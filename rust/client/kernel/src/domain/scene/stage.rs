@@ -64,7 +64,6 @@ use crate::domain::view::frame::resolution;
 use crate::domain::view::frame::resolution::{GpuMeasure, Pace};
 use crate::domain::view::frame::screen;
 use crate::domain::view::observation;
-use crate::sys::boot;
 use crate::sys::io::loader;
 use pxl_engine::clipmap::FILL_CAP;
 use pxl_engine::way::tree;
@@ -128,7 +127,7 @@ pub fn stage_write() {
 
 /// `pace` is the frame as the turn paced it, which the world's drawn
 /// resolution is judged by (domain/view/frame/resolution.rs `load`).
-pub fn stage_render(pace: Pace) {
+pub fn stage_render(pace: Pace) -> Option<f64> {
     let lists = draw_list().take();
     let stands = lists.stands;
     let models = model::models();
@@ -206,7 +205,6 @@ pub fn stage_render(pace: Pace) {
         }),
         text: text_raster,
         atlas: atlas(),
-        admit_frame: boot::admit_frame(),
         // The draws are the profiler's, which records only while its setting is on.
         counted: settings_store().perf,
         animated,
@@ -235,7 +233,7 @@ pub fn stage_render(pace: Pace) {
             px: stat.gpu_px,
             lattice: stat.gpu_lattice,
         });
-    resolution::load(pace, gpu);
+    let interval_ms = resolution::load(pace, gpu);
     let Some(stat) = out.stat else {
         set_renderer_frame(
             out.kind,
@@ -248,7 +246,7 @@ pub fn stage_render(pace: Pace) {
             None,
             None,
         );
-        return;
+        return interval_ms;
     };
     SCREEN_DEVICE.set(Some(api::device_generation()));
     let [draws, triangles] = stat
@@ -283,6 +281,7 @@ pub fn stage_render(pace: Pace) {
             rays: RaySample::of(r.counts),
         }),
     );
+    interval_ms
 }
 
 /// The scene's turn, `pivot` and `heading` the camera's as the turn hands

@@ -25,19 +25,23 @@
   "RES_MODES": {
     "$val": { "auto": 0, "fixed": 1, "low": 2 },
     "$doc": [
-      "How many device pixels the world is drawn at to a CSS pixel, and the",
-      "lattice the camera grid's beam rays and cells are laid on.",
+      "How many device pixels the world is drawn at to a CSS pixel, the",
+      "lattice the camera grid's beam rays and cells are laid on, and the rate",
+      "turns go at.",
       "",
-      "  auto  — the display's, stepped down to a share of it, then the",
+      "  auto  — the display's rate, slowed a refresh at a time to RATE_MIN_HZ;",
+      "          the display's pixels, stepped down to a share of them; then the",
       "          lattice to twice the cell, while moving frames' GPU time runs",
-      "          over their budget — the display's interval, no tighter than a",
-      "          sixtieth of a second — and back up, the lattice first, once",
-      "          the step above would fit, a budget control as congestion",
-      "          control is (rust/client/kernel/src/domain/view/frame/resolution.rs).",
-      "          The lattice changes no pixel drawn.",
-      "  fixed — the display's, on the cell's lattice, whatever the frames cost.",
+      "          over their budget — the interval turns are paced at, no tighter",
+      "          than a sixtieth of a second — and back up, the lattice first and",
+      "          the rate last, once the step above would fit, a budget control",
+      "          as congestion control is",
+      "          (rust/client/kernel/src/domain/view/frame/resolution.rs). The",
+      "          lattice changes no pixel drawn.",
+      "  fixed — the display's, on the cell's lattice at its rate, whatever the",
+      "          frames cost.",
       "  low   — half the display's each way, auto's floor (RES_MIN), on the",
-      "          cell's lattice."
+      "          cell's lattice at the display's rate."
     ]
   },
   "CAMERA_MODES": {

@@ -24,10 +24,11 @@
  * program's own interval away.
  *
  * A turn runs on every `divisor`-th refresh (Android Swappy's swap interval),
- * the most refreshes that fit one interval at `pace_hz` and at least one, so
- * the frame interval is a whole multiple of the refresh: at 60, every second
- * refresh of a 120 Hz display and of a 144. The divisor is the display's, not
- * the load's.
+ * so the frame interval is a whole multiple of the refresh: the most refreshes
+ * that fit one interval at `pace_hz` and at least one, at 60 every second
+ * refresh of a 120 Hz display and of a 144, or the fewest that reach the least
+ * interval the program last asked (`pace`), where those are more. The load is
+ * the program's to judge; an input hurries no turn past what it asked.
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
@@ -38,7 +39,7 @@ const MAX_FRAME_GAP_MS = 50;
 
 /** The program's numbers for its pacing. */
 export interface FramePacingConfig {
-  /** The slowest rate turns are paced at. */
+  /** The rate turns are paced at where the program asks none slower. */
   pace_hz: f64;
   /** The frame share left unspent, for the runtime's own work and estimate error. */
   margin_share: f64;
@@ -70,8 +71,10 @@ export class FramePacing implements SchedulingPolicy<FrameGrant> {
   private last = -Infinity;
 
   private readonly cfg: FramePacingConfig;
-  /** The longest interval turns are paced at. */
+  /** The interval `pace_hz` paces at. */
   private readonly max_ms: f64;
+  /** The least interval the program asked between turns, 0 for none. */
+  private _asked_ms: f64 = 0;
   private readonly next_frame: (run: (now: f64) => void) => void;
 
   /** `next_frame` hands over the display's next animation frame. */
@@ -108,6 +111,11 @@ export class FramePacing implements SchedulingPolicy<FrameGrant> {
     }
   }
 
+  /** The least interval between turns from now on, 0 for none. */
+  pace(interval_ms: f64): void {
+    this._asked_ms = interval_ms;
+  }
+
   /** The display's refresh, from the gaps seen. */
   refresh(): f64 {
     return this._refresh_ms;
@@ -115,14 +123,16 @@ export class FramePacing implements SchedulingPolicy<FrameGrant> {
 
   /**
    * The interval turns are paced at: the most whole refreshes within one
-   * interval at `pace_hz`, an eighth of a refresh allowed for the spread of its
-   * measure, so a 120 Hz display read at 8.34 ms still paces at two; one at
-   * least.
+   * interval at `pace_hz`, or the fewest that reach the interval asked, an
+   * eighth of a refresh allowed for the spread of its measure either way, so a
+   * 120 Hz display read at 8.34 ms still paces at two; one at least.
    */
   pace_ms(refresh_ms: f64): f64 {
+    const spread = refresh_ms / 8;
     const divisor = Math.max(
       1,
-      Math.floor((this.max_ms + refresh_ms / 8) / refresh_ms),
+      Math.floor((this.max_ms + spread) / refresh_ms),
+      Math.ceil((this._asked_ms - spread) / refresh_ms),
     );
     return divisor * refresh_ms;
   }

@@ -5,20 +5,16 @@
 // and the slide (light_slide.wgsl), before the beam: those in the disk it reads
 // (`Light::read`) within a tile and its taps of a step up the way up from it (`up`, `up_at`:
 // a point that far up lies that many tiles over or one more, its taps a tile either side), as
-// decor and the actors stand on what the eye meets and are no taller. A tile is listed read by
+// decor stands on its footprint (light_mark_draws.wgsl), the actors on what the eye meets, and
+// neither is taller. A tile is listed read by
 // the first thread to swap its mark to the number of the cast the world's receivers were last
 // stood afresh in (`light::HEAD_WORLD`, `light::LISTED_READ`), and stays listed, as the tiles
 // stood on do, until they are stood afresh again (`light::kept_at`): so a cast propagates only
 // the tiles stood on since the casts before it propagated theirs, whose reads it keeps.
-// Then, a thread a tile listed read, each one no cast of the reads' epoch claimed
-// (`reads_epoch`), or owed (`light::READ_OWED`), is wanted (`light::LISTED_WANTED`), counted by
-// its ring (`light::rings_at`), and the map's lay opened to every tile read (`light::ARGS_LAY`;
-// gpu/shadow.rs `Shadow::begin`) (`light_want_cs`); the claim takes the wanted nearest first,
-// at most `light::CLAIM_BUDGET` (`light_claim_cs`, `light::claims`), the one way a tile is
-// claimed: its word names the cast (`light::reads_at`), it takes a place for its slots' parked
-// rays (`light::places_at`), and what feeds it is listed for the passes that cast it
-// (`enlist`). A tile's read words are the thread's alone that listed it read, then the one
-// that claims it.
+// Then, a thread a tile listed read, each one no cast of the reads' epoch claimed (`reads_epoch`)
+// is claimed: its word names the cast (`light::reads_at`) and what feeds it is listed for the
+// passes that cast it (`enlist`); and the map's lay is opened to every tile read
+// (`light::ARGS_LAY`; gpu/shadow.rs `Shadow::begin`) (`light_claim_cs`).
 
 /// Whether box texel `p` lies where a receiver may read it, grown by `pad` texels
 /// (`Light::read`).
@@ -47,24 +43,6 @@ fn up() -> Up {
 fn up_at(u: Up, k: u32) -> vec2<i32> {
   let f = select(f32(k) / f32(u.steps), 0.0, u.steps == 0u);
   return vec2<i32>(floor(u.way * f));
-}
-
-/// The claim's dispatch over the tiles wanted (`light::CLAIM_DISPATCH`), a buffer of its own,
-/// its rows raised here; light_claim.wgsl reads its count from it and does not bind it.
-@group(0) @binding(25) var<storage, read_write> claims: array<atomic<u32>, 3>;
-
-/// Tile `t` wanted: listed for the claim, the claim's rows opened to it, and counted by its
-/// ring.
-fn want(t: vec2<i32>) {
-  let n = light_tiles();
-  let room = n * n;
-  let e = atomicAdd(&args.counts[LIGHT_LISTED_WANTED], 1u);
-  if (e >= room) {
-    return;
-  }
-  list_put(listed_at(LIGHT_LISTED_WANTED) + 1u + e, (u32(t.y) << 16u) | u32(t.x));
-  atomicMax(&claims[1], workgroups(e + 1u, room, LIGHT_LIST_ACROSS * LIGHT_LISTED_LANES));
-  atomicAdd(&args.marks[head_word(LIGHT_HEAD_RINGS) + ring(t)], 1u);
 }
 
 /// Tile `t` read since the world's receivers were stood afresh in the cast numbered `world`:
@@ -123,12 +101,10 @@ fn light_propagate_cs(
   }
 }
 
-/// Each tile listed read, a thread each over every place of the box, after the propagation: the
-/// map's lay opened to them all, and each wanted where no cast of the reads' epoch claimed it
-/// or it is owed (`want`), so a tile a cast left wanted, past its budget or owed, is wanted
-/// again by the next however long ago it was listed.
+/// Each tile listed read, a thread each: the map's lay opened to them all, and each claimed where
+/// no cast of the reads' epoch claimed it.
 @compute @workgroup_size(LIGHT_LISTED_LANES, 1, 1)
-fn light_want_cs(@builtin(global_invocation_id) id: vec3<u32>) {
+fn light_claim_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let n = light_tiles();
   let read = in_room(atomicLoad(&args.counts[LIGHT_LISTED_READ]), n * n);
   if (id.x == 0u) {
@@ -139,8 +115,10 @@ fn light_want_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
   let w = list_at(listed_at(LIGHT_LISTED_READ) + 1u + id.x);
   let t = vec2<i32>(i32(w & 0xffffu), i32(w >> 16u));
-  let word = list_at(reads_at() + u32(t.y) * n + u32(t.x));
-  if ((word & ~LIGHT_READ_OWED) < reads_epoch() || (word & LIGHT_READ_OWED) != 0u) {
-    want(t);
+  let at = reads_at() + u32(t.y) * n + u32(t.x);
+  if (list_at(at) < reads_epoch()) {
+    let current = cast_number();
+    list_put(at, current);
+    enlist(current, t);
   }
 }

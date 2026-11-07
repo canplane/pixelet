@@ -2,26 +2,18 @@
 
 // A run's walks over the node cache alone (walk.wgsl, cached.wgsl), over the items its kind's
 // module names, their rays, starts and ends (queue.wgsl for the holes): the first over the
-// run's items, an item parked before on from its parked state, the second over the rays the
-// first parked. A fixed dispatch (pxl-engine `ray::QUEUE_GROUPS`); each lane takes the next item
-// its kind's module hands it (`next_item`), off the queue's words, when its own ray ends or is
-// parked, walks it `QUEUE_STEPS` steps at a
-// time, and holds its state between them, so a lane whose ray ends early walks another while
-// the long ones go on. A ray whose start waits on its cell's, the cell's window holding a beam
-// ray not ended (`item_waits`), is parked as waiting (`WAITS_ZOOM`) and walks nothing, so it
-// takes none of the budget until its cell's start is there; one parked waiting starts afresh
-// once it is. A ray that meets a node no slot keeps is parked in the state its walk
-// left, and the node listed for the asks (queue_ask.wgsl), with what was handed its parent
-// where a slot keeps that; a ray the frame's budget of visits does not reach, up to its run's
-// caps (`ray::caps`), is parked where it is. Nothing it reads of the node cache any thread of
-// the pass writes.
+// run's items, the second over the rays the first parked. A fixed dispatch (pxl-engine
+// `ray::QUEUE_GROUPS`); each lane takes the next item when its own ray ends or is parked, walks
+// it `QUEUE_STEPS` steps at a time and holds its state between them, so a lane whose ray ends
+// early walks another while the long ones go on. A ray that meets a node no slot keeps is
+// parked in the state its walk left, and the node listed for the asks (queue_ask.wgsl). Nothing
+// it reads of the node cache any thread of the pass writes.
 
 /// The run's queue's words, its head first (pxl-engine `ray::QUEUE_WORDS`, `ray::queue_at`), the
 /// asks' records every queue shares past the heads (`queue_records_at`).
 @group(0) @binding(10) var<storage, read_write> queue: array<atomic<u32>>;
 
-/// The next number off the queue's counter at `word`, and the count it holds: the counters a
-/// kind's module takes its items by (`next_item`) and numbers its parked rays by.
+/// The next number off the queue's counter at `word`, and the count it holds.
 fn take(word: u32) -> u32 {
   return atomicAdd(&queue[word], 1u);
 }
@@ -30,21 +22,15 @@ fn held(word: u32) -> u32 {
   return atomicLoad(&queue[word]);
 }
 
-/// The next stop's number, as these walks number the stops their items keep for the record
-/// (queue.wgsl `keep_hit`), and the dispatch over them raised to `rows`: in the queue's words
-/// (`ray::QUEUE_HITS`), which the last walk goes on from as `node_cache::HITS_ARGS`.
+/// The next stop's number (queue.wgsl `keep_hit`), and the dispatch over them raised to `rows`:
+/// in the queue's words (`ray::QUEUE_HITS`), which the last walk goes on from as
+/// `node_cache::HITS_ARGS`.
 fn stop_number() -> u32 {
   return atomicAdd(&queue[QUEUE_HITS + 3u], 1u);
 }
 
 fn stop_rows(rows: u32) {
   atomicMax(&queue[QUEUE_HITS], rows);
-}
-
-/// Whether the frame's node visits so far reach the cap this run counts to (pxl-engine
-/// `ray::VISITS_A_FRAME`, `ray::caps`).
-fn spent() -> bool {
-  return node_cache[VISITED] + atomicLoad(&queue[QUEUE_VISITED]) >= node_cache[queue_caps()];
 }
 
 /// The node an item's walk `w` was left at, no slot keeping it, listed for the asks of the
@@ -82,10 +68,17 @@ fn list_ask(aim: Aim, w: Walked, again: bool) {
   atomicStore(&queue[at + 9u], handed.w);
 }
 
-/// The lanes of a walk over the node cache alone, the first, or the one `again` over what the
-/// first parked: each holds one ray at a time, `item` `NONE` where it holds none. The first
-/// takes every item the run holds, so every item's state is written in this run before the
-/// second reads it: parked, or not.
+/// Where item `h` goes on in the walk `again` or the first.
+fn start_of(h: u32, again: bool) -> Start {
+  if (again) {
+    return parked_start(h);
+  }
+  return item_start(h, item_aim(h));
+}
+
+/// The lanes of a walk, the first or the one `again` over what the first parked: each holds one
+/// ray at a time, `item` `NONE` where it holds none. A ray no pool has room for ends where it
+/// stands.
 fn queue_walk(again: bool) {
   var item = NONE;
   var t = 0.0;
@@ -95,44 +88,23 @@ fn queue_walk(again: bool) {
   var step = 0u;
   loop {
     if (item == NONE) {
-      let h = next_item(again, spent());
+      let h = next_item(again);
       if (h == NONE) {
         break;
       }
-      let how = taken(h, again);
-      if (how == TAKEN_NONE) {
-        continue;
-      }
-      let fresh = how == TAKEN_FRESH || waiting(h);
-      if (fresh && item_waits(h)) {
-        park(h, 0.0, vec3<u32>(0u), WAITS_ZOOM, vec3<i32>(0), 0u);
+      if (again && !parked(h)) {
         continue;
       }
       item = h;
-      if (fresh) {
-        let s = item_start(h, item_aim(h));
-        t = s.t;
-        corner = s.corner;
-        zoom = s.zoom;
-        roots = s.roots;
-        step = s.step;
-      } else {
-        let s = parked_start(h);
-        t = s.t;
-        corner = s.corner;
-        zoom = s.zoom;
-        roots = s.roots;
-        step = s.step;
-      }
-    }
-    if (spent()) {
-      park(item, t, corner, zoom, roots, step);
-      item = NONE;
-      continue;
+      let s = start_of(h, again);
+      t = s.t;
+      corner = s.corner;
+      zoom = s.zoom;
+      roots = s.roots;
+      step = s.step;
     }
     let aim = item_aim(item);
     let w = walk(aim, Start(t, corner, zoom, roots, vec4<u32>(0u), true, step), QUEUE_STEPS);
-    atomicAdd(&queue[QUEUE_VISITED], w.visits);
     if (w.ends == 5u) {
       t = w.t;
       corner = w.corner;
@@ -141,11 +113,19 @@ fn queue_walk(again: bool) {
       step = w.step;
       continue;
     }
-    if (w.ends == 4u) {
-      park(item, w.t, w.corner, w.zoom, w.roots, w.step);
-      list_ask(aim, w, again);
-    } else if (!finish(item, aim, w)) {
-      park(item, w.t, w.corner, w.zoom, w.roots, w.step);
+    if (w.ends == ENDS_AGAIN) {
+      let s = item_start(item, aim);
+      if (!park(item, s.t, s.corner, s.zoom, s.roots, s.step)) {
+        finish(item, aim, to_lack(w));
+      }
+    } else if (w.ends == 4u) {
+      if (park(item, w.t, w.corner, w.zoom, w.roots, w.step)) {
+        list_ask(aim, w, again);
+      } else {
+        finish(item, aim, to_lack(w));
+      }
+    } else {
+      finish(item, aim, w);
     }
     item = NONE;
   }

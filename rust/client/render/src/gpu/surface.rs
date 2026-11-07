@@ -11,7 +11,7 @@ use xpute_kit::math::scalar::round;
 use crate::api_spec::surface_role;
 use crate::frame::shader::floor;
 use crate::gpu::api::Format;
-use crate::gpu::ray::{drawn_fits, DRAWN_MOST};
+use crate::gpu::ray::{drawn_fits, DRAWN_AREA, DRAWN_MOST};
 use pxl_engine::screen;
 
 /// Slot 0 is never a surface.
@@ -126,11 +126,13 @@ impl Surface {
             if drawn_fits(size) {
                 return (size[0], size[1]);
             }
-            // The tiles past the dispatch's side: the share a side brought down by their root,
-            // and a step more, so each turn takes some off.
+            // The pixels or the tiles past their most: the share a side brought down by the root
+            // of the tighter, and a step more, so each turn takes some off.
             let tiles = [0, 1].map(|a| f64::from(size[a].div_ceil(screen::TILE)));
-            let limit = f64::from(floor::MAX_COMPUTE_WORKGROUPS_PER_DIMENSION);
-            k *= libm::sqrt(limit / (tiles[0] * tiles[1])) * (1.0 - 1.0 / most);
+            let limit =
+                f64::from(floor::MAX_COMPUTE_WORKGROUPS_PER_DIMENSION) / (tiles[0] * tiles[1]);
+            let area = f64::from(DRAWN_AREA) / (f64::from(size[0]) * f64::from(size[1]));
+            k *= libm::sqrt(limit.min(area)) * (1.0 - 1.0 / most);
         }
     }
 }

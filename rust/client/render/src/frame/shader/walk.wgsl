@@ -5,11 +5,14 @@
 // read only (cached.wgsl), or the node cache and the world asked where no slot keeps the node
 // (ask.wgsl). What the ray's origin decides is data the walk reads off its `Aim`: where it
 // starts (`Start`), the zooms its range holds it to, its stop rule (`UNTIL_OPAQUE`,
-// `UNTIL_BEAM`) and a beam ray's line. A node is answered at the zooms asked alone, the pair a
+// `UNTIL_BEAM`) and a beam ray's line. A node is answered at the zooms asked, the pair a
 // function of the node and the origin (`cast::ask_zooms`), as pxl-engine's `Query` answers
-// it: a walk that meets a node no slot keeps at that pair is left there (`KIND_LEFT`), never
-// passed on a slot of other zooms. So a ray walked by either module visits the nodes
-// `cast::walk` visits from the same start, in the same order, and stops where it stops. A ray
+// it: a walk that meets a node no slot keeps at that pair is left there (`KIND_LEFT`), but for
+// a split a slot keeps at other zooms or forgot, which it goes into taking no box of it
+// (`KIND_BLIND`): a split asked finer than itself is a split or air, whose children answer
+// the ray either way. Past one it may meet a lack a box would have kept it from, so the node
+// cache's walk stops at no lack: the walk that asks walks that ray again whole
+// (`lack_ends`). So a ray stops where `cast::walk` stops. A ray
 // walked on from the state a walk returns (`Walked`, `Start`) goes on as one unbroken walk. A
 // ray the first module left and the second walks on from its `t` alone (resume.wgsl
 // `resumed_at`, `line_resumed`) stops where one unbroken walk stops, as the partition of its
@@ -18,6 +21,11 @@
 
 /// No slot keeps the node at the zooms asked: the walk is left there (cached.wgsl).
 const KIND_LEFT = 0xfffffffeu;
+/// A slot keeps the node a split at other zooms, or forgot it: the walk goes in (cached.wgsl).
+const KIND_BLIND = 0xfffffffdu;
+/// What a walk ends at a lack where only the walk that asks may stop at one: its ray is walked
+/// again whole (`lack_ends`, queue_walk.wgsl).
+const ENDS_AGAIN = 6u;
 
 /// What was handed the line's node at `zoom`, at `line` (`beam::LINE_INHERITANCE`).
 fn line_handed(line: u32, zoom: u32) -> vec4<u32> {
@@ -103,7 +111,15 @@ fn walk(aim: Aim, start: Start, steps: u32) -> Walked {
       let v = asset.x & VAL_MASK;
       let clear = v == VALUE_VOID || v == VALUE_AIR;
       var near_at = s.near;
-      if (a.kind == KIND_SPLIT) {
+      if (a.kind == KIND_BLIND) {
+        // A beam ray stops at a split too narrow to share, which a box would decide: left.
+        if (beam && narrow(hi.x - lo.x, spacing_width(aim.spacing, squared(max(-lo, hi))))) {
+          ends = 4u;
+          hit_t = t;
+          break;
+        }
+        into = true;
+      } else if (a.kind == KIND_SPLIT) {
         // Whether its span meets the box its content lies in (`meets_box`), grown for a beam
         // ray by its width at the far corner: it stops at a split it may not share with the
         // rays about it, and clears one it clears by that (`narrow`).
@@ -149,7 +165,7 @@ fn walk(aim: Aim, start: Start, steps: u32) -> Walked {
           }
         }
       } else {
-        ends = 2u;
+        ends = lack_ends();
         stops = true;
       }
       if (line != NONE && (into || stops || t1 >= t_max)) {
@@ -231,6 +247,11 @@ fn walk(aim: Aim, start: Start, steps: u32) -> Walked {
     }
   }
   return Walked(ends, zoom, corner, roots, asset, axis, hit_t, visits, parent, top, step);
+}
+
+/// A walk `w` whose ray goes no further, a lack at the deepest node held.
+fn to_lack(w: Walked) -> Walked {
+  return Walked(2u, w.zoom, w.corner, w.roots, w.asset, w.axis, w.t, w.visits, w.parent, w.top, w.step);
 }
 
 /// The zooms the ray `aim` asks the node at `corner`, `zoom` and `roots` at, as its walk asks

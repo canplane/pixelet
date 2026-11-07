@@ -74,40 +74,31 @@ pub const COMPUTE_DECOR_GATE: u32 = 49;
 pub const COMPUTE_RECORD_DRAW: u32 = 50;
 /// The missed pixels' hits into the node cache's drawable entries (record_stops.wgsl).
 pub const COMPUTE_RECORD_STOPS: u32 = 51;
-/// The tiles the light's cast wants claimed nearest first (light_propagate.wgsl
-/// `light_claim_cs`), from the module that lists them.
-pub const COMPUTE_LIGHT_CLAIM: u32 = 52;
 /// The node cache's drawable entries drawn as the light's raster's boxes (record_draw.wgsl).
-pub const COMPUTE_LIGHT_RECORD_DRAW: u32 = 53;
-/// The screen's tiles that hold a parked pixel set changed (parked_tiles.wgsl).
-pub const COMPUTE_PARKED_TILES: u32 = 54;
+pub const COMPUTE_LIGHT_RECORD_DRAW: u32 = 52;
 /// The light's holes' stops into the node cache's drawable entries (record_stops.wgsl over
 /// record_stops.light.wgsl).
-pub const COMPUTE_LIGHT_RECORD_STOPS: u32 = 55;
-/// Each tile the light's cast lists read, wanted where its epoch has not cast it or it is owed
-/// (light_propagate.wgsl `light_want_cs`).
-pub const COMPUTE_LIGHT_WANT: u32 = 56;
+pub const COMPUTE_LIGHT_RECORD_STOPS: u32 = 53;
+/// Each tile the light's cast lists read, claimed where its epoch has not cast it
+/// (light_propagate.wgsl `light_claim_cs`).
+pub const COMPUTE_LIGHT_CLAIM: u32 = 54;
 /// The samples' runs' second walks over the node cache alone and their asks, the eye's and the
 /// light's (`SHADER_QUEUE_SAMPLES`, `SHADER_QUEUE_ASK_SAMPLES`).
-pub const COMPUTE_QUEUE_SAMPLES_PARKED: u32 = 57;
-pub const COMPUTE_QUEUE_ASK_SAMPLES: u32 = 58;
-pub const COMPUTE_QUEUE_ASK_SAMPLES_PARKED: u32 = 59;
-pub const COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED: u32 = 60;
-pub const COMPUTE_QUEUE_ASK_LIGHT_SAMPLES: u32 = 61;
-pub const COMPUTE_QUEUE_ASK_LIGHT_SAMPLES_PARKED: u32 = 62;
-/// The close of a frame the eye's queue runs in, where it casts its samples and where it does
-/// not (`SHADER_ROLL`).
-pub const COMPUTE_ROLL: u32 = 63;
-pub const COMPUTE_ROLL_OWED: u32 = 64;
+pub const COMPUTE_QUEUE_SAMPLES_PARKED: u32 = 55;
+pub const COMPUTE_QUEUE_ASK_SAMPLES: u32 = 56;
+pub const COMPUTE_QUEUE_ASK_SAMPLES_PARKED: u32 = 57;
+pub const COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED: u32 = 58;
+pub const COMPUTE_QUEUE_ASK_LIGHT_SAMPLES: u32 = 59;
+pub const COMPUTE_QUEUE_ASK_LIGHT_SAMPLES_PARKED: u32 = 60;
 /// The beam rays' runs' second walks over the node cache alone and their asks, the eye's and
 /// the light's (`SHADER_QUEUE_CORNERS`, `SHADER_QUEUE_ASK_CORNERS`).
-pub const COMPUTE_QUEUE_CORNERS_PARKED: u32 = 65;
-pub const COMPUTE_QUEUE_ASK_CORNERS: u32 = 66;
-pub const COMPUTE_QUEUE_ASK_CORNERS_PARKED: u32 = 67;
-pub const COMPUTE_QUEUE_LIGHT_CORNERS_PARKED: u32 = 68;
-pub const COMPUTE_QUEUE_ASK_LIGHT_CORNERS: u32 = 69;
-pub const COMPUTE_QUEUE_ASK_LIGHT_CORNERS_PARKED: u32 = 70;
-pub const COMPUTES: u32 = 71;
+pub const COMPUTE_QUEUE_CORNERS_PARKED: u32 = 61;
+pub const COMPUTE_QUEUE_ASK_CORNERS: u32 = 62;
+pub const COMPUTE_QUEUE_ASK_CORNERS_PARKED: u32 = 63;
+pub const COMPUTE_QUEUE_LIGHT_CORNERS_PARKED: u32 = 64;
+pub const COMPUTE_QUEUE_ASK_LIGHT_CORNERS: u32 = 65;
+pub const COMPUTE_QUEUE_ASK_LIGHT_CORNERS_PARKED: u32 = 66;
+pub const COMPUTES: u32 = 67;
 
 /// Compute pipeline `id`'s shader and the entry point it runs, as the
 /// source names it.
@@ -148,8 +139,7 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_LIGHT_MARK_DRAWS => (SHADER_LIGHT_MARK_DRAWS, "light_mark_draws_cs"),
         COMPUTE_LIGHT_MARK_DRAWS_OPEN => (SHADER_LIGHT_MARK_DRAWS_OPEN, "light_mark_draws_open_cs"),
         COMPUTE_LIGHT_PROPAGATE => (SHADER_LIGHT_PROPAGATE, "light_propagate_cs"),
-        COMPUTE_LIGHT_CLAIM => (SHADER_LIGHT_CLAIM, "light_claim_cs"),
-        COMPUTE_LIGHT_WANT => (SHADER_LIGHT_PROPAGATE, "light_want_cs"),
+        COMPUTE_LIGHT_CLAIM => (SHADER_LIGHT_PROPAGATE, "light_claim_cs"),
         COMPUTE_GENERATION_THIN => (SHADER_GENERATION_THIN, "decor_thin_cs"),
         COMPUTE_SCREEN_PROPAGATE => (SHADER_SCREEN_PROPAGATE, "screen_propagate_cs"),
         COMPUTE_SCREEN_MARK => (SHADER_SCREEN_MARK, "screen_mark_cs"),
@@ -180,13 +170,10 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_QUEUE_ASK_LIGHT_SAMPLES_PARKED => {
             (SHADER_QUEUE_ASK_LIGHT_SAMPLES, "queue_ask_parked_cs")
         }
-        COMPUTE_ROLL => (SHADER_ROLL, "roll_cs"),
-        COMPUTE_ROLL_OWED => (SHADER_ROLL, "roll_owed_cs"),
         COMPUTE_QUEUE_LAST_LIGHT_CORNERS => (SHADER_QUEUE_LAST_LIGHT_CORNERS, "queue_last_cs"),
         COMPUTE_RECORD_DRAW => (SHADER_RECORD_DRAW, "record_draw_cs"),
         COMPUTE_RECORD_STOPS => (SHADER_RECORD_STOPS, "record_stops_cs"),
         COMPUTE_LIGHT_RECORD_DRAW => (SHADER_RECORD_DRAW, "light_record_draw_cs"),
-        COMPUTE_PARKED_TILES => (SHADER_PARKED_TILES, "parked_tiles_cs"),
         COMPUTE_LIGHT_RECORD_STOPS => (SHADER_LIGHT_RECORD_STOPS, "record_stops_cs"),
         _ => panic!("a compute pipeline number with no shader"),
     }

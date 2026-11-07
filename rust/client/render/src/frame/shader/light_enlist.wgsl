@@ -1,9 +1,8 @@
 // pxl-render/light_enlist.wgsl
 
-// The light's args as the propagation and the claim write them (light_propagate.wgsl,
-// light_claim.wgsl): the passes' workgroups, the lists' counts and marks; what feeds a claimed
-// tile listed at each level, the rows of the passes that take it opened; and the ring a tile
-// lies in.
+// The light's args as the propagation writes them (light_propagate.wgsl): the passes'
+// workgroups, the lists' counts and marks; and what feeds a claimed tile listed at each level,
+// the rows of the passes that take it opened.
 
 /// The workgroups of the passes that cast tiles; the lists' counts and marks
 /// (`light::ARGS_WORDS`). A claim reads and writes the passes', the counts and the marks at once.
@@ -67,11 +66,4 @@ fn enlist(current: u32, t: vec2<i32>) {
     current, t, LIGHT_LISTED_CORNERS, i32(beam_across()),
     vec2<i32>(-w - 2i), vec2<i32>(w + 1i), light_on(LEVEL_CORNER, vec2<u32>(0u)),
   );
-}
-
-/// The ring box tile `t` lies in about the box's middle, whole tiles out (`light::ring`).
-fn ring(t: vec2<i32>) -> u32 {
-  let half = f32(light_tiles()) * 0.5;
-  let d = vec2<f32>(t) + vec2<f32>(0.5) - vec2<f32>(half);
-  return u32(sqrt(d.x * d.x + d.y * d.y));
 }

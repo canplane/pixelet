@@ -425,10 +425,11 @@ levels, from the outside in.
    deadline the turn ends by, which the core keeps by returning, and is handed
    what each turn took; the doorbell's turns are outside it. A page's is **frame pacing**
    (`sched/frame_pacing.ts`), named for Android's Frame Pacing library: turns a
-   whole number of the display's refreshes apart, each ending by its frame's
-   deadline, as Android's Choreographer hands a frame its deadline: from the
-   frame's start, so a turn rung late has the less, and one that ran past it
-   owes the next nothing. A runtime with no display that shares its thread
+   whole number of the display's refreshes apart, no nearer than the interval
+   the program last asked (`pace`), each ending by its frame's deadline, as
+   Android's Choreographer hands a frame its deadline: from the frame's start,
+   so a turn rung late has the less, and one that ran past it owes the next
+   nothing. A runtime with no display that shares its thread
    with the core runs a turn as soon as it is asked and ends it a fixed slice
    later (`sched/timeslice.ts`), as SCHED_RR's timeslice does.
 2. **Tick** (`sched/tick`) is the core's. It runs the program's phases, by

@@ -13,6 +13,63 @@ fn cost(px: f64, cell: f64, rest: f64) -> Cost {
     }
 }
 
+/// A frame paced `ms` apart on a display too slow for the rate to step: the
+/// scale and the lattice are what move.
+fn paced(ms: f64) -> Pace {
+    Pace {
+        refresh_ms: 1000.0,
+        paced_ms: ms,
+        gap_ms: ms,
+        moving: true,
+    }
+}
+
+/// A frame `refreshes` of a `hz` display apart.
+fn on(hz: f64, refreshes: f64) -> Pace {
+    Pace {
+        refresh_ms: 1000.0 / hz,
+        paced_ms: refreshes * 1000.0 / hz,
+        gap_ms: 0.0,
+        moving: true,
+    }
+}
+
+/// A window of frames paced as `p`, each `load` of its budget, per pixel:
+/// the knobs it moved to, where it moved one, the interval moved to in `p`,
+/// as the next grant says it.
+fn window(k: &mut Judge, p: &mut Pace, load: f64, timed: bool) -> Option<Knobs> {
+    let s = Cost {
+        px_ms: load * budget(p.paced_ms),
+        ..Cost::default()
+    };
+    loop {
+        let to = k.judge(Some(s), p, timed);
+        if k.window_ms == 0.0 {
+            if let Some((paced_ms, ..)) = to {
+                p.paced_ms = paced_ms;
+            }
+            return to;
+        }
+    }
+}
+
+/// `window` over and over, at most `n` times: the knobs the first that moved
+/// one moved to.
+fn until_moved(k: &mut Judge, p: &mut Pace, load: f64, n: u32) -> Option<Knobs> {
+    (0..n).find_map(|_| window(k, p, load, true))
+}
+
+/// The windows after a change that are not judged.
+fn settle(k: &mut Judge, p: &mut Pace, load: f64, timed: bool) {
+    for _ in 0..param::RES_SETTLE_WINDOWS {
+        assert_eq!(window(k, p, load, timed), None, "settling");
+    }
+}
+
+fn near(a: f64, b: f64) -> bool {
+    (a - b).abs() < 1e-9
+}
+
 /// Windows of `load` budgets each, all of it per pixel, judged as one frame
 /// a window.
 fn windows(k: &mut Judge, load: f64, n: u32, timed: bool) -> u32 {
@@ -23,7 +80,10 @@ fn windows(k: &mut Judge, load: f64, n: u32, timed: bool) -> u32 {
 /// knob.
 fn windows_of(k: &mut Judge, s: Cost, n: u32, timed: bool) -> u32 {
     (0..n)
-        .filter(|_| k.judge(Some(s), param::RES_WINDOW_MS, timed))
+        .filter(|_| {
+            k.judge(Some(s), &paced(param::RES_WINDOW_MS), timed)
+                .is_some()
+        })
         .count() as u32
 }
 
@@ -63,13 +123,14 @@ fn timed_windows() {
                 px_ms: 1.5 * frame,
                 ..Cost::default()
             };
-            k.judge((i % 3 == 0).then_some(s), frame, true)
+            k.judge((i % 3 == 0).then_some(s), &paced(frame), true)
+                .is_some()
         })
         .count();
     assert_eq!((changed, k.step), (1, 1), "one window's frames step down");
     let mut k = Judge::NEW;
     let changed = (0..3 * frames)
-        .filter(|_| k.judge(None, frame, true))
+        .filter(|_| k.judge(None, &paced(frame), true).is_some())
         .count();
     assert_eq!(
         (changed, k.step, k.since),
@@ -164,7 +225,11 @@ fn pause_keeps_windows() {
         windows(&mut k, 0.3, settle + param::RES_UP_WINDOWS - 1, true),
         0
     );
-    k.judge(Some(cost(0.3, 0.0, 0.0)), 0.5 * param::RES_WINDOW_MS, true);
+    k.judge(
+        Some(cost(0.3, 0.0, 0.0)),
+        &paced(0.5 * param::RES_WINDOW_MS),
+        true,
+    );
     k.restart();
     assert_eq!(
         windows(&mut k, 0.3, 1, true),
@@ -263,14 +328,121 @@ fn predicted_by_part() {
         ..Judge::NEW
     };
     let (s, w) = (cost(0.2, 0.1, 0.3), param::RES_WINDOW_MS);
-    let near = |a: f64, b: f64| (a - b).abs() < 1e-9;
-    assert!(near(k.predicted(s, w, (k.step, k.lattice)), 0.6));
-    assert!(near(k.predicted(s, w, (k.step, 1)), 0.3 + 0.2 + 0.4));
+    let p = paced(w);
+    assert!(near(k.predicted(s, w, &p, (w, k.step, k.lattice)), 0.6));
+    assert!(near(k.predicted(s, w, &p, (w, k.step, 1)), 0.3 + 0.2 + 0.4));
     let px = 1.0 / (param::RES_MIN * param::RES_MIN);
     assert!(near(
-        k.predicted(s, w, (0, k.lattice)),
+        k.predicted(s, w, &p, (w, 0, k.lattice)),
         0.3 + 0.2 * px + 0.1
     ));
+    assert!(near(
+        k.predicted(s, w, &p, (2.0 * w, k.step, k.lattice)),
+        0.3
+    ));
+}
+
+/// The rate steps within what the display and `RATE_MIN_HZ` leave: a refresh
+/// at a time, never past the floor, and turns are slowed only past the
+/// display's own divisor (@xpute/runtime sched/frame_pacing.ts `pace_ms`).
+#[test]
+fn rate_by_display() {
+    for (hz, own, floor) in [
+        (120.0, 2.0, 4.0),
+        (60.0, 1.0, 2.0),
+        (144.0, 2.0, 4.0),
+        (165.0, 2.0, 5.0),
+        (90.0, 1.0, 3.0),
+        (30.0, 1.0, 1.0),
+    ] {
+        assert!(!on(hz, own).slowed(), "{hz} Hz at its own rate");
+        assert!(
+            on(hz, own + 1.0).slowed() || own == floor,
+            "{hz} Hz past it"
+        );
+        assert!(!on(hz, floor).may_slow(), "{hz} Hz at its floor");
+        assert!(
+            own == floor || on(hz, floor - 1.0).may_slow(),
+            "{hz} Hz above it"
+        );
+    }
+}
+
+/// Timed, a window over its budget slows the rate first, a refresh a step
+/// to `RATE_MIN_HZ`, each change followed by its settling windows; only then
+/// does the scale step.
+#[test]
+fn down_rate_then_scale() {
+    let (mut k, mut p) = (Judge::NEW, on(120.0, 2.0));
+    for refreshes in [3.0, 4.0] {
+        assert!(window(&mut k, &mut p, 1.5, true).is_some());
+        assert!(near(p.paced_ms, on(120.0, refreshes).paced_ms));
+        assert_eq!(k.step, 0, "the rate first");
+        settle(&mut k, &mut p, 1.5, true);
+    }
+    assert!(window(&mut k, &mut p, 1.5, true).is_some());
+    assert!(near(p.paced_ms, on(120.0, 4.0).paced_ms), "at its floor");
+    assert_eq!(k.step, 1, "then the scale");
+}
+
+/// Timed, room steps the lattice up first, then the scale, and the rate
+/// last, to the display's own, and past that there is no step.
+#[test]
+fn up_rate_last() {
+    let mut k = Judge {
+        step: 1,
+        lattice: LATTICE_MAX,
+        ..Judge::NEW
+    };
+    let mut p = on(120.0, 3.0);
+    let wait = param::RES_SETTLE_WINDOWS + param::RES_UP_WINDOWS + 1;
+    assert!(until_moved(&mut k, &mut p, 0.1, wait).is_some());
+    assert_eq!((k.step, k.lattice), (1, 1), "the lattice first");
+    assert!(near(p.paced_ms, on(120.0, 3.0).paced_ms));
+    assert!(until_moved(&mut k, &mut p, 0.1, wait).is_some());
+    assert_eq!(k.step, 0, "then the scale");
+    assert!(near(p.paced_ms, on(120.0, 3.0).paced_ms));
+    assert!(until_moved(&mut k, &mut p, 0.1, wait).is_some());
+    assert!(near(p.paced_ms, on(120.0, 2.0).paced_ms), "the rate last");
+    assert_eq!(
+        until_moved(&mut k, &mut p, 0.1, 4 * wait),
+        None,
+        "all whole"
+    );
+}
+
+/// The rate's step up is judged by the shorter budget: at 30 Hz on a 120 Hz
+/// display, 0.8 of the budget is over at 40 Hz and 0.6 fits.
+#[test]
+fn rate_up_judges_its_budget() {
+    let (mut k, mut p) = (Judge::NEW, on(120.0, 4.0));
+    assert_eq!(until_moved(&mut k, &mut p, 0.8, 40), None);
+    assert!(until_moved(&mut k, &mut p, 0.6, 40).is_some());
+    assert!(near(p.paced_ms, on(120.0, 3.0).paced_ms));
+}
+
+/// A rate step up that goes over within its trust falls back and doubles
+/// the windows before the next.
+#[test]
+fn rate_up_backoff() {
+    let (mut k, mut p) = (Judge::NEW, on(120.0, 3.0));
+    let wait = param::RES_UP_WINDOWS;
+    assert!(until_moved(&mut k, &mut p, 0.3, wait).is_some());
+    assert!(k.on_trial && near(p.paced_ms, on(120.0, 2.0).paced_ms));
+    settle(&mut k, &mut p, 0.3, true);
+    assert!(window(&mut k, &mut p, 1.5, true).is_some(), "it falls back");
+    assert!(near(p.paced_ms, on(120.0, 3.0).paced_ms));
+    assert_eq!((k.on_trial, k.hold(true)), (false, 2 * wait));
+}
+
+/// Untimed, room cannot be foreseen, so the rate stays and the scale moves.
+#[test]
+fn untimed_rate_stays() {
+    let (mut k, mut p) = (Judge::NEW, on(120.0, 2.0));
+    let over = param::SCALE_MISSED + 0.5;
+    assert!(window(&mut k, &mut p, over, false).is_some());
+    assert_eq!(k.step, 1);
+    assert!(near(p.paced_ms, on(120.0, 2.0).paced_ms));
 }
 
 /// Untimed, the scale alone moves: past `RES_MIN` a window over holds,

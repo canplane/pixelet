@@ -249,9 +249,8 @@ fn save_sends_one_batch() {
         send(w);
     }
     assert_eq!(state().unsent.len(), 4);
-    state().save_due_ms = Some(0.0);
     save();
-    assert!(state().unsent.is_empty() && state().save_due_ms.is_none());
+    assert!(state().unsent.is_empty());
 }
 
 /// The top's rows the store folds each case's writes to, applied in order

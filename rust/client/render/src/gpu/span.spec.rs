@@ -134,7 +134,7 @@ impl GpuSpanName {
         [GpuSpanName::beam_hit, GpuSpanName::beam, GpuSpanName::cell];
 }
 
-pub const LIGHT_MOVED: usize = 6;
+pub const LIGHT_MOVED: usize = 5;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum LightMoved {
@@ -143,18 +143,16 @@ pub enum LightMoved {
     receivers = 2,
     footprint = 3,
     world = 4,
-    owed = 5,
 }
 
 impl LightMoved {
     /// Every member, in the JSON's own order.
-    pub const ALL: [LightMoved; 6] = [
+    pub const ALL: [LightMoved; 5] = [
         LightMoved::content,
         LightMoved::slide,
         LightMoved::receivers,
         LightMoved::footprint,
         LightMoved::world,
-        LightMoved::owed,
     ];
 
     /// The member a number names, or none for a number the set does not

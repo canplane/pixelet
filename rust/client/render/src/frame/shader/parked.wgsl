@@ -1,23 +1,8 @@
 // pxl-render/parked.wgsl
 
-// A ray parked by the queue (queue_walk.wgsl, queue_last.wgsl), every item kind's alike: its
+// A ray parked between a run's walks (queue_walk.wgsl, queue_last.wgsl), every item kind's alike: its
 // distance's bits, its node's corner, and one word of its zoom, roots and steps taken under
 // `PARKED` (pxl-engine `ray::STATE_WORDS`), each kind keeping them where its module says.
-
-/// What an item's walk takes on its first walk of a run (`taken`): none, as it ended or is not
-/// the run's; a fresh start; or the state it was parked in.
-const TAKEN_NONE = 0u;
-const TAKEN_FRESH = 1u;
-const TAKEN_PARKED = 2u;
-
-/// The zoom of a ray parked before its first step, its start waiting on its cell's: the cell's
-/// window holds a beam ray not ended (pxl-engine `beam::HAND_PARKED`; cell.wgsl). No node's zoom.
-const WAITS_ZOOM: u32 = 63u;
-
-/// Whether a parked state's word `p` is a ray's that waits on its cell's start (`WAITS_ZOOM`).
-fn waits(p: u32) -> bool {
-  return (p & 63u) == WAITS_ZOOM;
-}
 
 /// The word of a ray parked at node `zoom` with `roots`, `step` steps taken: the zoom over
 /// `ZOOM_BITS`, three bits a root, the steps above, under `PARKED`.

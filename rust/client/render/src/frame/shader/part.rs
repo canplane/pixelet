@@ -213,28 +213,20 @@ pub const SHADER_RECORD_DRAW: u32 = 84;
 /// The holes' stops into the node cache's drawable entries, and what lies about each one's face
 /// put at its pixel, by hand (record_stops.wgsl).
 pub const SHADER_RECORD_STOPS: u32 = 85;
-/// The screen's tiles that hold a pixel the eye's holes' queue left parked, set changed, by
-/// hand (parked_tiles.wgsl).
-pub const SHADER_PARKED_TILES: u32 = 86;
 /// `SHADER_RECORD_STOPS` for the light's stops (record_stops.light.wgsl).
-pub const SHADER_LIGHT_RECORD_STOPS: u32 = 87;
-/// The light's claim (light_claim.wgsl), a module apart from the propagation, which writes the
-/// dispatch it reads its count from; and the drawn receivers' dispatch opened
-/// (light_mark_draws_open.wgsl), a module apart from the receivers' pass that reads it.
-pub const SHADER_LIGHT_CLAIM: u32 = 88;
-pub const SHADER_LIGHT_MARK_DRAWS_OPEN: u32 = 89;
+pub const SHADER_LIGHT_RECORD_STOPS: u32 = 86;
+/// The drawn receivers' dispatch opened (light_mark_draws_open.wgsl), a module apart from the
+/// receivers' pass that reads it.
+pub const SHADER_LIGHT_MARK_DRAWS_OPEN: u32 = 87;
 /// The nodes the samples' runs' walks were parked at, asked once a node (queue_ask.wgsl), the
 /// eye's and the light's.
-pub const SHADER_QUEUE_ASK_SAMPLES: u32 = 90;
-pub const SHADER_QUEUE_ASK_LIGHT_SAMPLES: u32 = 91;
-/// The close of a frame the eye's queue runs in: its rolled lattice's offset counted or held
-/// (roll.wgsl), two compute entries.
-pub const SHADER_ROLL: u32 = 92;
+pub const SHADER_QUEUE_ASK_SAMPLES: u32 = 88;
+pub const SHADER_QUEUE_ASK_LIGHT_SAMPLES: u32 = 89;
 /// The nodes the beam rays' runs' walks were parked at, asked once a node (queue_ask.wgsl), the
 /// eye's and the light's.
-pub const SHADER_QUEUE_ASK_CORNERS: u32 = 93;
-pub const SHADER_QUEUE_ASK_LIGHT_CORNERS: u32 = 94;
-pub const SHADERS: u32 = 95;
+pub const SHADER_QUEUE_ASK_CORNERS: u32 = 90;
+pub const SHADER_QUEUE_ASK_LIGHT_CORNERS: u32 = 91;
+pub const SHADERS: u32 = 92;
 
 /// The air as the frame's shaders read it: its medium, its tables and the
 /// sky, the eye in it, the march through it, its light and the view
@@ -396,7 +388,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "side",
         "record",
         "visible",
-        "list",
         "walked",
         "cast",
     ],
@@ -632,7 +623,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_list",
         "record",
         "visible",
-        "list",
         "light",
     ],
     // SHADER_LIGHT_MAP
@@ -1071,14 +1061,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "record_hits",
         "record_stops",
     ],
-    // SHADER_PARKED_TILES
-    &[
-        "walk_word",
-        "eye_bind",
-        "tile_word",
-        "walked",
-        "parked_tiles",
-    ],
     // SHADER_LIGHT_RECORD_STOPS
     &[
         "walk_word",
@@ -1093,20 +1075,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "record_stops.light",
         "record_hits",
         "record_stops",
-    ],
-    // SHADER_LIGHT_CLAIM
-    &[
-        "walk_word",
-        "decor_word",
-        "eye_bind",
-        "walk_node",
-        "side",
-        "light_aim",
-        "light_box",
-        "light_list",
-        "light_stand",
-        "light_enlist",
-        "light_claim",
     ],
     // SHADER_LIGHT_MARK_DRAWS_OPEN
     &[
@@ -1169,8 +1137,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "samples_run.light",
         "queue_ask",
     ],
-    // SHADER_ROLL
-    &["walk_word", "roll"],
     // SHADER_QUEUE_ASK_CORNERS
     &[
         "walk_word",

@@ -53,9 +53,8 @@ function loaded(s: Snapshot): boolean {
   );
 }
 
-/** Called once by the app, after it has set the place, so boot order is
- * explicit, not import order; where it stands is `boot_state`. A second call
- * is refused. */
+/** Called once by the app, ahead of the shell (src/boot.ts); where it stands
+ * is `boot_state`. A second call is refused. */
 export function boot(): void {
   if (called) throw new InvariantError(Errno.EALREADY);
   called = true;

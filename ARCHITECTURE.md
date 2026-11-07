@@ -542,17 +542,20 @@ their boxes and faces on its angular cells and the rest of the light's passes
 on its map's texels, which neither shrinks; the finish and the markers draw at
 the display's pixels at any scale, their text sharp. Each GPU span says which
 it is (span.json `per_px`, `per_cell`), and a span whose passes are of two
-kinds is split. `auto` is a budget controller, as congestion control is, over
-both knobs: the frame's budget is the display's interval, no tighter than
-1/60 s; while the frame's GPU time runs over it a knob steps down, the scale to
-its least first, then the lattice, and a knob steps up, the lattice first,
-where the step above, the rest of the GPU's time as it is, the per-pixel spans'
-grown by their pixels and the lattice's by its cells, would fit; one step a
-settling window. A lattice changed draws no other pixel: the next cast lays
-it, and the frames that stand on the last cast's samples keep its grid.
-Without timestamps it reads the frames' gaps, which cannot foresee room, so
-only the scale moves, and a step up is a probe whose failure doubles the wait
-before the next.
+kinds is split. Neither knob reaches the rest, so a third gives every pass more
+time: the rate, the interval between turns, a refresh a step. `auto` is a budget
+controller, as congestion control is, over all three: the frame's budget is the
+interval turns are paced at, no tighter than 1/60 s; while the frame's GPU time
+runs over it a knob steps down, the rate to 30 Hz first (`RATE_MIN_HZ`), then
+the scale to its least, then the lattice, and a knob steps up, the lattice
+first and the rate last, where the step above, the rest of the GPU's time as it
+is, the per-pixel spans' grown by their pixels and the lattice's by its cells,
+would fit its budget; one step a settling window. The rate is the runtime's: the
+kernel asks it (`TURN_PACE`) and reads it back off each turn's grant. A lattice
+changed draws no other pixel: the next cast lays it, and the frames that stand
+on the last cast's samples keep its grid. Without timestamps it reads the
+frames' gaps, which cannot foresee room, so only the scale moves, and a step up
+is a probe whose failure doubles the wait before the next.
 
 What the rays asked of each node is kept between frames in the **node
 cache** (`pxl-engine node_cache.rs`), a table keyed by the node, and
@@ -1044,10 +1047,12 @@ for a command alone carries neither and draws nothing. The view each frame is
 drawn at is the world surface's layout box, in CSS pixels
 (`GPU_SURFACE_RESIZE`), and a
 pointer is placed on it from its top left (`INPUT_POINTER`). The runtime's turns are paced to the display by
-the frame pacing the client boots it with (`ts/client/src/abi/boot.ts`,
+the frame pacing the client boots it with (`ts/client/src/runtime/start.ts`,
 `@xpute/runtime/sched/frame_pacing.ts`), its numbers the kernel's
-(`spec/client/kernel/sys/sched/pacing.json`); an input makes the turns after it
-interactive (`ts/client/src/port/input.ts` `send_input`). The tick's phases are
+(`spec/client/kernel/sys/sched/pacing.json`), at no less than the interval the
+kernel last asked (`TURN_PACE`); an input makes the turns after it
+interactive (`ts/client/src/port/input.ts` `send_input`) and hurries none past
+that interval. The tick's phases are
 the kernel's (`spec/client/kernel/sys/sched/phase.json`), and `visible` holds back
 the content's share (`sys/sched/tick.rs` `POLICY`). What moves the eye runs in
 `interaction`, and after it what the pointer is over where the eye now stands,

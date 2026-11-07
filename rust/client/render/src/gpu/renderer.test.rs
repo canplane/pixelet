@@ -429,11 +429,10 @@ fn a_frame_decides_as_its_conditions_did_over_every_read() {
             ungated: bit(4),
             casts_px: bit(5),
             light_casts: bit(6),
-            eye_queue: bit(7),
         };
         let quiet = r.stands && r.listed_same && !r.clouds_drawn;
         let gated = r.partial && r.stands && !r.ungated;
-        let stood = quiet && !r.casts_px && !r.light_casts && !r.eye_queue;
+        let stood = quiet && !r.casts_px && !r.light_casts;
         let d = Decided::of(r);
         assert_eq!(
             d,

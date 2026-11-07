@@ -3,7 +3,7 @@
 use super::*;
 use crate::frame::shader::floor;
 use crate::gpu::api::word_bytes;
-use crate::gpu::ray::{drawn_fits, DRAWN_MOST};
+use crate::gpu::ray::{drawn_fits, DRAWN_AREA, DRAWN_MOST};
 use pxl_engine::grid::LATTICE_MAX;
 use pxl_engine::screen::TILE;
 use pxl_engine::{beam, ray};
@@ -45,8 +45,10 @@ fn drawn_within_the_floor() {
             } else {
                 let side = w.max(h) == DRAWN_MOST[0];
                 let tiles = [w, h].map(|v| v.div_ceil(TILE) + 1);
+                let area = f64::from(w) * f64::from(h) > 0.99 * f64::from(DRAWN_AREA);
                 assert!(
-                    side || tiles[0] * tiles[1] > floor::MAX_COMPUTE_WORKGROUPS_PER_DIMENSION,
+                    side || area
+                        || tiles[0] * tiles[1] > floor::MAX_COMPUTE_WORKGROUPS_PER_DIMENSION,
                     "{px:?} at {share}: {w}x{h} short of the most"
                 );
             }
@@ -55,16 +57,13 @@ fn drawn_within_the_floor() {
 }
 
 /// At the most drawn, of every shape from a square to 32:9, the beam rays' buffer, the camera
-/// grid's words at that shape's field and the eye's holes past them, fits the floor; and the
-/// bytes a drawn pixel takes there, before the grid.
+/// grid's words at that shape's field and the eye's holes past them, fits the floor.
 #[test]
 fn most_drawn_fits_every_buffer() {
-    let most = DRAWN_MOST[0];
     for wide in [1.0f32, 16.0 / 9.0, 21.0 / 9.0, 32.0 / 9.0] {
-        for size in [
-            [most, (most as f32 / wide) as u32],
-            [(most as f32 / wide) as u32, most],
-        ] {
+        let short = (DRAWN_AREA as f32 / wide).sqrt();
+        let long = short * wide;
+        for size in [[long as u32, short as u32], [short as u32, long as u32]] {
             let aspect = size[0] as f32 / size[1] as f32;
             let tan = [HALF_TAN as f32 * aspect, HALF_TAN as f32];
             for lattice in [1, LATTICE_MAX] {
@@ -78,15 +77,4 @@ fn most_drawn_fits_every_buffer() {
             }
         }
     }
-    let size = [7680, 4320];
-    let px = f64::from(size[0] * size[1]);
-    let bits = f64::from(ray::hole_words(size)) * 2.0 * 32.0;
-    let grid = beam::Grid::of([HALF_TAN as f32 * 16.0 / 9.0, HALF_TAN as f32], 1);
-    eprintln!(
-        "the eye's holes at {size:?}: {:.2} bits a drawn pixel, {} bytes in all; the grid's \
-         words at 16:9, lattice 1: {} bytes",
-        bits / px,
-        word_bytes(ray::holes_words(size) as usize),
-        word_bytes(grid.walked_at() as usize)
-    );
 }

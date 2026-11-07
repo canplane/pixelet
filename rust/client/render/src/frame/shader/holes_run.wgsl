@@ -1,17 +1,10 @@
 // pxl-render/holes_run.wgsl
 
 // The holes' run, either observer's, as the queue's passes count its work (queue_walk.wgsl,
-// queue_ask.wgsl, queue_last.wgsl): its walks' tag in the node cache's keys, its kind's caps,
-// and the lanes its visits and asks are counted in, the observer the bound head's
-// (light_aim.wgsl `light_run`).
+// queue_ask.wgsl, queue_last.wgsl): its walks' tag in the node cache's keys, and the lanes its
+// visits and asks are counted in, the observer the bound head's (light_aim.wgsl `light_run`).
 
 const WALK_PASS: u32 = MISSED_PASS;
-
-/// The first of its kind's caps in the node cache's head (pxl-engine `node_cache::caps_at`,
-/// `ray::EYE_HOLES`, `ray::LIGHT_HOLES`).
-fn queue_caps() -> u32 {
-  return select(EYE_HOLES_CAPS, LIGHT_HOLES_CAPS, light_run());
-}
 
 /// Where the asks' records lie in its observer's queue's view (pxl-engine
 /// `ray::queue_records_at`, `ray::QUEUE_EYE_HOLES`, `ray::QUEUE_LIGHT_HOLES`).

@@ -6,15 +6,11 @@
 //! frame's dispatches where no mapping of it is out (`copied`), mapped back
 //! (`mapped`), and handed on as it lands with what the CPU knew of the
 //! frame that counted it (`Frame`), by the renderer's number of that frame
-//! (`RayCounts`), as a GPU read is. Each observer's run, counted or not, keeps
-//! its owed work in a word of its own, which the first copy free carries
-//! (`count::OWED`), and what lands tells whether the observer is owed a run
-//! (`owed`).
+//! (`RayCounts`), as a GPU read is.
 
 use pxl_engine::{count, node_cache, raster, ray};
 use xpute_core::mem::off_of;
 
-use super::sequence;
 use crate::gpu::api::{buffer_usage, bytes, signaled, word_bytes, Gpu, RESULT};
 
 const WORDS: usize = count::WORDS as usize;
@@ -44,13 +40,11 @@ pub struct RayCounts {
 
 /// What the CPU knew of a counted frame: the renderer's number it will
 /// take (renderer.rs `FrameStat::frame`), and an observer's each, whether it
-/// cast, whether its holes' queue ran, its cast or its queue alone (`queues`),
-/// and its pixels or slots.
+/// cast and its pixels or slots.
 #[derive(Clone, Copy, Default)]
 pub(super) struct Frame {
     pub number: f64,
     pub casts: [bool; count::OBSERVERS as usize],
-    pub queues: [bool; count::OBSERVERS as usize],
     pub rays: [u32; count::OBSERVERS as usize],
 }
 
@@ -63,181 +57,18 @@ pub(super) struct Counts {
     pub boxes: [u32; count::OBSERVERS as usize],
 }
 
-/// The observers, as the readback keeps them (pxl-engine `count::OBSERVERS`), the eye's place.
-const OBSERVERS: usize = count::OBSERVERS as usize;
-const EYE: usize = count::EYE as usize;
-
-/// The one readback's slot and each observer's owed work as the CPU knows them, a pure state
-/// its frames step (`copy`, `ask`, `land`, `dropped`, `off`) and read (`wants_frame`, `wakes`),
-/// so every case is tested on the CPU (count.test.rs). One copy is out at a time, from the
-/// frame that encodes it (`copied`) to the mapping the next frame asks (`mapped`) and its
-/// landing. An observer's queue run, the eye's cast or its queue alone, the light's cast, is a
-/// generation of its own (`cast`), and its owed work (`count::OWED`), kept on the device in a
-/// word of its own until read (`Counter`), rides the first copy a frame makes once no other is
-/// out, named by that generation (`carried`): the run's own frame's, or a later one's that
-/// copies it alone (`pending`). Until it lands the observer is owed nothing; it is owed a run
-/// (`owed`) where what landed says so, where the mapping was refused, or where the frame that
-/// ran it was dropped. A copy of an older generation than an observer's last never clears what
-/// a newer run owes. So every run's work is read back, waits to be, or is owed, and each asks
-/// for the frame that goes on with it.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub(super) struct Readback {
-    /// A copy encoded, its mapping asked by the next frame.
-    pub copied: bool,
-    /// Its mapping out, until it lands.
-    pub mapped: bool,
-    /// Whether the copy out holds the lanes, the `ray_counts` setting's.
-    pub counted: bool,
-    /// Each observer's generation: its queue's runs, and each time it is let go, so far.
-    pub cast: [u32; OBSERVERS],
-    /// The generation whose owed work the copy out holds, an observer's each, if any.
-    pub carried: [Option<u32>; OBSERVERS],
-    /// Whether each observer's last run's owed work waits for a copy, none having been free.
-    pub pending: [bool; OBSERVERS],
-    /// Whether each observer ran in the frame that made the last copy, or tried to.
-    pub ran: [bool; OBSERVERS],
-    /// Whether each observer is owed a run of its queue.
-    pub owed: [bool; OBSERVERS],
-    /// Whether the eye's rolled lattice is owed an offset (`count::LATTICE_OWED`), as the eye's
-    /// owed work of a run since the grid was last laid that landed says: unlike `owed`, read
-    /// off a run older than the eye's last, whose count of offsets a later run of the same
-    /// grid only adds to, so the casts go on until one says every offset is counted.
-    pub lattice: bool,
-    /// The eye's generation the grid was last laid in (`lays`).
-    pub laid: u32,
-}
-
-impl Readback {
-    /// After a frame's dispatches, where it counted its lanes (`counted`) or an observer's
-    /// queue ran (`ran`), a generation of its own each: whether its counts are copied, which
-    /// they are where none are out, with every observer's owed work that waits for a copy, its
-    /// last run's. A run owes nothing until what it left lands.
-    pub fn copy(&mut self, counted: bool, ran: [bool; OBSERVERS]) -> bool {
-        for (o, &ran) in ran.iter().enumerate() {
-            if ran {
-                self.cast[o] = self.cast[o].wrapping_add(1);
-                (self.owed[o], self.pending[o]) = (false, true);
-            }
-        }
-        self.ran = ran;
-        let copy = (counted || self.pending.contains(&true)) && !self.copied && !self.mapped;
-        if copy {
-            (self.copied, self.counted) = (true, counted);
-            for o in 0..OBSERVERS {
-                self.carried[o] = self.pending[o].then_some(self.cast[o]);
-                self.pending[o] = false;
-            }
-        }
-        copy
-    }
-
-    /// As a frame begins, the copy the frame before made asked to be mapped, the mapping
-    /// before it landed (`signaled`): whether to ask.
-    pub fn ask(&mut self, signaled: bool) -> bool {
-        let ask = self.copied && !self.mapped && signaled;
-        if ask {
-            (self.copied, self.mapped) = (false, true);
-        }
-        ask
-    }
-
-    /// Whether the copy out holds observer `o`'s owed work of its last generation.
-    fn current(&self, o: usize) -> bool {
-        self.carried[o] == Some(self.cast[o])
-    }
-
-    /// The frame's eye run lays the grid anew, its rolled lattice owed from its first offset:
-    /// the eye's owed work of an earlier generation no longer says what it owes.
-    pub fn lays(&mut self) {
-        self.laid = self.cast[EYE].wrapping_add(1);
-        self.lattice = true;
-    }
-
-    /// The mapping out landed, refused where not `ok`, each observer's owed work read as
-    /// `owed`: an observer whose last generation it holds is owed where that owes work or the
-    /// mapping was refused; an older one's reading changes nothing, but the eye's lattice,
-    /// read off any generation since the grid was laid. Whether its lanes are taken.
-    pub fn land(&mut self, ok: bool, owed: [u32; OBSERVERS]) -> bool {
-        self.mapped = false;
-        for (o, &owed) in owed.iter().enumerate() {
-            if self.current(o) {
-                self.owed[o] = !ok || owed != 0;
-            }
-        }
-        if self.carried[EYE].is_some_and(|g| self.since_laid(g)) {
-            self.lattice = !ok || owed[EYE] & count::LATTICE_OWED != 0;
-        }
-        ok && self.counted
-    }
-
-    /// Whether the eye's generation `g` ran on the grid last laid.
-    pub fn since_laid(&self, g: u32) -> bool {
-        g.wrapping_sub(self.laid) <= self.cast[EYE].wrapping_sub(self.laid)
-    }
-
-    /// The last frame dropped, its run and its copy with it: an observer that ran in it is owed
-    /// the run again, its work never done; one whose earlier work the copy held waits for a
-    /// copy again, the word it was kept in as it was.
-    pub fn dropped(&mut self) {
-        if self.copied {
-            self.copied = false;
-            for o in 0..OBSERVERS {
-                self.pending[o] |= self.carried[o].is_some();
-            }
-        }
-        for o in 0..OBSERVERS {
-            if self.ran[o] {
-                (self.owed[o], self.pending[o]) = (true, false);
-                self.lattice |= o == EYE;
-            }
-        }
-        self.ran = [false; OBSERVERS];
-    }
-
-    /// Observer `o` let go, the light's cast released or no world to cast in: a generation of
-    /// its own, owing nothing, as its next run casts afresh.
-    pub fn off(&mut self, o: usize) {
-        self.cast[o] = self.cast[o].wrapping_add(1);
-        (self.owed[o], self.pending[o]) = (false, false);
-        self.lattice &= o != EYE;
-    }
-
-    /// Whether the frame after this one must run: a copy holding an observer's last owed work
-    /// waits on it to be mapped, or an observer that may run (`on`) is owed a run or waits for a
-    /// copy of its last.
-    pub fn wants_frame(&self, on: [bool; OBSERVERS]) -> bool {
-        (0..OBSERVERS).any(|o| {
-            (self.copied && self.current(o)) || (on[o] && (self.owed[o] || self.pending[o]))
-        })
-    }
-
-    /// Whether a frame that runs no observer copies owed work that waits for one (`copy`).
-    pub fn copies_pending(&self) -> bool {
-        self.pending.contains(&true) && !self.copied && !self.mapped
-    }
-
-    /// Whether the mapping out, which holds an observer's last owed work, landed for a frame to
-    /// read (`signaled`), its fence's store having woken the turn.
-    pub fn wakes(&self, signaled: bool) -> bool {
-        self.mapped && signaled && (0..OBSERVERS).any(|o| self.current(o))
-    }
-}
-
-/// The array and its readback (`Readback`); whether this frame counts (`on`), what the CPU
-/// knew of the frame copied (`copied_frame`), and the counts that landed, until taken
-/// (`take`).
+/// The array and its readback, one copy out at a time, from the frame that encodes it (`copied`)
+/// to the mapping the next frame asks (`mapped`) and its landing; whether this frame counts
+/// (`on`), what the CPU knew of the frame copied (`copied_frame`), and the counts that landed,
+/// until taken (`take`).
 pub(super) struct Counter {
     counts: u32,
     read: u32,
-    /// Each observer's owed work as its last run left it (`node_cache::OWED_AT`), a word
-    /// each, copied out of the node cache's head the frame it runs, which a later frame's
-    /// head written or a run of the other observer clears; read into the array by the copy
-    /// that carries it, the run's frame's or a later one's (`Readback::pending`).
-    owed: u32,
     on: bool,
     frame: Frame,
     copied_frame: Frame,
-    slot: Readback,
+    copied: bool,
+    mapped: bool,
     read_counts: Box<[u32; WORDS]>,
     /// The mapping's fence and result, the runtime's, and the ticket it
     /// was last asked with, the kernel's: one mapping out at a time.
@@ -258,14 +89,11 @@ impl Counter {
                 word_bytes(WORDS),
                 buffer_usage::MAP_READ | buffer_usage::COPY_DST,
             ),
-            owed: g.buf(
-                word_bytes(OBSERVERS),
-                buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
-            ),
             on: false,
             frame: Frame::default(),
             copied_frame: Frame::default(),
-            slot: Readback::default(),
+            copied: false,
+            mapped: false,
             read_counts: Box::new([0; WORDS]),
             mapping: Box::new([0; 2]),
             ticket: 0,
@@ -303,36 +131,16 @@ impl Counter {
         g.write_buf(self.counts, 0, bytes(&[0u32; WORDS]));
     }
 
-    /// A frame that runs no observer and casts nothing (`Frame::default`), as where no world
-    /// is cast in: its copy carries no run of its own.
-    pub(super) fn idle(&mut self) {
-        self.frame = Frame::default();
-    }
-
-    /// After the frame's dispatches: each observer's owed work kept where its queue ran; then
-    /// the counts gathered into the array and copied where none are out, each observer's that
-    /// cast where the frame counts, and each observer's owed work its copy carries
-    /// (`Readback::copy`).
+    /// After the frame's dispatches: the counts of each observer that cast gathered into the
+    /// array and copied, where this frame counts and none are out.
     pub(super) fn copy(&mut self, g: &Gpu, encoder: u32, from: &Counts) {
-        let ran = self.frame.queues;
-        let keep = [&sequence::EYE_OWED_KEEP, &sequence::LIGHT_OWED_KEEP];
-        for (o, step) in keep.into_iter().enumerate() {
-            if ran[o] {
-                g.copy_buf(
-                    encoder,
-                    (from.node_cache, step.from_at()),
-                    (self.owed, word_bytes(o)),
-                    word_bytes(1),
-                );
-            }
-        }
-        if !self.slot.copy(self.on, ran) {
+        if !self.on || self.copied || self.mapped {
             return;
         }
-        self.carry(g, encoder);
+        self.copied = true;
         for o in 0..count::OBSERVERS {
             let k = o as usize;
-            if !self.on || !self.frame.casts[k] {
+            if !self.frame.casts[k] {
                 continue;
             }
             // Each run where it was counted, into its lanes.
@@ -365,45 +173,14 @@ impl Counter {
         self.copied_frame = self.frame;
     }
 
-    /// The owed work the copy carries, each observer's kept word, into the array.
-    fn carry(&self, g: &Gpu, encoder: u32) {
-        for o in 0..count::OBSERVERS {
-            if self.slot.carried[o as usize].is_some() {
-                g.copy_buf(
-                    encoder,
-                    (self.owed, word_bytes(o as usize)),
-                    (self.counts, word_bytes((count::OWED + o) as usize)),
-                    word_bytes(1),
-                );
-            }
-        }
-    }
-
-    /// In a frame that dispatches nothing, the owed work that waits for a copy, copied alone in
-    /// a submission of its own where none is out (`Readback::copies_pending`), so it is read
-    /// back without a run of its own.
-    pub(super) fn copy_pending(&mut self, g: &Gpu) {
-        if !self.slot.copies_pending() {
-            return;
-        }
-        let encoder = g.encoder();
-        self.slot.copy(false, [false; OBSERVERS]);
-        self.carry(g, encoder);
-        g.copy_buf(encoder, (self.counts, 0), (self.read, 0), word_bytes(WORDS));
-        self.copied_frame = Frame::default();
-        g.submit(encoder);
-    }
-
     /// The counts copied last frame mapped back, and those that landed
     /// kept with what the CPU knew of their frame, until taken: after the
     /// frame that copied them was submitted.
     pub(super) fn back(&mut self, g: &Gpu) {
         let signaled = signaled(&self.mapping[0], self.ticket);
-        if self.slot.mapped && signaled {
-            let ok = self.mapping[1] == RESULT::OK;
-            let owed =
-                [count::EYE, count::LIGHT].map(|o| self.read_counts[(count::OWED + o) as usize]);
-            if self.slot.land(ok, owed) {
+        if self.mapped && signaled {
+            self.mapped = false;
+            if self.mapping[1] == RESULT::OK {
                 let (l, f) = (&self.read_counts, self.copied_frame);
                 let mut counts = [0.0; RAY_COUNTS];
                 for o in 0..count::OBSERVERS {
@@ -423,7 +200,8 @@ impl Counter {
                 });
             }
         }
-        if self.slot.ask(signaled) {
+        if self.copied && !self.mapped && signaled {
+            (self.copied, self.mapped) = (false, true);
             let addr = off_of(self.read_counts.as_ptr()) as u32;
             self.ticket = self.ticket.wrapping_add(1);
             g.map_read(
@@ -437,32 +215,6 @@ impl Counter {
         }
     }
 
-    /// Whether observer `o` is owed a run of its queue (`Readback::owed`).
-    pub(super) fn owed(&self, o: u32) -> bool {
-        self.slot.owed[o as usize]
-    }
-
-    /// Whether the eye's rolled lattice is owed an offset (`Readback::lattice`).
-    pub(super) fn lattice_owed(&self) -> bool {
-        self.slot.lattice
-    }
-
-    /// Whether the frame after this one must run for an observer's owed work, each observer
-    /// that may run `on` (`Readback::wants_frame`).
-    pub(super) fn wants_frame(&self, on: [bool; OBSERVERS]) -> bool {
-        self.slot.wants_frame(on)
-    }
-
-    /// Whether an observer's owed work landed for a frame to read (`Readback::wakes`).
-    pub(super) fn owed_landed(&self) -> bool {
-        self.slot.wakes(signaled(&self.mapping[0], self.ticket))
-    }
-
-    /// Observer `o` let go (`Readback::off`).
-    pub(super) fn off(&mut self, o: u32) {
-        self.slot.off(o as usize);
-    }
-
     /// The counts that landed since last taken.
     pub(super) fn take(&mut self) -> Option<RayCounts> {
         self.ray_counts.take()
@@ -470,15 +222,6 @@ impl Counter {
 
     /// The frame its copy was encoded in was dropped.
     pub(super) fn on_dropped(&mut self) {
-        self.slot.dropped();
-    }
-
-    /// The frame's eye run lays the grid anew (`Readback::lays`).
-    pub(super) fn lays(&mut self) {
-        self.slot.lays();
+        self.copied = false;
     }
 }
-
-#[cfg(test)]
-#[path = "count.test.rs"]
-mod test;

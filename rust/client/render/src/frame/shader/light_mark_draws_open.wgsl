@@ -6,13 +6,12 @@
 
 @group(0) @binding(24) var<storage, read_write> draws: array<u32, 3>;
 
-/// The drawn receivers' workgroups (`light::DRAWS_DISPATCH_WORDS`), the cast's one thread: the
-/// host's boxes' threads, and past them the placed decor's where any is placed.
+/// The drawn receivers' workgroups (`light::DRAWS_DISPATCH_WORDS`), the cast's one thread: one
+/// a host's box, and past them the placed decor's where any is placed.
 @compute @workgroup_size(1)
 fn light_mark_draws_open_cs() {
   let stands = min(u32(head[LIGHT_STANDS_AT].x), LIGHT_STANDS);
   let placed = instance_cnt();
-  let room = LIGHT_STANDS + instance_cap();
-  let threads = select(stands, LIGHT_STANDS + placed, placed != 0u);
-  draws = array<u32, 3>(workgroups(threads, room, ROW_LANES), 1u, 1u);
+  let groups = select(stands, LIGHT_STANDS + workgroups(placed, instance_cap(), ROW_LANES), placed != 0u);
+  draws = array<u32, 3>(min(groups, MAX_COMPUTE_WORKGROUPS_PER_DIMENSION), 1u, 1u);
 }

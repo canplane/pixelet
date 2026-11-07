@@ -2857,14 +2857,14 @@ impl Chain<'_> {
         let at = 0;
         let placed =
             read(d, q, &self.regions, frame.name)[2 * drawn::REGIONS as usize - 1].min(self.cap);
-        let threads = if placed == 0 {
+        let groups = if placed == 0 {
             0
         } else {
-            light::STANDS as u32 + placed
+            light::STANDS as u32 + placed.div_ceil(ROW_LANES)
         };
         assert_eq!(
             opened[at..at + 3],
-            [threads.div_ceil(ROW_LANES), 1, 1],
+            [groups, 1, 1],
             "{}: the drawn receivers' workgroups",
             frame.name
         );

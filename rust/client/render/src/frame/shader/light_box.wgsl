@@ -80,6 +80,11 @@ fn box_tiles(lo: vec3<f32>, hi: vec3<f32>) -> BoxTiles {
   if (!light_within(lo, hi, light_reach())) {
     return BoxTiles(false, vec2<i32>(0), vec2<i32>(0));
   }
+  return corner_tiles(lo, hi);
+}
+
+/// The tiles the box from `lo` to `hi` stands on, whatever the reach (`Light::corner_tiles`).
+fn corner_tiles(lo: vec3<f32>, hi: vec3<f32>) -> BoxTiles {
   var first = vec2<i32>(2147483647i);
   var last = vec2<i32>(-2147483647i);
   for (var k = 0u; k < 8u; k += 1u) {

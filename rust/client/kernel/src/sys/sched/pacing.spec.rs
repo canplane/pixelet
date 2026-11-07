@@ -18,10 +18,14 @@
     reason = "generated from the spec"
 )]
 
-/// The slowest rate turns are paced at: the most whole refreshes of the display that fit
-/// one interval at this rate, one at least, so a 120 Hz display runs a turn every second
-/// refresh.
+/// The rate turns are paced at where the kernel asks none slower: the most whole refreshes
+/// of the display that fit one interval at this rate, one at least, so a 120 Hz display
+/// runs a turn every second refresh.
 pub const PACE_HZ: f64 = 60.0;
+
+/// The slowest rate the kernel's load asks (pxl-kernel domain/view/frame/resolution.rs): past
+/// it the pixels give way, not the motion.
+pub const RATE_MIN_HZ: f64 = 30.0;
 
 /// Share of the frame left unspent for the runtime's own work; a share, so a fast display
 /// does not lose most of its frame to it.

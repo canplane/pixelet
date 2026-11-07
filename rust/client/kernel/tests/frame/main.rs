@@ -9,8 +9,8 @@
 //! The frames fail on any error WebGPU's validation raises, which a scope on the core's
 //! thread holds turn by turn (gpu.rs); on the kernel's stop, a broken invariant's report
 //! (the encode rule's ENOTRECOVERABLE in pxl-render gpu/api.rs among them) or a trap; on
-//! owed work that has not come to rest within `REST_FRAMES` idle turns of a view left
-//! standing; and on any wait that outlasts the harness's own clock (watch.rs).
+//! a view left standing that does not come to rest within `REST_FRAMES` idle turns; and on
+//! any wait that outlasts the harness's own clock (watch.rs).
 
 mod fs;
 mod gpu;
@@ -19,7 +19,6 @@ mod runtime;
 mod spec;
 mod watch;
 
-use pxl_engine::beam::ROLLS;
 use pxl_engine::ray::holes_words;
 use pxl_engine::screen::JITTERS;
 use pxl_engine::SHARD_ZOOM;
@@ -53,11 +52,10 @@ const NOON_MS: f64 = 1_782_010_800_000.0;
 /// Where the camera goes: Seoul.
 const PLACE: [f64; 2] = [126.978, 37.566];
 
-/// Idle turns a view left standing may ask for before its owed work rests: the rolled
-/// lattice's casts, one a frame (`beam::ROLLS`), then the jitter's sequence over each pixel
-/// (`screen::JITTERS`), each readback landing `FRAME_LATENCY` frames after the frame that
-/// copied it; twice that, for the owed queue's runs a frame's budget leaves to the next.
-const REST_FRAMES: u32 = 2 * (ROLLS + JITTERS + FRAME_LATENCY);
+/// Idle turns a view left standing may ask for before it rests: the jitter's sequence over each
+/// pixel (`screen::JITTERS`), each readback landing `FRAME_LATENCY` frames after the frame that
+/// copied it.
+const REST_FRAMES: u32 = JITTERS + FRAME_LATENCY;
 
 /// Frames the renderer's pipelines are given to be made in before the world is drawn.
 const PIPELINE_FRAMES: u32 = 600;
@@ -155,8 +153,8 @@ impl Run {
     }
 
     /// Idle turns, nothing sent, the clock at the display's pace: how many until the kernel
-    /// asks for the next frame at once no more, its owed work done, a readback's landing
-    /// among it; it asks none at once over a jitter's sequence of turns past the bound after.
+    /// asks for the next frame at once no more, a readback's landing among what it waits on; it
+    /// asks none at once over a jitter's sequence of turns past the bound after.
     /// What moves on its own (the companion standing in view) steps on and wakes it at its own
     /// steps, later than that.
     fn rest(&mut self) -> u32 {
@@ -168,8 +166,8 @@ impl Run {
         }
         assert!(
             asked < REST_FRAMES,
-            "frame {}: the owed work did not rest within {REST_FRAMES} idle turns, the last \
-             asked {asked} turns in",
+            "frame {}: the view did not rest within {REST_FRAMES} idle turns, the last asked \
+             {asked} turns in",
             self.frames
         );
         asked + 1
@@ -278,13 +276,12 @@ fn frames() {
         run.frame(false);
     }
 
-    // The camera sent to the place, and the cast its view asks for: the rolled lattice's
-    // casts and the jitter's sequence over them.
+    // The camera sent to the place, and the cast its view asks for: the jitter's sequence.
     run.call(
         "CAMERA_GOTO",
         &[("lon", V::Num(PLACE[0])), ("lat", V::Num(PLACE[1]))],
     );
-    run.frames(ROLLS + JITTERS);
+    run.frames(JITTERS);
 
     // Frames held: the view stands, the turns keep coming.
     run.frames(JITTERS);
@@ -312,19 +309,19 @@ fn frames() {
             ("value", V::Num(1.0)),
         ],
     );
-    run.frames(ROLLS + JITTERS);
+    run.frames(JITTERS);
 
-    // Idle turns until the owed work rests.
+    // Idle turns until the view rests.
     let rested = run.rest();
     eprintln!(
-        "{} frames: the pipelines made in {made}, the owed work at rest {rested} idle turns \
-         after the last input",
+        "{} frames: the pipelines made in {made}, the view at rest {rested} idle turns after \
+         the last input",
         run.frames
     );
 
-    // The surface an 8K display's, the view cast again over it, and its owed work at rest.
+    // The surface an 8K display's, the view cast again over it and at rest.
     resize(&mut run, LARGE.map(f64::from));
-    run.frames(ROLLS + JITTERS);
+    run.frames(JITTERS);
     let rested = run.rest();
     // Drawn whole, the most the resolution's rule draws it at (pxl-render gpu/surface.rs
     // `render_px`), and what the eye's holes take there (pxl-engine `ray::holes_words`).
@@ -339,7 +336,7 @@ fn frames() {
     let bytes = 4 * u64::from(holes_words([w, h]));
     eprintln!(
         "{LARGE:?}: drawn whole at {w}x{h}, the eye's holes {bytes} bytes, {:.3} bytes a drawn \
-         pixel; the owed work at rest {rested} idle turns after",
+         pixel; the view at rest {rested} idle turns after",
         bytes as f64 / f64::from(w * h),
     );
 }

@@ -8,12 +8,14 @@
 pub mod spec;
 
 use crate::domain::layer::Base as _;
+use crate::sys::boot;
 use crate::sys::mem::section;
 use pxl_spec::space::coord::q3::{self, Q3};
 use spec::{EffectName, StepName};
 use xpute_core::sched::edge::{notified, Notify};
 
 use crate::domain::control::camera::input::{camera_input_step, rehover_at};
+use crate::domain::control::cmd;
 use crate::domain::control::navigation::bootstrap::map_bootstrap_step;
 use crate::domain::control::navigation::follow_mode::follow_mode_step;
 use crate::domain::control::navigation::off_center::{off_center, off_center_step};
@@ -221,9 +223,7 @@ pub fn boot() {
 fn world_tasks() {
     use crate::sys::sched::edge::TaskPriority::*;
     use xpute_core::sched::task::spawn;
-    let spawned = spawn(frame_task(), Frame as u8)
-        && spawn(fetch::fetch_task(), Arrival as u8)
-        && spawn(repository::task(), Background as u8);
+    let spawned = spawn(frame_task(), Frame as u8) && spawn(fetch::fetch_task(), Arrival as u8);
     if !spawned {
         std::process::abort();
     }
@@ -320,8 +320,14 @@ fn frames() -> &'static mut Notify {
     FRAMES.get(Notify::new)
 }
 
+/// A frame turn granted: one still waiting for the GPU takes this one's place, its time added.
 pub fn on_world_frame_asked(grant: TurnGrant) {
-    *FRAME.get(|| None) = Some(grant);
+    let frame = FRAME.get(|| None);
+    let delta = frame.take().map_or(0.0, |was| was.delta);
+    *frame = Some(TurnGrant {
+        delta: delta + grant.delta,
+        ..grant
+    });
     frames().notify();
 }
 
@@ -339,6 +345,12 @@ pub fn take_world_drawn() -> bool {
 async fn frame_task() {
     loop {
         notified(frames).await;
+        // A frame the GPU cannot take without blocking (xpute_gpu::admit) is not run: its grant
+        // waits for the next, so the turn hands the renderer nothing it would have to put off.
+        if api::device().is_some() && !boot::admit_frame()() {
+            request_world_tick();
+            continue;
+        }
         let Some(grant) = FRAME.get(|| None).take() else {
             continue;
         };
@@ -376,11 +388,15 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
     request::declare(Stream::asset, loader::load_wants());
     pump();
     stage::stage_write();
-    stage::stage_render(Pace {
+    let interval_ms = stage::stage_render(Pace {
+        refresh_ms,
         paced_ms,
         gap_ms: delta * 1000.0,
         moving: interactive,
     });
+    if let Some(interval_ms) = interval_ms {
+        cmd::shell::turn_pace(&cmd::TurnPace { interval_ms });
+    }
     let done = now();
     perf_frame(FrameTurn {
         tick: report,

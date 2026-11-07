@@ -155,15 +155,17 @@ impl SourceMinor {
     }
 }
 
-/// A turn's: what the runtime grants it, the credits and the clock.
+/// A turn's: what the runtime grants it, the credits and the clock, and the interval the
+/// kernel asks between them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum TurnMinor {
     GRANT = 0x01,
+    PACE = 0x02,
 }
 
 impl TurnMinor {
-    pub const ALL: [TurnMinor; 1] = [TurnMinor::GRANT];
+    pub const ALL: [TurnMinor; 2] = [TurnMinor::GRANT, TurnMinor::PACE];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<TurnMinor> {
@@ -694,10 +696,14 @@ pub enum Command {
     /// The view's azimuth and scale, when either moved: a frame of its own, so a rotation or a
     /// zoom, which moves them every frame, leaves the snapshot as it was.
     SHELL_VIEW = 0x1b02,
+    /// The least interval the kernel asks between its turns: its load's word on the rate, which
+    /// the next TURN_GRANT's `paced_ms` answers, a whole number of refreshes (the pacing the
+    /// client boots the runtime with, @xpute/runtime sched/frame_pacing.ts `pace`).
+    TURN_PACE = 0x1d02,
 }
 
 impl Command {
-    pub const ALL: [Command; 34] = [
+    pub const ALL: [Command; 35] = [
         Command::SENSOR_POS,
         Command::SENSOR_ORIENT,
         Command::SENSOR_ERR,
@@ -732,6 +738,7 @@ impl Command {
         Command::TEXT_RASTER,
         Command::SHELL_SNAPSHOT,
         Command::SHELL_VIEW,
+        Command::TURN_PACE,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -1572,6 +1579,29 @@ impl xpute_core::ipc::door::Import for ShellView {
     }
 }
 
+/// Command::TURN_PACE's packet.
+pub struct TurnPace {
+    /// 0 asks none, and turns go at the display's own rate.
+    pub interval_ms: f64,
+}
+
+impl TurnPace {
+    /// The children it is written as.
+    pub const FIELDS: u32 = 1;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.f64(Some(self.interval_ms));
+    }
+}
+
+impl xpute_core::ipc::door::Import for TurnPace {
+    const NUMBER: u32 = 7426;
+    const FIELDS: u32 = 1;
+    fn write(&self, w: &mut PacketWriter) {
+        TurnPace::write(self, w);
+    }
+}
+
 /// The shell protocol's core end: what it posts to the runtime and what it hears from it.
 pub mod shell {
     use super::*;
@@ -1606,6 +1636,11 @@ pub mod shell {
 
     /// Command::SHELL_VIEW, posted for the runtime.
     pub fn shell_view(e: &ShellView) {
+        machine::door().send(e);
+    }
+
+    /// Command::TURN_PACE, posted for the runtime.
+    pub fn turn_pace(e: &TurnPace) {
         machine::door().send(e);
     }
 

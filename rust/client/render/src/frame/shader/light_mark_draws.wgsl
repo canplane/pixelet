@@ -2,15 +2,17 @@
 
 // The drawn receivers of the shadow map, each the eye sees standing by the world's one rule
 // (light_mark.wgsl, `Light::box_tiles`): what the host draws that reads the map, the box each
-// stands within as its draw is recorded, a thread each (`light::STANDS_AT`); then
+// stands within as its draw is recorded, a workgroup each (`light::STANDS_AT`); then
 // the decor generated, a thread a slot of its instances (gpu/generator.rs), as many as
-// are placed, where each stands, as decor_compact.wgsl lays it, the threads as many as the
+// are placed, where each stands, as decor_compact.wgsl lays it, the workgroups as many as the
 // cast's one thread opens in a buffer of their own, which this pass reads its count from and
 // does not bind (light_mark_draws_open.wgsl, `light::DRAWS_DISPATCH_WORDS`). Seen where a
 // ball about its box, a placed decor's about its middle as wide as decor is tall and wide,
-// meets the view (`eye::sees`); the box stands, as every receiver's does (`box_tiles`). The
-// host's are those frame/draw.rs `DrawList` records, no more than `light::STANDS`. Run after
-// decor is placed and the world's receivers stood, before the propagation.
+// meets the view (`eye::sees`); a host's box stands, as every receiver's does (`box_tiles`), and
+// a decor within the reach by that box stands on its footprint (`Light::corner_tiles`), the
+// propagation's way up holding what it lifts over it (light_propagate.wgsl `up`). The host's
+// are those frame/draw.rs `DrawList` records, no more than `light::STANDS`. Run after decor is
+// placed and the world's receivers stood, before the propagation.
 
 /// The decor compacted this frame as its draws read it (decor_compact.wgsl
 /// `decor_compact_cs`): its drawing words, its regions and its instances.
@@ -69,36 +71,53 @@ fn sees(v: vec3<f32>, radius: f32) -> bool {
 }
 
 @compute @workgroup_size(ROW_LANES, 1, 1)
-fn light_mark_draws_cs(@builtin(global_invocation_id) id: vec3<u32>) {
+fn light_mark_draws_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_invocation_index) lane: u32) {
   var lo: vec3<f32>;
   var hi: vec3<f32>;
-  if (id.x < LIGHT_STANDS) {
-    if (id.x >= u32(head[LIGHT_STANDS_AT].x)) {
+  var foot_lo: vec3<f32>;
+  var foot_hi: vec3<f32>;
+  // A host's box a workgroup, its tiles among the lanes, as one may stand over the whole map;
+  // past them a placed decor a thread.
+  var first = 0u;
+  var lanes = 1u;
+  if (group.x < LIGHT_STANDS) {
+    if (group.x >= u32(head[LIGHT_STANDS_AT].x)) {
       return;
     }
-    lo = bitcast<vec3<f32>>(head[LIGHT_STANDS_AT + 1u + 2u * id.x].xyz);
-    hi = bitcast<vec3<f32>>(head[LIGHT_STANDS_AT + 2u + 2u * id.x].xyz);
+    lo = bitcast<vec3<f32>>(head[LIGHT_STANDS_AT + 1u + 2u * group.x].xyz);
+    hi = bitcast<vec3<f32>>(head[LIGHT_STANDS_AT + 2u + 2u * group.x].xyz);
+    foot_lo = lo;
+    foot_hi = hi;
+    first = lane;
+    lanes = ROW_LANES;
   } else {
-    let k = id.x - LIGHT_STANDS;
+    let k = (group.x - LIGHT_STANDS) * ROW_LANES + lane;
     if (k >= instance_cnt()) {
       return;
     }
     let o = vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u)));
-    let middle = decor_middle(instance_pos(k, o));
+    let base = instance_pos(k, o);
+    let middle = decor_middle(base);
     lo = middle - vec3<f32>(decor_radius());
     hi = middle + vec3<f32>(decor_radius());
+    let half = vec3<f32>(vec2<f32>(0.5 * f32(WIDEST)), 0.0);
+    foot_lo = base - half;
+    foot_hi = base + half;
   }
   // Seen where the ball about the box meets the view.
   if (!sees(0.5 * (lo + hi), 0.5 * length(hi - lo))) {
     return;
   }
-  let b = box_tiles(lo, hi);
+  if (!light_within(lo, hi, light_reach())) {
+    return;
+  }
+  let b = corner_tiles(foot_lo, foot_hi);
   if (!b.got) {
     return;
   }
-  for (var j = b.first.y; j <= b.last.y; j += 1i) {
-    for (var i = b.first.x; i <= b.last.x; i += 1i) {
-      stand(vec2<i32>(i, j));
-    }
+  let across = u32(b.last.x - b.first.x) + 1u;
+  let tiles = across * (u32(b.last.y - b.first.y) + 1u);
+  for (var t = first; t < tiles; t += lanes) {
+    stand(b.first + vec2<i32>(i32(t % across), i32(t / across)));
   }
 }

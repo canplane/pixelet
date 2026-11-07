@@ -8,7 +8,7 @@
 
 @group(0) @binding(8) var<storage, read_write> beams: array<u32>;
 /// The node cache, whose drawable entries' faces' words an ask names (pxl-engine
-/// `record::TO_RECORD`, `node_cache::W_FACES`): an ask a face, so one writer a word.
+/// `record::TO_RECORD`, `node_cache::R_FACES`): an ask a face, so one writer a word.
 @group(0) @binding(9) var<storage, read_write> node_cache: array<u32>;
 /// Where its asks lie and how many (`raster::ARGS_ASKS`, `raster::ARGS_INSTANCES`).
 @group(0) @binding(16) var<storage, read> args: array<u32>;

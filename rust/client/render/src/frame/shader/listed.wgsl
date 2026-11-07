@@ -1,12 +1,11 @@
 // pxl-render/listed.wgsl
 
 // The items of a kind laid as a list (samples.wgsl, corners.wgsl), as the queue's walks take
-// them (queue_walk.wgsl, queue_last.wgsl): each walk the list's next place off its counter, every
-// item whatever the budget, as a kind whose items it does not reach parks them where they lie.
+// them (queue_walk.wgsl, queue_last.wgsl): each walk the list's next place off its counter.
 
 /// The next item a walk over the node cache takes, the first or the one `again`; `NONE` past the
 /// list.
-fn next_item(again: bool, spent: bool) -> u32 {
+fn next_item(again: bool) -> u32 {
   return item_listed(take(select(QUEUE_TAKEN, QUEUE_TAKEN_AGAIN, again)));
 }
 

@@ -3,10 +3,9 @@
 // The eye's holes among the beam rays' words, past the camera grid's (pxl-engine
 // `beam::Grid::walked_at`, `ray::holes_words`): a bit a drawn pixel, in squares of `CAST_SIDE`
 // pixels of `SQUARE_WORDS` words each, row by row. The walked bits, the pixels the last cast
-// marked (cast.wgsl `cast_cs`), which the light's receivers read (light_mark.wgsl); the owed
-// bits, the holes no ray of the eye's queue holds, which its first walk takes and clears
-// (queue.wgsl); the word saying what the queue's run takes; and the two pools its rays are
-// parked in, one taken by a run alone, the other filled by it (`ray::pool_at`).
+// marked (cast.wgsl `cast_cs`), which the light's receivers read (light_mark.wgsl); the holes the
+// cast listed (queue.wgsl); and the pool their rays are parked in between the run's walks
+// (`ray::pool_at`).
 
 /// The walked bits' first word.
 fn walked_at() -> u32 {
@@ -18,8 +17,8 @@ fn squares(size: vec2<u32>) -> vec2<u32> {
   return (size + vec2<u32>(CAST_SIDE - 1u)) / CAST_SIDE;
 }
 
-/// The words of one set of the holes' bits of a target `size` (`ray::hole_words`).
-fn hole_words(size: vec2<u32>) -> u32 {
+/// The walked bits' words of a target `size` (`ray::walked_words`).
+fn walked_words(size: vec2<u32>) -> u32 {
   let s = squares(size);
   return s.x * s.y * SQUARE_WORDS;
 }
@@ -40,23 +39,12 @@ fn bit_px(word: u32, bit: u32, size: vec2<u32>) -> vec2<u32> {
   return vec2<u32>((square % across) * CAST_SIDE + k % CAST_SIDE, (square / across) * CAST_SIDE + k / CAST_SIDE);
 }
 
-/// The owed bits' first word (`ray::owed_bits_at`).
-fn owed_bits_at(size: vec2<u32>) -> u32 {
-  return walked_at() + hole_words(size);
+/// The listed holes' count, their entries after it (`ray::holes_at`).
+fn eye_holes_at(size: vec2<u32>) -> u32 {
+  return walked_at() + walked_words(size);
 }
 
-/// The word saying what the eye's queue takes this run (`ray::from_at`, `ray::FROM_OWED`).
-fn from_at(size: vec2<u32>) -> u32 {
-  return owed_bits_at(size) + hole_words(size);
-}
-
-/// Pool `k`'s first word, its count (`ray::pool_at`, `ray::POOL_CNT`).
-fn pool_at(size: vec2<u32>, k: u32) -> u32 {
-  return from_at(size) + 1u + k * POOL_WORDS;
-}
-
-/// The pool the run that takes `taken` parks its rays in: the one it does not take
-/// (`ray::owed_into`).
-fn owed_into(taken: u32) -> u32 {
-  return select(0u, 1u, taken == FROM_OWED);
+/// The eye's pool's first word, its count (`ray::pool_at`, `ray::POOL_CNT`).
+fn eye_pool_at(size: vec2<u32>) -> u32 {
+  return eye_holes_at(size) + 1u + size.x * size.y;
 }

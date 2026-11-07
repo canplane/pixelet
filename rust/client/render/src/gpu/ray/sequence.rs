@@ -9,11 +9,10 @@
 //! built (frame/shader/access.rs `check`), each the frame holds today named in `KNOWN`.
 
 use super::cast::{
-    CAST_GROUP, CAST_TILES_GROUP, CLAIM_BINDING, DRAWS_BINDING, LATTICE_ASK_GROUP,
-    LATTICE_LAST_GROUP, LATTICE_WALK_GROUP, LIGHT_CLAIM_GROUP, LIGHT_GROUP,
-    LIGHT_LATTICE_LAST_GROUP, LIGHT_LATTICE_WALK_GROUP, LIGHT_MARK_DRAWS_GROUP,
-    LIGHT_MARK_DRAWS_OPEN_GROUP, LIGHT_MARK_GROUP, LIGHT_PROPAGATE_GROUP, LIGHT_SLIDE_GROUP,
-    PARKED_TILES_GROUP, QUEUE_ASK_GROUP, QUEUE_GROUP, QUEUE_LAST_GROUP, ROLL_GROUP, WORLD_GROUP,
+    CAST_GROUP, CAST_TILES_GROUP, DRAWS_BINDING, LATTICE_ASK_GROUP, LATTICE_LAST_GROUP,
+    LATTICE_WALK_GROUP, LIGHT_GROUP, LIGHT_LATTICE_LAST_GROUP, LIGHT_LATTICE_WALK_GROUP,
+    LIGHT_MARK_DRAWS_GROUP, LIGHT_MARK_DRAWS_OPEN_GROUP, LIGHT_MARK_GROUP, LIGHT_PROPAGATE_GROUP,
+    LIGHT_SLIDE_GROUP, QUEUE_ASK_GROUP, QUEUE_GROUP, QUEUE_LAST_GROUP, WORLD_GROUP,
 };
 use super::raster::{
     FACE_GROUP, LIGHT_SAMPLE_BOX_GROUP, LIGHT_STOPS_GROUP, RECORD_GROUP, SAMPLE_BOX_GROUP,
@@ -32,7 +31,7 @@ use crate::gpu::generator::{ARGS_GROUP, GATE_GROUP, GENERATE_GROUP, MARK_GROUP, 
 use crate::gpu::shadow::SIZE;
 use crate::gpu::tiles::BOX_ARGS_GROUP;
 use pxl_content::generation;
-use pxl_engine::{count, light, node_cache, raster, ray};
+use pxl_engine::{light, node_cache, raster, ray};
 
 /// The buffers, by their place in `BUFFERS`.
 const MARKS: u32 = 0;
@@ -45,15 +44,14 @@ const LIGHT_ARGS: u32 = 6;
 const LIGHT_LIST: u32 = 7;
 const LIGHT_STOOD: u32 = 8;
 const LIGHT_DRAWS: u32 = 9;
-const LIGHT_CLAIMS: u32 = 10;
-const LIGHT_MISSES: u32 = 11;
-const LIGHT_RASTER_ARGS: u32 = 12;
-const LIGHT_RASTER_STOPS: u32 = 13;
-const LIGHT_BOX_ARGS: u32 = 14;
-const GENERATION_LIST: u32 = 15;
-const GENERATION_ARGS: u32 = 16;
-const GATED_SCREEN_ARGS: u32 = 17;
-const GATED_LIGHT_ARGS: u32 = 18;
+const LIGHT_MISSES: u32 = 10;
+const LIGHT_RASTER_ARGS: u32 = 11;
+const LIGHT_RASTER_STOPS: u32 = 12;
+const LIGHT_BOX_ARGS: u32 = 13;
+const GENERATION_LIST: u32 = 14;
+const GENERATION_ARGS: u32 = 15;
+const GATED_SCREEN_ARGS: u32 = 16;
+const GATED_LIGHT_ARGS: u32 = 17;
 
 /// Each buffer, as the host names its field, and its role.
 const BUFFERS: &[Buffer] = &[
@@ -67,7 +65,6 @@ const BUFFERS: &[Buffer] = &[
     buffer("light_list", LIST),
     buffer("light_stood", ARGS),
     buffer("light_draws_dispatch", ARGS),
-    buffer("light_claim_dispatch", ARGS),
     buffer("light_misses", ARGS),
     buffer("raster.light.args", ARGS),
     buffer("raster.light.stops", ARGS),
@@ -113,20 +110,18 @@ const fn bind(binding: u32, buf: u32) -> Bind {
 const IN_LIGHT_MARKS: u32 = 1;
 const IN_EYE: u32 = 2;
 const IN_EYE_HOLES: u32 = 3;
-const IN_EYE_CLOSE: u32 = 4;
-const IN_GENERATE: u32 = 5;
-const IN_LIGHT: u32 = 6;
-const IN_LIGHT_HOLES: u32 = 7;
-const IN_MAP: u32 = 8;
-const IN_SCREEN_GATE: u32 = 9;
-const IN_LIGHT_GATE: u32 = 10;
-const IN_LIT: u32 = 11;
+const IN_GENERATE: u32 = 4;
+const IN_LIGHT: u32 = 5;
+const IN_LIGHT_HOLES: u32 = 6;
+const IN_MAP: u32 = 7;
+const IN_SCREEN_GATE: u32 = 8;
+const IN_LIGHT_GATE: u32 = 9;
+const IN_LIT: u32 = 10;
 const STAGES: &[&str] = &[
     "the host's writes",
     "the light's tiles' marks",
     "the eye's cast",
     "the eye's holes",
-    "the eye's close",
     "the decor generated",
     "the light's cast",
     "the light's holes",
@@ -157,14 +152,6 @@ const SAMPLES_ASK_BINDS: Group = Group {
 };
 const LATTICE_LAST_BINDS: Group = Group {
     layout: &LATTICE_LAST_GROUP,
-    binds: &[bind(9, NODE_CACHE)],
-};
-const PARKED_TILES_BINDS: Group = Group {
-    layout: &PARKED_TILES_GROUP,
-    binds: &[bind(9, NODE_CACHE)],
-};
-const ROLL_BINDS: Group = Group {
-    layout: &ROLL_GROUP,
     binds: &[bind(9, NODE_CACHE)],
 };
 const WORLD_BINDS: Group = Group {
@@ -289,10 +276,6 @@ const LIGHT_SLIDE_BINDS: Group = Group {
 };
 const LIGHT_PROPAGATE_BINDS: Group = Group {
     layout: &LIGHT_PROPAGATE_GROUP,
-    binds: &[bind(21, LIGHT_ARGS), bind(CLAIM_BINDING, LIGHT_CLAIMS)],
-};
-const LIGHT_CLAIM_BINDS: Group = Group {
-    layout: &LIGHT_CLAIM_GROUP,
     binds: &[bind(21, LIGHT_ARGS)],
 };
 const LIGHT_CORNERS_WALK_BINDS: Group = Group {
@@ -458,13 +441,6 @@ pub const LIGHT_PROPAGATE: Step = Step::dispatch_off(
     &[&LIGHT_PROPAGATE_BINDS],
     (LIGHT_STOOD, light::STOOD_LIST),
 );
-pub const LIGHT_CLAIM: Step = Step::dispatch_off(
-    "light_claim",
-    IN_LIGHT,
-    COMPUTE_LIGHT_CLAIM,
-    &[&LIGHT_CLAIM_BINDS],
-    (LIGHT_CLAIMS, 0),
-);
 pub const LIGHT_CELLS: Step = Step::dispatch_off(
     "light_cells",
     IN_LIGHT,
@@ -626,14 +602,6 @@ pub const OPEN_RASTER_STOP_ASKS: Step = Step::write(
 );
 pub const OPEN_LIGHT_ARGS: Step =
     Step::write("open_light_args", at(LIGHT_ARGS, 0, light::ARGS_WORDS));
-pub const OPEN_LIGHT_RINGS: Step = Step::write(
-    "open_light_rings",
-    at(
-        LIGHT_ARGS,
-        light::ARGS_WORDS + light::rings_at(SIZE),
-        light::rings(SIZE),
-    ),
-);
 /// The stood list's args written whole where the world's receivers are stood afresh, in place
 /// of those they left copied back in (`STOOD_BACK`).
 pub const OPEN_LIGHT_STOOD_AFRESH: Step = Step::write(
@@ -654,7 +622,6 @@ pub const OPEN_STOOD_PROPAGATED: Step = Step::write(
     "open_stood_propagated",
     at(LIGHT_LIST, light::kept_at(SIZE) + light::STOOD_CNT, 1),
 );
-pub const OPEN_LIGHT_CLAIMS: Step = Step::write("open_light_claims", at(LIGHT_CLAIMS, 0, 3));
 pub const OPEN_LIGHT_MISSES: Step = Step::write(
     "open_light_misses",
     at(LIGHT_MISSES, 0, ray::MISS_ARGS_WORDS as u32),
@@ -666,18 +633,6 @@ pub const OPEN_LIGHT_QUEUE: Step = Step::write(
 pub const OPEN_LIGHT_CORNERS_QUEUE: Step = Step::write(
     "open_light_corners_queue",
     head(ray::QUEUE_LIGHT_CORNERS, 0, ray::QUEUE_EMPTY.len() as u32),
-);
-/// The light's beam rays' parked states set to none where its cast carries no parked ray from
-/// the cast before (pxl-engine `light::HEAD_CARRIES`): a beam ray's state goes on only within a
-/// run of casts each of which carries, its content, box and bands as they were (corners.wgsl
-/// `taken`, beam.light.wgsl `beams_resume`).
-pub const OPEN_LIGHT_CORNER_STATES: Step = Step::write(
-    "open_light_corner_states",
-    at(
-        LIGHT_LIST,
-        light::corner_states_at(SIZE),
-        light::beam_across(SIZE) * light::beam_across(SIZE) * ray::STATE_WORDS,
-    ),
 );
 pub const OPEN_LIGHT_SAMPLES_QUEUE: Step = Step::write(
     "open_light_samples_queue",
@@ -705,27 +660,25 @@ pub const READ_COUNT_BACK: Step = Step::copy(
     at(LIGHT_LIST, light::kept_at(SIZE) + light::KEPT_READ, 1),
     at(LIGHT_ARGS, light::ARGS_COUNTS + light::LISTED_READ, 1),
 );
-/// The eye's rays its holes' walks over the node cache parked, copied into its run's pool,
-/// where the last walk and the runs after read it (ray/cast.rs `walk_run`, pxl-engine
-/// `ray::POOL_CNT`).
-pub const EYE_PARKED: Step = Step::copy(
-    "eye_parked",
+/// The eye's holes' count where the queue reads it, as the light's is (`LIGHT_HOLES_CNT`).
+pub const EYE_HOLES_CNT: Step = Step::copy(
+    "eye_holes_cnt",
+    IN_EYE_HOLES,
+    at(MARKS, ray::MISS_ARGS_CNT, 1),
+    NO_RANGE,
+);
+/// The rays each observer's holes' walks over the node cache parked, copied into its pool, where
+/// the last walk reads it (ray/cast.rs `walk_run`, pxl-engine `ray::POOL_CNT`).
+pub const EYE_POOL_CNT: Step = Step::copy(
+    "eye_pool_cnt",
     IN_EYE_HOLES,
     head(ray::QUEUE_EYE_HOLES, ray::QUEUE_PARKED, 1),
     NO_RANGE,
 );
-/// Each observer's owed work copied out of the node cache's head into a word of its own where
-/// its queue ran (ray/count.rs `Counter::owed`).
-pub const EYE_OWED_KEEP: Step = Step::copy(
-    "eye_owed_keep",
+pub const LIGHT_POOL_CNT: Step = Step::copy(
+    "light_pool_cnt",
     IN_LIGHT_HOLES,
-    at(NODE_CACHE, node_cache::owed_at(count::EYE), 1),
-    NO_RANGE,
-);
-pub const LIGHT_OWED_KEEP: Step = Step::copy(
-    "light_owed_keep",
-    IN_LIGHT_HOLES,
-    at(NODE_CACHE, node_cache::owed_at(count::LIGHT), 1),
+    head(ray::QUEUE_LIGHT_HOLES, ray::QUEUE_PARKED, 1),
     NO_RANGE,
 );
 pub const STOOD_KEEP: Step = Step::copy(
@@ -764,56 +717,23 @@ pub const CLAIMED_COUNT: Step = Step::copy(
     at(LIGHT_ARGS, light::ARGS_COUNTS + light::LISTED_CLAIMED, 1),
     at(LIGHT_LIST, light::listed_at(SIZE, light::LISTED_CLAIMED), 1),
 );
-pub const LIGHT_LEFT: Step = Step::copy(
-    "light_left",
-    IN_LIGHT,
-    at(LIGHT_ARGS, light::ARGS_LEFT, 1),
-    at(NODE_CACHE, node_cache::owed_at(count::LIGHT), 1),
-);
-pub const LIGHT_MISSES_COUNT: Step = Step::copy(
-    "light_misses_count",
+pub const LIGHT_HOLES_CNT: Step = Step::copy(
+    "light_holes_cnt",
     IN_LIGHT,
     at(LIGHT_MISSES, ray::MISS_ARGS_CNT, 1),
-    at(LIGHT_LIST, light::misses_cnt(SIZE), 1),
+    at(LIGHT_LIST, light::holes_at(SIZE), 1),
 );
 
 /// The host's writes past the opens above: the raster's draw args set to none where the
-/// record's draw runs (ray/raster.rs `record_draw`); each run's caps (ray/cast.rs
-/// `RaysPass::prepare`); the node cache's counts and frame where nothing casts; the decor's
-/// boxes (gpu/generator.rs `prepare`).
+/// record's draw runs (ray/raster.rs `record_draw`); the node cache's asks and frame where
+/// nothing casts; the decor's boxes (gpu/generator.rs `prepare`).
 pub const OPEN_RASTER_DRAW_ARGS: Step = Step::write(
     "open_raster_draw_args",
     at(RASTER_ARGS, 0, raster::ARGS_WORDS),
 );
-pub const OPEN_EYE_LATTICE_CAPS: Step = Step::write(
-    "open_eye_lattice_caps",
-    at(NODE_CACHE, node_cache::caps_at(count::EYE_LATTICE), 2),
-);
-pub const OPEN_LIGHT_LATTICE_CAPS: Step = Step::write(
-    "open_light_lattice_caps",
-    at(NODE_CACHE, node_cache::caps_at(count::LIGHT_LATTICE), 2),
-);
-/// The eye's rolled lattice set to none where its grid is laid anew (ray/cast.rs
-/// `RaysPass::prepare`, `node_cache::ROLL_K`).
-pub const OPEN_ROLL: Step = Step::write(
-    "open_roll",
-    at(NODE_CACHE, node_cache::ROLL_K, node_cache::ROLL_WORDS),
-);
-pub const OPEN_EYE_HOLES_CAPS: Step = Step::write(
-    "open_eye_holes_caps",
-    at(NODE_CACHE, node_cache::caps_at(count::EYE_HOLES), 2),
-);
-pub const OPEN_LIGHT_HOLES_CAPS: Step = Step::write(
-    "open_light_holes_caps",
-    at(NODE_CACHE, node_cache::caps_at(count::LIGHT_HOLES), 2),
-);
 pub const OPEN_NODE_CACHE_COUNTS: Step = Step::write(
     "open_node_cache_counts",
-    at(
-        NODE_CACHE,
-        node_cache::VISITED,
-        node_cache::owed_at(count::EYE) + 1 - node_cache::VISITED,
-    ),
+    at(NODE_CACHE, node_cache::ASKED, 1),
 );
 pub const OPEN_NODE_CACHE_FRAME: Step = Step::write(
     "open_node_cache_frame",
@@ -870,24 +790,16 @@ pub const FRAME: Frame = Frame {
         OPEN_RASTER_ARGS,
         OPEN_RASTER_STOP_ASKS,
         OPEN_LIGHT_ARGS,
-        OPEN_LIGHT_RINGS,
         OPEN_LIGHT_STOOD,
         OPEN_LIGHT_STOOD_AFRESH,
         OPEN_STOOD_PROPAGATED,
-        OPEN_LIGHT_CLAIMS,
         OPEN_LIGHT_MISSES,
         OPEN_LIGHT_QUEUE,
         OPEN_LIGHT_CORNERS_QUEUE,
-        OPEN_LIGHT_CORNER_STATES,
         OPEN_LIGHT_SAMPLES_QUEUE,
         OPEN_LIGHT_RASTER_ARGS,
         OPEN_GENERATION_LIST,
         OPEN_RASTER_DRAW_ARGS,
-        OPEN_EYE_LATTICE_CAPS,
-        OPEN_EYE_HOLES_CAPS,
-        OPEN_LIGHT_LATTICE_CAPS,
-        OPEN_LIGHT_HOLES_CAPS,
-        OPEN_ROLL,
         OPEN_NODE_CACHE_COUNTS,
         OPEN_NODE_CACHE_FRAME,
         OPEN_GENERATION_BOXES,
@@ -1013,7 +925,8 @@ pub const FRAME: Frame = Frame {
             &[&CAST_TILES_OF_BINDS],
         ),
         PX,
-        // The eye's holes walked, their stops into the record, and its owed counted.
+        // The eye's holes walked, their stops into the record.
+        EYE_HOLES_CNT,
         Step::dispatch("queue", IN_EYE_HOLES, COMPUTE_QUEUE, &[&WALK_BINDS]),
         Step::dispatch(
             "queue_ask",
@@ -1034,7 +947,7 @@ pub const FRAME: Frame = Frame {
             &[&WALK_ASK_BINDS],
         ),
         HITS,
-        EYE_PARKED,
+        EYE_POOL_CNT,
         Step::dispatch(
             "queue_last",
             IN_EYE_HOLES,
@@ -1045,17 +958,6 @@ pub const FRAME: Frame = Frame {
         STOPS,
         STOP_FACES,
         STOP_FACES_PUT,
-        // What the eye's holes leave owed, counted (parked_tiles.wgsl).
-        Step::dispatch(
-            "parked_tiles",
-            IN_EYE_HOLES,
-            COMPUTE_PARKED_TILES,
-            &[&PARKED_TILES_BINDS],
-        ),
-        // The eye's close: its rolled lattice's offset counted or held where its samples were
-        // cast, else its lattice owed alone (roll.wgsl).
-        Step::dispatch("roll", IN_EYE_CLOSE, COMPUTE_ROLL, &[&ROLL_BINDS]).one_of(5),
-        Step::dispatch("roll_owed", IN_EYE_CLOSE, COMPUTE_ROLL_OWED, &[&ROLL_BINDS]).one_of(5),
         // The decor generated over the rays.
         Step::dispatch(
             "generation_mark",
@@ -1095,16 +997,14 @@ pub const FRAME: Frame = Frame {
         STOOD_KEEP,
         READ_COUNT_KEEP,
         Step::dispatch(
-            "light_want",
+            "light_claim",
             IN_LIGHT,
-            COMPUTE_LIGHT_WANT,
+            COMPUTE_LIGHT_CLAIM,
             &[&LIGHT_PROPAGATE_BINDS],
         ),
-        LIGHT_CLAIM,
         CORNERS_COUNT,
         FED_COUNT,
         CLAIMED_COUNT,
-        LIGHT_LEFT,
         // The light's beam rays' run (ray/cast.rs `walk_run`).
         Step::dispatch(
             "light_corners",
@@ -1177,7 +1077,7 @@ pub const FRAME: Frame = Frame {
         ),
         LIGHT_RASTER,
         LIGHT_SLOTS,
-        LIGHT_MISSES_COUNT,
+        LIGHT_HOLES_CNT,
         // The light's holes walked and their stops into the record.
         Step::dispatch(
             "light_queue",
@@ -1204,6 +1104,7 @@ pub const FRAME: Frame = Frame {
             &[&LIGHT_WALK_ASK_BINDS],
         ),
         LIGHT_HITS,
+        LIGHT_POOL_CNT,
         Step::dispatch(
             "light_queue_last",
             IN_LIGHT_HOLES,
@@ -1212,10 +1113,6 @@ pub const FRAME: Frame = Frame {
         ),
         LIGHT_STOPS_DISPATCH,
         LIGHT_STOPS,
-        // Each observer's owed work kept apart where its queue ran, which the readback's copy
-        // carries (ray/count.rs `Counter::copy`).
-        EYE_OWED_KEEP,
-        LIGHT_OWED_KEEP,
         MAP_GATE,
         MAP_LAY,
         DECOR_MAP,
@@ -1234,8 +1131,7 @@ pub const FRAME: Frame = Frame {
 /// walks over the node cache list (queue_walk.wgsl); the stood list the record's draw and both
 /// receivers' passes list a tile on (light_stood.wgsl `stood_put`); the node cache's stops'
 /// dispatch the last walk raises; the read list's count the propagation lists a tile by
-/// (light_propagate.wgsl `read_tile`); the eye's lattice left parked, its beam rays' last walk's
-/// and its samples' (corners_run.eye.wgsl `corner_owed`, samples_run.eye.wgsl `sample_owed`).
+/// (light_propagate.wgsl `read_tile`); the frame's asks (queue_last.wgsl `may_ask`).
 const APPENDS: &[Range] = &[
     at(RASTER_ARGS, raster::ASKED_AT, raster::ARGS_WORDS),
     at(RASTER_ARGS, raster::STOP_ASKED_AT, raster::ARGS_WORDS),
@@ -1247,14 +1143,7 @@ const APPENDS: &[Range] = &[
     at(GATED_SCREEN_ARGS, 0, END),
     at(GATED_LIGHT_ARGS, 0, END),
     at(LIGHT_ARGS, light::ARGS_COUNTS + light::LISTED_READ, 1),
-    at(NODE_CACHE, node_cache::VISITED, 2),
-    at(NODE_CACHE, node_cache::LATTICE_LEFT, 1),
-    head(ray::QUEUE_EYE_HOLES, ray::QUEUE_VISITED, 1),
-    head(ray::QUEUE_LIGHT_HOLES, ray::QUEUE_VISITED, 1),
-    head(ray::QUEUE_EYE_SAMPLES, ray::QUEUE_VISITED, 1),
-    head(ray::QUEUE_LIGHT_SAMPLES, ray::QUEUE_VISITED, 1),
-    head(ray::QUEUE_EYE_CORNERS, ray::QUEUE_VISITED, 1),
-    head(ray::QUEUE_LIGHT_CORNERS, ray::QUEUE_VISITED, 1),
+    at(NODE_CACHE, node_cache::ASKED, 1),
 ];
 
 /// The copies that open a count before the passes that add to it: the stops the holes' walks
@@ -1264,21 +1153,12 @@ const APPENDS: &[Range] = &[
 /// afresh left, copied back in before this cast's receivers and propagation add to them.
 const SEEDS: &[&str] = &["hits", "light_hits", "stood_back", "read_count_back"];
 
-/// The counts read as a bound while they are added to: the frame's work so far, which every
-/// walk's budget reads before the asks after it fold its own visits in (queue_walk.wgsl
-/// `spent`, queue_ask.wgsl `fold_visits`). The visits run past the cap a walk read by what its
-/// lanes may visit before they read it again (pxl-engine `ray::OVERRUN`); the asks are counted
-/// one at a time and run past none.
-const BOUNDS: &[Bound] = &[
-    Bound {
-        range: at(NODE_CACHE, node_cache::VISITED, 1),
-        overrun: ray::OVERRUN,
-    },
-    Bound {
-        range: at(NODE_CACHE, node_cache::ASKED, 1),
-        overrun: 0,
-    },
-];
+/// The counts read as a bound while they are added to: the frame's asks, counted one at a time
+/// past none.
+const BOUNDS: &[Bound] = &[Bound {
+    range: at(NODE_CACHE, node_cache::ASKED, 1),
+    overrun: 0,
+}];
 
 /// The stood marks in the light's args.
 const fn stood_marks() -> Range {
@@ -1313,15 +1193,6 @@ const fn world_marks_kept(which: u32, owner: &'static str) -> Kept {
 
 /// What the frame keeps over frames, each with its owner and what makes it stale.
 const KEPT: &[Kept] = &[
-    Kept {
-        range: at(NODE_CACHE, node_cache::ROLL_K, node_cache::ROLL_WORDS),
-        owner: "roll",
-        by: &[],
-        invalidation: "the eye's rolled lattice: the offset its samples are cast at, the offsets \
-            counted, whether its parked samples go on and the casts since the grid was laid, \
-            which its parked beam rays go on past the first of, stale where the grid is laid anew, \
-            where the host sets it to none (ray/cast.rs `RaysPass::prepare`, `OPEN_ROLL`)",
-    },
     Kept {
         range: at(
             LIGHT_LIST,

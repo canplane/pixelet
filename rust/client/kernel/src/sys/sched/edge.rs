@@ -9,11 +9,11 @@ use xpute_core::clock;
 use xpute_core::global::Global;
 use xpute_core::sched::task;
 
-/// The kernel's tasks: the three that run for good (`world_tasks`), one for
+/// The kernel's tasks: the two that run for good (`world_tasks`), one for
 /// each file in flight, a slot's, the catalog's or the sphere's (sys/io/loader.rs
 /// `arrival`), and one for each model registering (domain/scene/model/asset.rs
 /// `registration`); an executor sizes its pool by it.
-pub const TASKS: usize = 3 + load::LOAD_FILES + load::REGISTRATIONS;
+pub const TASKS: usize = 2 + load::LOAD_FILES + load::REGISTRATIONS;
 
 /// The order the kernel's tasks ask of the executor, which may ignore it.
 #[repr(u8)]
@@ -21,7 +21,6 @@ pub const TASKS: usize = 3 + load::LOAD_FILES + load::REGISTRATIONS;
 pub(crate) enum TaskPriority {
     Frame,
     Arrival,
-    Background,
 }
 
 static EDGE: Global<Edge<TASKS>> = Global::new();

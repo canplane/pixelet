@@ -116,8 +116,8 @@ impl Resolve {
     /// sequence's next while a change that is not the scene's animation's
     /// settles (`asks`), or where it holds: once it ran through, the last
     /// frame such a change came in and the `JITTERS - 1` after it, each at its
-    /// own place of the sequence; and in a frame drawn for anything else, an
-    /// animation's step or an owed readback.
+    /// own place of the sequence; and in a frame drawn for anything else, as an
+    /// animation's step.
     pub fn jitter(&mut self) -> [f32; 2] {
         if self.asks() {
             let k = self.phase + 1;
@@ -256,8 +256,8 @@ impl Resolve {
     /// animation alone (`Tiles::asking`). The jitter is the world's sequence, and moving it
     /// casts every pixel again (gpu/ray/schedule.rs `FrameKind::px`), so an animation's step
     /// holds it: the tiles it marks are drawn through the gate with the jitter as it stands,
-    /// its own antialiasing converging no further while only it moves, and no pixel is cast,
-    /// no eye's queue run and no readback owed for it.
+    /// its own antialiasing converging no further while only it moves, and no pixel is cast
+    /// for it.
     pub fn asks(&self) -> bool {
         self.tiles.asking()
     }

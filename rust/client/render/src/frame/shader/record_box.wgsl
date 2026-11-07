@@ -4,11 +4,11 @@
 // observer's view (record_draw.wgsl) and the raster draws it off the entry's slot
 // (raster.wgsl): over the node cache as the module binds it, read through `node_cache_word`.
 
-/// The entry at word `e`'s box from the origin `o`, the cell its asset keeps inset as it
-/// fills (pxl-engine cast.rs `asset_box`).
-fn entry_box(e: u32, k: Node, o: vec3<i32>) -> Planes {
+/// Slot `slot`'s entry's box from the origin `o`, the cell its asset keeps inset as it fills
+/// (pxl-engine cast.rs `asset_box`).
+fn entry_box(slot: u32, k: Node, o: vec3<i32>) -> Planes {
   let p = kept_planes(k, o);
-  let eighths = (node_cache_word(e + W_ASSET) >> FILL_SHIFT) & (EIGHTHS - 1u);
+  let eighths = (node_cache_word(entry_at(slot) + W_ASSET) >> FILL_SHIFT) & (EIGHTHS - 1u);
   var lo = p.lo;
   var hi = p.hi;
   if (eighths != 0u) {

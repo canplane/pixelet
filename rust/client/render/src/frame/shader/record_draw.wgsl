@@ -2,7 +2,7 @@
 
 // The node cache over every slot, a thread a slot (pxl-engine record.rs): each drawable entry,
 // a face set, drawn by the eye and by the light, and marked drawn in the frame's number
-// (`node_cache::W_SEEN`; `record::drawn`). The eye's draw writes every drawable entry in view
+// (`node_cache::R_DRAWN`; `record::drawn`). The eye's draw writes every drawable entry in view
 // as a box for the raster's draw (`record_draw_cs`, raster.wgsl), its faces those an eye's ray
 // asked about (pxl-engine `record::ASKED`), none where it has none, a stale one behind every
 // fresh one (pxl-engine `raster::STALE`), a stale one about the eye not at all, and names the
@@ -44,11 +44,11 @@ fn box_place(room: u32) -> u32 {
   return place;
 }
 
-/// The entry at word `e` marked drawn this frame (`record::drawn`).
-fn mark_drawn(e: u32) {
+/// Slot `slot` marked drawn this frame (`record::drawn`).
+fn mark_drawn(slot: u32) {
   let frame = record_frame();
-  if (node_cache[e + W_SEEN] != frame) {
-    node_cache[e + W_SEEN] = frame;
+  if (node_cache[drawn_at(slot)] != frame) {
+    node_cache[drawn_at(slot)] = frame;
   }
 }
 /// Whether the box `lo`..`hi`, units from the eye, meets what the eye sees: before it, within
@@ -91,32 +91,36 @@ fn record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x >= ENTRIES) {
     return;
   }
-  let e = entry_at(id.x);
-  let kind = entry_kind(e);
-  let state = node_cache_word(e + W_STATE);
+  let state = node_cache_word(state_at(id.x));
   // The faces an eye's ray entered and asked what lies about (pxl-engine `record::ASKED`).
   let faces = (state & RECORD_ASKED) >> RECORD_ASKED_SHIFT;
-  if (kind == KIND_SPLIT || faces == 0u) {
+  if (faces == 0u) {
+    return;
+  }
+  let kind = entry_kind(id.x);
+  if (kind == KIND_SPLIT) {
     return;
   }
   let o = vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u)));
-  let k = entry_kept(e, o);
-  let b = entry_box(e, k, o);
+  let k = entry_kept(id.x, o);
+  let b = entry_box(id.x, k, o);
   let tan_xy = vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u));
   let near = is_eyed(b.lo, b.hi, tan_xy);
   if (!near && !in_view(b.lo, b.hi)) {
     return;
   }
-  let fresh = kept_fresh(k, (state & RECORD_WHOLE) != 0u, o);
-  // A stale box about the eye is not drawn (pxl-engine `record`, Fresh or stale).
-  if (near && !fresh) {
+  let whole = (state & RECORD_WHOLE) != 0u;
+  let fresh = kept_fresh(k, whole, o);
+  // A stale box about the eye is not drawn, nor one more than a zoom coarser than the eye asks
+  // where it lies, a wall of another view (pxl-engine `record`, Fresh or stale).
+  if (!fresh && (near || (!whole && k.zoom + 1u < asked_near(kept_planes(k, o))))) {
     return;
   }
   let place = box_place(RECORD_EYE_DRAWS);
   if (place == NO_ENTRY) {
     return;
   }
-  mark_drawn(e);
+  mark_drawn(id.x);
   put_draw(place, id.x, kind, select(0u, RASTER_EYED, near) | select(RASTER_STALE, 0u, fresh));
   if (head_word(LIGHT_HEAD_STANDS_WORLD) != 0u) {
     let t = box_tiles(b.lo, b.hi);
@@ -158,16 +162,18 @@ fn light_record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x >= ENTRIES) {
     return;
   }
-  let e = entry_at(id.x);
-  let kind = entry_kind(e);
-  let state = node_cache_word(e + W_STATE);
+  let state = node_cache_word(state_at(id.x));
   let faces = state & RECORD_FACES;
-  if (kind == KIND_SPLIT || faces == 0u) {
+  if (faces == 0u) {
+    return;
+  }
+  let kind = entry_kind(id.x);
+  if (kind == KIND_SPLIT) {
     return;
   }
   let o = texel_start(light_corner());
-  let k = entry_kept(e, o);
-  let b = entry_box(e, k, o);
+  let k = entry_kept(id.x, o);
+  let b = entry_box(id.x, k, o);
   if (!on_box(b.lo, b.hi)) {
     return;
   }
@@ -176,6 +182,6 @@ fn light_record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (place == NO_ENTRY) {
     return;
   }
-  mark_drawn(e);
+  mark_drawn(id.x);
   put_draw(place, id.x, kind, select(RASTER_STALE, 0u, fresh));
 }

@@ -52,19 +52,6 @@ fn beam_spacing() -> vec2<f32> {
   return vec2<f32>(0.0, eye_f32(GRID + GRID_S));
 }
 
-/// Whether this cast's beam rays go on from the cast before's: the grid stands, laid by an
-/// earlier cast than this (`node_cache::ROLL_CASTS`), its rays and the world they walk as they
-/// were.
-fn beams_resume() -> bool {
-  return node_cache_word(ROLL_CASTS) != 0u;
-}
-
-/// Whether a beam ray that ended in a cast before keeps its hand and line: every corner is
-/// walked from the grid's first cast on.
-fn beams_kept() -> bool {
-  return true;
-}
-
 /// Every line is held from the eye's one origin: none kept in it.
 fn beam_lay_origin(base: u32, origin: vec3<i32>) {
 }

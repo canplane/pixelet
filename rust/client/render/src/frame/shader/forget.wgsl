@@ -38,12 +38,20 @@ fn entries_word(q0: vec2<i32>, q1: vec2<i32>, k: u32) -> u32 {
   return word;
 }
 
-/// Whether the node of `zoom` at column `c` reads a brick that moved: one in the box of the
-/// clip level's moved bricks (`MOVED_BRICKS_AT`), whose entry is among the moved entries' words
-/// at `MOVED_AT`. A node coarser than `TOP_ZOOM` reads no brick, its ground a split whatever
-/// the clip levels hold (world_split.wgsl `ground_split`, world.wgsl `ground_cell`).
-fn forgets(zoom: u32, c: vec2<i32>) -> bool {
-  for (var w = 0u; w < EYE_CLIP_LEVELS; w += 1u) {
+/// Whether the node of `zoom` at column `c`, its answer read of the clip levels up to `finest`,
+/// reads a brick that moved. A query reads a clip level no finer than it asked (clip.wgsl
+/// `step_to`, `held_to`). A node no wider than a brick's levels reads the bricks held present
+/// alone (`step_to`): one in the box of the clip level's bricks that moved held
+/// (`MOVED_BRICKS_AT`), whose entry is among the moved entries' words at `MOVED_AT`. A wider
+/// node reads the clip level's fold (`held_of`), which bounds every brick wanted, held or
+/// not: any moved entry under it. A node coarser than `TOP_ZOOM` reads no brick, its ground a
+/// split whatever the clip levels hold (world_split.wgsl `ground_split`, world.wgsl
+/// `ground_cell`).
+fn forgets(zoom: u32, finest: u32, c: vec2<i32>) -> bool {
+  if (zoom < TOP_ZOOM) {
+    return false;
+  }
+  for (var w = 0u; w < EYE_CLIP_LEVELS && FIRST_CELL + w <= max(finest, FIRST_CELL); w += 1u) {
     let cell = FIRST_CELL + w;
     // The node's cells at the clip level's zoom, first and last, then its bricks.
     var lo: vec2<i32>;
@@ -62,7 +70,7 @@ fn forgets(zoom: u32, c: vec2<i32>) -> bool {
     let b = NODE_CACHE_MOVED_BRICKS_AT + 4u * w;
     let first = vec2<i32>(i32(node_cache[b]), i32(node_cache[b + 1u]));
     let last = vec2<i32>(i32(node_cache[b + 2u]), i32(node_cache[b + 3u]));
-    if (any(q1 < first) || any(q0 > last)) {
+    if (cell <= zoom + BRICK_LEVELS && (any(q1 < first) || any(q0 > last))) {
       continue;
     }
     let at = NODE_CACHE_MOVED_AT + w * LEVEL_WORDS;
@@ -106,8 +114,10 @@ fn reads_written(placed: u32, first: u32) -> bool {
   return placed != SLOT_NOTHING && (placed >> SLOT_SHIFT) - first < CHILDREN;
 }
 
-/// The key of a split a moved brick lies under, forgotten: it holds at no zooms asked,
-/// and is no empty slot.
+/// The key of a split a moved brick lies under, forgotten: it holds at no zooms asked, so the
+/// walk that asks asks again, and is no empty slot, so the walk over the node cache still goes
+/// through it (cached.wgsl), taking none of what it read of the brick: every moved brick lies
+/// under the root and the chain over it, and left, they would stop every ray of the frame.
 fn forgotten_split(key: u32) -> u32 {
   let zooms = (1u << ZOOM_BITS) - 1u;
   return (key & ((1u << TAG_BITS) - 1u)) | (zooms << TAG_BITS) | (zooms << (TAG_BITS + ZOOM_BITS));
@@ -118,20 +128,22 @@ fn forget_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x >= ENTRIES) {
     return;
   }
-  let w = ENTRIES_AT + id.x * ENTRY_WORDS;
+  let held = key_at(id.x);
   if (node_cache[NODE_CACHE_FORGETS] == FORGETS_ALL) {
-    node_cache[w + W_KEY] = 0u;
+    node_cache[held] = 0u;
     return;
   }
-  let key = node_cache[w + W_KEY];
+  let key = node_cache[held];
   if (key == 0u) {
     return;
   }
+  let w = entry_at(id.x);
   let zoom = node_cache[w + W_NODE];
   let c = vec2<i32>(i32(node_cache[w + W_NODE + 1u]), i32(node_cache[w + W_NODE + 2u]));
-  if (forgets(zoom, c)) {
+  // A key's near zoom, none where a cell is kept by its node alone (`node_cache::key_zooms`).
+  if (forgets(zoom, max(zoom, key >> (TAG_BITS + ZOOM_BITS)), c)) {
     let split = (node_cache[w + W_KIND] & KIND_MASK) == KIND_SPLIT;
-    node_cache[w + W_KEY] = select(0u, forgotten_split(key), split);
+    node_cache[held] = select(0u, forgotten_split(key), split);
     return;
   }
   // Or handed a slot of a child group of what is placed that was written.
@@ -141,7 +153,7 @@ fn forget_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let written = min(node_cache[NODE_CACHE_WRITTEN_AT], NODE_CACHE_WRITTEN_CAP);
   for (var f = 0u; f < written; f += 1u) {
     if (reads_written(placed, node_cache[NODE_CACHE_WRITTEN_AT + 1u + f])) {
-      node_cache[w + W_KEY] = 0u;
+      node_cache[held] = 0u;
       return;
     }
   }
@@ -156,15 +168,15 @@ fn forget_cs(@builtin(global_invocation_id) id: vec3<u32>) {
       i32(node_cache[at + 3u]),
     );
     if (over_box(zoom, c, changed)) {
-      node_cache[w + W_KEY] = 0u;
+      node_cache[held] = 0u;
       return;
     }
   }
-  let state = node_cache[w + W_STATE];
+  let state = node_cache[state_at(id.x)];
   if ((state & (RECORD_FACES | RECORD_ASKED)) != 0u && changed_beside(zoom, c)) {
-    node_cache[w + W_STATE] = state & ~(RECORD_FACES | RECORD_ASKED);
+    node_cache[state_at(id.x)] = state & ~(RECORD_FACES | RECORD_ASKED);
     for (var face = 0u; face < 6u; face += 1u) {
-      node_cache[w + W_FACES + face] = 0u;
+      node_cache[face_at(id.x, face)] = 0u;
     }
   }
 }
@@ -176,7 +188,7 @@ fn changed_beside(zoom: u32, c: vec2<i32>) -> bool {
   for (var dy = -1i; dy <= 1i; dy += 1i) {
     for (var dx = -1i; dx <= 1i; dx += 1i) {
       let at = vec2<i32>(wrap_idx(zoom, c.x + dx), c.y + dy);
-      if (forgets(zoom, at)) {
+      if (forgets(zoom, zoom, at)) {
         return true;
       }
       for (var b = 0u; b < boxes; b += 1u) {

@@ -35,7 +35,7 @@
 
 use crate::frame::shader::record::{compute, lays_out_writable, ACCESS, NONE, STAGES, STORAGE_RW};
 use crate::gpu::shadow::SIZE;
-use pxl_engine::{count, light, node_cache, raster, ray};
+use pxl_engine::{light, node_cache, raster, ray};
 
 /// A pass's access to a binding, as its shader uses it: read, written, and through atomics.
 pub const READ: u32 = 1;
@@ -335,7 +335,7 @@ pub const TOUCHES: &[Touch] = {
     use crate::frame::shader::record::*;
     /// The light's args (pxl-engine `light::ARGS_WORDS`): a pass's dispatch's x, raised by
     /// the claim as it lists (light_enlist.wgsl `opened`); the claims' counts; each list's
-    /// count; each list's marks past the counts, and the rings'.
+    /// count; each list's marks past the counts.
     const fn opened(w: u32) -> [u32; 2] {
         [w + 1, 1]
     }
@@ -345,10 +345,6 @@ pub const TOUCHES: &[Touch] = {
     const fn marks(which: u32) -> [u32; 2] {
         light_marks(which)
     }
-    const RINGS: [u32; 2] = [
-        light::ARGS_WORDS + light::rings_at(SIZE),
-        light::rings(SIZE),
-    ];
     /// The stood list's args a receivers' pass lists a tile by: its dispatch's x, its count
     /// and the slide's x (light_stood.wgsl `stood_put`, `stood_first`).
     const STOOD: [u32; 2] = [light::STOOD_LIST, light::STOOD_SLIDE + 1];
@@ -358,19 +354,10 @@ pub const TOUCHES: &[Touch] = {
         [at, raster::ARGS_WORDS]
     }
     const QUEUE_HITS: [u32; 2] = [ray::QUEUE_HITS, 4];
-    const QUEUE_VISITED: [u32; 2] = [ray::QUEUE_VISITED, 1];
-    /// The eye's next word of owed bits its first walk takes, and the rays its walks parked
-    /// (queue.wgsl `next_item`, `park`).
-    const QUEUE_SQUARES: [u32; 2] = [ray::QUEUE_SQUARES, 1];
+    /// The rays a run's walks parked (queue.wgsl `park`).
     const QUEUE_PARKED: [u32; 2] = [ray::QUEUE_PARKED, 1];
-    /// The frame's runs' work so far in the node cache's head, and every run's caps.
-    const WORK_DONE: [u32; 2] = [node_cache::VISITED, 2];
-    const VISITS_DONE: [u32; 2] = [node_cache::VISITED, 1];
-    const CAPS: [u32; 2] = [node_cache::CAPS_AT, 2 * count::RUNS];
-    /// The eye's rolled lattice, its samples' parked count and its owed word (roll.wgsl).
-    const ROLL: [u32; 2] = [node_cache::ROLL_K, node_cache::ROLL_WORDS];
-    const LATTICE_LEFT: [u32; 2] = [node_cache::LATTICE_LEFT, 1];
-    const EYE_OWED: [u32; 2] = [node_cache::OWED_AT + count::EYE, 1];
+    /// The frame's asks so far in the node cache's head.
+    const ASKED: [u32; 2] = [node_cache::ASKED, 1];
     &[
         // The eye's samples' stops, their faces' asks (sample_box.eye.wgsl); the light's lay
         // none (sample_box.light.wgsl).
@@ -448,30 +435,17 @@ pub const TOUCHES: &[Touch] = {
             writes: &[count(light::LISTED_READ), marks(light::LISTED_READ)],
             reads: &[count(light::LISTED_READ), marks(light::LISTED_READ)],
         },
-        // The wanting: each tile read wanted where it is due, its ring counted, and the lay's
-        // tiles set to those read (light_propagate.wgsl `light_want_cs`).
-        Touch {
-            compute: COMPUTE_LIGHT_WANT,
-            binding: 21,
-            writes: &[[light::ARGS_LAY + 1, 1], count(light::LISTED_WANTED), RINGS],
-            reads: &[
-                count(light::LISTED_READ),
-                count(light::LISTED_WANTED),
-                RINGS,
-            ],
-        },
-        // The claim: the claims counted, the claimed, fed and cornered listed, and the passes
-        // that cast them opened (light_claim.wgsl, light_enlist.wgsl).
+        // The claim: each tile read claimed where it is due, what feeds it listed and the passes
+        // that cast them opened, and the lay's tiles set to those read (light_propagate.wgsl
+        // `light_claim_cs`, light_enlist.wgsl).
         Touch {
             compute: COMPUTE_LIGHT_CLAIM,
             binding: 21,
             writes: &[
+                [light::ARGS_LAY + 1, 1],
                 opened(light::ARGS_CELLS),
                 opened(light::ARGS_SAMPLE_BOX),
                 opened(light::ARGS_SLOT),
-                [light::ARGS_PLACED, 1],
-                [light::ARGS_STRADDLE, 1],
-                [light::ARGS_LEFT, 1],
                 count(light::LISTED_CORNERS),
                 count(light::LISTED_FED),
                 count(light::LISTED_CLAIMED),
@@ -483,17 +457,13 @@ pub const TOUCHES: &[Touch] = {
                 opened(light::ARGS_CELLS),
                 opened(light::ARGS_SAMPLE_BOX),
                 opened(light::ARGS_SLOT),
-                [light::ARGS_PLACED, 1],
-                [light::ARGS_STRADDLE, 1],
-                [light::ARGS_LEFT, 1],
+                count(light::LISTED_READ),
                 count(light::LISTED_CORNERS),
                 count(light::LISTED_FED),
                 count(light::LISTED_CLAIMED),
-                count(light::LISTED_WANTED),
                 marks(light::LISTED_CORNERS),
                 marks(light::LISTED_FED),
                 marks(light::LISTED_CLAIMED),
-                RINGS,
             ],
         },
         // The stood list's args a receivers' pass or the record's draw lists a tile by.
@@ -516,318 +486,113 @@ pub const TOUCHES: &[Touch] = {
             reads: &[STOOD],
         },
         // The node cache's head: the stops' dispatch and count the last walk adds to, and the
-        // light's owed counted (queue_last.wgsl, queue.wgsl `unreached`).
+        // frame's asks (queue_last.wgsl).
         Touch {
             compute: COMPUTE_QUEUE_LAST,
             binding: 9,
-            writes: &[
-                [node_cache::HITS_ARGS, 4],
-                [node_cache::OWED_AT + count::LIGHT, 1],
-                WORK_DONE,
-            ],
-            reads: &[
-                [node_cache::HITS_ARGS, 4],
-                [node_cache::OWED_AT + count::LIGHT, 1],
-                WORK_DONE,
-                CAPS,
-            ],
+            writes: &[[node_cache::HITS_ARGS, 4], ASKED],
+            reads: &[[node_cache::HITS_ARGS, 4], ASKED],
         },
         // The holes' queue's words: the stops' count and dispatch its walks over the node cache
-        // raise, and the visits they count against their budget beside the frame's, read off
-        // the node cache's head with its run's caps (queue_walk.wgsl); which its asks fold
-        // into the frame's, and count their own against the caps (queue_ask.wgsl).
+        // raise (queue_walk.wgsl), and the asks the frame counts (queue_ask.wgsl).
         Touch {
             compute: COMPUTE_QUEUE,
             binding: 10,
-            writes: &[QUEUE_HITS, QUEUE_VISITED, QUEUE_SQUARES, QUEUE_PARKED],
-            reads: &[QUEUE_HITS, QUEUE_VISITED, QUEUE_SQUARES, QUEUE_PARKED],
+            writes: &[QUEUE_HITS, QUEUE_PARKED],
+            reads: &[QUEUE_HITS, QUEUE_PARKED],
         },
         Touch {
             compute: COMPUTE_QUEUE_PARKED,
             binding: 10,
-            writes: &[QUEUE_HITS, QUEUE_VISITED],
-            reads: &[QUEUE_HITS, QUEUE_VISITED, QUEUE_PARKED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE,
-            binding: 9,
-            writes: &[],
-            reads: &[VISITS_DONE, CAPS],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_PARKED,
-            binding: 9,
-            writes: &[],
-            reads: &[VISITS_DONE, CAPS],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_ASK,
-            binding: 10,
-            writes: &[QUEUE_VISITED],
-            reads: &[QUEUE_VISITED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_ASK_PARKED,
-            binding: 10,
-            writes: &[QUEUE_VISITED],
-            reads: &[QUEUE_VISITED],
+            writes: &[QUEUE_HITS],
+            reads: &[QUEUE_HITS, QUEUE_PARKED],
         },
         Touch {
             compute: COMPUTE_QUEUE_ASK,
             binding: 9,
-            writes: &[WORK_DONE],
-            reads: &[WORK_DONE, CAPS],
+            writes: &[ASKED],
+            reads: &[ASKED],
         },
         Touch {
             compute: COMPUTE_QUEUE_ASK_PARKED,
             binding: 9,
-            writes: &[WORK_DONE],
-            reads: &[WORK_DONE, CAPS],
+            writes: &[ASKED],
+            reads: &[ASKED],
         },
-        // The samples' runs, the eye's and the light's, as the holes' (queue_walk.wgsl,
-        // queue_ask.wgsl, queue_last.wgsl over samples.wgsl), but that no walk keeps a stop: the
-        // eye's read where its rolled lattice casts and whether its parked samples go on, and
-        // its last walk counts those it leaves parked (samples_run.eye.wgsl `sample_owed`).
-        Touch {
-            compute: COMPUTE_QUEUE_SAMPLES,
-            binding: 10,
-            writes: &[QUEUE_VISITED],
-            reads: &[QUEUE_VISITED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_SAMPLES_PARKED,
-            binding: 10,
-            writes: &[QUEUE_VISITED],
-            reads: &[QUEUE_VISITED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_LIGHT_SAMPLES,
-            binding: 10,
-            writes: &[QUEUE_VISITED],
-            reads: &[QUEUE_VISITED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED,
-            binding: 10,
-            writes: &[QUEUE_VISITED],
-            reads: &[QUEUE_VISITED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_SAMPLES,
-            binding: 9,
-            writes: &[],
-            reads: &[VISITS_DONE, CAPS, ROLL],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_SAMPLES_PARKED,
-            binding: 9,
-            writes: &[],
-            reads: &[VISITS_DONE, CAPS, ROLL],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_LIGHT_SAMPLES,
-            binding: 9,
-            writes: &[],
-            reads: &[VISITS_DONE, CAPS],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED,
-            binding: 9,
-            writes: &[],
-            reads: &[VISITS_DONE, CAPS],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_ASK_SAMPLES,
-            binding: 10,
-            writes: &[QUEUE_VISITED],
-            reads: &[QUEUE_VISITED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_ASK_SAMPLES_PARKED,
-            binding: 10,
-            writes: &[QUEUE_VISITED],
-            reads: &[QUEUE_VISITED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_ASK_LIGHT_SAMPLES,
-            binding: 10,
-            writes: &[QUEUE_VISITED],
-            reads: &[QUEUE_VISITED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_ASK_LIGHT_SAMPLES_PARKED,
-            binding: 10,
-            writes: &[QUEUE_VISITED],
-            reads: &[QUEUE_VISITED],
-        },
+        // The samples' and the beam rays' runs, the eye's and the light's: the frame's asks,
+        // which their asks and their last walks count as the holes' do (queue_ask.wgsl,
+        // queue_last.wgsl).
         Touch {
             compute: COMPUTE_QUEUE_ASK_SAMPLES,
             binding: 9,
-            writes: &[WORK_DONE],
-            reads: &[WORK_DONE, CAPS],
+            writes: &[ASKED],
+            reads: &[ASKED],
         },
         Touch {
             compute: COMPUTE_QUEUE_ASK_SAMPLES_PARKED,
             binding: 9,
-            writes: &[WORK_DONE],
-            reads: &[WORK_DONE, CAPS],
+            writes: &[ASKED],
+            reads: &[ASKED],
         },
         Touch {
             compute: COMPUTE_QUEUE_ASK_LIGHT_SAMPLES,
             binding: 9,
-            writes: &[WORK_DONE],
-            reads: &[WORK_DONE, CAPS],
+            writes: &[ASKED],
+            reads: &[ASKED],
         },
         Touch {
             compute: COMPUTE_QUEUE_ASK_LIGHT_SAMPLES_PARKED,
             binding: 9,
-            writes: &[WORK_DONE],
-            reads: &[WORK_DONE, CAPS],
+            writes: &[ASKED],
+            reads: &[ASKED],
         },
         Touch {
             compute: COMPUTE_QUEUE_LAST_SAMPLES,
             binding: 9,
-            writes: &[WORK_DONE, LATTICE_LEFT],
-            reads: &[WORK_DONE, CAPS, ROLL, LATTICE_LEFT],
+            writes: &[ASKED],
+            reads: &[ASKED],
         },
         Touch {
             compute: COMPUTE_QUEUE_LAST_LIGHT_SAMPLES,
             binding: 9,
-            writes: &[WORK_DONE],
-            reads: &[WORK_DONE, CAPS],
-        },
-        // The beam rays' runs, the eye's and the light's, as the samples': the eye's read whether
-        // its parked beam rays go on, the casts since the grid was laid, and its last walk counts
-        // those it leaves parked (corners_run.eye.wgsl `corner_owed`) (queue_walk.wgsl,
-        // queue_ask.wgsl, queue_last.wgsl over corners.wgsl).
-        Touch {
-            compute: COMPUTE_QUEUE_CORNERS,
-            binding: 10,
-            writes: &[QUEUE_VISITED],
-            reads: &[QUEUE_VISITED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_CORNERS_PARKED,
-            binding: 10,
-            writes: &[QUEUE_VISITED],
-            reads: &[QUEUE_VISITED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_LIGHT_CORNERS,
-            binding: 10,
-            writes: &[QUEUE_VISITED],
-            reads: &[QUEUE_VISITED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_LIGHT_CORNERS_PARKED,
-            binding: 10,
-            writes: &[QUEUE_VISITED],
-            reads: &[QUEUE_VISITED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_ASK_CORNERS,
-            binding: 10,
-            writes: &[QUEUE_VISITED],
-            reads: &[QUEUE_VISITED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_ASK_CORNERS_PARKED,
-            binding: 10,
-            writes: &[QUEUE_VISITED],
-            reads: &[QUEUE_VISITED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_ASK_LIGHT_CORNERS,
-            binding: 10,
-            writes: &[QUEUE_VISITED],
-            reads: &[QUEUE_VISITED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_ASK_LIGHT_CORNERS_PARKED,
-            binding: 10,
-            writes: &[QUEUE_VISITED],
-            reads: &[QUEUE_VISITED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_CORNERS,
-            binding: 9,
-            writes: &[],
-            reads: &[VISITS_DONE, CAPS, ROLL],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_CORNERS_PARKED,
-            binding: 9,
-            writes: &[],
-            reads: &[VISITS_DONE, CAPS, ROLL],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_LIGHT_CORNERS,
-            binding: 9,
-            writes: &[],
-            reads: &[VISITS_DONE, CAPS],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_LIGHT_CORNERS_PARKED,
-            binding: 9,
-            writes: &[],
-            reads: &[VISITS_DONE, CAPS],
+            writes: &[ASKED],
+            reads: &[ASKED],
         },
         Touch {
             compute: COMPUTE_QUEUE_ASK_CORNERS,
             binding: 9,
-            writes: &[WORK_DONE],
-            reads: &[WORK_DONE, CAPS],
+            writes: &[ASKED],
+            reads: &[ASKED],
         },
         Touch {
             compute: COMPUTE_QUEUE_ASK_CORNERS_PARKED,
             binding: 9,
-            writes: &[WORK_DONE],
-            reads: &[WORK_DONE, CAPS],
+            writes: &[ASKED],
+            reads: &[ASKED],
         },
         Touch {
             compute: COMPUTE_QUEUE_ASK_LIGHT_CORNERS,
             binding: 9,
-            writes: &[WORK_DONE],
-            reads: &[WORK_DONE, CAPS],
+            writes: &[ASKED],
+            reads: &[ASKED],
         },
         Touch {
             compute: COMPUTE_QUEUE_ASK_LIGHT_CORNERS_PARKED,
             binding: 9,
-            writes: &[WORK_DONE],
-            reads: &[WORK_DONE, CAPS],
+            writes: &[ASKED],
+            reads: &[ASKED],
         },
         Touch {
             compute: COMPUTE_QUEUE_LAST_CORNERS,
             binding: 9,
-            writes: &[WORK_DONE, LATTICE_LEFT],
-            reads: &[WORK_DONE, CAPS, ROLL, LATTICE_LEFT],
+            writes: &[ASKED],
+            reads: &[ASKED],
         },
         Touch {
             compute: COMPUTE_QUEUE_LAST_LIGHT_CORNERS,
             binding: 9,
-            writes: &[WORK_DONE],
-            reads: &[WORK_DONE, CAPS],
-        },
-        // The eye's close: the offset counted or its samples held to go on, and the eye's
-        // lattice owed in its owed word (roll.wgsl).
-        Touch {
-            compute: COMPUTE_ROLL,
-            binding: 9,
-            writes: &[ROLL, EYE_OWED],
-            reads: &[ROLL, LATTICE_LEFT, EYE_OWED],
-        },
-        // What the eye's holes leave owed, counted in its owed word (parked_tiles.wgsl).
-        Touch {
-            compute: COMPUTE_PARKED_TILES,
-            binding: 9,
-            writes: &[EYE_OWED],
-            reads: &[EYE_OWED],
-        },
-        Touch {
-            compute: COMPUTE_ROLL_OWED,
-            binding: 9,
-            writes: &[EYE_OWED],
-            reads: &[ROLL, EYE_OWED],
+            writes: &[ASKED],
+            reads: &[ASKED],
         },
     ]
 };

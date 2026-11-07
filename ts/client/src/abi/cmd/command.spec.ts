@@ -110,3 +110,7 @@ export const SHELL_SNAPSHOT = 0x1b01;
 /** The view's azimuth and scale, when either moved: a frame of its own, so a rotation or a
  * zoom, which moves them every frame, leaves the snapshot as it was. */
 export const SHELL_VIEW = 0x1b02;
+/** The least interval the kernel asks between its turns: its load's word on the rate, which
+ * the next TURN_GRANT's `paced_ms` answers, a whole number of refreshes (the pacing the
+ * client boots the runtime with, @xpute/runtime sched/frame_pacing.ts `pace`). */
+export const TURN_PACE = 0x1d02;

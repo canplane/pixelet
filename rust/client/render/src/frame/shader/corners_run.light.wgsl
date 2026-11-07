@@ -1,16 +1,10 @@
 // pxl-render/corners_run.light.wgsl
 
 // The light's beam rays' run as the queue's passes count its work (queue_walk.wgsl,
-// queue_ask.wgsl, queue_last.wgsl; corners.wgsl): its walks' tag in the node cache's keys, the
-// light's lattice's caps, and the lanes its visits and asks are counted in.
+// queue_ask.wgsl, queue_last.wgsl; corners.wgsl): its walks' tag in the node cache's keys, and
+// the lanes its visits and asks are counted in.
 
 const WALK_PASS: u32 = LIGHT_BEAM_PASS;
-
-/// The first of the light's lattice's caps in the node cache's head (pxl-engine
-/// `node_cache::caps_at`, `count::LIGHT_LATTICE`).
-fn queue_caps() -> u32 {
-  return LIGHT_LATTICE_CAPS;
-}
 
 /// Where the asks' records lie in its queue's view (pxl-engine `ray::queue_records_at`,
 /// `ray::QUEUE_LIGHT_CORNERS`).
@@ -24,10 +18,4 @@ fn visits_at() -> u32 {
 
 fn asked_at() -> u32 {
   return LIGHT_ASKED_COUNT;
-}
-
-/// A beam ray its run leaves parked owes nothing of its own: the slots of its cells wait on it
-/// and owe their tiles (queue.wgsl `unreached`), and the light's next cast of the same epoch
-/// and box goes on with it (beam.light.wgsl `beams_resume`).
-fn corner_owed() {
 }

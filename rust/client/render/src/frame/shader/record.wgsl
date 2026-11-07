@@ -8,11 +8,6 @@
 /// None.
 const NO_ENTRY: u32 = 0xffffffffu;
 
-/// The first word of slot `slot`'s entry (`node_cache::entry_at`).
-fn entry_at(slot: u32) -> u32 {
-  return ENTRIES_AT + slot * ENTRY_WORDS;
-}
-
 /// The frame's number (`node_cache::FRAME`).
 fn record_frame() -> u32 {
   return node_cache_word(FRAME);
@@ -54,21 +49,21 @@ fn node_of_idx(o: vec3<i32>, zoom: u32, c: vec3<i32>) -> Node {
   return Node(zoom, corner, root + origin_roots(o));
 }
 
-/// The node of the entry at word `e` as a walk from the origin `o` holds it.
-fn entry_kept(e: u32, o: vec3<i32>) -> Node {
-  let n = e + W_NODE;
+/// The node of slot `slot`'s entry as a walk from the origin `o` holds it.
+fn entry_kept(slot: u32, o: vec3<i32>) -> Node {
+  let n = entry_at(slot) + W_NODE;
   let c = vec3<i32>(i32(node_cache_word(n + 1u)), i32(node_cache_word(n + 2u)), i32(node_cache_word(n + 3u)));
   return node_of_idx(o, node_cache_word(n), c);
 }
 
-/// The kind of the entry at word `e` where it holds a node, a claim's or a free slot's
+/// The kind of slot `slot`'s entry where it holds a node, a claim's or a free slot's
 /// `KIND_SPLIT`, which no draw takes (pxl-engine `node_cache`).
-fn entry_kind(e: u32) -> u32 {
-  let key = node_cache_word(e + W_KEY);
+fn entry_kind(slot: u32) -> u32 {
+  let key = node_cache_word(key_at(slot));
   if (key == 0u || key == CLAIMED || (key & CLAIM_MASK) == CLAIM_FAR) {
     return KIND_SPLIT;
   }
-  return node_cache_word(e + W_KIND) & KIND_MASK;
+  return node_cache_word(entry_at(slot) + W_KIND) & KIND_MASK;
 }
 
 /// The slot of the entry that draws the node `c` of `zoom` a ray stopped on, its answer the
@@ -83,20 +78,21 @@ fn find(zoom: u32, c: vec3<i32>, asset: vec2<u32>, lacks: bool) -> u32 {
   let kind = select(KIND_CELL, KIND_LACKS, lacks);
   var found = NO_ENTRY;
   for (var k = 0u; k < BUCKET; k += 1u) {
-    let e = entry_at(first + k);
+    let slot = first + k;
+    let e = entry_at(slot);
     let n = e + W_NODE;
-    if (entry_kind(e) != kind || node_cache_word(n) != zoom
+    if (entry_kind(slot) != kind || node_cache_word(n) != zoom
       || any(vec3<u32>(node_cache_word(n + 1u), node_cache_word(n + 2u), node_cache_word(n + 3u)) != vec3<u32>(c))) {
       continue;
     }
     if (!lacks && (node_cache_word(e + W_ASSET) != asset.x || node_cache_word(e + W_ASSET + 1u) != asset.y)) {
       continue;
     }
-    if ((node_cache_word(e + W_STATE) & RECORD_FACES) != 0u) {
-      return first + k;
+    if ((node_cache_word(state_at(slot)) & RECORD_FACES) != 0u) {
+      return slot;
     }
     if (found == NO_ENTRY) {
-      found = first + k;
+      found = slot;
     }
   }
   return found;

@@ -5,7 +5,16 @@
 // takes is the voxel's, where the ray enters the voxel's box through a side its box draws, one
 // some ray entered it through (`raster::accepts`), tested again exactly where a GPU's f32 may
 // part the two (pxl-engine `cast::entry`, `fill_bounds`); the sky where the samples about it
-// each went on to their reach; and the counts of what each took.
+// each went on to their reach; any other a hole, listed for the holes' queue (queue.wgsl); and
+// the counts of what each took.
+
+/// The holes' count and the counts' lanes (pxl-engine `ray::MISS_ARGS_WORDS`): how many are
+/// listed (`MISS_ARGS_CNT`), and what was counted (`MISS_ARGS_COUNT`). build.rs holds its words
+/// to pxl-engine's.
+struct MissArgs {
+  cnt: atomic<u32>,
+  counts: array<atomic<u32>, COUNT_RAYS>,
+}
 
 /// Where a ray enters its visible voxel's cell, across which axis, and whether it enters it
 /// across a face its box draws.
@@ -37,9 +46,16 @@ fn went_on(k: u32) -> bool {
   return beams[k + SAMPLE_NODE + NODE_ZOOM] == SAMPLE_NONE;
 }
 
-/// One more of the counts' lane `lane` where `on` (`count::REUSED` on; list.wgsl `MissArgs`).
+/// One more of the counts' lane `lane` where `on` (`count::REUSED` on).
 fn add_cnt(on: bool, lane: u32) {
   if (on) {
     atomicAdd(&args.counts[lane - COUNT_REUSED], 1u);
   }
+}
+
+/// Pixel or slot `p` listed a hole, its column under its row, among the holes whose count lies
+/// at word `at` of `beams`, their entries after it (pxl-engine `ray::holes_at`,
+/// `light::holes_at`), its place counted in `args`.
+fn list_hole(at: u32, p: vec2<u32>) {
+  beams[at + 1u + atomicAdd(&args.cnt, 1u)] = p.x | (p.y << 16u);
 }

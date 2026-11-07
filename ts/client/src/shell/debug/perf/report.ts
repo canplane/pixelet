@@ -215,7 +215,9 @@ function windowSection(r: PerfReport): string[] {
       fps(f) ?? NaN,
     )}  moving ${f.moving}  still ${f.n - f.moving}   refresh ${n1(
       last.refresh_ms,
-    )} ms   paced ${n1(last.paced_ms)} ms   scale ${fixed(
+    )} ms   paced ${n1(last.paced_ms)} ms   rate ${n1(
+      1000 / last.paced_ms,
+    )} Hz   scale ${fixed(
       last.scale,
       2,
     )}   lattice ${last.lattice}   turns ${f.turns}`,

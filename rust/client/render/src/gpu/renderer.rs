@@ -128,9 +128,6 @@ pub struct FrameInput<'a> {
     pub cast: Option<Cast<'a>>,
     pub atlas: &'a mut Atlas,
     pub text: TextOf,
-    /// Whether the surfaces take a frame now without blocking; one admitted
-    /// is drawn. Asked only once nothing else stops the frame.
-    pub admit_frame: fn() -> bool,
     /// Whether its draws are counted (`FrameStat::draws`): the profiler's
     /// alone, so a frame it does not record counts none.
     pub counted: bool,
@@ -288,7 +285,6 @@ struct Reads {
     ungated: bool,
     casts_px: bool,
     light_casts: bool,
-    eye_queue: bool,
 }
 
 /// What a frame draws, a pure function of what it read (`Reads`), explored
@@ -311,7 +307,7 @@ impl Decided {
         Decided {
             quiet,
             gated: r.partial && r.stands && !r.ungated,
-            stood: quiet && !r.casts_px && !r.light_casts && !r.eye_queue,
+            stood: quiet && !r.casts_px && !r.light_casts,
         }
     }
 }
@@ -971,7 +967,7 @@ impl Renderer {
         out.dedup();
     }
 
-    /// A turn whose lists were taken and no frame drawn: the uploads and the
+    /// A turn whose lists moved an upload and no frame drawn: the uploads and the
     /// draws they moved the next frame does not see, so it draws whole, the
     /// draws' uniforms are written whole, and what the marks read is copied
     /// again (`UploadCopies::forget`).
@@ -1212,8 +1208,7 @@ impl Renderer {
         let drawn = self.resolve.tiles.this_frame();
         let [across, down] = self.resolve.tiles.squares();
         self.screen.set_tiles(drawn, across * down);
-        // The counts the frames before copied, read back before the light's cast is decided,
-        // so the work a cast left owed makes this frame's light due (`RaysPass::wants_frame`).
+        // The counts the frames before copied, read back.
         self.screen.counts_back(g);
         self.screen.prepare(
             g,
@@ -1261,7 +1256,7 @@ impl Renderer {
         // but its lists and its jitter, over rays cast again at most at
         // their pixels.
         let stands = read.end()
-            && self.screen.kind != FrameKind::cast
+            && self.screen.kind() != FrameKind::cast
             && !self.screen.generates()
             && !gridded;
         let decided = Decided::of(Reads {
@@ -1272,7 +1267,6 @@ impl Renderer {
             ungated: self.screen.ungated(),
             casts_px: self.screen.casts_px(),
             light_casts: self.screen.light_casts(),
-            eye_queue: self.screen.eye_queue(),
         });
         let (quiet, gated) = (decided.quiet, decided.gated);
         if !gated {
@@ -1283,10 +1277,6 @@ impl Renderer {
             let mut stat = self.stat(&draws, input.counted, [0.0; GPU_SPAN_NAMES]);
             // Nothing drawn, so no number a read could name.
             stat.frame = 0.0;
-            self.screen.copy_pending(g);
-            if self.screen.wants_frame() {
-                REDRAW.set(true);
-            }
             stat.rays = self.screen.take_counts();
             self.touched = touched;
             return (FrameKind::stood, stat);
@@ -1328,7 +1318,7 @@ impl Renderer {
         // No mark is handed: through the gate the casters mark drawn, and a
         // map drawn whole claims every tile by its uniform, its stamp read
         // by no frame while the map's `claimed_for` is 1 (`Tiles::mark`).
-        let cast = self.screen.kind != FrameKind::plain;
+        let cast = self.screen.kind() != FrameKind::plain;
         let map_gated = gated && cast && !self.screen.light_casts();
         self.light_tiles.size(g, [shadow::SIZE; 2]);
         self.light_tiles.mark(g, (map_gated, false, false), None);
@@ -1491,7 +1481,7 @@ impl Renderer {
             // The world's depth is the rays', so a cast where the world they
             // read moved, or decor generated again, lays the occlusion again;
             // not one where only the jitter moved (`FrameKind::px`).
-            a.mark(ao_remade || self.screen.generates() || self.screen.kind == FrameKind::cast);
+            a.mark(ao_remade || self.screen.generates() || self.screen.kind() == FrameKind::cast);
             !a.end() && !gated
         };
         // A frame not drawn whole keeps the rest as the last frame left it:
@@ -1664,18 +1654,13 @@ impl Renderer {
             // nothing else asks for those frames while it stands. What
             // moves on its own (an actor, the clouds, the location indicator) wakes the
             // turn at its own steps, drawn with the jitter held (`Resolve::asks`), and asks
-            // no frame between. The eye's
-            // rolled lattice run through the same way, a cast a frame, until its rays rest.
-            if self.screen.rolling() || (self.resolve.asks() && (quiet || !animated)) {
+            // no frame between.
+            if self.resolve.asks() && (quiet || !animated) {
                 REDRAW.set(true);
             }
             if self.screen.generates() {
                 self.screen.on_drawn();
             }
-        }
-        // The observers' owed work: its count mapped back the next frame, or a run it owes.
-        if self.screen.wants_frame() {
-            REDRAW.set(true);
         }
         read.end();
         self.frame_read = read;
@@ -1684,7 +1669,7 @@ impl Renderer {
         } else if gated {
             FrameKind::gated
         } else {
-            self.screen.kind
+            self.screen.kind()
         };
         let mut stat = self.stat(&draws, input.counted, gpu_spans);
         stat.gpu_read = gpu_read;
@@ -1889,9 +1874,10 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     // frame comes again (xpute_core ipc/stream.rs R3).
     if !stream_free() {
         carry_edits(&input.cast);
-        take_lists(None, &input.lists);
-        if let Some(r) = RENDERER.get(|| None).as_mut() {
-            r.put_off();
+        if take_lists(None, &input.lists) {
+            if let Some(r) = RENDERER.get(|| None).as_mut() {
+                r.put_off();
+            }
         }
         return FrameOutput {
             kind: FrameKind::held,
@@ -1912,19 +1898,6 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
             stat: None,
         };
     };
-    // The surfaces would block: skip rather than wait (`Renderer::put_off`).
-    if !(input.admit_frame)() {
-        carry_edits(&input.cast);
-        take_lists(Some(g), &input.lists);
-        if let Some(r) = RENDERER.get(|| None).as_mut() {
-            r.put_off();
-        }
-        return FrameOutput {
-            kind: FrameKind::held,
-            redraw: true,
-            stat: None,
-        };
-    }
     // The renderer is made in three steps before it draws (gpu/pipeline.rs):
     // its shaders' modules, a few a turn; then it, every pipeline asked for
     // by WebGPU's async call; then nothing until each is made. A turn before
@@ -1963,9 +1936,8 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
 
 /// Whether what the device made since this last ran wants a frame: an
 /// image landed, to be taken (`api::images_landed`), a pipeline made, which
-/// the progress shows and the first frame waits on, the air's measures
-/// (`Atmosphere::landed`), or an observer's owed work (`RaysPass::owed_landed`).
-/// Each wakes the turn as its fence is stored (xpute `RESULT`), so none is
+/// the progress shows and the first frame waits on, or the air's measures
+/// (`Atmosphere::landed`). Each wakes the turn as its fence is stored (xpute `RESULT`), so none is
 /// polled.
 pub fn landed() -> bool {
     let images = api::images_landed();
@@ -1973,7 +1945,7 @@ pub fn landed() -> bool {
         let was = r.pipelines.share();
         let pipelines =
             !r.pipelines.is_made() && (r.pipelines.made() || r.pipelines.share() != was);
-        pipelines || r.atmosphere.landed() || r.screen.owed_landed()
+        pipelines || r.atmosphere.landed()
     });
     images || made
 }

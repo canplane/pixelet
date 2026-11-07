@@ -665,6 +665,16 @@ export function read_shell_view(b: BranchCursor): ShellView {
   return { azimuth: b.at(0).get<f64>(), m_per_px: b.at(1).get<f64>() };
 }
 
+/** Command.TURN_PACE's packet. */
+export interface TurnPace {
+  /** 0 asks none, and turns go at the display's own rate. */
+  interval_ms: f64;
+}
+
+export function read_turn_pace(b: BranchCursor): TurnPace {
+  return { interval_ms: b.at(0).get<f64>() };
+}
+
 /** What the runtime sends on the shell protocol, bound to `runtime`: each
  * command sent, requested and answered later, or called and answered before
  * it returns. */
@@ -833,6 +843,10 @@ export interface ShellImports {
   /** The view's azimuth and scale, when either moved: a frame of its own, so a rotation or a
    * zoom, which moves them every frame, leaves the snapshot as it was. */
   shell_view(e: ShellView): void;
+  /** The least interval the kernel asks between its turns: its load's word on the rate, which
+   * the next TURN_GRANT's `paced_ms` answers, a whole number of refreshes (the pacing the
+   * client boots the runtime with, @xpute/runtime sched/frame_pacing.ts `pace`). */
+  turn_pace(e: TurnPace): void;
 }
 
 /** `h` as the handler a runtime routes the shell protocol's commands to, each one read and
@@ -852,6 +866,8 @@ export function shell_imports(h: ShellImports): OnImport {
         return h.shell_snapshot(read_shell_snapshot(need(f)));
       case Command.SHELL_VIEW:
         return h.shell_view(read_shell_view(need(f)));
+      case Command.TURN_PACE:
+        return h.turn_pace(read_turn_pace(need(f)));
       default:
         return Errno.ENOSYS;
     }

@@ -19,7 +19,7 @@ fn node_cache_word(k: u32) -> u32 {
 /// The visible voxel at each texel of the box, in the box's order (`Light::texel`): its
 /// number (`raster::id_of`), 0 where it kept none.
 @group(0) @binding(15) var visibility: texture_2d_array<u32>;
-/// The listed slots' dispatch, their count and the counts' lanes (list.wgsl `MissArgs`).
+/// The holes' count and the counts' lanes (visible.wgsl `MissArgs`).
 @group(0) @binding(17) var<storage, read_write> args: MissArgs;
 
 /// Whether sample `s` was walked at `band`, the band of box texel `p`'s tile: the band of the
@@ -51,11 +51,9 @@ fn sky(at: vec2<u32>, p: vec2<u32>, band: u32) -> bool {
     && went_on_alike(s + vec2<u32>(1u, 1u), band, p);
 }
 
-/// Each slot of the tiles the cast claimed (light_list.wgsl `light_item`): its word as it stands
-/// where the cast before answered it and its tile was carried over (`ray::KEPT`); else off its
-/// visible voxel or the sky, else listed for its walk as the eye's missed pixels are. The list
-/// holds every slot of the tiles a cast claims (pxl-engine `light::parked_room`), so none finds
-/// it full.
+/// Each slot of the tiles the cast claimed (light_list.wgsl `light_item`): off its visible voxel
+/// or the sky, else listed a hole as the eye's pixels are. The list holds every slot of the map
+/// (pxl-engine `light::holes_at`), so none finds it full.
 @compute @workgroup_size(LIGHT_TILE, LIGHT_TILE, 1)
 fn light_cs(
   @builtin(workgroup_id) group: vec3<u32>,
@@ -67,24 +65,18 @@ fn light_cs(
     return;
   }
   let on = head_word(LIGHT_HEAD_COUNTED) != 0u;
-  let k = (at.y % LIGHT_TILE) * LIGHT_TILE + at.x % LIGHT_TILE;
-  let state = light_state_at(beams[light_place_at(at)], k, head_word(LIGHT_HEAD_CAST));
-  if ((beams[state + STATE_WORDS - 1u] & KEPT) != 0u) {
-    add_cnt(on, COUNT_REUSED);
-    return;
-  }
   let p = slot_texel(at);
   let aim = light_aim(p);
   let band = aim.range.x;
   let visible = textureLoad(visibility, p, 0u, 0u).x;
   if (visible != 0u) {
     // A drawable entry, drawn this cast and so kept from any claim (`record::drawn`).
-    let e = entry_at((visible & ~VISIBLE_LACK) - 1u);
-    let state = node_cache_word(e + W_STATE);
+    let slot = (visible & ~VISIBLE_LACK) - 1u;
+    let state = node_cache_word(state_at(slot));
     let faces = state & RECORD_FACES;
-    if ((visible & VISIBLE_LACK) == 0u && entry_kind(e) != KIND_SPLIT && faces != 0u) {
-      let k = entry_kept(e, vec3<i32>(aim.origin));
-      let fill = (node_cache_word(e + W_ASSET) >> FILL_SHIFT) & (EIGHTHS - 1u);
+    if ((visible & VISIBLE_LACK) == 0u && entry_kind(slot) != KIND_SPLIT && faces != 0u) {
+      let k = entry_kept(slot, vec3<i32>(aim.origin));
+      let fill = (node_cache_word(entry_at(slot) + W_ASSET) >> FILL_SHIFT) & (EIGHTHS - 1u);
       let entry = visible_cell(aim, k.zoom, k.corner, k.roots - origin_roots(aim.origin), fill, faces);
       // Taken only where the voxel is the node a ray asking the slot's band stops on
       // (pxl-engine `Light::band`, `record::band_fresh`).
@@ -101,8 +93,5 @@ fn light_cs(
     return;
   }
   add_cnt(on, COUNT_WALKED);
-  let place = enlist(LIGHT_PARKED_ROOM);
-  if (place < LIGHT_PARKED_ROOM) {
-    beams[head_word(LIGHT_HEAD_MISSES) + place] = (at.y << 16u) | at.x;
-  }
+  list_hole(head_word(LIGHT_HEAD_HOLES), at);
 }

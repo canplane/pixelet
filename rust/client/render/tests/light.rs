@@ -194,7 +194,6 @@ fn hand_light_cs_answers_as_the_rust() {
         "past the list",
         "samples gone on",
         "samples stopped",
-        "kept",
     ]);
     tally.end("light_cs");
 }
@@ -222,31 +221,6 @@ fn run_slots(
 
     // The list's words noise, the samples walked over the world.
     let mut list: Vec<u32> = (0..light::list_words(SIZE)).map(noise).collect();
-    // Each tile of the slots' grid at a place of its own, its slots' states in the cast's
-    // region (`light::places_at`, `light::region_words`): none parked, and in one tile in seven
-    // every slot kept, its ray finished in the cast before and carried with its tile
-    // (`ray::KEPT`, light_propagate.wgsl `claim`).
-    list.resize(light::buffer_words(SIZE) as usize, 0);
-    let places = light::places_at(SIZE) as usize;
-    for t in 0..tiles * tiles {
-        list[places + t as usize] = t;
-    }
-    let kept = |slot: [u32; 2]| {
-        let t = (slot[1] / light::TILE) * tiles + slot[0] / light::TILE;
-        noise(t ^ 0x6b65).is_multiple_of(7)
-    };
-    for y in 0..SIZE {
-        for x in 0..SIZE {
-            if kept([x, y]) {
-                let place = (y / light::TILE) * tiles + x / light::TILE;
-                let k = (y % light::TILE) * light::TILE + x % light::TILE;
-                let at = light::list_words(SIZE)
-                    + ((CAST % 2) * light::parked_room() + place * light::TILE * light::TILE + k)
-                        * ray::STATE_WORDS;
-                list[(at + ray::STATE_WORDS - 1) as usize] = ray::KEPT;
-            }
-        }
-    }
     // The node cache, a drawable entry a sample at the sample's number, as the slots read it by
     // the visible id (pxl-engine `record`): its node, from where the sample's ray starts, its
     // answer, and its state the face the sample entered and whether it stopped coarser than its
@@ -506,10 +480,6 @@ fn run_slots(
     let wants: Vec<Answer> = needed
         .iter()
         .map(|&slot| {
-            if kept(slot) {
-                kinds.add("kept", true);
-                return Answer::Kept;
-            }
             let (o, _) = light::ray(&l, &starts, l.texel(SIZE, slot));
             answer(slot, o, inv, kinds)
         })
@@ -554,7 +524,7 @@ fn run_slots(
         let list_out = gpu.read(&list_buf);
         let misses = gpu.read(&misses_buf);
         // The slots it listed for their walk.
-        let from = light::misses_at(SIZE) as usize;
+        let from = light::holes_at(SIZE) as usize + 1;
         let to = from + (misses[ray::MISS_ARGS_CNT as usize] as usize).min((SIZE * SIZE) as usize);
         let had = list_out[from..to].to_vec();
         (read_texture(&gpu.device, &gpu.queue, &map_t), had)
@@ -584,10 +554,6 @@ fn run_slots(
     let (mut took, mut sky) = (0u32, 0u32);
     let (mut exact, mut fused) = (0u32, 0u32);
     for (&slot, &want) in needed.iter().zip(&wants) {
-        // A kept slot's word stands, and it is not listed.
-        if want == Answer::Kept {
-            continue;
-        }
         let at = (slot[1] * SIZE + slot[0]) as usize;
         let g = got(at, slot);
         // The answer the slot is held to: its own, or where a GPU's fused sum in its depth may
@@ -652,14 +618,13 @@ fn run_slots(
 }
 
 /// A slot's answer: the depth `t` along its ray and the axis it enters its visible voxel's
-/// cell across, the sky, its walk, or its word as the cast before left it, kept; and the word a
+/// cell across, the sky, or its walk; and the word a
 /// pass left it.
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Answer {
     Entry(f32, u32),
     Sky,
     Walk,
-    Kept,
     Word(u32),
 }
 
@@ -1084,7 +1049,10 @@ fn run_marks(
                     } else {
                         Kind::Cell
                     };
-                    let state = face | face << record::ASKED_SHIFT;
+                    // Whole where its ray stopped on it coarser than it asked, as a stop sets it.
+                    let whole = record::stopped_whole(c.origin, &m.hit.node, range);
+                    let state =
+                        face | face << record::ASKED_SHIFT | if whole { record::WHOLE } else { 0 };
                     lay_entry(
                         &mut rec,
                         slot,
@@ -1186,7 +1154,7 @@ fn run_marks(
         Marks::Walked => {
             binds.push((3, wgpu::BindingResource::TextureView(&view)));
             binds.push((23, beams_buf.as_entire_binding()));
-            let words = ray::hole_words([wd, ht]);
+            let words = ray::walked_words([wd, ht]);
             let per = ray::MISS_LANES * ray::MISS_ACROSS;
             (&pipes[0], [ray::MISS_ACROSS, words.div_ceil(per).max(1), 1])
         }

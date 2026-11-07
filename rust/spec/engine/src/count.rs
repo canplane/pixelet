@@ -17,15 +17,6 @@ pub const EYE: u32 = 0;
 pub const LIGHT: u32 = 1;
 pub const OBSERVERS: u32 = 2;
 
-/// The kinds of run a frame's budget of work is shared among (`ray::caps`), in the order a frame
-/// runs them: the eye's lattice, its holes, the light's lattice, its holes. Each holds its caps
-/// in the node cache's head (`node_cache::caps_at`).
-pub const EYE_LATTICE: u32 = 0;
-pub const EYE_HOLES: u32 = 1;
-pub const LIGHT_LATTICE: u32 = 2;
-pub const LIGHT_HOLES: u32 = 3;
-pub const RUNS: u32 = 4;
-
 /// An observer's lanes: the nodes its beam rays, its samples and its walk
 /// again asked (`BEAM`, `SAMPLE`, `MISS`), its walks' visits; of its walks
 /// that ask the world by hand, its samples' and the light's walk again,
@@ -42,18 +33,7 @@ pub const WALKED: u32 = 5;
 pub const SKY: u32 = 6;
 pub const BOXES: u32 = 7;
 pub const LANES: u32 = 8;
-/// Past the lanes, each observer's owed work as its last cast or queue left it
-/// (`node_cache::OWED_AT`), a word an observer: kept in a word of its own each frame the
-/// observer's queue runs, counted or not, copied in by the first copy free and read back with
-/// the lanes, so the renderer asks for the next frame while it is not none (pxl-render
-/// gpu/ray/count.rs `Readback`, `Counter`).
-pub const OWED: u32 = OBSERVERS * LANES;
-/// The bit of the eye's owed word that says its rolled lattice owes an offset
-/// (`beam::ROLLS`, `beam::ROLL_DONE`), set by the close of every frame its queue runs
-/// (pxl-render roll.wgsl): the renderer casts while it reads it (gpu/ray/count.rs
-/// `Readback::lattice`). The word's other bits count its parked pixels.
-pub const LATTICE_OWED: u32 = 1 << 31;
-pub const WORDS: u32 = OWED + OBSERVERS;
+pub const WORDS: u32 = OBSERVERS * LANES;
 
 /// The lanes a walk writing the node cache adds to, from the first
 /// (`BEAM` to `ASKED`), and those a pixel or a slot does (`REUSED` to

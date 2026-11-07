@@ -1,7 +1,7 @@
 // pxl-engine/record.rs
 
 //! gpu-portable: what draws the node cache's entries, the observers' record of voxels, kept
-//! across frames in the node cache's own slots (`node_cache::W_STATE`; pxl-render
+//! across frames in the node cache's own slots (`node_cache::STATES_AT`; pxl-render
 //! record.wgsl, record_put.wgsl, sample_box.wgsl, record_stops.wgsl, record_draw.wgsl,
 //! cast.wgsl, light.wgsl, face.wgsl, forget.wgsl, ask.wgsl; gpu/ray/raster.rs). A voxel is an
 //! entry of a node some ray stopped on: the World Query's answer for it, the node cache's,
@@ -56,10 +56,10 @@
 //!    (record_stops.wgsl, `beam::HIT_ASSET`, `HIT_LINE`), after their walk. A stop finds its
 //!    node's entry (above) and sets the face it entered across; an observer that reads faces'
 //!    words, the eye, asks its word the first time it enters it (`ASKED`; face.wgsl, which
-//!    writes `node_cache::W_FACES`). A stop whose node no slot keeps sets none, and its pixel
+//!    writes `node_cache::R_FACES`). A stop whose node no slot keeps sets none, and its pixel
 //!    walks again.
 //! 4. The draws (record_draw.wgsl `record_draw_cs`, `light_record_draw_cs`) read every slot
-//!    and write a box for each drawable entry, and mark it drawn (`node_cache::W_SEEN`); the
+//!    and write a box for each drawable entry, and mark it drawn (`node_cache::R_DRAWN`); the
 //!    eye's draw names the frame it ran (`node_cache::DRAWN`). The raster draws them;
 //!    `cast_cs` and light.wgsl read a pixel's slot. Each word has one writer a step.
 //!
@@ -73,6 +73,9 @@
 //! there until its walk ends (pxl-render cast.wgsl `cast_cs`), and the walk's stop draws the
 //! fresh voxel, after which the stale one goes undrawn and is evicted (`drawn`). Where a
 //! fresh voxel covers the pixel, the pixel takes the fresh one, so no second surface. A stale
+//! voxel more than a zoom coarser than the eye asks where it lies is not drawn: a voxel of a far
+//! view seen from near stands as a wall no fresh voxel covers where the ray goes on to the sky,
+//! and goes undrawn so it is evicted. A stale
 //! box about the eye (`raster::is_eyed`) is not drawn: drawn over the whole screen at the
 //! nearest stale depth, it would stand before every other stale box and show at every pixel
 //! no fresh box covers, where it lies at none of them. A stale node at the zoom now asked is
@@ -101,11 +104,7 @@
 //! **A drawn voxel hides no nearer one from the rays:** the samples walk from their cells'
 //! starts, which the beam rays find from the eye, not from what is drawn, so a sample stops on
 //! the first cell along its ray whatever is drawn there; an occluder a sample's ray meets is
-//! drawn the frame it is cast. While the view and the world stand, the samples are cast again
-//! at each offset of the rolled lattice (`beam::roll`), one a frame. The offsets together lay
-//! a regular lattice `grid::CELL`/16 apart, so a nearest occluder whose projection holds a
-//! square of that side aligned to it, or any disc √2 · `CELL`/16 across, holds a sample of
-//! some offset and is drawn within `beam::ROLLS` standing frames of the last change.
+//! drawn the frame it is cast, and a pixel the samples miss is walked and stopped that frame.
 //!
 //! **Eviction** is the node cache's (`node_cache`), but never of an entry drawn in the last
 //! two frames (`drawn`): a draw marks each entry it draws with its frame, a stop that makes an
@@ -116,9 +115,9 @@
 
 use crate::cast::{self, Detail, Node, Spacing};
 use crate::grid;
-use crate::light::{Light, BEAM, CLAIM_BUDGET, TILE};
+use crate::light::{Light, BEAM, TILE};
 use crate::node_cache::{self, ENTRIES};
-use crate::ray::ASKS_A_FRAME;
+
 use crate::{Zoom, WORKGROUPS_MOST};
 
 /// The threads of a workgroup of the passes over every slot (pxl-render record_draw.wgsl).
@@ -134,10 +133,10 @@ const _: () = assert!(
 /// What it holds: every voxel a view can draw, the eye's and the light's, and the nodes a
 /// frame's asks keep. A node is drawn where it spans at least a camera cell (pxl-engine
 /// grid.rs), so the voxels drawn are bounded by the cells: the eye's at the widest view
-/// (`EYE_CELLS_MOST`) and the light's claimed tiles', a cell a tile (`LIGHT_CELLS_MOST`); the
-/// rolled lattice's offsets find the same nodes in the same cells, so they multiply none. Each
-/// cell's count is grown by `CELL_NODES`' parts. The asks keep `ray::ASKS_A_FRAME` nodes a
-/// frame, kept for the two frames an entry is spared (`ASKS_KEPT`).
+/// (`EYE_CELLS_MOST`) and the light's claimed tiles', a cell a tile (`LIGHT_CELLS_MOST`). Each
+/// cell's count is grown by `CELL_NODES`' parts. The asks keep as many nodes a frame as a walk
+/// lists for them (`ray::QUEUE_RECORDS_ROOM`), kept for the two frames an entry is spared
+/// (`ASKS_KEPT`).
 const _: () = assert!(
     ENTRIES == entries_for(EYE_CELLS_MOST + LIGHT_CELLS_MOST),
     "the slots are what the table must hold"
@@ -153,16 +152,16 @@ pub const CELL_FRAMES: u32 = 2;
 pub const CELL_NODES: u32 = CELL_OVERLAP * CELL_STALE * CELL_FRAMES;
 
 /// The nodes the asks keep: a frame's, for the two frames an entry is spared.
-pub const ASKS_KEPT: u32 = CELL_FRAMES * ASKS_A_FRAME;
+pub const ASKS_KEPT: u32 = CELL_FRAMES * crate::ray::QUEUE_RECORDS_ROOM;
 
 /// The eye's camera cells at the widest view (`grid::ASPECT_MOST`), the vertical field's
 /// (`grid::HALF_TAN`) across `grid::CELLS_A_RAD`, as `beam::Grid::of` lays them at the cell.
 pub const EYE_CELLS_MOST: u32 = ceil(2.0 * grid::HALF_TAN * grid::ASPECT_MOST * grid::CELLS_A_RAD)
     * ceil(2.0 * grid::HALF_TAN * grid::CELLS_A_RAD);
 
-/// The light's cells a cast draws: a cell a tile (`light::BEAM` is `light::TILE`) of the most
-/// tiles it claims (`light::CLAIM_BUDGET`).
-pub const LIGHT_CELLS_MOST: u32 = CLAIM_BUDGET;
+/// The light's cells a cast draws, a cell a tile (`light::BEAM` is `light::TILE`): past them a
+/// slot walks.
+pub const LIGHT_CELLS_MOST: u32 = 4096;
 const _: () = assert!(BEAM == TILE, "a light's cell a tile");
 
 /// The table's load: the share of its slots held, in eighths, with buckets of `BUCKET`.
@@ -188,10 +187,10 @@ const fn ceil(v: f32) -> u32 {
 pub const EYE_DRAWS: u32 = EYE_CELLS_MOST * CELL_NODES;
 pub const LIGHT_DRAWS: u32 = LIGHT_CELLS_MOST * CELL_NODES;
 
-/// The state's bits (`node_cache::W_STATE`): a face some ray entered a side
+/// The state's bits (`node_cache::STATES_AT`): a face some ray entered a side
 /// (`raster::faces`), whether some ray stopped on it coarser than it asked, a cell the query
 /// answers whole, and a face an eye's ray entered and asked what lies about it
-/// (`node_cache::W_FACES`) a side, as `FACES` numbers them a byte up (`ASKED_SHIFT`). An
+/// (`node_cache::R_FACES`) a side, as `FACES` numbers them a byte up (`ASKED_SHIFT`). An
 /// entry draws where a face is set.
 pub const FACES: u32 = (1 << 6) - 1;
 pub const WHOLE: u32 = 1 << 7;

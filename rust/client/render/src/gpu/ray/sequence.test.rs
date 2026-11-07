@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::frame::shader::access::{
-    found, role, ARGS_INDIRECT, ARGS_WRITTEN, COPY, DRAW, NO_BUFFER, WRITE_BY_RUNTIME,
+    found, role, ARGS_INDIRECT, COPY, DRAW, NO_BUFFER, WRITE_BY_RUNTIME,
 };
 
 /// The sources whose calls take their offsets from a step here.
@@ -181,7 +181,6 @@ fn the_host_calls_off_the_steps_in_their_order() {
 fn a_binding_takes_its_role_from_its_buffer_and_its_call() {
     assert_eq!(role(&FRAME, &PX, 30), ARGS_INDIRECT);
     assert_eq!(role(&FRAME, &FACE, 16), ARGS_INDIRECT);
-    assert_eq!(role(&FRAME, &LIGHT_CLAIM, 21), ARGS_WRITTEN);
     assert_eq!(role(&FRAME, &STOPS, 9), STATE);
     let corners = FRAME.steps.iter().find(|s| s.name == "corners");
     assert_eq!(corners.map(|s| role(&FRAME, s, 9)), Some(STATE));
@@ -205,13 +204,13 @@ fn an_indirect_call_off_args_its_group_binds_writable_is_found() {
         steps: &[
             Step::write("light_args", at(0, 0, light::ARGS_WORDS)),
             Step::dispatch_off(
-                "light_claim",
+                "light_cells",
                 0,
-                COMPUTE_LIGHT_CLAIM,
+                COMPUTE_LIGHT_CELL,
                 &[&ARGS_BOUND],
                 (0, light::ARGS_PASSES),
             ),
         ],
     };
-    assert!(found(&SHIPPED).contains(&(1, "light_claim", "light_args")));
+    assert!(found(&SHIPPED).contains(&(1, "light_cells", "light_args")));
 }

@@ -777,6 +777,24 @@
           ]
         }
       ]
+    },
+    {
+      "name": "TURN_PACE",
+      "val": 7426,
+      "$doc": [
+        "The least interval the kernel asks between its turns: its load's word on the rate, which",
+        "the next TURN_GRANT's `paced_ms` answers, a whole number of refreshes (the pacing the",
+        "client boots the runtime with, @xpute/runtime sched/frame_pacing.ts `pace`)."
+      ],
+      "pkt": [
+        {
+          "name": "interval_ms",
+          "type": "f64",
+          "$doc": [
+            "0 asks none, and turns go at the display's own rate."
+          ]
+        }
+      ]
     }
   ],
   "extern": [
@@ -943,13 +961,18 @@
     {
       "name": "TurnMinor",
       "$doc": [
-        "A turn's: what the runtime grants it, the credits and the clock."
+        "A turn's: what the runtime grants it, the credits and the clock, and the interval the",
+        "kernel asks between them."
       ],
       "format": "hex2",
       "entries": [
         {
           "name": "GRANT",
           "val": 1
+        },
+        {
+          "name": "PACE",
+          "val": 2
         }
       ]
     },

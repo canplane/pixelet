@@ -21,7 +21,7 @@ use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::FrameKind;
 use crate::mesh::paint::ground::look_words;
 use cast::CastBuffers;
-pub use cast::{drawn_fits, Cast, LightReads, Overwrites, DRAWN_MOST};
+pub use cast::{drawn_fits, Cast, LightReads, Overwrites, DRAWN_AREA, DRAWN_MOST};
 pub use count::{count_at, RayCounts, CAST, LANES_AT, RAYS, RAY_COUNTS};
 pub use ground::{
     BrickFill, CellsBack, Filled, GroundBricks, OnFilled, TerrainUpload, TerrainWrite,
@@ -58,11 +58,6 @@ pub struct RaysPass {
     ground_built: Option<GroundPipelines>,
     ground: Option<GroundBuffers>,
     cast: Option<CastBuffers>,
-    /// What this frame does with the cast, as `prepare` decided it: nothing
-    /// cast (`plain`), the rays standing (`standing`), the pixels cast
-    /// again over the samples that stand (`px`), or a cast run
-    /// (`cast`).
-    pub kind: FrameKind,
 }
 
 impl RaysPass {
@@ -85,13 +80,12 @@ impl RaysPass {
             ground_built: None,
             ground: None,
             cast: None,
-            kind: FrameKind::plain,
         }
     }
 
     /// Whether this frame casts the pixels' rays (`casts_px`).
     pub fn casts_px(&self) -> bool {
-        casts_px(self.kind)
+        casts_px(self.kind())
     }
 
     /// The lit pass's entries, handed again whenever one of its objects is
@@ -131,7 +125,7 @@ impl RaysPass {
     }
 
     pub fn draw(&self, pass: &mut TrackedRenderPass) {
-        if self.kind == FrameKind::plain || self.group == 0 {
+        if self.kind() == FrameKind::plain || self.group == 0 {
             return;
         }
         pass.set_pipeline(self.pipeline.id);

@@ -30,7 +30,7 @@ fn light_mark_walked_cs(
 ) {
   let k = list_place(group.xy, lane.x);
   let drawn = textureDimensions(rays);
-  if (k >= hole_words(drawn)) {
+  if (k >= walked_words(drawn)) {
     return;
   }
   var bits = eye_beam(walked_at() + k);

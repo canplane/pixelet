@@ -22,7 +22,6 @@ use crate::gpu::ray::sequence;
 use pxl_engine::cast::REACH;
 use pxl_engine::eye;
 use pxl_engine::light::{self, Light, Starts, ANCHOR};
-use pxl_engine::ray::{MISS_ACROSS, MISS_LANES};
 use pxl_engine::WORKGROUPS_MOST;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::{self, V3};
@@ -81,10 +80,8 @@ const _: () = {
     let per = light::LIST_ACROSS * light::LISTED_LANES;
     let corners = light::beam_across(SIZE) * light::beam_across(SIZE);
     assert!(
-        (SIZE * SIZE).div_ceil(per) <= most
-            && corners.div_ceil(per) <= most
-            && (SIZE * SIZE).div_ceil(MISS_LANES * MISS_ACROSS) <= most,
-        "each pass over what the light's cast lists fits one dispatch: its texels' and beam rays' lists and the misses"
+        (SIZE * SIZE).div_ceil(per) <= most && corners.div_ceil(per) <= most,
+        "each pass over what the light's cast lists fits one dispatch: its texels' and beam rays' lists"
     );
 };
 

@@ -43,7 +43,7 @@ fn record_faces_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let slot = find(h.zoom, idx_of(h.corner, h.zoom, h.roots, vec3<i32>(0i)), p.asset, p.lacks);
   var word = 0u;
   if (slot != NO_ENTRY) {
-    word = node_cache_word(entry_at(slot) + W_FACES + p.face);
+    word = node_cache_word(face_at(slot, p.face));
   }
   textureStore(rays, at, 3u, vec4<u32>(word, 0u, 0u, 0u));
 }

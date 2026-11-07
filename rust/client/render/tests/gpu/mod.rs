@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use pxl_engine::answer::Kind;
 use pxl_engine::light::{self, Light, Starts};
-use pxl_engine::{cast, count, node_cache, ray, FRAC_W};
+use pxl_engine::{cast, node_cache, ray, FRAC_W};
 use pxl_render::frame::shader::record::{
     compute, src, COMPUTE_QUEUE, COMPUTE_QUEUE_ASK, COMPUTE_QUEUE_ASK_CORNERS,
     COMPUTE_QUEUE_ASK_CORNERS_PARKED, COMPUTE_QUEUE_ASK_LIGHT_CORNERS,
@@ -27,6 +27,8 @@ use pxl_render::frame::shader::record::{
 
 /// How long a test waits on the device for one submission before it fails.
 const WAIT: Duration = Duration::from_secs(60);
+/// The frames a run may take to ask what its rays need (`Gpu::run`).
+const FRAMES_TO_ASK: u32 = 64;
 
 /// Whether a mutant sweep runs this test: the file `MUT_WGSL` names stands for the module
 /// that holds the entry, and the test stops at its first case that differs.
@@ -188,42 +190,19 @@ impl Gpu {
         self.corners(true, world, table);
     }
 
-    /// The holes' queue as the cast runs it over one observer's holes (pxl-render
-    /// gpu/ray/cast.rs `walk_run`): its words empty, its caps in the node cache's head
-    /// (`table`), the two walks over the node cache alone and the asks after each, which fold
-    /// each walk's visits into the frame's there, where `hits` the hits copied into `table` as
-    /// the cast copies them, where `pool` the eye's parked rays' count copied into its pool's
-    /// count, a buffer and its word (pxl-engine `ray::POOL_CNT`), and the last walk. `all` binds what any of its passes
-    /// reads but the queue's words: the eye at 0, the world's at 1, 2 and 4 to 7, the rays or
-    /// the map at 3, the observer's list, its holes' region last, at 8, the node cache at 9, the
-    /// observer's head at 11; each pass takes those its entry reads. The queue counts to the
-    /// whole budget, as a run alone in its frame does (`ray::caps`). The frame's work its
-    /// passes did, the nodes visited and asked (`node_cache::VISITED`, `node_cache::ASKED`).
+    /// The holes' run as the cast runs it over one observer's holes (pxl-render gpu/ray/cast.rs
+    /// `walk_run`): the two walks over the node cache alone and the asks after each, the stops
+    /// copied into `table` and the rays parked into `pool`, a buffer and its word (pxl-engine
+    /// `ray::POOL_CNT`), as the cast copies them, and the last walk. `all` binds what any of its
+    /// passes reads but the queue's words: the eye at 0, the world's at 1, 2 and 4 to 7, the rays
+    /// or the map at 3, the observer's list at 8, the node cache at 9, the observer's head at 11;
+    /// each pass takes those its entry reads.
     pub fn holes(
         &self,
         all: &[(u32, wgpu::BindingResource)],
         table: &wgpu::Buffer,
-        hits: bool,
-        pool: Option<(&wgpu::Buffer, u32)>,
-    ) -> Vec<u32> {
-        self.holes_within(all, table, hits, pool, ray::caps(0))
-    }
-
-    /// `holes`, the queue counting the frame's visits and asks to `caps`
-    /// (`node_cache::caps_at`).
-    pub fn holes_within(
-        &self,
-        all: &[(u32, wgpu::BindingResource)],
-        table: &wgpu::Buffer,
-        hits: bool,
-        pool: Option<(&wgpu::Buffer, u32)>,
-        caps: [u32; 2],
-    ) -> Vec<u32> {
-        // Either observer's holes' caps, the walks taking their own by the head they are handed.
-        for run in [count::EYE_HOLES, count::LIGHT_HOLES] {
-            let at = u64::from(node_cache::caps_at(run)) * 4;
-            self.queue.write_buffer(table, at, bytes(&caps));
-        }
+        pool: (&wgpu::Buffer, u32),
+    ) {
         self.run(
             [
                 COMPUTE_QUEUE,
@@ -240,20 +219,13 @@ impl Gpu {
             all,
             table,
             None,
-            hits,
-            pool,
-        )
+            Some(pool),
+        );
     }
 
     /// An observer's beam rays' run as the cast runs it (pxl-render gpu/ray/cast.rs
-    /// `walk_run`), the eye's or the `light`'s, as `samples` runs the samples'. The frame's work
-    /// its passes did.
-    pub fn corners(
-        &self,
-        light: bool,
-        all: &[(u32, wgpu::BindingResource)],
-        table: &wgpu::Buffer,
-    ) -> Vec<u32> {
+    /// `walk_run`), the eye's or the `light`'s, as `samples` runs the samples'.
+    pub fn corners(&self, light: bool, all: &[(u32, wgpu::BindingResource)], table: &wgpu::Buffer) {
         let ids = if light {
             [
                 COMPUTE_QUEUE_LIGHT_CORNERS,
@@ -271,34 +243,27 @@ impl Gpu {
                 COMPUTE_QUEUE_LAST_CORNERS,
             ]
         };
-        self.lattice(ids, light, all, table, None)
+        self.lattice(ids, light, all, table, None);
     }
 
     /// An observer's samples' run as the cast runs it (pxl-render gpu/ray/cast.rs `walk_run`),
-    /// the eye's or the `light`'s: its words empty, its caps past any work it does, the test being
-    /// of its answers and not of the budget (`ray::caps`), the two walks over the node cache alone and the asks after each, and the last walk. `all`
-    /// binds what any of its passes reads but the queue's words: the eye at 0, the world's at
-    /// 1, 2 and 4 to 7, the observer's list at 8, the node cache at 9, the light's head at 11,
-    /// each pass taking those its entry reads. The frame's work its passes did, as `holes`.
-    pub fn samples(
-        &self,
-        light: bool,
-        all: &[(u32, wgpu::BindingResource)],
-        table: &wgpu::Buffer,
-    ) -> Vec<u32> {
-        self.samples_asked(light, all, table, None)
+    /// the eye's or the `light`'s: the two walks over the node cache alone and the asks after
+    /// each, and the last walk. `all` binds what any of its passes reads but the queue's words:
+    /// the eye at 0, the world's at 1, 2 and 4 to 7, the observer's list at 8, the node cache at
+    /// 9, the light's head at 11, each pass taking those its entry reads.
+    pub fn samples(&self, light: bool, all: &[(u32, wgpu::BindingResource)], table: &wgpu::Buffer) {
+        self.samples_asked(light, all, table, None);
     }
 
     /// `samples`, its last walk, which asks the world, over the node cache `asked` where given
-    /// in place of `table`, which the walks before it and their asks read and write; the
-    /// frame's work in each set to none first.
+    /// in place of `table`, which the walks before it and their asks read and write.
     pub fn samples_asked(
         &self,
         light: bool,
         all: &[(u32, wgpu::BindingResource)],
         table: &wgpu::Buffer,
         asked: Option<&wgpu::Buffer>,
-    ) -> Vec<u32> {
+    ) {
         let ids = if light {
             [
                 COMPUTE_QUEUE_LIGHT_SAMPLES,
@@ -316,11 +281,11 @@ impl Gpu {
                 COMPUTE_QUEUE_LAST_SAMPLES,
             ]
         };
-        self.lattice(ids, light, all, table, asked)
+        self.lattice(ids, light, all, table, asked);
     }
 
     /// A lattice's run of passes `ids`, the eye's or the `light`'s, over `table` and `asked`
-    /// (`samples_asked`): its caps past any work it does, the frame's work set to none first.
+    /// (`samples_asked`).
     fn lattice(
         &self,
         ids: [u32; 5],
@@ -328,33 +293,21 @@ impl Gpu {
         all: &[(u32, wgpu::BindingResource)],
         table: &wgpu::Buffer,
         asked: Option<&wgpu::Buffer>,
-    ) -> Vec<u32> {
-        let run = if light {
-            count::LIGHT_LATTICE
-        } else {
-            count::EYE_LATTICE
-        };
-        let at = u64::from(node_cache::caps_at(run)) * 4;
-        for t in [Some(table), asked].into_iter().flatten() {
-            self.queue.write_buffer(t, at, bytes(&[u32::MAX; 2]));
-        }
+    ) {
         // The light's walks read its head; no lattice's asks do, nor the eye's walks.
         let head: &[u32] = if light { &[11] } else { &[] };
         let walk = [&[0, 8, 9, 10][..], head].concat();
         let last = [&[0, 1, 2, 4, 5, 6, 7, 8, 9][..], head].concat();
         let keep = [&walk[..], &[0, 1, 2, 4, 5, 6, 7, 9, 10], &last[..]];
-        self.run(ids, keep, all, table, asked, false, None)
+        self.run(ids, keep, all, table, asked, None);
     }
 
     /// A run's passes `ids` (its walk, its asks, its walk again, their asks and its last walk)
-    /// over `all` and fresh queue's words, the walks, the asks and the last walk each taking
-    /// the bindings `keep` names for it, the last walk's node cache `asked` where given; where
-    /// `hits`, the stops its walks over the node cache listed copied into `table` as the cast
-    /// copies them. The frame's work its passes did.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "a run's passes, their groups and buffers, and the two copies the host makes between them"
-    )]
+    /// over `all` and the queue's words, the walks, the asks and the last walk each taking the
+    /// bindings `keep` names for it, the last walk's node cache `asked` where given; where
+    /// `pool`, the holes' run's, its stops and its parked rays copied as `holes` says. A run that
+    /// asks past `ray::ASKS_A_FRAME` ends rays as lacks, so it runs again over the node cache it
+    /// left, as the frames after do, until one lacks no ask: its words are what a test reads.
     fn run(
         &self,
         [walk_id, ask_id, walk_parked_id, ask_parked_id, last_id]: [u32; 5],
@@ -362,19 +315,12 @@ impl Gpu {
         all: &[(u32, wgpu::BindingResource)],
         table: &wgpu::Buffer,
         asked: Option<&wgpu::Buffer>,
-        hits: bool,
         pool: Option<(&wgpu::Buffer, u32)>,
-    ) -> Vec<u32> {
-        // Each run a frame of its own: its work starts at none, and the last walk's first taken,
-        // as the host's head and the asks set them each frame it casts.
-        let work = u64::from(node_cache::LAST_TAKEN) * 4;
-        let none = [0u32; (node_cache::LATTICE_LEFT + 1 - node_cache::LAST_TAKEN) as usize];
-        for t in [Some(table), asked].into_iter().flatten() {
-            self.queue.write_buffer(t, work, bytes(&none));
-        }
-        let mut words = vec![0u32; ray::QUEUE_WORDS as usize];
-        words[..ray::QUEUE_EMPTY.len()].copy_from_slice(&ray::QUEUE_EMPTY);
-        let queue = self.buffer(&words, wgpu::BufferUsages::STORAGE);
+    ) {
+        let queue = self.buffer(
+            &vec![0u32; ray::QUEUE_WORDS as usize],
+            wgpu::BufferUsages::STORAGE,
+        );
         let pipeline = |id| {
             let (shader, entry) = compute(id);
             self.pipeline(src(shader), entry)
@@ -403,26 +349,34 @@ impl Gpu {
             }
         }
         let groups = [ray::QUEUE_GROUPS, 1, 1];
-        self.dispatch(&walk, &walk_binds, groups);
-        self.dispatch(&ask, &ask_binds, groups);
-        self.dispatch(&walk_parked, &walk_binds, groups);
-        self.dispatch(&ask_parked, &ask_binds, groups);
-        let q = self.read(&queue);
-        if hits {
-            let h = ray::QUEUE_HITS as usize;
-            let at = u64::from(node_cache::HITS_ARGS) * 4;
-            self.queue.write_buffer(table, at, bytes(&q[h..h + 4]));
+        let word = |w: u32| u64::from(w) * 4;
+        for _ in 0..FRAMES_TO_ASK {
+            // Each run a frame of its own: its asks none and the last walk's first taken, as the
+            // host and the asks set them each frame it casts.
+            let none = [0u32; (node_cache::ASKED + 1 - node_cache::LAST_TAKEN) as usize];
+            for t in [Some(table), asked].into_iter().flatten() {
+                self.queue
+                    .write_buffer(t, word(node_cache::LAST_TAKEN), bytes(&none));
+            }
+            self.queue.write_buffer(&queue, 0, bytes(&ray::QUEUE_EMPTY));
+            self.dispatch(&walk, &walk_binds, groups);
+            self.dispatch(&ask, &ask_binds, groups);
+            self.dispatch(&walk_parked, &walk_binds, groups);
+            self.dispatch(&ask_parked, &ask_binds, groups);
+            if let Some((buf, at)) = pool {
+                let q = self.read(&queue);
+                let (h, p) = (ray::QUEUE_HITS as usize, ray::QUEUE_PARKED as usize);
+                self.queue
+                    .write_buffer(table, word(node_cache::HITS_ARGS), bytes(&q[h..h + 4]));
+                self.queue.write_buffer(buf, word(at), bytes(&q[p..p + 1]));
+            }
+            self.dispatch(&last, &last_binds, groups);
+            let done = self.read(asked.unwrap_or(table));
+            if done[node_cache::ASKED as usize] <= ray::ASKS_A_FRAME {
+                return;
+            }
         }
-        if let Some((buf, word)) = pool {
-            let p = ray::QUEUE_PARKED as usize;
-            self.queue
-                .write_buffer(buf, u64::from(word) * 4, bytes(&q[p..p + 1]));
-        }
-        self.dispatch(&last, &last_binds, groups);
-        let done = self.read(asked.unwrap_or(table));
-        [node_cache::VISITED, node_cache::ASKED]
-            .map(|w| done[w as usize])
-            .to_vec()
+        panic!("a run still asks past a frame's asks after {FRAMES_TO_ASK} frames");
     }
 }
 
@@ -472,7 +426,7 @@ pub fn lay_entry(
 ) {
     let e = node_cache::entry_at(slot) as usize;
     let zooms = n.zoom | n.zoom << pxl_engine::ZOOM_BITS;
-    cache[e + node_cache::W_KEY as usize] = node_cache::PASSES | zooms << node_cache::TAG_BITS;
+    cache[node_cache::key_at(slot) as usize] = node_cache::PASSES | zooms << node_cache::TAG_BITS;
     cache[e + node_cache::W_KIND as usize] = kind as u32;
     cache[e + node_cache::W_ASSET as usize] = asset[0];
     cache[e + node_cache::W_ASSET as usize + 1] = asset[1];
@@ -482,7 +436,7 @@ pub fn lay_entry(
     for a in 0..3 {
         cache[e + w + 1 + a] = idx[a] as u32;
     }
-    cache[e + node_cache::W_STATE as usize] = state;
+    cache[node_cache::state_at(slot) as usize] = state;
 }
 
 /// Lays the node `n`, as a walk from the origin `o` holds it, answered `kind` and `asset`, in
@@ -499,9 +453,8 @@ pub fn lay_kept(
     let first = node_cache::bucket_of(n.zoom, idx);
     let mut free = None;
     for slot in first..first + node_cache::BUCKET {
-        let e = node_cache::entry_at(slot) as usize;
-        if entry_held(cache, e) {
-            let w = e + node_cache::W_NODE as usize;
+        if entry_held(cache, slot) {
+            let w = (node_cache::entry_at(slot) + node_cache::W_NODE) as usize;
             if cache[w] == n.zoom && [1, 2, 3].map(|a| cache[w + a] as i32) == idx {
                 return None;
             }
@@ -521,9 +474,9 @@ pub fn entry_node(cache: &[u32], e: usize, o: [i32; 3]) -> cast::Node {
     cast::Node::of_idx(o, cache[w], [1, 2, 3].map(|a| cache[w + a] as i32))
 }
 
-/// Whether the entry at word `e` of `cache` holds a node: a key that is no claim.
-pub fn entry_held(cache: &[u32], e: usize) -> bool {
-    let key = cache[e + node_cache::W_KEY as usize];
+/// Whether slot `slot` of `cache` holds a node: a key that is no claim.
+pub fn entry_held(cache: &[u32], slot: u32) -> bool {
+    let key = cache[node_cache::key_at(slot) as usize];
     key != 0 && key != node_cache::CLAIMED && key & node_cache::CLAIM_MASK != node_cache::CLAIM_FAR
 }
 

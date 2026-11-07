@@ -748,6 +748,13 @@ impl Entry {
             || self.brick[1] != was.brick[1]
             || self.present != was.present
     }
+
+    /// Whether a query that reads bricks held present alone (`Presence`) reads it other than
+    /// as `was`: moved (`moved_from`), held present on either side. A brick wanted absent for
+    /// another moves only what reads the fold.
+    pub fn held_moved_from(&self, was: Entry) -> bool {
+        self.moved_from(was) && (self.present != 0 || was.present != 0)
+    }
 }
 
 /// The row of the clip levels' buffer each clip level's first brick is at: past
@@ -1016,5 +1023,9 @@ mod tests {
         // Neither present: another brick moved it, a ticket did not.
         assert!(at([1, 2], 0, 0).moved_from(at([8, 9], 0, 5)));
         assert!(!at([1, 2], 0, 0).moved_from(at([1, 2], 0, 5)));
+        // Held present on one side at least, or a brick wanted absent for another.
+        assert!(at([1, 2], 3, 0).held_moved_from(at([8, 9], 0, 0)));
+        assert!(at([1, 2], 0, 0).held_moved_from(at([8, 9], 3, 0)));
+        assert!(!at([1, 2], 0, 0).held_moved_from(at([8, 9], 0, 0)));
     }
 }

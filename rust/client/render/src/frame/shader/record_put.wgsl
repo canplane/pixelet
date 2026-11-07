@@ -7,7 +7,7 @@
 // (sample_box.wgsl) and the missed pixels' hits (record_stops.wgsl) each make their stops and
 // call `observe_stop`.
 
-/// The node cache, whose entries' states a stop sets (`node_cache::W_STATE`) through atomics,
+/// The node cache, whose entries' states a stop sets (`node_cache::STATES_AT`) through atomics,
 /// as many stops of one node set them at once.
 @group(0) @binding(9) var<storage, read_write> node_cache: array<atomic<u32>>;
 
@@ -69,19 +69,19 @@ fn kept_at(k: u32, origin: vec3<i32>) -> Node {
   );
 }
 
-/// The side stop `p` entered its entry at word `e` through set (`raster::faces`, a bit a side),
+/// The side stop `p` entered slot `slot`'s entry through set (`raster::faces`, a bit a side),
 /// and, where its observer reads faces' words (`asks`' room, the eye's), set asked
 /// (`record::ASKED`): the first time it is, what lies about it told at once where it needs no
 /// asking, a lack's none and a cell short of its cube its box's (`face::BOX`), else asked of
 /// the faces' pass off the stop's line, laid among `asks`, its node the entry
 /// (`record::TO_RECORD`). An observer that reads none (the light's) sets the side alone, a
 /// box's word told the first time it is.
-fn observe(p: Stop, e: u32, asks: Asks) {
+fn observe(p: Stop, slot: u32, asks: Asks) {
   let bit = 1u << p.face;
   let asked = bit << RECORD_ASKED_SHIFT;
   let reads = asks.room != 0u;
   let mark = select(bit, bit | asked, reads);
-  let state = e + W_STATE;
+  let state = state_at(slot);
   if ((node_cache_word(state) & mark) == mark) {
     return;
   }
@@ -92,7 +92,7 @@ fn observe(p: Stop, e: u32, asks: Asks) {
   }
   if (((p.asset.x >> FILL_SHIFT) & (EIGHTHS - 1u)) != 0u) {
     if ((was & bit) == 0u || first_asked) {
-      atomicStore(&node_cache[e + W_FACES + p.face], FACE_BOX);
+      atomicStore(&node_cache[face_at(slot, p.face)], FACE_BOX);
     }
     return;
   }
@@ -109,14 +109,14 @@ fn observe(p: Stop, e: u32, asks: Asks) {
     args_most(asks.args + RASTER_ARGS_FACES, workgroups(place + 1u, asks.room, RASTER_FACES_LANES));
   }
   let a = asks.at + place * ASK_WORDS;
-  beams[a + ASK_NODE] = e;
+  beams[a + ASK_NODE] = entry_at(slot);
   beams[a + ASK_FACE] = p.face;
   beams[a + ASK_LINE] = p.line;
-  beams[a + ASK_TO] = RECORD_TO | (e + W_FACES + p.face);
+  beams[a + ASK_TO] = RECORD_TO | face_at(slot, p.face);
 }
 
 /// Stop `p` on the node `k` into what draws it: its entry found (`find`), marked in the frame's
-/// number where it draws from now on (`node_cache::W_SEEN`), set whole where the stop found it
+/// number where it draws from now on (`node_cache::R_DRAWN`), set whole where the stop found it
 /// so (`RECORD_WHOLE`, the world's, which whichever ray stops on it whole first sets), and its
 /// face set (`observe`). None where no slot keeps its node: its pixel walks again.
 fn observe_stop(k: Node, p: Stop, asks: Asks) {
@@ -124,14 +124,13 @@ fn observe_stop(k: Node, p: Stop, asks: Asks) {
   if (slot == NO_ENTRY) {
     return;
   }
-  let e = entry_at(slot);
-  let state = node_cache_word(e + W_STATE);
+  let state = node_cache_word(state_at(slot));
   // Drawable from now: no claim takes it before a draw draws it (`record::drawn`).
   if ((state & (RECORD_FACES | RECORD_ASKED)) == 0u) {
-    atomicStore(&node_cache[e + W_SEEN], record_frame());
+    atomicStore(&node_cache[drawn_at(slot)], record_frame());
   }
   if (p.whole && (state & RECORD_WHOLE) == 0u) {
-    atomicOr(&node_cache[e + W_STATE], RECORD_WHOLE);
+    atomicOr(&node_cache[state_at(slot)], RECORD_WHOLE);
   }
-  observe(p, e, asks);
+  observe(p, slot, asks);
 }

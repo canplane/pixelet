@@ -38,7 +38,6 @@ use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
 use xpute_core::mem::heap::Block;
-use xpute_core::sched::edge::{notified, Notify};
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
@@ -52,7 +51,7 @@ use crate::sys::io::fetch::{body, release};
 use crate::sys::io::file::{self, Path};
 use crate::sys::io::file_spec::{self, format, object as object_file, root, top, write as column};
 use crate::sys::io::request::declare;
-use crate::sys::sched::edge::{request_world_tick, wake_at};
+use crate::sys::sched::edge::request_world_tick;
 use pxl_spec::object::ext::{class_of, Class};
 
 /// The most files wanted at once: the shards within the ground's demand at
@@ -78,7 +77,6 @@ struct State {
     refused_files: Vec<u64>,
     /// The writes the store took since the last batch went up, in order.
     unsent: Vec<Write>,
-    save_due_ms: Option<f64>,
     /// The files `want` asks for, by id; reused across turns.
     wants: Vec<(u64, Ask)>,
     /// How many times what `want` reads of it moved: the top or a shard
@@ -421,23 +419,9 @@ fn decode_top(bytes: &[u8]) -> Result<Vec<(u64, u32)>, MarshalError> {
         .collect()
 }
 
-/// A batch is sent a while after its first write, so a burst of writes
-/// goes up as one; what is pending is flushed when the page hides.
-const SAVE_DELAY_MS: f64 = 300.0;
-
-/// A write the store took, to go up as an edit.
+/// A write the store took, to go up as an edit with the turn's others (`step`).
 pub fn send(write: Write) {
-    let st = state();
-    st.unsent.push(write);
-    if st.save_due_ms.is_none() {
-        st.save_due_ms = Some(now() + SAVE_DELAY_MS);
-    }
-}
-
-static SAVES: Global<Notify> = Global::new();
-
-fn saves() -> &'static mut Notify {
-    SAVES.get(Notify::new)
+    state().unsent.push(write);
 }
 
 pub fn step() {
@@ -450,32 +434,15 @@ pub fn step() {
         }
         state().changes = changes;
     }
-    match state().save_due_ms {
-        Some(due) if now() >= due => saves().notify(),
-        Some(due) => wake_at(due),
-        None => {}
-    }
-}
-
-/// Sends the writes pending once a batch is due.
-pub async fn task() {
-    loop {
-        notified(saves).await;
-        save();
-    }
-}
-
-/// Sends what is pending now, as the page hides.
-pub fn flush() {
     save();
 }
 
 /// Sends the writes since the last batch as one edit batch, where the turn
-/// has a write left (sys/io/file.rs `write`); else it is due on the next
+/// has a write left (sys/io/file.rs `write`); else it goes on the next
 /// turn. A batch that does not encode is not sent.
-fn save() {
+pub fn save() {
     let st = state();
-    if st.save_due_ms.take().is_none() || st.unsent.is_empty() {
+    if st.unsent.is_empty() {
         return;
     }
     let Ok(batch) = encode_writes(format::OBJECT_EDITS, &st.unsent) else {
@@ -483,7 +450,6 @@ fn save() {
         return;
     };
     if !file::write(root::OBJECT, Path::of_name(object_file::EDITS), batch) {
-        st.save_due_ms = Some(now());
         request_world_tick();
         return;
     }

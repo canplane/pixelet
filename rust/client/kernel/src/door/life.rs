@@ -29,7 +29,7 @@ pub(super) fn apply(s: &mut State, life: Life) -> Outcome {
         // position no longer watched while nothing shows it.
         Life::Suspend => {
             geolocation::geolocation_visibility(false, world_platform().geolocation);
-            repository::flush();
+            repository::save();
         }
         Life::Resume => {
             geolocation::geolocation_visibility(true, world_platform().geolocation);

@@ -25,18 +25,6 @@ fn sample_queued(k: u32) -> vec2<u32> {
   return light_item_at(LEVEL_SAMPLE, k);
 }
 
-/// A cast's samples start afresh: one the budget left parked owes nothing (samples_run.light.wgsl).
-fn samples_resume() -> bool {
-  return false;
-}
-
-/// Whether the cell of the box its texel lies in waits on a beam ray of its window not ended
-/// (light_cell.wgsl `beam::CELL_WAITS`): the sample waits, parked, and the next cast casts it
-/// afresh (`samples_resume`).
-fn sample_waits(s: vec2<u32>) -> bool {
-  return beams[light_cell_at(slot_texel(s * LIGHT_SAMPLE) / LIGHT_BEAM) + CELL_RESUMES] == CELL_WAITS;
-}
-
 /// The first word of sample `s` (light_list.wgsl `light_sample_at`).
 fn sample_word(s: vec2<u32>) -> u32 {
   return light_sample_at(s);

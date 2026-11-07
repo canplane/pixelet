@@ -62,11 +62,53 @@ test("frame pacing - a refresh read a hair long still paces at two on a 120 Hz d
   near(grant_after_gaps(q, 8.34).paced_ms, 2 * 8.34, 1e-9);
 });
 
-test("frame pacing - the pace is the display's: no load moves it", () => {
+test("frame pacing - no turn's length moves the pace: the load is the program's to judge", () => {
   const q = new FramePacing(POLICY, () => {});
   const before = grant_after_gaps(q, 1000 / 120);
   for (let i = 0; i < 4 * FRAME_WINDOW; i++) q.observe(40, q.grant(0), 0);
   assert.deepStrictEqual(q.grant(0).paced_ms, before.paced_ms);
+});
+
+test("frame pacing - turns are paced at the fewest whole refreshes that reach the interval asked", () => {
+  const paced = (hz: number, ms: number) => {
+    const q = new FramePacing(POLICY, () => {});
+    q.pace(ms);
+    return grant_after_gaps(q, 1000 / hz).paced_ms;
+  };
+  near(paced(120, 1000 / 30), 4000 / 120, 1e-9);
+  near(paced(120, 3000 / 120), 3000 / 120, 1e-9);
+  near(paced(60, 1000 / 30), 2000 / 60, 1e-9);
+  // No whole refresh is 30 Hz here: the next that reaches it, not the last short of it.
+  near(paced(144, 1000 / 30), 5000 / 144, 1e-9);
+  // A refresh read a hair long takes no refresh more.
+  near(paced(1000 / 8.34, 3 * 8.33), 3 * 8.34, 1e-9);
+});
+
+test("frame pacing - an interval under the display's own moves nothing, and 0 asks none", () => {
+  const q = new FramePacing(POLICY, () => {});
+  q.pace(1);
+  near(grant_after_gaps(q, 1000 / 120).paced_ms, 2000 / 120, 1e-9);
+  q.pace(1000 / 30);
+  near(q.grant(0).paced_ms, 4000 / 120, 1e-9);
+  q.pace(0);
+  near(q.grant(0).paced_ms, 2000 / 120, 1e-9);
+});
+
+test("frame pacing - an input hurries no turn past the interval asked", () => {
+  const q = new FramePacing(POLICY, () => {});
+  const refresh_ms = 1000 / 120;
+  grant_after_gaps(q, refresh_ms);
+  q.pace(1000 / 30);
+  let now = 1000;
+  assert.ok(q.admit(now));
+  const admitted: number[] = [];
+  for (let i = 1; i <= 12; i++) {
+    now += refresh_ms;
+    q.input(now);
+    if (q.admit(now)) admitted.push(i);
+  }
+  assert.deepStrictEqual(admitted, [4, 8, 12]);
+  assert.ok(q.grant(now).interactive);
 });
 
 test("frame pacing - a gap that is not a frame moves nothing", () => {

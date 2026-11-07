@@ -28,8 +28,7 @@ fn light_lay(clip: vec4f) -> f32 {
   let t = vec2u(clip.xy) / LAY_TILE;
   let across = u32(side.x) / LAY_TILE;
   let epoch = max(u32(lay.corner.z), reads[lay.read.y]);
-  // Owed or not, the cast that last claimed it (pxl-engine `light::read_cast`).
-  if ((reads[u32(lay.corner.w) + t.y * across + t.x] & ~READ_OWED) < epoch) {
+  if (reads[u32(lay.corner.w) + t.y * across + t.x] < epoch) {
     return 1.0;
   }
   let slot = (vec2i(clip.xy) + lay.corner.xy) & (side - 1);

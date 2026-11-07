@@ -80,16 +80,16 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
   // Past the near plane: a corner of a face not drawn.
   o.clip = vec4f(0.0, 0.0, -1.0, 1.0);
   let lacks = (o.id & RASTER_LACK) != 0u;
-  let e = entry_at((o.id & ~RASTER_LACK) - 1u);
+  let slot = (o.id & ~RASTER_LACK) - 1u;
   let origin = raster.origin.xyz;
-  let b = entry_box(e, entry_kept(e, origin), origin);
+  let b = entry_box(slot, entry_kept(slot, origin), origin);
   let lo = b.lo;
   let hi = b.hi;
   o.lo = lo;
   o.hi = hi;
   // The faces drawn, a bit a side: those an eye's ray asked about, every one some ray entered
   // for the light (pxl-engine `record::ASKED`, `record::FACES`).
-  let state = node_cache_word(e + W_STATE);
+  let state = node_cache_word(state_at(slot));
   let faces = select((state & RECORD_ASKED) >> RECORD_ASKED_SHIFT, state & RECORD_FACES, raster.turn.y != 0u);
   // A stale voxel's depth, drawn behind every fresh one's.
   let behind = select(1.0, RASTER_STALE_DEPTH, (word & RASTER_STALE) != 0u);

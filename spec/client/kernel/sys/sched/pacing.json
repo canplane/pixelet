@@ -10,9 +10,17 @@
   "PACE_HZ": {
     "$val": 60,
     "$doc": [
-      "The slowest rate turns are paced at: the most whole refreshes of the display that fit",
-      "one interval at this rate, one at least, so a 120 Hz display runs a turn every second",
-      "refresh."
+      "The rate turns are paced at where the kernel asks none slower: the most whole refreshes",
+      "of the display that fit one interval at this rate, one at least, so a 120 Hz display",
+      "runs a turn every second refresh."
+    ]
+  },
+
+  "RATE_MIN_HZ": {
+    "$val": 30,
+    "$doc": [
+      "The slowest rate the kernel's load asks (pxl-kernel domain/view/frame/resolution.rs): past",
+      "it the pixels give way, not the motion."
     ]
   },
 
