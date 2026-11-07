@@ -12,6 +12,7 @@ pub mod spec;
 pub mod enums;
 
 pub mod admit;
+pub mod device;
 pub mod encode;
 
 /// What a native GPU runtime runs a core's stream by that is the program's to

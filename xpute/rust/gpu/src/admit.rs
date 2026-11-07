@@ -13,6 +13,7 @@ use core::sync::atomic::{AtomicU32, Ordering};
 
 use xpute_core::global::Global;
 
+use crate::device::{STATUS_AT, UNFINISHED_AT};
 use crate::spec::STATUS;
 
 pub type Admit = fn() -> bool;
@@ -27,15 +28,15 @@ pub fn admits(unfinished: u32, latency: u32) -> bool {
     unfinished < latency
 }
 
-/// The device's block the core last asked for (`call::device`): its first
-/// word and its length.
-static BLOCK: Global<Option<(*mut u32, usize)>> = Global::new();
+/// The first word of the device's block the core last asked for
+/// (`call::device`).
+static BLOCK: Global<Option<*mut u32>> = Global::new();
 
 /// The block `call::device` names to the runtime, kept for `page`. A block's
 /// words are the runtime's to write for good (xpute-core ipc/stream.rs R4), so
 /// it stays where it is while it is read.
 pub(crate) fn ask(block: &mut [u32]) {
-    BLOCK.set(Some((block.as_mut_ptr(), block.len())));
+    BLOCK.set(Some(block.as_mut_ptr()));
 }
 
 /// The page's admission (`Form::admit_frame` of a WebAssembly core given the
@@ -44,11 +45,11 @@ pub(crate) fn ask(block: &mut [u32]) {
 /// unfinished admit one; none before the block is asked for or once the
 /// device is lost.
 pub fn page<const LATENCY: u32>() -> bool {
-    BLOCK.get(|| None).is_some_and(|(at, len)| {
+    BLOCK.get(|| None).is_some_and(|at| {
         // SAFETY: the block `ask` kept, which stays live and in place; its
         // words the runtime writes are only ever loaded atomically.
         let word = |k: usize| unsafe { AtomicU32::from_ptr(at.add(k)) }.load(Ordering::Acquire);
-        word(len - 1) == STATUS::READY && admits(word(len - 2), LATENCY)
+        word(STATUS_AT) == STATUS::READY && admits(word(UNFINISHED_AT), LATENCY)
     })
 }
 

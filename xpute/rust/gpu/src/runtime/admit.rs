@@ -7,6 +7,7 @@ use xpute_runtime::mem::Memory;
 
 use super::surface::Frame;
 use super::GpuRuntime;
+use crate::device;
 
 /// A frame admitted and not yet done, counted until the queue's callback
 /// that holds it ends: called once the work is done, or let go uncalled, as
@@ -45,9 +46,9 @@ impl GpuRuntime {
     /// DEVICE) as a page's runtime tells them: before each turn, once the
     /// queue's callbacks that end frames have run.
     pub(super) fn tell_unfinished(&self, memory: &mut Memory<'_>) {
-        if let Some((address, words)) = self.block {
+        if let Some(address) = self.block {
             memory.store_release(
-                address + 4 * (words - 2),
+                address + 4 * device::UNFINISHED_AT as u32,
                 self.unfinished_cnt.load(Ordering::Relaxed),
             );
         }

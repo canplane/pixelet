@@ -33,6 +33,7 @@ use std::sync::Arc;
 
 use xpute_runtime::mem::Memory;
 
+use crate::device;
 use crate::spec::STATUS;
 use belt::Belt;
 use image::{Decoder, Decoding};
@@ -76,7 +77,7 @@ pub struct GpuRuntime {
     preferred_format: wgpu::TextureFormat,
     configure_at: ConfigureAt,
     /// Where the core asked the device's block written.
-    block: Option<(u32, u32)>,
+    block: Option<u32>,
     /// Set from wgpu's thread; taken at `poll`.
     gone: Arc<AtomicBool>,
     pending: Vec<Pending>,
@@ -160,8 +161,8 @@ impl GpuRuntime {
         self.objects.clear();
         self.pending.clear();
         self.decoding.clear();
-        if let Some((address, words)) = self.block {
-            memory.store_release(address + 4 * (words - 1), STATUS::LOST);
+        if let Some(address) = self.block {
+            memory.store_release(address + 4 * device::STATUS_AT as u32, STATUS::LOST);
         }
     }
 

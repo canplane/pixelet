@@ -15,6 +15,7 @@ use xpute_core::abi::handle::handle_slot;
 use xpute_core::global::Global;
 use xpute_core::ipc::stream::{Stream, WORD};
 use xpute_core::mem;
+use xpute_gpu::device;
 pub use xpute_gpu::encode::OBJECT_OPS;
 use xpute_gpu::encode::{self, call, Gpu as Encoder, Id};
 use xpute_gpu::enums::{
@@ -73,19 +74,12 @@ pub const UNIFORM_ALIGN_MAX: u32 = 256;
 /// taker's (`Gpu::image`).
 pub type Image = (u32, &'static [u8]);
 
-/// The device's block (xpute DEVICE): a word a limit, the features a bit
-/// each, the timestamp period, the preferred surface format, the frames
-/// unfinished, the status.
-const FEAT_WORDS: usize = FEATURE_NAME.len().div_ceil(32);
-const PERIOD_AT: usize = LIMIT_NAME.len() + FEAT_WORDS;
-const DEVICE_WORDS: usize = PERIOD_AT + 4;
-
 /// The head's words past the stream's own: the device's block, then the
 /// spans' reads, `READS` of them, each its fence and result, then the
 /// begin and end ticks of the frame it timed, two words a tick (`read_at`). The stream says the
 /// head's length itself, so the runtime reads none of this.
 const DEVICE_AT: usize = Stream::OWN_WORDS;
-const READS_AT: usize = DEVICE_AT + DEVICE_WORDS;
+const READS_AT: usize = DEVICE_AT + device::WORDS;
 /// The spans' reads on their way at once, each its own mapped buffer: a
 /// frame's read lands a frame or two after it, so with three none waits on
 /// the one before it to be taken.
@@ -826,7 +820,7 @@ pub fn device() -> Option<Device> {
     let s = STATE.get(|| None).as_mut()?;
     if s.device.is_none()
         && s.device_out
-        && load_acquire(head(DEVICE_AT + DEVICE_WORDS - 1)) == STATUS::READY
+        && load_acquire(head(DEVICE_AT + device::STATUS_AT)) == STATUS::READY
     {
         let word = |k: usize| *head(DEVICE_AT + k);
         let limit = |name: &str| {
@@ -842,10 +836,10 @@ pub fn device() -> Option<Device> {
                 .iter()
                 .position(|n| *n == name)
                 .or_bug(Errno::ENOENT);
-            word(LIMIT_NAME.len() + k / 32) >> (k % 32) & 1 != 0
+            word(device::FEATURES_AT + k / 32) >> (k % 32) & 1 != 0
         };
         let canvas = *Format::ALL
-            .get(word(PERIOD_AT + 1) as usize)
+            .get(word(device::FORMAT_AT) as usize)
             .or_bug(Errno::EINVAL);
         let align = limit("minUniformBufferOffsetAlignment");
         xpute_kit::ensure!(
@@ -857,7 +851,7 @@ pub fn device() -> Option<Device> {
             align,
             timestamps: feat("timestamp-query"),
             canvas,
-            period_ns: f32::from_bits(word(PERIOD_AT)),
+            period_ns: f32::from_bits(word(device::PERIOD_AT)),
         });
     }
     s.device
@@ -877,7 +871,7 @@ pub fn on_device_answered() {
 fn ask_device(s: &mut State) {
     let at = s.at as usize + DEVICE_AT * WORD;
     // SAFETY: the head's block, the runtime's to write.
-    let block = unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(at), DEVICE_WORDS) };
+    let block = unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(at), device::WORDS) };
     call::device(&mut s.stream, block);
     s.device_out = true;
 }
@@ -889,7 +883,7 @@ pub fn take_device_lost() -> bool {
     let Some(s) = STATE.get(|| None).as_mut() else {
         return false;
     };
-    let lost = load_acquire(head(DEVICE_AT + DEVICE_WORDS - 1)) == STATUS::LOST;
+    let lost = load_acquire(head(DEVICE_AT + device::STATUS_AT)) == STATUS::LOST;
     !core::mem::replace(&mut s.lost, lost) && lost
 }
 

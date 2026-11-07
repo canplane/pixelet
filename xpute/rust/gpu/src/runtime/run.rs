@@ -12,6 +12,7 @@ use super::object::Object;
 use super::pending::{Pending, ANSWERED, REFUSED, WAITING};
 use super::word::Words;
 use super::GpuRuntime;
+use crate::device;
 use crate::enums::{
     BUFFER_BINDING_TYPE, CANVAS_ALPHA_MODE, CULL_MODE, LOAD_OP, QUERY_TYPE, STORE_OP,
     TEXTURE_SAMPLE_TYPE,
@@ -771,16 +772,16 @@ impl GpuRuntime {
                 self.put(id, Object::View(view, texture.format()));
             }
             op::DEVICE => {
-                let (address, words) = (r.u(), r.u());
-                self.block = Some((address, words));
+                let address = r.u();
+                r.u();
+                self.block = Some(address);
                 let (limits, bits) = super::open::block(&self.device);
-                let period_at = limits.len() + bits.len();
                 for (k, w) in limits.into_iter().chain(bits).enumerate() {
                     memory.set_word(address + 4 * k as u32, w);
                 }
                 // wgpu resolves timestamps in ticks of this many nanoseconds.
                 memory.set_word(
-                    address + 4 * period_at as u32,
+                    address + 4 * device::PERIOD_AT as u32,
                     self.queue.get_timestamp_period().to_bits(),
                 );
                 let preferred = self
@@ -789,7 +790,7 @@ impl GpuRuntime {
                     .iter()
                     .position(|f| *f == Some(self.preferred_format));
                 memory.set_word(
-                    address + 4 * (period_at + 1) as u32,
+                    address + 4 * device::FORMAT_AT as u32,
                     preferred.unwrap_or_else(|| {
                         panic!(
                             "[gpu] {:?} is no format the spec names",
@@ -798,7 +799,7 @@ impl GpuRuntime {
                     }) as u32,
                 );
                 self.tell_unfinished(memory);
-                memory.store_release(address + 4 * (words - 1), STATUS::READY);
+                memory.store_release(address + 4 * device::STATUS_AT as u32, STATUS::READY);
             }
             _ => panic!("[gpu] op {code} is no op of spec/gpu/api.json"),
         }

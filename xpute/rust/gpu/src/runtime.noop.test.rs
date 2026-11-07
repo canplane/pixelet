@@ -125,17 +125,18 @@ fn write_waits_for_chunks() {
 fn native_tells_unfinished() {
     let (adapter, device, queue) = device();
     let mut h = runtime(adapter, &device, queue, 1);
-    let mut bytes = [0u8; 16];
+    let mut bytes = [0u8; 4 * crate::device::WORDS];
     let mut memory = Memory::of(&mut bytes);
-    h.block = Some((0, 4));
+    let unfinished = 4 * crate::device::UNFINISHED_AT as u32;
+    h.block = Some(0);
     assert!(h.admit_frame());
     h.present();
     assert!(!h.admit_frame(), "its one frame unfinished");
     h.tell_unfinished(&mut memory);
-    assert_eq!(memory.load_acquire(8), 1);
+    assert_eq!(memory.load_acquire(unfinished), 1);
     h.poll(&mut memory);
     assert_eq!(
-        memory.load_acquire(8),
+        memory.load_acquire(unfinished),
         0,
         "the frame done as the device is polled"
     );
