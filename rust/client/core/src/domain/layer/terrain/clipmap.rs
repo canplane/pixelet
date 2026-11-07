@@ -27,7 +27,7 @@ use pxl_engine::LEAF_CELL;
 use pxl_render::gpu::api;
 use pxl_render::gpu::ray::{BrickWrite, TerrainWrite};
 use pxl_spec::bake::tile::terrain::{
-    brick_lines, four_palette_indices, palette_cells, TerrainTile, ELE_COLUMN,
+    brick_lines, palette_cells, TerrainTile, ELE_COLUMN, PALETTE_COLUMN,
 };
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
@@ -738,7 +738,6 @@ pub fn cut(tile: Quadrant, pkt: &[u8]) {
         w.filled = true;
         return;
     };
-    let four = |c: usize| u32::from_le_bytes(four_palette_indices(cells, c));
     for b in 0..SLOTS {
         if !slot_wants(w, tile, b) {
             continue;
@@ -747,8 +746,20 @@ pub fn cut(tile: Quadrant, pkt: &[u8]) {
             w.filled = true;
             continue;
         }
-        let held = w.slots[b as usize];
-        cut_into(b, tile_of(held.cell, held.brick).1, &four);
+        let place = tile_of(w.slots[b as usize].cell, w.slots[b as usize].brick).1;
+        // Each way a packet holds them its own loop, not a branch a cell.
+        match cells.len() {
+            PALETTE_COLUMN => cut_into(b, place, &|c: usize| {
+                u32::from_le_bytes([
+                    cells[4 * c],
+                    cells[4 * c + 1],
+                    cells[4 * c + 2],
+                    cells[4 * c + 3],
+                ])
+            }),
+            1 => cut_into(b, place, &|_| word([u32::from(cells[0]); 4])),
+            _ => cut_into(b, place, &|c: usize| word([u32::from(cells[c]); 4])),
+        }
         w.slots[b as usize].fill = Fill::Cut;
     }
     w.due_stale = true;
@@ -761,9 +772,13 @@ fn cut_into(b: u32, place: [u32; 2], four: &impl Fn(usize) -> u32) {
     let at = (b * PALETTE_ARR_BYTES / 4) as usize;
     let side = GROUND.tile_cells() as usize;
     let (x0, y0) = ((place[0] * BRICK) as usize, (place[1] * BRICK) as usize);
-    for i in 0..BRICK_CELLS {
-        let [x, y] = clipmap::of_idx(i);
-        planes().palette[at + i as usize] = four((y0 + y as usize) * side + x0 + x as usize);
+    let palette = &mut planes().palette[at..at + BRICK_CELLS as usize];
+    let across: [u32; BRICK as usize] = core::array::from_fn(|x| clipmap::idx_of([x as u32, 0]));
+    for y in 0..BRICK {
+        let (row, down) = ((y0 + y as usize) * side + x0, clipmap::idx_of([0, y]));
+        for (x, &a) in across.iter().enumerate() {
+            palette[(a | down) as usize] = four(row + x);
+        }
     }
 }
 

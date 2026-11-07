@@ -512,7 +512,7 @@ impl TerrainTile {
 
 /// Cell `c`'s four palette indices, however a tile holds them: four a cell
 /// (`PALETTE_COLUMN`), one a cell, each its own four, or one for the whole tile.
-pub fn four_palette_indices(cells: &[GroundId], c: usize) -> [GroundId; 4] {
+fn four_palette_indices(cells: &[GroundId], c: usize) -> [GroundId; 4] {
     match cells.len() {
         PALETTE_COLUMN => [
             cells[4 * c],
@@ -576,8 +576,9 @@ fn read_tile(pkt: &[u8]) -> Result<Columns<'_>, MarshalError> {
     })
 }
 
-/// A packet's palette indices as it holds them, which a client's clip levels cut
-/// their bricks' from, a cell at a time (`four_palette_indices`).
+/// A packet's palette indices as it holds them, four a cell (`PALETTE_COLUMN`), one a
+/// cell, each its own four, or one for the whole tile: which a client's clip levels cut
+/// their bricks' from.
 pub fn palette_cells(pkt: &[u8]) -> Result<&[GroundId], MarshalError> {
     Ok(read_tile(pkt)?.ground)
 }
