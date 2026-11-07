@@ -24,7 +24,7 @@ use pxl_spec::space::coord::zoom::{idx_of, units, Zoom, UNIT_ZOOM};
 use xpute_core::global::Global;
 
 use crate::domain::layer::object::meta::user_decor_pick;
-use crate::domain::layer::object::preview::{self, RenderEdits};
+use crate::domain::preview::RenderEdits;
 use crate::domain::query::World;
 use crate::domain::scene::decor::param;
 use crate::domain::view::setting::store::settings_store;
@@ -159,13 +159,13 @@ fn wrap(x: i32) -> u32 {
 /// This frame's hand-over for an eye at `eye`: placed decor out to where the
 /// largest is an impostor's worth or the rays stop asking the leaves' cells,
 /// with the placed decor and the ground's decor the eraser's preview hides
-/// left out (`preview::cur`).
-pub fn step(eye: V3) {
+/// left out (`edits`, as the turn hands it).
+pub fn step(eye: V3, edits: &RenderEdits) {
     let RenderEdits {
         hide,
         scattered_cell,
         ..
-    } = preview::cur();
+    } = *edits;
     let h = hand_over();
     let anchor = eye.map(libm::floor);
     h.anchor = Position::of(anchor).q;

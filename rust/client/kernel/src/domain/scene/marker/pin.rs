@@ -13,7 +13,7 @@ use core::hash::Hasher;
 
 use super::arrangement::{surface, Brick, Instance, Key, MarkerHit};
 use crate::domain::layer::object::asset::Asset;
-use crate::domain::layer::object::preview::draft;
+use crate::domain::preview::Draft;
 use crate::domain::query::{cell_zoom_at, World};
 use crate::domain::scene::marker::design::Design;
 use pxl_render::look::marker::{CNT_FILL, CNT_INK, PILL_FILL, PILL_INK};
@@ -115,15 +115,15 @@ pub(super) fn read(brick: Brick, columns: &Aabb, pins: &mut Vec<Pin>) {
     });
 }
 
-/// What `pins` show seen from `eye`, into `out`: the draft,
+/// What `pins` show seen from `eye`, into `out`: `draft`,
 /// wherever it is, then each pin where its own point's cell
 /// shows a marker (`marker_shows`), a pin's cell's pins but that one
 /// together: one is itself, more their count, which a tap takes to where it
 /// stands. A cell lies in its brick, finer than it, so a brick's pins are
 /// counted among themselves.
-pub(super) fn show(pins: &mut [Pin], eye: V3, out: &mut Vec<Instance>) {
-    let drafted = draft().map(|d| d.at);
-    out.extend(draft().map(|d| one(d.at, pill(&d.text), pin_at(d.at).0)));
+pub(super) fn show(pins: &mut [Pin], eye: V3, draft: Option<&Draft>, out: &mut Vec<Instance>) {
+    let drafted = draft.map(|d| d.at);
+    out.extend(draft.map(|d| one(d.at, pill(&d.text), pin_at(d.at).0)));
     for p in pins.iter_mut() {
         p.grid = cell_zoom_at(eye, p.base);
         p.cell = marker_shows(p.grid).then(|| marker_cell_of(p.grid, p.at));
@@ -153,10 +153,10 @@ pub(super) fn show(pins: &mut [Pin], eye: V3, out: &mut Vec<Instance>) {
     }
 }
 
-/// The draft, as arrangement.rs `Inputs` compares it: its entry and its
+/// `draft` as arrangement.rs `Inputs` compares it: its entry and its
 /// text by its hash, so a settled turn asks the heap for nothing.
-pub(super) fn draft_key() -> Option<(Octant, u64)> {
-    draft().map(|d| {
+pub(super) fn draft_key(draft: Option<&Draft>) -> Option<(Octant, u64)> {
+    draft.map(|d| {
         let mut h = fnv::FnvHasher::default();
         h.write(d.text.as_bytes());
         (d.at, h.finish())

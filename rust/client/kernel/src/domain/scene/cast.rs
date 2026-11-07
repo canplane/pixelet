@@ -12,12 +12,12 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::eye::Observation;
 use xpute_core::global::Global;
 
-use crate::domain::layer::object::preview;
 use crate::domain::layer::object::store::object;
 use crate::domain::layer::terrain::clipmap::{self, TileContent};
 use crate::domain::layer::terrain::tile::uploads;
 use crate::domain::layer::upload::Uptake;
 use crate::domain::layer::Base as _;
+use crate::domain::preview::RenderEdits;
 use crate::domain::view::frame::resolution;
 use crate::domain::view::lens;
 use crate::sys::io::source;
@@ -52,13 +52,12 @@ pub fn shards() -> &'static [[i32; 4]] {
 /// The eye as the GPU's rays leave it, a ray a drawn pixel, its beam rays
 /// on the lattice the drawn resolution leaves (`lens::gpu_cast`,
 /// domain/view/frame/resolution.rs `lattice`),
-/// then the pointer's preview as the world answers through it (domain/query/world.rs
-/// `previewing`), its cut to air and its left-out leaf, each X, Y, Z and the
-/// zoom (pxl-engine `eye`). None without a screen.
-pub fn eye(o: &Observation) -> Option<[u32; eye::WORDS]> {
+/// then `edits`, the pointer's preview, as the world answers through it
+/// (domain/query/world.rs `previewing`), its cut to air and its left-out leaf,
+/// each X, Y, Z and the zoom (pxl-engine `eye`). None without a screen.
+pub fn eye(o: &Observation, edits: &RenderEdits) -> Option<[u32; eye::WORDS]> {
     let mut words = [0u32; eye::WORDS];
     lens::gpu_cast(o, resolution::lattice(), &mut words)?;
-    let edits = preview::cur();
     let cut = |e: Option<Octant>| {
         e.map_or([0, 0, 0, eye::NO_CUT], |e| {
             [

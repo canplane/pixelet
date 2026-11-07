@@ -49,6 +49,7 @@ pub fn is_screen_drawn() -> bool {
 const EARTH: Load = Load::Sphere;
 
 use crate::domain::layer::terrain::clipmap;
+use crate::domain::preview::{Draft, RenderEdits};
 use crate::domain::scene;
 use crate::domain::scene::animation;
 use crate::domain::scene::cast;
@@ -137,8 +138,9 @@ pub struct Drawn {
 }
 
 /// `pace` is the frame as the turn paced it, which the world's drawn
-/// resolution is judged by (domain/view/frame/resolution.rs `load`).
-pub fn stage_render(pace: Pace) -> Drawn {
+/// resolution is judged by (domain/view/frame/resolution.rs `load`), and
+/// `edits` the pointer's preview as the turn hands it, which the rays cut by.
+pub fn stage_render(pace: Pace, edits: &RenderEdits) -> Drawn {
     let lists = draw_list().take();
     let stands = lists.stands;
     let models = model::models();
@@ -175,7 +177,7 @@ pub fn stage_render(pace: Pace) -> Drawn {
     let (window, layers) = earth_window(Earth::demand().floor(), on);
     let mut earth_upload = move |write: &mut dyn FnMut(u32, &[u8]) -> bool| earth_upload(write, on);
     let o = observation::observation();
-    let eye = o.as_ref().and_then(cast::eye);
+    let eye = o.as_ref().and_then(|o| cast::eye(o, edits));
     let mut terrain_upload = cast::upload;
     let landed = core::cell::Cell::new(false);
     let mut on_filled = |b: u32, ticket: u32, filled: Filled<'_>| {
@@ -257,9 +259,17 @@ pub fn stage_render(pace: Pace) -> Drawn {
     }
 }
 
-/// The scene's turn, `pivot` and `heading` the camera's as the turn hands
-/// them (pxl-kernel turn.rs `scene_tick`), for the world gizmo.
-pub fn visible_step(ctx: &mut TickContext, pivot: Option<q3::Q3>, heading: Option<f64>) {
+/// The scene's turn, as the turn hands it what control decided (pxl-kernel
+/// turn.rs `scene_tick`): `pivot` and `heading` the camera's, for the world
+/// gizmo, `edits` the pointer's preview, for decor, and `draft` the marker
+/// tool's, for the markers.
+pub fn visible_step(
+    ctx: &mut TickContext,
+    pivot: Option<q3::Q3>,
+    heading: Option<f64>,
+    edits: &RenderEdits,
+    draft: Option<&Draft>,
+) {
     let v = view();
 
     let anchor = sea_under_eye();
@@ -284,9 +294,9 @@ pub fn visible_step(ctx: &mut TickContext, pivot: Option<q3::Q3>, heading: Optio
         scene::draw(list, models);
         animating
     });
-    gpu::step(frame.eye);
+    gpu::step(frame.eye, edits);
     cloud::step(draw_list(), &frame, &ctx.pass, environment_words());
-    marker::step(ctx, &frame);
+    marker::step(ctx, &frame, draft);
     marker::draw(draw_list());
     if draw {
         ctx.invalidate();

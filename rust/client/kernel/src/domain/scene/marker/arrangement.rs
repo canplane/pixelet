@@ -14,6 +14,7 @@
 use super::selection::select_visible;
 use super::{line, pin, place};
 
+use crate::domain::preview::Draft;
 use crate::domain::query::{at_zoom, Ray, World};
 use crate::domain::scene::marker::candidate::Candidates;
 use crate::domain::scene::marker::design::{self, Design};
@@ -199,7 +200,9 @@ pub(super) fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f6
 /// by eye to hold a name of a few words.
 const SPACING_PX: f64 = 193.0;
 
-pub fn step(ctx: &mut TickContext, frame: &Frame) {
+/// The markers laid out for `frame`, `draft` the marker tool's as the turn
+/// hands it (pxl-kernel turn.rs `scene_tick`).
+pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     let p = ARRANGEMENT.get(Arrangement::default);
     if pose::eye().is_none() {
         if p.set.free(model::draw_list()) {
@@ -223,7 +226,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     let seen = Inputs {
         o,
         places: settings_store().place,
-        drafted: pin::draft_key(),
+        drafted: pin::draft_key(draft),
         bubble: line::bubble(o.eye),
     };
     if !p.waiting && !p.moved && p.last.as_ref() == Some(&seen) {
@@ -335,7 +338,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame) {
     // Each shown at the zoom the grid's cell at its own point is.
     let mut shown = core::mem::take(&mut p.shown);
     shown.clear();
-    pin::show(&mut pins, o.eye, &mut shown);
+    pin::show(&mut pins, o.eye, draft, &mut shown);
     place::show(&mut read_places, o.eye, &mut shown);
     shown.extend(seen.bubble.instance());
     let spacing = SPACING_PX;

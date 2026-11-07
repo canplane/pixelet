@@ -70,13 +70,14 @@ struct Order {
 /// The kernel's order (ARCHITECTURE.md, "The kernel is one order of
 /// dependency"): a module names only what is at or below it, and neither
 /// head the other. The top wires everything, the shell's protocol among it;
-/// the protocol's enums the domain reads stand where both heads may name
+/// the protocol's enums the domain reads, and an edit not yet made, which
+/// the top hands from control to the scene, stand where both heads may name
 /// them. The machine it asks of its runtime and the device transport's
 /// decoder, which the device's app calls, are the bottom, naming none of the
 /// kernel. The profiler, reading anything, stands beside it, in no step of
 /// it, and only the top, which records into it, names it.
 const KERNEL: &str = "rust/client/kernel/src/";
-const KERNEL_ORDER: [(&str, u8); 15] = [
+const KERNEL_ORDER: [(&str, u8); 16] = [
     ("turn", 7),
     ("door", 7),
     ("shell", 7),
@@ -86,6 +87,7 @@ const KERNEL_ORDER: [(&str, u8); 15] = [
     ("smooth", 5),
     ("param", 5),
     ("cmd", 5),
+    ("preview", 5),
     ("view", 4),
     ("query", 3),
     ("layer", 2),

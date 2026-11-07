@@ -52,6 +52,7 @@ the same way. The check-rules tool holds the order (pxl-tool
     │   smooth.rs    the smoothing both heads share                 │
     │   param.rs     the tuned numbers both heads share             │
     │   cmd.spec.rs  the shell's enums both heads may read          │
+    │   preview.rs   an edit not yet made, control's to the scene's │
     │   view/        the trunk: the pose, the lens, demand          │
     │   query/       the trunk: the only seam                       │
     │   layer/       the trunk: the base and the object             │

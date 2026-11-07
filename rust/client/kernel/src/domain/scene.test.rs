@@ -1,6 +1,6 @@
 // pxl-kernel/domain/scene.test.rs
 
-use crate::domain::layer::object::preview::{Ghost, GhostBox};
+use crate::domain::preview::{Ghost, GhostBox};
 use crate::domain::scene::gizmo::debug_line::DebugLines;
 use crate::domain::scene::indicator::ghost::GhostDraw;
 use crate::domain::view::frame::pose::{view, view_compose, ObserverPose};

@@ -1,17 +1,16 @@
-// pxl-kernel/domain/layer/object/preview.rs
+// pxl-kernel/domain/preview.rs
 
-//! An edit not yet made, as what it changes in what is drawn: the pointer
-//! decides it, the world as drawn composes it (`World::previewing`); the
-//! ghost it shows under the pointer (`Ghost`); and a marker's draft, drawn
-//! with the text it has so far.
+//! An edit not yet made, as both heads see it: control decides it, and the
+//! turn hands it to the scene, which draws it (pxl-kernel turn.rs). What it
+//! changes in what is drawn, which the world as drawn composes
+//! (`World::previewing`); the ghost it shows under the pointer (`Ghost`); and
+//! a marker's draft, drawn with the text it has so far.
 
-use crate::sys::sched::edge::request_world_tick;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::asset::AssetId;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::octant::Octant;
-use xpute_core::global::Global;
 
 /// What the eraser's preview changes in what is drawn only: every mechanic
 /// — the pick, a walk, the camera's clearance, an edit's own reads, decor's
@@ -28,21 +27,6 @@ pub struct RenderEdits {
     pub carve: Option<Octant>,
     /// The scattered decor hidden, by the cell it stands in.
     pub scattered_cell: Option<[i32; 3]>,
-}
-
-/// The pointer's preview, the one copy of it.
-static PREVIEW: Global<RenderEdits> = Global::new();
-
-/// Hands the pointer's preview over once a turn: the one it replaced, where
-/// it changed.
-pub fn set(edits: RenderEdits) -> Option<RenderEdits> {
-    let was = core::mem::replace(PREVIEW.get(RenderEdits::default), edits);
-    (was != edits).then_some(was)
-}
-
-/// The preview in force.
-pub fn cur() -> RenderEdits {
-    *PREVIEW.get(RenderEdits::default)
 }
 
 /// What the pointer's tool would show where it is: nothing, a decor
@@ -84,17 +68,4 @@ pub struct GhostBox {
 pub struct Draft {
     pub at: Octant,
     pub text: String,
-}
-
-static DRAFT: Global<Option<Draft>> = Global::new();
-
-/// The draft, which the markers draw.
-pub fn draft() -> Option<&'static Draft> {
-    DRAFT.get(|| None).as_ref()
-}
-
-/// The draft, for the tool to change, which the next world turn draws.
-pub fn draft_mut() -> &'static mut Option<Draft> {
-    request_world_tick();
-    DRAFT.get(|| None)
 }

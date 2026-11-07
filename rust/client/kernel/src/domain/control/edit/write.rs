@@ -7,8 +7,9 @@ use crate::domain::control::edit::collision::{is_placement_blocked, placement_re
 use crate::domain::control::edit::{hover, tool, Tool};
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::ext::Ext;
-use crate::domain::layer::object::preview::{draft, draft_mut, Draft, RenderEdits};
 use crate::domain::layer::object::size::MARKER_ZOOM;
+use crate::domain::preview::{Draft, RenderEdits};
+use crate::sys::sched::edge::request_world_tick;
 use pxl_engine::answer::PLACED_ASSET;
 use pxl_spec::asset::marker::MARKER;
 use pxl_spec::asset::marker::MARKER_TEXT_CHARS;
@@ -122,6 +123,19 @@ pub fn restores_scattered(at: &Q3, id: AssetId) -> Option<Instance> {
     is_carved(&World::now(), at).then(|| World::now().generated_instance(Decor::of(id), at))?
 }
 
+/// The marker's draft the tool holds open; the turn hands it to the scene's
+/// markers, and each change here asks the turn that draws it.
+static DRAFT: Global<Option<Draft>> = Global::new();
+
+fn draft_mut() -> &'static mut Option<Draft> {
+    DRAFT.get(|| None)
+}
+
+/// The draft, none where none is open.
+pub fn draft() -> Option<&'static Draft> {
+    draft_mut().as_ref()
+}
+
 /// A marker tool's tap at `at`, a place free or holding a marker: a draft
 /// opened there, with the marker's own text if one stands there.
 pub fn draft_at(at: Octant) {
@@ -135,6 +149,7 @@ pub fn draft_at(at: Octant) {
             .to_string(),
     };
     *draft_mut() = Some(Draft { at, text });
+    request_world_tick();
 }
 
 /// A marker tool's tap on the free cell whose min corner is `corner`: a new
@@ -145,7 +160,9 @@ pub fn draft_new(corner: &Q3) {
 
 /// The draft dropped.
 pub fn cancel_draft() {
-    *draft_mut() = None;
+    if draft_mut().take().is_some() {
+        request_world_tick();
+    }
 }
 
 /// The draft's text, for the shell; none where no draft is open.
@@ -163,6 +180,7 @@ pub fn set_draft_text(text: &str) -> Result<(), Errno> {
     if let Some(d) = draft_mut() {
         d.text.clear();
         d.text.push_str(text);
+        request_world_tick();
     }
     Ok(())
 }
@@ -173,6 +191,7 @@ pub fn commit_draft() {
     let Some(Draft { at, text }) = draft_mut().take() else {
         return;
     };
+    request_world_tick();
     let (zoom, cell) = (at.zoom(), at.at());
     let stands = match World::now().entry_at(at) {
         Some(e) => e.asset() == Asset::Marker,
@@ -227,7 +246,8 @@ pub fn remove(at: Octant) {
 }
 
 /// The edit the pointer would make, decided once a turn: its ghost
-/// shows it, and what it removes is handed to what is drawn to leave out.
+/// shows it, and what it removes the turn hands to what is drawn to leave
+/// out (`edits`).
 #[derive(Clone, Copy, Default)]
 pub struct Pending {
     pub object: Option<Entry>,
@@ -241,6 +261,7 @@ pub struct Pending {
     /// a change touched the columns it reads (`placement_reads`,
     /// `changes::within`), as a step each frame turn sees each change once.
     blocked_key: Option<(Asset, Zoom, Q3, u32)>,
+    pub edits: RenderEdits,
 }
 
 static PENDING: Global<Pending> = Global::new();
@@ -249,8 +270,8 @@ pub fn pending() -> Pending {
     *PENDING.get(Pending::default)
 }
 
-/// Returns what the edit leaves out of what is drawn.
-pub fn pending_step() -> RenderEdits {
+/// Whether what the edit leaves out of what is drawn changed.
+pub fn pending_step() -> bool {
     let hover = hover();
     let ui = tool();
     let hovered = hover.coord;
@@ -298,14 +319,18 @@ pub fn pending_step() -> RenderEdits {
             .filter(|_| ui == Tool::Eraser)
             .and_then(|s| s.generated_in()),
     };
-    *PENDING.get(Pending::default) = Pending {
-        object,
-        zoom,
-        digging,
-        blocked,
-        blocked_key,
-    };
-    edits
+    let was = core::mem::replace(
+        PENDING.get(Pending::default),
+        Pending {
+            object,
+            zoom,
+            digging,
+            blocked,
+            blocked_key,
+            edits,
+        },
+    );
+    was.edits != edits
 }
 
 #[cfg(test)]

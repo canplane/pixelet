@@ -21,7 +21,7 @@ use pxl_spec::asset::decor::Decor;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
 
-use crate::domain::layer::object::preview::{Ghost, GhostBox};
+use crate::domain::preview::{Ghost, GhostBox};
 use crate::domain::scene::column::GroupColumns;
 use crate::domain::scene::decor::asset::{decor_model, decor_skin};
 use crate::domain::scene::transform::Transform;

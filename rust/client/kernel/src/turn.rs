@@ -35,7 +35,6 @@ use crate::domain::control::navigation::follow_mode;
 use crate::domain::control::support;
 use crate::domain::layer::division;
 use crate::domain::layer::earth::Earth;
-use crate::domain::layer::object::preview;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::terrain::clipmap;
 use crate::domain::query::changes;
@@ -106,9 +105,8 @@ fn companion_camera() -> Option<Camera> {
 /// The edit the pointer would make, of what it is over where the camera now
 /// stands (`camera_tick`), so the scene draws it this turn, not the next.
 fn edit_tick(_: &mut TickContext) {
-    let edits = write::pending_step();
     // A new preview moves the world as drawn where it was and where it is.
-    if preview::set(edits).is_some() {
+    if write::pending_step() {
         request_world_tick();
     }
 }
@@ -154,14 +152,17 @@ fn demand_tick(ctx: &mut TickContext) {
     demand::object_step();
 }
 
-/// The scene's turn, handed the camera's pivot and, third person, its
-/// heading, which the world gizmo is drawn about.
+/// The scene's turn, handed what control decided: the camera's pivot and,
+/// third person, its heading, which the world gizmo is drawn about; the
+/// edit's preview, which decor leaves out; and the marker's draft.
 fn scene_tick(ctx: &mut TickContext) {
     let third_person = controller::dist() != 0.0;
     visible_step(
         ctx,
         controller::pivot(),
         third_person.then(controller::azimuth),
+        &write::pending().edits,
+        write::draft(),
     );
 }
 
@@ -388,12 +389,15 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
     request::declare(Stream::asset, loader::load_wants());
     pump();
     stage::stage_write();
-    let drawn = stage::stage_render(Pace {
-        refresh_ms,
-        paced_ms,
-        gap_ms: delta * 1000.0,
-        moving: interactive,
-    });
+    let drawn = stage::stage_render(
+        Pace {
+            refresh_ms,
+            paced_ms,
+            gap_ms: delta * 1000.0,
+            moving: interactive,
+        },
+        &write::pending().edits,
+    );
     set_renderer_frame(&drawn);
     if let Some(interval_ms) = drawn.interval_ms {
         cmd::shell::turn_pace(&cmd::TurnPace { interval_ms });

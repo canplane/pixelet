@@ -3,7 +3,7 @@
 //! The ghost the tool held shows under the pointer: the decor a placement
 //! would stand or bring back, the box it would fill or carve, or what the
 //! eraser is over (`Ghost`, an edit not yet made, beside the others in
-//! domain/layer/object/preview.rs). What it looks like, its color, its
+//! domain/preview.rs). What it looks like, its color, its
 //! texture and what stands in for a decor not yet loaded, is the scene's
 //! (`domain/scene/indicator/ghost.rs`).
 
@@ -16,7 +16,7 @@ use pxl_spec::space::layer::octant::Octant;
 use crate::domain::control::edit::write::{middle, pending, restores_scattered, Pending};
 use crate::domain::control::edit::{hover, tool, Tool};
 use crate::domain::layer::object::meta::user_decor_pick;
-pub use crate::domain::layer::object::preview::{Ghost, GhostBox};
+use crate::domain::preview::{Ghost, GhostBox};
 use crate::domain::query::changes::Memo;
 use crate::domain::query::World;
 use crate::domain::view::frame::coord;

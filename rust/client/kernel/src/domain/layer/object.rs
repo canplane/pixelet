@@ -8,7 +8,6 @@
 pub mod asset;
 pub mod ext;
 pub mod meta;
-pub mod preview;
 pub mod repository;
 pub mod size;
 pub mod store;

@@ -12,6 +12,7 @@ pub mod cmd;
 pub mod control;
 pub mod layer;
 pub mod param;
+pub mod preview;
 pub mod query;
 pub mod scene;
 pub mod smooth;
