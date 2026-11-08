@@ -40,7 +40,7 @@ std::string show(const tlv::Value &v) {
             else if constexpr (std::is_same_v<T, std::uint64_t> || std::is_same_v<T, std::int64_t>) return "bigint:" + std::to_string(x);
             else if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double>) return "number:" + js_number(static_cast<double>(x));
             else if constexpr (std::is_same_v<T, tlv::Str>) return "string:" + std::string(x.text);
-            else if constexpr (std::is_same_v<T, tlv::Bytes>) return "bytes:" + hex(x.data);
+            else if constexpr (std::is_same_v<T, tlv::Blob>) return "bytes:" + hex(x.data);
             else return "number:" + std::to_string(x);
         },
         v);
@@ -67,7 +67,7 @@ XPUTE_TEST(tlv_matches_other_languages) {
         -1.5,
         true,
         tlv::Str{"€€"},
-        tlv::Bytes{three},
+        tlv::Blob{three},
         true,
         std::int32_t{5},
         std::int32_t{-2147483647 - 1},
@@ -77,7 +77,7 @@ XPUTE_TEST(tlv_matches_other_languages) {
         std::numeric_limits<double>::quiet_NaN(),
         std::numeric_limits<std::int64_t>::min(),
         tlv::Str{"s"},
-        tlv::Bytes{one},
+        tlv::Blob{one},
     };
     XPUTE_CHECK(w.write_all(vals).ok());
     const std::vector<std::uint8_t> &pkt = w.finish();

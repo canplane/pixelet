@@ -217,7 +217,7 @@ pub fn tile_at(zoom: Zoom, c: [i32; 2]) -> [i32; 2] {
 /// face, with its outer face on the area's edge. The area alone decides it, through `shard`,
 /// the shard of the node `(cell_zoom, b)` (`Shard::at`). A column is read by this rule
 /// (`clipmap::ground`), the ways' fill writes no way into the wall
-/// (`way::Columns::is_walled`), and `World::within` and `World::editable` refuse it (pxl-core
+/// (`way::ColumnGrid::is_walled`), and `World::within` and `World::editable` refuse it (pxl-core
 /// domain/query/limit.rs).
 pub fn is_wall(shard: Shard, cell_zoom: Zoom, b: [i32; 2]) -> bool {
     if cell_zoom < LEAF_CELL_ZOOM {

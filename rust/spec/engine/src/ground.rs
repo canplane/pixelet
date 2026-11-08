@@ -9,10 +9,10 @@
 //! since WGSL has no narrower integer.
 //!
 //! A cell's height from the samples (`height`) is exact, in integers, so the CPU and a GPU
-//! draw it alike whatever they fuse or reorder (doc/tip/cpu-and-gpu-agree.md).
+//! draw it alike whatever they fuse or reorder.
 
 use crate::answer::{
-    bound_of, bound_word, box_word, eighths, BoxWords, In, Kind, BOX_BITS, BOX_NONE, BOX_STEPS,
+    bound_of, bound_word, box_word, eighths, In, Kind, PackedBox, BOX_BITS, BOX_NONE, BOX_STEPS,
     BOX_WHOLE, FULL,
 };
 use crate::area::{Area, Shard};
@@ -87,20 +87,20 @@ pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [i32; 2]) -> i32 {
 /// What the clip levels bound under a node, each source on its own: the ground's faces,
 /// lowest and highest, and the leaf cells the ways fill, lowest and past the highest
 /// (`clipmap::BOUND_WORDS`, `fill::mip`).
-pub type Bounds = [[i32; 2]; 2];
+pub type Extent = [[i32; 2]; 2];
 
-/// Bounds as their two bound words.
-pub(crate) fn bounds_word(b: Bounds) -> [i32; 2] {
+/// An extent as its two bound words.
+pub(crate) fn extent_word(b: Extent) -> [i32; 2] {
     [bound_word(b[0]), bound_word(b[1])]
 }
 
-/// The bounds that `bounds_word` packed.
-pub fn bounds_of(w: [i32; 2]) -> Bounds {
+/// The bounds that `extent_word` packed.
+pub fn extent_of(w: [i32; 2]) -> Extent {
     [bound_of(w[0]), bound_of(w[1])]
 }
 
 /// Two bounds joined, each source's on its own.
-pub fn joined(a: Bounds, b: Bounds) -> Bounds {
+pub fn joined(a: Extent, b: Extent) -> Extent {
     [
         [a[0][0].min(b[0][0]), a[0][1].max(b[0][1])],
         [a[1][0].min(b[1][0]), a[1][1].max(b[1][1])],
@@ -344,7 +344,7 @@ pub trait Resident: Area {
     /// The content whose rules its ground follows: its caves and its strata.
     type Content: Content;
     /// The lowest and highest that the ground's cells reach over the node `node`, and the ways'
-    /// over them, kept apart (`Bounds`), read from the finest held tile over every zoom from
+    /// over them, kept apart (`Extent`), read from the finest held tile over every zoom from
     /// `cells`' coarsest to its finest (`clipmap::bound_over`). Where no brick it reads is held,
     /// the bounds are no tighter than the heights' whole range (`UNBOUNDED`), which only splits
     /// more; where no tile over the node is held, it returns false. `place` is where the cells
@@ -355,7 +355,7 @@ pub trait Resident: Area {
         place: &mut Lookup,
         cells: [Zoom; 2],
         node: (Zoom, [i32; 3]),
-    ) -> (Bounds, bool);
+    ) -> (Extent, bool);
     /// The column of the cell `c` at `zoom` from the clip levels (`clipmap::ground`), or the
     /// wall where it is the wall (`area::is_wall`, read from `shard`, what is known of the area
     /// there). Its cell is taken where `place` found the zoom's cells (`relief`), or found anew
@@ -386,7 +386,7 @@ pub type Answer = In<[u32; 2]>;
 /// answer it returns the column the cell was read from, `Cell::NONE` for a coarser node, and
 /// the ways' bound read with the ground's own (`Resident::relief`), `EMPTY` where none was.
 pub fn node<H: Resident>(
-    held: &mut H,
+    resident: &mut H,
     shard: Shard,
     place: &mut Lookup,
     (zoom, c): (Zoom, [i32; 3]),
@@ -438,14 +438,14 @@ pub fn node<H: Resident>(
     } else {
         [if first > near { near } else { first }, near]
     };
-    let ([relief, ways], ok) = held.relief(place, cells, (zoom, c));
+    let ([relief, ways], ok) = resident.relief(place, cells, (zoom, c));
     // Not held at a zoom asked: a cell is the lack. A coarser node is not known to be empty, so
     // it is split, and a ray stops only at a cell it meets that is not held.
     if !ok {
         return (if is_cell { lacks } else { split }, Cell::NONE, EMPTY);
     }
     if is_cell {
-        let column = held.cell(shard, *place, zoom, c);
+        let column = resident.cell(shard, *place, zoom, c);
         // The caves' share where they may take the cell, beside its asset:
         // the cell is air where they take it all.
         let ground = column.asset::<H::Content>(zoom, c[2]);
@@ -563,7 +563,7 @@ const _: () = assert!(
 /// The leaf cells `[lo, hi)` along z of the node `(zoom, z)`, as its box: the node's steps
 /// along z that they meet, rounded out, with the node whole across. A node finer than a leaf
 /// cell is held whole; an empty span, or one the node does not meet, gives `BOX_NONE`.
-pub(crate) fn box_along_z([lo, hi]: [i32; 2], (zoom, z): (Zoom, i32)) -> BoxWords {
+pub(crate) fn box_along_z([lo, hi]: [i32; 2], (zoom, z): (Zoom, i32)) -> PackedBox {
     if lo >= hi {
         return BOX_NONE;
     }
@@ -596,7 +596,7 @@ pub(crate) fn box_along_z([lo, hi]: [i32; 2], (zoom, z): (Zoom, i32)) -> BoxWord
     if past <= 0 || first >= BOX_STEPS as i32 {
         return BOX_NONE;
     }
-    let held = |e: i32, lo: i32, hi: i32| {
+    let clamp = |e: i32, lo: i32, hi: i32| {
         if e < lo {
             lo
         } else if e > hi {
@@ -606,8 +606,8 @@ pub(crate) fn box_along_z([lo, hi]: [i32; 2], (zoom, z): (Zoom, i32)) -> BoxWord
         }
     };
     let (first, past) = (
-        held(first, 0, BOX_STEPS as i32 - 1) as u32,
-        held(past, 1, BOX_STEPS as i32) as u32,
+        clamp(first, 0, BOX_STEPS as i32 - 1) as u32,
+        clamp(past, 1, BOX_STEPS as i32) as u32,
     );
     box_word([0, 0, first], [BOX_STEPS, BOX_STEPS, past])
 }

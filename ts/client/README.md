@@ -49,8 +49,8 @@ the world until the view is first drawn (`ui/cover/`).
 ## Builds
 
 The page is Expo's web build, bundled by Metro into one HTML file over one
-bundle. `script/build-wasm.py` builds the core's WebAssembly module into
-`public/core.wasm`, and `script/watch-wasm.py` rebuilds it while the dev server
+bundle. `script/wasm-build.py` builds the core's WebAssembly module into
+`public/core.wasm`, and `script/wasm-watch.py` rebuilds it while the dev server
 runs; `script/web.ts` writes the page's template and serves a preview, and
 `script/proxy.ts` forwards the server routes the way the Worker does.
 

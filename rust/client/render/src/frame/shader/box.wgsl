@@ -10,7 +10,7 @@ var<private> draw_slot: u32;
 
 fn ghost_box_word(k: u32) -> vec4f { return draws[draw_slot * DRAW_VEC4S + k]; }
 
-struct BoxWords {
+struct BoxInput {
   @location(0) first: vec4<u32>,
   @location(1) layer: u32,
 };
@@ -31,7 +31,7 @@ fn box_pair(word: u32, step: f32) -> vec2f {
   return vec2f(f32(word & 0xffffu), f32(word >> 16u)) * step;
 }
 
-fn box_of(words: BoxWords) -> Box {
+fn box_of(words: BoxInput) -> Box {
   let step = ghost_box_unit() / XY_STEPS;
   return Box(box_pair(words.first[0], step), box_pair(words.first[1], step), box_pair(words.first[2], ghost_box_z_step()), words.first[3], words.layer);
 }
@@ -85,7 +85,7 @@ fn box_corner(k: u32, b: Box, place: vec3f) -> Corner {
 // its record's index times the cube's vertices. The draw's first instance is
 // its first box.
 @vertex
-fn vs(@builtin(vertex_index) v: u32, words: BoxWords) -> VertexOut {
+fn vs(@builtin(vertex_index) v: u32, words: BoxInput) -> VertexOut {
   draw_slot = v / BOX_VERTICES;
   let b = box_of(words);
   let c = box_corner(v % BOX_VERTICES, b, from_eye(ghost_box_q(), ghost_box_r()));

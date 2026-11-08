@@ -1,10 +1,7 @@
 // @pxl/client/remote-console.ts
 
-/**
- * Forwards a device's console to the dev server's terminal, because a phone
- * reached over a tunnel has no devtools to attach. page.ts installs it only in
- * a development bundle. It wraps the console rather than replacing it.
- */
+/** Forwards a device's console to the dev server's terminal, because a phone
+ * reached over a tunnel has no devtools to attach. */
 
 const ENDPOINT = "/__console";
 
@@ -50,8 +47,7 @@ function flush(): void {
   if (queue.length === 0) return;
   const body = queue.join("\n");
   queue.length = 0;
-  // `keepalive` delivers a line logged while the page unloads. A failed post
-  // is dropped.
+  // `keepalive` delivers a line logged while the page unloads.
   fetch(ENDPOINT, { method: "POST", body, keepalive: true }).then(
     (r) => r.body?.cancel(),
     () => {},

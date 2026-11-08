@@ -9,7 +9,7 @@
  * settings read them.
  */
 
-import { Listeners } from "@xpute/kit/lang/listeners.ts";
+import { ListenerSet } from "@xpute/kit/lang/listener.ts";
 import { get, TILE_SOURCE_ROUTE } from "@/service/origin/route.ts";
 import { online, when_online } from "@/service/origin/online.ts";
 import {
@@ -102,7 +102,7 @@ export function declaration(text: string): Declaration | null {
 
 let state: Source = SOURCE_ASKING;
 let cur_declaration: Declaration | null = null;
-const listeners = new Listeners();
+const listeners = new ListenerSet();
 
 function set(next: Source): void {
   state = next;

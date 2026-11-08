@@ -29,8 +29,7 @@ import {
 import { type Tx } from "@/service/platform/types.ts";
 import * as db from "@/service/platform/db.ts";
 
-/** A file is one format byte followed by a tree packet. A file whose format
- * byte is not `fmt` is refused with EBADMSG. */
+/** A file is one format byte followed by a tree packet. */
 function packet(fmt: number, bytes: U8Array): U8Array {
   if (bytes[0] !== fmt) throw new FileError(Errno.EBADMSG);
   // The tree reader needs the packet to start on a word boundary. A view at
@@ -82,7 +81,7 @@ export function encode_writes(fmt: number, leaves: readonly Leaf[]): U8Array {
   return as_file(fmt, new TreeEncoder().encode(tree, { init_cap: 1 << 12 }));
 }
 
-/** Returns the top's rows. The layout is file.json's `top`. */
+/** The layout is file.json's `top`. */
 export function decode_top(bytes: U8Array): TopRow[] {
   const [shard, fold] = new TreeReader(packet(format.OBJECT_TOP, bytes))
     .read_branch()
@@ -109,8 +108,7 @@ function by_shard(a: TopRow, b: TopRow): number {
   return a.shard < b.shard ? -1 : a.shard > b.shard ? 1 : 0;
 }
 
-/** What the backend needs of the platform's database (service/platform/db.ts).
- * A test passes its own. */
+/** A test passes its own in place of the platform's database. */
 export type Db = { transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> };
 
 const DB: Db = db;
@@ -128,8 +126,8 @@ async function move_aside(tx: Tx, key: string, now_ms: number): Promise<void> {
   await tx.put(key, null);
 }
 
-/** Reads the kept top's rows. A top that does not decode was written by
- * another build: it is set aside and read as empty. */
+/** A top that does not decode was written by another build, so it is set aside
+ * and read as empty. */
 async function rows_of(tx: Tx): Promise<TopRow[]> {
   const bytes = await tx.get(object.TOP);
   if (bytes === null) return [];
@@ -141,8 +139,8 @@ async function rows_of(tx: Tx): Promise<TopRow[]> {
   }
 }
 
-/** Reads a kept shard's leaves. A shard that does not decode was written by
- * another build: it is set aside and read as empty. */
+/** A shard that does not decode was written by another build, so it is set
+ * aside and read as empty. */
 async function leaves_of(tx: Tx, shard: string): Promise<Leaf[]> {
   const bytes = await tx.get(shard);
   if (bytes === null) return [];
@@ -185,9 +183,8 @@ async function apply_edits(tx: Tx, writes: readonly Leaf[]): Promise<void> {
   await put_top(tx, others);
 }
 
-/** OBJECT's backend over `db`. A read sees every batch committed before it,
- * because the database runs its transactions one at a time, in the order they
- * were begun. */
+/** A read sees every batch committed before it, because the database runs its
+ * transactions one at a time, in the order they were begun. */
 export function object_backend(db: Db = DB): {
   open(path: string): Promise<U8Array>;
   commit(path: string, bytes: U8Array): void;
@@ -226,6 +223,4 @@ export function object_backend(db: Db = DB): {
   };
 }
 
-/** The backend that namespace.ts binds OBJECT to, and that refusal.ts sets
- * refused files aside through. */
 export const OBJECTS = object_backend();

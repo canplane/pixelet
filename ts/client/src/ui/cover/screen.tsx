@@ -8,8 +8,6 @@ import { LABEL } from "@/ui/component/palette.ts";
 import type { Cover } from "./cover.ts";
 import { ProgressBar } from "./progress-bar.tsx";
 
-/** Shown over the world while it starts: the progress bar, and under it a line
- * that says what the world waits on. `of` is the locale key of that line. */
 function Progress({ of, share }: { of: string; share: number }) {
   const { t } = useTranslation();
   return (
@@ -21,9 +19,8 @@ function Progress({ of, share }: { of: string; share: number }) {
 }
 
 /** Shown for good in place of an app that never ran, because it cannot run
- * here or because what it needed will not come. `of` is the locale key that
- * holds the title and the body. The details go to the log, not to this
- * screen. */
+ * here or because what it needed will not come. The details go to the log, not
+ * to this screen. */
 function Failed({ of }: { of: string }) {
   const { t } = useTranslation();
   return (

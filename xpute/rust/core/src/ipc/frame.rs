@@ -1,6 +1,6 @@
 // xpute-core/ipc/frame.rs
 
-//! A frame's four words, laid out by spec/ipc/frame.json.
+//! A frame's four words are laid out by spec/ipc/frame.json.
 
 #[path = "frame.spec.rs"]
 mod spec;
@@ -9,8 +9,8 @@ pub use spec::*;
 
 const CMD_MASK: u32 = (1 << FLAG_SHIFT) - 1;
 
-/// A frame's four words as read, with its command word split into the
-/// command and its flags.
+/// A frame's four words as read, with its command word split into the command
+/// and its flags.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Frame {
     pub tag: u32,

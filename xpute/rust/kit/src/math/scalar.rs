@@ -4,8 +4,8 @@ use core::ops::{Add, Div, Mul, Neg, Rem, Sub};
 
 pub const EPS: f64 = 1e-5;
 
-/// The float types these functions take: `f64`, and `f32` for a value that
-/// is stored as one.
+/// These are the float types these functions take: `f64`, and `f32` for a
+/// value that is stored as one.
 pub trait Float:
     Copy
     + PartialOrd

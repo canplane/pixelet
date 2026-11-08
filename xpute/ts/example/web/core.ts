@@ -1,8 +1,8 @@
 // @xpute/example/web/core.ts
 
 /**
- * The manifest of the smallest core (rust/example), which both the page and
- * the worker that runs the core import. It names the core's module and
+ * This is the manifest of the smallest core (rust/example), which both the page
+ * and the worker that runs the core import. It names the core's module and
  * answers ASK with ANSWER. Build the core first (`make build`).
  */
 

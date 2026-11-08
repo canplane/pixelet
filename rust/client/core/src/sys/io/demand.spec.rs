@@ -99,5 +99,5 @@ impl TaskPhaseName {
     }
 }
 
-/// Timings a run reports at most; past it one is left out.
+/// A run's timings past this many are dropped.
 pub const TASK_PHASES_MAX: u32 = 6;

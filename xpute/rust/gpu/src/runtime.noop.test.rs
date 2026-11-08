@@ -1,8 +1,8 @@
 // xpute-gpu/runtime.noop.test.rs
 
-//! Tests of the runtime's own bookkeeping, on wgpu's noop backend. That
-//! backend makes and maps buffers but runs nothing, and the queue's work is
-//! done as it is submitted. No GPU is touched, so these tests need none;
+//! These are tests of the runtime's own bookkeeping, on wgpu's noop backend.
+//! That backend makes and maps buffers but runs nothing, and the queue's work
+//! is done as it is submitted. No GPU is touched, so these tests need none;
 //! runtime.test.rs holds those that do.
 
 use xpute_runtime::mem::Memory;

@@ -36,7 +36,7 @@ use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, texture_usage, view_entry, word_bytes,
     Format, Gpu, Load, RenderContext,
 };
-use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::span_spec::GpuSpanName;
 use pxl_engine::param::raster::GROWTH;
 
@@ -119,7 +119,7 @@ pub(super) struct LightRaster {
 }
 
 impl Raster {
-    pub(super) fn new(g: &Gpu, pipelines: &mut Pipelines) -> Raster {
+    pub(super) fn new(g: &Gpu, pipelines: &mut PipelineCache) -> Raster {
         Raster {
             boxes: pipelines.build_compute(g, COMPUTE_SAMPLE_BOX, &SAMPLE_BOX_GROUP),
             light_boxes: pipelines.build_compute(
@@ -327,7 +327,7 @@ impl Raster {
 
     /// Makes the record's draw group (`RECORD_GROUP`) again where what it binds changed: the
     /// eye and the node cache the raster binds, and `light`, the light's head, list, args and
-    /// stood list's args (light_receiver_tiles.wgsl), by which the draw marks the tiles its
+    /// stood list's args (light_receiver_tile.wgsl), by which the draw marks the tiles its
     /// boxes stand on. The cast calls it every frame it prepares, as the light's buffers are
     /// made and released apart from the raster's.
     pub(super) fn record_group(&mut self, g: &Gpu, light: [u32; 4]) {
@@ -534,7 +534,7 @@ impl Raster {
     /// Writes the light's view off the eye's words `e` (pxl-engine `light::Light`) for a map
     /// `size` texels a side, laid as `prepare` lays the eye's, and clears the args. The light
     /// marks the entries it uses with the node cache's frame, as the eye does.
-    pub(super) fn light_prepare(&self, g: &Gpu, e: &[u32], size: u32, starts: &light::Starts) {
+    pub(super) fn light_prepare(&self, g: &Gpu, e: &[u32], size: u32, starts: &light::StartGrid) {
         let s = &self.light;
         if s.uniform == 0 {
             return;

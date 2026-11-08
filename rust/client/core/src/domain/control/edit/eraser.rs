@@ -12,7 +12,7 @@ use pxl_spec::space::layer::octant::Octant;
 use crate::domain::control::edit::ghost::{at_corner, carved_cube, decor_of, prop};
 use crate::domain::control::edit::write::{place_air, remove, Preview};
 use crate::domain::control::edit::{Hover, Target};
-use crate::domain::preview::{Ghost, RenderEdits};
+use crate::domain::preview::{Ghost, RenderEdit};
 
 pub(super) fn tap(hover: &Hover) {
     let Some(h) = hover.coord else {
@@ -30,8 +30,7 @@ pub(super) fn tap(hover: &Hover) {
 pub(super) fn preview(hover: &Hover) -> Preview {
     let (object, zoom) = hover.object();
     let prop = hover.prop();
-    let edits = RenderEdits {
-        // The real object is hidden a tick or more after the ghost appears.
+    let edits = RenderEdit {
         hide: object.map(|o| o.id()),
         // Over bare terrain, an AIR entry that is never written goes into the
         // drawn build, so what lies one voxel below shows through the ghost.

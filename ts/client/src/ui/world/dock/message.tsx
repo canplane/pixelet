@@ -1,8 +1,5 @@
 // @pxl/client/ui/world/dock/message.tsx
 
-/** The message card. Its field types a chat line and sends it, or, while a
- * marker is being drafted, writes the marker's text. */
-
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, type TextInput, View } from "react-native";
@@ -23,11 +20,9 @@ import * as edit from "@/service/core/edit.ts";
 import * as scene from "@/service/core/scene.ts";
 import * as snapshot from "@/service/core/snapshot.ts";
 
-/** The message field's text and its sending. The dock holds this state, so
- * that it is there whether or not the cards are drawn yet. */
+/** The dock holds this state, so that it is there whether or not the cards are
+ * drawn yet. */
 export function useMessage(mode: DockMode) {
-  // While the core holds a marker's draft, the field writes the marker's text
-  // instead of a chat line.
   const drafting = useCore((s) => s.draft !== null);
   const [messageText, setMessageText] = useState("");
   const [markerFits, setMarkerFits] = useState(true);
@@ -73,7 +68,6 @@ export function useMessage(mode: DockMode) {
         return;
       }
       edit.marker_commit();
-      // With the marker placed, the dock returns to the palette.
       setDockMode(DockMode.Palette);
     }, FADE.durationMs);
   }
@@ -150,7 +144,7 @@ export function Message({
           disabled={isSending || !fits}
           accessibilityRole="button"
           accessibilityLabel={
-            drafting ? t("world.dock.pin_done") : t("world.dock.send")
+            drafting ? t("world.dock.put_pin") : t("world.dock.send")
           }
           style={({ pressed }) => [
             styles.send,

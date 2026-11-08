@@ -18,7 +18,7 @@
 use crate::frame::shader::sequence;
 use pxl_engine::cast::REACH;
 use pxl_engine::eye;
-use pxl_engine::light::{self, Light, Starts, ANCHOR};
+use pxl_engine::light::{self, Light, StartGrid, ANCHOR};
 use pxl_engine::WORKGROUPS_CAP;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::{self, V3};
@@ -35,11 +35,11 @@ use crate::gpu::api::{
     word_bytes, Entry, Format, Gpu, Group, Load, RenderContext, Stencil, TrackedRenderPass,
     MASKED_DEPTH,
 };
-use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::put::put_mat;
-use crate::gpu::ray::LightReads;
+use crate::gpu::ray::LightRead;
 use crate::gpu::span_spec::GpuSpanName;
-use crate::gpu::tile::Tiles;
+use crate::gpu::tile::TileGrid;
 use crate::param::shadow::DEPTH_STEP;
 
 /// The light box's half width about its target for the effects' `reach`: the least power of
@@ -100,7 +100,7 @@ fn ortho(out: &mut Mat4, half: f64, near: f64, far: f64) {
 /// depth alone, as the lit passes read it. `world` is the world's depth from the light as the
 /// light's cast leaves it, a word for each slot of the clipmap (pxl-engine `light::word`).
 /// `light_cs` writes it, and `PIPELINE_LIGHT_MAP` lays it into the map from the box's corner.
-struct Targets {
+struct Target {
     map: u32,
     map_view: u32,
     map_depth_view: u32,
@@ -110,7 +110,7 @@ struct Targets {
 
 pub struct Shadow {
     /// The map and the world, none while the shadows are off.
-    targets: Option<Targets>,
+    target: Option<Target>,
     sampler: u32,
     blank_view: u32,
     blank_sampler: u32,
@@ -118,7 +118,7 @@ pub struct Shadow {
     /// lays it in the claimed tiles alone. `lay_group` binds the world, the corner and the
     /// light's list, whose reads keep lit the tiles the epoch has not cast yet. `mask_group`
     /// binds those and also the map's tiles' words and uniform and the marks' box
-    /// (`Tiles::new_damage_rect`). `set_groups` sets both before the frame.
+    /// (`TileGrid::new_damage_rect`). `set_groups` sets both before the frame.
     lay: Pipeline,
     mask: Pipeline,
     lay_group: Group,
@@ -153,7 +153,7 @@ pub struct Shadow {
 }
 
 impl Shadow {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Shadow {
+    pub fn new(g: &Gpu, pipelines: &mut PipelineCache) -> Shadow {
         let sampler = g.sampler(
             FilterMode::linear,
             FilterMode::linear,
@@ -195,7 +195,7 @@ impl Shadow {
             &[buf_entry(0, light_frame)],
         );
         Shadow {
-            targets: None,
+            target: None,
             sampler,
             blank_view,
             blank_sampler,
@@ -226,10 +226,10 @@ impl Shadow {
     /// released, so the lit passes' groups are made again over the map or the blank one
     /// (`entries`).
     pub fn made(&mut self, g: &Gpu, on: bool) -> bool {
-        if on == self.targets.is_some() {
+        if on == self.target.is_some() {
             return false;
         }
-        match self.targets.take() {
+        match self.target.take() {
             Some(t) => {
                 for id in [t.world_view, t.world, t.map_depth_view, t.map_view, t.map] {
                     release(id);
@@ -253,7 +253,7 @@ impl Shadow {
                     texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING,
                 );
                 let world_view = g.view(world, true, 0, 1, 0, 1);
-                self.targets = Some(Targets {
+                self.target = Some(Target {
                     map,
                     map_view: g.view(map, false, 0, 1, 0, 1),
                     map_depth_view: g.depth_only_view(map),
@@ -266,10 +266,10 @@ impl Shadow {
     }
 
     /// Sets the lay's group and the gate's over the map's `tiles` and the light's list `reads`
-    /// (ray/cast.rs `light_reads`), before the frame's commands. It sets them where both the
+    /// (ray/cast.rs `light_read`), before the frame's commands. It sets them where both the
     /// map and the list are made, and releases them where either is not.
-    pub fn set_groups(&mut self, g: &Gpu, tiles: &Tiles, reads: Option<u32>) {
-        let (Some(t), Some(reads)) = (&self.targets, reads) else {
+    pub fn set_groups(&mut self, g: &Gpu, tiles: &TileGrid, reads: Option<u32>) {
+        let (Some(t), Some(reads)) = (&self.target, reads) else {
             self.lay_group.release();
             self.mask_group.release();
             return;
@@ -297,30 +297,30 @@ impl Shadow {
 
     /// Whether the map and the world are made (`made`).
     pub fn on(&self) -> bool {
-        self.targets.is_some()
+        self.target.is_some()
     }
 
     /// The view of the world's depth from the light, which the light's cast writes; 0 while
     /// the shadows are off.
     pub fn world(&self) -> u32 {
-        self.targets.as_ref().map_or(0, |t| t.world_view)
+        self.target.as_ref().map_or(0, |t| t.world_view)
     }
 
-    fn targets(&self) -> &Targets {
-        self.targets.as_ref().or_bug(Errno::ENOTRECOVERABLE)
+    fn target(&self) -> &Target {
+        self.target.as_ref().or_bug(Errno::ENOTRECOVERABLE)
     }
 
     /// The light's frame, which a draw from the light reads in group 0, and the map as its
     /// pass draws it. A mark drawn from the light binds the first and attaches the second
     /// (gpu/pass/skinned_mesh.rs `draw_marks`).
     pub fn frame_and_map(&self) -> (u32, u32) {
-        (self.light_frame, self.targets().map_view)
+        (self.light_frame, self.target().map_view)
     }
 
     /// The map and its sampler at `binding` and the next binding, as a lit pass reads them
     /// (shadow.wgsl). While the shadows are off, they are the blank map's.
     pub fn entries(&self, binding: u32) -> [Entry; 2] {
-        match &self.targets {
+        match &self.target {
             Some(t) => [
                 view_entry(binding, t.map_depth_view),
                 sampler_entry(binding + 1, self.sampler),
@@ -414,13 +414,13 @@ impl Shadow {
         self.eye_world = fixed.map(|v| -v);
     }
 
-    /// Where the world's cast starts each texel's ray (pxl-engine `light::Starts`): the four
+    /// Where the world's cast starts each texel's ray (pxl-engine `light::StartGrid`): the four
     /// anchors about the box's corner, and a texel's steps across and down in Q3 steps. An
     /// anchor is where its world texel's middle lies on the near plane, in Q3 from the eye's
     /// world position. Each anchor is worked out once in a light frame and kept while the frame
     /// holds (`anchors`), so a texel's start is the same in every frame cast in that light
     /// frame.
-    pub fn starts(&mut self) -> Starts {
+    pub fn starts(&mut self) -> StartGrid {
         if self.anchors.0 != self.generation {
             self.anchors = (self.generation, Vec::new());
         }
@@ -475,7 +475,7 @@ impl Shadow {
             (0..=ANCHOR).contains(&d[0]) && (0..=ANCHOR).contains(&d[1])
         });
         let light = Light::of_words(&self.light_words);
-        Starts {
+        StartGrid {
             base,
             across: light.across.map(|v| light::fixed(v * q3 as f32)),
             down: light.down.map(|v| light::fixed(v * q3 as f32)),
@@ -508,20 +508,20 @@ impl Shadow {
     /// those tiles, and no receiver reads the far plane the rest hold. A pass drawn through its
     /// gate (`masked`) draws the claimed tiles of `tiles` alone and keeps the rest as the last
     /// frame left them; a gated frame always casts. The gate lays the world in the claimed
-    /// tiles and raises their stencil to the number `Tiles::mask` gives: a quad a tile of the
+    /// tiles and raises their stencil to the number `TileGrid::mask` gives: a quad a tile of the
     /// box the frame's marks cover, with the unclaimed ones collapsed, as many as the GPU
-    /// counted (`Tiles::rect_args`). Both draws bind the groups `set_groups` set before the
+    /// counted (`TileGrid::rect_args`). Both draws bind the groups `set_groups` set before the
     /// frame.
     pub fn begin<'a>(
         &self,
         ctx: &mut RenderContext<'a>,
         cast: bool,
-        tiles: &mut Tiles,
+        tiles: &mut TileGrid,
         masked: bool,
-        LightReads { epoch, args, .. }: LightReads,
+        LightRead { epoch, args, .. }: LightRead,
     ) -> TrackedRenderPass<'a> {
         let (g, encoder) = (ctx.g, ctx.encoder);
-        let t = self.targets();
+        let t = self.target();
         // The lay's uniform (light_lay.wgsl `Lay`) holds the box's corner, from which the
         // world's depth is laid in, and the epoch and the reads, which tell the tiles the
         // light's epoch has cast from those it has not, counting from where a slide went

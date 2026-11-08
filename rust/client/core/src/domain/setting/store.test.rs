@@ -18,15 +18,15 @@ fn storage_of(pairs: &[(u32, u32)]) -> Vec<u8> {
 /// The stored form is a contract with storage, which outlives a build.
 #[test]
 fn stored_round_trip() {
-    let mut s = Settings::DEFAULT;
-    let tilt = 1 - Settings::DEFAULT.get(SettingKey::tilt_lock);
+    let mut s = Setting::DEFAULT;
+    let tilt = 1 - Setting::DEFAULT.get(SettingKey::tilt_lock);
     let ao = AoMode::ALL
         .into_iter()
         .map(|o| o as u32)
-        .find(|&o| o != Settings::DEFAULT.get(SettingKey::ao))
+        .find(|&o| o != Setting::DEFAULT.get(SettingKey::ao))
         .expect("a second option");
     // The value is past 127, so its LEB128 takes two bytes.
-    let person = Settings::DEFAULT.get(SettingKey::person) + 200;
+    let person = Setting::DEFAULT.get(SettingKey::person) + 200;
     assert!(
         s.set(SettingKey::tilt_lock, tilt)
             && s.set(SettingKey::ao, ao)
@@ -42,7 +42,7 @@ fn stored_round_trip() {
         );
     }
     assert!(
-        Settings::DEFAULT.storage_bytes().is_empty(),
+        Setting::DEFAULT.storage_bytes().is_empty(),
         "the defaults keep nothing"
     );
 }
@@ -51,9 +51,9 @@ fn stored_round_trip() {
 fn stored_pair_format() {
     let ao = AoMode::ALL
         .into_iter()
-        .find(|&o| o as u32 != Settings::DEFAULT.get(SettingKey::ao))
+        .find(|&o| o as u32 != Setting::DEFAULT.get(SettingKey::ao))
         .expect("a second option");
-    let mut s = Settings::DEFAULT;
+    let mut s = Setting::DEFAULT;
     assert!(s.set(SettingKey::ao, ao as u32));
     assert_eq!(
         s.storage_bytes(),
@@ -74,14 +74,14 @@ fn unknown_stays_default() {
     ] {
         let back = read_stored(&bytes);
         for key in SettingKey::ALL {
-            assert_eq!(back.get(key), Settings::DEFAULT.get(key), "{bytes:?}");
+            assert_eq!(back.get(key), Setting::DEFAULT.get(key), "{bytes:?}");
         }
     }
 }
 
 #[test]
 fn reads_past_unknown_pair() {
-    let tilt = 1 - Settings::DEFAULT.get(SettingKey::tilt_lock);
+    let tilt = 1 - Setting::DEFAULT.get(SettingKey::tilt_lock);
     let back = read_stored(&storage_of(&[
         (SettingKey::SLOTS as u32 + 1000, 1),
         (SettingKey::ao as u32, 99),
@@ -90,7 +90,7 @@ fn reads_past_unknown_pair() {
     assert_eq!(back.get(SettingKey::tilt_lock), tilt);
     assert_eq!(
         back.get(SettingKey::ao),
-        Settings::DEFAULT.get(SettingKey::ao)
+        Setting::DEFAULT.get(SettingKey::ao)
     );
 }
 
@@ -112,11 +112,11 @@ fn session_setting_not_stored() {
     );
     let other = |key: SettingKey| match key.kind() {
         SettingKind::Choice => (0..=u32::from(u8::MAX))
-            .find(|&v| v != Settings::DEFAULT.get(key) && Settings::DEFAULT.clone().set(key, v))
+            .find(|&v| v != Setting::DEFAULT.get(key) && Setting::DEFAULT.clone().set(key, v))
             .expect("a second option"),
-        _ => 1 - Settings::DEFAULT.get(key),
+        _ => 1 - Setting::DEFAULT.get(key),
     };
-    let mut s = Settings::DEFAULT;
+    let mut s = Setting::DEFAULT;
     for &key in &session {
         assert!(s.set(key, other(key)));
     }
@@ -130,7 +130,7 @@ fn session_setting_not_stored() {
             .map(|&key| (key as u32, other(key)))
             .collect::<Vec<_>>(),
     ));
-    assert_eq!(back, Settings::DEFAULT, "nothing of {session:?} is read");
+    assert_eq!(back, Setting::DEFAULT, "nothing of {session:?} is read");
     open_slot();
     file::test::on_storage_answered(Err(file::Opened::Absent));
     assert!(settings_load_step());
@@ -160,7 +160,7 @@ fn open_slot() {
 
 /// Makes one change and then a keep, and returns whether the change is
 /// still unwritten.
-fn held_after_a_change() -> bool {
+fn unsaved_after_a_change() -> bool {
     let tilt = 1 - settings().get(SettingKey::tilt_lock);
     assert_eq!(
         settings_mut().set_setting(SettingKey::tilt_lock, tilt),
@@ -176,20 +176,20 @@ fn held_after_a_change() -> bool {
 fn read_before_write() {
     let _g = sys::serial();
     open_slot();
-    let tilt = 1 - Settings::DEFAULT.get(SettingKey::tilt_lock);
+    let tilt = 1 - Setting::DEFAULT.get(SettingKey::tilt_lock);
     assert!(
         !settings_load_step() && !are_settings_loaded(),
         "nothing has landed"
     );
     assert!(
-        held_after_a_change(),
+        unsaved_after_a_change(),
         "nothing is written before the slot is read"
     );
     file::test::on_storage_answered(Ok(&file_of(&[(SettingKey::tilt_lock as u32, tilt)])));
     assert!(settings_load_step() && are_settings_loaded());
     assert_eq!(settings().get(SettingKey::tilt_lock), tilt);
     assert!(!*UNSAVED.get(|| false), "what was read is not written back");
-    assert!(!held_after_a_change(), "a read slot keeps what changes");
+    assert!(!unsaved_after_a_change(), "a read slot keeps what changes");
     assert!(!settings_load_step(), "read once");
 }
 
@@ -201,8 +201,8 @@ fn empty_slot_defaults() {
     open_slot();
     file::test::on_storage_answered(Err(file::Opened::Absent));
     assert!(settings_load_step());
-    assert_eq!(*settings(), Settings::DEFAULT);
-    assert!(!held_after_a_change());
+    assert_eq!(*settings(), Setting::DEFAULT);
+    assert!(!unsaved_after_a_change());
 }
 
 /// A file too large for any heap, or of another format such as JSON, is
@@ -225,10 +225,10 @@ fn bad_slot_refused() {
             settings_load_step() && are_settings_loaded(),
             "the world need not wait on it"
         );
-        assert_eq!(*settings(), Settings::DEFAULT);
+        assert_eq!(*settings(), Setting::DEFAULT);
         assert!(file::is_storage_refused());
         assert!(
-            held_after_a_change(),
+            unsaved_after_a_change(),
             "a refused slot's change waits for it to be emptied"
         );
         file::on_storage_emptied();
@@ -251,7 +251,7 @@ fn unreadable_slot_stored() {
     }));
     assert!(settings_load_step());
     assert!(!file::is_storage_refused());
-    assert!(held_after_a_change());
+    assert!(unsaved_after_a_change());
     on_settings_emptied();
-    assert!(held_after_a_change());
+    assert!(unsaved_after_a_change());
 }

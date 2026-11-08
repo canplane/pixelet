@@ -81,7 +81,7 @@ pub const CHARACTER_LONG_SIDE_MAX: f64 = 256.0;
 /// child groups starting with one for its own nodes along z (pxl-engine
 /// `way::tree`), so this holds the ways of a sparse view. The pool doubles
 /// whenever the core's pool outgrows it (pxl-render gpu/ray/ground.rs
-/// `GroundBuffers::grow`), so a dense view reaches 64 MiB in six doublings.
+/// `GroundBuffer::grow`), so a dense view reaches 64 MiB in six doublings.
 pub const WAYS_POOL_FIRST_BYTES: u32 = 1 << 20;
 const _: () = {
     use pxl_engine::way::tree::{CHILD_GROUP_WORDS, POOL_CHILD_GROUPS};

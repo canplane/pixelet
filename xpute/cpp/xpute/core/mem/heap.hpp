@@ -1,9 +1,9 @@
 // cpp/xpute/core/mem/heap.hpp
 
-// Blocks from the core's heap, named by their offsets in the core memory
+// The core's heap hands out blocks named by their offsets in the core memory
 // (`mem::core`). The core installs the allocator (`set_heap`), and
-// `operator new` uses it too, so nothing allocates from memory the core was
-// not given.
+// `operator new` uses it too, so nothing allocates from memory the core was not
+// given.
 
 #pragma once
 
@@ -58,7 +58,7 @@ struct HeapStat {
     bool operator==(const HeapStat &) const = default;
 };
 
-// Reads the slab whose functions the core installed as its heap
+// `heap_stat` reads the slab whose functions the core installed as its heap
 // (`set_heap`).
 template <Range R> HeapStat heap_stat(const SlabMalloc<R> &a) noexcept {
     return HeapStat{

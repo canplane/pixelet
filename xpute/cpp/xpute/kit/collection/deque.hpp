@@ -1,8 +1,8 @@
 // cpp/xpute/kit/collection/deque.hpp
 
-// A double-ended queue in a ring over a buffer the caller owns. It allocates
-// nothing and never grows: a push onto a full deque is a bug. `head` and `len`
-// alone say which slots are live.
+// A deque is a double-ended queue in a ring over a buffer the caller owns. It
+// allocates nothing and never grows: a push onto a full deque is a bug. `head`
+// and `len` alone say which slots are live.
 
 #pragma once
 

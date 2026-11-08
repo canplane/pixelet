@@ -4,9 +4,9 @@
 //! sys/io/source.rs reads: the coarsest zoom supplied whole, each kind's format
 //! and version, and the shards every kind holds, four siblings written as their
 //! parent, with each override's version. The published one is made from a
-//! record of what the bucket serves (bin/declare_source.rs, which
+//! record of what the bucket serves (bin/declaration.rs, which
 //! script/publish.py gathers out of the bucket and uploads), a dev tile
-//! server's from what it serves (bin/serve_tiles.rs).
+//! server's from what it serves (bin/server.rs).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -30,10 +30,10 @@ pub struct Kind {
     pub shard: Option<BTreeSet<Quadrant>>,
 }
 
-pub(crate) type Kinds = [Kind; BaseLayer::ALL.len()];
+pub(crate) type KindTable = [Kind; BaseLayer::ALL.len()];
 
 /// Each kind's, in `BaseLayer`'s order.
-pub fn try_kinds(kind: impl FnMut(BaseLayer) -> Result<Kind, String>) -> Result<Kinds, String> {
+pub fn try_kinds(kind: impl FnMut(BaseLayer) -> Result<Kind, String>) -> Result<KindTable, String> {
     let all: Vec<Kind> = BaseLayer::ALL
         .into_iter()
         .map(kind)
@@ -44,12 +44,16 @@ pub fn try_kinds(kind: impl FnMut(BaseLayer) -> Result<Kind, String>) -> Result<
 }
 
 /// A kind's versions for a shard and the tiles under it, over the kind's own.
-pub type Overrides = BTreeMap<Quadrant, Vec<(BaseLayer, String)>>;
+pub type OverrideMap = BTreeMap<Quadrant, Vec<(BaseLayer, String)>>;
 
 /// Refused for anything a client would refuse (pxl-spec bake/source.rs), or
 /// would serve wrongly: a version that is no URL segment, a sharded kind holding no shards
 /// or another holding some, an override on anything but a shard served.
-pub fn declaration(min_zoom: Zoom, kinds: &Kinds, overrides: &Overrides) -> Result<Value, String> {
+pub fn declaration(
+    min_zoom: Zoom,
+    kinds: &KindTable,
+    overrides: &OverrideMap,
+) -> Result<Value, String> {
     for l in BaseLayer::ALL {
         let k = &kinds[l as usize];
         if k.shard.is_some() != is_sharded(l) {
@@ -71,13 +75,13 @@ pub fn declaration(min_zoom: Zoom, kinds: &Kinds, overrides: &Overrides) -> Resu
             ));
         }
     }
-    let held: Vec<&BTreeSet<Quadrant>> = kinds.iter().filter_map(|k| k.shard.as_ref()).collect();
-    let every: BTreeSet<Quadrant> = held
+    let shards: Vec<&BTreeSet<Quadrant>> = kinds.iter().filter_map(|k| k.shard.as_ref()).collect();
+    let every: BTreeSet<Quadrant> = shards
         .first()
         .map(|first| {
             first
                 .iter()
-                .filter(|s| held.iter().all(|h| h.contains(s)))
+                .filter(|s| shards.iter().all(|h| h.contains(s)))
                 .copied()
                 .collect()
         })
@@ -201,7 +205,7 @@ pub fn declaration_of(record: &Value) -> Result<Value, String> {
         })
     };
     let kinds = try_kinds(kind)?;
-    let mut overrides = Overrides::new();
+    let mut overrides = OverrideMap::new();
     for (name, versions) in record["override"].as_object().into_iter().flatten() {
         let tile = key(name).ok_or(format!("override.{name}: no shard's name"))?;
         let mut own = Vec::new();

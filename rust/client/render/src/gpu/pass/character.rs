@@ -23,9 +23,9 @@ use crate::gpu::api::{
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::draw::{Draw, Position};
 use crate::gpu::finish::Finish;
-use crate::gpu::pass::model::{frame_layout, FrameGroups, Stage};
+use crate::gpu::pass::model::{frame_layout, FrameGroup, Stage};
 use crate::gpu::pass::skinned_mesh::SkinnedPass;
-use crate::gpu::pipeline::Pipelines;
+use crate::gpu::pipeline::PipelineCache;
 use crate::gpu::put::put_mat;
 use crate::gpu::read::Read;
 use crate::gpu::shadow::Shadow;
@@ -39,7 +39,7 @@ pub struct CharacterPass {
     /// The buffer the skinned pass reads its draw uniforms from here. It has
     /// one slot, which holds the character's.
     draw_buf: u32,
-    frames: FrameGroups,
+    frames: FrameGroup,
     pub skinned_mesh: SkinnedPass,
     finish: Finish,
     /// What the surface's picture was made of when it was last drawn: the
@@ -69,7 +69,7 @@ fn clear_of(bg: u32) -> [f32; 4] {
 impl CharacterPass {
     pub fn new(
         g: &Gpu,
-        pipelines: &mut Pipelines,
+        pipelines: &mut PipelineCache,
         shadow: &Shadow,
         air: [Entry; AIR_ENTRIES],
         align: u32,
@@ -88,7 +88,7 @@ impl CharacterPass {
         CharacterPass {
             frame_buf,
             draw_buf,
-            frames: FrameGroups::new(g, layout, frame_buf, shadow.blank_entries(1), air),
+            frames: FrameGroup::new(g, layout, frame_buf, shadow.blank_entries(1), air),
             skinned_mesh,
             finish: Finish::new(g, pipelines),
             read: Read::default(),

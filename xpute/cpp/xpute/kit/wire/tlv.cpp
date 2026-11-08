@@ -59,7 +59,7 @@ Result<std::optional<Value>> Reader::next() noexcept {
     case Tag::bytes: {
         Result<std::span<const std::uint8_t>> r = run();
         if (!r) return r.error();
-        return std::optional<Value>(Bytes{*r});
+        return std::optional<Value>(Blob{*r});
     }
     }
     return marshal_error(Errno::ebadmsg);

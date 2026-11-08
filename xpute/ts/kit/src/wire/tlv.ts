@@ -38,7 +38,7 @@ import {
   U64_SZ,
   U8_SZ,
 } from "@xpute/kit/abi/word.ts";
-import type { Bytes } from "@xpute/kit/abi/array.ts";
+import type { ByteArray } from "@xpute/kit/abi/array.ts";
 import * as encoding from "@xpute/kit/codec/encoding.ts";
 import type { Stream } from "@xpute/kit/wire/scalar.ts";
 import * as scalar from "@xpute/kit/wire/scalar.ts";
@@ -69,13 +69,13 @@ const Tag = {
 } as const;
 type Tag = (typeof Tag)[keyof typeof Tag];
 
-export type TlvValue = primitive | Bytes;
+export type TlvValue = primitive | ByteArray;
 
 const put_tag = (s: Stream, tag: Tag): void => scalar.putu8(s, tag);
 const get_tag = (s: Stream): u8 => scalar.getu8(s);
 
 export class TlvWriter {
-  private _buf: Bytes;
+  private _buf: ByteArray;
   private _stream: Stream;
   private _sealed: boolean = false;
 
@@ -90,7 +90,7 @@ export class TlvWriter {
         this._buf.byteLength * 2,
         this._stream.off + sz,
       );
-      const new_buf: Bytes = new Uint8Array(new_cap);
+      const new_buf: ByteArray = new Uint8Array(new_cap);
       new_buf.set(this._buf);
       this._buf = new_buf;
 
@@ -105,12 +105,12 @@ export class TlvWriter {
     }
   }
 
-  data(): Bytes {
+  data(): ByteArray {
     return this._buf.subarray(0, this._stream.off);
   }
 
   /** Appends END, once. A write after it throws EBADMSG. */
-  finish(): Bytes {
+  finish(): ByteArray {
     if (!this._sealed) {
       this._ensure(1);
       put_tag(this._stream, Tag.END);
@@ -206,7 +206,7 @@ export class TlvWriter {
 
   str(s: string): this {
     this._check_unsealed();
-    const data: Bytes = encoding.te.encode(s);
+    const data: ByteArray = encoding.te.encode(s);
     const len: u32 = data.length;
     this._ensure(1 + U32_SZ + len);
     put_tag(this._stream, Tag.STR);
@@ -216,7 +216,7 @@ export class TlvWriter {
     return this;
   }
 
-  bytes(b: Bytes): this {
+  bytes(b: ByteArray): this {
     this._check_unsealed();
     const len: u32 = b.byteLength;
     this._ensure(1 + U32_SZ + len);
@@ -258,7 +258,7 @@ export class TlvWriter {
   }
 }
 
-/** How a sequence stopped without a fault: END was read, or the input ran out
+/** A sequence stopped without a fault: END was read, or the input ran out
  * between two values. */
 export type TlvEnd = "closed" | "unclosed";
 
@@ -267,9 +267,9 @@ export class TlvReader implements Iterable<TlvValue> {
   private _end: u32;
   private _ending: TlvEnd | null = null;
 
-  private readonly _buf: Bytes;
+  private readonly _buf: ByteArray;
 
-  constructor(_buf: Bytes) {
+  constructor(_buf: ByteArray) {
     this._buf = _buf;
     this._stream = scalar.stream(_buf);
     this._end = _buf.byteLength;
@@ -405,7 +405,7 @@ export class TlvReader implements Iterable<TlvValue> {
     return s;
   }
 
-  private _bytes(): Bytes {
+  private _bytes(): ByteArray {
     const len = this._u32();
     this._need(len);
     const b = this._buf.subarray(this._stream.off, this._stream.off + len);

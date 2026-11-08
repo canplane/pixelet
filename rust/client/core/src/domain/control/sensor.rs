@@ -16,7 +16,6 @@ use crate::domain::control::sensor::device_orientation::{
 use crate::domain::control::sensor::geolocation::{geolocation_close, geolocation_open};
 use xpute_core::global::Global;
 
-/// Which sensors the place has.
 #[derive(Clone, Copy, Default)]
 pub struct Platform {
     pub geolocation: bool,

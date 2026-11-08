@@ -68,8 +68,9 @@ export function Toaster() {
   const swipe = useRef<ReturnType<typeof PanResponder.create> | null>(null);
   if (!swipe.current) {
     swipe.current = PanResponder.create({
-      // The stack claims a touch as it starts. By the first move it would be
-      // too late: a swipe down has already gone to the dock by then.
+      // The stack claims a touch as it starts. A mouse drag on a page reports
+      // each move to whatever lies under the cursor, so a swipe down that
+      // reached the dock before the stack claimed it would turn the dock.
       onStartShouldSetPanResponder: () => toastCount() > 1,
       ...deckSwipe(rotateToasts, { drag: setToastDragging }),
     });

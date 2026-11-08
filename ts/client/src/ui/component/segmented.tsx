@@ -1,8 +1,5 @@
 // @pxl/client/ui/component/segmented.tsx
 
-/** A segmented control that the app draws itself, on a page and on Android.
- * An iPhone shows UIKit's (segmented.ios.tsx). */
-
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { PANEL_CONTROL } from "@/ui/component/panel.tsx";

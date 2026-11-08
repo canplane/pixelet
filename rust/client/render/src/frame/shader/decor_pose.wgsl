@@ -17,7 +17,7 @@
 @group(0) @binding(9) var<storage, read_write> records: array<u32>;
 @group(0) @binding(11) var<storage, read> list: array<u32>;
 
-/// What a column holds of its surface (`Surface::kind`).
+/// The values a `Surface`'s `kind` takes.
 const SURFACE_NONE = 0u;
 const SURFACE_MET = 1u;
 const SURFACE_WALK = 2u;

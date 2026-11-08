@@ -9,9 +9,9 @@ use super::surface::Frame;
 use super::GpuRuntime;
 use crate::device;
 
-/// A frame admitted and not yet done. It stays counted until the queue's
-/// callback that holds it ends, either called once the work is done or
-/// dropped uncalled, as wgpu drops a lost device's callbacks. The count is
+/// A `FrameGuard` is a frame admitted and not yet done. It stays counted until
+/// the queue's callback that holds it ends, either called once the work is done
+/// or dropped uncalled, as wgpu drops a lost device's callbacks. The count is
 /// taken off as the guard drops, so no frame stays counted forever.
 pub(super) struct FrameGuard(Arc<AtomicU32>);
 
@@ -32,9 +32,9 @@ impl Drop for FrameGuard {
 }
 
 impl GpuRuntime {
-    /// Whether this turn may draw a frame. It may while fewer frames than the
-    /// frame latency are unfinished, so each surface's next texture is free
-    /// and taking it does not block. Ask once a turn, before drawing:
+    /// This says whether this turn may draw a frame. It may while fewer frames
+    /// than the frame latency are unfinished, so each surface's next texture is
+    /// free and taking it does not block. Ask once a turn, before drawing:
     /// `present` counts the frame only where it was admitted.
     pub fn admit_frame(&mut self) -> bool {
         self.admitted = crate::admit::admits(

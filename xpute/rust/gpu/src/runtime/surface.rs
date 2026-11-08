@@ -1,45 +1,45 @@
 // xpute-gpu/runtime/surface.rs
 
-//! The surfaces a core names by number, and the window's surface that a
-//! program binds to each.
+//! These are the surfaces a core names by number, and the window's surface
+//! that a program binds to each.
 
 use xpute_core::abi::handle::{handle_slot, SLOT_BITS};
 
 use super::configure::ConfigureAt;
 use super::GpuRuntime;
 
-/// What the core asked of a surface. It holds whether or not a window's
+/// This is what the core asked of a surface. It holds whether or not a window's
 /// surface is bound, so a window bound later is configured as asked.
 pub(super) struct Surface {
-    /// CONFIGURE's format, usage and whether alpha is premultiplied.
+    /// This holds CONFIGURE's format, usage and whether alpha is premultiplied.
     pub(super) cfg: Option<(wgpu::TextureFormat, wgpu::TextureUsages, bool)>,
-    /// RESIZE's size, at least a pixel each way.
+    /// This is RESIZE's size, at least a pixel each way.
     pub(super) size: [u32; 2],
     bound: Option<Bound>,
-    /// The handle bound here, or 0 for none. A slot outlives its handles, so
-    /// an old handle let go must not release the one bound since.
+    /// This is the handle bound here, or 0 for none. A slot outlives its
+    /// handles, so an old handle let go must not release the one bound since.
     pub(super) handle: u32,
-    /// The newest handle bound here, kept after it is let go, so that an
-    /// older handle's late bind is refused.
+    /// This is the newest handle bound here, kept after it is let go, so that
+    /// an older handle's late bind is refused.
     newest_handle: u32,
-    /// This turn's texture, which every CURRENT of the turn shares.
+    /// This turn's texture is here, and every CURRENT of the turn shares it.
     pub(super) frame: Option<Frame>,
-    /// The texture drawn into where the window gives none. It is kept until
-    /// the format, usage or size asked for changes, so a hidden window costs
-    /// no new texture each frame.
+    /// This is the texture drawn into where the window gives none. It is kept
+    /// until the format, usage or size asked for changes, so a hidden window
+    /// costs no new texture each frame.
     offscreen: Option<wgpu::Texture>,
 }
 
 struct Bound {
     surface: wgpu::Surface<'static>,
-    /// Not yet configured as asked, so no texture is taken from it until it
-    /// is.
+    /// This surface is not yet configured as asked, so no texture is taken from
+    /// it until it is.
     stale: bool,
 }
 
-/// The window's texture, shown at the turn's end; or, where the window gives
-/// none, a texture never shown, since WebGPU's getCurrentTexture always gives
-/// one.
+/// A frame is the window's texture, shown at the turn's end; or, where the
+/// window gives none, a texture never shown, since WebGPU's getCurrentTexture
+/// always gives one.
 pub(super) enum Frame {
     Surface(wgpu::SurfaceTexture),
     Offscreen(wgpu::Texture),
@@ -68,16 +68,16 @@ impl Frame {
     }
 }
 
-/// Whether handle `a`'s generation is behind `b`'s. Generations wrap in 16
-/// bits.
+/// This says whether handle `a`'s generation is behind `b`'s. Generations wrap
+/// in 16 bits.
 fn older(a: u32, b: u32) -> bool {
     (((a >> SLOT_BITS) as u16).wrapping_sub((b >> SLOT_BITS) as u16) as i16) < 0
 }
 
 impl GpuRuntime {
     /// Binds the window's surface `s` to the core's surface `handle`, and
-    /// configures it once the core has asked for a configuration. False,
-    /// binding nothing, where a newer handle has bound the slot since.
+    /// configures it once the core has asked for a configuration. It answers
+    /// false, binding nothing, where a newer handle has bound the slot since.
     pub fn bind(&mut self, handle: u32, s: wgpu::Surface<'static>) -> bool {
         let Some(slot) = self.claim(handle) else {
             return false;
@@ -103,8 +103,8 @@ impl GpuRuntime {
         true
     }
 
-    /// Takes `handle`'s slot for it. None where the slot has seen a newer
-    /// handle.
+    /// Takes `handle`'s slot for it. It answers none where the slot has seen a
+    /// newer handle.
     pub(super) fn claim(&mut self, handle: u32) -> Option<u32> {
         let slot = handle_slot(handle);
         let s = self.surface(slot);
@@ -174,10 +174,10 @@ impl GpuRuntime {
         }
     }
 
-    /// `surface`'s texture for this turn: the window's where it gives one,
-    /// else one never shown. An outdated surface is configured and asked once
-    /// more. A suboptimal one is used this turn and configured before the
-    /// next.
+    /// This takes `surface`'s texture for this turn: the window's where it
+    /// gives one, else one never shown. An outdated surface is configured and
+    /// asked once more. A suboptimal one is used this turn and configured
+    /// before the next.
     pub(super) fn current(&mut self, surface: u32) -> Frame {
         let mut asked = false;
         loop {

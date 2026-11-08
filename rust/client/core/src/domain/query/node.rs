@@ -9,15 +9,14 @@
 //! and handed down (`At`; `World::asset` serves an asker with nothing handed
 //! down):
 //!
-//! - the ground: its column off the clip levels, as the GPU drew it and the
-//!   CPU read it back, or the wall at the service area's edge where the
-//!   column is that wall. The ways are read off the tree the GPU built of
-//!   their brick, whose child groups are read back into the pool's mirror
-//!   and read as the GPU reads them (pxl-engine `clipmap::ground`,
+//! - the ground: its column off the clip levels, as the GPU reads it, or the
+//!   wall at the service area's edge where the column is that wall. The ways
+//!   are read off the tree of their brick, whose child groups lie in the pool
+//!   and are read as the GPU reads them (pxl-engine `clipmap::ground`,
 //!   `way::tree`);
 //! - the caves: the noises at the cell's center (pxl-content `cave::hollow`);
 //! - what is placed: the objects' pyramid record at that zoom, folded by
-//!   majority (`pyramid.rs`, through the store's query).
+//!   majority (domain/layer/object/store.rs, through the store's query).
 //!
 //! At a coarser zoom, the answer is whether anything under the node fills at
 //! the zooms the reader asks within it. The world there is what that level
@@ -64,7 +63,7 @@ use super::world::World;
 use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::domain::layer::terrain::clipmap::{pool, CpuClipmap};
 use crate::domain::layer::terrain::TerrainQuery as _;
-use crate::domain::layer::tile_cache::Lines;
+use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::Answer;
 use crate::sys::io::source;
 
@@ -95,7 +94,7 @@ impl World<'_> {
     /// finer, for an asker with nothing handed down (`asset_at`). X is on the
     /// asker's lap.
     pub fn asset(&self, node: Node<3>) -> Answer<u32> {
-        self.asset_at(&mut self.start(node), &mut Lines::default())
+        self.asset_at(&mut self.start(node), &mut Path::default())
     }
 
     /// `node` with nothing handed down, as a descent's root is. Each source
@@ -115,7 +114,7 @@ impl World<'_> {
     /// what fills it (`node`, asked at that zoom), or void where it is air or
     /// void. `lines` are the ground's lines the asker read, and the cell's
     /// line steps on from them (`node`).
-    pub(super) fn asset_at(&self, at: &mut At, lines: &mut Lines) -> Answer<u32> {
+    pub(super) fn asset_at(&self, at: &mut At, lines: &mut Path) -> Answer<u32> {
         let (zoom, _) = at.node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
         self.node(at, [zoom, zoom], lines).map(|i| {
@@ -149,8 +148,8 @@ impl World<'_> {
     /// What is in `at`'s node, asked over `asked`, the zooms from far to
     /// near that a reader asks within it. This is the world's one query
     /// (pxl-engine `world::node`). The ground is read as the GPU reads it,
-    /// off what the GPU drew and read back (`CpuClipmap`), down the node's
-    /// line through the tile cache (`GroundRead`).
+    /// off the clip levels (`CpuClipmap`), down the node's line through the
+    /// tile cache (`GroundRead`).
     ///
     /// The answer (pxl-engine `answer`) is one of three: a split, with its
     /// box in its own steps; the asset of a cell at the zoom asked, void for
@@ -163,7 +162,7 @@ impl World<'_> {
         &self,
         at: &mut At,
         asked: [Zoom; 2],
-        lines: &mut Lines,
+        lines: &mut Path,
     ) -> Answer<In<[u32; 2]>> {
         let (lanes, cuts) = (
             self.object.columns(),
@@ -190,13 +189,13 @@ impl World<'_> {
 /// a coarser tile standing in for it (`coarser`).
 struct GroundRead<'r, 'a> {
     world: &'r World<'a>,
-    lines: &'r mut Lines,
+    lines: &'r mut Path,
     missing: Option<Quadrant>,
     coarser: Option<Quadrant>,
 }
 
 impl<'r, 'a> GroundRead<'r, 'a> {
-    fn new(world: &'r World<'a>, lines: &'r mut Lines) -> GroundRead<'r, 'a> {
+    fn new(world: &'r World<'a>, lines: &'r mut Path) -> GroundRead<'r, 'a> {
         GroundRead {
             world,
             lines,
@@ -205,11 +204,11 @@ impl<'r, 'a> GroundRead<'r, 'a> {
         }
     }
 
-    /// `of` as the reading went. Where `held`, it is exact, or coarser with
+    /// `of` as the reading went. Where `found`, it is exact, or coarser with
     /// the first tile that only a coarser one stood in for. Otherwise the
     /// answer is the missing tile.
-    fn answer<T>(&self, held: bool, of: impl FnOnce() -> T) -> Answer<T> {
-        match (held, self.missing, self.coarser) {
+    fn answer<T>(&self, found: bool, of: impl FnOnce() -> T) -> Answer<T> {
+        match (found, self.missing, self.coarser) {
             (false, Some(l), _) => Answer::Nothing(l),
             (_, _, Some(l)) => Answer::Coarser(of(), l),
             _ => Answer::Exact(of()),
@@ -253,7 +252,7 @@ impl ground::Resident for GroundRead<'_, '_> {
         place: &mut Lookup,
         cells: [Zoom; 2],
         (zoom, c): (Zoom, [i32; 3]),
-    ) -> (ground::Bounds, bool) {
+    ) -> (ground::Extent, bool) {
         let line = self
             .world
             .terrain

@@ -1,11 +1,5 @@
 // @pxl/client/ui/world/dock/dock.tsx
 
-/**
- * The dock at the foot of the world screen. It stacks the message card and
- * the palette card in one deck, which a vertical swipe turns. Over the
- * palette it shows the sizes that a hold on a swatch opens.
- */
-
 import { useRef, useState } from "react";
 import { PanResponder, PixelRatio, StyleSheet, View } from "react-native";
 

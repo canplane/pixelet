@@ -1,10 +1,10 @@
 // xpute-core/stop.rs
 
-//! How a core stops. A broken invariant (`bug!`) or a panic is posted to the
-//! runtime as the turn's only frame, by the reporter `install` is given (the
-//! core's `Door::abort`). Where the core shares its process with the runtime,
-//! the stop is also told to the form's hook, since a panic there would
-//! otherwise take the runtime down with it.
+//! A broken invariant (`bug!`) or a panic is posted to the runtime as the
+//! turn's only frame, by the reporter `install` is given (the core's
+//! `Door::abort`). Where the core shares its process with the runtime, the
+//! stop is also told to the form's hook, since a panic there would otherwise
+//! take the runtime down with it.
 
 use core::panic::Location;
 
@@ -87,9 +87,9 @@ fn abort(errnum: Errno, at: &Location<'_>, a: u64, b: u64) {
     }
 }
 
-/// Whether a bug has already been reported. After its report, a bug panics
-/// on a target where it cannot trap, and the panic hook must not report that
-/// panic again.
+/// `is_aborted` says whether a bug has already been reported. After its report,
+/// a bug panics on a target where it cannot trap, and the panic hook must not
+/// report that panic again.
 fn is_aborted() -> bool {
     *ABORTED.get(|| false)
 }

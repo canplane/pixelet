@@ -7,7 +7,7 @@ use pxl_spec::asset::cube::{self, ground, sentinel};
 use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
 use pxl_spec::bake::tile::terrain::Ground;
-use pxl_spec::space::layer::lattice::{Cells, GROUND, TILE_CELLS};
+use pxl_spec::space::layer::lattice::{Grid, GROUND, TILE_CELLS};
 
 use super::*;
 use crate::domain::layer::instance::Instance;
@@ -42,8 +42,7 @@ fn top() -> Quadrant {
 }
 
 /// A leaf as a client holds it: its tile with its lines, and each cell's
-/// palette index and height as the clip levels hold them once a GPU drew
-/// them.
+/// palette index and height as the clip levels hold them.
 #[derive(Clone)]
 struct Leaf {
     tile: TerrainTile,
@@ -51,12 +50,12 @@ struct Leaf {
     heights: Vec<i16>,
 }
 
-/// A tile cache holding `held` and, over each tile, its line up to the
+/// A tile cache holding `tiles` and, over each tile, its line up to the
 /// coarsest zoom the source supplies whole, as the floor holds it all around
 /// the eye (`domain/layer/tile_cache/floor.rs`). Here a tile's coarser
 /// pictures are the same ground, each marking its children held. Their cells
 /// are held in the clip levels around `center`, in units.
-fn resident(center: [f64; 2], held: &[(Quadrant, Leaf)]) -> TileCache<TerrainTile> {
+fn resident(center: [f64; 2], tiles: &[(Quadrant, Leaf)]) -> TileCache<TerrainTile> {
     use pxl_spec::bake::tile::Occupancy;
     let mut tile_cache = TileCache::default();
     let mut admitted: Vec<Quadrant> = Vec::new();
@@ -68,7 +67,7 @@ fn resident(center: [f64; 2], held: &[(Quadrant, Leaf)]) -> TileCache<TerrainTil
             palette_indices,
             heights,
         },
-    ) in held
+    ) in tiles
     {
         let line = std::iter::successors(Some(*p), |q| (q.zoom > MIN_ZOOM).then(|| q.parent()));
         for (k, q) in line.enumerate() {
@@ -98,7 +97,6 @@ fn resident(center: [f64; 2], held: &[(Quadrant, Leaf)]) -> TileCache<TerrainTil
     // held but not asked for is only cache, which answers nothing.
     let asks: fnv::FnvHashMap<Quadrant, ()> = admitted.iter().map(|&q| (q, ())).collect();
     tile_cache.ask(&asks);
-    // Their cells are handed back at once, as a GPU would hand them back.
     test::hold(center, &cells);
     tile_cache
 }
@@ -596,7 +594,7 @@ fn reading_reports_columns() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let store = Store::default();
-    let read = changes::Footprint::default();
+    let read = change::Footprint::default();
     let access = World::new(&tile_cache, &store).reading(&read);
     let cell = units(GROUND.leaf_cell_zoom());
     let at = [x + 0.5 * cell, y + 0.5 * cell];
@@ -646,20 +644,20 @@ fn box_placed_matches_store() {
         }
         asked.push((at, word & 0xffff));
     }
-    let mut held = Vec::new();
+    let mut in_store = Vec::new();
     let space = Aabb {
         min: [3.0, 4.0, 2.0],
         max: [11.0, 6.0, 6.0],
     };
     store.entries_in(&space, &mut |e| {
         if e.zoom == unit {
-            held.push((e.at, e.state));
+            in_store.push((e.at, e.state));
         }
     });
     asked.sort_unstable();
-    held.sort_unstable();
+    in_store.sort_unstable();
     assert_eq!(asked.len(), 3, "{asked:?}");
-    assert_eq!(asked, held);
+    assert_eq!(asked, in_store);
 }
 
 /// A brick handed after the clip levels were folded without it is read with
@@ -673,7 +671,7 @@ fn box_placed_matches_store() {
 fn late_brick_spike() {
     use crate::domain::layer::terrain::clipmap::test::{hand, unland};
     use crate::domain::layer::terrain::clipmap::CpuClipmap;
-    use pxl_engine::clipmap::{self as cells, Bricks, Lookup, BRICK, BRICK_MIPS, CLIP_SIZE};
+    use pxl_engine::clipmap::{self as cells, BrickSource, Lookup, BRICK, BRICK_MIPS, CLIP_SIZE};
     use pxl_engine::LEAF_CELL_ZOOM;
     let _g = serial();
     let leaf = top().children()[0];
@@ -717,10 +715,14 @@ fn late_brick_spike() {
             .unwrap()
             .point[2]
     };
-    let held = met(&World::new(&tile_cache, &store));
+    let before = met(&World::new(&tile_cache, &store));
     unland(LEAF_CELL_ZOOM, spike);
     hand();
-    assert_eq!(met(&World::new(&tile_cache, &store)), held, "the spike met");
+    assert_eq!(
+        met(&World::new(&tile_cache, &store)),
+        before,
+        "the spike met"
+    );
     let q = cells::brick_of(spike).0;
     let mut outside = 0;
     for k in 0..BRICK * BRICK {
@@ -751,11 +753,11 @@ fn late_brick_spike() {
 #[test]
 fn device_loss_drops_bounds() {
     use crate::domain::layer::terrain::clipmap::{test::lose, CpuClipmap};
-    use pxl_engine::clipmap::{self as cells, Bricks, Lookup, BRICK, BRICK_MIPS};
+    use pxl_engine::clipmap::{self as cells, BrickSource, Lookup, BRICK, BRICK_MIPS};
     use pxl_engine::ground::UNBOUNDED;
     use pxl_engine::LEAF_CELL_ZOOM;
     let _g = serial();
-    let _held = flat_at_five();
+    let _flat = flat_at_five();
     let (first, _) = CpuClipmap.origin(LEAF_CELL_ZOOM);
     let zoom = LEAF_CELL_ZOOM - BRICK_MIPS - 1;
     let over = || {

@@ -5,8 +5,6 @@
 
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
 
-/// The ray of pixel `id`, in a target of `size` pixels, through the pixel's middle moved by the
-/// eye's jitter (grid.wgsl `px_tan`).
 fn px_aim(id: vec2<u32>, size: vec2<u32>) -> Aim {
   return eye_aim(px_tan(id, size));
 }

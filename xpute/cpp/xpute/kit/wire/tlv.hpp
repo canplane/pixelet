@@ -56,9 +56,9 @@ struct Str {
     template <class Put> void decode(Put &&put) const { utf8_lossy(text, std::forward<Put>(put)); }
 };
 
-struct Bytes {
+struct Blob {
     std::span<const std::uint8_t> data;
-    bool operator==(const Bytes &o) const { return std::equal(data.begin(), data.end(), o.data.begin(), o.data.end()); }
+    bool operator==(const Blob &o) const { return std::equal(data.begin(), data.end(), o.data.begin(), o.data.end()); }
 };
 
 enum class End : std::uint8_t {
@@ -66,7 +66,7 @@ enum class End : std::uint8_t {
     unclosed,
 };
 
-using Value = std::variant<bool, std::uint8_t, std::int8_t, std::uint16_t, std::int16_t, std::uint32_t, std::int32_t, std::uint64_t, std::int64_t, float, double, Str, Bytes>;
+using Value = std::variant<bool, std::uint8_t, std::int8_t, std::uint16_t, std::int16_t, std::uint32_t, std::int32_t, std::uint64_t, std::int64_t, float, double, Str, Blob>;
 
 template <class Buf> class Writer {
   public:
@@ -124,7 +124,7 @@ template <class Buf> class Writer {
         le(static_cast<std::uint32_t>(s.text.size()));
         buf_.insert(buf_.end(), s.text.begin(), s.text.end());
     }
-    void put(const Bytes &b) {
+    void put(const Blob &b) {
         tag(Tag::bytes);
         le(static_cast<std::uint32_t>(b.data.size()));
         buf_.insert(buf_.end(), b.data.begin(), b.data.end());

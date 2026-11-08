@@ -1,10 +1,7 @@
 // @pxl/client/ui/setting/schema.ts
 
-/**
- * Every setting the sheet draws, keyed by the core's number. A new setting
- * takes an entry in schema.json and its strings under
- * `settings.<section>.<name>`.
- */
+/** A new setting takes an entry in schema.json and its strings under
+ * `settings.<section>.<name>`. */
 
 import {
   SETTING as EVERY,

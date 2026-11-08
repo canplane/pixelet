@@ -2,8 +2,6 @@
 //
 // GENERATED from spec/client/core/door/ui.json
 
-// The edit's: the tool and what it takes, and a marker's draft.
-
 export const TOOL = 0x01;
 export const MARKER_TEXT = 0x02;
 export const MARKER_CANCEL = 0x03;

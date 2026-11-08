@@ -24,7 +24,7 @@ pub const BRANCH: u32 = 1 << 31;
 pub const ROOT: u32 = 0;
 
 use crate::answer;
-use crate::answer::BoxWords;
+use crate::answer::PackedBox;
 use crate::answer::FULL;
 
 /// The bits of `FULL`; a share shifted down past them is none.
@@ -139,7 +139,7 @@ pub fn share(word: u32) -> u32 {
 }
 
 /// The tree's two columns, one word a slot.
-pub trait Columns {
+pub trait Table {
     fn first_child(&self, slot: u32) -> u32;
     fn data(&self, slot: u32) -> u32;
 }
@@ -272,7 +272,7 @@ fn child_idx(at: [i32; 3]) -> u32 {
     (at[0] & 1 | (at[1] & 1) << 1 | (at[2] & 1) << 2) as u32
 }
 
-fn of(columns: &impl Columns, slot: u32, zoom: Zoom) -> NodeSlot {
+fn of(columns: &impl Table, slot: u32, zoom: Zoom) -> NodeSlot {
     if columns.first_child(slot) != 0 {
         NodeSlot(slot << SLOT_SHIFT | FOLDED | zoom)
     } else if columns.data(slot) == VOID {
@@ -286,7 +286,7 @@ fn of(columns: &impl Columns, slot: u32, zoom: Zoom) -> NodeSlot {
 /// the root whose child group is `root` to the node's own slot, or to the leaf over it, one
 /// `child` step a zoom, the one step every descent of the tree takes. A descent asks this
 /// once, at its root.
-pub fn cursor(columns: &impl Columns, root: u32, zoom: Zoom, at: [i32; 3]) -> NodeSlot {
+pub fn cursor(columns: &impl Table, root: u32, zoom: Zoom, at: [i32; 3]) -> NodeSlot {
     let p = path(zoom, at);
     down(
         columns,
@@ -299,7 +299,7 @@ pub fn cursor(columns: &impl Columns, root: u32, zoom: Zoom, at: [i32; 3]) -> No
 
 /// What the node `at` of `zoom` holds, found by descending from the node above it at `top`,
 /// which `slot` holds, to its own slot or to the leaf over it, one `child` step a zoom.
-pub fn down(columns: &impl Columns, slot: u32, top: Zoom, zoom: Zoom, at: [i32; 3]) -> NodeSlot {
+pub fn down(columns: &impl Table, slot: u32, top: Zoom, zoom: Zoom, at: [i32; 3]) -> NodeSlot {
     let mut node_slot = of(columns, slot, top);
     let mut z = top;
     while z < zoom && node_slot.is_folded() {
@@ -313,7 +313,7 @@ pub fn down(columns: &impl Columns, slot: u32, top: Zoom, zoom: Zoom, at: [i32; 
 /// What the child `at` of `zoom` holds, given what its parent holds (`parent`). A leaf over
 /// the parent covers the child too, and nothing stays nothing; under a fold, the child has
 /// its own slot.
-pub fn child(columns: &impl Columns, parent: NodeSlot, zoom: Zoom, at: [i32; 3]) -> NodeSlot {
+pub fn child(columns: &impl Table, parent: NodeSlot, zoom: Zoom, at: [i32; 3]) -> NodeSlot {
     if parent.is_folded() {
         of(
             columns,
@@ -350,7 +350,7 @@ fn holds(cut: Cut, zoom: Zoom, at: [i32; 3]) -> bool {
 /// is kept is decided for the cell, over every layer together (`answer::cover`,
 /// `answer::eighths`). `hide`, a preview's left-out leaf, is left out where it is the leaf
 /// itself.
-pub fn val(columns: &impl Columns, slot: NodeSlot, hide: Cut, zoom: Zoom, at: [i32; 3]) -> u32 {
+pub fn val(columns: &impl Table, slot: NodeSlot, hide: Cut, zoom: Zoom, at: [i32; 3]) -> u32 {
     let word = if slot.holds() {
         columns.data(slot.slot())
     } else {
@@ -378,7 +378,7 @@ pub fn val(columns: &impl Columns, slot: NodeSlot, hide: Cut, zoom: Zoom, at: [i
 
 /// The share of its cube that what the node holding `slot` folds to fills, in `FULL`'s units
 /// (`val`): whole for a leaf over it, and the fold's share for a fold.
-pub fn fill_share(columns: &impl Columns, slot: NodeSlot) -> u32 {
+pub fn fill_share(columns: &impl Table, slot: NodeSlot) -> u32 {
     if slot.is_folded() {
         high(columns.data(slot.slot()))
     } else {
@@ -396,7 +396,7 @@ pub fn fill_share(columns: &impl Columns, slot: NodeSlot) -> u32 {
 /// Each child is read at its own index under `hide`, as `v` was, so a leaf a preview leaves
 /// out shows in no quarter.
 pub fn palette_indices(
-    columns: &impl Columns,
+    columns: &impl Table,
     slot: NodeSlot,
     hide: Cut,
     zoom: Zoom,
@@ -473,7 +473,7 @@ pub struct Over {
 /// otherwise. A preview's cut and its left-out leaf only make air, so where nothing placed
 /// fills, what lies under answers, and splits where it fills.
 pub fn over(
-    columns: &impl Columns,
+    columns: &impl Table,
     slot: NodeSlot,
     carve: Cut,
     hide: Cut,
@@ -516,7 +516,7 @@ pub fn over(
 /// halves of the node in which any of its eight children holds anything, or the whole node
 /// where the children are one (not folded). It is `answer::BOX_NONE` where nothing is placed.
 /// A preview's cut only makes air, so what is placed under the cut still lies in the box.
-pub fn object_box(columns: &impl Columns, slot: NodeSlot, zoom: Zoom) -> BoxWords {
+pub fn object_box(columns: &impl Table, slot: NodeSlot, zoom: Zoom) -> PackedBox {
     use crate::answer::{box_word, BOX_NONE, BOX_STEPS, BOX_WHOLE};
     if !slot.holds() {
         return BOX_NONE;
@@ -563,7 +563,7 @@ pub fn object_box(columns: &impl Columns, slot: NodeSlot, zoom: Zoom) -> BoxWord
 /// units, which is an eighth of a unit of its parent's, so the share left falls short of the
 /// filled volume by less than 8/7 of a unit; a margin of two units covers it. Where the ground
 /// fills the rest of such a cube, the ground's own bound splits it.
-fn cells_by(columns: &impl Columns, slot: NodeSlot, d: Zoom) -> bool {
+fn cells_by(columns: &impl Table, slot: NodeSlot, d: Zoom) -> bool {
     if !slot.holds() {
         return false;
     }
@@ -598,7 +598,7 @@ mod tests {
     /// nothing.
     struct ChildGroup(&'static [u32]);
 
-    impl Columns for ChildGroup {
+    impl Table for ChildGroup {
         fn first_child(&self, slot: u32) -> u32 {
             if slot == 1 {
                 8

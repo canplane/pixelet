@@ -88,7 +88,7 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
         ]
     };
 
-    // ---- The deepest area over each cell, with ids numbered as they are met. ----
+    // First, the deepest area over each cell, its id numbered in the order the areas are met.
     let mut ids = Numbering::default();
     let env: [&(dyn ToSql + Sync); 4] = [&min[0], &min[1], &max[0], &max[1]];
     let mut areas: Vec<(i32, String, Vec<u8>)> = client
@@ -123,7 +123,8 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
         }
     }
 
-    // ---- Under the areas, the nearest point of a child, within the reach. ----
+    // Then each cell under an area steps down, as far as it can, to the child whose point lies
+    // nearest it, among the children whose points lie within the reach.
     let margin = merc_from_u(BAKE_READ_DIST);
     let ring: [&(dyn ToSql + Sync); 4] = [
         &(min[0] - margin),
@@ -173,7 +174,7 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
         return Ok(None);
     }
 
-    // ---- Each division a cell names, with its parents. ----
+    // Last, each division a cell names is read, with its parents.
     let rows = client.query(RECORDS_SQL, &[&ids.list]).map_err(db)?;
     let mut records: FnvHashMap<String, (Division, Option<String>)> = FnvHashMap::default();
     for r in &rows {
@@ -254,8 +255,8 @@ impl Base for DivisionTile {
         division::decode(raw).map_err(|e| format!("{e:?}"))
     }
 
-    fn fold_tile<'a>(p: Quadrant, held: impl Fn(Quadrant) -> Option<&'a Self>) -> Option<Self> {
-        let [a, b, c, d] = p.children().map(held);
+    fn fold_tile<'a>(p: Quadrant, child_of: impl Fn(Quadrant) -> Option<&'a Self>) -> Option<Self> {
+        let [a, b, c, d] = p.children().map(child_of);
         Some(division::fold([a?, b?, c?, d?], p.zoom))
     }
 

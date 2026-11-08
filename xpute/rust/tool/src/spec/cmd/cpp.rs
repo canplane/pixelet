@@ -1,8 +1,8 @@
 // xpute-tool/spec/cmd/cpp.rs
 
-//! Writes a command table as a C++ core's header: its enums, a reader for
-//! each packet, and a struct and a writer for each import. A C++ core writes
-//! no record.
+//! This writes a command table as a C++ core's header: its enums, a reader for
+//! each packet, and a struct and a writer for each import. A C++ core writes no
+//! record.
 
 use super::{literal, members, Entry, Field, Kind, Member, Spec, Target};
 use crate::spec::{file, generated, pascal};
@@ -113,8 +113,8 @@ fn cpp_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
     })
 }
 
-/// The writer's call for `f`. It takes the field's value, or the optional
-/// itself where the field is optional.
+/// The writer's method takes the field's value, or the optional itself where
+/// the field is optional.
 fn cpp_write(spec: &Spec, f: &Field) -> Result<String, String> {
     let method = match spec.kind(&f.ty)? {
         Kind::Bool => "boolean",
@@ -124,8 +124,9 @@ fn cpp_write(spec: &Spec, f: &Field) -> Result<String, String> {
     Ok(format!("w.{method}({});", f.name))
 }
 
-/// An import, which is a frame the core posts: its number, the children its
-/// packet is written as, and its writer (cpp/xpute/core/ipc/door.hpp `Import`).
+/// This writes an import, a frame the core posts: its number, the children
+/// its packet is written as, and its writer, as `Import` in
+/// cpp/xpute/core/ipc/door.hpp requires.
 fn cpp_import(
     spec: &Spec,
     out: &mut Vec<String>,
@@ -219,7 +220,7 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
             format!("}} // namespace {namespace}"),
             String::new(),
             format!(
-                "template <> struct xpute::Members<{namespace}::{}> {{",
+                "template <> struct xpute::EnumInfo<{namespace}::{}> {{",
                 e.name
             ),
             format!(

@@ -62,7 +62,8 @@
     "pet": {
       "$number": 1,
       "$doc": [
-        "The pets, the same way."
+        "The pets a player's companion can be, each by its row, the number the settings store",
+        "persists. One pack, so one colormap."
       ],
       "size": {
         "$val": 0.25,

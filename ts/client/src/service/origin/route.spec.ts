@@ -44,12 +44,12 @@ export const ASSET_ROOT = "/asset";
 /** Forward search, the one geo query with no finite tile to bake it against. */
 export const SEARCH_URL = "/geo/search";
 
-/** Ops routes, behind the shared admin token. One per root rather than one
- * shared branch: each server gates its own prefix, and a token that opened
- * both would make either server's leak the other's. */
+/** Ops routes, behind the shared admin token. There is one branch per root rather
+ * than one shared branch, because each server gates its own prefix: a token that
+ * opened both would let a leak from either server open the other's. */
 export const GEO_INTERNAL = "/geo/internal";
 
-/** pxl-api's own, gated the same way. */
+/** pxl-api's ops routes, gated the same way. */
 export const API_INTERNAL = "/api/internal";
 
 export const GEO_PREFIX = "/geo/";

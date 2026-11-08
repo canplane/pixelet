@@ -50,34 +50,34 @@ fn read_timed(read: impl FnOnce() -> u32) -> u32 {
     addr
 }
 
-/// The address of STATS's words (perf.json): the statistics over
+/// The address of STAT_SLOT's words (perf.json): the statistics over
 /// `window_ms` and the current values. The client reads them in place rather
 /// than as a post, because `Door::post` asserts on a full completion ring.
 /// The words stay valid until the next turn.
 fn stats_words(window_ms: Option<f64>) -> u32 {
-    use crate::perf::spec::STATS;
+    use crate::perf::spec::STAT_SLOT;
     // The words live on the heap, not in a static, because a native build's
     // statics lie outside the core's memory, which is all the client reads.
-    static WORDS: Global<Box<[u32; STATS::WORDS as usize]>> = Global::new();
+    static WORDS: Global<Box<[u32; STAT_SLOT::WORDS as usize]>> = Global::new();
     let stats = read::perf_stats(window_ms);
     let now = read::perf_now();
-    let w = WORDS.get(|| Box::new([0; STATS::WORDS as usize]));
-    w[STATS::stats_at as usize] = off_of_slice(&raw const *stats) as u32;
-    w[STATS::stats_words as usize] = stats.len() as u32;
-    w[STATS::now_at as usize] = off_of_slice(&raw const *now) as u32;
-    w[STATS::now_words as usize] = now.len() as u32;
+    let w = WORDS.get(|| Box::new([0; STAT_SLOT::WORDS as usize]));
+    w[STAT_SLOT::stats_at as usize] = off_of_slice(&raw const *stats) as u32;
+    w[STAT_SLOT::stats_words as usize] = stats.len() as u32;
+    w[STAT_SLOT::now_at as usize] = off_of_slice(&raw const *now) as u32;
+    w[STAT_SLOT::now_words as usize] = now.len() as u32;
     off_of(w.as_ptr()) as u32
 }
 
-/// The address of RINGS's words, which point at the three rings where they
+/// The address of RING_SLOT's words, which point at the three rings where they
 /// lie.
 fn perf_rings() -> u32 {
     use crate::perf::record::{perf_frames, perf_tasks, perf_worst};
-    use crate::perf::spec::{RING, RINGS, RING_NAMES};
-    // On the heap for the same reason as STATS's words (`stats_words`).
-    static WORDS: Global<Box<[u32; RINGS::WORDS as usize]>> = Global::new();
+    use crate::perf::spec::{RING, RING_NAMES, RING_SLOT};
+    // On the heap for the same reason as STAT_SLOT's words (`stats_words`).
+    static WORDS: Global<Box<[u32; RING_SLOT::WORDS as usize]>> = Global::new();
     let (frames, tasks, worst) = (perf_frames(), perf_tasks(), perf_worst());
-    let w = WORDS.get(|| Box::new([0; RINGS::WORDS as usize]));
+    let w = WORDS.get(|| Box::new([0; RING_SLOT::WORDS as usize]));
     // In RING_NAMES' order: frames, tasks, worst.
     let rings: [(usize, usize); RING_NAMES] = [
         (off_of_slice(&raw const *frames), frames.len()),
@@ -85,7 +85,7 @@ fn perf_rings() -> u32 {
         (off_of_slice(&raw const *worst), worst.len()),
     ];
     for (k, (at, cnt)) in rings.into_iter().enumerate() {
-        let slot = (RINGS::slots + k as u32 * RING::WORDS) as usize;
+        let slot = (RING_SLOT::slots + k as u32 * RING::WORDS) as usize;
         w[slot + RING::at as usize] = at as u32;
         w[slot + RING::cnt as usize] = cnt as u32;
     }

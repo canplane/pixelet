@@ -1,11 +1,11 @@
 // cpp/xpute/kit/collection/arena.hpp
 
-// A pool of slots that are constructed once and reused. Slots are handed out
-// in order and taken back by rewinding to an earlier length. `truncate`
-// destroys nothing: a slot handed out again is in whatever state its last user
-// left it, with its buffers still allocated, and the caller must reinitialize
-// it. `Alloc` has no default, because the default would be the system's heap;
-// the caller names the memory it means.
+// An arena is a pool of slots that are constructed once and reused. Slots are
+// handed out in order and taken back by rewinding to an earlier length.
+// `truncate` destroys nothing: a slot handed out again is in whatever state
+// its last user left it, with its buffers still allocated, and the caller must
+// reinitialize it. `Alloc` has no default, because the default would be the
+// system's heap; the caller names the memory it means.
 
 #pragma once
 
@@ -22,14 +22,14 @@ namespace xpute {
 
 template <class T, class Alloc> class ArenaGuard;
 
-struct ArenaOptions {
+struct ArenaConfig {
     std::uint32_t init_cap;
     std::uint32_t max_cap;
 };
 
 template <class T, class Alloc> class Arena {
   public:
-    static Result<Arena> make(ArenaOptions opts, const Alloc &alloc = Alloc()) {
+    static Result<Arena> make(ArenaConfig opts, const Alloc &alloc = Alloc()) {
         Arena arena(opts.max_cap, alloc);
         if (Result<void> r = arena.grow(std::min(opts.init_cap, opts.max_cap)); !r) return r.error();
         return arena;

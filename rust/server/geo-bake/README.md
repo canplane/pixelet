@@ -96,10 +96,10 @@ of those children on the way up.
 Which version of each kind is served is said in one place, the bucket's
 declaration, which may also serve single shards from another version
 (`source.rs`). Only the publish script writes it, and it refuses anything a
-client would refuse (`bin/declare_source.rs`). A version never changes after it
+client would refuse (`bin/declaration.rs`). A version never changes after it
 is uploaded, so a tile is cached as immutable, and going back means serving an
 older version again.
 
-In development the dev tile server (`bin/serve_tiles.rs`) bakes a tile the
+In development the dev tile server (`bin/server.rs`) bakes a tile the
 first time it is asked for, by the same functions, and answers as the bucket
 does.

@@ -24,7 +24,7 @@ fn door() -> (Door, Box<[u8]>) {
 
 #[test]
 fn descriptor_owner() {
-    let ((door, _buf), mut files) = (door(), Files::<_, 8>::new());
+    let ((door, _buf), mut files) = (door(), FileTable::<_, 8>::new());
     let a = files.open(&door, 7, "a", "first");
     files.close(&door, a);
     let b = files.open(&door, 7, "b", "second");
@@ -33,7 +33,7 @@ fn descriptor_owner() {
 
 #[test]
 fn failed_open_let_go() {
-    let ((door, _buf), mut files) = (door(), Files::<_, 8>::new());
+    let ((door, _buf), mut files) = (door(), FileTable::<_, 8>::new());
     let failed = files.open(&door, 7, "a", "first");
     let answer = FsOpened {
         fd: failed,
@@ -88,7 +88,7 @@ fn completion_read_once() {
 
 #[test]
 fn read_whole_closes() {
-    let ((door, _buf), mut files) = (door(), Files::<_, 8>::new());
+    let ((door, _buf), mut files) = (door(), FileTable::<_, 8>::new());
     let fd = files.open(&door, 7, "a", "first");
     assert!(files.read_whole(&door, fd, 5).is_ok());
     assert_eq!(files.owner(fd), None, "read whole, it is closed");
@@ -98,7 +98,7 @@ fn read_whole_closes() {
 /// handed over then.
 #[test]
 fn read_whole_held_until_consumed() {
-    let ((door, _buf), mut files) = (door(), Files::<_, 8>::new());
+    let ((door, _buf), mut files) = (door(), FileTable::<_, 8>::new());
     let fd = files.open(&door, 7, "a", "first");
     let read = files.read_whole(&door, fd, 5).expect("room for five bytes");
     let read = read
@@ -112,7 +112,7 @@ fn read_whole_held_until_consumed() {
 
 #[test]
 fn stale_completion_ownerless() {
-    let ((door, _buf), mut files) = (door(), Files::<_, 8>::new());
+    let ((door, _buf), mut files) = (door(), FileTable::<_, 8>::new());
     let stale = files.open(&door, 7, "a", "first");
     files.close(&door, stale);
     let answer = FsOpened {

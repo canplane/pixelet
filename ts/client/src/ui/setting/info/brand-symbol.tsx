@@ -4,9 +4,7 @@ import { Path, Svg } from "react-native-svg";
 
 import { SYMBOL_PATH, SYMBOL_VIEW_BOX } from "./symbol-path.ts";
 
-/** The brand's cube in one color, with an icon's props. `size` is the cube's
- * height, with no padding. The outline is symbol-path.ts, which
- * `make render-brand` writes. */
+/** `size` is the cube's height, with no padding. */
 export function BrandSymbol({
   size = 24,
   color = "currentColor",

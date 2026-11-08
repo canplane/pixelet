@@ -10,18 +10,18 @@
 // core again, so overrunning that ring is a sizing bug, not a state to wait
 // out.
 //
-// A command under xpute's majors (abi/sys.json, abi/gpu.json, abi/fs.json)
-// is applied here, or handed to the program as what it means. The program
-// is handed every other command, and each open and close the runtime has
+// A command under xpute's majors (abi/sys.json, abi/gpu.json, abi/fs.json) is
+// applied here, or handed to the program as what it means. The program is
+// handed every other command, and each open and close the runtime has
 // completed.
 //
-// The core's imports, the commands it sends the runtime, are frames too.
-// Its file calls (abi/fs.json) and its stop report are posted as any import
-// is. An open and a close carry ACKREQ, and the runtime completes each on a
-// later turn with a frame flagged RES on the submission ring. A call, which
-// is answered before it returns, is laid unpublished in the next slot, and
-// its place is handed to the runtime's `call`. The runtime routes each
-// import by its command's major.
+// The core's imports, the commands it sends the runtime, are frames too. Its
+// file calls (abi/fs.json) and its stop report are posted as any import is.
+// An open and a close carry ACKREQ, and the runtime completes each on a later
+// turn with a frame flagged RES on the submission ring. A call, which is
+// answered before it returns, is laid unpublished in the next slot, and its
+// place is handed to the runtime's `call`. The runtime routes each import by
+// its command's major.
 //
 // Both rings keep the rules of a ring (ring.hpp R1 to R3), so the door works
 // whether its runtime takes turns with the core or runs beside it. The door
@@ -71,9 +71,9 @@
 
 namespace xpute {
 
-// An import as xpute-tool generates it from a protocol's table
-// (`spec/cmd`): its command number, the number of children its packet is
-// written as, and its writer.
+// An import is what xpute-tool generates from a protocol's table (`spec/cmd`):
+// its command number, the number of children its packet is written as, and its
+// writer.
 template <class E>
 concept Import = requires(const E &e, xtp::PacketWriter &w) {
     { E::NUMBER } -> std::convertible_to<std::uint32_t>;
@@ -88,37 +88,34 @@ struct Outcome {
     std::int32_t val = 0;
 };
 
-// The core's life as its runtime tells it (abi/sys.json). What each event
+// The core's life is as its runtime tells it (abi/sys.json). What each event
 // means the program keeps or resets is the program's to decide.
 enum class Life { attach, suspend, resume };
 
-// The GPU the machine asked for has answered, for the first time or again
-// after a loss (GPU_READY). It tells of the GPU's state, not of the core's
-// life.
+// The GPU the machine asked for has answered (GPU_READY), for the first time or
+// again after a loss. It tells of the GPU's state, not of the core's life.
 struct GpuReady {};
 
-// A surface the UI lends the GPU (abi/gpu.json). It is opened, and the
+// A surface is lent to the GPU by the UI (abi/gpu.json). It is opened, and the
 // program answers with its handle, or 0 for none; its box is resized; it is
 // let go.
 struct SurfaceOpen {};
 using Surface = std::variant<SurfaceOpen, abi::gpu::GpuSurfaceResize, abi::gpu::GpuSurfaceClose>;
 
-// A command of the program's own: its number and its packet.
 struct Program {
     std::uint32_t cmd = 0;
     std::span<const std::uint8_t> pkt;
 };
 
-// What the door hands the program: a change in its life that its runtime
-// tells it of, a turn the scheduling policy grants (SYS_TURN), the GPU's
-// answer, a surface the UI lends it, an open or a close the runtime has
-// completed, a file changed under it (FS_CHANGED), or a command of the
-// program's own. Nothing answers a completion, so what the program returns
-// for one is dropped.
+// The door hands the program a change in its life that its runtime tells it
+// of, a turn the scheduling policy grants (SYS_TURN), the GPU's answer, a
+// surface the UI lends it, an open or a close the runtime has completed, a file
+// changed under it (FS_CHANGED), or a command of the program's own. Nothing
+// answers a completion, so what the program returns for one is dropped.
 using Submission = std::variant<Life, abi::sys::SysTurn, GpuReady, Surface, FsOpened, FsClosed, abi::fs::FsChanged, Program>;
 
-// How full the rings ran since the stat was last taken (`Door::take_stat`).
-// Each figure is the most it reached.
+// A stat says how full the rings ran since the stat was last taken
+// (`Door::take_stat`). Each figure is the most it reached.
 struct DoorStat {
     std::uint32_t cq_peak = 0;
     // The submission ring's length when a drain started, which shows how
@@ -138,13 +135,13 @@ struct Pos {
     bool operator==(const Pos &) const = default;
 };
 
-// Bytes from the heap, which a read fills. They are given back to the heap
-// with their size.
-class Bytes {
+// A read fills bytes from the heap. They are given back to the heap with their
+// size.
+class Buffer {
   public:
-    Bytes() noexcept = default;
-    Bytes(Bytes &&o) noexcept : at_(std::exchange(o.at_, nullptr)), cnt_(std::exchange(o.cnt_, 0)) {}
-    Bytes &operator=(Bytes &&o) noexcept {
+    Buffer() noexcept = default;
+    Buffer(Buffer &&o) noexcept : at_(std::exchange(o.at_, nullptr)), cnt_(std::exchange(o.cnt_, 0)) {}
+    Buffer &operator=(Buffer &&o) noexcept {
         if (this != &o) {
             release();
             at_ = std::exchange(o.at_, nullptr);
@@ -152,13 +149,13 @@ class Bytes {
         }
         return *this;
     }
-    Bytes(const Bytes &) = delete;
-    Bytes &operator=(const Bytes &) = delete;
-    ~Bytes() { release(); }
+    Buffer(const Buffer &) = delete;
+    Buffer &operator=(const Buffer &) = delete;
+    ~Buffer() { release(); }
 
-    // Answers none when the heap has no room.
-    static std::optional<Bytes> make(std::uint32_t cnt) noexcept {
-        Bytes b;
+    // `make` answers none when the heap has no room.
+    static std::optional<Buffer> make(std::uint32_t cnt) noexcept {
+        Buffer b;
         if (cnt == 0) return b;
         b.at_ = static_cast<std::uint8_t *>(::operator new(cnt, std::nothrow));
         if (b.at_ == nullptr) return std::nullopt;
@@ -207,10 +204,11 @@ class Reading {
 
     // Answers the bytes once the runtime's head has passed the read. Before
     // then it answers none and leaves the reading untouched.
-    std::optional<Bytes> take(const Door &door) noexcept;
+    std::optional<Buffer> take(const Door &door) noexcept;
 
   private:
-    // Leaves the buffer to the door.
+    // `drop` leaves the buffer to the door, which frees it once the runtime's
+    // head has passed the read (`Door::rise`).
     void drop() noexcept;
 
     const Door *door_;
@@ -232,13 +230,12 @@ class Door {
 
     DoorStat take_stat() const noexcept { return std::exchange(stat_, {}); }
 
-    // Begins a turn. The door frees the buffer of every read the runtime's
-    // head has passed whose reading was destroyed.
+    // `rise` begins a turn. The door frees the buffer of every read the
+    // runtime's head has passed whose reading was destroyed.
     void rise() const noexcept {
         std::erase_if(reads_, [this](const FileRead &r) { return r.dropped && is_consumed(r.pos); });
     }
 
-    // Where the last import was posted.
     Pos last_pos() const noexcept { return {cq_.tail() - 1}; }
 
     // Whether the runtime's head has passed the import posted at `pos`, so
@@ -267,15 +264,14 @@ class Door {
         });
     }
 
-    // Posts `e`, tagged 0.
     template <Import E> void send(const E &e) const noexcept {
         send_with(0, E::NUMBER, 0, E::FIELDS, [&e](xtp::PacketWriter &w) { e.write(w); });
     }
 
-    // Calls `e`, which the runtime answers before this returns. The frame is
-    // laid unpublished in the next slot and handed to the runtime's `call`.
-    // Answers the runtime's value or errno, ENOSPC when no slot is free, or
-    // EMSGSIZE when the frame does not fit in one.
+    // `call` sends `e`, which the runtime answers before this returns. The
+    // frame is laid unpublished in the next slot and handed to the runtime's
+    // `call`. It answers the runtime's value or errno, ENOSPC when no slot is
+    // free, or EMSGSIZE when the frame does not fit in one.
     template <Import E> Result<std::uint32_t> call(const E &e) const noexcept {
         if (!can_post()) return make_error(ErrorClass::fault, Errno::enospc);
         Result<std::uint32_t> at = cq_.stage_in_place(0, E::NUMBER, frame::ACKREQ, [&](std::span<std::uint8_t> out) -> std::optional<std::uint32_t> {
@@ -288,8 +284,8 @@ class Door {
         return answer_of(xpute::call(*at));
     }
 
-    // Opens the file at `path` below `root` as `fd`. The runtime completes
-    // the open on a later turn, and `receive` hands it to the program as
+    // Opens the file at `path` below `root` as `fd`. The runtime completes the
+    // open on a later turn, and `receive` hands it to the program as
     // `FsOpened`.
     void openat(Fd fd, std::uint32_t root, std::uint32_t flags, std::string_view path) const noexcept {
         abi::fs::FsOpenat e{.fd = fd, .root = root, .flags = flags, .path = path};
@@ -307,7 +303,7 @@ class Door {
 
     // Reads into `buf`, which is filled once the runtime's head has passed
     // the import and is the door's until then.
-    Reading read_buf(Fd fd, Bytes buf) const {
+    Reading read_buf(Fd fd, Buffer buf) const {
         Pos at = read(fd, buf.span());
         reads_.push_back({at, std::move(buf), false});
         return Reading(*this, at);
@@ -361,8 +357,8 @@ class Door {
     // NOP answers its value here; every other command goes to `handle` as
     // what it means (`Submission`). A close the runtime completed goes to
     // `handle` after the bytes its descriptor's writes named are let go. The
-    // drain runs before any phase's budget, so the program should record what
-    // it is handed and return.
+    // drain runs before any phase's budget, so the program should record
+    // what it is handed and return.
     template <class Handle> std::uint32_t receive(Handle &&handle) const noexcept {
         std::uint32_t tail = cq_.tail();
         stat_.sq_peak = std::max(stat_.sq_peak, sq_.len());
@@ -389,10 +385,10 @@ class Door {
 
     bool pending() const noexcept { return !sq_.empty(); }
 
-    // A turn's drain. It lets go of the reads the runtime has passed
-    // (`rise`), hands what waits to `handle` in order (`receive`), and
-    // answers when the core wants the next turn: at once when submissions
-    // are left, else only when something arrives.
+    // `turn` is a turn's drain. It lets go of the reads the runtime has passed
+    // (`rise`), hands what waits to `handle` in order (`receive`), and answers
+    // when the core wants the next turn: at once when submissions are left,
+    // else only when something arrives.
     template <class Handle> double turn(Handle &&handle) const noexcept {
         rise();
         receive(handle);
@@ -419,8 +415,6 @@ class Door {
         }
     }
 
-    // Reads the packet as a `T` and hands what `wrap` makes of it to the
-    // program, or answers the reader's error.
     template <class T, class Handle, class Wrap> static Outcome read_then(std::span<const std::uint8_t> pkt, Handle &handle, Wrap wrap) noexcept {
         Result<T> r = T::read(pkt);
         if (!r) return {.err = r.error().errnum};
@@ -478,7 +472,7 @@ class Door {
     // `read_buf` that names it.
     struct FileRead {
         Pos pos;
-        Bytes buf;
+        Buffer buf;
         bool dropped;
     };
     mutable std::vector<FileRead> reads_;
@@ -486,9 +480,9 @@ class Door {
     friend class Reading;
 };
 
-inline std::optional<Bytes> Reading::take(const Door &door) noexcept {
+inline std::optional<Buffer> Reading::take(const Door &door) noexcept {
     if (!door.is_consumed(pos_)) return std::nullopt;
-    std::optional<Bytes> bytes;
+    std::optional<Buffer> bytes;
     std::erase_if(door.reads_, [&](Door::FileRead &r) {
         if (r.pos != pos_) return false;
         bytes = std::move(r.buf);

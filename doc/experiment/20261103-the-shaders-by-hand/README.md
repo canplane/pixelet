@@ -47,13 +47,13 @@ parameters), and its console goes to `ts/tool/shader/.dev-console.log`. Tint's t
 compiles every module: it was `src/shader.test.ts`, and it is
 `ts/tool/shader/shader.test.ts`, which takes the assembled hand modules alone.
 
-`tools/` holds what reduced the phones' refusals:
+`tool/` holds what reduced the phones' refusals:
 
 | Tool | What it does |
 | --- | --- |
-| `cdp.mjs` | sends a WGSL file from the Mac to the S23's Chrome, makes it a compute pipeline there (a render pipeline with `RENDER=1`) and prints what came back |
-| `catch_render.mjs` | a hook on the page that keeps the WGSL of each pipeline the S23 refuses |
-| `reduce.mjs` | shrinks a file while the device still refuses it: it empties a block, removes a loop, an assignment or a dead `let`, or makes a condition constant |
+| `cdp.js` | sends a WGSL file from the Mac to the S23's Chrome, makes it a compute pipeline there (a render pipeline with `RENDER=1`) and prints what came back |
+| `catch_render.js` | a hook on the page that keeps the WGSL of each pipeline the S23 refuses |
+| `reduce.js` | shrinks a file while the device still refuses it: it empties a block, removes a loop, an assignment or a dead `let`, or makes a condition constant |
 | `guard.py` | bounds every loop to 1000 turns before a reduction, so that a cut cannot leave a loop that never ends |
 | `descend.py` | empties one block at a time; it read the `*.gen.wgsl` modules by default, which went with rust-gpu, and it takes a file as its second argument |
 | `fnbisect.py` | empties one function at a time |
@@ -69,10 +69,10 @@ test binary at a time under a lock ("Running the work" tells why). `supervise/` 
 the sweeps of `world.wgsl` and their tools, which
 [supervise/sweep-f9f66682e.md](supervise/sweep-f9f66682e.md) describes: `round.sh`,
 `patch.py`, `gen_sweep.py` and `run_par.py` make and run the mutants, `livepath.py`
-counts the live words along a call path, and `tint.mjs` compiles a module through
+counts the live words along a call path, and `tint.js` compiles a module through
 Tint and Dawn. `decor/` holds the plan for the decor passes
 ([decor/plan.md](decor/plan.md)), the supervisor's rulings on it
-([decor/rulings.md](decor/rulings.md)), and the output of their tests and sweeps:
+([decor/ruling.md](decor/ruling.md)), and the output of their tests and sweeps:
 the differential of `decor_cs` against the generated module and the Rust, the frame
 chains, the mutant lists and the sweeps' results, and the `regions` words read on
 the page from the generated and from the hand passes.
@@ -179,8 +179,8 @@ After `4a74a51f2` the S23 made all 35 compute pipelines and every render pipelin
 and it drew the page: the ground, the decor, the companion and the chrome. Chrome
 and Safari on the Mac ran the page with no GPU error. The refused render pipeline
 was found by opening the page on the S23 with a hook that keeps the WGSL of each
-refused pipeline (`tools/catch_render.mjs`), then cutting the suspects in that
-module one at a time (`tools/cdp.mjs` with `RENDER=1`).
+refused pipeline (`tool/catch_render.js`), then cutting the suspects in that
+module one at a time (`tool/cdp.js` with `RENDER=1`).
 
 ### The hand WGSL on the phones
 
@@ -464,7 +464,7 @@ with soil survives both, so a case that one consumer needs belongs in the shared
 test world. A reduction is judged with the merge beside it: the plan's "`r+1..r+4`
 already hold" is true of two passes and false of one, since in the merged pass
 nothing writes `r+3` and `r+4` and the seed that thin leaves there would read as z.
-The merged `decor_cs` writes `r`, `r+3` and `r+4` ([decor/rulings.md](decor/rulings.md)).
+The merged `decor_cs` writes `r`, `r+3` and `r+4` ([decor/ruling.md](decor/ruling.md)).
 Still open for the world bundle: `world:1127` (`!fills(val)` in the placed branch, a
 placed fold sharing a cell with more ground than it fills) and `world:487` (the edge
 of `held_of`) survive `world.rs`, and the tie of `halve` (`760`) has been open since
@@ -626,7 +626,7 @@ each pipeline on a device of default limits. The generated `decor_cs` held 8 thr
 `NoPalette`, and the hand one does the same: the one read of the palette in
 `ground_cell` sits behind a function in a small part, with a binding form for
 light_miss and `world_asked` and a form returning 0 for decor (ruling R8 in
-[decor/rulings.md](decor/rulings.md)). The no-palette form did not suit
+[decor/ruling.md](decor/ruling.md)). The no-palette form did not suit
 `light_miss_cs`: `Map::assets()` went true with `e8d616ba4`, so a cell the light
 keeps is read by the eye and needs its palette words. The form was undone before it
 ran on a phone, and light_miss keeps binding 4 and 8 storage buffers.

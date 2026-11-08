@@ -45,8 +45,10 @@ use crate::gpu::api::{
 };
 use crate::gpu::atmosphere::{Atmosphere, Upload};
 use crate::gpu::cloud::CloudPass;
-use crate::gpu::draw::{drifts, uniform_of, Draw, Draws, Position};
-use crate::gpu::draw::{DrawStats, Lists, DRAW_PIPELINES, DRAW_WORDS, REWRITE_WORDS, UPLOAD_WORDS};
+use crate::gpu::draw::{drifts, uniform_of, Draw, DrawTable, Position};
+use crate::gpu::draw::{
+    DrawStat, DrawUpdate, DRAW_PIPELINES, DRAW_WORDS, REWRITE_WORDS, UPLOAD_WORDS,
+};
 use crate::gpu::finish::Finish;
 use crate::gpu::generator::Mask;
 use crate::gpu::image_map::ImageMap;
@@ -57,14 +59,14 @@ use crate::gpu::pass::debug::DebugPass;
 use crate::gpu::pass::decor::DecorPass;
 use crate::gpu::pass::impostor::ImpostorPass;
 use crate::gpu::pass::location::LocationPass;
-use crate::gpu::pass::mark::{DamageInput, UploadCopies};
+use crate::gpu::pass::mark::{CopyCache, DamageInput};
 use crate::gpu::pass::marker::MarkerPass;
-use crate::gpu::pass::model::{frame_layout, on_skins_lost, Extent, FrameGroups, Stage};
+use crate::gpu::pass::model::{frame_layout, on_skins_lost, Extent, FrameGroup, Stage};
 use crate::gpu::pass::skinned_mesh::SkinnedPass;
-use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::propagate::{self, Propagate};
 use crate::gpu::put::{put_mat, put_steps};
-use crate::gpu::ray::{Cast, GroundBricks, RayCounts, RaysPass};
+use crate::gpu::ray::{Cast, GroundInput, RayCount, RayPass};
 use crate::gpu::read::{Read, SlotMirror};
 use crate::gpu::resolve::Resolve;
 use crate::gpu::shadow::{self, Shadow};
@@ -73,7 +75,7 @@ use crate::gpu::span_spec::{FrameKind, GpuSpanName, GPU_SPAN_NAMES};
 use crate::gpu::star::StarPass;
 use crate::gpu::surface::{on_surfaces_lost, surface, surfaces, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;
-use crate::gpu::tile::{self, Damage, Tiles};
+use crate::gpu::tile::{self, Damage, TileGrid};
 use crate::gpu::upload::uploads;
 use crate::look::atmosphere::{BOTTOM_RADIUS_KM, SUN_ANGULAR_RADIUS};
 use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_SUN};
@@ -138,7 +140,7 @@ pub struct FrameInput<'a> {
     /// cloud.rs `drift`). The core lays the clouds out by both.
     pub clouds: f64,
     pub drift: [f64; 2],
-    pub lists: Lists<'a>,
+    pub lists: DrawUpdate<'a>,
     pub environment: &'a [f32],
     /// Each decor group's mesh, skin image and extent. The mesh is 0 while it
     /// loads.
@@ -152,10 +154,10 @@ pub struct FrameInput<'a> {
     pub pack: Option<Image>,
     pub moon: Option<Image>,
     pub earth: Option<Image>,
-    pub earth_tiles: EarthTiles<'a>,
+    pub earth_tiles: EarthLayer<'a>,
     /// The terrain's held tiles, whose cells the GPU draws whether or not
     /// an eye casts.
-    pub ground: GroundBricks<'a>,
+    pub ground: GroundInput<'a>,
     /// The cast of the eye's rays on the GPU, one ray a drawn pixel, into the
     /// world surface's `rays`, which the screen pass draws. It is none without
     /// an eye, and then no ray is drawn.
@@ -170,7 +172,7 @@ pub struct FrameInput<'a> {
     pub animated: bool,
 }
 
-/// How many texels beside its own a caster changes, in the sun's map and,
+/// How many texels beside its own a caster changes, in the light's map and,
 /// through a receiver's taps, on the screen. The margin covers the map's
 /// filter, a slope's push and the normal's offset, with room to spare
 /// (shadow.wgsl `shadow_visibility`).
@@ -240,7 +242,7 @@ fn beside(d: &[u32; DRAW_WORDS], u: &[f32]) -> bool {
 /// Whether the turn moved a draw whose moves draw the frame whole
 /// (`beside`). It did if it changed one, as it was or as it is, or if an
 /// upload one reads moved (`touched`, sorted).
-fn beside_changed(lists: &Lists, touched: &[u32]) -> bool {
+fn beside_changed(lists: &DrawUpdate, touched: &[u32]) -> bool {
     let draws = lists.draws;
     let changed = lists.changes.iter().any(|c| {
         draws.now(c.slot).is_some_and(|(d, u)| beside(&d, &u))
@@ -317,10 +319,10 @@ impl Seen {
 /// says that the listed draws are drawn as the last frame drew them (`Seen`).
 /// `clouds_damage` says that the cloud sheets in view moved. The rest are the
 /// rays' own: whether the light's receivers are marked afresh, which casts
-/// every pixel (`unmasked`, `RaysPass::unmasked`), whether the rays cast pixels
+/// every pixel (`unmasked`, `RayPass::unmasked`), whether the rays cast pixels
 /// (`casts_px`) and whether the light casts (`light_casts`).
 #[derive(Clone, Copy, Debug, Default)]
-struct Reads {
+struct FrameRead {
     partial: bool,
     stands: bool,
     lists_same: bool,
@@ -331,7 +333,7 @@ struct Reads {
 }
 
 /// What a frame draws. It is a pure function of what the frame read
-/// (`Reads`), and renderer.test.rs explores it whole. `quiet` holds where
+/// (`FrameRead`), and renderer.test.rs explores it whole. `quiet` holds where
 /// nothing moved but the jitter. `masked` holds where only the listed draws
 /// that mark moved: the frame draws again only its claimed tiles. Otherwise
 /// the frame is drawn whole and its pixels are cast whole, as they also are
@@ -347,7 +349,7 @@ struct FramePlan {
 }
 
 impl FramePlan {
-    fn of(r: Reads) -> FramePlan {
+    fn of(r: FrameRead) -> FramePlan {
         let quiet = r.stands && r.lists_same && !r.clouds_damage;
         FramePlan {
             quiet,
@@ -361,7 +363,7 @@ impl FramePlan {
 /// window, whose south-west tile comes first, and `layers` holds each tile's
 /// layer plus one. `upload` hands the writer each tile that has come, while
 /// the writer takes it.
-pub struct EarthTiles<'a> {
+pub struct EarthLayer<'a> {
     pub window: [i32; 2],
     pub layers: &'a [u32],
     pub upload: &'a mut Upload,
@@ -416,7 +418,7 @@ pub struct FrameStat {
     pub pack_bytes: f64,
     /// The draws and the triangles of each pipeline, counted only while
     /// `FrameInput::counted`. Their sums are the frame's draws and triangles.
-    pub draws: DrawStats,
+    pub draws: DrawStat,
     /// What changed that cast the light's map this frame, a bit each in
     /// `LIGHT_CHANGED`'s order (gpu/ray/cast.rs `light_changed`), or 0 where it
     /// cast none. `decor_rects` counts the rects that marked decor's slots to
@@ -425,8 +427,8 @@ pub struct FrameStat {
     pub decor_rects: f64,
     /// The ray counts of the eye's cast and of the light's from an earlier
     /// frame, which landed with this one, named by that frame's number
-    /// (gpu/ray/count.rs `RayCounts`).
-    pub rays: Option<RayCounts>,
+    /// (gpu/ray/count.rs `RayCount`).
+    pub rays: Option<RayCount>,
 }
 
 static RENDERER: Global<Option<Renderer>> = Global::new();
@@ -434,16 +436,19 @@ static RENDERER: Global<Option<Renderer>> = Global::new();
 /// The renderer's pipelines while their shader modules are made, a few a
 /// turn, before the renderer exists (`render_frame`). The renderer takes them
 /// once all the modules are made.
-static MAKING: Global<Option<Pipelines>> = Global::new();
+static MAKING: Global<Option<PipelineCache>> = Global::new();
 
 /// How much of what the renderer makes before its first frame is made, from
-/// 0 to 1 (`Pipelines::share`). The UI's progress bar shows it. It is 0 with
+/// 0 to 1 (`PipelineCache::share`). The UI's progress bar shows it. It is 0 with
 /// no device and 1 once the renderer draws.
 pub fn renderer_progress() -> f64 {
     if let Some(r) = RENDERER.get(|| None).as_ref() {
         return r.pipelines.share();
     }
-    MAKING.get(|| None).as_ref().map_or(0.0, Pipelines::share)
+    MAKING
+        .get(|| None)
+        .as_ref()
+        .map_or(0.0, PipelineCache::share)
 }
 
 /// Each light's step, the sun's first: how far its height moves before the
@@ -502,7 +507,7 @@ pub struct Renderer {
     /// and the number of the frame whose spans it timed.
     read_px: [f64; api::READS],
     read_frame: [f64; api::READS],
-    pipelines: Pipelines,
+    pipelines: PipelineCache,
     frame_buf: u32,
     frame: Frame,
     sky: SkyPass,
@@ -510,7 +515,7 @@ pub struct Renderer {
     draws_buf: u32,
     draws_bytes: u32,
     bind_group: u32,
-    models: FrameGroups,
+    models: FrameGroup,
     shadow: Shadow,
     /// Whether the shadow map is cast and drawn this frame. It is while the
     /// map is made (`Shadow::on`) and the sun or the moon is up (`prepare`).
@@ -537,7 +542,7 @@ pub struct Renderer {
     /// whose pixels read them.
     propagate: Propagate,
     debug: DebugPass,
-    screen: RaysPass,
+    screen: RayPass,
     /// The frame's input as the last frame drew it (stage 2, `frame`): the
     /// frame words except the jitter, the sky's, the stars', the occlusion's
     /// and the air's words, the world surface's targets, the skins and the
@@ -565,10 +570,10 @@ pub struct Renderer {
     /// The light map's tiles, each as wide as a tile of the light's cast
     /// (pxl-engine `light::TILE`). A tile is claimed only in the frame it
     /// changed in, since the map gathers nothing over frames (gpu/tile.rs).
-    light_tiles: Tiles,
+    light_tiles: TileGrid,
     /// The uploads that the marking draws read, as the last frame drew them
     /// (gpu/pass/mark.rs).
-    last_frame_uploads: UploadCopies,
+    last_frame_uploads: CopyCache,
     /// The frame words the last drawn frame drew with, and their buffer,
     /// which is written when the screen's marks draw. A draw as it was is
     /// marked by these words, so its mark has the jitter and the wind's drift
@@ -597,10 +602,10 @@ pub struct Renderer {
 
 impl Renderer {
     /// Makes the renderer over `pipelines`, once every shader's module is made
-    /// (`Pipelines::make_modules`). Each of its pipelines is asked for here,
-    /// the cast's and the ground's among them (`RaysPass::make`), so none is
+    /// (`PipelineCache::make_modules`). Each of its pipelines is asked for here,
+    /// the cast's and the ground's among them (`RayPass::make`), so none is
     /// asked for once it draws.
-    fn new(g: &Gpu, device: Device, mut pipelines: Pipelines) -> Renderer {
+    fn new(g: &Gpu, device: Device, mut pipelines: PipelineCache) -> Renderer {
         let frame_buf = g.buf(
             word_bytes(FRAME_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
@@ -619,7 +624,7 @@ impl Renderer {
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
         let shadow = Shadow::new(g, &mut pipelines);
-        let models = FrameGroups::new(
+        let models = FrameGroup::new(
             g,
             frame_layout(g, &mut pipelines),
             frame_buf,
@@ -642,7 +647,7 @@ impl Renderer {
             resolve: Resolve::new(g, &mut pipelines),
             propagate: Propagate::new(g, &mut pipelines),
             debug: DebugPass::new(g, &mut pipelines, frame_buf, device.align),
-            screen: RaysPass::new(g, &mut pipelines),
+            screen: RayPass::new(g, &mut pipelines),
             frame_read: Read::default(),
             jitter_written: [f32::NAN; 2],
             drift_written: [u32::MAX; 4],
@@ -652,8 +657,14 @@ impl Renderer {
             mask_group: Group::default(),
             marks: [Group::default(), Group::default()],
             light_marks: Group::default(),
-            light_tiles: Tiles::new(g, &mut pipelines, LIGHT_TILE, 1, GpuSpanName::shadow_damage),
-            last_frame_uploads: UploadCopies::default(),
+            light_tiles: TileGrid::new(
+                g,
+                &mut pipelines,
+                LIGHT_TILE,
+                1,
+                GpuSpanName::shadow_damage,
+            ),
+            last_frame_uploads: CopyCache::default(),
             last_frame_words: [0.0; FRAME_FLOATS],
             last_frame_buf: g.buf(
                 word_bytes(FRAME_FLOATS),
@@ -703,7 +714,7 @@ impl Renderer {
     /// Sets the groups the frame's passes keep across frames (`Group`). The
     /// caller sets them before the frame's commands, after the world's
     /// surface `s` is made at its size (`targets`) and the screen's and the
-    /// map's tiles at theirs (`Tiles::size`). Each group is set over those
+    /// map's tiles at theirs (`TileGrid::size`). Each group is set over those
     /// and over whatever else it binds.
     fn set_groups(&mut self, g: &Gpu, s: &Surface) {
         let tiles = &self.resolve.tiles;
@@ -717,13 +728,13 @@ impl Renderer {
             let entries = mark_entries(light_frame, &self.light_tiles);
             self.light_marks.set(g, layout, &entries);
         }
-        let drawn = tiles.this_frame();
-        let entries = [buf_entry(30, drawn.0), buf_entry(31, drawn.1)];
+        let frame_tiles = tiles.this_frame();
+        let entries = [buf_entry(30, frame_tiles.0), buf_entry(31, frame_tiles.1)];
         self.mask_group.set(g, self.mask.layouts[0], &entries);
         if self.screen_ao {
-            self.ao.set_apply_group(g, drawn);
+            self.ao.set_apply_group(g, frame_tiles);
         }
-        let reads = self.screen.light_reads().map(|r| r.list);
+        let reads = self.screen.light_read().map(|r| r.list);
         self.shadow.set_groups(g, &self.light_tiles, reads);
         if self.shadows {
             let depth = s.depth_only_view;
@@ -736,7 +747,7 @@ impl Renderer {
     }
 
     /// The entries a cell's face is painted by, wherever it is drawn from
-    /// (paint.wgsl): the frame words `frame`, the sun's shadow map, the
+    /// (paint.wgsl): the frame words `frame`, the light's shadow map, the
     /// texture pack and the air.
     fn lit_entries(&self, frame: u32) -> Vec<Entry> {
         let [map, sampler] = self.shadow.entries(1);
@@ -755,14 +766,14 @@ impl Renderer {
     /// Makes what only the shadows hold while their setting `on` is on
     /// (`FrameInput::shadows`), and lets it go while it is off, before the
     /// frame. The shadows hold the map and the world's depth seen from the
-    /// light (`Shadow::made`), and the light's cast (`RaysPass::light_made`).
+    /// light (`Shadow::made`), and the light's cast (`RayPass::light_made`).
     /// When the setting turned, the lit passes' groups are made again, over
     /// the map or over the blank one.
     fn shadows_made(&mut self, g: &Gpu, on: bool) {
         self.screen.light_made(g, on);
         if self.shadow.made(g, on) {
             self.models.release();
-            self.models = FrameGroups::new(
+            self.models = FrameGroup::new(
                 g,
                 frame_layout(g, &mut self.pipelines),
                 self.frame_buf,
@@ -809,8 +820,8 @@ impl Renderer {
         // which is the Q3 the rays leave from (`eye::ORIGIN`). What is
         // rasterized then stands about the same eye the world is drawn from.
         // Without a cast no world is drawn, and the eye's Q3 is zero. The eye
-        // is held on Q3 steps (pxl-core view/frame/pose.rs `view_compose`),
-        // so its Q3 is exact.
+        // is held on Q3 steps (pxl-core domain/view/frame/pose.rs
+        // `view_compose`), so its Q3 is exact.
         let origin = cast.map_or([0.0; 3], |c| {
             core::array::from_fn(|k| f32::from_bits(c.eye[eye::ORIGIN + k]))
         });
@@ -894,7 +905,7 @@ impl Renderer {
     /// slots bind the same buffer and read a box's record at two offsets. The
     /// draw's uniform slot rides on the first vertex, `uniform * BOX_VERTICES`,
     /// and box.wgsl divides the vertex index by `BOX_VERTICES` to find it.
-    fn draw_boxes(&self, pass: &mut TrackedRenderPass, draws: &Draws) {
+    fn draw_boxes(&self, pass: &mut TrackedRenderPass, draws: &DrawTable) {
         let b = uploads();
         for d in draws.of(PIPELINE_GHOST_BOX) {
             let (handle, box_cnt, first_box, uniform) = (d[0], d[1], d[2], d[3]);
@@ -952,8 +963,8 @@ impl Renderer {
     }
 
     /// Puts into `out` the uploads that the listed marking draws read, each
-    /// once, for `UploadCopies` to keep (gpu/pass/mark.rs).
-    fn marks_read(&self, draws: &Draws, out: &mut Vec<u32>) {
+    /// once, for `CopyCache` to keep (gpu/pass/mark.rs).
+    fn marks_read(&self, draws: &DrawTable, out: &mut Vec<u32>) {
         out.clear();
         self.skinned_mesh
             .marks_read(draws.of(PIPELINE_SKINNED), out);
@@ -967,7 +978,7 @@ impl Renderer {
     /// Called when a turn takes the lists and draws no frame. The next frame
     /// does not see the uploads and the draws they moved, so it is drawn
     /// whole, the draws' uniforms are written whole, and what the marks read
-    /// is copied again (`UploadCopies::forget`).
+    /// is copied again (`CopyCache::forget`).
     fn put_off(&mut self) {
         self.frame_read.forget();
         self.seen.put_off();
@@ -977,7 +988,7 @@ impl Renderer {
 
     /// Draws a frame in two stages. Each stage stands, and makes nothing new,
     /// while what it reads reads the same. Stage 1 is the cast's rays
-    /// (`RaysPass::prepare`). Stage 2 is the frame (`frame_read`): everything
+    /// (`RayPass::prepare`). Stage 2 is the frame (`frame_read`): everything
     /// the world and its light make from those rays, and over it what moves
     /// on its own. That is the characters, whose clips play, the clouds, which
     /// the wind carries, the location indicator, the ghosts, the markers and
@@ -1098,7 +1109,7 @@ impl Renderer {
         self.frame[JITTER + 1] = -2.0 * j[1] / world.height as f32;
         // Where the wind moved the cloud sheets, the screen's tiles they are
         // seen in are marked, as the draws that changed mark theirs
-        // (`Marks::prepare`).
+        // (`MarkPass::prepare`).
         let clouds_changed = {
             let r = &mut self.clouds_read;
             r.begin();
@@ -1179,9 +1190,9 @@ impl Renderer {
         if self.shadows {
             self.propagate.size(g, size);
         }
-        let drawn = self.resolve.tiles.this_frame();
+        let frame_tiles = self.resolve.tiles.this_frame();
         let [across, down] = self.resolve.tiles.squares();
-        self.screen.set_tiles(drawn, across * down);
+        self.screen.set_tiles(frame_tiles, across * down);
         // Reads back the counts that earlier frames copied out.
         self.screen.counts_back(g);
         self.screen.prepare(
@@ -1231,7 +1242,7 @@ impl Renderer {
         // most at their own pixels.
         let stands =
             read.end() && self.screen.kind() != FrameKind::cast && !self.screen.generates();
-        let decided = FramePlan::of(Reads {
+        let decided = FramePlan::of(FrameRead {
             partial,
             stands,
             lists_same,
@@ -1284,16 +1295,16 @@ impl Renderer {
         let mut read_uploads = core::mem::take(&mut self.read_uploads);
         self.marks_read(&draws, &mut read_uploads);
         self.last_frame_uploads.prepare(g, &read_uploads, b);
-        // The sun's map is drawn whole where it moved. Where the frame is
-        // gated and the sun's cast left the world as it was, the map is drawn
+        // The light's map is drawn whole where it moved. Where the frame is
+        // gated and the light's cast left the world as it was, the map is drawn
         // through its gate in the tiles the changed casters set, or not at
         // all. Only the GPU knows which tiles they set, so the map draws its
         // claimed tiles within the box they cover, which the GPU keeps and
-        // counts (`Tiles::rect_args`).
+        // counts (`TileGrid::rect_args`).
         // The CPU hands the map no mark. Through the gate the casters mark
         // their tiles by drawing, and a map drawn whole claims every tile by
         // its uniform. Its stamp is read by no frame while the map's
-        // `damage_frames` is 1 (`Tiles::damage`).
+        // `damage_frames` is 1 (`TileGrid::damage`).
         let cast = self.screen.kind() != FrameKind::plain;
         let map_masked = masked && cast && !self.screen.light_casts();
         self.light_tiles.size(g, [SHADOW_SIZE; 2]);
@@ -1424,12 +1435,12 @@ impl Renderer {
                 .dispatch(&mut ctx, self.resolve.tiles.squares());
         }
         self.screen.dispatch(&mut ctx);
-        // The shadow map holds the world's depth seen from the sun, in the
+        // The shadow map holds the world's depth seen from the light, in the
         // tiles a receiver reads. The rays hold the world it was cast with,
         // and the decor and the characters are drawn over it. Where
         // `map_masked`, it is drawn through its gate, with its stencil
         // numbered as the world pass's is.
-        if let Some(reads) = self.screen.light_reads().filter(|_| draws_map) {
+        if let Some(reads) = self.screen.light_read().filter(|_| draws_map) {
             let tiles = &mut self.light_tiles;
             let mut pass = self.shadow.begin(&mut ctx, cast, tiles, map_masked, reads);
             let light = self.shadow.light_group;
@@ -1533,7 +1544,8 @@ impl Renderer {
             let [across, down] = self.resolve.tiles.squares();
             self.ao.apply(&mut pass, across * down);
         }
-        // At the far plane after the opaque world, so only empty pixels run the sky shader.
+        // The sky is drawn at the far plane after the opaque world, so only the pixels the
+        // world left empty run its shader.
         self.sky.draw(&mut pass);
         self.stars.draw(&mut pass);
         // The characters, whose clips play, and the clouds the core lists, the
@@ -1577,7 +1589,7 @@ impl Renderer {
         let gathered = self.resolve.draw(&mut ctx, world, masked);
         // The finish runs at the canvas's size, in its own span. A frame not
         // drawn whole finishes again only its claimed tiles
-        // (screen_tiles.wgsl), unless the debug pass drew into the screen's
+        // (screen_tile.wgsl), unless the debug pass drew into the screen's
         // depth last frame.
         self.finish.draw(
             &mut ctx,
@@ -1724,9 +1736,9 @@ impl Renderer {
     /// for, so a draw passed over because its upload, skin or sprite is not on
     /// the device yet still counts. They are counted only while `counted`,
     /// which only the profiler sets, so a frame no one reads counts none.
-    fn stat(&self, draws: &Draws, counted: bool, gpu: Option<GpuRead>) -> FrameStat {
+    fn stat(&self, draws: &DrawTable, counted: bool, gpu: Option<GpuRead>) -> FrameStat {
         let b = uploads();
-        let mut stats: DrawStats = [[0.0; 2]; DRAW_PIPELINES.len()];
+        let mut stats: DrawStat = [[0.0; 2]; DRAW_PIPELINES.len()];
         if counted {
             draws.count(PIPELINE_GHOST_BOX, &mut stats, |d| d[1] * BOX_VERTICES / 3);
             self.decor.count(draws, b, &mut stats);
@@ -1752,7 +1764,7 @@ impl Renderer {
 
 /// The entries of a mark's group 0 (tile_mark.wgsl): the frame words
 /// `frame`, and the words, the uniform and the marks' box of `tiles`.
-fn mark_entries(frame: u32, tiles: &Tiles) -> [Entry; 4] {
+fn mark_entries(frame: u32, tiles: &TileGrid) -> [Entry; 4] {
     let (words, uniform) = tiles.this_frame();
     [
         buf_entry(0, frame),
@@ -1812,7 +1824,7 @@ fn targets(g: &Gpu, s: &mut Surface) {
             s.history[k] = g.texture(width, height, 1, WORLD_COLOR, 1, usage);
             s.history_view[k] = g.view(s.history[k], false, 0, 1, 0, 1);
         }
-        // Written by the cast, read by the screen pass.
+        // The rays are written by the cast and read by the screen pass.
         let rays = texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING;
         s.rays = g.texture(width, height, ray::WORDS, Format::r32uint, 1, rays);
         s.rays_view = g.view(s.rays, true, 0, 1, 0, ray::WORDS);
@@ -1873,7 +1885,10 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     let slot = RENDERER.get(|| None);
     if slot.is_none() {
         let making = MAKING.get(|| None);
-        if making.get_or_insert_with(Pipelines::new).make_modules(g) {
+        if making
+            .get_or_insert_with(PipelineCache::new)
+            .make_modules(g)
+        {
             let pipelines = making.take().or_bug(Errno::ENOTRECOVERABLE);
             *slot = Some(Renderer::new(g, device, pipelines));
         }
@@ -1922,7 +1937,7 @@ pub fn complete() -> bool {
 /// Applies the lists' frees, uploads and rewrites to the upload table, and
 /// says whether an upload was let go, made or rewritten. Uploads listed with
 /// no device wait in the table for the next one.
-fn take_lists(g: Option<&Gpu>, lists: &Lists) -> bool {
+fn take_lists(g: Option<&Gpu>, lists: &DrawUpdate) -> bool {
     let b = uploads();
     // Frees first, so the table never holds an upload beside its replacement.
     for &handle in lists.frees {

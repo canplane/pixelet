@@ -12,7 +12,7 @@ use crate::frame::shader::word::stars::{DENSITY, INTENSITY, SKY, VIEW_PROJ};
 use crate::frame::shader::word::{STARS_FLOATS, STAR_RECORD_FLOATS};
 use crate::gpu::api::{buf_entry, buffer_usage, bytes, word_bytes, Entry, Gpu, TrackedRenderPass};
 use crate::gpu::atmosphere::AIR_ENTRIES;
-use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::put::put_mat;
 use crate::look::environment::{ENV_SKY, ENV_STARS, ENV_STAR_FRAME_FLOATS};
 use crate::param::sky::star::DRAWN_ABOVE;
@@ -32,7 +32,7 @@ impl StarPass {
     /// air above the eye as the air's table holds it.
     pub fn new(
         g: &Gpu,
-        pipelines: &mut Pipelines,
+        pipelines: &mut PipelineCache,
         frame_buf: u32,
         air: [Entry; AIR_ENTRIES],
     ) -> StarPass {

@@ -6,9 +6,6 @@
 // build.rs writes their accessors here.
 @group(0) @binding(8) var<uniform> atmos_words: array<vec4f, ATMOS_VEC4S>;
 
-
-/* the medium */
-
 // The eye's radius, held a meter above the ground. It may lie above the top of
 // the atmosphere, for an eye in space.
 fn camera_r() -> f32 {
@@ -42,9 +39,6 @@ fn mie_phase(c: f32) -> f32 {
   return k * (1.0 + c * c) / pow(max(1.0 + g * g - 2.0 * g * c, 1e-4), 1.5);
 }
 
-
-/* rays */
-
 fn meets_sphere(r: f32, mu: f32, radius: f32) -> bool {
   return mu < 0.0 && r * r * (mu * mu - 1.0) + radius * radius >= 0.0;
 }
@@ -77,7 +71,6 @@ fn to_ground(r: f32, mu: f32) -> f32 {
   return to_sphere(r, mu, atmos_bottom_radius());
 }
 
-// How far a ray runs through the air until it meets the ground or the top.
 fn air_path(r: f32, mu: f32) -> f32 {
   return select(to_top(r, mu), to_ground(r, mu), meets_ground(r, mu));
 }
@@ -104,9 +97,6 @@ fn to_land(dir: vec3f) -> f32 {
 fn land_radius() -> f32 {
   return atmos_bottom_radius() + atmos_land_alt_km();
 }
-
-
-/* each light's tables */
 
 // How light `k`'s sky view and its share of the air's volume were laid
 // (gpu/atmosphere.rs `prepare`), `k` 0 for the sun and 1 for the moon. `x` is
@@ -144,10 +134,6 @@ fn air_dist(z: f32, e: vec2f) -> f32 {
 fn air_slice(d: f32, e: vec2f) -> f32 {
   return pow(clamp((d - e.x) / (e.y - e.x), 0.0, 1.0), 1.0 / 3.0) * f32(AIR_FROXELS - 1u);
 }
-
-
-
-/* tables */
 
 // `unit_of` and `coord_of` map between a table's coordinate and a unit range
 // whose ends lie on the first and last texel centers, so no read falls past

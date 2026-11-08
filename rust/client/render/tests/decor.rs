@@ -1,4 +1,4 @@
-//! Decor's passes by hand (frame/shader/decor_pose.wgsl, decor_args.wgsl) must answer as the
+//! Decor's passes by hand (frame/shader/decor_*.wgsl) must answer as the
 //! Rust does, over the real world of tests/real_world. Each record a thread leaves must equal,
 //! word for word, the record `generation::placement` stands through the real walk
 //! (`support::column_surface`). The pass reads a column's surface off the column and walks
@@ -18,7 +18,7 @@ use pxl_engine::ground::Resident;
 use pxl_engine::light::{self, Light};
 use pxl_engine::object::{self, Cut};
 use pxl_engine::seed::node_seed;
-use pxl_engine::support::{self, Ancestors};
+use pxl_engine::support::{self, Lineage};
 use pxl_engine::way::tree;
 use pxl_engine::world::{self, Inheritance, PlacedCursor};
 use pxl_engine::{area, beam, eye, ray, value, wrap_idx, Zoom, FRAC_W, LEAF_CELL_ZOOM};
@@ -73,10 +73,10 @@ impl Query for Ground<'_> {
         zooms: [Zoom; 2],
         _: f32,
     ) -> In<[u32; 2]> {
-        let mut held = self.w;
+        let mut resident = self.w;
         let pool = tree::Read(self.w.pool);
         world::node(
-            &mut held,
+            &mut resident,
             &self.w,
             &self.w,
             &pool,
@@ -97,7 +97,7 @@ struct AssetLine<'l> {
     root_at: [i32; 3],
 }
 
-impl Ancestors<Inheritance> for AssetLine<'_> {
+impl Lineage<Inheritance> for AssetLine<'_> {
     fn at(&self) -> [i32; 3] {
         if self.edited {
             self.root_at
@@ -163,12 +163,12 @@ impl DecorQuery for Generating<'_, '_> {
         self.tally
             .add("surface: nothing fills", f.ends == End::Miss);
         let met = f.ends == End::Hit;
-        let mut held = self.w;
+        let mut resident = self.w;
         let wrapped = wrap_idx(cell_zoom, g[0]);
         let shard = area::Shard::UNKNOWN.at(&self.w, (cell_zoom, [wrapped, g[1]]));
         self.tally.add("surface: past the area", shard.past());
         if met && !shard.past() {
-            let col = held.cell(shard, Lookup::NONE, cell_zoom, [wrapped, g[1], f.top.0]);
+            let col = resident.cell(shard, Lookup::NONE, cell_zoom, [wrapped, g[1], f.top.0]);
             self.tally
                 .add("surface: the ground's top", f.top.0 == col.top - 1);
             self.tally
@@ -187,7 +187,7 @@ impl DecorQuery for Generating<'_, '_> {
             // What the pass by hand asks of the world: where ways bound the column, its cells
             // down to the surface, and otherwise nothing.
             let (b, _, _) = clip::bound_over(
-                &held,
+                &resident,
                 &mut Lookup::NONE.clone(),
                 [cell_zoom, cell_zoom],
                 (cell_zoom, [wrapped, g[1]]),
@@ -204,16 +204,16 @@ impl DecorQuery for Generating<'_, '_> {
                     cuts: [Cut::NONE; 2],
                 };
                 let top = [wrapped, g[1], f.top.0];
-                let kept =
+                let eighths =
                     answer::fill_eighths(support::asset(&mut ground, &f.line, cell_zoom, top));
                 self.tally
-                    .add("walk: met a part of its cube", kept < answer::EIGHTHS);
+                    .add("walk: met a part of its cube", eighths < answer::EIGHTHS);
                 self.tally
-                    .add("walk: met an odd part of its cube", kept % 2 == 1);
+                    .add("walk: met an odd part of its cube", eighths % 2 == 1);
             }
         }
         if f.ends == End::Miss && !shard.past() {
-            let col = held.cell(shard, Lookup::NONE, cell_zoom, [wrapped, g[1], 0]);
+            let col = resident.cell(shard, Lookup::NONE, cell_zoom, [wrapped, g[1], 0]);
             self.tally.add(
                 "surface: void column, no way",
                 col.palette_idx == value::VOID,
@@ -387,7 +387,7 @@ struct Round {
 /// The leaves of the records a pair holds, as `decor_thin_cs` lays them, and the count the pair
 /// says it laid. A count of 0 stands for the number of leaves.
 #[derive(Default, Clone)]
-struct PairLeaves {
+struct LeafList {
     leaves: Vec<[i32; 2]>,
     cnt: u32,
 }
@@ -395,8 +395,8 @@ struct PairLeaves {
 /// What each pair holds. It starts with what `decor_thin_cs` lays, the candidates the hashes
 /// give. Leaves about the places that make a case are added, up to the decor's room: any leaf
 /// whose variant stands at the clip level, as a thread asks only what stands.
-fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), PairLeaves> {
-    let mut pairs: BTreeMap<(u32, u32), PairLeaves> = BTreeMap::new();
+fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), LeafList> {
+    let mut pairs: BTreeMap<(u32, u32), LeafList> = BTreeMap::new();
     let cells = [22u32, 23, 24];
     for cell_zoom in cells {
         for e in 0..ENTRIES {
@@ -432,7 +432,7 @@ fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), PairLe
                         }
                     }
                 }
-                pairs.insert((s, j as u32), PairLeaves { leaves, cnt: 0 });
+                pairs.insert((s, j as u32), LeafList { leaves, cnt: 0 });
             }
         }
     }
@@ -531,13 +531,13 @@ fn read(device: &wgpu::Device, queue: &wgpu::Queue, from: &wgpu::Buffer, label: 
     staging
         .slice(..)
         .map_async(wgpu::MapMode::Read, |r| r.unwrap());
-    let done = device.poll(wgpu::PollType::Wait {
+    let poll = device.poll(wgpu::PollType::Wait {
         submission_index: None,
         timeout: Some(DISPATCH_LIMIT),
     });
     assert!(
-        done.is_ok(),
-        "{label}: not done in {DISPATCH_LIMIT:?}: {done:?}"
+        poll.is_ok(),
+        "{label}: not done in {DISPATCH_LIMIT:?}: {poll:?}"
     );
     let v = staging.slice(..).get_mapped_range().unwrap();
     v.as_chunks::<4>()
@@ -751,7 +751,7 @@ struct Expected {
 
 /// The words a round starts from: each pair's count, and its records. A whole pair's records
 /// are as `decor_thin_cs` leaves them, and a pair in part holds what a frame before left.
-fn init_of(laid: &BTreeMap<(u32, u32), PairLeaves>, round: &Round) -> Vec<u32> {
+fn init_of(laid: &BTreeMap<(u32, u32), LeafList>, round: &Round) -> Vec<u32> {
     let words = generation::record_at(generation::SLOT_RECORDS) as usize;
     let mut init = vec![0u32; words];
     for (&(s, j), p) in laid {
@@ -785,7 +785,7 @@ fn init_of(laid: &BTreeMap<(u32, u32), PairLeaves>, round: &Round) -> Vec<u32> {
     init
 }
 
-fn expect(built: &Built, laid: &BTreeMap<(u32, u32), PairLeaves>, round: &Round) -> Expected {
+fn expect(built: &Built, laid: &BTreeMap<(u32, u32), LeafList>, round: &Round) -> Expected {
     let init = init_of(laid, round);
     let mut order: Vec<(u32, u32, bool)> = round.pairs.clone();
     order.sort_by_key(|p| p.2);
@@ -982,7 +982,7 @@ const LAP: i32 = 1 << LEAF_CELL_ZOOM;
 
 /// The pairs that hold leaves and whose bricks lie within `reach` of `p`, each run whole.
 fn pairs_near(
-    laid: &BTreeMap<(u32, u32), PairLeaves>,
+    laid: &BTreeMap<(u32, u32), LeafList>,
     built: &Built,
     p: [i32; 2],
     reach: i32,
@@ -1005,7 +1005,7 @@ fn pairs_near(
 /// The rounds of a world: all of it whole, then cuts and boxes about what stood there.
 fn rounds(
     built: &Built,
-    laid: &BTreeMap<(u32, u32), PairLeaves>,
+    laid: &BTreeMap<(u32, u32), LeafList>,
     stood: &[(u32, u32, [i32; 2], i32)],
     claims: &[[i32; 3]],
 ) -> Vec<Round> {
@@ -1182,7 +1182,7 @@ fn world_gpu<'d>(
 
 /// A world as `run_world` asks it, built with `extra` placed and with some rows cleared so no
 /// clip level holds them, and what its pairs lay.
-fn world_of(eye: [i32; 2], extra: &[Leaf]) -> (Built, BTreeMap<(u32, u32), PairLeaves>) {
+fn world_of(eye: [i32; 2], extra: &[Leaf]) -> (Built, BTreeMap<(u32, u32), LeafList>) {
     let mut built = real_world::build_with(eye, 600, extra);
     let edges = lack_columns(&mut built);
     let mut laid = pairs_about(&built, &edges);
@@ -1202,7 +1202,7 @@ fn world_of(eye: [i32; 2], extra: &[Leaf]) -> (Built, BTreeMap<(u32, u32), PairL
 fn run_round(
     gpu: &Gpu,
     built: &Built,
-    laid: &BTreeMap<(u32, u32), PairLeaves>,
+    laid: &BTreeMap<(u32, u32), LeafList>,
     round: &Round,
     label: &str,
     totals: &mut Tally,
@@ -1726,13 +1726,13 @@ fn mark_rust(clipmap: &[[i32; 4]], records: &mut [u32], list: &mut [u32], shown:
         })
         .collect();
     for s in 0..generation::EYE_ENTRIES {
-        let held = clipmap[s as usize];
-        if held[2] == 0 {
+        let entry = clipmap[s as usize];
+        if entry[2] == 0 {
             continue;
         }
         let (cell_zoom, q, h) = (
             clip::eye_cell_zoom(s / ENTRIES),
-            [held[0], held[1]],
+            [entry[0], entry[1]],
             generation::header_at(s) as usize,
         );
         let header = [records[h], records[h + 1], records[h + 2]];
@@ -1785,8 +1785,8 @@ fn mark_rust(clipmap: &[[i32; 4]], records: &mut [u32], list: &mut [u32], shown:
 }
 
 /// Whether workgroup `g` of a pass over the records reads them: the test's reference for
-/// decor_run.wgsl `is_held`.
-fn is_held(records: &[u32], clipmap: &[[i32; 4]], g: u32) -> bool {
+/// decor_run.wgsl `is_valid`.
+fn is_valid(records: &[u32], clipmap: &[[i32; 4]], g: u32) -> bool {
     if g >= generation::EYE_ENTRIES {
         return true;
     }
@@ -1827,7 +1827,7 @@ fn run_of(records: &[u32], g: u32, k: u32) -> (u32, u32) {
 fn each_record(records: &[u32], clipmap: &[[i32; 4]], workgroups: u32) -> Vec<usize> {
     let mut out = Vec::new();
     for g in 0..workgroups {
-        if is_held(records, clipmap, g) {
+        if is_valid(records, clipmap, g) {
             for k in 0..generation::RUNS {
                 let (first, cnt) = run_of(records, g, k);
                 for n in 0..cnt {
@@ -2008,7 +2008,7 @@ fn regions_of(records: &[u32], order: &[usize]) -> Vec<u32> {
 /// region `generation`'s rules size it into, for what the frame `sizing` asks over the clip
 /// levels of `w`. A record is asked at the zoom the rays ask at its distance (`distance2`,
 /// `Detail::at`); one the ground generated is asked at that zoom held to what the clip levels
-/// hold where it stands (`held_at`). It is drawn only where that zoom draws its record's zoom
+/// hold where it stands (`ray_zoom`). It is drawn only where that zoom draws its record's zoom
 /// (`drawn_at`), as a model, an impostor or culled by the angle its group spans
 /// (`drawn::lod`), and the decor left out is drawn as nothing.
 fn cnt_rust(w: &World, sizing: &Sizing, records: &mut [u32], workgroups: u32) {
@@ -2036,7 +2036,7 @@ fn cnt_rust(w: &World, sizing: &Sizing, records: &mut [u32], workgroups: u32) {
         let zoom = if placed {
             ask
         } else {
-            generation::held_at(w, ask, [at[0], at[1]])
+            generation::ray_zoom(w, ask, [at[0], at[1]])
         };
         let (decor, variant, _, cell_zoom) = generation::record_of(word);
         let group = generation::first_group(&DECORS, decor) + variant;
@@ -2264,7 +2264,7 @@ fn hand_compact_lays_as_the_rust() {
                         let got_regions = read(&device, &queue, &regions_buf, "compact's regions");
                         let got = read(&device, &queue, &instances, "compact's instances");
                         // Each region's end word must name its next slot past its end, which
-                        // `Instances::cnt` reads.
+                        // light_mark_draws.wgsl `instance_cnt` reads.
                         for r in 0..drawn::REGIONS as usize {
                             assert_eq!(
                                 got_regions[drawn::REGIONS as usize + r],
@@ -2469,11 +2469,11 @@ struct Frame {
 }
 
 /// A pair's count and, by leaf, each record's first word, Z and sink.
-type PairRecords = (u32, BTreeMap<[i32; 2], [u32; 3]>);
+type RecordMap = (u32, BTreeMap<[i32; 2], [u32; 3]>);
 
 /// Each pair's records keyed by their leaf, so their order does not matter: `(entry, decor)`
 /// maps to what the pair laid.
-fn pairs_of(records: &[u32]) -> BTreeMap<(u32, u32), PairRecords> {
+fn pairs_of(records: &[u32]) -> BTreeMap<(u32, u32), RecordMap> {
     let mut pairs = BTreeMap::new();
     for s in 0..generation::EYE_ENTRIES {
         for j in 0..DECORS.len() as u32 {
@@ -2653,8 +2653,8 @@ impl Model {
 /// Where what a frame left differs from what it must leave. Each pair's records, and placed
 /// decor's, must match the Rust's `want` word for word, with the regions it sized them into.
 /// What the draws read must agree with the records the frame sized: each region's count is its
-/// records', its slots hold their lanes, and the args, the uniforms and `Instances::cnt` follow
-/// from them.
+/// records', its slots hold their lanes, and the args, the uniforms and the count that
+/// light_mark_draws.wgsl `instance_cnt` reads follow from them.
 fn frame_differs(
     got: &FrameLeft,
     want: &[u32],
@@ -2755,7 +2755,10 @@ fn frame_differs(
         ));
     }
     if got.regions[2 * n - 1].min(cap) != lanes.len() as u32 {
-        out.push("what `Instances::cnt` reads".to_string());
+        out.push(
+            "the instances a reader takes, the last region's end at most `DecorBuffer::cap`"
+                .to_string(),
+        );
     }
     out
 }
@@ -2937,7 +2940,7 @@ struct Chain<'d> {
 
 /// What a frame binds of the world: the clip levels, the ground, the area, what is placed and
 /// the ways, with decor's rows, what the core shows and the meshes.
-struct WorldBuffers<'b> {
+struct WorldBinding<'b> {
     clipmap: &'b wgpu::Buffer,
     ground: &'b wgpu::Buffer,
     shards: &'b wgpu::Buffer,
@@ -2951,7 +2954,7 @@ struct WorldBuffers<'b> {
 impl Chain<'_> {
     /// Runs one frame as `Generator::dispatch` records it, in one compute pass. Thin and
     /// `decor_cs` are dispatched off the list the mark writes.
-    fn frame(&self, frame: &Frame, b: &WorldBuffers) -> FrameLeft {
+    fn frame(&self, frame: &Frame, b: &WorldBinding) -> FrameLeft {
         let (d, q) = (self.device, self.queue);
         let store = wgpu::BufferUsages::STORAGE;
         for &s in &frame.stale {
@@ -3474,7 +3477,7 @@ fn hand_frames_answer_as_the_rust() {
             let t1 = std::time::Instant::now();
             let mut apart = 0;
             for (frame, want) in &wants {
-                let b = WorldBuffers {
+                let b = WorldBinding {
                     clipmap: &clipmap,
                     ground: &ground,
                     shards: &shards,

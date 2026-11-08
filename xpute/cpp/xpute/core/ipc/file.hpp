@@ -1,8 +1,8 @@
 // cpp/xpute/core/ipc/file.hpp
 
-// A core's open files, each with the owner `O` the program gives it. A
-// descriptor is a generational handle (abi/handle.hpp), so a completion of
-// one already closed reaches no one.
+// `FileTable` holds a core's open files, each with the owner `O` the program gives
+// it. A descriptor is a generational handle (abi/handle.hpp), so a completion
+// of one already closed reaches no one.
 
 #pragma once
 
@@ -24,13 +24,13 @@
 
 namespace xpute {
 
-// What an open came to, read once from the runtime's completion.
+// `Opened` is what an open came to, read once from the runtime's completion.
 struct Opened {
     enum class Kind : std::uint8_t {
         // The file's size is `bytes`; the descriptor is its owner's to read
         // and close.
         bytes,
-        // No such file; the descriptor is gone (`Files::complete_open`).
+        // No such file; the descriptor is gone (`FileTable::complete_open`).
         absent,
         // Every other failure, `errnum`, and the number the runtime refused
         // with, `detail`; the descriptor is gone.
@@ -53,7 +53,7 @@ struct Opened {
 };
 
 // At most `N - 1` files are open at once; opening one more is a bug.
-template <class O, std::size_t N> class Files {
+template <class O, std::size_t N> class FileTable {
   public:
     Fd open(const Door &door, std::uint32_t root, std::string_view path, O owner) {
         Fd fd = take(std::move(owner));
@@ -67,8 +67,8 @@ template <class O, std::size_t N> class Files {
         return fds_.remove(fd);
     }
 
-    // Opens, writes and closes a file in one turn. Its completions reach no
-    // owner.
+    // `write_whole` opens, writes and closes a file in one turn. Its
+    // completions reach no owner.
     void write_whole(const Door &door, std::uint32_t root, std::string_view path, std::vector<std::uint8_t> bytes, O owner) {
         Fd fd = take(std::move(owner));
         door.openat(fd, root, fs::flag::O_WRONLY, path);
@@ -76,9 +76,9 @@ template <class O, std::size_t N> class Files {
         close(door, fd);
     }
 
-    // The owner of the open that `opened` completes, or none when its
-    // descriptor has been closed since. A failed open leaves no descriptor to
-    // close, so its handle is let go here.
+    // `complete_open` answers the owner of the open that `opened` completes,
+    // or none when its descriptor has been closed since. A failed open leaves
+    // no descriptor to close, so its handle is let go here.
     std::optional<O> complete_open(const FsOpened &opened) {
         const O *found = fds_.get(opened.fd);
         if (found == nullptr) return std::nullopt;
@@ -92,7 +92,7 @@ template <class O, std::size_t N> class Files {
     // over once the runtime's head has passed it, or ENOMEM when the heap has
     // no room for them and nothing was read.
     Result<Reading> read_whole(const Door &door, Fd fd, std::uint32_t bytes) {
-        std::optional<Bytes> buf = Bytes::make(bytes);
+        std::optional<Buffer> buf = Buffer::make(bytes);
         if (!buf) {
             close(door, fd);
             return make_error(ErrorClass::fault, Errno::enomem);

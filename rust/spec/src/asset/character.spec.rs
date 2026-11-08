@@ -67,7 +67,8 @@ pub mod groups {
         /// "walk" consistently: the person's is "sprint", the pet's "run".
         pub const move_clip: u32 = 3;
     }
-    /// The pets, the same way.
+    /// The pets a player's companion can be, each by its row, the number the settings store
+    /// persists. One pack, so one colormap.
     pub mod pet {
         /// World units tall — a quarter cell, the step the object tiers also take.
         pub const size: f64 = 0.25;

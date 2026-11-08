@@ -39,10 +39,10 @@ fn name_lineage() {
 
 #[test]
 fn lineage_gap_or_cycle() {
-    let mut held = lineage();
-    held.remove("r");
+    let mut divisions = lineage();
+    divisions.remove("r");
     assert_eq!(
-        name("l", false, &held)
+        name("l", false, &divisions)
             .iter()
             .map(|p| p.name.as_str())
             .collect::<Vec<_>>(),
@@ -53,17 +53,17 @@ fn lineage_gap_or_cycle() {
         division("b", "county", "B", Some("a")),
     ]);
     assert!(name("a", false, &looped).len() <= Subtype::ALL.len());
-    assert!(name("nowhere", false, &held).is_empty());
+    assert!(name("nowhere", false, &divisions).is_empty());
 }
 
 #[test]
 fn unknown_subtype_skipped() {
-    let held = FnvHashMap::from_iter([
+    let divisions = FnvHashMap::from_iter([
         division("x", "galaxy", "Galaxy", Some("k")),
         division("k", "country", "France", None),
     ]);
     assert_eq!(
-        name("x", false, &held)
+        name("x", false, &divisions)
             .iter()
             .map(|p| p.name.as_str())
             .collect::<Vec<_>>(),

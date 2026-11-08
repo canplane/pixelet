@@ -83,7 +83,6 @@ export function AttributionSection() {
   );
 }
 
-/** A provider's name above its notices, set apart from the next provider. */
 function Provider({ name, children }: { name: string; children: ReactNode }) {
   return (
     <View style={styles.provider}>

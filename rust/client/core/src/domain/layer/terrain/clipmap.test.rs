@@ -17,11 +17,11 @@ use pxl_spec::bake::tile::terrain::{self, GroundId};
 
 /// A tile as `hold` takes it: for each cell, row by row from the first, its
 /// own palette index and its height; then the tile's lines.
-pub(crate) type HeldTile = (Quadrant, Vec<GroundId>, Vec<i16>, Separation);
+pub(crate) type TileData = (Quadrant, Vec<GroundId>, Vec<i16>, Separation);
 
 /// What `hold` leaves held: the bricks' words up to the last nonzero one,
 /// the pool, the entries and the slots.
-struct Levels {
+struct Snapshot {
     cells: Vec<u32>,
     pool: WayPool,
     entries: Vec<Entry>,
@@ -29,49 +29,49 @@ struct Levels {
 }
 
 /// What clip levels are built over: a center and the tiles held.
-type Over = ([f64; 2], Vec<HeldTile>);
+type Over = ([f64; 2], Vec<TileData>);
 
 /// The clip levels built in this run, keyed by what they were built over.
 /// Each set is built once, and every later `hold` of it takes a copy.
-static BUILT: std::sync::Mutex<Vec<(Over, Levels)>> = std::sync::Mutex::new(Vec::new());
+static BUILT: std::sync::Mutex<Vec<(Over, Snapshot)>> = std::sync::Mutex::new(Vec::new());
 
 const CELLS_WORDS: usize = (SLOTS * CELLS_ARR_BYTES / 4) as usize;
 const PALETTE_WORDS: usize = (SLOTS * PALETTE_ARR_BYTES / 4) as usize;
 
 /// A test's own planes, with `cells` as the cells and a zeroed palette.
-fn planes_of(cells: &'static mut [u32]) -> Planes {
-    Planes {
+fn planes_of(cells: &'static mut [u32]) -> BrickMemory {
+    BrickMemory {
         cells,
         palette: vec![0; PALETTE_WORDS].leak(),
     }
 }
 
 /// Holds the eye's and the pivot's clip levels around `center`, in units, X
-/// then Y, with every brick the tiles in `held` cover present in its slot.
+/// then Y, with every brick the tiles in `tiles` cover present in its slot.
 /// The pivot's clip levels repeat the eye's finest two. Each brick holds its
 /// columns, tops and ways' spans as its fill keeps them (`fill_columns`),
 /// and its mip levels (pxl-engine `fill::mips`). The clip levels for a center
 /// and its tiles are built once per run (`BUILT`), and each hold gets its own
 /// copy, whatever a test does to it.
-pub(crate) fn hold(center: [f64; 2], held: &[HeldTile]) {
+pub(crate) fn hold(center: [f64; 2], tiles: &[TileData]) {
     let mut built = BUILT.lock().unwrap_or_else(|e| e.into_inner());
     let k = match built
         .iter()
-        .position(|((c, h), _)| *c == center && h.as_slice() == held)
+        .position(|((c, h), _)| *c == center && h.as_slice() == tiles)
     {
         Some(k) => k,
         None => {
-            build(center, held);
+            build(center, tiles);
             let upto = |words: &[u32]| {
                 words[..words.iter().rposition(|&w| w != 0).map_or(0, |i| i + 1)].to_vec()
             };
-            let b = Levels {
+            let b = Snapshot {
                 cells: upto(planes().cells),
                 pool: way_pool().clone(),
                 entries: clipmap().table.entries.to_vec(),
                 slots: clipmap().slots.to_vec(),
             };
-            built.push(((center, held.to_vec()), b));
+            built.push(((center, tiles.to_vec()), b));
             built.len() - 1
         }
     };
@@ -116,7 +116,7 @@ pub(crate) fn lose() {
 
 /// Builds `hold`'s clip levels, laying each tree into the pool as a fill
 /// lays it.
-fn build(center: [f64; 2], held: &[HeldTile]) {
+fn build(center: [f64; 2], tiles: &[TileData]) {
     PLANES.set(planes_of(vec![0; CELLS_WORDS].leak()));
     set_way_pool(WayPool::default());
     let mut pool = vec![0; 16 * (tree::BRICK_CHILD_GROUPS as usize + 1)];
@@ -144,7 +144,7 @@ fn build(center: [f64; 2], held: &[HeldTile]) {
             continue;
         }
         let (t, place) = tile_of(cell_zoom, brick);
-        let Some((_, palette_of, heights, separation)) = held.iter().find(|(p, _, _, _)| *p == t)
+        let Some((_, palette_of, heights, separation)) = tiles.iter().find(|(p, _, _, _)| *p == t)
         else {
             continue;
         };
@@ -190,7 +190,6 @@ fn build(center: [f64; 2], held: &[HeldTile]) {
                 .sum();
         }
         fill::mips(&mut back, &scratch, cell_zoom);
-        // Lay its ways' tree into the pool, named by its root word.
         let [used, cnt, root] = fill::tree(&back, &scratch, cell_zoom, &mut pool, 1);
         assert_ne!(used, u32::MAX, "a brick's tree past the pool");
         if cnt != 0 {
@@ -267,8 +266,7 @@ fn leaf(c: [f64; 2]) -> [f64; 2] {
     c.map(|v| (v + 0.5) * units(LEAF_CELL_ZOOM))
 }
 
-/// The slots holding a brick at `cell_zoom`.
-fn held_at(w: &Clipmap, cell_zoom: Zoom) -> usize {
+fn slots_at(w: &Clipmap, cell_zoom: Zoom) -> usize {
     w.slots.iter().filter(|b| b.cell_zoom == cell_zoom).count()
 }
 
@@ -332,7 +330,7 @@ fn hilly_tile() -> (Quadrant, TerrainTile, Vec<u8>) {
 }
 
 /// `t` held in the tile cache as `tile`, the only tile asked for.
-fn held_tile(t: Quadrant, tile: TerrainTile) {
+fn cache_tile(t: Quadrant, tile: TerrainTile) {
     let cache = TerrainTile::tile_cache();
     *cache = Default::default();
     cache.admit(t, |_| None, |_| Ok::<_, ()>(tile)).unwrap();
@@ -346,12 +344,12 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
     let _g = sys::serial();
     let w = fill_room();
     let (t, tile, pkt) = hilly_tile();
-    held_tile(t, tile.clone());
+    cache_tile(t, tile.clone());
     cut(t, &pkt);
     let wanted: Vec<u32> = (0..SLOTS)
         .filter(|&b| {
-            let held = w.slots[b as usize];
-            !held.is_free() && tile_of(held.cell_zoom, held.brick).0 == t
+            let slot = w.slots[b as usize];
+            !slot.is_free() && tile_of(slot.cell_zoom, slot.brick).0 == t
         })
         .collect();
     assert!(!wanted.is_empty(), "the clip levels want of the tile");
@@ -364,21 +362,21 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
     // Drop the packet, so the fill can read only the tile and the slots.
     drop(pkt);
     due(w);
-    while !matches!(fill_stage(w), Fills::Done) {}
+    while !matches!(fill_stage(w), Poll::Done) {}
     let mut ways = 0;
     for &b in &wanted {
-        let held = w.slots[b as usize];
-        assert!(held.fill == Fill::Filled, "filled, not yet handed");
-        assert!(!held.present, "not present before a frame hands it");
-        let (cell_zoom, place) = (held.cell_zoom, tile_of(held.cell_zoom, held.brick).1);
+        let slot = w.slots[b as usize];
+        assert!(slot.fill == Fill::Filled, "filled, not yet handed");
+        assert!(!slot.present, "not present before a frame hands it");
+        let (cell_zoom, place) = (slot.cell_zoom, tile_of(slot.cell_zoom, slot.brick).1);
         let mut pairs = vec![(0, 0); WAYS_BRICK_SEGMENTS as usize];
         let mut lines = vec![0; LINES_WORDS as usize];
         let n = brick_lines(t, &tile.separation, place, &mut pairs, &mut lines);
         let site = fill::Site {
             cell_zoom,
             place,
-            first: held.brick.map(|v| v << BRICK_SHIFT),
-            shard: Shard::UNKNOWN.at(&ServiceArea, (clipmap::bricks_zoom(cell_zoom), held.brick)),
+            first: slot.brick.map(|v| v << BRICK_SHIFT),
+            shard: Shard::UNKNOWN.at(&ServiceArea, (clipmap::bricks_zoom(cell_zoom), slot.brick)),
             ele: &tile.ele,
             lines: &lines[..n],
         };
@@ -400,7 +398,7 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
             "its words as a fill at once writes them"
         );
         assert_eq!(
-            held.tree[1], cnt,
+            slot.tree[1], cnt,
             "its tree's run, the child groups it holds"
         );
         assert!((0..BRICK_CELLS).all(|i| palette(b)[i as usize] == four(i)));
@@ -445,7 +443,7 @@ fn void_tile_bricks_filled_with_no_packet() {
     cache.set(t, TerrainTile::void());
     due(w);
     assert!(!w.due.is_empty(), "a void tile's bricks are due");
-    while !matches!(fill_stage(w), Fills::Done) {}
+    while !matches!(fill_stage(w), Poll::Done) {}
     assert!(
         w.slots.iter().any(|s| s.fill == Fill::Filled),
         "filled off the void's palette index, over samples all zero"
@@ -458,7 +456,7 @@ fn spent_turn_runs_one_part_and_asks_the_next() {
     let _g = sys::serial();
     let w = fill_room();
     let (t, tile, pkt) = hilly_tile();
-    held_tile(t, tile);
+    cache_tile(t, tile);
     cut(t, &pkt);
     world_edge().rise(0.0);
     world_fall();
@@ -488,7 +486,7 @@ fn brick_let_go_ends_its_fill() {
     let _g = sys::serial();
     let w = fill_room();
     let (t, tile, pkt) = hilly_tile();
-    held_tile(t, tile);
+    cache_tile(t, tile);
     cut(t, &pkt);
     due(w);
     fill_stage(w);
@@ -496,7 +494,7 @@ fn brick_let_go_ends_its_fill() {
     let far = leaf([CENTER[0] + 100.0 * f64::from(BRICK), CENTER[1]]);
     lay(w, far, far);
     assert!(w.slots[b as usize].fill != Fill::Cut, "its slot let it go");
-    while !matches!(fill_stage(w), Fills::Done) {}
+    while !matches!(fill_stage(w), Poll::Done) {}
     assert!(w.filling.is_none(), "and nothing lands in the slot it left");
     assert_eq!(way_pool().top(), 1, "no tree of it in the pool");
 }
@@ -506,10 +504,10 @@ fn slot_given_up_gives_its_tree_back() {
     let _g = sys::serial();
     let w = fill_room();
     let (t, tile, pkt) = hilly_tile();
-    held_tile(t, tile);
+    cache_tile(t, tile);
     cut(t, &pkt);
     due(w);
-    while !matches!(fill_stage(w), Fills::Done) {}
+    while !matches!(fill_stage(w), Poll::Done) {}
     let took: u32 = w.slots.iter().map(|s| s.tree[1]).sum();
     assert!(took > 0, "the bridge's trees");
     let far = leaf([CENTER[0] + 100.0 * f64::from(BRICK), CENTER[1]]);
@@ -571,7 +569,7 @@ fn left_brick_part() {
     let on = leaf([CENTER[0] + f64::from(BRICK), CENTER[1]]);
     lay(w, on, leaf(CENTER));
     assert_eq!(
-        held_at(w, LEAF_CELL_ZOOM),
+        slots_at(w, LEAF_CELL_ZOOM),
         (ENTRIES + clipmap::ACROSS) as usize
     );
     for s in 0..ENTRIES {
@@ -607,7 +605,7 @@ fn left_brick_part() {
         );
     }
     assert_eq!(
-        held_at(w, LEAF_CELL_ZOOM),
+        slots_at(w, LEAF_CELL_ZOOM),
         ENTRIES as usize,
         "the column no clip level wants is given up"
     );

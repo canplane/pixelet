@@ -18,9 +18,8 @@ import {
 } from "./object.ts";
 import type { Leaf } from "./object_tree.ts";
 
-/** A database over a Map. A transaction's puts land when it resolves, and
- * transactions run one at a time in the order they are asked for, as the
- * platform's do. With `refuses`, every transaction rejects. */
+/** A transaction's puts land when it resolves, and transactions run one at a
+ * time in the order they are asked for, as the platform's do. */
 function database(refuses = false): Db & { map: Map<string, U8Array> } {
   const map = new Map<string, U8Array>();
   let last: Promise<unknown> = Promise.resolve();

@@ -189,7 +189,7 @@ pub fn surface_open() -> u32 {
     handle
 }
 
-/// Whether the handle was live.
+/// Sets a canvas's size and ratios, and returns whether its handle was live.
 pub fn surface_resize(handle: u32, px_w: u32, px_h: u32, dpr: f64, ratio: f64) -> bool {
     let Some(s) = surface(handle) else {
         return false;

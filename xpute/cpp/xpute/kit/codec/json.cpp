@@ -222,17 +222,17 @@ std::optional<JsonStr> JsonValue::as_str() const noexcept {
     return JsonStr(s_.substr(1, s_.size() - 2));
 }
 
-JsonItems JsonValue::items() const noexcept {
-    return JsonItems(s_, type_of() == JsonType::array ? 1 : s_.size());
+JsonItemIter JsonValue::items() const noexcept {
+    return JsonItemIter(s_, type_of() == JsonType::array ? 1 : s_.size());
 }
 
-JsonFields JsonValue::fields() const noexcept {
-    return JsonFields(s_, type_of() == JsonType::object ? 1 : s_.size());
+JsonFieldIter JsonValue::fields() const noexcept {
+    return JsonFieldIter(s_, type_of() == JsonType::object ? 1 : s_.size());
 }
 
 std::optional<JsonValue> JsonValue::get(std::string_view key) const noexcept {
     std::optional<JsonValue> last;
-    JsonFields f = fields();
+    JsonFieldIter f = fields();
     while (auto field = f.next()) {
         if (field->first.eq_str(key)) last = field->second;
     }
@@ -240,14 +240,14 @@ std::optional<JsonValue> JsonValue::get(std::string_view key) const noexcept {
 }
 
 std::optional<JsonValue> JsonValue::at(std::size_t idx) const noexcept {
-    JsonItems it = items();
+    JsonItemIter it = items();
     for (std::size_t i = 0;; i++) {
         std::optional<JsonValue> v = it.next();
         if (!v || i == idx) return v;
     }
 }
 
-std::optional<JsonValue> JsonItems::next() noexcept {
+std::optional<JsonValue> JsonItemIter::next() noexcept {
     std::size_t start = skip_ws(s_, at_);
     if (start >= s_.size() || s_[start] == ']') {
         at_ = s_.size();
@@ -260,7 +260,7 @@ std::optional<JsonValue> JsonItems::next() noexcept {
     return JsonValue(s_.substr(start, end - start));
 }
 
-std::optional<std::pair<JsonStr, JsonValue>> JsonFields::next() noexcept {
+std::optional<std::pair<JsonStr, JsonValue>> JsonFieldIter::next() noexcept {
     std::size_t key_at = skip_ws(s_, at_);
     if (key_at >= s_.size() || s_[key_at] != '"') {
         at_ = s_.size();
@@ -287,7 +287,7 @@ static char32_t utf8_next(std::string_view s, std::size_t &at) noexcept {
     return c;
 }
 
-std::optional<char32_t> JsonChars::next() noexcept {
+std::optional<char32_t> JsonCharIter::next() noexcept {
     if (rest_.empty()) return std::nullopt;
     std::size_t at = 0;
     char32_t c = utf8_next(rest_, at);
@@ -326,7 +326,7 @@ std::optional<char32_t> JsonChars::next() noexcept {
 
 bool JsonStr::eq_str(std::string_view s) const noexcept {
     if (std::optional<std::string_view> plain = as_plain()) return *plain == s;
-    JsonChars c = chars();
+    JsonCharIter c = chars();
     std::size_t at = 0;
     for (;;) {
         std::optional<char32_t> a = c.next();

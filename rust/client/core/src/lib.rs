@@ -20,11 +20,11 @@ pub(crate) mod ui;
 use door::layout::FIXED_BYTES;
 use pxl_render::api_spec::device;
 use sys::machine::MACHINE;
-use xpute_gpu::Numbers;
+use xpute_gpu::CoreConfig;
 
 /// How a device's GPU runtime paces the renderer's stream, as
 /// spec/client/render/api.json `device` sets it.
-const GPU: Numbers = Numbers {
+const GPU: CoreConfig = CoreConfig {
     frame_latency: device::FRAME_LATENCY,
     upload_chunk_bytes: device::UPLOAD_CHUNK_BYTES as u64,
 };

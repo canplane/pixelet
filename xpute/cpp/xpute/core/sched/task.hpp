@@ -1,10 +1,10 @@
 // cpp/xpute/core/sched/task.hpp
 
-// Coroutine tasks and the executor they run on, installed once, as a global
-// allocator is. A task's frame comes from the core's heap; when the heap has
-// no room, no task is made. An executor may ignore priority, so no
-// correctness may rest on the order in which tasks are polled. Work that must
-// run in order within a turn runs in one task.
+// Coroutine tasks run on an executor installed once, as a global allocator is.
+// A task's frame comes from the core's heap; when the heap has no room, no task
+// is made. An executor may ignore priority, so no correctness may rest on the
+// order in which tasks are polled. Work that must run in order within a turn
+// runs in one task.
 
 #pragma once
 

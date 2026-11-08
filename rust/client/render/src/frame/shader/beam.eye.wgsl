@@ -1,6 +1,6 @@
 // pxl-render/beam.eye.wgsl
 
-// The eye's beam rays, as the beam rays' walks read them (corners.wgsl, eye_bind.wgsl). A beam
+// The eye's beam rays, as the beam rays' walks read them (corner.wgsl, eye_bind.wgsl). A beam
 // ray goes through each corner of the camera grid (pxl-engine `beam::Grid::corners`), and every
 // corner is walked, one thread a corner. A ray keeps its line in the eye's beam rays' buffer.
 
@@ -24,7 +24,6 @@ fn beam_idx(c: vec2<u32>) -> u32 {
   return c.y * beam_lattice().x + c.x;
 }
 
-/// The first word of corner `c`'s line (`beam::LINE_WORDS`).
 fn beam_line(c: vec2<u32>) -> u32 {
   return beam_idx(c) * LINE_WORDS;
 }
@@ -34,7 +33,6 @@ fn beam_hand_at(c: vec2<u32>) -> u32 {
   return eye_word(GRID + GRID_HANDS_AT) + beam_idx(c);
 }
 
-/// The first word of corner `c`'s parked state (`Grid::corner_states_at`).
 fn corner_state_at(c: vec2<u32>) -> u32 {
   return eye_word(GRID + GRID_CORNER_STATES_AT) + beam_idx(c) * STATE_WORDS;
 }

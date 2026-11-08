@@ -1,7 +1,9 @@
 // xpute-core/clock.rs
 
-//! The runtime's clock, in milliseconds. Until a runtime installs one, the
-//! time stays at zero, which native tests run with.
+//! The runtime's clock, in milliseconds, counted as the UI's
+//! `performance.now()` counts them, so that what the core times and what the UI
+//! times lie on one line. Until a runtime installs one, the time stays at zero,
+//! which native tests run with.
 
 use core::cell::Cell;
 

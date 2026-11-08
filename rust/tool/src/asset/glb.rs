@@ -89,14 +89,14 @@ fn local(node: &Node) -> Mat4 {
     m
 }
 
-struct Bounds {
+struct Aabb {
     lo: [f64; 3],
     hi: [f64; 3],
 }
 
-impl Bounds {
-    fn new() -> Bounds {
-        Bounds {
+impl Aabb {
+    fn new() -> Aabb {
+        Aabb {
             lo: [f64::INFINITY; 3],
             hi: [f64::NEG_INFINITY; 3],
         }
@@ -109,7 +109,7 @@ impl Bounds {
     }
 }
 
-fn visit(gltf: &Gltf, idx: usize, parent: &Mat4, bounds: &mut Bounds, depth: usize) {
+fn visit(gltf: &Gltf, idx: usize, parent: &Mat4, bounds: &mut Aabb, depth: usize) {
     // glTF does not forbid a cycle, which would not terminate.
     if depth > 64 {
         return;
@@ -156,7 +156,7 @@ fn visit(gltf: &Gltf, idx: usize, parent: &Mat4, bounds: &mut Bounds, depth: usi
 /// to two decimals.
 pub fn extent(bytes: &[u8]) -> Result<[f64; 3], String> {
     let gltf: Gltf = serde_json::from_slice(json_chunk(bytes)?).map_err(|e| e.to_string())?;
-    let mut bounds = Bounds::new();
+    let mut bounds = Aabb::new();
 
     let scenes: Vec<&Scene> = match gltf.scene.and_then(|i| gltf.scenes.get(i)) {
         Some(s) => vec![s],

@@ -2,9 +2,7 @@
 //
 // GENERATED from spec/client/core/door/ui.json
 
-// What the tracking button did, as the button showed it.
-
-/** Back to the device. */
+/** The camera goes back to the device's place. */
 export const Recenter = 0;
 /** Follow mode on, where the compass is listened to. */
 export const Follow = 1;

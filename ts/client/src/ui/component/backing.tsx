@@ -1,10 +1,7 @@
 // @pxl/client/ui/component/backing.tsx
 
-/**
- * The backing behind a floating control on a page and on Android: a plain
- * fill. These platforms have no system glass, so the backing fades in and out
- * by its opacity. An iPhone backs a control with glass (backing.ios.tsx).
- */
+/** A page and Android have no system glass, so the backing is a plain fill
+ * that fades in and out by its opacity. */
 
 import type { ReactNode } from "react";
 import type { ColorValue, StyleProp, ViewStyle } from "react-native";

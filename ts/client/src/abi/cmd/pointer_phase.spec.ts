@@ -2,8 +2,6 @@
 //
 // GENERATED from spec/client/core/door/ui.json
 
-// Where a pointer event is in its gesture.
-
 export const Down = 0;
 export const Move = 1;
 export const Up = 2;

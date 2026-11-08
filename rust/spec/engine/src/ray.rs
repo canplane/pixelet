@@ -43,7 +43,7 @@ pub const MISS_LANES: u32 = 64;
 pub const MISS_ACROSS: u32 = 64;
 
 /// What the pixels' cast counts, and the light slots' cast alike (pxl-render visible.wgsl
-/// `MissArgs`): first the holes it listed (`MISS_ARGS_CNT`, `list_hole`), then, while the
+/// `MissCount`): first the holes it listed (`MISS_ARGS_CNT`, `list_hole`), then, while the
 /// `ray_counts` setting is on, what its pixels or slots took (`MISS_ARGS_COUNT`: the
 /// `count::RAYS` counters from `count::VOXEL`). Each frame starts from `MISS_ARGS_EMPTY`.
 pub const MISS_ARGS_CNT: u32 = 0;

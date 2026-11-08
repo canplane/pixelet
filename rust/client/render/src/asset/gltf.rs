@@ -28,10 +28,11 @@ pub struct GltfPrimitive {
     pub pos: Vec<f32>,
     pub normal: Option<Vec<f32>>,
     pub uv: Option<Vec<f32>>,
-    /// Four joint indices a vertex, into the mesh's skin; None when unskinned.
+    /// Each vertex has four joint indices into the mesh's skin. This is None when the mesh is
+    /// unskinned.
     pub joints: Option<Vec<u16>>,
     pub weights: Option<Vec<f32>>,
-    /// Triangle list; generated as 0..n when the primitive has none.
+    /// The indices are a triangle list, generated as 0..n when the primitive has none.
     pub idx: Vec<u32>,
     pub material: i32,
 }
@@ -51,7 +52,8 @@ pub struct GltfNode {
 #[derive(Clone, Debug, PartialEq)]
 pub struct GltfSkin {
     pub joints: Vec<u32>,
-    /// Sixteen floats a joint, column-major; identity when the file gives none.
+    /// Each joint has sixteen floats, column-major, which are the identity when the file gives
+    /// none.
     pub inverse_bind: Vec<f32>,
 }
 
@@ -205,15 +207,15 @@ fn floats<const N: usize>(v: Option<JsonValue>, default: [f64; N]) -> [f64; N] {
     out
 }
 
-/// `v` as an index below `len`; none for a fraction, a negative, NaN or one
-/// past it.
+/// `v` as an index below `len`. It is None for a fraction, a negative, NaN or a value at or
+/// past `len`.
 fn idx_below(v: f64, len: usize) -> Option<usize> {
     let i = v as usize;
     (v >= 0.0 && i as f64 == v && i < len).then_some(i)
 }
 
-/// A field that is an index below `len`, None when absent; malformed when it
-/// is anything else.
+/// A field that is an index below `len`. It is None when the field is absent, and malformed
+/// when the field is anything else.
 fn idx_of(v: Option<JsonValue>, len: usize) -> Result<Option<usize>, MarshalError> {
     match v {
         None => Ok(None),
@@ -230,7 +232,7 @@ fn idx_in(v: Option<JsonValue>, len: usize) -> Result<usize, MarshalError> {
     idx_of(v, len)?.ok_or_else(malformed)
 }
 
-/// A count or a byte offset, `default` when absent.
+/// A field that is a count or a byte offset, `default` when the field is absent.
 fn size(v: Option<JsonValue>, default: usize) -> Result<usize, MarshalError> {
     Ok(idx_of(v, usize::MAX)?.unwrap_or(default))
 }
@@ -238,7 +240,7 @@ fn size(v: Option<JsonValue>, default: usize) -> Result<usize, MarshalError> {
 /// An accessor's fields, each looked up once: a lookup rescans the object, and
 /// one accessor may be read for any number of primitives.
 #[derive(Clone, Copy)]
-struct AccessorFields<'a> {
+struct Accessor<'a> {
     kind: Option<&'a str>,
     cnt: Option<JsonValue<'a>>,
     view: Option<JsonValue<'a>>,
@@ -248,9 +250,9 @@ struct AccessorFields<'a> {
     sparse: bool,
 }
 
-impl<'a> AccessorFields<'a> {
+impl<'a> Accessor<'a> {
     fn of(a: JsonValue<'a>) -> Self {
-        AccessorFields {
+        Accessor {
             kind: plain(a.get("type")),
             cnt: a.get("count"),
             view: a.get("bufferView"),
@@ -264,16 +266,16 @@ impl<'a> AccessorFields<'a> {
 
 /// A buffer view's fields, each looked up once, as an accessor's are.
 #[derive(Clone, Copy)]
-struct ViewFields<'a> {
+struct BufferView<'a> {
     buf: Option<JsonValue<'a>>,
     off: Option<JsonValue<'a>>,
     length: Option<JsonValue<'a>>,
     stride: Option<JsonValue<'a>>,
 }
 
-impl<'a> ViewFields<'a> {
+impl<'a> BufferView<'a> {
     fn of(v: JsonValue<'a>) -> Self {
-        ViewFields {
+        BufferView {
             buf: v.get("buffer"),
             off: v.get("byteOffset"),
             length: v.get("byteLength"),
@@ -284,15 +286,15 @@ impl<'a> ViewFields<'a> {
 
 /// A sampler's fields, each looked up once: any number of channels share one.
 #[derive(Clone, Copy)]
-struct SamplerFields<'a> {
+struct Sampler<'a> {
     input: Option<JsonValue<'a>>,
     output: Option<JsonValue<'a>>,
     interpolation: &'a str,
 }
 
-impl<'a> SamplerFields<'a> {
+impl<'a> Sampler<'a> {
     fn of(s: JsonValue<'a>) -> Self {
-        SamplerFields {
+        Sampler {
             input: s.get("input"),
             output: s.get("output"),
             interpolation: plain(s.get("interpolation")).unwrap_or("LINEAR"),
@@ -301,8 +303,8 @@ impl<'a> SamplerFields<'a> {
 }
 
 struct Reader<'a, F> {
-    accessors: Vec<AccessorFields<'a>>,
-    views: Vec<ViewFields<'a>>,
+    accessors: Vec<Accessor<'a>>,
+    views: Vec<BufferView<'a>>,
     buffers: &'a [&'a [u8]],
     pause: &'a F,
     /// Components the file may still decode.
@@ -320,7 +322,7 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
         Ok(())
     }
 
-    /// Reads accessor `index`, which must be of `kind`, with its components converted.
+    /// Reads accessor `idx`, which must be of `kind`, with its components converted.
     async fn read<T: Copy + Default>(
         &self,
         idx: usize,
@@ -424,7 +426,8 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
         self.read(idx, kind, |v| v as f32).await
     }
 
-    /// A vertex attribute, `count` elements as the position has.
+    /// Reads vertex attribute `idx`, which must hold `cnt` elements, as many as the position
+    /// holds; it is malformed otherwise.
     async fn attribute<T: Copy + Default>(
         &self,
         idx: Option<usize>,
@@ -461,14 +464,14 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
         if k % ENTRIES_PER_PAUSE == 0 {
             pause().await;
         }
-        accessors.push(AccessorFields::of(a));
+        accessors.push(Accessor::of(a));
     }
     let mut views = Vec::new();
     for (k, v) in arr(json.get("bufferViews")).enumerate() {
         if k % ENTRIES_PER_PAUSE == 0 {
             pause().await;
         }
-        views.push(ViewFields::of(v));
+        views.push(BufferView::of(v));
     }
     let r = Reader {
         accessors,
@@ -619,7 +622,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
 
     let mut animations = Vec::new();
     for a in arr(json.get("animations")) {
-        let samplers: Vec<SamplerFields> = arr(a.get("samplers")).map(SamplerFields::of).collect();
+        let samplers: Vec<Sampler> = arr(a.get("samplers")).map(Sampler::of).collect();
         let mut duration = 0.0f64;
         let mut channels = Vec::new();
         for c in arr(a.get("channels")) {
@@ -733,7 +736,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
     Ok(gltf)
 }
 
-/// Every node's world matrix at rest; identity for a node off the scene.
+/// Every node's world matrix at rest, which is the identity for a node off the scene.
 pub fn world_matrices(gltf: &Gltf) -> Vec<Mat4> {
     let mut out = vec![mat4::new(); gltf.nodes.len()];
     // Parents come first, so a parent's world is in place for its children.

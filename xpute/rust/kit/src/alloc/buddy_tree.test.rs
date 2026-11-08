@@ -8,9 +8,9 @@ const MIN: usize = 12;
 const MAX: usize = 20;
 const SPLIT_BYTES: usize = (1 << (MAX - MIN)) / 8;
 
-/// Reserves a test's range once and never frees it. `Range`'s functions
-/// take no receiver, so the base lives in a static, and the allocator over
-/// the range outlives any one test.
+/// `arena` reserves a test's range once and never frees it. `Range`'s
+/// functions take no receiver, so the base lives in a static, and the
+/// allocator over the range outlives any one test.
 fn arena(cell: &'static OnceLock<usize>) -> usize {
     *cell.get_or_init(|| {
         let layout = Layout::from_size_align(1 << MAX, 1 << MAX).unwrap();

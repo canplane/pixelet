@@ -2,9 +2,10 @@
 
 /**
  * Opens a native app's core. The core is linked into the app and reached
- * through xpute's native module (@xpute/native), which gives its memory, and
- * it runs on its own thread (`Core.thread`). A page takes platform.ts
- * instead.
+ * through xpute's native module (@xpute/native), which gives its memory, and it
+ * runs on its own thread (`Core.thread`). Its clock is xpute-runtime's native
+ * `now`, which counts as the app's `performance.now()` does, so `now` is not
+ * taken here. A page takes platform.ts instead.
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
@@ -16,6 +17,7 @@ import type { Core, Machine, ModuleSource } from "./runtime.ts";
 export function open(
   _machine: Machine,
   _source: ModuleSource | undefined,
+  _now: () => f64,
 ): Promise<Core> {
   return Promise.resolve({
     mem: XPUTE.mem(),

@@ -210,13 +210,13 @@ pub struct Line {
 /// lines part. It stays valid only while the tile cache it was walked over is
 /// unchanged.
 #[derive(Clone, Copy)]
-pub struct Lines {
+pub struct Path {
     at: [Option<Line>; LEAF_ZOOM as usize + 1],
 }
 
-impl Default for Lines {
+impl Default for Path {
     fn default() -> Self {
-        Lines {
+        Path {
             at: [None; LEAF_ZOOM as usize + 1],
         }
     }
@@ -284,14 +284,14 @@ impl<L: Base> TileCache<L> {
 
     /// `p`'s line, computed down from the top one tile at a time.
     pub fn line(&self, p: Quadrant) -> Line {
-        self.seek(&mut Lines::default(), p)
+        self.seek(&mut Path::default(), p)
     }
 
     /// `p`'s line, computed down from the finest tile over `p` whose line
     /// `lines` still holds. Afterwards `lines` holds `p`'s line too.
-    pub fn seek(&self, lines: &mut Lines, p: Quadrant) -> Line {
-        let held = |q: Quadrant| lines.at[q.zoom as usize].filter(|l| l.tile == q);
-        let line = match held(p) {
+    pub fn seek(&self, lines: &mut Path, p: Quadrant) -> Line {
+        let line_at = |q: Quadrant| lines.at[q.zoom as usize].filter(|l| l.tile == q);
+        let line = match line_at(p) {
             Some(l) => l,
             None if p.zoom > L::COARSEST => {
                 let over = self.seek(lines, p.parent());
@@ -307,7 +307,7 @@ impl<L: Base> TileCache<L> {
     /// entry, so a descent costs one lookup per zoom and never walks back up.
     pub fn step(&self, parent: &Line, child: Quadrant) -> Line {
         let e = self.entry(child);
-        let held = e.filter(|e| e.asked).and_then(|e| e.resident.as_ref());
+        let resident = e.filter(|e| e.asked).and_then(|e| e.resident.as_ref());
         let said = e.is_some_and(|e| e.answered)
             || parent.children.is_some_and(|o| !o.has_child(child.slot()));
         let over = match parent.resident() {
@@ -318,17 +318,21 @@ impl<L: Base> TileCache<L> {
         let says = if said { over } else { parent.says };
         Line {
             tile: child,
-            finest_resident: if held.is_some() {
+            finest_resident: if resident.is_some() {
                 Some(child)
             } else {
                 parent.finest_resident
             },
-            src: if held.is_some() { Some(child) } else { says },
+            src: if resident.is_some() {
+                Some(child)
+            } else {
+                says
+            },
             settled: said || parent.settled,
             said,
             over,
             says,
-            children: held.map(|h| h.body.occupancy()),
+            children: resident.map(|h| h.body.occupancy()),
         }
     }
 
@@ -512,7 +516,7 @@ impl<L: Base> TileCache<L> {
     }
 
     fn count_shown(&self) -> [u32; 2] {
-        let (mut lines, mut cnt) = (Lines::default(), [0u32; 2]);
+        let (mut lines, mut cnt) = (Path::default(), [0u32; 2]);
         for p in self.asked() {
             cnt[0] += 1;
             if self.has_answer(p) || self.seek(&mut lines, p).finest_resident.is_some() {
@@ -583,7 +587,6 @@ impl<L: Base> TileCache<L> {
         }
     }
 
-    /// Whether `p` is readable and marked `again`.
     pub fn is_again_held(&self, p: Quadrant) -> bool {
         self.readable(p).is_some_and(|h| h.again)
     }
@@ -613,16 +616,16 @@ impl<L: Base> TileCache<L> {
         let std::collections::hash_map::Entry::Occupied(mut e) = self.tiles.entry(p) else {
             return None;
         };
-        let held = e.get_mut().resident.take()?;
+        let resident = e.get_mut().resident.take()?;
         if e.get().idle() {
             e.remove();
         }
-        if let Some(f) = held.slot {
+        if let Some(f) = resident.slot {
             self.in_slot[f as usize] = None;
         }
         self.changed.push(p);
         self.revision = self.revision.wrapping_add(1);
-        held.slot
+        resident.slot
     }
 }
 

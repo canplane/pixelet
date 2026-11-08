@@ -7,8 +7,7 @@
 // word of the node cache is atomic, as a walk claims a slot by exchanging its key. No walk
 // uses compare-and-swap: Safari's WGSL compiler writes Metal for `atomicCompareExchangeWeak`
 // that Metal's compiler refuses. The pass that includes this part names the tag its walks keep
-// under (`WALK_PASS`), where its asks are counted (`asked_at`), and whether it may ask another
-// (`may_ask`).
+// under (`WALK_PASS`) and where its asks are counted (`asked_at`).
 
 @group(0) @binding(9) var<storage, read_write> node_cache: array<atomic<u32>>;
 
@@ -28,7 +27,6 @@ fn may_ask() -> bool {
   return atomicAdd(&node_cache[ASKED], 1u) < ASKS_A_FRAME;
 }
 
-/// This pass's tag: the frame's number times `PASSES`, plus the pass. A walk reads it once.
 fn walk_tag() -> u32 {
   return PASSES * node_cache_word(FRAME) + WALK_PASS;
 }
@@ -41,11 +39,10 @@ fn is_node(slot: u32, zoom: u32, c: vec3<i32>) -> bool {
   if (node_cache_word(n) != zoom) {
     return false;
   }
-  let held = vec3<u32>(node_cache_word(n + 1u), node_cache_word(n + 2u), node_cache_word(n + 3u));
-  return all(held == vec3<u32>(c));
+  let node = vec3<u32>(node_cache_word(n + 1u), node_cache_word(n + 2u), node_cache_word(n + 3u));
+  return all(node == vec3<u32>(c));
 }
 
-/// `is_node`, with each word read as it stands now (`node_cache_now`).
 fn is_node_now(slot: u32, zoom: u32, c: vec3<i32>) -> bool {
   let n = entry_at(slot) + W_NODE;
   return node_cache_now(n) == zoom
@@ -61,7 +58,8 @@ fn pair_hash(zoom: u32, c: vec3<i32>, zooms: u32) -> u32 {
   return h ^ (h >> 16u);
 }
 
-/// Whether a key is a walk's claim, named or not (pxl-engine `node_cache::CLAIMED`).
+/// Whether a key is a walk's claim, not yet named (pxl-engine `node_cache::CLAIMED`) or named
+/// (`node_cache::CLAIM_MASK`).
 fn is_claim(key: u32) -> bool {
   return key == CLAIMED || (key & CLAIM_MASK) == CLAIM_FAR;
 }
@@ -96,9 +94,9 @@ fn entry_stamp(kind: u32, zooms: u32, asset: vec2<u32>, inheritance: vec4<u32>, 
 /// the world is counted at word `asked`, unless `asked` is `NONE`. When the pass may ask no
 /// more (`may_ask`), nothing is asked and the walk is left there (`KIND_LEFT`).
 fn ask_node(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, asked: u32) -> Answer {
-  var kept = keeps(zoom, c);
+  var cached = keeps(zoom, c);
   var first = 0u;
-  if (kept) {
+  if (cached) {
     first = bucket_of(zoom, c);
     for (var k = 0u; k < BUCKET; k += 1u) {
       let slot = first + k;
@@ -110,7 +108,7 @@ fn ask_node(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, a
         // (`entry_stamp`). Nothing else keeps an entry torn this way from answering.
         let w = entry_at(slot);
         let at = w + W_INHERITANCE;
-        let held = vec4<u32>(
+        let inheritance = vec4<u32>(
           node_cache_word(at),
           node_cache_word(at + 1u),
           node_cache_word(at + 2u),
@@ -118,12 +116,12 @@ fn ask_node(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, a
         );
         let word = node_cache_word(w + W_KIND);
         let asset = vec2<u32>(node_cache_word(w + W_ASSET), node_cache_word(w + W_ASSET + 1u));
-        if ((word & ~KIND_MASK) == entry_stamp(word & KIND_MASK, slot_key >> TAG_BITS, asset, held, zoom, c)) {
-          return Answer(word & KIND_MASK, asset, held);
+        if ((word & ~KIND_MASK) == entry_stamp(word & KIND_MASK, slot_key >> TAG_BITS, asset, inheritance, zoom, c)) {
+          return Answer(word & KIND_MASK, asset, inheritance);
         }
         // The words are from two writes. They are left to the walk writing them, and this
         // walk does not keep its answer.
-        kept = false;
+        cached = false;
         break;
       }
     }
@@ -132,7 +130,7 @@ fn ask_node(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, a
     return Answer(KIND_LEFT, vec2<u32>(0u), vec4<u32>(0u));
   }
   let a = world_answer(parent, top, zoom, c, zooms, asked);
-  if (kept) {
+  if (cached) {
     keep(first, zoom, c, zooms, walk_tag(), a);
   }
   return a;
@@ -258,23 +256,23 @@ fn claim_slot(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32) -> vec2
     var best = 2u * BUCKET;
     for (var k = 0u; k < BUCKET; k += 1u) {
       let slot = first + k;
-      var held = node_cache_now(key_at(slot));
-      for (var r = 0u; r < CLAIM_READS && held == CLAIMED; r += 1u) {
-        held = node_cache_now(key_at(slot));
+      var slot_key = node_cache_now(key_at(slot));
+      for (var r = 0u; r < CLAIM_READS && slot_key == CLAIMED; r += 1u) {
+        slot_key = node_cache_now(key_at(slot));
       }
-      if (held == CLAIMED || held == mine || (held == key && is_node_now(slot, zoom, c))) {
+      if (slot_key == CLAIMED || slot_key == mine || (slot_key == key && is_node_now(slot, zoom, c))) {
         return vec2<u32>(NONE, 0u);
       }
       var turn = 2u * BUCKET;
-      if (held == 0u) {
+      if (slot_key == 0u) {
         turn = (k - probe) & (BUCKET - 1u);
-      } else if (!is_claim(held) && (held & ~KEY_ZOOMS) / PASSES < frame && !drawn(slot, frame)) {
+      } else if (!is_claim(slot_key) && (slot_key & ~KEY_ZOOMS) / PASSES < frame && !drawn(slot, frame)) {
         turn = BUCKET + ((k - victim) & (BUCKET - 1u));
       }
       if (turn < best) {
         best = turn;
         to = k;
-        was = held;
+        was = slot_key;
       }
     }
     if (to == NONE) {
@@ -379,7 +377,6 @@ fn counts(at: u32) -> bool {
   return ((node_cache_word(COUNT_ON) >> observer) & 1u) != 0u;
 }
 
-/// Adds the `visits` nodes a walk entered to word `at`, when its observer counts.
 fn count_visits(at: u32, visits: u32) {
   if (counts(at)) {
     atomicAdd(&node_cache[at], visits);

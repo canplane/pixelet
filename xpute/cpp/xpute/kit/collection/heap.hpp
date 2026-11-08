@@ -1,7 +1,8 @@
 // cpp/xpute/kit/collection/heap.hpp
 
-// A binary heap over a vector the caller owns. Keys must be totally ordered: a
-// key that compares with nothing, as a NaN does, breaks the heap's order.
+// This is a binary heap over a vector the caller owns. Keys must be totally
+// ordered: a key that compares with nothing, as a NaN does, breaks the heap's
+// order.
 
 #pragma once
 

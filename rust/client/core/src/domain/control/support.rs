@@ -8,7 +8,7 @@
 //! its Z unknown (`UNKNOWN_Z`) and is drawn on the finest ground known there
 //! until the leaf arrives.
 
-use crate::domain::query::changes::Memo;
+use crate::domain::query::change::Memo;
 use crate::domain::query::{over, under};
 use pxl_spec::space::coord::q3::{self, FRAC_W, Q3};
 use pxl_spec::space::coord::v3::V3;
@@ -59,9 +59,9 @@ pub fn stand_over(at: &Q3, top: f64) -> Q3 {
 }
 
 /// The last answer of `standing`. It is kept until another point is asked
-/// or the world changes in the columns the answer read (`changes::Memo`). A
-/// camera's `to` and a destination ask for the same point on every tick
-/// until a leaf gives its Z, and `resolve_to` asks twice in one tick.
+/// or the world changes in the columns the answer read (`change::Memo`),
+/// because a camera's `to` and a destination ask for the same point on every
+/// tick until a leaf gives its Z, and `resolve_to` asks twice in one tick.
 static STAND_MEMO: Global<Memo<Q3, Answer<Option<Q3>>>> = Global::new();
 
 fn stand_memo() -> &'static mut Memo<Q3, Answer<Option<Q3>>> {
@@ -70,7 +70,7 @@ fn stand_memo() -> &'static mut Memo<Q3, Answer<Option<Q3>>> {
 
 /// Drops the kept answer of `standing` where a change touched the columns
 /// it read. It runs on every frame turn, so each change is seen exactly once
-/// (`changes::within`).
+/// (`change::within`).
 pub fn support_step() {
     stand_memo().forget_touched();
 }
@@ -82,7 +82,7 @@ pub fn support_step() {
 /// stands on the floor under it as a leaf gives it: it drops when what it
 /// stood on is taken away, and it rises out of what fills its cell
 /// (`World::floor_under`). The pivot and the figures at it then stand on
-/// one floor. The answer is kept in `STAND_MEMO`.
+/// one floor.
 fn standing(world: World<'_>, at: &Q3) -> Answer<Option<Q3>> {
     if !is_unknown(at) {
         if !settings().surface_follow {
@@ -111,13 +111,13 @@ pub fn floor_at(world: World<'_>, at: &Q3) -> Option<f64> {
 }
 
 /// Where `at` is drawn, in world coordinates. Where nothing is known under
-/// it, it is drawn at the height of `held`.
-pub fn resolve(at: &Q3, held: V3) -> V3 {
+/// it, it is drawn at the height of `cur`.
+pub fn resolve(at: &Q3, cur: V3) -> V3 {
     match standing(World::now(), at) {
         Answer::Exact(Some(p)) | Answer::Coarser(Some(p), _) => to_world(&p),
         Answer::Exact(None) | Answer::Coarser(None, _) | Answer::Nothing(_) => {
             let l = to_world(at);
-            [l[0], l[1], held[2]]
+            [l[0], l[1], cur[2]]
         }
     }
 }

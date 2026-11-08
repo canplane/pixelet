@@ -73,7 +73,7 @@ Result<std::string_view> Cursor::get_str_ref() const noexcept {
     return str();
 }
 
-Result<Strs> Cursor::strs() const noexcept {
+Result<StrList> Cursor::strs() const noexcept {
     std::uint64_t payload = std::uint64_t{base_} + WORD_SZ;
     if (payload > pkt_.size()) return marshal_error(Errno::ebadmsg);
     Result<std::uint32_t> len = get_len(pkt_, base_);
@@ -88,10 +88,10 @@ Result<Strs> Cursor::strs() const noexcept {
         if (off(i) > off(i + 1) || off(i + 1) > total) return marshal_error(Errno::ebadmsg);
         if (!is_utf8(std::string_view(reinterpret_cast<const char *>(pkt_.data() + blob + off(i)), off(i + 1) - off(i)))) return marshal_error(Errno::ebadmsg);
     }
-    return Strs{pkt_.subspan(payload, 4 * (std::uint64_t{n} + 1)), pkt_.subspan(blob, total), n};
+    return StrList{pkt_.subspan(payload, 4 * (std::uint64_t{n} + 1)), pkt_.subspan(blob, total), n};
 }
 
-Result<Strs> Cursor::get_strs() const noexcept {
+Result<StrList> Cursor::get_strs() const noexcept {
     if (is_null() || type_ != type_of(SequenceType::strs)) return marshal_error(Errno::ebadmsg);
     return strs();
 }

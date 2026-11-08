@@ -416,7 +416,7 @@ noticing:
   the 3D query, so caves, bores and placed objects are seen alike.
 - Only the query reads a layer. Everything else asks the world, and the
   check-rules tool refuses a layer read anywhere else
-  (`rust/tool/src/bin/check_rules.rs` `LAYER_READERS`).
+  (`rust/tool/src/bin/rule.rs` `LAYER_READERS`).
 - The UI computes no coordinate and no tile, and reaches the core only through
   the generated commands and the snapshot.
 - Nothing under `xpute/` knows pixelet: no tile, no world, no pixelet name.

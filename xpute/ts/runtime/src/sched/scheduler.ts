@@ -36,8 +36,9 @@ export class Scheduler<G extends Grant = Grant> {
    * meant once that turn is heard, because the wake the turn asks for is told
    * after it. */
   private _gen = 0;
-  /** For each moment asked of the policy and not yet given, the generation it
-   * was asked under, in the order the policy gives the moments. */
+  /** This holds, for each moment asked of the policy and not yet given, the
+   * generation it was asked under, in the order the policy gives the
+   * moments. */
   private readonly _asked_gens: number[] = [];
   /** The runtime asked for a turn that has not run yet. Unlike a moment, this
    * outlives a turn heard. */
@@ -49,7 +50,7 @@ export class Scheduler<G extends Grant = Grant> {
   private _timer_at = Infinity;
   private _last = -1;
   private _running = false;
-  /** The last grant a core on its own thread was kicked with. */
+  /** This is the last grant a core on its own thread was kicked with. */
   private _granted: G | null = null;
   private readonly _consider = (now: f64): void => this._turn(now);
 
@@ -171,7 +172,6 @@ export class Scheduler<G extends Grant = Grant> {
   }
 }
 
-/** The ms from now to the grant's deadline, 0 where it has passed. */
 function left_ms(grant: Grant): f64 {
   return Math.max(0, grant.deadline - performance.now());
 }

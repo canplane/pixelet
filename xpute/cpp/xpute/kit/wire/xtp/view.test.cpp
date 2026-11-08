@@ -20,12 +20,12 @@ std::string hex(std::span<const std::uint8_t> bytes) {
     return out;
 }
 
-// The packet the tree `build` makes, encoded from a buffer of `init`, in hex,
-// or the errno it was refused with.
+// This answers the packet the tree `build` makes, encoded from a buffer of
+// `init`, in hex, or the errno it was refused with.
 template <class F> std::string encoded(F &&build, std::uint32_t init = 1024, std::optional<std::uint32_t> max = std::nullopt) {
     TreeView<> t;
     build(t);
-    auto pkt = encode<std::allocator<std::byte>>(t, TreeEncoderOptions{.init_cap = init, .max_cap = max});
+    auto pkt = encode<std::allocator<std::byte>>(t, TreeEncoderConfig{.init_cap = init, .max_cap = max});
     if (!pkt) return "errno:" + std::to_string(static_cast<int>(pkt.error().errnum));
     return hex(*pkt);
 }

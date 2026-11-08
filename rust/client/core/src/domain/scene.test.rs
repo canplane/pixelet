@@ -1,7 +1,7 @@
 // pxl-core/domain/scene.test.rs
 
 use crate::domain::preview::{Ghost, GhostBox};
-use crate::domain::scene::gizmo::debug_line::DebugLines;
+use crate::domain::scene::gizmo::debug_line::DebugMesh;
 use crate::domain::scene::indicator::ghost::GhostDraw;
 use crate::domain::view::frame::pose::{view, view_compose, ObserverPose};
 use crate::sys;
@@ -25,8 +25,8 @@ fn an_eye_moved_changes_no_draw() {
     let mut list = DrawList::default();
     let (mut ghost, mut debug, mut coverage) = (
         GhostDraw::default(),
-        DebugLines::default(),
-        DebugLines::default(),
+        DebugMesh::default(),
+        DebugMesh::default(),
     );
     ghost.set(
         &mut list,
@@ -56,7 +56,7 @@ fn an_eye_moved_changes_no_draw() {
             rot: mat4::new(),
         })
     };
-    let held = view().pose;
+    let before = view().pose;
     view_compose(pose([8_388_600.0, -1200.0, 40.0]));
     draw(&mut list);
     let was = list.take();
@@ -73,7 +73,7 @@ fn an_eye_moved_changes_no_draw() {
     view_compose(pose([-8_388_600.0 + 0.5, 3.9e6, -2000.25]));
     draw(&mut list);
     let now = list.take();
-    view_compose(held);
+    view_compose(before);
     assert!(now.changes.is_empty() && !now.reordered, "no draw changed");
     assert_eq!(now.receivers, &receivers[..]);
 }

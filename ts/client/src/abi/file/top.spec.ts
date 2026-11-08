@@ -2,9 +2,9 @@
 //
 // GENERATED from spec/client/core/sys/io/file.json
 
-/** strs: the shard it is, by quadkey. */
+/** A `strs` column holding each row's shard by its quadkey. */
 export const SHARD = 0 as number;
 
-/** u32[]: what its leaves fold to, its word in the objects' tree (pxl-engine
- * object.rs `fold`, `fold_word`): the kind most of its fill is and its share filled. */
+/** A `u32[]` column holding what each row's leaves fold to, its word in the objects' tree
+ * (pxl-engine object.rs `fold`, `fold_word`): the kind most of its fill is and its share filled. */
 export const FOLD = 1 as number;

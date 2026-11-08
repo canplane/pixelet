@@ -43,8 +43,6 @@ function face(end: f64, side: f64, seam: f64): string {
   return `M0 ${seam}L${side} 0L${x} ${y}Q${turn} ${ridge} 0 ${ridge}Z`;
 }
 
-/** The dial and a needle that points north. The needle turns against the
- * view's azimuth. */
 export function CompassFace() {
   const turn = -useView((v) => v.azimuth);
   const w = NEEDLE_WIDTH / 2;

@@ -11,14 +11,14 @@ mod real_world;
 
 use gpu::{list_every, margins, Gpu};
 use pxl_engine::cast::{Detail, Keep, Node, Query, Ray, Root, Trace, Until, DEPTH};
-use pxl_engine::light::{self, Light, Starts};
+use pxl_engine::light::{self, Light, StartGrid};
 use pxl_engine::object::Cut;
 use pxl_engine::world::Inheritance;
 use pxl_engine::{beam, cast};
 use pxl_engine::{eye, node_cache, Zoom, FRAC_W};
 use pxl_render::frame::shader::record::{src, SHADER_LIGHT_CELL};
 
-use real_world::{q8, store_of, Asking, World, WorldBufs, FINEST};
+use real_world::{q8, store_of, Asking, World, WorldBuffer, FINEST};
 
 /// The eye stands east of X = 0, 300 units short of X's seam, where the world goes round.
 const EYE: [i32; 2] = [(1 << 23) - 300, (40 << 16) + 30];
@@ -54,7 +54,7 @@ fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
 
 /// The light of case `c` and where its rays start, laid as the renderer lays them
 /// (gpu/shadow.rs `aim`, `Shadow::starts`).
-fn box_of(c: &LightCase) -> (Light, Starts) {
+fn box_of(c: &LightCase) -> (Light, StartGrid) {
     let dir = unit(c.dir);
     let a = unit(cross(dir, [0.0, 0.0, 1.0]));
     let across = a.map(|v| v * c.side);
@@ -87,7 +87,7 @@ fn box_of(c: &LightCase) -> (Light, Starts) {
         )
     };
     let [a0, a1, a2, a3] = [0, 1, 2, 3].map(anchor);
-    let starts = Starts {
+    let starts = StartGrid {
         base,
         across: across.map(|v| light::fixed(v * q)),
         down: down.map(|v| light::fixed(v * q)),
@@ -150,7 +150,7 @@ fn device() -> Option<Gpu> {
 
 /// The light's list after the beam and `light_cell_cs` run over a cast that claims every tile,
 /// from a node cache no frame has written.
-fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], header: &[u32]) -> Vec<u32> {
+fn beams_of(gpu: &Gpu, b: &WorldBuffer, eye: &[u32], header: &[u32]) -> Vec<u32> {
     let eye = gpu.buffer(eye, wgpu::BufferUsages::UNIFORM);
     let header = gpu.buffer(header, wgpu::BufferUsages::UNIFORM);
     let mut table = vec![0u32; node_cache::WORDS as usize];
@@ -201,7 +201,7 @@ fn light_cells_start_short_by_the_margin() {
     let store = store_of();
     let flat_u = |rows: &[[u32; 4]]| rows.iter().flatten().copied().collect::<Vec<u32>>();
     let clip: Vec<u32> = built.clipmap.iter().flatten().map(|&v| v as u32).collect();
-    let b = WorldBufs {
+    let b = WorldBuffer {
         clip: gpu.buffer(&clip, store),
         ground: gpu.buffer(&built.ground, store),
         palette: gpu.buffer(&built.palette, store),
@@ -256,7 +256,7 @@ fn light_cells_start_short_by_the_margin() {
         let got = beams_of(&gpu, &b, &eye, &header);
         let hand_of = |w: &[u32], k: u32| f32::from_bits(w[light::hand_at(SIZE, k) as usize]);
         // The engine walks each beam ray from the origin the pass laid in the ray's line, not
-        // from its own. A device rounds `Starts::start` one Q3 step off the engine's for some
+        // from its own. A device rounds `StartGrid::start` one Q3 step off the engine's for some
         // rays.
         let w = built.world();
         let t: Vec<f32> = (0..across * across)

@@ -8,14 +8,12 @@
 @group(0) @binding(17) var earth_tiles: texture_2d_array<f32>;
 @group(0) @binding(22) var air_volume: texture_3d<f32>;
 
-/* the air before a point */
-
 // Reads light `k`'s half of the volume, the sun's or the moon's, at column `c`
 // across and down and at `slice` deep, in one trilinear read. The coordinates
 // are in texels, with texel centers at whole numbers. A read past the half's
 // first or last column reads that column, as a sampler clamping a texture of
 // its own would, and never blends in the other half.
-fn air_held_at(k: u32, c: vec2f, slice: f32) -> vec3f {
+fn air_scatter_at(k: u32, c: vec2f, slice: f32) -> vec3f {
   let n = f32(AIR_FROXELS);
   let at = vec3f(clamp(c.x, 0.0, n - 1.0) + f32(k) * n, c.y, slice);
   return textureSampleLevel(air_volume, atmos_sampler, (at + 0.5) / vec3f(2.0 * n, n, n), 0.0).rgb;
@@ -26,9 +24,9 @@ fn air_held_at(k: u32, c: vec2f, slice: f32) -> vec3f {
 // is laid as the light's sky view is, so it is read where the direction lies
 // about the light (atmos_sky.wgsl `table_unit`), at the slice where the depth
 // law puts `d` (atmos_medium.wgsl `view_layout`, `air_slice`).
-fn air_held_of(k: u32, dir: vec3f, d: f32) -> vec3f {
+fn air_scatter_of(k: u32, dir: vec3f, d: f32) -> vec3f {
   let n = f32(AIR_FROXELS);
-  return air_held_at(k, table_unit(dir, k) * (n - 1.0), air_slice(d, view_layout(k).yz));
+  return air_scatter_at(k, table_unit(dir, k) * (n - 1.0), air_slice(d, view_layout(k).yz));
 }
 
 // The air between the eye and the point `d` units away along `dir`, after
@@ -37,26 +35,26 @@ fn air_held_of(k: u32, dir: vec3f, d: f32) -> vec3f {
 // channel, measured as the march measures it (atmos_march.wgsl
 // `gather_between`): from where the ray enters the air to the ground at the
 // latest. What the air scatters is the ray's own 1 - e^-τ(d) times what each
-// light's half of the volume holds per share taken (`air_held_of`), for each
+// light's half of the volume holds per share taken (`air_scatter_of`), for each
 // light that reaches the air (atmos_medium.wgsl `reaches`), shown as that
 // light's sky is shown (`beyond`). Only that factor, which changes slowly, is
 // read from the grid; the factor that changes fast is the pixel's own.
 fn air_before(dir: vec3f, d: f32) -> vec4f {
   let km = atmos_km_per_u();
-  var held = vec3f(0.0);
+  var scatter = vec3f(0.0);
   for (var k = 0u; k < 2u; k++) {
     if (reaches(k)) {
-      held += air_held_of(k, dir, d * km) * light_gain(k);
+      scatter += air_scatter_of(k, dir, d * km) * light_gain(k);
     }
   }
-  held *= shown();
+  scatter *= shown();
   let r = camera_r();
   let mu = dot(frame_up(), dir);
   let end = short_of_ground(r, mu, d * km);
   let low = ray_low(r, mu, end);
   let a = min(to_sphere(r, mu, atmos_top_radius()), end);
   let transmittance = exp(-max(depth_along(r, mu, low, end) - depth_along(r, mu, low, a), vec3f(0.0)));
-  return vec4f(held * (vec3f(1.0) - transmittance), dot(transmittance, LUMA));
+  return vec4f(scatter * (vec3f(1.0) - transmittance), dot(transmittance, LUMA));
 }
 
 // The air before a world point, read from the volume along the point's
@@ -72,13 +70,9 @@ fn seen_from_eye(world_pos: vec3f) -> Air {
   return Air(air.a, air.rgb);
 }
 
-/* sky */
-
 fn moon_view(dir: vec3f) -> vec3f {
   return table_view(moon_view_lut, dir, 1u);
 }
-
-/* the Earth past the terrain */
 
 // Where a point lies on the map, as its Mercator longitude and ordinate.
 fn map_of(p: vec3f) -> vec2f {

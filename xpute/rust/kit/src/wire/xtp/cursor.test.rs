@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::golden::Golden;
-use crate::wire::xtp::encode::{TreeEncoder, TreeEncoderOptions};
+use crate::wire::xtp::encode::{TreeEncoder, TreeEncoderConfig};
 use crate::wire::xtp::spec::{NodeValue, SequenceType};
 use crate::wire::xtp::view::{NodeView, TreeView};
 
@@ -195,7 +195,7 @@ fn matches_typescript() {
         t.str(Some(s));
         match TreeEncoder::new().encode(
             &t,
-            TreeEncoderOptions {
+            TreeEncoderConfig {
                 init_cap: 1 << 10,
                 max_cap: Some(cap),
             },

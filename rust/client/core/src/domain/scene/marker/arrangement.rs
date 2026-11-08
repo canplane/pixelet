@@ -17,7 +17,7 @@ use super::{line, pin, place};
 
 use crate::domain::preview::Draft;
 use crate::domain::query::{at_zoom, Ray, World};
-use crate::domain::scene::marker::candidate::Candidates;
+use crate::domain::scene::marker::candidate::CandidateTable;
 use crate::domain::scene::marker::design::{self, Design};
 use crate::domain::scene::marker::set::{self, Set};
 use crate::domain::setting::store::settings;
@@ -30,7 +30,7 @@ use xpute_core::global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::domain::query::changes;
+use crate::domain::query::change;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::marker::param::SPACING_PX;
 use crate::domain::scene::model;
@@ -71,7 +71,7 @@ pub(super) fn region((zoom, [x, y]): Brick, [low, high]: [f64; 2]) -> Aabb {
 
 #[derive(Default)]
 struct Arrangement {
-    candidates: Candidates,
+    candidates: CandidateTable,
     visible: Vec<u32>,
     set: Set,
     draw_order: Vec<u32>,
@@ -95,7 +95,7 @@ struct Arrangement {
     /// Whether places, ground or objects changed since they were read.
     changed: bool,
     /// The place tiles whose answer changed, besides the ground's changes
-    /// (domain/query/changes.rs). A brick they touch is read again.
+    /// (domain/query/change.rs). A brick they touch is read again.
     changed_places: Vec<Quadrant>,
     /// The bricks this turn would read, with their distance from the eye and
     /// their columns.
@@ -117,7 +117,7 @@ struct Arrangement {
     /// What the last run read, compared by value. While it is equal, nothing
     /// changed and nothing is left waiting, the last layout stands and the
     /// step does nothing.
-    last: Option<Inputs>,
+    last: Option<Input>,
     /// Whether the last run left a design not laid out or not painted, which
     /// a later turn brings, or a brick not read yet. If so, the next turn
     /// runs again.
@@ -129,7 +129,7 @@ struct Arrangement {
 /// the pin being written, and the chat's line with where it hangs. An input
 /// the step reads must be added here, or the step never sees it change.
 #[derive(Clone, PartialEq)]
-struct Inputs {
+struct Input {
     o: Observation,
     places: bool,
     drafted: Option<(Octant, u64)>,
@@ -227,7 +227,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
         p.changed_places.clear();
         return;
     };
-    let seen = Inputs {
+    let seen = Input {
         o,
         places: settings().place,
         drafted: pin::draft_key(draft),
@@ -245,10 +245,10 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     let now = &mut p.now;
     now.bricks.clear();
     let extent = extent_px(SPACING_PX);
-    let drawn = observation::eye_draw_dist().unwrap_or(0.0);
+    let draw_dist = observation::eye_draw_dist().unwrap_or(0.0);
     observation::bricks(&o, &mut |brick, heights| {
         let b = region(brick, heights);
-        if o.measure(&b).near > drawn {
+        if o.measure(&b).near > draw_dist {
             return;
         }
         let far = v3::len(&core::array::from_fn(|k| {
@@ -264,7 +264,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     now.places = settings().place;
     let places = now.places;
     // What was read stays for a brick that is still drawn and whose columns
-    // no change touches (domain/query/changes.rs), as long as the places
+    // no change touches (domain/query/change.rs), as long as the places
     // setting did not turn. A brick left or touched drops what was read from
     // it. Only bricks entered or touched are read, nearest the eye first, as
     // many a turn as one pass of the tick's budget reads and at least one.
@@ -284,7 +284,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
         .map(|&s| {
             let r = columns(s);
             before.binary_search(&s).is_ok()
-                && !changes::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], changed_places)
+                && !change::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], changed_places)
         })
         .collect();
     let stands = |s: &Brick| now.bricks.binary_search(s).is_ok_and(|k| stood[k]);
@@ -358,7 +358,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     // tiebreak).
     for s in shown.drain(..) {
         let (design, region) = s.design.with_spacing(spacing);
-        let (design, held) = match before.get(&s.key) {
+        let (design, pending) = match before.get(&s.key) {
             Some(before) if *before != design && !design::ready(&design) => {
                 (before.clone(), Some(design))
             }
@@ -371,7 +371,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
         };
         let local = coord::to_world(&s.stands);
         p.pending
-            .extend(held.map(|held| (sized.len() as u32, held)));
+            .extend(pending.map(|pending| (sized.len() as u32, pending)));
         p.candidates.push(
             local[0],
             local[1],

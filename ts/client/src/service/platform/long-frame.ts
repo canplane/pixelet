@@ -1,9 +1,8 @@
 // @pxl/client/service/platform/long-frame.ts
 
-/** The place's long frames, heard through its PerformanceObserver. They are
- * long animation frames, which Safari, WKWebView and React Native lack, and
- * long tasks. On a device, the long tasks are the JavaScript thread's, which
- * React Native's native performance API reports
+/** A place reports long animation frames, which Safari, WKWebView and React
+ * Native lack, and long tasks. On a device, the long tasks are the JavaScript
+ * thread's, which React Native's native performance API reports
  * (RuntimeScheduler_Modern.cpp `reportLongTasks`). */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
@@ -15,7 +14,6 @@ interface LoafEntry extends PerformanceEntry {
   scripts?: { duration: f64 }[];
 }
 
-/** The entry type each source is observed as. */
 const ENTRY: Record<LongFrameSource, string> = {
   loaf: "long-animation-frame",
   longtask: "longtask",

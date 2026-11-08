@@ -38,8 +38,8 @@ constexpr std::uint32_t page_up(std::uint32_t bytes) {
     return align_up(bytes, PAGE_BYTES);
 }
 
-// The parts the core shares with its runtime, each on pages of its own, which
-// `layout` places in an order the seed draws.
+// The parts the core shares with its runtime lie each on pages of its own, and
+// `layout` places them in an order the seed draws.
 enum Part : std::size_t { HEAD, SQ_DESC, CQ_DESC, SQ_SLOT, CQ_SLOT, STREAM, PARTS };
 
 constexpr std::array<std::uint32_t, PARTS> PART_BYTES{
@@ -60,9 +60,9 @@ constexpr std::uint32_t STATE_AT = [] {
     return end;
 }();
 
-// Where each part lies under `seed`, counted from the range's start. The
-// seed draws the order of the parts and, for each part, how many pages to
-// leave before it. The first page is never used, since offset 0 names
+// `layout` answers where each part lies under `seed`, counted from the range's
+// start. The seed draws the order of the parts and, for each part, how many
+// pages to leave before it. The first page is never used, since offset 0 names
 // nothing (ARCHITECTURE.md, the contract's rule 1).
 std::array<std::uint32_t, PARTS> layout(std::uint32_t seed) {
     SplitMix32 rng(seed);
@@ -79,7 +79,7 @@ std::array<std::uint32_t, PARTS> layout(std::uint32_t seed) {
     return at;
 }
 
-// The import CALL makes: a number, and the offset of the word the runtime
+// CALL makes this import: a number, and the offset of the word the runtime
 // writes in answer.
 struct Inc {
     std::uint32_t n = 0;
@@ -98,7 +98,7 @@ struct State {
     Door door;
     Stream stream;
     // Each open file's owner is the number its OPEN packet named.
-    Files<std::uint32_t, HANDLES> files;
+    FileTable<std::uint32_t, HANDLES> files;
     abi::Table<std::monostate, HANDLES> handles;
     xpute_conformance_now now;
     double mark = 0;
@@ -106,8 +106,8 @@ struct State {
     std::uint32_t word = 0;
 };
 
-// Where the heap begins. The memory never grows, so a module's allocator
-// sits over a fixed range.
+// The heap begins here. The memory never grows, so a module's allocator sits
+// over a fixed range.
 constexpr std::uint32_t HEAP_AT = page_up(STATE_AT + sizeof(State));
 
 static_assert(HEAP_AT + HEAP_BYTES <= MEM_BYTES, "the ranges run past the memory");
@@ -297,9 +297,9 @@ extern "C" double run(double) {
 
 #else
 
-// The memory a native runtime hands over: MEM_BYTES from `mem`. The core
-// allocates from the process, so nothing reads the process-wide core memory
-// (`mem::core`), which stays unset.
+// A native runtime hands over MEM_BYTES from `mem`. The core allocates from
+// the process, so nothing reads the process-wide core memory (`mem::core`),
+// which stays unset.
 Memory given(std::uint8_t *mem) noexcept { return Memory(reinterpret_cast<std::uintptr_t>(mem), MEM_BYTES); }
 
 extern "C" std::uint32_t xpute_conformance_boot(std::uint8_t *mem, xpute_conformance_now now, xpute_conformance_call call, std::uint32_t seed) {

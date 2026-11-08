@@ -76,8 +76,6 @@ pub(super) fn locate(s: &mut State) -> Outcome {
     ask_turn(s)
 }
 
-/// Which sensors the place has. The UI sends this once the core is
-/// attached.
 pub(super) fn platform(c: abi::SensorPlatform) -> Outcome {
     *sensor::platform() = Platform {
         geolocation: c.geolocation,

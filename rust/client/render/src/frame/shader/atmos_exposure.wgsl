@@ -31,7 +31,7 @@ fn radius_step(r: f32) -> f32 {
 
 // The land's lit face under the eye as shown, with the land at radius `r` and
 // the eye exposed for that land.
-fn land_shown(r: f32, s: Lights) -> vec3f {
+fn land_shown(r: f32, s: Lighting) -> vec3f {
   let up = frame_up();
   return surface_light_in(up, up, vec2f(1.0), 1.0, light_unexposed_in(r, up, s, true), s) * exp2(eye_stops_at(r, s));
 }

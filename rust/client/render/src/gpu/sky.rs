@@ -14,7 +14,7 @@ use crate::gpu::api::{
 };
 use crate::gpu::atmosphere::Atmosphere;
 use crate::gpu::image_map::ImageMap;
-use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::look::environment::ENV_POLE;
 
 pub struct SkyPass {
@@ -28,7 +28,7 @@ impl SkyPass {
     /// `moon` is the moon's map, and `atmosphere` the air the sky is lit through.
     pub fn new(
         g: &Gpu,
-        pipelines: &mut Pipelines,
+        pipelines: &mut PipelineCache,
         frame_buf: u32,
         moon: &ImageMap,
         atmosphere: &Atmosphere,

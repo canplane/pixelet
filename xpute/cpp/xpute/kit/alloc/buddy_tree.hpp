@@ -20,10 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// The core's page allocator, a port of evanw/buddy-malloc that follows the C
-// line for line. slab.hpp serves anything smaller than a page from it.
-//
-// The port departs from the C in two places. `update_max_ptr` asks the
+// This is the core's page allocator, and slab.hpp serves anything smaller than
+// a page from it. It is a port of evanw/buddy-malloc that follows the C line
+// for line, and departs from it in two places. `update_max_ptr` asks the
 // `Range` for memory where the C calls `brk`. A block carries no 8-byte header
 // with its size, so every caller passes the size it asked for back to `free`.
 
@@ -120,17 +119,17 @@ template <Range R> class BuddyMalloc {
         std::size_t original_bucket = bucket_for_request(request);
         std::size_t bucket = original_bucket;
 
-        // The loop looks for a free block at least as large as needed,
-        // moving to larger buckets when there is no exact match; a larger
-        // block is split below.
+        // The loop looks for a free block at least as large as needed, moving
+        // to larger buckets when there is no exact match; a larger block is
+        // split below.
         for (;;) {
             if (!lower_bucket_limit(bucket)) return nullptr;
 
             List *ptr = list_pop(bucket);
             if (ptr == nullptr) {
                 // When this is not the root's bucket, the search goes on to
-                // the next larger one; at bucket 0 there is no larger one,
-                // and the request fails.
+                // the next larger one; at bucket 0 there is no larger one, and
+                // the request fails.
                 if (bucket != bucket_limit_ || bucket == 0) {
                     if (bucket == 0) return nullptr;
                     bucket--;
@@ -161,8 +160,8 @@ template <Range R> class BuddyMalloc {
             if (i != 0) flip_parent_is_split(i);
 
             // A block larger than needed is split down to size. Each step
-            // keeps the left half and puts the right half on its bucket's
-            // free list.
+            // keeps the left half and puts the right half on its bucket's free
+            // list.
             while (bucket < original_bucket) {
                 i = i * 2 + 1;
                 bucket++;
@@ -184,8 +183,8 @@ template <Range R> class BuddyMalloc {
         releases_++;
         std::size_t i = node_for_ptr(ptr, bucket);
 
-        // The freed block becomes UNUSED, and while its buddy is UNUSED too
-        // the two merge into their parent, up toward the root.
+        // The freed block becomes UNUSED, and while its buddy is UNUSED too the
+        // two merge into their parent, up toward the root.
         while (i != 0) {
             flip_parent_is_split(i);
             // After the flip, the parent's bit says SPLIT exactly when the
@@ -204,8 +203,8 @@ template <Range R> class BuddyMalloc {
     }
 
   private:
-    // Stands in for the C's `brk`: the reached memory grows up to the range's
-    // end and is refused past it.
+    // This stands in for the C's `brk`: the reached memory grows up to the
+    // range's end and is refused past it.
     bool update_max_ptr(std::uintptr_t new_val) noexcept {
         if (new_val > max_ptr_) {
             if (new_val > end_ptr_) return false;
@@ -214,9 +213,8 @@ template <Range R> class BuddyMalloc {
         return true;
     }
 
-    // The address a node stands for. A bucket's first node is
-    // `(1 << bucket) - 1`, so `idx + 1` is taken before the subtraction,
-    // which then never goes below zero.
+    // A bucket's first node is `(1 << bucket) - 1`, so `idx + 1` is taken
+    // before the subtraction, which then never goes below zero.
     List *ptr_for_node(std::size_t idx, std::size_t bucket) const noexcept {
         return reinterpret_cast<List *>(base_ptr_ + ((idx + 1 - (std::size_t{1} << bucket)) << (R::MAX_LOG2 - bucket)));
     }

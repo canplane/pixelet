@@ -1,7 +1,7 @@
 // xpute-kit/alloc.rs
 
-//! A buddy allocator of pages, and a slab allocator of size classes that
-//! takes its pages from the buddy. Both manage a range of memory that the
+//! This is a buddy allocator of pages, and a slab allocator of size classes
+//! that takes its pages from the buddy. Both manage a range of memory that the
 //! caller describes through the `Range` trait.
 
 /// The width in bits that a range's size and the buddy's exponents fit in.

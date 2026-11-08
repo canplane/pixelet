@@ -78,7 +78,7 @@ fn division_parts(
 /// names, and the zoom the names show down to rather than the view's scale.
 /// The marker draft's text is kept apart, in `SnapshotMemo`.
 #[derive(Clone, Copy, PartialEq)]
-pub struct SnapshotInputs {
+pub struct SnapshotInput {
     status: GroundStatus,
     is_off_center: bool,
     pivot: Option<Q3>,
@@ -111,7 +111,7 @@ pub struct SnapshotInputs {
 /// snapshots, as the client empties the ones already named.
 const REFUSED_SHOWN: usize = 1 + repository::WANTS as usize;
 
-fn snapshot_inputs() -> SnapshotInputs {
+fn snapshot_inputs() -> SnapshotInput {
     let (location, settings) = (device_location_store(), settings());
     let pivot = controller::pivot();
     let division = pivot.and_then(|at| naming(&at));
@@ -133,7 +133,7 @@ fn snapshot_inputs() -> SnapshotInputs {
         (Some(_), true) if TerrainTile::tile_cache().is_shown() => GroundStatus::Success,
         _ => GroundStatus::Loading,
     };
-    SnapshotInputs {
+    SnapshotInput {
         status,
         is_off_center: off_center().is_off_center,
         pivot,
@@ -186,7 +186,7 @@ fn snapshot_inputs() -> SnapshotInputs {
 /// or view is sent only when it differs from these.
 #[derive(Default)]
 pub struct SnapshotMemo {
-    last_inputs: Option<SnapshotInputs>,
+    last_inputs: Option<SnapshotInput>,
     text: String,
     last_view: Option<(f64, f64)>,
 }
@@ -194,7 +194,7 @@ pub struct SnapshotMemo {
 impl SnapshotMemo {
     /// The snapshot's inputs now, or None when they have not changed since
     /// they were last sent. What it returns counts as sent.
-    pub fn take_changed(&mut self) -> Option<SnapshotInputs> {
+    pub fn take_changed(&mut self) -> Option<SnapshotInput> {
         let (now, text) = (snapshot_inputs(), write::marker_draft().unwrap_or_default());
         if self.last_inputs == Some(now) && self.text == text {
             return None;
@@ -225,7 +225,7 @@ impl SnapshotMemo {
 
 /// Writes the snapshot built from `shown` into `out`. Returns None when it
 /// does not fit.
-pub fn snapshot(shown: &SnapshotInputs, out: &mut [u8]) -> Option<u32> {
+pub fn snapshot(shown: &SnapshotInput, out: &mut [u8]) -> Option<u32> {
     let snapshot = Snapshot {
         pivot: PivotState {
             status: shown.status,

@@ -1,9 +1,9 @@
 // xpute-kit/status/bug.rs
 
-//! How a broken invariant stops the module. A bug is an errno, its place in
-//! the source and at most two numbers. It is handed to the report that
-//! `set_report` installed, and then the module stops: a WebAssembly module
-//! traps, and a native build panics.
+//! A broken invariant stops the module. A bug is an errno, its place in the
+//! source and at most two numbers. It is handed to the report that `set_report`
+//! installed, and then the module stops: a WebAssembly module traps, and a
+//! native build panics.
 
 use core::panic::Location;
 use std::sync::OnceLock;
@@ -61,8 +61,8 @@ impl<T, E> OrBug<T> for Result<T, E> {
     }
 }
 
-/// Reports a bug with an errno, named by its constant, and up to two
-/// numbers: `bug!(ENOSPC)`, `bug!(ENOSPC, n)` or `bug!(ENOSPC, n, cap)`.
+/// Reports a bug with an errno, named by its constant, and up to two numbers:
+/// `bug!(ENOSPC)`, `bug!(ENOSPC, n)` or `bug!(ENOSPC, n, cap)`.
 #[macro_export]
 macro_rules! bug {
     ($errnum:ident) => {

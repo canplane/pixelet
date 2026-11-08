@@ -28,15 +28,15 @@ pub enum Uptake {
     Full,
 }
 
-pub struct Uploads {
+pub struct UploadTable {
     slots: Vec<Upload>,
     /// The number of slots in `Waiting`.
     waiting: u32,
 }
 
-impl Uploads {
-    pub fn new(slots: u32) -> Uploads {
-        Uploads {
+impl UploadTable {
+    pub fn new(slots: u32) -> UploadTable {
+        UploadTable {
             slots: vec![Upload::Empty; slots as usize],
             waiting: 0,
         }

@@ -4,7 +4,7 @@
 //! shows is decided in angles, by the camera grid's cell (pxl-spec
 //! space/camera/grid.rs `CELL`). Pixels matter only to the UI's layout and
 //! to input, and check-rules lets only the modules it names read this one
-//! (pxl-tool bin/check_rules.rs `SCREEN_USERS`).
+//! (pxl-tool bin/rule.rs `SCREEN_USERS`).
 
 use pxl_spec::space::camera::grid::HALF_TAN;
 

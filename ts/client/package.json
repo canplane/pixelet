@@ -11,16 +11,12 @@
   },
   "scripts": {
     "start": "EXPO_NO_TYPESCRIPT_SETUP=1 expo start",
-    "build:wasm": "./script/build-wasm.py",
-    "build:wasm:published": "./script/build-wasm.py --published",
-    "build:brand": "cd \"$(git rev-parse --show-toplevel)/rust\" && cargo run -q -p pxl-tool --bin render_brand",
+    "build:wasm": "./script/wasm-build.py",
+    "build:wasm:published": "./script/wasm-build.py --published",
+    "build:brand": "cd \"$(git rev-parse --show-toplevel)/rust\" && cargo run -q -p pxl-tool --bin brand",
     "web": "pnpm build:wasm && pnpm build:brand && node script/web.ts html && EXPO_NO_TYPESCRIPT_SETUP=1 expo start --web",
-    "web:oven": "PXL_DEV_SOURCE=oven pnpm web",
-    "web:shelf": "PXL_DEV_SOURCE=shelf pnpm web",
     "build:web": "pnpm build:wasm:published && pnpm build:brand && node script/web.ts html && EXPO_NO_TYPESCRIPT_SETUP=1 expo export -p web && node script/web.ts stamp",
-    "preview": "pnpm build:web && node script/web.ts serve",
-    "preview:oven": "PXL_DEV_SOURCE=oven pnpm preview",
-    "preview:shelf": "PXL_DEV_SOURCE=shelf pnpm preview"
+    "preview": "pnpm build:web && node script/web.ts serve"
   },
   "dependencies": {
     "@expo/metro-runtime": "57.0.16",

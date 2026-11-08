@@ -1,8 +1,8 @@
 // @xpute/runtime/sched/frame_pacing.ts
 
 /**
- * A scheduling policy (policy.ts) for a runtime that shares its thread with a
- * display's compositor, as a page does. Turns run on animation frames, a
+ * This is a scheduling policy (policy.ts) for a runtime that shares its thread
+ * with a display's compositor, as a page does. Turns run on animation frames, a
  * whole number of refreshes apart, and each turn gets the time its frames
  * leave. None of this is xpute's mechanism: the program that composes a page
  * injects this policy, with its own numbers, when the runtime boots.
@@ -40,12 +40,11 @@ import type { Grant, SchedulingPolicy } from "./policy.ts";
 export const FRAME_WINDOW = 64;
 const MAX_FRAME_GAP_MS = 50;
 
-/** The program's numbers for its pacing. */
 export interface FramePacingConfig {
-  /** The rate turns are paced at, unless the program asks for a slower one
+  /** Turns are paced at this rate, unless the program asks for a slower one
    * (`pace`). */
   pace_hz: f64;
-  /** The share of each frame left unspent, for the runtime's own work and
+  /** This share of each frame is left unspent, for the runtime's own work and
    * for error in the estimate. */
   margin_share: f64;
   batch_frames: f64;
@@ -64,23 +63,24 @@ export class FramePacing implements SchedulingPolicy<FrameGrant> {
   private readonly gaps = new Float64Array(FRAME_WINDOW);
   private readonly sorted = new Float64Array(FRAME_WINDOW);
   private gap_at = 0;
-  /** How many of `gaps` are frames seen, up to the window. */
+  /** This counts how many of `gaps` are frames seen, up to the window. */
   private seen = 0;
-  /** The display's refresh as of the last gap seen. It is a percentile of
-   * the window, sorted once for each gap and read by every admit and grant
+  /** This is the display's refresh as of the last gap seen. It is a percentile
+   * of the window, sorted once for each gap and read by every admit and grant
    * after it. */
   private _refresh_ms: f64;
   private input_at = -Infinity;
   private asked_next = false;
-  /** When the last animation frame was handed, run or skipped. */
+  /** This is when the last animation frame was handed, run or skipped. */
   private frame_at = -1;
-  /** When the last turn ran. */
+  /** This is when the last turn ran. */
   private last = -Infinity;
 
   private readonly cfg: FramePacingConfig;
-  /** The interval `pace_hz` paces at. */
+  /** This is the interval `pace_hz` paces at. */
   private readonly max_ms: f64;
-  /** The least interval the program asked between turns, 0 for none. */
+  /** This is the least interval the program asked between turns, and 0 for
+   * none. */
   private _asked_ms: f64 = 0;
   private readonly next_frame: (run: (now: f64) => void) => void;
 
@@ -99,7 +99,7 @@ export class FramePacing implements SchedulingPolicy<FrameGrant> {
     this.next_frame(consider);
   }
 
-  /** An input at `now`: the turns after it are interactive for `settle_ms`. */
+  /** After an input at `now`, the turns are interactive for `settle_ms`. */
   input(now: f64): void {
     this.input_at = now;
   }
@@ -124,16 +124,15 @@ export class FramePacing implements SchedulingPolicy<FrameGrant> {
     this._asked_ms = interval_ms;
   }
 
-  /** The display's refresh, from the gaps seen. */
   refresh(): f64 {
     return this._refresh_ms;
   }
 
   /**
-   * The interval turns are paced at: the most whole refreshes within one
-   * interval at `pace_hz`, or the fewest that reach the interval the program
-   * asked for, whichever is more, and at least one. Each bound allows an
-   * eighth of a refresh for the spread of the refresh's measure, so a 120 Hz
+   * This is the interval turns are paced at: the most whole refreshes within
+   * one interval at `pace_hz`, or the fewest that reach the interval the
+   * program asked for, whichever is more, and at least one. Each bound allows
+   * an eighth of a refresh for the spread of the refresh's measure, so a 120 Hz
    * display measured at 8.34 ms still paces 60 Hz at two refreshes.
    */
   pace_ms(refresh_ms: f64): f64 {

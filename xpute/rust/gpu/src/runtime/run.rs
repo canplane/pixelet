@@ -11,7 +11,7 @@ use xpute_runtime::mem::Memory;
 use super::name::{flags, of, BUFFER_USAGES, COLOR_WRITES, SHADER_STAGES, TEXTURE_USAGES};
 use super::object::Object;
 use super::pending::{Pending, ANSWERED, REFUSED, WAITING};
-use super::word::Words;
+use super::word::WordCursor;
 use super::GpuRuntime;
 use crate::device;
 use crate::enums::{
@@ -52,7 +52,7 @@ impl GpuRuntime {
                     .iter()
                     .map(|w| u32::from_le_bytes(*w)),
             );
-            self.record(memory, code, &mut Words::new(&scratch));
+            self.record(memory, code, &mut WordCursor::new(&scratch));
             self.scratch = scratch;
             k += 2 + n;
         }
@@ -88,14 +88,14 @@ impl GpuRuntime {
         }
     }
 
-    /// The belt's room for the next `want` bytes of a write. Where every
-    /// chunk is taken, it submits the writes so far and waits on the queue
-    /// until a chunk is back, as a driver's staging ring waits for the GPU.
-    /// It must wait: a write record has no refusal, and its bytes are the
+    /// This takes the belt's room for the next `want` bytes of a write. Where
+    /// every chunk is taken, it submits the writes so far and waits on the
+    /// queue until a chunk is back, as a driver's staging ring waits for the
+    /// GPU. It must wait: a write record has no refusal, and its bytes are the
     /// runtime's only while the record runs (xpute-core ipc/stream.rs R3), so
-    /// they are staged before the record returns. None only where the device
-    /// is gone and its chunks' mappings were refused; the write is then lost
-    /// with everything else the loss ends.
+    /// they are staged before the record returns. It answers none only where
+    /// the device is gone and its chunks' mappings were refused; the write is
+    /// then lost with everything else the loss ends.
     fn stage(&mut self, want: u64) -> Option<(wgpu::Buffer, u64, u64)> {
         loop {
             if let Some(room) = self.belt.take(want) {
@@ -130,7 +130,7 @@ impl GpuRuntime {
         }
     }
 
-    fn texture_place(&self, r: &mut Words) -> OwnedTexture {
+    fn texture_place(&self, r: &mut WordCursor) -> OwnedTexture {
         let texture = self.texture(r.u()).clone();
         let mip_level = r.u();
         let origin = wgpu::Origin3d {
@@ -147,7 +147,7 @@ impl GpuRuntime {
         }
     }
 
-    fn buffer_layout(&self, r: &mut Words) -> OwnedBuffer {
+    fn buffer_layout(&self, r: &mut WordCursor) -> OwnedBuffer {
         let buffer = self.buffer(r.u()).clone();
         let offset = u64::from(r.u());
         let layout = wgpu::TexelCopyBufferLayout {
@@ -158,7 +158,7 @@ impl GpuRuntime {
         OwnedBuffer { buffer, layout }
     }
 
-    fn extent(r: &mut Words) -> wgpu::Extent3d {
+    fn extent(r: &mut WordCursor) -> wgpu::Extent3d {
         wgpu::Extent3d {
             width: r.u(),
             height: r.u(),
@@ -166,12 +166,12 @@ impl GpuRuntime {
         }
     }
 
-    fn timestamps(&self, r: &mut Words) -> Option<(wgpu::QuerySet, Option<u32>, Option<u32>)> {
+    fn timestamps(&self, r: &mut WordCursor) -> Option<(wgpu::QuerySet, Option<u32>, Option<u32>)> {
         let (set, begin, end) = (r.opt(), r.opt(), r.opt());
         set.map(|s| (self.query_set(s).clone(), begin, end))
     }
 
-    fn stencil_face(&self, r: &mut Words) -> wgpu::StencilFaceState {
+    fn stencil_face(&self, r: &mut WordCursor) -> wgpu::StencilFaceState {
         wgpu::StencilFaceState {
             compare: of(&self.names.compare, r.u(), "compare"),
             fail_op: of(&self.names.stencil, r.u(), "stencil"),
@@ -180,7 +180,7 @@ impl GpuRuntime {
         }
     }
 
-    fn record(&mut self, memory: &mut Memory<'_>, code: u32, r: &mut Words) {
+    fn record(&mut self, memory: &mut Memory<'_>, code: u32, r: &mut WordCursor) {
         match code {
             op::BUFFER => {
                 let id = r.u();
@@ -813,7 +813,7 @@ impl GpuRuntime {
     /// words. wgpu has no async call, so the pipeline is made already. Its
     /// ticket is still stored at the next poll, as a QUEUE_DONE's is, so the
     /// core finds it no sooner than on the web.
-    fn made_at_once(&mut self, r: &mut Words) {
+    fn made_at_once(&mut self, r: &mut WordCursor) {
         let (word, ticket) = (r.u(), r.u());
         self.pending.push(Pending {
             state: Arc::new(AtomicU8::new(ANSWERED)),
@@ -823,7 +823,7 @@ impl GpuRuntime {
         });
     }
 
-    fn render_pipeline(&mut self, r: &mut Words) {
+    fn render_pipeline(&mut self, r: &mut WordCursor) {
         let id = r.u();
         let layout = r.opt();
         let vertex_module = r.u();
@@ -958,7 +958,7 @@ impl GpuRuntime {
         self.put(id, Object::RenderPipeline(p));
     }
 
-    fn begin_render_pass(&mut self, r: &mut Words) {
+    fn begin_render_pass(&mut self, r: &mut WordCursor) {
         let (id, e) = (r.u(), r.u());
         struct Color {
             view: wgpu::TextureView,
@@ -1061,7 +1061,7 @@ impl GpuRuntime {
     }
 }
 
-/// The most color attachments a render pass takes: wgpu-hal's
+/// This is the most color attachments a render pass takes: wgpu-hal's
 /// `MAX_COLOR_ATTACHMENTS`, the bound wgpu builds its passes to.
 const COLORS: usize = 8;
 
@@ -1086,7 +1086,7 @@ fn slice(b: &wgpu::Buffer, offset: u64, size: Option<u64>) -> wgpu::BufferSlice<
     }
 }
 
-/// A copy's buffer side, holding its buffer, so that the encoder can be
+/// This is a copy's buffer side, holding its buffer, so that the encoder can be
 /// borrowed while the side is in use. `OwnedTexture` is the texture side.
 struct OwnedBuffer {
     buffer: wgpu::Buffer,

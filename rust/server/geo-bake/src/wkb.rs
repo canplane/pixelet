@@ -65,7 +65,7 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
     let has_srid = t & 0x2000_0000 != 0;
     // ISO writes the dimensions as thousands of the type: 1 Z, 2 M, 3 ZM.
     let iso = (t & 0xffff) / 1000;
-    let dims = Dims {
+    let dims = Dimension {
         z: t & 0x8000_0000 != 0 || iso == 1 || iso == 3,
         m: t & 0x4000_0000 != 0 || iso == 2 || iso == 3,
     };
@@ -128,12 +128,12 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
 }
 
 #[derive(Clone, Copy)]
-struct Dims {
+struct Dimension {
     z: bool,
     m: bool,
 }
 
-fn read_point(r: &mut Reader, le: bool, dims: Dims) -> Option<G3857> {
+fn read_point(r: &mut Reader, le: bool, dims: Dimension) -> Option<G3857> {
     let (x, y) = (r.f64(le)?, r.f64(le)?);
     let z = if dims.z { r.f64(le)? } else { 0.0 };
     if dims.m {
@@ -142,7 +142,7 @@ fn read_point(r: &mut Reader, le: bool, dims: Dims) -> Option<G3857> {
     Some([x, y, z])
 }
 
-fn read_ring(r: &mut Reader, le: bool, dims: Dims) -> Option<Vec<G3857>> {
+fn read_ring(r: &mut Reader, le: bool, dims: Dimension) -> Option<Vec<G3857>> {
     let n = r.u32(le)? as usize;
     // An untrusted length must not size an allocation: each point is at least 16 bytes.
     if n.saturating_mul(16) > r.b.len() - r.at.min(r.b.len()) {

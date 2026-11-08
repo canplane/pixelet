@@ -1,13 +1,12 @@
 // pxl-render/beam.light.wgsl
 
 // The shadow map's beam rays, as the beam rays' walks read them from the light's list
-// (corners.wgsl, light_list.wgsl). A beam ray starts over every `light::BEAM`-th texel, from
+// (corner.wgsl, light_list.wgsl). A beam ray starts over every `light::BEAM`-th texel, from
 // `BEAM_WINDOW` of them before the box's first (pxl-engine `light::corner_at`). A run takes only
 // those listed for the tiles the cast claimed. Each goes along the light from where its texel
 // lies on the near plane, at its tile's band (`Light::band`), and keeps its line in the light's
 // list.
 
-/// How many beam rays lie across the map, and as many down (`light::beam_across`).
 fn beam_lattice() -> vec2<u32> {
   return vec2<u32>(beam_across());
 }
@@ -22,12 +21,10 @@ fn corner_queued(k: u32) -> vec2<u32> {
   return light_item_at(LEVEL_CORNER, k);
 }
 
-/// The first word of beam ray `c`'s parked state (`light::corner_states_at`).
 fn corner_state_at(c: vec2<u32>) -> u32 {
   return header_word(LIGHT_HEADER_CORNER_STATES) + (c.y * beam_across() + c.x) * STATE_WORDS;
 }
 
-/// The first word of beam ray `c`'s line (`light::line`).
 fn beam_line(c: vec2<u32>) -> u32 {
   return light_line(c.y * beam_across() + c.x);
 }

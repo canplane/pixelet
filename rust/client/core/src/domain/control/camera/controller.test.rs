@@ -24,8 +24,6 @@ fn near(a: V3, b: V3, tol: f64) -> bool {
     (0..3).all(|k| (a[k] - b[k]).abs() <= tol * a[k].abs().max(1.0))
 }
 
-/// Places the orbit at a random pose near the world's middle and returns
-/// its pivot.
 fn placed(rng: &mut Rng) -> V3 {
     let at = [
         rng.unit() * 2_000.0 - 1_000.0,
@@ -40,7 +38,7 @@ fn placed(rng: &mut Rng) -> V3 {
 
 fn third_person() {
     tracked_end();
-    controllers().base = CameraMode::orbit;
+    controller().base = CameraMode::orbit;
     settings_mut().camera_mode = CameraMode::orbit;
 }
 
@@ -54,12 +52,12 @@ fn pivot_along_facing() {
     for n in 0..200 {
         let at = placed(&mut rng);
         assert!(near(pivot_world().unwrap(), at, 1e-9), "{n}: third person");
-        controllers().base = CameraMode::first_person;
+        controller().base = CameraMode::first_person;
         assert!(
             near(pivot_world().unwrap(), eye_world().unwrap(), 1e-12),
             "{n}: first person"
         );
-        controllers().base = CameraMode::orbit;
+        controller().base = CameraMode::orbit;
     }
 }
 
@@ -105,7 +103,7 @@ fn person_change_keeps_pivot() {
         }
     }
     // Under a tracker the change waits, and the base is left as it was.
-    controllers().tracker = Some(TrackerSpace {
+    controller().tracker = Some(TrackerSpace {
         world_turn: mat4::new(),
         world_at: [0.0; 3],
         turn: mat4::new(),
@@ -116,11 +114,11 @@ fn person_change_keeps_pivot() {
         "taken under a tracker"
     );
     assert_eq!(
-        controllers().base,
+        controller().base,
         CameraMode::orbit,
         "the base changed under a tracker"
     );
-    controllers().tracker = None;
+    controller().tracker = None;
     assert!(
         take_mode(CameraMode::first_person),
         "not taken once the tracker let go"

@@ -7,7 +7,7 @@ use crate::frame::shader::record::PIPELINE_MIP;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{pass_desc, release, sampler_entry, view_entry, Format, Gpu, Layout, Load};
-use crate::gpu::pipeline::Pipelines;
+use crate::gpu::pipeline::PipelineCache;
 
 pub fn mip_levels(width: u32, height: u32) -> u32 {
     32 - width.max(height).max(1).leading_zeros()
@@ -21,7 +21,7 @@ pub struct MipPass {
 
 impl MipPass {
     /// A pipeline draws into the format it was built for, so each format needs its own.
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, format: Format) -> MipPass {
+    pub fn new(g: &Gpu, pipelines: &mut PipelineCache, format: Format) -> MipPass {
         let pipeline = pipelines.build(g, PIPELINE_MIP, format);
         let sampler = g.sampler(
             FilterMode::linear,
@@ -56,7 +56,8 @@ impl MipPass {
                 g.set_bind_group(pass, 0, group, &[]);
                 g.draw(pass, 3, 1, 0, 0);
                 g.end(pass);
-                // The encoder keeps what it recorded; letting these go now only frees the handles.
+                // The encoder keeps what it recorded, so letting these go now frees only
+                // their handles.
                 for id in [pass, group, target, above] {
                     release(id);
                 }

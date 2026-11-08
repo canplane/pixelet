@@ -38,11 +38,10 @@ function columnsOf(width: f64): f64 {
 }
 
 /**
- * A grid with as many columns as fit when each cell is at least one target
- * wide. The cells are sized so that the outermost items' edges line up with
- * the section's edges, as the content of the other tabs does. For that, the
- * grid reaches past the section on each side by the margin an item keeps
- * inside its cell.
+ * The cells are sized so that the outermost items' edges line up with the
+ * section's edges, as the content of the other tabs does. For that, the grid
+ * reaches past the section on each side by the margin an item keeps inside its
+ * cell.
  */
 export function Grid({
   head,
@@ -73,8 +72,6 @@ export function Grid({
   );
 }
 
-/** A cell that shows only a picture. While it is pressed, its name is shown
- * above the finger (name-tip.tsx). */
 export function Item({
   label,
   active,
@@ -106,9 +103,6 @@ export function Item({
   );
 }
 
-/** How an item is marked. An item that is not lit has a hairline outline. The
- * lit item has the selection ring and the scale that ITEM_BASE leaves room
- * for. */
 export const mark = StyleSheet.create({
   off: { boxShadow: `0 0 0 1px ${hairline}` },
   on: {

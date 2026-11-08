@@ -11,7 +11,7 @@ fn sample_whole(s: vec2<u32>, k: Node) -> bool {
 
 /// Where the samples' faces' asks lie (pxl-engine `beam::Grid::asks_at`), with room for one ask
 /// a sample.
-fn sample_asks() -> Asks {
+fn sample_asks() -> AskList {
   let n = sample_lattice();
-  return Asks(RASTER_ASKED_AT, eye_word(GRID + GRID_ASKS_AT), n.x * n.y);
+  return AskList(RASTER_ASKED_AT, eye_word(GRID + GRID_ASKS_AT), n.x * n.y);
 }

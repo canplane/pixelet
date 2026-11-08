@@ -1,9 +1,9 @@
 // xpute-runtime/mem.rs
 
-//! The core's memory as any runtime reads and writes it: by the offsets the
-//! core names. Each access reaches only its own range and never takes one
-//! reference over the whole memory, because the runtime's own blocks may lie
-//! in it. C++'s `xpute::Memory` is the same part.
+//! This is the core's memory as any runtime reads and writes it: by the offsets
+//! the core names. Each access reaches only its own range and never takes one
+//! reference over the whole memory, because the runtime's own blocks may lie in
+//! it. C++'s `xpute::Memory` is the same part.
 
 use core::marker::PhantomData;
 use core::ptr::NonNull;
@@ -16,7 +16,7 @@ pub struct Memory<'a> {
 }
 
 impl<'a> Memory<'a> {
-    /// A memory the caller holds whole, as a test does.
+    /// `of` makes a memory the caller holds whole, as a test does.
     pub fn of(bytes: &'a mut [u8]) -> Memory<'a> {
         Memory {
             bytes: bytes.len(),
@@ -41,8 +41,8 @@ impl<'a> Memory<'a> {
         self.bytes
     }
 
-    /// The `n` bytes at `at`. A range past the memory's end is the core's
-    /// bug, and panics.
+    /// This is the `n` bytes at `at`. A range past the memory's end is the
+    /// core's bug, and panics.
     fn range(&self, at: usize, n: usize) -> *mut u8 {
         let end = at.checked_add(n).filter(|&end| end <= self.bytes);
         assert!(
@@ -54,7 +54,7 @@ impl<'a> Memory<'a> {
         unsafe { self.base.as_ptr().add(at) }
     }
 
-    /// The `n` bytes at `at`, borrowed while nothing is written.
+    /// This borrows the `n` bytes at `at` while nothing is written.
     pub fn read(&self, at: usize, n: usize) -> &[u8] {
         // SAFETY: in the memory, which `from_raw`'s caller lets this read;
         // `&self` keeps every write out while the slice lives.

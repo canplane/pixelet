@@ -24,10 +24,10 @@ use xpute_gpu::encode::Id;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use super::count::{self, Counter, Counts, RayCounts};
+use super::count::{self, CountBuffer, Counter, RayCount};
 use super::raster::Raster;
-use super::schedule::{Reads, Schedule};
-use super::RaysPass;
+use super::schedule::{CastRead, Schedule};
+use super::RayPass;
 use crate::frame::shader::floor;
 use crate::frame::shader::group::{
     BEAMS, CAST_GROUP, CAST_TILES, CAST_TILES_GROUP, CAST_TILES_OF_BINDS, CORNERS_ASK_BINDS,
@@ -69,11 +69,11 @@ use crate::gpu::draw::ReceiverBox;
 use crate::gpu::generator::{
     cut_rects, hold, DecorFrame, Generation, Generator, IndirectDraw, Mask,
 };
-use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::read::Read;
 use crate::gpu::span_spec::{FrameKind, GpuSpanName};
 use crate::gpu::surface::DRAWN_CAP;
-use crate::gpu::tile::Tiles;
+use crate::gpu::tile::TileGrid;
 
 /// What the core hands the GPU's cast each frame.
 pub struct Cast<'a> {
@@ -91,11 +91,11 @@ pub struct Cast<'a> {
     /// domain/scene/cast.rs `shards`). The runtime reads it where it lies, so its writer asks
     /// `in_flight` (gpu/api.rs) before it writes it again.
     pub shards: &'a [[i32; 4]],
-    pub objects: Objects<'a>,
+    pub objects: ObjectTable<'a>,
     /// The input of the decor the GPU generates over the same world (gpu/generator.rs).
     pub decor: DecorFrame<'a>,
     /// The box each of the host's draws that reads the shadow map stands within, in the
-    /// world's Q3, as gpu/draw.rs `Lists::receivers` records it. These draws receive the map as
+    /// world's Q3, as gpu/draw.rs `DrawUpdate::receivers` records it. These draws receive the map as
     /// decor does (pxl-engine `light::RECEIVER_BOXES_AT`), and their boxes are taken from the
     /// eye's `ORIGIN` when the light's head is written.
     pub receivers: &'a [ReceiverBox],
@@ -104,13 +104,13 @@ pub struct Cast<'a> {
     pub ray_counts: bool,
 }
 
-/// The overwrites' tree (pxl-core domain/layer/object/store.rs `GpuColumns`): its child
+/// The overwrites' tree (pxl-core domain/layer/object/store.rs `GpuTable`): its child
 /// pointer lane and its data lane, with room for `cap` words each before they grow, at
 /// `revision`. `written_groups` names, by their first slots, the child groups written since
 /// revision `since`, the last the core uploaded (pxl-core domain/scene/cast.rs `Upload`). The
 /// runtime reads the lanes where they lie, so their writer asks `in_flight` (gpu/api.rs)
 /// before it writes them again.
-pub struct Objects<'a> {
+pub struct ObjectTable<'a> {
     pub first_child: &'a [u32],
     pub data: &'a [u32],
     pub cap: usize,
@@ -119,10 +119,10 @@ pub struct Objects<'a> {
     pub written_groups: &'a [u32],
 }
 
-/// What the shadow map's pass reads of the light's cast (`RaysPass::light_reads`,
+/// What the shadow map's pass reads of the light's cast (`RayPass::light_read`,
 /// gpu/shadow.rs `Shadow::begin`).
 #[derive(Clone, Copy)]
-pub struct LightReads {
+pub struct LightRead {
     pub list: u32,
     pub epoch: u32,
     pub args: u32,
@@ -130,7 +130,7 @@ pub struct LightReads {
 
 /// What the GPU's cast holds from frame to frame: its pipelines, its buffers and groups, and
 /// what it last read.
-pub(super) struct CastBuffers {
+pub(super) struct CastBuffer {
     pipeline: Pipeline,
     /// Finds where each cell's rays start off the beam rays, a thread a cell (`cell_cs`). It
     /// binds the cast's world group, and the head it binds tells the eye's run from the
@@ -276,7 +276,7 @@ pub(super) struct CastBuffers {
     light_content: Read,
     /// Where the box slid, the reads as the cast before left them are copied out here, and
     /// back in shifted by the slide.
-    light_reads_was: u32,
+    light_read_was: u32,
     /// What decides which tiles the receivers read, as the light's cast last read it: the
     /// eye's place and look, the tiles the host's draws stand on, and decor placed again. Where
     /// only this moved, the cast casts only the tiles read anew.
@@ -321,7 +321,7 @@ pub(super) struct CastBuffers {
     object_revision: Option<u32>,
     generator: Generator,
     /// What the last cast read, without the jitter and the grid. Comparing this frame's with
-    /// it gives `schedule::Reads::same`.
+    /// it gives `schedule::CastRead::same`.
     read: Read,
     /// The raster of the record (ray/raster.rs). The pixels' cast reads the visible voxel it
     /// keeps at each pixel (`cast_cs`).
@@ -332,7 +332,7 @@ pub(super) struct CastBuffers {
     px_group: u32,
     px_bufs: [u32; 7],
     /// Lists the claimed tiles ahead of the pixels' cast, in the same pass, into `cast_tiles`,
-    /// whose words give the pixels' indirect dispatch (cast_tiles.wgsl). `cast_tiles` is made
+    /// whose words give the pixels' indirect dispatch (cast_tile.wgsl). `cast_tiles` is made
     /// again with `px_bufs`.
     cast_tiles_pipeline: Pipeline,
     cast_tiles: u32,
@@ -396,13 +396,13 @@ struct Receiver {
     tiles: [[i32; 2]; 2],
 }
 
-/// The claimed tiles' list as a frame's cast starts it (cast_tiles.wgsl): `cast_cs`'s
+/// The claimed tiles' list as a frame's cast starts it (cast_tile.wgsl): `cast_cs`'s
 /// dispatch with no tile yet and a tile's workgroups across and down, then no tile counted.
 const CAST_TILES_START: [u32; 4] = [0, TILE_CASTS, TILE_CASTS, 0];
 /// How many groups the light's cast has (`light_groups`).
 const LIGHT_GROUPS: usize = 17;
 
-impl CastBuffers {
+impl CastBuffer {
     /// The cast's id for the frame buffer named `buf` (frame/shader/group.rs `BUFFERS`), or 0
     /// for a buffer the cast does not hold.
     fn buf_of(&self, buf: u32) -> u32 {
@@ -423,10 +423,10 @@ impl CastBuffers {
     }
 }
 
-impl RaysPass {
+impl RayPass {
     /// Makes the cast's pipelines and buffers, once, with the renderer and before its first
     /// frame (gpu/pipeline.rs). No frame names a pipeline until every one is made.
-    pub fn make(&mut self, g: &Gpu, pipelines: &mut Pipelines) {
+    pub fn make(&mut self, g: &Gpu, pipelines: &mut PipelineCache) {
         if self.cast.is_some() {
             return;
         }
@@ -520,7 +520,7 @@ impl RaysPass {
         let counter = Counter::new(g);
         let buf = |size: u32, usage: u32| g.buf(size, usage);
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
-        let c = CastBuffers {
+        let c = CastBuffer {
             pipeline,
             cast_tiles_pipeline,
             cast_tiles: 0,
@@ -593,7 +593,7 @@ impl RaysPass {
             light_world_number: 0,
             light_slide_cast: 0,
             light_content: Read::default(),
-            light_reads_was: buf(
+            light_read_was: buf(
                 word_bytes((light::tiles(SHADOW_SIZE) * light::tiles(SHADOW_SIZE)) as usize),
                 buffer_usage::COPY_SRC | buffer_usage::COPY_DST,
             ),
@@ -655,7 +655,7 @@ impl RaysPass {
         cast: Option<Cast>,
         meshes: &[u32; GROUPS as usize],
         rays: (u32, [u32; 2]),
-        light_map: (u32, u32, light::Starts),
+        light_map: (u32, u32, light::StartGrid),
         partial: bool,
         frame: f64,
     ) {
@@ -683,7 +683,7 @@ impl RaysPass {
             clipmap,
             shards,
             objects:
-                Objects {
+                ObjectTable {
                     first_child: _,
                     data: _,
                     cap,
@@ -855,7 +855,7 @@ impl RaysPass {
                 if was.is_none_or(|w| entry(row).changed_from(entry(w))) {
                     c.changed[k / 32] |= 1 << (k % 32);
                 }
-                if was.is_none_or(|w| entry(row).held_changed_from(entry(w))) {
+                if was.is_none_or(|w| entry(row).present_changed_from(entry(w))) {
                     let level = &mut c.changed_bricks[k / clipmap::ENTRIES as usize];
                     for q in [Some(entry(row).brick), was.map(|w| entry(w).brick)]
                         .into_iter()
@@ -865,11 +865,11 @@ impl RaysPass {
                         *level = node_cache::bricks_joined(*level, [q[0], q[1], q[0], q[1]]);
                     }
                 }
-                let held = |r: &[i32]| entry(r).brick();
-                let (now, was) = (held(row), was.map(held));
+                let brick_of = |r: &[i32]| entry(r).brick();
+                let (now, was) = (brick_of(row), was.map(brick_of));
                 // The bricks a query reads differently now: the one held present that was not,
                 // and the one held present before that no longer is.
-                let (taken, gone) = match was {
+                let (added, dropped) = match was {
                     Some((brick, present)) => (
                         now.1 && (!present || brick != now.0),
                         present && !(now.1 && brick == now.0),
@@ -883,10 +883,10 @@ impl RaysPass {
                         put_column(&mut c.light_columns, v);
                     });
                 };
-                if taken {
+                if added {
                     changed(now.0);
                 }
-                if let (true, Some((q, _))) = (gone, was) {
+                if let (true, Some((q, _))) = (dropped, was) {
                     changed(q);
                 }
                 present_changed |= match was {
@@ -976,7 +976,7 @@ impl RaysPass {
         }
         l.mark(c.generator.counts());
         let receivers_same = l.end();
-        let plan = c.schedule.plan(Reads {
+        let plan = c.schedule.plan(CastRead {
             same,
             jitter: [cast.eye[eye::JITTER], cast.eye[eye::JITTER + 1]],
             partial,
@@ -1034,7 +1034,7 @@ impl RaysPass {
             // every pixel, and added to the marks already made, which hold the other pixels',
             // where they cover the claimed tiles alone. Otherwise they stand where they were
             // last marked. The head also names the last cast before this one that owed a slide
-            // (light_receiver_tiles.wgsl `receiver_tiles_first`).
+            // (light_receiver_tile.wgsl `receiver_tiles_first`).
             let afresh = due.world && !due.adds;
             if afresh {
                 c.light_world_number = c.light_number;
@@ -1057,7 +1057,7 @@ impl RaysPass {
             // Only those within the effects' reach are handed (`light_receiver_boxes`).
             let at = 4 * light::RECEIVER_BOXES_AT;
             let n = c.light_receiver_boxes.len();
-            c.light_draws = n != 0 || c.generator.instances().is_some();
+            c.light_draws = n != 0 || c.generator.decor_buffer().is_some();
             header[at] = n as u32;
             for (
                 k,
@@ -1380,7 +1380,7 @@ impl RaysPass {
         }
         let [drawing, regions, instances] = c
             .generator
-            .instances()
+            .decor_buffer()
             .map_or([c.light_none; 3], |p| [p.drawing, p.regions, p.instances]);
         let light_bufs = [
             c.eye,
@@ -1522,7 +1522,7 @@ impl RaysPass {
             }
             g.end(pass);
             // The beam rays' run, each ray from the root, in a frame that casts the samples
-            // (corners.wgsl).
+            // (corner.wgsl).
             if kind == FrameKind::cast {
                 let [walk, ask, walk_parked, ask_parked, last] = &c.corners;
                 let pass = walk_run(
@@ -1552,7 +1552,7 @@ impl RaysPass {
                 }
                 let mut group = c.group;
                 if span == GpuSpanName::px {
-                    // The samples' run, each from its cell's start (samples.wgsl).
+                    // The samples' run, each from its cell's start (sample.wgsl).
                     if kind == FrameKind::cast {
                         let [walk, ask, walk_parked, ask_parked, last] = &c.samples;
                         let pass = walk_run(
@@ -1635,7 +1635,7 @@ impl RaysPass {
                     groups: c.queue_groups,
                     queue: c.queues,
                     node_cache: c.node_cache,
-                    holes: Some(Holes {
+                    holes: Some(HoleCopy {
                         hits: &sequence::HITS,
                         pool: (
                             c.beams,
@@ -1671,13 +1671,13 @@ impl RaysPass {
                 let all = n * n;
                 if shift.abs() < all {
                     let words = |w: i32| word_bytes(w as usize);
-                    let out = (c.light_reads_was, 0);
+                    let out = (c.light_read_was, 0);
                     let reads = (c.light_list, sequence::LIGHT_READS_OUT.from_at());
                     g.copy_buf(encoder, reads, out, words(all));
                     let (from, to) = if shift >= 0 { (shift, 0) } else { (0, -shift) };
                     g.copy_buf(
                         encoder,
-                        (c.light_reads_was, words(from)),
+                        (c.light_read_was, words(from)),
                         (c.light_list, sequence::LIGHT_READS_IN.to_at() + words(to)),
                         words(all - shift.abs()),
                     );
@@ -1789,7 +1789,7 @@ impl RaysPass {
             // The light's cast, a workgroup a tile (pxl-engine `light::TILE`): the beam rays,
             // the samples, their boxes drawn, the slots taking their visible voxel, and the rest
             // walked off their list as the eye's holes are. First the beam rays' run over the
-            // listed corners, each ray from the root at its tile's band (corners.wgsl over
+            // listed corners, each ray from the root at its tile's band (corner.wgsl over
             // beam.light.wgsl); then the cells' starts, over the light's world group with the
             // light's head.
             let [walk, ask, walk_parked, ask_parked, last] = &c.light_corners;
@@ -1809,7 +1809,7 @@ impl RaysPass {
             g.dispatch_indirect(pass, c.light_args, sequence::LIGHT_CELLS.at());
             g.end(pass);
             // The samples' run over the samples of the tiles they feed, each from its cell's
-            // start (samples.wgsl over sample.light.wgsl).
+            // start (sample.wgsl over sample.light.wgsl).
             let [walk, ask, walk_parked, ask_parked, last] = &c.light_samples;
             let pass = walk_run(
                 ctx,
@@ -1858,7 +1858,7 @@ impl RaysPass {
                     groups: [c.light_groups[8], c.light_groups[12], c.light_groups[3]],
                     queue: c.queues,
                     node_cache: c.node_cache,
-                    holes: Some(Holes {
+                    holes: Some(HoleCopy {
                         hits: &sequence::LIGHT_HITS,
                         pool: (
                             c.light_list,
@@ -1874,7 +1874,7 @@ impl RaysPass {
             c.raster
                 .light_record_hits(ctx, c.node_cache, GpuSpanName::light_walk);
         }
-        let counted = Counts {
+        let counted = CountBuffer {
             node_cache: c.node_cache,
             args: [c.marks, c.light_misses],
             boxes: [c.raster.args, c.raster.light.args],
@@ -1931,7 +1931,7 @@ impl RaysPass {
         }
     }
 
-    pub fn take_counts(&mut self) -> Option<RayCounts> {
+    pub fn take_counts(&mut self) -> Option<RayCount> {
         self.cast.as_mut().and_then(|c| c.counter.take())
     }
 
@@ -1945,11 +1945,11 @@ impl RaysPass {
     /// list, whose reads tell the tiles its epoch cast and which tiles are read
     /// (`light::reads_at`, `light::LIST_READS`); the cast that began the host's epoch
     /// (`light::HEADER_EPOCH`); and the args, whose lay draws the tiles read (`light::ARGS_LAY`).
-    pub fn light_reads(&self) -> Option<LightReads> {
+    pub fn light_read(&self) -> Option<LightRead> {
         self.cast
             .as_ref()
             .filter(|c| c.light_list != 0)
-            .map(|c| LightReads {
+            .map(|c| LightRead {
                 list: c.light_list,
                 epoch: c.light_epoch,
                 args: c.light_args,
@@ -1981,7 +1981,7 @@ impl RaysPass {
 
     /// Culls the decor generated to the instances a frame draws through `mask`
     /// (`Generator::cull`).
-    pub fn cull_decor(&self, ctx: &mut RenderContext, mask: Mask, frame: u32, tiles: &Tiles) {
+    pub fn cull_decor(&self, ctx: &mut RenderContext, mask: Mask, frame: u32, tiles: &TileGrid) {
         if let Some(c) = self.cast.as_ref() {
             c.generator.cull(ctx, mask, frame, tiles);
         }
@@ -2215,19 +2215,19 @@ fn queue_groups(
 /// A run of the queue's passes (pxl-engine `ray::QUEUE_LANES`): the pipelines of its first
 /// walk, its asks, its second walk, their asks and its last walk; its groups
 /// (`queue_groups`); the queues' buffer, which holds its head; the node cache, whose head takes
-/// its stops' count; and, for a holes' run, what is copied before the last walk (`Holes`).
+/// its stops' count; and, for a holes' run, what is copied before the last walk (`HoleCopy`).
 struct Run<'a> {
     pipelines: [&'a Pipeline; 5],
     groups: [u32; 3],
     queue: u32,
     node_cache: u32,
-    holes: Option<Holes<'a>>,
+    holes: Option<HoleCopy<'a>>,
 }
 
 /// What a holes' run copies before its last walk: the step that copies its stops' count into
 /// the node cache's head (`sequence::HITS`), and the buffer, word and step by which its pool's
 /// count is copied (`sequence::EYE_POOL_CNT`, pxl-engine `ray::POOL_CNT`).
-struct Holes<'a> {
+struct HoleCopy<'a> {
     hits: &'a Step,
     pool: (u32, u32, &'a Step),
 }
@@ -2253,7 +2253,7 @@ fn walk_run(ctx: &mut RenderContext, spans: [GpuSpanName; 2], r: &Run) -> Id {
         g.dispatch(pass, ray::QUEUE_GROUPS, 1, 1);
     }
     g.end(pass);
-    if let Some(Holes {
+    if let Some(HoleCopy {
         hits,
         pool: (buf, at, parked),
     }) = r.holes

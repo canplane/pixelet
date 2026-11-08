@@ -2,8 +2,6 @@
 //
 // GENERATED from spec/client/core/door/ui.json
 
-// A sensor permission, as the UI's prompt or the browser's change reported it.
-
 /** The UI's prompt is up. */
 export const Asking = 0;
 export const Granted = 1;

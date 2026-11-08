@@ -1,6 +1,6 @@
 // cpp/xpute/kit/wire/xtp/spec.hpp
 
-// XTP, the Xpute Tree Packet: a tree of values in one buffer, read in place.
+// XTP, the Xpute Tree Packet, is a tree of values in one buffer, read in place.
 // This header holds its layout, its type byte, and the helpers that read and
 // write a packet's words. The format is described in
 // ts/kit/src/wire/xtp/README.md, and the golden records under

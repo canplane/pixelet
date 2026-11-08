@@ -64,9 +64,9 @@ fn main() {
         shipped += &accessors(&text);
         std::fs::write(out.join(name), shipped).expect("the stripped shader");
     }
-    // The cast paints a ray by comparing its cell's zoom with the unit's zoom and the ground's
-    // leaf cell zoom, and places that cell from the eye's position in Q3 steps, whose fraction
-    // has FRAC_W bits. All three come from pxl-engine.
+    // The cast paints a ray by comparing its cell's zoom with the unit's zoom and with the
+    // ground's leaf cell zoom, and places that cell from the eye's position in Q3 steps, whose
+    // fraction has `FRAC_W` bits.
     let lattice = format!(
         "const UNIT_ZOOM: u32 = {}u;\nconst FRAC_W: u32 = {}u;\nconst GROUND_CELL_ZOOM: u32 = {}u;\n",
         pxl_engine::UNIT_ZOOM,
@@ -88,13 +88,14 @@ fn main() {
         )
     };
     // A ray's faces word records what lies around the face it hit, one bit for each edge and
-    // each corner. Its layout is pxl-engine face.rs.
+    // each corner, as pxl-engine face.rs lays it out.
     use pxl_engine::face::{CORNER_SHIFT, LINE_SHIFT, RISE_SHIFT};
     let faces = format!(
         "const RAY_FACES: u32 = {FACES}u;\nconst FACES_LINE: u32 = {LINE_SHIFT}u;\nconst FACES_RISE: u32 = {RISE_SHIFT}u;\nconst FACES_CORNER: u32 = {CORNER_SHIFT}u;\n"
     );
-    // The side of the box drawn for a cell that fills only part of its cube, by the number of
-    // eighths it keeps (pxl-engine answer.rs `side`). A count of 0 means all eight are kept.
+    // `fill_side` gives the side of the box drawn for a cell that fills only part of its cube,
+    // by the number of eighths the cell keeps (pxl-engine answer.rs `side`). A fill of 0 eighths
+    // means all eight are kept, which the default case answers.
     let sides: String = (1..answer::EIGHTHS)
         .map(|k| format!("case {k}u: {{ return {:?}; }} ", answer::side(k)))
         .collect();
@@ -120,14 +121,13 @@ fn main() {
         palette_indices,
     ];
     std::fs::write(out.join("ray.wgsl"), ray.concat()).expect("the ray's shader");
-    // The layout of the samples' boxes in their buffer, which pxl-engine raster.rs defines and
-    // the raster reads. Then the corners of a box's 36 vertices, first as `corner` winds them
-    // and then wound the other way, packed three bits a corner and ten corners a word, and read
-    // back by `raster_corner`. The Galaxy S23's Vulkan driver refuses a render pipeline whose
-    // vertex stage indexes a constant array of vectors at a place computed as it runs, and takes
-    // the same table packed into u32 words. A hit's box that holds the eye is drawn at a depth
-    // just short of 1, the depth of a lack. Every float written here is finite, as Tint refuses
-    // a literal past f32's range.
+    // The corners of a box's vertices, first as pxl-engine raster.rs `corner` winds them and
+    // then wound the other way, are packed three bits a corner and ten corners a word, and
+    // `raster_corner` reads them back. The Galaxy S23's Vulkan driver refuses a render pipeline
+    // whose vertex stage indexes a constant array of vectors at a place computed as it runs, and
+    // takes the same table packed into u32 words. A hit's box that holds the eye is drawn at a depth just short of 1, the
+    // depth of a lack. Every float written here is finite, as Tint refuses a literal past f32's
+    // range.
     {
         use pxl_engine::raster::{corner, EYED, ID_MASK, LACK, NEAR, STALE, STALE_DEPTH};
         let n = word::BOX_VERTICES;
@@ -171,10 +171,8 @@ fn main() {
         last / 4 + 1
     );
     std::fs::write(out.join("eye.wgsl"), eye).expect("the eye's shader");
-    // How a light slot's word is read as a depth, a share of the light box's depth, as
-    // pxl-engine light.rs `word` lays it out; every shader reads a depth through `light_depth`.
-    // Then the slots on a side of a box tile, by which the lay finds a tile's read word, and the
-    // vertices the lay draws a tile with.
+    // A light slot's word is read as a depth, a share of the light box's depth, as pxl-engine
+    // light.rs `word` lays it out, and every shader reads a depth through `light_depth`.
     use pxl_engine::light::{DEPTH_ONE, LAY_VERTICES};
     let light = format!(
         "fn light_depth(w: u32) -> f32 {{ return f32(w) / {DEPTH_ONE}.0; }}\nconst LAY_TILE: u32 = {LIGHT_TILE}u;\nconst LAY_VERTICES: u32 = {}u;\n",
@@ -182,9 +180,9 @@ fn main() {
     );
     std::fs::write(out.join("light_word.wgsl"), light).expect("the light word's shader");
     std::fs::write(out.join("tile_word.wgsl"), tile_word()).expect("the tile word's shader");
-    // The cloud field's lattice cells and the hash each cell draws from. The hash is the one
-    // the CPU's cumulus uses (pxl-content cloud.rs `lattice_hash`), written from the same
-    // multipliers, rounds and output bits, so the clouds the GPU draws agree with the CPU's.
+    // The hash is the one the CPU's cumulus uses (pxl-content cloud.rs `lattice_hash`), written
+    // from the same multipliers, rounds and output bits, so the clouds the GPU draws agree with
+    // the CPU's.
     use pxl_content::cloud::{HASH_IN, HASH_LAST, HASH_ROUNDS, HASH_SHARE_BITS};
     use pxl_content::param::cloud::LATTICE_SHAMT;
     let [hx, hy, hs] = HASH_IN;
@@ -619,8 +617,6 @@ fn walk_word() -> String {
     out
 }
 
-/// `side(k)`, the side of the box drawn for a cell that keeps `k` eighths of its cube, from
-/// pxl-engine `answer::side`.
 fn side_word() -> String {
     let cases: String = (1..answer::EIGHTHS)
         .map(|k| format!("case {k}u: {{ return {:?}; }} ", answer::side(k)))
@@ -753,7 +749,6 @@ fn world_word() -> String {
         "fn tunnel_blocks(k: u32) -> u32 {{ switch k {{ {cases}default: {{ return {}u; }} }} }}\n",
         cave::BLOCKS_A_TUNNEL[4]
     );
-    // The entry at which level `j` of a brick's bound mips begins (`clipmap::bound_mip_at`).
     let cases: String = (0..=clip::BRICK_MIPS)
         .map(|j| format!("case {j}u: {{ return {}u; }} ", clip::bound_mip_at(j)))
         .collect();
@@ -763,10 +758,8 @@ fn world_word() -> String {
     )
 }
 
-/// The constants decor's passes read beyond the world's words, written from the pxl-content
-/// layouts that define them: the records, the list, a row of the catalog, and one function for
-/// each value a decor's row determines (`Decor::cap`, `scatter::root`,
-/// `generation::first_record`).
+/// The constants decor's passes read beyond the world's words, each written from the
+/// pxl-content layout or rule that defines it.
 fn decor_word() -> String {
     use core::mem::{offset_of, size_of};
     use pxl_content::decor::{Decor, Orientation, DECORS};
@@ -892,9 +885,8 @@ fn decor_word() -> String {
     out += &by_decor("decor_first_group", &|k| g::first_group(&DECORS, k as u32));
     out += &by_decor("decor_root", &|k| scatter::ROOTS[k]);
     out += &by_decor_i32("decor_widest", &|k| DECORS[k].widest() as i32);
-    // The spin of each turn a record can hold, written as the bits of the float the Rust
-    // computes, so decor_compact.wgsl writes the same spin the CPU does. Then the nearest a drawn
-    // thing is taken to be (`drawn::NEAREST_U`).
+    // Each turn's spin is written as the bits of the float the Rust computes, so
+    // decor_compact.wgsl writes the same spin the CPU does.
     let last = (1u32 << g::TURN_BITS) - 1;
     let spin = |t: u32| (t as f32 * core::f32::consts::FRAC_PI_2).to_bits();
     let spins: String = (0..last)
@@ -927,10 +919,10 @@ fn decor_word() -> String {
 }
 
 /// The tiles' uniform as every pass reads it (pxl-engine `screen::TILES_WORDS`, gpu/tile.rs
-/// `Tiles::words`), and the reading of a tile's word that word.rs's `screen::age` and
+/// `TileGrid::words`), and the reading of a tile's word that word.rs's `screen::age` and
 /// `screen::in_damage` define. A tile's age is the number of frames since it changed, and it
 /// wraps. A tile is in damage while its age is below the uniform's `damage_frames`. Every pass
-/// that reads the tiles (screen_tiles.wgsl, screen_propagate.wgsl, cast_tiles.wgsl) uses this
+/// that reads the tiles (screen_tile.wgsl, screen_propagate.wgsl, cast_tile.wgsl) uses this
 /// one rule.
 fn tile_word() -> String {
     // The Rust's rule must be the one the WGSL below spells: the age is a wrapping u32
@@ -942,9 +934,9 @@ fn tile_word() -> String {
     format!(
         concat!(
             "const CAST_TILES_LANES: u32 = {}u;\n",
-            "struct Tiles {{ count: vec4u, size: vec4f, }};\n",
-            "fn tiles_age(t: Tiles, changed_at: u32) -> u32 {{ return t.count.w - changed_at; }}\n",
-            "fn tiles_in_damage(t: Tiles, changed_at: u32) -> bool {{ return tiles_age(t, changed_at) < t.count.z; }}\n",
+            "struct TileGrid {{ count: vec4u, size: vec4f, }};\n",
+            "fn tiles_age(t: TileGrid, changed_at: u32) -> u32 {{ return t.count.w - changed_at; }}\n",
+            "fn tiles_in_damage(t: TileGrid, changed_at: u32) -> bool {{ return tiles_age(t, changed_at) < t.count.z; }}\n",
         ),
         screen::CAST_TILES_LANES
     )
@@ -973,8 +965,8 @@ fn params() -> String {
     out
 }
 
-/// The values the host lays out and every shader reads (frame/shader/word.rs), written as
-/// WGSL: each uniform's size in vec4s, and the pxl-engine values any shader may name.
+/// The values the host lays out and every shader reads (frame/shader/word.rs), written as WGSL:
+/// each uniform's size in vec4s, and the pxl-engine values any shader may name.
 fn words() -> String {
     use word::*;
     let vec4s = |name: &str, floats: usize| {
@@ -1029,9 +1021,8 @@ fn words() -> String {
         format!("const CELL_SIDE: u32 = {CELL_SIDE}u;\n"),
         format!("const LIGHT_SLOPES: u32 = {LIGHT_SLOPES}u;\nconst GROUND_SLOPES: u32 = {GROUND_SLOPES}u;\nconst SLOPE_WORDS: u32 = {SLOPE_WORDS}u;\n"),
         format!("const CLOUD_TILE_UNITS: u32 = {CLOUD_TILE_UNITS}u;\nconst CLOUD_TILE_TEXELS: u32 = {CLOUD_TILE_TEXELS}u;\n"),
-        // The bits of a Q3 Z, which spans the world's height about sea level (pxl-engine).
+        // The bits of a Q3 Z, which spans the world's height about sea level.
         format!("const HEIGHT_BITS: u32 = {}u;\n", pxl_engine::HEIGHT_BITS),
-        // Where night falls (pxl-content param.rs `night::FALL`).
         format!(
             "const NIGHT_FALL: vec2f = vec2f({:?}, {:?});\n",
             night::FALL[0],
@@ -1047,10 +1038,10 @@ fn words() -> String {
     .concat()
 }
 
-/// An accessor for each field of every uniform `text` reads (frame/shader/word.rs `UNIFORMS`).
-/// Each accessor reads its field off the vec4s where the host wrote it. A uniform is never
-/// declared as a struct, as one crashed the GPU process of Safari's WebGPU. Each field is
-/// checked to lie within its vec4s and apart from the others.
+/// An accessor for each field of every uniform `text` reads (frame/shader/word.rs `UNIFORMS`),
+/// which reads the field off the vec4s where the host wrote it. A uniform is never declared as
+/// a struct, as one crashed the GPU process of Safari's WebGPU. Each field is checked to lie
+/// within its vec4s and apart from the others.
 fn accessors(text: &str) -> String {
     use word::{floats, Kind, UNIFORMS};
     let mut out = String::new();
@@ -1181,7 +1172,7 @@ fn read_fns(text: &str) -> String {
             }
         }
     }
-    let mut kept = Vec::with_capacity(lines.len());
+    let mut out = Vec::with_capacity(lines.len());
     let mut k = 0;
     while k < lines.len() {
         let dropped = fns
@@ -1190,12 +1181,12 @@ fn read_fns(text: &str) -> String {
         match dropped {
             Some((_, &(_, last))) => k = last + 1,
             None => {
-                kept.push(lines[k]);
+                out.push(lines[k]);
                 k += 1;
             }
         }
     }
-    kept.join("\n") + "\n"
+    out.join("\n") + "\n"
 }
 
 /// `text` with only the structs something in it names. `text` is read as `strip_comments`
@@ -1266,14 +1257,13 @@ fn read_consts(text: &str) -> String {
 }
 
 /// Refuses, in every assembled module, compute and render, what the Galaxy S23's driver or
-/// Safari fails to compile (doc/tip/shaders-phones-take.md). The S23's Vulkan driver refuses a
-/// module whose struct holds a struct, directly or in an array, and one where a function's
-/// local is a struct or is or holds an array. The one struct local allowed is a vertex or
-/// fragment entry point's local of the type it returns. Safari writes `i32::MIN`, written or
-/// folded, as a C++ `long` that no `select` with an `int` takes. Safari 27 writes the result
-/// of `atomicCompareExchangeWeak` as a struct with a `thread`-qualified field, which Metal
-/// refuses.
-fn held_to_faults(module: &naga::Module, name: &str) {
+/// Safari fails to compile. The S23's Vulkan driver refuses a module whose struct holds a struct,
+/// directly or in an array, and one where a function's local is a struct or is or holds an array.
+/// The one struct local allowed is a vertex or fragment entry point's local of the type it
+/// returns. Safari writes `i32::MIN`, written or folded, as a C++ `long` that no `select` with an
+/// `int` takes. Safari 27 writes the result of `atomicCompareExchangeWeak` as a struct with a
+/// `thread`-qualified field, which Metal refuses.
+fn refuse_faults(module: &naga::Module, name: &str) {
     use naga::TypeInner::{Array, BindingArray, Struct};
     let is_struct = |mut ty: naga::Handle<naga::Type>| loop {
         match module.types[ty].inner {
@@ -1336,7 +1326,7 @@ fn held_to_faults(module: &naga::Module, name: &str) {
     let i32_min =
         |e: &naga::Expression| matches!(e, naga::Expression::Literal(naga::Literal::I32(i32::MIN)));
     let functions = module.functions.iter().map(|(_, f)| f);
-    let held_min = module
+    let min_cnt = module
         .global_expressions
         .iter()
         .filter(|(_, e)| i32_min(e))
@@ -1345,8 +1335,8 @@ fn held_to_faults(module: &naga::Module, name: &str) {
             .chain(module.entry_points.iter().map(|e| &e.function))
             .map(|f| f.expressions.iter().filter(|(_, e)| i32_min(e)).count())
             .sum::<usize>();
-    if held_min > 0 {
-        faults.push(format!("i32::MIN held {held_min} times"));
+    if min_cnt > 0 {
+        faults.push(format!("i32::MIN held {min_cnt} times"));
     }
     let compared = module
         .functions
@@ -1393,8 +1383,6 @@ fn assemble(out: &Path) {
         text = read_consts(&read_structs(&read_fns(&text)));
         let module = wgsl::parse_str(&text)
             .unwrap_or_else(|e| panic!("shader {kind} ({parts:?}): {}", e.emit_to_string(&text)));
-        // raster.wgsl's `Raster` must span exactly the floats the host writes for the raster's
-        // view (frame/shader/word.rs `RASTER_FLOATS`).
         let raster = module
             .types
             .iter()
@@ -1411,13 +1399,13 @@ fn assemble(out: &Path) {
             );
         }
         // Each member of the lists' argument structs must begin at the word pxl-engine lays it
-        // at (visible.wgsl `MissArgs`, light_receiver_tiles.wgsl `ReceiverArgs`).
+        // at (visible.wgsl `MissCount`, light_receiver_tile.wgsl `ReceiverDispatch`).
         {
             use pxl_engine::{light, ray};
             let words: [(&str, &[u32]); 2] = [
-                ("MissArgs", &[ray::MISS_ARGS_CNT, ray::MISS_ARGS_COUNT]),
+                ("MissCount", &[ray::MISS_ARGS_CNT, ray::MISS_ARGS_COUNT]),
                 (
-                    "ReceiverArgs",
+                    "ReceiverDispatch",
                     &[
                         light::RECEIVER_TILES_LIST,
                         light::RECEIVER_TILES_CNT,
@@ -1442,18 +1430,18 @@ fn assemble(out: &Path) {
                     want,
                     "`{name}`'s words against pxl-engine's"
                 );
-                if name == "MissArgs" {
+                if name == "MissCount" {
                     assert_eq!(
                         span as usize,
                         4 * ray::MISS_ARGS_WORDS,
-                        "`MissArgs` against `ray::MISS_ARGS_WORDS`"
+                        "`MissCount` against `ray::MISS_ARGS_WORDS`"
                     );
                 }
-                if name == "ReceiverArgs" {
+                if name == "ReceiverDispatch" {
                     assert_eq!(
                         span,
                         4 * light::RECEIVER_TILES_WORDS,
-                        "`ReceiverArgs` against `light::RECEIVER_TILES_WORDS`"
+                        "`ReceiverDispatch` against `light::RECEIVER_TILES_WORDS`"
                     );
                 }
             }
@@ -1461,7 +1449,7 @@ fn assemble(out: &Path) {
         let info = Validator::new(ValidationFlags::all(), Capabilities::empty())
             .validate(&module)
             .unwrap_or_else(|e| panic!("shader {kind} ({parts:?}): {}", e.emit_to_string(&text)));
-        held_to_faults(&module, &format!("shader {kind} ({parts:?})"));
+        refuse_faults(&module, &format!("shader {kind} ({parts:?})"));
         let file = format!("{kind}.wgsl");
         std::fs::write(out.join("assembled").join(&file), &text).expect("an assembled shader");
         sources += &format!(
@@ -1503,8 +1491,8 @@ fn assemble(out: &Path) {
             accessed.push(format!("(\"{}\", &[{}])", entry.name, by.join(", ")));
         }
         access += &format!("    &[{}],\n", accessed.join(", "));
-        // For each binding, the stages whose entry points read it and the layout kinds that
-        // take it as it is declared.
+        // For each binding, its group and number, the stages whose entry points read it, the
+        // layout kinds that take it as it is declared, and the vertex entries that read it.
         let mut read_by: Vec<(u32, u32, Vec<&str>, String, u32)> = Vec::new();
         for (handle, var) in module.global_variables.iter() {
             let Some(b) = var.binding else { continue };
@@ -1597,7 +1585,7 @@ fn assemble(out: &Path) {
     Validator::new(ValidationFlags::all(), Capabilities::empty())
         .validate(&module)
         .unwrap_or_else(|e| panic!("world_asked: {}", e.emit_to_string(&asked)));
-    held_to_faults(&module, "world_asked");
+    refuse_faults(&module, "world_asked");
     std::fs::write(out.join("assembled").join("world_asked.wgsl"), asked)
         .expect("the world's asked shader");
     let root = out.parent().expect("OUT_DIR");
@@ -1674,8 +1662,8 @@ fn stores_plainly(
     seen: &mut Vec<naga::Handle<naga::Function>>,
 ) -> bool {
     use naga::{Expression, Statement};
-    /// The global a pointer is into and the type it points at, where it is a global or a
-    /// member or an element of one.
+    /// The global a pointer is into and the type it points at, where the pointer is to a
+    /// global or to a member or an element of one.
     fn pointee(
         module: &naga::Module,
         f: &naga::Function,
@@ -1740,7 +1728,6 @@ fn stores_plainly(
     block(module, function, &function.body, global, seen)
 }
 
-/// Whether type `ty` of `module` holds an atomic, itself, in an array or in a member.
 fn holds_atomic(module: &naga::Module, ty: naga::Handle<naga::Type>) -> bool {
     match &module.types[ty].inner {
         naga::TypeInner::Atomic(_) => true,

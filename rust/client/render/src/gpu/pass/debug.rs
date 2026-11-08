@@ -9,11 +9,11 @@ use crate::frame::shader::record::{
 };
 use crate::gpu::api::{buf_entry, bytes, pass_desc, Gpu, Load, RenderContext};
 use crate::gpu::draw::uniform_of;
-use crate::gpu::draw::{DrawStats, Draws};
-use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
-use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::draw::{DrawStat, DrawTable};
+use crate::gpu::pass::model::{UniformBuffer, DRAW_BYTES};
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::span_spec::GpuSpanName;
-use crate::gpu::upload::Uploads;
+use crate::gpu::upload::UploadTable;
 
 /// The gizmos draw their faces into the world's depth at the canvas's size,
 /// cleared once everything drawn over the world is done with it. Their lines
@@ -24,11 +24,11 @@ pub struct DebugPass {
     pipeline: Pipeline,
     faces: Pipeline,
     frame_group: u32,
-    uniforms: DrawUniforms,
+    uniforms: UniformBuffer,
 }
 
 impl DebugPass {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buf: u32, align: u32) -> DebugPass {
+    pub fn new(g: &Gpu, pipelines: &mut PipelineCache, frame_buf: u32, align: u32) -> DebugPass {
         let pipeline = pipelines.build(g, PIPELINE_DEBUG, g.canvas());
         let faces = pipelines.build(g, PIPELINE_DEBUG_FACE, g.canvas());
         let frame_group = g.bind_group(pipeline.layouts[0], &[buf_entry(0, frame_buf)]);
@@ -36,11 +36,11 @@ impl DebugPass {
             pipeline,
             faces,
             frame_group,
-            uniforms: DrawUniforms::new(DRAW_BYTES, align),
+            uniforms: UniformBuffer::new(DRAW_BYTES, align),
         }
     }
 
-    pub fn prepare(&mut self, g: &Gpu, draws: &Draws, uniforms: &[f32], changed: bool) {
+    pub fn prepare(&mut self, g: &Gpu, draws: &DrawTable, uniforms: &[f32], changed: bool) {
         let sets = draws.of(PIPELINE_DEBUG);
         self.uniforms.write(
             g,
@@ -56,7 +56,7 @@ impl DebugPass {
 
     /// Adds the pass's draws to `stats`: two triangles a line segment, and the
     /// faces' triangles.
-    pub fn count(&self, draws: &Draws, stats: &mut DrawStats) {
+    pub fn count(&self, draws: &DrawTable, stats: &mut DrawStat) {
         draws.count(PIPELINE_DEBUG, stats, |d| d[1] + d[2] / 3);
     }
 
@@ -69,19 +69,19 @@ impl DebugPass {
         ctx: &mut RenderContext,
         canvas: u32,
         depth: u32,
-        draws: &Draws,
-        uploads: &Uploads,
+        draws: &DrawTable,
+        uploads: &UploadTable,
     ) -> bool {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::debug);
-        let held = self
+        let uniform_slots = self
             .uniforms
             .slots()
             .filter(|_| draws.of(PIPELINE_DEBUG).len() > 0);
-        if held.is_none() {
+        if uniform_slots.is_none() {
             return false;
         }
-        let slots = held.as_ref();
+        let slots = uniform_slots.as_ref();
         // Each set with lines whose vertices are on the device, as (slot,
         // record, vertex buffer, line vertices, face vertices, slots).
         let sets = || {

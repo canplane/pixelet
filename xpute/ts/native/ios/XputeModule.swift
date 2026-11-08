@@ -3,13 +3,13 @@
 import CXpute
 import ExpoModulesCore
 
-/// xpute's native module on iOS (src/mod.ts). It reaches the core and its
-/// GPU runtime through xpute's C ABI (xpute.h, xpute_gpu.h), and holds the
+/// This is xpute's native module on iOS (src/mod.ts). It reaches the core and
+/// its GPU runtime through xpute's C ABI (xpute.h, xpute_gpu.h), and holds the
 /// view the core's surface draws into (SurfaceView.swift). android/'s
 /// XputeModule.kt is the same module under the same names.
 public class XputeModule: Module {
-  /// The module through which the function given to `xpute_notify_on` sends
-  /// its event.
+  /// The function given to `xpute_notify_on` sends its event through this
+  /// module.
   nonisolated(unsafe) static weak var current: XputeModule?
   /// The JavaScript function that answers the core's calls. It is called on
   /// the JavaScript thread, inside `run` or `answer`.

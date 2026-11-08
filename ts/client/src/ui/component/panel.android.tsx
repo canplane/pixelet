@@ -9,7 +9,6 @@ import { Panel as Sheet } from "./panel.tsx";
 // file takes the place of a star export with the same name.
 export * from "./panel.tsx";
 
-// Android draws the page's sheet, and the system back button closes it.
 export function Panel(props: PanelProps) {
   const { open } = useContext(PanelPresence);
   const onClose = useRef(props.onClose);

@@ -1,7 +1,7 @@
 // @xpute/gpu/runtime.ts
 
 /**
- * The runtime's end of a core's GPU calls on the web, as
+ * This is the runtime's end of a core's GPU calls on the web, as
  * rust/gpu/src/runtime.rs is on a native device. It runs a stream's records
  * (spec/gpu/api.json) on a WebGPU device, and keeps each object the core made
  * at its handle's slot. An enumeration's number is its place in the spec's
@@ -66,13 +66,15 @@ type GpuObject =
   | GPURenderPassEncoder
   | GPUComputePassEncoder;
 
-/** A view with its format, which a pass's depth attachment needs to know. */
+/** This is a view with its format, which a pass's depth attachment needs to
+ * know. */
 type View = {
   readonly view: GPUTextureView;
   readonly format: GPUTextureFormat;
 };
 
-/** A texture's place in a copy, whose fields are refilled record by record. */
+/** This is a texture's place in a copy, whose fields are refilled record by
+ * record. */
 type Place = {
   texture: GPUTexture;
   mipLevel: number;
@@ -89,8 +91,8 @@ function place(): Place {
   };
 }
 
-/** A `GPUQueue` with `copyExternalImageToTexture`, which the lib's type does
- * not list. */
+/** This is a `GPUQueue` with `copyExternalImageToTexture`, which the lib's type
+ * does not list. */
 type ExternalImageQueue = GPUQueue & {
   copyExternalImageToTexture(
     source: { source: ImageBitmap },
@@ -99,10 +101,10 @@ type ExternalImageQueue = GPUQueue & {
   ): void;
 };
 
-/** A record's words, read in order as the core wrote them. One cursor runs
- * over the whole stream and is set at each record's first word, so reading a
- * record allocates nothing. */
-class Words {
+/** These are a record's words, read in order as the core wrote them. One cursor
+ * runs over the whole stream and is set at each record's first word, so reading
+ * a record allocates nothing. */
+class WordCursor {
   private readonly _f: Float32Array;
   at: u32 = 0;
   readonly w: U32Array;
@@ -126,7 +128,7 @@ class Words {
   skip(n: u32): void {
     this.at += n;
   }
-  /** Undefined where the core left the word unset (NONE). */
+  /** This is undefined where the core left the word unset (NONE). */
   opt(): u32 | undefined {
     const v = this.u();
     return v === NONE ? undefined : v;
@@ -143,8 +145,8 @@ class Words {
   }
 }
 
-/** Whether handle `a`'s generation is behind `b`'s. Generations wrap in
- * GENERATION_BITS. */
+/** This says whether handle `a`'s generation is behind `b`'s. Generations wrap
+ * in GENERATION_BITS. */
 function older(a: u32, b: u32): boolean {
   const behind =
     ((a >>> SLOT_BITS) - (b >>> SLOT_BITS)) & ((1 << GENERATION_BITS) - 1);
@@ -153,13 +155,13 @@ function older(a: u32, b: u32): boolean {
 
 export class GpuRuntime {
   private readonly _objects: (GpuObject | undefined)[] = [];
-  /** Each async pipeline still being made: its handle, by its slot. A slot
-   * let go since, or taken by another handle, no longer waits for the
+  /** This holds each async pipeline still being made: its handle, by its slot.
+   * A slot let go since, or taken by another handle, no longer waits for the
    * pipeline. */
   private readonly _making = new Map<u32, u32>();
-  /** The dictionaries a record's call takes, refilled for each call rather
-   * than made anew, since WebGPU reads a dictionary only during the call it
-   * is given to. There are two places because a texture-to-texture copy
+  /** These are the dictionaries a record's call takes, refilled for each call
+   * rather than made anew, since WebGPU reads a dictionary only during the call
+   * it is given to. There are two places because a texture-to-texture copy
    * names two. */
   private readonly _places: [Place, Place] = [place(), place()];
   private readonly _buffer_info: GPUTexelCopyBufferInfo = {
@@ -174,9 +176,9 @@ export class GpuRuntime {
     rowsPerImage: 0,
   };
   private readonly _size: number[] = [0, 0, 0];
-  /** A pass's dictionaries, refilled the same way: its descriptors, its
-   * color attachments (as many as any pass has had), its depth attachment and
-   * its timestamps; and a submit's command buffers. */
+  /** These are a pass's dictionaries, refilled the same way: its descriptors,
+   * its color attachments (as many as any pass has had), its depth attachment
+   * and its timestamps; and a submit's command buffers. */
   private readonly _pass: GPURenderPassDescriptor = { colorAttachments: [] };
   private readonly _colors: GPURenderPassColorAttachment[] = [];
   private readonly _depth: GPURenderPassDepthStencilAttachment = {
@@ -187,21 +189,21 @@ export class GpuRuntime {
     querySet: undefined as unknown as GPUQuerySet,
   };
   private readonly _command_bufs: GPUCommandBuffer[] = [];
-  /** Each canvas context, at the slot the core names its surface by, with
-   * the handle bound there. */
+  /** This holds each canvas context, at the slot the core names its surface by,
+   * with the handle bound there. */
   private readonly _surfaces = new Map<
     u32,
     { handle: u32; context: GPUCanvasContext }
   >();
-  /** Each slot's newest handle, kept after it is let go, so that an older
-   * handle's bind is refused. */
+  /** This holds each slot's newest handle, kept after it is let go, so that an
+   * older handle's bind is refused. */
   private readonly _seen = new Map<u32, u32>();
-  /** Where the core asked for the device's block, kept to write its
-   * unfinished frames and its status later. */
+  /** This says where the core asked for the device's block, and is kept to
+   * write its unfinished frames and its status later. */
   private _block: { address: u32; words: u32 } | undefined;
-  /** The frames drawn whose work the queue has not yet done (spec DEVICE).
-   * A turn whose stream took a surface's texture draws a frame, which stays
-   * unfinished until the queue's `onSubmittedWorkDone`, asked after the
+  /** This counts the frames drawn whose work the queue has not yet done (spec
+   * DEVICE). A turn whose stream took a surface's texture draws a frame, which
+   * stays unfinished until the queue's `onSubmittedWorkDone`, asked after the
    * turn, resolves. */
   private _unfinished_cnt = 0;
   /** This turn's stream has taken a surface's texture. */
@@ -231,8 +233,8 @@ export class GpuRuntime {
 
   /** Binds the canvas's `context` to the core's surface `handle`, which
    * CONFIGURE, RESIZE and CURRENT name by its slot. A context the slot held
-   * before is unconfigured. False, binding nothing, where a newer handle has
-   * bound the slot since. */
+   * before is unconfigured. It answers false, binding nothing, where a newer
+   * handle has bound the slot since. */
   bind(handle: u32, context: GPUCanvasContext): boolean {
     const slot = handle_slot(handle);
     const seen = this._seen.get(slot);
@@ -274,10 +276,10 @@ export class GpuRuntime {
    * the stream drew counts as unfinished until the queue has done the work
    * submitted with it. */
   run(at: u32): void {
-    let r: Words | undefined;
+    let r: WordCursor | undefined;
     this._drew = false;
     each_record(this._memory(), at, (code, w, a) => {
-      r ??= new Words(w);
+      r ??= new WordCursor(w);
       r.at = a;
       this._record(code, r);
     });
@@ -325,7 +327,7 @@ export class GpuRuntime {
    * by the sync call, so its error is reported as the sync op's is. */
   private _make_async<P extends GPURenderPipeline | GPUComputePipeline>(
     id: u32,
-    r: Words,
+    r: WordCursor,
     made: Promise<P>,
     sync: () => P,
     label: string,
@@ -369,7 +371,7 @@ export class GpuRuntime {
   /** Reads a texture's place into `p`. `p` is one of `_places` where WebGPU
    * reads it only during the call, and a fresh one where it is kept past the
    * call. */
-  private _texturePlace(r: Words, p: Place): Place {
+  private _texturePlace(r: WordCursor, p: Place): Place {
     p.texture = this._get<GPUTexture>(r.u());
     p.mipLevel = r.u();
     p.origin[0] = r.u();
@@ -379,7 +381,7 @@ export class GpuRuntime {
     return p;
   }
 
-  private _bufferLayout(r: Words): GPUTexelCopyBufferInfo {
+  private _bufferLayout(r: WordCursor): GPUTexelCopyBufferInfo {
     const b = this._buffer_info;
     b.buffer = this._get<GPUBuffer>(r.u());
     b.offset = r.u();
@@ -388,7 +390,7 @@ export class GpuRuntime {
     return b;
   }
 
-  private _extent(r: Words): number[] {
+  private _extent(r: WordCursor): number[] {
     const e = this._size;
     e[0] = r.u();
     e[1] = r.u();
@@ -396,7 +398,7 @@ export class GpuRuntime {
     return e;
   }
 
-  private _timestamps(r: Words): GPURenderPassTimestampWrites | undefined {
+  private _timestamps(r: WordCursor): GPURenderPassTimestampWrites | undefined {
     const set = r.opt();
     const t = this._stamps;
     t.beginningOfPassWriteIndex = r.opt();
@@ -406,7 +408,7 @@ export class GpuRuntime {
     return t;
   }
 
-  private _stencilFace(r: Words): GPUStencilFaceState {
+  private _stencilFace(r: WordCursor): GPUStencilFaceState {
     return {
       compare: COMPARE_FUNCTION[r.u()],
       failOp: STENCIL_OPERATION[r.u()],
@@ -415,7 +417,7 @@ export class GpuRuntime {
     };
   }
 
-  private _record(code: u32, r: Words): void {
+  private _record(code: u32, r: WordCursor): void {
     const d = this._device;
     switch (code) {
       case op.BUFFER: {

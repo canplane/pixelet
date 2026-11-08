@@ -22,9 +22,9 @@ fn reaches(b: vec4<i32>, zoom: u32, cell_zoom: u32, at: vec4<i32>) -> bool {
   return across && b.y < high.y && b.w > low.y;
 }
 
-/// Whether any box of the frame's reaches the leaf cells `at`.
 fn is_changed(cell_zoom: u32, at: vec4<i32>) -> bool {
-  // The list holds `RECT_CAP` boxes at most (pxl-content `generation::LIST_AT`).
+  // The list holds `RECT_CAP` boxes at most (pxl-content `generation::LIST_AT`), whatever
+  // count its word holds.
   let rects = min(list_word(LIST_RECTS), RECT_CAP);
   for (var k = 0u; k < rects; k += 1u) {
     let b = RECTS_AT + RECT_WORDS * k;

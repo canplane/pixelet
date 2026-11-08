@@ -1,6 +1,6 @@
 // xpute-kit/wire/xtp/view.rs
 
-//! The write side of XTP as a tree: nodes built in memory, which
+//! This is the write side of XTP as a tree: nodes built in memory, which
 //! `TreeEncoder` then lays out as a packet. A `None` value writes a typed
 //! null, an absent node that keeps its type.
 

@@ -1,9 +1,9 @@
 // @pxl/client/service/sys/gpu.ts
 
-/** The place's GPU state, kept for the UI to show. The core hears of
- * the device itself on the GPU's own port (@xpute/gpu). */
+/** This state is kept for the UI to show. The core hears of the device itself
+ * on the GPU's own port (@xpute/gpu). */
 
-import { Listeners } from "@xpute/kit/lang/listeners.ts";
+import { ListenerSet } from "@xpute/kit/lang/listener.ts";
 import {
   GPU_ASKING,
   GPU_LOST,
@@ -16,7 +16,6 @@ import {
 } from "@/abi/state.ts";
 import type { GpuState } from "@xpute/runtime";
 
-/** The client's state for each word a place uses for its GPU. */
 export const GPU_STATE: Readonly<Record<GpuState, Gpu>> = {
   present: GPU_PRESENT,
   waiting: GPU_WAITING,
@@ -27,7 +26,7 @@ export const GPU_STATE: Readonly<Record<GpuState, Gpu>> = {
 };
 
 let state: Gpu = GPU_ASKING;
-const listeners = new Listeners();
+const listeners = new ListenerSet();
 
 export function gpu(): Gpu {
   return state;

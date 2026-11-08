@@ -178,9 +178,9 @@ impl<'a> JsonValue<'a> {
         })
     }
 
-    pub fn items(&self) -> JsonItems<'a> {
+    pub fn items(&self) -> JsonItemIter<'a> {
         let open = self.type_of() == JsonType::Array;
-        JsonItems {
+        JsonItemIter {
             s: self.s,
             at: if open { 1 } else { self.s.len() },
         }
@@ -188,9 +188,9 @@ impl<'a> JsonValue<'a> {
 
     /// Every field in the text's order; a key that appears twice is yielded
     /// twice.
-    pub fn fields(&self) -> JsonFields<'a> {
+    pub fn fields(&self) -> JsonFieldIter<'a> {
         let open = self.type_of() == JsonType::Object;
-        JsonFields {
+        JsonFieldIter {
             s: self.s,
             at: if open { 1 } else { self.s.len() },
         }
@@ -216,12 +216,12 @@ impl core::fmt::Debug for JsonValue<'_> {
     }
 }
 
-pub struct JsonItems<'a> {
+pub struct JsonItemIter<'a> {
     s: &'a str,
     at: usize,
 }
 
-impl<'a> Iterator for JsonItems<'a> {
+impl<'a> Iterator for JsonItemIter<'a> {
     type Item = JsonValue<'a>;
 
     fn next(&mut self) -> Option<JsonValue<'a>> {
@@ -241,12 +241,12 @@ impl<'a> Iterator for JsonItems<'a> {
     }
 }
 
-pub struct JsonFields<'a> {
+pub struct JsonFieldIter<'a> {
     s: &'a str,
     at: usize,
 }
 
-impl<'a> Iterator for JsonFields<'a> {
+impl<'a> Iterator for JsonFieldIter<'a> {
     type Item = (JsonStr<'a>, JsonValue<'a>);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -283,8 +283,8 @@ impl<'a> JsonStr<'a> {
         (!self.raw.contains('\\')).then_some(self.raw)
     }
 
-    pub fn chars(&self) -> JsonChars<'a> {
-        JsonChars { rest: self.raw }
+    pub fn chars(&self) -> JsonCharIter<'a> {
+        JsonCharIter { rest: self.raw }
     }
 
     pub fn eq_str(&self, s: &str) -> bool {
@@ -313,7 +313,7 @@ impl core::fmt::Debug for JsonStr<'_> {
 
 /// The characters of a `JsonStr`, its escapes decoded. A `\u` escape of a
 /// lone surrogate reads as U+FFFD.
-pub struct JsonChars<'a> {
+pub struct JsonCharIter<'a> {
     rest: &'a str,
 }
 
@@ -326,7 +326,7 @@ fn hex4(s: &str) -> Option<u32> {
         .flatten()
 }
 
-impl Iterator for JsonChars<'_> {
+impl Iterator for JsonCharIter<'_> {
     type Item = char;
 
     fn next(&mut self) -> Option<char> {

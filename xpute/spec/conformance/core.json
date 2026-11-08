@@ -95,7 +95,7 @@
   "HANDLES": {
     "$val": 16,
     "$type": "u32",
-    "$doc": ["How many slots the core's handle table has; slot 0 is never handed out."]
+    "$doc": ["The core's handle table has this many slots, and slot 0 is never handed out."]
   },
 
   "MOST_RAISE": {

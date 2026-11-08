@@ -11,7 +11,7 @@ use super::spec::{
 };
 use super::view::NodeView;
 
-pub struct TreeEncoderOptions {
+pub struct TreeEncoderConfig {
     /// The size of the first buffer tried; it doubles each time the packet
     /// does not fit.
     pub init_cap: u32,
@@ -19,7 +19,7 @@ pub struct TreeEncoderOptions {
     pub max_cap: Option<u32>,
 }
 
-/// Encodes a tree by walking it onto `PacketWriter`, as the C++ `encode`
+/// This encodes a tree by walking it onto `PacketWriter`, as the C++ `encode`
 /// (cpp/xpute/kit/wire/xtp/view.hpp) does. The first buffer has `init_cap`
 /// bytes; each time the packet overflows it, the tree is walked again into
 /// one twice as large, up to `max_cap`.
@@ -36,7 +36,7 @@ impl TreeEncoder {
     pub fn encode<'a, V: NodeView<'a>>(
         &mut self,
         view: &V,
-        opts: TreeEncoderOptions,
+        opts: TreeEncoderConfig,
     ) -> Result<Vec<u8>, MarshalError> {
         let max_cap = opts.max_cap.unwrap_or(MAX_PKT_SZ);
         if !(HDR_SZ..=MAX_PKT_SZ).contains(&max_cap) {
@@ -183,7 +183,7 @@ pub struct PacketWriter<'a> {
     table: Table,
     root_type: u8,
     lim: u32,
-    /// The first error met; later ones are not kept.
+    /// This is the first error met; later ones are not kept.
     err: Option<Errno>,
 }
 
@@ -630,8 +630,8 @@ impl<'a> PacketWriter<'a> {
         Ok(end)
     }
 
-    /// `finish`'s length, or `None` when the packet was refused, for a caller
-    /// that only needs to know whether the packet fit.
+    /// This answers `finish`'s length, or `None` when the packet was refused,
+    /// for a caller that only needs to know whether the packet fit.
     pub fn fit_len(self) -> Option<u32> {
         self.finish().ok()
     }

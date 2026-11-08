@@ -1,8 +1,8 @@
 // xpute-tool/spec/machine.rs
 
-//! Generates a program's machine (spec/machine.schema.json) as `MACHINE`, for
-//! both ends, into the files its `gen` names. The machine declares what xpute
-//! gives the core: the memory, the stack, the rings, and the file and GPU
+//! This generates a program's machine (spec/machine.schema.json) as `MACHINE`,
+//! for both ends, into the files its `gen` names. The machine declares what
+//! xpute gives the core: the memory, the stack, the rings, and the file and GPU
 //! devices. `MACHINE` also carries where the front's parts lie, which the
 //! runtime lays out and the core holds its header to. Nothing a protocol
 //! carries is part of the machine.
@@ -13,12 +13,13 @@ use serde::Deserialize;
 
 use super::{beside, file, generated, read_as, Output};
 
-/// The page every range of the front begins on. It must equal xpute-core
-/// mem/section.rs `PAGE_BYTES`.
+/// Every range of the front begins on a page. This must equal `PAGE_BYTES` of
+/// xpute-core's mem/section.rs.
 const PAGE_BYTES: u32 = 4096;
 
-/// The lengths in words of a ring's header and of a frame. They must equal
-/// spec/ipc/ring.json `HEADER_WORDS` and spec/ipc/frame.json `WORDS`.
+/// These are the lengths in words of a ring's header and of a frame. They must
+/// equal `HEADER_WORDS` of spec/ipc/ring.json and `WORDS` of
+/// spec/ipc/frame.json.
 const RING_HEADER_WORDS: u32 = 8;
 const FRAME_WORDS: u32 = 4;
 
@@ -26,8 +27,8 @@ const fn page_up(bytes: u32) -> u32 {
     bytes.div_ceil(PAGE_BYTES) * PAGE_BYTES
 }
 
-/// The bytes a ring's header and frames take, as xpute-core ipc/ring.rs
-/// `ring_bytes` computes them.
+/// This answers the bytes a ring's header and frames take, as `ring_bytes` of
+/// xpute-core's ipc/ring.rs computes them.
 const fn ring_bytes(cap: u32) -> u32 {
     (RING_HEADER_WORDS + cap * FRAME_WORDS) * 4
 }
@@ -53,7 +54,7 @@ struct Stack {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Rings {
+struct Ring {
     #[serde(rename = "$doc")]
     _doc: Option<Vec<String>>,
     slot_bytes: u32,
@@ -69,14 +70,14 @@ struct Gpu {
     _doc: Option<Vec<String>>,
     bytes: u32,
     power: String,
-    features: Features,
+    features: FeatureSet,
 }
 
-/// WebGPU's feature names: those the device must have, and those it takes
-/// where the adapter has them.
+/// These are WebGPU's feature names: those the device must have, and those it
+/// takes where the adapter has them.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Features {
+struct FeatureSet {
     #[serde(default)]
     required: Vec<String>,
     #[serde(default)]
@@ -106,13 +107,13 @@ struct Machine {
     gen: Gen,
     mem: Mem,
     stack: Stack,
-    rings: Rings,
+    rings: Ring,
     fs: Option<Fs>,
     gpu: Option<Gpu>,
 }
 
-/// The file device. A machine asks for it by having an `fs` entry, which
-/// carries nothing else.
+/// A machine asks for the file device by having an `fs` entry, which carries
+/// nothing else.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Fs {
@@ -120,10 +121,10 @@ struct Fs {
     _doc: Vec<String>,
 }
 
-/// Where the front's parts lie, computed as xpute-core machine.rs computes
-/// them: the header's page past the stack, then the rings, their slots, and
-/// the GPU stream past them, which is 0 when the machine has no GPU. The
-/// generated Rust asserts at compile time that both computations agree.
+/// The front's parts lie where xpute-core machine.rs places them: the header's
+/// page past the stack, then the rings, their slots, and the GPU stream past
+/// them, which is 0 when the machine has no GPU. The generated Rust asserts at
+/// compile time that both computations agree.
 impl Machine {
     fn head_at(&self) -> u32 {
         page_up(self.stack.module_bytes)
@@ -152,7 +153,8 @@ impl Machine {
         }
     }
 
-    /// Each place under the name both ends give it, with its offset.
+    /// This answers each place under the name both ends give it, with its
+    /// offset.
     fn places(&self) -> [(&'static str, u32); 6] {
         [
             ("head_at", self.head_at()),

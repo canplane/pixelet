@@ -73,7 +73,7 @@ const CURSOR = (pkt: U8Array, base: u32, type: NodeType): NodeCursor => {
 
 const ENTRY_OFF = (base: u32, idx: u32) => base + WORD_SZ + idx * WORD_SZ;
 
-/** Throws on a malformed packet. `pkt` must start on a WORD_SZ boundary in
+/** This throws on a malformed packet. `pkt` must start on a WORD_SZ boundary in
  * its buffer, since arrays are read in place. */
 export class TreeReader {
   readonly pkt: U8Array;

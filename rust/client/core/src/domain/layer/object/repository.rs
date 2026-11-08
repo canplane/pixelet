@@ -44,12 +44,12 @@ use xpute_core::global::Global;
 use xpute_core::mem::heap::Block;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
+use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderConfig, TreeReader, TreeView};
 
 use super::store::{object, object_mut};
 use crate::domain::layer::object::ext::Ext;
 use crate::domain::layer::object::store::{apply, note_written, Write};
-use crate::sys::io::demand::{Order, Phases, Stream, TaskPhaseName};
+use crate::sys::io::demand::{Order, PhaseList, Stream, TaskPhaseName};
 use crate::sys::io::failure::Failure;
 use crate::sys::io::fetch::{body, release};
 use crate::sys::io::file::{self, Path};
@@ -201,7 +201,6 @@ pub fn want(asked: impl Iterator<Item = Quadrant>, order: impl Fn(Quadrant) -> O
     declare(Stream::object, &st.wants);
 }
 
-/// Declares again the files `want` last declared, unchanged.
 pub fn want_again() {
     declare(Stream::object, &state().wants);
 }
@@ -219,7 +218,7 @@ fn changed() {
 
 /// Takes in a file below OBJECT that arrived, the top or a shard, or the
 /// news that it is absent (`admit`).
-pub fn on_arrived(id: u64, block: Option<Block>, phases: &mut Phases) -> Result<(), Failure> {
+pub fn on_arrived(id: u64, block: Option<Block>, phases: &mut PhaseList) -> Result<(), Failure> {
     let at = now();
     let result = admit(id, block.map(body));
     release(block);
@@ -271,7 +270,6 @@ fn on_shard(id: u64, writes: Vec<Write>) {
     changed();
 }
 
-/// The refused files not yet emptied, by their id below OBJECT.
 pub fn refused_files() -> &'static [u64] {
     &state().refused_files
 }
@@ -325,7 +323,7 @@ fn encode_writes(format: u8, writes: &[Write]) -> Result<Vec<u8>, MarshalError> 
     }));
     let pkt = encoder().encode(
         &tree,
-        TreeEncoderOptions {
+        TreeEncoderConfig {
             init_cap: 1 << 14,
             max_cap: None,
         },

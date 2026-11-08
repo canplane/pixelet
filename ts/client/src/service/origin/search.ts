@@ -13,8 +13,8 @@ export interface SearchPart {
   approx?: boolean;
 }
 
-/** One result as the search API answers it. Its kind and its category are
- * numbers (ui/search/search.spec.ts). */
+/** The numbers of `kind` and `category` are defined by
+ * ui/search/search.spec.ts. */
 export interface SearchAnswer {
   gers_id: string;
   kind: number;

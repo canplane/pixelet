@@ -60,7 +60,7 @@ inline constexpr std::uint32_t STACK_BYTES = 1048576u;
 // a module never grows, and a core takes no memory it was not given.
 inline constexpr std::uint32_t HEAP_BYTES = 65536u;
 
-// How many slots the core's handle table has; slot 0 is never handed out.
+// The core's handle table has this many slots, and slot 0 is never handed out.
 inline constexpr std::uint32_t HANDLES = 16u;
 
 // The most frames one RAISE may ask for; a RAISE that asks for more is refused with EINVAL.

@@ -10,7 +10,7 @@
 use crate::frame::shader::record::PIPELINE_IMPOSTOR;
 use crate::frame::shader::record::{PIPELINE_IMPOSTOR_BAKE, PIPELINE_IMPOSTOR_MARK};
 use crate::gpu::draw::DRAW_WORDS;
-use crate::gpu::draw::{uniform_of, Draw, DrawStats, Draws};
+use crate::gpu::draw::{uniform_of, Draw, DrawStat, DrawTable};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::sequence;
@@ -21,12 +21,12 @@ use crate::gpu::api::{
 };
 use crate::gpu::generator::IndirectDraw;
 use crate::gpu::pass::decor::DecorPass;
-use crate::gpu::pass::mark::Marks;
+use crate::gpu::pass::mark::MarkPass;
 use crate::gpu::pass::model::{
-    draw_model, draw_models, put_instances, DrawUniforms, Extent, ModelDraw, DRAW_BYTES,
+    draw_model, draw_models, put_instances, Extent, ModelDraw, UniformBuffer, DRAW_BYTES,
 };
-use crate::gpu::pipeline::{Pipeline, Pipelines};
-use crate::gpu::upload::Uploads;
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
+use crate::gpu::upload::UploadTable;
 
 /// The side of an atlas layer, in texels. An impostor is drawn only smaller
 /// than the model tier's floor, which is one camera grid cell (pxl-engine
@@ -41,8 +41,8 @@ type BakeKey = (u32, Option<u32>, Extent);
 pub struct ImpostorPass {
     draw: Pipeline,
     bake: Pipeline,
-    uniforms: DrawUniforms,
-    fit_uniforms: DrawUniforms,
+    uniforms: UniformBuffer,
+    fit_uniforms: UniformBuffer,
     atlas: u32,
     depth_view: u32,
     fits: u32,
@@ -53,7 +53,7 @@ pub struct ImpostorPass {
     fit: [[f32; 4]; DECOR_GROUPS],
     baked: [Option<BakeKey>; DECOR_GROUPS],
     wanted: [Option<BakeKey>; DECOR_GROUPS],
-    pub marks: Marks,
+    pub marks: MarkPass,
 }
 
 /// Writes a mark's uniform as the draw's own (`put_instances`), with the
@@ -72,7 +72,7 @@ fn fit_of(extent: Extent) -> [f32; 4] {
 }
 
 impl ImpostorPass {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> ImpostorPass {
+    pub fn new(g: &Gpu, pipelines: &mut PipelineCache, align: u32) -> ImpostorPass {
         let draw = pipelines.build_world(g, PIPELINE_IMPOSTOR);
         let bake = pipelines.build(g, PIPELINE_IMPOSTOR_BAKE, Format::rgba8unorm_srgb);
         let sampler = g.sampler(
@@ -116,8 +116,8 @@ impl ImpostorPass {
         ImpostorPass {
             draw,
             bake,
-            uniforms: DrawUniforms::new(DRAW_BYTES, align),
-            fit_uniforms: DrawUniforms::new(FIT_BYTES, align),
+            uniforms: UniformBuffer::new(DRAW_BYTES, align),
+            fit_uniforms: UniformBuffer::new(FIT_BYTES, align),
             atlas,
             depth_view,
             fits,
@@ -125,7 +125,7 @@ impl ImpostorPass {
             fit: [[0.0; 4]; DECOR_GROUPS],
             baked: [None; DECOR_GROUPS],
             wanted: [None; DECOR_GROUPS],
-            marks: Marks::new(
+            marks: MarkPass::new(
                 g,
                 pipelines,
                 (PIPELINE_IMPOSTOR_MARK, PIPELINE_IMPOSTOR),
@@ -136,7 +136,7 @@ impl ImpostorPass {
     }
 
     /// Draws this frame's marks into `pass`. `frames` holds their group 0 as
-    /// they are and as they were (tile_mark.wgsl, `Marks::draw`). A group
+    /// they are and as they were (tile_mark.wgsl, `MarkPass::draw`). A group
     /// whose layer is not baked yet draws no mark.
     pub fn draw_marks(&self, pass: &mut TrackedRenderPass, frames: [u32; 2]) {
         self.marks.draw(pass, frames, |pass, d, upload| {
@@ -149,7 +149,7 @@ impl ImpostorPass {
         });
     }
 
-    /// Pushes onto `out` the uploads `draws` read (`Marks::reads`).
+    /// Pushes onto `out` the uploads `draws` read (`MarkPass::reads`).
     pub fn marks_read<'a>(
         &self,
         draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
@@ -159,7 +159,7 @@ impl ImpostorPass {
     }
 
     /// Adds the pass's draws to `stats`, two triangles an instance.
-    pub fn count(&self, draws: &Draws, stats: &mut DrawStats) {
+    pub fn count(&self, draws: &DrawTable, stats: &mut DrawStat) {
         draws.count(PIPELINE_IMPOSTOR, stats, |d| 2 * d[2]);
     }
 
@@ -170,7 +170,13 @@ impl ImpostorPass {
     }
 
     /// Bakes again each group that is due, and says whether any was.
-    pub fn bake(&mut self, g: &Gpu, encoder: u32, decor: &DecorPass, uploads: &Uploads) -> bool {
+    pub fn bake(
+        &mut self,
+        g: &Gpu,
+        encoder: u32,
+        decor: &DecorPass,
+        uploads: &UploadTable,
+    ) -> bool {
         // A group is due when its model, skin or extent changed since it was
         // baked and its model has landed. A group still landing is due on a
         // later frame, and this frame bakes, writes and submits nothing for
@@ -233,7 +239,7 @@ impl ImpostorPass {
         draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone,
         uniforms: &[f32],
         changed: bool,
-        uploads: &mut Uploads,
+        uploads: &mut UploadTable,
     ) {
         self.uniforms.write(
             g,
@@ -256,7 +262,7 @@ impl ImpostorPass {
         &self,
         pass: &mut TrackedRenderPass,
         draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
-        uploads: &mut Uploads,
+        uploads: &mut UploadTable,
         frame: u32,
     ) {
         let Some(slots) = self.uniforms.slots() else {

@@ -27,7 +27,7 @@ import {
 } from "@/ui/component/theme.ts";
 import { SectionTitle } from "@/ui/component/section-title.tsx";
 import { SensorStatus } from "@/abi/cmd.spec.ts";
-import { statusColor } from "@/ui/world/top/sensor-icons.tsx";
+import { statusColor } from "@/ui/world/top/sensor-icon.tsx";
 import { LABEL, STATUS } from "@/ui/component/palette.ts";
 import { AboveKeyboard } from "@/ui/component/above-keyboard.tsx";
 import { SYSTEM_CLEAR } from "@/ui/component/text-field.tsx";
@@ -118,8 +118,7 @@ function ResultRow({
   );
 }
 
-/** The country a result lies in, or the result's own name when it is a
- * country. It is null for a result no country holds, such as one at sea or
+/** The country is null for a result no country holds, such as one at sea or
  * beyond the mapped divisions. */
 function countryOf(result: SearchResult): string | null {
   if (
@@ -139,9 +138,9 @@ interface CountrySection {
   rows: SearchResult[];
 }
 
-/** Groups the results by country. The pivot's country comes first, then each
- * other country where its best result was ranked, and the results with no
- * country come last. Within a section, results keep the API's order. */
+/** The pivot's country comes first, then each other country where its best
+ * result was ranked, and the results with no country come last. Within a
+ * section, results keep the API's order. */
 function byCountry(
   results: SearchResult[],
   home: string | null,

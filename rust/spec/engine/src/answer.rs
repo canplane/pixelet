@@ -52,7 +52,7 @@ pub const fn val(asset: u32) -> u32 {
 }
 
 /// A bound packed into a word, its lowest in the low half and its highest in the high, each
-/// as an i16. The ground's bounds, a clip level's entries, are kept so (`ground::Bounds`).
+/// as an i16. The ground's bounds, a clip level's entries, are kept so (`ground::Extent`).
 pub(crate) fn bound_word([lo, hi]: [i32; 2]) -> i32 {
     lo & 0xffff | hi << 16
 }
@@ -68,19 +68,19 @@ pub(crate) fn bound_of(w: i32) -> [i32; 2] {
 /// first in the first word, y's last and z's two in the second. The box is conservative: all
 /// the node holds lies in it, and a wider box only makes a ray split more. A ray through the
 /// node outside the box meets nothing there (pxl-engine cast). The world asks no axis apart.
-pub(crate) type BoxWords = [u32; 2];
+pub(crate) type PackedBox = [u32; 2];
 pub const BOX_BITS: u32 = 10;
 /// The steps on a box's axis; a step is the node's side divided by `2^BOX_BITS`.
 pub const BOX_STEPS: u32 = 1 << BOX_BITS;
-pub const BOX_WHOLE: BoxWords = box_word([0; 3], [BOX_STEPS; 3]);
+pub const BOX_WHOLE: PackedBox = box_word([0; 3], [BOX_STEPS; 3]);
 /// No box: nothing lies in the node. A join of boxes starts from it. No `box_word` sets a bit
 /// past `3 · BOX_BITS` of a word, so no box is mistaken for it.
-pub const BOX_NONE: BoxWords = [u32::MAX; 2];
+pub const BOX_NONE: PackedBox = [u32::MAX; 2];
 
 /// The box from step `lo` to past step `hi` on each axis, each held to the
 /// node: `lo` in `0..BOX_STEPS`, `hi` in `1..=BOX_STEPS`, at least one past
 /// `lo`.
-pub(crate) const fn box_word(lo: [u32; 3], hi: [u32; 3]) -> BoxWords {
+pub(crate) const fn box_word(lo: [u32; 3], hi: [u32; 3]) -> PackedBox {
     let m = BOX_STEPS - 1;
     let mut f = [0u32; 6];
     let mut a = 0;
@@ -104,7 +104,7 @@ pub(crate) const fn box_word(lo: [u32; 3], hi: [u32; 3]) -> BoxWords {
 }
 
 /// The least box holding boxes `a` and `b`, each a `box_word` or none.
-pub(crate) const fn box_join(a: BoxWords, b: BoxWords) -> BoxWords {
+pub(crate) const fn box_join(a: PackedBox, b: PackedBox) -> PackedBox {
     if a[0] == BOX_NONE[0] && a[1] == BOX_NONE[1] {
         return b;
     }
@@ -124,12 +124,12 @@ pub(crate) const fn box_join(a: BoxWords, b: BoxWords) -> BoxWords {
     box_word(lo, hi)
 }
 
-pub(crate) const fn box_none(b: BoxWords) -> bool {
+pub(crate) const fn box_none(b: PackedBox) -> bool {
     b[0] == BOX_NONE[0] && b[1] == BOX_NONE[1]
 }
 
 /// The first step, and the step past the last, on each axis of a `box_word`.
-pub(crate) const fn box_of(w: BoxWords) -> ([u32; 3], [u32; 3]) {
+pub(crate) const fn box_of(w: PackedBox) -> ([u32; 3], [u32; 3]) {
     let m = BOX_STEPS - 1;
     let f = [
         w[0] & m,

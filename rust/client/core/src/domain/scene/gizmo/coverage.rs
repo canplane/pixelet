@@ -30,7 +30,7 @@ use xpute_core::global::Global;
 use crate::domain::layer::terrain::clipmap::{eye_entries, tile_of};
 use crate::domain::layer::Base as _;
 use crate::domain::query::World;
-use crate::domain::scene::gizmo::debug_line::DebugLines;
+use crate::domain::scene::gizmo::debug_line::DebugMesh;
 use crate::domain::scene::gizmo::gizmo_spec;
 use crate::domain::scene::model::draw_list;
 use crate::domain::view::frame::pose::view;
@@ -127,7 +127,7 @@ struct Coverage {
     /// The vertices laid this step. They are kept between steps so their
     /// buffer is reused.
     next: (Vec<f32>, usize),
-    lines: DebugLines,
+    lines: DebugMesh,
 }
 
 static COVERAGE: Global<Coverage> = Global::new();
@@ -165,7 +165,7 @@ pub fn coverage_gizmo_step(show: bool) {
         0.0,
     ];
     let outline = outline(&o, top);
-    let mut lines = Lines::default();
+    let mut lines = LineMap::default();
     for &(n, mark) in &outline.bricks {
         lines.piece(rect(n), mark);
     }
@@ -210,10 +210,10 @@ fn rect((zoom, [x, y]): Node2) -> (f64, f64, f64) {
 /// not drawn is marked with the reason: no tile on it, only the floor's tile,
 /// or a tile whose brick is not filled yet.
 fn outline(o: &Observation, top: Zoom) -> Outline {
-    let held: [Option<[Entry; ENTRIES as usize]>; EYE_CLIP_LEVELS as usize] =
+    let levels: [Option<[Entry; ENTRIES as usize]>; EYE_CLIP_LEVELS as usize] =
         core::array::from_fn(|w| eye_entries(clipmap::eye_cell_zoom(w as u32)));
     let present = |cell_zoom: Zoom, q: [i32; 2]| {
-        held[(cell_zoom - FIRST_CELL_ZOOM) as usize]
+        levels[(cell_zoom - FIRST_CELL_ZOOM) as usize]
             .is_some_and(|s| s[clipmap::entry(q) as usize].holds(q))
     };
     let over = (o.eye[2] - o.ground).max(0.0);
@@ -242,7 +242,7 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
         if GROUND.tile_zoom(cell_zoom) < top as i32 {
             continue;
         }
-        let Some(entries) = held[(cell_zoom - FIRST_CELL_ZOOM) as usize] else {
+        let Some(entries) = levels[(cell_zoom - FIRST_CELL_ZOOM) as usize] else {
             continue;
         };
         let pz = clipmap::bricks_zoom(cell_zoom);
@@ -302,12 +302,12 @@ fn line_top(mut p: Quadrant, top: Zoom) -> Quadrant {
 /// holds each edge on it as a stretch with its mark. The second field holds
 /// the pieces' bricks, whose faces hide the parts of the gizmo behind them.
 #[derive(Default)]
-struct Lines(FnvHashMap<(u8, u64), Vec<Stretch>>, Vec<(f64, f64, f64)>);
+struct LineMap(FnvHashMap<(u8, u64), Vec<Stretch>>, Vec<(f64, f64, f64)>);
 
 /// Where an edge starts and ends along its line, and what it marks.
 type Stretch = (f64, f64, Mark);
 
-impl Lines {
+impl LineMap {
     /// Adds the four edges of a square given as `rect` gives it: its
     /// south-west corner and its side.
     fn brick(&mut self, (x0, y0, side): (f64, f64, f64), mark: Mark) {

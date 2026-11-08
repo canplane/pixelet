@@ -1,10 +1,10 @@
 // xpute-tool/bin/gen.rs
 
-//! Generates a program's machine and protocols, each into the files its `gen`
-//! names (xpute-tool spec/machine.rs, spec/cmd.rs `protocol_outputs`). With
-//! `--check` it writes nothing, and fails where a file on disk differs from
-//! what it would write. A JSON that declares `mem` is a machine and any other
-//! is a protocol; no two protocols may give the same command number.
+//! This generates a program's machine and protocols, each into the files its
+//! `gen` names (xpute-tool spec/machine.rs, spec/cmd.rs `protocol_outputs`).
+//! With `--check` it writes nothing, and fails where a file on disk differs
+//! from what it would write. A JSON that declares `mem` is a machine and any
+//! other is a protocol; no two protocols may give the same command number.
 //!
 //!   xpute-gen <machine.json> <protocol.json>... [--check]
 //!

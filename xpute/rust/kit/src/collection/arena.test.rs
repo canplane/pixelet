@@ -9,7 +9,7 @@ struct Slot {
 }
 
 fn arena(init_cap: u32, max_cap: u32) -> Arena<Slot> {
-    Arena::new(ArenaOptions { init_cap, max_cap }).unwrap()
+    Arena::new(ArenaConfig { init_cap, max_cap }).unwrap()
 }
 
 #[test]

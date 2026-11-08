@@ -9,7 +9,7 @@
 //! ago, and every tile is claimed in a frame drawn whole. The screen keeps a tile claimed until
 //! its history has gathered the jitter's whole sequence; the map claims a tile only in the
 //! frame it changed. A pass that draws the tiles reads the words and the uniform
-//! (screen_tiles.wgsl) and draws only the claimed ones. A target drawn through its gate takes
+//! (screen_tile.wgsl) and draws only the claimed ones. A target drawn through its gate takes
 //! the number its gate writes into the stencil from here (`mask`).
 
 use crate::frame::shader::group::{
@@ -23,7 +23,7 @@ use crate::frame::shader::word::screen::{self, TILES_WORDS};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, word_bytes, Gpu, Group, PassDesc, RenderContext,
 };
-use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::span_spec::GpuSpanName;
 
 /// How many pixels a mark on the screen is grown by each way. The margin covers the pixels
@@ -32,7 +32,7 @@ use crate::gpu::span_spec::GpuSpanName;
 pub const DAMAGE_MARGIN: f32 = 4.0;
 
 /// A mark: the pixels `[x, y, width, height]` that a change covers. A frame drawn through the
-/// gate claims the tiles they lie in (`Tiles::damage`).
+/// gate claims the tiles they lie in (`TileGrid::damage`).
 pub type Damage = [u32; 4];
 
 /// The mark of the clip-space box `[x0, y0, x1, y1]`, Y up, on a target `width` by `height`
@@ -74,7 +74,7 @@ const NO_DAMAGE_RECT: [u32; 4] = [u32::MAX, u32::MAX, 0, 0];
 /// holds this frame's number but those it claims (gpu/api.rs `Stencil`).
 const MASK_NUMBERS: u32 = 255;
 
-pub struct Tiles {
+pub struct TileGrid {
     /// A tile's side in pixels, and how many frames a tile stays claimed once it changed, in a
     /// frame drawn through the gate.
     side: u32,
@@ -121,16 +121,16 @@ pub struct Tiles {
     damage_rect_pipeline: Pipeline,
 }
 
-impl Tiles {
+impl TileGrid {
     /// Makes tiles `side` pixels a side, which stay claimed for `damage_frames` frames once
     /// they changed, with their marks' passes timed in `span`.
     pub fn new(
         g: &Gpu,
-        pipelines: &mut Pipelines,
+        pipelines: &mut PipelineCache,
         side: u32,
         damage_frames: u32,
         span: GpuSpanName,
-    ) -> Tiles {
+    ) -> TileGrid {
         let new_damage_rect = g.buf(
             word_bytes(4),
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
@@ -153,7 +153,7 @@ impl Tiles {
             );
             (args, pass, group)
         });
-        Tiles {
+        TileGrid {
             side,
             damage_frames,
             span,
@@ -313,7 +313,7 @@ impl Tiles {
     }
 
     /// The span the marks' passes are timed in. A pass that reads the marks beside them, such
-    /// as the decor's mask, is timed in it too.
+    /// as the decor's cull (gpu/generator.rs `Generator::cull`), is timed in it too.
     pub fn span(&self) -> GpuSpanName {
         self.span
     }
@@ -352,7 +352,7 @@ impl Tiles {
         g.end(pass);
     }
 
-    /// The indirect args that draw a quad for each tile of the marks' box (screen_tiles.wgsl
+    /// The indirect args that draw a quad for each tile of the marks' box (screen_tile.wgsl
     /// `rect_clip`), as `dispatch_rect_args` set them. They draw the claimed tiles alone where
     /// a tile is claimed only in the frame it changed, as the map's is. They are none where a
     /// tile stays claimed longer.
@@ -388,7 +388,7 @@ impl Tiles {
         self.size.map(|v| v.div_ceil(self.side))
     }
 
-    /// The uniform's words for this frame, laid out as build.rs's `Tiles` reads them
+    /// The uniform's words for this frame, laid out as build.rs's `TileGrid` reads them
     /// (tile_word.wgsl). A quad is grown by `grow` pixels each way past its tile, and a tile
     /// stays claimed for `damage_frames` frames once it changed.
     pub fn words(&self, grow: f32, damage_frames: u32) -> [u32; TILES_WORDS] {

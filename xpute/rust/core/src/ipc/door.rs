@@ -7,18 +7,18 @@
 //! before it rings the core again, so overrunning that ring is a sizing bug,
 //! not a state to wait out.
 //!
-//! A command under xpute's majors (abi/sys.json, abi/gpu.json, abi/fs.json)
-//! is applied here, or handed to the program as what it means. The program
-//! is handed every other command, and each open and close the runtime has
+//! A command under xpute's majors (abi/sys.json, abi/gpu.json, abi/fs.json) is
+//! applied here, or handed to the program as what it means. The program is
+//! handed every other command, and each open and close the runtime has
 //! completed.
 //!
-//! The core's imports, the commands it sends the runtime, are frames too.
-//! Its file calls (abi/fs.json) and its stop report are posted as any import
-//! is. An open and a close carry ACKREQ, and the runtime completes each on a
-//! later turn with a frame flagged RES on the submission ring. A call, which
-//! is answered before it returns, is laid unpublished in the next slot, and
-//! its place is handed to the runtime's `call`. The runtime routes each
-//! import by its command's major.
+//! The core's imports, the commands it sends the runtime, are frames too. Its
+//! file calls (abi/fs.json) and its stop report are posted as any import is.
+//! An open and a close carry ACKREQ, and the runtime completes each on a later
+//! turn with a frame flagged RES on the submission ring. A call, which is
+//! answered before it returns, is laid unpublished in the next slot, and its
+//! place is handed to the runtime's `call`. The runtime routes each import by
+//! its command's major.
 //!
 //! Both rings keep the rules of a ring (ring.rs R1 to R3), so the door works
 //! whether its runtime takes turns with the core or runs beside it. A
@@ -60,9 +60,9 @@ use crate::ipc::ring::Ring;
 use crate::mem::off_of_slice;
 use crate::sched::wake::NO_WAKE;
 
-/// An import as xpute-tool generates it from a protocol's table
-/// (`spec/cmd`): its command number, the number of children its packet is
-/// written as, and its writer.
+/// An import is what xpute-tool generates from a protocol's table (`spec/cmd`):
+/// its command number, the number of children its packet is written as, and its
+/// writer.
 pub trait Import {
     const NUMBER: u32;
     const FIELDS: u32;
@@ -103,21 +103,22 @@ impl Reading {
 /// a command it does not know, which is replied to with ENOSYS.
 pub type Outcome = Result<Option<i32>, MarshalError>;
 
-/// What the door hands the program: a change in its life that its runtime
-/// tells it of, a turn the scheduling policy grants, the GPU's answer, a
-/// surface the UI lends it, an open or a close the runtime has completed, a
-/// file changed under it, or a command of the program's own, with its number
-/// and its packet. Nothing answers a completion, so what the program returns
-/// for one is dropped. The drain runs before any phase's budget, so the
-/// program should record what it is handed and return. xpute may add kinds:
-/// a program matches the kinds it takes and leaves the rest to a wildcard.
+/// The door hands the program a change in its life that its runtime tells it
+/// of, a turn the scheduling policy grants, the GPU's answer, a surface the UI
+/// lends it, an open or a close the runtime has completed, a file changed
+/// under it, or a command of the program's own, with its number and its
+/// packet. Nothing answers a completion, so what the program returns for one
+/// is dropped. The drain runs before any phase's budget, so the program should
+/// record what it is handed and return. xpute may add kinds: a program matches
+/// the kinds it takes and leaves the rest to a wildcard.
 #[non_exhaustive]
 pub enum Submission<'a> {
     Life(Life),
-    /// A turn the scheduling policy grants, with the wall clock (SYS_TURN).
+    /// The scheduling policy grants a turn (SYS_TURN), which carries the wall
+    /// clock.
     Turn(SysTurn),
-    /// The GPU the machine asked for has answered, for the first time or
-    /// again after a loss (GPU_READY). It tells of the GPU's state, not of the
+    /// The GPU the machine asked for has answered (GPU_READY), for the first
+    /// time or again after a loss. It tells of the GPU's state, not of the
     /// core's life.
     GpuReady,
     Surface(Surface),
@@ -129,7 +130,7 @@ pub enum Submission<'a> {
     Program(u32, Option<&'a [u8]>),
 }
 
-/// A surface the UI lends the GPU (abi/gpu.json). It is opened, and the
+/// A surface is lent to the GPU by the UI (abi/gpu.json). It is opened, and the
 /// program answers with its handle, or 0 for none; its box is resized; it is
 /// let go.
 #[derive(Clone, Copy, Debug)]
@@ -139,7 +140,7 @@ pub enum Surface {
     Close(GpuSurfaceClose),
 }
 
-/// The core's life as its runtime tells it (abi/sys.json). What each event
+/// The core's life is as its runtime tells it (abi/sys.json). What each event
 /// means the program keeps or resets is the program's to decide; a program
 /// with nothing to do answers `Ok(None)`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -153,8 +154,8 @@ pub enum Life {
     Resume,
 }
 
-/// How full the rings ran since the stat was last taken (`Door::take_stat`).
-/// Each figure is the most it reached.
+/// A stat says how full the rings ran since the stat was last taken
+/// (`Door::take_stat`). Each figure is the most it reached.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct DoorStat {
     pub cq_peak: u32,
@@ -195,15 +196,15 @@ impl Door {
         }
     }
 
-    /// Begins a turn. The door lets go of every read the runtime's head has
-    /// passed; the buffer itself is freed only where its reading was dropped.
+    /// `rise` begins a turn. The door lets go of every read the runtime's head
+    /// has passed; the buffer itself is freed only where its reading was
+    /// dropped.
     pub fn rise(&self) {
         self.reads
             .borrow_mut()
             .retain(|&(pos, _)| !self.is_consumed(pos));
     }
 
-    /// Where the last import was posted.
     pub fn last_pos(&self) -> Pos {
         Pos(self.cq.tail().wrapping_sub(1))
     }
@@ -284,15 +285,14 @@ impl Door {
         });
     }
 
-    /// Posts `import`, tagged 0.
     pub fn send<E: Import>(&self, import: &E) {
         self.send_with(0, E::NUMBER, 0, E::FIELDS, |w| import.write(w));
     }
 
-    /// Calls `import`, which the runtime answers before this returns. The
-    /// frame is laid unpublished in the next slot and handed to the runtime's
-    /// `call`. Answers the runtime's value or errno, ENOSPC when no slot is
-    /// free, or EMSGSIZE when the frame does not fit in one.
+    /// `call` sends `import`, which the runtime answers before this returns.
+    /// The frame is laid unpublished in the next slot and handed to the
+    /// runtime's `call`. It answers the runtime's value or errno, ENOSPC when
+    /// no slot is free, or EMSGSIZE when the frame does not fit in one.
     pub fn call<E: Import>(&self, import: &E) -> Result<u32, Errno> {
         if !self.can_post() {
             return Err(Errno::ENOSPC);
@@ -406,10 +406,10 @@ impl Door {
         self.cq.len() + self.reserve <= self.cq.cap
     }
 
-    /// A turn's drain. It lets go of the reads the runtime has passed
-    /// (`rise`), hands what waits to `handle` in order (`receive`), and
-    /// answers when the core wants the next turn: at once when submissions
-    /// are left, else only when something arrives.
+    /// `turn` is a turn's drain. It lets go of the reads the runtime has passed
+    /// (`rise`), hands what waits to `handle` in order (`receive`), and answers
+    /// when the core wants the next turn: at once when submissions are left,
+    /// else only when something arrives.
     pub fn turn(&self, handle: impl FnMut(Submission) -> Outcome) -> f64 {
         self.rise();
         self.receive(handle);
@@ -493,15 +493,15 @@ impl Door {
     }
 }
 
-/// A command's packet; a command with fields must carry one.
+/// A command with fields must carry a packet.
 fn packet(pkt: Option<&[u8]>) -> Result<&[u8], MarshalError> {
     pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))
 }
 
 /// Applies one submitted command. Every command past xpute's majors goes to
-/// the program. Of xpute's own, NOP answers its value and the rest are
-/// handed over as what they mean; any other of xpute's numbers is answered
-/// with nothing.
+/// the program. Of xpute's own, NOP answers its value and the rest are handed
+/// over as what they mean; any other of xpute's numbers is answered with
+/// nothing.
 fn apply_frame(
     f: &frame::Frame,
     pkt: Option<&[u8]>,

@@ -2,14 +2,10 @@
 
 //! The sky's and the clouds' tuned numbers.
 
-// ---- the sky ----
-
 /// The rate, per second, at which the sun and the moon ease across a jump of
 /// the anchor and the stars fade in: each transition takes 1/SKY_EASE_RATE s.
 /// These transitions are eased every frame, never stepped.
 pub const SKY_EASE_RATE: f64 = 1.5;
-
-// ---- the clouds ----
 
 /// The least and the most width of a cloud, in units: about 2 to 3.5 km. It
 /// does not depend on `CLOUD_SPACING_CELLS`.

@@ -75,8 +75,8 @@ pub fn on_publish(run: Option<fn()>) {
     ON_PUBLISH.with(|c| c.set(run));
 }
 
-/// The words of a record: its op and count, then `args`, then `bytes` as
-/// their count followed by the bytes in words.
+/// A record's words are its op and count, then `args`, then `bytes` as their
+/// count followed by the bytes in words.
 pub const fn record_words(args: usize, bytes: Option<usize>) -> usize {
     2 + args
         + match bytes {
@@ -85,13 +85,14 @@ pub const fn record_words(args: usize, bytes: Option<usize>) -> usize {
         }
 }
 
-/// A record's size in bytes, the unit a stream's room is counted in.
+/// `record_bytes` is a record's size in bytes, the unit a stream's room is
+/// counted in.
 pub const fn record_bytes(args: usize, bytes: Option<usize>) -> usize {
     record_words(args, bytes) * WORD
 }
 
-/// Whether a transaction is open, where it began, and whether a record that
-/// did not fit has dropped it.
+/// A mark says whether a transaction is open, where it began, and whether a
+/// record that did not fit has dropped it.
 #[derive(Clone, Copy, PartialEq)]
 enum Mark {
     Off,
@@ -114,7 +115,6 @@ pub struct Stream {
 impl Stream {
     pub const END: usize = spec::END as usize;
     pub const HEAD: usize = spec::HEAD as usize;
-    /// The stream's own words, before the user's.
     pub const OWN_WORDS: usize = spec::OWN_WORDS as usize;
 
     /// A stream over `words` words at `at` in `mem`, which must be
@@ -158,7 +158,7 @@ impl Stream {
         unsafe { core::slice::from_raw_parts_mut(self.mem.at::<u32>(self.at + k * WORD), n) }
     }
 
-    /// Where the stream's words begin in its memory, `END` first.
+    /// `at` is where the stream's words begin in its memory, `END` first.
     pub fn at(&self) -> usize {
         self.at
     }
@@ -190,8 +190,9 @@ impl Stream {
         }
     }
 
-    /// Whether records of `bytes` bytes (`record_bytes`, or xpute-gpu
-    /// encode's `call::*_bytes`) fit with `leave` bytes left after them.
+    /// `fits` says whether records of `bytes` bytes (`record_bytes`, or
+    /// xpute-gpu encode's `call::*_bytes`) fit with `leave` bytes left after
+    /// them.
     pub fn fits(&self, bytes: usize, leave: usize) -> bool {
         self.left() >= bytes + leave
     }
@@ -252,8 +253,8 @@ impl Stream {
     }
 }
 
-/// Fills a record's words past its op and count: `args`, `tail`, then
-/// `bytes` as their count followed by the bytes in words.
+/// Fills a record's words past its op and count: `args`, `tail`, then `bytes`
+/// as their count followed by the bytes in words.
 fn fill(w: &mut [u32], args: &[u32], tail: &[u32], bytes: Option<&[u8]>) {
     w[..args.len()].copy_from_slice(args);
     w[args.len()..args.len() + tail.len()].copy_from_slice(tail);

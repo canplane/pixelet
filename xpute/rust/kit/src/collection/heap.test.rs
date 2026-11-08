@@ -5,7 +5,7 @@ use crate::golden::Golden;
 
 const GOLDEN: &str = include_str!("../../../../spec/golden/collection/heap.tsv");
 
-type Elements = Vec<Element<f64, i32>>;
+type ElementList = Vec<Element<f64, i32>>;
 
 fn show(e: Option<Element<f64, i32>>) -> String {
     e.map_or("none".to_string(), |e| format!("{}:{}", e.key, e.val))
@@ -14,7 +14,7 @@ fn show(e: Option<Element<f64, i32>>) -> String {
 #[test]
 fn matches_record() {
     let v = Golden::load(GOLDEN);
-    let (mut a, mut b): (Elements, Elements) = (Vec::new(), Vec::new());
+    let (mut a, mut b): (ElementList, ElementList) = (Vec::new(), Vec::new());
     v.each("steps", |k| {
         if v.s(&format!("{k}.op")) == "pop" {
             assert_eq!(

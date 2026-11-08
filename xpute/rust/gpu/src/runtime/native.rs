@@ -1,10 +1,11 @@
 // xpute-gpu/runtime/native.rs
 
-//! The GPU's runtime for a core linked into its own process (xpute-runtime
-//! native), and its C ABI under xpute's names (`native_abi!`). On Android the
-//! Kotlin class `xpute.Gpu` reaches it too (`jni`). The device is opened once
-//! and held. A platform's window is bound to a core's surface and let go. The
-//! stream runs as the core publishes it, and a completion kicks the core.
+//! This is the GPU's runtime for a core linked into its own process
+//! (xpute-runtime native), and its C ABI under xpute's names (`native_abi!`).
+//! On Android the Kotlin class `xpute.Gpu` reaches it too (`jni`). The device
+//! is opened once and held. A platform's window is bound to a core's surface
+//! and let go. The stream runs as the core publishes it, and a completion kicks
+//! the core.
 //!
 //! The runtime is touched only on the core's thread: through `Core::run_on`,
 //! and through the core's own calls into `publish` and `admit_frame`. That is
@@ -23,45 +24,45 @@ use xpute_runtime::mem::Memory;
 use xpute_runtime::native::Core;
 
 use super::{Ask, Config, ConfigureAt, GpuRuntime, OpenError, Opened};
-use crate::Numbers;
+use crate::CoreConfig;
 
 struct Device {
-    /// What each window's surface is made with.
+    /// Each window's surface is made with this.
     instance: wgpu::Instance,
     runtime: GpuRuntime,
 }
 
 static DEVICE: Global<Option<Device>> = Global::new();
 
-/// The core the device was opened for. `configure` holds it idle while a
-/// surface is configured off its thread.
+/// This is the core the device was opened for. `configure` holds it idle while
+/// a surface is configured off its thread.
 static CORE: OnceLock<Core> = OnceLock::new();
 
-/// Where a native core's surfaces are configured: on an Apple platform, on
-/// the main thread while the core is idle; elsewhere, on the core's thread,
-/// which runs the stream.
+/// A native core's surfaces are configured on the main thread of an Apple
+/// platform while the core is idle, and elsewhere on the core's thread, which
+/// runs the stream.
 #[cfg(target_vendor = "apple")]
 pub const CONFIGURE_AT: ConfigureAt = ConfigureAt::Main(configure);
 #[cfg(not(target_vendor = "apple"))]
 pub const CONFIGURE_AT: ConfigureAt = ConfigureAt::Here;
 
-/// The surface format the runtime prefers: BGRA on an Apple platform, and
-/// RGBA elsewhere, since Android's Vulkan surfaces offer no BGRA.
+/// The runtime prefers BGRA on an Apple platform and RGBA elsewhere, since
+/// Android's Vulkan surfaces offer no BGRA.
 #[cfg(target_vendor = "apple")]
 pub const PREFERRED_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8Unorm;
 #[cfg(not(target_vendor = "apple"))]
 pub const PREFERRED_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
-/// The runtime's config for a native core: the program's `numbers`, the
+/// This is the runtime's config for a native core: the program's `numbers`, the
 /// platform's preferred format, where it configures a surface
 /// (`CONFIGURE_AT`), and `Fifo`, which shows each frame in turn at the
 /// display's pace and is the one present mode every platform has.
-pub const fn config(numbers: Numbers) -> Config {
+pub const fn config(cfg: CoreConfig) -> Config {
     Config {
         preferred_format: PREFERRED_FORMAT,
         configure_at: CONFIGURE_AT,
-        frame_latency: numbers.frame_latency,
-        upload_chunk_bytes: numbers.upload_chunk_bytes,
+        frame_latency: cfg.frame_latency,
+        upload_chunk_bytes: cfg.upload_chunk_bytes,
         present_mode: wgpu::PresentMode::Fifo,
     }
 }
@@ -70,8 +71,8 @@ fn device() -> Option<&'static mut Device> {
     DEVICE.get(|| None).as_mut()
 }
 
-/// The runtime once the device is open, for the program's own calls. Call it
-/// on the core's thread only.
+/// This is the runtime once the device is open, for the program's own calls.
+/// Call it on the core's thread only.
 pub fn runtime() -> Option<&'static mut GpuRuntime> {
     device().map(|d| &mut d.runtime)
 }
@@ -87,7 +88,7 @@ fn configure() {
     }
 }
 
-/// The core's memory as the runtime reads and writes it, on the core's
+/// This is the core's memory as the runtime reads and writes it, on the core's
 /// thread.
 fn view(core: Core) -> Memory<'static> {
     let (base, bytes) = core.mem();
@@ -124,26 +125,29 @@ pub fn publish(core: Core, stream_at: u32) {
     }
 }
 
-/// The runtime's admission (`crate::admit`), handed to the core with its
-/// boot (xpute-core `Form::admit_frame`). It admits a frame while the runtime
-/// does (`GpuRuntime::admit_frame`), so taking a surface's texture never
-/// blocks the core's thread, which a caller may be waiting on (xpute-runtime
-/// native `ring`). Before the device opens, it admits every frame.
+/// This is the runtime's admission (`crate::admit`), handed to the core with
+/// its boot (xpute-core `Form::admit_frame`). It admits a frame while the
+/// runtime does (`GpuRuntime::admit_frame`), so taking a surface's texture
+/// never blocks the core's thread, which a caller may be waiting on
+/// (xpute-runtime native `ring`). Before the device opens, it admits every
+/// frame.
 pub fn admit_frame() -> bool {
     runtime().is_none_or(|h| h.admit_frame())
 }
 
-/// The numbers the exports below return besides 0, which means done. They
-/// are the C ABI's, and an embedder's header states them as they are here
+/// These are the numbers the exports below return besides 0, which means done.
+/// They are the C ABI's, and an embedder's header states them as they are here
 /// (include/xpute_gpu.h).
 ///
-/// `xpute_gpu_open`: no device opens as the program asks.
+/// `xpute_gpu_open` returns this when no device opens as the program asks.
 pub const NO_DEVICE: i32 = -1;
-/// `xpute_gpu_surface_bind`: no device is open.
+/// `xpute_gpu_surface_bind` returns this when no device is open.
 pub const NOT_OPEN: i32 = -2;
-/// `xpute_gpu_surface_bind`: the system makes no surface of the window.
+/// `xpute_gpu_surface_bind` returns this when the system makes no surface of
+/// the window.
 pub const NO_SURFACE: i32 = -3;
-/// `xpute_gpu_surface_bind`: a newer handle has bound the slot since.
+/// `xpute_gpu_surface_bind` returns this when a newer handle has bound the slot
+/// since.
 pub const SLOT_TAKEN: i32 = -4;
 
 /// Says what refused the device, the way a stop is said (xpute-runtime
@@ -173,8 +177,8 @@ pub fn open(core: Core, ask: &Ask, cfg: Config) -> Result<(), OpenError> {
     opened.unwrap_or(Err(OpenError::Terminated))
 }
 
-/// The target wgpu draws a platform's window through: on an Apple platform a
-/// view's `CAMetalLayer`, on Android a view's native window.
+/// This is the target wgpu draws a platform's window through: on an Apple
+/// platform a view's `CAMetalLayer`, on Android a view's native window.
 #[cfg(target_vendor = "apple")]
 fn target(window: NonNull<c_void>) -> wgpu::SurfaceTargetUnsafe {
     wgpu::SurfaceTargetUnsafe::CoreAnimationLayer(window.as_ptr())
@@ -274,7 +278,7 @@ macro_rules! native_abi {
             }
 
             /// # Safety
-            /// The same as for `xpute_gpu_surface_bind`.
+            /// The contract is the same as for `xpute_gpu_surface_bind`.
             #[cfg(any(target_vendor = "apple", target_os = "android"))]
             pub unsafe fn bind(handle: u32, window: *mut ::core::ffi::c_void) -> i32 {
                 let Some(window) = ::core::ptr::NonNull::new(window) else {
@@ -313,7 +317,7 @@ macro_rules! native_abi {
         }
 
         /// # Safety
-        /// Called by JNI.
+        /// Only JNI calls this.
         #[cfg(target_os = "android")]
         #[no_mangle]
         unsafe extern "system" fn Java_xpute_Gpu_open(
@@ -324,8 +328,8 @@ macro_rules! native_abi {
         }
 
         /// # Safety
-        /// Called by JNI, with a live `android.view.Surface`, which its view
-        /// keeps until it has unbound it.
+        /// Only JNI calls this, with a live `android.view.Surface`, which its
+        /// view keeps until it has unbound it.
         #[cfg(target_os = "android")]
         #[no_mangle]
         unsafe extern "system" fn Java_xpute_Gpu_surfaceBind(
@@ -357,16 +361,15 @@ macro_rules! native_abi {
     };
 }
 
-/// A core of `machine` (its `MACHINE`) linked into this process with the
-/// GPU's runtime beside it. xpute-core's `core!` expands to it off
+/// This defines a core of `machine` (its `MACHINE`) linked into this process
+/// with the GPU's runtime beside it. xpute-core's `core!` expands to it off
 /// WebAssembly when it is given the GPU's numbers. It is xpute-runtime's
 /// `native_core!` with this runtime as its device: `poll` runs before each
-/// turn, `publish` runs the stream at the machine's `gpu_at` as the core
-/// rings, and `admit_frame` is the core's admission. It is also
-/// `native_abi!`, with the device the machine's GPU declares (`Ask::of`) and
-/// `numbers` made a `Config` by the platform's defaults (`config`). The
-/// program's crate depends on xpute-core and xpute-runtime besides this
-/// crate.
+/// turn, `publish` runs the stream at the machine's `gpu_at` as the core rings,
+/// and `admit_frame` is the core's admission. It is also `native_abi!`, with
+/// the device the machine's GPU declares (`Ask::of`) and `numbers` made a
+/// `Config` by the platform's defaults (`config`). The program's crate depends
+/// on xpute-core and xpute-runtime besides this crate.
 #[macro_export]
 macro_rules! native_core {
     ($machine:expr, $fixed_bytes:expr, $entry:expr, $numbers:expr $(,)?) => {

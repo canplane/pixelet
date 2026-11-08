@@ -1,12 +1,12 @@
 // xpute-core/sched/tick.rs
 
-//! A core's cooperative scheduler, which runs one tick a turn. A tick runs
-//! the program's phases in the order the program numbers them, and all of
+//! This is a core's cooperative scheduler, which runs one tick a turn. A tick
+//! runs the program's phases in the order the program numbers them, and all of
 //! them share one budget: the runtime's deadline, counted from the rising
-//! edge. While a phase runs, the share of the budget its policy holds back
-//! for the later phases is not its to spend, so a busy phase cannot starve
-//! them. The program decides what the phases are and what each holds back.
-//! Each step keeps its own state.
+//! edge. While a phase runs, the share of the budget its policy holds back for
+//! the later phases is not its to spend, so a busy phase cannot starve them.
+//! The program decides what the phases are and what each holds back. Each step
+//! keeps its own state.
 
 use super::pass::Pass;
 use crate::clock::now;
@@ -16,7 +16,6 @@ use xpute_kit::status::errno::Errno;
 /// A phase, by its place in the program's order.
 pub type Phase = u8;
 
-/// A tick runs at most this many phases.
 pub const PHASES_MAX: usize = 8;
 
 /// The most steps one step may unregister while it runs.
@@ -30,7 +29,7 @@ pub struct TickPolicy {
     /// One entry for each of the program's phases, in the order they run.
     /// Each is the fraction of the budget its phase must leave for the
     /// phases after it; 0 leaves none.
-    pub held_back: &'static [f64],
+    pub reserve: &'static [f64],
 }
 
 pub struct TickContext {
@@ -43,9 +42,9 @@ pub struct TickContext {
 }
 
 impl TickContext {
-    /// Marks the tick as wanting another turn (`TickReport::invalidated`).
-    /// The core is rung only when something asks for a turn, so a step that
-    /// animates calls this on every tick.
+    /// `invalidate` marks the tick as wanting another turn
+    /// (`TickReport::invalidated`). The core is rung only when something asks
+    /// for a turn, so a step that animates calls this on every tick.
     pub fn invalidate(&mut self) {
         self.invalidated = true;
     }
@@ -112,9 +111,9 @@ pub struct Tick<const N: usize> {
 impl<const N: usize> Tick<N> {
     pub fn new(policy: TickPolicy) -> Self {
         xpute_kit::ensure!(
-            policy.held_back.len() <= PHASES_MAX,
+            policy.reserve.len() <= PHASES_MAX,
             EINVAL,
-            policy.held_back.len()
+            policy.reserve.len()
         );
         Tick {
             policy,
@@ -134,7 +133,7 @@ impl<const N: usize> Tick<N> {
     pub fn on_tick(&mut self, phase: Phase, step: TickStep, name: u32) -> u32 {
         xpute_kit::ensure!(self.len < N, ENOSPC, N);
         xpute_kit::ensure!(
-            usize::from(phase) < self.policy.held_back.len(),
+            usize::from(phase) < self.policy.reserve.len(),
             EINVAL,
             phase
         );
@@ -239,8 +238,8 @@ impl<const N: usize> Tick<N> {
             off_len: 0,
         };
 
-        let held_back = self.policy.held_back;
-        for (phase, &share) in (0..).zip(held_back) {
+        let reserve = self.policy.reserve;
+        for (phase, &share) in (0..).zip(reserve) {
             ctx.pass.reserve_ms = ctx.pass.total_ms * share;
             self.run_phase(phase, &mut ctx);
         }

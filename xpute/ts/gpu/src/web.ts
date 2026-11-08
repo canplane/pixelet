@@ -1,8 +1,8 @@
 // @xpute/gpu/web.ts
 
 /**
- * A page's GPU, granted to a core (@xpute/runtime `Gpu`). It asks for the
- * device the core's machine declares, and asks again after a loss or a
+ * This is a page's GPU, granted to a core (@xpute/runtime `Gpu`). It asks for
+ * the device the core's machine declares, and asks again after a loss or a
  * refusal while the page is shown. The runtime (runtime.ts) runs the core's
  * stream on the device as each turn returns. The core is told when a device
  * answers. The canvases the program binds are kept by the core's handle. A
@@ -14,30 +14,30 @@ import type { Canvas, Gpu, GpuGrant, GpuState } from "@xpute/runtime";
 import { each_record } from "@xpute/runtime/ipc/stream.ts";
 import { GpuRuntime } from "./runtime.ts";
 
-/** How long the page waits between asks for a device. Safari gives no device
- * for a while after it loses its GPU process, so the page keeps asking. The
- * first retry waits too, or an adapter that returns an already lost device
+/** This is how long the page waits between asks for a device. Safari gives no
+ * device for a while after it loses its GPU process, so the page keeps asking.
+ * The first retry waits too, or an adapter that returns an already lost device
  * would loop at once. */
 const RETRY_MS = 1000;
 
-/** How many asks are made before the GPU is given up: about ten seconds of
- * them. */
+/** This is how many asks are made before the GPU is given up: about ten seconds
+ * of them. */
 const TRIES = 10;
 
 export class WebGpu implements Gpu {
   private runtime: GpuRuntime | null = null;
   private granted: GpuGrant | null = null;
-  /** Who is told of the GPU's state; `state` is the last one told. */
+  /** These are told of the GPU's state, and `state` is the last one told. */
   private readonly _reports: ((state: GpuState) => void)[] = [];
   private state: GpuState | null = null;
-  /** The asks made since a device last answered, so an outage is logged
-   * once as it starts and once as it ends. */
+  /** This counts the asks made since a device last answered, so an outage is
+   * logged once as it starts and once as it ends. */
   private tries = 0;
   /** A device has answered before, so giving up now is losing the GPU, not
    * lacking one. */
   private had = false;
-  /** The bound canvases in the order they were bound, so a device acquired
-   * again binds each slot's newest handle last. */
+  /** These are the bound canvases in the order they were bound, so a device
+   * acquired again binds each slot's newest handle last. */
   private readonly canvases = new Map<u32, Canvas>();
 
   watch(report: (state: GpuState) => void): void {
@@ -131,8 +131,8 @@ export class WebGpu implements Gpu {
     );
   }
 
-  /** False where no adapter answered. The core learns what the device is
-   * from the device's block, which it asks the runtime for. */
+  /** This answers false where no adapter answered. The core learns what the
+   * device is from the device's block, which it asks the runtime for. */
   private async acquire(): Promise<boolean> {
     const adapter = await navigator.gpu.requestAdapter({
       powerPreference: this.granted!.ask.power as GPUPowerPreference,
@@ -173,9 +173,9 @@ export class WebGpu implements Gpu {
   }
 }
 
-/** Why this page has no WebGPU, or null where it has it. `navigator.gpu`
- * exists only in a secure context, so a LAN address over http has none while
- * localhost has it. */
+/** This says why this page has no WebGPU, or null where it has it.
+ * `navigator.gpu` exists only in a secure context, so a LAN address over http
+ * has none while localhost has it. */
 function absent(): "unsupported" | "insecure" | null {
   if ("gpu" in navigator) return null;
   return isSecureContext ? "unsupported" : "insecure";

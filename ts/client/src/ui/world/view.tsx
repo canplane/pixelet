@@ -34,9 +34,6 @@ const PANEL_GAP_PX = 12;
 
 const WORLD = surface_driver(scene.draw_world);
 
-/** The world's input from the platform. Pointers and keys pass through the
- * UI's own handling first (`worldPointer` and `keyDown`). The rest goes to
- * service/core/input.ts as it comes. */
 const INPUT: InputDriver = {
   open: input.open,
   pointer: (phase, kind, id, button, x, y) =>
@@ -58,7 +55,6 @@ function World() {
   );
 }
 
-/** The room a panel may fill between the settings button and the dock. */
 function BetweenChrome({ children }: { children: ReactNode }) {
   const top = useChromeTop() + chrome.control + PANEL_GAP_PX;
   const bottom =

@@ -1,11 +1,11 @@
 // @xpute/runtime/module.ts
 
 /**
- * A core built as one WebAssembly module, opened over a memory the runtime
- * reserved (mem/reserve.ts). The module imports only xpute's three: the
- * memory, the clock and the call. Its entry is `run`. Anything else it
- * exports, such as a boot call that answers its front's offset, belongs to
- * the program and is reached on `instance`. The caller compiles the module.
+ * This is a core built as one WebAssembly module, opened over a memory the
+ * runtime reserved (mem/reserve.ts). The module imports only xpute's three: the
+ * memory, the clock and the call. Its entry is `run`. Anything else it exports,
+ * such as a boot call that answers its front's offset, belongs to the program
+ * and is reached on `instance`. The caller compiles the module.
  */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
@@ -17,7 +17,8 @@ export interface ModuleCore extends Core {
 }
 
 /** `now` is the runtime's clock in milliseconds; `performance.now()` unless the
- * caller keeps its own, as a test does. */
+ * caller keeps its own, as a worker does to count as its UI's clock, or as a
+ * test does. */
 export function open_module(
   module: WebAssembly.Module,
   memory: WebAssembly.Memory,

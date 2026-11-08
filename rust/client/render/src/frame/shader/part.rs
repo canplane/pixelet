@@ -9,7 +9,13 @@
 //! record, and a compute pipeline by its number (record.rs `compute`).
 //!
 //! A shader called a port by hand below is WGSL written after a rule of pxl-engine's Rust, and
-//! a test over a real world's buffers holds it to that rule word for word (tests/).
+//! a test on a device holds what it writes to that rule, word for word over a real world's
+//! buffers (tests/), with two exceptions. The test of the light's slide and propagation builds
+//! no world (tests/light_reads.rs), and it holds the slide only to setting to none every tile
+//! the rule cannot keep, so the slide may also set to none a tile it could keep. No test reads
+//! the cells' starts that `SHADER_CELL` writes: they are held only through the samples that
+//! start from them, which must stop where the Rust's walk from the root stops
+//! (tests/sample.rs).
 
 /// The names a shader's vertex entry points take. A pipeline names its vertex entry by its
 /// index here (record.rs `Header`), and build.rs reads which of them reads each binding.
@@ -47,8 +53,8 @@ pub const SHADER_MARKER_REGION: u32 = 23;
 /// Draws the eye's rays at their pixels (pxl-engine ray.rs).
 pub const SHADER_SCREEN_RAY: u32 = 24;
 /// Ends each drawn pixel's ray on the visible voxel the raster kept at it, or on the sky. Every
-/// other pixel is a hole, and gets a bit that marks it to be walked again (cast.wgsl). A port by
-/// hand with one compute entry point.
+/// other pixel is a hole, and gets a bit that marks it to be walked again (cast.wgsl). It is a
+/// port by hand with one compute entry point.
 pub const SHADER_CAST: u32 = 25;
 /// Generates the decor of the ground in the eye's clip levels, one record a thread: each decor
 /// stands on its column's surface and takes its pose (decor_pose.wgsl). It has one compute
@@ -69,12 +75,12 @@ pub const SHADER_GENERATION_MARK: u32 = 30;
 /// Fills a light's share of the air's volume, one column of froxels a workgroup
 /// (atmos_froxel.wgsl). It has one compute entry point.
 pub const SHADER_ATMOS_FROXEL: u32 = 31;
-/// Walks the eye's beam rays over the node cache alone (queue_walk.wgsl over corners.wgsl and
+/// Walks the eye's beam rays over the node cache alone (queue_walk.wgsl over corner.wgsl and
 /// beam.eye.wgsl). A ray that meets a node no slot keeps is parked. `SHADER_QUEUE_ASK_CORNERS`
 /// then asks the world for that node, and `SHADER_QUEUE_LAST_CORNERS` ends the ray.
 pub const SHADER_QUEUE_CORNERS: u32 = 32;
 /// Finds where the rays of each cell of the camera grid start, from the beam rays about the
-/// cell (cell.wgsl). A port by hand with one compute entry point.
+/// cell (cell.wgsl). It is a port by hand with one compute entry point.
 pub const SHADER_CELL: u32 = 33;
 /// `SHADER_QUEUE_LAST` is the last walk of the holes, which asks the world where the node cache
 /// keeps no node (queue_last.wgsl). `SHADER_FORGET` makes the node cache forget what the
@@ -83,7 +89,7 @@ pub const SHADER_CELL: u32 = 33;
 pub const SHADER_QUEUE_LAST: u32 = 34;
 pub const SHADER_FORGET: u32 = 35;
 /// The last walk of the eye's samples, which asks the world where the node cache keeps no node
-/// (queue_last.wgsl over samples.wgsl and sample.eye.wgsl).
+/// (queue_last.wgsl over sample.wgsl and sample.eye.wgsl).
 pub const SHADER_QUEUE_LAST_SAMPLES: u32 = 36;
 /// `SHADER_LIGHT` casts the world's depth from the light into its clipmap (pxl-engine
 /// `light`): each slot takes the visible voxel, one tile a workgroup (light.wgsl).
@@ -105,7 +111,7 @@ pub const SHADER_SAMPLE_BOX: u32 = 41;
 pub const SHADER_RASTER: u32 = 42;
 /// Asks the world what lies around each face of the record's voxels, once a face (pxl-engine
 /// `raster::ARGS_FACES`, `record::R_FACES`), and around the face each missed pixel's hit
-/// entered (face.wgsl). A port by hand with one compute entry point.
+/// entered (face.wgsl). It is a port by hand with one compute entry point.
 pub const SHADER_FACE: u32 = 43;
 /// The three shaders that list the tiles of the light's box the shadow map's receivers stand
 /// on (pxl-engine `light::LIST_RECEIVERS`), then the tiles they read. A receiver stands on the
@@ -157,7 +163,7 @@ pub const SHADER_SKINNED_MARK: u32 = 58;
 /// Carries the words of the light's box's tiles over once the box slid, the eye's zooms moved
 /// or the world under the box changed (light_slide.wgsl). A tile the box slid onto, a tile
 /// moved into another band (pxl-engine `Light::keeps`), and a tile whose rays may meet a
-/// changed column are set to none, so they are cast again. A port by hand.
+/// changed column are set to none, so they are cast again. It is a port by hand.
 pub const SHADER_LIGHT_SLIDE: u32 = 59;
 /// The four shaders that draw decor, an impostor, the location indicator's zone and its beacon
 /// where each was and where it is. Each fragment marks its screen tile (tile_mark.wgsl).
@@ -176,7 +182,7 @@ pub const SHADER_QUEUE_LIGHT_CORNERS: u32 = 65;
 pub const SHADER_LIGHT_CELL: u32 = 66;
 pub const SHADER_QUEUE_LAST_LIGHT_SAMPLES: u32 = 67;
 pub const SHADER_LIGHT_SAMPLE_BOX: u32 = 68;
-/// Walks the eye's samples over the node cache alone (queue_walk.wgsl over samples.wgsl and
+/// Walks the eye's samples over the node cache alone (queue_walk.wgsl over sample.wgsl and
 /// sample.eye.wgsl). A sample that meets a node no slot keeps is parked.
 /// `SHADER_QUEUE_ASK_SAMPLES` then asks the world for that node, and
 /// `SHADER_QUEUE_LAST_SAMPLES` ends the sample's walk.
@@ -186,7 +192,7 @@ pub const SHADER_QUEUE_SAMPLES: u32 = 69;
 /// then asks the world for that node, and `SHADER_QUEUE_LAST` ends the hole's ray.
 pub const SHADER_QUEUE: u32 = 70;
 /// The last walk of the eye's beam rays, which asks the world where the node cache keeps no
-/// node (queue_last.wgsl over corners.wgsl and beam.eye.wgsl).
+/// node (queue_last.wgsl over corner.wgsl and beam.eye.wgsl).
 pub const SHADER_QUEUE_LAST_CORNERS: u32 = 71;
 /// `SHADER_QUEUE_SAMPLES` for the light's map.
 pub const SHADER_QUEUE_LIGHT_SAMPLES: u32 = 72;
@@ -203,10 +209,10 @@ pub const SHADER_DECOR_CULL: u32 = 76;
 /// Goes over every slot's drawable entries in the node cache (record_draw.wgsl). Each entry in
 /// view is written as a box for the raster, and also stood as a receiver of the light when the
 /// world's receivers are stood this frame. Each entry on the light's box is written as a box
-/// for the light's raster. A port by hand.
+/// for the light's raster. It is a port by hand.
 pub const SHADER_RECORD_DRAW: u32 = 77;
 /// Writes the holes' stops into the node cache's drawable entries, and puts at each hole's
-/// pixel what lies about the face it entered (record_hits.wgsl). A port by hand.
+/// pixel what lies about the face it entered (record_hits.wgsl). It is a port by hand.
 pub const SHADER_RECORD_HITS: u32 = 78;
 /// `SHADER_RECORD_HITS` for the light's stops (record_hits.light.wgsl).
 pub const SHADER_LIGHT_RECORD_HITS: u32 = 79;
@@ -379,7 +385,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "paint",
         "px",
         "tile_word",
-        "screen_tiles",
+        "screen_tile",
         "tile_quad",
         "screen_ray",
         "screen_shade"
@@ -434,7 +440,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "decor_cnt",
     ],
     // SHADER_GENERATION_ARGS
-    &["decor_word", "decor_instances", "decor_args"],
+    &["decor_word", "decor_instance", "decor_args"],
     // SHADER_GENERATION_COMPACT
     &[
         "walk_word",
@@ -445,7 +451,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "decor_record",
         "decor_row",
         "decor_run",
-        "decor_instances",
+        "decor_instance",
         "decor_compact",
     ],
     // SHADER_GENERATION_MARK
@@ -479,8 +485,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "walk",
         "beam.eye",
         "parked",
-        "corners_run.eye",
-        "corners",
+        "corner_run.eye",
+        "corner",
         "item_list",
         "queue_walk",
     ],
@@ -513,7 +519,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_aim",
         "light_resume",
         "parked",
-        "holes_run",
+        "hole_run",
         "queue",
         "queue_last",
     ],
@@ -543,8 +549,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "sample.eye",
         "sample_put",
         "parked",
-        "samples_run.eye",
-        "samples",
+        "sample_run.eye",
+        "sample",
         "item_list",
         "queue_last",
     ],
@@ -581,13 +587,13 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "world_split",
         "ask",
         "light_aim",
-        "holes_run",
+        "hole_run",
         "queue_ask",
     ],
     // SHADER_AO_APPLY
     &[
         "tile_word",
-        "screen_tiles",
+        "screen_tile",
         "tile_quad",
         "effect",
         "ao_view",
@@ -650,7 +656,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_list",
         "light_stand",
         "list",
-        "light_receiver_tiles",
+        "light_receiver_tile",
         "walked",
         "light_mark",
     ],
@@ -668,7 +674,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_list",
         "light_stand",
         "list",
-        "light_receiver_tiles",
+        "light_receiver_tile",
         "decor_ball",
         "light_mark_draws",
     ],
@@ -703,7 +709,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "encode",
         "finish",
         "tile_word",
-        "screen_tiles",
+        "screen_tile",
         "tile_quad",
         "screen_finish",
     ],
@@ -711,37 +717,32 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &[
         "frame",
         "tile_word",
-        "screen_tiles",
+        "screen_tile",
         "tile_quad",
         "screen_resolve",
     ],
     // SHADER_SCREEN_MASK
-    &["tile_word", "screen_tiles", "tile_quad", "screen_mask"],
+    &["tile_word", "screen_tile", "tile_quad", "screen_mask"],
     // SHADER_SCREEN_SHOW
     &["screen_show"],
     // SHADER_SCREEN_PROPAGATE
     &["tile_word", "screen_propagate"],
     // SHADER_SCREEN_WRITE_BACK
-    &[
-        "tile_word",
-        "screen_tiles",
-        "tile_quad",
-        "screen_write_back",
-    ],
+    &["tile_word", "screen_tile", "tile_quad", "screen_write_back"],
     // SHADER_RASTER_MASK
-    &["tile_word", "screen_tiles", "tile_quad", "raster_mask"],
+    &["tile_word", "screen_tile", "tile_quad", "raster_mask"],
     // SHADER_SCREEN_MARK
     &["screen_mark"],
     // SHADER_LIGHT_MASK
     &[
         "light_word",
         "tile_word",
-        "screen_tiles",
+        "screen_tile",
         "light_lay",
         "light_mask",
     ],
     // SHADER_SCREEN_BOUND
-    &["tile_word", "screen_tiles", "screen_bound"],
+    &["tile_word", "screen_tile", "screen_bound"],
     // SHADER_SKINNED_MARK
     &[
         "frame",
@@ -792,8 +793,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_list",
         "beam.light",
         "parked",
-        "corners_run.light",
-        "corners",
+        "corner_run.light",
+        "corner",
         "item_list",
         "queue_walk",
     ],
@@ -833,8 +834,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "sample.light",
         "sample_put",
         "parked",
-        "samples_run.light",
-        "samples",
+        "sample_run.light",
+        "sample",
         "item_list",
         "queue_last",
     ],
@@ -869,8 +870,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "sample.eye",
         "sample_put",
         "parked",
-        "samples_run.eye",
-        "samples",
+        "sample_run.eye",
+        "sample",
         "item_list",
         "queue_walk",
     ],
@@ -891,7 +892,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_aim",
         "light_resume",
         "parked",
-        "holes_run",
+        "hole_run",
         "queue",
         "queue_walk",
     ],
@@ -917,8 +918,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "walk",
         "beam.eye",
         "parked",
-        "corners_run.eye",
-        "corners",
+        "corner_run.eye",
+        "corner",
         "item_list",
         "queue_last",
     ],
@@ -938,8 +939,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "sample.light",
         "sample_put",
         "parked",
-        "samples_run.light",
-        "samples",
+        "sample_run.light",
+        "sample",
         "item_list",
         "queue_walk",
     ],
@@ -967,13 +968,13 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "walk",
         "beam.light",
         "parked",
-        "corners_run.light",
-        "corners",
+        "corner_run.light",
+        "corner",
         "item_list",
         "queue_last",
     ],
     // SHADER_CAST_TILES
-    &["tile_word", "cast_tiles"],
+    &["tile_word", "cast_tile"],
     // SHADER_DAMAGE_RECT
     &["tile_word", "damage_rect"],
     // SHADER_DECOR_CULL
@@ -1000,7 +1001,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_list",
         "light_stand",
         "list",
-        "light_receiver_tiles",
+        "light_receiver_tile",
         "record_draw",
     ],
     // SHADER_RECORD_HITS
@@ -1045,7 +1046,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_list",
         "light_stand",
         "list",
-        "light_receiver_tiles",
+        "light_receiver_tile",
         "decor_ball",
         "light_mark_draws",
         "light_mark_draws_open",
@@ -1068,7 +1069,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "world_split",
         "ask",
         "light_aim",
-        "samples_run.eye",
+        "sample_run.eye",
         "queue_ask",
     ],
     // SHADER_QUEUE_ASK_LIGHT_SAMPLES
@@ -1089,7 +1090,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "world_split",
         "ask",
         "light_aim",
-        "samples_run.light",
+        "sample_run.light",
         "queue_ask",
     ],
     // SHADER_QUEUE_ASK_CORNERS
@@ -1110,7 +1111,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "world_split",
         "ask",
         "light_aim",
-        "corners_run.eye",
+        "corner_run.eye",
         "queue_ask",
     ],
     // SHADER_QUEUE_ASK_LIGHT_CORNERS
@@ -1131,7 +1132,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "world_split",
         "ask",
         "light_aim",
-        "corners_run.light",
+        "corner_run.light",
         "queue_ask",
     ],
 ];

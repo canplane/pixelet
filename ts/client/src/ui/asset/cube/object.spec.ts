@@ -4,7 +4,7 @@
 // What only an object can be: past a byte, so no ground cell holds it. An
 // object's value is a u16 whose byte range is the ground's palette.
 
-/** explicit air: retains this leaf and erases the layers under it; no ground cell can hold it, as it is past a byte */
+/** Explicit air: the leaf stays and erases the layers under it. */
 export const air = 256;
 
 // ---- colors ----

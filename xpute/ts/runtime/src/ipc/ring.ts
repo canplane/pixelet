@@ -33,7 +33,6 @@ export function slots_bytes(cap: u32, slot_bytes: u32): u32 {
   return cap * slot_bytes;
 }
 
-/** Payloads are padded to XTP's word (`WORD_SZ`). */
 function padded(bytes: u32): u32 {
   return Math.ceil(bytes / WORD_SZ) * WORD_SZ;
 }
@@ -44,8 +43,8 @@ function is_pow2(n: u32): boolean {
   return n !== 0 && (n & (n - 1)) === 0;
 }
 
-/** The bytes a packet takes: its header plus the payload length its second
- * word holds, padded. */
+/** A packet takes its header plus the payload length its second word holds,
+ * padded. */
 function pkt_bytes(u8: U8Array, at: u32): u32 {
   const word = at + WORD_SZ;
   const payload =
@@ -57,7 +56,7 @@ function pkt_bytes(u8: U8Array, at: u32): u32 {
 }
 
 export class Ring {
-  /** Where the ring's words begin in the memory. */
+  /** This is where the ring's words begin in the memory. */
   readonly at: u32;
   readonly words: Uint32Array;
   readonly cap: u32;

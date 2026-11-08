@@ -15,7 +15,7 @@ use crate::gpu::api::{buffer_usage, bytes, signaled, word_bytes, Gpu, RESULT};
 
 const WORDS: usize = count::WORDS as usize;
 
-/// The counts of each observer, the eye and the light, in `RayCounts::counts`
+/// The counts of each observer, the eye and the light, in `RayCount::counts`
 /// (`count_at`): whether it cast, 1 or 0; how many rays it has, the eye's
 /// pixels or the light's slots; and, from `LANES_AT`, the lanes pxl-engine
 /// `count` lays out.
@@ -33,7 +33,7 @@ pub const fn count_at(observer: u32, k: usize) -> usize {
 /// One frame's counts, which land a frame or two after it. `frame` is the
 /// renderer's number of that frame (renderer.rs `FrameStat::frame`).
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct RayCounts {
+pub struct RayCount {
     pub frame: f64,
     pub counts: [f64; RAY_COUNTS],
 }
@@ -52,7 +52,7 @@ pub(super) struct Frame {
 /// The buffers the passes count into. Every walk counts in the node cache's
 /// head; the eye's pixels and the light's slots count in their misses' args
 /// (`args`); the boxes each raster draws count in its draw's args (`boxes`).
-pub(super) struct Counts {
+pub(super) struct CountBuffer {
     pub node_cache: u32,
     pub args: [u32; count::OBSERVERS as usize],
     pub boxes: [u32; count::OBSERVERS as usize],
@@ -76,7 +76,7 @@ pub(super) struct Counter {
     /// mapping lands.
     mapping: Box<[u32; 2]>,
     ticket: u32,
-    ray_counts: Option<RayCounts>,
+    ray_counts: Option<RayCount>,
 }
 
 impl Counter {
@@ -134,7 +134,7 @@ impl Counter {
     /// Gathers the counts of each observer that cast into the array and copies it out for
     /// the readback. It runs after the frame's dispatches, and only where this frame counts
     /// and no copy is out.
-    pub(super) fn copy(&mut self, g: &Gpu, encoder: u32, from: &Counts) {
+    pub(super) fn copy(&mut self, g: &Gpu, encoder: u32, from: &CountBuffer) {
         if !self.on || self.copied || self.mapped {
             return;
         }
@@ -194,7 +194,7 @@ impl Counter {
                         counts[count_at(o, LANES_AT + lane as usize)] = c;
                     }
                 }
-                self.ray_counts = Some(RayCounts {
+                self.ray_counts = Some(RayCount {
                     frame: f.number,
                     counts,
                 });
@@ -215,7 +215,7 @@ impl Counter {
         }
     }
 
-    pub(super) fn take(&mut self) -> Option<RayCounts> {
+    pub(super) fn take(&mut self) -> Option<RayCount> {
         self.ray_counts.take()
     }
 

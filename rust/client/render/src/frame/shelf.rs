@@ -122,14 +122,14 @@ fn bucket(v: f64, to: u32) -> u32 {
 /// every slot on it has the shelf's height. `next_y` is the top of the next
 /// shelf to be made.
 #[derive(Default)]
-struct Shelves {
+struct ShelfTable {
     y: Vec<u32>,
     h: Vec<u32>,
     cursor: Vec<u32>,
     next_y: u32,
 }
 
-impl Shelves {
+impl ShelfTable {
     /// The top-left corner of a `w` by `h` rectangle, placed on the first
     /// shelf of height `h` that has room, or on a new shelf below the others.
     /// It is None when the rectangle does not fit on an atlas `size` a side.
@@ -159,11 +159,11 @@ impl Shelves {
 /// was.
 struct Layout {
     at: Vec<(u32, u32)>,
-    shelves: Shelves,
+    shelves: ShelfTable,
 }
 
 fn pack(size: u32, ws: &[u32], hs: &[u32]) -> Option<Layout> {
-    let mut shelves = Shelves::default();
+    let mut shelves = ShelfTable::default();
     let at = (0..ws.len())
         .map(|i| shelves.fit(ws[i], hs[i], size))
         .collect::<Option<_>>()?;
@@ -181,7 +181,7 @@ pub struct Flush {
 pub struct Atlas {
     size: u32,
 
-    shelves: Shelves,
+    shelves: ShelfTable,
 
     /// Each of these vectors holds one entry a slot. `x`, `y`, `w` and `h`
     /// are the slot's rectangle, its sides rounded up to the size class.

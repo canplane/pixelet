@@ -54,7 +54,8 @@ export const groups = {
      * "walk" consistently: the person's is "sprint", the pet's "run". */
     move_clip: 3 as number,
   },
-  /** The pets, the same way. */
+  /** The pets a player's companion can be, each by its row, the number the settings store
+   * persists. One pack, so one colormap. */
   pet: {
     /** World units tall — a quarter cell, the step the object tiers also take. */
     size: 0.25 as number,

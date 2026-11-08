@@ -30,10 +30,10 @@ XPUTE_TEST(json_in_place_read) {
     std::optional<JsonValue> doc = read_json(R"( {"a": [1, -2.5e1, true, null, "x\"y"], "b": {"k": "\uD83D\uDE00 \u00e9\n"}, "a": "last"} )");
     XPUTE_CHECK(doc && doc->type_of() == JsonType::object);
     XPUTE_CHECK(doc->get("a")->as_str()->eq_str("last"));
-    JsonFields fields = doc->fields();
+    JsonFieldIter fields = doc->fields();
     JsonValue first = fields.next()->second;
     std::vector<JsonType> kinds;
-    JsonItems items = first.items();
+    JsonItemIter items = first.items();
     while (auto item = items.next()) kinds.push_back(item->type_of());
     XPUTE_CHECK((kinds == std::vector<JsonType>{JsonType::number, JsonType::number, JsonType::boolean, JsonType::null, JsonType::string}));
     XPUTE_CHECK_EQ(*first.at(1)->as_f64(), -25.0, "a number reads as the runtime reads it");

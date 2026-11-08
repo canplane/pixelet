@@ -7,8 +7,8 @@
   "FORMAT": {
     "$doc": [
       "The format each bake writes now, which a published name begins with.",
-      "Bumped by a change to how the client reads a tile, or to what a",
-      "tile guarantees it (a terrain tile its lines past its edge, 11)."
+      "It is bumped by a change to how the client reads a tile, or to what a",
+      "tile guarantees it."
     ],
     "terrain": 12,
     "place": 10,
@@ -22,8 +22,8 @@
   ],
   "VERSION_BYTES": 32,
   "$VERSION_BYTES": [
-    "The longest version a declaration names: one segment of a tile's URL,",
-    "before its name (ts/client/src/service/origin/publication.spec.ts `tileObject`)."
+    "The longest version a declaration may name, in bytes: one segment of a tile's URL,",
+    "before its name (pxl-spec bake/source.rs `is_version`)."
   ],
   "OBJECT": "{version}/{name}",
   "$OBJECT": [

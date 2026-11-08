@@ -20,8 +20,7 @@ fn node_cache_word(k: u32) -> u32 {
 /// The visible voxel at each texel of the box, in the box's order (`Light::texel`), as its
 /// number (`raster::id_of`). A texel that kept no voxel holds 0.
 @group(0) @binding(15) var visibility: texture_2d_array<u32>;
-/// The holes' count and the counts' lanes (visible.wgsl `MissArgs`).
-@group(0) @binding(17) var<storage, read_write> args: MissArgs;
+@group(0) @binding(17) var<storage, read_write> args: MissCount;
 
 /// Whether sample `s` was walked at `band`, the band of the tile of box texel `p`. A sample is
 /// walked at the band of the tile it lies on (light_aim.wgsl `tile_band`, pxl-engine

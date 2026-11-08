@@ -1,10 +1,5 @@
 // @pxl/client/ui/component/panel.ios.tsx
 
-/**
- * A panel on an iPhone, drawn as the system's bottom sheet with the system's
- * corner radii. The sheet calls `gone` once its dismiss animation has ended.
- */
-
 import { useContext } from "react";
 import { StyleSheet, View } from "react-native";
 import { BottomSheet, Group, Host, RNHostView } from "@expo/ui/swift-ui";

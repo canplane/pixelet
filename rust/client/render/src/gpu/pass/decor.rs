@@ -12,19 +12,19 @@ use crate::frame::shader::record::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_MARK};
 use crate::frame::shader::word::DECOR_GROUPS;
 use crate::gpu::draw::uniform_of;
-use crate::gpu::draw::DrawStats;
+use crate::gpu::draw::DrawStat;
 
 use crate::frame::shader::sequence;
 use crate::gpu::api::{Format, Gpu, Image, Stencil, TrackedRenderPass};
-use crate::gpu::draw::{Draw, Draws};
+use crate::gpu::draw::{Draw, DrawTable};
 use crate::gpu::generator::IndirectDraw;
-use crate::gpu::pass::mark::Marks;
+use crate::gpu::pass::mark::MarkPass;
 use crate::gpu::pass::model::{
-    bind_mesh, draw_model, draw_models, put_instances, skin_group, skin_made, DrawUniforms, Extent,
-    ModelDraw, Stage, DRAW_BYTES,
+    bind_mesh, draw_model, draw_models, put_instances, skin_group, skin_made, Extent, ModelDraw,
+    Stage, UniformBuffer, DRAW_BYTES,
 };
-use crate::gpu::pipeline::{Pipeline, Pipelines};
-use crate::gpu::upload::Uploads;
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
+use crate::gpu::upload::UploadTable;
 use pxl_content::generation;
 
 const _: () = assert!(
@@ -36,14 +36,14 @@ pub struct DecorPass {
     lit: Pipeline,
     ghost: Pipeline,
     depth: Pipeline,
-    uniforms: DrawUniforms,
+    uniforms: UniformBuffer,
     /// Each group's mesh, 0 while its model is not registered, and the image of
     /// its skin.
     groups: [(u32, Option<Image>); DECOR_GROUPS],
     /// The marks of the listed opaque draws, which cast shadows.
-    pub marks: Marks,
+    pub marks: MarkPass,
     /// The marks of the listed ghost draws, which are blended.
-    pub ghost_marks: Marks,
+    pub ghost_marks: MarkPass,
 }
 
 /// Writes a mark's uniform as the draw's own (`put_instances`).
@@ -52,7 +52,7 @@ fn put_mark(buf: &mut [u8], (_, u): &Draw) {
 }
 
 impl DecorPass {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> DecorPass {
+    pub fn new(g: &Gpu, pipelines: &mut PipelineCache, align: u32) -> DecorPass {
         DecorPass {
             lit: pipelines.build_world(g, PIPELINE_DECOR),
             ghost: pipelines.build_world(g, PIPELINE_GHOST_DECOR),
@@ -62,16 +62,16 @@ impl DecorPass {
                 Format::depth32float,
                 Stencil::Masked,
             ),
-            uniforms: DrawUniforms::new(DRAW_BYTES, align),
+            uniforms: UniformBuffer::new(DRAW_BYTES, align),
             groups: [(0, None); DECOR_GROUPS],
-            marks: Marks::new(
+            marks: MarkPass::new(
                 g,
                 pipelines,
                 (PIPELINE_DECOR_MARK, PIPELINE_DECOR),
                 align,
                 (|d| d[0], put_mark, |_| true),
             ),
-            ghost_marks: Marks::new(
+            ghost_marks: MarkPass::new(
                 g,
                 pipelines,
                 (PIPELINE_DECOR_MARK, PIPELINE_GHOST_DECOR),
@@ -82,14 +82,14 @@ impl DecorPass {
     }
 
     /// Draws this frame's marks into `pass`. `frames` holds their group 0 as
-    /// they are and as they were (tile_mark.wgsl, `Marks::draw`). Where
+    /// they are and as they were (tile_mark.wgsl, `MarkPass::draw`). Where
     /// `casters`, as for the light's map, only the opaque draws' marks are
     /// drawn; otherwise the ghosts' are drawn too.
     pub fn draw_marks(
         &self,
         pass: &mut TrackedRenderPass,
         frames: [u32; 2],
-        uploads: &Uploads,
+        uploads: &UploadTable,
         casters: bool,
     ) {
         let marks = if casters {
@@ -110,8 +110,8 @@ impl DecorPass {
         }
     }
 
-    /// Pushes onto `out` the uploads the listed draws read (`Marks::reads`).
-    pub fn marks_read(&self, draws: &Draws, out: &mut Vec<u32>) {
+    /// Pushes onto `out` the uploads the listed draws read (`MarkPass::reads`).
+    pub fn marks_read(&self, draws: &DrawTable, out: &mut Vec<u32>) {
         self.marks.reads(draws.of(PIPELINE_DECOR), out);
         self.ghost_marks.reads(draws.of(PIPELINE_GHOST_DECOR), out);
     }
@@ -130,7 +130,7 @@ impl DecorPass {
         &self,
         g: &Gpu,
         group: u32,
-        uploads: &Uploads,
+        uploads: &UploadTable,
     ) -> Option<(u32, u32, u32, u32)> {
         self.model(group, uploads, |image| {
             skin_group(g, self.lit.layouts[2], image)
@@ -139,14 +139,14 @@ impl DecorPass {
 
     /// What `model_of` gives, as a frame's draws bind it: it takes the skin
     /// group a prepare made and makes none.
-    fn model_binding(&self, group: u32, uploads: &Uploads) -> Option<(u32, u32, u32, u32)> {
+    fn model_binding(&self, group: u32, uploads: &UploadTable) -> Option<(u32, u32, u32, u32)> {
         self.model(group, uploads, |image| skin_made(image.0))
     }
 
     fn model(
         &self,
         group: u32,
-        uploads: &Uploads,
+        uploads: &UploadTable,
         skin: impl FnOnce(Image) -> Option<u32>,
     ) -> Option<(u32, u32, u32, u32)> {
         let (mesh, image) = *self.groups.get(group as usize)?;
@@ -155,7 +155,7 @@ impl DecorPass {
     }
 
     /// The triangles of `group`'s model, 0 while its mesh is landing.
-    fn triangles_of(&self, group: u32, uploads: &Uploads) -> u32 {
+    fn triangles_of(&self, group: u32, uploads: &UploadTable) -> u32 {
         self.groups
             .get(group as usize)
             .and_then(|&(mesh, _)| uploads.get(mesh))
@@ -164,7 +164,7 @@ impl DecorPass {
 
     /// Adds the pass's draws to `stats`. Each instance counts the triangles of
     /// its group's model.
-    pub fn count(&self, draws: &Draws, uploads: &Uploads, stats: &mut DrawStats) {
+    pub fn count(&self, draws: &DrawTable, uploads: &UploadTable, stats: &mut DrawStat) {
         for pipeline in [PIPELINE_DECOR, PIPELINE_GHOST_DECOR] {
             draws.count(pipeline, stats, |d| self.triangles_of(d[1], uploads) * d[2]);
         }
@@ -177,10 +177,10 @@ impl DecorPass {
     pub fn prepare(
         &mut self,
         g: &Gpu,
-        draws: &Draws,
+        draws: &DrawTable,
         uniforms: &[f32],
         changed: bool,
-        uploads: &mut Uploads,
+        uploads: &mut UploadTable,
     ) {
         let (opaque, ghost) = (draws.of(PIPELINE_DECOR), draws.of(PIPELINE_GHOST_DECOR));
         let cnt = (opaque.len() + ghost.len()) as u32;
@@ -201,12 +201,12 @@ impl DecorPass {
     }
 
     /// Draws the listed opaque decor at `stage`: lit, or its depth seen from
-    /// the sun. `frame` is the group 0 the stage reads.
+    /// the light. `frame` is the group 0 the stage reads.
     pub fn draw(
         &mut self,
         pass: &mut TrackedRenderPass,
-        draws: &Draws,
-        uploads: &mut Uploads,
+        draws: &DrawTable,
+        uploads: &mut UploadTable,
         stage: Stage,
         frame: u32,
     ) {
@@ -224,8 +224,8 @@ impl DecorPass {
     pub fn draw_ghosts(
         &mut self,
         pass: &mut TrackedRenderPass,
-        draws: &Draws,
-        uploads: &mut Uploads,
+        draws: &DrawTable,
+        uploads: &mut UploadTable,
         frame: u32,
     ) {
         self.draw_pipeline(
@@ -243,8 +243,8 @@ impl DecorPass {
     fn draw_pipeline(
         &mut self,
         pass: &mut TrackedRenderPass,
-        draws: &Draws,
-        uploads: &mut Uploads,
+        draws: &DrawTable,
+        uploads: &mut UploadTable,
         which: u32,
         pipeline: u32,
         frame: u32,
@@ -284,7 +284,7 @@ impl DecorPass {
         &mut self,
         pass: &mut TrackedRenderPass,
         generated: Option<IndirectDraw>,
-        uploads: &Uploads,
+        uploads: &UploadTable,
         stage: Stage,
         frame: u32,
     ) {

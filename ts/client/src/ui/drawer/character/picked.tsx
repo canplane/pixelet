@@ -1,8 +1,5 @@
 // @pxl/client/ui/drawer/character/picked.tsx
 
-/** The picked character on a surface of its own, which the core draws as it
- * draws the companion's character. */
-
 import { useState } from "react";
 import { type StyleProp, StyleSheet, View, type ViewStyle } from "react-native";
 

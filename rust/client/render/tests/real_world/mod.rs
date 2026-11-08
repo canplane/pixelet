@@ -1,7 +1,7 @@
 //! A real world's buffers, made on the CPU as the fill and the store lay them, for the tests of
 //! the world's one query by hand and of the walks over it. The world holds clip levels and
 //! their bricks, the service area's index, what is placed and the ways' pool. `Asking` is the
-//! query a walk on the CPU asks of these buffers, and `WorldBufs` holds the same buffers on the
+//! query a walk on the CPU asks of these buffers, and `WorldBuffer` holds the same buffers on the
 //! device.
 
 #![allow(dead_code, reason = "each test reads its own of it")]
@@ -13,15 +13,16 @@ use pxl_engine::answer::In;
 use pxl_engine::area::{self, Area, Shard};
 use pxl_engine::cast::Query;
 use pxl_engine::clipmap::{
-    self as clip, Bricks, Lookup, Presence, ACROSS, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS, ENTRIES,
-    EYE_CLIP_LEVELS, FIRST_CELL_ZOOM, JOINED_AT, JOINED_ENTRIES, JOINED_MIPS, LINES_ENTRIES_AT,
-    LINES_SEGMENTS_AT, LINES_WORDS, ORIGIN_AT, OWN_AT, OWN_CELLS, ROOT_AT, SPANS_WORDS,
+    self as clip, BrickSource, Lookup, Presence, ACROSS, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS,
+    ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL_ZOOM, JOINED_AT, JOINED_ENTRIES, JOINED_MIPS,
+    LINES_ENTRIES_AT, LINES_SEGMENTS_AT, LINES_WORDS, ORIGIN_AT, OWN_AT, OWN_CELLS, ROOT_AT,
+    SPANS_WORDS,
 };
 use pxl_engine::fill;
 use pxl_engine::ground::{self, Resident};
 use pxl_engine::lattice::TILE_CELLS;
-use pxl_engine::object::{self, Columns, BRANCH};
-use pxl_engine::way::{self, tree, Segment, Stations};
+use pxl_engine::object::{self, Table, BRANCH};
+use pxl_engine::way::{self, tree, Segment, StationGrid};
 use pxl_engine::world::{self, Inheritance};
 use pxl_engine::{value, wrap_idx, Zoom, FRAC_W, LEAF_CELL_ZOOM, SHARD_ZOOM};
 
@@ -174,7 +175,7 @@ pub struct World<'a> {
     pub pool: &'a [u32],
 }
 
-impl Columns for World<'_> {
+impl Table for World<'_> {
     fn first_child(&self, slot: u32) -> u32 {
         self.objects[slot as usize]
     }
@@ -205,7 +206,7 @@ impl Presence for World<'_> {
     }
 }
 
-impl Bricks for World<'_> {
+impl BrickSource for World<'_> {
     fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool) {
         self.row((cell_zoom - FIRST_CELL_ZOOM) * ENTRIES + entry)
             .brick()
@@ -241,7 +242,7 @@ impl Resident for World<'_> {
         place: &mut Lookup,
         cells: [Zoom; 2],
         (zoom, c): (Zoom, [i32; 3]),
-    ) -> (ground::Bounds, bool) {
+    ) -> (ground::Extent, bool) {
         let (r, _, here) = clip::bound_over(self, place, cells, (zoom, [c[0], c[1]]));
         (r, here)
     }
@@ -332,7 +333,7 @@ pub fn source(
     // The tile's lines, each listed in every bin of the brick. They are bridges, bores and an
     // approach, each of two segments that continue one into the other.
     let per_m = 1.0f32;
-    let stations = Stations {
+    let stations = StationGrid {
         step: way::INTERVAL_M.map(|m| pxl_engine::cells_of_m(m, per_m)),
         phase: [[0; 2], [3 << s, 5 << s]],
         leaf: 1 << s,
@@ -482,12 +483,12 @@ pub struct Built {
     /// What was placed, each as its zoom and node.
     pub placed: Vec<(Zoom, [i32; 3])>,
     /// `folds` holds cells that what is placed folds into, and `lone` holds lone leaves of the
-    /// finest zoom. `over_bridges` holds points over high bridges, and `unheld` holds cells
+    /// finest zoom. `over_bridges` holds points over high bridges, and `groundless` holds cells
     /// partly placed where no clip level holds the ground under them.
     pub folds: Vec<[i32; 3]>,
     pub lone: Vec<[i32; 3]>,
     pub over_bridges: Vec<[i32; 3]>,
-    pub unheld: Vec<[i32; 3]>,
+    pub groundless: Vec<[i32; 3]>,
     /// The decor placed, each as one leaf cell.
     pub decors: Vec<[i32; 3]>,
     /// The stream the world was built by, left where the build stopped drawing from it.
@@ -600,7 +601,7 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
         vec![0u32; SPANS_WORDS as usize],
     );
     let mut way_points = Vec::new();
-    let (mut held_bricks, mut absent_bricks, mut way_bricks) = (0u32, 0u32, 0u32);
+    let (mut present_bricks, mut absent_bricks, mut way_bricks) = (0u32, 0u32, 0u32);
     for cell_zoom in FIRST_CELL_ZOOM..=LEAF_CELL_ZOOM {
         let first = level_first(eye, cell_zoom);
         let laid = !UNLAID.contains(&cell_zoom) as i32;
@@ -639,17 +640,17 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
                 lane[ROOT_AT as usize] = root;
                 way_bricks += (root != 0) as u32;
             }
-            let slot = held_bricks;
+            let slot = present_bricks;
             ground_words.extend_from_slice(&lane);
             clipmap[row][2] = slot as i32 + 1;
-            held_bricks += 1;
+            present_bricks += 1;
         }
     }
-    assert!(ground_words.len() as u32 / BRICK_WORDS == held_bricks);
+    assert!(ground_words.len() as u32 / BRICK_WORDS == present_bricks);
     // Some cells of each brick are laid void, with no ground of their own, both under ways and
     // away from them. Under a way, such a cell is what the way stands on; elsewhere it is
     // nothing.
-    for slot in 0..held_bricks {
+    for slot in 0..present_bricks {
         for i in 0..BRICK_CELLS {
             if mix(slot + 1000, [i as i32, 3]).is_multiple_of(29) {
                 let w = (slot * BRICK_WORDS + OWN_AT + i / OWN_CELLS) as usize;
@@ -660,7 +661,7 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
     // Slot 0 gets a brick whose ways' tree a node at any brick's Z may read. A place that no
     // brick holds has slot 0 and must read no slot, so a read of slot 0 there would show.
     let words = BRICK_WORDS as usize;
-    let treed = (0..held_bricks as usize)
+    let treed = (0..present_bricks as usize)
         .find(|&s| {
             let root = ground_words[s * words + ROOT_AT as usize];
             let (first, z0) = tree::root_slot(root);
@@ -685,7 +686,7 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
         }
     }
     eprintln!(
-        "{held_bricks} bricks held, {absent_bricks} absent, {way_bricks} with ways over {next_group} child groups"
+        "{present_bricks} bricks held, {absent_bricks} absent, {way_bricks} with ways over {next_group} child groups"
     );
     let objects_none = vec![0u32; 16];
     fold(&mut clipmap, &ground_words, &palette_words, &shards, &pool);
@@ -845,7 +846,7 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
         }
     }
     // Parts of cells placed where no clip level holds the ground under them.
-    let mut unheld = Vec::new();
+    let mut groundless = Vec::new();
     for k in 0..300 {
         let leaf = [
             (110 << 16) + draw.within(-4000, 4000),
@@ -858,7 +859,7 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
             at,
             object::leaf_word(if k % 2 == 0 { 9 } else { 0x130 }, 0),
         );
-        unheld.push(leaf);
+        groundless.push(leaf);
     }
     // Decor placed on the ground about the eye, each with its handle over its value, for
     // tests/decor.rs.
@@ -899,7 +900,7 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
         folds,
         lone,
         over_bridges,
-        unheld,
+        groundless,
         draw,
     }
 }
@@ -931,9 +932,9 @@ impl Query for Asking<'_> {
         _: f32,
     ) -> In<[u32; 2]> {
         let pool = tree::Read(self.w.pool);
-        let mut held = self.w;
+        let mut resident = self.w;
         world::node(
-            &mut held,
+            &mut resident,
             &self.w,
             &self.w,
             &pool,
@@ -955,9 +956,18 @@ pub fn truth(
     zooms: [Zoom; 2],
 ) -> (In<[u32; 2]>, [u32; 4]) {
     let pool = tree::Read(w.pool);
-    let mut held = w;
+    let mut resident = w;
     let mut at = Inheritance::of(&w, (zoom, c));
-    let a = world::node(&mut held, &w, &w, &pool, &mut at, (zoom, c), zooms, cuts);
+    let a = world::node(
+        &mut resident,
+        &w,
+        &w,
+        &pool,
+        &mut at,
+        (zoom, c),
+        zooms,
+        cuts,
+    );
     (a, at.words())
 }
 
@@ -971,7 +981,7 @@ pub fn q8(units: [i32; 3]) -> [i32; 3] {
 }
 
 /// The world's buffers on the device.
-pub struct WorldBufs {
+pub struct WorldBuffer {
     pub clip: wgpu::Buffer,
     pub ground: wgpu::Buffer,
     pub palette: wgpu::Buffer,

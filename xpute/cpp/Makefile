@@ -1,20 +1,21 @@
 # cpp/Makefile
 #
-# xpute's C++, built with the platform's compiler ($CXX, or c++), and the
-# core as a WebAssembly module with the WASI SDK's clang ($WASI_SDK_PATH,
-# or /opt/wasi-sdk). The library is xpute/, included from this directory by
-# its root ("xpute/kit/status/bug.hpp"); conformance/ is the core the
-# traces drive, beside it and never shipped. Output goes under
-# target/, where the traces look for the cores; the tests open their
-# golden records from the tree's root. GNU Make 3.81, as macOS ships it, is
-# enough. Run it from cpp/: the paths below are this directory's.
+# xpute's C++ is built with the platform's compiler ($CXX, or c++), and the
+# core as a WebAssembly module with the WASI SDK's clang ($WASI_SDK_PATH, or
+# /opt/wasi-sdk). The library is xpute/, included from this directory by its
+# root ("xpute/kit/status/bug.hpp"); conformance/ is the core the traces
+# drive, beside it and never shipped. The amalgamation is the library in two
+# files, xpute.hpp and xpute.cpp (amalgamation.awk), under
+# target/amalgamation/.
 #
 #   make -C cpp check | test | core | wasm | amalgamation       (-j for parallel compiles)
 #
-# The amalgamation is the library in two files, xpute.hpp and xpute.cpp
-# (amalgamation.awk), under target/amalgamation/. The cores the
-# traces drive are built from it, so what is traced is what ships; the
-# tests build every file of the tree on its own.
+# GNU Make 3.81, as macOS ships it, is enough. Run it from cpp/, because the
+# paths below are this directory's. Output goes under target/, where the
+# traces look for the cores; the tests open their golden records from the
+# tree's root. The cores the traces drive are built from the amalgamation,
+# so what is traced is what ships; the tests build every file of the tree on
+# its own.
 
 ROOT := ..
 OUT := target
@@ -37,19 +38,19 @@ FLAGS := -std=c++20 -fno-exceptions -fno-rtti -ffp-contract=off -Wall -Wextra -W
 # its own two files, as a program that compiles them would.
 PREFIX_MAP := -fmacro-prefix-map=./=cpp/ $(foreach d,xpute conformance,-fmacro-prefix-map=$(d)/=cpp/$(d)/)
 AMALGAMATION_MAP := -fmacro-prefix-map=$(AMALGAMATION)/= -fmacro-prefix-map=$(OUT)/conformance/=cpp/conformance/
-# The conformance core's numbers a link reads, as make variables
+# A link reads the conformance core's numbers as make variables
 # (`CONFORMANCE_STACK_BYTES`).
 include conformance/core.spec.mk
-# A module core's link, as xpute-core wasm `link` prints it for a Rust
-# one: its memory imported and its stack first; and its exports, the entry
-# the floor names, `run`, beside the core's own boot.
+# A module core is linked with the flags xpute-core's `wasm::link` prints for
+# a Rust core: its memory imported and its stack first. It exports `run`, the
+# entry the contract names (ARCHITECTURE.md), beside the core's own boot.
 WASM_LINK := --target=wasm32-wasip1 -nostartfiles -Wl,--no-entry -Wl,--import-memory -Wl,--stack-first \
 	-Wl,-z,stack-size=$(CONFORMANCE_STACK_BYTES) -Wl,--export=xpute_conformance_boot -Wl,--export=run
 
 SOURCES := $(sort $(shell find xpute conformance -name '*.cpp'))
-# What only the tests build: their own files, the runner and the golden reader.
+# Only the tests build these: their own files, the runner and the golden reader.
 TEST_ONLY := xpute/kit/test.cpp xpute/kit/test.hpp xpute/kit/golden.cpp xpute/kit/golden.hpp
-# The library, what the amalgamation holds: kit, then the core end over it,
+# The library is what the amalgamation holds: kit, then the core end over it,
 # then the GPU's calls over that, in the order the two files read.
 LAYERS := kit core gpu
 LIBRARY_HEADERS := $(filter-out $(TEST_ONLY),$(foreach d,$(LAYERS),$(sort $(shell find xpute/$(d) -name '*.hpp'))))
@@ -63,14 +64,15 @@ else
 LIBRARY := libxpute_conformance.so
 endif
 
-# The compilers named, kept in a stamp rewritten only when they change, so a
-# different $CXX or SDK rebuilds every object as a change to this file does.
+# The compilers' names are kept in a stamp rewritten only when they change,
+# so a different $CXX or SDK rebuilds every object as a change to this file
+# does.
 COMPILERS := $(OUT)/compilers
 $(shell mkdir -p $(OUT) && { echo '$(CXX) | $(WASI_CXX)' | cmp -s - $(COMPILERS) || echo '$(CXX) | $(WASI_CXX)' > $(COMPILERS); })
 
 TEST_OBJECTS := $(SOURCES:%.cpp=$(OUT)/test/%.o)
-# The core: the amalgamation, and the conformance core's own source with
-# its includes of the library made one of xpute.hpp.
+# The core is the amalgamation, and the conformance core's own source with its
+# includes of the library made one of xpute.hpp.
 CORE_OBJECTS := $(OUT)/core/xpute.o $(OUT)/core/conformance.o
 WASM_OBJECTS := $(OUT)/wasm/xpute.o $(OUT)/wasm/conformance.o
 
@@ -79,8 +81,6 @@ WASM_OBJECTS := $(OUT)/wasm/xpute.o $(OUT)/wasm/conformance.o
 check: $(TEST_OBJECTS)
 	@echo "cpp: $(words $(SOURCES)) files compile"
 
-# The tests, and the amalgamation compiled alone, natively and as wasm, into
-# the cores the traces drive.
 test: $(OUT)/test/xpute-test core wasm
 	cd $(ROOT) && ./cpp/target/test/xpute-test
 
@@ -105,8 +105,8 @@ $(OUT)/$(LIBRARY): $(CORE_OBJECTS)
 $(OUT)/xpute_conformance.wasm: $(WASM_OBJECTS)
 	@"$(WASI_CXX)" $(WASM_LINK) $^ -o $@
 
-# Each written whole under a name of its own and then moved, so a make that
-# reads it, or another writing it at once, never sees half of one.
+# Each file is written whole under a name of its own and then moved, so a make
+# that reads it, or another writing it at once, never sees half of one.
 $(AMALGAMATION)/xpute.hpp: amalgamation.awk $(LIBRARY_HEADERS) Makefile
 	@mkdir -p $(@D)
 	@awk -f amalgamation.awk -v part=hpp $(LIBRARY_HEADERS) > $@.$$$$ && mv $@.$$$$ $@ || { rm -f $@.$$$$; exit 1; }
@@ -119,13 +119,12 @@ $(OUT)/conformance/core.cpp: conformance/core.cpp amalgamation.awk $(LIBRARY_HEA
 	@mkdir -p $(@D)
 	@awk -f amalgamation.awk -v part=program $(LIBRARY_HEADERS) $< > $@.$$$$ && mv $@.$$$$ $@ || { rm -f $@.$$$$; exit 1; }
 
-# Each object names the headers it read (-MMD), so a header's change
-# rebuilds what includes it, and depends on this file and the compilers'
-# stamp, so a change to the flags or the compilers rebuilds every object and
-# so relinks what they make. The amalgamation's are compiled without -I .,
-# so nothing of the tree but conformance/'s own headers can stand in for
-# what the two files lack. The commands run quietly; a compiler's errors
-# still print.
+# Each object names the headers it read (-MMD), so a header's change rebuilds
+# what includes it. Each depends on this file and the compilers' stamp, so a
+# change to the flags or the compilers rebuilds every object and so relinks what
+# they make. The amalgamation's objects are compiled without -I ., so nothing of
+# the tree but conformance/'s own headers can stand in for what the two files
+# lack. The commands run quietly; a compiler's errors still print.
 $(OUT)/test/%.o: %.cpp Makefile $(COMPILERS)
 	@mkdir -p $(@D)
 	@$(CXX) $(FLAGS) -I . $(PREFIX_MAP) -MMD -MP -c $< -o $@

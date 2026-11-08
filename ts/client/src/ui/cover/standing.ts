@@ -1,9 +1,5 @@
 // @pxl/client/ui/cover/standing.ts
 
-/** Where the client's boot stands, as the UI reads it from the services. The
- * app boots the client (runtime/boot.ts), and the UI only shows what came of
- * it. */
-
 import { useEffect, useSyncExternalStore } from "react";
 
 import { GroundStatus, Message } from "@/abi/cmd.spec.ts";
@@ -14,7 +10,6 @@ import { stop_code } from "@/service/sys/abort.ts";
 import { useGpu, useCore, useOnline, useSource } from "@/ui/watch.ts";
 import type { Standing } from "./cover.ts";
 
-/** Gathers everything `coverOf` reads. */
 export function useStanding(): Standing {
   const boot = useSyncExternalStore(watch_boot, boot_state);
   const stall = useCore((s) => s.stall);

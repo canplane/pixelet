@@ -1,7 +1,7 @@
 // xpute-core/wasm.rs
 
-//! The core built as one WebAssembly module: how its build script links it
-//! (`link`), what it reads of the module itself (`data_end`, `stack_high`,
+//! This is the core built as one WebAssembly module: how its build script links
+//! it (`link`), what it reads of the module itself (`data_end`, `stack_high`,
 //! `given`, `now`), what it asks of its runtime (`call`), and `wasm_abi!`,
 //! which defines the module's allocator and exports `run`. The native form's
 //! counterpart is xpute-runtime's `native_abi!`.
@@ -31,7 +31,7 @@ pub use link::{link, LinkConfig, WASM_PAGE_BYTES};
 #[cfg(target_arch = "wasm32")]
 pub use module::{call, data_end, given, now, stack_high};
 
-/// What xpute cannot assume of a module core, and the program supplies.
+/// xpute cannot assume these of a module core, and the program supplies them.
 pub struct Config {
     /// Where the heap begins, computed from where the linker's data ends; the
     /// heap runs to the end of the memory given. It must be pure: the
@@ -83,7 +83,7 @@ macro_rules! wasm_abi {
 
             struct WasmHeap;
 
-            impl $crate::mem::heap::Bounds for WasmHeap {
+            impl $crate::mem::heap::Bound for WasmHeap {
                 fn base() -> usize {
                     (CFG.heap_at)($crate::wasm::data_end()) as usize
                 }

@@ -15,14 +15,10 @@ export function tile_url(layer: BaseLayer, object: string): string {
  * dev tile server's answer. */
 export const TILE_SOURCE_ROUTE = `${TILE_ROOT}/source`;
 
-/** A route as the platform reads it. A page reads the route on its own
- * origin, and a device reads it on the site. */
 export function href(route: string): string {
   return origin.remote ? `${SITE_URL}${route}` : route;
 }
 
-/** Fetches a route from the origin, as the platform fetches
- * (service/platform/origin.ts). */
 export function get(route: string, signal?: AbortSignal): Promise<Response> {
   return origin.get(href(route), signal);
 }

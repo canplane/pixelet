@@ -1,8 +1,9 @@
 // @xpute/kit/wire/xtp/special_type.ts
 
-// The type bytes with the leaf bit clear. spec.ts re-exports this module as
-// `SpecialType`, read as a namespace (`SpecialType.NIL`). Each constant is a
-// literal, so it is its own type, and `SpecialType` as a type is their union.
+// These are the type bytes with the leaf bit clear. spec.ts re-exports this
+// module as `SpecialType`, read as a namespace (`SpecialType.NIL`). Each
+// constant is a literal, so it is its own type, and `SpecialType` as a type is
+// their union.
 
 /** The untyped null. An absent node is not NIL: it keeps its own type. */
 export const NIL = 0x00;

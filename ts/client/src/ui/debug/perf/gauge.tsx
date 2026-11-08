@@ -1,12 +1,5 @@
 // @pxl/client/ui/debug/perf/gauge.tsx
 
-/**
- * The figures the profiler panel shows over the last few seconds, and the
- * positions the view panel shows live. Both come from the same summary the
- * report is built from (view.ts). The panels only show them: nothing here
- * changes the core.
- */
-
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
@@ -55,8 +48,6 @@ const geo = (lat: number, lon: number) =>
   Number.isNaN(lat) ? "-" : `${fixed(lat, 5)}°, ${fixed(lon, 5)}°`;
 const meters = (m: number) => (Number.isNaN(m) ? "-" : `${n1(m)} m`);
 
-/** The words shown for what the pointer's pick hit, one for each kind the
- * core reports (perf.json `HIT_KINDS`). */
 const HIT_KIND_TEXT: Record<(typeof HIT_KINDS)[number], string> = {
   ground: "ground",
   object: "cube",
@@ -171,8 +162,6 @@ export function PerfGauge({ g }: { g: Gauge | null }) {
   const sections: Record<FrameGroup, ReactNode> = {
     time: f !== null && (
       <>
-        {/* The frame rate over the window, and the rate the median interval
-            gives. */}
         <Row
           k="fps window/p50"
           v={`${or(fps(f) ?? NaN)}/${

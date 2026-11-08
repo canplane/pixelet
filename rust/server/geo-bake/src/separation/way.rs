@@ -47,7 +47,6 @@ impl Polyline {
     }
 }
 
-/// A way as read: its row and its line.
 pub(crate) struct Way {
     pub row: Part,
     pub line: Polyline,

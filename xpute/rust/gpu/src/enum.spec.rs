@@ -326,7 +326,7 @@ impl TextureFormat {
     }
 }
 
-/// GPUVertexFormat.
+/// These are the members of GPUVertexFormat.
 pub const VERTEX_FORMAT: &[&str] = &[
     "uint8",
     "uint8x2",

@@ -11,7 +11,7 @@
 //! still, as it does in every frame through the gate. The CPU does not read back what it
 //! marked. It runs only in a frame whose changed casters marked the map, and those casters also
 //! mark the screen tiles they are drawn in, so the CPU counts that frame as marked
-//! (`Tiles::marked_in`) and takes the tiles to gather from it, as the light decides from what
+//! (`TileGrid::marked_in`) and takes the tiles to gather from it, as the light decides from what
 //! it handed whether to cast.
 //!
 //! The depth it reads is a bound: the least and most depth of each square of `BOUND_STEP`
@@ -20,7 +20,7 @@
 //! (screen_bound.wgsl, `set_bounds`). So the pass reads no pixel's depth except where a
 //! square's bound spans more than a few of the map's tiles. It also passes over what lies
 //! outside the map tiles the frame's marks cover, which the GPU keeps
-//! (`Tiles::new_damage_rect`).
+//! (`TileGrid::new_damage_rect`).
 
 use pxl_engine::param::light;
 use pxl_spec::space::coord::mat4::{self, Mat4};
@@ -32,9 +32,9 @@ use crate::frame::shader::word::{BOUND_SQUARES, BOUND_STEP};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, Gpu, Group, RenderContext,
 };
-use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::span_spec::GpuSpanName;
-use crate::gpu::tile::Tiles;
+use crate::gpu::tile::TileGrid;
 
 /// What the propagate pass binds (screen_propagate.wgsl): the world's depth, the pass's
 /// uniform, the map's tile words and uniform, the screen's tile words and uniform, the depth's
@@ -79,7 +79,7 @@ pub struct Propagate {
 }
 
 impl Propagate {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Propagate {
+    pub fn new(g: &Gpu, pipelines: &mut PipelineCache) -> Propagate {
         Propagate {
             pipeline: pipelines.build_compute(g, COMPUTE_SCREEN_PROPAGATE, &GROUP),
             uniform: g.buf(
@@ -146,7 +146,7 @@ impl Propagate {
     /// Sets both passes' groups before the frame's commands, once the bound for the world's
     /// size is made (`size`): over the world's depth `depth`, the map's `light` tiles and the
     /// `screen`'s tiles.
-    pub fn set_groups(&mut self, g: &Gpu, depth: u32, light: &Tiles, screen: &Tiles) {
+    pub fn set_groups(&mut self, g: &Gpu, depth: u32, light: &TileGrid, screen: &TileGrid) {
         let (l, s) = (light.this_frame(), screen.this_frame());
         self.bounds_group.set(
             g,
@@ -190,7 +190,7 @@ impl Propagate {
     /// bind (`set_groups`), with the screen's `tiles` across and down. It reads the depth's
     /// bound, and the world's depth where a square's bound spans more than a few map tiles,
     /// both as the last frame left them. It passes over what lies outside the tiles the frame's
-    /// marks cover (`Tiles::new_damage_rect`).
+    /// marks cover (`TileGrid::new_damage_rect`).
     pub fn dispatch(&self, ctx: &mut RenderContext, tiles: [u32; 2]) {
         let g = ctx.g;
         let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::propagate).pass());

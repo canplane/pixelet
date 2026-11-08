@@ -14,7 +14,7 @@ use pxl_spec::bake::tile::division::{self, Division, DivisionTile, CELLS, DIVISI
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::{idx_of, Zoom};
-use pxl_spec::space::layer::lattice::Cells;
+use pxl_spec::space::layer::lattice::Grid;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 use xpute_core::global::Global;
@@ -23,7 +23,7 @@ use xpute_core::mem::range::OwnedRange;
 
 use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::{AskScope, Base};
-use crate::sys::io::demand::{Phases, Stream};
+use crate::sys::io::demand::{PhaseList, Stream};
 use crate::sys::io::failure::Failure;
 
 static DIVISION: Global<TileCache<DivisionTile>> = Global::new();
@@ -57,7 +57,7 @@ impl Base for DivisionTile {
         _tile: Quadrant,
         record: u32,
         pkt: &[u8],
-        _phases: &mut Phases,
+        _phases: &mut PhaseList,
     ) -> Result<DivisionTile, Failure> {
         // SAFETY: the record is this tile's, and nothing reads it until the tile is set.
         let room = unsafe { range::arr::<u32>(RANGE.get(), record * RECORD_BYTES, CELLS) };

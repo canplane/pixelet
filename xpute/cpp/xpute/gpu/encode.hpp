@@ -1,13 +1,12 @@
 // cpp/xpute/gpu/encode.hpp
 
-// The encoder: a core's GPU calls, written as records of a stream
-// (ipc/stream) in the words spec/gpu/api.json gives each op, as
-// rust/gpu/src/encode.rs writes them. An object the core makes is named by a
-// handle from one table (`Gpu`). A record that does not fit an open
-// transaction is not written, and the handle of the object it would have
-// made is given back. One function gives each record's words, and it runs
-// twice: once to count the words, then to write them into the room the
-// stream reserved.
+// The encoder writes a core's GPU calls as records of a stream (ipc/stream) in
+// the words spec/gpu/api.json gives each op, as rust/gpu/src/encode.rs writes
+// them. An object the core makes is named by a handle from one table (`Gpu`).
+// A record that does not fit an open transaction is not written, and the
+// handle of the object it would have made is given back. One function gives
+// each record's words, and it runs twice: once to count the words, then to
+// write them into the room the stream reserved.
 
 #pragma once
 
@@ -29,24 +28,25 @@
 
 namespace xpute::gpu {
 
-// An object the core made, named by a handle from its encoder's table.
+// An `Id` is an object the core made, named by a handle from its encoder's
+// table.
 using Id = std::uint32_t;
 
 struct BufferDescriptor {
     std::uint32_t size;
-    // BUFFER_USAGE bits.
+    // These are BUFFER_USAGE bits.
     std::uint32_t usage;
     bool mapped_at_creation;
 };
 
 struct TextureDescriptor {
-    // Width, height, and depth or layers.
+    // This holds the width, the height, and the depth or layers.
     std::array<std::uint32_t, 3> size;
     std::uint32_t mip_levels;
     std::uint32_t samples;
     TextureDimension dimension;
     TextureFormat format;
-    // TEXTURE_USAGE bits.
+    // These are TEXTURE_USAGE bits.
     std::uint32_t usage;
     std::span<const TextureFormat> view_formats;
 };
@@ -97,7 +97,7 @@ using BindingLayout = std::variant<BufferBinding, SamplerBinding, TextureBinding
 
 struct BindGroupLayoutEntry {
     std::uint32_t binding;
-    // SHADER_STAGE bits.
+    // These are SHADER_STAGE bits.
     std::uint32_t visibility;
     BindingLayout layout;
 };
@@ -149,7 +149,7 @@ struct PrimitiveState {
     bool unclipped_depth;
 };
 
-// A stencil face, whose defaults are WebGPU's.
+// A stencil face's defaults are WebGPU's.
 struct StencilFaceState {
     CompareFunction compare = CompareFunction::always;
     StencilOperation fail = StencilOperation::keep;
@@ -170,7 +170,7 @@ struct DepthStencilState {
     float clamp;
 };
 
-// Its defaults are WebGPU's: one sample, no multisampling.
+// The defaults are WebGPU's: one sample, no multisampling.
 struct MultisampleState {
     std::uint32_t count = 1;
     std::uint32_t mask = UINT32_MAX;
@@ -191,7 +191,7 @@ struct BlendState {
 struct ColorTargetState {
     TextureFormat format;
     std::optional<BlendState> blend;
-    // COLOR_WRITE bits.
+    // These are COLOR_WRITE bits.
     std::uint32_t write_mask;
 };
 
@@ -218,7 +218,7 @@ struct ComputePipelineDescriptor {
     std::string_view entry;
 };
 
-// The place in a texture that a copy reads or writes.
+// This is the place in a texture that a copy reads or writes.
 struct TexelCopyTexture {
     Id texture;
     std::uint32_t mip;
@@ -226,7 +226,7 @@ struct TexelCopyTexture {
     TextureAspect aspect;
 };
 
-// A buffer's bytes, laid out as rows of texels for a copy.
+// These are a buffer's bytes, laid out as rows of texels for a copy.
 struct TexelCopyBuffer {
     Id buffer;
     std::uint32_t offset;
@@ -269,7 +269,7 @@ struct RenderPassDescriptor {
 
 namespace detail {
 
-// The first run over a record's words, which counts them.
+// This is the first run over a record's words, which counts them.
 struct Count {
     std::uint32_t n = 0;
     void word(std::uint32_t) noexcept { n++; }
@@ -277,8 +277,8 @@ struct Count {
     void bytes(std::span<const std::uint8_t> b) noexcept { n += 1 + static_cast<std::uint32_t>((b.size() + WORD - 1) / WORD); }
 };
 
-// The second run over a record's words, which writes them where the stream
-// reserved them.
+// This is the second run over a record's words, which writes them where the
+// stream reserved them.
 struct Fill {
     Memory mem;
     std::uint32_t at;
@@ -314,9 +314,9 @@ template <class S> void words(S &s, std::initializer_list<std::uint32_t> w) noex
     for (std::uint32_t v : w) s.word(v);
 }
 
-// Writes a record of `op` with the words `put` gives. False where an open
-// transaction no longer fits the record; outside a transaction, a record that
-// does not fit is a bug (Stream::reserve).
+// Writes a record of `op` with the words `put` gives. It answers false where
+// an open transaction no longer fits the record; outside a transaction, a
+// record that does not fit is a bug (`Stream::reserve`).
 template <class F> bool emit(Stream &stream, std::uint32_t op, F &&put) noexcept {
     Count count;
     put(count);
@@ -328,8 +328,8 @@ template <class F> bool emit(Stream &stream, std::uint32_t op, F &&put) noexcept
     return true;
 }
 
-// The room a record takes of a stream, its op and count words included,
-// counted as `emit` writes it.
+// This is the room a record takes of a stream, its op and count words
+// included, counted as `emit` writes it.
 template <class F> std::uint64_t record_size(F &&put) noexcept {
     Count count;
     put(count);
@@ -351,7 +351,7 @@ template <class S> void extent(S &s, std::array<std::uint32_t, 3> e) noexcept { 
 
 template <class S> void stencil_face(S &s, const StencilFaceState &f) noexcept { words(s, {u(f.compare), u(f.fail), u(f.depth_fail), u(f.pass)}); }
 
-// The words of a RENDER_PIPELINE record after its id, which
+// These are the words of a RENDER_PIPELINE record after its id, which
 // RENDER_PIPELINE_ASYNC begins with too.
 template <class S> void render_pipeline_words(S &s, const RenderPipelineDescriptor &d) noexcept {
     s.word(opt(d.layout));
@@ -399,7 +399,7 @@ template <class S> void render_pipeline_words(S &s, const RenderPipelineDescript
     }
 }
 
-// The words of a COMPUTE_PIPELINE record after its id, which
+// These are the words of a COMPUTE_PIPELINE record after its id, which
 // COMPUTE_PIPELINE_ASYNC begins with too.
 template <class S> void compute_pipeline_words(S &s, const ComputePipelineDescriptor &d) noexcept {
     words(s, {opt(d.layout), d.module});
@@ -413,9 +413,9 @@ template <class S> void compute_pipeline_words(S &s, const ComputePipelineDescri
 // pass, a surface's current texture.
 inline constexpr std::size_t OBJECT_OPS = op::DESTROY;
 
-// The calls that make objects, over a table of `N` handles. Each handle holds
-// the op that made its object where the object lasts (OBJECT_OPS), and 0
-// where a turn lets it go.
+// These are the calls that make objects, over a table of `N` handles. Each
+// handle holds the op that made its object where the object lasts
+// (`OBJECT_OPS`), and 0 where a turn lets it go.
 template <std::size_t N> class Gpu {
   public:
     std::optional<Id> buffer(Stream &stream, const BufferDescriptor &d) noexcept {
@@ -449,8 +449,8 @@ template <std::size_t N> class Gpu {
         return make(stream, op::SHADER_MODULE, [&](auto &s) { s.bytes(detail::text(wgsl)); });
     }
 
-    // The room shader_module takes of a stream, for Stream::fits, so that a
-    // caller making several modules can ask before each one.
+    // This is the room `shader_module` takes of a stream, for `Stream::fits`,
+    // so that a caller making several modules can ask before each one.
     static std::uint64_t shader_module_bytes(std::string_view wgsl) noexcept {
         return detail::record_size([&](auto &s) {
             s.word(0);
@@ -502,8 +502,8 @@ template <std::size_t N> class Gpu {
         return make(stream, op::RENDER_PIPELINE, [&](auto &s) { detail::render_pipeline_words(s, d); });
     }
 
-    // As render_pipeline, but the runtime makes the pipeline without holding
-    // its thread, and stores `ticket` at `fence` once it is made (spec
+    // This is `render_pipeline`, but the runtime makes the pipeline without
+    // holding its thread, and stores `ticket` at `fence` once it is made (spec
     // RESULT). No record may name the pipeline before the core has seen that
     // ticket.
     std::optional<Id> render_pipeline_async(Stream &stream, const RenderPipelineDescriptor &d, const std::uint32_t &fence, std::uint32_t ticket) noexcept {
@@ -518,7 +518,8 @@ template <std::size_t N> class Gpu {
         return make(stream, op::COMPUTE_PIPELINE, [&](auto &s) { detail::compute_pipeline_words(s, d); });
     }
 
-    // As compute_pipeline, with the fence and ticket of render_pipeline_async.
+    // This is `compute_pipeline`, with the fence and ticket of
+    // `render_pipeline_async`.
     std::optional<Id> compute_pipeline_async(Stream &stream, const ComputePipelineDescriptor &d, const std::uint32_t &fence, std::uint32_t ticket) noexcept {
         std::uint32_t at = stream.mem().off_of(&fence);
         return make_as(stream, op::COMPUTE_PIPELINE_ASYNC, op::COMPUTE_PIPELINE, [&](auto &s) {
@@ -563,8 +564,8 @@ template <std::size_t N> class Gpu {
         });
     }
 
-    // A view of `surface`'s texture for this turn. Every CURRENT of one turn
-    // names the same texture.
+    // This makes a view of `surface`'s texture for this turn. Every CURRENT of
+    // one turn names the same texture.
     std::optional<Id> current(Stream &stream, std::uint32_t surface) noexcept {
         return make(stream, op::CURRENT, [&](auto &s) { s.word(surface); });
     }
@@ -576,9 +577,9 @@ template <std::size_t N> class Gpu {
         handles_.begin();
     }
 
-    // Closes the transaction. False where it did not fit: the stream is then
-    // as it was at `begin`, and every handle taken since is free again, since
-    // the runtime never saw it.
+    // Closes the transaction. It answers false where it did not fit: the
+    // stream is then as it was at `begin`, and every handle taken since is
+    // free again, since the runtime never saw it.
     bool commit(Stream &stream) noexcept {
         bool fit = stream.commit();
         if (!fit) handles_.rollback([this](Id, std::uint8_t op) { forget(op); });
@@ -614,10 +615,10 @@ template <std::size_t N> class Gpu {
 
   private:
     // Makes an object by a record of `op` whose first word is the new handle.
-    // None where the table is full or the record does not fit.
+    // It answers none where the table is full or the record does not fit.
     template <class F> std::optional<Id> make(Stream &stream, std::uint32_t op, F &&put) noexcept { return make_as(stream, op, op, put); }
 
-    // As make, but the object is counted under the op `kind`: an async
+    // This is `make`, but the object is counted under the op `kind`: an async
     // pipeline counts as its sync op's.
     template <class F> std::optional<Id> make_as(Stream &stream, std::uint32_t op, std::uint32_t kind, F &&put) noexcept {
         bool lasts = kind < OBJECT_OPS;
@@ -646,26 +647,27 @@ template <std::size_t N> class Gpu {
     }
 
     abi::Table<std::uint8_t, N> handles_;
-    // How many live objects each op has made, indexed by the op.
+    // This counts how many live objects each op has made, indexed by the op.
     std::array<std::uint32_t, OBJECT_OPS> objects_{};
 };
 
-// The calls that make no object. Each writes its record straight to the
-// stream, and returns false where an open transaction no longer fits it.
+// These are the calls that make no object. Each writes its record straight to
+// the stream, and returns false where an open transaction no longer fits it.
 namespace call {
 
 bool write_buffer(Stream &stream, Id buffer, std::uint32_t offset, std::span<const std::uint8_t> bytes) noexcept;
-// The room `write_buffer` takes of a stream, for Stream::fits, so that a
-// caller can ask once whether several writes fit.
+// This is the room `write_buffer` takes of a stream, for `Stream::fits`, so
+// that a caller can ask once whether several writes fit.
 std::uint64_t write_buffer_bytes(std::span<const std::uint8_t> bytes) noexcept;
-// As write_buffer, but the record names the bytes where they lie in the core's
-// memory, and the runtime reads them there as it runs the stream. The core
-// leaves them unchanged until the stream is handed back (ipc/stream.hpp R3).
+// This is `write_buffer`, but the record names the bytes where they lie in the
+// core's memory, and the runtime reads them there as it runs the stream. The
+// core leaves them unchanged until the stream is handed back (ipc/stream.hpp
+// R3).
 bool write_buffer_at(Stream &stream, Id buffer, std::uint32_t offset, std::span<const std::uint8_t> bytes) noexcept;
-// `layout`: bytes per row, rows per image.
+// `layout` holds the bytes per row and the rows per image.
 bool write_texture(Stream &stream, const TexelCopyTexture &place, std::array<std::uint32_t, 2> layout, std::array<std::uint32_t, 3> size, std::span<const std::uint8_t> bytes) noexcept;
-// As write_buffer_bytes. The room depends on the bytes alone, not on the
-// place, layout or size.
+// This is `write_buffer_bytes` for a texture. The room depends on the bytes
+// alone, not on the place, layout or size.
 std::uint64_t write_texture_bytes(std::span<const std::uint8_t> bytes) noexcept;
 bool write_texture_at(Stream &stream, const TexelCopyTexture &place, std::array<std::uint32_t, 2> layout, std::array<std::uint32_t, 3> size, std::span<const std::uint8_t> bytes) noexcept;
 // Decodes an encoded image (PNG, JPEG or WebP) from the core's memory into
@@ -674,7 +676,7 @@ bool write_texture_at(Stream &stream, const TexelCopyTexture &place, std::array<
 // The runtime copies the image's bytes as it runs the record, so they are the
 // core's again once the stream is handed back.
 bool copy_external_image(Stream &stream, const TexelCopyTexture &to, bool flip_y, bool premultiplied, std::span<const std::uint8_t> image, const std::array<std::uint32_t, 2> &fence, std::uint32_t ticket) noexcept;
-// `from` and `to`: a buffer and its offset.
+// `from` and `to` each hold a buffer and its offset.
 bool copy_buffer_to_buffer(Stream &stream, Id encoder, std::array<std::uint32_t, 2> from, std::array<std::uint32_t, 2> to, std::uint32_t size) noexcept;
 bool copy_buffer_to_texture(Stream &stream, Id encoder, const TexelCopyBuffer &from, const TexelCopyTexture &to, std::array<std::uint32_t, 3> size) noexcept;
 bool copy_texture_to_buffer(Stream &stream, Id encoder, const TexelCopyTexture &from, const TexelCopyBuffer &to, std::array<std::uint32_t, 3> size) noexcept;
@@ -686,7 +688,7 @@ bool set_pipeline(Stream &stream, Id pass, Id pipeline) noexcept;
 bool set_bind_group(Stream &stream, Id pass, std::uint32_t index, Id group, std::span<const std::uint32_t> dynamic_offsets = {}) noexcept;
 bool set_vertex_buffer(Stream &stream, Id pass, std::uint32_t slot, Id buffer, std::uint32_t offset, std::optional<std::uint32_t> size) noexcept;
 bool set_index_buffer(Stream &stream, Id pass, Id buffer, IndexFormat format, std::uint32_t offset, std::optional<std::uint32_t> size) noexcept;
-// `rect`: x, y, width, height; `depth`: min and max.
+// `rect` holds x, y, width and height, and `depth` holds the min and the max.
 bool set_viewport(Stream &stream, Id pass, std::array<float, 4> rect, std::array<float, 2> depth) noexcept;
 bool set_scissor(Stream &stream, Id pass, std::array<std::uint32_t, 4> rect) noexcept;
 bool set_blend_constant(Stream &stream, Id pass, std::array<float, 4> rgba) noexcept;

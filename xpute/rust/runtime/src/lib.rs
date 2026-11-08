@@ -1,6 +1,6 @@
 // xpute-runtime/lib.rs
 
-//! The runtime's side in Rust; `@xpute/runtime` plays the same role in
+//! This is the runtime's side in Rust; `@xpute/runtime` plays the same role in
 //! TypeScript. `mem` reads and writes a core's memory by offset on any
 //! platform. `native` is the runtime for a core linked into the runtime's own
 //! process; it exists only on unix, because it maps the core's memory through

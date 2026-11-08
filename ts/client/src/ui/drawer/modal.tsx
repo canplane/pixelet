@@ -31,8 +31,7 @@ import { LABEL } from "@/ui/component/palette.ts";
 import { Grid, Item, itemOf, mark } from "./grid.tsx";
 import { NameTipLayer } from "./name-tip.tsx";
 
-/** Groups `items` by section. The sections, and the items in each, keep the
- * catalog's order. */
+/** The sections, and the items in each, keep the catalog's order. */
 function sectioned<S, T>(
   items: readonly T[],
   sectionOf: (item: T) => S,
@@ -81,7 +80,6 @@ function CubeItem({
   );
 }
 
-/** An item for an asset drawn as a glyph: a decor or the marker. */
 function GlyphItem({
   id,
   label,
@@ -139,9 +137,6 @@ const DECOR_TAB = 1;
 const MARKER_TAB = 2;
 const CHARACTER_TAB = 3;
 
-/** The drawer sheet. Picking a cube, a decor or the marker puts it in hand and
- * closes the sheet. Picking a character applies it at once and leaves the
- * sheet open. */
 export function DrawerModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
 

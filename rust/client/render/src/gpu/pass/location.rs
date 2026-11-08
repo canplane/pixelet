@@ -10,12 +10,12 @@ use crate::frame::shader::record::{PIPELINE_LOCATION_BEACON_MARK, PIPELINE_LOCAT
 use crate::frame::shader::word::{location, BOX_VERTICES};
 use crate::gpu::api::{buf_entry, buffer_usage, bytes, release, Gpu, TrackedRenderPass};
 use crate::gpu::draw::{uniform_of, DRAW_WORDS};
-use crate::gpu::draw::{DrawStats, Draws};
-use crate::gpu::pass::mark::{put_whole, Marks};
-use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
-use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::draw::{DrawStat, DrawTable};
+use crate::gpu::pass::mark::{put_whole, MarkPass};
+use crate::gpu::pass::model::{UniformBuffer, DRAW_BYTES};
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::put::put_f32;
-use crate::gpu::upload::{buf_size, Uploads};
+use crate::gpu::upload::{buf_size, UploadTable};
 use crate::look::color::indicator;
 use crate::look::color::linear_rgb;
 use crate::param::location::beacon;
@@ -85,7 +85,7 @@ pub struct LocationPass {
     beacon: Pipeline,
     /// The zones' uniforms, a slot a draw, each bound at its own offset
     /// (`prepare`).
-    zone_uniforms: DrawUniforms,
+    zone_uniforms: UniformBuffer,
     /// The bind group the beacon reads the list's uniforms through, and the
     /// buffer it is made over (`set_draws`).
     draws: u32,
@@ -98,8 +98,8 @@ pub struct LocationPass {
     oct_normal: u32,
     /// The UI's action color, in linear light.
     color: [f32; 3],
-    pub zone_marks: Marks,
-    pub beacon_marks: Marks,
+    pub zone_marks: MarkPass,
+    pub beacon_marks: MarkPass,
 }
 
 fn put(g: &Gpu, data: &[u8], usage: u32) -> u32 {
@@ -109,12 +109,12 @@ fn put(g: &Gpu, data: &[u8], usage: u32) -> u32 {
 }
 
 /// The zones that are drawn. A zone of no boxes is not.
-fn zones<'a>(draws: &Draws<'a>) -> impl Iterator<Item = &'a [u32; DRAW_WORDS]> + Clone + 'a {
+fn zones<'a>(draws: &DrawTable<'a>) -> impl Iterator<Item = &'a [u32; DRAW_WORDS]> + Clone + 'a {
     draws.of(PIPELINE_LOCATION_ZONE).filter(|d| d[1] > 0)
 }
 
 impl LocationPass {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buf: u32, align: u32) -> LocationPass {
+    pub fn new(g: &Gpu, pipelines: &mut PipelineCache, frame_buf: u32, align: u32) -> LocationPass {
         let zone = pipelines.build_world(g, PIPELINE_LOCATION_ZONE);
         let beacon = pipelines.build_world(g, PIPELINE_LOCATION_BEACON);
         let (box_p, box_uv, box_i) = box_lanes();
@@ -122,7 +122,7 @@ impl LocationPass {
         let [r, gr, b] = linear_rgb(indicator::ACTION);
         LocationPass {
             frame_group: g.bind_group(zone.layouts[0], &[buf_entry(0, frame_buf)]),
-            zone_uniforms: DrawUniforms::new(DRAW_BYTES, align),
+            zone_uniforms: UniformBuffer::new(DRAW_BYTES, align),
             draws: 0,
             draws_buf: 0,
             zone,
@@ -133,14 +133,14 @@ impl LocationPass {
             oct_pos: put(g, bytes(&oct_p), buffer_usage::VERTEX),
             oct_normal: put(g, bytes(&oct_n), buffer_usage::VERTEX),
             color: [r as f32, gr as f32, b as f32],
-            zone_marks: Marks::new(
+            zone_marks: MarkPass::new(
                 g,
                 pipelines,
                 (PIPELINE_LOCATION_ZONE_MARK, PIPELINE_LOCATION_ZONE),
                 align,
                 (|d| d[0], put_whole, |d| d[1] > 0),
             ),
-            beacon_marks: Marks::new(
+            beacon_marks: MarkPass::new(
                 g,
                 pipelines,
                 (PIPELINE_LOCATION_BEACON_MARK, PIPELINE_LOCATION_BEACON),
@@ -151,7 +151,7 @@ impl LocationPass {
     }
 
     /// Draws this frame's marks into `pass`. `frames` holds their group 0 as
-    /// they are and as they were (tile_mark.wgsl, `Marks::draw`).
+    /// they are and as they were (tile_mark.wgsl, `MarkPass::draw`).
     pub fn draw_marks(&self, pass: &mut TrackedRenderPass, frames: [u32; 2]) {
         self.zone_marks.draw(pass, frames, |pass, d, upload| {
             pass.set_vertex_buf(0, self.box_pos, 0, 0);
@@ -167,9 +167,9 @@ impl LocationPass {
         });
     }
 
-    /// Pushes onto `out` the uploads the zones read (`Marks::reads`). A
+    /// Pushes onto `out` the uploads the zones read (`MarkPass::reads`). A
     /// beacon reads none.
-    pub fn marks_read(&self, draws: &Draws, out: &mut Vec<u32>) {
+    pub fn marks_read(&self, draws: &DrawTable, out: &mut Vec<u32>) {
         self.zone_marks.reads(zones(draws), out);
         self.beacon_marks
             .reads(draws.of(PIPELINE_LOCATION_BEACON), out);
@@ -177,7 +177,7 @@ impl LocationPass {
 
     /// Adds the pass's draws to `stats`: a box's triangles for each instance
     /// of a zone, and the octahedron's for each beacon.
-    pub fn count(&self, draws: &Draws, stats: &mut DrawStats) {
+    pub fn count(&self, draws: &DrawTable, stats: &mut DrawStat) {
         draws.count(PIPELINE_LOCATION_ZONE, stats, |d| BOX_VERTICES / 3 * d[1]);
         draws.count(PIPELINE_LOCATION_BEACON, stats, |_| BEACON_VERTICES / 3);
     }
@@ -189,10 +189,10 @@ impl LocationPass {
     pub fn prepare(
         &mut self,
         g: &Gpu,
-        draws: &Draws,
+        draws: &DrawTable,
         uniforms: &[f32],
         changed: bool,
-        uploads: &mut Uploads,
+        uploads: &mut UploadTable,
     ) {
         let c = self.color;
         let put = |buf: &mut [u8], d: &[u32; DRAW_WORDS]| {
@@ -229,11 +229,11 @@ impl LocationPass {
     }
 
     /// Draws each beacon. The pipeline, the models' group 0 `frame`
-    /// (gpu/pass/model.rs `FrameGroups`), the list's uniforms (`set_draws`)
+    /// (gpu/pass/model.rs `FrameGroup`), the list's uniforms (`set_draws`)
     /// and the octahedron are bound once. Each beacon is drawn as the
     /// instance its slot names, and its vertices read their draw at that slot
     /// (location.slot.wgsl).
-    pub fn draw_beacon(&self, pass: &mut TrackedRenderPass, draws: &Draws, frame: u32) {
+    pub fn draw_beacon(&self, pass: &mut TrackedRenderPass, draws: &DrawTable, frame: u32) {
         if self.draws == 0 || draws.of(PIPELINE_LOCATION_BEACON).len() == 0 {
             return;
         }
@@ -250,7 +250,12 @@ impl LocationPass {
     /// Draws each zone. The pipeline, the frame's group and the box are bound
     /// once, and each zone binds only its uniform's slot and its upload. A
     /// zone whose upload is not on the device yet is passed over.
-    pub fn draw_zone(&self, pass: &mut TrackedRenderPass, draws: &Draws, uploads: &mut Uploads) {
+    pub fn draw_zone(
+        &self,
+        pass: &mut TrackedRenderPass,
+        draws: &DrawTable,
+        uploads: &mut UploadTable,
+    ) {
         let Some(slots) = self.zone_uniforms.slots() else {
             return;
         };

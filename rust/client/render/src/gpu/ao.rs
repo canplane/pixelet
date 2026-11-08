@@ -22,7 +22,7 @@ use crate::gpu::api::{
     texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Group, Layout, Load, RenderContext,
     TrackedRenderPass,
 };
-use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::put::put_mat;
 use crate::gpu::span_spec::GpuSpanName;
 
@@ -62,7 +62,7 @@ pub struct ScreenAo {
 }
 
 impl ScreenAo {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32, frame_buf: u32) -> ScreenAo {
+    pub fn new(g: &Gpu, pipelines: &mut PipelineCache, align: u32, frame_buf: u32) -> ScreenAo {
         let noise = g.texture(
             AO_NOISE_SIDE,
             AO_NOISE_SIDE,

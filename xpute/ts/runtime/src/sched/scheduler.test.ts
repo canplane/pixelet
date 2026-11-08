@@ -46,7 +46,6 @@ function setup() {
     doorbell.on_turn!(1, wake_ms);
     doorbell.on_wake!(wake_ms);
   };
-  /** Gives the policy's next moment. */
   const moment = () => moments.shift()?.(performance.now());
   return { scheduler, wake: doorbell.on_wake!, heard, kicks, moments, moment };
 }

@@ -63,7 +63,7 @@ pub struct Grid {
     pub(crate) hits_at: u32,
     pub hit_asks_at: u32,
     /// Where the beam rays' runs park them, one state each (`ray::STATE_WORDS`, pxl-render
-    /// corners.wgsl), in the corners' order.
+    /// corner.wgsl), in the corners' order.
     pub corner_states_at: u32,
 }
 
@@ -362,7 +362,7 @@ pub const CELL_WORDS: u32 = 3;
 /// lacks, which a pixel entering it before any cell walks itself; and the axis the sample
 /// entered it across, a face its ray reached through air (`raster::faces`). While its ray has
 /// not ended, its zoom is `SAMPLE_PARKED`, and its words hold the state the queue parked it
-/// in (pxl-render samples.wgsl): its distance in the asset's first word (`SAMPLE_PARKED_T`),
+/// in (pxl-render sample.wgsl): its distance in the asset's first word (`SAMPLE_PARKED_T`),
 /// its node's corner in the node's words, and the rest in the lack word
 /// (`SAMPLE_PARKED_STATE`).
 pub const SAMPLE_NODE: u32 = 0;

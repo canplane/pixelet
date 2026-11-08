@@ -2,7 +2,5 @@
 //
 // GENERATED from spec/client/core/door/ui.json
 
-// A setting's.
-
 export const SET = 0x01;
 export const DEVELOPMENT = 0x02;

@@ -1,14 +1,12 @@
 // @pxl/client/ui/world/keyboard.ts
 
 /**
- * The keys the UI answers, and where each one goes. The movement keys send a
- * direction to the core. A digit, a tool's letter, a size key, Tab and the
- * drawer's key go to the UI's own stores. A key has no place on the screen
- * that decides what receives it, as a pointer has, so this file decides. A
- * sheet in front takes every key except Escape, which closes it. A text field
- * takes every key except Tab and Escape, and both of those leave the message
- * for the palette. Keys are named by `code`, the key's physical place, so that
- * every keyboard layout works the same.
+ * A key has no place on the screen that decides what receives it, as a
+ * pointer has, so this file decides. A sheet in front takes every key except
+ * Escape, which closes it. A text field takes every key except Tab and
+ * Escape, and both of those leave the message for the palette. Keys are
+ * named by `code`, the key's physical place, so that every keyboard layout
+ * works the same.
  */
 
 import type { i32 } from "@xpute/kit/abi/word.ts";
@@ -37,7 +35,6 @@ const MOVE: Record<string, [i32, i32]> = {
   KeyD: [1, 0],
 };
 
-/** Digit1 and the digits after it pick the hotbar's slots in order. */
 const SLOT = /^Digit([1-9])$/;
 
 /** The letters follow Figma and Photoshop: V for the move tool and E for the
@@ -48,7 +45,7 @@ const TOOL: Record<string, Tool> = {
 };
 
 /** I opens the drawer, as it opens a game's inventory and, with Shift,
- * Figma's resources. Escape closes the drawer as it closes any sheet. */
+ * Figma's resources. */
 const DRAWER = "KeyI";
 
 /** The brackets size the block as they size Photoshop's brush: `]` makes it

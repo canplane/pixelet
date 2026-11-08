@@ -11,7 +11,6 @@ pub use spec::{Kind, SHAPE_BITS};
 /// read (`kind_of`, the store's write).
 pub type AssetId = u32;
 
-/// The id of `kind`'s `shape`.
 pub(crate) const fn asset_id(kind: Kind, shape: u32) -> AssetId {
     (kind as u32) << SHAPE_BITS | shape
 }

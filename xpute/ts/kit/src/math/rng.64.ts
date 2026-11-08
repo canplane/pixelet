@@ -1,16 +1,16 @@
 // @xpute/kit/math/rng.64.ts
 
 /**
- * The 64-bit family: splitmix64's finalizer, a seed derived through it, and
- * splitmix64's stream, drawn as `u32` from the high 32 bits of each word.
+ * The 64-bit family holds splitmix64's finalizer, a seed derived through it,
+ * and splitmix64's stream, drawn as `u32` from the high 32 bits of each word.
  */
 
 import { U64, type u64 } from "../abi/word.ts";
 import type { RNG } from "./rng.ts";
 
 /**
- * A seed from Web Crypto's entropy, for shuffling and sampling. The streams
- * it seeds must still not be used where prediction must be resisted.
+ * This is a seed from Web Crypto's entropy, for shuffling and sampling. The
+ * streams it seeds must still not be used where prediction must be resisted.
  */
 export function seed64(): u64 {
   const u = new Uint32Array(2);
@@ -37,8 +37,8 @@ export function derive_seed_u64(base: u64, tag: u64): u64 {
 }
 
 /**
- * splitmix64's stream, drawn as `u32`: each draw is the high 32 bits of the
- * next 64-bit output.
+ * This is splitmix64's stream, drawn as `u32`: each draw is the high 32 bits of
+ * the next 64-bit output.
  */
 export function make_rng(seed: u64 = seed64()): RNG {
   let x: u64 = U64(seed);

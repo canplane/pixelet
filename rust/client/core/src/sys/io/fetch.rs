@@ -17,7 +17,7 @@ use xpute_kit::collection::list::List;
 use xpute_kit::status::errno::Errno;
 
 use crate::sys::io::body;
-use crate::sys::io::demand::{Phases, Stream, TaskPhaseName};
+use crate::sys::io::demand::{PhaseList, Stream, TaskPhaseName};
 use crate::sys::io::failure::{Exit, Failure};
 use crate::sys::io::file::{self, Opened, Owner, Path};
 use crate::sys::io::param::MAX_CREDITS;
@@ -44,7 +44,7 @@ pub struct Response {
     pub id: u64,
     /// None where the source has no object for it.
     pub block: Option<Block>,
-    pub phases: Phases,
+    pub phases: PhaseList,
 }
 
 const CREDITS: usize = MAX_CREDITS as usize;
@@ -157,7 +157,7 @@ fn arrived(a: Arrival) {
     let Some((stream, id)) = attempt_of(key) else {
         return release(a.got.ok().flatten());
     };
-    let mut phases = Phases::default();
+    let mut phases = PhaseList::default();
     phases.push(TaskPhaseName::net_ms, a.net_ms);
     match a.got {
         Ok(block) => {

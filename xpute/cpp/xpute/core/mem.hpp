@@ -1,9 +1,9 @@
 // cpp/xpute/core/mem.hpp
 
-// The memory both sides see, and the one place where an offset becomes a
-// pointer. Every address a core names is an offset from a memory's base,
-// never a pointer, so that it means the same on every runtime and fits in 32
-// bits. A part laid over a region of memory is given the `Memory` it lies in
+// `Memory` is the memory both sides see, and the one place where an offset
+// becomes a pointer. Every address a core names is an offset from a memory's
+// base, never a pointer, so that it means the same on every runtime and fits in
+// 32 bits. A part laid over a region of memory is given the `Memory` it lies in
 // and an offset. The core's own memory is `mem::core`.
 
 #pragma once

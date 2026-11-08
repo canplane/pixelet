@@ -1,7 +1,7 @@
 // @xpute/gpu/runtime.test.ts
 
 /**
- * Holds the web runtime to golden/gpu/programs.tsv where it runs: in a
+ * Holds the web runtime to golden/gpu/program.tsv where it runs: in a
  * browser, on its WebGPU. Each program's recorded turns, run as they were
  * written, must read back the bytes the record holds, as the native runtime's
  * do (rust/gpu/src/runtime.test.rs). Turn K's ticket is K + 1, and the next
@@ -38,7 +38,7 @@ function same(
 }
 
 async function replay(): Promise<void> {
-  const g = await Golden.load("golden/gpu/programs.tsv");
+  const g = await Golden.load("golden/gpu/program.tsv");
   const adapter = await navigator.gpu.requestAdapter();
   if (!adapter) throw new Error("no WebGPU adapter");
   const device = await adapter.requestDevice({
@@ -91,7 +91,7 @@ function guard(): void {
     () => new ArrayBuffer(0),
     () => {},
   );
-  // Slot 3, generations 1 and 2 (`slot | generation << 16`).
+  // These are slot 3, generations 1 and 2 (`slot | generation << 16`).
   const [old, newer] = [3 | (1 << 16), 3 | (2 << 16)];
   runtime.bind(old, context("old"));
   runtime.bind(newer, context("newer"));

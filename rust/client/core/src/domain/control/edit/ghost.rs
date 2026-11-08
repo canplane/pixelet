@@ -22,7 +22,7 @@ use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::layer::object::store::Entry;
 use crate::domain::preview::{Ghost, GhostBox};
-use crate::domain::query::changes::Memo;
+use crate::domain::query::change::Memo;
 use crate::domain::query::World;
 use crate::domain::view::frame::coord;
 use pxl_engine::answer;
@@ -38,7 +38,7 @@ fn carved() -> &'static mut Memo<Q3, Option<AssetId>> {
 
 pub fn ghost() -> Ghost {
     // This runs on every frame turn, whichever tool is held, so every change
-    // is seen once (`changes::within`).
+    // is seen once (`change::within`).
     carved().forget_touched();
     tool().ghost(&hover(), &preview())
 }
@@ -76,7 +76,6 @@ pub(super) fn stand_at(corner: &Q3, d: &Decor) -> ([f64; 3], DecorMeta) {
     d.stand(q3::unpack(corner), variant, turn, 1.0)
 }
 
-/// The decor a placed object is, standing as it stands.
 pub(super) fn decor_of(o: &Entry) -> Option<(&'static Decor, ([f64; 3], DecorMeta))> {
     let d = o.asset().decor()?;
     Some((d, stand_at(&o.corner(), d)))

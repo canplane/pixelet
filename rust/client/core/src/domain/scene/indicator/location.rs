@@ -14,7 +14,7 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 
-use crate::domain::query::changes::Memo;
+use crate::domain::query::change::Memo;
 use crate::domain::query::World;
 use crate::domain::scene::animation;
 use crate::domain::scene::environment;

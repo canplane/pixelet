@@ -16,7 +16,7 @@ use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, place, room, sampler_entry, texture_usage,
     view_entry, write_buffer_bytes, write_texture_bytes, Format, Gpu, Load,
 };
-use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::text::{Raster, TextOf};
 use crate::look::marker::{Font, Halo, ATLAS_SCALE};
 use pxl_spec::asset::symbol::{SYMBOL_MASKS, SYMBOL_PX};
@@ -188,7 +188,7 @@ pub struct AtlasPainter {
 }
 
 impl AtlasPainter {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> AtlasPainter {
+    pub fn new(g: &Gpu, pipelines: &mut PipelineCache) -> AtlasPainter {
         let sampler = g.sampler(
             FilterMode::linear,
             FilterMode::linear,
@@ -230,7 +230,7 @@ impl AtlasPainter {
             .iter()
             .map(|i| symbol_rgba(i.symbol, i.color))
             .collect();
-        let drawn = rasters.len() + icons.len();
+        let images = rasters.len() + icons.len();
         let [x, y, w, h] = rect;
 
         let icon_side = if icons.is_empty() { 1 } else { SYMBOL_PX };
@@ -246,7 +246,7 @@ impl AtlasPainter {
             .max()
             .unwrap_or(1)
             .max(icon_side);
-        let layers = (drawn as u32).max(1);
+        let layers = (images as u32).max(1);
         let mut shapes = list.shapes.clone();
         let placed: Vec<([f32; 4], [f32; 4])> = list
             .lines

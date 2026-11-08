@@ -149,9 +149,8 @@ impl Pick {
     }
 }
 
-/// What the hover picks at `ndc_x`, `ndc_y`. The ray is cast from the
-/// camera's pose as it is now, which a door event or a controller may have
-/// moved since the turn composed the view.
+/// The ray is cast from the camera's pose as it is now, which a door event or
+/// a controller may have moved since the turn composed the view.
 pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Pick> {
     let pose = controller::pose()?;
     let (mut origin, mut dir) = ([0.0; 3], [0.0; 3]);

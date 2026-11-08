@@ -16,7 +16,7 @@
 
 use std::collections::VecDeque;
 
-use crate::sys::io::demand::{Order, Phases, Source, Stream};
+use crate::sys::io::demand::{Order, PhaseList, Source, Stream};
 use crate::sys::io::failure::{Exit, Failure};
 use crate::sys::io::param::{BODY_SLOTS, MAX_CREDITS};
 use crate::sys::io::policy::{self, Fault, Rank};
@@ -83,7 +83,7 @@ pub enum Event {
     /// An attempt stopped under its key, for its reader to close.
     Stop(u64),
     /// An attempt ended: when, how, and the timings its run reported.
-    End(Attempt, f64, Exit, Option<Phases>),
+    End(Attempt, f64, Exit, Option<PhaseList>),
 }
 
 /// The hold on every start after the network or the server failed. The next
@@ -282,7 +282,7 @@ pub fn attempt_of(key: u64) -> Option<(Stream, u64)> {
 
 /// Ends `key`'s attempt. An answer ends its want, and a failure holds the
 /// want back.
-pub fn settle(key: u64, exit: Exit, phases: Option<Phases>) {
+pub fn settle(key: u64, exit: Exit, phases: Option<PhaseList>) {
     let (s, at) = (sched(), now());
     let Some(k) = slot_of(s, key) else { return };
     let a = end(s, k);

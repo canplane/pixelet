@@ -26,7 +26,6 @@ fn place_redundant_only_over_its_own_ground() {
     assert!(!redundant(catalog::Object::red as AssetId));
 }
 
-/// Where nothing was carved, a placement is always written.
 #[test]
 fn place_not_redundant_uncarved() {
     let _g = serial();

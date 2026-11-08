@@ -1,8 +1,8 @@
 // xpute-kit/collection/heap.rs
 
-//! A binary heap over a vector the caller owns, keyed by any `PartialOrd`
-//! type; `MIN` picks a min-heap or a max-heap. A key that compares with
-//! nothing, as a NaN does, breaks the heap's order.
+//! This is a binary heap over a vector the caller owns, keyed by any
+//! `PartialOrd` type; `MIN` picks a min-heap or a max-heap. A key that compares
+//! with nothing, as a NaN does, breaks the heap's order.
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Element<K, T> {

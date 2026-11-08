@@ -9,7 +9,7 @@ use crate::domain::control::edit::{hover, tool};
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::ext::Ext;
 use crate::domain::layer::object::size::MARKER_ZOOM;
-use crate::domain::preview::{Draft, RenderEdits};
+use crate::domain::preview::{Draft, RenderEdit};
 use crate::sys::sched::edge::request_world_tick;
 use pxl_engine::answer::PLACED_ASSET;
 use pxl_spec::asset::marker::MARKER;
@@ -37,8 +37,6 @@ use pxl_spec::space::layer::octant::Octant;
 fn is_carved(world: &World, at: &Q3) -> bool {
     world.asset_of(at).val() == Some(PLACED_ASSET | AIR)
 }
-
-// ---- Mutations ----
 
 /// A write of VOID collapses its path in the octree, so a redundant record
 /// never stays in a save.
@@ -87,7 +85,6 @@ pub(super) fn middle(at: Octant) -> Q3 {
 }
 
 impl Asset {
-    /// What a tap does at `at` with this asset held, its cube at `zoom`.
     pub fn place(self, at: &Q3, zoom: Zoom) {
         match self {
             Asset::Cube(id) => place_cube(at, zoom, id),
@@ -121,8 +118,8 @@ fn place_decor(at: &Q3, zoom: Zoom, id: AssetId) {
     write_object_val(Octant::holding(zoom, at), val);
 }
 
-/// The decor the ground generates at `at` that placing `id` would bring
-/// back (`place_decor`). The ghost previews it.
+/// The decor the ground generates at `at` that placing `id` would bring back
+/// (`place_decor`). The item tool's preview shows it.
 pub fn restores_scattered(at: &Q3, id: AssetId) -> Option<Instance> {
     is_carved(&World::now(), at).then(|| World::now().generated_instance(Decor::of(id), at))?
 }
@@ -168,7 +165,6 @@ pub fn cancel_draft() {
     }
 }
 
-/// The open draft's text, for the UI.
 pub fn marker_draft() -> Option<&'static str> {
     draft().map(|d| d.text.as_str())
 }
@@ -267,7 +263,7 @@ pub struct Preview {
     /// and the store's revision (item.rs `preview`). The step runs on every
     /// frame turn, so it sees each change once.
     pub(super) blocked_key: Option<(Asset, Zoom, Q3, u32)>,
-    pub edits: RenderEdits,
+    pub edits: RenderEdit,
 }
 
 static PREVIEW: Global<Preview> = Global::new();

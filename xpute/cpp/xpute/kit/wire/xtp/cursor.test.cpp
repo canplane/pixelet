@@ -43,7 +43,7 @@ std::string errno_of(const Error &e) {
 }
 
 template <class T> std::string elements(const Array &a) {
-    Elements<T> e = a.elements<T>();
+    ArrayView<T> e = a.elements<T>();
     std::string out;
     for (std::uint32_t i = 0; i < e.size(); i++) {
         if (i) out += ' ';
@@ -65,7 +65,7 @@ std::string show(const Value &v) {
             else if constexpr (std::is_same_v<T, std::uint64_t> || std::is_same_v<T, std::int64_t>) return "bigint:" + std::to_string(x);
             else if constexpr (std::is_floating_point_v<T>) return "number:" + js_number(x);
             else if constexpr (std::is_same_v<T, std::string_view>) return "string:" + hex({reinterpret_cast<const std::uint8_t *>(x.data()), x.size()});
-            else if constexpr (std::is_same_v<T, Strs>) {
+            else if constexpr (std::is_same_v<T, StrList>) {
                 std::string out = "[";
                 for (std::uint32_t i = 0; i < x.len; i++) {
                     std::string_view s = x[i];
@@ -215,6 +215,6 @@ XPUTE_TEST(xtp_pkt_reads_anywhere) {
     const std::array<double, 2> xs{0.5, -4.0};
     w.f64_array(xs);
     std::span<const std::uint8_t> pkt = std::span(buf).subspan(1, w.finish().value());
-    Elements<double> e = TreeReader::make(pkt)->read().get_array<double>().value();
+    ArrayView<double> e = TreeReader::make(pkt)->read().get_array<double>().value();
     XPUTE_CHECK(e.size() == 2 && e[0] == 0.5 && e[1] == -4.0);
 }

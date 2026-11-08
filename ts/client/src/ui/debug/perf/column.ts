@@ -18,7 +18,6 @@ import { EFFECT_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
 import { fixed } from "@/ui/fixed.ts";
 
-/** Every figure in bytes is shown in mebibytes. */
 const MIB = 1048576;
 
 export const zoomName = (z: number) => (Number.isNaN(z) ? "-" : `z${z}`);
@@ -39,8 +38,7 @@ export const n1 = (n: number) => fixed(n ?? 0, 1);
 
 const UNIT = /_(ms|bytes|px)$/;
 
-/** Shows a task phase's mean or total. The `bytes` phase is a count, and
- * every other phase is in milliseconds. */
+/** The `bytes` phase is a count, and every other phase is in milliseconds. */
 export const phaseText = ([k, v]: [string, f64]) =>
   `${k.replace(UNIT, "")} ${k === "bytes" ? round(v) : n1(v)}`;
 
@@ -50,8 +48,7 @@ export const pct = (part: number, whole: number) =>
 export const tris = (t: number) =>
   t >= 1000 ? `${round(t / 1000)}k` : String(round(t));
 
-/** The names each `_name` column indexes. The type requires a table for
- * every `_name` column of FRAME. */
+/** The type requires a table for every `_name` column of FRAME. */
 type NameColumn = Extract<FrameColumn, `${string}_name`>;
 const NAME_TABLES: { readonly [K in NameColumn]: readonly string[] } = {
   kind_name: FRAME_KINDS,

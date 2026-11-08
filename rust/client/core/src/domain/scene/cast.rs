@@ -6,12 +6,12 @@
 //! written by domain/layer/terrain/clipmap.rs.
 
 use pxl_engine::eye;
-use pxl_render::gpu::ray::Objects;
+use pxl_render::gpu::ray::ObjectTable;
 use pxl_spec::space::camera::eye::Observation;
 use xpute_core::global::Global;
 
 use crate::domain::layer::object::store::{object, object_mut};
-use crate::domain::preview::RenderEdits;
+use crate::domain::preview::RenderEdit;
 use crate::domain::view::lens;
 use crate::sys::io::source;
 use pxl_render::gpu::api;
@@ -50,7 +50,7 @@ pub fn shards() -> &'static [[i32; 4]] {
 /// while previewing (domain/query/world.rs `previewing`). The preview's carve
 /// is cut to air and its hidden object is left out; each is written as X, Y,
 /// Z and the zoom (pxl-engine `eye`). None without a screen.
-pub fn eye(o: &Observation, edits: &RenderEdits) -> Option<[u32; eye::WORDS]> {
+pub fn eye(o: &Observation, edits: &RenderEdit) -> Option<[u32; eye::WORDS]> {
     let mut words = [0u32; eye::WORDS];
     lens::gpu_cast(o, &mut words)?;
     let cut = |e: Option<Octant>| {
@@ -79,17 +79,17 @@ struct Upload {
 static UPLOAD: Global<Upload> = Global::new();
 
 /// The placed objects for the GPU (domain/layer/object/store.rs
-/// `gpu_columns`). The tree's lanes are handed where they live. A GPU that
+/// `gpu_table`). The tree's lanes are handed where they live. A GPU that
 /// holds the revision last handed copies again only the child groups written
 /// since that revision.
-pub fn objects() -> Objects<'static> {
+pub fn objects() -> ObjectTable<'static> {
     let h = UPLOAD.get(|| Upload {
         since: 0,
         written: Vec::new(),
     });
     object_mut().take_written_groups(&mut h.written);
-    let l = object().gpu_columns();
-    Objects {
+    let l = object().gpu_table();
+    ObjectTable {
         first_child: l.first_child,
         data: l.data,
         cap: l.cap,

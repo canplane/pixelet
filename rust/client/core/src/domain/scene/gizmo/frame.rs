@@ -12,7 +12,7 @@ use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::domain::query::World;
-use crate::domain::scene::gizmo::debug_line::DebugLines;
+use crate::domain::scene::gizmo::debug_line::DebugMesh;
 use crate::domain::scene::gizmo::gizmo_spec::frame;
 use crate::domain::scene::gizmo::param::{POINT_HALF, RING_RADIUS};
 use crate::domain::scene::model::draw_list;
@@ -113,7 +113,7 @@ struct Gizmo {
     shown: bool,
     /// The next sketch. It is kept between steps so a step allocates nothing.
     next: Sketch,
-    lines: DebugLines,
+    lines: DebugMesh,
 }
 
 static GIZMO: Global<Gizmo> = Global::new();
@@ -127,7 +127,7 @@ fn gizmo() -> &'static mut Gizmo {
         drawn: empty(),
         shown: false,
         next: empty(),
-        lines: DebugLines::default(),
+        lines: DebugMesh::default(),
     })
 }
 

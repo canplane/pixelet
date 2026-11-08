@@ -2,8 +2,6 @@
 //
 // GENERATED from spec/client/core/door/ui.json
 
-// The device sensors'.
-
 export const START = 0x01;
 export const POS = 0x02;
 export const STOP = 0x03;

@@ -16,14 +16,14 @@ use crate::frame::shader::record::PIPELINE_SCREEN_RAY;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, Entry, Gpu, TrackedRenderPass,
 };
-use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::span_spec::FrameKind;
 use crate::mesh::paint::ground::look_words;
-use cast::CastBuffers;
-pub use cast::{Cast, LightReads, Objects};
-pub use count::{count_at, RayCounts, CAST, LANES_AT, RAYS, RAY_COUNTS};
-use ground::GroundBuffers;
-pub use ground::{BrickWrite, GroundBricks, TerrainUpload, TerrainWrite};
+use cast::CastBuffer;
+pub use cast::{Cast, LightRead, ObjectTable};
+pub use count::{count_at, RayCount, CAST, LANES_AT, RAYS, RAY_COUNTS};
+use ground::GroundBuffer;
+pub use ground::{BrickWrite, GroundInput, TerrainUpload, TerrainWrite};
 
 /// Whether a frame of `kind` writes the pixels' rays again. A `cast` frame
 /// casts them whole; a `px` frame casts them again over the samples the
@@ -32,7 +32,7 @@ fn casts_px(kind: FrameKind) -> bool {
     kind == FrameKind::cast || kind == FrameKind::px
 }
 
-pub struct RaysPass {
+pub struct RayPass {
     pipeline: Pipeline,
     /// The screen pass's bind group 0, over the lit entries and the ids in
     /// `bindings`: the world surface's rays, the cast's eye buffer, and the
@@ -42,7 +42,7 @@ pub struct RaysPass {
     /// The claimed tiles' words and uniform (`Resolve::tiles`), and the
     /// number of tiles on the screen. The pixels' cast casts the claimed
     /// tiles alone, and the screen pass draws a quad for every tile, an
-    /// unclaimed one collapsed (screen_tiles.wgsl).
+    /// unclaimed one collapsed (screen_tile.wgsl).
     tiles: ((u32, u32), u32),
     /// The entries a cell's face is painted by (`Renderer::lit_entries`).
     /// It is empty until the renderer first hands them.
@@ -50,12 +50,12 @@ pub struct RaysPass {
     looks: u32,
     /// The terrain's bricks on the GPU, made the first time `hand` runs. No
     /// ray is cast before then.
-    ground: Option<GroundBuffers>,
-    cast: Option<CastBuffers>,
+    ground: Option<GroundBuffer>,
+    cast: Option<CastBuffer>,
 }
 
-impl RaysPass {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> RaysPass {
+impl RayPass {
+    pub fn new(g: &Gpu, pipelines: &mut PipelineCache) -> RayPass {
         let pipeline = pipelines.build_world(g, PIPELINE_SCREEN_RAY);
         let words = look_words();
         let looks = g.buf(
@@ -63,7 +63,7 @@ impl RaysPass {
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
         g.write_buf(looks, 0, bytes(&words));
-        RaysPass {
+        RayPass {
             pipeline,
             group: 0,
             bindings: [0; 4],

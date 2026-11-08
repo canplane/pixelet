@@ -22,7 +22,7 @@ use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 
 use crate::domain::layer::tile_cache::floor;
 use crate::domain::layer::Base as _;
-use crate::domain::query::changes;
+use crate::domain::query::change;
 use crate::domain::query::{ColumnWalk, World};
 use crate::domain::view::above_ground::height_at;
 use crate::domain::view::frame::pose::{eye, view};
@@ -50,13 +50,13 @@ pub fn eye_draw_dist() -> Option<f64> {
 /// `Some(None)` means the last reader found no eye or no demand distance.
 static OBSERVATION: Global<Option<Option<Observation>>> = Global::new();
 
-/// Called as a frame turn begins. The kept observation holds the eye's
-/// height over the ground under it, so it is dropped when a change touched
-/// that ground. `changes::within` is asked every frame turn, so each change
-/// is seen once.
+/// Called once a frame turn (turn.rs `camera_tick`). The kept observation
+/// holds the eye's height over the ground under it, so it is dropped when a
+/// change touched that ground. It must run every frame turn, so that
+/// `change::within` sees each change once.
 pub fn turn() {
     let made = OBSERVATION.get(|| None);
-    if made.is_some_and(|o| o.is_some_and(|o| changes::within([[o.eye[0], o.eye[1]]; 2], &[]))) {
+    if made.is_some_and(|o| o.is_some_and(|o| change::within([[o.eye[0], o.eye[1]]; 2], &[]))) {
         *made = None;
     }
 }
@@ -171,8 +171,7 @@ pub fn demand_radius(o: &Observation, lattice: Lattice, top: Zoom, zoom: Zoom) -
 /// `grid::cell_zoom_at`), which is never shorter than the distance across
 /// the ground, so the demand asks for at least what the rays read.
 pub struct ByEye {
-    /// The layer's lattice. Its tiles' cells decide which zoom a distance
-    /// asks for.
+    /// The cells of the layer's tiles decide which zoom a distance asks for.
     pub lattice: Lattice,
     /// The coarsest zoom the source supplies whole. No tile is asked for at a
     /// coarser zoom.

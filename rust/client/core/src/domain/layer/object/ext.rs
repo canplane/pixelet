@@ -26,17 +26,17 @@ impl Ext {
 pub const NONE: u16 = 0;
 
 #[derive(Default)]
-struct Pool {
+struct ClassPool {
     slots: Vec<Option<Ext>>,
     free: Vec<u16>,
 }
 
 #[derive(Default)]
-pub struct Pools {
-    pools: [Pool; Class::ALL.len()],
+pub struct Pool {
+    pools: [ClassPool; Class::ALL.len()],
 }
 
-impl Pools {
+impl Pool {
     /// Keeps `ext` in its class's pool and returns its handle. None when the
     /// pool already holds as many records as a handle can name.
     pub fn keep(&mut self, ext: Ext) -> Option<u16> {
@@ -69,6 +69,6 @@ impl Pools {
 
     #[cfg(test)]
     pub fn clear(&mut self) {
-        *self = Pools::default();
+        *self = Pool::default();
     }
 }

@@ -1,9 +1,9 @@
 // cpp/xpute/core/call.hpp
 
-// The runtime's synchronous `call`. The core writes a call's frame into the
-// core memory and passes the frame's offset; the runtime answers before
-// `call` returns, with a value or a negative errno. Until a runtime installs
-// its `call`, every call answers ENOSYS, which native tests run with.
+// The runtime's `call` is synchronous. The core writes a call's frame into the
+// core memory and passes the frame's offset; the runtime answers before `call`
+// returns, with a value or a negative errno. Until a runtime installs its
+// `call`, every call answers ENOSYS, which native tests run with.
 
 #pragma once
 

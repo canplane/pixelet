@@ -1,9 +1,9 @@
 // cpp/xpute/core/sched/pass.hpp
 
-// A turn's remaining budget, spent on ordered lists of steps (`run`). The
-// invariant is forward progress: neither the budget nor a step cap applies
-// until one step has done work. An item that costs more than the whole
-// budget therefore still runs, and cannot stay at the head of its list
+// A pass is a turn's remaining budget, spent on ordered lists of steps (`run`).
+// The invariant is forward progress: neither the budget nor a step cap
+// applies until one step has done work. An item that costs more than the
+// whole budget therefore still runs, and cannot stay at the head of its list
 // forever, blocking the items behind it.
 
 #pragma once
@@ -45,7 +45,7 @@ struct Pass {
 
     // `step` answers whether it did work. Only steps that did work count
     // toward `max_steps`.
-    template <class Items, class Step> PassStat run(Items &&items, Step &&step, std::optional<std::uint32_t> max_steps = std::nullopt) const {
+    template <class Range, class Step> PassStat run(Range &&items, Step &&step, std::optional<std::uint32_t> max_steps = std::nullopt) const {
         double start = now();
         double deadline = start + remaining();
         double hard_deadline = deadline + hard_slack_ms;

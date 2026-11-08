@@ -4,11 +4,11 @@
 //! holds the tiles (tile_cache.rs); this module decides which tiles an
 //! observation asks for, and in what order.
 //!
-//! A tile is asked for by the live eye's demand (`ByEye`), by the floor
+//! A tile is asked for by the eye's demand (`ByEye`), by the floor
 //! (tile_cache/floor.rs), by a destination's line, or as an ancestor of a
 //! missing tile. A tile asked for several reasons keeps the strongest
-//! (`Priority`). Nothing drawn enters the asks, since the camera grid is an
-//! angle. Where a tile marks a child as no tile (`Base::occupancy`), the
+//! (`Priority`). The pixels drawn do not enter the asks, since the camera grid
+//! is an angle. Where a tile marks a child as no tile (`Base::occupancy`), the
 //! child's ground is the tile's own and the child is never asked for.
 
 use pxl_spec::bake::tile::earth::EARTH_DIST;
@@ -33,11 +33,11 @@ use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 
 use crate::domain::layer::tile_cache::floor;
-use crate::domain::layer::tile_cache::{Lines, TileCache};
+use crate::domain::layer::tile_cache::{Path, TileCache};
 use crate::domain::query::ColumnWalk;
 use crate::domain::view::observation;
 use crate::domain::view::observation::{observation, ByEye};
-use crate::sys::io::demand::{Order, Phases};
+use crate::sys::io::demand::{Order, PhaseList};
 use crate::sys::io::failure::{Exit, Failure};
 use crate::sys::io::request::declare;
 use crate::sys::io::source;
@@ -100,7 +100,7 @@ pub struct Layer {
     pub slots: u32,
     /// Called when a want's file arrives, with the want's id and the file, or
     /// with None when the source has nothing for it.
-    on_arrival: fn(u64, Option<Block>, &mut Phases) -> Result<(), Failure>,
+    on_arrival: fn(u64, Option<Block>, &mut PhaseList) -> Result<(), Failure>,
 }
 
 const fn layer<L: ViewLayer>() -> Layer {
@@ -113,8 +113,8 @@ const fn layer<L: ViewLayer>() -> Layer {
 
 /// Every layer that is read a tile at a time; the object layer's tile is its
 /// shard (domain/layer/object/repository.rs). This is the one place a stream
-/// names its layer. A stream whose row says it is fetched has exactly one
-/// layer here, and a loaded stream has none.
+/// names its layer. A stream whose source is fetched has exactly one layer
+/// here, and a loaded stream has none.
 const LAYERS: [Layer; 5] = [
     layer::<TerrainTile>(),
     layer::<PlaceTile>(),
@@ -131,17 +131,17 @@ const _: () = {
     let mut s = 0;
     while s < Stream::ALL.len() {
         let stream = Stream::ALL[s];
-        let mut held = 0;
+        let mut layers = 0;
         let mut k = 0;
         while k < LAYERS.len() {
             if LAYERS[k].stream as u8 == stream as u8 {
-                held += 1;
+                layers += 1;
             }
             k += 1;
         }
         let fetched = !matches!(stream.row().source, Source::Load);
         assert!(
-            held == fetched as u32,
+            layers == fetched as u32,
             "a fetched stream is one layer's, and a load none's"
         );
         s += 1;
@@ -262,8 +262,9 @@ impl<L: ViewLayer> Demand<L> {
     }
 
     /// Records that the source has no object for `p`. At the layer's coarsest
-    /// zoom (`Base::min_zoom`) or coarser, `p` takes the layer's empty tile where it
-    /// has one (`Base::empty`); otherwise the tile over `p` gives its ground.
+    /// zoom (`Base::min_zoom`) or coarser, `p` takes the layer's empty tile
+    /// where it has one (`Base::empty`); otherwise the tile over `p` gives its
+    /// ground.
     pub fn absent(&mut self, p: Quadrant) {
         match L::empty() {
             Some(empty) if L::min_zoom().is_some_and(|min| p.zoom <= min) => {
@@ -322,7 +323,7 @@ impl<L: ViewLayer> Demand<L> {
             asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
             placed.push((p, of));
         };
-        let mut lines = Lines::default();
+        let mut lines = Path::default();
         self.required.clear();
         if let Some(o) = o {
             if matches!(L::ASK_SCOPE, AskScope::View) {
@@ -404,7 +405,7 @@ impl<L: ViewLayer> Demand<L> {
         demand.clear();
         demand.extend(asks.keys().copied());
         demand.sort_unstable_by_key(|p| p.id());
-        let unanswered = |p: Quadrant, lines: &mut Lines| {
+        let unanswered = |p: Quadrant, lines: &mut Path| {
             let r = L::tile_cache();
             !r.resident(p) && (!r.seek(lines, p).settled || r.is_again_held(p))
         };
@@ -413,7 +414,7 @@ impl<L: ViewLayer> Demand<L> {
         // the asks left it, before any absence is written, so which tiles
         // are absent does not depend on the order they are taken in.
         if let Some(layer) = L::STREAM.bake() {
-            let (mut gone, mut lines) = (core::mem::take(&mut self.gone), Lines::default());
+            let (mut gone, mut lines) = (core::mem::take(&mut self.gone), Path::default());
             gone.clear();
             gone.extend(
                 demand
@@ -431,7 +432,7 @@ impl<L: ViewLayer> Demand<L> {
         // line read steps on from its neighbor's. They are listed after every
         // absence is written, then placed in the view (`reorder`).
         placed.sort_unstable_by_key(|&(p, of)| (p.id(), of.id()));
-        let mut lines = Lines::default();
+        let mut lines = Path::default();
         self.wants.clear();
         self.orders.clear();
         for &p in &demand {
@@ -482,11 +483,11 @@ impl<L: ViewLayer> Demand<L> {
         self.observation = o.copied();
     }
 
-    /// The layer's turn, taken from the live eye: the eye the coming frames
-    /// cast from, which read each tile as it arrives. When anything in `Key`
-    /// changed, the layer observes again. When nothing it reads moved and the
-    /// eye names the tiles it named before (`names_same`), it only places
-    /// the wants again.
+    /// The layer's turn, from the observation of the eye this turn composed,
+    /// the eye this turn's frame casts from (turn.rs `camera_tick`). When
+    /// anything in `Key` changed, the layer observes again. When nothing it
+    /// reads moved and the eye names the tiles it named before (`names_same`),
+    /// it only places the wants again.
     ///
     /// `dst` is asked for with its line even before there is an observation,
     /// since at the first fix the camera waits for that ground. `pinned`
@@ -600,7 +601,7 @@ type ObjectKey = (Option<Observation>, Option<Zoom>, u32);
 /// The key the objects' shards were last asked from.
 static OBJECT: Global<Option<ObjectKey>> = Global::new();
 
-/// Asks for the object layer's tiles, its shards, from the live eye: every
+/// Asks for the object layer's tiles, its shards, from the eye: every
 /// shard within the radius the view asks the ground for at the shard's zoom
 /// (`observation::demand_radius`), at most `repository::WANTS` of them, seen
 /// and nearer ones first. The repository reads their top first, which a
@@ -626,10 +627,9 @@ pub fn object_step() {
 }
 
 /// Admits the tiles that arrived, the pyramid's and the objects' shards
-/// (`LAYERS`), against the view. The admission runs as a pass of the tick's
-/// budget, so the visible phase's hold on the content share bounds it, and
-/// it admits at least one. Each fetch settles here. What the pass leaves
-/// stays queued, and a turn is asked for it.
+/// (`LAYERS`), within the budget of `pass`, and at least one where any has
+/// arrived. Each fetch settles here. What the pass leaves stays queued, and
+/// a turn is asked for it.
 pub fn admit_arrived(pass: &Pass) {
     const OF: [Stream; LAYERS.len()] = {
         let mut of = [Stream::asset; LAYERS.len()];
@@ -681,7 +681,7 @@ pub fn admit_arrived(pass: &Pass) {
 fn on_arrived<L: ViewLayer>(
     id: u64,
     block: Option<Block>,
-    phases: &mut Phases,
+    phases: &mut PhaseList,
 ) -> Result<(), Failure> {
     let p = Quadrant::of_id(id);
     let Some(b) = block else {

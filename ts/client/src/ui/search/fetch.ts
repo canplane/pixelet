@@ -8,8 +8,6 @@ import {
 import type { NamePart } from "@/ui/division/label.ts";
 import { DIVISION_SUBTYPE } from "@/ui/division/division.spec.ts";
 
-/** One result as the search panel reads it: the search API's answer, its
- * context as the parts of a name. */
 export interface SearchResult extends Omit<SearchAnswer, "context"> {
   context: NamePart[];
 }

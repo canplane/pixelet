@@ -1,8 +1,5 @@
 // @pxl/client/service/platform/db.native.ts
 
-/** A device's database: SQLite, with one table of files by key, in the app's
- * own files. */
-
 import type { Tx } from "./types.ts";
 import { openDatabaseAsync } from "expo-sqlite";
 

@@ -10,6 +10,6 @@ fn sample_whole(s: vec2<u32>, k: Node) -> bool {
 }
 
 /// The light opens no faces' asks, because its slots read no face's word.
-fn sample_asks() -> Asks {
-  return Asks(0u, 0u, 0u);
+fn sample_asks() -> AskList {
+  return AskList(0u, 0u, 0u);
 }

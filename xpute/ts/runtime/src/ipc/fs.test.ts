@@ -19,7 +19,8 @@ const hex = (s: string): U8Array =>
   new Uint8Array((s.match(/../g) ?? []).map((b) => parseInt(b, 16)));
 const text = new TextEncoder();
 
-/** A turn's file calls, as the core posts them for the file device. */
+/** A `Turn` holds a turn's file calls, as the core posts them for the file
+ * device. */
 class Turn {
   readonly mem = new ArrayBuffer(1 << 16);
   writes = 0;
@@ -38,7 +39,6 @@ class Turn {
     this._frames.push([cmd, buf.slice(0, w.finish())]);
   }
 
-  /** Hands the turn's frames to the device, as its runtime hands them. */
   take(server: FsServer): void {
     const listener = fs_imports(server);
     for (const [cmd, pkt] of this._frames) {

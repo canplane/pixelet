@@ -1,9 +1,9 @@
 // @xpute/kit/wire/xtp/sequence_type.ts
 
-// The type bytes of the sequence leaves, each of which holds many values
-// after a len slot. spec.ts re-exports this module as `SequenceType`, read as a
-// namespace (`SequenceType.U8_ARRAY`). Each constant is a literal, so it is
-// its own type, and `SequenceType` as a type is their union.
+// These are the type bytes of the sequence leaves, each of which holds many
+// values after a len slot. spec.ts re-exports this module as `SequenceType`,
+// read as a namespace (`SequenceType.U8_ARRAY`). Each constant is a literal, so
+// it is its own type, and `SequenceType` as a type is their union.
 
 export const U8_ARRAY = 0xa0; // BIT_SEQ | I(0, 0)
 export const I8_ARRAY = 0xa8; // BIT_SEQ | I(0, 1)

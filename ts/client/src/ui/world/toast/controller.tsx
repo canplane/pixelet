@@ -43,7 +43,6 @@ const READY_MS = 3000;
  * value is a product choice. */
 const SERVER_HOLD_MS = 3000;
 
-/** A toast, with its words given as a locale key. */
 interface Notice {
   key: string;
   tone: ToastTone;
@@ -59,8 +58,6 @@ function useWords(): (key: string) => string {
   return useRef((key: string) => tRef.current(key)).current;
 }
 
-/** Shows report `id`'s toast while `notice` is set, and dismisses it `holdMs`
- * after `notice` clears. */
 function useNotice(id: Report, notice: Notice | null, holdMs = 0): void {
   const words = useWords();
   const key = notice?.key ?? null;
@@ -106,9 +103,6 @@ function serverError(stall: Message | null): Notice | null {
   return stall === Message.WorldReadFailing ? error(messageKey(stall)) : null;
 }
 
-/** The world has one toast, which goes through its states in order: an area
- * the world does not cover, the world loading, the companion loading, and the
- * ready word once. */
 function world(
   outside: boolean,
   shown: boolean,

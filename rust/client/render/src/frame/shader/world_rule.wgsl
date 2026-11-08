@@ -53,15 +53,15 @@ fn bound_word(run: vec2<i32>) -> u32 {
   return u32((run.x & 0xffffi) | (run.y << 16u));
 }
 
-/// The bounds two bound words hold (pxl-engine `ground::bounds_of`, `ground::Bounds`): the
+/// The bounds two bound words hold (pxl-engine `ground::extent_of`, `ground::Extent`): the
 /// ground's faces, lowest and highest, then the leaf cells the ways fill, lowest and past the
 /// highest.
-fn bounds_of(a: i32, b: i32) -> vec4<i32> {
+fn extent_of(a: i32, b: i32) -> vec4<i32> {
   return vec4<i32>(bound_of(a), bound_of(b));
 }
 
-/// The bounds `b` as their two bound words (pxl-engine `ground::bounds_word`).
-fn bounds_word(b: vec4<i32>) -> vec2<i32> {
+/// The bounds `b` as their two bound words (pxl-engine `ground::extent_word`).
+fn extent_word(b: vec4<i32>) -> vec2<i32> {
   return vec2<i32>(i32(bound_word(b.xy)), i32(bound_word(b.zw)));
 }
 

@@ -392,7 +392,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             "",
             "/// Every setting's value: what the store holds, and what the app reads.",
             "#[derive(Clone, Debug, PartialEq)]",
-            "pub struct Settings {",
+            "pub struct Setting {",
         ]
         .map(String::from),
     );
@@ -403,9 +403,9 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         [
             "}",
             "",
-            "impl Settings {",
+            "impl Setting {",
             "    /// Every setting at schema.json's default.",
-            "    pub const DEFAULT: Settings = Settings {",
+            "    pub const DEFAULT: Setting = Setting {",
         ]
         .map(String::from),
     );

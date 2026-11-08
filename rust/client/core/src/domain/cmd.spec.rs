@@ -30,11 +30,10 @@ impl PointerType {
     }
 }
 
-/// What the tracking button did, as the button showed it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Tracking {
-    /// Back to the device.
+    /// The camera goes back to the device's place.
     Recenter = 0,
     /// Follow mode on, where the compass is listened to.
     Follow = 1,
@@ -77,7 +76,6 @@ impl GeolocationErrorCode {
     }
 }
 
-/// A sensor permission, as the UI's prompt or the browser's change reported it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum PermissionAnswer {

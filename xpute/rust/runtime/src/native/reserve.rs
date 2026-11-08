@@ -1,13 +1,12 @@
 // xpute-runtime/native/reserve.rs
 
-//! The core's memory, mapped once from the system. It reads as zero until it
+//! The core's memory is mapped once from the system. It reads as zero until it
 //! is written, and it is never given back.
 
 use std::sync::OnceLock;
 
 use xpute_core::mem::section::PAGE_BYTES;
 
-/// The memory's address and size, and the heap's offset in it.
 #[derive(Clone, Copy)]
 pub(super) struct Core {
     pub at: usize,
@@ -51,7 +50,6 @@ pub(super) fn map(bytes: usize, heap_at: usize) -> Core {
     core
 }
 
-/// The memory, or `None` before it is reserved.
 pub(super) fn core() -> Option<Core> {
     CORE.get().copied()
 }

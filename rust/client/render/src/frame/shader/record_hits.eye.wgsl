@@ -22,6 +22,6 @@ fn hit_whole(k: Node, r: u32) -> bool {
   return stopped_whole(k, eye_origin());
 }
 
-fn hit_asks() -> Asks {
-  return Asks(RASTER_HIT_ASKED_AT, eye_word(GRID + GRID_HIT_ASKS_AT), HITS_A_FRAME);
+fn hit_asks() -> AskList {
+  return AskList(RASTER_HIT_ASKED_AT, eye_word(GRID + GRID_HIT_ASKS_AT), HITS_A_FRAME);
 }

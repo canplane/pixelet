@@ -1,7 +1,7 @@
 // xpute-tool/spec/errno.rs
 
-//! Generates xpute's errno table for TypeScript, Rust and C++ from one JSON.
-//! The numbers cross the ring, so every side must agree on them.
+//! This generates xpute's errno table for TypeScript, Rust and C++ from one
+//! JSON. The numbers cross the ring, so every side must agree on them.
 
 use serde::Deserialize;
 

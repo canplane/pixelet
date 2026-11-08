@@ -26,8 +26,6 @@ use crate::sys::sched::edge::request_world_tick;
 use crate::sys::sched::tick::TickContext;
 use xpute_core::global::Global;
 
-/// The distance from the eye to the pivot. It is zero in first person and
-/// while tracked.
 pub fn dist() -> f64 {
     match active() {
         Active::Orbit => orbit().dist,
@@ -58,8 +56,8 @@ pub enum Motion {
     Smooth,
 }
 
-/// Moves the pivot to `to`. While a tracker holds the pose, this does
-/// nothing, and the controller under the tracker does not move in its place.
+/// While a tracker holds the pose, this does nothing, and the controller
+/// under the tracker does not move in its place.
 pub fn put_pivot(to: Q3, motion: Motion) {
     let snap = motion == Motion::Snap;
     match active() {
@@ -127,22 +125,22 @@ struct TrackerSpace {
     at: V3,
 }
 
-struct Controllers {
+struct Controller {
     base: CameraMode,
     tracker: Option<TrackerSpace>,
 }
 
-static CONTROLLERS: Global<Controllers> = Global::new();
+static CONTROLLER: Global<Controller> = Global::new();
 
-fn controllers() -> &'static mut Controllers {
-    CONTROLLERS.get(|| Controllers {
+fn controller() -> &'static mut Controller {
+    CONTROLLER.get(|| Controller {
         base: CameraMode::orbit,
         tracker: None,
     })
 }
 
 pub fn active() -> Active {
-    let c = controllers();
+    let c = controller();
     match (&c.tracker, c.base) {
         (Some(_), _) => Active::Tracked,
         (None, CameraMode::orbit) => Active::Orbit,
@@ -150,10 +148,9 @@ pub fn active() -> Active {
     }
 }
 
-/// The pose the camera is drawn from. None before the camera has an eye.
 pub fn pose() -> Option<ObserverPose> {
     camera().eye?;
-    let c = controllers();
+    let c = controller();
     match (&c.tracker, c.base) {
         (Some(t), _) => {
             let (mut camera_to_world, mut rot, mut moved) = (mat4::new(), mat4::new(), [0.0; 3]);
@@ -260,7 +257,7 @@ fn switch() -> bool {
 /// eases away. While a tracker holds the pose, the switch waits until the
 /// tracker lets go.
 fn take_mode(want: CameraMode) -> bool {
-    let c = controllers();
+    let c = controller();
     if c.base == want || c.tracker.is_some() {
         return false;
     }
@@ -302,7 +299,7 @@ fn take_mode(want: CameraMode) -> bool {
 pub fn tracked_pose(at: V3, q: [f64; 4]) {
     let mut turn = mat4::new();
     mat4::rot_quat(&mut turn, q);
-    let c = controllers();
+    let c = controller();
     if c.tracker.is_none() {
         let Some(now) = pose() else { return };
         let (mut camera_to_world, mut turn_back, mut world_turn, mut off) =
@@ -327,7 +324,7 @@ pub fn tracked_pose(at: V3, q: [f64; 4]) {
 }
 
 pub fn tracked_end() {
-    if controllers().tracker.take().is_some() {
+    if controller().tracker.take().is_some() {
         request_world_tick();
     }
 }

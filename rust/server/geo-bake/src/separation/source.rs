@@ -39,14 +39,14 @@ const WATER_SQL: &str = "SELECT subtype, class, ST_AsBinary(geom) AS geom_wkb FR
 
 /// One tile's rows, as a tile's other rows are read: whatever overlaps it.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
-pub struct TileRows {
+pub struct TileRowSet {
     ways: Vec<Part>,
     water: Vec<(String, Option<String>, Vec<u8>)>,
     /// Its elevation, flat where the raster does not reach.
     ele: Vec<i16>,
 }
 
-impl TileRows {
+impl TileRowSet {
     /// Every way it overlaps, the bridges and tunnels among them.
     pub fn ways(&self) -> &[Part] {
         &self.ways
@@ -82,14 +82,14 @@ fn quad_rows(
     client: &mut Client,
     repo: &TerrainRepository,
     tile: [i32; 2],
-) -> Result<TileRows, String> {
+) -> Result<TileRowSet, String> {
     let [min, max] = epsg3857::get_tile_bbox(LEAF_ZOOM, tile);
     let env: [&(dyn ToSql + Sync); 4] = [&min[0], &min[1], &max[0], &max[1]];
     let read = |client: &mut Client, sql: &str| client.query(sql, &env).map_err(|e| e.to_string());
     let ways = read(client, SEGMENTS_SQL)?;
     let water = read(client, WATER_SQL)?;
     let ele = repo.ele(client, tile).map_err(|e| e.to_string())?;
-    Ok(TileRows {
+    Ok(TileRowSet {
         ways: ways.iter().flat_map(Part::of).collect(),
         water: water
             .iter()
@@ -112,7 +112,7 @@ pub trait Store {
         client: &mut Client,
         repo: &TerrainRepository,
         tile: [i32; 2],
-    ) -> Result<TileRows, String>;
+    ) -> Result<TileRowSet, String>;
 }
 
 /// On disk, shared by the processes that bake tiles on demand.
@@ -124,7 +124,7 @@ impl Store for Disk<'_> {
         client: &mut Client,
         repo: &TerrainRepository,
         tile: [i32; 2],
-    ) -> Result<TileRows, String> {
+    ) -> Result<TileRowSet, String> {
         memo_rows(client, repo, tile, self.0)
     }
 }
@@ -133,7 +133,7 @@ impl Store for Disk<'_> {
 /// eight around it and no more.
 #[derive(Default)]
 pub struct Walk {
-    tiles: FnvHashMap<[i32; 2], TileRows>,
+    tiles: FnvHashMap<[i32; 2], TileRowSet>,
 }
 
 impl Walk {
@@ -150,7 +150,7 @@ impl Store for Walk {
         client: &mut Client,
         repo: &TerrainRepository,
         tile: [i32; 2],
-    ) -> Result<TileRows, String> {
+    ) -> Result<TileRowSet, String> {
         if let Some(rows) = self.tiles.get(&tile) {
             return Ok(rows.clone());
         }
@@ -176,7 +176,7 @@ pub(crate) fn portals_in(
 ) -> Result<Vec<Portal>, String> {
     let env: [&(dyn ToSql + Sync); 4] = [&lo[0], &lo[1], &hi[0], &hi[1]];
     let rows = client.query(TUNNELS_SQL, &env).map_err(|e| e.to_string())?;
-    Ok(TileRows {
+    Ok(TileRowSet {
         ways: rows.iter().flat_map(Part::of).collect(),
         water: Vec::new(),
         ele: Vec::new(),
@@ -190,7 +190,7 @@ fn memo_rows(
     repo: &TerrainRepository,
     tile: [i32; 2],
     memo: &Path,
-) -> Result<TileRows, String> {
+) -> Result<TileRowSet, String> {
     let file = memo.join(Quadrant::new(LEAF_ZOOM, tile).key());
     if let Some(rows) = std::fs::read(&file)
         .ok()

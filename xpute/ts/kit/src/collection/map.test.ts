@@ -3,7 +3,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
-import { I64_KEYS, IndexedMap, type KeyTraits, U32_KEYS } from "./map.ts";
+import { I64_KEYS, IndexedMap, type KeyType, U32_KEYS } from "./map.ts";
 
 test("IndexedMap - positions are dense and stable until a removal", () => {
   const m = new IndexedMap(I64_KEYS, 4);
@@ -30,7 +30,7 @@ test("IndexedMap - removal moves the last entry into the hole and says where it 
 });
 
 function agrees_with_map<K extends number | bigint>(
-  traits: KeyTraits<K>,
+  traits: KeyType<K>,
   make: (n: number) => K,
 ): void {
   const m = new IndexedMap(traits, 2);

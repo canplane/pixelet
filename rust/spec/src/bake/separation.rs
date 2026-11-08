@@ -11,7 +11,7 @@ use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::shape::Shape;
 
 use pxl_engine::lattice::CELL_CENTER;
-use pxl_engine::way::{self, Segment, Stations};
+use pxl_engine::way::{self, Segment, StationGrid};
 
 use super::malformed;
 use crate::procedural::Frame;
@@ -39,15 +39,15 @@ pub use pxl_engine::way::{Crossing, Occupancy, Occupy};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Form {
-    Bridge = way::BRIDGE as u8,     // a slab under its surface
-    Tunnel = way::TUNNEL as u8,     // its clear height and shell over its surface
-    Approach = way::APPROACH as u8, // a bridge's or a tunnel's approach on the ground: an embankment or a cutting
+    Bridge = way::BRIDGE as u8,     // A slab, which stands under its surface.
+    Tunnel = way::TUNNEL as u8,     // Its clear height and its shell stand over its surface.
+    Approach = way::APPROACH as u8, // A bridge's or a tunnel's approach on the ground: an embankment or a cutting.
 }
 
 impl Form {
     const ALL: [Form; 3] = [Form::Bridge, Form::Tunnel, Form::Approach];
 
-    /// A byte `Columns::of` let through.
+    /// A byte `Table::of` let through.
     pub fn of(byte: u8) -> Form {
         Form::ALL[usize::from(byte)]
     }
@@ -56,12 +56,12 @@ impl Form {
         self as u8
     }
 
-    /// Can stand below the ground.
+    /// Whether a line of this form can stand below the ground.
     pub fn sinks(self) -> bool {
         self != Form::Bridge
     }
 
-    /// Can stand above the ground.
+    /// Whether a line of this form can stand above the ground.
     pub fn rises(self) -> bool {
         self != Form::Tunnel
     }
@@ -80,16 +80,16 @@ pub const fn holds(lines: usize, points: usize) -> bool {
 /// A tile's lines, structure-of-arrays: a column a line, then a column a point.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Separation {
-    pub starts: Cow<'static, [u32]>, // line d is points starts[d]..starts[d + 1]
-    pub points: Cow<'static, [[i16; 2]]>, // centreline, 1/POINT_SCALE tile cell: the source's
-    pub tops: Cow<'static, [i16]>,   // road surface, in leaf cells: solved over many tiles
-    pub width: Cow<'static, [u8]>,   // 1/POINT_SCALE tile cell: the source's
-    pub kind: Cow<'static, [u8]>,    // transport type: the source's class, the slab's material
-    pub form: Cow<'static, [u8]>,    // `Form`: the source's flags
-    pub clear: Cow<'static, [u8]>,   // a bore's clear space over its surface, in leaf cells: solved
+    pub starts: Cow<'static, [u32]>, // Line d holds the points starts[d]..starts[d + 1].
+    pub points: Cow<'static, [[i16; 2]]>, // Each point of the centreline, in 1/POINT_SCALE of a tile cell, as the source gives it.
+    pub tops: Cow<'static, [i16]>, // The road surface at each point, in leaf cells, solved over many tiles.
+    pub width: Cow<'static, [u8]>, // Each line's width, in 1/POINT_SCALE of a tile cell, as the source gives it.
+    pub kind: Cow<'static, [u8]>, // Each line's transport type: the source's class, which is the slab's material.
+    pub form: Cow<'static, [u8]>, // Each line's `Form`, from the source's flags.
+    pub clear: Cow<'static, [u8]>, // A bore's clear space over its surface, in leaf cells, as the solve set it.
     /// The coarsest zoom at which each point is held (pxl-engine `way::coarsest`): what a fold
     /// keeps of a line. Only the bake reads it, since no client path folds, so a client's record
-    /// holds none (`Columns::into_room`).
+    /// holds none (`Table::into_room`).
     pub coarsest: Cow<'static, [u8]>,
 }
 
@@ -295,7 +295,7 @@ impl Line<'_> {
 
 /// What segment `s` is over the column about `at`, in eighths of its tile's
 /// cells (pxl-engine way.rs `crossing`).
-fn crossing_at(s: &Segment, at: [i32; 2], stations: &Stations) -> Option<Crossing> {
+fn crossing_at(s: &Segment, at: [i32; 2], stations: &StationGrid) -> Option<Crossing> {
     Some(way::crossing(s, at, stations)).filter(Crossing::is)
 }
 
@@ -581,7 +581,7 @@ impl Separation {
     }
 }
 
-pub struct Columns<'a> {
+pub struct Table<'a> {
     starts: &'a [u32],
     points: &'a [[i16; 2]],
     tops: &'a [i16],
@@ -592,11 +592,11 @@ pub struct Columns<'a> {
     coarsest: &'a [u8],
 }
 
-impl<'a> Columns<'a> {
+impl<'a> Table<'a> {
     /// Refused unless the columns are one tile's separation, consistently sized and within a record's room.
     pub fn of(
         (starts, points, tops, width, kind, form, clear, coarsest): <Packet as Shape>::Read<'a>,
-    ) -> Result<Columns<'a>, MarshalError> {
+    ) -> Result<Table<'a>, MarshalError> {
         let (points, []) = points.as_chunks::<2>() else {
             return Err(malformed());
         };
@@ -613,7 +613,7 @@ impl<'a> Columns<'a> {
             && starts.windows(2).all(|w| w[0] <= w[1])
             && form.iter().all(|&f| usize::from(f) < Form::ALL.len());
         shaped
-            .then_some(Columns {
+            .then_some(Table {
                 starts,
                 points,
                 tops,

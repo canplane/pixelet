@@ -1,6 +1,6 @@
 // xpute-core/sched/task.rs
 
-//! The core's executor, installed once, as a global allocator is. An
+//! The core's executor is installed once, as a global allocator is. An
 //! executor may ignore priority, so no correctness may rest on the order in
 //! which tasks are polled. Work that must run in order within a turn runs in
 //! one task.

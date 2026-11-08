@@ -83,11 +83,11 @@ fn formats_round_trip() {
     // On the CPU its lines, but for what only a bake reads: a fold's
     // coarsest zooms and a grid sweep's boxes.
     let resident = decode_into(&terrain, room(), vec![0; ELE_COLUMN].leak()).unwrap();
-    let held = Separation {
+    let want = Separation {
         coarsest: Default::default(),
         ..tile.separation.clone()
     };
-    assert_eq!(resident.separation, held, "its lines");
+    assert_eq!(resident.separation, want, "its lines");
     assert_eq!(resident.ele, tile.ele, "its samples");
     assert_eq!(resident.occupancy, tile.occupancy);
 }

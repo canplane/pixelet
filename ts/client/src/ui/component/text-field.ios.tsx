@@ -4,5 +4,4 @@
 // in this file takes the place of a star export with the same name.
 export * from "./text-field.tsx";
 
-/** An iPhone's field draws its own clear button. */
 export const SYSTEM_CLEAR: boolean = true;

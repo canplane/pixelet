@@ -65,7 +65,7 @@ impl Golden {
         }
     }
 
-    /// Bytes recorded as hex, two digits a byte.
+    /// This reads bytes recorded as hex, two digits a byte.
     pub fn bytes(&self, key: &str) -> Vec<u8> {
         let text = self.s(key);
         (0..text.len())

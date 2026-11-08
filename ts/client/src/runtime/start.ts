@@ -1,12 +1,7 @@
 // @pxl/client/runtime/start.ts
 
-/**
- * The core as xpute's runtime boots it where the core's memory is, on a
- * device's UI thread or in a page's worker: its module, its files, the GPU,
- * the frame pacing and each turn's grant. What the core asks on that side is
- * answered through a table: the text, and the rate, which the pacing keeps.
- * The profiler's reads are made here too.
- */
+/** This is the core as xpute's runtime boots it where the core's memory is: on
+ * a device's UI thread or in a page's worker. */
 
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import type { i32 } from "@xpute/kit/abi/word.ts";
@@ -29,7 +24,6 @@ import type { Perf } from "@/service/core/core.ts";
 import { source } from "@/service/platform/core.ts";
 import { gpu } from "@/service/platform/gpu.ts";
 
-/** What the core asks on this side. */
 function calls(pacing: FramePacing) {
   return new Map<number, (f: BranchCursor) => i32 | void>([
     [text.Command.TEXT_LAYOUT, (f) => text_layout(text.read_text_layout(f))],
@@ -69,6 +63,5 @@ export function manifest(handheld: boolean): Manifest<FrameGrant> {
   return { machine: MACHINE, core: () => config(handheld) };
 }
 
-/** Makes the profiler's reads here, beside the core's memory. */
 export const perf_here: Perf = (what, args) =>
   Promise.resolve(answer(what as PerfRead, args));

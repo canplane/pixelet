@@ -37,7 +37,7 @@ struct Run {
 }
 
 #[derive(Default)]
-struct Slots {
+struct SlotTable {
     runs: Vec<Run>,
     /// A count that moves with every slot given back. A refusal by the body
     /// slots waits on it (`Refusal::bodies`).
@@ -95,13 +95,13 @@ const _: () = {
     }
 };
 
-static SLOT_TABLE: Global<Slots> = Global::new();
+static SLOT_TABLE: Global<SlotTable> = Global::new();
 
-fn slot_table() -> &'static mut Slots {
-    SLOT_TABLE.get(Slots::default)
+fn slot_table() -> &'static mut SlotTable {
+    SLOT_TABLE.get(SlotTable::default)
 }
 
-impl Slots {
+impl SlotTable {
     fn out(&self) -> u32 {
         self.runs.iter().map(|r| r.out.count_ones()).sum()
     }

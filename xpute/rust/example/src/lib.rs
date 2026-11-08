@@ -1,12 +1,12 @@
 // xpute-example/lib.rs
 
 //! The smallest core, meant to be read beside the runtime that drives it
-//! (ts/example/sum.test.ts). Its machine (machine.json) declares its memory
-//! and its rings, which the runtime lays out where the machine places them.
-//! Its one protocol (asker.json) has the runtime send SUM and the core call
-//! ASK, and the code of both ends is generated from it. The core answers SUM
-//! with the sum of its two numbers and the runtime's answer to ASK, which
-//! the runtime gives before the call returns.
+//! (ts/example/sum.test.ts). Its machine (machine.json) declares its memory and
+//! its rings, which the runtime lays out where the machine places them. Its one
+//! protocol (asker.json) has the runtime send SUM and the core call ASK, and
+//! the code of both ends is generated from it. The core answers SUM with the
+//! sum of its two numbers and the runtime's answer to ASK, which the runtime
+//! gives before the call returns.
 
 #![cfg(target_arch = "wasm32")]
 
@@ -20,7 +20,7 @@ use xpute_core::entry::BootInfo;
 use xpute_core::ipc::door::{Outcome, Submission};
 use xpute_kit::status::error::MarshalError;
 
-// No fixed ranges: the heap starts on the page past the data.
+// The core has no fixed ranges, so its heap starts on the page past the data.
 xpute_core::core!(machine::MACHINE, 0, entry);
 
 struct Example;
@@ -32,8 +32,7 @@ impl asker::Exports for Example {
     }
 }
 
-/// A turn: the core answers its own commands, and answers each of xpute's
-/// with 0.
+/// A turn answers the core's own commands, and answers each of xpute's with 0.
 fn entry(_deadline_ms: f64, _boot: fn() -> BootInfo) -> f64 {
     xpute_core::machine::door().turn(|s| match s {
         Submission::Program(cmd, pkt) => asker::apply(&mut Example, cmd, &pkt),

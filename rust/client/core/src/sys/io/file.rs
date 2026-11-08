@@ -25,7 +25,7 @@ use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 use xpute_core::global::Global;
 use xpute_core::ipc::door::Pos;
 pub use xpute_core::ipc::door::Reading;
-use xpute_core::ipc::file::Files;
+use xpute_core::ipc::file::FileTable;
 pub use xpute_core::ipc::file::Opened;
 use xpute_core::ipc::fs::{Fd, FsOpened};
 use xpute_kit::status::bug::OrBug;
@@ -98,7 +98,7 @@ enum ReadState {
 const OPEN: usize = MAX_CREDITS as usize + 3;
 
 struct Fs {
-    files: Files<Owner, OPEN>,
+    files: FileTable<Owner, OPEN>,
     storage: Option<ReadState>,
     /// Whether the storage file has been refused since the client last
     /// emptied its slot.
@@ -111,7 +111,7 @@ static FS: Global<Fs> = Global::new();
 
 fn fs() -> &'static mut Fs {
     FS.get(|| Fs {
-        files: Files::new(),
+        files: FileTable::new(),
         storage: None,
         refused: false,
         written: (0, 0),
@@ -192,7 +192,7 @@ fn set_read(read: ReadState) {
 pub fn take_storage() -> Option<StorageRead> {
     let read = &mut fs().storage;
     match read.take()? {
-        ReadState::Read(held) => Some(held),
+        ReadState::Read(storage_read) => Some(storage_read),
         ReadState::Reading(reading) => match take_read(reading) {
             Ok(bytes) => Some(storage_of(bytes)),
             Err(reading) => {

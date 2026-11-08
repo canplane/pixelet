@@ -1,9 +1,9 @@
 // xpute-core/sched/edge.rs
 
-//! The core's side of a turn. A turn begins at its rising edge (`rise`),
-//! which sets its deadline, and ends at its falling edge (`fall`), which
-//! answers when the core wants the next turn. A task that must wait for a
-//! later turn parks here in between.
+//! This is the core's side of a turn. A turn begins at its rising edge
+//! (`rise`), which sets its deadline, and ends at its falling edge (`fall`),
+//! which answers when the core wants the next turn. A task that must wait for
+//! a later turn parks here in between.
 //!
 //! Only `rise` wakes a parked task; a task never wakes itself. An executor
 //! that re-reads its queue within one poll would otherwise run a self-woken

@@ -23,8 +23,7 @@ import { FileError } from "@xpute/runtime";
 import { storage } from "@/abi/file.spec.ts";
 import * as local from "@/service/platform/storage.ts";
 
-/** Storage as the platform gives it (service/platform/storage.ts). A write the
- * platform refuses keeps nothing and does not throw. */
+/** A write the platform refuses keeps nothing and does not throw. */
 export interface Storage {
   get(key: string): string | null;
   set(key: string, value: string): void;
@@ -32,9 +31,8 @@ export interface Storage {
 
 export let STORAGE: Storage = local;
 
-/** Replaces the storage this module keeps files in. A page's worker cannot
- * reach the page's storage, so the core's worker keeps a copy of it that
- * writes back to the page (runtime/worker.ts). */
+/** A page's worker cannot reach the page's storage, so the core's worker keeps
+ * a copy of it that writes back to the page (runtime/worker.ts). */
 export function set_storage(s: Storage): void {
   STORAGE = s;
 }
@@ -48,25 +46,24 @@ function bytes_of(text: string): U8Array {
   }
 }
 
-/** The platform's key for each storage file. A file's path below STORAGE is
- * its slot number in decimal. */
+/** A file's path below STORAGE is its slot number in decimal. */
 const KEYS: ReadonlyMap<string, string> = new Map([
   [String(storage.SETTINGS), "pxl:settings"],
 ]);
 
 /** Whether `key` holds a storage file or one set aside. These are the keys a
  * page copies to its core's worker (runtime/open.ts). */
-export function is_kept(key: string): boolean {
+export function is_storage_key(key: string): boolean {
   for (const k of KEYS.values()) {
     if (key === k || key.startsWith(`${k}:aside:`)) return true;
   }
   return false;
 }
 
-/** Copies what `key` holds to `<key>:aside:<now_ms>`, then empties `key`.
- * The copy is read back first. When it does not read back, the storage
- * refused the write, so `key` is left as it was and the answer is false: the
- * file is never emptied without a copy. */
+/** Copies what `key` holds to `<key>:aside:<now_ms>`, reads the copy back, and
+ * then empties `key`. When the copy does not read back, the storage refused
+ * the write, so `key` is left as it was and the answer is false: the file is
+ * never emptied without a copy. */
 function set_aside_key(s: Storage, key: string, now_ms: number): boolean {
   const text = s.get(key);
   if (text !== null && text !== "") {

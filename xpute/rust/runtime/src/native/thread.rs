@@ -1,7 +1,7 @@
 // xpute-runtime/native/thread.rs
 
-//! The core's own thread, a vCPU that runs while the core has work. It runs
-//! a turn (`Vcpu::turn`) whenever it is kicked, and sleeps otherwise.
+//! This is the core's own thread, a vCPU that runs a turn (`Vcpu::turn`)
+//! whenever it is kicked and sleeps otherwise.
 //!
 //! A kick may carry a deadline for the next turn, in ms from the turn's
 //! rise; when several kicks come before a turn, the turn takes the latest of
@@ -51,23 +51,24 @@ use std::time::{Duration, Instant};
 
 use xpute_core::global::on_marked_thread;
 
-/// What the core's thread calls as it loops. `turn` runs a turn with a
+/// The core's thread calls these as it loops: `turn` runs a turn with a
 /// deadline and answers when the core wants the next
-/// (`xpute_core::entry::Entry`); `ready` says whether a turn may begin.
+/// (`xpute_core::entry::Entry`), and `ready` says whether a turn may begin.
 #[derive(Clone, Copy)]
 pub struct Vcpu {
     pub turn: fn(deadline_ms: f64) -> f64,
     pub ready: fn() -> bool,
 }
 
-/// A caller's work, borrowed from the caller, which waits until it has run.
+/// A job is a caller's work, borrowed from the caller, which waits until it has
+/// run.
 struct Job(*mut (dyn FnMut() + Send + 'static));
 
 // SAFETY: the closure it points at is `Send`, and only the core's thread
 // runs it, while the caller that owns it waits.
 unsafe impl Send for Job {}
 
-/// What made a call, which decides who answers it.
+/// What made a call decides who answers it.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Asker {
     /// A caller's work made the call, and that caller answers it.
@@ -76,11 +77,11 @@ enum Asker {
     Turn,
 }
 
-/// What the runtime reads of the turns since it last asked (`turns`).
-struct Turns {
+/// The runtime reads this of the turns since it last asked (`turns`).
+struct TurnStat {
     /// Some turn answered 0: the core wants the next turn at once.
     resched: bool,
-    /// How long the longest turn took, in ms.
+    /// This is how long the longest turn took, in ms.
     turn_ms: f64,
     /// The runtime has been told and has not asked since, so it is not told
     /// again.
@@ -89,12 +90,12 @@ struct Turns {
 
 struct Loop {
     kicked: bool,
-    /// The next turn's deadline: the latest any kick has given since the
+    /// The next turn's deadline is the latest any kick has given since the
     /// last turn began.
     deadline: Option<f64>,
-    /// When the last turn asked to be woken, if that is later than now; the
-    /// runtime is told it through `wake_of`. A turn that answered 0 sets
-    /// `Turns::resched` instead. The thread does not wait for this moment
+    /// This is when the last turn asked to be woken, if that is later than
+    /// now; the runtime is told it through `wake_of`. A turn that answered 0
+    /// sets `TurnStat::resched` instead. The thread does not wait for this moment
     /// itself: the runtime's kick wakes it.
     wake_at: Option<Instant>,
     job: Option<Job>,
@@ -107,18 +108,18 @@ struct Loop {
     stall_at: u64,
     call: Option<(u32, Asker)>,
     ret: Option<i32>,
-    /// Callers waiting in `ring`.
+    /// This counts the callers waiting in `ring`.
     ringers: u32,
-    /// The turn those callers wait for, counted in `starts`. While paused,
-    /// turns begin only until that one has begun.
+    /// This is the turn those callers wait for, counted in `starts`. While
+    /// paused, turns begin only until that one has begun.
     ring_until: u64,
-    /// Callers in `while_idle`.
+    /// This counts the callers in `while_idle`.
     idlers: u32,
-    /// The core's thread is running a turn or a caller's work.
+    /// This is set while the core's thread runs a turn or a caller's work.
     busy: bool,
     /// Only a turn a caller rings may begin (`pause`, `resume`).
     paused: bool,
-    turns: Turns,
+    turns: TurnStat,
     terminated: bool,
 }
 
@@ -139,7 +140,7 @@ static LOOP: Mutex<Loop> = Mutex::new(Loop {
     idlers: 0,
     busy: false,
     paused: false,
-    turns: Turns {
+    turns: TurnStat {
         resched: false,
         turn_ms: 0.0,
         told: false,
@@ -154,7 +155,7 @@ static CORE_CV: Condvar = Condvar::new();
 /// a call to answer, or for the core to go idle or stop.
 static RUNTIME_CV: Condvar = Condvar::new();
 
-/// Lets one caller's work through at a time.
+/// This lets one caller's work through at a time.
 static JOBS: Mutex<()> = Mutex::new(());
 
 fn state() -> MutexGuard<'static, Loop> {
@@ -165,8 +166,8 @@ fn wait<'a>(cv: &Condvar, g: MutexGuard<'a, Loop>) -> MutexGuard<'a, Loop> {
     cv.wait(g).unwrap_or_else(PoisonError::into_inner)
 }
 
-/// The runtime's function that answers a call; it runs on the answering
-/// thread.
+/// This is the runtime's function that answers a call, and it runs on the
+/// answering thread.
 pub type Answer = extern "C" fn(at: u32) -> i32;
 
 static ANSWER: Mutex<Option<Answer>> = Mutex::new(None);
@@ -211,8 +212,8 @@ thread_local! {
     /// This thread rings the core, so it answers a turn's calls.
     #[cfg_attr(target_os = "android", allow(clippy::missing_const_for_thread_local, reason = "already const; the lint misreads Android's expansion"))]
     static RINGS: Cell<bool> = const { Cell::new(false) };
-    /// Set on the core's thread while it runs a caller's work rather than a
-    /// turn.
+    /// This is set on the core's thread while it runs a caller's work rather
+    /// than a turn.
     #[cfg_attr(target_os = "android", allow(clippy::missing_const_for_thread_local, reason = "already const; the lint misreads Android's expansion"))]
     static IN_JOB: Cell<bool> = const { Cell::new(false) };
 }
@@ -558,7 +559,7 @@ pub(super) fn run<R: Send>(f: impl FnOnce() -> R + Send) -> Option<R> {
     if g.terminated {
         return None;
     }
-    let done = g.job_ends;
+    let ends = g.job_ends;
     g.job = Some(Job(job));
     CORE_CV.notify_all();
     loop {
@@ -570,7 +571,7 @@ pub(super) fn run<R: Send>(f: impl FnOnce() -> R + Send) -> Option<R> {
         if answered {
             continue;
         }
-        if g.job_ends > done {
+        if g.job_ends > ends {
             break;
         }
         g = wait(&RUNTIME_CV, g);

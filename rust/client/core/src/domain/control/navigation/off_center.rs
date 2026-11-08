@@ -17,8 +17,6 @@ pub struct OffCenter {
 
 static OFF_CENTER: Global<bool> = Global::new();
 
-/// The device's location, at its altitude. Where the device gives no
-/// altitude, the Z is unknown.
 fn device_coord() -> Option<Q3> {
     device_location_store().location.map(|l| {
         let [lon, lat] = l.coords;

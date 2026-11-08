@@ -21,8 +21,8 @@ std::string hex(std::span<const std::uint8_t> bytes) {
     return out;
 }
 
-// The packet `build` writes as its root, in hex, or the errno it was refused
-// with.
+// This answers the packet `build` writes as its root, in hex, or the errno it
+// was refused with.
 template <class F> std::string encode(F &&build, std::size_t cap = 1024) {
     std::vector<std::uint8_t> buf(cap, 0xff);
     PacketWriter w(buf);

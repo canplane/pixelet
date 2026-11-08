@@ -1,11 +1,5 @@
 // @pxl/client/ui/debug/perf/view.ts
 
-/**
- * Reads what the profiler panel and the report show: the core's records as
- * service/core/perf.ts decodes them, the platform's long frames beside them
- * (long-frame.ts), and the build they were recorded on.
- */
-
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/build.ts";
 import {
@@ -32,8 +26,6 @@ export interface PerfReport {
   recent: TaskRecord[];
   worst: Worst[];
   longs: LongFrame[];
-  /** `recording` holds each frame figure's most or least since the recording
-   * started. `view` is where the view stands when the report is read. */
   recording: RecordingSection;
   view: ViewSection;
 }
@@ -59,8 +51,6 @@ export const movingFps = (f: { moving: f64; moving_ms: f64 }): f64 | null =>
 export const RECENT_MS = 1_000;
 
 export interface Gauge {
-  /** How many frames and tasks the core's rings hold, as the RINGS record
-   * counts them. */
   rec: {
     recording: boolean;
     elapsed_ms: f64;
@@ -69,15 +59,13 @@ export interface Gauge {
     truncated: boolean;
   };
   frames: FrameSummary | null;
-  /** The frames over the last `RECENT_MS`, which give the panel title's
-   * frame rate. */
   recent: FrameSummary | null;
   tasks: TaskSummary[];
   view: ViewSection;
 }
 
 export async function perfGaugeRead(windowMs: f64): Promise<Gauge> {
-  const [s, held, recent] = await Promise.all([
+  const [s, counts, recent] = await Promise.all([
     read("summary", windowMs),
     read("counts"),
     read("summary", RECENT_MS),
@@ -86,8 +74,8 @@ export async function perfGaugeRead(windowMs: f64): Promise<Gauge> {
     rec: {
       recording: s.recording_state.recording,
       elapsed_ms: s.recording_state.elapsed_ms,
-      tasks: held.tasks,
-      frames: held.frames,
+      tasks: counts.tasks,
+      frames: counts.frames,
       truncated: s.recording_state.truncated,
     },
     frames: s.frames,

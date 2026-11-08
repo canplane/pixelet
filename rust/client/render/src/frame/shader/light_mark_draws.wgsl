@@ -29,7 +29,6 @@ fn instance_at(i: u32) -> u32 {
   return select(0u, instances[i], i < arrayLength(&instances));
 }
 
-/// How many slots the instances hold.
 fn instance_cap() -> u32 {
   return arrayLength(&instances) / (DRAWN_COLUMNS + 1u);
 }

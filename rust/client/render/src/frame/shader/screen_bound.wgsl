@@ -4,7 +4,7 @@
 // each square of the screen `BOUND_STEP` pixels a side, the least and the most reversed depth
 // the world's pass drew there. The sky, at depth 0, is left out, so a square of sky alone
 // holds 2 and 0, an empty range. The bound stays on the GPU across frames and is set after
-// each world pass in the tiles that pass drew (screen_tiles.wgsl), so it matches the depth
+// each world pass in the tiles that pass drew (screen_tile.wgsl), so it matches the depth
 // while the eye stands still.
 
 @group(0) @binding(0) var depth: texture_depth_2d;

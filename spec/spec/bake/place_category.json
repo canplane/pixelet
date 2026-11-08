@@ -3,9 +3,9 @@
     "Overture's places' `basic_category`, the kind a place tile carries: a kind",
     "crosses a tile as its place in CATEGORIES counted from 1, 0 for none, so a",
     "category is appended and one moved or taken out renumbers every tile made",
-    "before. The values the geo database holds of the release it was ingested",
-    "from; a release whose taxonomy moved is a purge by command, and a category",
-    "missing here is a place with no kind, which no theme row draws."
+    "before. The values are those the geo database holds of the release it was",
+    "ingested from. A release whose taxonomy moved takes a purge by command, and a",
+    "category missing here is a place with no kind, which no theme row draws."
   ],
   "CATEGORIES": [
     "academy",

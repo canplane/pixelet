@@ -40,7 +40,7 @@
       "$val": 131072,
       "$doc": [
         "The WGSL a turn hands the device as shader modules before the renderer is",
-        "made (gpu/pipeline.rs `Pipelines::make_modules`): one module a turn, then",
+        "made (gpu/pipeline.rs `PipelineCache::make_modules`): one module a turn, then",
         "more while their sources stay within this and `RESERVE` is left. A page",
         "makes a module on its main thread, so this bounds the task that makes",
         "them, a module larger than it alone in its turn."
@@ -52,7 +52,7 @@
     "$doc": [
       "What a device's GPU runtime runs the renderer's stream by (xpute-gpu runtime",
       "`Config`), which the core hands it (pxl-core lib.rs `GPU`, xpute-gpu",
-      "`Numbers`); a page's browser paces its frames and stages its writes itself."
+      "`CoreConfig`); a page's browser paces its frames and stages its writes itself."
     ],
     "FRAME_LATENCY": {
       "$val": 2,

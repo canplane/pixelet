@@ -1,8 +1,8 @@
 // @xpute/kit/wire/scalar.ts
 
-// Little-endian numbers read from and written to a byte stream, each call
-// moving its offset on. Nothing here checks bounds: the caller does, and an
-// access out of range throws DataView's RangeError.
+// These are little-endian numbers read from and written to a byte stream, each
+// call moving its offset on. Nothing here checks bounds: the caller does, and
+// an access out of range throws DataView's RangeError.
 
 import type {
   f32,
@@ -17,33 +17,33 @@ import type {
   u8,
 } from "@xpute/kit/abi/word.ts";
 import { U64 } from "@xpute/kit/abi/word.ts";
-import type { Bytes } from "@xpute/kit/abi/array.ts";
+import type { ByteArray } from "@xpute/kit/abi/array.ts";
 
 export interface Stream {
   view: DataView;
-  buf: Bytes;
+  buf: ByteArray;
   off: i32;
 }
 
-export const stream = (buf: Bytes, off: i32 = 0): Stream => ({
+export const stream = (buf: ByteArray, off: i32 = 0): Stream => ({
   buf,
   view: new DataView(buf.buffer, buf.byteOffset, buf.byteLength),
   off,
 });
 
-export const memcpy = (dst: Bytes, src: Bytes, nbyte: u32): void => {
+export const memcpy = (dst: ByteArray, src: ByteArray, nbyte: u32): void => {
   const s = new Uint8Array(src.buffer, src.byteOffset, nbyte);
   dst.set(s, 0);
 };
 
-export const write = (s: Stream, src: Bytes, nbyte: u32): void => {
+export const write = (s: Stream, src: ByteArray, nbyte: u32): void => {
   const beg = s.off;
   const end = beg + nbyte;
   const src_n = new Uint8Array(src.buffer, src.byteOffset, nbyte);
   s.buf.set(src_n, beg);
   s.off = end;
 };
-export const read = (s: Stream, dst: Bytes, nbyte: u32): void => {
+export const read = (s: Stream, dst: ByteArray, nbyte: u32): void => {
   const beg = s.off;
   const end = beg + nbyte;
   const src_n = new Uint8Array(s.buf.buffer, s.buf.byteOffset + beg, nbyte);
@@ -51,7 +51,7 @@ export const read = (s: Stream, dst: Bytes, nbyte: u32): void => {
   s.off = end;
 };
 
-/** Where `seek` counts from, as lseek(2)'s whence. */
+/** `seek` counts from these, as lseek(2)'s whence does. */
 export const SEEK_SET = 0;
 export const SEEK_CUR = 1;
 export const SEEK_END = 2;

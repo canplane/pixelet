@@ -13,8 +13,8 @@ using namespace xpute;
 
 namespace {
 
-// A ring of `cap` frames with slots of `slot` bytes, in a buffer of its own.
-// The ring's words start at offset 8, and its slots follow them.
+// A fixture is a ring of `cap` frames with slots of `slot` bytes, in a buffer
+// of its own. The ring's words start at offset 8, and its slots follow them.
 struct Fixture {
     std::vector<std::uint64_t> buf;
     Ring ring;
@@ -28,8 +28,6 @@ Fixture fixture(std::uint32_t cap, std::uint32_t slot) {
     return Fixture{std::move(buf), r};
 }
 
-// Writes into `out` a packet that is one branch of a u32 and a u64, both
-// made from `n`, and answers its length.
 std::optional<std::uint32_t> pair(std::span<std::uint8_t> out, std::uint32_t n) {
     xtp::PacketWriter w(out);
     w.branch(2, [n](xtp::PacketWriter &b) { b.u32(n).u64(std::uint64_t{n} << 40); });

@@ -41,10 +41,10 @@ fn entries_word(q0: vec2<i32>, q1: vec2<i32>, k: u32) -> u32 {
 
 /// Whether the node of `zoom` at column `c`, whose answer reads the clip levels up to
 /// `finest`, reads a brick that moved. A query reads no clip level finer than it asked
-/// (clip.wgsl `step_to`, `held_to`). A node no wider than a brick's levels reads only the
+/// (clip.wgsl `step_to`, `clip_zoom`). A node no wider than a brick's levels reads only the
 /// bricks held present (`step_to`). It reads a moved brick where one lies in the box of the
 /// clip level's moved bricks that are held (`CHANGED_BRICKS_AT`), and its entry's bit is set
-/// among the moved bits at `CHANGED_AT`. A wider node reads the clip level's fold (`held_of`),
+/// among the moved bits at `CHANGED_AT`. A wider node reads the clip level's fold (`level_bounds`),
 /// which bounds every brick wanted, held or not, so any moved entry under it counts. A node
 /// coarser than `MIN_ZOOM` reads no brick: its ground is a split whatever the clip levels hold
 /// (world_split.wgsl `ground_split`, world.wgsl `ground_cell`).
@@ -131,12 +131,12 @@ fn forget_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x >= ENTRIES) {
     return;
   }
-  let held = key_at(id.x);
+  let key_idx = key_at(id.x);
   if (node_cache[NODE_CACHE_FORGETS] == FORGETS_ALL) {
-    node_cache[held] = 0u;
+    node_cache[key_idx] = 0u;
     return;
   }
-  let key = node_cache[held];
+  let key = node_cache[key_idx];
   if (key == 0u) {
     return;
   }
@@ -147,7 +147,7 @@ fn forget_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   // that field, so its own zoom is taken (`node_cache::key_zooms`).
   if (forgets(zoom, max(zoom, key >> (TAG_BITS + ZOOM_BITS)), c)) {
     let split = (node_cache[w + W_KIND] & KIND_MASK) == KIND_SPLIT;
-    node_cache[held] = select(0u, forgotten_split(key), split);
+    node_cache[key_idx] = select(0u, forgotten_split(key), split);
     return;
   }
   // The slot is forgotten where its node was handed a slot of a written child group of what is
@@ -157,7 +157,7 @@ fn forget_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let written = min(node_cache[NODE_CACHE_WRITTEN_AT], NODE_CACHE_WRITTEN_CAP);
   for (var f = 0u; f < written; f += 1u) {
     if (reads_written(placed, node_cache[NODE_CACHE_WRITTEN_AT + 1u + f])) {
-      node_cache[held] = 0u;
+      node_cache[key_idx] = 0u;
       return;
     }
   }
@@ -173,7 +173,7 @@ fn forget_cs(@builtin(global_invocation_id) id: vec3<u32>) {
       i32(node_cache[at + 3u]),
     );
     if (over_rect(zoom, c, changed)) {
-      node_cache[held] = 0u;
+      node_cache[key_idx] = 0u;
       return;
     }
   }

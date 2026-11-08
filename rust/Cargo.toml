@@ -73,7 +73,7 @@ pxl-geo-spec = { path = "server/geo-spec" }
 # cast and every harmless one alike, so the harmless ones are made to say
 # what they are — `.cast()`, `.cast_const()`, `&raw`, `ptr::from_ref` — and
 # any `as *const` or `as *mut` left is an offset made a pointer, which
-# pxl-tool's check_rules refuses. A crate takes these with `[lints]
+# pxl-tool's rule refuses. A crate takes these with `[lints]
 # workspace = true`; xpute-core and xpute-runtime, in their own workspace, spell
 # them themselves.
 [workspace.lints.rust]
@@ -141,7 +141,7 @@ lto = true
 codegen-units = 1
 panic = "abort"
 # The name section is not stripped here. What is published is what Binaryen
-# finishes (ts/client/script/build-wasm.py): it strips the name, producers and
+# finishes (ts/client/script/wasm-build.py): it strips the name, producers and
 # target-features sections in one pass, and it has to read the target
 # features before it can take them off — which it cannot do if Cargo has
 # already thrown them away.
@@ -153,7 +153,7 @@ panic = "abort"
 # browser. The bake wraps each page so that one bad page out of tens of
 # thousands is counted rather than fatal, and there is nothing to catch under
 # `abort`; a request handler wrapped by the web framework is the same story.
-# The module is untouched — ts/client/script/build-wasm.py builds the
+# The module is untouched — ts/client/script/wasm-build.py builds the
 # published one `--release` and the dev server's `watch`, below —
 # and the two binaries never link together.
 #
@@ -176,7 +176,7 @@ inherits = "release"
 opt-level = 3
 
 # The module as the dev server rebuilds it on every change
-# (ts/client/script/build-wasm.py). It keeps the release profile's `z`,
+# (ts/client/script/wasm-build.py). It keeps the release profile's `z`,
 # which costs this module no speed (above), and drops what makes every build
 # of it start over: one codegen unit and the whole-graph LTO, which are for
 # the bytes a visitor downloads. A change then recompiles only the crates it
@@ -188,7 +188,7 @@ codegen-units = 256
 incremental = true
 
 # The device's library as a dev build of the app rebuilds it
-# (xpute/ts/native/script/build-core.py), as `watch` is the module's: the
+# (xpute/ts/native/script/core-build.py), as `watch` is the module's: the
 # native profile's code, without the one codegen unit and the whole-graph
 # LTO that make every build of it start over, so a change recompiles the
 # crates it reaches. A Release build of the app takes `native`.

@@ -18,13 +18,13 @@ use crate::gpu::api::{
     Format, Gpu, Layout, Load, RenderContext,
 };
 use crate::gpu::atlas::{AtlasPainter, DisplayList};
-use crate::gpu::draw::{DrawStats, Draws};
+use crate::gpu::draw::{DrawStat, DrawTable};
 use crate::gpu::mip::{mip_levels, MipPass};
-use crate::gpu::pass::model::DrawUniforms;
-use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::pass::model::UniformBuffer;
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::text::TextOf;
-use crate::gpu::upload::Uploads;
+use crate::gpu::upload::UploadTable;
 use crate::look::marker::ATLAS_SCALE;
 use crate::look::marker::{
     bubble_rect_h, point_mark, BLACK, BORDER, BUBBLE_FONT, DOT_BORDER, DOT_CY, DOT_DIAM, DOT_FILL,
@@ -164,7 +164,7 @@ pub struct MarkerPass {
     sets: [Set; SETS],
     dirty: SlotSet,
     /// One uniform slot a set, as marker.wgsl reads `marker_words`.
-    uniforms: DrawUniforms,
+    uniforms: UniformBuffer,
     frame_group: u32,
     pub view: [f32; 16],
     pub proj: [f32; 16],
@@ -172,7 +172,7 @@ pub struct MarkerPass {
 }
 
 impl MarkerPass {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, frame_buf: u32, align: u32) -> MarkerPass {
+    pub fn new(g: &Gpu, pipelines: &mut PipelineCache, frame_buf: u32, align: u32) -> MarkerPass {
         let sampler = g.sampler(
             FilterMode::nearest,
             FilterMode::linear,
@@ -201,7 +201,7 @@ impl MarkerPass {
             generation: u32::MAX,
             sets: [Set::default(); SETS],
             dirty: SlotSet::default(),
-            uniforms: DrawUniforms::new(word_bytes(MARKER_FLOATS), align),
+            uniforms: UniformBuffer::new(word_bytes(MARKER_FLOATS), align),
             view: [0.0; 16],
             proj: [0.0; 16],
             px_per_unit: 1.0,
@@ -245,7 +245,7 @@ impl MarkerPass {
         if self.dirty.is_empty() || self.atlas == 0 {
             return flush.whole;
         }
-        // Only the slots whose text the driver has drawn are painted. A slot
+        // Only the slots whose text the platform has drawn are painted. A slot
         // whose text is still on its way waits for it to land, and no encoder
         // is made for it.
         let mut ready = Vec::new();
@@ -322,8 +322,8 @@ impl MarkerPass {
         g: &Gpu,
         depth: u32,
         size: (u32, u32),
-        draws: &Draws,
-        uploads: &Uploads,
+        draws: &DrawTable,
+        uploads: &UploadTable,
     ) {
         if self.atlas_group == 0 {
             return;
@@ -408,7 +408,7 @@ impl MarkerPass {
     }
 
     /// Adds the pass's draws to `stats`, two triangles a marker.
-    pub fn count(&self, draws: &Draws, stats: &mut DrawStats) {
+    pub fn count(&self, draws: &DrawTable, stats: &mut DrawStat) {
         draws.count(PIPELINE_MARKER, stats, |d| 2 * d[1]);
     }
 
@@ -417,8 +417,8 @@ impl MarkerPass {
         ctx: &mut RenderContext,
         color: u32,
         depth: u32,
-        draws: &Draws,
-        uploads: &Uploads,
+        draws: &DrawTable,
+        uploads: &UploadTable,
     ) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::marker);

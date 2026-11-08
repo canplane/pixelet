@@ -1,9 +1,7 @@
 // @pxl/client/service/platform/sensor.ts
 
-/**
- * The device's sensors as a browser grants them to a page. iOS gates the
- * compass behind a permission prompt, which must be raised inside a gesture.
- */
+/** iOS gates the compass behind a permission prompt, which must be raised
+ * inside a gesture. */
 
 import { geo_fix, listener } from "./sensor-listener.ts";
 import type { GeolocationSensor, OrientationSensor } from "./types.ts";

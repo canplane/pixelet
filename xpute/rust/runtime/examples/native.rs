@@ -1,8 +1,8 @@
 // xpute-runtime/examples/native.rs
 
-//! A core linked into its runtime's own native program, and the C ABI
-//! through which the program's app calls it. `native` exists only on unix,
-//! so elsewhere the example is an empty `main`.
+//! This is a core linked into its runtime's own native program, and the C ABI
+//! through which the program's app calls it. `native` exists only on unix, so
+//! elsewhere the example is an empty `main`.
 
 #[cfg(unix)]
 mod program {
@@ -37,8 +37,8 @@ mod program {
     /// core's heap, and it answers -1 to ask for no further turn.
     fn turn(deadline_ms: f64, boot: fn() -> BootInfo) -> f64 {
         assert_eq!(boot().given, MEM_BYTES);
-        let held = vec![deadline_ms; 8];
-        core::hint::black_box(held);
+        let buf = vec![deadline_ms; 8];
+        core::hint::black_box(buf);
         -1.0
     }
 

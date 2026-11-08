@@ -7,14 +7,13 @@ fn block() -> Block {
     alloc(64).unwrap()
 }
 
-/// Whether slot `slot`'s packet is still to be sent.
-fn waits(k: &Uploads, slot: usize) -> bool {
+fn waits(k: &UploadTable, slot: usize) -> bool {
     matches!(k.slots[slot], Upload::Waiting(_))
 }
 
 #[test]
 fn keeps_at_most() {
-    let mut k = Uploads::new(4);
+    let mut k = UploadTable::new(4);
     for slot in 0..3 {
         k.keep(Some(slot), block(), 2);
     }
@@ -46,7 +45,7 @@ fn keeps_at_most() {
 
 #[test]
 fn full_stream_offers_no_more() {
-    let mut k = Uploads::new(4);
+    let mut k = UploadTable::new(4);
     for slot in 0..4 {
         k.keep(Some(slot), block(), 4);
     }

@@ -10,7 +10,6 @@
 /// The value that stands for no slot and no place.
 const NO_ENTRY: u32 = 0xffffffffu;
 
-/// The frame's number, which the node cache's header holds (pxl-engine `node_cache::FRAME`).
 fn record_frame() -> u32 {
   return node_cache_word(FRAME);
 }
@@ -102,20 +101,20 @@ fn find(zoom: u32, c: vec3<i32>, asset: vec2<u32>, lacks: bool) -> u32 {
 }
 
 /// A box's low and high planes, in units from an origin (pxl-engine cast.rs `bounds`).
-struct Planes {
+struct Aabb {
   lo: vec3<f32>,
   hi: vec3<f32>,
 }
 
-fn kept_planes(k: Node, o: vec3<i32>) -> Planes {
+fn node_planes(k: Node, o: vec3<i32>) -> Aabb {
   let og = vec3<u32>(u32(o.x), u32(o.y) + Y_START, u32(o.z) + Z_START);
   let roots = k.roots - origin_roots(o);
-  return Planes(units(k.corner, og, roots), far_of(k.corner, under(k.zoom), og, roots));
+  return Aabb(units(k.corner, og, roots), far_of(k.corner, under(k.zoom), og, roots));
 }
 
 /// The zoom at which the eye's walk asks a node with planes `p`, at the node's nearest point,
 /// as walk.wgsl asks it (pxl-engine `cast::node_zooms`).
-fn asked_near(p: Planes) -> u32 {
+fn asked_near(p: Aabb) -> u32 {
   let range = vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u));
   if (range.x == range.y) {
     return range.x;
@@ -126,14 +125,14 @@ fn asked_near(p: Planes) -> u32 {
 /// Whether the eye's ray from `o` stopped on `k` whole, that is, on a node coarser than the
 /// zoom it asked there (pxl-engine `record::stopped_whole`).
 fn stopped_whole(k: Node, o: vec3<i32>) -> bool {
-  return k.zoom < asked_near(kept_planes(k, o));
+  return k.zoom < asked_near(node_planes(k, o));
 }
 
 /// Whether `k` is the node the eye's walk from `o` stops on (pxl-engine `record::fresh`). It is
 /// where `k` answers a cell, at its zoom or because `whole` says some ray stopped on it whole,
 /// and its parent does not.
-fn kept_fresh(k: Node, whole: bool, o: vec3<i32>) -> bool {
-  if (!whole && k.zoom < asked_near(kept_planes(k, o))) {
+fn is_fresh(k: Node, whole: bool, o: vec3<i32>) -> bool {
+  if (!whole && k.zoom < asked_near(node_planes(k, o))) {
     return false;
   }
   if (k.zoom == 0u) {
@@ -141,7 +140,7 @@ fn kept_fresh(k: Node, whole: bool, o: vec3<i32>) -> bool {
   }
   let zoom = k.zoom - 1u;
   let parent = Node(zoom, k.corner & vec3<u32>(~under(zoom)), k.roots);
-  return zoom < asked_near(kept_planes(parent, o));
+  return zoom < asked_near(node_planes(parent, o));
 }
 
 /// Whether a node at `zoom` is the node a light's ray asking zoom `band` stops on (pxl-engine

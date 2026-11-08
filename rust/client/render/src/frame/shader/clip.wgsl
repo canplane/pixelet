@@ -20,12 +20,12 @@ fn gather(v: u32) -> u32 {
   return (g | (g >> 8u)) & 0x0000ffffu;
 }
 
-/// `clipmap::idx_of`.
+/// This is the twin of pxl-engine `clipmap::idx_of`.
 fn cell_id(at: vec2<u32>) -> u32 {
   return spread(at.x) | (spread(at.y) << 1u);
 }
 
-/// `clipmap::of_idx`.
+/// This is the twin of pxl-engine `clipmap::of_idx`.
 fn id_cell(i: u32) -> vec2<u32> {
   return vec2<u32>(gather(i), gather(i >> 1u));
 }
@@ -41,12 +41,12 @@ fn entry_row(cell_zoom: u32, e: u32) -> u32 {
   return (cell_zoom - FIRST_CELL_ZOOM) * CLIP_ENTRIES + e;
 }
 
-/// `clipmap::key_word`.
+/// This is the twin of pxl-engine `clipmap::key_word`.
 fn key_word(v: i32) -> u32 {
   return u32(v) ^ 0x80000000u;
 }
 
-/// `clipmap::joined_idx`.
+/// This is the twin of pxl-engine `clipmap::joined_idx`.
 fn joined_idx(l: u32, at: vec2<u32>) -> u32 {
   let under = ACROSS >> (l - 1u);
   return (ACROSS * ACROSS - under * under) / 3u + cell_id(at);
@@ -62,7 +62,7 @@ fn joined_row(cell_zoom: u32, e: u32) -> u32 {
 /// `first`, or open bounds when the entry's key names another brick.
 fn unfold(e: vec4<i32>, first: vec2<i32>) -> vec4<i32> {
   if (u32(e.x) == key_word(first.x) && u32(e.y) == key_word(first.y)) {
-    return bounds_of(e.z, e.w);
+    return extent_of(e.z, e.w);
   }
   return BOUNDS_OPEN;
 }
@@ -87,7 +87,7 @@ fn lookup_here(l: u32) -> bool {
   return (l & (1u << LOOKUP_SLOT_BITS)) != 0u;
 }
 
-/// `clipmap::cell_at`.
+/// This is the twin of pxl-engine `clipmap::cell_at`.
 fn cell_at(zoom: u32, clip: u32, c: vec2<i32>) -> vec2<i32> {
   let s = zoom - clip;
   return vec2<i32>(wrap_idx(clip, c.x >> s), c.y >> s);
@@ -119,7 +119,7 @@ fn step_to(above: u32, cell_zoom: u32, g: vec2<i32>) -> Step {
   return Step(f, vec2<u32>(cell_at(cell_zoom, lookup_from(f), g) & vec2<i32>(i32(BRICK) - 1i)));
 }
 
-fn held_to(cell_zoom: u32) -> u32 {
+fn clip_zoom(cell_zoom: u32) -> u32 {
   return clamp(cell_zoom, FIRST_CELL_ZOOM, LEAF_CELL_ZOOM);
 }
 
@@ -134,9 +134,9 @@ struct NodeBound {
   place: u32,
 }
 
-/// `clipmap::held_of`: what the eye's clip level at `cell_zoom` holds of a node `2^l` bricks a
+/// `clipmap::level_bounds`: what the eye's clip level at `cell_zoom` holds of a node `2^l` bricks a
 /// side.
-fn held_of(place: u32, cell_zoom: u32, g: vec2<i32>, l: u32) -> NodeBound {
+fn level_bounds(place: u32, cell_zoom: u32, g: vec2<i32>, l: u32) -> NodeBound {
   let origin = clipmap[ORIGIN_AT + cell_zoom - FIRST_CELL_ZOOM];
   if (origin.z == 0i) {
     return NodeBound(BOUNDS_EMPTY, cell_zoom, true, false, place);
@@ -159,13 +159,13 @@ fn held_of(place: u32, cell_zoom: u32, g: vec2<i32>, l: u32) -> NodeBound {
   return NodeBound(b, cell_zoom, true, all(d >= vec2<i32>(0i)) && all(d + side <= vec2<i32>(across)), place);
 }
 
-/// `clipmap::bounded`.
+/// This is the twin of pxl-engine `clipmap::bounded`.
 fn bounded(place: u32, cell_zoom: u32, zoom: u32, c: vec2<i32>) -> NodeBound {
   // The node's first cell at `cell_zoom`, or the cell that holds the node when the node is
   // finer (`idx_at`).
   let g = select(c >> vec2<u32>((zoom - cell_zoom) & 31u), c << vec2<u32>((cell_zoom - zoom) & 31u), cell_zoom >= zoom);
   if (cell_zoom > zoom + BRICK_MIPS) {
-    return held_of(place, cell_zoom, g, cell_zoom - zoom - BRICK_MIPS);
+    return level_bounds(place, cell_zoom, g, cell_zoom - zoom - BRICK_MIPS);
   }
   let s = step_to(place, cell_zoom, g);
   let clip = lookup_from(s.place);
@@ -174,5 +174,5 @@ fn bounded(place: u32, cell_zoom: u32, zoom: u32, c: vec2<i32>) -> NodeBound {
   }
   let j = select(0u, clip - zoom, zoom < clip);
   let e = mip_entry(brick_at(lookup_slot(s.place)), j, s.at >> vec2<u32>(j));
-  return NodeBound(bounds_of(i32(ground[e]), i32(ground[e + 1u])), clip, true, true, s.place);
+  return NodeBound(extent_of(i32(ground[e]), i32(ground[e + 1u])), clip, true, true, s.place);
 }

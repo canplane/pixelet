@@ -1,12 +1,12 @@
 // xpute-runtime/include/xpute.h
 
-// The C ABI of a core linked into its runtime's own process, as xpute-runtime's
-// `native_core!` and `native_abi!` export it, for an app in C, Objective-C or
-// Swift. The core runs on its own thread while it has work and sleeps until it
-// is kicked. The app kicks it at the moment the app's policy picks for the wake
-// the core asked for (`xpute_turns`; xpute-runtime native/thread.rs). The app's
-// thread waits on the core only for a turn it rings, and it answers the core's
-// calls.
+// This is the C ABI of a core linked into its runtime's own process, as
+// xpute-runtime's `native_core!` and `native_abi!` export it, for an app in C,
+// Objective-C or Swift. The core runs on its own thread while it has work and
+// sleeps until it is kicked. The app kicks it at the moment the app's policy
+// picks for the wake the core asked for (`xpute_turns`; xpute-runtime
+// native/thread.rs). The app's thread waits on the core only for a turn it
+// rings, and it answers the core's calls.
 
 #pragma once
 

@@ -1,9 +1,9 @@
 // cpp/xpute/kit/math/rng.32.hpp
 
-// The 32-bit family, the counterpart of rng.64.hpp in `u32` arithmetic alone.
-// WebGPU has no 64-bit integer, so a shader can compute these same numbers.
-// The family holds Murmur3's finalizer, a seed derived through it, and a
-// stream that applies it to a Weyl sequence.
+// The 32-bit family is the counterpart of rng.64.hpp in `u32` arithmetic alone:
+// WebGPU has no 64-bit integer, so a shader can compute these same numbers. The
+// family holds Murmur3's finalizer, a seed derived through it, and a stream
+// that applies it to a Weyl sequence.
 
 #pragma once
 

@@ -49,7 +49,7 @@ pub fn placement_reads(asset: Asset, zoom: Zoom, corner: &Q3) -> [[f64; 2]; 2] {
 /// Whether something of `kind` may stand on an instance of `under`. A kind
 /// that stands (`Kind::stands`) goes only on a kind that can be stood on
 /// (`Kind::stood_on`).
-fn goes_on(kind: Kind, under: Kind) -> bool {
+fn stands_on(kind: Kind, under: Kind) -> bool {
     !kind.stands() || under.stood_on()
 }
 
@@ -58,11 +58,11 @@ fn goes_on(kind: Kind, under: Kind) -> bool {
 /// world takes an edit (`World::editable`), where nothing placed shares the
 /// room the asset's kind occupies (`World::placed_occupying`), and where
 /// nothing in the cell under it is something it may not stand on
-/// (`goes_on`). Only a placed marker can refuse it that way, since the
+/// (`stands_on`). Only a placed marker can refuse it that way, since the
 /// ground generates no markers.
 pub fn is_placement_blocked(asset: Asset, zoom: Zoom, corner: &Q3) -> bool {
     let (world, room) = (World::now(), asset.room(zoom, corner));
-    let taken = !world.editable(&room) || world.placed_occupying(&room, |_| true).is_some();
+    let blocked = !world.editable(&room) || world.placed_occupying(&room, |_| true).is_some();
     let under = Aabb {
         min: [
             room.min[0],
@@ -72,9 +72,9 @@ pub fn is_placement_blocked(asset: Asset, zoom: Zoom, corner: &Q3) -> bool {
         max: [room.max[0], room.max[1], room.min[2]],
     };
     let refuses = |e: &Entry| {
-        kind_of(e.state).is_some_and(|under| asset.kind().is_some_and(|k| !goes_on(k, under)))
+        kind_of(e.state).is_some_and(|under| asset.kind().is_some_and(|k| !stands_on(k, under)))
     };
-    taken || world.placed_occupying(&under, refuses).is_some()
+    blocked || world.placed_occupying(&under, refuses).is_some()
 }
 
 /// The center of the leaf cell whose min corner is the hover anchor

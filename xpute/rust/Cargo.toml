@@ -1,31 +1,32 @@
-# The Rust kit, and the two ends over it. `kit` is what any program that
-# links it may use; `core` asks to be run its way — a turn on a doorbell, a
-# deadline measured from the frame, I/O asked of the runtime — and depends on
-# `kit`, never the reverse; `runtime` is the runtime's end in Rust, for a core
-# linked into the runtime's own native process. `gpu` is WebGPU's vocabulary
-# for a core's calls to a device it cannot reach, beside both. A core's
-# form lives in its end's path: `core`'s `wasm` (a module's link arguments,
-# which a build script takes it for, and its entry) and `runtime`'s `native`.
-# `conformance` is the core the contract's traces drive (spec/conformance/).
+# This is the Rust kit, and the two ends over it. `kit` is what any program
+# that links it may use. `core` asks to be run its way (a turn on a doorbell,
+# a deadline measured from the frame, I/O asked of the runtime), and it depends
+# on `kit`, never the reverse. `runtime` is the runtime's end in Rust, for a
+# core linked into the runtime's own native process. `gpu` is WebGPU's
+# vocabulary for a core's calls to a device it cannot reach, beside both. A
+# core's form lives in its end's path: `core`'s `wasm` (a module's link
+# arguments, which a build script takes it for, and its entry) and `runtime`'s
+# `native`. `conformance` is the core the contract's traces drive
+# (spec/conformance/).
 
 [workspace]
 resolver = "2"
 members = ["kit", "core", "runtime", "gpu", "conformance", "example", "tool"]
 
 [workspace.dependencies]
-# The workspace's own crates, each by its path once, so a crate names another
-# by name.
+# Each of the workspace's own crates is given by its path once, so a crate
+# names another by name.
 xpute-kit = { path = "kit" }
 xpute-core = { path = "core" }
 xpute-runtime = { path = "runtime" }
-# What a test reads a golden packet's bytes back as.
+# A test reads a golden packet's bytes back with this.
 hex = "0.4"
 
 [workspace.package]
 edition = "2021"
 version = "0.0.0"
 publish = false
-# What the library crates (kit, core, runtime, gpu) carry for a registry.
+# The library crates (kit, core, runtime, gpu) carry these for a registry.
 license = "MIT"
 repository = "https://github.com/canplane/xpute"
 readme = "../README.md"

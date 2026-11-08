@@ -12,13 +12,13 @@
 //! the sequence. Where the tile changed this frame, what the frames before left is moved to
 //! where this frame's eye sees it, and held within what this frame's pixels about it hold. A
 //! tile is claimed, and drawn again, until it has run through the sequence (word.rs
-//! `screen::DAMAGE_FRAMES`, screen_tiles.wgsl). Once every tile has, the jitter holds and the
+//! `screen::DAMAGE_FRAMES`, screen_tile.wgsl). Once every tile has, the jitter holds and the
 //! frame stands still.
 //!
 //! The tiles' words live on the GPU, as the light's do (gpu/tile.rs). Each holds the number of
 //! the frame its tile last changed in, which the frame's marks set. The CPU hands the marks, so
 //! it knows whether any tile gathers from what it handed. The resolve and the write-back draw
-//! the claimed tiles alone, a quad each (screen_tiles.wgsl).
+//! the claimed tiles alone, a quad each (screen_tile.wgsl).
 
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::world;
@@ -32,10 +32,10 @@ use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, sampler_entry, view_entry, Gpu, Group, Load,
     RenderContext,
 };
-use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::Surface;
-use crate::gpu::tile::{Tiles, SIDE};
+use crate::gpu::tile::{TileGrid, SIDE};
 
 /// The least share a frame takes where what the frames before left is held to this frame's
 /// pixels. It trades how long a trail a moving thing leaves against how still an edge stands.
@@ -71,11 +71,11 @@ pub struct Resolve {
     /// The screen's tiles, each claimed until it has gathered the jitter's whole sequence since
     /// it changed (gpu/tile.rs). The gate, the pixels' cast, the resolve, the write-back and
     /// the finish all draw by them.
-    pub tiles: Tiles,
+    pub tiles: TileGrid,
 }
 
 impl Resolve {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Resolve {
+    pub fn new(g: &Gpu, pipelines: &mut PipelineCache) -> Resolve {
         Resolve {
             pipeline: pipelines.build_world(g, PIPELINE_SCREEN_RESOLVE),
             sampler: g.sampler(
@@ -100,7 +100,7 @@ impl Resolve {
             last: (mat4::new(), [0.0; 3]),
             phase: 0,
             jitter: [0.0; 2],
-            tiles: Tiles::new(g, pipelines, SIDE, DAMAGE_FRAMES, GpuSpanName::damage),
+            tiles: TileGrid::new(g, pipelines, SIDE, DAMAGE_FRAMES, GpuSpanName::damage),
         }
     }
 
@@ -123,7 +123,7 @@ impl Resolve {
     }
 
     /// Sets the groups over `s`, the frame words in `frame` and the tiles' words and uniform,
-    /// before the frame's commands, once the tiles are sized for `s` (`Tiles::size`).
+    /// before the frame's commands, once the tiles are sized for `s` (`TileGrid::size`).
     pub fn set_groups(&mut self, g: &Gpu, frame: u32, s: &Surface) {
         let (words, uniform) = self.tiles.this_frame();
         for k in 0..2 {
@@ -247,7 +247,7 @@ impl Resolve {
 
     /// Whether the frames left of the jitter's sequence are asked for, with the jitter taking
     /// the sequence's next place in each. They are while the screen gathers after a change that
-    /// is not the scene's animation alone (`Tiles::asking`). The jitter is the world's
+    /// is not the scene's animation alone (`TileGrid::asking`). The jitter is the world's
     /// sequence, and moving it casts every pixel again (gpu/ray/schedule.rs `FrameKind::px`).
     /// So an animation's step holds the jitter: the tiles it marks are drawn through the gate
     /// with the jitter where it stands, and no pixel is cast for it. The animation's own

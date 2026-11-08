@@ -1,7 +1,7 @@
 // xpute-kit/wire/shape.test.rs
 
 use super::*;
-use crate::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeView, MAX_PKT_SZ};
+use crate::wire::xtp::{encoder, NodeView, TreeEncoderConfig, TreeView, MAX_PKT_SZ};
 
 type Packet = (Vec<u16>, u8, Vec<String>, (Vec<i16>, bool));
 
@@ -27,7 +27,7 @@ fn a_shape_writes_the_bytes_a_tree_does() {
     let tree = encoder()
         .encode(
             &t,
-            TreeEncoderOptions {
+            TreeEncoderConfig {
                 init_cap: 1 << 10,
                 max_cap: None,
             },

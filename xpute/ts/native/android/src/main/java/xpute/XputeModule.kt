@@ -8,10 +8,9 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 /**
- * xpute's native module on Android (src/mod.ts), the same as
- * ios/XputeModule.swift under the same names. It holds the core (Core.kt),
- * its GPU runtime (Gpu.kt) and the view its surface draws into
- * (SurfaceView.kt).
+ * This is xpute's native module on Android (src/mod.ts), the same as
+ * ios/XputeModule.swift under the same names. It holds the core (Core.kt), its
+ * GPU runtime (Gpu.kt) and the view its surface draws into (SurfaceView.kt).
  */
 class XputeModule : Module() {
   override fun definition() = ModuleDefinition {

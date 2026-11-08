@@ -1,7 +1,7 @@
 // xpute-runtime/native/alloc.rs
 
-//! The process's allocator. A block asked for on the core's thread comes from
-//! the core's memory, through xpute's slab over a buddy allocator
+//! This is the process's allocator. A block asked for on the core's thread
+//! comes from the core's memory, through xpute's slab over a buddy allocator
 //! (xpute_core::mem::heap), so what the core hands its runtime lies where the
 //! runtime can read it. A block asked for on any other thread comes from the
 //! system. A freed block goes back to whichever of the two holds its address.
@@ -12,15 +12,15 @@
 use std::alloc::{GlobalAlloc, Layout, System};
 
 use xpute_core::global::on_marked_thread;
-use xpute_core::mem::heap::{heap_stat, Bounds, Heap, HeapStat};
+use xpute_core::mem::heap::{heap_stat, Bound, Heap, HeapStat};
 
 use super::reserve::core;
 
-/// The heap's bounds, from `heap_at` to the memory's end. They are read only
+/// The heap's bounds run from `heap_at` to the memory's end. They are read only
 /// once the core has booted.
 struct Range;
 
-impl Bounds for Range {
+impl Bound for Range {
     fn base() -> usize {
         let c = core().expect("a block is asked of the heap once the core is booted");
         c.at + c.heap_at
@@ -74,7 +74,7 @@ impl SysLock {
     fn hold<R>(&self, f: impl FnOnce() -> R) -> R {
         // A panic under the lock stops the core, so the lock's poison is
         // ignored and the slab is used as it stands.
-        let _held = self
+        let _guard = self
             .0
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -105,8 +105,8 @@ pub(super) fn stat() -> HeapStat {
     HEAP.with(heap_stat)
 }
 
-/// The allocator a program installs. Before boot no thread is the core's,
-/// so every block is the system's.
+/// A program installs this allocator. Before boot no thread is the core's, so
+/// every block is the system's.
 pub struct Alloc;
 
 // SAFETY: every call into the slab holds the lock, and every block goes back

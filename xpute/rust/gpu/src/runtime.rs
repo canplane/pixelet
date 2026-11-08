@@ -1,6 +1,6 @@
 // xpute-gpu/runtime.rs
 
-//! The runtime's end of a core's GPU calls on a native device, as
+//! This is the runtime's end of a core's GPU calls on a native device, as
 //! ts/gpu/src/runtime.ts is on the web. It runs a stream's records
 //! (spec/gpu/api.json) on a wgpu device, and keeps each object the core made
 //! at its handle's slot. It knows nothing of what the core draws.
@@ -38,7 +38,7 @@ use crate::device;
 use crate::spec::STATUS;
 use belt::Belt;
 use image::{Decoder, Decoding};
-use name::Names;
+use name::EnumTable;
 use object::Object;
 use pending::Pending;
 use surface::Surface;
@@ -49,20 +49,20 @@ pub use open::{open, Ask, OpenError, Opened};
 #[cfg(test)]
 use admit::FrameGuard;
 
-/// What the runtime runs by: the program's numbers (`Numbers`) and the
+/// The runtime runs by these: the program's config (`CoreConfig`) and the
 /// platform's choices (`native::config`).
 #[derive(Clone, Copy)]
 pub struct Config {
-    /// The format that SURFACE_PREFERRED stands for and the device's block
-    /// tells the core, as `getPreferredCanvasFormat` gives it on the web.
+    /// This is the format that SURFACE_PREFERRED stands for and the device's
+    /// block tells the core, as `getPreferredCanvasFormat` gives it on the web.
     pub preferred_format: wgpu::TextureFormat,
     pub configure_at: ConfigureAt,
-    /// How many frames may be admitted and unfinished at once
+    /// This is how many frames may be admitted and unfinished at once
     /// (`GpuRuntime::admit_frame`); at least one. It is also each surface's
     /// `desired_maximum_frame_latency`. A surface keeps one texture more than
     /// that, so taking a texture for an admitted frame never blocks.
     pub frame_latency: u32,
-    /// The size of one chunk of the staging belt, chosen as large as a
+    /// This is the size of one chunk of the staging belt, chosen as large as a
     /// frame's writes; a larger write is staged across several chunks. The
     /// belt holds one chunk more than the frame latency.
     pub upload_chunk_bytes: u64,
@@ -73,30 +73,30 @@ pub struct GpuRuntime {
     adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
-    names: Names,
+    names: EnumTable,
     objects: Vec<Option<Object>>,
-    /// Indexed by surface number: the slot of the handle the program binds
-    /// the surface by.
+    /// This is indexed by surface number, and holds the slot of the handle the
+    /// program binds the surface by.
     surfaces: Vec<Surface>,
     preferred_format: wgpu::TextureFormat,
     configure_at: ConfigureAt,
-    /// The address where the core asked for the device's block.
+    /// This is the address where the core asked for the device's block.
     block: Option<u32>,
-    /// Set by wgpu's device-lost callback, on whatever thread wgpu calls it,
-    /// and taken at `poll`.
+    /// wgpu's device-lost callback sets this, on whatever thread wgpu calls it,
+    /// and `poll` takes it.
     gone: Arc<AtomicBool>,
     pending: Vec<Pending>,
     decoder: Decoder,
     decoding: VecDeque<Decoding>,
-    /// A record's words, copied out of the core's memory so that running the
-    /// record may write that memory.
+    /// These are a record's words, copied out of the core's memory so that
+    /// running the record may write that memory.
     scratch: Vec<u32>,
     command_bufs: Vec<wgpu::CommandBuffer>,
     /// This turn's frame was admitted, so `present` counts it unfinished.
     admitted: bool,
-    /// The frames this runtime admitted that the queue has not yet finished.
-    /// Each runtime keeps its own count, so no other runtime's frames hold
-    /// back its own.
+    /// This counts the frames this runtime admitted that the queue has not yet
+    /// finished. Each runtime keeps its own count, so no other runtime's frames
+    /// hold back its own.
     unfinished_cnt: Arc<AtomicU32>,
     frame_latency: u32,
     present_mode: wgpu::PresentMode,
@@ -138,7 +138,7 @@ impl GpuRuntime {
             belt: Belt::new(&device, cfg.upload_chunk_bytes, cfg.frame_latency + 1),
             device,
             queue,
-            names: Names::new(),
+            names: EnumTable::new(),
             objects: Vec::new(),
             surfaces: Vec::new(),
             preferred_format: cfg.preferred_format,
@@ -158,8 +158,8 @@ impl GpuRuntime {
         }
     }
 
-    /// The device the stream runs on, for the program's own calls on the
-    /// thread that runs the stream. An error scope the program pushes there
+    /// This is the device the stream runs on, for the program's own calls on
+    /// the thread that runs the stream. An error scope the program pushes there
     /// catches the errors of the records run after it.
     pub fn device(&self) -> &wgpu::Device {
         &self.device

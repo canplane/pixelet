@@ -27,7 +27,14 @@ export async function start<G extends Grant>(
     w.onerror = w.onmessageerror = (e: Event) =>
       fail(new Error(`the core's worker: ${e.type}`));
   });
-  w.postMessage({ xpute: port2, cmds: ui.cmds } satisfies Hello, [port2]);
+  w.postMessage(
+    {
+      xpute: port2,
+      cmds: ui.cmds,
+      origin: performance.timeOrigin,
+    } satisfies Hello,
+    [port2],
+  );
   await Promise.race([rose, failed]);
   w.onerror = w.onmessageerror = stop;
   return link;

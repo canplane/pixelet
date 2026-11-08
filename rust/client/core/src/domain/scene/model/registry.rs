@@ -93,7 +93,7 @@ pub struct Model {
 }
 
 #[derive(Default)]
-pub struct Models {
+pub struct ModelTable {
     /// A model is never let go, so its number names it for good.
     models: Vec<Model>,
 }
@@ -230,7 +230,7 @@ pub fn blend(a: &[f32; 10], b: &[f32; 10], w: f32) -> [f32; 10] {
     o
 }
 
-impl Models {
+impl ModelTable {
     /// Uploads `model` through `draw`, keeps it for good, and returns its
     /// number, which names it from then on.
     pub fn add(&mut self, draw: &mut DrawList, mut model: Model) -> u32 {
@@ -386,9 +386,9 @@ impl Model {
             if self.order.len() == before {
                 // The parents left form a cycle, so the remaining joints are
                 // taken as roots.
-                for (j, done) in placed.iter_mut().enumerate() {
-                    if !*done {
-                        *done = true;
+                for (j, is_placed) in placed.iter_mut().enumerate() {
+                    if !*is_placed {
+                        *is_placed = true;
                         self.order.push(j as u32);
                     }
                 }

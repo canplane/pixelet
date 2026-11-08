@@ -57,7 +57,6 @@ export function LocationStack() {
             status === SensorStatus.Loading ? (
               <Spinner size={chrome.glyph} color={LABEL.primary} />
             ) : (
-              // The glyph turns once as following starts.
               <Motion
                 to={{ rotate: 0 }}
                 from={{ rotate: -90 }}

@@ -4,7 +4,7 @@
 //! mechanics of a turn, the sections of its memory, the files it loads, what
 //! it was booted with, the machine it asks of its runtime and the device
 //! transport's decoder. Nothing here uses the domain, the renderer or the
-//! profiler (pxl-tool check_rules.rs).
+//! profiler (pxl-tool rule.rs).
 
 pub(crate) mod boot;
 pub(crate) mod io;

@@ -13,15 +13,15 @@ use crate::sys::sched::phase_spec::Phase;
 
 /// The share of the budget each phase must leave to the phases after it.
 /// Only the visible phase leaves one: the content's share.
-const HELD_BACK: [f64; Phase::ALL.len()] = {
-    let mut held = [0.0; Phase::ALL.len()];
-    held[Phase::visible as usize] = param::CONTENT_SHARE;
-    held
+const RESERVE: [f64; Phase::ALL.len()] = {
+    let mut share = [0.0; Phase::ALL.len()];
+    share[Phase::visible as usize] = param::CONTENT_SHARE;
+    share
 };
 
 const POLICY: TickPolicy = TickPolicy {
     hard_slack_ms: param::HARD_SLACK_MS,
-    held_back: &HELD_BACK,
+    reserve: &RESERVE,
 };
 
 /// Room for the steps registered at boot, with some to spare.

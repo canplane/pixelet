@@ -8,7 +8,7 @@
 
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::layer::lattice::Cells;
+use pxl_spec::space::layer::lattice::Grid;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 
@@ -49,7 +49,6 @@ pub fn cancel() {
     *dst() = None;
 }
 
-/// The place asked for and not yet put.
 pub fn pending() -> Option<Q3> {
     dst().map(|(at, _)| at)
 }
@@ -87,8 +86,6 @@ pub(crate) fn go_on_ground(to: Q3, motion: Motion) {
     go_to_ground(unknown_z(&to), motion);
 }
 
-/// Goes to a place as the location button does. A view far out comes in to
-/// the default distance.
 pub fn go_to_place(to: Q3) {
     go_on_ground(to, Motion::Smooth);
     controller::come_in_to_default();

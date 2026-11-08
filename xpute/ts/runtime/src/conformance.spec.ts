@@ -57,7 +57,7 @@ export const STACK_BYTES: u32 = 1048576 as number;
  * a module never grows, and a core takes no memory it was not given. */
 export const HEAP_BYTES: u32 = 65536 as number;
 
-/** How many slots the core's handle table has; slot 0 is never handed out. */
+/** The core's handle table has this many slots, and slot 0 is never handed out. */
 export const HANDLES: u32 = 16 as number;
 
 /** The most frames one RAISE may ask for; a RAISE that asks for more is refused with EINVAL. */

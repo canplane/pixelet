@@ -1,7 +1,7 @@
 // pxl-render/gpu/pass/model.rs
 
 //! What the model passes share: the decor, the impostors and the skinned
-//! characters. They bind one group 0, which holds the frame words, the sun's
+//! characters. They bind one group 0, which holds the frame words, the light's
 //! shadow map and the air. Each pass writes its draws' uniforms once before
 //! the pass, one slot a draw, and draws them by one loop.
 
@@ -18,7 +18,7 @@ use crate::gpu::api::{
 };
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::draw::{Block, DRAW_WORDS, MODEL_VERTEX_WORDS};
-use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::put::put_u32;
 
 fn frame_group(
@@ -39,10 +39,10 @@ fn frame_group(
 /// any pass, uses the group kept here. There are as many groups as skins the
 /// asset table names, all in the one skin layout (record.rs `SKIN`), and
 /// they are kept for the device's life.
-static SKINS: Global<Skins> = Global::new();
+static SKINS: Global<SkinCache> = Global::new();
 
 #[derive(Default)]
-struct Skins {
+struct SkinCache {
     sampler: u32,
     /// Pairs of an image and its bind group.
     groups: Vec<(u32, u32)>,
@@ -57,7 +57,7 @@ pub fn skin_group(g: &Gpu, layout: Layout, (image, file): Image) -> Option<u32> 
     if let Some(group) = skin_made(image) {
         return Some(group);
     }
-    let skins = SKINS.get(Skins::default);
+    let skins = SKINS.get(SkinCache::default);
     let texture = g.image(image, file)?;
     if skins.sampler == 0 {
         skins.sampler = g.sampler(
@@ -82,7 +82,7 @@ pub fn skin_group(g: &Gpu, layout: Layout, (image, file): Image) -> Option<u32> 
 /// frame's draws to bind. It makes none.
 pub fn skin_made(image: u32) -> Option<u32> {
     SKINS
-        .get(Skins::default)
+        .get(SkinCache::default)
         .groups
         .iter()
         .find(|&&(i, _)| i == image)
@@ -92,11 +92,11 @@ pub fn skin_made(image: u32) -> Option<u32> {
 /// Forgets every skin group once the device is lost, because the groups
 /// were the device's.
 pub(crate) fn on_skins_lost() {
-    SKINS.set(Skins::default());
+    SKINS.set(SkinCache::default());
 }
 
 /// Which of a model's two pipelines draws it. `Lit` draws it lit into the
-/// world's color. `Depth` draws its depth, seen from the sun, into the shadow
+/// world's color. `Depth` draws its depth, seen from the light, into the shadow
 /// map.
 #[derive(Clone, Copy)]
 pub enum Stage {
@@ -107,25 +107,25 @@ pub enum Stage {
 /// The group 0 layout of every model pipeline. Pipelines whose groups read
 /// alike share one layout (gpu/pipeline.rs), so a group made in the skinned
 /// pipeline's layout binds to every model pipeline.
-pub fn frame_layout(g: &Gpu, pipelines: &mut Pipelines) -> Layout {
+pub fn frame_layout(g: &Gpu, pipelines: &mut PipelineCache) -> Layout {
     pipelines.build_world(g, PIPELINE_SKINNED).layouts[0]
 }
 
-/// The model passes' group 0. It binds the frame words, the sun's shadow map
+/// The model passes' group 0. It binds the frame words, the light's shadow map
 /// and the air.
-pub struct FrameGroups {
+pub struct FrameGroup {
     pub frame: u32,
 }
 
-impl FrameGroups {
+impl FrameGroup {
     pub fn new(
         g: &Gpu,
         layout: Layout,
         frame_buf: u32,
         shadow: [Entry; 2],
         air: [Entry; AIR_ENTRIES],
-    ) -> FrameGroups {
-        FrameGroups {
+    ) -> FrameGroup {
+        FrameGroup {
             frame: frame_group(g, layout, frame_buf, shadow, air),
         }
     }
@@ -135,7 +135,7 @@ impl FrameGroups {
     }
 }
 
-pub struct DrawUniforms {
+pub struct UniformBuffer {
     bytes: u32,
     /// The distance between slots: `bytes` rounded up to the device's
     /// dynamic offset alignment.
@@ -147,30 +147,30 @@ pub struct DrawUniforms {
 }
 
 #[derive(Clone, Copy)]
-pub struct Slots {
+pub struct SlotRange {
     group: u32,
     stride: u32,
     first: u32,
 }
 
-impl Slots {
+impl SlotRange {
     pub fn at(&self, k: u32) -> (u32, u32) {
         (self.group, (self.first + k) * self.stride)
     }
 
     /// Drops the first `n` slots, as `Iterator::skip` drops the first `n`
     /// draws, so that the slots and the draws stay in step.
-    pub fn skip(self, n: u32) -> Slots {
-        Slots {
+    pub fn skip(self, n: u32) -> SlotRange {
+        SlotRange {
             first: self.first + n,
             ..self
         }
     }
 }
 
-impl DrawUniforms {
-    pub fn new(bytes: u32, align: u32) -> DrawUniforms {
-        DrawUniforms {
+impl UniformBuffer {
+    pub fn new(bytes: u32, align: u32) -> UniformBuffer {
+        UniformBuffer {
             bytes,
             stride: bytes.next_multiple_of(align),
             buf: 0,
@@ -217,8 +217,8 @@ impl DrawUniforms {
         g.write_buf(self.buf, 0, buf);
     }
 
-    pub fn slots(&self) -> Option<Slots> {
-        (self.group != 0).then_some(Slots {
+    pub fn slots(&self) -> Option<SlotRange> {
+        (self.group != 0).then_some(SlotRange {
             group: self.group,
             stride: self.stride,
             first: 0,
@@ -232,7 +232,7 @@ impl DrawUniforms {
     }
 }
 
-/// The bytes of one draw's uniform: the part of a `DrawUniforms` slot that
+/// The bytes of one draw's uniform: the part of a `UniformBuffer` slot that
 /// every model pass writes and its shader reads (frame/shader/word.rs
 /// `DRAW_FLOATS`).
 pub const DRAW_BYTES: u32 = word_bytes(DRAW_FLOATS);
@@ -265,7 +265,7 @@ pub fn draw_models<'a>(
     lit: &Pipeline,
     pipeline: u32,
     frame: u32,
-    slots: Slots,
+    slots: SlotRange,
     draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
     mut resolve: impl FnMut(&[u32; DRAW_WORDS]) -> Option<ModelDraw>,
 ) {

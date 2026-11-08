@@ -223,11 +223,11 @@ impl Light {
     /// cast at its band. So the band is exact: the squared distance is a whole number of squared
     /// texels (`band_texels2`) times `band_scale`, one product, which no device fuses or reorders.
     pub fn band(&self, size: u32, range: [Zoom; 2], tile: [i32; 2]) -> Zoom {
-        let held = cast::Detail {
+        let detail = cast::Detail {
             range,
             spacing: Spacing::NONE,
         };
-        held.hold(grid::cell_zoom_in_splits(
+        detail.hold(grid::cell_zoom_in_splits(
             band_texels2(size, tile) as f32 * self.band_scale(),
         ))
     }
@@ -278,7 +278,7 @@ impl Light {
     /// hold them and what is placed or cut over them (pxl-render forget.wgsl). So a tile whose
     /// rays meet no cell of its band over the column answers as before. A cell over the column
     /// lies within the column grown by a cell's side, and by a texel more for the rounding of the
-    /// rays' starts (`Starts`). Seen from above, the tile's rays sweep the parallelogram of its
+    /// rays' starts (`StartGrid`). Seen from above, the tile's rays sweep the parallelogram of its
     /// texels on the near plane along the light to their reach: a hexagon with three pairs of
     /// parallel edges, which the grown column misses where one of five axes separates them: X, Y,
     /// and the axis across each of the three edge directions. A band outside the column's reads
@@ -451,7 +451,7 @@ impl Column {
 
 /// The columns that brick `q` at `cell_zoom` changed by moving, as the tiles read them, each
 /// handed to `put`. A band reads a cell from the finest clip level at or above it that holds
-/// the cell present (`clipmap::step`, `held_to`). So the band at `cell_zoom` reads the whole
+/// the cell present (`clipmap::step`, `clip_zoom`). So the band at `cell_zoom` reads the whole
 /// brick, and a finer band reads it only where no brick at the next zoom is present
 /// (`present`): one column serves those bands, joining the bricks not present, or the whole
 /// brick's where none is. A coarser band reads none of it.
@@ -507,7 +507,7 @@ pub const COLUMNS: usize = 64;
 /// `HEADER_VEC4S` vec4s. It holds the cast's number, whether it is counted, its epoch and the
 /// map's side (`HEADER_CAST` to `HEADER_SIZE`); the corner of the cast before
 /// (`HEADER_LAST_CORNER`); whether its marks take each pixel's footprint
-/// (`HEADER_FOOTPRINT`); then the rays' starts (`Starts`, from `STARTS_AT`); then what the
+/// (`HEADER_FOOTPRINT`); then the rays' starts (`StartGrid`, from `STARTS_AT`); then what the
 /// host draws that reads the map (`RECEIVER_BOXES_AT`); then where the passes written by hand
 /// find the list's parts (`HEADER_CELLS`); and last the world's columns that changed
 /// (`COLUMNS_AT`).
@@ -611,19 +611,19 @@ pub const fn header_layout(size: u32) -> [(usize, u32); HEADER_LAYOUT_WORDS] {
         (HEADER_POOL, list_words(size)),
         (HEADER_HITS, hits_at(size)),
     ];
-    let mut laid = [(0, 0); HEADER_LAYOUT_WORDS];
+    let mut layout = [(0, 0); HEADER_LAYOUT_WORDS];
     let mut k = 0;
     while k < own.len() {
-        laid[k] = own[k];
+        layout[k] = own[k];
         k += 1;
     }
     let mut list = 0;
     while list < LISTS {
-        laid[k] = (HEADER_MARKS + list as usize, list_marks_at(size, list));
-        laid[k + 1] = (HEADER_LISTS + list as usize, list_cnt_at(size, list));
+        layout[k] = (HEADER_MARKS + list as usize, list_marks_at(size, list));
+        layout[k + 1] = (HEADER_LISTS + list as usize, list_cnt_at(size, list));
         (k, list) = (k + 2, list + 1);
     }
-    laid
+    layout
 }
 
 /// Where a texel's ray starts: the same point of the world in every frame cast in one light
@@ -637,7 +637,7 @@ pub const fn header_layout(size: u32) -> [(usize, u32); HEADER_LAYOUT_WORDS] {
 /// bits of a Q3 step (`fixed`), so a start is summed in integers, exactly, and a GPU that
 /// fuses, reorders or simplifies a float sum (Metal's fast math) gets the same start.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Starts {
+pub struct StartGrid {
     pub base: [i32; 2],
     pub across: [i32; 3],
     pub down: [i32; 3],
@@ -651,7 +651,7 @@ const _: () = assert!(
     "a band's texels squared are a float exactly (`band_texels2`)"
 );
 
-/// The fractional bits of a Q3 step that a start's steps and remainders hold (`Starts`).
+/// The fractional bits of a Q3 step that a start's steps and remainders hold (`StartGrid`).
 /// `start` splits each step into its whole steps, under 2^14 a texel (64 units), multiplied
 /// by a whole number under `ANCHOR`, and its fraction, multiplied by one, so each sum stays
 /// within an i32.
@@ -667,7 +667,7 @@ pub fn fixed(v: f32) -> i32 {
 /// vec4 each from `STARTS_AT`: the base, the steps across and down, the
 /// anchors, their remainders.
 pub const STARTS_AT: usize = 2;
-/// `Starts`'s vec4s from `STARTS_AT`, as a shader reads them (`Starts::words`).
+/// `StartGrid`'s vec4s from `STARTS_AT`, as a shader reads them (`StartGrid::words`).
 pub const STARTS_ACROSS: usize = 1;
 pub const STARTS_DOWN: usize = 2;
 pub const STARTS_ANCHORS: usize = 3;
@@ -682,7 +682,7 @@ pub const STARTS_VEC4S: usize = 11;
 pub const RECEIVER_BOXES_AT: usize = STARTS_AT + STARTS_VEC4S;
 pub const RECEIVER_BOXES: usize = 64;
 
-impl Starts {
+impl StartGrid {
     /// The start of the ray of world texel `w`, X across and Y down the
     /// rows: its anchor's (`base` and `ANCHOR`) and the steps from it.
     pub fn start(&self, w: [i32; 2]) -> [i32; 3] {
@@ -748,10 +748,10 @@ impl Starts {
 
     /// The starts its vec4s `w` lay, `w(k)` the `k`-th, as `words` lays
     /// them.
-    pub fn of_words(w: impl Fn(usize) -> [i32; 4]) -> Starts {
+    pub fn of_words(w: impl Fn(usize) -> [i32; 4]) -> StartGrid {
         let i = |v: [i32; 4]| [v[0], v[1], v[2]];
         let b = w(0);
-        Starts {
+        StartGrid {
             base: [b[0], b[1]],
             across: i(w(1)),
             down: i(w(2)),
@@ -765,7 +765,7 @@ impl Starts {
 /// (pxl-render light.wgsl `light_cs`), dispatched over the whole map.
 pub const TILE: u32 = 8;
 
-/// The light's beam (pxl-render corners.wgsl over beam.light.wgsl, light_cell.wgsl
+/// The light's beam (pxl-render corner.wgsl over beam.light.wgsl, light_cell.wgsl
 /// `light_cell_cs`). A beam ray stands at every `BEAM`-th texel of the box across and down,
 /// and `BEAM_WINDOW` past the box on each side. Each is walked from the world's root along the
 /// light's rays until it meets a cell that fills or lacks, or a split narrower than `2√2`
@@ -799,7 +799,7 @@ const _: () = assert!(
 pub const LINE_ORIGIN: u32 = beam::LINE_WORDS;
 
 /// The box texel over which beam ray `c` starts, across and down: every `BEAM`-th, from
-/// `BEAM_WINDOW` of them before the box's first (pxl-render light_list.wgsl `corner`).
+/// `BEAM_WINDOW` of them before the box's first (pxl-render light_list.wgsl `corner_texel`).
 pub const fn corner_at(c: [u32; 2]) -> [i32; 2] {
     let (b, w) = (BEAM as i32, BEAM_WINDOW as i32);
     [(c[0] as i32 - w) * b, (c[1] as i32 - w) * b]
@@ -815,7 +815,8 @@ pub const READ_PAD: f32 = (SPREAD + FILTER) * SQRT_2;
 const FILTER: f32 = 1.0;
 
 /// How far past the disk a receiver reads a tile's middle may lie with the tile still holding
-/// a slot it reads (`Light::reads_tile`): `READ_PAD` plus half the tile's diagonal.
+/// a slot it reads (`Light::read`, light_propagate.wgsl `read_tile`): `READ_PAD` plus half
+/// the tile's diagonal.
 pub const TILE_READ_PAD: f32 = READ_PAD + TILE as f32 * core::f32::consts::FRAC_1_SQRT_2;
 
 /// The tiles a receiver that reads a slot may stand in, across and down from
@@ -870,11 +871,11 @@ pub fn margin(width: f32) -> f32 {
 }
 
 /// The shadow map cast as the eye's rays are, every slot every frame (pxl-engine `raster`).
-/// A sample every `SAMPLE` slots across and down is walked (pxl-render samples.wgsl over
-/// sample.light.wgsl); the cells the samples stopped at are written as boxes by the eye's
-/// writer (pxl-render boxes.wgsl `write_box`) and drawn from the light by the eye's raster,
-/// orthographic (pxl-render raster.wgsl), in the box's order (`Light::texel`), each texel
-/// keeping the nearest box its own ray enters. A slot whose ray enters its visible sample,
+/// A sample every `SAMPLE` slots across and down is walked (pxl-render sample.wgsl over
+/// sample.light.wgsl); the cells the samples stopped at are written into the record by the
+/// eye's writer (pxl-render sample_box.wgsl `sample_box_cs`) and drawn from the light as boxes
+/// by the eye's raster, orthographic (pxl-render raster.wgsl), in the box's order
+/// (`Light::texel`), each texel keeping the nearest box its own ray enters. A slot whose ray enters its visible sample,
 /// tested again with its own ray as the eye's pixels test theirs (`cast::entry`), takes it
 /// (`light_cs`); the rest are listed and walked apart (`holes_at`). As for the eye, a cell no
 /// sample stopped at may stand in front of the visible one. The raster's `EYED` case does not
@@ -1019,7 +1020,7 @@ impl Light {
 
 /// What a cast lists, in the list's buffer, each entry a tile as `i | j << 16`. First come
 /// what feeds a tile it claimed at each level of the lattice, by the reach it feeds within
-/// (pxl-render light_list.wgsl `light_needs`), each entry the box tile it lies on: the beam
+/// (pxl-render light_enlist.wgsl `enlist`), each entry the box tile it lies on: the beam
 /// rays' corners (`LIST_CORNERS`), the tiles whose cells and samples feed one
 /// (`LIST_SOURCES`), and the tiles claimed, whose slots it casts (`LIST_DAMAGE`). Then come
 /// the tiles a receiver stands on (`LIST_RECEIVERS`), the world's first and then the drawn
@@ -1085,7 +1086,7 @@ pub const fn list_cnt_at(size: u32, which: u32) -> u32 {
 
 /// Where the beam rays' run parks them, past the lists, as the eye's are past its words
 /// (`beam::Grid::corner_states_at`): one state for each beam ray of the map
-/// (`ray::STATE_WORDS`, pxl-render corners.wgsl), row by row.
+/// (`ray::STATE_WORDS`, pxl-render corner.wgsl), row by row.
 pub const fn corner_states_at(size: u32) -> u32 {
     list_cnt_at(size, LISTS)
 }
@@ -1095,7 +1096,7 @@ pub const fn corner_states_at(size: u32) -> u32 {
 /// light_slide.wgsl). `READS_FROM` is the number of the first cast whose reads hold where a
 /// cast that owed a slide stood no receiver and so ran none. It is set by the one thread that
 /// lists a cast's first stood tile, where the slide last ran before the last cast that owed
-/// one (`HEADER_SLIDE_CAST`; light_receiver_tiles.wgsl `receiver_tiles_first`). The reads'
+/// one (`HEADER_SLIDE_CAST`; light_receiver_tile.wgsl `receiver_tiles_first`). The reads'
 /// epoch is the later of it and `HEADER_EPOCH` (`reads_epoch`).
 pub const fn slide_at(size: u32) -> u32 {
     corner_states_at(size) + beam_across(size) * beam_across(size) * ray::STATE_WORDS
@@ -1134,8 +1135,8 @@ pub const fn buffer_words(size: u32) -> u32 {
     hits_at(size) + ray::HITS_A_FRAME * beam::HIT_WORDS
 }
 
-/// The stood list's arguments, in a buffer of their own (pxl-render light_receiver_tiles.wgsl
-/// `ReceiverArgs`), laid out as a list walked apart lays its own (`ray::LEFT_EMPTY`;
+/// The stood list's arguments, in a buffer of their own (pxl-render light_receiver_tile.wgsl
+/// `ReceiverDispatch`), laid out as a list walked apart lays its own (`ray::LEFT_EMPTY`;
 /// list.wgsl `enlist`). First come the propagation's dispatch over the stood tiles, one row
 /// for each `MISS_LANES · MISS_ACROSS` listed (`RECEIVER_TILES_LIST`), and their count
 /// (`RECEIVER_TILES_CNT`). Then comes the slide's dispatch (`RECEIVER_TILES_SLIDE`): its
@@ -1195,8 +1196,8 @@ pub const fn args_words(size: u32) -> u32 {
 }
 
 /// Box texel `p`'s ray: its origin, where its world texel's middle lies on the near plane,
-/// rounded to a Q3 step as its anchor lays it out (`Starts`), and the ray.
-pub fn ray(s: &Light, starts: &Starts, p: [u32; 2]) -> ([i32; 3], Ray) {
+/// rounded to a Q3 step as its anchor lays it out (`StartGrid`), and the ray.
+pub fn ray(s: &Light, starts: &StartGrid, p: [u32; 2]) -> ([i32; 3], Ray) {
     let o = starts.start([
         s.corner[0].wrapping_add(p[0] as i32),
         s.corner[1].wrapping_add(p[1] as i32),
@@ -1248,7 +1249,7 @@ mod tests {
 
     /// Starts as a host lays them for the eye at the Q3 position `eye`, from the light's words
     /// alone: each anchor where its texel lies relative to the eye, rounded.
-    fn starts_of(eye: [i32; 3], s: &Light) -> Starts {
+    fn starts_of(eye: [i32; 3], s: &Light) -> StartGrid {
         let base = [
             s.corner[0].div_euclid(ANCHOR) * ANCHOR,
             s.corner[1].div_euclid(ANCHOR) * ANCHOR,
@@ -1268,7 +1269,7 @@ mod tests {
             )
         };
         let [a0, a1, a2, a3] = [0, 1, 2, 3].map(anchor);
-        Starts {
+        StartGrid {
             base,
             across: s.across.map(|v| fixed(v * q3)),
             down: s.down.map(|v| fixed(v * q3)),
@@ -1283,7 +1284,7 @@ mod tests {
         let s = down();
         let st = starts_of([7, -9, 11], &s);
         let w = st.words();
-        let back = Starts::of_words(|k| [0, 1, 2, 3].map(|j| w[4 * k + j] as i32));
+        let back = StartGrid::of_words(|k| [0, 1, 2, 3].map(|j| w[4 * k + j] as i32));
         assert_eq!(back, st);
     }
 
@@ -1484,7 +1485,7 @@ mod tests {
     /// where its floor lies under the top at its middle, so a coarser zoom's steps are wider. A
     /// node coarser than asked is a split where it reaches under the bumps' height, and air above
     /// it.
-    struct Bumps;
+    struct BumpyGround;
 
     const BUMPS: f32 = 6.0;
 
@@ -1492,7 +1493,7 @@ mod tests {
         3.0 * libm::sinf(x * 0.37) + 3.0 * libm::cosf(y * 0.29)
     }
 
-    impl cast::Query for Bumps {
+    impl cast::Query for BumpyGround {
         type At = ();
         fn root(&mut self, _: [i32; 3]) {}
         fn child(&mut self, _: &(), _: Zoom, _: [i32; 3]) {}
@@ -1539,7 +1540,12 @@ mod tests {
 
     /// The words a cast of box tile `tile` leaves, one for each of its texels' slots, every walk
     /// at the tile's band (`Light::band`) over the bumps.
-    fn cast_tile(s: &Light, st: &Starts, range: [Zoom; 2], tile: [i32; 2]) -> std::vec::Vec<u32> {
+    fn cast_tile(
+        s: &Light,
+        st: &StartGrid,
+        range: [Zoom; 2],
+        tile: [i32; 2],
+    ) -> std::vec::Vec<u32> {
         let b = s.band(64, range, tile);
         let detail = cast::Detail {
             range: [b, b],
@@ -1552,7 +1558,7 @@ mod tests {
                     tile[1] as u32 * TILE + k / TILE,
                 ];
                 let (o, ray) = ray(s, st, p);
-                let met = cast::first(&mut Bumps, o, &ray, detail, cast::Until::Opaque);
+                let met = cast::first(&mut BumpyGround, o, &ray, detail, cast::Until::Opaque);
                 word(depth(s, &met))
             })
             .collect()
@@ -1672,7 +1678,7 @@ mod tests {
     }
 
     /// Every point of a box within the reach stands on a tile its range holds, as every pixel
-    /// that took a voxel hit that voxel's box (pxl-render visible.wgsl `visible_entry`).
+    /// that took a voxel hit that voxel's box (pxl-render visible.wgsl `visible_cell`).
     #[test]
     fn box_tiles_hold_every_point() {
         let s = over_eye();
@@ -1695,11 +1701,11 @@ mod tests {
                 let p = [0, 1, 2].map(|k| lo[k] + next() * (hi[k] - lo[k]));
                 let t = s.tile_of(p);
                 let on = (0..8).contains(&t[0]) && (0..8).contains(&t[1]);
-                let held = range.is_some_and(|[first, last]| {
+                let in_range = range.is_some_and(|[first, last]| {
                     first[0] <= t[0] && t[0] <= last[0] && first[1] <= t[1] && t[1] <= last[1]
                 });
                 assert!(
-                    !within || !on || held,
+                    !within || !on || in_range,
                     "{lo:?} {hi:?} {p:?} {t:?} {range:?}"
                 );
             }
@@ -1728,15 +1734,15 @@ mod tests {
             }
             spans += 1;
             let range = s.box_tiles(64, a, a, true).unwrap();
-            let held = |t: [i32; 2], [lo, hi]: [[i32; 2]; 2]| {
+            let in_range = |t: [i32; 2], [lo, hi]: [[i32; 2]; 2]| {
                 lo[0] <= t[0] && t[0] <= hi[0] && lo[1] <= t[1] && t[1] <= hi[1]
             };
-            assert!(held(tb, range), "{a:?} {b:?}");
+            assert!(in_range(tb, range), "{a:?} {b:?}");
             for k in 0..=64 {
                 let f = k as f32 / 64.0;
                 let p = [0, 1, 2].map(|i| a[i] + f * (b[i] - a[i]));
                 let t = s.tile_of(p);
-                assert!(held(t, range), "{a:?} {b:?} {p:?} {t:?}");
+                assert!(in_range(t, range), "{a:?} {b:?} {p:?} {t:?}");
             }
         }
         assert!(spans >= 2, "{spans}");
@@ -1783,10 +1789,10 @@ mod tests {
             HEADER_SLIDE_CAST,
             HEADER_WORLD_RECEIVERS,
         ];
-        let laid: std::vec::Vec<usize> = header_layout(2048).iter().map(|&(k, _)| k).collect();
+        let layout: std::vec::Vec<usize> = header_layout(2048).iter().map(|&(k, _)| k).collect();
         for (i, a) in host.iter().enumerate() {
             assert!(*a < HEADER_WORDS);
-            assert!(!laid.contains(a), "{a}");
+            assert!(!layout.contains(a), "{a}");
             assert!(host[i + 1..].iter().all(|b| b != a), "{a}");
         }
     }

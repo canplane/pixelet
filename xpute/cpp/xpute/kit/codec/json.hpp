@@ -25,9 +25,9 @@ enum class JsonType : std::uint8_t { null, boolean, number, string, array, objec
 
 // The characters of a `JsonStr`, its escapes decoded. A `\u` escape of a lone
 // surrogate reads as U+FFFD.
-class JsonChars {
+class JsonCharIter {
   public:
-    explicit JsonChars(std::string_view rest) noexcept : rest_(rest) {}
+    explicit JsonCharIter(std::string_view rest) noexcept : rest_(rest) {}
     std::optional<char32_t> next() noexcept;
 
   private:
@@ -39,13 +39,13 @@ class JsonChars {
 class JsonStr {
   public:
     explicit JsonStr(std::string_view raw) noexcept : raw_(raw) {}
-    // The string as it stands, or none when it holds an escape and must be
-    // decoded.
+    // This answers the string as it stands, or none when it holds an escape
+    // and must be decoded.
     std::optional<std::string_view> as_plain() const noexcept;
-    JsonChars chars() const noexcept { return JsonChars(raw_); }
+    JsonCharIter chars() const noexcept { return JsonCharIter(raw_); }
     bool eq_str(std::string_view s) const noexcept;
     template <class S> void decode_into(S &out) const {
-        JsonChars c = chars();
+        JsonCharIter c = chars();
         while (std::optional<char32_t> ch = c.next()) {
             char buf[4];
             std::size_t n = 0;
@@ -59,8 +59,8 @@ class JsonStr {
     std::string_view raw_;
 };
 
-class JsonItems;
-class JsonFields;
+class JsonItemIter;
+class JsonFieldIter;
 
 class JsonValue {
   public:
@@ -69,10 +69,10 @@ class JsonValue {
     std::optional<bool> as_bool() const noexcept;
     std::optional<double> as_f64() const noexcept;
     std::optional<JsonStr> as_str() const noexcept;
-    JsonItems items() const noexcept;
+    JsonItemIter items() const noexcept;
     // Every field in the text's order; a key that appears twice is yielded
     // twice.
-    JsonFields fields() const noexcept;
+    JsonFieldIter fields() const noexcept;
     // The last field with that key, which is the one the runtime's
     // `JSON.parse` keeps.
     std::optional<JsonValue> get(std::string_view key) const noexcept;
@@ -81,30 +81,30 @@ class JsonValue {
 
   private:
     friend std::optional<JsonValue> read_json(std::string_view) noexcept;
-    friend class JsonItems;
-    friend class JsonFields;
+    friend class JsonItemIter;
+    friend class JsonFieldIter;
     explicit JsonValue(std::string_view s) noexcept : s_(s) {}
     std::string_view s_;
 };
 
-class JsonItems {
+class JsonItemIter {
   public:
     std::optional<JsonValue> next() noexcept;
 
   private:
     friend class JsonValue;
-    JsonItems(std::string_view s, std::size_t at) noexcept : s_(s), at_(at) {}
+    JsonItemIter(std::string_view s, std::size_t at) noexcept : s_(s), at_(at) {}
     std::string_view s_;
     std::size_t at_;
 };
 
-class JsonFields {
+class JsonFieldIter {
   public:
     std::optional<std::pair<JsonStr, JsonValue>> next() noexcept;
 
   private:
     friend class JsonValue;
-    JsonFields(std::string_view s, std::size_t at) noexcept : s_(s), at_(at) {}
+    JsonFieldIter(std::string_view s, std::size_t at) noexcept : s_(s), at_(at) {}
     std::string_view s_;
     std::size_t at_;
 };

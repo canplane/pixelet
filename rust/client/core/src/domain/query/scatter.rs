@@ -33,7 +33,7 @@ use pxl_content::decor;
 pub(super) struct DecorWorld<'a, 'w> {
     world: &'a World<'w>,
     ground: World<'w>,
-    lanes: store::Columns<'a>,
+    lanes: store::Table<'a>,
 }
 
 impl<'a, 'w> DecorWorld<'a, 'w> {

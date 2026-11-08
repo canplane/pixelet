@@ -26,9 +26,8 @@ const TIP_OPACITY = 0.72;
 const TIP_PAD_Y = 5;
 const TIP_RADIUS = (textStyle.notice.lineHeight + 2 * TIP_PAD_Y) / 2;
 
-/** Shows and hides the name of a pressed item. The name is drawn in the
- * sheet's top layer, over its bar: a name drawn inside the scrolling content
- * could not reach over the bar. */
+/** The name is drawn in the sheet's top layer, over its bar: a name drawn
+ * inside the scrolling content could not reach over the bar. */
 interface Naming {
   show: (label: string, item: View) => void;
   hide: () => void;
@@ -69,8 +68,6 @@ function NameTip({ named, sheetHeight }: { named: Named; sheetHeight: f64 }) {
   );
 }
 
-/** Holds the sheet's whole content and draws the name of the pressed item
- * over it. */
 export function NameTipLayer({ children }: { children: ReactNode }) {
   const sheet = useRef<View>(null);
   const [sheetHeight, setSheetHeight] = useState(0);

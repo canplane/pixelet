@@ -1,7 +1,7 @@
 // xpute-tool/spec/cmd/ts.rs
 
-//! Writes a command table as TypeScript for the runtime: its enums, a writer
-//! for each packet and a reader for each import.
+//! This writes a command table as TypeScript for the runtime: its enums, a
+//! writer for each packet and a reader for each import.
 
 use super::{literal, Entry, Field, Kind, Spec, Target, NUMBERS};
 use crate::spec::{file, generated, pascal, snake, ts_doc, Output};
@@ -86,12 +86,12 @@ fn ts_read(spec: &Spec, f: &Field, i: usize) -> Result<String, String> {
     Ok(format!("b.at({i}).get<{}>()", ts_type(spec, f)?))
 }
 
-struct TsUses {
+struct TsUse {
     words: Vec<String>,
     arrays: Vec<String>,
 }
 
-impl TsUses {
+impl TsUse {
     fn add(list: &mut Vec<String>, name: String) {
         if !list.contains(&name) {
             list.push(name);
@@ -104,13 +104,13 @@ impl TsUses {
     fn note(&mut self, spec: &Spec, fields: &[Field], read: bool) -> Result<(), String> {
         for f in fields {
             if NUMBERS.contains(&f.ty.as_str()) {
-                TsUses::add(&mut self.words, f.ty.clone());
+                TsUse::add(&mut self.words, f.ty.clone());
             }
             if read && f.list && NUMBERS.contains(&f.ty.as_str()) {
-                TsUses::add(&mut self.arrays, format!("{}Array", f.ty.to_uppercase()));
+                TsUse::add(&mut self.arrays, format!("{}Array", f.ty.to_uppercase()));
             }
             if spec.kind(&f.ty)? == Kind::Extern {
-                TsUses::add(&mut self.words, "u32".to_string());
+                TsUse::add(&mut self.words, "u32".to_string());
             }
         }
         Ok(())
@@ -145,7 +145,8 @@ fn ts_reader(spec: &Spec, name: &str, ty: &str, fields: &[Field]) -> Result<Vec<
     ])
 }
 
-/// The table's module, and beside it a module of each enum's constants.
+/// Writes the table's module, and beside it a module of each enum's
+/// constants.
 pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
     let mut out = vec![
         format!("// {}", t.ts_logical),
@@ -163,7 +164,7 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
     }));
     out.push(" */".into());
     let mut tail: Vec<String> = Vec::new();
-    let mut uses = TsUses {
+    let mut uses = TsUse {
         words: Vec::new(),
         arrays: Vec::new(),
     };
@@ -320,15 +321,15 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
     Ok(outputs)
 }
 
-/// The table's file name without `.spec.ts`, which names the folder its enums'
+/// The table's file name without `.spec.ts` names the folder its enums'
 /// modules lie in.
 fn stem_of(ts: &str) -> &str {
     let name = ts.rsplit_once('/').map_or(ts, |(_, n)| n);
     name.strip_suffix(".spec.ts").unwrap_or(name)
 }
 
-/// The path of an enum's module, in the folder beside the table that is named
-/// after it (`cmd.spec.ts`'s enums go in `cmd/`), with its logical path.
+/// This is the path of an enum's module, in the folder beside the table that is
+/// named after it (`cmd.spec.ts`'s enums go in `cmd/`), with its logical path.
 fn enum_module(t: &Target, name: &str) -> (String, String) {
     let stem = stem_of(t.ts);
     let at = |p: &str| {

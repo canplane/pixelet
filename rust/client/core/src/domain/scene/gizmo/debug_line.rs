@@ -21,7 +21,7 @@ pub const DEBUG_VERTEX_FLOATS: usize = record::DEBUG_VERTEX_BYTES as usize / 4;
 pub const DEBUG_FACE_FLOATS: usize = 3;
 
 #[derive(Default)]
-pub struct DebugLines {
+pub struct DebugMesh {
     block: MirroredBlock,
     line_cnt: u32,
     face_cnt: u32,
@@ -29,7 +29,7 @@ pub struct DebugLines {
     id: DrawId,
 }
 
-impl DebugLines {
+impl DebugMesh {
     /// Sets what is drawn. The first `lines` floats of `vertices` are line
     /// vertices, `DEBUG_VERTEX_FLOATS` each, and the rest are face vertices,
     /// `DEBUG_FACE_FLOATS` each, all relative to `origin`. When the block

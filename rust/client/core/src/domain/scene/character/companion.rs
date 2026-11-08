@@ -13,7 +13,7 @@
 //! Pets", CC0.
 
 use crate::domain::param;
-use crate::domain::query::changes::Memo;
+use crate::domain::query::change::Memo;
 use crate::domain::query::World;
 use crate::domain::query::{cell_zoom_at, over, under, walks};
 use crate::domain::scene::character::param::{
@@ -22,7 +22,7 @@ use crate::domain::scene::character::param::{
 };
 use crate::domain::scene::character::{Character, Group};
 use crate::domain::scene::frame::Frame;
-use crate::domain::scene::model::registry::Models;
+use crate::domain::scene::model::registry::ModelTable;
 use crate::domain::scene::model::{draw_list, models};
 use crate::domain::scene::transform::Transform;
 use crate::domain::setting::store::settings;
@@ -37,7 +37,7 @@ use pxl_spec::asset::marker::marker_shows;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{units, Zoom};
-use pxl_spec::space::layer::lattice::Cells;
+use pxl_spec::space::layer::lattice::Grid;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_core::clock;
 use xpute_core::global::Global;
@@ -546,7 +546,7 @@ pub fn companion_ready() -> [bool; 2] {
 /// surface shows the person and whether one shows the pet.
 pub fn companion_animate(
     draw: &mut DrawList,
-    models: &Models,
+    models: &ModelTable,
     frame: &Frame,
     on_surface: [bool; 2],
 ) -> bool {
@@ -559,7 +559,7 @@ pub fn companion_animate(
     moved
 }
 
-pub fn companion_draw(draw: &mut DrawList, models: &Models) {
+pub fn companion_draw(draw: &mut DrawList, models: &ModelTable) {
     for c in companion().characters.iter().flatten() {
         c.draw(draw, models);
     }

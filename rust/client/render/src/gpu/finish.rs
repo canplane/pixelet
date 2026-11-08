@@ -8,23 +8,23 @@
 //! world onto two targets of one color: the canvas, and the picture kept at the canvas's size
 //! (`Surface::picture`). The canvas's texture is a new one each frame, so a frame not drawn
 //! whole first shows the picture whole on the canvas, then finishes both targets again only in
-//! its claimed tiles (screen_tiles.wgsl).
+//! its claimed tiles (screen_tile.wgsl).
 
 use crate::frame::shader::record::{PIPELINE_SCREEN_FINISH, PIPELINE_SCREEN_SHOW};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, view_entry, word_bytes, Gpu, Group, Load,
     RenderContext, TARGETS,
 };
-use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::Surface;
-use crate::gpu::tile::{Tiles, SIDE};
+use crate::gpu::tile::{TileGrid, SIDE};
 
 pub struct Finish {
-    /// `pipeline` finishes onto the canvas alone, for a character surface. `kept` finishes
+    /// `pipeline` finishes onto the canvas alone, for a character surface. `picture` finishes
     /// onto the canvas and the picture, for the world.
     pipeline: Pipeline,
-    kept: Pipeline,
+    picture: Pipeline,
     /// `tiles` is the uniform the finish draws the tiles by, at the canvas's scale. `every` is
     /// bound in place of the tiles' words for a surface with no tiles, and nothing reads it.
     tiles: u32,
@@ -38,10 +38,10 @@ pub struct Finish {
 }
 
 impl Finish {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Finish {
+    pub fn new(g: &Gpu, pipelines: &mut PipelineCache) -> Finish {
         Finish {
             pipeline: pipelines.build(g, PIPELINE_SCREEN_FINISH, g.canvas()),
-            kept: pipelines.build_targets(g, PIPELINE_SCREEN_FINISH, g.canvas(), TARGETS),
+            picture: pipelines.build_targets(g, PIPELINE_SCREEN_FINISH, g.canvas(), TARGETS),
             tiles: g.buf(
                 word_bytes(8),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
@@ -64,17 +64,17 @@ impl Finish {
     /// When `s` keeps its picture, as the world does, a group is set over each of its histories
     /// with the screen's `tiles`, and the show's over the picture. Otherwise one group is set
     /// over its color.
-    pub fn set_groups(&mut self, g: &Gpu, frame: u32, s: &Surface, tiles: Option<&Tiles>) {
-        let kept = s.picture_view != 0;
-        let (layout, colors) = if kept {
-            (self.kept.layouts[0], &s.history_view[..])
+    pub fn set_groups(&mut self, g: &Gpu, frame: u32, s: &Surface, tiles: Option<&TileGrid>) {
+        let has_picture = s.picture_view != 0;
+        let (layout, colors) = if has_picture {
+            (self.picture.layouts[0], &s.history_view[..])
         } else {
             (
                 self.pipeline.layouts[0],
                 core::slice::from_ref(&s.color_view),
             )
         };
-        let changed_at = tiles.map_or(self.every, Tiles::changed_at);
+        let changed_at = tiles.map_or(self.every, TileGrid::changed_at);
         for (group, &color) in self.groups.iter_mut().zip(colors) {
             group.set(
                 g,
@@ -88,7 +88,7 @@ impl Finish {
                 ],
             );
         }
-        if kept {
+        if has_picture {
             let layout = self.show.layouts[0];
             self.show_group
                 .set(g, layout, &[view_entry(1, s.picture_view)]);
@@ -109,23 +109,23 @@ impl Finish {
         s: &Surface,
         color: u32,
         canvas: u32,
-        tiles: Option<(&Tiles, bool)>,
+        tiles: Option<(&TileGrid, bool)>,
     ) {
-        let kept = s.picture_view != 0;
+        let has_picture = s.picture_view != 0;
         let claimed = tiles
-            .filter(|&(_, partial)| partial && kept)
+            .filter(|&(_, partial)| partial && has_picture)
             .map(|(t, _)| t);
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(span);
         // The group of the world history that `color` is. A character surface's one color
         // uses the first group.
-        let group = self.groups[usize::from(kept && color == s.history_view[1])].id();
+        let group = self.groups[usize::from(has_picture && color == s.history_view[1])].id();
         // A tile's quad is grown by one canvas pixel each way, measured in the world's pixels,
         // to cover the world texels that a pixel at its edge reads.
         let grow = s.width as f32 / s.screen.0.max(1) as f32;
         let squares = [s.width, s.height].map(|v| v.div_ceil(SIDE));
         let t = match tiles {
-            Some((t, _)) => t.words(grow, claimed.map_or(u32::MAX, Tiles::damage_frames)),
+            Some((t, _)) => t.words(grow, claimed.map_or(u32::MAX, TileGrid::damage_frames)),
             None => [
                 squares[0],
                 squares[1],
@@ -154,8 +154,8 @@ impl Finish {
             Load::Clear
         };
         let desc = pass_desc(canvas, load, s.screen_depth_view, load, 0.0, stamp.pass());
-        let (pipeline, desc) = if kept {
-            (self.kept.id, desc.second_color(s.picture_view))
+        let (pipeline, desc) = if has_picture {
+            (self.picture.id, desc.second_color(s.picture_view))
         } else {
             (self.pipeline.id, desc)
         };

@@ -47,7 +47,7 @@ use crate::gpu::api::{
     RESULT,
 };
 use crate::gpu::image_map::ImageMap;
-use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::read::Read;
 use crate::gpu::span_spec::GpuSpanName;
 use crate::look::atmosphere as model;
@@ -331,7 +331,7 @@ pub struct Atmosphere {
 }
 
 impl Atmosphere {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Atmosphere {
+    pub fn new(g: &Gpu, pipelines: &mut PipelineCache) -> Atmosphere {
         let uniform = g.buf(
             word_bytes(ATMOS_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,

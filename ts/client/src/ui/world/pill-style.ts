@@ -1,7 +1,5 @@
 // @pxl/client/ui/world/pill-style.ts
 
-/** The styles a pill shares across platforms (pill.tsx and pill.ios.tsx). */
-
 import { StyleSheet } from "react-native";
 
 export const pillStyles = StyleSheet.create({

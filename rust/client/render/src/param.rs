@@ -107,14 +107,16 @@ pub mod ao {
 /// half its step. The module also holds the altitude a sky view's slope is measured over.
 pub mod atmos {
     params! {
-        /// Transmittance, as optical depth to the top.
+        /// The steps that march the transmittance table, which holds the optical depth to the
+        /// top.
         TRANSMITTANCE_STEPS: i32 = 40;
-        /// Hillaire's multiple scattering, which marches the second order with an isotropic
-        /// phase.
+        /// These two settings size Hillaire's multiple scattering, which marches the second
+        /// order with an isotropic phase.
         MULTISCATTER_DIRS: i32 = 8;
         MULTISCATTER_STEPS: i32 = 20;
         SKY_VIEW_STEPS: i32 = 30;
-        /// Bruneton's irradiance, the sky's light on an up-facing face.
+        /// These three settings size Bruneton's irradiance, the sky's light on an up-facing
+        /// face.
         IRRADIANCE_RINGS: i32 = 8;
         IRRADIANCE_BEARINGS: i32 = 16;
         IRRADIANCE_STEPS: i32 = 16;
@@ -207,7 +209,7 @@ pub mod lens {
         /// `GLARE_VEIL` is near the middle of that range.
         GLARE_HALO_SHARE: f32 = 0.6205;
         GLARE_VEIL: f32 = 0.03;
-        /// postprocessing's VignetteEffect defaults.
+        /// These two are the defaults of postprocessing's VignetteEffect.
         VIGNETTE_DARKNESS: f32 = 0.45;
         VIGNETTE_OFF: f32 = 0.3;
     }
@@ -253,10 +255,10 @@ pub mod location {
     pub mod beacon {
         params! {
             RADIUS: f32 = 0.3;
-            /// #ff1493 and #00f2ff in linear light; param.test.rs checks them.
+            /// These are #ff1493 and #00f2ff in linear light; param.test.rs checks them.
             DAY: [f32; 3] = [1.0, 0.006995, 0.291771];
             NIGHT: [f32; 3] = [0.0, 0.887923, 1.0];
-            /// What it gives off itself, by day and by night.
+            /// These two are what the beacon gives off itself, by day and by night.
             DAY_GLOW: f32 = 0.25;
             NIGHT_GLOW: f32 = 1.0;
             /// The values of three.js's standard material for a gem. The metal share gives the
@@ -295,7 +297,7 @@ pub mod sky {
     pub mod sun {
         params! {
             LIMB: f32 = 0.6;
-            /// Far past white once exposed, so the air in front colors it.
+            /// The disc is far past white once exposed, so the air in front colors it.
             DISC_GAIN: f32 = 4.0;
         }
     }

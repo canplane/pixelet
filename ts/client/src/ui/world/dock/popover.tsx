@@ -22,7 +22,6 @@ import { OBJECT_SCALES } from "@/ui/world/object.spec.ts";
 import { DOCK_HEIGHT } from "./card.tsx";
 import { type SizeGesture, STRIP } from "./strip.tsx";
 
-/** How far above the card the seed and the sizes stand. */
 const POPOVER_LIFT_PX = 6;
 const POPOVER_GAP_PX = 8;
 const POPOVER_PAD_Y = 8;
@@ -79,7 +78,6 @@ function scaleAt(at: Popover, x: f64, y: f64): i32 | null {
   return SCALES[row];
 }
 
-/** `bar` is the dock's bar. The popover's place is measured from it. */
 export function usePopover(bar: React.RefObject<View | null>): {
   popover: Popover | null;
   gesture: Omit<SizeGesture, "press">;

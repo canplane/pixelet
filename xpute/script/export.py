@@ -117,14 +117,14 @@ def compare(files: list[File], to: Path) -> tuple[list[str], list[str]]:
             differs.append(path)
         elif full.read_bytes() != data or bool(full.stat().st_mode & 0o111) != executable:
             differs.append(path)
-    kept = {f[0] for f in files}
-    return differs, [p for p in present(to) if p not in kept]
+    paths = {f[0] for f in files}
+    return differs, [p for p in present(to) if p not in paths]
 
 
 def write(files: list[File], to: Path) -> None:
-    kept = {f[0] for f in files}
+    paths = {f[0] for f in files}
     for path in present(to):
-        if path not in kept:
+        if path not in paths:
             (to / path).unlink()
     for path, data, executable in files:
         full = to / path

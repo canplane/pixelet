@@ -1,10 +1,10 @@
 // xpute-tool/spec/cmd/service.rs
 
-//! Writes a protocol's binding onto xpute's two ends, on top of its messages.
-//! On the runtime it writes a stub per `export`, bound to a runtime, and a
-//! handler per `import`. On the core it writes a function per `import`, and a
-//! trait the program implements for its `export`s. A runtime routes a frame to
-//! the binding by its command's major.
+//! This writes a protocol's binding onto xpute's two ends, on top of its
+//! messages. On the runtime it writes a stub per `export`, bound to a runtime,
+//! and a handler per `import`. On the core it writes a function per `import`,
+//! and a trait the program implements for its `export`s. A runtime routes a
+//! frame to the binding by its command's major.
 
 use super::{Field, Kind, Protocol, Spec};
 use crate::spec::{pascal, rs_doc, ts_doc};

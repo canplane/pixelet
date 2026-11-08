@@ -62,13 +62,14 @@ namespace xpute {
 
 inline constexpr std::uint32_t WORD = sizeof(std::uint32_t);
 
-// The words of a record: its op and count, then `args`, then `bytes` as
-// their count followed by the bytes in words.
+// A record's words are its op and count, then `args`, then `bytes` as their
+// count followed by the bytes in words.
 constexpr std::uint64_t record_words(std::uint64_t args, std::optional<std::uint64_t> bytes) noexcept {
     return 2 + args + (bytes ? 1 + (*bytes + WORD - 1) / WORD : 0);
 }
 
-// A record's size in bytes, the unit a stream's room is counted in.
+// `record_bytes` is a record's size in bytes, the unit a stream's room is
+// counted in.
 constexpr std::uint64_t record_bytes(std::uint64_t args, std::optional<std::uint64_t> bytes) noexcept {
     return record_words(args, bytes) * WORD;
 }
@@ -77,7 +78,6 @@ class Stream {
   public:
     static constexpr std::uint32_t END = stream::END;
     static constexpr std::uint32_t HEAD = stream::HEAD;
-    // The stream's own words, before the user's.
     static constexpr std::uint32_t OWN_WORDS = stream::OWN_WORDS;
 
     Stream(Memory mem, std::uint32_t at, std::uint32_t words, std::uint32_t head = OWN_WORDS) noexcept;
@@ -88,8 +88,8 @@ class Stream {
 
     std::uint32_t left() const noexcept { return (words_ - head_ - len_) * WORD; }
 
-    // Whether records of `bytes` bytes (`record_bytes`, or gpu/encode's
-    // `call::*_bytes`) fit with `leave` bytes left after them.
+    // `fits` says whether records of `bytes` bytes (`record_bytes`, or
+    // gpu/encode's `call::*_bytes`) fit with `leave` bytes left after them.
     bool fits(std::uint64_t bytes, std::uint32_t leave) const noexcept { return std::uint64_t{left()} >= bytes + leave; }
 
     // Opens a record of `n` words for its writer to fill, and answers where
@@ -149,8 +149,8 @@ class Stream {
     // Whether the runtime has stored END back to 0 since the last publish,
     // as of the last load.
     bool free_ = true;
-    // Whether a transaction is open, where it began, and whether a record
-    // that did not fit has dropped it.
+    // A mark says whether a transaction is open, where it began, and whether
+    // a record that did not fit has dropped it.
     struct Mark {
         enum State { off, open, spilled } state = off;
         std::uint32_t at = 0;

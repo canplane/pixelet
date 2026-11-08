@@ -111,13 +111,13 @@ fn grid(qx: i64, qy: i64, f: impl Fn(i64, i64) -> i64) -> Vec<i16> {
 }
 
 fn fold_grids(f: impl Fn(i64, i64) -> i64 + Copy) -> Vec<i16> {
-    fold_grids_held(f, |_| true)
+    fold_grids_of(f, |_| true)
 }
 
-/// The fold with only the tiles `held` says are held.
-fn fold_grids_held(f: impl Fn(i64, i64) -> i64 + Copy, held: impl Fn(usize) -> bool) -> Vec<i16> {
+/// The fold with only the tiles `has` says are held.
+fn fold_grids_of(f: impl Fn(i64, i64) -> i64 + Copy, has: impl Fn(usize) -> bool) -> Vec<i16> {
     let grids: Vec<Vec<i16>> = (0..16).map(|k| grid(k % 4 - 1, k / 4 - 1, f)).collect();
-    let refs: [Option<&[i16]>; 16] = std::array::from_fn(|k| held(k).then(|| grids[k].as_slice()));
+    let refs: [Option<&[i16]>; 16] = std::array::from_fn(|k| has(k).then(|| grids[k].as_slice()));
     let mut out = vec![0; PADDED * PADDED];
     fold_ele(refs, &mut out);
     out
@@ -129,7 +129,7 @@ fn fold_grids_held(f: impl Fn(i64, i64) -> i64 + Copy, held: impl Fn(usize) -> b
 fn ele_fold_padding() {
     let f = |x: i64, y: i64| 7 * x - 3 * y + 11;
     let whole = fold_grids(f);
-    let four = fold_grids_held(f, |k| [5, 6, 9, 10].contains(&k));
+    let four = fold_grids_of(f, |k| [5, 6, 9, 10].contains(&k));
     let rim = |s: usize| s < ELE_PAD as usize - 1 || s >= PADDED - (ELE_PAD as usize - 1);
     let mut outer = 0;
     for sy in 0..PADDED {

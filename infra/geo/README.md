@@ -30,7 +30,7 @@ infra/geo/
 │   ├── Dockerfile         every tool the ingests run, pinned
 │   └── run                runs a tool in that image
 ├── overture/
-│   └── source.json        the release; ingested by pxl-geo-bake's ingest_overture
+│   └── source.json        the release; ingested by pxl-geo-bake's overture
 ├── elevation/
 │   ├── source.json        the version
 │   └── ingest.sh

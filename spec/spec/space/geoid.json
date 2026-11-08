@@ -2,7 +2,7 @@
   "$doc": [
     "EGM2008's geoid height over the WGS84 ellipsoid, in meters to a tenth: what a GPS height,",
     "the ellipsoid's, is over the terrain's, EGM2008's (GEDTM30, EPSG:3855). From GeographicLib's",
-    "5' grid (egm2008-5) by pxl-tool/bin/bake_geoid.rs; bilinear between these misses it by at",
+    "5' grid (egm2008-5) by pxl-tool/bin/geoid.rs; bilinear between these misses it by at",
     "most 23.1 m, 1.9 m RMS."
   ],
   "GEOID_STEP_DEG": {

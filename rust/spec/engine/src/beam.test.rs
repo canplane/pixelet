@@ -257,7 +257,7 @@ fn each<T: Send>(n: usize, f: impl Fn(usize) -> T + Sync) -> Vec<T> {
 /// A sample's stop as the sample leaves it for the raster (pxl-render sample_put.wgsl
 /// `sample_put`): how it ended, the node, its asset and the axis it entered across. For a
 /// sample that went on to its reach, only that is kept, because its zoom `SAMPLE_NONE` is all
-/// the raster reads of it (pxl-render boxes.wgsl `write_box`).
+/// the raster reads of it (pxl-render sample_box.wgsl `stopped`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Hit {
     ends: End,
@@ -295,7 +295,7 @@ struct Cast {
     resumed: bool,
 }
 
-/// The view cast as the shader casts it (pxl-render corners.wgsl, cell.wgsl, samples.wgsl
+/// The view cast as the shader casts it (pxl-render corner.wgsl, cell.wgsl, sample.wgsl
 /// over sample.eye.wgsl): every corner's beam ray to where it stops, and how far it hands on;
 /// each cell's start, the least of its window's, with that corner's line and whether the cell
 /// resumes, which it does where every beam ray of the window asks as its rays ask; and every
@@ -351,9 +351,9 @@ fn cast_view(view: &View) -> Vec<Cast> {
         let (start, resumed) = if !resumes {
             ((root.0, root.1, 0.0), false)
         } else {
-            let (h, held) = line.node.over(cast::point_at(o, &ray, t));
+            let (h, found) = line.node.over(cast::point_at(o, &ray, t));
             let h = cast::holding(o, &ray, h, t);
-            if held {
+            if found {
                 ((h, cast::Over::over(line, h.zoom), t), true)
             } else {
                 ((root.0, root.1, t), false)

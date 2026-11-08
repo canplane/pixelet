@@ -1,6 +1,6 @@
 // xpute-tool/spec/cmd/rs.rs
 
-//! Writes a command table as Rust for a Rust core: its enums, a reader for
+//! This writes a command table as Rust for a Rust core: its enums, a reader for
 //! each packet and a writer for each import.
 
 use super::{literal, members, Apart, Entry, Enum, Field, Kind, Member, Spec, Target};
@@ -39,7 +39,7 @@ fn rs_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
         return Ok(format!("&'a [{}]", f.ty));
     }
     if f.list && kind == Kind::Str {
-        return Ok("Strs<'a>".to_string());
+        return Ok("StrList<'a>".to_string());
     }
     if f.list || kind == Kind::Record {
         return Err(format!(
@@ -311,8 +311,8 @@ pub(super) fn emit(spec: &Spec, t: &Target, apart: Option<&Apart>) -> Result<Str
         ]
         .map(String::from),
     );
-    // A list of strings is read as xpute's `Strs`, which is imported only
-    // where a packet has such a list.
+    // A list of strings is read as xpute's `StrList`, which is imported only where
+    // a packet has such a list.
     let strs = spec
         .commands()?
         .iter()
@@ -326,7 +326,7 @@ pub(super) fn emit(spec: &Spec, t: &Target, apart: Option<&Apart>) -> Result<Str
         .any(|f| f.list && f.ty == "str");
     out.push(format!(
         "use xpute_kit::wire::xtp::{{PacketWriter, {}TreeReader}};",
-        if strs { "Strs, " } else { "" }
+        if strs { "StrList, " } else { "" }
     ));
     out.push(format!("use {}::{{finite, integer, unknown}};", t.number));
     let names: &[String] = apart.map_or(&[], |a| &a.names);

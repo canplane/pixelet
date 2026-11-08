@@ -48,7 +48,7 @@ pub fn open(core: Core) -> Option<()> {
 /// they opened, one line each, and opens the scopes again at once. Returns no errors when
 /// the core has stopped.
 pub fn take(core: Core) -> Vec<String> {
-    let taken = core.run_on(|| {
+    let errors = core.run_on(|| {
         device()
             .poll(wgpu::PollType::Wait {
                 submission_index: None,
@@ -64,5 +64,5 @@ pub fn take(core: Core) -> Vec<String> {
         push();
         errors
     });
-    taken.unwrap_or_default()
+    errors.unwrap_or_default()
 }

@@ -44,12 +44,12 @@ pub const ASSET_ROOT: &str = "/asset";
 /// Forward search, the one geo query with no finite tile to bake it against.
 pub const SEARCH_URL: &str = "/geo/search";
 
-/// Ops routes, behind the shared admin token. One per root rather than one
-/// shared branch: each server gates its own prefix, and a token that opened
-/// both would make either server's leak the other's.
+/// Ops routes, behind the shared admin token. There is one branch per root rather
+/// than one shared branch, because each server gates its own prefix: a token that
+/// opened both would let a leak from either server open the other's.
 pub const GEO_INTERNAL: &str = "/geo/internal";
 
-/// pxl-api's own, gated the same way.
+/// pxl-api's ops routes, gated the same way.
 pub const API_INTERNAL: &str = "/api/internal";
 
 pub const GEO_PREFIX: &str = "/geo/";

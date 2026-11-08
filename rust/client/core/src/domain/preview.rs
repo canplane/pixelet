@@ -20,7 +20,7 @@ use pxl_spec::space::layer::octant::Octant;
 /// fall into a hole not yet dug. The preview moves no revision, so saves
 /// never see a hover.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct RenderEdits {
+pub struct RenderEdit {
     /// The key of the placed object hidden, whatever its kind. The rays cut
     /// it and decor's records leave it out, each reader only where it holds
     /// that object.

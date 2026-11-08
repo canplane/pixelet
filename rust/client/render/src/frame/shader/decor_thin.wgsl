@@ -12,12 +12,12 @@
 /// each decor's count, which this pass's threads add to, lies among them. The records after
 /// them are plain: a record's words are written by the one thread whose add to its decor's
 /// count took it, and read by the passes after.
-struct Records {
+struct RecordBuffer {
   headers: array<atomic<u32>, SLOTS_AT>,
   words: array<u32>,
 }
 
-@group(0) @binding(9) var<storage, read_write> records: Records;
+@group(0) @binding(9) var<storage, read_write> records: RecordBuffer;
 @group(0) @binding(11) var<storage, read> list: array<u32>;
 
 @compute @workgroup_size(LANES)

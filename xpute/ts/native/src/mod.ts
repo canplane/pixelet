@@ -1,12 +1,12 @@
 // @xpute/native
 
 /**
- * xpute's native module, which an Expo app autolinks (ios/, android/). It
- * gives the core linked into the app, which @xpute/runtime's native platform
- * opens; the core's GPU runtime, which @xpute/gpu's `NativeGpu` grants; and
- * the view a core's surface draws into. The core is the app's core crate,
- * named by `xpute.core` in the app's package.json and built along with the
- * app (script/build-core.py).
+ * This is xpute's native module, which an Expo app autolinks (ios/, android/).
+ * It gives the core linked into the app, which @xpute/runtime's native platform
+ * opens; the core's GPU runtime, which @xpute/gpu's `NativeGpu` grants; and the
+ * view a core's surface draws into. The core is the app's core crate, named by
+ * `xpute.core` in the app's package.json and built along with the app
+ * (script/core-build.py).
  *
  * The core's memory is one ArrayBuffer over the region the core took, with
  * no copy. The core runs on its own thread while it has work (xpute-runtime
@@ -46,20 +46,20 @@ interface Xpute {
   resume(): void;
   /** Answers here the call that waits, if one does. */
   answer(): void;
-  /** What the turns since the last call asked: when the core wants the next
-   * turn, in ms (0 for at once, -1 for never, NaN once the core has
+  /** This reports what the turns since the last call asked: when the core wants
+   * the next turn, in ms (0 for at once, -1 for never, NaN once the core has
    * stopped), then how long the longest of those turns took, in ms. */
   turns(): [f64, f64];
   /** Makes `answer` answer the core's calls from here on. */
   callOn(answer: (at: u32) => i32): void;
-  /** Whether a GPU device opened. What the device is, the core reads from
-   * its GPU runtime. */
+  /** This says whether a GPU device opened. What the device is, the core reads
+   * from its GPU runtime. */
   gpuOpen(): boolean;
 }
 
 export const XPUTE: Xpute = requireNativeModule<Xpute>("Xpute");
 
-/** A view that the core's surface `surface` draws into; 0 names no surface.
+/** The core's surface `surface` draws into this view, and 0 names no surface.
  * The view tells when the surface is bound (`onAttach`), which happens after
  * mount, and when it is let go (`onDetach`). The core sizes the surface and
  * draws it inside its turns. */

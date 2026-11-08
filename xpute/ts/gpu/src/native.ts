@@ -1,12 +1,12 @@
 // @xpute/gpu/native.ts
 
 /**
- * A native app's GPU, granted to a core (@xpute/runtime `Gpu`). The device and
- * its runtime run in the app's own process (xpute-gpu runtime native), reached
- * through xpute's native module (@xpute/native). That runtime runs the core's
- * stream as the core publishes it, and kicks the core when a request
- * completes. This class only opens the device and tells the core that it
- * answered.
+ * This is a native app's GPU, granted to a core (@xpute/runtime `Gpu`). The
+ * device and its runtime run in the app's own process (xpute-gpu runtime
+ * native), reached through xpute's native module (@xpute/native). That runtime
+ * runs the core's stream as the core publishes it, and kicks the core when a
+ * request completes. This class only opens the device and tells the core that
+ * it answered.
  */
 
 import type { Gpu, GpuGrant, GpuState } from "@xpute/runtime";
@@ -31,8 +31,8 @@ export class NativeGpu implements Gpu {
     to.ready();
   }
 
-  /** Nothing to do: the native runtime runs the stream as the core publishes
-   * it. */
+  /** There is nothing to do here: the native runtime runs the stream as the
+   * core publishes it. */
   after_turn(): void {}
 
   private tell(state: GpuState): void {

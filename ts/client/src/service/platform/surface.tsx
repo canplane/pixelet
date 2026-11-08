@@ -1,10 +1,5 @@
 // @pxl/client/service/platform/surface.tsx
 
-/**
- * The canvases the core draws into on a page, and the page's input: the
- * canvas's box, the pointer, the wheel, the keys and the tab's visibility.
- */
-
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 import { useEffect, useRef } from "react";
@@ -33,7 +28,8 @@ function dpr(): f64 {
   return globalThis.devicePixelRatio || 1;
 }
 
-/** Calls `then` when the device pixel ratio changes: a page zoom, or a move to another screen. */
+/** The device pixel ratio changes with a page zoom or a move to another
+ * screen. */
 function onRatioChange(then: () => void): () => void {
   let query = matchMedia(`(resolution: ${dpr()}dppx)`);
   const fire = () => {
@@ -47,11 +43,10 @@ function onRatioChange(then: () => void): () => void {
 }
 
 /**
- * Opens a surface on `canvas` and keeps it sized to the canvas's layout box.
- * The bounding rect is not used, because it includes the transforms that a
- * sliding drawer passes through. Safari reports no size in device pixels, so
- * the CSS box times the pixel ratio stands in, and a change of the ratio alone
- * is watched for.
+ * The bounding rect is not used for a surface's size, because it includes the
+ * transforms that a sliding drawer passes through. Safari reports no size in
+ * device pixels, so the CSS box times the pixel ratio stands in, and a change
+ * of the ratio alone is watched for.
  */
 function openSurface(
   canvas: HTMLCanvasElement,
@@ -73,8 +68,6 @@ function openSurface(
   };
 }
 
-/** Binds `handle` to the canvas and keeps it sized to it. The returned
- * function lets the handle go. */
 function attach(
   canvas: HTMLCanvasElement,
   surface: SurfaceDriver,
@@ -109,7 +102,6 @@ function attach(
   };
 }
 
-/** Whether a key went to a text field. The UI routes a field's keys apart. */
 function inField(e: KeyboardEvent): boolean {
   const target = e.target;
   return (
@@ -184,8 +176,8 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
     if (keyDown(e.code, { inField: inField(e) })) e.preventDefault();
   };
   const onKeyUp = (e: KeyboardEvent) => keyUp(e.code);
-  // The keys and pointers the world holds are released as the page hides. The
-  // core hears of the hiding itself from the platform (visibility.ts).
+  // The core hears of the hiding from the platform (visibility.ts), so this
+  // only lets go of what the world holds.
   const onVisibility = () => {
     if (document.visibilityState !== "visible") {
       releaseKeys();
@@ -251,7 +243,6 @@ export function World({
     };
   }, []);
 
-  // Over a marker that a tap acts on, the cursor shows as it does over a link.
   return (
     <canvas
       ref={ref}

@@ -1,12 +1,11 @@
 // @pxl/client/ui/world/pointer.ts
 
 /**
- * Sends a pointer on the world to the core. A touch that starts on the world
- * puts the keyboard away. While the dock is in message mode, that touch ends
- * the typing instead of tapping: its lift ends the gesture with no tap, and
- * its drag still moves the world. In message mode the pointer counts as off
- * the world, so that nothing hovers there and no tool previews what a tap
- * would do.
+ * A touch that starts on the world puts the keyboard away. While the dock is
+ * in message mode, that touch ends the typing instead of tapping: its lift
+ * ends the gesture with no tap, and its drag still moves the world. In message
+ * mode the pointer counts as off the world, so that nothing hovers there and
+ * no tool previews what a tap would do.
  */
 
 import type { f64, i32 } from "@xpute/kit/abi/word.ts";

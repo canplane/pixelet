@@ -228,23 +228,19 @@ pub enum SettingKey {
     /// Off by default: the tilt is the one control a view from above is expected to
     /// have, and locking it reads as the app being stuck.
     tilt_lock = 4,
-    /// Which controller makes the camera's pose; CAMERA_MODES says each. To
-    /// first person the person stands at the pivot, the eye at its
-    /// height over the ground; to third the pivot is laid on the ground
-    /// and the eye steps back by the radius.
+    /// On a switch to first person the person stands at the pivot, the eye at its
+    /// height over the ground. On a switch to third person the pivot is laid on the
+    /// ground and the eye steps back by the radius.
     camera_mode = 5,
     /// The pivot stands on what supports it and a pan takes the lowest way over what is in it (control/support.rs). Off, a pan keeps the pivot's height and passes through anything; a tap still stands it on the surface it struck.
     surface_follow = 6,
-    /// What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. Only `climb` goes into a tunnel (orbit/collision.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default.
+    /// Only `climb` goes into a tunnel (orbit/collision.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default.
     orbit_obstacle = 7,
     /// Darkens cube edges that border open air (rust/client/render/src/frame/shader/paint.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.
     edge_shade = 8,
     /// A uniform on an already-compiled shader term; not a pass.
     rim_light = 9,
-    /// corner, the occlusion a voxel world reads off its own cubes' faces;
-    /// screen, N8AO's screen-space pass with the corners' too, the costliest
-    /// of the three. AO_MODES says each.
     ao = 10,
     /// The shadow map (rust/client/render/src/gpu/shadow.rs): the world cast
     /// once more from the sun, or the moon where the sun is down, as the eye's
@@ -257,7 +253,7 @@ pub enum SettingKey {
     /// The pixels the world is drawn at: two to a CSS pixel is four times the
     /// work done a drawn pixel at a time (span.json `per_px`), and nothing
     /// more; the camera grid's rays and the light's map cost the same at any.
-    /// The markers and the finish stay at the display's. RES_MODES says each.
+    /// The markers and the finish stay at the display's.
     res = 12,
     /// Where the camera and the pointer are, read live (perf/read.rs, NOW's view section).
     view = 13,
@@ -269,7 +265,6 @@ pub enum SettingKey {
     pet = 18,
     /// Counts what the eye's cast and the sun's shadow map do: the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn. The GPU counts them and writes them into the profiler's ray lanes of the frame that counted them (rust/spec/engine/src/count.rs, rust/client/render/src/gpu/ray/count.rs). The counting's atomics run inside the cast's spans, so time the cast with this off.
     ray_counts = 20,
-    /// The hour the sky is drawn at; SKY_TIMES says each.
     sky_time = 21,
 }
 
@@ -364,7 +359,7 @@ impl SettingKey {
 
 /// Every setting's value: what the store holds, and what the app reads.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Settings {
+pub struct Setting {
     pub textures: bool,
     pub decor: bool,
     pub clouds: bool,
@@ -387,9 +382,9 @@ pub struct Settings {
     pub sky_time: SkyTime,
 }
 
-impl Settings {
+impl Setting {
     /// Every setting at schema.json's default.
-    pub const DEFAULT: Settings = Settings {
+    pub const DEFAULT: Setting = Setting {
         textures: true,
         decor: true,
         clouds: true,

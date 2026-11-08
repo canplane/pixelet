@@ -41,7 +41,7 @@ enum class Major : std::uint32_t {
 
 } // namespace xpute::abi::sys
 
-template <> struct xpute::Members<xpute::abi::sys::Major> {
+template <> struct xpute::EnumInfo<xpute::abi::sys::Major> {
     static constexpr std::array<xpute::abi::sys::Major, 2> ALL{xpute::abi::sys::Major::NOP, xpute::abi::sys::Major::SYS};
 };
 
@@ -57,7 +57,7 @@ enum class SysMinor : std::uint32_t {
 
 } // namespace xpute::abi::sys
 
-template <> struct xpute::Members<xpute::abi::sys::SysMinor> {
+template <> struct xpute::EnumInfo<xpute::abi::sys::SysMinor> {
     static constexpr std::array<xpute::abi::sys::SysMinor, 5> ALL{xpute::abi::sys::SysMinor::ABORT, xpute::abi::sys::SysMinor::ATTACH, xpute::abi::sys::SysMinor::SUSPEND, xpute::abi::sys::SysMinor::RESUME, xpute::abi::sys::SysMinor::TURN};
 };
 
@@ -93,7 +93,7 @@ enum class Command : std::uint32_t {
 
 } // namespace xpute::abi::sys
 
-template <> struct xpute::Members<xpute::abi::sys::Command> {
+template <> struct xpute::EnumInfo<xpute::abi::sys::Command> {
     static constexpr std::array<xpute::abi::sys::Command, 6> ALL{xpute::abi::sys::Command::NOP, xpute::abi::sys::Command::SYS_ATTACH, xpute::abi::sys::Command::SYS_SUSPEND, xpute::abi::sys::Command::SYS_RESUME, xpute::abi::sys::Command::SYS_TURN, xpute::abi::sys::Command::SYS_ABORT};
 };
 

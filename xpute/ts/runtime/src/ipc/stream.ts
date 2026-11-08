@@ -1,7 +1,7 @@
 // @xpute/runtime/ipc/stream.ts
 
 /**
- * A stream: a turn's calls from the core to the runtime (xpute-core
+ * A stream carries a turn's calls from the core to the runtime (xpute-core
  * ipc/stream.rs), which the runtime runs after the turn returns. The records
  * are found from the stream's own words (spec/ipc/stream.json).
  */

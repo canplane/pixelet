@@ -1,10 +1,5 @@
 // @pxl/client/service/platform/sensor-listener.ts
 
-/**
- * What both platforms' sensors (sensor.ts, sensor.native.ts) share: the
- * listener they tell, and how a fix is put in the listener's terms.
- */
-
 import type { f64 } from "@xpute/kit/abi/word.ts";
 
 import type { Fix, SensorListener } from "./types.ts";

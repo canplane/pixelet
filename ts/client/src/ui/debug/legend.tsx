@@ -1,11 +1,5 @@
 // @pxl/client/ui/debug/legend.tsx
 
-/**
- * The legend of the world gizmo's marks, shown while the `world_gizmo` setting
- * is on. Its colors and dashes are read from gizmo.spec.ts, the same values
- * the gizmo's lines are drawn with.
- */
-
 import { StyleSheet, Text, View } from "react-native";
 
 import { SETTING } from "@/ui/setting/schema.ts";
@@ -43,11 +37,8 @@ const hex = (rgb: number) => `#${rgb.toString(16).padStart(6, "0")}`;
 const useShown = (name: "world_gizmo") =>
   useCore((s) => s.settings[SETTING[name].key] === 1);
 
-/**
- * Lists the looks in the spec's order. `reversed` lists them backwards, so
- * that the look drawn over the others comes first. A look shows as a stroke,
- * the way a line is drawn, or with `filled` as a patch, the way a tint is.
- */
+/** `reversed` lists the looks backwards, so that the look drawn over the
+ * others comes first. */
 function Rows<K extends string>({
   looks,
   labels,

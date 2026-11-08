@@ -3,8 +3,6 @@
 //! The numbers of the core's I/O: how reads are retried and how many run at
 //! once, how many files a turn writes, and how much memory bodies may hold.
 
-// ---- I/O robustness ----
-
 /// After the server fails, every read waits before it starts. The longest
 /// wait is `RETRY_BASE_MS`, doubled for each failure in a row and never more
 /// than `RETRY_CAP_MS` (sys/io/policy.rs `backoff`). After `RETRY_ATTEMPTS`
@@ -17,15 +15,11 @@ pub const RETRY_ATTEMPTS: u32 = 6;
 /// The most reads out at once, however many credits the runtime grants.
 pub const MAX_CREDITS: u32 = 16;
 
-// ---- writes ----
-
 /// The most files `write` writes in one turn (sys/io/file.rs). Each such file
 /// is one batch of the objects' edits (domain/layer/object/repository.rs). A
 /// write past this number waits for a later turn. The frames the files may
 /// post in a turn count these writes (sys/io/runtime.rs `FILE_FRAMES`).
 pub const WRITES_A_TURN: u32 = 8;
-
-// ---- bodies ----
 
 /// The most terrain and Earth bodies held at once, in slots of the heap's
 /// runs (sys/io/body.rs). A body holds its slot while it is on a credit and

@@ -5,8 +5,7 @@ import { assembleLabel } from "./label.ts";
 import { fixed } from "@/ui/fixed.ts";
 import { useCore } from "@/ui/watch.ts";
 
-/** The label of the division under the pivot, assembled from each snapshot.
- * The core marks which of the division's names the view is zoomed in far
+/** The core marks which of the division's names the view is zoomed in far
  * enough to show. */
 export function useDivisionLabel(): string | null {
   return useCore((s) => {

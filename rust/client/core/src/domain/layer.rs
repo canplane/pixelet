@@ -10,7 +10,7 @@ use pxl_spec::space::layer::lattice::{coarsest, Lattice};
 use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 use xpute_core::mem::heap::Block;
 
-use crate::sys::io::demand::{Phases, Stream};
+use crate::sys::io::demand::{PhaseList, Stream};
 use crate::sys::io::failure::Failure;
 use tile_cache::TileCache;
 
@@ -29,7 +29,6 @@ use crate::sys::io::source;
 pub use answer::Answer;
 pub(in crate::domain) use query::Query;
 
-/// Which tiles a layer asks for.
 #[derive(Clone, Copy)]
 pub enum AskScope {
     /// The floor alone (tile_cache/floor.rs).
@@ -91,12 +90,12 @@ pub trait Base: Clone + 'static {
         tile: Quadrant,
         record: u32,
         pkt: &[u8],
-        phases: &mut Phases,
+        phases: &mut PhaseList,
     ) -> Result<Self, Failure>;
 
     /// Disposes of the packet a tile arrived in, once slot `record` took the
     /// tile or no slot did. The default frees it; a layer whose GPU copies
-    /// the tile from its packet keeps the packet instead (`upload::Uploads`).
+    /// the tile from its packet keeps the packet instead (`upload::UploadTable`).
     fn keep(_record: Option<u32>, block: Block) {
         fetch::release(Some(block));
     }

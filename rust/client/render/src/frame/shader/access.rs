@@ -158,7 +158,6 @@ impl Step {
         }
     }
 
-    /// A direct dispatch of compute pipeline `compute` over `group`.
     pub const fn dispatch(
         name: &'static str,
         stage: u32,
@@ -225,7 +224,6 @@ impl Step {
         }
     }
 
-    /// A copy of `from` to `to`.
     pub const fn copy(name: &'static str, stage: u32, from: Range, to: Range) -> Step {
         Step {
             from,
@@ -234,7 +232,6 @@ impl Step {
         }
     }
 
-    /// A write of `to` by the host.
     pub const fn write(name: &'static str, to: Range) -> Step {
         Step {
             to,
@@ -300,7 +297,6 @@ pub struct Bound {
     pub overrun: u32,
 }
 
-/// Whether `r` lies within one of `bounds`.
 const fn within_bound(r: Range, bounds: &[Bound]) -> bool {
     let mut k = 0;
     while k < bounds.len() {
@@ -361,7 +357,7 @@ pub const TOUCHES: &[Touch] = {
     }
     /// The stood list is the list of the tiles the receivers stand on. These are the words of
     /// its args that a receivers' pass writes as it lists a tile: its dispatch's x, its count
-    /// and the slide's x (light_receiver_tiles.wgsl `receiver_tiles_put`,
+    /// and the slide's x (light_receiver_tile.wgsl `receiver_tiles_put`,
     /// `receiver_tiles_first`).
     const RECEIVER_TILES: [u32; 2] = [light::RECEIVER_TILES_LIST, light::RECEIVER_TILES_SLIDE + 1];
     /// The args of a raster's draw, and the faces' asks a pass lays out at `at`
@@ -392,7 +388,7 @@ pub const TOUCHES: &[Touch] = {
         },
         // The record's draw counts the drawable entries' boxes into its draw's args, and stands
         // each box's tiles as a receiver of the world's (record_draw.wgsl,
-        // light_receiver_tiles.wgsl `stand_box`).
+        // light_receiver_tile.wgsl `stand_box`).
         Touch {
             compute: COMPUTE_RECORD_DRAW,
             binding: 16,
@@ -434,7 +430,7 @@ pub const TOUCHES: &[Touch] = {
             reads: &[DRAW_ARGS],
         },
         // The receivers' passes mark the tiles they stand on, the world's receivers and the
-        // drawn ones alike (light_receiver_tiles.wgsl `stand`).
+        // drawn ones alike (light_receiver_tile.wgsl `stand`).
         Touch {
             compute: COMPUTE_LIGHT_MARK_WALKED,
             binding: 21,
@@ -656,7 +652,6 @@ pub const fn same(a: &str, b: &str) -> bool {
     true
 }
 
-/// The kind `layout` gives `binding`, or None when the layout does not hold it.
 const fn kind_in(layout: &[u32], binding: u32) -> Option<u32> {
     let mut e = 0;
     while e + 2 < layout.len() {
@@ -668,7 +663,6 @@ const fn kind_in(layout: &[u32], binding: u32) -> Option<u32> {
     None
 }
 
-/// Pass `compute`'s touch of `binding`, where one is declared.
 const fn touch_of(compute: u32, binding: u32) -> Option<&'static Touch> {
     let mut k = 0;
     while k < TOUCHES.len() {
@@ -688,7 +682,6 @@ const fn end(r: Range) -> u32 {
     }
 }
 
-/// Whether two ranges share a word.
 pub const fn overlap(a: Range, b: Range) -> bool {
     a.buf != NO_BUFFER
         && a.buf == b.buf
@@ -787,7 +780,6 @@ pub const fn writes_atomic(s: &Step, buf: u32) -> bool {
     true
 }
 
-/// Whether `r` lies within one of `ranges`.
 const fn within(r: Range, ranges: &[Range]) -> bool {
     let mut k = 0;
     while k < ranges.len() {
@@ -801,7 +793,7 @@ const fn within(r: Range, ranges: &[Range]) -> bool {
 }
 
 /// The kept range `r` lies within, if one does.
-const fn kept_of(f: &Frame, r: Range) -> Option<usize> {
+const fn persistent_of(f: &Frame, r: Range) -> Option<usize> {
     let mut k = 0;
     while k < f.persistent.len() {
         if within(r, &[f.persistent[k].range]) {
@@ -868,16 +860,18 @@ pub const fn declared(f: &Frame) {
     }
     let mut k = 0;
     while k < f.persistent.len() {
-        let kept = &f.persistent[k];
+        let persistent = &f.persistent[k];
         let mut by = 0;
-        while by < kept.by.len() {
-            if !named(f, kept.by[by]) {
-                panic!("{}", kept.by[by]);
+        while by < persistent.by.len() {
+            if !named(f, persistent.by[by]) {
+                panic!("{}", persistent.by[by]);
             }
             by += 1;
         }
-        if kept.invalidation.is_empty() || (kept.by.is_empty() && !named(f, kept.owner)) {
-            panic!("{}", kept.owner);
+        if persistent.invalidation.is_empty()
+            || (persistent.by.is_empty() && !named(f, persistent.owner))
+        {
+            panic!("{}", persistent.owner);
         }
         k += 1;
     }
@@ -944,7 +938,6 @@ pub const fn declared(f: &Frame) {
     }
 }
 
-/// Whether a step of the frame is named `name`.
 const fn named(f: &Frame, name: &str) -> bool {
     let mut k = 0;
     while k < f.steps.len() {
@@ -956,7 +949,6 @@ const fn named(f: &Frame, name: &str) -> bool {
     false
 }
 
-/// Whether `pipelines` holds `pipeline`.
 const fn holds(pipelines: &[u32], pipeline: u32) -> bool {
     let mut k = 0;
     while k < pipelines.len() {
@@ -1058,7 +1050,6 @@ const fn table(f: &Frame) -> Table {
     t
 }
 
-/// Whether step `k` writes what `r` holds.
 const fn writes_into(t: &Table, k: usize, r: Range) -> bool {
     let mut n = 0;
     while n < t.written[k] {
@@ -1070,7 +1061,6 @@ const fn writes_into(t: &Table, k: usize, r: Range) -> bool {
     false
 }
 
-/// Whether the step named `name` is declared a seed (`Frame::seeds`).
 const fn seeds(f: &Frame, name: &str) -> bool {
     let mut k = 0;
     while k < f.seeds.len() {
@@ -1148,7 +1138,7 @@ const fn unwritten_read(f: &Frame, t: &Table, r: usize) -> Option<(usize, u32)> 
             }
             w += 1;
         }
-        if !before && kept_of(f, read).is_none() {
+        if !before && persistent_of(f, read).is_none() {
             return Some((usize::MAX, read.buf));
         }
         n += 1;
@@ -1162,12 +1152,12 @@ const fn not_owner(f: &Frame, t: &Table, w: usize) -> Option<usize> {
     let s = &f.steps[w];
     let mut k = 0;
     while k < f.persistent.len() {
-        let kept = f.persistent[k];
-        let writes = writes_into(t, w, kept.range);
-        let applies = applies(&kept, s.name);
-        let owner = same(s.name, kept.owner) || applies;
-        let atomic = within(kept.range, f.appends) && writes_atomic(s, kept.range.buf);
-        if (writes && !owner && s.kind != WRITE_BY_RUNTIME && !owned_with(f, w, kept.owner))
+        let persistent = f.persistent[k];
+        let writes = writes_into(t, w, persistent.range);
+        let applies = applies(&persistent, s.name);
+        let owner = same(s.name, persistent.owner) || applies;
+        let atomic = within(persistent.range, f.appends) && writes_atomic(s, persistent.range.buf);
+        if (writes && !owner && s.kind != WRITE_BY_RUNTIME && !owned_with(f, w, persistent.owner))
             || (owner && !writes)
             || (applies && writes && !atomic)
         {
@@ -1178,11 +1168,10 @@ const fn not_owner(f: &Frame, t: &Table, w: usize) -> Option<usize> {
     None
 }
 
-/// Whether step `name` is one that applies kept range `kept`'s rule.
-const fn applies(kept: &Persistent, name: &str) -> bool {
+const fn applies(persistent: &Persistent, name: &str) -> bool {
     let mut k = 0;
-    while k < kept.by.len() {
-        if same(kept.by[k], name) {
+    while k < persistent.by.len() {
+        if same(persistent.by[k], name) {
             return true;
         }
         k += 1;
@@ -1205,7 +1194,7 @@ const fn owned_with(f: &Frame, w: usize, owner: &str) -> bool {
 /// Whether step `w` owns the kept range `read` lies within. An owner writes the range for the
 /// frames after, so its write after a read in the same frame is no hazard.
 const fn rewrites_persistent(f: &Frame, w: usize, read: Range) -> bool {
-    match kept_of(f, read) {
+    match persistent_of(f, read) {
         Some(k) => {
             same(f.steps[w].name, f.persistent[k].owner)
                 || owned_with(f, w, f.persistent[k].owner)
@@ -1215,7 +1204,6 @@ const fn rewrites_persistent(f: &Frame, w: usize, read: Range) -> bool {
     }
 }
 
-/// The most hazards a frame is held to.
 pub const HAZARDS_CAP: usize = 64;
 
 /// Every hazard the frame holds, step by step and rule by rule within a step, and how many
@@ -1233,12 +1221,12 @@ pub const fn hazards(f: &Frame) -> ([Hazard; HAZARDS_CAP], usize) {
     let mut k = 0;
     while k < f.steps.len() {
         let mut each = [none; 4];
-        if let Some(kept) = not_owner(f, &t, k) {
+        if let Some(p) = not_owner(f, &t, k) {
             each[3] = Hazard {
                 rule: 4,
                 step: k,
-                other: kept,
-                buf: f.persistent[kept].range.buf,
+                other: p,
+                buf: f.persistent[p].range.buf,
             };
         }
         if let Some(g) = bound_writable(f, k) {
@@ -1293,7 +1281,6 @@ pub const fn with(f: &Frame, found: &Hazard) -> &'static str {
     }
 }
 
-/// Whether `known` names `found`.
 const fn names(f: &Frame, known: &KnownHazard, found: &Hazard) -> bool {
     known.rule == found.rule
         && same(known.step, f.steps[found.step].name)
@@ -1314,7 +1301,7 @@ const fn refuse_read_before_written(name: &str) {
     panic!("{}", name)
 }
 /// A known hazard the frame no longer holds, refused by its step's name.
-const fn refuse_known_gone(name: &str) {
+const fn refuse_known_missing(name: &str) {
     panic!("{}", name)
 }
 
@@ -1345,14 +1332,14 @@ pub const fn check(f: &Frame, known: &[KnownHazard]) {
     }
     let mut m = 0;
     while m < known.len() {
-        let mut held = false;
+        let mut matched = false;
         let mut k = 0;
         while k < n {
-            held |= names(f, &known[m], &found[k]);
+            matched |= names(f, &known[m], &found[k]);
             k += 1;
         }
-        if !held {
-            refuse_known_gone(known[m].step);
+        if !matched {
+            refuse_known_missing(known[m].step);
         }
         m += 1;
     }

@@ -1,11 +1,11 @@
 // @xpute/runtime/ipc/head.ts
 
 /**
- * The front's header (spec/ipc/head.json). The runtime lays it in a core's
- * memory from the core's machine before the first turn, as io_uring's setup
- * lays its rings, together with each ring's own header (ring.json). It is
- * read back to find the rings and the GPU stream. On its first turn the core
- * checks the header against its machine.
+ * The runtime lays the front's header (spec/ipc/head.json) in a core's memory
+ * from the core's machine before the first turn, as io_uring's setup lays its
+ * rings, together with each ring's own header (ring.json). It is read back to
+ * find the rings and the GPU stream. On its first turn the core checks the
+ * header against its machine.
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
@@ -14,8 +14,8 @@ import { MarshalError } from "@xpute/kit/status/error.ts";
 import { MAGIC, WORDS, word } from "./head.spec.ts";
 import * as ring from "./ring.spec.ts";
 
-/** The front a machine declares: the rings' sizes, and where the rings,
- * their slots and the GPU stream lie. `gpu_at` is 0 without the GPU
+/** A `Front` is the front a machine declares: the rings' sizes, and where the
+ * rings, their slots and the GPU stream lie. `gpu_at` is 0 without the GPU
  * device. */
 export interface Front {
   sq_cap: u32;
@@ -28,14 +28,14 @@ export interface Front {
   gpu_at: u32;
 }
 
-/** Whether a header is laid at `at`. A core that outlived its runtime's
- * reload keeps the header laid for it, and its rings' positions with it. */
+/** This says whether a header is laid at `at`. A core that outlived its
+ * runtime's reload keeps the header laid for it, and its rings' positions with
+ * it. */
 export function laid(mem: ArrayBufferLike, at: u32): boolean {
   return new Uint32Array(mem, at, WORDS)[word.MAGIC] === MAGIC;
 }
 
-/** Lays the header at `at`, and each ring's header with its positions at
- * 0. */
+/** Lays the header at `at`, and each ring's header with its positions at 0. */
 export function lay(mem: ArrayBufferLike, at: u32, f: Front): void {
   const h = new Uint32Array(mem, at, WORDS);
   h[word.MAGIC] = MAGIC;
@@ -57,8 +57,8 @@ export function lay(mem: ArrayBufferLike, at: u32, f: Front): void {
   }
 }
 
-/** Where a laid header says the rings and the GPU stream are. A header
- * without xpute's MAGIC throws EBADMSG. */
+/** A `Head` says where a laid header puts the rings and the GPU stream. A
+ * header without xpute's MAGIC throws EBADMSG. */
 export class Head {
   readonly sq_at: u32;
   readonly cq_at: u32;

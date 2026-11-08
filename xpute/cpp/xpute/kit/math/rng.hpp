@@ -1,8 +1,8 @@
 // cpp/xpute/kit/math/rng.hpp
 
-// Reproducible seeds and random streams, not for anything that must resist
-// prediction. There are two families, a file each: a 64-bit one built on
-// splitmix64 (rng.64.hpp), and a 32-bit one built on Murmur3's finalizer
+// These seeds and streams are reproducible, and not for anything that must
+// resist prediction. There are two families, a file each: a 64-bit one built
+// on splitmix64 (rng.64.hpp), and a 32-bit one built on Murmur3's finalizer
 // (rng.32.hpp), which a GPU shader can compute as well.
 
 #pragma once

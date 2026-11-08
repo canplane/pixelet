@@ -1,19 +1,19 @@
 // xpute-gpu/runtime/configure.rs
 
-/// Where a stale surface is configured. Configuring a surface sets its
-/// layer's properties, which some platforms allow on one thread only.
+/// This says where a stale surface is configured. Configuring a surface sets
+/// its layer's properties, which some platforms allow on one thread only.
 #[derive(Clone, Copy)]
 pub enum ConfigureAt {
-    /// On the thread that runs the stream.
+    /// The surface is configured on the thread that runs the stream.
     Here,
-    /// Wherever the given function sends the work, which must then run
-    /// `configure_surfaces`.
+    /// The surface is configured wherever the given function sends the work,
+    /// which must then run `configure_surfaces`.
     Elsewhere(fn()),
-    /// On the main queue, where Core Animation sets a layer's properties.
-    /// The given function must run `configure_surfaces` while nothing else
-    /// uses the runtime; beside a native core, that is inside the core's
-    /// `while_idle`. Asking twice before it runs configures nothing twice,
-    /// since only a stale surface is configured.
+    /// The surface is configured on the main queue, where Core Animation sets a
+    /// layer's properties. The given function must run `configure_surfaces`
+    /// while nothing else uses the runtime; beside a native core, that is
+    /// inside the core's `while_idle`. Asking twice before it runs configures
+    /// nothing twice, since only a stale surface is configured.
     #[cfg(target_vendor = "apple")]
     Main(fn()),
 }

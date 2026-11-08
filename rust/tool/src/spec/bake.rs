@@ -107,7 +107,8 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
         "export const BASE_LAYERS = [{}] as const;",
         list(&|k| json_str(k))
     ));
-    // A version is any one segment the declaration names; a name, a digit a zoom (pxl-spec space/hierarchy/morton.rs).
+    // A version is any one segment the declaration names. A name is digits from 0 to 3, one
+    // digit for each zoom (pxl-spec space/hierarchy/morton.rs).
     let pattern = object
         .replace("{version}", "[^/]+")
         .replace("{name}", "[0-3]+")
@@ -398,7 +399,7 @@ pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
         "SYMBOL",
         &symbol,
     )?;
-    // The UI's: what it draws a search result's place as, by its number.
+    // The UI's table holds what it draws a search result's place as, by the category's number.
     let mut ts = vec![
         "// @pxl/client/ui/search/place_theme.spec.ts".to_string(),
         "//".into(),

@@ -7,8 +7,8 @@ import type { i32 } from "@xpute/kit/abi/word.ts";
 
 import type {
   Frame,
-  Percentiles,
-  RayCounts,
+  Percentile,
+  RayCount,
   RecordingSection,
   TaskRecord,
   TaskSummary,
@@ -33,23 +33,19 @@ const pastText = (f: Frame) =>
   f.over_ms > 0
     ? `over by ${n1(f.over_ms)}`
     : `off-turn ${n1(f.interval_ms - f.busy_ms)}`;
-const percentiles = (s: Percentiles) =>
+const percentiles = (s: Percentile) =>
   `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
-/** A ray column's name without its observer's prefix, such as `cast` for
- * `eye_cast` (FRAME_GROUP.rays). */
-type RayColumn<K = keyof RayCounts> = K extends `eye_${infer C}` ? C : never;
+type RayColumn<K = keyof RayCount> = K extends `eye_${infer C}` ? C : never;
 
-/** Formats the counts the `ray_counts` setting collects, which the core sums
- * over the window's frames (the rays columns of FRAME in perf.json). Each
- * observer, the eye and the light, gets one line when it cast in the window.
- * Per cast, the line gives the nodes asked by its beam rays, by its samples
- * and by its holes' walk (`hole_walk`), and how many of the walks' nodes were
- * asked of the world (`asks`). It gives the pixels or map slots cast again,
- * split into those that took the visible voxel, the holes, which walked on
- * their own, and those that took the sky, each as a share of all its pixels
- * or slots. Last come the nodes each hole asked, and the boxes drawn per
- * cast. */
-const raysText = (f: RayCounts) => {
+/** The counts are the ones the `ray_counts` setting collects, which the core
+ * sums over the window's frames. Each observer, the eye and the light, gets one
+ * line when it cast in the window. `beam`, `sample` and `hole_walk` are the
+ * nodes that its beam rays, its samples and its holes' walks asked per cast,
+ * and `asks` is how many of the walks' nodes were asked of the world. `voxel`,
+ * `hole` and `sky` count the pixels or map slots cast again that took the
+ * visible voxel, walked on their own, or took the sky, each shown as a share
+ * of all its pixels or slots (`rays`). */
+const raysText = (f: RayCount) => {
   const observer = (name: "eye" | "light") => {
     const at = (column: RayColumn) => f[`${name}_${column}`];
     const casts = at("cast");
@@ -76,9 +72,6 @@ const raysText = (f: RayCounts) => {
 
 const deg = (rad: number) => (rad * 180) / Math.PI;
 
-/** Where the view stood when the report was read, in the core's numbers
- * (perf.json NOW.view), and how many of the world's pixels the last frame
- * that a GPU read timed drew. */
 function viewText(v: ViewSection, gpuPx: f64): string {
   const pivot = Number.isNaN(v.pivot_lat)
     ? "-"
@@ -90,8 +83,6 @@ function viewText(v: ViewSection, gpuPx: f64): string {
   }`;
 }
 
-/** Each frame figure's most or least since the recording started (perf.json
- * STAT.recording). */
 function recordingText(r: RecordingSection): string {
   if (!r.frames) return "  since   no frame folded";
   return `  since   heap max live ${bytes(r.heap_live_max_bytes)}  run ${bytes(
@@ -173,8 +164,6 @@ export function frameLine({ sample: s, delta }: Worst): string {
   )}${d}`;
 }
 
-/** A note for a platform that does not report long animation frames (LoAF):
- * its long frames are then long tasks only, or none. */
 function longSourcesText(): string {
   const sources = long_frame.sources();
   if (sources.includes("loaf")) return "";

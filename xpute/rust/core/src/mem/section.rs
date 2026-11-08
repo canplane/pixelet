@@ -1,8 +1,8 @@
 // xpute-core/mem/section.rs
 
-//! Ranges laid end to end in a linear memory, as a linker script places
-//! sections at `ALIGN(n)` boundaries. The memory never grows, so a view over
-//! it stays valid for the module's life.
+//! These are ranges laid end to end in a linear memory, as a linker script
+//! places sections at `ALIGN(n)` boundaries. The memory never grows, so a view
+//! over it stays valid for the module's life.
 
 /// The unit every range begins on, and the heap buddy's smallest block: the
 /// page of a 32-bit machine with no MMU, which is what a core is.
@@ -32,7 +32,7 @@ impl Section {
         }
     }
 
-    /// The `n`th of the ranges whose sizes are `bytes`, laid end to end
+    /// This is the `n`th of the ranges whose sizes are `bytes`, laid end to end
     /// inside the section, each aligned to `unit`. The ranges must all fit.
     pub const fn nth(&self, bytes: &[u32], unit: u32, n: usize) -> Section {
         // A const fn cannot report a bug, so it panics bare.
@@ -50,13 +50,14 @@ pub const fn align_up(n: u32, unit: u32) -> u32 {
     n.div_ceil(unit) * unit
 }
 
-/// `n` rounded up to a whole page, where whatever follows it begins.
+/// This is `n` rounded up to a whole page, where whatever follows it begins.
 pub const fn page_up(n: u32) -> u32 {
     align_up(n, PAGE_BYTES)
 }
 
-/// The span of ranges laid end to end, each aligned to `unit`. It includes
-/// the last range's rounding, so it is where whatever follows begins.
+/// `span_of` answers the span of ranges laid end to end, each aligned to
+/// `unit`. It includes the last range's rounding, so it is where whatever
+/// follows begins.
 pub const fn span_of(bytes: &[u32], unit: u32) -> u32 {
     let (mut span, mut i) = (0, 0);
     while i < bytes.len() {

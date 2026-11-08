@@ -15,15 +15,14 @@ import { root } from "@/abi/file.spec.ts";
 import { OBJECTS } from "@/service/sys/fs/object.ts";
 import { STORAGE, set_aside, type Storage } from "@/service/sys/fs/storage.ts";
 
-/** Sets aside the file at `path` through the backend that `root` is bound
- * to. It answers false, with nothing changed, when the backend could not. */
+/** A set-aside goes through the backend that `root` is bound to, and answers
+ * false, with nothing changed, when the backend could not make it. */
 export type SetAside = (
   root: u32,
   path: string,
   now_ms: number,
 ) => boolean | Promise<boolean>;
 
-/** Sends each root to its backend's set-aside. STORAGE's acts on `s`. */
 export function set_aside_by_root(s: Storage): SetAside {
   return (r, path, now_ms) => {
     switch (r) {
@@ -42,8 +41,6 @@ export function set_aside_by_root(s: Storage): SetAside {
  * this set keeps such a file from being set aside twice. */
 const emptying = new Set<string>();
 
-/** Takes a snapshot's `refused_files`, sets each file aside once, and tells
- * the core through `emptied`. */
 export function follow_refused_files(
   files: readonly RefusedFile[],
   emptied: (f: RefusedFile) => void,

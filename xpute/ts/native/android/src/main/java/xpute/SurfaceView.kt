@@ -9,15 +9,14 @@ import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
 
 /**
- * A view a core's surface draws into: the Android counterpart of
+ * A core's surface draws into this view: the Android counterpart of
  * ios/SurfaceView.swift. It holds a system SurfaceView, a window of its own
  * that the system composes under the app's views. The view binds the surface
- * the app names (`surface`) while the system's surface exists, and never
- * past the moment the system takes it back: `surfaceDestroyed` does not
- * return until the core's GPU runtime has let the surface go. The view tells
- * when the surface is bound (`onAttach`) and when it no longer is
- * (`onDetach`). The core sizes the surface and draws every frame inside a
- * turn, so nothing here draws.
+ * the app names (`surface`) while the system's surface exists, and never past
+ * the moment the system takes it back: `surfaceDestroyed` does not return until
+ * the core's GPU runtime has let the surface go. The view tells when the
+ * surface is bound (`onAttach`) and when it no longer is (`onDetach`). The core
+ * sizes the surface and draws every frame inside a turn, so nothing here draws.
  */
 class SurfaceView(context: Context, appContext: AppContext) : ExpoView(context, appContext), SurfaceHolder.Callback {
   private val onAttach by EventDispatcher()
@@ -35,7 +34,7 @@ class SurfaceView(context: Context, appContext: AppContext) : ExpoView(context, 
       rebind()
     }
 
-  /** Whether the system's surface exists to be drawn into. */
+  /** This says whether the system's surface exists to be drawn into. */
   private var ready = false
 
   /** The core's surface bound to the system's surface; 0 for none. */
@@ -59,7 +58,6 @@ class SurfaceView(context: Context, appContext: AppContext) : ExpoView(context, 
     rebind()
   }
 
-  /** Binds the surface wanted now, and lets go of one no longer wanted. */
   private fun rebind() {
     val wanted = if (ready) surface else 0
     if (bound == wanted) return

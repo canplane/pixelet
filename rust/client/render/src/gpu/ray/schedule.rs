@@ -1,7 +1,7 @@
 // pxl-render/gpu/ray/schedule.rs
 
 //! Decides what each frame casts of the eye's rays and the light's. It is a pure state
-//! machine: `Schedule::plan` steps it once a frame from what the frame read (`Reads`), and
+//! machine: `Schedule::plan` steps it once a frame from what the frame read (`CastRead`), and
 //! `whole`, `dropped` and `off` step it by what befell the frame after. It holds no GPU and no
 //! clock, so its tests drive it on the CPU alone (schedule.test.rs). The cast (cast.rs
 //! `prepare`) reads the frame, asks for a plan and encodes what the plan says.
@@ -11,7 +11,7 @@ use crate::gpu::span_spec::{FrameKind, LightChanged};
 
 /// What a frame read that decides what the eye and the light cast.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(super) struct Reads {
+pub(super) struct CastRead {
     /// Whether the cast's input is byte for byte the last frame's and the cast's group is made
     /// (cast.rs `prepare`). The input is the eye's words without the light's, the jitter's and
     /// the grid's; the clip levels' table; the shards; the overwrites' room and revision; and
@@ -152,7 +152,7 @@ impl Schedule {
     }
 
     /// Whether the view and the world stand: the cast's input is the last frame's
-    /// (`Reads::same`), and the rays hold what it read.
+    /// (`CastRead::same`), and the rays hold what it read.
     pub fn stands(&self, same: bool) -> bool {
         same && self.read
     }
@@ -165,7 +165,7 @@ impl Schedule {
     /// The light casts while shadows are on and its cast is made, where what a tile holds
     /// moved, the box slid, which tiles are read moved, the footprints are owed, or the world
     /// moved in columns.
-    pub fn plan(&mut self, r: Reads) -> Plan {
+    pub fn plan(&mut self, r: CastRead) -> Plan {
         let stands = self.stands(r.same);
         self.read = true;
         let jittered = r.jitter != self.jitter;
@@ -176,7 +176,7 @@ impl Schedule {
             (false, _) => FrameKind::cast,
         };
         let light_on = r.shadows && r.light_made;
-        let held = r.content_same && self.content;
+        let unchanged = r.content_same && self.content;
         self.content = r.light_made;
         // A step of the eye's zooms changes what a tile holds only where it moves the tile's
         // band, as a slide does, so it is handled as a slide (`Light::keeps`).
@@ -197,7 +197,7 @@ impl Schedule {
         } else {
             !self.walked_whole
         };
-        let unmasked = light_on && (!held || slid || footprint_owed) && partial;
+        let unmasked = light_on && (!unchanged || slid || footprint_owed) && partial;
         if unmasked && kind == FrameKind::still {
             kind = FrameKind::px;
         }
@@ -206,7 +206,7 @@ impl Schedule {
         let changed = LightChanged::ALL
             .into_iter()
             .filter(|m| match m {
-                LightChanged::content => !held,
+                LightChanged::content => !unchanged,
                 LightChanged::slide => slid,
                 LightChanged::receivers => !r.receivers_same,
                 LightChanged::footprint => footprint_owed,
@@ -218,14 +218,14 @@ impl Schedule {
         // owed, or where the box slid, which moves the tiles under them. Otherwise they stand
         // on the tiles they last marked: a jittered cast moves a ray only within its footprint,
         // which those marks took where the eye stood.
-        self.world |= kind == FrameKind::cast || !held || footprint_owed || slid;
+        self.world |= kind == FrameKind::cast || !unchanged || footprint_owed || slid;
         let light = (light_on && changed != 0).then(|| {
             let last_corner = core::mem::replace(&mut self.corner, r.corner);
             let last_range = core::mem::replace(&mut self.range, r.range);
             // The marks are added to those already made where the walked bits cover the
             // claimed tiles alone, which happens only within the epoch and under the same box.
             let adds = !walked_whole;
-            xpute_kit::ensure!(!adds || (held && !slid), ENOTRECOVERABLE);
+            xpute_kit::ensure!(!adds || (unchanged && !slid), ENOTRECOVERABLE);
             let world = core::mem::take(&mut self.world);
             // Marks added for the claimed tiles alone leave the footprint owed to the rest, as
             // marks made while the eye moves do.
@@ -234,9 +234,9 @@ impl Schedule {
             }
             Light {
                 changed,
-                epoch: !held,
-                slid: held && slid,
-                reached: held && r.world_columns,
+                epoch: !unchanged,
+                slid: unchanged && slid,
+                reached: unchanged && r.world_columns,
                 corner: r.corner,
                 last_corner,
                 last_range,

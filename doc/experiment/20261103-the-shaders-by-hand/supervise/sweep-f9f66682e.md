@@ -1,8 +1,8 @@
 # Sweep of world.wgsl at f9f66682e
 
-443 operator mutants (records/f9f66682e-sweep.txt, results in f9f66682e-sweep.out): 388 fail the test, 7 hang it, 48 survive. Each survivor is sorted by reading, not by proof. The text of line 457 is since deleted from the working tree.
+443 operator mutants (record/f9f66682e-sweep.txt, results in f9f66682e-sweep.out): 388 fail the test, 7 hang it, 48 survive. Each survivor is sorted by reading, not by proof. The text of line 457 is since deleted from the working tree.
 
-Run: tools/round.sh copies the tree to a scratch directory and adds the mutant loop (tools/patch.py) to the copy of tests/world.rs; tools/gen_sweep.py makes the mutants; tools/run_par.py runs each in its own process, 60 s a mutant. tools/livepath.py counts live words along a call path. tools/tint.mjs compiles a module through Tint and Dawn. The scratchpad the tools name (`SP`) was the session's that ran them, since deleted, and tools/tint.mjs resolves `webgpu` from `ts/app/web`, the page's tree of the time.
+Run: tool/round.sh copies the tree to a scratch directory and adds the mutant loop (tool/patch.py) to the copy of tests/world.rs; tool/gen_sweep.py makes the mutants; tool/run_par.py runs each in its own process, 60 s a mutant. tool/livepath.py counts live words along a call path. tool/tint.js compiles a module through Tint and Dawn. The scratchpad the tools name (`SP`) was the session's that ran them, since deleted, and tool/tint.js resolves `webgpu` from `ts/app/web`, the page's tree of the time.
 
 ## reachable, the test does not reach it (3)
 

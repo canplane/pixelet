@@ -18,8 +18,6 @@ fn burn(ms: f64) {
     CLOCK_MS.with(|c| c.set(c.get() + ms));
 }
 
-/// A pass with `budget_ms` left from now, and a hard limit at
-/// `hard_budget_ms` from now, or none.
 fn pass(budget_ms: f64, hard_budget_ms: Option<f64>) -> Pass {
     clock::set(clock);
     CLOCK_MS.with(|c| c.set(0.0));

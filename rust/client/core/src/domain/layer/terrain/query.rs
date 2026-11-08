@@ -10,7 +10,7 @@
 
 use pxl_engine::area::Shard;
 use pxl_engine::clipmap::{self as cells, Lookup};
-use pxl_engine::ground::{Bounds, Cell};
+use pxl_engine::ground::{Cell, Extent};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
@@ -18,7 +18,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::{Quadrant, MIN_ZOOM};
 
 use crate::domain::layer::terrain::clipmap::CpuClipmap;
-use crate::domain::layer::tile_cache::{Line, Lines, TileCache};
+use crate::domain::layer::tile_cache::{Line, Path, TileCache};
 use crate::sys::io::source;
 
 use crate::domain::layer::{Answer, Query};
@@ -30,7 +30,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 pub(in crate::domain) trait TerrainQuery {
     /// The lowest and highest heights, in leaf cells, of the ground over
     /// column `node`'s own cells, with the ways' heights kept apart
-    /// (pxl-engine `ground::Bounds`). They are the bounds over the cells of
+    /// (pxl-engine `ground::Extent`). They are the bounds over the cells of
     /// `line`'s tile, taken from the finest clip level that holds them, in one
     /// look-up whatever the node's size. A coarser clip level standing in
     /// gives the bounds of its own cells, which contain the finer ones, and
@@ -51,7 +51,7 @@ pub(in crate::domain) trait TerrainQuery {
         place: &mut Lookup,
         node: Node<2>,
         zooms: [Zoom; 2],
-    ) -> Answer<Bounds>;
+    ) -> Answer<Extent>;
 
     /// Column `node` as read from the clip levels, or the wall where the
     /// column is the wall, read as the GPU reads it (pxl-engine
@@ -67,7 +67,7 @@ pub(in crate::domain) trait TerrainQuery {
     /// ancestor read. Nodes beside or under each other therefore share their
     /// lines down to where they part, and pay one look-up per zoom only past
     /// that point.
-    fn walk_line(&self, lines: &mut Lines, node: Node<2>, cell_zoom: Zoom) -> Line;
+    fn walk_line(&self, lines: &mut Path, node: Node<2>, cell_zoom: Zoom) -> Line;
 
     /// The line that `node`'s cells at `cell_zoom` are read on, found from
     /// `over`, the line its parent column's cells were read on. It is `over`
@@ -80,7 +80,7 @@ pub(in crate::domain) trait TerrainQuery {
     /// in key order pays one look-up per node.
     fn bound_walked(
         &self,
-        lines: &mut Lines,
+        lines: &mut Path,
         node: Node<2>,
         cell_zoom: Zoom,
     ) -> Answer<Option<Aabb>>;
@@ -93,7 +93,7 @@ impl TerrainQuery for TileCache<TerrainTile> {
         place: &mut Lookup,
         node: Node<2>,
         zooms: [Zoom; 2],
-    ) -> Answer<Bounds> {
+    ) -> Answer<Extent> {
         let (r, from, here) = cells::bound_over(&CpuClipmap, place, zooms, node);
         answer_at(line, from, here, r)
     }
@@ -103,7 +103,7 @@ impl TerrainQuery for TileCache<TerrainTile> {
         answer_at(line, f.from(), f.here(), cell)
     }
 
-    fn walk_line(&self, lines: &mut Lines, node: Node<2>, cell_zoom: Zoom) -> Line {
+    fn walk_line(&self, lines: &mut Path, node: Node<2>, cell_zoom: Zoom) -> Line {
         self.seek(lines, bound_tile(node, cell_zoom))
     }
 
@@ -118,7 +118,7 @@ impl TerrainQuery for TileCache<TerrainTile> {
 
     fn bound_walked(
         &self,
-        lines: &mut Lines,
+        lines: &mut Path,
         node: Node<2>,
         cell_zoom: Zoom,
     ) -> Answer<Option<Aabb>> {

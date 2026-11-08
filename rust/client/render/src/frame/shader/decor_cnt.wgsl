@@ -3,7 +3,7 @@
 // Picks the region each of the eye's records draws in this frame, writes it into the record's
 // first word, and counts it. A workgroup takes an entry's records or a run of placed decor. A
 // record draws nothing where the rays at its distance ask another zoom, held to the clip levels
-// that hold its column (`generation::held_at`), than the one its record's clip level draws at
+// that hold its column (`generation::ray_zoom`), than the one its record's clip level draws at
 // (`generation::drawn_at`), or where it is the decor left out. Otherwise it is sized for the
 // screen as a model, an impostor, or culled (`generation::drawn`).
 
@@ -20,16 +20,15 @@ fn distance2(origin: vec3<i32>, at: vec3<i32>) -> f32 {
   return d.x * d.x + d.y * d.y + d.z * d.z;
 }
 
-/// `generation::held_at`: the zoom asked, `ask_zoom`, held to what the clip levels hold at
+/// `generation::ray_zoom`: the zoom asked, `ask_zoom`, held to what the clip levels hold at
 /// leaf cell `c`.
-fn held_at(ask_zoom: u32, c: vec2<i32>) -> u32 {
-  let z = held_to(ask_zoom);
+fn ray_zoom(ask_zoom: u32, c: vec2<i32>) -> u32 {
+  let z = clip_zoom(ask_zoom);
   let s = LEAF_CELL_ZOOM - z;
   let g = vec2<i32>(wrap_idx(z, c.x >> s), c.y >> s);
   return min(ask_zoom, lookup_from(step_to(LOOKUP_NONE, z, g).place));
 }
 
-/// `decor_cnt_cs` for the record at word `i`.
 fn cnt_one(i: u32) {
   let w = records[i];
   if (w == UNGENERATED) {
@@ -40,7 +39,7 @@ fn cnt_one(i: u32) {
   let d2 = distance2(origin, corner);
   let placed = i >= PLACED_HEADER + PLACED_HEADER_WORDS;
   let ask_zoom = zoom_at(d2, vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)));
-  let zoom = select(held_at(ask_zoom, corner.xy), ask_zoom, placed);
+  let zoom = select(ray_zoom(ask_zoom, corner.xy), ask_zoom, placed);
   let cell_zoom = record_cell_zoom(w);
   var drawn_here = zoom == cell_zoom;
   if (placed) {
@@ -69,7 +68,7 @@ fn cnt_one(i: u32) {
 
 @compute @workgroup_size(LANES)
 fn decor_cnt_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_invocation_id) lane: vec3<u32>) {
-  if (!is_held(group.x)) {
+  if (!is_valid(group.x)) {
     return;
   }
   for (var k = lane.x; k < RUNS; k += LANES) {

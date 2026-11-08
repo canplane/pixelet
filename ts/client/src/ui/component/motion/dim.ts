@@ -16,13 +16,9 @@ export const Dim = createContext<f64>(1);
 
 interface Dimmed {
   level: f64;
-  /** The props that move a Motion to `level`. */
   motion: { from?: Pose; to: Pose; transition: Transition };
 }
 
-/** A surface's level is its own fade times the dim around it. A change of the
- * dim moves with the dim's transition, and any other change with the
- * surface's own. */
 export function useDim(
   fade: f64,
   transition: Transition,

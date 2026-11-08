@@ -1,19 +1,18 @@
 // xpute-conformance/core.rs
 
-//! The Rust conformance core. It exports the same two calls as the C++
-//! conformance core, so that one runtime drives both. `boot` takes a seed,
-//! lays out the parts of the front by it, writes the front's header as a
-//! runtime does for a machine, and answers the header's offset. Natively,
-//! the runtime hands the core a region, a clock and its call. As wasm, the
-//! core imports all three, its range starts past the linker's data, and its
-//! turn is the module's `run`.
+//! The Rust conformance core exports the same two calls as the C++ conformance
+//! core, so that one runtime drives both. `boot` takes a seed, lays out the
+//! parts of the front by it, writes the front's header as a runtime does for a
+//! machine, and answers the header's offset. Natively, the runtime hands the
+//! core a region, a clock and its call. As wasm, the core imports all three,
+//! its range starts past the linker's data, and its turn is the module's `run`.
 
 #[cfg(not(target_arch = "wasm32"))]
 use core::cell::Cell;
 
 use xpute_core::abi::handle::Table;
 use xpute_core::ipc::door::{Door, Import, Outcome, Submission};
-use xpute_core::ipc::file::Files;
+use xpute_core::ipc::file::FileTable;
 use xpute_core::ipc::head::{self, Head};
 use xpute_core::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use xpute_core::ipc::stream::Stream;
@@ -32,8 +31,8 @@ const fn page_up(bytes: u32) -> u32 {
     bytes.div_ceil(PAGE_BYTES) * PAGE_BYTES
 }
 
-// The parts the core shares with its runtime, each on pages of its own, which
-// `layout` places in an order the seed draws.
+// The parts the core shares with its runtime lie each on pages of its own, and
+// `layout` places them in an order the seed draws.
 const HEAD: usize = 0;
 const SQ_DESC: usize = 1;
 const CQ_DESC: usize = 2;
@@ -82,7 +81,7 @@ pub type Call = extern "C" fn(u32) -> i32;
 
 #[cfg(not(target_arch = "wasm32"))]
 thread_local! {
-    /// The native runtime's call, which `boot` installs as the core's.
+    /// This is the native runtime's call, which `boot` installs as the core's.
     static CALL: Cell<Option<Call>> = const { Cell::new(None) };
 }
 
@@ -98,16 +97,16 @@ struct Core {
 
 struct State {
     stream: Stream,
-    files: Files<u32, { spec::HANDLES as usize }>,
+    files: FileTable<u32, { spec::HANDLES as usize }>,
     handles: Table<(), { spec::HANDLES as usize }>,
     now: Now,
-    /// The clock at the last MARK.
+    /// This is the clock at the last MARK.
     mark: f64,
     /// What the runtime writes as it answers CALL's INC.
     word: u32,
 }
 
-/// The import CALL makes: a number, and the offset of the word the runtime
+/// CALL makes this import: a number, and the offset of the word the runtime
 /// writes in answer.
 struct Inc {
     n: u32,
@@ -123,9 +122,9 @@ impl Import for Inc {
     }
 }
 
-/// Where each part lies under `seed`, counted from the range's start. The
-/// seed draws the order of the parts and, for each part, how many pages to
-/// leave before it. The first page is never used, since offset 0 names
+/// `layout` answers where each part lies under `seed`, counted from the range's
+/// start. The seed draws the order of the parts and, for each part, how many
+/// pages to leave before it. The first page is never used, since offset 0 names
 /// nothing (ARCHITECTURE.md, the contract's rule 1).
 fn layout(seed: u32) -> [u32; PARTS] {
     let mut rng = SplitMix32::new(seed);
@@ -193,7 +192,7 @@ unsafe fn boot(mem: Memory, range: u32, now: Now, seed: u32) -> u32 {
         door,
         state: State {
             stream,
-            files: Files::new(),
+            files: FileTable::new(),
             handles: Table::new(),
             now,
             mark: 0.0,
@@ -255,7 +254,7 @@ pub unsafe extern "C" fn xpute_conformance_run(mem: *mut u8, _deadline_ms: f64) 
     unsafe { turn(given(mem), 0) }
 }
 
-/// The memory a native runtime hands over: `spec::MEM_BYTES` from `mem`.
+/// A native runtime hands over `spec::MEM_BYTES` from `mem`.
 #[cfg(not(target_arch = "wasm32"))]
 fn given(mem: *mut u8) -> Memory {
     // SAFETY: the runtime hands over `spec::MEM_BYTES` from `mem`, kept for the core's life.

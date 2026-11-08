@@ -36,7 +36,7 @@ fn on(hz: f64, refreshes: f64) -> Pace {
 /// Judges one window of frames paced as `p`, each costing `load` of its
 /// budget, all of it per pixel. It returns the knobs the window moved to, if
 /// any, and writes a new interval into `p` as the next grant would report it.
-fn window(k: &mut Judge, p: &mut Pace, load: f64, timed: bool) -> Option<Knobs> {
+fn window(k: &mut Judge, p: &mut Pace, load: f64, timed: bool) -> Option<Setpoint> {
     let s = Cost {
         px_ms: load * budget(p.paced_ms),
         ..Cost::default()
@@ -54,7 +54,7 @@ fn window(k: &mut Judge, p: &mut Pace, load: f64, timed: bool) -> Option<Knobs> 
 
 /// Runs up to `n` windows and returns the knobs of the first one that moved a
 /// knob.
-fn until_changed(k: &mut Judge, p: &mut Pace, load: f64, n: u32) -> Option<Knobs> {
+fn until_changed(k: &mut Judge, p: &mut Pace, load: f64, n: u32) -> Option<Setpoint> {
     (0..n).find_map(|_| window(k, p, load, true))
 }
 

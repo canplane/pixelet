@@ -21,7 +21,7 @@ type Babel = { types: typeof BabelTypes };
 export default (api: ConfigAPI): TransformOptions => {
   const production = process.env.NODE_ENV === "production";
   // Where a dev server's tiles come from (script/proxy.ts `route_target`).
-  const source = process.env.PXL_DEV_SOURCE || "delivery";
+  const source = process.env.PXL_TILE_SOURCE || "delivery";
   api.cache.using(() => `${process.env.NODE_ENV} ${source}`);
 
   const DEFINE = {

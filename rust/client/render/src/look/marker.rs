@@ -49,12 +49,12 @@ pub const DOT_BORDER: f32 = 1.0;
 pub const PILL_H: f32 = PILL_INNER + PAD_Y;
 pub const PILL_R: f32 = PILL_H / 2.0;
 pub const DOT_CY: f32 = PILL_H + DOT_GAP + DOT_DIAM / 2.0;
-/// A dark pill with white words.
+/// The pill is dark, and its words are white.
 pub const PILL_FILL: u32 = 0x14141ab8;
 pub const PILL_INK: u32 = WHITE;
 pub const DOT_FILL: u32 = 0xffffff99;
 pub const DOT_RING: u32 = 0xffffff40;
-/// The pill's colors turned over: a light pill with dark words.
+/// These are the pill's colors turned over: a light pill with dark words.
 pub const CNT_FILL: u32 = 0xffffffe6;
 pub const CNT_INK: u32 = 0x14141aff;
 
@@ -92,7 +92,7 @@ pub const POINT_SHADOW_DY: f32 = 1.5;
 pub const POINT_SHADOW_BLUR: f32 = 3.0;
 pub const POINT_SHADOW_FILL: u32 = 0x00000059;
 pub const POINT_PAD: f32 = 3.0;
-/// From the mark's foot to the name's first line.
+/// This is the distance from the mark's foot to the name's first line.
 pub const POINT_GAP: f32 = 2.0;
 const POINT_HALO: f32 = 2.0;
 const POINT_HALO_FILL: u32 = 0xfffffff2;
@@ -106,7 +106,7 @@ pub const POINT_TEXT_HALO: Halo = Halo {
 };
 /// A line's height: the font's size with its halo above and below.
 pub const POINT_LINE: f32 = POINT_FONT.px + 2.0 * POINT_HALO;
-/// From one line to the next, as Mapnik sets it (text_line.cpp): the face's
+/// The distance from one line to the next, as Mapnik sets it (text_line.cpp): the face's
 /// own line height plus Carto's @standard-line-spacing-size, −0.15 em. The
 /// face is the system's, whose metrics the atlas does not read; 1.2 em is
 /// CSS's `line-height: normal` at its high end (CSS 2.1 §10.8.1).

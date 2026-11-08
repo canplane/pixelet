@@ -1,7 +1,7 @@
 // @xpute/kit/collection/arena.ts
 
-// Pools that hand out slots in order and take them back by rewinding to an
-// earlier length. `Arena` holds objects its factory constructs once, and
+// These are pools that hand out slots in order and take them back by rewinding
+// to an earlier length. `Arena` holds objects its factory constructs once, and
 // reuses them: `alloc` hands one out in whatever state its last user left it,
 // and the caller must reinitialize it. `Vector` does the same over a typed
 // array of numbers.
@@ -15,7 +15,7 @@ import type {
 import { InvariantError, MarshalError } from "@xpute/kit/status/error.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 
-export interface ArenaOptions {
+export interface ArenaConfig {
   init_cap: u32;
   max_cap: u32;
 }
@@ -29,7 +29,7 @@ export class Arena<T extends object> {
 
   private _factory: () => T;
 
-  constructor(factory: () => T, opts: ArenaOptions) {
+  constructor(factory: () => T, opts: ArenaConfig) {
     const { init_cap: _init_cap, max_cap } = opts;
     this.max_cap = max_cap;
     this._cap = 0;
@@ -112,7 +112,7 @@ export class Vector<T extends AnyTypedArray> {
 
   readonly ctor: AnyTypedArrayCtor<T>;
 
-  constructor(ctor: AnyTypedArrayCtor<T>, opts: ArenaOptions) {
+  constructor(ctor: AnyTypedArrayCtor<T>, opts: ArenaConfig) {
     this.ctor = ctor;
     const { init_cap: _init_cap, max_cap } = opts;
     this.max_cap = max_cap;

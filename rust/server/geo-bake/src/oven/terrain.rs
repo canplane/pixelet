@@ -1,0 +1,48 @@
+// pxl-geo-bake/oven/terrain.rs
+
+use super::job;
+use crate::coverage::Coverage;
+use crate::elevation::Raster;
+use crate::separation::source::Disk;
+use crate::terrain::absent::Absence;
+use pxl_spec::space::layer::quadrant::Quadrant;
+
+/// Each tile's rows the separation solve read and each structure it solved, kept
+/// beside the tiles of the source they came from.
+pub(super) const MEMO: &str = ".memo";
+
+pub(super) fn execute(
+    p: Quadrant,
+    cache: &std::path::Path,
+    out: &std::path::Path,
+    seconds: u64,
+) -> Result<(), String> {
+    use crate::terrain::{leaf, repository::TerrainRepository};
+    use pxl_spec::bake::tile::terrain::TerrainTile;
+    super::pyramid::execute::<TerrainTile>(
+        p,
+        cache,
+        out,
+        || {
+            let (_, mut client) = job::connect(
+                &leaf::READS,
+                &Coverage::of_source()?.around(p.zoom, p.at),
+                seconds,
+            )?;
+            if !leaf::has_ground(&mut client, &[p.at]).map_err(|e| e.to_string())?[0] {
+                return Ok(None);
+            }
+            let raster = std::sync::Arc::new(Raster::open(&mut client)?);
+            let repo =
+                TerrainRepository::prepare(&mut client, raster).map_err(|e| e.to_string())?;
+            let memo = cache.join(MEMO);
+            let reader = &mut crate::separation::Reader {
+                client: &mut client,
+                repo: &repo,
+                store: &mut Disk(&memo),
+            };
+            Ok(Some(leaf::bake_leaf(reader, p.at)?))
+        },
+        &Absence::new(Coverage::of_source()?),
+    )
+}

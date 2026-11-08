@@ -1,10 +1,9 @@
 // @pxl/client/ui/world/pill.ios.tsx
 
 /**
- * A pill on an iPhone. It is one piece of glass, laid out again at each new
- * place and width and animated by LayoutAnimation, because clipped pieces
- * would show seams through the glass. Its content fades on the glass, never
- * over it.
+ * An iPhone's pill is one piece of glass, laid out again at each new place and
+ * width and animated by LayoutAnimation, because clipped pieces would show
+ * seams through the glass. Its content fades on the glass, never over it.
  */
 
 import { useRef } from "react";

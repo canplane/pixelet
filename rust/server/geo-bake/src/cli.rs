@@ -18,18 +18,18 @@ pub fn enter() -> Result<(), String> {
     std::env::set_current_dir(root).map_err(|e| format!("{}: {e}", root.display()))
 }
 
-pub struct Flags {
+pub struct Argv {
     argv: Vec<String>,
     at: usize,
 }
 
-impl Flags {
-    pub(crate) fn from_env() -> Flags {
-        Flags::of(std::env::args().skip(1).collect())
+impl Argv {
+    pub(crate) fn from_env() -> Argv {
+        Argv::of(std::env::args().skip(1).collect())
     }
 
-    pub fn of(argv: Vec<String>) -> Flags {
-        Flags { argv, at: 0 }
+    pub fn of(argv: Vec<String>) -> Argv {
+        Argv { argv, at: 0 }
     }
 
     pub fn arg(&mut self) -> Option<String> {

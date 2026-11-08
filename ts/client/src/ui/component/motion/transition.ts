@@ -26,13 +26,13 @@ const SAMPLES = 64;
 
 /** The constants of a spring that moves from 0 to 1, starting at rest, by
  * m x'' + c x' + k x = k: `mass` is m, `damping` c and `stiffness` k. */
-interface SpringConstants {
+interface Spring {
   stiffness: f64;
   damping: f64;
   mass: f64;
 }
 
-function position(s: SpringConstants, seconds: f64): f64 {
+function position(s: Spring, seconds: f64): f64 {
   const w0 = Math.sqrt(s.stiffness / s.mass);
   const zeta = s.damping / (2 * Math.sqrt(s.stiffness * s.mass));
   if (zeta < 1) {
@@ -52,7 +52,7 @@ function position(s: SpringConstants, seconds: f64): f64 {
   );
 }
 
-export function spring(s: SpringConstants): Transition {
+export function spring(s: Spring): Transition {
   let lastMs = 0;
   for (let t = 0; t <= MAX_MS; t += STEP_MS) {
     if (Math.abs(1 - position(s, t / 1000)) > REST) lastMs = t;

@@ -78,14 +78,12 @@ struct Input {
     // same zoom as one exp() per delta, since the exponents add.
     pending_wheel_delta_y: Option<f64>,
 
-    // ---- movement keys ----
     /// The screen direction of the held keys, of unit length, or zero when
     /// none is held.
     keys: [f64; 2],
     /// The time the keys last panned, in ms.
     keys_at: f64,
 
-    // ---- rotate-drag ----
     rotate_turn: Option<Anchor>,
     /// The tilt follows the drag's vertical travel since this anchor.
     rotate_tilt: Anchor,
@@ -93,7 +91,6 @@ struct Input {
     rotate_drag_start_y: f64,
     rotate_axis_lock: RotateAxisLock,
 
-    // ---- multi-touch ----
     active_pointers: BTreeMap<i32, PointerPos>,
     pinch_start_dist: f64,
     pinch_tilt: Anchor,

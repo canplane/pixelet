@@ -1,10 +1,10 @@
 // xpute-gpu/encode.rs
 
-//! The encoder: a core's GPU calls, written as records of a stream
-//! (xpute-core `ipc::stream`) in the words spec/gpu/api.json gives each op.
-//! An object the core makes is named by a handle from one table (`Gpu`). A
-//! record that does not fit an open transaction is not written, and the
-//! handle of the object it would have made is given back.
+//! The encoder writes a core's GPU calls as records of a stream (xpute-core
+//! `ipc::stream`) in the words spec/gpu/api.json gives each op. An object the
+//! core makes is named by a handle from one table (`Gpu`). A record that does
+//! not fit an open transaction is not written, and the handle of the object it
+//! would have made is given back.
 //!
 //! One function gives each record's words, and it runs twice: once to count
 //! the words, then to write them into the room the stream reserved. So no
@@ -25,7 +25,8 @@ use crate::enums::{
 };
 use crate::spec::{op, BindingKind, ResourceKind, NONE, SURFACE_PREFERRED};
 
-/// An object the core made, named by a handle from its encoder's table.
+/// An `Id` is an object the core made, named by a handle from its encoder's
+/// table.
 pub type Id = u32;
 
 /// Loads a word that a record named for the runtime to answer, such as a
@@ -96,9 +97,9 @@ fn flag(v: bool) -> u32 {
     u32::from(v)
 }
 
-/// Writes a record of `op` with the words `put` gives. False where an open
-/// transaction no longer fits the record; outside a transaction, a record
-/// that does not fit is a bug (`Stream::reserve`).
+/// Writes a record of `op` with the words `put` gives. It answers false where
+/// an open transaction no longer fits the record; outside a transaction, a
+/// record that does not fit is a bug (`Stream::reserve`).
 fn emit(stream: &mut Stream, op: u32, put: &dyn Fn(&mut dyn Sink)) -> bool {
     let mut count = Count(0);
     put(&mut count);
@@ -111,8 +112,8 @@ fn emit(stream: &mut Stream, op: u32, put: &dyn Fn(&mut dyn Sink)) -> bool {
     true
 }
 
-/// The room a record takes of a stream, its op and count words included,
-/// counted as `emit` writes it.
+/// This is the room a record takes of a stream, its op and count words
+/// included, counted as `emit` writes it.
 fn record_size(put: &dyn Fn(&mut dyn Sink)) -> usize {
     let mut count = Count(0);
     put(&mut count);
@@ -121,19 +122,19 @@ fn record_size(put: &dyn Fn(&mut dyn Sink)) -> usize {
 
 pub struct BufferDescriptor {
     pub size: u32,
-    /// `spec::BUFFER_USAGE` bits.
+    /// These are `spec::BUFFER_USAGE` bits.
     pub usage: u32,
     pub mapped_at_creation: bool,
 }
 
 pub struct TextureDescriptor<'a> {
-    /// Width, height, and depth or layers.
+    /// This holds the width, the height, and the depth or layers.
     pub size: [u32; 3],
     pub mip_levels: u32,
     pub samples: u32,
     pub dimension: TextureDimension,
     pub format: TextureFormat,
-    /// `spec::TEXTURE_USAGE` bits.
+    /// These are `spec::TEXTURE_USAGE` bits.
     pub usage: u32,
     pub view_formats: &'a [TextureFormat],
 }
@@ -180,7 +181,7 @@ pub enum BindingLayout {
 
 pub struct BindGroupLayoutEntry {
     pub binding: u32,
-    /// `spec::SHADER_STAGE` bits.
+    /// These are `spec::SHADER_STAGE` bits.
     pub visibility: u32,
     pub layout: BindingLayout,
 }
@@ -235,7 +236,7 @@ pub struct StencilFaceState {
     pub pass: StencilOperation,
 }
 
-/// WebGPU's default for a stencil face.
+/// This is WebGPU's default for a stencil face.
 pub const STENCIL_UNUSED: StencilFaceState = StencilFaceState {
     compare: CompareFunction::always,
     fail: StencilOperation::keep,
@@ -262,7 +263,7 @@ pub struct MultisampleState {
     pub alpha_to_coverage: bool,
 }
 
-/// WebGPU's default: one sample, no multisampling.
+/// This is WebGPU's default: one sample, no multisampling.
 pub const MULTISAMPLE_NONE: MultisampleState = MultisampleState {
     count: 1,
     mask: u32::MAX,
@@ -283,7 +284,7 @@ pub struct BlendState {
 pub struct ColorTargetState {
     pub format: TextureFormat,
     pub blend: Option<BlendState>,
-    /// `spec::COLOR_WRITE` bits.
+    /// These are `spec::COLOR_WRITE` bits.
     pub write_mask: u32,
 }
 
@@ -310,7 +311,7 @@ pub struct ComputePipelineDescriptor<'a> {
     pub entry: &'a str,
 }
 
-/// The place in a texture that a copy reads or writes.
+/// This is the place in a texture that a copy reads or writes.
 pub struct TexelCopyTexture {
     pub texture: Id,
     pub mip: u32,
@@ -318,7 +319,7 @@ pub struct TexelCopyTexture {
     pub aspect: TextureAspect,
 }
 
-/// A buffer's bytes, laid out as rows of texels for a copy.
+/// These are a buffer's bytes, laid out as rows of texels for a copy.
 pub struct TexelCopyBuffer {
     pub buffer: Id,
     pub offset: u32,
@@ -402,7 +403,7 @@ fn stencil_face(s: &mut dyn Sink, f: &StencilFaceState) {
     .for_each(|w| s.word(w));
 }
 
-/// The words of a RENDER_PIPELINE record after its id, which
+/// These are the words of a RENDER_PIPELINE record after its id, which
 /// RENDER_PIPELINE_ASYNC begins with too.
 fn render_pipeline_words(s: &mut dyn Sink, d: &RenderPipelineDescriptor) {
     s.word(opt(d.layout));
@@ -496,7 +497,7 @@ fn render_pipeline_words(s: &mut dyn Sink, d: &RenderPipelineDescriptor) {
     }
 }
 
-/// The words of a COMPUTE_PIPELINE record after its id, which
+/// These are the words of a COMPUTE_PIPELINE record after its id, which
 /// COMPUTE_PIPELINE_ASYNC begins with too.
 fn compute_pipeline_words(s: &mut dyn Sink, d: &ComputePipelineDescriptor) {
     [opt(d.layout), d.module]
@@ -510,13 +511,13 @@ fn compute_pipeline_words(s: &mut dyn Sink, d: &ComputePipelineDescriptor) {
 /// pass, a surface's current texture.
 pub const OBJECT_OPS: usize = op::DESTROY as usize;
 
-/// The calls that make objects, over a table of `N` handles. Each handle
-/// holds the op that made its object where the object lasts (`OBJECT_OPS`),
-/// and 0 where a turn lets it go. A `Gpu` whose bytes are all zero holds no
-/// object, as `new` makes it.
+/// These are the calls that make objects, over a table of `N` handles. Each
+/// handle holds the op that made its object where the object lasts
+/// (`OBJECT_OPS`), and 0 where a turn lets it go. A `Gpu` whose bytes are all
+/// zero holds no object, as `new` makes it.
 pub struct Gpu<const N: usize> {
     handles: Table<u8, N>,
-    /// How many live objects each op has made, indexed by the op.
+    /// This counts how many live objects each op has made, indexed by the op.
     objects: [u32; OBJECT_OPS],
 }
 
@@ -541,12 +542,13 @@ impl<const N: usize> Gpu<N> {
     }
 
     /// Makes an object by a record of `op` whose first word is the new
-    /// handle. None where the table is full or the record does not fit.
+    /// handle. It answers none where the table is full or the record does not
+    /// fit.
     fn make(&mut self, stream: &mut Stream, op: u32, put: &dyn Fn(&mut dyn Sink)) -> Option<Id> {
         self.make_as(stream, op, op, put)
     }
 
-    /// As `make`, but the object is counted under the op `kind`: an async
+    /// This is `make`, but the object is counted under the op `kind`: an async
     /// pipeline counts as its sync op's.
     fn make_as(
         &mut self,
@@ -646,8 +648,8 @@ impl<const N: usize> Gpu<N> {
         self.make(stream, op::SHADER_MODULE, &|s| s.bytes(wgsl.as_bytes()))
     }
 
-    /// The room `shader_module` takes of a stream, for `Stream::fits`, so
-    /// that a caller making several modules can ask before each one.
+    /// This is the room `shader_module` takes of a stream, for `Stream::fits`,
+    /// so that a caller making several modules can ask before each one.
     pub fn shader_module_bytes(wgsl: &str) -> usize {
         record_size(&|s| {
             s.word(0);
@@ -747,7 +749,7 @@ impl<const N: usize> Gpu<N> {
         })
     }
 
-    /// As `render_pipeline`, but the runtime makes the pipeline without
+    /// This is `render_pipeline`, but the runtime makes the pipeline without
     /// holding its thread, and stores `ticket` at `fence` once it is made
     /// (spec RESULT). No record may name the pipeline before the core has
     /// seen that ticket.
@@ -780,7 +782,7 @@ impl<const N: usize> Gpu<N> {
         })
     }
 
-    /// As `compute_pipeline`, with the fence and ticket of
+    /// This is `compute_pipeline`, with the fence and ticket of
     /// `render_pipeline_async`.
     pub fn compute_pipeline_async(
         &mut self,
@@ -871,8 +873,8 @@ impl<const N: usize> Gpu<N> {
         })
     }
 
-    /// A view of `surface`'s texture for this turn. Every CURRENT of one
-    /// turn names the same texture.
+    /// This makes a view of `surface`'s texture for this turn. Every CURRENT of
+    /// one turn names the same texture.
     pub fn current(&mut self, stream: &mut Stream, surface: u32) -> Option<Id> {
         self.make(stream, op::CURRENT, &|s| s.word(surface))
     }
@@ -884,9 +886,9 @@ impl<const N: usize> Gpu<N> {
         self.handles.begin();
     }
 
-    /// Closes the transaction. False where it did not fit: the stream is
-    /// then as it was at `begin`, and every handle taken since is free again,
-    /// since the runtime never saw it.
+    /// Closes the transaction. It answers false where it did not fit: the
+    /// stream is then as it was at `begin`, and every handle taken since is
+    /// free again, since the runtime never saw it.
     pub fn commit(&mut self, stream: &mut Stream) -> bool {
         let fit = stream.commit();
         if !fit {
@@ -933,8 +935,8 @@ impl<const N: usize> Gpu<N> {
     }
 }
 
-/// The calls that make no object. Each writes its record straight to the
-/// stream, and returns false where an open transaction no longer fits it.
+/// These are the calls that make no object. Each writes its record straight to
+/// the stream, and returns false where an open transaction no longer fits it.
 pub mod call {
     use super::*;
 
@@ -953,13 +955,13 @@ pub mod call {
         })
     }
 
-    /// The room `write_buffer` takes of a stream, for `Stream::fits`, so
-    /// that a caller can ask once whether several writes fit.
+    /// This is the room `write_buffer` takes of a stream, for `Stream::fits`,
+    /// so that a caller can ask once whether several writes fit.
     pub fn write_buffer_bytes(bytes: &[u8]) -> usize {
         record_size(&|s| buffer_write(s, 0, 0, bytes))
     }
 
-    /// As `write_buffer`, but the record names the bytes where they lie in
+    /// This is `write_buffer`, but the record names the bytes where they lie in
     /// the core's memory, and the runtime reads them there as it runs the
     /// stream. The core leaves them unchanged until the stream is handed back
     /// (xpute-core ipc/stream.rs R3).
@@ -982,7 +984,7 @@ pub mod call {
         extent(s, size);
     }
 
-    /// `layout`: bytes per row, rows per image.
+    /// `layout` holds the bytes per row and the rows per image.
     pub fn write_texture(
         stream: &mut Stream,
         place: &TexelCopyTexture,
@@ -996,8 +998,8 @@ pub mod call {
         })
     }
 
-    /// As `write_buffer_bytes`. The room depends on the bytes alone, not on
-    /// the place, layout or size.
+    /// This is `write_buffer_bytes` for a texture. The room depends on the
+    /// bytes alone, not on the place, layout or size.
     pub fn write_texture_bytes(bytes: &[u8]) -> usize {
         let place = TexelCopyTexture {
             texture: 0,
@@ -1199,7 +1201,8 @@ pub mod call {
         )
     }
 
-    /// `rect`: x, y, width, height; `depth`: min and max.
+    /// `rect` holds x, y, width and height, and `depth` holds the min and the
+    /// max.
     pub fn set_viewport(stream: &mut Stream, pass: Id, rect: [f32; 4], depth: [f32; 2]) -> bool {
         words(
             stream,

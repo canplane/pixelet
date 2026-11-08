@@ -1,18 +1,20 @@
 // xpute-core/entry.rs
 
-//! The one function a core runs inside, `run`, and what the runtime hands it
-//! there. xpute names this entry as a C runtime names `main`: a module
-//! exports `run` (`wasm`), a native library's thread calls it in a loop
+//! This is the one function a core runs inside, `run`, and what the runtime
+//! hands it there. xpute names this entry as a C runtime names `main`: a
+//! module exports `run` (`wasm`), a native library's thread calls it in a loop
 //! (xpute-runtime `native`), and the program implements it.
 //!
-//! A core's form is how it is built: a WebAssembly module or a native
-//! library. Every runtime, in either form, holds the core to one contract.
-//! In a turn the core runs until it has nothing left to do or its deadline
-//! passes; at the deadline its tasks yield (`sched::edge`). It then returns
-//! when it wants to be woken: 0 for the earliest moment the runtime's
+//! A core's form is how it is built: a WebAssembly module or a native library.
+//! Every runtime, whichever form the core is built in, holds the core to one
+//! contract. In a turn the core runs until it has nothing left to do or its
+//! deadline passes; at the deadline its tasks yield (`sched::edge`). It then
+//! returns when it wants to be woken: 0 for the earliest moment the runtime's
 //! scheduling policy allows, `n` for `n` ms from now, or `NO_WAKE` for only
-//! when something arrives. A kick wakes it earlier; a submission, a
-//! completion and a call each kick it.
+//! when something arrives. A kick wakes it earlier: the runtime kicks it for
+//! each submission, completion and call it sends, and after a read of the
+//! completion ring that took frames, since that read gave back room a task may
+//! be waiting for.
 //!
 //! A page runs the core on its one thread, in turns its scheduler grants and
 //! cuts off at each turn's deadline (@xpute/runtime `Scheduler`). A native
@@ -23,9 +25,9 @@
 use crate::mem::heap::HeapStat;
 use crate::stop::PanicHook;
 
-/// What every core is handed, in whichever form it is built: what its
-/// runtime measures and installs, and what depends on its form (`Form`). An
-/// entry receives it as a function to call (`Entry`).
+/// Every core is handed this, in whichever form it is built: what its runtime
+/// measures and installs, and what depends on its form (`Form`). An entry
+/// receives it as a function to call (`Entry`).
 #[derive(Clone, Copy)]
 pub struct BootInfo {
     /// The size of the core memory in bytes. The memory never grows.
@@ -35,8 +37,8 @@ pub struct BootInfo {
     pub form: Form,
 }
 
-/// What depends on the core's form. A module's values come from its linker
-/// and its page (`wasm`); a native library's come from its config
+/// This is what depends on the core's form. A module's values come from its
+/// linker and its page (`wasm`); a native library's come from its config
 /// (xpute-runtime `native::Config`).
 #[derive(Clone, Copy)]
 pub struct Form {
@@ -61,12 +63,12 @@ pub struct Form {
     pub publish: Option<fn()>,
 }
 
-/// Runs one turn that may last `deadline_ms`, and answers in how many ms the
-/// core wants the next: 0 for as soon as the scheduling policy allows,
+/// An entry runs one turn that may last `deadline_ms`, and answers in how many
+/// ms the core wants the next: 0 for as soon as the scheduling policy allows,
 /// `sched::wake::NO_WAKE` for none.
 pub type Entry = fn(deadline_ms: f64, boot: fn() -> BootInfo) -> f64;
 
-/// What a form's exported entry calls on every turn. On the first turn it
+/// A form's exported entry calls this on every turn. On the first turn it
 /// installs the call and the publish hook from `boot`, and the form's clock
 /// unless a runtime that keeps the core's time has already set one
 /// (`clock::set`). It then runs `entry`.

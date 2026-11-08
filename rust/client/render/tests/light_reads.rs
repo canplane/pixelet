@@ -452,10 +452,10 @@ fn hand_propagation_reads_what_stands() {
         args[light::ARGS_LAY as usize] = light::LAY_VERTICES;
         // A cast before this one stood the world's receivers afresh (`light::HEADER_WORLD`) and
         // propagates the first half of the stood tiles, none of them propagated before it.
-        let kept = light::carry_at(SIZE) as usize;
+        let carry = light::carry_at(SIZE) as usize;
         let half = stood.len() / 2;
         list[stood_at] = half as u32;
-        list[kept + light::RECEIVER_TILES_CNT as usize] = 0;
+        list[carry + light::RECEIVER_TILES_CNT as usize] = 0;
         let mut header = header_words(current, epoch, [1304, -896], RANGE);
         header[light::HEADER_SLIDE_CAST] = 0;
         header[light::HEADER_WORLD] = current - 3;
@@ -482,7 +482,7 @@ fn hand_propagation_reads_what_stands() {
         // the reads stay with their count in the args, as the host copies the count back in.
         let mut now = gpu.read(&list_buf);
         now[stood_at] = stood.len() as u32;
-        now[kept + light::RECEIVER_TILES_CNT as usize] = half as u32;
+        now[carry + light::RECEIVER_TILES_CNT as usize] = half as u32;
         let list_buf = gpu.buffer(&now, wgpu::BufferUsages::STORAGE);
         propagation(&list_buf, &p, rows(stood.len()));
         propagation(
@@ -501,7 +501,7 @@ fn hand_propagation_reads_what_stands() {
         let got: std::collections::BTreeSet<[i32; 2]> = entries.iter().copied().collect();
         // A decor's pixel may lie anywhere on its model, from a tenth of a unit under its base,
         // where a pine sinks, up to the tallest decor's height. It reads a texel off along its
-        // normal, then a tap and the neighbor it filters in each way (pxl-render shadow.wgsl
+        // normal, then a tap and the neighbor it filters in each way (shadow.wgsl
         // `shadow_visibility`).
         let (reach, tile) = (param::light::SPREAD + 2.0, light::TILE as f32);
         let mut unread = Vec::new();

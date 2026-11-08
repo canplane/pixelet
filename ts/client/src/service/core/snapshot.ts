@@ -1,7 +1,7 @@
 // @pxl/client/service/core/snapshot.ts
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
-import { Listeners } from "@xpute/kit/lang/listeners.ts";
+import { ListenerSet } from "@xpute/kit/lang/listener.ts";
 import { TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
 import {
   GroundStatus,
@@ -36,11 +36,11 @@ const INIT: Snapshot = {
 };
 
 let snapshot: Snapshot = INIT;
-const listeners = new Listeners();
+const listeners = new ListenerSet();
 
-/** Takes the core's UI_SNAPSHOT. `bytes` view the snapshot where it lies, and
- * stay valid only until the runtime's head passes it, because the core writes
- * the next snapshot in the same place. So the snapshot is read whole at once. */
+/** `bytes` view the snapshot where it lies, and stay valid only until the
+ * runtime's head passes it, because the core writes the next snapshot in the
+ * same place. So the snapshot is read whole at once. */
 export function set_snapshot(bytes: U8Array): void {
   snapshot = read_snapshot(new TreeReader(bytes).read_branch());
   listeners.notify();
@@ -53,7 +53,7 @@ export function current(): Snapshot {
 }
 
 let view: UiView = { azimuth: 0, m_per_px: 0 };
-const view_listeners = new Listeners();
+const view_listeners = new ListenerSet();
 
 /** Takes the core's UI_VIEW, which a rotation or a zoom posts every frame.
  * Only what watches the view is told, so the snapshot's readers are not woken

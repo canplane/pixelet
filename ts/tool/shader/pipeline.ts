@@ -1,16 +1,8 @@
 // @pxl/shader/pipeline.ts
 
-/**
- * The pipelines the renderer makes over its modules, render and compute,
- * each named by the entry points it runs (pxl-render examples/assembled.rs,
- * pipelines.json). They are made here as WebGPU takes them. A compute
- * pipeline gets the layout its entry declares. A render pipeline gets its
- * vertex buffers; its fragment entry, where it has one, writing one target
- * for each location the entry returns; and a depth buffer, where its record
- * tests depth.
- */
+/** The pipelines come from the renderer (pxl-render examples/assembled.rs,
+ * pipelines.json), each named by the entry points it runs. */
 
-/** A pipeline as pipelines.json describes it. */
 export interface Pipeline {
   module: string;
   compute?: string;
@@ -21,13 +13,10 @@ export interface Pipeline {
   depth?: boolean;
 }
 
-/** The entry points `p` runs, as one line of output names them. */
 export function entries(p: Pipeline): string {
   return p.compute ?? [p.vertex, p.fragment].filter(Boolean).join("+");
 }
 
-/** A color target for the type a location returns: an integer format for an
- * integer type, and a float format otherwise. */
 function target(ty: string): GPUColorTargetState {
   const format = /\bu32\b|vec\du\b/.test(ty)
     ? "r32uint"
@@ -37,8 +26,6 @@ function target(ty: string): GPUColorTargetState {
   return { format };
 }
 
-/** The color targets that the fragment entry `fs` of `code` writes: one for
- * each location it returns, alone or as the fields of a struct. */
 function targets(code: string, fs: string): GPUColorTargetState[] {
   const ret = code.match(
     new RegExp(`\\bfn\\s+${fs}\\s*\\([^]*?\\)\\s*->\\s*([^{]+)\\{`),
@@ -55,8 +42,8 @@ function targets(code: string, fs: string): GPUColorTargetState[] {
     .map(target);
 }
 
-/** Makes `p` over `module`, whose source is `code`, through WebGPU's async
- * call, so that a pipeline WebGPU refuses rejects the promise. */
+/** WebGPU's async call is used so that a pipeline WebGPU refuses rejects the
+ * promise. */
 export function make(
   device: GPUDevice,
   module: GPUShaderModule,
