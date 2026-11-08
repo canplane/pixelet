@@ -17,27 +17,8 @@ shard bakes from itself alone and shards taken one at a time give the same
 result as shards taken together. The coast belongs to no shard; it is taken
 whole.
 
-A table is filled beside itself and swapped in, never emptied first
-([infra/README.md](../README.md) §2).
-
 Overture is the base. What it cannot supply sits beside it, named for the role
 it fills.
-
-```text
-infra/geo/
-├── coverage.json          the shards
-├── tool/
-│   ├── Dockerfile         every tool the ingests run, pinned
-│   └── run                runs a tool in that image
-├── overture/
-│   └── source.json        the release; ingested by pxl-geo-bake's overture
-├── elevation/
-│   ├── source.json        the version
-│   └── ingest.sh
-└── coastline/
-    ├── source.json        the zip's hash
-    └── ingest.sh
-```
 
 ## The tables
 
@@ -70,9 +51,9 @@ make ingest-overture ARGS="[--type <type>]… [--shard <name>]… [--whole]"
 Each reads `infra/local/.env`; no source needs a key. Every tool they run, GDAL,
 PostGIS's raster loader, psql and Overture's CLI, comes from the image in
 `tool/`, which `tool/run` builds before each call, so the host needs only
-Docker and cargo. The image's PostgreSQL 16 and PostGIS 3.4 are db-geo's own
-major versions. Never `down -v`: the volume is the only copy, and filling it
-again takes hours.
+Docker, cargo and `jq`. The image's PostgreSQL 16 and PostGIS 3.4 are db-geo's
+own major versions. Never `down -v`: the volume is the only copy, and filling
+it again takes hours.
 
 **Overture.** A run takes the types it names, or all of them, and the shards it
 names, or the coverage's. It writes each type into its table in place: a
@@ -94,8 +75,8 @@ from the shards already beside, unless those hold another version, which it
 refuses rather than mix.
 
 **Coastline.** OSM's land polygons for the whole world come as one zip. osmdata
-names no version and serves only its latest, so the zip's SHA-256 (its first 16
-hex digits) is its version. The zip kept in `coastline/raw/` is used while it
+names no version and serves only its latest, so the zip's SHA-256 is its
+version. The zip kept in `coastline/raw/` is used while it
 matches the pin, and once osmdata moves on it is the pin's only copy: deleting it
 makes the pinned coast unreachable. A newer coast is taken by changing the pin.
 

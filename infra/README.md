@@ -39,23 +39,18 @@ production keeps its own in `infra/prod/.env`.
 db-geo's volume is the only copy of hours of ingest, so it is never removed
 with `down -v` ([geo/README.md](./geo/README.md)).
 
-In development a tile server stands in for the bucket (`pxl-geo-bake
-bin/server.rs`). It answers the bucket's declaration in the published
-shape, so the client cannot tell the difference.
-
 ## 2. Filling db-geo
 
 [geo/README.md](./geo/README.md) describes the sources, the tables and how to
-run each ingest. One rule holds for all of them: a table is filled beside itself
-and swapped in, never emptied first. The new table is built as `<table>_next`
-while readers keep using the old one; then one short transaction, with a bounded
-`lock_timeout`, drops the old and renames the new. Nothing is dropped or
-truncated by hand, and a fill needs room for both tables at once.
+run each ingest. One rule holds for all of them: a table is never emptied first.
+A table made anew is built as `<table>_next` while readers keep using the old
+one; then one short transaction drops the old and renames the new, so a fill
+needs room for both at once. Nothing is dropped or truncated by hand.
 
 ## 3. Production (Hetzner Cloud)
 
-One CX23 (2 vCPU, 4 GB, 40 GB) runs both servers, both databases and Caddy in
-one compose stack (`prod/`). Caddy is the only published port; it sends `/geo/*`
+One CX23 runs both servers, both databases and Caddy in one compose stack
+(`prod/`). Caddy is the only published port; it sends `/geo/*`
 to `api` (pxl-geo) and `/api/*` to `app` (pxl-api). Production's db-geo holds
 only what search reads: `overture_places`, `overture_division_areas` and
 `overture_divisions`.
@@ -96,11 +91,8 @@ only what search reads: `overture_places`, `overture_division_areas` and
    CI deploys as root, which installing those files needs.
 
 After setup, every deploy updates the stack with `infra/prod/deploy.sh`, sent
-from a checkout and run on the VM. It resets the tree to the commit, installs any
-changed file under `infra/prod/etc/` and restarts what reads it, then runs
-`docker compose up -d --build --force-recreate` and `docker image prune -f` in
-`infra/prod`. By hand it is the same script, for a commit `deploy` already
-holds, since the VM fetches it from there:
+from a checkout and run on the VM. By hand it is the same script, for a commit
+`deploy` already holds, since the VM fetches it from there:
 
 ```sh
 ssh root@$(hcloud server ip pixelet-prod) bash -eu -s -- "$(git rev-parse origin/deploy)" < infra/prod/deploy.sh
@@ -180,17 +172,14 @@ the app itself:
 | `_meta/paths/<n>.json`  | build `#n`'s source paths, to decode its panics | build number             | written by `make deploy` under a build number; never served      |
 
 A tile's name is its Morton key, so the same name under two kinds is the same
-ground, and one prefix is one region across every kind and every zoom. Every
-object is uploaded `public, max-age=31536000, immutable`; a new version is a new
-prefix, so no cache ever needs purging.
+ground, and one prefix is one region across every kind and every zoom.
 
 The Worker claims all four roots (`wrangler.jsonc` `run_worker_first`). The
 bucket answers `/tile/*` under its path less the root, and `/asset/*` under its
 path; `/geo/*` and `/api/*` go to `GEO_ORIGIN` and `API_ORIGIN` unchanged. No
 path is rewritten anywhere. A route outside the roots cannot be reached in
 production: the app's fallback answers it with `index.html`, which looks like
-the app loading rather than a missing route. The dev proxy splits on the same
-roots.
+the app loading rather than a missing route.
 
 **Deploying the client** is CI's job (§5); by hand it is the script CI runs.
 Neither checks nor tests anything, so `make -j8 check` and `make -j8 test` must
@@ -205,20 +194,19 @@ make deploy              # build and publish
 ./script/smoke.py
 ```
 
-A deploy uploads only the changed static assets and leaves the bucket alone.
-Tiles and assets go into the bucket with `./script/publish.py <kind>` and the
-asset ingest, which upload under new names and then write `source`. The smoke
-does not check the bytes a tile or an asset is served with.
+A deploy uploads only the app's changed static assets. Tiles go into the bucket
+with `./script/publish.py <kind>`, which uploads a new version and then writes
+`source`; models and textures by the sync in
+[asset/README.md](../asset/README.md).
 
 ## 5. CI/CD
 
 `.github/workflows/deploy.yml` runs on a push to `deploy` and on a dispatch,
 never on main. Main carries work between machines, whether or not it compiles.
-A push that changes only markdown runs nothing, and a dispatch against any other
-ref does nothing. **Publishing is `git push origin main:deploy`**, forced once
-main has been rewritten, after `make -j8 check` and `make -j8 test` pass here,
-because CI checks and tests nothing. The reason for each job's shape is in the
-workflow's comments.
+A push that changes only markdown runs nothing. **Publishing is
+`git push origin main:deploy`**, forced once main has been rewritten, after
+`make -j8 check` and `make -j8 test` pass here, because CI checks and tests
+nothing.
 
 | Job             | When                  | What                                                                                                    |
 | :-------------- | :-------------------- | :------------------------------------------------------------------------------------------------------ |
@@ -236,12 +224,13 @@ Every build of `deploy` takes a number from a counter in the bucket, which is
 never reset. A published build is one line in `_meta/build-log.jsonl`, with the
 subjects of the commits it carried, because main's commit ids do not survive
 its rewrites; `./script/build-log.py` reads it, newest first. A deployment
-states its own number at `/build.json`, which `make dev` caches
-(`script/build-number.py`) to label a build that CI did not number.
+states its own number at `/build.json`.
 
 The secrets are GitHub's alone: `CLOUDFLARE_API_TOKEN` and
-`CLOUDFLARE_ACCOUNT_ID` for wrangler and the counter; `VM_HOST`, `VM_USER` and
-`VM_SSH_KEY`, a keypair used only for deploys, for the VM; and `VM_KNOWN_HOSTS`,
+`CLOUDFLARE_ACCOUNT_ID` for wrangler; `R2_ACCESS_KEY_ID` and
+`R2_SECRET_ACCESS_KEY`, held to the bucket, for the counter, the log and the
+panic paths; `VM_HOST`, `VM_USER` and `VM_SSH_KEY`, a keypair used only for
+deploys, for the VM; and `VM_KNOWN_HOSTS`,
 which is optional, and without which the deploy warns and trusts whatever host
 answers.
 

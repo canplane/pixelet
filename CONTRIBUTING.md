@@ -29,7 +29,8 @@ client and the core.
 
 `make dev-oven` runs the whole stack here and bakes each tile the first time it
 is asked for, which is what you want when you change a bake or a server. It
-needs the local databases:
+needs the local databases and an `ADMIN_TOKEN` of your choosing in
+`rust/server/.env`:
 
 ```bash
 cp infra/local/.env.example infra/local/.env
@@ -44,16 +45,7 @@ what publishing them would show. `make preview`, `preview-oven` and
 measure speed on.
 
 The page is Expo's web build, bundled by Metro. Beside the dev server, a watcher
-rebuilds the core's WebAssembly module whenever its Rust changes. The dev server
-forwards the server routes the way the Worker does, and the environment can
-change where they go:
-
-| Variable                                                    | What it sets                                                       |
-| ----------------------------------------------------------- | ------------------------------------------------------------------ |
-| `PXL_TILE_SOURCE`                                            | `delivery` (the default), `oven` or `shelf`, as the targets set it |
-| `PXL_REMOTE_ORIGIN`                                         | the deployment that `delivery` reads from                          |
-| `PXL_GEO_BASE_URL`, `PXL_TILE_BASE_URL`, `PXL_API_BASE_URL` | the local servers, `127.0.0.1` on 3000, 3001 and 3002 by default   |
-| `PXL_PREVIEW_PORT`                                          | the preview's port, 4173 by default                                |
+rebuilds the core's WebAssembly module whenever its Rust changes.
 
 A development page leaves two helpers in the browser console. `xpute.cmd` sends
 the core any command by its number, and `pxl.perf` is the profiler: `report()`
@@ -105,9 +97,9 @@ make -j8 test
 ```
 
 `check` runs every check and `test` every test; each also has a target per tree,
-such as `check-ts` or `test-rust`. A change to a shader or to how the renderer
-encodes its GPU calls also takes `make -C xpute test-gpu`, which needs a GPU and
-Chrome. `make fmt` and `make lint` format and lint.
+such as `check-ts` or `test-rust`. A change to xpute's GPU encoder or runtime
+also takes `make -C xpute test-gpu`, which needs a GPU and Chrome. `make fmt`
+and `make lint` format and lint.
 
 `make check` also lints Android, which needs the NDK's compiler at the app's
 minSdk:

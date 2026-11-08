@@ -8,10 +8,8 @@ want into asks of the runtime, fits every answer into memory that was set aside
 at boot, and spends each turn's time in an order the rest of the core can rely
 on.
 
-Nothing in `sys/` knows what a tile, a building or a camera is. A layer asks
-for the read of a quadkey, and `sys/` never asks what it is for. `sys/` imports
-nothing from the domain, the renderer or the profiler, and `cargo check-rules`
-refuses such an import.
+`sys/` imports nothing from the domain, the renderer or the profiler, and
+`cargo check-rules` refuses such an import.
 
 ## The memory, laid out once
 
@@ -103,9 +101,10 @@ the object itself is wrong, asking again brings the same bytes, so its want is
 held for as long as it is wanted. When the heap or the slots refused the body
 room, the want waits until what refused it gives room back, and only that
 (`io/room.rs`). When the network or the server failed, every start is held:
-one probe goes out at a time, after a wait that grows with each failure and is
-drawn at random below its cap, so clients that failed together do not return
-together. After the last wait the server is given up, and the UI says so.
+one probe goes out at a time, after a wait drawn at random below its cap, so
+clients that failed together do not return together. Each failure of the server
+raises the cap, and after the last wait the server is given up, and the UI says
+so.
 
 None of this makes anything up. While a read is held, the view draws the
 coarser tile it has, or nothing.

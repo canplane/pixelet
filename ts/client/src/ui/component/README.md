@@ -35,11 +35,7 @@ any Android app's. Its backing is the fill made solid: it cannot blur the map,
 which is a native surface, and a see-through fill unblurred is unreadable.
 
 A device draws text at the size the phone's Text Size setting asks for, and a
-page ignores it, so a view that fits on a page can overflow on a device. The iOS
-simulator takes the setting from the command line:
-`xcrun simctl ui
-booted content_size extra-small`, then
-`accessibility-extra-extra-extra-large`, then `large` again.
+page ignores it, so a view that fits on a page can overflow on a device.
 
 ## A control that takes a touch is UIKit's
 
@@ -49,10 +45,7 @@ UIKit's: React Native's own component, or a view of the platform module
 is presented on its own (the sheet) and nothing a touch lands on inside React
 Native.
 
-A SwiftUI Toggle in the settings sheet sat in SwiftUI under React Native's
-scroll view under SwiftUI again, and on a phone it took about three quick taps
-in five; UIKit's switch in the same place took every one. React Native's scroll
-view never takes a touch from a UIKit control; it has no such promise for a
-SwiftUI one.
+React Native's scroll view never takes a touch from a UIKit control; it has no
+such promise for a SwiftUI one.
 
 `@expo/ui` is imported by `panel.ios.tsx` alone.

@@ -45,10 +45,10 @@ events forget every entry at once: what was placed changed by more than the
 stream has room to send, or by revisions the GPU never held, or by a write that
 names no box, and the casts outrunning the frames a key's tag tells apart
 (`gpu/ray/cast.rs`). That is correct, and costs only a cast of everything again.
-The entries a ray stopped on are the record, and the raster draws every one in
-view each frame (`record_draw_cs`). A frame whose rays reached little still
-draws everything found before; a still frame over a still world draws nothing at
-all.
+The entries a ray stopped on are the record, and the raster draws every fresh
+one in view each frame (`record_draw_cs`). A frame whose rays reached little
+still draws everything found before that is still fresh; a still frame over a
+still world draws nothing at all.
 
 ## Time: the scale and the rate
 
@@ -177,7 +177,7 @@ every shader.
 The sky is drawn at the far plane, so only pixels no ray met run it
 (`sky.wgsl`); where such a ray falls to the land, it shows flat land shaded from
 the earth layer. The air between the eye and what is drawn is Hillaire's
-aerial-perspective volume (`gpu/atmosphere.rs` `froxel_cs`), read by each drawn
+aerial-perspective volume (`atmos_froxel.wgsl` `froxel_cs`), read by each drawn
 point at its direction and depth (`atmos_air.wgsl`). Neither the sky view nor
 the volume reads the view's direction, so turning the eye keeps both, and both
 are drawn again only where the light's height or the eye's altitude has moved by
