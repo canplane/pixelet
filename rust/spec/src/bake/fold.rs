@@ -7,7 +7,7 @@
 //! column's volume; a parent's surface is its own bicubic of its own samples. The mean is the
 //! surface drawn at the parent's zoom, not a bound on the surfaces under it.
 
-use crate::space::layer::lattice::Cells;
+use crate::space::layer::lattice::Grid;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use crate::space::layer::quadrant::{neighbor_idx, CHILDREN};
 use xpute_kit::math::scalar::round;

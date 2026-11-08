@@ -1,7 +1,7 @@
 // xpute-kit/abi/word.rs
 
-//! Bit fields in 32- and 64-bit words. A field is `nbit` bits wide and
-//! starts at bit `shamt`; the caller keeps it inside the word. `field_mask`
+//! These are bit fields in 32- and 64-bit words. A field is `nbit` bits wide
+//! and starts at bit `shamt`; the caller keeps it inside the word. `field_mask`
 //! also takes a field as wide as the whole word, which a plain shift cannot
 //! express.
 
@@ -51,7 +51,7 @@ pub const fn field_set32(x: u32, shamt: u32, mask: u32, v: u32) -> u32 {
     (x & !(mask << shamt)) | ((v & mask) << shamt)
 }
 
-/// The low `nbit` bits of `x`, sign-extended.
+/// This reads the low `nbit` bits of `x`, sign-extended.
 pub const fn as_int_n64(nbit: u32, x: u64) -> i64 {
     ((x << (64 - nbit)) as i64) >> (64 - nbit)
 }

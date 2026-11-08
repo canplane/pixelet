@@ -41,7 +41,6 @@ pub const SEPARATION_COLUMNS: [(usize, usize); 7] = [
     (MAX_LINES, 1),
 ];
 
-/// Separation column `k`'s bytes in a record.
 const fn separation_column_bytes(k: usize) -> u32 {
     let (cnt, size) = SEPARATION_COLUMNS[k];
     arr_bytes(cnt, size)
@@ -118,7 +117,6 @@ pub const fn separation_column(record: u32, k: usize) -> (u32, u32) {
     (separation_plane(k) + record * bytes, bytes)
 }
 
-/// Where record `record`'s samples start.
 pub const fn ele_off(record: u32) -> u32 {
     ELE_AT + record * ELE_BYTES
 }
@@ -129,7 +127,6 @@ pub const fn cells_off(slot: u32) -> u32 {
     CELLS_AT + slot * CELLS_ARR_BYTES
 }
 
-/// Where brick slot `slot`'s palette starts.
 pub const fn palette_off(slot: u32) -> u32 {
     PALETTE_AT + slot * PALETTE_ARR_BYTES
 }

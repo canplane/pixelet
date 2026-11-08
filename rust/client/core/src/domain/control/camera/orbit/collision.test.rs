@@ -96,7 +96,6 @@ fn dives_slanted() {
 fn dive_held_back() {
     // The line passes beside the roof.
     assert_eq!(dive_to(Some(3.0), 10.0, 0.3), None);
-    // Nothing is over the pivot.
     assert_eq!(dive_to(None, 10.0, 0.0), None);
 }
 
@@ -115,8 +114,8 @@ fn dives_into_low_roof() {
 /// over the slab or in it. A zoom out that starts in the slab stops.
 #[test]
 fn zoom_out_does_not_go_through() {
-    let held = climbed_to(Some(3.0), MIN_DIST, 10.0);
-    assert!((MIN_DIST..=8.0 - over(5.0)).contains(&held), "{held}");
+    let dist = climbed_to(Some(3.0), MIN_DIST, 10.0);
+    assert!((MIN_DIST..=8.0 - over(5.0)).contains(&dist), "{dist}");
     assert_eq!(climbed_to(Some(2.0), MIN_DIST, 10.0), MIN_DIST);
     assert_eq!(climbed_to(Some(3.0), 16.0, 20.0), 20.0);
     assert_eq!(climbed_to(None, MIN_DIST, 10.0), 10.0);

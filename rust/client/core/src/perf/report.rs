@@ -105,7 +105,7 @@ pub fn set_renderer_frame(report: &FrameReport) {
 /// allocator reports it, the rings' and body slots' peaks since the frame
 /// before, and the terrain tiles refused a slot since then. Taking a peak or
 /// a count starts it again from zero.
-fn held_now(h: &HeapStat) -> RecordingSection {
+fn peaks(h: &HeapStat) -> RecordingSection {
     let rings = door::take_stat();
     RecordingSection {
         frames: 1.0,
@@ -149,7 +149,7 @@ pub fn perf_frame(t: FrameTurn) {
     // The peaks and counts are taken whether or not the profiler records, so
     // a recording that starts later counts from its own start.
     let heap = boot::heap_stat();
-    let held = held_now(&heap);
+    let section = peaks(&heap);
     let terrain_loads = f64::from(TerrainTile::tile_cache().take_loads());
     let renderer = core::mem::take(RENDERER.get(RendererFrame::default));
     if !perf_recording() {
@@ -161,7 +161,7 @@ pub fn perf_frame(t: FrameTurn) {
     if let Some(r) = renderer.rays {
         perf_record_rays(r);
     }
-    perf_fold_recording(&held);
+    perf_fold_recording(&section);
     let record = FrameSample {
         // The time the stage ended, before the record was taken.
         t: at,

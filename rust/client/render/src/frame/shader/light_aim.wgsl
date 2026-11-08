@@ -20,7 +20,7 @@ fn light_v3(k: u32) -> vec3<f32> {
   return eye_v3(LIGHT + k);
 }
 
-/// Where the ray of world texel `w` starts (`Starts::start`). The steps are summed exactly in
+/// Where the ray of world texel `w` starts (`StartGrid::start`). The steps are summed exactly in
 /// fixed point, each split into its whole steps and its fraction, so every device takes the
 /// same start.
 fn texel_start(w: vec2<i32>) -> vec3<i32> {
@@ -47,12 +47,10 @@ fn gap(k: i32, half: i32) -> i32 {
   return max(max(k * t - half, half - (k + 1i) * t), 0i);
 }
 
-/// The first word of the start of cell `c` in the light's list (`light::cell`).
 fn light_cell_at(c: vec2<u32>) -> u32 {
   return header_word(LIGHT_HEADER_CELLS) + (c.y * header_word(LIGHT_HEADER_CELLS_ACROSS) + c.x) * CELL_WORDS;
 }
 
-/// The box's texel that slot `slot` of the map holds (`Light::texel`).
 fn slot_texel(slot: vec2<u32>) -> vec2<u32> {
   return vec2<u32>(vec2<i32>(slot) - light_corner()) & vec2<u32>(header_word(LIGHT_HEADER_SIZE) - 1u);
 }
@@ -68,7 +66,6 @@ fn tile_band(tile: vec2<i32>) -> u32 {
   return tile_band_in(tile, vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)));
 }
 
-/// The band of `tile` under the eye's zooms `range` (`Light::band`).
 fn tile_band_in(tile: vec2<i32>, range: vec2<u32>) -> u32 {
   let half = i32(header_word(LIGHT_HEADER_SIZE) / 2u);
   let x = gap(tile.x, half);

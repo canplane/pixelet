@@ -3,8 +3,8 @@
 use super::*;
 
 /// What a frame reads where nothing moved since the last.
-fn still() -> Reads {
-    Reads {
+fn still() -> CastRead {
+    CastRead {
         same: true,
         jitter: [0; 2],
         partial: false,
@@ -38,7 +38,7 @@ fn nothing_moved_casts_nothing() {
 #[test]
 fn a_moved_view_casts_the_rays() {
     let mut s = stood();
-    let plan = s.plan(Reads {
+    let plan = s.plan(CastRead {
         same: false,
         ..still()
     });
@@ -48,7 +48,7 @@ fn a_moved_view_casts_the_rays() {
 #[test]
 fn the_jitter_casts_the_pixels_alone() {
     let mut s = stood();
-    let plan = s.plan(Reads {
+    let plan = s.plan(CastRead {
         jitter: [1, 0],
         ..still()
     });
@@ -65,19 +65,19 @@ fn a_dropped_frame_casts_again() {
 #[test]
 fn the_light_casts_where_it_moved() {
     for moved in [
-        Reads {
+        CastRead {
             content_same: false,
             ..still()
         },
-        Reads {
+        CastRead {
             corner: [8, 0],
             ..still()
         },
-        Reads {
+        CastRead {
             receivers_same: false,
             ..still()
         },
-        Reads {
+        CastRead {
             world_columns: true,
             ..still()
         },
@@ -90,7 +90,7 @@ fn the_light_casts_where_it_moved() {
 #[test]
 fn no_shadows_no_light() {
     let mut s = stood();
-    let plan = s.plan(Reads {
+    let plan = s.plan(CastRead {
         shadows: false,
         receivers_same: false,
         ..still()
@@ -102,7 +102,7 @@ fn no_shadows_no_light() {
 #[test]
 fn a_stopped_view_rests() {
     let mut s = stood();
-    s.plan(Reads {
+    s.plan(CastRead {
         same: false,
         ..still()
     });

@@ -14,7 +14,8 @@ import { Ring, ring_bytes, slots_bytes } from "./ring.ts";
 const CAP = 8;
 const SLOT = 64;
 
-/** A core's rings, laid in fresh memory: the SQ, the CQ, then their slots. */
+/** This lays a core's rings in fresh memory: the SQ, the CQ, then their
+ * slots. */
 function rings(): {
   mem: ArrayBuffer;
   sq: Ring;
@@ -40,7 +41,7 @@ function rings(): {
 test("doorbell - a call from inside a listener is refused and leaves nothing submitted", () => {
   const { mem, sq, cq, sq_at, cq_at } = rings();
 
-  // A core whose every turn raises one import's frame.
+  // This core raises one import's frame on every turn.
   const door = new Doorbell(mem, sq_at, cq_at, () => {
     cq.push(0, 2);
     return -1;
@@ -133,7 +134,7 @@ test("doorbell - a call answered in the turn that traps takes its answer once", 
   const error = console.error;
   console.error = () => {};
   try {
-    // A core that answers the call, then traps in the same turn.
+    // This core answers the call, then traps in the same turn.
     const door = new Doorbell(mem, sq_at, cq_at, () => {
       const at = sq.peek();
       const tag = sq.tag(at);
@@ -157,7 +158,8 @@ test("doorbell - a turn rung is heard before its wake", () => {
   const mem = new ArrayBuffer(slots_at + 2 * slots_bytes(CAP, SLOT));
   Ring.init(mem, sq_at, CAP, slots_at, SLOT);
   Ring.init(mem, cq_at, CAP, slots_at + slots_bytes(CAP, SLOT), SLOT);
-  // A core on its own thread, whose rung turn asks for the next in 20 ms.
+  // This core runs on its own thread, and its rung turn asks for the next in
+  // 20 ms.
   const door = new Doorbell(
     mem,
     sq_at,
@@ -175,7 +177,7 @@ test("doorbell - a turn rung is heard before its wake", () => {
 test("doorbell - a rung core's read asks the next turn, which the turn heard lets stand", () => {
   const { mem, cq, sq_at, cq_at } = rings();
   let turns = 0;
-  // A core with no wake of its own, whose first turn posts a frame.
+  // This core has no wake of its own, and its first turn posts a frame.
   const door = new Doorbell(mem, sq_at, cq_at, () => {
     if (++turns === 1) cq.push(0, 2);
     return NO_WAKE;
@@ -206,7 +208,7 @@ test("doorbell - a rung core's read asks the next turn, which the turn heard let
 test("doorbell - a request is answered by the reply its turn posts, and waits for no turn", async () => {
   const { mem, sq, cq, sq_at, cq_at } = rings();
   let turns = 0;
-  // A core that replies to each submission with ACKREQ as it applies it.
+  // This core replies to each submission with ACKREQ as it applies it.
   const door = new Doorbell(mem, sq_at, cq_at, () => {
     turns++;
     for (let at = sq.peek(); at >= 0; at = sq.peek()) {

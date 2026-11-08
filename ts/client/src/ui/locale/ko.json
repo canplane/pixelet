@@ -175,7 +175,7 @@
       "message_placeholder": "메시지 입력",
       "pin_placeholder": "핀 메시지 입력",
       "send": "전송",
-      "pin_done": "핀 세우기",
+      "put_pin": "핀 세우기",
       "drawer_tooltip": "서랍 열기",
       "object_size": "크기 {{n}}"
     },

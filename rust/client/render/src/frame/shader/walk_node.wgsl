@@ -91,7 +91,6 @@ fn start_at(t: f32, corner: vec3<u32>, zoom: u32, roots: vec3<i32>) -> Start {
   return Start(t, corner, zoom, roots, vec4<u32>(0u), true, 0u);
 }
 
-/// The start at the origin's root, at `t` 0.
 fn root_start() -> Start {
   return start_at(0.0, vec3<u32>(0u), 0u, vec3<i32>(0));
 }

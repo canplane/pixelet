@@ -82,10 +82,9 @@ export const SETTING = {
     default: false,
     section: "camera",
   },
-  /** Which controller makes the camera's pose; CAMERA_MODES says each. To
-   * first person the person stands at the pivot, the eye at its
-   * height over the ground; to third the pivot is laid on the ground
-   * and the eye steps back by the radius. */
+  /** On a switch to first person the person stands at the pivot, the eye at its
+   * height over the ground. On a switch to third person the pivot is laid on the
+   * ground and the eye steps back by the radius. */
   camera_mode: {
     key: 5 as number,
     kind: "choice",
@@ -105,7 +104,7 @@ export const SETTING = {
     section: "camera",
     dev: true,
   },
-  /** What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. Only `climb` goes into a tunnel (orbit/collision.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default. */
+  /** Only `climb` goes into a tunnel (orbit/collision.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default. */
   orbit_obstacle: {
     key: 7 as number,
     kind: "choice",
@@ -136,9 +135,6 @@ export const SETTING = {
     section: "lighting",
     cost: "low",
   },
-  /** corner, the occlusion a voxel world reads off its own cubes' faces;
-   * screen, N8AO's screen-space pass with the corners' too, the costliest
-   * of the three. AO_MODES says each. */
   ao: {
     key: 10 as number,
     kind: "choice",
@@ -168,7 +164,7 @@ export const SETTING = {
   /** The pixels the world is drawn at: two to a CSS pixel is four times the
    * work done a drawn pixel at a time (span.json `per_px`), and nothing
    * more; the camera grid's rays and the light's map cost the same at any.
-   * The markers and the finish stay at the display's. RES_MODES says each. */
+   * The markers and the finish stay at the display's. */
   res: {
     key: 12 as number,
     kind: "choice",
@@ -221,7 +217,6 @@ export const SETTING = {
     section: "perf",
     dev: true,
   },
-  /** The hour the sky is drawn at; SKY_TIMES says each. */
   sky_time: {
     key: 21 as number,
     kind: "choice",
@@ -299,10 +294,9 @@ export const SETTING_PRODUCTION = {
     default: false,
     section: "camera",
   },
-  /** Which controller makes the camera's pose; CAMERA_MODES says each. To
-   * first person the person stands at the pivot, the eye at its
-   * height over the ground; to third the pivot is laid on the ground
-   * and the eye steps back by the radius. */
+  /** On a switch to first person the person stands at the pivot, the eye at its
+   * height over the ground. On a switch to third person the pivot is laid on the
+   * ground and the eye steps back by the radius. */
   camera_mode: {
     key: 5 as number,
     kind: "choice",
@@ -331,9 +325,6 @@ export const SETTING_PRODUCTION = {
     section: "lighting",
     cost: "low",
   },
-  /** corner, the occlusion a voxel world reads off its own cubes' faces;
-   * screen, N8AO's screen-space pass with the corners' too, the costliest
-   * of the three. AO_MODES says each. */
   ao: {
     key: 10 as number,
     kind: "choice",
@@ -363,7 +354,7 @@ export const SETTING_PRODUCTION = {
   /** The pixels the world is drawn at: two to a CSS pixel is four times the
    * work done a drawn pixel at a time (span.json `per_px`), and nothing
    * more; the camera grid's rays and the light's map cost the same at any.
-   * The markers and the finish stay at the display's. RES_MODES says each. */
+   * The markers and the finish stay at the display's. */
   res: {
     key: 12 as number,
     kind: "choice",

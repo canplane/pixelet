@@ -1,16 +1,10 @@
 // @pxl/client/service/core/surface.ts
 
-/** The surfaces the UI lends the core, on xpute's GPU device
- * (GPU_SURFACE_*). */
-
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { gpu_exports } from "@xpute/runtime";
 import { type SurfaceDriver } from "@/service/platform/types.ts";
 import { ui } from "@/service/core/core.ts";
 
-/** A surface as the place drives it. Opening answers 0 when the core has no
- * surface left. `draw`, when given, says what the surface draws as soon as it
- * opens (scene.ts). */
 export function surface_driver(draw?: (surface: u32) => void): SurfaceDriver {
   return {
     open: async () => {

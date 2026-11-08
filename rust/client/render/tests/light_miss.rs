@@ -21,14 +21,14 @@ use gpu::{array_view, read_texture, texture, Gpu};
 use pxl_engine::answer;
 use pxl_engine::cast::{self, Detail, End, Ray, Until};
 use pxl_engine::clipmap::{self, Entry, ENTRIES, FIRST_CELL_ZOOM};
-use pxl_engine::light::{self, Light, Starts};
+use pxl_engine::light::{self, Light, StartGrid};
 use pxl_engine::node_cache::{self, CHANGED_WORDS};
 use pxl_engine::object::Cut;
 use pxl_engine::{beam, eye, object, ray, value, Zoom, FRAC_W, LEAF_CELL_ZOOM};
 use pxl_render::frame::shader::record::{src, SHADER_FORGET, SHADER_LIGHT_CELL};
 use pxl_render::frame::shader::word::ROW_LANES;
 
-use real_world::{q8, store_of, truth, Asking, Built, World, WorldBufs, FINEST, NOTCH};
+use real_world::{q8, store_of, truth, Asking, Built, World, WorldBuffer, FINEST, NOTCH};
 
 /// The leaf cell the eye stands in: 300 cells west of X's seam, on the east side of X = 0,
 /// and 30 cells north of the service area's south edge.
@@ -52,8 +52,8 @@ const FRAME: u32 = 9;
 const TELLS: u32 = 4;
 
 /// The light box of case `c` and where its rays start, laid as the host lays them (pxl-engine
-/// light.rs `Starts`).
-fn box_of(c: &Case) -> (Light, Starts) {
+/// light.rs `StartGrid`).
+fn box_of(c: &Case) -> (Light, StartGrid) {
     let l = libm::sqrtf(c.dir[0] * c.dir[0] + c.dir[1] * c.dir[1] + c.dir[2] * c.dir[2]);
     let dir = c.dir.map(|v| v / l);
     let cross = |a: [f32; 3], b: [f32; 3]| {
@@ -103,7 +103,7 @@ fn box_of(c: &Case) -> (Light, Starts) {
         )
     };
     let [a0, a1, a2, a3] = [0, 1, 2, 3].map(anchor);
-    let starts = Starts {
+    let starts = StartGrid {
         base,
         across: across.map(|v| light::fixed(v * q)),
         down: down.map(|v| light::fixed(v * q)),
@@ -132,7 +132,7 @@ struct Case {
 
 /// The ray of `slot`, with where it starts, and the detail it asks: the one band of its tile
 /// (`Light::band`).
-fn slot_ray(c: &Case, s: &Light, starts: &Starts, slot: [u32; 2]) -> ([i32; 3], Ray, Detail) {
+fn slot_ray(c: &Case, s: &Light, starts: &StartGrid, slot: [u32; 2]) -> ([i32; 3], Ray, Detail) {
     let p = s.texel(SIZE, slot);
     let (o, r) = light::ray(s, starts, p);
     let tile = [(p[0] / light::TILE) as i32, (p[1] / light::TILE) as i32];
@@ -446,7 +446,7 @@ fn hand_light_holes_answer_as_cast_walk() {
     let store = wgpu::BufferUsages::STORAGE;
     let flat_u = |rows: &[[u32; 4]]| rows.iter().flatten().copied().collect::<Vec<u32>>();
     let clip_flat: Vec<u32> = built.clipmap.iter().flatten().map(|&v| v as u32).collect();
-    let bound = WorldBufs {
+    let bound = WorldBuffer {
         clip: gpu.buffer(&clip_flat, store),
         ground: gpu.buffer(&built.ground, store),
         palette: gpu.buffer(&built.palette, store),
@@ -462,7 +462,7 @@ fn hand_light_holes_answer_as_cast_walk() {
     // West of X = 0, every node's X is negative as the world names it, and the node cache must
     // keep, find and read such nodes.
     let west = real_world::build(EYE_WEST);
-    let bound_west = WorldBufs {
+    let bound_west = WorldBuffer {
         clip: gpu.buffer(
             &west
                 .clipmap
@@ -494,7 +494,7 @@ fn hand_light_holes_answer_as_cast_walk() {
     run_case(&gpu, &bound_west, west.world(), &case, None, &mut failed);
     // Over X = 0, where one root ends and the next begins in X, rays end in the next root.
     let zero = real_world::build(EYE_ZERO);
-    let bound_zero = WorldBufs {
+    let bound_zero = WorldBuffer {
         clip: gpu.buffer(
             &zero
                 .clipmap
@@ -540,7 +540,7 @@ const CAST: u32 = 7;
 /// Lays the beam's lines and each cell's start in `list`, as the cast lays them
 /// (beam.light.wgsl, light_cell.wgsl). Every tile is read, and the beam runs over a node cache
 /// of its own.
-fn lay_cells(gpu: &Gpu, b: &WorldBufs, [eye, header]: [&wgpu::Buffer; 2], list: &mut [u32]) {
+fn lay_cells(gpu: &Gpu, b: &WorldBuffer, [eye, header]: [&wgpu::Buffer; 2], list: &mut [u32]) {
     let tiles = light::tiles(SIZE) as usize;
     let reads = light::reads_at(SIZE) as usize;
     list[reads..reads + tiles * tiles].fill(CAST);
@@ -586,7 +586,7 @@ fn lay_cells(gpu: &Gpu, b: &WorldBufs, [eye, header]: [&wgpu::Buffer; 2], list: 
 /// hands it: its buffers, the words that name the moved entries and the changed bricks
 /// (gpu/ray/cast.rs), and the pass that forgets by them.
 struct Edited<'a> {
-    b: &'a WorldBufs,
+    b: &'a WorldBuffer,
     w: World<'a>,
     changed: [u32; CHANGED_WORDS as usize],
     changed_bricks: [[i32; 4]; clipmap::EYE_CLIP_LEVELS as usize],
@@ -595,7 +595,7 @@ struct Edited<'a> {
 
 fn run_case(
     gpu: &Gpu,
-    b: &WorldBufs,
+    b: &WorldBuffer,
     w: World,
     case: &Case,
     edited: Option<&Edited>,
@@ -833,7 +833,7 @@ fn an_axis_over(s: &Light, got: u32, want: u32) -> bool {
 }
 
 /// Prints a slot that differs: its words and where its walk stops.
-fn tell_slot(w: World, case: &Case, s: &Light, starts: &Starts, k: u32, [got, want]: [u32; 2]) {
+fn tell_slot(w: World, case: &Case, s: &Light, starts: &StartGrid, k: u32, [got, want]: [u32; 2]) {
     let (o, r, d) = slot_ray(case, s, starts, [k % SIZE, k / SIZE]);
     let mut q = Asking { w, cuts: case.cuts };
     let t = cast::first(&mut q, o, &r, d, Until::Opaque);
@@ -872,7 +872,7 @@ fn list_of(slots: &[u32]) -> Vec<u32> {
 /// `walked` lists, and no slot may have two.
 fn holes(
     gpu: &Gpu,
-    b: &WorldBufs,
+    b: &WorldBuffer,
     [eye, header, table, list]: [&wgpu::Buffer; 4],
     view: &wgpu::TextureView,
     walked: &[bool],
@@ -895,12 +895,12 @@ fn holes(
     let hits = gpu.read(table)[node_cache::HITS_CNT as usize].min(ray::HITS_A_FRAME);
     let words = gpu.read(list);
     let at = light::hits_at(SIZE) as usize;
-    let mut kept = std::collections::BTreeSet::new();
+    let mut seen = std::collections::BTreeSet::new();
     let mut strays = 0u32;
     for r in 0..hits as usize {
         let px = words[at + r * beam::HIT_WORDS as usize + beam::HIT_PX as usize];
         let k = ((px >> 16) * SIZE + (px & 0xffff)) as usize;
-        if k >= walked.len() || !walked[k] || !kept.insert(k) {
+        if k >= walked.len() || !walked[k] || !seen.insert(k) {
             strays += 1;
         }
     }
@@ -989,7 +989,7 @@ fn handed_between_frames(eye: [i32; 2], cell_zoom: Zoom, by: [i32; 2], name: &'s
         if Entry::of(now[k]).changed_from(Entry::of(was[k])) {
             changed[k / 32] |= 1 << (k % 32);
         }
-        if Entry::of(now[k]).held_changed_from(Entry::of(was[k])) {
+        if Entry::of(now[k]).present_changed_from(Entry::of(was[k])) {
             for q in [Entry::of(now[k]).brick, Entry::of(was[k]).brick] {
                 if q != [i32::MIN; 2] {
                     let level = &mut changed_bricks[k / ENTRIES as usize];
@@ -1001,7 +1001,7 @@ fn handed_between_frames(eye: [i32; 2], cell_zoom: Zoom, by: [i32; 2], name: &'s
     assert!(changed.iter().any(|&m| m != 0), "no entry changed");
 
     let store = wgpu::BufferUsages::STORAGE;
-    let bufs = |rows: &[[i32; 4]]| WorldBufs {
+    let bufs = |rows: &[[i32; 4]]| WorldBuffer {
         clip: gpu.buffer(
             &rows
                 .iter()
@@ -1058,7 +1058,7 @@ fn handed_between_frames(eye: [i32; 2], cell_zoom: Zoom, by: [i32; 2], name: &'s
 
 /// Casts a map fresh over the world `b` with the eye's cuts `cuts` and every tile read, as
 /// `run_case`'s first frame does. Returns the slots listed and the map's words.
-fn fresh_map(gpu: &Gpu, b: &WorldBufs, case: &Case, cuts: [Cut; 2]) -> (Vec<bool>, Vec<u32>) {
+fn fresh_map(gpu: &Gpu, b: &WorldBuffer, case: &Case, cuts: [Cut; 2]) -> (Vec<bool>, Vec<u32>) {
     let (s, starts) = box_of(case);
     let mut eye_words = vec![0u32; eye::WORDS];
     eye_words[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&s.words());
@@ -1120,7 +1120,7 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
     };
     let built = real_world::build(EYE);
     let store = wgpu::BufferUsages::STORAGE;
-    let bufs = |rows: &[[i32; 4]]| WorldBufs {
+    let bufs = |rows: &[[i32; 4]]| WorldBuffer {
         clip: gpu.buffer(
             &rows
                 .iter()

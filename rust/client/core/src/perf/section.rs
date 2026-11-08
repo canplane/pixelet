@@ -7,7 +7,7 @@ use core::mem::{offset_of, size_of};
 
 use crate::perf::frame::{FrameSample, RaySample, EFFECTS, GPU_SPANS};
 use crate::perf::spec::{FRAME, LIMIT, NOW, PERCENTILE, STAT, STEP_STAT, STREAM_STAT, WAKES};
-use crate::perf::word::{words, zeroed, Words};
+use crate::perf::word::{words, zeroed, AsWords};
 use crate::sys::io::demand_spec::{STREAM_NAMES, TASK_PHASE_NAMES};
 use crate::sys::sched::phase_spec::PHASES;
 use pxl_render::gpu::span_spec::FRAME_KINDS;
@@ -20,13 +20,13 @@ const CATEGORIES: usize = STREAM_NAMES;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Percentiles {
+pub struct Percentile {
     pub p50: f64,
     pub p95: f64,
     pub max: f64,
 }
 
-words!(Percentiles, PERCENTILE::WORDS, p50 => PERCENTILE::p50, p95 => PERCENTILE::p95, max => PERCENTILE::max);
+words!(Percentile, PERCENTILE::WORDS, p50 => PERCENTILE::p50, p95 => PERCENTILE::p95, max => PERCENTILE::max);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -42,7 +42,7 @@ words!(RecordingStateSection, NOW::recording_state::WORDS,
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct FramesSection {
+pub struct FrameSection {
     /// 0 for a window with no frames, where every other word is 0 too.
     pub present: f64,
     pub cnt: f64,
@@ -60,20 +60,20 @@ pub struct FramesSection {
     /// How many frames a GPU read timed. The GPU's figures cover these frames
     /// alone.
     pub gpu_timed: f64,
-    pub interval: Percentiles,
-    pub busy: Percentiles,
-    pub tick: Percentiles,
+    pub interval: Percentile,
+    pub busy: Percentile,
+    pub tick: Percentile,
     /// The other measured parts of `busy`, then `rest`, what they leave of it
     /// unmeasured.
-    pub effects: Percentiles,
-    pub stage: Percentiles,
-    pub tasks: Percentiles,
-    pub perf: Percentiles,
-    pub rest: Percentiles,
+    pub effects: Percentile,
+    pub stage: Percentile,
+    pub tasks: Percentile,
+    pub perf: Percentile,
+    pub rest: Percentile,
     /// Each effect's p95, indexed by `EffectName`.
     pub effects_p95: [f64; EFFECTS],
     /// The GPU's time, with overlapping spans counted once.
-    pub gpu_busy: Percentiles,
+    pub gpu_busy: Percentile,
     /// Three words for each of the renderer's FRAME_KINDS: the p50 and p95 of
     /// the GPU's busy time over that kind's timed frames, and how many there
     /// were. All three are 0 for a kind no timed frame had.
@@ -102,13 +102,13 @@ const _: () = assert!(
     "the last frame runs past STAT's frames section"
 );
 
-impl Default for FramesSection {
+impl Default for FrameSection {
     fn default() -> Self {
         zeroed()
     }
 }
 
-words!(FramesSection, STAT::frames::WORDS,
+words!(FrameSection, STAT::frames::WORDS,
     present => STAT::frames::present, cnt => STAT::frames::cnt, seconds => STAT::frames::seconds,
     moving => STAT::frames::moving, moving_ms => STAT::frames::moving_ms,
     missed => STAT::frames::missed, overran => STAT::frames::overran,
@@ -128,7 +128,7 @@ words!(FramesSection, STAT::frames::WORDS,
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct StreamStats {
+pub struct StreamStat {
     pub cnt: f64,
     pub ok: f64,
     pub aborted: f64,
@@ -143,7 +143,7 @@ pub struct StreamStats {
     pub phase_mean: [f64; TASK_PHASES],
 }
 
-words!(StreamStats, STREAM_STAT::WORDS,
+words!(StreamStat, STREAM_STAT::WORDS,
     cnt => STREAM_STAT::cnt, ok => STREAM_STAT::ok, aborted => STREAM_STAT::aborted, err => STREAM_STAT::err,
     lat_p50 => STREAM_STAT::lat_p50, lat_p95 => STREAM_STAT::lat_p95, reason_cnt => STREAM_STAT::reason_cnt, reasons => STREAM_STAT::reasons,
     phase_n => STREAM_STAT::phase_n, phase_mean => STREAM_STAT::phase_mean,
@@ -151,11 +151,11 @@ words!(StreamStats, STREAM_STAT::WORDS,
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct TasksSection {
-    pub slots: [StreamStats; CATEGORIES],
+pub struct TaskSection {
+    pub slots: [StreamStat; CATEGORIES],
 }
 
-words!(TasksSection, STAT::tasks::WORDS, slots => STAT::tasks::slots);
+words!(TaskSection, STAT::tasks::WORDS, slots => STAT::tasks::slots);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -200,7 +200,7 @@ words!(ViewSection, NOW::view::WORDS,
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct StepStats {
+pub struct StepStat {
     /// Indices into PHASES and STEP_NAMES.
     pub phase: f64,
     pub name: f64,
@@ -209,18 +209,18 @@ pub struct StepStats {
     pub max_ms: f64,
 }
 
-words!(StepStats, STEP_STAT::WORDS,
+words!(StepStat, STEP_STAT::WORDS,
     phase => STEP_STAT::phase, name => STEP_STAT::name, ms => STEP_STAT::ms, cnt => STEP_STAT::cnt, max_ms => STEP_STAT::max_ms,
 );
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct StepsSection {
+pub struct StepSection {
     pub cnt: f64,
-    pub slots: [StepStats; STEP_CAP],
+    pub slots: [StepStat; STEP_CAP],
 }
 
-words!(StepsSection, STAT::steps::WORDS, cnt => STAT::steps::cnt, slots => STAT::steps::slots);
+words!(StepSection, STAT::steps::WORDS, cnt => STAT::steps::cnt, slots => STAT::steps::slots);
 
 /// The largest and smallest values the frames held since the recording
 /// started (perf.json STAT.recording). Each frame turn's figures are folded

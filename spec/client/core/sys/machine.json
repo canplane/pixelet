@@ -15,10 +15,9 @@
     "$doc": [
       "`bytes`: what a desktop is asked to reserve, then a handheld. A handheld's is half of",
       "the desktop's, because a reservation is committed lazily by the OS but JavaScriptCore",
-      "reports the whole of it as the page's JavaScript memory — a Safari heap timeline read",
-      "it as one ArrayBuffer. The smaller is also the floor the module declares to the",
-      "engine (`--initial-memory`), so a page that reserves less fails to instantiate rather",
-      "than booting into a core with nowhere to put the terrain.",
+      "reports the whole of it as the page's JavaScript memory. The smaller is also the floor",
+      "the module declares to the engine (`--initial-memory`), so a page that reserves less",
+      "fails to instantiate rather than booting into a core with nowhere to put the terrain.",
       "",
       "`region_bytes`: a reservation is a whole number of these and the bytes past the last",
       "one are left out.",
@@ -31,7 +30,7 @@
       "grown past a phone fails to build; and at boot against where it actually started and",
       "what the device gave.",
       "",
-      "256 MiB. The fixed ranges take 87.31 MiB, the terrain's 77.99 MiB of them.",
+      "`min_heap_bytes` is 256 MiB. The fixed ranges take 87.31 MiB, the terrain's 77.99 MiB of them.",
       "",
       "The heap's bounded flows at their worst are checked against it at compile time too",
       "(door/layout.rs `HEAP_FLOWS_BYTES`): the runs that `BODY_SLOTS` terrain and Earth",
@@ -40,7 +39,7 @@
       "on, each in the buddy's blocks, a power of two, 164.56 MiB.",
       "",
       "Each figure here in MiB to two places is held to the code by a test",
-      "(door/layout.test.rs); the data's end is a build's, and read off one."
+      "(door/layout.test.rs)."
     ],
     "bytes": [
       1073741824,

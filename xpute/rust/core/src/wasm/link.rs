@@ -1,8 +1,8 @@
 // xpute-core/wasm/link.rs
 
-//! How a core built as one WebAssembly module is linked. The core's build
-//! script calls `link`; a build script runs on the build machine, so this
-//! module is compiled for every target:
+//! This is how a core built as one WebAssembly module is linked. A core's
+//! build script calls `link`; a build script runs on the build machine, so
+//! this module is compiled for every target:
 //!
 //! ```
 //! // a core's build.rs, in its `main`
@@ -15,12 +15,12 @@
 //! address 0 and traps instead of writing over the data above the stack. The
 //! C++ core links with the same flags (`cpp/Makefile` `WASM_LINK`).
 
-/// The size of a WebAssembly page, the unit a memory is declared in: 64 KiB.
-/// It is not the 4 KiB page by which a core places its ranges and its heap
+/// A WebAssembly page, the unit a memory is declared in, is 64 KiB. It is not
+/// the 4 KiB page by which a core places its ranges and its heap
 /// (`crate::mem::section::PAGE_BYTES`).
 pub const WASM_PAGE_BYTES: u32 = 1 << 16;
 
-/// The numbers a module core is linked with.
+/// These are the numbers a module core is linked with.
 pub struct LinkConfig {
     /// The stack's size (`-z stack-size`). The stack is placed first in the
     /// memory (`--stack-first`).
@@ -34,8 +34,9 @@ pub struct LinkConfig {
     pub init_bytes: Option<u32>,
 }
 
-/// Prints `cfg`'s link arguments for Cargo. When the target is not wasm32 it
-/// prints nothing, and the core is linked as the platform links any library.
+/// `link` prints `cfg`'s link arguments for Cargo. When the target is not
+/// wasm32 it prints nothing, and the core is linked as the platform links any
+/// library.
 pub fn link(cfg: &LinkConfig) {
     if std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() != Ok("wasm32") {
         return;

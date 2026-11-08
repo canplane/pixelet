@@ -101,8 +101,6 @@ export function TopOverlays() {
   );
 }
 
-/** The strip at the top center. It shows the map's scale while zooming and
- * the address otherwise, and it dims with the buttons beside it. */
 function SearchStrip() {
   const { t } = useTranslation();
   const zooming = useCore((s) => s.zooming);

@@ -1,11 +1,11 @@
 // @xpute/runtime/ipc/ns.ts
 
 /**
- * The roots a program binds, after Plan 9's namespace, as the `Fs` it hands
- * `FsServer` (fs.ts). Each root the core opens files under is answered by
+ * These are the roots a program binds, after Plan 9's namespace, as the `Fs` it
+ * hands `FsServer` (fs.ts). Each root the core opens files under is answered by
  * whatever the program binds there. The bindings are made once, when the
- * namespace is built, and never change. What a path below a root names is
- * for the bound side alone to decide.
+ * namespace is built, and never change. What a path below a root names is for
+ * the bound side alone to decide.
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -13,7 +13,7 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FileError, type Fs } from "./fs.ts";
 
-/** What answers below one root; one with no `commit` is read-only. */
+/** A binding answers below one root, and one with no `commit` is read-only. */
 export interface Binding {
   open(path: string, signal: AbortSignal): U8Array | Promise<U8Array>;
   commit?(path: string, bytes: U8Array): void;
@@ -26,7 +26,7 @@ export class Namespace implements Fs {
     this.bound = new Map(bound);
   }
 
-  /** Throws ENOENT below a root nothing is bound to. */
+  /** This throws ENOENT below a root nothing is bound to. */
   open(
     root: u32,
     path: string,
@@ -37,7 +37,7 @@ export class Namespace implements Fs {
     return bound.open(path, signal);
   }
 
-  /** Throws EROFS below a root that cannot be written. */
+  /** This throws EROFS below a root that cannot be written. */
   commit(root: u32, path: string, bytes: U8Array): void {
     const write = this.bound.get(root)?.commit;
     if (write === undefined) throw new FileError(Errno.EROFS);

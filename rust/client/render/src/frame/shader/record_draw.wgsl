@@ -122,7 +122,7 @@ fn record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   // A stale voxel is no pixel's answer: a pixel only it covers walks as if no box stood there
   // (pxl-engine record.rs, "Fresh or stale"). Left undrawn, it stands no receiver and may be
   // evicted.
-  if (!kept_fresh(k, (state & RECORD_WHOLE) != 0u, o)) {
+  if (!is_fresh(k, (state & RECORD_WHOLE) != 0u, o)) {
     return;
   }
   let place = box_place(RECORD_EYE_DRAWS);

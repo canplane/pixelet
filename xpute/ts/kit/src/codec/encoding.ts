@@ -1,6 +1,6 @@
 // @xpute/kit/codec/encoding.ts
 
-import type { Bytes } from "@xpute/kit/abi/array.ts";
+import type { ByteArray } from "@xpute/kit/abi/array.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
 
@@ -24,14 +24,14 @@ export function is_b64url(s: string): boolean {
   return true;
 }
 
-export function ct_eq(a: Bytes, b: Bytes): boolean {
+export function ct_eq(a: ByteArray, b: ByteArray): boolean {
   if (a.byteLength !== b.byteLength) return false;
   let v = 0;
   for (let i = 0; i < a.byteLength; i++) v |= a[i] ^ b[i];
   return v === 0;
 }
 
-export function bytes_to_b64url(bytes: Bytes): Base64Url {
+export function bytes_to_b64url(bytes: ByteArray): Base64Url {
   let bin_str = "";
   const n = bytes.byteLength;
   const CHUNK = 0x8000;
@@ -46,7 +46,7 @@ export function bytes_to_b64url(bytes: Bytes): Base64Url {
   return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
-export function b64url_to_bytes(b64url: Base64Url): Bytes {
+export function b64url_to_bytes(b64url: Base64Url): ByteArray {
   let b64: Base64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
 
   while (b64.length % 4) {
@@ -60,7 +60,7 @@ export function b64url_to_bytes(b64url: Base64Url): Bytes {
   return out;
 }
 
-export function is_pid_b64url_16(pid: unknown, pid_bin: Bytes): boolean {
+export function is_pid_b64url_16(pid: unknown, pid_bin: ByteArray): boolean {
   if (typeof pid !== "string") return false;
   // 16 bytes take 22 characters in unpadded base64url.
   if (pid.length !== 22) return false;
@@ -73,7 +73,7 @@ export function is_pid_b64url_16(pid: unknown, pid_bin: Bytes): boolean {
   }
 }
 
-export type Uuid = Bytes;
+export type Uuid = ByteArray;
 
 export function generate_uuid(): Uuid {
   const bytes: Uuid = new Uint8Array(16);
@@ -110,11 +110,11 @@ export function uuid_equals(a: Uuid, b: Uuid): boolean {
   return true;
 }
 
-export function bytes_to_hex(bytes: Bytes): string {
+export function bytes_to_hex(bytes: ByteArray): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export function hex_to_bytes(hex: string): Bytes {
+export function hex_to_bytes(hex: string): ByteArray {
   if (hex.length % 2 !== 0) {
     throw new MarshalError(Errno.EINVAL);
   }

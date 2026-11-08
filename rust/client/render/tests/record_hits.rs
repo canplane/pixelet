@@ -27,12 +27,13 @@ mod real_world;
 use std::collections::{BTreeMap, BTreeSet};
 
 use gpu::{
-    array_view, cross, entry_held, mix, read_texture, texture, unit, Gpu, Kinds, LightBox, Tally,
+    array_view, cross, holds_node, mix, read_texture, texture, unit, Gpu, KindCount, LightBox,
+    Tally,
 };
 use pxl_engine::answer::{self, Kind};
 use pxl_engine::beam::{self, Grid};
 use pxl_engine::cast::Node;
-use pxl_engine::light::{self, Light, Starts};
+use pxl_engine::light::{self, Light, StartGrid};
 use pxl_engine::object::Cut;
 use pxl_engine::{
     eye, face, node_cache, raster, ray, record, Zoom, LEAF_CELL_ZOOM, WORKGROUPS_CAP,
@@ -43,7 +44,7 @@ use pxl_render::frame::shader::record::{
 };
 use pxl_render::frame::shader::word::SQUARE_SIDE;
 
-use real_world::{q8, store_of, Built, WorldBufs, FINEST};
+use real_world::{q8, store_of, Built, WorldBuffer, FINEST};
 
 /// The leaf cell the world is built about, 300 cells west of X's seam.
 const EYE: [i32; 2] = [(1 << 23) - 300, (40 << 16) + 30];
@@ -70,10 +71,10 @@ fn device() -> Option<Gpu> {
     gpu
 }
 
-fn world_bufs(gpu: &Gpu, built: &Built) -> WorldBufs {
+fn world_bufs(gpu: &Gpu, built: &Built) -> WorldBuffer {
     let flat_u = |rows: &[[u32; 4]]| rows.iter().flatten().copied().collect::<Vec<u32>>();
     let clip: Vec<u32> = built.clipmap.iter().flatten().map(|&v| v as u32).collect();
-    WorldBufs {
+    WorldBuffer {
         clip: gpu.buffer(&clip, store_of()),
         ground: gpu.buffer(&built.ground, store_of()),
         palette: gpu.buffer(&built.palette, store_of()),
@@ -84,7 +85,7 @@ fn world_bufs(gpu: &Gpu, built: &Built) -> WorldBufs {
 }
 
 fn world_binds<'a>(
-    b: &'a WorldBufs,
+    b: &'a WorldBuffer,
     eye: &'a wgpu::Buffer,
     words: &'a wgpu::Buffer,
     table: &'a wgpu::Buffer,
@@ -105,7 +106,7 @@ fn world_binds<'a>(
 /// What the faces' pass binds, with its args at word `at` of the raster's args: the samples'
 /// asks at `raster::ASKED_AT`, the holes' hits' at `raster::HIT_ASKED_AT`.
 fn face_binds<'a>(
-    b: &'a WorldBufs,
+    b: &'a WorldBuffer,
     run: &'a Run,
     at: u32,
 ) -> Vec<(u32, wgpu::BindingResource<'a>)> {
@@ -352,7 +353,7 @@ fn entries_of(cache: &[u32], h: &Hit) -> Vec<u32> {
         .filter(|&slot| {
             let e = node_cache::entry_at(slot) as usize;
             let w = e + node_cache::W_NODE as usize;
-            entry_held(cache, slot)
+            holds_node(cache, slot)
                 && cache[e + node_cache::W_KIND as usize] & node_cache::KIND_MASK == kind
                 && cache[w] == zoom
                 && [1, 2, 3].map(|k| cache[w + k] as i32) == idx
@@ -373,9 +374,9 @@ fn holders(cache: &[u32], h: &Hit) -> Vec<u32> {
 /// The slot of the entry that draws the node of hit `h` (pxl-engine `record`): among its
 /// holders, the one that already draws, with a face set, or else the first.
 fn drawer(cache: &[u32], h: &Hit) -> Option<u32> {
-    let held = holders(cache, h);
+    let slots = holders(cache, h);
     let draws = |s: &u32| cache[node_cache::state_at(*s) as usize] & record::FACES != 0;
-    held.iter().copied().find(draws).or(held.first().copied())
+    slots.iter().copied().find(draws).or(slots.first().copied())
 }
 
 /// Lays some of the entries the hits find otherwise, as other frames and the other observer
@@ -474,7 +475,7 @@ fn record_want(
     args: &mut [u32],
     hits: &[Hit],
     reads: bool,
-    kinds: &mut Kinds,
+    kinds: &mut KindCount,
 ) -> BTreeMap<u32, Ask> {
     let frame = cache[node_cache::FRAME as usize];
     let found: Vec<Option<u32>> = hits.iter().map(|h| drawer(cache, h)).collect();
@@ -593,7 +594,7 @@ fn faces_want(
     size: [u32; 2],
     cache: &[u32],
     (hits, asked): (&[Hit], &BTreeSet<u32>),
-    kinds: &mut Kinds,
+    kinds: &mut KindCount,
 ) {
     let texels = (size[0] * size[1]) as usize;
     for (r, h) in hits.iter().enumerate() {
@@ -729,7 +730,7 @@ fn args_of(grid: &Grid) -> Vec<u32> {
 /// `s.samples`, the samples, their hits' record and the faces' pass over their asks; and then
 /// the holes' queue over the pixels the cast marked, as tests/sample.rs marks them. The
 /// entries the hits find are then laid otherwise (`lay_otherwise`).
-fn eye_run(gpu: &Gpu, b: &WorldBufs, (c, s): (&EyeCase, &Screen)) -> Run {
+fn eye_run(gpu: &Gpu, b: &WorldBuffer, (c, s): (&EyeCase, &Screen)) -> Run {
     let (mut eye, grid) = eye_of(c);
     for k in 0..2 {
         eye[eye::JITTER + k] = s.jitter[k].to_bits();
@@ -872,7 +873,7 @@ fn eye_run(gpu: &Gpu, b: &WorldBufs, (c, s): (&EyeCase, &Screen)) -> Run {
 /// Lays the light's beam lines and each cell's start in its list `list`, as the cast lays them
 /// (beam.light.wgsl, light_cell.wgsl). Every tile is read, and the beam runs over a node cache
 /// of its own.
-fn lay_cells(gpu: &Gpu, b: &WorldBufs, [eye, header]: [&wgpu::Buffer; 2], list: &mut [u32]) {
+fn lay_cells(gpu: &Gpu, b: &WorldBuffer, [eye, header]: [&wgpu::Buffer; 2], list: &mut [u32]) {
     let tiles = light::tiles(SIZE) as usize;
     let reads = light::reads_at(SIZE) as usize;
     list[reads..reads + tiles * tiles].fill(CAST);
@@ -903,8 +904,8 @@ fn lay_cells(gpu: &Gpu, b: &WorldBufs, [eye, header]: [&wgpu::Buffer; 2], list: 
 /// cells' starts, then the holes' queue over every slot of its map, over a node cache that
 /// holds nothing yet, as tests/light_miss.rs runs them. The entries the hits find are then
 /// laid otherwise (`lay_otherwise`).
-fn light_run(gpu: &Gpu, b: &WorldBufs, c: &LightCase) -> Run {
-    let (l, starts): (Light, Starts) = LightBox {
+fn light_run(gpu: &Gpu, b: &WorldBuffer, c: &LightCase) -> Run {
+    let (l, starts): (Light, StartGrid) = LightBox {
         size: SIZE,
         origin: c.origin,
         dir: c.dir,
@@ -1016,7 +1017,7 @@ fn record_case(
     p: &wgpu::ComputePipeline,
     run: &Run,
     tally: &mut Tally,
-    kinds: &mut Kinds,
+    kinds: &mut KindCount,
 ) {
     let mut cache = run.cache.clone();
     let mut args = run.args.clone();
@@ -1087,7 +1088,7 @@ fn hand_eye_hits_answer_as_record() {
     let b = world_bufs(&gpu, &built);
     let p = pipeline(&gpu, COMPUTE_RECORD_HITS);
     let mut tally = Tally::default();
-    let mut kinds = Kinds::new();
+    let mut kinds = KindCount::new();
     for (c, s) in eye_cases(&built) {
         let run = eye_run(&gpu, &b, (&c, &s));
         record_case(&gpu, &p, &run, &mut tally, &mut kinds);
@@ -1120,7 +1121,7 @@ fn hand_light_hits_answer_as_record() {
     let b = world_bufs(&gpu, &built);
     let p = pipeline(&gpu, COMPUTE_LIGHT_RECORD_HITS);
     let mut tally = Tally::default();
-    let mut kinds = Kinds::new();
+    let mut kinds = KindCount::new();
     for c in light_cases(&built) {
         let run = light_run(&gpu, &b, &c);
         record_case(&gpu, &p, &run, &mut tally, &mut kinds);
@@ -1151,7 +1152,7 @@ fn hand_hit_faces_answer_as_record() {
     let [hits_p, face_p, faces_p] =
         [COMPUTE_RECORD_HITS, COMPUTE_FACE, COMPUTE_RECORD_FACES].map(|id| pipeline(&gpu, id));
     let mut tally = Tally::default();
-    let mut kinds = Kinds::new();
+    let mut kinds = KindCount::new();
     for (c, s) in eye_cases(&built) {
         let run = eye_run(&gpu, &b, (&c, &s));
         gpu.dispatch(

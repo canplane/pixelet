@@ -3,7 +3,7 @@
 use super::*;
 use crate::space::coord::world::{nearest, ROUND};
 use crate::space::coord::zoom::UNIT_ZOOM;
-use crate::space::layer::lattice::Cells;
+use crate::space::layer::lattice::Grid;
 use crate::space::layer::lattice::GROUND;
 use crate::space::layer::lattice::*;
 

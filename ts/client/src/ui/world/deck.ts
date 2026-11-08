@@ -19,7 +19,6 @@ const SWIPE_PX = 24;
 interface CardPose {
   rest: { translateY: f64; scale: f64 };
   above: { translateY: f64 };
-  /** The card's opacity. A card deeper than the drawn ones has none. */
   fade: f64;
   zIndex: u32;
 }
@@ -52,7 +51,7 @@ export function useTurnedBack(rotation: i32): boolean {
   return turnedBack;
 }
 
-interface SwipeHooks {
+interface SwipeHandler {
   /** Called when a touch starts, before any responder claims it. */
   press?: () => void;
   drag?: (on: boolean) => void;
@@ -66,7 +65,7 @@ interface SwipeHooks {
  */
 export function deckSwipe(
   turn: (delta: i32) => void,
-  { press, drag }: SwipeHooks = {},
+  { press, drag }: SwipeHandler = {},
 ): PanResponderCallbacks {
   // The distance is measured from where the touch began. The responder's own
   // `dy` restarts at the grant, which can come after the first moves.

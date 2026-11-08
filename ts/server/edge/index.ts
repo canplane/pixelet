@@ -9,8 +9,6 @@
  * `/asset/*` come straight out of the R2 bucket. `/geo/*` and `/api/*` are
  * reverse-proxied as they are to GEO_ORIGIN and API_ORIGIN (infra/README.md),
  * so that they stay same-origin with the app.
- *
- * The platform types the Worker needs are declared inline.
  */
 
 type R2Object = {
@@ -49,14 +47,12 @@ declare global {
 type ExecutionContext = { waitUntil(p: Promise<unknown>): void };
 
 export type Env = {
-  /** The bucket: the baked pages, the assets and `source`. */
   BUCKET: R2Bucket;
-  /** The static assets' binding, used only when no other route matches. */
   ASSETS: { fetch(request: Request): Promise<Response> };
   /** The live API's own origin (infra/README.md), from wrangler.jsonc's
    * `vars`. */
   API_ORIGIN: string;
-  /** The geo server's origin, set the same way. */
+  /** The geo server's own origin, also from wrangler.jsonc's `vars`. */
   GEO_ORIGIN: string;
 };
 
@@ -76,7 +72,7 @@ import { BASE_LAYERS, TILE_OBJECT, TILE_SPHERE } from "./publication.spec.ts";
  *   (`TILE_OBJECT`). The Earth's picture lies whole beside its tiles
  *   (`TILE_SPHERE`).
  * - `asset/<sha256>.<ext>`: a model or an image, named by its bytes alone
- *   (pxl-tool's ingest_asset). A catalog names it by its path, and the
+ *   (pxl-tool's asset). A catalog names it by its path, and the
  *   shipped table maps the path to the key. A changed file gets a new name.
  * - `source`: the source's declaration (pxl-geo-bake source.rs), the one
  *   object that changes under its key.
@@ -144,7 +140,6 @@ async function declaration(request: Request, env: Env): Promise<Response> {
   );
 }
 
-/** A baked page's key: a kind, a version and a page name. */
 const BAKE_KEY = new RegExp(String.raw`^(?:${KINDS})\/`);
 
 export default {
@@ -197,7 +192,6 @@ export default {
     }
 
     const key = bucket;
-    // A key of no known shape (KEY_RE) is refused before R2 is asked.
     if (!KEY_RE.test(key)) return new Response("not found", { status: 404 });
     if (key === SOURCE_KEY) return declaration(request, env);
 

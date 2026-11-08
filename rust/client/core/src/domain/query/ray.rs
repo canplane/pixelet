@@ -11,7 +11,7 @@ use super::node::{coarsest, At};
 use super::world::World;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::store::ObjectQuery as _;
-use crate::domain::layer::tile_cache::Lines;
+use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::{Answer, Base};
 use pxl_engine::answer::{self, In, Kind};
 pub(super) use pxl_engine::cast::Until;
@@ -127,7 +127,7 @@ pub(super) struct Walker<'w, 'a> {
     decor_ray: Option<(&'w Ray, DecorRay)>,
     /// The ground's lines the walk read. Each node's line steps on from them
     /// (`World::node`).
-    lines: Lines,
+    lines: Path,
 }
 
 impl<'a> Query for Walker<'_, 'a> {
@@ -237,7 +237,7 @@ impl<'a> World<'a> {
     /// ray tells nothing. Decor, which fills no cell, is struck at the leaf
     /// cells the ray passes.
     pub fn first_hit(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
-        let mut lines = Lines::default();
+        let mut lines = Path::default();
         let (met, decor_ray) =
             self.along(ray, detail, Until::Opaque, self.decor_ray(ray), &mut lines);
         let decor = decor_ray
@@ -264,7 +264,7 @@ impl<'a> World<'a> {
         detail: Detail,
         until: Until,
         decor_ray: Option<DecorRay>,
-        lines: &mut Lines,
+        lines: &mut Path,
     ) -> (Answer<Option<Hit>>, Option<DecorRay>) {
         let mut walker = Walker {
             world: self,
@@ -328,14 +328,13 @@ impl<'a> World<'a> {
         }
     }
 
-    /// A walk with nothing met yet, striking no decor.
     fn walker(&self) -> Walker<'_, 'a> {
         Walker {
             world: self,
             lack: None,
             answered: false,
             decor_ray: None,
-            lines: Lines::default(),
+            lines: Path::default(),
         }
     }
 

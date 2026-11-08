@@ -1,11 +1,11 @@
 // @xpute/runtime/conformance.test.ts
 
 /**
- * Runs the traces under spec/conformance/ against every core, Rust or C++,
- * native or WebAssembly, through this package's rings, header and stream,
- * under each of the layouts a core draws from its seed (LAYOUTS). Build the
- * cores first with `make build` at xpute's root, which builds Rust with Cargo
- * and C++ with cpp/Makefile.
+ * This runs the traces under spec/conformance/ against every core, Rust or C++,
+ * native or WebAssembly, through this package's rings, header and stream, under
+ * each of the layouts a core draws from its seed (LAYOUTS). Build the cores
+ * first with `make build` at xpute's root, which builds Rust with Cargo and C++
+ * with cpp/Makefile.
  */
 
 import { test } from "vitest";
@@ -67,19 +67,19 @@ const MODULE_BYTES = 4 << 20;
 
 const MODULE_IMPORTS = ["env.call", "env.memory", "env.now"];
 
-/** A core as the runtime holds it, with `head_at`, the offset its boot
+/** This is a core as the runtime holds it, with `head_at`, the offset its boot
  * answered for the front's header. */
 interface Opened extends Core {
   head_at: number;
 }
 
 interface Opener {
-  /** A core booted under the layout `seed` draws. */
+  /** `open` boots a core under the layout `seed` draws. */
   open(seed: number): Opened;
   close(): void;
 }
 
-/** Answers a core's calls until its runtime sets an answer. */
+/** This answers a core's calls until its runtime sets an answer. */
 function answer_enosys(): number {
   return Errno.ENOSYS;
 }
@@ -178,7 +178,6 @@ interface Turn {
 }
 
 class Runtime {
-  /** The header's words. */
   readonly head: Uint32Array;
   readonly sq: Ring;
   private readonly _cq: Ring;
@@ -215,7 +214,6 @@ class Runtime {
     this._push(tag, cmd, ack ? frame.ACKREQ : 0, 0, args);
   }
 
-  /** Completes the core's request tagged `tag`, as a device completes it. */
   complete(tag: number, cmd: number, result: number, args: number[]): void {
     this._push(tag, cmd, frame.RES, result, args);
   }
@@ -271,19 +269,17 @@ class Runtime {
     return { completions, stream, wake };
   }
 
-  /** Whether a submission waits. */
   get pending(): boolean {
     return this.sq.len > 0;
   }
 
-  /** What the header's word `name` holds. */
   word(name: string): number {
     if (!(name in word)) throw new Error(`no header word ${name}`);
     return this.head[word[name as keyof typeof word]];
   }
 
-  /** Word `at` of the own header of the ring that the header word `ring_at`
-   * places. */
+  /** This reads word `at` of the own header of the ring that the header word
+   * `ring_at` places. */
   ring_word(ring_at: string, at: number): number {
     return new Uint32Array(
       this.head.buffer,
@@ -293,12 +289,12 @@ class Runtime {
   }
 }
 
-/** The core's own commands, by name. */
+/** These are the core's own commands, by name. */
 const CMD_NAMES = Object.entries(cmd).filter(
   ([, v]) => typeof v === "number",
 ) as [string, number][];
 
-/** The commands of xpute's own that a trace sends or completes: the
+/** These are the commands of xpute's own that a trace sends or completes: the
  * runtime's control commands and the file device's. */
 const RUNTIME_NAMES: [string, number][] = [
   ["NOP", Command.NOP],

@@ -1,8 +1,5 @@
 // @pxl/client/ui/world/dock/card.tsx
 
-/** A card of the dock's deck. Each mode has one card. The current mode's card
- * stands in front, and the other peeks out under it. */
-
 import type { ReactNode } from "react";
 import { StyleSheet } from "react-native";
 
@@ -18,7 +15,6 @@ import { cardPose, peekBelow } from "@/ui/world/deck.ts";
 
 const PEEK_PX = 10;
 
-/** The dock stands tall enough for the card behind to peek out under the front one. */
 export const DOCK_HEIGHT = chrome.control + PEEK_PX;
 
 /** Handlers that do nothing. The bar's swipe handles the drags on a card;

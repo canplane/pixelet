@@ -13,12 +13,12 @@ use pxl_content::generation::drawn::COLUMNS;
 /// (x, y, z, spin, scale), then one flag byte an instance, padded to a whole
 /// word.
 #[derive(Clone, Copy)]
-pub struct GroupColumns {
+pub struct GroupRange {
     pub first: usize,
     pub cnt: usize,
 }
 
-impl GroupColumns {
+impl GroupRange {
     pub const fn words(cnt: usize) -> usize {
         COLUMNS as usize * cnt + cnt.div_ceil(4)
     }
@@ -45,7 +45,7 @@ pub fn groups(words: &[u32]) -> impl Iterator<Item = (u32, u32)> + '_ {
         .iter()
         .map(move |&n| {
             let (first, n) = (at, n as usize);
-            at += GroupColumns::words(n);
+            at += GroupRange::words(n);
             (first as u32, n as u32)
         })
 }

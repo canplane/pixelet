@@ -4,12 +4,10 @@
 // `eye::GRID`). It says where a cell's start and a sample's hit lie among the beam rays'
 // words, and which cell a drawn pixel's ray goes through.
 
-/// The first word of the start of the screen's cell `c` (`Grid::cell_at`).
 fn cell_start(c: vec2<u32>) -> u32 {
   return eye_word(GRID + GRID_CELLS_AT) + (c.y * eye_word(GRID + GRID_SPAN) + c.x) * CELL_WORDS;
 }
 
-/// The first word of the hit of sample `s` (`Grid::sample_at`).
 fn sample_word(s: vec2<u32>) -> u32 {
   return eye_word(GRID + GRID_SAMPLES_AT) + (s.y * eye_word(GRID + GRID_SAMPLES) + s.x) * SAMPLE_WORDS;
 }

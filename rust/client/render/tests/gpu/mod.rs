@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use pxl_engine::answer::Kind;
-use pxl_engine::light::{self, Light, Starts};
+use pxl_engine::light::{self, Light, StartGrid};
 use pxl_engine::{cast, node_cache, ray, FRAC_W};
 use pxl_render::frame::shader::record::{
     compute, src, COMPUTE_QUEUE, COMPUTE_QUEUE_ASK, COMPUTE_QUEUE_ASK_CORNERS,
@@ -390,8 +390,8 @@ impl Gpu {
                 self.queue.write_buffer(buf, word(at), bytes(&q[p..p + 1]));
             }
             self.dispatch(&last, &last_binds, groups);
-            let done = self.read(asked.unwrap_or(table));
-            if self.asks_spent.get() || done[node_cache::ASKED as usize] <= ray::ASKS_A_FRAME {
+            let words = self.read(asked.unwrap_or(table));
+            if self.asks_spent.get() || words[node_cache::ASKED as usize] <= ray::ASKS_A_FRAME {
                 return;
             }
         }
@@ -400,7 +400,7 @@ impl Gpu {
 }
 
 /// Fills list `which` of the light's list `words`, over a map `size` texels a side, with every
-/// item of its level, as a cast that claims every tile lays it (light_propagate.wgsl `enlist`).
+/// item of its level, as a cast that claims every tile lays it (light_enlist.wgsl `enlist`).
 /// Returns the workgroups a pass dispatches over that list when each entry is `per` items a
 /// side (light_list.wgsl `light_item`).
 pub fn list_every(words: &mut [u32], size: u32, which: u32, per: u32) -> [u32; 2] {
@@ -472,7 +472,7 @@ pub fn lay_kept(
     let first = node_cache::bucket_of(n.zoom, idx);
     let mut free = None;
     for slot in first..first + node_cache::BUCKET {
-        if entry_held(cache, slot) {
+        if holds_node(cache, slot) {
             let w = (node_cache::entry_at(slot) + node_cache::W_NODE) as usize;
             if cache[w] == n.zoom && [1, 2, 3].map(|a| cache[w + a] as i32) == idx {
                 return None;
@@ -495,7 +495,7 @@ pub fn entry_node(cache: &[u32], e: usize, o: [i32; 3]) -> cast::Node {
 
 /// Whether slot `slot` of `cache` holds a node. It does when its key is neither empty nor a
 /// claim.
-pub fn entry_held(cache: &[u32], slot: u32) -> bool {
+pub fn holds_node(cache: &[u32], slot: u32) -> bool {
     let key = cache[node_cache::key_at(slot) as usize];
     key != 0 && key != node_cache::CLAIMED && key & node_cache::CLAIM_MASK != node_cache::CLAIM_FAR
 }
@@ -602,11 +602,11 @@ pub fn array_view(t: &wgpu::Texture) -> wgpu::TextureView {
 /// How many cases of each kind a test met. A test may claim a result only from the kinds it
 /// met, so a kind it needs and met too few times fails it.
 #[derive(Default, Debug)]
-pub struct Kinds(BTreeMap<&'static str, u64>);
+pub struct KindCount(BTreeMap<&'static str, u64>);
 
-impl Kinds {
-    pub fn new() -> Kinds {
-        Kinds::default()
+impl KindCount {
+    pub fn new() -> KindCount {
+        KindCount::default()
     }
 
     pub fn add(&mut self, k: &'static str, yes: bool) {
@@ -657,7 +657,7 @@ pub struct LightBox {
 impl LightBox {
     /// The light, and where its texels' rays start. Each anchor lies where its texel lies off
     /// the box's middle, rounded to a Q3 step with ties to even.
-    pub fn lay(&self) -> (Light, Starts) {
+    pub fn lay(&self) -> (Light, StartGrid) {
         let dir = unit(self.dir);
         let a = cross(dir, [0.0, 0.0, 1.0]);
         let a = if a == [0.0; 3] {
@@ -698,7 +698,7 @@ impl LightBox {
             )
         };
         let [a0, a1, a2, a3] = [0, 1, 2, 3].map(anchor);
-        let starts = Starts {
+        let starts = StartGrid {
             base,
             across: across.map(|v| light::fixed(v * q)),
             down: down.map(|v| light::fixed(v * q)),

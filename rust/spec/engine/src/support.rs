@@ -120,14 +120,14 @@ fn same(a: [i32; 3], b: [i32; 3]) -> bool {
 /// node, by its index at its zoom, and what was handed it and each node over it, by zoom. It
 /// may be a descent's own (`Line`) or one a reader holds elsewhere (`JoinedLine`; a beam ray's
 /// line in the beam rays' words, pxl-render resume.wgsl).
-pub trait Ancestors<A: Copy> {
+pub trait Lineage<A: Copy> {
     fn at(&self) -> [i32; 3];
     fn zoom(&self) -> Zoom;
     /// What was handed the line's node at `z` over its own, or its own node at its own zoom.
     fn ancestor(&self, z: Zoom) -> A;
 }
 
-impl<A: Copy> Ancestors<A> for Line<A> {
+impl<A: Copy> Lineage<A> for Line<A> {
     fn at(&self) -> [i32; 3] {
         self.at
     }
@@ -162,12 +162,12 @@ pub struct JoinedLine<'a, L, A> {
 
 impl<A: Copy> SubLine<A> {
     /// The sub-line read together with `base`, the line it was descended from.
-    pub fn joined<'a, L: Ancestors<A>>(&'a self, base: &'a L) -> JoinedLine<'a, L, A> {
+    pub fn joined<'a, L: Lineage<A>>(&'a self, base: &'a L) -> JoinedLine<'a, L, A> {
         JoinedLine { base, sub: self }
     }
 }
 
-impl<A: Copy, L: Ancestors<A>> Ancestors<A> for JoinedLine<'_, L, A> {
+impl<A: Copy, L: Lineage<A>> Lineage<A> for JoinedLine<'_, L, A> {
     fn at(&self) -> [i32; 3] {
         self.sub.line.at
     }
@@ -188,7 +188,7 @@ impl<A: Copy, L: Ancestors<A>> Ancestors<A> for JoinedLine<'_, L, A> {
 /// The deepest zoom at which the line `l` and the node `c` of `zoom` share a node, no finer
 /// than either, and whether they share one at all; they share none where they lie under two
 /// roots.
-fn shared_zoom<A: Copy>(l: &impl Ancestors<A>, zoom: Zoom, c: [i32; 3]) -> (Zoom, bool) {
+fn shared_zoom<A: Copy>(l: &impl Lineage<A>, zoom: Zoom, c: [i32; 3]) -> (Zoom, bool) {
     let (line, lz) = (l.at(), l.zoom());
     let mut z = if zoom < lz { zoom } else { lz };
     while z > 0 && !same(over(line, lz, z), over(c, zoom, z)) {
@@ -237,12 +237,12 @@ pub fn line<Q: Query>(q: &mut Q, zoom: Zoom, c: [i32; 3]) -> Line<Q::At> {
 /// instead of from the top.
 pub fn sub_line<Q: Query>(
     q: &mut Q,
-    base: &impl Ancestors<Q::At>,
+    base: &impl Lineage<Q::At>,
     zoom: Zoom,
     c: [i32; 3],
 ) -> SubLine<Q::At> {
-    let (z, held) = shared_zoom(base, zoom, c);
-    let (from, low) = if held {
+    let (z, shared) = shared_zoom(base, zoom, c);
+    let (from, low) = if shared {
         (base.ancestor(z), z)
     } else {
         (q.root(over(c, zoom, 0)), 0)
@@ -264,9 +264,9 @@ pub fn sub_line<Q: Query>(
 /// at that zoom (the first word of `Query::node`). It is asked from the deepest node of the
 /// line that holds the cell, each node under that handed down by its parent (`Query::child`),
 /// or from the cell's own root where no node of the line holds it.
-pub fn asset<Q: Query>(q: &mut Q, l: &impl Ancestors<Q::At>, zoom: Zoom, c: [i32; 3]) -> u32 {
-    let (mut z, held) = shared_zoom(l, zoom, c);
-    let mut at = if held {
+pub fn asset<Q: Query>(q: &mut Q, l: &impl Lineage<Q::At>, zoom: Zoom, c: [i32; 3]) -> u32 {
+    let (mut z, shared) = shared_zoom(l, zoom, c);
+    let mut at = if shared {
         l.ancestor(z)
     } else {
         z = 0;
@@ -505,9 +505,9 @@ mod tests {
             for share in [0.2, 0.5, 0.9] {
                 let ray = Ray::new([d[0], d[1], -1.0], 64.0);
                 let t = met.hit.t * share;
-                let (h, held) = met.hit.node.over(cast::point_at(o, &ray, t));
+                let (h, found) = met.hit.node.over(cast::point_at(o, &ray, t));
                 let h = cast::holding(o, &ray, h, t);
-                let from = if held {
+                let from = if found {
                     (h, cast::Over::over(&Along(&first), h.zoom), t)
                 } else {
                     (Node::ROOT, Step.root(Node::ROOT.idx(o)), t)

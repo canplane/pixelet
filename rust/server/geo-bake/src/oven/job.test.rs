@@ -24,7 +24,7 @@ async fn outcomes_reported() {
 #[test]
 fn staging_publish() {
     let base = directory::temp_dir(&format!("oven-publication-{}", std::process::id()));
-    let runner = Runner::new(1, Limits::default()).unwrap();
+    let runner = Runner::new(1, Limit::default()).unwrap();
     let data = Dataset::open(&base, super::super::Kind::Place, &runner).unwrap();
     let stage = Staging(data.cache.root.join("stage"));
     std::fs::create_dir(&stage.0).unwrap();
@@ -53,14 +53,14 @@ async fn wait_keeps_budget() {
 
 #[tokio::test]
 async fn client_wait_first() {
-    let workers = Arc::new(Workers {
+    let workers = Arc::new(WorkerPool {
         state: Mutex::new((1, VecDeque::new())),
     });
     let lease = |asked: bool| Lease {
         deadline: Instant::now() + Duration::from_secs(5),
         asked: Arc::new(AtomicBool::new(asked)),
     };
-    let held = workers.acquire(&lease(true)).await.unwrap();
+    let permit = workers.acquire(&lease(true)).await.unwrap();
     let order = Arc::new(Mutex::new(Vec::new()));
     let wait = |name: &'static str, l: Lease| {
         let (workers, order) = (workers.clone(), order.clone());
@@ -73,7 +73,7 @@ async fn client_wait_first() {
     task::yield_now().await;
     let asked = wait("asked", lease(true));
     task::yield_now().await;
-    drop(held);
+    drop(permit);
     asked.await.unwrap();
     fold.await.unwrap();
     assert_eq!(*order.lock().unwrap(), ["asked", "fold"]);

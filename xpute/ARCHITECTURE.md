@@ -559,7 +559,7 @@ The code, in the order its parts depend on each other.
   the records' reader.
 - `rust/core` is the core end: `mem` (`Memory`, `section`, `range`, `heap`),
   `machine` (`Machine`, `boot`, `core!`), `entry` (`run`, `BootInfo`), `ipc`
-  (`door::Door`, `ring::Ring`, `stream::Stream`, `file::Files`), `abi/handle`
+  (`door::Door`, `ring::Ring`, `stream::Stream`, `file::FileTable`), `abi/handle`
   (`Table`), `sched` (`edge`, `tick`, `pass`, `task`), `call`, `clock`, `stop`
   and `wasm` (`wasm_abi!`, `link`). `cpp/xpute/core` holds the same parts but
   the machine and the entry, which a C++ core writes for itself.

@@ -2,8 +2,6 @@
 //
 // GENERATED from spec/client/core/door/ui.json
 
-// The module a command is for: the core's, or the device's that sends it.
-
 export const INPUT = 0x11;
 export const SENSOR = 0x12;
 export const SOURCE = 0x13;

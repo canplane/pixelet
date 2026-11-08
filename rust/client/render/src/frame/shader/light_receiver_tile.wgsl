@@ -15,13 +15,13 @@
 /// and the count, under the names `enlist` reads them by, then the slide's dispatch. The cast's
 /// first stood tile opens the slide's workgroups across, and the host sets its workgroups down
 /// where the cast owes a slide.
-struct ReceiverArgs {
+struct ReceiverDispatch {
   list: array<atomic<u32>, 3>,
   cnt: atomic<u32>,
   slide: array<atomic<u32>, 3>,
 }
 
-@group(0) @binding(22) var<storage, read_write> args: ReceiverArgs;
+@group(0) @binding(22) var<storage, read_write> args: ReceiverDispatch;
 /// The light's args as words, whose marks lie past `light::ARGS_WORDS` (`light::args_words`).
 @group(0) @binding(21) var<storage, read_write> light_args: array<atomic<u32>>;
 
@@ -69,7 +69,6 @@ fn stand(t: vec2<i32>) {
   }
 }
 
-/// Stands a receiver on the tiles from `first` to `last`, held to the box.
 fn stand_box(first: vec2<i32>, last: vec2<i32>) {
   let n = i32(light_tiles());
   let lo = max(first, vec2<i32>(0));

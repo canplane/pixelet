@@ -30,17 +30,17 @@ use crate::domain::scene::gizmo::coverage::coverage_gizmo_draw;
 use crate::domain::scene::gizmo::frame::frame_gizmo_draw;
 use crate::domain::scene::indicator::ghost::ghost_draw;
 use crate::domain::scene::indicator::location::{location_animate, location_draw};
-use crate::domain::scene::model::registry::Models;
+use crate::domain::scene::model::registry::ModelTable;
 
 /// Returns whether anything is still moving, in which case the stage asks for
 /// another turn.
-pub fn animate(list: &mut DrawList, models: &Models, frame: &Frame) -> bool {
+pub fn animate(list: &mut DrawList, models: &ModelTable, frame: &Frame) -> bool {
     companion_animate(list, models, frame, character_surface_shows())
         | location_animate(frame)
         | environment_animate(frame)
 }
 
-pub fn draw(list: &mut DrawList, models: &Models) {
+pub fn draw(list: &mut DrawList, models: &ModelTable) {
     ghost_draw(list);
     companion_draw(list, models);
     location_draw(list);

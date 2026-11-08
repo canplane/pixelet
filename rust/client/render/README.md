@@ -128,7 +128,7 @@ whole, through tiles, or not at all, so nothing is read back to decide it.
 
 The renderer is made before its first frame, so that making it never holds the
 GPU process's main thread, which every frame the browser presents waits on
-(`gpu/pipeline.rs` `Pipelines`). Shader modules are made a few a turn, within
+(`gpu/pipeline.rs` `PipelineCache`). Shader modules are made a few a turn, within
 `MODULE_BYTES` of the stream; then every pipeline is asked for by WebGPU's async
 call, which compiles off that thread and reports through a ticket's word; and no
 frame is drawn until every word says its pipeline is made. The snapshot carries
@@ -152,7 +152,7 @@ the layouts and numbers they read are generated from pxl-engine by `build.rs`.
 - The build validates every shader with naga, and checks each pipeline's groups
   against the bindings its shaders read, both ways (`build.rs` `BINDS`,
   `frame/shader/record.rs` `lays_out`); no struct of a shader holds a struct
-  (`build.rs` `held_to_faults`).
+  (`build.rs` `refuse_faults`).
 - A test compiles each shader with Tint, the compiler a browser runs, and makes
   every pipeline the renderer makes (`ts/tool/shader/shader.test.ts`).
 

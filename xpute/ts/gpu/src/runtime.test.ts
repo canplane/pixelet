@@ -91,7 +91,7 @@ function guard(): void {
     () => new ArrayBuffer(0),
     () => {},
   );
-  // Slot 3, generations 1 and 2 (`slot | generation << 16`).
+  // These are slot 3, generations 1 and 2 (`slot | generation << 16`).
   const [old, newer] = [3 | (1 << 16), 3 | (2 << 16)];
   runtime.bind(old, context("old"));
   runtime.bind(newer, context("newer"));

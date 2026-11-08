@@ -18,7 +18,7 @@ fn the_renderer_makes_every_group_as_its_layout_lays_it_out() {
     let device = api::test_device();
     api::install_apart(device);
     let g = gpu().or_bug(Errno::ENODEV);
-    let mut pipelines = Pipelines::new();
+    let mut pipelines = PipelineCache::new();
     let made = (0..SHADERS).any(|_| pipelines.make_modules(g));
     assert!(
         made,
@@ -69,7 +69,7 @@ struct Turn {
     drift: i64,
 }
 
-/// The passes that mark, as gpu/pass/*.rs make their `Marks`: each one's
+/// The passes that mark, as gpu/pass/*.rs make their `MarkPass`: each one's
 /// pipeline, the upload a draw reads, and which of its draws are drawn.
 fn passes() -> Vec<(u32, UploadOf, Shown)> {
     vec![
@@ -388,23 +388,23 @@ fn events() -> Vec<Event> {
 #[test]
 fn seen_answers_as_the_reads_did_in_every_state() {
     // The two reads, each as whether it holds what the last frame drew.
-    let read = |held: [bool; 2], e: Event| -> ([bool; 2], Option<(bool, bool)>) {
+    let read = |fresh: [bool; 2], e: Event| -> ([bool; 2], Option<(bool, bool)>) {
         match e {
             Event::Frame([changed, uploads, drifted, beside]) => (
                 [true; 2],
                 Some((
-                    held[0] && !changed && !uploads && !drifted,
-                    !held[1] || beside,
+                    fresh[0] && !changed && !uploads && !drifted,
+                    !fresh[1] || beside,
                 )),
             ),
             Event::Dropped => ([false; 2], None),
-            Event::PutOff => ([held[0], false], None),
+            Event::PutOff => ([fresh[0], false], None),
         }
     };
     let mut reached = vec![(Seen::NONE, [false; 2])];
     let mut k = 0;
     while k < reached.len() {
-        let (s, held) = reached[k];
+        let (s, fresh) = reached[k];
         for e in events() {
             let mut next = s;
             let got = match e {
@@ -418,11 +418,11 @@ fn seen_answers_as_the_reads_did_in_every_state() {
                     None
                 }
             };
-            let (held_next, want) = read(held, e);
+            let (fresh_next, want) = read(fresh, e);
             assert_eq!(got, want, "{s:?} {e:?}");
-            assert_eq!([next.lists, next.beside], held_next, "{s:?} {e:?}");
+            assert_eq!([next.lists, next.beside], fresh_next, "{s:?} {e:?}");
             if !reached.iter().any(|&(r, _)| r == next) {
-                reached.push((next, held_next));
+                reached.push((next, fresh_next));
             }
         }
         k += 1;
@@ -433,13 +433,13 @@ fn seen_answers_as_the_reads_did_in_every_state() {
 }
 
 /// Over every combination of the reads, `FramePlan::of` decides quiet, masked
-/// and stood as the conditions written out here do. What stands is also
-/// quiet, and what is masked or quiet stands.
+/// and unchanged as the conditions written out here do. What is unchanged is
+/// also quiet, and what is masked or quiet stands.
 #[test]
 fn a_frame_decides_as_its_conditions_did_over_every_read() {
     for b in 0..1u32 << 8 {
         let bit = |k: u32| b >> k & 1 != 0;
-        let r = Reads {
+        let r = FrameRead {
             partial: bit(0),
             stands: bit(1),
             lists_same: bit(2),

@@ -90,7 +90,6 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
   // a derivative needs uniform control flow.
   let footprint = max(length(fwidth(cloud_lattice(v.world))), 1e-6);
   let alpha = sheet_opacity(sheet_of(v.sheet), v.world, t, footprint, clouds_draw_dist()) * clouds_shown();
-  // Where none of the sheet stands, the pixel reads nothing more.
   if (alpha <= HALF_STEP) {
     discard;
   }

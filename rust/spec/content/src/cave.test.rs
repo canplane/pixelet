@@ -80,7 +80,7 @@ fn picture() {
     let Ok(path) = std::env::var("CAVE_PICTURE") else {
         return;
     };
-    let side = 128usize; // blocks, 2 units each: four roots across
+    let side = 128usize; // The side in blocks, each two units, which makes four roots across.
     let mut hollow = vec![false; side * side * side];
     for cx in 0..side as i32 / 4 {
         for cy in 0..side as i32 / 4 {

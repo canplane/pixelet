@@ -33,10 +33,10 @@ use crate::segment::{End, PartId};
 use crate::separation::elevation::{sample_cells, tile_of};
 use crate::separation::{Line, WayRange};
 
-use super::bridge::Decks;
+use super::bridge::DeckPlan;
 use super::*;
 
-// ---- Arnis's numbers for a bore, in meters, under its names. ----
+// Arnis's numbers for a bore, in meters, under its names.
 const TUNNEL_CEIL_OFF_M: f64 = 5.0;
 const TUNNEL_COVER_DROP_M: f64 = 7.0;
 const TUNNEL_ROOF_COVER_M: f64 = TUNNEL_CEIL_OFF_M + 1.0;
@@ -66,7 +66,7 @@ pub(super) fn approach_run(level: i64, scale: Scale) -> f64 {
 pub(super) fn bores(
     src: &Ring,
     stretches: &[Stretch],
-    decks: &Decks,
+    decks: &DeckPlan,
     scale: Scale,
     lines: &mut Vec<(Line, WayRange)>,
 ) {
@@ -117,7 +117,8 @@ fn is_pedestrian(class: &str) -> bool {
     matches!(class, "footway" | "pedestrian" | "steps")
 }
 
-// ---- Road tunnels: approaches sink into the portals, and the bore is as deep as its cover asks. ----
+// In a road tunnel, the approaches sink into the portals, and the bore lies as deep as its
+// cover asks.
 
 /// `drop` cells under grade at cell `anchor`, easing back to grade over `run` cells a cell.
 #[derive(Clone, Copy)]
@@ -138,7 +139,7 @@ fn tunnel_drop(level: i64, scale: Scale) -> i32 {
 fn road_bores(
     src: &Ring,
     stretches: &[Stretch],
-    decks: &Decks,
+    decks: &DeckPlan,
     scale: Scale,
     lines: &mut Vec<(Line, WayRange)>,
 ) -> Vec<(usize, Vec<i32>, Vec<bool>)> {
@@ -167,9 +168,9 @@ fn road_bores(
         |q: usize, e: usize| stretches[q].clipped[e] || shared.contains(&stretches[q].ends[e]);
     let drop_of = |r: &Stretch| tunnel_drop(r.piece.way.tags.level.unwrap_or(0), scale);
 
-    // ---- A portal on a road deck, at the deck's end or along it, opens at the deck's height
-    // there, where Arnis leaves it at the terrain under the deck: the bore ramps down from it, and
-    // no approach sinks. ----
+    // A portal on a road deck, at the deck's end or along it, opens at the deck's height
+    // there, where Arnis leaves it at the terrain under the deck: the bore ramps down from it,
+    // and no approach sinks.
     let mut deck: FnvHashMap<&End, i32> = FnvHashMap::default();
     for &q in &tunnels {
         for e in (0..2).filter(|&e| !internal(q, e)) {
@@ -201,7 +202,7 @@ fn road_bores(
         }
     }
 
-    // ---- The approaches: ways at grade from a portal, as far as the drop needs and the road goes on. ----
+    // The approaches are ways at grade from a portal, as far as the drop needs and the road goes on.
     let portal_nodes: FnvHashSet<&End> = tunnels
         .iter()
         .flat_map(|&q| {
@@ -228,7 +229,7 @@ fn road_bores(
         let mut n = 0;
         while n <= last && n < cap {
             let k = if from_start { n } else { last - n };
-            if !src.is_held(line.at((f64::from(k) * step).min(line.length()))) {
+            if !src.is_loaded(line.at((f64::from(k) * step).min(line.length()))) {
                 break;
             }
             n += 1;
@@ -357,7 +358,7 @@ fn road_bores(
             while k <= b {
                 let from = k;
                 let mut cells = Vec::new();
-                while k <= b && src.is_held(w.line.at(along(k))) {
+                while k <= b && src.is_loaded(w.line.at(along(k))) {
                     cells.push(w.line.at(along(k)));
                     k += 1;
                 }
@@ -389,7 +390,7 @@ fn road_bores(
         }
     }
 
-    // ---- Each bore (Arnis `generate_highway_tunnel_shell`); the world has no bedrock to stop it. ----
+    // Each bore follows Arnis's `generate_highway_tunnel_shell`; the world has no bedrock to stop it.
     let roof = scale.c(TUNNEL_ROOF_COVER_M);
     let mut out = Vec::new();
     for &q in &tunnels {
@@ -477,8 +478,8 @@ fn road_bores(
             .into_iter()
             .flatten()
             .max()
-            .map_or(r.terrain[i], |held| {
-                r.terrain[i].max(if long { held } else { held.min(grade(i)) })
+            .map_or(r.terrain[i], |top| {
+                r.terrain[i].max(if long { top } else { top.min(grade(i)) })
             })
         };
         // As deep as the cover asks, ramping down from whatever the portals reached.

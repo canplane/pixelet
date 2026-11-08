@@ -2,9 +2,9 @@
 
 import { DIVISION_SUBTYPE } from "./division.spec.ts";
 
-/** One division's name, a part of a place's label. `subtype` is one of
- * `DIVISION_SUBTYPE`. `area` is true when the division's area holds the
- * point, and false when the division was found by its own point instead. */
+/** `subtype` is one of `DIVISION_SUBTYPE`. `area` is true when the division's
+ * area holds the point, and false when the division was found by its own point
+ * instead. */
 export interface NamePart {
   name: string;
   subtype: number;
@@ -22,7 +22,6 @@ const HOODS = new Set([
   DIVISION_SUBTYPE.MICROHOOD,
 ]);
 
-/** What separates the address from its neighborhood. */
 const TIER_SEPARATOR = " · ";
 
 function joined(names: string[], broadFirst: boolean): string {

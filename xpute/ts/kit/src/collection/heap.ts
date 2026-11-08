@@ -1,7 +1,7 @@
 // @xpute/kit/collection/heap.ts
-// Binary min-heaps and max-heaps over an array the caller owns. They check
-// nothing; a key that compares with nothing, as a NaN does, breaks the heap's
-// order.
+// These are binary min-heaps and max-heaps over an array the caller owns. They
+// check nothing; a key that compares with nothing, as a NaN does, breaks the
+// heap's order.
 
 import type { primitive, u32 } from "../abi/word.ts";
 
@@ -96,10 +96,8 @@ export class MinHeap<K extends primitive, T> {
     return out;
   }
 
-  /**
-   * Replaces the top element and restores the order. The heap must not be
-   * empty.
-   */
+  /** Replaces the top element and restores the order. The heap must not be
+   * empty. */
   replace_root(e: Element<K, T>): void {
     this.a[0] = e;
     MinHeap.heapify(this.a, 0, this.a.length);
@@ -192,10 +190,8 @@ export class MaxHeap<K extends primitive, T> {
     return out;
   }
 
-  /**
-   * Replaces the top element and restores the order. The heap must not be
-   * empty.
-   */
+  /** Replaces the top element and restores the order. The heap must not be
+   * empty. */
   replace_root(e: Element<K, T>): void {
     this.a[0] = e;
     MaxHeap.heapify(this.a, 0, this.a.length);

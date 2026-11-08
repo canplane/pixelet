@@ -27,8 +27,8 @@ export function keepKeyboard(): false {
   return false;
 }
 
-/** A touch that starts anywhere but in a view that keeps the keyboard puts
- * the keyboard away and calls `onAway`. */
+/** A touch that starts anywhere but in a view that keeps the keyboard puts the
+ * keyboard away and calls `onAway`. */
 export function KeyboardAway({
   children,
   onAway,

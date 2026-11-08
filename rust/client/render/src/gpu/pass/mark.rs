@@ -15,7 +15,7 @@
 //! moved; `touched` holds the handles this frame's lists upload, rewrite or
 //! free. Or it drifts with the wind and the wind's drift moved; each of its
 //! two draws then takes its own frame's drift. To draw a draw where it was,
-//! `UploadCopies` keeps each upload the draws read as the last frame drew
+//! `CopyCache` keeps each upload the draws read as the last frame drew
 //! it. It copies an upload after the frame has read it, whenever the lists
 //! moved it since.
 
@@ -23,10 +23,10 @@ use crate::frame::shader::record::UPLOAD_LAYOUT;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, Format, Gpu, Layout, Stencil, TrackedRenderPass,
 };
-use crate::gpu::draw::{drifted, drifts, Change, Draw, Draws, Position, DRAW_WORDS};
-use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
-use crate::gpu::pipeline::{Pipeline, Pipelines};
-use crate::gpu::upload::Uploads;
+use crate::gpu::draw::{drifted, drifts, Change, Draw, DrawTable, Position, DRAW_WORDS};
+use crate::gpu::pass::model::{UniformBuffer, DRAW_BYTES};
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
+use crate::gpu::upload::UploadTable;
 
 /// Gives the handle of the upload a draw reads, 0 for none.
 pub(crate) type UploadOf = fn(&[u32; DRAW_WORDS]) -> u32;
@@ -44,7 +44,7 @@ pub(crate) type Shown = fn(&[u32; DRAW_WORDS]) -> bool;
 /// has carried the clouds, first as this frame draws them and then as the
 /// last frame drew them (word.rs `frame::DRIFT_Q`).
 pub struct DamageInput<'a> {
-    pub draws: Draws<'a>,
+    pub draws: DrawTable<'a>,
     pub changes: &'a [Change],
     pub touched: &'a [u32],
     pub drift: [Position; 2],
@@ -65,7 +65,7 @@ fn drawn_at((d, mut u): Draw, drift: Position) -> Draw {
 }
 
 /// Hands `take` each draw of `pipeline` that a frame marks
-/// (`Marks::prepare`), as it is drawn at its frame's drift, with whether it
+/// (`MarkPass::prepare`), as it is drawn at its frame's drift, with whether it
 /// is the draw as it is (true) or as it was. A draw the turn changed is
 /// handed as it is, as it was, or both, by which of the two it has. A draw
 /// whose upload moved, or that drifts while the drift moved, is handed both
@@ -103,40 +103,40 @@ pub(crate) fn marked(
     }
 }
 
-/// The marks of one pipeline's draws (`Marks::new`). `marks` holds this
+/// The marks of one pipeline's draws (`MarkPass::new`). `marks` holds this
 /// frame's marks, each a draw's record with the group of the upload it reads
 /// (0 where it reads none), as it is or as it was. The marks as they are come
 /// first, `now_cnt` of them.
-pub struct Marks {
+pub struct MarkPass {
     pipeline: Pipeline,
     marks_of: u32,
     read: UploadOf,
     put: PutMark,
     shown: Shown,
-    uniforms: DrawUniforms,
+    uniforms: UniformBuffer,
     marks: Vec<([u32; DRAW_WORDS], u32)>,
     now_cnt: usize,
 }
 
-impl Marks {
+impl MarkPass {
     /// The marks of the draws of pipeline `marks_of`, drawn by pipeline `id`
     /// into a target whose depth is attached read only. `read` names the
     /// upload each draw reads, and `put` writes each mark's uniform. Only a
     /// draw that `shown` passes is marked.
     pub fn new(
         g: &Gpu,
-        pipelines: &mut Pipelines,
+        pipelines: &mut PipelineCache,
         (id, marks_of): (u32, u32),
         align: u32,
         (read, put, shown): (UploadOf, PutMark, Shown),
-    ) -> Marks {
-        Marks {
+    ) -> MarkPass {
+        MarkPass {
             pipeline: pipelines.build_masked(g, id, Format::depth32float, Stencil::Unused),
             marks_of,
             read,
             put,
             shown,
-            uniforms: DrawUniforms::new(DRAW_BYTES, align),
+            uniforms: UniformBuffer::new(DRAW_BYTES, align),
             marks: Vec::new(),
             now_cnt: 0,
         }
@@ -158,8 +158,8 @@ impl Marks {
         &mut self,
         g: &Gpu,
         m: &DamageInput,
-        uploads: &mut Uploads,
-        last_frame_uploads: &UploadCopies,
+        uploads: &mut UploadTable,
+        last_frame_uploads: &CopyCache,
     ) -> bool {
         let (read, put, shown) = (self.read, self.put, self.shown);
         let mut now: Vec<(Draw, u32)> = Vec::new();
@@ -216,7 +216,7 @@ impl Marks {
     }
 
     /// Pushes onto `out` the uploads `draws` read. These are the uploads
-    /// `UploadCopies` keeps a copy of.
+    /// `CopyCache` keeps a copy of.
     pub fn reads<'a>(
         &self,
         draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
@@ -239,7 +239,7 @@ struct Copy {
     group: u32,
     size: u32,
     /// Whether it holds the upload as the last frame drew it.
-    held: bool,
+    valid: bool,
 }
 
 /// A copy of each upload the marking draws read, as the last frame drew it,
@@ -248,18 +248,18 @@ struct Copy {
 /// of this frame reads is let go, and it is released before the next frame's
 /// commands.
 #[derive(Default)]
-pub struct UploadCopies {
+pub struct CopyCache {
     copies: Vec<Copy>,
     let_go: Vec<(u32, u32)>,
     layout: Option<Layout>,
 }
 
-impl UploadCopies {
+impl CopyCache {
     /// Releases the copies let go before, then makes a copy for each upload
     /// `handles` names that has no copy of its size. A copy of another size
     /// is let go. The caller calls it before the frame's commands, so a frame
     /// that is dropped loses no copy.
-    pub fn prepare(&mut self, g: &Gpu, handles: &[u32], uploads: &Uploads) {
+    pub fn prepare(&mut self, g: &Gpu, handles: &[u32], uploads: &UploadTable) {
         for (buf, group) in self.let_go.drain(..) {
             release(group);
             release(buf);
@@ -284,7 +284,7 @@ impl UploadCopies {
                 buf,
                 group,
                 size,
-                held: false,
+                valid: false,
             });
         }
     }
@@ -299,7 +299,7 @@ impl UploadCopies {
         encoder: u32,
         handles: &[u32],
         touched: &[u32],
-        uploads: &Uploads,
+        uploads: &UploadTable,
     ) {
         let mut k = 0;
         while k < self.copies.len() {
@@ -309,12 +309,12 @@ impl UploadCopies {
                 self.let_go.push((c.buf, c.group));
                 continue;
             }
-            if !c.held || touched.binary_search(&c.handle).is_ok() {
+            if !c.valid || touched.binary_search(&c.handle).is_ok() {
                 let src = uploads.buf_of(c.handle).filter(|&(_, size)| size == c.size);
                 if let Some((src, size)) = src {
                     g.copy_buf(encoder, (src, 0), (c.buf, 0), size);
                 }
-                c.held = src.is_some();
+                c.valid = src.is_some();
             }
             k += 1;
         }
@@ -325,7 +325,7 @@ impl UploadCopies {
     pub fn group_of(&self, handle: u32) -> Option<u32> {
         self.copies
             .iter()
-            .find(|c| c.handle == handle && c.held)
+            .find(|c| c.handle == handle && c.valid)
             .map(|c| c.group)
     }
 
@@ -333,7 +333,7 @@ impl UploadCopies {
     /// frame is dropped or put off. The next frame drawn copies each again.
     pub fn forget(&mut self) {
         for c in &mut self.copies {
-            c.held = false;
+            c.valid = false;
         }
     }
 }

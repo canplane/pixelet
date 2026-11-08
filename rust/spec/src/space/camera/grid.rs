@@ -8,13 +8,13 @@
 use crate::space::coord::zoom::{units, Zoom};
 use pxl_engine::grid;
 
-// ---- the view's knobs, mirrored from pxl-engine grid.rs ----
+// The view's knobs are pxl-engine grid.rs's, mirrored here in f64.
 
 /// The tangent of half the vertical field of view (pxl-engine
 /// `grid::HALF_TAN`), a field of 53.13° (`fov`).
 pub const HALF_TAN: f64 = grid::HALF_TAN as f64;
 
-// ---- derived from the knobs ----
+// What follows is derived from the knobs.
 
 /// The vertical field of view, in radians (`HALF_TAN`).
 pub fn fov() -> f64 {

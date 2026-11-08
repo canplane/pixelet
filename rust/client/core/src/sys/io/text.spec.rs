@@ -5,7 +5,7 @@
 //! The platform's text, a device of the app's ABI beside the UI's protocol
 //! (ui.json): what the core calls of it, numbered as ui.json numbers its
 //! own, each a call the runtime answers beside the core before it returns
-//! (ts/client/src/runtime/start.ts, port/text.ts). Where an answer lies in the
+//! (ts/client/src/runtime/start.ts, ts/client/src/service/core/text.ts). Where an answer lies in the
 //! core's memory is laid out in spec/client/core/sys/io/text_answer.json.
 
 // A list a record carries is a function handing out its items, whose
@@ -28,7 +28,6 @@ use xpute_core::abi::number::{finite, integer, unknown};
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{PacketWriter, TreeReader};
 
-/// The module a command is for: the text device's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Major {
@@ -44,7 +43,6 @@ impl Major {
     }
 }
 
-/// What the core asks the platform's text, answered before the call returns.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum TextMinor {
@@ -97,7 +95,7 @@ pub struct TextLayout {
     pub lines: u32,
     /// Where the text's UTF-8 lies in the core's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns.
     pub text_at: u32,
-    /// Its bytes.
+    /// The length of that UTF-8 in bytes.
     pub text_len: u32,
 }
 
@@ -128,7 +126,7 @@ impl xpute_core::ipc::door::Import for TextLayout {
 pub struct TextRaster {
     pub weight: u32,
     pub px: f64,
-    /// 0xRRGGBBAA.
+    /// The color as 0xRRGGBBAA.
     pub color: u32,
     pub at: u32,
     pub width: u32,
@@ -136,7 +134,7 @@ pub struct TextRaster {
     pub x: f64,
     /// Where the text's UTF-8 lies in the core's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns.
     pub text_at: u32,
-    /// Its bytes.
+    /// The length of that UTF-8 in bytes.
     pub text_len: u32,
 }
 

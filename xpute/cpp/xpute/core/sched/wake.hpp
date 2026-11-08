@@ -1,7 +1,7 @@
 // cpp/xpute/core/sched/wake.hpp
 
-// What a falling edge may answer in place of a delay (sched/edge.hpp). When
-// the next turn runs, and how long it may run, is up to the runtime's
+// A falling edge may answer this in place of a delay (sched/edge.hpp). When the
+// next turn runs, and how long it may run, is up to the runtime's
 // scheduling policy.
 
 #pragma once

@@ -33,7 +33,7 @@ pub const MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP: u32 = 256;
 
 /// Whether every device can make a buffer of `bytes` and, when `storage` is
 /// set, bind it as a storage buffer. The storage limit is checked against
-/// the whole buffer, since no binding takes a range of a storage buffer.
+/// the whole buffer, whatever range of it a binding takes.
 pub const fn fits(bytes: u64, storage: bool) -> bool {
     bytes <= MAX_BUFFER_SIZE && (!storage || bytes <= MAX_STORAGE_BUFFER_BINDING_SIZE)
 }

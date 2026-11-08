@@ -66,16 +66,16 @@
       "under": "GEO_ROOT",
       "name": "internal",
       "$doc": [
-        "Ops routes, behind the shared admin token. One per root rather than one",
-        "shared branch: each server gates its own prefix, and a token that opened",
-        "both would make either server's leak the other's."
+        "Ops routes, behind the shared admin token. There is one branch per root rather",
+        "than one shared branch, because each server gates its own prefix: a token that",
+        "opened both would let a leak from either server open the other's."
       ]
     },
     "API_INTERNAL": {
       "under": "API_ROOT",
       "name": "internal",
       "$doc": [
-        "pxl-api's own, gated the same way."
+        "pxl-api's ops routes, gated the same way."
       ]
     }
   },

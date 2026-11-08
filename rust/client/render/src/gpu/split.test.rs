@@ -10,8 +10,8 @@ const WRITES_ARGS: Id = 5;
 const NEXT: Id = 6;
 const PASS: Id = 10;
 
-fn with_args() -> Splits {
-    let mut s = Splits::default();
+fn with_args() -> Split {
+    let mut s = Split::default();
     s.made(ARGS, true, 1);
     s.made(OTHER_ARGS, true, 2);
     s.made(PLAIN, false, 3);

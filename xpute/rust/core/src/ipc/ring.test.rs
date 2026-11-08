@@ -3,7 +3,7 @@
 use super::*;
 use crate::ipc::frame;
 use crate::mem::Memory;
-use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
+use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderConfig, TreeReader, TreeView};
 
 fn ring(cap: u32, slot: u32) -> (Ring, Box<[u8]>) {
     let slot_base = 8 + ring_bytes(cap);
@@ -63,7 +63,7 @@ fn payload_per_slot() {
         encoder()
             .encode(
                 &t,
-                TreeEncoderOptions {
+                TreeEncoderConfig {
                     init_cap: 1 << 10,
                     max_cap: None,
                 },

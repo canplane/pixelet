@@ -20,13 +20,13 @@ fn shows(aim: Aim, w: WalkEnd) -> WalkEnd {
   return w;
 }
 
-/// Takes the next number from the queue's counter at `word`. `held` reads the counter without
+/// Takes the next number from the queue's counter at `word`. `load` reads the counter without
 /// taking.
 fn take(word: u32) -> u32 {
   return atomicAdd(&queue[word], 1u);
 }
 
-fn held(word: u32) -> u32 {
+fn load(word: u32) -> u32 {
   return atomicLoad(&queue[word]);
 }
 

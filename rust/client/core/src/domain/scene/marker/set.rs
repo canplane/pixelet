@@ -73,10 +73,10 @@ impl Set {
 
     /// Frees the block. Returns whether there was one.
     pub(super) fn free(&mut self, draw: &mut DrawList) -> bool {
-        let held = self.block.handle != 0;
+        let had_block = self.block.handle != 0;
         self.block.free(draw);
         self.cnt = 0;
-        held
+        had_block
     }
 
     pub(super) fn draw(&self, draw: &mut DrawList) {

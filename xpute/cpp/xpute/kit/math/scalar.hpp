@@ -1,7 +1,7 @@
 // cpp/xpute/kit/math/scalar.hpp
 
-// Scalar functions of a float or a double. Each is computed in plain IEEE
-// arithmetic, with no fused operations, so its bits match the Rust kit's.
+// These are scalar functions of a float or a double. Each is computed in plain
+// IEEE arithmetic, with no fused operations, so its bits match the Rust kit's.
 
 #pragma once
 
@@ -20,8 +20,8 @@ namespace xpute {
 
 inline constexpr double EPS = 1e-5;
 
-// The float types these functions take: double, and float for a value that
-// is stored as one.
+// These are the float types these functions take: double, and float for a
+// value that is stored as one.
 template <class T>
 concept Float = std::is_floating_point_v<T>;
 

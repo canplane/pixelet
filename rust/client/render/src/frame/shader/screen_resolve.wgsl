@@ -86,6 +86,6 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   let off = h - m1;
   let room = max(spread, vec4f(1e-5));
   let k = max(max(abs(off.x) / room.x, abs(off.y) / room.y), max(abs(off.z) / room.z, abs(off.w) / room.w));
-  let held = select(h, m1 + off / k, k > 1.0 && !still);
-  return resolve_rgb(mix(held, c, blend));
+  let clamped = select(h, m1 + off / k, k > 1.0 && !still);
+  return resolve_rgb(mix(clamped, c, blend));
 }

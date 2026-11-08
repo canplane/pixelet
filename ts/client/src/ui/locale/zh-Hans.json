@@ -175,7 +175,7 @@
       "message_placeholder": "输入消息",
       "pin_placeholder": "输入图钉消息",
       "send": "发送",
-      "pin_done": "立起图钉",
+      "put_pin": "立起图钉",
       "drawer_tooltip": "打开抽屉",
       "object_size": "大小 {{n}}"
     },

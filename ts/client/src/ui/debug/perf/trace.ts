@@ -24,7 +24,7 @@ const TID_FRAMES = 1;
 const TID_LONG = 2;
 const TID_TASK_BASE = 10;
 
-type Args = Record<string, f64 | string | null>;
+type ArgMap = Record<string, f64 | string | null>;
 interface TraceEvent {
   name: string;
   cat: string;
@@ -33,7 +33,7 @@ interface TraceEvent {
   dur?: f64;
   pid: u32;
   tid: u32;
-  args?: Args;
+  args?: ArgMap;
 }
 
 const us = (ms: f64) => round(ms * 1000);
@@ -46,7 +46,7 @@ function event(
   ts: f64,
   dur: f64 | null,
   tid: u32,
-  args?: Args,
+  args?: ArgMap,
 ): TraceEvent {
   return {
     name,
@@ -63,8 +63,8 @@ function event(
 const threadName = (tid: u32, name: string) =>
   event("thread_name", "__metadata", "M", 0, null, tid, { name });
 
-function frameArgs(f: Frame): Args {
-  const args: Args = {};
+function frameArgs(f: Frame): ArgMap {
+  const args: ArgMap = {};
   for (const { name } of COLUMNS) {
     if (!is_list(name)) {
       args[name] = fixedN(f[name], 2);
@@ -81,7 +81,6 @@ async function perfTraceJson(): Promise<string> {
   const longs = longFramesSince(-Infinity);
   const events: TraceEvent[] = [];
 
-  // ---- task spans ----
   // Perfetto draws spans that overlap on one thread as nested. So each stream
   // has rows, and a task goes on the first of its stream's rows that is free
   // when the task is enqueued.
@@ -101,9 +100,7 @@ async function perfTraceJson(): Promise<string> {
       rowTid.set(row, tid);
       events.push(threadName(tid, `task: ${row}`));
     }
-    // The task's outcome goes in the event's category, and a failure's detail
-    // in the text of `fail`.
-    const args: Args = {
+    const args: ArgMap = {
       priority: r.priority,
       queuedMs:
         r.start_ms === null ? null : fixedN(r.start_ms - r.enqueue_ms, 1),
@@ -126,8 +123,6 @@ async function perfTraceJson(): Promise<string> {
         args,
       ),
     );
-    // A second span, nested in the task's, marks the time after the task
-    // started running.
     if (r.start_ms !== null) {
       events.push(
         event(
@@ -142,7 +137,6 @@ async function perfTraceJson(): Promise<string> {
     }
   }
 
-  // ---- per-frame counters (Perfetto graphs these) ----
   if (frames.length > 0) {
     events.push(threadName(TID_FRAMES, "frames"));
     for (const f of frames) {
@@ -163,7 +157,6 @@ async function perfTraceJson(): Promise<string> {
     }
   }
 
-  // ---- long frames ----
   if (longs.length > 0) {
     events.push(threadName(TID_LONG, "long frames"));
     for (const l of longs) {

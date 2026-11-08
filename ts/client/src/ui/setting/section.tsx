@@ -30,8 +30,6 @@ function devOption(setting: Setting, option: string): boolean {
   return options.includes(option);
 }
 
-/** A setting's strings come from `settings.<section>.<name>`, and the strings
- * of a choice's options from `.<option>` under that. */
 export function SettingsSection(props: { section: SettingSection }) {
   const { section } = props;
   const { t } = useTranslation();

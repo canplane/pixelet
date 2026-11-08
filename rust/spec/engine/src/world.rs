@@ -12,9 +12,9 @@ use crate::answer::{
     PLACED_ASSET,
 };
 use crate::area::Shard;
-use crate::clipmap::{Bricks, Lookup};
+use crate::clipmap::{BrickSource, Lookup};
 use crate::ground::{self, VOID};
-use crate::object::{self, Columns, Cut, AIR, CELL, ROOT, SPLIT};
+use crate::object::{self, Cut, Table, AIR, CELL, ROOT, SPLIT};
 use crate::way;
 use crate::way::tree;
 use crate::{Zoom, LEAF_CELL_ZOOM, SHARD_ZOOM, UNIT_ZOOM};
@@ -58,7 +58,7 @@ impl Inheritance {
 
     /// The inheritance of the node `c` at `zoom` with nothing handed down, as for a descent's
     /// root: each source is found down its line from the top, what is placed from `columns`.
-    pub fn of(columns: &impl Columns, (zoom, c): (Zoom, [i32; 3])) -> Inheritance {
+    pub fn of(columns: &impl Table, (zoom, c): (Zoom, [i32; 3])) -> Inheritance {
         Inheritance {
             object: object::cursor(columns, ROOT, zoom, c),
             shard: Shard::UNKNOWN,
@@ -81,8 +81,8 @@ impl Inheritance {
     /// in `columns` and the ways in `pool`.
     pub fn child(
         &self,
-        columns: &impl Columns,
-        pool: &impl Columns,
+        columns: &impl Table,
+        pool: &impl Table,
         (zoom, c): (Zoom, [i32; 3]),
     ) -> Inheritance {
         Inheritance {
@@ -137,8 +137,8 @@ const WAYS_FROM: Zoom = SHARD_ZOOM + 1;
     clippy::too_many_arguments,
     reason = "the world's four stores, where the node is, and the zooms and cuts it is asked at, each its own"
 )]
-pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
-    held: &mut H,
+pub fn node<H: ground::Resident, W: BrickSource, L: Table, P: Table>(
+    resident: &mut H,
     bricks: &W,
     columns: &L,
     pool: &P,
@@ -147,7 +147,7 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
     [far, near]: [Zoom; 2],
     [carve, hide]: [Cut; 2],
 ) -> In<[u32; 2]> {
-    at.shard = at.shard.at(held, (zoom, [c[0], c[1]]));
+    at.shard = at.shard.at(resident, (zoom, [c[0], c[1]]));
     let (put, shard) = (at.object, at.shard);
     let (place, trail) = (&mut at.ground, &mut at.ways);
     let is_cell = zoom >= near || zoom >= LEAF_CELL_ZOOM && object::whole(put, carve, zoom, c);
@@ -192,7 +192,7 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
         (BOX_NONE, false)
     };
     let before = *place;
-    let (i, cell, bound) = ground::node(held, shard, place, (zoom, c), [far, near], is_cell);
+    let (i, cell, bound) = ground::node(resident, shard, place, (zoom, c), [far, near], is_cell);
     if place.from() != before.from()
         || place.slot() != before.slot()
         || place.here() != before.here()
@@ -364,9 +364,9 @@ pub fn placed_in(lo: [i32; 3], hi: [i32; 3]) -> PlacedCursor {
 
 impl PlacedCursor {
     /// The next leaf placed at a unit cell of the box, with its cell and its word
-    /// (`Columns::data`), or false past the last. The cursor makes one descent of the tree's
+    /// (`Table::data`), or false past the last. The cursor makes one descent of the tree's
     /// branches that meet the box, stepping each child once from its parent.
-    pub fn next(&mut self, columns: &impl Columns) -> ([i32; 3], u32, bool) {
+    pub fn next(&mut self, columns: &impl Table) -> ([i32; 3], u32, bool) {
         let s = UNIT_ZOOM - PLACED_FIRST;
         loop {
             if self.depth == 0 {

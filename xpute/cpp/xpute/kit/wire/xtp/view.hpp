@@ -1,9 +1,9 @@
 // cpp/xpute/kit/wire/xtp/view.hpp
 
-// The write side of XTP as a tree: nodes built in memory, which `encode` then
-// lays out as a packet. A node borrows what it carries (an array, a string, a
-// graft's packet), so the caller must keep them alive until the tree is
-// encoded.
+// This is the write side of XTP as a tree: nodes built in memory, which
+// `encode` then lays out as a packet. A node borrows what it carries (an
+// array, a string, a graft's packet), so the caller must keep them alive
+// until the tree is encoded.
 
 #pragma once
 
@@ -26,7 +26,7 @@ namespace xpute::xtp {
 enum class NodeKind : std::uint8_t { nil, scalar, array, bitset, str, strs, branch, graft };
 
 template <class Alloc = std::allocator<std::byte>> struct Node {
-    using Children = std::vector<Node, typename std::allocator_traits<Alloc>::template rebind_alloc<Node>>;
+    using NodeList = std::vector<Node, typename std::allocator_traits<Alloc>::template rebind_alloc<Node>>;
 
     NodeKind kind = NodeKind::nil;
     NodeType type = type_of(SpecialType::nil);
@@ -37,7 +37,7 @@ template <class Alloc = std::allocator<std::byte>> struct Node {
     std::span<const std::uint8_t> bytes;
     std::string_view str;
     std::span<const std::string_view> strs;
-    Children children;
+    NodeList children;
 
     explicit Node(const Alloc &alloc = Alloc()) : children(alloc) {}
 };
@@ -278,7 +278,7 @@ template <class Alloc = std::allocator<std::byte>> class BranchView : public Nod
     Node<Alloc> node_;
 };
 
-struct TreeEncoderOptions {
+struct TreeEncoderConfig {
     // The size of the first buffer tried; it doubles each time the packet
     // does not fit.
     std::uint32_t init_cap;
@@ -374,18 +374,18 @@ template <class Alloc> void walk(PacketWriter &w, const Node<Alloc> &n) {
 
 } // namespace view_detail
 
-// Encodes a tree by walking it onto `PacketWriter`. The first buffer has
+// This encodes a tree by walking it onto `PacketWriter`. The first buffer has
 // `init_cap` bytes; each time the packet overflows it, the tree is walked
 // again into one twice as large, up to `max_cap`. A `max_cap` below HDR_SZ or
 // above MAX_PKT_SZ is EINVAL; a packet larger than `max_cap` is EOVERFLOW.
 template <class Alloc, class View>
-Result<std::vector<std::uint8_t, typename std::allocator_traits<Alloc>::template rebind_alloc<std::uint8_t>>> encode(const View &view, TreeEncoderOptions opts = {},
+Result<std::vector<std::uint8_t, typename std::allocator_traits<Alloc>::template rebind_alloc<std::uint8_t>>> encode(const View &view, TreeEncoderConfig opts = {},
                                                                                                                      const Alloc &alloc = Alloc()) {
-    using Bytes = std::vector<std::uint8_t, typename std::allocator_traits<Alloc>::template rebind_alloc<std::uint8_t>>;
+    using Buffer = std::vector<std::uint8_t, typename std::allocator_traits<Alloc>::template rebind_alloc<std::uint8_t>>;
     std::uint32_t max_cap = opts.max_cap.value_or(MAX_PKT_SZ);
     if (max_cap < HDR_SZ || max_cap > MAX_PKT_SZ) return marshal_error(Errno::einval);
     std::uint32_t cap = std::max(HDR_SZ, std::min(opts.init_cap, max_cap));
-    Bytes buf(alloc);
+    Buffer buf(alloc);
     for (;;) {
         buf.assign(cap, 0);
         PacketWriter w(std::span<std::uint8_t>(buf.data(), buf.size()));

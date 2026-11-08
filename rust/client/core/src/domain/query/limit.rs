@@ -14,7 +14,7 @@ use pxl_spec::limit::{bedrock, ceiling};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::world::point;
 use pxl_spec::space::coord::zoom::units;
-use pxl_spec::space::layer::lattice::{Cells, GROUND};
+use pxl_spec::space::layer::lattice::{Grid, GROUND};
 use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 
 use super::World;
@@ -99,7 +99,6 @@ impl World<'_> {
     }
 }
 
-/// `World::within` against the service area `area`.
 pub(super) fn within_in(area: &impl Area, at: &Q3) -> bool {
     let [x, y] = [i64::from(at[0]), i64::from(at[1])].map(q3::to_real);
     let (cell_zoom, b) = GROUND.cell_of(LEAF_ZOOM, &point(x, y, 0.0)).node();

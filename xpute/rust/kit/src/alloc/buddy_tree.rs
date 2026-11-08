@@ -20,13 +20,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-//! The core's page allocator, a port of evanw/buddy-malloc that follows the C
-//! line for line. `slab.rs` serves anything smaller than a page from it.
-//!
-//! The port departs from the C in two places. `update_max_ptr` asks the
-//! `Range` for memory where the C calls `brk`. A block carries no 8-byte
-//! header with its size, so every caller passes the size it asked for back
-//! to `free`.
+//! This is the core's page allocator, and `slab.rs` serves anything smaller
+//! than a page from it. It is a port of evanw/buddy-malloc that follows the C
+//! line for line, and departs from it in two places. `update_max_ptr` asks the
+//! `Range` for memory where the C calls `brk`. A block carries no 8-byte header
+//! with its size, so every caller passes the size it asked for back to `free`.
 
 use core::cell::UnsafeCell;
 use core::marker::PhantomData;
@@ -156,8 +154,9 @@ impl<R: Range> BuddyMalloc<R> {
         unsafe { (*self.heap.get()).releases }
     }
 
-    /// The size of the largest block on a free list, or 0. The memory past
-    /// the tree's current root, which no block covers yet, is not counted.
+    /// `largest_free` answers the size of the largest block on a free list, or
+    /// 0. The memory past the tree's current root, which no block covers yet,
+    /// is not counted.
     pub fn largest_free(&self) -> usize {
         // SAFETY: single-threaded; see the Sync impl.
         let h = unsafe { &*self.heap.get() };
@@ -210,7 +209,7 @@ impl<R: Range> BuddyMalloc<R> {
 }
 
 impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
-    /// Stands in for the C's `brk`: the reached memory grows up to the
+    /// This stands in for the C's `brk`: the reached memory grows up to the
     /// range's end and is refused past it.
     fn update_max_ptr(&mut self, new_val: usize) -> bool {
         if new_val > self.max_ptr {

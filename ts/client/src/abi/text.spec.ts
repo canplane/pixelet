@@ -6,7 +6,7 @@
  * The platform's text, a device of the app's ABI beside the UI's protocol
  * (ui.json): what the core calls of it, numbered as ui.json numbers its
  * own, each a call the runtime answers beside the core before it returns
- * (ts/client/src/runtime/start.ts, port/text.ts). Where an answer lies in the
+ * (ts/client/src/runtime/start.ts, ts/client/src/service/core/text.ts). Where an answer lies in the
  * core's memory is laid out in spec/client/core/sys/io/text_answer.json.
  */
 
@@ -41,7 +41,7 @@ export interface TextLayout {
   lines: u32;
   /** Where the text's UTF-8 lies in the core's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns. */
   text_at: u32;
-  /** Its bytes. */
+  /** The length of that UTF-8 in bytes. */
   text_len: u32;
 }
 
@@ -61,7 +61,7 @@ export function read_text_layout(b: BranchCursor): TextLayout {
 export interface TextRaster {
   weight: u32;
   px: f64;
-  /** 0xRRGGBBAA. */
+  /** The color as 0xRRGGBBAA. */
   color: u32;
   at: u32;
   width: u32;
@@ -69,7 +69,7 @@ export interface TextRaster {
   x: f64;
   /** Where the text's UTF-8 lies in the core's memory: by address, so a text longer than a slot crosses whole, and kept until the call returns. */
   text_at: u32;
-  /** Its bytes. */
+  /** The length of that UTF-8 in bytes. */
   text_len: u32;
 }
 

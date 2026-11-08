@@ -8,7 +8,6 @@ const SQ: u32 = 8;
 const CQ: u32 = 256;
 const SLOT: u32 = 64;
 const MOST_FRAMES: u32 = 64;
-/// A command of the program's own, past xpute's majors.
 const PROGRAM: u32 = frame::PROGRAM_MAJOR << 8 | 1;
 
 fn door() -> (Door, Box<[u8]>) {
@@ -91,7 +90,6 @@ fn ring_peaks() {
     );
 }
 
-/// The packet of an FS_OPENAT completion, with a detail of 0.
 fn openat_reply() -> Vec<u8> {
     let mut buf = vec![0u8; SLOT as usize];
     let mut w = PacketWriter::new(&mut buf, 1);
@@ -234,7 +232,6 @@ fn xpute_number_unknown_refused() {
     assert_eq!((f.tag, f.result), (5, Errno::ENOSYS as i32));
 }
 
-/// An import with no fields, for `call` to send.
 struct Ping;
 
 impl Import for Ping {

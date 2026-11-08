@@ -20,7 +20,7 @@
 //! words for tags. Where a column is crossed, its road's tops and its pier (`on_way`,
 //! `crossing`, `pier_covers`) are exact, in integers over the wire's own (points in eighths of
 //! a cell, tops and stations in leaf cells), so the CPU and a GPU decide them alike whatever
-//! they fuse or reorder (doc/tip/cpu-and-gpu-agree.md). There is no division but a rational's
+//! they fuse or reorder. There is no division but a rational's
 //! floor, and the one root, a segment's direction, is rounded once by the CPU and handed to a
 //! GPU in a word (`Segment::dir`).
 
@@ -247,7 +247,7 @@ impl Segment {
 /// is measured. All are whole leaf cells, as every length given in meters is (`cells_of_m`),
 /// so a station is exact. It is made once a tile (pxl-spec procedural.rs `Frame::stations`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Stations {
+pub struct StationGrid {
     pub step: [i32; 2],
     pub phase: [[i32; 2]; 2],
     pub leaf: u32,
@@ -258,7 +258,7 @@ pub const INTERVAL_M: [f32; 2] = [BEAM_PILLAR_INTERVAL_M, WIDE_BEAM_PIER_INTERVA
 
 /// What a brick's lines open with (pxl-engine clipmap.rs `LINES_*`): its tile's leaf cells a
 /// ground meter (pxl-spec `Frame::per_m`), as a float's bits, then its stations
-/// (`Stations`), a word each: the narrow beam's step and then the wide's, the phase
+/// (`StationGrid`), a word each: the narrow beam's step and then the wide's, the phase
 /// `phase[w][axis]` at `HEADER_PHASE + 2w + axis`, and the leaf cells a cell.
 pub const HEADER_PER_M: usize = 0;
 pub const HEADER_STEP: usize = 1;
@@ -266,7 +266,7 @@ pub const HEADER_PHASE: usize = 3;
 pub const HEADER_LEAF: usize = 7;
 pub const HEADER_WORDS: u32 = 8;
 
-pub fn header(per_m: f32, st: &Stations) -> [u32; HEADER_WORDS as usize] {
+pub fn header(per_m: f32, st: &StationGrid) -> [u32; HEADER_WORDS as usize] {
     let [[p0, p1], [p2, p3]] = st.phase;
     let mut w = [0; HEADER_WORDS as usize];
     w[HEADER_PER_M] = per_m.to_bits();
@@ -280,9 +280,9 @@ pub fn header(per_m: f32, st: &Stations) -> [u32; HEADER_WORDS as usize] {
     w
 }
 
-pub(crate) fn of_header(w: [u32; HEADER_WORDS as usize]) -> (f32, Stations) {
+pub(crate) fn of_header(w: [u32; HEADER_WORDS as usize]) -> (f32, StationGrid) {
     let i = |k: usize| w[k] as i32;
-    let st = Stations {
+    let st = StationGrid {
         step: [i(HEADER_STEP), i(HEADER_STEP + 1)],
         phase: [
             [i(HEADER_PHASE), i(HEADER_PHASE + 1)],
@@ -320,7 +320,12 @@ fn bent(half: i32) -> ([i32; 3], u32) {
 /// the foot, so a center more than 128 from it on either axis holds none, and `rel` stays
 /// under 2^23. Along and across the segment, `rel` against the direction (`dir`) stays under
 /// 2^38, and each is compared with half a leaf cell times `d[k]`'s size times the direction's.
-pub(crate) fn pier_covers(st: &Stations, s: &Segment, [n, len2]: [i64; 2], at: [i32; 2]) -> bool {
+pub(crate) fn pier_covers(
+    st: &StationGrid,
+    s: &Segment,
+    [n, len2]: [i64; 2],
+    at: [i32; 2],
+) -> bool {
     let d = [s.b[0] - s.a[0], s.b[1] - s.a[1]];
     let (k, l) = (major(d), 1 - major(d));
     let leaf = st.leaf as i32;
@@ -464,7 +469,7 @@ pub fn on_way(
 /// column, and whether the column holds the section of a pier at one of its stations. Filling
 /// a brick costs this once for each column and segment: some ten 64-bit products, and a
 /// quotient for each of the two surfaces and for the station (`nearest`).
-pub fn crossing(s: &Segment, at: [i32; 2], st: &Stations) -> Crossing {
+pub fn crossing(s: &Segment, at: [i32; 2], st: &StationGrid) -> Crossing {
     let ends = [s.first == 1, s.last == 1];
     let ([n, len2], on) = on_way([s.a, s.b], s.width, ends, at);
     if !on {
@@ -554,7 +559,7 @@ pub fn occupies(c: &Crossing, ground: i32, per_m: f32) -> Occupancy {
 /// in its own tile's cells, with its center there and the tile's stations, and its ground,
 /// which is its palette index as read and its face's height in leaf cells. A column the brick
 /// does not hold has no segment.
-pub trait Columns {
+pub trait ColumnGrid {
     /// The cells' zoom, and leaf cells a ground meter over the ground.
     fn cell_zoom(&self) -> Zoom;
     fn per_m(&self) -> f32;
@@ -563,7 +568,7 @@ pub trait Columns {
     fn segment(&self, c: [i32; 2], k: u32) -> Segment;
     /// The column's center in eighths of its tile's cells, a cell a side.
     fn center(&self, c: [i32; 2]) -> [i32; 2];
-    fn stations(&self) -> Stations;
+    fn stations(&self) -> StationGrid;
     fn palette_idx(&self, c: [i32; 2]) -> u32;
     /// Whether the column is the service area's wall (pxl-engine
     /// `area::is_wall`), where no way writes, as none does past it.
@@ -575,7 +580,7 @@ pub trait Columns {
 }
 
 /// The `k`-th segment's crossing of column `c`.
-fn crossing_at<C: Columns>(cols: &C, c: [i32; 2], k: u32) -> Crossing {
+fn crossing_at<C: ColumnGrid>(cols: &C, c: [i32; 2], k: u32) -> Crossing {
     crossing(&cols.segment(c, k), cols.center(c), &cols.stations())
 }
 
@@ -584,7 +589,7 @@ fn crossing_at<C: Columns>(cols: &C, c: [i32; 2], k: u32) -> Crossing {
 /// crossing (all the surface they sweep across the column, and a pier wherever any one's
 /// station is), and where the next visit starts. It is `NONE` where the `k`-th segment is not
 /// over the column.
-fn visit<C: Columns>(cols: &C, c: [i32; 2], k: u32) -> (Crossing, u32) {
+fn visit<C: ColumnGrid>(cols: &C, c: [i32; 2], k: u32) -> (Crossing, u32) {
     let mut x = crossing_at(cols, c, k);
     if !x.is() {
         return (x, k + 1);
@@ -661,7 +666,7 @@ fn at_or_after(v: [i32; 2], best: [i32; 2]) -> bool {
 /// above the ground, on a way at grade, or over a deck `LOWER_DECK_GAP_M` or more under its
 /// own (Arnis's `place_pillar`, `support_blocked`), and none where the terrain gives no
 /// surface to stand on; water stops none. The run is empty where none stands.
-fn pier_stands<C: Columns>(
+fn pier_stands<C: ColumnGrid>(
     cols: &C,
     c: [i32; 2],
     pier: [i32; 2],
@@ -716,7 +721,7 @@ impl Write {
 /// What the visit from the `k`-th segment over column `c` writes, and where the next visit
 /// starts. A visit whose palette index grounds writes what it occupies over the column's face
 /// `face`, where `per_m` is the leaf cells a meter, and its pier where one stands.
-fn writes<C: Columns>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32)) -> (Write, u32) {
+fn writes<C: ColumnGrid>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32)) -> (Write, u32) {
     let (x, next) = visit(cols, c, k);
     if !x.is() || !value::grounds(x.kind) {
         return (Write::NONE, next);
@@ -754,17 +759,17 @@ pub const SPANS: usize = 10;
 /// (`ground::face_cell`), under which a bore's air beside the column lines it (`way_cell`); it
 /// is `i32::MIN` where the area's edge walls the column or the column is past the area, where
 /// nothing lines it. The column's cells are read from these, so its visits are found once: a
-/// brick's fill keeps them (pxl-engine fill.rs `spans`, read through `ColumnSpans`).
+/// brick's fill keeps them (pxl-engine fill.rs `spans`, read through `SpanTable`).
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Spans {
+pub struct SpanList {
     pub run: [[i32; 2]; SPANS],
     pub val: [u32; SPANS],
     pub n: u32,
     pub face: i32,
 }
 
-impl Spans {
-    pub const NONE: Spans = Spans {
+impl SpanList {
+    pub const NONE: SpanList = SpanList {
         run: [[0, 0]; SPANS],
         val: [0; SPANS],
         n: 0,
@@ -786,10 +791,10 @@ impl Spans {
 /// Column `c`'s spans: what each visit of a line writes there that fills a cell at the grid's
 /// zoom (`fills_any`), since `at` reads no other; its face cell; and whether they all fit
 /// `SPANS`. A column of the bedrock, past the area or walled by its edge
-/// (`Columns::is_walled`), has no spans and no face, because bedrock wins over a way as it
+/// (`ColumnGrid::is_walled`), has no spans and no face, because bedrock wins over a way as it
 /// does over the ground's face.
-pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
-    let (mut spans, mut fits) = (Spans::NONE, true);
+pub fn column<C: ColumnGrid>(cols: &C, c: [i32; 2]) -> (SpanList, bool) {
+    let (mut spans, mut fits) = (SpanList::NONE, true);
     if cols.palette_idx(c) == ground::UNKNOWN || cols.is_walled(c) {
         return (spans, fits);
     }
@@ -813,8 +818,8 @@ pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
 
 /// The spans of a brick's columns and of the ring around it, as its fill keeps them
 /// (pxl-engine fill.rs `spans`), read in place: column `c`'s face cell and how many spans it
-/// has (`Spans`), and its `j`-th span with its value.
-pub trait ColumnSpans {
+/// has (`SpanList`), and its `j`-th span with its value.
+pub trait SpanTable {
     fn header(&self, c: [i32; 2]) -> (i32, u32);
     fn span(&self, c: [i32; 2], j: u32) -> ([i32; 2], u32);
 }
@@ -823,7 +828,7 @@ pub trait ColumnSpans {
 /// kept in `k`. A deck's slab or its pier comes first: where two share the cell, the higher
 /// keeps it, and a slab goes before its pier. Otherwise it is the first air over the cell
 /// (`AIR_OF` over its way's palette index), or else `NOTHING`.
-fn at(k: &impl ColumnSpans, c: [i32; 2], n: u32, cell_zoom: Zoom, z: i32) -> u32 {
+fn at(k: &impl SpanTable, c: [i32; 2], n: u32, cell_zoom: Zoom, z: i32) -> u32 {
     let (mut best, mut palette_idx, mut air) = ([i32::MIN, i32::MIN], NOTHING, NOTHING);
     let mut j = 0;
     while j < n {
@@ -863,7 +868,7 @@ fn near(k: u32) -> [i32; 3] {
 
 /// Where the ways may fill a node along z, at the zooms from `coarsest` to `near` that a
 /// reader asks within it, where what they fill under it lies in the leaf cells `[lo, hi)`
-/// (`ground::Bounds`, with a bore's air counted as none): from its lowest to past its
+/// (`ground::Extent`, with a bore's air counted as none): from its lowest to past its
 /// highest, in leaf cells. A cell fills where more than half of it is filled (`fills`). At a
 /// zoom whose cell is `s` leaf cells, the slab runs from the first cell more than half over
 /// `lo` to past the last more than half under `hi`; at the leaves or finer it is `[lo, hi)`
@@ -909,7 +914,7 @@ fn beside(c: [i32; 2], m: u32, z: i32) -> ([i32; 2], i32) {
 /// so a cave never opens into a way, whatever carves the ground. Otherwise it is `NOTHING`.
 /// It is read from the spans in place, the column's own first, and a cell the column writes
 /// reads nothing beside it.
-pub fn way_cell(k: &impl ColumnSpans, c: [i32; 2], cell_zoom: Zoom, z: i32) -> u32 {
+pub fn way_cell(k: &impl SpanTable, c: [i32; 2], cell_zoom: Zoom, z: i32) -> u32 {
     let (face, n) = k.header(c);
     let v = at(k, c, n, cell_zoom, z);
     if v != NOTHING {
@@ -935,7 +940,7 @@ pub fn way_cell(k: &impl ColumnSpans, c: [i32; 2], cell_zoom: Zoom, z: i32) -> u
 /// where no slab or pier of that column fills the cell read (`bare`). A lined cell is under
 /// the face's cell, so under the top. So the result is exactly the hull of the cells
 /// `way_cell` reads something in, read from the spans.
-pub fn lined_hull(k: &impl ColumnSpans, c: [i32; 2], cell_zoom: Zoom, top: i32) -> [i32; 2] {
+pub fn lined_hull(k: &impl SpanTable, c: [i32; 2], cell_zoom: Zoom, top: i32) -> [i32; 2] {
     let s = 1i32 << (LEAF_CELL_ZOOM - cell_zoom);
     let (face, n) = k.header(c);
     let [mut lo, mut hi] = ground::EMPTY;
@@ -983,7 +988,7 @@ pub fn lined_hull(k: &impl ColumnSpans, c: [i32; 2], cell_zoom: Zoom, top: i32) 
 /// column `b`'s `n` spans fills, so that its air is read as air (`at`); past `to` where they
 /// fill every one. Each step passes one of them, so it takes no more than one step a span.
 fn bare(
-    k: &impl ColumnSpans,
+    k: &impl SpanTable,
     b: [i32; 2],
     n: u32,
     cell_zoom: Zoom,
@@ -1030,7 +1035,7 @@ mod tests {
         }
     }
 
-    impl ColumnSpans for Five {
+    impl SpanTable for Five {
         fn header(&self, c: [i32; 2]) -> (i32, u32) {
             let (face, _, n) = self.of(c);
             (*face, *n)

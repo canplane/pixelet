@@ -7,14 +7,14 @@
 use pxl_spec::space::coord::mat4;
 use pxl_spec::space::coord::v3;
 
-use crate::domain::scene::marker::candidate::Candidates;
+use crate::domain::scene::marker::candidate::CandidateTable;
 use crate::domain::scene::marker::param::ANCHOR_RADIUS;
 use crate::domain::view::frame::pose::view;
 use crate::domain::view::frame::screen::{ndc_to_px, size};
 
 /// Writes into `out` the indices into `candidates` of the visible markers,
 /// nearest first. The candidates are in the root frame.
-pub(super) fn select_visible(candidates: &mut Candidates, out: &mut Vec<u32>) {
+pub(super) fn select_visible(candidates: &mut CandidateTable, out: &mut Vec<u32>) {
     let v = view();
     let eye = v.at().eye;
     let [width, height] = size();

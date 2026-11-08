@@ -175,7 +175,7 @@
       "message_placeholder": "輸入訊息",
       "pin_placeholder": "輸入圖釘訊息",
       "send": "傳送",
-      "pin_done": "立起圖釘",
+      "put_pin": "立起圖釘",
       "drawer_tooltip": "開啟抽屜",
       "object_size": "大小 {{n}}"
     },

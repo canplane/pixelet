@@ -5,10 +5,10 @@ use core::panic::Location;
 
 use crate::status::errno::Errno;
 
-/// An errno and the place in the source where the error was made, with no
-/// message. The type wrapped around it says whether it is fatal: an
-/// `InvariantError` is, and a `FaultError`, a fault from outside the
-/// program, is not.
+/// This is an errno and the place in the source where the error was made, with
+/// no message. The type wrapped around it says whether it is fatal: an
+/// `InvariantError` is, and a `FaultError`, a fault from outside the program,
+/// is not.
 #[derive(Debug)]
 pub struct XputeError {
     pub errnum: Errno,

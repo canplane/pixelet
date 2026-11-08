@@ -22,8 +22,6 @@ import { create, globals } from "webgpu";
 
 import { entries, make, type Pipeline } from "./pipeline.ts";
 
-/** The paths of the hand modules, which the renderer's own example assembles
- * here, and the pipelines the renderer makes over them. */
 function assembled(): { modules: string[]; pipelines: Pipeline[] } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pxl-wgsl-"));
   execFileSync(

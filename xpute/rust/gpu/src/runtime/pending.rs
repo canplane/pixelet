@@ -7,15 +7,15 @@ use xpute_runtime::mem::Memory;
 
 use crate::spec::RESULT;
 
-/// A request the device answers at a later poll: a MAP_ASYNC read, a
-/// QUEUE_DONE, or an async pipeline made at once.
+/// A `Pending` is a request the device answers at a later poll: a MAP_ASYNC
+/// read, a QUEUE_DONE, or an async pipeline made at once.
 pub(super) struct Pending {
     pub(super) state: Arc<AtomicU8>,
     pub(super) word: u32,
     pub(super) ticket: u32,
-    /// A read's buffer, offset, size and the address it lands at. A read's
-    /// fence has a result word after it; the fence of a request with no read
-    /// has none.
+    /// This holds a read's buffer, offset, size and the address it lands at. A
+    /// read's fence has a result word after it; the fence of a request with no
+    /// read has none.
     pub(super) read: Option<(wgpu::Buffer, u64, u64, u32)>,
 }
 

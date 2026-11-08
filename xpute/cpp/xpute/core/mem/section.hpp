@@ -1,7 +1,7 @@
 // cpp/xpute/core/mem/section.hpp
 
-// Ranges laid end to end in a linear memory, as a linker script places
-// sections at `. = ALIGN(n)` boundaries.
+// These are ranges laid end to end in a linear memory, as a linker script
+// places sections at `. = ALIGN(n)` boundaries.
 
 #pragma once
 
@@ -22,13 +22,14 @@ constexpr std::uint32_t align_up(std::uint32_t n, std::uint32_t unit) noexcept {
     return (n + unit - 1) / unit * unit;
 }
 
-// `n` rounded up to a whole page, where whatever follows it begins.
+// This is `n` rounded up to a whole page, where whatever follows it begins.
 constexpr std::uint32_t page_up(std::uint32_t n) noexcept {
     return align_up(n, PAGE_BYTES);
 }
 
-// The span of ranges laid end to end, each aligned to `unit`. It includes
-// the last range's rounding, so it is where whatever follows begins.
+// `span_of` answers the span of ranges laid end to end, each aligned to
+// `unit`. It includes the last range's rounding, so it is where whatever
+// follows begins.
 constexpr std::uint32_t span_of(std::span<const std::uint32_t> bytes, std::uint32_t unit) noexcept {
     std::uint32_t span = 0;
     for (std::uint32_t s : bytes) span += align_up(s, unit);
@@ -56,7 +57,7 @@ struct Section {
         return this->off + off;
     }
 
-    // The `n`th of the ranges whose sizes are `bytes`, laid end to end
+    // This is the `n`th of the ranges whose sizes are `bytes`, laid end to end
     // inside the section, each aligned to `unit`. The ranges must all fit.
     constexpr Section nth(std::span<const std::uint32_t> bytes, std::uint32_t unit, std::size_t n) const noexcept {
         if (span_of(bytes, unit) > this->bytes) bug(Errno::einval, span_of(bytes, unit), this->bytes);

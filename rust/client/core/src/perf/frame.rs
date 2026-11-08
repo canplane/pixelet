@@ -9,7 +9,7 @@ use crate::sys::sched::phase_spec::PHASES;
 use pxl_engine::count;
 
 use crate::perf::spec::{FRAME, FRAME_GROUP, WORST};
-use crate::perf::word::{as_words, as_words_mut, words, zeroed, Words};
+use crate::perf::word::{as_words, as_words_mut, words, zeroed, AsWords};
 use crate::sys::sched::param;
 use crate::turn::spec;
 use pxl_render::gpu::ray;
@@ -119,7 +119,7 @@ pub struct FrameSample {
 }
 
 /// One frame's ray counts, which the renderer gathers while the `ray_counts`
-/// setting is on (pxl-render gpu/ray/count.rs `RayCounts`). The fields
+/// setting is on (pxl-render gpu/ray/count.rs `RayCount`). The fields
 /// follow the order of perf.json FRAME's `rays` group. For the eye they say
 /// whether it cast in full, how many pixels it cast, and its lane counts.
 /// For the light's map they say whether it cast, how many slots it cast,

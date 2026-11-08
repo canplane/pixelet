@@ -10,7 +10,7 @@ fn kind(names: &[&str]) -> Kind {
     }
 }
 
-fn kinds(each: impl Fn(BaseLayer) -> Kind) -> Kinds {
+fn kinds(each: impl Fn(BaseLayer) -> Kind) -> KindTable {
     try_kinds(|l| Ok(each(l))).expect("a kind each")
 }
 
@@ -25,7 +25,8 @@ fn shard_served_when_all_kinds() {
         },
         _ => kind(&all),
     });
-    let shard = &declaration(MIN_ZOOM, &kinds, &Overrides::new()).expect("a declaration")["shard"];
+    let shard =
+        &declaration(MIN_ZOOM, &kinds, &OverrideMap::new()).expect("a declaration")["shard"];
     let keys: Vec<&str> = shard
         .as_object()
         .expect("a map")
@@ -45,10 +46,10 @@ fn unread_keys_unwritten() {
         shard: shards().filter(|_| l != BaseLayer::earth),
     });
     assert!(
-        declaration(MIN_ZOOM, &kinds, &Overrides::new()).is_err(),
+        declaration(MIN_ZOOM, &kinds, &OverrideMap::new()).is_err(),
         "a version no segment"
     );
-    let earth_held = try_kinds(|_| {
+    let earth_sharded = try_kinds(|_| {
         Ok(Kind {
             format: 1,
             version: "v1".into(),
@@ -57,7 +58,7 @@ fn unread_keys_unwritten() {
     })
     .expect("a kind each");
     assert!(
-        declaration(MIN_ZOOM, &earth_held, &Overrides::new()).is_err(),
+        declaration(MIN_ZOOM, &earth_sharded, &OverrideMap::new()).is_err(),
         "the Earth's picture held by shards"
     );
 }
@@ -76,7 +77,7 @@ fn override_names_shard() {
         .pop_first()
         .expect("one");
     let overrides =
-        Overrides::from([(at, vec![(BaseLayer::place, "v10.2026-10-12.1".to_string())])]);
+        OverrideMap::from([(at, vec![(BaseLayer::place, "v10.2026-10-12.1".to_string())])]);
     let shard = &declaration(MIN_ZOOM, &kinds, &overrides).expect("a declaration")["shard"];
     assert_eq!(shard["0103300"], json!({}));
     assert_eq!(
@@ -98,7 +99,7 @@ fn partial_shard_override_refused() {
     for name in ["01033001", "0103300"] {
         let at = key(name).expect("a key");
         let overrides =
-            Overrides::from([(at, vec![(BaseLayer::place, "v10.2026-10-12.1".to_string())])]);
+            OverrideMap::from([(at, vec![(BaseLayer::place, "v10.2026-10-12.1".to_string())])]);
         assert!(declaration(MIN_ZOOM, &kinds, &overrides).is_err(), "{name}");
     }
 }

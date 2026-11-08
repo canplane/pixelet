@@ -1,9 +1,9 @@
 // cpp/xpute/core/abi/handle.hpp
 
-// Generational handles. A handle is `slot | generation << 16`: a slot and
-// that slot's generation, so a handle kept past its release names nothing
-// that takes the slot later. The other side reads only the slot. Slot 0 is
-// never handed out, so 0 is never a handle.
+// A handle is `slot | generation << 16`: a slot and that slot's generation, so
+// a handle kept past its release names nothing that takes the slot later. The
+// other side reads only the slot. Slot 0 is never handed out, so 0 is never a
+// handle.
 
 #pragma once
 
@@ -25,15 +25,15 @@ constexpr std::uint32_t handle_slot(std::uint32_t handle) noexcept {
     return handle & ((1u << SLOT_BITS) - 1);
 }
 
-// N slots, each holding a `T` while its handle is live. A slot given back is
-// the next one taken. All-zero bytes are an empty table (for a `T` whose zero
-// is its default), so a table can lie in memory that starts zeroed, or be
-// emptied by zeroing it, without ever being built and moved.
+// A table has N slots, each holding a `T` while its handle is live. A slot
+// given back is the next one taken. All-zero bytes are an empty table (for a
+// `T` whose zero is its default), so a table can lie in memory that starts
+// zeroed, or be emptied by zeroing it, without ever being built and moved.
 template <class T, std::size_t N> class Table {
     static_assert(N >= 2 && N <= (std::size_t{1} << SLOT_BITS), "a slot is 16 bits, and slot 0 is never handed out");
 
   public:
-    // Answers none when every slot is taken.
+    // `insert` answers none when every slot is taken.
     std::optional<std::uint32_t> insert(T val) noexcept {
         std::uint32_t slot;
         if (free_ != 0) {

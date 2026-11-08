@@ -1,10 +1,10 @@
 // cpp/xpute/core/stop.hpp
 
-// How a core stops. A broken invariant (`bug`) is posted to the runtime as
-// the turn's only frame, by the reporter `stop::install` is given (the
-// core's `Door::abort`). Where the core's process dies with it, the stop is
-// also told to the form's hook. C++ has no panic of its own: what libc++
-// aborts on is a bug (kit status/bug.cpp).
+// A broken invariant (`bug`) is posted to the runtime as the turn's only
+// frame, by the reporter `stop::install` is given (the core's `Door::abort`).
+// Where the core's process dies with it, the stop is also told to the form's
+// hook. C++ has no panic of its own: what libc++ aborts on is a bug (kit
+// status/bug.cpp).
 
 #pragma once
 

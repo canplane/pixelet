@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/sequence.rs
 
 //! The frame's calls over the buffers that hold indirect counts, in the order the host encodes
-//! them (gpu/renderer.rs `frame`): the light's tiles' marks, then `RaysPass::dispatch`, then
+//! them (gpu/renderer.rs `frame`): the light's tiles' marks, then `RayPass::dispatch`, then
 //! the shadow map's pass. Each call states its pipeline, the groups set for it and the buffers
 //! they view, and where it reads its count. Every indirect call in gpu/ray/cast.rs,
 //! gpu/ray/raster.rs, gpu/generator.rs and gpu/shadow.rs takes the place of its count from its
@@ -90,7 +90,7 @@ pub const LIT_PASS: &[u32] = &[
 ];
 
 /// The eye's raster draw of the record and its faces' pass (gpu/ray/raster.rs `Raster::draw`),
-/// then the cast of the pixels in the claimed tiles (gpu/ray/cast.rs `RaysPass::dispatch`).
+/// then the cast of the pixels in the claimed tiles (gpu/ray/cast.rs `RayPass::dispatch`).
 pub const RASTER: Step =
     Step::draw_off("raster", IN_EYE, PIPELINE_RASTER, &[], (RASTER_ARGS, 0)).in_pass(RASTER_PASS);
 pub const FACE: Step = Step::dispatch_off(
@@ -154,7 +154,7 @@ pub const GENERATE: Step = Step::dispatch_off(
     &[&GENERATION_BINDS],
     (GENERATION_LIST, generation::GENERATE_ARGS),
 );
-/// The light's cast (gpu/ray/cast.rs `RaysPass::dispatch`).
+/// The light's cast (gpu/ray/cast.rs `RayPass::dispatch`).
 pub const LIGHT_MARK_WALKED: Step = Step::dispatch(
     "light_mark_walked",
     IN_LIGHT,
@@ -304,7 +304,7 @@ pub const IMPOSTOR_LIT_MASKED: Step = Step::draw_regions(
 .in_pass(LIT_PASS);
 
 /// The count of the stops the holes' walks listed, copied into the node cache's head before
-/// the last walk adds its own, where the stops' passes read it (gpu/ray/cast.rs `walk_holes`).
+/// the last walk adds its own, where the stops' passes read it (gpu/ray/cast.rs `walk_run`).
 /// One copy is the eye's and one the light's.
 pub const HITS: Step = Step::copy(
     "hits",
@@ -542,7 +542,7 @@ pub const OPEN_GENERATION_RECTS: Step = Step::write(
     ),
 );
 /// The light's tiles' reads move with the box: they are copied out, then back in where the box
-/// slid them (gpu/ray/cast.rs `RaysPass::dispatch`).
+/// slid them (gpu/ray/cast.rs `RayPass::dispatch`).
 pub const LIGHT_READS_OUT: Step = Step::copy(
     "light_reads_out",
     IN_LIGHT,
@@ -572,7 +572,7 @@ pub const FRAME: Frame = Frame {
     bounds: BOUNDS,
     persistent: PERSISTENT,
     steps: &[
-        // The host's writes as it prepares the frame (gpu/ray/cast.rs `RaysPass::prepare`,
+        // The host's writes as it prepares the frame (gpu/ray/cast.rs `RayPass::prepare`,
         // gpu/ray/raster.rs `Raster::prepare`, `light_prepare`, `record_draw`, gpu/generator.rs
         // `prepare`).
         OPEN_NODE_CACHE,
@@ -926,7 +926,7 @@ pub const FRAME: Frame = Frame {
 /// `receiver_tiles_put`); the stops' dispatch in the node cache's head, which the last walk
 /// raises; the stood list's marks; the args the decor's culls write; the read list's count, by
 /// which the propagation lists a tile (light_propagate.wgsl `read_tile`); and the frame's asks
-/// (queue_last.wgsl `may_ask`).
+/// (ask.wgsl `may_ask`).
 const APPENDS: &[Range] = &[
     at(RASTER_ARGS, raster::ASKED_AT, raster::ARGS_WORDS),
     at(RASTER_ARGS, raster::HIT_ASKED_AT, raster::ARGS_WORDS),
@@ -947,7 +947,7 @@ const APPENDS: &[Range] = &[
 
 /// The copies that open a count before the passes that add to it. `hits` and `light_hits` copy
 /// the stops each observer's holes' walks over the node cache listed into the node cache's
-/// head, before the last walk adds its own (gpu/ray/cast.rs `walk_holes`, queue_last.wgsl
+/// head, before the last walk adds its own (gpu/ray/cast.rs `walk_run`; queue.wgsl
 /// `keep_hit`). `receiver_tiles_back` and `read_count_back` copy back the stood list's args and
 /// the read list's count that the casts since the world's receivers were last stood afresh
 /// left, before this cast's receivers and propagation add to them.
@@ -1045,7 +1045,7 @@ const PERSISTENT: &[Persistent] = &[
         invalidation: "the stood list's args the casts since the world's receivers were stood \
             afresh left, its count the tiles propagated, stale where they are stood afresh: the \
             host then writes the stood list empty and none of it propagated, and copies none \
-            back in (ray/cast.rs `RaysPass::prepare`, `dispatch`)",
+            back in (ray/cast.rs `RayPass::prepare`, `dispatch`)",
     },
     Persistent {
         range: at(
@@ -1057,7 +1057,7 @@ const PERSISTENT: &[Persistent] = &[
         by: &[],
         invalidation: "the read list's count the casts since the world's receivers were stood \
             afresh left, stale where they are stood afresh: the host then writes the light's \
-            args with the count none and copies none back in (ray/cast.rs `RaysPass::prepare`, \
+            args with the count none and copies none back in (ray/cast.rs `RayPass::prepare`, \
             `dispatch`)",
     },
 ];

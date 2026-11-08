@@ -32,7 +32,7 @@ impl Base for Probe {
         PROBE_TILES.get(TileCache::default)
     }
 
-    fn receive(_: Quadrant, _: u32, _: &[u8], _: &mut Phases) -> Result<Probe, Failure> {
+    fn receive(_: Quadrant, _: u32, _: &[u8], _: &mut PhaseList) -> Result<Probe, Failure> {
         Err(Errno::ENOTRECOVERABLE.into())
     }
 }
@@ -95,29 +95,29 @@ fn turns_ask_what_a_fresh_observation_asks() {
         turns.push(at(*eye, east, top));
     }
     let dst = Quadrant::new(LEAF_ZOOM, [0, 0]);
-    let held = Probe::demand();
+    let reused = Probe::demand();
     let mut changed = Vec::new();
     for (k, o) in turns.iter().enumerate() {
         let dst = (k >= 20).then_some(dst);
-        held.turn(Some(*o), dst, &[], top);
+        reused.turn(Some(*o), dst, &[], top);
         let mut fresh = Demand::<Probe>::default();
         fresh.turn(Some(*o), dst, &[], top);
         assert_eq!(
-            held.wants, fresh.wants,
+            reused.wants, fresh.wants,
             "turn {k}: the wants and their order"
         );
-        assert_eq!(held.floor, fresh.floor, "turn {k}: the floor");
-        assert_eq!(held.observation, fresh.observation, "turn {k}");
+        assert_eq!(reused.floor, fresh.floor, "turn {k}: the floor");
+        assert_eq!(reused.observation, fresh.observation, "turn {k}");
         // A tile arrives, as one would between turns.
         if k == 50 {
-            let p = Quadrant::of_id(held.wants[held.wants.len() / 2].0);
+            let p = Quadrant::of_id(reused.wants[reused.wants.len() / 2].0);
             Probe::tile_cache().set(p, Probe);
         }
         // The demand is told what moved, as the turn tells it (turn.rs
         // `changes_step`).
         Probe::tile_cache().take_changed(&mut changed);
         if !changed.is_empty() {
-            held.on_changed();
+            reused.on_changed();
         }
     }
 }

@@ -1,6 +1,6 @@
 // xpute-gpu/runtime/name.rs
 
-//! The wgpu value of each enumeration's number. The spec lists each
+//! This maps each enumeration's number to its wgpu value. The spec lists each
 //! enumeration's WebGPU names, which are wgpu's serde names too, so each
 //! number maps to its value by name.
 
@@ -15,9 +15,9 @@ use crate::enums::{
 };
 use crate::spec::{BUFFER_USAGE, COLOR_WRITE, SHADER_STAGE, TEXTURE_USAGE};
 
-/// Each enumeration's wgpu values, indexed by place in the spec's list. A
-/// name wgpu has no value for is None.
-pub(super) struct Names {
+/// These are each enumeration's wgpu values, indexed by place in the spec's
+/// list. A name wgpu has no value for is None.
+pub(super) struct EnumTable {
     pub(super) texture_format: Vec<Option<wgpu::TextureFormat>>,
     pub(super) vertex_format: Vec<Option<wgpu::VertexFormat>>,
     pub(super) topology: Vec<Option<wgpu::PrimitiveTopology>>,
@@ -48,9 +48,9 @@ fn named<T: DeserializeOwned>(names: &[&str]) -> Vec<Option<T>> {
         .collect()
 }
 
-impl Names {
-    pub(super) fn new() -> Names {
-        Names {
+impl EnumTable {
+    pub(super) fn new() -> EnumTable {
+        EnumTable {
             texture_format: named(TEXTURE_FORMAT),
             vertex_format: named(VERTEX_FORMAT),
             topology: named(PRIMITIVE_TOPOLOGY),

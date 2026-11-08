@@ -1,11 +1,5 @@
 // @pxl/client/ui/world/dock/strip.tsx
 
-/**
- * The palette's card: the tools, the hotbar and the drawer's button, each in
- * a slot. A tap on a cube's swatch puts the cube in hand, and a hold opens its
- * sizes (popover.tsx).
- */
-
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -48,8 +42,6 @@ import { CubeSwatch, decorGlyph, selectionRing } from "@/ui/asset/swatch.tsx";
 
 const ITEM = 24;
 
-/** How long a press lasts before it counts as a hold, as `Pressable`'s
- * `delayLongPress` would. */
 const LONG_PRESS_MS = 300;
 /** A finger that moves this far before the hold time is a drag, not a press.
  * Sideways it scrolls the strip; up or down it turns the deck. */
@@ -273,7 +265,7 @@ function ToolButton({
           rounded corners. */}
       <View
         collapsable={false}
-        style={[styles.held, active && styles.toolActive]}
+        style={[styles.highlight, active && styles.toolActive]}
       >
         <Glyph
           glyph={glyph}
@@ -285,8 +277,8 @@ function ToolButton({
   );
 }
 
-/** `span` is the bar's width, and the strip never grows past it. The hotbar
- * does not scroll while the sizes are open. */
+/** `span` is the bar's width, and the strip never grows past it. The caller
+ * stops the hotbar's scrolling while the sizes are open. */
 export function Strip({
   span,
   scrolls,
@@ -348,7 +340,7 @@ export const STRIP = {
   glyph: alpha(color.white, 0.6),
   glyphOn: color.white,
   mark: color.white,
-  held: alpha(color.white, 0.2),
+  highlight: alpha(color.white, 0.2),
   line: alpha(color.white, 0.15),
   swatchLine: alpha(color.white, 0.3),
   ground: color.band,
@@ -386,21 +378,21 @@ const styles = StyleSheet.create({
 
   slot: SLOT,
   swatchSlot: panX,
-  held: {
+  highlight: {
     width: chrome.selection,
     height: chrome.selection,
     borderRadius: chrome.selection / 2,
     alignItems: "center",
     justifyContent: "center",
   },
-  toolActive: { backgroundColor: STRIP.held },
+  toolActive: { backgroundColor: STRIP.highlight },
   decorDisc: {
     width: ITEM,
     height: ITEM,
     borderRadius: ITEM / 2,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: STRIP.held,
+    backgroundColor: STRIP.highlight,
   },
   swatchIdle: { boxShadow: `0 0 0 1px ${STRIP.swatchLine}` },
   swatchSelected: { boxShadow: selectionRing(STRIP.ground, STRIP.mark, 1) },

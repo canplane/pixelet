@@ -1,10 +1,11 @@
 // @xpute/gpu/runtime.frame.test.ts
 
-/** The web runtime's unfinished frames, as it tells them in the device's
- * block (spec DEVICE). A turn whose stream took a surface's texture counts
- * one, and the queue's `onSubmittedWorkDone`, asked after that turn, takes it
- * off. No GPU is used: the device, its queue and the canvas are stand-ins,
- * and each `onSubmittedWorkDone` resolves only when the test resolves it. */
+/** These tests hold the web runtime's unfinished frames, as it tells them in
+ * the device's block (spec DEVICE). A turn whose stream took a surface's
+ * texture counts one, and the queue's `onSubmittedWorkDone`, asked after that
+ * turn, takes it off. No GPU is used: the device, its queue and the canvas are
+ * stand-ins, and each `onSubmittedWorkDone` resolves only when the test
+ * resolves it. */
 
 import { afterEach, test, vi } from "vitest";
 import assert from "node:assert/strict";

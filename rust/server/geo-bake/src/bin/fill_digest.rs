@@ -24,12 +24,12 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use fnv::FnvHasher;
-use pxl_engine::object::{self, Columns, NodeSlot};
+use pxl_engine::object::{self, NodeSlot, Table};
 use pxl_engine::way::tree::{self, Read};
 use pxl_engine::{clipmap, fill};
 use pxl_geo_bake::pyramid::{Base, TileSet};
 use pxl_geo_bake::util::code_digest;
-use pxl_spec::bake::tile::terrain::{self, BrickWords, TerrainTile};
+use pxl_spec::bake::tile::terrain::{self, FilledBrick, TerrainTile};
 use pxl_spec::directory;
 use pxl_spec::space::coord::zoom::Zoom;
 
@@ -73,7 +73,7 @@ fn key(set: &Path) -> Result<String, String> {
 /// The node `at` of `zoom` and every node under it a reader steps to, into
 /// `h`: its zoom, whether it holds, whether folded, and its word.
 fn walk(
-    l: &impl Columns,
+    l: &impl Table,
     slot: NodeSlot,
     (zoom, cell_zoom): (Zoom, Zoom),
     at: [i32; 3],
@@ -107,7 +107,7 @@ fn walk(
 /// A brick's line: its levels' words, the child groups its build took and
 /// holds, and its tree under each of its own nodes along z its ways meet
 /// and two past either end.
-fn line(name: &str, k: u32, b: &BrickWords<'_>) -> String {
+fn line(name: &str, k: u32, b: &FilledBrick<'_>) -> String {
     let at = clipmap::BOUNDS_AT as usize;
     let mut levels = FnvHasher::default();
     for w in &b.column[at..at + clipmap::BOUND_WORDS as usize] {

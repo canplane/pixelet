@@ -116,7 +116,7 @@ async fn shared_admission() {
     })
     .await
     .unwrap();
-    let held = a.admission.clone().acquire_many_owned(32).await.unwrap();
+    let permits = a.admission.clone().acquire_many_owned(32).await.unwrap();
     a.once("cached".into(), true, |_deadline| async {
         panic!("must be cached")
     })
@@ -129,7 +129,7 @@ async fn shared_admission() {
         .await,
         Err(Failure::Limited(_))
     ));
-    drop(held);
+    drop(permits);
     b.once("new".into(), true, |_deadline| async { Ok(()) })
         .await
         .unwrap();

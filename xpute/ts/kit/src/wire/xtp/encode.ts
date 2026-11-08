@@ -58,7 +58,7 @@ import type { NodeView } from "./view.ts";
 
 const DESC_REG: [u32, NodeType] = [NONE, SpecialType.NIL];
 
-export interface TreeEncoderOptions {
+export interface TreeEncoderConfig {
   /** The size of the first buffer tried; it doubles each time the packet does
    * not fit. */
   init_cap: u32;
@@ -67,7 +67,7 @@ export interface TreeEncoderOptions {
 }
 
 /**
- * Encodes a tree by walking it onto `PacketWriter`, as the C++ `encode`
+ * This encodes a tree by walking it onto `PacketWriter`, as the C++ `encode`
  * (cpp/xpute/kit/wire/xtp/view.hpp) does. The first buffer has `init_cap`
  * bytes; each time the packet overflows it, the tree is walked again into one
  * twice as large, up to `max_cap`.
@@ -75,7 +75,7 @@ export interface TreeEncoderOptions {
 export class TreeEncoder {
   /** A `max_cap` below HDR_SZ or above MAX_PKT_SZ is EINVAL; a packet larger
    * than `max_cap` is EOVERFLOW. */
-  encode(view: NodeView, opts: TreeEncoderOptions): U8Array {
+  encode(view: NodeView, opts: TreeEncoderConfig): U8Array {
     const { init_cap, max_cap = MAX_PKT_SZ } = opts;
     if (max_cap < HDR_SZ || max_cap > MAX_PKT_SZ) {
       throw new MarshalError(Errno.EINVAL);
@@ -219,15 +219,15 @@ const word_up = (n: number): number => Math.ceil(n / WORD_SZ) * WORD_SZ;
 export class PacketWriter {
   private bytes: U8Array = new Uint8Array(0);
   private view: DataView = new DataView(new ArrayBuffer(0));
-  /** Where the packet begins in `bytes`. */
+  /** This is where the packet begins in `bytes`. */
   start: u32 = 0;
-  /** The most bytes the packet may take. */
+  /** This is the most bytes the packet may take. */
   private cap: u32 = 0;
   private table: Table = { base: 0, cnt: 1, written: 0, root: true };
   private root_type: NodeType = SpecialType.NIL;
   /** The packet's end so far, counted from `start`. */
   private lim: u32 = HDR_SZ;
-  /** The first error met; later ones are not kept. */
+  /** This is the first error met; later ones are not kept. */
   private err: i32 | null = null;
 
   /** Begins a packet whose root is any one node, at `start` in `bytes`.
@@ -263,7 +263,7 @@ export class PacketWriter {
   }
 
   /** Takes `bytes` at the next multiple of `unit`, zeroing them and the
-   * padding before them. Returns where they begin, or -1 when they do not
+   * padding before them. It returns where they begin, or -1 when they do not
    * fit. */
   private reserve(unit: AlignUnit, bytes: number): number {
     if (this.err !== null) return -1;
@@ -597,8 +597,8 @@ export class PacketWriter {
     return end;
   }
 
-  /** `finish_or_throw`'s length, or -1 when the packet was refused, for a
-   * caller that only needs to know whether the packet fit. */
+  /** This answers `finish_or_throw`'s length, or -1 when the packet was
+   * refused, for a caller that only needs to know whether the packet fit. */
   finish(): number {
     try {
       return this.finish_or_throw();

@@ -1,11 +1,13 @@
 // @xpute/kit/collection/map.ts
 
 /**
- * An index from keys to dense positions. The keys sit in an array with no
- * holes, and an open-addressing table, with linear probing and backward-shift
- * deletion, finds a key's position. The map stores no values: a caller keeps
- * each entry's data in arrays of its own at the entry's position, and moves
- * that data when `remove_at` moves an entry.
+ * This is an index from keys to dense positions. The keys sit in an array with
+ * no holes, and an open-addressing table, with linear probing and
+ * backward-shift deletion, finds a key's position.
+ *
+ * The map stores no values: a caller keeps each entry's data in arrays of its
+ * own at the entry's position, and moves that data when `remove_at` moves an
+ * entry.
  */
 
 import type { i32, i64, numeric, u32, u64 } from "../abi/word.ts";
@@ -14,7 +16,7 @@ import { mix64 } from "../math/rng.ts";
 
 type KeyLane = I64Array | U32Array;
 
-export interface KeyTraits<K extends numeric> {
+export interface KeyType<K extends numeric> {
   readonly ctor: BigInt64ArrayConstructor | Uint32ArrayConstructor;
   norm(key: K): K;
   /**
@@ -29,14 +31,14 @@ export interface KeyTraits<K extends numeric> {
  * packed word, is folded into the signed range on the way in, so the same 64
  * bits always find the same entry. `key_at` returns the folded form.
  */
-export const I64_KEYS: KeyTraits<i64> = {
+export const I64_KEYS: KeyType<i64> = {
   ctor: BigInt64Array,
   norm: (k) => BigInt.asIntN(64, k),
   // Fibonacci hashing: the high half of k · 2^64/φ.
   hash: (k) => Number(BigInt.asUintN(64, k * 0x9e3779b97f4a7c15n) >> 32n),
 };
 
-export const U32_KEYS: KeyTraits<u32> = {
+export const U32_KEYS: KeyType<u32> = {
   ctor: Uint32Array,
   norm: (k) => k >>> 0,
   hash: (k) => Math.imul(k, 0x9e3779b1) >>> 0,
@@ -54,9 +56,9 @@ export class IndexedMap<K extends numeric> {
   private _mask: u32;
   private _size: u32 = 0;
 
-  private readonly _traits: KeyTraits<K>;
+  private readonly _traits: KeyType<K>;
 
-  constructor(traits: KeyTraits<K>, cap: u32 = 16) {
+  constructor(traits: KeyType<K>, cap: u32 = 16) {
     this._traits = traits;
     let sz = 2;
     while (sz < cap * 2) sz <<= 1;

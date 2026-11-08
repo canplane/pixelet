@@ -68,7 +68,7 @@ struct Open {
     bytes: Option<Vec<u8>>,
 }
 
-pub struct Files {
+pub struct Fs {
     open: BTreeMap<u32, Open>,
     asset: u32,
     catalog: u32,
@@ -92,8 +92,8 @@ fn catalog() -> Vec<u8> {
     hex::decode(hex).expect("the catalog is hex")
 }
 
-impl Files {
-    pub fn new() -> Files {
+impl Fs {
+    pub fn new() -> Fs {
         let ingest = spec::json("spec/spec/asset/ingest.json");
         let assets = ingest["files"]
             .as_array()
@@ -102,7 +102,7 @@ impl Files {
             .map(|f| f["path"].as_str().expect("a file's path").to_string())
             .collect();
         let flags = spec::json("xpute/spec/ipc/fs.json");
-        Files {
+        Fs {
             open: BTreeMap::new(),
             asset: spec::file_val(&["root", "ASSET"]),
             catalog: spec::file_val(&["CATALOG"]),

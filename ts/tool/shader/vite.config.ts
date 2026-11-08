@@ -3,11 +3,10 @@
 /**
  * The shader probe's dev server (probe.html). It serves each module as the
  * renderer assembles it, and the pipelines the renderer makes over them
- * (pxl-render examples/assembled.rs), at `/__assembled`. It also serves the
- * experiments' WGSL from the repository, and prints a device's console here
- * (@pxl/build/console.ts). Run `pnpm probe`, then open /probe.html on the
- * device. A device other than this machine must reach it over a tunnel,
- * because WebGPU needs a secure context.
+ * (pxl-render examples/assembled.rs), at `/__assembled`, and prints a device's
+ * console here (@pxl/build/console.ts). Run `pnpm probe`, then open
+ * /probe.html on the device. A device other than this machine must reach it
+ * over a tunnel, because WebGPU needs a secure context.
  */
 
 import { execFile } from "node:child_process";
@@ -21,9 +20,8 @@ import { defineConfig, type Plugin } from "vite";
 import { CONSOLE_PATH, consoleHandler } from "@pxl/build/console.ts";
 import { REPO } from "@pxl/build/path.ts";
 
-/** The renderer's modules by name, and the pipelines it makes over them.
- * They are assembled again at each ask: cargo rebuilds the example after a
- * shader is edited, and reuses it otherwise. */
+/** The modules are assembled again at each ask: cargo rebuilds the example
+ * after a shader is edited, and reuses it otherwise. */
 async function assembled(): Promise<{
   modules: Record<string, string>;
   pipelines: unknown[];

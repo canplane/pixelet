@@ -10,7 +10,7 @@ import type { Encode } from "./ipc/doorbell.ts";
 import { attach, connect } from "./remote.ts";
 import type { Runtime, Ui } from "./runtime.ts";
 
-/** A runtime that keeps what it is sent, each packet read back as its words,
+/** This runtime keeps what it is sent, each packet read back as its words,
  * and answers a request with its command plus one. */
 function runtime(): {
   rt: Runtime;
@@ -44,7 +44,7 @@ const two =
   (room) =>
     room.writer(2).u32(a).u32(b);
 
-/** A UI that keeps what comes down. */
+/** This UI keeps what comes down. */
 function ui(cmds: number[] = []): Ui & { heard: unknown[] } {
   const heard: unknown[] = [];
   return {

@@ -16,7 +16,7 @@
 //! The query is the only reader of a layer (ARCHITECTURE.md, "The query, the
 //! only seam"). The layers' reads (`Query`, `TerrainQuery`, `ObjectQuery`,
 //! `CpuClipmap`, the ways' pool) are named only here and in the layers, and
-//! none is re-exported (pxl-tool check_rules.rs `LAYER_READERS`). A public
+//! none is re-exported (pxl-tool rule.rs `LAYER_READERS`). A public
 //! `World` function answers from the composed world; an answer from one
 //! layer alone (`surface_of`) stays inside the query.
 

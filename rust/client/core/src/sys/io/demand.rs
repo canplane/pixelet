@@ -69,7 +69,7 @@ pub const PHASES_MAX: usize = demand_spec::TASK_PHASES_MAX as usize;
 /// The timings a run reports, each under the name the run gives it. A timing
 /// past `PHASES_MAX` is dropped.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Phases {
+pub struct PhaseList {
     items: [(TaskPhaseName, f64); PHASES_MAX],
     len: usize,
 }
@@ -157,16 +157,16 @@ impl PartialEq for Order {
 
 impl Eq for Order {}
 
-impl Default for Phases {
-    fn default() -> Phases {
-        Phases {
+impl Default for PhaseList {
+    fn default() -> PhaseList {
+        PhaseList {
             items: [(TaskPhaseName::net_ms, 0.0); PHASES_MAX],
             len: 0,
         }
     }
 }
 
-impl Phases {
+impl PhaseList {
     pub fn push(&mut self, name: TaskPhaseName, val: f64) {
         if self.len < PHASES_MAX {
             self.items[self.len] = (name, val);

@@ -2,15 +2,15 @@
 
 use crate::spec::NONE;
 
-/// A record's words, read in order.
-pub(super) struct Words<'w> {
+/// These are a record's words, read in order.
+pub(super) struct WordCursor<'w> {
     w: &'w [u32],
     at: usize,
 }
 
-impl<'w> Words<'w> {
-    pub(super) fn new(w: &'w [u32]) -> Words<'w> {
-        Words { w, at: 0 }
+impl<'w> WordCursor<'w> {
+    pub(super) fn new(w: &'w [u32]) -> WordCursor<'w> {
+        WordCursor { w, at: 0 }
     }
     pub(super) fn u(&mut self) -> u32 {
         let v = self.w[self.at];
@@ -26,7 +26,7 @@ impl<'w> Words<'w> {
     pub(super) fn flag(&mut self) -> bool {
         self.u() != 0
     }
-    /// A count, then that many words.
+    /// This reads a count, then that many words.
     pub(super) fn list(&mut self) -> &'w [u32] {
         let n = self.u() as usize;
         let words = &self.w[self.at..self.at + n];
@@ -36,7 +36,7 @@ impl<'w> Words<'w> {
     pub(super) fn opt(&mut self) -> Option<u32> {
         Some(self.u()).filter(|&v| v != NONE)
     }
-    /// A count, then the bytes padded to whole words.
+    /// This reads a count, then the bytes padded to whole words.
     pub(super) fn bytes(&mut self) -> &'w [u8] {
         let n = self.u() as usize;
         let words = &self.w[self.at..self.at + n.div_ceil(4)];

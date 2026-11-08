@@ -24,10 +24,10 @@ const KeyboardDock: ComponentType<KeyboardDockProps> = requireNativeView(
 );
 
 /**
- * A layer on a device that stands `inset` above an open keyboard. The native
- * view lifts the layer within the keyboard's own animation. Once the keyboard
- * is still, the native view reports the lift and the layout here takes it on,
- * so that presses hit-test where the layer is drawn.
+ * The layer stands `inset` above an open keyboard. The native view lifts it
+ * within the keyboard's own animation. Once the keyboard is still, the native
+ * view reports the lift and the layout here takes it on, so that presses
+ * hit-test where the layer is drawn.
  */
 export function AboveKeyboard({
   inset,

@@ -36,7 +36,7 @@ fn fresh() {
 }
 
 /// Every leaf the store holds, by key, with its text.
-fn held() -> Vec<(u128, u32, Option<String>)> {
+fn leaves() -> Vec<(u128, u32, Option<String>)> {
     let object = object();
     let mut out = Vec::new();
     object.each(&mut |e| {
@@ -97,7 +97,7 @@ fn top_file(rows: &[(u64, u32)]) -> Vec<u8> {
     let pkt = encoder()
         .encode(
             &tree,
-            TreeEncoderOptions {
+            TreeEncoderConfig {
                 init_cap: 1 << 10,
                 max_cap: None,
             },
@@ -132,7 +132,7 @@ fn shard_file_round_trip() {
     let own: Vec<_> = {
         fresh();
         apply(written());
-        held()
+        leaves()
             .into_iter()
             .filter(|&(key, _, _)| shard_of(key) == shard)
             .collect()
@@ -140,7 +140,7 @@ fn shard_file_round_trip() {
     assert_eq!(own.len(), 3);
     fresh();
     apply(decode_shard(shard, &shard_file(shard)).unwrap());
-    assert_eq!(held(), own);
+    assert_eq!(leaves(), own);
 }
 
 /// A file of another format, or another shard's file, is refused whole.
@@ -212,7 +212,7 @@ fn top_folds_until_shard_read() {
     fresh();
     admit(TOP, Some(&top_file(&rows))).unwrap();
     assert_eq!(object().word_at(shard.at), Some(rows[0].1));
-    assert!(held().is_empty());
+    assert!(leaves().is_empty());
     assert!(!holds(&shard.region()) && holds(&other.region()));
     want([shard, other].into_iter(), |_| Order::LAST);
     assert_eq!(state().wants.len(), 1);
@@ -220,7 +220,7 @@ fn top_folds_until_shard_read() {
     admit(shard.id(), Some(&shard_file(shard))).unwrap();
     assert!(holds(&shard.region()));
     assert_eq!(top_of(&written()[..3]), rows);
-    assert_eq!(held().len(), 3);
+    assert_eq!(leaves().len(), 3);
 }
 
 /// A file that does not decode is refused: it is named to the client, not

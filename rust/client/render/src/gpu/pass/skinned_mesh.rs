@@ -10,13 +10,13 @@
 
 use crate::frame::shader::record::PIPELINE_SKINNED;
 use crate::frame::shader::record::{PIPELINE_SKINNED_DEPTH, PIPELINE_SKINNED_MARK};
-use crate::gpu::draw::{DrawStats, Draws, DRAW_WORDS};
+use crate::gpu::draw::{DrawStat, DrawTable, DRAW_WORDS};
 
 use crate::gpu::api::{buf_entry, release, Format, Gpu, Image, Layout, Stencil, TrackedRenderPass};
-use crate::gpu::pass::mark::{put_whole, Marks};
+use crate::gpu::pass::mark::{put_whole, MarkPass};
 use crate::gpu::pass::model::{bind_mesh, draw_model, skin_group, skin_made, Stage};
-use crate::gpu::pipeline::{Pipeline, Pipelines};
-use crate::gpu::upload::Uploads;
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
+use crate::gpu::upload::UploadTable;
 
 pub struct SkinnedPass {
     lit: Pipeline,
@@ -27,11 +27,11 @@ pub struct SkinnedPass {
     draws_buf: u32,
     /// The skin image of each model, as the frame hands them (`set_skins`).
     skins: Vec<(u32, Image)>,
-    pub marks: Marks,
+    pub marks: MarkPass,
 }
 
 impl SkinnedPass {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> SkinnedPass {
+    pub fn new(g: &Gpu, pipelines: &mut PipelineCache, align: u32) -> SkinnedPass {
         SkinnedPass {
             lit: pipelines.build_world(g, PIPELINE_SKINNED),
             depth: pipelines.build_masked(
@@ -43,7 +43,7 @@ impl SkinnedPass {
             draws: [0; 2],
             draws_buf: 0,
             skins: Vec::new(),
-            marks: Marks::new(
+            marks: MarkPass::new(
                 g,
                 pipelines,
                 (PIPELINE_SKINNED_MARK, PIPELINE_SKINNED),
@@ -60,8 +60,13 @@ impl SkinnedPass {
 
     /// Draws this frame's marks into `pass`. `frames` holds their group 0 as
     /// they are and as they were, over the eye's or the light's frame words
-    /// and its tiles (tile_mark.wgsl, `Marks::draw`).
-    pub fn draw_marks(&self, pass: &mut TrackedRenderPass, frames: [u32; 2], uploads: &Uploads) {
+    /// and its tiles (tile_mark.wgsl, `MarkPass::draw`).
+    pub fn draw_marks(
+        &self,
+        pass: &mut TrackedRenderPass,
+        frames: [u32; 2],
+        uploads: &UploadTable,
+    ) {
         self.marks.draw(pass, frames, |pass, d, palette| {
             let Some((mesh, vertex_cnt, idx_cnt)) = uploads.get(d[0]) else {
                 return;
@@ -75,7 +80,7 @@ impl SkinnedPass {
         });
     }
 
-    /// Pushes onto `out` the uploads `draws` read (`Marks::reads`).
+    /// Pushes onto `out` the uploads `draws` read (`MarkPass::reads`).
     pub fn marks_read<'a>(
         &self,
         draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
@@ -86,7 +91,7 @@ impl SkinnedPass {
 
     /// Adds the pass's draws to `stats`. Each counts its model's triangles, or
     /// 0 while its mesh is landing.
-    pub fn count(&self, draws: &Draws, uploads: &Uploads, stats: &mut DrawStats) {
+    pub fn count(&self, draws: &DrawTable, uploads: &UploadTable, stats: &mut DrawStat) {
         draws.count(PIPELINE_SKINNED, stats, |d| {
             uploads.get(d[0]).map_or(0, |(_, _, idx_cnt)| idx_cnt / 3)
         });
@@ -128,7 +133,7 @@ impl SkinnedPass {
         &mut self,
         g: &Gpu,
         draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
-        uploads: &mut Uploads,
+        uploads: &mut UploadTable,
     ) {
         for d in draws {
             uploads.group(g, d[1]);
@@ -138,7 +143,7 @@ impl SkinnedPass {
         }
     }
 
-    /// Draws the characters at `stage`: lit, or their depth seen from the sun.
+    /// Draws the characters at `stage`: lit, or their depth seen from the light.
     /// `frame` is the group 0 the stage reads. The list's uniforms are bound
     /// once (`set_draws`). Each character is drawn as the instance its slot
     /// names, and its vertices read their draw at that slot
@@ -147,7 +152,7 @@ impl SkinnedPass {
         &self,
         pass: &mut TrackedRenderPass,
         draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
-        uploads: &mut Uploads,
+        uploads: &mut UploadTable,
         stage: Stage,
         frame: u32,
     ) {

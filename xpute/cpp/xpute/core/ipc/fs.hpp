@@ -1,8 +1,8 @@
 // cpp/xpute/core/ipc/fs.hpp
 
-// The core's end of the file device, as ipc/fs.json numbers it: a
-// descriptor, and what one descriptor posts in a turn. The file calls are
-// `Door`'s (ipc/door.hpp), and `Files` keeps the owner of each open
+// This header holds the core's end of the file device, as ipc/fs.json numbers
+// it: a descriptor, and what one descriptor posts in a turn. The file calls are
+// `Door`'s (ipc/door.hpp), and `FileTable` keeps the owner of each open
 // (ipc/file.hpp).
 
 #pragma once

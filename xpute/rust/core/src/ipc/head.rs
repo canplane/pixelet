@@ -1,8 +1,8 @@
 // xpute-core/ipc/head.rs
 
-//! The header of the memory's front (spec/ipc/head.json; the front is
-//! described in machine.rs). A runtime writes these words in the page past
-//! the stack before the first turn, and they say where the rings and the GPU
+//! `Head` is the header of the memory's front (spec/ipc/head.json; the front is
+//! described in machine.rs). A runtime writes these words in the page past the
+//! stack before the first turn, and they say where the rings and the GPU
 //! stream it laid out lie. A core of a machine checks the header against the
 //! machine's numbers (machine.rs `boot`). A core that lays out its own front,
 //! as the conformance core does, writes the header itself (`write`).
@@ -26,7 +26,6 @@ pub struct Head {
 }
 
 impl Head {
-    /// Every word, in the header's order.
     pub const fn words(&self) -> [u32; spec::WORDS as usize] {
         let mut w = [0; spec::WORDS as usize];
         w[word::MAGIC as usize] = spec::MAGIC;
@@ -40,8 +39,6 @@ impl Head {
     }
 }
 
-/// Writes `head`'s words at `at` in `mem`.
-///
 /// # Safety
 /// The header's words at `at` must be valid, and nothing else may hold them
 /// while they are written.

@@ -93,7 +93,7 @@ impl Cost {
 
 /// The two knobs: the interval between turns in ms, and the scale's step,
 /// where step 0 draws whole.
-type Knobs = (f64, i32);
+type Setpoint = (f64, i32);
 
 /// `auto`'s judge: the scale's step and the window being judged.
 ///
@@ -182,7 +182,7 @@ impl Judge {
     }
 
     /// The knobs one step down, or None when neither can go lower.
-    fn down(&self, pace: &Pace, timed: bool) -> Option<Knobs> {
+    fn down(&self, pace: &Pace, timed: bool) -> Option<Setpoint> {
         if timed && pace.may_slow() {
             Some((pace.paced_ms + pace.refresh_ms, self.step))
         } else if self.step < param::RES_STEPS {
@@ -194,7 +194,7 @@ impl Judge {
 
     /// The knobs one step up, or None when the world is drawn whole at the
     /// display's rate.
-    fn up(&self, pace: &Pace) -> Option<Knobs> {
+    fn up(&self, pace: &Pace) -> Option<Setpoint> {
         if self.step > 0 {
             Some((pace.paced_ms, self.step - 1))
         } else if pace.slowed() {
@@ -218,7 +218,13 @@ impl Judge {
     /// summing to `budget_ms`, would have at the knobs `(paced_ms, step)`. The
     /// rest stays as it is, the per-pixel time scales by the pixel count there
     /// over here, and the budget by a frame's budget there over here.
-    fn predicted(&self, cost: Cost, budget_ms: f64, pace: &Pace, (paced_ms, step): Knobs) -> f64 {
+    fn predicted(
+        &self,
+        cost: Cost,
+        budget_ms: f64,
+        pace: &Pace,
+        (paced_ms, step): Setpoint,
+    ) -> f64 {
         let px = libm::pow(share(step) / share(self.step), 2.0);
         let rate = budget(pace.paced_ms) / budget(paced_ms);
         (cost.rest_ms + cost.px_ms * px) * rate / budget_ms
@@ -228,7 +234,7 @@ impl Judge {
     /// took one. At the window's end it judges the window and moves at most
     /// one knob by one step. It returns the knobs it moved to, if it moved
     /// one.
-    fn judge(&mut self, cost: Option<Cost>, pace: &Pace, timed: bool) -> Option<Knobs> {
+    fn judge(&mut self, cost: Option<Cost>, pace: &Pace, timed: bool) -> Option<Setpoint> {
         let budget_ms = budget(pace.paced_ms);
         self.window_ms += budget_ms;
         if let Some(cost) = cost {
@@ -381,10 +387,10 @@ pub fn load(pace: Pace, gpu: Option<GpuRead>) -> Option<f64> {
     } else if started {
         k.restart();
     } else if pace.moving && pace.paced_ms > 0.0 && s.render_px() == (s.width, s.height) {
-        let drawn = f64::from(s.width) * f64::from(s.height);
+        let px = f64::from(s.width) * f64::from(s.height);
         let timed = api::device().is_some_and(|d| d.timestamps);
         let cost = if timed {
-            gpu.filter(|t| t.busy_ms > 0.0 && t.px > 0.0 && t.px == drawn)
+            gpu.filter(|t| t.busy_ms > 0.0 && t.px > 0.0 && t.px == px)
                 .map(|t| {
                     let px_ms = t.px_ms();
                     Cost {

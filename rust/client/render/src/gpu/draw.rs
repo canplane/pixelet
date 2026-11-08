@@ -161,7 +161,7 @@ pub const DRAW_PIPELINES: [u32; 9] = [
 ];
 
 /// The draws and triangles counted for each pipeline, by its place in `DRAW_PIPELINES`.
-pub type DrawStats = [[f64; 2]; DRAW_PIPELINES.len()];
+pub type DrawStat = [[f64; 2]; DRAW_PIPELINES.len()];
 
 /// `pipeline`'s place in `DRAW_PIPELINES`; a draw naming another is a bug.
 fn stats_slot(pipeline: u32) -> usize {
@@ -177,14 +177,14 @@ pub const REWRITE_WORDS: usize = 4;
 /// The uploads' and the frees' arrays in `.fixed.uploads` (gpu/upload.rs `set_uploads`),
 /// each twice: one being written and one the renderer took. Each has room for as many records
 /// as there are live uploads, because a turn's uploads become live and its frees were live.
-struct ListArrays {
+struct ListMemory {
     uploads: [&'static mut [u32]; 2],
     frees: [&'static mut [u32]; 2],
 }
 
-static LIST_ARRAYS: Global<ListArrays> = Global::new();
+static LIST_ARRAYS: Global<ListMemory> = Global::new();
 
-fn list_arrays() -> &'static mut ListArrays {
+fn list_arrays() -> &'static mut ListMemory {
     LIST_ARRAYS.get(|| xpute_kit::bug!(ENOTRECOVERABLE))
 }
 
@@ -202,7 +202,7 @@ pub unsafe fn set_lists(at: usize, live: usize) {
         core::slice::from_raw_parts_mut(mem::at::<u32>(at + from * 4), words)
     };
     let (u, f) = (UPLOAD_WORDS * live, live);
-    LIST_ARRAYS.set(ListArrays {
+    LIST_ARRAYS.set(ListMemory {
         uploads: [arr(0, u), arr(u, u)],
         frees: [arr(2 * u, f), arr(2 * u + f, f)],
     });
@@ -256,7 +256,7 @@ pub fn scaled_draw(
 }
 
 /// A draw the turn changed: its slot, and the draw as the turn before left it, None where this
-/// turn drew it first. What it is now is read from the list (`Draws::now`), which gives None
+/// turn drew it first. What it is now is read from the list (`DrawTable::now`), which gives None
 /// where this turn let it go.
 #[derive(Clone, Copy, Debug)]
 pub struct Change {
@@ -295,7 +295,7 @@ pub struct DrawList {
     frees: usize,
     rewrites: Vec<u32>,
     next_handle: u32,
-    taken: Vec<u32>,
+    taken_rewrites: Vec<u32>,
     /// Each pipeline's records. Those this turn has set come first, in the order it set them,
     /// which is the order they are drawn in; `set` counts them.
     records: [Vec<[u32; DRAW_WORDS]>; DRAW_PIPELINES.len()],
@@ -396,11 +396,11 @@ impl ReceiverBox {
     }
 }
 
-pub struct Lists<'a> {
+pub struct DrawUpdate<'a> {
     pub uploads: &'a [u32],
     pub rewrites: &'a [u32],
     pub frees: &'a [u32],
-    pub draws: Draws<'a>,
+    pub draws: DrawTable<'a>,
     /// What the turn changed of the draws (`Change`), and whether it drew any
     /// in another order.
     pub changes: &'a [Change],
@@ -413,7 +413,7 @@ pub struct Lists<'a> {
 /// The draws as a turn left them: each pipeline's records in the order they are drawn, and
 /// each record's uniform at its slot (`uniform_of`), handed where they lie.
 #[derive(Clone, Copy)]
-pub struct Draws<'a> {
+pub struct DrawTable<'a> {
     records: &'a [Vec<[u32; DRAW_WORDS]>; DRAW_PIPELINES.len()],
     slots: &'a [Slot],
     pub uniforms: &'a [f32],
@@ -421,7 +421,7 @@ pub struct Draws<'a> {
     drifting: u32,
 }
 
-impl<'a> Draws<'a> {
+impl<'a> DrawTable<'a> {
     pub fn of(&self, pipeline: u32) -> core::slice::Iter<'a, [u32; DRAW_WORDS]> {
         self.records
             .get(pipeline as usize)
@@ -433,7 +433,7 @@ impl<'a> Draws<'a> {
     pub fn count(
         &self,
         pipeline: u32,
-        stats: &mut DrawStats,
+        stats: &mut DrawStat,
         triangles: impl Fn(&[u32; DRAW_WORDS]) -> u32,
     ) {
         let c = &mut stats[stats_slot(pipeline)];
@@ -455,7 +455,7 @@ impl<'a> Draws<'a> {
         Some((d, u))
     }
 
-    /// Whether the turn changed the draw at `slot` (`Lists::changes`).
+    /// Whether the turn changed the draw at `slot` (`DrawUpdate::changes`).
     pub fn changed(&self, slot: u32) -> bool {
         self.slots
             .get(slot as usize)
@@ -833,7 +833,7 @@ impl DrawList {
     /// Hands the turn's lists to the renderer. The draws the turn did not set are let go, and
     /// the turn's changes are handed with the lists. The next turn's uploads, rewrites, frees
     /// and changes start empty, on the lists' other side.
-    pub fn take(&mut self) -> Lists<'_> {
+    pub fn take(&mut self) -> DrawUpdate<'_> {
         for p in 0..DRAW_PIPELINES.len() {
             while self.records[p].len() > self.set[p] {
                 let Some(d) = self.records[p].pop() else {
@@ -859,14 +859,14 @@ impl DrawList {
         self.begun = false;
         let (side, uploads, frees) = (self.side, self.uploads, self.frees);
         (self.side, self.uploads, self.frees) = (1 - side, 0, 0);
-        core::mem::swap(&mut self.taken, &mut self.rewrites);
+        core::mem::swap(&mut self.taken_rewrites, &mut self.rewrites);
         self.rewrites.clear();
         let l = list_arrays();
-        Lists {
+        DrawUpdate {
             uploads: &l.uploads[side][..uploads],
-            rewrites: &self.taken,
+            rewrites: &self.taken_rewrites,
             frees: &l.frees[side][..frees],
-            draws: Draws {
+            draws: DrawTable {
                 records: &self.records,
                 slots: &self.slots,
                 uniforms: &self.uniforms,

@@ -215,7 +215,7 @@ impl EnvironmentDraw {
     pub fn observe(&mut self, unix_ms: f64) -> f64 {
         let first = *self.first_ms.get_or_insert(unix_ms);
         let at = self.sky_anchor();
-        let (sky_ms, held) = sky_clock(settings().sky_time, unix_ms, at[0]);
+        let (sky_ms, fixed) = sky_clock(settings().sky_time, unix_ms, at[0]);
         let heights = |days: f64| heights(days, at);
         let step = steps();
         // The time at which each light's height will have moved a step, at
@@ -253,7 +253,7 @@ impl EnvironmentDraw {
             animation::note_animation();
         }
         self.drift = drift((clouds - first) / 1000.0);
-        let sky_in = if held {
+        let sky_in = if fixed {
             f64::INFINITY
         } else {
             rate(sky, f64::INFINITY) - sky_ms

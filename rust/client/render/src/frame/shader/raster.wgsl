@@ -43,7 +43,7 @@ struct Raster {
   // texel (0, 0) starts, in units from `origin`.
   first: vec4f,
   // The Q3 position the boxes are laid from: the eye's origin, or where the ray of box texel
-  // (0, 0) starts (pxl-engine `light::Starts::start`).
+  // (0, 0) starts (pxl-engine `light::StartGrid::start`).
   origin: vec4i,
 };
 

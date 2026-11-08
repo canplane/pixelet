@@ -27,22 +27,22 @@ fn node_answer(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32
     let first = bucket_of(zoom, c);
     var other = NONE;
     for (var k = 0u; k < BUCKET; k += 1u) {
-      let held = node_cache[key_at(first + k)];
-      if (held == 0u) {
+      let key = node_cache[key_at(first + k)];
+      if (key == 0u) {
         continue;
       }
       let w = entry_at(first + k);
       // A claimed key matches no zoom pair a walk asks and no cell, so it is passed over
       // (pxl-engine `node_cache::CLAIMED`).
-      let kept = holds_for(held, zoom, zooms);
-      if (!kept && (node_cache[w + W_KIND] & KIND_MASK) != KIND_SPLIT) {
+      let holds = holds_for(key, zoom, zooms);
+      if (!holds && (node_cache[w + W_KIND] & KIND_MASK) != KIND_SPLIT) {
         continue;
       }
       let n = vec4<u32>(node_cache[w + W_NODE], node_cache[w + W_NODE + 1u], node_cache[w + W_NODE + 2u], node_cache[w + W_NODE + 3u]);
       if (any(n != node)) {
         continue;
       }
-      if (!kept) {
+      if (!holds) {
         other = w;
         continue;
       }

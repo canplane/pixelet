@@ -176,7 +176,6 @@ export const textStyle = {
     lineHeight: 18,
     fontWeight: weight.regular,
   },
-  /** The words of a notice, such as a toast or an item's name. */
   notice: {
     fontSize: 13,
     lineHeight: 18,

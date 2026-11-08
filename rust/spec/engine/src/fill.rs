@@ -13,7 +13,7 @@
 use crate::answer;
 use crate::area::Shard;
 use crate::clipmap::{
-    self, column_top, Bricks, Presence, BOUNDS_AT, BOUND_ENTRY_WORDS, BRICK, BRICK_CELLS,
+    self, column_top, BrickSource, Presence, BOUNDS_AT, BOUND_ENTRY_WORDS, BRICK, BRICK_CELLS,
     COLUMNS_AT, OWN_AT, OWN_CELLS, ROOT_AT, SPANS_ACROSS, SPANS_AT, SPANS_COLUMNS,
     SPANS_COLUMN_WORDS,
 };
@@ -54,7 +54,7 @@ pub fn root_of(ground: &[u32], base: u32) -> u32 {
 /// `cell_zoom`, read from the whole bound of its levels (`way::tree::span`): the Z of the
 /// first and how many there are, which is what the root of its ways' tree holds.
 pub fn root_span(ground: &[u32], base: u32, cell_zoom: Zoom) -> (i32, u32) {
-    let ways = ground::bounds_of(mip_of(ground, base, clipmap::BRICK_MIPS, [0, 0]))[1];
+    let ways = ground::extent_of(mip_of(ground, base, clipmap::BRICK_MIPS, [0, 0]))[1];
     way::tree::span(ways, cell_zoom)
 }
 
@@ -70,7 +70,7 @@ impl Presence for LoneBrick<'_> {
     }
 }
 
-impl Bricks for LoneBrick<'_> {
+impl BrickSource for LoneBrick<'_> {
     /// A brick on its own belongs to no clip level.
     fn brick(&self, _: u32, _: u32) -> ([i32; 2], bool) {
         ([0; 2], false)
@@ -115,7 +115,7 @@ impl Scratch<'_> {
     }
 }
 
-impl way::ColumnSpans for Scratch<'_> {
+impl way::SpanTable for Scratch<'_> {
     fn header(&self, c: [i32; 2]) -> (i32, u32) {
         let w = at(self.words, self.column(c));
         let face = w as i32 >> 16;
@@ -143,7 +143,7 @@ pub const SPANS_CNT: u32 = SPANS_PAST - 1;
 pub const SPANS_PAST: u32 = 0x8000;
 
 /// The head word of a column's spans (`clipmap::SPANS_COLUMN_WORDS`).
-fn header_word(s: &way::Spans, fits: bool) -> u32 {
+fn header_word(s: &way::SpanList, fits: bool) -> u32 {
     let face = if s.face == i32::MIN {
         i16::MIN as i32
     } else {
@@ -260,7 +260,7 @@ pub fn keep(sq: &impl clipmap::Brick, scratch: &mut [u32], i: u32) -> u32 {
     let c = [(i % SPANS_ACROSS) as i32 - 1, (i / SPANS_ACROSS) as i32 - 1];
     let edge = |v: i32| v == -1 || v == BRICK as i32;
     let (s, fits) = if edge(c[0]) && edge(c[1]) {
-        (way::Spans::NONE, true)
+        (way::SpanList::NONE, true)
     } else {
         way::column(sq, c)
     };
@@ -269,8 +269,8 @@ pub fn keep(sq: &impl clipmap::Brick, scratch: &mut [u32], i: u32) -> u32 {
     let mut j = 0;
     while j < s.n as usize {
         let w = at + 1 + 2 * j as u32;
-        let held = |v: i32| v.clamp(i16::MIN as i32, i16::MAX as i32);
-        let run = [held(s.run[j][0]), held(s.run[j][1])];
+        let clamp16 = |v: i32| v.clamp(i16::MIN as i32, i16::MAX as i32);
+        let run = [clamp16(s.run[j][0]), clamp16(s.run[j][1])];
         put(scratch, w, answer::bound_word(run) as u32);
         put(scratch, w + 1, s.val[j]);
         j += 1;
@@ -284,7 +284,7 @@ pub fn keep(sq: &impl clipmap::Brick, scratch: &mut [u32], i: u32) -> u32 {
 
 /// Entry `[x, y]` of level `j` of the brick at `base`, whose cells are at `cell_zoom`. At
 /// level 0 it is column `[x, y]`'s own entry: its ground's top, and the leaf cells the ways
-/// write in it, from the spans its fill kept (`way::lined_hull`; `ground::Bounds`). At a
+/// write in it, from the spans its fill kept (`way::lined_hull`; `ground::Extent`). At a
 /// higher level it is joined over the level under it, which is written first
 /// (`clipmap::join`). A bore's air counts only as far up as the column's top, as the ways
 /// write it: the cells of the brick's ways tree under the top lie in the bound (`way::tree`),
@@ -294,7 +294,7 @@ pub fn keep(sq: &impl clipmap::Brick, scratch: &mut [u32], i: u32) -> u32 {
 pub fn mip(
     ground: &mut [u32],
     base: u32,
-    spans: &impl way::ColumnSpans,
+    spans: &impl way::SpanTable,
     cell_zoom: Zoom,
     j: u32,
     at: [u32; 2],
@@ -302,7 +302,7 @@ pub fn mip(
     let w = if j == 0 {
         let top = column_top(column_of(ground, base, clipmap::idx_of(at)));
         let lines = way::lined_hull(spans, [at[0] as i32, at[1] as i32], cell_zoom, top);
-        ground::bounds_word([[top, top], lines])
+        ground::extent_word([[top, top], lines])
     } else {
         let under: &[u32] = ground;
         clipmap::join(
@@ -473,7 +473,7 @@ mod tests {
             for i in 0..SPANS_COLUMNS {
                 let c = [(i % SPANS_ACROSS) as i32 - 1, (i / SPANS_ACROSS) as i32 - 1];
                 let top = tops[i as usize];
-                let mut s = way::Spans::NONE;
+                let mut s = way::SpanList::NONE;
                 s.face = ground::face_cell(
                     cell_zoom,
                     ground::face_height(cell_zoom, ground::cells(cell_zoom, top as f32)),
@@ -510,13 +510,13 @@ mod tests {
                 at: 0,
             };
             let mut pool = vec![0u32; 16 * (tree::BRICK_CHILD_GROUPS as usize + 1)];
-            let [used, held, root] = tree(&lane, &scratch, cell_zoom, &mut pool, 1);
-            assert!(used != u32::MAX && held <= used, "round {round}: refused");
+            let [used, cnt, root] = tree(&lane, &scratch, cell_zoom, &mut pool, 1);
+            assert!(used != u32::MAX && cnt <= used, "round {round}: refused");
             let p = Read(&pool);
             // The tree laid again into a pool shared with another tree, past that tree's groups, in the
-            // fewest child groups it holds (`held`).
-            let (at, mut order) = (3, vec![0; held as usize + 1]);
-            let mut shared = vec![0u32; 16 * (at + held) as usize];
+            // fewest child groups it holds (`cnt`).
+            let (at, mut order) = (3, vec![0; cnt as usize + 1]);
+            let mut shared = vec![0u32; 16 * (at + cnt) as usize];
             let laid_root = if root == 0 {
                 0
             } else {

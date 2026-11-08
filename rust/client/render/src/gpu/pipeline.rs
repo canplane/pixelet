@@ -34,9 +34,9 @@ const LAYOUTS: usize = PIPELINES as usize * BIND_GROUPS + COMPUTES as usize;
 /// it as it is made.
 const PIPELINE_CAP: usize = 118;
 
-pub struct Pipelines {
+pub struct PipelineCache {
     modules: [u32; SHADERS as usize],
-    /// The shaders whose module is made, the first `modules_made` by kind.
+    /// How many shaders have their module made. They are the first ones in order of kind.
     modules_made: u32,
     layouts: [(u64, Layout); LAYOUTS],
     layout_len: usize,
@@ -52,7 +52,7 @@ pub struct Pipelines {
     made_cnt: usize,
 }
 
-impl Default for Pipelines {
+impl Default for PipelineCache {
     fn default() -> Self {
         Self::new()
     }
@@ -66,9 +66,9 @@ fn fold(key: u64, word: u32) -> u64 {
     (key ^ word as u64).wrapping_mul(0x100000001b3)
 }
 
-impl Pipelines {
+impl PipelineCache {
     pub fn new() -> Self {
-        Pipelines {
+        PipelineCache {
             modules: [0; SHADERS as usize],
             modules_made: 0,
             layouts: [(0, Layout::default()); LAYOUTS],

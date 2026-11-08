@@ -13,7 +13,7 @@ use crate::clipmap::{
 };
 use crate::content::Sample;
 use crate::fill::{column_of, mip_of, own_of, put, root_of, LoneBrick};
-use crate::ground::Bounds;
+use crate::ground::Extent;
 use crate::support::{asset, column_surface};
 use crate::SHARD_ZOOM;
 use std::{vec, vec::Vec};
@@ -57,7 +57,7 @@ impl Presence for Clipmap<'_> {
     }
 }
 
-impl Bricks for Clipmap<'_> {
+impl BrickSource for Clipmap<'_> {
     fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool) {
         self.rows[((cell_zoom - FIRST_CELL_ZOOM) * ENTRIES + entry) as usize].brick()
     }
@@ -101,7 +101,7 @@ impl ground::Resident for Clipmap<'_> {
         place: &mut Lookup,
         cells: [Zoom; 2],
         (zoom, c): (Zoom, [i32; 3]),
-    ) -> (Bounds, bool) {
+    ) -> (Extent, bool) {
         let (r, _, here) = bound_over(self, place, cells, (zoom, [c[0], c[1]]));
         (r, here)
     }
@@ -113,7 +113,7 @@ impl ground::Resident for Clipmap<'_> {
 /// Nothing placed and no ways.
 struct Nothing;
 
-impl Columns for Nothing {
+impl Table for Nothing {
     fn first_child(&self, _: u32) -> u32 {
         0
     }
@@ -196,7 +196,7 @@ fn clipmap() -> (Vec<Entry>, Vec<u32>) {
                 let w = &mut ground[(base + OWN_AT + i / OWN_CELLS) as usize];
                 *w |= (Sample::GROUND) << (8 * (i % OWN_CELLS));
                 let e = base + BOUNDS_AT + BOUND_ENTRY_WORDS * mip_idx(0, [x, y]);
-                let b = ground::bounds_word([[top, top], ground::EMPTY]);
+                let b = ground::extent_word([[top, top], ground::EMPTY]);
                 put(&mut ground, e, b[0] as u32);
                 put(&mut ground, e + 1, b[1] as u32);
             }
@@ -363,7 +363,7 @@ impl Presence for WestOf<'_> {
     }
 }
 
-impl Bricks for WestOf<'_> {
+impl BrickSource for WestOf<'_> {
     fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool) {
         self.0.brick(cell_zoom, entry)
     }
@@ -488,7 +488,7 @@ fn cell_answer_takes_no_zooms() {
 /// `cell_answer_takes_no_zooms` over the clip levels `w`, returning how many answers of each
 /// kind it asked.
 fn answers_take_no_zooms(w: Clipmap<'_>) -> [u32; 3] {
-    let mut held = w;
+    let mut resident = w;
     let mut asking = Asking { w };
     let (first, _) = w.origin(CELL_ZOOM);
     let mut kinds = [0u32; 3];
@@ -513,7 +513,7 @@ fn answers_take_no_zooms(w: Clipmap<'_>) -> [u32; 3] {
                 let c = object::ancestor_at(CELL_ZOOM, leaf, CELL_ZOOM - zoom);
                 let mut alone = Inheritance::of(&Nothing, (zoom, c));
                 let base = node(
-                    &mut held,
+                    &mut resident,
                     &w,
                     &Nothing,
                     &Nothing,
@@ -540,7 +540,7 @@ fn answers_take_no_zooms(w: Clipmap<'_>) -> [u32; 3] {
                         let near = z + 1 + take(CELL_ZOOM + 2 - z);
                         let far = take(near + 1);
                         let got = node(
-                            &mut held,
+                            &mut resident,
                             &w,
                             &Nothing,
                             &Nothing,
@@ -570,7 +570,7 @@ fn answers_take_no_zooms(w: Clipmap<'_>) -> [u32; 3] {
                     let far = take(near + 1);
                     let mut mine = at;
                     let got = node(
-                        &mut held,
+                        &mut resident,
                         &w,
                         &Nothing,
                         &Nothing,

@@ -195,7 +195,7 @@ export interface Snapshot {
   refused_files: RefusedFile[];
   /** Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the runtime's to say. */
   stall: Message | null;
-  /** How much of what the renderer makes before its first frame is made, 0 to 1 (pxl-render gpu/pipeline.rs `Pipelines::share`): the pipelines made of those asked for, in whatever order they finish, 0 before any is asked; 1 once it draws, 0 again while a lost device's next renderer is made. The loading bar is the UI's to draw of it. */
+  /** How much of what the renderer makes before its first frame is made, 0 to 1 (pxl-render gpu/pipeline.rs `PipelineCache::share`): the pipelines made of those asked for, in whatever order they finish, 0 before any is asked; 1 once it draws, 0 again while a lost device's next renderer is made. The loading bar is the UI's to draw of it. */
   renderer_progress: f64;
   /** How much of the view's ground shows, 0 to 1: of the tiles asked for, those with an answer or drawn coarser. 0 where none is asked yet, 1 once the area is shown; it goes back as more is asked for. */
   area_progress: f64;
@@ -310,7 +310,6 @@ export function read_division_part(b: BranchCursor): DivisionPart {
   };
 }
 
-/** A file the core refused, as it opened it. */
 export interface RefusedFile {
   /** file.json's `root`. */
   root: u32;
@@ -593,7 +592,6 @@ export function read_ui_snapshot(b: BranchCursor): UiSnapshot {
 
 /** Command.UI_VIEW's packet. */
 export interface UiView {
-  /** The view's azimuth. */
   azimuth: f64;
   /** The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the UI's to make of it; which division names show, the core's (`DivisionPart.shown`). */
   m_per_px: f64;
@@ -760,9 +758,7 @@ export type UiExports = ReturnType<typeof ui_exports>;
 /** What the program does with each command the core posts on the ui protocol; a
  * call's answer is its return. */
 export interface UiImports {
-  /** Start watching. */
   sensor_start(e: SensorStart): void;
-  /** Stop watching. */
   sensor_stop(e: SensorStop): void;
   /** The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
    * block the core holds, valid until the next snapshot. */

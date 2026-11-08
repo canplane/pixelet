@@ -5,7 +5,7 @@
 // (record_hits.wgsl) each call `observe_hit`. A stop finds its node's entry (record.wgsl
 // `find`), marks the entry whole where it stopped on it whole, and sets the face its ray
 // entered. The first stop to enter a face asks the faces' pass (face.wgsl) for that face's
-// word, with an ask laid among the asks it is handed (`Asks`).
+// word, with an ask laid among the asks it is handed (`AskList`).
 
 /// The node cache. A stop sets its entry's state (`node_cache::STATES_AT`) with atomics,
 /// because many stops on one node set it at once.
@@ -38,7 +38,7 @@ struct Hit {
 /// among the raster's (`RASTER_ASKED_AT` or `RASTER_HIT_ASKED_AT`), `at` the first word of
 /// their list among the beam rays' words, and `cap` the most asks the list holds. A `cap` of 0
 /// means the observer reads no face's word.
-struct Asks {
+struct AskList {
   args: u32,
   at: u32,
   cap: u32,
@@ -81,7 +81,7 @@ fn node_at(k: u32, origin: vec3<i32>) -> Node {
 /// `asks` whose target is the entry's word (`record::TO_RECORD`). An observer that reads no
 /// words, which is the light, sets only the side, and writes a box's word the first time it
 /// sets the side.
-fn observe(p: Hit, slot: u32, asks: Asks) {
+fn observe(p: Hit, slot: u32, asks: AskList) {
   let bit = 1u << p.face;
   let asked = bit << RECORD_ASKED_SHIFT;
   let reads = asks.cap != 0u;
@@ -125,7 +125,7 @@ fn observe(p: Hit, slot: u32, asks: Asks) {
 /// whole, the entry is set whole (`RECORD_WHOLE`). That is a fact of the world, so the first
 /// ray of either observer to stop on the node whole sets it. Then the stop's face is set
 /// (`observe`).
-fn observe_hit(k: Node, p: Hit, asks: Asks) {
+fn observe_hit(k: Node, p: Hit, asks: AskList) {
   let slot = find(k.zoom, idx_of(k.corner, k.zoom, k.roots, vec3<i32>(0i)), p.asset, p.lacks);
   if (slot == NO_ENTRY) {
     return;

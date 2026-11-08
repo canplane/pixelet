@@ -34,7 +34,7 @@ enum class Major : std::uint32_t {
 
 } // namespace xpute::abi::gpu
 
-template <> struct xpute::Members<xpute::abi::gpu::Major> {
+template <> struct xpute::EnumInfo<xpute::abi::gpu::Major> {
     static constexpr std::array<xpute::abi::gpu::Major, 1> ALL{xpute::abi::gpu::Major::GPU};
 };
 
@@ -49,7 +49,7 @@ enum class GpuMinor : std::uint32_t {
 
 } // namespace xpute::abi::gpu
 
-template <> struct xpute::Members<xpute::abi::gpu::GpuMinor> {
+template <> struct xpute::EnumInfo<xpute::abi::gpu::GpuMinor> {
     static constexpr std::array<xpute::abi::gpu::GpuMinor, 4> ALL{xpute::abi::gpu::GpuMinor::READY, xpute::abi::gpu::GpuMinor::SURFACE_OPEN, xpute::abi::gpu::GpuMinor::SURFACE_RESIZE, xpute::abi::gpu::GpuMinor::SURFACE_CLOSE};
 };
 
@@ -75,7 +75,7 @@ enum class Command : std::uint32_t {
 
 } // namespace xpute::abi::gpu
 
-template <> struct xpute::Members<xpute::abi::gpu::Command> {
+template <> struct xpute::EnumInfo<xpute::abi::gpu::Command> {
     static constexpr std::array<xpute::abi::gpu::Command, 4> ALL{xpute::abi::gpu::Command::GPU_READY, xpute::abi::gpu::Command::GPU_SURFACE_OPEN, xpute::abi::gpu::Command::GPU_SURFACE_RESIZE, xpute::abi::gpu::Command::GPU_SURFACE_CLOSE};
 };
 

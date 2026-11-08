@@ -16,7 +16,6 @@ fn from_anchor(i: u32, axis: u32) -> f32 {
   return f32(select(d, wrap_idx(LEAF_CELL_ZOOM, d), axis == 0u));
 }
 
-/// `decor_compact_cs` for the record at word `i`.
 fn compact_one(i: u32) {
   let w = records[i];
   let region = w >> DRAWN_REGION_SHIFT;
@@ -41,7 +40,7 @@ fn compact_one(i: u32) {
 
 @compute @workgroup_size(LANES)
 fn decor_compact_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_invocation_id) lane: vec3<u32>) {
-  if (!is_held(group.x)) {
+  if (!is_valid(group.x)) {
     return;
   }
   for (var k = lane.x; k < RUNS; k += LANES) {

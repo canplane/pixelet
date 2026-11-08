@@ -21,7 +21,7 @@ const fn slots_of(live: usize) -> usize {
 /// The uploads, found by the list's handle in an open-addressed table in `.fixed.uploads`.
 /// The heap holds the bytes and the device holds a copy, so a lost device is restored from the
 /// addresses.
-pub struct Uploads {
+pub struct UploadTable {
     handle: &'static mut [u32],
     at: &'static mut [u32],
     len: &'static mut [u32],
@@ -65,7 +65,7 @@ pub unsafe fn set_uploads(at: u32, live: usize) {
     let column = |k: usize| unsafe {
         core::slice::from_raw_parts_mut(mem::at::<u32>(at as usize + k * slots * 4), slots)
     };
-    UPLOADS.set(Uploads {
+    UPLOADS.set(UploadTable {
         handle: column(0),
         at: column(1),
         len: column(2),
@@ -87,7 +87,7 @@ fn home(handle: u32, slots: usize) -> usize {
     (handle.wrapping_mul(0x9e37_79b1) >> (32 - slots.trailing_zeros())) as usize
 }
 
-impl Uploads {
+impl UploadTable {
     pub(crate) fn lose(&mut self) {
         self.buf.fill(0);
         self.group.fill(0);
@@ -113,8 +113,8 @@ impl Uploads {
         if !room(write_buffer_bytes(mem(self.at[i], self.len[i] & !3))) {
             return false;
         }
-        // The buffer is also copied from, to keep a palette as it was drawn
-        // (gpu/pass/skinned_mesh.rs `keep`).
+        // The buffer is also copied from, so the marks keep each upload they read as the
+        // last frame drew it (gpu/pass/mark.rs `CopyCache::keep`).
         let buf = g.buf(
             buf_size(self.len[i]),
             buffer_usage::VERTEX
@@ -144,7 +144,8 @@ impl Uploads {
         }
     }
 
-    /// None until the upload is on the device.
+    /// The upload's buffer and its vertex and index counts, none until the upload is on the
+    /// device.
     pub fn get(&self, handle: u32) -> Option<(u32, u32, u32)> {
         self.find(handle)
             .filter(|&i| self.buf[i] != 0)
@@ -244,8 +245,9 @@ impl Uploads {
         }
     }
 
-    /// The bind group over `handle`'s buffer, made the first time it is asked for. The ghost's
-    /// boxes are read through it (box.wgsl).
+    /// The bind group over `handle`'s buffer, made the first time it is asked for. The decor's
+    /// and the impostors' instances, the characters' palettes and the zones' boxes are read
+    /// through it.
     pub fn group(&mut self, g: &Gpu, handle: u32) -> Option<u32> {
         let i = self.find(handle).filter(|&i| self.buf[i] != 0)?;
         if self.group[i] == 0 {
@@ -274,8 +276,8 @@ impl Uploads {
     }
 }
 
-static UPLOADS: Global<Uploads> = Global::new();
+static UPLOADS: Global<UploadTable> = Global::new();
 
-pub(crate) fn uploads() -> &'static mut Uploads {
+pub(crate) fn uploads() -> &'static mut UploadTable {
     UPLOADS.get(|| xpute_kit::bug!(ENOTRECOVERABLE))
 }

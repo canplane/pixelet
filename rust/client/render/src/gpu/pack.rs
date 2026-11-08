@@ -76,7 +76,7 @@ pub struct Pack {
 }
 
 impl Pack {
-    /// Until the pack arrives every face reads NO_SLOT.
+    /// Until the pack arrives, every face reads `NO_SLOT`.
     pub fn new(g: &Gpu) -> Pack {
         let (tiles, _) = layout();
         let slots = tiles.len() as u32;
@@ -93,8 +93,8 @@ impl Pack {
             usage,
         );
         let view = g.view(tex, true, 0, levels, 0, slots);
-        // Anisotropic 4x: the ground is mostly seen at a grazing angle, where an
-        // isotropic mip blurs the tile along the view.
+        // The sampler filters anisotropically, at 4x, as the ground is mostly seen at a
+        // grazing angle, where an isotropic mip blurs the tile along the view.
         let sampler = g.sampler(
             FilterMode::linear,
             FilterMode::linear,

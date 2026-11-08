@@ -5,7 +5,6 @@ import { Share } from "react-native";
 
 import { PLATFORM } from "./pxl-platform.ts";
 
-/** Writes the file to the cache and offers it through the share sheet. */
 export async function save(
   name: string,
   text: string,

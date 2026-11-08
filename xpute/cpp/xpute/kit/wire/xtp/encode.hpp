@@ -148,7 +148,7 @@ class PacketWriter {
     Table table_{.base = 0, .cnt = 1, .written = 0, .root = true};
     NodeType root_type_ = type_of(SpecialType::nil);
     std::uint32_t lim_ = HDR_SZ;
-    // The first error met; later ones are not kept.
+    // This is the first error met; later ones are not kept.
     std::optional<Error> err_;
 };
 

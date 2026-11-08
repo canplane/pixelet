@@ -84,7 +84,7 @@ impl Ring {
         }
     }
 
-    /// Where the ring's words begin in its memory.
+    /// `at` is where the ring's words begin in its memory.
     pub fn at(&self) -> usize {
         self.at
     }
@@ -96,9 +96,9 @@ impl Ring {
         unsafe { AtomicU32::from_ptr(self.mem.at::<u32>(self.at + 4 * word as usize)) }
     }
 
-    /// The ring's word at index `word` from the ring's start. A frame's words
-    /// are the producer's until it publishes the frame, and the consumer's
-    /// after.
+    /// `frame_word` reads the ring's word at index `word` from the ring's
+    /// start. A frame's words are the producer's until it publishes the frame,
+    /// and the consumer's after.
     fn frame_word(&self, word: usize) -> u32 {
         // SAFETY: inside the ring `new` was given, aligned as its start is.
         unsafe { self.mem.at::<u32>(self.at + 4 * word).read() }
@@ -143,11 +143,10 @@ impl Ring {
         }
     }
 
-    /// Finds the first fixed word of the ring header at `at` that differs
-    /// from what `cap`, `slot_base` and `slot_bytes` say, and answers where
-    /// it is in the memory and what it holds, or none when all agree. The
-    /// position words are not checked, since a runtime may have pushed before
-    /// the core looks.
+    /// Finds the first fixed word of the ring header at `at` that differs from
+    /// what `cap`, `slot_base` and `slot_bytes` say, and answers where it is in
+    /// the memory and what it holds, or none when all agree. The position words
+    /// are not checked, since a runtime may have pushed before the core looks.
     pub fn header_differs(
         mem: Memory,
         at: usize,
@@ -299,8 +298,8 @@ impl Ring {
             .store(self.tail().wrapping_add(1), Ordering::Release);
     }
 
-    /// The frame at the head, or none when the ring is empty. A reader reads
-    /// it, then calls `advance`.
+    /// `peek` answers the frame at the head, or none when the ring is empty. A
+    /// reader reads it, then calls `advance`.
     pub fn peek(&self) -> Option<Frame> {
         if self.is_empty() {
             return None;

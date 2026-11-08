@@ -1,6 +1,6 @@
 // @xpute/runtime/ipc/frame.ts
 
-/** A frame's four words, laid out by spec/ipc/frame.json. */
+/** A frame's four words are laid out by spec/ipc/frame.json. */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { FLAG_SHIFT } from "./frame.spec.ts";
@@ -21,7 +21,7 @@ export function flags_of(word: u32): u32 {
   return word >>> FLAG_SHIFT;
 }
 
-/** The major a command's number lies in, which says what answers it. */
+/** A command's number lies in a major, which says what answers it. */
 export function major_of(cmd: u32): u32 {
   return (cmd >>> 8) & 0xff;
 }

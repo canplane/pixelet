@@ -1,7 +1,8 @@
 // xpute-kit/wire/xtp/cursor.rs
 
-//! The read side of XTP: cursors over a packet. Opening a packet checks its
-//! header; a node's bytes are read and checked only when a `get` reaches them.
+//! This is the read side of XTP: cursors over a packet. Opening a packet
+//! checks its header; a node's bytes are read and checked only when a `get`
+//! reaches them.
 
 #![allow(non_snake_case)]
 
@@ -116,7 +117,7 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    pub fn get_strs(&self) -> Result<Strs<'a>, MarshalError> {
+    pub fn get_strs(&self) -> Result<StrList<'a>, MarshalError> {
         match self {
             Cursor::Node(c) if c.type_ == SequenceType::STRS as u8 => c.strs(),
             _ => Err(MarshalError::new(Errno::EBADMSG)),
@@ -476,7 +477,7 @@ impl<'a> NodeCursor<'a> {
 
     /// Every string is checked as UTF-8, and every offset against the next one
     /// and the end, before any string is returned.
-    fn strs(&self) -> Result<Strs<'a>, MarshalError> {
+    fn strs(&self) -> Result<StrList<'a>, MarshalError> {
         let bad = || MarshalError::new(Errno::EBADMSG);
         if self.base + WORD_SZ > self.pkt.len() as u32 {
             return Err(bad());
@@ -491,14 +492,14 @@ impl<'a> NodeCursor<'a> {
             return Err(bad());
         }
         let offs = &pkt[start..start + lane as usize];
-        let strs = Strs {
+        let strs = StrList {
             offs,
             blob: &[],
             len: n,
         };
         let blob = start + offs.len();
         let total = strs.off(n as usize);
-        let strs = Strs {
+        let strs = StrList {
             blob: pkt
                 .get(blob..blob.checked_add(total).ok_or_else(bad)?)
                 .ok_or_else(bad)?,
@@ -683,16 +684,16 @@ pub fn elements<'b, T: Copy>(a: &'b Array<'_>) -> &'b [T] {
 #[path = "cursor.test.rs"]
 mod test;
 
-/// The strings of a STRS leaf, read in place. Each was checked as UTF-8 when
-/// the leaf was read.
+/// These are the strings of a STRS leaf, read in place. Each was checked as
+/// UTF-8 when the leaf was read.
 #[derive(Clone, Copy, Debug)]
-pub struct Strs<'a> {
+pub struct StrList<'a> {
     offs: &'a [u8],
     blob: &'a [u8],
     len: u32,
 }
 
-impl<'a> Strs<'a> {
+impl<'a> StrList<'a> {
     fn off(&self, i: usize) -> usize {
         u32::from_le_bytes([
             self.offs[4 * i],

@@ -1,6 +1,4 @@
 // pxl-core/domain/layer/tile_cache.test.rs
-//
-// Tests of the tile cache's count of the tiles that show.
 
 use super::*;
 use pxl_spec::bake::tile::terrain::TerrainTile;

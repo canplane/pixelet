@@ -2,7 +2,7 @@
 
 use crate::enums::{FEATURE_NAME, LIMIT_NAME};
 
-/// What a device is asked to be as it opens.
+/// This says what a device is asked to be as it opens.
 #[derive(Clone)]
 pub struct Ask {
     pub backends: wgpu::Backends,
@@ -13,16 +13,16 @@ pub struct Ask {
     /// (`OpenError::Feature`). The core reads the features the device has
     /// from the device's block (spec DEVICE).
     pub required: &'static [&'static str],
-    /// The features the device takes where the adapter has them.
+    /// The device takes these features where the adapter has them.
     pub optional: &'static [&'static str],
-    /// The limits asked of the device, given the adapter it is asked of,
-    /// since an adapter refuses a device that asks past its own limits.
+    /// These are the limits asked of the device, given the adapter it is asked
+    /// of, since an adapter refuses a device that asks past its own limits.
     pub limits: fn(&wgpu::Adapter) -> wgpu::Limits,
     pub memory_hints: wgpu::MemoryHints,
 }
 
 impl Ask {
-    /// The device the machine's GPU declares: its power preference and
+    /// This is the device the machine's GPU declares: its power preference and
     /// features, with the adapter's own limits and the platform's primary
     /// backends.
     pub fn of(gpu: &xpute_core::machine::Gpu) -> Ask {
@@ -55,14 +55,14 @@ impl Ask {
 pub enum OpenError {
     Adapter(wgpu::RequestAdapterError),
     Device(wgpu::RequestDeviceError),
-    /// A required feature whose WebGPU name wgpu does not know.
+    /// A required feature has a WebGPU name wgpu does not know.
     Feature(&'static str),
     /// The core it is for has stopped.
     Terminated,
 }
 
-/// A device opened as asked, and the instance a program makes its surfaces
-/// with (`GpuRuntime::bind`).
+/// This is a device opened as asked, and the instance a program makes its
+/// surfaces with (`GpuRuntime::bind`).
 pub struct Opened {
     pub instance: wgpu::Instance,
     pub adapter: wgpu::Adapter,
@@ -99,9 +99,9 @@ pub fn open(ask: &Ask) -> Result<Opened, OpenError> {
     })
 }
 
-/// The device's limits and features as the device's block lays them out
-/// (spec DEVICE): a word for each limit LIMIT_NAME names, then a bit for each
-/// feature FEATURE_NAME names.
+/// These are the device's limits and features as the device's block lays them
+/// out (spec DEVICE): a word for each limit LIMIT_NAME names, then a bit for
+/// each feature FEATURE_NAME names.
 pub(super) fn block(device: &wgpu::Device) -> (Vec<u32>, Vec<u32>) {
     let (limits, features) = (device.limits(), device.features());
     let words = LIMIT_NAME.iter().map(|name| limit(&limits, name)).collect();
@@ -114,8 +114,8 @@ pub(super) fn block(device: &wgpu::Device) -> (Vec<u32>, Vec<u32>) {
     (words, bits)
 }
 
-/// The value of the limit WebGPU calls `name`, clamped to a word. A name
-/// wgpu has no limit for is 0.
+/// This is the value of the limit WebGPU calls `name`, clamped to a word. A
+/// name wgpu has no limit for is 0.
 fn limit(l: &wgpu::Limits, name: &str) -> u32 {
     let v: u64 = match name {
         "maxTextureDimension1D" => l.max_texture_dimension_1d.into(),

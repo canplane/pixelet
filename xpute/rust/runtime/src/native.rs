@@ -1,13 +1,13 @@
 // xpute-runtime/native.rs
 
-//! The runtime for a core linked into the runtime's own process. It reserves
-//! the core's memory (`reserve`) and runs the core on a thread of its own,
-//! the only thread on which the core's `Global`s are sound. That thread acts
-//! as a vCPU (`thread`): it runs while the core has work and sleeps until it
-//! is kicked, and the program kicks it at the moment the program's policy
-//! picks for the wake the core asked for. Each call the core makes is handed
-//! to the thread that answers it (`answer_with`, `notify_on`), and the blocks
-//! the core allocates lie in its memory (`Alloc`).
+//! This is the runtime for a core linked into the runtime's own process. It
+//! reserves the core's memory (`reserve`) and runs the core on a thread of its
+//! own, the only thread on which the core's `Global`s are sound. That thread
+//! acts as a vCPU (`thread`): it runs while the core has work and sleeps until
+//! it is kicked, and the program kicks it at the moment the program's policy
+//! picks for the wake the core asked for. Each call the core makes is handed to
+//! the thread that answers it (`answer_with`, `notify_on`), and the blocks the
+//! core allocates lie in its memory (`Alloc`).
 //!
 //! A process holds one core, because the core's memory base is one value for
 //! the whole process. So the C ABI exports xpute's own names, with no prefix
@@ -20,8 +20,6 @@ mod thread;
 
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicU32, Ordering};
-use std::sync::OnceLock;
-use std::time::Instant;
 
 use xpute_core::mem::heap::HeapStat;
 use xpute_core::mem::section::PAGE_BYTES;
@@ -68,7 +66,6 @@ pub struct Device {
 }
 
 impl Device {
-    /// No device: nothing is polled or run, and every frame is admitted.
     pub const NONE: Device = Device {
         poll: |_| {},
         publish: |_| {},
@@ -76,10 +73,10 @@ impl Device {
     };
 }
 
-/// `Vcpu::ready` for a core with a machine. A turn may begin before the
-/// first turn has opened the rings, and after that only while the
-/// completion ring has room for all that one turn may post (xpute-core
-/// ipc/door.rs `has_room`).
+/// This is `Vcpu::ready` for a core with a machine. A turn may begin before the
+/// first turn has opened the rings, and after that only while the completion
+/// ring has room for all that one turn may post (xpute-core ipc/door.rs
+/// `has_room`).
 pub fn ready() -> bool {
     !xpute_core::machine::booted() || xpute_core::machine::door().has_room()
 }
@@ -90,10 +87,10 @@ pub struct Core {
     _booted: (),
 }
 
-/// Reserves the memory and starts the core's thread, which loops on `turn`
-/// and `cfg.ready` (`Vcpu`). Before this returns, the thread is marked as
-/// the core's and the memory's base is set. A process boots once; a second
-/// boot panics.
+/// Reserves the memory and starts the core's thread, which loops on `turn` and
+/// `cfg.ready` (`Vcpu`). Before this returns, the thread is marked as the
+/// core's and the memory's base is set. A process boots once; a second boot
+/// panics.
 pub fn boot(cfg: &Config, turn: fn(deadline_ms: f64) -> f64) -> Core {
     assert!(
         cfg.heap_at < cfg.mem_bytes,
@@ -187,15 +184,29 @@ impl Core {
     }
 }
 
-/// The process's clock in milliseconds, counted from its first reading.
+/// The system's monotonic clock in milliseconds since boot: the clock a
+/// native app's `performance.now()` counts on, C++'s `steady_clock`, so that the
+/// core's times and the UI's lie on one line. That is `CLOCK_MONOTONIC_RAW` on
+/// Apple's systems, where `Instant` reads another clock, and `CLOCK_MONOTONIC`
+/// elsewhere.
 pub fn now() -> f64 {
-    static START: OnceLock<Instant> = OnceLock::new();
-    START.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
+    #[cfg(target_vendor = "apple")]
+    const CLOCK: libc::clockid_t = libc::CLOCK_MONOTONIC_RAW;
+    #[cfg(not(target_vendor = "apple"))]
+    const CLOCK: libc::clockid_t = libc::CLOCK_MONOTONIC;
+    let mut t = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    // SAFETY: `t` is a valid timespec to write, and CLOCK exists on every
+    // system `native` builds for.
+    unsafe { libc::clock_gettime(CLOCK, &raw mut t) };
+    t.tv_sec as f64 * 1000.0 + t.tv_nsec as f64 / 1e6
 }
 
-/// Runs one turn of a core of `machine`. Before the first turn, the front
-/// the runtime laid is checked against the machine and opened
-/// (`machine::boot`); every turn then runs `entry`.
+/// Runs one turn of a core of `machine`. Before the first turn, the front the
+/// runtime laid is checked against the machine and opened (`machine::boot`);
+/// every turn then runs `entry`.
 pub fn turn(machine: &Machine, deadline_ms: f64, boot: fn() -> BootInfo, entry: Entry) -> f64 {
     if !xpute_core::machine::booted() {
         xpute_core::machine::boot(machine);
@@ -340,11 +351,11 @@ macro_rules! native_abi {
 /// publishes, and the core is handed the device's admission (`Device`);
 /// xpute-gpu's `native_core!` passes its runtime this way.
 ///
-/// On Android it also exports the C ABI to JNI, as the `external` functions
-/// of the Kotlin class `xpute.Core` (`jni`):
-/// `run(deadlineMs: Double): Double`, `kick(deadlineMs: Double)`, `pause()`,
-/// `resume()`, `answer()`, `turns(): DoubleArray` (the wake, then the longest
-/// turn), `mem(): ByteBuffer`, `load(at: Double): Double` and
+/// On Android it also exports the C ABI to JNI, as the `external` functions of
+/// the Kotlin class `xpute.Core` (`jni`): `run(deadlineMs: Double): Double`,
+/// `kick(deadlineMs: Double)`, `pause()`, `resume()`, `answer()`,
+/// `turns(): DoubleArray` (the wake, then the longest turn),
+/// `mem(): ByteBuffer`, `load(at: Double): Double` and
 /// `store(at: Double, word: Double)`. It calls back the class's static
 /// `call(at: Int): Int` for each of the core's calls, and its static
 /// `onNotify()` for each piece of news `xpute_notify_on` describes.

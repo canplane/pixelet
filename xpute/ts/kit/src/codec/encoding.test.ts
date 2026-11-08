@@ -32,8 +32,8 @@ test("hex round trips, pads a byte under 0x10, and reads no half a pair", () => 
   );
   assert.deepStrictEqual(bytes_to_hex(bytes()), "");
   assert.deepStrictEqual(hex_to_bytes("").length, 0);
-  // Either case is read, and encoding the bytes again gives the lower case
-  // the encoder writes.
+  // Either case is read, and encoding the bytes again gives the lower case the
+  // encoder writes.
   assert.deepStrictEqual(
     Array.from(hex_to_bytes("AbCdEf")),
     [0xab, 0xcd, 0xef],

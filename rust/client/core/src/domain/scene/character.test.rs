@@ -27,7 +27,7 @@ fn idle(dist: f64) -> Vec<(bool, bool)> {
     // SAFETY: a block of the heap's, the lists' alone for the test's run.
     unsafe { set_lists(at, LIVE) };
     let mut draw = DrawList::default();
-    let mut models = Models::default();
+    let mut models = ModelTable::default();
     let model = models.add(&mut draw, swaying());
     let mut character = Character::new(&mut draw, &models, model, Group::person, 0).unwrap();
     character.play(&models, 0, 0.0);
@@ -85,10 +85,10 @@ fn idle_asks_nothing_between_steps() {
     // At tick k the clip has run k + 1 frames, and the sway turns back every
     // half second, starting at a quarter second.
     let by_turn = |k: usize| (((k + 1) as f64 / 60.0) % 0.5 - 0.25).abs() <= 2.0 / 60.0;
-    let held: Vec<usize> = (0..near.len()).filter(|&k| !near[k].1).collect();
+    let still: Vec<usize> = (0..near.len()).filter(|&k| !near[k].1).collect();
     assert!(
-        !held.is_empty() && held.iter().all(|&k| by_turn(k)),
-        "near, the ticks {held:?} did not step, where they stand by no turn"
+        !still.is_empty() && still.iter().all(|&k| by_turn(k)),
+        "near, the ticks {still:?} did not step, where they stand by no turn"
     );
     let far = idle(150.0);
     assert!(

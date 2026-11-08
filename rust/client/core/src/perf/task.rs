@@ -13,8 +13,8 @@ use xpute_core::mem::off_of_slice;
 use xpute_kit::status::errno::Errno;
 
 use crate::perf::spec::TASK;
-use crate::perf::word::{words, Words};
-use crate::sys::io::demand::{Phases, PHASES_MAX};
+use crate::perf::word::{words, AsWords};
+use crate::sys::io::demand::{PhaseList, PHASES_MAX};
 use crate::sys::io::failure::Exit;
 use crate::sys::io::file::{path_of, PATH_BYTES};
 use crate::sys::io::request::Attempt;
@@ -63,7 +63,7 @@ fn path_bytes(path: &[u8]) -> [u8; TASK_PATH_BYTES] {
 impl TaskRecord {
     /// The row of `a`, which ended at `at` with `exit`, and the phase timings
     /// its run reported.
-    pub fn of(a: &Attempt, at: f64, exit: Exit, phases: Option<Phases>) -> TaskRecord {
+    pub fn of(a: &Attempt, at: f64, exit: Exit, phases: Option<PhaseList>) -> TaskRecord {
         let mut row = TaskRecord {
             stream: a.stream as u32 as f64,
             path: path_bytes(path_of(a.stream, a.id).as_bytes()),

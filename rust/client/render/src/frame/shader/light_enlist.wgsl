@@ -7,13 +7,13 @@
 
 /// The workgroups of the passes that cast tiles, then the lists' counts and marks
 /// (`light::ARGS_WORDS`). A claim reads and writes all three together.
-struct Args {
+struct Dispatch {
   passes: array<atomic<u32>, LIGHT_ARGS_PASSES>,
   counts: array<atomic<u32>, LIGHT_LISTS>,
   marks: array<atomic<u32>>,
 }
 
-@group(0) @binding(21) var<storage, read_write> args: Args;
+@group(0) @binding(21) var<storage, read_write> args: Dispatch;
 
 /// Raises the rows of pass `w` to hold entry `e` of a list of `cap` places. The pass takes each
 /// entry with a square of `across` threads a side, and lays `light::LIST_ACROSS` workgroups in

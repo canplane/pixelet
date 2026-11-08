@@ -15,8 +15,8 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "vite";
 
-/** xpute's root, three directories up. It holds the spec the server serves
- * and ts/target/, which the test is bundled into. */
+/** This is xpute's root, three directories up. It holds the spec the server
+ * serves and ts/target/, which the test is bundled into. */
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const TEST = "ts/gpu/src/runtime.test.ts";
 const BUNDLE = join(ROOT, "ts/target/browser/runtime.test.js");

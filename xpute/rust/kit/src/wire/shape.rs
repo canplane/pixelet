@@ -12,7 +12,9 @@
 use crate::status::errno::Errno;
 use crate::status::error::MarshalError;
 
-use super::xtp::{ArrayElem, Cursor, NodeValue, PacketWriter, Strs, TreeReader, HDR_SZ, WORD_SZ};
+use super::xtp::{
+    ArrayElem, Cursor, NodeValue, PacketWriter, StrList, TreeReader, HDR_SZ, WORD_SZ,
+};
 
 const WORD: u64 = WORD_SZ as u64;
 
@@ -48,7 +50,7 @@ impl<T: ArrayElem + 'static> Shape for Vec<T> {
 }
 
 impl Shape for Vec<String> {
-    type Read<'a> = Strs<'a>;
+    type Read<'a> = StrList<'a>;
     type Write<'a> = &'a [&'a str];
 
     fn most(v: &&[&str]) -> u64 {
@@ -58,7 +60,7 @@ impl Shape for Vec<String> {
     fn write(v: &&[&str], w: &mut PacketWriter<'_>) {
         w.strs(Some(*v));
     }
-    fn read(c: Cursor<'_>) -> Result<Strs<'_>, MarshalError> {
+    fn read(c: Cursor<'_>) -> Result<StrList<'_>, MarshalError> {
         c.get_strs()
     }
 }
@@ -129,8 +131,8 @@ branch!(A 0, B 1, C 2, D 3, E 4, F 5, G 6, H 7, I 8, J 9);
 branch!(A 0, B 1, C 2, D 3, E 4, F 5, G 6, H 7, I 8, J 9, K 10);
 branch!(A 0, B 1, C 2, D 3, E 4, F 5, G 6, H 7, I 8, J 9, K 10, L 11);
 
-/// `v` encoded as a packet of shape `S`. A packet that needs more than `cap`
-/// bytes is EOVERFLOW.
+/// This encodes `v` as a packet of shape `S`. A packet that needs more than
+/// `cap` bytes is EOVERFLOW.
 pub fn encode<S: Shape>(v: S::Write<'_>, cap: u32) -> Result<Vec<u8>, MarshalError> {
     let most = u64::from(HDR_SZ) + S::most(&v);
     let mut buf = vec![0u8; most.min(u64::from(cap)) as usize];

@@ -1,7 +1,5 @@
 // @pxl/client/service/core/setting.ts
 
-/** The setting's command: one value set from the sheet or a picker. */
-
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { core } from "@/service/core/core.ts";
 

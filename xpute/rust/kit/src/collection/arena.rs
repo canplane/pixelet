@@ -1,12 +1,12 @@
 // xpute-kit/collection/arena.rs
 
-//! A pool of slots that are constructed once and reused. Slots are handed
-//! out in order and taken back by rewinding to an earlier length.
+//! An arena is a pool of slots that are constructed once and reused. Slots are
+//! handed out in order and taken back by rewinding to an earlier length.
 
 use crate::status::errno::Errno;
 use crate::status::error::MarshalError;
 
-pub struct ArenaOptions {
+pub struct ArenaConfig {
     pub init_cap: u32,
     pub max_cap: u32,
 }
@@ -23,7 +23,7 @@ pub struct Arena<T: Default> {
 }
 
 impl<T: Default> Arena<T> {
-    pub fn new(opts: ArenaOptions) -> Result<Arena<T>, MarshalError> {
+    pub fn new(opts: ArenaConfig) -> Result<Arena<T>, MarshalError> {
         let mut arena = Arena {
             mem: Vec::new(),
             max_cap: opts.max_cap,

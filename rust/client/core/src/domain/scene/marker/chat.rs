@@ -21,7 +21,7 @@ use crate::sys::sched::edge::wake_at;
 /// make a dismissed line look new.
 struct Line {
     text: Rc<str>,
-    said: f64,
+    at_ms: f64,
 }
 
 #[derive(Default)]
@@ -38,7 +38,7 @@ fn chat() -> &'static mut Chat {
 pub fn append_chat_line(text: &str) {
     chat().line = Some(Line {
         text: text.into(),
-        said: now(),
+        at_ms: now(),
     });
 }
 
@@ -46,10 +46,10 @@ pub fn append_chat_line(text: &str) {
 /// `SHOWN_MS`. While it shows, the turn is woken for the moment it expires.
 pub(super) fn shown_line() -> Option<Design> {
     let line = chat().line.as_ref()?;
-    if line.said + SHOWN_MS <= now() {
+    if line.at_ms + SHOWN_MS <= now() {
         return None;
     }
-    wake_at(line.said + SHOWN_MS);
+    wake_at(line.at_ms + SHOWN_MS);
     Some(Design::Bubble {
         text: line.text.clone(),
     })

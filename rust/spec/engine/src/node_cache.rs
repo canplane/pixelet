@@ -99,7 +99,7 @@ pub const FORGETS: u32 = 1;
 pub const CHANGED_AT: u32 = 2;
 pub const CHANGED_WORDS: u32 = (EYE_CLIP_LEVELS * clipmap::ENTRIES).div_ceil(32);
 /// For each of the eye's clip levels, the box in which its bricks that moved and are held
-/// present lie (`Entry::held_changed_from`), as `[x0, y0, x1, y1]` from first to last, or
+/// present lie (`Entry::present_changed_from`), as `[x0, y0, x1, y1]` from first to last, or
 /// `NO_BRICKS` where none moved. An entry's bit stands for any brick at its place modulo
 /// `clipmap::ACROSS`, so the box tells the moved bricks from those of other places, for the
 /// nodes that read only bricks held present (pxl-render forget.wgsl `forgets`).
@@ -330,11 +330,11 @@ pub const fn keeps(zoom: Zoom, c: [i32; 3]) -> bool {
     if zoom >= 32 {
         return false;
     }
-    const fn held(v: i32, zoom: Zoom) -> bool {
+    const fn near(v: i32, zoom: Zoom) -> bool {
         let v = v >> zoom;
         v == 0 || v == -1
     }
-    held(c[0], zoom) && held(c[1], zoom) && held(c[2], zoom)
+    near(c[0], zoom) && near(c[1], zoom) && near(c[2], zoom)
 }
 
 /// The twin of pxl-render walk_node.wgsl `mix_hash`.
@@ -375,11 +375,11 @@ mod tests {
             for near in 0..=crate::FINEST_ZOOM {
                 for far in [0, near / 2, near] {
                     let asked = pair(far, near);
-                    let kept = key_zooms(zoom, asked, Kind::Cell, cell);
-                    let key = tag | kept << TAG_BITS;
+                    let zooms = key_zooms(zoom, asked, Kind::Cell, cell);
+                    let key = tag | zooms << TAG_BITS;
                     let whole = zoom < near;
-                    assert_eq!(kept & ((1 << ZOOM_BITS) - 1), CELL_FAR);
-                    assert_eq!(kept >> ZOOM_BITS != 0, whole);
+                    assert_eq!(zooms & ((1 << ZOOM_BITS) - 1), CELL_FAR);
+                    assert_eq!(zooms >> ZOOM_BITS != 0, whole);
                     for n2 in 0..=crate::FINEST_ZOOM {
                         let other = pair(n2 / 2, n2);
                         assert_eq!(

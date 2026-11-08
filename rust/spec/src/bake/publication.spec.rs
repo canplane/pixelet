@@ -3,8 +3,8 @@
 // GENERATED from spec/spec/bake/publication.json
 
 /// The format each bake writes now, which a published name begins with.
-/// Bumped by a change to how the client reads a tile, or to what a
-/// tile guarantees it (a terrain tile its lines past its edge, 11).
+/// It is bumped by a change to how the client reads a tile, or to what a
+/// tile guarantees it.
 pub struct Format {
     pub terrain: u32,
     pub place: u32,
@@ -19,8 +19,8 @@ pub const FORMAT: Format = Format {
     earth: 2,
 };
 
-/// The longest version a declaration names: one segment of a tile's URL,
-/// before its name (ts/client/src/service/origin/publication.spec.ts `tileObject`).
+/// The longest version a declaration may name, in bytes: one segment of a tile's URL,
+/// before its name (pxl-spec bake/source.rs `is_version`).
 pub const VERSION_BYTES: usize = 32;
 
 /// What a version is written in: one segment of a tile's URL, with no character it would

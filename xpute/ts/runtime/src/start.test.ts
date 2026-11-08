@@ -10,7 +10,6 @@ import { start } from "./start.ts";
 
 const MANIFEST = { machine: { slot_bytes: 64 } } as unknown as Manifest;
 
-/** A worker that keeps the port it is sent. */
 function worker(): Worker & { port: Promise<MessagePort> } {
   const port = Promise.withResolvers<MessagePort>();
   return {
@@ -19,7 +18,6 @@ function worker(): Worker & { port: Promise<MessagePort> } {
   } as unknown as Worker & { port: Promise<MessagePort> };
 }
 
-/** A UI that counts its stops. */
 function ui(): Ui & { stops: number } {
   return {
     cmds: [],

@@ -38,7 +38,7 @@ use crate::domain::scene::animation;
 use crate::domain::scene::character::companion::Walk;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model::asset::model_of;
-use crate::domain::scene::model::registry::{blend, Models};
+use crate::domain::scene::model::registry::{blend, ModelTable};
 use crate::domain::scene::model::{draw_list, models};
 use crate::domain::scene::transform::Transform;
 use crate::domain::view::lens::{cell_there, decor_impostor_angle, decor_model_angle, StepClock};
@@ -76,7 +76,7 @@ pub struct Character {
     group: Group,
     /// The character's row in its group, as the settings store holds it.
     pub number: u8,
-    /// The model's index in `Models`.
+    /// The model's index in `ModelTable`.
     model: u32,
     cur: Option<ClipTime>,
     previous: Option<ClipTime>,
@@ -133,7 +133,7 @@ impl Character {
     /// registered or the heap refuses.
     fn new(
         draw: &mut DrawList,
-        models: &Models,
+        models: &ModelTable,
         model: u32,
         group: Group,
         number: u8,
@@ -204,7 +204,7 @@ impl Character {
     /// Fades from the clip playing into `clip` over `fade_s` seconds. With no
     /// clip playing, `clip` starts at once. A clip the model lacks, or the
     /// clip already playing, changes nothing.
-    pub fn play(&mut self, models: &Models, clip: u32, fade_s: f32) {
+    pub fn play(&mut self, models: &ModelTable, clip: u32, fade_s: f32) {
         let lacks = models.get(self.model).is_none_or(|m| clip >= m.clip_cnt());
         if lacks || self.cur.is_some_and(|c| c.clip == clip) {
             return;
@@ -246,7 +246,7 @@ impl Character {
     pub fn tick(
         &mut self,
         draw: &mut DrawList,
-        models: &Models,
+        models: &ModelTable,
         frame: &Frame,
         on_surface: bool,
     ) -> bool {
@@ -378,7 +378,7 @@ impl Character {
     /// receiver box (`ReceiverBox::ball`) depends on the eye. Every character
     /// the world draws receives the sun's shadow map, and the map covers the
     /// receivers the eye sees.
-    pub fn draw(&self, draw: &mut DrawList, models: &Models) {
+    pub fn draw(&self, draw: &mut DrawList, models: &ModelTable) {
         let Some(m) = models.get(self.model).filter(|m| m.handle() != 0) else {
             return;
         };
@@ -405,7 +405,7 @@ impl Character {
     /// The model is scaled to one unit tall, as the surface's eye frames it
     /// (pxl-render gpu/pass/character.rs), and turned by the clock so that
     /// every side shows. None while the model is not uploaded.
-    pub fn surface_draw(&self, models: &Models) -> Option<Draw> {
+    pub fn surface_draw(&self, models: &ModelTable) -> Option<Draw> {
         let m = models.get(self.model).filter(|m| m.handle() != 0)?;
         let at = self.transform.map_or([0.0; 3], |t| t.at);
         let rot = (now() / 1000.0 * param::SURFACE_SPIN_RAD_S % core::f64::consts::TAU) as f32;

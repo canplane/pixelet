@@ -50,11 +50,14 @@ pub(super) fn draw(s: &mut State, c: abi::SceneDraw) -> Outcome {
                 Errno::EBUSY,
             )?;
             character_surface_open(c.surface, group, bg);
-            if let Some(drawn) = surface::surface(c.surface) {
-                drawn.role = surface_role::CHARACTER;
-                if drawn.px_w != 0 {
-                    drawn.ratio =
-                        resolution::surface_ratio(drawn.role, [drawn.px_w, drawn.px_h], drawn.dpr);
+            if let Some(character) = surface::surface(c.surface) {
+                character.role = surface_role::CHARACTER;
+                if character.px_w != 0 {
+                    character.ratio = resolution::surface_ratio(
+                        character.role,
+                        [character.px_w, character.px_h],
+                        character.dpr,
+                    );
                 }
             }
             ask_turn(s)

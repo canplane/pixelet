@@ -13,7 +13,7 @@ XPUTE_TEST(file_descriptor_owner) {
     std::vector<std::uint64_t> words(1024);
     Memory mem(reinterpret_cast<std::uintptr_t>(words.data()), words.size() * 8);
     Door door(Ring::init(mem, 8, 8, 1024, 256), Ring::init(mem, 256, 8, 4096, 256), 0);
-    Files<std::string, 8> files;
+    FileTable<std::string, 8> files;
     Fd a = files.open(door, 7, "a", "first");
     files.close(door, a);
     Fd b = files.open(door, 7, "b", "second");
@@ -33,7 +33,7 @@ XPUTE_TEST(file_read_whole_closes) {
     std::vector<std::uint64_t> words(1024);
     Memory mem(reinterpret_cast<std::uintptr_t>(words.data()), words.size() * 8);
     Door door(Ring::init(mem, 8, 8, 1024, 256), Ring::init(mem, 256, 8, 4096, 256), 0);
-    Files<std::string, 8> files;
+    FileTable<std::string, 8> files;
     Fd fd = files.open(door, 7, "a", "first");
     // None of the heap lies in the test's memory, so the file is empty.
     Result<Reading> read = files.read_whole(door, fd, 0);
@@ -47,12 +47,12 @@ XPUTE_TEST(file_read_whole_held_until_consumed) {
     std::vector<std::uint64_t> words(1024);
     Memory mem(reinterpret_cast<std::uintptr_t>(words.data()), words.size() * 8);
     Door door(Ring::init(mem, 8, 8, 1024, 256), Ring::init(mem, 256, 8, 4096, 256), 0);
-    Files<std::string, 8> files;
+    FileTable<std::string, 8> files;
     Fd fd = files.open(door, 7, "a", "first");
     Result<Reading> read = files.read_whole(door, fd, 0);
     XPUTE_CHECK(read.ok());
     XPUTE_CHECK(!read->take(door).has_value());
     while (door.cq().peek()) door.cq().advance();
-    std::optional<Bytes> bytes = read->take(door);
+    std::optional<Buffer> bytes = read->take(door);
     XPUTE_CHECK(bytes && bytes->size() == 0);
 }

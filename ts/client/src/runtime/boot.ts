@@ -1,14 +1,10 @@
 // @pxl/client/runtime/boot.ts
 
 /**
- * Boots the client from the bottom up, on its platform's services
- * (service/platform/). It opens the runtime where the platform places it: on
- * a page in the core's worker (open.ts), and on a device beside the UI
- * (open.native.ts). It binds the core's commands to the runtime. Then it
- * moves where the boot stands as the runtime starts, the GPU answers, the
- * world's source is declared and the core's snapshots arrive. The UI takes no
- * part in the boot. It reads where the boot stands (service/sys/boot.ts),
- * and, once the core has started, what the core shows it.
+ * A page opens the runtime in the core's worker (open.ts), and a device
+ * opens it beside the UI (open.native.ts). The UI takes no part in the boot.
+ * It reads where the boot stands (service/sys/boot.ts), and, once the core
+ * has started, what the core shows it.
  */
 
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
@@ -38,8 +34,6 @@ function loaded(s: Snapshot): boolean {
   );
 }
 
-/** Called once by the app, ahead of the UI (boot.ts). `boot_state` says
- * where the boot stands. A second call is refused. */
 export function boot(): void {
   if (called) throw new InvariantError(Errno.EALREADY);
   called = true;

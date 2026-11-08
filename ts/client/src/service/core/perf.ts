@@ -47,7 +47,7 @@ const WORD = 8;
 const PATH_BYTES = 3 * WORD;
 
 /** A profiler call answers with the address of its reply in the core's
- * memory, or with a negative errno when it refuses. A refusal is thrown. */
+ * memory, or with a negative errno when it refuses. */
 function reply_at(at: i32): u32 {
   if (at < 0) throw new FaultError(-at as i32);
   return at >>> 0;
@@ -67,8 +67,7 @@ const u32s = (at: u32, n: u32) => new Uint32Array(mem, at, n);
 const site = (file: u32, bytes: u32, line: u32) =>
   file === 0 ? null : `${td.decode(new Uint8Array(mem, file, bytes))}:${line}`;
 
-/** The FRAME columns that are lists, one word for each name in the list. The
- * names come from each list's owner, and the UI shows them. */
+/** The FRAME columns that are lists, one word for each name in the list. */
 export const LIST_COLUMNS = ["phases", "effects", "gpu_spans"] as const;
 export type ListColumn = (typeof LIST_COLUMNS)[number];
 export type FrameColumn = Exclude<keyof typeof FRAME, "WORDS">;
@@ -80,8 +79,7 @@ export type Frame = { [K in ScalarColumn]: f64 } & {
   gpu_spans: f64[];
 };
 
-/** Each FRAME column with its first word and its width in words. A column
- * runs up to the next one, and the last runs to the end of the record. */
+/** Each FRAME column with its first word and its width in words. */
 export const COLUMNS: readonly { name: FrameColumn; at: u32; width: u32 }[] =
   (() => {
     const at = (Object.entries(FRAME) as [FrameColumn | "WORDS", u32][]).filter(
@@ -110,7 +108,7 @@ export function frame_at(words: ArrayLike<f64>, o: u32): Frame {
   return f as Frame;
 }
 
-export interface Percentiles {
+export interface Percentile {
   p50: f64;
   p95: f64;
   max: f64;
@@ -130,19 +128,19 @@ export interface FrameSummary {
   /** How many frames a GPU read timed. The GPU's figures are taken over
    * these frames alone. */
   gpu_timed: f64;
-  interval: Percentiles;
-  busy: Percentiles;
-  tick: Percentiles;
+  interval: Percentile;
+  busy: Percentile;
+  tick: Percentile;
   /** The parts of `busy` besides `tick`. `rest` is what they leave of it,
    * which no span measured. */
-  effects: Percentiles;
-  stage: Percentiles;
-  tasks: Percentiles;
-  perf: Percentiles;
-  rest: Percentiles;
+  effects: Percentile;
+  stage: Percentile;
+  tasks: Percentile;
+  perf: Percentile;
+  rest: Percentile;
   /** The GPU's busy time: the time its spans ran, with overlapping spans
    * counted once. */
-  gpu_busy: Percentiles;
+  gpu_busy: Percentile;
   /** For each frame kind, the p50 and p95 of the GPU's busy time over the
    * frames of that kind that a read timed, and how many there were. */
   gpu_busy_kinds: { name: string; p50: f64; p95: f64; n: f64 }[];
@@ -158,8 +156,9 @@ export interface FrameSummary {
   wakes: { name: string; n: f64 }[];
   /** How many of the world's pixels the last frame a read timed drew. */
   gpu_px: f64;
-  /** The ray counts of the window's frames, summed by FRAME's rays columns. */
-  rays: RayCounts;
+  /** The ray counts of the window's frames, summed for each of FRAME's rays
+   * columns. */
+  rays: RayCount;
   /** How far the heap's high-water mark rose over the window: the last
    * frame's mark less the first frame's. */
   heap_used_delta_bytes: f64;
@@ -213,17 +212,12 @@ export interface Worst {
   } | null;
 }
 
-/** A section's words, keyed by the names its spec gives them (perf.json),
- * without AT and WORDS. */
 export type Section<S> = { [K in Exclude<keyof S, "AT" | "WORDS">]: f64 };
-/** Where the view is at the time of the read (NOW.view). */
 export type ViewSection = Section<typeof NOW.view>;
 /** The highest or lowest values the frames held since the recording started
  * (STAT.recording). */
 export type RecordingSection = Section<typeof STAT.recording>;
-/** The window's ray counts, one for each of FRAME's rays columns
- * (FRAME_GROUP.rays). */
-export type RayCounts = { [K in (typeof FRAME_GROUP.rays)[number]]: f64 };
+export type RayCount = { [K in (typeof FRAME_GROUP.rays)[number]]: f64 };
 
 /** What PERF_STATS sums over its window, section by section. `recording` and
  * `steps` are over the whole recording instead, from when it started. */
@@ -236,14 +230,13 @@ export interface Summary {
   view: ViewSection;
 }
 
-/** How many records each ring holds, as RING_SLOT counts them. */
-export interface RingCounts {
+export interface RingCount {
   frames: u32;
   tasks: u32;
   worst: u32;
 }
 
-const percentiles_at = (s: F64Array, at: u32): Percentiles => ({
+const percentiles_at = (s: F64Array, at: u32): Percentile => ({
   p50: s[at + PERCENTILE.p50],
   p95: s[at + PERCENTILE.p95],
   max: s[at + PERCENTILE.max],
@@ -295,7 +288,7 @@ function frame_summary(s: F64Array): FrameSummary | null {
     gpu_px: s[a + F.gpu_px],
     rays: Object.fromEntries(
       FRAME_GROUP.rays.map((name, k) => [name, s[a + F.rays + k]]),
-    ) as RayCounts,
+    ) as RayCount,
     heap_used_delta_bytes: last.heap_used_bytes - first.heap_used_bytes,
     first,
     last,
@@ -360,8 +353,6 @@ function section<S extends { AT: u32; WORDS: u32 }>(
   return out as Section<S>;
 }
 
-/** STAT's words over `window_ms`, and NOW's words, in the layout PERF_STATS
- * replies with. */
 function stats_of(window_ms: f64 | null): { stats: F64Array; now: F64Array } {
   const r = u32s(reply_at(core.perf_stats(window_ms)), STAT_SLOT.WORDS);
   return {
@@ -389,14 +380,13 @@ function perf_summary(window_ms: f64 | null): Summary {
   };
 }
 
-/** Reads NOW's view alone. It asks for an empty window, so that no frame or
- * task is folded. */
+/** Reads NOW's view alone. The core is asked for an empty window, so that no
+ * frame or task is folded. */
 function perf_view(): ViewSection {
   return section(stats_of(0).now, NOW.view);
 }
 
-/** Each ring's address and record count, as the rings lie in memory, with
- * nothing reduced. */
+/** Each ring's address and record count. */
 function rings(): { frames: [u32, u32]; tasks: [u32, u32]; worst: [u32, u32] } {
   const r = u32s(reply_at(core.perf_rings()), RING_SLOT.WORDS);
   const ring = (name: (typeof RING_NAMES)[number]): [u32, u32] => {
@@ -406,7 +396,7 @@ function rings(): { frames: [u32, u32]; tasks: [u32, u32]; worst: [u32, u32] } {
   return { frames: ring("frames"), tasks: ring("tasks"), worst: ring("worst") };
 }
 
-function perf_counts(): RingCounts {
+function perf_counts(): RingCount {
   const { frames, tasks, worst } = rings();
   return { frames: frames[1], tasks: tasks[1], worst: worst[1] };
 }
@@ -421,10 +411,10 @@ function perf_frames(): Frame[] {
 /** The tasks the ring holds, oldest first: the last `last` of them, or all of
  * them when `last` is null. */
 function perf_tasks(last: u32 | null = null): TaskRecord[] {
-  const [ring, held] = rings().tasks;
-  const from = last === null ? 0 : Math.max(0, held - last);
+  const [ring, total] = rings().tasks;
+  const from = last === null ? 0 : Math.max(0, total - last);
   const at = ring + from * TASK.WORDS * WORD;
-  const cnt = held - from;
+  const cnt = total - from;
   const w = words(at, cnt * TASK.WORDS);
   return Array.from({ length: cnt }, (_, i) => {
     const o = i * TASK.WORDS;
@@ -459,7 +449,6 @@ function perf_tasks(last: u32 | null = null): TaskRecord[] {
   });
 }
 
-/** The worst frames the core kept since recording began. */
 function perf_worst(): Worst[] {
   const [at, cnt] = rings().worst;
   const w = words(at, cnt * WORST.WORDS);
@@ -479,7 +468,6 @@ function perf_worst(): Worst[] {
   });
 }
 
-/** The reads that must run beside the core's memory. */
 const READERS = {
   summary: perf_summary,
   view: perf_view,
@@ -500,7 +488,8 @@ export function read<K extends PerfRead>(
   return perf(what, args) as Promise<ReturnType<(typeof READERS)[K]>>;
 }
 
-/** Answers a `read` here, beside the core's memory. */
+/** Answers a `read` on the side that holds the core's memory, where the caller
+ * must be. */
 export function answer(what: PerfRead, args: unknown[]): unknown {
   return (READERS[what] as (...a: unknown[]) => unknown)(...args);
 }

@@ -1,9 +1,9 @@
 // xpute-gpu/admit.rs
 
-//! Whether the GPU's runtime can take another frame now without blocking.
-//! Every runtime holds a frame to one rule (`admits`): a core draws a frame
-//! only while fewer of its frames than its frame latency are unfinished on
-//! the GPU. A runtime in the core's own process applies the rule to its own
+//! Admission says whether the GPU's runtime can take another frame now without
+//! blocking. Every runtime holds a frame to one rule (`admits`): a core draws a
+//! frame only while fewer of its frames than its frame latency are unfinished
+//! on the GPU. A runtime in the core's own process applies the rule to its own
 //! count (`runtime::native::admit_frame`). A page's runtime writes its count
 //! into the device's block (spec DEVICE), and `page` applies the rule there.
 //! The core is handed its admission with its boot (xpute-core
@@ -27,7 +27,7 @@ pub fn admits(unfinished: u32, latency: u32) -> bool {
     unfinished < latency
 }
 
-/// The first word of the device's block that the core last asked for
+/// This is the first word of the device's block that the core last asked for
 /// (`call::device`).
 static BLOCK: Global<Option<*mut u32>> = Global::new();
 
@@ -39,11 +39,11 @@ pub(crate) fn ask(block: &mut [u32]) {
     BLOCK.set(Some(block.as_mut_ptr()));
 }
 
-/// The admission of a WebAssembly core that has the GPU (xpute-core `core!`),
-/// where `LATENCY` is the program's frame latency (`Numbers`). It admits a
-/// frame while the block's STATUS is READY and `admits` holds for the
-/// block's unfinished frames. It admits none before the core has asked for
-/// the block, and none once the device is lost.
+/// This is the admission of a WebAssembly core that has the GPU (xpute-core
+/// `core!`), where `LATENCY` is the program's frame latency (`CoreConfig`). It
+/// admits a frame while the block's STATUS is READY and `admits` holds for the
+/// block's unfinished frames. It admits none before the core has asked for the
+/// block, and none once the device is lost.
 pub fn page<const LATENCY: u32>() -> bool {
     BLOCK.get(|| None).is_some_and(|at| {
         // SAFETY: the block `ask` kept, which stays live and in place; its

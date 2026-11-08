@@ -1,10 +1,10 @@
 // cpp/conformance/core.hpp
 
-// The C++ conformance core, held to the same traces as the other
+// The C++ conformance core is held to the same traces as the other
 // conformance cores. These calls are for tests, not an API. Natively, the
-// runtime hands the core a region, a clock and its call. As a wasm module,
-// its memory starts at 0, the clock is `env.now`, the call is `env.call`,
-// and its turn is the module's entry, `run` (xpute/core/wasm.hpp).
+// runtime hands the core a region, a clock and its call. As a wasm module, its
+// memory starts at 0, the clock is `env.now`, the call is `env.call`, and its
+// turn is the module's entry, `run` (xpute/core/wasm.hpp).
 
 #pragma once
 

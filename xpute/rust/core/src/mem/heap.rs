@@ -1,10 +1,10 @@
 // xpute-core/mem/heap.rs
 
-//! The core's heap, whose blocks are named by offset. It is a slab of size
-//! classes over a buddy allocator of pages, within the core's `Bounds`. The
-//! slab borrows and returns whole runs of pages, so neither level starves
-//! while the other has room. `alloc` and `free` serve blocks through
-//! whatever `#[global_allocator]` is installed.
+//! The core's heap names its blocks by offset. It is a slab of size classes
+//! over a buddy allocator of pages, within the core's `Bound`. The slab
+//! borrows and returns whole runs of pages, so neither level starves while the
+//! other has room. `alloc` and `free` serve blocks through whatever
+//! `#[global_allocator]` is installed.
 
 use core::marker::PhantomData;
 
@@ -14,15 +14,14 @@ use xpute_kit::alloc::ADDR_BITS;
 
 use crate::mem::{at, off_of};
 
-/// Where a core's heap lies: from `base` up to `end`. Each must be a pure
-/// function, since the first block is asked for before anything has laid
-/// out the memory.
-pub trait Bounds {
+/// A core's heap lies from `base` up to `end`. Each function must be pure,
+/// since the first block is asked for before anything has laid out the memory.
+pub trait Bound {
     fn base() -> usize;
     fn end() -> usize;
 }
 
-/// The log2 of a page, the buddy's smallest block.
+/// This is the log2 of a page, the buddy's smallest block.
 const PAGE_LOG2: usize = crate::mem::section::PAGE_BYTES.trailing_zeros() as usize;
 
 /// 2 GiB, the largest power of two short of the whole address space. The
@@ -36,7 +35,7 @@ const SPLIT_BYTES: usize = (1 << (SPAN_LOG2 - PAGE_LOG2)) / 8;
 
 pub struct Span<B>(PhantomData<B>);
 
-impl<B: Bounds> Range for Span<B> {
+impl<B: Bound> Range for Span<B> {
     const MIN_LOG2: usize = PAGE_LOG2;
     const MAX_LOG2: usize = SPAN_LOG2;
     type Split = [u8; SPLIT_BYTES];
@@ -75,7 +74,7 @@ pub struct HeapStat {
     pub requests: u32,
 }
 
-pub fn heap_stat<B: Bounds>(a: &Heap<B>) -> HeapStat {
+pub fn heap_stat<B: Bound>(a: &Heap<B>) -> HeapStat {
     HeapStat {
         range: a.range_bytes(),
         peak: a.peak(),

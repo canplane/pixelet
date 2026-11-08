@@ -1,6 +1,6 @@
 // cpp/xpute/core/ipc/frame.hpp
 
-// A frame's four words, laid out by spec/ipc/frame.json.
+// A frame's four words are laid out by spec/ipc/frame.json.
 
 #pragma once
 
@@ -10,8 +10,8 @@
 
 namespace xpute {
 
-// A frame's four words as read, with its command word split into the
-// command and its flags.
+// A frame's four words as read, with its command word split into the command
+// and its flags.
 struct Frame {
     std::uint32_t tag;
     std::uint32_t cmd;

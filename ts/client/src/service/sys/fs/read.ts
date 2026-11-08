@@ -1,11 +1,6 @@
 // @pxl/client/service/sys/fs/read.ts
 
-/**
- * The read under the backends that fetch (tile.ts, asset.ts). It fetches an
- * object whole from the origin and answers as a file's open does. A 204 is a
- * baked page that its version leaves out, and reads as ENOENT. A 404 means
- * the key names nothing, which is a failure like any other.
- */
+/** A 204 is a baked page that its version leaves out, and reads as ENOENT. */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";

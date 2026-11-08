@@ -89,9 +89,8 @@ export function HaloIcon({
   );
 }
 
-/** A white stroke over its halo, drawn inside an `Svg`. The halo's rings are
- * black strokes along `under`, which defaults to `d`, and each ring is one
- * layer. */
+/** A white stroke over its halo, which the caller must draw inside an `Svg`.
+ * The halo's rings are black strokes along `under`, which defaults to `d`. */
 export function HaloPath({
   d,
   under = d,

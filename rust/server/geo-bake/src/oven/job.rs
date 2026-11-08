@@ -20,11 +20,11 @@ use tokio::time;
 use tokio::time::Instant;
 
 #[derive(Clone, Copy)]
-pub struct Limits {
+pub struct Limit {
     pub queued: usize,
     pub seconds: u64,
 }
-impl Default for Limits {
+impl Default for Limit {
     fn default() -> Self {
         Self {
             queued: 64,
@@ -42,14 +42,14 @@ pub struct Job {
 
 pub(crate) struct Runner {
     pub(super) admission: Arc<Semaphore>,
-    workers: Arc<Workers>,
-    pub(super) limits: Limits,
+    workers: Arc<WorkerPool>,
+    pub(super) limits: Limit,
 }
 
 /// The worker processes, a free one handed to the oldest job a client waits
 /// on before any a fold alone needs: a fold over a cold zoom bakes every
 /// tile under it, and the tile on screen must not queue behind them.
-struct Workers {
+struct WorkerPool {
     state: Mutex<(usize, VecDeque<Waiter>)>,
 }
 
@@ -58,7 +58,7 @@ struct Waiter {
     wake: oneshot::Sender<()>,
 }
 
-struct Worker(Arc<Workers>);
+struct Worker(Arc<WorkerPool>);
 
 impl Drop for Worker {
     fn drop(&mut self) {
@@ -66,7 +66,7 @@ impl Drop for Worker {
     }
 }
 
-impl Workers {
+impl WorkerPool {
     fn release(&self) {
         let mut state = self.state.lock().expect("workers");
         let (free, waiting) = &mut *state;
@@ -137,7 +137,7 @@ impl Staging {
 }
 
 impl Runner {
-    pub fn new(workers: usize, limits: Limits) -> Result<Self, String> {
+    pub fn new(workers: usize, limits: Limit) -> Result<Self, String> {
         if workers == 0
             || limits.seconds == 0
             || workers
@@ -148,7 +148,7 @@ impl Runner {
         }
         Ok(Self {
             admission: Arc::new(Semaphore::new(workers + limits.queued)),
-            workers: Arc::new(Workers {
+            workers: Arc::new(WorkerPool {
                 state: Mutex::new((workers, VecDeque::new())),
             }),
             limits,

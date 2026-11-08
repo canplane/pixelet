@@ -69,7 +69,8 @@ fn pose(view: Intent) -> Option<ViewPose> {
 }
 
 /// The top of the ground under the eye of `at` (`ground_at`). It is the only
-/// floor the gate reads of a pose. None where no tile is resident there.
+/// floor the gate reads of a pose, and None where no tile is resident under
+/// the eye.
 fn ground_under(at: &ViewPose, access: &Ground<'_>) -> Option<f64> {
     ground_at(&eye(at).1, at.pivot, access)
 }
@@ -154,9 +155,8 @@ fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     }
 }
 
-/// The pose a fraction `t` of the way from `from` to `to`. The azimuth goes
-/// the short way round, as the easing turns it (domain/smooth.rs
-/// `smooth_angle`).
+/// The azimuth goes the short way round, as the easing turns it
+/// (domain/smooth.rs `smooth_angle`).
 fn between(from: &ViewPose, to: &ViewPose, t: f64) -> ViewPose {
     let turn = wrap(
         to.azimuth - from.azimuth,
@@ -226,12 +226,11 @@ fn climb_step(to: &ViewPose, from: &ViewPose, access: &Ground<'_>) -> ViewPose {
 /// None where it hits nothing. `draw` turns a pose into the pose as it is
 /// drawn. The way is clear when the straight line from the drawn eye to
 /// where it ends is clear. Otherwise the way follows the straight line in
-/// control space, as the easing does. It is sampled once for every two
-/// units the eye moves, and between samples the eye goes up its own column
-/// and across (`rise_clear`). An eye that starts in something solid has hit
-/// it where it stands. The exception is an eye at the nearest below the
-/// pivot's level, which may go where it is no deeper (the rules at the top
-/// of this module).
+/// control space, as the easing does, and between samples the eye goes up
+/// its own column and across (`rise_clear`). An eye that starts in something
+/// solid has hit it where it stands. The exception is an eye at the nearest
+/// below the pivot's level, which may go where it is no deeper (the rules at
+/// the top of this module).
 fn way_hit(
     from: &ViewPose,
     to: &ViewPose,

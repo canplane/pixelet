@@ -9,14 +9,13 @@ import { FileError } from "@xpute/runtime";
 import { root, storage as slots } from "@/abi/file.spec.ts";
 import { follow_refused_files, set_aside_by_root } from "./refusal.ts";
 import {
-  is_kept,
+  is_storage_key,
   commit_storage,
   open_storage,
   set_aside,
   type Storage,
 } from "./storage.ts";
 
-/** The settings' path below STORAGE. */
 const SETTINGS = String(slots.SETTINGS);
 
 function storage(
@@ -85,7 +84,7 @@ test("follow_refused_files - each refused file is set aside and emptied once", a
 test("storage - the keys kept are the core's files and those set aside, no other", () => {
   assert.deepStrictEqual(
     ["pxl:settings", "pxl:settings:aside:7-1", "pxl:lang", "pxl:ui"].map(
-      is_kept,
+      is_storage_key,
     ),
     [true, true, false, false],
   );

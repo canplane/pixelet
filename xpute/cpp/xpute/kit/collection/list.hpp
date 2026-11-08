@@ -1,7 +1,7 @@
 // cpp/xpute/kit/collection/list.hpp
 
-// A list of at most `N` values, held inline. It never grows: a push past `N`
-// is a bug (ENOSPC). Its first `len` slots hold values, and the rest are
+// A list holds at most `N` values, inline. It never grows: a push past `N` is a
+// bug (ENOSPC). Its first `len` slots hold values, and the rest are
 // uninitialized.
 
 #pragma once
@@ -46,8 +46,8 @@ template <class T, std::size_t N> class List {
     std::span<const T> as_slice() const noexcept { return {slot(0), len_}; }
     std::span<T> as_mut_slice() noexcept { return {slot(0), len_}; }
 
-    // Indexing and iteration reach the live values, as a Rust `List` derefs
-    // to its slice.
+    // Indexing and iteration reach the live values, as a Rust `List` derefs to
+    // its slice.
     T &operator[](std::size_t at) noexcept { return as_mut_slice()[at]; }
     const T &operator[](std::size_t at) const noexcept { return as_slice()[at]; }
     T *begin() noexcept { return slot(0); }

@@ -1,6 +1,6 @@
 {
   "$doc": [
-    "ground: OpenStreetMap Carto (gravitystorm/openstreetmap-carto, style/*.mss), each the value its key names, a derived one computed (darken, lighten, an rgba over @land-color) and a literal named for the feature it paints, a building at z16 and finer as a cell is z16; object: hand-picked; every value #rrggbb"
+    "The ground's colors are OpenStreetMap Carto's (gravitystorm/openstreetmap-carto, style/*.mss): each is the value its key names, a derived one is computed (darken, lighten, an rgba over @land-color), and a literal is named for the feature it paints. A building takes its color at z16 and finer, as a cell is z16. The objects' colors are hand-picked. Every value is #rrggbb."
   ],
   "sentinel": {
     "unknown": {

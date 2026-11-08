@@ -9,20 +9,18 @@ use crate::space::coord::zoom::units;
 use crate::space::layer::lattice::TILE_CELLS;
 use crate::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 
-use pxl_engine::way::{Stations, INTERVAL_M};
+use pxl_engine::way::{StationGrid, INTERVAL_M};
 use pxl_engine::{cells_of_m, LEAF_CELL_ZOOM};
 
-// ---- scatter: pxl-content's, for the CPU's readers of one cell ----
+// The scatter is pxl-content's, re-exported for the CPU's readers of one cell.
 
 pub use pxl_content::scatter::{before, meet, scatter_at, side_of, Candidate};
-
-// ---- piers ----
 
 /// A tile's cells in the world, so a station is the world's and not a tile's.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Frame {
-    pub corner: [f64; 2], // south-west, in u
-    pub cell: f64,        // a cell's side, in u
+    pub corner: [f64; 2], // The tile's south-west corner, in units.
+    pub cell: f64,        // A cell's side, in units.
 }
 
 impl Frame {
@@ -43,15 +41,15 @@ impl Frame {
     }
 
     /// Where its piers may stand, in leaf cells (pxl-engine way.rs
-    /// `Stations`): each beam's lattice of stations, at its spacing in
+    /// `StationGrid`): each beam's lattice of stations, at its spacing in
     /// ground meters where the tile lies, in whole leaf cells
     /// (`cells_of_m`), and where its corner falls in it; and the leaf cells
     /// its cell spans.
-    pub(crate) fn stations(self) -> Stations {
+    pub(crate) fn stations(self) -> StationGrid {
         let leaf = units(LEAF_CELL_ZOOM);
         let corner = self.corner.map(|v| (v / leaf).round_ties_even() as i64);
         let step = INTERVAL_M.map(|m| cells_of_m(m, self.per_m()).max(1));
-        Stations {
+        StationGrid {
             step,
             phase: step.map(|s| corner.map(|c| c.rem_euclid(i64::from(s)) as i32)),
             leaf: (self.cell / leaf).round_ties_even() as u32,

@@ -6,12 +6,12 @@
 // the eye a surface receives the map and which tiles a box of receivers stands on
 // (`Light::reach`, `Light::box_tiles`), and what a slide keeps (`Light::keeps`).
 
-/// The map's side, in texels (`light::HEADER_SIZE`).
+/// The map's side, in texels.
 fn light_size() -> u32 {
   return header_word(LIGHT_HEADER_SIZE);
 }
 
-/// The cast's number, counted up from one each cast (`light::HEADER_CAST`).
+/// The cast's number, counted up from one each cast.
 fn cast_number() -> u32 {
   return header_word(LIGHT_HEADER_CAST);
 }
@@ -50,10 +50,10 @@ fn tile_of(v: vec3<f32>) -> vec2<i32> {
 fn keeps_tile(tile: vec2<u32>, was: vec2<i32>) -> bool {
   let n = i32(light_tiles());
   let here = vec2<i32>(tile);
-  let held = here + (light_corner() - was) / i32(LIGHT_TILE);
+  let before = here + (light_corner() - was) / i32(LIGHT_TILE);
   let last_range = vec2<u32>(header_word(LIGHT_HEADER_LAST_RANGE), header_word(LIGHT_HEADER_LAST_RANGE + 1u));
-  return all(held >= vec2<i32>(0)) && all(held < vec2<i32>(n))
-    && tile_band_in(held, last_range) == tile_band(here);
+  return all(before >= vec2<i32>(0)) && all(before < vec2<i32>(n))
+    && tile_band_in(before, last_range) == tile_band(here);
 }
 
 /// How far from the eye a surface receives the map, in units (`Light::reach`). It is the
@@ -73,7 +73,7 @@ fn light_within(lo: vec3<f32>, hi: vec3<f32>, reach: f32) -> bool {
 
 /// The box tiles a receiver may stand on: whether there are any, and the lowest and the
 /// highest of them.
-struct BoxTiles {
+struct TileRange {
   got: bool,
   first: vec2<i32>,
   last: vec2<i32>,
@@ -84,15 +84,15 @@ struct BoxTiles {
 /// of it as the light's rays are parallel, and `LIGHT_FOOTPRINT_TILES` more each way where the
 /// head asks for the footprint (`footprint`). There are none where the box lies past the reach
 /// or past the light's box.
-fn box_tiles(lo: vec3<f32>, hi: vec3<f32>) -> BoxTiles {
+fn box_tiles(lo: vec3<f32>, hi: vec3<f32>) -> TileRange {
   if (!light_within(lo, hi, light_reach())) {
-    return BoxTiles(false, vec2<i32>(0), vec2<i32>(0));
+    return TileRange(false, vec2<i32>(0), vec2<i32>(0));
   }
   return corner_tiles(lo, hi);
 }
 
 /// The tiles the box from `lo` to `hi` stands on, whatever the reach (`Light::corner_tiles`).
-fn corner_tiles(lo: vec3<f32>, hi: vec3<f32>) -> BoxTiles {
+fn corner_tiles(lo: vec3<f32>, hi: vec3<f32>) -> TileRange {
   var first = vec2<i32>(2147483647i);
   var last = vec2<i32>(-2147483647i);
   for (var k = 0u; k < 8u; k += 1u) {
@@ -105,5 +105,5 @@ fn corner_tiles(lo: vec3<f32>, hi: vec3<f32>) -> BoxTiles {
   let n = i32(light_tiles()) - 1i;
   first = max(first - grow, vec2<i32>(0));
   last = min(last + grow, vec2<i32>(n));
-  return BoxTiles(all(first <= last), first, last);
+  return TileRange(all(first <= last), first, last);
 }

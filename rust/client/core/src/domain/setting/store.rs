@@ -15,7 +15,7 @@
 //! alone: it is neither written nor read, so it starts at its default.
 
 pub use crate::domain::setting::schema_spec::{
-    AoMode, CameraMode, OrbitObstacleMode, ResMode, SettingKey, Settings,
+    AoMode, CameraMode, OrbitObstacleMode, ResMode, Setting, SettingKey,
 };
 use crate::sys::io::file::{self, StorageRead};
 use xpute_core::global::Global;
@@ -42,7 +42,7 @@ pub fn is_offered(key: SettingKey, val: u32) -> bool {
     !(key.dev() || key.dev_option(val)) || (cfg!(feature = "dev") && development())
 }
 
-impl Settings {
+impl Setting {
     /// Sets `key` to `val` and returns whether it changed. None for a value
     /// the key cannot hold or a setting not offered (`is_offered`). The
     /// caller acts on the change.
@@ -66,7 +66,7 @@ impl Settings {
         let mut bytes = Vec::new();
         for key in SettingKey::ALL {
             let val = self.get(key);
-            if !key.is_stored() || !is_offered(key, val) || val == Settings::DEFAULT.get(key) {
+            if !key.is_stored() || !is_offered(key, val) || val == Setting::DEFAULT.get(key) {
                 continue;
             }
             leb(&mut bytes, key as u32);
@@ -99,7 +99,7 @@ fn unleb(bytes: &[u8], at: &mut usize) -> Option<u32> {
     None
 }
 
-static SETTINGS_STORE: Global<Settings> = Global::new();
+static SETTINGS_STORE: Global<Setting> = Global::new();
 
 /// Whether the store differs from what storage holds. The store is written
 /// at most once a turn, so a turn of changes costs the runtime one file
@@ -154,9 +154,9 @@ pub fn settings_load_step() -> bool {
     };
     let (s, now) = match file {
         StorageRead::Bytes(bytes) => (read_stored(&bytes), Load::Loaded),
-        StorageRead::None => (Settings::DEFAULT, Load::Loaded),
-        StorageRead::Unreadable if file::is_storage_refused() => (Settings::DEFAULT, Load::Refused),
-        StorageRead::Unreadable => (Settings::DEFAULT, Load::Unreadable),
+        StorageRead::None => (Setting::DEFAULT, Load::Loaded),
+        StorageRead::Unreadable if file::is_storage_refused() => (Setting::DEFAULT, Load::Refused),
+        StorageRead::Unreadable => (Setting::DEFAULT, Load::Unreadable),
     };
     SETTINGS_STORE.set(s);
     UNSAVED.set(false);
@@ -184,8 +184,8 @@ pub fn settings_keep_step() {
 /// The stored pairs over the defaults. A pair whose number no setting has is
 /// skipped, as is a session's setting and a value its setting cannot hold or
 /// this build does not offer. A pair cut short ends the read.
-fn read_stored(bytes: &[u8]) -> Settings {
-    let mut s = Settings::DEFAULT;
+fn read_stored(bytes: &[u8]) -> Setting {
+    let mut s = Setting::DEFAULT;
     let mut at = 0;
     while let (Some(number), Some(val)) = (unleb(bytes, &mut at), unleb(bytes, &mut at)) {
         if let Some(key) =
@@ -197,12 +197,12 @@ fn read_stored(bytes: &[u8]) -> Settings {
     s
 }
 
-pub fn settings() -> &'static Settings {
+pub fn settings() -> &'static Setting {
     settings_mut()
 }
 
-pub fn settings_mut() -> &'static mut Settings {
-    SETTINGS_STORE.get(|| Settings::DEFAULT)
+pub fn settings_mut() -> &'static mut Setting {
+    SETTINGS_STORE.get(|| Setting::DEFAULT)
 }
 
 #[cfg(test)]

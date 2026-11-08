@@ -1,11 +1,5 @@
 // @pxl/client/ui/world/dock/store.ts
 
-/**
- * The dock's state, which the UI owns: the tool and the asset in hand, the
- * hotbar, the chat lines, the dock's mode and the swatch flash. The store
- * tells the core what is held and sends it each chat line.
- */
-
 import { create } from "zustand";
 
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
@@ -40,8 +34,6 @@ function isKnownPick(id: AssetId): boolean {
   return id === MARKER || decorIds.includes(id) || allCubes.includes(id);
 }
 
-// A pick already on the hotbar keeps its slot. A new pick goes in front and
-// pushes the last one out.
 function touchRecent(recentPicks: readonly AssetId[], id: AssetId): AssetId[] {
   if (recentPicks.includes(id)) return recentPicks as AssetId[];
   return [id, ...recentPicks].slice(0, RECENT_PICKS);
@@ -64,8 +56,6 @@ interface DockState {
   // the core holds it.
   recentPicks: AssetId[];
   chatLines: ChatLine[];
-  /** Whether the dock shows the palette or the message field. The keyboard is
-   * up while it shows the message field (message.tsx). */
   dockMode: DockMode;
   /** A pick or a size step made with a key. The dock shows it over the cube's
    * swatch as a press would (popover.tsx). */
@@ -92,8 +82,8 @@ const SEED: readonly AssetId[] = [
   decorIds[0],
 ];
 
-/** The number of hotbar slots. The hotbar is always full: the seed fills the
- * empty slots, and a new pick pushes the last one out. */
+/** The hotbar is always full: the seed fills the empty slots, and a new pick
+ * pushes the last one out. */
 export const RECENT_PICKS = SEED.length;
 
 // Only the hotbar is saved. Chat lines and the tool in hand are not, so every
@@ -160,12 +150,10 @@ export function useSwatchFlash(): SwatchFlash {
   return store((s) => s.swatchFlash);
 }
 
-/** The pick in hotbar `slot`, read once rather than watched. */
 export function recentPick(slot: number): AssetId {
   return store.getState().recentPicks[slot];
 }
 
-/** The dock's mode, read once rather than watched. */
 export function dockMode(): DockMode {
   return store.getState().dockMode;
 }
@@ -204,10 +192,9 @@ export function selectScale(scaleSteps: i32): void {
   void hold(tool, id, scaleSteps);
 }
 
-/** Puts `id` in hand to place, and on the hotbar once the core holds it. */
 export function selectAsset(id: AssetId): void {
-  void hold(Tool.Item, id, store.getState().scaleSteps).then((held) => {
-    if (held) {
+  void hold(Tool.Item, id, store.getState().scaleSteps).then((ok) => {
+    if (ok) {
       store.setState((s) => ({ recentPicks: touchRecent(s.recentPicks, id) }));
     }
   });
@@ -225,7 +212,6 @@ export function setDockMode(mode: DockMode): void {
   store.setState({ dockMode: mode });
 }
 
-/** Turns to the other mode. A swipe either way and the Tab key both do. */
 export function switchDockMode(): void {
   setDockMode(
     dockMode() === DockMode.Message ? DockMode.Palette : DockMode.Message,
@@ -238,8 +224,7 @@ export function flashSwatch(cube: Cube, open: boolean): void {
   }));
 }
 
-/** Steps the scale of the cube in hand. A `delta` of 1 is one step coarser,
- * and -1 one step finer. */
+/** A `delta` of 1 is one step coarser, and -1 one step finer. */
 export function stepScale(delta: i32): void {
   const { tool, id, scaleSteps } = store.getState();
   if (tool !== Tool.Item || kindOf(id) !== KIND.cube) return;

@@ -32,7 +32,6 @@ const CORE = join(
   "wasm32-unknown-unknown/debug/xpute_example.wasm",
 );
 
-/** The runtime's answer to ASK, which the core adds. */
 const ANSWER = 100;
 
 test("example - a command answered with what the core asked its runtime", async () => {

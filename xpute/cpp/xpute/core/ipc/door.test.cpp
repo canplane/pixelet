@@ -15,10 +15,8 @@ constexpr std::uint32_t SQ = 8;
 constexpr std::uint32_t CQ = 256;
 constexpr std::uint32_t SLOT = 64;
 constexpr std::uint32_t MOST_FRAMES = 64;
-// A command of the program's own, past xpute's majors.
 constexpr std::uint32_t PROGRAM = frame::PROGRAM_MAJOR << 8 | 1;
 
-// A program that answers its own commands with `apply`, and the rest with 0.
 template <class Apply> auto program(Apply apply) {
     return [apply](const Submission &sub) mutable {
         if (const Program *p = std::get_if<Program>(&sub)) return apply(p->cmd, p->pkt);
@@ -119,7 +117,6 @@ XPUTE_TEST(door_open_and_close_ask_for_completion) {
     d.close(5);
     for (abi::fs::Command cmd : {abi::fs::Command::FS_OPENAT, abi::fs::Command::FS_CLOSE}) {
         std::optional<Frame> got = d.cq().peek();
-        // Tagged with its descriptor.
         XPUTE_CHECK(got && got->tag == 5 && got->cmd == static_cast<std::uint32_t>(cmd) && (got->flags & frame::ACKREQ) != 0);
         d.cq().advance();
     }

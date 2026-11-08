@@ -12,8 +12,8 @@ use crate::frame::shader::floor;
 use crate::frame::shader::record::*;
 use pxl_engine::{raster, ray};
 
-/// The binding of a pass's head (pxl-engine `light::HEADER_SIZE`). A pass of the light's map
-/// binds the light's head there; a pass of the eye binds the eye's, which names no light.
+/// A pass of the light's map binds the light's head at this binding, and a pass of the eye
+/// binds the eye's, which names no light.
 pub const HEADER_BINDING: u32 = 11;
 
 /// The group of the walks over the node cache alone of the lattice's runs, which are the runs
@@ -23,7 +23,7 @@ pub const LATTICE_WALK_GROUP: [u32; 12] = [
     0, COMPUTE, UNIFORM, 8, COMPUTE, STORAGE_RW, 9, COMPUTE, STORAGE, 10, COMPUTE, STORAGE_RW,
 ];
 
-/// `LATTICE_WALK_GROUP` with the light's head, for the light's map.
+/// `LATTICE_WALK_GROUP` with the light's head at `HEADER_BINDING`, for the light's map.
 pub const LIGHT_LATTICE_WALK_GROUP: [u32; 15] = [
     0,
     COMPUTE,
@@ -373,7 +373,7 @@ pub const LATTICE_LAST_GROUP: [u32; 27] = [
     STORAGE_RW,
 ];
 
-/// `LATTICE_LAST_GROUP` with the light's head, for the light's map.
+/// `LATTICE_LAST_GROUP` with the light's head at `HEADER_BINDING`, for the light's map.
 pub const LIGHT_LATTICE_LAST_GROUP: [u32; 30] = [
     0,
     COMPUTE,
@@ -417,8 +417,6 @@ const _: () = assert!(
     "the cast's world's group or the holes' queue's binds past WebGPU's floor"
 );
 
-// Each compute group must lay out what the shaders built over it read, as their declarations
-// take it (build.rs `BINDS`).
 const _: () = assert!(
     binds(&[COMPUTE_CAST], &CAST_GROUP)
         && binds(&[COMPUTE_CAST_TILES], &CAST_TILES_GROUP)
@@ -610,8 +608,6 @@ pub const FACE_GROUP: [u32; 27] = [
     STORAGE,
 ];
 
-// Each compute group here against what its shader reads, as its declarations take it
-// (build.rs `BINDS`).
 const _: () = assert!(
     binds(&[COMPUTE_SAMPLE_BOX], &SAMPLE_BOX_GROUP)
         && binds(&[COMPUTE_LIGHT_SAMPLE_BOX], &LIGHT_SAMPLE_BOX_GROUP)
@@ -641,29 +637,24 @@ pub const GENERATE_GROUP: [u32; 27] = [
     STORAGE,
 ];
 
-/// The group of `decor_mark_cs` (decor_mark.wgsl).
 pub const MARK_GROUP: [u32; 12] = [
     1, COMPUTE, STORAGE, 9, COMPUTE, STORAGE_RW, 11, COMPUTE, STORAGE_RW, 12, COMPUTE, STORAGE,
 ];
 
-/// The group of `decor_thin_cs` (decor_thin.wgsl).
 pub const THIN_GROUP: [u32; 9] = [
     9, COMPUTE, STORAGE_RW, 10, COMPUTE, STORAGE, 11, COMPUTE, STORAGE,
 ];
 
-/// The group of `decor_cnt_cs` (decor_cnt.wgsl).
 pub const CNT_GROUP: [u32; 15] = [
     0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 9, COMPUTE, STORAGE_RW, 13, COMPUTE, STORAGE, 14,
     COMPUTE, STORAGE_RW,
 ];
 
-/// The group of `decor_compact_cs` (decor_compact.wgsl).
 pub const COMPACT_GROUP: [u32; 18] = [
     1, COMPUTE, STORAGE, 9, COMPUTE, STORAGE, 10, COMPUTE, STORAGE, 13, COMPUTE, STORAGE, 14,
     COMPUTE, STORAGE_RW, 15, COMPUTE, STORAGE_RW,
 ];
 
-/// The group of `decor_args_cs` (decor_args.wgsl).
 pub const ARGS_GROUP: [u32; 15] = [
     0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW, 2, COMPUTE, STORAGE_RW, 3, COMPUTE, STORAGE_RW,
     15, COMPUTE, STORAGE_RW,
@@ -678,8 +669,6 @@ pub const CULL_GROUP: [u32; 27] = [
     UNIFORM,
 ];
 
-// Each compute group here against what its shader reads, as its declarations take it
-// (build.rs `BINDS`).
 const _: () = assert!(
     binds(&[COMPUTE_DECOR_CULL, COMPUTE_DECOR_CULL_ARGS], &CULL_GROUP)
         && binds(&[COMPUTE_GENERATION_MARK], &MARK_GROUP)
@@ -718,8 +707,6 @@ pub const DAMAGE_RECT_GROUP: [u32; 9] = [
     0, COMPUTE, STORAGE_RW, 30, COMPUTE, STORAGE, 31, COMPUTE, UNIFORM,
 ];
 
-// Each compute group here against what its shader reads, as its declarations take it
-// (build.rs `BINDS`).
 const _: () = assert!(
     binds(&[COMPUTE_RECT_ARGS], &RECT_ARGS_GROUP)
         && binds(&[COMPUTE_SCREEN_MARK], &SCREEN_MARK_GROUP)
@@ -797,7 +784,6 @@ const fn args_bind(at: u32) -> Bind {
     }
 }
 
-/// Binding `binding` of the whole of buffer `buf`.
 pub const fn bind(binding: u32, buf: u32) -> Bind {
     Bind {
         binding,

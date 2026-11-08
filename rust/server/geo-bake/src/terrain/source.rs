@@ -10,7 +10,6 @@ use crate::terrain::bake::bake_surface;
 use crate::terrain::bake::Surface;
 use crate::terrain::repository::TerrainRepository;
 
-/// The tile's surface.
 pub fn fetch_surface(
     repo: &TerrainRepository,
     client: &mut Client,

@@ -15,21 +15,21 @@ path = "src/lib.rs"
 xpute-core.workspace = true
 xpute-kit.workspace = true
 
-# The core memory a native runtime reserves, mapped from the system
-# (src/native/reserve.rs). `native` is unix's alone.
+# A native runtime maps the core's memory from the system
+# (src/native/reserve.rs), and `native` is unix's alone.
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
-# What an Android app reaches a native core through (src/jni.rs), and the
-# log a stop is told to (src/native/say.rs): the NDK's own headers, JNI and
-# the log, as bindings and nothing over them.
+# An Android app reaches a native core through JNI (src/jni.rs), and a stop is
+# told to the NDK's log (src/native/say.rs). These are the NDK's own headers as
+# bindings, with nothing over them.
 [target.'cfg(target_os = "android")'.dependencies]
 jni-sys = "0.3"
 ndk-sys = "0.6"
 
-# Each its own process, since a process boots one core and sets one base
-# (xpute_core::mem): the boot and the core's thread, and the
-# allocator installed as a test binary's own.
+# Each test binary is its own process, since a process boots one core and sets
+# one base (xpute_core::mem): the boot and the core's thread, the allocator
+# installed as a test binary's own, and a pause.
 [[test]]
 name = "native"
 path = "src/native.test.rs"

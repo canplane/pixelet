@@ -7,7 +7,6 @@
 
 use crate::{Zoom, FINEST_ZOOM, UNIT_ZOOM};
 
-// ---- the view's knobs ----
 // Each knob here is set on its own. What is drawn, and how finely, follows from them, from
 // the field of view and from the display's pixels.
 
@@ -30,14 +29,12 @@ pub const ASPECT_MOST: f32 = 21.0 / 9.0;
 /// out to `CLIP_MARGIN` times the distance where the view stops drawing them.
 pub const CLIP_MARGIN: f32 = 2.0;
 
-// ---- the split's rule ----
-
 /// How many of the view's cells a zoom's cell spans at the distance where, going outward, it
 /// begins to be drawn. Its split distance is therefore `CELLS_A_RAD / SPANS` times its side
 /// (pxl-spec space/camera/grid.rs `split_dist`).
 pub const SPANS: f32 = 2.0;
 
-// ---- derived from the knobs ----
+// What follows is derived from the knobs above and is not set on its own.
 
 pub const CLIP_CELLS_A_RAD: f32 = CELLS_A_RAD * CLIP_MARGIN;
 

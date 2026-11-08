@@ -7,8 +7,8 @@
 // size and the fog are read from the frame's words.
 @group(0) @binding(6) var<uniform> ao_words: array<vec4f, AO_VEC4S>;
 
-// The blue noise's side less one. A pixel reads the noise tiled, its
-// coordinates masked by it.
+// A pixel reads the blue noise tiled, its coordinates masked by the noise's side less one,
+// which holds only while that side is a power of two.
 const AO_NOISE_MASK: i32 = i32(AO_NOISE_SIDE) - 1;
 
 // The view-space position at reversed depth `d` and screen coordinates `uv`,

@@ -38,7 +38,7 @@ use crate::terrain::pipeline::overture::policy::waterway_width;
 
 use super::*;
 
-// ---- Arnis's numbers for a deck, in meters or as ratios, under its names ----
+// Arnis's numbers for a deck, in meters or as ratios, under its names.
 const LAYER_HEIGHT_STEP_M: f64 = 6.0;
 const FLAT_TERRAIN_DIP_THRESHOLD_M: f64 = 4.0;
 const SHORT_BRIDGE_LENGTH_M: f64 = 30.0;
@@ -77,7 +77,7 @@ fn effective_layer(r: &Stretch) -> i64 {
         .unwrap_or(i64::from(r.piece.form == Form::Bridge))
 }
 
-// ---- What a deck must clear: ways at grade and waterways, bucketed. ----
+// What a deck must clear are the ways at grade and the waterways, bucketed by where they lie.
 
 struct Obstacle {
     a: [f64; 2],
@@ -88,74 +88,75 @@ struct Obstacle {
     nodes: Vec<End>,
 }
 
-struct Obstacles {
+struct ObstacleGrid {
     list: Vec<Obstacle>,
     buckets: FnvHashMap<(i64, i64), Vec<usize>>,
     bucket: f64,
 }
 
-impl Obstacles {
+impl ObstacleGrid {
     /// Each segment cut to the ring `[origin, far]`, with its nodes those in it. `none` has
     /// nothing to clear, for where no deck is solved.
-    fn none() -> Obstacles {
-        Obstacles {
+    fn none() -> ObstacleGrid {
+        ObstacleGrid {
             list: Vec::new(),
             buckets: FnvHashMap::default(),
             bucket: 1.0,
         }
     }
 
-    fn of(src: &Ring, [origin, far]: [[f64; 2]; 2], scale: Scale) -> Obstacles {
+    fn of(src: &Ring, [origin, far]: [[f64; 2]; 2], scale: Scale) -> ObstacleGrid {
         let cell = |p: [f64; 2]| {
             [
                 u_from_merc(p[0] - origin[0]) / CELL_U,
                 u_from_merc(p[1] - origin[1]) / CELL_U,
             ]
         };
-        let mut out = Obstacles {
+        let mut out = ObstacleGrid {
             list: Vec::new(),
             buckets: FnvHashMap::default(),
             bucket: f64::from(scale.c(OBSTACLE_GRID_M).max(1)),
         };
-        let add =
-            |out: &mut Obstacles, points: &[[f64; 2]], ends: &[End], width: f32, headroom: i32| {
-                let at_end = [points[0], points[points.len() - 1]];
-                let nodes: Vec<End> = points
-                    .iter()
-                    .filter(|&&p| src.inside(p))
-                    .map(|&p| End::at(p))
-                    .chain(
-                        ends.iter()
-                            .zip(at_end)
-                            .filter(|(_, p)| src.inside(*p))
-                            .map(|(e, _)| e.clone()),
-                    )
-                    .collect();
-                for pair in points.windows(2) {
-                    let Some((a, b)) = clip(pair[0], pair[1], [origin, far]) else {
-                        continue;
-                    };
-                    let pair = [cell(a), cell(b)];
-                    let i = out.list.len();
-                    out.list.push(Obstacle {
-                        a: pair[0],
-                        b: pair[1],
-                        width,
-                        headroom,
-                        nodes: nodes.clone(),
-                    });
-                    let r = f64::from(way::half_width(width));
-                    let k = |v: f64| (v / out.bucket).floor() as i64;
-                    for bx in k(pair[0][0].min(pair[1][0]) - r)..=k(pair[0][0].max(pair[1][0]) + r)
+        let add = |out: &mut ObstacleGrid,
+                   points: &[[f64; 2]],
+                   ends: &[End],
+                   width: f32,
+                   headroom: i32| {
+            let at_end = [points[0], points[points.len() - 1]];
+            let nodes: Vec<End> = points
+                .iter()
+                .filter(|&&p| src.inside(p))
+                .map(|&p| End::at(p))
+                .chain(
+                    ends.iter()
+                        .zip(at_end)
+                        .filter(|(_, p)| src.inside(*p))
+                        .map(|(e, _)| e.clone()),
+                )
+                .collect();
+            for pair in points.windows(2) {
+                let Some((a, b)) = clip(pair[0], pair[1], [origin, far]) else {
+                    continue;
+                };
+                let pair = [cell(a), cell(b)];
+                let i = out.list.len();
+                out.list.push(Obstacle {
+                    a: pair[0],
+                    b: pair[1],
+                    width,
+                    headroom,
+                    nodes: nodes.clone(),
+                });
+                let r = f64::from(way::half_width(width));
+                let k = |v: f64| (v / out.bucket).floor() as i64;
+                for bx in k(pair[0][0].min(pair[1][0]) - r)..=k(pair[0][0].max(pair[1][0]) + r) {
+                    for by in k(pair[0][1].min(pair[1][1]) - r)..=k(pair[0][1].max(pair[1][1]) + r)
                     {
-                        for by in
-                            k(pair[0][1].min(pair[1][1]) - r)..=k(pair[0][1].max(pair[1][1]) + r)
-                        {
-                            out.buckets.entry((bx, by)).or_default().push(i);
-                        }
+                        out.buckets.entry((bx, by)).or_default().push(i);
                     }
                 }
-            };
+            }
+        };
         for way in src.ways.values() {
             let row = &way.row;
             // A bridge, a tunnel or a way indoors is no grade a deck clears (Arnis `grade_obstacle`).
@@ -276,14 +277,14 @@ fn dist_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
     libm::hypot(p[0] - a[0] - t * d[0], p[1] - a[1] - t * d[1])
 }
 
-// ---- Road bridges (Arnis `BridgeStructureMap::build`). ----
+// The road bridges follow Arnis's `BridgeStructureMap::build`.
 
 /// The resolved decks: for each cell, the deck's height and layer.
-pub(super) type DeckCells = FnvHashMap<(i64, i64), (i32, i64)>;
+pub(super) type DeckMap = FnvHashMap<(i64, i64), (i32, i64)>;
 
-pub(super) struct Decks {
+pub(super) struct DeckPlan {
     pub(super) ys: Vec<(usize, Vec<i32>)>,
-    pub(super) cells: DeckCells,
+    pub(super) cells: DeckMap,
     /// The ways a bridge's ramp took, kept from a tunnel's approach.
     pub(super) ramp_ways: FnvHashSet<PartId>,
 }
@@ -309,7 +310,6 @@ fn parallel(a: f64, b: f64) -> bool {
         || (180.0 - diff).abs() <= DUAL_CARRIAGEWAY_HEADING_TOLERANCE_DEG
 }
 
-/// The box around cells.
 fn cells_box(cells: &[[f64; 2]]) -> [[f64; 2]; 2] {
     let mut b = [[f64::INFINITY; 2], [f64::NEG_INFINITY; 2]];
     for c in cells {
@@ -474,7 +474,7 @@ fn ramp_len(total: f64, scale: Scale) -> f64 {
     )
 }
 
-// ---- A deck, leaning on nothing further than a tile. ----
+// A deck leans on nothing further away than a tile.
 
 /// A deck is solved in panels of `DECK_PANEL` cells along its way whole, each from what lies
 /// around the panel's middle, and a cell between two middles takes the blend of the two. The
@@ -495,7 +495,7 @@ const _: () = assert!(
 
 /// What a group's decks must meet or clear, each where it lies, in the ring's cells.
 #[derive(Default)]
-struct Needs {
+struct Clearance {
     /// The ground under each cell, and its member.
     grounds: Vec<([f64; 2], i32, usize)>,
     /// What a cell must clear, capped so that the deck can still come down to every anchor, and
@@ -536,7 +536,7 @@ impl Panel {
 }
 
 /// Stretch `r`'s deck cell by cell, member `m` of its group (`DECK_PANEL`).
-fn deck_of(r: &Stretch, m: usize, members: &[Member], needs: &Needs, scale: Scale) -> Vec<i32> {
+fn deck_of(r: &Stretch, m: usize, members: &[Member], needs: &Clearance, scale: Scale) -> Vec<i32> {
     let me = &members[m];
     let mut panels: FnvHashMap<usize, Panel> = FnvHashMap::default();
     (0..r.cell.len())
@@ -576,7 +576,7 @@ fn deck_panel(
     k: usize,
     m: usize,
     members: &[Member],
-    needs: &Needs,
+    needs: &Clearance,
     scale: Scale,
 ) -> Panel {
     let me = &members[m];
@@ -706,10 +706,10 @@ fn deck_panel(
 fn road_decks(
     src: &Ring,
     stretches: &[Stretch],
-    obstacles: &Obstacles,
+    obstacles: &ObstacleGrid,
     scale: Scale,
     lines: &mut Vec<(Line, WayRange)>,
-) -> Decks {
+) -> DeckPlan {
     let road: Vec<usize> = (0..stretches.len())
         .filter(|&q| stretches[q].piece.form == Form::Bridge && !stretches[q].rail())
         .collect();
@@ -775,7 +775,7 @@ fn road_decks(
             bridge_nodes.entry(e).or_default().push(q);
         }
     }
-    let mut laid: DeckCells = FnvHashMap::default();
+    let mut laid: DeckMap = FnvHashMap::default();
     let mut joints: FnvHashMap<End, i32> = FnvHashMap::default();
     let mut claimed: FnvHashSet<PartId> = FnvHashSet::default();
     let mut out = Vec::new();
@@ -839,7 +839,7 @@ fn road_decks(
         let anchors_end = |n: &End| is_boundary(n) && !ramp_ends.contains(n) && !joins_other(n);
 
         // What the deck must meet or clear, each where it lies, in the ring's cells.
-        let mut needs = Needs::default();
+        let mut needs = Clearance::default();
         for (m, &q) in g.iter().enumerate() {
             let r = &stretches[q];
             let last = r.cell.len() - 1;
@@ -1040,19 +1040,20 @@ fn road_decks(
             out.push((q, std::mem::take(&mut ys[m])));
         }
     }
-    Decks {
+    DeckPlan {
         ys: out,
         cells: laid,
         ramp_ways: claimed,
     }
 }
 
-// ---- Rail bridges: on a road deck, or one level as a viaduct with ramps at its free ends. ----
+// A rail bridge stands on a road deck, or at one level as a viaduct with ramps at its free
+// ends.
 
 fn rail_decks(
     stretches: &[Stretch],
-    obstacles: &Obstacles,
-    laid: &DeckCells,
+    obstacles: &ObstacleGrid,
+    laid: &DeckMap,
     scale: Scale,
 ) -> Vec<(usize, Vec<i32>)> {
     let rail: Vec<usize> = (0..stretches.len())
@@ -1284,12 +1285,12 @@ pub(super) fn decks(
     ring: [[f64; 2]; 2],
     scale: Scale,
     lines: &mut Vec<(Line, WayRange)>,
-) -> Decks {
+) -> DeckPlan {
     // What a deck must clear, read only where there is a deck.
     let obstacles = if stretches.iter().any(|r| r.piece.form == Form::Bridge) {
-        Obstacles::of(src, ring, scale)
+        ObstacleGrid::of(src, ring, scale)
     } else {
-        Obstacles::none()
+        ObstacleGrid::none()
     };
     let solved = road_decks(src, stretches, &obstacles, scale, lines);
     for (q, ys) in &solved.ys {

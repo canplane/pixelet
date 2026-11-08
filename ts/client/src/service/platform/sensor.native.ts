@@ -61,7 +61,8 @@ function watch_end(watch: Watch): void {
   watch.subscription = null;
 }
 
-/** A subscription that arrives after its stop is let go at once. */
+/** `watchPositionAsync` answers later, so a subscription can arrive after the
+ * watch was stopped. It is then let go at once. */
 function watch_keep(
   watch: Watch,
   subscription: Location.LocationSubscription,

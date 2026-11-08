@@ -14,7 +14,6 @@ fn hits_cap() -> u32 {
   return HITS_A_FRAME;
 }
 
-/// The box texel whose slot's ray made hit `r`.
 fn hit_texel(r: u32) -> vec2<u32> {
   let px = beams[hit_at(r) + HIT_PX];
   return slot_texel(vec2<u32>(px & 0xffffu, px >> 16u));
@@ -33,6 +32,6 @@ fn hit_whole(k: Node, r: u32) -> bool {
 }
 
 /// The light opens no faces' asks, because its slots read no face's word.
-fn hit_asks() -> Asks {
-  return Asks(0u, 0u, 0u);
+fn hit_asks() -> AskList {
+  return AskList(0u, 0u, 0u);
 }

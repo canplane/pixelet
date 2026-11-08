@@ -220,8 +220,8 @@ fn is_past(shard: u32) -> bool {
 
 /// The twin of pxl-engine `clipmap::bound_over`. The `all` of the bound it returns is not read.
 fn bound_over(place: u32, coarsest: u32, finest: u32, zoom: u32, c: vec2<i32>) -> NodeBound {
-  let top = held_to(finest);
-  let bottom = held_to(coarsest);
+  let top = clip_zoom(finest);
+  let bottom = clip_zoom(coarsest);
   var b = BOUNDS_EMPTY;
   var found = place;
   var z = top;
@@ -252,7 +252,7 @@ struct Cell {
 
 /// The twin of pxl-engine `clipmap::ground`.
 fn ground_column(shard: u32, place: u32, zoom: u32, b: vec2<i32>) -> Cell {
-  let clip = held_to(zoom);
+  let clip = clip_zoom(zoom);
   let s = step_to(place, clip, cell_at(zoom, clip, b));
   var fold = 0u;
   var column = 0u;

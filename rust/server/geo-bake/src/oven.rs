@@ -20,7 +20,7 @@ use pxl_spec::space::coord::zoom::Zoom;
 use std::sync::Arc;
 
 pub mod job;
-use job::{Limits, Runner};
+use job::{Limit, Runner};
 use pxl_spec::space::layer::quadrant;
 
 #[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -119,7 +119,7 @@ impl Server {
         workers: usize,
         base: PathBuf,
         min_zoom: Zoom,
-        limits: Limits,
+        limits: Limit,
     ) -> Result<Self, String> {
         let owner = claim(&base)?;
         let runner = Arc::new(Runner::new(workers, limits)?);

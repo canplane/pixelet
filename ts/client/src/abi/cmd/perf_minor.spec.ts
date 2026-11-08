@@ -2,8 +2,6 @@
 //
 // GENERATED from spec/client/core/door/ui.json
 
-// The profiler's.
-
 export const START = 0x01;
 export const STOP = 0x02;
 export const STATS = 0x03;

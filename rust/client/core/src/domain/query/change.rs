@@ -19,15 +19,15 @@ use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_core::global::Global;
 
 #[derive(Default)]
-struct Changes {
+struct ChangeLog {
     ground: Vec<Quadrant>,
     written: Vec<Aabb>,
 }
 
-static CHANGES: Global<Changes> = Global::new();
+static CHANGES: Global<ChangeLog> = Global::new();
 
-fn changes() -> &'static mut Changes {
-    CHANGES.get(Changes::default)
+fn changes() -> &'static mut ChangeLog {
+    CHANGES.get(ChangeLog::default)
 }
 
 /// Takes the frame turn's changes from the ground's tile cache and the object
@@ -130,8 +130,8 @@ impl<K, A> Default for Memo<K, A> {
 impl<K: PartialEq, A: Copy> Memo<K, A> {
     pub const NONE: Memo<K, A> = Memo(None);
 
-    /// Drops the answer when a change touched its columns. It is called every
-    /// frame turn, so it sees each change once (`within`).
+    /// Drops the answer when a change touched its columns. The caller calls
+    /// this every frame turn, so that it sees each change once (`within`).
     pub fn forget_touched(&mut self) {
         if self
             .0

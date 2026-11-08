@@ -9,8 +9,8 @@ use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::shader::word::{DECOR_GROUPS, DRAW_FLOATS};
 use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::draw::DRAW_WORDS;
-use pxl_render::gpu::ray::{Cast, GroundBricks};
-use pxl_render::gpu::renderer::{render_frame, EarthTiles, FrameInput, FrameStat};
+use pxl_render::gpu::ray::{Cast, GroundInput};
+use pxl_render::gpu::renderer::{render_frame, EarthLayer, FrameInput, FrameStat};
 use pxl_render::gpu::span_spec::FrameKind;
 use pxl_render::gpu::surface::SURFACES;
 use pxl_spec::space::coord::v3;
@@ -49,7 +49,7 @@ pub fn screen_shows_world() -> bool {
 const EARTH: Load = Load::Sphere;
 
 use crate::domain::layer::terrain::clipmap;
-use crate::domain::preview::{Draft, RenderEdits};
+use crate::domain::preview::{Draft, RenderEdit};
 use crate::domain::scene;
 use crate::domain::scene::animation;
 use crate::domain::scene::cast;
@@ -92,7 +92,7 @@ pub struct FrameReport {
 /// `pace` is how the turn paced this frame, and the drawn resolution is
 /// judged by it (domain/scene/resolution.rs `load`). `edits` is the pointer's
 /// preview, by which the GPU's rays cut the world.
-pub fn stage_render(pace: Pace, edits: &RenderEdits) -> FrameReport {
+pub fn stage_render(pace: Pace, edits: &RenderEdit) -> FrameReport {
     let v = view();
     let settings = settings();
     // The matrices are relative to the eye, as the draws' positions are, so
@@ -177,12 +177,12 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> FrameReport {
         pack: load_of(pack).and_then(load_image),
         moon: load_of(moon::picture).and_then(load_image),
         earth: load_image(EARTH),
-        earth_tiles: EarthTiles {
+        earth_tiles: EarthLayer {
             window,
             layers: &layers,
             upload: &mut earth_upload,
         },
-        ground: GroundBricks {
+        ground: GroundInput {
             upload: &mut terrain_upload,
             pool: clipmap::pool_top()
                 .max(param::WAYS_POOL_FIRST_BYTES / (4 * tree::CHILD_GROUP_WORDS)),
@@ -231,7 +231,7 @@ pub fn scene_step(
     ctx: &mut TickContext,
     pivot: Option<q3::Q3>,
     heading: Option<f64>,
-    edits: &RenderEdits,
+    edits: &RenderEdit,
     draft: Option<&Draft>,
 ) {
     let v = view();

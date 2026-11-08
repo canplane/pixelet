@@ -1,11 +1,11 @@
 // xpute-gpu/program.test.rs
 
-//! The programs whose records spec/golden/gpu/program.tsv holds, written
-//! with the Rust encoder; cpp/xpute/gpu/encode.test.cpp makes the same calls
-//! in C++. Each turn ends through `turn` with a request whose ticket is the
-//! turn's number, counted from 1. The next turn waits until the runtime has
-//! stored that ticket at the fence, and the last turn reads the result back
-//! to the place the record names.
+//! These are the programs whose records spec/golden/gpu/program.tsv holds,
+//! written with the Rust encoder; cpp/xpute/gpu/encode.test.cpp makes the same
+//! calls in C++. Each turn ends through `turn` with a request whose ticket is
+//! the turn's number, counted from 1. The next turn waits until the runtime has
+//! stored that ticket at the fence, and the last turn reads the result back to
+//! the place the record names.
 
 use xpute_core::ipc::stream::Stream;
 
@@ -15,12 +15,12 @@ use crate::spec::{BUFFER_USAGE as B, COLOR_WRITE, SHADER_STAGE as S, TEXTURE_USA
 
 pub(crate) type Encoder = Gpu<64>;
 
-/// What ends a turn. The test that runs a program publishes the stream there
-/// and checks it.
+/// A `Turn` ends a turn. The test that runs a program publishes the stream
+/// there and checks it.
 pub(crate) type Turn<'a> = dyn FnMut(&mut Stream) + 'a;
 
-/// The offsets, in the region that starts at `base`, where the record puts
-/// what a program reads and writes.
+/// These are the offsets, in the region that starts at `base`, where the record
+/// puts what a program reads and writes.
 pub(crate) struct At {
     pub base: *mut u8,
     pub input: usize,
@@ -35,8 +35,8 @@ impl At {
         unsafe { core::slice::from_raw_parts(self.base.add(self.input), self.input_len) }
     }
 
-    /// The fence and the result word after it (spec RESULT), which only the
-    /// runtime writes.
+    /// This is the fence and the result word after it (spec RESULT), which only
+    /// the runtime writes.
     fn done(&self) -> &'static [u32; 2] {
         // SAFETY: as `input`; the places do not overlap.
         unsafe { &*self.base.add(self.done).cast::<[u32; 2]>() }
@@ -101,8 +101,8 @@ pub(crate) const PROGRAMS: [Program; 7] = [
     },
 ];
 
-/// A target's side in pixels. Its rows are read back 256 bytes apart, the
-/// row alignment WebGPU asks of a copy into a buffer.
+/// This is a target's side in pixels. Its rows are read back 256 bytes apart,
+/// the row alignment WebGPU asks of a copy into a buffer.
 pub(crate) const SIDE: u32 = 16;
 
 fn le(words: &[u32]) -> Vec<u8> {
@@ -132,8 +132,8 @@ fn target(gpu: &mut Encoder, s: &mut Stream) -> (Id, Id) {
     (t, v)
 }
 
-/// One pass drawing into `view`. Each channel of its clear color is a whole
-/// number of 255ths, so every device stores the same bytes.
+/// This is one pass drawing into `view`. Each channel of its clear color is a
+/// whole number of 255ths, so every device stores the same bytes.
 fn pass(gpu: &mut Encoder, s: &mut Stream, e: Id, view: Id) -> Id {
     let colors = [ColorAttachment {
         view,
@@ -204,7 +204,7 @@ const PRIMITIVE: PrimitiveState = PrimitiveState {
     unclipped_depth: false,
 };
 
-/// c = a + b over 256 words.
+/// This computes c = a + b over 256 words.
 fn add_arrays(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
     const N: u32 = 256;
     let storage = |gpu: &mut Encoder, s: &mut Stream| {
@@ -282,9 +282,9 @@ fn add_arrays(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
     turn(s);
 }
 
-/// One triangle with its corners at whole 32nds. Every pixel center lies at
-/// least 0.17 pixels from its edges, so no rasterizer's rounding decides
-/// whether a pixel is covered.
+/// This draws one triangle with its corners at whole 32nds. Every pixel center
+/// lies at least 0.17 pixels from its edges, so no rasterizer's rounding
+/// decides whether a pixel is covered.
 fn triangle(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
     let (t, v) = target(gpu, s);
     let m = gpu
@@ -328,19 +328,20 @@ fn triangle(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
     turn(s);
 }
 
-/// Four quads drawn from one indexed list of corners, each instance with its
-/// own place and color. Their edges lie on pixel boundaries. The base vertex
-/// and the first instance are past 0, so both are put to use.
+/// This draws four quads from one indexed list of corners, each instance with
+/// its own place and color. Their edges lie on pixel boundaries. The base
+/// vertex and the first instance are past 0, so both are put to use.
 fn indexed_instanced(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
     let (t, v) = target(gpu, s);
-    // Two vertices before the quad's corners, which the base vertex skips.
+    // Two vertices come before the quad's corners, and the base vertex skips
+    // them.
     let corners = le_f32(&[9.0, 9.0, 9.0, 9.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
     let indices: Vec<u8> = [0u16, 1, 2, 2, 1, 3]
         .iter()
         .flat_map(|i| i.to_le_bytes())
         .collect();
-    // Each instance's offset (two f32) and color (unorm8x4). The first
-    // instance index skips the first.
+    // These are each instance's offset (two f32) and color (unorm8x4). The
+    // first instance index skips the first.
     let places: [([f32; 2], [u8; 4]); 5] = [
         ([0.0, 0.0], [1, 2, 3, 4]),
         ([-1.0, -1.0], [255, 0, 0, 255]),
@@ -444,9 +445,9 @@ fn indexed_instanced(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn
     turn(s);
 }
 
-/// A 4×4 PNG copied into a texture, flipped, in one turn, and drawn over the
-/// target in the next. Each pixel samples the nearest texel at a point well
-/// inside it, so no rounding picks between two texels.
+/// This copies a 4×4 PNG into a texture, flipped, in one turn, and draws it
+/// over the target in the next. Each pixel samples the nearest texel at a point
+/// well inside it, so no rounding picks between two texels.
 fn sampled_image(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
     let image = gpu
         .texture(
@@ -576,7 +577,7 @@ fn sampled_image(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
     turn(s);
 }
 
-/// A pass's begin and end times, written and resolved. Only whether the end
+/// This writes and resolves a pass's begin and end times. Only whether the end
 /// is not before the begin is read back, since no device gives the same
 /// times twice.
 fn timestamps(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
@@ -748,9 +749,9 @@ fn dropped_transaction(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Tu
         .unwrap();
     let write = |gpu: &mut Encoder, s: &mut Stream, spill: bool| {
         gpu.begin(s);
-        // Kept past the commit. Its handle is one that the dropped
-        // transaction gives back and the next takes again.
-        let _held = gpu.buffer(
+        // This buffer is kept past the commit. Its handle is one that the
+        // dropped transaction gives back and the next takes again.
+        let _buf = gpu.buffer(
             s,
             &BufferDescriptor {
                 size: 4,
@@ -765,7 +766,7 @@ fn dropped_transaction(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Tu
         call::dispatch(s, pass, [1, 1, 1]);
         gpu.end(s, pass);
         if spill {
-            // More bytes than the stream has room for.
+            // These are more bytes than the stream has room for.
             call::write_buffer(s, out, 0, &vec![0; s.left() + 4]);
         }
         gpu.submit(s, &[e]);
@@ -777,9 +778,9 @@ fn dropped_transaction(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Tu
     turn(s);
 }
 
-/// The triangle again, with its render pipeline and a compute pipeline made
-/// by the async ops. Each is made in a turn of its own, and no record names
-/// it until the next turn has found its ticket at the fence.
+/// This is the triangle again, with its render pipeline and a compute pipeline
+/// made by the async ops. Each is made in a turn of its own, and no record
+/// names it until the next turn has found its ticket at the fence.
 fn pipelines_async(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
     let m = gpu
         .shader_module(s, "@compute @workgroup_size(1) fn main() {}\n")

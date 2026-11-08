@@ -1,16 +1,14 @@
 // @pxl/client/ui/debug/perf/long-frame.ts
 //
 // Keeps the platform's long frames (service/platform/long-frame.ts) in one
-// ring, for the profiler to show beside the core's frames. Both are timed on
-// the clock of `performance.now()`, so they line up.
+// ring, for the profiler to show beside the core's frames on one timeline: the
+// runtime counts the core's clock as the UI thread's `performance.now()`.
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { type LongFrame } from "@/service/platform/types.ts";
 import * as long_frame from "@/service/platform/long-frame.ts";
 import { LIMIT } from "@/abi/perf.spec.ts";
 
-// The ring spans the same window as the core's rings (perf.json
-// `LIMIT.WINDOW_MS`).
 const WINDOW_MS = LIMIT.WINDOW_MS;
 const CAP = 1_024;
 
@@ -37,8 +35,6 @@ export function longFramesClear(): void {
 
 let installed = false;
 
-/** A second call does nothing. On a platform that reports no long frames,
- * the ring stays empty. */
 export function installLongFrameObservers(): void {
   if (installed) return;
   installed = true;

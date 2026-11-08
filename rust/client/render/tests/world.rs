@@ -16,7 +16,7 @@ use pxl_engine::answer::{self, In, Kind};
 use pxl_engine::area;
 use pxl_engine::clipmap::{self as clip, Lookup, ACROSS, BRICK_SHIFT, FIRST_CELL_ZOOM, ORIGIN_AT};
 use pxl_engine::ground;
-use pxl_engine::object::{self, Columns, Cut};
+use pxl_engine::object::{self, Cut, Table};
 use pxl_engine::way::{self, tree};
 use pxl_engine::world::{self, Inheritance};
 use pxl_engine::{value, wrap_idx, Zoom, LEAF_CELL_ZOOM, SHARD_ZOOM};
@@ -32,12 +32,12 @@ const OP_HOLLOW: u32 = 3;
 
 /// The asks made so far and what the Rust answered of each.
 #[derive(Default)]
-struct Asks {
+struct AskLog {
     asked: Vec<u32>,
     told: Vec<u32>,
 }
 
-impl Asks {
+impl AskLog {
     fn push(
         &mut self,
         (op, zoom, c): (u32, Zoom, [i32; 3]),
@@ -90,7 +90,7 @@ fn descend(
     [mut far, mut near]: [Zoom; 2],
     moving: bool,
     cuts: [Cut; 2],
-    asks: &mut Asks,
+    asks: &mut AskLog,
     tally: &mut Tally,
     draw: &mut Draw,
     seen: &mut Lookup,
@@ -134,15 +134,15 @@ fn descend(
             tally.add("handed another descent's place", true);
         }
         let before = at;
-        let mut held = w;
-        let got = world::node(&mut held, &w, &w, &pool, &mut at, (z, c), zooms, cuts);
+        let mut resident = w;
+        let got = world::node(&mut resident, &w, &w, &pool, &mut at, (z, c), zooms, cuts);
         // Only a node handed what its parent gave it is asked again from the top. Another
         // descent's place is no state the node derives itself, so a node handed one, and every
         // node below it, is skipped.
         if z > start && !foreign {
             let mut top = Inheritance::of(&w, (z, c));
-            let mut held = w;
-            let again = world::node(&mut held, &w, &w, &pool, &mut top, (z, c), zooms, cuts);
+            let mut resident = w;
+            let again = world::node(&mut resident, &w, &w, &pool, &mut top, (z, c), zooms, cuts);
             tally.add("asked again from the top", true);
             if again != got {
                 tally.add(OTHERWISE, true);
@@ -185,7 +185,7 @@ fn tell(
     let v = answer::val(got.asset[0]);
     let is_cell = got.kind == Kind::Cell;
     // Compares the clip level this node asks with what the node above it found.
-    let asked = clip::held_to(if z >= zooms[1] { z } else { zooms[1] });
+    let asked = clip::clip_zoom(if z >= zooms[1] { z } else { zooms[1] });
     let above = before.ground;
     if above != Lookup::NONE && asked <= z + clip::BRICK_MIPS {
         t.add("asked coarser than above's cell", asked < above.cell_zoom());
@@ -243,8 +243,8 @@ fn tell(
         !(-row..row).contains(&c[1]) || !(-side..side).contains(&c[2])
     });
     if got.kind != Kind::Cell && z >= pxl_engine::MIN_ZOOM && !is_cell {
-        let (mut held, mut place) = (w, before.ground);
-        let (i, _, bound) = ground::node(&mut held, shard, &mut place, (z, c), zooms, false);
+        let (mut resident, mut place) = (w, before.ground);
+        let (i, _, bound) = ground::node(&mut resident, shard, &mut place, (z, c), zooms, false);
         let ways = way::slab(bound, [ground::coarsest(z, zooms[0]), zooms[1]]);
         t.add(
             "ways' span rounded to none",
@@ -284,8 +284,8 @@ fn tell(
         is_cell && v == value::VOID && got.asset[0] == 0,
     );
     if is_cell && answer::is_placed(got.asset[0]) && z >= FIRST_CELL_ZOOM && !shard.past() {
-        let (mut held, mut place) = (w, before.ground);
-        let (i, _, _) = ground::node(&mut held, shard, &mut place, (z, c), zooms, true);
+        let (mut resident, mut place) = (w, before.ground);
+        let (i, _, _) = ground::node(&mut resident, shard, &mut place, (z, c), zooms, true);
         t.add("cell over a lack, placed", i.kind == Kind::Lacks);
     }
     t.add("cell, placed", is_cell && answer::is_placed(got.asset[0]));
@@ -332,9 +332,9 @@ fn tell(
     t.add("ways' cursor held", at.ways.holds());
     // How much of the cell the caves took, from the ground's own answer.
     if is_cell && z >= FIRST_CELL_ZOOM && !shard.past() {
-        let mut held = w;
+        let mut resident = w;
         let mut place = before.ground;
-        let (i, _, _) = ground::node(&mut held, shard, &mut place, (z, c), zooms, true);
+        let (i, _, _) = ground::node(&mut resident, shard, &mut place, (z, c), zooms, true);
         if i.kind == Kind::Cell {
             t.add(
                 "cell, some of it cave",
@@ -344,9 +344,9 @@ fn tell(
         }
     }
     if cuts != [Cut::NONE; 2] {
-        let (mut held, mut plain, pool) = (w, before, tree::Read(w.pool));
+        let (mut resident, mut plain, pool) = (w, before, tree::Read(w.pool));
         let without = world::node(
-            &mut held,
+            &mut resident,
             &w,
             &w,
             &pool,
@@ -383,7 +383,7 @@ fn read(device: &wgpu::Device, queue: &wgpu::Queue, from: &wgpu::Buffer) -> Vec<
 
 /// The module of `source`. Its compiler messages are printed with their lines, and a module the
 /// device refuses fails the test.
-fn taken(device: &wgpu::Device, label: &str, source: &str) -> wgpu::ShaderModule {
+fn module_of(device: &wgpu::Device, label: &str, source: &str) -> wgpu::ShaderModule {
     let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some(label),
@@ -417,13 +417,13 @@ fn hand_world_answers_as_the_rust() {
         &built.objects,
         &built.pool,
     );
-    let (way_points, placed, folds, lone, over_bridges, unheld) = (
+    let (way_points, placed, folds, lone, over_bridges, groundless) = (
         built.way_points.clone(),
         built.placed.clone(),
         built.folds.clone(),
         built.lone.clone(),
         built.over_bridges.clone(),
-        built.unheld.clone(),
+        built.groundless.clone(),
     );
     let mut draw = Draw(built.draw.0);
     let top_at = |g: [i32; 2]| built.top_at(g);
@@ -537,8 +537,9 @@ fn hand_world_answers_as_the_rust() {
             }
         }
     }
-    // Points on the cells that what is placed folds into, each asked as that cell.
-    for &p in &unheld {
+    // Points on the cells partly placed where no clip level holds the ground under them, and
+    // on the cells that what is placed folds into, each asked as that cell.
+    for &p in &groundless {
         asked_at.push((p, [LEAF_CELL_ZOOM - 1, LEAF_CELL_ZOOM]));
     }
     for &p in &folds {
@@ -658,7 +659,7 @@ fn hand_world_answers_as_the_rust() {
     }
 
     // Each point gets one descent, its zooms set by how far the point lies from the eye.
-    let mut asks = Asks::default();
+    let mut asks = AskLog::default();
     let mut tally = Tally::default();
     let mut seen = Lookup::NONE;
     let by_its_distance = points.iter().map(|p| {
@@ -871,7 +872,7 @@ fn hand_world_answers_as_the_rust() {
         buffer(pool, store),
     );
     let source = WORLD_ASKED;
-    let module = taken(&device, "world", source);
+    let module = module_of(&device, "world", source);
     let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: Some("world"),
         layout: None,

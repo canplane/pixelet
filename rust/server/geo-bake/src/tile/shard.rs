@@ -1,8 +1,8 @@
 // pxl-geo-bake/tile/shard.rs
 
 //! A bake's one set, `out/<kind>/`: every zoom of the pyramid, flat under the tiles' names
-//! and never pruned, which `dev:baked` reads. A bake changes it only through `<set>.stage/`, a
-//! shard at a time, as the ingest keeps its rows. Which shards are baked, and when, is the
+//! and never pruned, which the dev tile server serves with `--shelf`. A bake changes it only
+//! through `<set>.stage/`, a shard at a time, as the ingest keeps its rows. Which shards are baked, and when, is the
 //! operator's to say (`--shard`); a change of source, code or coverage is a purge, the set
 //! deleted by hand. Every step can stop and run again:
 //!
@@ -20,7 +20,7 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::cli::Flags;
+use crate::cli::Argv;
 use crate::coverage::{src_of, Coverage, Node};
 use crate::pyramid::{
     fold, orphan_tiles, write_manifest, Absent, Base, Staged, TileSet, FITS, MANIFEST,
@@ -395,7 +395,7 @@ impl Run {
             PathBuf::from(format!("./out/{kind}")),
             8,
         );
-        let mut flags = Flags::from_env();
+        let mut flags = Argv::from_env();
         while let Some(flag) = flags.arg() {
             match flag.as_str() {
                 "--step" => steps.push(flags.val()?),

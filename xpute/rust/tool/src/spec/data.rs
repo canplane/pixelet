@@ -1,16 +1,16 @@
 // xpute-tool/spec/data.rs
 
-//! Generates data specs: JSON files of named values, written into the files
-//! each spec names as TypeScript `as const` values, Rust constants, C++
-//! constants and make variables. A number is an f64 unless a `$type` says
-//! otherwise. A u64 is written as a hex string, and an rgb color as
-//! `#RRGGBB`. A value wrapped as `{ "$val", "$doc" }` carries its reason in
-//! `$doc`. A table may be laid out in words (`laid_out`), with its widths read
-//! from the specs it uses. A list of names may give each member as
-//! `{ "name", <flag>: bool, … }`, with the same flags on every member; the
-//! TypeScript keeps the names, and the Rust enum gets, for each flag, a
-//! constant that lists the members having it (`flagged`). A program's own
-//! `$type` may name an entry of a list the program keeps (`Slots`).
+//! A data spec is a JSON file of named values, written into the files each spec
+//! names as TypeScript `as const` values, Rust constants, C++ constants and
+//! make variables. A number is an f64 unless a `$type` says otherwise. A u64 is
+//! written as a hex string, and an rgb color as `#RRGGBB`. A value wrapped as
+//! `{ "$val", "$doc" }` carries its reason in `$doc`. A table may be laid out
+//! in words (`laid_out`), with its widths read from the specs it uses. A list
+//! of names may give each member as `{ "name", <flag>: bool, … }`, with the
+//! same flags on every member; the TypeScript keeps the names, and the Rust
+//! enum gets, for each flag, a constant that lists the members having it
+//! (`flagged`). A program's own `$type` may name an entry of a list the program
+//! keeps (`SlotType`).
 
 use std::cell::Cell;
 use std::path::Path;
@@ -23,7 +23,7 @@ use crate::root;
 
 /// Which of a spec's lists of names, and tables of numbers, the Rust also
 /// writes as an enum.
-pub enum Enums {
+pub enum EnumScope {
     None,
     /// Every list of names, and every table of distinct numbers below 256 or
     /// of `$number`s.
@@ -32,12 +32,12 @@ pub enum Enums {
     Named(&'static [&'static str]),
 }
 
-impl Enums {
+impl EnumScope {
     fn has(&self, name: &str) -> bool {
         match self {
-            Enums::None => false,
-            Enums::All => true,
-            Enums::Named(list) => list.contains(&name),
+            EnumScope::None => false,
+            EnumScope::All => true,
+            EnumScope::Named(list) => list.contains(&name),
         }
     }
 }
@@ -57,17 +57,17 @@ pub struct DataSpec {
     /// name, for a crate that cannot depend on the crate `rs` lies in, such as
     /// a build script.
     pub rs_also: &'static [(&'static str, &'static str)],
-    pub enums: Enums,
+    pub enums: EnumScope,
     /// The C++ header, and its namespace.
     pub cpp: Option<(&'static str, &'static str)>,
-    /// For a spec a Makefile reads: where its numbers are written as make
-    /// variables, and the prefix each takes.
+    /// For a spec a Makefile reads, this says where its numbers are written as
+    /// make variables, and the prefix each takes.
     pub mk: Option<(&'static str, &'static str)>,
 }
 
 impl DataSpec {
-    /// A spec that writes nothing. A row of a table of specs spells out only
-    /// what differs from it.
+    /// `DEFAULT` is a spec that writes nothing. A row of a table of specs
+    /// spells out only what differs from it.
     pub const DEFAULT: DataSpec = DataSpec {
         json: "",
         uses: &[],
@@ -76,7 +76,7 @@ impl DataSpec {
         rs: None,
         module: "spec",
         rs_also: &[],
-        enums: Enums::None,
+        enums: EnumScope::None,
         cpp: None,
         mk: None,
     };
@@ -90,7 +90,7 @@ pub type Run<'a> = (&'a str, u16, u16);
 /// place in `names` counted from 1. In Rust it is written as a slot, `rs`
 /// wrapped around a number; a spec's leaves are numbered in document order,
 /// starting at the first slot of the spec's run.
-pub struct Slots<'a> {
+pub struct SlotType<'a> {
     pub ty: &'a str,
     pub rs: &'a str,
     pub names: &'a [String],
@@ -98,7 +98,7 @@ pub struct Slots<'a> {
     pub runs: &'a [Run<'a>],
 }
 
-impl Slots<'_> {
+impl SlotType<'_> {
     fn number(&self, name: &str) -> Result<usize, String> {
         self.names
             .iter()
@@ -115,7 +115,8 @@ impl Slots<'_> {
     }
 }
 
-/// Where a program's data specs are written, and what its Rust carries.
+/// A `Layout` says where a program's data specs are written, and what its Rust
+/// carries.
 pub struct Layout<'a> {
     /// A TypeScript file's directory, and the name it is imported by.
     pub ts: &'a [(&'a str, &'a str)],
@@ -125,7 +126,7 @@ pub struct Layout<'a> {
     /// a table's keys as its `KEYS`. Where it does not, a list of names is
     /// written as its count.
     pub rs_names: bool,
-    pub slots: &'a [Slots<'a>],
+    pub slots: &'a [SlotType<'a>],
 }
 
 const DATA_SPECS: [DataSpec; 8] = [
@@ -176,7 +177,7 @@ const DATA_SPECS: [DataSpec; 8] = [
         json: "spec/gpu/api.json",
         ts: Some("ts/gpu/src/api.spec.ts"),
         rs: Some("rust/gpu/src/api.spec.rs"),
-        enums: Enums::Named(&["BINDING_KIND", "RESOURCE_KIND"]),
+        enums: EnumScope::Named(&["BINDING_KIND", "RESOURCE_KIND"]),
         cpp: Some(("cpp/xpute/gpu/api.spec.hpp", "xpute::gpu")),
         ..DataSpec::DEFAULT
     },
@@ -184,7 +185,7 @@ const DATA_SPECS: [DataSpec; 8] = [
         json: "spec/gpu/enum.json",
         ts: Some("ts/gpu/src/enum.spec.ts"),
         rs: Some("rust/gpu/src/enum.spec.rs"),
-        enums: Enums::Named(&[
+        enums: EnumScope::Named(&[
             "TEXTURE_FORMAT",
             "VERTEX_FORMAT",
             "PRIMITIVE_TOPOLOGY",
@@ -247,7 +248,7 @@ fn is_ts_ident(k: &str) -> bool {
         && c.all(|x| x.is_ascii_alphanumeric() || x == '_' || x == '$')
 }
 
-/// The words a module cannot export a constant under.
+/// A module cannot export a constant under these words.
 const TS_RESERVED: [&str; 46] = [
     "await",
     "break",
@@ -297,9 +298,9 @@ const TS_RESERVED: [&str; 46] = [
     "yield",
 ];
 
-/// The members of a group whose every member is a number, under a name a
-/// module can export. Such a group is written as a module of constants beside
-/// the group's file.
+/// This answers the members of a group whose every member is a number, under a
+/// name a module can export. Such a group is written as a module of constants
+/// beside the group's file.
 fn numbers(n: &Node) -> Option<Vec<(&str, &Node)>> {
     let entries: Vec<(&str, &Node)> = n.is_obj().then(|| n.named().collect())?;
     (!entries.is_empty()
@@ -311,9 +312,9 @@ fn numbers(n: &Node) -> Option<Vec<(&str, &Node)>> {
     .then_some(entries)
 }
 
-/// The module of a group written beside `ts_path`, at
-/// `<its stem>/<the group>.spec.ts`: its path, and the path the file beside
-/// it imports it by.
+/// `beside` answers the module of a group written beside `ts_path`, at
+/// `<its stem>/<the group>.spec.ts`: its path, and the path the file beside it
+/// imports it by.
 fn beside(ts_path: &str, group: &str) -> (String, String) {
     let stem = ts_path.strip_suffix(".spec.ts").unwrap_or(ts_path);
     let file_stem = stem.rsplit('/').next().unwrap_or(stem);
@@ -324,8 +325,8 @@ fn beside(ts_path: &str, group: &str) -> (String, String) {
     )
 }
 
-/// A TypeScript file's path as it is imported, by the layout's name for its
-/// directory.
+/// `logical` answers a TypeScript file's path as it is imported, by the
+/// layout's name for its directory.
 fn logical(layout: &Layout, path: &str) -> String {
     layout
         .ts
@@ -364,8 +365,8 @@ type Flagged<'a> = (Vec<&'a str>, Vec<Flag<'a>>);
 
 /// Reads a list of names whose members carry flags, each written as
 /// `{ "name", <flag>: bool, … }` with the same flags in the same order. It
-/// returns the names, and each flag with the names that have it; None where
-/// the list's members are not of that form.
+/// returns the names, and each flag with the names that have it; None where the
+/// list's members are not of that form.
 fn flagged(a: &[Node]) -> Result<Option<Flagged<'_>>, String> {
     fn flags_of(e: &Node) -> Vec<&str> {
         e.named().map(|(k, _)| k).filter(|k| *k != "name").collect()
@@ -373,7 +374,7 @@ fn flagged(a: &[Node]) -> Result<Option<Flagged<'_>>, String> {
     let Some(first) = a.first().filter(|e| e.str_at("name").is_some()) else {
         return Ok(None);
     };
-    let mut held: Vec<Flag<'_>> = flags_of(first)
+    let mut by_flag: Vec<Flag<'_>> = flags_of(first)
         .into_iter()
         .map(|f| (f, Vec::new()))
         .collect();
@@ -384,12 +385,12 @@ fn flagged(a: &[Node]) -> Result<Option<Flagged<'_>>, String> {
             names.join("`, `")
         ))?;
         let flags = flags_of(e);
-        if flags.len() != held.len() || flags.iter().zip(&held).any(|(f, (h, _))| f != h) {
+        if flags.len() != by_flag.len() || flags.iter().zip(&by_flag).any(|(f, (h, _))| f != h) {
             return Err(format!(
                 "`{name}` carries {flags:?}, not the first member's flags"
             ));
         }
-        for (f, members) in &mut held {
+        for (f, members) in &mut by_flag {
             match e.get(f) {
                 Some(Node::Bool(true)) => members.push(name),
                 Some(Node::Bool(false)) => {}
@@ -398,12 +399,12 @@ fn flagged(a: &[Node]) -> Result<Option<Flagged<'_>>, String> {
         }
         names.push(name);
     }
-    Ok(Some((names, held)))
+    Ok(Some((names, by_flag)))
 }
 
-/// `n` as a TypeScript literal. A leaf of a program's own `$type` is written
-/// as the number `slots` gives it.
-pub fn ts_literal(n: &Node, ty: &str, indent: &str, slots: &[Slots]) -> Result<String, String> {
+/// Writes `n` as a TypeScript literal. A leaf of a program's own `$type` is
+/// written as the number `slots` gives it.
+pub fn ts_literal(n: &Node, ty: &str, indent: &str, slots: &[SlotType]) -> Result<String, String> {
     if n.is_wrapper() {
         return ts_literal(n.value(), type_of(n, ty), indent, slots);
     }
@@ -467,9 +468,9 @@ pub fn ts_literal(n: &Node, ty: &str, indent: &str, slots: &[Slots]) -> Result<S
 struct Scope<'a> {
     module: String,
     top: Vec<String>,
-    enums: &'a Enums,
+    enums: &'a EnumScope,
     rs_names: bool,
-    slots: &'a [Slots<'a>],
+    slots: &'a [SlotType<'a>],
     /// The next free slot of each entry of `slots`.
     next: Vec<Cell<u16>>,
 }
@@ -576,7 +577,7 @@ fn rs_items(
     } else {
         let t = type_of(n, ty);
         let keys: Vec<(&str, &Node)> = n.named().collect();
-        let all = matches!(scope.enums, Enums::All);
+        let all = matches!(scope.enums, EnumScope::All);
         let numbers: Vec<Option<f64>> = keys.iter().map(|(_, v)| v.num()).collect();
         let numbered = all
             && !keys.is_empty()
@@ -646,9 +647,10 @@ fn rs_items(
     Ok(())
 }
 
-/// Whether `s` can name an enum member once it is made an identifier: a
-/// letter, a digit or `_`, followed by those or `-` (as in WebGPU's
-/// "2d-array").
+/// `is_name` says whether `s` can name an enum member once it is made an
+/// identifier: a letter, a digit or `_`, followed by those or `-`. `-` is
+/// allowed past the first character because WebGPU's names hold it
+/// ("2d-array"), and an identifier made from such a name spells it `_`.
 fn is_name(s: &str) -> bool {
     let mut c = s.chars();
     c.next()
@@ -656,8 +658,8 @@ fn is_name(s: &str) -> bool {
         && c.all(|x| x.is_ascii_alphanumeric() || x == '_' || x == '-')
 }
 
-/// A member's name as a C++ enumerator: each `-` becomes `_`, a leading digit
-/// gets an `_` before it, and a keyword gets one after it.
+/// This makes a member's name a C++ enumerator: each `-` becomes `_`, a leading
+/// digit gets an `_` before it, and a keyword gets one after it.
 fn cpp_ident(k: &str) -> String {
     const KEYWORDS: [&str; 12] = [
         "float", "double", "int", "char", "bool", "default", "delete", "new", "and", "or", "not",
@@ -682,8 +684,9 @@ fn cpp_ident(k: &str) -> String {
     }
 }
 
-/// A list of names in Rust: the names, where the Rust carries names, or else
-/// their count, which is what a spec's widths read a list's name as.
+/// This writes a list of names in Rust: the names, where the Rust carries
+/// names, or else their count, which is what a spec's widths read a list's name
+/// as.
 fn rs_names(name: &str, names: &[&str], indent: &str, scope: &Scope) -> String {
     if scope.rs_names {
         let quoted: Vec<String> = names.iter().map(|n| json_str(n)).collect();
@@ -894,7 +897,8 @@ fn width(v: &Node, above: &[(String, Node)], used: &[(String, Node)]) -> Result<
         };
         found.ok_or_else(|| format!("`{t}` names no width above it"))
     };
-    // A product of terms, minus any further terms: `TABLE.FIELD - 1`.
+    // A width is a product of terms, minus any further terms:
+    // `TABLE.FIELD - 1`.
     let product = |p: &str| p.split('*').map(term).product::<Result<f64, String>>();
     match v {
         Node::Num(n) => Ok(*n),
@@ -911,9 +915,9 @@ fn read_at(root: &Path, json: &str) -> Result<Node, String> {
     read(&root.join(json).to_string_lossy())
 }
 
-/// The names `json` may read beyond its own, taken from the specs it uses.
-/// Each used spec is laid out over its own uses, each name must be owned by
-/// one file, and no chain of uses may be circular.
+/// This answers the names `json` may read beyond its own, taken from the specs
+/// it uses. Each used spec is laid out over its own uses, each name must be
+/// owned by one file, and no chain of uses may be circular.
 fn read_used(
     root: &Path,
     json: &str,
@@ -999,8 +1003,6 @@ pub fn outputs_at(root: &Path, specs: &[DataSpec], layout: &Layout) -> Result<Ve
     Ok(outputs)
 }
 
-/// The spec's head: the file as it is named, the JSON it is generated from,
-/// and the spec's `$doc`.
 fn head(shown: &str, json: &str, spec: &Node) -> Vec<String> {
     let mut out = vec![format!("// {shown}"), "//".into(), generated(json)];
     if let Some(doc) = spec.lines_at("$doc") {
@@ -1088,7 +1090,7 @@ fn ts_outputs(
                 ts_literal(n, "f64", "", layout.slots)?
             ));
             let entries: Vec<(&str, &Node)> = n.named().collect();
-            if matches!(d.enums, Enums::All)
+            if matches!(d.enums, EnumScope::All)
                 && !entries.is_empty()
                 && entries
                     .iter()
@@ -1162,7 +1164,7 @@ fn rs_outputs(
         "// A table is generated whole, whether or not this crate calls an entry.".to_string(),
         format!(
             "#![allow(non_upper_case_globals, non_snake_case, clippy::absolute_paths, {}dead_code, reason = \"generated from the spec\")]",
-            if matches!(d.enums, Enums::None) {
+            if matches!(d.enums, EnumScope::None) {
                 ""
             } else {
                 "non_camel_case_types, "

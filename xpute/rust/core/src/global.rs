@@ -1,7 +1,7 @@
 // xpute-core/global.rs
 
-//! A value that lives as long as the module and is made on first use.
-//! Handing out `&mut` from a static is sound only because the core runs on
+//! A `Global` is a value that lives as long as the module and is made on first
+//! use. Handing out `&mut` from a static is sound only because the core runs on
 //! one thread and one turn never runs inside another.
 //!
 //! A native runtime marks the core's thread (`mark_thread`). Until it does,
@@ -44,7 +44,7 @@ pub fn serial() -> std::sync::MutexGuard<'static, ()> {
     LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// Whether any thread has been marked as the core's; `ON_MARKED` says
+/// This says whether any thread has been marked as the core's; `ON_MARKED` says
 /// whether it is this one.
 static MARKED: AtomicBool = AtomicBool::new(false);
 
@@ -53,7 +53,7 @@ thread_local! {
     static ON_MARKED: Cell<bool> = const { Cell::new(false) };
 }
 
-/// Marks this thread as the core's. A runtime calls it once per process,
+/// Marks this thread as the core's. A runtime calls this once per process,
 /// before the core's first turn.
 pub fn mark_thread() {
     let again = MARKED.swap(true, Ordering::AcqRel);
@@ -68,8 +68,8 @@ pub fn on_marked_thread() -> bool {
     ON_MARKED.with(Cell::get)
 }
 
-/// Whether another thread is marked as the core's, so that this one must not
-/// touch a `Global`.
+/// This says whether another thread is marked as the core's, so that this one
+/// must not touch a `Global`.
 pub fn off_marked_thread() -> bool {
     MARKED.load(Ordering::Acquire) && !on_marked_thread()
 }

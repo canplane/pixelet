@@ -1,9 +1,9 @@
 // xpute-runtime/jni.rs
 
-//! A native core as an Android app reaches it. `native_core!` exports the C
-//! ABI's calls under the names JNI looks for, as the `external` functions of
-//! the Kotlin class `xpute.Core`, and this module holds what they share. Only
-//! JNI's own values cross: a number, an array of numbers, and the whole
+//! This is a native core as an Android app reaches it. `native_core!` exports
+//! the C ABI's calls under the names JNI looks for, as the `external` functions
+//! of the Kotlin class `xpute.Core`, and this module holds what they share.
+//! Only JNI's own values cross: a number, an array of numbers, and the whole
 //! memory as one direct buffer, which the app hands its JavaScript unchanged.
 //! JNI's and the NDK's bindings are re-exported (`sys`, `ndk`), so that a
 //! program's macro expansion and xpute-gpu name them through this crate.
@@ -22,7 +22,7 @@ use xpute_kit::status::errno::Errno;
 
 use crate::native::{answer_with, notify_on, turns as turns_of, Core};
 
-/// The table of JNI's functions that the environment of a call holds.
+/// This is the table of JNI's functions that the environment of a call holds.
 ///
 /// # Safety
 /// `env` is the environment JNI called with.
@@ -31,10 +31,10 @@ pub unsafe fn env<'e>(env: *mut JNIEnv) -> &'e JNINativeInterface_ {
     unsafe { &**env }
 }
 
-/// The VM, a global reference to the class `xpute.Core`, and the IDs of its
-/// static methods `call(I)I` and `onNotify()V`. It is taken on a thread Java
-/// made, because a thread the runtime made cannot find the app's classes by
-/// name.
+/// This holds the VM, a global reference to the class `xpute.Core`, and the IDs
+/// of its static methods `call(I)I` and `onNotify()V`. The class is taken on a
+/// thread Java made, because a thread the runtime made cannot find the app's
+/// classes by name.
 struct Class {
     vm: *mut JavaVM,
     class: jclass,
@@ -50,9 +50,8 @@ unsafe impl Sync for Class {}
 
 static CLASS: OnceLock<Class> = OnceLock::new();
 
-/// Takes the class `xpute.Core` from `this`, once, and makes its static
-/// methods answer the core's calls (`call`) and hear the core's news
-/// (`notify`).
+/// Takes the class `xpute.Core` from `this`, once, and makes its static methods
+/// answer the core's calls (`call`) and hear the core's news (`notify`).
 ///
 /// # Safety
 /// `e` and `this` are what JNI called with, `this` an `xpute.Core`.
@@ -94,7 +93,7 @@ pub unsafe fn init(e: *mut JNIEnv, this: jobject) {
 }
 
 /// Calls `Core.call` on the thread that answers the core's call
-/// (`answer_with`). Java made that thread, so it is attached to the VM. It
+/// (`answer_with`). Java made that thread, so it is attached to the VM. This
 /// returns ENOSYS on a thread JNI does not know, and EIO when Kotlin threw.
 extern "C" fn call(at: u32) -> i32 {
     let Some(&Class {
@@ -154,7 +153,7 @@ extern "C" fn notify() {
     }
 }
 
-/// `Core.turns`: the wake and the longest turn since it was last asked
+/// This is `Core.turns`: the wake and the longest turn since it was last asked
 /// (`native::turns`), as a `double[]` of two.
 ///
 /// # Safety
@@ -173,7 +172,7 @@ pub unsafe fn turns(e: *mut JNIEnv) -> jobject {
     }
 }
 
-/// `Core.mem`: the memory, as a direct buffer over the whole of it.
+/// This is `Core.mem`: the memory, as a direct buffer over the whole of it.
 ///
 /// # Safety
 /// `e` is the environment JNI called with.

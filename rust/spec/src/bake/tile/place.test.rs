@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::space::layer::lattice;
-use crate::space::layer::lattice::Cells;
+use crate::space::layer::lattice::Grid;
 
 fn leaf() -> Quadrant {
     Quadrant::new(LEAF_ZOOM, [6, 4])

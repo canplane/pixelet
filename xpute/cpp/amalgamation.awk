@@ -10,13 +10,13 @@
 #   awk -f amalgamation.awk -v part=cpp <headers> <sources>   > xpute.cpp
 #   awk -f amalgamation.awk -v part=program <headers> <file>  > file
 #
-# `program` is a program of the library's own written against the two
-# files: its includes of the library become one of xpute.hpp, its other
-# includes left as they are. A header is found as the compiler finds it
-# under -I cpp: beside the file that names it ("ring.hpp"), or from cpp/
-# ("xpute/kit/status/bug.hpp"). A quoted include that the library names and
-# no file given answers is an error, so a header left out of the list fails
-# here and not in a program that includes xpute.hpp.
+# `program` is a program of the library's own written against the two files: its
+# includes of the library become one of xpute.hpp, and its other includes are
+# left as they are. A header is found as the compiler finds it under -I cpp:
+# beside the file that names it ("ring.hpp"), or from cpp/
+# ("xpute/kit/status/bug.hpp"). A quoted include that the library names and no
+# file given answers is an error, so a header left out of the list fails here
+# and not in a program that includes xpute.hpp.
 
 BEGIN {
     if (part != "hpp" && part != "cpp" && part != "program") fail("part is hpp, cpp or program, not '" part "'")
@@ -48,7 +48,7 @@ BEGIN {
         print "// Every source of xpute's C++ library, as one translation unit over xpute.hpp."
         print ""
         print "#include \"xpute.hpp\""
-        # What the header already includes, a source need not again.
+        # A source need not include again what the header already includes.
         for (i = 1; i < ARGC; i++) if (ARGV[i] ~ /\.hpp$/) scan(ARGV[i])
         for (i = 1; i < ARGC; i++) if (ARGV[i] !~ /\.hpp$/) body(ARGV[i])
     } else {
@@ -62,7 +62,6 @@ function fail(message) {
     exit 1
 }
 
-# The quoted path an include line names, or "" for any other line.
 function quoted(l) {
     if (l !~ /^[ \t]*#[ \t]*include[ \t]*"/) return ""
     sub(/^[^"]*"/, "", l)
@@ -74,7 +73,8 @@ function system_include(l) {
     return l ~ /^[ \t]*#[ \t]*include[ \t]*</
 }
 
-# The library file an include in `f` names, or "" when it names none.
+# resolve answers the library file that an include in `f` names, or "" when
+# it names none.
 function resolve(f, p, d) {
     if (p ~ /\//) return (p in library) ? p : ""
     d = f
@@ -82,7 +82,7 @@ function resolve(f, p, d) {
     return ((d "/" p) in library) ? (d "/" p) : ""
 }
 
-# A header, after every header it includes.
+# emit writes a header after every header it includes, each once.
 function emit(f, k, p, r) {
     if (f in emitted) return
     if (f in open_) fail(f ": includes itself through another header")
@@ -96,7 +96,7 @@ function emit(f, k, p, r) {
     body(f)
 }
 
-# The system includes a header holds outside any conditional.
+# scan collects the system includes a header holds outside any conditional.
 function scan(f, k, depth, l) {
     depth = 0
     for (k = 1; k <= n[f]; k++) {
@@ -107,8 +107,9 @@ function scan(f, k, depth, l) {
     }
 }
 
-# A file's lines, without its includes of the library or its `#pragma once`,
-# and without a second blank line where a dropped one leaves two.
+# body writes a file's lines, without its includes of the library or its
+# `#pragma once`, and without a second blank line where a dropped one leaves
+# two.
 function body(f, k, l, p, r, depth, blank) {
     depth = 0
     print ""

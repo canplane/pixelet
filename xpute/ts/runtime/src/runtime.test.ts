@@ -18,7 +18,7 @@ import type { Grant, SchedulingPolicy } from "./sched/policy.ts";
 const CAP = 8;
 const SLOT = 256;
 const HEAD_AT = 0;
-/** Where the core's GPU stream begins, which the header names. */
+/** The core's GPU stream begins here, as the header names it. */
 const STREAM_AT = 32;
 const SQ_AT = 64;
 const CQ_AT = SQ_AT + ring_bytes(CAP);
@@ -33,14 +33,14 @@ const FRONT: Front = {
   cq_slots_at: SLOTS_AT + slots_bytes(CAP, SLOT),
   gpu_at: STREAM_AT,
 };
-/** Two commands the core posts each turn: one of the program's, and one of
- * xpute's own. */
+/** The core posts these two commands each turn: one of the program's, and one
+ * of xpute's own. */
 const PROGRAM_IMPORT = (frame.PROGRAM_MAJOR << 8) | 9;
 const OWN_IMPORT = 0x0109;
 
-/** A core that opens the rings its runtime laid. Each turn it replies 0 to
- * every submission and posts PROGRAM_IMPORT and OWN_IMPORT. When `trap`
- * says so, the turn throws instead. */
+/** This core opens the rings its runtime laid. Each turn it replies 0 to every
+ * submission and posts PROGRAM_IMPORT and OWN_IMPORT. When `trap` says so, the
+ * turn throws instead. */
 function core(trap: () => boolean = () => false): Core & { turns: number[] } {
   const mem = new ArrayBuffer(FRONT.cq_slots_at + slots_bytes(CAP, SLOT));
   let sq: Ring | null = null;
@@ -66,10 +66,11 @@ function core(trap: () => boolean = () => false): Core & { turns: number[] } {
   };
 }
 
-/** Where the front is, and no GPU asked for. */
+/** This says where the front is, and that no GPU is asked for. */
 const AT = { ...FRONT, head_at: HEAD_AT, gpu: null };
 
-/** A policy whose moments come when the test says, each a turn with a deadline of 0. */
+/** This policy's moments come when the test says, each a turn with a deadline
+ * of 0. */
 function stepped(): SchedulingPolicy & { asked: number; step(): void } {
   let waiting: ((now: number) => void) | null = null;
   return {

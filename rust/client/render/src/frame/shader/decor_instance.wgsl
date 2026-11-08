@@ -6,7 +6,6 @@
 
 @group(0) @binding(15) var<storage, read_write> instances: array<u32>;
 
-/// How many slots the instances hold.
 fn instance_cap() -> u32 {
   return arrayLength(&instances) / (DRAWN_COLUMNS + 1u);
 }

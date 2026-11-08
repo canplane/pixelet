@@ -1,6 +1,6 @@
 // cpp/xpute/core/wasm.hpp
 
-// The core built as one WebAssembly module: what it reads of the module
+// This is the core built as one WebAssembly module: what it reads of the module
 // itself, what it asks of its runtime (`call`), and its entry, `run`, which
 // xpute names and the program defines. It is linked as every module core is
 // (cpp/Makefile `WASM_LINK`).
@@ -26,15 +26,16 @@ extern const std::uint8_t __stack_high;
 __attribute__((import_module("env"), import_name("now"))) double xpute_wasm_now(void);
 __attribute__((import_module("env"), import_name("call"))) std::int32_t xpute_wasm_call(std::uint32_t at);
 
-// The entry. It runs one turn that may last `deadline_ms`, and answers in
-// how many ms the core wants the next: 0 for as soon as the scheduling
-// policy allows, NO_WAKE (xpute/core/sched/wake.hpp) for none.
+// `run` runs one turn that may last `deadline_ms`, and answers in how many ms
+// the core wants the next: 0 for as soon as the scheduling policy allows,
+// NO_WAKE (xpute/core/sched/wake.hpp) for none.
 double run(double deadline_ms);
 }
 
 namespace xpute::wasm {
 
-// The size of a WebAssembly page, the unit a memory is declared and grown in.
+// This is the size of a WebAssembly page, the unit a memory is declared and
+// grown in.
 inline constexpr std::uint64_t WASM_PAGE_BYTES = 1 << 16;
 
 inline std::uint32_t data_end() noexcept {
@@ -46,7 +47,7 @@ inline std::uint32_t stack_high() noexcept {
     return static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(&__stack_high));
 }
 
-// The size in bytes of the memory the runtime has given the module.
+// This is the size in bytes of the memory the runtime has given the module.
 inline std::uint64_t given() noexcept {
     return std::uint64_t{__builtin_wasm_memory_size(0)} * WASM_PAGE_BYTES;
 }

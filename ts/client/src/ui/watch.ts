@@ -1,9 +1,5 @@
 // @pxl/client/ui/watch.ts
 
-/** A React hook for each watch that the layers below hand the UI: the core's
- * snapshot and its view, the GPU's state, whether the device is online, and
- * the source's state and versions. */
-
 import { useSyncExternalStore } from "react";
 
 import type { UiView, Snapshot } from "@/abi/cmd.spec.ts";

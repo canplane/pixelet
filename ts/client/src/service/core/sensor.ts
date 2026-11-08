@@ -1,10 +1,5 @@
 // @pxl/client/service/core/sensor.ts
 
-/** SENSOR on the UI's port. What the place's sensors heard, in the place's
- * words (service/platform/types.ts `SensorListener`), is sent in the core's
- * numbers. The core's asks to start or stop a sensor are passed to the place's
- * sensors. The search panel's card asks for the location here. */
-
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import {
   GeolocationErrorCode,
@@ -70,8 +65,6 @@ const ANSWER = {
   failed: PermissionAnswer.Failed,
 } as const;
 
-/** Receives what the place's sensors heard. It is handed to the place once,
- * at boot. */
 export const SENSOR_LISTENER: SensorListener = {
   position: core_pos,
   positionError: (error) => core.sensor_err(Sensor.Geolocation, ERR[error]),
@@ -82,14 +75,12 @@ export const SENSOR_LISTENER: SensorListener = {
     core.sensor_permission(SENSOR[sensor], ANSWER[answer]),
 };
 
-/** Answers the core's SENSOR_START. */
 export function sensor_start(e: SensorStart): void {
   if (e.sensor === Sensor.Geolocation) {
     sensor.geo.start();
   } else sensor.orient.start();
 }
 
-/** Answers the core's SENSOR_STOP. */
 export function sensor_stop(e: SensorStop): void {
   if (e.sensor === Sensor.Geolocation) {
     sensor.geo.stop();

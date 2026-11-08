@@ -1,8 +1,5 @@
 // @xpute/kit/wire/xtp/spec.test.ts
 
-/** Each type constant is of its group's kind and may appear on the wire,
- * and no two constants share a byte. */
-
 import { test } from "vitest";
 import assert from "node:assert/strict";
 

@@ -35,9 +35,9 @@ use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, bytes, release, word_bytes, Entry, Gpu, Layout,
     RenderContext,
 };
-use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::read::Read;
-use crate::gpu::tile::Tiles;
+use crate::gpu::tile::TileGrid;
 
 /// What the CPU hands the GPU's decor this frame.
 pub struct DecorFrame<'a> {
@@ -161,7 +161,7 @@ pub struct Generator {
 pub type World = [u32; 6];
 
 impl Generator {
-    pub fn new(g: &Gpu, pipelines: &mut Pipelines) -> Generator {
+    pub fn new(g: &Gpu, pipelines: &mut PipelineCache) -> Generator {
         let buf = |size: u32, usage: u32| g.buf(size, usage);
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         let rows = buf(size_of_val(&DECORS) as u32, storage);
@@ -630,9 +630,9 @@ impl Generator {
         self.on && self.counting
     }
 
-    /// The decor compacted, while decor is on (`Instances`).
-    pub fn instances(&self) -> Option<Instances> {
-        (self.on && self.instances != 0).then_some(Instances {
+    /// The decor compacted, while decor is on (`DecorBuffer`).
+    pub fn decor_buffer(&self) -> Option<DecorBuffer> {
+        (self.on && self.instances != 0).then_some(DecorBuffer {
             drawing: self.drawing,
             regions: self.regions,
             instances: self.instances,
@@ -656,7 +656,7 @@ impl Generator {
     /// meets the box of the claimed tiles of `tiles`, as the frame's words `frame` see it
     /// (damage_rect.wgsl, decor_cull.wgsl). It runs once the tiles' marks are made, timed in
     /// the marks' span.
-    pub fn cull(&self, ctx: &mut RenderContext, mask: Mask, frame: u32, tiles: &Tiles) {
+    pub fn cull(&self, ctx: &mut RenderContext, mask: Mask, frame: u32, tiles: &TileGrid) {
         if !(self.on && self.instances != 0) {
             return;
         }
@@ -714,7 +714,7 @@ struct Culled {
 /// drawing words, its regions, its instances, and how many instances each lane holds
 /// (`cap`).
 #[derive(Clone, Copy)]
-pub struct Instances {
+pub struct DecorBuffer {
     pub drawing: u32,
     pub regions: u32,
     pub instances: u32,

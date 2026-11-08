@@ -50,7 +50,7 @@ fn encode<'a>(build: impl FnOnce(&mut TreeView<'a>)) -> Vec<u8> {
     TreeEncoder::new()
         .encode(
             &t,
-            TreeEncoderOptions {
+            TreeEncoderConfig {
                 init_cap: 1 << 10,
                 max_cap: None,
             },
@@ -165,7 +165,7 @@ fn under_cap_written() {
     let bytes = [0u8; 1100];
     let mut t = TreeView::new();
     t.u8_array(Some(&bytes[..]));
-    let options = TreeEncoderOptions {
+    let options = TreeEncoderConfig {
         init_cap: 1 << 10,
         max_cap: Some(1500),
     };

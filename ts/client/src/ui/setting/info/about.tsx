@@ -16,23 +16,17 @@ const ENV_SHORT: Record<string, string> = {
   staging: "stg",
 };
 
-/** The environment's short name, followed by the tile source when it is not
- * the deployment's: `dev`, `dev:oven` or `dev:shelf`. */
 function envLabel(): string {
   const env = ENV_SHORT[APP_ENV] ?? APP_ENV;
   return DEV_SOURCE === "delivery" ? env : `${env}:${DEV_SOURCE}`;
 }
 
-/** One line for each bake: its kind and the version the source declares it
- * is read under. */
 function bakeLines(source: Readonly<Record<string, string>> | null): string[] {
   return Object.entries(source ?? {}).map(
     ([kind, version]) => `${kind}/${version}`,
   );
 }
 
-/** The placed objects are kept a shard at a time. This names the format this
- * build reads them in. */
 function objectLabel(): string {
   return `objects · format ${format.OBJECT}`;
 }

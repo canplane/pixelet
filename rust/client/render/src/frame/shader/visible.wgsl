@@ -12,7 +12,7 @@
 /// The holes' count and the count lanes, laid out as pxl-engine `ray::MISS_ARGS_WORDS` lays
 /// them: how many holes are listed (`MISS_ARGS_CNT`), then what the rays took
 /// (`MISS_ARGS_COUNT`). build.rs checks this struct's size against pxl-engine's.
-struct MissArgs {
+struct MissCount {
   cnt: atomic<u32>,
   counts: array<atomic<u32>, COUNT_RAYS>,
 }

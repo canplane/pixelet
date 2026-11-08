@@ -156,7 +156,7 @@ impl Coverage {
         under == (cnt(SHARD_ZOOM, zoom) as usize).pow(2)
     }
 
-    /// Every leaf held.
+    /// Every leaf the coverage holds, at `LEAF_ZOOM`.
     pub fn tiles(&self) -> Vec<[i32; 2]> {
         self.shards().flat_map(|s| s.tiles(LEAF_ZOOM)).collect()
     }
@@ -227,7 +227,7 @@ impl Overture {
     pub fn reading(reads: &[&[&str]], need: &BTreeSet<Node>) -> Result<(Overture, Client), String> {
         let tables = tables_of(reads);
         let url = std::env::var("DB_GEO_URL").map_err(|_| "env:DB_GEO_URL:missing")?;
-        let held: BTreeSet<String> = Coverage::of_source()?.shards().map(Node::name).collect();
+        let shards: BTreeSet<String> = Coverage::of_source()?.shards().map(Node::name).collect();
         let want: BTreeSet<String> = need.iter().map(|n| n.name()).collect();
         let mut client = Client::connect(&url, NoTls).map_err(|e| e.to_string())?;
         let rows = client
@@ -243,7 +243,7 @@ impl Overture {
                 .map(|r| r.get(1))
                 .collect();
             let missing = want.iter().filter(|n| !have.contains(n.as_str())).count();
-            let extra = have.iter().filter(|n| !held.contains(**n)).count();
+            let extra = have.iter().filter(|n| !shards.contains(**n)).count();
             if missing + extra > 0 {
                 return Err(format!("{table} lacks {missing} of the shards needed and holds {extra} past the coverage's: {INGEST}"));
             }

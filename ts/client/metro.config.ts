@@ -29,9 +29,8 @@ const here = path.join(WORKSPACE, "client");
 const SINGLETONS = ["react", "react-native"];
 const FROM_APP = path.join(here, "index.ts");
 
-/** Writes the build's stamp (ts/build/stamp.ts) as the module
- * `virtual:pxl-build`. It is written once, when Metro starts, so a dev
- * server's stamp is the one it started under. */
+/** The stamp is written once, when Metro starts, so a dev server's stamp is
+ * the one it started under. */
 function buildStamp(): string {
   const { time, id, number } = stamp();
   const file = path.join(here, ".expo/pxl-build.js");
@@ -64,8 +63,6 @@ function ownPlatform(
   const ext = path.extname(file);
   const stem = file.slice(0, -ext.length);
   if (from.startsWith(`${stem}.`)) return file;
-  // The page takes a `.web` file, or else the default. A device takes its own
-  // system's file, or else the `.native` one.
   for (const which of platform === "web" ? ["web"] : [platform, "native"]) {
     const own = `${stem}.${which}${ext}`;
     if (fs.existsSync(own)) return own;
@@ -90,8 +87,6 @@ const resolveRequest: NonNullable<typeof base.resolver.resolveRequest> = (
   if (name === "virtual:pxl-build") {
     return { type: "sourceFile", filePath: BUILD_STAMP };
   }
-  // A file that an import names, through an alias, a workspace package or a
-  // relative path, is resolved to this platform's own file.
   const from = context.originModulePath;
   const file = name.startsWith(".")
     ? path.extname(name) !== ""
@@ -108,7 +103,6 @@ const resolveRequest: NonNullable<typeof base.resolver.resolveRequest> = (
   return context.resolveRequest(context, name, platform);
 };
 
-/** A device's console lines, appended to the app's `.dev-console.log`. */
 const devConsole = consoleHandler(path.join(here, ".dev-console.log"));
 
 export default {

@@ -56,9 +56,7 @@ export const PanelPresence = createContext<{ open: boolean; gone: () => void }>(
   { open: true, gone: () => {} },
 );
 
-/** The sheet's top row. The sheet's own control, such as its tabs or its
- * search field, stands where a title would, and the close button follows it.
- * The row shows no title: the panel's `label` names the sheet to assistive
+/** The row shows no title: the panel's `label` names the sheet to assistive
  * technology. */
 export function PanelBar({
   onClose,
@@ -170,9 +168,8 @@ const HANDLE = { width: 36, height: 5 };
 const TAP_SLOP = 8;
 
 /**
- * A panel on a page and on Android: a bottom sheet over a dimmed world, which
- * only its header drags. The sheet is always laid out at full height and slid
- * down to show half, so that a drag animates nothing but a transform.
+ * Only the header drags the sheet. The sheet is always laid out at full height
+ * and slid down to show half, so that a drag animates nothing but a transform.
  */
 export function Panel({ label, onClose, half, children }: PanelProps) {
   const window = useWindowSize();

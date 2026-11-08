@@ -14,7 +14,7 @@ use pxl_engine::cast::REACH;
 
 /// A lattice's integer core — its zooms, its cells' indices, the ground's —
 /// is pxl-engine's, which a GPU reads tiles by too; placing it in the
-/// world is here (`Cells`).
+/// world is here (`Grid`).
 pub use pxl_engine::lattice::{Lattice, GROUND, TILE_CELLS};
 
 /// The coarsest zoom `lattice`'s tiles are read at: where it reads the top's
@@ -50,7 +50,7 @@ pub const fn demand_dist(lattice: Lattice, zoom: Zoom) -> f64 {
 
 /// A lattice placed in the world: the tiles and cells a node, a point or an
 /// index names.
-pub trait Cells {
+pub trait Grid {
     fn read_tile(self, node: (Zoom, [i32; 2]), cell_zoom: Zoom) -> Quadrant;
     fn z_at(self, r2: f64) -> Zoom;
     fn cell_of(self, zoom: Zoom, at: &Q3) -> Cell;
@@ -59,7 +59,7 @@ pub trait Cells {
     fn child_cells(self, idx: u32) -> (usize, [u32; 4]);
 }
 
-impl Cells for Lattice {
+impl Grid for Lattice {
     fn read_tile(self, (zoom, column): (Zoom, [i32; 2]), cell_zoom: Zoom) -> Quadrant {
         let z = self.read_zoom(cell_zoom);
         Quadrant::new(z, ancestor_of(column, zoom - z))
@@ -71,7 +71,7 @@ impl Cells for Lattice {
         self.read_zoom(cell_zoom_at(r2))
     }
 
-    /// The cell at `z` a point stands in; a point, since a cell may be finer than a unit.
+    /// The cell at `zoom` a point stands in; a point, since a cell may be finer than a unit.
     fn cell_of(self, zoom: Zoom, at: &Q3) -> Cell {
         let zoom = self.cell_zoom(zoom);
         let [x, y, _] = idx_of(zoom, at);

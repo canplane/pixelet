@@ -22,7 +22,7 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::units;
 
 use crate::domain::preview::{Ghost, GhostBox};
-use crate::domain::scene::column::GroupColumns;
+use crate::domain::scene::column::GroupRange;
 use crate::domain::scene::decor::asset::{decor_model, decor_skin};
 use crate::domain::scene::indicator::param::GHOST_OPACITY;
 use crate::domain::scene::transform::Transform;
@@ -174,8 +174,8 @@ impl GhostDraw {
         }
         // The block is one group of one instance, with no header: its
         // columns, its flags, and the index list.
-        let column = GroupColumns { first: 0, cnt: 1 };
-        let mut m = [0u32; GroupColumns::words(1) + 1];
+        let column = GroupRange { first: 0, cnt: 1 };
+        let mut m = [0u32; GroupRange::words(1) + 1];
         (m[column.f32_at(3, 0)], m[column.f32_at(4, 0)]) = (rot.to_bits(), scale.to_bits());
         self.write(draw, shape, bytes(&m));
         true
@@ -222,7 +222,7 @@ impl GhostDraw {
                 );
             }
             Shape::Decor { group, .. } => {
-                let idx = GroupColumns::words(1) as u32;
+                let idx = GroupRange::words(1) as u32;
                 draw.draw_instances(
                     &self.id,
                     PIPELINE_GHOST_DECOR,

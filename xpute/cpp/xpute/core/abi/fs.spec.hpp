@@ -35,7 +35,7 @@ enum class Major : std::uint32_t {
 
 } // namespace xpute::abi::fs
 
-template <> struct xpute::Members<xpute::abi::fs::Major> {
+template <> struct xpute::EnumInfo<xpute::abi::fs::Major> {
     static constexpr std::array<xpute::abi::fs::Major, 1> ALL{xpute::abi::fs::Major::FS};
 };
 
@@ -51,7 +51,7 @@ enum class FsMinor : std::uint32_t {
 
 } // namespace xpute::abi::fs
 
-template <> struct xpute::Members<xpute::abi::fs::FsMinor> {
+template <> struct xpute::EnumInfo<xpute::abi::fs::FsMinor> {
     static constexpr std::array<xpute::abi::fs::FsMinor, 5> ALL{xpute::abi::fs::FsMinor::OPENAT, xpute::abi::fs::FsMinor::READ, xpute::abi::fs::FsMinor::WRITE, xpute::abi::fs::FsMinor::CLOSE, xpute::abi::fs::FsMinor::CHANGED};
 };
 
@@ -86,7 +86,7 @@ enum class Command : std::uint32_t {
 
 } // namespace xpute::abi::fs
 
-template <> struct xpute::Members<xpute::abi::fs::Command> {
+template <> struct xpute::EnumInfo<xpute::abi::fs::Command> {
     static constexpr std::array<xpute::abi::fs::Command, 5> ALL{xpute::abi::fs::Command::FS_CHANGED, xpute::abi::fs::Command::FS_OPENAT, xpute::abi::fs::Command::FS_READ, xpute::abi::fs::Command::FS_WRITE, xpute::abi::fs::Command::FS_CLOSE};
 };
 

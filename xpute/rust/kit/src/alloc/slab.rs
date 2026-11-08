@@ -1,12 +1,12 @@
 // xpute-kit/alloc/slab.rs
 
-//! A slab allocator of size classes for requests smaller than a page, over
-//! the buddy allocator of `buddy_tree.rs`, whose smallest block is a page.
-//! Each class borrows a run of pages from the buddy and carves it into
-//! slots as SLUB does: the free slots form a list threaded through
-//! themselves, and the run's header sits in its leading slots. A run goes
-//! back to the buddy when its last slot is freed. A request of a page or
-//! more goes straight to the buddy.
+//! This is a slab allocator of size classes for requests smaller than a page,
+//! over the buddy allocator of `buddy_tree.rs`, whose smallest block is a page.
+//! Each class borrows a run of pages from the buddy and carves it into slots
+//! as SLUB does: the free slots form a list threaded through themselves, and
+//! the run's header sits in its leading slots. A run goes back to the buddy
+//! when its last slot is freed. A request of a page or more goes straight to
+//! the buddy.
 //!
 //! A slot finds its run by masking its offset from the range's base, which
 //! works because the buddy aligns every block to its own size from the base.
@@ -106,9 +106,9 @@ impl<R: Range> SlabMalloc<R> {
         }
     };
 
-    /// The class for a request, or None when the buddy serves it. A slot is
-    /// aligned to its own size, so a request's alignment is met by raising
-    /// its size to the alignment.
+    /// `class_for` gives the class for a request, or None when the buddy
+    /// serves it. A slot is aligned to its own size, so a request's alignment
+    /// is met by raising its size to the alignment.
     fn class_for(layout: Layout) -> Option<usize> {
         let need = layout.size().max(layout.align()).max(1);
         if need >= 1 << R::MIN_LOG2 {

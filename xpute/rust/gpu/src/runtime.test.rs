@@ -18,7 +18,7 @@ fn device() -> (wgpu::Adapter, wgpu::Device, wgpu::Queue) {
     (adapter, device, queue)
 }
 
-/// A test's config. Its chunk is as large as the largest write a record
+/// This is a test's config. Its chunk is as large as the largest write a record
 /// makes.
 fn cfg(frame_latency: u32) -> Config {
     Config {
@@ -110,7 +110,7 @@ fn lost_device_frames_released() {
 fn stale_handle_inert() {
     let (adapter, device, queue) = device();
     let mut h = runtime(&adapter, &device, &queue, 2);
-    // Slot 3, generations 1 and 2 (`slot | generation << 16`).
+    // These are slot 3, generations 1 and 2 (`slot | generation << 16`).
     let (old, newer) = (3 | (1 << 16), 3 | (2 << 16));
     assert!(!h.unbind(old), "nothing is bound");
     assert_eq!(h.claim(old), Some(3));

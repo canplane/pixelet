@@ -1,12 +1,12 @@
 // xpute-tool/spec/cmd.rs
 
-//! Generates the code for a protocol over xpute's rings, xpute's own or a
-//! program's: its commands and the types their packets are made of. As a WIT
-//! world does, a protocol names its commands from the core's side: an
-//! `export` is a command the core implements and the runtime calls, and an
-//! `import` is one the runtime implements and the core calls. cmd/ts.rs,
-//! cmd/rs.rs and cmd/cpp.rs write the messages in each language, and
-//! cmd/service.rs writes each end's binding onto xpute's runtime and core.
+//! This generates the code for a protocol over xpute's rings, xpute's own or a
+//! program's: its commands and the types their packets are made of. A protocol
+//! names its commands from the core's side, as a WIT world does: an `export` is
+//! a command the core implements and the runtime calls, and an `import` is one
+//! the runtime implements and the core calls. cmd/ts.rs, cmd/rs.rs and
+//! cmd/cpp.rs write the messages in each language, and cmd/service.rs writes
+//! each end's binding onto xpute's runtime and core.
 
 mod cpp;
 mod rs;
@@ -32,8 +32,8 @@ struct Field {
     doc: Option<Vec<String>>,
 }
 
-/// A member of an enum. Each command becomes a member of the `Command` enum,
-/// made from its protocol's entry (`Cmd`).
+/// A `Member` is a member of an enum. Each command becomes a member of the
+/// `Command` enum, made from its protocol's entry (`Cmd`).
 #[derive(Deserialize)]
 struct Member {
     name: String,
@@ -44,8 +44,8 @@ struct Member {
     pkt: Option<Vec<Field>>,
     #[serde(skip)]
     import: Option<Vec<Field>>,
-    /// The packet of an `import`'s completion, which the runtime writes and the
-    /// core reads.
+    /// This is the packet of an `import`'s completion, which the runtime writes
+    /// and the core reads.
     #[serde(skip)]
     reply: Option<Vec<Field>>,
 }
@@ -88,13 +88,13 @@ struct Record {
     fields: Vec<Field>,
 }
 
-/// A command as its protocol lists it. With `call`, the sender waits for the
-/// answer: the runtime calls an `export` and waits, or answers an `import`
-/// before the core's call returns. With `ackreq`, the command is posted with
-/// ACKREQ and answered later; the runtime completes such an `import` on a
-/// later turn with a frame of the same tag flagged RES, whose packet is
-/// `reply`. `mem` names the two fields of an `import` that give where a
-/// region of the core's memory is and how long it is.
+/// A `Cmd` is a command as its protocol lists it. With `call`, the sender waits
+/// for the answer: the runtime calls an `export` and waits, or answers an
+/// `import` before the core's call returns. With `ackreq`, the command is
+/// posted with ACKREQ and answered later; the runtime completes such an
+/// `import` on a later turn with a frame of the same tag flagged RES, whose
+/// packet is `reply`. `mem` names the two fields of an `import` that give where
+/// a region of the core's memory is and how long it is.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Cmd {
@@ -111,10 +111,10 @@ struct Cmd {
     mem: Option<[String; 2]>,
 }
 
-/// A protocol: the commands the runtime sends the core (`export`) and those
-/// the core posts to the runtime (`import`). `name` serves only the generated
-/// code's names. Nothing on the rings reads the protocol; a runtime routes a
-/// frame by its command's major alone.
+/// A `Doc` is a protocol: the commands the runtime sends the core (`export`)
+/// and those the core posts to the runtime (`import`). `name` serves only the
+/// generated code's names. Nothing on the rings reads the protocol; a runtime
+/// routes a frame by its command's major alone.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Doc {
@@ -166,7 +166,7 @@ struct Spec {
     gen: Option<Gen>,
 }
 
-/// A protocol as the emitters read it.
+/// A `Protocol` is a protocol as the emitters read it.
 struct Protocol {
     name: String,
     /// Each export's name, whether it is a call, and whether it is posted with
@@ -333,9 +333,9 @@ fn literal(val: u32, format: &str) -> String {
     }
 }
 
-/// Checks that every command's major and minor are members its protocol
-/// names, that each number in a table is given out once, and that no member
-/// takes the name of a global.
+/// Checks that every command's major and minor are members its protocol names,
+/// that each number in a table is given out once, and that no member takes the
+/// name of a global.
 fn check_numbers(spec: &Spec, json: &str) -> Result<(), String> {
     for e in &spec.enums {
         let all: Vec<&Member> = members(e).collect();
@@ -450,12 +450,11 @@ const TARGETS: [Target; 3] = [
     },
 ];
 
-/// The first major a program's commands may take; the majors below it are
-/// xpute's own. It must equal spec/ipc/frame.json `PROGRAM_MAJOR`.
+/// This is the first major a program's commands may take; the majors below it
+/// are xpute's own. It must equal `PROGRAM_MAJOR` of spec/ipc/frame.json.
 const PROGRAM_MAJOR: u32 = 0x10;
 
-/// Checks that no two commands across `specs` share a number. Each spec comes
-/// with the JSON it was read from.
+/// Checks that no two commands across `specs` share a number.
 fn check_once(specs: &[(&Spec, &str)]) -> Result<(), String> {
     let mut seen: Vec<(u32, &str, &str)> = Vec::new();
     for (spec, json) in specs {
@@ -472,10 +471,10 @@ fn check_once(specs: &[(&Spec, &str)]) -> Result<(), String> {
     Ok(())
 }
 
-/// Generates a program's protocols, each into the files its `gen` names.
-/// Every `json`, and every path in the outputs, is relative to `root`. A
-/// command under xpute's majors is refused, and so is a number that two
-/// protocols both give.
+/// Generates a program's protocols, each into the files its `gen` names. Every
+/// `json`, and every path in the outputs, is relative to `root`. A command
+/// under xpute's majors is refused, and so is a number that two protocols both
+/// give.
 pub fn protocol_outputs(root: &Path, jsons: &[&str]) -> Result<Vec<Output>, String> {
     let mut specs = Vec::new();
     for json in jsons {

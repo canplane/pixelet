@@ -8,7 +8,7 @@
 //! a tile is its children with what shows from its zoom on. It is one XTP
 //! tree, as every other baked tile is.
 
-use crate::space::layer::lattice::Cells;
+use crate::space::layer::lattice::Grid;
 use fnv::FnvHashSet;
 
 use crate::asset::marker::MARK_STEPS;
@@ -109,12 +109,12 @@ pub fn category_of(category: &str) -> u16 {
 
 /// Strings end to end in one buffer, read by index.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct Strings {
+pub(crate) struct StringTable {
     bytes: String,
     ends: Vec<u32>,
 }
 
-impl Strings {
+impl StringTable {
     fn push(&mut self, s: &str) {
         self.bytes.push_str(s);
         self.ends.push(self.bytes.len() as u32);
@@ -153,8 +153,8 @@ pub struct PlaceTile {
     at: Vec<[u16; 2]>,
     categories: Vec<u16>,
     from: Vec<u8>,
-    names: Strings,
-    ids: Strings,
+    names: StringTable,
+    ids: StringTable,
     /// The children that are tiles: those holding a place this tile does not.
     pub occupancy: Occupancy,
 }

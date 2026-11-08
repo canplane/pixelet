@@ -175,7 +175,7 @@
       "message_placeholder": "メッセージを入力",
       "pin_placeholder": "ピンのメッセージを入力",
       "send": "送信",
-      "pin_done": "ピンを立てる",
+      "put_pin": "ピンを立てる",
       "drawer_tooltip": "引き出しを開く",
       "object_size": "サイズ {{n}}"
     },

@@ -1,8 +1,8 @@
 // xpute-kit/collection/list.rs
 
-//! A list of at most `N` values, held inline. It never grows: a push past
-//! `N` is a bug (ENOSPC). Its first `len` slots hold values, and the rest
-//! are uninitialized.
+//! A list holds at most `N` values, inline. It never grows: a push past `N` is
+//! a bug (ENOSPC). Its first `len` slots hold values, and the rest are
+//! uninitialized.
 
 use core::mem::MaybeUninit;
 
@@ -64,8 +64,8 @@ impl<T, const N: usize> List<T, N> {
         }
     }
 
-    /// Drops every value `keep` refuses and keeps the order of the rest, in
-    /// one pass.
+    /// Drops every value `keep` refuses and keeps the order of the rest, in one
+    /// pass.
     pub fn retain(&mut self, mut keep: impl FnMut(&T) -> bool) {
         let len = self.len;
         // The list counts as empty while the pass runs, so a panic in `keep`
@@ -133,7 +133,7 @@ impl<T, const N: usize> IntoIterator for List<T, N> {
     }
 }
 
-/// Moves a list's values out in order. The values not reached are dropped
+/// This moves a list's values out in order. The values not reached are dropped
 /// with the iterator.
 pub struct IntoIter<T, const N: usize> {
     list: List<T, N>,

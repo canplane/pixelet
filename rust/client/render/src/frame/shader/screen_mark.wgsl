@@ -1,6 +1,6 @@
 // pxl-render/frame/shader/screen_mark.wgsl
 
-// Sets the frame's mark into the tiles' words (gpu/tile.rs `Tiles::damage`), for the screen's
+// Sets the frame's mark into the tiles' words (gpu/tile.rs `TileGrid::damage`), for the screen's
 // tiles or the light's map's. A frame hands one mark, a rectangle of tiles, and a frame drawn
 // whole hands a mark of every tile. One thread a tile of the mark writes this frame's number
 // into the tile's word in `changed_at`, as a light tile's word takes the number of the cast

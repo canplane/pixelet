@@ -8,7 +8,7 @@ use pxl_spec::bake::tile::place::{PlaceTile, TilePlace};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 use super::world::World;
-use crate::domain::layer::tile_cache::Lines;
+use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::Base as _;
 
 impl World<'static> {
@@ -22,13 +22,13 @@ impl World<'static> {
         tiles: impl IntoIterator<Item = Quadrant>,
         visit: &mut dyn FnMut(Quadrant, u32, TilePlace<'static>),
     ) {
-        let held: &'static _ = PlaceTile::tile_cache();
-        let mut lines = Lines::default();
+        let cache: &'static _ = PlaceTile::tile_cache();
+        let mut lines = Path::default();
         for tile in tiles {
-            let Some(src) = held.seek(&mut lines, tile).src else {
+            let Some(src) = cache.seek(&mut lines, tile).src else {
                 continue;
             };
-            let Some(places) = held.get(src) else {
+            let Some(places) = cache.get(src) else {
                 continue;
             };
             for (place, h) in places.iter() {

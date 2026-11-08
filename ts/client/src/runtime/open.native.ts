@@ -1,9 +1,6 @@
 // @pxl/client/runtime/open.native.ts
 
-/**
- * A device's core, beside the UI. The runtime runs on the UI's thread and is
- * itself the UI's link. A page's core is opened by open.ts.
- */
+/** The runtime runs on the UI's thread and is itself the UI's link. */
 
 import { start } from "@xpute/runtime";
 import { follow_refused_files } from "@/service/sys/fs/refusal.ts";

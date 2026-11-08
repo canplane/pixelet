@@ -22,8 +22,6 @@ import {
 } from "@/abi/state.ts";
 import { messageKey } from "@/ui/locale/message-key.ts";
 
-/** Where the app stands, as told by each part that can hold it back or stop
- * it. */
 export interface Standing {
   boot: Boot;
   gpu: Gpu;

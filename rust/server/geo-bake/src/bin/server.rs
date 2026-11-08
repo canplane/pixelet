@@ -18,14 +18,14 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::Router;
 use pxl_geo_bake::cli;
-use pxl_geo_bake::cli::Flags;
+use pxl_geo_bake::cli::Argv;
 use pxl_geo_bake::coverage::Coverage;
 use pxl_geo_bake::oven::{
-    job::{self, Limits},
+    job::{self, Limit},
     Failure, Kind, Server,
 };
 use pxl_geo_bake::pyramid;
-use pxl_geo_bake::source::{self, Overrides};
+use pxl_geo_bake::source::{self, OverrideMap};
 use pxl_geo_bake::util::{code_digest, CONTENT_ENCODING};
 use pxl_spec::bake::publication::{tile_object_parts, BaseLayer, FORMAT, TILE_SPHERE};
 use pxl_spec::bake::source::is_sharded;
@@ -120,7 +120,7 @@ fn declaration(app: &App) -> Result<String, String> {
             }),
         }
     })?;
-    Ok(source::declaration(app.min_zoom, &kinds, &Overrides::new())?.to_string())
+    Ok(source::declaration(app.min_zoom, &kinds, &OverrideMap::new())?.to_string())
 }
 
 const EARTH: &str = "earth";
@@ -268,7 +268,7 @@ fn run() -> Result<(), String> {
         let seconds = argv[3].parse().map_err(|_| "invalid job deadline")?;
         return job::execute(job, std::path::Path::new(&argv[2]), seconds);
     }
-    let mut limits = Limits::default();
+    let mut limits = Limit::default();
     let mut port: u16 = 3001;
     let mut host = "127.0.0.1".to_string();
     let mut asset_dir = None;
@@ -278,7 +278,7 @@ fn run() -> Result<(), String> {
     let mut folds: Zoom = 2;
     let mut shelf: Option<PathBuf> = None;
 
-    let mut flags = Flags::of(argv);
+    let mut flags = Argv::of(argv);
     let mut oven_named = false;
     while let Some(flag) = flags.arg() {
         oven_named |= flag.starts_with("--oven");

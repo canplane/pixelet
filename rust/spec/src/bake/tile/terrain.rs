@@ -77,10 +77,10 @@ pub struct Ground {
 /// `clipmap`, `fill`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct TerrainTile {
-    pub ground: Ground, // a class a cell: the source rasterized, or its fold; a client's void tile's alone
-    pub separation: Separation, // ways off the ground: source lines, tops solved offline
-    pub ele: Cow<'static, [i16]>, // padded samples, a leaf's source or the fold's; a client's in its room
-    pub occupancy: Occupancy,     // which children are tiles: none is asked for that is not
+    pub ground: Ground, // One class a cell, rasterized from the source or folded; a client holds it only for a void tile.
+    pub separation: Separation, // The ways off the ground: the source's lines, with tops solved offline.
+    pub ele: Cow<'static, [i16]>, // The padded samples, a leaf's from the source or folded; a client holds its own in its room.
+    pub occupancy: Occupancy, // Which children are tiles; a child that is not one is never asked for.
 }
 
 /// Whether every brick, `brick` cells a side, that a tile is cut into holds its ways' entries
@@ -256,25 +256,25 @@ fn laid<'a>(
 /// most spans a column makes.
 pub(crate) fn brick_spans(
     tile: Quadrant,
-    held: &TerrainTile,
+    terrain: &TerrainTile,
     place: [u32; 2],
     scratch: &mut [(u32, u32)],
     [lines, column, spans]: [&mut [u32]; 3],
 ) -> u32 {
-    let n = brick_lines(tile, &held.separation, place, scratch, lines);
+    let n = brick_lines(tile, &terrain.separation, place, scratch, lines);
     let cell_zoom = GROUND.cell_zoom(tile.zoom);
     let site = fill::Site {
         cell_zoom,
         place,
         first: first_cell(tile, cell_zoom, place),
         shard: Shard::INSIDE,
-        ele: &held.ele,
+        ele: &terrain.ele,
         lines: &lines[..n],
     };
     let four = |i: u32| {
         let at = brick_cell(place, i);
         ground::word(
-            four_palette_indices(&held.ground.cells, (at[1] * TILE_CELLS + at[0]) as usize)
+            four_palette_indices(&terrain.ground.cells, (at[1] * TILE_CELLS + at[0]) as usize)
                 .map(u32::from),
         )
     };
@@ -300,13 +300,13 @@ pub fn pool_needs(worst: impl Fn(Zoom) -> u64) -> u64 {
     cells.map(worst).sum::<u64>() + u64::from(CLIP_LEVELS - EYE_CLIP_LEVELS) * most
 }
 
-/// `held` with only the lines it draws at `tile`'s zoom. Each line is read alone, its piers
+/// `terrain` with only the lines it draws at `tile`'s zoom. Each line is read alone, its piers
 /// standing as if nothing blocks them, by the rule its bricks' columns are read by, their
 /// rings included (`way::column`), so a line no span of which fills a cell there
 /// (`way::fills_any`) is none at that zoom and is not stored.
-pub fn drawn(tile: Quadrant, held: TerrainTile) -> TerrainTile {
+pub fn drawn(tile: Quadrant, terrain: TerrainTile) -> TerrainTile {
     use pxl_engine::clipmap::{BRICK, LINES_WORDS};
-    let lines = &held.separation;
+    let lines = &terrain.separation;
     let bricks = TILE_CELLS / BRICK;
     let (mut scratch, mut words) = (
         vec![(0, 0); WAYS_BRICK_SEGMENTS],
@@ -335,7 +335,7 @@ pub fn drawn(tile: Quadrant, held: TerrainTile) -> TerrainTile {
         let seen = span(1).any(|qy| {
             span(0).any(|qx| {
                 let n = brick_lines(tile, &one, [qx, qy], &mut scratch, &mut words);
-                let sq = laid(tile, &held.ground, &held.ele, [qx, qy], &words[..n]);
+                let sq = laid(tile, &terrain.ground, &terrain.ele, [qx, qy], &words[..n]);
                 let ring = -1..=BRICK as i32;
                 ring.clone()
                     .any(|y| ring.clone().any(|x| way::column(&sq, [x, y]).0.n > 0))
@@ -353,7 +353,7 @@ pub fn drawn(tile: Quadrant, held: TerrainTile) -> TerrainTile {
     }
     TerrainTile {
         separation: separation.finish(),
-        ..held
+        ..terrain
     }
 }
 
@@ -383,7 +383,7 @@ pub enum Unfit {
 /// spans (pxl-engine `fill::brick`), its cells' zoom, and its ways' tree
 /// in a pool of its own, its root word (`way::tree::root_word`) and the
 /// child groups its build took and holds.
-pub struct BrickWords<'a> {
+pub struct FilledBrick<'a> {
     pub column: &'a [u32],
     pub spans: &'a [u32],
     pub cell_zoom: Zoom,
@@ -401,13 +401,13 @@ pub struct BrickWords<'a> {
 /// what the tile takes of the client's ways (`Fit`).
 pub fn fill_fit(
     tile: Quadrant,
-    held: &TerrainTile,
-    mut each: impl FnMut(u32, &BrickWords<'_>),
+    terrain: &TerrainTile,
+    mut each: impl FnMut(u32, &FilledBrick<'_>),
 ) -> Result<Fit, ([u32; 2], Unfit)> {
     use pxl_engine::clipmap::{BRICK, BRICK_WORDS, LINES_WORDS, SPANS_WORDS};
     use pxl_engine::way::tree::{BRICK_CHILD_GROUPS, ROOT_NODES};
     let mut fit = Fit::default();
-    if held.separation.is_empty() {
+    if terrain.separation.is_empty() {
         return Ok(fit);
     }
     let mut scratch = vec![(0, 0); WAYS_BRICK_SEGMENTS];
@@ -423,7 +423,7 @@ pub fn fill_fit(
         let place = [k % side, k / side];
         let spans = brick_spans(
             tile,
-            held,
+            terrain,
             place,
             &mut scratch,
             [&mut lines, &mut column, &mut span_scratch],
@@ -444,7 +444,7 @@ pub fn fill_fit(
         }
         each(
             k,
-            &BrickWords {
+            &FilledBrick {
                 column: &column,
                 spans: &span_scratch,
                 cell_zoom,
@@ -550,23 +550,23 @@ pub fn encode(tile: &TerrainTile) -> Result<Vec<u8>, MarshalError> {
     )
 }
 
-struct Columns<'a> {
+struct Table<'a> {
     ele: &'a [i16],
     ground: &'a [GroundId],
     occupancy: Occupancy,
-    separation: separation::Columns<'a>,
+    separation: separation::Table<'a>,
 }
 
 /// Refused unless every column is a tile's length.
-fn read_tile(pkt: &[u8]) -> Result<Columns<'_>, MarshalError> {
+fn read_tile(pkt: &[u8]) -> Result<Table<'_>, MarshalError> {
     let (ele, ground, occupancy, separation) = shape::get_deep::<Packet>(pkt)?;
     let occupancy = occupancy_of(occupancy)?;
-    let separation = separation::Columns::of(separation)?;
+    let separation = separation::Table::of(separation)?;
     if ele.len() != ELE_COLUMN || (ground.len() != GROUND_COLUMN && ground.len() != PALETTE_COLUMN)
     {
         return Err(malformed());
     }
-    Ok(Columns {
+    Ok(Table {
         ele,
         ground,
         occupancy,
@@ -589,7 +589,7 @@ pub fn decode_into(
     room: separation::Room,
     ele: &'static mut [i16],
 ) -> Result<TerrainTile, MarshalError> {
-    let Columns {
+    let Table {
         ele: samples,
         occupancy,
         separation,
@@ -608,7 +608,7 @@ pub fn decode_into(
 
 // Copied out as the bake holds it, for a tile that outlives its packet.
 pub fn decode(pkt: &[u8]) -> Result<TerrainTile, MarshalError> {
-    let Columns {
+    let Table {
         ele,
         ground,
         occupancy,

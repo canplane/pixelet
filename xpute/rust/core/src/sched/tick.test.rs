@@ -56,7 +56,7 @@ const CONTENT_SHARE: f64 = 0.2;
 
 const POLICY: TickPolicy = TickPolicy {
     hard_slack_ms: 4.0,
-    held_back: &[0.0, CONTENT_SHARE, 0.0, 0.0, 0.0],
+    reserve: &[0.0, CONTENT_SHARE, 0.0, 0.0, 0.0],
 };
 
 const DEADLINE_MS: f64 = 6.0;

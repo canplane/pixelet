@@ -355,7 +355,6 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
             .collect::<Vec<_>>()
     };
 
-    // TS
     let mut ts = vec!["// @pxl/client/ui/asset/cube.spec.ts".to_string()];
     ts.extend(header.iter().cloned());
     // Every placeable cube under its heading: the ground's palette entries, and the colors past a ground byte.
@@ -495,7 +494,6 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
         "}".to_string(),
     ]);
 
-    // Rust
     let mut rs = vec!["// pxl-content/cube.spec.rs".to_string()];
     rs.extend(header);
     rs.push(String::new());
@@ -571,7 +569,6 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
         }
     }
     rs.extend(["    }".to_string(), String::new()]);
-    // The palette entries as an enum.
     rs.extend([
         "    /// A palette entry, by its number.".to_string(),
         "    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]".into(),
@@ -624,7 +621,6 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
         ),
     ]);
     rs.extend(["    }".to_string(), String::new()]);
-    // The object's colors.
     let colors: Vec<&Entry> = cube_entries(&object).filter(|e| is_color(e)).collect();
     rs.extend([
         "    /// One of the object's colors, by its number.".to_string(),

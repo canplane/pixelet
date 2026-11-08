@@ -15,7 +15,7 @@ const DEFAULT_LIMIT: u32 = 20;
 const MAX_LIMIT: u32 = 50;
 
 #[derive(Deserialize)]
-struct Params {
+struct SearchQuery {
     q: Option<String>,
     near: Option<String>,
     limit: Option<String>,
@@ -50,7 +50,7 @@ pub(crate) fn routes(pool: Pool) -> Router {
         .with_state(pool)
 }
 
-async fn search(State(pool): State<Pool>, Query(params): Query<Params>) -> Response {
+async fn search(State(pool): State<Pool>, Query(params): Query<SearchQuery>) -> Response {
     let q = params.q.unwrap_or_default().trim().to_string();
     // Characters, not bytes: a Korean syllable is three bytes.
     let len = q.chars().count();

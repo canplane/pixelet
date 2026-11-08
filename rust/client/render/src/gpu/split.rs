@@ -2,10 +2,9 @@
 
 //! Where an encoder's work is cut into command buffers: no indirect dispatch
 //! or draw reads args written earlier in the command buffer it is recorded
-//! in. A driver that ran an indirect call off args written before it in the
-//! same command buffer has hung the GPU at far zoom (WebKit on Metal); one
-//! whose args were written in a command buffer submitted before it never
-//! has.
+//! in. WebKit's driver on Metal hangs the GPU at far zoom when an indirect
+//! call reads args written before it in the same command buffer, and not
+//! when they were written in a command buffer submitted before it.
 //!
 //! What writes args is found as it is recorded: a buffer made `INDIRECT`,
 //! bound writable in a group of the pass when it dispatches or draws, or
@@ -52,9 +51,10 @@ pub struct Open {
 
 /// The args buffers the device holds, each with the source line that made it
 /// (gpu/api.rs `Gpu::buf`), the args each bind group binds writable, each at its
-/// binding, and the encoders and passes being recorded.
+/// binding, the encoders and passes being recorded, and the record each render
+/// pipeline was made from.
 #[derive(Default)]
-pub struct Splits {
+pub struct Split {
     args: Vec<(Id, u32)>,
     writes: Vec<(Id, Vec<(u32, Id)>)>,
     chains: Vec<Chain>,
@@ -62,7 +62,7 @@ pub struct Splits {
     records: Vec<(Id, u32)>,
 }
 
-impl Splits {
+impl Split {
     /// Records a buffer made at source line `line`. It is an args buffer when it was made
     /// `INDIRECT`.
     pub fn made(&mut self, buf: Id, indirect: bool, line: u32) {

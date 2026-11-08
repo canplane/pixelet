@@ -444,13 +444,13 @@ pub fn placement(
 /// Where a candidate in the leaf cell `leaf` stands at `cell_zoom` before it is posed
 /// (`placement`): its box's min corner and sink, `Prop`'s with no pose; the finest zoom it is
 /// posed at (`DecorQuery::finest`) and its column surface's top cell there, `base`; and
-/// whether that zoom's column surface was found, `held`.
+/// whether that zoom's column surface was found, `found`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Footing {
     pub prop: Prop,
     pub zoom: Zoom,
     pub base: i32,
-    pub held: bool,
+    pub found: bool,
 }
 
 /// The column surfaces under leaf cell `leaf` at `cell_zoom` (`placement`'s first half): its
@@ -485,7 +485,7 @@ pub fn footing<Q: DecorQuery>(
                 },
                 zoom,
                 base: top.0,
-                held: k == 0 || here,
+                found: k == 0 || here,
             };
             return (f, ft, k == 1 || here);
         }
@@ -508,7 +508,7 @@ pub fn pose<Q: DecorQuery>(
     let (prop, generates) = asks(q, f, decor, (ft.zoom, ft.base), seed, ft.prop, boxed);
     (
         prop,
-        ft.held && generates && stands_at(decor, prop.variant, cell_zoom),
+        ft.found && generates && stands_at(decor, prop.variant, cell_zoom),
     )
 }
 
@@ -650,7 +650,7 @@ pub fn distance2(origin: [i32; 3], at: [i32; 3]) -> f32 {
 /// level's decor; one generated at the leaves' is drawn where `at` is the leaf cell's zoom or
 /// finer; and one `placed` is drawn where `at` is the coarsest zoom it stands at or finer, so
 /// it stands where one of its size that the ground generates would. A generated one is asked
-/// at the zoom held where it stands (`held_at`), as a ray there draws. Each clip level
+/// at the zoom held where it stands (`ray_zoom`), as a ray there draws. Each clip level
 /// generates what stands as itself at it (pxl-core domain/view/lens.rs `decor_zooms`,
 /// `stands_at`).
 pub fn drawn_at(at: Zoom, cell_zoom: Zoom, placed: bool) -> bool {
@@ -664,12 +664,12 @@ pub fn drawn_at(at: Zoom, cell_zoom: Zoom, placed: bool) -> bool {
 }
 
 /// The zoom asked at `at` that the clip levels hold at leaf cell `c`: `at` held to the clip
-/// levels (`clipmap::held_to`), or the finest coarser clip level that holds the column
+/// levels (`clipmap::clip_zoom`), or the finest coarser clip level that holds the column
 /// present, as a ray reads it (`clipmap::step`), or the first where none does. Where a finer
 /// clip level holds no brick, because the bake left an empty page out (open sea), a coarser
 /// clip level's ground is drawn there, and its decor with it.
-pub fn held_at(w: &impl clipmap::Presence, at: Zoom, c: [i32; 2]) -> Zoom {
-    let z = clipmap::held_to(at);
+pub fn ray_zoom(w: &impl clipmap::Presence, at: Zoom, c: [i32; 2]) -> Zoom {
+    let z = clipmap::clip_zoom(at);
     let s = LEAF_CELL_ZOOM - z;
     let g = [wrap_idx(z, c[0] >> s), c[1] >> s];
     let (f, _) = clipmap::step(w, clipmap::Lookup::NONE, z, g);

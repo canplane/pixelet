@@ -26,7 +26,7 @@ pub const EARTH_DIST: f64 = demand_dist(GROUND, EARTH_ZOOM);
 pub const EARTH_BYTES: usize = (TILE_CELLS * TILE_CELLS * 4) as usize;
 
 /// The global picture's texels, across and down, what is drawn past the
-/// tiles: the whole Earth equirectangular, as pxl-geo-bake bake_earth.rs
+/// tiles: the whole Earth equirectangular, as pxl-geo-bake earth.rs
 /// writes it.
 pub const PICTURE: (u32, u32) = (2048, 1024);
 

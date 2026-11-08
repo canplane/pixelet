@@ -389,7 +389,7 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
     if let Some(interval_ms) = frame.interval_ms {
         cmd::ui::turn_pace(&cmd::TurnPace { interval_ms });
     }
-    let done = now();
+    let end = now();
     perf_frame(FrameTurn {
         tick: report,
         interval_ms: delta * 1000.0,
@@ -397,8 +397,8 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
         paced_ms,
         settled: !interactive,
         effects_ms,
-        stage_ms: done - after_tick,
-        task_ms: done - t0,
+        stage_ms: end - after_tick,
+        task_ms: end - t0,
     });
     if report.invalidated {
         request_world_tick();

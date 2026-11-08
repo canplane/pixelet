@@ -7,20 +7,20 @@ publish.workspace = true
 [lib]
 path = "src/lib.rs"
 
-# xpute's own files, generated from its spec/: `cargo spec` says what is
-# stale, `cargo spec --write` writes it.
+# This writes xpute's own files, generated from its spec/: `cargo spec` says
+# what is stale, and `cargo spec --write` writes it.
 [[bin]]
 name = "spec"
 path = "src/bin/spec.rs"
 
-# A program's machine and protocols generated where each one's `gen` says:
-# `xpute-gen <machine.json> <protocol.json>...`, `--check` to fail where one
-# is stale.
+# This generates a program's machine and protocols where each one's `gen` says:
+# `xpute-gen <machine.json> <protocol.json>...`, with `--check` to fail where
+# one is stale.
 [[bin]]
 name = "xpute-gen"
 path = "src/bin/gen.rs"
 
-# No crate of the workspace's: it writes into them.
+# The tool depends on no crate of the workspace, because it writes into them.
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }

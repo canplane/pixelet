@@ -43,7 +43,6 @@ pub enum Tool {
 }
 
 impl Tool {
-    /// What the tool would place, and at which zoom.
     pub fn asset(self) -> Option<(Asset, Zoom)> {
         match self {
             Tool::Item { asset, zoom } => Some((asset, zoom)),
@@ -51,7 +50,6 @@ impl Tool {
         }
     }
 
-    /// What the tool points at where the pick struck.
     fn hover(self, pick: &Pick) -> Hover {
         match self {
             Tool::Pointer | Tool::Eraser => aim(pick),
@@ -59,7 +57,6 @@ impl Tool {
         }
     }
 
-    /// What a tap does where the tool points (`hover`).
     fn tap(self, hover: &Hover) {
         match self {
             Tool::Pointer => pointer::tap(hover),
@@ -68,8 +65,7 @@ impl Tool {
         }
     }
 
-    /// The edit a tap would make where the tool points, this turn; `was` the
-    /// last turn's.
+    /// `was` is the last turn's preview.
     fn preview(self, hover: &Hover, was: &Preview) -> Preview {
         match self {
             Tool::Pointer => pointer::preview(hover),
@@ -78,7 +74,6 @@ impl Tool {
         }
     }
 
-    /// The ghost of the edit `preview` previews.
     fn ghost(self, hover: &Hover, preview: &Preview) -> Ghost {
         match self {
             Tool::Pointer => pointer::ghost(hover, preview),
@@ -185,8 +180,6 @@ impl Hover {
     }
 }
 
-/// Finds what is under the pointer at `ndc_x`, `ndc_y` for the tool held,
-/// and keeps it as the hover.
 pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
     state().pointer_ndc = Some([ndc_x, ndc_y]);
     state().hover = match pick_at(ndc_x, ndc_y).filter(|p| !p.is_folded()) {
@@ -215,7 +208,6 @@ fn aim(pick: &Pick) -> Hover {
             GROUND.leaf_cell_zoom(),
         ),
     };
-    // Where the world takes no edit, nothing is pointed at.
     if !World::now().editable(&cube(zoom, idx_of(zoom, &corner))) {
         return Hover::default();
     }
@@ -226,7 +218,6 @@ fn aim(pick: &Pick) -> Hover {
     }
 }
 
-/// Carries out a tap at `ndc_x`, `ndc_y` with the tool held.
 pub fn tap(ndc_x: f64, ndc_y: f64) {
     hover_at(ndc_x, ndc_y);
     let hover = state().hover;

@@ -4,7 +4,6 @@
 // its cells in clip.wgsl's order. The part reads no binding, so a pass that writes the bricks
 // includes it as a pass that reads them does.
 
-/// The first word of the brick held in `slot`.
 fn brick_at(slot: u32) -> u32 {
   return slot * BRICK_WORDS;
 }

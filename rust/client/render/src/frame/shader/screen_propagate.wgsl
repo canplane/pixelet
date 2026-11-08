@@ -18,7 +18,7 @@
 // The tests must cover: a tile marked too many only costs work, and a tile missed is a
 // failure.
 
-// `Tiles`, `tiles_age` and `tiles_in_damage` come from tile_word.wgsl, which build.rs writes
+// `TileGrid`, `tiles_age` and `tiles_in_damage` come from tile_word.wgsl, which build.rs writes
 // from word.rs `screen`.
 
 struct Propagate {
@@ -33,14 +33,14 @@ struct Propagate {
 @group(0) @binding(0) var depth: texture_depth_2d;
 @group(0) @binding(1) var<uniform> propagate: Propagate;
 @group(0) @binding(2) var<storage, read> light_changed_at: array<u32>;
-@group(0) @binding(3) var<uniform> light_tiles: Tiles;
+@group(0) @binding(3) var<uniform> light_tiles: TileGrid;
 @group(0) @binding(4) var<storage, read_write> changed_at: array<u32>;
-@group(0) @binding(5) var<uniform> tiles: Tiles;
+@group(0) @binding(5) var<uniform> tiles: TileGrid;
 // The depth bound: the least and the most depth drawn in each square of `BOUND_STEP` pixels a
 // side, as the last world pass left them (screen_bound.wgsl).
 @group(0) @binding(6) var<storage, read> bounds: array<vec2f>;
 // The map tiles the frame's marks cover, as the first tile across and down and the tile just
-// past the last (gpu/tile.rs `Tiles::new_damage_rect`). The host hands it, and the drawn marks
+// past the last (gpu/tile.rs `TileGrid::new_damage_rect`). The host hands it, and the drawn marks
 // widen it (tile_mark.wgsl). No map tile outside it changed this frame.
 @group(0) @binding(7) var<storage, read> new_damage_rect: vec4u;
 

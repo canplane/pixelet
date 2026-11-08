@@ -32,14 +32,14 @@ mod real_world;
 use std::collections::BTreeSet;
 
 use gpu::{
-    array_view, at_edge, cross, edges_within, entry_held, entry_node, mix, read_texture, slack,
-    texture, ulps, unit, Gpu, Kinds, Tally,
+    array_view, at_edge, cross, edges_within, entry_node, holds_node, mix, read_texture, slack,
+    texture, ulps, unit, Gpu, KindCount, Tally,
 };
 use pxl_engine::answer::{self, Kind};
 use pxl_engine::beam::{self, Grid};
 use pxl_engine::cast::{self, Node, Ray};
 use pxl_engine::object::{ancestor_at, Cut};
-use pxl_engine::support::{self, Ancestors};
+use pxl_engine::support::{self, Lineage};
 use pxl_engine::world::Inheritance;
 use pxl_engine::{eye, face, node_cache, raster, ray, record, Zoom, LEAF_CELL_ZOOM};
 use pxl_render::frame::shader::record::{
@@ -47,7 +47,7 @@ use pxl_render::frame::shader::record::{
 };
 use pxl_render::frame::shader::word::{screen, SQUARE_SIDE};
 
-use real_world::{q8, Asking, Built, WorldBufs, FINEST};
+use real_world::{q8, Asking, Built, WorldBuffer, FINEST};
 
 /// The leaf cells the worlds are built about. `EYE` lies 300 cells west of X's seam, and
 /// `EYE_ZERO` lies by X = 0, where one root ends and the next begins in X.
@@ -144,10 +144,10 @@ fn store() -> wgpu::BufferUsages {
     wgpu::BufferUsages::STORAGE
 }
 
-fn world_bufs(gpu: &Gpu, built: &Built) -> WorldBufs {
+fn world_bufs(gpu: &Gpu, built: &Built) -> WorldBuffer {
     let flat_u = |rows: &[[u32; 4]]| rows.iter().flatten().copied().collect::<Vec<u32>>();
     let clip: Vec<u32> = built.clipmap.iter().flatten().map(|&v| v as u32).collect();
-    WorldBufs {
+    WorldBuffer {
         clip: gpu.buffer(&clip, store()),
         ground: gpu.buffer(&built.ground, store()),
         palette: gpu.buffer(&built.palette, store()),
@@ -158,7 +158,7 @@ fn world_bufs(gpu: &Gpu, built: &Built) -> WorldBufs {
 }
 
 fn world_binds<'a>(
-    b: &'a WorldBufs,
+    b: &'a WorldBuffer,
     eye: &'a wgpu::Buffer,
     beams: &'a wgpu::Buffer,
     table: &'a wgpu::Buffer,
@@ -208,7 +208,7 @@ fn eye_of(c: &EyeCase) -> (Vec<u32>, Grid, [[f32; 3]; 3]) {
 /// Runs the eye's passes that come before the pixels, in the order a frame that casts runs
 /// them: the beam rays, the cells' starts, the samples with their record and their asks, and
 /// then `face_cs` over the record's asks.
-fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline) -> Cast {
+fn cast_of(gpu: &Gpu, b: &WorldBuffer, c: &EyeCase, face_p: &wgpu::ComputePipeline) -> Cast {
     let (eye, grid, axes) = eye_of(c);
     let eye_buf = gpu.buffer(&eye, wgpu::BufferUsages::UNIFORM);
     let mut table0 = vec![0u32; node_cache::WORDS as usize];
@@ -293,7 +293,7 @@ fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline
 }
 
 fn face_binds<'a>(
-    b: &'a WorldBufs,
+    b: &'a WorldBuffer,
     eye: &'a wgpu::Buffer,
     beams: &'a wgpu::Buffer,
     args: &'a wgpu::Buffer,
@@ -326,7 +326,7 @@ fn drawable_at(table: &[u32]) -> std::collections::BTreeMap<(u32, [i32; 3]), u32
         let e = node_cache::entry_at(slot) as usize;
         let kind = table[e + node_cache::W_KIND as usize] & node_cache::KIND_MASK;
         let state = table[node_cache::state_at(slot) as usize];
-        if entry_held(table, slot)
+        if holds_node(table, slot)
             && kind != Kind::Split as u32
             && state & (record::FACES | record::ASKED) != 0
         {
@@ -368,7 +368,7 @@ impl<'a> BeamLine<'a> {
     }
 }
 
-impl Ancestors<Inheritance> for BeamLine<'_> {
+impl Lineage<Inheritance> for BeamLine<'_> {
     fn at(&self) -> [i32; 3] {
         self.at
     }
@@ -573,7 +573,7 @@ fn hand_faces_answer_as_face_word() {
     let Some(gpu) = device() else { return };
     let face_p = gpu.pipeline(src(SHADER_FACE), "face_cs");
     let mut tally = Tally::default();
-    let mut kinds = Kinds::new();
+    let mut kinds = KindCount::new();
     let worlds = worlds();
     for (built, c) in worlds
         .iter()
@@ -714,7 +714,7 @@ fn hand_pixels_answer_as_cast_entry() {
         },
     ];
     let mut tally = Tally::default();
-    let mut kinds = Kinds::new();
+    let mut kinds = KindCount::new();
     let (mut dir_off, mut px_off, mut inv_off) = (0f32, 0f32, 0u32);
     let worlds = worlds();
     let mut runs: Vec<(&Built, &EyeCase, &Screen)> = Vec::new();

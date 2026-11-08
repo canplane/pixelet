@@ -1,7 +1,7 @@
 // xpute-tool/spec.rs
 
-//! Generates the TypeScript, Rust and C++ code that spec/ JSON describes: the
-//! named values of a data spec (data.rs), the readers and writers of a
+//! This generates the TypeScript, Rust and C++ code that spec/ JSON describes:
+//! the named values of a data spec (data.rs), the readers and writers of a
 //! command table (cmd.rs), xpute's errno table (errno.rs) and a program's
 //! machine (machine.rs). It links none of the crates it writes into.
 
@@ -78,7 +78,7 @@ pub fn generate(write: bool) -> Result<(), String> {
     generate_at(&root(), outputs()?, &[], write)
 }
 
-/// `generate` for a program's outputs, their paths relative to `root`.
+/// This is `generate` for a program's outputs, their paths relative to `root`.
 /// `others` lists the trees whose generated files another generator writes,
 /// and this one never deletes a file under them.
 pub fn generate_at(
@@ -106,12 +106,12 @@ pub fn generate_at(
         .map_or(orphaned.clone(), |e| format!("{e}, {orphaned}")))
 }
 
-/// The text every generated file carries on one of its first lines, after the
+/// Every generated file carries this text on one of its first lines, after the
 /// comment marker (`generated`).
 const MARK: &str = "GENERATED from ";
 
-/// The tracked files under `root`, outside `others`, that carry `MARK` but
-/// that no output writes.
+/// `orphans` answers the tracked files under `root`, outside `others`, that
+/// carry `MARK` but that no output writes.
 fn orphans(root: &Path, outputs: &[Output], others: &[&str]) -> Result<Vec<String>, String> {
     let listed = Command::new("git")
         .args(["ls-files", "-z"])
@@ -132,7 +132,6 @@ fn orphans(root: &Path, outputs: &[Output], others: &[&str]) -> Result<Vec<Strin
         .collect())
 }
 
-/// Whether one of the file's first lines carries `MARK` after a comment marker.
 fn marked(path: &Path) -> bool {
     let mut head = Vec::new();
     let read = File::open(path).and_then(|f| f.take(1024).read_to_end(&mut head));
@@ -336,7 +335,7 @@ pub fn read_as<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, String> {
     serde_json::from_str(&text).map_err(|e| format!("{path}: {e}"))
 }
 
-/// A `#RRGGBB` color as one number, `0xRRGGBB`.
+/// `rgb` reads a `#RRGGBB` color as one number, `0xRRGGBB`.
 pub fn rgb(hex: &str) -> Result<u32, String> {
     let digits = hex
         .strip_prefix('#')
@@ -499,8 +498,9 @@ pub fn align_star(line: String, indent: &str) -> String {
     }
 }
 
-/// The line that names the JSON a file is generated from. Behind its comment
-/// marker it begins with `MARK`, which is how `orphans` finds the file.
+/// `generated` writes the line that names the JSON a file is generated from.
+/// Behind its comment marker the line begins with `MARK`, which is how
+/// `orphans` finds the file.
 pub fn generated(json: &str) -> String {
     format!("// GENERATED from {json}")
 }

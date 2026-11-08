@@ -12,8 +12,8 @@ import { color } from "@/ui/component/theme.ts";
 import * as device from "@/service/platform/device.ts";
 import { useCore } from "@/ui/watch.ts";
 
-/** A sensor's status as a color. Each surface passes its own `tone`, and the
- * glyphs over the world are paler than a sheet's. */
+/** Each surface passes its own `tone`, because the glyphs over the world are
+ * paler than a sheet's. */
 export function statusColor(
   status: SensorStatus,
   base: string,

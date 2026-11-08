@@ -7,7 +7,7 @@
 //! only where it says more than its parent, which a reader that holds the
 //! parent then reads instead.
 
-use crate::space::layer::lattice::Cells;
+use crate::space::layer::lattice::Grid;
 use fnv::FnvHashMap;
 use std::borrow::Cow;
 
@@ -21,7 +21,7 @@ use crate::space::coord::adapter::epsg3857::cell_zoom_of;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_engine::ground::majority;
-use xpute_kit::wire::xtp::Strs;
+use xpute_kit::wire::xtp::StrList;
 
 /// The finest tile Overture makes of its divisions (overture-tiles
 /// `profiles/Divisions.java`, `MAXZOOM`): finer views read it.
@@ -178,12 +178,12 @@ fn check(cells: &[u32], parents: &[u32]) -> Result<(), MarshalError> {
 struct DivisionTileView<'a> {
     cells: &'a [u32],
     pub occupancy: Occupancy,
-    ids: Strs<'a>,
+    ids: StrList<'a>,
     subtypes: &'a [u8],
     parents: &'a [u32],
     prominence: &'a [u8],
     area: &'a [u8],
-    names: Strs<'a>,
+    names: StrList<'a>,
 }
 
 fn open(pkt: &[u8]) -> Result<DivisionTileView<'_>, MarshalError> {

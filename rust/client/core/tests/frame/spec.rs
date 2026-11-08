@@ -112,7 +112,6 @@ impl Protocol {
         all
     }
 
-    /// The command `name`, if this protocol gives it.
     pub fn get(&self, name: &str) -> Option<&Command> {
         self.commands.get(name)
     }
@@ -123,12 +122,10 @@ impl Protocol {
             .unwrap_or_else(|| panic!("no command {name}"))
     }
 
-    /// The command's number.
     pub fn number(&self, name: &str) -> u32 {
         self.command(name).val
     }
 
-    /// The name of the command numbered `number`, if this protocol gives it.
     pub fn name_of(&self, number: u32) -> Option<&str> {
         self.commands
             .iter()
@@ -150,7 +147,6 @@ impl Protocol {
             .unwrap_or_else(|| panic!("{command} has no field {field}"))
     }
 
-    /// The index of `field` among the children of `record`.
     pub fn record_at(&self, record: &str, field: &str) -> u32 {
         self.records
             .get(record)

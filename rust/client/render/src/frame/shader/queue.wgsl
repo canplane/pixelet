@@ -19,12 +19,10 @@ fn hole_at(hole: u32) -> vec2<u32> {
   return vec2<u32>(hole & 0xffffu, hole >> 16u);
 }
 
-/// The eye's drawn pixels across and down.
 fn eye_size() -> vec2<u32> {
   return textureDimensions(rays).xy;
 }
 
-/// The first word of the observer's pool (`ray::pool_at`, `light::HEADER_POOL`).
 fn pool_at() -> u32 {
   if (light_run()) {
     return header_word(LIGHT_HEADER_POOL);
@@ -32,7 +30,6 @@ fn pool_at() -> u32 {
   return eye_pool_at(eye_size());
 }
 
-/// The first word of parked ray `item` in the pool (`ray::PARK_WORDS`).
 fn park_at(item: u32) -> u32 {
   return pool_at() + POOL_STATES + (item & ~SLOT) * PARK_WORDS;
 }
@@ -69,7 +66,7 @@ fn holes_at() -> u32 {
 fn next_item(again: bool) -> u32 {
   if (again) {
     let k = take(QUEUE_NEXT_AGAIN);
-    return select(NONE, SLOT | k, k < min(held(QUEUE_PARKED), POOL_CAP));
+    return select(NONE, SLOT | k, k < min(load(QUEUE_PARKED), POOL_CAP));
   }
   let k = take(QUEUE_NEXT);
   let at = holes_at();
@@ -127,7 +124,6 @@ fn parked(hole: u32) -> bool {
   return (beams[park_at(hole) + 4u] & PARKED) != 0u;
 }
 
-/// The state a hole's ray is parked in, from which a walk goes on.
 fn parked_start(hole: u32) -> Start {
   let at = park_at(hole);
   return parked_from(beams[at], vec3<u32>(beams[at + 1u], beams[at + 2u], beams[at + 3u]), beams[at + 4u]);

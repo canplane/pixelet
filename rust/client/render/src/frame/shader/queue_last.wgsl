@@ -44,13 +44,13 @@ fn shows(aim: Aim, w: WalkEnd) -> WalkEnd {
   return w;
 }
 
-/// Takes the next number from the node cache's counter at `word`. `held` reads the counter
+/// Takes the next number from the node cache's counter at `word`. `load` reads the counter
 /// without taking.
 fn take(word: u32) -> u32 {
   return atomicAdd(&node_cache[word], 1u);
 }
 
-fn held(word: u32) -> u32 {
+fn load(word: u32) -> u32 {
   return atomicLoad(&node_cache[word]);
 }
 

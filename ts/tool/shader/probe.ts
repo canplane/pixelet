@@ -4,14 +4,13 @@
 
 /**
  * The dev server's shader probe (probe.html). It makes each module as the
- * renderer assembles it, with every pipeline the renderer makes over it
- * (pipeline.ts), on this device alone, one at a time. What the device said of
- * each is shown on the page and sent to the dev server's console
- * (remote-console.ts). `?only=a,b` probes only the modules whose names start
- * with those prefixes. `?bisect=<name>` finds the line a device refuses, and
- * `?from=` with `?to=` narrows the search to a range of lines. `?src=` probes
- * a shader under doc/experiment, made into a pipeline over its first compute
- * entry, or else over its first vertex and fragment entries.
+ * renderer assembles it, with every pipeline the renderer makes over it, on
+ * this device alone, one at a time. `?only=a,b` probes only the modules whose
+ * names start with those prefixes. `?bisect=<name>` finds the line a device
+ * refuses, and `?from=` with `?to=` narrows the search to a range of lines.
+ * `?src=` probes one of the experiments' recorded shaders, named by the end
+ * of its path, made into a pipeline over its first compute entry, or else over
+ * its first vertex and fragment entries.
  */
 
 import { round } from "@xpute/kit/math/scalar.ts";
@@ -19,15 +18,11 @@ import { round } from "@xpute/kit/math/scalar.ts";
 import { install } from "../../client/src/remote-console.ts";
 import { entries, make, type Pipeline } from "./pipeline.ts";
 
-/** The experiments' shaders, which `?src=` names by their path under
- * doc/experiment. */
 const RECORDED = import.meta.glob<string>("../../../doc/experiment/**/*.wgsl", {
   query: "?raw",
   import: "default",
 });
 
-/** Each module as the renderer assembles it, by name, and the pipelines it
- * makes over them, from the dev server's `/__assembled` (vite.config.ts). */
 async function assembled(): Promise<{
   modules: Record<string, string>;
   pipelines: Pipeline[];
@@ -48,14 +43,10 @@ function show(line: string, ok: boolean): void {
   out.append(div);
 }
 
-/** The name of the first `stage` entry point in `code`, found by its
- * attribute. */
 function entry(code: string, stage: string): string | undefined {
   return code.match(new RegExp(`@${stage}[^]*?\\bfn\\s+(\\w+)\\s*\\(`))?.[1];
 }
 
-/** The pipeline to probe for a shader that no pipeline names: one over its
- * first compute entry, or else over its first vertex and fragment entries. */
 function first(name: string, code: string): Pipeline[] {
   const cs = entry(code, "compute");
   if (cs) return [{ module: name, compute: cs }];
@@ -64,8 +55,6 @@ function first(name: string, code: string): Pipeline[] {
   return [{ module: name, vertex, fragment: entry(code, "fragment") }];
 }
 
-/** Makes module `name` on `device`, then each of `pipelines` over it, and
- * answers whether the device took them all. */
 async function probe(
   device: GPUDevice,
   name: string,

@@ -13,8 +13,6 @@ import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as path from "node:path";
 
-/** Parses JSONC. Comments and trailing commas are dropped, and strings are
- * left untouched. */
 function jsonc(text: string): unknown {
   let out = "";
   for (let i = 0; i < text.length; i++) {
@@ -32,18 +30,14 @@ function jsonc(text: string): unknown {
       const end = text.indexOf("*/", i + 2);
       i = end < 0 ? text.length : end + 1;
     } else if (c === "}" || c === "]") {
-      // A comma before a close, outside strings and comments, is trailing.
       out = out.replace(/,\s*$/, "") + c;
     } else out += c;
   }
   return JSON.parse(out);
 }
 
-/** The TypeScript workspace's root, the directory above this one. */
 export const WORKSPACE: string = path.dirname(import.meta.dirname!);
 
-/** The repository's root, which holds the workspace (ts/) beside rust/ and
- * xpute/. */
 export const REPO: string = path.dirname(WORKSPACE);
 
 type Config = { compilerOptions?: { paths?: Record<string, string[]> } };

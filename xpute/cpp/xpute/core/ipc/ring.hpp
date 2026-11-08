@@ -74,8 +74,8 @@ class Ring {
     // begins.
     std::uint32_t entry_at(std::uint32_t pos) const noexcept { return ring::HEADER_WORDS + (pos & (cap_ - 1)) * frame::WORDS; }
 
-    // Answers EAGAIN when the ring is full, and EMSGSIZE when the packet is
-    // larger than a slot.
+    // `push` answers EAGAIN when the ring is full, and EMSGSIZE when the packet
+    // is larger than a slot.
     Errno push(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result,
                std::optional<std::span<const std::uint8_t>> pkt = std::nullopt) const noexcept;
 
@@ -104,8 +104,8 @@ class Ring {
     }
 
 
-    // The frame at the head, or none when the ring is empty. A reader reads
-    // it, then calls `advance`.
+    // `peek` answers the frame at the head, or none when the ring is empty. A
+    // reader reads it, then calls `advance`.
     std::optional<Frame> peek() const noexcept;
 
     // The frame's packet, valid until `advance`. A frame that names bytes

@@ -29,9 +29,10 @@ const NO_LINE_START =
 /** The characters no line may end with: opening marks. */
 const NO_LINE_END = /[（［｛〔〈《「『【“‘([{]/;
 
-/** Moves the break at `at` back past any mark that the rules above keep with
- * its neighbor, but never past the line's first character. */
-function kept_break(text: string, line: number, at: number): number {
+/** Moves the break at `at` back past any mark that NO_LINE_START or
+ * NO_LINE_END keeps with its neighbor, but never past the line's first
+ * character. */
+function allowed_break(text: string, line: number, at: number): number {
   while (
     at - 1 > line &&
     (NO_LINE_START.test(text[at]) || NO_LINE_END.test(text[at - 1])) &&
@@ -46,10 +47,10 @@ function isSurrogate(unit: number): boolean {
   return unit >= 0xd800 && unit <= 0xdfff;
 }
 
-/** Where each line ends. Words fill each line greedily. A word too wide for a
- * line by itself, as Korean, Japanese or Chinese typed without spaces can be,
- * breaks between characters. A space stays at the head of the next line, for
- * the core to trim. */
+/** Words fill each line greedily. A word too wide for a line by itself, as
+ * Korean, Japanese or Chinese typed without spaces can be, breaks between
+ * characters. A space stays at the head of the next line, for the core to
+ * trim. */
 function line_ends(
   text: string,
   max_width: number,
@@ -78,7 +79,7 @@ function line_ends(
       for (let i = s; i < e;) {
         const next = i + (text.codePointAt(i)! > 0xffff ? 2 : 1);
         if (i > chunk && width(text.slice(chunk, next)) > max_width) {
-          chunk = kept_break(text, chunk, i);
+          chunk = allowed_break(text, chunk, i);
           ends.push(chunk);
         }
         i = next;
@@ -90,9 +91,8 @@ function line_ends(
   return ends;
 }
 
-/** Answers TEXT_LAYOUT. It lays the text out a line at a time, and writes
- * each line's end and width at the call's `at`. A line's end counts UTF-8
- * bytes, and its width leaves out the spaces at its ends. */
+/** A line's end counts UTF-8 bytes, and its width leaves out the spaces at
+ * its ends. */
 export function text_layout(e: TextLayout): i32 {
   const { weight, px, max_width, at, lines, text_at, text_len } = e;
   const text = text_of(text_at, text_len);
@@ -117,7 +117,6 @@ export function text_layout(e: TextLayout): i32 {
   return 0;
 }
 
-/** Answers TEXT_RASTER by writing one line's pixels at the call's `at`. */
 export function text_raster(e: TextRaster): i32 {
   const { weight, px, color, at, width, height, x, text_at, text_len } = e;
   const text = text_of(text_at, text_len);

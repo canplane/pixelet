@@ -1,11 +1,8 @@
 // @pxl/client/service/platform/surface.native.tsx
 
-/**
- * The core's surfaces on a device: xpute's native view (@xpute/native
+/** The core's surfaces on a device are xpute's native view (@xpute/native
  * `SurfaceView`), which wgpu draws into directly. The view's layer arrives
- * after the view mounts, so the view reports when its layer is bound. The
- * world's view also carries the app's input.
- */
+ * after the view mounts, so the view reports when its layer is bound. */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";

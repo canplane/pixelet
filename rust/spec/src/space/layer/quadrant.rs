@@ -46,7 +46,7 @@ impl Quadrant {
         }
     }
 
-    /// The tile at `z` the leaf `leaf` lies under.
+    /// The tile at `zoom` the leaf `leaf` lies under.
     pub fn over(zoom: Zoom, leaf: [i32; 2]) -> Quadrant {
         Quadrant::new(zoom, ancestor_of(leaf, LEAF_ZOOM - zoom))
     }
@@ -152,7 +152,7 @@ pub(crate) const fn neighbor_idx(qx: i32, qy: i32) -> usize {
     ((qx + 1) + 4 * (qy + 1)) as usize
 }
 
-/// The rows of tiles at `z`, south to north; past them is no tile.
+/// The rows of tiles at `zoom`, south to north; past them is no tile.
 pub fn quad_rows(zoom: Zoom) -> std::ops::Range<i32> {
     let n = 1 << zoom;
     -n / 2..n / 2
@@ -230,7 +230,7 @@ impl Cell {
         }
     }
 
-    /// The cell at `zoom` of `lattice` that lies `offset` of its sides into
+    /// The cell at `zoom` of `lattice` that lies `off` of its sides into
     /// this one, no coarser.
     pub(crate) fn inner_at(self, lattice: Lattice, zoom: Zoom, off: [u32; 2]) -> Cell {
         let zoom = lattice.cell_zoom(zoom);

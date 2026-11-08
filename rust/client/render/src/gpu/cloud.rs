@@ -17,7 +17,7 @@ use crate::gpu::api::{
 };
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::mip::{mip_levels, MipPass};
-use crate::gpu::pipeline::{Pipeline, Pipelines};
+use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use pxl_content::cloud::LATTICE_CNT;
 use pxl_content::param::cloud::LATTICE_SHAMT;
 use pxl_engine::UNIT_ZOOM;
@@ -46,7 +46,7 @@ pub struct CloudPass {
 impl CloudPass {
     pub fn new(
         g: &Gpu,
-        pipelines: &mut Pipelines,
+        pipelines: &mut PipelineCache,
         frame_buf: u32,
         air: [Entry; AIR_ENTRIES],
     ) -> CloudPass {

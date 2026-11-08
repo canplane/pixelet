@@ -10,9 +10,9 @@ const MAX: usize = 20;
 const SPLIT_BYTES: usize = (1 << (MAX - MIN)) / 8;
 const PAGE: usize = 1 << MIN;
 
-/// Reserves a test's range once and never frees it. `Range`'s functions
-/// take no receiver, so the base lives in a static, and the allocator over
-/// the range outlives any one test.
+/// `arena` reserves a test's range once and never frees it. `Range`'s
+/// functions take no receiver, so the base lives in a static, and the
+/// allocator over the range outlives any one test.
 fn arena(cell: &'static OnceLock<usize>) -> usize {
     *cell.get_or_init(|| {
         let layout = Layout::from_size_align(1 << MAX, 1 << MAX).unwrap();
@@ -42,10 +42,10 @@ macro_rules! range {
     };
 }
 
-range!(Slots, SLOTS_AT);
+range!(SlotRange, SLOTS_AT);
 range!(EmptyRun, EMPTY_RUN_AT);
 range!(Whole, WHOLE_AT);
-range!(Runs, RUNS_AT);
+range!(RunRange, RUNS_AT);
 
 fn small() -> Layout {
     Layout::from_size_align(24, 8).unwrap()
@@ -53,7 +53,7 @@ fn small() -> Layout {
 
 #[test]
 fn slot_contents_survive() {
-    let heap: SlabMalloc<Slots> = SlabMalloc::new();
+    let heap: SlabMalloc<SlotRange> = SlabMalloc::new();
     let sizes = [1usize, 16, 17, 24, 64, 200, 1000, 4096, 9000];
     let mut live: Vec<(*mut u8, usize, u8)> = Vec::new();
 
@@ -161,11 +161,11 @@ fn page_requests_delegated() {
 
 #[test]
 fn slots_inside_runs() {
-    let heap: SlabMalloc<Runs> = SlabMalloc::new();
+    let heap: SlabMalloc<RunRange> = SlabMalloc::new();
     let sizes = [16usize, 24, 64, 300, 1000, PAGE, PAGE * 3];
     let mut live: Vec<(*mut u8, Layout)> = Vec::new();
 
-    let check = |heap: &SlabMalloc<Runs>| {
+    let check = |heap: &SlabMalloc<RunRange>| {
         assert!(
             heap.slot_live() <= heap.run_live(),
             "slots out past the runs they are carved from"

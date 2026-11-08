@@ -15,7 +15,7 @@ use crate::mesh::paint::palette::{layer_mean, rgb255, sentinel_layer};
 /// The number of values a ground's byte can take. Every value below it is one of them.
 const BYTES: usize = u8::MAX as usize + 1;
 
-/// Each value's look as a ray's pixel paints it (frame/shader/screen_ray.wgsl `drawn`). The look
+/// Each value's look as a ray's pixel paints it (frame/shader/screen_ray.wgsl `look`). The look
 /// depends on the value alone, whichever source holds it. It is four words, its colors in
 /// linear light, which a pixel is lit in: the swatch's red and green; its blue, with the
 /// texture layer above it; the color it reads as from afar (`layer_mean`), red and green; then

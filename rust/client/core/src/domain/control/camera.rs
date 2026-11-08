@@ -2,7 +2,7 @@
 
 //! The camera, which is an eye and a facing, and the controllers that move
 //! it. The folder is layered, and a part names only the parts below it
-//! (pxl-tool check_rules.rs `CAMERA_ORDER`). The camera itself, here, is at
+//! (pxl-tool rule.rs `CAMERA_ORDER`). The camera itself, here, is at
 //! the bottom, beside a gesture's anchor (`gesture`). Above them is what the
 //! controls ask for (`state`). Above that are the orbit and the first-person
 //! camera, and each turns about its own pivot. At the top, `controller`
@@ -41,9 +41,8 @@ pub fn facing_dir(polar: f64, azimuth: f64) -> V3 {
     [st * sp, st * cp, -ct]
 }
 
-/// The rotation matrix of a facing. At polar 0 the
-/// facing looks straight down and the azimuth points up the screen. At
-/// either pole the azimuth only turns the screen about the facing.
+/// At polar 0 the facing looks straight down and the azimuth points up the
+/// screen. At either pole the azimuth only turns the screen about the facing.
 pub fn facing_rot(polar: f64, azimuth: f64) -> Mat4 {
     let mut about_z = mat4::new();
     mat4::rot_z(&mut about_z, azimuth);

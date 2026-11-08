@@ -180,8 +180,8 @@ pub const LOAD_PER_8: u32 = 6;
 
 /// The slots needed for `cells` camera cells and for the nodes the asks keep.
 pub const fn entries_for(cells: u32) -> u32 {
-    let held = cells * CELL_NODES + ASKS_KEPT;
-    (held * 8).div_ceil(LOAD_PER_8).next_power_of_two()
+    let nodes = cells * CELL_NODES + ASKS_KEPT;
+    (nodes * 8).div_ceil(LOAD_PER_8).next_power_of_two()
 }
 
 const fn ceil(v: f32) -> u32 {

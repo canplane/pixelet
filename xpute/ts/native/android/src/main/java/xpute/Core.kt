@@ -5,14 +5,14 @@ package xpute
 import java.nio.ByteBuffer
 
 /**
- * The core linked into the app, as xpute's native form exports it to JNI
- * (xpute-runtime `native_core!`, src/jni.rs). These are the same calls that
+ * This is the core linked into the app, as xpute's native form exports it to
+ * JNI (xpute-runtime `native_core!`, src/jni.rs). These are the same calls that
  * the iOS module's Swift makes through the C ABI (xpute.h). The core is the
  * shared library that the module's build makes of the app's core crate
- * (build.gradle). It runs on its own thread while it has work; the app's
- * thread kicks it, waits on it only for a turn it rings, and answers its
- * calls. It takes nothing of React Native's; the Expo module (XputeModule.kt)
- * is one host that uses it.
+ * (build.gradle). The core runs on its own thread while it has work; the app's
+ * thread kicks it, waits on it only for a turn it rings, and answers its calls.
+ * It takes nothing of React Native's; the Expo module (XputeModule.kt) is one
+ * host that uses it.
  */
 object Core {
   init {
@@ -47,7 +47,7 @@ object Core {
    * on the app's thread. */
   @Volatile var answer: ((Int) -> Int)? = null
 
-  /** What `onNotify` calls: it sends the module's event (XputeModule.kt
+  /** `onNotify` calls this, and it sends the module's event (XputeModule.kt
    * `onNotify`). */
   @Volatile var notify: (() -> Unit)? = null
 

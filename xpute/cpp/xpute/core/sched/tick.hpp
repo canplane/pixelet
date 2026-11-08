@@ -1,12 +1,12 @@
 // cpp/xpute/core/sched/tick.hpp
 
-// A core's cooperative scheduler, which runs one tick a turn. A tick runs
-// the program's phases in the order the program numbers them, and all of
-// them share one budget: the runtime's deadline, counted from the rising
-// edge. While a phase runs, the share of the budget its policy holds back
-// for the later phases is not its to spend, so a busy phase cannot starve
-// them. The program decides what the phases are and what each holds back.
-// Each step keeps its own state.
+// This is a core's cooperative scheduler, which runs one tick a turn. A tick
+// runs the program's phases in the order the program numbers them, and all of
+// them share one budget: the runtime's deadline, counted from the rising edge.
+// While a phase runs, the share of the budget its policy holds back for the
+// later phases is not its to spend, so a busy phase cannot starve them. The
+// program decides what the phases are and what each holds back. Each step keeps
+// its own state.
 
 #pragma once
 
@@ -27,7 +27,6 @@ namespace xpute {
 // A phase, by its place in the program's order.
 using Phase = std::uint8_t;
 
-// A tick runs at most this many phases.
 inline constexpr std::size_t PHASES_MAX = 8;
 
 struct TickPolicy {
@@ -37,7 +36,7 @@ struct TickPolicy {
     // One entry for each of the program's phases, in the order they run.
     // Each is the fraction of the budget its phase must leave for the
     // phases after it; 0 leaves none.
-    std::span<const double> held_back;
+    std::span<const double> reserve;
 };
 
 // The most steps one step may unregister while it runs.
@@ -49,9 +48,9 @@ class TickContext {
     Pass pass;
     std::array<double, PHASES_MAX> phase_ms{};
 
-    // Marks the tick as wanting another turn (`TickReport::invalidated`).
-    // The core is rung only when something asks for a turn, so a step that
-    // animates calls this on every tick.
+    // `invalidate` marks the tick as wanting another turn
+    // (`TickReport::invalidated`). The core is rung only when something asks
+    // for a turn, so a step that animates calls this on every tick.
     void invalidate() noexcept { invalidated_ = true; }
 
     void off_tick(std::uint32_t id) noexcept {
@@ -94,12 +93,12 @@ struct TickReport {
 template <std::size_t N> class Tick {
   public:
     explicit Tick(TickPolicy policy) noexcept : policy_(policy) {
-        ensure(policy.held_back.size() <= PHASES_MAX, Errno::einval, policy.held_back.size());
+        ensure(policy.reserve.size() <= PHASES_MAX, Errno::einval, policy.reserve.size());
     }
 
     std::uint32_t on_tick(Phase phase, TickStep step, std::uint32_t name) noexcept {
         ensure(len_ < N, Errno::enospc, N);
-        ensure(phase < policy_.held_back.size(), Errno::einval, phase);
+        ensure(phase < policy_.reserve.size(), Errno::einval, phase);
         std::uint32_t id = next_id_++;
         registry_[len_++] = Registered{id, phase, step, name};
         return id;
@@ -119,8 +118,8 @@ template <std::size_t N> class Tick {
     TickReport run(double delta, double deadline_ms, double t0) noexcept {
         double start = now();
         TickContext ctx(delta, Pass(deadline_ms, t0, policy_.hard_slack_ms));
-        for (std::size_t phase = 0; phase < policy_.held_back.size(); phase++) {
-            ctx.pass.reserve_ms = ctx.pass.total_ms * policy_.held_back[phase];
+        for (std::size_t phase = 0; phase < policy_.reserve.size(); phase++) {
+            ctx.pass.reserve_ms = ctx.pass.total_ms * policy_.reserve[phase];
             run_phase(static_cast<Phase>(phase), ctx);
         }
         ctx.pass.reserve_ms = 0;

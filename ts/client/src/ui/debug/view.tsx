@@ -1,10 +1,7 @@
 // @pxl/client/ui/debug/view.tsx
 
-/**
- * The view panel shows where the camera and the pointer are, read live. It
- * is shown while the `view` setting is on and is read for as long as it is
- * shown, so its header gives the pivot's position even while it is closed.
- */
+/** The panel is read for as long as it is shown, so its header gives the
+ * pivot's position even while it is closed. */
 
 import { SETTING } from "@/ui/setting/schema.ts";
 import { fixed } from "@/ui/fixed.ts";

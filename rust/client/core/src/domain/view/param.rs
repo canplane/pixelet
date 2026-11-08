@@ -9,12 +9,8 @@ use pxl_spec::space::coord::adapter::epsg4326::G4326;
 /// here too, and it decides day or night until the pivot exists.
 pub const FALLBACK_G4326: G4326 = [126.978, 37.5665, 0.0];
 
-// ---- the projection ----
-
 /// The near plane's distance from the eye, in world units.
 pub const NEAR: f64 = 0.1;
-
-// ---- what is seen to move ----
 
 /// How far a motion that is stepped a quantum at a time moves what it
 /// carries in one step, as a share of the camera grid cell at the nearest
@@ -22,8 +18,6 @@ pub const NEAR: f64 = 0.1;
 /// watching the clouds: a step of a twelfth of a cell, 1/1152 rad, is not
 /// seen as a jump.
 pub const VISIBLE_STEP_CELLS: f64 = 1.0 / 12.0;
-
-// ---- what a thing spans: its lod ----
 
 /// A decor is drawn as a model while it spans at least this many camera grid
 /// cells, and as an impostor below that. At two cells a model is drawn down

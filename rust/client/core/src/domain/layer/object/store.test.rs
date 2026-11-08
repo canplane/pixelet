@@ -99,12 +99,12 @@ fn some_node(rng: &mut Rng, radius: f64) -> Node<3> {
 
 /// What the store's folded tree holds at each cell: its value and how many
 /// eighths of the cell's cube are filled (pxl-engine `answer::eighths`).
-type Contents = FnvHashMap<[i32; 3], (u32, u32)>;
+type Content = FnvHashMap<[i32; 3], (u32, u32)>;
 
 /// Writes `cells`, whole cells offset from a fixed corner, and reads back
 /// through the store's query what the folded tree holds at `zoom`'s cells,
 /// wherever it holds anything. Also returns the corner in that zoom's cells.
-fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Contents, [i32; 2]) {
+fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Content, [i32; 2]) {
     let mut store = Store::default();
     let base = [64, -64];
     store.write(cells.iter().map(|&(x, y, z, state)| Write {

@@ -1,9 +1,9 @@
 // xpute-core/sched/pass.rs
 
-//! A turn's remaining budget, spent on ordered lists of steps (`run`). The
-//! invariant is forward progress: neither the budget nor a step cap applies
-//! until one step has done work. An item that costs more than the whole
-//! budget therefore still runs, and cannot stay at the head of its list
+//! A pass is a turn's remaining budget, spent on ordered lists of steps
+//! (`run`). The invariant is forward progress: neither the budget nor a step
+//! cap applies until one step has done work. An item that costs more than the
+//! whole budget therefore still runs, and cannot stay at the head of its list
 //! forever, blocking the items behind it.
 
 use crate::clock::now;

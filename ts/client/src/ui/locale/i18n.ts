@@ -20,9 +20,8 @@ interface Catalog {
   [key: string]: string | Catalog;
 }
 
-/** Merges `extra` into `base` at every depth. A shallow merge would let a dev
- * branch replace the base's branch of the same name and lose the base's keys
- * under it. */
+/** A shallow merge would let a dev branch replace the base's branch of the
+ * same name and lose the base's keys under it. */
 function deepMerge(base: Catalog, extra: Catalog): Catalog {
   const out: Catalog = { ...base };
   for (const [key, value] of Object.entries(extra)) {
@@ -50,7 +49,6 @@ const catalog = __IS_DEV__
 
 export type Language = keyof typeof catalog;
 
-/** Each language's name in that language. */
 export const LANGUAGE_NAMES: Record<Language, string> = {
   en: "English",
   ko: "한국어",
@@ -63,17 +61,16 @@ const LANGUAGES = Object.keys(catalog) as Language[];
 
 const LANG_KEY = "pxl:lang";
 
-/** The catalog that a system's language tag reads: the tag's language, and for
- * Chinese its script too. A Chinese tag that names no script reads
- * Traditional for Taiwan, Hong Kong and Macau, and Simplified elsewhere. */
+/** A Chinese tag that names no script reads Traditional for Taiwan, Hong Kong
+ * and Macau, and Simplified elsewhere. */
 function languageOf(tag: string): string {
   const [language] = tag.split("-");
   if (language !== "zh") return language;
   return /^zh-(Hant|TW|HK|MO)/.test(tag) ? "zh-Hant" : "zh-Hans";
 }
 
-/** The language the person chose; else the first of the system's preferred
- * languages that has a catalog; else English. */
+/** The person's chosen language comes first, then the first of the system's
+ * preferred languages that has a catalog, then English. */
 const languageDetector: LanguageDetectorModule = {
   type: "languageDetector",
   // The system's tags are cut to their languages. Given whole tags, i18next

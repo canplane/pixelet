@@ -9,7 +9,13 @@
 //! record, and a compute pipeline by its number (record.rs `compute`).
 //!
 //! A shader called a port by hand below is WGSL written after a rule of pxl-engine's Rust, and
-//! a test over a real world's buffers holds it to that rule word for word (tests/).
+//! a test on a device holds what it writes to that rule, word for word over a real world's
+//! buffers (tests/), with two exceptions. The test of the light's slide and propagation builds
+//! no world (tests/light_reads.rs), and it holds the slide only to setting to none every tile
+//! the rule cannot keep, so the slide may also set to none a tile it could keep. No test reads
+//! the cells' starts that `SHADER_CELL` writes: they are held only through the samples that
+//! start from them, which must stop where the Rust's walk from the root stops
+//! (tests/sample.rs).
 
 /// The names a shader's vertex entry points take. A pipeline names its vertex entry by its
 /// index here (record.rs `Header`), and build.rs reads which of them reads each binding.
@@ -47,8 +53,8 @@ pub const SHADER_MARKER_REGION: u32 = 23;
 /// Draws the eye's rays at their pixels (pxl-engine ray.rs).
 pub const SHADER_SCREEN_RAY: u32 = 24;
 /// Ends each drawn pixel's ray on the visible voxel the raster kept at it, or on the sky. Every
-/// other pixel is a hole, and gets a bit that marks it to be walked again (cast.wgsl). A port by
-/// hand with one compute entry point.
+/// other pixel is a hole, and gets a bit that marks it to be walked again (cast.wgsl). It is a
+/// port by hand with one compute entry point.
 pub const SHADER_CAST: u32 = 25;
 /// Generates the decor of the ground in the eye's clip levels, one record a thread: each decor
 /// stands on its column's surface and takes its pose (decor_pose.wgsl). It has one compute
@@ -74,7 +80,7 @@ pub const SHADER_ATMOS_FROXEL: u32 = 31;
 /// then asks the world for that node, and `SHADER_QUEUE_LAST_CORNERS` ends the ray.
 pub const SHADER_QUEUE_CORNERS: u32 = 32;
 /// Finds where the rays of each cell of the camera grid start, from the beam rays about the
-/// cell (cell.wgsl). A port by hand with one compute entry point.
+/// cell (cell.wgsl). It is a port by hand with one compute entry point.
 pub const SHADER_CELL: u32 = 33;
 /// `SHADER_QUEUE_LAST` is the last walk of the holes, which asks the world where the node cache
 /// keeps no node (queue_last.wgsl). `SHADER_FORGET` makes the node cache forget what the
@@ -105,7 +111,7 @@ pub const SHADER_SAMPLE_BOX: u32 = 41;
 pub const SHADER_RASTER: u32 = 42;
 /// Asks the world what lies around each face of the record's voxels, once a face (pxl-engine
 /// `raster::ARGS_FACES`, `record::R_FACES`), and around the face each missed pixel's hit
-/// entered (face.wgsl). A port by hand with one compute entry point.
+/// entered (face.wgsl). It is a port by hand with one compute entry point.
 pub const SHADER_FACE: u32 = 43;
 /// The three shaders that list the tiles of the light's box the shadow map's receivers stand
 /// on (pxl-engine `light::LIST_RECEIVERS`), then the tiles they read. A receiver stands on the
@@ -157,7 +163,7 @@ pub const SHADER_SKINNED_MARK: u32 = 58;
 /// Carries the words of the light's box's tiles over once the box slid, the eye's zooms moved
 /// or the world under the box changed (light_slide.wgsl). A tile the box slid onto, a tile
 /// moved into another band (pxl-engine `Light::keeps`), and a tile whose rays may meet a
-/// changed column are set to none, so they are cast again. A port by hand.
+/// changed column are set to none, so they are cast again. It is a port by hand.
 pub const SHADER_LIGHT_SLIDE: u32 = 59;
 /// The four shaders that draw decor, an impostor, the location indicator's zone and its beacon
 /// where each was and where it is. Each fragment marks its screen tile (tile_mark.wgsl).
@@ -203,10 +209,10 @@ pub const SHADER_DECOR_CULL: u32 = 76;
 /// Goes over every slot's drawable entries in the node cache (record_draw.wgsl). Each entry in
 /// view is written as a box for the raster, and also stood as a receiver of the light when the
 /// world's receivers are stood this frame. Each entry on the light's box is written as a box
-/// for the light's raster. A port by hand.
+/// for the light's raster. It is a port by hand.
 pub const SHADER_RECORD_DRAW: u32 = 77;
 /// Writes the holes' stops into the node cache's drawable entries, and puts at each hole's
-/// pixel what lies about the face it entered (record_hits.wgsl). A port by hand.
+/// pixel what lies about the face it entered (record_hits.wgsl). It is a port by hand.
 pub const SHADER_RECORD_HITS: u32 = 78;
 /// `SHADER_RECORD_HITS` for the light's stops (record_hits.light.wgsl).
 pub const SHADER_LIGHT_RECORD_HITS: u32 = 79;

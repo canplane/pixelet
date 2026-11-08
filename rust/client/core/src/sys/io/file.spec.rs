@@ -61,23 +61,23 @@ pub const SHARD_ZOOM: u32 = 8;
 /// domain/layer/object/store.rs `Write`). A record a class's (pxl-spec object/ext.rs),
 /// its row and its fields as columns.
 pub mod write {
-    /// strs: each key as an octkey (pxl-spec space/hierarchy/morton.rs `name`, 3D): the shard's quadkey, then a digit 0 to 7 a zoom.
+    /// A `strs` column holding each key as an octkey (pxl-spec space/hierarchy/morton.rs `name`, 3D): the shard's quadkey, then a digit 0 to 7 a zoom.
     pub const KEY: u32 = 0;
-    /// u32[]: each catalog value.
+    /// A `u32[]` column holding each row's catalog value.
     pub const ID: u32 = 1;
-    /// u32[]: the rows a marker's text is for, a marker's each.
+    /// A `u32[]` column holding, for each marker with a text, the row that text is for.
     pub const TEXT_ROW: u32 = 2;
-    /// strs: those markers' texts.
+    /// A `strs` column holding those markers' texts.
     pub const TEXT: u32 = 3;
 }
 
 /// The children of the tree packet `object.TOP` holds after its format byte, by index:
 /// each row a shard holding objects, which only its leaves are under.
 pub mod top {
-    /// strs: the shard it is, by quadkey.
+    /// A `strs` column holding each row's shard by its quadkey.
     pub const SHARD: u32 = 0;
-    /// u32[]: what its leaves fold to, its word in the objects' tree (pxl-engine
-    /// object.rs `fold`, `fold_word`): the kind most of its fill is and its share filled.
+    /// A `u32[]` column holding what each row's leaves fold to, its word in the objects' tree
+    /// (pxl-engine object.rs `fold`, `fold_word`): the kind most of its fill is and its share filled.
     pub const FOLD: u32 = 1;
 }
 

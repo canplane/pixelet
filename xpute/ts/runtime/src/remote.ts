@@ -1,8 +1,9 @@
 // @xpute/runtime/remote.ts
 
 /**
- * A UI apart from its core, as a page's main thread is apart from the worker
- * that runs the core, with a MessagePort between them that carries frames.
+ * This is a UI apart from its core, as a page's main thread is apart from the
+ * worker that runs the core, with a MessagePort between them that carries
+ * frames.
  *
  * - Up the port go the UI's frames, a lifecycle call by name, and a canvas,
  *   transferred once.
@@ -13,7 +14,7 @@
  *   Once the core stops, every request is answered ENOTRECOVERABLE.
  */
 
-import type { i32, u32 } from "@xpute/kit/abi/word.ts";
+import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
@@ -34,7 +35,7 @@ import {
 } from "./runtime.ts";
 import type { Grant } from "./sched/policy.ts";
 
-/** The calls a link carries by name. */
+/** These are the calls a link carries by name. */
 const CALLS = [
   "wake",
   "input",
@@ -65,15 +66,18 @@ type Down =
   | { kind: "stop" }
   | { kind: "rose"; why: string | null };
 
-/** What `start` sends the worker first. */
+/** This is what `start` sends the worker first. `origin` is the UI's
+ * `performance.timeOrigin`, so that the worker can count the core's clock as
+ * the UI's `performance.now()` counts it. */
 export interface Hello {
   xpute: MessagePort;
   cmds: readonly u32[];
+  origin: f64;
 }
 
-/** The UI's end of `port`; what comes down is handed to `ui`. `rose` settles
- * once the core is up. `stop` ends the link as the core's stop, for when the
- * worker that ran the core died without a word of its own. */
+/** This is the UI's end of `port`, and what comes down is handed to `ui`.
+ * `rose` settles once the core is up. `stop` ends the link as the core's stop,
+ * for when the worker that ran the core died without a word of its own. */
 export function connect(
   port: MessagePort,
   slot_bytes: u32,
@@ -166,8 +170,8 @@ export function connect(
   return { link, rose: rose.promise, stop };
 }
 
-/** The worker's end of `port`. The `Ui` it returns posts down what the UI
- * takes, and `serve` hands the UI's frames and calls to the runtime `r`. */
+/** This is the worker's end of `port`. The `Ui` it returns posts down what the
+ * UI takes, and `serve` hands the UI's frames and calls to the runtime `r`. */
 export function attach(
   port: MessagePort,
   cmds: readonly u32[],
@@ -228,8 +232,10 @@ export function serve<G extends Grant>(m: Manifest<G>): Promise<Runtime> {
       removeEventListener("message", hello);
       const port = h.xpute;
       const end = attach(port, h.cmds ?? []);
+      const shift =
+        performance.timeOrigin - (h.origin ?? performance.timeOrigin);
       try {
-        const r = await boot(m, end.ui);
+        const r = await boot(m, end.ui, () => performance.now() + shift);
         end.serve(r);
         port.postMessage({ kind: "rose", why: null } satisfies Down);
         done(r);

@@ -40,7 +40,7 @@ use crate::frame::shader::floor::{self, BIND_GROUPS, VERTEX_BUFFERS};
 use crate::frame::shader::group::BUFFERS;
 use crate::frame::shader::record::{FRAGMENT_ENTRY, VERTEX_ENTRY};
 use crate::gpu::span_spec::{GpuSpanName, GPU_SPAN_NAMES};
-use crate::gpu::split::Splits;
+use crate::gpu::split::Split;
 
 pub mod buffer_usage {
     pub use xpute_gpu::spec::BUFFER_USAGE::{
@@ -371,7 +371,7 @@ impl PassDesc {
     }
 
     /// Adds `view` as the second color target, at location 1, started as the first is. A
-    /// pipeline built with two targets draws into it (`Pipelines::build_targets`).
+    /// pipeline built with two targets draws into it (`PipelineCache::build_targets`).
     pub fn second_color(self, view: Id) -> PassDesc {
         PassDesc {
             second: view,
@@ -553,7 +553,7 @@ impl Group {
     /// otherwise a new one made in its place.
     #[track_caller]
     pub fn set(&mut self, g: &Gpu, layout: Layout, entries: &[Entry]) -> Id {
-        let kept = self.id != 0
+        let same = self.id != 0
             && self.layout == layout.id
             && self.entries.len() == entries.len()
             && self
@@ -561,7 +561,7 @@ impl Group {
                 .iter()
                 .zip(entries)
                 .all(|(a, b)| same_entry(a, b));
-        if !kept {
+        if !same {
             release(self.id);
             self.id = g.bind_group(layout, entries);
             self.layout = layout.id;
@@ -650,7 +650,7 @@ struct State {
     ranges: Vec<(usize, usize)>,
     ranges_out: Vec<(usize, usize)>,
     /// Where each encoder is cut into command buffers (gpu/split.rs).
-    splits: Splits,
+    splits: Split,
 }
 
 /// An image file being copied into its texture. The asker keeps the file's bytes until the
@@ -772,7 +772,7 @@ impl State {
             lost: false,
             ranges: Vec::new(),
             ranges_out: Vec::new(),
-            splits: Splits::default(),
+            splits: Split::default(),
         }
     }
 }
@@ -1412,7 +1412,7 @@ impl Gpu {
     /// `format` is `depth32float`, it draws into the depth alone and its fragment writes no
     /// color, as the shadow map's does (gpu/shadow.rs). WebGPU makes it asynchronously: the
     /// runtime stores `ticket` at `fence` once the pipeline is made, and nothing names the
-    /// pipeline before then (gpu/pipeline.rs `Pipelines::made`).
+    /// pipeline before then (gpu/pipeline.rs `PipelineCache::made`).
     pub fn pipeline(
         &self,
         words: &[u32],
@@ -1712,10 +1712,10 @@ impl Gpu {
     }
 
     /// The pass in which an indirect call on `pass` that reads `buf` is recorded. Where `buf`
-    /// was written in the pass's own command buffer (`Splits::cuts`), a compute pass is ended
+    /// was written in the pass's own command buffer (`Split::cuts`), a compute pass is ended
     /// and begun again in a new command buffer, with its pipeline and groups set again and its
     /// span's end moved to the new part. A render pass already begins in a command buffer of
-    /// its own where args were written before it (`Splits::draws_apart`), so only its own draws
+    /// its own where args were written before it (`Split::draws_apart`), so only its own draws
     /// could have written `buf`, which is a bug.
     #[track_caller]
     fn indirect(&self, pass: Id, buf: Id) -> Id {

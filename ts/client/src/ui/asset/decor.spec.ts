@@ -11,7 +11,7 @@
 // generates it on its own. A decor's `seed` names its scatter, so changing it
 // reshuffles every one the ground generates; `density` is the chance a cell of
 // its holds one, the mean of a tree of hashes of the cells (pxl-content
-// scatter.rs); `on` the palette entries it may stand on; `orientation` a random
+// scatter.rs); `on` the palette entries it may stand on; `orient` a random
 // heading, or along the road or rail its cell lies on. A variant's
 // skin is its pack's colormap, kept outside the glb.
 //

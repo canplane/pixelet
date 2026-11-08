@@ -83,20 +83,20 @@ def remapped():
 
 def optimized(src, out):
     try:
-        done = subprocess.run(["wasm-opt", *WASM_OPT, str(src), "-o", str(out)])
+        proc = subprocess.run(["wasm-opt", *WASM_OPT, str(src), "-o", str(out)])
     except FileNotFoundError:
         raise Failed(1, "[wasm-build] wasm-opt did not run. The module is finished by Binaryen: brew install binaryen (or your platform's package).")
-    if done.returncode != 0:
-        raise Failed(done.returncode or 1)
+    if proc.returncode != 0:
+        raise Failed(proc.returncode or 1)
 
 
 def finish(*args):
     """Rewrites the module with pxl-tool's wasm, which owns the module's
     binary layout."""
-    done = subprocess.run(["cargo", "run", "-q", "--package", "pxl-tool", "--bin", "wasm", "--", *map(str, args)], cwd=RUST, stdout=subprocess.PIPE, text=True)
-    if done.returncode != 0:
-        raise Failed(done.returncode or 1)
-    return done.stdout.strip()
+    proc = subprocess.run(["cargo", "run", "-q", "--package", "pxl-tool", "--bin", "wasm", "--", *map(str, args)], cwd=RUST, stdout=subprocess.PIPE, text=True)
+    if proc.returncode != 0:
+        raise Failed(proc.returncode or 1)
+    return proc.stdout.strip()
 
 
 def mtime(path):
@@ -135,21 +135,21 @@ def main():
     # volume, so its files can be renamed into place.
     work = Path(tempfile.mkdtemp(dir=TARGET_DIR, prefix="wasm-build-"))
     try:
-        linked_file, done = work / "linked.wasm", work / "done.wasm"
+        linked_file, opt_file = work / "linked.wasm", work / "done.wasm"
         shutil.copyfile(BUILT, linked_file)
         linked = linked_file.stat().st_size
         finish("exports", linked_file, *EXPORTS)
-        optimized(linked_file, done)
+        optimized(linked_file, opt_file)
         numbered = work / "paths.json"
-        paths = int(finish("number", done, numbered)) if PUBLISHED else 0
+        paths = int(finish("number", opt_file, numbered)) if PUBLISHED else 0
         # The module is moved into place last, because a reader keys on it.
         if PUBLISHED:
             os.replace(numbered, PATHS)
         built = mtime(BUILT)
-        os.utime(done, ns=(built, built))
-        os.replace(done, OUT)
-        said = (", without the dev-only settings" if PUBLISHED else "") + (f", and {paths} source paths numbered" if paths > 0 else "")
-        print(f"[wasm-build] {linked} -> {OUT.stat().st_size} bytes, stripped{said} -> public/core.wasm")
+        os.utime(opt_file, ns=(built, built))
+        os.replace(opt_file, OUT)
+        note = (", without the dev-only settings" if PUBLISHED else "") + (f", and {paths} source paths numbered" if paths > 0 else "")
+        print(f"[wasm-build] {linked} -> {OUT.stat().st_size} bytes, stripped{note} -> public/core.wasm")
         return 0
     except Failed as err:
         if str(err):

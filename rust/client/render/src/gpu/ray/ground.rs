@@ -9,14 +9,14 @@ use pxl_engine::clipmap::{BRICK_CELLS, BRICK_WORDS, FRAME_BRICKS, SLOTS};
 use pxl_engine::{way, Zoom};
 use xpute_kit::collection::list::List;
 
-use super::RaysPass;
+use super::RayPass;
 use crate::frame::shader::floor;
 use crate::gpu::api::{buffer_usage, bytes, release, room, write_buffer_bytes, Gpu};
 
 /// What a frame hands of the terrain: `upload` offers the writer each brick
 /// the core filled, and `pool` is how many child groups the ways' pool must
-/// hold (`GroundBuffers::grow`).
-pub struct GroundBricks<'a> {
+/// hold (`GroundBuffer::grow`).
+pub struct GroundInput<'a> {
     pub upload: &'a mut TerrainUpload,
     pub pool: u32,
 }
@@ -63,7 +63,7 @@ fn pool_buf(g: &Gpu, child_groups: u32) -> u32 {
 }
 
 /// The terrain's bricks on the GPU.
-pub(super) struct GroundBuffers {
+pub(super) struct GroundBuffer {
     /// Every slot's brick words (`GROUND_BYTES`).
     pub(super) ground: u32,
     /// Every slot's palette indices (`PALETTE_BYTES`).
@@ -77,7 +77,7 @@ pub(super) struct GroundBuffers {
     pub(super) bricks: List<(Zoom, [i32; 2]), { FRAME_BRICKS as usize }>,
 }
 
-impl GroundBuffers {
+impl GroundBuffer {
     /// Grows the ways' pool to hold `child_groups`, rounded up to a power of
     /// two and never past `way::tree::POOL_CHILD_GROUPS`, which holds any
     /// baked set. The old words are copied to the same offsets, so every child
@@ -128,20 +128,20 @@ const _: () = assert!(
     "PALETTE_BYTES: the bricks' palette indices bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
-impl RaysPass {
+impl RayPass {
     /// Uploads the bricks the core filled: at most `clipmap::FRAME_BRICKS` a
     /// frame, and only while the stream has room for each brick's records.
     /// The renderer calls it every frame, whether or not an eye casts, as the
     /// bricks are the terrain's and not an eye's. It runs before the frame's
     /// cast, which reads the clip levels' table the upload changed.
-    pub fn hand(&mut self, g: &Gpu, ground: &mut GroundBricks) {
+    pub fn hand(&mut self, g: &Gpu, ground: &mut GroundInput) {
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         let gb = self.ground.get_or_insert_with(|| {
             let child_groups = ground
                 .pool
                 .next_power_of_two()
                 .min(way::tree::POOL_CHILD_GROUPS);
-            GroundBuffers {
+            GroundBuffer {
                 ground: g.buf(GROUND_BYTES as u32, storage),
                 palette_indices: g.buf(PALETTE_BYTES as u32, storage),
                 pool: pool_buf(g, child_groups),

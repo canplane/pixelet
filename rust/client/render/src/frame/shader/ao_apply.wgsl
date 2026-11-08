@@ -60,8 +60,6 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   } else if (open_cnt > 0.0) {
     occ = open_acc / open_cnt;
   }
-  // The occlusion fades out toward the effects' reach, as every effect does
-  // (effect.wgsl `effect_share`).
   let share = effect_share(length(at));
   return vec4f(0.0, 0.0, 0.0, (1.0 - pow(occ, AO_INTENSITY)) * share);
 }

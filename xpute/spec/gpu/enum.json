@@ -110,7 +110,7 @@
   },
   "VERTEX_FORMAT": {
     "$doc": [
-      "GPUVertexFormat."
+      "These are the members of GPUVertexFormat."
     ],
     "$val": [
       "uint8",

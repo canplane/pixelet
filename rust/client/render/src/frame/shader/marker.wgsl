@@ -25,7 +25,6 @@ const DEPTH_BIAS_CELLS: f32 = 1.5;
 // `MARKER_INSTANCE_WORDS`).
 @group(2) @binding(0) var<storage, read> instances: array<u32>;
 
-// Word `w` of the instance whose words start at `k`, read as a float.
 fn instance_f32(k: u32, w: u32) -> f32 {
   return bitcast<f32>(instances[k + w]);
 }
@@ -105,5 +104,6 @@ fn anchor_px(p: Placement, dims: vec2u) -> vec2i {
   return vec2i(uv * vec2f(dims));
 }
 
-// A quad with no area: nothing of it is drawn.
+// A clip position that every vertex of a quad given it shares, so the quad has no area and
+// nothing of it is drawn.
 const NOWHERE: vec4f = vec4f(0.0, 0.0, 0.0, 1.0);

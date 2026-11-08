@@ -4,7 +4,7 @@
 //! candidate.
 
 #[derive(Clone, Debug, Default)]
-pub(super) struct Candidates {
+pub(super) struct CandidateTable {
     pub cnt: u32,
 
     /// The anchor, relative to the origin of the local world frame.
@@ -35,7 +35,7 @@ pub(super) struct Candidates {
     pub order: Vec<u32>,
 }
 
-impl Candidates {
+impl CandidateTable {
     /// A high-water mark, not a limit.
     pub(super) fn cap(&self) -> usize {
         self.local_x.len()

@@ -83,7 +83,8 @@ struct Ring {
     water_seen: FnvHashSet<Vec<u8>>,
     pieces: BTreeMap<PartId, Sampled>,
     by_end: FnvHashMap<End, Vec<PartId>>,
-    /// Every way by its two ends.
+    /// Every way read, by each of its two ends: the ways at grade as well as the pieces, which
+    /// `by_end` holds alone.
     way_ends: FnvHashMap<End, Vec<PartId>>,
     /// The pieces read since the scope last looked.
     fresh: Vec<PartId>,
@@ -185,8 +186,8 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solution
     };
     src.load(r, tile)?;
 
-    // ---- The structures the tile holds, and every one they reach through shared ends or decks
-    // beside or across them, each read as far as the ring. ----
+    // The structures the tile holds, and every one they reach through shared ends or decks
+    // beside or across them, each read as far as the ring.
     let own = [[pmin[0], pmin[1]], [pmax[0], pmax[1]]];
     // A road tunnel whose portal lies within its approaches' reach of the tile sinks ways the
     // tile draws, whether or not it touches the tile. So the tunnels around the tile are asked for
@@ -303,7 +304,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solution
     let stretches = stretches_of(&src, &scope, lo);
     let mut lines: Vec<(Line, WayRange)> = Vec::new();
 
-    // ---- Road bridges, lower first; rail bridges over them; then the tunnels. ----
+    // Road bridges are solved lower first, rail bridges over them, and then the tunnels.
     let decks = bridge::decks(&src, &stretches, [lo, hi], scale, &mut lines);
     tunnel::bores(&src, &stretches, &decks, scale, &mut lines);
     let mut out = Solution::default();
@@ -336,7 +337,7 @@ impl Ring {
     }
 
     /// Whether a point's ground is held: its tile of the ring was read.
-    fn is_held(&self, p: [f64; 2]) -> bool {
+    fn is_loaded(&self, p: [f64; 2]) -> bool {
         self.loaded.contains(&tile_of(p))
     }
 

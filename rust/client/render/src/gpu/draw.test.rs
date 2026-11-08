@@ -22,7 +22,7 @@ impl Noise {
         (self.0 >> 11) as f64 / (1u64 << 53) as f64
     }
 
-    /// In [-half, half).
+    /// The result lies in [-half, half).
     fn about(&mut self, half: f64) -> f64 {
         (self.next() * 2.0 - 1.0) * half
     }
@@ -240,7 +240,7 @@ fn draws_keep_the_order_they_are_set_in() {
             );
         }
     };
-    let handles = |l: &Lists, p: u32| l.draws.of(p).map(|r| r[0]).collect::<Vec<_>>();
+    let handles = |l: &DrawUpdate, p: u32| l.draws.of(p).map(|r| r[0]).collect::<Vec<_>>();
     let m = PIPELINE_MARKER;
     set(&mut d, &[0, 1, 2], [m; 3]);
     let l = d.take();

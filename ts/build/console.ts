@@ -28,12 +28,12 @@ export function consoleHandler(
       return;
     }
     const chunks: Buffer[] = [];
-    let kept = 0;
+    let size = 0;
     let past = 0;
     req.on("data", (c: Buffer) => {
-      const take = Math.min(POST_MAX - kept, c.length);
+      const take = Math.min(POST_MAX - size, c.length);
       if (take > 0) chunks.push(c.subarray(0, take));
-      kept += take;
+      size += take;
       past += c.length - take;
     });
     req.on("end", () => {

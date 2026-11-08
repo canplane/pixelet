@@ -4,9 +4,9 @@ import { strerror } from "./errno.spec.ts";
 import type { i32 } from "../abi/word.ts";
 
 /**
- * An errno raised as an exception. Its class says whether it is fatal, not its
- * errno: an `InvariantError` is fatal, and a `FaultError` is caught, isolated
- * and dropped.
+ * An `XputeError` is an errno raised as an exception. Its class says whether it
+ * is fatal, not its errno: an `InvariantError` is fatal, and a `FaultError` is
+ * caught, isolated and dropped.
  */
 export class XputeError extends Error {
   readonly errnum: i32;
@@ -31,17 +31,13 @@ export class XputeError extends Error {
     }
   }
 }
-/** A broken invariant, which is fatal. */
+/** A broken invariant is fatal. */
 export class InvariantError extends XputeError {}
-/**
- * A fault from outside the program, such as untrusted input; it is not
- * fatal.
- */
+/** A fault comes from outside the program, such as untrusted input, and is not
+ * fatal. */
 export class FaultError extends XputeError {}
-/**
- * A payload that does not decode where it crosses the wire. It is a fault of
- * the input, not of the program's logic, and is not fatal.
- */
+/** A payload does not decode where it crosses the wire. This is a fault of the
+ * input, not of the program's logic, and is not fatal. */
 export class MarshalError extends FaultError {}
-/** A fault of the network, its transport or its protocol; it is not fatal. */
+/** A fault of the network, its transport or its protocol is not fatal. */
 export class NetworkFaultError extends FaultError {}

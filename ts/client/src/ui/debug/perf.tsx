@@ -1,13 +1,7 @@
 // @pxl/client/ui/debug/perf.tsx
 
-/**
- * The profiler panel. Its buttons start, stop and export the profiler's
- * recording window, its checkboxes are the settings of section `perf`, and
- * its gauge shows what the window holds. The panel is shown while the `perf`
- * setting is on, in any build, and while that setting is on the core records
- * from the moment it boots. A development page reads the same exports from
- * the console (console.ts).
- */
+/** The panel is shown while the `perf` setting is on, in any build, and while
+ * that setting is on the core records from the moment it boots. */
 
 import { CheckSquareIcon, SquareIcon } from "phosphor-react-native";
 import { useEffect, useState } from "react";
@@ -135,7 +129,6 @@ function PanelButton({
 
 const SAID_MS = 2500;
 
-/** One of the panel's own settings: a setting of section `perf`. */
 type Own = {
   [K in SettingName]: (typeof SETTING)[K]["section"] extends "perf" ? K : never;
 }[SettingName];
@@ -211,8 +204,6 @@ export function PerfPanel() {
 
   if (!show) return null;
   const recording = g?.rec.recording === true;
-  // The title's note is the rate at which frames were drawn over the last
-  // second. It reads "idle" when a recording saw no frame move in that second.
   const r = g?.recent ?? null;
   const rate = r === null ? null : movingFps(r);
   const note =

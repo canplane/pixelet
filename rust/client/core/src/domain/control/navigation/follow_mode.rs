@@ -97,7 +97,7 @@ pub fn follow_mode_step() {
     }
 
     // The location is not smoothed here, because the smooth move is its only
-    // smoothing stage. The pivot goes to the floor nearest the fix's altitude.
+    // smoothing stage.
     if let Some(device) = device_coord.filter(|d| entered || Some(*d) != f.last_device) {
         go_to_ground(device, Motion::Smooth);
     }
@@ -107,7 +107,6 @@ pub fn follow_mode_step() {
         let raw_azimuth = heading * (core::f64::consts::PI / 180.0);
         let smoothed = match f.smoothed_azimuth {
             None => raw_azimuth,
-            // The azimuth eases the short way across the wrap.
             Some(s) => {
                 s + wrap(
                     raw_azimuth - s,

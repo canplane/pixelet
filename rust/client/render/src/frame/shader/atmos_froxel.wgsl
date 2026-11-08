@@ -7,7 +7,7 @@
 // directions each way in Hillaire's layout (atmos_medium.wgsl `view_unit`),
 // and as many slices deep by one law for every direction (atmos_medium.wgsl
 // `air_dist`). A workgroup marches one column of froxels once, a thread a
-// froxel, and writes each froxel (`air_held`). Nothing in the volume depends
+// froxel, and writes each froxel (`air_scatter`). Nothing in the volume depends
 // on the view, so it holds as the eye turns. It is drawn together with its
 // light's sky view, for the same light and altitude and with the same layout
 // (atmos_medium.wgsl `view_layout`). The sun's half is the first
@@ -32,14 +32,14 @@ fn column_dir(beta: f32, c: vec2u) -> vec3f {
 // and slices however fast the air thickens, and a pixel scales it by its own
 // ray's 1 - T (atmos_air.wgsl `air_before`). Where the air has taken nothing
 // yet, the froxel holds nothing.
-fn air_held(v: Veil) -> vec4f {
+fn air_scatter(v: Veil) -> vec4f {
   let opacity = vec3f(1.0) - v.transmittance;
   return vec4f(select(vec3f(0.0), v.scattered / opacity, opacity > vec3f(1e-6)), 1.0);
 }
 
 var<workgroup> column_transmittance: array<vec3f, AIR_FROXELS>;
 var<workgroup> column_scattered: array<vec3f, AIR_FROXELS>;
-var<workgroup> column_held: array<vec4f, AIR_FROXELS>;
+var<workgroup> column_scatter: array<vec4f, AIR_FROXELS>;
 
 // Marches a column once. Each thread gathers its stretch from the slice before
 // its own (atmos_march.wgsl `gather_between`), and the stretches are joined
@@ -49,7 +49,7 @@ var<workgroup> column_held: array<vec4f, AIR_FROXELS>;
 // A froxel before its ray enters the air takes nothing and would hold
 // nothing. It holds the light of the first froxel past it in its column
 // instead, so the volume runs on smoothly into the air, and a read there does
-// not blur a step up from nothing (atmos_air.wgsl `air_held_of`). A pixel
+// not blur a step up from nothing (atmos_air.wgsl `air_scatter_of`). A pixel
 // before the air still scatters nothing, by its own 1 - T.
 @compute @workgroup_size(1, 1, AIR_FROXELS)
 fn froxel_cs(@builtin(global_invocation_id) id: vec3u) {
@@ -77,12 +77,12 @@ fn froxel_cs(@builtin(global_invocation_id) id: vec3u) {
     }
     workgroupBarrier();
   }
-  let held = air_held(Veil(transmittance, scattered));
-  column_held[k] = held;
+  let scatter = air_scatter(Veil(transmittance, scattered));
+  column_scatter[k] = scatter;
   workgroupBarrier();
-  var out = held;
+  var out = scatter;
   for (var j = k; j < AIR_FROXELS && all(out.rgb == vec3f(0.0)); j++) {
-    out = column_held[j];
+    out = column_scatter[j];
   }
   textureStore(air_out, vec3u(id.x + light_k * AIR_FROXELS, id.y, k), out);
 }

@@ -15,7 +15,7 @@ use xpute_core::mem::Memory;
 use xpute_kit::status::errno::Errno;
 use xpute_runtime::native::{ring, turns, Core};
 
-use crate::fs::Files;
+use crate::fs::Fs;
 use crate::spec::{self, Protocol, V};
 
 /// What the last snapshot said: the share of the renderer's pipelines made so far, and
@@ -35,7 +35,7 @@ pub struct Runtime {
     pub ui: Protocol,
     xpute: Protocol,
     fs: Protocol,
-    files: Files,
+    files: Fs,
     /// The core's stop report, as SYS_ABORT carried it.
     pub abort: Option<String>,
     pub shown: Shown,
@@ -84,7 +84,7 @@ impl Runtime {
             replies: BTreeMap::new(),
             ui: Protocol::load("spec/client/core/door/ui.json"),
             xpute: Protocol::load_each(&["xpute/spec/abi/sys.json", "xpute/spec/abi/gpu.json"]),
-            files: Files::new(),
+            files: Fs::new(),
             fs,
             abort: None,
             shown: Shown::default(),
@@ -164,7 +164,7 @@ impl Runtime {
     /// Reads the completion ring until it is empty, then submits the file calls'
     /// completions.
     fn drain(&mut self) {
-        let mut done = Vec::new();
+        let mut results = Vec::new();
         while let Some(f) = self.cq.peek() {
             let pkt = self.cq.pkt(&f).expect("the core's frame names its slot");
             if f.flags & RES != 0 {
@@ -189,7 +189,7 @@ impl Runtime {
                         let res = self
                             .files
                             .open(field("fd"), field("root"), field("flags"), path);
-                        done.push((field("fd"), f.cmd, res));
+                        results.push((field("fd"), f.cmd, res));
                     }
                     "FS_READ" => {
                         let bytes = self.files.read(field("fd"));
@@ -204,7 +204,7 @@ impl Runtime {
                         }
                     }
                     "FS_WRITE" => self.files.write(field("fd")),
-                    "FS_CLOSE" => done.push((field("fd"), f.cmd, self.files.close(field("fd")))),
+                    "FS_CLOSE" => results.push((field("fd"), f.cmd, self.files.close(field("fd")))),
                     _ => panic!("the core posted {cmd}"),
                 }
             } else if f.cmd == self.xpute.number("SYS_ABORT") {
@@ -220,7 +220,7 @@ impl Runtime {
             fields: openat.reply.clone(),
             reply: Vec::new(),
         };
-        for (fd, cmd, res) in done {
+        for (fd, cmd, res) in results {
             if cmd == reply.val {
                 self.push(fd, cmd, RES, res, |slot| {
                     spec::write(&reply, &[("detail", V::Num(0.0))], slot)

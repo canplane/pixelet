@@ -71,7 +71,7 @@ impl Read {
 /// so a frame writes again only the slots its writer says changed.
 #[derive(Default)]
 pub(crate) struct SlotMirror {
-    held: bool,
+    in_sync: bool,
     /// The changed slots, sorted. The vector is kept to reuse its allocation.
     slots: Vec<u32>,
 }
@@ -89,7 +89,7 @@ impl SlotMirror {
         unit: usize,
         changed: impl Iterator<Item = u32>,
     ) -> bool {
-        if self.held {
+        if self.in_sync {
             let n = (now.len() / unit) as u32;
             self.slots.clear();
             self.slots.extend(changed.filter(|&s| s < n));
@@ -110,13 +110,13 @@ impl SlotMirror {
             }
         }
         g.upload_buf(buf, 0, now);
-        self.held = true;
+        self.in_sync = true;
         true
     }
 
     /// Called when the buffer no longer holds what was written, so the next write is whole.
     pub(crate) fn forget(&mut self) {
-        self.held = false;
+        self.in_sync = false;
     }
 }
 

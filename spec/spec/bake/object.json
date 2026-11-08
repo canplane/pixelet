@@ -1,8 +1,8 @@
 {
   "$doc": [
     "How many scales an object places at: a unit and its halvings, as a decor's",
-    "`scale_steps`, 0, -1, -2 and -3. Four, so the 0.125u one kept working when the",
-    "cell grew from 0.5u to 1u. The UI names a size by its scale, never by a length."
+    "`scale_steps`, 0, -1, -2 and -3. There are four so that the smallest is 0.125u, an",
+    "eighth of the 1u cell. The UI names a size by its scale, never by a length."
   ],
   "OBJECT_SCALES": 4
 }

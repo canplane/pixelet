@@ -1,12 +1,13 @@
 // @xpute/runtime/ipc/doorbell.ts
 
 /**
- * The runtime's end of a core's rings. One ring of the doorbell is one turn
- * (sched/scheduler.ts). Everything a turn leaves is read before the next turn
- * is rung, so a listener must not ring the core while the completion ring is
- * being read. A frame's tag is the sender's id (ipc/frame.json): each call the
- * runtime makes takes the next id, and its reply keeps that id. Everything the
- * core raises is handed to the one listener, which tells the commands apart.
+ * This is the runtime's end of a core's rings. One ring of the doorbell is one
+ * turn (sched/scheduler.ts). Everything a turn leaves is read before the next
+ * turn is rung, so a listener must not ring the core while the completion ring
+ * is being read. A frame's tag is the sender's id (ipc/frame.json): each call
+ * the runtime makes takes the next id, and its reply keeps that id. Everything
+ * the core raises is handed to the one listener, which tells the commands
+ * apart.
  *
  * A core on a thread of its own (runtime.ts `Core.thread`) runs by itself. It
  * is kicked after each submission, and after each read of the completion
@@ -53,17 +54,17 @@ export type OnImport = (
   pkt: U8Array | null,
 ) => i32 | void;
 
-/** Writes a command's packet into the room it is given, as a generated
- * `encode_*` does. */
+/** An `Encode` writes a command's packet into the room it is given, as a
+ * generated `encode_*` does. */
 export type Encode = (room: PacketRoom) => PacketWriter | null;
 
 type Run = (deadline_ms: f64) => f64;
 type Kick = (deadline_ms: f64) => void;
 
-/** Encodes a packet whose fields are `args`, in order. Each argument is
- * lowered as XTP lowers a value (wire/xtp `TreeView.set`) and grafted in,
- * within a slot of `slot_bytes`. With no arguments there is no packet. A
- * console sends its commands this way. */
+/** Encodes a packet whose fields are `args`, in order. Each argument is lowered
+ * as XTP lowers a value (wire/xtp `TreeView.set`) and grafted in, within a
+ * slot of `slot_bytes`. With no arguments there is no packet. A console sends
+ * its commands this way. */
 export function encode_args(
   args: NodeValue<NodeView>[],
   slot_bytes: u32,
@@ -81,7 +82,7 @@ export function encode_args(
 
 export class Doorbell implements PacketRoom {
   private readonly _sq: Ring;
-  /** The one writer every packet is written with, in place in its slot. */
+  /** Every packet is written with this one writer, in place in its slot. */
   private readonly _writer = new PacketWriter();
   private readonly _cq: Ring;
   private _next_call: u32 = 0;
@@ -89,8 +90,8 @@ export class Doorbell implements PacketRoom {
     u32,
     (result: i32, f: BranchCursor | null) => void
   >();
-  /** Set while the completion ring is being read, and so while a listener
-   * runs. */
+  /** This is set while the completion ring is being read, and so while a
+   * listener runs. */
   private _reading = false;
   /** The core is gone. Either its turn stopped partway, or the runtime could
    * not take what it posted; either way the submission it was applying would
@@ -111,7 +112,7 @@ export class Doorbell implements PacketRoom {
    * the core's own thread ran since it was last heard, whoever kicked it
    * (`turns`). */
   on_turn: ((turn_ms: f64, wake_ms: f64) => void) | null = null;
-  /** Told once, as the core stops. */
+  /** This is told once, as the core stops. */
   onterminated: (() => void) | null = null;
 
   private readonly _run: Run;
@@ -122,7 +123,6 @@ export class Doorbell implements PacketRoom {
    * (`batch`). */
   private _batching = false;
 
-  /** The core is gone, and no turn runs again. */
   get terminated(): boolean {
     return this._terminated;
   }
@@ -158,13 +158,12 @@ export class Doorbell implements PacketRoom {
     return pkt.finish() >= 0;
   }
 
-  /** Hands `listener` what the core sends or calls with. */
   listen(listener: OnImport): void {
     this._listener = listener;
   }
 
-  /** Sends `cmd` tagged 0. While the completion ring is being read, the
-   * send waits until the read is done. */
+  /** Sends `cmd` tagged 0. While the completion ring is being read, the send
+   * waits until the read is done. */
   send(cmd: u32, encode: Encode | null = null): void {
     if (this._reading) {
       this._later.push([0, cmd, 0, 0, encode]);
@@ -217,9 +216,9 @@ export class Doorbell implements PacketRoom {
     if (errnum !== Errno.OK) throw new InvariantError(errnum);
   }
 
-  /** Sends `cmd` with `args` as its packet's fields, in order
-   * (`encode_args`), and rings at once. It is for a command from outside the
-   * runtime's own code, such as a console's. */
+  /** Sends `cmd` with `args` as its packet's fields, in order (`encode_args`),
+   * and rings at once. It is for a command from outside the runtime's own code,
+   * such as a console's. */
   cmd(cmd: u32, ...args: NodeValue<NodeView>[]): void {
     this.send(cmd, encode_args(args, this._sq.slot_bytes));
     this.ring(0);

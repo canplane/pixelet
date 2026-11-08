@@ -8,15 +8,15 @@
 use pxl_render::gpu::draw::DrawList;
 use xpute_core::global::Global;
 
-use crate::domain::scene::model::registry::Models;
+use crate::domain::scene::model::registry::ModelTable;
 
 pub mod asset;
 pub mod registry;
 
-static MODELS: Global<Models> = Global::new();
+static MODELS: Global<ModelTable> = Global::new();
 
-pub fn models() -> &'static mut Models {
-    MODELS.get(Models::default)
+pub fn models() -> &'static mut ModelTable {
+    MODELS.get(ModelTable::default)
 }
 
 /// The list the renderer is handed each turn. Every drawn layer adds its draws

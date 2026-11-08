@@ -30,7 +30,6 @@ fn cfg(heap_at: u32) -> Config {
     }
 }
 
-/// A turn that asks for no next turn.
 fn turn(_: f64) -> f64 {
     -1.0
 }

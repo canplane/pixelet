@@ -5,7 +5,7 @@
 // dispatch, so the cast takes the claimed tiles' pixels alone. A frame drawn whole lists every
 // tile.
 
-struct CastTiles {
+struct TileList {
   // The dispatch's workgroups along x, one for each tile listed, up to as many as the list
   // holds.
   count: atomic<u32>,
@@ -19,9 +19,9 @@ struct CastTiles {
   at: array<u32>,
 }
 
-@group(0) @binding(0) var<storage, read_write> list: CastTiles;
+@group(0) @binding(0) var<storage, read_write> list: TileList;
 @group(0) @binding(30) var<storage, read> changed_at: array<u32>;
-@group(0) @binding(31) var<uniform> tiles: Tiles;
+@group(0) @binding(31) var<uniform> tiles: TileGrid;
 
 @compute @workgroup_size(CAST_TILES_LANES, 1, 1)
 fn cast_tiles_cs(@builtin(global_invocation_id) id: vec3<u32>) {

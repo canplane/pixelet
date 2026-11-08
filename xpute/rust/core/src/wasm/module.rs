@@ -1,7 +1,7 @@
 // xpute-core/wasm/module.rs
 
-//! What a module core reads of the module itself. It assumes the module was
-//! linked as `link` links it.
+//! This is what a module core reads of the module itself. It assumes the module
+//! was linked as `link` links it.
 
 extern "C" {
     /// The end of `.rodata`, `.data` and `.bss`, defined by wasm-ld. A core
@@ -37,7 +37,7 @@ pub fn data_end() -> u32 {
     core::ptr::addr_of!(__data_end) as u32
 }
 
-/// The size in bytes of the memory the runtime has given the module.
+/// This is the size in bytes of the memory the runtime has given the module.
 pub fn given() -> u64 {
     core::arch::wasm32::memory_size(0) as u64 * u64::from(super::WASM_PAGE_BYTES)
 }

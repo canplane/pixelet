@@ -1,8 +1,5 @@
 // @pxl/client/service/core/scene.ts
 
-/** The scene's commands: what a surface the UI lent draws, either the world
- * or one group's companion character alone, and a line of chat said. */
-
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { encode_scene_chat, SceneContent } from "@/abi/cmd.spec.ts";
 import { core, ui } from "@/service/core/core.ts";
@@ -22,8 +19,7 @@ export function chat(text: string): void {
   core.scene_chat(text);
 }
 
-/** Whether a line fits in one command. A line too long to send is refused
- * whole, never cut. */
+/** A line too long for one command is refused whole, never cut. */
 export function chat_fits(text: string): boolean {
   return ui.fits((room) => encode_scene_chat(room, text));
 }

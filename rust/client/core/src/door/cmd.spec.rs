@@ -44,9 +44,8 @@ pub use crate::domain::cmd::{
 };
 use xpute_core::abi::number::{finite, integer, unknown};
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{PacketWriter, Strs, TreeReader};
+use xpute_kit::wire::xtp::{PacketWriter, StrList, TreeReader};
 
-/// The module a command is for: the core's, or the device's that sends it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Major {
@@ -82,7 +81,6 @@ impl Major {
     }
 }
 
-/// The input's: the pointer, the wheel, the held movement, a tracker's pose.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum InputMinor {
@@ -108,7 +106,6 @@ impl InputMinor {
     }
 }
 
-/// The device sensors'.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum SensorMinor {
@@ -140,7 +137,6 @@ impl SensorMinor {
     }
 }
 
-/// What the tile source declares of itself.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum SourceMinor {
@@ -156,8 +152,6 @@ impl SourceMinor {
     }
 }
 
-/// A turn's: what the runtime grants it, the credits and the clock, and the interval the
-/// core asks between them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum TurnMinor {
@@ -174,7 +168,6 @@ impl TurnMinor {
     }
 }
 
-/// A setting's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum SettingMinor {
@@ -191,7 +184,6 @@ impl SettingMinor {
     }
 }
 
-/// The scene's: what a surface draws, a line said.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum SceneMinor {
@@ -208,7 +200,6 @@ impl SceneMinor {
     }
 }
 
-/// The camera's: the tracking button, the compass, a search result.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum CameraMinor {
@@ -230,7 +221,6 @@ impl CameraMinor {
     }
 }
 
-/// The profiler's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum PerfMinor {
@@ -254,7 +244,6 @@ impl PerfMinor {
     }
 }
 
-/// The edit's: the tool and what it takes, and a marker's draft.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum EditMinor {
@@ -278,7 +267,6 @@ impl EditMinor {
     }
 }
 
-/// What the core shows the UI.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum UiMinor {
@@ -295,7 +283,6 @@ impl UiMinor {
     }
 }
 
-/// Where a pointer event is in its gesture.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum PointerPhase {
@@ -341,12 +328,10 @@ impl Tool {
     }
 }
 
-/// What a surface draws (SCENE_DRAW).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum SceneContent {
     World = 0,
-    /// One character alone, named by its group and number.
     Character = 1,
 }
 
@@ -359,7 +344,6 @@ impl SceneContent {
     }
 }
 
-/// Which of the device's sensors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Sensor {
@@ -438,9 +422,8 @@ pub enum Command {
     INPUT_POINTER = 0x1102,
     /// The tool and what it takes, the UI's to choose and keep: the core is told, and answers EINVAL for an item the catalog does not give out. It picks again under a hovering pointer.
     EDIT_TOOL = 0x1a01,
-    /// The draft's text (Snapshot.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (pxl-spec object/ext.json) is refused whole, never cut: EMSGSIZE, which the UI shows as what does not fit.
+    /// The draft's text (Snapshot.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (spec/spec/asset/marker.json) is refused whole, never cut: EMSGSIZE, which the UI shows as what does not fit.
     EDIT_MARKER_TEXT = 0x1a02,
-    /// The marker's draft dropped, nothing committed.
     EDIT_MARKER_CANCEL = 0x1a03,
     /// The marker's draft committed with its text, where its place is still free or still a marker, and closed.
     EDIT_MARKER_COMMIT = 0x1a04,
@@ -460,7 +443,7 @@ pub enum Command {
     SCENE_CHAT = 0x1703,
     /// The tracking button's press, as the button showed it.
     CAMERA_TRACKING = 0x1801,
-    /// The compass's press: north up.
+    /// The compass was pressed: north comes up.
     CAMERA_NORTH_UP = 0x1802,
     /// The search panel's location card's press: the location asked for. The compass is
     /// asked for where it is used, entering follow mode (TRACKING), and never alone: nothing
@@ -472,15 +455,15 @@ pub enum Command {
     /// A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
     /// (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
     /// first of a run is taken to be where the camera already is, so nothing moves as
-    /// it begins; the camera follows the tracker from there until POSE_END. No client
-    /// sends it: it is the way in by which an immersive mode's head pose (a Quest's, a
-    /// Vision Pro's) drives the camera, sent by the device app.
+    /// it begins; the camera follows the tracker from there until POSE_END. Nothing in the
+    /// client sends it: it is the way in for an immersive mode's head pose (a Quest's, a
+    /// Vision Pro's) to drive the camera, from the device app.
     INPUT_XR_POSE = 0x1109,
     /// The tracker let the camera go: back to the controller it had.
     INPUT_XR_POSE_END = 0x110a,
-    /// A fresh recording window.
+    /// Starts a fresh recording window.
     PERF_START = 0x1901,
-    /// The window frozen, so what is exported holds still.
+    /// Freezes the window, so what is exported holds still.
     PERF_STOP = 0x1902,
     /// The profiler's statistics and what it holds now, where they lie: the reply is the address of STAT_SLOT's words (perf.json), the statistics
     /// over the last `window_ms`, the whole recording where it is absent, good until the next turn. A
@@ -490,9 +473,7 @@ pub enum Command {
     PERF_RINGS = 0x1904,
 
     // ---- ui, import ----
-    /// Start watching.
     SENSOR_START = 0x1201,
-    /// Stop watching.
     SENSOR_STOP = 0x1203,
     /// The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
     /// block the core holds, valid until the next snapshot.
@@ -578,7 +559,7 @@ pub struct Snapshot<'a> {
     pub refused_files: &'a dyn Fn(&mut dyn FnMut(&RefusedFile<'_>)),
     /// Why the server does not answer the world's reads now: failing since the last answered, or given up. Absent while it answers. The network and the GPU are the runtime's to say.
     pub stall: Option<Message>,
-    /// How much of what the renderer makes before its first frame is made, 0 to 1 (pxl-render gpu/pipeline.rs `Pipelines::share`): the pipelines made of those asked for, in whatever order they finish, 0 before any is asked; 1 once it draws, 0 again while a lost device's next renderer is made. The loading bar is the UI's to draw of it.
+    /// How much of what the renderer makes before its first frame is made, 0 to 1 (pxl-render gpu/pipeline.rs `PipelineCache::share`): the pipelines made of those asked for, in whatever order they finish, 0 before any is asked; 1 once it draws, 0 again while a lost device's next renderer is made. The loading bar is the UI's to draw of it.
     pub renderer_progress: f64,
     /// How much of the view's ground shows, 0 to 1: of the tiles asked for, those with an answer or drawn coarser. 0 where none is asked yet, 1 once the area is shown; it goes back as more is asked for.
     pub area_progress: f64,
@@ -732,7 +713,6 @@ impl DivisionPart<'_> {
     }
 }
 
-/// A file the core refused, as it opened it.
 pub struct RefusedFile<'a> {
     /// file.json's `root`.
     pub root: u32,
@@ -873,7 +853,7 @@ pub struct SourceDeclare<'a> {
     pub format: &'a [u32],
     /// The shards it serves, by name. Their order means nothing: no two at a zoom
     /// are over one node, and the finer wins.
-    pub shard: Strs<'a>,
+    pub shard: StrList<'a>,
 }
 
 impl<'a> SourceDeclare<'a> {
@@ -1274,7 +1254,6 @@ impl xpute_core::ipc::door::Import for UiSnapshot {
 
 /// Command::UI_VIEW's packet.
 pub struct UiView {
-    /// The view's azimuth.
     pub azimuth: f64,
     /// The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the UI's to make of it; which division names show, the core's (`DivisionPart.shown`).
     pub m_per_px: f64,

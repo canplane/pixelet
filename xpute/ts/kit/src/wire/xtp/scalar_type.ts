@@ -1,7 +1,7 @@
 // @xpute/kit/wire/xtp/scalar_type.ts
 
-// The type bytes of the scalar leaves, each of which holds one value. spec.ts
-// re-exports this module as `ScalarType`, read as a namespace
+// These are the type bytes of the scalar leaves, each of which holds one value.
+// spec.ts re-exports this module as `ScalarType`, read as a namespace
 // (`ScalarType.U8`). Each constant is a literal, so it is its own type, and
 // `ScalarType` as a type is their union.
 

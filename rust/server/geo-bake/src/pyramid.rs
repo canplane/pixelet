@@ -1,7 +1,7 @@
 // pxl-geo-bake/pyramid.rs
 
-//! A layer's pyramid on disk, a directory a zoom, folded by the same
-//! one-zoom function the client runs.
+//! A layer's pyramid on disk, flat under each tile's name, folded by the same one-zoom
+//! function the client runs.
 
 use fnv::{FnvHashMap, FnvHashSet};
 use std::borrow::Cow;

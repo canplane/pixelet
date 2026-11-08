@@ -33,15 +33,15 @@ export function Presence({
   style,
   children,
 }: PresenceProps) {
-  const [held, setHeld] = useState(show);
-  if (show && !held) setHeld(true);
-  if (!show && !held) return null;
+  const [mounted, setMounted] = useState(show);
+  if (show && !mounted) setMounted(true);
+  if (!show && !mounted) return null;
   return (
     <Motion
       from={from}
       to={show ? to : exit}
       transition={show ? transition : exitTransition}
-      onSettled={show ? undefined : () => setHeld(false)}
+      onSettled={show ? undefined : () => setMounted(false)}
       style={style}
     >
       {children}
@@ -75,10 +75,10 @@ export function usePresent<T>(
   let current = leaving;
   if (prev !== items) {
     const asked = new Set(items.map(keyOf));
-    const held = new Set(leaving.map((l) => l.key));
+    const leavingKeys = new Set(leaving.map((l) => l.key));
     const left = prev
       .map((item) => ({ item, key: keyOf(item) }))
-      .filter((l) => !asked.has(l.key) && !held.has(l.key));
+      .filter((l) => !asked.has(l.key) && !leavingKeys.has(l.key));
     current = [...leaving.filter((l) => !asked.has(l.key)), ...left];
     setLeaving(current);
     setPrev(items);

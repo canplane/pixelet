@@ -1,10 +1,10 @@
 // xpute-gpu/runtime/image.rs
 
-//! COPY_EXTERNAL_IMAGE on a native device. The web asks its browser to decode
-//! the image (createImageBitmap); here a thread of the runtime's own decodes
-//! it, and a later poll lands it in its texture. The formats are PNG, JPEG and
-//! WebP, the ones every browser is sure to read, so a core can count on them
-//! on either runtime. Any other format is refused here.
+//! This is COPY_EXTERNAL_IMAGE on a native device. The web asks its browser to
+//! decode the image (createImageBitmap); here a thread of the runtime's own
+//! decodes it, and a later poll lands it in its texture. The formats are PNG,
+//! JPEG and WebP, the ones every browser is sure to read, so a core can count
+//! on them on either runtime. Any other format is refused here.
 
 use std::io::Cursor;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -17,18 +17,18 @@ use super::run::OwnedTexture;
 use super::GpuRuntime;
 use crate::spec::RESULT;
 
-/// An image sent to the decoder. It lands in its texture at the first poll
-/// after its decode comes back.
+/// A `Decoding` is an image sent to the decoder. It lands in its texture at the
+/// first poll after its decode comes back.
 pub(super) struct Decoding {
-    /// Its number among the jobs sent. The decoder answers in the order it
-    /// was sent them.
+    /// This is its number among the jobs sent. The decoder answers in the order
+    /// it was sent them.
     job: u64,
     to: OwnedTexture,
     word: u32,
     ticket: u32,
 }
 
-/// A job's number, the bytes, flip y and premultiply.
+/// A job holds its number, the bytes, flip y and premultiply.
 type Job = (u64, Vec<u8>, bool, bool);
 
 pub(super) struct Decoder {
@@ -98,12 +98,12 @@ impl GpuRuntime {
             let Some(d) = self.decoding.pop_front_if(|d| d.job == job) else {
                 continue;
             };
-            let held = self
+            let exists = self
                 .objects
                 .iter()
                 .flatten()
                 .any(|o| matches!(o, Object::Texture(t) if *t == d.to.texture));
-            if !held {
+            if !exists {
                 continue;
             }
             let Some(image) = image else {
@@ -127,7 +127,7 @@ impl GpuRuntime {
     }
 }
 
-/// RGBA8 rows, top first.
+/// The pixels are RGBA8 rows, top first.
 struct Image {
     width: u32,
     height: u32,
@@ -163,8 +163,8 @@ fn decode(bytes: &[u8], flip_y: bool, premultiplied: bool) -> Option<Image> {
     Some(image)
 }
 
-/// Pixels of `channels` bytes each, as RGBA8. Gray is spread to the three
-/// colors, and a missing alpha is opaque.
+/// This converts pixels of `channels` bytes each to RGBA8. Gray is spread to
+/// the three colors, and a missing alpha is opaque.
 fn rgba(width: u32, height: u32, channels: usize, from: &[u8]) -> Image {
     let rgba = match channels {
         4 => from.to_vec(),

@@ -152,9 +152,7 @@ pub fn orient_visible() {
 /// tracked on a platform where silence is the only sign of loss, so nothing
 /// is woken while nothing is tracked. It wakes once, when the silence since
 /// the last event would amount to a loss. An event before then moves that
-/// deadline, so a sensor that keeps talking is never polled. A heading is
-/// asked for when the sensors open and again when the user follows
-/// (navigation/follow_mode.rs `tracking_action`).
+/// deadline, so a sensor that keeps talking is never polled.
 pub fn orient_watchdog_step() {
     if !platform().orient.silence_is_loss || !device_orient_store().is_tracking_orient {
         return;

@@ -29,7 +29,7 @@ use xpute_core::mem;
 use xpute_core::mem::heap::{alloc, free};
 use xpute_core::sched::pass::Pass;
 
-use crate::domain::scene::column::{self, GroupColumns};
+use crate::domain::scene::column::{self, GroupRange};
 use crate::domain::scene::environment::param::{
     CLOUD_GONE_KM, CLOUD_SALT, CLOUD_SHARE, CLOUD_SPACING_CELLS, CLOUD_WIDTH,
 };
@@ -107,7 +107,7 @@ struct Patch {
 }
 
 #[derive(Default)]
-struct Clouds {
+struct CloudLayer {
     models: [Option<u32>; VARIANTS.len()],
     patches: FnvHashMap<[i64; 2], Patch>,
     /// The vectors from here on are kept between turns, so a turn where
@@ -121,10 +121,10 @@ struct Clouds {
     seen: f64,
 }
 
-static CLOUDS: Global<Clouds> = Global::new();
+static CLOUDS: Global<CloudLayer> = Global::new();
 
-fn clouds() -> &'static mut Clouds {
-    CLOUDS.get(Clouds::default)
+fn clouds() -> &'static mut CloudLayer {
+    CLOUDS.get(CloudLayer::default)
 }
 
 /// Each variant's draw group, with its mesh (0 while it loads), its skin and
@@ -346,9 +346,9 @@ fn patch_place(key: [i64; 2]) -> Position {
 /// drift crosses into the next cell. Meanwhile the stand stays still, for as
 /// long as the wind takes to carry the field a cell.
 fn box_corner(key: [i64; 2], off: [f64; 2], eye: V3) -> [f64; 2] {
-    let held = off.map(|v| libm::floor(v / CELL) * CELL);
-    let x = key[0] as f64 * PATCH - held[0];
-    [nearest(x, eye[0]), key[1] as f64 * PATCH - held[1]]
+    let cell_off = off.map(|v| libm::floor(v / CELL) * CELL);
+    let x = key[0] as f64 * PATCH - cell_off[0];
+    [nearest(x, eye[0]), key[1] as f64 * PATCH - cell_off[1]]
 }
 
 /// A patch's stand: the box its draws declare they stand within (pxl-render
@@ -429,7 +429,7 @@ fn patch_clouds(b: &Patch) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
     column::groups(words)
         .zip(VARIANTS.map(|file| (widest(file), extent(file)[2])))
         .flat_map(move |((first, n), (wide, tall))| {
-            let column = GroupColumns {
+            let column = GroupRange {
                 first: first as usize,
                 cnt: n as usize,
             };
@@ -473,7 +473,7 @@ fn build(
     let words = header
         + columns
             .iter()
-            .map(|l| GroupColumns::words(l.len()))
+            .map(|l| GroupRange::words(l.len()))
             .sum::<usize>();
     let idx = (words * 4) as u32;
     let (at, bytes) = alloc(idx + instances as u32 * 4)?;
@@ -484,7 +484,7 @@ fn build(
     let mut first = header;
     for (g, l) in columns.iter().enumerate() {
         out[1 + g] = l.len() as u32;
-        let column = GroupColumns {
+        let column = GroupRange {
             first,
             cnt: l.len(),
         };
@@ -494,7 +494,7 @@ fn build(
             }
         }
         out[column.flags()..column.flags() + l.len().div_ceil(4)].fill(0);
-        first += GroupColumns::words(l.len());
+        first += GroupRange::words(l.len());
     }
     let handle = draw.upload(at as u32, bytes, 0, 0);
     Some(Patch {
@@ -567,7 +567,7 @@ fn present_patch(
     let (mut at, mut changed) = (0usize, false);
     let variants = column::groups(columns_of).zip(groups).zip(b.draws);
     for (((off, cnt), (group, (extent, [least, most]))), [model_id, impostor_id]) in variants {
-        let column = GroupColumns {
+        let column = GroupRange {
             first: off as usize,
             cnt: cnt as usize,
         };

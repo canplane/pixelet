@@ -5,8 +5,8 @@ import CXpute
 import QuartzCore
 import UIKit
 
-/// A view backed by a Metal layer, which a core's surface draws into. The
-/// view owns its layer, so it binds the core's surface to the layer itself:
+/// A core's surface draws into this view, which a Metal layer backs. The view
+/// owns its layer, so it binds the core's surface to the layer itself:
 /// it binds the surface the app names (`surface`) while the view is in a
 /// window, and never past the moment it lets the layer go. A view reaches
 /// its window only after it is mounted and laid out, so it tells when the
@@ -32,8 +32,6 @@ class SurfaceView: ExpoView {
     rebind()
   }
 
-  /// Binds the layer to the surface wanted now, and lets go of one no longer
-  /// wanted.
   private func rebind() {
     let wanted = window == nil ? 0 : surface
     if bound == wanted { return }

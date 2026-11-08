@@ -1,14 +1,14 @@
 // @xpute/runtime/ipc/fs.ts
 
 /**
- * The file device on Major FS (spec/abi/fs.json): the runtime's server for a
- * core's opens, reads, writes and closes. Each is a frame taken after the
- * turn returns and before the next begins, so whatever the frame names in
- * the core's memory is written before the core reads it. An open and a close
- * are each completed once, by their tag, which is the descriptor; an open
- * whose close came first completes with ECANCELED. A write's bytes stay
- * where the core keeps them, and are read from there at the close. The
- * program's `Fs` says what a file is.
+ * This is the file device on Major FS (spec/abi/fs.json): the runtime's server
+ * for a core's opens, reads, writes and closes. Each is a frame taken after the
+ * turn returns and before the next begins, so whatever the frame names in the
+ * core's memory is written before the core reads it. An open and a close are
+ * each completed once, by their tag, which is the descriptor; an open whose
+ * close came first completes with ECANCELED. A write's bytes stay where the
+ * core keeps them, and are read from there at the close. The program's `Fs`
+ * says what a file is.
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -42,7 +42,7 @@ export class FileError extends Error {
   }
 }
 
-/** What backs the files: an open's bytes, and a written file's commit. */
+/** An `Fs` backs the files: an open's bytes, and a written file's commit. */
 export interface Fs {
   /** Returns the whole file at `path` below `root`, or throws a FileError.
    * `signal` is aborted when the core closes the file before its open
@@ -59,8 +59,8 @@ export interface Fs {
   commit(root: u32, path: string, bytes: U8Array): void;
 }
 
-/** Completes a core's request, given its tag and command, the result, and
- * the completion's packet. */
+/** A `Complete` completes a core's request, given its tag and command, the
+ * result, and the completion's packet. */
 export type Complete = (
   tag: u32,
   cmd: u32,
@@ -72,7 +72,7 @@ interface File {
   root: u32;
   path: string;
   controller: AbortController;
-  /** Whether its open has completed. */
+  /** This says whether its open has completed. */
   opened: boolean;
   bytes: U8Array | null;
   /** Where each write's bytes lie in the core's memory, in order. */
@@ -137,8 +137,8 @@ export class FsServer implements FsImports {
     this._complete(e.fd, Command.FS_CLOSE, this._commit(file), null);
   }
 
-  /** Reads what `file` was written from where the core keeps it, and hands
-   * it to `Fs.commit`. Returns 0, or the errno the commit refused with. */
+  /** Reads what `file` was written from where the core keeps it, and hands it
+   * to `Fs.commit`. It returns 0, or the errno the commit refused with. */
   private _commit(file: File): i32 {
     if (!file.written) return Errno.OK;
     const whole = new Uint8Array(

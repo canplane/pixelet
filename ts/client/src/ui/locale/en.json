@@ -175,7 +175,7 @@
       "message_placeholder": "Type a message",
       "pin_placeholder": "Type the pin's message",
       "send": "Send",
-      "pin_done": "Put up pin",
+      "put_pin": "Put up pin",
       "drawer_tooltip": "Open drawer",
       "object_size": "Size {{n}}"
     },

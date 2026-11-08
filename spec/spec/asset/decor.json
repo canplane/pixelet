@@ -7,7 +7,7 @@
     "generates it on its own. A decor's `seed` names its scatter, so changing it",
     "reshuffles every one the ground generates; `density` is the chance a cell of",
     "its holds one, the mean of a tree of hashes of the cells (pxl-content",
-    "scatter.rs); `on` the palette entries it may stand on; `orientation` a random",
+    "scatter.rs); `on` the palette entries it may stand on; `orient` a random",
     "heading, or along the road or rail its cell lies on. A variant's",
     "skin is its pack's colormap, kept outside the glb.",
     "",
@@ -60,9 +60,8 @@
         "near a coast alone: a tile of open sea is left out of the bake and drawn",
         "from a coarser one, at whose cells no boat stands (pxl-content",
         "`scatter::stands_at`), so the clip levels a boat stands at hold sea only in",
-        "the tiles a coast crosses. Rivers are a few cells wide, so the per-cell",
-        "rate reads far denser than on land: cut to a quarter of 0.015 after",
-        "boats covered the water."
+        "the tiles a coast crosses. Rivers are a few cells wide, so the same per-cell",
+        "rate reads far denser than on land."
       ],
       "seed": "0xb0a5802d",
       "density": 0.001,

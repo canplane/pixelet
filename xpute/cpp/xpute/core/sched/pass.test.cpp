@@ -24,8 +24,6 @@ void burn(double ms) {
     clock_ms += ms;
 }
 
-// A pass with `budget_ms` left from now, and a hard limit at
-// `hard_budget_ms` from now, or none.
 Pass pass(double budget_ms, std::optional<double> hard_budget_ms = std::nullopt) {
     set_clock(test_clock);
     clock_ms = 0;

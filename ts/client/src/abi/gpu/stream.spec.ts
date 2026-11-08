@@ -9,7 +9,7 @@
 export const RESERVE = 1048576 as number;
 
 /** The WGSL a turn hands the device as shader modules before the renderer is
- * made (gpu/pipeline.rs `Pipelines::make_modules`): one module a turn, then
+ * made (gpu/pipeline.rs `PipelineCache::make_modules`): one module a turn, then
  * more while their sources stay within this and `RESERVE` is left. A page
  * makes a module on its main thread, so this bounds the task that makes
  * them, a module larger than it alone in its turn. */

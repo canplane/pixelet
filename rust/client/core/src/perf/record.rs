@@ -328,11 +328,11 @@ pub fn perf_record_rays(r: RayRead) {
     at_frame(l, r.frame, |f| f.rays = r.rays);
 }
 
-/// Folds what a frame turn held, `held`, into the recording's extremes.
-pub fn perf_fold_recording(held: &RecordingSection) {
+/// Folds what a frame turn held, `section`, into the recording's extremes.
+pub fn perf_fold_recording(section: &RecordingSection) {
     let l = perf();
     if l.recording {
-        l.extremes.fold(held);
+        l.extremes.fold(section);
     }
 }
 

@@ -4,7 +4,7 @@
 //! side, which is the same at every zoom, and how its cells scale against the camera grid's.
 //! The zooms and indices of the layer's cells follow from it, and the CPU and the GPU read
 //! tiles by them alike. Placing a lattice in the world, such as finding a position's cell or a
-//! tile's neighbors, is pxl-spec's (space/layer/lattice.rs `Cells`).
+//! tile's neighbors, is pxl-spec's (space/layer/lattice.rs `Grid`).
 
 use crate::{cnt, Zoom, FINEST_ZOOM, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM};
 

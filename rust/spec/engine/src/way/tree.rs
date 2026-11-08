@@ -29,13 +29,13 @@
 //! While the tree is built, a candidate's node is held in its data word, where its leaf or
 //! fold is written afterwards (`pack`).
 
-use crate::clipmap::{Bricks, BRICK_SHIFT};
+use crate::clipmap::{BrickSource, BRICK_SHIFT};
 use crate::fill;
-use crate::object::{self, Columns, NodeSlot, AIR as PLACED_AIR, BRANCH};
+use crate::object::{self, NodeSlot, Table, AIR as PLACED_AIR, BRANCH};
 use crate::{ground, Zoom, LEAF_CELL_ZOOM};
 
 /// The tree's columns as its builder writes them, a word a slot.
-pub trait Pool: Columns {
+pub trait Pool: Table {
     fn set_first_child(&mut self, slot: u32, v: u32);
     fn set_data(&mut self, slot: u32, v: u32);
 }
@@ -51,7 +51,7 @@ const fn first_child_at(slot: u32) -> u32 {
 /// (fill.rs `tree`), and a bake's.
 pub struct Column<'a>(pub &'a mut [u32]);
 
-impl Columns for Column<'_> {
+impl Table for Column<'_> {
     fn first_child(&self, slot: u32) -> u32 {
         crate::at(self.0, first_child_at(slot))
     }
@@ -74,7 +74,7 @@ impl Pool for Column<'_> {
 #[derive(Clone, Copy)]
 pub struct Read<'a>(pub &'a [u32]);
 
-impl Columns for Read<'_> {
+impl Table for Read<'_> {
     fn first_child(&self, slot: u32) -> u32 {
         crate::at(self.0, first_child_at(slot))
     }
@@ -87,9 +87,9 @@ impl Columns for Read<'_> {
 /// to. A bake's set fits it wherever the eye is (pxl-spec bake/tile/terrain.rs `pool_needs`),
 /// so a pool this large refuses none. The core's pool grows as bricks take it, up to this
 /// (pxl-core domain/layer/terrain/pool.rs), and the GPU's follows it (pxl-render
-/// gpu/ray/ground.rs `GroundBuffers::grow`); a tree past what the pool holds is refused, and
+/// gpu/ray/ground.rs `GroundBuffer::grow`); a tree past what the pool holds is refused, and
 /// its brick is left absent. Child group 0 is never handed out: its words stay zero, which
-/// reads as nothing (`object::Columns`), so a root word of 0 is a brick with no tree, read as
+/// reads as nothing (`object::Table`), so a root word of 0 is a brick with no tree, read as
 /// nothing without a child group of its own (`root_word`).
 pub const POOL_CHILD_GROUPS: u32 = 1 << 20;
 
@@ -124,7 +124,7 @@ const _: () = assert!(
 pub const ROOT_NODES: u32 = object::CHILDREN;
 
 /// The brick's own nodes along z that its ways' bound `[lo, hi)` (in leaf cells,
-/// `ground::Bounds`) meets, for cells at `cell_zoom`: the first one's Z and how many, none
+/// `ground::Extent`) meets, for cells at `cell_zoom`: the first one's Z and how many, none
 /// where the bound is empty.
 pub fn span([lo, hi]: [i32; 2], cell_zoom: Zoom) -> (i32, u32) {
     let d = LEAF_CELL_ZOOM - (cell_zoom - BRICK_SHIFT);
@@ -141,7 +141,7 @@ pub fn span([lo, hi]: [i32; 2], cell_zoom: Zoom) -> (i32, u32) {
 /// `object::cursor` steps; it is nothing where the root holds no node there. A descent asks
 /// this once, where it finds the brick (pxl-engine world.rs `node`).
 pub fn cursor(
-    columns: &impl Columns,
+    columns: &impl Table,
     root: u32,
     cell_zoom: Zoom,
     zoom: Zoom,
@@ -209,10 +209,10 @@ pub fn root(pool: &mut impl Pool, z0: i32, root: u32) {
 /// Whether the candidate at `slot`, a node of `zoom`, takes a child group for its children:
 /// it does where it is coarser than the brick's cells at `cell_zoom` and its Z meets where the
 /// brick's ways write under it, as the ways' bound in the brick's level of its size says
-/// (`clipmap::Bricks::bound_mip`, the brick's slot `s`).
+/// (`clipmap::BrickSource::bound_mip`, the brick's slot `s`).
 pub fn flag(
     pool: &impl Pool,
-    w: &impl Bricks,
+    w: &impl BrickSource,
     s: u32,
     cell_zoom: Zoom,
     zoom: Zoom,
@@ -223,7 +223,7 @@ pub fn flag(
         return false;
     }
     let e = [at[0] as u32, at[1] as u32];
-    let [lo, hi] = ground::bounds_of(w.bound_mip(cell_zoom, s, cell_zoom - zoom, e))[1];
+    let [lo, hi] = ground::extent_of(w.bound_mip(cell_zoom, s, cell_zoom - zoom, e))[1];
     let d = LEAF_CELL_ZOOM - zoom;
     lo < (at[2] + 1) << d && hi > at[2] << d
 }
@@ -272,7 +272,7 @@ pub fn empty(pool: &mut impl Pool, slot: u32) {
 /// the ground's void to a reader, as the ways write it (`way::AIR`).
 pub fn leaf(
     pool: &mut impl Pool,
-    column_spans: &impl super::ColumnSpans,
+    column_spans: &impl super::SpanTable,
     cell_zoom: Zoom,
     slot: u32,
 ) {
@@ -334,7 +334,7 @@ pub fn fold(pool: &mut impl Pool, zoom: Zoom, slot: u32) -> u32 {
 
 /// The first slot of the child group under the branch at `slot`, `NONE` under a
 /// leaf.
-pub fn under(pool: &impl Columns, slot: u32) -> u32 {
+pub fn under(pool: &impl Table, slot: u32) -> u32 {
     let h = pool.first_child(slot);
     if h == 0 {
         NONE
@@ -348,7 +348,7 @@ pub fn under(pool: &impl Columns, slot: u32) -> u32 {
 /// pointer following its group, and none of those its fold gave back. `order` has room for a
 /// word for each group it holds, as the build counts them (fill.rs `tree`). It returns the
 /// root word the laid tree is read by.
-pub fn lay(from: &impl Columns, root: u32, to: &mut impl Pool, at: u32, order: &mut [u32]) -> u32 {
+pub fn lay(from: &impl Table, root: u32, to: &mut impl Pool, at: u32, order: &mut [u32]) -> u32 {
     let (first, z0) = root_slot(root);
     order[0] = first / object::CHILDREN;
     let (mut i, mut n) = (0, 1);

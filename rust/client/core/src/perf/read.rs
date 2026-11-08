@@ -21,7 +21,7 @@ use crate::perf::record::{
 };
 use crate::perf::section::TASK_PHASES;
 use crate::perf::section::{
-    FramesSection, Percentiles, StepStats, StepsSection, StreamStats, TasksSection, ViewSection,
+    FrameSection, Percentile, StepSection, StepStat, StreamStat, TaskSection, ViewSection,
 };
 use crate::perf::spec::{self, LIMIT, NOW, STAT};
 use crate::perf::task::TaskRecord;
@@ -58,7 +58,7 @@ fn read() -> &'static mut Read {
 
 /// The percentiles of `vals` (perf.json PERCENTILE) and how many values
 /// they cover. Only as many values as `scratch` holds are taken.
-fn percentiles_n(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> (Percentiles, usize) {
+fn percentiles_n(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> (Percentile, usize) {
     let mut n = 0;
     for v in vals.take(scratch.len()) {
         scratch[n] = v;
@@ -67,7 +67,7 @@ fn percentiles_n(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> (Perce
     let sorted = &mut scratch[..n];
     sorted.sort_by(f64::total_cmp);
     (
-        Percentiles {
+        Percentile {
             p50: rank(sorted, 0.5),
             p95: rank(sorted, 0.95),
             max: sorted.last().copied().unwrap_or(0.0),
@@ -76,7 +76,7 @@ fn percentiles_n(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> (Perce
     )
 }
 
-fn percentiles(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> Percentiles {
+fn percentiles(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> Percentile {
     percentiles_n(scratch, vals).0
 }
 
@@ -122,9 +122,9 @@ pub fn perf_now() -> &'static [f64] {
     out
 }
 
-fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
+fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FrameSection {
     let (Some(first), Some(last)) = (frames.first(), frames.last()) else {
-        return FramesSection::default();
+        return FrameSection::default();
     };
     let sum = |pick: &dyn Fn(&FrameSample) -> f64| frames.iter().map(pick).sum::<f64>();
     let seconds = ((last.t - first.t) / 1000.0).max(1e-3);
@@ -138,7 +138,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
         let (s, n) = percentiles_n(scratch, ran);
         (s.p95, n as f64)
     });
-    FramesSection {
+    FrameSection {
         present: 1.0,
         cnt: frames.len() as f64,
         seconds,
@@ -187,13 +187,13 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
     }
 }
 
-fn tasks(scratch: &mut [f64], tasks: &[TaskRecord]) -> TasksSection {
+fn tasks(scratch: &mut [f64], tasks: &[TaskRecord]) -> TaskSection {
     let (ok, aborted, err) = (
         Outcome::ok as u32 as f64,
         Outcome::aborted as u32 as f64,
         Outcome::err as u32 as f64,
     );
-    let mut section = TasksSection::default();
+    let mut section = TaskSection::default();
     for (c, slot) in section.slots.iter_mut().enumerate() {
         let mine = || tasks.iter().filter(move |r| r.stream == c as f64);
         let n = mine().count();
@@ -239,7 +239,7 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRecord]) -> TasksSection {
                 .filter(|r| r.outcome == ok)
                 .map(|r| r.end_ms - r.enqueue_ms),
         );
-        *slot = StreamStats {
+        *slot = StreamStat {
             cnt: n as f64,
             ok: mine().filter(|r| r.outcome == ok).count() as f64,
             aborted: mine().filter(|r| r.outcome == aborted).count() as f64,
@@ -346,15 +346,15 @@ fn view() -> ViewSection {
     }
 }
 
-fn steps() -> StepsSection {
-    let mut steps = StepsSection::default();
+fn steps() -> StepSection {
+    let mut steps = StepSection::default();
     for s in tick()
         .step_stats()
         .iter()
         .filter(|s| s.cnt > 0)
         .take(STEP_CAP)
     {
-        steps.slots[steps.cnt as usize] = StepStats {
+        steps.slots[steps.cnt as usize] = StepStat {
             phase: f64::from(s.phase),
             name: s.name as f64,
             ms: s.ms,

@@ -25,7 +25,7 @@ use crate::domain::layer::terrain::clipmap;
 use crate::domain::layer::terrain::fixed::RANGE;
 use crate::domain::layer::terrain::fixed::{ele_off, separation_column, SEPARATION_COLUMNS};
 use crate::domain::layer::Base;
-use crate::sys::io::demand::{Phases, Stream, TaskPhaseName};
+use crate::sys::io::demand::{PhaseList, Stream, TaskPhaseName};
 use crate::sys::io::fetch;
 use crate::sys::io::request;
 use pxl_spec::bake::tile::Occupancy;
@@ -59,7 +59,7 @@ impl Base for TerrainTile {
         _tile: Quadrant,
         record: u32,
         pkt: &[u8],
-        phases: &mut Phases,
+        phases: &mut PhaseList,
     ) -> Result<TerrainTile, Failure> {
         let t0 = now();
         // SAFETY: the record is this tile's, and nothing reads it until the tile is set.

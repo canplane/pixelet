@@ -13,7 +13,7 @@
 
 pub mod intersect;
 
-use pxl_spec::space::layer::lattice::Cells;
+use pxl_spec::space::layer::lattice::Grid;
 
 use crate::domain::layer::object::asset::Asset;
 use pxl_spec::asset::decor::{Decor, DECORS};
@@ -70,8 +70,6 @@ pub(super) struct DecorRay {
 }
 
 impl DecorRay {
-    /// The zoom a node at `zoom` is looked around at: its own, or
-    /// `extent_zoom` where that is coarser.
     pub(super) fn about_zoom(&self, zoom: Zoom) -> Zoom {
         zoom.min(self.extent_zoom)
     }
@@ -127,7 +125,7 @@ impl Around {
     /// Records that the walk entered the node `(zoom, c)` and finds the
     /// cursors of its 27. They are stepped from its parent's where those are
     /// the ones held, or else each found down from the roots.
-    pub(super) fn visit(&mut self, lanes: &impl object::Columns, (zoom, c): Node<3>) {
+    pub(super) fn visit(&mut self, lanes: &impl object::Table, (zoom, c): Node<3>) {
         let z = zoom as usize;
         if self.at[z] == c {
             return;
@@ -441,7 +439,6 @@ impl<'a> World<'a> {
     }
 }
 
-/// The box a decor thing claims.
 pub(super) fn claim(i: &Instance) -> Option<Aabb> {
     Some(Asset::of(u32::from(i.id)).decor()?.claim(i.at, &i.meta))
 }

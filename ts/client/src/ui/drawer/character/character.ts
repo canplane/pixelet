@@ -1,7 +1,5 @@
 // @pxl/client/ui/drawer/character/character.ts
 
-/** The playable characters from character.json. Persons are split by gender for the picker. */
-
 import type { u32 } from "@xpute/kit/abi/word.ts";
 
 import { SETTING } from "@/ui/setting/schema.ts";
@@ -27,11 +25,9 @@ export const PETS: readonly Pet[] = groups.pet.label.map((label, number) => ({
   label,
 }));
 
-/** A person's gender (character.spec.ts `GENDER`). */
 export type Gender = number;
 export const GENDERS: readonly Gender[] = [GENDER.female, GENDER.male];
 
-/** The locale key of each gender's row title. */
 export const GENDER_LABEL_KEY: Readonly<Record<Gender, string>> = {
   [GENDER.female]: "drawer.character.female_label",
   [GENDER.male]: "drawer.character.male_label",
@@ -45,8 +41,6 @@ export function genderOf(character: Character): Gender {
   return groups.person.gender[character.number] ?? GENDERS[0];
 }
 
-/** The character numbered `number`, or else the one numbered `fallback`,
- * the setting's default. */
 function numbered<V extends Character>(
   characters: readonly V[],
   number: number,

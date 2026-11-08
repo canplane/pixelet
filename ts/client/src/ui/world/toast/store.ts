@@ -64,7 +64,6 @@ export function useToastTurns(): i32 {
   return store((s) => s.turns);
 }
 
-/** The number of cards up, read once rather than watched. */
 export function toastCount(): u32 {
   return get().entries.length;
 }
@@ -97,7 +96,6 @@ export function showToast(id: u32, spec: ToastSpec): void {
     else toFront(id);
     return;
   }
-  // A new toast goes before the first card it outranks, or at the back.
   const entry = { id, ...spec };
   const k = entries.findIndex((e) => outranks(entry, e));
   const at = k < 0 ? entries.length : k;

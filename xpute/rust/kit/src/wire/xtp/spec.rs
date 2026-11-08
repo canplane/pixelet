@@ -1,9 +1,9 @@
 // xpute-kit/wire/xtp/spec.rs
 
-//! XTP's layout, its type byte, and the helpers that read and write a
-//! packet's words. A packet is a 16-byte header and one root node, all
-//! little-endian. A len, an offset or a size takes an 8-byte slot, the value
-//! in its low half; the high half is reserved and zero, or holds a type.
+//! This file holds XTP's layout, its type byte, and the helpers that read and
+//! write a packet's words. A packet is a 16-byte header and one root node, all
+//! little-endian. A len, an offset or a size takes an 8-byte slot, the value in
+//! its low half; the high half is reserved and zero, or holds a type.
 //!
 //! ```text
 //! header  word 0  [MAGIC 32 | reserved 32]

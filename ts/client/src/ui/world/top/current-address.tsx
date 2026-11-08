@@ -15,11 +15,6 @@ import {
   weight,
 } from "@/ui/component/theme.ts";
 
-/**
- * The name of the place under the pivot. Where the pivot is in no place, at
- * sea or before the place has arrived, its coordinates stand in. Before there
- * is a pivot, "Locating…" does.
- */
 export function CurrentAddress() {
   const { t } = useTranslation();
   const label = useDivisionLabel();

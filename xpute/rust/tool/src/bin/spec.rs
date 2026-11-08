@@ -1,7 +1,7 @@
 // xpute-tool/bin/spec.rs
 
-//! Writes every file generated from spec/, or checks that each one on disk is
-//! what its JSON writes.
+//! This writes every file generated from spec/, or checks that each one on disk
+//! is what its JSON writes.
 //!
 //!   make spec          # write every generated file
 //!   make check-spec    # fail where one on disk is not what its JSON writes

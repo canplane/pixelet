@@ -14,18 +14,18 @@ use std::vec::Vec;
 fn cells_hold_their_chance() {
     let side = 512;
     for decor in &DECORS {
-        let mut held = 0u32;
+        let mut cnt = 0u32;
         for y in 0..side {
             for x in 0..side {
-                held += u32::from(candidate_at(decor, [x - 7000, y + 123_000]).1);
+                cnt += u32::from(candidate_at(decor, [x - 7000, y + 123_000]).1);
             }
         }
         let n = f64::from(side * side);
         let p = f64::from(decor.chance) / 4_294_967_296.0;
         let spread = 5.0 * libm::sqrt(n * p * (1.0 - p));
         assert!(
-            (f64::from(held) - n * p).abs() <= spread,
-            "{}: {held} of {n}, p {p}",
+            (f64::from(cnt) - n * p).abs() <= spread,
+            "{}: {cnt} of {n}, p {p}",
             decor.val
         );
     }

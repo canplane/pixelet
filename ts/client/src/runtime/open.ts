@@ -1,16 +1,12 @@
 // @pxl/client/runtime/open.ts
 
-/**
- * A page's core, in a worker of its own (worker.ts). The UI's link to it is
- * xpute's, across the worker's port. The worker is sent what it cannot read
- * of the page, and the files the core refused. What it keeps in storage, the
- * source's state and the profiler's reads come back (page.ts).
- */
+/** A page's core runs in a worker of its own, and the UI's link to it is
+ * xpute's, across the worker's port. */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { start } from "@xpute/runtime";
 import { mirror_source, settled } from "@/service/sys/fs/source.ts";
-import { is_kept } from "@/service/sys/fs/storage.ts";
+import { is_storage_key } from "@/service/sys/fs/storage.ts";
 import { set_online } from "@/service/origin/online.ts";
 import { set_core } from "@/service/core/core.ts";
 import type { ToCore, ToUi } from "@/runtime/page.ts";
@@ -48,7 +44,7 @@ export async function open(on: OnOpen): Promise<boolean> {
     kind: "page",
     keys: storage
       .keys()
-      .filter(is_kept)
+      .filter(is_storage_key)
       .map((key) => [key, storage.get(key)!]),
     handheld: device.handheld,
   });

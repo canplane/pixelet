@@ -21,13 +21,13 @@ using namespace xpute::gpu;
 namespace {
 
 using Encoder = Gpu<64>;
-// What ends a turn. The test publishes the stream there and checks it.
+// A `Turn` ends a turn, and the test publishes the stream there and checks it.
 using Turn = std::function<void(Stream &)>;
 
 constexpr std::uint32_t SIDE = 16;
 
-// The offsets in memory where the record puts what a program reads and
-// writes.
+// These are the offsets in memory where the record puts what a program reads
+// and writes.
 struct At {
     Memory mem;
     std::uint32_t input;
@@ -36,8 +36,8 @@ struct At {
     std::uint32_t readback;
 
     std::span<const std::uint8_t> input_bytes() const { return {mem.at(input), input_len}; }
-    // The fence and the result word after it (spec RESULT), which only the
-    // runtime writes.
+    // This is the fence and the result word after it (spec RESULT), which only
+    // the runtime writes.
     const std::array<std::uint32_t, 2> &done() const { return *reinterpret_cast<const std::array<std::uint32_t, 2> *>(mem.at(done_at)); }
     // Reads `n` bytes of `buffer` back to the readback place. WebGPU maps only
     // a buffer made to be mapped, so the bytes are copied into one, and that
@@ -301,8 +301,8 @@ void dropped_transaction(Encoder &gpu, Stream &s, const At &at, const Turn &turn
     Id p = *gpu.compute_pipeline(s, {pl, m, "main"});
     auto write = [&](bool spill) {
         gpu.begin(s);
-        // Kept past the commit. Its handle is one that the dropped transaction
-        // gives back and the next takes again.
+        // This buffer is kept past the commit. Its handle is one that the
+        // dropped transaction gives back and the next takes again.
         gpu.buffer(s, {.size = 4, .usage = BUFFER_USAGE::STORAGE, .mapped_at_creation = false});
         Id e = *gpu.encoder(s);
         Id ps = *gpu.compute_pass(s, e, std::nullopt);
@@ -310,7 +310,7 @@ void dropped_transaction(Encoder &gpu, Stream &s, const At &at, const Turn &turn
         call::set_bind_group(s, ps, 0, bg);
         call::dispatch(s, ps, {1, 1, 1});
         gpu.end(s, ps);
-        // More bytes than the stream has room for.
+        // These are more bytes than the stream has room for.
         if (spill) call::write_buffer(s, out, 0, std::vector<std::uint8_t>(s.left() + 4));
         const Id encoders[] = {e};
         gpu.submit(s, encoders);
@@ -322,9 +322,9 @@ void dropped_transaction(Encoder &gpu, Stream &s, const At &at, const Turn &turn
     turn(s);
 }
 
-// The triangle again, with its render pipeline and a compute pipeline made by
-// the async ops. Each is made in a turn of its own, and no record names it
-// until the next turn has found its ticket at the fence.
+// This is the triangle again, with its render pipeline and a compute pipeline
+// made by the async ops. Each is made in a turn of its own, and no record names
+// it until the next turn has found its ticket at the fence.
 void pipelines_async(Encoder &gpu, Stream &s, const At &at, const Turn &turn) {
     Id cm = *gpu.shader_module(s, "@compute @workgroup_size(1) fn main() {}\n");
     Id compute = *gpu.compute_pipeline_async(s, {std::nullopt, cm, "main"}, at.done()[0], 1);
@@ -396,7 +396,8 @@ XPUTE_TEST(gpu_programs_match_record) {
             std::vector<std::uint8_t> got(mem.at(0), mem.at(0) + n);
             std::string key = name + ".turn." + std::to_string(turn);
             XPUTE_CHECK_EQ(got == g.bytes(key), true, key.c_str());
-            // Handed back, as a runtime hands it back once it has run it.
+            // The stream is handed back, as a runtime hands it back once it has
+            // run it.
             mem.set_word(0, 0);
             turn++;
         });

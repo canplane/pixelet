@@ -1,9 +1,5 @@
 // @pxl/client/service/core/input.ts
 
-/** Input sent as the core's commands, translated from the place's words
- * (`POINTER_PHASE`, `POINTER_KIND`), and the opening and closing of the
- * world's view. */
-
 import type { f64, i32 } from "@xpute/kit/abi/word.ts";
 import { PointerPhase, PointerType } from "@/abi/cmd.spec.ts";
 import {
@@ -40,8 +36,8 @@ export function keys(x: i32, y: i32): void {
   core.input_move(x, y);
 }
 
-/** Opens the world's view and returns what closes it. Turns run, and the
- * sensors are followed, only while the view is open. */
+/** Opens the world's view and returns the function that closes it. Turns run,
+ * and the sensors are followed, only while the view is open. */
 export function open(): () => void {
   ui.resume();
   const unfollow = sensor.follow();
@@ -56,7 +52,6 @@ export function frame(): void {
   ui.wake();
 }
 
-/** A place's pointer phase, as the core numbers it. */
 export const POINTER_PHASE: Readonly<Record<PlacePhase, PointerPhase>> = {
   down: PointerPhase.Down,
   move: PointerPhase.Move,
@@ -65,7 +60,6 @@ export const POINTER_PHASE: Readonly<Record<PlacePhase, PointerPhase>> = {
   out: PointerPhase.Out,
 };
 
-/** A place's pointer kind, as the core numbers it. */
 export const POINTER_KIND: Readonly<Record<PointerKind, PointerType>> = {
   mouse: PointerType.Mouse,
   touch: PointerType.Touch,

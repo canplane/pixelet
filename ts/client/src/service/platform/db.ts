@@ -1,8 +1,7 @@
 // @pxl/client/service/platform/db.ts
 
-/** The page's database: IndexedDB, with one store of files by key. Where the
- * browser refuses a database, as in a sandboxed frame or a private window,
- * it keeps nothing and never throws. */
+/** Where the browser refuses a database, as in a sandboxed frame or a private
+ * window, this keeps nothing and never throws. */
 
 import type { Tx } from "./types.ts";
 

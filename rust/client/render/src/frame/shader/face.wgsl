@@ -217,10 +217,10 @@ fn face_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let c = hit.xyz;
   let zoom = u32(hit.w);
   let line = beams[a + ASK_LINE];
-  let held = node_idx(line + LINE_NODE);
+  let deepest = node_idx(line + LINE_NODE);
   // The hit's own descent starts at the deepest node of the line over it, or at its root where
   // no node of the line is over it (`support::sub_line`).
-  let meet = shared_zoom(held.xyz, u32(held.w), c, zoom);
+  let meet = shared_zoom(deepest.xyz, u32(deepest.w), c, zoom);
   var low = 0u;
   var low_inheritance = world_root(0u, over(c, zoom, 0u));
   if (meet.y != 0u) {

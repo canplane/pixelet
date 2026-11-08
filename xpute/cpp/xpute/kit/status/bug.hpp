@@ -1,8 +1,8 @@
 // cpp/xpute/kit/status/bug.hpp
 
-// How a broken invariant stops the program. A bug is an errno, its place in
-// the source and at most two numbers. It is handed to the report that
-// `set_report` installed, and then the program aborts.
+// A broken invariant stops the program. A bug is an errno, its place in the
+// source and at most two numbers. It is handed to the report that `set_report`
+// installed, and then the program aborts.
 
 #pragma once
 

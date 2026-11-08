@@ -30,16 +30,16 @@ pub(crate) fn cell_of(length: f64) -> f64 {
 }
 
 /// A column's rules, parsed once: each the range it holds over, and itself.
-pub(crate) struct Rules(Vec<(Range, Value)>);
+pub(crate) struct RuleSet(Vec<(Range, Value)>);
 
-impl Rules {
+impl RuleSet {
     /// An unparseable column says nothing.
-    pub fn of(column: Option<&str>) -> Rules {
+    pub fn of(column: Option<&str>) -> RuleSet {
         let all = match column.map(serde_json::from_str::<Value>) {
             Some(Ok(Value::Array(all))) => all,
             _ => Vec::new(),
         };
-        Rules(
+        RuleSet(
             all.into_iter()
                 .filter_map(|r| Some((range_of(&r)?, r)))
                 .collect(),

@@ -1,8 +1,8 @@
 // @xpute/kit/wire/lower.ts
 
-// Turns a record into a tuple in a schema's key order, and back. XTP writes
-// arrays but not objects, so a schema that owns its keys writes an object this
-// way. A missing key, or a tuple of the wrong length, is EINVAL.
+// This turns a record into a tuple in a schema's key order, and back. XTP
+// writes arrays but not objects, so a schema that owns its keys writes an
+// object this way. A missing key, or a tuple of the wrong length, is EINVAL.
 
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";

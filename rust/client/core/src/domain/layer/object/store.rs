@@ -36,7 +36,7 @@ use pxl_spec::space::layer::octant::Octant;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::domain::layer::object::ext::{Ext, Pools, NONE};
+use crate::domain::layer::object::ext::{Ext, Pool, NONE};
 use crate::domain::layer::{Answer, Query};
 use crate::sys::sched::edge::request_world_tick;
 use pxl_engine::object::{self, path, NodeSlot};
@@ -77,7 +77,6 @@ impl Entry {
     }
 }
 
-/// The layer's one store of placed objects.
 static OBJECT: Global<Store> = Global::new();
 
 pub fn object() -> &'static Store {
@@ -137,8 +136,6 @@ impl Leaf {
         }
     }
 
-    /// The leaf's word in the tree, laid out as pxl-engine `object::leaf_word`
-    /// lays it.
     pub(super) const fn word(self) -> u32 {
         object::leaf_word(self.id as u32, self.ext as u32)
     }
@@ -152,9 +149,9 @@ const fn depth(zoom: Zoom) -> u32 {
 
 /// The tree's columns as pxl-engine `object` reads them, so that the CPU
 /// walks the tree exactly as the GPU does.
-pub struct Columns<'a>(&'a Tree);
+pub struct Table<'a>(&'a Tree);
 
-impl object::Columns for Columns<'_> {
+impl object::Table for Table<'_> {
     fn first_child(&self, slot: u32) -> u32 {
         self.0.first_child()[slot as usize]
     }
@@ -201,16 +198,16 @@ impl Write {
 /// children folded, one word for each slot.
 pub struct Store {
     tree: Tree,
-    ext: Pools,
+    ext: Pool,
     /// A counter that advances with every write that changes the tree, so a
     /// reader holding a copy of the columns, such as the GPU, knows to take
     /// them again.
     revision: u32,
 }
 
-/// The tree's columns as the GPU takes them (`Store::gpu_columns`), in
+/// The tree's columns as the GPU takes them (`Store::gpu_table`), in
 /// place, at `revision`. `cap` is the room each column has before it grows.
-pub struct GpuColumns<'a> {
+pub struct GpuTable<'a> {
     pub first_child: &'a [u32],
     pub data: &'a [u32],
     pub cap: usize,
@@ -221,7 +218,7 @@ impl Default for Store {
     fn default() -> Store {
         Store {
             tree: Tree::new(EMPTY.word()),
-            ext: Pools::default(),
+            ext: Pool::default(),
             revision: 0,
         }
     }
@@ -249,9 +246,8 @@ impl Store {
         api::in_flight(self.tree.first_child()) || api::in_flight(self.tree.data())
     }
 
-    /// The tree's columns as the GPU takes them (`GpuColumns`).
-    pub fn gpu_columns(&self) -> GpuColumns<'_> {
-        GpuColumns {
+    pub fn gpu_table(&self) -> GpuTable<'_> {
+        GpuTable {
             first_child: self.tree.first_child(),
             data: self.tree.data(),
             cap: self.tree.cap(),
@@ -299,7 +295,6 @@ impl Store {
     }
 
     #[cfg(test)]
-    /// Calls `visit` on every leaf, as the columns name it.
     pub fn each(&self, visit: &mut dyn FnMut(&Entry)) {
         self.descend(f64::NAN, &mut |zoom, at, _, leaf| {
             if let Some(v) = leaf {
@@ -458,12 +453,12 @@ impl Store {
     #[cfg(test)]
     /// Empties the store and returns the cubes that held anything.
     pub fn clear(&mut self) -> Vec<Aabb> {
-        let mut held = Vec::new();
-        self.each(&mut |e| held.push(e.cube()));
+        let mut cubes = Vec::new();
+        self.each(&mut |e| cubes.push(e.cube()));
         self.tree = Tree::new(EMPTY.word());
         self.ext.clear();
         self.revision = self.revision.wrapping_add(1);
-        held
+        cubes
     }
 }
 
@@ -485,12 +480,12 @@ fn about(b: &Aabb) -> f64 {
 /// The leaves of one node, as the query reads them. What the node holds
 /// folded is read through the cursor instead (`Query::cursor`).
 #[derive(Clone, Copy)]
-pub struct Cells<'a> {
+pub struct NodeView<'a> {
     store: &'a Store,
     node: Node<3>,
 }
 
-impl Cells<'_> {
+impl NodeView<'_> {
     #[cfg(test)]
     /// Every leaf inside the node, or the one over it.
     pub fn entries(&self, visit: &mut dyn FnMut(&Entry)) {
@@ -499,7 +494,6 @@ impl Cells<'_> {
             .each_in(zoom, at, self.store.cursor(self.node, zoom), visit);
     }
 
-    /// The leaf placed at exactly the node, if one is.
     pub fn entry(&self) -> Option<Entry> {
         let (zoom, at) = self.node;
         self.store
@@ -581,8 +575,7 @@ impl Walk {
 /// The store's reads beyond `Query`. As with `Query`, only the world's query
 /// (domain/query.rs) reads it.
 pub(in crate::domain) trait ObjectQuery {
-    /// The tree's columns, read in place.
-    fn columns(&self) -> Columns<'_>;
+    fn columns(&self) -> Table<'_>;
 
     /// Calls `visit` on every leaf whose cube meets `query`, with X in
     /// `query`'s frame.
@@ -619,12 +612,12 @@ pub(in crate::domain) trait ObjectQuery {
     fn column(&self, walk: &mut Walk, node: Node<2>) -> Option<Aabb>;
 
     /// What is placed in `node`, read in place; the whole store is resident.
-    fn read(&self, node: Node<3>) -> Cells<'_>;
+    fn read(&self, node: Node<3>) -> NodeView<'_>;
 }
 
 impl ObjectQuery for Store {
-    fn columns(&self) -> Columns<'_> {
-        Columns(&self.tree)
+    fn columns(&self) -> Table<'_> {
+        Table(&self.tree)
     }
 
     fn entries_in(&self, query: &Aabb, visit: &mut dyn FnMut(&Entry)) {
@@ -702,9 +695,9 @@ impl ObjectQuery for Store {
             let k = walk.at.len();
             let c = column(k);
             let mut leaves = k.checked_sub(1).and_then(|o| walk.at[o].leaves);
-            let mut met = |held: &mut Vec<([i32; 3], NodeSlot)>, at: [i32; 3], h: NodeSlot| {
+            let mut met = |slots: &mut Vec<([i32; 3], NodeSlot)>, at: [i32; 3], h: NodeSlot| {
                 if h.is_folded() {
-                    held.push((at, h));
+                    slots.push((at, h));
                 } else if h.holds() {
                     leaves = join(leaves, span(k, at));
                 }
@@ -746,8 +739,8 @@ impl ObjectQuery for Store {
         };
         placed.meet(whole)
     }
-    fn read(&self, node: Node<3>) -> Cells<'_> {
-        Cells { store: self, node }
+    fn read(&self, node: Node<3>) -> NodeView<'_> {
+        NodeView { store: self, node }
     }
 }
 

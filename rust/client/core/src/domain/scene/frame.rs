@@ -11,10 +11,10 @@ use pxl_spec::space::coord::world;
 pub struct Frame {
     /// The point at sea level under the eye, in world coordinates as f64.
     pub anchor: V3,
-    /// The eye in world coordinates as f64. It decides what is listed, but
-    /// no draw's position or receiver box depends on it (pxl-render
-    /// gpu/draw.rs `Position`, `ReceiverBox`), so a draw does not change when
-    /// only the eye moves.
+    /// The eye in world coordinates as f64. It decides what is listed, but no
+    /// draw's position or receiver box depends on it (pxl-render gpu/draw.rs
+    /// `Position`, `ReceiverBox`), so a draw does not change when only the eye
+    /// moves.
     pub eye: V3,
     /// The view frustum, measured about the anchor.
     pub frustum: Frustum,

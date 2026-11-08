@@ -213,7 +213,7 @@ impl Raster {
         let ([ref_x, ref_y], stride) = grid_of(tile_bbox);
         let env = tile_reads(tile_bbox);
 
-        // `ST_Union(ST_Clip(tile, env))`.
+        // This is what PostGIS's `ST_Union(ST_Clip(tile, env))` computes, done here in memory.
         let gx = |x: f64| (x - self.origin[0]) / self.sx;
         let gy = |y: f64| (y - self.origin[1]) / self.sy;
         let (cx0, cx1) = (gx(env[0]).floor() as i64, gx(env[2]).ceil() as i64);
@@ -280,7 +280,7 @@ impl Raster {
         }
         let (out_w, out_h) = (out_w as usize, out_h as usize);
 
-        // Output pixel to mosaic pixel (`GDALGenImgProjTransform`).
+        // This maps an output pixel to a mosaic pixel, as GDAL's `GDALGenImgProjTransform` does.
         let inv = [-m_x / self.sx, 1.0 / self.sx, -m_y / self.sy, 1.0 / self.sy];
         let to_src = |x: f64, y: f64| -> (f64, f64) {
             let (gx, gy) = (out_x + x * stride, out_y + y * -stride);

@@ -1,7 +1,7 @@
 // @xpute/kit/abi/array.ts
 
-// Typed-array helpers over an ArrayBuffer. The number and bigint families are
-// kept apart, because no typed-array API spans both.
+// These are typed-array helpers over an ArrayBuffer. The number and bigint
+// families are kept apart, because no typed-array API spans both.
 
 import type { f32, f64, i16, i32, i64, i8, u16, u32, u64, u8 } from "./word.ts";
 
@@ -126,19 +126,19 @@ export const copy_ab_view = <T extends TypedArray>(
   return out;
 };
 
-export type Bytes = U8Array;
+export type ByteArray = U8Array;
 
-export const is_bytes = (vals: unknown): vals is Bytes =>
+export const is_bytes = (vals: unknown): vals is ByteArray =>
   vals instanceof Uint8Array && is_ab(vals.buffer);
 
 export const as_bytes = (
   vals: ArrayBuffer | TypedArray | ArrayLike<number>,
-): Bytes => as_ta_ab(vals, Uint8Array);
+): ByteArray => as_ta_ab(vals, Uint8Array);
 
-export const to_bytes = (arr: TypedArray | BigTypedArray): Bytes =>
+export const to_bytes = (arr: TypedArray | BigTypedArray): ByteArray =>
   new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength);
 
-export const copy_bytes = (buf: ArrayBuffer, off: u32, nbyte: u32): Bytes =>
+export const copy_bytes = (buf: ArrayBuffer, off: u32, nbyte: u32): ByteArray =>
   copy_ab_view(buf, off, nbyte, Uint8Array);
 
 export type U64Array<B extends ArrayBufferLike = ArrayBuffer> =

@@ -49,8 +49,6 @@ export interface Fix {
   heading: f64 | null;
 }
 
-/** Receives what the sensors hear, in the platform's terms. It is handed in
- * once, at boot. */
 export interface SensorListener {
   position(
     lon: f64,
@@ -73,14 +71,12 @@ export interface SensorListener {
   ): void;
 }
 
-/** The place's location, watched between a start and a stop. */
 export interface GeolocationSensor {
   has: boolean;
   start(): void;
   stop(): void;
 }
 
-/** The place's compass, heard between a start and a stop. */
 export interface OrientationSensor {
   has: boolean;
   /** Whether a permission prompt, which must be raised inside a gesture,
@@ -95,8 +91,7 @@ export interface OrientationSensor {
   stop(): void;
 }
 
-/** The surfaces the core draws into, by the handles it gives them. Handle 0
- * is no surface. */
+/** Handle 0 is no surface. */
 export interface SurfaceDriver {
   /** Asks the core for a new surface's handle, which is 0 when the core has
    * none left. */
@@ -112,7 +107,6 @@ export interface SurfaceDriver {
 export type PointerPhase = "down" | "move" | "up" | "cancel" | "out";
 export type PointerKind = "mouse" | "touch" | "pen";
 
-/** Hands the core what the place's input says, in the place's terms. */
 export interface InputDriver {
   /** Called when the world's surface opens. The function it returns is
    * called when the surface closes. */

@@ -21,17 +21,16 @@ fn node_cache_word(k: u32) -> u32 {
 /// Each drawn pixel's visible voxel (gpu/ray/raster.rs), as its number (`raster::id_of`), or 0
 /// where the raster kept none. It is read as an array of one layer.
 @group(0) @binding(13) var visibility: texture_2d_array<u32>;
-/// The holes' count and the counts' lanes (visible.wgsl `MissArgs`).
-@group(0) @binding(14) var<storage, read_write> args: MissArgs;
-/// The tiles claimed, after this pass's dispatch words: cast_tile.wgsl's `CastTiles`, its layout
+@group(0) @binding(14) var<storage, read_write> args: MissCount;
+/// The tiles claimed, after this pass's dispatch words: cast_tile.wgsl's `TileList`, its layout
 /// read without the atomics, which a read-only binding cannot hold.
-struct CastTiles {
+struct TileList {
   count: u32,
   sides: array<u32, 2>,
   cnt: u32,
   at: array<u32>,
 }
-@group(0) @binding(30) var<storage, read> claimed: CastTiles;
+@group(0) @binding(30) var<storage, read> claimed: TileList;
 
 /// The first of the four samples about the screen's point at the tangents `at`
 /// (`Grid::sample_before`).
@@ -40,7 +39,6 @@ fn sample_before(at: vec2<f32>) -> vec2<u32> {
   return vec2<u32>(max(floor(v * SAMPLE_SPACING_INVERSE), vec2<f32>(0.0))) + vec2<u32>(NEAR_SAMPLES);
 }
 
-/// Writes the ray's words at pixel `p`.
 fn write_ray(p: vec2<u32>, w: vec4<u32>) {
   for (var i = 0u; i < 4u; i += 1u) {
     textureStore(rays, p, i, vec4<u32>(w[i], 0u, 0u, 0u));
@@ -73,7 +71,7 @@ fn cast_px(p: vec2<u32>, size: vec2<u32>) -> bool {
       let fill = (node_cache_word(e + W_ASSET) >> FILL_SHIFT) & (EIGHTHS - 1u);
       let faces = (state & RECORD_ASKED) >> RECORD_ASKED_SHIFT;
       let entry = visible_cell(aim, k.zoom, k.corner, k.roots - origin_roots(aim.origin), fill, faces);
-      if (entry.enters && kept_fresh(k, (state & RECORD_WHOLE) != 0u, vec3<i32>(aim.origin))) {
+      if (entry.enters && is_fresh(k, (state & RECORD_WHOLE) != 0u, vec3<i32>(aim.origin))) {
         // The ray's words, with what lies about its face taken from the voxel's (`word`,
         // `ray::first_word`).
         let face = 2u * entry.axis + select(0u, 1u, ray_dir(aim.dir)[entry.axis] > 0.0);

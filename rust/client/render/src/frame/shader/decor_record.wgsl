@@ -13,7 +13,7 @@ fn entry_word(s: u32, k: u32, i: u32) -> u32 {
   return SLOTS_AT + (s * BRICK_RECORDS + decor_first_record(k) + i) * RECORD_WORDS;
 }
 
-/// `record_word`.
+/// A record's first word, as pxl-content `generation::record_word` packs it.
 fn record_word(decor: u32, variant: u32, turn: u32, cell_zoom: u32) -> u32 {
   return decor | (variant << VARIANT_SHIFT) | (turn << TURN_SHIFT) | (cell_zoom << CELL_ZOOM_SHIFT);
 }

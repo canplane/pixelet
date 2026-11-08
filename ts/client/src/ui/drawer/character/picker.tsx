@@ -31,8 +31,6 @@ import { useCore } from "@/ui/watch.ts";
 import { touchOutset } from "@/ui/component/touch.ts";
 import * as setting from "@/service/core/setting.ts";
 
-// A chip is drawn 32 high, and a press lands on a 44-high box laid out around
-// it.
 const CHIP_HEIGHT = 32;
 const SURFACE_SIZE = 96;
 const CHIP_GAP_X = 8;
@@ -84,7 +82,6 @@ function Chip({
   );
 }
 
-/** A picker: the picked character, drawn beside the chips that pick it. */
 function PickerCard({
   label,
   selected,
@@ -112,8 +109,7 @@ interface PersonPickerProps {
   onSelect: (character: Character) => void;
 }
 
-/** Shows the equipped character. Switching between genders changes nothing
- * until a character is picked. */
+/** Switching between genders changes nothing until a character is picked. */
 function PersonPicker(props: PersonPickerProps) {
   const { gender, onGenderChange, selected, onSelect } = props;
   const { t } = useTranslation();

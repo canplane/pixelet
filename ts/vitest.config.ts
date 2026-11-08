@@ -1,7 +1,6 @@
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  // The aliases are tsconfig.json's.
   resolve: { tsconfigPaths: true },
   test: {
     include: ["client/src/**/*.test.ts", "tool/shader/*.test.ts"],

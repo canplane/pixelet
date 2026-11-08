@@ -1,11 +1,7 @@
-// @pxl/client/src/app.config.ts
+// @pxl/client/app.config.ts
 
-/**
- * The app as Expo builds it, for a device and for the page. The icon is the
- * client's brand, found from the workspace (ts/build/path.ts). The page is
- * one HTML file over one bundle (`output: "single"`), filled from the template
- * that script/web.ts makes of index.html in public/.
- */
+/** The page is one HTML file over one bundle (`output: "single"`), filled from
+ * the template public/index.html, which script/web.ts makes from index.html. */
 
 import * as path from "node:path";
 import { WORKSPACE } from "@pxl/build/path.ts";

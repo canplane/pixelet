@@ -4,7 +4,7 @@ import { expect, test, vi } from "vitest";
 
 const words = vi.hoisted(() => new Uint32Array(8));
 
-// The native module as an app has it, over a memory of eight words.
+// This is the native module as an app has it, over a memory of eight words.
 vi.mock("@xpute/native", () => ({
   XPUTE: {
     load: (at: number) => words[at / 4],

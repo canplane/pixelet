@@ -1,8 +1,7 @@
 // @pxl/client/service/core/fs.ts
 
-/** xpute's file device, on the core's port. It tells the core that a refused
- * file was set aside, so that the core reads it again. Which file, and when,
- * is sys/fs's to decide (refusal.ts). */
+/** The core reads a refused file again once it hears here that the file was
+ * set aside. Which file, and when, is sys/fs's to decide (refusal.ts). */
 
 import { fs_exports } from "@xpute/runtime";
 import type { RefusedFile } from "@/abi/cmd.spec.ts";

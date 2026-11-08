@@ -13,7 +13,7 @@
 //! its cap (pxl-engine way/tree.rs `POOL_CHILD_GROUPS`).
 
 use pxl_engine::clipmap::SLOTS;
-use pxl_engine::object::Columns;
+use pxl_engine::object::Table;
 use pxl_engine::way::tree::{self, Pool, BRICK_CHILD_GROUPS, CHILD_GROUP_WORDS};
 use pxl_render::gpu::api;
 use xpute_core::global::Global;
@@ -75,7 +75,6 @@ pub enum PoolRefusal {
     Heap,
 }
 
-/// The pool, empty before any brick is filled.
 pub fn way_pool() -> &'static mut WayPool {
     POOL.get(WayPool::default)
 }
@@ -198,7 +197,7 @@ impl WayPool {
     }
 }
 
-impl Columns for WayPool {
+impl Table for WayPool {
     fn first_child(&self, slot: u32) -> u32 {
         self.word(slot, 0)
     }

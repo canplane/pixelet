@@ -7,7 +7,7 @@
 //! one, and a table's keys are not listed; the TypeScript keeps them for what
 //! a person reads. A `file` is a slot of the catalog (catalog.rs).
 
-use xpute_tool::spec::data::{outputs_at, DataSpec, Enums, Layout, Slots};
+use xpute_tool::spec::data::{outputs_at, DataSpec, EnumScope, Layout, SlotType};
 
 use super::catalog::{runs, FILE};
 use super::ingest::files;
@@ -29,7 +29,7 @@ const DATA_SPECS: [DataSpec; 19] = [
         json: "spec/spec/object/ext.json",
         rs: Some("rust/spec/src/object/ext.spec.rs"),
         module: "ext",
-        enums: Enums::All,
+        enums: EnumScope::All,
         ..DataSpec::DEFAULT
     },
     DataSpec {
@@ -45,7 +45,7 @@ const DATA_SPECS: [DataSpec; 19] = [
         ts: Some("ts/client/src/ui/asset/id.spec.ts"),
         rs: Some("rust/spec/src/asset/id.spec.rs"),
         module: "id",
-        enums: Enums::All,
+        enums: EnumScope::All,
         ..DataSpec::DEFAULT
     },
     DataSpec {
@@ -66,7 +66,7 @@ const DATA_SPECS: [DataSpec; 19] = [
         ts_names: Some(&["groups", "GENDER"]),
         rs: Some("rust/spec/src/asset/character.spec.rs"),
         module: "character",
-        enums: Enums::All,
+        enums: EnumScope::All,
         ..DataSpec::DEFAULT
     },
     DataSpec {
@@ -116,7 +116,7 @@ const DATA_SPECS: [DataSpec; 19] = [
         ts: Some("ts/client/src/abi/demand.spec.ts"),
         rs: Some("rust/client/core/src/sys/io/demand.spec.rs"),
         module: "demand_spec",
-        enums: Enums::Named(&["STREAM_NAMES", "OUTCOME_NAMES", "TASK_PHASE_NAMES"]),
+        enums: EnumScope::Named(&["STREAM_NAMES", "OUTCOME_NAMES", "TASK_PHASE_NAMES"]),
         ..DataSpec::DEFAULT
     },
     DataSpec {
@@ -124,14 +124,14 @@ const DATA_SPECS: [DataSpec; 19] = [
         ts: Some("ts/client/src/abi/phase.spec.ts"),
         rs: Some("rust/client/core/src/sys/sched/phase.spec.rs"),
         module: "phase_spec",
-        enums: Enums::Named(&["PHASES"]),
+        enums: EnumScope::Named(&["PHASES"]),
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/client/core/turn/step.json",
         ts: Some("ts/client/src/abi/step.spec.ts"),
         rs: Some("rust/client/core/src/turn/step.spec.rs"),
-        enums: Enums::Named(&["STEP_NAMES", "EFFECT_NAMES"]),
+        enums: EnumScope::Named(&["STEP_NAMES", "EFFECT_NAMES"]),
         ..DataSpec::DEFAULT
     },
     DataSpec {
@@ -139,7 +139,7 @@ const DATA_SPECS: [DataSpec; 19] = [
         ts: Some("ts/client/src/abi/span.spec.ts"),
         rs: Some("rust/client/render/src/gpu/span.spec.rs"),
         module: "span_spec",
-        enums: Enums::Named(&["GPU_SPAN_NAMES", "FRAME_KINDS", "LIGHT_CHANGED"]),
+        enums: EnumScope::Named(&["GPU_SPAN_NAMES", "FRAME_KINDS", "LIGHT_CHANGED"]),
         ..DataSpec::DEFAULT
     },
     DataSpec {
@@ -152,7 +152,7 @@ const DATA_SPECS: [DataSpec; 19] = [
         ],
         ts: Some("ts/client/src/abi/perf.spec.ts"),
         rs: Some("rust/client/core/src/perf/perf.spec.rs"),
-        enums: Enums::Named(&["WAKES", "HIT_KINDS"]),
+        enums: EnumScope::Named(&["WAKES", "HIT_KINDS"]),
         ..DataSpec::DEFAULT
     },
 ];
@@ -174,7 +174,7 @@ const SLOT: &str = "crate::asset::catalog::Slot";
 pub fn outputs() -> Result<Vec<Output>, String> {
     let files: Vec<String> = files()?.into_iter().map(|f| f.path).collect();
     let runs = runs()?;
-    let slots = [Slots {
+    let slots = [SlotType {
         ty: FILE,
         rs: SLOT,
         names: &files,

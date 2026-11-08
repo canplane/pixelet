@@ -211,7 +211,7 @@ fn occlusion_of(d: f32) -> f32 {
 
 // `edge` is how much the face's edge lines darken it here, and `ao` how open its edges and
 // corners leave it to the light, 1 being fully open.
-struct Creases {
+struct Crease {
   edge: f32,
   ao: f32,
 };
@@ -224,10 +224,10 @@ struct Creases {
 // rises across, and each corner a cell rises across alone, darkens what the others left by its
 // own share, over one cell. Both effects end at the effects' reach and fade alike before it
 // (effect.wgsl `effect_share`).
-fn creases(h: Hit, faces: u32, p: mat2x3f) -> Creases {
+fn creases(h: Hit, faces: u32, p: mat2x3f) -> Crease {
   let share = effect_share(length(h.at));
   if ((frame_edge_strength() <= 0.0 && frame_corner_ao() <= 0.0) || share <= 0.0) {
-    return Creases(0.0, 1.0);
+    return Crease(0.0, 1.0);
   }
   let u = (h.axis + 1u) % 3u;
   let v = (h.axis + 2u) % 3u;
@@ -252,7 +252,7 @@ fn creases(h: Hit, faces: u32, p: mat2x3f) -> Creases {
     }
   }
   let k = frame_corner_ao() * (1.0 - ao) * share;
-  return Creases(edge * share, 1.0 - k);
+  return Crease(edge * share, 1.0 - k);
 }
 
 // The face's texture coordinate, from the hit's position in the world, one repeat a unit.

@@ -1,11 +1,5 @@
 // @pxl/client/ui/debug/accordion.tsx
 
-/**
- * The debug panels, shown as an accordion. Each panel is closed until it is
- * opened, and opening one closes the one that was open, so the corner holds
- * one open panel at a time.
- */
-
 import { CaretDownIcon, CaretUpIcon } from "phosphor-react-native";
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -16,6 +10,8 @@ import { alpha, color } from "@/ui/component/theme.ts";
 import { gauge } from "./perf/gauge.tsx";
 import type { PanelName } from "./window.tsx";
 
+/** Opening a panel closes the one that was open, so the corner holds one open
+ * panel at a time. */
 const store = create<{ open: PanelName | null }>()(() => ({
   open: null,
 }));
@@ -27,11 +23,8 @@ const toggle = (name: PanelName) =>
 
 export const HINT_INK = alpha(color.white, 0.55);
 
-/**
- * A panel that opens and closes when its title is pressed. `note` follows the
- * title in regular weight, since it is a reading and not a name. `end` is
- * shown beside the caret while the panel is open.
- */
+/** `note` follows the title in regular weight, since it is a reading and not a
+ * name. */
 export function Accordion({
   name,
   title,

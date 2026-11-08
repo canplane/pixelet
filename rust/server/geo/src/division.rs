@@ -31,8 +31,8 @@ async fn lineage(client: &Client, ids: &[String]) -> Result<FnvHashMap<String, D
 /// What a division lies in, broad to narrow: its name less itself.
 pub(crate) async fn ancestors(pool: &Pool, id: &str) -> Result<Vec<DivisionPart>, DbError> {
     let client = pool.get().await?;
-    let held = lineage(&client, &[id.to_string()]).await?;
-    let mut parts = division::name(id, false, &held);
+    let divisions = lineage(&client, &[id.to_string()]).await?;
+    let mut parts = division::name(id, false, &divisions);
     parts.pop();
     Ok(parts)
 }
@@ -55,12 +55,13 @@ pub(crate) async fn name_points(
             .map(|r| (r.get("idx"), r.get("division_id"), r.get("approx"))),
     );
     let ids: Vec<String> = finest.iter().flatten().map(|(id, _)| id.clone()).collect();
-    let held = lineage(&client, &ids).await?;
+    let divisions = lineage(&client, &ids).await?;
     Ok(finest
         .iter()
         .map(|f| {
-            f.as_ref()
-                .map_or_else(Vec::new, |(id, approx)| division::name(id, *approx, &held))
+            f.as_ref().map_or_else(Vec::new, |(id, approx)| {
+                division::name(id, *approx, &divisions)
+            })
         })
         .collect())
 }

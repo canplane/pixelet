@@ -50,9 +50,9 @@ constexpr std::array<std::string_view, 5> PHASES{"interaction", "visible", "cont
 // The share of the budget the visible phase holds back for the content
 // phase.
 constexpr double CONTENT_SHARE = 0.2;
-constexpr std::array<double, 5> HELD_BACK{0, CONTENT_SHARE, 0, 0, 0};
+constexpr std::array<double, 5> RESERVE{0, CONTENT_SHARE, 0, 0, 0};
 
-constexpr TickPolicy POLICY{.hard_slack_ms = 4, .held_back = HELD_BACK};
+constexpr TickPolicy POLICY{.hard_slack_ms = 4, .reserve = RESERVE};
 constexpr double DEADLINE_MS = 6;
 constexpr double COST = 0.3;
 

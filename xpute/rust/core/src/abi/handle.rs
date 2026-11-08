@@ -1,8 +1,8 @@
 // xpute-core/abi/handle.rs
 
-//! Generational handles. A handle is a slot and that slot's generation, so a
-//! handle kept past its release names nothing that takes the slot later.
-//! The other side reads only the slot. 0 is never a handle.
+//! A handle is a slot and that slot's generation, so a handle kept past its
+//! release names nothing that takes the slot later. The other side reads only
+//! the slot. 0 is never a handle.
 
 use core::mem::MaybeUninit;
 
@@ -37,10 +37,10 @@ struct Slot<T> {
     val: MaybeUninit<T>,
 }
 
-/// N slots, each holding a `T` while its handle is live. A slot given back is
-/// the next one taken. All-zero bytes are an empty table, so a table can lie
-/// in memory that starts zeroed, or be emptied by zeroing it, without ever
-/// being built and moved.
+/// A table has N slots, each holding a `T` while its handle is live. A slot
+/// given back is the next one taken. All-zero bytes are an empty table, so a
+/// table can lie in memory that starts zeroed, or be emptied by zeroing it,
+/// without ever being built and moved.
 pub struct Table<T: Copy, const N: usize> {
     slot: [Slot<T>; N],
     /// The current transaction, advanced by `begin`. The slots taken since
@@ -82,7 +82,7 @@ impl<T: Copy, const N: usize> Table<T, N> {
         }
     }
 
-    /// Answers none when every slot is taken.
+    /// `insert` answers none when every slot is taken.
     pub fn insert(&mut self, val: T) -> Option<u32> {
         let slot = if self.free != 0 {
             let slot = self.free;

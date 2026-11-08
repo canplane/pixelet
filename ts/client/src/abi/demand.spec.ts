@@ -26,5 +26,5 @@ export const TASK_PHASE_NAMES = [
   "adopt_ms",
 ] as const;
 
-/** Timings a run reports at most; past it one is left out. */
+/** A run's timings past this many are dropped. */
 export const TASK_PHASES_MAX: u32 = 6 as number;

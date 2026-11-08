@@ -364,7 +364,7 @@ fn linear_to_srgb(c: f64) -> u8 {
 pub fn compose(tiles: &[(String, &[u8])]) -> Result<Image, String> {
     let rows = tiles.len().div_ceil(COLUMNS as usize) as u32;
     // Opaque black, so an uncovered cell is visible rather than blended.
-    let mut laid = RgbaImage::from_pixel(
+    let mut sheet = RgbaImage::from_pixel(
         COLUMNS * TILE_SIZE,
         rows.max(1) * TILE_SIZE,
         image::Rgba([0, 0, 0, 255]),
@@ -387,11 +387,11 @@ pub fn compose(tiles: &[(String, &[u8])]) -> Result<Image, String> {
             (n as u32 / COLUMNS) * TILE_SIZE,
         );
         means.push(mean_of(&img));
-        imageops::replace(&mut laid, &img, x as i64, y as i64);
+        imageops::replace(&mut sheet, &img, x as i64, y as i64);
     }
 
     let encoded =
-        webp::Encoder::from_rgba(laid.as_raw(), laid.width(), laid.height()).encode(QUALITY);
+        webp::Encoder::from_rgba(sheet.as_raw(), sheet.width(), sheet.height()).encode(QUALITY);
     Ok(Image {
         bytes: encoded.to_vec(),
         tiles: tiles.iter().map(|(t, _)| t.clone()).collect(),

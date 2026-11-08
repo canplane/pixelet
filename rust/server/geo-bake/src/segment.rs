@@ -8,7 +8,7 @@
 
 use pxl_spec::space::coord::adapter::epsg3857::G3857;
 
-use crate::terrain::pipeline::overture::between::{cell_of, Line, Rules};
+use crate::terrain::pipeline::overture::between::{cell_of, Line, RuleSet};
 use crate::terrain::pipeline::overture::role::Role;
 use crate::wkb::wkb_to_geometries;
 
@@ -26,7 +26,7 @@ const GONE: &[&str] = &["is_under_construction", "is_abandoned", "is_disused"];
 
 /// What a part's rules say, the one value of each along it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub(crate) struct Tags {
+pub(crate) struct TagSet {
     pub bridge: bool,
     pub tunnel: bool,
     pub indoor: bool,
@@ -51,7 +51,7 @@ pub struct Part {
     pub(crate) segment_length: f64,
     pub subtype: String,
     pub class: Option<String>,
-    pub(crate) tags: Tags,
+    pub(crate) tags: TagSet,
     pub ends: [End; 2],
     pub points: Vec<G3857>,
 }
@@ -98,7 +98,7 @@ impl Part {
             r.get("subclass"),
         );
         let [flags, levels, subclasses] =
-            ["flags", "levels", "subclasses"].map(|c| Rules::of(r.get::<_, Option<&str>>(c)));
+            ["flags", "levels", "subclasses"].map(|c| RuleSet::of(r.get::<_, Option<&str>>(c)));
         let Some(g) = wkb_to_geometries(r.get::<_, &[u8]>("geom_wkb"))
             .into_iter()
             .next()
@@ -131,7 +131,7 @@ impl Part {
         cuts.dedup();
         // Each run between cuts, with what holds over it; a cut across which no value changes joins
         // its runs.
-        let mut runs: Vec<([f64; 2], Tags)> = Vec::new();
+        let mut runs: Vec<([f64; 2], TagSet)> = Vec::new();
         for w in cuts.windows(2).filter(|w| w[0] < w[1]) {
             let mid = (w[0] + w[1]) / 2.0;
             if holds(&gone, mid) {
@@ -143,7 +143,7 @@ impl Part {
             };
             let (bridge, tunnel) = (holds(&bridge, mid), holds(&tunnel, mid));
             let level = levels.at(mid).and_then(|v| v.as_f64()).map(|v| v as i64);
-            let here = Tags {
+            let here = TagSet {
                 bridge,
                 tunnel,
                 indoor: holds(&indoor, mid),
@@ -156,7 +156,7 @@ impl Part {
                 _ => runs.push(([w[0], w[1]], here)),
             }
         }
-        let part = |(span, tags): ([f64; 2], Tags), points: Vec<G3857>| Part {
+        let part = |(span, tags): ([f64; 2], TagSet), points: Vec<G3857>| Part {
             gers_id: gers_id.clone(),
             between: span,
             segment_length: length,

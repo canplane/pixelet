@@ -265,7 +265,7 @@ pub const PIPELINE_LIGHT_MASK: u32 = 37;
 /// word (gpu/pass/skinned_mesh.rs `draw_marks`).
 pub const PIPELINE_SKINNED_MARK: u32 = 38;
 /// The same marks for decor, an impostor, the location indicator's zone and its beacon
-/// (gpu/pass/mark.rs `Marks`).
+/// (gpu/pass/mark.rs `MarkPass`).
 pub const PIPELINE_DECOR_MARK: u32 = 39;
 pub const PIPELINE_IMPOSTOR_MARK: u32 = 40;
 pub const PIPELINE_LOCATION_ZONE_MARK: u32 = 41;
@@ -560,7 +560,7 @@ const BOX_GROUP: [[u32; 2]; 13] = and(
     LIT_FRAME,
     [[3, STORAGE], [4, TEXTURE_ARRAY], [5, STORAGE], [6, SAMPLER]],
 );
-/// A draw's uniform, at a dynamic offset (gpu/pass/model.rs `DrawUniforms`). It and a draw's
+/// A draw's uniform, at a dynamic offset (gpu/pass/model.rs `UniformBuffer`). It and a draw's
 /// upload (`UPLOAD`) each have one layout wherever a draw binds them, so a group one owner
 /// makes binds in every pipeline that names it (gpu/generator.rs, gpu/upload.rs).
 const DRAW: [[u32; 2]; 1] = [[0, UNIFORM_DYNAMIC]];
@@ -568,7 +568,7 @@ const DRAW: [[u32; 2]; 1] = [[0, UNIFORM_DYNAMIC]];
 /// words themselves, except in a frame drawn through the gate (instance.wgsl `order`).
 const UPLOAD: [[u32; 2]; 2] = [[0, STORAGE], [1, STORAGE]];
 /// An upload's group as every pipeline that binds one lays it out. The draw list's uploads
-/// are grouped in it (gpu/upload.rs `Uploads::group`).
+/// are grouped in it (gpu/upload.rs `UploadTable::group`).
 pub const UPLOAD_LAYOUT: [u32; 6] = [
     UPLOAD[0][0],
     stages_reading(&UPLOAD, UPLOAD[0][0]),

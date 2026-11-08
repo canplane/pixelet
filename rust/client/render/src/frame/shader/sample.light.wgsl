@@ -27,7 +27,6 @@ fn sample_queued(k: u32) -> vec2<u32> {
   return light_item_at(LEVEL_SAMPLE, k);
 }
 
-/// The first word of sample `s` (light_list.wgsl `light_sample_at`).
 fn sample_word(s: vec2<u32>) -> u32 {
   return light_sample_at(s);
 }

@@ -1,7 +1,7 @@
 // @xpute/runtime
 
 /**
- * What an app takes from the runtime. From one manifest it starts its core
+ * An app takes this from the runtime. From one manifest it starts its core
  * where the platform runs it (`start`, with `serve` inside a page's worker),
  * or boots the core beside it (`boot`). It also takes the UI's link to the
  * core, the types of what the app decides (its files, its policy, its GPU),

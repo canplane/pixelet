@@ -20,7 +20,7 @@
 //!
 //!   make bake-earth
 
-use pxl_spec::space::layer::lattice::Cells;
+use pxl_spec::space::layer::lattice::Grid;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 

@@ -183,7 +183,7 @@ fn run() -> Result<(), String> {
     });
     rows.sort_by(|a, b| a.path.cmp(&b.path));
 
-    let laid = Pack {
+    let packed = Pack {
         image,
         cell: pack::TILE_SIZE,
         columns: pack::COLUMNS,
@@ -215,7 +215,7 @@ fn run() -> Result<(), String> {
         &root.join("spec/spec/asset/ingest.json"),
         &table::render_json(
             &rows,
-            &laid,
+            &packed,
             &symbols.iter().map(|s| s.path.clone()).collect::<Vec<_>>(),
         ),
     )?;
@@ -225,7 +225,7 @@ fn run() -> Result<(), String> {
         "[ingest] {} assets, {:.1} MiB, pack {} tiles {:.0} KiB -> out/asset/, spec/spec/asset/ingest.json and what it generates written",
         rows.len(),
         total as f64 / 1024.0 / 1024.0,
-        laid.tiles.len(),
+        packed.tiles.len(),
         composed.bytes.len() as f64 / 1024.0
     );
     Ok(())

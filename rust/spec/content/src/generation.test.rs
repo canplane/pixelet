@@ -43,10 +43,10 @@ fn decor_at_its_clip_level() {
     assert_eq!(seen, [true, true], "both sides of the leaves are asked");
 }
 
-/// Clip levels that hold a brick present only at `held` and coarser.
-struct HeldTo(Zoom);
+/// Clip levels that hold a brick present only at its zoom and coarser.
+struct PresentTo(Zoom);
 
-impl clipmap::Presence for HeldTo {
+impl clipmap::Presence for PresentTo {
     fn present(&self, cell_zoom: Zoom, _: [i32; 2]) -> (u32, bool) {
         (0, cell_zoom <= self.0)
     }
@@ -60,10 +60,10 @@ impl clipmap::Presence for HeldTo {
 fn decor_at_held_clip_level() {
     let (coarse, c) = (LEAF_CELL_ZOOM - 2, [12_345, 678]);
     for at in coarse..=FINEST_ZOOM {
-        let held = held_at(&HeldTo(coarse), at, c);
-        assert!(drawn_at(held, coarse, false), "z{at} over z{coarse}");
-        let finer = held_at(&HeldTo(LEAF_CELL_ZOOM), at, c);
+        let read = ray_zoom(&PresentTo(coarse), at, c);
+        assert!(drawn_at(read, coarse, false), "z{at} over z{coarse}");
+        let finer = ray_zoom(&PresentTo(LEAF_CELL_ZOOM), at, c);
         assert_eq!(drawn_at(finer, coarse, false), at == coarse, "z{at}");
     }
-    assert_eq!(held_at(&HeldTo(coarse), coarse - 1, c), coarse - 1);
+    assert_eq!(ray_zoom(&PresentTo(coarse), coarse - 1, c), coarse - 1);
 }

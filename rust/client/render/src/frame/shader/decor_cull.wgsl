@@ -17,7 +17,7 @@
 /// Each region's count, then its end. The end holds the region's first slot as the args pass
 /// laid it (decor_args.wgsl), and the slot past its last once compacted (decor_compact.wgsl).
 @group(0) @binding(7) var<storage, read> regions: array<u32>;
-@group(0) @binding(31) var<uniform> tiles: Tiles;
+@group(0) @binding(31) var<uniform> tiles: TileGrid;
 
 /// Word `k` of region `r`'s draw uniform, which holds the lanes' base and stride and the first
 /// word of the region's list.

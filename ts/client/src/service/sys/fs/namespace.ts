@@ -1,11 +1,7 @@
 // @pxl/client/service/sys/fs/namespace.ts
 
-/**
- * The core's namespace. Each root the core opens files under (file.json
- * `root`) is bound to the backend that fetches or keeps their bytes, and a
- * file's path below its root is its one name. The boot hands the namespace to
- * the system calls of `@xpute/runtime` (runtime/start.ts).
- */
+/** Each root the core opens files under (file.json `root`) is bound to one
+ * backend, and a file's path below its root is its one name. */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { type Binding, Namespace } from "@xpute/runtime";

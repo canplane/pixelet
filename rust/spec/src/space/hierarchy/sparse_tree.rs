@@ -38,7 +38,7 @@ fn toward<const D: usize>(at: [i32; D], steps: u32) -> usize {
 impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
     const WIDTH: usize = children(D);
 
-    /// The root's children, each a leaf of `value`.
+    /// The root's children, each a leaf of `val`.
     pub fn new(val: T) -> SparseTree<T, D> {
         SparseTree {
             first_child: vec![0; Self::WIDTH],

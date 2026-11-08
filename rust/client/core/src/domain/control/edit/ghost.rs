@@ -76,7 +76,6 @@ pub(super) fn stand_at(corner: &Q3, d: &Decor) -> ([f64; 3], DecorMeta) {
     d.stand(q3::unpack(corner), variant, turn, 1.0)
 }
 
-/// The decor a placed object is, standing as it stands.
 pub(super) fn decor_of(o: &Entry) -> Option<(&'static Decor, ([f64; 3], DecorMeta))> {
     let d = o.asset().decor()?;
     Some((d, stand_at(&o.corner(), d)))

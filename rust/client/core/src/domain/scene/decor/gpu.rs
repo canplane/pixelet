@@ -24,7 +24,7 @@ use pxl_spec::space::coord::zoom::{idx_of, units, Zoom, UNIT_ZOOM};
 use xpute_core::global::Global;
 
 use crate::domain::layer::object::meta::user_decor_pick;
-use crate::domain::preview::RenderEdits;
+use crate::domain::preview::RenderEdit;
 use crate::domain::query::World;
 use crate::domain::setting::store::settings;
 use crate::domain::view::lens::{decor_impostor_angle, decor_model_angle, decor_zooms};
@@ -108,8 +108,8 @@ fn wrap(x: i32) -> u32 {
 /// Builds this frame's hand-over for an eye at `eye`. Placed decor is walked
 /// out to the reach `walk_zoom` describes. The placed decor and the ground's
 /// decor that the eraser's preview hides (`edits`) are left out.
-pub fn step(eye: V3, edits: &RenderEdits) {
-    let RenderEdits {
+pub fn step(eye: V3, edits: &RenderEdit) {
+    let RenderEdit {
         hide,
         scattered_cell,
         ..

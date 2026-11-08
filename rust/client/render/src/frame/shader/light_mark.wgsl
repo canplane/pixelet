@@ -30,15 +30,15 @@ fn light_mark_walked_cs(
   @builtin(local_invocation_id) lane: vec3<u32>,
 ) {
   let k = list_place(group.xy, lane.x);
-  let drawn = textureDimensions(rays);
-  if (k >= walked_words(drawn)) {
+  let size = textureDimensions(rays);
+  if (k >= walked_words(size)) {
     return;
   }
   var bits = eye_beam(walked_at() + k);
   while (bits != 0u) {
-    let p = bit_px(k, firstTrailingBit(bits), drawn);
+    let p = bit_px(k, firstTrailingBit(bits), size);
     bits = bits & (bits - 1u);
-    if (any(p >= drawn)) {
+    if (any(p >= size)) {
       continue;
     }
     let first = textureLoad(rays, p, 0u).x;
@@ -46,7 +46,7 @@ fn light_mark_walked_cs(
       continue;
     }
     let t = bitcast<f32>(textureLoad(rays, p, 1u).x);
-    let at = eye_aim(px_tan(p, drawn)).dir * t;
+    let at = eye_aim(px_tan(p, size)).dir * t;
     let b = box_tiles(at, at);
     if (b.got) {
       stand_box(b.first, b.last);

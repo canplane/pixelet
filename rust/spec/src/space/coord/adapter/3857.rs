@@ -59,7 +59,6 @@ pub fn unproject(q: &Q3) -> G3857 {
 
 pub type BBox3857 = [G3857; 2];
 
-/// The square of the tile at `zoom` whose index is `tile`.
 pub fn get_tile_bbox(zoom: Zoom, tile: [i32; 2]) -> BBox3857 {
     let span = units(zoom);
     let min = tile.map(|v| f64::from(v) * span);

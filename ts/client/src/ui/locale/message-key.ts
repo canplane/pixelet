@@ -1,8 +1,5 @@
 // @pxl/client/ui/locale/message-key.ts
 
-/** The locale key that shows each of the core's message numbers, as
- * `strerror` gives the words for an `errno`. */
-
 import { Message } from "@/abi/cmd.spec.ts";
 
 export function messageKey(message: Message): string {

@@ -17,9 +17,9 @@ use xpute_core::global::Global;
 use xpute_core::mem::heap::Block;
 
 use crate::domain::layer::tile_cache::TileCache;
-use crate::domain::layer::upload::{Uploads, Uptake};
+use crate::domain::layer::upload::{UploadTable, Uptake};
 use crate::domain::layer::{AskScope, Base};
-use crate::sys::io::demand::{Phases, Stream};
+use crate::sys::io::demand::{PhaseList, Stream};
 use crate::sys::io::failure::Failure;
 use crate::sys::io::param::{BODY_SLOTS, MAX_CREDITS};
 use pxl_spec::space::coord::zoom::Zoom;
@@ -50,7 +50,7 @@ impl Base for Earth {
         _tile: Quadrant,
         _record: u32,
         pkt: &[u8],
-        _phases: &mut Phases,
+        _phases: &mut PhaseList,
     ) -> Result<Earth, Failure> {
         earth::decode(pkt)?;
         Ok(Earth)
@@ -65,10 +65,10 @@ impl Base for Earth {
 }
 
 /// The packets whose texels the GPU does not hold yet.
-static UPLOADS: Global<Uploads> = Global::new();
+static UPLOADS: Global<UploadTable> = Global::new();
 
-fn uploads() -> &'static mut Uploads {
-    UPLOADS.get(|| Uploads::new(TileCache::<Earth>::SLOTS))
+fn uploads() -> &'static mut UploadTable {
+    UPLOADS.get(|| UploadTable::new(TileCache::<Earth>::SLOTS))
 }
 
 /// Offers each waiting packet's texels to `write`, for its slot's layer on

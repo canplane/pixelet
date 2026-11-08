@@ -179,7 +179,6 @@ export function SettingChoiceRow(props: SettingChoiceRowProps) {
   );
 }
 
-/** Choice rows that stand outside any group, flush with the section's text. */
 export function SettingChoices({ children }: { children: ReactNode }) {
   return <View style={styles.bleed}>{children}</View>;
 }
@@ -207,7 +206,6 @@ export function Section(props: SectionProps) {
   );
 }
 
-/** A section's running text. */
 export function Prose({ children }: { children: ReactNode }) {
   return <View style={styles.prose}>{children}</View>;
 }

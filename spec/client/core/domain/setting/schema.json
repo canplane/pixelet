@@ -184,10 +184,9 @@
     "camera_mode": {
       "number": 5,
       "$doc": [
-        "Which controller makes the camera's pose; CAMERA_MODES says each. To",
-        "first person the person stands at the pivot, the eye at its",
-        "height over the ground; to third the pivot is laid on the ground",
-        "and the eye steps back by the radius."
+        "On a switch to first person the person stands at the pivot, the eye at its",
+        "height over the ground. On a switch to third person the pivot is laid on the",
+        "ground and the eye steps back by the radius."
       ],
       "kind": "choice",
       "default": "orbit",
@@ -207,7 +206,7 @@
     },
     "orbit_obstacle": {
       "number": 7,
-      "$doc": ["What the camera does when the controls would put it underground; ORBIT_OBSTACLE_MODES says each. Only `climb` goes into a tunnel (orbit/collision.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default."],
+      "$doc": ["Only `climb` goes into a tunnel (orbit/collision.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default."],
       "kind": "choice",
       "default": "climb",
       "options": "ORBIT_OBSTACLE_MODES",
@@ -236,11 +235,6 @@
     },
     "ao": {
       "number": 10,
-      "$doc": [
-        "corner, the occlusion a voxel world reads off its own cubes' faces;",
-        "screen, N8AO's screen-space pass with the corners' too, the costliest",
-        "of the three. AO_MODES says each."
-      ],
       "kind": "choice",
       "default": "corner",
       "options": "AO_MODES",
@@ -269,7 +263,7 @@
         "The pixels the world is drawn at: two to a CSS pixel is four times the",
         "work done a drawn pixel at a time (span.json `per_px`), and nothing",
         "more; the camera grid's rays and the light's map cost the same at any.",
-        "The markers and the finish stay at the display's. RES_MODES says each."
+        "The markers and the finish stay at the display's."
       ],
       "kind": "choice",
       "default": "auto",
@@ -299,8 +293,8 @@
       "default": false,
       "section": "debug"
     },
-    "person": { "number": 17, "kind": "index", "default": { "$val": 1, "$type": "u8", "$doc": ["female-2, by its number in character.json's person keys."] }, "section": "character" },
-    "pet": { "number": 18, "kind": "index", "default": { "$val": 5, "$type": "u8", "$doc": ["chick, by its number in character.json's pet keys."] }, "section": "character" },
+    "person": { "number": 17, "kind": "index", "default": { "$val": 1, "$type": "u8", "$doc": ["The female-b model, by its row in character.json's person models."] }, "section": "character" },
+    "pet": { "number": 18, "kind": "index", "default": { "$val": 5, "$type": "u8", "$doc": ["The chick, by its row in character.json's pet models."] }, "section": "character" },
     "ray_counts": {
       "number": 20,
       "$doc": [
@@ -313,7 +307,6 @@
     },
     "sky_time": {
       "number": 21,
-      "$doc": ["The hour the sky is drawn at; SKY_TIMES says each."],
       "kind": "choice",
       "default": "real",
       "options": "SKY_TIMES",

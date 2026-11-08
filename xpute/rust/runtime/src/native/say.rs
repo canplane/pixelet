@@ -8,7 +8,7 @@ use xpute_core::stop::Stop;
 
 use super::thread::stopped;
 
-/// xpute's stop hook for a core linked into its runtime's process
+/// This is xpute's stop hook for a core linked into its runtime's process
 /// (`Form::stop_hook`). It writes one line for a broken invariant or a panic
 /// (`say`), and tells the core's thread once the core has ended (`stopped`).
 pub fn stop_hook(stop: Stop<'_>) {

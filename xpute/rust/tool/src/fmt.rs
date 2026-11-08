@@ -1,9 +1,9 @@
 // xpute-tool/fmt.rs
 
-//! Formats a generated file before it is written, because `prettier --check`
-//! and `cargo fmt --check` gate the trees. A Rust file goes through rustfmt.
-//! A TypeScript or JSON file goes through the prettier of the pnpm tree it
-//! lies in, found by walking up from the file, so that it reads as that
+//! A generated file is formatted before it is written, because
+//! `prettier --check` and `cargo fmt --check` gate the trees. A Rust file goes
+//! through rustfmt. A TypeScript or JSON file takes the prettier of the pnpm
+//! tree it lies in, found by walking up from the file, so that it reads as that
 //! tree's own check expects. A file under no tree is written as generated.
 
 use std::io::Write;

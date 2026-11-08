@@ -16,13 +16,11 @@ const LEVEL_CELL = 1u;
 const LEVEL_SAMPLE = 2u;
 const LEVEL_RAY = 3u;
 
-/// The number of beam rays across the map, which is also the number down
-/// (`light::beam_across`).
+/// The number of beam rays across the map, which is also the number down.
 fn beam_across() -> u32 {
   return header_word(LIGHT_HEADER_BEAM_ACROSS);
 }
 
-/// The first word of the line of beam ray `k` (`light::line`).
 fn light_line(k: u32) -> u32 {
   return k * LIGHT_LINE_WORDS;
 }
@@ -135,7 +133,7 @@ fn light_on(level: u32, at: vec2<u32>) -> vec2<i32> {
   return vec2<i32>(slot_texel(p) / LIGHT_TILE);
 }
 
-/// The number of tiles across the map, which is also the number down (`light::tiles`).
+/// The number of tiles across the map, which is also the number down.
 fn light_tiles() -> u32 {
   return header_word(LIGHT_HEADER_TILES);
 }

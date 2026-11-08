@@ -3,7 +3,7 @@
 //! Where something stands: the support, the floor and the ceiling over a
 //! point, found by climbing as a walker would. Each is asked of the point's
 //! cell, split into columns, with a ray straight up or down through each
-//! column (`CellColumns`). That ray is the one every reader casts
+//! column (`SplitCell`). That ray is the one every reader casts
 //! (`World::along`). In any column it finds the first cell that fills or,
 //! starting inside what fills, the first cell that does not.
 //!
@@ -27,7 +27,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 
 use super::ray::{at_zoom, cell_zoom_at, finest, Ray, Until};
 use super::world::World;
-use crate::domain::layer::tile_cache::Lines;
+use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::*;
 use pxl_engine::cast::{fill_bounds, Detail};
 use pxl_spec::space::layer::quadrant::Quadrant;
@@ -65,7 +65,7 @@ fn xy(at: &Q3) -> [f64; 2] {
 /// ray's tile lines step on from the last ray's (`lines`), which were handed
 /// on from the columns these were made beside, since the rays climb the same
 /// tiles over the same tile cache.
-struct CellColumns<'w, 'a> {
+struct SplitCell<'w, 'a> {
     world: &'w World<'a>,
     corner: [f64; 2],
     side: f64,
@@ -73,11 +73,11 @@ struct CellColumns<'w, 'a> {
     detail: Detail,
     lack: Option<Quadrant>,
     zoom: Zoom,
-    lines: Lines,
+    lines: Path,
 }
 
-impl<'w, 'a> CellColumns<'w, 'a> {
-    fn new(world: &'w World<'a>, xy: [f64; 2], zoom: Zoom, lines: Lines) -> CellColumns<'w, 'a> {
+impl<'w, 'a> SplitCell<'w, 'a> {
+    fn new(world: &'w World<'a>, xy: [f64; 2], zoom: Zoom, lines: Path) -> SplitCell<'w, 'a> {
         let cell_zoom = GROUND.cell_zoom(zoom);
         let side = units(cell_zoom);
         let corner = xy.map(|v| libm::floor(v / side) * side);
@@ -93,7 +93,7 @@ impl<'w, 'a> CellColumns<'w, 'a> {
         let finer = world
             .finest_in(&column)
             .map_or(0, |z| z.min(read.range[1]).saturating_sub(cell_zoom));
-        CellColumns {
+        SplitCell {
             world,
             corner,
             side: side / f64::from(1u32 << finer),
@@ -135,7 +135,6 @@ impl<'w, 'a> CellColumns<'w, 'a> {
         answer.map(|h| h.map(|h| h.cube))
     }
 
-    /// Column `k`'s middle on the ground's two axes.
     fn middle(&self, k: u32) -> [f64; 2] {
         let at = |i: u32, c: f64| c + (f64::from(i) + 0.5) * self.side;
         [
@@ -278,7 +277,7 @@ impl<'a> World<'a> {
     /// what fills the surface, or else drops onto the first solid under it.
     /// None where nothing stands: a cell with no surface and nothing placed.
     pub fn surface_support(&self, at: &Q3) -> Answer<Option<f64>> {
-        let mut c = CellColumns::new(self, xy(at), LEAF_ZOOM, Lines::default());
+        let mut c = SplitCell::new(self, xy(at), LEAF_ZOOM, Path::default());
         let [lo, hi] = [BOUNDS.min[2], BOUNDS.max[2]];
         let surface = c.surface();
         // With no surface, the search starts at the highest solid, or at the reach's floor.
@@ -295,7 +294,7 @@ impl<'a> World<'a> {
     /// first solid's top. None where nothing stands under `at`.
     pub fn floor_under(&self, at: &Q3, zoom: Zoom) -> Answer<Option<f64>> {
         let start = q3::to_real(i64::from(at[2]));
-        let mut c = CellColumns::new(self, xy(at), zoom, Lines::default());
+        let mut c = SplitCell::new(self, xy(at), zoom, Path::default());
         let stands = match c.lift(start) {
             z if z > start => Some(z.min(BOUNDS.max[2])),
             z => c.below(z),
@@ -306,7 +305,7 @@ impl<'a> World<'a> {
     /// The top of the highest solid in `at`'s column, whatever `at`'s height.
     /// None where nothing stands there.
     pub fn column_top(&self, at: &Q3) -> Answer<Option<f64>> {
-        let mut c = CellColumns::new(self, xy(at), LEAF_ZOOM, Lines::default());
+        let mut c = SplitCell::new(self, xy(at), LEAF_ZOOM, Path::default());
         let top = c.highest();
         c.answer(top)
     }
@@ -316,7 +315,7 @@ impl<'a> World<'a> {
     /// stands.
     pub fn support_nearest(&self, at: &Q3) -> Answer<Option<f64>> {
         let z = q3::to_real(i64::from(at[2]));
-        let mut c = CellColumns::new(self, xy(at), LEAF_ZOOM, Lines::default());
+        let mut c = SplitCell::new(self, xy(at), LEAF_ZOOM, Path::default());
         let down = match c.lift(z) {
             t if t > z => Some(t.min(BOUNDS.max[2])),
             t => c.below(t),
@@ -410,9 +409,9 @@ impl<'a> World<'a> {
         let mut at = [sx, sy].map(|v| libm::floor(v / s));
         // The walker first climbs out of what fills its own cell, so only
         // what is over that counts as a ceiling.
-        let mut lines = Lines::default();
+        let mut lines = Path::default();
         floor = {
-            let mut c = CellColumns::new(self, center(at), LEAF_ZOOM, lines);
+            let mut c = SplitCell::new(self, center(at), LEAF_ZOOM, lines);
             let f = c.lift(floor);
             lines = c.lines;
             c.answer(f).exact()?
@@ -474,7 +473,7 @@ impl<'a> World<'a> {
         floor: f64,
         to: [f64; 2],
         (falls, walled): (bool, bool),
-        lines: &mut Lines,
+        lines: &mut Path,
     ) -> Option<Option<f64>> {
         // For what is `walled` and within the service area, the area's edge
         // is a wall, slid along as any wall is. One already past the area
@@ -485,10 +484,10 @@ impl<'a> World<'a> {
             return Some(None);
         }
         let cell = units(GROUND.leaf_cell_zoom());
-        let mut c = CellColumns::new(self, to, LEAF_ZOOM, *lines);
+        let mut c = SplitCell::new(self, to, LEAF_ZOOM, *lines);
         let mut z = c.lift(floor);
         let moved = if z > floor {
-            let mut left = CellColumns::new(self, from, LEAF_ZOOM, c.lines);
+            let mut left = SplitCell::new(self, from, LEAF_ZOOM, c.lines);
             let stopped = left.above(floor, z + cell).is_some();
             (*lines, c.lines) = (left.lines, left.lines);
             left.answer(()).exact()?;

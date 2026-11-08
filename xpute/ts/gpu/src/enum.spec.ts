@@ -107,7 +107,7 @@ export const TEXTURE_FORMAT = [
   "astc-12x12-unorm-srgb",
 ] as const;
 
-/** GPUVertexFormat. */
+/** These are the members of GPUVertexFormat. */
 export const VERTEX_FORMAT = [
   "uint8",
   "uint8x2",
