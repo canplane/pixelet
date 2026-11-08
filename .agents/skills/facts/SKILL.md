@@ -30,22 +30,20 @@ asked once. A new wrapper, a rename alone or a shorter function clears nothing.
 
 Look for:
 
-- A type per kind around one number: the number is the fact (`DecorId`, `Cube`
-  and `RecentPick` were each an `AssetId`). A value says what it is by what it
-  holds, so a variant carrying what its neighbor's number already says goes.
+- A type per kind around one number: the number is the fact. A value says
+  what it is by what it holds, so a variant carrying what its neighbor's number
+  already says goes.
 - A value and the tag that says how to read it: `{ tool, cube }`, when the
   number's kind says the tool.
-- One either-or kept as two `Option`s: one field of the enum
-  (`Hover::object_at`, `scattered_decor`, now `target`).
+- One either-or kept as two `Option`s: one field of an enum.
 - The same `match` over the same thing in several functions: what a kind does
-  moves onto one type (`Asset`), its behavior in the module it needs, the code
-  asking it once.
-- A boolean pair read off one value (`givenUp`, `readFailing`, of `stall`).
+  moves onto one type, its behavior in the module it needs, the code asking it
+  once.
+- A boolean pair read off one value.
 - The same value read in two components: passed from the one that decided.
-- One thing decided outside the place that decides it (`Failed` drawn past
-  `coverOf`).
+- One thing decided outside the place that decides it.
 - A kind that fails one way where its neighbors fail another: one reading, one
-  rule (`Asset::of`, `Unknown`).
+  rule.
 
 Do:
 

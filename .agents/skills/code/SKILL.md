@@ -15,6 +15,9 @@ description: How code in pixelet and xpute is written — fewest concepts, ortho
 - Read in the order it runs. A step is not hidden behind a wrapper or a hook.
 - No optional seams. What is there is there: no hook that may be absent, no
   fallback for a value one place could give, no layer split out for a test.
+- A type alias names a meaning (`pub type Block = (usize, u32)`); no newtype
+  or guard enforces it. In TypeScript, `protected` is for a class that is
+  extended, and no field is `#`.
 - One hand. A file, and a part across files, is written once in one manner:
   the same work in the same shape, the same names for the same things. Do not
   patch a new manner beside an old one; rewrite the part.

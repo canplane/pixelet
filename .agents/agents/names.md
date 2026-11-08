@@ -11,9 +11,8 @@ chosen.
 ## Rules
 
 - Read only: no edit, `git add`, commit, stash or checkout.
-- Read `.agents/skills/naming/SKILL.md` first; its table of names chosen with
-  the user, its abbreviations and its section on what is someone else's
-  decide over anything here.
+- Read `.agents/skills/naming/SKILL.md` first; its rules, its abbreviations
+  and its table of names chosen with the user decide over anything here.
 - Read code through the LSP tool (ToolSearch "select:LSP") on the main
   checkout's files, `/Users/sanghoon/git/canplane/pixelet/`: definitions,
   references, hover. Where it answers nothing for a file, say so in the
@@ -34,8 +33,8 @@ say which thing it is. How exact it must be follows how far it is read.
 - Across modules (a pub item, a spec field, a shared constant, a document's
   term) a name says what the thing is. A name for what happened to the thing
   (`kept`, `held`, `handed`, `asked`, `told`) is a finding there.
-- One loose word spread over many modules for different things, as `kept`
-  and `held` were, is the finding that matters most. Count where a word
+- One loose word spread over many modules for things named for what happened
+  to them (`kept`, `held`) is the finding that matters most. Count where a word
   stands before judging any one use.
 - A rename that lengthens a name its context made plain, or qualifies it
   against a name in another module or enum, is a finding: the name goes back.

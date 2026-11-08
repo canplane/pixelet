@@ -1,6 +1,6 @@
 ---
 name: naming
-description: Naming in pixelet — short, plain names read where they stand; where a word comes from; the abbreviations and the words that stay whole; the names chosen with the user; names someone else owns; renaming. Use before naming, renaming or reviewing names, in code, spec JSON or a backticked identifier in a document.
+description: Naming in pixelet — short, plain names read where they stand; where a word comes from; the abbreviations and the words that stay whole; the names chosen with the user. Use before naming, renaming or reviewing names, in code, spec JSON or a backticked identifier in a document.
 ---
 
 # Naming
@@ -35,17 +35,13 @@ description: Naming in pixelet — short, plain names read where they stand; whe
 - When a name meets one already taken, see whether they share a namespace or a
   context where both are read, and whether the name already taken is itself the
   best one.
-- A type alias names a meaning (`pub type Block = (usize, u32)`); add no newtype
-  or guard to enforce it.
 - A word may mean different things in different parts where each is its
   field's word (a map's tile, a screen's tile, a shadow map's tile). A name
   changes when it is not its field's word or not what the thing is, not to
   keep words apart.
 - Snake_case and SCREAMING abbreviate; PascalCase types, camelCase and the
-  React UI's own names stay whole (`let cfg: Config`).
-- In TypeScript, a `private` member takes a leading `_` (`private _cap`,
-  `private _grow()`), `protected` is for a class that is extended, and no
-  field is `#`.
+  React UI's own names stay whole (`let cfg: Config`). A TypeScript `private`
+  member takes a leading `_` (`private _cap`).
 - Use a plural for a collection, and a unit suffix on a length (`_u` the
   world's units, `_merc` a meter on the EPSG:3857 plane, `_m` a meter on the
   ground), on the value where a person sees it (`29.0 m`).
@@ -98,14 +94,3 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   `examples/`), is plural.
 - Keep WebGPU's words in xpute's `gpu/`, and its `host`, the CPU's side, in a
   renderer's and a shader's words.
-- Treat a name between the client and a server as protocol, and a name kept in
-  storage (a bucket object, a storage key, a baked file's field) as needing a
-  version bump to change; a setting's name can change, since storage keeps its
-  `number`.
-- When renaming, search what the language server doesn't see: generated
-  code and the `.wgsl` files, which read pxl-engine's layouts and a render
-  setting by their names.
-- Watch a renamed C++ struct field being taken by a same-named parameter of its
-  own method (`Section::at` read `off + off` until `this->off`).
-- Let a backticked identifier in a comment or document follow the code; leave
-  a prose word as it is.
