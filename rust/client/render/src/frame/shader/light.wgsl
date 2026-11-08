@@ -83,7 +83,7 @@ fn light_cs(
       // The voxel is taken only where it is the node that a ray asking the slot's band stops on
       // (pxl-engine `Light::band`, `record::band_fresh`).
       if (entry.enters && band_fresh(k.zoom, (state & RECORD_WHOLE) != 0u, band)) {
-        add_cnt(on, COUNT_REUSED);
+        add_cnt(on, COUNT_VOXEL);
         textureStore(light, at, 0u, vec4<u32>(hit_word(entry.t, entry.axis), 0u, 0u, 0u));
         return;
       }
@@ -94,6 +94,6 @@ fn light_cs(
     textureStore(light, at, 0u, vec4<u32>(depth_word(1.0), 0u, 0u, 0u));
     return;
   }
-  add_cnt(on, COUNT_WALKED);
+  add_cnt(on, COUNT_HOLE);
   list_hole(header_word(LIGHT_HEADER_HOLES), at);
 }

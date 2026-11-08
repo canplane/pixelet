@@ -84,8 +84,8 @@ pub fn set_renderer_frame(report: &FrameReport) {
             draws,
             triangles,
             frame: stat.frame,
-            light_moved: stat.light_moved,
-            decor_boxes: stat.decor_boxes,
+            light_changed: stat.light_changed,
+            decor_rects: stat.decor_rects,
             ..GpuSample::default()
         },
         device: DeviceSample {
@@ -119,7 +119,7 @@ fn held_now(h: &HeapStat) -> RecordingSection {
         ring_sq_peak: f64::from(rings.sq_peak),
         ring_left_peak: f64::from(rings.left_peak),
         body_slots_peak: f64::from(body::take_peak()),
-        cap_terrain_refused: TerrainTile::tile_cache().take_refusals() as f64,
+        terrain_refusals: TerrainTile::tile_cache().take_refusals() as f64,
     }
 }
 
@@ -150,7 +150,7 @@ pub fn perf_frame(t: FrameTurn) {
     // a recording that starts later counts from its own start.
     let heap = boot::heap_stat();
     let held = held_now(&heap);
-    let terrain_landed = f64::from(TerrainTile::tile_cache().take_loads());
+    let terrain_loads = f64::from(TerrainTile::tile_cache().take_loads());
     let renderer = core::mem::take(RENDERER.get(RendererFrame::default));
     if !perf_recording() {
         return;
@@ -177,7 +177,7 @@ pub fn perf_frame(t: FrameTurn) {
         effects: turn::effect_times(),
         kind: f64::from(renderer.kind as u8),
         gpu: renderer.gpu,
-        terrain_landed,
+        terrain_loads,
         device: renderer.device,
         heap_used_bytes: heap.peak as f64,
         // The interval's figures come later: its turns' as each ends, and its

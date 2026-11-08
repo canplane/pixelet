@@ -154,7 +154,7 @@ impl Counter {
                 (
                     from.args[k],
                     ray::MISS_ARGS_COUNT,
-                    count::REUSED,
+                    count::VOXEL,
                     count::RAYS,
                 ),
                 (from.boxes[k], raster::ARGS_INSTANCES, count::BOXES, 1),

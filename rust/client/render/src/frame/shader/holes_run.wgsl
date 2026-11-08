@@ -14,8 +14,8 @@ fn queue_records_at() -> u32 {
   return select(EYE_HOLES_RECORDS_AT, LIGHT_HOLES_RECORDS_AT, light_run());
 }
 
-/// The lane in which the run's walks count the nodes they visit (pxl-engine `count::MISS`).
-/// `asked_at` is the lane in which they count the nodes they ask (`count::ASKED`).
+/// The lane in which the run's walks count the nodes they visit (pxl-engine `count::HOLE_WALK`).
+/// `asked_at` is the lane in which they count the nodes they ask (`count::ASKS`).
 fn visits_at() -> u32 {
   return select(EYE_MISS_COUNT, LIGHT_MISS_COUNT, light_run());
 }

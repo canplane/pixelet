@@ -14,7 +14,7 @@ use pxl_render::gpu::span_spec::FRAME_KINDS;
 
 const REASONS: usize = LIMIT::REASONS as usize;
 const REASON_WORDS: usize = LIMIT::REASON_WORDS as usize;
-const STEP_SLOTS: usize = LIMIT::STEP_SLOTS as usize;
+const STEP_CAP: usize = LIMIT::STEP_CAP as usize;
 pub const TASK_PHASES: usize = TASK_PHASE_NAMES;
 const CATEGORIES: usize = STREAM_NAMES;
 
@@ -59,7 +59,7 @@ pub struct FramesSection {
     pub turns: f64,
     /// How many frames a GPU read timed. The GPU's figures cover these frames
     /// alone.
-    pub gpu_read: f64,
+    pub gpu_timed: f64,
     pub interval: Percentiles,
     pub busy: Percentiles,
     pub tick: Percentiles,
@@ -112,7 +112,7 @@ words!(FramesSection, STAT::frames::WORDS,
     present => STAT::frames::present, cnt => STAT::frames::cnt, seconds => STAT::frames::seconds,
     moving => STAT::frames::moving, moving_ms => STAT::frames::moving_ms,
     missed => STAT::frames::missed, overran => STAT::frames::overran,
-    long => STAT::frames::long, turns => STAT::frames::turns, gpu_read => STAT::frames::gpu_read,
+    long => STAT::frames::long, turns => STAT::frames::turns, gpu_timed => STAT::frames::gpu_timed,
     interval => STAT::frames::interval, busy => STAT::frames::busy,
     tick => STAT::frames::tick, effects => STAT::frames::effects,
     stage => STAT::frames::stage, tasks => STAT::frames::tasks,
@@ -217,7 +217,7 @@ words!(StepStats, STEP_STAT::WORDS,
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct StepsSection {
     pub cnt: f64,
-    pub slots: [StepStats; STEP_SLOTS],
+    pub slots: [StepStats; STEP_CAP],
 }
 
 words!(StepsSection, STAT::steps::WORDS, cnt => STAT::steps::cnt, slots => STAT::steps::slots);
@@ -239,7 +239,7 @@ pub struct RecordingSection {
     pub ring_sq_peak: f64,
     pub ring_left_peak: f64,
     pub body_slots_peak: f64,
-    pub cap_terrain_refused: f64,
+    pub terrain_refusals: f64,
 }
 
 impl RecordingSection {
@@ -267,7 +267,7 @@ impl RecordingSection {
             ring_sq_peak: max(self.ring_sq_peak, h.ring_sq_peak),
             ring_left_peak: max(self.ring_left_peak, h.ring_left_peak),
             body_slots_peak: max(self.body_slots_peak, h.body_slots_peak),
-            cap_terrain_refused: self.cap_terrain_refused + h.cap_terrain_refused,
+            terrain_refusals: self.terrain_refusals + h.terrain_refusals,
         };
     }
 }
@@ -279,5 +279,5 @@ words!(RecordingSection, STAT::recording::WORDS,
     heap_largest_free_min_bytes => STAT::recording::heap_largest_free_min_bytes,
     heap_refusals => STAT::recording::heap_refusals, ring_cq_peak => STAT::recording::ring_cq_peak,
     ring_sq_peak => STAT::recording::ring_sq_peak, ring_left_peak => STAT::recording::ring_left_peak,
-    body_slots_peak => STAT::recording::body_slots_peak, cap_terrain_refused => STAT::recording::cap_terrain_refused,
+    body_slots_peak => STAT::recording::body_slots_peak, terrain_refusals => STAT::recording::terrain_refusals,
 );

@@ -208,8 +208,8 @@ export function PerfGauge({ g }: { g: Gauge | null }) {
             was timed there is no measure, and it is shown as such, not as 0. */}
         <Row
           k="gpu busy p95"
-          v={f.gpu_read > 0 ? `${n1(f.gpu_busy.p95)} ms` : "no timestamps"}
-          warn={f.gpu_read > 0 && f.gpu_busy.p95 > f.last.paced_ms}
+          v={f.gpu_timed > 0 ? `${n1(f.gpu_busy.p95)} ms` : "no timestamps"}
+          warn={f.gpu_timed > 0 && f.gpu_busy.p95 > f.last.paced_ms}
         />
         {heaviest(f.gpu_spans, (s) => s.p95, SPAN_ROWS).map((s) => (
           <Row key={s.name} k={`  ${s.name} p95`} v={`${n1(s.p95)} ms`} />

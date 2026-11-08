@@ -375,7 +375,7 @@ fn road_bores(
                                 [p[0], p[1], f64::from(t - drop)]
                             })
                             .collect();
-                        let fraction = |k: i32| w.row.span[0] + along(k) / w.row.segment_length;
+                        let fraction = |k: i32| w.row.between[0] + along(k) / w.row.segment_length;
                         lines.push(grade_line(
                             w,
                             points,

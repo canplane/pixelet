@@ -18,7 +18,7 @@ use crate::perf::frame::{over_ms, FrameSample, WorstFrame};
 use crate::perf::report::RayRead;
 use crate::perf::section::{RecordingSection, RecordingStateSection};
 use crate::perf::spec::LIMIT;
-use crate::perf::task::TaskRow;
+use crate::perf::task::TaskRecord;
 
 /// The rings keep the last minute (perf.json `LIMIT.WINDOW_MS`), as the UI's
 /// long frames do. At 60 Hz that is 3,600 frames. A faster display or a busy
@@ -74,7 +74,7 @@ pub(super) fn drop_front<T: Copy>(ring: &mut [T], len: &mut usize, n: usize) {
 /// The byte size of each column, in order: tasks, frames, the worst frames
 /// and the read's scratch (read.rs).
 const COLUMNS: [u32; 4] = [
-    (TASK_CAP * size_of::<TaskRow>()) as u32,
+    (TASK_CAP * size_of::<TaskRecord>()) as u32,
     (FRAME_CAP * size_of::<FrameSample>()) as u32,
     (WORST_CAP * size_of::<WorstFrame>()) as u32,
     (PERCENTILES_CAP * size_of::<f64>()) as u32,
@@ -103,7 +103,7 @@ fn heap_column<T: Copy + Default>(n: usize) -> Option<Box<[T]>> {
 }
 
 struct Perf {
-    task_ring: Box<[TaskRow]>,
+    task_ring: Box<[TaskRecord]>,
     task_len: usize,
     frame_ring: Box<[FrameSample]>,
     frame_len: usize,
@@ -234,7 +234,7 @@ pub(crate) fn perf_scratch() -> &'static mut [f64] {
 }
 
 /// Records a settled task. `row` is built only while recording.
-pub fn perf_record(row: impl FnOnce() -> TaskRow) {
+pub fn perf_record(row: impl FnOnce() -> TaskRecord) {
     let l = perf();
     if !l.recording {
         return;
@@ -314,7 +314,7 @@ pub fn perf_record_gpu(r: GpuRead) {
         return;
     }
     at_frame(l, r.frame, |f| {
-        (f.gpu.read, f.gpu.spans, f.gpu.busy_ms, f.gpu.px) = (1.0, r.spans, r.busy_ms, r.px);
+        (f.gpu.timed, f.gpu.spans, f.gpu.busy_ms, f.gpu.px) = (1.0, r.spans, r.busy_ms, r.px);
     });
 }
 
@@ -404,7 +404,7 @@ pub fn perf_frames() -> &'static [FrameSample] {
 }
 
 /// In `end_ms` order, since a task is recorded as it settles.
-pub fn perf_tasks() -> &'static [TaskRow] {
+pub fn perf_tasks() -> &'static [TaskRecord] {
     let l = perf();
     &l.task_ring[l.task_head..l.task_len]
 }
@@ -419,7 +419,7 @@ pub fn perf_frames_since(t: f64) -> &'static [FrameSample] {
     &ring[first_at(ring, t, |f| f.t)..]
 }
 
-pub fn perf_tasks_since(t: f64) -> &'static [TaskRow] {
+pub fn perf_tasks_since(t: f64) -> &'static [TaskRecord] {
     let ring = perf_tasks();
     &ring[first_at(ring, t, |r| r.end_ms)..]
 }

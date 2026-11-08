@@ -85,7 +85,7 @@ fn point_wrap_x_clamp_y() {
     );
     assert_eq!(nearest(-half + 3.0, half - 1.0), half + 3.0);
     assert_eq!(nearest(half - 1.0, -half + 3.0), -half - 1.0);
-    for zoom in [TOP_ZOOM, LEAF_ZOOM] {
+    for zoom in [MIN_ZOOM, LEAF_ZOOM] {
         let n = 1i32 << zoom;
         assert_eq!(
             Quadrant::new(zoom, [n / 2, 0]),
@@ -110,7 +110,7 @@ fn known_tile_name() {
 /// One prefix is one region at every zoom, and a name's length is its zoom.
 #[test]
 fn tile_name_prefix() {
-    for zoom in TOP_ZOOM..LEAF_ZOOM {
+    for zoom in MIN_ZOOM..LEAF_ZOOM {
         let coarse = Quadrant::over(zoom, BUNDANG).key();
         assert_eq!(coarse.len(), zoom as usize);
         assert!(BUNDANG_NAME.starts_with(&coarse), "z{zoom} {coarse}");
@@ -122,7 +122,7 @@ fn tile_name_round_trip() {
     let n = 1i32 << LEAF_ZOOM;
     for x in [-n / 2, -12345, -1, 0, 1, 11569, n / 2 - 1] {
         for y in [-n / 2, -7777, -1, 0, 1, 3671, n / 2 - 1] {
-            for zoom in TOP_ZOOM..=LEAF_ZOOM {
+            for zoom in MIN_ZOOM..=LEAF_ZOOM {
                 let p = Quadrant::over(zoom, [x, y]);
                 assert_eq!(Quadrant::of_key(&p.key()), Some(p), "({x}, {y}) at z{zoom}");
             }

@@ -341,7 +341,7 @@ pub fn ways(row: &Part, way_ranges: &[WayRange], tile_min: G3857) -> Vec<Feature
         return Vec::new();
     }
     // The lines' ranges are along the segment; take them into the part's own span.
-    let [a0, b0] = row.span;
+    let [a0, b0] = row.between;
     let lined = merged(
         way_ranges
             .iter()

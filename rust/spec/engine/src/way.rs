@@ -34,7 +34,7 @@ use crate::param::way::PIER_MIN_RISE_M;
 use crate::param::way::STACKED_DECK_HEADROOM_M;
 use crate::param::way::WIDE_BEAM_PIER_INTERVAL_M;
 use crate::value;
-use crate::{cells_of_m, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, TOP_ZOOM};
+use crate::{cells_of_m, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM};
 
 /// Points are counted in eighths of the tile's cell.
 pub const POINT_SCALE: f32 = 8.0;
@@ -81,7 +81,7 @@ pub fn vanishes(width: f32) -> bool {
 /// A line's ends weigh without bound and are held at every zoom.
 pub fn coarsest(weight: f32) -> Zoom {
     let mut z = LEAF_ZOOM;
-    while z > TOP_ZOOM && weight >= (1u32 << (2 * (LEAF_ZOOM - z + 1))) as f32 {
+    while z > MIN_ZOOM && weight >= (1u32 << (2 * (LEAF_ZOOM - z + 1))) as f32 {
         z -= 1;
     }
     z

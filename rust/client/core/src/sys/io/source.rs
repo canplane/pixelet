@@ -12,12 +12,12 @@ use pxl_engine::area::{self, Area};
 use pxl_spec::bake::publication::{BaseLayer, FORMAT};
 use pxl_spec::bake::source::{is_sharded, key};
 use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, TOP_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, MIN_ZOOM};
 use xpute_core::global::Global;
 use xpute_kit::status::errno::Errno;
 
 struct Source {
-    top_zoom: Zoom,
+    min_zoom: Zoom,
     /// The service area at `SHARD_ZOOM` (pxl-engine `area::Area`). For each
     /// cell, by its key (`area::shard_key`), it holds the bits of which of the
     /// nine cells about it are served. A cell beside no served cell holds 0.
@@ -44,7 +44,7 @@ fn declared_source() -> Option<&'static Source> {
 /// or that names a node over shards (pxl-spec bake/source.rs), or a kind with
 /// no format or with a format the core does not read.
 pub fn declare<'a>(
-    top_zoom: u32,
+    min_zoom: u32,
     format: &[u32],
     shard: impl IntoIterator<Item = &'a str>,
 ) -> Result<(), Errno> {
@@ -52,16 +52,16 @@ pub fn declare<'a>(
     if declared.is_some() {
         return Err(Errno::EEXIST);
     }
-    *declared = Some(parse(top_zoom, format, shard).ok_or(Errno::EINVAL)?);
+    *declared = Some(parse(min_zoom, format, shard).ok_or(Errno::EINVAL)?);
     Ok(())
 }
 
 fn parse<'a>(
-    top_zoom: u32,
+    min_zoom: u32,
     format: &[u32],
     names: impl IntoIterator<Item = &'a str>,
 ) -> Option<Source> {
-    let top_zoom = Some(top_zoom).filter(|z| (TOP_ZOOM..=LEAF_ZOOM).contains(z))?;
+    let min_zoom = Some(min_zoom).filter(|z| (MIN_ZOOM..=LEAF_ZOOM).contains(z))?;
     let read = format.len() == BaseLayer::ALL.len()
         && BaseLayer::ALL
             .into_iter()
@@ -71,7 +71,7 @@ fn parse<'a>(
     }
     let shard = names.into_iter().map(key).collect::<Option<Vec<_>>>()?;
     Some(Source {
-        top_zoom,
+        min_zoom,
         nine: nines_of(&shard),
         nodes: nodes_of(&shard),
     })
@@ -158,8 +158,8 @@ fn node_of(zoom: Zoom, at: [i32; 2]) -> Option<usize> {
 }
 
 /// The coarsest zoom the source supplies whole; none until it is declared.
-pub fn top() -> Option<Zoom> {
-    declared_source().map(|s| s.top_zoom)
+pub fn min_zoom() -> Option<Zoom> {
+    declared_source().map(|s| s.min_zoom)
 }
 
 /// Whether a served shard is over or under `p`. A kind that shards do not

@@ -1539,7 +1539,7 @@ impl RaysPass {
             }
             for (span, pipeline, [x, y], w) in [
                 (
-                    GpuSpanName::cell,
+                    GpuSpanName::grid_cell,
                     &c.cells,
                     c.grid.span,
                     [CELL_SIDE, CELL_SIDE, 1],
@@ -1622,7 +1622,7 @@ impl RaysPass {
             );
             let pass = walk_run(
                 ctx,
-                [GpuSpanName::miss; 2],
+                [GpuSpanName::hole; 2],
                 &Run {
                     pipelines: [
                         &c.queue_pipeline,
@@ -1647,7 +1647,7 @@ impl RaysPass {
             g.end(pass);
             // Every stop is recorded, its new faces are asked, and its face word is put at its
             // pixel (ray/raster.rs `record_hits`). The next frame's raster draws them.
-            c.raster.record_hits(ctx, c.node_cache, GpuSpanName::miss);
+            c.raster.record_hits(ctx, c.node_cache, GpuSpanName::hole);
         }
         // Decor is generated after the rays and before the light's cast, which marks where
         // decor stands (`light_mark_draws_cs`).
@@ -1685,14 +1685,14 @@ impl RaysPass {
             // The tiles the world's receivers stand on (`light::LIST_RECEIVERS`). The record's
             // draw marks every box it writes, in the eye's pixels' cast, or here where that did
             // not run (`draws_record`). Then every pixel the eye walked apart marks its hit, a
-            // thread a word of the walked bits, in a span of their own (`light_receivers`,
+            // thread a word of the walked bits, in a span of their own (`light_world_receivers`,
             // span.json `per_px`). Where these marks are added to those already made, the
             // earlier ones were copied back in before the frame's first pass (above).
             if due.world {
                 if !c.draws_record {
                     c.raster.record_draw(ctx);
                 }
-                let stamp = ctx.stamp(GpuSpanName::light_receivers).pass();
+                let stamp = ctx.stamp(GpuSpanName::light_world_receivers).pass();
                 let pass = g.compute_pass(encoder, stamp);
                 g.set_bind_group(pass, 0, c.light_groups[4], &[]);
                 g.set_pipeline(pass, c.light_mark_walked.id);
@@ -1765,7 +1765,7 @@ impl RaysPass {
             );
             // Then every tile read that its epoch has not cast is claimed, a thread a tile of the
             // box (`light_damage_cs`).
-            let stamp = ctx.stamp(GpuSpanName::light_claim).pass();
+            let stamp = ctx.stamp(GpuSpanName::light_damage).pass();
             let pass = g.compute_pass(encoder, stamp);
             g.set_bind_group(pass, 0, c.light_groups[6], &[]);
             g.set_pipeline(pass, c.light_damage.id);
@@ -1955,18 +1955,18 @@ impl RaysPass {
             })
     }
 
-    /// Why the light's map cast this frame, a bit for each `LightMoved` (span.json
-    /// `LIGHT_MOVED`), or 0 where it did not cast.
-    pub fn light_moved(&self) -> u32 {
+    /// What changed that cast the light's map this frame, a bit for each `LightChanged`
+    /// (span.json `LIGHT_CHANGED`), or 0 where it did not cast.
+    pub fn light_changed(&self) -> u32 {
         self.cast
             .as_ref()
             .and_then(|c| c.schedule.last().light)
-            .map_or(0, |l| l.moved)
+            .map_or(0, |l| l.changed)
     }
 
-    /// How many boxes mark decor's slots to generate again this frame (gpu/generator.rs
+    /// How many rects mark decor's slots to generate again this frame (gpu/generator.rs
     /// `marked_rects`).
-    pub fn decor_boxes(&self) -> u32 {
+    pub fn decor_rects(&self) -> u32 {
         self.cast.as_ref().map_or(0, |c| c.generator.marked_rects())
     }
 

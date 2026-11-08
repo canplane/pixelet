@@ -132,7 +132,7 @@ def upload(record, kind):
     by no one until a declaration names it (`serve`)."""
     directory = REPO / "out" / f"{kind}.publish"
     if not directory.is_dir():
-        die(f"{kind}: no {directory.relative_to(REPO)}: bake it (with `--stage publish` where it has stages)")
+        die(f"{kind}: no {directory.relative_to(REPO)}: bake it (with `--step publish` where it has steps)")
     # What the version is, fixed with it: the copy as its own manifest says.
     manifest = json.loads((directory / MANIFEST).read_text())
     fmt, shard = manifest.get("format"), manifest.get("shard")

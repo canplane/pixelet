@@ -77,7 +77,7 @@ fn cast_px(p: vec2<u32>, size: vec2<u32>) -> bool {
         // The ray's words, with what lies about its face taken from the voxel's (`word`,
         // `ray::first_word`).
         let face = 2u * entry.axis + select(0u, 1u, ray_dir(aim.dir)[entry.axis] > 0.0);
-        add_cnt(on, COUNT_REUSED);
+        add_cnt(on, COUNT_VOXEL);
         write_ray(p, vec4<u32>(
           (node_cache_word(e + W_ASSET) & VAL_MASK) | (face << RAY_FACE_SHIFT) | (k.zoom << RAY_ZOOM_SHIFT) | (fill << RAY_FILL_SHIFT),
           bitcast<u32>(entry.t),
@@ -96,7 +96,7 @@ fn cast_px(p: vec2<u32>, size: vec2<u32>) -> bool {
     write_ray(p, vec4<u32>(0u));
     return false;
   }
-  add_cnt(on, COUNT_WALKED);
+  add_cnt(on, COUNT_HOLE);
   return true;
 }
 

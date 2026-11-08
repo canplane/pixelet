@@ -31,7 +31,7 @@ fn stood() -> Schedule {
 fn nothing_moved_casts_nothing() {
     let mut s = stood();
     let plan = s.plan(still());
-    assert_eq!(plan.kind, FrameKind::standing);
+    assert_eq!(plan.kind, FrameKind::still);
     assert!(plan.light.is_none());
 }
 
@@ -107,6 +107,6 @@ fn a_stopped_view_rests() {
         ..still()
     });
     s.plan(still());
-    assert_eq!(s.plan(still()).kind, FrameKind::standing);
-    assert_eq!(s.plan(still()).kind, FrameKind::standing);
+    assert_eq!(s.plan(still()).kind, FrameKind::still);
+    assert_eq!(s.plan(still()).kind, FrameKind::still);
 }

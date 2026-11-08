@@ -29,7 +29,7 @@ use pxl_spec::bake::publication::{tile_object_parts, BaseLayer, FORMAT, TILE_SPH
 use pxl_spec::bake::source::is_sharded;
 use pxl_spec::route::{ASSET_ROOT, TILE_ROOT};
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, TOP_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, MIN_ZOOM};
 use std::path::{Path as FsPath, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -48,7 +48,7 @@ struct App {
     tile_source: TileSource,
     /// The oven's cache, whose token names what it serves.
     cache: PathBuf,
-    top_zoom: Zoom,
+    min_zoom: Zoom,
     coverage: Vec<String>,
     asset_dir: PathBuf,
     out: PathBuf,
@@ -117,7 +117,7 @@ fn declaration(app: &App) -> Result<String, String> {
             }),
         }
     })?;
-    Ok(source::declaration(app.top_zoom, &kinds, &Overrides::new())?.to_string())
+    Ok(source::declaration(app.min_zoom, &kinds, &Overrides::new())?.to_string())
 }
 
 const EARTH: &str = "earth";
@@ -292,16 +292,16 @@ fn run() -> Result<(), String> {
         }
     }
 
-    let (tile_source, top_zoom) = match shelf {
-        Some(dir) => (TileSource::Shelf(dir), TOP_ZOOM),
+    let (tile_source, min_zoom) = match shelf {
+        Some(dir) => (TileSource::Shelf(dir), MIN_ZOOM),
         None => {
-            let top_zoom = LEAF_ZOOM
+            let min_zoom = LEAF_ZOOM
                 .checked_sub(folds)
-                .filter(|&z| z >= TOP_ZOOM)
+                .filter(|&z| z >= MIN_ZOOM)
                 .ok_or("--folds past the pyramid's top")?;
             (
-                TileSource::Oven(Server::open(workers, cache.clone(), top_zoom, limits)?),
-                top_zoom,
+                TileSource::Oven(Server::open(workers, cache.clone(), min_zoom, limits)?),
+                min_zoom,
             )
         }
     };
@@ -309,7 +309,7 @@ fn run() -> Result<(), String> {
     let app = Arc::new(App {
         tile_source,
         cache: cache.clone(),
-        top_zoom,
+        min_zoom,
         coverage,
         asset_dir,
         out,

@@ -44,8 +44,9 @@ pub(crate) type PartId = (String, u64);
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Part {
     pub gers_id: String,
-    /// Where it lies on its segment, as fractions of the segment's length.
-    pub span: [f64; 2],
+    /// Where it lies on its segment, as fractions of the segment's length: Overture's
+    /// linear referencing, `between`.
+    pub between: [f64; 2],
     /// Its segment's whole length, in DB coordinates.
     pub(crate) segment_length: f64,
     pub subtype: String,
@@ -157,7 +158,7 @@ impl Part {
         }
         let part = |(span, tags): ([f64; 2], Tags), points: Vec<G3857>| Part {
             gers_id: gers_id.clone(),
-            span,
+            between: span,
             segment_length: length,
             subtype: subtype.clone(),
             class: class.clone(),
@@ -176,7 +177,7 @@ impl Part {
     }
 
     pub fn id(&self) -> PartId {
-        (self.gers_id.clone(), self.span[0].to_bits())
+        (self.gers_id.clone(), self.between[0].to_bits())
     }
 
     pub(crate) fn is_subway(&self) -> bool {
@@ -185,6 +186,6 @@ impl Part {
 
     /// Its length, in DB coordinates.
     pub fn length(&self) -> f64 {
-        (self.span[1] - self.span[0]) * self.segment_length
+        (self.between[1] - self.between[0]) * self.segment_length
     }
 }

@@ -131,7 +131,7 @@ pub const HEADER_WORDS: u32 = ASKED + 1;
 /// are those of the entries it marked then (`record::drawn`). It lies past the head that the
 /// host writes each frame.
 pub const DRAWN: u32 = HEADER_WORDS;
-/// Where `observer`'s walks keep counter `lane` (`count::BEAM` to `count::ASKED`) in the
+/// Where `observer`'s walks keep counter `lane` (`count::BEAM` to `count::ASKS`) in the
 /// head.
 pub const fn lane_at(observer: u32, lane: u32) -> u32 {
     COUNT_AT + observer * count::WALKS + lane

@@ -19,13 +19,13 @@ use pxl_render::gpu::span_spec::GPU_SPAN_NAMES;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GpuSample {
     /// This frame's GPU timings. They land a frame or two later and are
-    /// written back into this record (record.rs `perf_record_gpu`). `read`
+    /// written back into this record (record.rs `perf_record_gpu`). `timed`
     /// is 1 when the frame was measured, and otherwise 0 with every field 0.
     /// `busy_ms` is the frame's GPU time, with overlapping spans counted
     /// once; the sum of `spans` overstates it where passes overlap. `px` is
     /// the number of world pixels the frame drew, which the spans were
     /// measured over.
-    pub read: f64,
+    pub timed: f64,
     pub spans: [f64; GPU_SPANS],
     pub busy_ms: f64,
     pub px: f64,
@@ -40,12 +40,12 @@ pub struct GpuSample {
     /// `FrameStat::frame`). A GPU read names this number when it lands, so
     /// the read finds its frame. It is 0 when the renderer drew no frame.
     pub frame: f64,
-    /// Why the light's map was cast, one bit per reason in LIGHT_MOVED's
-    /// order, and 0 when it was not cast. `decor_boxes` counts the boxes that
+    /// What changed that cast the light's map, one bit each in LIGHT_CHANGED's
+    /// order, and 0 when it was not cast. `decor_rects` counts the rects that
     /// marked decor's slots to be generated again (pxl-render renderer.rs
     /// `FrameStat`).
-    pub light_moved: f64,
-    pub decor_boxes: f64,
+    pub light_changed: f64,
+    pub decor_rects: f64,
 }
 
 impl Default for GpuSample {
@@ -112,7 +112,7 @@ pub struct FrameSample {
     /// `perf_record_rays`).
     pub rays: RaySample,
     /// The terrain tiles the tile cache took in during the frame turn.
-    pub terrain_landed: f64,
+    pub terrain_loads: f64,
     pub device: DeviceSample,
     /// The heap's high-water mark (xpute-core mem/heap.rs `HeapStat`).
     pub heap_used_bytes: f64,
@@ -123,7 +123,7 @@ pub struct FrameSample {
 /// follow the order of perf.json FRAME's `rays` group. For the eye they say
 /// whether it cast in full, how many pixels it cast, and its lane counts.
 /// For the light's map they say whether it cast, how many slots it cast,
-/// and its lane counts (pxl-engine `count`). The reused, walked and sky
+/// and its lane counts (pxl-engine `count`). The voxel, walk and sky
 /// lanes divide up what an observer cast again of its pixels or slots.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -132,20 +132,20 @@ pub struct RaySample {
     pub eye_rays: f64,
     pub eye_beam: f64,
     pub eye_sample: f64,
-    pub eye_miss: f64,
-    pub eye_asked: f64,
-    pub eye_reused: f64,
-    pub eye_walked: f64,
+    pub eye_hole_walk: f64,
+    pub eye_asks: f64,
+    pub eye_voxel: f64,
+    pub eye_hole: f64,
     pub eye_sky: f64,
     pub eye_boxes: f64,
     pub light_cast: f64,
     pub light_rays: f64,
     pub light_beam: f64,
     pub light_sample: f64,
-    pub light_miss: f64,
-    pub light_asked: f64,
-    pub light_reused: f64,
-    pub light_walked: f64,
+    pub light_hole_walk: f64,
+    pub light_asks: f64,
+    pub light_voxel: f64,
+    pub light_hole: f64,
     pub light_sky: f64,
     pub light_boxes: f64,
 }
@@ -161,20 +161,20 @@ impl RaySample {
             eye_rays: at(eye, ray::RAYS),
             eye_beam: lane(eye, count::BEAM),
             eye_sample: lane(eye, count::SAMPLE),
-            eye_miss: lane(eye, count::MISS),
-            eye_asked: lane(eye, count::ASKED),
-            eye_reused: lane(eye, count::REUSED),
-            eye_walked: lane(eye, count::WALKED),
+            eye_hole_walk: lane(eye, count::HOLE_WALK),
+            eye_asks: lane(eye, count::ASKS),
+            eye_voxel: lane(eye, count::VOXEL),
+            eye_hole: lane(eye, count::HOLE),
             eye_sky: lane(eye, count::SKY),
             eye_boxes: lane(eye, count::BOXES),
             light_cast: at(light, ray::CAST),
             light_rays: at(light, ray::RAYS),
             light_beam: lane(light, count::BEAM),
             light_sample: lane(light, count::SAMPLE),
-            light_miss: lane(light, count::MISS),
-            light_asked: lane(light, count::ASKED),
-            light_reused: lane(light, count::REUSED),
-            light_walked: lane(light, count::WALKED),
+            light_hole_walk: lane(light, count::HOLE_WALK),
+            light_asks: lane(light, count::ASKS),
+            light_voxel: lane(light, count::VOXEL),
+            light_hole: lane(light, count::HOLE),
             light_sky: lane(light, count::SKY),
             light_boxes: lane(light, count::BOXES),
         }
@@ -226,11 +226,11 @@ words!(FrameSample, FRAME::WORDS,
     phases => FRAME::phases, stage_ms => FRAME::stage_ms, tasks_ms => FRAME::tasks_ms,
     perf_ms => FRAME::perf_ms, effects => FRAME::effects,
     kind => FRAME::kind_name, wake => FRAME::wake_name,
-    gpu.read => FRAME::gpu_read, gpu.spans => FRAME::gpu_spans, gpu.busy_ms => FRAME::gpu_busy_ms, gpu.px => FRAME::gpu_px, gpu.scale => FRAME::scale,
+    gpu.timed => FRAME::gpu_timed, gpu.spans => FRAME::gpu_spans, gpu.busy_ms => FRAME::gpu_busy_ms, gpu.px => FRAME::gpu_px, gpu.scale => FRAME::scale,
     gpu.draws => FRAME::draws, gpu.triangles => FRAME::triangles, gpu.frame => FRAME::gpu_frame,
-    gpu.light_moved => FRAME::light_moved, gpu.decor_boxes => FRAME::decor_boxes,
+    gpu.light_changed => FRAME::light_changed, gpu.decor_rects => FRAME::decor_rects,
     rays => FRAME::eye_cast,
-    terrain_landed => FRAME::terrain_landed,
+    terrain_loads => FRAME::terrain_loads,
     device.uploads => FRAME::uploads, device.uploads_bytes => FRAME::uploads_bytes, device.pack_bytes => FRAME::pack_bytes,
     heap_used_bytes => FRAME::heap_used_bytes,
 );
@@ -240,13 +240,13 @@ words!(FrameSample, FRAME::WORDS,
 words!(RaySample, FRAME_GROUP::rays,
     eye_cast => 0, eye_rays => FRAME::eye_rays - FRAME::eye_cast,
     eye_beam => FRAME::eye_beam - FRAME::eye_cast, eye_sample => FRAME::eye_sample - FRAME::eye_cast,
-    eye_miss => FRAME::eye_miss - FRAME::eye_cast, eye_asked => FRAME::eye_asked - FRAME::eye_cast, eye_reused => FRAME::eye_reused - FRAME::eye_cast,
-    eye_walked => FRAME::eye_walked - FRAME::eye_cast, eye_sky => FRAME::eye_sky - FRAME::eye_cast,
+    eye_hole_walk => FRAME::eye_hole_walk - FRAME::eye_cast, eye_asks => FRAME::eye_asks - FRAME::eye_cast, eye_voxel => FRAME::eye_voxel - FRAME::eye_cast,
+    eye_hole => FRAME::eye_hole - FRAME::eye_cast, eye_sky => FRAME::eye_sky - FRAME::eye_cast,
     eye_boxes => FRAME::eye_boxes - FRAME::eye_cast,
     light_cast => FRAME::light_cast - FRAME::eye_cast, light_rays => FRAME::light_rays - FRAME::eye_cast,
     light_beam => FRAME::light_beam - FRAME::eye_cast,
-    light_sample => FRAME::light_sample - FRAME::eye_cast, light_miss => FRAME::light_miss - FRAME::eye_cast, light_asked => FRAME::light_asked - FRAME::eye_cast,
-    light_reused => FRAME::light_reused - FRAME::eye_cast, light_walked => FRAME::light_walked - FRAME::eye_cast,
+    light_sample => FRAME::light_sample - FRAME::eye_cast, light_hole_walk => FRAME::light_hole_walk - FRAME::eye_cast, light_asks => FRAME::light_asks - FRAME::eye_cast,
+    light_voxel => FRAME::light_voxel - FRAME::eye_cast, light_hole => FRAME::light_hole - FRAME::eye_cast,
     light_sky => FRAME::light_sky - FRAME::eye_cast, light_boxes => FRAME::light_boxes - FRAME::eye_cast,
 );
 

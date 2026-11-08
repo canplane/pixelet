@@ -38,5 +38,5 @@ pub struct Numbers {
 pub mod runtime;
 
 #[cfg(test)]
-#[path = "programs.test.rs"]
-mod programs;
+#[path = "program.test.rs"]
+mod program;

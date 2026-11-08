@@ -790,7 +790,7 @@ pub const FRAME: Frame = Frame {
         RECEIVER_TILES_KEEP,
         READ_COUNT_KEEP,
         Step::dispatch(
-            "light_claim",
+            "light_damage",
             IN_LIGHT,
             COMPUTE_LIGHT_DAMAGE,
             &[&LIGHT_PROPAGATE_BINDS],
@@ -1031,9 +1031,9 @@ const PERSISTENT: &[Persistent] = &[
         ..persistent_world_marks(light::LIST_RECEIVERS, "light_receiver_tiles.wgsl `stand`")
     },
     persistent_world_marks(light::LIST_READS, "light_propagate"),
-    persistent_marks(light::LIST_CORNERS, "light_claim"),
-    persistent_marks(light::LIST_SOURCES, "light_claim"),
-    persistent_marks(light::LIST_DAMAGE, "light_claim"),
+    persistent_marks(light::LIST_CORNERS, "light_damage"),
+    persistent_marks(light::LIST_SOURCES, "light_damage"),
+    persistent_marks(light::LIST_DAMAGE, "light_damage"),
     Persistent {
         range: at(
             LIGHT_LIST,

@@ -24,7 +24,7 @@ use crate::domain::view::demand;
 use crate::door::cmd::{Sensor, SensorStart, SensorStop, UiSnapshot};
 use crate::perf::record::{perf_record, perf_record_turn};
 use crate::perf::spec::Wake;
-use crate::perf::task::TaskRow;
+use crate::perf::task::TaskRecord;
 use crate::sys::boot;
 use crate::sys::io::dispatch;
 use crate::sys::io::file;
@@ -208,7 +208,7 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
             Event::Start(key, stream, id) => dispatch::start(key, stream, id),
             Event::Stop(key) => dispatch::stop(key),
             Event::End(a, at, exit, phases) => {
-                perf_record(|| TaskRow::of(&a, at, exit, phases));
+                perf_record(|| TaskRecord::of(&a, at, exit, phases));
             }
         }
     }

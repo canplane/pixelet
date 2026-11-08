@@ -11,7 +11,7 @@ use xpute_kit::status::errno::Errno;
 
 pub(super) fn declare(c: abi::SourceDeclare<'_>) -> Outcome {
     refuse_unless(
-        source::declare(c.top_zoom, c.format, c.shard.iter()).is_ok(),
+        source::declare(c.min_zoom, c.format, c.shard.iter()).is_ok(),
         Errno::EINVAL,
     )?;
     Ok(Some(0))

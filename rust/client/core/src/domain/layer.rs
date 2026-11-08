@@ -65,16 +65,19 @@ pub trait Base: Clone + 'static {
     const ASK_SCOPE: AskScope = AskScope::View;
 
     /// The coarsest zoom the layer's own source supplies whole, for a layer
-    /// whose source differs from the ground's declared top (sys/io/source.rs
-    /// `top`). The layer's floor is then the whole reach of that zoom around
-    /// the eye, so the layer is drawn past where the ground stops.
-    const TOP: Option<Zoom> = None;
+    /// whose source differs from the ground's declared one (sys/io/source.rs
+    /// `min_zoom`). The layer's floor is then the whole reach of that zoom
+    /// around the eye, so the layer is drawn past where the ground stops.
+    const MIN_ZOOM: Option<Zoom> = None;
 
-    /// The coarsest zoom the layer is asked for and drawn at: its own `TOP`,
-    /// or else the ground's declared top, but never coarser than `COARSEST`.
-    /// None while the layer has no `TOP` and the source is not declared yet.
-    fn top() -> Option<Zoom> {
-        Self::TOP.or(source::top()).map(|t| t.max(Self::COARSEST))
+    /// The coarsest zoom the layer is asked for and drawn at: its own
+    /// `MIN_ZOOM`, or else the ground's declared one, but never coarser than
+    /// `COARSEST`. None while the layer has no `MIN_ZOOM` and the source is
+    /// not declared yet.
+    fn min_zoom() -> Option<Zoom> {
+        Self::MIN_ZOOM
+            .or(source::min_zoom())
+            .map(|t| t.max(Self::COARSEST))
     }
 
     /// The most tiles held hard for a reader that cannot take a coarser

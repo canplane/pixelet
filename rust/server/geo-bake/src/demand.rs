@@ -49,8 +49,8 @@ impl Kind {
 
     /// Its coarsest tile served, which the client reads from too: never
     /// coarser than the kind is read at.
-    fn top(self, top: Zoom) -> Zoom {
-        quadrant::top_over(self.leaf(), top).max(self.coarsest())
+    fn min_zoom(self, min_zoom: Zoom) -> Zoom {
+        quadrant::min_zoom_over(self.leaf(), min_zoom).max(self.coarsest())
     }
 
     /// The coarsest zoom it is read at (`pyramid::Base::COARSEST`).
@@ -112,13 +112,13 @@ pub struct Server {
     _owner: std::fs::File,
     runner: Arc<Runner>,
     datasets: [Arc<Dataset>; 3],
-    top_zoom: Zoom,
+    min_zoom: Zoom,
 }
 impl Server {
     pub fn open(
         workers: usize,
         base: PathBuf,
-        top_zoom: Zoom,
+        min_zoom: Zoom,
         limits: Limits,
     ) -> Result<Self, String> {
         let owner = claim(&base)?;
@@ -133,15 +133,21 @@ impl Server {
             _owner: owner,
             runner,
             datasets: [t?, p?, g?],
-            top_zoom,
+            min_zoom,
         })
     }
 
     pub async fn get(&self, kind: Kind, name: &str) -> Result<Option<Vec<u8>>, Failure> {
         let data = self.datasets[kind as usize].clone();
         let runner = self.runner.clone();
-        let path =
-            pyramid::resolve(data.clone(), runner, kind, name, kind.top(self.top_zoom)).await?;
+        let path = pyramid::resolve(
+            data.clone(),
+            runner,
+            kind,
+            name,
+            kind.min_zoom(self.min_zoom),
+        )
+        .await?;
         let Some(path) = path else { return Ok(None) };
         data.cache.read(&path).await.map_err(Failure::Bake)
     }

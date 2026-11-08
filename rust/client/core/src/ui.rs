@@ -156,7 +156,7 @@ fn snapshot_inputs() -> SnapshotInputs {
         named_to: named_to(units_per_px_at(dist())),
         character_surfaces,
         stall: stall(),
-        declared: source::top().is_some(),
+        declared: source::min_zoom().is_some(),
         refused_files: {
             let stored = file::is_storage_refused()
                 .then(|| (root::STORAGE, file::storage_path()))

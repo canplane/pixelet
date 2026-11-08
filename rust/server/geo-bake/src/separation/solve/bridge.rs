@@ -1014,7 +1014,7 @@ fn road_decks(
                     })
                     .collect(),
                 [true, true],
-                way.row.span,
+                way.row.between,
             ));
         }
 

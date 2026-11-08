@@ -24,7 +24,7 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, units, within, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, TOP_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, MIN_ZOOM};
 use xpute_core::global::Global;
 
 use crate::domain::layer::terrain::clipmap::{eye_entries, tile_of};
@@ -144,7 +144,7 @@ pub fn coverage_gizmo_draw(draw: &mut DrawList) {
 pub fn coverage_gizmo_step(show: bool) {
     let c = COVERAGE.get(Coverage::default);
     let draw = draw_list();
-    let (Some(o), Some(top)) = (observation().filter(|_| show), TerrainTile::top()) else {
+    let (Some(o), Some(top)) = (observation().filter(|_| show), TerrainTile::min_zoom()) else {
         if c.drawn.take().is_some() {
             c.lines.set(draw, [0.0; 3], &[], 0);
             request_world_tick();
@@ -156,7 +156,7 @@ pub fn coverage_gizmo_step(show: bool) {
     // precision, and the eye must move about its own height before the lines
     // are rebuilt about a new origin.
     let height = (o.eye[2] - o.ground).max(1.0);
-    let zoom = within(height).clamp(TOP_ZOOM as i32, LEAF_ZOOM as i32) as Zoom;
+    let zoom = within(height).clamp(MIN_ZOOM as i32, LEAF_ZOOM as i32) as Zoom;
     let span = units(zoom);
     let eye = view().at().eye;
     let about = [

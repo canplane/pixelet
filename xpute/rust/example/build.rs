@@ -4,7 +4,7 @@
 // `link`): it imports its memory, puts its stack first, and places its data
 // past the front.
 
-#[path = "machine.spec.rs"]
+#[path = "src/machine.spec.rs"]
 mod machine;
 
 fn main() {

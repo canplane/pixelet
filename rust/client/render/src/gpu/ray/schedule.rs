@@ -7,7 +7,7 @@
 //! `prepare`) reads the frame, asks for a plan and encodes what the plan says.
 
 use super::casts_px;
-use crate::gpu::span_spec::{FrameKind, LightMoved};
+use crate::gpu::span_spec::{FrameKind, LightChanged};
 
 /// What a frame read that decides what the eye and the light cast.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -49,8 +49,9 @@ pub(super) struct Reads {
 /// What the light's cast does in a frame that casts it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(super) struct Light {
-    /// Why it casts, a bit for each `LightMoved` (span.json `LIGHT_MOVED`). It is never 0.
-    pub moved: u32,
+    /// What changed that it casts, a bit for each `LightChanged` (span.json `LIGHT_CHANGED`).
+    /// It is never 0.
+    pub changed: u32,
     /// Whether an epoch begins (pxl-engine `light::HEADER_EPOCH`). An epoch is a run of casts
     /// over which what decides a tile's content stands, so a tile one of them cast stands for
     /// the rest; it begins where that content moved.
@@ -82,7 +83,7 @@ pub(super) struct Light {
 /// What a frame casts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(super) struct Plan {
-    /// `plain` casts nothing, as there is no world to cast in; `standing` keeps the rays as they
+    /// `plain` casts nothing, as there is no world to cast in; `still` keeps the rays as they
     /// are; `px` casts the pixels again over the samples that stand; `cast` runs the whole cast.
     pub kind: FrameKind,
     /// Whether every pixel is cast again though only the claimed tiles moved. The light's cast
@@ -170,7 +171,7 @@ impl Schedule {
         let jittered = r.jitter != self.jitter;
         self.jitter = r.jitter;
         let mut kind = match (stands, jittered) {
-            (true, false) => FrameKind::standing,
+            (true, false) => FrameKind::still,
             (true, true) => FrameKind::px,
             (false, _) => FrameKind::cast,
         };
@@ -197,19 +198,19 @@ impl Schedule {
             !self.walked_whole
         };
         let unmasked = light_on && (!held || slid || footprint_owed) && partial;
-        if unmasked && kind == FrameKind::standing {
+        if unmasked && kind == FrameKind::still {
             kind = FrameKind::px;
         }
         let casts = casts_px(kind);
         let walked_whole = !partial || unmasked;
-        let moved = LightMoved::ALL
+        let changed = LightChanged::ALL
             .into_iter()
             .filter(|m| match m {
-                LightMoved::content => !held,
-                LightMoved::slide => slid,
-                LightMoved::receivers => !r.receivers_same,
-                LightMoved::footprint => footprint_owed,
-                LightMoved::world => r.world_columns,
+                LightChanged::content => !held,
+                LightChanged::slide => slid,
+                LightChanged::receivers => !r.receivers_same,
+                LightChanged::footprint => footprint_owed,
+                LightChanged::world => r.world_columns,
             })
             .fold(0, |bits, m| bits | 1 << m as u32);
         // The world's receivers stand where the eye's rays hit. The next light cast marks them
@@ -218,7 +219,7 @@ impl Schedule {
         // on the tiles they last marked: a jittered cast moves a ray only within its footprint,
         // which those marks took where the eye stood.
         self.world |= kind == FrameKind::cast || !held || footprint_owed || slid;
-        let light = (light_on && moved != 0).then(|| {
+        let light = (light_on && changed != 0).then(|| {
             let last_corner = core::mem::replace(&mut self.corner, r.corner);
             let last_range = core::mem::replace(&mut self.range, r.range);
             // The marks are added to those already made where the walked bits cover the
@@ -232,7 +233,7 @@ impl Schedule {
                 self.footprint_owed = !stands || adds;
             }
             Light {
-                moved,
+                changed,
                 epoch: !held,
                 slid: held && slid,
                 reached: held && r.world_columns,

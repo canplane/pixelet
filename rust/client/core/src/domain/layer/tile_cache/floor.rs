@@ -6,7 +6,7 @@
 //! observation finds nothing; otherwise each turn toward new ground would
 //! leave a hole for a whole round trip.
 //!
-//! The floor's zoom is the layer's top (`Base::top`), which the source
+//! The floor's zoom is the layer's coarsest (`Base::min_zoom`), which the source
 //! declares (sys/io/source.rs). Until the source is declared, the floor is
 //! empty.
 

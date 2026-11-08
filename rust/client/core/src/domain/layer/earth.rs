@@ -35,7 +35,7 @@ impl Base for Earth {
     const STREAM: Stream = Stream::earth;
     const LATTICE: Lattice = GROUND;
     const ASK_SCOPE: AskScope = AskScope::Floor;
-    const TOP: Option<Zoom> = Some(EARTH_ZOOM);
+    const MIN_ZOOM: Option<Zoom> = Some(EARTH_ZOOM);
 
     /// Only the top zoom is baked, so no child has a tile.
     fn occupancy(&self) -> Occupancy {

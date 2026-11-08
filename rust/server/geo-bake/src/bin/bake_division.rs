@@ -7,7 +7,7 @@
 //!
 //!   cargo run --profile server -p pxl-geo-bake --bin bake_division -- [flags]
 //!
-//!   --stage <s>          leaf, fold, commit or publish; repeatable (default: the first three)
+//!   --step <s>           leaf, fold, commit or publish; repeatable (default: the first three)
 //!   --shard <name>       bake that shard's leaves, repeatable (default: every shard of the coverage)
 //!   --out <dir>          the set (default ./out/division), staged beside it in <dir>.stage
 //!   --concurrency <n>    parallel tiles, one connection each (default 8)

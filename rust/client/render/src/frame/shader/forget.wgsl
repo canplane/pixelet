@@ -46,10 +46,10 @@ fn entries_word(q0: vec2<i32>, q1: vec2<i32>, k: u32) -> u32 {
 /// clip level's moved bricks that are held (`CHANGED_BRICKS_AT`), and its entry's bit is set
 /// among the moved bits at `CHANGED_AT`. A wider node reads the clip level's fold (`held_of`),
 /// which bounds every brick wanted, held or not, so any moved entry under it counts. A node
-/// coarser than `TOP_ZOOM` reads no brick: its ground is a split whatever the clip levels hold
+/// coarser than `MIN_ZOOM` reads no brick: its ground is a split whatever the clip levels hold
 /// (world_split.wgsl `ground_split`, world.wgsl `ground_cell`).
 fn forgets(zoom: u32, finest: u32, c: vec2<i32>) -> bool {
-  if (zoom < TOP_ZOOM) {
+  if (zoom < MIN_ZOOM) {
     return false;
   }
   for (var w = 0u; w < EYE_CLIP_LEVELS && FIRST_CELL_ZOOM + w <= max(finest, FIRST_CELL_ZOOM); w += 1u) {

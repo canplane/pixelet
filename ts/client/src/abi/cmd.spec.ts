@@ -381,18 +381,18 @@ export function encode_turn_grant(
 
 /** Command.SOURCE_DECLARE's packet, written in place into `to`.
  *
- * @param top_zoom The coarsest zoom the source supplies whole.
+ * @param min_zoom The coarsest zoom the source supplies whole.
  * @param format Each kind's format, one a kind, indexed by its bake's number (pxl-spec bake/publication.spec.rs).
  * @param shard The shards it serves, by name. Their order means nothing: no two at a zoom are over one node, and the finer wins. */
 export function encode_source_declare(
   to: PacketRoom,
-  top_zoom: u32,
+  min_zoom: u32,
   format: u32[],
   shard: string[],
 ): PacketWriter {
   return to
     .writer(3)
-    .u32(top_zoom)
+    .u32(min_zoom)
     .array(SequenceType.U32_ARRAY, Uint32Array.from(format))
     .strs(shard);
 }
@@ -650,9 +650,9 @@ export function ui_exports(runtime: Sender) {
       runtime.send(Command.TURN_GRANT, (r) =>
         encode_turn_grant(r, refresh_ms, paced_ms, interactive, credits),
       ),
-    source_declare: (top_zoom: u32, format: u32[], shard: string[]): i32 =>
+    source_declare: (min_zoom: u32, format: u32[], shard: string[]): i32 =>
       runtime.call(Command.SOURCE_DECLARE, (r) =>
-        encode_source_declare(r, top_zoom, format, shard),
+        encode_source_declare(r, min_zoom, format, shard),
       ),
     sensor_permission: (sensor: Sensor, answer: PermissionAnswer): void =>
       runtime.send(Command.SENSOR_PERMISSION, (r) =>

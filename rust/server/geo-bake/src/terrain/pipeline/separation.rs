@@ -10,7 +10,7 @@ use crate::terrain::CELL_U;
 use pxl_spec::bake::separation::{self, Builder, Separation, POINT_SCALE};
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, u_from_merc};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
-use pxl_spec::space::layer::quadrant::{LEAF_ZOOM, TOP_ZOOM};
+use pxl_spec::space::layer::quadrant::{LEAF_ZOOM, MIN_ZOOM};
 use xpute_kit::math::scalar::round;
 
 use crate::separation::Line;
@@ -80,7 +80,7 @@ fn edge_coarsest(m: i64) -> u8 {
     } else {
         m.trailing_zeros().min(LEAF_ZOOM)
     });
-    first.saturating_sub(1).max(TOP_ZOOM) as u8
+    first.saturating_sub(1).max(MIN_ZOOM) as u8
 }
 
 /// The line through `points` with a point where it crosses each edge of the

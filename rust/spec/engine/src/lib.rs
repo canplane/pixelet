@@ -52,9 +52,9 @@ pub const UNIT_ZOOM: Zoom = 24;
 pub const LEAF_ZOOM: Zoom = 15;
 
 /// The coarsest tile zoom, the top of the pyramid. A layer is kept in tiles from this zoom
-/// down to the leaves, and a source declares its own top at this zoom or finer (its
-/// `top_zoom`).
-pub const TOP_ZOOM: Zoom = 4;
+/// down to the leaves, and a source declares its own at this zoom or finer (its
+/// declaration's `top_zoom`, the core's `min_zoom`).
+pub const MIN_ZOOM: Zoom = 4;
 
 /// A tile is 2^9 cells a side, so a leaf tile's cells are at this zoom, the ground's finest
 /// cell (`lattice::GROUND`).

@@ -129,7 +129,7 @@ export interface FrameSummary {
   turns: f64;
   /** How many frames a GPU read timed. The GPU's figures are taken over
    * these frames alone. */
-  gpu_read: f64;
+  gpu_timed: f64;
   interval: Percentiles;
   busy: Percentiles;
   tick: Percentiles;
@@ -264,7 +264,7 @@ function frame_summary(s: F64Array): FrameSummary | null {
     overran: s[a + F.overran],
     long: s[a + F.long],
     turns: s[a + F.turns],
-    gpu_read: s[a + F.gpu_read],
+    gpu_timed: s[a + F.gpu_timed],
     interval: percentiles_at(s, a + F.interval),
     busy: percentiles_at(s, a + F.busy),
     tick: percentiles_at(s, a + F.tick),

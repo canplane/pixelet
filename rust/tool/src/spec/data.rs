@@ -139,7 +139,7 @@ const DATA_SPECS: [DataSpec; 19] = [
         ts: Some("ts/client/src/abi/span.spec.ts"),
         rs: Some("rust/client/render/src/gpu/span.spec.rs"),
         module: "span_spec",
-        enums: Enums::Named(&["GPU_SPAN_NAMES", "FRAME_KINDS", "LIGHT_MOVED"]),
+        enums: Enums::Named(&["GPU_SPAN_NAMES", "FRAME_KINDS", "LIGHT_CHANGED"]),
         ..DataSpec::DEFAULT
     },
     DataSpec {

@@ -167,7 +167,7 @@
       ],
       "pkt": [
         {
-          "name": "top_zoom",
+          "name": "min_zoom",
           "type": "u32",
           "$doc": [
             "The coarsest zoom the source supplies whole."

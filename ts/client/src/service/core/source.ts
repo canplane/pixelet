@@ -10,9 +10,9 @@ import { core } from "@/service/core/core.ts";
  * Returns false when they are more than one command can carry, or when the
  * core refuses them. */
 export function source_declare(
-  top_zoom: number,
+  min_zoom: number,
   formats: number[],
   shards: string[],
 ): boolean {
-  return core.source_declare(top_zoom, formats, shards) >= 0;
+  return core.source_declare(min_zoom, formats, shards) >= 0;
 }

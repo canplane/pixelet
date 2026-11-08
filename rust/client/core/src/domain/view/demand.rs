@@ -261,12 +261,12 @@ impl<L: ViewLayer> Demand<L> {
         self.floor.iter().copied()
     }
 
-    /// Records that the source has no object for `p`. At the layer's top
-    /// (`Base::top`) or coarser, `p` takes the layer's empty tile where it
+    /// Records that the source has no object for `p`. At the layer's coarsest
+    /// zoom (`Base::min_zoom`) or coarser, `p` takes the layer's empty tile where it
     /// has one (`Base::empty`); otherwise the tile over `p` gives its ground.
     pub fn absent(&mut self, p: Quadrant) {
         match L::empty() {
-            Some(empty) if L::top().is_some_and(|top| p.zoom <= top) => {
+            Some(empty) if L::min_zoom().is_some_and(|min| p.zoom <= min) => {
                 L::tile_cache().set(p, empty);
             }
             _ => L::tile_cache().answer_above(p),
@@ -495,8 +495,10 @@ impl<L: ViewLayer> Demand<L> {
     /// layer with a top of its own is observed out to its own reach
     /// (`ViewLayer::demand_dist`).
     pub fn step(&mut self, dst: Option<Quadrant>, pinned: &[Quadrant]) {
-        let Some(top) = L::top() else { return };
-        let o = observation().map(|o| match L::TOP {
+        let Some(min_zoom) = L::min_zoom() else {
+            return;
+        };
+        let o = observation().map(|o| match L::MIN_ZOOM {
             Some(_) => Observation {
                 demand_dist: L::demand_dist(),
                 ..o
@@ -506,7 +508,7 @@ impl<L: ViewLayer> Demand<L> {
         if o.is_none() && dst.is_none() && pinned.is_empty() {
             return;
         }
-        self.turn(o, dst, pinned, top);
+        self.turn(o, dst, pinned, min_zoom);
         declare(L::STREAM, &self.wants);
     }
 
@@ -605,7 +607,7 @@ static OBJECT: Global<Option<ObjectKey>> = Global::new();
 /// view from afar draws from. Then it reads the shards the top lists and it
 /// has not read, and places each in the view only once it is listed.
 pub fn object_step() {
-    let (o, top) = (observation(), source::top());
+    let (o, top) = (observation(), source::min_zoom());
     let now = Some((o, top, repository::revision()));
     let last = OBJECT.get(|| None);
     if *last == now {

@@ -338,14 +338,14 @@ struct Reads {
 /// that mark moved: the frame draws again only its claimed tiles. Otherwise
 /// the frame is drawn whole and its pixels are cast whole, as they also are
 /// where the light's receivers are marked afresh off every pixel's walk.
-/// `stood` holds where nothing moved, not even the jitter, and nothing is
+/// `unchanged` holds where nothing moved, not even the jitter, and nothing is
 /// cast. Then nothing is drawn or submitted, and the canvases keep the frame
 /// they show.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct FramePlan {
     quiet: bool,
     masked: bool,
-    stood: bool,
+    unchanged: bool,
 }
 
 impl FramePlan {
@@ -354,7 +354,7 @@ impl FramePlan {
         FramePlan {
             quiet,
             masked: r.partial && r.stands && !r.unmasked,
-            stood: quiet && !r.casts_px && !r.light_casts,
+            unchanged: quiet && !r.casts_px && !r.light_casts,
         }
     }
 }
@@ -419,12 +419,12 @@ pub struct FrameStat {
     /// The draws and the triangles of each pipeline, counted only while
     /// `FrameInput::counted`. Their sums are the frame's draws and triangles.
     pub draws: DrawStats,
-    /// Why the light's map cast this frame, a bit a reason in `LIGHT_MOVED`'s
-    /// order (gpu/ray/cast.rs `light_moved`), or 0 where it cast none.
-    /// `decor_boxes` counts the boxes that marked decor's slots to generate
-    /// again (gpu/generator.rs `marked_rects`), or 0 where none did.
-    pub light_moved: f64,
-    pub decor_boxes: f64,
+    /// What changed that cast the light's map this frame, a bit each in
+    /// `LIGHT_CHANGED`'s order (gpu/ray/cast.rs `light_changed`), or 0 where it
+    /// cast none. `decor_rects` counts the rects that marked decor's slots to
+    /// generate again (gpu/generator.rs `marked_rects`), or 0 where none did.
+    pub light_changed: f64,
+    pub decor_rects: f64,
     /// The ray counts of the eye's cast and of the light's from an earlier
     /// frame, which landed with this one, named by that frame's number
     /// (gpu/ray/count.rs `RayCounts`).
@@ -693,7 +693,7 @@ impl Renderer {
             mask_group: Group::default(),
             marks: [Group::default(), Group::default()],
             light_marks: Group::default(),
-            light_tiles: Tiles::new(g, &mut pipelines, LIGHT_TILE, 1, GpuSpanName::light_mark),
+            light_tiles: Tiles::new(g, &mut pipelines, LIGHT_TILE, 1, GpuSpanName::shadow_damage),
             last_frame_uploads: UploadCopies::default(),
             last_frame_words: [0.0; FRAME_FLOATS],
             last_frame_buf: g.buf(
@@ -1290,7 +1290,7 @@ impl Renderer {
         if !masked {
             self.screen.whole();
         }
-        if decided.stood {
+        if decided.unchanged {
             self.frame_read = read;
             let mut stat = self.stat(&draws, input.counted, None);
             // Nothing was drawn, so the frame has no number for a read to
@@ -1298,7 +1298,7 @@ impl Renderer {
             stat.frame = 0.0;
             stat.rays = self.screen.take_counts();
             self.touched = touched;
-            return (FrameKind::stood, stat);
+            return (FrameKind::unchanged, stat);
         }
 
         // In a gated frame, each listed draw that changed marks the screen's
@@ -1381,8 +1381,8 @@ impl Renderer {
         // light's words and marks, each before anything reads them. A dropped
         // frame leaves them as they were, and the next frame is drawn whole.
         // A span times from its first pass to its last (gpu/api.rs
-        // `TimestampWrites`), so the passes of the screen's marks (`mark`), of
-        // the light's (`light_mark`) and of the propagation (`propagate`) are
+        // `TimestampWrites`), so the passes of the screen's damage (`damage`),
+        // the shadow map's (`shadow_damage`) and the propagation (`propagate`) are
         // each encoded together.
         self.resolve.tiles.dispatch_damage(&mut ctx);
         if screen_marking {
@@ -1399,7 +1399,7 @@ impl Renderer {
                 world.depth_view,
                 Load::ReadOnly,
                 0.0,
-                ctx.stamp(GpuSpanName::mark).pass(),
+                ctx.stamp(GpuSpanName::damage).pass(),
             )
             .load_stencil();
             let pass = g.pass(ctx.encoder, &desc);
@@ -1437,7 +1437,7 @@ impl Renderer {
                 map,
                 Load::ReadOnly,
                 1.0,
-                ctx.stamp(GpuSpanName::light_mark).pass(),
+                ctx.stamp(GpuSpanName::shadow_damage).pass(),
             )
             .load_stencil();
             let pass = g.pass(ctx.encoder, &desc);
@@ -1702,7 +1702,7 @@ impl Renderer {
         let kind = if skipped {
             FrameKind::dropped
         } else if masked {
-            FrameKind::gated
+            FrameKind::masked
         } else {
             self.screen.kind()
         };
@@ -1791,8 +1791,8 @@ impl Renderer {
             upload_bytes: b.bytes as f64,
             pack_bytes: self.pack.bytes as f64,
             draws: stats,
-            light_moved: f64::from(self.screen.light_moved()),
-            decor_boxes: f64::from(self.screen.decor_boxes()),
+            light_changed: f64::from(self.screen.light_changed()),
+            decor_rects: f64::from(self.screen.decor_rects()),
             rays: None,
         }
     }
@@ -1895,7 +1895,7 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
             }
         }
         return FrameOutput {
-            kind: FrameKind::held,
+            kind: FrameKind::stream_busy,
             redraw: true,
             stat: None,
         };

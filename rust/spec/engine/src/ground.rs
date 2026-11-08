@@ -22,7 +22,7 @@ use crate::lattice::TILE_CELLS;
 use crate::object::z_start;
 use crate::value;
 use crate::{
-    Zoom, HEIGHT_BITS, LEAF_CELL_ZOOM, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, TOP_ZOOM, UNIT_ZOOM,
+    Zoom, HEIGHT_BITS, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM, SEA_LEVEL, SHARD_ZOOM, UNIT_ZOOM,
 };
 
 /// The value space's void and unknown as the words a palette index is read into.
@@ -425,7 +425,7 @@ pub fn node<H: Resident>(
         return (answer, Cell::NONE, EMPTY);
     }
     // A node coarser than any tile lies in no one tile's index, so it is split.
-    if zoom < TOP_ZOOM {
+    if zoom < MIN_ZOOM {
         return (split, Cell::NONE, EMPTY);
     }
     // A cell's columns are its zoom's. A coarser node's are those of every zoom asked within it,

@@ -320,13 +320,13 @@ fn walk_word() -> String {
         ("MISSED_PASS", node_cache::MISSED_PASS),
         (
             "EYE_MISS_COUNT",
-            node_cache::lane_at(count::EYE, count::MISS),
+            node_cache::lane_at(count::EYE, count::HOLE_WALK),
         ),
         ("HITS_ARGS", node_cache::HITS_ARGS),
         ("HITS_CNT", node_cache::HITS_CNT),
         (
             "LIGHT_ASKED_COUNT",
-            node_cache::lane_at(count::LIGHT, count::ASKED),
+            node_cache::lane_at(count::LIGHT, count::ASKS),
         ),
         ("LIGHT_T_MAX", light::W_T_MAX as u32),
         ("LIGHT_ACROSS", light::W_ACROSS as u32),
@@ -396,9 +396,9 @@ fn walk_word() -> String {
         ),
         ("VISIBLE_LACK", raster::LACK),
         ("COUNT_RAYS", count::RAYS),
-        ("COUNT_REUSED", count::REUSED),
+        ("COUNT_VOXEL", count::VOXEL),
         ("COUNT_SKY", count::SKY),
-        ("COUNT_WALKED", count::WALKED),
+        ("COUNT_HOLE", count::HOLE),
         ("SAMPLES_PASS", node_cache::SAMPLES_PASS),
         ("LIGHT_SAMPLES_PASS", node_cache::LIGHT_SAMPLES_PASS),
         (
@@ -407,7 +407,7 @@ fn walk_word() -> String {
         ),
         (
             "EYE_ASKED_COUNT",
-            node_cache::lane_at(count::EYE, count::ASKED),
+            node_cache::lane_at(count::EYE, count::ASKS),
         ),
         (
             "LIGHT_SAMPLE_COUNT",
@@ -435,7 +435,7 @@ fn walk_word() -> String {
         ("STARTS_FRACS", light::STARTS_FRACS as u32),
         (
             "LIGHT_MISS_COUNT",
-            node_cache::lane_at(count::LIGHT, count::MISS),
+            node_cache::lane_at(count::LIGHT, count::HOLE_WALK),
         ),
         ("CARVE", eye::CARVE as u32),
         ("HIDE", eye::HIDE as u32),
@@ -646,7 +646,7 @@ fn world_word() -> String {
     use xpute_kit::math::rng;
     let words: &[(&str, u32)] = &[
         ("LEAF_CELL_ZOOM", pxl_engine::LEAF_CELL_ZOOM),
-        ("TOP_ZOOM", pxl_engine::TOP_ZOOM),
+        ("MIN_ZOOM", pxl_engine::MIN_ZOOM),
         ("VALUE_UNKNOWN", value::UNKNOWN),
         ("GROUNDS_FIRST", value::GROUNDS[0]),
         ("GROUNDS_LAST", value::GROUNDS[1]),

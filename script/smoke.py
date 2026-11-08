@@ -53,7 +53,7 @@ ASSET_KEY = json.loads((SPEC / "asset" / "ingest.json").read_text())["files"][0]
 # A land page in Bundang: the zoom-15 tile's name.
 PAGE = "010332102130223"
 # PAGE's divisions page at z5, its first five digits: one zoom under the
-# pyramid's top (pxl-engine lib.rs `TOP_ZOOM`). Written out, since
+# pyramid's top (pxl-engine lib.rs `MIN_ZOOM`). Written out, since
 # computing it would copy pxl-spec's arithmetic here.
 DIVISION_TOP = "01033"
 # A zoom-15 page in the Arctic Ocean, the pyramid's north-east corner: well

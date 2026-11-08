@@ -37,7 +37,7 @@ pub const NEAREST_DIST: f64 = 1.25 * MIN_DIST;
 /// The orbit's farthest distance: `DOLLY_END_CELLS` sides of the coarsest
 /// cell any zoom holds, the cell of the pyramid's top. Looking straight down
 /// from there, the grid never asks for a cell coarser than a zoom draws.
-pub const MAX_DIST: f64 = DOLLY_END_CELLS * units(GROUND.cell_zoom(quadrant::TOP_ZOOM));
+pub const MAX_DIST: f64 = DOLLY_END_CELLS * units(GROUND.cell_zoom(quadrant::MIN_ZOOM));
 
 // ---- how the camera settles and keeps out of the ground ----
 

@@ -145,7 +145,7 @@ pub fn load_wants() -> &'static [(u64, Order)] {
     l.wants.clear();
     for kind in LoadKind::ALL {
         let files = (0..l.entries[kind as usize].len() as u32).map(Load::File);
-        for load in files.chain(source::top().map(|_| Load::Sphere)) {
+        for load in files.chain(source::min_zoom().map(|_| Load::Sphere)) {
             if matches!(l.at(kind, load), Some(Entry::Pending)) {
                 l.wants.push((id_of(kind, load), Order::LAST));
             }

@@ -573,7 +573,7 @@ fn line_of(r: &Stretch, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8) -
     }
     keep.sort_by(|x, y| x.0.total_cmp(&y.0));
     keep.dedup_by(|x, y| x.0 == y.0);
-    let fraction = |d: f64| r.piece.way.span[0] + d / r.piece.way.segment_length;
+    let fraction = |d: f64| r.piece.way.between[0] + d / r.piece.way.segment_length;
     let points: Vec<[f64; 3]> = keep.iter().map(|(_, p, z)| [p[0], p[1], *z]).collect();
     let last = r.at.len() - 1;
     (

@@ -27,7 +27,7 @@ use pxl_render::gpu::surface::Surface;
 use pxl_spec::bake::publication::{BaseLayer, FORMAT};
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3;
-use pxl_spec::space::layer::quadrant::{quad_rows, Quadrant, TOP_ZOOM};
+use pxl_spec::space::layer::quadrant::{quad_rows, Quadrant, MIN_ZOOM};
 use runtime::Runtime;
 use spec::V;
 use xpute_runtime::native::{pause, Core};
@@ -72,9 +72,9 @@ fn shard_of([lon, lat]: [f64; 2]) -> Quadrant {
         let (sx, sy, side) = t.rect();
         (sx..sx + side).contains(&x) && (sy..sy + side).contains(&y)
     };
-    let n = 1i32 << TOP_ZOOM;
-    let mut t = quad_rows(TOP_ZOOM)
-        .flat_map(|r| (0..n).map(move |c| Quadrant::new(TOP_ZOOM, [c, r])))
+    let n = 1i32 << MIN_ZOOM;
+    let mut t = quad_rows(MIN_ZOOM)
+        .flat_map(|r| (0..n).map(move |c| Quadrant::new(MIN_ZOOM, [c, r])))
         .find(holds)
         .expect("a top tile holds the place");
     while t.zoom < SHARD_ZOOM {
@@ -256,7 +256,7 @@ fn frames() {
     run.call(
         "SOURCE_DECLARE",
         &[
-            ("top_zoom", V::Num(TOP_ZOOM.into())),
+            ("min_zoom", V::Num(MIN_ZOOM.into())),
             ("format", V::Nums(format)),
             ("shard", V::Strs(vec![shard_of(PLACE).key()])),
         ],

@@ -102,16 +102,16 @@ fn icon_kinds_ship_symbol() {
 
 #[test]
 fn no_tile_past_coarsest() {
-    use crate::space::layer::quadrant::TOP_ZOOM;
+    use crate::space::layer::quadrant::MIN_ZOOM;
     const {
         assert!(
-            lattice::coarsest(GROUND) == TOP_ZOOM,
+            lattice::coarsest(GROUND) == MIN_ZOOM,
             "the ground is read up to the pyramid's top"
         );
     };
     const {
         assert!(
-            lattice::coarsest(PLACE_LATTICE) > TOP_ZOOM,
+            lattice::coarsest(PLACE_LATTICE) > MIN_ZOOM,
             "places are read no coarser than their icon's cell allows"
         );
     };

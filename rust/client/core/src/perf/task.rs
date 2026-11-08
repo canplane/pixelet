@@ -2,7 +2,7 @@
 
 //! A task's row in the profiler's columns: what ran, when, and how it ended.
 //! A row is made from an attempt the request scheduler ended
-//! (`TaskRow::of`), when the door takes the scheduler's end event (door.rs
+//! (`TaskRecord::of`), when the door takes the scheduler's end event (door.rs
 //! `run`).
 
 use core::mem::{offset_of, size_of};
@@ -25,7 +25,7 @@ const _: () = assert!(PATH_BYTES <= TASK_PATH_BYTES);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct TaskRow {
+pub struct TaskRecord {
     pub stream: f64,
     /// The path the task opened, zero past its end.
     pub path: [u8; TASK_PATH_BYTES],
@@ -47,7 +47,7 @@ pub struct TaskRow {
     pub phase_vals: [f64; PHASES_MAX],
 }
 
-words!(TaskRow, TASK::WORDS,
+words!(TaskRecord, TASK::WORDS,
     stream => TASK::stream, path => TASK::path, priority => TASK::priority, enqueue_ms => TASK::enqueue_ms,
     start_ms => TASK::start_ms, end_ms => TASK::end_ms, outcome => TASK::outcome,
     fail => TASK::fail, detail => TASK::detail,
@@ -60,11 +60,11 @@ fn path_bytes(path: &[u8]) -> [u8; TASK_PATH_BYTES] {
     out
 }
 
-impl TaskRow {
+impl TaskRecord {
     /// The row of `a`, which ended at `at` with `exit`, and the phase timings
     /// its run reported.
-    pub fn of(a: &Attempt, at: f64, exit: Exit, phases: Option<Phases>) -> TaskRow {
-        let mut row = TaskRow {
+    pub fn of(a: &Attempt, at: f64, exit: Exit, phases: Option<Phases>) -> TaskRecord {
+        let mut row = TaskRecord {
             stream: a.stream as u32 as f64,
             path: path_bytes(path_of(a.stream, a.id).as_bytes()),
             priority: a.rank.class as f64 + a.rank.dist,
@@ -72,7 +72,7 @@ impl TaskRow {
             start_ms: a.start_ms,
             end_ms: at,
             outcome: exit.outcome() as u32 as f64,
-            ..TaskRow::default()
+            ..TaskRecord::default()
         };
         match exit {
             Exit::Failed(fail) => {

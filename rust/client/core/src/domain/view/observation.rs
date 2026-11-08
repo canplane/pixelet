@@ -35,14 +35,14 @@ use pxl_spec::space::coord::zoom::Zoom;
 /// the draw distance (`eye_draw_dist`) by the clip levels' margin. None until
 /// the source declares its top.
 pub fn eye_demand_dist() -> Option<f64> {
-    source::top().map(|top| demand_dist(GROUND, top))
+    source::min_zoom().map(|min| demand_dist(GROUND, min))
 }
 
 /// How far the eye draws, in world units. The rays and the clouds both stop
 /// here, short of `eye_demand_dist` by the margin the clip levels hold past
 /// it. None until the source declares its top.
 pub fn eye_draw_dist() -> Option<f64> {
-    source::top().map(|top| draw_dist(GROUND, top))
+    source::min_zoom().map(|min| draw_dist(GROUND, min))
 }
 
 /// The observation the last reader made. It is kept so that the floor under
@@ -101,11 +101,11 @@ pub fn observation() -> Option<Observation> {
 /// met. A column the world knows nothing of yet gets no brick, since there is
 /// nothing in it for a brick to stand in.
 pub fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
-    let (Some(top), Some(flat)) = (TerrainTile::top(), floor::ring(o)) else {
+    let (Some(min_zoom), Some(flat)) = (TerrainTile::min_zoom(), floor::ring(o)) else {
         return;
     };
     let over = (o.eye[2] - o.ground).max(0.0);
-    let coarsest = GROUND.grid_zoom(top).max(BRICK_SHIFT);
+    let coarsest = GROUND.grid_zoom(min_zoom).max(BRICK_SHIFT);
     let near = |zoom: Zoom, [x, y]: [i32; 2]| {
         let side = units(zoom);
         let gap = |lo: f64, e: f64| (lo - e).max(e - lo - side).max(0.0);
@@ -148,7 +148,7 @@ pub fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
 }
 
 /// How far from the eye a layer's tiles at `zoom` are asked for. At the
-/// source's `top` zoom this is the floor's ring (tile_cache/floor.rs `ring`).
+/// source's `min_zoom` this is the floor's ring (tile_cache/floor.rs `ring`).
 /// At a finer zoom it is the outer edge of the zoom's band (pxl-spec
 /// layer/demand.rs `band`), and None when that band lies past the far edge.
 pub fn demand_radius(o: &Observation, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option<f64> {

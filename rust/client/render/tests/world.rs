@@ -212,7 +212,7 @@ fn tell(
         "asked of a level not laid",
         asked > z + clip::BRICK_MIPS && UNLAID.contains(&asked),
     );
-    if (pxl_engine::TOP_ZOOM..SHARD_ZOOM).contains(&z) && got.kind == Kind::Split {
+    if (pxl_engine::MIN_ZOOM..SHARD_ZOOM).contains(&z) && got.kind == Kind::Split {
         let mut place = before.ground;
         let coarsest = ground::coarsest(z, zooms[0]).min(zooms[1]);
         let cells = [coarsest, zooms[1]];
@@ -242,7 +242,7 @@ fn tell(
         };
         !(-row..row).contains(&c[1]) || !(-side..side).contains(&c[2])
     });
-    if got.kind != Kind::Cell && z >= pxl_engine::TOP_ZOOM && !is_cell {
+    if got.kind != Kind::Cell && z >= pxl_engine::MIN_ZOOM && !is_cell {
         let (mut held, mut place) = (w, before.ground);
         let (i, _, bound) = ground::node(&mut held, shard, &mut place, (z, c), zooms, false);
         let ways = way::slab(bound, [ground::coarsest(z, zooms[0]), zooms[1]]);

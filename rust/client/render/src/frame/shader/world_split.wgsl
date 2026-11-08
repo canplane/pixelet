@@ -173,7 +173,7 @@ fn ground_split(shard: u32, place: u32, zoom: u32, c: vec3<i32>, far: u32, near:
     }
     return GroundSplit(KIND_SPLIT, BOX_WHOLE, none, LOOKUP_NONE);
   }
-  if (zoom < TOP_ZOOM) {
+  if (zoom < MIN_ZOOM) {
     return GroundSplit(KIND_SPLIT, BOX_WHOLE, none, place);
   }
   let r = bound_over(place, min(coarsest(zoom, far), near), near, zoom, c.xy);

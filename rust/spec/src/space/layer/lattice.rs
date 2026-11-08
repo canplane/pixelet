@@ -3,7 +3,7 @@
 //! A layer's lattice: how many cells its tile holds a side, the same at
 //! every zoom, and its scale on the camera grid's cells.
 
-use super::quadrant::{Cell, Quadrant, TOP_ZOOM};
+use super::quadrant::{Cell, Quadrant, MIN_ZOOM};
 use crate::space::camera::grid::{cell_zoom_at, split_dist, CLIP_MARGIN};
 use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::{idx_of, Zoom};
@@ -21,7 +21,7 @@ pub use pxl_engine::lattice::{Lattice, GROUND, TILE_CELLS};
 /// ground cells, the coarsest the camera grid draws. A tile coarser is one no
 /// reader asks for, so the bake folds no coarser.
 pub const fn coarsest(lattice: Lattice) -> Zoom {
-    lattice.read_zoom(GROUND.cell_zoom(TOP_ZOOM))
+    lattice.read_zoom(GROUND.cell_zoom(MIN_ZOOM))
 }
 
 /// How far from the eye the view draws with `zoom` its coarsest:
@@ -36,7 +36,7 @@ pub const fn draw_dist(lattice: Lattice, zoom: Zoom) -> f64 {
 pub const EFFECT_REACH: f64 = split_dist(GROUND.leaf_cell_zoom() - 1);
 
 const _: () = assert!(
-    draw_dist(GROUND, TOP_ZOOM) < REACH as f64,
+    draw_dist(GROUND, MIN_ZOOM) < REACH as f64,
     "the eye draws within the reach every node it stops on is named and kept by"
 );
 

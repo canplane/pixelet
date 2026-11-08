@@ -179,7 +179,7 @@ async function ask_declaration(): Promise<string | null> {
  * refuses it. The core refuses, among others, a format this build cannot
  * read. */
 export type SendSource = (
-  top_zoom: number,
+  min_zoom: number,
   formats: number[],
   shards: string[],
 ) => boolean;

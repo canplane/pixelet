@@ -450,18 +450,18 @@ fn a_frame_decides_as_its_conditions_did_over_every_read() {
         };
         let quiet = r.stands && r.lists_same && !r.clouds_damage;
         let masked = r.partial && r.stands && !r.unmasked;
-        let stood = quiet && !r.casts_px && !r.light_casts;
+        let unchanged = quiet && !r.casts_px && !r.light_casts;
         let d = FramePlan::of(r);
         assert_eq!(
             d,
             FramePlan {
                 quiet,
                 masked,
-                stood
+                unchanged
             },
             "{r:?}"
         );
-        assert!(!d.stood || d.quiet, "{r:?}: what stands is quiet");
+        assert!(!d.unchanged || d.quiet, "{r:?}: what is unchanged is quiet");
         assert!(
             !(d.masked || d.quiet) || r.stands,
             "{r:?}: what is masked or quiet stands"

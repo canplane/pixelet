@@ -16,7 +16,7 @@ use pxl_spec::bake::tile::terrain::{GroundId, TerrainTile, GROUND_COLUMN};
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, TOP_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, MIN_ZOOM};
 
 use crate::domain::layer::object::store::Store;
 use crate::domain::layer::tile_cache::TileCache;
@@ -70,7 +70,7 @@ fn resident(center: [f64; 2], held: &[(Quadrant, Leaf)]) -> TileCache<TerrainTil
         },
     ) in held
     {
-        let line = std::iter::successors(Some(*p), |q| (q.zoom > TOP_ZOOM).then(|| q.parent()));
+        let line = std::iter::successors(Some(*p), |q| (q.zoom > MIN_ZOOM).then(|| q.parent()));
         for (k, q) in line.enumerate() {
             if admitted.contains(&q) {
                 continue;
@@ -729,7 +729,7 @@ fn late_brick_spike() {
             q[1] * BRICK as i32 + (k / BRICK) as i32,
         ];
         let h = top(g);
-        for zoom in TOP_ZOOM..LEAF_CELL_ZOOM - BRICK_MIPS {
+        for zoom in MIN_ZOOM..LEAF_CELL_ZOOM - BRICK_MIPS {
             let s = LEAF_CELL_ZOOM - zoom;
             let (b, _, _) = cells::bound_over(
                 &CpuClipmap,

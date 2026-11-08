@@ -10,7 +10,7 @@ use crate::cast::{Detail, End, Node, Query, Ray, Spacing, Trace, Until, DEPTH};
 use crate::content::Sample;
 use crate::object::{ancestor_at, y_start, z_start};
 use crate::HEIGHT_BITS;
-use crate::{wrap_idx, Zoom, FRAC_W, TOP_ZOOM, UNIT_ZOOM};
+use crate::{wrap_idx, Zoom, FRAC_W, MIN_ZOOM, UNIT_ZOOM};
 use std::vec::Vec;
 
 #[test]
@@ -214,7 +214,7 @@ impl View {
             origin: EYE.map(|v| libm::rintf(v * (1 << FRAC_W) as f32) as i32),
             axes: [[0.0, c, -s], [1.0, 0.0, 0.0], [0.0, s, c]],
             tan,
-            range: [TOP_ZOOM + 9, UNIT_ZOOM + 3],
+            range: [MIN_ZOOM + 9, UNIT_ZOOM + 3],
         }
     }
 

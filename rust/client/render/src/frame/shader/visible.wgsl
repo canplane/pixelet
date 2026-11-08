@@ -51,10 +51,10 @@ fn went_on(k: u32) -> bool {
 }
 
 /// Adds one to count lane `lane` where `on`. The lanes in `args` begin at pxl-engine
-/// `count::REUSED`.
+/// `count::VOXEL`.
 fn add_cnt(on: bool, lane: u32) {
   if (on) {
-    atomicAdd(&args.counts[lane - COUNT_REUSED], 1u);
+    atomicAdd(&args.counts[lane - COUNT_VOXEL], 1u);
   }
 }
 

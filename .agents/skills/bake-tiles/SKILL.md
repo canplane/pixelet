@@ -34,30 +34,30 @@ docker compose -f infra/local/docker-compose.yml up -d
 A missing or partial table needs an ingest; the bake names it
 ([infra/geo/README.md](../../../infra/geo/README.md)). **Never `down -v`.**
 
-## Stages and flags
+## Steps and flags
 
 A bake changes its set only through `out/<kind>.stage/`, one shard at a time:
 `leaf` (the named shards' leaves), then `fold`, then `commit`. `publish` runs
-only when named and makes `out/<kind>.publish/` for an upload. Any stage can be
+only when named and makes `out/<kind>.publish/` for an upload. Any step can be
 stopped and rerun, and `commit` refuses to run before `fold`. After a change of
 source, code or coverage, purge
 (`rm -rf out/<kind> out/<kind>.stage out/<kind>.publish`) and bake every shard.
 
 ```bash
-make bake-terrain ARGS="--shard 01033210 --stage leaf"
-make bake-terrain ARGS="--stage fold --stage commit"
+make bake-terrain ARGS="--shard 01033210 --step leaf"
+make bake-terrain ARGS="--step fold --step commit"
 ```
 
 | Flag                | Meaning                                                                       |
 | ------------------- | ----------------------------------------------------------------------------- |
-| `--stage <s>`       | `leaf`, `fold`, `commit`, `publish`; repeatable; the first three when omitted |
+| `--step <s>`        | `leaf`, `fold`, `commit`, `publish`; repeatable; the first three when omitted |
 | `--shard <name>`    | bake that shard's leaves, repeatable; every shard when omitted                |
 | `--out <dir>`       | the set (default `./out/<kind>`), staged in `<dir>.stage`                     |
 | `--concurrency <n>` | parallel tiles — match `DB_POOL_SIZE`, the DB is the bottleneck               |
 
 ## Verifying
 
-1. **Zero failures** in the leaf stage's `failed=`.
+1. **Zero failures** in the leaf step's `failed=`.
 2. **Terrain: spot-check against the dev tile server, at more than one zoom.**
    Compare the decompressed packets, not the files. Run `make serve-tile`, not
    `dev`:

@@ -12,7 +12,7 @@
 
 #[path = "asker.spec.rs"]
 mod abi;
-#[path = "../machine.spec.rs"]
+#[path = "machine.spec.rs"]
 mod machine;
 
 use abi::asker;

@@ -224,7 +224,7 @@ impl Stage {
         if !self.done_path(COMMIT).exists() {
             if !self.done_path(FOLD).exists() {
                 return Err(format!(
-                    "{}: nothing folded; run --stage fold first",
+                    "{}: nothing folded; run --step fold first",
                     self.stage.root.display()
                 ));
             }
@@ -278,7 +278,7 @@ impl Stage {
     fn not_committing(&self) -> Result<(), String> {
         match self.done_path(COMMIT).exists() {
             true => Err(format!(
-                "{}: a commit is begun; finish it with --stage commit",
+                "{}: a commit is begun; finish it with --step commit",
                 self.stage.root.display()
             )),
             false => Ok(()),
@@ -371,7 +371,7 @@ impl Stage {
     }
 }
 
-/// What a bake is told to do: its stages (`--stage leaf`, `fold`, `commit`,
+/// What a bake is told to do: its steps (`--step leaf`, `fold`, `commit`,
 /// all three where none is named, and `publish` only where named), the
 /// shards to bake (`--shard <name>`, repeated; every shard of the coverage
 /// where none is), its set (`--out`) and how many tiles at once
@@ -389,7 +389,7 @@ pub struct Run {
 impl Run {
     pub fn parse(kind: &str) -> Result<Run, String> {
         let coverage = Coverage::of_source()?;
-        let (mut stages, mut named, mut out, mut concurrency) = (
+        let (mut steps, mut named, mut out, mut concurrency) = (
             Vec::new(),
             Vec::new(),
             PathBuf::from(format!("./out/{kind}")),
@@ -398,18 +398,18 @@ impl Run {
         let mut flags = Flags::from_env();
         while let Some(flag) = flags.arg() {
             match flag.as_str() {
-                "--stage" => stages.push(flags.val()?),
+                "--step" => steps.push(flags.val()?),
                 "--shard" => named.push(flags.val()?),
                 "--out" => out = PathBuf::from(flags.val()?),
                 "--concurrency" => concurrency = flags.parse()?,
                 other => return Err(format!("unknown flag: {other}")),
             }
         }
-        if let Some(s) = stages
+        if let Some(s) = steps
             .iter()
             .find(|s| !matches!(s.as_str(), "leaf" | "fold" | "commit" | "publish"))
         {
-            return Err(format!("unknown stage: {s}"));
+            return Err(format!("unknown step: {s}"));
         }
         if let Some(n) = named
             .iter()
@@ -419,8 +419,8 @@ impl Run {
                 "{n}: no shard of the coverage (infra/geo/coverage.json)"
             ));
         }
-        let all = stages.is_empty();
-        let has = |s: &str| stages.iter().any(|t| t == s);
+        let all = steps.is_empty();
+        let has = |s: &str| steps.iter().any(|t| t == s);
         Ok(Run {
             leaf: all || has("leaf"),
             fold: all || has("fold"),

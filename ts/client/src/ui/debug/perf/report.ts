@@ -43,11 +43,11 @@ type RayColumn<K = keyof RayCounts> = K extends `eye_${infer C}` ? C : never;
  * over the window's frames (the rays columns of FRAME in perf.json). Each
  * observer, the eye and the light, gets one line when it cast in the window.
  * Per cast, the line gives the nodes asked by its beam rays, by its samples
- * and by its walks again (`miss`), and how many of the walks' nodes were
- * asked of the world (`asked`). It gives the pixels or map slots cast again,
- * split into those that reused the visible sample, those that walked and
- * those that took the sky, each as a share of all its pixels or slots. Last
- * come the nodes each walking pixel or slot asked, and the boxes drawn per
+ * and by its holes' walk (`hole_walk`), and how many of the walks' nodes were
+ * asked of the world (`asks`). It gives the pixels or map slots cast again,
+ * split into those that took the visible voxel, the holes, which walked on
+ * their own, and those that took the sky, each as a share of all its pixels
+ * or slots. Last come the nodes each hole asked, and the boxes drawn per
  * cast. */
 const raysText = (f: RayCounts) => {
   const observer = (name: "eye" | "light") => {
@@ -58,16 +58,16 @@ const raysText = (f: RayCounts) => {
     const rays = at("rays");
     const part = (n: number) =>
       rays > 0 ? `${fixed((100 * n) / rays, 2)}%` : `${perCast(n)} a cast`;
-    const again = at("reused") + at("walked") + at("sky");
+    const again = at("voxel") + at("hole") + at("sky");
     return [
       `  ${name.padEnd(7)} cast in ${casts} frames   nodes a cast: beam ${perCast(
         at("beam"),
-      )}  sample ${perCast(at("sample"))}  miss ${perCast(
-        at("miss"),
-      )} (${perCast(at("asked"))} asked of the world)   cast again ${part(again)}: reused ${part(at("reused"))}  walked ${part(
-        at("walked"),
+      )}  sample ${perCast(at("sample"))}  hole walk ${perCast(
+        at("hole_walk"),
+      )} (${perCast(at("asks"))} asked of the world)   cast again ${part(again)}: voxel ${part(at("voxel"))}  hole ${part(
+        at("hole"),
       )} (${n1(
-        at("miss") / Math.max(1, at("walked")),
+        at("hole_walk") / Math.max(1, at("hole")),
       )} nodes each)  sky ${part(at("sky"))}   boxes ${perCast(at("boxes"))} a cast`,
     ];
   };
@@ -104,7 +104,7 @@ function recordingText(r: RecordingSection): string {
     r.ring_sq_peak
   } left ${r.ring_left_peak}   body slots peak ${
     r.body_slots_peak
-  }   terrain refused ${r.cap_terrain_refused}   (over the ${
+  }   terrain refused ${r.terrain_refusals}   (over the ${
     r.frames
   } frames since the recording started)`;
 }
@@ -167,7 +167,7 @@ export function frameLine({ sample: s, delta }: Worst): string {
   )}${s.settled ? " (still)" : ""}  stage ${n1(s.stage_ms)}  tasks ${n1(
     s.tasks_ms,
   )}  perf ${n1(s.perf_ms)}  gpu busy ${
-    s.gpu_read ? n1(s.gpu_busy_ms) : "-"
+    s.gpu_timed ? n1(s.gpu_busy_ms) : "-"
   }  draws ${s.draws} tris ${tris(s.triangles)}  uploads ${s.uploads}  heap used ${bytes(
     s.heap_used_bytes,
   )}${d}`;
@@ -246,10 +246,10 @@ function windowSection(r: PerfReport): string[] {
     `  rest    ${percentiles(
       f.rest,
     )} ms   (busy unmeasured: the door's commands, rise and fall)`,
-    f.gpu_read > 0
+    f.gpu_timed > 0
       ? `  gpu     ${percentiles(
           f.gpu_busy,
-        )} ms busy   (over the ${f.gpu_read} frames a read timed)`
+        )} ms busy   (over the ${f.gpu_timed} frames a read timed)`
       : "  gpu     no timestamps: no read landed (no renderer yet, or the device keeps none)",
     `  busy by kind  ${
       f.gpu_busy_kinds

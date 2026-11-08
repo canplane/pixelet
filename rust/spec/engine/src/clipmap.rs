@@ -25,7 +25,7 @@ use crate::way;
 use crate::way::Columns;
 use crate::way::Segment;
 use crate::way::Stations;
-use crate::{wrap_idx, Zoom, LEAF_CELL_ZOOM, TOP_ZOOM};
+use crate::{wrap_idx, Zoom, LEAF_CELL_ZOOM, MIN_ZOOM};
 
 /// A brick's side in cells, as a shift.
 pub const BRICK_SHIFT: u32 = 6;
@@ -39,7 +39,7 @@ pub const ENTRIES: u32 = ACROSS * ACROSS;
 /// A clip level's side in cells.
 pub const CLIP_SIZE: u32 = ACROSS * BRICK;
 /// The eye's coarsest clip level's cells' zoom: the top's.
-pub const FIRST_CELL_ZOOM: Zoom = GROUND.cell_zoom(TOP_ZOOM);
+pub const FIRST_CELL_ZOOM: Zoom = GROUND.cell_zoom(MIN_ZOOM);
 /// The eye's clip levels, one for every zoom the pyramid draws, coarsest first, which the
 /// GPU's cast reads; the one at `cell_zoom` is number `cell_zoom − FIRST_CELL_ZOOM`.
 pub const EYE_CLIP_LEVELS: u32 = LEAF_CELL_ZOOM - FIRST_CELL_ZOOM + 1;

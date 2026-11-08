@@ -3,7 +3,7 @@
 use crate::space::coord::world::EXTENT;
 use crate::space::coord::zoom::{Zoom, UNIT_ZOOM};
 use crate::space::layer::lattice::GROUND;
-use crate::space::layer::quadrant::TOP_ZOOM;
+use crate::space::layer::quadrant::MIN_ZOOM;
 use pxl_engine::FINEST_ZOOM;
 
 // Elevation is sampled at cell centers (x + 0.5, y + 0.5) by both the SQL
@@ -24,6 +24,6 @@ pub const OBJECT_COARSEST: Zoom = UNIT_ZOOM;
 
 pub const OBJECT_FINEST: Zoom = OBJECT_COARSEST + OBJECT_SCALES as Zoom - 1;
 const _: () = assert!(
-    OBJECT_FINEST < FINEST_ZOOM && GROUND.grid_zoom(TOP_ZOOM) >= 1,
+    OBJECT_FINEST < FINEST_ZOOM && GROUND.grid_zoom(MIN_ZOOM) >= 1,
     "the zooms a cell is asked at, and so every node a ray stops on, lie from 1 to the finest's coarser, where a slot may keep it (pxl-engine node_cache::keeps)"
 );

@@ -31,7 +31,7 @@ static SHARDS: Global<(bool, Vec<[i32; 4]>)> = Global::new();
 /// gpu/api.rs `in_flight`); a source declared meanwhile is built in at a
 /// later call.
 pub fn shards() -> &'static [[i32; 4]] {
-    let declared = source::top().is_some();
+    let declared = source::min_zoom().is_some();
     let (made, s) = SHARDS.get(|| (false, Vec::new()));
     if s.is_empty() || (*made != declared && !api::in_flight(s)) {
         s.clear();

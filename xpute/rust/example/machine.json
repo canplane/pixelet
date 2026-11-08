@@ -5,7 +5,7 @@
   ],
   "gen": {
     "ts": "../../ts/example/machine.spec.ts",
-    "rs": "machine.spec.rs"
+    "rs": "src/machine.spec.rs"
   },
   "mem": {
     "bytes": [

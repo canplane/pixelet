@@ -15,7 +15,7 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::quadrant::{Quadrant, TOP_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, MIN_ZOOM};
 
 use crate::domain::layer::terrain::clipmap::CpuClipmap;
 use crate::domain::layer::tile_cache::{Line, Lines, TileCache};
@@ -111,7 +111,7 @@ impl TerrainQuery for TileCache<TerrainTile> {
         let tile = bound_tile(node, cell_zoom);
         match over {
             Some(o) if o.tile == tile => *o,
-            Some(o) if tile.zoom > TOP_ZOOM && o.tile == tile.parent() => self.step(o, tile),
+            Some(o) if tile.zoom > MIN_ZOOM && o.tile == tile.parent() => self.step(o, tile),
             _ => self.line(tile),
         }
     }

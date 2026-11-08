@@ -58,7 +58,7 @@ use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::octant::Octant;
-use pxl_spec::space::layer::quadrant::{Quadrant, TOP_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, MIN_ZOOM};
 
 use super::world::World;
 use crate::domain::layer::object::store::ObjectQuery as _;
@@ -71,7 +71,7 @@ use crate::sys::io::source;
 /// The coarsest zoom a cell is asked at: that of the coarsest cells a tile
 /// draws.
 pub(super) fn coarsest() -> Zoom {
-    GROUND.grid_zoom(TOP_ZOOM)
+    GROUND.grid_zoom(MIN_ZOOM)
 }
 
 /// A node as a descent reaches it, with X on the asker's lap, and what its

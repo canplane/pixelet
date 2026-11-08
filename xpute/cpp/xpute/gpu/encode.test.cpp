@@ -1,7 +1,7 @@
 // cpp/xpute/gpu/encode.test.cpp
 
 // Holds the C++ encoder to golden/gpu/programs.tsv. The programs that
-// rust/gpu/src/programs.test.rs writes, making the same calls in C++, must
+// rust/gpu/src/program.test.rs writes, making the same calls in C++, must
 // write the words the record holds, turn by turn. Each turn ends with a
 // request whose ticket is the turn's number, counted from 1, and the last
 // turn reads the result back.

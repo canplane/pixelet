@@ -17,34 +17,30 @@ pub const EYE: u32 = 0;
 pub const LIGHT: u32 = 1;
 pub const OBSERVERS: u32 = 2;
 
-/// An observer's counters. `BEAM`, `SAMPLE` and `MISS` count the nodes visited by its beam
-/// rays, its samples and its second walk of the missed pixels. `ASKED` counts the nodes that
-/// no node cache slot answered, among those visited by the walks that ask the world
-/// themselves: its samples and the light's second walk. `REUSED`, `WALKED` and `SKY` count
-/// the pixels or slots it cast again by what each took: the visible voxel, a walk of its own,
-/// or the sky. `BOXES` counts the boxes it drew.
+/// An observer's counters. `BEAM`, `SAMPLE` and `HOLE_WALK` count the nodes visited by its
+/// beam rays, its samples and the walk of its holes. `ASKS` counts the nodes that no node
+/// cache slot answered, among those visited by the walks that ask the world themselves: its
+/// samples and the light's holes' walk. `VOXEL`, `HOLE` and `SKY` count the pixels or slots it
+/// cast again by what each took: the visible voxel, a walk of its own as a hole, or the sky.
+/// `BOXES` counts the boxes it drew.
 pub const BEAM: u32 = 0;
 pub const SAMPLE: u32 = 1;
-pub const MISS: u32 = 2;
-pub const ASKED: u32 = 3;
-pub const REUSED: u32 = 4;
-pub const WALKED: u32 = 5;
+pub const HOLE_WALK: u32 = 2;
+pub const ASKS: u32 = 3;
+pub const VOXEL: u32 = 4;
+pub const HOLE: u32 = 5;
 pub const SKY: u32 = 6;
 pub const BOXES: u32 = 7;
 pub const LANES: u32 = 8;
 pub const WORDS: u32 = OBSERVERS * LANES;
 
-/// A walk that writes the node cache adds to the first `WALKS` counters, `BEAM` to `ASKED`,
-/// and a pixel or a slot adds to the `RAYS` counters after them, `REUSED` to `SKY`. Each of
+/// A walk that writes the node cache adds to the first `WALKS` counters, `BEAM` to `ASKS`,
+/// and a pixel or a slot adds to the `RAYS` counters after them, `VOXEL` to `SKY`. Each of
 /// the two runs lies in this order in the buffer it is added to.
 pub const WALKS: u32 = 4;
 pub const RAYS: u32 = 3;
 const _: () = assert!(
-    BEAM == 0
-        && ASKED + 1 == WALKS
-        && REUSED == WALKS
-        && SKY + 1 == WALKS + RAYS
-        && BOXES == SKY + 1
+    BEAM == 0 && ASKS + 1 == WALKS && VOXEL == WALKS && SKY + 1 == WALKS + RAYS && BOXES == SKY + 1
 );
 
 pub const fn at(observer: u32, lane: u32) -> u32 {

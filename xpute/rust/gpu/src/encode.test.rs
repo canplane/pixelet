@@ -3,7 +3,7 @@
 use xpute_core::ipc::stream::{Stream, WORD};
 use xpute_kit::golden::Golden;
 
-use crate::programs::{At, Encoder, PROGRAMS};
+use crate::program::{At, Encoder, PROGRAMS};
 
 const GOLDEN: &str = include_str!("../../../spec/golden/gpu/programs.tsv");
 

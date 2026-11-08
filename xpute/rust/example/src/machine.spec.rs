@@ -1,4 +1,4 @@
-// rust/example/machine.spec.rs
+// rust/example/src/machine.spec.rs
 //
 // GENERATED from rust/example/machine.json
 

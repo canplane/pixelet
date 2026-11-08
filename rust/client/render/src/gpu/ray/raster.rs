@@ -400,7 +400,7 @@ impl Raster {
         let (g, encoder) = (ctx.g, ctx.encoder);
         if samples_cast {
             let [x, y] = grid.samples;
-            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::sample_box).pass());
+            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::raster_box).pass());
             g.set_bind_group(pass, 0, self.groups[0], &[]);
             g.set_pipeline(pass, self.boxes.id);
             g.dispatch(pass, x.div_ceil(SQUARE_SIDE), y.div_ceil(SQUARE_SIDE), 1);
@@ -463,7 +463,7 @@ impl Raster {
             sequence::OPEN_RASTER_DRAW_ARGS.to_at(),
             bytes(&draw_args()),
         );
-        let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::sample_box).pass());
+        let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::raster_box).pass());
         g.set_bind_group(pass, 0, self.groups[3], &[]);
         g.set_pipeline(pass, self.record_draw_pipeline.id);
         g.dispatch(pass, node_cache::ENTRIES / record::DRAW_LANES, 1, 1);

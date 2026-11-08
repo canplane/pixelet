@@ -79,7 +79,7 @@ pub fn by_dist() -> Detail {
 pub fn cell_zoom_at(eye: V3, at: V3) -> Zoom {
     let v = v3::sub(&at, &eye);
     let cell_zoom = grid::cell_zoom_at(v3::dot(&v, &v)).min(GROUND.leaf_cell_zoom());
-    TerrainTile::top().map_or(cell_zoom, |top| cell_zoom.max(GROUND.grid_zoom(top)))
+    TerrainTile::min_zoom().map_or(cell_zoom, |min| cell_zoom.max(GROUND.grid_zoom(min)))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

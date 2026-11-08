@@ -24,7 +24,7 @@ use crate::perf::section::{
     FramesSection, Percentiles, StepStats, StepsSection, StreamStats, TasksSection, ViewSection,
 };
 use crate::perf::spec::{self, LIMIT, NOW, STAT};
-use crate::perf::task::TaskRow;
+use crate::perf::task::TaskRecord;
 use crate::perf::word::put;
 use crate::sys::io::failure::Outcome;
 use crate::sys::sched::tick::tick;
@@ -38,7 +38,7 @@ use xpute_core::global::Global;
 const STATS_WORDS: usize = STAT::WORDS as usize;
 const NOW_WORDS: usize = NOW::WORDS as usize;
 const REASONS: usize = LIMIT::REASONS as usize;
-const STEP_SLOTS: usize = LIMIT::STEP_SLOTS as usize;
+const STEP_CAP: usize = LIMIT::STEP_CAP as usize;
 
 struct Read {
     /// The words live on the heap, not in a static, because a native build's
@@ -132,7 +132,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
     let cnt = |of: &dyn Fn(&FrameSample) -> bool| frames.iter().filter(|f| of(f)).count() as f64;
     // The GPU's figures cover only the frames a read timed, each counted
     // once. A span the frame did not run reads 0 and is left out.
-    let read = || frames.iter().filter(|f| f.gpu.read != 0.0);
+    let read = || frames.iter().filter(|f| f.gpu.timed != 0.0);
     let spans: [(f64, f64); GPU_SPANS] = core::array::from_fn(|k| {
         let ran = read().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0);
         let (s, n) = percentiles_n(scratch, ran);
@@ -159,7 +159,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
         effects_p95: core::array::from_fn(|k| {
             percentiles(scratch, frames.iter().map(|f| f.effects[k])).p95
         }),
-        gpu_read: cnt(&|f| f.gpu.read != 0.0),
+        gpu_timed: cnt(&|f| f.gpu.timed != 0.0),
         gpu_busy: percentiles(scratch, read().map(|f| f.gpu.busy_ms)),
         gpu_busy_kinds: {
             let mut by = [0.0; 3 * FRAME_KINDS];
@@ -187,7 +187,7 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
     }
 }
 
-fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
+fn tasks(scratch: &mut [f64], tasks: &[TaskRecord]) -> TasksSection {
     let (ok, aborted, err) = (
         Outcome::ok as u32 as f64,
         Outcome::aborted as u32 as f64,
@@ -352,7 +352,7 @@ fn steps() -> StepsSection {
         .step_stats()
         .iter()
         .filter(|s| s.cnt > 0)
-        .take(STEP_SLOTS)
+        .take(STEP_CAP)
     {
         steps.slots[steps.cnt as usize] = StepStats {
             phase: f64::from(s.phase),

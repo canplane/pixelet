@@ -867,7 +867,7 @@ impl TurnGrant {
 #[derive(Clone, Copy, Debug)]
 pub struct SourceDeclare<'a> {
     /// The coarsest zoom the source supplies whole.
-    pub top_zoom: u32,
+    pub min_zoom: u32,
     /// Each kind's format, one a kind, indexed by its bake's number
     /// (pxl-spec bake/publication.spec.rs).
     pub format: &'a [u32],
@@ -880,7 +880,7 @@ impl<'a> SourceDeclare<'a> {
     pub fn read(pkt: &'a [u8]) -> Result<SourceDeclare<'a>, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SourceDeclare {
-            top_zoom: integer::<u32>(f.at(0)?.get_number()?)?,
+            min_zoom: integer::<u32>(f.at(0)?.get_number()?)?,
             format: f.at(1)?.get_array::<u32>()?,
             shard: f.at(2)?.get_strs()?,
         })

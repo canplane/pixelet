@@ -338,7 +338,7 @@ fn ground_cell(shard: u32, place: u32, zoom: u32, c: vec3<i32>) -> GroundCell {
     let earth = select(VALUE_VOID, VALUE_UNKNOWN, c.z < SEA_LEVEL);
     return ground_none(KIND_CELL, vec2<u32>(earth, 0u), LOOKUP_NONE);
   }
-  if (zoom < TOP_ZOOM) {
+  if (zoom < MIN_ZOOM) {
     return ground_none(KIND_SPLIT, BOX_WHOLE, place);
   }
   let r = bound_over(place, zoom, zoom, zoom, c.xy);

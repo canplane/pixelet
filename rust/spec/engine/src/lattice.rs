@@ -6,7 +6,7 @@
 //! tiles by them alike. Placing a lattice in the world, such as finding a position's cell or a
 //! tile's neighbors, is pxl-spec's (space/layer/lattice.rs `Cells`).
 
-use crate::{cnt, Zoom, FINEST_ZOOM, LEAF_CELL_ZOOM, LEAF_ZOOM, TOP_ZOOM};
+use crate::{cnt, Zoom, FINEST_ZOOM, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM};
 
 /// Where a cell's center lies, as a share of its side from its low corner. A cell is
 /// painted, sampled and crossed at this point.
@@ -52,8 +52,8 @@ impl Lattice {
     /// The zoom of the tile that cells at `cell_zoom` are read from, held to the pyramid's zooms.
     pub const fn read_zoom(self, cell_zoom: Zoom) -> Zoom {
         let z = self.tile_zoom_of_grid(cell_zoom);
-        (if z < TOP_ZOOM as i32 {
-            TOP_ZOOM as i32
+        (if z < MIN_ZOOM as i32 {
+            MIN_ZOOM as i32
         } else if z < LEAF_ZOOM as i32 {
             z
         } else {

@@ -1,4 +1,4 @@
-// xpute-gpu/programs.test.rs
+// xpute-gpu/program.test.rs
 
 //! The programs whose records spec/golden/gpu/programs.tsv holds, written
 //! with the Rust encoder; cpp/xpute/gpu/encode.test.cpp makes the same calls
