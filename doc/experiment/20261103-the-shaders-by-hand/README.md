@@ -1088,8 +1088,8 @@ Each commit passes `cargo check`.
 
 A server whose table shape had changed was deployed without the search tables
 copied, and `/geo/search` returned 500 until the user restored them and ran
-`VACUUM`. `infra/README.md` gives the copy as one step, and a deploy now checks
-first whether a table's shape moved. `VACUUM` then failed on `/dev/shm`, running in
+`VACUUM`. `infra/README.md` gives the copy and the server's deploy as one step.
+`VACUUM` then failed on `/dev/shm`, running in
 parallel within Docker's 64 MB, and passed with `PARALLEL 0`. A report said "pushed
 to deploy" when the push had failed, because a `tail` hid the error.
 
