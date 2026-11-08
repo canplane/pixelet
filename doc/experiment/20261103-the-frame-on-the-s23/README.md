@@ -18,7 +18,7 @@ rust-gpu went on 2026-11-05. The decisions the later runs served are
 [the frame is what it must draw](../../minutes/20261106-the-frame-is-what-it-must-draw.md),
 [a ray ends in its frame](../../minutes/20261107-a-ray-ends-in-its-frame.md),
 [the deployed build is the bar](../../minutes/20261107-the-deployed-build-is-the-bar.md) and
-[the light's list](../../minutes/20261108-the-light-s-list-measured.md).
+[the light's list](../../minutes/20261108-ray-raster-ray.md).
 
 ## How the runs were taken
 
@@ -1199,7 +1199,7 @@ cells here, a tenth of the 1 M that 11-06 assumed. Its time on the S23 was not m
 **The light's list, measured on the CPU and set aside** (11-08). Each tile's cells at its band,
 found by a descent of the query over its texels' sweep, came out exact in 13 of 14 cases, at 5 to
 400 times the nodes that the tile's 64 walks ask: the ground under the surface is listed as deep
-as the sweep runs ([the light's list](../../minutes/20261108-the-light-s-list-measured.md)).
+as the sweep runs ([the light's list](../../minutes/20261108-ray-raster-ray.md)).
 
 **A split's air children (ESVO's child masks), measured and dropped.** What a light's ray asks on
 the real-world test data, walked whole from the root on the CPU, 81 rays a case over 14 cases, is
