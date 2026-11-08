@@ -199,11 +199,15 @@ a cell at the zoom its distance asks for
    └── it is not known ────────────────▶ the ray stops there
 ```
 
-Control asks the same world one ray at a time, at the zoom the eye's rays draw
-there (`pxl-core domain/query/ray.rs` `first_hit`). The walker stands on the
-first cell that fills under it, and the pointer strikes what the rays draw. So
-there is no collision mesh beside a drawing mesh to drift apart: what you see is
-what you stand on and what you click.
+Control asks the same world, one ray at a time (`pxl-core domain/query/ray.rs`
+`first_hit`). So there is no collision mesh beside a drawing mesh to drift
+apart: what you see is what you stand on and what you click. What a body stands
+on and what an edit takes are the world's at its finest held zoom, not the
+eye's: the walker stands on the first cell that fills under it, the orbit camera
+keeps clear of what is there, and the pointer asks at the finest zoom and then
+judges what it struck by the zoom the eye's rays draw there
+(`domain/control/edit/pick.rs` `Pick`, `by_dist`), since an edit takes only
+whole cells and a folded cell is a summary.
 
 ### Honest answers, bounded holding
 
@@ -290,12 +294,13 @@ solid below its surface.
 ### What was found is remembered
 
 What the rays asked of each node is kept between frames in the **node cache**
-(`pxl-engine node_cache.rs`), and forgotten only where the data a node read
-changed. The voxels in it are the **record**, and the raster draws every one in
-view each frame, whatever that frame's rays reached (`pxl-engine record.rs`). So
-a voxel found once is drawn until its data changes, and rays walk only where
-something is newly seen. A still camera over a still world costs almost nothing,
-and a frame where nothing it reads moved submits no work at all.
+(`pxl-engine node_cache.rs`), and forgotten where the data a node read changed,
+or given up for room once it has not been drawn for two frames. The voxels in it
+are the **record**, and the raster draws every one in view each frame, whatever
+that frame's rays reached (`pxl-engine record.rs`). So a voxel found once is
+drawn until its data changes, and rays walk only where something is newly seen.
+A still camera over a still world costs almost nothing, and a frame where
+nothing it reads moved submits no work at all.
 
 When the GPU runs out of time anyway, two knobs give it room: the **scale**
 draws fewer pixels, and the **rate** spaces the turns further apart. The `auto`
@@ -407,6 +412,8 @@ for good, and going back is serving the older version again.
 Some of what holds the system together is an absence, and easy to break without
 noticing:
 
+- The ground is stored as 2.5D, but nothing behaves as 2.5D: every reader asks
+  the 3D query, so caves, bores and placed objects are seen alike.
 - Only the query reads a layer. Everything else asks the world, and the
   check-rules tool refuses a layer read anywhere else
   (`rust/tool/src/bin/check_rules.rs` `LAYER_READERS`).

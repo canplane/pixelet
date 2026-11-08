@@ -24,7 +24,8 @@ enters, at the point where it enters, and a fresh voxel wins over a stale one.
 no sample's cell met anything in is sky; any other pixel is a hole, listed for
 the queue, and walked to its first hit (`queue_walk.wgsl`, `queue_ask_cs`,
 `queue_last_cs`). A walk that meets a node the GPU does not hold parks, and the
-node is asked for.
+node is asked for; one that may ask no more in its frame ends there as a lack,
+and its pixel keeps what it last showed rather than the sky.
 
 A ray leaves four words: the asset with its face, zoom and fill eighths; the
 distance; the palette indices a coarse cell folds; and which edges and corners
@@ -34,12 +35,18 @@ every lit face uses (`screen_ray.wgsl` `px_ray`, `paint.wgsl`).
 ## The node cache and the record
 
 What the rays asked of each node is kept between frames in the node cache, a
-table keyed by the node (pxl-engine `node_cache.rs`). An entry is forgotten only
+table keyed by the node (pxl-engine `node_cache.rs`). An entry is forgotten
 where what its node read changed: an edit, a cut, or a tile that landed under it
-(`forget_cs`). The entries a ray stopped on are the record, and the raster draws
-every one in view each frame (`record_draw_cs`). A frame whose rays reached
-little still draws everything found before; a still frame over a still world
-draws nothing at all.
+(`forget_cs`). Where the bucket an entry needs is full, the cache gives up one
+that has not been drawn for two frames (pxl-engine `record.rs`). A few rare
+events forget every entry at once: what was placed changed by more than the
+stream has room to send, or by revisions the GPU never held, or by a write that
+names no box, and the casts outrunning the frames a key's tag tells apart
+(`gpu/ray/cast.rs`). That is correct, and costs only a cast of everything again.
+The entries a ray stopped on are the record, and the raster draws every one in
+view each frame (`record_draw_cs`). A frame whose rays reached little still
+draws everything found before; a still frame over a still world draws nothing at
+all.
 
 ## Time: the scale and the rate
 

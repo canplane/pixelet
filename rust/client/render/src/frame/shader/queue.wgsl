@@ -158,9 +158,9 @@ fn keep_hit(r: u32, w: WalkEnd, face: u32, id: vec2<u32>) -> u32 {
 /// Ends the walk `w` of hole `hole`. Its stop, whatever it stopped on, is listed for its
 /// observer's record (`keep_hit`, record_hits.wgsl), the eye's and the light's alike. A slot of
 /// the light gets its depth. A pixel of the eye gets its ray's words, and what lies around the
-/// face it stopped on: a box's for a cell short of its cube (pxl-engine `face::BOX`), none for
-/// a lack, and for a whole cell the word the record puts there once its stop is in
-/// (record_hits.wgsl `record_faces_cs`).
+/// face it stopped on: a box's for a cell short of its cube (pxl-engine `face::BOX`), and for a
+/// whole cell the word the record puts there once its stop is in (record_hits.wgsl
+/// `record_faces_cs`). A pixel whose ray ended as a lack keeps its words.
 fn finish(hole: u32, aim: Aim, w: WalkEnd) {
   let stops = w.ends == 1u || w.ends == 2u;
   var r = NONE;
@@ -187,6 +187,11 @@ fn finish(hole: u32, aim: Aim, w: WalkEnd) {
   }
   if (w.ends == 1u && hit_fill(w) != 0u) {
     faces = FACE_BOX;
+  }
+  // A lack is a node not held yet, which says nothing of what is there, so its pixel keeps the
+  // words it last showed rather than taking the sky's.
+  if (w.ends == 2u) {
+    return;
   }
   write_ray(at, ray_word(w, face, faces));
 }
