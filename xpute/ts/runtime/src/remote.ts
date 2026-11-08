@@ -19,11 +19,12 @@ import type { U8Array } from "@xpute/kit/abi/array.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 import {
+  type Arg,
   type PacketRoom,
   PacketWriter,
   TreeReader,
 } from "@xpute/kit/wire/xtp/mod.ts";
-import type { Encode } from "./ipc/doorbell.ts";
+import { encode_args } from "./ipc/doorbell.ts";
 import {
   type Canvas,
   type GpuState,
@@ -96,9 +97,9 @@ export function connect(
   let next = 0;
   let stopped = false;
 
-  function frame(cmd: u32, id: u32, encode?: Encode | null): void {
+  function frame(cmd: u32, id: u32, args: Arg[]): void {
     cnt = 0;
-    const end = encode?.(room)?.finish() ?? 0;
+    const end = encode_args(args)(room)?.finish() ?? 0;
     if (end < 0) throw new InvariantError(Errno.EMSGSIZE);
     const pkt = end > 0 ? buf.slice(0, end) : null;
     up({ kind: "frame", cmd, id, cnt, pkt }, pkt ? [pkt.buffer] : []);
@@ -146,19 +147,19 @@ export function connect(
   };
 
   const link: Link = {
-    send: (cmd, encode) => void (stopped || frame(cmd, 0, encode)),
-    request(cmd, encode) {
+    send: (cmd, ...args) => void (stopped || frame(cmd, 0, args)),
+    request(cmd, ...args) {
       if (stopped) return Promise.resolve(Errno.ENOTRECOVERABLE);
       const id = (next = (next + 1) >>> 0 || 1);
       return new Promise((done) => {
         waiting.set(id, done);
-        frame(cmd, id, encode);
+        frame(cmd, id, args);
       });
     },
     call(): never {
       throw new InvariantError(Errno.ENOTSUP);
     },
-    fits: (encode) => (encode(room)?.finish() ?? 0) >= 0,
+    fits: (_cmd, ...args) => (encode_args(args)(room)?.finish() ?? 0) >= 0,
     wake: () => call("wake"),
     input: () => call("input"),
     resume: () => call("resume"),
@@ -199,8 +200,13 @@ export function attach(
           const { cmd, id, cnt, pkt } = m;
           const encode =
             pkt && ((room: PacketRoom) => room.writer(cnt).copy(pkt));
-          if (id === 0) return r.send(cmd, encode ?? undefined);
-          return void r.request(cmd, encode).then((res) =>
+          if (id === 0) {
+            r.doorbell.send(cmd, encode);
+            return r.kick();
+          }
+          const answer = r.doorbell.request(cmd, encode);
+          r.kick();
+          return void answer.then((res) =>
             down({
               kind: "frame",
               tag: id,

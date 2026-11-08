@@ -133,10 +133,10 @@ answered before it returns.
 
 The **generator** writes both ends' code from the machine and the protocol
 files. `xpute-gen machine.json asker.json` writes the machine's constants for
-both ends and, for the protocol, the packets' writers and readers, a stub for
-each export and a handler for each import on the runtime, and a function for
-each import and a trait for the exports on the core. The generated files are
-committed, and `--check` fails where one is stale.
+both ends and, for the protocol, on the runtime the fields each export takes,
+by its number, the packets' readers and a handler for each import, and on the
+core a function for each import and a trait for the exports. The generated
+files are committed, and `--check` fails where one is stale.
 
 ### The core
 
@@ -218,7 +218,7 @@ const link = await start(
     }),
 );
 link.resume();
-const sum = await link.request(Command.SUM, (room) => encode_sum(room, 2, 3));
+const sum = await link.request(Command.SUM, 2, 3);
 ```
 
 ### On a device, and in C++

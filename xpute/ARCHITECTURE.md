@@ -258,11 +258,12 @@ a turn cannot answer late.
 A **protocol** is a JSON file of commands, each an export, which the core
 handles, or an import, which the core sends, as a WIT world names them from the
 core's side. The **generator** writes both ends' code from the machine and the
-protocols: on the runtime a stub for each export and a handler for each import,
-and on the core a function for each import and a trait for the exports. xpute's
-own protocols are generated the same way, so every language's numbers come from
-`spec/`, and the generated files are committed. The generator refuses a
-program's command under 0x10, and a number that two protocols both give.
+protocols: on the runtime the fields each export takes, by its number, and a
+handler for each import, and on the core a function for each import and a trait
+for the exports. xpute's own protocols are generated the same way, so every
+language's numbers come from `spec/`, and the generated files are committed. The
+generator refuses a program's command under 0x10, and a number that two
+protocols both give.
 
 When the core stops on a broken invariant or a panic, it posts its report in the
 CQ's kept slot, after what the turn has already published, and runs no more; a

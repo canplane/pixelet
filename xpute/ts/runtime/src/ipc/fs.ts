@@ -18,14 +18,13 @@ import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 import {
   Command,
-  encode_fs_openat_reply,
   type FsClose,
   type FsImports,
   type FsOpenat,
   type FsRead,
   type FsWrite,
 } from "@xpute/runtime/abi/fs.spec.ts";
-import type { Encode } from "./doorbell.ts";
+import { type Encode, encode_args } from "./doorbell.ts";
 import { flag } from "./fs.spec.ts";
 
 /** Why an open did not complete with a file: an errno, and whatever number
@@ -102,11 +101,11 @@ export class FsServer implements FsImports {
     this._complete = complete;
   }
 
-  fs_openat(e: FsOpenat): void {
+  [Command.FS_OPENAT](e: FsOpenat): void {
     this._openat(e.fd, e.root, e.flags, e.path);
   }
 
-  fs_read(e: FsRead): void {
+  [Command.FS_READ](e: FsRead): void {
     const bytes = this.files.get(e.fd)?.bytes;
     if (!bytes) throw new InvariantError(Errno.EBADF);
     const len = Math.min(e.len, bytes.byteLength);
@@ -116,14 +115,14 @@ export class FsServer implements FsImports {
   /** A write to a file whose open failed is dropped. The core posts the
    * write before it learns of the failure, and it hears of the failure from
    * the open's completion and the close's. */
-  fs_write(e: FsWrite): void {
+  [Command.FS_WRITE](e: FsWrite): void {
     const file = this.files.get(e.fd);
     if (!file) return;
     if (!file.written) throw new InvariantError(Errno.EBADF);
     file.written.push([e.at, e.len]);
   }
 
-  fs_close(e: FsClose): void {
+  [Command.FS_CLOSE](e: FsClose): void {
     const file = this.files.get(e.fd);
     if (!file) {
       this._complete(e.fd, Command.FS_CLOSE, Errno.EBADF, null);
@@ -164,9 +163,7 @@ export class FsServer implements FsImports {
   }
 
   private _complete_open(fd: u32, res: i32, detail: u32): void {
-    this._complete(fd, Command.FS_OPENAT, res, (room) =>
-      encode_fs_openat_reply(room, detail),
-    );
+    this._complete(fd, Command.FS_OPENAT, res, encode_args([detail]));
   }
 
   private _openat(fd: u32, root: u32, flags: u32, path: string): void {

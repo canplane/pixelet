@@ -1,10 +1,11 @@
 // xpute-tool/spec/cmd/service.rs
 
 //! This writes a protocol's binding onto xpute's two ends, on top of its
-//! messages. On the runtime it writes a stub per `export`, bound to a runtime,
-//! and a handler per `import`. On the core it writes a function per `import`,
-//! and a trait the program implements for its `export`s. A runtime routes a
-//! frame to the binding by its command's major.
+//! messages. On the runtime it writes the type of each `export`'s fields, by
+//! its command's number, and a handler per `import`, the program's own keyed by
+//! the number too, so that no command's name reaches a bundle. On the core it
+//! writes a function per `import`, and a trait the program implements for its
+//! `export`s. A runtime routes a frame to the binding by its command's major.
 
 use super::{Field, Kind, Protocol, Spec};
 use crate::spec::{pascal, rs_doc, ts_doc};
@@ -132,61 +133,78 @@ fn lifetime(spec: &Spec, fields: &[Field], read: bool) -> Result<&'static str, S
     Ok(if borrows { "<'_>" } else { "" })
 }
 
-/// Writes the TypeScript binding's imports and body: the runtime's stubs and
-/// its handlers.
+/// Writes one way of sending, as a type: each command that goes that way, by
+/// its number, and the fields its packet takes in order.
+fn ts_fields(spec: &Spec, ty: &str, cmds: &[&str]) -> Result<Vec<String>, String> {
+    if cmds.is_empty() {
+        return Ok(vec![format!("export type {ty} = Record<never, never>;")]);
+    }
+    let mut out = vec![format!("export type {ty} = {{")];
+    for cmd in cmds {
+        let fields = fields_of(spec, cmd, true).unwrap_or(&[]);
+        let doc: Vec<String> = fields
+            .iter()
+            .filter_map(|f| {
+                let d = f.doc.as_ref()?;
+                Some(format!("@param {} {}", f.name, d.join(" ")))
+            })
+            .collect();
+        if !doc.is_empty() {
+            out.extend(ts_doc(&doc, "  "));
+        }
+        let mut args = Vec::new();
+        for f in fields {
+            args.push(format!("{}: {}", f.name, super::ts::ts_arg(spec, f)?));
+        }
+        out.push(format!("  [Command.{cmd}]: [{}];", args.join(", ")));
+    }
+    out.push("};".into());
+    Ok(out)
+}
+
+/// Writes the TypeScript binding's imports and body: the fields of what the
+/// runtime sends, and its handlers.
 pub(super) fn ts(spec: &Spec, runtime: &str) -> Result<(Vec<String>, Vec<String>), String> {
     let mut imports: Vec<String> = Vec::new();
     let mut out: Vec<String> = Vec::new();
-    let mut runtime_types = vec!["Sender", "OnImport"];
+    let mut runtime_types = vec!["Protocol", "OnImport"];
     let mut sends = false;
     let p = &spec.protocol;
     let name = module_name(p);
     if !p.exports.is_empty() {
         sends = true;
+        let ty = pascal(&p.name);
+        let pick = |want: &dyn Fn(bool, bool) -> bool| -> Vec<&str> {
+            p.exports
+                .iter()
+                .filter(|(_, call, ack)| want(*call, *ack))
+                .map(|(cmd, _, _)| cmd.as_str())
+                .collect()
+        };
         out.extend([
             String::new(),
             format!(
-                "/** What the runtime sends on the {} protocol, bound to `runtime`: each",
+                "/** What the runtime sends on the {} protocol: each command by its number, and",
                 p.name
             ),
-            " * command sent, requested and answered later, or called and answered before".into(),
-            " * it returns. */".into(),
-            format!("export function {name}_exports(runtime: Sender) {{"),
-            "  return {".into(),
+            " * the fields its packet takes in order. It is sent, requested and answered".into(),
+            " * later, or called and answered before it returns. */".into(),
         ]);
-        for (cmd, call, ackreq) in &p.exports {
-            let f = cmd.to_lowercase();
-            let fields = fields_of(spec, cmd, true);
-            let mut params = Vec::new();
-            let mut args = String::new();
-            for fl in fields.unwrap_or(&[]) {
-                params.push(format!("{}: {}", fl.name, super::ts::ts_type(spec, fl)?));
-                args += &format!(", {}", fl.name);
-            }
-            let (verb, ret) = if *call {
-                ("call", "i32")
-            } else if *ackreq {
-                ("request", "Promise<i32>")
-            } else {
-                ("send", "void")
-            };
-            let encode = match fields {
-                Some(_) => format!(", (r) => encode_{f}(r{args})"),
-                None => String::new(),
-            };
-            let ring = format!(
-                "({}): {ret} =>\n      runtime.{verb}(Command.{cmd}{encode})",
-                params.join(", ")
-            );
-            out.push(format!("    {f}: {ring},"));
-        }
-        out.push("  };".into());
-        out.push("}".into());
+        out.extend(ts_fields(
+            spec,
+            &format!("{ty}Send"),
+            &pick(&|c, a| !c && !a),
+        )?);
+        out.extend(ts_fields(
+            spec,
+            &format!("{ty}Request"),
+            &pick(&|c, a| !c && a),
+        )?);
+        out.extend(ts_fields(spec, &format!("{ty}Call"), &pick(&|c, _| c))?);
         out.push(String::new());
-        out.push(format!("/** The {} protocol's stubs, bound. */", p.name));
+        out.push(format!("/** The {} protocol over a link. */", p.name));
         out.push(format!(
-            "export type {}Exports = ReturnType<typeof {name}_exports>;",
-            pascal(&p.name)
+            "export type {ty}Protocol = Protocol<{ty}Send, {ty}Request, {ty}Call>;"
         ));
     }
     if !p.imports.is_empty() {
@@ -205,7 +223,6 @@ pub(super) fn ts(spec: &Spec, runtime: &str) -> Result<(Vec<String>, Vec<String>
             format!("export interface {iface} {{"),
         ]);
         for (cmd, call) in &p.imports {
-            let f = cmd.to_lowercase();
             let ret = if *call { "i32" } else { "void" };
             if let Some(doc) = spec
                 .commands()?
@@ -216,9 +233,9 @@ pub(super) fn ts(spec: &Spec, runtime: &str) -> Result<(Vec<String>, Vec<String>
                 out.extend(ts_doc(doc, "  "));
             }
             if fields_of(spec, cmd, false).is_some_and(|f| !f.is_empty()) {
-                out.push(format!("  {f}(e: {}): {ret};", pascal(cmd)));
+                out.push(format!("  [Command.{cmd}](e: {}): {ret};", pascal(cmd)));
             } else {
-                out.push(format!("  {f}(): {ret};"));
+                out.push(format!("  [Command.{cmd}](): {ret};"));
             }
         }
         out.push("}".into());
@@ -237,14 +254,13 @@ pub(super) fn ts(spec: &Spec, runtime: &str) -> Result<(Vec<String>, Vec<String>
             "    switch (cmd) {".into(),
         ]);
         for (cmd, _) in &p.imports {
-            let f = cmd.to_lowercase();
             let arg = if fields_of(spec, cmd, false).is_some_and(|f| !f.is_empty()) {
-                format!("read_{f}(need(f))")
+                format!("read[Command.{cmd}](need(f))")
             } else {
                 String::new()
             };
             out.push(format!("      case Command.{cmd}:"));
-            out.push(format!("        return h.{f}({arg});"));
+            out.push(format!("        return h[Command.{cmd}]({arg});"));
         }
         out.extend([
             "      default:".into(),
@@ -267,10 +283,7 @@ pub(super) fn ts(spec: &Spec, runtime: &str) -> Result<(Vec<String>, Vec<String>
         ]);
         for (cmd, [at, len]) in &p.mem {
             out.push(format!("    case Command.{cmd}: {{"));
-            out.push(format!(
-                "      const e = read_{}(need(f));",
-                cmd.to_lowercase()
-            ));
+            out.push(format!("      const e = read[Command.{cmd}](need(f));"));
             out.push(format!("      return [e.{at}, e.{len}];"));
             out.push("    }".into());
         }
@@ -300,7 +313,7 @@ pub(super) fn ts(spec: &Spec, runtime: &str) -> Result<(Vec<String>, Vec<String>
         runtime_types.retain(|t| *t != "OnImport");
     }
     if !sends {
-        runtime_types.retain(|t| *t != "Sender");
+        runtime_types.retain(|t| *t != "Protocol");
     }
     if !runtime_types.is_empty() {
         imports.push(format!(

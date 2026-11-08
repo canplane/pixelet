@@ -14,6 +14,7 @@ import * as path from "node:path";
 import { getDefaultConfig } from "expo/metro-config";
 import { REPO, treeFile, WORKSPACE } from "@pxl/build/path.ts";
 import { CONSOLE_PATH, consoleHandler } from "@pxl/build/console.ts";
+import { digest } from "@pxl/build/constant.ts";
 import { stamp } from "@pxl/build/stamp.ts";
 import { forward, type Middleware, route_target } from "./script/proxy.ts";
 
@@ -72,6 +73,13 @@ function ownPlatform(
 
 const base = getDefaultConfig(here);
 
+/** A release build compiles each exported literal into the files that read
+ * it (babel.config.ts), so the transforms it may reuse depend on them. */
+const LITERALS =
+  process.env.NODE_ENV === "production"
+    ? digest([path.join(here, "src"), path.join(REPO, "xpute/ts")])
+    : "";
+
 const resolveRequest: NonNullable<typeof base.resolver.resolveRequest> = (
   context,
   name,
@@ -121,6 +129,7 @@ export default {
   // directory. The bundle reads nothing outside these folders.
   watchFolders: [WORKSPACE, path.join(REPO, "xpute/ts")],
   cacheStores: [new Store({ root: CACHE })],
+  cacheVersion: `${base.cacheVersion ?? ""}${LITERALS}`,
   fileMapCacheDirectory: CACHE,
   resolver: { ...base.resolver, resolveRequest },
   server: {

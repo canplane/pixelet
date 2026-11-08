@@ -40,6 +40,7 @@ import {
 import { EFFECT_NAMES, STEP_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
 import { mem } from "@xpute/runtime";
+import { Command } from "@/abi/cmd.spec.ts";
 import { core, perf } from "@/service/core/core.ts";
 
 const WORD = 8;
@@ -54,12 +55,12 @@ function reply_at(at: i32): u32 {
 }
 
 export function start(): void {
-  core.perf_start();
+  core.send(Command.PERF_START);
 }
 
 /** Freezes the recording window, so that what is exported holds still. */
 export function stop(): void {
-  core.perf_stop();
+  core.send(Command.PERF_STOP);
 }
 
 const words = (at: u32, n: u32) => new Float64Array(mem, at, n);
@@ -354,7 +355,10 @@ function section<S extends { AT: u32; WORDS: u32 }>(
 }
 
 function stats_of(window_ms: f64 | null): { stats: F64Array; now: F64Array } {
-  const r = u32s(reply_at(core.perf_stats(window_ms)), STAT_SLOT.WORDS);
+  const r = u32s(
+    reply_at(core.call(Command.PERF_STATS, window_ms)),
+    STAT_SLOT.WORDS,
+  );
   return {
     stats: words(r[STAT_SLOT.stats_at], r[STAT_SLOT.stats_words]),
     now: words(r[STAT_SLOT.now_at], r[STAT_SLOT.now_words]),
@@ -388,7 +392,7 @@ function perf_view(): ViewSection {
 
 /** Each ring's address and record count. */
 function rings(): { frames: [u32, u32]; tasks: [u32, u32]; worst: [u32, u32] } {
-  const r = u32s(reply_at(core.perf_rings()), RING_SLOT.WORDS);
+  const r = u32s(reply_at(core.call(Command.PERF_RINGS)), RING_SLOT.WORDS);
   const ring = (name: (typeof RING_NAMES)[number]): [u32, u32] => {
     const at = RING_SLOT.slots + RING_NAMES.indexOf(name) * RING.WORDS;
     return [r[at + RING.at], r[at + RING.cnt]];

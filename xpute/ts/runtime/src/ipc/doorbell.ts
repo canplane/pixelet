@@ -23,14 +23,11 @@ import type { U8Array } from "@xpute/kit/abi/array.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import {
+  type Arg,
   type BranchCursor,
-  encoder,
-  type NodeValue,
-  type NodeView,
   type PacketRoom,
   PacketWriter,
   TreeReader,
-  TreeView,
 } from "@xpute/kit/wire/xtp/mod.ts";
 import { NO_WAKE } from "../sched/wake.ts";
 import * as frame from "./frame.ts";
@@ -54,28 +51,19 @@ export type OnImport = (
   pkt: U8Array | null,
 ) => i32 | void;
 
-/** An `Encode` writes a command's packet into the room it is given, as a
- * generated `encode_*` does. */
+/** An `Encode` writes a command's packet into the room it is given. */
 export type Encode = (room: PacketRoom) => PacketWriter | null;
 
 type Run = (deadline_ms: f64) => f64;
 type Kick = (deadline_ms: f64) => void;
 
-/** Encodes a packet whose fields are `args`, in order. Each argument is lowered
- * as XTP lowers a value (wire/xtp `TreeView.set`) and grafted in, within a
- * slot of `slot_bytes`. With no arguments there is no packet. A console sends
- * its commands this way. */
-export function encode_args(
-  args: NodeValue<NodeView>[],
-  slot_bytes: u32,
-): Encode {
+/** Writes a packet whose fields are `args`, in order, in place. With no
+ * arguments there is no packet. */
+export function encode_args(args: Arg[]): Encode {
   return (room) => {
     if (args.length === 0) return null;
     const pkt = room.writer(args.length);
-    const cap = { init_cap: slot_bytes, max_cap: slot_bytes };
-    for (const a of args) {
-      pkt.graft(encoder.encode(new TreeView().set(a), cap));
-    }
+    for (const a of args) pkt.arg(a);
     return pkt;
   };
 }
@@ -216,11 +204,11 @@ export class Doorbell implements PacketRoom {
     if (errnum !== Errno.OK) throw new InvariantError(errnum);
   }
 
-  /** Sends `cmd` with `args` as its packet's fields, in order (`encode_args`),
-   * and rings at once. It is for a command from outside the runtime's own code,
-   * such as a console's. */
-  cmd(cmd: u32, ...args: NodeValue<NodeView>[]): void {
-    this.send(cmd, encode_args(args, this._sq.slot_bytes));
+  /** Sends `cmd` with `args` as its packet's fields, in order, and rings at
+   * once. It is for a command from outside the runtime's own code, such as a
+   * console's. */
+  cmd(cmd: u32, ...args: Arg[]): void {
+    this.send(cmd, encode_args(args));
     this.ring(0);
   }
 

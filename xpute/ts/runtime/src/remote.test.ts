@@ -30,19 +30,18 @@ function runtime(): {
     return [f.at(0).get<number>(), f.at(1).get<number>()];
   };
   const rt = {
-    send: (cmd: number, encode?: Encode) => void sent.push([cmd, read(encode)]),
-    request: (cmd: number, encode?: Encode | null) => {
-      sent.push([cmd, read(encode)]);
-      return Promise.resolve(cmd + 1);
+    doorbell: {
+      send: (cmd: number, encode: Encode | null) =>
+        void sent.push([cmd, read(encode)]),
+      request: (cmd: number, encode: Encode | null) => {
+        sent.push([cmd, read(encode)]);
+        return Promise.resolve(cmd + 1);
+      },
     },
+    kick: () => {},
   } as unknown as Runtime;
   return { rt, sent };
 }
-
-const two =
-  (a: number, b: number): Encode =>
-  (room) =>
-    room.writer(2).u32(a).u32(b);
 
 /** This UI keeps what comes down. */
 function ui(cmds: number[] = []): Ui & { heard: unknown[] } {
@@ -64,8 +63,8 @@ test("remote - a UI's send and request reach the runtime as they were encoded", 
   const { rt, sent } = runtime();
   attach(port2, []).serve(rt);
   const { link } = connect(port1, 256, ui());
-  link.send(0x1001, two(7, 9));
-  assert.deepStrictEqual(await link.request(0x1002, two(1, 2)), 0x1003);
+  link.send(0x1001, 7, 9);
+  assert.deepStrictEqual(await link.request(0x1002, 1, 2), 0x1003);
   assert.deepStrictEqual(sent, [
     [0x1001, [7, 9]],
     [0x1002, [1, 2]],
@@ -97,8 +96,11 @@ test("remote - an import the UI takes comes down with its packet and the memory 
 test("remote - once the core stops, a request waiting and every one after answer ENOTRECOVERABLE", async () => {
   const { port1, port2 } = new MessageChannel();
   const rt = {
-    send: () => {},
-    request: () => new Promise<number>(() => {}),
+    doorbell: {
+      send: () => {},
+      request: () => new Promise<number>(() => {}),
+    },
+    kick: () => {},
   } as unknown as Runtime;
   const end = attach(port2, []);
   end.serve(rt);

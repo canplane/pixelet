@@ -19,18 +19,14 @@
  * its own protocols past them.
  */
 
-import type {
-  BranchCursor,
-  PacketRoom,
-  PacketWriter,
-} from "@xpute/kit/wire/xtp/mod.ts";
+import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
 import * as Major from "./sys/major.spec.ts";
 import * as SysMinor from "./sys/sys_minor.spec.ts";
 import * as Command from "./sys/command.spec.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
-import type { Sender, OnImport } from "../mod.ts";
+import type { Protocol, OnImport } from "../mod.ts";
 
 /** One of Major's, as its enum was a type. */
 type Major = (typeof Major)[keyof typeof Major];
@@ -44,16 +40,6 @@ export { SysMinor };
 type Command = (typeof Command)[keyof typeof Command];
 export { Command };
 
-/** Command.NOP's packet, written in place into `to`. */
-export function encode_nop(to: PacketRoom, val: u32): PacketWriter {
-  return to.writer(1).u32(val);
-}
-
-/** Command.SYS_TURN's packet, written in place into `to`. */
-export function encode_sys_turn(to: PacketRoom, unix_ms: f64): PacketWriter {
-  return to.writer(1).f64(unix_ms);
-}
-
 /** Command.SYS_ABORT's packet. */
 export interface SysAbort {
   errnum: i32;
@@ -66,8 +52,9 @@ export interface SysAbort {
   file: string;
 }
 
-export function read_sys_abort(b: BranchCursor): SysAbort {
-  return {
+/** Each import's packet, read from its branch, by its number. */
+export const read = {
+  [Command.SYS_ABORT]: (b: BranchCursor): SysAbort => ({
     errnum: b.at(0).get<i32>(),
     line: b.at(1).get<u32>(),
     column: b.at(2).get<u32>(),
@@ -76,32 +63,31 @@ export function read_sys_abort(b: BranchCursor): SysAbort {
     b_low: b.at(5).get<u32>(),
     b_high: b.at(6).get<u32>(),
     file: b.at(7).get<string>(),
-  };
-}
+  }),
+};
 
-/** What the runtime sends on the sys protocol, bound to `runtime`: each
- * command sent, requested and answered later, or called and answered before
- * it returns. */
-export function sys_exports(runtime: Sender) {
-  return {
-    nop: (val: u32): void =>
-      runtime.send(Command.NOP, (r) => encode_nop(r, val)),
-    sys_attach: (): void => runtime.send(Command.SYS_ATTACH),
-    sys_suspend: (): i32 => runtime.call(Command.SYS_SUSPEND),
-    sys_resume: (): i32 => runtime.call(Command.SYS_RESUME),
-    sys_turn: (unix_ms: f64): void =>
-      runtime.send(Command.SYS_TURN, (r) => encode_sys_turn(r, unix_ms)),
-  };
-}
+/** What the runtime sends on the sys protocol: each command by its number, and
+ * the fields its packet takes in order. It is sent, requested and answered
+ * later, or called and answered before it returns. */
+export type SysSend = {
+  [Command.NOP]: [val: u32];
+  [Command.SYS_ATTACH]: [];
+  [Command.SYS_TURN]: [unix_ms: f64];
+};
+export type SysRequest = Record<never, never>;
+export type SysCall = {
+  [Command.SYS_SUSPEND]: [];
+  [Command.SYS_RESUME]: [];
+};
 
-/** The sys protocol's stubs, bound. */
-export type SysExports = ReturnType<typeof sys_exports>;
+/** The sys protocol over a link. */
+export type SysProtocol = Protocol<SysSend, SysRequest, SysCall>;
 
 /** What the program does with each command the core posts on the sys protocol; a
  * call's answer is its return. */
 export interface SysImports {
   /** Reports the broken invariant the core stops on (xpute-kit status/bug.rs). */
-  sys_abort(e: SysAbort): void;
+  [Command.SYS_ABORT](e: SysAbort): void;
 }
 
 /** `h` as the handler a runtime routes the sys protocol's commands to, each one read and
@@ -110,7 +96,7 @@ export function sys_imports(h: SysImports): OnImport {
   return (_tag, cmd, f) => {
     switch (cmd) {
       case Command.SYS_ABORT:
-        return h.sys_abort(read_sys_abort(need(f)));
+        return h[Command.SYS_ABORT](read[Command.SYS_ABORT](need(f)));
       default:
         return Errno.ENOSYS;
     }

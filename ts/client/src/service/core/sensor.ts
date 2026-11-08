@@ -2,6 +2,7 @@
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import {
+  Command,
   GeolocationErrorCode,
   PermissionAnswer,
   Sensor,
@@ -13,7 +14,7 @@ import * as sensor from "@/service/platform/sensor.ts";
 import { core } from "@/service/core/core.ts";
 
 export function locate(): void {
-  core.sensor_locate();
+  core.send(Command.SENSOR_LOCATE);
 }
 
 /** A reading the device could not give, such as NaN or an infinity, is sent
@@ -29,7 +30,14 @@ function core_pos(
   accuracy: f64 | null,
   course: f64 | null,
 ): void {
-  core.sensor_pos(lon, lat, given(alt), given(accuracy), given(course));
+  core.send(
+    Command.SENSOR_POS,
+    lon,
+    lat,
+    given(alt),
+    given(accuracy),
+    given(course),
+  );
 }
 
 function core_orient(
@@ -38,7 +46,8 @@ function core_orient(
   beta: f64 | null,
   gamma: f64 | null,
 ): void {
-  core.sensor_orient(
+  core.send(
+    Command.SENSOR_ORIENT,
     given(webkit_compass_heading),
     given(alpha),
     given(beta),
@@ -67,12 +76,14 @@ const ANSWER = {
 
 export const SENSOR_LISTENER: SensorListener = {
   position: core_pos,
-  positionError: (error) => core.sensor_err(Sensor.Geolocation, ERR[error]),
+  positionError: (error) =>
+    core.send(Command.SENSOR_ERR, Sensor.Geolocation, ERR[error]),
   orientation: core_orient,
   // The compass gives no code for its failure.
-  orientationLost: () => core.sensor_err(Sensor.Orientation, null),
+  orientationLost: () =>
+    core.send(Command.SENSOR_ERR, Sensor.Orientation, null),
   permission: (sensor, answer) =>
-    core.sensor_permission(SENSOR[sensor], ANSWER[answer]),
+    core.send(Command.SENSOR_PERMISSION, SENSOR[sensor], ANSWER[answer]),
 };
 
 export function sensor_start(e: SensorStart): void {

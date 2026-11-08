@@ -17,12 +17,11 @@ import type { U8Array } from "@xpute/kit/abi/array.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
-import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
+import type { Arg, BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import {
   Command,
-  encode_sys_turn,
   Major,
-  read_sys_abort,
+  read,
   sys_imports,
   type SysAbort,
 } from "@xpute/runtime/abi/sys.spec.ts";
@@ -32,7 +31,7 @@ import { type Front, Head, laid, lay } from "@xpute/runtime/ipc/head.ts";
 import * as frame from "@xpute/runtime/ipc/frame.ts";
 import {
   Doorbell,
-  type Encode,
+  encode_args,
   type OnImport,
 } from "@xpute/runtime/ipc/doorbell.ts";
 import { type Fs, FsServer } from "@xpute/runtime/ipc/fs.ts";
@@ -116,7 +115,7 @@ export interface Abort {
 }
 
 export function read_abort(f: BranchCursor): Abort {
-  return abort_of(read_sys_abort(f));
+  return abort_of(read[Command.SYS_ABORT](f));
 }
 
 function abort_of(e: SysAbort): Abort {
@@ -172,27 +171,35 @@ export interface Ui {
 
 export const QUIET: Ui = { cmds: [], on() {}, gpu() {}, stop() {} };
 
-/** A protocol's generated stubs send through this. */
-export interface Sender {
-  /** Sends a command with the next turn. */
-  send(cmd: u32, encode?: Encode): void;
-  /** Sends a command with ACKREQ. The promise settles with the core's
-   * reply, which comes with a later turn. */
-  request(cmd: u32, encode?: Encode | null): Promise<i32>;
-  /** Sends a command and rings the core at once, again and again until it
-   * answers, whether turns are paused or not. */
-  call(cmd: u32, encode?: Encode | null): i32;
-  call<T>(
-    cmd: u32,
-    encode: Encode | null,
-    read: (result: i32, reply: BranchCursor | null) => T,
-  ): T;
+/** Each command of a protocol, by its number, and the fields its packet takes
+ * in order. */
+export type Fields = Record<u32, Arg[]>;
+
+/** A `Link` as a protocol's generated table types it. Each command goes by the
+ * one way its specification names, and only a number crosses at run time. */
+export interface Protocol<
+  S extends Fields,
+  R extends Fields,
+  C extends Fields,
+> {
+  send<K extends keyof S & u32>(cmd: K, ...args: S[K]): void;
+  request<K extends keyof R & u32>(cmd: K, ...args: R[K]): Promise<i32>;
+  call<K extends keyof C & u32>(cmd: K, ...args: C[K]): i32;
+  fits<K extends keyof S & u32>(cmd: K, ...args: S[K]): boolean;
 }
 
 /** This is the UI's link to its runtime, beside it or across a port. */
-export interface Link extends Sender {
+export interface Link {
+  /** Sends a command with the next turn. */
+  send(cmd: u32, ...args: Arg[]): void;
+  /** Sends a command with ACKREQ. The promise settles with the core's
+   * reply, which comes with a later turn. */
+  request(cmd: u32, ...args: Arg[]): Promise<i32>;
+  /** Sends a command and rings the core at once, again and again until it
+   * answers, whether turns are paused or not. */
+  call(cmd: u32, ...args: Arg[]): i32;
   /** This says whether a command's packet fits a slot. */
-  fits(encode: Encode): boolean;
+  fits(cmd: u32, ...args: Arg[]): boolean;
   /** Asks for a turn. */
   wake(): void;
   /** Tells the policy that an input came now. */
@@ -215,6 +222,8 @@ export interface Runtime extends Link {
   core: Core;
   head: Head;
   doorbell: Doorbell;
+  /** Tells the scheduler of what was submitted on `doorbell` itself. */
+  kick(): void;
 }
 
 /** This is the memory of the core last mounted here. */
@@ -253,23 +262,17 @@ export function mount<G extends Grant>(
   );
   const scheduler = new Scheduler(doorbell, policy, (grant, delta_s) => {
     cfg.submit(grant, delta_s);
-    doorbell.send(Command.SYS_TURN, (room) =>
-      encode_sys_turn(room, Date.now()),
-    );
+    doorbell.send(Command.SYS_TURN, encode_args([Date.now()]));
   });
   thread?.listen((wake_ms, turn_ms) => doorbell.turns(wake_ms, turn_ms));
   thread?.pause();
 
   const kick = <T>(v: T): T => (scheduler.kick(), v);
-  const send = (cmd: u32, encode?: Encode) => kick(doorbell.send(cmd, encode));
-  function call<T>(
-    cmd: u32,
-    encode: Encode | null = null,
-    read?: (result: i32, reply: BranchCursor | null) => T,
-  ): T | i32 {
+  const send = (cmd: u32, ...args: Arg[]) =>
+    kick(doorbell.send(cmd, encode_args(args)));
+  function call(cmd: u32, ...args: Arg[]): i32 {
     return kick(
-      doorbell.call(cmd, encode, (res, reply) => {
-        if (read) return read(res, reply);
+      doorbell.call(cmd, encode_args(args), (res) => {
         if (res < 0)
           console.warn(`[xpute] 0x${cmd.toString(16)}: ${strerror(res)}`);
         return res;
@@ -278,7 +281,12 @@ export function mount<G extends Grant>(
   }
 
   const own = new Map<u32, OnImport>([
-    [Major.SYS, sys_imports({ sys_abort: (e) => log_abort(abort_of(e)) })],
+    [
+      Major.SYS,
+      sys_imports({
+        [Command.SYS_ABORT]: (e) => log_abort(abort_of(e)),
+      }),
+    ],
   ]);
   if (cfg.fs) {
     const files = new FsServer(cfg.fs, core.mem, (tag, cmd, res, encode) =>
@@ -341,12 +349,13 @@ export function mount<G extends Grant>(
     head,
     doorbell,
     send,
-    request: (cmd, encode) => kick(doorbell.request(cmd, encode ?? null)),
+    request: (cmd, ...args) => kick(doorbell.request(cmd, encode_args(args))),
     call,
-    fits: (encode) => {
-      const pkt = encode(doorbell);
+    fits: (_cmd, ...args) => {
+      const pkt = encode_args(args)(doorbell);
       return pkt === null || doorbell.fits(pkt);
     },
+    kick: () => scheduler.kick(),
     wake: () => scheduler.wake(),
     input: () => policy.input?.(performance.now()),
     resume: () => ((resumed = true), steer()),

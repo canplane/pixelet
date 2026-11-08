@@ -5,16 +5,16 @@
  * where the core's memory is. They are set once, before anything uses them. */
 
 import type { Link } from "@xpute/runtime";
-import { ui_exports, type UiExports } from "@/abi/cmd.spec.ts";
+import type { UiProtocol } from "@/abi/cmd.spec.ts";
 
 export type Perf = (what: string, args: unknown[]) => Promise<unknown>;
 
-export let core: UiExports;
+export let core: UiProtocol;
 export let ui: Link;
 export let perf: Perf;
 
 export function set_core(link: Link, read: Perf): void {
-  core = ui_exports(link);
+  core = link;
   ui = link;
   perf = read;
 }

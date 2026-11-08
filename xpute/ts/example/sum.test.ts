@@ -17,7 +17,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { boot, QUIET, Timeslice } from "@xpute/runtime";
-import { asker_imports, asker_exports } from "./asker.spec.ts";
+import { asker_imports, type AskerProtocol, Command } from "./asker.spec.ts";
 import { MACHINE } from "./machine.spec.ts";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -40,12 +40,13 @@ test("example - a command answered with what the core asked its runtime", async 
       machine: MACHINE,
       core: () => ({
         core: { module: readFileSync(CORE), bytes: MACHINE.mem_bytes[0] },
-        program: asker_imports({ ask: () => ANSWER }),
+        program: asker_imports({ [Command.ASK]: () => ANSWER }),
         policy: new Timeslice(4),
         submit: () => {},
       }),
     },
     QUIET,
   );
-  assert.deepStrictEqual(asker_exports(runtime).sum(2, 3), 2 + 3 + ANSWER);
+  const asker: AskerProtocol = runtime;
+  assert.deepStrictEqual(asker.call(Command.SUM, 2, 3), 2 + 3 + ANSWER);
 });

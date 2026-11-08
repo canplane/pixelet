@@ -1,7 +1,7 @@
 // xpute-tool/spec/cmd/ts.rs
 
-//! This writes a command table as TypeScript for the runtime: its enums, a
-//! writer for each packet and a reader for each import.
+//! This writes a command table as TypeScript for the runtime: its enums and a
+//! reader for each import, keyed by the command's number.
 
 use super::{literal, Entry, Field, Kind, Spec, Target, NUMBERS};
 use crate::spec::{file, generated, pascal, snake, ts_doc, Output};
@@ -34,31 +34,21 @@ pub(super) fn ts_type(spec: &Spec, f: &Field) -> Result<String, String> {
     })
 }
 
-fn ts_write(spec: &Spec, f: &Field, val: &str) -> Result<String, String> {
+/// The type a caller hands for a field of a packet the runtime sends.
+pub(super) fn ts_arg(spec: &Spec, f: &Field) -> Result<String, String> {
     let kind = spec.kind(&f.ty)?;
     if f.list && kind == Kind::Number {
         check_packed(f)?;
-        return Ok(format!(
-            ".array(SequenceType.U32_ARRAY, Uint32Array.from({val}))"
-        ));
+        return Ok("U32Array".to_string());
     }
-    if f.list && kind == Kind::Str {
-        return Ok(format!(".strs({val})"));
-    }
-    if f.list || kind == Kind::Record {
+    if (f.list && kind != Kind::Str) || kind == Kind::Record {
         return Err(format!(
             "cmd.json: TypeScript writes no {} ({})",
             if f.list { "list" } else { "record" },
             f.name
         ));
     }
-    let method = match kind {
-        Kind::Number => f.ty.as_str(),
-        Kind::Bool => "bool",
-        Kind::Str => "str",
-        _ => "u32",
-    };
-    Ok(format!(".{method}({val})"))
+    ts_type(spec, f)
 }
 
 fn ts_read(spec: &Spec, f: &Field, i: usize) -> Result<String, String> {
@@ -99,14 +89,12 @@ impl TsUse {
     }
 
     /// Collects the word and array types that `fields` are spelled with.
-    /// Only a reader (`read`) names a typed array for a list of numbers; a
-    /// writer is handed the list as a plain array.
-    fn note(&mut self, spec: &Spec, fields: &[Field], read: bool) -> Result<(), String> {
+    fn note(&mut self, spec: &Spec, fields: &[Field]) -> Result<(), String> {
         for f in fields {
             if NUMBERS.contains(&f.ty.as_str()) {
                 TsUse::add(&mut self.words, f.ty.clone());
             }
-            if read && f.list && NUMBERS.contains(&f.ty.as_str()) {
+            if f.list && NUMBERS.contains(&f.ty.as_str()) {
                 TsUse::add(&mut self.arrays, format!("{}Array", f.ty.to_uppercase()));
             }
             if spec.kind(&f.ty)? == Kind::Extern {
@@ -117,7 +105,7 @@ impl TsUse {
     }
 
     fn field_lines(&mut self, spec: &Spec, fields: &[Field]) -> Result<Vec<String>, String> {
-        self.note(spec, fields, true)?;
+        self.note(spec, fields)?;
         let mut out = Vec::new();
         for f in fields {
             if let Some(doc) = &f.doc {
@@ -129,20 +117,14 @@ impl TsUse {
     }
 }
 
-fn ts_reader(spec: &Spec, name: &str, ty: &str, fields: &[Field]) -> Result<Vec<String>, String> {
+/// The object literal that reads `fields` from a branch `b`.
+fn ts_reads(spec: &Spec, fields: &[Field]) -> Result<String, String> {
     let reads = fields
         .iter()
         .enumerate()
         .map(|(i, f)| Ok(format!("{}: {}", f.name, ts_read(spec, f, i)?)))
         .collect::<Result<Vec<_>, String>>()?;
-    Ok(vec![
-        format!(
-            "export function read_{name}({}: BranchCursor): {ty} {{",
-            if fields.is_empty() { "_b" } else { "b" }
-        ),
-        format!("  return {{ {} }};", reads.join(", ")),
-        "}".to_string(),
-    ])
+    Ok(format!("{{ {} }}", reads.join(", ")))
 }
 
 /// Writes the table's module, and beside it a module of each enum's
@@ -168,6 +150,14 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
         words: Vec::new(),
         arrays: Vec::new(),
     };
+    let commands = spec.commands()?;
+    let nested: Vec<&str> = spec
+        .records
+        .iter()
+        .flat_map(|r| r.fields.iter())
+        .chain(commands.iter().filter_map(|c| c.import.as_ref()).flatten())
+        .map(|f| f.ty.as_str())
+        .collect();
     for r in &spec.records {
         tail.push(String::new());
         if let Some(doc) = &r.doc {
@@ -176,59 +166,23 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
         tail.push(format!("export interface {} {{", r.name));
         tail.extend(uses.field_lines(spec, &r.fields)?);
         tail.extend(["}".to_string(), String::new()]);
-        tail.extend(ts_reader(spec, &snake(&r.name), &r.name, &r.fields)?);
+        // A record no other reader reaches is read where it lies, by its name.
+        tail.push(format!(
+            "{}function read_{}(b: BranchCursor): {} {{",
+            if nested.contains(&r.name.as_str()) {
+                ""
+            } else {
+                "export "
+            },
+            snake(&r.name),
+            r.name
+        ));
+        tail.push(format!("  return {};", ts_reads(spec, &r.fields)?));
+        tail.push("}".into());
     }
-    for c in spec.commands()? {
+    let mut readers: Vec<String> = Vec::new();
+    for c in &commands {
         let name = pascal(&c.name);
-        let lower = c.name.to_lowercase();
-        let pkts = [
-            (c.pkt.as_ref(), lower.clone(), "packet"),
-            (
-                c.reply.as_ref().filter(|r| !r.is_empty()),
-                format!("{lower}_reply"),
-                "completion's packet",
-            ),
-        ];
-        for (pkt, encode, what) in pkts {
-            let Some(pkt) = pkt else {
-                continue;
-            };
-            // The packet is written in place from the fields as they are handed
-            // over, so no record type is made for it.
-            uses.note(spec, pkt, false)?;
-            let mut doc = vec![format!(
-                "Command.{}'s {what}, written in place into `to`.",
-                c.name
-            )];
-            for f in pkt {
-                if let Some(d) = &f.doc {
-                    if doc.len() == 1 {
-                        doc.push(String::new());
-                    }
-                    doc.push(format!("@param {} {}", f.name, d.join(" ")));
-                }
-            }
-            tail.push(String::new());
-            tail.extend(ts_doc(&doc, ""));
-            let params = pkt
-                .iter()
-                .map(|f| Ok(format!(", {}: {}", f.name, ts_type(spec, f)?)))
-                .collect::<Result<Vec<_>, String>>()?;
-            let writes = pkt
-                .iter()
-                .map(|f| ts_write(spec, f, &f.name))
-                .collect::<Result<Vec<_>, String>>()?;
-            tail.push(format!(
-                "export function encode_{encode}(to: PacketRoom{}): PacketWriter {{",
-                params.concat()
-            ));
-            tail.push(format!(
-                "  return to.writer({}){};",
-                pkt.len(),
-                writes.concat()
-            ));
-            tail.push("}".into());
-        }
         if let Some(import) = &c.import {
             tail.extend([
                 String::new(),
@@ -236,9 +190,24 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
                 format!("export interface {name} {{"),
             ]);
             tail.extend(uses.field_lines(spec, import)?);
-            tail.extend(["}".to_string(), String::new()]);
-            tail.extend(ts_reader(spec, &c.name.to_lowercase(), &name, import)?);
+            tail.push("}".to_string());
+            if !import.is_empty() {
+                readers.push(format!(
+                    "  [Command.{}]: (b: BranchCursor): {name} => ({}),",
+                    c.name,
+                    ts_reads(spec, import)?
+                ));
+            }
         }
+    }
+    if !readers.is_empty() {
+        tail.extend([
+            String::new(),
+            "/** Each import's packet, read from its branch, by its number. */".to_string(),
+            "export const read = {".to_string(),
+        ]);
+        tail.extend(readers);
+        tail.push("};".to_string());
     }
     uses.arrays.sort();
     uses.words.sort();
@@ -266,7 +235,7 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
         ]);
     }
     tail.splice(0..0, helpers.iter().map(|l| l.to_string()));
-    let xtp: Vec<&str> = ["BranchCursor", "NodeCursor", "PacketRoom", "PacketWriter"]
+    let xtp: Vec<&str> = ["BranchCursor", "NodeCursor"]
         .into_iter()
         .filter(|c| reads(&tail, c))
         .collect();
@@ -286,11 +255,6 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
                 names.join(", ")
             ));
         }
-    }
-    // A packed list is written through its SequenceType, which is a value and
-    // not a type, so it takes a plain import.
-    if reads(&tail, "SequenceType.") {
-        out.push("import { SequenceType } from \"@xpute/kit/wire/xtp/mod.ts\";".to_string());
     }
     let mut modules: Vec<Output> = Vec::new();
     let stem = stem_of(t.ts);

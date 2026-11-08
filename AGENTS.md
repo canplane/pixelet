@@ -12,7 +12,7 @@
   never `@xpute/runtime` or `xpute-runtime`.
 - The UI computes no coordinate or tile. It reaches what is below it through
   `service/` alone, the core through `service/core/` alone, and that through the
-  generated stubs alone.
+  generated command table alone.
 - What differs by platform is a file pair in `service/platform/` (`<x>.ts` the
   page's, `<x>.native.ts` the device's) or, for a piece of the UI, a file and
   its override beside it (`ts/client/src/ui/component/README.md`).

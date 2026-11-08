@@ -387,8 +387,9 @@ waits while one probe goes out, after a growing, jittered delay (`policy.rs`
 
 The UI sits outside the image. It never computes a coordinate or a tile: it
 sends the core commands and draws the snapshot the core sends back, and its one
-way in is `ts/client/src/service/core/`, through stubs generated from one
-specification, so the two cannot disagree about a field.
+way in is `ts/client/src/service/core/`, through a table of each command's
+fields generated from one specification, so the two cannot disagree about a
+field.
 
 ## Making the data
 

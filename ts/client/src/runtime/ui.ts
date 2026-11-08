@@ -5,12 +5,7 @@ import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { read_abort, type Ui } from "@xpute/runtime";
 import type { RefusedFile } from "@/abi/cmd.spec.ts";
 import { Command as Sys } from "@xpute/runtime/abi/sys.spec.ts";
-import {
-  Command,
-  read_sensor_start,
-  read_sensor_stop,
-  read_ui_view,
-} from "@/abi/cmd.spec.ts";
+import { Command, read } from "@/abi/cmd.spec.ts";
 import { onabort } from "@/service/sys/abort.ts";
 import { core, ui as link } from "@/service/core/core.ts";
 import { GPU_STATE, set_gpu } from "@/service/sys/gpu.ts";
@@ -48,9 +43,9 @@ export function ui(
         on.snapshot();
       },
     ],
-    [Command.UI_VIEW, (f) => snapshot.view_posted(read_ui_view(f))],
-    [Command.SENSOR_START, (f) => sensor_start(read_sensor_start(f))],
-    [Command.SENSOR_STOP, (f) => sensor_stop(read_sensor_stop(f))],
+    [Command.UI_VIEW, (f) => snapshot.view_posted(read[Command.UI_VIEW](f))],
+    [Command.SENSOR_START, (f) => sensor_start(read[Command.SENSOR_START](f))],
+    [Command.SENSOR_STOP, (f) => sensor_stop(read[Command.SENSOR_STOP](f))],
     [Sys.SYS_ABORT, (f) => onabort(read_abort(f))],
   ]);
   return {
@@ -68,6 +63,12 @@ export function started(on: OnOpen): void {
   listen(SENSOR_LISTENER);
   visibility.watch((visible) => link.visible(visible));
   const { geo, orient } = sensor;
-  core.sensor_platform(geo.has, orient.has, orient.gated, orient.silence);
-  core.setting_dev(__IS_DEV__);
+  core.send(
+    Command.SENSOR_PLATFORM,
+    geo.has,
+    orient.has,
+    orient.gated,
+    orient.silence,
+  );
+  core.send(Command.SETTING_DEV, __IS_DEV__);
 }

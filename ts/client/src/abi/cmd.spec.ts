@@ -25,15 +25,9 @@
  * without one refuses the packet. The generator refuses a number given twice.
  */
 
-import type {
-  BranchCursor,
-  NodeCursor,
-  PacketRoom,
-  PacketWriter,
-} from "@xpute/kit/wire/xtp/mod.ts";
+import type { BranchCursor, NodeCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import type { U32Array } from "@xpute/kit/abi/array.ts";
 import type { f64, i32, u32, u8 } from "@xpute/kit/abi/word.ts";
-import { SequenceType } from "@xpute/kit/wire/xtp/mod.ts";
 import * as Major from "./cmd/major.spec.ts";
 import * as InputMinor from "./cmd/input_minor.spec.ts";
 import * as SensorMinor from "./cmd/sensor_minor.spec.ts";
@@ -59,7 +53,7 @@ import * as Message from "./cmd/message.spec.ts";
 import * as Command from "./cmd/command.spec.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
-import type { Sender, OnImport } from "@xpute/runtime";
+import type { Protocol, OnImport } from "@xpute/runtime";
 
 /** One of Major's, as its enum was a type. */
 type Major = (typeof Major)[keyof typeof Major];
@@ -231,7 +225,7 @@ export interface PivotState {
   outside: boolean;
 }
 
-export function read_pivot_state(b: BranchCursor): PivotState {
+function read_pivot_state(b: BranchCursor): PivotState {
   return {
     status: b.at(0).get<GroundStatus>(),
     is_off_center: b.at(1).get<boolean>(),
@@ -245,7 +239,7 @@ export interface LonLat {
   lat: f64;
 }
 
-export function read_lon_lat(b: BranchCursor): LonLat {
+function read_lon_lat(b: BranchCursor): LonLat {
   return { lon: b.at(0).get<f64>(), lat: b.at(1).get<f64>() };
 }
 
@@ -256,7 +250,7 @@ export interface LocationState {
   err: Message | null;
 }
 
-export function read_location_state(b: BranchCursor): LocationState {
+function read_location_state(b: BranchCursor): LocationState {
   return {
     status: b.at(0).get<SensorStatus>(),
     has_location: b.at(1).get<boolean>(),
@@ -269,7 +263,7 @@ export interface CompanionState {
   pet_ready: boolean;
 }
 
-export function read_companion_state(b: BranchCursor): CompanionState {
+function read_companion_state(b: BranchCursor): CompanionState {
   return {
     person_ready: b.at(0).get<boolean>(),
     pet_ready: b.at(1).get<boolean>(),
@@ -282,7 +276,7 @@ export interface OrientationState {
   err: Message | null;
 }
 
-export function read_orientation_state(b: BranchCursor): OrientationState {
+function read_orientation_state(b: BranchCursor): OrientationState {
   return {
     status: b.at(0).get<SensorStatus>(),
     err: b.at(1).get<Message | null>(),
@@ -301,7 +295,7 @@ export interface DivisionPart {
   area: boolean;
 }
 
-export function read_division_part(b: BranchCursor): DivisionPart {
+function read_division_part(b: BranchCursor): DivisionPart {
   return {
     subtype: b.at(0).get<u8>(),
     name: b.at(1).get<string>(),
@@ -317,246 +311,8 @@ export interface RefusedFile {
   path: string;
 }
 
-export function read_refused_file(b: BranchCursor): RefusedFile {
+function read_refused_file(b: BranchCursor): RefusedFile {
   return { root: b.at(0).get<u32>(), path: b.at(1).get<string>() };
-}
-
-/** Command.SENSOR_POS's packet, written in place into `to`. */
-export function encode_sensor_pos(
-  to: PacketRoom,
-  lon: f64,
-  lat: f64,
-  alt: f64 | null,
-  accuracy: f64 | null,
-  course: f64 | null,
-): PacketWriter {
-  return to.writer(5).f64(lon).f64(lat).f64(alt).f64(accuracy).f64(course);
-}
-
-/** Command.SENSOR_ORIENT's packet, written in place into `to`. */
-export function encode_sensor_orient(
-  to: PacketRoom,
-  webkit_compass_heading: f64 | null,
-  alpha: f64 | null,
-  beta: f64 | null,
-  gamma: f64 | null,
-): PacketWriter {
-  return to
-    .writer(4)
-    .f64(webkit_compass_heading)
-    .f64(alpha)
-    .f64(beta)
-    .f64(gamma);
-}
-
-/** Command.SENSOR_ERR's packet, written in place into `to`.
- *
- * @param code Geolocation's; orientation gives none. */
-export function encode_sensor_err(
-  to: PacketRoom,
-  sensor: Sensor,
-  code: GeolocationErrorCode | null,
-): PacketWriter {
-  return to.writer(2).u32(sensor).u32(code);
-}
-
-/** Command.TURN_GRANT's packet, written in place into `to`.
- *
- * @param refresh_ms The display's refresh, as the runtime measures it from the animation frames it is handed, and the interval it paces turns at, a whole number of refreshes (the pacing the client boots it with, @xpute/runtime sched/frame_pacing.ts `FrameGrant`): the frame's budget. */
-export function encode_turn_grant(
-  to: PacketRoom,
-  refresh_ms: f64,
-  paced_ms: f64,
-  interactive: boolean,
-  credits: u32,
-): PacketWriter {
-  return to
-    .writer(4)
-    .f64(refresh_ms)
-    .f64(paced_ms)
-    .bool(interactive)
-    .u32(credits);
-}
-
-/** Command.SOURCE_DECLARE's packet, written in place into `to`.
- *
- * @param min_zoom The coarsest zoom the source supplies whole.
- * @param format Each kind's format, one a kind, indexed by its bake's number (pxl-spec bake/publication.spec.rs).
- * @param shard The shards it serves, by name. Their order means nothing: no two at a zoom are over one node, and the finer wins. */
-export function encode_source_declare(
-  to: PacketRoom,
-  min_zoom: u32,
-  format: u32[],
-  shard: string[],
-): PacketWriter {
-  return to
-    .writer(3)
-    .u32(min_zoom)
-    .array(SequenceType.U32_ARRAY, Uint32Array.from(format))
-    .strs(shard);
-}
-
-/** Command.SENSOR_PERMISSION's packet, written in place into `to`. */
-export function encode_sensor_permission(
-  to: PacketRoom,
-  sensor: Sensor,
-  answer: PermissionAnswer,
-): PacketWriter {
-  return to.writer(2).u32(sensor).u32(answer);
-}
-
-/** Command.SENSOR_PLATFORM's packet, written in place into `to`.
- *
- * @param orient_permission iOS 13+'s gate: requestPermission exists and must run inside a gesture.
- * @param orient_silence_is_loss A browser's compass talks while the device is still and cannot say it stopped, so silence is the only sign of loss; a device's speaks only when the heading turns and reports a failure itself (SENSOR_ERR). */
-export function encode_sensor_platform(
-  to: PacketRoom,
-  geolocation: boolean,
-  orient: boolean,
-  orient_permission: boolean,
-  orient_silence_is_loss: boolean,
-): PacketWriter {
-  return to
-    .writer(4)
-    .bool(geolocation)
-    .bool(orient)
-    .bool(orient_permission)
-    .bool(orient_silence_is_loss);
-}
-
-/** Command.SETTING_DEV's packet, written in place into `to`. */
-export function encode_setting_dev(to: PacketRoom, dev: boolean): PacketWriter {
-  return to.writer(1).bool(dev);
-}
-
-/** Command.INPUT_POINTER's packet, written in place into `to`. */
-export function encode_input_pointer(
-  to: PacketRoom,
-  phase: PointerPhase,
-  pointer_type: PointerType,
-  id: i32,
-  button: i32,
-  x: f64,
-  y: f64,
-): PacketWriter {
-  return to
-    .writer(6)
-    .u32(phase)
-    .u32(pointer_type)
-    .i32(id)
-    .i32(button)
-    .f64(x)
-    .f64(y);
-}
-
-/** Command.EDIT_TOOL's packet, written in place into `to`.
- *
- * @param val The item to place, its id (id.json); read only for that tool.
- * @param scale_steps A cube's scale, as a decor's `scale_steps`: 0 a unit, each step down its half, to 1 - OBJECT_SCALES (pxl-spec bake/object.spec.rs). Read only for an item, and only a cube's is chosen. */
-export function encode_edit_tool(
-  to: PacketRoom,
-  tool: Tool,
-  val: u32,
-  scale_steps: i32,
-): PacketWriter {
-  return to.writer(3).u32(tool).u32(val).i32(scale_steps);
-}
-
-/** Command.EDIT_MARKER_TEXT's packet, written in place into `to`. */
-export function encode_edit_marker_text(
-  to: PacketRoom,
-  text: string,
-): PacketWriter {
-  return to.writer(1).str(text);
-}
-
-/** Command.INPUT_WHEEL's packet, written in place into `to`. */
-export function encode_input_wheel(to: PacketRoom, delta_y: f64): PacketWriter {
-  return to.writer(1).f64(delta_y);
-}
-
-/** Command.INPUT_MOVE's packet, written in place into `to`. */
-export function encode_input_move(
-  to: PacketRoom,
-  x: i32,
-  y: i32,
-): PacketWriter {
-  return to.writer(2).i32(x).i32(y);
-}
-
-/** Command.SCENE_DRAW's packet, written in place into `to`.
- *
- * @param bg What the character is drawn over, 0xRRGGBB, sRGB. */
-export function encode_scene_draw(
-  to: PacketRoom,
-  surface: u32,
-  content: SceneContent,
-  group: u32 | null,
-  bg: u32 | null,
-): PacketWriter {
-  return to.writer(4).u32(surface).u32(content).u32(group).u32(bg);
-}
-
-/** Command.SETTING_SET's packet, written in place into `to`.
- *
- * @param value A toggle's 0 or 1, a choice's option by its index, or a number. */
-export function encode_setting_set(
-  to: PacketRoom,
-  key: u32,
-  value: u32,
-): PacketWriter {
-  return to.writer(2).u32(key).u32(value);
-}
-
-/** Command.SCENE_CHAT's packet, written in place into `to`. */
-export function encode_scene_chat(to: PacketRoom, text: string): PacketWriter {
-  return to.writer(1).str(text);
-}
-
-/** Command.CAMERA_TRACKING's packet, written in place into `to`. */
-export function encode_camera_tracking(
-  to: PacketRoom,
-  tracking: Tracking,
-): PacketWriter {
-  return to.writer(1).u32(tracking);
-}
-
-/** Command.CAMERA_GOTO's packet, written in place into `to`.
- *
- * @param dist The zoom, the eye's distance from the pivot, clamped to the zoom's range; absent, a view far out comes in.
- * @param azimuth The heading about Z in radians, wrapped.
- * @param polar The angle down from vertical in radians, clamped. */
-export function encode_camera_goto(
-  to: PacketRoom,
-  lon: f64,
-  lat: f64,
-  dist: f64 | null,
-  azimuth: f64 | null,
-  polar: f64 | null,
-): PacketWriter {
-  return to.writer(5).f64(lon).f64(lat).f64(dist).f64(azimuth).f64(polar);
-}
-
-/** Command.INPUT_XR_POSE's packet, written in place into `to`. */
-export function encode_input_xr_pose(
-  to: PacketRoom,
-  x: f64,
-  y: f64,
-  z: f64,
-  qx: f64,
-  qy: f64,
-  qz: f64,
-  qw: f64,
-): PacketWriter {
-  return to.writer(7).f64(x).f64(y).f64(z).f64(qx).f64(qy).f64(qz).f64(qw);
-}
-
-/** Command.PERF_STATS's packet, written in place into `to`. */
-export function encode_perf_stats(
-  to: PacketRoom,
-  window_ms: f64 | null,
-): PacketWriter {
-  return to.writer(1).f64(window_ms);
 }
 
 /** Command.SENSOR_START's packet. */
@@ -564,27 +320,15 @@ export interface SensorStart {
   sensor: Sensor;
 }
 
-export function read_sensor_start(b: BranchCursor): SensorStart {
-  return { sensor: b.at(0).get<Sensor>() };
-}
-
 /** Command.SENSOR_STOP's packet. */
 export interface SensorStop {
   sensor: Sensor;
-}
-
-export function read_sensor_stop(b: BranchCursor): SensorStop {
-  return { sensor: b.at(0).get<Sensor>() };
 }
 
 /** Command.UI_SNAPSHOT's packet. */
 export interface UiSnapshot {
   at: u32;
   len: u32;
-}
-
-export function read_ui_snapshot(b: BranchCursor): UiSnapshot {
-  return { at: b.at(0).get<u32>(), len: b.at(1).get<u32>() };
 }
 
 /** Command.UI_VIEW's packet. */
@@ -594,177 +338,150 @@ export interface UiView {
   m_per_px: f64;
 }
 
-export function read_ui_view(b: BranchCursor): UiView {
-  return { azimuth: b.at(0).get<f64>(), m_per_px: b.at(1).get<f64>() };
-}
-
 /** Command.TURN_PACE's packet. */
 export interface TurnPace {
   /** 0 asks none, and turns go at the display's own rate. */
   interval_ms: f64;
 }
 
-export function read_turn_pace(b: BranchCursor): TurnPace {
-  return { interval_ms: b.at(0).get<f64>() };
-}
+/** Each import's packet, read from its branch, by its number. */
+export const read = {
+  [Command.SENSOR_START]: (b: BranchCursor): SensorStart => ({
+    sensor: b.at(0).get<Sensor>(),
+  }),
+  [Command.SENSOR_STOP]: (b: BranchCursor): SensorStop => ({
+    sensor: b.at(0).get<Sensor>(),
+  }),
+  [Command.UI_SNAPSHOT]: (b: BranchCursor): UiSnapshot => ({
+    at: b.at(0).get<u32>(),
+    len: b.at(1).get<u32>(),
+  }),
+  [Command.UI_VIEW]: (b: BranchCursor): UiView => ({
+    azimuth: b.at(0).get<f64>(),
+    m_per_px: b.at(1).get<f64>(),
+  }),
+  [Command.TURN_PACE]: (b: BranchCursor): TurnPace => ({
+    interval_ms: b.at(0).get<f64>(),
+  }),
+};
 
-/** What the runtime sends on the ui protocol, bound to `runtime`: each
- * command sent, requested and answered later, or called and answered before
- * it returns. */
-export function ui_exports(runtime: Sender) {
-  return {
-    sensor_pos: (
-      lon: f64,
-      lat: f64,
-      alt: f64 | null,
-      accuracy: f64 | null,
-      course: f64 | null,
-    ): void =>
-      runtime.send(Command.SENSOR_POS, (r) =>
-        encode_sensor_pos(r, lon, lat, alt, accuracy, course),
-      ),
-    sensor_orient: (
-      webkit_compass_heading: f64 | null,
-      alpha: f64 | null,
-      beta: f64 | null,
-      gamma: f64 | null,
-    ): void =>
-      runtime.send(Command.SENSOR_ORIENT, (r) =>
-        encode_sensor_orient(r, webkit_compass_heading, alpha, beta, gamma),
-      ),
-    sensor_err: (sensor: Sensor, code: GeolocationErrorCode | null): void =>
-      runtime.send(Command.SENSOR_ERR, (r) =>
-        encode_sensor_err(r, sensor, code),
-      ),
-    turn_grant: (
-      refresh_ms: f64,
-      paced_ms: f64,
-      interactive: boolean,
-      credits: u32,
-    ): void =>
-      runtime.send(Command.TURN_GRANT, (r) =>
-        encode_turn_grant(r, refresh_ms, paced_ms, interactive, credits),
-      ),
-    source_declare: (min_zoom: u32, format: u32[], shard: string[]): i32 =>
-      runtime.call(Command.SOURCE_DECLARE, (r) =>
-        encode_source_declare(r, min_zoom, format, shard),
-      ),
-    sensor_permission: (sensor: Sensor, answer: PermissionAnswer): void =>
-      runtime.send(Command.SENSOR_PERMISSION, (r) =>
-        encode_sensor_permission(r, sensor, answer),
-      ),
-    sensor_platform: (
-      geolocation: boolean,
-      orient: boolean,
-      orient_permission: boolean,
-      orient_silence_is_loss: boolean,
-    ): void =>
-      runtime.send(Command.SENSOR_PLATFORM, (r) =>
-        encode_sensor_platform(
-          r,
-          geolocation,
-          orient,
-          orient_permission,
-          orient_silence_is_loss,
-        ),
-      ),
-    setting_dev: (dev: boolean): void =>
-      runtime.send(Command.SETTING_DEV, (r) => encode_setting_dev(r, dev)),
-    input_pointer: (
-      phase: PointerPhase,
-      pointer_type: PointerType,
-      id: i32,
-      button: i32,
-      x: f64,
-      y: f64,
-    ): void =>
-      runtime.send(Command.INPUT_POINTER, (r) =>
-        encode_input_pointer(r, phase, pointer_type, id, button, x, y),
-      ),
-    edit_tool: (tool: Tool, val: u32, scale_steps: i32): Promise<i32> =>
-      runtime.request(Command.EDIT_TOOL, (r) =>
-        encode_edit_tool(r, tool, val, scale_steps),
-      ),
-    edit_marker_text: (text: string): Promise<i32> =>
-      runtime.request(Command.EDIT_MARKER_TEXT, (r) =>
-        encode_edit_marker_text(r, text),
-      ),
-    edit_marker_cancel: (): void => runtime.send(Command.EDIT_MARKER_CANCEL),
-    edit_marker_commit: (): void => runtime.send(Command.EDIT_MARKER_COMMIT),
-    input_wheel: (delta_y: f64): void =>
-      runtime.send(Command.INPUT_WHEEL, (r) => encode_input_wheel(r, delta_y)),
-    input_move: (x: i32, y: i32): void =>
-      runtime.send(Command.INPUT_MOVE, (r) => encode_input_move(r, x, y)),
-    scene_draw: (
-      surface: u32,
-      content: SceneContent,
-      group: u32 | null,
-      bg: u32 | null,
-    ): void =>
-      runtime.send(Command.SCENE_DRAW, (r) =>
-        encode_scene_draw(r, surface, content, group, bg),
-      ),
-    setting_set: (key: u32, value: u32): void =>
-      runtime.send(Command.SETTING_SET, (r) =>
-        encode_setting_set(r, key, value),
-      ),
-    scene_chat: (text: string): void =>
-      runtime.send(Command.SCENE_CHAT, (r) => encode_scene_chat(r, text)),
-    camera_tracking: (tracking: Tracking): void =>
-      runtime.send(Command.CAMERA_TRACKING, (r) =>
-        encode_camera_tracking(r, tracking),
-      ),
-    camera_north_up: (): void => runtime.send(Command.CAMERA_NORTH_UP),
-    sensor_locate: (): void => runtime.send(Command.SENSOR_LOCATE),
-    camera_goto: (
-      lon: f64,
-      lat: f64,
-      dist: f64 | null,
-      azimuth: f64 | null,
-      polar: f64 | null,
-    ): void =>
-      runtime.send(Command.CAMERA_GOTO, (r) =>
-        encode_camera_goto(r, lon, lat, dist, azimuth, polar),
-      ),
-    input_xr_pose: (
-      x: f64,
-      y: f64,
-      z: f64,
-      qx: f64,
-      qy: f64,
-      qz: f64,
-      qw: f64,
-    ): void =>
-      runtime.send(Command.INPUT_XR_POSE, (r) =>
-        encode_input_xr_pose(r, x, y, z, qx, qy, qz, qw),
-      ),
-    input_xr_pose_end: (): void => runtime.send(Command.INPUT_XR_POSE_END),
-    perf_start: (): void => runtime.send(Command.PERF_START),
-    perf_stop: (): void => runtime.send(Command.PERF_STOP),
-    perf_stats: (window_ms: f64 | null): i32 =>
-      runtime.call(Command.PERF_STATS, (r) => encode_perf_stats(r, window_ms)),
-    perf_rings: (): i32 => runtime.call(Command.PERF_RINGS),
-  };
-}
+/** What the runtime sends on the ui protocol: each command by its number, and
+ * the fields its packet takes in order. It is sent, requested and answered
+ * later, or called and answered before it returns. */
+export type UiSend = {
+  [Command.SENSOR_POS]: [
+    lon: f64,
+    lat: f64,
+    alt: f64 | null,
+    accuracy: f64 | null,
+    course: f64 | null,
+  ];
+  [Command.SENSOR_ORIENT]: [
+    webkit_compass_heading: f64 | null,
+    alpha: f64 | null,
+    beta: f64 | null,
+    gamma: f64 | null,
+  ];
+  /** @param code Geolocation's; orientation gives none. */
+  [Command.SENSOR_ERR]: [sensor: Sensor, code: GeolocationErrorCode | null];
+  /** @param refresh_ms The display's refresh, as the runtime measures it from the animation frames it is handed, and the interval it paces turns at, a whole number of refreshes (the pacing the client boots it with, @xpute/runtime sched/frame_pacing.ts `FrameGrant`): the frame's budget. */
+  [Command.TURN_GRANT]: [
+    refresh_ms: f64,
+    paced_ms: f64,
+    interactive: boolean,
+    credits: u32,
+  ];
+  [Command.SENSOR_PERMISSION]: [sensor: Sensor, answer: PermissionAnswer];
+  /** @param orient_permission iOS 13+'s gate: requestPermission exists and must run inside a gesture.
+   * @param orient_silence_is_loss A browser's compass talks while the device is still and cannot say it stopped, so silence is the only sign of loss; a device's speaks only when the heading turns and reports a failure itself (SENSOR_ERR). */
+  [Command.SENSOR_PLATFORM]: [
+    geolocation: boolean,
+    orient: boolean,
+    orient_permission: boolean,
+    orient_silence_is_loss: boolean,
+  ];
+  [Command.SETTING_DEV]: [dev: boolean];
+  [Command.INPUT_POINTER]: [
+    phase: PointerPhase,
+    pointer_type: PointerType,
+    id: i32,
+    button: i32,
+    x: f64,
+    y: f64,
+  ];
+  [Command.EDIT_MARKER_CANCEL]: [];
+  [Command.EDIT_MARKER_COMMIT]: [];
+  [Command.INPUT_WHEEL]: [delta_y: f64];
+  [Command.INPUT_MOVE]: [x: i32, y: i32];
+  /** @param bg What the character is drawn over, 0xRRGGBB, sRGB. */
+  [Command.SCENE_DRAW]: [
+    surface: u32,
+    content: SceneContent,
+    group: u32 | null,
+    bg: u32 | null,
+  ];
+  /** @param value A toggle's 0 or 1, a choice's option by its index, or a number. */
+  [Command.SETTING_SET]: [key: u32, value: u32];
+  [Command.SCENE_CHAT]: [text: string];
+  [Command.CAMERA_TRACKING]: [tracking: Tracking];
+  [Command.CAMERA_NORTH_UP]: [];
+  [Command.SENSOR_LOCATE]: [];
+  /** @param dist The zoom, the eye's distance from the pivot, clamped to the zoom's range; absent, a view far out comes in.
+   * @param azimuth The heading about Z in radians, wrapped.
+   * @param polar The angle down from vertical in radians, clamped. */
+  [Command.CAMERA_GOTO]: [
+    lon: f64,
+    lat: f64,
+    dist: f64 | null,
+    azimuth: f64 | null,
+    polar: f64 | null,
+  ];
+  [Command.INPUT_XR_POSE]: [
+    x: f64,
+    y: f64,
+    z: f64,
+    qx: f64,
+    qy: f64,
+    qz: f64,
+    qw: f64,
+  ];
+  [Command.INPUT_XR_POSE_END]: [];
+  [Command.PERF_START]: [];
+  [Command.PERF_STOP]: [];
+};
+export type UiRequest = {
+  /** @param val The item to place, its id (id.json); read only for that tool.
+   * @param scale_steps A cube's scale, as a decor's `scale_steps`: 0 a unit, each step down its half, to 1 - OBJECT_SCALES (pxl-spec bake/object.spec.rs). Read only for an item, and only a cube's is chosen. */
+  [Command.EDIT_TOOL]: [tool: Tool, val: u32, scale_steps: i32];
+  [Command.EDIT_MARKER_TEXT]: [text: string];
+};
+export type UiCall = {
+  /** @param min_zoom The coarsest zoom the source supplies whole.
+   * @param format Each kind's format, one a kind, indexed by its bake's number (pxl-spec bake/publication.spec.rs).
+   * @param shard The shards it serves, by name. Their order means nothing: no two at a zoom are over one node, and the finer wins. */
+  [Command.SOURCE_DECLARE]: [min_zoom: u32, format: U32Array, shard: string[]];
+  [Command.PERF_STATS]: [window_ms: f64 | null];
+  [Command.PERF_RINGS]: [];
+};
 
-/** The ui protocol's stubs, bound. */
-export type UiExports = ReturnType<typeof ui_exports>;
+/** The ui protocol over a link. */
+export type UiProtocol = Protocol<UiSend, UiRequest, UiCall>;
 
 /** What the program does with each command the core posts on the ui protocol; a
  * call's answer is its return. */
 export interface UiImports {
-  sensor_start(e: SensorStart): void;
-  sensor_stop(e: SensorStop): void;
+  [Command.SENSOR_START](e: SensorStart): void;
+  [Command.SENSOR_STOP](e: SensorStop): void;
   /** The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
    * block the core holds, valid until the next snapshot. */
-  ui_snapshot(e: UiSnapshot): void;
+  [Command.UI_SNAPSHOT](e: UiSnapshot): void;
   /** The view's azimuth and scale, when either moved: a frame of its own, so a rotation or a
    * zoom, which moves them every frame, leaves the snapshot as it was. */
-  ui_view(e: UiView): void;
+  [Command.UI_VIEW](e: UiView): void;
   /** The least interval the core asks between its turns: its load's word on the rate, which
    * the next TURN_GRANT's `paced_ms` answers, a whole number of refreshes (the pacing the
    * client boots the runtime with, @xpute/runtime sched/frame_pacing.ts `pace`). */
-  turn_pace(e: TurnPace): void;
+  [Command.TURN_PACE](e: TurnPace): void;
 }
 
 /** `h` as the handler a runtime routes the ui protocol's commands to, each one read and
@@ -773,15 +490,15 @@ export function ui_imports(h: UiImports): OnImport {
   return (_tag, cmd, f) => {
     switch (cmd) {
       case Command.SENSOR_START:
-        return h.sensor_start(read_sensor_start(need(f)));
+        return h[Command.SENSOR_START](read[Command.SENSOR_START](need(f)));
       case Command.SENSOR_STOP:
-        return h.sensor_stop(read_sensor_stop(need(f)));
+        return h[Command.SENSOR_STOP](read[Command.SENSOR_STOP](need(f)));
       case Command.UI_SNAPSHOT:
-        return h.ui_snapshot(read_ui_snapshot(need(f)));
+        return h[Command.UI_SNAPSHOT](read[Command.UI_SNAPSHOT](need(f)));
       case Command.UI_VIEW:
-        return h.ui_view(read_ui_view(need(f)));
+        return h[Command.UI_VIEW](read[Command.UI_VIEW](need(f)));
       case Command.TURN_PACE:
-        return h.turn_pace(read_turn_pace(need(f)));
+        return h[Command.TURN_PACE](read[Command.TURN_PACE](need(f)));
       default:
         return Errno.ENOSYS;
     }
@@ -793,7 +510,7 @@ export function ui_imports(h: UiImports): OnImport {
 export function ui_mem(cmd: u32, f: BranchCursor | null): [u32, u32] | null {
   switch (cmd) {
     case Command.UI_SNAPSHOT: {
-      const e = read_ui_snapshot(need(f));
+      const e = read[Command.UI_SNAPSHOT](need(f));
       return [e.at, e.len];
     }
     default:

@@ -7,7 +7,7 @@
  */
 
 import { type Manifest, Timeslice } from "@xpute/runtime";
-import { asker_imports } from "../asker.spec.ts";
+import { asker_imports, Command } from "../asker.spec.ts";
 import { MACHINE } from "../machine.spec.ts";
 
 export const ANSWER = 100;
@@ -22,7 +22,7 @@ export const manifest: Manifest = {
       module: new URL(CORE, import.meta.url),
       bytes: MACHINE.mem_bytes[0],
     },
-    program: asker_imports({ ask: () => ANSWER }),
+    program: asker_imports({ [Command.ASK]: () => ANSWER }),
     policy: new Timeslice(4),
     submit: () => {},
   }),

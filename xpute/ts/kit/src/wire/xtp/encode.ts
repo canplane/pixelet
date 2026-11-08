@@ -2,6 +2,7 @@
 
 import {
   BOOL,
+  exact_i32,
   type f32,
   type f64,
   FIELD_SET,
@@ -17,6 +18,7 @@ import {
 import type {
   BigTypedArray,
   TypedArray,
+  U32Array,
   U8Array,
 } from "@xpute/kit/abi/array.ts";
 import * as encoding from "@xpute/kit/codec/encoding.ts";
@@ -57,6 +59,9 @@ import {
 import type { NodeView } from "./view.ts";
 
 const DESC_REG: [u32, NodeType] = [NONE, SpecialType.NIL];
+
+/** A field of a command's packet as a caller hands it. */
+export type Arg = number | boolean | string | null | U32Array | string[];
 
 export interface TreeEncoderConfig {
   /** The size of the first buffer tried; it doubles each time the packet does
@@ -319,6 +324,23 @@ export class PacketWriter {
 
   nil(): this {
     return this.entry(-1, SpecialType.NIL);
+  }
+
+  /** Writes `v` by what it is. A number an i32 holds goes as one and any other
+   * as an f64, and a reader of a number takes either. */
+  arg(v: Arg): this {
+    switch (typeof v) {
+      case "number":
+        return exact_i32(v) ? this.i32(v) : this.f64(v);
+      case "boolean":
+        return this.bool(v);
+      case "string":
+        return this.str(v);
+    }
+    if (v === null) return this.nil();
+    return v instanceof Uint32Array
+      ? this.array(SequenceType.U32_ARRAY, v)
+      : this.strs(v);
   }
 
   u8(v: u8 | null): this {

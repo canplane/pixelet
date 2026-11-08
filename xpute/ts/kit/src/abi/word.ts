@@ -63,6 +63,10 @@ export const fits_u32 = (x: number): boolean =>
   is_int(x) && 0 <= x && x <= U32_MAX;
 export const fits_i32 = (x: number): boolean =>
   is_int(x) && I32_MIN <= x && x <= I32_MAX;
+/** Whether an i32 holds `x` and gives it back: -0 fits by value but reads back
+ * as 0. */
+export const exact_i32 = (x: number): boolean =>
+  fits_i32(x) && !Object.is(x, -0);
 
 export const fits_u64 = (x: bigint): boolean => 0n <= x && x <= U64_MAX;
 export const fits_i64 = (x: bigint): boolean => I64_MIN <= x && x <= I64_MAX;

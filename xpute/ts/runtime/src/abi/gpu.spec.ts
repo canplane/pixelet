@@ -13,12 +13,11 @@
  * a surface shows is the program's to decide.
  */
 
-import type { PacketRoom, PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
-import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
 import * as Major from "./gpu/major.spec.ts";
 import * as GpuMinor from "./gpu/gpu_minor.spec.ts";
 import * as Command from "./gpu/command.spec.ts";
-import type { Sender } from "../mod.ts";
+import type { f64, u32 } from "@xpute/kit/abi/word.ts";
+import type { Protocol } from "../mod.ts";
 
 /** One of Major's, as its enum was a type. */
 type Major = (typeof Major)[keyof typeof Major];
@@ -32,59 +31,23 @@ export { GpuMinor };
 type Command = (typeof Command)[keyof typeof Command];
 export { Command };
 
-/** Command.GPU_SURFACE_RESIZE's packet, written in place into `to`. */
-export function encode_gpu_surface_resize(
-  to: PacketRoom,
-  surface: u32,
-  width: u32,
-  height: u32,
-  device_pixel_ratio: f64,
-): PacketWriter {
-  return to
-    .writer(4)
-    .u32(surface)
-    .u32(width)
-    .u32(height)
-    .f64(device_pixel_ratio);
-}
+/** What the runtime sends on the gpu protocol: each command by its number, and
+ * the fields its packet takes in order. It is sent, requested and answered
+ * later, or called and answered before it returns. */
+export type GpuSend = {
+  [Command.GPU_READY]: [];
+  [Command.GPU_SURFACE_RESIZE]: [
+    surface: u32,
+    width: u32,
+    height: u32,
+    device_pixel_ratio: f64,
+  ];
+  [Command.GPU_SURFACE_CLOSE]: [surface: u32];
+};
+export type GpuRequest = {
+  [Command.GPU_SURFACE_OPEN]: [];
+};
+export type GpuCall = Record<never, never>;
 
-/** Command.GPU_SURFACE_CLOSE's packet, written in place into `to`. */
-export function encode_gpu_surface_close(
-  to: PacketRoom,
-  surface: u32,
-): PacketWriter {
-  return to.writer(1).u32(surface);
-}
-
-/** What the runtime sends on the gpu protocol, bound to `runtime`: each
- * command sent, requested and answered later, or called and answered before
- * it returns. */
-export function gpu_exports(runtime: Sender) {
-  return {
-    gpu_ready: (): void => runtime.send(Command.GPU_READY),
-    gpu_surface_open: (): Promise<i32> =>
-      runtime.request(Command.GPU_SURFACE_OPEN),
-    gpu_surface_resize: (
-      surface: u32,
-      width: u32,
-      height: u32,
-      device_pixel_ratio: f64,
-    ): void =>
-      runtime.send(Command.GPU_SURFACE_RESIZE, (r) =>
-        encode_gpu_surface_resize(
-          r,
-          surface,
-          width,
-          height,
-          device_pixel_ratio,
-        ),
-      ),
-    gpu_surface_close: (surface: u32): void =>
-      runtime.send(Command.GPU_SURFACE_CLOSE, (r) =>
-        encode_gpu_surface_close(r, surface),
-      ),
-  };
-}
-
-/** The gpu protocol's stubs, bound. */
-export type GpuExports = ReturnType<typeof gpu_exports>;
+/** The gpu protocol over a link. */
+export type GpuProtocol = Protocol<GpuSend, GpuRequest, GpuCall>;
