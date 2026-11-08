@@ -138,11 +138,11 @@ pub fn exact(at: &Q3) -> Option<Q3> {
     standing(World::now(), at).exact().flatten()
 }
 
-/// `resolve` for a camera's `to`. Once a leaf gives the Z, the Z is written
-/// into `to`.
+/// `resolve` for a camera's `to`. A Z not yet known is written into `to` once
+/// a leaf gives it, and a known Z is not written over.
 pub fn resolve_to(to: &mut Option<Q3>, cur: V3) -> V3 {
     let Some(at) = *to else { return cur };
-    if let Some(p) = exact(&at) {
+    if let Some(p) = exact(&at).filter(|_| is_unknown(&at)) {
         *to = Some(p);
     }
     resolve(&to.unwrap_or(at), cur)
