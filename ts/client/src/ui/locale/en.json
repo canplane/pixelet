@@ -205,8 +205,8 @@
     }
   },
   "progress": {
-    "app": "Downloading the app…",
-    "gpu": "Connecting to WebGPU…",
+    "app": "Loading the app…",
+    "gpu": "Connecting to the GPU…",
     "offline": "Waiting for the network…",
     "server": "Waiting for the server…",
     "location": "Waiting for your location…",
@@ -223,7 +223,7 @@
       "body": "Open this again at its https:// address."
     },
     "gpu": {
-      "title": "WebGPU couldn’t start.",
+      "title": "The GPU couldn’t start.",
       "body": "Turn on hardware acceleration in your browser, or check your device’s settings."
     },
     "boot": {

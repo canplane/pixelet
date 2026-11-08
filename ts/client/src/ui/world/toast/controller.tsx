@@ -1,11 +1,12 @@
 // @pxl/client/ui/world/toast/controller.tsx
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 
 import { messageKey } from "@/ui/locale/message-key.ts";
 import { GroundStatus, Message, SensorStatus } from "@/abi/cmd.spec.ts";
-import { GPU_WAITING, type Gpu } from "@/abi/state.ts";
+import { BOOT_STARTED, GPU_WAITING, type Gpu } from "@/abi/state.ts";
+import { boot_state, watch_boot } from "@/service/sys/boot.ts";
 
 import { dismissToast, showToast, ToastTone } from "./store.ts";
 import { useGpu, useCore, useOnline } from "@/ui/watch.ts";
@@ -147,7 +148,9 @@ export function ToastController() {
     (s) => !s.companion.person_ready || !s.companion.pet_ready,
   );
   const [greeting, setGreeting] = useState<Greeting>(UNSAID);
-  const ready = !outside && shown && !companionLoading;
+  // The cover hides the toasts until the app shows.
+  const shows = useSyncExternalStore(watch_boot, boot_state) === BOOT_STARTED;
+  const ready = shows && !outside && shown && !companionLoading;
   useEffect(() => {
     if (ready && greeting === UNSAID) setGreeting(SAYING);
     // A ready word cut short is not shown again.
