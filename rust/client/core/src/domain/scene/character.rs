@@ -33,13 +33,12 @@ use xpute_kit::status::errno::Errno;
 
 use crate::domain::scene::animation;
 use crate::domain::scene::character::companion::Walk;
-use crate::domain::scene::decor::gpu::{decor_impostor_angle, decor_model_angle};
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model::asset::model_of;
 use crate::domain::scene::model::registry::{blend, Models};
 use crate::domain::scene::model::{draw_list, models};
 use crate::domain::scene::transform::Transform;
-use crate::domain::view::lens::{cell_there, Stepped};
+use crate::domain::view::lens::{cell_there, decor_impostor_angle, decor_model_angle, Stepped};
 use crate::sys::io::loader::{load_image, load_of};
 use crate::sys::sched::edge::wake_at;
 

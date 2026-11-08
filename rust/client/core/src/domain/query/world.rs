@@ -17,6 +17,9 @@ use crate::domain::layer::terrain::TerrainQuery as _;
 use crate::domain::layer::tile_cache::{Lines, TileCache};
 use crate::domain::layer::Answer;
 use crate::domain::layer::Base as _;
+use pxl_engine::clipmap::FIRST_CELL;
+use pxl_engine::LEAF_CELL;
+use pxl_spec::asset::decor::DECORS;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::aabb::Aabb;
 
@@ -26,9 +29,10 @@ use pxl_spec::space::coord::aabb::Aabb;
 pub struct World<'a> {
     pub(super) terrain: &'a TileCache<TerrainTile>,
     pub(super) object: &'a Store,
-    /// Whether decor is struck, as the boxes it claims; else a ray passes
-    /// through decor.
-    pub(super) decor: bool,
+    /// The decor struck, as the boxes it claims: what is placed, and of what
+    /// the ground generates the kinds whose bits are set, a bit a kind in
+    /// `DECORS`' order; none where a ray passes through decor.
+    pub(super) decor: Option<u32>,
     /// Whether it is unplaced, nothing placed asked of it: the ground's alone
     /// (pxl-engine `world::Inheritance::UNPLACED`).
     pub(super) unplaced: bool,
@@ -46,23 +50,31 @@ impl World<'static> {
         let object: &'static Store = store::object();
         World::new(TerrainTile::tile_cache(), object)
     }
-
-    /// As `now`, and decor is struck too, where the frame holds it: the
-    /// pointer's pick, which alone asks what a decor thing is.
-    pub fn striking_decor(self) -> World<'static> {
-        World {
-            decor: true,
-            ..self
-        }
-    }
 }
 
 impl<'a> World<'a> {
+    /// As it is, and decor is struck too, as the frame draws it about the
+    /// eye: what is placed, and what the ground generates of each kind the
+    /// frame generates at the leaves' clip level, by its zooms as the frame
+    /// is handed them (domain/view/lens.rs `decor_zooms`). The pointer's pick,
+    /// which alone asks what a decor thing is.
+    pub fn striking_decor(self, zooms: &[u32; DECORS.len()]) -> World<'a> {
+        let leaves = |z: u32| z >> (LEAF_CELL - FIRST_CELL) & 1;
+        let kinds = zooms
+            .iter()
+            .enumerate()
+            .fold(0, |bits, (k, &z)| bits | leaves(z) << k);
+        World {
+            decor: Some(kinds),
+            ..self
+        }
+    }
+
     pub fn new(terrain: &'a TileCache<TerrainTile>, object: &'a Store) -> World<'a> {
         World {
             terrain,
             object,
-            decor: false,
+            decor: None,
             unplaced: false,
             hide: None,
             carve: None,

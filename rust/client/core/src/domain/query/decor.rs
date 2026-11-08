@@ -254,21 +254,24 @@ impl Around {
 }
 
 impl<'a> World<'a> {
-    /// What the ground generates on the leaf `cell`, each decor's, handed to
-    /// `each` until `each` says it has what it wants: each on its column's
-    /// column surface in the world unplaced (`World::column_surface`), with, where
-    /// `boxed`, whether it generates
-    /// there as the frame drawing it draws it (`generated_at`), true where not.
-    /// Nothing where the world does not hold the column.
+    /// What the ground generates on the leaf `cell`, each decor's of the
+    /// kinds whose bits `kinds` sets (`World::decor`), handed to `each` until
+    /// `each` says it has what it wants: each on its column's column surface
+    /// in the world unplaced (`World::column_surface`), with, where `boxed`,
+    /// whether it generates there as the frame drawing it draws it
+    /// (`generated_at`), true where not. Nothing where the world does not
+    /// hold the column.
     fn generated_in(
         &self,
         cell: [i32; 2],
         boxed: bool,
+        kinds: u32,
         mut each: impl FnMut(&Decor, Instance, bool) -> bool,
     ) -> bool {
-        DECORS.iter().any(|decor| {
-            generated_at(&mut DecorWorld::new(self), decor, cell, boxed)
-                .is_some_and(|(i, generates)| each(decor, i, generates))
+        DECORS.iter().enumerate().any(|(k, decor)| {
+            kinds >> k & 1 == 1
+                && generated_at(&mut DecorWorld::new(self), decor, cell, boxed)
+                    .is_some_and(|(i, generates)| each(decor, i, generates))
         })
     }
 
@@ -283,7 +286,7 @@ impl<'a> World<'a> {
         let mut out = Vec::new();
         for y in cells(1) {
             for x in cells(0) {
-                self.generated_in([x, y], false, |_, i, _| {
+                self.generated_in([x, y], false, u32::MAX, |_, i, _| {
                     if claim(&i).is_some_and(|c| c.shares(*space)) {
                         out.push(i);
                     }
@@ -300,7 +303,7 @@ impl<'a> World<'a> {
     pub fn generated_instance(&self, decor: &Decor, at: &Q3) -> Option<Instance> {
         let [x, y, z] = idx_of(GROUND.cell(), at);
         let mut met = None;
-        self.generated_in([x, y], false, |d, i, _| {
+        self.generated_in([x, y], false, u32::MAX, |d, i, _| {
             met = Some(i)
                 .filter(|i| d.val() == decor.val() && i.generated_in().is_some_and(|c| c[2] == z));
             met.is_some()
@@ -310,9 +313,7 @@ impl<'a> World<'a> {
 
     /// The decor tests a ray carries, where decor is struck at all.
     pub(super) fn decor_ray(&self, ray: &Ray) -> Option<DecorRay> {
-        if !self.decor {
-            return None;
-        }
+        self.decor?;
         // NodeSlot as it is out to where the view draws the leaves' tiles.
         let dist = match GROUND.z_at(0.0) {
             LEAF_ZOOM => draw_dist(GROUND, LEAF_ZOOM).min(ray.t_max),
@@ -413,7 +414,8 @@ impl<'a> World<'a> {
     }
 
     fn generated_near(&self, s: &mut DecorRay, ray: &Ray, cell: [i32; 2]) {
-        self.generated_in(cell, true, |_, i, generates| {
+        let kinds = self.decor.unwrap_or(0);
+        self.generated_in(cell, true, kinds, |_, i, generates| {
             if generates {
                 meet(s, ray, i);
             }

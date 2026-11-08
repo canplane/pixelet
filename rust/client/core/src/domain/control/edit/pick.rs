@@ -13,6 +13,7 @@ use pxl_spec::space::coord::zoom::{units, Zoom};
 use crate::domain::layer::object::store::Entry;
 use crate::domain::query::{finest, Hit, HitKind, Ray, World};
 use crate::domain::view::frame::coord::world_to_canonical;
+use crate::domain::view::lens::decor_zooms;
 use pxl_spec::space::coord::aabb::Aabb;
 
 /// A product number: what can be edited is a sphere about the observer.
@@ -93,7 +94,7 @@ pub fn resolve_hit_object(hit: &Hit) -> Option<Entry> {
 }
 
 /// In the root frame, from the eye.
-/// Decor is struck where the frame holds it. The world
+/// Decor is struck as the frame draws it (`World::striking_decor`). The world
 /// asked is the stored one (`World::now`), not as the eraser's preview draws
 /// it: what to erase is what is stored.
 pub fn ray_pick(origin: V3, dir: V3) -> Option<Hit> {
@@ -104,7 +105,7 @@ pub fn ray_pick(origin: V3, dir: V3) -> Option<Hit> {
     };
     // A coarser tile's answer is a summary, not what is held.
     World::now()
-        .striking_decor()
+        .striking_decor(&decor_zooms())
         .first_hit(&ray, finest())
         .exact()
         .flatten()

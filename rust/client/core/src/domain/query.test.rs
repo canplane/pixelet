@@ -844,6 +844,64 @@ fn generated_decor_edit_removes() {
     }
 }
 
+/// What the ground generates is struck of the kinds the frame generates at
+/// the leaves' clip level alone: where it generates none, as with the decor
+/// setting off (domain/view/lens.rs `decor_zooms`), the pointer's ray goes
+/// through where one would stand to the ground under it
+/// (`World::striking_decor`).
+#[test]
+fn generated_decor_struck_where_generated() {
+    use pxl_engine::clipmap::FIRST_CELL;
+    use pxl_engine::LEAF_CELL;
+    use pxl_spec::asset::decor::DECORS;
+    let _g = serial();
+    let (tile_cache, [x, y]) = flat_at_five();
+    let empty = Store::default();
+    let world = World::new(&tile_cache, &empty);
+    let space = Aabb {
+        min: [x - 8.0, y - 8.0, world::BOUNDS.min[2]],
+        max: [x + 8.0, y + 8.0, world::BOUNDS.max[2]],
+    };
+    let generates = |i: &Instance| {
+        let [cx, cy, _] = i.generated_in().unwrap();
+        let decor = Decor::of(u32::from(i.id));
+        scatter::generated_at(&mut scatter::DecorWorld::new(&world), decor, [cx, cy], true)
+            .is_some_and(|(_, generates)| generates)
+    };
+    let tree = world
+        .generated_over(&space)
+        .into_iter()
+        .find(generates)
+        .expect("a decor generates about the eye");
+    let b = decor::claim(&tree).unwrap();
+    let ray = Ray {
+        origin: [
+            (b.min[0] + b.max[0]) / 2.0,
+            (b.min[1] + b.max[1]) / 2.0,
+            b.max[2] + 1.0,
+        ],
+        dir: [0.0, 0.0, -1.0],
+        t_max: 20.0,
+    };
+    let met = |zooms: [u32; DECORS.len()]| {
+        world
+            .striking_decor(&zooms)
+            .first_hit(&ray, finest())
+            .exact()
+            .flatten()
+            .expect("the ground under it")
+            .kind
+    };
+    let leaves = [1 << (LEAF_CELL - FIRST_CELL); DECORS.len()];
+    assert!(
+        matches!(met(leaves), HitKind::Decor(i) if i.generated_in() == tree.generated_in()),
+        "{:?}",
+        met(leaves)
+    );
+    let none = [0; DECORS.len()];
+    assert!(!matches!(met(none), HitKind::Decor(_)), "{:?}", met(none));
+}
+
 /// The service area of the shards at `SHARD_ZOOM` in its column and east
 /// of it, every row: their nines as a declaration lays them (`area::nine`).
 struct EastOf(i32);

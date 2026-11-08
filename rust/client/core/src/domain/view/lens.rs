@@ -2,18 +2,27 @@
 
 //! The camera grid through the screen: the cell a distance holds
 //! (`cell_there`), how long a motion takes to be seen there and a clock
-//! stepped by it (`seen_step_s`, `Stepped`), and what the GPU's cast of the
+//! stepped by it (`seen_step_s`, `Stepped`), how much of it a thing spans, a
+//! model, an impostor or culled, and the clip levels the ground's decor is
+//! generated at by it (`decor_zooms`), and what the GPU's cast of the
 //! screen's rays reads (`gpu_cast`), a ray a drawn pixel, one rule wherever
 //! the eye is.
 
+use pxl_content::scatter;
+use pxl_engine::clipmap::FIRST_CELL;
+use pxl_engine::LEAF_CELL;
 use pxl_engine::{beam, eye};
+use pxl_spec::asset::decor::{Decor, DECORS};
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::camera::grid::CELL;
+use pxl_spec::space::camera::grid::{split_dist, CELL, CLIP_CELLS_A_RAD, CLIP_MARGIN};
 use pxl_spec::space::coord::world::origin;
+use pxl_spec::space::coord::zoom::Zoom;
 
 use crate::domain::query::zoom_range;
 use crate::domain::view::observation;
 use crate::domain::view::param;
+use crate::domain::view::setting::store::settings_store;
+use crate::sys::io::loader::catalog;
 
 /// The camera grid's cell `distance` from the eye, in units: what spans it is
 /// observed there, and a motion that carries something this far is seen.
@@ -51,6 +60,64 @@ impl Stepped {
         self.0 = Some(t);
         (t, next(t), true)
     }
+}
+
+/// A decor is drawn as a model down to `DECOR_MODEL_CELLS` of a camera
+/// cell, the model's edge, an angle about the eye in radians (pxl-spec
+/// space/camera/grid.rs `CELL`), so no screen's size or ratio moves it.
+pub fn decor_model_angle() -> f64 {
+    param::DECOR_MODEL_CELLS * CELL
+}
+
+/// The impostor's edge, `DECOR_IMPOSTOR_CELLS` of a camera cell, as an angle as
+/// the model's is (`decor_model_angle`).
+pub fn decor_impostor_angle() -> f64 {
+    param::DECOR_IMPOSTOR_CELLS * CELL
+}
+
+/// How far a thing `extent_u` wide is an impostor's worth as a clip level holds
+/// it, in units, past which it is culled: where it spans
+/// `DECOR_IMPOSTOR_CELLS` of the clip level's cells (`CLIP_CELLS_A_RAD`),
+/// `CLIP_MARGIN` times as far as `decor_impostor_angle` puts the
+/// impostor's edge, an upper bound. `is_decor_shown` takes both its
+/// sides at the clip level's, so its zooms are the view's.
+pub const fn cull_dist_u(extent_u: f64) -> f64 {
+    extent_u * CLIP_CELLS_A_RAD / param::DECOR_IMPOSTOR_CELLS
+}
+
+/// Whether a decor `extent_u` wide is an impostor's worth anywhere cells of
+/// `cell_zoom` are drawn: as it spans where that zoom begins.
+fn is_decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
+    split_dist(cell_zoom) * CLIP_MARGIN <= cull_dist_u(extent_u)
+}
+
+/// Each kind's clip level zooms, a bit each, where the ground generates its
+/// decor: the leaves', and each coarser one where one of its variants stands
+/// as itself, its own size no narrower than the clip level's cell (pxl-engine
+/// `scatter::stands_at`), the same cells' decor read at every one, each where
+/// the kind is an impostor's worth; none with the decor setting off, nor
+/// before the catalog that measures the variants is read. A finer clip level
+/// lies within the leaves'. What the frame generates (domain/scene/decor/gpu.rs
+/// `frame`) and what the pointer strikes of it (domain/control/edit/pick.rs
+/// `ray_pick`) are both these.
+pub fn decor_zooms() -> [u32; DECORS.len()] {
+    if !settings_store().decor {
+        return [0; DECORS.len()];
+    }
+    zooms_by(|d| d.extent(catalog()))
+}
+
+/// `decor_zooms` with the setting on, each kind's extent `extent` gives.
+fn zooms_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {
+    core::array::from_fn(|k| {
+        let (d, extent) = (&DECORS[k], extent(&DECORS[k]));
+        (FIRST_CELL..=LEAF_CELL)
+            .filter(|&cell| {
+                let stands = scatter::any_stands_at(d.row, cell);
+                stands && is_decor_shown(extent, cell)
+            })
+            .fold(0, |bits, cell| bits | 1 << (cell - FIRST_CELL))
+    })
 }
 
 /// What a GPU's cast of the screen's rays reads of the eye (pxl-engine
