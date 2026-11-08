@@ -166,12 +166,17 @@ vite.config.ts.timestamp-*
 # symlinks into it.
 # NOTE: git has no inline comments in .gitignore — a trailing `# ...` becomes
 # part of the pattern, so these must each sit on their own line.
-.claude/
 .cursor/
 .windsurf/
 .codex/
 .continue/
 .aider*
+
+# .claude is a link to .agents: only the agent files and the skills are
+# committed, and what the tool writes there stays local.
+.agents/*
+!.agents/agents/
+!.agents/skills/
 
 # Personal, uncommitted variants of shared agent content
 .agents/skills/.local/
@@ -183,13 +188,13 @@ vite.config.ts.timestamp-*
 # Scratch: notes, diffs and logs a session keeps while it works.
 /tmp/
 
-# The core's module, built from rust/ by ts/client/script/build-wasm.py, and
+# The core's module, built from rust/ by ts/client/script/wasm-build.py, and
 # the page's template made from ts/client/index.html (ts/client/script/web.ts).
 ts/client/public/core.wasm
 ts/client/public/index.html
 ts/client/core.paths.json
 # The page's icons and link preview, made from ts/client/brand by each web
-# build (pxl-tool/bin/render_brand.rs).
+# build (pxl-tool/bin/brand.rs).
 ts/client/public/brand/
 
 
@@ -202,6 +207,9 @@ asset/raw/sky/
 # A bake set kept beside the current one while the new one is made: `out` is
 # already ignored, and this is the same thing with a number on it.
 out[0-9]*/
+
+# Temporary folders (AGENTS.md).
+/cache/
 
 # The number the deployment serves (script/build-number.py), which a dev build of either app is labeled after
 ts/client/.build_number

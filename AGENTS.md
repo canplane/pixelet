@@ -1,60 +1,47 @@
 # Agent Instructions
 
-- Skills and this file are in English.
-- `pxl-core` and `xpute-core`, its library OS, are linked into one image, a
-  unikernel on a virtual machine. xpute's core is `xpute-core`; do not call
-  the image xpute's core. The runtime is its VMM, which implements its devices
-  and gives it its time. The UI is the client outside the VM; the rings are
-  the device between them.
-- Under `xpute/`: runtime, core and their contract only. No pixelet domain
-  (tiles, the world, sensors) and no pixelet name.
-- xpute's predefined ABI takes majors 0x00 to 0x0F (`xpute/spec/abi/`); the
-  app's ABI takes majors from `PROGRAM_MAJOR`, 0x10
-  (`spec/client/core/door/ui.json`). No ports.
-- pixelet's layers are the UI (`ts/client/src/ui/`), the services
-  (`ts/client/src/service/`) and the runtime (`ts/client/src/runtime/`); the
-  core is `rust/client/core`.
-- The app is one Expo app, `ts/client` (`@pxl/client`), for iOS, Android and the
-  page; the page is bundled by Metro. What differs by platform is a file pair
-  in `ts/client/src/service/platform/`: `<x>.ts` the page's, `<x>.native.ts`
-  the device's, the shapes both share in `platform/types.ts`; the pair that
-  opens the runtime is in `runtime/`. A piece of the UI the platforms draw
-  differently is a file and its override beside it
-  (`ts/client/src/ui/component/README.md`).
-- The runtime gives no app number a meaning. What the core's files, the app's
-  ABI and the server mean on the client is the client's services
-  (`ts/client/README.md`), and none of it goes into `@xpute/runtime` or
-  `xpute-runtime`.
-- The UI computes no coordinate or tile and is not the runtime. It reaches what
-  is below it through `service/` alone, the core through `service/core/`
-  alone, and `service/core/` reaches the core through the generated stubs
-  alone.
-- xpute is to be published for other programs. Don't propose removing a part
-  of xpute's `kit`, or its C++ core, because nothing here calls it.
+- `pxl-core` and `xpute-core`, its library OS, link into one image, a unikernel.
+  The runtime is its VMM, the UI the client outside the VM, the rings the device
+  between them.
+- Under `xpute/`: runtime, core and their contract, with no pixelet domain or
+  name. It is to be published: don't propose removing a part of its `kit` or its
+  C++ core because nothing here calls it.
+- xpute's ABI takes the majors under `PROGRAM_MAJOR`, the app's from it. No
+  ports.
+- What the app's numbers mean is the client's services (`ts/client/README.md`),
+  never `@xpute/runtime` or `xpute-runtime`.
+- The UI computes no coordinate or tile. It reaches what is below it through
+  `service/` alone, the core through `service/core/` alone, and that through the
+  generated stubs alone.
+- What differs by platform is a file pair in `service/platform/` (`<x>.ts` the
+  page's, `<x>.native.ts` the device's) or, for a piece of the UI, a file and
+  its override beside it (`ts/client/src/ui/component/README.md`).
 
-## Reading and changing
+## Working
 
 - Read the skill the task needs (`.agents/skills/`).
-- Work in the main checkout, and commit only your own paths. A worktree is
-  only for a tree that must be built apart. No drafts under `out/`.
-- The code is agents' work, not the user's intent: read it as suspect. Decide
-  what a part must do from the user's decisions, then judge the code against
-  that; a comment, a structure or a pattern in it, however often repeated, is
-  no reason to keep it.
-- Keep an established symmetry by role and contract, not by matching module
-  lists. A local gain alone does not weaken one or cross a boundary. A
-  contract changed on purpose is named as such, with what keeps or replaces
-  the properties it held.
-- A comment is understood on its own, in whole sentences, without reading the
-  code under it, and does not say the code again.
+- The code is agents' work, not the user's intent: judge it against the user's
+  decisions. A comment, a structure or a pattern in it is no reason to keep it.
+- Work in the main checkout and commit only your own paths; a worktree only for
+  a tree that must be built apart.
+- `out/` holds what a build makes, and no drafts. A temporary folder, an
+  experiment's data too, goes under `cache/` at the checkout's root.
+- Cargo builds into `<root>/rust/target/session/<id>`, written absolute, `<id>`
+  the session's (`$CLAUDE_CODE_SESSION_ID`).
 
-## Setup
+## Instructions
 
-This file and the skills are vendor-neutral. An assistant's own directory links
-to them once per checkout:
+In English. A rule lives in one place, and any other links it:
 
-```bash
-mkdir -p .claude
-ln -sfn ../AGENTS.md      .claude/CLAUDE.md
-ln -sfn ../.agents/skills .claude/skills
-```
+- this file: what every task needs, a line each;
+- a skill: one kind of task with its own procedure, its `description` saying
+  where it ends;
+- an agent file: a reviewer's scope and report, the rules staying in the skill;
+- `CONTRIBUTING.md`: what a person runs; a README or doc comment: how a part
+  works;
+- memory: what the user said about working that none of these holds.
+
+A change rewrites the rule that covers it, and a correction the rule it
+corrects. A new file is for a new kind of task. A rule says what holds now: no
+incident, date or reason, and nothing the code or a test already holds. A path
+or a name appears only where the reader needs it to find the thing.

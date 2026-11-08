@@ -1,14 +1,11 @@
 ---
 name: publish-bucket
-description: Upload baked tiles, ingested models and textures to the R2 bucket the Worker serves, and verify the served bytes. Use after a bake or an asset change, when the client must point at a new version, or when a live tile decodes wrong.
+description: Upload baked tiles, ingested models and textures to the R2 bucket the Worker serves, and verify the served bytes. Use after a bake or an asset change, when the client must point at a new version, or when a live tile decodes wrong. Building a set is the bake-tiles skill.
 ---
 
 # Publishing the bucket
 
-How a tile set or an asset gets into the bucket `pixelet-bucket`, and how to
-confirm it arrived. What the bucket holds and how the Worker serves it is
-[infra/README.md](../../../infra/README.md) §4; building a set is
-[bake-tiles](../bake-tiles/SKILL.md).
+The bucket is `pixelet-bucket` ([infra/README.md](../../../infra/README.md) §4).
 
 Only `./script/publish.py` writes the bucket's `source` object, which the
 client reads at boot: publishing needs no commit or deploy. **A manual upload

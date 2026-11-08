@@ -5,9 +5,6 @@ description: Bake terrain, place and division tiles from the geo DB into each ki
 
 # Baking tiles
 
-How to build a tile set and check it. Uploading a set is
-[publish-bucket](../publish-bucket/SKILL.md).
-
 ## The bakes
 
 ```bash
@@ -59,7 +56,7 @@ make bake-terrain ARGS="--step fold --step commit"
 
 1. **Zero failures** in the leaf step's `failed=`.
 2. **Terrain: spot-check against the dev tile server, at more than one zoom.**
-   Compare the decompressed packets, not the files. Run `make serve-tile`, not
+   Compare the decompressed packets, not the files. Run `make serve-oven`, not
    `dev`:
 
    ```bash
@@ -82,5 +79,5 @@ make bake-terrain ARGS="--step fold --step commit"
 Bump the kind's `FORMAT` (`spec/spec/bake/publication.json`) only when how the client
 reads a tile changes (its format in `pxl-spec bake/`).
 
-After a re-ingest or a bake change, `rm -rf out/oven` (the dev tile server's
-cache).
+After a re-ingest, `rm -rf ~/Library/Caches/pixelet/oven` (the dev tile server's
+cache). A bake change takes a new key by itself.

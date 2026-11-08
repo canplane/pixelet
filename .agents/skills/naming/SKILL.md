@@ -6,11 +6,10 @@ description: Naming in pixelet — short, plain names read where they stand; whe
 # Naming
 
 - Use short, plain names, as in UNIX V6 and K&R's C.
-- The system — xpute, the commands' modules, what the core asks of its runtime
-  — takes its word from Unix, Linux or Wayland; a device outside them keeps its
-  platform's word. The application — the world, its drawing, its map, its UI —
-  takes the word its own field uses (graphics, cartography, games). A metaphor
-  no field uses is no name.
+- The system (xpute, the commands' modules, what the core asks of its runtime)
+  takes its word from Unix, Linux or Wayland; a device outside them keeps its
+  platform's word. The application takes its field's word (graphics, cartography,
+  games). A metaphor no field uses is no name.
 - A word on this list is abbreviated; any other stays whole: index `idx`,
   value `val`, values `vals`, buffer `buf`, source `src`, destination `dst`,
   offset `off`, count `cnt`, current `cur` (not `curr`), position `pos`,
@@ -24,33 +23,25 @@ description: Naming in pixelet — short, plain names read where they stand; whe
 - Whole, though they look short: `zoom`; `size` in pixelet, GPU texture sizes
   included, and `sz` in xpute (`HDR_SZ`, `WORD_SZ`); `environment`; `source` as
   a source of data; `encode`, `decode`.
-- Name what the thing is. A padding noun says little, and a placeholder word
-  says nothing: one that could stand for anything, as "whatsit" could (`kept`,
-  `held`, `goes`, `done`), which only the code around it explains (`Stop`, not
-  `Held`). A plain word that reads at once (`reach`) is fine. A word in a
-  comment is no precedent for a name.
-- Judge a name by what the thing is now: what it holds, does and which boundary
-  it crosses. Where a word came from, or an earlier module that used it, is no
-  reason to keep it.
-- When a name meets one already taken, see whether they share a namespace or a
-  context where both are read, and whether the name already taken is itself the
-  best one.
-- A word may mean different things in different parts where each is its
-  field's word (a map's tile, a screen's tile, a shadow map's tile). A name
-  changes when it is not its field's word or not what the thing is, not to
-  keep words apart.
+- Name what the thing is now: what it holds, does and which boundary it crosses.
+  A placeholder says nothing (`kept`, `held`, `goes`, `done`; `Stop`, not
+  `Held`); a plain word that reads at once (`reach`) is fine. A word in a comment
+  or an earlier module's use is no reason for a name.
+- How exact a name must be follows how far it is read. Inside one module it may
+  be loose; across modules it says what the thing is, never what happened to it
+  (`handed`, `asked`, `told`). A rename that lengthens a name its context made
+  plain goes back.
+- A word may mean different things where each is its field's word (a map's tile,
+  a shadow map's tile). A name changes when it is not its field's word or not
+  what the thing is, not to keep words apart.
 - Snake_case and SCREAMING abbreviate; PascalCase types, camelCase and the
-  React UI's own names stay whole (`let cfg: Config`). A TypeScript `private`
-  member takes a leading `_` (`private _cap`).
+  React UI's own names stay whole (`let cfg: Config`).
 - Use a unit suffix on a length (`_u` the world's units, `_merc` a meter on
   the EPSG:3857 plane, `_m` a meter on the ground), on the value where a
   person sees it (`29.0 m`).
-- Name a symmetric pair's part, one side of a base both share, with the base,
-  a dot and its side, as `x.native.ts` marks a variant (`sample.eye.wgsl`,
-  `sample.light.wgsl` beside `sample.wgsl`), and a stand-in that replaces a part
-  at assembly with the part, a dot and what it stands in as
-  (`atmos_eye.unit.wgsl` for `atmos_eye.wgsl` at exposure 1, `palette.none.wgsl`
-  for `palette.wgsl`).
+- A symmetric pair's part is the base, a dot and its side (`x.native.ts`,
+  `sample.eye.wgsl` beside `sample.wgsl`); a stand-in replacing a part at
+  assembly is the part, a dot and what it stands in as (`palette.none.wgsl`).
 - Name a new concept the parts share with the user, and use the names already
   chosen with the user:
 
@@ -64,7 +55,7 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | what a mouse, touch or controller points with | `pointer` | cursor |
   | the raster's nearest sample at each pixel | the visibility buffer | pick |
   | a frame's number on xpute's rings, its meaning the program's | a `cmd`, a `Command` | vec, vector, opcode |
-  | what the UI asks of the core      | a command | |
+  | what the UI asks of the core | a command | |
   | a core's command to its runtime, a frame on the CQ | an import | hostcall, system call, hypercall |
   | an import answered before it returns | a call | hostcall |
   | a node of the plane at a zoom | `Quadrant`, `quad_at` | Tile |
@@ -84,11 +75,8 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | decor drawn as a model, an impostor or not at all by its distance | its `lod` | tier |
 
   `at` is where a thing is, `to` where it is going.
-- xpute's names are the mechanism's: the core, the runtime, the UI, a device,
-  the SQ and the CQ. pixelet names its parts by the side of xpute they sit on,
-  the owner given by the prefix (`pxl_core`, `xpute_core`, `Runtime.core`);
-  `core.wasm` is pixelet's build of its core.
+- xpute's names are the mechanism's: the core, the runtime, the UI, a device, the
+  SQ and the CQ. pixelet names its parts by the side of xpute they sit on, the
+  owner in the prefix (`pxl_core`, `xpute_core`, `Runtime.core`).
 - A file, folder or type name is singular (`service/`, `remote.ts`,
   `component/`).
-- Keep WebGPU's words in xpute's `gpu/`, and its `host`, the CPU's side, in a
-  renderer's and a shader's words.
