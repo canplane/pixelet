@@ -92,16 +92,18 @@ const fn body_block(stream: Stream) -> u64 {
 /// guaranteed must hold:
 /// - the terrain's and the Earth's bodies, kept or on a credit, in the runs
 ///   that `BODY_SLOTS` slots fill (sys/io/body.rs);
-/// - one body on every credit, in the buddy's block for the longest other
+/// - two baked tile's bodies for every credit, one in each of the fetch queue's
+///   lists (sys/io/fetch.rs `Queue`), in the buddy's block for the longest other
 ///   kind, each freed once it is decoded;
 /// - the ways' pool at its largest (domain/layer/terrain/pool.rs, pxl-engine
 ///   way/tree.rs `POOL_CHILD_GROUPS`);
 /// - the profiler's lanes while its setting is on (perf/record.rs).
 ///
-/// The pool and the lanes sit in the buddy's power-of-two blocks. Each flow
-/// is refused past its cap, and waits or stays absent when the heap refuses
-/// it. The rest of the heap is workspace, and code that takes it asks the
-/// allocator first.
+/// The pool and the lanes sit in the buddy's power-of-two blocks. Each flow is
+/// refused past its cap, and waits or stays absent when the heap refuses it. A
+/// shard's body has no longest (`Stream::max_body`), so no sum counts it.
+///
+/// The rest of the heap is workspace.
 const HEAP_FLOWS_BYTES: u64 = {
     use crate::sys::io::body::slots_bytes;
     use crate::sys::io::demand::Stream;
@@ -114,7 +116,7 @@ const HEAP_FLOWS_BYTES: u64 = {
         k += 1;
     }
     slots_bytes(param::BODY_SLOTS)
-        + param::MAX_CREDITS as u64 * longest
+        + 2 * param::MAX_CREDITS as u64 * longest
         + pool::POOL_BYTES
         + record::PERF_BYTES
 };

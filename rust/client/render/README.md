@@ -124,6 +124,18 @@ tile stays in the damage until its history has gathered the jitter's frames
 (`gpu/resolve.rs`). The CPU decides from what it handed whether a frame is drawn
 whole, through tiles, or not at all, so nothing is read back to decide it.
 
+## What it holds
+
+The GPU's memory has no sum the renderer keeps to, only a bound on each part.
+The terrain's bricks and palette are fixed at build time, and the ways' pool
+grows to a cap the build checks. What is sized by the screen is capped by the
+area drawn (`gpu/surface.rs`). The objects' tree, placed decor, the models and
+the images grow with what they hold, each buffer checked only against what
+every device can bind (`frame/shader/floor.rs` `fits`). Past that check the core
+stops. A device that runs out of memory first fails on its own terms: no error
+scope is kept, so a buffer it could not make is an error buffer, and a device it
+loses comes back through `on_gpu_lost`, which makes everything again.
+
 ## Making the renderer
 
 The renderer is made before its first frame, so that making it never holds the

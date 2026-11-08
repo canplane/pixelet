@@ -222,10 +222,11 @@ met, and each layer holds what is demanded in its own **tile cache**
 (`domain/layer/tile_cache.rs`), which keeps four promises. Every observation has
 an answer, because the coarsest zoom is always held all round the eye, as the
 **floor**. The tiles held for the floor and for demand are counted at compile
-time and fit the cache's slots with one to spare (`TileCache::SLOTS`), so memory
-has a bound no view can break. A region only ever goes from unresolved to coarse
-to as fine as it is observed, never back. And nothing is prefetched: a view
-converges on its misses alone.
+time and fit the cache's slots (`TileCache::SLOTS`), so no view can ask for more
+tiles than the cache holds. A region only ever goes from unresolved to coarse
+to as fine as it is observed, never back. And nothing is fetched on a guess: a
+view converges on its misses alone, and a camera sent somewhere waits for the
+ground there.
 
 The ground's cells are held in a **clipmap** (Tanner, Migdal and Jones 1998):
 one level per zoom about a center, each a few **bricks** wide and addressed

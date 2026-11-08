@@ -73,7 +73,8 @@ cache (`tile_cache.rs`), which keeps four promises:
 - A tile is held hard for the floor or for demand while it is demanded, and as
   cache otherwise; only the hard set is correctness. The slots are counted at
   compile time and asserted to hold everything that can be held hard at once,
-  with one more to land in (`TileCache::SLOTS`). A tile that arrives takes a
+  and for a layer that reads the view one more to land in
+  (`TileCache::SLOTS`). A tile that arrives takes a
   free slot, or else the farthest one nothing holds hard and the view does not
   read.
 - A region goes from unresolved to coarse to as fine as it is observed, and

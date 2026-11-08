@@ -4,8 +4,8 @@
     "its stack, its rings and the GPU it asks for.",
     "",
     "`turn_posts` is what the core's turn may post besides its replies: a sensor's start",
-    "or stop each, the snapshot, the view, the files' imports at their most and a call's slot",
-    "(door.rs `EVENTS`, which it checks against this)."
+    "or stop each, the snapshot, the view, the frame's pace, the files' imports at their most",
+    "and a call's slot (door.rs `EVENTS`, which it checks against this)."
   ],
   "gen": {
     "ts": "../../../../ts/client/src/abi/machine.spec.ts",
@@ -34,9 +34,15 @@
       "",
       "The heap's bounded flows at their worst are checked against it at compile time too",
       "(door/layout.rs `HEAP_FLOWS_BYTES`): the runs that `BODY_SLOTS` terrain and Earth",
-      "bodies fill (sys/io/body.rs), a body on every credit in the buddy's block for a",
-      "division's, the ways' pool at its cap, and the profiler's lanes while its setting is",
-      "on, each in the buddy's blocks, a power of two, 164.56 MiB.",
+      "bodies fill (sys/io/body.rs), two baked tile's bodies for every credit, one in each of",
+      "the fetch queue's lists, in the buddy's block for a division's,",
+      "the ways' pool at its cap, and the profiler's lanes while its setting is on, each in the",
+      "buddy's blocks, a power of two, 228.56 MiB. A shard's body has no longest and is not",
+      "counted.",
+      "",
+      "The buddy's blocks stop short of the heap's end, since a block splits only where its",
+      "middle lies inside the heap: a handheld's heap of about 410 MiB is reached to 384 MiB,",
+      "and a desktop's of about 920 MiB to 896 MiB. `min_heap_bytes` is below both.",
       "",
       "Each figure here in MiB to two places is held to the code by a test",
       "(door/layout.test.rs)."
@@ -80,7 +86,7 @@
     "slot_bytes": 4096,
     "sq_cap": 512,
     "cq_cap": 1024,
-    "turn_posts": 173
+    "turn_posts": 174
   },
   "fs": {
     "$doc": [

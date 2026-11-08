@@ -16,7 +16,7 @@ pub const MACHINE: Machine = Machine {
     slot_bytes: 4096,
     sq_cap: 512,
     cq_cap: 1024,
-    turn_posts: 173,
+    turn_posts: 174,
     fs: true,
     gpu: Some(Gpu {
         bytes: 4194304,

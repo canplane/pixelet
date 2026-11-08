@@ -77,10 +77,11 @@ pub(crate) fn take_stat() -> DoorStat {
 /// The most events a turn posts besides its replies, which the machine
 /// declares as machine.json `turn_posts`. `post_ui` posts, once a turn after
 /// the drain, at most one start or stop for each sensor, then the snapshot
-/// and the view. The file calls post at most `runtime::FILE_FRAMES`, whether
-/// during the drain or later in the turn. One more slot holds a call while it
-/// is laid out and is never published.
-const EVENTS: u32 = Sensor::ALL.len() as u32 + 2 + runtime::FILE_FRAMES + 1;
+/// and the view. A frame posts its pace once (turn.rs `world_frame`). The
+/// file calls post at most `runtime::FILE_FRAMES`, whether during the drain
+/// or later in the turn. One more slot holds a call while it is laid out and
+/// is never published.
+const EVENTS: u32 = Sensor::ALL.len() as u32 + 2 + 1 + runtime::FILE_FRAMES + 1;
 
 const _: () = assert!(
     MACHINE.turn_posts == EVENTS,

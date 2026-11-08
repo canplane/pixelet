@@ -32,8 +32,9 @@ The core's memory is one linear space whose sections never move after boot.
 A range belongs in `.fixed` only when its owner can say at compile time how
 large it will ever be and it is mostly in use whenever the core runs. That is
 true of a few of the core's own formats and of nothing else: a glTF model or a
-PNG has no bound, so the loader reads it into the heap, and what is held only
-at times lives on the heap under a cap of its own.
+PNG has no bound, so the loader reads it into the heap. What is held only at
+times lives on the heap as well, the largest of it under caps that the build
+checks against the heap.
 `door/layout.rs` decides which ranges `.fixed` holds and how large each is, and
 hands each owner its range at boot. The machine names how much heap the core
 must keep, and both the compiler and the boot check that the front and `.fixed`
@@ -43,7 +44,7 @@ The largest bodies, terrain and Earth packets just past a mebibyte, would cost
 the buddy allocator two mebibytes each. They take slots instead: fixed-size
 pieces cut from runs the heap gives whole and takes back whole, a slab
 allocator for one large object (`io/body.rs`). The number of slots out at once
-is bounded, so reads cannot exhaust the heap by arriving together.
+is bounded, so those bodies take no more than their runs however they arrive.
 
 ## A turn
 
