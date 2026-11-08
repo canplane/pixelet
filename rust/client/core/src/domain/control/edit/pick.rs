@@ -13,6 +13,7 @@ use pxl_spec::space::coord::zoom::{of_side, units, Zoom};
 use crate::domain::control::camera::controller;
 use crate::domain::control::edit::collision::object_aabb;
 use crate::domain::control::edit::Target;
+use crate::domain::control::param::PICK_DIST_U;
 use crate::domain::layer::object::store::Entry;
 use crate::domain::query;
 use crate::domain::query::{finest, Hit, HitKind, Ray, World};
@@ -21,10 +22,6 @@ use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::frame::pose::{eye, ray_of};
 use crate::domain::view::lens::decor_zooms;
 use pxl_spec::space::coord::aabb::Aabb;
-
-/// How far from the eye the pointer can pick, in units. It is a product
-/// decision: what can be edited is a sphere about the observer.
-const PICK_DIST_U: f64 = 32.0;
 
 // Larger than the error of a round trip through the 1/256 grid (±1/512 u),
 // and smaller than the gap between any two object tiers (the finest tier's

@@ -12,6 +12,7 @@ mod candidate;
 mod chat;
 mod design;
 mod line;
+mod param;
 mod pin;
 mod place;
 mod selection;

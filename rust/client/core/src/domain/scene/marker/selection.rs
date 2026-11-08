@@ -8,13 +8,9 @@ use pxl_spec::space::coord::mat4;
 use pxl_spec::space::coord::v3;
 
 use crate::domain::scene::marker::candidate::Candidates;
+use crate::domain::scene::marker::param::ANCHOR_RADIUS;
 use crate::domain::view::frame::pose::view;
 use crate::domain::view::frame::screen::{ndc_to_px, size};
-
-/// The radius of the sphere tested against the frustum, as a fraction of the
-/// distance, since a marker keeps a constant size on the screen. It is
-/// generous, because one marker too many costs only a sprite.
-const ANCHOR_RADIUS: f64 = 0.08;
 
 /// Writes into `out` the indices into `candidates` of the visible markers,
 /// nearest first. The candidates are in the root frame.

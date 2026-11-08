@@ -73,6 +73,7 @@ use xpute_core::clock::now;
 use xpute_core::global::Global;
 use xpute_core::sched::tick::TickReport;
 
+use crate::sys::sched::param::MAX_STEP_S;
 use crate::sys::sched::phase_spec::Phase;
 
 /// The camera as the companion's walk reads it. It is None in first person,
@@ -285,11 +286,6 @@ pub fn world_turn() -> f64 {
     *EFFECTS.get(|| [0.0; spec::EFFECT_NAMES]) = times.unwrap_or_default();
     now() - at
 }
-
-/// The longest gap between frames, in seconds, that the world steps as
-/// motion. A longer gap (a hidden tab, a stall) is stepped as this long, so
-/// the world pauses instead of leaping.
-const MAX_STEP_S: f64 = 0.1;
 
 pub struct TurnGrant {
     pub delta: f64,

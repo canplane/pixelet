@@ -10,23 +10,12 @@ use crate::domain::control::camera::controller::Motion;
 use crate::domain::control::camera::state::IntentPatch;
 use crate::domain::control::navigation::destination::go_to_ground;
 use crate::domain::control::navigation::off_center::off_center;
+use crate::domain::control::param::{HEADING_SMOOTH_ALPHA, SENSOR_GRACE_MS};
 use crate::domain::control::sensor::device_orientation::request_orient;
 use crate::domain::control::sensor::reading::{device_location_store, device_orient_store};
 use crate::sys::sched::edge::wake_at;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
-
-/// The share of each new heading sample the followed azimuth takes. It
-/// applies per sample, not per frame. Compass jitter, which is worse
-/// indoors, passes the store's 1.5° dead zone, and this smooths it before it
-/// reaches the azimuth.
-const HEADING_SMOOTH_ALPHA: f64 = 0.25;
-
-/// How long following outlasts a location that is not ready, in ms, set by
-/// eye. A gap the location recovers from, such as a fix lost indoors or the
-/// watch starting again, keeps following. A dead location lets following go
-/// before the camera looks frozen behind a disabled button.
-const SENSOR_GRACE_MS: f64 = 12000.0;
 
 struct Follow {
     /// Whether the camera follows the device. The controls turn it on and

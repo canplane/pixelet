@@ -10,6 +10,8 @@ description: How code in pixelet and xpute is written — fewest concepts, ortho
   import) is that other. Code is short because its concepts are few, not
   because its lines are.
 - Orthogonal. A concept says one thing, and changing it reinterprets no other.
+- One owner. A fact has one definition; every other form of it is derived
+  from it, generated, computed or read through it.
 - Data first. The structures and the tables come first; functions run over
   them, short and straight. Where a branch picks by kind, a table picks.
 - Read in the order it runs. A step is not hidden behind a wrapper or a hook.

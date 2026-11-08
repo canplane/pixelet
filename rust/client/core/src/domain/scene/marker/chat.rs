@@ -12,10 +12,8 @@ use xpute_core::clock::now;
 use xpute_core::global::Global;
 
 use crate::domain::scene::marker::design::Design;
+use crate::domain::scene::marker::param::SHOWN_MS;
 use crate::sys::sched::edge::wake_at;
-
-/// How long a line shows, in ms. The chat has no expiry of its own.
-const SHOWN_MS: f64 = 8000.0;
 
 /// A line is stamped with the runtime's clock, not the frame's. A line said
 /// after a still spell would otherwise take the last frame's time and read

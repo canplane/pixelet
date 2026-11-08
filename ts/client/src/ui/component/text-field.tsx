@@ -10,7 +10,6 @@
 
 import type { Ref } from "react";
 import {
-  Platform,
   StyleSheet,
   TextInput,
   type TextInputProps,
@@ -19,9 +18,10 @@ import {
 
 import { color, textScale, textStyle } from "@/ui/component/theme.ts";
 
-/** Whether the platform's field draws its own clear button. An iPhone's does.
- * On a page and on Android, the caller draws one. */
-export const SYSTEM_CLEAR: boolean = Platform.OS === "ios";
+/** Whether the platform's field draws its own clear button: on a page and on
+ * Android it does not, and the caller draws one; an iPhone's does
+ * (text-field.ios.tsx). */
+export const SYSTEM_CLEAR: boolean = false;
 
 type TextFieldProps = Omit<TextInputProps, "onSubmitEditing"> & {
   ref?: Ref<TextInput>;

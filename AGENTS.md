@@ -21,19 +21,10 @@
   opens the runtime is in `runtime/`. A piece of the UI the platforms draw
   differently is a file and its override beside it
   (`ts/client/src/ui/component/README.md`).
-- The runtime gives no app number a meaning. What answers the core's files goes
-  in `ts/client/src/service/sys/`: their names, versions, kept keys and
-  refusals in `sys/fs/`, the stop report and the boot's and the GPU's states
-  beside. What the app's ABI carries on the client goes in
-  `ts/client/src/service/core/`, a file a major (UI's snapshot in
-  `snapshot.ts`): the commands for the UI's intents and its input, the
-  snapshot, the surfaces it lends and each turn's grant, what the place's
-  sensors tell the core, the text the core calls for, the profiler. The server
-  the client reads from (its routes, its published tables, whether the device
-  is online) is `ts/client/src/service/origin/`. The numbers both read,
-  generated from `spec/` or written beside it (a state the client reports and
-  the UI shows, `abi/state.ts`), are `ts/client/src/abi/`; the boot is
-  `runtime/`. None of it goes into `@xpute/runtime` or `xpute-runtime`.
+- The runtime gives no app number a meaning. What the core's files, the app's
+  ABI and the server mean on the client is the client's services
+  (`ts/client/README.md`), and none of it goes into `@xpute/runtime` or
+  `xpute-runtime`.
 - The UI computes no coordinate or tile and is not the runtime. It reaches what
   is below it through `service/` alone, the core through `service/core/`
   alone, and `service/core/` reaches the core through the generated stubs
@@ -43,8 +34,9 @@
 
 ## Reading and changing
 
-- Read the skill the task needs (`.agents/skills/`). What done means:
-  `.agents/working.md`.
+- Read the skill the task needs (`.agents/skills/`).
+- Work in the main checkout, and commit only your own paths. A worktree is
+  only for a tree that must be built apart. No drafts under `out/`.
 - The code is agents' work, not the user's intent: read it as suspect. Decide
   what a part must do from the user's decisions, then judge the code against
   that; a comment, a structure or a pattern in it, however often repeated, is

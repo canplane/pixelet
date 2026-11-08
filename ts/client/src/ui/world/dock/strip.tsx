@@ -10,7 +10,6 @@ import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
   PanResponder,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -24,6 +23,7 @@ import { Glyph } from "@/ui/component/glyph.tsx";
 import { Motion } from "@/ui/component/motion/motion.tsx";
 import { SNAP } from "@/ui/component/motion/transition.ts";
 import { alpha, chrome, color } from "@/ui/component/theme.ts";
+import { panX } from "@/ui/component/pan.ts";
 import { openModal } from "@/ui/modal.tsx";
 import {
   selectTool,
@@ -45,12 +45,6 @@ import {
 } from "@/ui/asset/catalog.ts";
 import { PIN_LABEL } from "@/ui/asset/marker.spec.ts";
 import { CubeSwatch, decorGlyph, selectionRing } from "@/ui/asset/swatch.tsx";
-
-/** On a page, the browser scrolls the strip sideways itself and leaves holds
- * and vertical drags to the view's own gestures. On a device, React Native's
- * responder system shares the finger between them. */
-const PAN_X: ViewStyle =
-  Platform.OS === "web" ? ({ touchAction: "pan-x" } as ViewStyle) : {};
 
 const ITEM = 24;
 
@@ -391,7 +385,7 @@ const styles = StyleSheet.create({
   },
 
   slot: SLOT,
-  swatchSlot: PAN_X,
+  swatchSlot: panX,
   held: {
     width: chrome.selection,
     height: chrome.selection,

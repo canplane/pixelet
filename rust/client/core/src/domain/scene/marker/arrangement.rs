@@ -32,6 +32,7 @@ use xpute_kit::status::errno::Errno;
 
 use crate::domain::query::changes;
 use crate::domain::scene::frame::Frame;
+use crate::domain::scene::marker::param::SPACING_PX;
 use crate::domain::scene::model;
 use crate::domain::view::frame::{coord, pose};
 use crate::domain::view::observation;
@@ -201,13 +202,6 @@ pub(super) fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f6
         .flatten()?;
     Some(high - hit.t)
 }
-
-/// The width a place keeps to itself on the screen, in CSS pixels. Its name
-/// wraps to this width, and its marker's region is this wide. A marker is
-/// laid out in CSS pixels, as the UI's text is, so the width looks the same
-/// on every screen. The value was chosen by eye to hold a name of a few
-/// words.
-const SPACING_PX: f64 = 193.0;
 
 /// Lays out the markers for `frame`. `draft` is the marker tool's draft as
 /// the turn hands it (turn.rs `scene_tick`).

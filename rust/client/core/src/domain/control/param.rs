@@ -1,7 +1,8 @@
 // pxl-core/domain/control/param.rs
 
-//! The tuned numbers of the camera: its defaults and limits, how it settles,
-//! and how gestures and keys move it.
+//! The tuned numbers of control: the camera's defaults and limits, how it
+//! settles and how gestures and keys move it; how far the pointer picks; and
+//! how long following and the sensors wait out a silence.
 
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::zoom::units;
@@ -104,3 +105,24 @@ const _: () = assert!(
     CLIMB_RISE_DAMP > CAM_DAMP && CLIMB_RELAX_DAMP < CAM_DAMP,
     "the climb rises faster and relaxes slower than the controls ease"
 );
+
+/// The share of each new heading sample the followed azimuth takes. It
+/// applies per sample, not per frame. Compass jitter, which is worse
+/// indoors, passes the store's 1.5° dead zone, and this smooths it before it
+/// reaches the azimuth.
+pub const HEADING_SMOOTH_ALPHA: f64 = 0.25;
+
+/// How long following outlasts a location that is not ready, in ms, set by
+/// eye. A gap the location recovers from, such as a fix lost indoors or the
+/// watch starting again, keeps following. A dead location lets following go
+/// before the camera looks frozen behind a disabled button.
+pub const SENSOR_GRACE_MS: f64 = 12000.0;
+
+/// How far from the eye the pointer can pick, in units. It is a product
+/// decision: what can be edited is a sphere about the observer.
+pub const PICK_DIST_U: f64 = 32.0;
+
+/// Orientation has no Permissions API, so a revoked permission is never
+/// reported. A gap this long while tracking is taken as a loss instead. This
+/// holds only where the sensor talks while still (`silence_is_loss`).
+pub const WATCHDOG_TIMEOUT_MS: f64 = 8000.0;

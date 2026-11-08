@@ -24,11 +24,10 @@ use pxl_spec::space::coord::zoom::units;
 use crate::domain::preview::{Ghost, GhostBox};
 use crate::domain::scene::column::GroupColumns;
 use crate::domain::scene::decor::asset::{decor_model, decor_skin};
+use crate::domain::scene::indicator::param::GHOST_OPACITY;
 use crate::domain::scene::transform::Transform;
 use crate::domain::setting::store::settings;
 use xpute_core::global::Global;
-
-pub const GHOST_OPACITY: f32 = 0.5;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Shape {

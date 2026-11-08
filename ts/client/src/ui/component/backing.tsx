@@ -7,18 +7,14 @@
  */
 
 import type { ReactNode } from "react";
-import {
-  type ColorValue,
-  Platform,
-  type StyleProp,
-  type ViewStyle,
-} from "react-native";
+import type { ColorValue, StyleProp, ViewStyle } from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Motion } from "@/ui/component/motion/motion.tsx";
 import { SNAP, type Transition } from "@/ui/component/motion/transition.ts";
 import { useDim } from "@/ui/component/motion/dim.ts";
-import { alpha, type Material } from "@/ui/component/theme.ts";
+import type { Material } from "@/ui/component/theme.ts";
+import { backdrop } from "./backdrop.ts";
 import * as BackingPlace from "./backing-place.ts";
 
 type BackingPlace = (typeof BackingPlace)[keyof typeof BackingPlace];
@@ -42,21 +38,6 @@ export interface BackingProps {
 }
 
 export const SYSTEM_BACKING: boolean = false;
-
-/**
- * On a page, a see-through fill blurs what is behind it. Android cannot blur
- * the world, which it draws in a SurfaceView, and a see-through fill without
- * a blur is unreadable, so Android draws the fill solid.
- */
-function backdrop(fill: string, m: Material): ViewStyle {
-  if (Platform.OS !== "web") return { backgroundColor: fill };
-  // React Native's style type has no backdrop filter, but react-native-web
-  // writes it out to the page's CSS.
-  return {
-    backgroundColor: alpha(fill, m.opacity),
-    backdropFilter: `blur(${m.blur}px)`,
-  } as ViewStyle;
-}
 
 export function Backing({
   fill,

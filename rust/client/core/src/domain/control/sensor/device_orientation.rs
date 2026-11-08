@@ -7,6 +7,7 @@
 use crate::domain::cmd::Message;
 
 use crate::domain::cmd::{PermissionAnswer, SensorStatus};
+use crate::domain::control::param::WATCHDOG_TIMEOUT_MS;
 use crate::domain::control::sensor::platform;
 use crate::domain::control::sensor::reading::{
     device_orient_store, device_orient_store_mut, SensorState,
@@ -14,11 +15,6 @@ use crate::domain::control::sensor::reading::{
 use crate::sys::sched::edge::wake_at;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
-
-/// Orientation has no Permissions API, so a revoked permission is never
-/// reported. A gap this long while tracking is taken as a loss instead. This
-/// holds only where the sensor talks while still (`silence_is_loss`).
-const WATCHDOG_TIMEOUT_MS: f64 = 8000.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OrientationCommand {
