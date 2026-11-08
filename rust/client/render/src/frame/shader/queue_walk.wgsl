@@ -13,13 +13,20 @@
 /// the heads lie the asks' records, which every queue shares (`queue_records_at`).
 @group(0) @binding(10) var<storage, read_write> queue: array<atomic<u32>>;
 
-/// Takes the next number from the queue's counter at `word`. `held` reads the counter without
+/// What the ray that ended as `w` shows (queue.wgsl `finish`): what it met. These walks read the
+/// node cache alone and cannot ask the world, so a ray they end as a lack, which happens only
+/// past its pool's room, shows nothing.
+fn shows(aim: Aim, w: WalkEnd) -> WalkEnd {
+  return w;
+}
+
+/// Takes the next number from the queue's counter at `word`. `load` reads the counter without
 /// taking.
 fn take(word: u32) -> u32 {
   return atomicAdd(&queue[word], 1u);
 }
 
-fn held(word: u32) -> u32 {
+fn load(word: u32) -> u32 {
   return atomicLoad(&queue[word]);
 }
 

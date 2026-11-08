@@ -19,12 +19,10 @@ fn hole_at(hole: u32) -> vec2<u32> {
   return vec2<u32>(hole & 0xffffu, hole >> 16u);
 }
 
-/// The eye's drawn pixels across and down.
 fn eye_size() -> vec2<u32> {
   return textureDimensions(rays).xy;
 }
 
-/// The first word of the observer's pool (`ray::pool_at`, `light::HEADER_POOL`).
 fn pool_at() -> u32 {
   if (light_run()) {
     return header_word(LIGHT_HEADER_POOL);
@@ -32,7 +30,6 @@ fn pool_at() -> u32 {
   return eye_pool_at(eye_size());
 }
 
-/// The first word of parked ray `item` in the pool (`ray::PARK_WORDS`).
 fn park_at(item: u32) -> u32 {
   return pool_at() + POOL_STATES + (item & ~SLOT) * PARK_WORDS;
 }
@@ -69,7 +66,7 @@ fn holes_at() -> u32 {
 fn next_item(again: bool) -> u32 {
   if (again) {
     let k = take(QUEUE_NEXT_AGAIN);
-    return select(NONE, SLOT | k, k < min(held(QUEUE_PARKED), POOL_CAP));
+    return select(NONE, SLOT | k, k < min(load(QUEUE_PARKED), POOL_CAP));
   }
   let k = take(QUEUE_NEXT);
   let at = holes_at();
@@ -127,7 +124,6 @@ fn parked(hole: u32) -> bool {
   return (beams[park_at(hole) + 4u] & PARKED) != 0u;
 }
 
-/// The state a hole's ray is parked in, from which a walk goes on.
 fn parked_start(hole: u32) -> Start {
   let at = park_at(hole);
   return parked_from(beams[at], vec3<u32>(beams[at + 1u], beams[at + 2u], beams[at + 3u]), beams[at + 4u]);
@@ -160,7 +156,8 @@ fn keep_hit(r: u32, w: WalkEnd, face: u32, id: vec2<u32>) -> u32 {
 /// the light gets its depth. A pixel of the eye gets its ray's words, and what lies around the
 /// face it stopped on: a box's for a cell short of its cube (pxl-engine `face::BOX`), and for a
 /// whole cell the word the record puts there once its stop is in (record_hits.wgsl
-/// `record_faces_cs`). A pixel whose ray ended as a lack keeps its words.
+/// `record_faces_cs`). A ray that ended as a lack shows the deepest node held (`shows`), and
+/// its stop stays a lack, so the next frame asks for what it lacked.
 fn finish(hole: u32, aim: Aim, w: WalkEnd) {
   let stops = w.ends == 1u || w.ends == 2u;
   var r = NONE;
@@ -172,11 +169,12 @@ fn finish(hole: u32, aim: Aim, w: WalkEnd) {
     beams[park_at(hole) + 4u] = 0u;
   }
   let face = face_of(aim, w);
+  let shown = shows(aim, w);
   if (light_run()) {
     if (r != NONE) {
       _ = keep_hit(r, w, face | select(0u, HIT_LACKS, w.ends == 2u), at);
     }
-    textureStore(rays, at, 0u, vec4<u32>(walked_word(w), 0u, 0u, 0u));
+    textureStore(rays, at, 0u, vec4<u32>(walked_word(shown), 0u, 0u, 0u));
     return;
   }
   var faces = 0u;
@@ -185,13 +183,12 @@ fn finish(hole: u32, aim: Aim, w: WalkEnd) {
   if (r != NONE) {
     faces = keep_hit(r, w, face | select(0u, HIT_LACKS, w.ends == 2u), at);
   }
-  if (w.ends == 1u && hit_fill(w) != 0u) {
+  // A lack's stop takes no word from the record, so what its pixel shows waits for none.
+  if (w.ends == 2u) {
+    faces = 0u;
+  }
+  if (shown.ends == 1u && hit_fill(shown) != 0u) {
     faces = FACE_BOX;
   }
-  // A lack is a node not held yet, which says nothing of what is there, so its pixel keeps the
-  // words it last showed rather than taking the sky's.
-  if (w.ends == 2u) {
-    return;
-  }
-  write_ray(at, ray_word(w, face, faces));
+  write_ray(at, ray_word(shown, face, faces));
 }

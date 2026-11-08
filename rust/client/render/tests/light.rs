@@ -17,7 +17,7 @@
 //! their walk are compared as a set.
 //!
 //! The light's reciprocals are the host's words (`Light::inverse`, `Light::t_max_inverse`). A
-//! ray's start is summed in fixed point (`Starts::start`), so a probe reads it off the device
+//! ray's start is summed in fixed point (`StartGrid::start`), so a probe reads it off the device
 //! and holds it to the Rust's exactly. A slot's band is exact too (`Light::band`). A slot's
 //! word may differ where the device fuses a product of its depth into the sum after it; the
 //! test takes such a word and counts it.
@@ -30,7 +30,9 @@ mod real_world;
 
 use std::collections::BTreeSet;
 
-use gpu::{array_view, cross, lay_entry, read_texture, texture, unit, Gpu, Kinds, LightBox, Tally};
+use gpu::{
+    array_view, cross, lay_entry, read_texture, texture, unit, Gpu, KindCount, LightBox, Tally,
+};
 use pxl_engine::answer::Kind;
 use pxl_engine::beam;
 use pxl_engine::cast::{self, Detail, End, Hit, Node, Ray, Spacing, Trace, Until};
@@ -115,7 +117,7 @@ fn hand_light_cs_answers_as_the_rust() {
     let built = real_world::build(EYE);
     let over = |b: &Built, g: [i32; 2], up: i32| q8([g[0], g[1], b.top_at(g) + up]);
     let mut tally = Tally::default();
-    let mut kinds = Kinds::default();
+    let mut kinds = KindCount::default();
     let cases = [
         SlotCase {
             name: "about the eye, the epoch begun",
@@ -215,7 +217,7 @@ fn run_slots(
     w: World,
     c: &SlotCase,
     tally: &mut Tally,
-    kinds: &mut Kinds,
+    kinds: &mut KindCount,
 ) {
     let (l, starts) = c.lit.lay();
     let inv = l.inverse();
@@ -446,7 +448,7 @@ fn run_slots(
         let k = light::sample(SIZE, (s[1] % n) * n + s[0] % n) + beam::SAMPLE_NODE;
         list[(k + beam::NODE_ZOOM) as usize] == beam::SAMPLE_NONE
     };
-    let answer = |slot: [u32; 2], o: [i32; 3], inv: [f32; 3], kinds: &mut Kinds| {
+    let answer = |slot: [u32; 2], o: [i32; 3], inv: [f32; 3], kinds: &mut KindCount| {
         let band_of = |p: [u32; 2]| {
             let tile = [(p[0] / light::TILE) as i32, (p[1] / light::TILE) as i32];
             l.band(SIZE, c.range, tile)
@@ -575,7 +577,7 @@ fn run_slots(
         let g = got(at, slot);
         // Where the shader's word is one a GPU may give the Rust's depth, rounded or fused, the
         // slot is held to the shader's word. Otherwise it is held to the Rust's own answer.
-        let held = if matches(want, g) {
+        let expected = if matches(want, g) {
             match want {
                 Answer::Entry(t, e) => {
                     let (w, _) = words_of(t, e);
@@ -594,7 +596,7 @@ fn run_slots(
                 a => a,
             }
         };
-        match held {
+        match expected {
             Answer::Word(w) => {
                 want_map[at] = w;
                 took += 1;
@@ -742,7 +744,7 @@ fn within_by(d: f32, reach: f32) -> (bool, bool) {
     (d <= reach - edge, d <= reach + edge)
 }
 
-/// Checks that the hand-written receivers' passes (light_mark.wgsl, light_receiver_tiles.wgsl)
+/// Checks that the hand-written receivers' passes (light_mark.wgsl, light_receiver_tile.wgsl)
 /// stand on the tiles that pxl-engine's one rule gives (`Light::box_tiles`, with the footprint
 /// where the head asks for it), over the real world of tests/real_world. Each tile must be
 /// listed once (`light::LIST_RECEIVERS`), with the count in the stood list's args
@@ -751,7 +753,7 @@ fn within_by(d: f32, reach: f32) -> (bool, bool) {
 /// Two passes stand receivers. `light_mark_walked_cs` stands the pixels the eye walked apart,
 /// which it finds by their walked bits past the grid's words (`ray::hole_bit`), each hit a box
 /// of one point. `record_draw_cs` (record_draw.wgsl) stands every box the eye's draw writes,
-/// one for each held voxel in view, with its planes as `cast::asset_box` lays them. It stands
+/// one for each fresh held voxel in view, with its planes as `cast::asset_box` lays them. It stands
 /// each box as it writes it, where the head says the world's receivers stand
 /// (`light::HEADER_WORLD_RECEIVERS`).
 ///
@@ -896,9 +898,9 @@ fn hand_light_marks_answer_as_the_rust() {
         },
     ];
     let mut tally = Tally::default();
-    let mut kinds = Kinds::default();
+    let mut kinds = KindCount::default();
     for c in &looks {
-        for by in [Marks::Walked, Marks::Voxels] {
+        for by in [MarkSource::Walked, MarkSource::Voxels] {
             run_marks(&gpu, &pipes, built.world(), c, by, &mut tally, &mut kinds);
         }
     }
@@ -918,7 +920,7 @@ fn hand_light_marks_answer_as_the_rust() {
 
 /// Which of the receivers' passes stands the tiles (`hand_light_marks_answer_as_the_rust`).
 #[derive(Clone, Copy, PartialEq)]
-enum Marks {
+enum MarkSource {
     Walked,
     Voxels,
 }
@@ -928,9 +930,9 @@ fn run_marks(
     pipes: &[wgpu::ComputePipeline; 2],
     w: World,
     c: &Look,
-    by: Marks,
+    by: MarkSource,
     tally: &mut Tally,
-    kinds: &mut Kinds,
+    kinds: &mut KindCount,
 ) {
     let (l, _) = c.lit.lay();
     let forward = unit(c.look);
@@ -1001,7 +1003,7 @@ fn run_marks(
     let boxes = vec![0u32; record::EYE_DRAWS as usize];
     let mut rec = vec![0u32; node_cache::WORDS as usize];
     match by {
-        Marks::Walked => {
+        MarkSource::Walked => {
             let mut walked = Vec::new();
             for y in 0..ht {
                 for x in 0..wd {
@@ -1050,11 +1052,12 @@ fn run_marks(
                 beams[walked_at + w as usize] |= 1 << bit;
             }
         }
-        Marks::Voxels => {
-            // Each stopped sample's node becomes a held voxel of the record, in a slot of its
-            // own, as the samples write it (sample_box.wgsl). The draw writes each voxel in
-            // view as a box and stands it.
+        MarkSource::Voxels => {
+            // Each node a sample stopped on becomes one held voxel of the record, as the samples
+            // write it (sample_box.wgsl). The draw writes each voxel in view as a box and stands
+            // it.
             let mut slot = 0u32;
+            let mut laid = BTreeSet::new();
             for j in 0..grid.samples[1] {
                 for i in 0..grid.samples[0] {
                     let t = grid.sample([i, j]);
@@ -1078,16 +1081,24 @@ fn run_marks(
                     let whole = record::stopped_whole(c.origin, &m.hit.node, range);
                     let state =
                         face | face << record::ASKED_SHIFT | if whole { record::WHOLE } else { 0 };
-                    lay_entry(
-                        &mut rec,
-                        slot,
-                        c.origin,
-                        &m.hit.node,
-                        (kind, m.hit.asset),
-                        state,
-                    );
-                    slot += 1;
-                    kinds.add("voxels", true);
+                    if laid.insert((m.hit.node.corner, m.hit.node.zoom, m.hit.node.roots)) {
+                        lay_entry(
+                            &mut rec,
+                            slot,
+                            c.origin,
+                            &m.hit.node,
+                            (kind, m.hit.asset),
+                            state,
+                        );
+                        slot += 1;
+                        kinds.add("voxels", true);
+                    }
+                    // A stale voxel draws no box, so it stands on no tile.
+                    let fresh = record::fresh(c.origin, &m.hit.node, whole, range);
+                    kinds.add("voxels, stale", !fresh);
+                    if !fresh {
+                        continue;
+                    }
                     // The draw writes a box that is in view or by the eye. A GPU's rounding may
                     // move a tile's edge or the view's, so the box a hair smaller gives the
                     // tiles it must stand on, and the box a hair larger those it may.
@@ -1177,14 +1188,14 @@ fn run_marks(
         (22, receiver_tiles_buf.as_entire_binding()),
     ];
     let (pipe, groups) = match by {
-        Marks::Walked => {
+        MarkSource::Walked => {
             binds.push((3, wgpu::BindingResource::TextureView(&view)));
             binds.push((23, beams_buf.as_entire_binding()));
             let words = ray::walked_words([wd, ht]);
             let per = ray::MISS_LANES * ray::MISS_ACROSS;
             (&pipes[0], [ray::MISS_ACROSS, words.div_ceil(per).max(1), 1])
         }
-        Marks::Voxels => {
+        MarkSource::Voxels => {
             binds.push((14, boxes_buf.as_entire_binding()));
             binds.push((16, raster_buf.as_entire_binding()));
             binds.push((9, record_buf.as_entire_binding()));
@@ -1250,9 +1261,9 @@ fn run_marks(
 }
 
 /// Checks that every texel's start as the device takes it (light_aim.wgsl `texel_start`) is
-/// exactly `Starts::start`'s. A probe appended to light.wgsl reads the starts. They are summed
+/// exactly `StartGrid::start`'s. A probe appended to light.wgsl reads the starts. They are summed
 /// in fixed point, so nothing may round apart.
-fn starts_alike(gpu: &Gpu, l: &Light, starts: &light::Starts) {
+fn starts_alike(gpu: &Gpu, l: &Light, starts: &light::StartGrid) {
     const PROBE: &str = r"
 @group(0) @binding(40) var<storage, read_write> probe: array<i32>;
 

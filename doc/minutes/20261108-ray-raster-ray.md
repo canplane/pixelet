@@ -87,7 +87,7 @@ its own, held to `cast::first` texel by texel.
 
 ### The list, measured
 
-`list::cells` ran on the CPU (pxl-engine, not kept: out/cmp/list-step1.patch). It lists a
+`list::cells` ran on the CPU (pxl-engine, not kept: [the patch](../experiment/20261103-the-frame-on-the-s23/tool/list/list-step1.patch)). It lists a
 tile's cells at its band by a descent of the query over the parallelepiped that the tile's
 texels' rays sweep, and keeps each split's children only within its content box. It was run
 on the real world's test data, 14 cases of the light, 1,024 tiles of 8 texels a side each,

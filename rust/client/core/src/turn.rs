@@ -37,7 +37,7 @@ use crate::domain::layer::division;
 use crate::domain::layer::earth::Earth;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::terrain::clipmap;
-use crate::domain::query::changes;
+use crate::domain::query::change;
 use crate::domain::scene::character::companion::{self, companion_step, Camera};
 use crate::domain::scene::decor::asset::decor_models_step;
 use crate::domain::scene::decor::gpu;
@@ -389,7 +389,7 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
     if let Some(interval_ms) = frame.interval_ms {
         cmd::ui::turn_pace(&cmd::TurnPace { interval_ms });
     }
-    let done = now();
+    let end = now();
     perf_frame(FrameTurn {
         tick: report,
         interval_ms: delta * 1000.0,
@@ -397,8 +397,8 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
         paced_ms,
         settled: !interactive,
         effects_ms,
-        stage_ms: done - after_tick,
-        task_ms: done - t0,
+        stage_ms: end - after_tick,
+        task_ms: end - t0,
     });
     if report.invalidated {
         request_world_tick();
@@ -409,13 +409,13 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
 /// Tells each reader what changed this turn: the tiles whose answer changed
 /// and the boxes where objects were written. A tile is reported by its
 /// identity, which fixes its contents. The query holds the ground's changes
-/// (domain/query/changes.rs). This runs after arrivals are admitted and
+/// (domain/query/change.rs). This runs after arrivals are admitted and
 /// before the layers observe.
 fn changes_step() {
     static CHANGED: Global<[Vec<Quadrant>; 3]> = Global::new();
     let [places, earth, divisions] = CHANGED.get(Default::default);
-    let shared = changes::take();
-    gpu::note_edited(changes::written_boxes());
+    let shared = change::take();
+    gpu::note_edited(change::written_boxes());
     PlaceTile::tile_cache().take_changed(places);
     Earth::tile_cache().take_changed(earth);
     DivisionTile::tile_cache().take_changed(divisions);

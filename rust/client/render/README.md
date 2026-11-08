@@ -19,13 +19,15 @@ one queue (`queue_cs`), walked by the same code as the holes later.
 The raster (`gpu/ray/raster.rs`, `raster.wgsl`) draws every box of the record
 into a visibility buffer. A face keeps a pixel only where the pixel's own ray
 enters the box across that face, so the depth test keeps the nearest box the ray
-enters, at the point where it enters, and a fresh voxel wins over a stale one.
+enters, at the point where it enters. The eye draws only fresh voxels; the light
+draws its stale ones behind the fresh.
 `cast_cs` then reads each pixel: a fresh voxel gives the pixel its ray; a pixel
 no sample's cell met anything in is sky; any other pixel is a hole, listed for
 the queue, and walked to its first hit (`queue_walk.wgsl`, `queue_ask_cs`,
 `queue_last_cs`). A walk that meets a node the GPU does not hold parks, and the
 node is asked for; one that may ask no more in its frame ends there as a lack,
-and its pixel keeps what it last showed rather than the sky.
+and shows the deepest node held: the node it stands at as a cell of its own
+zoom, or the nearest over it that the world holds.
 
 A ray leaves four words: the asset with its face, zoom and fill eighths; the
 distance; the palette indices a coarse cell folds; and which edges and corners
@@ -67,8 +69,8 @@ probe whose failure doubles the wait before the next.
 ## The shadow map
 
 The sun is a second observer. The same passes run for it over the parts each
-observer gives (`beam.eye.wgsl` and `beam.light.wgsl`, `samples_run.eye.wgsl`
-and `samples_run.light.wgsl`), into a map of the world's depth along the light
+observer gives (`beam.eye.wgsl` and `beam.light.wgsl`, `sample_run.eye.wgsl`
+and `sample_run.light.wgsl`), into a map of the world's depth along the light
 in a square box about the eye (`gpu/shadow.rs`). Each texel is fixed in the
 world and held in a slot by its index modulo the map's side, and its ray starts
 at a fixed point, summed in integers (`light_aim.wgsl` `texel_start`).
@@ -126,7 +128,7 @@ whole, through tiles, or not at all, so nothing is read back to decide it.
 
 The renderer is made before its first frame, so that making it never holds the
 GPU process's main thread, which every frame the browser presents waits on
-(`gpu/pipeline.rs` `Pipelines`). Shader modules are made a few a turn, within
+(`gpu/pipeline.rs` `PipelineCache`). Shader modules are made a few a turn, within
 `MODULE_BYTES` of the stream; then every pipeline is asked for by WebGPU's async
 call, which compiles off that thread and reports through a ticket's word; and no
 frame is drawn until every word says its pipeline is made. The snapshot carries
@@ -150,7 +152,7 @@ the layouts and numbers they read are generated from pxl-engine by `build.rs`.
 - The build validates every shader with naga, and checks each pipeline's groups
   against the bindings its shaders read, both ways (`build.rs` `BINDS`,
   `frame/shader/record.rs` `lays_out`); no struct of a shader holds a struct
-  (`build.rs` `held_to_faults`).
+  (`build.rs` `refuse_faults`).
 - A test compiles each shader with Tint, the compiler a browser runs, and makes
   every pipeline the renderer makes (`ts/tool/shader/shader.test.ts`).
 

@@ -3,8 +3,10 @@
 /**
  * The one standard measurement (`pxl.perf.drive`). It puts the renderer
  * through the worst case it meets, the same way every time. The display's
- * pixels are fixed, the shadows and the profiler are on, and the sky is at
- * 07:00. Through the canvas's own input, the camera is zoomed to its farthest
+ * pixels are fixed, the shadows and the profiler are on, the sky is at 07:00,
+ * and the camera passes through the ground, so that the eye takes the same
+ * path wherever it stands. Through the canvas's own input, the camera is
+ * zoomed to its farthest
  * and tilted to just over the horizon. Then, for the whole window, the view
  * turns a full circle every `TURN_S` seconds while the wheel sweeps the zoom
  * in and out, both paced by the clock. The result is the window's report.
@@ -46,6 +48,10 @@ export async function perfDrive(seconds = 60): Promise<string> {
   setting.set(SETTING.shadows.key, 1);
   setting.set(SETTING.perf.key, 1);
   setting.set(SETTING.sky_time.key, SETTING.sky_time.options.dawn);
+  setting.set(
+    SETTING.orbit_obstacle.key,
+    SETTING.orbit_obstacle.options.through,
+  );
   const r = canvas.getBoundingClientRect();
   const tilt = TILT_SHARE * r.height;
   const [x, y] = [r.left + r.width / 2, r.top + r.height / 2];
