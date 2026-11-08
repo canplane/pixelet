@@ -3,7 +3,7 @@
 `decor.rs` = rust/client/shader/src/decor.rs.
 
 The shader crate went with rust-gpu. The decor passes landed by hand in `e85332699f`, on main `9e9b30b924`
-([the journal](../journal.md)), now `rust/client/render/src/frame/shader/decor_*.wgsl`,
+([the journal](../README.md)), now `rust/client/render/src/frame/shader/decor_*.wgsl`,
 footing and pose one pass, `decor_cs` in decor_pose.wgsl.
 
 ## Headline claims

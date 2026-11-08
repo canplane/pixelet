@@ -5,4 +5,3 @@
 
 pub mod asset;
 pub mod gpu;
-pub mod param;

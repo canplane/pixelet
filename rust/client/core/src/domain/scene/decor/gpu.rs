@@ -3,9 +3,11 @@
 //! What the core hands the GPU's decor each frame (pxl-render
 //! gpu/generator.rs). The GPU generates the decor the ground scatters and
 //! draws it together with the decor users placed. The core hands it only what
-//! the CPU alone knows, and never reads back what the GPU generated. Among
-//! what it hands are the boxes where objects were written since the last
-//! frame, because the ground's generated decor may have changed there.
+//! the CPU alone knows, and never reads back what the GPU generated. Which
+//! zooms each kind is generated at and the angles that set its lod come from
+//! the lens (domain/view/lens.rs). Among what the core hands are the boxes
+//! where objects were written since the last frame, because the ground's
+//! generated decor may have changed there.
 
 use pxl_content::generation::{self, drawn, row_of};
 use pxl_content::scatter;
@@ -15,7 +17,6 @@ use pxl_render::gpu::api;
 use pxl_render::gpu::draw::Position;
 use pxl_render::gpu::generator::DecorFrame;
 use pxl_spec::asset::decor::DECORS;
-use pxl_spec::space::camera::grid::{split_dist, CLIP_CELLS_A_RAD, CLIP_MARGIN};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
@@ -25,81 +26,21 @@ use xpute_core::global::Global;
 use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::preview::RenderEdits;
 use crate::domain::query::World;
-use crate::domain::scene::decor::param;
 use crate::domain::setting::store::settings_store;
+use crate::domain::view::lens::{decor_impostor_angle, decor_model_angle, decor_zooms};
 use crate::sys::io::loader::catalog;
 use pxl_content::decor;
-use pxl_engine::clipmap::FIRST_CELL_ZOOM;
-use pxl_spec::asset::decor::Decor;
-use pxl_spec::space::camera::grid;
 use pxl_spec::space::layer::lattice;
 use pxl_spec::space::layer::octant::Octant;
 use pxl_spec::space::layer::quadrant;
 
-/// The angle about the eye, in radians, below which a decor is drawn as an
-/// impostor instead of a model: `DECOR_MODEL_CELLS` camera grid cells
-/// (pxl-spec space/camera/grid.rs `CELL`). Being an angle, it does not change
-/// with the screen's size or aspect ratio.
-pub fn decor_model_angle() -> f64 {
-    param::DECOR_MODEL_CELLS * grid::CELL
-}
-
-/// The angle about the eye, in radians, below which a decor's impostor is
-/// culled: `DECOR_IMPOSTOR_CELLS` camera grid cells.
-pub fn decor_impostor_angle() -> f64 {
-    param::DECOR_IMPOSTOR_CELLS * grid::CELL
-}
-
-/// The distance, in units, past which a clip level culls a decor `extent_u`
-/// wide: where it spans `DECOR_IMPOSTOR_CELLS` of the clip level's cells
-/// (`CLIP_CELLS_A_RAD`). A clip level's cells are `CLIP_MARGIN` times finer
-/// than the view's, so this distance is `CLIP_MARGIN` times the one at which
-/// the view culls it (`decor_impostor_angle`), an upper bound.
-/// `is_decor_shown` scales its other side by the same margin, so the zooms it
-/// picks are the ones the view would pick.
-pub const fn cull_dist_u(extent_u: f64) -> f64 {
-    extent_u * CLIP_CELLS_A_RAD / param::DECOR_IMPOSTOR_CELLS
-}
-
-/// Whether a decor `extent_u` wide is still large enough for an impostor
-/// somewhere cells of `cell_zoom` are drawn. The nearest such place is where
-/// that zoom begins, so the decor is measured there.
-fn is_decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
-    split_dist(cell_zoom) * CLIP_MARGIN <= cull_dist_u(extent_u)
-}
-
-/// The clip level zooms each kind is generated at, one bit for each zoom from
-/// `FIRST_CELL_ZOOM`. A kind is generated at the leaves' zoom, and at each
-/// coarser zoom where one of its variants stands as itself, by its own size
-/// rather than the clip level's cell (pxl-content `scatter::stands_at`), and
-/// is still large enough for an impostor. Every one of those zooms reads the
-/// decor of the same cells. No zoom finer than the leaves' is needed, since a
-/// finer clip level lies within the leaves' one.
-fn shown() -> [u32; DECORS.len()] {
-    shown_by(|d| d.extent(catalog()))
-}
-
-/// `shown`, with each kind's extent taken from `extent` instead of the
-/// catalog.
-fn shown_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {
-    core::array::from_fn(|k| {
-        let (d, extent) = (&DECORS[k], extent(&DECORS[k]));
-        (FIRST_CELL_ZOOM..=LEAF_CELL_ZOOM)
-            .filter(|&cell_zoom| {
-                let stands = scatter::any_stands_at(d.row, cell_zoom);
-                stands && is_decor_shown(extent, cell_zoom)
-            })
-            .fold(0, |bits, cell_zoom| {
-                bits | 1 << (cell_zoom - FIRST_CELL_ZOOM)
-            })
-    })
-}
-
 /// What this module hands the GPU each frame. It is kept between frames, so a
-/// frame where nothing changed allocates nothing, and each part is rebuilt
-/// only when its inputs change.
+/// frame where nothing changed allocates nothing, and each part but `zooms`
+/// is rebuilt only when its inputs change.
 struct Frame {
-    shown: [u32; DECORS.len()],
+    /// Each kind's zooms (`decor_zooms`). They are taken again every frame,
+    /// because the decor setting is not among the inputs `seen` compares.
+    zooms: [u32; DECORS.len()],
     walk_zoom: Zoom,
     drawing: [u32; drawn::DRAWING_WORDS as usize],
     placed: Vec<[u32; generation::RECORD_WORDS as usize]>,
@@ -111,7 +52,7 @@ struct Frame {
     /// The unit cell the eye stands in, as a draw's Q3 position (pxl-render
     /// gpu/draw.rs `Position`). The GPU draws the decor's lanes about it.
     anchor: Q3,
-    /// The inputs `drawing`, `shown` and `walk_zoom` were last built from.
+    /// The inputs `drawing` and `walk_zoom` were last built from.
     seen: Option<Key>,
     /// What the last walk of placed decor was made over.
     walked: Option<WalkKey>,
@@ -146,7 +87,7 @@ static HAND_OVER: Global<Frame> = Global::new();
 
 fn hand_over() -> &'static mut Frame {
     HAND_OVER.get(|| Frame {
-        shown: [0; DECORS.len()],
+        zooms: [0; DECORS.len()],
         walk_zoom: UNIT_ZOOM,
         drawing: [0; drawn::DRAWING_WORDS as usize],
         placed: Vec::new(),
@@ -191,7 +132,6 @@ pub fn step(eye: V3, edits: &RenderEdits) {
     if h.seen != Some(seen) {
         h.seen = Some(seen);
         drawing(&mut h.drawing, seen);
-        h.shown = shown();
         h.walk_zoom = walk_zoom();
     }
     let zoom = h.walk_zoom;
@@ -335,25 +275,18 @@ pub fn note_edited(regions: &[Aabb]) {
     }
 }
 
-/// The hand-over `step` built. The edits `note_edited` held are handed once
-/// and then cleared. With the decor setting off, the ground generates its
-/// decor at no zoom, while placed decor is still drawn.
+/// The hand-over `step` built, with each kind's zooms as they are now
+/// (`decor_zooms`). The edits `note_edited` held are handed once and then
+/// cleared.
 pub fn frame() -> DecorFrame<'static> {
     let h = hand_over();
     let edited = core::mem::take(&mut h.edited);
+    h.zooms = decor_zooms(settings_store().decor);
     DecorFrame {
-        zooms: if settings_store().decor {
-            &h.shown
-        } else {
-            &[0; DECORS.len()]
-        },
+        zooms: &h.zooms,
         drawing: &h.drawing,
         placed_records: &h.placed,
         anchor: h.anchor,
         edits: &h.edits[..edited],
     }
 }
-
-#[cfg(test)]
-#[path = "gpu.test.rs"]
-mod test;

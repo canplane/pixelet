@@ -22,3 +22,15 @@ pub const NEAR: f64 = 0.1;
 /// watching the clouds: a step of a twelfth of a cell, 1/1152 rad, is not
 /// seen as a jump.
 pub const VISIBLE_STEP_CELLS: f64 = 1.0 / 12.0;
+
+// ---- what a thing spans: its lod ----
+
+/// A decor is drawn as a model while it spans at least this many camera grid
+/// cells, and as an impostor below that. At two cells a model is drawn down
+/// to about 22 px.
+pub const DECOR_MODEL_CELLS: f64 = 2.0;
+
+/// A decor's impostor is not drawn when it spans less than this share of a
+/// camera grid cell, because an instance that small reads as pixel noise. The
+/// value was chosen by eye.
+pub const DECOR_IMPOSTOR_CELLS: f64 = 0.25;

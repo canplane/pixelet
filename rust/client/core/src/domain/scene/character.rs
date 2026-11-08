@@ -10,7 +10,7 @@
 //! gives it (`companion.rs` `Walk`).
 //!
 //! Each view draws a character by its own eye. The world chooses as it does
-//! for decor's tiers (`decor::gpu`), by how many camera grid cells the
+//! for decor's lods (`view::lens`), by how many camera grid cells the
 //! character spans. Above the model's edge it is posed as it plays. Between
 //! the model's edge and the impostor's its pose is held. Below the impostor's
 //! edge it is not drawn, as decor that small is not, and it is not drawn while
@@ -36,13 +36,12 @@ use xpute_kit::status::errno::Errno;
 
 use crate::domain::scene::animation;
 use crate::domain::scene::character::companion::Walk;
-use crate::domain::scene::decor::gpu::{decor_impostor_angle, decor_model_angle};
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model::asset::model_of;
 use crate::domain::scene::model::registry::{blend, Models};
 use crate::domain::scene::model::{draw_list, models};
 use crate::domain::scene::transform::Transform;
-use crate::domain::view::lens::{cell_there, StepClock};
+use crate::domain::view::lens::{cell_there, decor_impostor_angle, decor_model_angle, StepClock};
 use crate::sys::io::loader::{load_image, load_of};
 use crate::sys::sched::edge::wake_at;
 

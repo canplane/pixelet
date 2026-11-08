@@ -2,7 +2,7 @@
 
 Paths: `decor.rs` = rust/client/shader/src/decor.rs. Every live-word figure is a source count; no pass has met naga, Tint or the S23.
 
-The shader crate went with rust-gpu. What the rulings led to landed in `e85332699f`, on main `9e9b30b924` ([the journal](../journal.md)), now `rust/client/render/src/frame/shader/decor_*.wgsl`.
+The shader crate went with rust-gpu. What the rulings led to landed in `e85332699f`, on main `9e9b30b924` ([the journal](../README.md)), now `rust/client/render/src/frame/shader/decor_*.wgsl`.
 
 ## Finding not in the plan: 9 storage buffers
 `world.wgsl` reads `palette_indices` (binding 4; `fold = palette_indices[...]` in `ground_cell`), so `decor_cs` on it binds clipmap, ground, palette, shards, overwrites, pool, records, rows, list: 9. `floor.rs` allows 8, and main's `shader.test.ts` makes each pipeline on a device of default limits. Today's `decor_cs` holds 8 through `NoPalette` (decor.rs:460). The "no-palette form" is NOT coming. `asset[0]` never reads `fold`, so decor can go without it.

@@ -17,6 +17,9 @@ use crate::domain::layer::terrain::TerrainQuery as _;
 use crate::domain::layer::tile_cache::{Lines, TileCache};
 use crate::domain::layer::Answer;
 use crate::domain::layer::Base as _;
+use pxl_engine::clipmap::FIRST_CELL_ZOOM;
+use pxl_engine::LEAF_CELL_ZOOM;
+use pxl_spec::asset::decor::DECORS;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::aabb::Aabb;
 
@@ -24,9 +27,11 @@ use pxl_spec::space::coord::aabb::Aabb;
 pub struct World<'a> {
     pub(super) terrain: &'a TileCache<TerrainTile>,
     pub(super) object: &'a Store,
-    /// Whether a ray strikes decor, as the boxes it claims. Otherwise rays
-    /// pass through decor.
-    pub(super) decor: bool,
+    /// Which decor a ray strikes, as the boxes it claims. With none, rays
+    /// pass through all decor. With a value, they strike everything placed
+    /// and, of what the ground generates, the kinds whose bits are set, one
+    /// bit a kind in `DECORS`' order.
+    pub(super) decor: Option<u32>,
     /// Whether the world is read unplaced: the ground alone, with nothing
     /// placed asked of it (pxl-engine `world::Inheritance::UNPLACED`).
     pub(super) unplaced: bool,
@@ -45,24 +50,32 @@ impl World<'static> {
         let object: &'static Store = store::object();
         World::new(TerrainTile::tile_cache(), object)
     }
-
-    /// This world with decor struck too, where the frame holds it. Only the
-    /// pointer's pick asks for this, since it alone asks what a decor thing
-    /// is.
-    pub fn striking_decor(self) -> World<'static> {
-        World {
-            decor: true,
-            ..self
-        }
-    }
 }
 
 impl<'a> World<'a> {
+    /// This world with decor struck too, as the frame draws it about the eye:
+    /// everything placed and, of what the ground generates, the kinds the
+    /// frame generates at the leaves' clip level, told by `zooms`, the zooms
+    /// the frame hands the GPU (domain/view/lens.rs `decor_zooms`). Only the
+    /// pointer's pick asks for this, since it alone asks what a decor thing
+    /// is.
+    pub fn striking_decor(self, zooms: &[u32; DECORS.len()]) -> World<'a> {
+        let leaves = |z: u32| z >> (LEAF_CELL_ZOOM - FIRST_CELL_ZOOM) & 1;
+        let kinds = zooms
+            .iter()
+            .enumerate()
+            .fold(0, |bits, (k, &z)| bits | leaves(z) << k);
+        World {
+            decor: Some(kinds),
+            ..self
+        }
+    }
+
     pub fn new(terrain: &'a TileCache<TerrainTile>, object: &'a Store) -> World<'a> {
         World {
             terrain,
             object,
-            decor: false,
+            decor: None,
             unplaced: false,
             hide: None,
             carve: None,

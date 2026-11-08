@@ -651,7 +651,7 @@ pub fn distance2(origin: [i32; 3], at: [i32; 3]) -> f32 {
 /// finer; and one `placed` is drawn where `at` is the coarsest zoom it stands at or finer, so
 /// it stands where one of its size that the ground generates would. A generated one is asked
 /// at the zoom held where it stands (`held_at`), as a ray there draws. Each clip level
-/// generates what stands as itself at it (pxl-core domain/scene/decor/gpu.rs `shown`,
+/// generates what stands as itself at it (pxl-core domain/view/lens.rs `decor_zooms`,
 /// `stands_at`).
 pub fn drawn_at(at: Zoom, cell_zoom: Zoom, placed: bool) -> bool {
     if placed {
