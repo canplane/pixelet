@@ -2,7 +2,6 @@
 
 package xpute
 
-import expo.modules.kotlin.jni.JavaScriptFunction
 import java.nio.ByteBuffer
 
 /**
@@ -10,9 +9,10 @@ import java.nio.ByteBuffer
  * (xpute-runtime `native_core!`, src/jni.rs). These are the same calls that
  * the iOS module's Swift makes through the C ABI (xpute.h). The core is the
  * shared library that the module's build makes of the app's core crate
- * (build.gradle). It runs on its own thread while it has work; the
- * JavaScript thread kicks it, waits on it only for a turn it rings, and
- * answers its calls.
+ * (build.gradle). It runs on its own thread while it has work; the app's
+ * thread kicks it, waits on it only for a turn it rings, and answers its
+ * calls. It takes nothing of React Native's; the Expo module (XputeModule.kt)
+ * is one host that uses it.
  */
 object Core {
   init {
@@ -43,16 +43,16 @@ object Core {
    * longest of them took, in ms. */
   external fun turns(): DoubleArray
 
-  /** The JavaScript function that answers the core's calls (@xpute/runtime),
-   * on the JavaScript thread. */
-  @Volatile var answer: JavaScriptFunction<Int>? = null
+  /** The function that answers the core's call laid at the byte it is given,
+   * on the app's thread. */
+  @Volatile var answer: ((Int) -> Int)? = null
 
   /** What `onNotify` calls: it sends the module's event (XputeModule.kt
    * `onNotify`). */
   @Volatile var notify: (() -> Unit)? = null
 
   /** The core's runtime (xpute-runtime src/jni.rs `call`) calls this on the
-   * JavaScript thread, inside `run` or `answer`, for the call laid at `at`.
+   * app's thread, inside `run` or `answer`, for the call laid at `at`.
    * The call is answered before the turn goes on, with ENOSYS (-38) when
    * nothing answers. */
   @JvmStatic fun call(at: Int): Int = answer?.invoke(at) ?: -38

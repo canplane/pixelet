@@ -49,7 +49,9 @@ class XputeModule : Module() {
 
     Function("turns") { Core.turns().toList() }
 
-    Function("callOn") { answer: JavaScriptFunction<Int> -> Core.answer = answer }
+    // @xpute/runtime's answer, called on the JavaScript thread, which is the
+    // app's thread here.
+    Function("callOn") { answer: JavaScriptFunction<Int> -> Core.answer = { at -> answer.invoke(at) } }
 
     Function("gpuOpen") { Gpu.open() }
 
