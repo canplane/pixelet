@@ -5,6 +5,7 @@ use crate::domain::control::camera::first_person;
 use crate::domain::control::camera::fixture::place;
 use crate::domain::control::camera::orbit;
 use crate::domain::control::param;
+use crate::domain::setting::store::settings_mut;
 use crate::domain::view::frame::coord::to_world;
 use crate::sys::serial;
 
@@ -40,7 +41,7 @@ fn placed(rng: &mut Rng) -> V3 {
 fn third_person() {
     tracked_end();
     controllers().base = CameraMode::orbit;
-    settings_store().camera_mode = CameraMode::orbit;
+    settings_mut().camera_mode = CameraMode::orbit;
 }
 
 /// The pivot lies the orbit's distance ahead of the eye in third person,

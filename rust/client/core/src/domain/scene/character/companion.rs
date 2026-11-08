@@ -25,7 +25,7 @@ use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model::registry::Models;
 use crate::domain::scene::model::{draw_list, models};
 use crate::domain::scene::transform::Transform;
-use crate::domain::setting::store::settings_store;
+use crate::domain::setting::store::settings;
 use crate::domain::smooth::smoothing_factor;
 use crate::domain::view::frame::coord::{to_world, world_to_canonical};
 use crate::sys::sched::edge::wake_at;
@@ -179,7 +179,7 @@ pub fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
     // A memo must see every change once, so the pivot's floor checks for
     // touched columns on every frame turn, also on one that does not ask it.
     s.pivot_floor.forget_touched();
-    let settings = settings_store();
+    let settings = settings();
     for (slot, (group, number)) in s
         .characters
         .iter_mut()

@@ -8,7 +8,9 @@ use crate::domain::cmd::Message;
 
 use crate::domain::cmd::{PermissionAnswer, SensorStatus};
 use crate::domain::control::sensor::platform;
-use crate::domain::control::sensor::reading::{device_orient_store, SensorState};
+use crate::domain::control::sensor::reading::{
+    device_orient_store, device_orient_store_mut, SensorState,
+};
 use crate::sys::sched::edge::wake_at;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
@@ -68,21 +70,21 @@ pub fn orient_event(
     // the sensor counts as unavailable.
     if webkit_compass_heading.is_none() && alpha.is_none() && beta.is_none() && gamma.is_none() {
         orient().command = Some(OrientationCommand::Remove);
-        let store = device_orient_store();
+        let store = device_orient_store_mut();
         store.set_is_tracking_orient(false);
         store.state = SensorState::of(SensorStatus::Unavailable);
         return;
     }
     orient().last_event_at = now();
     let heading = webkit_compass_heading.or_else(|| alpha.map(|a| (360.0 - a) % 360.0));
-    device_orient_store().set_orient(heading, beta, gamma);
+    device_orient_store_mut().set_orient(heading, beta, gamma);
 }
 
 /// Asks for the heading. Returns true when the heading is tracked or now
 /// asked for. Behind a permission, only the UI's prompt can start it, so
 /// this returns false there.
 pub fn request_orient() -> bool {
-    let store = device_orient_store();
+    let store = device_orient_store_mut();
     if store.is_tracking_orient {
         return true;
     }
@@ -105,7 +107,7 @@ pub fn request_orient() -> bool {
 /// sensor, a grant came from outside the app (the device's settings) and
 /// starts the listener here.
 pub fn orient_permission(answer: PermissionAnswer) {
-    let store = device_orient_store();
+    let store = device_orient_store_mut();
     match answer {
         PermissionAnswer::Asking => {
             if !store.is_tracking_orient {
@@ -131,14 +133,14 @@ pub fn orient_permission(answer: PermissionAnswer) {
 }
 
 pub fn on_orient_lost() {
-    let store = device_orient_store();
+    let store = device_orient_store_mut();
     store.set_is_tracking_orient(false);
     store.state = SensorState::failed(Message::OrientationSignalLost);
 }
 
 pub fn orient_close() {
     orient().command = Some(OrientationCommand::Remove);
-    let store = device_orient_store();
+    let store = device_orient_store_mut();
     store.set_is_tracking_orient(false);
     store.state = SensorState::of(SensorStatus::Idle);
 }

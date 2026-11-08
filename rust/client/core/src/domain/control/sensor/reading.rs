@@ -203,10 +203,18 @@ impl DeviceOrientationStore {
 static LOCATION: Global<DeviceLocationStore> = Global::new();
 static ORIENT: Global<DeviceOrientationStore> = Global::new();
 
-pub fn device_location_store() -> &'static mut DeviceLocationStore {
+pub fn device_location_store() -> &'static DeviceLocationStore {
+    device_location_store_mut()
+}
+
+pub fn device_location_store_mut() -> &'static mut DeviceLocationStore {
     LOCATION.get(DeviceLocationStore::default)
 }
 
-pub fn device_orient_store() -> &'static mut DeviceOrientationStore {
+pub fn device_orient_store() -> &'static DeviceOrientationStore {
+    device_orient_store_mut()
+}
+
+pub fn device_orient_store_mut() -> &'static mut DeviceOrientationStore {
     ORIENT.get(DeviceOrientationStore::default)
 }

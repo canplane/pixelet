@@ -177,7 +177,7 @@ pub fn on_settings_emptied() {
 /// unreadable slot the changes stay in the store alone.
 pub fn settings_keep_step() {
     if *load() == Load::Loaded && core::mem::take(UNSAVED.get(|| false)) {
-        file::write_storage(&settings_store().storage_bytes());
+        file::write_storage(&settings().storage_bytes());
     }
 }
 
@@ -197,7 +197,11 @@ fn read_stored(bytes: &[u8]) -> Settings {
     s
 }
 
-pub fn settings_store() -> &'static mut Settings {
+pub fn settings() -> &'static Settings {
+    settings_mut()
+}
+
+pub fn settings_mut() -> &'static mut Settings {
     SETTINGS_STORE.get(|| Settings::DEFAULT)
 }
 

@@ -139,7 +139,7 @@ fn demand_tick(ctx: &mut TickContext) {
     changes_step();
     TerrainTile::demand().step(destination::tile(), clipmap::pinned_tiles());
     // No place tile is fetched while places are hidden.
-    match store::settings_store().place {
+    match store::settings().place {
         true => PlaceTile::demand().step(None, &[]),
         false => PlaceTile::demand().idle(),
     }
@@ -262,7 +262,7 @@ pub fn world_turn() -> f64 {
     // first to act on them.
     effect!(times, settings, {
         if store::settings_load_step() {
-            perf_follow(store::settings_store().perf);
+            perf_follow(store::settings().perf);
         }
     });
     effect!(times, navigation, off_center_step());

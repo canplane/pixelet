@@ -17,7 +17,7 @@ use xpute_core::global::Global;
 
 use crate::domain::layer::Answer;
 use crate::domain::query::World;
-use crate::domain::setting::store::settings_store;
+use crate::domain::setting::store::settings;
 use crate::domain::view::frame::coord::{to_world, world_to_canonical};
 use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 
@@ -85,7 +85,7 @@ pub fn support_step() {
 /// one floor. The answer is kept in `STAND_MEMO`.
 fn standing(world: World<'_>, at: &Q3) -> Answer<Option<Q3>> {
     if !is_unknown(at) {
-        if !settings_store().surface_follow {
+        if !settings().surface_follow {
             return Answer::Exact(Some(*at));
         }
         let floor = stand_memo().of(world, *at, |w| {
@@ -162,7 +162,7 @@ pub fn pan_to(from: &Q3, lx: f64, ly: f64, azimuth: f64, eye: &Q3) -> Q3 {
     if is_unknown(from) {
         return unknown_z(&to);
     }
-    if !settings_store().surface_follow {
+    if !settings().surface_follow {
         return to;
     }
     if way == [0.0, 0.0] {

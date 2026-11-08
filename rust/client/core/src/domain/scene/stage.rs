@@ -26,7 +26,7 @@ use crate::domain::scene::gizmo::coverage::coverage_gizmo_step;
 use crate::domain::scene::gizmo::frame::frame_gizmo_step;
 use crate::domain::scene::marker::atlas;
 use crate::domain::scene::model::draw_list;
-use crate::domain::setting::store::{settings_store, AoMode};
+use crate::domain::setting::store::{settings, AoMode};
 use crate::domain::view::demand::ViewLayer as _;
 use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::load::Load;
@@ -94,7 +94,7 @@ pub struct FrameReport {
 /// preview, by which the GPU's rays cut the world.
 pub fn stage_render(pace: Pace, edits: &RenderEdits) -> FrameReport {
     let v = view();
-    let settings = settings_store();
+    let settings = settings();
     // The matrices are relative to the eye, as the draws' positions are, so
     // no large eye position cancels in f32.
     let (view_proj, rot) = v.eye_frame();
@@ -249,7 +249,7 @@ pub fn scene_step(
 
     // The world gizmo is laid before the scene adds its draws, so its lines
     // and the origin they are drawn about come from the same turn.
-    let show = settings_store().world_gizmo;
+    let show = settings().world_gizmo;
     frame_gizmo_step(show, pivot, heading);
     coverage_gizmo_step(show);
     let (list, models) = (draw_list(), model::models());

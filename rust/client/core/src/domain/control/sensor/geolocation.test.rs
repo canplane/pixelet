@@ -9,7 +9,7 @@ use crate::sys::serial;
 #[test]
 fn a_fix_is_kept_where_it_is() {
     let _g = serial();
-    device_location_store().location = None;
+    device_location_store_mut().location = None;
     let (lon, lat) = (126.9784, 37.5667);
     geolocation_fix(lon, lat, Some(100.0), 5.0, None);
     let got = device_location_store().location.expect("a fix");

@@ -26,7 +26,7 @@ use xpute_core::global::Global;
 use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::preview::RenderEdits;
 use crate::domain::query::World;
-use crate::domain::setting::store::settings_store;
+use crate::domain::setting::store::settings;
 use crate::domain::view::lens::{decor_impostor_angle, decor_model_angle, decor_zooms};
 use crate::sys::io::loader::catalog;
 use pxl_content::decor;
@@ -281,7 +281,7 @@ pub fn note_edited(regions: &[Aabb]) {
 pub fn frame() -> DecorFrame<'static> {
     let h = hand_over();
     let edited = core::mem::take(&mut h.edited);
-    h.zooms = decor_zooms(settings_store().decor);
+    h.zooms = decor_zooms(settings().decor);
     DecorFrame {
         zooms: &h.zooms,
         drawing: &h.drawing,

@@ -84,7 +84,11 @@ impl View {
 
 static VIEW: Global<View> = Global::new();
 
-pub fn view() -> &'static mut View {
+pub fn view() -> &'static View {
+    view_mut()
+}
+
+pub fn view_mut() -> &'static mut View {
     VIEW.get(View::new)
 }
 
@@ -134,7 +138,7 @@ pub fn km_per_u() -> f64 {
 /// pixels the surface is drawn with matter to the drawing alone, since the
 /// camera grid is an angle (pxl-spec space/camera/grid.rs `CELL`).
 pub fn view_resize(width: f64, height: f64) {
-    let v = view();
+    let v = view_mut();
     let (width, height) = (width.max(1.0), height.max(1.0));
     if width == v.width && height == v.height {
         return;
@@ -157,14 +161,14 @@ pub fn view_compose(pose: Option<ObserverPose>) -> bool {
     });
     let moved = view().pose != pose;
     if moved {
-        view().pose = pose;
+        view_mut().pose = pose;
         compose();
     }
     moved
 }
 
 fn compose() {
-    let v = view();
+    let v = view_mut();
     let at = v.at();
     let e = at.eye;
     let mut to_eye = mat4::new();

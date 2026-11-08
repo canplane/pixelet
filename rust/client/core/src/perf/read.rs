@@ -293,7 +293,7 @@ fn view() -> ViewSection {
     });
     let (hover, cell_zoom) = (met.map(|m| m.0), met.map(|m| m.1));
     // What the held tool strikes there, picked the way the hover picks it.
-    let picked = pointed.and_then(|[x, y]| edit::pick_at(x, y));
+    let picked = pointed.and_then(|[x, y]| edit::pick::pick_at(x, y));
     let hit_kind = picked.as_ref().map_or(f64::NAN, |p| {
         f64::from(match p.hit.kind {
             HitKind::Ground => spec::HitKind::ground,

@@ -21,7 +21,7 @@ use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{self, V3};
 
 use crate::domain::control::camera::gesture::{spread, Anchor};
-use crate::domain::control::camera::state::{camera_state, Intent, IntentPatch};
+use crate::domain::control::camera::state::{camera_state, camera_state_mut, Intent, IntentPatch};
 use crate::domain::control::camera::{camera, facing_dir, facing_domain, set_eye_world};
 use crate::domain::control::param;
 use crate::domain::control::param::DOLLY_GAIN;
@@ -33,7 +33,7 @@ use crate::domain::control::param::{
 use crate::domain::control::param::{MAX_DIST, MIN_DIST};
 use crate::domain::control::support::resolve_to;
 use crate::domain::param::POS_DAMP;
-use crate::domain::setting::store::{settings_store, OrbitObstacleMode};
+use crate::domain::setting::store::{settings, OrbitObstacleMode};
 use crate::domain::smooth::{smooth_angle, smooth_vec};
 use crate::domain::view::frame::coord::world_to_canonical;
 use collision::{allowed_view, climb_polar};
@@ -80,9 +80,9 @@ pub fn pivot_world() -> Option<V3> {
 /// instead, because a pitch written into the intent would stay after the
 /// ground no longer asks for it.
 pub fn ask(partial: IntentPatch) -> Intent {
-    let c = camera_state();
+    let c = camera_state_mut();
     let mut asked = c.with_patch(partial);
-    if partial.polar.is_some() && settings_store().orbit_obstacle == OrbitObstacleMode::climb {
+    if partial.polar.is_some() && settings().orbit_obstacle == OrbitObstacleMode::climb {
         if let Some(at) = pivot_world() {
             asked.polar = climb_polar(at, asked.dist, asked.polar, asked.azimuth);
         }
@@ -159,7 +159,7 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
     // Under `climb`, the ground pitches the facing toward straight down
     // instead of shortening the distance. The pitch rises fast and relaxes
     // slowly while the ground bounds it.
-    let polar = match settings_store().orbit_obstacle {
+    let polar = match settings().orbit_obstacle {
         OrbitObstacleMode::climb => climb_polar(drawn_pivot, o.dist, vs.polar, vs.azimuth),
         _ => vs.polar,
     };

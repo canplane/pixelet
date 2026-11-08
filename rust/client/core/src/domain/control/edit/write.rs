@@ -4,8 +4,8 @@
 //! carving objects. It reads through the world's query and writes to the
 //! store.
 
-use crate::domain::control::edit::collision::{is_placement_blocked, placement_reads};
-use crate::domain::control::edit::{hover, tool, Tool};
+use crate::domain::control::edit::collision::is_placement_blocked;
+use crate::domain::control::edit::{hover, tool};
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::ext::Ext;
 use crate::domain::layer::object::size::MARKER_ZOOM;
@@ -26,7 +26,6 @@ use xpute_kit::status::errno::Errno;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::object::store::{Entry, Write, AIR, VOID};
-use crate::domain::query::changes;
 use crate::domain::query::World;
 use pxl_engine::answer;
 use pxl_spec::asset::decor::Decor;
@@ -252,23 +251,22 @@ pub fn remove(at: Octant) {
     }
 }
 
-/// The edit the pointer would make, decided once a turn. The ghost shows it,
-/// and the turn hands what it removes to the drawing to leave out (`edits`).
+/// The edit the tool held would make, decided once a turn by the tool. The
+/// ghost shows it, and the turn hands what it removes to the drawing to leave
+/// out (`edits`).
 #[derive(Clone, Copy, Default)]
 pub struct Preview {
+    /// The placed object pointed at, as stored.
     pub object: Option<Entry>,
     /// The zoom of the cube the edit fills or takes.
     pub zoom: Zoom,
-    pub digging: bool,
     /// The same check the commit makes (`is_placement_blocked`), so the
     /// preview and the placement cannot disagree.
     pub blocked: bool,
-    /// What `blocked` was computed from: the asset, its zoom, the hovered
-    /// corner and the store's revision. `blocked` is computed again only when
-    /// one of these moved or a change touched the columns the check reads
-    /// (`placement_reads`, `changes::within`). The step runs on every frame
-    /// turn, so it sees each change once.
-    blocked_key: Option<(Asset, Zoom, Q3, u32)>,
+    /// What `blocked` was asked of: the asset, its zoom, the hovered corner
+    /// and the store's revision (item.rs `preview`). The step runs on every
+    /// frame turn, so it sees each change once.
+    pub(super) blocked_key: Option<(Asset, Zoom, Q3, u32)>,
     pub edits: RenderEdits,
 }
 
@@ -281,66 +279,10 @@ pub fn preview() -> Preview {
 /// Decides the preview for this turn and returns whether what the edit
 /// leaves out of the drawing changed.
 pub fn preview_step() -> bool {
-    let hover = hover();
-    let ui = tool();
-    let hovered = hover.coord;
-    let world = World::now();
-    let object = hover.object_at().and_then(|at| world.entry_at(at));
-    let scattered = hover.prop().is_some();
-    let digging = ui == Tool::Eraser && object.is_none() && !scattered;
-    let asset = ui.asset();
-    let zoom = match (asset, &object) {
-        (Some((_, zoom)), _) => zoom,
-        (None, Some(o)) => o.zoom,
-        // A terrain carve takes a whole cell. The scan emits nothing for a
-        // zero material, whatever its bytes below the cell, so the whole cell
-        // goes anyway.
-        (None, None) => GROUND.leaf_cell_zoom(),
-    };
-    let (blocked, blocked_key) = match (&hovered, asset) {
-        (Some(h), Some((asset, _))) => {
-            let blocked_key = Some((asset, zoom, *h, world.revision()));
-            let was = *PREVIEW.get(Preview::default);
-            let same = was.blocked_key == blocked_key
-                && !changes::within(placement_reads(asset, zoom, h), &[]);
-            (
-                if same {
-                    was.blocked
-                } else {
-                    is_placement_blocked(asset, zoom, h)
-                },
-                blocked_key,
-            )
-        }
-        _ => (false, None),
-    };
-    // The real object is hidden a tick or more after the ghost appears.
-    let hidden = object.filter(|_| ui == Tool::Eraser);
-    let edits = RenderEdits {
-        hide: hidden.map(|o| o.id()),
-        // Where the eraser hovers bare terrain, an AIR entry that is never
-        // written goes into the drawn build, so what lies one voxel below
-        // shows through the ghost.
-        carve: hovered
-            .filter(|_| digging)
-            .map(|h| Octant::holding(zoom, &h)),
-        scattered_cell: hover
-            .prop()
-            .filter(|_| ui == Tool::Eraser)
-            .and_then(|s| s.generated_in()),
-    };
-    let was = core::mem::replace(
-        PREVIEW.get(Preview::default),
-        Preview {
-            object,
-            zoom,
-            digging,
-            blocked,
-            blocked_key,
-            edits,
-        },
-    );
-    was.edits != edits
+    let was = preview();
+    let now = tool().preview(&hover(), &was);
+    *PREVIEW.get(Preview::default) = now;
+    was.edits != now.edits
 }
 
 #[cfg(test)]

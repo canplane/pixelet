@@ -12,7 +12,9 @@ use crate::domain::cmd::GeolocationErrorCode;
 use crate::domain::cmd::Message;
 use crate::domain::cmd::SensorStatus;
 use crate::domain::control::sensor::platform;
-use crate::domain::control::sensor::reading::{device_location_store, SensorState};
+use crate::domain::control::sensor::reading::{
+    device_location_store, device_location_store_mut, SensorState,
+};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::layer::lattice::Cells;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -46,7 +48,7 @@ fn geolocation() -> &'static mut Geolocation {
 /// A watch runs while the store tracks the location
 /// (`DeviceLocationStore::is_tracking_location`).
 pub fn start_watching() {
-    let store = device_location_store();
+    let store = device_location_store_mut();
     if store.is_tracking_location {
         return;
     }
@@ -60,7 +62,7 @@ pub fn start_watching() {
 }
 
 pub fn stop_watching() {
-    let store = device_location_store();
+    let store = device_location_store_mut();
     if store.is_tracking_location {
         store.set_is_tracking_location(false);
         geolocation().command = Some(GeolocationCommand::Stop);
@@ -75,7 +77,7 @@ pub fn geolocation_open() {
 pub fn geolocation_close() {
     geolocation().open = false;
     stop_watching();
-    device_location_store().state = SensorState::of(SensorStatus::Idle);
+    device_location_store_mut().state = SensorState::of(SensorStatus::Idle);
 }
 
 pub fn geolocation_visibility(visible: bool) {
@@ -105,7 +107,7 @@ pub fn geolocation_fix(lon: f64, lat: f64, alt: Option<f64>, accuracy: f64, cour
     let [base_lon, base_lat, _] =
         epsg4326::from_mercator(&[epsg3857::merc_from_u(x0), epsg3857::merc_from_u(y0), 0.0]);
     let alt = alt.map(|h| h - epsg4326::geoid_m(base_lon, base_lat));
-    device_location_store().set_location([lon, lat], alt, accuracy, course);
+    device_location_store_mut().set_location([lon, lat], alt, accuracy, course);
 }
 
 /// A location error. A momentary error (unavailable, timed out) leaves the
@@ -114,7 +116,7 @@ pub fn geolocation_fix(lon: f64, lat: f64, alt: Option<f64>, accuracy: f64, cour
 /// start) leaves nothing watching, and a grant or a return to the foreground
 /// starts the watch again.
 pub fn geolocation_err(code: GeolocationErrorCode) {
-    let store = device_location_store();
+    let store = device_location_store_mut();
     store.state = SensorState::failed(match code {
         GeolocationErrorCode::PermissionDenied => Message::GeolocationPermissionDenied,
         GeolocationErrorCode::PositionUnavailable => Message::GeolocationPositionUnavailable,

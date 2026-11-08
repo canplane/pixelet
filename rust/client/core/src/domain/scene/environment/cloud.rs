@@ -37,7 +37,7 @@ use crate::domain::scene::environment::{environment_alt_km, environment_drift};
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model;
 use crate::domain::scene::model::asset::model_of;
-use crate::domain::setting::store::settings_store;
+use crate::domain::setting::store::settings;
 use crate::domain::view::frame::pose::{eye, km_per_u};
 use crate::domain::view::lens::{self, cull_dist_u, decor_impostor_angle, decor_model_angle};
 use crate::domain::view::observation;
@@ -173,7 +173,7 @@ pub fn drift_step_s() -> f64 {
 /// Otherwise it is 1 while the eye, at the height the sky last saw it, is
 /// below half of `CLOUD_GONE_KM`, and it fades to 0 at `CLOUD_GONE_KM`.
 pub fn clouds_shown() -> f64 {
-    if !settings_store().clouds {
+    if !settings().clouds {
         return 0.0;
     }
     let t = ((environment_alt_km() - CLOUD_GONE_KM / 2.0) / (CLOUD_GONE_KM / 2.0)).clamp(0.0, 1.0);

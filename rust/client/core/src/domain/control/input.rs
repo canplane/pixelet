@@ -24,7 +24,7 @@ use crate::domain::control::camera::orbit;
 use crate::domain::control::camera::state::{camera_state, IntentPatch};
 use crate::domain::control::navigation::destination::cancel as cancel_destination;
 use crate::domain::control::navigation::follow_mode::set_following;
-use crate::domain::setting::store::settings_store;
+use crate::domain::setting::store::settings;
 use crate::domain::view::frame::screen::size;
 use crate::sys::sched::edge::request_world_tick;
 use xpute_core::clock::now;
@@ -179,7 +179,7 @@ fn do_rotate(s: &mut Input, view_x: f64, view_y: f64) {
     }
 
     if s.rotate_axis_lock == RotateAxisLock::Tilt {
-        if !settings_store().tilt_lock {
+        if !settings().tilt_lock {
             let polar = s.rotate_tilt.ask(view_y, linear(tilt_gain()));
             let took = controller::set_intent(IntentPatch {
                 polar: Some(polar),
@@ -246,7 +246,7 @@ fn update_pinch(s: &mut Input) {
     // A control that did not move is not asked, so a pinch that only zooms
     // writes no tilt.
     let polar = s.pinch_tilt.ask(midpoint_y, linear(tilt_gain()));
-    let polar = (!settings_store().tilt_lock && polar != intent.polar).then_some(polar);
+    let polar = (!settings().tilt_lock && polar != intent.polar).then_some(polar);
     let angle = libm::atan2(p1.y - p0.y, p1.x - p0.x);
     if dist < MIN_TWIST_DIST_PX {
         s.pinch_twist = None;

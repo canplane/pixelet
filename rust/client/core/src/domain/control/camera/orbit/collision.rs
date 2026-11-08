@@ -43,7 +43,7 @@ use crate::domain::control::param::{CLIMB_PASSES, COLLISION_STEP_SAMPLES};
 use crate::domain::control::param::{EYE_CLEARANCE_U, MIN_DIST, NEAREST_DIST};
 use crate::domain::query::changes::Memo;
 use crate::domain::query::{finest, Hit, HitKind, Ray, World};
-use crate::domain::setting::store::{settings_store, OrbitObstacleMode};
+use crate::domain::setting::store::{settings, OrbitObstacleMode};
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::param::NEAR;
 use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
@@ -136,7 +136,7 @@ fn eye(at: &ViewPose) -> (V3, Q3) {
 /// How far the orbit gets from `from` toward `to`, by the rules at the top
 /// of this module.
 fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
-    let mode = settings_store().orbit_obstacle;
+    let mode = settings().orbit_obstacle;
     if mode == OrbitObstacleMode::through {
         return *to;
     }

@@ -22,7 +22,7 @@ pub(super) fn tool(c: abi::EditTool) -> Outcome {
             Asset::Unknown => return Err(MarshalError::new(Errno::EINVAL)),
             asset => Tool::Item {
                 asset,
-                scale_steps: c.scale_steps,
+                zoom: asset.zoom(c.scale_steps),
             },
         },
     });

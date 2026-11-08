@@ -135,7 +135,7 @@ fn session_setting_not_stored() {
     file::test::on_storage_answered(Err(file::Opened::Absent));
     assert!(settings_load_step());
     for &key in session.iter().filter(|&&k| is_offered(k, other(k))) {
-        assert_eq!(settings_store().set_setting(key, other(key)), Some(true));
+        assert_eq!(settings_mut().set_setting(key, other(key)), Some(true));
     }
     assert!(
         !*UNSAVED.get(|| false),
@@ -161,9 +161,9 @@ fn open_slot() {
 /// Makes one change and then a keep, and returns whether the change is
 /// still unwritten.
 fn held_after_a_change() -> bool {
-    let tilt = 1 - settings_store().get(SettingKey::tilt_lock);
+    let tilt = 1 - settings().get(SettingKey::tilt_lock);
     assert_eq!(
-        settings_store().set_setting(SettingKey::tilt_lock, tilt),
+        settings_mut().set_setting(SettingKey::tilt_lock, tilt),
         Some(true)
     );
     settings_keep_step();
@@ -187,7 +187,7 @@ fn read_before_write() {
     );
     file::test::on_storage_answered(Ok(&file_of(&[(SettingKey::tilt_lock as u32, tilt)])));
     assert!(settings_load_step() && are_settings_loaded());
-    assert_eq!(settings_store().get(SettingKey::tilt_lock), tilt);
+    assert_eq!(settings().get(SettingKey::tilt_lock), tilt);
     assert!(!*UNSAVED.get(|| false), "what was read is not written back");
     assert!(!held_after_a_change(), "a read slot keeps what changes");
     assert!(!settings_load_step(), "read once");
@@ -201,7 +201,7 @@ fn empty_slot_defaults() {
     open_slot();
     file::test::on_storage_answered(Err(file::Opened::Absent));
     assert!(settings_load_step());
-    assert_eq!(*settings_store(), Settings::DEFAULT);
+    assert_eq!(*settings(), Settings::DEFAULT);
     assert!(!held_after_a_change());
 }
 
@@ -225,7 +225,7 @@ fn bad_slot_refused() {
             settings_load_step() && are_settings_loaded(),
             "the world need not wait on it"
         );
-        assert_eq!(*settings_store(), Settings::DEFAULT);
+        assert_eq!(*settings(), Settings::DEFAULT);
         assert!(file::is_storage_refused());
         assert!(
             held_after_a_change(),

@@ -20,7 +20,7 @@ use crate::domain::query::{at_zoom, Ray, World};
 use crate::domain::scene::marker::candidate::Candidates;
 use crate::domain::scene::marker::design::{self, Design};
 use crate::domain::scene::marker::set::{self, Set};
-use crate::domain::setting::store::settings_store;
+use crate::domain::setting::store::settings;
 use crate::domain::view::frame::screen::{ndc_to_px, units_per_px_at};
 use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::shelf::NO_SLOT;
@@ -235,7 +235,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     };
     let seen = Inputs {
         o,
-        places: settings_store().place,
+        places: settings().place,
         drafted: pin::draft_key(draft),
         bubble: line::bubble(o.eye),
     };
@@ -267,7 +267,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     });
     now.bricks.sort_unstable();
     // Places are a setting, while what someone placed always shows.
-    now.places = settings_store().place;
+    now.places = settings().place;
     let places = now.places;
     // What was read stays for a brick that is still drawn and whose columns
     // no change touches (domain/query/changes.rs), as long as the places

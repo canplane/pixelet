@@ -25,7 +25,7 @@ use crate::domain::preview::{Ghost, GhostBox};
 use crate::domain::scene::column::GroupColumns;
 use crate::domain::scene::decor::asset::{decor_model, decor_skin};
 use crate::domain::scene::transform::Transform;
-use crate::domain::setting::store::settings_store;
+use crate::domain::setting::store::settings;
 use xpute_core::global::Global;
 
 pub const GHOST_OPACITY: f32 = 0.5;
@@ -115,7 +115,7 @@ impl GhostDraw {
         }: GhostBox,
     ) -> bool {
         let size = units(zoom);
-        let state = cube.filter(|_| settings_store().textures).unwrap_or(0);
+        let state = cube.filter(|_| settings().textures).unwrap_or(0);
         let rgb = cube.and_then(cube_rgb).unwrap_or(if erase {
             indicator::ERASE
         } else {

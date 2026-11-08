@@ -4,7 +4,7 @@
 
 use super::State;
 use super::{ask_turn, refuse_unless};
-use crate::domain::setting::store::settings_store;
+use crate::domain::setting::store::settings;
 use crate::door::cmd as abi;
 use crate::perf::read;
 use crate::perf::record;
@@ -19,7 +19,7 @@ use xpute_kit::status::errno::Errno;
 
 /// The profiler records only while its setting is on.
 pub(super) fn start(s: &mut State) -> Outcome {
-    refuse_unless(settings_store().perf, Errno::EPERM)?;
+    refuse_unless(settings().perf, Errno::EPERM)?;
     refuse_unless(perf_window_start(), Errno::ENOMEM)?;
     ask_turn(s)
 }

@@ -14,11 +14,11 @@ use pxl_spec::space::coord::v3::{self, V3};
 use crate::domain::control::camera::first_person;
 use crate::domain::control::camera::orbit;
 use crate::domain::control::camera::orbit::orbit;
-use crate::domain::control::camera::state::{camera_state, Intent, IntentPatch};
+use crate::domain::control::camera::state::{camera_state, camera_state_mut, Intent, IntentPatch};
 use crate::domain::control::camera::{camera, eye_world, facing_rot};
 use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_DIST};
 use crate::domain::control::support::{is_unknown, pan_to, unknown_z};
-use crate::domain::setting::store::{settings_store, CameraMode};
+use crate::domain::setting::store::{settings, CameraMode};
 use crate::domain::view::frame::coord::{world_to_canonical, world_to_canonical_nearest};
 use crate::domain::view::frame::pose::ObserverPose;
 use crate::domain::view::frame::screen::units_per_px_at;
@@ -180,7 +180,7 @@ pub fn set_intent(partial: IntentPatch) -> Intent {
     match active() {
         Active::Orbit => orbit::ask(partial),
         Active::FirstPerson | Active::Tracked => {
-            let c = camera_state();
+            let c = camera_state_mut();
             c.commit_intent(c.with_patch(partial));
             c.intent
         }
@@ -248,7 +248,7 @@ pub fn camera_step(ctx: &mut TickContext) {
 }
 
 fn switch() -> bool {
-    if !take_mode(settings_store().camera_mode) {
+    if !take_mode(settings().camera_mode) {
         return false;
     }
     request_world_tick();
@@ -279,7 +279,7 @@ fn take_mode(want: CameraMode) -> bool {
     c.base = want;
     let cam = camera();
     if want == CameraMode::orbit {
-        camera_state().commit_intent(Intent {
+        camera_state_mut().commit_intent(Intent {
             dist: orbit().dist,
             azimuth: cam.azimuth,
             polar: cam.polar,

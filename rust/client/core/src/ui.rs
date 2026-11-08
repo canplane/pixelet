@@ -26,7 +26,7 @@ use crate::domain::query::World;
 use crate::domain::scene::character::companion::companion_ready;
 use crate::domain::scene::character::surface::character_surface_rows;
 use crate::domain::scene::stage::screen_shows_world;
-use crate::domain::setting::store::{are_settings_loaded, settings_store, SettingKey};
+use crate::domain::setting::store::{are_settings_loaded, settings, SettingKey};
 use crate::domain::view::frame::pose;
 use crate::domain::view::frame::screen::units_per_px_at;
 use crate::door::cmd::{
@@ -112,7 +112,7 @@ pub struct SnapshotInputs {
 const REFUSED_SHOWN: usize = 1 + repository::WANTS as usize;
 
 fn snapshot_inputs() -> SnapshotInputs {
-    let (location, settings) = (device_location_store(), settings_store());
+    let (location, settings) = (device_location_store(), settings());
     let pivot = controller::pivot();
     let division = pivot.and_then(|at| naming(&at));
     let mut character_surfaces = ([0u32; SURFACES], 0);

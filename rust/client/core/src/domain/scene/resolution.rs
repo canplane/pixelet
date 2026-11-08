@@ -25,7 +25,7 @@
 //! and the judge keeps no copy of it.
 
 use crate::domain::scene::param;
-use crate::domain::setting::store::{settings_store, ResMode};
+use crate::domain::setting::store::{settings, ResMode};
 use crate::sys::sched::edge;
 use crate::sys::sched::pacing_spec::{PACE_HZ, RATE_MIN_HZ};
 use pxl_render::api_spec::surface_role;
@@ -308,7 +308,7 @@ fn share(step: i32) -> f64 {
 /// The share of the display's pixels on each axis that the setting, and
 /// under `auto` the judge's step, asks the world to be drawn at.
 fn scale() -> f64 {
-    match settings_store().res {
+    match settings().res {
         ResMode::auto => share(state().step),
         ResMode::fixed => 1.0,
         ResMode::low => param::RES_MIN,
@@ -374,7 +374,7 @@ pub fn load(pace: Pace, gpu: Option<GpuRead>) -> Option<f64> {
     let k = state();
     let started = pace.moving && !k.moving;
     k.moving = pace.moving;
-    if settings_store().res != ResMode::auto {
+    if settings().res != ResMode::auto {
         (k.step, k.quiet) = (0, 0);
         k.restart();
         interval_ms = pace.slowed().then_some(0.0);

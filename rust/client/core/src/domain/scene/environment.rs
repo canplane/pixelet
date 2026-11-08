@@ -20,7 +20,7 @@ use crate::domain::scene::animation;
 use crate::domain::scene::environment::param::SKY_EASE_RATE;
 use crate::domain::scene::frame::Frame;
 use crate::domain::setting::schema_spec::SkyTime;
-use crate::domain::setting::store::settings_store;
+use crate::domain::setting::store::settings;
 use crate::domain::view::frame::pose::{anchor, km_per_u};
 use crate::domain::view::lens::StepClock;
 use crate::domain::view::observation;
@@ -215,7 +215,7 @@ impl EnvironmentDraw {
     pub fn observe(&mut self, unix_ms: f64) -> f64 {
         let first = *self.first_ms.get_or_insert(unix_ms);
         let at = self.sky_anchor();
-        let (sky_ms, held) = sky_clock(settings_store().sky_time, unix_ms, at[0]);
+        let (sky_ms, held) = sky_clock(settings().sky_time, unix_ms, at[0]);
         let heights = |days: f64| heights(days, at);
         let step = steps();
         // The time at which each light's height will have moved a step, at

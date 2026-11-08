@@ -34,6 +34,13 @@ fn cases() -> [(&'static str, Hit); 3] {
     ]
 }
 
+fn pick(hit: Hit) -> Pick {
+    Pick {
+        hit,
+        ray_zoom: None,
+    }
+}
+
 fn lattice(p: &Q3) -> (i32, i32, i32) {
     let [x, y, z] = idx_of(UNIT_ZOOM, p);
     (x, y, z)
@@ -42,7 +49,7 @@ fn lattice(p: &Q3) -> (i32, i32, i32) {
 #[test]
 fn struck_corner_lands_on_cell() {
     for (name, hit) in cases() {
-        let p = world_struck_corner(&hit, GROUND.leaf_cell_zoom());
+        let p = pick(hit).struck_corner(GROUND.leaf_cell_zoom());
         assert_eq!(lattice(&p), (3, 5, 2), "{name}");
         assert_eq!(p.map(|v| v.rem_euclid(1 << FRAC_W)), [0, 0, 0], "{name}");
     }
@@ -51,10 +58,10 @@ fn struck_corner_lands_on_cell() {
 #[test]
 fn struck_corner_names_cell() {
     for (name, hit) in cases() {
-        let cell = lattice(&world_struck_corner(&hit, GROUND.leaf_cell_zoom()));
+        let cell = lattice(&pick(hit).struck_corner(GROUND.leaf_cell_zoom()));
         for zoom in OBJECT_COARSEST..=OBJECT_FINEST {
             assert_eq!(
-                lattice(&world_struck_corner(&hit, zoom)),
+                lattice(&pick(hit).struck_corner(zoom)),
                 cell,
                 "{name} at zoom {zoom}"
             );

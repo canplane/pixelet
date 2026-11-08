@@ -79,6 +79,10 @@ impl CameraState {
 
 static CAMERA_STATE: Global<CameraState> = Global::new();
 
-pub fn camera_state() -> &'static mut CameraState {
+pub fn camera_state() -> &'static CameraState {
+    camera_state_mut()
+}
+
+pub fn camera_state_mut() -> &'static mut CameraState {
     CAMERA_STATE.get(CameraState::new)
 }
