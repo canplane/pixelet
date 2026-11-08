@@ -41,12 +41,13 @@ importers:
       '@xpute/kit':
         specifier: workspace:*
         version: link:../kit
-      '@xpute/native':
-        specifier: workspace:*
-        version: link:../native
       '@xpute/runtime':
         specifier: workspace:*
         version: link:../runtime
+    devDependencies:
+      '@xpute/native':
+        specifier: workspace:*
+        version: link:../native
 
   ../xpute/ts/kit: {}
 
@@ -74,6 +75,7 @@ importers:
       '@xpute/kit':
         specifier: workspace:*
         version: link:../kit
+    devDependencies:
       '@xpute/native':
         specifier: workspace:*
         version: link:../native
