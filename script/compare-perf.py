@@ -30,9 +30,8 @@ SIZE = {"width": 1920, "height": 1080}
 # Where the device stands, so the view opens there as a user's does: on
 # Seoraksan, whose ridges the drive's eye meets at the horizon.
 PLACE = {"latitude": 38.1193, "longitude": 128.4656}
-# How far a page's pivot may lie from `PLACE`, in degrees: about ten meters. The
-# cost of a view depends on where it stands, so two pages are compared only on
-# the same ground.
+# How far a page's pivot may lie from `PLACE`, in degrees: about ten meters. Two
+# pages are compared only on the same ground.
 PLACE_SLACK_DEG = 1e-4
 # How much longer the change's first load may block the page than the base's.
 LOAD_SLACK_MS = 3000

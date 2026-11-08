@@ -42,10 +42,17 @@ they name were those of the session that ran them (`572d46ae`), and both are gon
 **Where these runs stood.** A rename on 10-29 (`98ed13185d`) stored the leaf tile's corner
 in place of the GPS fix, until 11-08 (`bb12471c6e`). So every run in this journal, and every
 `compare-perf`, asked for the ridge at 38.1193, 128.4656 and stood about 300 m away, at
-38.11727, 128.46313. The numbers below are that corner's. A build driven from the corner
-and from the ridge are not the same measurement: on 11-08, on the Mac, main took 9.3 ms of
-tasks a turn and about 1,200 tile reads from the ridge, and 0.1 ms and about 760 from the
-corner.
+38.11727, 128.46313. The numbers below are that corner's. A drive from the corner and one
+from the ridge were not the same measurement, and what differed was the camera, not the
+ground. The drive sweeps the zoom by relative wheel steps, and under the default `climb` the
+terrain stops a zoom out that would put the eye in the ground, so the steps it stopped are
+lost. On 11-08, on the Mac, the eye's median distance from the pivot was 11 u from the
+corner, where it sat at its nearest, 2 u, for much of the window, and 630 to 740 u from the
+ridge. Tasks took 0.1 ms a turn against 9 ms, terrain tile reads were about 800 against
+1,200, and the GPU's p50 was 19.8 ms against 23.5 ms. With `orbit_obstacle` at `through`,
+the ridge, the corner, 38.1150, 128.4700 and 38.1300, 128.5000 all had a median distance of
+1,560 to 1,880 u, 9.8 to 10.0 ms of tasks, 1,296 to 1,369 tile reads and a GPU p50 of 22.4
+to 23.2 ms. The drive holds the gate at `through` from that day on.
 [`report/`](report/) holds each window's whole report, and `tool/walk/show4.py` prints
 them. The scenes were these:
 
