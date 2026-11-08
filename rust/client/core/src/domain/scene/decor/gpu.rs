@@ -26,7 +26,7 @@ use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::preview::RenderEdits;
 use crate::domain::query::World;
 use crate::domain::scene::decor::param;
-use crate::domain::view::setting::store::settings_store;
+use crate::domain::setting::store::settings_store;
 use crate::sys::io::loader::catalog;
 use pxl_content::decor;
 use pxl_engine::clipmap::FIRST_CELL_ZOOM;

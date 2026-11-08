@@ -4,11 +4,11 @@
     "(ui.json): what the core calls of it, numbered as ui.json numbers its",
     "own, each a call the runtime answers beside the core before it returns",
     "(ts/client/src/runtime/start.ts, port/text.ts). Where an answer lies in the",
-    "core's memory is laid out in spec/client/core/sys/io/runtime.json."
+    "core's memory is laid out in spec/client/core/sys/io/text_answer.json."
   ],
   "gen": {
-    "ts": "../../../ts/client/src/abi/text.spec.ts",
-    "rs": "src/sys/io/text.spec.rs"
+    "ts": "../../../../../ts/client/src/abi/text.spec.ts",
+    "rs": "../../../../../rust/client/core/src/sys/io/text.spec.rs"
   },
   "name": "text",
   "import": [
@@ -19,7 +19,7 @@
         "The text in the platform's own family at the weight and size, broken into lines no",
         "wider than the width where it can be; at `at` in the core's memory, how many lines,",
         "then a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most",
-        "(sys/io/runtime.json LAYOUT_ANSWER, LINE). A call: answered before it returns."
+        "(sys/io/text_answer.json LAYOUT_ANSWER, LINE). A call: answered before it returns."
       ],
       "pkt": [
         {

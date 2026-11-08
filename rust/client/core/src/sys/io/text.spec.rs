@@ -1,12 +1,12 @@
 // rust/client/core/src/sys/io/text.spec.rs
 //
-// GENERATED from rust/client/core/text.json
+// GENERATED from spec/client/core/sys/io/text.json
 
 //! The platform's text, a device of the app's ABI beside the UI's protocol
 //! (ui.json): what the core calls of it, numbered as ui.json numbers its
 //! own, each a call the runtime answers beside the core before it returns
 //! (ts/client/src/runtime/start.ts, port/text.ts). Where an answer lies in the
-//! core's memory is laid out in spec/client/core/sys/io/runtime.json.
+//! core's memory is laid out in spec/client/core/sys/io/text_answer.json.
 
 // A list a record carries is a function handing out its items, whose
 // type is long to spell and is spelled once, here, for each. A table
@@ -69,7 +69,7 @@ pub enum Command {
     /// The text in the platform's own family at the weight and size, broken into lines no
     /// wider than the width where it can be; at `at` in the core's memory, how many lines,
     /// then a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most
-    /// (sys/io/runtime.json LAYOUT_ANSWER, LINE). A call: answered before it returns.
+    /// (sys/io/text_answer.json LAYOUT_ANSWER, LINE). A call: answered before it returns.
     TEXT_LAYOUT = 0x1c01,
     /// One line drawn in the platform's own family, starting at x with the middle of its em
     /// box on the middle row, into `width` by `height` pixels at `at` in the core's memory,

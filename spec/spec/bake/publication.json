@@ -23,7 +23,7 @@
   "VERSION_BYTES": 32,
   "$VERSION_BYTES": [
     "The longest version a declaration names: one segment of a tile's URL,",
-    "before its name (ts/client/src/origin/route.spec.ts `tileObject`)."
+    "before its name (ts/client/src/service/origin/publication.spec.ts `tileObject`)."
   ],
   "OBJECT": "{version}/{name}",
   "$OBJECT": [

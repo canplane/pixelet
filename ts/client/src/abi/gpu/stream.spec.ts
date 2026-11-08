@@ -1,6 +1,6 @@
 // @pxl/client/abi/gpu/stream.spec.ts
 //
-// GENERATED from spec/client/render/gpu/api.json
+// GENERATED from spec/client/render/api.json
 
 /** What an upload leaves of the range. The records a turn cannot put off — a
  * frame's passes and draws, the renderer's pipelines — are never refused, so

@@ -10,7 +10,7 @@
   (tiles, the world, sensors) and no pixelet name.
 - xpute's predefined ABI takes majors 0x00 to 0x0F (`xpute/spec/abi/`); the
   app's ABI takes majors from `PROGRAM_MAJOR`, 0x10
-  (`rust/client/core/ui.json`). No ports.
+  (`spec/client/core/door/ui.json`). No ports.
 - pixelet's layers are the UI (`ts/client/src/ui/`), the services
   (`ts/client/src/service/`) and the runtime (`ts/client/src/runtime/`); the
   core is `rust/client/core`.

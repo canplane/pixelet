@@ -1,6 +1,6 @@
 // @pxl/client/abi/gpu/surface_role.spec.ts
 //
-// GENERATED from spec/client/render/gpu/api.json
+// GENERATED from spec/client/render/api.json
 
 export const WORLD = 0 as number;
 

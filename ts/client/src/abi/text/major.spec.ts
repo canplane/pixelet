@@ -1,6 +1,6 @@
 // ts/client/src/abi/text/major.spec.ts
 //
-// GENERATED from rust/client/core/text.json
+// GENERATED from spec/client/core/sys/io/text.json
 
 // The module a command is for: the text device's.
 

@@ -1,4 +1,4 @@
-// pxl-core/domain/scene/gizmo/frame_gizmo.rs
+// pxl-core/domain/scene/gizmo/frame.rs
 
 //! The frame gizmo, shown with the `world_gizmo` setting and drawn as debug
 //! lines. It marks the pivot and the ground cell under it. Around the pivot

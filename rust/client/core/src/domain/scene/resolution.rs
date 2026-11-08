@@ -25,7 +25,7 @@
 //! and the judge keeps no copy of it.
 
 use crate::domain::scene::param;
-use crate::domain::view::setting::store::{settings_store, ResMode};
+use crate::domain::setting::store::{settings_store, ResMode};
 use crate::sys::sched::edge;
 use crate::sys::sched::pacing_spec::{PACE_HZ, RATE_MIN_HZ};
 use pxl_render::api_spec::surface_role;

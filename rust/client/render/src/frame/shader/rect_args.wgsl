@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/rect_args.wgsl
 
 // Writes the indirect arguments of the draw over the rectangle of tiles the frame's damage
-// covers, once every pass that marks has made that rectangle (gpu/tiles.rs
+// covers, once every pass that marks has made that rectangle (gpu/tile.rs
 // `Tiles::dispatch_rect_args`). The draw is one quad a tile of the rectangle (screen_tiles.wgsl
 // `rect_clip`): none where the rectangle is empty, and never more than the target's tiles.
 

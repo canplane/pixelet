@@ -2,7 +2,7 @@
 # each case's writes, `<octkey, id>` applied in order to an empty tree, and the rows they
 # fold to, `<shard's quadkey, fold word>` by shard. Read by the core's store
 # (pxl-core domain/layer/object/repository.test.rs) and by the client's source
-# (ts/client/src/sys/fs/object_tree.test.ts), which folds as the store does.
+# (ts/client/src/service/sys/fs/object_tree.test.ts), which folds as the store does.
 # the kind most filled, either side of sea level, a marker filling none, two shards
 case.0.write.0	000000000 3
 case.0.write.1	000000001 3

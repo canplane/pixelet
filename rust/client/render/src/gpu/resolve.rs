@@ -15,7 +15,7 @@
 //! `screen::DAMAGE_FRAMES`, screen_tiles.wgsl). Once every tile has, the jitter holds and the
 //! frame stands still.
 //!
-//! The tiles' words live on the GPU, as the light's do (gpu/tiles.rs). Each holds the number of
+//! The tiles' words live on the GPU, as the light's do (gpu/tile.rs). Each holds the number of
 //! the frame its tile last changed in, which the frame's marks set. The CPU hands the marks, so
 //! it knows whether any tile gathers from what it handed. The resolve and the write-back draw
 //! the claimed tiles alone, a quad each (screen_tiles.wgsl).
@@ -35,7 +35,7 @@ use crate::gpu::api::{
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::Surface;
-use crate::gpu::tiles::{Tiles, SIDE};
+use crate::gpu::tile::{Tiles, SIDE};
 
 /// The least share a frame takes where what the frames before left is held to this frame's
 /// pixels. It trades how long a trail a moving thing leaves against how still an edge stands.
@@ -69,7 +69,7 @@ pub struct Resolve {
     phase: u32,
     jitter: [f32; 2],
     /// The screen's tiles, each claimed until it has gathered the jitter's whole sequence since
-    /// it changed (gpu/tiles.rs). The gate, the pixels' cast, the resolve, the write-back and
+    /// it changed (gpu/tile.rs). The gate, the pixels' cast, the resolve, the write-back and
     /// the finish all draw by them.
     pub tiles: Tiles,
 }

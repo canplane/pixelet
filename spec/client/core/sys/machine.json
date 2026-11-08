@@ -8,8 +8,8 @@
     "(door.rs `EVENTS`, which it checks against this)."
   ],
   "gen": {
-    "ts": "../../../ts/client/src/abi/machine.spec.ts",
-    "rs": "src/machine.spec.rs"
+    "ts": "../../../../ts/client/src/abi/machine.spec.ts",
+    "rs": "../../../../rust/client/core/src/sys/machine.spec.rs"
   },
   "mem": {
     "$doc": [
@@ -85,7 +85,7 @@
   },
   "fs": {
     "$doc": [
-      "Its roots: the bakes' tiles, the shipped assets, the platform's storage and the placed objects' source (ts/client/src/sys/fs/namespace.ts)."
+      "Its roots: the bakes' tiles, the shipped assets, the platform's storage and the placed objects' source (ts/client/src/service/sys/fs/namespace.ts)."
     ]
   },
   "gpu": {

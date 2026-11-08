@@ -7,27 +7,23 @@
 //! it and admits each frame. Every turn enters the core through door.rs
 //! `run`. No other file of the core knows about WebAssembly, the browser or
 //! threads. The only function a device's app calls outside xpute's names is
-//! the transport's decoder (unpack.rs, include/pxl_native.h).
+//! the transport's decoder (sys/unpack.rs, include/pxl_native.h).
 
 pub(crate) mod domain;
 pub mod door;
-#[path = "machine.spec.rs"]
-pub mod machine;
 pub(crate) mod perf;
 pub(crate) mod pointer;
 pub mod sys;
 pub(crate) mod turn;
 pub(crate) mod ui;
-#[cfg(not(target_arch = "wasm32"))]
-mod unpack;
 
 use door::layout::FIXED_BYTES;
-use machine::MACHINE;
 use pxl_render::api_spec::device;
+use sys::machine::MACHINE;
 use xpute_gpu::Numbers;
 
 /// How a device's GPU runtime paces the renderer's stream, as
-/// spec/client/render/gpu/api.json `device` sets it.
+/// spec/client/render/api.json `device` sets it.
 const GPU: Numbers = Numbers {
     frame_latency: device::FRAME_LATENCY,
     upload_chunk_bytes: device::UPLOAD_CHUNK_BYTES as u64,

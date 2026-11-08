@@ -83,7 +83,7 @@ const DATA_SPECS: [DataSpec; 19] = [
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/render/gpu/api.json",
+        json: "spec/client/render/api.json",
         ts: Some("ts/client/src/abi/gpu.spec.ts"),
         ts_names: Some(&["surface_role", "stream"]),
         rs: Some("rust/client/render/src/api.spec.rs"),
@@ -98,10 +98,10 @@ const DATA_SPECS: [DataSpec; 19] = [
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/core/sys/io/runtime.json",
-        ts: Some("ts/client/src/abi/runtime.spec.ts"),
-        rs: Some("rust/client/core/src/sys/io/runtime.spec.rs"),
-        module: "runtime_spec",
+        json: "spec/client/core/sys/io/text_answer.json",
+        ts: Some("ts/client/src/abi/text_answer.spec.ts"),
+        rs: Some("rust/client/core/src/sys/io/text_answer.spec.rs"),
+        module: "text_answer_spec",
         ..DataSpec::DEFAULT
     },
     DataSpec {

@@ -26,9 +26,9 @@ use crate::domain::query::World;
 use crate::domain::scene::character::companion::companion_ready;
 use crate::domain::scene::character::surface::character_surface_rows;
 use crate::domain::scene::stage::screen_shows_world;
+use crate::domain::setting::store::{are_settings_loaded, settings_store, SettingKey};
 use crate::domain::view::frame::pose;
 use crate::domain::view::frame::screen::units_per_px_at;
-use crate::domain::view::setting::store::{are_settings_loaded, settings_store, SettingKey};
 use crate::door::cmd::{
     CompanionState, DivisionPart, GroundStatus, LocationState, LonLat, Message, OrientationState,
     PivotState, RefusedFile, Snapshot, UiView,

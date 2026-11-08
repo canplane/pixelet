@@ -53,6 +53,7 @@ the same way. The check-rules tool holds the order (pxl-tool
     │   param.rs     the tuned numbers both heads share             │
     │   cmd.spec.rs  the UI's enums both heads may read             │
     │   preview.rs   an edit not yet made, control's to the scene's │
+    │   setting/     the settings both heads read                   │
     │   view/        the trunk: the pose, the lens, demand          │
     │   query/       the trunk: the only seam                       │
     │   layer/       the trunk: the base and the object             │
@@ -62,8 +63,8 @@ the same way. The check-rules tool holds the order (pxl-tool
         sched/       a turn's edge and its phases
         mem/         the core memory's sections
         boot · load · stop   bringing it up, what it loads, its end
-  machine.spec.rs        the machine it asks of its runtime (machine.json)
-  unpack.rs              the device transport's zstd decoder
+        machine.spec.rs      the machine it asks of its runtime (machine.json)
+        unpack.rs            the device transport's zstd decoder
 
   beside   perf/: reads anything; no decision reads it
 ```
@@ -162,7 +163,7 @@ than a turn allows. The objects' source applies them to its shards and rebuilds
 the top's rows of the shards they reach; the core writes no shard and no top. It
 folds as the tree does, a rule the client's `OBJECT` backend holds again
 (`ts/client/src/service/sys/fs/object_tree.ts`), held to the store by one record
-both read (`rust/spec/golden/object/top.tsv`). Which source answers, the
+both read (`spec/golden/object/top.tsv`). Which source answers, the
 client's own database or a server, the core cannot tell.
 
 **Places** are tiles named like the ground tiles under them, each holding what
@@ -635,7 +636,7 @@ depth only. A receiver compares nine taps, each moved by its own plane's slope,
 and casters are pushed by the same formula, so a plane does not shadow itself
 (`shadow.wgsl` `shadow_visibility`). Beside the shadows, the lighting settings
 outline an edge that meets the air, lift a rim, and shade corners or run N8AO
-(`spec/client/core/domain/view/setting/schema.json`, section `lighting`).
+(`spec/client/core/domain/setting/schema.json`, section `lighting`).
 
 ## The frame
 
@@ -695,7 +696,7 @@ step, the cast's and the ground's included; one asked for once it draws is a bug
 the same op at once by the same ticket.
 
 A frame where only the draws the core bounds moved is drawn again in the
-screen's **tiles** alone (`gpu/tiles.rs` `Tiles`), by the shape the light's cast
+screen's **tiles** alone (`gpu/tile.rs` `Tiles`), by the shape the light's cast
 casts by: what moved marks the tiles it covered and covers; the light's map is
 drawn again in the tiles its casters that moved mark, and the change is
 propagated on the GPU to the screen's tiles whose pixels read one of those
@@ -832,8 +833,8 @@ kept settings, a canvas lent and the profiler's readings, as
 
 The core's crate is its artifact, in xpute's core form for its target (`pxl-core
 lib.rs`, one `xpute_core::core!` over its machine,
-`rust/client/core/machine.json`): the core implements xpute's entry (`door.rs`
-`run`), and the form hands it what it hands any core (`xpute_core::entry`
+`spec/client/core/sys/machine.json`): the core implements xpute's entry
+(`door.rs` `run`), and the form hands it what it hands any core (`xpute_core::entry`
 `BootInfo`: where a form sharing its process says what stopped it, `stop_hook`,
 and its GPU runtime's answer, `admit`). On wasm32 it is the WebAssembly module
 the page runs (`ts/client/src/service/platform/core.ts`); anywhere else it is
@@ -842,7 +843,7 @@ the library linked into the device app under xpute's native runtime
 call on the core's own thread, since a turn that draws through wgpu outgrows
 React Native's JavaScript stack, runs the GPU's runtime around each turn, and
 exports it to the app through xpute's native module (`@xpute/native`). What the
-app calls besides xpute's names is the transport's decoder (`unpack.rs`,
+app calls besides xpute's names is the transport's decoder (`sys/unpack.rs`,
 `rust/client/core/include/pxl_native.h`). Outside either form the core runs
 under `cargo test`.
 
@@ -854,10 +855,10 @@ after it returns, so each is done before the next turn begins
 (`SYS_ATTACH`, `SYS_SUSPEND`, `SYS_RESUME`, `door/life.rs`) and a GPU answered
 (`GPU_READY`), and completes its opens and closes (`FS_OPENAT`, `FS_CLOSE`).
 **The app's ABI** is what the app defines, two protocols: the UI's,
-`rust/client/core/ui.json`, its intents and what the platform's services give,
-the surfaces, the sensors, the data and each turn's grant; and the text
-device's, `text.json` beside it, the platform's text, which the runtime answers
-beside the core. Both sides' readers, writers and bindings are generated from
+`spec/client/core/door/ui.json`, its intents and what the platform's services
+give, the surfaces, the sensors, the data and each turn's grant; and the text
+device's, `spec/client/core/sys/io/text.json`, the platform's text, which the
+runtime answers beside the core. Both sides' readers, writers and bindings are generated from
 each (`door/cmd.spec.rs`, the enums the domain reads apart in
 `domain/cmd.spec.rs`, and `ts/client/src/abi/cmd.spec.ts`;
 `sys/io/text.spec.rs`, `ts/client/src/abi/text.spec.ts`), each packet an XTP
@@ -1072,7 +1073,7 @@ reader needs.
 The client's state is xpute's
 [core memory](./xpute/ARCHITECTURE.md#the-core-memory-placed-once), placed
 once and never moved, of the sizes the core's machine sets
-(`rust/client/core/machine.json`). Every address is an offset from its first
+(`spec/client/core/sys/machine.json`). Every address is an offset from its first
 byte, so the map holds in a tab and on a device alike. The front, from the
 stack to the GPU stream, is the machine's, and the runtime lays it before the
 first turn. On a device the stack and the core's data are the process's, so

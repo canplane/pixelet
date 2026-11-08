@@ -17,7 +17,7 @@ use crate::gpu::put::put_mat;
 use crate::look::environment::{ENV_SKY, ENV_STARS, ENV_STAR_FRAME_FLOATS};
 use crate::param::sky::star::DRAWN_ABOVE;
 
-const CATALOG: &[u8] = include_bytes!("../frame/shader/bright-star.bin");
+const CATALOG: &[u8] = include_bytes!("bright_star.bin");
 
 pub struct StarPass {
     pipeline: Pipeline,

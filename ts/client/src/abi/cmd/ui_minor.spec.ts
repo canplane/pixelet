@@ -1,6 +1,6 @@
 // ts/client/src/abi/cmd/ui_minor.spec.ts
 //
-// GENERATED from rust/client/core/ui.json
+// GENERATED from spec/client/core/door/ui.json
 
 // What the core shows the UI.
 

@@ -7,7 +7,7 @@ export const BASE_LAYERS = ["terrain", "place", "division", "earth"] as const;
 
 export type BaseLayer = (typeof BASE_LAYERS)[number];
 
-/** The longest version a declaration names: one segment of a tile's URL, before its name (ts/client/src/origin/route.spec.ts `tileObject`). */
+/** The longest version a declaration names: one segment of a tile's URL, before its name (ts/client/src/service/origin/publication.spec.ts `tileObject`). */
 export const VERSION_BYTES = 32;
 
 /** What a version is written in: one segment of a tile's URL, with no character it would have to escape. */

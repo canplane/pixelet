@@ -7,7 +7,7 @@ import java.nio.ByteBuffer
 /**
  * What the app calls in the core (rust/client/core) besides xpute's own calls
  * (xpute.Core, xpute.Gpu): the transport's decoder. Kotlin reaches it through
- * the JNI function that the core's src/unpack.rs names, and the iPhone's Swift
+ * the JNI function that the core's src/sys/unpack.rs names, and the iPhone's Swift
  * makes the same call through the C ABI (include/pxl_native.h).
  */
 object PxlNative {

@@ -33,9 +33,9 @@ use crate::domain::control::param::{
 use crate::domain::control::param::{MAX_DIST, MIN_DIST};
 use crate::domain::control::support::resolve_to;
 use crate::domain::param::POS_DAMP;
+use crate::domain::setting::store::{settings_store, OrbitObstacleMode};
 use crate::domain::smooth::{smooth_angle, smooth_vec};
 use crate::domain::view::frame::coord::world_to_canonical;
-use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
 use collision::{allowed_view, climb_polar};
 use xpute_core::global::Global;
 use xpute_kit::math::scalar::clamp;

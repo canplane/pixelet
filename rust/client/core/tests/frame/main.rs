@@ -1,6 +1,6 @@
 //! Runs whole frames of the core the way a device runs them. The core is linked as its
 //! native core (lib.rs `core!`, xpute-gpu's `native_core!`) and driven through its rings
-//! the way the app's UI drives it (ts/client/src/port/). Each frame's turn comes one
+//! the way the app's UI drives it (ts/client/src/service/core/). Each frame's turn comes one
 //! refresh after the last on the core's clock, however long the machine takes (pace.rs),
 //! and the world's surface is drawn offscreen on a wgpu device. A test that encodes a pass
 //! by hand binds its own groups and sees one usage scope. Only the renderer's real frames
@@ -35,7 +35,7 @@ use xpute_runtime::native::{pause, Core};
 /// The refresh interval of the display the frames are paced to, 60 Hz.
 const REFRESH_MS: f64 = 1000.0 / 60.0;
 
-/// How many reads the client allows in flight at once (ts/client/src/service/origin.ts
+/// How many reads the client allows in flight at once (ts/client/src/service/platform/origin.ts
 /// `credits`).
 const CREDITS: f64 = 6.0;
 
@@ -95,7 +95,7 @@ struct Run {
 }
 
 impl Run {
-    /// Grants a turn the way the runtime does (ts/client/src/port/surface.ts `submit_grant`,
+    /// Grants a turn the way the runtime does (ts/client/src/service/core/turn.ts `submit_grant`,
     /// then @xpute/runtime's SYS_TURN) and checks what every frame must keep. Returns whether
     /// the core wants the next frame at once.
     fn frame(&mut self, interactive: bool) -> bool {
@@ -249,9 +249,9 @@ fn frames() {
         .send("SETTING_DEVELOPMENT", &[("development", V::Bool(true))]);
     run.runtime.send("GPU_READY", &[]);
     run.frame(false);
-    // The tile source, declared as port/source.ts declares it, with the place's shard alone.
-    // Every tile of the shard is a page its version leaves out (fs.rs), so the world there is
-    // sea.
+    // The tile source, declared as service/core/source.ts declares it, with the place's shard
+    // alone. Every tile of the shard is a page its version leaves out (fs.rs), so the world
+    // there is sea.
     let format = BaseLayer::ALL.map(|l| FORMAT.of(l)).to_vec();
     run.call(
         "SOURCE_DECLARE",
@@ -262,8 +262,8 @@ fn frames() {
         ],
     );
 
-    // The world's surface, opened the way the scene's place opens it (port/surface.ts,
-    // port/scene.ts).
+    // The world's surface, opened the way the scene's place opens it (service/core/surface.ts,
+    // service/core/scene.ts).
     let surface = run.call("GPU_SURFACE_OPEN", &[]);
     assert!(surface > 0, "no surface was opened");
     let surface = V::Num(f64::from(surface));

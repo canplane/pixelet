@@ -16,7 +16,7 @@ import {
 /** The core's store is tested against the same record (pxl-core
  * domain/layer/object/repository.test.rs `top_golden`). */
 const GOLDEN = new URL(
-  "../../../../../../rust/spec/golden/object/top.tsv",
+  "../../../../../../spec/golden/object/top.tsv",
   import.meta.url,
 );
 

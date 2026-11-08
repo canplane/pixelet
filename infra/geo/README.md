@@ -26,7 +26,7 @@ it fills.
 ```
 infra/geo/
 ├── coverage.json          the shards
-├── tools/
+├── tool/
 │   ├── Dockerfile         every tool the ingests run, pinned
 │   └── run                a tool, run in that image
 ├── overture/
@@ -69,8 +69,8 @@ make ingest-overture ARGS="[--type <type>]… [--shard <name>]… [--whole]"
 
 Each reads `infra/local/.env`, the scripts themselves and the Overture ingest
 through `script/with-env.sh`; no source needs a key. Every tool they run — GDAL,
-PostGIS's raster loader, psql, Overture's CLI — is `tools/`'s image's, which
-`tools/run` builds from its Dockerfile before each call, so the host needs
+PostGIS's raster loader, psql, Overture's CLI — is `tool/`'s image's, which
+`tool/run` builds from its Dockerfile before each call, so the host needs
 Docker and cargo alone. Ubuntu 24.04's are PostgreSQL 16 and PostGIS 3.4,
 db-geo's own majors. Never `down -v`: the volume is the only copy, and filling
 it again takes hours.

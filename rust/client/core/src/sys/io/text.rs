@@ -3,7 +3,7 @@
 //! Text that the platform lays out and draws, through calls to its text
 //! device (text.json TEXT_LAYOUT, TEXT_RASTER). The platform answers each
 //! call before the call returns, and writes the answer at the call's `at`
-//! (runtime.json `LAYOUT_ANSWER`, `LINE`). Each world frame keeps only the
+//! (text_answer.json `LAYOUT_ANSWER`, `LINE`). Each world frame keeps only the
 //! answers that the frame before it read. A native test has no runtime, so a
 //! text there is one line of a fixed width for each character, and it is
 //! never drawn.
@@ -15,7 +15,7 @@ use xpute_core::global::Global;
 use xpute_core::mem::off_of_slice;
 
 use crate::sys::io::runtime::door;
-use crate::sys::io::runtime_spec::{LAYOUT_ANSWER, LINE};
+use crate::sys::io::text_answer_spec::{LAYOUT_ANSWER, LINE};
 use crate::sys::io::text_spec::text::{text_layout, text_raster};
 use crate::sys::io::text_spec::{TextLayout, TextRaster};
 

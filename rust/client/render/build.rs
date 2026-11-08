@@ -926,7 +926,7 @@ fn decor_word() -> String {
     )
 }
 
-/// The tiles' uniform as every pass reads it (pxl-engine `screen::TILES_WORDS`, gpu/tiles.rs
+/// The tiles' uniform as every pass reads it (pxl-engine `screen::TILES_WORDS`, gpu/tile.rs
 /// `Tiles::words`), and the reading of a tile's word that word.rs's `screen::age` and
 /// `screen::in_damage` define. A tile's age is the number of frames since it changed, and it
 /// wraps. A tile is in damage while its age is below the uniform's `damage_frames`. Every pass

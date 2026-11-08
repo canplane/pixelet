@@ -5,7 +5,10 @@ use crate::domain::layer::terrain::fixed;
 
 #[test]
 fn machine_json_matches_layout() {
-    let note = include_str!(concat!(env!("PXL_REPO"), "/rust/client/core/machine.json"));
+    let note = include_str!(concat!(
+        env!("PXL_REPO"),
+        "/spec/client/core/sys/machine.json"
+    ));
     let mib = |bytes: u64| format!("{:.2} MiB", bytes as f64 / f64::from(1u32 << 20));
     let figures = [
         ("the fixed ranges", u64::from(FIXED_BYTES)),

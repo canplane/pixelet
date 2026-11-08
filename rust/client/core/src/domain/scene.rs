@@ -26,8 +26,8 @@ use crate::domain::scene::character::companion::{companion_animate, companion_dr
 use crate::domain::scene::character::surface::character_surface_shows;
 use crate::domain::scene::environment::environment_animate;
 use crate::domain::scene::frame::Frame;
-use crate::domain::scene::gizmo::coverage_gizmo::coverage_gizmo_draw;
-use crate::domain::scene::gizmo::frame_gizmo::frame_gizmo_draw;
+use crate::domain::scene::gizmo::coverage::coverage_gizmo_draw;
+use crate::domain::scene::gizmo::frame::frame_gizmo_draw;
 use crate::domain::scene::indicator::ghost::ghost_draw;
 use crate::domain::scene::indicator::location::{location_animate, location_draw};
 use crate::domain::scene::model::registry::Models;

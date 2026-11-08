@@ -17,8 +17,8 @@ use xpute_core::global::Global;
 
 use crate::domain::layer::Answer;
 use crate::domain::query::World;
+use crate::domain::setting::store::settings_store;
 use crate::domain::view::frame::coord::{to_world, world_to_canonical};
-use crate::domain::view::setting::store::settings_store;
 use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 
 /// The Z, in Q3 steps, that marks a point whose height is not known. It is

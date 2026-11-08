@@ -3,7 +3,7 @@
 //! Propagates the shadow map's changed tiles to the screen's tiles (screen_propagate.wgsl), as
 //! the light's own propagation takes the screen's receivers to the map's tiles
 //! (light_propagate.wgsl). It runs on the GPU in a frame where the casters that changed marked
-//! tiles of the map (gpu/tiles.rs), after the marks and before anything reads the screen's
+//! tiles of the map (gpu/tile.rs), after the marks and before anything reads the screen's
 //! words, timed in the span `propagate`. Each screen tile whose pixels' shadow taps read a
 //! marked map tile is set to have changed this frame.
 //!
@@ -34,7 +34,7 @@ use crate::gpu::api::{
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
-use crate::gpu::tiles::Tiles;
+use crate::gpu::tile::Tiles;
 
 /// What the propagate pass binds (screen_propagate.wgsl): the world's depth, the pass's
 /// uniform, the map's tile words and uniform, the screen's tile words and uniform, the depth's

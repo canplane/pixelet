@@ -6,13 +6,13 @@
 # here, and on the host's network, so DB_GEO_URL reaches db-geo as it does
 # from the host.
 #
-#   ./infra/geo/tools/run <tool> [<arg>]…
+#   ./infra/geo/tool/run <tool> [<arg>]…
 
 set -e
 
-TOOLS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$TOOLS_DIR/../../.." && pwd)"
+TOOL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$TOOL_DIR/../../.." && pwd)"
 IMAGE=pixelet-geo-tools
 
-docker build -q -t "$IMAGE" "$TOOLS_DIR" > /dev/null
+docker build -q -t "$IMAGE" "$TOOL_DIR" > /dev/null
 exec docker run --rm -i --network host -v "$REPO_ROOT:$REPO_ROOT" -w "$PWD" "$IMAGE" "$@"

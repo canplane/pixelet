@@ -10,10 +10,13 @@ use super::Output;
 use crate::root;
 
 pub fn outputs() -> Result<Vec<Output>, String> {
-    let mut out = machine::outputs(&root(), "rust/client/core/machine.json")?;
+    let mut out = machine::outputs(&root(), "spec/client/core/sys/machine.json")?;
     out.extend(protocol_outputs(
         &root(),
-        &["rust/client/core/ui.json", "rust/client/core/text.json"],
+        &[
+            "spec/client/core/door/ui.json",
+            "spec/client/core/sys/io/text.json",
+        ],
     )?);
     Ok(out
         .into_iter()

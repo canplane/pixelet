@@ -1,6 +1,6 @@
 // ts/client/src/abi/cmd/major.spec.ts
 //
-// GENERATED from rust/client/core/ui.json
+// GENERATED from spec/client/core/door/ui.json
 
 // The module a command is for: the core's, or the device's that sends it.
 

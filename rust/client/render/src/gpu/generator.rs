@@ -37,7 +37,7 @@ use crate::gpu::api::{
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::read::Read;
-use crate::gpu::tiles::Tiles;
+use crate::gpu::tile::Tiles;
 
 /// What the CPU hands the GPU's decor this frame.
 pub struct DecorFrame<'a> {

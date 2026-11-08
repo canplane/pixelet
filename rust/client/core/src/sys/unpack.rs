@@ -1,8 +1,8 @@
-// pxl-core/unpack.rs
+// pxl-core/sys/unpack.rs
 
 //! Decodes the zstd bodies a device's fetch receives. A device asks the
 //! server for zstd, the encoding the bake stores objects in, and its
-//! transport (ts/client/src/service/origin.native.ts) decodes each body here
+//! transport (ts/client/src/service/platform/origin.native.ts) decodes each body here
 //! before anything reads it. A page has no such decoder, because the browser
 //! decodes zstd itself.
 //!

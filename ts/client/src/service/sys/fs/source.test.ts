@@ -10,7 +10,7 @@ import { declaration } from "./source.ts";
 /** pxl-spec is tested against the same record (bake/source.test.rs
  * `is_version_golden`). */
 const GOLDEN = new URL(
-  "../../../../../../rust/spec/golden/bake/version.tsv",
+  "../../../../../../spec/golden/bake/version.tsv",
   import.meta.url,
 );
 

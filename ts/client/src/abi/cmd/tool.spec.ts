@@ -1,6 +1,6 @@
 // ts/client/src/abi/cmd/tool.spec.ts
 //
-// GENERATED from rust/client/core/ui.json
+// GENERATED from spec/client/core/door/ui.json
 
 // What the pointer holds: itself, the eraser, or an item to place, which its id says the kind of.
 

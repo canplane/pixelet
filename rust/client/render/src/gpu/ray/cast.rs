@@ -73,7 +73,7 @@ use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::read::Read;
 use crate::gpu::span_spec::{FrameKind, GpuSpanName};
 use crate::gpu::surface::DRAWN_CAP;
-use crate::gpu::tiles::Tiles;
+use crate::gpu::tile::Tiles;
 
 /// What the core hands the GPU's cast each frame.
 pub struct Cast<'a> {

@@ -29,5 +29,5 @@ pub mod split;
 pub mod star;
 pub mod surface;
 pub mod text;
-pub mod tiles;
+pub mod tile;
 pub mod upload;

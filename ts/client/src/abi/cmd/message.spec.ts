@@ -1,13 +1,13 @@
 // ts/client/src/abi/cmd/message.spec.ts
 //
-// GENERATED from rust/client/core/ui.json
+// GENERATED from spec/client/core/door/ui.json
 
 // A message the core raises and the UI shows.
 //
 // The core decides which message a state calls for and carries the number.
 // It never carries the words: a string that exists to be read has no reason
 // to sit in the core's memory, and the UI has the locale files already
-// (ts/client/src/locale) — the same split `strerror` is on the other side of.
+// (ts/client/src/ui/locale) — the same split `strerror` is on the other side of.
 //
 // The number is the name here, and a band is what a message is about.
 

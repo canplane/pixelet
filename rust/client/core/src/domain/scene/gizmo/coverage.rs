@@ -1,4 +1,4 @@
-// pxl-core/domain/scene/gizmo/coverage_gizmo.rs
+// pxl-core/domain/scene/gizmo/coverage.rs
 
 //! The coverage gizmo, shown with the frame gizmo under the `world_gizmo`
 //! setting and drawn as translucent debug lines over the ground. It outlines

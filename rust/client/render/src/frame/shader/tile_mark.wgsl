@@ -21,7 +21,7 @@ struct TileMarks {
 @group(0) @binding(30) var<storage, read_write> changed_at: array<atomic<u32>>;
 @group(0) @binding(31) var<uniform> tile_marks: TileMarks;
 // The tiles the frame's marks cover, as the first tile across and down and the tile just past
-// the last (gpu/tiles.rs `Tiles::new_damage_rect`).
+// the last (gpu/tile.rs `Tiles::new_damage_rect`).
 @group(0) @binding(32) var<storage, read_write> new_damage_rect: array<atomic<u32>, 4>;
 
 @fragment

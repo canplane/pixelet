@@ -1,6 +1,6 @@
 // ts/client/src/abi/cmd/edit_minor.spec.ts
 //
-// GENERATED from rust/client/core/ui.json
+// GENERATED from spec/client/core/door/ui.json
 
 // The edit's: the tool and what it takes, and a marker's draft.
 

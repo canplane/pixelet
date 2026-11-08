@@ -613,7 +613,7 @@ pub const FRAME: Frame = Frame {
             &[&CULL_SCREEN_BINDS],
         ),
         // The box the light's tiles' marks cover, written as the args of the light's gate's
-        // draw (gpu/tiles.rs `dispatch_rect_args`).
+        // draw (gpu/tile.rs `dispatch_rect_args`).
         Step::dispatch(
             "light_rect_args",
             IN_LIGHT_MARKS,

@@ -29,7 +29,7 @@ use crate::gpu::span_spec::GpuSpanName;
 /// N8AO's blue noise, `AO_NOISE_SIDE` texels a side, which a pixel reads tiled. Its four
 /// channels hold the spin of the hemisphere's samples, the offset of their distances along
 /// their directions, and the spins of the two denoise passes.
-const NOISE: &[u8] = include_bytes!("../frame/shader/blue-noise.bin");
+const NOISE: &[u8] = include_bytes!("blue_noise.bin");
 
 pub struct ScreenAo {
     noise_view: u32,

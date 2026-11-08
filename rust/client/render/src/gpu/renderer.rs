@@ -75,7 +75,7 @@ use crate::gpu::span_spec::{FrameKind, GpuSpanName, GPU_SPAN_NAMES};
 use crate::gpu::star::StarPass;
 use crate::gpu::surface::{on_surfaces_lost, surface, surfaces, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;
-use crate::gpu::tiles::{self, Damage, Tiles};
+use crate::gpu::tile::{self, Damage, Tiles};
 use crate::gpu::upload::uploads;
 use crate::look::atmosphere::{BOTTOM_RADIUS_KM, SUN_ANGULAR_RADIUS};
 use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_POLE, ENV_SUN};
@@ -592,7 +592,7 @@ pub struct Renderer {
     light_marks: Group,
     /// The light map's tiles, each as wide as a tile of the light's cast
     /// (pxl-engine `light::TILE`). A tile is claimed only in the frame it
-    /// changed in, since the map gathers nothing over frames (gpu/tiles.rs).
+    /// changed in, since the map gathers nothing over frames (gpu/tile.rs).
     light_tiles: Tiles,
     /// The uploads that the marking draws read, as the last frame drew them
     /// (gpu/pass/mark.rs).
@@ -994,7 +994,7 @@ impl Renderer {
                 }));
             }
         }
-        clip.and_then(|c| tiles::damage_of(c, width, height, tiles::DAMAGE_MARGIN))
+        clip.and_then(|c| tile::damage_of(c, width, height, tile::DAMAGE_MARGIN))
     }
 
     /// Puts into `out` the uploads that the listed marking draws read, each

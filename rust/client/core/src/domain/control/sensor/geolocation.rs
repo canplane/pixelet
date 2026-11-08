@@ -6,7 +6,7 @@
 //! trying through POSITION_UNAVAILABLE and TIMEOUT
 //! (https://www.w3.org/TR/geolocation/#watchposition-method), so nothing is
 //! retried here. A device's module re-arms its own watch where its platform
-//! ends one (ts/client/src/service/sensor.native.ts).
+//! ends one (ts/client/src/service/platform/sensor.native.ts).
 
 use crate::domain::cmd::GeolocationErrorCode;
 use crate::domain::cmd::Message;

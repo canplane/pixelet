@@ -9,7 +9,7 @@
  *
  * The core's store owns these rules (pxl-core domain/layer/object/store.rs).
  * This file is a port of them, held equal to the store by a record that the
- * tests of both read (rust/spec/golden/object/top.tsv). The rules ported are
+ * tests of both read (spec/golden/object/top.tsv). The rules ported are
  * an octkey's digits (pxl-spec space/hierarchy/morton.rs `name`), the nodes a
  * write reaches (pxl-spec space/hierarchy/sparse_tree.rs `set`), and the fold
  * (pxl-engine object.rs `fold`, `share` and `voxel`, and answer.rs `FULL`).

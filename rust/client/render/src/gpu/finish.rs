@@ -18,7 +18,7 @@ use crate::gpu::api::{
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::Surface;
-use crate::gpu::tiles::{Tiles, SIDE};
+use crate::gpu::tile::{Tiles, SIDE};
 
 pub struct Finish {
     /// `pipeline` finishes onto the canvas alone, for a character surface. `kept` finishes

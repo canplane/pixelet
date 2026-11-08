@@ -6,7 +6,7 @@ use super::*;
 use crate::bake::tile::earth;
 use xpute_kit::math::rng::SplitMix64;
 
-const GOLDEN: &str = include_str!("../../../golden/bake/terrain.tsv");
+const GOLDEN: &str = include_str!(concat!(env!("PXL_REPO"), "/spec/golden/bake/terrain.tsv"));
 
 /// A seeded generator, so that a tile's lanes are the same on every run.
 struct Rng(SplitMix64);

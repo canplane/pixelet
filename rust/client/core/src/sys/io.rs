@@ -23,9 +23,9 @@ pub mod policy;
 pub mod request;
 pub mod room;
 pub mod runtime;
-#[path = "io/runtime.spec.rs"]
-pub mod runtime_spec;
 pub mod source;
 pub mod text;
+#[path = "io/text_answer.spec.rs"]
+pub mod text_answer_spec;
 #[path = "io/text.spec.rs"]
 pub mod text_spec;

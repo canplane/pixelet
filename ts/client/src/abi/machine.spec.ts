@@ -1,6 +1,6 @@
 // ts/client/src/abi/machine.spec.ts
 //
-// GENERATED from rust/client/core/machine.json
+// GENERATED from spec/client/core/sys/machine.json
 
 /** The machine its JSON declares: the sizes a runtime may give, what a
  * reservation is counted in, the rings' sizes, where the front's header,

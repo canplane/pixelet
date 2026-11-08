@@ -1,6 +1,6 @@
 //! These tests dispatch `decor_cull_cs` (frame/shader/decor_cull.wgsl) alone and hold it to the
 //! rule its comment states. A frame through the gate draws only its claimed tiles, the tiles
-//! that changed (gpu/tiles.rs). Of each region's instances, the shader must list exactly those
+//! that changed (gpu/tile.rs). Of each region's instances, the shader must list exactly those
 //! whose ball (decor_ball.wgsl) meets the box of the claimed tiles as the frame sees it. It must
 //! write that list at the region's own place and set the region's args to the count it listed.
 //! One test runs the screen's gate under a perspective view, and the other runs the light map's

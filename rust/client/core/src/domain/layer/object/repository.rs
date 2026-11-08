@@ -4,7 +4,7 @@
 //! they come from. It is the one way the layer's records are read and
 //! written. What the view asks for arrives here, and each edit leaves from
 //! here, every write as `<key, id, ext>`. The objects are kept by their
-//! source, a mock or a server (ts/client/src/sys/fs/object.ts), below OBJECT
+//! source, a mock or a server (ts/client/src/service/sys/fs/object.ts), below OBJECT
 //! (file.json `root`); this file reads what the source serves and sends it
 //! the edits.
 //!

@@ -195,7 +195,7 @@ each source's ingest ([infra/geo/README.md](./infra/geo/README.md)).
 A development page puts two things in the browser console
 (`ts/client/src/ui/debug/console.ts`): `xpute.cmd(command, ...args)`, which
 sends the core any command by its number
-(`rust/client/core/ui.json`), and `pxl.perf`, the profiler
+(`spec/client/core/door/ui.json`), and `pxl.perf`, the profiler
 panel's `report()` and `trace()`.
 
 The agent instructions are [AGENTS.md](./AGENTS.md) and the procedures

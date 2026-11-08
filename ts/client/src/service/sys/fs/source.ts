@@ -37,7 +37,7 @@ export interface Declaration {
 
 /** A version must be one segment of a URL, so that a tile's path stays under
  * its version. The rule is pxl-spec bake/source.rs `is_version`, and both are
- * tested against rust/spec/golden/bake/version.tsv. */
+ * tested against spec/golden/bake/version.tsv. */
 function is_version(s: string): boolean {
   return (
     s.length >= 1 &&

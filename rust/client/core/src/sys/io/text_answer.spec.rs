@@ -1,10 +1,10 @@
-// pxl-core/sys/io/runtime.spec.rs
+// pxl-core/sys/io/text_answer.spec.rs
 //
-// GENERATED from spec/client/core/sys/io/runtime.json
+// GENERATED from spec/client/core/sys/io/text_answer.json
 //
 // What the platform's text writes into the core's memory as it answers the core's
-// calls TEXT_LAYOUT and TEXT_RASTER (rust/client/core/text.json, pxl-core sys/io/text.rs,
-// ts/client/src/port/text.ts), before they return.
+// calls TEXT_LAYOUT and TEXT_RASTER (spec/client/core/sys/io/text.json, pxl-core sys/io/text.rs,
+// ts/client/src/service/core/text.ts), before they return.
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.

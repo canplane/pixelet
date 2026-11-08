@@ -1,4 +1,4 @@
-//! Answers the core's files in this harness, standing in for how ts/client/src/sys/fs/
+//! Answers the core's files in this harness, standing in for how ts/client/src/service/sys/fs/
 //! binds the roots on a device. The shipped assets come from the repository: the catalog
 //! the client plugs in, and each file it names from asset/content/. The terrain is made
 //! here tile by tile, encoded as the bake writes a tile (`terrain`). The other bakes have

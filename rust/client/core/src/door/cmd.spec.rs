@@ -1,15 +1,15 @@
 // rust/client/core/src/door/cmd.spec.rs
 //
-// GENERATED from rust/client/core/ui.json
+// GENERATED from spec/client/core/door/ui.json
 
 //! The UI's protocol with the core: its commands, by number (@xpute/kit/abi/cmd.ts:
 //! `major << 8 | minor`, past xpute's majors 0x00 to 0x0F), each with the packet
 //! it carries — an XTP branch whose children are its fields, in order. A command with no
 //! fields carries no packet. The JavaScript around the core is two
 //! things to it, its runtime, which holds the turns and carries its imports to what
-//! answers them (ts/client/src/sys/), and its UI, which sends what the user
+//! answers them (ts/client/src/service/sys/), and its UI, which sends what the user
 //! does and what the place's sensors, visibility and frames tell it
-//! (ts/client/src/port/). A command's major is the module it is for.
+//! (ts/client/src/service/core/). A command's major is the module it is for.
 //!
 //! `export` is what the UI sends the core and `import` what the core posts to it, `call`
 //! one its sender waits on. Each is written and read by what this file generates, on
@@ -421,7 +421,7 @@ pub enum Command {
     TURN_GRANT = 0x1d01,
     /// What the tile source declares of itself, once the client has it: the tile root's
     /// `source`, the published one out of the bucket or the dev tile server's, read by the
-    /// client (ts/client/src/sys/fs/source.ts) and handed over as numbers and names.
+    /// client (ts/client/src/service/sys/fs/source.ts) and handed over as numbers and names.
     /// Until it comes nothing is observed: the floor is held at the zoom it names, and no
     /// tile is asked for that no shard it serves is over or under (pxl-core sys/io/source.rs).
     SOURCE_DECLARE = 0x1301,
@@ -1075,7 +1075,7 @@ impl SceneDraw {
 /// Command::SETTING_SET's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct SettingSet {
-    pub key: crate::domain::view::setting::schema_spec::SettingKey,
+    pub key: crate::domain::setting::schema_spec::SettingKey,
     /// A toggle's 0 or 1, a choice's option by its index, or a number.
     pub value: u32,
 }
@@ -1084,7 +1084,7 @@ impl SettingSet {
     pub fn read(pkt: &[u8]) -> Result<SettingSet, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SettingSet {
-            key: crate::domain::view::setting::schema_spec::SettingKey::of(integer::<u32>(
+            key: crate::domain::setting::schema_spec::SettingKey::of(integer::<u32>(
                 f.at(0)?.get_number()?,
             )?)
             .ok_or_else(|| unknown())?,

@@ -12,9 +12,9 @@ use crate::sys;
 use crate::sys::io::request;
 
 /// The golden top rows for each case's writes. The store's fold and the
-/// source's fold (ts/client/src/sys/fs/object_tree.ts) must both produce
+/// source's fold (ts/client/src/service/sys/fs/object_tree.ts) must both produce
 /// them.
-const GOLDEN: &str = include_str!("../../../../../../spec/golden/object/top.tsv");
+const GOLDEN: &str = include_str!(concat!(env!("PXL_REPO"), "/spec/golden/object/top.tsv"));
 
 /// A leaf at `zoom`, `x` shards east of the first.
 fn leaf_at(zoom: Zoom, x: i32, at: [i32; 3]) -> u128 {

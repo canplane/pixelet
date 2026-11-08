@@ -10,7 +10,7 @@
 // For any other target the script prints nothing, and the platform links the
 // core as it links any library.
 
-#[path = "src/machine.spec.rs"]
+#[path = "src/sys/machine.spec.rs"]
 mod machine;
 
 use xpute_core::wasm;
@@ -18,5 +18,5 @@ use xpute_core::wasm;
 fn main() {
     wasm::link(&machine::MACHINE.link());
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=src/machine.spec.rs");
+    println!("cargo:rerun-if-changed=src/sys/machine.spec.rs");
 }

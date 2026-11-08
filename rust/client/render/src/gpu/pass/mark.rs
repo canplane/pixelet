@@ -1,7 +1,7 @@
 // pxl-render/gpu/pass/mark.rs
 
 //! The marks of the listed draws that changed. A frame that is not drawn
-//! whole draws again only its claimed tiles (gpu/tiles.rs), and a draw that
+//! whole draws again only its claimed tiles (gpu/tile.rs), and a draw that
 //! changed claims its tiles by its mark. The mark sets the words of the
 //! screen's tiles it covers, and of the light map's tiles where the draw
 //! casts a shadow (tile_mark.wgsl). The draw is drawn twice for its mark,

@@ -69,14 +69,12 @@ struct Order {
 
 /// The core's order (ARCHITECTURE.md, "The core is one order of dependency"): a module names
 /// only what is at or below it, and neither head names the other. The top wires everything,
-/// the UI's protocol among it. The protocol's enums, which the domain reads, and an edit not
-/// yet made, which the top hands from control to the scene, stand where both heads may name
-/// them. The machine the core asks of its runtime, and the device transport's decoder, which
-/// the device's app calls, are the bottom and name none of the core. The profiler reads
-/// anything and stands beside the order, in none of its steps, and only the top, which
-/// records into it, names it.
+/// the UI's protocol among it. The protocol's enums, which the domain reads, the settings,
+/// and an edit not yet made, which the top hands from control to the scene, stand where both
+/// heads may name them. The profiler reads anything and stands beside the order, in none of its steps, and
+/// only the top, which records into it, names it.
 const CORE: &str = "rust/client/core/src/";
-const CORE_ORDER: [(&str, u8); 16] = [
+const CORE_ORDER: [(&str, u8); 15] = [
     ("turn", 7),
     ("door", 7),
     ("ui", 7),
@@ -87,12 +85,11 @@ const CORE_ORDER: [(&str, u8); 16] = [
     ("param", 5),
     ("cmd", 5),
     ("preview", 5),
+    ("setting", 5),
     ("view", 4),
     ("query", 3),
     ("layer", 2),
     ("sys", 1),
-    ("machine", 0),
-    ("unpack", 0),
 ];
 const CORE_HEADS: [&str; 2] = ["scene", "control"];
 const CORE_BESIDE: [&str; 1] = ["perf"];
@@ -124,15 +121,13 @@ const CAMERA_ORDER: [(&str, u8); 6] = [
 ];
 
 /// The view's own order (domain/view.rs): demand and the lens over the
-/// observation, over the ground under a point and the frame, over the
-/// settings.
-const VIEW_ORDER: [(&str, u8); 7] = [
+/// observation, over the ground under a point and the frame.
+const VIEW_ORDER: [(&str, u8); 6] = [
     ("demand", 3),
     ("lens", 3),
     ("observation", 2),
     ("above_ground", 1),
     ("frame", 1),
-    ("setting", 0),
     ("param", 0),
 ];
 
@@ -211,10 +206,9 @@ const CONTENT_ORDER: [(&str, u8); 9] = [
 /// protocol, under a frame's data, which the hover ghost's mesh and the paints stand on, and
 /// the device on top of all of it.
 const RENDER: &str = "rust/client/render/src/";
-const RENDER_ORDER: [(&str, u8); 8] = [
+const RENDER_ORDER: [(&str, u8); 7] = [
     ("param", 0),
     ("look", 0),
-    ("api", 0),
     ("api_spec", 0),
     ("asset", 0),
     ("frame", 1),
@@ -243,9 +237,8 @@ const SHADER_ORDER: [(&str, u8); 7] = [
 /// the draw lists, the pipelines and the surfaces, under what the passes make with them, over
 /// which the world's rays stand, then the shadow map and the passes over them, the renderer
 /// on top.
-const GPU_ORDER: [(&str, u8); 28] = [
+const GPU_ORDER: [(&str, u8); 27] = [
     ("put", 0),
-    ("span", 0),
     ("span_spec", 0),
     ("split", 0),
     ("text", 0),
@@ -257,7 +250,7 @@ const GPU_ORDER: [(&str, u8); 28] = [
     ("ao", 3),
     ("atlas", 3),
     ("mip", 3),
-    ("tiles", 3),
+    ("tile", 3),
     ("upload", 3),
     ("finish", 4),
     ("generator", 4),
@@ -643,6 +636,28 @@ fn imported(text: &str, f: &str, aliases: &[(String, String)]) -> Vec<(usize, St
         .collect()
 }
 
+/// Each file the folder's own file (`root`'s `lib.rs` or `domain.rs`, or the file named as
+/// the folder) declares by `#[path]`, with the module it declares, by which the file stands
+/// in the order (`api.spec.rs` as `api_spec`).
+fn declared(read: &dyn Fn(&str) -> Option<String>, root: &str) -> Vec<(String, String)> {
+    let decl = Regex::new(r#"#\[path\s*=\s*"([^"]+)"\]\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+(\w+)"#)
+        .expect("a declared module's pattern");
+    let folder = root.trim_end_matches('/');
+    [
+        format!("{root}lib.rs"),
+        format!("{root}domain.rs"),
+        format!("{folder}.rs"),
+    ]
+    .iter()
+    .flat_map(|parent| {
+        let dir = parent.rsplit_once('/').map_or("", |(d, _)| d);
+        decl.captures_iter(&read(parent).unwrap_or_default())
+            .map(|c| (format!("{dir}/{}", &c[1]), c[2].to_string()))
+            .collect::<Vec<_>>()
+    })
+    .collect()
+}
+
 /// Where `f` stands in `order` under `root`: its first step past `root`, or
 /// past `domain/` for the core's heads and trunk.
 fn standing(f: &str, root: &str) -> String {
@@ -665,13 +680,17 @@ fn out_of_order(files: &[&str], read: &dyn Fn(&str) -> Option<String>, o: &Order
     let level = |m: &str| o.levels.iter().find(|(n, _)| *n == m).map(|(_, l)| *l);
     let top = o.levels.iter().map(|&(_, l)| l).max().unwrap_or(0);
     let aliases = ts_aliases(read);
+    let declared = declared(read, o.root);
     let mut problems = Vec::new();
     let mut unplaced = std::collections::BTreeSet::new();
     for f in files
         .iter()
         .filter(|f| f.starts_with(o.root) && [".rs", ".ts", ".tsx"].iter().any(|e| f.ends_with(e)))
     {
-        let me = standing(f, o.root);
+        let me = declared
+            .iter()
+            .find(|(p, _)| p == f)
+            .map_or_else(|| standing(f, o.root), |(_, m)| m.clone());
         let Some(mine) = level(&me) else {
             if !["lib", "domain"].contains(&me.as_str()) && !o.beside.contains(&me.as_str()) {
                 unplaced.insert(me);
@@ -1147,6 +1166,45 @@ mod spec;"
         let names = "use crate::gpu::draw::x;";
         let found = out_of_order(&[f.as_str()], &|_| Some(names.to_string()), down);
         assert!(found.is_empty(), "{found:?}");
+    }
+
+    /// A file its folder's own file declares by `#[path]` stands as the module it declares, so
+    /// a generated file that names a module up the order is refused at its module's level.
+    #[test]
+    fn declared_file_stands_as_its_module() {
+        const LEVELS: [(&str, u8); 2] = [("top", 1), ("gen_spec", 0)];
+        let order = Order {
+            root: "rust/k/src/",
+            path: "crate",
+            levels: &LEVELS,
+            heads: &[],
+            beside: &[],
+            own: None,
+        };
+        let files = [
+            "rust/k/src/lib.rs",
+            "rust/k/src/top.rs",
+            "rust/k/src/gen.spec.rs",
+        ];
+        let read = |f: &str| {
+            Some(
+                match f {
+                    "rust/k/src/lib.rs" => {
+                        "#[path = \"gen.spec.rs\"]\npub mod gen_spec;\npub mod top;"
+                    }
+                    "rust/k/src/top.rs" => "use crate::gen_spec::x;",
+                    "rust/k/src/gen.spec.rs" => "use crate::top::y;",
+                    _ => "",
+                }
+                .to_string(),
+            )
+        };
+        let found = out_of_order(&files, &read, &order);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(
+            found[0].starts_with("rust/k/src/gen.spec.rs:1:"),
+            "{found:?}"
+        );
     }
 
     #[test]

@@ -17,5 +17,6 @@ pub mod param;
 pub mod preview;
 pub mod query;
 pub mod scene;
+pub mod setting;
 pub mod smooth;
 pub mod view;

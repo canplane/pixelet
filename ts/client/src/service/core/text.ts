@@ -1,7 +1,7 @@
 // @pxl/client/service/core/text.ts
 
 /**
- * TEXT, the text device's protocol (rust/client/core/text.json). The core's
+ * TEXT, the text device's protocol (spec/client/core/sys/io/text.json). The core's
  * calls TEXT_LAYOUT and TEXT_RASTER are answered from the platform's text
  * before they return, so what they write into the core's memory is in place
  * by the time the call returns.
@@ -11,7 +11,7 @@ import type { i32 } from "@xpute/kit/abi/word.ts";
 import { td, te } from "@xpute/kit/codec/encoding.ts";
 
 import type { TextLayout, TextRaster } from "@/abi/text.spec.ts";
-import { LAYOUT_ANSWER, LINE } from "@/abi/runtime.spec.ts";
+import { LAYOUT_ANSWER, LINE } from "@/abi/text_answer.spec.ts";
 import * as font from "@/service/platform/text.ts";
 import { mem } from "@xpute/runtime";
 

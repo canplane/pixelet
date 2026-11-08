@@ -10,7 +10,7 @@
 //! the far plane. Decor and the characters, which move every frame, are then drawn over it
 //! from the light's frame, depth only. The lit passes read the map as a plain orthographic
 //! shadow map. Where only the listed casters that changed moved, over a world the cast left
-//! as it was, the map is drawn again only in the tiles they set (gpu/tiles.rs), through a
+//! as it was, the map is drawn again only in the tiles they set (gpu/tile.rs), through a
 //! gate of its own (light_mask.wgsl), as the world's pass is. At a side of 2048 the world
 //! takes 16 MiB and the map with its stencil 20 MiB, and both exist only while the shadows
 //! are on (`Shadow::made`).
@@ -39,7 +39,7 @@ use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::put::put_mat;
 use crate::gpu::ray::LightReads;
 use crate::gpu::span_spec::GpuSpanName;
-use crate::gpu::tiles::Tiles;
+use crate::gpu::tile::Tiles;
 use crate::param::shadow::DEPTH_STEP;
 
 /// The light box's half width about its target for the effects' `reach`: the least power of

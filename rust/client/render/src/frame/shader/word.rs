@@ -406,7 +406,7 @@ pub mod screen {
     pub const DAMAGE_FRAMES: u32 = JITTERS;
 
     /// The words of the uniform the passes over the tiles read
-    /// (gpu/tiles.rs `Tiles::words`). The first four are u32s: the tiles
+    /// (gpu/tile.rs `Tiles::words`). The first four are u32s: the tiles
     /// across and down, `damage_frames`, and this frame's number. When the
     /// frame is drawn whole, `damage_frames` is u32::MAX, so every tile is
     /// claimed. The last four are f32 bits: the target's pixels across and

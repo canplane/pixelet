@@ -7,7 +7,7 @@
 //! shard by its quadkey, an asset by its load's id, the storage file by its
 //! slot, and the sphere and the objects' top and edits by names of their own.
 //! Everything past that name, such as a version, a URL or a storage key, is
-//! the client's to decide (ts/client/src/sys/fs/). A file is bytes, and how a
+//! the client's to decide (ts/client/src/service/sys/fs/). A file is bytes, and how a
 //! platform keeps them is up to its backend. A native test has no runtime
 //! and opens nothing.
 //!
@@ -31,13 +31,13 @@ use xpute_core::ipc::fs::{Fd, FsOpened};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::machine::MACHINE;
 use crate::sys::io::demand::{Source, Stream};
 use crate::sys::io::file_spec::{format, object, root, storage};
 use crate::sys::io::param::{MAX_CREDITS, WRITES_A_TURN};
 use crate::sys::io::room::Refusal;
 use crate::sys::io::runtime::{door, turn};
 use crate::sys::io::{fetch, loader};
+use crate::sys::machine::MACHINE;
 use crate::sys::sched::edge::request_world_tick;
 
 pub enum StorageRead {

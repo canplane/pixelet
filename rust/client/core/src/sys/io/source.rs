@@ -3,7 +3,7 @@
 //! The tile source's declaration, made once at boot (`SOURCE_DECLARE`). The
 //! source is the published bake's `source` (script/publish.py), or the dev
 //! tile server's in the same shape, and the client hands over the core's part
-//! of it (ts/client/src/sys/fs/source.ts): the zoom the floor is held at, the
+//! of it (ts/client/src/service/sys/fs/source.ts): the zoom the floor is held at, the
 //! format each kind is in, and the shards served. A tile that no served shard
 //! is over or under is never asked for. The versions the source names stay
 //! with the client.

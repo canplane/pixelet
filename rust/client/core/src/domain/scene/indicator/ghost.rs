@@ -25,7 +25,7 @@ use crate::domain::preview::{Ghost, GhostBox};
 use crate::domain::scene::column::GroupColumns;
 use crate::domain::scene::decor::asset::{decor_model, decor_skin};
 use crate::domain::scene::transform::Transform;
-use crate::domain::view::setting::store::settings_store;
+use crate::domain::setting::store::settings_store;
 use xpute_core::global::Global;
 
 pub const GHOST_OPACITY: f32 = 0.5;

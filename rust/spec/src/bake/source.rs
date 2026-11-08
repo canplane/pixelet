@@ -16,8 +16,8 @@ pub fn key(name: &str) -> Option<Quadrant> {
 }
 
 /// A version is one segment of a URL, so a tile's name stays under it. The client's source
-/// holds the same rule (ts/client/src/sys/fs/source.ts), and both are held to one record
-/// (golden/bake/version.tsv).
+/// holds the same rule (ts/client/src/service/sys/fs/source.ts), and both are held to one record
+/// (spec/golden/bake/version.tsv).
 pub fn is_version(version: &str) -> bool {
     !version.is_empty()
         && version.len() <= VERSION_BYTES

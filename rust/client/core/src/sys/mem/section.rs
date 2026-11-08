@@ -19,7 +19,7 @@
 use xpute_core::global::Global;
 use xpute_core::mem::section::Section;
 
-use crate::machine::MACHINE;
+use crate::sys::machine::MACHINE;
 
 static FIXED: Global<Option<Section>> = Global::new();
 

@@ -225,9 +225,9 @@ pub fn flag(c: Cursor<'_>) -> bool {
     c.get_bool().expect("a bool")
 }
 
-/// A setting's number by its key (spec/client/core/domain/view/setting/schema.json).
+/// A setting's number by its key (spec/client/core/domain/setting/schema.json).
 pub fn setting(key: &str) -> u32 {
-    let j = json("spec/client/core/domain/view/setting/schema.json");
+    let j = json("spec/client/core/domain/setting/schema.json");
     j["SETTING"][key]["number"]
         .as_u64()
         .unwrap_or_else(|| panic!("no setting {key}")) as u32

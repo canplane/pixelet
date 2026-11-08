@@ -43,9 +43,9 @@ use crate::domain::control::param::{CLIMB_PASSES, COLLISION_STEP_SAMPLES};
 use crate::domain::control::param::{EYE_CLEARANCE_U, MIN_DIST, NEAREST_DIST};
 use crate::domain::query::changes::Memo;
 use crate::domain::query::{finest, Hit, HitKind, Ray, World};
+use crate::domain::setting::store::{settings_store, OrbitObstacleMode};
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::param::NEAR;
-use crate::domain::view::setting::store::{settings_store, OrbitObstacleMode};
 use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 
 /// An orbit pose. It holds the pivot as well as the offset, because the eye

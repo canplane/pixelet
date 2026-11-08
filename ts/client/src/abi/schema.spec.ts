@@ -1,6 +1,6 @@
 // @pxl/client/abi/schema.spec.ts
 //
-// GENERATED from spec/client/core/domain/view/setting/schema.json
+// GENERATED from spec/client/core/domain/setting/schema.json
 //
 // Every setting the app has, declared once: its default, its kind, and
 // where it is shown, its `section`: one of the settings sheet's, or
@@ -194,7 +194,7 @@ export const SETTING = {
     default: false,
     section: "debug",
   },
-  /** Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/gizmo/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/gizmo/coverage_gizmo.rs). */
+  /** Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/gizmo/frame.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/gizmo/coverage.rs). */
   world_gizmo: {
     key: 15 as number,
     kind: "toggle",
@@ -389,7 +389,7 @@ export const SETTING_PRODUCTION = {
     default: false,
     section: "debug",
   },
-  /** Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/gizmo/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/gizmo/coverage_gizmo.rs). */
+  /** Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/gizmo/frame.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/gizmo/coverage.rs). */
   world_gizmo: {
     key: 15 as number,
     kind: "toggle",

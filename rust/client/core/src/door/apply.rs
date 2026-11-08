@@ -13,6 +13,7 @@ mod perf;
 mod scene;
 mod sensor;
 mod setting;
+mod source;
 mod surface;
 pub(super) mod turn;
 
@@ -88,7 +89,7 @@ impl ui::Exports for State {
         turn::grant(c)
     }
     fn source_declare(&mut self, c: abi::SourceDeclare<'_>) -> Outcome {
-        fs::declare(c)
+        source::declare(c)
     }
     fn input_pointer(&mut self, c: abi::InputPointer) -> Outcome {
         input::pointer(c)

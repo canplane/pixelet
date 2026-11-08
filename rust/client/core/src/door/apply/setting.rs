@@ -4,10 +4,10 @@
 
 use super::State;
 use super::{ask_turn, refuse_unless};
-use crate::domain::view::setting::store::are_settings_loaded;
-use crate::domain::view::setting::store::set_development;
-use crate::domain::view::setting::store::settings_store;
-use crate::domain::view::setting::store::SettingKey;
+use crate::domain::setting::store::are_settings_loaded;
+use crate::domain::setting::store::set_development;
+use crate::domain::setting::store::settings_store;
+use crate::domain::setting::store::SettingKey;
 use crate::door::cmd as abi;
 use crate::perf::window::perf_follow;
 use xpute_core::ipc::door::Outcome;

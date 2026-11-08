@@ -1,6 +1,6 @@
 // ts/client/src/abi/cmd.spec.ts
 //
-// GENERATED from rust/client/core/ui.json
+// GENERATED from spec/client/core/door/ui.json
 
 /**
  * The UI's protocol with the core: its commands, by number (@xpute/kit/abi/cmd.ts:
@@ -8,9 +8,9 @@
  * it carries — an XTP branch whose children are its fields, in order. A command with no
  * fields carries no packet. The JavaScript around the core is two
  * things to it, its runtime, which holds the turns and carries its imports to what
- * answers them (ts/client/src/sys/), and its UI, which sends what the user
+ * answers them (ts/client/src/service/sys/), and its UI, which sends what the user
  * does and what the place's sensors, visibility and frames tell it
- * (ts/client/src/port/). A command's major is the module it is for.
+ * (ts/client/src/service/core/). A command's major is the module it is for.
  *
  * `export` is what the UI sends the core and `import` what the core posts to it, `call`
  * one its sender waits on. Each is written and read by what this file generates, on

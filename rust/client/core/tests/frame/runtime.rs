@@ -1,13 +1,13 @@
 //! The runtime's end of the core's rings, kept the way @xpute/runtime's doorbell and the
-//! client's port keep it (xpute/ts/runtime/src/ipc/doorbell.ts, ts/client/src/port/). It
-//! lays the front before the first turn, sends the UI's commands and waits for its calls'
-//! answers. Everything a turn posts is read before the next turn is rung: the file calls
-//! are answered (fs.rs), the stop report is kept, and the snapshot is read where the core
-//! names it.
+//! client's services keep it (xpute/ts/runtime/src/ipc/doorbell.ts,
+//! ts/client/src/service/core/). It lays the front before the first turn, sends the UI's
+//! commands and waits for its calls' answers. Everything a turn posts is read before the next
+//! turn is rung: the file calls are answered (fs.rs), the stop report is kept, and the
+//! snapshot is read where the core names it.
 
 use std::collections::BTreeMap;
 
-use pxl_core::machine::MACHINE;
+use pxl_core::sys::machine::MACHINE;
 use xpute_core::ipc::frame::{ACKREQ, PROGRAM_MAJOR, RES};
 use xpute_core::ipc::head;
 use xpute_core::ipc::ring::Ring;
@@ -82,7 +82,7 @@ impl Runtime {
             cq,
             next_call: 0,
             replies: BTreeMap::new(),
-            ui: Protocol::load("rust/client/core/ui.json"),
+            ui: Protocol::load("spec/client/core/door/ui.json"),
             xpute: Protocol::load_each(&["xpute/spec/abi/sys.json", "xpute/spec/abi/gpu.json"]),
             files: Files::new(),
             fs,

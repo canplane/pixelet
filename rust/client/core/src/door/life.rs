@@ -7,7 +7,7 @@ use super::{on_runtime_attached, State};
 use crate::domain::control::sensor::device_orientation;
 use crate::domain::control::sensor::geolocation;
 use crate::domain::layer::object::repository;
-use crate::domain::view::setting::store::settings_open;
+use crate::domain::setting::store::settings_open;
 use crate::sys::sched::edge;
 use xpute_core::ipc::door::{Life, Outcome};
 

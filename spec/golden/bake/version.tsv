@@ -1,6 +1,6 @@
 # What a tile source's declaration may call a version: one segment of a URL, at most
 # VERSION_BYTES of VERSION_CHARS (spec/spec/bake/publication.json). Read by pxl-spec
-# (bake/source.test.rs) and by the client's source (ts/client/src/sys/fs/source.test.ts),
+# (bake/source.test.rs) and by the client's source (ts/client/src/service/sys/fs/source.test.ts),
 # which refuses a declaration that names another.
 case.0.version	1
 case.0.is_version	true

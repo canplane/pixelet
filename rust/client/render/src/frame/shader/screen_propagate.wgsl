@@ -4,7 +4,7 @@
 // propagation turned round: light_propagate.wgsl `light_propagate_cs` takes the screen's
 // receivers to the light's tiles, and this pass takes the map tiles that changed this frame
 // back to the pixels that read them. Where any texel a pixel's shadow taps read lies in a map
-// tile that changed (gpu/tiles.rs), the pixel's screen tile takes this frame's number, as a
+// tile that changed (gpu/tile.rs), the pixel's screen tile takes this frame's number, as a
 // mark would set it (screen_mark.wgsl). The host reads nothing back: it already counts the
 // frame this pass runs in as marked, from the marks it drew.
 //
@@ -40,12 +40,12 @@ struct Propagate {
 // side, as the last world pass left them (screen_bound.wgsl).
 @group(0) @binding(6) var<storage, read> bounds: array<vec2f>;
 // The map tiles the frame's marks cover, as the first tile across and down and the tile just
-// past the last (gpu/tiles.rs `Tiles::new_damage_rect`). The host hands it, and the drawn marks
+// past the last (gpu/tile.rs `Tiles::new_damage_rect`). The host hands it, and the drawn marks
 // widen it (tile_mark.wgsl). No map tile outside it changed this frame.
 @group(0) @binding(7) var<storage, read> new_damage_rect: vec4u;
 
 // Whether tile `t` of the map changed this frame, as its word says. A map tile is in damage
-// only in the frame it changed (gpu/tiles.rs `damage_frames`).
+// only in the frame it changed (gpu/tile.rs `damage_frames`).
 fn propagate_changed(t: vec2i) -> bool {
   let n = vec2i(light_tiles.count.xy);
   if (any(t < vec2i(0)) || any(t >= n)) {

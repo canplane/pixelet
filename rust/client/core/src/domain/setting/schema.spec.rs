@@ -1,6 +1,6 @@
-// pxl-core/domain/view/setting/schema.spec.rs
+// pxl-core/domain/setting/schema.spec.rs
 //
-// GENERATED from spec/client/core/domain/view/setting/schema.json
+// GENERATED from spec/client/core/domain/setting/schema.json
 //
 // Every setting the app has, declared once: its default, its kind, and
 // where it is shown, its `section`: one of the settings sheet's, or
@@ -263,7 +263,7 @@ pub enum SettingKey {
     view = 13,
     /// The performance panel, recording while it is on (perf/window.rs `perf_follow`).
     perf = 14,
-    /// Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/gizmo/frame_gizmo.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/gizmo/coverage_gizmo.rs).
+    /// Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/gizmo/frame.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/gizmo/coverage.rs).
     world_gizmo = 15,
     person = 17,
     pet = 18,

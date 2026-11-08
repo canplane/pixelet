@@ -1,4 +1,4 @@
-// pxl-render/gpu/tiles.rs
+// pxl-render/gpu/tile.rs
 
 //! The tiles by which a frame that is not drawn whole draws again only what changed, on the
 //! screen and on the light's map alike (word.rs `screen`). A tile is `side` pixels a side. Its

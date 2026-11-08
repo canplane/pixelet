@@ -1,6 +1,6 @@
-// rust/client/core/src/machine.spec.rs
+// rust/client/core/src/sys/machine.spec.rs
 //
-// GENERATED from rust/client/core/machine.json
+// GENERATED from spec/client/core/sys/machine.json
 
 //! The machine its JSON declares (xpute-core machine.rs), which a build
 //! script includes too as it links the module.

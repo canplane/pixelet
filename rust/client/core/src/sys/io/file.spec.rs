@@ -3,7 +3,7 @@
 // GENERATED from spec/client/core/sys/io/file.json
 //
 // The core's files: the roots it opens them below, the names below each and what a
-// file holds (pxl-core sys/io/file.rs, ts/client/src/sys/fs/).
+// file holds (pxl-core sys/io/file.rs, ts/client/src/service/sys/fs/).
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
@@ -19,7 +19,7 @@
 /// bake, numbered by its kind (pxl-spec bake/publication.spec.rs). Below every root a path is
 /// one name: a tile's quadkey (pxl-spec space/layer/quadrant.rs), or what the root says. What it
 /// is called and where past that, a tile's version and URL, a storage key, is what the client
-/// (ts/client/src/sys/fs/) binds the root to, `@xpute/runtime` carrying the open there.
+/// (ts/client/src/service/sys/fs/) binds the root to, `@xpute/runtime` carrying the open there.
 pub mod root {
     /// The platform's storage; a path is a storage file's id in decimal (`storage`); where the platform holds a slot is the client's choice.
     pub const STORAGE: u32 = 256;
@@ -84,7 +84,7 @@ pub mod top {
 /// The files the core keeps below STORAGE, by slot. What a slot holds is its
 /// owner's, written whole, its slot's `format` first (pxl-core sys/io/file.rs).
 pub mod storage {
-    /// The settings' overrides (domain/view/setting/store.rs).
+    /// The settings' overrides (domain/setting/store.rs).
     pub const SETTINGS: u32 = 0;
 }
 

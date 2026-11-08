@@ -686,7 +686,7 @@ pub fn pinned_tiles() -> &'static [Quadrant] {
 
 /// A copy of the entries of the eye's clip level at `cell_zoom`, each brick
 /// present or still wanted (`Entry`), or none while its center is not laid
-/// out. It serves a debug reader (domain/scene/gizmo/coverage_gizmo.rs) and
+/// out. It serves a debug reader (domain/scene/gizmo/coverage.rs) and
 /// changes nothing.
 pub fn eye_entries(cell_zoom: Zoom) -> Option<[Entry; ENTRIES as usize]> {
     let (w, clip_level) = (

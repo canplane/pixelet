@@ -1,7 +1,7 @@
-// pxl-core/domain/view/setting/store.test.rs
+// pxl-core/domain/setting/store.test.rs
 
 use super::*;
-use crate::domain::view::setting::schema_spec::SettingKind;
+use crate::domain::setting::schema_spec::SettingKind;
 use crate::sys;
 use crate::sys::io::file_spec::format;
 use xpute_kit::status::errno::Errno;
