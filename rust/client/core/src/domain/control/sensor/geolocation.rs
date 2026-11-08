@@ -102,9 +102,9 @@ pub fn geolocation_fix(lon: f64, lat: f64, alt: Option<f64>, accuracy: f64, cour
         .cell_of(LEAF_ZOOM, &epsg4326::project(&[lon, lat, 0.0]))
         .tile()
         .rect();
-    let [lon, lat, _] =
+    let [base_lon, base_lat, _] =
         epsg4326::from_mercator(&[epsg3857::merc_from_u(x0), epsg3857::merc_from_u(y0), 0.0]);
-    let alt = alt.map(|h| h - epsg4326::geoid_m(lon, lat));
+    let alt = alt.map(|h| h - epsg4326::geoid_m(base_lon, base_lat));
     device_location_store().set_location([lon, lat], alt, accuracy, course);
 }
 
@@ -132,3 +132,7 @@ pub fn geolocation_err(code: GeolocationErrorCode) {
 pub fn take_geolocation_command() -> Option<GeolocationCommand> {
     geolocation().command.take()
 }
+
+#[cfg(test)]
+#[path = "geolocation.test.rs"]
+mod test;
