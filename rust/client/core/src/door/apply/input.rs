@@ -1,6 +1,7 @@
 // pxl-core/door/apply/input.rs
 
-//! INPUT: the input's: the pointer, the wheel, the held movement, a tracker's pose.
+//! The INPUT major's commands: the pointer, the wheel, the held movement
+//! keys, and a tracker's pose.
 
 use super::State;
 use super::{ask_turn, refuse_unless};
@@ -34,7 +35,7 @@ pub(super) fn pointer(c: abi::InputPointer) -> Outcome {
             camera_pointer_up(c.pointer_type, c.id);
         }
     }
-    // A pinch points at nothing to place.
+    // A pinch does not point at anything the tool could place.
     if pinching() {
         clear_hover_coord();
     }
@@ -52,7 +53,8 @@ pub(super) fn r#move(c: abi::InputMove) -> Outcome {
 }
 
 pub(super) fn xr_pose(s: &mut State, c: abi::InputXrPose) -> Outcome {
-    // A unit quaternion by the protocol; one of no length turns nothing.
+    // The protocol sends a unit quaternion. One of zero length describes no
+    // rotation and is refused.
     refuse_unless(
         c.qx * c.qx + c.qy * c.qy + c.qz * c.qz + c.qw * c.qw > 0.0,
         Errno::EINVAL,

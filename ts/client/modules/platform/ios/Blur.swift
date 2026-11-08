@@ -3,13 +3,14 @@
 import ExpoModulesCore
 import UIKit
 
-/// The system's blur a see-through backing stands on
-/// (ts/client/src/ui/component/backing.ios.tsx): the thinnest of the system's
-/// materials, whole from the start, since the UI's fill is laid over it
-/// and a thicker one, the chrome iOS's own bars are drawn in, hid all that
-/// passed under it. Not expo-blur's view, which
-/// sets its effect in `draw(_:)` to stop an animation part way for its
-/// intensity: iOS 26 never draws a visual effect view, so it blurs nothing.
+/// The system blur that a see-through backing stands on
+/// (ts/client/src/ui/component/backing.ios.tsx). It is the thinnest of the
+/// system's materials, at full strength from the start. The UI lays its own
+/// fill over it, and a thicker material, such as the chrome iOS draws its own
+/// bars in, hides everything that passes under it. expo-blur's view is not
+/// used: it sets its effect in `draw(_:)`, to stop an animation part way for
+/// its intensity, and iOS 26 never calls `draw(_:)` on a visual effect view,
+/// so that view blurs nothing.
 class Blur: ExpoView {
   private let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialLight))
 

@@ -7,7 +7,7 @@
 //!
 //!   cargo run --profile server -p pxl-geo-bake --bin bake_terrain -- [flags]
 //!
-//!   --stage <s>          leaf, fold, commit or publish; repeatable (default: the first three)
+//!   --step <s>           leaf, fold, commit or publish; repeatable (default: the first three)
 //!   --shard <name>       bake that shard's leaves, repeatable (default: every shard of the coverage)
 //!   --out <dir>          the set (default ./out/terrain), staged beside it in <dir>.stage
 //!   --concurrency <n>    parallel tiles, one connection each (default 8)
@@ -62,11 +62,11 @@ fn zigzag(band: &[[i32; 2]]) -> Vec<[i32; 2]> {
 fn land(client: &mut Client, candidates: &[[i32; 2]]) -> Result<Vec<[i32; 2]>, String> {
     let mut out = Vec::new();
     for batch in candidates.chunks(CLASSIFY_BATCH) {
-        for (&tile, drawn) in batch
+        for (&tile, grounded) in batch
             .iter()
             .zip(has_ground(client, batch).map_err(|e| e.to_string())?)
         {
-            if drawn {
+            if grounded {
                 out.push(tile);
             }
         }
@@ -98,12 +98,12 @@ fn run() -> Result<(), String> {
                     1000,
                     |[x, y]| format!("{x}:{y}"),
                     || Ok((connect(&src, &raster)?, separation::source::Walk::default())),
-                    |(db, held), tile| {
-                        held.keep_around(tile);
+                    |(db, walk), tile| {
+                        walk.keep_around(tile);
                         let reader = &mut separation::Reader {
                             client: &mut db.client,
                             repo: &db.repo,
-                            store: held,
+                            store: walk,
                         };
                         let terrain = bake_leaf(reader, tile)?;
                         let at = Quadrant::new(LEAF_ZOOM, tile);

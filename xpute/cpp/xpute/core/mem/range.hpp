@@ -1,9 +1,9 @@
 // cpp/xpute/core/mem/range.hpp
 
-// A range of the core's own ahead of its heap: placed once at boot, never
-// freed, sized at compile time. Whoever lays the memory out hands each owner
-// its range once (`OwnedRange`); a range is read only through `arr` and
-// `Section::at`, which check its end.
+// The core's fixed ranges: ranges of its own memory below its heap, sized
+// at compile time, placed once at boot and never freed. Whoever lays out
+// the memory hands each owner its range once (`OwnedRange`). A range is
+// read only through `arr` and `Section::at`, which check its end.
 
 #pragma once
 
@@ -18,7 +18,8 @@
 
 namespace xpute {
 
-// One owner's range, handed in once at boot; asking before is a bug.
+// One owner's range, handed in once at boot. Asking for it before then is a
+// bug.
 class OwnedRange {
   public:
     void set(Section s) noexcept { held_ = s; }
@@ -29,18 +30,20 @@ class OwnedRange {
     std::optional<Section> held_;
 };
 
-// A cache line, which an array is laid on.
+// A cache line. Arrays are laid out in whole lines.
 inline constexpr std::size_t LINE_BYTES = 64;
 
-// `cnt` of `size` bytes, rounded up to a whole cache line, as an array is laid.
+// The bytes an array of `cnt` items of `size` bytes takes, rounded up to
+// whole cache lines.
 constexpr std::uint32_t arr_bytes(std::size_t cnt, std::size_t size) noexcept {
     return static_cast<std::uint32_t>((cnt * size + LINE_BYTES - 1) / LINE_BYTES * LINE_BYTES);
 }
 
-// `n` of `T` from `off` into `s`, in the core's own memory. Sizes are fixed at
-// compile time, so out of bounds or misaligned is a bug, not a refusal. The
-// caller holds those bytes alone while it keeps the array, and they are a valid
-// `T` (zeroed, for plain numbers).
+// An array of `n` items of `T`, at `off` into `s` in the core's own memory.
+// Sizes are fixed at compile time, so an array out of bounds or misaligned
+// is a bug, not a refusal. The caller must hold those bytes alone for as
+// long as it keeps the array, and they must be valid `T`s (zeroed, for
+// plain numbers).
 template <class T> std::span<T> arr(Section s, std::uint32_t off, std::size_t n) noexcept {
     std::uint64_t bytes = std::uint64_t{n} * sizeof(T);
     ensure(bytes <= UINT32_MAX, Errno::enotrecoverable, bytes);

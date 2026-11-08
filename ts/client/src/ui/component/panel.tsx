@@ -25,20 +25,22 @@ import { ease, SLIDE, SLIDE_AWAY } from "@/ui/component/motion/transition.ts";
 import { LABEL } from "@/ui/component/palette.ts";
 import { alpha, chrome, color, layer, material } from "@/ui/component/theme.ts";
 import { touches } from "@/ui/component/touch.ts";
-import { useSafeArea } from "@/service/safe-area.ts";
-import { useWindowSize } from "@/service/viewport.ts";
+import { useSafeArea } from "@/service/platform/safe-area.ts";
+import { useWindowSize } from "@/service/platform/viewport.ts";
 
 export const PANEL_CONTROL = chrome.target;
-/** iOS 26 Maps' sheet inset, for the top row's controls and the content's sides. */
+/** The inset of iOS 26 Maps' sheet. The top row's controls and the content
+ * keep this distance from the sheet's sides. */
 export const PANEL_EDGE = 16;
-/** Above the top row: the band the sheet's handle stands in. */
+/** The height of the band above the top row, where the sheet's handle stands. */
 export const PANEL_TOP = 20;
 
 export const PANEL_SECTION_GAP = 24;
 export const PANEL_HEAD_HEIGHT = PANEL_TOP + PANEL_CONTROL + PANEL_EDGE;
 export const PANEL_CONTENT_TOP = PANEL_TOP + PANEL_CONTROL + PANEL_SECTION_GAP;
 
-/** Concentric with the round controls in the top row. */
+/** The sheet's corner radius, which makes its corners concentric with the
+ * round controls in the top row. */
 export const SHEET_RADIUS = PANEL_EDGE + PANEL_CONTROL / 2;
 
 export interface PanelProps {
@@ -48,13 +50,16 @@ export interface PanelProps {
   children: ReactNode;
 }
 
-/** A runtime drops a panel only after `gone`, once it has slid away. */
+/** The panel's host tells it whether it is open. The panel calls `gone` once
+ * it has slid away, and only then does the host stop drawing it. */
 export const PanelPresence = createContext<{ open: boolean; gone: () => void }>(
   { open: true, gone: () => {} },
 );
 
-/** The top row: the sheet's own control where a title would stand — its tabs or
- * its search field — and close. The panel's `label` names the sheet. */
+/** The sheet's top row. The sheet's own control, such as its tabs or its
+ * search field, stands where a title would, and the close button follows it.
+ * The row shows no title: the panel's `label` names the sheet to assistive
+ * technology. */
 export function PanelBar({
   onClose,
   children,
@@ -106,7 +111,9 @@ function PanelClose({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** A tab's scroller under the tabs; keyed per tab, since a shared one kept its offset across a switch. */
+/** The scroller of one tab, under the tabs. Each tab must give its scroller
+ * its own key: a scroller shared by the tabs keeps its offset when the tab
+ * changes. */
 export function PanelScroll({ children }: { children: ReactNode }) {
   const { bottom } = useSafeArea();
   return (
@@ -151,20 +158,22 @@ const styles = StyleSheet.create({
   scroll: { flex: 1, overflow: "hidden" },
 });
 
-/**
- * A panel on a page and on Android: a bottom sheet over a dimmed world, dragged by its header only. Always laid
- * out full height and slid down to show half, so drags animate transform
- * only. Max width 540, an iPad form sheet's.
- */
+/** The width of an iPad form sheet, which the sheet never exceeds. */
 const MAX_WIDTH = 540;
 const WHOLE_GAP = 12;
-/** Points per millisecond. */
+/** The speed, in points per millisecond, past which a released drag flings
+ * the sheet on to the next stop. */
 const FLING = 0.5;
 const FOLLOW = ease(0, [0, 0, 1, 1]);
-/** An iPhone sheet's grabber. */
+/** The size of an iPhone sheet's grabber. */
 const HANDLE = { width: 36, height: 5 };
 const TAP_SLOP = 8;
 
+/**
+ * A panel on a page and on Android: a bottom sheet over a dimmed world, which
+ * only its header drags. The sheet is always laid out at full height and slid
+ * down to show half, so that a drag animates nothing but a transform.
+ */
 export function Panel({ label, onClose, half, children }: PanelProps) {
   const window = useWindowSize();
   const { top } = useSafeArea();
@@ -174,7 +183,9 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
   const halfHeight = window.height / 2;
 
   const [full, setFull] = useState(!half);
-  // Full height as soon as it grows, back at half once it has slid down, so the scroll reaches its end.
+  // The body is as tall as the part of the sheet in view, so that its scroll
+  // can reach its end. It grows as soon as the sheet does, and shrinks only
+  // once the sheet has slid down to half.
   const [bodyFull, setBodyFull] = useState(full);
   const [drag, setDrag] = useState<f64 | null>(null);
   const shown = full ? fullHeight : halfHeight;
@@ -202,8 +213,9 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
 
   const responder = useRef(
     PanResponder.create({
-      // Claimed at the press: a drag up leaves the sheet, and its moves would go
-      // to the world. The handle is no button, which would take its drags too.
+      // The header claims a touch at the press. A drag upward soon leaves the
+      // sheet, and its moves would then go to the world. The handle is not a
+      // button, because a button would take its drags as well.
       onStartShouldSetPanResponder: (e) =>
         e.nativeEvent.pageY - live.current.top < PANEL_HEAD_HEIGHT,
       onPanResponderTerminationRequest: () => false,

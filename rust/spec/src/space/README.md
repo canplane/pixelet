@@ -50,7 +50,7 @@ zoom is finer, one zoom finer is half as wide, and the unit itself is z24.
 | z27  | 1/8u | a placed object's finest cell                                         |
 | z24  | 1u   | a ground cell, the canonical unit                                     |
 | z15  | 512u | a leaf tile, the finest the ground is fetched at                      |
-| z4   |      | the coarsest tile, where the pyramid stops (pxl-engine `TOP_ZOOM`) |
+| z4   |      | the coarsest tile, where the pyramid stops (pxl-engine `MIN_ZOOM`) |
 
 The zooms are size and nothing else — the rightmost column is this program's
 arrangement, not the number's meaning. A zoom finer than z24 is a fraction of a

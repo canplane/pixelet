@@ -7,8 +7,8 @@ use crate::space::layer::lattice::GROUND;
 use crate::space::layer::lattice::{demand_dist, draw_dist};
 use crate::space::layer::quadrant::*;
 
-/// The ground tile a distance folds from, past the pyramid's ends too, as
-/// the rule reads it: squared.
+/// The ground tile zoom a distance folds from, past the pyramid's ends too, read as the rule
+/// reads it, from the squared distance.
 fn zoom_at(r: f64) -> i32 {
     GROUND.tile_zoom_of_grid(cell_zoom_at(r * r))
 }
@@ -40,7 +40,7 @@ fn demands(zoom: Zoom, foot: [f64; 2]) -> Vec<Quadrant> {
 
 #[test]
 fn demand_within_dist() {
-    for zoom in TOP_ZOOM..=LEAF_ZOOM {
+    for zoom in MIN_ZOOM..=LEAF_ZOOM {
         for foot in feet(zoom) {
             let n = demands(zoom, foot).len() as u32;
             assert!(n <= GROUND_DEMAND_TILES, "z{zoom} at {foot:?}: {n} tiles");
@@ -50,7 +50,7 @@ fn demand_within_dist() {
 
 #[test]
 fn parents_in_coarser() {
-    for zoom in TOP_ZOOM + 1..=LEAF_ZOOM {
+    for zoom in MIN_ZOOM + 1..=LEAF_ZOOM {
         for foot in feet(zoom) {
             let above = demands(zoom - 1, foot);
             for p in demands(zoom, foot) {
@@ -67,7 +67,7 @@ fn parents_in_coarser() {
 /// asking for a zoom.
 #[test]
 fn fault_bound_zoom_end() {
-    for zoom in TOP_ZOOM..=LEAF_ZOOM {
+    for zoom in MIN_ZOOM..=LEAF_ZOOM {
         let r = demand_dist(GROUND, zoom) / CLIP_MARGIN;
         assert_eq!(
             zoom_at(short_of(r)),
@@ -93,7 +93,7 @@ fn zoom_by_dist() {
             assert_eq!(zoom_at(libm::ldexp(r, n)), z - n, "{r} scaled by 2^{n}");
         }
     }
-    for z in TOP_ZOOM as i32..=LEAF_ZOOM as i32 + 3 {
+    for z in MIN_ZOOM as i32..=LEAF_ZOOM as i32 + 3 {
         assert_eq!(
             zoom_at(split_dist(GROUND.grid_zoom(z as Zoom))),
             z,
@@ -112,7 +112,7 @@ fn zoom_by_dist() {
 /// and at it the coarser's.
 #[test]
 fn view_zoom_extent() {
-    for zoom in TOP_ZOOM..=LEAF_ZOOM {
+    for zoom in MIN_ZOOM..=LEAF_ZOOM {
         let r = draw_dist(GROUND, zoom);
         assert_eq!(
             zoom_at(short_of(r)),

@@ -1,21 +1,21 @@
 // pxl-render/samples.wgsl
 
-// The samples as the queue's items (queue_walk.wgsl, queue_last.wgsl), an observer's as its
-// sample.eye.wgsl or sample.light.wgsl lays them: each a ray off its cell's start, parked in its
-// own words between its run's walks (pxl-engine `beam::SAMPLE_PARKED`), its hit put there once
-// it ends (sample_put.wgsl).
+// An observer's samples as the queue's items (queue_walk.wgsl, queue_last.wgsl), laid out as
+// sample.eye.wgsl or sample.light.wgsl lays them. Each item is a sample's ray, which starts at
+// its cell's start. Between its run's walks the ray is parked in the sample's own words
+// (pxl-engine `beam::SAMPLE_PARKED`), and once it ends its hit is written there
+// (sample_put.wgsl).
 
-/// A sample by its item word, its column under its row.
 fn sample_of(item: u32) -> vec2<u32> {
   return vec2<u32>(item & 0xffffu, item >> 16u);
 }
 
-/// The items listed (listed.wgsl).
+/// How many items the list holds (item_list.wgsl).
 fn item_count() -> u32 {
-  return samples_listed();
+  return sample_cnt();
 }
 
-/// The item at place `k` of the list (listed.wgsl).
+/// The item at place `k` of the list (item_list.wgsl).
 fn item_at(k: u32) -> u32 {
   let s = sample_queued(k);
   return s.x | (s.y << 16u);
@@ -29,8 +29,10 @@ fn item_start(item: u32, aim: Aim) -> Start {
   return sample_start(aim, sample_of(item));
 }
 
-/// A sample's ray parked at its node `corner`, `zoom`, `roots`, `t` along it, `step` steps
-/// taken, in its own words (`beam::SAMPLE_PARKED_T`, `beam::SAMPLE_PARKED_STATE`; parked.wgsl).
+/// Parks a sample's ray in the sample's own words, at the node `corner`, `zoom`, `roots`, at
+/// `t` along the ray, after `step` steps (pxl-engine `beam::SAMPLE_PARKED_T`,
+/// `beam::SAMPLE_PARKED_STATE`; parked.wgsl). A sample always has room to park, so this never
+/// fails.
 fn park(item: u32, t: f32, corner: vec3<u32>, zoom: u32, roots: vec3<i32>, step: u32) -> bool {
   let at = sample_word(sample_of(item));
   beams[at + SAMPLE_NODE + NODE_ZOOM] = SAMPLE_PARKED;
@@ -56,6 +58,6 @@ fn parked_start(item: u32) -> Start {
   return parked_from(beams[at + SAMPLE_PARKED_T], corner, beams[at + SAMPLE_PARKED_STATE]);
 }
 
-fn finish(item: u32, aim: Aim, w: Walked) {
+fn finish(item: u32, aim: Aim, w: WalkEnd) {
   sample_put(sample_word(sample_of(item)), w);
 }

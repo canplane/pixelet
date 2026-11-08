@@ -1,7 +1,7 @@
 // cpp/xpute/kit/math/rng.64.hpp
 
 // The 64-bit family: splitmix64's finalizer, a seed derived through it, and
-// splitmix64's stream drawn as u32, each its word's high 32 bits.
+// splitmix64's stream, drawn as `u32` from the high 32 bits of each word.
 
 #pragma once
 

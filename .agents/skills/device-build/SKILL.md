@@ -11,8 +11,7 @@ from. Prebuild first: `ts/client/ios/` and `ts/client/android/` come from
 `pxl-core` (`ts/client/package.json` `xpute.core`), through `@xpute/native`'s
 `xpute/ts/native/script/build-core.py`.
 
-After the app moves or pnpm's links are remade (the move from `ts/client/native/`
-did both), prebuild again with `--clean` and run `pod install` again.
+After the app moves or pnpm's links are remade, prebuild again with `--clean` and run `pod install` again.
 
 A **Release** build embeds the JavaScript bundle. A **Debug** build loads it
 from Metro (`make dev-native`) on port 8081; check that the running Metro serves

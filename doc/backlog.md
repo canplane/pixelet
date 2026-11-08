@@ -14,11 +14,6 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P2
 
-- **The vocabulary, cleaned.** Agents have left words with several meanings
-  (`level`, `chunk`, `frame`), several words for one thing, and names of what
-  happened. In order: every domain noun listed with what it names (read-only, by
-  area), a glossary decided with the user, conventional names first and cited, put
-  in the naming skill; then the renames by area, one names commit each.
 
 ## Parked, with the reason on file
 

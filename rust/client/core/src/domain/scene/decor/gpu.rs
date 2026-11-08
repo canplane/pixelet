@@ -1,22 +1,22 @@
 // pxl-core/domain/scene/decor/gpu.rs
 
-//! What the GPU's decor takes each frame (pxl-render gpu/generator.rs), which
-//! generates what the ground generates and draws it with placed decor: what
-//! only the CPU knows, handed over and never read back. Each kind's zooms
-//! where it is an impostor's worth, the tiers' floors as angles, the anchor
-//! a decor is drawn about, the decor the eraser leaves out, each
-//! variant's extent, placed decor as records, and the boxes the objects
-//! were written in, where what the ground generates may have changed.
+//! What the core hands the GPU's decor each frame (pxl-render
+//! gpu/generator.rs). The GPU generates the decor the ground scatters and
+//! draws it together with the decor users placed. The core hands it only what
+//! the CPU alone knows, and never reads back what the GPU generated. Which
+//! zooms each kind is generated at and the angles that set its lod come from
+//! the lens (domain/view/lens.rs). Among what the core hands are the boxes
+//! where objects were written since the last frame, because the ground's
+//! generated decor may have changed there.
 
 use pxl_content::generation::{self, drawn, row_of};
 use pxl_content::scatter;
-use pxl_engine::overwrite;
-use pxl_engine::LEAF_CELL;
+use pxl_engine::object;
+use pxl_engine::LEAF_CELL_ZOOM;
 use pxl_render::gpu::api;
 use pxl_render::gpu::draw::Position;
 use pxl_render::gpu::generator::DecorFrame;
 use pxl_spec::asset::decor::DECORS;
-use pxl_spec::space::camera::grid::{split_dist, CLIP_CELLS_A_RAD, CLIP_MARGIN};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
@@ -26,95 +26,44 @@ use xpute_core::global::Global;
 use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::preview::RenderEdits;
 use crate::domain::query::World;
-use crate::domain::scene::decor::param;
-use crate::domain::view::setting::store::settings_store;
+use crate::domain::setting::store::settings;
+use crate::domain::view::lens::{decor_impostor_angle, decor_model_angle, decor_zooms};
 use crate::sys::io::loader::catalog;
 use pxl_content::decor;
-use pxl_engine::clipmap::FIRST_CELL;
-use pxl_spec::asset::decor::Decor;
-use pxl_spec::space::camera::grid;
 use pxl_spec::space::layer::lattice;
 use pxl_spec::space::layer::octant::Octant;
 use pxl_spec::space::layer::quadrant;
 
-/// A decor is drawn as a model down to `DECOR_MODEL_CELLS` of a camera
-/// cell, the model's edge, an angle about the eye in radians (pxl-spec
-/// space/camera/grid.rs `CELL`), so no screen's size or ratio moves it.
-pub fn decor_model_angle() -> f64 {
-    param::DECOR_MODEL_CELLS * grid::CELL
-}
-
-/// The impostor's edge, `DECOR_IMPOSTOR_CELLS` of a camera cell, as an angle as
-/// the model's is (`decor_model_angle`).
-pub fn decor_impostor_angle() -> f64 {
-    param::DECOR_IMPOSTOR_CELLS * grid::CELL
-}
-
-/// How far a thing `extent_u` wide is an impostor's worth as a clip level holds
-/// it, in units, past which it is culled: where it spans
-/// `DECOR_IMPOSTOR_CELLS` of the clip level's cells (`CLIP_CELLS_A_RAD`),
-/// `CLIP_MARGIN` times as far as `decor_impostor_angle` puts the
-/// impostor's edge, an upper bound. `is_decor_shown` takes both its
-/// sides at the clip level's, so its zooms are the view's.
-pub const fn cull_dist_u(extent_u: f64) -> f64 {
-    extent_u * CLIP_CELLS_A_RAD / param::DECOR_IMPOSTOR_CELLS
-}
-
-/// Whether a decor `extent_u` wide is an impostor's worth anywhere cells of
-/// `cell_zoom` are drawn: as it spans where that zoom begins.
-fn is_decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
-    split_dist(cell_zoom) * CLIP_MARGIN <= cull_dist_u(extent_u)
-}
-
-/// Each kind's clip level zooms, a bit each, where it is an impostor's worth:
-/// the leaves', and each coarser one where one of its variants stands as
-/// itself, its own size no narrower than the clip level's cell (pxl-engine
-/// `scatter::stands_at`), the same cells' decor read at every one. A finer clip
-/// level lies within the leaves'.
-fn shown() -> [u32; DECORS.len()] {
-    shown_by(|d| d.extent(catalog()))
-}
-
-/// `shown`, each kind's extent `extent` gives.
-fn shown_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {
-    core::array::from_fn(|k| {
-        let (d, extent) = (&DECORS[k], extent(&DECORS[k]));
-        (FIRST_CELL..=LEAF_CELL)
-            .filter(|&cell| {
-                let stands = scatter::any_stands_at(d.row, cell);
-                stands && is_decor_shown(extent, cell)
-            })
-            .fold(0, |bits, cell| bits | 1 << (cell - FIRST_CELL))
-    })
-}
-
-/// The frame's hand-over, kept so a settled frame asks the heap for nothing,
-/// and made again only where what it is made of changed.
+/// What this module hands the GPU each frame. It is kept between frames, so a
+/// frame where nothing changed allocates nothing, and each part but `zooms`
+/// is rebuilt only when its inputs change.
 struct Frame {
-    /// Made with the drawing words, from the variants' extents.
-    shown: [u32; DECORS.len()],
-    /// The zoom placed decor is walked at (`walk_zoom`), made with `shown`.
+    /// Each kind's zooms (`decor_zooms`). They are taken again every frame,
+    /// because the decor setting is not among the inputs `seen` compares.
+    zooms: [u32; DECORS.len()],
     walk_zoom: Zoom,
     drawing: [u32; drawn::DRAWING_WORDS as usize],
     placed: Vec<[u32; generation::RECORD_WORDS as usize]>,
-    /// The boxes the objects were written in at the last take, in leaf
-    /// cells, and how many the next frame hands (`note_edited`, `frame`).
-    edits: [[i32; 4]; overwrite::EDITS as usize],
+    /// The column boxes, in leaf cells, where objects were written since a
+    /// frame last took them (`note_edited`). The first `edited` of them are
+    /// the ones the next frame hands.
+    edits: [[i32; 4]; object::EDITS as usize],
     edited: usize,
-    /// The unit the eye stands in, the lanes' anchor, as a draw's Q3
-    /// (pxl-render gpu/draw.rs `Position`).
+    /// The unit cell the eye stands in, as a draw's Q3 position (pxl-render
+    /// gpu/draw.rs `Position`). The GPU draws the decor's lanes about it.
     anchor: Q3,
-    /// What the drawing words were last made of, by value.
+    /// The inputs `drawing` and `walk_zoom` were last built from.
     seen: Option<Key>,
-    /// The cell the placed decor was last walked about, and what it left out.
+    /// What the last walk of placed decor was made over.
     walked: Option<WalkKey>,
 }
 
-/// What the drawing words are made of: the unit the eye stands in (its
-/// anchor), the ground's decor the eraser leaves out, and whether the
-/// catalog that measures the variants is read. A new input goes here or the
-/// drawing words never see it change. The eye within its unit moves nothing
-/// here, only the frame's eye (pxl-render word.rs `frame::EYE`).
+/// The inputs the drawing words are built from, compared by value. The
+/// catalog measures the variants, so whether it has been read is one of them.
+/// An input the drawing words read must be added here, or they are never
+/// rebuilt when it changes. A motion of the eye within its unit cell changes
+/// nothing here, because the GPU reads it from the frame's eye (pxl-render
+/// word.rs `frame::EYE`).
 #[derive(Clone, Copy, PartialEq)]
 struct Key {
     anchor: V3,
@@ -122,11 +71,11 @@ struct Key {
     read: bool,
 }
 
-/// What the placed decor was walked over: the eye's cell at the reach's
-/// zoom, the coarsest cell no wider than the reach is short of, and the
-/// placed decor the eraser leaves out. Walked again where this moves, or
-/// where a write meets its box (`note_edited`): a traversal kept while the eye
-/// stays in its cell.
+/// What a walk of placed decor was made over: the eye's cell at the walk's
+/// zoom (`walk_zoom`) and the placed decor the eraser's preview hides. The
+/// placed decor is walked again when this changes or when a write meets the
+/// walked box (`note_edited`), so one walk serves while the eye stays in its
+/// cell.
 #[derive(Clone, Copy, PartialEq)]
 struct WalkKey {
     zoom: Zoom,
@@ -138,11 +87,11 @@ static HAND_OVER: Global<Frame> = Global::new();
 
 fn hand_over() -> &'static mut Frame {
     HAND_OVER.get(|| Frame {
-        shown: [0; DECORS.len()],
+        zooms: [0; DECORS.len()],
         walk_zoom: UNIT_ZOOM,
         drawing: [0; drawn::DRAWING_WORDS as usize],
         placed: Vec::new(),
-        edits: [[0; 4]; overwrite::EDITS as usize],
+        edits: [[0; 4]; object::EDITS as usize],
         edited: 0,
         anchor: [0; 3],
         seen: None,
@@ -150,16 +99,15 @@ fn hand_over() -> &'static mut Frame {
     })
 }
 
-/// A leaf cell's X as the world names it (pxl-engine `wrap_idx`), the
-/// GPU's generated records' among them, as a word.
+/// A leaf cell's X wrapped as the world wraps it (pxl-engine `wrap_idx`), as a
+/// word. The GPU's generated records name X the same way.
 fn wrap(x: i32) -> u32 {
-    pxl_engine::wrap_idx(LEAF_CELL, x) as u32
+    pxl_engine::wrap_idx(LEAF_CELL_ZOOM, x) as u32
 }
 
-/// This frame's hand-over for an eye at `eye`: placed decor out to where the
-/// largest is an impostor's worth or the rays stop asking the leaves' cells,
-/// with the placed decor and the ground's decor the eraser's preview hides
-/// left out (`edits`, as the turn hands it).
+/// Builds this frame's hand-over for an eye at `eye`. Placed decor is walked
+/// out to the reach `walk_zoom` describes. The placed decor and the ground's
+/// decor that the eraser's preview hides (`edits`) are left out.
 pub fn step(eye: V3, edits: &RenderEdits) {
     let RenderEdits {
         hide,
@@ -174,8 +122,8 @@ pub fn step(eye: V3, edits: &RenderEdits) {
         scattered_cell,
         read: catalog().is_some(),
     };
-    // Only a decor is left out of the records: anything else hidden is the
-    // rays' to cut, and the walk is kept.
+    // Only a hidden decor is left out of the records. The rays cut any other
+    // hidden object, so hiding one keeps the walk.
     let hide = hide.filter(|&at| {
         World::now()
             .entry_at(at)
@@ -184,7 +132,6 @@ pub fn step(eye: V3, edits: &RenderEdits) {
     if h.seen != Some(seen) {
         h.seen = Some(seen);
         drawing(&mut h.drawing, seen);
-        h.shown = shown();
         h.walk_zoom = walk_zoom();
     }
     let zoom = h.walk_zoom;
@@ -199,9 +146,9 @@ pub fn step(eye: V3, edits: &RenderEdits) {
     if h.walked == Some(walked) && !met {
         return;
     }
-    // The renderer hands the records where they lie: while the runtime holds
-    // them they stay, walked again at a later frame (pxl-render gpu/api.rs
-    // `in_flight`).
+    // The renderer hands the records to the runtime in place, without a copy.
+    // While the runtime still holds them they must not change, so the walk
+    // waits for a later frame (pxl-render gpu/api.rs `in_flight`).
     if api::in_flight(&h.placed) {
         h.walked = None;
         return;
@@ -231,13 +178,14 @@ pub fn step(eye: V3, edits: &RenderEdits) {
     });
 }
 
-/// The zoom of the coarsest cell no wider than the reach placed decor is
-/// walked out to is short of: out to where the largest is an impostor's
-/// worth, and no farther than the rays ask the leaves' cells, past which
-/// none is drawn. Every unit of the eye's cell at that zoom reaches no
-/// farther than the cell and one beside it. What is past an eye's own
-/// distance `decor_cnt_cs` leaves out by its size, as it does what is past
-/// the box.
+/// The zoom at which placed decor is walked: that of the finest cell at least
+/// as wide as the reach. The reach ends where the largest decor is too small
+/// for an impostor, or where the rays stop asking the leaves' cells, since no
+/// decor is drawn past that. With cells this wide, the eye's cell and the
+/// cells beside it hold the whole reach from any point in the eye's cell. A
+/// walked decor beyond the reach of the eye's actual position is culled by
+/// size on the GPU (`decor_cnt_cs`), as anything outside the walked box would
+/// be.
 fn walk_zoom() -> Zoom {
     let dist = (DECORS
         .iter()
@@ -252,11 +200,12 @@ fn walk_zoom() -> Zoom {
     zoom
 }
 
-/// Whether an edit's columns, `[x0, y0, x1, y1)` in leaf cells, X on its own
-/// lap, meet `around`'s on any lap.
+/// Whether an edit's columns, `[x0, y0, x1, y1)` in leaf cells, meet those of
+/// `around`. X goes round the world, and the edit's X is on whatever lap it
+/// was written on, so the test tries it on every lap that could meet.
 fn meets(e: &[i32; 4], around: &Aabb) -> bool {
-    let leaf = units(LEAF_CELL);
-    let lap = 1i64 << LEAF_CELL;
+    let leaf = units(LEAF_CELL_ZOOM);
+    let lap = 1i64 << LEAF_CELL_ZOOM;
     let (lo, hi) = (
         |v: f64| libm::floor(v / leaf) as i64,
         |v: f64| libm::ceil(v / leaf) as i64,
@@ -274,7 +223,6 @@ fn meets(e: &[i32; 4], around: &Aabb) -> bool {
         .any(|s| i64::from(e[0]) + s < b[2] && b[0] < i64::from(e[2]) + s)
 }
 
-/// The drawing words of a hand-over `seen` makes.
 fn drawing(p: &mut [u32; drawn::DRAWING_WORDS as usize], seen: Key) {
     let anchor = seen.anchor;
     p.fill(0);
@@ -296,14 +244,14 @@ fn drawing(p: &mut [u32; drawn::DRAWING_WORDS as usize], seen: Key) {
     }
 }
 
-/// Where the objects were written, as the turn's change took them
-/// (domain/query/changes.rs), held for the next frame to hand: each region's
-/// columns in leaf cells, `[x0, y0, x1, y1)`, X on its own lap; past
-/// `overwrite::EDITS`, the rest joined into the last, so every write is met,
-/// however many turns pass before a frame takes them.
+/// Holds the regions where objects were written (domain/query/changes.rs) for
+/// the next frame to hand. Each is kept as its columns in leaf cells,
+/// `[x0, y0, x1, y1)`, with X on whatever lap it was written on. Past
+/// `object::EDITS` regions, the rest are merged into the last one, so no
+/// write is lost however many turns pass before a frame takes them.
 pub fn note_edited(regions: &[Aabb]) {
     let h = hand_over();
-    let leaf = units(LEAF_CELL);
+    let leaf = units(LEAF_CELL_ZOOM);
     for r in regions {
         let b = [
             libm::floor(r.min[0] / leaf),
@@ -327,25 +275,18 @@ pub fn note_edited(regions: &[Aabb]) {
     }
 }
 
-/// The hand-over `step` made; the edits `note_edited` gave, once. With the
-/// decor setting off the ground generates its decor at no zoom, and what was
-/// placed stays.
+/// The hand-over `step` built, with each kind's zooms as they are now
+/// (`decor_zooms`). The edits `note_edited` held are handed once and then
+/// cleared.
 pub fn frame() -> DecorFrame<'static> {
     let h = hand_over();
     let edited = core::mem::take(&mut h.edited);
+    h.zooms = decor_zooms(settings().decor);
     DecorFrame {
-        zooms: if settings_store().decor {
-            &h.shown
-        } else {
-            &[0; DECORS.len()]
-        },
+        zooms: &h.zooms,
         drawing: &h.drawing,
         placed_records: &h.placed,
         anchor: h.anchor,
         edits: &h.edits[..edited],
     }
 }
-
-#[cfg(test)]
-#[path = "gpu.test.rs"]
-mod test;

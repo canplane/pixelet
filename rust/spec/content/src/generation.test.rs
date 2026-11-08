@@ -19,32 +19,36 @@ fn decor_at_its_clip_level() {
         let d2 = d * d;
         let at = detail.at(d2);
         assert_eq!(
-            drawn_at(at, LEAF_CELL, false),
-            at >= LEAF_CELL,
+            drawn_at(at, LEAF_CELL_ZOOM, false),
+            at >= LEAF_CELL_ZOOM,
             "at {d}: z{at}"
         );
-        for cell in FIRST_CELL..=LEAF_CELL {
-            assert_eq!(drawn_at(at, cell, true), at >= cell, "placed at {d}: z{at}");
-        }
-        for cell in FIRST_CELL..LEAF_CELL {
+        for cell_zoom in FIRST_CELL_ZOOM..=LEAF_CELL_ZOOM {
             assert_eq!(
-                drawn_at(at, cell, false),
-                at == cell,
-                "at {d}: z{at}, z{cell}"
+                drawn_at(at, cell_zoom, true),
+                at >= cell_zoom,
+                "placed at {d}: z{at}"
             );
         }
-        seen[usize::from(at >= LEAF_CELL)] = true;
+        for cell_zoom in FIRST_CELL_ZOOM..LEAF_CELL_ZOOM {
+            assert_eq!(
+                drawn_at(at, cell_zoom, false),
+                at == cell_zoom,
+                "at {d}: z{at}, z{cell_zoom}"
+            );
+        }
+        seen[usize::from(at >= LEAF_CELL_ZOOM)] = true;
         d *= 1.5;
     }
     assert_eq!(seen, [true, true], "both sides of the leaves are asked");
 }
 
-/// The clip levels holding a brick present at `held` and coarser alone.
+/// Clip levels that hold a brick present only at `held` and coarser.
 struct HeldTo(Zoom);
 
 impl clipmap::Presence for HeldTo {
-    fn present(&self, cell: Zoom, _: [i32; 2]) -> (u32, bool) {
-        (0, cell <= self.0)
+    fn present(&self, cell_zoom: Zoom, _: [i32; 2]) -> (u32, bool) {
+        (0, cell_zoom <= self.0)
     }
 }
 
@@ -54,11 +58,11 @@ impl clipmap::Presence for HeldTo {
 /// holds it, the finer one's alone.
 #[test]
 fn decor_at_held_clip_level() {
-    let (coarse, c) = (LEAF_CELL - 2, [12_345, 678]);
+    let (coarse, c) = (LEAF_CELL_ZOOM - 2, [12_345, 678]);
     for at in coarse..=FINEST_ZOOM {
         let held = held_at(&HeldTo(coarse), at, c);
         assert!(drawn_at(held, coarse, false), "z{at} over z{coarse}");
-        let finer = held_at(&HeldTo(LEAF_CELL), at, c);
+        let finer = held_at(&HeldTo(LEAF_CELL_ZOOM), at, c);
         assert_eq!(drawn_at(finer, coarse, false), at == coarse, "z{at}");
     }
     assert_eq!(held_at(&HeldTo(coarse), coarse - 1, c), coarse - 1);

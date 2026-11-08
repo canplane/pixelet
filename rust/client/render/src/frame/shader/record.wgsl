@@ -1,35 +1,37 @@
 // pxl-render/record.wgsl
 
-// What draws the node cache's entries (pxl-engine record.rs): an entry's node as a walk from an
-// origin holds it, whether that node is the one the eye's walk or a light's ray stops on, and
-// the entry of a node a stop draws. Over the node cache as the module binds it, whose words it
-// reads through `node_cache_word`. Its writers and their order are record.rs's.
+// The record's reads of the node cache (pxl-engine record.rs). They give the node an entry
+// holds, placed as a walk from a given origin holds it; whether that node is the one the eye's
+// walk or a light's ray stops on, which makes the entry fresh; and which entry draws a node a
+// ray stopped on. The module that includes this part binds the node cache and reads its words
+// through `node_cache_word`. pxl-engine record.rs names the passes that write the record and
+// their order.
 
-/// None.
+/// The value that stands for no slot and no place.
 const NO_ENTRY: u32 = 0xffffffffu;
 
-/// The frame's number (`node_cache::FRAME`).
+/// The frame's number, which the node cache's header holds (pxl-engine `node_cache::FRAME`).
 fn record_frame() -> u32 {
   return node_cache_word(FRAME);
 }
 
-/// A node as a walk holds it, its roots world-absolute (pxl-engine `cast::Node`, its roots
-/// added to the origin's).
+/// A node as a walk holds it (pxl-engine `cast::Node`), except that `roots` counts over the
+/// whole world: the walk's roots, which count from the origin's root, plus the origin's own.
 struct Node {
   zoom: u32,
   corner: vec3<u32>,
   roots: vec3<i32>,
 }
 
-/// The root holding the origin `o` on each axis (`cast::roots_of`).
+/// The root that holds the origin `o` on each axis (pxl-engine `cast::roots_of`).
 fn origin_roots(o: vec3<i32>) -> vec3<i32> {
   return vec3<i32>(o.x >> 31u, 0i, i32(u32(o.z) + Z_START) >> 31u);
 }
 
-/// The node of `zoom` the world names `c` as a walk from the origin `o` holds it
-/// (pxl-engine `cast::Node::of_idx`): its corner off the index's low bits, and on each axis the
-/// root, the origin's or one either side, whose copy of it has its middle nearer the origin
-/// than half a root.
+/// The node at `zoom` whose world index is `c`, as a walk from the origin `o` holds it
+/// (pxl-engine `cast::Node::of_idx`). Its corner comes from the index's low bits. On each axis
+/// its root is the origin's or one to either side: the one whose copy of the node has its
+/// middle within half a root of the origin.
 fn node_of_idx(o: vec3<i32>, zoom: u32, c: vec3<i32>) -> Node {
   let og = vec3<u32>(u32(o.x), u32(o.y) + Y_START, u32(o.z) + Z_START);
   let y_start = select(1u << ((zoom - 1u) & 31u), 0u, zoom == 0u);
@@ -49,15 +51,15 @@ fn node_of_idx(o: vec3<i32>, zoom: u32, c: vec3<i32>) -> Node {
   return Node(zoom, corner, root + origin_roots(o));
 }
 
-/// The node of slot `slot`'s entry as a walk from the origin `o` holds it.
-fn entry_kept(slot: u32, o: vec3<i32>) -> Node {
+/// The node the entry in slot `slot` holds, as a walk from the origin `o` holds it.
+fn entry_node(slot: u32, o: vec3<i32>) -> Node {
   let n = entry_at(slot) + W_NODE;
   let c = vec3<i32>(i32(node_cache_word(n + 1u)), i32(node_cache_word(n + 2u)), i32(node_cache_word(n + 3u)));
   return node_of_idx(o, node_cache_word(n), c);
 }
 
-/// The kind of slot `slot`'s entry where it holds a node, a claim's or a free slot's
-/// `KIND_SPLIT`, which no draw takes (pxl-engine `node_cache`).
+/// The kind of the entry in slot `slot` (pxl-engine `node_cache`). A free slot and a claimed
+/// one hold no node, and count as `KIND_SPLIT`, which no draw takes.
 fn entry_kind(slot: u32) -> u32 {
   let key = node_cache_word(key_at(slot));
   if (key == 0u || key == CLAIMED || (key & CLAIM_MASK) == CLAIM_FAR) {
@@ -66,10 +68,11 @@ fn entry_kind(slot: u32) -> u32 {
   return node_cache_word(entry_at(slot) + W_KIND) & KIND_MASK;
 }
 
-/// The slot of the entry that draws the node `c` of `zoom` a ray stopped on, its answer the
-/// asset `asset` or the lack: of the entries of its bucket that hold it and answer so, the one
-/// that draws already (a face set), else the first; `NO_ENTRY` where none does (pxl-engine
-/// `record`). No pass that looks writes a key, so every look of a pass takes one entry.
+/// The slot of the entry that draws the node `c` at `zoom` that a ray stopped on, where the
+/// node answers the asset `asset`, or is a lack where `lacks` (pxl-engine `record`). Among the
+/// entries of the node's bucket that hold it with that answer, this is the one that already
+/// draws, with a face set, or else the first; `NO_ENTRY` where there is none. No pass that
+/// calls this writes a key, so every call in one pass finds the same entry.
 fn find(zoom: u32, c: vec3<i32>, asset: vec2<u32>, lacks: bool) -> u32 {
   if (!keeps(zoom, c)) {
     return NO_ENTRY;
@@ -98,7 +101,7 @@ fn find(zoom: u32, c: vec3<i32>, asset: vec2<u32>, lacks: bool) -> u32 {
   return found;
 }
 
-/// The node's planes in units from the origin `o` (pxl-engine cast.rs `bounds`).
+/// A box's low and high planes, in units from an origin (pxl-engine cast.rs `bounds`).
 struct Planes {
   lo: vec3<f32>,
   hi: vec3<f32>,
@@ -110,8 +113,8 @@ fn kept_planes(k: Node, o: vec3<i32>) -> Planes {
   return Planes(units(k.corner, og, roots), far_of(k.corner, under(k.zoom), og, roots));
 }
 
-/// The zoom the eye's walk asks a node of planes `p` at its nearest point, as walk.wgsl
-/// asks it (`cast::node_zooms`).
+/// The zoom at which the eye's walk asks a node with planes `p`, at the node's nearest point,
+/// as walk.wgsl asks it (pxl-engine `cast::node_zooms`).
 fn asked_near(p: Planes) -> u32 {
   let range = vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u));
   if (range.x == range.y) {
@@ -120,14 +123,15 @@ fn asked_near(p: Planes) -> u32 {
   return zoom_at(squared(min(max(p.lo, vec3<f32>(0.0)), p.hi)), range);
 }
 
-/// Whether the eye's ray from `o` stopped on `k` whole, coarser than it asked there
-/// (`record::stopped_whole`).
+/// Whether the eye's ray from `o` stopped on `k` whole, that is, on a node coarser than the
+/// zoom it asked there (pxl-engine `record::stopped_whole`).
 fn stopped_whole(k: Node, o: vec3<i32>) -> bool {
   return k.zoom < asked_near(kept_planes(k, o));
 }
 
-/// Whether `k`, `whole` where it stopped whole, is the node the eye's walk from `o` stops on:
-/// it answers a cell and its parent does not (`record::fresh`).
+/// Whether `k` is the node the eye's walk from `o` stops on (pxl-engine `record::fresh`). It is
+/// where `k` answers a cell, at its zoom or because `whole` says some ray stopped on it whole,
+/// and its parent does not.
 fn kept_fresh(k: Node, whole: bool, o: vec3<i32>) -> bool {
   if (!whole && k.zoom < asked_near(kept_planes(k, o))) {
     return false;
@@ -140,9 +144,9 @@ fn kept_fresh(k: Node, whole: bool, o: vec3<i32>) -> bool {
   return zoom < asked_near(kept_planes(parent, o));
 }
 
-/// Whether the node of `zoom`, `whole` where some ray stopped on it whole, is the node a
-/// light's ray asking `band` stops on: at the band, or coarser where the query answers it a
-/// cell whole (pxl-engine `record::band_fresh`).
+/// Whether a node at `zoom` is the node a light's ray asking zoom `band` stops on (pxl-engine
+/// `record::band_fresh`). The ray stops at the band, or on a coarser node where the query
+/// answers that node as a whole cell; `whole` says some ray stopped on it so.
 fn band_fresh(zoom: u32, whole: bool, band: u32) -> bool {
   return zoom == band || (whole && zoom < band);
 }

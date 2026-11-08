@@ -1,8 +1,9 @@
 // cpp/xpute/core/call.hpp
 
-// The runtime's `call`: a call's frame at an offset, answered before it
-// returns, a value or -errno. Until the runtime installs one, ENOSYS, which
-// tests run on.
+// The runtime's synchronous `call`. The core writes a call's frame into the
+// core memory and passes the frame's offset; the runtime answers before
+// `call` returns, with a value or a negative errno. Until a runtime installs
+// its `call`, every call answers ENOSYS, which native tests run with.
 
 #pragma once
 
@@ -17,11 +18,11 @@ using Call = std::int32_t (*)(std::uint32_t at);
 
 void set_call(Call call) noexcept;
 
-// `at` is the frame's offset in the core memory.
 std::int32_t call(std::uint32_t at) noexcept;
 
-// A runtime's answer as one value: a count, or the errno it refused with. A code
-// no errno names is the runtime breaking the protocol, EPROTO.
+// Reads a runtime's answer as a count, or as the errno it refused with. A
+// negative code that names no errno means the runtime broke the protocol,
+// and reads as EPROTO.
 inline Result<std::uint32_t> answer_of(std::int32_t res) noexcept {
     if (res < 0) return make_error(ErrorClass::fault, errno_of(res).value_or(Errno::eproto));
     return static_cast<std::uint32_t>(res);

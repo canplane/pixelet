@@ -157,7 +157,7 @@ function val_to_node(val: NodeValue<NodeView>): Node {
 
   switch (typeof val) {
     case "number":
-      // -0 is a double's; as an I32 it would come back 0.
+      // -0 fits an i32 by value but would read back as 0, so it is an f64.
       if (fits_i32(val) && !Object.is(val, -0)) return I32_NODE(val);
       return F64_NODE(val);
     case "bigint":
@@ -225,7 +225,8 @@ export abstract class NodeView {
 
   abstract branch(fn: ((b: BranchView) => void) | null): this;
 
-  /** `pkt` must be WORD_SZ-aligned and is not copied, so it must not change after this. */
+  /** `pkt` must start on a WORD_SZ boundary in its buffer, or EBADMSG. It is
+   * not copied, so it must not change until the tree is encoded. */
   abstract graft(pkt: U8Array): this;
 }
 
@@ -238,11 +239,12 @@ export class TreeView extends NodeView {
   }
 
   /**
-   * A number lowers to i32 when it fits and f64 otherwise, a bigint to i64
-   * (u64 needs `u64()`). An object does not lower: which keys go and in what
-   * order is a schema's to say, and a schema that owns them lowers an object
-   * to an array with `to_tuple` and reads it back with `from_tuple`
-   * (wire/lower.ts).
+   * Writes `val` as the root, choosing each node's type from its value. A
+   * number becomes an i32 when it fits and an f64 otherwise; a bigint becomes
+   * an i64 (EINVAL outside it), so a u64 needs `u64()`. An array becomes a
+   * branch. An object is refused (EINVAL): which keys it carries and in what
+   * order is for a schema to say. A schema that owns the keys turns an object
+   * into an array with `to_tuple` and back with `from_tuple` (wire/lower.ts).
    */
   set<T extends NodeValue<NodeView>>(val: T): this {
     return this._set_node(val_to_node(val));
@@ -340,7 +342,8 @@ export class TreeView extends NodeView {
     return this._set_node(branch.node);
   }
 
-  /** `pkt` must be WORD_SZ-aligned and is not copied, so it must not change after this. */
+  /** `pkt` must start on a WORD_SZ boundary in its buffer, or EBADMSG. It is
+   * not copied, so it must not change until the tree is encoded. */
   override graft(pkt: U8Array): this {
     if (pkt.byteOffset % WORD_SZ) throw new MarshalError(Errno.EBADMSG);
     return this._set_node({ type: SpecialType.GRAFT, val: pkt });
@@ -461,7 +464,8 @@ export abstract class BranchView extends NodeView {
     return this._put_node(subtree.node);
   }
 
-  /** `pkt` must be WORD_SZ-aligned and is not copied, so it must not change after this. */
+  /** `pkt` must start on a WORD_SZ boundary in its buffer, or EBADMSG. It is
+   * not copied, so it must not change until the tree is encoded. */
   override graft(pkt: U8Array): this {
     if (pkt.byteOffset % WORD_SZ) throw new MarshalError(Errno.EBADMSG);
     return this._put_node({ type: SpecialType.GRAFT, val: pkt });

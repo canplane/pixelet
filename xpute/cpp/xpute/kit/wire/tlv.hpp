@@ -1,8 +1,18 @@
 // cpp/xpute/kit/wire/tlv.hpp
 
-// TLV, a forward-only typed value sequence: [tag, payload] … [END]. A reader
-// keeps nothing it has passed. Reading stops closed (END), unclosed (input
-// ran out at a boundary), or EBADMSG (inside an element or an unknown tag).
+// TLV, a sequence of values read once, front to back, with no table and no
+// offset. Each value is a tag byte and its little-endian payload, and the tag
+// `end` closes the sequence. A tag fixes its payload's size, except `str` and
+// `bytes`, whose payload starts with its length as a u32; a reader cannot skip
+// a tag it does not know, so an unknown tag is EBADMSG.
+//
+// The reader tells how the sequence ended (`Reader::end`): closed by the tag
+// `end`, or unclosed, where the input ran out between two values, which the
+// caller may or may not accept. Input that runs out inside a value is
+// EBADMSG, and the values read before it stand.
+//
+// Equal values give equal bytes only under a schema that fixes their types: 1
+// may be written as a u8, a u32 or an f64.
 
 #pragma once
 
@@ -38,7 +48,8 @@ enum class Tag : std::uint8_t {
     bytes = 0x20,
 };
 
-// Invalid UTF-8 decodes to U+FFFD, as the runtime decodes it.
+// `decode` puts U+FFFD in place of each sequence that is not UTF-8, as the
+// Rust and TypeScript readers do.
 struct Str {
     std::string_view text;
     bool operator==(const Str &) const = default;
@@ -55,7 +66,6 @@ enum class End : std::uint8_t {
     unclosed,
 };
 
-// In the tags' order.
 using Value = std::variant<bool, std::uint8_t, std::int8_t, std::uint16_t, std::int16_t, std::uint32_t, std::int32_t, std::uint64_t, std::int64_t, float, double, Str, Bytes>;
 
 template <class Buf> class Writer {
@@ -64,7 +74,7 @@ template <class Buf> class Writer {
 
     const Buf &data() const noexcept { return buf_; }
 
-    // The writer is not written to after.
+    // Appends the tag `end`, once. A write after it is EBADMSG.
     const Buf &finish() {
         if (!sealed_) {
             buf_.push_back(static_cast<std::uint8_t>(Tag::end));
@@ -131,7 +141,8 @@ class Reader {
     // None at END or at the input's end, which `end` tells apart.
     Result<std::optional<Value>> next() noexcept;
 
-    // None while values remain, and none after a fault.
+    // How the sequence ended, once the reader has reached its end; none while
+    // values remain, and after a fault.
     std::optional<End> end() const noexcept { return end_; }
 
     template <class Vec> Result<void> read_all(Vec &out) {
@@ -144,7 +155,8 @@ class Reader {
     }
 
   private:
-    // In 64 bits: a length past 2^32 off the wire would otherwise wrap.
+    // `n` is 64-bit so that a length off the wire near 2^32 cannot wrap the
+    // sum.
     bool has(std::uint64_t n) const noexcept { return off_ + n <= buf_.size(); }
 
     template <class T> T le() noexcept {

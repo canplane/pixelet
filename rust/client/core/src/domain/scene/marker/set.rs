@@ -1,7 +1,7 @@
 // pxl-core/domain/scene/marker/set.rs
 
-//! Markers drawn flat to the camera, as one set of instances, each where
-//! it stands.
+//! The markers, drawn flat to the camera as one set of instances, each at the
+//! place it stands.
 
 use pxl_render::frame::shader::record::PIPELINE_MARKER;
 use pxl_render::gpu::api::bytes;
@@ -11,19 +11,20 @@ use pxl_spec::space::coord::q3::Q3;
 use crate::domain::scene::marker::atlas::atlas;
 use pxl_render::frame::shader::word;
 
-/// Its stand's Q3 (3), logical size in pixels (2), atlas rectangle (4),
-/// anchor's place down the sprite, 0 top 1 bottom (1), and its region's
-/// width (1), the floats' bits: the stride marker.wgsl reads (pxl-render
-/// frame/shader/word.rs `MARKER_INSTANCE_WORDS`).
+/// The words of one marker instance: its stand as Q3 (3), then the bits of
+/// these floats: its logical size in pixels (2), its atlas rectangle (4),
+/// where the anchor lies down the sprite, from 0 at the top to 1 at the
+/// bottom (1), and its region's width (1). marker.wgsl reads this stride
+/// (pxl-render frame/shader/word.rs `MARKER_INSTANCE_WORDS`).
 pub(super) const INSTANCE_WORDS: usize = word::MARKER_INSTANCE_WORDS as usize;
 
-/// One instance: where its anchor stands, `stands`, `size` in logical
-/// pixels, the atlas's `slot`, where down the sprite the anchor stands, and
-/// the width of the region it keeps, as tall as it and centered on it: a
-/// marker is one thing, hidden whole where a nearer one's region is in front
-/// of its anchor (marker.wgsl). Its stand is on Q3 and is taken against the
-/// eye's on the GPU, as a draw's is (pxl-render gpu/draw.rs `Position`),
-/// so nothing here reads the eye.
+/// One instance, anchored at `stands`, `size` logical pixels big, drawn from
+/// the atlas's `slot`, with its anchor `down` the sprite. `region` is the
+/// width of the region it keeps, as tall as the marker and centered on it. A
+/// marker is hidden whole when a nearer marker's region lies in front of its
+/// anchor (marker.wgsl). Its stand is a Q3 position, which the GPU takes
+/// against the eye's, as it does a draw's (pxl-render gpu/draw.rs
+/// `Position`), so nothing here reads the eye.
 pub(super) fn instance(
     stands: Q3,
     size: [f64; 2],
@@ -49,8 +50,8 @@ pub(super) fn instance(
     words
 }
 
-/// The markers laid out, in one heap block the renderer mirrors: the
-/// arrangement's (`arrangement.rs`).
+/// The markers the arrangement laid out (`arrangement.rs`), in one heap block
+/// the renderer mirrors.
 #[derive(Default)]
 pub(super) struct Set {
     block: MirroredBlock,
@@ -59,7 +60,8 @@ pub(super) struct Set {
 }
 
 impl Set {
-    /// `instances` holds INSTANCE_WORDS words an instance (`instance`).
+    /// `instances` holds `INSTANCE_WORDS` words for each instance
+    /// (`instance`). When the block cannot be written, nothing is drawn.
     pub(super) fn write(&mut self, draw: &mut DrawList, instances: &[u32]) {
         let written = self.block.write(draw, bytes(instances));
         self.cnt = if written {
@@ -69,7 +71,7 @@ impl Set {
         };
     }
 
-    /// Whether it held a block.
+    /// Frees the block. Returns whether there was one.
     pub(super) fn free(&mut self, draw: &mut DrawList) -> bool {
         let held = self.block.handle != 0;
         self.block.free(draw);

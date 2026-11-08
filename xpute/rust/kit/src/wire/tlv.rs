@@ -1,15 +1,19 @@
 // xpute-kit/wire/tlv.rs
 
-//! TLV: a forward-only sequence of `[tag u8 | payload]`, closed by END, all
-//! little-endian. A tag fixes its payload's size; STR and BYTES lead with a
-//! u32 length. Unlike XTP there is no table or offset: read once, in order.
+//! TLV, a sequence of values read once, front to back, with no table and no
+//! offset. Each value is a tag byte and its little-endian payload, and END
+//! closes the sequence. A tag fixes its payload's size, except STR and BYTES,
+//! whose payload starts with its length as a u32; a reader cannot skip a tag
+//! it does not know, so an unknown tag is EBADMSG.
 //!
-//! The reader reports how a sequence ended (`end`): closed by END, unclosed
-//! at an element boundary, or cut (EBADMSG, the values before it stand).
-//! Whether unclosed is acceptable is the caller's call.
+//! The reader tells how the sequence ended (`end`): closed by END, or
+//! unclosed, where the input ran out between two values, which the caller
+//! may or may not accept. Input that runs out inside a value is EBADMSG, and
+//! the values read before it stand.
 //!
-//! Equal values are equal bytes only under a fixed schema: 1 may be written
-//! as a U8, a U32 or an F64.
+//! A STR that is not UTF-8 reads with U+FFFD in place of each bad sequence.
+//! Equal values give equal bytes only under a schema that fixes their types:
+//! 1 may be written as a U8, a U32 or an F64.
 
 use crate::status::errno::Errno;
 use crate::status::error::MarshalError;
@@ -21,7 +25,8 @@ const U64_SZ: u32 = size_of::<u64>() as u32;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-// The width tags are `U8`, `I16`, so the rest match them.
+// The width tags are spelled `U8` and `I16`, so the other tags are upper case
+// to match.
 #[allow(clippy::upper_case_acronyms)]
 enum Tag {
     END = 0x00,
@@ -47,7 +52,7 @@ enum Tag {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TlvEnd {
     Closed,
-    /// The input ran out at an element's boundary, without END.
+    /// The input ran out between two values, with no END.
     Unclosed,
 }
 
@@ -96,7 +101,7 @@ impl TlvWriter {
         &self.buf
     }
 
-    /// Appends END once; any write after it fails.
+    /// Appends END, once. A write after it is EBADMSG.
     pub fn finish(&mut self) -> &[u8] {
         if !self.sealed {
             self.buf.push(Tag::END as u8);
@@ -221,7 +226,8 @@ impl<'a> TlvReader<'a> {
         }
     }
 
-    /// None while values remain, and after a fault.
+    /// How the sequence ended, once the reader has reached its end; `None`
+    /// while values remain, and after a fault.
     pub fn end(&self) -> Option<TlvEnd> {
         self.end
     }
@@ -275,7 +281,7 @@ impl<'a> TlvReader<'a> {
 
     #[track_caller]
     fn need(&self, n: u32) -> Result<(), MarshalError> {
-        // In u64: a wire length near 2^32 would otherwise wrap under the end.
+        // In u64, so that a length off the wire near 2^32 cannot wrap the sum.
         if self.off as u64 + n as u64 > self.buf.len() as u64 {
             return Err(MarshalError::new(Errno::EBADMSG));
         }

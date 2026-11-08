@@ -17,10 +17,11 @@ fn world(px: [u32; 2], dpr: f64, ratio: f64) -> Surface {
     }
 }
 
-/// An 8K canvas at any ratio, and a square one at and past the floor's side, is drawn at what
-/// every device draws (`drawn_fits`): no side past the floor's, its screen tiles within a
-/// dispatch's side, its shape kept, and at the floor's side or within a tile a side of the
-/// dispatch's; a canvas within it at the ratio asked.
+/// An 8K canvas at any ratio, and a square canvas at and past the floor's side, is drawn at a
+/// size every device draws (`drawn_fits`), with its shape kept. Where the size asked does not
+/// fit, the size drawn reaches the floor's side or nearly the most area, or comes within a
+/// tile a side of the most tiles a dispatch takes. A canvas whose size asked fits is drawn at
+/// the ratio asked.
 #[test]
 fn drawn_within_the_floor() {
     for (px, dpr) in [
@@ -39,11 +40,11 @@ fn drawn_within_the_floor() {
             if drawn_fits(whole) {
                 assert_eq!((w, h), (whole[0], whole[1]), "{px:?} at {share}");
             } else {
-                let side = w.max(h) == DRAWN_MOST[0];
+                let side = w.max(h) == DRAWN_CAP[0];
                 let tiles = [w, h].map(|v| v.div_ceil(TILE) + 1);
                 let area = f64::from(w) * f64::from(h) > 0.99 * f64::from(DRAWN_AREA);
                 assert!(
-                    side || area || tiles[0] * tiles[1] > WORKGROUPS_MOST,
+                    side || area || tiles[0] * tiles[1] > WORKGROUPS_CAP,
                     "{px:?} at {share}: {w}x{h} short of the most"
                 );
             }
@@ -51,10 +52,11 @@ fn drawn_within_the_floor() {
     }
 }
 
-/// At the most drawn, of every shape from a square to 32:9, the beam rays' buffer, the camera
-/// grid's words at that shape's field and the eye's holes past them, fits the floor.
+/// At the most pixels drawn, for every shape from a square to 32:9, the beam rays' buffer fits
+/// the floor. The buffer holds the camera grid's words at that shape's field and the eye's
+/// holes past them.
 #[test]
-fn most_drawn_fits_every_buffer() {
+fn drawn_cap_fits_every_buffer() {
     for wide in [1.0f32, 16.0 / 9.0, 21.0 / 9.0, 32.0 / 9.0] {
         let short = (DRAWN_AREA as f32 / wide).sqrt();
         let long = short * wide;

@@ -9,12 +9,13 @@ import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
 
 /**
- * A view a core's surface draws into, ios/SurfaceView.swift's on Android:
- * a system SurfaceView, a window of its own the system composes under the
- * app's views. The view binds the surface the app names (`surface`) while
- * the system's surface exists, and never past the moment the system takes it
- * back: `surfaceDestroyed` does not return until the core's GPU runtime has let
- * it go. It says when it is bound (`onAttach`) and when it is not
+ * A view a core's surface draws into: the Android counterpart of
+ * ios/SurfaceView.swift. It holds a system SurfaceView, a window of its own
+ * that the system composes under the app's views. The view binds the surface
+ * the app names (`surface`) while the system's surface exists, and never
+ * past the moment the system takes it back: `surfaceDestroyed` does not
+ * return until the core's GPU runtime has let the surface go. The view tells
+ * when the surface is bound (`onAttach`) and when it no longer is
  * (`onDetach`). The core sizes the surface and draws every frame inside a
  * turn, so nothing here draws.
  */
@@ -37,11 +38,11 @@ class SurfaceView(context: Context, appContext: AppContext) : ExpoView(context, 
   /** Whether the system's surface exists to be drawn into. */
   private var ready = false
 
-  /** The surface bound to the view's; 0 for none. */
+  /** The core's surface bound to the system's surface; 0 for none. */
   private var bound = 0
 
-  // React Native lays this view out and none of its own children, so the
-  // system's view is given the whole of it here.
+  // React Native lays out this view but none of its children, so the
+  // system's view is given the whole view here.
   override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
     view.layout(0, 0, r - l, b - t)
   }
@@ -58,7 +59,7 @@ class SurfaceView(context: Context, appContext: AppContext) : ExpoView(context, 
     rebind()
   }
 
-  /** Binds the core's surface to what is wanted, letting go of what is not. */
+  /** Binds the surface wanted now, and lets go of one no longer wanted. */
   private fun rebind() {
     val wanted = if (ready) surface else 0
     if (bound == wanted) return

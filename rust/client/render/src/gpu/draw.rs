@@ -1,9 +1,10 @@
 // pxl-render/gpu/draw.rs
 
-//! Draw lists the core fills and the renderer executes without deciding.
-//! A free cancels its block's pending upload and rewrites: the block may be
-//! reused before the list runs. The draws are kept from turn to turn, each
-//! at its slot, and what a turn changed of them is handed with them.
+//! The draw lists the core fills each turn and the renderer carries out without deciding
+//! anything: uploads of heap blocks, rewrites of them, frees, and the draws. A free cancels its
+//! block's pending upload and rewrites, because the block may be reused before the list runs.
+//! The draws are kept from turn to turn, each at its slot, and each turn hands what it changed
+//! of them along with them.
 
 use core::cell::Cell;
 
@@ -24,26 +25,25 @@ use xpute_core::mem;
 use xpute_core::mem::heap::{alloc, free};
 use xpute_kit::status::errno::Errno;
 
-/// Upload record: handle, address, byte length, vertex count, index count.
+/// An upload record's words: handle, address, byte length, vertex count and index count.
 pub const UPLOAD_WORDS: usize = 5;
-/// Draw record: handle, two pipeline-specific words, the slot its uniform
-/// lies at, pipeline.
+/// A draw record's words: handle, two words the pipeline gives a meaning, the slot where the
+/// draw's uniform lies, and pipeline.
 pub const DRAW_WORDS: usize = 5;
 
 pub fn uniform_of<'a>(uniforms: &'a [f32], d: &[u32; DRAW_WORDS]) -> &'a [f32] {
     &uniforms[d[3] as usize * DRAW_FLOATS..][..DRAW_FLOATS]
 }
 
-/// Whether a draw's uniform says it drifts with the wind
-/// (`DrawList::draw_instances`).
+/// Whether a draw's uniform says it drifts with the wind (`DrawList::draw_instances`).
 pub fn drifts(u: &[f32]) -> bool {
     u[draw::DRIFTS] != 0.0
 }
 
-/// A draw's uniform `u` with the wind's drift `drift` taken into its position,
-/// where it drifts, as instance.wgsl `draw_translation` takes it: Q3 from Q3,
-/// remainder from remainder, X and Y. Then it says it drifts no more, so a
-/// shader reading it moves it by no frame's drift.
+/// Takes the wind's drift `drift` into the position in a draw's uniform `u`, if the draw
+/// drifts, as instance.wgsl `draw_translation` does: Q3 from Q3 and remainder from remainder,
+/// in X and Y. The uniform then says the draw does not drift, so a shader that reads it moves
+/// it by no frame's drift.
 pub fn drifted(u: &mut [f32], drift: Position) {
     if drifts(u) {
         for k in 0..2 {
@@ -55,53 +55,46 @@ pub fn drifted(u: &mut [f32], drift: Position) {
     }
 }
 
-/// Where a draw stands in the world, free of the eye: its Q3, and the f32
-/// remainder `r` of a position finer than Q3, zero for one on it. A record
-/// holds it, the frame the eye's Q3 (word.rs `frame::EYE`), and a shader
-/// takes the one against the other (frame.wgsl `from_eye`), as `from_eye`
-/// here does: the i32 difference first, wrapping, then
-/// `f32(q - eye) / 256 + r`.
+/// Where a draw stands in the world, independent of the eye. Q3 is the world's fixed-point
+/// position, 1/256 of a unit a step (pxl-spec `q3`). `q` is the draw's position in Q3, and
+/// `r` is the f32 remainder of a position finer than Q3, zero for a position on Q3. A draw's
+/// uniform holds the position and the frame holds the eye's Q3 (word.rs `frame::EYE`). A
+/// shader takes the one against the other (frame.wgsl `from_eye`), as `from_eye` here does:
+/// first the wrapping i32 difference, then `f32(q - eye) / 256 + r`.
 ///
-/// - The split is a floor: `q = floor(v * 256)` (pxl-spec `q3::from_real`),
-///   narrowed from the i64 with `as i32`, a truncation mod 2^32, and
-///   `r = v - q / 256`, so `r` lies in [0, 1/256) on negative coordinates
-///   too. The position passes no clamp of the world's (pxl-spec `world::at`,
-///   `world::origin`): it holds a point 100,000 units under the eye.
-/// - X goes round: the wrapping difference is the short way round, the
-///   round 2^32 Q3, so a record on any lap draws where its copy nearest the
-///   eye does.
-/// - Y and Z do not go round: their wrapping difference is the true one
-///   while it is under 2^31 Q3, and a drawn record lies within the draw
-///   distance (pxl-core control/param.rs `MAX_DIST`, 2^17 units, 2^25 Q3)
-///   of the eye.
-/// - On Q3 (`r` zero) the result is the eye-relative translation the
-///   records held before, `f32((at - eye) as f64)`: the f64 difference is
-///   exact and narrowed once, and `f32(q - eye)` rounds the same exact
-///   difference once before a power-of-two scale, which is exact. A device
-///   that rounds an i32 to f32 other than to nearest differs by an ulp past
-///   2^24 Q3, where WGSL lets it pick either neighbour.
-/// - With a remainder the result is within an ulp of that translation, or
-///   within an ulp and 2^-33 units: below 2^24 Q3 `r`, rounded to f32 once,
-///   is added in a second rounding, which can land on the other side of a
-///   tie; past it the difference is rounded before `r` is added; and where
-///   the difference is a step or two and `r` cancels it, the result is
-///   smaller than `r` and keeps `r`'s rounding, half an ulp of 1/256, 2^-33
-///   units. Only what is drawn takes this; what decides anything
-///   (selection, collision, visibility, culling, LOD, the shadow's
-///   receivers) reads Q3 or f64.
-/// - Nothing decided on the GPU reads a remainder: decor's gate
-///   (decor_gate.wgsl) reads decor's anchor, on Q3, and the light's
-///   receivers read each `Stand` rounded outward from Q3
-///   (`Stand::from_eye`). The screen tiles a draw marks (tile_mark.wgsl) are
-///   where it is drawn, by the same placing.
+/// - The split is a floor: `q = floor(v * 256)` (pxl-spec `q3::from_real`) and
+///   `r = v - q / 256`, so `r` lies in [0, 1/256) for negative coordinates too. The i64 floor
+///   is narrowed to an i32 with `as i32`, which truncates mod 2^32. The position passes
+///   through none of the world's clamps (pxl-spec `world::at`, `world::origin`), so it can
+///   hold a point 100,000 units under the eye.
+/// - X goes round the world, whose round is 2^32 Q3. The wrapping difference takes the short
+///   way round, so a record on any lap draws where its copy nearest the eye does.
+/// - Y and Z do not go round. Their wrapping difference is the true one while it is under
+///   2^31 Q3, and a drawn record lies within the draw distance of the eye (pxl-core
+///   domain/control/param.rs `MAX_DIST`, 2^17 units or 2^25 Q3).
+/// - On Q3 (`r` zero), the result equals `f32((at - eye) as f64)`. The f64 difference is
+///   exact and is narrowed once. `f32(q - eye)` rounds the same exact difference once, and the
+///   power-of-two scale after it is exact. A device that rounds an i32 to f32 other than to
+///   nearest can differ by an ulp past 2^24 Q3, where WGSL lets it pick either neighbour.
+/// - With a remainder, the result is within an ulp of that f64 difference, or within an ulp
+///   and 2^-33 units. Below 2^24 Q3, `r` has been rounded to f32 once and is added in a second
+///   rounding, which can land on the other side of a tie. Past 2^24 Q3, the difference is
+///   rounded before `r` is added. Where the difference is a step or two and `r` cancels it,
+///   the result is smaller than `r` and keeps `r`'s own rounding, half an ulp of 1/256, which
+///   is 2^-33 units. Only drawing uses this result. Whatever decides anything (selection,
+///   collision, visibility, culling, LOD, the shadow's receivers) reads Q3 or f64.
+/// - No decision on the GPU reads a remainder. Decor's gate (decor_cull.wgsl) reads decor's
+///   anchor, which is on Q3. The light's receivers read each `ReceiverBox` rounded outward
+///   from Q3 (`ReceiverBox::from_eye`). The screen tiles a draw marks (tile_mark.wgsl) are
+///   where the draw is drawn, because they are placed the same way.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Position {
     pub q: Q3,
     pub r: [f32; 3],
 }
 
-/// Units as a position's Q3, X, Y and Z alike: the floor's i64 truncated
-/// to an i32, never an f64's saturating `as i32`.
+/// Units as a position's Q3, X, Y and Z alike. The i64 floor is truncated to an i32, which
+/// wraps; an f64's `as i32` would saturate instead.
 fn q3_of(v: V3) -> Q3 {
     v.map(|x| from_real(x) as i32)
 }
@@ -112,8 +105,8 @@ fn q3_up(v: V3) -> Q3 {
 }
 
 impl Position {
-    /// None of a draw's own: its instances each hold theirs, as a marker
-    /// set's do (word.rs `MARKER_INSTANCE_WORDS`).
+    /// The position of a draw that has none of its own, because each of its instances holds
+    /// its own, as a marker set's instances do (word.rs `MARKER_INSTANCE_WORDS`).
     pub const NONE: Position = Position {
         q: [0; 3],
         r: [0.0; 3],
@@ -135,7 +128,7 @@ impl Position {
         })
     }
 
-    /// A draw's, from its uniform (`uniform_of`).
+    /// A draw's position, read back from its uniform (`uniform_of`).
     pub fn in_uniform(u: &[f32]) -> Position {
         Position {
             q: [0, 1, 2].map(|k| u[draw::Q + k].to_bits() as i32),
@@ -143,17 +136,18 @@ impl Position {
         }
     }
 
-    /// Its Q3 in a uniform's floats, bit for bit.
+    /// Its Q3 as a uniform's floats, bit for bit.
     fn q_words(&self) -> [f32; 3] {
         self.q.map(|v| f32::from_bits(v as u32))
     }
 }
 
-/// Position 3, normal 3, UV 2, joints 4 (u32), weights 4; indices follow the vertex columns.
+/// A model vertex's words: position 3, normal 3, UV 2, joints 4 (u32) and weights 4. The
+/// indices follow the vertex columns.
 pub const MODEL_VERTEX_WORDS: u32 = 16;
 
-/// Every pipeline a draw record names, in the order a frame's draw stats count
-/// them (gpu/renderer.rs `FrameStat::draws`): what the list draws is these.
+/// Every pipeline a draw record may name, in the order a frame's draw stats count them
+/// (gpu/renderer.rs `FrameStat::draws`). The list draws with these alone.
 pub const DRAW_PIPELINES: [u32; 9] = [
     PIPELINE_DECOR,
     PIPELINE_GHOST_BOX,
@@ -166,7 +160,7 @@ pub const DRAW_PIPELINES: [u32; 9] = [
     PIPELINE_IMPOSTOR,
 ];
 
-/// A draw record's (draws, triangles), by its pipeline's place in `DRAW_PIPELINES`.
+/// The draws and triangles counted for each pipeline, by its place in `DRAW_PIPELINES`.
 pub type DrawStats = [[f64; 2]; DRAW_PIPELINES.len()];
 
 /// `pipeline`'s place in `DRAW_PIPELINES`; a draw naming another is a bug.
@@ -177,13 +171,12 @@ fn stats_slot(pipeline: u32) -> usize {
         .position(|&p| p == pipeline)
         .or_bug(Errno::EINVAL)
 }
-/// Rewrite record: handle, address, byte offset, length.
+/// A rewrite record's words: handle, address, byte offset and length.
 pub const REWRITE_WORDS: usize = 4;
 
-/// The uploads' and the frees' arrays in `.fixed.uploads` (pxl-render
-/// gpu/upload.rs `set_uploads`), each twice, the one written and the one
-/// the renderer took: room for as many records as uploads live, since a
-/// turn's uploads become live and its frees were.
+/// The uploads' and the frees' arrays in `.fixed.uploads` (gpu/upload.rs `set_uploads`),
+/// each twice: one being written and one the renderer took. Each has room for as many records
+/// as there are live uploads, because a turn's uploads become live and its frees were live.
 struct ListArrays {
     uploads: [&'static mut [u32]; 2],
     frees: [&'static mut [u32]; 2],
@@ -195,14 +188,14 @@ fn list_arrays() -> &'static mut ListArrays {
     LIST_ARRAYS.get(|| xpute_kit::bug!(ENOTRECOVERABLE))
 }
 
-/// The lists' arrays' bytes, for `live` uploads.
+/// The bytes the lists' arrays take for `live` live uploads.
 pub const fn lists_bytes(live: usize) -> u32 {
     (2 * (UPLOAD_WORDS + 1) * live * 4) as u32
 }
 
 /// # Safety
-/// `at` must address `lists_bytes(live)`, 4-aligned, the lists' alone for
-/// as long as the module runs.
+/// `at` must address `lists_bytes(live)` bytes, 4-aligned, that only the lists use for as long
+/// as the module runs.
 pub unsafe fn set_lists(at: usize, live: usize) {
     // SAFETY: the caller's range, one array after another.
     let arr = |from: usize, words: usize| unsafe {
@@ -215,18 +208,18 @@ pub unsafe fn set_lists(at: usize, live: usize) {
     });
 }
 
-/// A producer's name for its draw in the list, kept across turns: the slot
-/// its uniform lies at, and the slot's generation, which moves on as the slot
-/// is let go. None until it is first drawn; a name whose slot was let go is
-/// drawn anew in another.
+/// A producer's name for its draw in the list, kept across turns. It holds the slot where the
+/// draw's uniform lies and the slot's generation, which moves on when the slot is let go. It is
+/// None until the draw is first set, and a name whose slot was let go is drawn anew in another
+/// slot.
 #[derive(Default, Debug)]
 pub struct DrawId(Cell<Option<(u32, u32)>>);
 
 /// A draw as the list holds it: its record and its uniform.
 pub type Draw = ([u32; DRAW_WORDS], [f32; DRAW_FLOATS]);
 
-/// A draw's uniform: `at`'s Q3 and remainder (`Position`), and each word its
-/// kind's table in word.rs names.
+/// A draw's uniform: `at`'s Q3 and remainder (`Position`), and each of `words` at the index
+/// that its kind's table in word.rs names.
 fn uniform(at: Position, words: &[(usize, f32)]) -> [f32; DRAW_FLOATS] {
     let mut u = [0.0; DRAW_FLOATS];
     u[draw::Q..draw::Q + 3].copy_from_slice(&at.q_words());
@@ -237,8 +230,9 @@ fn uniform(at: Position, words: &[(usize, f32)]) -> [f32; DRAW_FLOATS] {
     u
 }
 
-/// The draw `DrawList::draw_scaled` lists, held by no list: its uniform at
-/// slot 0, as a reader that binds it alone reads it (gpu/pass/character.rs).
+/// The draw that `DrawList::draw_scaled` lists, made here for a reader outside any list. Its
+/// record names uniform slot 0, as a reader that binds the uniform alone reads it
+/// (gpu/pass/character.rs).
 #[expect(
     clippy::too_many_arguments,
     reason = "each argument is a word of the draw record it writes, as WebGPU's draw takes its counts"
@@ -261,9 +255,9 @@ pub fn scaled_draw(
     ([handle, a, b, 0, pipeline], uniform(at, &words))
 }
 
-/// A draw the turn changed: its slot, and what it was as the turn before
-/// left it, none where this turn drew it first. What it is now is the list's
-/// (`Draws::now`), none where this turn let it go.
+/// A draw the turn changed: its slot, and the draw as the turn before left it, None where this
+/// turn drew it first. What it is now is read from the list (`Draws::now`), which gives None
+/// where this turn let it go.
 #[derive(Clone, Copy, Debug)]
 pub struct Change {
     pub slot: u32,
@@ -283,85 +277,87 @@ pub struct Slot {
     /// The turns its draw was last set in and last changed in.
     set: u32,
     changed: u32,
-    /// Whether the uniforms' other side lacks what this slot holds.
+    /// Whether the other copy of the uniforms lacks what this slot holds
+    /// (`DrawList::uniforms`).
     behind: bool,
 }
 
-/// The draws a turn sets, kept from turn to turn: each turn sets every draw
-/// it draws, by its producer's name (`DrawId`), and one it sets no longer is
-/// let go as the lists are taken. A draw set as it was is no change; what
-/// changed, with what it was, is the turn's changes (`Change`), all the
-/// renderer reads to tell what moved.
+/// The draws a turn sets, kept from turn to turn. Each turn sets every draw it draws, by its
+/// producer's name (`DrawId`), and a draw the turn did not set is let go when the lists are
+/// taken. A draw set as it was is no change. The turn's changes (`Change`) hold each draw that
+/// changed with what it was, and they are all the renderer reads to tell what moved.
 #[derive(Default)]
 pub struct DrawList {
-    /// The lists' side written, and how much of each is.
+    /// The side of the lists' arrays being written, and how far its uploads and frees are
+    /// written.
     side: usize,
     uploads: usize,
     frees: usize,
     rewrites: Vec<u32>,
     next_handle: u32,
     taken: Vec<u32>,
-    /// Each pipeline's records, those this turn set first, in the order it set
-    /// them, which is the order they are drawn in, and how many those are.
+    /// Each pipeline's records. Those this turn has set come first, in the order it set them,
+    /// which is the order they are drawn in; `set` counts them.
     records: [Vec<[u32; DRAW_WORDS]>; DRAW_PIPELINES.len()],
     set: [usize; DRAW_PIPELINES.len()],
     slots: Vec<Slot>,
     /// The slots let go, which a new draw takes first.
     free_slots: Vec<u32>,
-    /// The uniforms by slot, `DRAW_FLOATS` a slot, written into whichever of
-    /// the two the host does not hold (gpu/api.rs `in_flight`): the renderer
-    /// hands them where they lie. The slots written since the other was last
-    /// written into are copied into it as it is taken (`behind`).
+    /// The uniforms by slot, `DRAW_FLOATS` a slot, in two copies. A turn writes into the copy
+    /// the host does not hold (gpu/api.rs `in_flight`), because the renderer hands the
+    /// uniforms to the host where they lie. The slots written since the other copy was last
+    /// written are copied into it when the turn takes it (`behind`).
     uniforms: Vec<f32>,
     other_uniforms: Vec<f32>,
     behind: Vec<u32>,
-    /// Whether this turn chose the side its uniforms are written into.
+    /// Whether this turn has chosen the copy its uniforms are written into.
     begun: bool,
-    /// The turn, and its changes so far, and those `take` handed.
+    /// The turn's number, its changes so far, and the changes `take` last handed.
     turn: u32,
     changes: Vec<Change>,
     taken_changes: Vec<Change>,
-    /// Whether a record moved in its pipeline's order this turn, and in the
-    /// turn `take` handed.
+    /// Whether a record moved in its pipeline's order this turn, and whether one did in the
+    /// turn `take` last handed.
     reordered: bool,
     taken_reordered: bool,
-    /// The draws that drift with the wind.
+    /// How many draws drift with the wind.
     drifting: u32,
-    /// The box each drawn thing that reads the shadow map stands within
-    /// (`Stand`), as this turn set them, and as `take` handed them.
-    stands: Vec<Stand>,
-    taken_stands: Vec<Stand>,
+    /// The box each drawn thing that reads the shadow map stands within (`ReceiverBox`), as
+    /// this turn set them and as `take` last handed them.
+    receivers: Vec<ReceiverBox>,
+    taken_receivers: Vec<ReceiverBox>,
 }
 
-/// The box a drawn thing that reads the shadow map stands within, in the world, free of the
-/// eye: its lowest corner's Q3 rounded down and its highest's rounded up, so it holds the box
-/// asked. A receiver of the map stands by the rule every receiver does (pxl-engine
-/// `light::STANDS_AT`, `Light::box_tiles`), and which of the light's tiles it stands on is a
-/// decision, so the box stays exact: Q3, taken against the eye on the CPU in integers and
-/// rounded outward to the f32 the light's passes read (`from_eye`). X goes round as a
-/// `Position`'s does; a box is no wider than the draw distance, so its corners' differences
-/// are the true ones.
+/// The box that a drawn thing reading the shadow map stands within, in the world and
+/// independent of the eye. Its low corner is rounded down to Q3 and its high corner up, so it
+/// holds the box asked for. Every receiver of the map stands by the same rule (pxl-engine
+/// `light::RECEIVER_BOXES_AT`, `Light::box_tiles`). Which of the light's tiles a receiver
+/// stands on is a decision, so the box stays exact: it is held in Q3, taken against the eye on
+/// the CPU in integers, and rounded outward to the f32 the light's passes read (`from_eye`).
+/// X goes round as a `Position`'s does. A box is no wider than the draw distance, so the
+/// differences between its corners are the true ones.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Stand(pub [Q3; 2]);
+pub struct ReceiverBox(pub [Q3; 2]);
 
-impl Stand {
-    /// The box from `lo` to `hi`, in units, held whole.
-    pub fn of(lo: V3, hi: V3) -> Stand {
-        Stand([q3_of(lo), q3_up(hi)])
+impl ReceiverBox {
+    /// The box from `lo` to `hi`, in units, rounded outward so it holds them whole.
+    pub fn of(lo: V3, hi: V3) -> ReceiverBox {
+        ReceiverBox([q3_of(lo), q3_up(hi)])
     }
 
-    /// The box about the ball a thing standing at `at` stands within: about its middle, as
-    /// wide as decor is tall and wide (pxl-render decor_ball.wgsl, which reads a placed
-    /// decor's alike).
-    pub fn ball(at: V3) -> Stand {
+    /// The box around the ball that a thing standing at `at` stands within. The ball is
+    /// centred on the thing's middle, and its radius is as large as decor is tall and wide.
+    /// decor_ball.wgsl reads a placed decor's ball the same way.
+    pub fn ball(at: V3) -> ReceiverBox {
         let r = f64::from(TALLEST + WIDEST);
         let middle = [at[0], at[1], at[2] + f64::from(TALLEST) * 0.5];
-        Stand::of(middle.map(|v| v - r), middle.map(|v| v + r))
+        ReceiverBox::of(middle.map(|v| v - r), middle.map(|v| v + r))
     }
 
-    /// Its corners in units from the eye whose Q3 is `eye`, as the light's passes read them:
-    /// the differences in integers, X the short way round, each rounded once and outward, the
-    /// low corner down and the high up, so the box read holds the box stood.
+    /// Its corners in units from the eye whose Q3 is `eye`, as the light's passes read them.
+    /// The differences are taken in integers, X the short way round. Each is rounded once and
+    /// outward, the low corner down and the high corner up, so the box read holds the box
+    /// stood.
     pub fn from_eye(&self, eye: Q3) -> [[f32; 3]; 2] {
         let [lo, hi] = self.0;
         let from = between(&eye, &lo);
@@ -381,9 +377,9 @@ impl Stand {
         ]
     }
 
-    /// Grown to hold `b` too, each axis about its own low corner, so X goes round as the
-    /// corners do.
-    fn hold(&mut self, b: &Stand) {
+    /// Grows the box to hold `b` too. Each axis is measured from the box's own low corner, so
+    /// X goes round as the corners do.
+    fn hold(&mut self, b: &ReceiverBox) {
         let [base, top] = self.0;
         let [lo, hi]: [Q3; 2] = [0, 1].map(|end| {
             core::array::from_fn(|k| {
@@ -409,14 +405,13 @@ pub struct Lists<'a> {
     /// in another order.
     pub changes: &'a [Change],
     pub reordered: bool,
-    /// The box each drawn thing that reads the shadow map stands within, as its draw is
-    /// set (`Stand`).
-    pub stands: &'a [Stand],
+    /// The box each drawn thing that reads the shadow map stands within, as its draw was set
+    /// (`ReceiverBox`).
+    pub receivers: &'a [ReceiverBox],
 }
 
-/// The draws as a turn left them: each pipeline's records in the order they
-/// are drawn, a record's uniform at its slot (`uniform_of`), handed where they
-/// lie.
+/// The draws as a turn left them: each pipeline's records in the order they are drawn, and
+/// each record's uniform at its slot (`uniform_of`), handed where they lie.
 #[derive(Clone, Copy)]
 pub struct Draws<'a> {
     records: &'a [Vec<[u32; DRAW_WORDS]>; DRAW_PIPELINES.len()],
@@ -434,8 +429,7 @@ impl<'a> Draws<'a> {
             .iter()
     }
 
-    /// `pipeline`'s draws counted into `stats`, each as many triangles as
-    /// `triangles` says.
+    /// Counts `pipeline`'s draws into `stats`, each as many triangles as `triangles` says.
     pub fn count(
         &self,
         pipeline: u32,
@@ -449,7 +443,7 @@ impl<'a> Draws<'a> {
         }
     }
 
-    /// The draw at `slot`; none where none is.
+    /// The draw at `slot`, or None where the slot holds none.
     pub fn now(&self, slot: u32) -> Option<Draw> {
         let s = self
             .slots
@@ -508,7 +502,7 @@ impl DrawList {
             if uploads[k] == handle {
                 uploads.copy_within(k + UPLOAD_WORDS..self.uploads, k);
                 self.uploads -= UPLOAD_WORDS;
-                // An upload never taken needs no free either.
+                // An upload the renderer never took needs no free either.
                 return;
             }
             k += UPLOAD_WORDS;
@@ -522,9 +516,9 @@ impl DrawList {
         self.rewrite_part(handle, at, 0, bytes);
     }
 
-    /// One rewrite a part of an upload, however often it is asked before the
-    /// list is taken: its bytes are read then, at the latest place asked,
-    /// as many as the most asked.
+    /// Asks for one rewrite of the part of an upload from byte `from`, however often it is
+    /// asked before the list is taken. The renderer reads the bytes when the list is taken, at
+    /// the latest place asked, and as many as the most asked.
     pub fn rewrite_part(&mut self, handle: u32, at: u32, from: u32, bytes: u32) {
         if handle == 0 {
             return;
@@ -542,9 +536,9 @@ impl DrawList {
         self.rewrites.extend_from_slice(&[handle, at, from, bytes]);
     }
 
-    /// The side the turn writes its uniforms into: the other where the host
-    /// holds this one, the slots it lacks copied in first. One frame a hand-off
-    /// hands them, so the host holds one at most.
+    /// Chooses the copy the turn writes its uniforms into. Where the host holds the current
+    /// copy, the turn switches to the other and first copies in the slots it lacks. A hand-off
+    /// carries one frame's uniforms, so the host holds at most one copy.
     fn begin(&mut self) {
         if self.begun {
             return;
@@ -587,7 +581,8 @@ impl DrawList {
         u
     }
 
-    /// `slot` among the turn's changes, as it was before the turn changed it.
+    /// Records `slot` among the turn's changes, with `was`, the draw before the turn changed
+    /// it.
     fn change(&mut self, slot: u32, was: Option<Draw>) {
         let s = &mut self.slots[slot as usize];
         if s.changed != self.turn {
@@ -621,8 +616,8 @@ impl DrawList {
         slot
     }
 
-    /// `slot`'s record out of its pipeline's, the last of them put in its
-    /// place: both lie past those the turn set.
+    /// Takes `slot`'s record out of its pipeline's records and puts the last record in its
+    /// place. Both records lie past those the turn has set, so the turn's order is kept.
     fn unlist(&mut self, slot: u32) {
         let s = self.slots[slot as usize];
         let records = &mut self.records[s.pipeline as usize];
@@ -632,15 +627,16 @@ impl DrawList {
         }
     }
 
-    /// The draw `id` names set to `record`'s first three words and the uniform
-    /// `u`, in `pipeline`, next in its order: a change where either differs
+    /// Sets the draw `id` names to the record words `words` and the uniform `u`, in `pipeline`,
+    /// next in that pipeline's order. It is a change where the record or the uniform differs
     /// from what it was, bit for bit.
     fn set(&mut self, id: &DrawId, pipeline: u32, words: [u32; 3], u: [f32; DRAW_FLOATS]) {
         let p = pipeline as usize;
         xpute_kit::ensure!(p < DRAW_PIPELINES.len(), EINVAL, pipeline);
         let slot = self.slot_of(id);
         let s = self.slots[slot as usize];
-        // A draw set twice in a turn would be drawn once, as the second says.
+        // A draw set twice in a turn would be drawn once, as the second set says, so the
+        // second set is refused.
         xpute_kit::ensure!(s.set != self.turn, EEXIST, slot);
         self.slots[slot as usize].set = self.turn;
         let record = [words[0], words[1], words[2], slot, pipeline];
@@ -668,8 +664,8 @@ impl DrawList {
             let s = &mut self.slots[slot as usize];
             (s.pipeline, s.at) = (pipeline, self.records[p].len() as u32 - 1);
         }
-        // Next in its pipeline's order: the record there, not set yet this
-        // turn, takes its place.
+        // The draw goes next in its pipeline's order. The record there has not been set this
+        // turn, and it takes the draw's old place.
         let (at, next) = (self.slots[slot as usize].at as usize, self.set[p]);
         if at != next {
             self.records[p].swap(at, next);
@@ -680,24 +676,25 @@ impl DrawList {
         self.set[p] += 1;
     }
 
-    /// Where the draw of `pipeline` stands: the box `stand`, which every draw whose shader reads
-    /// the shadow map gives and no other does (record.rs `reads_shadow_map`), so whatever reads
-    /// the map stands. Past `light::STANDS` the box is taken into the last.
-    fn stand(&mut self, pipeline: u32, stand: Option<Stand>) {
+    /// Records where the draw of `pipeline` stands, the box `receiver`. Every draw whose shader
+    /// reads the shadow map gives a box and no other draw does (record.rs `reads_shadow_map`),
+    /// so whatever reads the map stands somewhere. Past `light::RECEIVER_BOXES` boxes, the box
+    /// is taken into the last one.
+    fn stand(&mut self, pipeline: u32, receiver: Option<ReceiverBox>) {
         xpute_kit::ensure!(
-            reads_shadow_map(pipeline) == stand.is_some(),
+            reads_shadow_map(pipeline) == receiver.is_some(),
             EINVAL,
             pipeline
         );
-        let Some(b) = stand else { return };
-        let full = self.stands.len() == light::STANDS;
-        match self.stands.last_mut() {
+        let Some(b) = receiver else { return };
+        let full = self.receivers.len() == light::RECEIVER_BOXES;
+        match self.receivers.last_mut() {
             Some(last) if full => last.hold(&b),
-            _ => self.stands.push(b),
+            _ => self.receivers.push(b),
         }
     }
 
-    /// A draw set: its uniform at `at` with `words` (`uniform`), and where it
+    /// Sets a draw whose uniform is at `at` with `words` (`uniform`), and records where it
     /// stands.
     fn put(
         &mut self,
@@ -706,9 +703,9 @@ impl DrawList {
         record: [u32; 3],
         at: Position,
         words: &[(usize, f32)],
-        stand: Option<Stand>,
+        receiver: Option<ReceiverBox>,
     ) {
-        self.stand(pipeline, stand);
+        self.stand(pipeline, receiver);
         self.set(id, pipeline, record, uniform(at, words));
     }
 
@@ -728,10 +725,10 @@ impl DrawList {
         rot: f32,
         opacity: f32,
         scale: f32,
-        stand: Option<Stand>,
+        receiver: Option<ReceiverBox>,
     ) {
         let (d, u) = scaled_draw(pipeline, handle, a, b, at, rot, opacity, scale);
-        self.stand(pipeline, stand);
+        self.stand(pipeline, receiver);
         self.set(id, pipeline, [d[0], d[1], d[2]], u);
     }
 
@@ -748,14 +745,21 @@ impl DrawList {
         a: u32,
         b: u32,
         at: Position,
-        stand: Option<Stand>,
+        receiver: Option<ReceiverBox>,
     ) {
-        self.put(id, pipeline, [handle, a, b], at, &[], stand);
+        self.put(id, pipeline, [handle, a, b], at, &[], receiver);
     }
 
-    /// The location indicator's beacon at `at`, spun `spin` about Z, its
-    /// look the night's where `night` (location.slot.wgsl).
-    pub fn draw_beacon(&mut self, id: &DrawId, at: Position, spin: f32, night: bool, stand: Stand) {
+    /// Draws the location indicator's beacon at `at`, spun `spin` about Z, with the night's
+    /// look where `night` is set (location.slot.wgsl).
+    pub fn draw_beacon(
+        &mut self,
+        id: &DrawId,
+        at: Position,
+        spin: f32,
+        night: bool,
+        receiver: ReceiverBox,
+    ) {
         let night = if night { 1.0 } else { 0.0 };
         let words = [(location::SPIN, spin), (location::NIGHT, night)];
         self.put(
@@ -764,7 +768,7 @@ impl DrawList {
             [0; 3],
             at,
             &words,
-            Some(stand),
+            Some(receiver),
         );
     }
 
@@ -783,7 +787,7 @@ impl DrawList {
         opacity: f32,
         unit: f32,
         z_step: f32,
-        stand: Option<Stand>,
+        receiver: Option<ReceiverBox>,
     ) {
         let words = [
             (ghost_box::OPACITY, opacity),
@@ -791,13 +795,13 @@ impl DrawList {
             (ghost_box::Z_STEP, z_step),
         ];
         let record = [handle, vertex_cnt, idx_cnt];
-        self.put(id, pipeline, record, at, &words, stand);
+        self.put(id, pipeline, record, at, &words, receiver);
     }
 
-    /// One that `drifts` is a cloud's: `at` its place on the cloud field's map, which the wind carries, and
-    /// it is drawn moved back by how far the wind has carried the field
-    /// (word.rs `frame::DRIFT_Q`, instance.wgsl `draw_translation`), so it
-    /// stands still in the list while the wind blows.
+    /// A draw that `drifts` is a cloud's. Its `at` is its place on the cloud field's map,
+    /// which the wind carries, and the shader moves it back by how far the wind has carried
+    /// the field (word.rs `frame::DRIFT_Q`, instance.wgsl `draw_translation`). Its record
+    /// therefore stays the same in the list while the wind blows.
     #[expect(
         clippy::too_many_arguments,
         reason = "each argument is a word of the draw record it writes, as WebGPU's draw takes its counts"
@@ -813,7 +817,7 @@ impl DrawList {
         at: Position,
         opacity: f32,
         drifts: bool,
-        stand: Option<Stand>,
+        receiver: Option<ReceiverBox>,
     ) {
         let [off, stride, idx] = columns;
         let words = [
@@ -823,12 +827,12 @@ impl DrawList {
             (instance::IDX, f32::from_bits(idx)),
             (instance::DRIFTS, if drifts { 1.0 } else { 0.0 }),
         ];
-        self.put(id, pipeline, [handle, group, cnt], at, &words, stand);
+        self.put(id, pipeline, [handle, group, cnt], at, &words, receiver);
     }
 
-    /// Uploads, rewrites and frees start fresh, on the lists' other side; the
-    /// draws the turn did not set are let go, its changes handed, and the
-    /// next turn's start fresh.
+    /// Hands the turn's lists to the renderer. The draws the turn did not set are let go, and
+    /// the turn's changes are handed with the lists. The next turn's uploads, rewrites, frees
+    /// and changes start empty, on the lists' other side.
     pub fn take(&mut self) -> Lists<'_> {
         for p in 0..DRAW_PIPELINES.len() {
             while self.records[p].len() > self.set[p] {
@@ -847,8 +851,8 @@ impl DrawList {
         }
         core::mem::swap(&mut self.changes, &mut self.taken_changes);
         self.changes.clear();
-        core::mem::swap(&mut self.stands, &mut self.taken_stands);
-        self.stands.clear();
+        core::mem::swap(&mut self.receivers, &mut self.taken_receivers);
+        self.receivers.clear();
         self.taken_reordered = core::mem::take(&mut self.reordered);
         let turn = self.turn;
         self.turn = self.turn.wrapping_add(1);
@@ -871,13 +875,13 @@ impl DrawList {
             },
             changes: &self.taken_changes,
             reordered: self.taken_reordered,
-            stands: &self.taken_stands,
+            receivers: &self.taken_receivers,
         }
     }
 }
 
-/// A heap block, grown to the next power of two as its holder needs more,
-/// never shrunk, and let go with it.
+/// A heap block. It grows to the next power of two as its holder needs more, never shrinks,
+/// and is let go with its holder.
 #[derive(Default)]
 pub struct Block {
     at: usize,
@@ -885,8 +889,8 @@ pub struct Block {
 }
 
 impl Block {
-    /// Its first `bytes`, what it held gone where it grew; none where the heap
-    /// refused, the block then gone.
+    /// The block's first `bytes`. Where the block must grow, what it held is lost. None where
+    /// the heap refused, and the block is then gone.
     pub fn take(&mut self, bytes: u32) -> Option<&'static mut [u8]> {
         if bytes > self.bytes {
             self.free();
@@ -911,8 +915,8 @@ impl Drop for Block {
     }
 }
 
-/// A heap block the renderer mirrors, written whole each time, and its
-/// upload's handle, 0 for none.
+/// A heap block that the renderer mirrors, written whole each time, with its upload's handle,
+/// or 0 for none.
 #[derive(Default)]
 pub struct MirroredBlock {
     block: Block,
@@ -946,8 +950,8 @@ impl MirroredBlock {
     }
 }
 
-/// The lists' arrays, set once for the tests, which take them one at a time:
-/// they are a `Global`, and tests run on several threads.
+/// Sets the lists' arrays once for the tests and hands each test a guard that lets it use them
+/// alone: the arrays are a `Global`, and tests run on several threads.
 #[cfg(test)]
 pub(crate) fn test_lists() -> std::sync::MutexGuard<'static, ()> {
     static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());

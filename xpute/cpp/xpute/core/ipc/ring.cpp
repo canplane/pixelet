@@ -44,7 +44,7 @@ void Ring::pad(std::uint32_t slot, std::uint32_t n) const noexcept {
 
 void Ring::publish(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result, std::uint32_t pkt_at) const noexcept {
     entry(tag, cmd, flags, result, pkt_at);
-    // The frame is whole before the tail says so (R2).
+    // The frame is whole before the tail publishes it (R2).
     pos(ring::TAIL).store(tail() + 1, std::memory_order_release);
 }
 
@@ -90,7 +90,8 @@ Result<std::span<const std::uint8_t>> Ring::pkt(const Frame &f) const noexcept {
     if (f.pkt_at < base) return marshal_error(Errno::ebadmsg);
     std::uint64_t off = f.pkt_at - base;
     if (off % slot != 0 || off + xtp::HDR_SZ > slots_bytes(cap(), slot)) return marshal_error(Errno::ebadmsg);
-    // The header, then the payload its second word names, to the word.
+    // The packet is its header and then the payload whose length the
+    // header's second word gives, padded to a word.
     std::uint64_t n = padded(xtp::HDR_SZ + std::uint64_t{mem_.word(f.pkt_at + xtp::WORD_SZ)});
     if (n > slot) return marshal_error(Errno::ebadmsg);
     return std::span<const std::uint8_t>(mem_.at(f.pkt_at), static_cast<std::size_t>(n));
@@ -98,7 +99,7 @@ Result<std::span<const std::uint8_t>> Ring::pkt(const Frame &f) const noexcept {
 
 void Ring::advance() const noexcept {
     ensure(!empty(), Errno::enotrecoverable);
-    // The head's frame, and its slot, let go (R2).
+    // Lets go of the frame at the head and its slot (R2).
     pos(ring::HEAD).store(head() + 1, std::memory_order_release);
 }
 

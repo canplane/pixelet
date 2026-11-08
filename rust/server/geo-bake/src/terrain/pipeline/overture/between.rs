@@ -132,7 +132,7 @@ impl<'a> Line<'a> {
     }
 
     pub fn at(&self, d: f64) -> G3857 {
-        // its own ends bit for bit, as the segments meeting there carry them
+        // At its own ends, the line's points bit for bit, as the segments meeting there carry them.
         if d <= 0.0 {
             return self.points[0];
         }

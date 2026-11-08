@@ -1,14 +1,14 @@
 // xpute-tool/bin/gen.rs
 
-//! A program's machine and protocols generated where each one's `gen` says
-//! (xpute-tool spec/machine.rs, spec/cmd.rs `protocol_outputs`), or, with
-//! `--check`, a failure where a file is not what it writes. A file that
-//! declares `mem` is a machine; any other, a protocol, and the protocols
-//! together give no number twice.
+//! Generates a program's machine and protocols, each into the files its `gen`
+//! names (xpute-tool spec/machine.rs, spec/cmd.rs `protocol_outputs`). With
+//! `--check` it writes nothing, and fails where a file on disk differs from
+//! what it would write. A JSON that declares `mem` is a machine and any other
+//! is a protocol; no two protocols may give the same command number.
 //!
 //!   xpute-gen <machine.json> <protocol.json>... [--check]
 //!
-//! Its paths are from the directory it runs in.
+//! Paths are relative to the directory it runs in.
 
 use std::process::ExitCode;
 

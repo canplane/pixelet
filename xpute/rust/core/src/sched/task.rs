@@ -1,8 +1,9 @@
 // xpute-core/sched/task.rs
 
-//! The core's executor, installed once like a global allocator. An executor
-//! may ignore priority, so nothing may rest on poll order: work ordered
-//! within a turn runs in one task.
+//! The core's executor, installed once, as a global allocator is. An
+//! executor may ignore priority, so no correctness may rest on the order in
+//! which tasks are polled. Work that must run in order within a turn runs in
+//! one task.
 
 use core::future::Future;
 use core::pin::Pin;
@@ -11,15 +12,16 @@ use crate::global::Global;
 
 pub type Task = Pin<&'static mut (dyn Future<Output = ()> + 'static)>;
 
-/// Lower is sooner.
+/// A lower number runs sooner.
 pub type Priority = u8;
 
 pub trait Executor {
-    /// False when it has no room, keeping nothing of `task`.
+    /// Answers false when the executor has no room. It then keeps nothing of
+    /// `task`, and the caller frees it.
     fn spawn(&self, task: Task, priority: Priority) -> bool;
-    /// Never from inside a task.
+    /// Must not be called from inside a task.
     fn poll(&self);
-    /// A task was queued since the last poll began.
+    /// Whether a task has been queued since the last poll began.
     fn pending(&self) -> bool;
 }
 

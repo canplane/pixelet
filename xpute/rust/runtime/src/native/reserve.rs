@@ -1,13 +1,13 @@
 // xpute-runtime/native/reserve.rs
 
-//! The core memory: mapped once from the system, zero until touched, never
-//! given back.
+//! The core's memory, mapped once from the system. It reads as zero until it
+//! is written, and it is never given back.
 
 use std::sync::OnceLock;
 
 use xpute_core::mem::section::PAGE_BYTES;
 
-/// Where the memory lies, its bytes, and the heap's offset in it.
+/// The memory's address and size, and the heap's offset in it.
 #[derive(Clone, Copy)]
 pub(super) struct Core {
     pub at: usize,
@@ -23,8 +23,8 @@ impl Core {
 
 static CORE: OnceLock<Core> = OnceLock::new();
 
-/// Once a process. A mapping lies on the system's page, which is all the
-/// heap aligns to.
+/// Maps the memory, once a process. The system places a mapping on a page
+/// boundary, and the heap needs no stricter alignment than that.
 pub(super) fn map(bytes: usize, heap_at: usize) -> Core {
     // SAFETY: an anonymous private mapping, which touches nothing that exists.
     let p = unsafe {
@@ -51,7 +51,7 @@ pub(super) fn map(bytes: usize, heap_at: usize) -> Core {
     core
 }
 
-/// The memory, none before it is reserved.
+/// The memory, or `None` before it is reserved.
 pub(super) fn core() -> Option<Core> {
     CORE.get().copied()
 }

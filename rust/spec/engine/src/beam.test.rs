@@ -8,17 +8,16 @@ use crate::answer::{
 };
 use crate::cast::{Detail, End, Node, Query, Ray, Spacing, Trace, Until, DEPTH};
 use crate::content::Sample;
-use crate::overwrite::{ancestor_at, y_start, z_start};
+use crate::object::{ancestor_at, y_start, z_start};
 use crate::HEIGHT_BITS;
-use crate::{wrap_idx, Zoom, FRAC_W, TOP_ZOOM, UNIT_ZOOM};
+use crate::{wrap_idx, Zoom, FRAC_W, MIN_ZOOM, UNIT_ZOOM};
 use std::vec::Vec;
 
 #[test]
 fn largest_beam_fits_binding() {
-    // 4112 × 2338 drawn, a ratio of 2, at the view's FOV (the tangent of
-    // its half 1/2, pxl-spec space/camera/grid.rs `HALF_TAN`), within the
-    // 33,554,432 words a storage binding holds on every device
-    // (pxl-render floor.rs).
+    // A target of 4112 × 2338 drawn pixels, a ratio of 2, at the view's field of view (the
+    // tangent of its half is 1/2, pxl-spec space/camera/grid.rs `HALF_TAN`), must fit within
+    // the 33,554,432 words a storage binding holds on every device (pxl-render floor.rs).
     let up = 0.5;
     let words = Grid::of([up * 4112.0 / 2338.0, up]).size();
     assert!(words <= 33_554_432, "{words} words");
@@ -31,8 +30,8 @@ const VIEWS: [[f32; 2]; 3] = [
     [0.5, 0.5 * 19.5 / 9.0],
 ];
 
-/// What a stand-in node is handed: itself, its zoom and its world's index,
-/// so a walk resumed off a line is checked to hand each node its own.
+/// What a stand-in node is handed: itself, as its zoom and its world index, so a walk resumed
+/// from a line can be checked to hand each node its own.
 type At = (Zoom, [i32; 3]);
 
 /// A box in units, lo and hi on each axis, and the eighths of its cube a
@@ -43,11 +42,10 @@ struct Thing {
     eighths: u32,
 }
 
-/// What stands on the stand-in's ground, about the eye (`EYE`): a tower,
-/// a slab over the ground with air under it, a pole half a unit thick,
-/// thinner than the beam rays lie apart where it stands, its cells keeping
-/// half their cubes, a block far off whose cells keep six eighths, and a
-/// cube a quarter of a unit a side ten units before the eye.
+/// What stands on the stand-in's ground around the eye (`EYE`): a tower; a slab over the
+/// ground with air under it; a pole half a unit thick, thinner than the beam rays' spacing
+/// where it stands, its cells keeping half their cubes; a block far off whose cells keep six
+/// eighths; and a cube a quarter of a unit a side ten units before the eye.
 const THINGS: [Thing; 5] = [
     Thing {
         lo: [994.0, 30.0, -8.0],
@@ -79,17 +77,16 @@ const THINGS: [Thing; 5] = [
 /// The highest the ground's top reaches (`top`).
 const RELIEF: f32 = 6.0;
 
-/// The ground's top at `[x, y]` units: bumps up to `RELIEF` about sea level.
+/// The ground's top at `[x, y]` units: bumps up to `RELIEF` around sea level.
 fn top(x: f32, y: f32) -> f32 {
     3.0 * libm::sinf(x * 0.37) + 3.0 * libm::cosf(y * 0.29)
 }
 
-/// A stand-in world: the ground's bumps (`top`) and the things on it
-/// (`THINGS`). A cell is what it lies wholly in, a thing's or the ground's
-/// under its top at its middle, else air; a node coarser than asked is a
-/// split boxed about the ground under `RELIEF` and the things it meets,
-/// rounded out a step, else air. So every cell under a split lies in its
-/// box, and a node's answer is a function of the node and the zooms asked.
+/// A stand-in world: the ground's bumps (`top`) and the things on it (`THINGS`). A cell is
+/// what it lies wholly in: a thing, or the ground where the cell's middle lies under the top;
+/// otherwise air. A node coarser than asked is a split, boxed around the ground under `RELIEF`
+/// and the things it meets, rounded out by a step, or else air. So every cell under a split
+/// lies in its box, and a node's answer depends only on the node and the zooms asked.
 struct Stand;
 
 impl Query for Stand {
@@ -113,7 +110,7 @@ impl Query for Stand {
     ) -> In<[u32; 2]> {
         assert_eq!(*at, (zoom, c), "asked");
         let side = libm::ldexpf(1.0, UNIT_ZOOM as i32 - zoom as i32);
-        // Y and Z from the world's edge (`overwrite::path`).
+        // Y and Z from the world's edge (`object::path`).
         let lo = [
             c[0] as f32 * side,
             (c[1] + y_start(zoom)) as f32 * side - (1u32 << (UNIT_ZOOM - 1)) as f32,
@@ -134,8 +131,7 @@ impl Query for Stand {
                 asset: [asset, 0],
             };
         }
-        // The steps of the node's box about `[a, b]` on each axis, a step
-        // past it each way.
+        // The steps of the node's box around `[a, b]` on each axis, one step past it each way.
         let step = side / BOX_STEPS as f32;
         let boxed = |a: [f32; 3], b: [f32; 3]| {
             let first = |k: usize| (libm::floorf((a[k] - lo[k]) / step) - 1.0).max(0.0) as u32;
@@ -192,8 +188,8 @@ impl cast::Over<At> for Line {
     }
 }
 
-/// The eye the views are cast from, in units: over the bumps, south of the
-/// things, a root's edge under it and before it (sea level and Y's 0).
+/// The eye the views are cast from, in units: above the bumps, south of the things, with a
+/// root's edge under it and before it (sea level, and Y's 0).
 const EYE: [f32; 3] = [1000.37, -40.6, 12.3];
 
 /// How far below the horizon the eye looks, in radians, and how far its
@@ -218,7 +214,7 @@ impl View {
             origin: EYE.map(|v| libm::rintf(v * (1 << FRAC_W) as f32) as i32),
             axes: [[0.0, c, -s], [1.0, 0.0, 0.0], [0.0, s, c]],
             tan,
-            range: [TOP_ZOOM + 9, UNIT_ZOOM + 3],
+            range: [MIN_ZOOM + 9, UNIT_ZOOM + 3],
         }
     }
 
@@ -258,30 +254,29 @@ fn each<T: Send>(n: usize, f: impl Fn(usize) -> T + Sync) -> Vec<T> {
     })
 }
 
-/// A sample's stop as it leaves it for the raster (pxl-render sample_put.wgsl
-/// `sample_put`): how it ended, the node, its asset and the axis it
-/// entered across. Of one gone on to its reach, only that: its zoom
-/// `SAMPLE_NONE` is all the raster reads of it (pxl-render boxes.wgsl
-/// `write_box`).
+/// A sample's stop as the sample leaves it for the raster (pxl-render sample_put.wgsl
+/// `sample_put`): how it ended, the node, its asset and the axis it entered across. For a
+/// sample that went on to its reach, only that is kept, because its zoom `SAMPLE_NONE` is all
+/// the raster reads of it (pxl-render boxes.wgsl `write_box`).
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct Stop {
+struct Hit {
     ends: End,
     node: Node,
     asset: [u32; 2],
     axis: u32,
 }
 
-impl Stop {
-    fn of(met: &Trace<At>) -> Stop {
+impl Hit {
+    fn of(met: &Trace<At>) -> Hit {
         if met.ends == End::Miss {
-            return Stop {
+            return Hit {
                 ends: End::Miss,
                 node: Node::ROOT,
                 asset: AIR,
                 axis: 0,
             };
         }
-        Stop {
+        Hit {
             ends: met.ends,
             node: met.hit.node,
             asset: met.hit.asset,
@@ -290,25 +285,23 @@ impl Stop {
     }
 }
 
-/// A sample's stop, and how it started: its cell, that
-/// cell's start, and whether it resumed off a node of the line, not a
-/// root.
+/// A sample's stop, and how it started: its cell, that cell's start, and whether it resumed
+/// from a node of the line rather than from a root.
 #[derive(Clone, Copy)]
 struct Cast {
-    stop: Stop,
+    hit: Hit,
     cell: [u32; 2],
     t: f32,
     resumed: bool,
 }
 
-/// The view cast as the shader casts it (pxl-render corners.wgsl,
-/// cell.wgsl, samples.wgsl over sample.eye.wgsl): every
-/// corner's beam ray to where it stops and how far it hands on; each
-/// cell's start, the least of its window's, that corner's line, and
-/// whether it resumes, every beam ray of the window asking as its rays
-/// ask; and every sample walked to its stop from its cell's start off that
-/// line (pxl-render resume.wgsl), or from the world's root
-/// where it resumes not. The samples row by row, `samples[0]` a row.
+/// The view cast as the shader casts it (pxl-render corners.wgsl, cell.wgsl, samples.wgsl
+/// over sample.eye.wgsl): every corner's beam ray to where it stops, and how far it hands on;
+/// each cell's start, the least of its window's, with that corner's line and whether the cell
+/// resumes, which it does where every beam ray of the window asks as its rays ask; and every
+/// sample walked to its stop from its cell's start along that line (pxl-render resume.wgsl),
+/// or from the world's root where it does not resume. The samples come row by row,
+/// `samples[0]` to a row.
 fn cast_view(view: &View) -> Vec<Cast> {
     let g = Grid::of(view.tan);
     let detail = view.detail();
@@ -377,7 +370,7 @@ fn cast_view(view: &View) -> Vec<Cast> {
             &mut (),
         );
         Cast {
-            stop: Stop::of(&met),
+            hit: Hit::of(&met),
             cell,
             t,
             resumed,
@@ -385,9 +378,9 @@ fn cast_view(view: &View) -> Vec<Cast> {
     })
 }
 
-/// A sample's hit on a world is that of its ray walked from the eye with
-/// nothing resumed: each cell's start, the least of its window's beam rays'
-/// handed on, lies short of everything any ray of the cell meets.
+/// A sample's hit on a world is the hit of its ray walked from the eye with nothing resumed:
+/// each cell's start, the least distance its window's beam rays hand on, lies short of
+/// everything any ray of the cell meets.
 #[test]
 fn sample_hit_is_the_walks_from_the_eye() {
     for tan in VIEWS {
@@ -397,7 +390,7 @@ fn sample_hit_is_the_walks_from_the_eye() {
         let [n, m] = g.samples;
         let fresh = each((n * m) as usize, |k| {
             let ray = view.ray(g.sample([k as u32 % n, k as u32 / n]));
-            Stop::of(&cast::first(
+            Hit::of(&cast::first(
                 &mut Stand,
                 view.origin,
                 &ray,
@@ -411,12 +404,12 @@ fn sample_hit_is_the_walks_from_the_eye() {
             let s = [k as u32 % n, k as u32 / n];
             let a = &cast[k];
             assert!(
-                a.stop == *f,
+                a.hit == *f,
                 "{tan:?} sample {s:?}: fresh {f:?}; cell {:?} from {} resumed {}: {:?}",
                 a.cell,
                 a.t,
                 a.resumed,
-                a.stop,
+                a.hit,
             );
             if f.ends == End::Hit {
                 met[fill_eighths(f.asset[0]) as usize] += 1;

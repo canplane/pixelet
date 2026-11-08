@@ -1,8 +1,9 @@
 // @pxl/client/ui/debug/legend.tsx
 
 /**
- * What the world gizmo's marks mean, shown while its setting is on. Colors and
- * dashes are the spec's, which its lines are drawn in (`gizmo.spec.ts`).
+ * The legend of the world gizmo's marks, shown while the `world_gizmo` setting
+ * is on. Its colors and dashes are read from gizmo.spec.ts, the same values
+ * the gizmo's lines are drawn with.
  */
 
 import { StyleSheet, Text, View } from "react-native";
@@ -11,7 +12,7 @@ import { SETTING } from "@/ui/setting/schema.ts";
 import { gauge, Head } from "./perf/gauge.tsx";
 import { Accordion } from "./accordion.tsx";
 import { coverage, frame } from "@/abi/gizmo.spec.ts";
-import { useCore } from "@/ui/store/watch.ts";
+import { useCore } from "@/ui/watch.ts";
 
 interface Look {
   rgb: number;
@@ -43,8 +44,9 @@ const useShown = (name: "world_gizmo") =>
   useCore((s) => s.settings[SETTING[name].key] === 1);
 
 /**
- * In the spec's order, or `reversed` to list the one drawn over the rest
- * first; a line's look as a stroke, or `filled` a tint's as a patch.
+ * Lists the looks in the spec's order. `reversed` lists them backwards, so
+ * that the look drawn over the others comes first. A look shows as a stroke,
+ * the way a line is drawn, or with `filled` as a patch, the way a tint is.
  */
 function Rows<K extends string>({
   looks,
@@ -111,7 +113,7 @@ export function WorldGizmoLegend() {
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
-  // A mid gray, where both the black marks and the faint white one read.
+  // A mid gray, on which both the black marks and the faint white mark show.
   chip: {
     width: 28,
     height: 12,

@@ -8,8 +8,8 @@
 
 use crate::division_spec::DIVISION_SUBTYPE;
 
-/// Overture's subtypes, broadest first: spec/spec/division.json's numbers,
-/// which is also how it crosses as JSON.
+/// Overture's subtypes, broadest first, numbered as spec/spec/division.json numbers them,
+/// which is also how a subtype crosses as JSON.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum Subtype {

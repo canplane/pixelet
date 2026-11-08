@@ -1,31 +1,29 @@
 // pxl-engine/answer.rs
 
-//! gpu-portable: what the world's one query answers of a node, as every
-//! source writes it and every reader reads it: its kind, a cell's asset in
-//! the one value space and the share of its cube it keeps, and a split's box
-//! in its own steps, every axis alike.
-//! Below the descent, the query and the sources alike.
+//! gpu-portable: the answer the world's one query gives about a node, as every source writes
+//! it and every reader reads it: the node's kind; for a cell, its asset in the one value space
+//! and the share of its cube it keeps; and for a split, the box where anything in it may lie,
+//! in the node's own steps, alike on every axis. The descent, the query and the sources all
+//! stand on this module.
 
 use crate::value;
 
-/// A cube filled whole, as a share counts it: a share is in 2⁻¹⁵ of its
-/// cube, floored at each fold, so eighths stay exact `FULL_FOLDS` folds deep.
+/// A cube filled whole, as a share counts it. A share is counted in 2⁻¹⁵ of its cube and
+/// floored at each fold, so its eighths stay exact through `FULL_FOLDS` folds.
 pub const FULL: u32 = 1 << (FILL_BITS * FULL_FOLDS);
 
-/// The folds a share's eighths stay exact through.
 const FULL_FOLDS: u32 = 5;
 
 /// What a node is to a descent.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Kind {
-    /// Coarser than asked: something under it may fill.
+    /// Coarser than asked, and something under it may fill.
     Split,
-    /// A cell: at the zoom asked, the asset in it; coarser, air (`AIR`)
-    /// where nothing under it fills at the zooms asked, as a cell of air its
-    /// size.
+    /// A cell. At the zoom asked it holds its asset. Coarser than asked, it is air (`AIR`), a
+    /// cell of air its whole size, where nothing under it fills at the zooms asked.
     Cell,
-    /// Not held: past it the ray tells nothing.
+    /// Not held, a lack: past it the ray can tell nothing.
     Lacks,
 }
 
@@ -39,46 +37,44 @@ pub struct In<B> {
 /// A cell nothing fills: void, no palette indices.
 pub const AIR: [u32; 2] = [value::VOID, 0];
 
-/// The bits an asset's value takes at the foot of its word.
+/// The low bits of an asset's word that hold its value.
 pub const VAL_BITS: u32 = 16;
 
-/// An asset's word where what is placed answered it, over its value: the
-/// source control tells an edit by (`is_placed`), which nothing drawn reads.
-/// Over it, the share of its cube the cell keeps (`FILL_SHIFT`).
+/// The bit above the value that marks an asset answered by what is placed. Control tells an
+/// edit by it (`is_placed`); nothing drawn reads it. The share of its cube the cell keeps lies
+/// above it (`FILL_SHIFT`).
 pub const PLACED_ASSET: u32 = 1 << VAL_BITS;
 
-/// An asset's value, without whether what is placed holds it
-/// (`PLACED_ASSET`) or what of its cube it keeps: a palette index reads the same
-/// whichever layer holds it.
+/// An asset's value without the `PLACED_ASSET` bit or its fill share, so a palette index
+/// reads the same whichever layer holds it.
 pub const fn val(asset: u32) -> u32 {
     asset & (PLACED_ASSET - 1)
 }
 
-/// A bound as a word, its lowest in the low half and its highest in the
-/// high, each an i16: the ground's, a level's entry (`ground::Bounds`).
+/// A bound packed into a word, its lowest in the low half and its highest in the high, each
+/// as an i16. The ground's bounds, a clip level's entries, are kept so (`ground::Bounds`).
 pub(crate) fn bound_word([lo, hi]: [i32; 2]) -> i32 {
     lo & 0xffff | hi << 16
 }
 
-/// `bound_word`'s lowest and highest.
+/// The lowest and highest a `bound_word` holds.
 pub(crate) fn bound_of(w: i32) -> [i32; 2] {
     [w << 16 >> 16, w >> 16]
 }
 
-/// A split's asset words: where anything may lie in the node, a box on
-/// every axis alike in the node's own steps, `BOX_STEPS` a side, the
-/// pyramid `BOX_BITS` zooms under it — on each axis its first step and its
-/// last, `BOX_BITS` each: x's two and y's first in the first word, y's last
-/// and z's two in the second. Conservative: what the node holds lies in it,
-/// a box wider only splits more. A ray through the node outside it meets
-/// nothing there (pxl-engine cast). The world asks no axis apart.
+/// A split's asset words: the box in which anything in the node may lie, in the node's own
+/// steps, `BOX_STEPS` a side on every axis, which is the pyramid `BOX_BITS` zooms under the
+/// node. Each axis holds its first step and its last, `BOX_BITS` bits each: x's two and y's
+/// first in the first word, y's last and z's two in the second. The box is conservative: all
+/// the node holds lies in it, and a wider box only makes a ray split more. A ray through the
+/// node outside the box meets nothing there (pxl-engine cast). The world asks no axis apart.
 pub(crate) type BoxWords = [u32; 2];
 pub const BOX_BITS: u32 = 10;
-/// The steps of a box's axis: its node's side over them, `2^BOX_BITS`.
+/// The steps on a box's axis; a step is the node's side divided by `2^BOX_BITS`.
 pub const BOX_STEPS: u32 = 1 << BOX_BITS;
 pub const BOX_WHOLE: BoxWords = box_word([0; 3], [BOX_STEPS; 3]);
-/// No box: nothing lies in the node, as a join of boxes starts. No
-/// `box_word` sets a bit past `3 · BOX_BITS` of a word.
+/// No box: nothing lies in the node. A join of boxes starts from it. No `box_word` sets a bit
+/// past `3 · BOX_BITS` of a word, so no box is mistaken for it.
 pub const BOX_NONE: BoxWords = [u32::MAX; 2];
 
 /// The box from step `lo` to past step `hi` on each axis, each held to the
@@ -128,12 +124,11 @@ pub(crate) const fn box_join(a: BoxWords, b: BoxWords) -> BoxWords {
     box_word(lo, hi)
 }
 
-/// Whether `b` is no box (`BOX_NONE`).
 pub(crate) const fn box_none(b: BoxWords) -> bool {
     b[0] == BOX_NONE[0] && b[1] == BOX_NONE[1]
 }
 
-/// `box_word`'s first step and past its last on each axis.
+/// The first step, and the step past the last, on each axis of a `box_word`.
 pub(crate) const fn box_of(w: BoxWords) -> ([u32; 3], [u32; 3]) {
     let m = BOX_STEPS - 1;
     let f = [
@@ -147,39 +142,37 @@ pub(crate) const fn box_of(w: BoxWords) -> ([u32; 3], [u32; 3]) {
     ([f[0], f[2], f[4]], [f[1] + 1, f[3] + 1, f[5] + 1])
 }
 
-/// Whether an asset lets light through: a ray sees nothing there
-/// and passes on, whichever source holds it. What every ray sees by
-/// (cast.rs `walk`), and the one place a value is told to be so: what
-/// nothing is painted on and what is placed as nothing. What is placed
-/// answers a voxel alone (`overwrite::value`), so no decor or marker is
-/// among them. A question of light, not of matter (`fills`): matter a ray
-/// sees through would answer yes to both.
+/// Whether an asset lets light through: a ray sees nothing there and passes on, whichever
+/// source holds it. Every ray sees by this (cast.rs `walk`), and it is the one place a value
+/// is said to be transparent: void, on which nothing is painted, and air, which is placed as
+/// nothing. What is placed answers a voxel alone (`object::val`), so no decor or marker is
+/// among them. It is a question of light, not of matter (`fills`): matter that a ray sees
+/// through would answer yes to both.
 pub fn transparent(val: u32) -> bool {
     let v = self::val(val);
     v == value::VOID || v == value::AIR
 }
 
-/// Whether an asset is matter, taking its share of its cell as the
-/// layers compose its volume (`cover`) and drawn by its palette indices: anything but
-/// what nothing is painted on and what is placed as nothing. A question of
-/// matter, not of light (`transparent`).
+/// Whether an asset is matter: it takes its share of its cell as the layers compose the
+/// cell's volume (`cover`), and it is drawn by its palette indices. Everything is matter but
+/// void and air. It is a question of matter, not of light (`transparent`).
 pub fn fills(val: u32) -> bool {
     let v = self::val(val);
     v != value::VOID && v != value::AIR
 }
 
-/// A cell's fill share over its asset's value and `PLACED_ASSET`: the eighths of
-/// its cube it keeps of what fills it (`fill_eighths`), 0 for all eight, so a leaf's
-/// word, and every cell's whole, sets no bit of it.
+/// A cell's fill share, above its asset's value and `PLACED_ASSET`: the eighths of its cube
+/// that what fills it keeps (`fill_eighths`), with 0 for all eight, so a leaf's word, like
+/// every whole cell's, sets none of its bits.
 pub const FILL_SHIFT: u32 = VAL_BITS + 1;
 pub const FILL_BITS: u32 = EIGHTHS.trailing_zeros();
-/// A cube's eighths: its children, what a share is kept in.
+/// A cube's eighths, its children, in which a share is kept.
 pub const EIGHTHS: u32 = 8;
 
-/// The eighths of a cube kept of `fill` of it, in `FULL`'s units:
-/// floored, so a trace too small to fill one child keeps none and nothing is
-/// drawn there. The one rule a cell's fill share is, the ground's top
-/// (`ground::top`) and a cell of every layer together (`cover`) alike.
+/// The eighths of a cube kept of `fill` of it, in `FULL`'s units. It floors, so a trace too
+/// small to fill one child keeps none and nothing is drawn there. It is the one rule for a
+/// cell's fill share, for the ground's top (`ground::top`) and for a cell of every layer
+/// together (`cover`) alike.
 pub const fn eighths(fill: u32) -> u32 {
     let k = fill / (FULL / EIGHTHS);
     if k > EIGHTHS {
@@ -189,16 +182,14 @@ pub const fn eighths(fill: u32) -> u32 {
     }
 }
 
-/// What of a cell's cube fills, and whether an overwrite's kind is its
-/// palette index: the ground filling `ground` of it, under an overwrite — what is
-/// placed, or the ways — of `kind` filling `over` of it, each in
-/// `FULL`'s units. A kind that fills lies beside the ground, as
-/// a thing stands on it, so their shares add; air lies in it, as a cut, a
-/// bore or a cave, so it takes its share from the ground's, in whole eighths
-/// as a fill is kept (`eighths`): a trace too small to empty one child
-/// empties none. The palette index is the kind most
-/// of the fill is: the overwrite's where it fills at least as much as the
-/// ground, the ground's where air is what is written.
+/// How much of a cell's cube fills, and whether the overwrite's kind gives the palette index.
+/// The ground fills `ground` of the cube, and over it an overwrite (what is placed, or the
+/// ways) of `kind` fills `over`, each in `FULL`'s units. A kind that fills lies beside the
+/// ground, as a thing stands on it, so the two shares add. Air lies inside the ground, as a
+/// cut, a bore or a cave does, so it takes its share from the ground's, in whole eighths as a
+/// fill is kept (`eighths`): a trace too small to empty one child empties none. The palette
+/// index is the kind that makes up most of the fill: the overwrite's where it fills at least
+/// as much as the ground, and the ground's where air is written.
 pub fn cover(ground: u32, kind: u32, over: u32) -> (u32, bool) {
     if fills(kind) {
         let sum = ground + over;
@@ -209,13 +200,13 @@ pub fn cover(ground: u32, kind: u32, over: u32) -> (u32, bool) {
     }
 }
 
-/// `asset` keeping `k` eighths of its cube (`FILL_SHIFT`).
+/// `asset` set to keep `k` eighths of its cube (`FILL_SHIFT`).
 pub(crate) const fn fill_word(asset: u32, k: u32) -> u32 {
     asset & !(((1 << FILL_BITS) - 1) << FILL_SHIFT) | (k % EIGHTHS) << FILL_SHIFT
 }
 
-/// The eighths of its cube an asset's word keeps, all eight where it sets
-/// none (`FILL_SHIFT`).
+/// The eighths of its cube an asset's word keeps; all eight where it sets none
+/// (`FILL_SHIFT`).
 pub const fn fill_eighths(asset: u32) -> u32 {
     let k = asset >> FILL_SHIFT & ((1 << FILL_BITS) - 1);
     if k == 0 {
@@ -225,10 +216,10 @@ pub const fn fill_eighths(asset: u32) -> u32 {
     }
 }
 
-/// The side of the box a cell keeping `k` eighths of its cube is drawn
-/// as, a share of its cube's: the cube root of what it keeps, so its volume
-/// is that share, inset about its cube's center on every axis alike. A
-/// table, as a GPU has no cube root: `∛(k/8) = ∛k / 2`.
+/// The side of the box a cell keeping `k` eighths of its cube is drawn as, as a share of the
+/// cube's side: the cube root of what it keeps, so the box's volume is that share, inset about
+/// the cube's center alike on every axis. It is a table because a GPU has no cube root:
+/// `∛(k/8) = ∛k / 2`.
 pub const fn side(k: u32) -> f32 {
     match k {
         1 => 0.5,
@@ -242,8 +233,9 @@ pub const fn side(k: u32) -> f32 {
     }
 }
 
-/// Whether an asset hides its cube whole: it is not transparent and keeps
-/// all of it (`fill_eighths`). A cell beside a box closes in none of its edges.
+/// Whether an asset hides its cube whole: it is not transparent and keeps all of the cube
+/// (`fill_eighths`). A box filled short of its cube closes in none of the edges of a cell
+/// beside it.
 pub fn whole(asset: u32) -> bool {
     !transparent(asset) && fill_eighths(asset) == EIGHTHS
 }
@@ -267,8 +259,8 @@ mod tests {
         assert_eq!(box_of(BOX_WHOLE), ([0; 3], [BOX_STEPS; 3]));
     }
 
-    /// A carve takes a fill in whole eighths: a trace under one takes none,
-    /// as a fill under one keeps none (`eighths`).
+    /// A carve takes a fill in whole eighths: a trace under one eighth takes none, as a fill
+    /// under one keeps none (`eighths`).
     #[test]
     fn carve_takes_whole_eighths() {
         let air = value::AIR;

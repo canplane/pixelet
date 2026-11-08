@@ -1,9 +1,9 @@
 // @pxl/client/ui/debug/view.tsx
 
 /**
- * The view panel: where the camera and the pointer are, read live. Shown by
- * the `view` setting, and read while shown, so its header carries where the
- * pivot is even closed.
+ * The view panel shows where the camera and the pointer are, read live. It
+ * is shown while the `view` setting is on and is read for as long as it is
+ * shown, so its header gives the pivot's position even while it is closed.
  */
 
 import { SETTING } from "@/ui/setting/schema.ts";
@@ -11,7 +11,7 @@ import { fixed } from "@/ui/fixed.ts";
 import { Accordion } from "./accordion.tsx";
 import { PerfView } from "./perf/gauge.tsx";
 import { usePerfView } from "./perf/poll.ts";
-import { useCore } from "@/ui/store/watch.ts";
+import { useCore } from "@/ui/watch.ts";
 
 export function ViewPanel() {
   const show = useCore((s) => s.settings[SETTING.view.key] === 1);

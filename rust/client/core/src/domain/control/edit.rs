@@ -1,58 +1,89 @@
 // pxl-core/domain/control/edit.rs
 
-//! What the pointer picks and edits, apart from what it does to the camera:
-//! the tool it holds, what is under it, and what a tap does with that.
+//! What the pointer picks and edits in the world. What it does to the
+//! camera is in input.rs. This module keeps the tool the pointer holds and
+//! what is under the pointer. Each tool does the steps of an edit in its own
+//! module: what a tap does, the edit it previews and the ghost it shows
+//! (pointer.rs, eraser.rs, item.rs). The pointer and the eraser point at what
+//! the pick struck alike (`aim`); the item at the corner flush against it.
 
 pub mod collision;
+mod eraser;
 pub mod ghost;
+mod item;
 pub mod pick;
+mod pointer;
 pub mod write;
 
-use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::lattice::GROUND;
 
-use crate::domain::control::camera::controller;
-use crate::domain::control::camera::controller::Motion;
-use crate::domain::control::edit::collision::is_placement_blocked;
-use crate::domain::control::edit::collision::{anchor_center, object_aabb};
-use crate::domain::control::edit::pick::{
-    ray_pick, resolve_hit_object, world_adjacent_corner, world_struck_corner,
-};
-use crate::domain::control::edit::write::{place_air, remove};
-use crate::domain::control::navigation::destination;
-use crate::domain::control::support::stand;
+use crate::domain::control::edit::pick::{pick_at, Pick};
+use crate::domain::control::edit::write::Preview;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::asset::Asset;
-use crate::domain::query;
-use crate::domain::query::HitKind::Decor;
-use crate::domain::query::HitKind::Object;
-use crate::domain::query::{Hit, World};
-use crate::domain::view::frame::pose::{eye, ray_of};
-use pxl_spec::space::coord::zoom::{base_of, cube, idx_of, of_side, Zoom};
+use crate::domain::layer::object::store::Entry;
+use crate::domain::preview::Ghost;
+use crate::domain::query::World;
+use pxl_spec::space::coord::zoom::{base_of, cube, idx_of, Zoom};
 use pxl_spec::space::layer::octant::Octant;
 use xpute_core::global::Global;
 
-/// What the pointer holds, as the UI chose it (`EDIT_TOOL`).
+/// The tool the pointer holds, as the UI chose it (`EDIT_TOOL`).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum Tool {
     #[default]
     Pointer,
     Eraser,
-    /// An item to place, at a scale chosen for a cube.
+    /// An item to place, at the zoom its scale comes to (`Asset::zoom`).
     Item {
         asset: Asset,
-        scale_steps: i32,
+        zoom: Zoom,
     },
 }
 
 impl Tool {
-    /// What it would place, and the zoom that comes to.
+    /// What the tool would place, and at which zoom.
     pub fn asset(self) -> Option<(Asset, Zoom)> {
         match self {
-            Tool::Item { asset, scale_steps } => Some((asset, asset.zoom(scale_steps))),
+            Tool::Item { asset, zoom } => Some((asset, zoom)),
             Tool::Pointer | Tool::Eraser => None,
+        }
+    }
+
+    /// What the tool points at where the pick struck.
+    fn hover(self, pick: &Pick) -> Hover {
+        match self {
+            Tool::Pointer | Tool::Eraser => aim(pick),
+            Tool::Item { zoom, .. } => item::hover(zoom, pick),
+        }
+    }
+
+    /// What a tap does where the tool points (`hover`).
+    fn tap(self, hover: &Hover) {
+        match self {
+            Tool::Pointer => pointer::tap(hover),
+            Tool::Eraser => eraser::tap(hover),
+            Tool::Item { asset, zoom } => item::tap(asset, zoom, hover),
+        }
+    }
+
+    /// The edit a tap would make where the tool points, this turn; `was` the
+    /// last turn's.
+    fn preview(self, hover: &Hover, was: &Preview) -> Preview {
+        match self {
+            Tool::Pointer => pointer::preview(hover),
+            Tool::Eraser => eraser::preview(hover),
+            Tool::Item { asset, zoom } => item::preview(asset, zoom, hover, was),
+        }
+    }
+
+    /// The ghost of the edit `preview` previews.
+    fn ghost(self, hover: &Hover, preview: &Preview) -> Ghost {
+        match self {
+            Tool::Pointer => pointer::ghost(hover, preview),
+            Tool::Eraser => eraser::ghost(hover, preview),
+            Tool::Item { asset, .. } => item::ghost(asset, hover, preview),
         }
     }
 }
@@ -61,15 +92,16 @@ impl Tool {
 pub struct Hover {
     pub coord: Option<Q3>,
     pub target: Option<Target>,
-    /// Where the pivot sent there starts from.
+    /// The leaf cell across the struck face, where a pivot sent to the
+    /// hover stands (`tap`).
     pub approach: Option<Q3>,
 }
 
 struct State {
     tool: Tool,
     hover: Hover,
-    /// Where the pointer stands on the screen, in NDC, whatever it can strike:
-    /// the gauge casts its own ray there.
+    /// Where the pointer is on the screen, in NDC, whether or not it strikes
+    /// anything. The gauge casts its own ray there.
     pointer_ndc: Option<[f64; 2]>,
 }
 
@@ -100,19 +132,20 @@ pub(crate) fn clear_hover() {
     state().pointer_ndc = None;
 }
 
-/// Where the pointer stands on the screen, in NDC, while it is over it.
+/// Where the pointer is on the screen, in NDC. None while it is off the
+/// screen.
 pub fn pointer_ndc() -> Option<[f64; 2]> {
     state().pointer_ndc
 }
 
-/// The pointer stands at `ndc_x`, `ndc_y` over something the world's pick
-/// does not reach (pxl-core pointer.rs): nothing in the world is picked.
+/// The pointer is at `ndc_x`, `ndc_y` over something the world's pick does
+/// not reach (pxl-core pointer.rs), so nothing in the world is picked.
 pub(crate) fn point_at(ndc_x: f64, ndc_y: f64) {
     state().pointer_ndc = Some([ndc_x, ndc_y]);
     state().hover = Hover::default();
 }
 
-/// A gesture under way points at nothing to place.
+/// While a gesture is under way, the pointer points at nothing to place.
 pub(crate) fn clear_hover_coord() {
     state().hover.coord = None;
 }
@@ -122,8 +155,9 @@ pub(crate) fn clear_hover_coord() {
 pub enum Target {
     /// A placed object.
     Object(Octant),
-    /// A decor the ground generated, which has no entry, in its leaf cell.
-    Generated([i32; 3], Instance),
+    /// A decor the ground generated, and the leaf cell it stands in. It has
+    /// no entry in the store.
+    Prop([i32; 3], Instance),
 }
 
 impl Hover {
@@ -134,158 +168,73 @@ impl Hover {
         }
     }
 
-    pub fn scattered_decor(&self) -> Option<Instance> {
+    pub fn prop(&self) -> Option<Instance> {
         match self.target {
-            Some(Target::Generated(_, i)) => Some(i),
+            Some(Target::Prop(_, i)) => Some(i),
             _ => None,
         }
     }
-}
 
-/// The box what is put across the face `hit` struck goes flush against, past
-/// the hit's own: a placed cube's entry, as it is stored. A decor's is the
-/// box it claims, which the hit carries.
-fn flush_against(hit: &Hit) -> Option<Aabb> {
-    match hit.kind {
-        Object(_) => resolve_hit_object(hit).map(|o| object_aabb(&o)),
-        _ => None,
+    /// The placed object pointed at, as stored, and the zoom of the cube an
+    /// edit there takes: the object's, or else a whole leaf cell, as a carve
+    /// of the ground takes it.
+    fn object(&self) -> (Option<Entry>, Zoom) {
+        let object = self.object_at().and_then(|at| World::now().entry_at(at));
+        let zoom = object.map_or(GROUND.leaf_cell_zoom(), |o| o.zoom);
+        (object, zoom)
     }
 }
 
-fn resolve_target(hit: &Hit) -> Option<Target> {
-    match hit.kind {
-        Decor(i) => match i.generated_in() {
-            Some(cell) => Some(Target::Generated(cell, i)),
-            None => resolve_hit_object(hit).map(|o| Target::Object(o.id())),
-        },
-        _ => resolve_hit_object(hit).map(|o| Target::Object(o.id())),
-    }
-}
-
-/// What the hover's pick met, and the cell zoom the eye's rays draw where
-/// it struck, by the rule they are cast by (domain/query/ray.rs `by_dist`),
-/// which near the eye is finer than the ground's cells, as what is placed
-/// may be; none without an eye.
-pub(crate) struct Pick {
-    pub hit: Hit,
-    pub ray_zoom: Option<Zoom>,
-}
-
-/// The cell what `hit` struck stands in: a decor's, whatever its box, else
-/// the box struck.
-fn cell_struck(hit: &Hit) -> Aabb {
-    match hit.kind {
-        Decor(i) => i.cell(),
-        _ => hit.cube,
-    }
-}
-
-impl Pick {
-    /// The zoom of the cell struck.
-    pub(crate) fn zoom(&self) -> Zoom {
-        of_side(cell_struck(&self.hit).extent()[0])
-    }
-
-    /// Whether the rays draw coarser there than the cell struck: a summary,
-    /// not what is held, so nothing in it is struck.
-    pub(crate) fn is_folded(&self) -> bool {
-        self.ray_zoom.is_some_and(|z| z < self.zoom())
-    }
-}
-
-/// What the hover picks at `ndc_x`, `ndc_y`,
-/// from the pose as the camera holds it now, which a door event or a
-/// controller may have moved since the turn composed the view.
-pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Pick> {
-    let pose = controller::pose()?;
-    let (mut origin, mut dir) = ([0.0; 3], [0.0; 3]);
-    ray_of(pose, ndc_x, ndc_y, &mut origin, &mut dir);
-    let hit = ray_pick(origin, dir)?;
-    let ray_zoom = eye().map(|eye| {
-        let v = v3::sub(&cell_struck(&hit).center(), &eye);
-        query::by_dist().at(v3::dot(&v, &v) as f32)
-    });
-    Some(Pick { hit, ray_zoom })
-}
-
-/// What is under the pointer at `ndc_x`, `ndc_y`, for the tool held.
+/// Finds what is under the pointer at `ndc_x`, `ndc_y` for the tool held,
+/// and keeps it as the hover.
 pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
-    let ui = state().tool;
     state().pointer_ndc = Some([ndc_x, ndc_y]);
-    let hover = &mut state().hover;
-    let Some(Pick { hit, .. }) = pick_at(ndc_x, ndc_y).filter(|p| !p.is_folded()) else {
-        *hover = Hover::default();
-        return;
+    state().hover = match pick_at(ndc_x, ndc_y).filter(|p| !p.is_folded()) {
+        Some(p) => state().tool.hover(&p),
+        None => Hover::default(),
     };
+}
 
-    if let Some((_, zoom)) = ui.asset() {
-        hover.target = None;
-        hover.approach = None;
-        hover.coord = Some(world_adjacent_corner(
-            &hit,
-            zoom,
-            flush_against(&hit).as_ref(),
-        ));
-        return;
-    }
-
-    let target = resolve_target(&hit);
-    hover.target = target;
-    hover.approach = Some(world_adjacent_corner(
-        &hit,
-        GROUND.cell(),
-        flush_against(&hit).as_ref(),
-    ));
+/// What the pointer and the eraser point at where `pick` struck: the placed
+/// object or the generated decor struck, or else the leaf cell of the
+/// ground; and the leaf cell across the struck face, where a pivot sent
+/// there stands. Where the world takes no edit, nothing.
+fn aim(pick: &Pick) -> Hover {
+    let target = pick.target();
+    let approach = Some(pick.adjacent_corner(GROUND.leaf_cell_zoom()));
     let (corner, zoom) = match target {
         Some(Target::Object(at)) => (base_of(at.zoom(), at.at()), at.zoom()),
-        Some(Target::Generated(cell, _)) => (base_of(GROUND.cell(), cell), GROUND.cell()),
-        // On the cell's grid, not the tier's: that is the size a carve is written at.
-        None => (world_struck_corner(&hit, GROUND.cell()), GROUND.cell()),
+        Some(Target::Prop(cell, _)) => (
+            base_of(GROUND.leaf_cell_zoom(), cell),
+            GROUND.leaf_cell_zoom(),
+        ),
+        // The corner is on the leaf cell's grid, not the size tier's, because
+        // a carve is written at a leaf cell's size.
+        None => (
+            pick.struck_corner(GROUND.leaf_cell_zoom()),
+            GROUND.leaf_cell_zoom(),
+        ),
     };
-    // Past where the world takes an edit, nothing is pointed at.
+    // Where the world takes no edit, nothing is pointed at.
     if !World::now().editable(&cube(zoom, idx_of(zoom, &corner))) {
-        *hover = Hover::default();
-        return;
+        return Hover::default();
     }
-    hover.coord = Some(corner);
+    Hover {
+        coord: Some(corner),
+        target,
+        approach,
+    }
 }
 
-/// A tap at `ndc_x`, `ndc_y` with the tool held.
+/// Carries out a tap at `ndc_x`, `ndc_y` with the tool held.
 pub fn tap(ndc_x: f64, ndc_y: f64) {
     hover_at(ndc_x, ndc_y);
-    let Some(hovered) = state().hover.coord else {
-        return;
-    };
-    let ui = state().tool;
     let hover = state().hover;
-
-    match ui.asset() {
-        Some((asset, zoom)) => {
-            // The slot may have filled since the last hover update.
-            if !is_placement_blocked(asset, zoom, &hovered) {
-                asset.place(&hovered, zoom);
-            }
-        }
-        None if ui == Tool::Pointer => {
-            // Recenter across the struck face, standing as a pan lands.
-            let Some(approach) = hover.approach else {
-                return;
-            };
-            let target = stand(&anchor_center(&approach));
-            destination::go_to(target, Motion::Smooth);
-        }
-        // The eraser.
-        None => {
-            match hover.target {
-                Some(Target::Object(at)) => remove(at),
-                Some(Target::Generated(cell, _)) => place_air(Octant::new(GROUND.cell(), cell)),
-                // AIR, not VOID: terrain has no leaf to delete. A whole cell, never the
-                // size tier.
-                None => place_air(Octant::holding(GROUND.cell(), &hovered)),
-            }
-        }
+    if hover.coord.is_none() {
+        return;
     }
-    // What the tap wrote is under the pointer, which may not move again: the
-    // world is picked again there.
+    state().tool.tap(&hover);
+    // What the tap wrote is under the pointer, and the pointer may not move
+    // again, so the world is picked again there now.
     hover_at(ndc_x, ndc_y);
 }

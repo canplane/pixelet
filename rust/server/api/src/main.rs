@@ -1,7 +1,7 @@
 // pxl-api/main.rs
 
-//! The application's server (sessions, chat, placed objects). It has no
-//! routes yet; only the db-main connection and the gated internal prefix.
+//! The application's server, for sessions, chat and placed objects. It holds the db-main
+//! connection and the gated internal prefix, and serves no routes.
 
 use std::process::ExitCode;
 

@@ -1,6 +1,7 @@
 // pxl-core/domain/scene/indicator.rs
 
-//! What marks where something is: the location indicator, the hover ghost.
+//! The marks that show where something is: the location indicator and the
+//! hover ghost.
 
 pub mod ghost;
 pub mod location;

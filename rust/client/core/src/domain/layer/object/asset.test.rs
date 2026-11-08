@@ -19,8 +19,8 @@ fn of_the_catalog() {
     assert_eq!(Asset::of(MARKER), Asset::Marker);
 }
 
-/// One reading for every kind: what the catalog does not give out, another
-/// version's among them, is unknown and stops nothing.
+/// An id the catalog does not give out, one from another version's catalog
+/// among them, reads as unknown and does not stop the core.
 #[test]
 fn past_the_catalog() {
     let shape = |kind: Kind, n: u32| (kind as u32) << SHAPE_BITS | n;

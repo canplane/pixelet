@@ -47,9 +47,9 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 /// xpute-tool.
 const OTHERS: [&str; 1] = ["xpute/"];
 
-/// Writes every generated file that differs from what its JSON writes and
-/// deletes every one nothing writes any more, or, not `write`, fails where
-/// one is either.
+/// Writes every generated file that differs from what its JSON writes and deletes every one
+/// that nothing writes any more; where `write` is false, it fails wherever it finds either
+/// instead.
 pub fn generate(write: bool) -> Result<(), String> {
     generate_at(&root(), outputs()?, &OTHERS, write)
 }

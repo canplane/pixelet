@@ -15,7 +15,9 @@ use crate::domain::query::World;
 use crate::domain::view::frame::coord;
 
 impl Asset {
-    /// The room it takes at `corner`, in units, its cube at `zoom`.
+    /// The room, in units, the asset takes when placed at `corner` with its
+    /// cube at `zoom`. A decor claims its own box in the cell, and anything
+    /// else takes the whole cell.
     fn room(self, zoom: Zoom, corner: &Q3) -> Aabb {
         let cell = cube(zoom, idx_of(zoom, corner));
         match self.decor() {
@@ -29,10 +31,11 @@ impl Asset {
     }
 }
 
-/// The columns `is_placement_blocked` reads the world over, in units, X then
-/// Y, lowest then highest: its room's, and about it a placed decor's extent
-/// past it, as `World::placed_occupying` reads them, and the room's own
-/// width again, where `World::editable` bounds it by the nodes about it.
+/// The columns over which `is_placement_blocked` reads the world, in units,
+/// as the lowest corner and then the highest, each X then Y. They cover the
+/// room, padded on every side by the farthest a placed decor reaches past
+/// its cell (`World::placed_occupying`) and by the room's own width again,
+/// since `World::editable` judges the room by the nodes around it.
 pub fn placement_reads(asset: Asset, zoom: Zoom, corner: &Q3) -> [[f64; 2]; 2] {
     let room = asset.room(zoom, corner);
     let width = (room.max[0] - room.min[0]).max(room.max[1] - room.min[1]);
@@ -43,22 +46,29 @@ pub fn placement_reads(asset: Asset, zoom: Zoom, corner: &Q3) -> [[f64; 2]; 2] {
     ]
 }
 
-/// Whether what is of `kind` may stand over an instance of `under`: what
-/// stands (`Kind::stands`) only on what is stood on (`Kind::stood_on`).
+/// Whether something of `kind` may stand on an instance of `under`. A kind
+/// that stands (`Kind::stands`) goes only on a kind that can be stood on
+/// (`Kind::stood_on`).
 fn goes_on(kind: Kind, under: Kind) -> bool {
     !kind.stands() || under.stood_on()
 }
 
-/// The shared check for the placement commit and its hover preview: its room
-/// is where the world takes an edit (`World::editable`), nothing placed
-/// shares the room its kind occupies (`World::placed_occupying`), which
-/// holds its cell, and nothing in the cell under it is one it may not stand
-/// on (`goes_on`), a marker, as the ground generates none.
+/// Whether placing `asset` at `corner` is refused. The placement and its
+/// hover preview share this check. A placement is allowed only where the
+/// world takes an edit (`World::editable`), where nothing placed shares the
+/// room the asset's kind occupies (`World::placed_occupying`), and where
+/// nothing in the cell under it is something it may not stand on
+/// (`goes_on`). Only a placed marker can refuse it that way, since the
+/// ground generates no markers.
 pub fn is_placement_blocked(asset: Asset, zoom: Zoom, corner: &Q3) -> bool {
     let (world, room) = (World::now(), asset.room(zoom, corner));
     let taken = !world.editable(&room) || world.placed_occupying(&room, |_| true).is_some();
     let under = Aabb {
-        min: [room.min[0], room.min[1], room.min[2] - units(GROUND.cell())],
+        min: [
+            room.min[0],
+            room.min[1],
+            room.min[2] - units(GROUND.leaf_cell_zoom()),
+        ],
         max: [room.max[0], room.max[1], room.min[2]],
     };
     let refuses = |e: &Entry| {
@@ -67,10 +77,10 @@ pub fn is_placement_blocked(asset: Asset, zoom: Zoom, corner: &Q3) -> bool {
     taken || world.placed_occupying(&under, refuses).is_some()
 }
 
-/// The center of the cell a hover anchor (a min corner) points at: where a
-/// tap recenters, which is where the ghost box is drawn.
+/// The center of the leaf cell whose min corner is the hover anchor
+/// `anchor`. A tap recenters there, and the ghost box is drawn there.
 pub fn anchor_center(anchor: &Q3) -> Q3 {
-    let half = q3::from_real(units(GROUND.cell()) / 2.0);
+    let half = q3::from_real(units(GROUND.leaf_cell_zoom()) / 2.0);
     world::at(
         i64::from(anchor[0]) + half,
         i64::from(anchor[1]) + half,
@@ -78,7 +88,7 @@ pub fn anchor_center(anchor: &Q3) -> Q3 {
     )
 }
 
-/// In the world's doubles, the space the pick works in.
+/// The box of a placed object in world doubles, the space the pick works in.
 pub fn object_aabb(obj: &Entry) -> Aabb {
     let min = coord::to_world(&obj.corner());
     let max = min.map(|v| v + obj.size());

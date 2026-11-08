@@ -1,17 +1,17 @@
 // pxl-core/door.rs
 
-//! The core's side of the doorbell, its entry (`run`, xpute_core::entry),
-//! which its machine's core form (`xpute_core::core!`, lib.rs) hands each
-//! turn to: commands applied, events raised. The rings, the front's header
-//! and the front they lie in are xpute's, laid by the runtime as the core's
-//! machine places them (machine.json, xpute_core::machine), and so is what
-//! its runtime's form hands it (`BootInfo`).
+//! The core's side of the door. Every turn enters through `run`
+//! (xpute_core::entry), which applies the commands waiting in the rings and
+//! posts the turn's events. The rings, the front's header and the front that
+//! holds them belong to xpute: the runtime lays them out where the core's
+//! machine places them (machine.json, xpute_core::machine). xpute also
+//! defines what the runtime hands the core at boot (`BootInfo`).
 
 mod apply;
-/// The commands and the snapshot the core and the UI agree on,
-/// generated from ui.json; the enums the domain reads are written apart
-/// (domain/cmd.spec.rs) and named here from there. What any core and runtime
-/// share is `xpute_core::abi`'s.
+/// The commands and the snapshot the core and the UI agree on, generated
+/// from ui.json. The enums the domain reads are generated apart
+/// (domain/cmd.spec.rs), and this module names them from there. What every
+/// core shares with every runtime is in `xpute_core::abi`.
 #[path = "door/cmd.spec.rs"]
 pub mod cmd;
 mod executor;
@@ -22,10 +22,9 @@ use crate::domain::control::sensor;
 use crate::domain::scene::character::surface::character_surface_close;
 use crate::domain::view::demand;
 use crate::door::cmd::{Sensor, SensorStart, SensorStop, UiSnapshot};
-use crate::machine::MACHINE;
 use crate::perf::record::{perf_record, perf_record_turn};
 use crate::perf::spec::Wake;
-use crate::perf::task::TaskRow;
+use crate::perf::task::TaskRecord;
 use crate::sys::boot;
 use crate::sys::io::dispatch;
 use crate::sys::io::file;
@@ -34,6 +33,7 @@ use crate::sys::io::request;
 use crate::sys::io::request::Event;
 use crate::sys::io::runtime;
 use crate::sys::io::text;
+use crate::sys::machine::MACHINE;
 use crate::sys::mem::section;
 use crate::sys::sched::edge;
 use crate::turn;
@@ -53,29 +53,33 @@ use xpute_core::sched::task;
 use xpute_core::stop;
 
 struct State {
-    /// The UI snapshot and view last posted; each is posted only where it moved.
+    /// The UI snapshot and view last posted. Each is posted again only when
+    /// it changes.
     last_snapshot: SnapshotMemo,
-    /// Where the last snapshot's event was posted: `SNAPSHOT` is the runtime's
-    /// until its head has passed it (xpute_core ipc/door.rs R3).
+    /// The position of the event that posted the last snapshot. The runtime
+    /// owns `SNAPSHOT` until its head has passed this position (xpute_core
+    /// ipc/door.rs R3).
     snapshot_pos: Option<Pos>,
-    /// A snapshot was put off while the runtime still held the last: the next
-    /// turn comes at once and posts it.
+    /// Set when a snapshot was put off because the runtime still held the
+    /// last one. The next turn then comes at once and posts it.
     snapshot_pending: bool,
-    /// A UI command was applied this turn, so its falling edge posts to the UI.
+    /// Set when a UI command was applied this turn, so the turn posts to the
+    /// UI as it ends.
     snapshot_due: bool,
 }
 
-/// The rings' peaks since the last take, the profiler's (perf/report.rs
-/// `perf_frame`).
+/// The rings' peak use since the last call. Only the profiler reads it
+/// (perf/report.rs `perf_frame`).
 pub(crate) fn take_stat() -> DoorStat {
     door().take_stat()
 }
 
-/// What a turn posts besides its replies: a sensor's start or stop each, the
-/// snapshot and the view, all after its drain and once (`post_ui` at the
-/// falling edge); the files' calls at their most, whether the drain or the
-/// rest of the turn posts them (`runtime::FILE_FRAMES`); and the slot a call is
-/// laid in, never published. The machine declares it (machine.json `turn_posts`).
+/// The most events a turn posts besides its replies, which the machine
+/// declares as machine.json `turn_posts`. `post_ui` posts, once a turn after
+/// the drain, at most one start or stop for each sensor, then the snapshot
+/// and the view. The file calls post at most `runtime::FILE_FRAMES`, whether
+/// during the drain or later in the turn. One more slot holds a call while it
+/// is laid out and is never published.
 const EVENTS: u32 = Sensor::ALL.len() as u32 + 2 + runtime::FILE_FRAMES + 1;
 
 const _: () = assert!(
@@ -94,7 +98,7 @@ fn state() -> &'static mut State {
     })
 }
 
-/// A surface's character goes with it.
+/// Closes a surface, and the character drawn on it closes with it.
 fn close_surface(handle: u32) {
     if let Some(closed) = surface::surface_close(handle) {
         renderer::on_surface_closed(closed);
@@ -102,18 +106,19 @@ fn close_surface(handle: u32) {
     character_surface_close(handle);
 }
 
-/// The GPU answered, the first time or again after a loss: the core asks
-/// its block and makes the renderer on it once the block is in (pxl-render
-/// gpu/api.rs). Its loss is the block's to say, read at the turn's edge.
+/// Called when the GPU answers, the first time or again after a loss. The
+/// core then asks for the device's block and makes the renderer on it once
+/// the block is in (pxl-render gpu/api.rs). A later loss is reported through
+/// the block and read at the start of a turn.
 fn gpu_ready() {
     api::on_device_answered();
     edge::request_world_tick();
 }
 
-/// A UI has booted. On a device the core outlives a JS reload, and the
-/// old UI's reads, surfaces, sensor watches and text requests will never
-/// be answered; a read left out keeps its credit forever, so all of it is
-/// let go here.
+/// Called when a UI has booted. On a device the core outlives a JavaScript
+/// reload, and the old UI will never answer its reads, surfaces, sensor
+/// watches or text requests. A read left open would hold its credit forever,
+/// so all of them are dropped here.
 fn on_runtime_attached(s: &mut State) {
     request::reset();
     let open: Vec<u32> = surface::surfaces().map(|surface| surface.handle).collect();
@@ -125,9 +130,10 @@ fn on_runtime_attached(s: &mut State) {
     s.last_snapshot = Default::default();
 }
 
-/// First turn: the stop installed, then the front the runtime laid held to the
-/// machine and opened where the form has not (`xpute_core::core!` has, on a
-/// page), then the rest of memory.
+/// Boots the core on its first turn. The stop goes in first. The front the
+/// runtime laid is then checked against the machine and opened, unless the
+/// core's form already did so (`xpute_core::core!` does on a page). The rest
+/// of memory comes last.
 fn boot(b: BootInfo) {
     stop::install(runtime::abort, b.form.stop_hook);
     if !machine::booted() {
@@ -136,34 +142,35 @@ fn boot(b: BootInfo) {
     boot::set(b);
     executor::install();
     layout::install(&b);
-    // A layer asks for no more tiles than its tile cache's slots.
+    // A layer asks for no more tiles at once than its tile cache has slots.
     request::open(|c| demand::of_stream(c).map_or(0, |l| l.slots));
     turn::boot();
 }
 
-/// The entry (xpute_core::entry `Entry`): a turn applies waiting
-/// submissions, polls tasks on the deadline, and returns when to wake next, in
-/// ms (0 for the next frame, NO_WAKE for none). The first turn boots, on what
-/// its runtime's form hands it (`boot_info`), its stop hook and its GPU runtime's
-/// admission among it.
+/// The core's entry (xpute_core::entry `Entry`). A turn applies the waiting
+/// submissions, polls the tasks against the deadline, and returns when to
+/// wake next, in milliseconds: 0 for the next frame, NO_WAKE for never. The
+/// first turn boots from what the runtime's form hands it (`boot_info`),
+/// which includes the stop hook and the GPU runtime's admission.
 pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
-    use crate::turn::{take_world_drawn, world_frame_waiting};
-    if section::map().is_none() {
+    use crate::turn::{take_new_frame, world_frame_waiting};
+    if section::fixed().is_none() {
         boot(boot_info());
     }
     let s = state();
     let rise = now();
     runtime::rise();
     edge::world_edge().rise(deadline_ms);
-    // The device's loss, as its runtime wrote it into the device's block: before
-    // the commands, as a device answering again among them asks that block anew.
+    // A device loss, which the runtime wrote into the device's block, is read
+    // before the commands, because a `GpuReady` among them asks for that
+    // block anew.
     if api::take_device_lost() {
         renderer::on_gpu_lost();
         loader::on_images_lost();
     }
-    // An image or a pipeline the device made since: its fence's store woke
-    // this turn, and a frame takes it.
-    if renderer::landed() {
+    // The device finished an image or a pipeline since the last turn. Its
+    // fence's store woke this turn, and a frame must take it in.
+    if renderer::complete() {
         edge::request_world_tick();
     }
     door().receive(|submission| match submission {
@@ -188,27 +195,27 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
         task::poll();
     }
     let polled = now();
-    // Once a turn, where a frame was drawn, a UI command applied or a
-    // snapshot put off.
+    // The UI is posted to at most once a turn, and only when a frame was
+    // drawn, a UI command was applied, or a snapshot was put off.
     let due = core::mem::take(&mut s.snapshot_due);
-    if take_world_drawn() || due || core::mem::take(&mut s.snapshot_pending) {
+    if take_new_frame() || due || core::mem::take(&mut s.snapshot_pending) {
         post_ui(s);
     }
-    // What the request scheduler started, stopped and ended, in order: a
-    // start or a stop handed to its reader, an end a row of the profiler's.
+    // The request scheduler's events, in order. A start or a stop goes to
+    // the stream's reader, and an end becomes a row in the profiler.
     while let Some(event) = request::take_event() {
         match event {
-            Event::Start(credit, stream, id) => dispatch::start(credit, stream, id),
+            Event::Start(key, stream, id) => dispatch::start(key, stream, id),
             Event::Stop(key) => dispatch::stop(key),
-            Event::End(a, at, ended, phases) => {
-                perf_record(|| TaskRow::of(&a, at, ended, phases));
+            Event::End(a, at, exit, phases) => {
+                perf_record(|| TaskRecord::of(&a, at, exit, phases));
             }
         }
     }
     api::gpu_publish();
     let fall = edge::world_fall();
-    // What the completion ring had no room for is still in the submission
-    // ring, and a snapshot put off waits for the next turn.
+    // The next turn comes at once while submissions wait that the completion
+    // ring had no room to answer, or while a snapshot is put off.
     let wake = if door().pending() || s.snapshot_pending {
         0.0
     } else {
@@ -224,9 +231,10 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     wake
 }
 
-/// Grows to the largest snapshot and stays, so a settled turn allocates nothing.
-/// It is rewritten only once the runtime's head has passed the event that named
-/// it (`State::snapshot_pos`); until then a snapshot that moved is put off.
+/// The buffer the UI reads the snapshot from. It grows to the largest
+/// snapshot and keeps that size, so a settled turn allocates nothing. It is
+/// rewritten only after the runtime's head has passed the event that named it
+/// (`State::snapshot_pos`), and until then a changed snapshot is put off.
 static SNAPSHOT: Global<Vec<u8>> = Global::new();
 
 fn post_ui(s: &mut State) {
@@ -251,13 +259,14 @@ fn post_ui(s: &mut State) {
             OrientationCommand::Remove => stop(Sensor::Orientation),
         }
     }
-    if let Some(view) = s.last_snapshot.take_view_moved() {
+    if let Some(view) = s.last_snapshot.take_view_changed() {
         cmd::ui::ui_view(&view);
     }
     if s.snapshot_pos.is_some_and(|p| !door().is_consumed(p)) {
-        // The memo is left as it was, so what moved is posted once the runtime lets go.
+        // The memo stays as it was, so the change is posted once the runtime
+        // lets go of the buffer.
         s.snapshot_pending = true;
-    } else if let Some(shown) = s.last_snapshot.take_moved() {
+    } else if let Some(shown) = s.last_snapshot.take_changed() {
         let buf = SNAPSHOT.get(Vec::new);
         let len = loop {
             if let Some(len) = ui::snapshot(&shown, buf) {

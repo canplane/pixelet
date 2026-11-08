@@ -1,7 +1,7 @@
 // pxl-geo-bake/demand/pyramid.rs
 
-//! A pyramid layer baked a tile at a time on demand. Lower tiles missing are baked
-//! one at a time, so a coarse request cannot fan out a task tree.
+//! A pyramid layer baked a tile at a time on demand. Missing finer tiles are baked one at a
+//! time, so a coarse request cannot fan out into a tree of tasks.
 
 use super::job::{self, Job, Runner};
 use super::{Dataset, Failure, Kind};

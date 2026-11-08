@@ -14,7 +14,7 @@ use super::{
     Output,
 };
 
-const JSON: &str = "spec/client/core/domain/view/setting/schema.json";
+const JSON: &str = "spec/client/core/domain/setting/schema.json";
 
 struct Setting<'a> {
     key: &'a str,
@@ -31,7 +31,7 @@ impl Setting<'_> {
     fn flag(&self, name: &str) -> bool {
         self.spec.get(name) == Some(&Node::Bool(true))
     }
-    /// StorageFile unless marked `"stored": false`; anything else there is refused.
+    /// Stored unless marked `"stored": false`; anything else there is refused.
     fn stored(&self) -> Result<bool, String> {
         match self.spec.get("stored") {
             None | Some(Node::Bool(true)) => Ok(true),
@@ -141,7 +141,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     }
 
     let mut rs = vec![
-        "// pxl-core/domain/view/setting/schema.spec.rs".to_string(),
+        "// pxl-core/domain/setting/schema.spec.rs".to_string(),
         "//".into(),
         format!("// GENERATED from {JSON}"),
         "//".into(),
@@ -532,7 +532,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 
     Ok(vec![
         Output::new(
-            "rust/client/core/src/domain/view/setting/schema.spec.rs",
+            "rust/client/core/src/domain/setting/schema.spec.rs",
             file(&rs),
         ),
         Output::new("ts/client/src/abi/schema.spec.ts", file(&ts)),

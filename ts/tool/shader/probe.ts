@@ -3,14 +3,15 @@
 /// <reference types="vite/client" />
 
 /**
- * The dev server's shader probe (probe.html): each module as the renderer
- * assembles it is made, with every pipeline the renderer makes over it
+ * The dev server's shader probe (probe.html). It makes each module as the
+ * renderer assembles it, with every pipeline the renderer makes over it
  * (pipeline.ts), on this device alone, one at a time. What the device said of
  * each is shown on the page and sent to the dev server's console
- * (remote-console.ts). `?only=a,b` probes the modules whose names start so;
- * `?bisect=<name>` finds the line a device refuses; `?src=` a shader under
- * doc/experiment, made into a pipeline over its first compute entry, or its
- * first vertex and fragment entries.
+ * (remote-console.ts). `?only=a,b` probes only the modules whose names start
+ * with those prefixes. `?bisect=<name>` finds the line a device refuses, and
+ * `?from=` with `?to=` narrows the search to a range of lines. `?src=` probes
+ * a shader under doc/experiment, made into a pipeline over its first compute
+ * entry, or else over its first vertex and fragment entries.
  */
 
 import { round } from "@xpute/kit/math/scalar.ts";
@@ -18,7 +19,8 @@ import { round } from "@xpute/kit/math/scalar.ts";
 import { install } from "../../client/src/remote-console.ts";
 import { entries, make, type Pipeline } from "./pipeline.ts";
 
-/** The experiments' shaders, which `?src=` names by its path under doc/experiment. */
+/** The experiments' shaders, which `?src=` names by their path under
+ * doc/experiment. */
 const RECORDED = import.meta.glob<string>("../../../doc/experiment/**/*.wgsl", {
   query: "?raw",
   import: "default",
@@ -46,13 +48,14 @@ function show(line: string, ok: boolean): void {
   out.append(div);
 }
 
-/** The first entry of `stage` in `code`, by its attribute. */
+/** The name of the first `stage` entry point in `code`, found by its
+ * attribute. */
 function entry(code: string, stage: string): string | undefined {
   return code.match(new RegExp(`@${stage}[^]*?\\bfn\\s+(\\w+)\\s*\\(`))?.[1];
 }
 
-/** A shader no pipeline names, `name`'s: a pipeline over its first compute
- * entry, or its first vertex and fragment entries. */
+/** The pipeline to probe for a shader that no pipeline names: one over its
+ * first compute entry, or else over its first vertex and fragment entries. */
 function first(name: string, code: string): Pipeline[] {
   const cs = entry(code, "compute");
   if (cs) return [{ module: name, compute: cs }];
@@ -61,8 +64,8 @@ function first(name: string, code: string): Pipeline[] {
   return [{ module: name, vertex, fragment: entry(code, "fragment") }];
 }
 
-/** Module `name` made, and each of `pipelines` over it, on `device`: whether
- * it took them all. */
+/** Makes module `name` on `device`, then each of `pipelines` over it, and
+ * answers whether the device took them all. */
 async function probe(
   device: GPUDevice,
   name: string,
@@ -118,9 +121,9 @@ async function probe(
   return ok;
 }
 
-/** Where in the longest function of `code` a `return;` may stand: before a
- * line that starts a statement, outside any `continuing` block, the line
- * before it ending one. */
+/** Where in the longest function of `code` a `return;` may be put: before a
+ * line that starts a statement, right after a line that ends one, and outside
+ * any `continuing` block. */
 function cuts(
   lines: string[],
   range?: [number, number],
@@ -136,9 +139,10 @@ function cuts(
   });
   const at: number[] = [];
   const stack: boolean[] = [];
-  // Within `range` (lines from 1), only at the depth its first line stands
-  // at: a `return;` there drops the rest of that block alone, so the cuts
-  // drop more the later they stand.
+  // Within `range` (lines counted from 1), cuts stand only at the depth of the
+  // range's first line. A `return;` there drops only the rest of that block,
+  // so a later cut always keeps more of the code than an earlier one, which
+  // the bisection needs.
   let depth = -1;
   for (let i = best.from + 1; i < best.to; i++) {
     const t = lines[i].trim();
@@ -165,9 +169,10 @@ function cuts(
   return { from: best.from, at };
 }
 
-/** The first line of `name`'s longest function past which the device
- * refuses it: each probe the module with a `return;` before a candidate
- * line, halving the candidates between one it takes and one it refuses. */
+/** Finds the first line of `name`'s longest function past which the device
+ * refuses the module. Each probe puts a `return;` before a candidate line,
+ * and the candidates are halved between one the device takes and one it
+ * refuses. */
 async function bisect(
   device: GPUDevice,
   name: string,
@@ -192,7 +197,7 @@ async function bisect(
   if (await probe(device, name, cut(at.length), pipelines, true)) {
     return say("taken whole");
   }
-  // cut(lo) taken, cut(hi) refused.
+  // The device takes cut(lo) and refuses cut(hi).
   let [lo, hi] = [0, at.length];
   while (hi - lo > 1) {
     const mid = (lo + hi) >> 1;

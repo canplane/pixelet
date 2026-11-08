@@ -1,6 +1,7 @@
 // pxl-core/door/apply/edit.rs
 
-//! EDIT: the edit's: the tool and what it takes, and the marker it left waiting.
+//! The EDIT major's commands: the tool held and what it places, and the
+//! marker draft it left waiting.
 
 use super::or_refuse;
 use crate::domain::control::edit::set_tool;
@@ -21,7 +22,7 @@ pub(super) fn tool(c: abi::EditTool) -> Outcome {
             Asset::Unknown => return Err(MarshalError::new(Errno::EINVAL)),
             asset => Tool::Item {
                 asset,
-                scale_steps: c.scale_steps,
+                zoom: asset.zoom(c.scale_steps),
             },
         },
     });

@@ -9,7 +9,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// A body the app's fetch hands over still zstd (src/unpack.rs), which never
+// A body the app's fetch hands over still zstd (src/sys/unpack.rs), which never
 // reaches the core and so runs on the caller's thread, off the JavaScript
 // thread: 0 with the decoded bytes at *out, *out_len long, the library's
 // until pxl_unpacked_free; -1 where it does not decode.

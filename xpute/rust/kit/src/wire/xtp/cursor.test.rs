@@ -8,7 +8,8 @@ use crate::wire::xtp::view::{NodeView, TreeView};
 
 const GOLDEN: &str = include_str!("../../../../../spec/golden/wire/xtp/cursor.tsv");
 
-/// As JavaScript prints it: 64-bit integers as `bigint:`, the rest `number:`.
+/// A value in the golden record's text, as JavaScript prints it: a 64-bit
+/// integer as `bigint:`, any other number as `number:`.
 fn show<T>(v: &NodeValue<T>) -> String {
     match v {
         NodeValue::Extra(_) => "branch".to_string(),
@@ -92,7 +93,8 @@ fn show<T>(v: &NodeValue<T>) -> String {
     }
 }
 
-/// Word-aligned, as `TreeReader` requires; a `Vec<u8>` is only byte-aligned.
+/// A packet copied to a word-aligned place, which `TreeReader` requires; a
+/// `Vec<u8>` is only byte-aligned.
 struct Packet {
     buf: Vec<u8>,
     at: usize,

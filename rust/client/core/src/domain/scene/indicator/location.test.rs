@@ -5,11 +5,12 @@ use crate::sys;
 use pxl_spec::space::coord::q3;
 use xpute_core::clock;
 
-/// The zone laid by asking the ground for every box and again for each of
-/// its four sides, what `lay_zone` must lay the same bytes as.
+/// The zone laid the plain way, asking the ground again for every box and for
+/// each of its four sides. `lay_zone` must lay the same bytes while asking
+/// each cell once.
 fn laid_asking_each(center_pos: V3, mut ground: impl FnMut(&Q3) -> Option<f64>) -> Vec<f32> {
     let mut instances = Vec::new();
-    let cell = units(GROUND.cell());
+    let cell = units(GROUND.leaf_cell_zoom());
     let mut box_at = |off: V3| {
         let v = v3::add(&center_pos, &off);
         let coord = world::point(v[0], v[1], v[2]);
@@ -41,10 +42,10 @@ fn laid_asking_each(center_pos: V3, mut ground: impl FnMut(&Q3) -> Option<f64>) 
     instances
 }
 
-/// A rough ground over the cell a point is in: steps up and down, a fraction
-/// of a cell high, and a column here and there not known.
+/// A rough ground, level over each cell. It steps up and down by fractions of
+/// a cell, and here and there a column is unknown.
 fn rough(at: &Q3) -> Option<f64> {
-    let cell = units(GROUND.cell());
+    let cell = units(GROUND.leaf_cell_zoom());
     let [x, y] = [0, 1].map(|k| (q3::to_real(i64::from(at[k])) / cell).floor() as i64);
     let h = (x * 7 + y * 13).rem_euclid(11);
     (h != 4).then(|| 3.0 + h as f64 * 0.375 - (x - y).rem_euclid(3) as f64)
@@ -52,7 +53,7 @@ fn rough(at: &Q3) -> Option<f64> {
 
 #[test]
 fn zone_cells_once() {
-    let cell = units(GROUND.cell());
+    let cell = units(GROUND.leaf_cell_zoom());
     for center in [[0.0, 0.0, 3.0], [10.0, -7.0, 5.0], [-123.0, 456.0, -2.0]] {
         let center = center.map(|v| v * cell);
         let (mut asked, mut rise, mut instances) = (0, Vec::new(), Vec::new());
@@ -100,19 +101,20 @@ fn beacon_holds_on_stall() {
             night: false,
             time: 0.0,
             run: 0.0,
-            clock: Stepped::default(),
+            clock: StepClock::default(),
             visible: false,
             zone_drawn: false,
         }),
         ..Default::default()
     };
-    // The eye at the zone's center: seen, and the bob spans the cell there.
+    // The eye stands at the zone's center, so the zone is seen and the bob
+    // spans a camera cell there.
     location.tick(&Frame {
         delta_s: 0.05,
         ..Frame::default()
     });
-    // A minute passes, a hidden tab; the turn's step is capped as turn.rs
-    // caps it (`MAX_STEP_S`).
+    // A minute passes, as in a hidden tab. The frame's step is capped as
+    // turn.rs caps it (`MAX_STEP_S`), so the bob must not leap.
     clock::set(|| 60_000.0);
     location.tick(&Frame {
         delta_s: 0.1,

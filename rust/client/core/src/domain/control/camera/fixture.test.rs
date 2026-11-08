@@ -1,17 +1,18 @@
 // pxl-core/domain/control/camera/fixture.test.rs
 //
-// What the camera's tests share: an eye placed by the orbit's controls.
+// What the camera's tests share. `place` stands the orbit at a pivot with
+// its intent and its drawn camera already equal, so nothing eases.
 
 use pxl_spec::space::coord::v3::{self, V3};
 
 pub(crate) fn place(at: V3, dist: f64, polar: f64, azimuth: f64) {
     use crate::domain::control::camera::orbit::{orbit, orbit_eye_off};
-    use crate::domain::control::camera::state::{camera_state, Intent};
+    use crate::domain::control::camera::state::{camera_state_mut, Intent};
     use crate::domain::control::camera::{camera, set_eye_world};
     orbit().dist = dist;
     let cam = camera();
     (cam.polar, cam.azimuth) = (polar, azimuth);
-    camera_state().intent = Intent {
+    camera_state_mut().intent = Intent {
         dist,
         azimuth,
         polar,

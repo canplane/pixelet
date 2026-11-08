@@ -7,7 +7,10 @@ import { bytes_to_hex, te } from "./encoding.ts";
 const FNV64_OFF = 0xcbf29ce484222325n;
 const FNV64_PRIME = 0x100000001b3n;
 
-/** FNV-1a 64 over UTF-8, the same word the Rust side and the spec generator compute. */
+/**
+ * 64-bit FNV-1a of a string's UTF-8 bytes. The other languages and the spec
+ * generator compute the same hash of the same bytes.
+ */
 export function fnv1a64_str(s: string): u64 {
   return fnv1a64_bytes(te.encode(s));
 }

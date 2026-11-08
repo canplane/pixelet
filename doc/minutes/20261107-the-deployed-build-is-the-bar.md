@@ -2,7 +2,7 @@
 
 **2026-11-07** — recorded with the user, in the session that compared the frame with the
 deployed build and took out what the frame carried over frames. The measurements are in
-[the frame on the S23](../experiment/20261105-the-frame-on-the-s23/journal.md), its 11-07
+[the frame on the S23](../experiment/20261103-the-frame-on-the-s23/README.md), its 11-07
 section; the decision on the frame itself is [a ray ends in its frame](./20261107-a-ray-ends-in-its-frame.md).
 
 ## What the user decided
@@ -34,7 +34,7 @@ removed with its case: what it did wrong, and why the deployed build had no such
 
 - The deployed build is `e317a3644b`, deployed on 11-04 before rust-gpu was taken out
   (`4399ef1ce5`, 11-05). Its run failed only at the smoke, on `/geo/search`; the client and
-  the servers went out. The `deploy` branch still names it.
+  the servers went out.
 - Main's frame against it on the 4K Mac, before this session's change: the gate failed, GPU
   p95 47.9 to 78.3 ms. On the S23 at 550 MHz the deployed build took 252–324 ms a cast frame,
   main's renderer 92–100 ms.
@@ -74,5 +74,5 @@ not taken.
 **Closed, 11-08.** Against `e317a3644b`: the Mac's gate passes, its GPU faster; the S23 at
 719 MHz 6.1× at p50, and at p95 1.7–2× on the deployed build's best run of several, 5.7× on
 one pair; the tick's tail accepted. What the S23's p95 has left is the light's walks, which
-its list did not undercut ([the light's list](./20261108-the-light-s-list-measured.md)).
+its list did not undercut ([the light's list](./20261108-ray-raster-ray.md)).
 

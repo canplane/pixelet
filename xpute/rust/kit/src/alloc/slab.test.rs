@@ -10,7 +10,9 @@ const MAX: usize = 20;
 const SPLIT_BYTES: usize = (1 << (MAX - MIN)) / 8;
 const PAGE: usize = 1 << MIN;
 
-/// Made once and never freed: `Range` has no receiver.
+/// Reserves a test's range once and never frees it. `Range`'s functions
+/// take no receiver, so the base lives in a static, and the allocator over
+/// the range outlives any one test.
 fn arena(cell: &'static OnceLock<usize>) -> usize {
     *cell.get_or_init(|| {
         let layout = Layout::from_size_align(1 << MAX, 1 << MAX).unwrap();
@@ -113,7 +115,8 @@ fn empty_run_returned() {
         assert!(!p.is_null(), "the range ran out before one run was full");
         live.push(p);
     }
-    // Free the second run's slot first, leaving exactly the first run's.
+    // The last slot is the second run's only one. Freeing it first gives the
+    // second run back and leaves the first run's slots.
     let spilled = live.pop().unwrap();
     unsafe { heap.dealloc(spilled, small()) };
     assert_eq!(
@@ -185,7 +188,8 @@ fn slots_inside_runs() {
             assert!(!p.is_null(), "the range ran out at {sz} on round {round}");
             live.push((p, layout));
             check(&heap);
-            // Every other one, so runs are left partly full.
+            // One allocation is freed for every two made, so runs are left
+            // partly full.
             if k % 2 == 1 {
                 let (q, l) = live.remove(0);
                 unsafe { heap.dealloc(q, l) };

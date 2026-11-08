@@ -1,12 +1,12 @@
 // pxl-render/world_split.wgsl
 
-// The world's one query of a node coarser than asked, and the node a walk steps down to
-// (pxl-engine world.rs `node`, `Inheritance::child`), over world.wgsl's cell: what a walk asks,
-// and a pass that asks cells alone does not take.
+// The world's one query for a node coarser than asked, and what a node hands the child a walk
+// steps down to (pxl-engine world.rs `node`, `Inheritance::child`), built over world.wgsl's
+// answer for a cell. A walk asks these; a pass that asks only cells does not include this part.
 
-// ---- answer.rs: a split's box ----
+// A split's box, as pxl-engine answer.rs packs it.
 
-/// `answer::box_word`.
+/// The twin of pxl-engine `answer::box_word`.
 fn box_word(lo: vec3<u32>, hi: vec3<u32>) -> vec2<u32> {
   let l = min(lo, vec3<u32>(BOX_STEPS - 1u));
   let h = select(min(hi, vec3<u32>(BOX_STEPS)), l + 1u, hi <= l) - 1u;
@@ -20,7 +20,7 @@ fn box_none(b: vec2<u32>) -> bool {
   return all(b == BOX_NONE);
 }
 
-/// `answer::box_join`.
+/// The twin of pxl-engine `answer::box_join`.
 fn box_join(a: vec2<u32>, b: vec2<u32>) -> vec2<u32> {
   if (box_none(a)) {
     return b;
@@ -31,9 +31,9 @@ fn box_join(a: vec2<u32>, b: vec2<u32>) -> vec2<u32> {
   return box_word(min(box_first(a), box_first(b)), max(box_past(a), box_past(b)));
 }
 
-// ---- overwrite.rs ----
+// What is placed, as pxl-engine object.rs reads it.
 
-/// `overwrite::object_box`, under a split.
+/// The twin of pxl-engine `object::object_box`, for what is placed under a split.
 fn object_box(s: u32, zoom: u32) -> vec2<u32> {
   if (s == SLOT_NOTHING) {
     return BOX_NONE;
@@ -59,7 +59,7 @@ fn object_box(s: u32, zoom: u32) -> vec2<u32> {
   return box_word(select(vec3<u32>(half), vec3<u32>(0u), lows != vec3<u32>(0u)), select(vec3<u32>(half), vec3<u32>(BOX_STEPS), highs != vec3<u32>(0u)));
 }
 
-/// `overwrite::cells_by`.
+/// The twin of pxl-engine `object::cells_by`.
 fn cells_by(s: u32, d: u32) -> bool {
   if (s == SLOT_NOTHING) {
     return false;
@@ -72,7 +72,7 @@ fn cells_by(s: u32, d: u32) -> bool {
   return (word >> 16u) + 2u > select(0u, FULL >> (shift & 31u), shift <= FULL_BITS);
 }
 
-/// `overwrite::whole`.
+/// The twin of pxl-engine `object::whole`.
 fn whole(s: u32, carve: vec4<i32>, zoom: u32, at: vec3<i32>) -> bool {
   if (is_folded(s)) {
     return false;
@@ -84,13 +84,14 @@ fn whole(s: u32, carve: vec4<i32>, zoom: u32, at: vec3<i32>) -> bool {
   return any(path(zoom, carve.xyz >> vec3<u32>(cz - zoom)) != path(zoom, at));
 }
 
-// ---- ground.rs ----
+// The ground and the ways, as pxl-engine ground.rs and way.rs answer them.
 
 fn coarsest(zoom: u32, far: u32) -> u32 {
   return max(far, zoom + 1u);
 }
 
-/// `ground::slab`: the highest its zooms round `hi` to.
+/// The highest face to which the zooms from `far` to `near` round the relief's top
+/// `relief_hi` (pxl-engine `ground::slab`).
 fn slab_over(zoom: u32, relief_hi: i32, far: u32, near: u32) -> i32 {
   let hi = select(relief_hi, max(relief_hi, SEA_LEVEL), zoom < SHARD_ZOOM);
   var over = EMPTY_HI;
@@ -100,30 +101,31 @@ fn slab_over(zoom: u32, relief_hi: i32, far: u32, near: u32) -> i32 {
   return over;
 }
 
-/// `ground::meets`.
+/// The twin of pxl-engine `ground::meets`.
 fn meets(span: vec2<i32>, zoom: u32, z: i32, near: u32) -> bool {
-  let e = max(near, LEAF_CELL) - LEAF_CELL;
-  let s = LEAF_CELL + e - zoom;
+  let e = max(near, LEAF_CELL_ZOOM) - LEAF_CELL_ZOOM;
+  let s = LEAF_CELL_ZOOM + e - zoom;
   let first = ((z + z_start(zoom)) << s) - (SEA_CELLS << e);
   return first < (span.y << e) && first + (1i << s) > (span.x << e);
 }
 
-/// The step of a node `shift` over the leaves a leaf cell `v` lies in (`box_along_z`).
+/// The box step that the leaf cell `v` lies in, within the node at height `z` that is `shift`
+/// zooms coarser than the leaves (pxl-engine `ground::box_along_z`).
 fn z_step(v: i32, z: i32, shift: u32) -> i32 {
   let first = v + SEA_CELLS;
   let scaled = select(first << ((BOX_BITS - shift) & 31u), first >> ((shift - BOX_BITS) & 31u), shift >= BOX_BITS);
   return scaled - (z << BOX_BITS);
 }
 
-/// `ground::box_along_z`.
+/// The twin of pxl-engine `ground::box_along_z`.
 fn box_along_z(span: vec2<i32>, zoom: u32, z_at: i32) -> vec2<u32> {
   if (span.x >= span.y) {
     return BOX_NONE;
   }
-  if (zoom >= LEAF_CELL) {
+  if (zoom >= LEAF_CELL_ZOOM) {
     return BOX_WHOLE;
   }
-  let shift = LEAF_CELL - zoom;
+  let shift = LEAF_CELL_ZOOM - zoom;
   let z = z_at + z_start(zoom);
   let first = z_step(span.x, z, shift);
   let past = select(z_step(span.y, z, shift), z_step(span.y - 1i, z, shift) + 1i, shift >= BOX_BITS);
@@ -135,7 +137,7 @@ fn box_along_z(span: vec2<i32>, zoom: u32, z_at: i32) -> vec2<u32> {
   return box_word(vec3<u32>(0u, 0u, lo), vec3<u32>(BOX_STEPS, BOX_STEPS, hi));
 }
 
-/// `way::slab`.
+/// The twin of pxl-engine `way::slab`.
 fn way_slab(bound: vec2<i32>, first: u32, near: u32) -> vec2<i32> {
   if (bound.x >= bound.y) {
     return vec2<i32>(EMPTY_LO, EMPTY_HI);
@@ -143,8 +145,8 @@ fn way_slab(bound: vec2<i32>, first: u32, near: u32) -> vec2<i32> {
   var span = vec2<i32>(EMPTY_LO, EMPTY_HI);
   for (var z = first; z <= near; z += 1u) {
     var got = bound;
-    if (z < LEAF_CELL) {
-      let k = LEAF_CELL - z;
+    if (z < LEAF_CELL_ZOOM) {
+      let k = LEAF_CELL_ZOOM - z;
       let half = 1i << (k - 1u);
       got = vec2<i32>(((bound.x + half) >> k) << k, -(((half - bound.y) >> k) << k));
     }
@@ -153,8 +155,8 @@ fn way_slab(bound: vec2<i32>, first: u32, near: u32) -> vec2<i32> {
   return span;
 }
 
-/// `ground::node` of a node coarser than asked: its kind and asset, the ways' bound
-/// read with its own, where it was held.
+/// What pxl-engine `ground::node` answers for a node coarser than asked: its kind and asset,
+/// the ways' bound read with the ground's own, and where that bound was held (`place`).
 struct GroundSplit {
   kind: u32,
   asset: vec2<u32>,
@@ -162,7 +164,7 @@ struct GroundSplit {
   place: u32,
 }
 
-/// `ground::node`, not `is_cell`.
+/// The twin of pxl-engine `ground::node` where the node is not asked as a cell (`is_cell`).
 fn ground_split(shard: u32, place: u32, zoom: u32, c: vec3<i32>, far: u32, near: u32) -> GroundSplit {
   let none = vec2<i32>(EMPTY_LO, EMPTY_HI);
   if (is_past(shard)) {
@@ -171,7 +173,7 @@ fn ground_split(shard: u32, place: u32, zoom: u32, c: vec3<i32>, far: u32, near:
     }
     return GroundSplit(KIND_SPLIT, BOX_WHOLE, none, LOOKUP_NONE);
   }
-  if (zoom < TOP_ZOOM) {
+  if (zoom < MIN_ZOOM) {
     return GroundSplit(KIND_SPLIT, BOX_WHOLE, none, place);
   }
   let r = bound_over(place, min(coarsest(zoom, far), near), near, zoom, c.xy);
@@ -185,15 +187,17 @@ fn ground_split(shard: u32, place: u32, zoom: u32, c: vec3<i32>, far: u32, near:
   return GroundSplit(KIND_CELL, vec2<u32>(VALUE_VOID, 0u), r.b.zw, r.place);
 }
 
-// ---- world.rs ----
+// The world's query, as pxl-engine world.rs states it.
 
-/// `Inheritance::child`: what its child `c` at `zoom` is handed.
+/// What a node hands its child `c` at `zoom`, given what the node was handed, `above`
+/// (pxl-engine `Inheritance::child`).
 fn world_child(above: vec4<u32>, zoom: u32, c: vec3<i32>) -> vec4<u32> {
   return vec4<u32>(tree_child(PLACED, above.x, zoom, path(zoom, c)), above.y, above.z, tree_child(WAYS, above.w, zoom, c));
 }
 
-/// `world::node`, coarser than asked: what is placed splits it where it may fill, and the
-/// ways what the ground leaves air where they may; a split's box every source's own joined.
+/// The twin of pxl-engine `world::node` for a node coarser than asked. What is placed splits
+/// the node where it may fill it, and the ways split what the ground leaves air where they may.
+/// A split's box is every source's own box joined.
 fn world_split(above: vec4<u32>, shard: u32, zoom: u32, c: vec3<i32>, far: u32, near: u32) -> Answer {
   let put = above.x;
   let splits = cells_by(put, near - zoom);
@@ -220,11 +224,11 @@ fn world_split(above: vec4<u32>, shard: u32, zoom: u32, c: vec3<i32>, far: u32, 
   return Answer(KIND_SPLIT, joined, at);
 }
 
-/// What is in the node `c` at `zoom`, asked from `far` to `near`, `above` what the
-/// node over it handed it (`world::node`).
+/// What is in the node `c` at `zoom`, asked at the zooms from `far` to `near`, where `above` is
+/// what the node over it handed it (pxl-engine `world::node`).
 fn world_node(above: vec4<u32>, zoom: u32, c: vec3<i32>, far: u32, near: u32, carve: vec4<i32>, hide: vec4<i32>) -> Answer {
   let shard = shard_at(above.y, zoom, c.xy);
-  if (zoom >= near || (zoom >= LEAF_CELL && whole(above.x, carve, zoom, c))) {
+  if (zoom >= near || (zoom >= LEAF_CELL_ZOOM && whole(above.x, carve, zoom, c))) {
     return world_cell(above, shard, zoom, c, carve, hide);
   }
   return world_split(above, shard, zoom, c, far, near);

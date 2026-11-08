@@ -1,11 +1,13 @@
 // cpp/xpute/gpu/encode.hpp
 
-// A core's GPU calls written as a stream's records (ipc/stream), in the
-// words spec/gpu/api.json gives each op, as rust/gpu/src/encode.rs writes
-// them. Objects are handles from one table; a record that does not fit an
-// open transaction is not written, and an object it would have made is
-// handed back. Every record is written twice by the same function: once to
-// count its words, then into the room the stream reserved for them.
+// The encoder: a core's GPU calls, written as records of a stream
+// (ipc/stream) in the words spec/gpu/api.json gives each op, as
+// rust/gpu/src/encode.rs writes them. An object the core makes is named by a
+// handle from one table (`Gpu`). A record that does not fit an open
+// transaction is not written, and the handle of the object it would have
+// made is given back. One function gives each record's words, and it runs
+// twice: once to count the words, then to write them into the room the
+// stream reserved.
 
 #pragma once
 
@@ -27,7 +29,7 @@
 
 namespace xpute::gpu {
 
-// An object the core made: a handle of the table its encoder holds.
+// An object the core made, named by a handle from its encoder's table.
 using Id = std::uint32_t;
 
 struct BufferDescriptor {
@@ -147,7 +149,7 @@ struct PrimitiveState {
     bool unclipped_depth;
 };
 
-// WebGPU's default face: always, keep, keep, keep.
+// A stencil face, whose defaults are WebGPU's.
 struct StencilFaceState {
     CompareFunction compare = CompareFunction::always;
     StencilOperation fail = StencilOperation::keep;
@@ -168,7 +170,7 @@ struct DepthStencilState {
     float clamp;
 };
 
-// One sample, every sample's bit set.
+// Its defaults are WebGPU's: one sample, no multisampling.
 struct MultisampleState {
     std::uint32_t count = 1;
     std::uint32_t mask = UINT32_MAX;
@@ -200,7 +202,8 @@ struct FragmentState {
 };
 
 struct RenderPipelineDescriptor {
-    // None for a layout the device makes from the shaders.
+    // None asks the device for a layout made from the shaders, WebGPU's
+    // "auto".
     std::optional<Id> layout;
     VertexState vertex;
     PrimitiveState primitive;
@@ -215,7 +218,7 @@ struct ComputePipelineDescriptor {
     std::string_view entry;
 };
 
-// A texture's place a copy reads or writes.
+// The place in a texture that a copy reads or writes.
 struct TexelCopyTexture {
     Id texture;
     std::uint32_t mip;
@@ -223,7 +226,7 @@ struct TexelCopyTexture {
     TextureAspect aspect;
 };
 
-// A buffer's bytes laid out as texels.
+// A buffer's bytes, laid out as rows of texels for a copy.
 struct TexelCopyBuffer {
     Id buffer;
     std::uint32_t offset;
@@ -266,15 +269,16 @@ struct RenderPassDescriptor {
 
 namespace detail {
 
-// A record's words counted.
+// The first run over a record's words, which counts them.
 struct Count {
     std::uint32_t n = 0;
     void word(std::uint32_t) noexcept { n++; }
-    // A count, then the bytes padded to words.
+    // Bytes go as their count, then the bytes padded to whole words.
     void bytes(std::span<const std::uint8_t> b) noexcept { n += 1 + static_cast<std::uint32_t>((b.size() + WORD - 1) / WORD); }
 };
 
-// A record's words written where the stream reserved them.
+// The second run over a record's words, which writes them where the stream
+// reserved them.
 struct Fill {
     Memory mem;
     std::uint32_t at;
@@ -310,8 +314,9 @@ template <class S> void words(S &s, std::initializer_list<std::uint32_t> w) noex
     for (std::uint32_t v : w) s.word(v);
 }
 
-// Writes a record of `op` whose words `put` gives; false where an open
-// transaction no longer fits it.
+// Writes a record of `op` with the words `put` gives. False where an open
+// transaction no longer fits the record; outside a transaction, a record that
+// does not fit is a bug (Stream::reserve).
 template <class F> bool emit(Stream &stream, std::uint32_t op, F &&put) noexcept {
     Count count;
     put(count);
@@ -323,7 +328,8 @@ template <class F> bool emit(Stream &stream, std::uint32_t op, F &&put) noexcept
     return true;
 }
 
-// What a record takes of a stream's room, measured as `emit` writes it.
+// The room a record takes of a stream, its op and count words included,
+// counted as `emit` writes it.
 template <class F> std::uint64_t record_size(F &&put) noexcept {
     Count count;
     put(count);
@@ -345,7 +351,8 @@ template <class S> void extent(S &s, std::array<std::uint32_t, 3> e) noexcept { 
 
 template <class S> void stencil_face(S &s, const StencilFaceState &f) noexcept { words(s, {u(f.compare), u(f.fail), u(f.depth_fail), u(f.pass)}); }
 
-// A render pipeline's words but its id (RENDER_PIPELINE).
+// The words of a RENDER_PIPELINE record after its id, which
+// RENDER_PIPELINE_ASYNC begins with too.
 template <class S> void render_pipeline_words(S &s, const RenderPipelineDescriptor &d) noexcept {
     s.word(opt(d.layout));
     const VertexState &v = d.vertex;
@@ -364,7 +371,8 @@ template <class S> void render_pipeline_words(S &s, const RenderPipelineDescript
         stencil_face(s, ds->stencil_back);
         words(s, {ds->stencil_read_mask, ds->stencil_write_mask, static_cast<std::uint32_t>(ds->bias), f(ds->slope_scale), f(ds->clamp)});
     } else {
-        // Present either way, so the record's shape is fixed.
+        // The depth-stencil words are present either way, so the record's
+        // shape is fixed.
         s.word(NONE);
         for (int k = 0; k < 2 + 8 + 5; k++) s.word(0);
     }
@@ -391,7 +399,8 @@ template <class S> void render_pipeline_words(S &s, const RenderPipelineDescript
     }
 }
 
-// A compute pipeline's words but its id (COMPUTE_PIPELINE).
+// The words of a COMPUTE_PIPELINE record after its id, which
+// COMPUTE_PIPELINE_ASYNC begins with too.
 template <class S> void compute_pipeline_words(S &s, const ComputePipelineDescriptor &d) noexcept {
     words(s, {opt(d.layout), d.module});
     s.bytes(text(d.entry));
@@ -399,13 +408,14 @@ template <class S> void compute_pipeline_words(S &s, const ComputePipelineDescri
 
 } // namespace detail
 
-// The ops below DESTROY make what lasts until it is destroyed, the objects a
-// program holds; those past it make what a turn lets go (an encoder, a pass,
-// a surface's current texture).
+// The ops numbered below DESTROY make objects that last until the core
+// destroys them. The ops past it make what a turn lets go: an encoder, a
+// pass, a surface's current texture.
 inline constexpr std::size_t OBJECT_OPS = op::DESTROY;
 
-// The calls, over a table of `N` handles, each holding the op that made it
-// where what it made lasts, 0 otherwise.
+// The calls that make objects, over a table of `N` handles. Each handle holds
+// the op that made its object where the object lasts (OBJECT_OPS), and 0
+// where a turn lets it go.
 template <std::size_t N> class Gpu {
   public:
     std::optional<Id> buffer(Stream &stream, const BufferDescriptor &d) noexcept {
@@ -439,8 +449,8 @@ template <std::size_t N> class Gpu {
         return make(stream, op::SHADER_MODULE, [&](auto &s) { s.bytes(detail::text(wgsl)); });
     }
 
-    // What shader_module takes of a stream's room (Stream::fits), so a caller
-    // making several asks before each.
+    // The room shader_module takes of a stream, for Stream::fits, so that a
+    // caller making several modules can ask before each one.
     static std::uint64_t shader_module_bytes(std::string_view wgsl) noexcept {
         return detail::record_size([&](auto &s) {
             s.word(0);
@@ -492,9 +502,10 @@ template <std::size_t N> class Gpu {
         return make(stream, op::RENDER_PIPELINE, [&](auto &s) { detail::render_pipeline_words(s, d); });
     }
 
-    // As render_pipeline, made where the runtime can without holding its thread:
-    // the runtime stores `ticket` at the fence `fence` once it is made (spec
-    // RESULT), and no record names it before.
+    // As render_pipeline, but the runtime makes the pipeline without holding
+    // its thread, and stores `ticket` at `fence` once it is made (spec
+    // RESULT). No record may name the pipeline before the core has seen that
+    // ticket.
     std::optional<Id> render_pipeline_async(Stream &stream, const RenderPipelineDescriptor &d, const std::uint32_t &fence, std::uint32_t ticket) noexcept {
         std::uint32_t at = stream.mem().off_of(&fence);
         return make_as(stream, op::RENDER_PIPELINE_ASYNC, op::RENDER_PIPELINE, [&](auto &s) {
@@ -507,7 +518,7 @@ template <std::size_t N> class Gpu {
         return make(stream, op::COMPUTE_PIPELINE, [&](auto &s) { detail::compute_pipeline_words(s, d); });
     }
 
-    // As compute_pipeline, its word as render_pipeline_async's.
+    // As compute_pipeline, with the fence and ticket of render_pipeline_async.
     std::optional<Id> compute_pipeline_async(Stream &stream, const ComputePipelineDescriptor &d, const std::uint32_t &fence, std::uint32_t ticket) noexcept {
         std::uint32_t at = stream.mem().off_of(&fence);
         return make_as(stream, op::COMPUTE_PIPELINE_ASYNC, op::COMPUTE_PIPELINE, [&](auto &s) {
@@ -552,35 +563,38 @@ template <std::size_t N> class Gpu {
         });
     }
 
-    // This turn's texture of `surface`, as a view.
+    // A view of `surface`'s texture for this turn. Every CURRENT of one turn
+    // names the same texture.
     std::optional<Id> current(Stream &stream, std::uint32_t surface) noexcept {
         return make(stream, op::CURRENT, [&](auto &s) { s.word(surface); });
     }
 
-    // The records from here to `commit` are one, and so are the objects they
-    // make: a transaction that does not fit drops both.
+    // Opens a transaction. The records from here to `commit` are written whole
+    // or not at all, and so are the objects they make.
     void begin(Stream &stream) noexcept {
         stream.begin();
         handles_.begin();
     }
 
-    // False where the transaction did not fit: the stream is as at `begin`,
-    // and every handle taken since is free again, as the runtime never saw it.
+    // Closes the transaction. False where it did not fit: the stream is then
+    // as it was at `begin`, and every handle taken since is free again, since
+    // the runtime never saw it.
     bool commit(Stream &stream) noexcept {
         bool fit = stream.commit();
         if (!fit) handles_.rollback([this](Id, std::uint8_t op) { forget(op); });
         return fit;
     }
 
-    // Ends a pass. Its handle is free whether or not the record was written:
-    // one dropped with its transaction left nothing on the runtime.
+    // Ends a pass and frees its handle, whether or not the record was written:
+    // a pass dropped with its transaction left nothing on the runtime to end.
     bool end(Stream &stream, Id pass) noexcept {
         bool sent = detail::emit(stream, op::END, [&](auto &s) { s.word(pass); });
         release(pass);
         return sent;
     }
 
-    // Each encoder finished, submitted in order and let go, as `end` lets a pass go.
+    // Submits the encoders in order, and frees their handles as `end` frees a
+    // pass's.
     bool submit(Stream &stream, std::span<const Id> encoders) noexcept {
         bool sent = detail::emit(stream, op::SUBMIT, [&](auto &s) {
             s.word(static_cast<std::uint32_t>(encoders.size()));
@@ -596,16 +610,15 @@ template <std::size_t N> class Gpu {
 
     bool live(Id id) const noexcept { return handles_.live(id); }
 
-    // The live objects by the op that made them (slot `op`, below DESTROY).
     const std::array<std::uint32_t, OBJECT_OPS> &objects() const noexcept { return objects_; }
 
   private:
-    // An object's handle, written by `op` as the record's first word; none
-    // where the table is full or the record did not fit.
+    // Makes an object by a record of `op` whose first word is the new handle.
+    // None where the table is full or the record does not fit.
     template <class F> std::optional<Id> make(Stream &stream, std::uint32_t op, F &&put) noexcept { return make_as(stream, op, op, put); }
 
-    // As make, the object counted as `kind` makes it: an async pipeline as its
-    // sync op's.
+    // As make, but the object is counted under the op `kind`: an async
+    // pipeline counts as its sync op's.
     template <class F> std::optional<Id> make_as(Stream &stream, std::uint32_t op, std::uint32_t kind, F &&put) noexcept {
         bool lasts = kind < OBJECT_OPS;
         std::optional<std::uint32_t> id = handles_.insert(lasts ? static_cast<std::uint8_t>(kind) : 0);
@@ -621,7 +634,7 @@ template <std::size_t N> class Gpu {
         return id;
     }
 
-    // `id` let go, where it was live.
+    // Frees the handle `id`, and says whether it was live.
     bool release(Id id) noexcept {
         std::optional<std::uint8_t> op = handles_.remove(id);
         if (op) forget(*op);
@@ -633,29 +646,33 @@ template <std::size_t N> class Gpu {
     }
 
     abi::Table<std::uint8_t, N> handles_;
-    // The live objects by the op that made them, slot `op`.
+    // How many live objects each op has made, indexed by the op.
     std::array<std::uint32_t, OBJECT_OPS> objects_{};
 };
 
-// The calls that make no object: an op's words straight to the stream, false
-// where an open transaction no longer fits them.
+// The calls that make no object. Each writes its record straight to the
+// stream, and returns false where an open transaction no longer fits it.
 namespace call {
 
 bool write_buffer(Stream &stream, Id buffer, std::uint32_t offset, std::span<const std::uint8_t> bytes) noexcept;
-// What `write_buffer` takes of a stream's room (Stream::fits), so a caller
-// writing several asks once.
+// The room `write_buffer` takes of a stream, for Stream::fits, so that a
+// caller can ask once whether several writes fit.
 std::uint64_t write_buffer_bytes(std::span<const std::uint8_t> bytes) noexcept;
-// The bytes read where they lie in the core's memory when the runtime runs the
-// stream, no copy made (ipc/stream.hpp R3).
+// As write_buffer, but the record names the bytes where they lie in the core's
+// memory, and the runtime reads them there as it runs the stream. The core
+// leaves them unchanged until the stream is handed back (ipc/stream.hpp R3).
 bool write_buffer_at(Stream &stream, Id buffer, std::uint32_t offset, std::span<const std::uint8_t> bytes) noexcept;
 // `layout`: bytes per row, rows per image.
 bool write_texture(Stream &stream, const TexelCopyTexture &place, std::array<std::uint32_t, 2> layout, std::array<std::uint32_t, 3> size, std::span<const std::uint8_t> bytes) noexcept;
-// As write_buffer_bytes: the words are the same whatever the place, layout and size.
+// As write_buffer_bytes. The room depends on the bytes alone, not on the
+// place, layout or size.
 std::uint64_t write_texture_bytes(std::span<const std::uint8_t> bytes) noexcept;
 bool write_texture_at(Stream &stream, const TexelCopyTexture &place, std::array<std::uint32_t, 2> layout, std::array<std::uint32_t, 3> size, std::span<const std::uint8_t> bytes) noexcept;
-// An encoded image (PNG, JPEG, WebP) where it lies in the core's memory,
-// decoded into `to`; `fence` its fence and result (spec RESULT), `ticket`
-// landing there once it is in or refused.
+// Decodes an encoded image (PNG, JPEG or WebP) from the core's memory into
+// `to`. `fence` is the fence and the result word after it (spec RESULT): the
+// runtime stores `ticket` there once the image is in the texture or refused.
+// The runtime copies the image's bytes as it runs the record, so they are the
+// core's again once the stream is handed back.
 bool copy_external_image(Stream &stream, const TexelCopyTexture &to, bool flip_y, bool premultiplied, std::span<const std::uint8_t> image, const std::array<std::uint32_t, 2> &fence, std::uint32_t ticket) noexcept;
 // `from` and `to`: a buffer and its offset.
 bool copy_buffer_to_buffer(Stream &stream, Id encoder, std::array<std::uint32_t, 2> from, std::array<std::uint32_t, 2> to, std::uint32_t size) noexcept;
@@ -664,7 +681,7 @@ bool copy_texture_to_buffer(Stream &stream, Id encoder, const TexelCopyTexture &
 bool copy_texture_to_texture(Stream &stream, Id encoder, const TexelCopyTexture &from, const TexelCopyTexture &to, std::array<std::uint32_t, 3> size) noexcept;
 bool clear_buffer(Stream &stream, Id encoder, Id buffer, std::uint32_t offset, std::optional<std::uint32_t> size) noexcept;
 bool resolve_query_set(Stream &stream, Id encoder, Id query_set, std::uint32_t first, std::uint32_t count, Id buffer, std::uint32_t offset) noexcept;
-// A render or a compute pipeline, as the pass is.
+// `pipeline` is a render or a compute pipeline, as `pass` is.
 bool set_pipeline(Stream &stream, Id pass, Id pipeline) noexcept;
 bool set_bind_group(Stream &stream, Id pass, std::uint32_t index, Id group, std::span<const std::uint32_t> dynamic_offsets = {}) noexcept;
 bool set_vertex_buffer(Stream &stream, Id pass, std::uint32_t slot, Id buffer, std::uint32_t offset, std::optional<std::uint32_t> size) noexcept;
@@ -680,18 +697,21 @@ bool draw_indirect(Stream &stream, Id pass, Id buffer, std::uint32_t offset) noe
 bool draw_indexed_indirect(Stream &stream, Id pass, Id buffer, std::uint32_t offset) noexcept;
 bool dispatch(Stream &stream, Id pass, std::array<std::uint32_t, 3> workgroups) noexcept;
 bool dispatch_indirect(Stream &stream, Id pass, Id buffer, std::uint32_t offset) noexcept;
-// `buffer` (MAP_READ | COPY_DST, copied into by an encoder submitted before)
-// read into the core's memory at `into`; `fence` its fence and result
-// (spec RESULT), `ticket` landing there once the bytes are there and the
-// buffer is unmapped, or the mapping refused.
+// Reads `buffer` into the core's memory at `into`. The buffer has MAP_READ and
+// COPY_DST usage, and an encoder submitted before copied into it. `fence` is
+// the fence and the result word after it (spec RESULT): the runtime stores
+// `ticket` there once the bytes are in `into` and the buffer is unmapped, or
+// once the mapping is refused.
 bool map_async(Stream &stream, Id buffer, std::uint32_t offset, std::span<std::uint8_t> into, const std::array<std::uint32_t, 2> &fence, std::uint32_t ticket) noexcept;
-// `ticket` at the fence `fence` once what was submitted before is done
-// (spec RESULT).
+// Asks the runtime to store `ticket` at `fence` once the work submitted
+// before is done (spec RESULT).
 bool queue_done(Stream &stream, const std::uint32_t &fence, std::uint32_t ticket) noexcept;
-// `format` none for the format the runtime's surface prefers.
+// `format` empty asks for the format the runtime's surface prefers.
 bool configure(Stream &stream, std::uint32_t surface, std::optional<TextureFormat> format, std::uint32_t usage, CanvasAlphaMode alpha) noexcept;
 bool resize(Stream &stream, std::uint32_t surface, std::array<std::uint32_t, 2> size) noexcept;
-// Where the runtime writes the device's limits, features and status.
+// Asks the runtime to write the device's block (spec DEVICE) into `into`:
+// its limits, features, unfinished frames and status. The runtime writes the
+// block's words for good, so `into` stays in place (ipc/stream.hpp R4).
 bool device(Stream &stream, std::span<std::uint32_t> into) noexcept;
 
 } // namespace call

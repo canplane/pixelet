@@ -1,32 +1,28 @@
 // @pxl/client/ui/component/backing.tsx
 
 /**
- * A floating control's backing: its fill, on a page and on Android. A page
- * has no system glass, so presence is plain opacity. An iPhone's is glass
- * (backing.ios.tsx).
+ * The backing behind a floating control on a page and on Android: a plain
+ * fill. These platforms have no system glass, so the backing fades in and out
+ * by its opacity. An iPhone backs a control with glass (backing.ios.tsx).
  */
 
 import type { ReactNode } from "react";
-import {
-  type ColorValue,
-  Platform,
-  type StyleProp,
-  type ViewStyle,
-} from "react-native";
+import type { ColorValue, StyleProp, ViewStyle } from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Motion } from "@/ui/component/motion/motion.tsx";
 import { SNAP, type Transition } from "@/ui/component/motion/transition.ts";
 import { useDim } from "@/ui/component/motion/dim.ts";
-import { alpha, type Material } from "@/ui/component/theme.ts";
+import type { Material } from "@/ui/component/theme.ts";
+import { backdrop } from "./backdrop.ts";
 import * as BackingPlace from "./backing-place.ts";
 
-/** One of BackingPlace's. */
 type BackingPlace = (typeof BackingPlace)[keyof typeof BackingPlace];
 export { BackingPlace };
 
 export interface BackingProps {
-  /** With a material, a `#rrggbb` the material sets the opacity of. */
+  /** With a material, the fill must be a `#rrggbb` color, and the material
+   * sets its opacity. */
   fill: ColorValue;
   material?: Material;
   tint?: ColorValue;
@@ -35,26 +31,13 @@ export interface BackingProps {
   fade?: f64;
   fadeFrom?: f64;
   transition?: Transition;
-  /** No transform: that is the fade's. */
+  /** The style must not set a transform: the Motion that fades the backing
+   * writes its own transform over it. */
   style?: StyleProp<ViewStyle>;
   children?: ReactNode;
 }
 
 export const SYSTEM_BACKING: boolean = false;
-
-/**
- * A see-through fill blurs what is behind on a page. Android cannot blur the
- * world, which is a SurfaceView, and an unblurred see-through fill is
- * unreadable, so it takes the fill solid.
- */
-function backdrop(fill: string, m: Material): ViewStyle {
-  if (Platform.OS !== "web") return { backgroundColor: fill };
-  // RN's style type has no backdrop filter; react-native-web writes it out.
-  return {
-    backgroundColor: alpha(fill, m.opacity),
-    backdropFilter: `blur(${m.blur}px)`,
-  } as ViewStyle;
-}
 
 export function Backing({
   fill,

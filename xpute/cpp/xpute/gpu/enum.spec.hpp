@@ -2,10 +2,10 @@
 //
 // GENERATED from spec/gpu/enum.json
 //
-// WebGPU's own enumerations, each its spec's strings in order: a number is its
-// place in the list, so a runtime hands the string to the device as it is and a core
-// names a member by its generated constant. Nothing here is any one program's; a
-// value WebGPU leaves optional is NONE (api.json) where unset.
+// WebGPU's own enumerations. Each one lists its WebGPU spec's strings in order, and a
+// member's number is its place in that list. A runtime hands the device the string as it
+// is, and a core names a member by its generated constant. Nothing here belongs to any one
+// program. A value that WebGPU leaves optional is NONE (api.json) when it is unset.
 
 #pragma once
 
@@ -15,7 +15,8 @@
 
 namespace xpute::gpu {
 
-// GPUTextureFormat, the core spec's and its texture-compression features'.
+// GPUTextureFormat: the formats of the core WebGPU spec and of its texture-compression
+// features.
 enum class TextureFormat : std::uint8_t {
     r8unorm = 0,
     r8snorm = 1,
@@ -371,7 +372,8 @@ enum class CanvasAlphaMode : std::uint8_t {
 
 inline constexpr std::array<std::string_view, 2> CANVAS_ALPHA_MODE{"opaque", "premultiplied"};
 
-// GPUFeatureName: a device's features are a bit each, by place (DEVICE in api.json).
+// GPUFeatureName. The DEVICE record (api.json) reports a device's features as one bit each,
+// at the member's place.
 enum class FeatureName : std::uint8_t {
     depth_clip_control = 0,
     depth32float_stencil8 = 1,
@@ -394,7 +396,8 @@ enum class FeatureName : std::uint8_t {
 
 inline constexpr std::array<std::string_view, 17> FEATURE_NAME{"depth-clip-control", "depth32float-stencil8", "texture-compression-bc", "texture-compression-bc-sliced-3d", "texture-compression-etc2", "texture-compression-astc", "texture-compression-astc-sliced-3d", "timestamp-query", "indirect-first-instance", "shader-f16", "rg11b10ufloat-renderable", "bgra8unorm-storage", "float32-filterable", "float32-blendable", "clip-distances", "dual-source-blending", "subgroups"};
 
-// GPUSupportedLimits' members: a device's limits are a word each, by place (DEVICE in api.json).
+// The members of GPUSupportedLimits. The DEVICE record (api.json) reports a device's limits
+// as one word each, at the member's place.
 enum class LimitName : std::uint8_t {
     maxTextureDimension1D = 0,
     maxTextureDimension2D = 1,

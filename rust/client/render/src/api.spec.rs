@@ -1,6 +1,6 @@
 // pxl-render/api.spec.rs
 //
-// GENERATED from spec/client/render/gpu/api.json
+// GENERATED from spec/client/render/api.json
 //
 // pixelet's conventions over xpute's GPU calls (xpute/spec/gpu/api.json), which
 // the renderer writes through xpute's encoder (gpu/api.rs): the stream it writes
@@ -27,7 +27,7 @@ pub mod surface_role {
 /// The one place the renderer's calls cross (gpu/api.rs): a stream
 /// (xpute-core ipc/stream.rs) in the core's machine's GPU socket, which the
 /// core writes its calls into during a turn and the runtime runs once the turn
-/// has returned. Its size is the socket's (rust/client/core/machine.json `gpu`).
+/// has returned. Its size is the socket's (spec/client/core/sys/machine.json `gpu`).
 ///
 /// Its head, past the stream's own words, is what the runtime writes for the
 /// core: the device's block (xpute DEVICE) and the timed spans' reads, three
@@ -64,7 +64,7 @@ pub mod device {
 }
 
 /// A pipeline record's codes (frame/shader/record.rs, expanded into xpute's
-/// descriptors by gpu/api.rs), and HEAD, the words it opens with before its
+/// descriptors by gpu/api.rs), and HEADER, the words it opens with before its
 /// vertex buffers. Then: the topology, the cull mode, the depth compare under
 /// reversed Z (LESS is plain depth, for a depth-only pass; NO_DEPTH, no
 /// depth attachment), the blend, which vertex entry point of
@@ -81,7 +81,7 @@ pub mod device {
 /// compares a depth texture's texels against a reference (the light's shadow
 /// map, gpu/shadow.rs).
 pub mod record {
-    pub const HEAD: u32 = 10;
+    pub const HEADER: u32 = 10;
     pub const TRIANGLES: u32 = 0;
     pub const STRIP: u32 = 1;
     pub const CULL_NONE: u32 = 0;

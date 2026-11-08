@@ -1,5 +1,5 @@
-// The sky: one triangle at the far plane, drawn after the opaque world, with
-// the sun's and moon's discs through the air.
+// The sky: one triangle at the far plane, drawn after the opaque world, with the sun's and the
+// moon's discs seen through the air.
 
 @group(0) @binding(2) var moon_map: texture_2d_array<f32>;
 @group(0) @binding(3) var moon_sampler: sampler;
@@ -22,7 +22,8 @@ fn vs(@builtin(vertex_index) i: u32) -> VertexOut {
 
 fn sun_disc(dir: vec3f, r: f32, a: f32, w: f32) -> vec3f {
   let mu = dot(dir, frame_up());
-  // Behind the land the eye stands over.
+  // The disc does not show behind the land the eye stands over, away from the sun, or past its
+  // edge.
   if (falls_to_land(dir) || dot(dir, atmos_sun_dir()) <= 0.0 || a >= 1.0 + w) {
     return vec3f(0.0);
   }
@@ -32,7 +33,8 @@ fn sun_disc(dir: vec3f, r: f32, a: f32, w: f32) -> vec3f {
   return disc_light(r, mu, exposure()) * limb * edge;
 }
 
-// Lommel-Seeliger, so a full moon is as bright at its limb as at its center.
+// The moon's face is lit by the Lommel-Seeliger law, so a full moon is as bright at its limb
+// as at its center.
 fn moon_disc(dir: vec3f, r: f32, across: vec3f, a: f32, w: f32) -> vec3f {
   let axis = atmos_moon_dir();
   let mu = dot(dir, frame_up());
@@ -43,7 +45,8 @@ fn moon_disc(dir: vec3f, r: f32, across: vec3f, a: f32, w: f32) -> vec3f {
   let on = across / max(a, 1.0);
   let normal = on - axis * sqrt(max(1.0 - dot(on, on), 0.0));
 
-  // Selenographic: north toward the pole, east to the right as seen from Earth.
+  // Selenographic coordinates: north points toward the pole, and east to the right as seen
+  // from Earth.
   let north = normalize(sky_pole() - dot(sky_pole(), axis) * axis);
   let east = cross(axis, north);
   let lon = atan2(dot(normal, east), -dot(normal, axis));
@@ -73,7 +76,7 @@ fn moon_disc(dir: vec3f, r: f32, across: vec3f, a: f32, w: f32) -> vec3f {
 fn fs(v: VertexOut) -> @location(0) vec4f {
   let dir = normalize(sky_ray() * vec3f(v.ndc + frame_jitter(), 1.0));
   let r = camera_r();
-  // Derivatives, so taken where every pixel takes them.
+  // These feed derivatives, so every pixel takes them before any branch.
   let sun_a = length(cross(dir, atmos_sun_dir())) / (atmos_sun_angular_radius() * SKY_DISC_SCALE);
   let sun_w = max(fwidth(sun_a), 1e-4);
   let across = (dir - dot(dir, atmos_moon_dir()) * atmos_moon_dir()) / (MOON_ANGULAR_RADIUS * SKY_DISC_SCALE);

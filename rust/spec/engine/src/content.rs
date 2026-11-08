@@ -1,12 +1,11 @@
 // pxl-engine/content.rs
 
-//! gpu-portable: the rules the engine asks of the content it draws, the one
-//! trait a content implements: where its caves take the ground, its strata,
-//! and how far its decor reaches, which the light's box reads. A world type
-//! carries its content as an associated type of the trait it implements
-//! where those rules are asked (`ground::Resident`); a function that reads
-//! no world takes it as a type parameter. The values a
-//! content's palette takes are the engine's value space (`value`).
+//! gpu-portable: the rules the engine asks of the content it draws, as the one trait a
+//! content implements: how its caves hollow the ground, its strata, its bedrock, and the
+//! Earth's ground past the service area. A world type carries its content as an associated
+//! type of the trait through which those rules are asked (`ground::Resident`); a function that
+//! reads no world takes the content as a type parameter. The values in a content's palette
+//! are the engine's value space (`value`).
 
 #[cfg(test)]
 use crate::value::{UNKNOWN, VOID};
@@ -15,29 +14,27 @@ use crate::Zoom;
 /// The rules a content's world follows, each answered the same on the CPU
 /// and on the GPU.
 pub trait Content {
-    /// The share of the cube `c` at `zoom` its caves take, in
-    /// `answer::FULL`'s units, where the ground may give one (`ground::node`):
-    /// the mean of its leaves', so a coarse cell holds what they do and
-    /// `FULL` is a cave all through.
+    /// The share of the cube at `node` that its caves take, in units of `answer::FULL`, asked
+    /// where the ground may give the cube a cave (`ground::node`). It is the mean over the cube's
+    /// leaves, so a coarse cell holds what its leaves hold, and `FULL` is a cave all through.
     fn hollow(node: (Zoom, [i32; 3])) -> u32;
 
-    /// What the ground is in cell `z` of a column of `cell` whose palette
-    /// index is `palette_idx` and whose top is `top` cells: by depth under
-    /// its top, `value::VOID` over it, `value::UNKNOWN` under its bedrock and
-    /// for the wall all through.
-    fn by_depth(cell: Zoom, palette_idx: u32, top: i32, z: i32) -> u32;
+    /// What the ground is in cell `z` of a column at `cell_zoom` whose palette index is
+    /// `palette_idx` and whose top is `top` cells. Under the top it goes by depth; above the top
+    /// it is `value::VOID`; under the bedrock, and all through the wall, it is `value::UNKNOWN`.
+    fn by_depth(cell_zoom: Zoom, palette_idx: u32, top: i32, z: i32) -> u32;
 
-    /// The bedrock's top under a face at `face` leaf cells, in leaf cells:
-    /// the lowest a cube may reach there.
+    /// The top of the bedrock under a face `face` leaf cells high, in leaf cells: the lowest a
+    /// cube may reach there.
     fn bedrock(face: i32) -> i32;
 
-    /// Cell `z` past the service area: the Earth's ground there.
+    /// Cell `z` of a column past the service area, where the Earth's ground stands.
     fn earth(z: i32) -> u32;
 }
 
-/// A content for the engine's own tests, no content's: no caves, a column
-/// its face's entry all the way down, a bedrock 64 under it or sea level,
-/// and past the area bedrock under sea level.
+/// A content for the engine's own tests. It has no caves, and a column is its face's entry
+/// all the way down. The bedrock lies 64 cells under the face or under sea level, whichever is
+/// lower, and past the area everything under sea level is unknown.
 #[cfg(test)]
 pub(crate) struct Sample;
 

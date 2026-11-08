@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-# Builds the core's module again (build-wasm.py) on each change under rust/
-# outside a target/, one build at a time: a change during a build queues one
-# more. It says when public/core.wasm was replaced; Metro does not watch
-# public/, so the page is reloaded by hand. `make dev` runs it beside the dev
-# server, which builds the module once at its start.
+# Builds the core's module again (build-wasm.py) on each change under rust/,
+# outside any target/. One build runs at a time, and a change during a build
+# queues one more. It says when public/core.wasm was replaced. Metro does not
+# watch public/, so the page must be reloaded by hand. `make dev` runs this
+# beside the dev server, which builds the module once at its start.
 #
 #   ./script/watch-wasm.py [--interval SECONDS]
 
@@ -21,7 +21,8 @@ RUST = APP.parent.parent / "rust"
 
 
 def tree():
-    """Each file under rust/ but a target/, by its path, with its time and size."""
+    """Each file under rust/ outside a target/, by its path, with its time and
+    size."""
     seen = {}
     stack = [RUST]
     while stack:
@@ -59,8 +60,8 @@ def main():
         now = tree()
         if now == last:
             continue
-        # What a build starts from; a change while it runs differs from this
-        # and starts one more build after it.
+        # The tree this build starts from. A change while the build runs
+        # differs from it, and starts one more build after this one.
         last = now
         before = mtime(OUT)
         status = subprocess.run([sys.executable, str(BUILD)], cwd=APP).returncode

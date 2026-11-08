@@ -1,9 +1,10 @@
 // pxl-core/domain/view/frame.rs
 
 //! The frame the world is drawn in: the observer's pose and its matrices,
-//! and the world's doubles a canonical point enters on the lap nearest the
-//! eye. No origin is kept: a draw is placed less the eye, in doubles, before
-//! it is narrowed.
+//! and positions in the world's doubles. X wraps around the world, and a
+//! canonical point enters the doubles on the lap of X nearest the eye. The
+//! frame keeps no origin of its own: each draw subtracts the eye in doubles
+//! before it is narrowed to f32.
 
 pub mod coord;
 pub mod pose;

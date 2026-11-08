@@ -42,7 +42,7 @@ and after, against the object count `publish` prints:
 Deleting an old version is free.
 
 ```bash
-make bake-<kind> ARGS="--stage publish"    # terrain, place or division
+make bake-<kind> ARGS="--step publish"     # terrain, place or division
 ./script/publish.py <kind>
 ```
 
@@ -62,15 +62,9 @@ A missing place or division tile is not an error.
 
 ### A new format
 
-The plain `publish.py <kind>` is for a version in the format the deployed
-client reads. A client takes `source` only where every kind is in its own
-format exactly (pxl-core `sys/io/source.rs`, `reads_every`), and
-`declare_source` judges by the tree's format, not the deployed client's, so it
-lets through a format no deployed client reads. A version in a new format is
-uploaded with `upload` and served with `serve` when the client that reads it
-is out. Under that exact match, whichever goes first, the clients of the other
-format refuse `source` until they are replaced, and a page refused says to
-update (`failed.source`): the switch interrupts one side. Whether that is taken, or avoided some other way, is the user's call.
+A client takes `source` only where every kind is in its own format exactly
+(pxl-core `sys/io/source.rs`, `parse`). A version in a new format goes up with
+`upload` and is served with `serve` once the client that reads it is deployed.
 
 ### Earth
 

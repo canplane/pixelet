@@ -1,7 +1,7 @@
 // @pxl/app/modules/platform/android/build.gradle
 //
-// The device's half of the app's platform on Android (src/main/java/…). The
-// core is built and packed by xpute's module (@xpute/native).
+// The device's half of the app's platform on Android, in src/main/java/.
+// xpute's module (@xpute/native) builds and packs the core.
 
 plugins {
   id 'com.android.library'

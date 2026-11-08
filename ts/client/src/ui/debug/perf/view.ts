@@ -1,13 +1,13 @@
 // @pxl/client/ui/debug/perf/view.ts
 
 /**
- * What the profiler's panel and report are made of: the core's records as
- * abi/perf.ts decodes them, with the place's long frames beside them
- * (long-frame.ts) and the build they were taken on.
+ * Reads what the profiler panel and the report show: the core's records as
+ * service/core/perf.ts decodes them, the platform's long frames beside them
+ * (long-frame.ts), and the build they were recorded on.
  */
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
-import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/deploy.ts";
+import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/build.ts";
 import {
   type FrameSummary,
   read,
@@ -17,8 +17,8 @@ import {
   type TaskSummary,
   type ViewSection,
   type Worst,
-} from "@/port/perf.ts";
-import type { LongFrame } from "@/service/types.ts";
+} from "@/service/core/perf.ts";
+import type { LongFrame } from "@/service/platform/types.ts";
 import { longFramesSince } from "./long-frame.ts";
 
 const RECENT_TASKS = 20;
@@ -32,30 +32,35 @@ export interface PerfReport {
   recent: TaskRecord[];
   worst: Worst[];
   longs: LongFrame[];
-  /** What the frames held at the most or the least since the recording
-   * started, and where the view is as it is read. */
+  /** `recording` holds each frame figure's most or least since the recording
+   * started. `view` is where the view stands when the report is read. */
   recording: RecordingSection;
   view: ViewSection;
 }
 
-/** Frames a second over a window: its intervals over its span, none under two frames. */
+/** The frame rate over a window. Its `n` frames bound `n - 1` intervals,
+ * which are divided by the window's span. Fewer than two frames give no
+ * rate. */
 export const fps = (f: { n: f64; seconds: f64 }): f64 | null =>
   f.n >= 2 && f.seconds > 0 ? (f.n - 1) / f.seconds : null;
 
 /**
- * Frames a second while frames are drawn: the moving frames over their
- * intervals summed, none where none moved. A window's average (`fps`)
- * counts the still spans between moves as frames not drawn, and the median
- * interval holds at the refresh until half the frames miss it.
+ * The frame rate while frames are being drawn: the frames that moved, over
+ * the sum of their intervals. When no frame moved there is no rate. The
+ * window's average (`fps`) would count the still spans between moves as
+ * frames not drawn, and the median interval stays at the display's refresh
+ * until half the frames miss it, so neither shows this rate.
  */
 export const movingFps = (f: { moving: f64; moving_ms: f64 }): f64 | null =>
   f.moving >= 1 && f.moving_ms > 0 ? (1000 * f.moving) / f.moving_ms : null;
 
-/** The window the header's rate is over: short, so a dip shows as it happens. */
+/** The span the panel title's frame rate is taken over. It is short so that
+ * a dip shows as it happens. */
 export const RECENT_MS = 1_000;
 
 export interface Gauge {
-  /** The frames and tasks the rings hold, as RINGS counts them. */
+  /** How many frames and tasks the core's rings hold, as the RINGS record
+   * counts them. */
   rec: {
     recording: boolean;
     elapsed_ms: f64;
@@ -64,7 +69,8 @@ export interface Gauge {
     truncated: boolean;
   };
   frames: FrameSummary | null;
-  /** The frames over the last `RECENT_MS`, the header's rate. */
+  /** The frames over the last `RECENT_MS`, which give the panel title's
+   * frame rate. */
   recent: FrameSummary | null;
   tasks: TaskSummary[];
   view: ViewSection;

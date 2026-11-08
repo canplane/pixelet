@@ -1,7 +1,9 @@
-//! The device every test of a pass by hand runs it on: its buffers and textures, a module taken as the renderer assembles it or from a file
-//! a mutant sweep names, and a wait for the device that gives up, as a shader by hand may loop
-//! on; and what the tests share besides: the light's beam as the cast runs it, the kinds of
-//! case each met, a light's box as a host lays it, a hash and a few vectors.
+//! The tests that run a pass written by hand share this device and its helpers. A pass by
+//! hand is a WGSL shader that carries out what pxl-engine's Rust does, and the tests compare the
+//! two. A module comes as build.rs assembles it for the renderer, or from the file a mutant sweep
+//! names. A wait on the device fails the test after `WAIT`, because a shader may loop forever,
+//! and a dispatch the device stops short fails the test too. The runs of the cast here dispatch
+//! their passes in the order the renderer does (gpu/ray/cast.rs `walk_run`).
 
 #![allow(dead_code, reason = "each test reads its own of it")]
 
@@ -24,19 +26,19 @@ use pxl_render::frame::shader::record::{
     COMPUTE_QUEUE_SAMPLES_PARKED,
 };
 
-/// How long a test waits on the device for one submission before it fails.
+/// How long a test waits for the device to finish its work before the test fails.
 const WAIT: Duration = Duration::from_secs(60);
-/// The frames a run may take to ask what its rays need (`Gpu::run`).
+/// How many frames a run may take to ask the world for everything its rays need (`Gpu::run`).
 const FRAMES_TO_ASK: u32 = 64;
 
-/// Whether a mutant sweep runs this test: the file `MUT_WGSL` names stands for the module
-/// that holds the entry, and the test stops at its first case that differs.
+/// Whether a mutant sweep runs this test. In a sweep, the file `MUT_WGSL` names stands in for
+/// the module that holds the entry, and the test stops at its first case that differs.
 pub fn mutant() -> bool {
     std::env::var_os("MUT_WGSL").is_some()
 }
 
-/// The module that holds `entry`: as assembled, or the file `MUT_WGSL` names where it
-/// holds the entry.
+/// The source of the module that holds `entry`. It is the file `MUT_WGSL` names where that
+/// file holds the entry, and `assembled` otherwise.
 pub fn source(assembled: &str, entry: &str) -> String {
     if let Some(path) = std::env::var_os("MUT_WGSL") {
         let text = std::fs::read_to_string(&path).expect("the mutant's module");
@@ -58,7 +60,7 @@ pub struct Gpu {
 }
 
 impl Gpu {
-    /// A device of the adapter's own limits; none where no adapter answers.
+    /// A device with the adapter's own limits, or `None` where no adapter answers.
     pub fn new() -> Option<Gpu> {
         let instance =
             wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
@@ -71,7 +73,7 @@ impl Gpu {
         Some(Gpu { device, queue })
     }
 
-    /// Every submission done, or the test failed.
+    /// Waits until every submission is done, and fails the test past `WAIT`.
     pub fn wait(&self) {
         wait(&self.device);
     }
@@ -90,8 +92,8 @@ impl Gpu {
         read_buffer(&self.device, &self.queue, from)
     }
 
-    /// The pipeline of `entry` in `assembled`, or in the mutant's module (`source`), its
-    /// group laid out as the module reads it; a module the device refuses fails the test.
+    /// The pipeline of `entry` in `assembled`, or in the mutant's module (`source`). Its group's
+    /// layout is the one the module's bindings imply. A module the device refuses fails the test.
     pub fn pipeline(&self, assembled: &str, entry: &str) -> wgpu::ComputePipeline {
         let scope = self.device.push_error_scope(wgpu::ErrorFilter::Validation);
         let module = self
@@ -116,8 +118,8 @@ impl Gpu {
         p
     }
 
-    /// `groups` workgroups of `p` over `binds`, waited for; a command buffer the device
-    /// stopped short fails the test.
+    /// Dispatches `groups` workgroups of `p` over `binds` and waits for them. A command buffer
+    /// the device stopped short fails the test.
     pub fn dispatch(
         &self,
         p: &wgpu::ComputePipeline,
@@ -136,8 +138,9 @@ impl Gpu {
             layout: &p.get_bind_group_layout(0),
             entries: &entries,
         });
-        // A word the same command buffer clears after the pass: one Metal aborts mid-way runs
-        // nothing after, and wgpu counts it done all the same.
+        // The same command buffer clears this word after the pass. When Metal aborts a command
+        // buffer midway, it runs nothing after the abort, yet wgpu counts the buffer done. A word
+        // left set shows the abort.
         let ran = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: 4,
@@ -172,10 +175,11 @@ impl Gpu {
         );
     }
 
-    /// The light's beam rays' run as the cast runs it over the map `size` texels a side
-    /// (corners.wgsl over beam.light.wgsl), every beam ray of the whole map listed
-    /// (light_list.wgsl `light_item_at`), as `corners` runs it. `world` binds what its passes
-    /// read: the list at 8, the node cache `table` at 9, the head at 11.
+    /// Runs the light's beam rays as the cast runs them (corners.wgsl over beam.light.wgsl),
+    /// over a map `size` texels a side. It first lists every beam ray of the whole map in `list`
+    /// (light_list.wgsl `light_item_at`), then runs them through `corners`. `world` binds what
+    /// the passes read, with the list at 8, the node cache `table` at 9 and the light's header
+    /// at 11.
     pub fn light_beam(
         &self,
         world: &[(u32, wgpu::BindingResource)],
@@ -184,18 +188,19 @@ impl Gpu {
         size: u32,
     ) {
         let mut words = self.read(list);
-        list_every(&mut words, size, light::LISTED_CORNERS, 1);
+        list_every(&mut words, size, light::LIST_CORNERS, 1);
         self.queue.write_buffer(list, 0, bytes(&words));
         self.corners(true, world, table);
     }
 
-    /// The holes' run as the cast runs it over one observer's holes (pxl-render gpu/ray/cast.rs
-    /// `walk_run`): the two walks over the node cache alone and the asks after each, the stops
-    /// copied into `table` and the rays parked into `pool`, a buffer and its word (pxl-engine
-    /// `ray::POOL_CNT`), as the cast copies them, and the last walk. `all` binds what any of its
-    /// passes reads but the queue's words: the eye at 0, the world's at 1, 2 and 4 to 7, the rays
-    /// or the map at 3, the observer's list at 8, the node cache at 9, the observer's head at 11;
-    /// each pass takes those its entry reads.
+    /// Runs one observer's holes as the cast runs them (gpu/ray/cast.rs `walk_run`). Two walks
+    /// read the node cache alone, and an ask follows each. The queue's hits are then copied into
+    /// `table` (`node_cache::HITS_ARGS`), and its count of parked rays into `pool`, a buffer and
+    /// the word that holds the count (pxl-engine `ray::POOL_CNT`), as the cast copies them. The
+    /// last walk runs after. `all` binds what any of the passes reads except the queue's words:
+    /// the eye at 0, the world at 1, 2 and 4 to 7, the rays or the map at 3, the observer's list
+    /// at 8, the node cache at 9 and the observer's header at 11. Each pass takes the bindings
+    /// its entry reads.
     pub fn holes(
         &self,
         all: &[(u32, wgpu::BindingResource)],
@@ -222,8 +227,9 @@ impl Gpu {
         );
     }
 
-    /// An observer's beam rays' run as the cast runs it (pxl-render gpu/ray/cast.rs
-    /// `walk_run`), the eye's or the `light`'s, as `samples` runs the samples'.
+    /// Runs an observer's beam rays as the cast runs them (gpu/ray/cast.rs `walk_run`), the
+    /// light's where `light` is set and the eye's otherwise. The passes and bindings follow
+    /// `samples`.
     pub fn corners(&self, light: bool, all: &[(u32, wgpu::BindingResource)], table: &wgpu::Buffer) {
         let ids = if light {
             [
@@ -245,17 +251,19 @@ impl Gpu {
         self.lattice(ids, light, all, table, None);
     }
 
-    /// An observer's samples' run as the cast runs it (pxl-render gpu/ray/cast.rs `walk_run`),
-    /// the eye's or the `light`'s: the two walks over the node cache alone and the asks after
-    /// each, and the last walk. `all` binds what any of its passes reads but the queue's words:
-    /// the eye at 0, the world's at 1, 2 and 4 to 7, the observer's list at 8, the node cache at
-    /// 9, the light's head at 11, each pass taking those its entry reads.
+    /// Runs an observer's samples as the cast runs them (gpu/ray/cast.rs `walk_run`), the
+    /// light's where `light` is set and the eye's otherwise. Two walks read the node cache
+    /// alone, an ask follows each, and the last walk runs after. `all` binds what any of the
+    /// passes reads except the queue's words: the eye at 0, the world at 1, 2 and 4 to 7, the
+    /// observer's list at 8, the node cache at 9 and the light's header at 11. Each pass takes
+    /// the bindings its entry reads.
     pub fn samples(&self, light: bool, all: &[(u32, wgpu::BindingResource)], table: &wgpu::Buffer) {
         self.samples_asked(light, all, table, None);
     }
 
-    /// `samples`, its last walk, which asks the world, over the node cache `asked` where given
-    /// in place of `table`, which the walks before it and their asks read and write.
+    /// `samples`, with the last walk, which asks the world, over the node cache `asked` in place
+    /// of `table` where `asked` is given. The walks before it and their asks read and write
+    /// `table`.
     pub fn samples_asked(
         &self,
         light: bool,
@@ -283,8 +291,8 @@ impl Gpu {
         self.lattice(ids, light, all, table, asked);
     }
 
-    /// A lattice's run of passes `ids`, the eye's or the `light`'s, over `table` and `asked`
-    /// (`samples_asked`).
+    /// Runs the passes `ids` of a lattice, the light's where `light` is set and the eye's
+    /// otherwise, over `table` and `asked` as `samples_asked` says.
     fn lattice(
         &self,
         ids: [u32; 5],
@@ -293,20 +301,22 @@ impl Gpu {
         table: &wgpu::Buffer,
         asked: Option<&wgpu::Buffer>,
     ) {
-        // The light's walks read its head; no lattice's asks do, nor the eye's walks.
-        let head: &[u32] = if light { &[11] } else { &[] };
-        let walk = [&[0, 8, 9, 10][..], head].concat();
-        let last = [&[0, 1, 2, 4, 5, 6, 7, 8, 9][..], head].concat();
+        // The light's walks read its header at 11. The eye's walks and every lattice's asks do
+        // not.
+        let header: &[u32] = if light { &[11] } else { &[] };
+        let walk = [&[0, 8, 9, 10][..], header].concat();
+        let last = [&[0, 1, 2, 4, 5, 6, 7, 8, 9][..], header].concat();
         let keep = [&walk[..], &[0, 1, 2, 4, 5, 6, 7, 9, 10], &last[..]];
         self.run(ids, keep, all, table, asked, None);
     }
 
-    /// A run's passes `ids` (its walk, its asks, its walk again, their asks and its last walk)
-    /// over `all` and the queue's words, the walks, the asks and the last walk each taking the
-    /// bindings `keep` names for it, the last walk's node cache `asked` where given; where
-    /// `pool`, the holes' run's, its stops and its parked rays copied as `holes` says. A run that
-    /// asks past `ray::ASKS_A_FRAME` ends rays as lacks, so it runs again over the node cache it
-    /// left, as the frames after do, until one lacks no ask: its words are what a test reads.
+    /// Runs the passes `ids` over `all` and the queue's words: the walk, its asks, the walk of
+    /// the parked rays, their asks, and the last walk. `keep` names the bindings that the walks,
+    /// the asks and the last walk each take. The last walk reads the node cache `asked` where it
+    /// is given. Where `pool` is given, as in the holes' run, the hits and the parked count are
+    /// copied as `holes` says. A run that asks past `ray::ASKS_A_FRAME` ends rays as lacks. It
+    /// then runs again over the node cache it left, as the frames after it would, until a run
+    /// asks no more than a frame's asks. The words that run leaves are what a test reads.
     fn run(
         &self,
         [walk_id, ask_id, walk_parked_id, ask_parked_id, last_id]: [u32; 5],
@@ -350,12 +360,12 @@ impl Gpu {
         let groups = [ray::QUEUE_GROUPS, 1, 1];
         let word = |w: u32| u64::from(w) * 4;
         for _ in 0..FRAMES_TO_ASK {
-            // Each run a frame of its own: its asks none and the last walk's first taken, as the
-            // host and the asks set them each frame it casts.
-            let none = [0u32; (node_cache::ASKED + 1 - node_cache::LAST_TAKEN) as usize];
+            // Each run is a frame of its own. The count of asks and the last walk's next ray
+            // start at zero, as the host and the asks set them each frame the cast runs.
+            let none = [0u32; (node_cache::ASKED + 1 - node_cache::LAST_NEXT) as usize];
             for t in [Some(table), asked].into_iter().flatten() {
                 self.queue
-                    .write_buffer(t, word(node_cache::LAST_TAKEN), bytes(&none));
+                    .write_buffer(t, word(node_cache::LAST_NEXT), bytes(&none));
             }
             self.queue.write_buffer(&queue, 0, bytes(&ray::QUEUE_EMPTY));
             self.dispatch(&walk, &walk_binds, groups);
@@ -379,17 +389,17 @@ impl Gpu {
     }
 }
 
-/// List `which` of the light's list `words` over a map `size` texels a side holding every item
-/// of its level, as a cast that claims every tile lays it (light_propagate.wgsl `enlist`); and
-/// the workgroups a pass takes it over whose entries are `per` items a side
-/// (light_list.wgsl `light_item`).
+/// Fills list `which` of the light's list `words`, over a map `size` texels a side, with every
+/// item of its level, as a cast that claims every tile lays it (light_propagate.wgsl `enlist`).
+/// Returns the workgroups a pass dispatches over that list when each entry is `per` items a
+/// side (light_list.wgsl `light_item`).
 pub fn list_every(words: &mut [u32], size: u32, which: u32, per: u32) -> [u32; 2] {
-    let across = if which == light::LISTED_CORNERS {
+    let across = if which == light::LIST_CORNERS {
         light::beam_across(size)
     } else {
         light::tiles(size)
     };
-    let at = light::listed_at(size, which) as usize;
+    let at = light::list_cnt_at(size, which) as usize;
     words[at] = across * across;
     for k in 0..across * across {
         words[at + 1 + k as usize] = ((k / across) << 16) | (k % across);
@@ -397,11 +407,11 @@ pub fn list_every(words: &mut [u32], size: u32, which: u32, per: u32) -> [u32; 2
     let threads = across * across * per * per;
     [
         light::LIST_ACROSS,
-        threads.div_ceil(light::LIST_ACROSS * light::LISTED_LANES),
+        threads.div_ceil(light::LIST_ACROSS * light::LIST_LANES),
     ]
 }
 
-/// Every submission on `device` done, or the test failed.
+/// Waits until every submission on `device` is done, and fails the test past `WAIT`.
 fn wait(device: &wgpu::Device) {
     device
         .poll(wgpu::PollType::Wait {
@@ -411,10 +421,10 @@ fn wait(device: &wgpu::Device) {
         .unwrap_or_else(|e| panic!("the device did not finish in {WAIT:?}: {e:?}"));
 }
 
-/// The words of `from`, a buffer that may be copied from.
-/// Lays in the node cache's words `cache` a drawable entry in slot `slot` (pxl-engine
-/// `node_cache`, `record`): the node `n` as a walk from the origin `o` holds it, kept by a walk
-/// of frame 1 at the node's own zoom, answered `kind` and `asset`, what draws it `state`.
+/// Lays a drawable entry in slot `slot` of the node cache's words `cache` (pxl-engine
+/// `node_cache`, `record`). The entry holds the node `n` as a walk from the origin `o` holds it.
+/// A walk of frame 1 kept it at the node's own zoom, its answer is `kind` and `asset`, and
+/// `state` says what draws it.
 pub fn lay_entry(
     cache: &mut [u32],
     slot: u32,
@@ -438,10 +448,10 @@ pub fn lay_entry(
     cache[node_cache::state_at(slot) as usize] = state;
 }
 
-/// Lays the node `n`, as a walk from the origin `o` holds it, answered `kind` and `asset`, in
-/// the first free slot of its bucket of the node cache's words `cache`, as a walk that asked it
-/// keeps it (pxl-render ask.wgsl `keep`), what draws it none: its slot, none where it is kept
-/// already or its bucket is full.
+/// Lays the node `n`, as a walk from the origin `o` holds it, in the first free slot of its
+/// bucket in the node cache's words `cache`, as a walk that asked it keeps it (ask.wgsl `keep`).
+/// Its answer is `answer`, a kind and an asset, and nothing draws it yet. Returns the slot, or
+/// `None` where the node is kept already or its bucket is full.
 pub fn lay_kept(
     cache: &mut [u32],
     o: [i32; 3],
@@ -467,18 +477,20 @@ pub fn lay_kept(
 }
 
 /// The node of the entry at word `e` of the node cache's words `cache`, as a walk from the
-/// origin `o` holds it (`cast::Node::of_idx`).
+/// origin `o` holds it.
 pub fn entry_node(cache: &[u32], e: usize, o: [i32; 3]) -> cast::Node {
     let w = e + node_cache::W_NODE as usize;
     cast::Node::of_idx(o, cache[w], [1, 2, 3].map(|a| cache[w + a] as i32))
 }
 
-/// Whether slot `slot` of `cache` holds a node: a key that is no claim.
+/// Whether slot `slot` of `cache` holds a node. It does when its key is neither empty nor a
+/// claim.
 pub fn entry_held(cache: &[u32], slot: u32) -> bool {
     let key = cache[node_cache::key_at(slot) as usize];
     key != 0 && key != node_cache::CLAIMED && key & node_cache::CLAIM_MASK != node_cache::CLAIM_FAR
 }
 
+/// Reads back the words of `from`, which must allow copies from it (`COPY_SRC`).
 pub fn read_buffer(device: &wgpu::Device, queue: &wgpu::Queue, from: &wgpu::Buffer) -> Vec<u32> {
     let staging = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
@@ -501,8 +513,8 @@ pub fn read_buffer(device: &wgpu::Device, queue: &wgpu::Queue, from: &wgpu::Buff
         .collect()
 }
 
-/// A texture of `layers` R32Uint layers at `size`, for `usage` and copies either way, laid
-/// with `words`, a layer after another.
+/// A texture of `layers` R32Uint layers at `size`, usable for `usage` and for copies both
+/// ways, filled from `words` one layer after another.
 pub fn texture(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -538,7 +550,8 @@ pub fn texture(
     t
 }
 
-/// A texture's words read back whole, a layer after another, a row's padding dropped.
+/// Reads back a texture's words whole, one layer after another, without the padding a copy
+/// adds to each row.
 pub fn read_texture(device: &wgpu::Device, queue: &wgpu::Queue, t: &wgpu::Texture) -> Vec<u32> {
     use wgpu::util::DeviceExt as _;
     let [w, h, layers] = [t.width(), t.height(), t.depth_or_array_layers()];
@@ -576,8 +589,8 @@ pub fn array_view(t: &wgpu::Texture) -> wgpu::TextureView {
     })
 }
 
-/// How many of each kind of case a test met, for what it may say: a kind it needs and met
-/// too few of fails it.
+/// How many cases of each kind a test met. A test may claim a result only from the kinds it
+/// met, so a kind it needs and met too few times fails it.
 #[derive(Default, Debug)]
 pub struct Kinds(BTreeMap<&'static str, u64>);
 
@@ -586,7 +599,6 @@ impl Kinds {
         Kinds::default()
     }
 
-    /// One more of `k` where `yes`.
     pub fn add(&mut self, k: &'static str, yes: bool) {
         self.count(k, u64::from(yes));
     }
@@ -599,7 +611,7 @@ impl Kinds {
         self.0.get(k).copied().unwrap_or(0)
     }
 
-    /// Each kind of `least` met fewer times than it asks, told.
+    /// A message for each kind in `least` met fewer times than the count it asks for.
     pub fn short(&self, least: &[(&str, u64)]) -> Vec<String> {
         least
             .iter()
@@ -608,7 +620,7 @@ impl Kinds {
             .collect()
     }
 
-    /// Each of `what` met at least once, or the test fails.
+    /// Fails the test unless each kind in `what` was met at least once.
     pub fn hold(&self, what: &[&str]) {
         eprintln!("  KINDS {:?}", self.0);
         let short = self.short(&what.iter().map(|&k| (k, 1)).collect::<Vec<_>>());
@@ -616,10 +628,11 @@ impl Kinds {
     }
 }
 
-/// A light's box as a host lays it (pxl-render gpu/shadow.rs `aim`, `Shadow::starts`): the map
-/// `size` texels a side, its middle at the Q3 position `origin`, looking along `dir`, a texel
-/// `side` units, its near plane `back` units back along the light, its rays reaching `t_max`,
-/// its corner and its receivers' reach.
+/// A light's box as the renderer lays it (gpu/shadow.rs `aim`, `Shadow::starts`). The map is
+/// `size` texels a side, its middle lies at the Q3 position `origin`, and it looks along `dir`.
+/// A texel is `side` units wide, the near plane lies `back` units back along the light, and the
+/// rays reach `t_max`. `corner` is the world texel index of the box's texel (0, 0), and
+/// `reach_ndc` is the share of the box's half-width a receiver reads the map within.
 pub struct LightBox {
     pub size: u32,
     pub origin: [i32; 3],
@@ -632,8 +645,8 @@ pub struct LightBox {
 }
 
 impl LightBox {
-    /// The light, and where its texels' rays start (`light::Starts`): each anchor where its
-    /// texel lies off the middle, rounded to a Q3 step, half to even.
+    /// The light, and where its texels' rays start. Each anchor lies where its texel lies off
+    /// the box's middle, rounded to a Q3 step with ties to even.
     pub fn lay(&self) -> (Light, Starts) {
         let dir = unit(self.dir);
         let a = cross(dir, [0.0, 0.0, 1.0]);
@@ -686,9 +699,10 @@ impl LightBox {
     }
 }
 
-/// The margins a device may take for `light::margin` of a beam `width` wide, a rounding each,
-/// named: the engine's, and the product fused into the sum (beam.light.wgsl `beam_hand`). The
-/// width is the host's word (`Light::width`), so nothing else rounds apart.
+/// The margins a device may take for `light::margin` of a beam `width` wide, each named by its
+/// rounding. The engine rounds the product and then adds, and a device may fuse the two into
+/// one rounding (beam.light.wgsl `beam_hand`). The width comes from the host's word
+/// (`Light::width`), so no other step rounds apart.
 pub fn margins(width: f32) -> [(&'static str, f32); 2] {
     let fused = (2.0 * cast::SQRT_6).mul_add(width, light::margin(0.0));
     [
@@ -723,9 +737,10 @@ pub fn ulps(a: f32, b: f32) -> u32 {
     key(a).abs_diff(key(b))
 }
 
-/// The ulps a plane's t may move by as the device works out the ray's way `d` along an axis
-/// itself: a sum of terms about 1, a few ulps of 1 off, is a large share of a small way. As
-/// many as a u32 holds where the way is so small its share has no bound.
+/// How many ulps a plane's t may move when the device works out the ray's direction `d` on an
+/// axis itself. The device sums terms near 1 and lands a few ulps of 1 off, which is a large
+/// share of a small `d`. Where `d` is so small that the share has no bound, the slack is as
+/// many as a u32 holds. An axis the ray does not move along has none.
 pub fn slack(d: f32) -> u32 {
     if d == 0.0 {
         0
@@ -734,21 +749,22 @@ pub fn slack(d: f32) -> u32 {
     }
 }
 
-/// The ulps within which a device's rounding of a ray may take it across an edge of a cell,
-/// past what its way's own rounding takes (`slack`).
+/// How many ulps of a device's rounding may carry a ray across an edge of a cell, beyond what
+/// the rounding of its direction adds (`slack`).
 pub const EDGE_ULPS: u32 = 16;
 
-/// The room the device's rounding has between the planes of axes `a` and `b` along the way
-/// `dir`: `EDGE_ULPS` and each axis's slack; a bound the origin or the ray's reach sets moves by
-/// none.
+/// How many ulps the device's rounding may take between the planes of axes `a` and `b` along
+/// the direction `dir`: `EDGE_ULPS` plus each axis's slack. A bound that the origin or the
+/// ray's reach sets is given as `None` and adds no slack.
 fn edge_room(dir: [f32; 3], a: Option<usize>, b: Option<usize>) -> u32 {
     let s = |a: Option<usize>| a.map_or(0, |a| slack(dir[a]));
     EDGE_ULPS.saturating_add(s(a)).saturating_add(s(b))
 }
 
-/// The axes entry `e` along the way `dir` may enter across as the device rounds the ray: its
-/// own, and each other axis the ray moves along whose near plane lies within the room of the
-/// plane it enters across (`edge_room`), at an edge between the two.
+/// The axes across which the device, as it rounds the ray, may make entry `e` along `dir`.
+/// They are the entry's own axis, and each other axis the ray moves along whose near plane lies
+/// within `edge_room` of the plane the entry crosses. Such an entry lies at an edge between the
+/// two planes.
 pub fn edge_axes(e: &cast::Entry, dir: [f32; 3]) -> Vec<u32> {
     let axis = e.axis as usize;
     (0..3)
@@ -761,9 +777,9 @@ pub fn edge_axes(e: &cast::Entry, dir: [f32; 3]) -> Vec<u32> {
         .collect()
 }
 
-/// Whether the device's rounding may decide entry `e` otherwise along the way `dir`: where it
-/// enters lies within the room of where it leaves, or the plane it enters across within the
-/// room of another axis's near plane (`edge_axes`).
+/// Whether the device's rounding may decide entry `e` along `dir` otherwise than the engine
+/// does. It may where the entry's start lies within `edge_room` of its end, or where the plane
+/// it enters across lies within `edge_room` of another axis's near plane (`edge_axes`).
 pub fn at_edge(e: &cast::Entry, dir: [f32; 3]) -> bool {
     let moves = |a: usize| dir[a] != 0.0;
     let enter = (0..3).find(|&a| moves(a) && e.near[a] == e.span[0]);
@@ -771,8 +787,8 @@ pub fn at_edge(e: &cast::Entry, dir: [f32; 3]) -> bool {
     ulps(e.span[0], e.span[1]) <= edge_room(dir, enter, leave) || edge_axes(e, dir).len() > 1
 }
 
-/// Whether `edges` of a run's `rays` decided at an edge as the device rounds them (`at_edge`)
-/// are few enough: one in a thousand at most.
+/// Whether the `edges` of a run's `rays` that the device may decide at an edge (`at_edge`)
+/// are few enough. A run may have one in a thousand at most.
 pub fn edges_within(edges: u64, rays: u64) -> bool {
     edges * 1000 <= rays
 }
@@ -785,8 +801,9 @@ pub fn mix(a: u32, b: u32) -> u32 {
     h ^ h >> 12
 }
 
-/// The cases that differ, each told by its name, how many words it compared and how many
-/// differ: a sweep's mutant stops at its first.
+/// A tally of the cases a test compared: how many cases and words it compared, and the name
+/// and count of differing words of each case that differs. Under a mutant sweep, the first
+/// case that differs stops the test.
 #[derive(Default)]
 pub struct Tally {
     pub cases: u32,
@@ -795,8 +812,8 @@ pub struct Tally {
 }
 
 impl Tally {
-    /// `have` against `want`, word for word, named `case`; `what` names word `k` where one
-    /// differs.
+    /// Compares `have` with `want` word for word as the case named `case`. Where word `k`
+    /// differs, `what(k)` names it in the message.
     pub fn compare(
         &mut self,
         case: &str,
@@ -807,7 +824,7 @@ impl Tally {
         self.compare_by(case, want, have, what, |_, w, h| w == h);
     }
 
-    /// `compare`, word `k` alike where `alike(k, want, have)`.
+    /// `compare`, where word `k` counts as alike when `alike(k, want, have)` holds.
     pub fn compare_by(
         &mut self,
         case: &str,

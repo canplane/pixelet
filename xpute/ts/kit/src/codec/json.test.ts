@@ -1,6 +1,10 @@
 // @xpute/kit/codec/json.test.ts
 
-/** golden/codec/json.tsv as `JSON.parse` judges it; the cores' readers are held to the same record. */
+/**
+ * Holds golden/codec/json.tsv to what the runtime's `JSON.parse` accepts. The
+ * Rust and C++ readers are held to the same record, so all three accept the
+ * same texts.
+ */
 
 import { test } from "vitest";
 import assert from "node:assert/strict";

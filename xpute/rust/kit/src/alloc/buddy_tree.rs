@@ -20,19 +20,24 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-//! evanw/buddy-malloc ported line for line: the core's page allocator, with
-//! `slab.rs` over it for anything smaller than a page. Two changes from the C:
-//! `update_max_ptr` asks the `Range` instead of `brk`, and there is no 8-byte
-//! header, since every caller passes the size back to `free`.
+//! The core's page allocator, a port of evanw/buddy-malloc that follows the C
+//! line for line. `slab.rs` serves anything smaller than a page from it.
+//!
+//! The port departs from the C in two places. `update_max_ptr` asks the
+//! `Range` for memory where the C calls `brk`. A block carries no 8-byte
+//! header with its size, so every caller passes the size it asked for back
+//! to `free`.
 
 use core::cell::UnsafeCell;
 use core::marker::PhantomData;
 use core::ptr;
 
-/// The range this allocator spans. `MAX_LOG2` bounds the address space the
-/// tree can describe, not the memory; `end` says how much of it is real.
-/// `Split` must be `2^(MAX_LOG2 - MIN_LOG2) / 8` bytes; the first `malloc`
-/// checks it.
+/// The memory this allocator manages. A block is `2^MIN_LOG2` bytes at the
+/// smallest and `2^MAX_LOG2` at the largest. `MAX_LOG2` bounds the address
+/// space the tree can describe, not the memory that exists: `end` is where
+/// the real memory stops. `Split` holds one bit for each node that can
+/// split, so it must be `2^(MAX_LOG2 - MIN_LOG2) / 8` bytes; the first
+/// `malloc` checks this.
 pub trait Range {
     const MIN_LOG2: usize;
     const MAX_LOG2: usize;
@@ -42,12 +47,12 @@ pub trait Range {
     fn end() -> usize;
 }
 
-/// Enough free list heads for any pair of exponents in the address space,
-/// 0 through `ADDR_BITS`.
+/// One free list head for each block size the address space allows, from
+/// exponent 0 through `ADDR_BITS`.
 const MAX_BUCKETS: usize = super::ADDR_BITS + 1;
 
-/// A circular free list threaded through the free blocks, so the smallest
-/// block must hold one.
+/// A link of a circular free list. The links live inside the free blocks
+/// themselves, so the smallest block must be large enough to hold one.
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct List {
@@ -55,15 +60,22 @@ struct List {
     next: *mut List,
 }
 
-/// `repr(C)`: `stat`'s row is these fields in this order.
+/// `repr(C)`, because the runtime reads the fields from `base_ptr` through
+/// `allocs` in place, in this order (`stat`).
 #[repr(C)]
 struct Heap<S> {
-    /// Bucket 0 is the largest block, the whole address space.
+    /// Bucket 0 holds the largest block, which spans the whole address
+    /// space; each bucket after it holds blocks half as large.
     buckets: [List; MAX_BUCKETS],
-    /// The tree starts small and grows.
+    /// The bucket of the tree's current root. The tree starts with its root
+    /// at the smallest block and grows toward bucket 0 as larger blocks are
+    /// asked for.
     bucket_limit: usize,
-    /// Linearized tree: parent `(i - 1) / 2`, children `2i + 1` and `2i + 2`.
-    /// Only SPLIT is stored; UNUSED and USED are told apart from context.
+    /// A tree laid out in an array: node `i` has its parent at `(i - 1) / 2`,
+    /// its children at `2i + 1` and `2i + 2`, and its buddy at
+    /// `((i - 1) ^ 1) + 1`. Each parent keeps one bit, the XOR of its two
+    /// children's UNUSED flags. A node's state (UNUSED, SPLIT or USED) is not
+    /// stored; the walks tell it from these bits.
     node_is_split: S,
     min_log2: usize,
     max_log2: usize,
@@ -71,14 +83,16 @@ struct Heap<S> {
     base_ptr: usize,
     max_ptr: usize,
     end_ptr: usize,
-    /// `releases` moves exactly when a refused request might now be served.
     live: usize,
+    /// Changes exactly when a request refused before might now be served, so
+    /// a caller can wait for it to change before it retries.
     releases: u32,
     allocs: u32,
 }
 
-/// Must not move once a block is handed out: the bucket heads are their own
-/// lists' sentinels.
+/// A `BuddyMalloc` must not move once it has handed out a block: each
+/// bucket's head is the sentinel of its own circular list, and the free
+/// blocks point at it.
 pub struct BuddyMalloc<R: Range> {
     heap: UnsafeCell<Heap<R::Split>>,
     range: PhantomData<R>,
@@ -118,7 +132,8 @@ impl<R: Range> BuddyMalloc<R> {
         }
     }
 
-    /// Bytes ever reached into, not bytes live.
+    /// The most bytes of the range the allocator has ever reached into, not
+    /// the bytes live now.
     pub fn peak(&self) -> usize {
         // SAFETY: single-threaded; see the Sync impl.
         let h = unsafe { &*self.heap.get() };
@@ -141,8 +156,8 @@ impl<R: Range> BuddyMalloc<R> {
         unsafe { (*self.heap.get()).releases }
     }
 
-    /// The largest block on a free list, or 0. The untouched range past the
-    /// tree's root is not counted.
+    /// The size of the largest block on a free list, or 0. The memory past
+    /// the tree's current root, which no block covers yet, is not counted.
     pub fn largest_free(&self) -> usize {
         // SAFETY: single-threaded; see the Sync impl.
         let h = unsafe { &*self.heap.get() };
@@ -164,19 +179,22 @@ impl<R: Range> BuddyMalloc<R> {
         unsafe { (*self.heap.get()).allocs as usize }
     }
 
-    /// The runtime reads `base_ptr`, `max_ptr`, `end_ptr`, `live`, `releases`,
-    /// `allocs` in place from here, so their order in `Heap` is a contract.
+    /// Where the runtime reads `base_ptr`, `max_ptr`, `end_ptr`, `live`,
+    /// `releases` and `allocs` in place, one after another. Their order in
+    /// `Heap` is part of the contract with the runtime.
     pub fn stat(&self) -> *const usize {
         // SAFETY: single-threaded; the fields are laid out as the row.
         unsafe { core::ptr::addr_of!((*self.heap.get()).base_ptr) }
     }
 
-    /// Null on failure. A block is aligned to its own size from the base, so a
-    /// caller can find its start by masking.
+    /// Returns null when no block can be had. A block's offset from the
+    /// range's base is a multiple of its own size, so a caller can find a
+    /// block's start from any address inside it by masking the offset.
     ///
     /// # Safety
-    /// The range `R` names must be this module's, and nothing else may write
-    /// a free block's first two words.
+    /// The range `R` names must be this module's own memory. Nothing but the
+    /// allocator may write the first two words of a free block, which hold
+    /// its free list links.
     pub unsafe fn malloc(&self, request: usize) -> *mut u8 {
         // SAFETY: single-threaded; see the Sync impl.
         unsafe { (*self.heap.get()).malloc(R::base(), R::end(), R::MIN_LOG2, R::MAX_LOG2, request) }
@@ -192,7 +210,8 @@ impl<R: Range> BuddyMalloc<R> {
 }
 
 impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
-    /// The C's `brk`, answered by the range.
+    /// Stands in for the C's `brk`: the reached memory grows up to the
+    /// range's end and is refused past it.
     fn update_max_ptr(&mut self, new_val: usize) -> bool {
         if new_val > self.max_ptr {
             if new_val > self.end_ptr {
@@ -203,8 +222,9 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
         true
     }
 
-    /// `index + 1` comes first: the C's `index - (1 << bucket) + 1` underflows
-    /// on a bucket's first node and traps in a debug build.
+    /// The sum `idx + 1` is taken before the subtraction. The C's order,
+    /// `index - (1 << bucket) + 1`, underflows for a bucket's first node,
+    /// which traps in a debug build.
     fn ptr_for_node(&self, idx: usize, bucket: usize) -> *mut List {
         (self.base_ptr + ((idx + 1 - (1 << bucket)) << (self.max_log2 - bucket))) as *mut List
     }
@@ -280,12 +300,14 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
         }
     }
 
-    /// Doubles the tree until its root lies at `bucket`.
+    /// Doubles the tree until its root is at `bucket`. Returns false when the
+    /// range has no room for the links of a new free block.
     fn lower_bucket_limit(&mut self, bucket: usize) -> bool {
         while bucket < self.bucket_limit {
             let root = self.node_for_ptr(self.base_ptr as *mut List, self.bucket_limit);
 
-            // Root UNUSED: the whole space is free, so the new root takes it.
+            // The root is UNUSED, so the whole tree is free and the new,
+            // larger root becomes one free block.
             if !self.parent_is_split(root) {
                 // SAFETY: the base is on the root's list, which is what
                 // UNUSED at the limit means.
@@ -298,7 +320,8 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
                 continue;
             }
 
-            // Root in use: add a SPLIT parent with its right child free.
+            // The root is in use, so the new root is SPLIT: its left child is
+            // the old root and its right child a new free block.
             let right_child = self.ptr_for_node(root + 1, self.bucket_limit);
             if !self.update_max_ptr(right_child as usize + core::mem::size_of::<List>()) {
                 return false;
@@ -371,8 +394,9 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
                     continue;
                 }
 
-                // The root is used, so growing one level puts its new right
-                // sibling on this bucket's list.
+                // This bucket is the root's and the root is in use. Growing
+                // the tree one level puts the root's new right sibling on
+                // this bucket's free list.
                 if !self.lower_bucket_limit(bucket - 1) {
                     return ptr::null_mut();
                 }
@@ -391,8 +415,10 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
                 return ptr::null_mut();
             }
 
-            // The split bit is the XOR of the children's UNUSED flags. The
-            // grandparent needs no flip: the buddy is USED.
+            // A parent's bit is the XOR of its children's UNUSED flags, so
+            // taking this block flips its parent's bit. The grandparent's bit
+            // stays: this block's buddy is USED, so the parent was never
+            // UNUSED.
             let mut i = self.node_for_ptr(ptr, bucket);
             if i != 0 {
                 self.flip_parent_is_split(i);
@@ -428,7 +454,9 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
         while i != 0 {
             self.flip_parent_is_split(i);
 
-            // SPLIT now means the buddy is USED; the root has no buddy.
+            // After the flip, the parent's bit says SPLIT exactly when the
+            // buddy is still USED, and the two cannot merge. The tree's
+            // current root has no buddy to merge with.
             if self.parent_is_split(i) || bucket == self.bucket_limit {
                 break;
             }

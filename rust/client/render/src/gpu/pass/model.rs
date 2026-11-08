@@ -1,7 +1,9 @@
 // pxl-render/gpu/pass/model.rs
 
-//! What the model passes (decor, impostors, characters) share: group 0, per-draw
-//! uniform slots written once before the pass, and the draw loop.
+//! What the model passes share: the decor, the impostors and the skinned
+//! characters. They bind one group 0, which holds the frame words, the sun's
+//! shadow map and the air. Each pass writes its draws' uniforms once before
+//! the pass, one slot a draw, and draws them by one loop.
 
 use xpute_core::global::Global;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
@@ -31,23 +33,26 @@ fn frame_group(
     g.bind_group(layout, &e)
 }
 
-/// Each skin image's bind group, made the first time a frame prepares a draw
-/// of it, over one sampler: an image's texture is taken once (`Gpu::image`),
-/// so a skin one pass binds again, or another binds, is the group here. As
-/// many as the skins the asset table names, in the one layout a skin takes
-/// (record.rs `SKIN`), kept for the device's life.
+/// The bind group of each skin image, all over one sampler. A group is made
+/// the first time a frame prepares a draw of its image. `Gpu::image` hands
+/// an image's texture over only once, so every later bind of that skin, by
+/// any pass, uses the group kept here. There are as many groups as skins the
+/// asset table names, all in the one skin layout (record.rs `SKIN`), and
+/// they are kept for the device's life.
 static SKINS: Global<Skins> = Global::new();
 
 #[derive(Default)]
 struct Skins {
     sampler: u32,
-    /// An image and its group.
+    /// Pairs of an image and its bind group.
     groups: Vec<(u32, u32)>,
 }
 
-/// A skin's bind group, made in `layout` where none is; none while its image
-/// lands. Only as a frame prepares, before its transaction (`frame_begin`): a
-/// group made in a frame that is dropped would be gone and still named here.
+/// The bind group of a skin image, made in `layout` if it has none yet. It is
+/// none while the image is still landing. Call it only while a frame
+/// prepares, before the frame's transaction begins (`frame_begin`). A group
+/// made inside a frame that is then dropped would be gone, and this table
+/// would still name it.
 pub fn skin_group(g: &Gpu, layout: Layout, (image, file): Image) -> Option<u32> {
     if let Some(group) = skin_made(image) {
         return Some(group);
@@ -73,8 +78,8 @@ pub fn skin_group(g: &Gpu, layout: Layout, (image, file): Image) -> Option<u32> 
     Some(group)
 }
 
-/// A skin's bind group as a frame's draws bind it: the one a prepare made
-/// (`skin_group`), or none.
+/// The bind group a prepare made for skin `image` (`skin_group`), for a
+/// frame's draws to bind. It makes none.
 pub fn skin_made(image: u32) -> Option<u32> {
     SKINS
         .get(Skins::default)
@@ -84,25 +89,29 @@ pub fn skin_made(image: u32) -> Option<u32> {
         .map(|&(_, group)| group)
 }
 
-/// The device gone, its groups go with it.
+/// Forgets every skin group once the device is lost, because the groups
+/// were the device's.
 pub(crate) fn on_skins_lost() {
     SKINS.set(Skins::default());
 }
 
-/// Which of a model's pipelines draws it: lit into the world's image, or its
-/// depth from the sun into the shadow map.
+/// Which of a model's two pipelines draws it. `Lit` draws it lit into the
+/// world's color. `Depth` draws its depth, seen from the sun, into the shadow
+/// map.
 #[derive(Clone, Copy)]
 pub enum Stage {
     Lit,
     Depth,
 }
 
-/// A layout is shared by its words, so one group 0 serves every model pipeline.
+/// The group 0 layout of every model pipeline. Pipelines whose groups read
+/// alike share one layout (gpu/pipeline.rs), so a group made in the skinned
+/// pipeline's layout binds to every model pipeline.
 pub fn frame_layout(g: &Gpu, pipelines: &mut Pipelines) -> Layout {
     pipelines.build_world(g, PIPELINE_SKINNED).layouts[0]
 }
 
-/// Group 0 as the models read it: the frame, the sun's shadow map `shadow`
+/// The model passes' group 0. It binds the frame words, the sun's shadow map
 /// and the air.
 pub struct FrameGroups {
     pub frame: u32,
@@ -128,7 +137,8 @@ impl FrameGroups {
 
 pub struct DrawUniforms {
     bytes: u32,
-    /// `bytes` rounded up to the device's offset alignment.
+    /// The distance between slots: `bytes` rounded up to the device's
+    /// dynamic offset alignment.
     stride: u32,
     buf: u32,
     cap: u32,
@@ -148,7 +158,8 @@ impl Slots {
         (self.group, (self.first + k) * self.stride)
     }
 
-    /// The slots past the first `n`, as `Iterator::skip` takes them.
+    /// Drops the first `n` slots, as `Iterator::skip` drops the first `n`
+    /// draws, so that the slots and the draws stay in step.
     pub fn skip(self, n: u32) -> Slots {
         Slots {
             first: self.first + n,
@@ -169,24 +180,26 @@ impl DrawUniforms {
         }
     }
 
-    /// One write: a later write to the same buffer before the submit would stand
-    /// for every draw. Grows to the next power of two, eight at least. Written
-    /// only where the lists the draws are made from `moved`, or it grew: else
-    /// the buffer holds these bytes already.
+    /// Writes the uniforms of the first `cnt` draws, one slot each, in a
+    /// single write. Every queued write lands before the submit runs, so a
+    /// second write to the buffer would be what every draw reads. The buffer
+    /// grows to the next power of two of slots, eight at least. It is written
+    /// only when the lists the draws come from `changed` or when it grew;
+    /// otherwise it already holds these bytes.
     pub fn write<T>(
         &mut self,
         g: &Gpu,
         layout: Layout,
         cnt: u32,
         draws: impl Iterator<Item = T>,
-        moved: bool,
+        changed: bool,
         mut put: impl FnMut(&mut [u8], T),
     ) {
         if cnt == 0 {
             return;
         }
         let need = self.stride * cnt.next_power_of_two().max(8);
-        if !moved && need <= self.cap {
+        if !changed && need <= self.cap {
             return;
         }
         if need > self.cap {
@@ -219,16 +232,18 @@ impl DrawUniforms {
     }
 }
 
-/// A draw's uniform, a slot of `DrawUniforms` each: what every model pass
-/// writes and its shader reads (frame/shader/word.rs `DRAW_FLOATS`).
+/// The bytes of one draw's uniform: the part of a `DrawUniforms` slot that
+/// every model pass writes and its shader reads (frame/shader/word.rs
+/// `DRAW_FLOATS`).
 pub const DRAW_BYTES: u32 = word_bytes(DRAW_FLOATS);
 
-/// glTF's across, up and deep.
+/// A model's extent along glTF's axes: across (X), up (Y) and deep (Z).
 pub type Extent = [f32; 3];
 
-/// A decor draw's uniform as instance.wgsl reads it, for the model tier and
-/// the impostors both: the list's words, `layer` its atlas layer, none for
-/// decor.
+/// Puts a decor draw's uniform into `buf` as instance.wgsl reads it, for the
+/// model tier and the impostors alike. It is the list's words `u`, with
+/// `layer` written over the `LAYER` word. For an impostor `layer` is its atlas
+/// layer; the model tier passes 0, and its shader reads no layer.
 pub fn put_instances(buf: &mut [u8], u: &[f32], layer: u32) {
     buf[..DRAW_BYTES as usize].copy_from_slice(bytes(u));
     put_u32(buf, 4 * instance::LAYER, layer);
@@ -236,13 +251,15 @@ pub fn put_instances(buf: &mut [u8], u: &[f32], layer: u32) {
 
 pub struct ModelDraw {
     pub groups: [u32; 2],
-    /// None for a strip of four corners an instance.
+    /// The mesh with its vertex and index counts. None draws a strip of four
+    /// corners for each instance.
     pub mesh: Option<(u32, u32, u32)>,
     pub instances: u32,
 }
 
-/// Each draw `resolve` makes, at its slot's uniforms; the pipeline and
-/// group 0 set once a draw is made.
+/// Draws each draw that `resolve` makes a `ModelDraw` of. Draw `k` of
+/// `draws` reads the uniform in slot `k`, whether or not it is made. The
+/// pipeline and group 0 are set only once some draw is made.
 pub fn draw_models<'a>(
     pass: &mut TrackedRenderPass,
     lit: &Pipeline,
@@ -282,7 +299,9 @@ pub fn draw_model(
     pass.draw_indexed(idx_cnt, instances, 0, 0);
 }
 
-/// A mesh's vertex lanes and indices, a lane its `lit` stride's share.
+/// Binds a mesh buffer's vertex lanes and its indices. The buffer holds the
+/// lanes back to back, each `vertex_cnt` vertices at the `lit` pipeline's
+/// stride for that lane, and the u32 indices after them all.
 pub fn bind_mesh(
     pass: &mut TrackedRenderPass,
     lit: &Pipeline,

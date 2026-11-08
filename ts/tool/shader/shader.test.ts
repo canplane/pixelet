@@ -1,14 +1,15 @@
 // @pxl/shader/shader.test.ts
 
 /**
- * Whether the browser's compiler takes the shaders the page hands it: each
+ * Whether the browser's compiler takes the shaders the page hands it. Each
  * module as the renderer assembles it (pxl-render examples/assembled.rs), the
- * world's asked one among them, compiled by Tint, the WGSL compiler a
- * browser's WebGPU runs (Dawn's, npm:webgpu), and every pipeline the renderer
- * makes over it, render and compute, made by its entry points (pipeline.ts)
- * on a device of the default limits, the floor every WebGPU device binds
- * (frame/shader/floor.rs). naga, which writes and validates them, takes
- * modules Tint refuses (a literal past f32's range).
+ * world's asked module among them, is compiled by Tint, the WGSL compiler a
+ * browser's WebGPU runs (Dawn's, from npm:webgpu). Every pipeline the
+ * renderer makes over a module, render and compute, is then made by its entry
+ * points (pipeline.ts) on a device with the default limits, the floor every
+ * WebGPU device binds (frame/shader/floor.rs). naga, which writes and
+ * validates the shaders, takes some modules that Tint refuses, such as one
+ * with a literal past f32's range, so naga's check alone is not enough.
  */
 
 import { test } from "vitest";
@@ -21,8 +22,8 @@ import { create, globals } from "webgpu";
 
 import { entries, make, type Pipeline } from "./pipeline.ts";
 
-/** Each hand module, assembled here by the renderer's own example, by its
- * path, and the pipelines the renderer makes over them. */
+/** The paths of the hand modules, which the renderer's own example assembles
+ * here, and the pipelines the renderer makes over them. */
 function assembled(): { modules: string[]; pipelines: Pipeline[] } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pxl-wgsl-"));
   execFileSync(
@@ -49,8 +50,8 @@ test("Tint takes every shader", { timeout: 1_200_000 }, async () => {
   const { modules, pipelines } = assembled();
 
   Object.assign(globalThis, globals);
-  // Held to the end (`void gpu` below): an instance collected while its
-  // device works ends the process.
+  // The instance is held to the end (`void gpu` below), because an instance
+  // collected while its device works ends the process.
   const gpu = create([]);
   const adapter = await gpu.requestAdapter();
   if (!adapter) throw new Error("no WebGPU adapter to compile on");
@@ -75,7 +76,8 @@ test("Tint takes every shader", { timeout: 1_200_000 }, async () => {
     console.log(
       `${file}: ${errors.length > 0 || scoped ? "refused" : "compiled"}`,
     );
-    // A module that does not compile fails its pipelines too: said once.
+    // A module that does not compile would fail its pipelines too, so it is
+    // reported once and its pipelines are not made.
     if (errors.length > 0 || scoped) continue;
     for (const p of pipelines.filter((p) => p.module === name)) {
       device.pushErrorScope("validation");

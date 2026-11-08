@@ -1,7 +1,8 @@
 // xpute-kit/collection/list.rs
 
-//! A list of at most `N`, held inline: it never grows, and a push past `N`
-//! is a bug (ENOSPC). Its first `len` slots are live.
+//! A list of at most `N` values, held inline. It never grows: a push past
+//! `N` is a bug (ENOSPC). Its first `len` slots hold values, and the rest
+//! are uninitialized.
 
 use core::mem::MaybeUninit;
 
@@ -48,7 +49,8 @@ impl<T, const N: usize> List<T, N> {
         unsafe { core::slice::from_raw_parts_mut(self.slots.as_mut_ptr().cast::<T>(), self.len) }
     }
 
-    /// The value at `at`, those after it moved down one: the order kept.
+    /// Takes out the value at `at` and moves every value after it down one
+    /// slot, so the order is kept.
     pub fn remove(&mut self, at: usize) -> T {
         crate::ensure!(at < self.len, EINVAL, at);
         // SAFETY: `at` is live; it is read out once, and the live slots after
@@ -62,11 +64,13 @@ impl<T, const N: usize> List<T, N> {
         }
     }
 
-    /// Those `keep` refuses dropped, the order of the rest kept, in one pass.
+    /// Drops every value `keep` refuses and keeps the order of the rest, in
+    /// one pass.
     pub fn retain(&mut self, mut keep: impl FnMut(&T) -> bool) {
         let len = self.len;
-        // Emptied first: a panic in `keep` leaks the rest rather than leaving
-        // a slot counted twice.
+        // The list counts as empty while the pass runs, so a panic in `keep`
+        // leaks the remaining values rather than leaving a slot counted
+        // twice.
         self.len = 0;
         let p = self.slots.as_mut_ptr().cast::<T>();
         let mut live = 0;
@@ -89,7 +93,8 @@ impl<T, const N: usize> List<T, N> {
 
     pub fn clear(&mut self) {
         let len = self.len;
-        // Emptied before the drops, so a panic in one leaves nothing twice.
+        // The list counts as empty before the drops run, so a panic in one
+        // drop cannot leave a value to be dropped twice.
         self.len = 0;
         // SAFETY: the first `len` slots were live, and no longer are counted.
         unsafe {
@@ -128,7 +133,8 @@ impl<T, const N: usize> IntoIterator for List<T, N> {
     }
 }
 
-/// A list's values by value, in order; those not reached are dropped with it.
+/// Moves a list's values out in order. The values not reached are dropped
+/// with the iterator.
 pub struct IntoIter<T, const N: usize> {
     list: List<T, N>,
     at: usize,
@@ -149,7 +155,8 @@ impl<T, const N: usize> Iterator for IntoIter<T, N> {
 impl<T, const N: usize> Drop for IntoIter<T, N> {
     fn drop(&mut self) {
         let (at, len) = (self.at, self.list.len);
-        // The list forgets them all; those not yet read out are dropped here.
+        // The list is emptied so that its own drop skips every slot; the
+        // values not yet read out are dropped here.
         self.list.len = 0;
         // SAFETY: slots `at..len` are live and were not read out.
         unsafe {

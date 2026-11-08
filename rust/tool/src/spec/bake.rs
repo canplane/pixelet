@@ -57,7 +57,7 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
         ));
     }
     let sphere_doc = spec.lines_at("$SPHERE").unwrap_or_default();
-    let head = [
+    let header = [
         "//".to_string(),
         "// GENERATED from spec/spec/bake/publication.json".into(),
         "".into(),
@@ -70,8 +70,8 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
             .join(", ")
     };
 
-    let mut ts = vec!["// @pxl/client/origin/publication.spec.ts".to_string()];
-    ts.extend(head.iter().cloned());
+    let mut ts = vec!["// @pxl/client/service/origin/publication.spec.ts".to_string()];
+    ts.extend(header.iter().cloned());
     ts.push("/** The base layers by the number the core names one by: the root a bake's objects are opened below (xpute's OPENAT). */".into());
     ts.push(format!(
         "export const BASE_LAYERS = [{}] as const;",
@@ -101,7 +101,7 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
     // The Worker's own: it is bundled for the Workers runtime, apart from the
     // client, so it reads a copy beside it written from the same JSON.
     let mut edge = vec!["// @pxl/edge/publication.spec.ts".to_string()];
-    edge.extend(head.iter().cloned());
+    edge.extend(header.iter().cloned());
     edge.push("/** The base layers, each a kind a baked page is published under. */".into());
     edge.push(format!(
         "export const BASE_LAYERS = [{}] as const;",
@@ -125,7 +125,7 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
     edge.push(format!("export const TILE_SPHERE = {};", json_str(sphere)));
 
     let mut rs = vec!["// pxl-spec/bake/publication.spec.rs".to_string()];
-    rs.extend(head);
+    rs.extend(header);
     rs.extend(rs_doc(&format_doc, "", "///"));
     rs.push("pub struct Format {".into());
     rs.extend(formats.iter().map(|(k, _)| format!("    pub {k}: u32,")));
@@ -224,7 +224,10 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
     );
     rs.extend(["        }", "    }", "}"].map(String::from));
     Ok(vec![
-        Output::new("ts/client/src/origin/publication.spec.ts", file(&ts)),
+        Output::new(
+            "ts/client/src/service/origin/publication.spec.ts",
+            file(&ts),
+        ),
         Output::new("ts/server/edge/publication.spec.ts", file(&edge)),
         Output::new("rust/spec/src/bake/publication.spec.rs", file(&rs)),
     ])
@@ -242,14 +245,14 @@ pub fn object_outputs() -> Result<Vec<Output>, String> {
         return Err(format!("{json}: OBJECT_SCALES {scales} is not a count"));
     }
     let scales = scales as u32;
-    let head = [
+    let header = [
         "//".to_string(),
         "// GENERATED from spec/spec/bake/object.json".into(),
         "".into(),
     ];
 
     let mut ts = vec!["// @pxl/client/ui/world/object.spec.ts".to_string()];
-    ts.extend(head.iter().cloned());
+    ts.extend(header.iter().cloned());
     ts.push("/**".into());
     ts.extend(doc.iter().map(|l| {
         if l.is_empty() {
@@ -264,7 +267,7 @@ pub fn object_outputs() -> Result<Vec<Output>, String> {
     ]);
 
     let mut rs = vec!["// pxl-spec/bake/object.spec.rs".to_string()];
-    rs.extend(head);
+    rs.extend(header);
     rs.extend(rs_doc(&doc, "", "///"));
     rs.push(format!("pub const OBJECT_SCALES: usize = {scales};"));
     Ok(vec![
@@ -273,8 +276,8 @@ pub fn object_outputs() -> Result<Vec<Output>, String> {
     ])
 }
 
-// The Rust reads a place's look by its category number: per category, in lists the
-// core indexes, what Carto draws for it, with 0 for a zoom it never shows at.
+// The Rust reads a place's look by its category number: for each category, in lists the
+// core indexes, what Carto draws for it, with 0 for a zoom at which it never shows.
 
 pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
     let (cat_json, theme_json) = (

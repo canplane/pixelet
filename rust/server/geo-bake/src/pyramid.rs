@@ -36,7 +36,7 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
     /// at (pxl-spec lattice.rs `coarsest`).
     const COARSEST: Zoom = coarsest(Self::LATTICE);
 
-    /// As tile `at` is published.
+    /// The tile as it is published at `at`.
     fn encode(&self, at: Quadrant) -> Result<Vec<u8>, String>;
 
     /// As tile `at` is stored: its packet, as `encode` makes it, and its fit
@@ -56,10 +56,10 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
     /// Which of its children are tiles, as the tile says.
     fn occupancy(&self) -> Occupancy;
 
-    /// The fits of the set as it will be (`set`, `FITS`), refused where it holds
-    /// what the client's pool cannot: a fact of the whole set, not of a tile, asked
-    /// before a commit moves anything, of each tile's fit (`encode_with_fit`);
-    /// `workers` tiles at once. None for a kind with no fits.
+    /// The fits of the set as it will be (`set`, `FITS`), refused where the set holds what the
+    /// client's pool cannot. It is a fact of the whole set, not of a tile, asked of each tile's fit
+    /// (`encode_with_fit`) before a commit moves anything, `workers` tiles at once. None for a kind
+    /// with no fits.
     fn check_pool(
         _set: &Staged<'_>,
         _workers: usize,
@@ -84,10 +84,10 @@ impl<L: Base> Absent<L> for L {
 /// Inside a set, beside its tiles; no tile is named so.
 pub const MANIFEST: &str = "manifest.json";
 
-/// Inside a set, each of its tiles' fit (`Base::encode_with_fit`), a line a tile,
-/// its name and its fit: so a commit asks what the set will hold of these, never
-/// of the tiles read and made again. Not published. A stage has each staged
-/// tile's beside it, `<name>.fit`. No tile is named so.
+/// Inside a set, each of its tiles' fit (`Base::encode_with_fit`), a line a tile with its name
+/// and its fit, so a commit asks what the set will hold of these, never of the tiles read and
+/// made again. It is not published. A stage has each staged tile's fit beside it,
+/// `<name>.fit`. No tile is named so.
 pub(crate) const FITS: &str = "fits";
 
 pub struct TileSet {
@@ -214,7 +214,8 @@ fn remove_file(path: &Path) -> Result<(), String> {
     }
 }
 
-/// None where it has no child: a parent exists exactly where a child does.
+/// The parent folded from its children; none where it has no child, since a parent exists
+/// exactly where a child does.
 pub(crate) fn fold_parent<'a, L: Base>(
     parent: Quadrant,
     read: impl Fn(Quadrant) -> Option<&'a L>,
@@ -241,7 +242,7 @@ pub struct Staged<'a> {
     pub stage: &'a TileSet,
     pub leaf: Zoom,
     pub whole: &'a FnvHashSet<Quadrant>,
-    pub(crate) gone: FnvHashSet<Quadrant>,
+    pub(crate) removed: FnvHashSet<Quadrant>,
 }
 
 impl Staged<'_> {
@@ -251,7 +252,7 @@ impl Staged<'_> {
                 return Ok(Some(c));
             }
         }
-        if self.gone.contains(&p) {
+        if self.removed.contains(&p) {
             return Ok(None);
         }
         self.base.content(p)
@@ -277,7 +278,7 @@ impl Staged<'_> {
         if (p.zoom != self.leaf || self.whole.contains(&p.shard())) && self.stage.path(p).exists() {
             return self.stage.fit(p);
         }
-        if self.gone.contains(&p) {
+        if self.removed.contains(&p) {
             return Ok(None);
         }
         Ok(base.get(&p).cloned())
@@ -318,30 +319,30 @@ pub fn fold<L: Base>(
             .filter(|c| c.zoom == zoom + 1)
             .collect();
         let at = std::time::Instant::now();
-        let (written, gone) = fold_zoom(set, &readers::<L>(&below), absent, workers)?;
+        let (written, removed) = fold_zoom(set, &readers::<L>(&below), absent, workers)?;
         println!(
             "[bake/pyramid] z{zoom}: {} tiles changed in {:.1}s",
-            written.len() + gone.len(),
+            written.len() + removed.len(),
             at.elapsed().as_secs_f64()
         );
         changed.retain(|c| c.zoom <= zoom);
-        changed.extend(written.iter().chain(&gone));
-        set.gone.extend(gone);
+        changed.extend(written.iter().chain(&removed));
+        set.removed.extend(removed);
     }
     Ok(())
 }
 
 /// Every tile its parent marks as no tile (`Base::occupancy`), under
 /// `top`: what a reader never asks for.
-pub(crate) fn unasked_tiles<L: Base>(
+pub(crate) fn orphan_tiles<L: Base>(
     set: &TileSet,
     top: Zoom,
 ) -> Result<FnvHashSet<Quadrant>, String> {
     let mut out = FnvHashSet::default();
-    let listed = set.by_zoom()?;
+    let by_zoom = set.by_zoom()?;
     for zoom in top + 1..=L::LEAF {
         let mut parents: FnvHashMap<Quadrant, Option<L>> = FnvHashMap::default();
-        for &p in listed.get(&zoom).into_iter().flatten() {
+        for &p in by_zoom.get(&zoom).into_iter().flatten() {
             let parent = p.parent();
             if let std::collections::hash_map::Entry::Vacant(e) = parents.entry(parent) {
                 e.insert(set.read::<L>(parent)?);
@@ -357,21 +358,21 @@ pub(crate) fn unasked_tiles<L: Base>(
     Ok(out)
 }
 
-/// Measured from disk, not the run: a resumed run that skipped everything
-/// would describe an empty set.
+/// Writes the set's manifest, measured from disk, not from the run: a resumed run that
+/// skipped everything would describe an empty set.
 pub fn write_manifest(
     set: &TileSet,
     top: Zoom,
-    built: Option<&str>,
+    git_sha: Option<&str>,
     layer: serde_json::Value,
 ) -> Result<(), String> {
     // The tiles, a zoom at a time; the set is its tiles and the manifest.
-    let listed = set.by_zoom()?;
+    let by_zoom = set.by_zoom()?;
     let (mut objects, mut bytes) = (0u64, 0u64);
     let mut zooms = Vec::new();
-    for zoom in (top..=listed.keys().last().copied().unwrap_or(top)).rev() {
+    for zoom in (top..=by_zoom.keys().last().copied().unwrap_or(top)).rev() {
         let (mut n, mut b) = (0u64, 0u64);
-        for &p in listed.get(&zoom).into_iter().flatten() {
+        for &p in by_zoom.get(&zoom).into_iter().flatten() {
             n += 1;
             b += fs::metadata(set.path(p)).map_err(|e| e.to_string())?.len();
         }
@@ -382,7 +383,7 @@ pub fn write_manifest(
     if let (Some(out), serde_json::Value::Object(layer)) = (fields.as_object_mut(), layer) {
         out.extend(layer);
     }
-    util::write_manifest(&set.root.join(MANIFEST), built, fields)
+    util::write_manifest(&set.root.join(MANIFEST), git_sha, fields)
 }
 
 /// The parents whose `sources` read any of `below`, sorted by row. A
@@ -440,7 +441,7 @@ fn fold_band<L: Base>(
     absent: &impl Absent<L>,
 ) -> Result<(Vec<Quadrant>, Vec<Quadrant>), String> {
     let mut sources: FnvHashMap<Quadrant, Option<L>> = FnvHashMap::default();
-    let (mut written, mut gone) = (Vec::new(), Vec::new());
+    let (mut written, mut removed) = (Vec::new(), Vec::new());
     for row in rows {
         let y = row[0].at[1];
         sources.retain(|p, _| p.at[1] >= 2 * y - 1);
@@ -468,11 +469,11 @@ fn fold_band<L: Base>(
                     )?;
                     written.push(parent);
                 }
-                None => gone.push(parent),
+                None => removed.push(parent),
             }
         }
     }
-    Ok((written, gone))
+    Ok((written, removed))
 }
 
 #[cfg(test)]

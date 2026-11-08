@@ -1,10 +1,9 @@
 // pxl-core/door/apply.rs
 
-//! The UI's commands, applied: the core's answer to each command the
-//! UI's protocol carries, each major's by its own module beside; and
-//! xpute's that the door hands over as what they mean, a surface lent
-//! (`on_surface`), a turn's pacing (turn.rs `turn`) and a file changed (fs.rs
-//! `changed`).
+//! Applies the commands the UI's protocol carries, each major's commands in
+//! its own module beside this one. It also applies the xpute commands the
+//! door hands over already decoded: a surface lent (`on_surface`), a turn's
+//! pacing (turn.rs `turn`) and a changed file (fs.rs `changed`).
 
 mod camera;
 mod edit;
@@ -14,6 +13,7 @@ mod perf;
 mod scene;
 mod sensor;
 mod setting;
+mod source;
 mod surface;
 pub(super) mod turn;
 
@@ -24,8 +24,9 @@ use xpute_core::ipc::door::{Outcome, Surface};
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
-/// What the decoder cannot see, a value out of the range the core takes or a
-/// handle it does not hold, is refused here: past the door nothing checks it again.
+/// Refuses what the decoder cannot check: a value outside the range the core
+/// takes, or a handle the core does not hold. Nothing past the door checks
+/// these again.
 fn or_refuse<T>(v: Option<T>, errnum: Errno) -> Result<T, MarshalError> {
     v.ok_or_else(|| MarshalError::new(errnum))
 }
@@ -38,14 +39,15 @@ fn on_earth(lon: f64, lat: f64) -> bool {
     (-180.0..=180.0).contains(&lon) && (-90.0..=90.0).contains(&lat)
 }
 
-/// A bearing in degrees, as a compass or a course gives it.
+/// Whether `deg` is absent or a bearing in degrees, as a compass or a course
+/// gives it.
 fn bearing(deg: Option<f64>) -> bool {
     deg.is_none_or(|d| (0.0..=360.0).contains(&d))
 }
 
-/// A UI command: asks for a turn, and has this one raise what it asks of the
-/// runtime at its falling edge, so a sensor close sent while turns are paused is
-/// still heard.
+/// Answers a UI command by asking for a turn and by marking this turn to
+/// post to the runtime as it ends. That way a sensor close sent while turns
+/// are paused is still heard.
 fn ask_turn(s: &mut State) -> Outcome {
     edge::request_world_tick();
     s.snapshot_due = true;
@@ -87,7 +89,7 @@ impl ui::Exports for State {
         turn::grant(c)
     }
     fn source_declare(&mut self, c: abi::SourceDeclare<'_>) -> Outcome {
-        fs::declare(c)
+        source::declare(c)
     }
     fn input_pointer(&mut self, c: abi::InputPointer) -> Outcome {
         input::pointer(c)

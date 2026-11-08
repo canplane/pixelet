@@ -16,11 +16,10 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.typedarray.Uint8Array
 
 /**
- * The device's half of the client's services (ts/client/src/service/, the
- * .native files) on Android, the module an iPhone's PlatformModule.swift is: what the UI
- * asks of the system, under the same names. The core and the view it draws
- * into are xpute's module (@xpute/native). An image's decode runs off the
- * JavaScript thread.
+ * The device's half of the client's services on Android (the .native files in
+ * ts/client/src/service/platform/). It answers what the UI asks of the system,
+ * under the same names as the iPhone's PlatformModule.swift. The core, and the
+ * view it draws into, are in xpute's own module (@xpute/native).
  */
 class PlatformModule : Module() {
   private val context: Context
@@ -29,18 +28,19 @@ class PlatformModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("PxlPlatform")
 
-    // ---- the transport (service/origin.native.ts) ----
+    // ---- the transport (service/platform/origin.native.ts) ----
 
-    /** A body fetched still zstd, decoded off the JavaScript thread on the
-     * module's queue, into a direct buffer JavaScript takes without a copy. */
+    /** Decodes a body that arrived still zstd-compressed. It runs on the
+     * module's queue, off the JavaScript thread, and decodes into a direct
+     * buffer that JavaScript takes without a copy. */
     AsyncFunction("unpack") { packed: ByteArray ->
       NativeArrayBuffer(PxlNative.unpack(packed) ?: throw CodedException("a body sent zstd does not decode"))
     }
 
-    // ---- storage (service/storage.native.ts) ----
+    // ---- storage (service/platform/storage.native.ts) ----
     //
-    // SharedPreferences, the system's store for an app's small values, as a
-    // page's localStorage is the browser's.
+    // SharedPreferences is the system's store for an app's small values, as
+    // localStorage is the browser's for a page.
 
     Function("storageGet") { key: String -> preferences().getString(key, null) }
 
@@ -48,41 +48,43 @@ class PlatformModule : Module() {
       preferences().edit().putString(key, value).apply()
     }
 
-    // ---- the clipboard (service/share.native.ts) ----
+    // ---- the clipboard (service/platform/share.native.ts) ----
 
     Function("clipboardSet") { text: String ->
       val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
       clipboard.setPrimaryClip(ClipData.newPlainText("pixelet", text))
     }
 
-    // ---- text (service/text.native.ts, Text.kt) ----
+    // ---- text (service/platform/text.native.ts, Text.kt) ----
 
 
     Function("textWidth") { weight: Double, px: Double, text: String -> textWidth(text, weight, px) }
 
-    /** The line starting at `x` with the middle of its em box on the middle
-     * row, into `out`: `width` by `height` pixels, RGBA, top row first, alpha
-     * not premultiplied. */
+    /** Draws the line into `out`, starting at `x`, with the middle of its em
+     * box on the middle row. `out` is `width` by `height` pixels of RGBA, top
+     * row first, with alpha not premultiplied. An `out` too small for that is
+     * left untouched. */
     Function("textRaster") { weight: Double, px: Double, rgba: Double, text: String, x: Double, width: Int, height: Int, out: Uint8Array ->
       if (out.byteLength >= width * height * 4) textRaster(text, weight, px, rgba.toLong(), x, width, height, out)
     }
 
-    // ---- the compass (service/sensor.native.ts) ----
+    // ---- the compass (service/platform/sensor.native.ts) ----
 
-    /** Whether the device has a compass at all, which expo-horizon-location only says
-     * by failing a watch — and a failed watch reads as a compass lost, not
-     * one never there. */
+    /** Whether the device has a compass at all. expo-horizon-location tells
+     * that only by failing a watch, and a failed watch reads as a compass lost
+     * rather than one that was never there. */
     Function("headingAvailable") {
       val sensors = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
       sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) != null || sensors.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD) != null
     }
 
-    // ---- the safe area (service/safe-area.native.ts) ----
+    // ---- the safe area (service/platform/safe-area.native.ts) ----
 
     /** How much of the screen's bottom inset takes a touch, in
-     * density-independent pixels: the navigation buttons' bar, or none with
-     * gesture navigation, whose handle only takes a swipe. What the UI
-     * rests its bottom chrome clear of (ts/client/src/ui/component/bottom-rest.ts). */
+     * density-independent pixels. That is the bar of navigation buttons, or
+     * nothing under gesture navigation, whose handle takes only a swipe. The
+     * UI rests its bottom chrome clear of it
+     * (ts/client/src/ui/component/bottom-rest.ts). */
     Function("tappableBottom") {
       val view = appContext.currentActivity?.window?.decorView ?: return@Function 0.0
       val insets = ViewCompat.getRootWindowInsets(view) ?: return@Function 0.0
@@ -93,8 +95,8 @@ class PlatformModule : Module() {
 
     View(KeyboardDock::class) {
       Events("onLift")
-      // The UI's lengths are in density-independent pixels, the view's in
-      // the screen's.
+      // The UI's lengths are in density-independent pixels, and the view's are
+      // in the screen's pixels.
       Prop("clearance") { view: KeyboardDock, clearance: Double -> view.clearance = view.px(clearance) }
       Prop("rest") { view: KeyboardDock, rest: Double -> view.rest = view.px(rest) }
       Prop("layoutLift") { view: KeyboardDock, layoutLift: Double -> view.layoutLift = view.px(layoutLift) }

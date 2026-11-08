@@ -1,13 +1,14 @@
 // @xpute/runtime/ipc/fs.ts
 
 /**
- * The file device, Major FS (abi/fs.json): a core's opens, reads, writes
- * and closes, each a frame taken after the turn returns and before the next
- * begins, so whatever it names in core memory is written before the core
- * reads it. An open and a close are completed once each, by their tag, the
- * descriptor: an open with ECANCELED where its close came first. A write's
- * bytes are read where the core keeps them, at the close. What a file is,
- * the program's `Fs` says.
+ * The file device on Major FS (spec/abi/fs.json): the runtime's server for a
+ * core's opens, reads, writes and closes. Each is a frame taken after the
+ * turn returns and before the next begins, so whatever the frame names in
+ * the core's memory is written before the core reads it. An open and a close
+ * are each completed once, by their tag, which is the descriptor; an open
+ * whose close came first completes with ECANCELED. A write's bytes stay
+ * where the core keeps them, and are read from there at the close. The
+ * program's `Fs` says what a file is.
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -27,8 +28,9 @@ import {
 import type { Encode } from "./doorbell.ts";
 import { flag } from "./fs.spec.ts";
 
-/** Why an open did not complete with a file: an errno, and whatever number the
- * runtime refused with (an HTTP status) for a reader to print. */
+/** Why an open did not complete with a file: an errno, and whatever number
+ * the store behind the file refused with (for HTTP, its status), kept for a
+ * reader to print. */
 export class FileError extends Error {
   readonly errnum: i32;
   readonly detail: u32;
@@ -42,20 +44,23 @@ export class FileError extends Error {
 
 /** What backs the files: an open's bytes, and a written file's commit. */
 export interface Fs {
-  /** The file at `path` below `root`, whole, or a FileError; `signal` is
-   * aborted when the core closes it first. */
+  /** Returns the whole file at `path` below `root`, or throws a FileError.
+   * `signal` is aborted when the core closes the file before its open
+   * completes. */
   open(
     root: u32,
     path: string,
     signal: AbortSignal,
   ): U8Array | Promise<U8Array>;
-  /** All a file opened for writing was given, once it is closed; a
-   * FileError where it could not be replaced. `bytes` are the runtime's. */
+  /** Receives all the bytes a file opened for writing was given, once it is
+   * closed, and throws a FileError where the file could not be replaced.
+   * `bytes` lies in the runtime's own memory, not the core's, so it stays
+   * valid after the call. */
   commit(root: u32, path: string, bytes: U8Array): void;
 }
 
-/** A core's request completed: its tag and command, its result and the
- * completion's packet. */
+/** Completes a core's request, given its tag and command, the result, and
+ * the completion's packet. */
 export type Complete = (
   tag: u32,
   cmd: u32,
@@ -67,14 +72,15 @@ interface File {
   root: u32;
   path: string;
   controller: AbortController;
-  /** Its open is completed. */
+  /** Whether its open has completed. */
   opened: boolean;
   bytes: U8Array | null;
   /** Where each write's bytes lie in the core's memory, in order. */
   written: [at: u32, len: u32][] | null;
 }
 
-/** No name empty, `.` or `..`, so a path never leaves its root. */
+/** Whether no name in `path` is empty, `.` or `..`, so that the path cannot
+ * leave its root. */
 function walks_down(path: string): boolean {
   return path
     .split("/")
@@ -88,7 +94,8 @@ export class FsServer implements FsImports {
   private readonly _mem: ArrayBuffer;
   private readonly _complete: Complete;
 
-  /** `mem` is the core's, which a read writes and a close reads. */
+  /** `mem` is the core's memory, which a read writes into and a close reads
+   * from. */
   constructor(fs: Fs, mem: ArrayBufferLike, complete: Complete) {
     this._fs = fs;
     this._mem = mem as ArrayBuffer;
@@ -106,8 +113,9 @@ export class FsServer implements FsImports {
     new Uint8Array(this._mem, e.at, len).set(bytes.subarray(0, len));
   }
 
-  /** A write to an open that failed is dropped: the core posts it before it
-   * learns, and hears it from the open's completion and the close's. */
+  /** A write to a file whose open failed is dropped. The core posts the
+   * write before it learns of the failure, and it hears of the failure from
+   * the open's completion and the close's. */
   fs_write(e: FsWrite): void {
     const file = this.files.get(e.fd);
     if (!file) return;
@@ -129,8 +137,8 @@ export class FsServer implements FsImports {
     this._complete(e.fd, Command.FS_CLOSE, this._commit(file), null);
   }
 
-  /** What `file` was written, read where the core keeps it and handed to
-   * `Fs.commit`: 0, or the errno it refused with. */
+  /** Reads what `file` was written from where the core keeps it, and hands
+   * it to `Fs.commit`. Returns 0, or the errno the commit refused with. */
   private _commit(file: File): i32 {
     if (!file.written) return Errno.OK;
     const whole = new Uint8Array(

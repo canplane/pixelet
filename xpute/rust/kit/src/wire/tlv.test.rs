@@ -5,7 +5,8 @@ use crate::golden::Golden;
 
 const GOLDEN: &str = include_str!("../../../../spec/golden/wire/tlv.tsv");
 
-/// As the TypeScript prints it: `typeof`, a colon, the value.
+/// A value in the golden record's text, which is how the TypeScript test
+/// prints one: its `typeof`, a colon, the value.
 fn show(v: &TlvValue) -> String {
     match v {
         TlvValue::Bool(b) => format!("boolean:{b}"),

@@ -14,7 +14,7 @@ set -o pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$ROOT/../../.." && pwd)"
 DATA_DIR="$ROOT/raw"
-TOOLS="$REPO_ROOT/infra/geo/tools/run"
+TOOLS="$REPO_ROOT/infra/geo/tool/run"
 
 set -a; . "$REPO_ROOT/infra/local/.env"; set +a
 psql_geo() { "$TOOLS" psql "$DB_GEO_URL" -v ON_ERROR_STOP=1 "$@"; }

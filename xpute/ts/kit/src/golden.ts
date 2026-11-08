@@ -1,8 +1,9 @@
 // @xpute/kit/golden.ts
 
 /**
- * Reads the golden records under spec/ (lines of `path<TAB>value`), as
- * xpute-kit/golden.rs does. Only records that cross languages belong here.
+ * Reads golden records, files of lines `dotted.path<TAB>value` under spec/,
+ * as the Rust and C++ readers do. A record holds every language that reads it
+ * to the same answer, so only a record that crosses languages belongs here.
  */
 
 import type { U8Array } from "./abi/array.ts";
@@ -27,8 +28,9 @@ export class Golden {
   }
 
   /**
-   * The record at `path` under spec/: `golden/wire/tlv.tsv`, fetched beside
-   * this file, so a page served from the tree reads it as the tests do.
+   * Loads the record at `path` under spec/, such as `golden/wire/tlv.tsv`. It
+   * is fetched relative to this file, so a page served from the source tree
+   * reads it as the tests do.
    */
   static async load(path: string): Promise<Golden> {
     return new Golden(await (await fetch(new URL(path, SPEC))).text());
@@ -52,7 +54,10 @@ export class Golden {
     return BigInt(this.s(key));
   }
 
-  /** A double written through its bits, so that -0 and a NaN's payload survive. */
+  /**
+   * A double recorded as the hex of its bits, so it reads back exactly, -0
+   * and a NaN's payload included.
+   */
   f64(key: string): f64 {
     const bits = BigInt(this.s(key));
     const view = new DataView(new ArrayBuffer(8));
@@ -76,7 +81,10 @@ export class Golden {
     return out;
   }
 
-  /** Calls `f` with `base.0`, `base.1`, … while an entry has that prefix. */
+  /**
+   * Calls `f` with `base.0`, `base.1` and so on, for as long as some record's
+   * key starts with that prefix. A list with no item is a bug.
+   */
   each(base: string, f: (key: string) => void): void {
     let k = 0;
     for (; ; k++) {

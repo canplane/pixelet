@@ -1,4 +1,5 @@
-// Unlit and half transparent; placed as location_zone_place.wgsl lays it.
+// Draws the zone unlit and see-through, with its borders opaque.
+// location_zone_place.wgsl places it.
 
 struct VertexOut {
   @builtin(position) clip: vec4f,

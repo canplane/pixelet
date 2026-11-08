@@ -10,7 +10,7 @@ import { Presence } from "@/ui/component/motion/presence.tsx";
 import { LEAVE, SETTLE } from "@/ui/component/motion/transition.ts";
 import { HaloPath, HaloText } from "./halo.tsx";
 import { color, halo, textStyle, weight } from "@/ui/component/theme.ts";
-import { useView } from "@/ui/store/watch.ts";
+import { useView } from "@/ui/watch.ts";
 
 const TICK_PX = 5;
 const QUARTER_TICK_PX = 3;
@@ -19,7 +19,7 @@ const PAD_PX = LINE_PX + halo.width + 1;
 const LABEL_GAP_PX = 8;
 const BAR_MAX_PX = 80;
 
-/** Nearest 1, 2 or 5 × 10ⁿ. */
+/** The length nearest to `m` of the form 1, 2 or 5 × 10ⁿ. */
 function niceLength(m: f64): f64 {
   if (!(m > 0)) return 0;
   const base = 10 ** Math.floor(Math.log10(m));
@@ -27,7 +27,8 @@ function niceLength(m: f64): f64 {
   return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * base;
 }
 
-/** Line and ticks are one path under one halo. */
+/** The line and its ticks are one path under one halo, so that the halo is no
+ * darker where they meet. */
 export function MapScaleBar({ show }: { show: boolean }) {
   const mPerPx = useView((v) => v.m_per_px);
   const totalMeters = niceLength(BAR_MAX_PX * mPerPx);
@@ -73,7 +74,8 @@ export function MapScaleBar({ show }: { show: boolean }) {
 }
 
 const styles = StyleSheet.create({
-  // As tall below the line as above it, so the line is the strip's middle.
+  // The bar is as tall below its line as above it, so that the line lies at
+  // the strip's middle.
   root: { alignItems: "center", paddingTop: TICK_PX },
   above: {
     position: "absolute",
@@ -84,7 +86,6 @@ const styles = StyleSheet.create({
   },
 });
 
-/** The scale's label. */
 const scaleLabel = StyleSheet.create({
   label: {
     ...textStyle.caption2,

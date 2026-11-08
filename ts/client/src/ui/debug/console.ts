@@ -1,25 +1,27 @@
 // @pxl/client/ui/debug/console.ts
 
 /**
- * A development page's console: `xpute`, whose `cmd` sends the core any
- * command by its number, as the UI (port/ui.ts `ui.door`); and
- * `pxl.perf`, what the profiler panel exports, made on this side of the
- * door: `report()`, the window's summary as text, `read()`, the same as
- * values (script/compare-perf.py reads it), `trace()`, the window saved
- * for ui.perfetto.dev, and `drive(seconds)`, the one measurement, taken the
- * same way each time (perf/drive.ts).
+ * What a development build puts on the console. `xpute.cmd(cmd, ...args)` sends
+ * the core any command by its number, the way the UI sends one (`raw` in
+ * service/core/raw.ts). `pxl.perf` holds what the profiler panel exports,
+ * computed on the client from what the core's profiler holds. `report()` gives
+ * the summary of the profiler's window as text, and `read()` gives the same
+ * summary as values, which script/compare-perf.py reads. `trace()` saves the
+ * window as a trace for ui.perfetto.dev. `drive(seconds)` takes the one
+ * standard measurement, driven the same way each time (perf/drive.ts).
  */
 
 import { perfDrive } from "./perf/drive.ts";
 import { perfReportText } from "./perf/report.ts";
 import { perfTraceSave } from "./perf/trace.ts";
 import { perfReportRead } from "./perf/view.ts";
-import * as ui from "@/port/ui.ts";
+import { raw } from "@/service/core/raw.ts";
 
-/** Once the core has booted: its doorbell is made then. */
+/** Call this once the core has booted: the doorbell that `xpute.cmd` rings
+ * exists only from then. */
 export function installConsole(): void {
   const g = globalThis as { xpute?: unknown; pxl?: unknown };
-  g.xpute = ui.door;
+  g.xpute = raw;
   g.pxl = {
     perf: {
       report: async () => perfReportText(await perfReportRead()),

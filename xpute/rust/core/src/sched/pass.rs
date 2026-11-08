@@ -1,28 +1,32 @@
 // xpute-core/sched/pass.rs
 
-//! What is left of a turn's budget, spent on ordered lists of steps (`run`).
-//! Forward progress is the invariant: neither the budget nor a step cap
-//! applies until one step has done work, so one expensive item cannot block
-//! everything behind it.
+//! A turn's remaining budget, spent on ordered lists of steps (`run`). The
+//! invariant is forward progress: neither the budget nor a step cap applies
+//! until one step has done work. An item that costs more than the whole
+//! budget therefore still runs, and cannot stay at the head of its list
+//! forever, blocking the items behind it.
 
 use crate::clock::now;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Pass {
-    /// The rising edge, so what the turn spent before comes off.
+    /// The time of the turn's rising edge. The budget counts from it, so the
+    /// time the turn spent before this pass comes off what is left.
     pub t0: f64,
     pub total_ms: f64,
-    /// Held back for the phases after the current one.
+    /// The time held back for the phases after the current one.
     pub reserve_ms: f64,
-    /// Past what is left, never waived: a step can cost time and still report
-    /// no work.
+    /// A hard limit this far past the remaining budget. Unlike the budget, it
+    /// applies before any step has done work, since a step can cost time and
+    /// still report none.
     pub hard_slack_ms: f64,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct PassStat {
     pub ran: u32,
-    /// With the steps that did no work, and the one that tripped the stop.
+    /// Every step called, counting those that reported no work and the one
+    /// that used up the budget.
     pub step_cnt: u32,
     pub elapsed_ms: f64,
     pub stopped_early: bool,
@@ -42,7 +46,8 @@ impl Pass {
         (self.t0 + self.total_ms - self.reserve_ms - now()).max(0.0)
     }
 
-    /// `step` answers whether it did work; only work counts to `max_steps`.
+    /// `step` answers whether it did work. Only steps that did work count
+    /// toward `max_steps`.
     pub fn run<T>(
         &self,
         items: impl IntoIterator<Item = T>,
@@ -56,7 +61,8 @@ impl Pass {
         let mut stat = PassStat::default();
         for item in items {
             let at = now();
-            // Before the waiver below, but the first item is always tried.
+            // The hard limit applies even before any step has done work,
+            // though never to the first item.
             if stat.step_cnt > 0 && at >= hard_deadline
                 || stat.ran > 0 && (stat.ran >= cap || at >= deadline)
             {

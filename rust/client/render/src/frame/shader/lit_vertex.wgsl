@@ -1,10 +1,11 @@
 // pxl-render/frame/shader/lit_vertex.wgsl
 
-// What a lit model's vertex hands its fragment, decor's, an impostor's, a
-// character's and the location beacon's: where it stands, the air before it and
-// the light on it, each worked out at the vertex (atmos_air.wgsl `seen_from_eye`,
-// atmos_view.wgsl `light_of`), and the one word of its draw the fragment reads,
-// `draw`, a model's opacity and the beacon's night.
+// What the vertex of a lit model hands its fragment. Decor, impostors,
+// characters and the location beacon are drawn through it. The air between the
+// eye and the vertex (atmos_air.wgsl `seen_from_eye`) and the light on the
+// vertex (atmos_view.wgsl `light_of`) are worked out at the vertex, not at each
+// fragment. The fragment reads one word of its draw, `draw`: a model's opacity,
+// or whether it is night for the beacon.
 
 struct VertexOut {
   @builtin(position) clip: vec4f,
@@ -34,7 +35,7 @@ fn lit_light(i: VertexOut) -> Light {
   return Light(i.sun, i.other, i.fill);
 }
 
-// A model's `albedo` lit at `i`, at its opacity.
+// A model's `albedo` lit at `i` and toned, with the model's opacity as alpha.
 fn lit_color(albedo: vec3f, i: VertexOut) -> vec4f {
   let n = normalize(i.normal);
   let color = shade(albedo, n, i.world_pos, shadow_visibility(i.world_pos, n), 1.0, lit_air(i), lit_light(i));

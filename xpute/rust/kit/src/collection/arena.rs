@@ -1,6 +1,7 @@
 // xpute-kit/collection/arena.rs
 
-//! Arena: a pool of constructed slots, bump-allocated and rewound whole.
+//! A pool of slots that are constructed once and reused. Slots are handed
+//! out in order and taken back by rewinding to an earlier length.
 
 use crate::status::errno::Errno;
 use crate::status::error::MarshalError;
@@ -10,8 +11,9 @@ pub struct ArenaOptions {
     pub max_cap: u32,
 }
 
-/// `truncate` drops nothing: a slot comes back in whatever state its last
-/// user left it, buffers still allocated, and the caller reinitializes it.
+/// `truncate` drops nothing. A slot handed out again is in whatever state
+/// its last user left it, with its buffers still allocated, and the caller
+/// must reinitialize it.
 pub struct Arena<T: Default> {
     pub mem: Vec<T>,
 
@@ -62,13 +64,15 @@ impl<T: Default> Arena<T> {
         self.grow(self.len_of.saturating_add(cnt))
     }
 
-    /// A `new_len` above the cursor is a bug, not a resize.
+    /// Rewinds to `new_len` slots. A `new_len` above the current length is a
+    /// bug, not a way to grow.
     pub fn truncate(&mut self, new_len: u32) {
         crate::ensure!(new_len <= self.len_of, EINVAL, new_len, self.len_of);
         self.len_of = new_len;
     }
 
-    /// Doubling stops at the cap, so the cap refuses only what does not fit.
+    /// The capacity doubles but stops at `max_cap`, so a request is refused
+    /// only when it does not fit under `max_cap`.
     fn grow(&mut self, req: u32) -> Result<(), MarshalError> {
         if req <= self.cap_of {
             return Ok(());
@@ -86,7 +90,7 @@ impl<T: Default> Arena<T> {
         Ok(())
     }
 
-    /// Marks here and rewinds to the mark when the guard drops.
+    /// Remembers the current length and rewinds to it when the guard drops.
     pub fn scope(&mut self) -> ArenaGuard<'_, T> {
         ArenaGuard::new(self)
     }

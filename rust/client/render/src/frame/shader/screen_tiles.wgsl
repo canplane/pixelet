@@ -1,46 +1,45 @@
 // pxl-render/frame/shader/screen_tiles.wgsl
 
-// The tiles as a pass over the whole screen or map draws them (gpu/tiles.rs
-// `Tiles`): a quad each, drawn instanced, an unclaimed one collapsed, so the
-// pass touches the claimed tiles alone; or a thread each, an unclaimed one
-// returning at once. A tile is claimed where it changed
-// this frame or has not yet run through the jitter's sequence since, or every
-// one where the frame is drawn whole. The frames the sequence covers a pixel
-// in, `TILE_JITTERS`, are constant.wgsl's (word.rs `screen::JITTERS`).
+// How a pass over the whole screen or the whole map takes its tiles so that it touches only
+// the claimed ones (gpu/tile.rs `Tiles`). A draw takes a quad a tile, drawn instanced, and
+// collapses the quad of an unclaimed tile. A compute pass takes a thread a tile, which returns
+// at once on an unclaimed one. A tile is claimed where it changed this frame or has not yet
+// run through the jitter's sequence since, and every tile is claimed where the frame is drawn
+// whole. `TILE_JITTERS`, the frames in which the sequence covers a pixel, comes from word.rs
+// `screen::JITTERS`.
 
 // The uniform `Tiles` and the rule a tile's word is read by, `tiles_age` and
-// `tiles_claimed`, are tile_word.wgsl's, which build.rs writes from
-// word.rs `screen`: `count` the tiles across and down, the frames a
-// tile stays claimed once it changed (`claimed_for`, all of them where every
-// one is drawn), and this frame's number; `size` the target's pixels across
-// and down, how far, in them, a quad is grown each way past its tile, and a
-// tile's side, in them.
+// `tiles_in_damage`, come from tile_word.wgsl, which build.rs writes from word.rs `screen`.
+// `count` holds the tiles across and down, the frames a tile stays claimed once it changed
+// (`damage_frames`), and this frame's number. In a frame drawn whole, `damage_frames` is
+// `u32::MAX`, so every tile is claimed. `size` holds the target's pixels across and down, how
+// many pixels a quad is grown each way past its tile, and a tile's side in pixels.
 
-// Each tile's word, the number of the frame it last changed in
-// (gpu/tiles.rs `Tiles::mark`).
+// Each tile's word holds the number of the frame it last changed in (gpu/tile.rs
+// `Tiles::damage`).
 @group(0) @binding(30) var<storage, read> changed_at: array<u32>;
 @group(0) @binding(31) var<uniform> tiles: Tiles;
-// The tiles the frame's marks cover, from the first across and down to past
-// the last, as the GPU leaves them once the frame's marks are made
-// (`Tiles::marks_box`, tile_mark.wgsl).
-@group(0) @binding(33) var<storage, read> marks_box: vec4u;
+// The tiles the frame's marks cover, as the first tile across and down and the tile just past
+// the last, which the GPU leaves once the frame's marks are made (gpu/tile.rs
+// `Tiles::new_damage_rect`, tile_mark.wgsl).
+@group(0) @binding(33) var<storage, read> new_damage_rect: vec4u;
 
-// A tile's pixels a side.
+// A tile's side, in pixels.
 fn tile_side() -> u32 {
   return u32(tiles.size.w);
 }
 
-// Tile `ii`'s frames since it last changed: 0 where it changed this frame.
+// How many frames have passed since tile `ii` last changed; 0 means it changed this frame.
 fn tile_age(ii: u32) -> u32 {
   return tiles_age(tiles, changed_at[ii]);
 }
 
 // Whether tile `ii` is claimed.
-fn tile_claimed(ii: u32) -> bool {
-  return tiles_claimed(tiles, changed_at[ii]);
+fn tile_in_damage(ii: u32) -> bool {
+  return tiles_in_damage(tiles, changed_at[ii]);
 }
 
-// A quad's corner `vi`, two triangles.
+// Corner `vi` of a quad drawn as two triangles.
 fn tile_corner(vi: u32) -> vec2u {
   let corners = array<vec2u, 6>(
     vec2u(0u, 0u), vec2u(1u, 0u), vec2u(0u, 1u),
@@ -49,28 +48,28 @@ fn tile_corner(vi: u32) -> vec2u {
   return corners[vi];
 }
 
-// The pixel `px` of the target in clip units.
+// The target's pixel position `px` in clip space.
 fn tile_px_clip(px: vec2f) -> vec4f {
   let size = tiles.size.xy;
   return vec4f(px.x / size.x * 2.0 - 1.0, 1.0 - px.y / size.y * 2.0, 0.0, 1.0);
 }
 
-// Corner `vi` of tile `ii`'s quad, in clip units; past the clip where the
-// tile is not claimed.
+// Corner `vi` of tile `ii`'s quad in clip space, grown past the tile by `size.z` pixels. Every
+// corner of an unclaimed tile lies outside the clip volume, so its quad draws nothing.
 fn tile_clip(vi: u32, ii: u32) -> vec4f {
   let t = vec2u(ii % tiles.count.x, ii / tiles.count.x);
   let c = tile_corner(vi);
   let px = min(vec2f((t + c) * tile_side()), tiles.size.xy) + (vec2f(c) * 2.0 - 1.0) * tiles.size.z;
-  return select(vec4f(2.0, 2.0, 0.0, 1.0), tile_px_clip(px), tile_claimed(ii));
+  return select(vec4f(2.0, 2.0, 0.0, 1.0), tile_px_clip(px), tile_in_damage(ii));
 }
 
-// Corner `vi` of the quad of tile `ii` of the marks' box, a row after
-// another, in clip units; past the clip where it is not claimed. Drawn as
-// many times as the box holds tiles (gpu/tiles.rs `Tiles::box_args`), the
-// tiles drawn are the claimed alone where the frame claims no tile off the
-// box: a target claimed the frame it changed alone.
-fn box_clip(vi: u32, ii: u32) -> vec4f {
-  let b = marks_box;
+// Corner `vi` of the quad of tile `ii` of the damage rectangle, counted row by row, in clip
+// space; an unclaimed tile's quad draws nothing. The draw has one instance a tile of the
+// rectangle (gpu/tile.rs `Tiles::rect_args`). It draws exactly the claimed tiles only where
+// no tile outside the rectangle is claimed, which holds for a target whose tiles stay claimed
+// only in the frame they changed.
+fn rect_clip(vi: u32, ii: u32) -> vec4f {
+  let b = new_damage_rect;
   let w = b.z - b.x;
   let t = b.xy + vec2u(ii % w, ii / w);
   return tile_clip(vi, t.y * tiles.count.x + t.x);

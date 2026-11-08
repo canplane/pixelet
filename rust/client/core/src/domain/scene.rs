@@ -1,8 +1,8 @@
 // pxl-core/domain/scene.rs
 
-//! What a frame draws beside the screen's rays: each drawn layer keeps its
-//! own state and lists itself into the draw list (domain/scene/model.rs
-//! `draw_list`), in the order here.
+//! The scene is what a frame draws besides the world the screen's rays cast.
+//! Each of its parts keeps its own state and adds its draws to the one draw
+//! list (domain/scene/model.rs `draw_list`), in the order `draw` calls them.
 
 pub mod animation;
 pub mod cast;
@@ -26,20 +26,20 @@ use crate::domain::scene::character::companion::{companion_animate, companion_dr
 use crate::domain::scene::character::surface::character_surface_shows;
 use crate::domain::scene::environment::environment_animate;
 use crate::domain::scene::frame::Frame;
-use crate::domain::scene::gizmo::coverage_gizmo::coverage_gizmo_draw;
-use crate::domain::scene::gizmo::frame_gizmo::frame_gizmo_draw;
+use crate::domain::scene::gizmo::coverage::coverage_gizmo_draw;
+use crate::domain::scene::gizmo::frame::frame_gizmo_draw;
 use crate::domain::scene::indicator::ghost::ghost_draw;
 use crate::domain::scene::indicator::location::{location_animate, location_draw};
 use crate::domain::scene::model::registry::Models;
 
-/// Advances what animates; whether anything did.
+/// Returns whether anything is still moving, in which case the stage asks for
+/// another turn.
 pub fn animate(list: &mut DrawList, models: &Models, frame: &Frame) -> bool {
     companion_animate(list, models, frame, character_surface_shows())
         | location_animate(frame)
         | environment_animate(frame)
 }
 
-/// Sets the scene's own layers' draws into the turn's list.
 pub fn draw(list: &mut DrawList, models: &Models) {
     ghost_draw(list);
     companion_draw(list, models);

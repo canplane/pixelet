@@ -2,8 +2,6 @@
 //
 // GENERATED from spec/abi/sys.json
 
-// The core's life as its runtime tells it, its turns, and its end.
-
 export const ABORT = 0x01;
 export const ATTACH = 0x02;
 export const SUSPEND = 0x03;

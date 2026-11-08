@@ -1,9 +1,10 @@
 // @pxl/client/ui/setting/toggle-row.tsx
 
 /**
- * A settings row on a page and on Android: the whole row is the switch, since a switch also
- * taking the press toggled twice. Drawn as iOS 26's switch; RN-web's is
- * Material's older one.
+ * A settings row on a page and on Android. The whole row is the switch,
+ * because a switch inside a row that also takes the press would toggle twice.
+ * It is drawn as iOS 26's switch, since React Native for Web draws Material's
+ * older one.
  */
 
 import type { ReactNode } from "react";
@@ -26,7 +27,8 @@ export interface ToggleRowProps {
   children: ReactNode;
 }
 
-/** 63 × 28 track, capsule thumb 2 in from its ends. */
+/** A 63 × 28 track, with a capsule thumb inset 2 from its ends, as iOS 26
+ * draws it. */
 const TRACK = { width: 63, height: 28 };
 const INSET = 2;
 const THUMB = { width: 37, height: TRACK.height - 2 * INSET };

@@ -14,38 +14,41 @@ import type {
   TaskSummary,
   ViewSection,
   Worst,
-} from "@/port/perf.ts";
+} from "@/service/core/perf.ts";
 import { n1, pct, phaseText, tris, valueText } from "./column.ts";
 import { fps, type PerfReport } from "./view.ts";
 import { fixed } from "@/ui/fixed.ts";
 import { EFFECT_NAMES } from "@/abi/step.spec.ts";
-import { type LongFrame } from "@/service/types.ts";
-import * as long_frame from "@/service/long-frame.ts";
-import * as share from "@/service/share.ts";
+import { type LongFrame } from "@/service/platform/types.ts";
+import * as long_frame from "@/service/platform/long-frame.ts";
+import * as share from "@/service/platform/share.ts";
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
-/** A count of bytes in the one unit the figures are shown in, signed. */
 const signedBytes = (b: number) =>
   `${b >= 0 ? "+" : ""}${valueText("_bytes", b)}`;
 const bytes = (b: number) => valueText("_bytes", b);
-/** Where the interval's turns ended: past it, by how much, or before it, by the
- * time left. */
+/** Says how far the interval's turns ran past the interval's end, or, when
+ * they ended inside it, how much of the interval was left with no turn. */
 const pastText = (f: Frame) =>
   f.over_ms > 0
     ? `over by ${n1(f.over_ms)}`
     : `off-turn ${n1(f.interval_ms - f.busy_ms)}`;
 const percentiles = (s: Percentiles) =>
   `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
-/** What a ray column counts, its observer's name aside (FRAME_GROUP.rays). */
+/** A ray column's name without its observer's prefix, such as `cast` for
+ * `eye_cast` (FRAME_GROUP.rays). */
 type RayColumn<K = keyof RayCounts> = K extends `eye_${infer C}` ? C : never;
 
-/** The `ray_counts` setting's counts over the window, the core's sums of
- * its frames' (perf.json FRAME's rays columns): an observer's line each where
- * it cast — the nodes its beam rays, its samples and its walk again asked a
- * cast, those its walks by hand asked of the world, its pixels or slots cast again, those that reused the visible sample,
- * that walked and that took the sky, each as a share of its pixels or its
- * map's slots, the nodes its walk again asked a walking one, and the boxes
- * it drew a cast. */
+/** Formats the counts the `ray_counts` setting collects, which the core sums
+ * over the window's frames (the rays columns of FRAME in perf.json). Each
+ * observer, the eye and the light, gets one line when it cast in the window.
+ * Per cast, the line gives the nodes asked by its beam rays, by its samples
+ * and by its holes' walk (`hole_walk`), and how many of the walks' nodes were
+ * asked of the world (`asks`). It gives the pixels or map slots cast again,
+ * split into those that took the visible voxel, the holes, which walked on
+ * their own, and those that took the sky, each as a share of all its pixels
+ * or slots. Last come the nodes each hole asked, and the boxes drawn per
+ * cast. */
 const raysText = (f: RayCounts) => {
   const observer = (name: "eye" | "light") => {
     const at = (column: RayColumn) => f[`${name}_${column}`];
@@ -55,16 +58,16 @@ const raysText = (f: RayCounts) => {
     const rays = at("rays");
     const part = (n: number) =>
       rays > 0 ? `${fixed((100 * n) / rays, 2)}%` : `${perCast(n)} a cast`;
-    const again = at("reused") + at("walked") + at("sky");
+    const again = at("voxel") + at("hole") + at("sky");
     return [
       `  ${name.padEnd(7)} cast in ${casts} frames   nodes a cast: beam ${perCast(
         at("beam"),
-      )}  sample ${perCast(at("sample"))}  miss ${perCast(
-        at("miss"),
-      )} (${perCast(at("asked"))} asked of the world)   cast again ${part(again)}: reused ${part(at("reused"))}  walked ${part(
-        at("walked"),
+      )}  sample ${perCast(at("sample"))}  hole walk ${perCast(
+        at("hole_walk"),
+      )} (${perCast(at("asks"))} asked of the world)   cast again ${part(again)}: voxel ${part(at("voxel"))}  hole ${part(
+        at("hole"),
       )} (${n1(
-        at("miss") / Math.max(1, at("walked")),
+        at("hole_walk") / Math.max(1, at("hole")),
       )} nodes each)  sky ${part(at("sky"))}   boxes ${perCast(at("boxes"))} a cast`,
     ];
   };
@@ -73,9 +76,9 @@ const raysText = (f: RayCounts) => {
 
 const deg = (rad: number) => (rad * 180) / Math.PI;
 
-/** Where the view was as the report was read, by the core's numbers
- * (perf.json NOW.view), and the world's pixels of the last frame a read
- * timed. */
+/** Where the view stood when the report was read, in the core's numbers
+ * (perf.json NOW.view), and how many of the world's pixels the last frame
+ * that a GPU read timed drew. */
 function viewText(v: ViewSection, gpuPx: f64): string {
   const pivot = Number.isNaN(v.pivot_lat)
     ? "-"
@@ -87,8 +90,8 @@ function viewText(v: ViewSection, gpuPx: f64): string {
   }`;
 }
 
-/** What the frames held at the most or the least since the recording
- * started (perf.json STAT.recording). */
+/** Each frame figure's most or least since the recording started (perf.json
+ * STAT.recording). */
 function recordingText(r: RecordingSection): string {
   if (!r.frames) return "  since   no frame folded";
   return `  since   heap max live ${bytes(r.heap_live_max_bytes)}  run ${bytes(
@@ -101,7 +104,7 @@ function recordingText(r: RecordingSection): string {
     r.ring_sq_peak
   } left ${r.ring_left_peak}   body slots peak ${
     r.body_slots_peak
-  }   terrain refused ${r.cap_terrain_refused}   (over the ${
+  }   terrain refused ${r.terrain_refusals}   (over the ${
     r.frames
   } frames since the recording started)`;
 }
@@ -111,7 +114,8 @@ export function failText(fail: u32, detail: u32): string {
   return detail === 0 ? name : `${name} ${detail}`;
 }
 
-/** Set once from profiling, never fed back into scheduling. */
+/** What each task stream waits on, judged by hand from profiling. It only
+ * labels the report: scheduling never reads it. */
 export const BOUND: Record<string, string> = {
   terrain: "network",
   division: "network",
@@ -137,7 +141,6 @@ export function taskLine(r: TaskRecord): string {
   )}${why}`;
 }
 
-/** The frame turn's longest effect, by its name, where any ran. */
 const worstEffectText = (f: Frame) => {
   const k = f.effects.reduce((w, ms, i) => (ms > f.effects[w] ? i : w), 0);
   return f.effects_ms > 0
@@ -145,8 +148,8 @@ const worstEffectText = (f: Frame) => {
     : "";
 };
 
-/** Geometry, textures and heap only mean anything as what changed from the
- * frame before. */
+/** For one frame, the uploads and the heap mean something only as a change
+ * from the frame before, so the line adds their deltas (`Δ`). */
 export function frameLine({ sample: s, delta }: Worst): string {
   const d =
     delta === null
@@ -164,13 +167,14 @@ export function frameLine({ sample: s, delta }: Worst): string {
   )}${s.settled ? " (still)" : ""}  stage ${n1(s.stage_ms)}  tasks ${n1(
     s.tasks_ms,
   )}  perf ${n1(s.perf_ms)}  gpu busy ${
-    s.gpu_read ? n1(s.gpu_busy_ms) : "-"
+    s.gpu_timed ? n1(s.gpu_busy_ms) : "-"
   }  draws ${s.draws} tris ${tris(s.triangles)}  uploads ${s.uploads}  heap used ${bytes(
     s.heap_used_bytes,
   )}${d}`;
 }
 
-/** What the place hears its long frames by, where that is less than both sources. */
+/** A note for a platform that does not report long animation frames (LoAF):
+ * its long frames are then long tasks only, or none. */
 function longSourcesText(): string {
   const sources = long_frame.sources();
   if (sources.includes("loaf")) return "";
@@ -242,10 +246,10 @@ function windowSection(r: PerfReport): string[] {
     `  rest    ${percentiles(
       f.rest,
     )} ms   (busy unmeasured: the door's commands, rise and fall)`,
-    f.gpu_read > 0
+    f.gpu_timed > 0
       ? `  gpu     ${percentiles(
           f.gpu_busy,
-        )} ms busy   (over the ${f.gpu_read} frames a read timed)`
+        )} ms busy   (over the ${f.gpu_timed} frames a read timed)`
       : "  gpu     no timestamps: no read landed (no renderer yet, or the device keeps none)",
     `  busy by kind  ${
       f.gpu_busy_kinds
@@ -256,7 +260,8 @@ function windowSection(r: PerfReport): string[] {
     `  spans   p95 ${spans || "-"} ms   (n: the frames a read timed that ran each)`,
     ...raysText(f.rays),
     viewText(r.view, f.gpu_px),
-    // Per step: a cooperative scheduler is only as cooperative as its longest step.
+    // Steps are listed one by one, because a cooperative scheduler is only as
+    // cooperative as its longest step.
     `  steps   ${steps}   (ms a run and max, since the recording started)`,
     `  heap used Δ ${signedBytes(
       f.heap_used_delta_bytes,

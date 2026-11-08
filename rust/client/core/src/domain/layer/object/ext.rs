@@ -1,16 +1,16 @@
 // pxl-core/domain/layer/object/ext.rs
 
-//! What placed things carry beyond their ids, a pool a class
-//! (pxl-spec object/ext.rs). A leaf names its record by its place in its
-//! class's pool, so a record lives and goes with the leaf that names it.
-//! A record's memory is the heap's, whose slab keeps small ones together.
+//! The records placed things carry beyond their ids, in one pool for each
+//! class of record (pxl-spec object/ext.rs). A leaf names its record by the
+//! record's place in its class's pool, so a record lives and goes with the
+//! leaf that names it. Records are allocated on the heap, whose slab keeps
+//! small ones together.
 
 use pxl_spec::object::ext::Class;
 
-/// One record, in its class's shape.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Ext {
-    /// A marker's text, within `MARKER_TEXT_CHARS`.
+    /// A marker's text, at most `MARKER_TEXT_CHARS` long.
     MarkerText(String),
 }
 
@@ -22,7 +22,7 @@ impl Ext {
     }
 }
 
-/// The handle a leaf holds: none, or one past its record's slot.
+/// The handle of no record. Any other handle is its record's slot plus one.
 pub const NONE: u16 = 0;
 
 #[derive(Default)]
@@ -37,8 +37,8 @@ pub struct Pools {
 }
 
 impl Pools {
-    /// Keeps `ext` in its class's pool; none where the pool holds as many
-    /// records as a handle can name.
+    /// Keeps `ext` in its class's pool and returns its handle. None when the
+    /// pool already holds as many records as a handle can name.
     pub fn keep(&mut self, ext: Ext) -> Option<u16> {
         let pool = &mut self.pools[ext.class() as usize];
         if let Some(h) = pool.free.pop() {

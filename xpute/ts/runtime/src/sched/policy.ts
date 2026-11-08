@@ -2,17 +2,19 @@
 
 /**
  * What the scheduler asks of the scheduling policy it was booted with: when a
- * turn it was asked for may run, and when each must end. The scheduler is the
- * mechanism: it rings only when the runtime or the core's last falling edge
- * asked, keeps the core's `wake_ms`, and hands the policy what each turn
- * took. A page's policy paces turns to the display (frame_pacing.ts); a runtime
- * with no display may run one as soon as it is asked, or on a timer of its own.
+ * turn it was asked for may run, and when each turn must end. The scheduler
+ * is the mechanism, and the policy decides. The scheduler rings only when the
+ * runtime or the core's last falling edge asked for a turn, keeps the core's
+ * `wake_ms`, and hands the policy what each turn took. A page's policy paces
+ * turns to the display (frame_pacing.ts); a runtime with no display may run a
+ * turn as soon as it is asked for, or on a timer of its own.
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 
-/** What one turn is given: its deadline, the time on the runtime's clock
- * (`performance.now()`) it ends by, and whatever else the policy says of it. */
+/** What one turn is given: its `deadline`, the time on the runtime's clock
+ * (`performance.now()`) by which it ends, and whatever else the policy says
+ * about the turn. */
 export interface Grant {
   deadline: f64;
 }
@@ -26,9 +28,9 @@ export interface SchedulingPolicy<G extends Grant = Grant> {
   admit(now: f64): boolean;
   /** The grant of the turn about to run. */
   grant(now: f64): G;
-  /** What the turn took and what its falling edge asked for. */
+  /** Hears how long the turn took and what its falling edge asked for. */
   observe(turn_ms: f64, grant: G, wake_ms: f64): void;
-  /** An input at `now`, which a policy may make the turns after it
-   * interactive for (frame_pacing.ts). */
+  /** Hears an input at `now`; a policy may treat the turns after it as
+   * interactive (frame_pacing.ts). */
   input?(now: f64): void;
 }

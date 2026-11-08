@@ -1,11 +1,12 @@
 // @pxl/client/ui/world/pointer.ts
 
 /**
- * A pointer on the world, sent to the core. A touch that starts there puts
- * the keyboard away, and while the dock is for typing it puts the typing away
- * instead of tapping: its lift ends the gesture with no tap, and its drag
- * still moves the world. Typing, the pointer is off the world, so nothing
- * hovers there and no tool shows what a tap would do.
+ * Sends a pointer on the world to the core. A touch that starts on the world
+ * puts the keyboard away. While the dock is in message mode, that touch ends
+ * the typing instead of tapping: its lift ends the gesture with no tap, and
+ * its drag still moves the world. In message mode the pointer counts as off
+ * the world, so that nothing hovers there and no tool previews what a tap
+ * would do.
  */
 
 import type { f64, i32 } from "@xpute/kit/abi/word.ts";
@@ -17,11 +18,13 @@ import {
   setDockMode,
   watchDockMode,
 } from "@/ui/world/dock/store.ts";
-import * as input from "@/port/input.ts";
+import * as input from "@/service/core/input.ts";
 
-/** The pointers spent putting the typing away. */
+/** The pointers whose press ended the typing. Each one's lift is sent as a
+ * cancel, so that it taps nothing. */
 const spent = new Set<i32>();
-/** The pointers pressed, whose moves drag rather than hover, each with its kind. */
+/** The pressed pointers, each with its kind. Their moves drag rather than
+ * hover. */
 const pressed = new Map<i32, PointerType>();
 
 watchDockMode((mode) => {
@@ -59,8 +62,9 @@ export function worldPointer(
   input.pointer(phase, pointerType, id, button, x, y);
 }
 
-/** Each pointer still pressed ends with a cancel: the page lost it (blur,
- * hidden, the surface gone) and its lift will not come. */
+/** Ends every pressed pointer with a cancel. The caller calls it when the page
+ * loses its pointers, on a blur, when it is hidden or when the surface goes,
+ * because their lifts will not come. */
 export function releasePointers(): void {
   for (const [id, pointerType] of pressed) {
     worldPointer(PointerPhase.Cancel, pointerType, id, 0, 0, 0);

@@ -4,7 +4,8 @@ use core::ops::{Add, Div, Mul, Neg, Rem, Sub};
 
 pub const EPS: f64 = 1e-5;
 
-/// What these functions take: `f64`, and `f32` where a value lives as one.
+/// The float types these functions take: `f64`, and `f32` for a value that
+/// is stored as one.
 pub trait Float:
     Copy
     + PartialOrd
@@ -63,7 +64,8 @@ macro_rules! float {
 float!(f32);
 float!(f64);
 
-/// Absolute tolerance near zero, relative beyond.
+/// Equal within `eps`, by default `EPS`. The tolerance is absolute near
+/// zero and relative to the larger magnitude beyond.
 pub fn approx_eq<T: Float>(a: T, b: T, eps: Option<T>) -> bool {
     let eps = eps.unwrap_or(T::EPS);
     if a == b {
@@ -77,7 +79,8 @@ pub fn near<T: Float>(a: T, b: T, tol: T) -> bool {
     (a - b).abs() < tol
 }
 
-/// JavaScript's `Math.round`: `-2.5` is `-2`.
+/// Rounds as JavaScript's `Math.round` does: half rounds up, so `-2.5`
+/// becomes `-2`.
 pub fn round_half_up<T: Float>(x: T) -> T {
     if x.fract() == -T::HALF {
         x.ceil()
@@ -86,18 +89,21 @@ pub fn round_half_up<T: Float>(x: T) -> T {
     }
 }
 
-/// C's and Rust's `round`: `-2.5` is `-3`.
+/// Rounds as C's and Rust's `round` do: half rounds away from zero, so
+/// `-2.5` becomes `-3`.
 pub fn round_half_away<T: Float>(x: T) -> T {
     x.round_away()
 }
 
-/// IEEE 754's and WGSL's: `2.5` is `2`.
+/// Rounds as IEEE 754's default and WGSL's `round` do: half rounds to
+/// even, so `2.5` becomes `2` and `-2.5` becomes `-2`.
 pub fn round_half_even<T: Float>(x: T) -> T {
     x.round_even()
 }
 
-/// To even, as WGSL's `round`, so the CPU and a shader land on one integer.
-/// `f64::round` is not this.
+/// The kit's one rounding, half to even as WGSL's `round`, so the CPU and a
+/// shader land on the same integer. `f64::round` rounds half away from zero
+/// instead.
 pub use self::round_half_even as round;
 
 pub fn lerp<T: Float>(a: T, b: T, t: T) -> T {
@@ -107,7 +113,6 @@ pub fn inv_lerp<T: Float>(x: T, min: T, max: T) -> T {
     (x - min) / (max - min)
 }
 
-/// Remaps a value from one range into another.
 pub fn remap<T: Float>(x: T, in_min: T, in_max: T, out_min: T, out_max: T) -> T {
     lerp(out_min, out_max, inv_lerp(x, in_min, in_max))
 }

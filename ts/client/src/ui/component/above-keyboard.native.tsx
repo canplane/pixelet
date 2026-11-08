@@ -9,7 +9,7 @@ import {
   bottomRest,
 } from "@/ui/component/bottom-rest.ts";
 import { layer } from "@/ui/component/theme.ts";
-import { useSafeArea } from "@/service/safe-area.ts";
+import { useSafeArea } from "@/service/platform/safe-area.ts";
 
 interface KeyboardDockProps extends ViewProps {
   clearance: number;
@@ -24,9 +24,10 @@ const KeyboardDock: ComponentType<KeyboardDockProps> = requireNativeView(
 );
 
 /**
- * A layer standing `inset` above an open keyboard. The native view lifts it
- * in the keyboard's own animation; once still, the lift is laid out here so
- * presses hit-test where the layer is.
+ * A layer on a device that stands `inset` above an open keyboard. The native
+ * view lifts the layer within the keyboard's own animation. Once the keyboard
+ * is still, the native view reports the lift and the layout here takes it on,
+ * so that presses hit-test where the layer is drawn.
  */
 export function AboveKeyboard({
   inset,

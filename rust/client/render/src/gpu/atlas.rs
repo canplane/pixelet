@@ -1,8 +1,9 @@
 // pxl-render/gpu/atlas.rs
 
-//! A sprite on the marker atlas drawn on the device into a texture of its size and
-//! copied into its rectangle. Display lists are in logical pixels, drawn at the
-//! atlas's scale.
+//! Paints a sprite of the marker atlas on the device. A display list is drawn into a
+//! texture of the sprite's size, which is then copied into the sprite's rectangle of the
+//! atlas. A display list is in logical pixels and is drawn at the atlas's scale,
+//! `ATLAS_SCALE`.
 
 use crate::frame::shader::record::PIPELINE_ATLAS;
 use crate::frame::shader::word::{
@@ -27,7 +28,8 @@ struct Line {
     font: Font,
     color: u32,
     text: String,
-    /// Its middle across, and its baseline's height.
+    /// The line's horizontal middle and the height of its em box's middle, in logical
+    /// pixels.
     at: [f32; 2],
     halo: Option<Halo>,
 }
@@ -39,16 +41,16 @@ pub struct DisplayList {
     icons: Vec<Icon>,
 }
 
-/// One of Carto's symbols (pxl-spec asset/symbol.spec.rs), centered at
-/// `at`, its mask in `color`.
+/// One of Carto's symbols (pxl-spec asset/symbol.spec.rs), centered at `at` and drawn as
+/// its mask in `color`.
 struct Icon {
     symbol: usize,
     color: u32,
     at: [f32; 2],
 }
 
-/// A symbol's mask in `color`, as the platform hands text: RGBA, not
-/// premultiplied, top row first.
+/// A symbol's mask in `color`, laid out as the platform hands a line of text: RGBA, not
+/// premultiplied, top row first. The mask scales the color's alpha.
 fn symbol_rgba(symbol: usize, color: u32) -> Vec<u8> {
     let side = (SYMBOL_PX * SYMBOL_PX) as usize;
     let mask = &SYMBOL_MASKS[symbol * side..(symbol + 1) * side];
@@ -62,7 +64,8 @@ fn px(v: f32) -> f32 {
     PAD as f32 + v * ATLAS_SCALE as f32
 }
 
-/// The texture is sRGB, and what a shader writes into it is linear.
+/// The color `0xRRGGBBAA` with its channels made linear and its alpha kept. The atlas's
+/// texture is sRGB, and a shader writes linear values into it.
 fn linear(rgba: u32) -> [f32; 4] {
     let ch = |shift: u32| {
         let c = ((rgba >> shift) & 0xff) as f32 / 255.0;
@@ -148,7 +151,7 @@ impl DisplayList {
         ));
     }
 
-    /// Carto's `symbol`, by its place among `SYMBOL_MASKS`, centered at (cx, cy).
+    /// Carto's symbol whose index among `SYMBOL_MASKS` is `symbol`, centered at (cx, cy).
     pub fn icon(&mut self, symbol: usize, color: u32, cx: f32, cy: f32) {
         self.icons.push(Icon {
             symbol,
@@ -157,7 +160,8 @@ impl DisplayList {
         });
     }
 
-    /// A line centered across on `x`.
+    /// A line of text whose horizontal middle is `x` and whose em box's middle is at height
+    /// `y`.
     pub fn text(&mut self, font: Font, color: u32, text: &str, x: f32, y: f32) {
         self.lines.push(Line {
             font,
@@ -168,7 +172,8 @@ impl DisplayList {
         });
     }
 
-    /// Text over its own glyphs grown into `halo`, under every line's text.
+    /// A line of text drawn over a halo, its own glyphs grown by `halo`. Every halo lies under
+    /// the text of every line.
     pub fn haloed_text(&mut self, font: Font, color: u32, halo: Halo, text: &str, x: f32, y: f32) {
         self.text(font, color, text, x, y);
         if let Some(line) = self.lines.last_mut() {
@@ -198,8 +203,8 @@ impl AtlasPainter {
         }
     }
 
-    /// The rasters of a display list's lines, as the driver has drawn them; none while
-    /// one is not drawn yet, whose landing is the turn that paints it.
+    /// The rasters of a display list's lines, as the platform has drawn them. It returns none
+    /// while any line is not drawn yet; the list is painted on the turn its last raster lands.
     pub fn rasters(list: &DisplayList, text: TextOf) -> Option<Vec<Raster<'static>>> {
         list.lines
             .iter()
@@ -207,10 +212,10 @@ impl AtlasPainter {
             .collect()
     }
 
-    /// `list` painted with its lines' `rasters` (`rasters`), and what it
-    /// made for that, let go once the encoder is submitted; none, and
-    /// nothing recorded, where its pixels do not fit this turn's stream
-    /// (`room`).
+    /// Records the painting of `list` into the rectangle `rect` of `atlas`, with the lines'
+    /// rasters as `rasters` returned them. It returns the objects it made, which the caller
+    /// releases once the encoder is submitted. It returns none and records nothing when the
+    /// pixels do not fit this turn's stream (`room`).
     pub fn paint(
         &self,
         g: &Gpu,
@@ -263,13 +268,15 @@ impl AtlasPainter {
                 )
             })
             .collect();
-        // Every shadow, then every halo, so one line's never covers another's.
+        // All the shadows go first, then all the halos, then the text, so no line's shadow
+        // covers another line's halo and no halo covers another line's text.
         let scale = ATLAS_SCALE as f32;
         for (line, &(place, cover)) in list.lines.iter().zip(&placed) {
             if let Some(h) = line.halo {
                 let dy = round(h.shadow_dy * scale);
                 let dropped = [place[0], place[1] + dy, place[2], place[3] + dy];
-                // Soft over all of its radius past the halo's.
+                // The shadow is soft over the part of its radius that reaches past the
+                // halo's radius.
                 let soft = (h.shadow_radius - h.radius) * scale;
                 shapes.push(shape(
                     ATLAS_HALO,
@@ -294,8 +301,8 @@ impl AtlasPainter {
         for &(place, cover) in &placed {
             shapes.push(shape(ATLAS_TEXT, place, 0, cover, [0.0; 2]));
         }
-        // A mask is laid texel for texel: rasterized at `SYMBOL_RATIO`, the
-        // atlas's scale.
+        // A symbol's mask is laid texel for texel, as it is rasterized at `SYMBOL_RATIO`
+        // device pixels a pixel, which is the atlas's scale.
         for (k, icon) in list.icons.iter().enumerate() {
             let layer = (rasters.len() + k) as u32;
             let half = SYMBOL_PX as f32 / 2.0;
@@ -309,8 +316,9 @@ impl AtlasPainter {
             ];
             shapes.push(shape(ATLAS_TEXT, place, 0, cover, [0.0; 2]));
         }
-        // What goes into the stream whole, asked of it at once: the text's and
-        // the icons' pixels, the size and the shapes, as their writers measure them.
+        // The stream is asked at once for room for all the paint writes, so the paint is
+        // recorded whole or not at all: the text's and the icons' pixels, the size and the
+        // shapes, each measured as its writer measures it.
         let size_bytes = [w as f32, h as f32, 0.0, 0.0];
         let instance_bytes = bytes(shapes.as_flattened());
         let px = rasters

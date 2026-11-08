@@ -5,7 +5,6 @@ import { create } from "zustand";
 
 import * as ToastTone from "./tone.ts";
 
-/** One of ToastTone's. */
 type ToastTone = (typeof ToastTone)[keyof typeof ToastTone];
 export { ToastTone };
 
@@ -15,12 +14,14 @@ export interface ToastSpec {
 }
 
 interface Entry extends ToastSpec {
-  /** The caller's numbering: a report shown again replaces itself, and of
-   * one tone the lower outranks the higher. */
+  /** The caller's number for the report. Showing the same number again
+   * replaces its toast, and among toasts of one tone the lower number ranks
+   * higher. */
   id: u32;
 }
 
-/** Where a new card comes in: an error before a wait, a wait before news. */
+/** Decides where a new card comes in: an error goes before a wait, and a wait
+ * before a ready word. */
 const SEVERITY: Record<ToastTone, u32> = {
   [ToastTone.Error]: 0,
   [ToastTone.Loading]: 1,
@@ -34,11 +35,14 @@ function outranks(a: Entry, b: Entry): boolean {
 }
 
 interface ToastState {
-  /** Front card first. */
+  /** The cards, front card first. */
   entries: Entry[];
-  /** Turns so far, up positive: which way the cards last moved. */
+  /** The sum of the turns so far, a turn up counting as 1. The stack compares
+   * it with its last value to tell which way the cards moved. */
   turns: i32;
   dragging: boolean;
+  /** A toast that changed during a drag. It comes to the front when the drag
+   * ends. */
   pending: u32 | null;
 }
 
@@ -60,7 +64,7 @@ export function useToastTurns(): i32 {
   return store((s) => s.turns);
 }
 
-/** How many cards are up now. */
+/** The number of cards up, read once rather than watched. */
 export function toastCount(): u32 {
   return get().entries.length;
 }
@@ -77,7 +81,8 @@ function toFront(id: u32): void {
 export function showToast(id: u32, spec: ToastSpec): void {
   const { entries, dragging } = get();
   const shown = entries.find((e) => e.id === id);
-  // Said again as it is, as a toast kept past its cause is: no card to bring forward.
+  // The same toast shown again, as a toast held past its cause is, changes
+  // nothing and does not come to the front.
   if (
     shown !== undefined &&
     shown.message === spec.message &&
@@ -86,12 +91,13 @@ export function showToast(id: u32, spec: ToastSpec): void {
     return;
   if (shown !== undefined) {
     set({ entries: entries.map((e) => (e.id === id ? { id, ...spec } : e)) });
-    // Reshuffling mid-drag would move the held card out of front.
+    // Reordering during a drag would move the held card away from the front,
+    // so the move waits for the drag to end.
     if (dragging) set({ pending: id });
     else toFront(id);
     return;
   }
-  // Over the front card if it outranks it, else before the first behind it that it outranks.
+  // A new toast goes before the first card it outranks, or at the back.
   const entry = { id, ...spec };
   const k = entries.findIndex((e) => outranks(entry, e));
   const at = k < 0 ? entries.length : k;
@@ -106,7 +112,8 @@ export function dismissToast(id: u32): void {
   });
 }
 
-/** Up (1) sends the front card to the back; down (-1) brings the back one forward. */
+/** A `delta` of 1, a swipe up, sends the front card to the back. A `delta` of
+ * -1, a swipe down, brings the back card forward. */
 export function rotateToasts(delta: i32): void {
   const { entries, turns } = get();
   const k = ((delta % entries.length) + entries.length) % entries.length;

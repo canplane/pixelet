@@ -121,7 +121,7 @@ web-preview-shelf:
 # addresses and the servers' numbers (script/with-env.sh). Each works in the
 # checkout's root, so ./out and what ARGS names are the root's:
 #
-#   make bake-terrain ARGS="--shard 01033210 --stage leaf"
+#   make bake-terrain ARGS="--shard 01033210 --step leaf"
 #   make bake-geoid ARGS=egm2008-5.pgm
 TOOLS := bake-terrain bake-place bake-division bake-earth bake-star bake-geoid ingest-overture \
 	download-pack download-moon download-earth download-star ingest-asset render-brand \

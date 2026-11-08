@@ -1,11 +1,14 @@
 // @xpute/kit/wire/xtp/special_type.ts
 
-// The types with the leaf bit clear. One constant a member, read as a
-// namespace (`SpecialType.NIL`, re-exported by spec.ts). Literals, so each is
-// its own type and the group a union of them (spec.ts).
+// The type bytes with the leaf bit clear. spec.ts re-exports this module as
+// `SpecialType`, read as a namespace (`SpecialType.NIL`). Each constant is a
+// literal, so it is its own type, and `SpecialType` as a type is their union.
 
-export const NIL = 0x00; // untyped null
+/** The untyped null. An absent node is not NIL: it keeps its own type. */
+export const NIL = 0x00;
 
 export const BRANCH = 0x20;
 
+/** Never on the wire: a graft is written as its packet's root, under that
+ * root's type. */
 export const GRAFT = 0x40;

@@ -1,34 +1,37 @@
 // pxl-core/domain/scene/cast.rs
 
-//! What the GPU's cast of the eye's rays reads (pxl-render gpu/ray/cast.rs
-//! `Cast`): the eye as the rays leave it, a ray a drawn pixel, and the eye's
-//! clip levels as a table of the bricks each holds, each brick handed to the
-//! GPU once it is filled (domain/layer/terrain/clipmap.rs `upload`).
+//! What the GPU's cast of the eye's rays reads from the core (pxl-render
+//! gpu/ray/cast.rs `Cast`): the eye, the service area's index and the placed
+//! objects. The terrain's part of the cast, the clipmap's table of bricks, is
+//! written by domain/layer/terrain/clipmap.rs.
 
 use pxl_engine::eye;
-use pxl_render::gpu::ray::Overwrites;
+use pxl_render::gpu::ray::Objects;
 use pxl_spec::space::camera::eye::Observation;
 use xpute_core::global::Global;
 
-use crate::domain::layer::object::store::object;
+use crate::domain::layer::object::store::{object, object_mut};
 use crate::domain::preview::RenderEdits;
 use crate::domain::view::lens;
 use crate::sys::io::source;
 use pxl_render::gpu::api;
 use pxl_spec::space::layer::octant::Octant;
 
-/// The service area's index as the GPU reads it, and whether a declared
-/// source made it: one is declared once (sys/io/source.rs `declare`), so it is
-/// made then and not again.
+/// The service area's index as the GPU reads it, and whether it was built
+/// after a source was declared. A source is declared once (sys/io/source.rs
+/// `declare`), so the index is built once before that and once after.
 static SHARDS: Global<(bool, Vec<[i32; 4]>)> = Global::new();
 
-/// The area (pxl-engine `area::Area`): every cell's nine by its key
-/// (`area::shard_key`), four a row; a row of none where none is declared,
-/// since a binding holds at least one, and a read past it is none. The
-/// renderer hands it where it lies, so a source declared while the runtime
-/// holds it is made at a later call (pxl-render gpu/api.rs `in_flight`).
+/// The service area (pxl-engine `area::Area`) in rows of four words. The word
+/// at a cell's key (`area::shard_key`) holds that cell's nine: which of the
+/// nine cells about it are served. Before a source is declared the index is
+/// one row of zeros, because a GPU binding cannot be empty, and a read past
+/// its end is zero as well. The renderer hands the GPU this memory where it
+/// lies, so the index is not rebuilt while the runtime holds it (pxl-render
+/// gpu/api.rs `in_flight`); a source declared meanwhile is built in at a
+/// later call.
 pub fn shards() -> &'static [[i32; 4]] {
-    let declared = source::top().is_some();
+    let declared = source::min_zoom().is_some();
     let (made, s) = SHARDS.get(|| (false, Vec::new()));
     if s.is_empty() || (*made != declared && !api::in_flight(s)) {
         s.clear();
@@ -42,10 +45,11 @@ pub fn shards() -> &'static [[i32; 4]] {
     s
 }
 
-/// The eye as the GPU's rays leave it, a ray a drawn pixel (`lens::gpu_cast`),
-/// then `edits`, the pointer's preview, as the world answers through it
-/// (domain/query/world.rs `previewing`), its cut to air and its left-out leaf,
-/// each X, Y, Z and the zoom (pxl-engine `eye`). None without a screen.
+/// The eye's words for the GPU's cast (`lens::gpu_cast`), with the pointer's
+/// preview `edits` added so that the GPU's world answers as the CPU's does
+/// while previewing (domain/query/world.rs `previewing`). The preview's carve
+/// is cut to air and its hidden object is left out; each is written as X, Y,
+/// Z and the zoom (pxl-engine `eye`). None without a screen.
 pub fn eye(o: &Observation, edits: &RenderEdits) -> Option<[u32; eye::WORDS]> {
     let mut words = [0u32; eye::WORDS];
     lens::gpu_cast(o, &mut words)?;
@@ -64,18 +68,33 @@ pub fn eye(o: &Observation, edits: &RenderEdits) -> Option<[u32; eye::WORDS]> {
     Some(words)
 }
 
-/// What is placed, for the GPU: the objects' tree's lanes as they live, the
-/// room either has, the store's revision, and the child groups written since the
-/// revision the lanes were last handed at, so the GPU takes only those
-/// again where it holds that one (domain/layer/object/store.rs `gpu_columns`).
-pub fn overwrites() -> Overwrites<'static> {
+/// What the GPU was last handed of the placed objects: the store's revision
+/// at that hand, and the child groups written between the hand before it and
+/// it, by their first slots (`objects`).
+struct Upload {
+    since: u32,
+    written: Vec<u32>,
+}
+
+static UPLOAD: Global<Upload> = Global::new();
+
+/// The placed objects for the GPU (domain/layer/object/store.rs
+/// `gpu_columns`). The tree's lanes are handed where they live. A GPU that
+/// holds the revision last handed copies again only the child groups written
+/// since that revision.
+pub fn objects() -> Objects<'static> {
+    let h = UPLOAD.get(|| Upload {
+        since: 0,
+        written: Vec::new(),
+    });
+    object_mut().take_written_groups(&mut h.written);
     let l = object().gpu_columns();
-    Overwrites {
+    Objects {
         first_child: l.first_child,
         data: l.data,
-        room: l.room,
+        cap: l.cap,
         revision: l.revision,
-        since: l.since,
-        written_groups: l.written_groups,
+        since: core::mem::replace(&mut h.since, l.revision),
+        written_groups: &h.written,
     }
 }

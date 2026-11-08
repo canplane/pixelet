@@ -1,10 +1,10 @@
 // pxl-core/pointer.rs
 
-//! What the pointer is over, decided here alone and in one order: a marker a
-//! tap would act on, drawn over the world, then what the eye's ray meets
-//! first in the world. What is met first takes the pointer. The scene and
-//! control name neither the other (domain.rs), so the order is kept above
-//! both.
+//! Decides what the pointer is over, here alone and in one order. A marker a
+//! tap would act on comes first, because markers are drawn over the world.
+//! Then comes whatever the eye's ray meets first in the world. The scene owns
+//! the markers and control owns the ray, and neither names the other
+//! (domain.rs), so the order is kept here, above both.
 
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::layer::octant::Octant;
@@ -21,9 +21,10 @@ enum MarkerTap {
     Draft(Octant),
 }
 
-/// The scene marker at `x`, `y` a tap would act on with the tool held: the
-/// pointer goes to any, the eraser takes away a pin someone put up, the marker
-/// tool opens that pin's draft. A place's scene marker is no eraser's.
+/// What a tap at `x`, `y` would do to the scene marker there with the tool
+/// held. The pointer tool goes to any marker. The eraser removes a pin someone
+/// put up, and the marker tool opens that pin's draft. The eraser cannot
+/// remove a place's marker.
 fn marker_at(x: f64, y: f64) -> Option<MarkerTap> {
     match (edit::tool(), marker::tap(x, y)?) {
         (Tool::Pointer, MarkerHit::To(at) | MarkerHit::Pin(_, at)) => Some(MarkerTap::Go(at)),
@@ -39,7 +40,6 @@ fn marker_at(x: f64, y: f64) -> Option<MarkerTap> {
     }
 }
 
-/// The pointer stands at `x`, `y`.
 pub fn hover(x: f64, y: f64) {
     match marker_at(x, y) {
         Some(_) => edit::point_at(x, y),
@@ -52,7 +52,6 @@ pub fn over_marker() -> bool {
     edit::pointer_ndc().is_some_and(|[x, y]| marker_at(x, y).is_some())
 }
 
-/// A tap at `x`, `y`.
 pub fn tap(x: f64, y: f64) {
     match marker_at(x, y) {
         Some(MarkerTap::Go(at)) => destination::go_to_place(at),

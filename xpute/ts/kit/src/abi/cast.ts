@@ -1,7 +1,8 @@
 // @xpute/kit/abi/cast.ts
 
-// Reinterpret the low `w` bits as unsigned or two's-complement signed: `u`/`d`
-// in a number (1 <= w <= 32, as JS bit ops are 32-bit), `lu`/`ld` in a bigint.
+// Reads the low `w` bits of a value as unsigned or as two's-complement signed.
+// `u` and `d` work on a number, with `w` from 1 to 32 because JavaScript's bit
+// operators are 32-bit; `lu` and `ld` work on a bigint.
 
 export type nbits = number;
 

@@ -34,7 +34,7 @@ import {
   textStyle,
 } from "@/ui/component/theme.ts";
 import { type ToastSpec, ToastTone } from "./store.ts";
-import { useWindowSize } from "@/service/viewport.ts";
+import { useWindowSize } from "@/service/platform/viewport.ts";
 
 export const TOAST_SIDE = 32;
 const MESSAGE_PAD = 4;
@@ -42,10 +42,13 @@ const EDGE = 4;
 
 const OPEN_AFTER_MS = 450;
 
-/** Underdamped on purpose: a small bounce. */
+/** A spring damped below critical, so that the ready mark lands with a small
+ * bounce. */
 const POP: Transition = spring({ stiffness: 260, damping: 12, mass: 0.8 });
 
-/** A filled disc, as Apple's status glyphs: a green stroke on glass stood under 2:1. */
+/** Each tone's mark is drawn white on a filled disc, as Apple's status glyphs
+ * are. A green stroke drawn straight on the glass reads at under 2:1
+ * contrast. */
 const TONE: Record<
   ToastTone,
   { mark: "checkmark" | "xmark" | null; status: string }

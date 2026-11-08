@@ -1,6 +1,7 @@
 // pxl-core/perf/word.rs
 
-//! A record as perf.json lays it out, word for word, checked at compile time.
+//! Records laid out word for word as perf.json lays them, with every offset
+//! checked at compile time.
 
 use core::mem::size_of;
 
@@ -8,7 +9,9 @@ use core::mem::size_of;
 /// `words!`, which checks every field's offset at compile time.
 ///
 /// # Safety
-/// The implementor is `#[repr(C)]` and all f64 (or such records), no padding.
+/// The implementor must be `#[repr(C)]` with no padding, and every field an
+/// f64, such a record, or bytes a whole number of words long, so every word
+/// reads as an f64.
 pub unsafe trait Words: Sized {}
 
 /// `val`'s words, laid end to end as perf.json lays them.
@@ -33,7 +36,8 @@ pub fn as_words_mut<T: Words>(val: &mut T) -> &mut [f64] {
     }
 }
 
-/// A record every word of which is 0.0, which `Default` derives for no array past 32.
+/// A record with every word 0.0. `Default` cannot be derived for an array
+/// longer than 32, and this serves such records instead.
 pub fn zeroed<T: Words>() -> T {
     // SAFETY: `Words` guarantees plain f64s laid end to end, and all bits 0 is 0.0.
     unsafe { core::mem::zeroed() }

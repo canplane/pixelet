@@ -1,9 +1,9 @@
 // @xpute/runtime/platform.ts
 
 /**
- * A page's core: its module, compiled from its bytes, opened over memory the
- * runtime reserves. A native app's bundler takes platform.native.ts in its
- * place.
+ * Opens a page's core: its module, compiled from its bytes and opened over
+ * memory the runtime reserves. A native app's bundler takes
+ * platform.native.ts in this file's place.
  */
 
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
@@ -12,9 +12,10 @@ import type { Core, Machine, ModuleSource } from "./runtime.ts";
 import { reserve_mem } from "./mem/reserve.ts";
 import { open_module } from "./module.ts";
 
-/** EINVAL without a source, or with memory of a size its machine does not
- * allow. Compiling from bytes reads a `file:` URL too, which streaming
- * refuses for want of an `application/wasm` response. */
+/** Throws EINVAL without a source, or for a memory size the machine does not
+ * allow. The module is compiled from its bytes rather than streamed, so that
+ * a `file:` URL works too: streaming compilation refuses a response that is
+ * not `application/wasm`. */
 export async function open(
   machine: Machine,
   source: ModuleSource | undefined,

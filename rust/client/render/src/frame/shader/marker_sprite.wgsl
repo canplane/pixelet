@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/marker_sprite.wgsl
 
-// A marker's sprite where the region nearest at its anchor is its own
-// (marker.wgsl); one whose anchor is off the screen is drawn.
+// Draws a marker's sprite where the nearest region at its anchor is its own
+// (marker.wgsl). A marker whose anchor is off the screen is drawn.
 
 @group(2) @binding(1) var nearest: texture_2d<f32>;
 @group(3) @binding(0) var atlas: texture_2d<f32>;

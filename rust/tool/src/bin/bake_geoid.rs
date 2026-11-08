@@ -16,8 +16,8 @@ use std::process::ExitCode;
 use pxl_tool::root;
 
 const OUT: &str = "spec/spec/space/geoid.json";
-/// Coarse beside GPS's vertical error. The world's worst and RMS are measured
-/// and written beside it.
+/// The grid's spacing in degrees, coarse beside GPS's vertical error. The world's worst error
+/// and its RMS are measured and written beside it.
 const STEP_DEG: usize = 5;
 
 /// Rows from 90°N down, columns from 0°E east, in meters.
@@ -28,7 +28,7 @@ struct Grid {
 }
 
 impl Grid {
-    /// At whole multiples of the grid's spacing, X wrapping.
+    /// The height at whole multiples of the grid's spacing, with X wrapping.
     fn at(&self, row: usize, col: usize) -> f64 {
         self.m[row * self.width + col % self.width]
     }
@@ -97,13 +97,14 @@ fn read(path: &str) -> Result<Grid, String> {
     Ok(Grid { width, height, m })
 }
 
-/// Half to even, as everything rounds; the tool links no xpute.
+/// Rounds half to even, as everything rounds; the tool links no xpute, so it has its own.
 fn round(x: f64) -> f64 {
     x.round_ties_even()
 }
 
 fn run() -> Result<(), String> {
-    // the grid's path is the checkout's, as a bake's paths are (pxl-geo-bake cli.rs `enter`)
+    // The grid's path is counted from the checkout, as a bake's paths are (pxl-geo-bake cli.rs
+    // `enter`).
     std::env::set_current_dir(root()).map_err(|e| format!("{}: {e}", root().display()))?;
     let path = std::env::args()
         .nth(1)
@@ -133,7 +134,7 @@ fn run() -> Result<(), String> {
     let vals: Vec<String> = m.iter().map(|v| format!("{v}")).collect();
     let json = format!(
         "{{\n  \"$doc\": [\n    \"EGM2008's geoid height over the WGS84 ellipsoid, in meters to a tenth: what a GPS height,\",\n    \"the ellipsoid's, is over the terrain's, EGM2008's (GEDTM30, EPSG:3855). From GeographicLib's\",\n    \"5' grid (egm2008-5) by pxl-tool/bin/bake_geoid.rs; bilinear between these misses it by at\",\n    \"most {worst:.1} m, {rms:.1} m RMS.\"\n  ],\n  \"GEOID_STEP_DEG\": {{\n    \"$val\": {STEP_DEG},\n    \"$doc\": [\"The grid's spacing; rows from 90N down, {cols} columns from 0E east.\"]\n  }},\n  \"GEOID_M\": {{\n    \"$type\": \"f32\",\n    \"$val\": [\n      {}\n    ]\n  }}\n}}\n",
-        // One a line.
+        // One value a line.
         vals.join(",\n      ")
     );
     std::fs::write(root().join(OUT), json).map_err(|e| format!("{OUT}: {e}"))?;

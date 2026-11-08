@@ -76,7 +76,7 @@ pub struct Feature {
     pub(crate) rank: Rank,
 }
 
-/// In the tile's cells from its corner.
+/// A point in the tile's cells, counted from its corner.
 pub(crate) fn local(p: G3857, tile_min: G3857) -> P {
     [
         u_from_merc(p[0] - tile_min[0]) / CELL_U,

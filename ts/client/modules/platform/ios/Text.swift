@@ -3,19 +3,20 @@
 import CoreText
 import UIKit
 
-// Text in the platform's own family, as the core asks for it
-// (ts/client/src/service/text.native.ts): how wide a line runs, and a line
-// drawn. The system font, which falls back through every script and draws color
-// emoji as the app's own text does.
+// Text in the platform's own font, as the core asks for it
+// (ts/client/src/service/platform/text.native.ts): how wide a line runs, and a
+// line drawn. The font is the system's, which falls back through every script
+// and draws color emoji as the app's own text does.
 
 /// How far a line of `text` runs at a CSS weight and a size, in pixels.
 func textWidth(_ text: String, _ weight: Double, _ px: Double) -> Double {
   Double(CTLineGetTypographicBounds(line(text, weight, px, 0xffffffff), nil, nil, nil))
 }
 
-/// A line of `text` in `rgba` (0xRRGGBBAA), starting at `x` with the middle
-/// of its em box on the middle row, into `out`: `width` by `height` pixels,
-/// RGBA, top row first, alpha not premultiplied.
+/// Draws a line of `text` in the color `rgba` (0xRRGGBBAA) into `out`,
+/// starting at `x`, with the middle of its em box on the middle row. `out` is
+/// `width` by `height` pixels of RGBA, top row first, with alpha not
+/// premultiplied.
 func textRaster(_ text: String, _ weight: Double, _ px: Double, _ rgba: UInt32, _ x: Double, _ width: Int, _ height: Int, _ out: UnsafeMutableRawPointer) {
   guard let space = CGColorSpace(name: CGColorSpace.sRGB),
     let context = CGContext(
@@ -27,9 +28,9 @@ func textRaster(_ text: String, _ weight: Double, _ px: Double, _ rgba: UInt32, 
   // CoreGraphics counts up from the bottom row.
   context.textPosition = CGPoint(x: x, y: Double(height) / 2 - Double(f.ascender + f.descender) / 2)
   CTLineDraw(line(text, weight, px, rgba), context)
-  // CoreGraphics draws premultiplied, and the core reads straight alpha: a
-  // page's canvas hands its pixels back straight whatever it drew them as,
-  // so straight is what both platforms can give.
+  // CoreGraphics draws premultiplied, and the core reads straight alpha, which
+  // is what a page's canvas always hands back. So the colors are divided by
+  // alpha here, and both platforms give the same.
   let bytes = out.assumingMemoryBound(to: UInt8.self)
   for i in stride(from: 0, to: width * height * 4, by: 4) {
     let a = Int(bytes[i + 3])
@@ -40,7 +41,7 @@ func textRaster(_ text: String, _ weight: Double, _ px: Double, _ rgba: UInt32, 
   }
 }
 
-/// The system font at a CSS weight (400 regular, 600 semibold) and a size.
+/// The system font at a CSS weight (400 is regular, 600 semibold) and a size.
 private func font(_ weight: Double, _ px: Double) -> UIFont {
   let w: UIFont.Weight =
     switch weight {

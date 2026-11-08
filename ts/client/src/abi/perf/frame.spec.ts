@@ -38,7 +38,7 @@ export const kind_name = 28 as number;
 
 export const wake_name = 29 as number;
 
-export const gpu_read = 30 as number;
+export const gpu_timed = 30 as number;
 
 export const gpu_spans = 31 as number;
 
@@ -54,9 +54,9 @@ export const triangles = 73 as number;
 
 export const gpu_frame = 74 as number;
 
-export const light_moved = 75 as number;
+export const light_changed = 75 as number;
 
-export const decor_boxes = 76 as number;
+export const decor_rects = 76 as number;
 
 export const eye_cast = 77 as number;
 
@@ -66,13 +66,13 @@ export const eye_beam = 79 as number;
 
 export const eye_sample = 80 as number;
 
-export const eye_miss = 81 as number;
+export const eye_hole_walk = 81 as number;
 
-export const eye_asked = 82 as number;
+export const eye_asks = 82 as number;
 
-export const eye_reused = 83 as number;
+export const eye_voxel = 83 as number;
 
-export const eye_walked = 84 as number;
+export const eye_hole = 84 as number;
 
 export const eye_sky = 85 as number;
 
@@ -86,19 +86,19 @@ export const light_beam = 89 as number;
 
 export const light_sample = 90 as number;
 
-export const light_miss = 91 as number;
+export const light_hole_walk = 91 as number;
 
-export const light_asked = 92 as number;
+export const light_asks = 92 as number;
 
-export const light_reused = 93 as number;
+export const light_voxel = 93 as number;
 
-export const light_walked = 94 as number;
+export const light_hole = 94 as number;
 
 export const light_sky = 95 as number;
 
 export const light_boxes = 96 as number;
 
-export const terrain_landed = 97 as number;
+export const terrain_loads = 97 as number;
 
 export const uploads = 98 as number;
 

@@ -1,9 +1,8 @@
 // pxl-render/frame/shader/screen_show.wgsl
 
-// The finished picture kept at the canvas's size shown on the canvas, a
-// texel a pixel (gpu/finish.rs): the canvas's texture is a new one each
-// frame, so what a region frame did not finish again is shown from what an
-// earlier frame did.
+// Shows the finished picture, which is kept at the canvas's size, on the canvas, a texel a
+// pixel (gpu/finish.rs). The canvas's texture is a new one each frame, so a frame not drawn
+// whole shows what an earlier frame finished wherever it does not finish the canvas again.
 
 @group(0) @binding(1) var shown: texture_2d<f32>;
 

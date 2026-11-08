@@ -5,18 +5,20 @@ use std::task::{Context, Poll, Waker};
 
 use super::*;
 
-/// Keys of the swaying clip over its second.
+/// The swaying clip has a key every 1/`SWAY_KEYS` of its one-second loop.
 const SWAY_KEYS: usize = 40;
 
 /// How far the swaying clip turns its joint either way, in radians.
 const SWAY_RAD: f32 = 0.3;
 
-/// The times the swaying clip's motion turns back: where its sine peaks.
+/// The times at which the swaying clip's motion turns back, where its sine
+/// peaks.
 const SWAY_TURNS: [f32; 2] = [0.25, 0.75];
 
-/// One joint and four vertices on it, a unit or two from its origin, and
-/// one clip of a second that sways the joint about Z by a sine baked a key
-/// every fortieth of a second, as an exported idle clip is baked.
+/// A model of one joint and four vertices on it, a unit or two from its
+/// origin, with one clip of a second that sways the joint about Z. The sine is
+/// baked into a key every fortieth of a second, as an exported idle clip is
+/// baked.
 pub(crate) fn swaying() -> Model {
     let vertices: [[f32; 3]; 4] = [
         [1.0, 0.0, 0.0],
@@ -80,7 +82,7 @@ pub(crate) fn swaying() -> Model {
     m
 }
 
-/// Its vertices as its clip skins them at `time`.
+/// The model's vertices as its clip skins them at `time`.
 fn drawn(m: &Model, time: f32) -> Vec<[f32; 3]> {
     let n = m.joints();
     let (mut local, mut global) = (vec![[0.0; 10]; n], vec![[0.0; 16]; n]);
@@ -98,7 +100,8 @@ fn gone(from: &[[f32; 3]], to: &[[f32; 3]]) -> f32 {
         .fold(0.0, f32::max)
 }
 
-/// The clip's steps from `start` to its end, `far` a step.
+/// The times of the clip's steps from `start` to its end, each step a motion
+/// of `far`.
 fn steps(m: &Model, start: f32, far: f32) -> Vec<f32> {
     let mut at = vec![start];
     while at[at.len() - 1] < 1.0 {
@@ -113,17 +116,18 @@ fn steps(m: &Model, start: f32, far: f32) -> Vec<f32> {
     at
 }
 
-/// A step goes as far as a pixel `far` is and no farther: what is drawn
-/// stands within it of the pose drawn at the step's start until the next,
-/// past it by no more than a turn between two keys' arc is longer than its
-/// chord, here under a ten-thousandth (the joint turns 0.047 rad between
-/// keys at most), and a step that ends at no turn and not at the clip's
-/// end has gone it, all but the arc's shortfall.
+/// A step goes as far as a pixel, `far`, and no farther. Until the next step,
+/// what is drawn stays within `far` of the pose drawn at the step's start, or
+/// past it by no more than an arc between two keys is longer than its chord:
+/// here under a ten-thousandth, since the joint turns at most 0.047 rad
+/// between keys. A step that ends neither at a turn nor at the clip's end has
+/// gone the full `far`, short only by the arc's shortfall.
 #[test]
 fn a_step_goes_a_pixel() {
     let m = swaying();
     let far = 0.01;
-    // How much farther than the chord a point may go: an arc's over its chord.
+    // A point may go farther than the chord by as much as an arc exceeds its
+    // chord.
     let bound = far * 1.0001 + 1e-6;
     let at = steps(&m, 0.0, far);
     for w in at.windows(2) {
@@ -145,8 +149,8 @@ fn a_step_goes_a_pixel() {
     }
 }
 
-/// Far, where a pixel spans more than the clip moves, it steps at its turns
-/// and its end alone: three steps a loop of forty keys.
+/// Far from the eye, where a pixel spans more than the clip moves, the clip
+/// steps only at its turns and its end: three steps a loop of forty keys.
 #[test]
 fn far_steps_at_turns() {
     let m = swaying();
@@ -156,8 +160,8 @@ fn far_steps_at_turns() {
     );
 }
 
-/// The clip's turns are where its motion turns back and nowhere else, and
-/// a step reaches each turn after where it starts, whatever a pixel spans.
+/// The clip's turns lie where its motion turns back and nowhere else, and the
+/// steps land on each turn after their start, whatever a pixel spans.
 #[test]
 fn steps_keep_turns() {
     let m = swaying();

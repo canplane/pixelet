@@ -1,21 +1,24 @@
 // pxl-render/frame/shader/location_zone_place.wgsl
 
-// The zone's boxes placed, an instance a box read from the zone's upload:
-// what the lit pass (location_zone.wgsl) and the mark (tile_mark.wgsl) lay alike.
+// Places the zone's boxes, one instance for each box, read from the zone's
+// upload. The zone's draw (location_zone.wgsl) and the mark (tile_mark.wgsl)
+// both place them here, so the mark covers the pixels the zone draws.
 
 @group(2) @binding(0) var<storage, read> zone: array<f32>;
 
 struct VertexIn {
   @builtin(instance_index) i: u32,
-  // Four a face, in the box's order (gpu/pass/location.rs `box_lanes`).
+  // Four vertices for each face, the faces in the order gpu/pass/location.rs
+  // `box_lanes` lays them out.
   @builtin(vertex_index) corner: u32,
   @location(0) pos: vec3f,
   @location(1) uv: vec2f,
 };
 
-// Only the faces open to the air: one the ground buries stays unseen behind
-// it rather than fight it along the edges it meets. A shut face's corners
-// meet at one point outside the view, which draws nothing.
+// Only the faces open to the air are drawn. The ground hides a face it buries,
+// and drawn, that face would fight the ground along the edges where they meet.
+// A shut face's corners all go to one point outside the view, so the face
+// draws nothing.
 fn zone_clip(v: VertexIn) -> vec4f {
   let k = v.i * LOCATION_ZONE_INSTANCE_FLOATS;
   let center = vec3f(zone[k], zone[k + 1u], zone[k + 2u]);

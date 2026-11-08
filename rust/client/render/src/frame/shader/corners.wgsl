@@ -1,22 +1,23 @@
 // pxl-render/corners.wgsl
 
-// The beam rays as the queue's items (queue_walk.wgsl, queue_last.wgsl), an observer's as its
-// beam.eye.wgsl or beam.light.wgsl lays them: each a ray from the root, its line kept as it
-// goes (walk.wgsl), parked between its run's walks at its state's place (`corner_state_at`;
-// parked.wgsl), its line ending at the parent of the node it was left at, whose handed words it
-// holds; its hand set when it ends.
+// The beam rays as the queue's items (queue_walk.wgsl, queue_last.wgsl), laid out for an
+// observer by beam.eye.wgsl or beam.light.wgsl. Each is a ray from the root that keeps its line
+// as it goes (walk.wgsl). Between its run's walks it is parked at its state's place
+// (`corner_state_at`, parked.wgsl), and its line then ends at the parent of the node it was left
+// at, whose inherited words the line holds. When the ray ends, it writes how far the rays about
+// it start (`beam_hand`).
 
-/// A beam ray by its item word, its column under its row.
+/// The beam ray an item word names: its column in the low half and its row in the high half.
 fn corner_of(item: u32) -> vec2<u32> {
   return vec2<u32>(item & 0xffffu, item >> 16u);
 }
 
-/// The items listed (listed.wgsl).
+/// How many items are listed (item_list.wgsl).
 fn item_count() -> u32 {
-  return corners_listed();
+  return corner_cnt();
 }
 
-/// The item at place `k` of the list (listed.wgsl).
+/// The item at place `k` of the list (item_list.wgsl).
 fn item_at(k: u32) -> u32 {
   let c = corner_queued(k);
   return c.x | (c.y << 16u);
@@ -26,7 +27,8 @@ fn item_aim(item: u32) -> Aim {
   return beam_aim(corner_of(item));
 }
 
-/// From the root, its line's origin laid where its observer keeps one.
+/// A beam ray starts from the root. Its line's origin is laid first, where its observer keeps
+/// one.
 fn item_start(item: u32, aim: Aim) -> Start {
   beam_lay_origin(aim.line, aim.origin);
   return root_start();
@@ -60,8 +62,9 @@ fn parked_start(item: u32) -> Start {
   return parked_from(beams[at], vec3<u32>(beams[at + 1u], beams[at + 2u], beams[at + 3u]), beams[at + 4u]);
 }
 
-/// How far the rays about it start (`beam_hand`), its state no longer parked.
-fn finish(item: u32, aim: Aim, w: Walked) {
+/// Ends the beam ray: its state is no longer parked, and it writes how far the rays about it
+/// start (`beam_hand`).
+fn finish(item: u32, aim: Aim, w: WalkEnd) {
   let c = corner_of(item);
   beams[corner_state_at(c) + 4u] = 0u;
   beams[beam_hand_at(c)] = bitcast<u32>(beam_hand(w.t));

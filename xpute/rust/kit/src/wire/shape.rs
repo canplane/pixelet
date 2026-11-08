@@ -1,11 +1,13 @@
 // xpute-kit/wire/shape.rs
 
-//! An XTP packet's shape as a type, over XTP's public writer and reader: a tuple
-//! is a branch, its elements its children in order, so a value written and one
-//! read are checked at compile time. A shape names exact types: a child of any
-//! other is refused, and a branch of any other length. A `Vec<T>` is a packed
-//! array and a `Vec<String>` many strings as one leaf, each read in place, with no
-//! vector made. XTP knows nothing of it.
+//! A Rust type that names the shape of an XTP packet, so that the compiler
+//! checks what is written and what is read. A tuple is a branch whose
+//! children are its elements, in order, and a number or a bool is a scalar
+//! leaf. A `Vec<T>` stands for a packed array of `T`, and a `Vec<String>` for
+//! a STRS leaf; both are read in place in the packet, with no vector built. A
+//! read refuses (EBADMSG) a child of any type but the one named, and a branch
+//! of any other length. This module is built on XTP's public writer and
+//! reader, and XTP does not depend on it.
 
 use crate::status::errno::Errno;
 use crate::status::error::MarshalError;
@@ -19,12 +21,12 @@ fn refused<T>() -> Result<T, MarshalError> {
 }
 
 pub trait Shape {
-    /// What a read hands back, in place in the packet where it can be.
+    /// What a read returns, which points into the packet where it can.
     type Read<'a>;
-    /// What a write takes.
     type Write<'a>;
 
-    /// The most bytes it takes in a packet, its table's entry aside.
+    /// An upper bound on the bytes `v` takes in a packet, not counting its
+    /// entry in its parent's table.
     fn most(v: &Self::Write<'_>) -> u64;
     fn write(v: &Self::Write<'_>, w: &mut PacketWriter<'_>);
     fn read(c: Cursor<'_>) -> Result<Self::Read<'_>, MarshalError>;
@@ -127,7 +129,8 @@ branch!(A 0, B 1, C 2, D 3, E 4, F 5, G 6, H 7, I 8, J 9);
 branch!(A 0, B 1, C 2, D 3, E 4, F 5, G 6, H 7, I 8, J 9, K 10);
 branch!(A 0, B 1, C 2, D 3, E 4, F 5, G 6, H 7, I 8, J 9, K 10, L 11);
 
-/// `v` as a packet of shape `S`, EOVERFLOW past `cap`.
+/// `v` encoded as a packet of shape `S`. A packet that needs more than `cap`
+/// bytes is EOVERFLOW.
 pub fn encode<S: Shape>(v: S::Write<'_>, cap: u32) -> Result<Vec<u8>, MarshalError> {
     let most = u64::from(HDR_SZ) + S::most(&v);
     let mut buf = vec![0u8; most.min(u64::from(cap)) as usize];
@@ -138,7 +141,7 @@ pub fn encode<S: Shape>(v: S::Write<'_>, cap: u32) -> Result<Vec<u8>, MarshalErr
     Ok(buf)
 }
 
-/// A packet of shape `S`, its leaves in place.
+/// Reads a packet of shape `S`. Its arrays and strings are read in place.
 pub fn get_deep<S: Shape>(pkt: &[u8]) -> Result<S::Read<'_>, MarshalError> {
     S::read(TreeReader::new(pkt)?.read())
 }

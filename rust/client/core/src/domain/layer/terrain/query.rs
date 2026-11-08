@@ -1,11 +1,12 @@
 // pxl-core/domain/layer/terrain/query.rs
 
-//! Terrain's answers. A node's cells are read from the clip levels
-//! (domain/layer/terrain/clipmap.rs) at the cells of the tile its cells fold from,
-//! off the finest clip level holding them: exact where that is the zoom its
-//! tile's line says its ground at, coarser where only one over holds them.
-//! A column's ways are its brick's tree, its child groups in the ways' pool
-//! (domain/layer/terrain/clipmap.rs `pool`).
+//! The terrain's answers to the query. A node's cells are read from the
+//! clip levels (clipmap.rs), at the cells of the tile they fold from, using
+//! the finest clip level that holds them. The answer is exact when that clip
+//! level is at least as fine as the tile that the tile's line gives the
+//! ground from, and coarser when only a coarser clip level holds them. A
+//! column's ways are read from its brick's tree, whose child groups live in
+//! the ways' pool (pool.rs).
 
 use pxl_engine::area::Shard;
 use pxl_engine::clipmap::{self as cells, Lookup};
@@ -14,7 +15,7 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::quadrant::{Quadrant, TOP_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, MIN_ZOOM};
 
 use crate::domain::layer::terrain::clipmap::CpuClipmap;
 use crate::domain::layer::tile_cache::{Line, Lines, TileCache};
@@ -23,23 +24,27 @@ use crate::sys::io::source;
 use crate::domain::layer::{Answer, Query};
 use pxl_spec::space::coord::aabb::Aabb;
 
-/// The terrain's reads past the form it shares with the object store
-/// (`Query`): its relief, its columns and the lines they are read on. Read by
-/// the world's query alone (domain/query.rs), as `Query` is.
+/// The terrain's reads beyond `Query`, the form it shares with the object
+/// store: its relief, its columns, and the lines they are read on. As with
+/// `Query`, only the world's query (domain/query.rs) reads it.
 pub(in crate::domain) trait TerrainQuery {
-    /// The lowest and highest the ground holds over the column `node`'s own
-    /// cells, in leaf cells, and the ways apart (pxl-engine
-    /// `ground::Bounds`): the bounds over the cells of `line`'s tile, off the
-    /// finest clip level holding them, one look-up whatever the node's size
-    /// (`relief`). A coarser clip level standing in holds its own cells, which
-    /// its bound holds, and names the tile lacked; where no clip level holds
-    /// it, the lack, never nothing. Past the service area no clip level holds
-    /// anything: a reader asks that first, the descent of its shard
-    /// (pxl-engine `area::Shard`). `place` is where a node over it found its
-    /// cells, or `Lookup::NONE`, and becomes where its own are (pxl-engine
-    /// `clipmap::step`). Its cells are read at `cell` as the GPU reads them
-    /// (pxl-engine `clipmap::bound_over`); `line` names the tile and says
-    /// whether the clip level read is its ground's own.
+    /// The lowest and highest heights, in leaf cells, of the ground over
+    /// column `node`'s own cells, with the ways' heights kept apart
+    /// (pxl-engine `ground::Bounds`). They are the bounds over the cells of
+    /// `line`'s tile, taken from the finest clip level that holds them, in one
+    /// look-up whatever the node's size. A coarser clip level standing in
+    /// gives the bounds of its own cells, which contain the finer ones, and
+    /// the answer names the tile lacked. Where no clip level holds the cells,
+    /// the answer is that lack, never an empty bound.
+    ///
+    /// No clip level holds anything past the service area, so a reader asks
+    /// that first, in the descent of its shard (pxl-engine `area::Shard`).
+    /// `place` comes in as where a node over this one found its cells, or
+    /// `Lookup::NONE`, and goes out as where this node's cells are
+    /// (pxl-engine `clipmap::step`). The cells are read at the cell zooms in
+    /// `zooms`, coarsest and finest, as the GPU reads them (pxl-engine
+    /// `clipmap::bound_over`). `line` names the tile and says whether the
+    /// clip level read gives the tile's own ground.
     fn relief(
         &self,
         line: &Line,
@@ -48,30 +53,37 @@ pub(in crate::domain) trait TerrainQuery {
         zooms: [Zoom; 2],
     ) -> Answer<Bounds>;
 
-    /// The column `node` off the clip levels, the wall where it is the
-    /// wall, as the GPU reads it (pxl-engine `clipmap::ground`), stepped
-    /// from `place`: exact where `line`
-    /// says the ground at the clip level it was read off or coarser, else
-    /// coarser, naming its tile (`answer_at`); where no clip level holds it, the
-    /// lack.
+    /// Column `node` as read from the clip levels, or the wall where the
+    /// column is the wall, read as the GPU reads it (pxl-engine
+    /// `clipmap::ground`) and stepped from `place`. The answer is exact where
+    /// `line` gives the ground at the zoom of the clip level read or coarser,
+    /// and otherwise coarser, naming the tile (`answer_at`). Where no clip
+    /// level holds the column, the answer is the lack.
     fn column(&self, line: &Line, place: Lookup, node: Node<2>) -> Answer<Cell>;
 
-    /// The line `node`'s cells at `cell` are read on, stepped from where
-    /// `lines` last walked: a tile under one it holds from that one's line, a
-    /// coarser one its own as an ancestor read it, so nodes beside or under
-    /// each other share their lines down to where they part, and pay a
-    /// look-up a zoom only past it.
-    fn walk_line(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Line;
+    /// The line that `node`'s cells at `cell_zoom` are read on, stepped from
+    /// where `lines` last walked. A tile under one that `lines` holds is
+    /// stepped from that tile's line, and a coarser tile reuses the line an
+    /// ancestor read. Nodes beside or under each other therefore share their
+    /// lines down to where they part, and pay one look-up per zoom only past
+    /// that point.
+    fn walk_line(&self, lines: &mut Lines, node: Node<2>, cell_zoom: Zoom) -> Line;
 
-    /// The line `node`'s cells at `cell` are read on, off `over`, the line its
-    /// parent column's were: that line where it is the same tile's, stepped
-    /// from it where it is the tile's parent's (`step`), else walked from the
-    /// top, as `seek` steps.
-    fn line_under(&self, over: Option<&Line>, node: Node<2>, cell: Zoom) -> Line;
+    /// The line that `node`'s cells at `cell_zoom` are read on, found from
+    /// `over`, the line its parent column's cells were read on. It is `over`
+    /// itself where both are the same tile's, one step from `over` where
+    /// `over` is the tile's parent's (`step`), and otherwise walked from the
+    /// top as `seek` walks.
+    fn line_under(&self, over: Option<&Line>, node: Node<2>, cell_zoom: Zoom) -> Line;
 
-    /// `bound`, its line walked (`walk_line`): a walk in key order pays one
-    /// look-up a node.
-    fn bound_walked(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Answer<Option<Aabb>>;
+    /// `bound`, with the node's line found by `walk_line`. A walk over nodes
+    /// in key order pays one look-up per node.
+    fn bound_walked(
+        &self,
+        lines: &mut Lines,
+        node: Node<2>,
+        cell_zoom: Zoom,
+    ) -> Answer<Option<Aabb>>;
 }
 
 impl TerrainQuery for TileCache<TerrainTile> {
@@ -91,27 +103,32 @@ impl TerrainQuery for TileCache<TerrainTile> {
         answer_at(line, f.from(), f.here(), cell)
     }
 
-    fn walk_line(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Line {
-        self.seek(lines, bound_tile(node, cell))
+    fn walk_line(&self, lines: &mut Lines, node: Node<2>, cell_zoom: Zoom) -> Line {
+        self.seek(lines, bound_tile(node, cell_zoom))
     }
 
-    fn line_under(&self, over: Option<&Line>, node: Node<2>, cell: Zoom) -> Line {
-        let tile = bound_tile(node, cell);
+    fn line_under(&self, over: Option<&Line>, node: Node<2>, cell_zoom: Zoom) -> Line {
+        let tile = bound_tile(node, cell_zoom);
         match over {
             Some(o) if o.tile == tile => *o,
-            Some(o) if tile.zoom > TOP_ZOOM && o.tile == tile.parent() => self.step(o, tile),
+            Some(o) if tile.zoom > MIN_ZOOM && o.tile == tile.parent() => self.step(o, tile),
             _ => self.line(tile),
         }
     }
 
-    fn bound_walked(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Answer<Option<Aabb>> {
-        self.bound(&self.walk_line(lines, node, cell), node, cell)
+    fn bound_walked(
+        &self,
+        lines: &mut Lines,
+        node: Node<2>,
+        cell_zoom: Zoom,
+    ) -> Answer<Option<Aabb>> {
+        self.bound(&self.walk_line(lines, node, cell_zoom), node, cell_zoom)
     }
 }
 
 impl TileCache<TerrainTile> {
-    /// `tile`'s line, stepped down from `from`'s, a tile over it or itself:
-    /// a look-up a zoom between them.
+    /// `tile`'s line, stepped down from `from`, the line of `tile` itself or
+    /// of a tile over it, at one look-up per zoom between them.
     fn down(&self, from: &Line, tile: Quadrant) -> Line {
         match tile == from.tile {
             true => *from,
@@ -120,16 +137,18 @@ impl TileCache<TerrainTile> {
     }
 }
 
-/// The tile a node's bound is read from: its cells' tile, within the
-/// pyramid's zooms, or where the node is wider than one, its own, the
-/// finest one tile holding it.
-fn bound_tile<const D: usize>((zoom, at): Node<D>, cell: Zoom) -> Quadrant {
-    let read = GROUND.read_zoom(cell).min(zoom);
+/// The tile a node's bound is read from: the tile its cells at `cell_zoom`
+/// are read from, within the pyramid's zooms, or, where the node is wider
+/// than that tile, the finest tile that holds the whole node.
+fn bound_tile<const D: usize>((zoom, at): Node<D>, cell_zoom: Zoom) -> Quadrant {
+    let read = GROUND.read_zoom(cell_zoom).min(zoom);
     Quadrant::new(read, ancestor_of([at[0], at[1]], zoom - read))
 }
 
-/// `v`, read off the clip level at `from` (`here`, else none held): exact where
-/// `line` says the ground at `from` or coarser, else coarser, naming its tile.
+/// The answer for `v`, read from the clip level at zoom `from`; `here` is
+/// false where no clip level held it. It is exact where `line` gives the
+/// ground at `from` or coarser, and otherwise coarser, naming the line's
+/// tile.
 fn answer_at<T>(line: &Line, from: Zoom, here: bool, v: T) -> Answer<T> {
     match here {
         false => Answer::Nothing(line.tile),
@@ -141,15 +160,15 @@ fn answer_at<T>(line: &Line, from: Zoom, here: bool, v: T) -> Answer<T> {
 impl Query for TileCache<TerrainTile> {
     type Cursor = Line;
 
-    fn cursor<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Line {
-        self.line(bound_tile(node, cell))
+    fn cursor<const D: usize>(&self, node: Node<D>, cell_zoom: Zoom) -> Line {
+        self.line(bound_tile(node, cell_zoom))
     }
 
-    /// The tile a child reads is its parent's or one under it, stepped down
-    /// from the parent's line a zoom at a time (`down`); a coarser one, whose
-    /// line no child holds, is walked from the top.
-    fn child<const D: usize>(&self, parent: &Line, node: Node<D>, cell: Zoom) -> Line {
-        let tile = bound_tile(node, cell);
+    /// A child that reads its parent's tile or one under it steps down from
+    /// the parent's line one zoom at a time (`down`). A child that reads a
+    /// coarser tile, whose line the parent does not hold, walks from the top.
+    fn child<const D: usize>(&self, parent: &Line, node: Node<D>, cell_zoom: Zoom) -> Line {
+        let tile = bound_tile(node, cell_zoom);
         let mut over = tile;
         while over.zoom > parent.tile.zoom {
             over = over.parent();
@@ -160,17 +179,18 @@ impl Query for TileCache<TerrainTile> {
         }
     }
 
-    /// From the clip levels' relief over the node's own cells (`relief`), the
-    /// ground's and the ways' joined, down to a cell at `cell` under its
-    /// lowest, within the node. A node past the service area, no palette index in
-    /// it, holds nothing: known before any of its ground arrives, a shard or
-    /// finer, as every reader knows it (pxl-engine `area::Shard`); a
-    /// coarser node may straddle the area's edge and is read.
+    /// The bound joins the clip levels' relief of the ground and of the ways
+    /// over the node's own cells (`relief`), reaches one cell at `cell_zoom`
+    /// below the lowest, and is cut to the node. A node past the service area
+    /// has no palette index in it and holds nothing. For a node of a shard or
+    /// finer, that is known before any of its ground arrives, the same way
+    /// every reader knows it (pxl-engine `area::Shard`). A coarser node may
+    /// straddle the area's edge, so it is read.
     fn bound<const D: usize>(
         &self,
         line: &Line,
         (zoom, at): Node<D>,
-        cell: Zoom,
+        cell_zoom: Zoom,
     ) -> Answer<Option<Aabb>> {
         let node = (zoom, [at[0], at[1]]);
         if Shard::UNKNOWN.at(&source::ServiceArea, node).past() {
@@ -178,11 +198,12 @@ impl Query for TileCache<TerrainTile> {
         }
         let whole = region((zoom, at));
         let mut place = Lookup::NONE;
-        self.relief(line, &mut place, node, [cell, cell])
+        self.relief(line, &mut place, node, [cell_zoom, cell_zoom])
             .map(|[ground, ways]| {
                 let [lo, hi] = [ground[0].min(ways[0]), ground[1].max(ways[1])];
-                let lo = (f64::from(lo) * units(GROUND.cell()) - units(cell)).max(whole.min[2]);
-                let hi = (f64::from(hi) * units(GROUND.cell())).min(whole.max[2]);
+                let lo = (f64::from(lo) * units(GROUND.leaf_cell_zoom()) - units(cell_zoom))
+                    .max(whole.min[2]);
+                let hi = (f64::from(hi) * units(GROUND.leaf_cell_zoom())).min(whole.max[2]);
                 (lo <= hi).then(|| Aabb {
                     min: [whole.min[0], whole.min[1], lo],
                     max: [whole.max[0], whole.max[1], hi],

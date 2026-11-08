@@ -1,28 +1,30 @@
 // pxl-render/queue_ask.wgsl
 
-// The nodes a run's walk was parked at, asked of the world once a node
-// (queue_walk.wgsl, `ask_once`): a lane a node listed, the lanes a fixed dispatch
-// (pxl-engine `ray::QUEUE_GROUPS`) that takes the list in strides. What it keeps is there when
-// the next walk goes on from the parked states, past this dispatch's end.
+// Asks the world once for each node a run's walk was parked at (queue_walk.wgsl, `ask_once`).
+// A lane takes one listed node at a time. The lanes are a fixed dispatch (pxl-engine
+// `ray::QUEUE_GROUPS`) that takes the list in strides. What the pass keeps is in the node
+// cache when the next walk goes on from the parked states, after this dispatch ends.
 
-/// The run's queue's words, its head first (pxl-engine `ray::QUEUE_WORDS`, `ray::queue_at`), the
-/// asks' records every queue shares past the heads (`queue_records_at`).
+/// The run's queue, bound from its head (pxl-engine `ray::QUEUE_WORDS`, `ray::queue_at`). Past
+/// the heads lie the asks' records, which every queue shares (`queue_records_at`).
 @group(0) @binding(10) var<storage, read_write> queue: array<atomic<u32>>;
 
-/// The node `c` at `zoom`, asked at `zooms`, asked of the world once for all the rays the queue
-/// parked at it, what is handed it found as `world_answer` finds it (ask.wgsl): the slot
-/// claimed first (`claim_slot`), so every other asker of the node at those zooms finds it
-/// claimed and asks nothing; then, one more ask within the frame's (`may_ask`), the world asked
-/// and the answer written there (`fill`). Nothing where a slot keeps it at those zooms, where it
-/// is not kept (`keeps`), or where no slot can be claimed, none of which asks the world; past the
-/// frame's asks the claim is let go, the slot's key put back as it was. The rays parked at it are then walked on by the walk that
-/// asks (queue_last.wgsl). Counted at the run's lane (`asked_at`), none where `NONE`.
+/// Asks the world once, for all the rays the queue parked at it, for the node `c` at `zoom`
+/// asked at `zooms`. What the node inherits is found as `world_answer` finds it (ask.wgsl). The
+/// slot is claimed first (`claim_slot`), so every other asker of the node at those zooms finds
+/// it claimed and asks nothing. Then, where one more ask stays within the frame's (`may_ask`),
+/// the world is asked and the answer written to the slot (`fill`). Nothing is asked where a
+/// slot keeps the node at those zooms, where the node cache does not keep such a node
+/// (`keeps`), or where no slot can be claimed. Past the frame's asks the claim is let go, and
+/// the slot's key is put back as it was. The rays parked at the node are then walked on by the
+/// walk that asks (queue_last.wgsl). The ask is counted in the run's lane (`asked_at`), unless
+/// that lane is `NONE`.
 fn ask_once(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32) {
   if (!keeps(zoom, c)) {
     return;
   }
   let first = bucket_of(zoom, c);
-  if (kept_at(first, zoom, c, zooms)) {
+  if (holds_node(first, zoom, c, zooms)) {
     return;
   }
   let tag = walk_tag();
@@ -34,20 +36,20 @@ fn ask_once(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32) {
     atomicStore(&node_cache[key_at(got.x)], got.y);
     return;
   }
-  // Kept at the zooms its answer is kept at (ask.wgsl `key_zooms`); a cell another slot keeps
-  // by its node alone already keeps it, the claim let go.
+  // The node is kept at the zooms its answer is kept at (ask.wgsl `key_zooms`). Where it is a
+  // cell that another slot already keeps by its node alone, the claim is let go.
   let a = world_answer(parent, top, zoom, c, zooms, asked_at());
   let kz = key_zooms(zoom, zooms, a);
-  if (kz != zooms && cell_kept(first, zoom, c, kz != CELL_FAR)) {
+  if (kz != zooms && holds_cell(first, zoom, c, kz != CELL_FAR)) {
     atomicStore(&node_cache[key_at(got.x)], got.y);
     return;
   }
   fill(got.x, zoom, c, kz, tag, a);
 }
 
-/// The nodes the walk `again` or the first listed, each asked once.
+/// Asks once for each node that the first walk listed, or the second where `again`.
 fn queue_ask(again: bool, id: u32) {
-  let n = in_room(atomicLoad(&queue[select(QUEUE_ASKS, QUEUE_ASKS_AGAIN, again)]), QUEUE_RECORDS_ROOM);
+  let n = in_cap(atomicLoad(&queue[select(QUEUE_ASKS, QUEUE_ASKS_AGAIN, again)]), QUEUE_RECORDS_CAP);
   for (var k = id; k < n; k += QUEUE_GROUPS * QUEUE_LANES) {
     let at = queue_records_at() + k * QUEUE_RECORD_WORDS;
     let c = vec3<i32>(
@@ -70,12 +72,12 @@ fn queue_ask_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   queue_ask(false, id.x);
 }
 
-/// The second walk's nodes; and the last walk's first ray to take set back, as that walk runs
-/// next (queue_last.wgsl).
+/// Asks for the second walk's nodes. It also sets back the counter of the last walk's rays, as
+/// that walk runs next (queue_last.wgsl).
 @compute @workgroup_size(QUEUE_LANES)
 fn queue_ask_parked_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x == 0u) {
-    atomicStore(&node_cache[LAST_TAKEN], 0u);
+    atomicStore(&node_cache[LAST_NEXT], 0u);
   }
   queue_ask(true, id.x);
 }

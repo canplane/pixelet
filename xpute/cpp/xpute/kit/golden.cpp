@@ -26,7 +26,9 @@ Golden Golden::load(const char *path) {
         std::size_t end = text.find('\n', at);
         if (end == std::string::npos) end = text.size();
         std::string_view line(text.data() + at, end - at);
-        // As Rust's `lines`: a CR before the LF is the line's end, and a later key wins.
+        // Lines are read as the Rust reader reads them: a CR before an LF
+        // ends the line too, as in Rust's `lines`, and a key given twice keeps
+        // its later value.
         if (line.ends_with('\r')) line.remove_suffix(1);
         if (std::size_t tab = line.find('\t'); tab != std::string_view::npos) {
             g.map_.insert_or_assign(std::string(line.substr(0, tab)), std::string(line.substr(tab + 1)));
@@ -46,10 +48,11 @@ const std::string &Golden::s(std::string_view key) const {
     return it->second;
 }
 
-// A number, the whole of the value or a bug.
+// Parses the whole value as a decimal number; anything else is a bug.
 template <class T> static T parse(const std::string &text, T (*conv)(const char *, char **, int)) {
-    // Digits, a sign only where the type has one: strtoull would take a
-    // space and wrap a minus, where Rust's parse refuses both.
+    // Only digits are accepted, after a minus where the type is signed.
+    // strtoull alone would skip a leading space and wrap a minus around,
+    // where Rust's parse refuses both.
     bool sign = !text.empty() && text[0] == '-' && std::is_signed_v<T>;
     bool digits = text.size() > (sign ? 1u : 0u) && text.find_first_not_of("0123456789", sign ? 1 : 0) == std::string::npos;
     ensure(digits, Errno::einval);

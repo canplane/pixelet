@@ -62,7 +62,8 @@ export function b64url_to_bytes(b64url: Base64Url): Bytes {
 
 export function is_pid_b64url_16(pid: unknown, pid_bin: Bytes): boolean {
   if (typeof pid !== "string") return false;
-  if (pid.length !== 22) return false; // 16 bytes => 22 chars (unpadded base64url)
+  // 16 bytes take 22 characters in unpadded base64url.
+  if (pid.length !== 22) return false;
   if (!is_b64url(pid)) return false;
   try {
     const b = b64url_to_bytes(pid);
@@ -78,8 +79,8 @@ export function generate_uuid(): Uuid {
   const bytes: Uuid = new Uint8Array(16);
   crypto.getRandomValues(bytes);
 
-  bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
-  bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 2
+  bytes[6] = (bytes[6] & 0x0f) | 0x40; // Marks the UUID as version 4.
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // Marks it as RFC 4122's variant.
 
   return bytes;
 }
@@ -120,7 +121,8 @@ export function hex_to_bytes(hex: string): Bytes {
 
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < hex.length; i += 2) {
-    // parseInt reads what it can and stops: "1g" would be 1, "zz" NaN stored as 0.
+    // `parseInt` reads what it can and stops, so it would take "1g" as 1 and
+    // store "zz", its NaN, as 0; each pair is checked first.
     const pair = hex.slice(i, i + 2);
     if (!/^[0-9a-fA-F]{2}$/.test(pair)) throw new MarshalError(Errno.EINVAL);
     bytes[i / 2] = parseInt(pair, 16);

@@ -1,11 +1,13 @@
 {
   "$doc": [
-    "The GPU device's protocol, on major GPU: its state and the surfaces a UI lends it. The",
-    "calls a core makes to the GPU are records of its stream (gpu/api.json), not commands.",
-    "GPU_READY tells the core the device the machine asked for answered. A surface is a",
-    "canvas or a view the UI hands over and the core alone draws from then on, by the handle",
-    "GPU_SURFACE_OPEN answers, the handle the UI binds the canvas under (@xpute/runtime",
-    "`Link.bind`) and the stream's CONFIGURE and CURRENT name. What it shows is the program's."
+    "The GPU device's protocol on major GPU, which tells the core the device's state and the",
+    "surfaces the UI lends it. The core's own calls to the GPU are not commands: they are",
+    "records in its GPU stream (gpu/api.json). GPU_READY tells the core that the device its",
+    "machine asked for has answered. A surface is a canvas or a view that the UI hands over,",
+    "and from then on only the core draws into it. The surface is named by the handle that",
+    "GPU_SURFACE_OPEN answers with: the UI binds its canvas under that handle (@xpute/runtime",
+    "`Link.bind`), and the stream's CONFIGURE and CURRENT records name the surface by it. What",
+    "a surface shows is the program's to decide."
   ],
   "name": "gpu",
   "export": [
@@ -13,15 +15,16 @@
       "name": "GPU_READY",
       "val": 513,
       "$doc": [
-        "The GPU the machine asked for answered, the first time or again after a loss, whose",
-        "sign is in the stream's device block."
+        "The GPU the machine asked for has answered, for the first time or again after the device",
+        "was lost. The STATUS word of the stream's device block tells the core the device's state."
       ]
     },
     {
       "name": "GPU_SURFACE_OPEN",
       "val": 514,
       "$doc": [
-        "Answered with the surface's handle, 0 where the core opens none."
+        "Asks the core to open a surface. The core answers with the surface's handle, or with 0",
+        "when it opens none."
       ],
       "ackreq": true
     },
@@ -29,8 +32,8 @@
       "name": "GPU_SURFACE_RESIZE",
       "val": 515,
       "$doc": [
-        "The surface's layout box in device pixels, transforms aside, and the device pixel ratio;",
-        "the buffer it is drawn into is the core's."
+        "The surface's layout box in device pixels, ignoring transforms, and the device pixel",
+        "ratio. The size of the buffer the surface is drawn into is the core's to choose."
       ],
       "pkt": [
         {
@@ -55,7 +58,8 @@
       "name": "GPU_SURFACE_CLOSE",
       "val": 516,
       "$doc": [
-        "The surface is going: what it drew and held on the device is let go."
+        "The surface is going away, and the core lets go of what it drew and held on the device",
+        "for it."
       ],
       "pkt": [
         {
@@ -71,7 +75,7 @@
     {
       "name": "Major",
       "$doc": [
-        "What a command is about."
+        "A command's major, the high byte of its number, by which the runtime routes the frame."
       ],
       "format": "hex2",
       "entries": [
@@ -83,9 +87,6 @@
     },
     {
       "name": "GpuMinor",
-      "$doc": [
-        "The GPU's state and its surfaces."
-      ],
       "format": "hex2",
       "entries": [
         {

@@ -1,16 +1,15 @@
 // @pxl/client/ui/world/dock/strip.tsx
 
 /**
- * The palette's card: the tools, the recent picks and the drawer, each in a
- * slot. A swatch's tap takes its cube, and its hold opens the sizes
- * (popover.tsx).
+ * The palette's card: the tools, the hotbar and the drawer's button, each in
+ * a slot. A tap on a cube's swatch puts the cube in hand, and a hold opens its
+ * sizes (popover.tsx).
  */
 
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
   PanResponder,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -24,6 +23,7 @@ import { Glyph } from "@/ui/component/glyph.tsx";
 import { Motion } from "@/ui/component/motion/motion.tsx";
 import { SNAP } from "@/ui/component/motion/transition.ts";
 import { alpha, chrome, color } from "@/ui/component/theme.ts";
+import { panX } from "@/ui/component/pan.ts";
 import { openModal } from "@/ui/modal.tsx";
 import {
   selectTool,
@@ -34,7 +34,7 @@ import {
   useSwatchFlash,
 } from "./store.ts";
 import { Tool } from "@/abi/cmd.spec.ts";
-import { KIND } from "@/ui/catalog/asset/id.spec.ts";
+import { KIND } from "@/ui/asset/id.spec.ts";
 import {
   type AssetId,
   type Cube,
@@ -42,23 +42,17 @@ import {
   decorLabel,
   kindOf,
   MARKER,
-} from "@/ui/catalog/asset/mod.ts";
-import { PIN_LABEL } from "@/ui/catalog/asset/marker.spec.ts";
-import {
-  CubeSwatch,
-  decorGlyph,
-  selectionRing,
-} from "@/ui/catalog/asset/swatch.tsx";
-
-/** A page's browser pans the strip, and holds and drags up reach the view's own gesture; on a device the responder system shares the finger. */
-const PAN_X: ViewStyle =
-  Platform.OS === "web" ? ({ touchAction: "pan-x" } as ViewStyle) : {};
+} from "@/ui/asset/catalog.ts";
+import { PIN_LABEL } from "@/ui/asset/marker.spec.ts";
+import { CubeSwatch, decorGlyph, selectionRing } from "@/ui/asset/swatch.tsx";
 
 const ITEM = 24;
 
-/** How long a press is held to be a long press (React Native `Pressable`'s `delayLongPress`). */
+/** How long a press lasts before it counts as a hold, as `Pressable`'s
+ * `delayLongPress` would. */
 const LONG_PRESS_MS = 300;
-/** A move this far before the hold is a drag: the strip's sideways, the deck's up and down. */
+/** A finger that moves this far before the hold time is a drag, not a press.
+ * Sideways it scrolls the strip; up or down it turns the deck. */
 export const DRAG_PX = 12;
 
 const PENDING = 0;
@@ -66,13 +60,15 @@ const POPOVER = 1;
 const DRAG = 2;
 type Gesture = typeof PENDING | typeof POPOVER | typeof DRAG;
 
-/** A swatch's gesture. `press`, `pressIn` and `longPress` are React Native
- * `Pressable`'s; `release` is a lift once the sizes are open, and `end` closes
- * them on any lift, a drag or a terminate. */
+/** The handlers of a swatch's gesture. `press`, `pressIn` and `longPress` mean
+ * what they mean on React Native's `Pressable`. `release` is a lift while the
+ * sizes are open. `end` closes the sizes; it comes on every lift, on a drag,
+ * and when the gesture is taken away. */
 export interface SizeGesture {
   press: () => void;
   pressIn: (swatch: View) => void;
-  /** A key picked the cube or stepped its size: the seed or the sizes over the swatch a moment, as a press shows them. */
+  /** A key picked the cube or stepped its size. Shows the seed, or the sizes
+   * when `open`, over the swatch for a moment, as a press would. */
   flash: (swatch: View, open: boolean) => void;
   longPress: () => void;
   move: (x: f64, y: f64) => void;
@@ -80,7 +76,6 @@ export interface SizeGesture {
   end: () => void;
 }
 
-/** A tap takes the cube; a hold opens the sizes. */
 function useSizeGesture(swatch: React.RefObject<View | null>, g: SizeGesture) {
   const handlers = useRef(g);
   handlers.current = g;
@@ -210,7 +205,6 @@ function DecorIconButton({ kind }: { kind: u8 }) {
   );
 }
 
-/** A hotbar slot: the button of what it holds. */
 function PickButton({
   id,
   gesture,
@@ -274,8 +268,9 @@ function ToolButton({
       accessibilityLabel={label}
       style={styles.slot}
     >
-      {/* Always mounted: Android, creating it once lit, drew its ground without
-                its corners. */}
+      {/* The highlight stays mounted and only its color changes. On Android,
+          a view created with its background already set is drawn without its
+          rounded corners. */}
       <View
         collapsable={false}
         style={[styles.held, active && styles.toolActive]}
@@ -290,7 +285,8 @@ function ToolButton({
   );
 }
 
-/** `span` is the bar's width, past which it never reaches; the picks scroll unless the sizes are open. */
+/** `span` is the bar's width, and the strip never grows past it. The hotbar
+ * does not scroll while the sizes are open. */
 export function Strip({
   span,
   scrolls,
@@ -358,7 +354,8 @@ export const STRIP = {
   ground: color.band,
 };
 
-/** No wider than a target: past it, the later neighbor in the tree takes the tap. */
+/** A slot is one touch target wide. A wider slot would overlap its neighbor,
+ * and of two overlapping views the later one in the tree takes the tap. */
 export const SLOT: ViewStyle = {
   width: chrome.target,
   height: chrome.target,
@@ -388,7 +385,7 @@ const styles = StyleSheet.create({
   },
 
   slot: SLOT,
-  swatchSlot: PAN_X,
+  swatchSlot: panX,
   held: {
     width: chrome.selection,
     height: chrome.selection,

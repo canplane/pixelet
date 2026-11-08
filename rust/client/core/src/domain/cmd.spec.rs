@@ -1,6 +1,6 @@
 // rust/client/core/src/domain/cmd.spec.rs
 //
-// GENERATED from rust/client/core/ui.json
+// GENERATED from spec/client/core/door/ui.json
 
 //! The ui protocol's enums a module under its own code reads,
 //! which its code (rust/client/core/src/door/cmd.spec.rs) names from here.
@@ -137,7 +137,7 @@ impl SensorStatus {
 /// The core decides which message a state calls for and carries the number.
 /// It never carries the words: a string that exists to be read has no reason
 /// to sit in the core's memory, and the UI has the locale files already
-/// (ts/client/src/locale) — the same split `strerror` is on the other side of.
+/// (ts/client/src/ui/locale) — the same split `strerror` is on the other side of.
 ///
 /// The number is the name here, and a band is what a message is about.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

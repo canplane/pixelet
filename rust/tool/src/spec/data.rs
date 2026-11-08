@@ -34,7 +34,7 @@ const DATA_SPECS: [DataSpec; 19] = [
     },
     DataSpec {
         json: "spec/spec/asset/marker.json",
-        ts: Some("ts/client/src/ui/catalog/asset/marker.spec.ts"),
+        ts: Some("ts/client/src/ui/asset/marker.spec.ts"),
         ts_names: Some(&["PIN_LABEL", "MARKER_TEXT_CHARS"]),
         rs: Some("rust/spec/src/asset/marker.spec.rs"),
         module: "marker",
@@ -42,7 +42,7 @@ const DATA_SPECS: [DataSpec; 19] = [
     },
     DataSpec {
         json: "spec/spec/asset/id.json",
-        ts: Some("ts/client/src/ui/catalog/asset/id.spec.ts"),
+        ts: Some("ts/client/src/ui/asset/id.spec.ts"),
         rs: Some("rust/spec/src/asset/id.spec.rs"),
         module: "id",
         enums: Enums::All,
@@ -62,7 +62,7 @@ const DATA_SPECS: [DataSpec; 19] = [
     },
     DataSpec {
         json: "spec/spec/asset/character.json",
-        ts: Some("ts/client/src/ui/catalog/asset/character.spec.ts"),
+        ts: Some("ts/client/src/ui/asset/character.spec.ts"),
         ts_names: Some(&["groups", "GENDER"]),
         rs: Some("rust/spec/src/asset/character.spec.rs"),
         module: "character",
@@ -83,7 +83,7 @@ const DATA_SPECS: [DataSpec; 19] = [
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/render/gpu/api.json",
+        json: "spec/client/render/api.json",
         ts: Some("ts/client/src/abi/gpu.spec.ts"),
         ts_names: Some(&["surface_role", "stream"]),
         rs: Some("rust/client/render/src/api.spec.rs"),
@@ -98,10 +98,10 @@ const DATA_SPECS: [DataSpec; 19] = [
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/core/sys/io/runtime.json",
-        ts: Some("ts/client/src/abi/runtime.spec.ts"),
-        rs: Some("rust/client/core/src/sys/io/runtime.spec.rs"),
-        module: "runtime_spec",
+        json: "spec/client/core/sys/io/text_answer.json",
+        ts: Some("ts/client/src/abi/text_answer.spec.ts"),
+        rs: Some("rust/client/core/src/sys/io/text_answer.spec.rs"),
+        module: "text_answer_spec",
         ..DataSpec::DEFAULT
     },
     DataSpec {
@@ -139,7 +139,7 @@ const DATA_SPECS: [DataSpec; 19] = [
         ts: Some("ts/client/src/abi/span.spec.ts"),
         rs: Some("rust/client/render/src/gpu/span.spec.rs"),
         module: "span_spec",
-        enums: Enums::Named(&["GPU_SPAN_NAMES", "FRAME_KINDS", "LIGHT_MOVED"]),
+        enums: Enums::Named(&["GPU_SPAN_NAMES", "FRAME_KINDS", "LIGHT_CHANGED"]),
         ..DataSpec::DEFAULT
     },
     DataSpec {

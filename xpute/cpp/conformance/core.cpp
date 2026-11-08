@@ -38,8 +38,8 @@ constexpr std::uint32_t page_up(std::uint32_t bytes) {
     return align_up(bytes, PAGE_BYTES);
 }
 
-// What the core shares with its runtime, each on pages of its own, in the order
-// a layout draws (`layout`).
+// The parts the core shares with its runtime, each on pages of its own, which
+// `layout` places in an order the seed draws.
 enum Part : std::size_t { HEAD, SQ_DESC, CQ_DESC, SQ_SLOT, CQ_SLOT, STREAM, PARTS };
 
 constexpr std::array<std::uint32_t, PARTS> PART_BYTES{
@@ -51,17 +51,19 @@ constexpr std::array<std::uint32_t, PARTS> PART_BYTES{
     STREAM_WORDS * 4,
 };
 
-// The most a layout spans: the page it starts past, every part, and the most
-// pages before each. The core's own state follows, where no layout moves it.
+// The most any layout spans: the first page, which it starts past, every
+// part, and the most gap pages before each part. The core's own state lies
+// here, past every layout, so that no layout moves it.
 constexpr std::uint32_t STATE_AT = [] {
     std::uint32_t end = PAGE_BYTES + PARTS * GAP_PAGES * PAGE_BYTES;
     for (std::uint32_t bytes : PART_BYTES) end += page_up(bytes);
     return end;
 }();
 
-// Where each part lies under `seed`, from the range's start: the parts in the
-// order the seed draws, each past the pages it draws to leave before it. The
-// first page is left out (the contract's rule 1).
+// Where each part lies under `seed`, counted from the range's start. The
+// seed draws the order of the parts and, for each part, how many pages to
+// leave before it. The first page is never used, since offset 0 names
+// nothing (ARCHITECTURE.md, the contract's rule 1).
 std::array<std::uint32_t, PARTS> layout(std::uint32_t seed) {
     SplitMix32 rng(seed);
     std::array<std::size_t, PARTS> order{};
@@ -77,7 +79,8 @@ std::array<std::uint32_t, PARTS> layout(std::uint32_t seed) {
     return at;
 }
 
-// What CALL calls: a number and an offset.
+// The import CALL makes: a number, and the offset of the word the runtime
+// writes in answer.
 struct Inc {
     std::uint32_t n = 0;
     std::uint32_t at = 0;
@@ -94,7 +97,7 @@ struct Inc {
 struct State {
     Door door;
     Stream stream;
-    // Each for the owner its packet named.
+    // Each open file's owner is the number its OPEN packet named.
     Files<std::uint32_t, HANDLES> files;
     abi::Table<std::monostate, HANDLES> handles;
     xpute_conformance_now now;
@@ -103,7 +106,8 @@ struct State {
     std::uint32_t word = 0;
 };
 
-// The memory never grows, so a module's allocator sits over a fixed range.
+// Where the heap begins. The memory never grows, so a module's allocator
+// sits over a fixed range.
 constexpr std::uint32_t HEAP_AT = page_up(STATE_AT + sizeof(State));
 
 static_assert(HEAP_AT + HEAP_BYTES <= MEM_BYTES, "the ranges run past the memory");
@@ -126,7 +130,8 @@ std::optional<std::uint32_t> first_u32(std::span<const std::uint8_t> pkt) {
 }
 
 Outcome apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
-    // A command that takes a number fails with EBADMSG when its packet does not read.
+    // A command that takes a number fails with EBADMSG when its packet does
+    // not read as one.
     std::uint32_t arg = 0;
     if (cmd == cmd::RAISE || cmd == cmd::RECORD || cmd == cmd::RELEASE || cmd == cmd::USE || cmd == cmd::OPEN || cmd == cmd::CLOSE || cmd == cmd::CALL) {
         std::optional<std::uint32_t> n = first_u32(pkt);
@@ -177,22 +182,25 @@ Outcome apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
     }
 }
 
-// Every offset written is the memory's, so the range's start is added to each.
+// Every offset the core writes is counted from the memory's start, so the
+// start of the core's range is added to each.
 std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now, std::uint32_t seed) {
     std::array<std::uint32_t, PARTS> at = layout(seed);
     for (std::uint32_t &off : at) off += range;
     Door door(Ring::init(m, at[SQ_DESC], SQ_CAP, at[SQ_SLOT], SLOT_BYTES), Ring::init(m, at[CQ_DESC], CQ_CAP, at[CQ_SLOT], SLOT_BYTES), MOST_RAISE);
     new (m.at(range + STATE_AT)) State{
         .door = std::move(door), .stream = Stream(m, at[STREAM], STREAM_WORDS), .files = {}, .handles = {}, .now = now};
-    // The stream lies where a GPU stream would: the runtime runs it after every turn.
+    // The stream lies where a GPU stream would, so the runtime runs it after
+    // every turn.
     write_head(m, at[HEAD], Head{.sq_cap = SQ_CAP, .cq_cap = CQ_CAP, .slot_bytes = SLOT_BYTES, .sq_at = at[SQ_DESC], .cq_at = at[CQ_DESC], .gpu_at = at[STREAM]});
     return at[HEAD];
 }
 
 double turn(Memory m, std::uint32_t range) {
     State &s = state_of(m, range);
-    // It keeps nothing across its life, reads no file again, and draws nothing:
-    // a surface opened is answered 0, none.
+    // The conformance core keeps nothing across its life, reads no file
+    // again, and draws nothing, so it answers 0 to every other submission,
+    // and a surface it is lent gets the handle 0, none.
     double wake = s.door.turn([&s](const Submission &sub) {
         if (const FsOpened *opened = std::get_if<FsOpened>(&sub)) {
             if (std::optional<std::uint32_t> owner = s.files.complete_open(*opened)) s.door.post(*owner, cmd::OPENED, 0, opened->res);
@@ -207,8 +215,8 @@ double turn(Memory m, std::uint32_t range) {
 
 #ifdef __wasm__
 
-// The range starts past where the linker stopped, so how large the stack or
-// data is decides nothing a runtime reads.
+// The range starts past where the linker's data ends, so the size of the
+// stack or the data changes nothing a runtime reads.
 std::uint32_t range_at() {
     return page_up(wasm::data_end());
 }
@@ -231,8 +239,8 @@ using namespace xpute::conformance;
 
 #ifdef __wasm__
 
-// The library's allocator is never linked: it grows a memory that never grows,
-// and its failure path prints through WASI.
+// The C library's allocator is never linked: it would grow a memory that
+// never grows, and its failure path prints through WASI.
 struct HeapRange {
     static constexpr std::size_t MIN_LOG2 = std::countr_zero(PAGE_BYTES);
     static constexpr std::size_t MAX_LOG2 = std::countr_zero(HEAP_BYTES);
@@ -276,7 +284,8 @@ extern "C" std::uint32_t xpute_conformance_boot(std::uint32_t seed) {
     // The stack the module was linked with is the one the core declares.
     ensure(wasm::stack_high() == STACK_BYTES, Errno::enotrecoverable, wasm::stack_high());
     std::uint32_t range = range_at();
-    // A range past the memory's end is a runtime that sized it for another core.
+    // A range past the memory's end means a runtime sized the memory for
+    // another core.
     ensure(std::uint64_t{range} + MEM_BYTES <= wasm::given(), Errno::enomem, range);
     set_call(runtime_call);
     return boot(mem::core(), range, runtime_now, seed);
@@ -288,8 +297,9 @@ extern "C" double run(double) {
 
 #else
 
-// The memory a native runtime hands over, MEM_BYTES from `mem`; the core
-// allocates from the process, so nothing reads the ambient one.
+// The memory a native runtime hands over: MEM_BYTES from `mem`. The core
+// allocates from the process, so nothing reads the process-wide core memory
+// (`mem::core`), which stays unset.
 Memory given(std::uint8_t *mem) noexcept { return Memory(reinterpret_cast<std::uintptr_t>(mem), MEM_BYTES); }
 
 extern "C" std::uint32_t xpute_conformance_boot(std::uint8_t *mem, xpute_conformance_now now, xpute_conformance_call call, std::uint32_t seed) {

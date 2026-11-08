@@ -1,36 +1,36 @@
 # Filling db-geo
 
-`db-geo` is a local copy of three public sources — Overture Maps, GEDTM30's
-elevation and OpenStreetMap's land polygons — in one PostGIS instance. The bakes
-read it to make every tile; forward search reads it live. Three ingests fill it,
-run by hand when a source or the coverage changes.
+Every tile is baked from one database, `db-geo`, and a bake reads nothing else.
+So the database has to say exactly what it holds: which version of each source,
+over which part of the world. `db-geo` is a local copy of three public sources,
+Overture Maps, GEDTM30's elevation and OpenStreetMap's land polygons, in one
+PostGIS instance. The bakes read it to make every tile, and forward search reads
+it live. Three ingests fill it, run by hand when a source or the coverage
+changes.
 
-What it holds is decided by two things a file pins:
-
-- **Which version.** Each source's `source.json` pins its version and when it
-  was taken (`pin`), and the run writes both into the database, so the database
-  says what it holds without these files.
-- **Where.** The coverage is a list of **shards**, each a z8 tile (`SHARD_ZOOM`)
-  named by its Morton key, kept in `coverage.json` and read by
-  `pxl-geo-bake coverage.rs`. A shard holds everything its leaves' bakes read,
-  out to its apron (`SHARD_APRON`), so it bakes from itself alone and shards
-  taken one at a time are the same as taken together. The coast is no shard's:
-  it is taken whole.
+Two files decide what it holds. Each source's `source.json` pins its version
+and the time it was taken, and the ingest writes both into the database, so the
+database can say what it holds without these files. The coverage,
+`coverage.json`, lists the shards: tiles at zoom 8, each named by its Morton
+key. A shard holds everything its leaves' bakes read, out to its apron, so each
+shard bakes from itself alone and shards taken one at a time give the same
+result as shards taken together. The coast belongs to no shard; it is taken
+whole.
 
 A table is filled beside itself and swapped in, never emptied first
 ([infra/README.md](../README.md) §2).
 
-Overture is the base; what it cannot supply sits beside it, named for the role
+Overture is the base. What it cannot supply sits beside it, named for the role
 it fills.
 
-```
+```text
 infra/geo/
 ├── coverage.json          the shards
-├── tools/
+├── tool/
 │   ├── Dockerfile         every tool the ingests run, pinned
-│   └── run                a tool, run in that image
+│   └── run                runs a tool in that image
 ├── overture/
-│   └── source.json        the release; ingested by pxl-geo-bake's ingest_overture, every type a table
+│   └── source.json        the release; ingested by pxl-geo-bake's ingest_overture
 ├── elevation/
 │   ├── source.json        the version
 │   └── ingest.sh
@@ -49,15 +49,15 @@ infra/geo/
 | GEDTM30 v1.2      | `elevation_raster`                                                                                                                                             | `elevation_catalog`     |
 | OSM land polygons | `osm_land_polygons`                                                                                                                                            | the table's own comment |
 
-`overture_catalog` has a row per table and shard, `elevation_catalog` a row per
-shard, each with the `version`, the `accessed_at` and a count — of features for
-Overture, of blocks for the elevation. `holdings` (`pxl-geo-bake coverage.rs`)
-copies them, and the coast's pin from its table's comment, into a baked set's
-`manifest.json`: what a set was baked from. An Overture row is its GERS id, its
+`overture_catalog` has one row for each table and shard, and `elevation_catalog`
+one row for each shard. Each row holds the `version`, the `accessed_at` and a
+count: of features for Overture, of blocks for the elevation. When a set is
+baked, these rows and the coast's pin are copied into its `manifest.json`, which
+records what the set was baked from. An Overture row is its GERS id, its
 properties as the release holds them, and its geometry; a column a reader
-filters on is generated from `properties`.
+filters on is generated from the properties.
 
-## Run
+## Running the ingests
 
 ```sh
 docker compose -f infra/local/docker-compose.yml up -d db-geo
@@ -67,39 +67,39 @@ make ingest-overture ARGS="[--type <type>]… [--shard <name>]… [--whole]"
 ./infra/geo/coastline/ingest.sh
 ```
 
-Each reads `infra/local/.env`, the scripts themselves and the Overture ingest
-through `script/with-env.sh`; no source needs a key. Every tool they run — GDAL,
-PostGIS's raster loader, psql, Overture's CLI — is `tools/`'s image's, which
-`tools/run` builds from its Dockerfile before each call, so the host needs
-Docker and cargo alone. Ubuntu 24.04's are PostgreSQL 16 and PostGIS 3.4,
-db-geo's own majors. Never `down -v`: the volume is the only copy, and filling
-it again takes hours.
+Each reads `infra/local/.env`; no source needs a key. Every tool they run, GDAL,
+PostGIS's raster loader, psql and Overture's CLI, comes from the image in
+`tool/`, which `tool/run` builds before each call, so the host needs only
+Docker and cargo. The image's PostgreSQL 16 and PostGIS 3.4 are db-geo's own
+major versions. Never `down -v`: the volume is the only copy, and filling it
+again takes hours.
 
-**Overture.** A run takes the types it names (every one by default) and the
-shards it names (the coverage's by default), and writes them into each table as
-it is, a feature held already taking the release's and one the release no longer
-has going from the shard its lower-left corner lies in; `--whole` makes each table
-anew from every shard and swaps it in. Each type's write is one transaction, its catalog rows
-with it, so a type stopped partway leaves nothing of itself. The official
-`overturemaps` CLI, pinned in the tools' image, downloads each type's GeoParquet
-to `overture/raw/`, kept until the release or the shards change. Divisions come
-with their ancestors, which may lie past every shard.
+**Overture.** A run takes the types it names, or all of them, and the shards it
+names, or the coverage's. It writes each type into its table in place: a
+feature already held takes the release's version, and a feature the release no
+longer has is removed from the shard its lower-left corner lies in. With
+`--whole`, each table is built anew from every shard and swapped in. Each type
+is written in one transaction together with its catalog rows, so a type stopped
+partway leaves nothing of itself behind. The `overturemaps` CLI, pinned in the
+tools' image, downloads each type's GeoParquet to `overture/raw/`, where it is
+kept until the release or the shards change. Divisions come with their
+ancestors, which may lie outside every shard.
 
 **Elevation.** Each shard is warped out of the remote GeoTIFF over HTTP onto one
-grid, at the stride the bake samples, into blocks, each a square of samples as
-wide as a tile of one zoom and named by that tile (`BLOCK_ZOOM`, `pxl-geo-bake
-elevation.rs`), so a block two aprons share is stored once. A run fills the tables beside and swaps them in once every shard is
-whole; a run stopped partway resumes from the shards beside, unless they hold
-another version, which it refuses rather than mix, and any other run warps every
-shard anew.
+grid, at the stride the bake samples, and cut into blocks. A block is a square
+of samples as wide as a tile at one zoom and is named by that tile, so a block
+that two aprons share is stored once. A run fills the tables beside the old ones
+and swaps them in once every shard is whole. A run that stopped partway resumes
+from the shards already beside, unless those hold another version, which it
+refuses rather than mix.
 
-**Coastline.** OSM's land polygons for the world, one zip. osmdata names no
-version and serves only its latest, so the zip's SHA-256 (its first 16 hex) is
-its version: the zip kept in `coastline/raw/` is used while it matches, and is
-the pin's only copy once osmdata moves on — deleting it makes the pin
-unreachable. A newer coast is taken by changing the pin.
+**Coastline.** OSM's land polygons for the whole world come as one zip. osmdata
+names no version and serves only its latest, so the zip's SHA-256 (its first 16
+hex digits) is its version. The zip kept in `coastline/raw/` is used while it
+matches the pin, and once osmdata moves on it is the pin's only copy: deleting it
+makes the pinned coast unreachable. A newer coast is taken by changing the pin.
 
-## Check
+## Checking what it holds
 
 ```sql
 SELECT table_name, count(*) AS shards, min(version), max(version), sum(total_count)
@@ -111,12 +111,11 @@ SELECT obj_description('osm_land_polygons'::regclass);
 ```
 
 Every table should name each of the coverage's shards at the pinned version. A
-bake checks the same before it reads: it refuses an Overture table that lacks a
-shard it needs or holds one past the coverage, and an elevation that holds other
-than exactly the coverage's shards (`pxl-geo-bake coverage.rs`
-`Overture::reading`, `elevation.rs` `Raster::open`). Replacing rows leaves dead
-space behind; `VACUUM ANALYZE` reclaims it.
+bake checks the same before it reads anything: it refuses an Overture table that
+lacks a shard it needs or holds one outside the coverage, and an elevation that
+holds anything other than exactly the coverage's shards (`pxl-geo-bake
+coverage.rs`, `elevation.rs`). Replacing rows leaves dead space behind, which
+`VACUUM ANALYZE` reclaims.
 
-Production keeps its own copy of the three tables search reads, which a
-re-ingest reaches only when it is copied over ([infra/README.md](../README.md)
-§3).
+Production keeps its own copy of the three tables search reads. A re-ingest
+reaches it only when they are copied over ([infra/README.md](../README.md) §3).

@@ -1,24 +1,27 @@
 // @xpute/runtime/sched/scheduler.ts
 
 /**
- * When a core's turn is rung: only when the runtime (`wake`, `kick`) or the
- * core's last falling edge asked for one, at a moment the scheduling policy
- * it was booted with gives and admits (policy.ts); a moment it does not admit
- * passes to the next.
+ * Decides when a core's turn is rung. A turn is rung only when the runtime
+ * (`wake`, `kick`) or the core's last falling edge asked for one, and only at
+ * a moment that the scheduling policy the scheduler was booted with gives and
+ * admits (policy.ts). A moment the policy does not admit passes the turn on
+ * to the next moment.
  *
  * A core on a thread of its own (runtime.ts `Core.thread`) runs its turns as
- * kicks ask and keeps no timer, so the scheduler is its one scheduler as it is
- * a page core's: each wake the core asks, at once or in `n` ms, as the
- * doorbell hears it (`Doorbell.turns`, `ring`), and each the runtime asks
- * (`wake`), waits for the moment the policy gives and admits, where a
- * frame's grant is submitted and kicked with its deadline. It asks no turn for
- * what the runtime sent, which the doorbell kicked. Every turn is heard
- * (`Doorbell.on_turn`), the thread's whoever kicked it and each one rung,
- * and lets go the timer and the moments asked for an earlier wake: a moment
- * the policy hands back from before it runs nothing, and only a turn the
- * runtime still wants is asked again, so the scheduler holds no request it no
- * longer means. The policy is handed what the thread ran as the doorbell
- * hears it.
+ * kicks ask and keeps no timer, so this scheduler is its only scheduler, as
+ * it is for a page's core. Each wake the core asks for, at once or in `n` ms,
+ * as the doorbell hears it (`Doorbell.turns`, `ring`), and each wake the
+ * runtime asks for (`wake`), waits for a moment the policy gives and admits.
+ * At that moment the turn's grant is submitted and the core is kicked with
+ * its deadline. The scheduler asks for no turn for what the runtime sent,
+ * since the doorbell has already kicked for it.
+ *
+ * Every turn is heard (`Doorbell.on_turn`): each turn the thread ran, whoever
+ * kicked it, and each turn rung. A turn heard drops the timer and every
+ * moment asked for an earlier wake: a moment the policy hands back from
+ * before the turn runs nothing, and only a turn the runtime still wants is
+ * asked for again, so the scheduler never holds a request it no longer means.
+ * The policy is told what the thread ran, as the doorbell hears it.
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
@@ -29,15 +32,18 @@ import type { Grant, SchedulingPolicy } from "./policy.ts";
 const TIMER_REACH_MS = 2 ** 31 - 1;
 
 export class Scheduler<G extends Grant = Grant> {
-  /** Bumped by every turn heard: a moment asked before it is no longer
-   * meant, since the wake that turn asks is told after it. */
+  /** Counts the turns heard. A moment asked for before a turn is no longer
+   * meant once that turn is heard, because the wake the turn asks for is told
+   * after it. */
   private _gen = 0;
-  /** The generation each moment asked of the policy and not yet given was
-   * asked under, in the order the policy gives them. */
+  /** For each moment asked of the policy and not yet given, the generation it
+   * was asked under, in the order the policy gives the moments. */
   private readonly _asked_gens: number[] = [];
-  /** The runtime asked for a turn that has not run yet: kept past a turn heard. */
+  /** The runtime asked for a turn that has not run yet. Unlike a moment, this
+   * outlives a turn heard. */
   private _runtime_wants = false;
-  /** What `submit` sends goes with the turn being submitted. */
+  /** Set while `submit` runs: what it sends goes with the turn being
+   * submitted, so `wake` asks for no other. */
   private _batching = false;
   private _timer: ReturnType<typeof setTimeout> | undefined;
   private _timer_at = Infinity;
@@ -51,7 +57,8 @@ export class Scheduler<G extends Grant = Grant> {
   private readonly _policy: SchedulingPolicy<G>;
   private readonly _submit: (grant: G, delta_s: f64) => void;
 
-  /** `submit` fills the rings before the doorbell rings. */
+  /** `submit` fills the rings for a granted turn before the doorbell
+   * rings. */
   constructor(
     doorbell: Doorbell,
     policy: SchedulingPolicy<G>,
@@ -61,9 +68,10 @@ export class Scheduler<G extends Grant = Grant> {
     this._policy = policy;
     this._submit = submit;
     doorbell.on_wake = (wake_ms) => this._wake_in(wake_ms);
-    // A turn heard, whoever kicked or rang it, ends with the wake it asks,
-    // told next (`Doorbell.turns`, `ring`): the timer and the moments asked for
-    // an earlier wake go, and only what the runtime still wants is asked again.
+    // A turn heard, whoever kicked or rang it, is followed by the wake it asks
+    // for (`Doorbell.turns`, `ring`). So the timer and the moments asked for
+    // an earlier wake are dropped, and only a turn the runtime still wants is
+    // asked for again.
     doorbell.on_turn = (turn_ms, wake_ms) => {
       this._gen++;
       this._drop_timer();
@@ -72,7 +80,8 @@ export class Scheduler<G extends Grant = Grant> {
     };
   }
 
-  /** Turns run from now on; nothing where they already run or the core stopped. */
+  /** Lets turns run from now on. It does nothing if they already run or the
+   * core has stopped. */
   resume(): void {
     if (this._running || this._doorbell.terminated) return;
     this._running = true;
@@ -80,30 +89,30 @@ export class Scheduler<G extends Grant = Grant> {
     this.wake();
   }
 
-  /** No turn runs until `resume`; nothing where none runs. */
+  /** Stops turns until `resume`. It does nothing if none run. */
   pause(): void {
     if (!this._running) return;
     this._running = false;
     this._drop_timer();
   }
 
-  /** Wakes the core for what the runtime submitted: asks a moment for a core
-   * that runs only when rung; nothing for one on its own thread, which the
-   * doorbell kicked as it submitted. */
+  /** Wakes the core for what the runtime submitted. For a core that runs only
+   * when rung, it asks the policy for a moment. For a core on its own thread
+   * it does nothing, since the doorbell kicked that core as it submitted. */
   kick(): void {
     if (!this._doorbell.kick) this.wake();
   }
 
-  /** A turn the runtime wants, at a moment asked of the policy; none while
-   * paused or once the core stopped, and none for what goes with the turn
-   * being submitted. */
+  /** Asks for a turn the runtime wants, at a moment asked of the policy. It
+   * asks nothing while paused or once the core has stopped, nor for what goes
+   * with the turn being submitted. */
   wake(): void {
     if (this._batching) return;
     this._runtime_wants = true;
     this._ask();
   }
 
-  /** A moment asked of the policy under this generation, once. */
+  /** Asks the policy for a moment, at most once in a generation. */
   private _ask(): void {
     if (!this._running || this._doorbell.terminated) return;
     if (this._asked_gens.at(-1) === this._gen) return;
@@ -136,14 +145,15 @@ export class Scheduler<G extends Grant = Grant> {
     if (!this._running || this._doorbell.terminated) return;
     if (!this._policy.admit(now)) return this._ask();
     this._runtime_wants = false;
-    // Unclamped: how long a gap still counts as motion is the core's call,
-    // and a clamp here is where every turn worth reporting would land.
+    // The gap is not clamped. How long a gap still counts as motion is for the
+    // core to decide, and a clamp here would pin every turn worth reporting to
+    // the clamp's value.
     const delta_s = Math.max(0, (now - this._last) / 1000);
     this._last = now;
     this._drop_timer();
     const grant = this._policy.grant(performance.now());
-    // What `submit` sends goes with this turn, so it asks for no other, and
-    // kicks nothing before the turn's own kick.
+    // What `submit` sends goes with this turn, so it asks for no other turn
+    // and kicks nothing before the turn's own kick.
     this._batching = true;
     try {
       this._doorbell.batch(() => this._submit(grant, delta_s));

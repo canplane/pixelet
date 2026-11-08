@@ -2,7 +2,8 @@
 
 use super::*;
 
-/// encode.wgsl's `to_srgb` in levels.
+/// The sRGB level, 0 to 255, that encode.wgsl `to_srgb` makes of the linear
+/// value `c`.
 fn levels(c: f32) -> f32 {
     let lo = c * 12.92;
     let hi = 1.055 * libm::powf(c, 1.0 / 2.4) - 0.055;
@@ -11,8 +12,9 @@ fn levels(c: f32) -> f32 {
 
 #[test]
 fn a_clear_encodes_back_to_the_uis_bytes() {
-    // The finish's dither is half a level either way: within a tenth of a
-    // level, a byte stays itself but at the dither's very ends.
+    // The finish dithers by up to half a level either way before the color
+    // is stored. A clear within a tenth of a level of its byte therefore
+    // comes back as that byte, except at the dither's very ends.
     for v in 0..=255u32 {
         let [r, g, b, a] = clear_of(v << 16 | v << 8 | v);
         assert_eq!(a, 1.0, "a character surface shows nothing through");

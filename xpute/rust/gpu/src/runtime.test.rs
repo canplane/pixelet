@@ -18,8 +18,8 @@ fn device() -> (wgpu::Adapter, wgpu::Device, wgpu::Queue) {
     (adapter, device, queue)
 }
 
-/// A test's config: `frame_latency` frames, and a chunk as large as the
-/// largest write a record makes.
+/// A test's config. Its chunk is as large as the largest write a record
+/// makes.
 fn cfg(frame_latency: u32) -> Config {
     Config {
         preferred_format: wgpu::TextureFormat::Bgra8Unorm,
@@ -45,8 +45,8 @@ fn runtime(
     )
 }
 
-/// Each runtime counts its own frames: one at its latency holds back no other,
-/// and its frames end as the device is polled.
+/// Each runtime counts its own frames. One at its latency holds back no other
+/// runtime, and its frames end as the device is polled.
 #[test]
 fn runtime_paces_frames() {
     let (adapter, device, queue) = device();
@@ -66,7 +66,7 @@ fn runtime_paces_frames() {
 }
 
 /// A frame's callback takes it off its count whether the queue calls it or
-/// lets it go uncalled.
+/// drops it uncalled.
 #[test]
 fn frame_ends_either_way() {
     let count = Arc::new(AtomicU32::new(0));
@@ -79,8 +79,8 @@ fn frame_ends_either_way() {
     assert_eq!(count.load(Ordering::Relaxed), 0);
 }
 
-/// A device that goes with a frame's work never done lets its callbacks go,
-/// and the frames they counted are released with them.
+/// A device that goes before a frame's work is done drops its callbacks, and
+/// the frames they counted are released with them.
 #[test]
 fn lost_device_frames_released() {
     let (adapter, device, queue) = device();
@@ -102,10 +102,10 @@ fn lost_device_frames_released() {
     );
 }
 
-/// A surface's handle holds its slot only while it is the one bound there:
-/// an old handle's late unbind lets go no newer surface in the slot, and the
-/// newer one unbinds its own, once. A window's surface needs a window, so
-/// the slot is claimed as `bind` claims it, without one.
+/// A surface's handle holds its slot only while it is the one bound there.
+/// An old handle's late unbind lets go no newer surface in the slot, and the
+/// newer handle unbinds its own, once. A window's surface needs a window, so
+/// the test claims the slot as `bind` does, without one.
 #[test]
 fn stale_handle_inert() {
     let (adapter, device, queue) = device();
@@ -134,8 +134,8 @@ fn stale_handle_inert() {
 }
 
 /// Each program's recorded turns, run as they were written, read back the
-/// bytes the record holds: turn K's ticket is K + 1, and the next turn waits
-/// for the runtime to store it at the fence.
+/// bytes the record holds. Turn K's ticket is K + 1, and the next turn waits
+/// until the runtime has stored it at the fence.
 #[test]
 fn records_read_back() {
     let g = Golden::load(GOLDEN);

@@ -1,8 +1,8 @@
 use super::halve;
 
-/// The halves sum to the count, each within its room.
+/// The halves sum to the count, each within its cap.
 #[test]
-fn halves_sum_within_rooms() {
+fn halves_sum_within_caps() {
     let mut h = 0x1234_5678u32;
     let mut next = || {
         h ^= h << 13;
@@ -11,9 +11,9 @@ fn halves_sum_within_rooms() {
         h
     };
     for _ in 0..100_000 {
-        let rooms = [next() % 3000, next() % 3000];
-        let n = next() % (rooms[0] + rooms[1] + 1);
-        let a = halve(n, rooms, next());
-        assert!(a <= rooms[0] && n - a <= rooms[1], "{rooms:?} {n} {a}");
+        let caps = [next() % 3000, next() % 3000];
+        let n = next() % (caps[0] + caps[1] + 1);
+        let a = halve(n, caps, next());
+        assert!(a <= caps[0] && n - a <= caps[1], "{caps:?} {n} {a}");
     }
 }

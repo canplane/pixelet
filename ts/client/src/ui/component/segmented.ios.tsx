@@ -1,6 +1,8 @@
 // @pxl/client/ui/component/segmented.ios.tsx
 
-/** UIKit's segmented control, as every touched control here is; a segment is a title or an image, never both. */
+/** An iPhone's segmented control is UIKit's, as is every control a person
+ * touches on an iPhone. A UIKit segment shows a title or an image, never
+ * both. */
 
 import { requireNativeView } from "expo";
 import type { ComponentType } from "react";
@@ -9,7 +11,8 @@ import type { NativeSyntheticEvent, ViewProps } from "react-native";
 import { PANEL_CONTROL } from "@/ui/component/panel.tsx";
 import type { SegmentedProps } from "@/ui/component/segmented.tsx";
 
-// Everything the default has, but what this file draws itself.
+// Every export of the default file, except `Segmented`: an export declared in
+// this file takes the place of a star export with the same name.
 export * from "./segmented.tsx";
 
 interface SegmentedControlProps extends ViewProps {

@@ -1,6 +1,6 @@
 // pxl-core/door/apply/scene.rs
 
-//! SCENE: the scene's: what a surface draws, a line said.
+//! The SCENE major's commands: what a surface draws, and a chat line said.
 
 use super::State;
 use super::{ask_turn, or_refuse, refuse_unless};
@@ -19,11 +19,11 @@ pub(super) fn chat(s: &mut State, c: abi::SceneChat<'_>) -> Outcome {
     ask_turn(s)
 }
 
-/// What a surface draws until it closes: the world, or the companion's
-/// character of a group alone, which a second replaces. Refused where the surface is
-/// not open (EBADF), already draws the other content (EBUSY), or the
-/// character's fields are not all given for a character or are given for
-/// the world (EINVAL).
+/// Sets what a surface draws until it closes: the world, or one group's
+/// companion character alone, which a second command replaces. It is refused
+/// with EBADF when the surface is not open, with EBUSY when the surface
+/// already draws the other content, and with EINVAL when the character's
+/// fields are missing for a character or given for the world.
 pub(super) fn draw(s: &mut State, c: abi::SceneDraw) -> Outcome {
     let role = or_refuse(
         surface::surface(c.surface).map(|open| open.role),

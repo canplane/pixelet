@@ -1,11 +1,14 @@
-// One sprite on the marker atlas: shapes by signed distance, text as the platform's
-// pixels. Stored premultiplied; marker.wgsl divides it out.
+// Paints one sprite of the marker atlas (gpu/atlas.rs): its shapes by their signed
+// distance, and its text as the platform rasterized it. The alpha blend stores the
+// sprite premultiplied, and marker_sprite.wgsl divides the alpha out.
 
-// kind: 0 filled rounded rect, 1 stroked, 2 triangle, 3 text, 4 a text's halo.
-// `p`: radius and a fill's edge width or a stroke's, a triangle's first two
-// points, or text layer and coverage, and a halo's radius. `q`: a triangle's
-// third point, a fill's shade, lighter at its top by as much as darker at
-// its foot, or how far in from its radius a halo fades.
+// One shape of a sprite. `kind.x` names it: a filled rounded rectangle, a stroked one,
+// a triangle, a line of text, or a text's halo (`ATLAS_FILL` to `ATLAS_HALO`). `p`
+// holds a rectangle's corner radius and the width of a fill's edge or of a stroke; a
+// triangle's first two points; or the text's layer and the share of the layer the text
+// covers, with a halo's radius in `p.w`. `q` holds a triangle's third point; a fill's
+// shade, by which its top is lighter and its foot as much darker; or how far in from
+// its radius a halo fades.
 struct Shape {
   rect: vec4f,
   color: vec4f,
@@ -39,7 +42,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Verte
   return o;
 }
 
-fn round_box(p: vec2f, half: vec2f, r: f32) -> f32 {
+fn round_rect(p: vec2f, half: vec2f, r: f32) -> f32 {
   let q = abs(p) - half + vec2f(r);
   return length(max(q, vec2f(0.0))) + min(max(q.x, q.y), 0.0) - r;
 }
@@ -69,20 +72,21 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   var edge = 1.0;
   switch s.kind.x {
     case ATLAS_FILL: {
-      d = round_box(i.at - center, half, s.p.x);
+      d = round_rect(i.at - center, half, s.p.x);
       edge = max(s.p.y, 1.0);
       let down = (i.at.y - s.rect.y) / max(s.rect.w - s.rect.y, 1.0);
       rgb = rgb * (1.0 + s.q.x * (1.0 - 2.0 * down));
     }
     case ATLAS_STROKE: {
-      d = abs(round_box(i.at - center, half, s.p.x)) - s.p.y * 0.5;
+      d = abs(round_rect(i.at - center, half, s.p.x)) - s.p.y * 0.5;
     }
     case ATLAS_TRIANGLE: {
       d = triangle(i.at, s.p.xy, s.p.zw, s.q.xy);
     }
     case ATLAS_HALO: {
-      // The glyphs' coverage grown by the radius: the most of it within reach,
-      // each texel weighed by how much of it the disc covers.
+      // The halo grows the glyphs' coverage by its radius. It takes the greatest
+      // coverage within the radius, each texel weighed by how much of it the
+      // disc covers.
       let size = vec2i(s.rect.zw - s.rect.xy);
       let base = vec2i(floor(i.at - s.rect.xy));
       let r = s.p.w;

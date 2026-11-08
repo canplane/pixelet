@@ -2,7 +2,6 @@
 
 use super::*;
 
-/// A frame while fewer than the latency are unfinished, and none at it.
 #[test]
 fn admits_below_latency() {
     assert!(admits(0, 1));
@@ -12,9 +11,9 @@ fn admits_below_latency() {
     assert!(!admits(3, 2));
 }
 
-/// The page's admission reads the block's frames unfinished once its status
-/// is READY, and admits nothing before a block is asked or once the device
-/// is lost. The only test here that touches the kept block.
+/// The page's admission follows the block's unfinished frames once its STATUS
+/// is READY, and admits nothing before a block is asked for or once the
+/// device is lost. The kept block is global, so no other test may touch it.
 #[test]
 fn page_reads_block() {
     assert!(!page::<2>(), "no block asked");

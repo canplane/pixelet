@@ -34,10 +34,12 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Spin } from "@/ui/component/motion/motion.tsx";
 
 /**
- * SF Symbol names, drawn as the nearest Phosphor glyph: Apple licenses the
- * symbols to its own platforms only. A `.fill` name is Phosphor's fill
- * weight; `turn` is degrees clockwise, Phosphor's navigation arrow pointing
- * up-left where SF's points up-right.
+ * A glyph is named by its SF Symbol and drawn off Apple's platforms as the
+ * nearest Phosphor glyph, because Apple licenses its symbols to its own
+ * platforms only. An entry holds the Phosphor glyph, whether it takes
+ * Phosphor's fill weight (for a `.fill` name), and a turn in degrees
+ * clockwise. The turn is there because Phosphor's navigation arrow points
+ * up-left, where SF's points up-right.
  */
 const PHOSPHOR = {
   archivebox: [ArchiveIcon, false, 0],
@@ -73,7 +75,8 @@ export type GlyphName = keyof typeof PHOSPHOR;
 
 type GlyphWeight = "regular" | "semibold" | "bold" | "heavy" | "black";
 
-/** Phosphor has two stroked weights; SF's heavier ones take its bold. */
+/** Every SF weight above regular takes Phosphor's bold, the heaviest stroked
+ * weight Phosphor has. */
 const WEIGHT: Record<GlyphWeight, IconWeight> = {
   regular: "regular",
   semibold: "bold",
@@ -90,9 +93,9 @@ export interface IconProps {
 }
 
 export function Icon({ glyph, size, color, weight = "regular" }: IconProps) {
-  const [Drawn, filled, turn] = PHOSPHOR[glyph];
+  const [Phosphor, filled, turn] = PHOSPHOR[glyph];
   return (
-    <Drawn
+    <Phosphor
       size={size}
       color={color}
       weight={filled ? "fill" : WEIGHT[weight]}

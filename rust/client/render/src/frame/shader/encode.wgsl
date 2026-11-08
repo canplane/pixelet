@@ -1,4 +1,5 @@
-// The vignette and the sRGB encoding the canvas is written in.
+// The canvas is written in sRGB. The vignette darkens a pixel by its distance from
+// the middle of the screen, as a lens does.
 
 fn to_srgb(c: vec3f) -> vec3f {
   let x = clamp(c, vec3f(0.0), vec3f(1.0));

@@ -1,8 +1,10 @@
-//! The light's cells' starts (beam.light.wgsl `beam_hand`, light_cell.wgsl
-//! `light_cell_cs`) against pxl-engine `light::margin` of `Light::spacing`: over the real world
-//! of tests/real_world, each beam ray's hand and each cell's `CELL_T` as the engine takes them
-//! off where the engine's walk of that ray from the origin the pass laid stops. Skipped where
-//! no adapter answers.
+//! This test holds where the light's cells start (beam.light.wgsl `beam_hand`, light_cell.wgsl
+//! `light_cell_cs`) to pxl-engine's `light::margin` of the beam spacing (`Light::spacing`), over
+//! the real world of tests/real_world. A beam ray's hand is how far along the light the texels
+//! about the ray start, a margin short of where the ray stopped. A cell starts at the least hand
+//! of the beam rays in its window (`beam::CELL_T`). The engine walks each beam ray from the
+//! origin the pass laid, and each hand and each cell's start must equal what the margin takes
+//! off where that walk stops.
 
 mod gpu;
 mod real_world;
@@ -10,7 +12,7 @@ mod real_world;
 use gpu::{list_every, margins, Gpu};
 use pxl_engine::cast::{Detail, Keep, Node, Query, Ray, Root, Trace, Until, DEPTH};
 use pxl_engine::light::{self, Light, Starts};
-use pxl_engine::overwrite::Cut;
+use pxl_engine::object::Cut;
 use pxl_engine::world::Inheritance;
 use pxl_engine::{beam, cast};
 use pxl_engine::{eye, node_cache, Zoom, FRAC_W};
@@ -18,12 +20,14 @@ use pxl_render::frame::shader::record::{src, SHADER_LIGHT_CELL};
 
 use real_world::{q8, store_of, Asking, World, WorldBufs, FINEST};
 
-/// East of X = 0 by the seam, as tests/sample.rs stands.
+/// The eye stands east of X = 0, 300 units short of X's seam, where the world goes round.
 const EYE: [i32; 2] = [(1 << 23) - 300, (40 << 16) + 30];
 const SIZE: u32 = 256;
 const FRAME: u32 = 9;
 const CAST: u32 = 7;
-/// A light's box over the world.
+/// A light's box over the world. `side` is a texel's side in units, and `back` is how far the
+/// near plane lies back along the light from `origin`. `range` is the zooms a cell is asked at,
+/// coarsest then finest (`eye::RANGE`).
 struct LightCase {
     name: &'static str,
     origin: [i32; 3],
@@ -48,7 +52,8 @@ fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
     ]
 }
 
-/// The light and where its rays start, as a host lays them (light.rs `Starts`).
+/// The light of case `c` and where its rays start, laid as the renderer lays them
+/// (gpu/shadow.rs `aim`, `Shadow::starts`).
 fn box_of(c: &LightCase) -> (Light, Starts) {
     let dir = unit(c.dir);
     let a = unit(cross(dir, [0.0, 0.0, 1.0]));
@@ -92,23 +97,23 @@ fn box_of(c: &LightCase) -> (Light, Starts) {
     (s, starts)
 }
 
-/// A walk that keeps nothing of its line.
 struct Unkept;
 
 impl Keep<Inheritance> for Unkept {
     fn keep(&mut self, _: &Trace<Inheritance>, _: &[Inheritance; DEPTH]) {}
 }
 
-/// Where beam ray `c` of the light's box, from origin `o`, stops, as `cast::walk_at_most` from
-/// the world's root takes it: its hand with the margin zero.
-fn stop_of(w: World, l: &Light, range: [Zoom; 2], c: [u32; 2], o: [i32; 3]) -> f32 {
+/// Where beam ray `c` of the light's box stops when `cast::walk_at_most` walks it from the
+/// world's root and from origin `o`. The value is the ray's hand with a margin of zero.
+fn hit_of(w: World, l: &Light, range: [Zoom; 2], c: [u32; 2], o: [i32; 3]) -> f32 {
     let p = light::corner_at(c);
     let band = l.band(SIZE, range, p.map(|v| v.div_euclid(light::TILE as i32)));
     let detail = Detail {
         range: [band, band],
         spacing: l.spacing(),
     };
-    // A table no frame has written: every node asked of the world.
+    // No frame has written the node cache the pass reads, so this walk asks the world for every
+    // node too.
     let mut q = Asking {
         w,
         cuts: [Cut::NONE; 2],
@@ -123,13 +128,14 @@ fn stop_of(w: World, l: &Light, range: [Zoom; 2], c: [u32; 2], o: [i32; 3]) -> f
         (Node::ROOT, at, 0.0),
         &Root(at),
         &mut Unkept,
-        cast::STEPS_MOST,
+        cast::STEPS_CAP,
     );
     met.hit.t.max(0.0)
 }
 
 fn device() -> Option<Gpu> {
-    // A hand shader's loop may hang the device's wait: the run gives up.
+    // A shader that loops forever would hang the wait on the device, so the run gives up after
+    // a fixed time.
     std::thread::spawn(|| {
         std::thread::sleep(std::time::Duration::from_secs(170));
         eprintln!("gave up after 170 s");
@@ -142,11 +148,11 @@ fn device() -> Option<Gpu> {
     gpu
 }
 
-/// The light's list after its beam and `light_cell_cs` over a whole cast, from a table no frame
-/// has written.
-fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], head: &[u32]) -> Vec<u32> {
+/// The light's list after the beam and `light_cell_cs` run over a cast that claims every tile,
+/// from a node cache no frame has written.
+fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], header: &[u32]) -> Vec<u32> {
     let eye = gpu.buffer(eye, wgpu::BufferUsages::UNIFORM);
-    let head = gpu.buffer(head, wgpu::BufferUsages::UNIFORM);
+    let header = gpu.buffer(header, wgpu::BufferUsages::UNIFORM);
     let mut table = vec![0u32; node_cache::WORDS as usize];
     table[node_cache::FRAME as usize] = FRAME;
     let table = gpu.buffer(&table, store_of());
@@ -154,7 +160,7 @@ fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], head: &[u32]) -> Vec<u32> {
     let mut list = vec![0u32; light::list_words(SIZE) as usize];
     let reads_at = light::reads_at(SIZE) as usize;
     list[reads_at..reads_at + (tiles * tiles) as usize].fill(CAST);
-    let fed = list_every(&mut list, SIZE, light::LISTED_FED, 1);
+    let fed = list_every(&mut list, SIZE, light::LIST_SOURCES, 1);
     let beams = gpu.buffer(&list, store_of());
     gpu.light_beam(
         &[
@@ -167,7 +173,7 @@ fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], head: &[u32]) -> Vec<u32> {
             (7, b.pool.as_entire_binding()),
             (8, beams.as_entire_binding()),
             (9, table.as_entire_binding()),
-            (11, head.as_entire_binding()),
+            (11, header.as_entire_binding()),
         ],
         &beams,
         &table,
@@ -178,16 +184,16 @@ fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], head: &[u32]) -> Vec<u32> {
         &[
             (0, eye.as_entire_binding()),
             (8, beams.as_entire_binding()),
-            (11, head.as_entire_binding()),
+            (11, header.as_entire_binding()),
         ],
         [fed[0], fed[1], 1],
     );
     gpu.read(&beams)
 }
 
-/// Each beam ray's hand and each cell's `CELL_T` by hand against `light::margin` of the light's
-/// spacing, off where the engine's walk of each beam ray stops: two boxes, one a texel a unit,
-/// one narrow and slanting.
+/// Each beam ray's hand and each cell's `CELL_T` from the shaders must equal `light::margin` of
+/// the light's spacing, taken off where the engine's walk of the beam ray stops. The test runs
+/// two boxes: one whose texel is a unit wide, and one narrow and slanting.
 #[test]
 fn light_cells_start_short_by_the_margin() {
     let Some(gpu) = device() else { return };
@@ -200,7 +206,7 @@ fn light_cells_start_short_by_the_margin() {
         ground: gpu.buffer(&built.ground, store),
         palette: gpu.buffer(&built.palette, store),
         shards: gpu.buffer(&flat_u(&built.shards), store),
-        placed: gpu.buffer(&built.overwrites, store),
+        placed: gpu.buffer(&built.objects, store),
         pool: gpu.buffer(&built.pool, store),
     };
     let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
@@ -239,24 +245,25 @@ fn light_cells_start_short_by_the_margin() {
         eye[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&l.words());
         eye[eye::RANGE] = c.range[0];
         eye[eye::RANGE + 1] = c.range[1];
-        let mut head = vec![0u32; light::HEAD_WORDS];
-        head[light::HEAD_CAST] = CAST;
-        head[light::HEAD_EPOCH] = CAST;
-        for (k, v) in light::head_layout(SIZE) {
-            head[k] = v;
+        let mut header = vec![0u32; light::HEADER_WORDS];
+        header[light::HEADER_CAST] = CAST;
+        header[light::HEADER_EPOCH] = CAST;
+        for (k, v) in light::header_layout(SIZE) {
+            header[k] = v;
         }
-        head[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
+        header[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
             .copy_from_slice(&starts.words());
-        let got = beams_of(&gpu, &b, &eye, &head);
+        let got = beams_of(&gpu, &b, &eye, &header);
         let hand_of = |w: &[u32], k: u32| f32::from_bits(w[light::hand_at(SIZE, k) as usize]);
-        // Each beam ray's stop, the engine's walk from the origin the pass laid: a device rounds
-        // `Starts::start` a Q3 step off the engine's for some.
+        // The engine walks each beam ray from the origin the pass laid in the ray's line, not
+        // from its own. A device rounds `Starts::start` one Q3 step off the engine's for some
+        // rays.
         let w = built.world();
         let t: Vec<f32> = (0..across * across)
             .map(|k| {
                 let f = (k * light::LINE_WORDS + light::LINE_ORIGIN) as usize;
                 let o = [0, 1, 2].map(|a| got[f + a] as i32);
-                stop_of(w, &l, c.range, [k % across, k / across], o)
+                hit_of(w, &l, c.range, [k % across, k / across], o)
             })
             .collect();
         let hands: Vec<f32> = (0..across * across).map(|k| hand_of(&got, k)).collect();
@@ -269,7 +276,9 @@ fn light_cells_start_short_by_the_margin() {
         };
         let margins = margins(l.spacing().across);
         let engine = hand(margins[0].1);
-        // The one rounding every hand of the pass takes: one spacing, one margin.
+        // The light's beam rays share one spacing, so they share one margin. The pass takes that
+        // margin with one rounding for every hand, so one of `margins` must give every hand bit
+        // for bit.
         let Some(&(cause, m)) = margins.iter().find(|&&(_, m)| {
             hand(m)
                 .iter()

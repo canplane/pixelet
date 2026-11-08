@@ -1,8 +1,8 @@
 // @pxl/client/ui/component/motion/presence.tsx
 
 /**
- * Keeps a leaving view rendered until its exit motion settles. Stores and
- * callers remove things at once and never wait on an animation.
+ * Keeps a leaving view drawn until its exit motion settles, so that stores and
+ * callers remove a thing at once and never wait on an animation.
  */
 
 import { type ReactNode, useMemo, useRef, useState } from "react";
@@ -54,7 +54,8 @@ export type Key = string | number;
 interface Present<T> {
   item: T;
   key: Key;
-  /** False while it is leaving: drawn at its exit, and dropped by `gone`. */
+  /** False while the item is leaving. A leaving item is drawn at its exit
+   * until `gone` drops it. */
   present: boolean;
 }
 
@@ -102,6 +103,9 @@ interface SwapProps {
   children: ReactNode;
 }
 
+/** Draws the child of `id`. When `id` changes, the old child plays its exit,
+ * and the new child enters from `from` only once the old one has gone. The
+ * first child drawn does not enter. */
 export function Swap({
   id,
   from,
@@ -112,7 +116,7 @@ export function Swap({
   children,
 }: SwapProps) {
   const ids = useMemo(() => [id], [id]);
-  // What each id last drew, so a leaving one keeps drawing it.
+  // What each id drew last, so that a leaving id keeps drawing it.
   const nodes = useRef(new Map<Key, ReactNode>());
   nodes.current.set(id, children);
   const [init, setInit] = useState<Key | null>(id);

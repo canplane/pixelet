@@ -1,8 +1,8 @@
-//! A real world's buffers made on the CPU, as the fill and the store lay them, for what is
-//! tested over the world's one query by hand (tests/world.rs, tests/light_miss.rs): its clip
-//! levels and their bricks, the service area's index, what is placed and the ways' pool; the
-//! query a walk on the CPU asks of them (`Asking`), and the same buffers on the device
-//! (`WorldBufs`).
+//! A real world's buffers, made on the CPU as the fill and the store lay them, for the tests of
+//! the world's one query by hand and of the walks over it. The world holds clip levels and
+//! their bricks, the service area's index, what is placed and the ways' pool. `Asking` is the
+//! query a walk on the CPU asks of these buffers, and `WorldBufs` holds the same buffers on the
+//! device.
 
 #![allow(dead_code, reason = "each test reads its own of it")]
 
@@ -14,23 +14,23 @@ use pxl_engine::area::{self, Area, Shard};
 use pxl_engine::cast::Query;
 use pxl_engine::clipmap::{
     self as clip, Bricks, Lookup, Presence, ACROSS, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS, ENTRIES,
-    EYE_CLIP_LEVELS, FIRST_CELL, JOINED_AT, JOINED_ENTRIES, JOINED_LEVELS, LAID_AT, LAID_CELLS,
-    LINES_ENTRIES_AT, LINES_SEGMENTS_AT, LINES_WORDS, ORIGIN_AT, ROOT_AT, SPANS_WORDS,
+    EYE_CLIP_LEVELS, FIRST_CELL_ZOOM, JOINED_AT, JOINED_ENTRIES, JOINED_MIPS, LINES_ENTRIES_AT,
+    LINES_SEGMENTS_AT, LINES_WORDS, ORIGIN_AT, OWN_AT, OWN_CELLS, ROOT_AT, SPANS_WORDS,
 };
 use pxl_engine::fill;
 use pxl_engine::ground::{self, Resident};
 use pxl_engine::lattice::TILE_CELLS;
-use pxl_engine::overwrite::{self, Columns, BRANCH};
+use pxl_engine::object::{self, Columns, BRANCH};
 use pxl_engine::way::{self, tree, Segment, Stations};
 use pxl_engine::world::{self, Inheritance};
-use pxl_engine::{value, wrap_idx, Zoom, FRAC_W, LEAF_CELL, SHARD_ZOOM};
+use pxl_engine::{value, wrap_idx, Zoom, FRAC_W, LEAF_CELL_ZOOM, SHARD_ZOOM};
 
-/// `x` a leaf cell's, as the world names it.
+/// The leaf cell index `x`, wrapped round X as the world names it.
 pub fn wrap(x: i32) -> i32 {
-    wrap_idx(LEAF_CELL, x)
+    wrap_idx(LEAF_CELL_ZOOM, x)
 }
 
-/// The hash made-up content turns on.
+/// The hash the made-up content is drawn from.
 pub fn mix(a: u32, c: [i32; 2]) -> u32 {
     let mut h = a.wrapping_mul(0x9E37_79B1) ^ 0x51ED_270B;
     for v in c {
@@ -49,24 +49,26 @@ impl Draw {
         self.0 ^= self.0 << 5;
         self.0
     }
-    /// In `[lo, hi)`.
+    /// The next draw, within `[lo, hi)`.
     pub fn within(&mut self, lo: i32, hi: i32) -> i32 {
         lo + (self.next() % (hi - lo) as u32) as i32
     }
 }
 
-/// The finest zoom asked: what is placed is held no finer (pxl-spec bake `OBJECT_FINEST`).
-pub const FINEST: Zoom = LEAF_CELL + 3;
+/// The finest zoom a test asks. What is placed is held no finer (pxl-spec bake
+/// `OBJECT_FINEST`).
+pub const FINEST: Zoom = LEAF_CELL_ZOOM + 3;
 
-/// Where the eye is, a leaf cell: just east of the world's seam in X, so its finest clip
-/// level starts east of it and its coarser ones west, a few cells over the service area's
-/// south edge.
+/// Where the eye stands, in leaf cells. It is just east of the world's seam in X, so its finest
+/// clip level starts east of the seam and its coarser levels start west of it. It is a few
+/// cells north of the service area's south edge.
 pub const EYE: [i32; 2] = [-(1 << 23) + 300, (40 << 16) + 30];
 
-/// The shards served: west of the seam far past what the clip levels reach, a few east of
-/// it, and three about X = 0, where X's roots part, from row 40 to 44: an edge of the area
-/// within every clip level's reach but the west; and a shard left out in it (`NOTCH`), whose
-/// corners only a diagonal leaf cell touches; and the shard at the world's first node, no clip
+/// Whether shard `n` is served. The served shards lie in rows 40 to 43: west of the seam from
+/// X = 100, far past what the clip levels reach; a few east of the seam; and three about
+/// X = 0, where X's roots part. Every edge of the area but the west lies within every clip
+/// level's reach. One shard inside is left out (`NOTCH`), and some leaf cells touch it only at
+/// a corner (`CORNERS`). The shard at the world's first node is served too, out of every clip
 /// level's reach.
 pub fn served(n: [i32; 2]) -> bool {
     (n[0] >= 100 || n[0] < -124 || (-1..=1).contains(&n[0]))
@@ -78,7 +80,8 @@ pub fn served(n: [i32; 2]) -> bool {
 /// The shard left out of the area.
 pub const NOTCH: [i32; 2] = [-126, 41];
 
-/// The leaf cells that touch the notch only at a corner, what each is named by a tally.
+/// The leaf cells that touch the notch only at a corner, each with the name a tally counts it
+/// by.
 pub const CORNERS: [(&str, [i32; 2]); 4] = [
     (
         "wall by a diagonal, south-west",
@@ -98,61 +101,65 @@ pub const CORNERS: [(&str, [i32; 2]); 4] = [
     ),
 ];
 
-/// The rows whose nodes wider than a shard lie wholly under the sea: all from here north.
+/// The first row of the land sunk under the sea. From this row north, nodes wider than a shard
+/// lie wholly under the sea.
 pub const SUNK_FROM: i32 = 42 << 16;
 
-/// The clip levels wanted and not laid out.
+/// The clip levels the world wants but has not laid out.
 pub const UNLAID: [Zoom; 2] = [15, 21];
 
-/// The first brick of the clip level at `cell`.
-pub fn level_first(eye: [i32; 2], cell: Zoom) -> [i32; 2] {
-    let s = LEAF_CELL - cell;
-    let first = clip::origin(cell, [eye[0] >> s, eye[1] >> s]);
-    // At some zooms it starts on a block the whole level's: its top entry is all of it. North
-    // to the block, so it holds the area's edge and not what lies past it.
-    if cell == 16 || cell == 20 {
+/// The first brick of the clip level at `cell_zoom`.
+pub fn level_first(eye: [i32; 2], cell_zoom: Zoom) -> [i32; 2] {
+    let s = LEAF_CELL_ZOOM - cell_zoom;
+    let first = clip::origin(cell_zoom, [eye[0] >> s, eye[1] >> s]);
+    // At zooms 16 and 20 the level starts on a block as wide as the whole level, so its top
+    // entry covers all of it. The start rounds north to the block, so the level holds the
+    // area's south edge and not what lies past it.
+    if cell_zoom == 16 || cell_zoom == 20 {
         [first[0] & !7, (first[1] + 7) & !7]
     } else {
         first
     }
 }
 
-/// What a brick of the clip level at `cell` stands over the rest, its own samples': spires a
-/// brick wide about its own edges and each finer level's, so a block read at an edge, or read
-/// on at a coarser level, moves a bound.
-pub fn spire(eye: [i32; 2], cell: Zoom, x: i32, y: i32) -> i32 {
-    let s = BRICK_SHIFT + LEAF_CELL - cell;
+/// How far the samples of a brick of the clip level at `cell_zoom` stand over the rest of the
+/// ground. Spires a brick wide stand about the edges of this level and of each finer level, so
+/// a block read at an edge, or read at a coarser level, moves a bound.
+pub fn spire(eye: [i32; 2], cell_zoom: Zoom, x: i32, y: i32) -> i32 {
+    let s = BRICK_SHIFT + LEAF_CELL_ZOOM - cell_zoom;
     let mut most = 0;
-    for finer in cell..=LEAF_CELL {
-        let f = BRICK_SHIFT + LEAF_CELL - finer;
+    for finer in cell_zoom..=LEAF_CELL_ZOOM {
+        let f = BRICK_SHIFT + LEAF_CELL_ZOOM - finer;
         let first = level_first(eye, finer);
-        let i = wrap_idx(LEAF_CELL, x - (first[0] << f)) >> f;
+        let i = wrap_idx(LEAF_CELL_ZOOM, x - (first[0] << f)) >> f;
         let j = (y - (first[1] << f)) >> f;
         let ring = |v: i32| matches!(v, -1 | 0 | 7 | 8);
         if (-1..=8).contains(&i) && (-1..=8).contains(&j) && (ring(i) || ring(j)) {
-            let h = mix(31 * cell + finer, [x >> s, y >> s]);
+            let h = mix(31 * cell_zoom + finer, [x >> s, y >> s]);
             if h.is_multiple_of(3) {
-                // Each level's taller than a coarser's, so what it reads alone shows.
-                most = most.max(500 + 120 * (cell - FIRST_CELL) as i32 + (h >> 8) as i32 % 100);
+                // Each level's spires stand taller than a coarser level's, so a read that only
+                // this level answers shows in the bound.
+                most = most
+                    .max(500 + 120 * (cell_zoom - FIRST_CELL_ZOOM) as i32 + (h >> 8) as i32 % 100);
             }
         }
     }
     most
 }
 
-/// The ground's face at a leaf column as the clip level at `cell` holds it, in leaf cells.
-pub fn elevation(eye: [i32; 2], cell: Zoom, x: i32, y: i32) -> i32 {
+/// The ground's face at a leaf column as the clip level at `cell_zoom` holds it, in leaf cells.
+pub fn elevation(eye: [i32; 2], cell_zoom: Zoom, x: i32, y: i32) -> i32 {
     let (fx, fy) = (x as f32, y as f32);
     let hills = 300.0 * libm::sinf(fx * 1.3e-5) + 120.0 * libm::cosf(fy * 3.1e-5);
     let near = 40.0 * libm::sinf(fx * 0.002) + 30.0 * libm::cosf(fy * 0.0031);
     let fine = 8.0 * libm::sinf((fx + fy) * 0.017);
     let sunk = if y >= SUNK_FROM { -1500 } else { 0 };
-    (hills + near + fine) as i32 + sunk + spire(eye, cell, x, y)
+    (hills + near + fine) as i32 + sunk + spire(eye, cell_zoom, x, y)
 }
 
-/// A leaf cell's column at `cell` as `g` (`g` the cell's middle).
-pub fn leaf_of(cell: Zoom, g: i32) -> i32 {
-    let s = LEAF_CELL - cell;
+/// The leaf column at the middle of column `g` of the clip level at `cell_zoom`.
+pub fn leaf_of(cell_zoom: Zoom, g: i32) -> i32 {
+    let s = LEAF_CELL_ZOOM - cell_zoom;
     (g << s) + ((1 << s) >> 1)
 }
 
@@ -163,16 +170,16 @@ pub struct World<'a> {
     pub ground: &'a [u32],
     pub palette: &'a [u32],
     pub shards: &'a [[u32; 4]],
-    pub overwrites: &'a [u32],
+    pub objects: &'a [u32],
     pub pool: &'a [u32],
 }
 
 impl Columns for World<'_> {
     fn first_child(&self, slot: u32) -> u32 {
-        self.overwrites[slot as usize]
+        self.objects[slot as usize]
     }
     fn data(&self, slot: u32) -> u32 {
-        self.overwrites[self.overwrites.len() / 2 + slot as usize]
+        self.objects[self.objects.len() / 2 + slot as usize]
     }
 }
 
@@ -192,22 +199,23 @@ impl World<'_> {
 }
 
 impl Presence for World<'_> {
-    fn present(&self, cell: Zoom, q: [i32; 2]) -> (u32, bool) {
-        let row = self.row((cell - FIRST_CELL) * ENTRIES + clip::entry(q));
+    fn present(&self, cell_zoom: Zoom, q: [i32; 2]) -> (u32, bool) {
+        let row = self.row((cell_zoom - FIRST_CELL_ZOOM) * ENTRIES + clip::entry(q));
         (row.slot(), row.holds(q))
     }
 }
 
 impl Bricks for World<'_> {
-    fn brick(&self, cell: Zoom, entry: u32) -> ([i32; 2], bool) {
-        self.row((cell - FIRST_CELL) * ENTRIES + entry).brick()
+    fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool) {
+        self.row((cell_zoom - FIRST_CELL_ZOOM) * ENTRIES + entry)
+            .brick()
     }
-    fn joined(&self, cell: Zoom, e: u32) -> [u32; clip::JOINED_WORDS as usize] {
-        self.clipmap[(JOINED_AT + (cell - FIRST_CELL) * JOINED_ENTRIES + e) as usize]
+    fn joined(&self, cell_zoom: Zoom, e: u32) -> [u32; clip::JOINED_WORDS as usize] {
+        self.clipmap[(JOINED_AT + (cell_zoom - FIRST_CELL_ZOOM) * JOINED_ENTRIES + e) as usize]
             .map(|v| v as u32)
     }
-    fn origin(&self, cell: Zoom) -> ([i32; 2], bool) {
-        self.row(ORIGIN_AT + cell - FIRST_CELL).brick()
+    fn origin(&self, cell_zoom: Zoom) -> ([i32; 2], bool) {
+        self.row(ORIGIN_AT + cell_zoom - FIRST_CELL_ZOOM).brick()
     }
     fn palette_word(&self, _: Zoom, slot: u32, i: u32) -> u32 {
         self.palette[(slot * BRICK_CELLS + i) as usize]
@@ -215,11 +223,11 @@ impl Bricks for World<'_> {
     fn column(&self, _: Zoom, slot: u32, i: u32) -> u32 {
         fill::column_of(self.ground, slot * BRICK_WORDS, i)
     }
-    fn bound_level(&self, _: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
-        fill::level_of(self.ground, slot * BRICK_WORDS, j, at)
+    fn bound_mip(&self, _: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
+        fill::mip_of(self.ground, slot * BRICK_WORDS, j, at)
     }
-    fn laid(&self, _: Zoom, slot: u32, i: u32) -> u32 {
-        fill::laid_of(self.ground, slot * BRICK_WORDS, i)
+    fn own(&self, _: Zoom, slot: u32, i: u32) -> u32 {
+        fill::own_of(self.ground, slot * BRICK_WORDS, i)
     }
     fn root(&self, _: Zoom, slot: u32) -> u32 {
         fill::root_of(self.ground, slot * BRICK_WORDS)
@@ -242,42 +250,44 @@ impl Resident for World<'_> {
     }
 }
 
-/// A way's middle a descent is sent to: its cells' zoom, its line, and where in leaf cells.
+/// The middle of a way, where a descent is sent: the zoom of the way's cells, its line, and the
+/// place in leaf cells.
 pub type Point = (Zoom, u32, [i32; 3]);
 
-/// What a brick is filled off: its four palette indices a cell, its tile's samples, its
-/// lines (pxl-engine `fill::Site`).
-pub struct Handed {
+/// What a brick is filled from (pxl-engine `fill::Site`): four palette indices for each cell,
+/// the samples of its tile, and its lines.
+pub struct Source {
     pub four: Vec<u32>,
     pub ele: Vec<i16>,
     pub lines: Vec<u32>,
 }
 
-/// A brick as the core fills it. Its ways' middles are added to `ways`.
-pub fn handed(
+/// What the core hands the fill for brick `q` of the clip level at `cell_zoom`. The brick has
+/// lines only where `lined` is set, and the middles of its ways are added to `ways`.
+pub fn source(
     eye: [i32; 2],
-    cell: Zoom,
+    cell_zoom: Zoom,
     q: [i32; 2],
     lined: bool,
     ways: &mut Vec<Point>,
-) -> Handed {
+) -> Source {
     let span = (ground::ELE_PADDED_SPAN * ground::ELE_PADDED_SPAN) as usize;
-    let mut handed = Handed {
+    let mut source = Source {
         four: vec![0; BRICK_CELLS as usize],
         ele: vec![0; span],
         lines: vec![0; LINES_WORDS as usize],
     };
-    let s = LEAF_CELL - cell;
+    let s = LEAF_CELL_ZOOM - cell_zoom;
     for i in 0..BRICK_CELLS {
         let [x, y] = clip::of_idx(i);
         let g = [
             (q[0] << BRICK_SHIFT) + x as i32,
             (q[1] << BRICK_SHIFT) + y as i32,
         ];
-        let leaf = [leaf_of(cell, g[0]), leaf_of(cell, g[1])];
+        let leaf = [leaf_of(cell_zoom, g[0]), leaf_of(cell_zoom, g[1])];
         let shard = [wrap_idx(SHARD_ZOOM, leaf[0] >> 16), leaf[1] >> 16];
         let four = if served(shard) {
-            let region = mix(cell, [g[0] >> 3, g[1] >> 3]);
+            let region = mix(cell_zoom, [g[0] >> 3, g[1] >> 3]);
             let base = match region % 8 {
                 0 => palette::sand as u32,
                 1 => palette::beach as u32,
@@ -297,9 +307,10 @@ pub fn handed(
         } else {
             [ground::UNKNOWN; 4]
         };
-        handed.four[i as usize] = ground::word(four);
+        source.four[i as usize] = ground::word(four);
     }
-    // The tile's samples, each about a padded place on the tile's cells.
+    // The tile's elevation samples, each at the middle of its step on the padded grid over the
+    // tile's cells.
     let tile = [q[0] >> 3, q[1] >> 3];
     let side = TILE_CELLS as i32;
     let first = [tile[0] * side, tile[1] * side];
@@ -309,35 +320,41 @@ pub fn handed(
             let at = |v: u32, f: i32| {
                 ((f + (v as i32 - ground::ELE_PAD as i32) * step + step / 2) as i64) << s
             };
-            let e = elevation(eye, cell, at(sx, first[0]) as i32, at(sy, first[1]) as i32);
-            handed.ele[ground::ele_idx(sx, sy)] = e as i16;
+            let e = elevation(
+                eye,
+                cell_zoom,
+                at(sx, first[0]) as i32,
+                at(sy, first[1]) as i32,
+            );
+            source.ele[ground::ele_idx(sx, sy)] = e as i16;
         }
     }
-    // The tile's lines, every one in every bin of the brick: a bridge, a bore and an
-    // approach, each two segments that continue.
+    // The tile's lines, each listed in every bin of the brick. They are bridges, bores and an
+    // approach, each of two segments that continue one into the other.
     let per_m = 1.0f32;
     let stations = Stations {
         step: way::INTERVAL_M.map(|m| pxl_engine::cells_of_m(m, per_m)),
         phase: [[0; 2], [3 << s, 5 << s]],
         leaf: 1 << s,
     };
-    handed.lines[..way::HEADER_WORDS as usize].copy_from_slice(&way::header(per_m, &stations));
+    source.lines[..way::HEADER_WORDS as usize].copy_from_slice(&way::header(per_m, &stations));
     if !lined {
-        return handed;
+        return source;
     }
     let mut segments = Vec::new();
     for line in 0..5u32 {
-        let h = mix(line + 100 * cell, tile);
-        // Across the brick's own quarter of the tile, so its bricks hold it.
-        // The high bridge apart from the rest, its nodes over no other's.
+        let h = mix(line + 100 * cell_zoom, tile);
+        // Each line crosses the brick's own part of the tile, so the brick holds it. The high
+        // bridge, line 3, lies apart from the rest, so none of its nodes lie over another's.
         let beside = if line == 3 { 22 } else { 0 };
         let center = [(q[0] & 7) * 64 + 32, (q[1] & 7) * 64 + 32 + beside];
         let off = |r: u32| ((r % 8) as i32 - 4) * 8;
         let a = [(center[0] - 40) * 8, center[1] * 8 + off(h)];
         let b = [(center[0] + 40) * 8, center[1] * 8 + off(h >> 8)];
         let m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + off(h >> 16)];
-        // A bridge, a bore and an approach; a bridge high over the ground; a bore through
-        // the surface, its air over the ground's top, tall enough to fill a coarse cell.
+        // Lines 0 to 2 are a bridge, a bore and an approach. Line 3 is a bridge high over the
+        // ground. Line 4 is a bore through the surface, whose air rises over the ground's top
+        // and is tall enough to fill a coarse cell.
         let form = [
             way::BRIDGE,
             way::TUNNEL,
@@ -348,7 +365,7 @@ pub fn handed(
         let lift = [10, -25, 2, 60, -2][line as usize];
         let top_at = |p: [i32; 2]| {
             let leaf = |v: i32, f: i32| (f + v / 8) << s;
-            (elevation(eye, cell, leaf(p[0], first[0]), leaf(p[1], first[1])) + lift) as i16
+            (elevation(eye, cell_zoom, leaf(p[0], first[0]), leaf(p[1], first[1])) + lift) as i16
         };
         let width = 16 + (h >> 24) % 48;
         let kinds = value::TRANSPORTS[1] - value::TRANSPORTS[0] + 1;
@@ -368,24 +385,29 @@ pub fn handed(
             ));
         }
         let mid = [first[0] + m[0] / 8, first[1] + m[1] / 8];
-        ways.push((cell, line, [mid[0] << s, mid[1] << s, top_at(m) as i32]));
+        ways.push((
+            cell_zoom,
+            line,
+            [mid[0] << s, mid[1] << s, top_at(m) as i32],
+        ));
     }
     let n = segments.len() as u32;
     for b in 0..clip::WAYS_BINS {
-        handed.lines[(way::HEADER_WORDS + b) as usize] = n << 16;
+        source.lines[(way::HEADER_WORDS + b) as usize] = n << 16;
     }
     for e in 0..n {
-        handed.lines[(LINES_ENTRIES_AT + e / 2) as usize] |= e << (16 * (e % 2));
+        source.lines[(LINES_ENTRIES_AT + e / 2) as usize] |= e << (16 * (e % 2));
     }
     for (k, w) in segments.iter().enumerate() {
         let at = LINES_SEGMENTS_AT as usize + k * way::SEGMENT_WORDS;
-        handed.lines[at..at + way::SEGMENT_WORDS].copy_from_slice(w);
+        source.lines[at..at + way::SEGMENT_WORDS].copy_from_slice(w);
     }
-    handed
+    source
 }
 
-/// What is placed as the store lays it: a slot's child pointer, then its data; the
-/// root's child group first; each branch its children's fold.
+/// What is placed, as the store lays it. The words are every slot's child pointer, then every
+/// slot's data. The root's child group comes first, and each branch's data is the fold of its
+/// children.
 pub struct Placing {
     first: Vec<u32>,
     data: Vec<u32>,
@@ -399,9 +421,9 @@ impl Placing {
         }
     }
 
-    /// The leaf `word` at the node `c` of `zoom`, unless a coarser leaf covers it.
+    /// Puts the leaf `word` at the node `c` of `zoom`, unless a coarser leaf covers it.
     fn put(&mut self, zoom: Zoom, c: [i32; 3], word: u32) {
-        let p = overwrite::path(zoom, c);
+        let p = object::path(zoom, c);
         let idx = |d: Zoom| {
             let v = [p[0] >> d, p[1] >> d, p[2] >> d];
             (v[0] & 1 | (v[1] & 1) << 1 | (v[2] & 1) << 2) as usize
@@ -423,17 +445,17 @@ impl Placing {
         self.data[slot] = word;
     }
 
-    /// The fold of the branch at `slot`, a node of `zoom`.
+    /// Folds the branch at `slot`, a node of `zoom`, into its data, and returns the fold.
     fn fold(&mut self, slot: usize, zoom: Zoom) -> u32 {
         if self.first[slot] == 0 {
-            return overwrite::share(self.data[slot]);
+            return object::share(self.data[slot]);
         }
         let base = (self.first[slot] & !BRANCH) as usize;
         let mut children = [0; 8];
         for (k, c) in children.iter_mut().enumerate() {
             *c = self.fold(base + k, zoom + 1);
         }
-        self.data[slot] = overwrite::fold(children, zoom);
+        self.data[slot] = object::fold(children, zoom);
         self.data[slot]
     }
 
@@ -446,30 +468,29 @@ impl Placing {
     }
 }
 
-/// The first decor's stored value (pxl-content `DECORS`).
 pub const FIRST_DECOR_VAL: u32 = DECORS[0].val;
 
-/// The world built, and what lies where a test sends what it asks.
+/// The world built, and the places where the tests send their asks.
 pub struct Built {
     pub clipmap: Vec<[i32; 4]>,
     pub ground: Vec<u32>,
     pub palette: Vec<u32>,
     pub shards: Vec<[u32; 4]>,
-    pub overwrites: Vec<u32>,
+    pub objects: Vec<u32>,
     pub pool: Vec<u32>,
-    /// The ways' middles.
     pub way_points: Vec<Point>,
-    /// What was placed, its zoom and node.
+    /// What was placed, each as its zoom and node.
     pub placed: Vec<(Zoom, [i32; 3])>,
-    /// Cells what is placed folds in; lone leaves of the finest; points over high bridges;
-    /// some of a cell placed where no clip level holds the ground under it.
+    /// `folds` holds cells that what is placed folds into, and `lone` holds lone leaves of the
+    /// finest zoom. `over_bridges` holds points over high bridges, and `unheld` holds cells
+    /// partly placed where no clip level holds the ground under them.
     pub folds: Vec<[i32; 3]>,
     pub lone: Vec<[i32; 3]>,
     pub over_bridges: Vec<[i32; 3]>,
     pub unheld: Vec<[i32; 3]>,
-    /// Decor placed, each a unit leaf.
+    /// The decor placed, each as one leaf cell.
     pub decors: Vec<[i32; 3]>,
-    /// The stream it was built by, going on.
+    /// The stream the world was built by, left where the build stopped drawing from it.
     pub draw: Draw,
 }
 
@@ -480,26 +501,27 @@ impl Built {
             ground: &self.ground,
             palette: &self.palette,
             shards: &self.shards,
-            overwrites: &self.overwrites,
+            objects: &self.objects,
             pool: &self.pool,
         }
     }
 
-    /// A ground's top, off whichever clip level holds it, what is placed read from none.
+    /// The ground's top at leaf column `g`, from whichever clip level holds it. What is placed
+    /// is not read.
     pub fn top_at(&self, g: [i32; 2]) -> i32 {
         let (_, column, _, _) = clip::cell(
             &self.world(),
             Lookup::NONE,
-            LEAF_CELL,
-            [wrap_idx(LEAF_CELL, g[0]), g[1]],
+            LEAF_CELL_ZOOM,
+            [wrap_idx(LEAF_CELL_ZOOM, g[0]), g[1]],
         );
         clip::column_top(column)
     }
 }
 
-/// The eye's clip levels' entries in `clipmap` folded a level at a time over its entry table
-/// (`clip::fold`), and some left as a clip level moved along one axis left them, not yet
-/// folded again.
+/// Folds the entries of the eye's clip levels in `clipmap`, one level at a time over its entry
+/// table (`clip::fold`). Some entries are then left as a clip level that moved along one axis
+/// would leave them, not yet folded again.
 pub fn fold(
     clipmap: &mut [[i32; 4]],
     ground: &[u32],
@@ -507,24 +529,25 @@ pub fn fold(
     shards: &[[u32; 4]],
     pool: &[u32],
 ) {
-    for l in 1..=JOINED_LEVELS {
-        for cell in FIRST_CELL..=LEAF_CELL {
+    for l in 1..=JOINED_MIPS {
+        for cell_zoom in FIRST_CELL_ZOOM..=LEAF_CELL_ZOOM {
             let entries: Vec<_> = {
                 let w = World {
                     clipmap,
                     ground,
                     palette,
                     shards,
-                    overwrites: &[0; 16],
+                    objects: &[0; 16],
                     pool,
                 };
                 (0..(ACROSS >> l) * (ACROSS >> l))
-                    .map(|b| clip::fold(&w, cell, l, b))
+                    .map(|b| clip::fold(&w, cell_zoom, l, b))
                     .collect()
             };
             for (b, e) in entries.into_iter().enumerate() {
-                let at =
-                    JOINED_AT + (cell - FIRST_CELL) * JOINED_ENTRIES + clip::joined_idx(l, [0, 0]);
+                let at = JOINED_AT
+                    + (cell_zoom - FIRST_CELL_ZOOM) * JOINED_ENTRIES
+                    + clip::joined_idx(l, [0, 0]);
                 clipmap[at as usize + b] = e.map(|v| v as i32);
             }
         }
@@ -537,7 +560,8 @@ pub fn fold(
     }
 }
 
-/// The service area's index, a cell's nine by its key (`served`).
+/// The service area's index, which holds each shard's nine (`area::nine`) at its key, as
+/// `served` decides.
 pub fn shards() -> Vec<[u32; 4]> {
     let mut shards = vec![[0u32; 4]; (area::SHARD_CELLS / 4) as usize];
     for y in 0..1 << SHARD_ZOOM {
@@ -549,7 +573,7 @@ pub fn shards() -> Vec<[u32; 4]> {
     shards
 }
 
-/// The world about an eye at `eye`, seeded the one way.
+/// The world about an eye at `eye`, always from the same seed.
 pub fn build(eye: [i32; 2]) -> Built {
     build_with_decors(eye, 0)
 }
@@ -559,12 +583,12 @@ pub fn build_with_decors(eye: [i32; 2], placed_decors: u32) -> Built {
     build_with(eye, placed_decors, &[])
 }
 
-/// `build_with_decors`, and the leaves `leaves` placed last, each its zoom, node and word.
+/// `build_with_decors`, with `leaves` placed last, each given as its zoom, node and word.
 pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], u32)]) -> Built {
     let shards = shards();
 
-    // The clip levels and their bricks, each filled as a frame's fill does; some wanted
-    // and not yet held.
+    // The clip levels and their bricks, each brick filled as a frame's fill fills it. Some
+    // bricks are wanted and not yet held.
     let rows = (JOINED_AT + EYE_CLIP_LEVELS * JOINED_ENTRIES) as usize;
     let mut clipmap = vec![[0i32; 4]; rows];
     let mut ground_words: Vec<u32> = Vec::new();
@@ -577,38 +601,41 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
     );
     let mut way_points = Vec::new();
     let (mut held_bricks, mut absent_bricks, mut way_bricks) = (0u32, 0u32, 0u32);
-    for cell in FIRST_CELL..=LEAF_CELL {
-        let first = level_first(eye, cell);
-        let laid = !UNLAID.contains(&cell) as i32;
-        clipmap[(ORIGIN_AT + cell - FIRST_CELL) as usize] = [first[0], first[1], laid, 0];
+    for cell_zoom in FIRST_CELL_ZOOM..=LEAF_CELL_ZOOM {
+        let first = level_first(eye, cell_zoom);
+        let laid = !UNLAID.contains(&cell_zoom) as i32;
+        clipmap[(ORIGIN_AT + cell_zoom - FIRST_CELL_ZOOM) as usize] = [first[0], first[1], laid, 0];
         for k in 0..ENTRIES {
             let q = [
-                wrap_idx(clip::bricks_zoom(cell), first[0] + (k % ACROSS) as i32),
+                wrap_idx(clip::bricks_zoom(cell_zoom), first[0] + (k % ACROSS) as i32),
                 first[1] + (k / ACROSS) as i32,
             ];
-            let row = ((cell - FIRST_CELL) * ENTRIES + clip::entry(q)) as usize;
+            let row = ((cell_zoom - FIRST_CELL_ZOOM) * ENTRIES + clip::entry(q)) as usize;
             clipmap[row] = [q[0], q[1], 0, 0];
-            let h = mix(cell, q);
+            let h = mix(cell_zoom, q);
             if h.is_multiple_of(7) {
                 absent_bricks += 1;
                 continue;
             }
             let lined = !(h >> 8).is_multiple_of(3);
-            let brick = handed(eye, cell, q, lined, &mut way_points);
+            let brick = source(eye, cell_zoom, q, lined, &mut way_points);
             lane.fill(0);
             palette_words.extend_from_slice(&brick.four);
             let site = fill::Site {
-                cell,
+                cell_zoom,
                 place: [(q[0] & 7) as u32, (q[1] & 7) as u32],
-                first: [wrap_idx(cell, q[0] << BRICK_SHIFT), q[1] << BRICK_SHIFT],
+                first: [
+                    wrap_idx(cell_zoom, q[0] << BRICK_SHIFT),
+                    q[1] << BRICK_SHIFT,
+                ],
                 shard: Shard::INSIDE,
                 ele: &brick.ele,
                 lines: &brick.lines,
             };
             fill::brick(&mut lane, &mut scratch, |i| brick.four[i as usize], &site);
-            let [taken, _, root] = fill::tree(&lane, &scratch, cell, &mut pool, next_group);
-            if taken != u32::MAX {
-                next_group += taken;
+            let [used, _, root] = fill::tree(&lane, &scratch, cell_zoom, &mut pool, next_group);
+            if used != u32::MAX {
+                next_group += used;
                 lane[ROOT_AT as usize] = root;
                 way_bricks += (root != 0) as u32;
             }
@@ -619,18 +646,19 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
         }
     }
     assert!(ground_words.len() as u32 / BRICK_WORDS == held_bricks);
-    // Some of each brick's columns no ground, its cells laid void, under ways and not: what the
-    // ways stand on there, or nothing.
+    // Some cells of each brick are laid void, with no ground of their own, both under ways and
+    // away from them. Under a way, such a cell is what the way stands on; elsewhere it is
+    // nothing.
     for slot in 0..held_bricks {
         for i in 0..BRICK_CELLS {
             if mix(slot + 1000, [i as i32, 3]).is_multiple_of(29) {
-                let w = (slot * BRICK_WORDS + LAID_AT + i / LAID_CELLS) as usize;
-                ground_words[w] &= !(0xff << (8 * (i % LAID_CELLS)));
+                let w = (slot * BRICK_WORDS + OWN_AT + i / OWN_CELLS) as usize;
+                ground_words[w] &= !(0xff << (8 * (i % OWN_CELLS)));
             }
         }
     }
-    // Slot 0 a brick with a tree a node of any brick's Z may read: a place held by none, its
-    // slot 0, reads no slot.
+    // Slot 0 gets a brick whose ways' tree a node at any brick's Z may read. A place that no
+    // brick holds has slot 0 and must read no slot, so a read of slot 0 there would show.
     let words = BRICK_WORDS as usize;
     let treed = (0..held_bricks as usize)
         .find(|&s| {
@@ -659,29 +687,29 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
     eprintln!(
         "{held_bricks} bricks held, {absent_bricks} absent, {way_bricks} with ways over {next_group} child groups"
     );
-    let overwrites_none = vec![0u32; 16];
+    let objects_none = vec![0u32; 16];
     fold(&mut clipmap, &ground_words, &palette_words, &shards, &pool);
 
-    // A ground's top, off whichever clip level holds it.
+    // The ground's top at leaf column `g`, from whichever clip level holds it.
     let top_at = |g: [i32; 2]| {
         let w = World {
             clipmap: &clipmap,
             ground: &ground_words,
             palette: &palette_words,
             shards: &shards,
-            overwrites: &overwrites_none,
+            objects: &objects_none,
             pool: &pool,
         };
         let (_, column, _, _) = clip::cell(
             &w,
             Lookup::NONE,
-            LEAF_CELL,
-            [wrap_idx(LEAF_CELL, g[0]), g[1]],
+            LEAF_CELL_ZOOM,
+            [wrap_idx(LEAF_CELL_ZOOM, g[0]), g[1]],
         );
         clip::column_top(column)
     };
 
-    // What is placed about the eye, and further off, each kind a leaf of its own.
+    // What is placed about the eye and further off, each kind as a leaf of its own.
     let mut draw = Draw(0x1234_5679);
     let mut placing = Placing::new();
     let mut placed: Vec<(Zoom, [i32; 3])> = Vec::new();
@@ -695,10 +723,10 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
         let t = top_at(g);
         let leaf = |zoom: Zoom, dz: i32| {
             let c = |v: i32| {
-                if zoom >= LEAF_CELL {
-                    v << (zoom - LEAF_CELL)
+                if zoom >= LEAF_CELL_ZOOM {
+                    v << (zoom - LEAF_CELL_ZOOM)
                 } else {
-                    v >> (LEAF_CELL - zoom)
+                    v >> (LEAF_CELL_ZOOM - zoom)
                 }
             };
             (zoom, [wrap_idx(zoom, c(g[0])), c(g[1]), c(t + dz)])
@@ -708,18 +736,19 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
             placed.push((zoom, c));
         };
         match i % 12 {
-            // Finer than a cell: a cell's eight, a byte each, all of it, the half of it
-            // low, air over a byte, or decor's alone, which fills none.
+            // Finer than a cell: the eight nodes of one cell, each a byte's value. Case 8
+            // fills all eight, case 9 the lower half, and case 10 lays air over bytes. Case 11
+            // lays decor's value alone, which fills none.
             8..=11 => {
                 let (z, c) = leaf(25, 0);
                 let at = [c[0] & !1, c[1] & !1, c[2] & !1];
                 for k in 0..8u32 {
                     let word = match i % 12 {
-                        8 => overwrite::leaf_word(5 + k * 3 + i % 7, 0),
-                        9 if k < 4 => overwrite::leaf_word(6 + k * 2, 0),
-                        10 if k < 4 => overwrite::leaf_word(40 + k, 0),
-                        10 if k % 2 == 0 => overwrite::leaf_word(value::AIR, 0),
-                        11 => overwrite::leaf_word(0x1500 + k, i),
+                        8 => object::leaf_word(5 + k * 3 + i % 7, 0),
+                        9 if k < 4 => object::leaf_word(6 + k * 2, 0),
+                        10 if k < 4 => object::leaf_word(40 + k, 0),
+                        10 if k % 2 == 0 => object::leaf_word(value::AIR, 0),
+                        11 => object::leaf_word(0x1500 + k, i),
                         _ => continue,
                     };
                     let d = [(k & 1) as i32, (k >> 1 & 1) as i32, (k >> 2) as i32];
@@ -727,10 +756,11 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
                 }
                 folds.push([g[0], g[1], c[2] >> 1]);
             }
-            // An object's color, a ground's palette entry, its handle over it.
+            // Case 0 places an object's color and case 1 a ground's palette entry, each with
+            // its handle over its value.
             0 => lay(
-                leaf(LEAF_CELL, draw.within(0, 4)),
-                overwrite::leaf_word(
+                leaf(LEAF_CELL_ZOOM, draw.within(0, 4)),
+                object::leaf_word(
                     match i / 12 % 3 {
                         0 => value::OBJECTS[1],
                         1 => value::OBJECTS[0],
@@ -740,8 +770,8 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
                 ),
             ),
             1 => lay(
-                leaf(LEAF_CELL, 0),
-                overwrite::leaf_word(
+                leaf(LEAF_CELL_ZOOM, 0),
+                object::leaf_word(
                     match i / 12 % 3 {
                         0 => value::GROUNDS[1],
                         1 => value::GROUNDS[0],
@@ -752,68 +782,69 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
             ),
             // Air, where a cube is cut out of the ground.
             2 => lay(
-                leaf(LEAF_CELL, -draw.within(1, 5)),
-                overwrite::leaf_word(value::AIR, 0),
+                leaf(LEAF_CELL_ZOOM, -draw.within(1, 5)),
+                object::leaf_word(value::AIR, 0),
             ),
             // A leaf over several cells.
             3 => lay(
                 leaf(22, draw.within(0, 9)),
-                overwrite::leaf_word(0x200 + i % 40, 0),
+                object::leaf_word(0x200 + i % 40, 0),
             ),
             // Finer than a cell: some of its cube.
             4 => {
                 let (z, c) = leaf(FINEST - (i / 12 % 2), 0);
                 for k in 0..1 + draw.next() % 40 {
                     let d = |b: u32| ((k >> b & 3) as i32) & 3;
-                    let word = overwrite::leaf_word(0x120 + i % 5, 0);
+                    let word = object::leaf_word(0x120 + i % 5, 0);
                     lay((z, [c[0] + d(0), c[1] + d(2), c[2] + d(4)]), word);
                 }
             }
-            // A fine leaf a byte's and air beside it.
+            // A fine leaf of a byte's value, with air beside it.
             5 => {
                 let (z, c) = leaf(25, 1);
-                lay((z, c), overwrite::leaf_word(20 + i % 9, 0));
+                lay((z, c), object::leaf_word(20 + i % 9, 0));
                 lay(
                     (z, [c[0] + 1, c[1], c[2]]),
-                    overwrite::leaf_word(value::AIR, 0),
+                    object::leaf_word(value::AIR, 0),
                 );
-                lay((z, [c[0], c[1] + 1, c[2]]), overwrite::leaf_word(0x140, 0));
+                lay((z, [c[0], c[1] + 1, c[2]]), object::leaf_word(0x140, 0));
             }
-            // A value that is no voxel: decor's.
-            6 => lay(leaf(LEAF_CELL, 2), overwrite::leaf_word(0x1234, i)),
+            // A value that is no voxel, as decor's is.
+            6 => lay(leaf(LEAF_CELL_ZOOM, 2), object::leaf_word(0x1234, i)),
             // A large leaf further off.
             _ => lay(
                 leaf(18 + i % 5, draw.within(-40, 60)),
-                overwrite::leaf_word(0x180, 0),
+                object::leaf_word(0x180, 0),
             ),
         }
     }
-    // A lone leaf of the finest in its node of zoom 21, nothing else near: a fold there has
-    // a kind and no share.
+    // Lone leaves of the finest zoom, each alone in its node of zoom 21. A fold there has a
+    // kind and no share.
     let mut lone = Vec::new();
     for k in 0..300 {
         let g = [(-127 << 16) + 16 * k, (43 << 16) + 400 + 16 * (k % 40)];
         let p = [g[0], g[1], top_at(g) + 30];
         let at = [wrap_idx(FINEST, p[0] << 3), p[1] << 3, p[2] << 3];
         let val = if k % 2 == 0 { 0x150 } else { value::AIR };
-        placing.put(FINEST, at, overwrite::leaf_word(val, 0));
+        placing.put(FINEST, at, object::leaf_word(val, 0));
         lone.push(p);
     }
-    // In the upper half of a node over a high bridge at the leaves, the ground under it:
-    // its box and the bridge's both short along z.
+    // Leaves in the upper half of a node over a high bridge at the leaves, with the ground
+    // under them. The box of what is placed and the bridge's box both fall short of the node
+    // along Z.
     let mut over_bridges = Vec::new();
-    for &(cell, line, p) in &way_points {
+    for &(cell_zoom, line, p) in &way_points {
         let side = 16;
-        if cell == LEAF_CELL && line == 3 && (3..8).contains(&p[2].rem_euclid(side)) {
+        if cell_zoom == LEAF_CELL_ZOOM && line == 3 && (3..8).contains(&p[2].rem_euclid(side)) {
             let z = p[2].div_euclid(side) * side + side / 2 + side / 4;
             for at in [[p[0], p[1], z], [p[0] + 3, p[1] - 3, z + 1]] {
-                let c = [wrap_idx(LEAF_CELL, at[0]), at[1], at[2]];
-                placing.put(LEAF_CELL, c, overwrite::leaf_word(0x170, 0));
+                let c = [wrap_idx(LEAF_CELL_ZOOM, at[0]), at[1], at[2]];
+                placing.put(LEAF_CELL_ZOOM, c, object::leaf_word(0x170, 0));
             }
             over_bridges.push(p);
         }
     }
-    // Some of a cell placed where no clip level holds the ground under it.
+    // Parts of cells placed where no clip level holds the ground under them.
     let mut unheld = Vec::new();
     for k in 0..300 {
         let leaf = [
@@ -825,11 +856,12 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
         placing.put(
             25,
             at,
-            overwrite::leaf_word(if k % 2 == 0 { 9 } else { 0x130 }, 0),
+            object::leaf_word(if k % 2 == 0 { 9 } else { 0x130 }, 0),
         );
         unheld.push(leaf);
     }
-    // Decor placed on the ground about the eye, its handle over its value (tests/decor.rs).
+    // Decor placed on the ground about the eye, each with its handle over its value, for
+    // tests/decor.rs.
     let mut decors = Vec::new();
     let mut scatter = Draw(0x51ed_270b);
     for k in 0..placed_decors {
@@ -839,28 +871,28 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
             (eye[1] + scatter.within(-reach, reach)).max((40 << 16) + 2),
         ];
         let at = [
-            wrap_idx(LEAF_CELL, g[0]),
+            wrap_idx(LEAF_CELL_ZOOM, g[0]),
             g[1],
             top_at(g) + scatter.within(0, 2),
         ];
         placing.put(
-            LEAF_CELL,
+            LEAF_CELL_ZOOM,
             at,
-            overwrite::leaf_word(FIRST_DECOR_VAL + k % 4, 7000 + k),
+            object::leaf_word(FIRST_DECOR_VAL + k % 4, 7000 + k),
         );
         decors.push(at);
     }
     for &(zoom, c, word) in leaves {
         placing.put(zoom, c, word);
     }
-    let overwrites = placing.words();
+    let objects = placing.words();
     Built {
         decors,
         clipmap,
         ground: ground_words,
         palette: palette_words,
         shards,
-        overwrites,
+        objects,
         pool,
         way_points,
         placed,
@@ -872,11 +904,11 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
     }
 }
 
-/// The world's one query asked of every node a walk visits, nothing kept: what a walk answers
-/// whatever the node cache holds.
+/// The world's one query asked of every node a walk visits, with nothing kept. A walk over it
+/// answers what a walk must answer whatever the node cache holds.
 pub struct Asking<'a> {
     pub w: World<'a>,
-    pub cuts: [overwrite::Cut; 2],
+    pub cuts: [object::Cut; 2],
 }
 
 impl Query for Asking<'_> {
@@ -913,11 +945,11 @@ impl Query for Asking<'_> {
     }
 }
 
-/// What the world answers of a node with nothing handed down, what it hands on included:
-/// what a stackless walk asks.
+/// What the world answers of a node with nothing handed down to it, and what it hands on. This
+/// is what a stackless walk asks.
 pub fn truth(
     w: World,
-    cuts: [overwrite::Cut; 2],
+    cuts: [object::Cut; 2],
     zoom: Zoom,
     c: [i32; 3],
     zooms: [Zoom; 2],
@@ -929,7 +961,7 @@ pub fn truth(
     (a, at.words())
 }
 
-/// A position `units` off, its fraction off every edge of a step.
+/// The Q3 position of `units`, with a fraction that lies off every edge of a step.
 pub fn q8(units: [i32; 3]) -> [i32; 3] {
     [
         units[0].wrapping_shl(FRAC_W) | 5,

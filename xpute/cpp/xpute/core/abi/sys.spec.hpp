@@ -2,16 +2,20 @@
 //
 // GENERATED from spec/abi/sys.json
 //
-// xpute's own protocol on majors NOP and SYS: the core's life as its runtime tells it, its
-// turns, and its end. NOP is the rings' own test. SYS_ATTACH, SYS_SUSPEND and SYS_RESUME
-// are the core's life as its runtime sees it: a runtime (re)attached, the core about to be
-// frozen, and woken; what each means to keep or reset is the core's. SYS_TURN marks a turn
-// the runtime's scheduling policy grants, with the wall clock. SYS_ABORT is the core's end, the
-// broken invariant it reports as it stops, which the runtime hears as a VMM hears a core's
-// exit. Each command is `major << 8 | minor` (kit abi/cmd) and carries an XTP branch whose
-// children are its fields, in order; one with no fields carries no packet. The GPU and the
-// files are devices of their own (gpu.json, fs.json). Majors 0x00 to 0x0F are xpute's
-// (ipc/frame.json); a program numbers its own protocols' commands past them.
+// xpute's own protocol on majors NOP and SYS. Through it the runtime tells the core about
+// the core's life and its turns, and the core reports its end. NOP is the rings' own test.
+// SYS_ATTACH, SYS_SUSPEND and SYS_RESUME tell the core that a runtime attached, for the
+// first time or again, that the core is about to be frozen, and that it was woken; what
+// each one means the core keeps or resets is the core's to decide. SYS_TURN marks a turn
+// that the runtime's scheduling policy grants, and carries the wall clock. SYS_ABORT
+// reports the broken invariant the core stops on, and the runtime hears it as a VMM hears
+// its guest exit.
+//
+// Each command is `major << 8 | minor` (kit abi/cmd). Its packet is an XTP branch whose
+// children are the command's fields, in order; a command with no fields carries no packet.
+// The GPU and the files are devices with protocols of their own (gpu.json, fs.json).
+// Majors 0x00 to 0x0F are xpute's (ipc/frame.json), and a program numbers the commands of
+// its own protocols past them.
 
 #pragma once
 
@@ -29,7 +33,7 @@
 
 namespace xpute::abi::sys {
 
-// What a command is about.
+// A command's major, the high byte of its number, by which the runtime routes the frame.
 enum class Major : std::uint32_t {
     NOP = 0x00,
     SYS = 0x01,
@@ -43,7 +47,6 @@ template <> struct xpute::Members<xpute::abi::sys::Major> {
 
 namespace xpute::abi::sys {
 
-// The core's life as its runtime tells it, its turns, and its end.
 enum class SysMinor : std::uint32_t {
     ABORT = 0x01,
     ATTACH = 0x02,
@@ -64,23 +67,27 @@ namespace xpute::abi::sys {
 enum class Command : std::uint32_t {
 
     // ---- sys, export ----
-    // Replies with its packet's value, or 0 where it has none — the rings' own test.
+    // The rings' own test. The reply carries the packet's value, or 0 when the frame has no
+    // packet.
     NOP = 0x0000,
-    // A runtime has attached, the first or again after one before it went: the mount sends it
-    // once the front is laid. What the old runtime's requests leave behind is the core's to let go.
+    // A runtime has attached, for the first time or after an earlier runtime went away. The
+    // runtime sends it once it has laid the front of the core's memory (ipc/head.json). The core
+    // lets go of whatever the earlier runtime's requests left behind.
     SYS_ATTACH = 0x0102,
-    // The core is about to be frozen, its turns stopped for as long as its runtime is hidden:
-    // its last sure moment to save. A call, rung at once.
+    // The core is about to be frozen: its turns stop for as long as its runtime is hidden. This
+    // is the core's last sure moment to save. It is a call, and the runtime rings the core at
+    // once to have it answered.
     SYS_SUSPEND = 0x0103,
-    // The core woken from SYS_SUSPEND. A call, rung at once.
+    // The core has been woken after SYS_SUSPEND. It is a call, rung at once as SYS_SUSPEND is.
     SYS_RESUME = 0x0104,
-    // A turn the scheduling policy grants, sent before it rings after what the program
-    // submits for it, as against a turn rung for a command alone: the wall clock, in Unix
-    // milliseconds. What else the policy says of the turn is the program's to send.
+    // Marks a turn that the scheduling policy grants, as opposed to a turn rung only because a
+    // command arrived. The runtime submits it after what the program submits for that turn,
+    // and before it rings. It carries the wall clock in Unix milliseconds. Anything else the
+    // policy has to say about the turn, the program sends in commands of its own.
     SYS_TURN = 0x0105,
 
     // ---- sys, import ----
-    // The broken invariant the core reports as it stops (xpute-kit status/bug.rs).
+    // Reports the broken invariant the core stops on (xpute-kit status/bug.rs).
     SYS_ABORT = 0x0101,
 };
 

@@ -1,6 +1,7 @@
 // pxl-render/eye_bind.wgsl
 
-// The eye a cast is from, its words where pxl-engine `eye` lays them, read a word at a time.
+// The eye a cast is made from. Its words lie where pxl-engine eye.rs places them, and a shader
+// reads them one word at a time.
 
 @group(0) @binding(0) var<uniform> eye: array<vec4<u32>, EYE_VEC4S>;
 

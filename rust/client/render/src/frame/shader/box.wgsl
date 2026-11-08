@@ -1,9 +1,9 @@
-// The ghost's boxes: each unfolded into a cube's six faces, every edge of
-// it its own silhouette.
+// Draws the ghost's boxes. Each box is unfolded into a cube's six faces, and
+// every edge of a box is outlined as its silhouette.
 
-// The draws' uniforms by slot (word.rs `ghost_box`), read as whole vec4s: a vec3f
-// followed by scalars inside a storage array is read differently by two backends,
-// everything past the first member sliding.
+// The draws' uniforms by slot (word.rs `ghost_box`), read as whole vec4s. Two
+// backends lay out a vec3f followed by scalars in a storage array differently,
+// and every member after the first slides.
 @group(0) @binding(3) var<storage, read> draws: array<vec4f>;
 
 var<private> draw_slot: u32;
@@ -15,7 +15,8 @@ struct BoxWords {
   @location(1) layer: u32,
 };
 
-// x/y in steps of its own cell, floor and height in steps of the mesh's.
+// A box's x and y are in steps of its own cell, and its floor and height in
+// steps of the mesh's.
 struct Box {
   min_xy: vec2f,
   size_xy: vec2f,
@@ -35,7 +36,8 @@ fn box_of(words: BoxWords) -> Box {
   return Box(box_pair(words.first[0], step), box_pair(words.first[1], step), box_pair(words.first[2], ghost_box_z_step()), words.first[3], words.layer);
 }
 
-// Wound counter-clockwise from outside, in paint.wgsl's FACE_NORMAL order.
+// Each face's four corners, wound counter-clockwise seen from outside, with the
+// faces in the order of paint.wgsl's `FACE_NORMAL`.
 const FACE_CORNER = array<vec3f, 24>(
   vec3f(0.5, -0.5, -0.5), vec3f(0.5, 0.5, -0.5), vec3f(0.5, 0.5, 0.5), vec3f(0.5, -0.5, 0.5),
   vec3f(-0.5, -0.5, -0.5), vec3f(-0.5, -0.5, 0.5), vec3f(-0.5, 0.5, 0.5), vec3f(-0.5, 0.5, -0.5),
@@ -79,8 +81,9 @@ fn box_corner(k: u32, b: Box, place: vec3f) -> Corner {
 }
 
 
-// The draw record's index rides on vertex_index (first vertex = record index
-// times the cube); the first box is the draw's first instance.
+// The draw record's index rides on `vertex_index`: a draw's first vertex is
+// its record's index times the cube's vertices. The draw's first instance is
+// its first box.
 @vertex
 fn vs(@builtin(vertex_index) v: u32, words: BoxWords) -> VertexOut {
   draw_slot = v / BOX_VERTICES;
@@ -105,18 +108,19 @@ fn vs(@builtin(vertex_index) v: u32, words: BoxWords) -> VertexOut {
   o.sun = l.sun;
   o.other = l.other;
   o.fill = l.fill;
-  // Real-size tile UV, one repeat a unit, read from where the face stands and
-  // not from its box: a leaf cut into several boxes still wears one tile. The
-  // mesh's corner and floor stand on whole units (ghost.rs `on_whole_units`), so its own
-  // coordinates are the world's modulo the repeat; v runs down a side.
+  // The tile's UV is at real size, one repeat a unit, and is read from where
+  // the face stands, not from its box, so a leaf cut into several boxes still
+  // wears one tile. The mesh's corner and floor stand on whole units (ghost.rs
+  // `on_whole_units`), so the mesh's own coordinates are the world's modulo
+  // the repeat. On a side, v runs down.
   o.box_uv = face_uv(vec3f(b.min_xy, b.z.x) + size * (local + 0.5), normal);
   return o;
 }
 
-// How much the box's own edges darken a point of its face: a lone box's
-// every edge is its silhouette, the nearer of the two edges of the face
-// that run through the point's axes. `px` is the units one of the
-// surface's pixels spans along each axis: an edge is the cells' line, of
+// How much the box's own edges darken a point of its face. Every edge of a
+// lone box is its silhouette, and the point takes the nearer of the face's
+// two edges along its axes. `px` is how many units one of the surface's
+// pixels spans along each axis. An edge is drawn as the cells' line is, of
 // one width in units whatever the box's size (`line_at`).
 fn outline(local_pos: vec3f, box_scale: vec3f, px: vec3f, normal: vec3f) -> f32 {
   if (frame_edge_strength() <= 0.0) {

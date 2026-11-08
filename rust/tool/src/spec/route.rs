@@ -157,7 +157,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     }));
 
     let spec_doc = spec.lines_at("$doc").unwrap_or_default();
-    let head = |logical: &str| {
+    let header = |logical: &str| {
         let mut h = vec![
             format!("// {logical}"),
             "//".to_string(),
@@ -168,7 +168,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         h
     };
 
-    let mut rs = head("pxl-spec/route.spec.rs");
+    let mut rs = header("pxl-spec/route.spec.rs");
     for (name, val) in &all {
         rs.extend(doc(name).unwrap_or_default().iter().map(|l| {
             if l.is_empty() {
@@ -196,7 +196,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         String::new(),
     ]);
 
-    let mut ts = head("@pxl/client/origin/route.spec.ts");
+    let mut ts = header("@pxl/client/service/origin/route.spec.ts");
     for (name, val) in &all {
         ts.extend(ts_doc(&doc(name).unwrap_or_default(), ""));
         ts.extend([
@@ -216,7 +216,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         ]);
     }
 
-    let mut worker = head("@pxl/edge/route.spec.ts");
+    let mut worker = header("@pxl/edge/route.spec.ts");
     worker.extend(
         [
             "// The Worker is bundled for the Workers runtime rather than from src/, so it",
@@ -235,7 +235,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     worker.push(String::new());
     Ok(vec![
         Output::new("rust/spec/src/route.spec.rs", rs.join("\n")),
-        Output::new("ts/client/src/origin/route.spec.ts", ts.join("\n")),
+        Output::new("ts/client/src/service/origin/route.spec.ts", ts.join("\n")),
         Output::new("ts/server/edge/route.spec.ts", worker.join("\n")),
         Output::new(wrangler_path, wrangler),
         Output::new(caddy_path, caddy),

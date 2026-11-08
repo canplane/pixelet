@@ -32,7 +32,7 @@ pub(crate) struct Tags {
     pub indoor: bool,
     /// A bridge's or a tunnel's OSM `layer` (`level_rules`), where given.
     pub level: Option<i64>,
-    /// Another way's `layer` of 1 or more: what Arnis lets carry a bridge down.
+    /// Whether the way has a `layer` of 1 or more, which Arnis lets carry a bridge down.
     pub raised: bool,
     pub role: Role,
 }
@@ -44,8 +44,9 @@ pub(crate) type PartId = (String, u64);
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Part {
     pub gers_id: String,
-    /// Where it lies on its segment, as fractions of the segment's length.
-    pub span: [f64; 2],
+    /// Where it lies on its segment, as fractions of the segment's length: Overture's
+    /// linear referencing, `between`.
+    pub between: [f64; 2],
     /// Its segment's whole length, in DB coordinates.
     pub(crate) segment_length: f64,
     pub subtype: String,
@@ -128,7 +129,8 @@ impl Part {
         cuts.extend(levels.bounds().chain(subclasses.bounds()));
         cuts.sort_by(f64::total_cmp);
         cuts.dedup();
-        // each run between cuts with what holds over it; a cut no value changes across joins its runs
+        // Each run between cuts, with what holds over it; a cut across which no value changes joins
+        // its runs.
         let mut runs: Vec<([f64; 2], Tags)> = Vec::new();
         for w in cuts.windows(2).filter(|w| w[0] < w[1]) {
             let mid = (w[0] + w[1]) / 2.0;
@@ -156,7 +158,7 @@ impl Part {
         }
         let part = |(span, tags): ([f64; 2], Tags), points: Vec<G3857>| Part {
             gers_id: gers_id.clone(),
-            span,
+            between: span,
             segment_length: length,
             subtype: subtype.clone(),
             class: class.clone(),
@@ -164,7 +166,7 @@ impl Part {
             ends: span.map(|at| End::of(&gers_id, whole, at)),
             points,
         };
-        // a part that is its whole segment takes the segment's own points
+        // A part that is its whole segment takes the segment's own points.
         if runs.len() == 1 && runs[0].0 == [0.0, 1.0] {
             drop(line);
             return vec![part(runs[0], g.points)];
@@ -175,7 +177,7 @@ impl Part {
     }
 
     pub fn id(&self) -> PartId {
-        (self.gers_id.clone(), self.span[0].to_bits())
+        (self.gers_id.clone(), self.between[0].to_bits())
     }
 
     pub(crate) fn is_subway(&self) -> bool {
@@ -184,6 +186,6 @@ impl Part {
 
     /// Its length, in DB coordinates.
     pub fn length(&self) -> f64 {
-        (self.span[1] - self.span[0]) * self.segment_length
+        (self.between[1] - self.between[0]) * self.segment_length
     }
 }

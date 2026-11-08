@@ -1,12 +1,14 @@
-# pixelet's TypeScript: the client, one Expo app for the page and the device,
-# the scripts its bundler reads it through; the shader tools; and xpute's
-# packages, as their own workspace lists them.
+# pixelet's TypeScript workspace. It holds the client, which is one Expo app
+# for the page and the device; the build scripts its bundler reads the client
+# through; the shader tools; and xpute's packages, as xpute's own workspace
+# lists them.
 packages:
   - client
   - build
   - tool/shader
   - ../xpute/ts/*
 
-# Dawn, which the shader test compiles on, installs its binary.
+# Only webgpu may run its install script, which installs the binary of Dawn,
+# the WebGPU implementation the shader test compiles shaders on.
 onlyBuiltDependencies:
   - webgpu

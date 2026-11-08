@@ -1,6 +1,7 @@
 // xpute-kit/collection.rs
 
-//! No `map`: TypeScript's `IndexedMap` is `indexmap::IndexSet` here.
+//! The Rust kit has no `map`: the TypeScript kit's `IndexedMap` is
+//! `indexmap::IndexSet` in Rust.
 
 pub mod arena;
 pub mod deque;

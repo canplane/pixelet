@@ -2,58 +2,64 @@
 
 package xpute
 
-import expo.modules.kotlin.jni.JavaScriptFunction
 import java.nio.ByteBuffer
 
 /**
  * The core linked into the app, as xpute's native form exports it to JNI
- * (xpute-runtime `native_core!`, src/jni.rs): the same calls an iPhone's Swift
- * makes through the C ABI (xpute.h). The core is the shared library the
- * module's build makes of the app's core crate (build.gradle). It runs on its
- * own thread while it has work; the JavaScript thread kicks it, waits only
- * for a turn it rings, and answers its calls.
+ * (xpute-runtime `native_core!`, src/jni.rs). These are the same calls that
+ * the iOS module's Swift makes through the C ABI (xpute.h). The core is the
+ * shared library that the module's build makes of the app's core crate
+ * (build.gradle). It runs on its own thread while it has work; the app's
+ * thread kicks it, waits on it only for a turn it rings, and answers its
+ * calls. It takes nothing of React Native's; the Expo module (XputeModule.kt)
+ * is one host that uses it.
  */
 object Core {
   init {
     System.loadLibrary(BuildConfig.CORE)
   }
 
-  /** A turn ending no sooner than `deadlineMs` from its rise, waited for, and when the core wants
-   * the next, in ms; NaN once it has stopped. The first boots the core. Its
+  /** Rings a turn that ends no sooner than `deadlineMs` after its rise, and
+   * waits for it. Returns when the core wants the next turn, in ms, or NaN
+   * once the core has stopped. The first call boots the core. The turn's
    * calls come back to this thread meanwhile (`call`). */
   external fun run(deadlineMs: Double): Double
 
-  /** A turn wanted at once, the next ending no sooner than `deadlineMs` from its rise, none of its
-   * own where negative. */
+  /** Asks for a turn at once. The next turn ends no sooner than `deadlineMs`
+   * after its rise; a negative `deadlineMs` sets no deadline. */
   external fun kick(deadlineMs: Double)
 
-  /** No turn begins but one `run` rings; a kick waits for `resume`. */
+  /** From now on only a turn `run` rings may begin, and a kick waits for
+   * `resume`. */
   external fun pause()
 
   /** Turns begin again as kicks ask. */
   external fun resume()
 
-  /** The call waiting, if one does, answered on this thread. */
+  /** Answers on this thread the call that waits, if one does. */
   external fun answer()
 
-  /** The wake the turns since asked, then the longest of them, in ms. */
+  /** What the turns since the last call asked: the wake, then how long the
+   * longest of them took, in ms. */
   external fun turns(): DoubleArray
 
-  /** What answers the core's calls (@xpute/runtime), on the JavaScript
-   * thread. */
-  @Volatile var answer: JavaScriptFunction<Int>? = null
+  /** The function that answers the core's call laid at the byte it is given,
+   * on the app's thread. */
+  @Volatile var answer: ((Int) -> Int)? = null
 
-  /** What `onNotify` calls: the module's event (XputeModule.kt `onNotify`). */
+  /** What `onNotify` calls: it sends the module's event (XputeModule.kt
+   * `onNotify`). */
   @Volatile var notify: (() -> Unit)? = null
 
-  /** Called by the core's runtime (xpute-runtime src/jni.rs `call`) on the
-   * JavaScript thread, inside `run` or `answer`: the record at `at`,
-   * answered before the turn goes on, ENOSYS where nothing answers. */
+  /** The core's runtime (xpute-runtime src/jni.rs `call`) calls this on the
+   * app's thread, inside `run` or `answer`, for the call laid at `at`.
+   * The call is answered before the turn goes on, with ENOSYS (-38) when
+   * nothing answers. */
   @JvmStatic fun call(at: Int): Int = answer?.invoke(at) ?: -38
 
-  /** Called by the core's runtime (xpute-runtime src/jni.rs `notify`) from the
-   * core's thread, attached to the VM there: the core has posted or asked,
-   * a call waits, or the core has stopped. */
+  /** The core's runtime (xpute-runtime src/jni.rs `notify`) calls this from
+   * the core's thread, which it attached to the VM, when the core has posted
+   * or asked for a turn, when a call waits, or when the core has stopped. */
   @JvmStatic fun onNotify() {
     notify?.invoke()
   }
@@ -61,10 +67,10 @@ object Core {
   /** The memory, a direct buffer over the whole region the core took. */
   external fun mem(): ByteBuffer
 
-  /** The word at byte `at` of the memory, loaded with acquire, a Double since
-   * Kotlin's Int stops short of a u32. */
+  /** Loads the word at byte `at` of the memory with acquire. The word
+   * crosses as a Double, since Kotlin's Int cannot hold every u32. */
   external fun load(at: Double): Double
 
-  /** `word` stored at byte `at` of the memory with release. */
+  /** Stores `word` at byte `at` of the memory with release. */
   external fun store(at: Double, word: Double)
 }

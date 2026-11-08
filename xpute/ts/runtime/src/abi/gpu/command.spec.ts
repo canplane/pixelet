@@ -6,13 +6,15 @@
 
 // ---- gpu, export ----
 
-/** The GPU the machine asked for answered, the first time or again after a loss, whose
- * sign is in the stream's device block. */
+/** The GPU the machine asked for has answered, for the first time or again after the device
+ * was lost. The STATUS word of the stream's device block tells the core the device's state. */
 export const GPU_READY = 0x0201;
-/** Answered with the surface's handle, 0 where the core opens none. */
+/** Asks the core to open a surface. The core answers with the surface's handle, or with 0
+ * when it opens none. */
 export const GPU_SURFACE_OPEN = 0x0202;
-/** The surface's layout box in device pixels, transforms aside, and the device pixel ratio;
- * the buffer it is drawn into is the core's. */
+/** The surface's layout box in device pixels, ignoring transforms, and the device pixel
+ * ratio. The size of the buffer the surface is drawn into is the core's to choose. */
 export const GPU_SURFACE_RESIZE = 0x0203;
-/** The surface is going: what it drew and held on the device is let go. */
+/** The surface is going away, and the core lets go of what it drew and held on the device
+ * for it. */
 export const GPU_SURFACE_CLOSE = 0x0204;

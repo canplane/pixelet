@@ -1,10 +1,10 @@
 // xpute-tool/spec/cmd/service.rs
 
-//! A protocol's binding to xpute's two ends, over its messages: on the runtime
-//! a stub per `export`, bound to a runtime, and a handler per `import`; on the
-//! core a function per `import`, and a trait the program implements for its
-//! `export`s. A
-//! runtime routes a frame to the binding by its command's major.
+//! Writes a protocol's binding onto xpute's two ends, on top of its messages.
+//! On the runtime it writes a stub per `export`, bound to a runtime, and a
+//! handler per `import`. On the core it writes a function per `import`, and a
+//! trait the program implements for its `export`s. A runtime routes a frame to
+//! the binding by its command's major.
 
 use super::{Field, Kind, Protocol, Spec};
 use crate::spec::{pascal, rs_doc, ts_doc};
@@ -22,9 +22,9 @@ fn fields_of<'a>(spec: &'a Spec, name: &str, export: bool) -> Option<&'a [Field]
     }
 }
 
-/// The protocol's module: a function for each `import`, and a trait the
-/// program implements for its `export`s, with the dispatch that reads each packet and
-/// calls it.
+/// Writes the protocol's Rust module: a function for each `import`, and a
+/// trait the program implements for its `export`s, with the dispatch that
+/// reads each export's packet and calls the trait's method.
 pub(super) fn rs(spec: &Spec) -> Result<String, String> {
     let mut out: Vec<String> = Vec::new();
     let p = &spec.protocol;
@@ -117,8 +117,8 @@ pub(super) fn rs(spec: &Spec) -> Result<String, String> {
     Ok(out.join("\n") + "\n")
 }
 
-/// `<'_>` where the type borrows: a packet read in place (`export`), an import
-/// that writes a borrowed field (`import`).
+/// Gives `<'_>` where the type borrows: with `read`, a packet read in place,
+/// as an export's is; without it, an import that writes a borrowed field.
 fn lifetime(spec: &Spec, fields: &[Field], read: bool) -> Result<&'static str, String> {
     let borrows = if read {
         let mut b = false;
@@ -132,7 +132,8 @@ fn lifetime(spec: &Spec, fields: &[Field], read: bool) -> Result<&'static str, S
     Ok(if borrows { "<'_>" } else { "" })
 }
 
-/// The TypeScript's imports and body: the runtime's stubs and its handlers.
+/// Writes the TypeScript binding's imports and body: the runtime's stubs and
+/// its handlers.
 pub(super) fn ts(spec: &Spec, runtime: &str) -> Result<(Vec<String>, Vec<String>), String> {
     let mut imports: Vec<String> = Vec::new();
     let mut out: Vec<String> = Vec::new();

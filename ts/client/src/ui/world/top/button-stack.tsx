@@ -27,7 +27,8 @@ interface StackItem {
   disabled?: boolean;
 }
 
-/** iPhone Maps' grouped controls. */
+/** Round buttons grouped in one capsule, as the iPhone's Maps app groups its
+ * controls. */
 export function ButtonStack({
   items,
   isActive,
@@ -46,7 +47,8 @@ export function ButtonStack({
       {items.map((item) => (
         <Pressable
           key={item.label}
-          // Disabled still takes the touch: no tap through to the world.
+          // A disabled button still takes the touch, so that a tap on it does
+          // not reach the world.
           onPress={item.disabled ? undefined : item.onPress}
           accessibilityRole="button"
           accessibilityLabel={item.label}

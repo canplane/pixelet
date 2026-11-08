@@ -1,4 +1,4 @@
-// Characters lit, placed as skinned_place.wgsl lays them.
+// The lit pass over the characters, which places each vertex as skinned_place.wgsl lays it.
 
 @vertex
 fn vs(v: VertexIn) -> VertexOut {

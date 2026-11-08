@@ -1,9 +1,10 @@
 // pxl-render/gpu/cloud.rs
 
-//! The cloud sheets, altocumulus and cirrus, each a plane drawn over the
-//! world's pass against its depth, both reading the cloud field (`pxl-content cloud.rs`) as a tile baked once
-//! per device.
-//! The cumulus is drawn as decor is (`pxl-core domain/scene/environment/cloud.rs`).
+//! Draws the two cloud sheets, altocumulus and cirrus. Each sheet is a plane drawn in the
+//! world's pass against the world's depth. Both read the cloud field (pxl-content cloud.rs)
+//! from one tile, which is baked once when the renderer starts and repeats across the world.
+//! The cumulus is not drawn here: it is drawn as decor is (pxl-core
+//! domain/scene/environment/cloud.rs).
 
 use crate::frame::shader::record::{PIPELINE_CLOUD, PIPELINE_CLOUD_FIELD};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
@@ -36,9 +37,9 @@ pub struct CloudPass {
     uniform: u32,
     group: u32,
     words: [f32; CLOUDS_FLOATS],
-    /// The field's tile, its pipeline and its mips' pass, until it is baked
-    /// (`bake`): once the renderer's pipelines are made, before its first
-    /// frame.
+    /// The field's tile, the pipeline that draws it and the pass that builds its mips, held
+    /// until `bake` bakes the tile. The renderer calls `bake` once its pipelines are made,
+    /// before its first frame.
     unbaked: Option<(u32, Pipeline, MipPass)>,
 }
 
@@ -66,7 +67,7 @@ impl CloudPass {
             0,
             1,
         );
-        // Repeated, since the tile meets itself.
+        // The sampler repeats, as the tile is seamless: each edge meets the opposite one.
         let tile_sampler = g.sampler(
             FilterMode::linear,
             FilterMode::linear,
@@ -98,8 +99,8 @@ impl CloudPass {
         }
     }
 
-    /// The field's tile drawn, then its mips, once, as the renderer's first
-    /// frame comes: its pipelines are made by then.
+    /// Draws the field's tile and then its mips. Only the first call does anything; the
+    /// renderer makes it before its first frame, once the pipelines are made.
     pub fn bake(&mut self, g: &Gpu) {
         let Some((tile, field, mips)) = self.unbaked.take() else {
             return;
@@ -126,23 +127,22 @@ impl CloudPass {
         mips.release();
     }
 
-    /// `shown`, how much of the clouds the core shows; `over`, the eye's
-    /// place on the map in the world's doubles; `drift`, how far the wind has
-    /// carried the field; `draw_dist_km` how far it draws: past it no sheet
-    /// is drawn. The field moves with the wind, so its words are the clouds'
-    /// own.
+    /// Lays out the clouds' words. `over` is the eye's place on the map, in the world's
+    /// coordinates as doubles. `drift` is how far the wind has carried the field, and `shown`
+    /// is how much of the clouds the core shows. No sheet is drawn past `draw_dist_km`.
     pub fn prepare(&mut self, over: [f64; 2], drift: [f64; 2], shown: f64, draw_dist_km: f32) {
         self.words[SHOWN] = shown as f32;
         self.words[DRAW_DIST] = draw_dist_km;
         field(&mut self.words, over, drift);
     }
 
-    /// `words` written, where the frame's read found them moved.
+    /// Writes `words` to the device. The frame calls it only when its read found them
+    /// changed.
     pub fn write(&self, g: &Gpu) {
         g.write_buf(self.uniform, 0, bytes(&self.words));
     }
 
-    /// The words its pass reads, as `prepare` wrote them.
+    /// The words the pass reads, as `prepare` wrote them.
     pub fn words(&self) -> &[f32] {
         &self.words
     }
@@ -153,16 +153,16 @@ impl CloudPass {
         }
         pass.set_pipeline(self.pipeline.id);
         pass.set_bind_group(0, self.group, &[]);
-        // A quad each, the farther sheet first (cloud.wgsl `vs`).
+        // The pass draws one quad for each sheet, the farther sheet first (cloud.wgsl `vs`).
         pass.draw(6, 2, 0, 0);
     }
 }
 
-/// The eye, in the world's doubles, split on the lattice into a whole unit
-/// and a fraction of one, so the shader never holds a world-sized coordinate;
-/// the world is `LATTICE_CNT` units around, so a lap of X is a whole number
-/// of them and the unit wraps with it. And where the wind has carried the
-/// field by now.
+/// Writes the eye's place on the field's lattice, split into a whole lattice unit and a
+/// fraction of one, so the shader never holds a coordinate as large as the world. `eye` is in
+/// the world's coordinates as doubles. The world is `LATTICE_CNT` units around, so a lap of X
+/// is a whole number of units and the whole unit wraps with it. It also writes how far the
+/// wind has carried the field.
 fn field(words: &mut [f32; CLOUDS_FLOATS], eye: [f64; 2], drift: [f64; 2]) {
     let side = (1u32 << LATTICE_SHAMT) as f64;
     for k in 0..2 {

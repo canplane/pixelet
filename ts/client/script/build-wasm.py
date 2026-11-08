@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Builds the core's module (rust/client/core) to public/,
 # where the page fetches it as /core.wasm
-# (ts/client/src/service/core.ts).
+# (ts/client/src/service/platform/core.ts).
 #
 #   ./script/build-wasm.py [--published]
 
@@ -16,9 +16,10 @@ APP = Path(__file__).resolve().parent.parent
 
 
 def repo_of(start):
-    """The repository over `start`: the nearest directory up holding the
-    TypeScript workspace's manifest, ts/pnpm-workspace.yaml, as pxl-tool finds it by
-    its own manifest. It works in a tree copied without .git."""
+    """The repository that holds `start`: the nearest directory up that holds
+    the TypeScript workspace's manifest, ts/pnpm-workspace.yaml. pxl-tool finds
+    the repository the same way, by its own manifest. This works in a tree
+    copied without .git."""
     for d in [start, *start.parents]:
         if (d / "ts" / "pnpm-workspace.yaml").is_file():
             return d
@@ -28,32 +29,39 @@ def repo_of(start):
 REPO = repo_of(APP)
 RUST = REPO / "rust"
 TARGET = "wasm32-unknown-unknown"
-# Cargo's own rule: CARGO_TARGET_DIR, else the workspace's target/.
+# Cargo's own rule for its target directory: CARGO_TARGET_DIR, or else the
+# workspace's target/.
 TARGET_DIR = Path(os.environ["CARGO_TARGET_DIR"]) if os.environ.get("CARGO_TARGET_DIR") else RUST / "target"
 OUT = APP / "public/core.wasm"
-# The source path each number in a published module's panics stands for; kept by the deploy, never bundled.
+# The source path that each number in a published module's panics stands for.
+# The deploy keeps this file, and it is never bundled.
 PATHS = APP / "core.paths.json"
 
-# What `pnpm build:web` bundles: no dev features, numbered panic paths.
+# `pnpm build:web` asks for the published module: no dev features, and
+# numbered panic paths.
 PUBLISHED = "--published" in sys.argv[1:]
-# The published module is release's bytes; the dev server's, watch's, which a
-# change rebuilds in part (rust/Cargo.toml). Each in its own directory, so
-# building one never starts the other over.
+# The published module is built with the release profile, and the dev
+# server's with the watch profile, which a change rebuilds only in part
+# (rust/Cargo.toml). Each profile builds into its own directory, so building
+# one never starts the other over.
 PROFILE = "release" if PUBLISHED else "watch"
 BUILT = TARGET_DIR / TARGET / PROFILE / "pxl_core.wasm"
 
-# Strips run here, not via Cargo, so target features are still declared while wasm-opt runs.
+# The strips run here rather than in Cargo, so that the target features are
+# still declared while wasm-opt runs.
 STRIPS = [
     "--strip-debug",
     "--strip-producers",
     "--strip-target-features",
 ]
-# Inlines across the crate graph, which LTO does not: the published module's
-# speed, which `preview` serves. The dev server's module only has to show a
-# change working, and -O3 would be most of each of its rebuilds.
+# -O3 inlines across the crate graph, which LTO does not, and gives the
+# published module its speed; `preview` serves that module. The dev server's
+# module only has to show a change working, and -O3 would take most of each of
+# its rebuilds.
 WASM_OPT = ["-O3", *STRIPS] if PUBLISHED else STRIPS
 
-# embassy and critical-section export their `#[no_mangle]` symbols; only these stay.
+# embassy and critical-section export their `#[no_mangle]` symbols. Only
+# these exports stay.
 EXPORTS = ["run"]
 
 
@@ -83,7 +91,8 @@ def optimized(src, out):
 
 
 def finish(*args):
-    """The module is rewritten by pxl-tool's finish_wasm, which owns the binary."""
+    """Rewrites the module with pxl-tool's finish_wasm, which owns the module's
+    binary layout."""
     done = subprocess.run(["cargo", "run", "-q", "--package", "pxl-tool", "--bin", "finish_wasm", "--", *map(str, args)], cwd=RUST, stdout=subprocess.PIPE, text=True)
     if done.returncode != 0:
         raise Failed(done.returncode or 1)
@@ -98,7 +107,8 @@ def main():
     before = mtime(BUILT)
     try:
         status = subprocess.run(
-            # The module alone of the core's crate types, asked of cargo by name.
+            # The core declares several crate types. This asks cargo for the
+            # module's alone, by name.
             ["cargo", "rustc", "--crate-type", "cdylib", "--profile", PROFILE, "--package", "pxl-core", "--target", TARGET, *(["--no-default-features"] if PUBLISHED else [])],
             cwd=RUST,
             env={**os.environ, "RUSTFLAGS": remapped()},
@@ -109,19 +119,20 @@ def main():
     if status.returncode != 0:
         return status.returncode
 
-    # An unchanged module is not finished again, so its time says when the
-    # module last changed (watch-wasm.py).
-    # The module carries the time of what it was finished from, so it is this
-    # build's only when the two are equal: the dev server's and the published
-    # are each their own file, and either may have been finished last.
+    # An unchanged module is not finished again, so that its time says when it
+    # last changed (watch-wasm.py). The finished module carries the time of the
+    # build it was finished from, so it is this build's only when the two times
+    # are equal. The dev server's build and the published one are separate
+    # files, and either may have been finished last.
     if before is not None and mtime(BUILT) == before and mtime(OUT) == before:
         print("[build-wasm] up to date -> public/core.wasm")
         return 0
 
-    # One directory a run under cargo's target, removed whole: a failed run
-    # leaves nothing beside the module, a killed one leaves it where cargo
-    # clean takes it, and a dev server's build and a check's never share a
-    # file. On the module's volume, so what it holds is renamed into place.
+    # Each run works in its own directory under cargo's target, removed whole
+    # at the end. A failed run leaves nothing beside the module, a killed one
+    # leaves its directory where `cargo clean` removes it, and a dev server's
+    # build and a check's never share a file. The directory is on the module's
+    # volume, so its files can be renamed into place.
     work = Path(tempfile.mkdtemp(dir=TARGET_DIR, prefix="build-wasm-"))
     try:
         linked_file, done = work / "linked.wasm", work / "done.wasm"
@@ -131,7 +142,7 @@ def main():
         optimized(linked_file, done)
         numbered = work / "paths.json"
         paths = int(finish("number", done, numbered)) if PUBLISHED else 0
-        # The module last: it is what a reader keys on.
+        # The module is moved into place last, because a reader keys on it.
         if PUBLISHED:
             os.replace(numbered, PATHS)
         built = mtime(BUILT)

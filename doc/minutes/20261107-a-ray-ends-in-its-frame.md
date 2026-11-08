@@ -21,7 +21,7 @@ then the lattice; up, the reverse. This takes up the backlog's third knob.
 
 **The papers under `out/`.** The two the 11-06 minutes point at moved here:
 [cell raster](./20261106-cell-raster.md) and
-[the plan](../experiment/20261105-the-frame-on-the-s23/plan.md). The rest are not kept.
+[the plan](../experiment/20261103-the-frame-on-the-s23/README.md). The rest are not kept.
 
 ## What was weighed
 
@@ -56,7 +56,7 @@ What other systems do, read from their documents and forums:
 Each defers detail and answers the frame from something coarser.
 
 `auto` alone could not hold the frame: on 11-03 the S23 held 6–8 fps with both knobs at
-their floor ([the walk on a phone](../experiment/20261103-the-walk-on-a-phone/README.md)),
+their floor ([the walk on a phone](../experiment/20261103-the-frame-on-the-s23/README.md)),
 and the light's and the cells' passes do not shrink with the pixels. The rate shrinks
 every pass's work a second. Android's frame pacing guidance favours a steady divisor of
 the refresh over uneven frames. Casting at a lower rate than the drawing, as Application
@@ -73,8 +73,6 @@ pasted outside review: rays go as far as the budget and unfinished work is kept.
 record replaces it.
 
 ## Built, 11-07
-
-In the main checkout's working tree, uncommitted:
 
 - No visit budget, no ray parked across frames, no owed work and no readback that wakes a
   frame for it. Rays park only between a run's walks and its asks.

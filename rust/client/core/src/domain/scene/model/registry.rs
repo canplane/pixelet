@@ -1,9 +1,10 @@
 // pxl-core/domain/scene/model/registry.rs
 
-//! The registered models, each built and sealed by its registration
-//! (asset.rs) before it joins. A model's mesh is one heap block read column by column
-//! (positions, normals, UVs, joints, weights, indices), in glTF's Y-up scaled
-//! to its registered height; what draws it turns it Z-up. A model poses its
+//! The registered models. A registration (asset.rs) builds and seals each
+//! model before it joins. A model's mesh is one heap block laid out in
+//! columns: positions, normals, UVs, joints, weights, then indices. The mesh
+//! stays in glTF's Y-up and unscaled; whatever draws the model turns it Z-up
+//! and scales it to its registered height (`Model::scale`). A model poses its
 //! joints at a clip's time and writes their palette for whatever plays it.
 
 use core::future::Future;
@@ -14,18 +15,19 @@ use pxl_render::gpu::draw::{DrawList, MODEL_VERTEX_WORDS};
 use xpute_core::mem;
 use xpute_core::mem::heap::alloc;
 
-// The most a parse lets one model draw fits a block's size.
+// The largest mesh a parse accepts fits in one block, whose size in bytes is
+// a u32.
 const _: () = assert!(
     (MAX_SCENE_VERTICES as u64 * MODEL_VERTEX_WORDS as u64 + MAX_SCENE_IDXS as u64) * 4
         <= u32::MAX as u64
 );
 
-/// Vertices a pass over a mesh reads or writes, or joint palettes a clip's
-/// keys pose, between a registration's pauses (`Model::seal`, asset.rs
-/// `register_model`).
+/// How many vertices a pass over a mesh reads or writes, or how many joint
+/// palettes a clip's keys pose, between two of a registration's pauses
+/// (`Model::seal`, asset.rs `register_model`).
 pub const STEPS_PER_PAUSE: usize = 1 << 10;
 
-/// Translation, rotation; anything else is scale.
+/// A channel's path: translation or rotation. Any other path is scale.
 const T: u8 = 0;
 const R: u8 = 1;
 
@@ -35,26 +37,26 @@ pub struct Channel {
     /// Step keys hold a value until the next; linear keys interpolate.
     pub step: bool,
     pub times: Vec<f32>,
-    /// 3 or 4 floats a key.
+    /// Three floats a key, or four for a rotation.
     pub vals: Vec<f32>,
 }
 
 struct Clip {
     duration: f32,
     channels: Vec<Channel>,
-    /// The farthest any point of the mesh moves over it, unscaled; set when
-    /// the model is sealed (`Model::moved`).
+    /// The farthest any point of the mesh moves over the clip, unscaled. It
+    /// is set when the model is sealed (`Model::moved`), as are the fields
+    /// below.
     motion: f32,
-    /// Every channel's key times, its start and its end, in order; set with
-    /// it.
+    /// Every channel's key times, with the clip's start and end, in order.
     keys: Vec<f32>,
     /// How far any point of the mesh may have gone from the clip's start by
-    /// each of `keys`, unscaled, along the keys' chords; set with it.
+    /// each of `keys`, unscaled, measured along the chords between keys.
     reach: Vec<f32>,
-    /// The keys where some joint's motion turns back; set with it.
+    /// The keys at which some joint's motion turns back.
     turns: Vec<f32>,
-    /// How far any vertex lies from the origin as its first key skins it,
-    /// unscaled; set with it.
+    /// How far any vertex lies from the origin as the clip's first key skins
+    /// it, unscaled.
     radius: f32,
 }
 
@@ -72,24 +74,27 @@ pub struct Model {
     parent: Vec<i32>,
     /// A joint's rest pose: translation (3), rotation (4, xyzw), scale (3).
     rest: Vec<[f32; 10]>,
-    /// The transform above a root joint that is not a joint itself, column-major.
+    /// For a root joint, the transform of the node above it that is not a
+    /// joint, column-major.
     root_pre: Vec<[f32; 16]>,
     inverse_bind: Vec<[f32; 16]>,
     clips: Vec<Clip>,
     /// Joints in an order where a parent comes before its children.
     order: Vec<u32>,
-    /// What it is drawn at to stand the height it was registered at.
+    /// The scale that draws the model at the height it was registered at.
     scale: f32,
-    /// Unscaled bounding sphere for a hit test to reject by.
+    /// The radius of the unscaled bounding sphere about the origin, for a hit
+    /// test to reject by.
     radius: f32,
-    /// How far any vertex lies from its origin as its rest pose skins it,
-    /// unscaled: what it covers drawn (`pose_radius`).
+    /// How far any vertex lies from the origin as the rest pose skins it,
+    /// unscaled. It bounds what the model covers when drawn at rest
+    /// (`pose_radius`).
     rest_radius: f32,
 }
 
 #[derive(Default)]
 pub struct Models {
-    /// Never let go.
+    /// A model is never let go, so its number names it for good.
     models: Vec<Model>,
 }
 
@@ -160,7 +165,6 @@ fn slerp(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
     [q[0] / n, q[1] / n, q[2] / n, q[3] / n]
 }
 
-/// Floats a key: four for a rotation, three otherwise.
 fn width(path: u8) -> usize {
     if path == R {
         4
@@ -213,7 +217,8 @@ fn sample(ch: &Channel, time: f32, out: &mut [f32; 10]) {
     }
 }
 
-/// One local transform eased toward another, rotations along the sphere.
+/// The local transform `a` eased toward `b` by `w`, with the rotation taken
+/// along the sphere.
 pub fn blend(a: &[f32; 10], b: &[f32; 10], w: f32) -> [f32; 10] {
     let mut o = [0.0; 10];
     for i in 0..3 {
@@ -226,8 +231,8 @@ pub fn blend(a: &[f32; 10], b: &[f32; 10], w: f32) -> [f32; 10] {
 }
 
 impl Models {
-    /// `model` uploaded through `draw` and kept for good: its number, which
-    /// names it from here on.
+    /// Uploads `model` through `draw`, keeps it for good, and returns its
+    /// number, which names it from then on.
     pub fn add(&mut self, draw: &mut DrawList, mut model: Model) -> u32 {
         model.handle = draw.upload(
             model.at as u32,
@@ -250,8 +255,9 @@ impl Models {
 }
 
 impl Model {
-    /// `joint_cnt` joints at rest and a block for `vertex_cnt` vertices and
-    /// `idx_cnt` indices, unwritten; None when the heap refused.
+    /// A model of `joint_cnt` joints at rest, with an unwritten block for
+    /// `vertex_cnt` vertices and `idx_cnt` indices. None when the heap
+    /// refuses.
     pub fn new(vertex_cnt: u32, idx_cnt: u32, joint_cnt: u32) -> Option<Model> {
         let bytes = vertex_cnt
             .checked_mul(MODEL_VERTEX_WORDS)
@@ -287,12 +293,14 @@ impl Model {
         })
     }
 
-    /// Where its block lies, the vertex columns and then the indices.
+    /// The address of the model's block: the vertex columns, then the
+    /// indices.
     pub fn at(&self) -> usize {
         self.at
     }
 
-    /// `parent` is -1 for a root; `root_pre` is the transform above a root.
+    /// `parent` is -1 for a root joint, and `root_pre` is the transform above
+    /// a root.
     pub fn joint(
         &mut self,
         joint: u32,
@@ -324,7 +332,7 @@ impl Model {
         (self.clips.len() - 1) as u32
     }
 
-    /// `ch` into `clip`, its values a key's each, past them dropped.
+    /// Adds `ch` to `clip`, dropping any values past those its keys hold.
     pub fn ch(&mut self, clip: u32, mut ch: Channel) {
         let Some(c) = self.clips.get_mut(clip as usize) else {
             return;
@@ -333,9 +341,10 @@ impl Model {
         c.channels.push(ch);
     }
 
-    /// Its scale, bounds, joints' order and clips' reach, off its block,
-    /// awaiting `pause` between clips, between the order's passes and every
-    /// `STEPS_PER_PAUSE` vertices or joint palettes.
+    /// Sets the model's scale and derives from its block its bounds, its
+    /// joints' order and each clip's reach. It awaits `pause` between clips,
+    /// between the passes that order the joints, and every `STEPS_PER_PAUSE`
+    /// vertices or joint palettes.
     ///
     /// # Safety
     /// The model's block has been written.
@@ -375,7 +384,8 @@ impl Model {
                 }
             }
             if self.order.len() == before {
-                // A cycle: the rest are roots.
+                // The parents left form a cycle, so the remaining joints are
+                // taken as roots.
                 for (j, done) in placed.iter_mut().enumerate() {
                     if !*done {
                         *done = true;
@@ -413,13 +423,13 @@ impl Model {
         self.scale
     }
 
-    /// One a glTF animation, in file order, so a clip's number is its
-    /// animation's index.
+    /// The number of clips. There is one clip a glTF animation, in file
+    /// order, so a clip's number is its animation's index.
     pub fn clip_cnt(&self) -> u32 {
         self.clips.len() as u32
     }
 
-    /// A clip's length, where it has one.
+    /// A clip's length in seconds. None for a clip the model lacks.
     pub fn duration(&self, clip: u32) -> Option<f32> {
         self.clips.get(clip as usize).map(|c| c.duration)
     }
@@ -429,19 +439,19 @@ impl Model {
         self.clips.get(clip as usize).map_or(0.0, |c| c.motion)
     }
 
-    /// How far any vertex lies from the origin as drawn, unscaled, at a
-    /// clip's first key and as far as it moves from there, or at rest where
-    /// none plays: a sphere about where it stands that holds it.
+    /// The radius of a sphere about the model's origin that holds the model as
+    /// drawn, unscaled. For a clip it is the first key's radius plus the
+    /// farthest the clip moves any point. With no clip it is the rest pose's.
     pub fn pose_radius(&self, clip: Option<u32>) -> f32 {
         clip.and_then(|c| self.clips.get(c as usize))
             .map_or(self.rest_radius, |c| c.radius + c.motion)
     }
 
     /// How far any vertex lies from the origin as the pose `at` skins it,
-    /// unscaled: each vertex its joints' palettes blended by its weights,
-    /// its columns laid one after another a vertex count apart
-    /// (`MODEL_VERTEX_WORDS`: positions 3, normals 3, UVs 2, joints 4,
-    /// weights 4; scene/model/asset.rs).
+    /// unscaled. A vertex is skinned by its joints' palettes blended by its
+    /// weights. The block's columns lie one after another, each a vertex
+    /// count long (`MODEL_VERTEX_WORDS`: positions 3, normals 3, UVs 2,
+    /// joints 4, weights 4; scene/model/asset.rs).
     async fn radius_at<P: Future<Output = ()>>(
         &self,
         at: Option<(u32, f32)>,
@@ -469,7 +479,7 @@ impl Model {
         far
     }
 
-    /// Where `palette`, a mat4 a joint, skins each of `vertices`, unscaled.
+    /// Where `palette`, one mat4 a joint, skins each of `vertices`, unscaled.
     fn skin<'a>(
         &'a self,
         palette: &'a [f32],
@@ -504,13 +514,13 @@ impl Model {
         })
     }
 
-    /// The clip's time after `time` by which any point of its mesh may have
-    /// gone `far` units, unscaled, from where it stood at `time`, and no
-    /// later than the next key where a joint's motion turns back or the
-    /// clip's end, where its clock wraps. Between two keys a point goes at
-    /// the pace of their chord, so one that turns between them goes as far
-    /// as its arc is longer than the chord, past `far`. Infinite where the
-    /// clip is none.
+    /// The clip time after `time` by which any point of the mesh may have
+    /// gone `far` units, unscaled, from where it stood at `time`. It is no
+    /// later than the next key where a joint's motion turns back, or than the
+    /// clip's end, where its clock wraps. Between two keys a point is taken to
+    /// move at the pace of their chord, so a point that turns between them
+    /// can go past `far` by as much as its arc is longer than the chord.
+    /// Infinite for a clip the model lacks.
     pub fn next_step(&self, clip: u32, time: f32, far: f32) -> f32 {
         let Some(c) = self.clips.get(clip as usize) else {
             return f32::INFINITY;
@@ -519,8 +529,8 @@ impl Model {
         let turn = c.turns[c.turns.partition_point(|&t| t <= time)..]
             .first()
             .map_or(c.duration, |&t| t.min(c.duration));
-        // The chord's pace between keys `k` and `k + 1`: how far a point
-        // goes over the share `w` of their time.
+        // How far a point has gone at the share `w` of the time between keys
+        // `k` and `k + 1`, moving at the pace of their chord.
         let along = |k: usize, w: f32| reach[k] + (reach[k + 1] - reach[k]) * w;
         let k = keys
             .partition_point(|&t| t <= time)
@@ -551,16 +561,22 @@ impl Model {
         gone.max(time).min(turn)
     }
 
-    /// A clip's motion, keys, reach and turns, off its own pose and palette
-    /// at each of its keys: a vertex is its joints' palettes blended, so it
-    /// moves no farther than the farthest joint's palette moves a point
-    /// within the radius — its translation's change and its linear part's
-    /// (Frobenius) times the radius. Twice the farthest from the first key
-    /// bounds any two. Its reach is every vertex skinned at each key, the
-    /// farthest any goes from one key to the next summed key by key, along
-    /// their chords. A joint's motion turns back at a key where its
-    /// palette's change into the key and out of it point apart, its linear
-    /// part weighed at the radius.
+    /// Derives a clip's motion, keys, reach and turns from its pose and
+    /// palette at each of its keys.
+    ///
+    /// A vertex is a blend of its joints' palettes, so it moves no farther
+    /// than the farthest joint's palette moves a point within the radius. That
+    /// bound is the change of the palette's translation plus the Frobenius
+    /// norm of the change of its linear part times the radius. Twice the
+    /// farthest any key gets from the first bounds the motion between any two
+    /// keys.
+    ///
+    /// The reach skins every vertex at each key and sums, key by key, the
+    /// farthest any vertex goes from one key to the next, along their chords.
+    ///
+    /// A joint's motion turns back at a key where the palette's change into
+    /// the key and its change out of it point apart, the linear part weighed
+    /// at the radius.
     async fn moved<P: Future<Output = ()>>(
         &self,
         clip: usize,
@@ -599,7 +615,7 @@ impl Model {
                 })
                 .fold(0.0f32, f32::max)
         };
-        // Whether a joint's change from one key and its change into the next
+        // Whether some joint's change into a key and its change out of it
         // point apart.
         let r2 = self.radius * self.radius;
         let turns_back = |into: &[f32], out: &[f32]| {
@@ -656,7 +672,8 @@ impl Model {
         (2.0 * far, times, reach, turns)
     }
 
-    /// The joints' local transforms at a clip's time, or at rest.
+    /// Writes into `out` the joints' local transforms at a clip's time, or at
+    /// rest.
     pub fn pose(&self, at: Option<(u32, f32)>, out: &mut [[f32; 10]]) {
         out.copy_from_slice(&self.rest);
         let Some(c) = at.and_then(|(clip, _)| self.clips.get(clip as usize)) else {
@@ -670,7 +687,8 @@ impl Model {
         }
     }
 
-    /// The joint palette from local transforms, parents first: one mat4 a joint.
+    /// Writes the joint palette from the local transforms, one mat4 a joint.
+    /// A parent is composed before its children (`order`).
     pub fn palette(&self, local: &[[f32; 10]], global: &mut [[f32; 16]], palette: &mut [f32]) {
         for &j in &self.order {
             let j = j as usize;

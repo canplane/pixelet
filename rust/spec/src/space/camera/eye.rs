@@ -6,17 +6,16 @@ use crate::space::coord::aabb::Aabb;
 use crate::space::coord::v3::{self, V3};
 use crate::space::coord::world::nearest_box;
 
-/// Five planes, normals in, `n · x + d ≥ 0` inside, in world units: the
-/// sides and the near (`mat4::frustum_planes`), none far.
+/// Five planes with normals pointing in, a point lying inside where `n · x + d ≥ 0`, in world
+/// units: the four sides and the near plane (`mat4::frustum_planes`); there is no far plane.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Frustum {
     pub planes: [f64; 20],
 }
 
 impl Frustum {
-    /// Whether a sphere may show: for a round bound (a box is `sees_box`'s).
-    /// Conservative: a sphere near a corner can pass every plane and still
-    /// lie outside.
+    /// Whether a sphere may show, for a round bound (a box is `sees_box`'s). The test is
+    /// conservative: a sphere near a corner can pass every plane and still lie outside.
     pub fn sees(&self, center: V3, radius: f64) -> bool {
         self.planes
             .as_chunks::<4>()
@@ -25,9 +24,9 @@ impl Frustum {
             .all(|p| v3::dot(&[p[0], p[1], p[2]], &center) + p[3] >= -radius)
     }
 
-    /// Whether the box from `min` to `max` may show: each plane has its corner
-    /// farthest along the plane's normal inside. Conservative as `sees` is,
-    /// but no wider than the box.
+    /// Whether the box from `min` to `max` may show: for each plane, the box's corner farthest
+    /// along the plane's normal is inside. It is conservative as `sees` is, but no wider than the
+    /// box.
     pub fn sees_box(&self, min: V3, max: V3) -> bool {
         self.planes.as_chunks::<4>().0.iter().all(|p| {
             let far: V3 = core::array::from_fn(|k| if p[k] >= 0.0 { max[k] } else { min[k] });
@@ -43,10 +42,9 @@ impl Frustum {
         self
     }
 
-    /// The screen as the eye sees it, off the planes alone: the axes are
-    /// differences of opposite normals and the tangents their ratios, so
-    /// where the planes are measured from moves neither. None without a
-    /// screen.
+    /// The screen as the eye sees it, from the planes alone: the axes are differences of opposite
+    /// normals and the tangents are their ratios, so the point the planes are measured from moves
+    /// neither. None where there is no screen.
     pub fn lens(&self) -> Option<Lens> {
         let n = |k: usize| -> V3 {
             [
@@ -92,7 +90,7 @@ fn unit(v: V3) -> Option<V3> {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Observation {
     pub eye: [f64; 3],
-    /// None for every direction.
+    /// None where every direction is seen.
     pub frustum: Option<Frustum>,
     /// How far the layers' demand reaches: never past the top's
     /// (layer/lattice.rs `demand_dist`).
@@ -108,8 +106,8 @@ pub struct Measure {
 }
 
 impl Observation {
-    /// Where box `b` stands from the eye, where it is drawn: what is drawn
-    /// stands where it is stored. An unbounded box is always seen.
+    /// Where box `b` stands from the eye, measured where it is drawn, which is where it is
+    /// stored. An unbounded box is always seen.
     pub fn measure(&self, b: &Aabb) -> Measure {
         let e = self.eye;
         let b = &nearest_box(b, e[0]);

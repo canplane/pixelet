@@ -24,7 +24,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::{neighborhood, Quadrant};
 
 /// The ground cell's side: what the raster, the separation's lines and a height count in.
-pub(crate) const CELL_U: f64 = units(GROUND.cell());
+pub(crate) const CELL_U: f64 = units(GROUND.leaf_cell_zoom());
 
 impl Base for TerrainTile {
     const LAYER: BaseLayer = BaseLayer::terrain;
@@ -35,11 +35,10 @@ impl Base for TerrainTile {
         self.encode_with_fit(at).map(|(pkt, _)| pkt)
     }
 
-    /// Refused where a record's room does not hold its lines (pxl-spec
-    /// `Separation::fits`), or a window's brick would hold more of its
-    /// ways' entries than a client gives one (pxl-spec `terrain::ways_fit`),
-    /// or would not fill or build as a client's does (`terrain::fill_fit`);
-    /// what that build takes is its fit (pool.rs `line`).
+    /// Refused where a record's room does not hold its lines (pxl-spec `Separation::fits`),
+    /// where a window's brick would hold more of its ways' entries than a client gives one
+    /// (pxl-spec `terrain::ways_fit`), or where it would not fill or build as a client's does
+    /// (`terrain::fill_fit`); what that build takes is its fit (pool.rs `line`).
     fn encode_with_fit(&self, at: Quadrant) -> Result<(Vec<u8>, Option<String>), String> {
         self.separation
             .fits()
@@ -78,7 +77,7 @@ impl Base for TerrainTile {
     }
 }
 
-/// Why brick `at` of a tile does not fit (`terrain::fill_fit`), said.
+/// Why brick `at` of a tile does not fit (`terrain::fill_fit`), as a message.
 fn unfit([qx, qy]: [u32; 2], why: Unfit) -> String {
     match why {
         Unfit::Spans(spans) => format!("its brick ({qx}, {qy}) makes a column of {spans} of the ways' spans, past SPANS ({SPANS})"),

@@ -2,27 +2,29 @@
 
 use crate::enums::{FEATURE_NAME, LIMIT_NAME};
 
-/// What the device is opened as.
+/// What a device is asked to be as it opens.
 #[derive(Clone)]
 pub struct Ask {
     pub backends: wgpu::Backends,
     pub power_preference: wgpu::PowerPreference,
-    /// WebGPU's feature names the device must have: one the adapter lacks
-    /// makes the device refuse (`OpenError::Device`), one wgpu does not know
-    /// refuses it before it is asked (`OpenError::Feature`). What the device
-    /// has, the core reads from its block (DEVICE).
+    /// The WebGPU names of the features the device must have. One the
+    /// adapter lacks makes the device refuse to open (`OpenError::Device`);
+    /// one wgpu does not know refuses it before it is asked
+    /// (`OpenError::Feature`). The core reads the features the device has
+    /// from the device's block (spec DEVICE).
     pub required: &'static [&'static str],
-    /// Those it takes where the adapter has them.
+    /// The features the device takes where the adapter has them.
     pub optional: &'static [&'static str],
-    /// What the device is asked to hold, from the adapter it is asked of,
-    /// since an adapter refuses a device that asks past its own.
+    /// The limits asked of the device, given the adapter it is asked of,
+    /// since an adapter refuses a device that asks past its own limits.
     pub limits: fn(&wgpu::Adapter) -> wgpu::Limits,
     pub memory_hints: wgpu::MemoryHints,
 }
 
 impl Ask {
-    /// The device the machine's GPU asks for: its power and features,
-    /// with the adapter's own limits and the platform's primary backends.
+    /// The device the machine's GPU declares: its power preference and
+    /// features, with the adapter's own limits and the platform's primary
+    /// backends.
     pub fn of(gpu: &xpute_core::machine::Gpu) -> Ask {
         Ask {
             backends: wgpu::Backends::PRIMARY,
@@ -37,8 +39,6 @@ impl Ask {
         }
     }
 
-    /// The features asked of `adapter`: every required one, and each
-    /// optional one it has.
     fn features(&self, adapter: &wgpu::Adapter) -> Result<wgpu::Features, OpenError> {
         let mut out = wgpu::Features::empty();
         for name in self.required {
@@ -70,9 +70,10 @@ pub struct Opened {
     pub queue: wgpu::Queue,
 }
 
-/// Opens a device as `ask` says, for `GpuRuntime::new`, waiting out wgpu's
+/// Opens a device as `ask` says, for `GpuRuntime::new`. It blocks on wgpu's
 /// futures, which a native backend resolves at once. The instance is made
-/// without a display handle: each surface brings its own (`SurfaceTargetUnsafe`).
+/// without a display handle, since each surface brings its own
+/// (`SurfaceTargetUnsafe`).
 pub fn open(ask: &Ask) -> Result<Opened, OpenError> {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: ask.backends,
@@ -98,8 +99,9 @@ pub fn open(ask: &Ask) -> Result<Opened, OpenError> {
     })
 }
 
-/// The device's limits and features as the block lays them (DEVICE): each
-/// limit `LIMIT_NAME` names, then a bit a feature `FEATURE_NAME` names.
+/// The device's limits and features as the device's block lays them out
+/// (spec DEVICE): a word for each limit LIMIT_NAME names, then a bit for each
+/// feature FEATURE_NAME names.
 pub(super) fn block(device: &wgpu::Device) -> (Vec<u32>, Vec<u32>) {
     let (limits, features) = (device.limits(), device.features());
     let words = LIMIT_NAME.iter().map(|name| limit(&limits, name)).collect();
@@ -112,7 +114,8 @@ pub(super) fn block(device: &wgpu::Device) -> (Vec<u32>, Vec<u32>) {
     (words, bits)
 }
 
-/// A limit's value as WebGPU names it, held to a word.
+/// The value of the limit WebGPU calls `name`, clamped to a word. A name
+/// wgpu has no limit for is 0.
 fn limit(l: &wgpu::Limits, name: &str) -> u32 {
     let v: u64 = match name {
         "maxTextureDimension1D" => l.max_texture_dimension_1d.into(),

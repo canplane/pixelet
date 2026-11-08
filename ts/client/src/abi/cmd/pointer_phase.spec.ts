@@ -1,6 +1,6 @@
 // ts/client/src/abi/cmd/pointer_phase.spec.ts
 //
-// GENERATED from rust/client/core/ui.json
+// GENERATED from spec/client/core/door/ui.json
 
 // Where a pointer event is in its gesture.
 

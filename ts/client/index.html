@@ -1,17 +1,17 @@
 <!doctype html>
-<!-- The page's template: script/web.ts puts in the site's URL and the
-     UI's ground and writes it to public/index.html, which Expo's web
-     build fills with the bundle's script (app.config.ts). -->
+<!-- The page's template. script/web.ts puts in the site's URL and the
+     UI's ground and writes it to public/index.html, and Expo's web build
+     fills that with the bundle's script (app.config.ts). -->
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
 
-    <!-- Favicon: the world-cube symbol, rastered from ts/client/brand/ into
-         /brand/ by the build. The ICO carries 16/32/48 as PNG entries; there
-         is no vector of the symbol, so no SVG icon. The manifest's icon srcs
-         are absolute and include the /brand/ prefix: bare
-         /web-app-manifest-*.png 404s, so an installed Android shortcut had no
-         icon at all. -->
+    <!-- The favicon is the world-cube symbol, rastered from ts/client/brand/
+         into /brand/ by the build. The ICO carries 16, 32 and 48 pixels as
+         PNG entries. The symbol has no vector form, so there is no SVG icon.
+         The manifest's icon srcs are absolute and include the /brand/
+         prefix, because a bare /web-app-manifest-*.png is a 404 and leaves an
+         installed Android shortcut without an icon. -->
     <link rel="icon" href="/brand/favicon.ico" sizes="16x16 32x32 48x48" />
     <link
       rel="icon"
@@ -22,22 +22,22 @@
     <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
 
-    <!-- Near the black the map shows: Android paints its browser chrome
-         with this. -->
+    <!-- Android paints its browser chrome in this color, which is near the
+         black the map shows. -->
     <meta name="theme-color" content="#080c0f" />
 
     <!--
-      viewport-fit=cover: lets content reach under the notch and home
-      indicator, which is also the prerequisite for env(safe-area-inset-*)
-      to report anything but zero.
+      viewport-fit=cover lets content reach under the notch and the home
+      indicator. Without it, env(safe-area-inset-*) reports zero.
 
-      No interactive-widget=resizes-content, deliberately. It does keep the
-      overlays on screen when the keyboard opens — by shrinking the layout
-      viewport — but the canvas is sized off that same viewport, so the 3D
-      view resized and reframed itself every time the keyboard appeared.
-      Holding the layout viewport still keeps the world where it was, and the
-      overlays are repositioned instead, from visualViewport (see
-      src/viewport.ts). One mechanism rather than two that disagree.
+      interactive-widget=resizes-content is left out on purpose. It keeps the
+      overlays on screen when the keyboard opens by shrinking the layout
+      viewport, but the canvas is sized from that same viewport, so the 3D
+      view would resize and reframe itself every time the keyboard appears.
+      The layout viewport holds still instead, which keeps the world where it
+      is, and the overlays are placed from visualViewport
+      (src/service/platform/viewport.ts). One mechanism moves them, not two that
+      disagree.
     -->
     <meta
       name="viewport"
@@ -49,8 +49,8 @@
       content="Find a real place and stack blocks on it."
     />
 
-    <!-- Open Graph / Twitter link-preview card. Static, not run through
-         t() — a crawler reads this HTML as-served and never executes the
+    <!-- The Open Graph and Twitter link-preview card. It is static and not
+         translated: a crawler reads this HTML as served and never runs the
          client bundle, so there is no language to switch on. -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="%SITE_URL%" />
@@ -71,7 +71,7 @@
     <meta name="twitter:image" content="%SITE_URL%/brand/og-image.jpg" />
   </head>
   <body>
-    <!-- The UI's ground until it mounts, which replaces this. -->
+    <!-- The UI's ground, shown until the UI mounts and replaces it. -->
     <div id="root">
       <div style="flex: 1; background-color: %GROUND%"></div>
     </div>

@@ -1,11 +1,12 @@
 // cpp/xpute/core/sched/tick.hpp
 
-// A core's cooperative scheduler: one tick a turn, its phases in the order
-// the program numbers them, against one budget counted from the rising edge.
-// While a phase runs, the share of the budget its policy holds back for the
-// phases after it is not its to take, so they are not starved while it keeps
-// busy. What the phases are, and what each holds back, are the program's. A
-// step keeps its own state.
+// A core's cooperative scheduler, which runs one tick a turn. A tick runs
+// the program's phases in the order the program numbers them, and all of
+// them share one budget: the runtime's deadline, counted from the rising
+// edge. While a phase runs, the share of the budget its policy holds back
+// for the later phases is not its to spend, so a busy phase cannot starve
+// them. The program decides what the phases are and what each holds back.
+// Each step keeps its own state.
 
 #pragma once
 
@@ -26,18 +27,20 @@ namespace xpute {
 // A phase, by its place in the program's order.
 using Phase = std::uint8_t;
 
-// The most phases a tick runs.
+// A tick runs at most this many phases.
 inline constexpr std::size_t PHASES_MAX = 8;
 
 struct TickPolicy {
-    // Hard ceiling over what is left, so a step that costs time and reports
-    // nothing done cannot walk the whole list.
+    // A hard limit this far past the remaining budget, so steps that report
+    // no work cannot run through the whole list (`Pass::hard_slack_ms`).
     double hard_slack_ms;
-    // The program's phases, in the order they run: each the share of the
-    // budget held back from it for the phases after it, 0 for none.
+    // One entry for each of the program's phases, in the order they run.
+    // Each is the fraction of the budget its phase must leave for the
+    // phases after it; 0 leaves none.
     std::span<const double> held_back;
 };
 
+// The most steps one step may unregister while it runs.
 inline constexpr std::size_t OFFS_MAX = 8;
 
 class TickContext {
@@ -46,7 +49,9 @@ class TickContext {
     Pass pass;
     std::array<double, PHASES_MAX> phase_ms{};
 
-    // The core is rung only when asked, so a step that animates asks here.
+    // Marks the tick as wanting another turn (`TickReport::invalidated`).
+    // The core is rung only when something asks for a turn, so a step that
+    // animates calls this on every tick.
     void invalidate() noexcept { invalidated_ = true; }
 
     void off_tick(std::uint32_t id) noexcept {
@@ -65,7 +70,8 @@ class TickContext {
 
 using TickStep = void (*)(TickContext &);
 
-// Two registrations under one name in one phase add into one row.
+// A step's time, summed until `step_stats_reset`. Registrations with the
+// same phase and name add into one row.
 struct StepStat {
     Phase phase = 0;
     std::uint32_t name = 0;
@@ -99,7 +105,8 @@ template <std::size_t N> class Tick {
         return id;
     }
 
-    // Inside a tick, a step asks its context instead.
+    // For use outside a tick. A step inside a tick unregisters through its
+    // context (`TickContext::off_tick`).
     void off_tick(std::uint32_t id) noexcept { (void)remove(id); }
 
     void set_step_timing(bool on) noexcept { step_timing_ = on; }
@@ -139,7 +146,8 @@ template <std::size_t N> class Tick {
         return std::nullopt;
     }
 
-    // A table with no row left drops the sample.
+    // When the table has no free row, the time of a step not yet in it is
+    // dropped.
     void record(Phase phase, std::uint32_t name, double ms) noexcept {
         std::size_t at = 0;
         while (at < stats_len_ && !(stats_[at].phase == phase && stats_[at].name == name)) at++;
@@ -155,7 +163,8 @@ template <std::size_t N> class Tick {
 
     void run_phase(Phase phase, TickContext &ctx) noexcept {
         double start = now();
-        // An index, not a snapshot: a step may unregister itself or a sibling.
+        // An index, not an iterator: a step may unregister itself or another
+        // step, and a snapshot would still run a step just unregistered.
         std::size_t i = 0;
         while (i < len_) {
             Registered r = registry_[i++];

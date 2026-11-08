@@ -5,8 +5,8 @@ use xpute_kit::golden::Golden;
 use super::*;
 
 /// The record the client's source is held to too
-/// (ts/client/src/sys/fs/source.test.ts).
-const GOLDEN: &str = include_str!("../../golden/bake/version.tsv");
+/// (ts/client/src/service/sys/fs/source.test.ts).
+const GOLDEN: &str = include_str!(concat!(env!("PXL_REPO"), "/spec/golden/bake/version.tsv"));
 
 #[test]
 fn is_version_golden() {

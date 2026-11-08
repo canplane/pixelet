@@ -43,7 +43,7 @@ fn expected(name: &str) -> String {
         .to_string()
 }
 
-/// `'a` is named so the closure is not asked to work for every lifetime.
+/// `'a` is named so that the closure need not work for every lifetime.
 fn encode<'a>(build: impl FnOnce(&mut TreeView<'a>)) -> Vec<u8> {
     let mut t = TreeView::new();
     build(&mut t);

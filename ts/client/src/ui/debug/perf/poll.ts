@@ -1,16 +1,17 @@
 // @pxl/client/ui/debug/perf/poll.ts
 
 /**
- * The one poll of the profiler the debug panels read: while the profiler
- * panel is up, the gauge over the live window, whose view the view panel
- * reads too; while only the view panel is open, the view alone
- * (port/perf.ts `read("view")`); while neither, nothing.
+ * The one poll of the profiler that the debug panels share. While the profiler
+ * panel is shown, it reads the gauge over the live window, and the view panel
+ * takes its view from that gauge. While only the view panel is shown, it reads
+ * the view alone (`read("view")` in service/core/perf.ts). While neither is
+ * shown, it reads nothing.
  */
 
 import { useEffect } from "react";
 import { create } from "zustand";
 
-import { read as perf_read } from "@/port/perf.ts";
+import { read as perf_read } from "@/service/core/perf.ts";
 import { type Gauge, perfGaugeRead } from "./view.ts";
 
 const POLL_MS = 500;
@@ -21,7 +22,8 @@ const store = create<{ gauge: Gauge | null; view: Gauge["view"] | null }>()(
   () => ({ gauge: null, view: null }),
 );
 
-/** The panels reading each, which says what a poll reads. */
+/** How many panels read the gauge, and how many the view. The counts decide
+ * what a poll reads. */
 const readers = { gauge: 0, view: 0 };
 let timer: ReturnType<typeof setInterval> | undefined;
 
@@ -35,14 +37,15 @@ function read(): void {
   }
 }
 
-/** Read at once, then every POLL_MS while anyone reads; the returned call stops reading. */
+/** Joins the poll as a reader of `what`. The poll reads at once, then every
+ * POLL_MS while any reader remains. The returned function leaves the poll. */
 function join(what: keyof typeof readers): () => void {
   readers[what]++;
   read();
   timer ??= setInterval(read, POLL_MS);
   return () => {
     readers[what]--;
-    // A panel shown again starts from nothing, not from what it read before.
+    // A panel that is shown again starts empty, not with what it read before.
     if (readers.gauge === 0) store.setState({ gauge: null });
     if (readers.view === 0 && readers.gauge === 0) {
       store.setState({ view: null });
@@ -54,13 +57,15 @@ function join(what: keyof typeof readers): () => void {
   };
 }
 
-/** The gauge over the live window, polled while `on`; null until the first read. */
+/** The gauge over the live window, polled while `on`. It is null until the
+ * first read lands. */
 export function usePerfGauge(on: boolean): Gauge | null {
   useEffect(() => (on ? join("gauge") : undefined), [on]);
   return store((s) => (on ? s.gauge : null));
 }
 
-/** Where the camera and the pointer are now, polled while `on`; null until the first read. */
+/** Where the camera and the pointer are now, polled while `on`. It is null
+ * until the first read lands. */
 export function usePerfView(on: boolean): Gauge["view"] | null {
   useEffect(() => (on ? join("view") : undefined), [on]);
   return store((s) => (on ? s.view : null));

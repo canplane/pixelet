@@ -1,17 +1,23 @@
 // pxl-render/gpu/pass/mark.rs
 
-//! What a listed draw that changed marks: the screen's tiles and, where it
-//! casts, the light's map's (tile_mark.wgsl), by itself drawn where it was,
-//! by the frame's words the last frame drew it with, and where it is, by
-//! this frame's, its vertices as its depth pass lays them, each fragment
-//! setting its tile's word: the pixels it covered then and covers now,
-//! each frame at its own jitter. A draw changed where the turn changed it
-//! (gpu/draw.rs `Change`), as it was and as it is; or where the upload it
-//! reads moved (`touched`, the handles this frame's lists upload, rewrite or
-//! free); or, one that drifts with the wind, where the wind's drift moved,
-//! each drawn at its own frame's drift. What the last frame drew is kept for
-//! that: each upload the draws read, copied after the frame read it where the
-//! lists moved it since (`UploadCopies`).
+//! The marks of the listed draws that changed. A frame that is not drawn
+//! whole draws again only its claimed tiles (gpu/tile.rs), and a draw that
+//! changed claims its tiles by its mark. The mark sets the words of the
+//! screen's tiles it covers, and of the light map's tiles where the draw
+//! casts a shadow (tile_mark.wgsl). The draw is drawn twice for its mark,
+//! with its vertices laid as its depth pass lays them: where it was, by the
+//! frame words the last frame drew it with, and where it is, by this
+//! frame's. The marked tiles then hold the pixels it covered then and covers
+//! now, each at its own frame's jitter.
+//!
+//! A draw counts as changed in three cases. The turn changed it (gpu/draw.rs
+//! `Change`), and it is drawn as it was and as it is. The upload it reads
+//! moved; `touched` holds the handles this frame's lists upload, rewrite or
+//! free. Or it drifts with the wind and the wind's drift moved; each of its
+//! two draws then takes its own frame's drift. To draw a draw where it was,
+//! `UploadCopies` keeps each upload the draws read as the last frame drew
+//! it. It copies an upload after the frame has read it, whenever the lists
+//! moved it since.
 
 use crate::frame::shader::record::UPLOAD_LAYOUT;
 use crate::gpu::api::{
@@ -22,47 +28,53 @@ use crate::gpu::pass::model::{DrawUniforms, DRAW_BYTES};
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::upload::Uploads;
 
-/// The upload a draw reads, 0 for none.
+/// Gives the handle of the upload a draw reads, 0 for none.
 pub(crate) type UploadOf = fn(&[u32; DRAW_WORDS]) -> u32;
 
-/// A mark's uniform written as its pipeline reads it.
+/// Writes a mark's uniform into its slot as the mark's pipeline reads it.
 type PutMark = fn(&mut [u8], &Draw);
 
-/// Whether a draw of the pass is drawn at all.
+/// Says whether the pass draws a draw at all. A draw it does not draw marks
+/// nothing.
 pub(crate) type Shown = fn(&[u32; DRAW_WORDS]) -> bool;
 
-/// What a frame's marks are made from: the draws as the turn left them, its
-/// changes, the handles its lists touch, sorted, and how far the wind has
-/// carried the clouds as this frame draws them and as the last frame drew
-/// them (word.rs `frame::DRIFT_Q`).
-pub struct MarkInput<'a> {
+/// What a frame's marks are made from. `draws` are the draws as the turn
+/// left them, and `changes` are the turn's changes. `touched` holds the
+/// handles the frame's lists touch, sorted. `drift` holds how far the wind
+/// has carried the clouds, first as this frame draws them and then as the
+/// last frame drew them (word.rs `frame::DRIFT_Q`).
+pub struct DamageInput<'a> {
     pub draws: Draws<'a>,
     pub changes: &'a [Change],
     pub touched: &'a [u32],
     pub drift: [Position; 2],
 }
 
-/// A mark's uniform: the draw's, as its lit pass reads it.
+/// Writes a mark's uniform as the draw's own, whole, as its lit pass reads
+/// it.
 pub(crate) fn put_whole(buf: &mut [u8], (_, u): &Draw) {
     buf[..DRAW_BYTES as usize].copy_from_slice(bytes(u));
 }
 
-/// A draw as a frame draws it, at the wind's drift `drift` (gpu/draw.rs
-/// `drifted`), so its mark reads no frame's.
+/// The draw as a frame draws it at the wind's drift `drift`. The drift is
+/// taken into its uniform (gpu/draw.rs `drifted`), so the mark's shader adds
+/// no frame's drift to it again.
 fn drawn_at((d, mut u): Draw, drift: Position) -> Draw {
     drifted(&mut u, drift);
     (d, u)
 }
 
-/// Each draw of `pipeline` a frame marks (`Marks::prepare`) handed to
-/// `take`, as it is drawn, at its frame's drift, with whether it is as it is
-/// (true) or as it was: each the turn changed, the one or both it has; and
-/// each whose upload moved, or that drifts where the drift moved, both. A
-/// draw reads the upload `read` names, and only one `shown` marks.
+/// Hands `take` each draw of `pipeline` that a frame marks
+/// (`Marks::prepare`), as it is drawn at its frame's drift, with whether it
+/// is the draw as it is (true) or as it was. A draw the turn changed is
+/// handed as it is, as it was, or both, by which of the two it has. A draw
+/// whose upload moved, or that drifts while the drift moved, is handed both
+/// ways. `read` names the upload a draw reads, and only a draw that `shown`
+/// passes is marked.
 pub(crate) fn marked(
     pipeline: u32,
     (read, shown): (UploadOf, Shown),
-    m: &MarkInput,
+    m: &DamageInput,
     mut take: impl FnMut(Draw, bool),
 ) {
     let mine = |d: &Draw| d.0[4] == pipeline && shown(&d.0);
@@ -74,29 +86,27 @@ pub(crate) fn marked(
             take(drawn_at(w, m.drift[1]), false);
         }
     }
-    let drift_moved = m.drift[0] != m.drift[1];
-    if m.touched.is_empty() && !drift_moved {
+    let drift_changed = m.drift[0] != m.drift[1];
+    if m.touched.is_empty() && !drift_changed {
         return;
     }
-    let moved = |d: &[u32; DRAW_WORDS]| read(d) != 0 && m.touched.binary_search(&read(d)).is_ok();
+    let changed = |d: &[u32; DRAW_WORDS]| read(d) != 0 && m.touched.binary_search(&read(d)).is_ok();
     for d in m.draws.of(pipeline) {
         if !shown(d) || m.draws.changed(d[3]) {
             continue;
         }
         let Some(d) = m.draws.now(d[3]) else { continue };
-        if moved(&d.0) || (drift_moved && drifts(&d.1)) {
+        if changed(&d.0) || (drift_changed && drifts(&d.1)) {
             take(drawn_at(d, m.drift[0]), true);
             take(drawn_at(d, m.drift[1]), false);
         }
     }
 }
 
-/// One pipeline's marks: the pipeline they are drawn by and the draws' it
-/// marks (`marks`), the upload a draw reads (`read`, 0 for none), a mark's
-/// uniform as the pipeline reads it (`put`) and whether a draw is drawn
-/// (`shown`), the marks' uniforms, and this frame's marks, each
-/// its record and the group of the upload it reads, as it is or as it was (0
-/// where it reads none), those as they are first, `now_cnt` of them.
+/// The marks of one pipeline's draws (`Marks::new`). `marks` holds this
+/// frame's marks, each a draw's record with the group of the upload it reads
+/// (0 where it reads none), as it is or as it was. The marks as they are come
+/// first, `now_cnt` of them.
 pub struct Marks {
     pipeline: Pipeline,
     marks_of: u32,
@@ -109,10 +119,10 @@ pub struct Marks {
 }
 
 impl Marks {
-    /// The marks of pipeline `marks_of`'s draws, drawn by pipeline `id` into
-    /// a target whose depth is attached read only, each draw reading the
-    /// upload `read` names, each mark's uniform written by `put`, a draw
-    /// `shown` alone marking.
+    /// The marks of the draws of pipeline `marks_of`, drawn by pipeline `id`
+    /// into a target whose depth is attached read only. `read` names the
+    /// upload each draw reads, and `put` writes each mark's uniform. Only a
+    /// draw that `shown` passes is marked.
     pub fn new(
         g: &Gpu,
         pipelines: &mut Pipelines,
@@ -121,7 +131,7 @@ impl Marks {
         (read, put, shown): (UploadOf, PutMark, Shown),
     ) -> Marks {
         Marks {
-            pipeline: pipelines.build_gated(g, id, Format::depth32float, Stencil::Unused),
+            pipeline: pipelines.build_masked(g, id, Format::depth32float, Stencil::Unused),
             marks_of,
             read,
             put,
@@ -132,20 +142,22 @@ impl Marks {
         }
     }
 
-    /// Group 0's layout (tile_mark.wgsl): the frame, the tiles' words, their
-    /// uniform and the box of the tiles the frame's marks cover.
+    /// The layout of the marks' group 0 (tile_mark.wgsl). It binds the frame
+    /// words, the tiles' words, their uniform and the box of the tiles the
+    /// frame's marks cover.
     pub fn layout(&self) -> Layout {
         self.pipeline.layouts[0]
     }
 
-    /// The marks this frame of the pipeline's draws: each the turn changed,
-    /// where it is, its upload as it is, and where it was, its upload as the
-    /// last frame drew it (`last_frame_uploads`); and each whose upload
-    /// moved, or that drifts where the drift moved, both. Whether any.
+    /// Makes this frame's marks of the pipeline's draws (`marked`) and says
+    /// whether there are any. A draw marked as it is reads its upload as it
+    /// is now. A draw marked as it was reads its upload as the last frame drew
+    /// it (`last_frame_uploads`). A mark whose upload has no group on the
+    /// device is left out.
     pub fn prepare(
         &mut self,
         g: &Gpu,
-        m: &MarkInput,
+        m: &DamageInput,
         uploads: &mut Uploads,
         last_frame_uploads: &UploadCopies,
     ) -> bool {
@@ -178,11 +190,13 @@ impl Marks {
         !self.marks.is_empty()
     }
 
-    /// The marks `prepare` made drawn into `pass`, `frames` their group 0
-    /// (tile_mark.wgsl) over the frame's words of a draw as it is and of one
-    /// as it was, their uniforms group 1; `bind` binds each one's groups past
-    /// those and its mesh, given its upload's group, and draws it, or passes
-    /// it by where what it draws with is not on the device.
+    /// Draws the marks `prepare` made into `pass`. `frames` holds two group 0s
+    /// (tile_mark.wgsl): the first over this frame's words, for the marks as
+    /// they are, and the second over the last frame's, for the marks as they
+    /// were. The marks' uniforms are group 1. `bind` is given each mark's
+    /// record and its upload's group. It binds the groups past 1 and the mesh
+    /// and draws the mark, or skips it when what it draws with is not on the
+    /// device.
     pub fn draw(
         &self,
         pass: &mut TrackedRenderPass,
@@ -201,8 +215,8 @@ impl Marks {
         }
     }
 
-    /// The uploads `draws` read, into `out`: what is kept of them
-    /// (`UploadCopies`).
+    /// Pushes onto `out` the uploads `draws` read. These are the uploads
+    /// `UploadCopies` keeps a copy of.
     pub fn reads<'a>(
         &self,
         draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
@@ -216,7 +230,8 @@ impl Marks {
     }
 }
 
-/// An upload a draw that marks reads, copied as the last frame drew it.
+/// A copy of an upload that a marking draw reads, as the last frame drew
+/// it.
 #[derive(Clone, Copy)]
 struct Copy {
     handle: u32,
@@ -227,10 +242,11 @@ struct Copy {
     held: bool,
 }
 
-/// Each upload the draws that mark read, copied as the last frame drew it,
-/// by its handle, its group in the one layout every upload's is
-/// (record.rs `UPLOAD_LAYOUT`); copies let go, released before the next
-/// frame's commands, once none of this frame's reads them.
+/// A copy of each upload the marking draws read, as the last frame drew it,
+/// found by the upload's handle. Each copy's group is in the one layout that
+/// every upload's group has (record.rs `UPLOAD_LAYOUT`). A copy that no draw
+/// of this frame reads is let go, and it is released before the next frame's
+/// commands.
 #[derive(Default)]
 pub struct UploadCopies {
     copies: Vec<Copy>,
@@ -239,9 +255,10 @@ pub struct UploadCopies {
 }
 
 impl UploadCopies {
-    /// Before the frame's commands, so a frame dropped loses none: a copy
-    /// made for each upload `handles` names that has none of its size, one
-    /// of another size let go; and those let go before released.
+    /// Releases the copies let go before, then makes a copy for each upload
+    /// `handles` names that has no copy of its size. A copy of another size
+    /// is let go. The caller calls it before the frame's commands, so a frame
+    /// that is dropped loses no copy.
     pub fn prepare(&mut self, g: &Gpu, handles: &[u32], uploads: &Uploads) {
         for (buf, group) in self.let_go.drain(..) {
             release(group);
@@ -272,10 +289,10 @@ impl UploadCopies {
         }
     }
 
-    /// Each upload `handles` names copied in `encoder`, after the frame's
-    /// draws read it, where its copy does not hold it as drawn: the lists
-    /// moved it this frame (`touched`), or the copy is new or forgotten.
-    /// Copies no handle names let go.
+    /// Copies in `encoder` each upload `handles` names whose copy does not
+    /// hold it as drawn: the lists moved it this frame (`touched`), or the
+    /// copy is new or forgotten. The caller encodes it after the frame's
+    /// draws have read the uploads. A copy that no handle names is let go.
     pub fn keep(
         &mut self,
         g: &Gpu,
@@ -303,8 +320,8 @@ impl UploadCopies {
         }
     }
 
-    /// The group of the copy of upload `handle` as the last frame drew it;
-    /// none where none holds it.
+    /// The group of the copy of upload `handle` as the last frame drew it, or
+    /// none where no copy holds it.
     pub fn group_of(&self, handle: u32) -> Option<u32> {
         self.copies
             .iter()
@@ -312,8 +329,8 @@ impl UploadCopies {
             .map(|c| c.group)
     }
 
-    /// The copies no longer hold what the last frame drew, a frame dropped
-    /// or put off since: each is copied again by the next frame drawn.
+    /// Marks every copy as not holding what the last frame drew, as after a
+    /// frame is dropped or put off. The next frame drawn copies each again.
     pub fn forget(&mut self) {
         for c in &mut self.copies {
             c.held = false;

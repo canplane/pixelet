@@ -1,6 +1,7 @@
 // xpute-tool/spec/errno.rs
 
-//! xpute's errno. The numbers cross the ring, so every side must agree.
+//! Generates xpute's errno table for TypeScript, Rust and C++ from one JSON.
+//! The numbers cross the ring, so every side must agree on them.
 
 use serde::Deserialize;
 
@@ -35,9 +36,10 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 
     let mut ts = vec!["// @xpute/kit/status/errno.spec.ts".to_string()];
     ts.extend(head.iter().cloned());
-    // One constant a member, read as a namespace (`import * as Errno`): no
-    // enum, so a file transpiled alone or a stripped one reads it, and a
-    // bundle inlines what it uses.
+    // TypeScript gets one constant per member, read as a namespace (`import *
+    // as Errno`), and no enum: a file transpiled alone, or with its types
+    // stripped, can still read the constants, and a bundler inlines the ones
+    // it uses.
     ts.extend([
         String::new(),
         "import type { i32 } from \"../abi/word.ts\";".to_string(),
@@ -89,7 +91,8 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     }
     flush(&mut run, &mut rs);
     rs.extend(["}".to_string(), String::new()]);
-    // A code from across the ring, read once: a number no member has is the sender's error.
+    // A code from across the ring is read into a member once, where it
+    // arrives; a number no member has is the sender's error.
     rs.extend(
         [
             "impl Errno {",
@@ -168,7 +171,8 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         ]
         .map(String::from),
     );
-    // Lower case, as std::errc: EINVAL may be a <cerrno> macro already included.
+    // C++ spells the members in lower case, as std::errc does, because a name
+    // such as EINVAL may already be a <cerrno> macro.
     let mut cpp = vec!["// cpp/xpute/kit/status/errno.spec.hpp".to_string()];
     cpp.extend(head.iter().cloned());
     cpp.extend(

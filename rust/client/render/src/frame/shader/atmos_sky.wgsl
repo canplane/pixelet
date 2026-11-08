@@ -1,9 +1,9 @@
-// Sky-view table lookup, unexposed, for a light of illuminance 1.
+// Reads a light's sky-view table, unexposed and for a light of illuminance 1.
 
 @group(0) @binding(10) var sky_view_lut: texture_2d<f32>;
 
-// Where `dir` lies about light `k`, as its sky view and its share of the
-// air's volume are laid (atmos_medium.wgsl `view_unit`, `laid`).
+// Where `dir` lies about light `k`, as the light's sky view and its share of
+// the air's volume are laid (atmos_medium.wgsl `view_unit`, `view_layout`).
 fn table_unit(dir: vec3f, k: u32) -> vec2f {
   let up = frame_up();
   let mu = dot(dir, up);
@@ -16,7 +16,7 @@ fn table_unit(dir: vec3f, k: u32) -> vec2f {
   if (h_dir > 1e-4 && h_light > 1e-4) {
     light_cos = dot(dir_h, light_h) / (h_dir * h_light);
   }
-  return view_unit(laid(k).x, mu, light_cos);
+  return view_unit(view_layout(k).x, mu, light_cos);
 }
 
 fn table_view(lut: texture_2d<f32>, dir: vec3f, k: u32) -> vec3f {

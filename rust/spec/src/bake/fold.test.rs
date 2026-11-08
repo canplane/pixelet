@@ -11,13 +11,13 @@ const PADDED: usize = ELE_PADDED_SPAN as usize;
 
 #[test]
 fn area_majority_fold() {
-    assert_eq!(majority([7, 7, 7, 1], GROUND.cell()), 7);
-    assert_eq!(majority([7, 7, 1, 2], GROUND.cell()), 7);
-    assert_eq!(majority([1, 7, 2, 7], GROUND.cell() - 1), 7);
+    assert_eq!(majority([7, 7, 7, 1], GROUND.leaf_cell_zoom()), 7);
+    assert_eq!(majority([7, 7, 1, 2], GROUND.leaf_cell_zoom()), 7);
+    assert_eq!(majority([1, 7, 2, 7], GROUND.leaf_cell_zoom() - 1), 7);
     // No majority: the tie child, first under an odd step from the cell and last under an even one.
-    assert_eq!(majority([7, 1, 2, 3], GROUND.cell() - 1), 7);
-    assert_eq!(majority([7, 1, 2, 3], GROUND.cell() - 2), 3);
-    assert_eq!(majority([7, 7, 1, 1], GROUND.cell() - 2), 1);
+    assert_eq!(majority([7, 1, 2, 3], GROUND.leaf_cell_zoom() - 1), 7);
+    assert_eq!(majority([7, 1, 2, 3], GROUND.leaf_cell_zoom() - 2), 3);
+    assert_eq!(majority([7, 7, 1, 1], GROUND.leaf_cell_zoom() - 2), 1);
 }
 
 /// A leaf whose cell is `f` of it, its own four palette indices.
@@ -190,23 +190,29 @@ fn volume_majority_fold() {
     assert_eq!(
         majority(
             [a, empty, empty, empty, empty, empty, empty, empty],
-            GROUND.cell() - 1
+            GROUND.leaf_cell_zoom() - 1
         ),
         empty
     );
     assert_eq!(
-        majority([a, a, a, a, empty, empty, empty, empty], GROUND.cell() - 1),
+        majority(
+            [a, a, a, a, empty, empty, empty, empty],
+            GROUND.leaf_cell_zoom() - 1
+        ),
         a
     );
     assert_eq!(
-        majority([empty, a, a, a, a, a, empty, empty], GROUND.cell() - 2),
+        majority(
+            [empty, a, a, a, a, a, empty, empty],
+            GROUND.leaf_cell_zoom() - 2
+        ),
         a
     );
     let halves = [a, b, a, b, b, a, b, a];
-    assert_eq!(majority(halves, GROUND.cell() - 1), halves[0]);
-    assert_eq!(majority(halves, GROUND.cell() - 2), halves[7]);
+    assert_eq!(majority(halves, GROUND.leaf_cell_zoom() - 1), halves[0]);
+    assert_eq!(majority(halves, GROUND.leaf_cell_zoom() - 2), halves[7]);
     assert_eq!(
-        majority(halves, GROUND.cell() + 1),
+        majority(halves, GROUND.leaf_cell_zoom() + 1),
         halves[0],
         "a side finer than the cell alternates the same way"
     );

@@ -3,12 +3,14 @@
 // GENERATED from spec/abi/gpu.json
 
 /**
- * The GPU device's protocol, on major GPU: its state and the surfaces a UI lends it. The
- * calls a core makes to the GPU are records of its stream (gpu/api.json), not commands.
- * GPU_READY tells the core the device the machine asked for answered. A surface is a
- * canvas or a view the UI hands over and the core alone draws from then on, by the handle
- * GPU_SURFACE_OPEN answers, the handle the UI binds the canvas under (@xpute/runtime
- * `Link.bind`) and the stream's CONFIGURE and CURRENT name. What it shows is the program's.
+ * The GPU device's protocol on major GPU, which tells the core the device's state and the
+ * surfaces the UI lends it. The core's own calls to the GPU are not commands: they are
+ * records in its GPU stream (gpu/api.json). GPU_READY tells the core that the device its
+ * machine asked for has answered. A surface is a canvas or a view that the UI hands over,
+ * and from then on only the core draws into it. The surface is named by the handle that
+ * GPU_SURFACE_OPEN answers with: the UI binds its canvas under that handle (@xpute/runtime
+ * `Link.bind`), and the stream's CONFIGURE and CURRENT records name the surface by it. What
+ * a surface shows is the program's to decide.
  */
 
 import type { PacketRoom, PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";

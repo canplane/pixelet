@@ -1,9 +1,9 @@
 // @xpute/example/web/core.ts
 
 /**
- * The smallest core's manifest (rust/example), read by the page and by the
- * worker that runs the core: its module, and ASK answered with ANSWER. Build
- * the core first (`make build`).
+ * The manifest of the smallest core (rust/example), which both the page and
+ * the worker that runs the core import. It names the core's module and
+ * answers ASK with ANSWER. Build the core first (`make build`).
  */
 
 import { type Manifest, Timeslice } from "@xpute/runtime";

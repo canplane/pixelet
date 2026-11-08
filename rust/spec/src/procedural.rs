@@ -10,9 +10,9 @@ use crate::space::layer::lattice::TILE_CELLS;
 use crate::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 
 use pxl_engine::way::{Stations, INTERVAL_M};
-use pxl_engine::{cells_of_m, LEAF_CELL};
+use pxl_engine::{cells_of_m, LEAF_CELL_ZOOM};
 
-// ---- scatter: pxl-engine's, for the CPU's readers of one cell ----
+// ---- scatter: pxl-content's, for the CPU's readers of one cell ----
 
 pub use pxl_content::scatter::{before, meet, scatter_at, side_of, Candidate};
 
@@ -34,13 +34,12 @@ impl Frame {
         }
     }
 
-    /// Leaf cells a ground meter over the tile, of height as of breadth: the
-    /// scale where its south-west corner lies, one value a tile
-    /// (pxl-engine `cells_of_m`). A leaf tile's is the scale the bake
-    /// makes the ground's heights by, and so a height's meters
+    /// Leaf cells a ground meter over the tile, for height as for breadth: the scale where its
+    /// south-west corner lies, one value a tile (pxl-engine `cells_of_m`). A leaf tile's is the
+    /// scale by which the bake makes the ground's heights, and so a height's meters
     /// (`height_u_per_m`).
     pub fn per_m(self) -> f32 {
-        (u_per_m(self.corner[1]) / units(LEAF_CELL)) as f32
+        (u_per_m(self.corner[1]) / units(LEAF_CELL_ZOOM)) as f32
     }
 
     /// Where its piers may stand, in leaf cells (pxl-engine way.rs
@@ -49,7 +48,7 @@ impl Frame {
     /// (`cells_of_m`), and where its corner falls in it; and the leaf cells
     /// its cell spans.
     pub(crate) fn stations(self) -> Stations {
-        let leaf = units(LEAF_CELL);
+        let leaf = units(LEAF_CELL_ZOOM);
         let corner = self.corner.map(|v| (v / leaf).round_ties_even() as i64);
         let step = INTERVAL_M.map(|m| cells_of_m(m, self.per_m()).max(1));
         Stations {
@@ -67,5 +66,5 @@ impl Frame {
 /// `unproject`).
 pub fn height_u_per_m(y_u: f64) -> f64 {
     let row = libm::floor(y_u / units(LEAF_ZOOM)) as i32;
-    f64::from(Frame::of(Quadrant::new(LEAF_ZOOM, [0, row])).per_m()) * units(LEAF_CELL)
+    f64::from(Frame::of(Quadrant::new(LEAF_ZOOM, [0, row])).per_m()) * units(LEAF_CELL_ZOOM)
 }

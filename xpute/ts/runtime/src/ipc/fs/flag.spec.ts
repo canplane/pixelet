@@ -2,8 +2,9 @@
 //
 // GENERATED from spec/ipc/fs.json
 
-/** To read, whole. */
+/** Opens the file to be read whole. */
 export const O_RDONLY = 0 as number;
 
-/** To write: created where it is not, and replaced whole at FS_CLOSE (O_CREAT | O_TRUNC). */
+/** Opens the file to be written. The file is created if it does not exist, and replaced
+ * whole at FS_CLOSE, as O_CREAT | O_TRUNC would do. */
 export const O_WRONLY = 1 as number;

@@ -1,7 +1,8 @@
 // cpp/xpute/kit/abi/word.hpp
 
-// Bit fields in either word width. A width of the whole word is handled, which
-// the shift alone cannot say; otherwise `nbit` and `shamt` must stay inside it.
+// Bit fields in 32- and 64-bit words. A field is `nbit` bits wide and starts
+// at bit `shamt`; the caller keeps it inside the word. `field_mask` also takes
+// a field as wide as the whole word, which a plain shift cannot express.
 
 #pragma once
 

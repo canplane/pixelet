@@ -1,7 +1,8 @@
 // cpp/xpute/core/clock.hpp
 
-// Milliseconds, as `performance.now()`. Until the runtime installs one, time
-// stands at zero, which tests run on.
+// The runtime's clock, in milliseconds, as `performance.now()` counts them.
+// Until a runtime installs one, the time stays at zero, which native tests
+// run with.
 
 #pragma once
 

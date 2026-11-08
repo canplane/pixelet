@@ -1,15 +1,15 @@
 // xpute-runtime/examples/native.rs
 
-//! A core linked into its runtime's own native program, and the C ABI the
-//! program's app calls it through. `native` is unix's, so elsewhere the
-//! example is an empty `main`.
+//! A core linked into its runtime's own native program, and the C ABI
+//! through which the program's app calls it. `native` exists only on unix,
+//! so elsewhere the example is an empty `main`.
 
 #[cfg(unix)]
 mod program {
     use xpute_runtime::native::{self, Alloc, BootInfo, Config};
 
-    /// What the core's thread asks for lies in its memory; any other
-    /// thread's is the system's.
+    /// Blocks the core's thread allocates lie in the core's memory; any other
+    /// thread's blocks come from the system.
     #[global_allocator]
     static ALLOC: Alloc = Alloc;
 
@@ -33,7 +33,8 @@ mod program {
         turn
     );
 
-    /// The core's entry (xpute_core::entry `Entry`).
+    /// The core's entry (xpute_core::entry `Entry`). Its block comes from the
+    /// core's heap, and it answers -1 to ask for no further turn.
     fn turn(deadline_ms: f64, boot: fn() -> BootInfo) -> f64 {
         assert_eq!(boot().given, MEM_BYTES);
         let held = vec![deadline_ms; 8];

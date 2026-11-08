@@ -5,10 +5,11 @@ import { BackHandler } from "react-native";
 import { PanelPresence, type PanelProps } from "@/ui/component/panel.tsx";
 import { Panel as Sheet } from "./panel.tsx";
 
-// Everything the default has, but what this file draws itself.
+// Every export of the default file, except `Panel`: an export declared in this
+// file takes the place of a star export with the same name.
 export * from "./panel.tsx";
 
-// Android draws the page's sheet; the system back closes it.
+// Android draws the page's sheet, and the system back button closes it.
 export function Panel(props: PanelProps) {
   const { open } = useContext(PanelPresence);
   const onClose = useRef(props.onClose);

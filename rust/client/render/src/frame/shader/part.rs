@@ -1,19 +1,21 @@
 // pxl-render/frame/shader/part.rs
 
-//! Every shader by its number, and its parts in order: compiled into the
-//! crate for its numbers, and read by build.rs, which assembles each
-//! (record.rs `src`), validates it, and reads off it which stages read
-//! each binding (record.rs `pipeline`), so a pipeline's groups take their
-//! visibility from its shader and from nowhere else. A shader's parts follow
-//! constant.wgsl. A shader is one module, made once, and each pipeline over
-//! it names the entry points it runs: a render pipeline in its record, a
-//! compute pipeline by its number (record.rs `compute`).
+//! Every shader's number, and the WGSL parts it is assembled from, in order. The crate
+//! compiles this file for the numbers. build.rs includes it to assemble each shader
+//! (record.rs `src`), validate it, and read off it which stages read each binding (record.rs
+//! `pipeline`), so a pipeline's groups take their visibility from its shader and from nowhere
+//! else. Each shader's parts follow constant.wgsl. A shader is one module, made once, and each
+//! pipeline over it names the entry points it runs: a render pipeline names them in its
+//! record, and a compute pipeline by its number (record.rs `compute`).
+//!
+//! A shader called a port by hand below is WGSL written after a rule of pxl-engine's Rust, and
+//! a test over a real world's buffers holds it to that rule word for word (tests/).
 
-/// A shader's vertex entry points, a pipeline naming one by its index (record.rs `Head`), so
-/// build.rs reads which of them reads each binding.
+/// The names a shader's vertex entry points take. A pipeline names its vertex entry by its
+/// index here (record.rs `Header`), and build.rs reads which of them reads each binding.
 pub const VERTEX_ENTRY: [&str; 2] = ["vs", "vs_depth"];
-/// A shader's fragment entry point, which a pipeline with a fragment stage runs (record.rs
-/// `Head`).
+/// The name of a shader's fragment entry point, which every pipeline with a fragment stage
+/// runs (record.rs `Header`).
 pub const FRAGMENT_ENTRY: &str = "fs";
 
 pub const SHADER_BOX: u32 = 0;
@@ -31,8 +33,8 @@ pub const SHADER_AO_BLUR: u32 = 11;
 pub const SHADER_ATMOS_TRANSMITTANCE: u32 = 12;
 pub const SHADER_ATMOS_MULTISCATTER: u32 = 13;
 pub const SHADER_ATMOS_SKY_VIEW: u32 = 14;
-/// The eye's exposure and how far each light reaches the air, a texel a
-/// thread (atmos_exposure.wgsl): its one compute entry.
+/// Measures the eye's exposure and how far each light reaches the air, one texel a thread
+/// (atmos_exposure.wgsl). It has one compute entry point.
 pub const SHADER_ATMOS_EXPOSURE: u32 = 15;
 pub const SHADER_STAR: u32 = 16;
 pub const SHADER_CLOUD: u32 = 17;
@@ -42,182 +44,197 @@ pub const SHADER_IMPOSTOR: u32 = 20;
 pub const SHADER_IMPOSTOR_BAKE: u32 = 21;
 pub const SHADER_ATMOS_IRRADIANCE: u32 = 22;
 pub const SHADER_MARKER_REGION: u32 = 23;
-/// The eye's rays drawn at their pixels (pxl-engine ray.rs).
+/// Draws the eye's rays at their pixels (pxl-engine ray.rs).
 pub const SHADER_SCREEN_RAY: u32 = 24;
-/// Each drawn pixel's ray off the visible voxel or the sky, the rest marked a bit each for
-/// their walk again, by hand (cast.wgsl): its one compute entry.
+/// Ends each drawn pixel's ray on the visible voxel the raster kept at it, or on the sky. Every
+/// other pixel is a hole, and gets a bit that marks it to be walked again (cast.wgsl). A port by
+/// hand with one compute entry point.
 pub const SHADER_CAST: u32 = 25;
-/// The decor the ground generates in the eye's clip levels, a record a thread, on its
-/// column's surface and posed (decor_pose.wgsl): its one compute entry.
+/// Generates the decor of the ground in the eye's clip levels, one record a thread: each decor
+/// stands on its column's surface and takes its pose (decor_pose.wgsl). It has one compute
+/// entry point.
 pub const SHADER_GENERATION: u32 = 26;
-/// What `SHADER_GENERATION` and placed decor leave, sized for the screen and
-/// counted a draw region each; the regions laid out with their indirect
-/// args (decor_args.wgsl); each drawn compacted into the decor's instances:
-/// pxl-engine `generation::drawn`.
+/// The three passes after `SHADER_GENERATION` (pxl-engine `generation::drawn`). The count
+/// sizes each record that generation and placed decor leave for the screen, and counts it in a
+/// draw region (decor_cnt.wgsl). The args lay out the regions one after another with their
+/// indirect args (decor_args.wgsl). The compact writes each drawn record into the decor's
+/// instances (decor_compact.wgsl).
 pub const SHADER_GENERATION_CNT: u32 = 27;
 pub const SHADER_GENERATION_ARGS: u32 = 28;
 pub const SHADER_GENERATION_COMPACT: u32 = 29;
-/// Which eye slots' decor generates again this frame, listed for
-/// `SHADER_GENERATION_THIN`'s and `SHADER_GENERATION`'s dispatches: its one
-/// compute entry.
+/// Lists the eye's slots whose decor generates again this frame, for the dispatches of
+/// `SHADER_GENERATION_THIN` and `SHADER_GENERATION` (decor_mark.wgsl). It has one compute
+/// entry point.
 pub const SHADER_GENERATION_MARK: u32 = 30;
-/// A light's share of the air's volume, a column of froxels a workgroup
-/// (atmos_froxel.wgsl): its one compute entry.
+/// Fills a light's share of the air's volume, one column of froxels a workgroup
+/// (atmos_froxel.wgsl). It has one compute entry point.
 pub const SHADER_ATMOS_FROXEL: u32 = 31;
-/// The eye's beam rays' run's walks over the node cache alone (queue_walk.wgsl over
-/// corners.wgsl, beam.eye.wgsl): what they park `SHADER_QUEUE_ASK_CORNERS` asks and
-/// `SHADER_QUEUE_LAST_CORNERS` ends.
+/// Walks the eye's beam rays over the node cache alone (queue_walk.wgsl over corners.wgsl and
+/// beam.eye.wgsl). A ray that meets a node no slot keeps is parked. `SHADER_QUEUE_ASK_CORNERS`
+/// then asks the world for that node, and `SHADER_QUEUE_LAST_CORNERS` ends the ray.
 pub const SHADER_QUEUE_CORNERS: u32 = 32;
-/// Where each of the camera grid's cells' rays start off its beam rays, by hand
-/// (cell.wgsl): its one compute entry.
+/// Finds where the rays of each cell of the camera grid start, from the beam rays about the
+/// cell (cell.wgsl). A port by hand with one compute entry point.
 pub const SHADER_CELL: u32 = 33;
-/// The holes' queue's last walk, which asks the world (queue_last.wgsl), and the node cache
-/// forgotten (pxl-engine `node_cache`), by hand (forget.wgsl): compute entries.
+/// `SHADER_QUEUE_LAST` is the last walk of the holes, which asks the world where the node cache
+/// keeps no node (queue_last.wgsl). `SHADER_FORGET` makes the node cache forget what the
+/// world's changes have made stale (pxl-engine `node_cache`, forget.wgsl). Both are ports by
+/// hand.
 pub const SHADER_QUEUE_LAST: u32 = 34;
 pub const SHADER_FORGET: u32 = 35;
-/// The eye's samples' run's last walk, which asks the world (queue_last.wgsl over samples.wgsl,
-/// sample.eye.wgsl): a compute entry.
+/// The last walk of the eye's samples, which asks the world where the node cache keeps no node
+/// (queue_last.wgsl over samples.wgsl and sample.eye.wgsl).
 pub const SHADER_QUEUE_LAST_SAMPLES: u32 = 36;
-/// The world's depth from the light into its clipmap (pxl-engine `light`):
-/// every slot taking the visible voxel, a workgroup a tile (light.wgsl), a
-/// compute entry; and that depth laid into the map (light_map.wgsl,
-/// gpu/shadow.rs). The nodes the holes' queue's walks were parked at, asked once
-/// a node (queue_ask.wgsl): compute entries.
+/// `SHADER_LIGHT` casts the world's depth from the light into its clipmap (pxl-engine
+/// `light`): each slot takes the visible voxel, one tile a workgroup (light.wgsl).
+/// `SHADER_LIGHT_MAP` lays that depth into the shadow map (light_map.wgsl, gpu/shadow.rs).
+/// `SHADER_QUEUE_ASK` asks the world, once a node, for each node a walk of the holes was
+/// parked at (queue_ask.wgsl).
 pub const SHADER_LIGHT: u32 = 37;
 pub const SHADER_LIGHT_MAP: u32 = 38;
 pub const SHADER_QUEUE_ASK: u32 = 39;
-/// The occlusion's half-resolution map brought to the pixel and multiplied
-/// into the world's color, as the tiles' quads (ao_apply.wgsl).
+/// Brings the occlusion's half-resolution map up to each pixel and multiplies it into the
+/// world's color, drawn as the claimed tiles' quads (ao_apply.wgsl).
 pub const SHADER_AO_APPLY: u32 = 40;
-/// The eye's samples' stops into the record of voxels, by hand (pxl-engine `record`;
-/// sample_box.wgsl), two compute entries; and the boxes drawn, the eye's and the light's, the
-/// nearest face a pixel's ray enters kept with its voxel (raster.wgsl), which the cast's
-/// pixels read (`SHADER_CAST`).
+/// `SHADER_SAMPLE_BOX` writes the eye's samples into the record of voxels as stops (pxl-engine
+/// `record`, sample_box.wgsl). It is a port by hand with two compute entry points.
+/// `SHADER_RASTER` draws the record's voxels as boxes, the eye's and the light's, and keeps at
+/// each pixel the voxel whose face its ray enters first (raster.wgsl). The cast reads what
+/// each pixel keeps (`SHADER_CAST`).
 pub const SHADER_SAMPLE_BOX: u32 = 41;
 pub const SHADER_RASTER: u32 = 42;
-/// What lies about each face of the record's voxels, asked once a face (pxl-engine
-/// `raster::ARGS_FACES`, `record::R_FACES`), and each missed pixel's hit's, by hand
-/// (face.wgsl): its one compute entry.
+/// Asks the world what lies around each face of the record's voxels, once a face (pxl-engine
+/// `raster::ARGS_FACES`, `record::R_FACES`), and around the face each missed pixel's hit
+/// entered (face.wgsl). A port by hand with one compute entry point.
 pub const SHADER_FACE: u32 = 43;
-/// The tiles of the light's box its receivers stand on (pxl-engine
-/// `light::LISTED_STOOD`): the pixels the eye walked apart (its voxels' boxes stood by the
-/// record's draw, `SHADER_RECORD_DRAW`), and where the decor and what the core draws that
-/// reads the map stand; then those they read (`light::LISTED_READ`,
-/// `light::reads_at`), by hand (light_mark.wgsl, light_mark_draws.wgsl,
-/// light_propagate.wgsl): compute entries.
+/// The three shaders that list the tiles of the light's box the shadow map's receivers stand
+/// on (pxl-engine `light::LIST_RECEIVERS`), then the tiles they read. A receiver stands on the
+/// tiles its box covers. `SHADER_LIGHT_MARK` stands the pixels whose rays the holes' queue
+/// walked; the record's draw stands the boxes of the voxels the raster drew
+/// (`SHADER_RECORD_DRAW`). `SHADER_LIGHT_MARK_DRAWS` stands the decor, and what the core draws
+/// that reads the map. `SHADER_LIGHT_PROPAGATE` lists the tiles those receivers read
+/// (`light::LIST_READS`, `light::reads_at`). All three are ports by hand (light_mark.wgsl,
+/// light_mark_draws.wgsl, light_propagate.wgsl).
 pub const SHADER_LIGHT_MARK: u32 = 44;
 pub const SHADER_LIGHT_MARK_DRAWS: u32 = 45;
 pub const SHADER_LIGHT_PROPAGATE: u32 = 46;
-/// Which candidates of a slot `SHADER_GENERATION_MARK` listed the thinning
-/// retains, a clip level cell a thread, for `SHADER_GENERATION` to generate: its
-/// one compute entry.
+/// Thins the candidates of each slot `SHADER_GENERATION_MARK` listed, one clip level cell a
+/// thread, and lays out those it keeps for `SHADER_GENERATION` to generate (decor_thin.wgsl).
+/// It has one compute entry point.
 pub const SHADER_GENERATION_THIN: u32 = 47;
-/// The world's toned color encoded onto the canvas once (screen_finish.wgsl).
+/// Brings the world's toned color up to the canvas's pixels and encodes it, the one encode a
+/// frame takes (screen_finish.wgsl).
 pub const SHADER_SCREEN_FINISH: u32 = 48;
-/// The world's color gathered over frames (screen_resolve.wgsl).
+/// Gathers the world's color over frames (screen_resolve.wgsl).
 pub const SHADER_SCREEN_RESOLVE: u32 = 49;
-/// The claimed tiles set back to nothing at the far plane, their stencil
-/// raised (screen_gate.wgsl).
-pub const SHADER_SCREEN_GATE: u32 = 50;
-/// The finished picture kept at the canvas's size shown on the canvas
-/// (screen_show.wgsl).
+/// The gate of a frame not drawn whole: it clears each claimed tile to no color at the far
+/// plane and raises its stencil (screen_mask.wgsl).
+pub const SHADER_SCREEN_MASK: u32 = 50;
+/// Shows on the canvas the finished picture kept at the canvas's size (screen_show.wgsl).
 pub const SHADER_SCREEN_SHOW: u32 = 51;
-/// The light's map's tiles that changed propagated to the screen's
-/// (screen_propagate.wgsl): its one compute entry.
+/// Claims the screen's tiles whose pixels read a tile of the light's map that changed
+/// (screen_propagate.wgsl). It has one compute entry point.
 pub const SHADER_SCREEN_PROPAGATE: u32 = 52;
-/// The claimed tiles of the history the resolve wrote copied back into the
-/// last (screen_write_back.wgsl).
+/// Copies the claimed tiles of the history the resolve wrote this frame back into the history
+/// the frame before wrote (screen_write_back.wgsl).
 pub const SHADER_SCREEN_WRITE_BACK: u32 = 53;
-/// The claimed tiles of the samples' raster set back to no sample at the far
-/// plane (raster_gate.wgsl).
-pub const SHADER_RASTER_GATE: u32 = 54;
-/// The tiles the frame's one mark covers, or every one, taking its number
-/// (screen_mark.wgsl): its one compute entry.
+/// The gate of the samples' raster: it clears each claimed tile to no sample at the far plane
+/// (raster_mask.wgsl).
+pub const SHADER_RASTER_MASK: u32 = 54;
+/// Writes the frame's number into the word of each tile the frame's one mark covers, or of
+/// every tile when the frame is drawn whole (screen_mark.wgsl). It has one compute entry
+/// point.
 pub const SHADER_SCREEN_MARK: u32 = 55;
-/// The world's depth laid in the claimed tiles of the light's map, their
-/// stencil raised (light_gate.wgsl).
-pub const SHADER_LIGHT_GATE: u32 = 56;
-/// Each square of the screen's least and most depth, set in the tiles drawn
-/// (screen_bound.wgsl): its one compute entry.
+/// The gate of the light's map: it lays the world's depth in the map's claimed tiles and
+/// raises their stencil (light_mask.wgsl).
+pub const SHADER_LIGHT_MASK: u32 = 56;
+/// Sets the least and the most depth of each square of the screen, in the tiles the world's
+/// pass drew (screen_bound.wgsl). It has one compute entry point.
 pub const SHADER_SCREEN_BOUND: u32 = 57;
-/// A character where it was and where it is, its fragments marking their screen
-/// tiles (skinned_place.wgsl, tile_mark.wgsl).
+/// Draws a character where it was and where it is, and each fragment marks its screen tile
+/// (skinned_place.wgsl, tile_mark.wgsl).
 pub const SHADER_SKINNED_MARK: u32 = 58;
-/// The tiles of the light's box the box slid onto, or slid into another
-/// band (pxl-engine `Light::keeps`), by hand (light_slide.wgsl): a compute
-/// entry.
+/// Carries the words of the light's box's tiles over once the box slid, the eye's zooms moved
+/// or the world under the box changed (light_slide.wgsl). A tile the box slid onto, a tile
+/// moved into another band (pxl-engine `Light::keeps`), and a tile whose rays may meet a
+/// changed column are set to none, so they are cast again. A port by hand.
 pub const SHADER_LIGHT_SLIDE: u32 = 59;
-/// Decor, an impostor, the location indicator's zone and its beacon where each
-/// was and where it is, their fragments marking their tiles (tile_mark.wgsl).
+/// The four shaders that draw decor, an impostor, the location indicator's zone and its beacon
+/// where each was and where it is. Each fragment marks its screen tile (tile_mark.wgsl).
 pub const SHADER_DECOR_MARK: u32 = 60;
 pub const SHADER_IMPOSTOR_MARK: u32 = 61;
 pub const SHADER_LOCATION_ZONE_MARK: u32 = 62;
 pub const SHADER_LOCATION_BEACON_MARK: u32 = 63;
-/// The indirect args of a quad a tile of the box the frame's marks cover
-/// (box_args.wgsl): its one compute entry.
-pub const SHADER_BOX_ARGS: u32 = 64;
-/// The shadow map's beam rays' walks, cells, samples' last walk and samples' stops into the
-/// record: `SHADER_QUEUE_CORNERS`, `SHADER_CELL`, `SHADER_QUEUE_LAST_SAMPLES` and
-/// `SHADER_SAMPLE_BOX` for the light's map (beam.light.wgsl, light_cell.wgsl,
+/// Writes the indirect args of the draw of one quad a tile over the box the frame's marks
+/// cover (rect_args.wgsl). It has one compute entry point.
+pub const SHADER_RECT_ARGS: u32 = 64;
+/// `SHADER_QUEUE_CORNERS`, `SHADER_CELL`, `SHADER_QUEUE_LAST_SAMPLES` and `SHADER_SAMPLE_BOX`
+/// for the light's map: the walks of its beam rays, its cells, the last walk of its samples,
+/// and its samples' stops into the record (beam.light.wgsl, light_cell.wgsl,
 /// sample.light.wgsl, sample_box.light.wgsl).
 pub const SHADER_QUEUE_LIGHT_CORNERS: u32 = 65;
 pub const SHADER_LIGHT_CELL: u32 = 66;
 pub const SHADER_QUEUE_LAST_LIGHT_SAMPLES: u32 = 67;
 pub const SHADER_LIGHT_SAMPLE_BOX: u32 = 68;
-/// The eye's samples' run's walks over the node cache alone (queue_walk.wgsl over
-/// samples.wgsl, sample.eye.wgsl): what they park `SHADER_QUEUE_ASK_SAMPLES` asks and
-/// `SHADER_QUEUE_LAST_SAMPLES` ends.
+/// Walks the eye's samples over the node cache alone (queue_walk.wgsl over samples.wgsl and
+/// sample.eye.wgsl). A sample that meets a node no slot keeps is parked.
+/// `SHADER_QUEUE_ASK_SAMPLES` then asks the world for that node, and
+/// `SHADER_QUEUE_LAST_SAMPLES` ends the sample's walk.
 pub const SHADER_QUEUE_SAMPLES: u32 = 69;
-/// The holes' queue's walks over the node cache alone (queue_walk.wgsl), the eye's pixels' and
-/// the light's slots': what they park `SHADER_QUEUE_ASK` asks and `SHADER_QUEUE_LAST` ends.
+/// Walks the holes over the node cache alone (queue_walk.wgsl), the eye's pixels and the
+/// light's slots alike. A hole that meets a node no slot keeps is parked. `SHADER_QUEUE_ASK`
+/// then asks the world for that node, and `SHADER_QUEUE_LAST` ends the hole's ray.
 pub const SHADER_QUEUE: u32 = 70;
-/// The eye's beam rays' run's last walk, which asks the world (queue_last.wgsl over
-/// corners.wgsl, beam.eye.wgsl).
+/// The last walk of the eye's beam rays, which asks the world where the node cache keeps no
+/// node (queue_last.wgsl over corners.wgsl and beam.eye.wgsl).
 pub const SHADER_QUEUE_LAST_CORNERS: u32 = 71;
 /// `SHADER_QUEUE_SAMPLES` for the light's map.
 pub const SHADER_QUEUE_LIGHT_SAMPLES: u32 = 72;
 /// `SHADER_QUEUE_LAST_CORNERS` for the light's map.
 pub const SHADER_QUEUE_LAST_LIGHT_CORNERS: u32 = 73;
-/// The tiles claimed, listed for `SHADER_CAST`.
+/// Lists the claimed tiles, so that `SHADER_CAST` takes only their pixels.
 pub const SHADER_CAST_TILES: u32 = 74;
-/// The box of the screen's claimed tiles, a frame through the gate's (`SHADER_DECOR_GATE`).
-pub const SHADER_CLAIMED_BOX: u32 = 75;
-/// Decor generated a frame through the gate draws: the instances that meet its claimed tiles.
-pub const SHADER_DECOR_GATE: u32 = 76;
-/// The node cache's drawable entries over every slot, by hand (record_draw.wgsl): those in view
-/// written as the raster's boxes, each stood on by the light's receivers where the world's are
-/// stood this frame, and those on the light's box as its raster's.
+/// Finds the box of the screen's tiles claimed in a frame drawn through the gate, for
+/// `SHADER_DECOR_CULL`.
+pub const SHADER_DAMAGE_RECT: u32 = 75;
+/// Lists the generated decor's instances that meet the claimed tiles, the only ones a frame
+/// drawn through the gate draws.
+pub const SHADER_DECOR_CULL: u32 = 76;
+/// Goes over every slot's drawable entries in the node cache (record_draw.wgsl). Each entry in
+/// view is written as a box for the raster, and also stood as a receiver of the light when the
+/// world's receivers are stood this frame. Each entry on the light's box is written as a box
+/// for the light's raster. A port by hand.
 pub const SHADER_RECORD_DRAW: u32 = 77;
-/// The holes' stops into the node cache's drawable entries, and what lies about each one's face
-/// put at its pixel, by hand (record_stops.wgsl).
-pub const SHADER_RECORD_STOPS: u32 = 78;
-/// `SHADER_RECORD_STOPS` for the light's stops (record_stops.light.wgsl).
-pub const SHADER_LIGHT_RECORD_STOPS: u32 = 79;
-/// The drawn receivers' dispatch opened (light_mark_draws_open.wgsl), a module apart from the
-/// receivers' pass that reads it.
+/// Writes the holes' stops into the node cache's drawable entries, and puts at each hole's
+/// pixel what lies about the face it entered (record_hits.wgsl). A port by hand.
+pub const SHADER_RECORD_HITS: u32 = 78;
+/// `SHADER_RECORD_HITS` for the light's stops (record_hits.light.wgsl).
+pub const SHADER_LIGHT_RECORD_HITS: u32 = 79;
+/// Writes the dispatch of the drawn receivers' pass (light_mark_draws_open.wgsl). It is a
+/// module apart from that pass, so the pass, which takes its dispatch from the buffer this one
+/// writes, does not bind that buffer writable.
 pub const SHADER_LIGHT_MARK_DRAWS_OPEN: u32 = 80;
-/// The nodes the samples' runs' walks were parked at, asked once a node (queue_ask.wgsl), the
-/// eye's and the light's.
+/// Asks the world, once a node, for each node a walk of the samples was parked at, the eye's
+/// and the light's (queue_ask.wgsl).
 pub const SHADER_QUEUE_ASK_SAMPLES: u32 = 81;
 pub const SHADER_QUEUE_ASK_LIGHT_SAMPLES: u32 = 82;
-/// The nodes the beam rays' runs' walks were parked at, asked once a node (queue_ask.wgsl), the
-/// eye's and the light's.
+/// Asks the world, once a node, for each node a walk of the beam rays was parked at, the eye's
+/// and the light's (queue_ask.wgsl).
 pub const SHADER_QUEUE_ASK_CORNERS: u32 = 83;
 pub const SHADER_QUEUE_ASK_LIGHT_CORNERS: u32 = 84;
 pub const SHADERS: u32 = 85;
 
-/// The air as the frame's shaders read it: its medium, its tables and the
-/// sky, the eye in it, the march through it, its light and the view
-/// through it, between a shader's own parts before and after.
+/// The parts of the air as the frame's shaders read it: its medium, its tables and the sky,
+/// the eye in it, the march through it, its light and the view through it. A shader's own
+/// parts go before and after them.
 macro_rules! air {
     [$($before:literal),*; $($after:literal),*] => {
         &[$($before,)* "atmos_medium", "atmos_bind", "atmos_lut", "atmos_sky", "atmos_eye", "atmos_march", "atmos_light", "atmos_view", $($after),*]
     };
 }
 
-/// What a lit draw reads before its own parts: the frame, the air and the
-/// volume before each point, the ground's light, the shading, the light's
-/// shadow and the finish.
+/// The parts every lit draw reads before its own: the frame, the air and the volume before
+/// each point, the ground's light, the shading, the light's shadow and the finish.
 macro_rules! lit {
     [$($own:literal),*] => {
         air!["frame", "encode", "effect"; "atmos_air", "atmos_ground", "shade", "shadow", "finish", $($own),*]
@@ -390,13 +407,13 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "seed",
         "clip",
         "brick",
-        "level",
+        "bound_mip",
         "palette.none",
         "world_rule",
         "answer",
         "world",
         "decor_record",
-        "decor_box",
+        "decor_rect",
         "decor_row",
         "decor_pose",
     ],
@@ -439,7 +456,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "clipmap",
         "seed",
         "decor_record",
-        "decor_box",
+        "decor_rect",
         "decor_mark",
     ],
     // SHADER_ATMOS_FROXEL
@@ -464,7 +481,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "parked",
         "corners_run.eye",
         "corners",
-        "listed",
+        "item_list",
         "queue_walk",
     ],
     // SHADER_CELL
@@ -482,7 +499,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "seed",
         "clip",
         "brick",
-        "level",
+        "bound_mip",
         "palette",
         "world_rule",
         "answer",
@@ -515,7 +532,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "seed",
         "clip",
         "brick",
-        "level",
+        "bound_mip",
         "palette",
         "world_rule",
         "answer",
@@ -528,7 +545,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "parked",
         "samples_run.eye",
         "samples",
-        "listed",
+        "item_list",
         "queue_last",
     ],
     // SHADER_LIGHT
@@ -556,7 +573,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "clip",
         "palette",
         "brick",
-        "level",
+        "bound_mip",
         "eye_bind",
         "walk_node",
         "answer",
@@ -613,7 +630,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "seed",
         "clip",
         "brick",
-        "level",
+        "bound_mip",
         "palette.none",
         "world_rule",
         "answer",
@@ -633,7 +650,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_list",
         "light_stand",
         "list",
-        "light_stood",
+        "light_receiver_tiles",
         "walked",
         "light_mark",
     ],
@@ -651,7 +668,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_list",
         "light_stand",
         "list",
-        "light_stood",
+        "light_receiver_tiles",
         "decor_ball",
         "light_mark_draws",
     ],
@@ -698,8 +715,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "tile_quad",
         "screen_resolve",
     ],
-    // SHADER_SCREEN_GATE
-    &["tile_word", "screen_tiles", "tile_quad", "screen_gate"],
+    // SHADER_SCREEN_MASK
+    &["tile_word", "screen_tiles", "tile_quad", "screen_mask"],
     // SHADER_SCREEN_SHOW
     &["screen_show"],
     // SHADER_SCREEN_PROPAGATE
@@ -711,17 +728,17 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "tile_quad",
         "screen_write_back",
     ],
-    // SHADER_RASTER_GATE
-    &["tile_word", "screen_tiles", "tile_quad", "raster_gate"],
+    // SHADER_RASTER_MASK
+    &["tile_word", "screen_tiles", "tile_quad", "raster_mask"],
     // SHADER_SCREEN_MARK
     &["screen_mark"],
-    // SHADER_LIGHT_GATE
+    // SHADER_LIGHT_MASK
     &[
         "light_word",
         "tile_word",
         "screen_tiles",
         "light_lay",
-        "light_gate",
+        "light_mask",
     ],
     // SHADER_SCREEN_BOUND
     &["tile_word", "screen_tiles", "screen_bound"],
@@ -759,8 +776,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "location_beacon_place",
         "tile_mark",
     ],
-    // SHADER_BOX_ARGS
-    &["tile_word", "box_args"],
+    // SHADER_RECT_ARGS
+    &["tile_word", "rect_args"],
     // SHADER_QUEUE_LIGHT_CORNERS
     &[
         "walk_word",
@@ -777,7 +794,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "parked",
         "corners_run.light",
         "corners",
-        "listed",
+        "item_list",
         "queue_walk",
     ],
     // SHADER_LIGHT_CELL
@@ -802,7 +819,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "seed",
         "clip",
         "brick",
-        "level",
+        "bound_mip",
         "palette",
         "world_rule",
         "answer",
@@ -818,7 +835,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "parked",
         "samples_run.light",
         "samples",
-        "listed",
+        "item_list",
         "queue_last",
     ],
     // SHADER_LIGHT_SAMPLE_BOX
@@ -854,7 +871,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "parked",
         "samples_run.eye",
         "samples",
-        "listed",
+        "item_list",
         "queue_walk",
     ],
     // SHADER_QUEUE
@@ -890,7 +907,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "seed",
         "clip",
         "brick",
-        "level",
+        "bound_mip",
         "palette",
         "world_rule",
         "answer",
@@ -902,7 +919,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "parked",
         "corners_run.eye",
         "corners",
-        "listed",
+        "item_list",
         "queue_last",
     ],
     // SHADER_QUEUE_LIGHT_SAMPLES
@@ -923,7 +940,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "parked",
         "samples_run.light",
         "samples",
-        "listed",
+        "item_list",
         "queue_walk",
     ],
     // SHADER_QUEUE_LAST_LIGHT_CORNERS
@@ -938,7 +955,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "seed",
         "clip",
         "brick",
-        "level",
+        "bound_mip",
         "palette",
         "world_rule",
         "answer",
@@ -952,20 +969,20 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "parked",
         "corners_run.light",
         "corners",
-        "listed",
+        "item_list",
         "queue_last",
     ],
     // SHADER_CAST_TILES
     &["tile_word", "cast_tiles"],
-    // SHADER_CLAIMED_BOX
-    &["tile_word", "claimed_box"],
-    // SHADER_DECOR_GATE
+    // SHADER_DAMAGE_RECT
+    &["tile_word", "damage_rect"],
+    // SHADER_DECOR_CULL
     &[
         "frame",
         "decor_word",
         "tile_word",
         "decor_ball",
-        "decor_gate",
+        "decor_cull",
     ],
     // SHADER_RECORD_DRAW
     &[
@@ -983,10 +1000,10 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_list",
         "light_stand",
         "list",
-        "light_stood",
+        "light_receiver_tiles",
         "record_draw",
     ],
-    // SHADER_RECORD_STOPS
+    // SHADER_RECORD_HITS
     &[
         "walk_word",
         "raster_box",
@@ -995,11 +1012,11 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "hit",
         "record",
         "record_put",
-        "record_stops.eye",
+        "record_hits.eye",
+        "hit_read",
         "record_hits",
-        "record_stops",
     ],
-    // SHADER_LIGHT_RECORD_STOPS
+    // SHADER_LIGHT_RECORD_HITS
     &[
         "walk_word",
         "raster_box",
@@ -1010,9 +1027,9 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "hit",
         "record",
         "record_put",
-        "record_stops.light",
+        "record_hits.light",
+        "hit_read",
         "record_hits",
-        "record_stops",
     ],
     // SHADER_LIGHT_MARK_DRAWS_OPEN
     &[
@@ -1028,7 +1045,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_list",
         "light_stand",
         "list",
-        "light_stood",
+        "light_receiver_tiles",
         "decor_ball",
         "light_mark_draws",
         "light_mark_draws_open",
@@ -1043,7 +1060,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "clip",
         "palette",
         "brick",
-        "level",
+        "bound_mip",
         "eye_bind",
         "walk_node",
         "answer",
@@ -1064,7 +1081,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "clip",
         "palette",
         "brick",
-        "level",
+        "bound_mip",
         "eye_bind",
         "walk_node",
         "answer",
@@ -1085,7 +1102,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "clip",
         "palette",
         "brick",
-        "level",
+        "bound_mip",
         "eye_bind",
         "walk_node",
         "answer",
@@ -1106,7 +1123,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "clip",
         "palette",
         "brick",
-        "level",
+        "bound_mip",
         "eye_bind",
         "walk_node",
         "answer",

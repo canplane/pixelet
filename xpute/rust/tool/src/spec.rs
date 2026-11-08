@@ -1,9 +1,9 @@
 // xpute-tool/spec.rs
 
-//! Writes the TypeScript, Rust and C++ generated from spec/ JSON: a data
-//! spec's named values (data.rs), a command table's readers and writers
-//! (cmd.rs), and xpute's errno (errno.rs). It links none of the crates it
-//! writes into.
+//! Generates the TypeScript, Rust and C++ code that spec/ JSON describes: the
+//! named values of a data spec (data.rs), the readers and writers of a
+//! command table (cmd.rs), xpute's errno table (errno.rs) and a program's
+//! machine (machine.rs). It links none of the crates it writes into.
 
 pub mod cmd;
 pub mod data;
@@ -37,8 +37,8 @@ impl Output {
     }
 }
 
-/// The packages' version, said once in rust/Cargo.toml's workspace: each
-/// TypeScript package's `package.json` must say the same.
+/// Fails unless every TypeScript package's `package.json` carries the version
+/// of rust/Cargo.toml's workspace, the one place the packages' version is set.
 fn check_versions() -> Result<(), String> {
     let read = |p: &str| std::fs::read_to_string(root().join(p)).map_err(|e| format!("{p}: {e}"));
     let toml = read("rust/Cargo.toml")?;
@@ -61,7 +61,6 @@ fn check_versions() -> Result<(), String> {
 pub fn outputs() -> Result<Vec<Output>, String> {
     check_versions()?;
     let mut out = cmd::outputs()?;
-    // The example's machine and protocol, kept beside xpute's own code.
     out.extend(machine::outputs(&root(), "rust/example/machine.json")?);
     out.extend(cmd::protocol_outputs(
         &root(),
@@ -72,16 +71,16 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     Ok(out)
 }
 
-/// Writes every generated file that differs from what its JSON writes and
-/// deletes every one nothing writes any more, or, not `write`, fails where
-/// one is either.
+/// With `write`, writes every generated file that differs from what its JSON
+/// writes, and deletes every generated file that nothing writes any more.
+/// Without it, fails where a file is either.
 pub fn generate(write: bool) -> Result<(), String> {
     generate_at(&root(), outputs()?, &[], write)
 }
 
-/// `generate` for a program's outputs, each path from `root`. A file under
-/// one of `others`, a tree whose files another generator writes, is not
-/// this one's to delete.
+/// `generate` for a program's outputs, their paths relative to `root`.
+/// `others` lists the trees whose generated files another generator writes,
+/// and this one never deletes a file under them.
 pub fn generate_at(
     root: &Path,
     outputs: Vec<Output>,
@@ -107,11 +106,11 @@ pub fn generate_at(
         .map_or(orphaned.clone(), |e| format!("{e}, {orphaned}")))
 }
 
-/// What a file the generators write says on one of its first lines, behind
-/// its comment's mark (`generated`).
+/// The text every generated file carries on one of its first lines, after the
+/// comment marker (`generated`).
 const MARK: &str = "GENERATED from ";
 
-/// The tracked files under `root`, outside `others`, that carry `MARK` and
+/// The tracked files under `root`, outside `others`, that carry `MARK` but
 /// that no output writes.
 fn orphans(root: &Path, outputs: &[Output], others: &[&str]) -> Result<Vec<String>, String> {
     let listed = Command::new("git")
@@ -133,7 +132,7 @@ fn orphans(root: &Path, outputs: &[Output], others: &[&str]) -> Result<Vec<Strin
         .collect())
 }
 
-/// Whether one of the file's first lines is `MARK`'s, behind a comment's mark.
+/// Whether one of the file's first lines carries `MARK` after a comment marker.
 fn marked(path: &Path) -> bool {
     let mut head = Vec::new();
     let read = File::open(path).and_then(|f| f.take(1024).read_to_end(&mut head));
@@ -144,8 +143,8 @@ fn marked(path: &Path) -> bool {
             .any(|l| l.trim_start_matches(['/', '#', '*', ' ']).starts_with(MARK))
 }
 
-/// Writes every output that differs from the file on disk, each path from
-/// `root`, or, not `write`, fails where one does.
+/// With `write`, writes every output that differs from its file on disk, the
+/// paths relative to `root`. Without it, fails where one differs.
 pub fn apply_at(root: &Path, outputs: Vec<Output>, write: bool) -> Result<(), String> {
     let outputs = thread::scope(|scope| {
         let handles: Vec<_> = outputs
@@ -172,7 +171,8 @@ pub fn apply_at(root: &Path, outputs: Vec<Output>, write: bool) -> Result<(), St
         })
         .collect();
     if write {
-        // Only what differs: a rewrite moves the mtime, and cargo and Vite rebuild.
+        // Only the files that differ are written: rewriting a file moves its
+        // mtime, which makes cargo and Vite rebuild.
         for o in &stale {
             let at = root.join(&o.path);
             std::fs::create_dir_all(at.parent().ok_or("a path with no parent")?)
@@ -196,8 +196,8 @@ pub fn apply_at(root: &Path, outputs: Vec<Output>, write: bool) -> Result<(), St
     Ok(())
 }
 
-/// A JSON value in file order, which numbers enums and orders tables;
-/// `serde_json::Value` sorts its keys.
+/// A JSON value that keeps an object's keys in file order, since that order
+/// numbers enums and orders tables; `serde_json::Value` sorts its keys.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Node {
     Null,
@@ -499,7 +499,8 @@ pub fn align_star(line: String, indent: &str) -> String {
     }
 }
 
-/// A generated file's line naming the JSON it is generated from.
+/// The line that names the JSON a file is generated from. Behind its comment
+/// marker it begins with `MARK`, which is how `orphans` finds the file.
 pub fn generated(json: &str) -> String {
     format!("// GENERATED from {json}")
 }
@@ -508,8 +509,9 @@ pub fn file(lines: &[String]) -> String {
     lines.join("\n") + "\n"
 }
 
-/// `p`, given from the directory `json` is in, as a path from the root `json`
-/// is given from; refused where it climbs past that root.
+/// Turns `p`, a path relative to the directory `json` lies in, into a path
+/// relative to the root that `json` itself is relative to. A `p` that climbs
+/// above that root is refused.
 pub fn beside(json: &str, p: &str) -> Result<String, String> {
     let dir = Path::new(json).parent().unwrap_or(Path::new(""));
     let mut out = PathBuf::new();

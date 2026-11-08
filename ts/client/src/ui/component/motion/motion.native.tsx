@@ -1,9 +1,10 @@
 // @pxl/client/ui/component/motion/motion.native.tsx
 
 /**
- * A view moved by RN's native driver: one call hands the whole curve to the
- * UI thread, since the core spends the JS thread's frame. A pose arriving
- * mid-flight starts from the UI thread's value.
+ * A view on a device, moved by React Native's native driver. One call hands
+ * the whole curve to the UI thread, because the core spends the JS thread's
+ * frame time. A pose given while an animation runs starts from the value the
+ * UI thread holds.
  */
 
 import { useEffect, useReducer, useRef } from "react";
@@ -84,18 +85,20 @@ export function Motion({
       settled.current?.();
       return;
     }
-    // A later pose moving one channel leaves the others running.
+    // A later pose that moves one channel leaves the other channels running.
     Animated.parallel(moves, { stopTogether: false }).start(({ finished }) => {
       if (!finished) return;
-      // Committed as props too: a layout animation re-lays the view from its
-      // props, which left a faded-in toast faint or blank once its pill opened.
+      // The end values are committed as props as well. A layout animation lays
+      // the view out again from its props, and without them a faded-in toast
+      // turns faint or blank once its pill opens.
       for (const c of moving) v[c].setValue(target[c]);
       commit();
       settled.current?.();
     });
   }, [...CHANNELS.map((c) => target[c]), replay]);
 
-  // Under StrictMode a view put back arrives again from `from`.
+  // Under StrictMode, React takes a view down and puts it back. The view put
+  // back must arrive from `from` again.
   useEffect(
     () => () => {
       for (const c of CHANNELS) v[c].stopAnimation();
@@ -104,8 +107,9 @@ export function Motion({
     [],
   );
 
-  // One layer while not opaque: Android otherwise fades each child apart, and
-  // overlapping ones show through.
+  // `needsOffscreenAlphaCompositing` fades the view as one layer. Without it,
+  // Android fades each child on its own, and overlapping children show
+  // through one another.
   return (
     <Animated.View
       onLayout={onLayout}

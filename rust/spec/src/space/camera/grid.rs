@@ -1,15 +1,14 @@
 // pxl-spec/space/camera/grid.rs
 
-//! The camera grid, the one resolution: a cell is an angle about the eye,
-//! its zoom the distance's (pxl-engine grid.rs, which holds its knobs).
-//! The node a cell is drawn with, whole, spans at least one cell from any
-//! direction; one cell of the grid is one thing drawn, and what lies inside
-//! it is its layer's to fold.
+//! The camera grid, the one resolution: a cell is an angle around the eye, and its zoom
+//! follows from the distance (pxl-engine grid.rs holds the knobs). The node a cell is drawn
+//! with, drawn whole, spans at least one cell from any direction; one cell of the grid is one
+//! thing drawn, and what lies inside it is for its layer to fold.
 
 use crate::space::coord::zoom::{units, Zoom};
 use pxl_engine::grid;
 
-// ---- the view's knobs, beside pxl-engine grid.rs's ----
+// ---- the view's knobs, mirrored from pxl-engine grid.rs ----
 
 /// The tangent of half the vertical field of view (pxl-engine
 /// `grid::HALF_TAN`), a field of 53.13° (`fov`).
@@ -37,20 +36,19 @@ pub const CLIP_CELLS_A_RAD: f64 = grid::CLIP_CELLS_A_RAD as f64;
 /// (pxl-engine `grid::CELL`).
 pub const CELL: f64 = 1.0 / CELLS_A_RAD;
 
-/// Where ground starts being drawn with cells at `cell_zoom`, going out: where
-/// its side spans `SPANS` of the view's cells (pxl-engine `grid`). A clip
-/// level holds them out to `CLIP_MARGIN` times as far.
+/// Where, going outward, ground starts being drawn with cells at `cell_zoom`: where a cell's
+/// side spans `SPANS` of the view's cells (pxl-engine `grid`). A clip level holds those cells
+/// out to `CLIP_MARGIN` times as far.
 pub const fn split_dist(cell_zoom: Zoom) -> f64 {
     CELLS_A_RAD * units(cell_zoom) / grid::SPANS as f64
 }
 
-/// The camera grid's cell zoom at `r2`, a distance from the eye squared: the
-/// widest cell whose split distance is within the distance, which is the
-/// finest whose side spans one of the view's cells there, `r / CELLS_A_RAD`.
-/// A node drawn whole, all its faces, is at least its side wide from any
-/// direction, so the face a ray meets does not enter. Finer than the
-/// ground's near the eye, held to what a zoom can name: pxl-engine's, the
-/// one rule the CPU and a GPU's cast size by, of the one input, a square.
+/// The camera grid's cell zoom at `r2`, a squared distance from the eye: the widest cell
+/// whose split distance lies within the distance, which is the finest whose side spans one of
+/// the view's cells there, `r / CELLS_A_RAD`. A node drawn whole, all its faces, is at least
+/// its side wide from any direction, so the face a ray meets does not enter. Near the eye it
+/// is finer than the ground's, held to the zooms that exist. It is pxl-engine's rule, by which
+/// the CPU and a GPU's cast size their cells from the same input, a square.
 pub fn cell_zoom_at(r2: f64) -> Zoom {
     grid::cell_zoom_at(r2 as f32)
 }

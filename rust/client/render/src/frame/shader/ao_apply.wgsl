@@ -1,14 +1,16 @@
 // pxl-render/frame/shader/ao_apply.wgsl
 
-// The occlusion over the world's color, as the tiles' quads
-// (screen_tiles.wgsl): the four half-resolution texels whose centers surround
-// the pixel's, weighed by the plane and the normal of the half texel the pixel
-// lies in, then black blended over by how much they darken, so what the static
-// opaque draws laid is multiplied by it (gpu/ao.rs `apply`). The pass draws
-// the depth it would read, so the pixel's half texel, the depth the
-// downsample kept of its 2×2, stands for the pixel's own. A pixel whose half
-// texel is the sky takes its taps that are not; the sky, drawn after over
-// every empty pixel, leaves none darkened.
+// Multiplies the occlusion into the world's color, drawn as a quad for each of
+// the screen's tiles (screen_tiles.wgsl, gpu/ao.rs `apply`). A pixel takes the
+// four half-resolution texels whose centers surround its own, each weighed by
+// how near it lies to the plane of the pixel's half texel and by how alike its
+// normal is. The pixel returns black at the alpha by which they darken it, so
+// the blend multiplies what the static opaque draws laid. The draw runs in the
+// world's pass, which holds the full-resolution depth as its target, so the
+// depth of the pixel's half texel, which the downsample kept from its 2×2,
+// stands for the pixel's own. A pixel whose half texel is the sky takes its
+// taps that are not sky. The sky is drawn later over every empty pixel, so no
+// empty pixel stays darkened.
 
 @group(0) @binding(1) var half_depth: texture_2d<f32>;
 @group(0) @binding(2) var blurred: texture_2d<f32>;
@@ -21,15 +23,15 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   let own_depth = textureLoad(half_depth, own, 0).r;
   let normal = textureLoad(blurred, own, 0).gba * 2.0 - 1.0;
   let pos = view_pos(own_depth, (vec2f(own) + 0.5) / ao_half());
-  // The four half texels whose centers surround this pixel's; the pixel's
-  // own among them.
+  // `base` is the first of the four half texels whose centers surround this
+  // pixel's center. The pixel's own half texel is among them.
   let base = (fp - 1) / i32(AO_DOWNSCALE);
   var total = 0.0;
   var acc = 0.0;
   var open_cnt = 0.0;
   var open_acc = 0.0;
-  // Where the pixel lies, for its reach: its half texel's, or where that is
-  // the sky, the first of its taps that is not.
+  // Where the pixel lies, which sets how much of the effects it shows: at its
+  // half texel, or, when that is the sky, at its first tap that is not.
   var at = pos;
   for (var y = 0; y <= 1; y++) {
     for (var x = 0; x <= 1; x++) {
@@ -58,7 +60,8 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   } else if (open_cnt > 0.0) {
     occ = open_acc / open_cnt;
   }
-  // To the effects' reach, faded alike before it (effect.wgsl `effect_share`).
+  // The occlusion fades out toward the effects' reach, as every effect does
+  // (effect.wgsl `effect_share`).
   let share = effect_share(length(at));
   return vec4f(0.0, 0.0, 0.0, (1.0 - pow(occ, AO_INTENSITY)) * share);
 }

@@ -9,7 +9,7 @@ use pxl_spec::space::layer::quadrant::Quadrant;
 
 /// Each tile's rows the separation solve read and each structure it solved, kept
 /// beside the tiles of the source they came from.
-pub(super) const SOURCE: &str = ".source";
+pub(super) const MEMO: &str = ".memo";
 
 pub(super) fn execute(
     p: Quadrant,
@@ -35,7 +35,7 @@ pub(super) fn execute(
             let raster = std::sync::Arc::new(Raster::open(&mut client)?);
             let repo =
                 TerrainRepository::prepare(&mut client, raster).map_err(|e| e.to_string())?;
-            let memo = cache.join(SOURCE);
+            let memo = cache.join(MEMO);
             let reader = &mut crate::separation::Reader {
                 client: &mut client,
                 repo: &repo,

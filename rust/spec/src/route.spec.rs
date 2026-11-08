@@ -20,9 +20,9 @@
 pub const GEO_ROOT: &str = "/geo";
 
 /// The application: sessions, chat, what a player places, and the realtime
-/// half. pxl-api answers here, and answers nothing yet — the root, the
-/// origin and the process exist so that the first route arrives into a
-/// shape rather than assembling one on the day it is written.
+/// half. pxl-api answers here. It serves no route; the root, the origin and the
+/// process exist so that a route, when one is written, fits a shape already set
+/// rather than assembling one.
 pub const API_ROOT: &str = "/api";
 
 /// Baked tiles by kind, version and name: under the root a kind's own, and

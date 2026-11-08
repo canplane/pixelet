@@ -1,6 +1,9 @@
 // @xpute/kit/math/rng.32.test.ts
 
-/** Holds the TypeScript side to golden/math/rng.32.tsv, which every language's stream must match. */
+/**
+ * Holds the TypeScript stream to golden/math/rng.32.tsv, the record every
+ * language's stream must match.
+ */
 
 import { test } from "vitest";
 import assert from "node:assert/strict";

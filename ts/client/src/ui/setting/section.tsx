@@ -11,8 +11,8 @@ import {
   settingsIn,
 } from "@/ui/setting/schema.ts";
 import { Section, SettingChoiceRow, SettingGroup, SettingRow } from "./row.tsx";
-import { useCore } from "@/ui/store/watch.ts";
-import { set as setSetting } from "@/port/setting.ts";
+import { useCore } from "@/ui/watch.ts";
+import { set as setSetting } from "@/service/core/setting.ts";
 
 const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
   display: "eye",
@@ -21,14 +21,17 @@ const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
   debug: "ladybug",
 };
 
-/** Typed for the table as it is, which may hold no setting with dev options. */
+/** Whether `option` is shown only in development. The table may hold no
+ * setting with dev options, and then its type has no `dev_options`, so the
+ * field is read this way. */
 function devOption(setting: Setting, option: string): boolean {
   const options =
     "dev_options" in setting ? (setting.dev_options as readonly string[]) : [];
   return options.includes(option);
 }
 
-/** Strings come from `settings.<section>.<key>` and, for a choice, `.<option>` under that. */
+/** A setting's strings come from `settings.<section>.<name>`, and the strings
+ * of a choice's options from `.<option>` under that. */
 export function SettingsSection(props: { section: SettingSection }) {
   const { section } = props;
   const { t } = useTranslation();

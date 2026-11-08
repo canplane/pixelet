@@ -1,18 +1,18 @@
 // pxl-render/frame/shader/light_lay.wgsl
 
-// The world's depth from the light, as its cast left it a word a slot of the
-// clipmap (light.wgsl `light_cs`, pxl-engine `light::word`; its depth
-// read as `light_depth`, which build.rs makes off its layout), as the map
-// lays it in the light box's own order (light_map.wgsl, light_gate.wgsl):
-// box texel p's slot is its world texel, the box's corner on by p, modulo
-// the map's side. A box tile no cast of the reads' epoch cast yet holds another light
-// frame's depth, or none, and is laid at the far plane, lit until it is cast: its read word
-// (pxl-engine `light::reads_at`) names a cast before the epoch's first (`light::reads_epoch`).
+// Lays the world's depth from the light into the map, in the light box's own order
+// (light_map.wgsl, light_mask.wgsl). The light's cast leaves one word for each slot of the
+// clipmap (light.wgsl `light_cs`, pxl-engine `light::word`), and `light_depth`, which build.rs
+// writes from that layout, reads the depth from it. Box texel p is held in the slot of its
+// world texel, the box's corner plus p, modulo the map's side. A box tile that no cast of the
+// reads' epoch has cast yet holds the depth of another light frame, or none. It is laid at the
+// far plane, and so lit, until it is cast. Its read word (pxl-engine `light::reads_at`) names
+// a cast before the first of the epoch (`light::reads_epoch`).
 
-/// What the lay reads the list by (gpu/shadow.rs `Shadow::begin`): the box's corner, the
-/// host's epoch and where the reads lie; then where the tiles read lie
-/// (`light::LISTED_READ`) and the word of the first cast whose reads hold where a slide went
-/// unrun (`light::READS_FROM`).
+/// What the lay reads the list by (gpu/shadow.rs `Shadow::begin`). `corner` holds the box's
+/// corner, the host's epoch and where the reads lie. `read` holds where the list of tiles read
+/// lies (`light::LIST_READS`), then the word of the first cast whose reads hold where a slide
+/// went unrun (`light::READS_FROM`).
 struct Lay {
   corner: vec4i,
   read: vec4u,

@@ -1,16 +1,16 @@
 // xpute-runtime/native/say.rs
 
-//! Where a native core's stop is told: the process's error stream, or
-//! Android's log under the tag `xpute`, since an Android app's error stream
-//! goes nowhere.
+//! A native core's stop is told on the process's error stream. On Android it
+//! goes to the log under the tag `xpute` instead, because an Android app's
+//! error stream goes nowhere.
 
 use xpute_core::stop::Stop;
 
 use super::thread::stopped;
 
 /// xpute's stop hook for a core linked into its runtime's process
-/// (`BootInfo::stop_hook`): a broken invariant's or a panic's line said
-/// (`say`), and the core's end told its thread (`stopped`).
+/// (`Form::stop_hook`). It writes one line for a broken invariant or a panic
+/// (`say`), and tells the core's thread once the core has ended (`stopped`).
 pub fn stop_hook(stop: Stop<'_>) {
     let line = match stop {
         Stop::Bug { errnum, at, a, b } => format!(
@@ -28,7 +28,7 @@ pub fn stop_hook(stop: Stop<'_>) {
     say(&line);
 }
 
-/// A line to the process's error stream, or to Android's log.
+/// Writes a line to the process's error stream, or to Android's log.
 pub fn say(line: &str) {
     #[cfg(target_os = "android")]
     {

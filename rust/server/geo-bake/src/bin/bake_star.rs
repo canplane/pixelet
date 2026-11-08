@@ -17,7 +17,7 @@ use pxl_spec::asset::star::{record, Star, RECORD_BYTES};
 
 /// The catalog as pxl-tool bin/download_star.rs keeps it.
 const SRC: &str = "asset/raw/sky/star/catalog.gz";
-const OUT: &str = "rust/client/render/src/frame/shader/bright-star.bin";
+const OUT: &str = "rust/client/render/src/gpu/bright_star.bin";
 const SOLAR_BV: f64 = 0.65;
 
 fn catalog() -> Result<String, String> {

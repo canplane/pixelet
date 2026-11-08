@@ -13,7 +13,8 @@ Case *&cases() noexcept {
 
 int main() {
     using xpute::test::Case;
-    // Registered last first; reversed, so they run as they were written.
+    // Each test registers at the front of the list, so the list is reversed
+    // to run the tests in the order they are written.
     Case *reversed = nullptr;
     for (Case *c = xpute::test::cases(); c != nullptr;) {
         Case *next = c->next;

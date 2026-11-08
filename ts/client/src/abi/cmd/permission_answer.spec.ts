@@ -1,6 +1,6 @@
 // ts/client/src/abi/cmd/permission_answer.spec.ts
 //
-// GENERATED from rust/client/core/ui.json
+// GENERATED from spec/client/core/door/ui.json
 
 // A sensor permission, as the UI's prompt or the browser's change reported it.
 

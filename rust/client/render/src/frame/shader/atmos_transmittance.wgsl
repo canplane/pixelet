@@ -1,4 +1,5 @@
-// Transmittance table, drawn once per device, as optical depth to the top.
+// Draws the transmittance table once per device. It holds the optical depth to
+// the top of the air rather than the transmittance.
 
 @fragment
 fn fs(v: TableOut) -> @location(0) vec4f {

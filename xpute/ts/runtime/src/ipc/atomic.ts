@@ -1,9 +1,9 @@
 // @xpute/runtime/ipc/atomic.ts
 
 /**
- * A word of the core's memory that both ends touch: loaded with acquire,
- * stored with release. A native app's bundler takes atomic.native.ts in its
- * place, for an engine with no `Atomics`.
+ * A word of the core's memory that both ends touch is loaded with acquire and
+ * stored with release. A native app's bundler takes atomic.native.ts in this
+ * file's place, for an engine with no `Atomics`.
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";

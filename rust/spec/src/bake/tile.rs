@@ -50,10 +50,10 @@ pub const fn max_pkt_bytes(layer: BaseLayer) -> usize {
     }
 }
 
-/// Which of a tile and its four children are tiles of their own, the rest
-/// said whole by the tile (terrain's zero tile, places's uncrowded ground):
-/// children in the low four bits in `child_idx`'s order, the tile itself above
-/// them. A client never asks for a child its parent marks absent.
+/// Which of a tile and its four children are tiles of their own, the rest said whole by the
+/// tile (terrain's zero tile, places' uncrowded ground): the children in the low four bits in
+/// `child_idx`'s order, and the tile itself above them. A client never asks for a child its
+/// parent marks absent.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Occupancy(u8);
 
@@ -95,7 +95,7 @@ impl Occupancy {
     }
 }
 
-/// A whole number a byte holds, never a cast of one that is not.
+/// The occupancy a byte holds, refused rather than cast where the byte is not one.
 pub(crate) fn occupancy_of(bits: u8) -> Result<Occupancy, MarshalError> {
     Occupancy::of_bits(bits).ok_or_else(malformed)
 }

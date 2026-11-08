@@ -2,8 +2,8 @@
 
 use super::*;
 
-/// A window's sample, each part a share of its budget: per pixel and the
-/// rest.
+/// A window's sample, its per-pixel part and its rest each given as a share
+/// of the window's budget.
 fn cost(px: f64, rest: f64) -> Cost {
     let w = param::RES_WINDOW_MS;
     Cost {
@@ -12,8 +12,8 @@ fn cost(px: f64, rest: f64) -> Cost {
     }
 }
 
-/// A frame paced `ms` apart on a display too slow for the rate to step: the
-/// scale is what moves.
+/// A frame paced `ms` apart on a display that refreshes once a second. That is
+/// too slow for the rate to step, so only the scale moves.
 fn paced(ms: f64) -> Pace {
     Pace {
         refresh_ms: 1000.0,
@@ -23,7 +23,7 @@ fn paced(ms: f64) -> Pace {
     }
 }
 
-/// A frame `refreshes` of a `hz` display apart.
+/// A frame paced `refreshes` refreshes of a `hz` display apart.
 fn on(hz: f64, refreshes: f64) -> Pace {
     Pace {
         refresh_ms: 1000.0 / hz,
@@ -33,9 +33,9 @@ fn on(hz: f64, refreshes: f64) -> Pace {
     }
 }
 
-/// A window of frames paced as `p`, each `load` of its budget, per pixel:
-/// the knobs it moved to, where it moved one, the interval moved to in `p`,
-/// as the next grant says it.
+/// Judges one window of frames paced as `p`, each costing `load` of its
+/// budget, all of it per pixel. It returns the knobs the window moved to, if
+/// any, and writes a new interval into `p` as the next grant would report it.
 fn window(k: &mut Judge, p: &mut Pace, load: f64, timed: bool) -> Option<Knobs> {
     let s = Cost {
         px_ms: load * budget(p.paced_ms),
@@ -52,13 +52,13 @@ fn window(k: &mut Judge, p: &mut Pace, load: f64, timed: bool) -> Option<Knobs> 
     }
 }
 
-/// `window` over and over, at most `n` times: the knobs the first that moved
-/// one moved to.
-fn until_moved(k: &mut Judge, p: &mut Pace, load: f64, n: u32) -> Option<Knobs> {
+/// Runs up to `n` windows and returns the knobs of the first one that moved a
+/// knob.
+fn until_changed(k: &mut Judge, p: &mut Pace, load: f64, n: u32) -> Option<Knobs> {
     (0..n).find_map(|_| window(k, p, load, true))
 }
 
-/// The windows after a change that are not judged.
+/// Runs the windows after a change and asserts that none of them is judged.
 fn settle(k: &mut Judge, p: &mut Pace, load: f64, timed: bool) {
     for _ in 0..param::RES_SETTLE_WINDOWS {
         assert_eq!(window(k, p, load, timed), None, "settling");
@@ -69,14 +69,14 @@ fn near(a: f64, b: f64) -> bool {
     (a - b).abs() < 1e-9
 }
 
-/// Windows of `load` budgets each, all of it per pixel, judged as one frame
-/// a window.
+/// Runs `n` windows of one frame each, costing `load` budgets, all of it per
+/// pixel, and returns how many moved a knob.
 fn windows(k: &mut Judge, load: f64, n: u32, timed: bool) -> u32 {
     windows_of(k, cost(load, 0.0), n, timed)
 }
 
-/// Windows of `s` each, judged as one frame a window: how many changed a
-/// knob.
+/// Runs `n` windows of one frame each, costing `s`, and returns how many moved
+/// a knob.
 fn windows_of(k: &mut Judge, s: Cost, n: u32, timed: bool) -> u32 {
     (0..n)
         .filter(|_| {
@@ -86,9 +86,9 @@ fn windows_of(k: &mut Judge, s: Cost, n: u32, timed: bool) -> u32 {
         .count() as u32
 }
 
-/// Timed, a window over its budget steps down at once; a change is not
-/// judged again before its settling windows, and the step above is taken
-/// back only after `RES_UP_WINDOWS` windows in which it fits.
+/// With timestamps, a window over its budget steps down at once. The settling
+/// windows after a change are not judged. The step above is taken again only
+/// after `RES_UP_WINDOWS` windows in which it would fit.
 #[test]
 fn timed_steps() {
     let mut k = Judge::NEW;
@@ -108,9 +108,10 @@ fn timed_steps() {
     assert_eq!(k.step, 1);
 }
 
-/// Timed, a window is its frames' budgets whether or not a read landed with
-/// them: reads on one frame in three judge it as soon as every frame would,
-/// by the frames that took them, and a window none landed in is not judged.
+/// With timestamps, a window's length counts every frame's budget, whether or
+/// not a read landed with the frame. Reads on one frame in three end and judge
+/// the window as soon as reads on every frame would, by the frames that took
+/// them. A window in which no read landed is not judged.
 #[test]
 fn timed_windows() {
     let frame = param::RES_BUDGET_FLOOR_MS;
@@ -138,9 +139,9 @@ fn timed_windows() {
     );
 }
 
-/// Untimed, a step up is a probe after a hold of quiet windows; one that
-/// goes over within its trust steps back and doubles the hold, and one that
-/// outlasts it stands.
+/// Without timestamps, a step up is a probe taken after a run of quiet
+/// windows. A probe that goes over within its trial steps back and doubles the
+/// wait. A probe that outlasts its trial stands.
 #[test]
 fn untimed_probe_backoff() {
     let mut k = Judge::NEW;
@@ -175,17 +176,17 @@ fn untimed_probe_backoff() {
     );
 }
 
-/// Timed, two steps do not swing where the step above is predicted to fit
-/// and does not: each fall within the trust doubles the windows before the
-/// next step up, up to the most, and one that outlasts the trust stands and
-/// the wait is as it was.
+/// With timestamps, two steps do not swing when the step above is predicted
+/// to fit and does not. Each fall back within the trial doubles the windows
+/// before the next step up, up to `RES_UP_WINDOWS_MAX`. A step up that
+/// outlasts its trial stands, and the wait returns to its first length.
 #[test]
 fn timed_up_backoff() {
     let settle = param::RES_SETTLE_WINDOWS;
     let mut k = Judge::NEW;
     k.step = 1;
-    // Up after its wait, over within the trust, back: twice the wait, then
-    // four times.
+    // Each round steps up after its wait, goes over within the trial and
+    // falls back, so the wait doubles and then doubles again.
     let mut wait = param::RES_UP_WINDOWS;
     for _ in 0..2 {
         assert_eq!(windows(&mut k, 0.3, wait - 1, true), 0);
@@ -198,10 +199,11 @@ fn timed_up_backoff() {
         wait *= 2;
         assert_eq!(k.hold(true), wait);
     }
-    // The most it waits.
+    // The wait has a cap.
     k.backoff = 1 << 20;
     assert_eq!(k.hold(true), param::RES_UP_WINDOWS_MAX);
-    // A step up that outlasts its trust stands, and the wait is as it was.
+    // A step up that outlasts its trial stands, and the wait returns to its
+    // first length.
     k.backoff = 2;
     assert_eq!(windows(&mut k, 0.3, 2 * param::RES_UP_WINDOWS, true), 1);
     assert_eq!(k.step, 0);
@@ -212,9 +214,9 @@ fn timed_up_backoff() {
     );
 }
 
-/// A pause in moving starts a fresh window but keeps the quiet windows
-/// judged before it: a drag, a pause and a drag step up as one drag would,
-/// timed or untimed.
+/// A pause in motion starts a fresh window but keeps the quiet windows judged
+/// before it, so a drag, a pause and another drag step up as one drag would,
+/// with timestamps or without.
 #[test]
 fn pause_keeps_windows() {
     let settle = param::RES_SETTLE_WINDOWS;
@@ -252,8 +254,9 @@ fn pause_keeps_windows() {
     assert_eq!((k.step, k.on_trial), (0, true));
 }
 
-/// Timed, a window over its budget steps the scale down to `RES_MIN`, each
-/// change followed by its settling windows, and past it holds.
+/// With timestamps, windows over their budget step the scale down to
+/// `RES_MIN`, each change followed by its settling windows, and at `RES_MIN`
+/// the scale holds.
 #[test]
 fn down_scale_to_its_floor() {
     let (over, settle) = (cost(0.6, 0.9), param::RES_SETTLE_WINDOWS);
@@ -266,8 +269,8 @@ fn down_scale_to_its_floor() {
     assert_eq!(windows_of(&mut k, over, settle + 10, true), 0, "past it");
 }
 
-/// Timed, room steps the scale up, after `RES_UP_WINDOWS` windows in which
-/// the step above fits.
+/// With timestamps, the scale steps up after `RES_UP_WINDOWS` windows in
+/// which the step above fits.
 #[test]
 fn up_scale() {
     let mut k = Judge {
@@ -280,23 +283,25 @@ fn up_scale() {
     assert_eq!(k.step, 1);
 }
 
-/// Timed, the step above is judged by the whole frame it would cost: the
-/// rest as it is and the per-pixel time by its pixels, so a step whose
-/// per-pixel time alone fits waits.
+/// With timestamps, the step above is judged by the whole frame it would
+/// cost: the rest as it is, plus the per-pixel time grown by the step's
+/// pixels. A step whose per-pixel time alone would fit still waits.
 #[test]
 fn step_up_judges_total() {
     let mut k = Judge {
         step: 1,
         ..Judge::NEW
     };
-    // The per-pixel time 0.2 grows to 0.28 a step up, under the budget's
-    // 0.9 alone, but over it with the rest's 0.7.
+    // A step up grows the per-pixel time from 0.2 to 0.28. That alone is
+    // under the 0.9 the band leaves of the budget, but with the rest's 0.7 it
+    // is over.
     assert_eq!(windows_of(&mut k, cost(0.2, 0.7), 20, true), 0);
     assert_eq!(k.step, 1);
 }
 
-/// What a step would cost: the rest as it is, the per-pixel time by the
-/// pixels there over these.
+/// The load predicted at another step keeps the rest as it is and scales the
+/// per-pixel time by the pixel count there over here. A longer interval
+/// spreads the load over its longer budget.
 #[test]
 fn predicted_by_part() {
     let k = Judge {
@@ -311,9 +316,10 @@ fn predicted_by_part() {
     assert!(near(k.predicted(s, w, &p, (2.0 * w, k.step)), 0.3));
 }
 
-/// The rate steps within what the display and `RATE_MIN_HZ` leave: a refresh
-/// at a time, never past the floor, and turns are slowed only past the
-/// display's own divisor (@xpute/runtime sched/frame_pacing.ts `pace_ms`).
+/// The rate steps a refresh at a time within what the display and
+/// `RATE_MIN_HZ` allow, and never past that floor (`floor`). Turns count as
+/// slowed only when they take more refreshes than the display's own pacing
+/// does (`own`, @xpute/runtime sched/frame_pacing.ts `pace_ms`).
 #[test]
 fn rate_by_display() {
     for (hz, own, floor) in [
@@ -337,9 +343,9 @@ fn rate_by_display() {
     }
 }
 
-/// Timed, a window over its budget slows the rate first, a refresh a step
-/// to `RATE_MIN_HZ`, each change followed by its settling windows; only then
-/// does the scale step.
+/// With timestamps, windows over their budget slow the rate first, one
+/// refresh a step down to `RATE_MIN_HZ`, each change followed by its settling
+/// windows. Only then does the scale step down.
 #[test]
 fn down_rate_then_scale() {
     let (mut k, mut p) = (Judge::NEW, on(120.0, 2.0));
@@ -354,8 +360,8 @@ fn down_rate_then_scale() {
     assert_eq!(k.step, 1, "then the scale");
 }
 
-/// Timed, room steps the scale up first and the rate last, to the display's
-/// own, and past that there is no step.
+/// With timestamps, room steps the scale up first and the rate last, back to
+/// the display's own rate, and past that there is no step.
 #[test]
 fn up_rate_last() {
     let mut k = Judge {
@@ -364,35 +370,36 @@ fn up_rate_last() {
     };
     let mut p = on(120.0, 3.0);
     let wait = param::RES_SETTLE_WINDOWS + param::RES_UP_WINDOWS + 1;
-    assert!(until_moved(&mut k, &mut p, 0.1, wait).is_some());
+    assert!(until_changed(&mut k, &mut p, 0.1, wait).is_some());
     assert_eq!(k.step, 0, "the scale first");
     assert!(near(p.paced_ms, on(120.0, 3.0).paced_ms));
-    assert!(until_moved(&mut k, &mut p, 0.1, wait).is_some());
+    assert!(until_changed(&mut k, &mut p, 0.1, wait).is_some());
     assert!(near(p.paced_ms, on(120.0, 2.0).paced_ms), "the rate last");
     assert_eq!(
-        until_moved(&mut k, &mut p, 0.1, 4 * wait),
+        until_changed(&mut k, &mut p, 0.1, 4 * wait),
         None,
         "all whole"
     );
 }
 
-/// The rate's step up is judged by the shorter budget: at 30 Hz on a 120 Hz
-/// display, 0.8 of the budget is over at 40 Hz and 0.6 fits.
+/// A step up of the rate is judged against the shorter budget it would have.
+/// At 30 Hz on a 120 Hz display, a load of 0.8 would be over its budget at
+/// 40 Hz, and a load of 0.6 fits.
 #[test]
 fn rate_up_judges_its_budget() {
     let (mut k, mut p) = (Judge::NEW, on(120.0, 4.0));
-    assert_eq!(until_moved(&mut k, &mut p, 0.8, 40), None);
-    assert!(until_moved(&mut k, &mut p, 0.6, 40).is_some());
+    assert_eq!(until_changed(&mut k, &mut p, 0.8, 40), None);
+    assert!(until_changed(&mut k, &mut p, 0.6, 40).is_some());
     assert!(near(p.paced_ms, on(120.0, 3.0).paced_ms));
 }
 
-/// A rate step up that goes over within its trust falls back and doubles
-/// the windows before the next.
+/// A step up of the rate that goes over within its trial falls back and
+/// doubles the windows before the next step up.
 #[test]
 fn rate_up_backoff() {
     let (mut k, mut p) = (Judge::NEW, on(120.0, 3.0));
     let wait = param::RES_UP_WINDOWS;
-    assert!(until_moved(&mut k, &mut p, 0.3, wait).is_some());
+    assert!(until_changed(&mut k, &mut p, 0.3, wait).is_some());
     assert!(k.on_trial && near(p.paced_ms, on(120.0, 2.0).paced_ms));
     settle(&mut k, &mut p, 0.3, true);
     assert!(window(&mut k, &mut p, 1.5, true).is_some(), "it falls back");
@@ -400,7 +407,8 @@ fn rate_up_backoff() {
     assert_eq!((k.on_trial, k.hold(true)), (false, 2 * wait));
 }
 
-/// Untimed, room cannot be foreseen, so the rate stays and the scale moves.
+/// Without timestamps, room cannot be foreseen, so the rate stays and the
+/// scale moves.
 #[test]
 fn untimed_rate_stays() {
     let (mut k, mut p) = (Judge::NEW, on(120.0, 2.0));
@@ -410,7 +418,8 @@ fn untimed_rate_stays() {
     assert!(near(p.paced_ms, on(120.0, 2.0).paced_ms));
 }
 
-/// Untimed, the scale alone moves: past `RES_MIN` a window over holds,
+/// Without timestamps, only the scale moves, and at `RES_MIN` a window over
+/// its budget moves nothing.
 #[test]
 fn untimed_scale_alone() {
     let (over, settle) = (param::SCALE_MISSED + 0.5, param::RES_SETTLE_WINDOWS);

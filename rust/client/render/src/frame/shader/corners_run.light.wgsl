@@ -1,13 +1,13 @@
 // pxl-render/corners_run.light.wgsl
 
-// The light's beam rays' run as the queue's passes count its work (queue_walk.wgsl,
-// queue_ask.wgsl, queue_last.wgsl; corners.wgsl): its walks' tag in the node cache's keys, and
-// the lanes its visits and asks are counted in.
+// How the queue's passes over the light's beam rays count their work (queue_walk.wgsl,
+// queue_ask.wgsl, queue_last.wgsl, corners.wgsl): the tag their walks put in the node cache's
+// keys, and the lanes their visits and asks are counted in.
 
 const WALK_PASS: u32 = LIGHT_BEAM_PASS;
 
-/// Where the asks' records lie in its queue's view (pxl-engine `ray::queue_records_at`,
-/// `ray::QUEUE_LIGHT_CORNERS`).
+/// Where the asks' records lie in the run's view of its queue (pxl-engine
+/// `ray::queue_records_at`, `ray::QUEUE_LIGHT_CORNERS`).
 fn queue_records_at() -> u32 {
   return LIGHT_CORNERS_RECORDS_AT;
 }

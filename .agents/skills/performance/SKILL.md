@@ -32,7 +32,6 @@ one measured case fitted at the cost of another.
   polyfill or fallback for what time will fix.
 - Each experiment gets a journal entry under `doc/experiment/`: tried, came
   of it, how we know, kept or dropped.
-- The CPU↔GPU data contract is generated from `spec/` (`make spec`).
 - In gpu-portable code, index no large const array at run time: the WGSL
   builds it as a local array, filled on every call.
 

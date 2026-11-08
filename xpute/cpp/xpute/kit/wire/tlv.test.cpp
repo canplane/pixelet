@@ -30,7 +30,8 @@ std::string js_number(double x) {
     return std::string(buf, r.ptr);
 }
 
-// A read value as the TypeScript prints it: `typeof`, a colon, the value.
+// A value in the golden record's text, which is how the TypeScript test prints
+// one: its `typeof`, a colon, the value.
 std::string show(const tlv::Value &v) {
     return std::visit(
         [](const auto &x) -> std::string {
@@ -47,7 +48,6 @@ std::string show(const tlv::Value &v) {
 
 } // namespace
 
-// Across a protocol: the bytes are the other languages', to the last one.
 XPUTE_TEST(tlv_matches_other_languages) {
     Golden v = Golden::load("spec/golden/wire/tlv.tsv");
     std::vector<std::uint8_t> buf;
@@ -88,8 +88,9 @@ XPUTE_TEST(tlv_matches_other_languages) {
     XPUTE_CHECK_EQ(read.size(), v.len("read"), "read back a different count");
     for (std::size_t j = 0; j < read.size(); j++) XPUTE_CHECK_EQ(show(read[j]), v.s("read." + std::to_string(j)), ("read." + std::to_string(j)).c_str());
 
-    // How a sequence stops: the values handed out before it did, then END
-    // read, the input run out at a boundary, or a fault.
+    // Each case gives the values read before the sequence stopped, then how it
+    // stopped: the tag `end` read, the input run out between two values, or a
+    // fault.
     v.each("end", [&](const std::string &k) {
         std::vector<std::uint8_t> pkt = v.bytes(k + ".packet");
         tlv::Reader r(pkt);

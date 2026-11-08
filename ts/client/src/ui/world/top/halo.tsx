@@ -22,10 +22,11 @@ import {
 } from "@/ui/component/theme.ts";
 
 /**
- * A dark halo from black copies of `draw` around circles, not a stroke: a
- * device's text and an iPhone's symbol have none to widen. Each ring fades as
- * one layer so overlaps are no darker. The box includes the rings, since
- * Android cuts a layer at its view's bounds.
+ * A dark halo made of black copies of `draw`, placed around circles of
+ * growing radius. It cannot be a widened stroke, because a device's text and
+ * an iPhone's symbol have no stroke to widen. Each ring fades as one layer,
+ * so that copies that overlap are no darker. The box includes the rings,
+ * because Android clips a layer at its view's bounds.
  */
 function Halo({
   style,
@@ -59,8 +60,8 @@ function Halo({
         </View>
       ))}
       {
-        // Its own view: a positioned box paints over an unpositioned SVG, which the
-        // rings would gray.
+        // The drawing gets its own view. A positioned box paints over an
+        // unpositioned SVG, so the rings would otherwise gray the drawing.
       }
       <View>{draw()}</View>
     </View>
@@ -88,8 +89,9 @@ export function HaloIcon({
   );
 }
 
-/** A white stroke inside an `Svg` over its halo: rings stroked black along
- * `under` (`d` where left out), each ring one layer. */
+/** A white stroke over its halo, drawn inside an `Svg`. The halo's rings are
+ * black strokes along `under`, which defaults to `d`, and each ring is one
+ * layer. */
 export function HaloPath({
   d,
   under = d,

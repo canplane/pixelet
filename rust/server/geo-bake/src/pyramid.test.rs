@@ -60,7 +60,7 @@ fn folded<const PLACE: bool>() -> Vec<Zoom> {
         stage: &stage,
         leaf: LEAF_ZOOM,
         whole: &whole,
-        gone: FnvHashSet::default(),
+        removed: FnvHashSet::default(),
     };
     fold::<Count<PLACE>>(
         &mut staged,

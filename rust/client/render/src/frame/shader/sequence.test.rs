@@ -20,9 +20,10 @@ const SOURCES: [(&str, &str); 8] = [
     ("renderer.rs", include_str!("../../gpu/renderer.rs")),
 ];
 
-/// Every render pass a draw of the frame's runs in declared where the host begins it: each
-/// list a draw names (`Step::in_pass`) held to a pass by `Gpu::declare_pass`, which refuses
-/// any other pipeline the pass sets; and every pass declared so holds a list of the frame's.
+/// Every render pass an indirect draw of the frame runs in is declared where the host begins
+/// it. The host declares the pass with the list the draw names (`Step::in_pass`) through
+/// `Gpu::declare_pass`, which refuses any other pipeline the pass sets. Every list a pass is
+/// declared with is one of the frame's.
 #[test]
 fn the_host_declares_each_render_pass_of_an_indirect_draw() {
     let lists = [
@@ -58,11 +59,12 @@ fn the_host_declares_each_render_pass_of_an_indirect_draw() {
     }
 }
 
-/// The hazards the frame holds, each as the build names it in `KNOWN`.
+/// The frame holds as many hazards as `KNOWN` names. On a mismatch the message lists every
+/// hazard found.
 #[test]
 fn the_frame_holds_the_hazards_known_names() {
     let found = found(&FRAME);
-    let listed: Vec<String> = found
+    let lines: Vec<String> = found
         .iter()
         .map(|(rule, step, with)| format!("rule {rule}: {step} with {with}"))
         .collect();
@@ -70,7 +72,7 @@ fn the_frame_holds_the_hazards_known_names() {
         found.len(),
         KNOWN.len(),
         "the frame's hazards:\n{}",
-        listed.join("\n")
+        lines.join("\n")
     );
 }
 
@@ -95,8 +97,8 @@ fn named(statement: &str) -> Option<&str> {
     Some(&name[..end])
 }
 
-/// Whether `statement` names one of the frame's buffers by the host's field: `.marks,`,
-/// `.light_args)`.
+/// Whether `statement` names one of the frame's buffers by the host's field for it, as in
+/// `.marks,` or `.light_args)`.
 fn names_buffer(statement: &str) -> bool {
     BUFFERS.iter().any(|b| {
         let field = b.name.rsplit('.').next().unwrap_or(b.name);
@@ -106,10 +108,11 @@ fn names_buffer(statement: &str) -> bool {
     })
 }
 
-/// Every indirect dispatch and draw of the sources takes its count's place from a step, and
-/// every copy and host's write of one of the frame's buffers its offsets; the steps a function
-/// names come in the frame's order, the host's writes, which land first, apart; and every
-/// step that reads a count, copies or writes is named by a source.
+/// Every indirect dispatch and draw in the sources takes the place of its count from a step,
+/// and every copy and host's write of one of the frame's buffers takes its offsets from one.
+/// The steps a function names come in the frame's order, except the host's writes, which land
+/// first wherever they are named. Every step that reads a count, copies or writes is named by
+/// some source.
 #[test]
 fn the_host_calls_off_the_steps_in_their_order() {
     let order: Vec<&str> = FRAME.steps.iter().map(|s| s.name).collect();
@@ -146,8 +149,8 @@ fn the_host_calls_off_the_steps_in_their_order() {
                 }
             }
         }
-        // The steps a function names, in its text's order, against the frame's; a pass's list
-        // is no step.
+        // The steps a function names, in the order of its text, are held to the frame's order.
+        // A pass's list is not a step.
         let at: Vec<(usize, &str)> = text
             .match_indices("sequence::")
             .filter_map(|(k, _)| named(&text[k..]).map(|n| (k, n)))
@@ -178,19 +181,20 @@ fn the_host_calls_off_the_steps_in_their_order() {
     }
 }
 
-/// A binding's role in a call: the args it reads its count from, bound read only; args its
-/// pass writes; else its buffer's.
+/// A binding's role in a call is `ARGS_INDIRECT` for the args the call reads its count from,
+/// which it binds read-only, `ARGS_WRITTEN` for args its pass writes, and otherwise its
+/// buffer's role.
 #[test]
 fn a_binding_takes_its_role_from_its_buffer_and_its_call() {
     assert_eq!(role(&FRAME, &PX, 30), ARGS_INDIRECT);
     assert_eq!(role(&FRAME, &FACE, 16), ARGS_INDIRECT);
-    assert_eq!(role(&FRAME, &STOPS, 9), STATE);
+    assert_eq!(role(&FRAME, &RECORD_HITS, 9), STATE);
     let corners = FRAME.steps.iter().find(|s| s.name == "corners");
     assert_eq!(corners.map(|s| role(&FRAME, s, 9)), Some(STATE));
 }
 
-/// The call that shipped refused: the claim off the light's args, which the propagation's
-/// group, set for it, binds writable (034ddad063).
+/// Rule 1 finds a dispatch off the light's args whose own group binds those args writable:
+/// the light's cells set with the propagation's group, which WebGPU refuses.
 #[test]
 fn an_indirect_call_off_args_its_group_binds_writable_is_found() {
     const ARGS_BOUND: Group = Group {
@@ -203,7 +207,7 @@ fn an_indirect_call_off_args_its_group_binds_writable_is_found() {
         appends: &[],
         seeds: &[],
         bounds: &[],
-        kept: &[],
+        persistent: &[],
         steps: &[
             Step::write("light_args", at(0, 0, light::ARGS_WORDS)),
             Step::dispatch_off(

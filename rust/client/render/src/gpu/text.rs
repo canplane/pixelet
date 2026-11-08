@@ -1,7 +1,7 @@
 // pxl-render/gpu/text.rs
 
-//! Text is laid out and drawn by the platform, which owns the fonts, fallback
-//! and color glyphs and shapes a line whole; the renderer gets pixels.
+//! The platform lays out and draws text: it owns the fonts, their fallback and color glyphs,
+//! and shapes a line whole. The renderer receives pixels.
 
 use crate::look::marker::{Font, ATLAS_SCALE};
 

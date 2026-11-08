@@ -17,7 +17,8 @@ pub struct OffCenter {
 
 static OFF_CENTER: Global<bool> = Global::new();
 
-/// At its altitude; where the device gives none, its Z unknown.
+/// The device's location, at its altitude. Where the device gives no
+/// altitude, the Z is unknown.
 fn device_coord() -> Option<Q3> {
     device_location_store().location.map(|l| {
         let [lon, lat] = l.coords;
@@ -30,7 +31,8 @@ fn device_coord() -> Option<Q3> {
     })
 }
 
-/// Whether the pivot has wandered off the device, as of this turn.
+/// The device's location, and whether the pivot has wandered off it as of
+/// this turn's `off_center_step`.
 pub fn off_center() -> OffCenter {
     OffCenter {
         device_coord: device_coord(),
@@ -38,14 +40,17 @@ pub fn off_center() -> OffCenter {
     }
 }
 
-/// Whether the pivot is off the device, decided once a turn.
+/// Decides once a turn whether the pivot is off the device. The pivot goes
+/// off past 10 units and comes back within 3, so a pivot near the edge does
+/// not flicker between the two.
 pub fn off_center_step() {
     let off = OFF_CENTER.get(|| false);
-    // Horizontal only: the fix's Z is GPS altitude and the pivot's a floor, and
-    // their mismatch could hold it off-center forever.
+    // Only the horizontal distance counts. The fix's Z is a GPS altitude and
+    // the pivot's Z is a floor, and their mismatch could hold the pivot
+    // off-center forever.
     match (controller::pivot(), device_coord()) {
         (Some(pivot), Some(device)) => {
-            // X the short way across the antimeridian.
+            // X is measured the short way across the antimeridian.
             let [dx, dy, _] = world::between(&pivot, &device).map(q3::to_real);
             let dist = (dx * dx + dy * dy).sqrt();
             if !*off && dist > 10.0 {

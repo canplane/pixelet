@@ -1,60 +1,73 @@
 // pxl-render/frame/shelf.rs
 
-//! Where each marker's bitmap lies in the atlas, one texture, so all markers draw in one instanced
-//! call. Shelf-packed with bucketed sizes so a freed slot is reusable; growth
-//! doubles the atlas and replays each sprite's `Paint`. Only dirty rectangles
-//! are uploaded.
+//! The marker atlas: one texture that holds every marker's bitmap, so that
+//! all markers draw in one instanced call. Each sprite takes a slot, a
+//! rectangle on a shelf with its sides rounded up to a size class, so that a
+//! freed slot can be given to another sprite of the same class. A full atlas
+//! doubles its side, and every live sprite is then painted again from its
+//! `Paint`. A slot keeps its index for as long as it is live, but its
+//! rectangle moves when the atlas changes size, so a caller keeps the index
+//! and reads the rectangle again on each use. The rectangle is in canvas
+//! orientation: `v0`, its top, is less than `v1`, its bottom.
 
-/// Slot rectangles are in canvas orientation (v0 top < v1 bottom) and move on a
-/// repack, so read them on every use; the slot index is what stays.
+/// The slot `add` returns when even the largest atlas has no room for the
+/// sprite. Such a sprite is not shown until a slot is released.
 pub const NO_SLOT: i32 = -1;
 
-/// What a sprite paints, in logical pixels before the render scale.
+/// What a sprite paints. Its widths are logical pixels, which the painter
+/// scales to device pixels by `ATLAS_SCALE` (look/marker.rs).
 #[derive(Clone, Debug, PartialEq)]
 pub enum Paint {
-    /// Text alone on a pill in its fill and text colors (`ink`).
+    /// A pill in color `fill` with `text` on it in color `ink`.
     Pill {
         text: String,
         fill: u32,
         ink: u32,
         logical_w: f64,
     },
-    /// A place as Carto draws it: a dot or its icon in the fill, and under
-    /// it the name, if shown, in the text color (`ink`).
+    /// A place drawn as Carto draws it: a dot, or a disc when `icon` is set,
+    /// in color `fill`, and under it the place's name in color `ink`.
     Point {
-        /// Its name as laid out, a line each; none where it is not named.
+        /// The place's name as laid out, one entry a line. It is empty when
+        /// the place shows no name.
         lines: Vec<String>,
         icon: bool,
-        /// Carto's symbol for it, by its place among `SYMBOL_MASKS`; a disc where none.
+        /// The index in `SYMBOL_MASKS` of Carto's symbol for the place, drawn
+        /// on the disc. With none, the disc is drawn bare.
         symbol: Option<u16>,
         fill: u32,
         ink: u32,
         logical_w: f64,
     },
-    /// A speech bubble over its tail, its text in lines.
+    /// A speech bubble with a tail below it, holding `lines` of text in a
+    /// box `box_w` wide.
     Bubble { lines: Vec<String>, box_w: f64 },
 }
 
-/// Freed slots are matched by size class, not exact fit. 16 device pixels is 8
-/// logical at the marker render scale.
+/// The steps a slot's width and height are rounded up to, in device pixels.
+/// A freed slot is given only to a sprite whose rounded size is the same.
+/// 16 device pixels are 8 logical pixels at `ATLAS_SCALE`.
 const WIDTH_BUCKET: u32 = 16;
 const HEIGHT_BUCKET: u32 = 16;
 
 pub const INIT_SIZE: u32 = 1024;
 
-/// 2048 px RGBA is 16 MiB plus mips; past the limit a sprite waits unshown (`NO_SLOT`).
+/// The largest side the atlas grows to. An RGBA texture this size takes 16 MiB
+/// before its mips.
 const MAX_SIZE: u32 = 2048;
 
-/// Transparent margin so a linear or mipmapped sample cannot reach a neighbor.
+/// The transparent margin, in device pixels, round each sprite inside its
+/// slot. A linear sample at the sprite's edge reads the margin, not a
+/// neighbor.
 pub const PAD: u32 = 1;
 
-/// The most slots an atlas holds: a live or free one holds a rectangle of a
-/// size class at least (`WIDTH_BUCKET` × `HEIGHT_BUCKET`), none overlapping,
-/// in an atlas `MAX_SIZE` a side at most; an unused one is reused before
-/// another is made.
+/// The most slots an atlas can have. A live or free slot holds a rectangle
+/// at least `WIDTH_BUCKET` by `HEIGHT_BUCKET`, no two of them overlap, and
+/// the atlas is at most `MAX_SIZE` a side. An unused slot is taken again
+/// before a new one is made, so the slots never outnumber this bound.
 pub const SLOTS_MAX: usize = ((MAX_SIZE / WIDTH_BUCKET) * (MAX_SIZE / HEIGHT_BUCKET)) as usize;
 
-/// A set of an atlas's slots, a bit each.
+/// A set of slots, one bit a slot.
 #[derive(Clone, Copy)]
 pub struct SlotSet([u64; SLOTS_MAX / 64]);
 
@@ -84,7 +97,7 @@ impl SlotSet {
         self.0.iter().map(|w| w.count_ones()).sum()
     }
 
-    /// Its slots, lowest first.
+    /// The slots in the set, lowest first.
     pub fn iter(&self) -> impl Iterator<Item = u32> + '_ {
         self.0.iter().enumerate().flat_map(|(k, &w)| {
             (0..64)
@@ -94,7 +107,9 @@ impl SlotSet {
     }
 }
 
-/// UNUSED holds nothing, FREE is reusable by its size class, LIVE is drawn.
+/// A slot's states. An unused slot has no rectangle on the atlas. A free slot
+/// keeps its rectangle until a sprite of its size class takes it. A live slot
+/// holds a sprite.
 const UNUSED: u8 = 0;
 const FREE: u8 = 1;
 const LIVE: u8 = 2;
@@ -103,7 +118,9 @@ fn bucket(v: f64, to: u32) -> u32 {
     (v / to as f64).ceil() as u32 * to
 }
 
-/// Every sprite in a shelf takes the shelf's height.
+/// The atlas's shelves. A shelf is a row of slots filled from the left, and
+/// every slot on it has the shelf's height. `next_y` is the top of the next
+/// shelf to be made.
 #[derive(Default)]
 struct Shelves {
     y: Vec<u32>,
@@ -113,7 +130,9 @@ struct Shelves {
 }
 
 impl Shelves {
-    /// The first shelf of height `h` with room, else a new one; none past `size`.
+    /// The top-left corner of a `w` by `h` rectangle, placed on the first
+    /// shelf of height `h` that has room, or on a new shelf below the others.
+    /// It is None when the rectangle does not fit on an atlas `size` a side.
     fn fit(&mut self, w: u32, h: u32, size: u32) -> Option<(u32, u32)> {
         let shelf = match (0..self.h.len()).find(|&s| self.h[s] == h && self.cursor[s] + w <= size)
         {
@@ -135,8 +154,9 @@ impl Shelves {
     }
 }
 
-/// Every sprite's place on an atlas of `size`, laid out on scratch shelves so
-/// a failed layout changes nothing.
+/// Where each live sprite would lie on an atlas of another size. It is laid
+/// out on shelves of its own, so a layout that fails leaves the atlas as it
+/// was.
 struct Layout {
     at: Vec<(u32, u32)>,
     shelves: Shelves,
@@ -163,8 +183,10 @@ pub struct Atlas {
 
     shelves: Shelves,
 
-    /// `w`/`h` is the bucketed slot; `cw`/`ch` is what was drawn, the only part a
-    /// UV may cover.
+    /// Each of these vectors holds one entry a slot. `x`, `y`, `w` and `h`
+    /// are the slot's rectangle, its sides rounded up to the size class.
+    /// `cw` and `ch` are the size of the drawing inside it, which is the only
+    /// part a texture coordinate may cover.
     state: Vec<u8>,
     x: Vec<u32>,
     y: Vec<u32>,
@@ -172,7 +194,8 @@ pub struct Atlas {
     h: Vec<u32>,
     cw: Vec<u32>,
     ch: Vec<u32>,
-    /// What drew each sprite, kept so a repack can replay it.
+    /// What each sprite paints, kept so that the sprite can be painted again
+    /// when the atlas changes size.
     paints: Vec<Option<Paint>>,
 
     generation: u32,
@@ -205,14 +228,16 @@ impl Atlas {
         (self.y[slot as usize] + PAD + self.ch[slot as usize]) as f64 / self.size as f64
     }
 
-    /// A slot's rectangle in device pixels, the padding included: x, y, w, h.
+    /// The slot's rectangle in device pixels, the margin included, as x, y,
+    /// width and height.
     pub fn slot_rect(&self, slot: u32) -> [u32; 4] {
         let s = slot as usize;
         [self.x[s], self.y[s], self.w[s], self.h[s]]
     }
 
-    /// Whether a live slot holds its drawing, which one added or marked
-    /// dirty lacks until a sync paints it.
+    /// Whether the slot is live and its sprite has been painted. A slot that
+    /// was added or marked dirty counts as unpainted until a flush hands it
+    /// to the painter.
     pub fn is_painted(&self, slot: u32) -> bool {
         let s = slot as usize;
         self.state.get(s) == Some(&LIVE) && !self.dirty.contains(slot)
@@ -224,7 +249,9 @@ impl Atlas {
             .flatten()
     }
 
-    /// The slot drawn into, or NO_SLOT when the atlas is full. `w`/`h` are device pixels.
+    /// The slot given to a sprite `w` by `h` device pixels that `paint` draws,
+    /// or `NO_SLOT` when even the largest atlas has no room for it. The next
+    /// flush hands the slot to the painter.
     pub fn add(&mut self, w: f64, h: f64, paint: Paint) -> i32 {
         let bw = bucket(w + (PAD * 2) as f64, WIDTH_BUCKET);
         let bh = bucket(h + (PAD * 2) as f64, HEIGHT_BUCKET);
@@ -253,8 +280,9 @@ impl Atlas {
         self.dirty.insert(slot);
     }
 
-    /// The slots to paint into `paint`: every live one if the atlas was
-    /// replaced since `generation`, else the dirty ones, which are then clean.
+    /// Puts the slots to paint into `paint`: every live slot when the atlas
+    /// has been made again since `generation`, or else the dirty ones. No slot
+    /// is dirty afterward.
     pub fn flush(&mut self, generation: u32, paint: &mut SlotSet) -> Flush {
         let whole = generation != self.generation;
         if whole {
@@ -329,7 +357,9 @@ impl Atlas {
         (slots, ws, hs)
     }
 
-    /// Halves the atlas while every live sprite still fits.
+    /// Halves the atlas's side for as long as the live sprites cover at most
+    /// half of the smaller atlas and fit on it. It returns whether the atlas
+    /// changed.
     pub fn compact(&mut self) -> bool {
         let mut changed = false;
         while self.size > INIT_SIZE {
@@ -347,13 +377,15 @@ impl Atlas {
         changed
     }
 
-    /// Slots keep their indices; only their rectangles move.
+    /// Doubles the atlas's side, or returns false when the atlas is already
+    /// at `MAX_SIZE`.
     fn grow(&mut self) -> bool {
         if self.size >= MAX_SIZE {
             return false;
         }
         let (slots, ws, hs) = self.live_slots();
-        // Everything fit at half the size, so this fits by construction.
+        // The live sprites fit on the atlas at its present side, so they fit
+        // on one twice as wide.
         let Some(layout) = pack(self.size * 2, &ws, &hs) else {
             return false;
         };

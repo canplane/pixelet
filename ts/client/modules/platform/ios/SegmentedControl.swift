@@ -4,12 +4,13 @@ import ExpoModulesCore
 import UIKit
 
 /// UIKit's segmented control, for the UI's Segmented
-/// (ts/client/src/ui/component/segmented.ios.tsx). UIKit's rather than SwiftUI's
-/// Picker: a control that takes a touch inside React Native's views is
-/// UIKit's (ts/client/src/ui/component/README.md says why).
+/// (ts/client/src/ui/component/segmented.ios.tsx). It is UIKit's rather than
+/// SwiftUI's Picker, because a control that takes a touch inside React
+/// Native's views must be UIKit's (ts/client/src/ui/component/README.md says
+/// why).
 ///
-/// Held to the UI's value: a pick is reported and the control shows it at
-/// once, and the UI's `selectedIndex` then says what stands.
+/// The UI's value rules. The control shows a pick at once and reports it, and
+/// the UI's `selectedIndex` then sets what stands.
 class SegmentedControl: ExpoView {
   private let control = UISegmentedControl()
   let onPick = EventDispatcher()

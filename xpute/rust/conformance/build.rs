@@ -1,7 +1,8 @@
 // xpute-conformance/build.rs
 
-// As wasm the memory is imported and the stack goes first, its size the
-// core's own (spec/conformance/core.json), which cpp/Makefile matches.
+// Built as wasm, the core imports its memory and puts its stack first. The
+// stack's size is the conformance core's own (spec/conformance/core.json),
+// and cpp/Makefile links the C++ core with the same size.
 
 #[path = "src/core.spec.rs"]
 mod spec;

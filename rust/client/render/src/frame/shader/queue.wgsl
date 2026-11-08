@@ -1,31 +1,33 @@
 // pxl-render/queue.wgsl
 
-// The holes as the queue's items (queue_walk.wgsl, queue_last.wgsl), an observer's: the pixels
-// the eye's cast marked and the slots the light's listed, which no voxel answers (cast.wgsl,
-// light.wgsl). The observer is the head the pass binds (light_aim.wgsl `light_run`): one code
-// for both, its pixel or slot, its ray and its words chosen by it.
+// The holes as the queue's items (queue_walk.wgsl, queue_last.wgsl), for either observer. The
+// holes are the pixels the eye's cast listed and the slots the light's cast listed, which took
+// neither a visible voxel nor the sky (cast.wgsl, light.wgsl). The observer is read off the
+// head the pass binds (light_aim.wgsl `light_run`). One code serves both, and the observer
+// chooses the pixel or slot, the ray and the words written.
 //
 // A ray parked between the run's walks lies in its observer's pool with its pixel or slot
-// (`ray::PARK_WORDS`), and its item is then its place there (`SLOT`). Past the pool's room it
-// ends where it stands.
+// (`ray::PARK_WORDS`), and its item is then its place in the pool, marked by `SLOT`. A ray
+// that finds the pool full ends where it stands.
 
-/// An item that is a parked ray, its place in the pool under it.
+/// The bit that marks an item as a parked ray, with its place in the pool in the bits under it.
 const SLOT = 0x80000000u;
 
-/// A hole's slot, its column under its row.
+/// A hole's pixel or slot, from a word that holds its column in the low half and its row in
+/// the high half.
 fn hole_at(hole: u32) -> vec2<u32> {
   return vec2<u32>(hole & 0xffffu, hole >> 16u);
 }
 
-/// The eye's drawn pixels each way.
+/// The eye's drawn pixels across and down.
 fn eye_size() -> vec2<u32> {
   return textureDimensions(rays).xy;
 }
 
-/// The observer's pool's first word (`ray::pool_at`, `light::HEAD_POOL`).
+/// The first word of the observer's pool (`ray::pool_at`, `light::HEADER_POOL`).
 fn pool_at() -> u32 {
   if (light_run()) {
-    return head_word(LIGHT_HEAD_POOL);
+    return header_word(LIGHT_HEADER_POOL);
   }
   return eye_pool_at(eye_size());
 }
@@ -35,7 +37,7 @@ fn park_at(item: u32) -> u32 {
   return pool_at() + POOL_STATES + (item & ~SLOT) * PARK_WORDS;
 }
 
-/// A hole's pixel or slot, a parked ray's off its pool.
+/// A hole's pixel or slot. A parked ray's is read from its place in the pool.
 fn hole_px(hole: u32) -> vec2<u32> {
   if ((hole & SLOT) != 0u) {
     return hole_at(beams[park_at(hole) + PARK_PX]);
@@ -44,42 +46,43 @@ fn hole_px(hole: u32) -> vec2<u32> {
 }
 
 /// Where the observer's stops lie (hit.wgsl): the eye's past the beam rays' words
-/// (`beam::Grid::hits_at`); the light's past its pool (`light::hits_at`).
+/// (`beam::Grid::hits_at`), and the light's past its pool (`light::hits_at`).
 fn hits_at() -> u32 {
   if (light_run()) {
-    return head_word(LIGHT_HEAD_HITS);
+    return header_word(LIGHT_HEADER_HITS);
   }
   return eye_word(GRID + GRID_HITS_AT);
 }
 
-/// The observer's listed holes' count, their entries after it (`ray::holes_at`,
+/// Where the observer's listed holes lie: their count, then their entries (`ray::holes_at`,
 /// `light::holes_at`).
 fn holes_at() -> u32 {
   if (light_run()) {
-    return head_word(LIGHT_HEAD_HOLES);
+    return header_word(LIGHT_HEADER_HOLES);
   }
   return eye_holes_at(eye_size());
 }
 
-/// The next item a walk over the node cache takes; `NONE` where it takes no more. The second
-/// takes the rays the first parked, the first the observer's holes.
+/// The next item for a walk over the node cache to take, or `NONE` where it takes no more. The
+/// first walk takes the observer's holes, and the second, where `again`, takes the rays the
+/// first parked.
 fn next_item(again: bool) -> u32 {
   if (again) {
-    let k = take(QUEUE_TAKEN_AGAIN);
+    let k = take(QUEUE_NEXT_AGAIN);
     return select(NONE, SLOT | k, k < min(held(QUEUE_PARKED), POOL_CAP));
   }
-  let k = take(QUEUE_TAKEN);
+  let k = take(QUEUE_NEXT);
   let at = holes_at();
   return select(NONE, beams[at + 1u + k], k < beams[at]);
 }
 
-/// The next ray the last walk takes off the pool, `NONE` past it.
+/// The next parked ray for the last walk to take from the pool, or `NONE` past the rays
+/// parked.
 fn next_last() -> u32 {
-  let k = take(LAST_TAKEN);
+  let k = take(LAST_NEXT);
   return select(NONE, SLOT | k, k < min(beams[pool_at() + POOL_CNT], POOL_CAP));
 }
 
-/// A hole's ray.
 fn item_aim(hole: u32) -> Aim {
   let at = hole_px(hole);
   if (light_run()) {
@@ -88,7 +91,7 @@ fn item_aim(hole: u32) -> Aim {
   return px_aim(at, eye_size());
 }
 
-/// Where a hole's ray starts afresh: its cell's start.
+/// Where a hole's ray starts afresh: at the start of its cell.
 fn item_start(hole: u32, aim: Aim) -> Start {
   let at = hole_px(hole);
   if (light_run()) {
@@ -97,9 +100,10 @@ fn item_start(hole: u32, aim: Aim) -> Start {
   return px_start(aim, at, eye_size());
 }
 
-/// A hole's ray parked at its node `corner`, `zoom`, `roots`, `t` along it, `step` steps taken
-/// (parked.wgsl): where it lies in the pool, or at the next place there, its pixel with it;
-/// false past the pool's room.
+/// Parks a hole's ray at its node `corner` of `zoom` with `roots`, `t` along the ray, after
+/// `step` steps (parked.wgsl). A ray already parked keeps its place in the pool. A hole not yet
+/// parked takes the next place and stores its pixel or slot there. It returns false where the
+/// pool is full.
 fn park(hole: u32, t: f32, corner: vec3<u32>, zoom: u32, roots: vec3<i32>, step: u32) -> bool {
   var item = hole;
   if ((hole & SLOT) == 0u) {
@@ -123,44 +127,45 @@ fn parked(hole: u32) -> bool {
   return (beams[park_at(hole) + 4u] & PARKED) != 0u;
 }
 
-/// The state a hole's ray is parked in, where a walk goes on from.
+/// The state a hole's ray is parked in, from which a walk goes on.
 fn parked_start(hole: u32) -> Start {
   let at = park_at(hole);
   return parked_from(beams[at], vec3<u32>(beams[at + 1u], beams[at + 2u], beams[at + 3u]), beams[at + 4u]);
 }
 
-/// A stop's number for the record, as the walk that ends it numbers them (`stop_number`),
-/// the dispatch over them raised by the number that opens a workgroup; `NONE` past its
-/// list's room (`ray::STOPS_A_FRAME`).
-fn stop_room() -> u32 {
-  let r = stop_number();
-  if (r >= STOPS_A_FRAME) {
+/// Takes a number for a stop the record will take, as the walk that ends the ray numbers them
+/// (`hit_number`). The number that opens a workgroup raises the dispatch over the stops. Past
+/// the list's room it is `NONE` (`ray::HITS_A_FRAME`).
+fn hit_in_cap() -> u32 {
+  let r = hit_number();
+  if (r >= HITS_A_FRAME) {
     return NONE;
   }
   if (r % HIT_LANES == 0u) {
-    stop_rows(workgroups(r + 1u, STOPS_A_FRAME, HIT_LANES));
+    hit_rows(workgroups(r + 1u, HITS_A_FRAME, HIT_LANES));
   }
   return r;
 }
 
-/// Stop `r` listed for the record, what lies about its face put at its pixel off it
-/// (miss_word.wgsl `hit_put`, record_stops.wgsl), and its number marked waiting
-/// (`beam::HIT_WAITS`).
-fn keep_hit(r: u32, w: Walked, face: u32, id: vec2<u32>) -> u32 {
+/// Lists stop `r` for the record (miss_word.wgsl `hit_put`) and returns its number marked as
+/// waiting (`beam::HIT_WAITS`). The pixel keeps that word until record_hits.wgsl puts there
+/// what lies around the stop's face.
+fn keep_hit(r: u32, w: WalkEnd, face: u32, id: vec2<u32>) -> u32 {
   hit_put(r, w, face, id);
   return HIT_WAITS | r;
 }
 
-/// Hole `hole`'s walk `w`, ended, its words written and its stop, whatever it stopped on,
-/// listed for its observer's record (`keep_hit`, record_stops.wgsl), the eye's and the
-/// light's alike: a slot's depth; the eye's ray's, what lies about the face it stopped on its
-/// box's for a cell short of its cube (pxl-engine `face::BOX`), a lack's none, a whole cell's
-/// put there off the record once its stop is in (record_stops.wgsl `record_faces_cs`).
-fn finish(hole: u32, aim: Aim, w: Walked) {
+/// Ends the walk `w` of hole `hole`. Its stop, whatever it stopped on, is listed for its
+/// observer's record (`keep_hit`, record_hits.wgsl), the eye's and the light's alike. A slot of
+/// the light gets its depth. A pixel of the eye gets its ray's words, and what lies around the
+/// face it stopped on: a box's for a cell short of its cube (pxl-engine `face::BOX`), and for a
+/// whole cell the word the record puts there once its stop is in (record_hits.wgsl
+/// `record_faces_cs`). A pixel whose ray ended as a lack keeps its words.
+fn finish(hole: u32, aim: Aim, w: WalkEnd) {
   let stops = w.ends == 1u || w.ends == 2u;
   var r = NONE;
   if (stops) {
-    r = stop_room();
+    r = hit_in_cap();
   }
   let at = hole_px(hole);
   if ((hole & SLOT) != 0u) {
@@ -175,12 +180,18 @@ fn finish(hole: u32, aim: Aim, w: Walked) {
     return;
   }
   var faces = 0u;
-  // Both of a `select` are taken, so the stop is kept under an `if`.
+  // A `select` evaluates both its arms, so the stop is kept under an `if`, only where it has a
+  // number.
   if (r != NONE) {
     faces = keep_hit(r, w, face | select(0u, HIT_LACKS, w.ends == 2u), at);
   }
   if (w.ends == 1u && hit_fill(w) != 0u) {
     faces = FACE_BOX;
+  }
+  // A lack is a node not held yet, which says nothing of what is there, so its pixel keeps the
+  // words it last showed rather than taking the sky's.
+  if (w.ends == 2u) {
+    return;
   }
   write_ray(at, ray_word(w, face, faces));
 }

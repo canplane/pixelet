@@ -19,7 +19,7 @@ fn a_set_with_tiles_and_no_fits_is_refused() {
         stage: &stage,
         leaf: LEAF_ZOOM,
         whole: &whole,
-        gone: FnvHashSet::default(),
+        removed: FnvHashSet::default(),
     };
     assert!(check(&staged, 1).unwrap().is_empty(), "an empty set is new");
 

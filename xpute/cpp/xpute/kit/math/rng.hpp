@@ -1,8 +1,9 @@
 // cpp/xpute/kit/math/rng.hpp
 
-// Reproducible seeds and streams; not for anything that must resist prediction.
-// Two families, a file each: 64-bit (splitmix64, rng.64.hpp) and 32-bit
-// (Murmur3's finalizer, rng.32.hpp), the latter gpu-portable.
+// Reproducible seeds and random streams, not for anything that must resist
+// prediction. There are two families, a file each: a 64-bit one built on
+// splitmix64 (rng.64.hpp), and a 32-bit one built on Murmur3's finalizer
+// (rng.32.hpp), which a GPU shader can compute as well.
 
 #pragma once
 
@@ -13,7 +14,7 @@
 
 namespace xpute {
 
-/// Uniform in [0, 1).
+// Maps a `u32` onto [0, 1), uniformly.
 constexpr double u32_to_unit(std::uint32_t x) noexcept {
     return static_cast<double>(x) / 4294967296.0;
 }

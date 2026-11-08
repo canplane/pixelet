@@ -27,7 +27,7 @@ check-rules = ["run", "-q", "-p", "pxl-tool", "--bin", "check_rules", "--"]
 # felt on every tile, `release` for one long run. Each works in the checkout's
 # root wherever it is started. The ones that read the databases or are servers
 # want the local environment, which the root's make gives them
-# (script/with-env.sh): `make bake-terrain ARGS="--stage leaf"`.
+# (script/with-env.sh): `make bake-terrain ARGS="--step leaf"`.
 bake-terrain = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--bin", "bake_terrain", "--"]
 bake-place = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--bin", "bake_place", "--"]
 bake-division = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--bin", "bake_division", "--"]

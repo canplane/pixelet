@@ -1,6 +1,7 @@
 // pxl-core/door/apply/sensor.rs
 
-//! SENSOR: the device sensors': their readings, failures and permissions, and the location asked for.
+//! The SENSOR major's commands: the device sensors' readings, failures and
+//! permissions, and a request to locate the device.
 
 use super::State;
 use super::{ask_turn, bearing, on_earth, refuse_unless};
@@ -18,7 +19,8 @@ pub(super) fn pos(c: abi::SensorPos) -> Outcome {
         on_earth(c.lon, c.lat) && c.accuracy.is_none_or(|a| a >= 0.0) && bearing(c.course),
         Errno::EINVAL,
     )?;
-    // An accuracy the device does not give is no accuracy at all.
+    // A fix that comes without an accuracy is taken as having an infinite
+    // error.
     geolocation::geolocation_fix(
         c.lon,
         c.lat,
@@ -31,7 +33,7 @@ pub(super) fn pos(c: abi::SensorPos) -> Outcome {
 
 pub(super) fn err(c: abi::SensorErr) -> Outcome {
     match c.sensor {
-        // A failure the platform named no cause for is Other's.
+        // A failure the platform gave no cause for counts as Other.
         abi::Sensor::Geolocation => {
             geolocation::geolocation_err(c.code.unwrap_or(abi::GeolocationErrorCode::Other));
         }
@@ -41,7 +43,8 @@ pub(super) fn err(c: abi::SensorErr) -> Outcome {
 }
 
 pub(super) fn orient(c: abi::SensorOrient) -> Outcome {
-    // DeviceOrientationEvent's ranges, closed: a reading at an end is still one.
+    // DeviceOrientationEvent's ranges, with both ends included, since a
+    // reading can lie exactly at an end.
     let within = |v: Option<f64>, half: f64| v.is_none_or(|v| (-half..=half).contains(&v));
     refuse_unless(
         bearing(c.webkit_compass_heading)
@@ -73,7 +76,7 @@ pub(super) fn locate(s: &mut State) -> Outcome {
     ask_turn(s)
 }
 
-/// What the place's sensors are, which the UI says once the core is
+/// Which sensors the place has. The UI sends this once the core is
 /// attached.
 pub(super) fn platform(c: abi::SensorPlatform) -> Outcome {
     *sensor::platform() = Platform {

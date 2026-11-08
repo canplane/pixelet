@@ -1,30 +1,32 @@
 // pxl-render/frame/shader/screen_propagate.wgsl
 
-// The light's changed tiles propagated to the screen (gpu/propagate.rs), the
-// light's propagation turned round: where light_propagate.wgsl
-// `light_propagate_cs`
-// takes the screen's receivers to the light's tiles, this takes the light's
-// tiles that changed back to the pixels that read them. A workgroup a screen
-// tile, a thread a square of its pixels: the slab of the square's world,
-// between the least and most depth the world's pass last left there, as the
-// depth's bound keeps them (screen_bound.wgsl), the eye standing, taken into
-// the light's map, a pixel at a time where the slab spans more than a few
-// tiles, none where it lies off every tile the frame's marks cover, as the
-// whole tile's slab is first; where any texel its shadow's taps read lies in a tile of the map
-// that changed this frame (gpu/tiles.rs), the screen tile takes this frame's
-// number, as a mark sets it (screen_mark.wgsl). The host reads nothing back:
-// the frame it runs in is one whose drawn marks it counts. Bounds that
-// cover: a tile too many costs, one missing is a failure.
+// Propagates the light's changed tiles to the screen (gpu/propagate.rs). It is the light's
+// propagation turned round: light_propagate.wgsl `light_propagate_cs` takes the screen's
+// receivers to the light's tiles, and this pass takes the map tiles that changed this frame
+// back to the pixels that read them. Where any texel a pixel's shadow taps read lies in a map
+// tile that changed (gpu/tile.rs), the pixel's screen tile takes this frame's number, as a
+// mark would set it (screen_mark.wgsl). The host reads nothing back: it already counts the
+// frame this pass runs in as marked, from the marks it drew.
+//
+// A workgroup takes a screen tile, and a thread a square of its pixels. A square's world is the
+// slab between the least and the most depth the world's pass last left there, as the depth
+// bound keeps them (screen_bound.wgsl). The eye stands still in every frame this pass runs, so
+// that depth is still right. The slab is taken into the light's map. The whole tile's slab is
+// tested first, and a tile whose slab lies off every map tile the frame's marks cover stops
+// there. Where a square's slab spans more than a few map tiles, each pixel is taken alone.
+//
+// The tests must cover: a tile marked too many only costs work, and a tile missed is a
+// failure.
 
-// `Tiles`, `tiles_age` and `tiles_claimed` are tile_word.wgsl's (build.rs,
-// word.rs `screen`).
+// `Tiles`, `tiles_age` and `tiles_in_damage` come from tile_word.wgsl, which build.rs writes
+// from word.rs `screen`.
 
 struct Propagate {
-  // From the screen's clip, its depth reversed, to units from the eye; and
-  // from those to the light's clip.
+  // `unproject` takes a point from the screen's clip space, with its reversed depth, to units
+  // from the eye, and `light` takes it on to the light's clip space.
   unproject: mat4x4f,
   light: mat4x4f,
-  // The texels a receiver's taps reach each way, and the map's side.
+  // `x` is how many texels a receiver's taps reach each way, and `y` the map's side in texels.
   spread: vec4f,
 };
 
@@ -34,27 +36,27 @@ struct Propagate {
 @group(0) @binding(3) var<uniform> light_tiles: Tiles;
 @group(0) @binding(4) var<storage, read_write> changed_at: array<u32>;
 @group(0) @binding(5) var<uniform> tiles: Tiles;
-// Each square's least and most depth drawn, `BOUND_STEP` pixels a side, a
-// thread's of a screen tile's `BOUND_SQUARES` a side (constant.wgsl), as
-// the last frame's world's pass left them (screen_bound.wgsl).
+// The depth bound: the least and the most depth drawn in each square of `BOUND_STEP` pixels a
+// side, as the last world pass left them (screen_bound.wgsl).
 @group(0) @binding(6) var<storage, read> bounds: array<vec2f>;
-// The map's tiles the frame's marks cover, from the first across and down to
-// past the last, as the host handed them and the drawn marks widened them
-// (gpu/tiles.rs `Tiles::marks_box`, tile_mark.wgsl): none changed off them.
-@group(0) @binding(7) var<storage, read> marks_box: vec4u;
+// The map tiles the frame's marks cover, as the first tile across and down and the tile just
+// past the last (gpu/tile.rs `Tiles::new_damage_rect`). The host hands it, and the drawn marks
+// widen it (tile_mark.wgsl). No map tile outside it changed this frame.
+@group(0) @binding(7) var<storage, read> new_damage_rect: vec4u;
 
-// Whether tile `t` of the map changed this frame: claimed by its words.
+// Whether tile `t` of the map changed this frame, as its word says. A map tile is in damage
+// only in the frame it changed (gpu/tile.rs `damage_frames`).
 fn propagate_changed(t: vec2i) -> bool {
   let n = vec2i(light_tiles.count.xy);
   if (any(t < vec2i(0)) || any(t >= n)) {
     return false;
   }
   let ii = u32(t.y * n.x + t.x);
-  return tiles_claimed(light_tiles, light_changed_at[ii]);
+  return tiles_in_damage(light_tiles, light_changed_at[ii]);
 }
 
-// The depth the world's pass left at pixel `p` of a target `size`, 0 past
-// it.
+// The depth the world's pass left at pixel `p` of a target of `size` pixels, or 0, the sky's,
+// past its edge.
 fn propagate_depth(p: vec2u, size: vec2u) -> f32 {
   if (any(p >= size)) {
     return 0.0;
@@ -62,8 +64,8 @@ fn propagate_depth(p: vec2u, size: vec2u) -> f32 {
   return textureLoad(depth, vec2i(p), 0);
 }
 
-// Where the pixel point `c`, in pixels of a target `size`, at depth `d`
-// (reversed), lies in the light's map, in its texels.
+// Where the point `c`, in pixels of a target of `size` pixels, at the reversed depth `d`, lies
+// on the light's map, in texels.
 fn propagate_texel(c: vec2f, d: f32, size: vec2u) -> vec2f {
   let ndc = vec2f(c.x / f32(size.x) * 2.0 - 1.0, 1.0 - c.y / f32(size.y) * 2.0);
   let e = propagate.unproject * vec4f(ndc, d, 1.0);
@@ -71,27 +73,28 @@ fn propagate_texel(c: vec2f, d: f32, size: vec2u) -> vec2f {
   return vec2f(l.x * 0.5 + 0.5, 0.5 - l.y * 0.5) * propagate.spread.y;
 }
 
-// The tiles of the map a receiver's taps read about the texels from `lo` to
-// `hi`, held to a tile past the map each way.
+// The map tiles a receiver's taps read around the texels from `lo` to `hi`, as the first and
+// the last tile across and down, held to one tile past the map each way.
 fn propagate_range(lo: vec2f, hi: vec2f) -> vec4i {
   let n = vec2i(light_tiles.count.xy);
   let side = light_tiles.size.w;
-  // Clamped as integers, so a range lies within a tile past the map however its floats came.
+  // The clamp is on integers, so the range stays within a tile past the map whatever floats it
+  // came from.
   let a = clamp(vec2i(floor((lo - propagate.spread.x) / side)), vec2i(-1), n);
   let b = clamp(vec2i(floor((hi + propagate.spread.x) / side)), vec2i(-1), n);
   return vec4i(a, b);
 }
 
-// Whether any tile `propagate_range` holds lies among those the marks cover.
-fn propagate_in_marks_box(lo: vec2f, hi: vec2f) -> bool {
+// Whether any tile of `propagate_range` lies among the map tiles the frame's marks cover.
+fn propagate_in_damage(lo: vec2f, hi: vec2f) -> bool {
   let r = propagate_range(lo, hi);
-  let m = vec4i(marks_box);
+  let m = vec4i(new_damage_rect);
   return r.x < m.z && r.z >= m.x && r.y < m.w && r.w >= m.y;
 }
 
-// The box in the map's texels of the slab of pixels from `at` to `at + side`
-// each way between depths `far` and `near` (reversed), its 8 corners taken
-// into the map: what the pixels between read lies within it.
+// The box, in the map's texels, around the slab of pixels from `at` to `at + side` each way
+// between the reversed depths `far` and `near`, found from the slab's eight corners taken into
+// the map. Whatever those pixels read lies within this box.
 fn propagate_slab(at: vec2u, side: u32, far: f32, near: f32, size: vec2u) -> array<vec2f, 2> {
   var lo = vec2f(1e30);
   var hi = vec2f(-1e30);
@@ -104,21 +107,20 @@ fn propagate_slab(at: vec2u, side: u32, far: f32, near: f32, size: vec2u) -> arr
   return array<vec2f, 2>(lo, hi);
 }
 
-// The tile's least and most depth drawn, as its squares' bounds' bits (a
-// depth is positive, so its bits keep its order), and whether its slab
-// lies on a tile the marks cover.
+// The tile's least and most depth drawn, gathered from its squares' bounds as bits: a positive
+// f32's bits keep its order, so the integer atomics order the depths right. Then whether the
+// tile's slab lies on a map tile the marks cover.
 var<workgroup> slab_far: atomic<u32>;
 var<workgroup> slab_near: atomic<u32>;
-var<workgroup> slab_in_marks_box: bool;
+var<workgroup> slab_in_damage: bool;
 
-// How many tiles `propagate_range` holds.
 fn propagate_tiles(lo: vec2f, hi: vec2f) -> i32 {
   let r = propagate_range(lo, hi);
   return (r.z - r.x + 1) * (r.w - r.y + 1);
 }
 
-// Whether any tile `propagate_range` holds changed this frame.
-fn propagate_box(lo: vec2f, hi: vec2f) -> bool {
+// Whether any map tile of `propagate_range` changed this frame.
+fn propagate_rect(lo: vec2f, hi: vec2f) -> bool {
   let r = propagate_range(lo, hi);
   var hit = false;
   for (var y = r.y; y <= r.w; y++) {
@@ -129,8 +131,8 @@ fn propagate_box(lo: vec2f, hi: vec2f) -> bool {
   return hit;
 }
 
-// The tiles a square's box asks at most before each pixel is asked alone.
-const PROPAGATE_BOX_MOST: i32 = 16;
+// The most map tiles a square's box may span before each of its pixels is tested alone.
+const PROPAGATE_RECT_CAP: i32 = 16;
 
 @compute @workgroup_size(BOUND_SQUARES, BOUND_SQUARES, 1)
 fn screen_propagate_cs(
@@ -151,8 +153,8 @@ fn screen_propagate_cs(
     atomicStore(&slab_near, 0u);
   }
   workgroupBarrier();
-  // The square's least and most depth drawn, kept; the sky, which no shadow
-  // falls on, left out (a square of sky alone holds 2 and 0).
+  // The square's least and most depth drawn. The bound leaves out the sky, which no shadow
+  // falls on, so a square of sky alone holds 2 and 0 and adds nothing to the tile's.
   var b = vec2f(2.0, 0.0);
   if (all(at < size)) {
     b = bounds[(at.y / BOUND_STEP) * ((size.x + BOUND_STEP - 1u) / BOUND_STEP) + at.x / BOUND_STEP];
@@ -162,16 +164,16 @@ fn screen_propagate_cs(
     atomicMax(&slab_near, bitcast<u32>(b.y));
   }
   workgroupBarrier();
-  // The tile's slab first: off every tile the marks cover, none of its
-  // pixels reads a tile that changed. None where a mark changed it this
-  // frame already.
+  // The tile's whole slab is tested first. Where it lies off every map tile the marks cover,
+  // none of the tile's pixels reads a tile that changed. A screen tile that a mark already
+  // changed this frame needs no test.
   if (li == 0u) {
     let near = bitcast<f32>(atomicLoad(&slab_near));
-    let box = propagate_slab(tile * side, side, bitcast<f32>(atomicLoad(&slab_far)), near, size);
+    let rect = propagate_slab(tile * side, side, bitcast<f32>(atomicLoad(&slab_far)), near, size);
     let changed = tiles_age(tiles, changed_at[ti]) == 0u;
-    slab_in_marks_box = !changed && near > 0.0 && propagate_in_marks_box(box[0], box[1]);
+    slab_in_damage = !changed && near > 0.0 && propagate_in_damage(rect[0], rect[1]);
   }
-  if (!workgroupUniformLoad(&slab_in_marks_box)) {
+  if (!workgroupUniformLoad(&slab_in_damage)) {
     return;
   }
   let far = b.x;
@@ -179,19 +181,18 @@ fn screen_propagate_cs(
   if (!(near > 0.0)) {
     return;
   }
-  // The square's slab: what its pixels read lies within its box.
-  let box = propagate_slab(at, BOUND_STEP, far, near, size);
-  let lo = box[0];
-  let hi = box[1];
-  if (!propagate_in_marks_box(lo, hi)) {
+  let rect = propagate_slab(at, BOUND_STEP, far, near, size);
+  let lo = rect[0];
+  let hi = rect[1];
+  if (!propagate_in_damage(lo, hi)) {
     return;
   }
   var hit = false;
-  if (propagate_tiles(lo, hi) <= PROPAGATE_BOX_MOST) {
-    hit = propagate_box(lo, hi);
+  if (propagate_tiles(lo, hi) <= PROPAGATE_RECT_CAP) {
+    hit = propagate_rect(lo, hi);
   } else {
-    // A box past a few tiles (an edge between near and far): each pixel
-    // its own, as tight as before.
+    // A box that spans more than a few tiles comes from a square across an edge between near
+    // and far, so each pixel is tested alone, at its own depth.
     for (var k = 0u; k < BOUND_STEP * BOUND_STEP; k++) {
       let p = at + vec2u(k % BOUND_STEP, k / BOUND_STEP);
       let v = propagate_depth(p, size);
@@ -199,7 +200,7 @@ fn screen_propagate_cs(
         continue;
       }
       let t = propagate_texel(vec2f(p) + 0.5, v, size);
-      hit = propagate_box(t, t);
+      hit = propagate_rect(t, t);
     }
   }
   if (hit) {

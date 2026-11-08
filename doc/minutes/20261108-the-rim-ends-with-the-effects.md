@@ -14,5 +14,4 @@ surface's effects end at one boundary; past it the light and the air alone are l
 
 **A shadow at dawn on flat ground stays as strong as it is.**
 
-**A character keeps clear of the wall beside it.** The fix is on `axis` (b871c07432), done on
-the user's word there.
+**A character keeps clear of the wall beside it.**

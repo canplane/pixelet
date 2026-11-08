@@ -1,7 +1,8 @@
 // pxl-core/domain/query/entry.rs
 
-//! What is placed, as the records an edit would change: the world's answer
-//! for what a player wrote, beside what the assets compose to.
+//! What is placed, read as the records an edit would change. This is the
+//! world's answer for what a player wrote, as opposed to what the assets
+//! compose to (`node.rs`).
 
 use pxl_spec::object::is_air;
 use pxl_spec::space::coord::aabb::Aabb;
@@ -24,8 +25,8 @@ impl<'a> World<'a> {
             .filter(|e| !is_air(e.state))
     }
 
-    /// Everything placed whose cube meets `space`, air left out, X in
-    /// `space`'s frame.
+    /// Calls `visit` with everything placed whose cube meets `space`, air
+    /// left out, with X on the lap of `space`.
     pub fn placed_in(&self, space: &Aabb, visit: &mut dyn FnMut(&Entry)) {
         self.object.entries_in(space, &mut |e| {
             if !is_air(e.state) {
@@ -34,8 +35,8 @@ impl<'a> World<'a> {
         });
     }
 
-    /// The finest zoom anything is placed at in `space`, air included: what
-    /// a dig cut finer is held as finely as a cube.
+    /// The finest zoom anything is placed at in `space`. Air counts, since a
+    /// dig that cut finer is held as finely as a placed cube.
     pub(super) fn finest_in(&self, space: &Aabb) -> Option<Zoom> {
         let mut finest = None;
         self.object
@@ -43,15 +44,17 @@ impl<'a> World<'a> {
         finest
     }
 
-    /// A marker's text, as put up; none for anything else.
+    /// A marker's text as it was put up. None for any other entry.
     pub fn text(&self, e: &Entry) -> Option<&'a str> {
         self.object.text(e)
     }
 
-    /// What is placed whose own room shares `space`, air left out, that
-    /// `which` takes: the room its kind says it occupies (`occupies`).
+    /// The first placed entry that `which` accepts and whose own room shares
+    /// `space`, air left out. An entry's room is what its kind says it
+    /// occupies (`occupies`).
     pub fn placed_occupying(&self, space: &Aabb, which: impl Fn(&Entry) -> bool) -> Option<Entry> {
-        // A decor's box reaches past its cell's corner.
+        // A decor's box reaches up to `box_extent` past its min corner, so an
+        // entry whose cell starts that far below `space` may still reach it.
         let around = Aabb {
             min: space.min.map(|v| v - box_extent()),
             max: space.max,
@@ -70,9 +73,10 @@ impl<'a> World<'a> {
     }
 }
 
-/// The room a placed entry occupies, as its kind has it: a decor its box
-/// (`decor::claim`), which holds its cell, the corner it stands at, since
-/// a variant is a cell or more a side; anything else its cell.
+/// The room a placed entry occupies, as its kind has it. A decor occupies
+/// its box (`decor::claim`). The box always holds the decor's own cell, at
+/// the corner it stands on, since every variant is a cell or more on a side.
+/// Anything else occupies its cell.
 fn occupies(e: &Entry) -> Option<Aabb> {
     match decor_instance(e) {
         Some(decor) => claim(&decor),

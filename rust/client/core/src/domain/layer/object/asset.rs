@@ -1,10 +1,11 @@
 // pxl-core/domain/layer/object/asset.rs
 
-//! What an id names, the one reading of one, stored or handed in, and what each
-//! kind does: a cube, a decor or a marker the catalog gives out. Anything else is
-//! `Unknown`, of another version's catalog among them: taken for nothing here,
-//! drawn as the catalog's `unknown`, and left as it is where it is stored. What
-//! a tool does with one is beside the tool (`control/edit`).
+//! What an asset id names. This is the one place an id is read, whether it
+//! was stored or handed in. An id names a cube, a decor or a marker from the
+//! catalog. Any other id is `Unknown`, an id from another version's catalog
+//! among them: it is taken for nothing here, drawn as the catalog's
+//! `unknown`, and left as it is where it is stored. What a tool does with an
+//! asset is defined beside the tool (`control/edit`).
 
 use pxl_spec::asset::cube::cube_of;
 use pxl_spec::asset::decor::Decor;
@@ -47,7 +48,8 @@ impl Asset {
         }
     }
 
-    /// The kind it is of, as it stands under and on others.
+    /// The asset's kind, which decides what it may stand on and what may
+    /// stand on it. None for an unknown asset.
     pub fn kind(self) -> Option<Kind> {
         match self {
             Asset::Cube(_) => Some(Kind::cube),
@@ -57,14 +59,14 @@ impl Asset {
         }
     }
 
-    /// The zoom of the cube it takes: a cube's comes of the scale chosen; a
-    /// decor's and a marker's are their own.
+    /// The zoom of the cube the asset takes. A cube's zoom comes from the
+    /// chosen scale step; a decor and a marker each have a fixed zoom.
     pub fn zoom(self, scale_steps: i32) -> Zoom {
         match self {
             Asset::Cube(_) => object_zoom_of(scale_steps),
             Asset::Decor(_) => UNIT_ZOOM,
             Asset::Marker => MARKER_ZOOM,
-            Asset::Unknown => GROUND.cell(),
+            Asset::Unknown => GROUND.leaf_cell_zoom(),
         }
     }
 }

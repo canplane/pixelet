@@ -1,18 +1,21 @@
-// Half-resolution AO denoise: a blue-noise-spun Poisson disc whose taps are
-// weighed by plane distance and normal, so the blur never crosses an edge.
+// Denoises the occlusion at half resolution. The taps lie on a Poisson disc
+// that the blue noise spins, and each tap is weighed by its distance from the
+// pixel's plane and by its normal, so the blur does not cross an edge.
 
 @group(0) @binding(1) var half_depth: texture_2d<f32>;
 @group(0) @binding(2) var blue_noise: texture_2d<f32>;
 @group(0) @binding(3) var src: texture_2d<f32>;
 @group(0) @binding(4) var src_sampler: sampler;
 
+// Which of the two denoise passes runs, 0 or 1. Each spins the disc by its own
+// channel of the blue noise.
 struct Run {
   idx: f32,
 };
 
 @group(0) @binding(5) var<uniform> run: Run;
 
-// N8AO's generateDenoiseSamples(4, 11).
+// The disc's taps, as N8AO's `generateDenoiseSamples(4, 11)` gives them.
 const DISC = array<vec2f, AO_DENOISE_SAMPLES>(
   vec2f(0.353553, 0.000000),
   vec2f(0.000000, -0.594604),

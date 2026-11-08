@@ -1,5 +1,6 @@
-// Decor instances too small on screen for their model, drawn as quads placed
-// as impostor_place.wgsl lays them.
+// Draws the decor instances too small on the screen for their model. Each is a
+// quad that impostor_place.wgsl places and that shows its draw group's model as
+// impostor_bake.wgsl baked it.
 
 @group(2) @binding(0) var impostors: texture_2d_array<f32>;
 @group(2) @binding(1) var impostor_sampler: sampler;

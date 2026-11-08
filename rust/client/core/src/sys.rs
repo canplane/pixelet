@@ -1,17 +1,23 @@
 // pxl-core/sys.rs
 
-//! What all of the domain stands on: the reads (`io`), a turn's mechanics
-//! (`sched`), the core memory's sections (`mem`), what the core loads, the
-//! table io and sched both read (`load`), and what it was booted
-//! with (`boot`). Nothing here names the domain.
+//! The lowest layer of the core, which the domain stands on: its I/O, the
+//! mechanics of a turn, the sections of its memory, the files it loads, what
+//! it was booted with, the machine it asks of its runtime and the device
+//! transport's decoder. Nothing here uses the domain, the renderer or the
+//! profiler (pxl-tool check_rules.rs).
 
 pub(crate) mod boot;
 pub(crate) mod io;
 pub(crate) mod load;
+#[path = "sys/machine.spec.rs"]
+pub mod machine;
 pub mod mem;
 pub(crate) mod sched;
+#[cfg(not(target_arch = "wasm32"))]
+mod unpack;
 
-/// Native tests run on several threads, and a `Global` is for one.
+/// Serializes the native tests that touch a `Global`. The test harness runs
+/// tests on several threads, and a `Global` assumes one.
 #[cfg(test)]
 pub(crate) fn serial() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());

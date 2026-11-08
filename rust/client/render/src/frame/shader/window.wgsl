@@ -1,12 +1,14 @@
 // pxl-render/window.wgsl
 
-// The least of the beam rays' starts within a cell's window, the eye's (cell.wgsl,
-// `beam::Grid::cell_window`) and the light's (light_cell.wgsl, `light::cell`): the least of
-// each row, then the first row whose least is less than every row's before it, so the
-// window's first least in row-major order is taken.
+// Finds the least of the beam rays' starts within a cell's window, for the eye (cell.wgsl,
+// pxl-engine `beam::Grid::cell_window`) and for the light (light_cell.wgsl, `light::cell`). It
+// takes the least of each row, then the first row whose least is less than every earlier
+// row's, so of equal starts it takes the first in row-major order.
 
-/// The least of the hands from word `hands`, `across` a row, over the square `side` a side
-/// from `first`, and the index of the first that holds it: its bits, then its index.
+/// The least hand over the square `side` a side from `first`, of the hands laid from word
+/// `hands`, `across` to a row. A hand is how far a beam ray hands its start on (pxl-engine
+/// `beam::Grid::hand_dist`). It returns the least hand's bits, then the index of the first hand
+/// that holds it.
 fn window_least(hands: u32, across: u32, first: vec2<u32>, side: u32) -> vec2<u32> {
   var least_at = first.y * across + first.x;
   var least = bitcast<f32>(beams[hands + least_at]);

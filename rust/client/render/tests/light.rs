@@ -1,20 +1,29 @@
-//! `light_cs` and the receivers' passes by hand (frame/shader/light.wgsl, light_mark.wgsl)
-//! answer as pxl-engine's light over the real world of tests/real_world. A slot of a tile the
-//! cast casts takes its visible voxel, a drawable entry of the node cache, where its own ray enters it
-//! as the sample did
-//! (`cast::entry_with`) at the band it asks (`Light::band`), its word
-//! `light::word(light::depth(..))`; else the sky where the four samples about it
-//! (`light::samples_about`) went on to their reach at its band; else it is listed for its walk.
-//! That composition is this test's own reading of light.wgsl `light_cs`, which pxl-engine has no
-//! one function for. The samples are each walked by `cast::first` over the world, and each
-//! texel's visible voxel is the nearest of those about it its ray enters, as the raster keeps
-//! it, some put out of place. Every word of the map is compared, and the slots listed for their
-//! walk as a set. The light's reciprocals are the host's words (`Light::inverse`,
-//! `Light::t_max_inverse`), and a ray's start is summed in fixed point (`Starts::start`), read
-//! off a probe and held to the Rust's exactly; a slot may take what a fused sum gives it, each
-//! counted: its depth's product fused into the push after it; a slot's band is exact
-//! (`Light::band`). The receivers stand on the tiles `Light::box_tiles` gives, each listed once
-//! (`hand_light_marks_answer_as_the_rust`). Skipped where no adapter answers.
+//! Checks that the light's hand-written `light_cs` (frame/shader/light.wgsl) and the
+//! receivers' passes (light_mark.wgsl, record_draw.wgsl) answer as pxl-engine's light does,
+//! over the real world of tests/real_world. It also checks that every pass that reads a tile's
+//! band gives it the band `Light::band` gives.
+//!
+//! In each tile the cast casts, a slot must take its visible voxel, a drawable entry of the
+//! node cache, where the slot's own ray enters that voxel across the axis the sample entered
+//! by (`cast::entry_with`) and the voxel is the stop at the band the slot asks
+//! (`Light::band`). The slot's word is then `light::word(light::depth(..))`. Otherwise the slot
+//! takes the sky where the four samples about it (`light::samples_about`) went on to their
+//! reach at its band. Otherwise it is listed for its walk. pxl-engine has no one function for
+//! this composition: it is this test's own reading of light.wgsl `light_cs`.
+//!
+//! Each sample is walked over the world by `cast::first`. Each texel's visible voxel is the
+//! nearest of the samples' voxels about it that its ray enters, as the raster keeps it, and
+//! some are put out of place. Every word of the map is compared, and the slots listed for
+//! their walk are compared as a set.
+//!
+//! The light's reciprocals are the host's words (`Light::inverse`, `Light::t_max_inverse`). A
+//! ray's start is summed in fixed point (`Starts::start`), so a probe reads it off the device
+//! and holds it to the Rust's exactly. A slot's band is exact too (`Light::band`). A slot's
+//! word may differ where the device fuses a product of its depth into the sum after it; the
+//! test takes such a word and counts it.
+//!
+//! The receivers must stand on the tiles `Light::box_tiles` gives, each listed once
+//! (`hand_light_marks_answer_as_the_rust`). The tests are skipped where no adapter answers.
 
 mod gpu;
 mod real_world;
@@ -26,20 +35,21 @@ use pxl_engine::answer::Kind;
 use pxl_engine::beam;
 use pxl_engine::cast::{self, Detail, End, Hit, Node, Ray, Spacing, Trace, Until};
 use pxl_engine::light::{self, Light};
-use pxl_engine::overwrite::Cut;
+use pxl_engine::object::Cut;
 use pxl_engine::{eye, node_cache, param, raster, ray, record, Zoom};
 use pxl_render::frame::shader::record::{src, SHADER_LIGHT, SHADER_LIGHT_MARK, SHADER_RECORD_DRAW};
 use pxl_render::frame::shader::word::SQUARE_SIDE;
 
 use real_world::{q8, Asking, Built, World, FINEST};
 
-/// East of X = 0 by the seam, and by X = 0, where X's roots part.
+/// The leaf cells the worlds are built about. `EYE` lies 300 cells west of X's seam, and
+/// `EYE_ZERO` lies by X = 0, where one root ends and the next begins in X.
 const EYE: [i32; 2] = [(1 << 23) - 300, (40 << 16) + 30];
 const EYE_ZERO: [i32; 2] = [150, (40 << 16) + 30];
 const SIZE: u32 = 256;
 const CAST: u32 = 7;
-/// Tiles a tile's coordinate may lie off an edge between tiles for a GPU's rounding to put it
-/// on either side.
+/// How far, in tiles, a point may lie from an edge between two tiles and still be put on
+/// either side of it by a GPU's rounding.
 const EDGE: f64 = 1e-4;
 
 fn noise(k: u32) -> u32 {
@@ -47,8 +57,9 @@ fn noise(k: u32) -> u32 {
     h.wrapping_mul(0x85eb_ca77) ^ h >> 15
 }
 
-/// A light's box about `origin`: the direction, a texel's side in units, how far back along
-/// the light its near plane lies, how far its rays reach, and its corner.
+/// A light box about `origin` that looks along `dir`. `side` is a texel's side in units, `back`
+/// is how far back along the light its near plane lies, `t_max` is how far its rays reach, and
+/// `corner` is the world texel of its texel (0, 0).
 fn lit(
     origin: [i32; 3],
     dir: [f32; 3],
@@ -74,12 +85,12 @@ struct SlotCase {
     name: &'static str,
     lit: LightBox,
     range: [Zoom; 2],
-    /// Where the cast is within its epoch, one tile in so many claimed; none where it begins
-    /// it, every tile read claimed.
-    listed: Option<u32>,
+    /// `None` makes the cast the first of its epoch, where every tile read is claimed. `Some(k)`
+    /// puts it later in its epoch, where about one tile in `k` is claimed.
+    one_in: Option<u32>,
 }
 
-/// The node, the asset and the axis of the sample at word `k`.
+/// The node, the asset and the axis of the sample whose words begin at word `k` of the list.
 fn cell_of(list: &[u32], k: usize) -> (Node, [u32; 2], u32) {
     let n = k + beam::SAMPLE_NODE as usize;
     let node = Node {
@@ -117,7 +128,7 @@ fn hand_light_cs_answers_as_the_rust() {
                 [1300, -900],
             ),
             range: [8, FINEST],
-            listed: None,
+            one_in: None,
         },
         SlotCase {
             name: "reaching about the ground, the sky between",
@@ -130,7 +141,7 @@ fn hand_light_cs_answers_as_the_rust() {
                 [-77, 4093],
             ),
             range: [8, FINEST],
-            listed: None,
+            one_in: None,
         },
         SlotCase {
             name: "short of the ground, the sky about every band's edge",
@@ -143,7 +154,7 @@ fn hand_light_cs_answers_as_the_rust() {
                 [1300, -900],
             ),
             range: [8, FINEST],
-            listed: None,
+            one_in: None,
         },
         SlotCase {
             name: "tiles claimed within the epoch",
@@ -156,7 +167,7 @@ fn hand_light_cs_answers_as_the_rust() {
                 [1296, -904],
             ),
             range: [10, FINEST],
-            listed: Some(3),
+            one_in: Some(3),
         },
     ];
     for c in &cases {
@@ -178,7 +189,7 @@ fn hand_light_cs_answers_as_the_rust() {
             [1300, -900],
         ),
         range: [8, FINEST],
-        listed: Some(2),
+        one_in: Some(2),
     };
     run_slots(&gpu, &pipe, zero.world(), &c, &mut tally, &mut kinds);
     kinds.hold(&[
@@ -219,12 +230,13 @@ fn run_slots(
     let texel_slot =
         |p: [u32; 2]| [0, 1].map(|k| (p[k] as i32).wrapping_add(l.corner[k]) as u32 & (SIZE - 1));
 
-    // The list's words noise, the samples walked over the world.
+    // The list starts as noise, and the samples written into it are walked over the world.
     let mut list: Vec<u32> = (0..light::list_words(SIZE)).map(noise).collect();
-    // The node cache, a drawable entry a sample at the sample's number, as the slots read it by
-    // the visible id (pxl-engine `record`): its node, from where the sample's ray starts, its
-    // answer, and its state the face the sample entered and whether it stopped coarser than its
-    // band (`record::light_whole`).
+    // The node cache holds a drawable entry for each stopped sample, in the slot of the
+    // sample's number, as the slots find it by the visible id (pxl-engine `record`). The entry
+    // holds its node as seen from where the sample's ray starts, its answer, and a state that
+    // holds the face the sample entered and whether it stopped coarser than its band
+    // (`record::light_whole`).
     let mut rec = vec![0u32; node_cache::WORDS as usize];
     rec[node_cache::FRAME as usize] = CAST;
     let mut origins = vec![[0i32; 3]; (n * n) as usize];
@@ -291,9 +303,9 @@ fn run_slots(
         })
         .collect();
 
-    // Each texel's visible voxel, as the raster keeps it: the nearest of those about it whose
-    // box its ray enters across the axis the sample entered by. Some none, some another's that
-    // stopped, some marked lacking.
+    // Each texel's visible voxel is the one the raster keeps: the nearest voxel of the samples
+    // about it whose box its ray enters across the axis the sample entered by. Some texels are
+    // then given none, some the voxel of another sample that stopped, and some a lack.
     let mut vis = vec![0u32; (SIZE * SIZE) as usize];
     for y in 0..SIZE {
         for x in 0..SIZE {
@@ -338,16 +350,17 @@ fn run_slots(
         }
     }
 
-    // The tiles the cast casts, each listed once, the room past them an unlisted tile's: where
-    // it begins its epoch, those read, all but some; else some of the box, each read, as a
-    // claimed tile is (light_propagate.wgsl).
+    // The tiles the cast casts are listed once each, and the room past the list is filled with
+    // a tile that is not listed. In the first cast of an epoch, the tiles listed are those
+    // read, which is all but some. Later in the epoch, they are some of the box, each marked
+    // read, as a claimed tile is (light_propagate.wgsl).
     let reads_at = light::reads_at(SIZE) as usize;
     let mut threads: Vec<Option<[u32; 2]>> = Vec::new();
     let mut entries = Vec::new();
     for j in 0..tiles {
         for i in 0..tiles {
             let t = j * tiles + i;
-            let (claimed, word) = match c.listed {
+            let (claimed, word) = match c.one_in {
                 Some(every) => {
                     let claimed = (i + 2 * j).is_multiple_of(every) || i == 0 || j == tiles - 1;
                     (claimed, if claimed { CAST } else { CAST - 1 })
@@ -364,16 +377,17 @@ fn run_slots(
         }
     }
     entries.reverse();
-    let at = light::listed_at(SIZE, light::LISTED_CLAIMED) as usize;
+    let at = light::list_cnt_at(SIZE, light::LIST_DAMAGE) as usize;
     list[at] = entries.len() as u32;
     list[at + 1..at + 1 + entries.len()].copy_from_slice(&entries);
-    let room = light::listed_room(SIZE, light::LISTED_CLAIMED) as usize;
+    let cap = light::list_cap(SIZE, light::LIST_DAMAGE) as usize;
     let unlisted = (0..tiles * tiles)
         .map(|k| ((k / tiles) << 16) | (k % tiles))
         .find(|e| !entries.contains(e))
         .expect("a tile not claimed");
-    list[at + 1 + entries.len()..at + 1 + room].fill(unlisted);
-    // Read, so a thread that took the room past the list would cast it.
+    list[at + 1 + entries.len()..at + 1 + cap].fill(unlisted);
+    // The unlisted tile is marked read, so that a thread that took the room past the list
+    // would cast it and differ from the Rust.
     let u = (unlisted >> 16) * tiles + (unlisted & 0xffff);
     list[reads_at + u as usize] = CAST;
     let rows = (entries.len() as u32).div_ceil(light::LIST_ACROSS);
@@ -394,19 +408,20 @@ fn run_slots(
     eye_words[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&l.words());
     eye_words[eye::RANGE] = c.range[0];
     eye_words[eye::RANGE + 1] = c.range[1];
-    let mut head = vec![0u32; light::HEAD_WORDS];
-    head[light::HEAD_CAST] = CAST;
-    head[light::HEAD_EPOCH] = if c.listed.is_some() { CAST - 3 } else { CAST };
-    for (k, v) in light::head_layout(SIZE) {
-        head[k] = v;
+    let mut header = vec![0u32; light::HEADER_WORDS];
+    header[light::HEADER_CAST] = CAST;
+    header[light::HEADER_EPOCH] = if c.one_in.is_some() { CAST - 3 } else { CAST };
+    for (k, v) in light::header_layout(SIZE) {
+        header[k] = v;
     }
-    head[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
+    header[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
         .copy_from_slice(&starts.words());
     let map0: Vec<u32> = (0..SIZE * SIZE)
         .map(|k| noise(k ^ 0xabc) | 1 << 31)
         .collect();
 
-    // The slots the threads take and the cast needs.
+    // The slots the threads take, and among them the slots the cast needs: those whose tile
+    // names this cast.
     let mut needed = Vec::new();
     for slot in &threads {
         let Some(slot) = *slot else {
@@ -426,7 +441,7 @@ fn run_slots(
         }
     }
 
-    // Each needed slot's answer from its ray's start `o`.
+    // The answer the Rust gives a needed slot whose ray starts at `o`.
     let gone_on = |s: [u32; 2]| {
         let k = light::sample(SIZE, (s[1] % n) * n + s[0] % n) + beam::SAMPLE_NODE;
         list[(k + beam::NODE_ZOOM) as usize] == beam::SAMPLE_NONE
@@ -444,11 +459,12 @@ fn run_slots(
         if visible != 0 && visible & raster::LACK == 0 {
             let s = raster::voxel_of(visible);
             let (node, asset, axis) = cell_of(&list, light::sample(SIZE, s) as usize);
-            // The node as the slot's ray holds it, its roots from where that ray starts.
+            // The sample's node is moved from where the sample's ray starts to where the slot's
+            // ray starts, so that its roots count from the slot's start.
             let whole = record::light_whole(node.zoom, sample_band([s % n, s / n]));
             let node = node.moved(origins[s as usize], o);
             let e = cast::entry_with(o, &r, inv, &node, asset[0]);
-            // The node a ray asking the slot's band stops on (`record::band_fresh`).
+            // Whether a ray asking the slot's band stops on this node (`record::band_fresh`).
             let alike = record::band_fresh(node.zoom, whole, band);
             if e.enters && e.axis == axis && alike {
                 kinds.add("took", true);
@@ -484,7 +500,8 @@ fn run_slots(
             answer(slot, o, inv, kinds)
         })
         .collect();
-    // The pass over fresh words: the map it leaves and the slots it listed.
+    // Runs the pass over fresh buffers, and reads back the map it leaves and the slots it
+    // listed.
     let (map, had) = {
         let vis_t = texture(
             &gpu.device,
@@ -504,7 +521,7 @@ fn run_slots(
         );
         let (vis_v, map_v) = (array_view(&vis_t), array_view(&map_t));
         let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
-        let head_buf = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
+        let header_buf = gpu.buffer(&header, wgpu::BufferUsages::UNIFORM);
         let list_buf = gpu.buffer(&list, wgpu::BufferUsages::STORAGE);
         let misses_buf = gpu.buffer(&ray::MISS_ARGS_EMPTY, wgpu::BufferUsages::STORAGE);
         let rec_buf = gpu.buffer(&rec, wgpu::BufferUsages::STORAGE);
@@ -514,7 +531,7 @@ fn run_slots(
                 (0, eye_buf.as_entire_binding()),
                 (8, list_buf.as_entire_binding()),
                 (10, wgpu::BindingResource::TextureView(&map_v)),
-                (11, head_buf.as_entire_binding()),
+                (11, header_buf.as_entire_binding()),
                 (15, wgpu::BindingResource::TextureView(&vis_v)),
                 (17, misses_buf.as_entire_binding()),
                 (9, rec_buf.as_entire_binding()),
@@ -531,8 +548,8 @@ fn run_slots(
     };
     let had_set: BTreeSet<u32> = had.iter().copied().collect();
 
-    // What the pass left of a slot, and whether it is answer `a`: its word for a depth within
-    // the rounding a GPU gives it (`depth_words`).
+    // `got` reads what the pass left in a slot. `matches` says whether that is the answer `a`,
+    // taking a depth's word within the rounding a GPU may give it (`depth_words`).
     let got = |at: usize, slot: [u32; 2]| -> Answer {
         if had_set.contains(&(slot[1] << 16 | slot[0])) && map[at] == map0[at] {
             Answer::Walk
@@ -556,8 +573,8 @@ fn run_slots(
     for (&slot, &want) in needed.iter().zip(&wants) {
         let at = (slot[1] * SIZE + slot[0]) as usize;
         let g = got(at, slot);
-        // The answer the slot is held to: its own, or where a GPU's fused sum in its depth may
-        // give another word, the one the hand gave.
+        // Where the shader's word is one a GPU may give the Rust's depth, rounded or fused, the
+        // slot is held to the shader's word. Otherwise it is held to the Rust's own answer.
         let held = if matches(want, g) {
             match want {
                 Answer::Entry(t, e) => {
@@ -600,7 +617,7 @@ fn run_slots(
     tally.compare(&format!("{name}: the map"), &want_map, &map, |k| {
         format!("slot {:?}", [k as u32 % SIZE, k as u32 / SIZE])
     });
-    // The listed slots as a set, each once.
+    // The slots listed for their walk must be those the Rust walks, each listed once.
     let listed_alike = had.len() == had_set.len() && had_set == walked;
     tally.compare(
         &format!("{name}: the slots listed, as a set"),
@@ -617,9 +634,8 @@ fn run_slots(
     kinds.count("slots a depth a product fused into a sum", u64::from(fused));
 }
 
-/// A slot's answer: the depth `t` along its ray and the axis it enters its visible voxel's
-/// cell across, the sky, or its walk; and the word a
-/// pass left it.
+/// A slot's answer. `Entry` holds the depth `t` along its ray and the axis it enters its
+/// visible voxel's cell across. `Word` holds the word a pass left in the slot.
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Answer {
     Entry(f32, u32),
@@ -628,10 +644,11 @@ enum Answer {
     Word(u32),
 }
 
-/// The word of a slot that took its visible voxel `t` along its ray across `axis`
-/// (`light::depth`, `light::word`), and every word a GPU may leave for it: its share of the
-/// box's depth, `t` times the reach's reciprocal, rounded or fused into the push added, and
-/// the product with `DEPTH_ONE` rounded or fused into the half added. Nothing is divided.
+/// The word of a slot that took its visible voxel at `t` along its ray, across `axis`
+/// (`light::depth`, `light::word`), and every word a GPU may leave for it. The depth is `t`
+/// times the reach's reciprocal plus a push, and its word is the depth times `DEPTH_ONE` plus
+/// a half. A GPU may round each product or fuse it into the sum after it. Nothing is divided,
+/// so no other rounding enters.
 fn depth_words(l: &Light, t: f32, axis: u32) -> (u32, Vec<u32>) {
     let met = Trace {
         ends: End::Hit,
@@ -669,8 +686,8 @@ struct Look {
     lit: LightBox,
 }
 
-/// The tiles a point `v` units from the eye may stand on: one, or either side of an edge it
-/// lies within `EDGE` of.
+/// The tiles that the point `v`, in units from the eye, may stand on: its own tile, or the
+/// tiles on both sides of an edge it lies within `EDGE` of.
 fn tiles_about(l: &Light, v: [f32; 3]) -> Vec<[i32; 2]> {
     let want = l.tile_of(v);
     let d: [f64; 3] = [0, 1, 2].map(|k| f64::from(v[k]) - f64::from(l.first[k]));
@@ -693,8 +710,8 @@ fn tiles_about(l: &Light, v: [f32; 3]) -> Vec<[i32; 2]> {
         .collect()
 }
 
-/// The tiles a set of receivers must stand on, and those they may, by a tile's edge or the
-/// reach's.
+/// The tiles a set of receivers must stand on, and those they may stand on where a point lies
+/// by a tile's edge or by the reach.
 #[derive(Default)]
 struct Stood {
     must: BTreeSet<[i32; 2]>,
@@ -709,7 +726,6 @@ impl Stood {
         self.may.insert(t);
     }
 
-    /// The tiles from `first` to `last`, each `sure` or not.
     fn put_range(&mut self, [first, last]: [[i32; 2]; 2], sure: bool) {
         for y in first[1]..=last[1] {
             for x in first[0]..=last[0] {
@@ -719,25 +735,30 @@ impl Stood {
     }
 }
 
-/// Whether a point `d` units from the eye lies within `reach` of it: yes, no, or by the reach's
-/// edge, where a GPU's rounding may put it either side.
+/// Whether a point `d` units from the eye lies within `reach`: first whether it surely does,
+/// then whether it may, as by the reach's edge a GPU's rounding may put it on either side.
 fn within_by(d: f32, reach: f32) -> (bool, bool) {
     let edge = 1e-4 * reach;
     (d <= reach - edge, d <= reach + edge)
 }
 
-/// The receivers' passes by hand (light_mark.wgsl, light_stood.wgsl) stand on the tiles
-/// pxl-engine's one rule gives (`Light::box_tiles`, the footprint where the head asks it), each
-/// listed once (`light::LISTED_STOOD`), the count in the stood list's args
-/// (`light::STOOD_CNT`), over the real world of tests/real_world: the pixels the eye walked
-/// apart, off their walked bits past the grid's words (`light_mark_walked_cs`, `ray::hole_bit`),
-/// each hit a box of one point; and every box the eye's draw writes, a held voxel in
-/// view each, its planes as `cast::asset_box` lays them, stood as it is written, where the head
-/// says the world's receivers stand (record_draw.wgsl `record_draw_cs`,
-/// `light::HEAD_STANDS_WORLD`). The cast's first stood tile opens the slide
-/// and begins the reads' epoch anew where a slide went unrun (`light::READS_FROM`); none
-/// stood, none listed and the slide shut, as past the reach. A tile a point lies within `EDGE`
-/// of, or a point by the reach, may be stood on or not. Skipped where no adapter answers.
+/// Checks that the hand-written receivers' passes (light_mark.wgsl, light_receiver_tiles.wgsl)
+/// stand on the tiles that pxl-engine's one rule gives (`Light::box_tiles`, with the footprint
+/// where the head asks for it), over the real world of tests/real_world. Each tile must be
+/// listed once (`light::LIST_RECEIVERS`), with the count in the stood list's args
+/// (`light::RECEIVER_TILES_CNT`).
+///
+/// Two passes stand receivers. `light_mark_walked_cs` stands the pixels the eye walked apart,
+/// which it finds by their walked bits past the grid's words (`ray::hole_bit`), each hit a box
+/// of one point. `record_draw_cs` (record_draw.wgsl) stands every box the eye's draw writes,
+/// one for each held voxel in view, with its planes as `cast::asset_box` lays them. It stands
+/// each box as it writes it, where the head says the world's receivers stand
+/// (`light::HEADER_WORLD_RECEIVERS`).
+///
+/// The cast's first stood tile must open the slide, and where a slide did not run it must
+/// begin the reads' epoch anew (`light::READS_FROM`). Where nothing is stood, as when every hit
+/// lies past the reach, nothing is listed and the slide stays shut. A tile that a point lies
+/// within `EDGE` of, or a point by the reach, may be stood on or not.
 #[test]
 fn hand_light_marks_answer_as_the_rust() {
     let Some(gpu) = Gpu::new() else {
@@ -956,15 +977,16 @@ fn run_marks(
     let walked_at = grid.walked_at() as usize;
     let mut beams = vec![0u32; walked_at + ray::holes_words([wd, ht]) as usize];
 
-    // Each pixel's ray walked over the world: its first word and its t, as the cast leaves them;
-    // some meeting nothing, some walked apart and listed.
+    // Each pixel's ray is walked over the world, and its first word and its t are laid as the
+    // cast leaves them. Some pixels meet nothing, and some are walked apart and listed.
     let mut words: Vec<u32> = (0..ray::WORDS * wd * ht).map(noise).collect();
     let tan_of = |p: [u32; 2]| {
         let at = [0, 1].map(|k| (p[k] as f32 + 0.5 + c.jitter[k]) / c.size[k] as f32 * 2.0);
         [(at[0] - 1.0) * c.tan[0], (1.0 - at[1]) * c.tan[1]]
     };
     let mut want = Stood::default();
-    // The tiles about `t`, the footprint where the head asks it, kept to the box.
+    // The tiles about tile `t`, a footprint wide where the head asks for one, kept within the
+    // box.
     let about = |t: [i32; 2]| {
         let m = n as i32 - 1;
         [
@@ -972,8 +994,8 @@ fn run_marks(
             [(t[0] + grow).min(m), (t[1] + grow).min(m)],
         ]
     };
-    // The raster's draw args as the draw begins, room for the draws, and the node cache, every
-    // slot free but those the samples' nodes hold.
+    // The raster's draw arguments as the draw begins, room for the draws, and the node cache,
+    // where every slot is free but those that hold the samples' nodes.
     let mut raster_args = vec![0u32; raster::ARGS_WORDS as usize];
     raster_args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
     let boxes = vec![0u32; record::EYE_DRAWS as usize];
@@ -1029,8 +1051,9 @@ fn run_marks(
             }
         }
         Marks::Voxels => {
-            // A held voxel of the record a stopped sample's node, a slot each, as the samples
-            // write it (sample_box.wgsl); the draw writes each in view as a box and stands it.
+            // Each stopped sample's node becomes a held voxel of the record, in a slot of its
+            // own, as the samples write it (sample_box.wgsl). The draw writes each voxel in
+            // view as a box and stands it.
             let mut slot = 0u32;
             for j in 0..grid.samples[1] {
                 for i in 0..grid.samples[0] {
@@ -1042,14 +1065,16 @@ fn run_marks(
                         kinds.add("samples gone on", true);
                         continue;
                     }
-                    // A face an eye's ray entered and asked about (`record::ASKED`).
+                    // The face the sample's ray entered is set both as entered and as asked
+                    // about by an eye's ray (`record::ASKED`).
                     let face = 1 << m.hit.axis;
                     let kind = if m.ends == End::Lacks {
                         Kind::Lacks
                     } else {
                         Kind::Cell
                     };
-                    // Whole where its ray stopped on it coarser than it asked, as a stop sets it.
+                    // The entry is whole where its ray stopped on a node coarser than it asked,
+                    // as a stop sets it.
                     let whole = record::stopped_whole(c.origin, &m.hit.node, range);
                     let state =
                         face | face << record::ASKED_SHIFT | if whole { record::WHOLE } else { 0 };
@@ -1063,9 +1088,9 @@ fn run_marks(
                     );
                     slot += 1;
                     kinds.add("voxels", true);
-                    // Drawn where in view or by the eye; a box a hair smaller holds the tiles it
-                    // must stand on, a hair larger those it may, as a GPU's rounding may move a
-                    // tile's edge or the view's.
+                    // The draw writes a box that is in view or by the eye. A GPU's rounding may
+                    // move a tile's edge or the view's, so the box a hair smaller gives the
+                    // tiles it must stand on, and the box a hair larger those it may.
                     let (lo, hi) = cast::asset_box(c.origin, &m.hit.node, m.hit.asset[0]);
                     let hair = 1e-3;
                     let shrunk = (lo.map(|v| v + hair), hi.map(|v| v - hair));
@@ -1096,24 +1121,25 @@ fn run_marks(
     kinds.count("tiles stood on", want.must.len() as u64);
     kinds.add("casts that stood nothing", want.may.is_empty());
 
-    let mut head = vec![0u32; light::HEAD_WORDS];
-    head[light::HEAD_CAST] = CAST;
-    head[light::HEAD_WORLD] = CAST;
-    head[light::HEAD_FOOTPRINT] = u32::from(c.footprint);
-    head[light::HEAD_SLIDE_OWED] = CAST - 2;
-    head[light::HEAD_STANDS_WORLD] = 1;
-    for (k, v) in light::head_layout(SIZE) {
-        head[k] = v;
+    let mut header = vec![0u32; light::HEADER_WORDS];
+    header[light::HEADER_CAST] = CAST;
+    header[light::HEADER_WORLD] = CAST;
+    header[light::HEADER_FOOTPRINT] = u32::from(c.footprint);
+    header[light::HEADER_SLIDE_CAST] = CAST - 2;
+    header[light::HEADER_WORLD_RECEIVERS] = 1;
+    for (k, v) in light::header_layout(SIZE) {
+        header[k] = v;
     }
-    // The list noise but the slide's words: the slide last ran before the last cast that owed
-    // one. The marks some other cast's, none the world's this one's.
+    // The list is noise but for the slide's words, which say the slide last ran before the
+    // last cast that owed one. Each tile's mark names another cast than this one, the cast the
+    // world's receivers are stood in, so no tile is listed yet.
     let mut list: Vec<u32> = (0..light::list_words(SIZE))
         .map(|k| noise(k ^ 0x99))
         .collect();
     let slide = light::slide_at(SIZE) as usize;
     list[slide + light::SLIDE_RAN as usize] = CAST - 3;
     list[slide + light::READS_FROM as usize] = 0;
-    let marks_at = (light::ARGS_WORDS + light::listed_marks_at(SIZE, light::LISTED_STOOD)) as usize;
+    let marks_at = (light::ARGS_WORDS + light::list_marks_at(SIZE, light::LIST_RECEIVERS)) as usize;
     let mut args: Vec<u32> = (0..light::args_words(SIZE)).map(noise).collect();
     for t in 0..(n * n) as usize {
         args[marks_at + t] = match noise(t as u32) % 3 {
@@ -1122,7 +1148,7 @@ fn run_marks(
             _ => CAST - 1,
         };
     }
-    let mut stood = vec![0u32; light::STOOD_WORDS as usize];
+    let mut stood = vec![0u32; light::RECEIVER_TILES_WORDS as usize];
     stood[..ray::LEFT_EMPTY.len()].copy_from_slice(&ray::LEFT_EMPTY);
 
     let rays = texture(
@@ -1135,20 +1161,20 @@ fn run_marks(
     );
     let view = array_view(&rays);
     let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
-    let head_buf = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
+    let header_buf = gpu.buffer(&header, wgpu::BufferUsages::UNIFORM);
     let list_buf = gpu.buffer(&list, wgpu::BufferUsages::STORAGE);
     let args_buf = gpu.buffer(&args, wgpu::BufferUsages::STORAGE);
-    let stood_buf = gpu.buffer(&stood, wgpu::BufferUsages::STORAGE);
+    let receiver_tiles_buf = gpu.buffer(&stood, wgpu::BufferUsages::STORAGE);
     let beams_buf = gpu.buffer(&beams, wgpu::BufferUsages::STORAGE);
     let raster_buf = gpu.buffer(&raster_args, wgpu::BufferUsages::STORAGE);
     let boxes_buf = gpu.buffer(&boxes, wgpu::BufferUsages::STORAGE);
     let record_buf = gpu.buffer(&rec, wgpu::BufferUsages::STORAGE);
     let mut binds: Vec<(u32, wgpu::BindingResource)> = vec![
         (0, eye_buf.as_entire_binding()),
-        (11, head_buf.as_entire_binding()),
+        (11, header_buf.as_entire_binding()),
         (12, list_buf.as_entire_binding()),
         (21, args_buf.as_entire_binding()),
-        (22, stood_buf.as_entire_binding()),
+        (22, receiver_tiles_buf.as_entire_binding()),
     ];
     let (pipe, groups) = match by {
         Marks::Walked => {
@@ -1168,14 +1194,14 @@ fn run_marks(
     };
     gpu.dispatch(pipe, &binds, groups);
     let out = gpu.read(&list_buf);
-    let out_stood = gpu.read(&stood_buf);
-    let cnt = out_stood[light::STOOD_CNT as usize] as usize;
-    let at = light::listed_at(SIZE, light::LISTED_STOOD) as usize;
-    let listed: Vec<[i32; 2]> = out[at + 1..at + 1 + cnt.min((n * n) as usize)]
+    let out_receiver_tiles = gpu.read(&receiver_tiles_buf);
+    let cnt = out_receiver_tiles[light::RECEIVER_TILES_CNT as usize] as usize;
+    let at = light::list_cnt_at(SIZE, light::LIST_RECEIVERS) as usize;
+    let entries: Vec<[i32; 2]> = out[at + 1..at + 1 + cnt.min((n * n) as usize)]
         .iter()
         .map(|&w| [(w & 0xffff) as i32, (w >> 16) as i32])
         .collect();
-    let got: BTreeSet<[i32; 2]> = listed.iter().copied().collect();
+    let got: BTreeSet<[i32; 2]> = entries.iter().copied().collect();
     let name = c.name;
     let case = |what: &str| {
         format!(
@@ -1183,10 +1209,11 @@ fn run_marks(
             ["the walked", "the voxels"][by as usize]
         )
     };
-    // Each tile listed once, every one it must stand on listed, none it may not.
+    // Each tile must be listed once. Every tile the receivers must stand on must be listed, and
+    // no tile they may not stand on.
     tally.compare(
         &case("each listed once"),
-        &[listed.len() as u32],
+        &[entries.len() as u32],
         &[got.len() as u32],
         |_| "listed".into(),
     );
@@ -1207,22 +1234,24 @@ fn run_marks(
         &[extra.len() as u32],
         |_| format!("{extra:?}"),
     );
-    // The slide opened and the reads' epoch begun anew by the first stood tile, else neither.
+    // The first stood tile must open the slide and begin the reads' epoch anew. With no tile
+    // stood, neither happens.
     let n_slide = n.div_ceil(SQUARE_SIDE);
     let any = cnt != 0;
     tally.compare(
         &case("the slide opened, the reads' epoch begun anew"),
         &[if any { n_slide } else { 0 }, if any { CAST } else { 0 }],
         &[
-            out_stood[light::STOOD_SLIDE as usize],
+            out_receiver_tiles[light::RECEIVER_TILES_SLIDE as usize],
             out[slide + light::READS_FROM as usize],
         ],
         |k| ["the slide's workgroups across", "the reads' epoch"][k].into(),
     );
 }
 
-/// Every texel's start as the device takes it (light_aim.wgsl `texel_start`), read off a probe
-/// appended to light.wgsl, is `Starts::start`'s: summed in fixed point, nothing rounds apart.
+/// Checks that every texel's start as the device takes it (light_aim.wgsl `texel_start`) is
+/// exactly `Starts::start`'s. A probe appended to light.wgsl reads the starts. They are summed
+/// in fixed point, so nothing may round apart.
 fn starts_alike(gpu: &Gpu, l: &Light, starts: &light::Starts) {
     const PROBE: &str = r"
 @group(0) @binding(40) var<storage, read_write> probe: array<i32>;
@@ -1243,11 +1272,11 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     let p = gpu.pipeline(&module, "probe_cs");
     let mut eye_words = vec![0u32; eye::WORDS];
     eye_words[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&l.words());
-    let mut head = vec![0u32; light::HEAD_WORDS];
-    head[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
+    let mut header = vec![0u32; light::HEADER_WORDS];
+    header[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
         .copy_from_slice(&starts.words());
     let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
-    let head_buf = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
+    let header_buf = gpu.buffer(&header, wgpu::BufferUsages::UNIFORM);
     let out = gpu.buffer(
         &vec![0u32; 3 * (SIZE * SIZE) as usize],
         wgpu::BufferUsages::STORAGE,
@@ -1256,7 +1285,7 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         &p,
         &[
             (0, eye_buf.as_entire_binding()),
-            (11, head_buf.as_entire_binding()),
+            (11, header_buf.as_entire_binding()),
             (40, out.as_entire_binding()),
         ],
         [SIZE / 16, SIZE / 16, 1],
@@ -1272,12 +1301,13 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     assert_eq!(off, 0, "{off} texels' starts not the Rust's");
 }
 
-/// Every pass that reads a tile's band (light_aim.wgsl `tile_band`) gives each tile the band
-/// pxl-engine's `Light::band` gives it, so no two passes split over one: a slot's against its
-/// samples' run's and the holes' queue's, a cell's against its beam rays', a slide's against the cast it
-/// keeps. A probe appended to each pass's module reads every tile of a box, and of the beam
-/// rays' window past it, over boxes of every side, their texels' width at random and where a
-/// tile's distance squared lands on a split distance's.
+/// Every pass that reads a tile's band (light_aim.wgsl `tile_band`) must give each tile the
+/// band pxl-engine's `Light::band` gives it, so that no two passes disagree on one. A slot's
+/// pass must agree with the run of its samples and with the holes' queue, a cell's with its
+/// beam rays', and a slide's with the cast it keeps. A probe appended to each pass's module
+/// reads the band of every tile of a box, and of the beam rays' window past it. The boxes take
+/// every side, with texel widths at random and widths where a tile's distance squared lands on
+/// a split distance's.
 #[test]
 fn every_pass_bands_a_tile_alike() {
     use pxl_engine::grid::INV_SPLIT2;
@@ -1292,14 +1322,15 @@ fn every_pass_bands_a_tile_alike() {
 
 @compute @workgroup_size(8, 8, 1)
 fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  let across = head_word(LIGHT_HEAD_SIZE) / LIGHT_TILE + 2u * PROBE_LEAD;
+  let across = header_word(LIGHT_HEADER_SIZE) / LIGHT_TILE + 2u * PROBE_LEAD;
   if (id.x >= across || id.y >= across) {
     return;
   }
   probe[id.y * across + id.x] = tile_band(vec2<i32>(id.xy) - vec2<i32>(i32(PROBE_LEAD)));
 }
 ";
-    /// Tiles probed before the box's first, as far as the beam rays' window reaches.
+    /// How many tiles before the box's first are probed: as far as the beam rays' window
+    /// reaches.
     const LEAD: u32 = light::BEAM_WINDOW + 1;
     let Some(gpu) = Gpu::new() else {
         eprintln!("no adapter: skipped");
@@ -1324,9 +1355,8 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         );
         (entry, gpu.pipeline(&module, "probe_cs"))
     });
-    // The texel widths: at random over four octaves either side of one, and where a tile
-    // `g` texels off the middle on each axis lies a split distance off, a last place either
-    // side.
+    // Some texel widths are at random from 1/8 to 2. The others put a tile `g` texels off the
+    // middle on each axis exactly a split distance off, with the next float either side.
     let mut widths: Vec<f32> = (0..24)
         .map(|k| f32::from_bits(0x3e00_0000 + noise(k) % 0x0200_0000))
         .collect();
@@ -1358,10 +1388,10 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         eye_words[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&l.words());
         eye_words[eye::RANGE] = range[0];
         eye_words[eye::RANGE + 1] = range[1];
-        let mut head = vec![0u32; light::HEAD_WORDS];
-        head[light::HEAD_SIZE] = size;
+        let mut header = vec![0u32; light::HEADER_WORDS];
+        header[light::HEADER_SIZE] = size;
         let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
-        let head_buf = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
+        let header_buf = gpu.buffer(&header, wgpu::BufferUsages::UNIFORM);
         let across = light::tiles(size) + 2 * LEAD;
         let want: Vec<u32> = (0..across * across)
             .map(|k| {
@@ -1380,7 +1410,7 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
                     p,
                     &[
                         (0, eye_buf.as_entire_binding()),
-                        (11, head_buf.as_entire_binding()),
+                        (11, header_buf.as_entire_binding()),
                         (40, out.as_entire_binding()),
                     ],
                     [across.div_ceil(8), across.div_ceil(8), 1],

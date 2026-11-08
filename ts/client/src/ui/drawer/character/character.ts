@@ -5,15 +5,14 @@
 import type { u32 } from "@xpute/kit/abi/word.ts";
 
 import { SETTING } from "@/ui/setting/schema.ts";
-import { GENDER, Group, groups } from "@/ui/catalog/asset/character.spec.ts";
+import { GENDER, Group, groups } from "@/ui/asset/character.spec.ts";
 
 export interface Character {
   group: u32;
-  /** What the core holds it as: its row in its group. */
+  /** The character's row in its group, which is how the core holds it. */
   number: u32;
 }
 
-/** A pet, with its name. */
 export interface Pet extends Character {
   label: string;
 }
@@ -32,7 +31,7 @@ export const PETS: readonly Pet[] = groups.pet.label.map((label, number) => ({
 export type Gender = number;
 export const GENDERS: readonly Gender[] = [GENDER.female, GENDER.male];
 
-/** Each gender's row title, the locale's key. */
+/** The locale key of each gender's row title. */
 export const GENDER_LABEL_KEY: Readonly<Record<Gender, string>> = {
   [GENDER.female]: "drawer.character.female_label",
   [GENDER.male]: "drawer.character.male_label",
@@ -46,7 +45,8 @@ export function genderOf(character: Character): Gender {
   return groups.person.gender[character.number] ?? GENDERS[0];
 }
 
-/** The character numbered `number`, else the setting's default. */
+/** The character numbered `number`, or else the one numbered `fallback`,
+ * the setting's default. */
 function numbered<V extends Character>(
   characters: readonly V[],
   number: number,

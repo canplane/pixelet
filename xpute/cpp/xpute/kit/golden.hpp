@@ -1,7 +1,7 @@
 // cpp/xpute/kit/golden.hpp
 
-// The golden records: lines of `path<TAB>value`, split per line with no
-// parser. For tests only.
+// Reads golden records, files of lines `dotted.path<TAB>value`, for the tests
+// alone. A record holds every language that reads it to the same answer.
 
 #pragma once
 

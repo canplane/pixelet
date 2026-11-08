@@ -1,6 +1,7 @@
 // pxl-core/perf/section.rs
 
-//! Every STAT and NOW section as a record held to perf.json by `words!`.
+//! Every STAT and NOW section of perf.json as a record, each held to its
+//! layout by `words!`.
 
 use core::mem::{offset_of, size_of};
 
@@ -13,7 +14,7 @@ use pxl_render::gpu::span_spec::FRAME_KINDS;
 
 const REASONS: usize = LIMIT::REASONS as usize;
 const REASON_WORDS: usize = LIMIT::REASON_WORDS as usize;
-const STEP_SLOTS: usize = LIMIT::STEP_SLOTS as usize;
+const STEP_CAP: usize = LIMIT::STEP_CAP as usize;
 pub const TASK_PHASES: usize = TASK_PHASE_NAMES;
 const CATEGORIES: usize = STREAM_NAMES;
 
@@ -47,45 +48,49 @@ pub struct FramesSection {
     pub cnt: f64,
     pub seconds: f64,
     pub moving: f64,
-    /// The moving frames' intervals summed: a second over their mean
-    /// interval is the rate they were drawn at.
+    /// The sum of the moving frames' intervals. Divided by `moving`, it gives
+    /// their mean interval, and a second over that mean is the rate they were
+    /// drawn at.
     pub moving_ms: f64,
     pub missed: f64,
     pub overran: f64,
-    /// Intervals whose turns ran past them.
+    /// How many intervals had turns that ran past the interval's end.
     pub long: f64,
     pub turns: f64,
-    /// Frames a GPU read timed: the GPU's figures are over these alone.
-    pub gpu_read: f64,
+    /// How many frames a GPU read timed. The GPU's figures cover these frames
+    /// alone.
+    pub gpu_timed: f64,
     pub interval: Percentiles,
     pub busy: Percentiles,
     pub tick: Percentiles,
-    /// The other parts of `busy`, and what they leave of it, unmeasured.
+    /// The other measured parts of `busy`, then `rest`, what they leave of it
+    /// unmeasured.
     pub effects: Percentiles,
     pub stage: Percentiles,
     pub tasks: Percentiles,
     pub perf: Percentiles,
     pub rest: Percentiles,
-    /// Each effect's p95, in EFFECT_NAMES' order.
+    /// Each effect's p95, indexed by `EffectName`.
     pub effects_p95: [f64; EFFECTS],
-    /// The GPU's time: the time its spans ran, those that overlap counted
-    /// once.
+    /// The GPU's time, with overlapping spans counted once.
     pub gpu_busy: Percentiles,
-    /// The busy time's p50 and p95 of the frames of each of the renderer's
-    /// FRAME_KINDS a read timed, and how many they are, three a kind, all 0
-    /// for a kind none was.
+    /// Three words for each of the renderer's FRAME_KINDS: the p50 and p95 of
+    /// the GPU's busy time over that kind's timed frames, and how many there
+    /// were. All three are 0 for a kind no timed frame had.
     pub gpu_busy_kinds: [f64; 3 * FRAME_KINDS],
-    /// The p95 alone of each phase and each span: what is read of them; a
-    /// span's over the frames a read timed that ran it, `gpu_spans_cnt` of them.
+    /// Only the p95 of each phase and each GPU span is kept, because only it
+    /// is read. A span's p95 covers the timed frames that ran the span, and
+    /// `gpu_spans_cnt` counts those frames.
     pub phases_p95: [f64; PHASES],
     pub gpu_spans_p95: [f64; GPU_SPANS],
     pub gpu_spans_cnt: [f64; GPU_SPANS],
-    /// Frames by the renderer's FRAME_KINDS, and turns' last ask by WAKES.
+    /// How many frames fell in each of the renderer's FRAME_KINDS, and how
+    /// many intervals ended on each of the WAKES as the last turn's ask.
     pub kinds: [f64; FRAME_KINDS],
     pub wakes: [f64; WAKES],
-    /// The world's pixels of the last frame a read timed.
+    /// The world's pixel count in the last frame a read timed.
     pub gpu_px: f64,
-    /// The ray counts of the window's frames, summed lane by lane.
+    /// The ray counts of the window's frames, summed field by field.
     pub rays: RaySample,
     /// The window's first frame and its last.
     pub first: FrameSample,
@@ -107,7 +112,7 @@ words!(FramesSection, STAT::frames::WORDS,
     present => STAT::frames::present, cnt => STAT::frames::cnt, seconds => STAT::frames::seconds,
     moving => STAT::frames::moving, moving_ms => STAT::frames::moving_ms,
     missed => STAT::frames::missed, overran => STAT::frames::overran,
-    long => STAT::frames::long, turns => STAT::frames::turns, gpu_read => STAT::frames::gpu_read,
+    long => STAT::frames::long, turns => STAT::frames::turns, gpu_timed => STAT::frames::gpu_timed,
     interval => STAT::frames::interval, busy => STAT::frames::busy,
     tick => STAT::frames::tick, effects => STAT::frames::effects,
     stage => STAT::frames::stage, tasks => STAT::frames::tasks,
@@ -131,7 +136,7 @@ pub struct StreamStats {
     pub lat_p50: f64,
     pub lat_p95: f64,
     pub reason_cnt: f64,
-    /// (reason, status, count) each, commonest first.
+    /// Each failure reason as (reason, status, count), the commonest first.
     pub reasons: [[f64; REASON_WORDS]; REASONS],
     pub phase_n: f64,
     /// NaN for a phase no run in the window reported.
@@ -170,7 +175,7 @@ pub struct ViewSection {
     pub hover_x: f64,
     pub hover_y: f64,
     pub hover_z: f64,
-    pub cell: f64,
+    pub cell_zoom: f64,
     pub hit_kind: f64,
     pub pick_zoom: f64,
     pub ray_zoom: f64,
@@ -188,7 +193,7 @@ words!(ViewSection, NOW::view::WORDS,
     pivot_x => NOW::view::pivot_x, pivot_y => NOW::view::pivot_y, pivot_z => NOW::view::pivot_z,
     pivot_lon => NOW::view::pivot_lon, pivot_lat => NOW::view::pivot_lat, pivot_alt => NOW::view::pivot_alt,
     hover_x => NOW::view::hover_x, hover_y => NOW::view::hover_y, hover_z => NOW::view::hover_z,
-    cell => NOW::view::cell, hit_kind => NOW::view::hit_kind, pick_zoom => NOW::view::pick_zoom, ray_zoom => NOW::view::ray_zoom,
+    cell_zoom => NOW::view::cell_zoom, hit_kind => NOW::view::hit_kind, pick_zoom => NOW::view::pick_zoom, ray_zoom => NOW::view::ray_zoom,
     folded => NOW::view::folded, place_x => NOW::view::place_x, place_y => NOW::view::place_y, place_z => NOW::view::place_z,
     place_zoom => NOW::view::place_zoom, blocked => NOW::view::blocked,
 );
@@ -212,13 +217,14 @@ words!(StepStats, STEP_STAT::WORDS,
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct StepsSection {
     pub cnt: f64,
-    pub slots: [StepStats; STEP_SLOTS],
+    pub slots: [StepStats; STEP_CAP],
 }
 
 words!(StepsSection, STAT::steps::WORDS, cnt => STAT::steps::cnt, slots => STAT::steps::slots);
 
-/// What the frames held at the most or the least since the recording
-/// started (perf.json STAT.recording), each frame turn's folded in (`fold`).
+/// The largest and smallest values the frames held since the recording
+/// started (perf.json STAT.recording). Each frame turn's figures are folded
+/// in by `fold`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RecordingSection {
@@ -233,13 +239,14 @@ pub struct RecordingSection {
     pub ring_sq_peak: f64,
     pub ring_left_peak: f64,
     pub body_slots_peak: f64,
-    pub cap_terrain_refused: f64,
+    pub terrain_refusals: f64,
 }
 
 impl RecordingSection {
-    /// One frame turn's figures, `h`, folded in: each the most, the
-    /// largest free block the least, the refusals as they stand, the tiles
-    /// refused summed.
+    /// Folds in one frame turn's figures, `h`. Each figure keeps its largest
+    /// value, except the largest free block, which keeps its smallest. The
+    /// heap's refusals are taken as they stand, since the heap's count only
+    /// grows, and the refused tiles are summed.
     pub fn fold(&mut self, h: &RecordingSection) {
         let first = self.frames == 0.0;
         let max = |a: f64, b: f64| if first { b } else { a.max(b) };
@@ -260,7 +267,7 @@ impl RecordingSection {
             ring_sq_peak: max(self.ring_sq_peak, h.ring_sq_peak),
             ring_left_peak: max(self.ring_left_peak, h.ring_left_peak),
             body_slots_peak: max(self.body_slots_peak, h.body_slots_peak),
-            cap_terrain_refused: self.cap_terrain_refused + h.cap_terrain_refused,
+            terrain_refusals: self.terrain_refusals + h.terrain_refusals,
         };
     }
 }
@@ -272,5 +279,5 @@ words!(RecordingSection, STAT::recording::WORDS,
     heap_largest_free_min_bytes => STAT::recording::heap_largest_free_min_bytes,
     heap_refusals => STAT::recording::heap_refusals, ring_cq_peak => STAT::recording::ring_cq_peak,
     ring_sq_peak => STAT::recording::ring_sq_peak, ring_left_peak => STAT::recording::ring_left_peak,
-    body_slots_peak => STAT::recording::body_slots_peak, cap_terrain_refused => STAT::recording::cap_terrain_refused,
+    body_slots_peak => STAT::recording::body_slots_peak, terrain_refusals => STAT::recording::terrain_refusals,
 );

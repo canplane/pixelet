@@ -5,7 +5,7 @@ on `small` and merged it (eff52c1d), while another session worked xpute on
 `main` ([its minutes](./20261105-xpute-not-yet-for-other-programs.md)). Why
 rust-gpu went is in [rust-gpu goes](./20261103-rust-gpu-goes.md); the work, as
 it happened, is in
-[the journal](../experiment/20261104-taking-rust-gpu-out/journal.md).
+[the journal](../experiment/20261103-the-shaders-by-hand/README.md).
 
 ## What the user decided
 
@@ -86,13 +86,6 @@ GPU, vitest 28, xpute 114, the page with no console error. The originals are on
 `original` behind `chore: original/20261105-by-hand`.
 
 ## Open
-
-In progress after the merge, in worktrees off main: the ways' divisions to the
-host's reciprocals (way.rs, way.wgsl); render-pass shaders without nested
-structs, `spacing_width` placed by who decides it, list offsets from pxl-engine
-instead of arithmetic; the two test device harnesses as one; check_rules'
-findings (`machine`, `unpack`, xpute's words); a reading of decor's
-`fill_eighths` and the world query's surviving mutants.
 
 **Owed** (verification, carried by whoever runs next):
 

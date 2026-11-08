@@ -1,9 +1,8 @@
 // pxl-spec/space/layer/quadrant.rs
 
-//! The pyramid: tiles of a tile grid, from the leaves up to the top, a
-//! tile's zoom its size's, so 2^z of them stand around the world. Cell
-//! placement, tile membership, folding order and cell centers are decided
-//! here only; a layer owns what a cell carries and how it folds.
+//! The pyramid: tiles of a tile grid from the leaves up to the top, a tile's zoom given by its
+//! size, so 2^z of them stand around the world. Cell placement, tile membership, folding order
+//! and cell centers are decided here only; a layer owns what a cell carries and how it folds.
 
 use core::fmt;
 
@@ -23,7 +22,7 @@ use pxl_engine::wrap_idx;
 /// world 2^15 round.
 pub use pxl_engine::LEAF_ZOOM;
 /// The top: the coarsest tile any layer is kept in.
-pub use pxl_engine::TOP_ZOOM;
+pub use pxl_engine::MIN_ZOOM;
 const _: () = assert!(
     morton::bits::<2>(LEAF_ZOOM) < 64,
     "a quadrant's id fits a u64"
@@ -31,7 +30,7 @@ const _: () = assert!(
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Quadrant {
-    /// Its size's.
+    /// Its zoom, which is its size.
     pub zoom: Zoom,
     /// Its index at its zoom.
     pub at: [i32; 2],
@@ -77,7 +76,7 @@ impl Quadrant {
 
     pub fn of_key(key: &str) -> Option<Quadrant> {
         let (zoom, at) = node_of::<2>(morton::key_of_name::<2>(key)?);
-        (TOP_ZOOM..=LEAF_ZOOM)
+        (MIN_ZOOM..=LEAF_ZOOM)
             .contains(&zoom)
             .then(|| Quadrant::new(zoom, at))
     }
@@ -94,7 +93,7 @@ impl Quadrant {
         child_idx(self.at)
     }
 
-    /// In `child_idx`'s order.
+    /// Its four children, in `child_idx`'s order.
     pub fn children(self) -> [Quadrant; 4] {
         std::array::from_fn(|slot| Quadrant::new(self.zoom + 1, child_of(self.at, slot)))
     }
@@ -132,9 +131,9 @@ impl Quadrant {
 }
 
 /// The coarsest tile of a layer made at `leaf` when the source supplies
-/// terrain whole from `top`: as many zooms over its leaves.
-pub fn top_over(leaf: Zoom, top: Zoom) -> Zoom {
-    top.saturating_sub(LEAF_ZOOM - leaf).max(TOP_ZOOM)
+/// terrain whole from `min_zoom`: as many zooms over its leaves.
+pub fn min_zoom_over(leaf: Zoom, min_zoom: Zoom) -> Zoom {
+    min_zoom.saturating_sub(LEAF_ZOOM - leaf).max(MIN_ZOOM)
 }
 
 /// The 4×4 tiles a zoom finer around a tile's children, each at
@@ -195,7 +194,7 @@ impl Cell {
         self.zoom - self.shamt() as Zoom
     }
 
-    /// Its own.
+    /// Its own zoom.
     pub fn zoom(self) -> Zoom {
         self.zoom
     }

@@ -5,7 +5,8 @@ export default defineConfig({
   resolve: { tsconfigPaths: true },
   test: {
     include: ["client/src/**/*.test.ts", "tool/shader/*.test.ts"],
-    // Tint compiles every shader in one test.
+    // One test has Tint compile every shader, which runs long, so tests have
+    // no timeout.
     testTimeout: 0,
   },
 });

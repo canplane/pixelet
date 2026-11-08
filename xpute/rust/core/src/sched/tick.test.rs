@@ -5,7 +5,8 @@ use core::cell::{Cell, RefCell};
 use super::*;
 use crate::clock;
 
-// A clock the test moves, and what the steps saw, per thread.
+// Each test thread has its own clock, which the test moves, and its own
+// record of what the steps saw.
 thread_local! {
     static CLOCK_MS: Cell<f64> = const { Cell::new(0.0) };
     static TRACE: RefCell<Trace> = RefCell::new(Trace::default());
@@ -36,7 +37,7 @@ fn saw() -> Trace {
     trace(|s| s.clone())
 }
 
-// A program's phases, as a world's might number them.
+// Example phases, numbered as a program might number its own.
 #[allow(non_upper_case_globals, reason = "named as a program's phases are")]
 mod phase {
     use super::Phase;
@@ -49,7 +50,8 @@ mod phase {
 
 const PHASES: [&str; 5] = ["interaction", "visible", "content", "cosmetic", "report"];
 
-/// What the visible phase holds back for content.
+/// The share of the budget the visible phase holds back for the content
+/// phase.
 const CONTENT_SHARE: f64 = 0.2;
 
 const POLICY: TickPolicy = TickPolicy {

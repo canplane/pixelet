@@ -1,11 +1,11 @@
 // @pxl/client/runtime/worker.ts
 
 /**
- * A page's core and runtime, in a worker of their own so a turn holds none
- * of the UI's events (open.ts starts it). The core is served
- * on xpute's port once the page has told what a worker cannot read; the source
- * is declared here and mirrored to the UI; the refused files are followed
- * here, where the files are; the profiler is read here.
+ * A page's core and runtime, in a worker of their own so that a turn holds
+ * up none of the UI's events (open.ts starts the worker). The core is served
+ * on xpute's port once the page has sent what a worker cannot read. The
+ * source is declared here and mirrored to the UI. The refused files are
+ * followed here, where the files are, and the profiler is read here.
  */
 
 import { type Link, serve } from "@xpute/runtime";
@@ -15,17 +15,17 @@ import {
   source_declaration,
   source_state,
   watch_source,
-} from "@/sys/fs/source.ts";
-import { follow_refused_files } from "@/sys/fs/refusal.ts";
-import { set_storage } from "@/sys/fs/storage.ts";
-import { set_online } from "@/origin/online.ts";
+} from "@/service/sys/fs/source.ts";
+import { follow_refused_files } from "@/service/sys/fs/refusal.ts";
+import { set_storage } from "@/service/sys/fs/storage.ts";
+import { set_online } from "@/service/origin/online.ts";
 import { config, perf_here } from "@/runtime/start.ts";
-import { set_core } from "@/port/core.ts";
+import { set_core } from "@/service/core/core.ts";
 import type { Page, ToCore, ToUi } from "@/runtime/page.ts";
-import { fs_changed } from "@/port/fs.ts";
-import { answer, type PerfRead } from "@/port/perf.ts";
-import { source_declare } from "@/port/source.ts";
-import * as online from "@/service/online.ts";
+import { fs_changed } from "@/service/core/fs.ts";
+import { answer, type PerfRead } from "@/service/core/perf.ts";
+import { source_declare } from "@/service/core/source.ts";
+import * as online from "@/service/platform/online.ts";
 
 const tell = (m: ToUi) => postMessage(m);
 const page = Promise.withResolvers<Page>();
@@ -45,8 +45,9 @@ onmessage = ({ data: m }: MessageEvent<ToCore>) => {
   }
 };
 
-/** Whether the page is held in the hand, its kept keys taken here first,
- * each one written told the page. */
+/** Waits for the page's first message, keeps a copy of the page's kept keys
+ * here, and tells the page each key written. Resolves to whether the device
+ * is held in the hand. */
 async function keep(): Promise<boolean> {
   const { keys, handheld } = await page.promise;
   const kept = new Map(keys);
@@ -60,8 +61,8 @@ async function keep(): Promise<boolean> {
   return handheld;
 }
 
-/** Up: the core's commands bound here too, for what sys/ sends; the source
- * declared here, and mirrored to the UI. */
+/** Runs once the core is served. It binds the core's commands here too, for
+ * what sys/ sends, and declares the source here, mirroring it to the UI. */
 function up(link: Link): void {
   set_core(link, perf_here);
   online.watch(set_online);

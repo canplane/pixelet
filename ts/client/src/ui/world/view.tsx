@@ -4,12 +4,12 @@ import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AboveKeyboard } from "@/ui/component/above-keyboard.tsx";
-import { type InputDriver } from "@/service/types.ts";
-import * as surface from "@/service/surface.tsx";
-import { useSafeArea } from "@/service/safe-area.ts";
-import { useVisualViewport } from "@/service/viewport.ts";
-import { POINTER_KIND, POINTER_PHASE } from "@/port/input.ts";
-import { surface_driver } from "@/port/surface.ts";
+import { type InputDriver } from "@/service/platform/types.ts";
+import * as surface from "@/service/platform/surface.tsx";
+import { useSafeArea } from "@/service/platform/safe-area.ts";
+import { useVisualViewport } from "@/service/platform/viewport.ts";
+import { POINTER_KIND, POINTER_PHASE } from "@/service/core/input.ts";
+import { surface_driver } from "@/service/core/surface.ts";
 import { keyDown, keyUp, releaseKeys } from "./keyboard.ts";
 import { releasePointers, worldPointer } from "./pointer.ts";
 import { Corner } from "./corner.tsx";
@@ -24,9 +24,9 @@ import { Dock } from "./dock/dock.tsx";
 import { TopOverlays } from "@/ui/world/top/top.tsx";
 import { DOCK_HEIGHT } from "./dock/card.tsx";
 import { ToastController } from "@/ui/world/toast/controller.tsx";
-import { useCore } from "@/ui/store/watch.ts";
-import * as input from "@/port/input.ts";
-import * as scene from "@/port/scene.ts";
+import { useCore } from "@/ui/watch.ts";
+import * as input from "@/service/core/input.ts";
+import * as scene from "@/service/core/scene.ts";
 
 const TOAST_LIFT_PX = chrome.inset + 20;
 
@@ -34,9 +34,9 @@ const PANEL_GAP_PX = 12;
 
 const WORLD = surface_driver(scene.draw_world);
 
-/** The place's input as the world takes it: pointers and keys through the
- * UI's own stores first (`worldPointer`, `keyDown`), the box and the wheel
- * to the core, and a moved box's turn to the scheduler. */
+/** The world's input from the platform. Pointers and keys pass through the
+ * UI's own handling first (`worldPointer` and `keyDown`). The rest goes to
+ * service/core/input.ts as it comes. */
 const INPUT: InputDriver = {
   open: input.open,
   pointer: (phase, kind, id, button, x, y) =>
@@ -49,7 +49,8 @@ const INPUT: InputDriver = {
   requestFrame: input.frame,
 };
 
-/** Alone, so a marker under the pointer re-renders only the surface. */
+/** A component of its own, so that a change of the marker under the pointer
+ * re-renders only the surface. */
 function World() {
   const overMarker = useCore((s) => s.over_marker);
   return (
@@ -88,12 +89,14 @@ export function WorldView() {
         <Corner />
       </BetweenChrome>
 
-      {/* The world's own pointer puts the keyboard away (`worldPointer`). */}
+      {/* The world puts the keyboard away itself (`worldPointer`), so the
+          shared dismissal leaves its touches alone. */}
       <View {...KEEPS_KEYBOARD} style={StyleSheet.absoluteFill}>
         <World />
       </View>
 
-      {/* Under the chrome: the size popover is meant to cover the toasts. */}
+      {/* The toasts lie under the chrome, so that the size popover covers
+          them. */}
       <AboveKeyboard inset={chrome.inset} lift={DOCK_HEIGHT + TOAST_LIFT_PX}>
         <Toaster />
       </AboveKeyboard>
@@ -112,6 +115,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     pointerEvents: "box-none",
   },
-  // The dock's width chain needs a real ancestor width to grow into.
+  // The dock's bar is as wide as this box, so the box needs a definite width
+  // for the bar to grow into.
   bottom: { width: "100%", minWidth: 0, alignItems: "center" },
 });

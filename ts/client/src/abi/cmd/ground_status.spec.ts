@@ -1,6 +1,6 @@
 // ts/client/src/abi/cmd/ground_status.spec.ts
 //
-// GENERATED from rust/client/core/ui.json
+// GENERATED from spec/client/core/door/ui.json
 
 // Whether the screen shows the world: Success once a frame that drew ground went
 // to it, or one went over a view whose tiles all answered with nothing to draw;

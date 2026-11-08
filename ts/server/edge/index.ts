@@ -1,16 +1,16 @@
 // @pxl/edge/index.ts
 
 /**
- * Cloudflare Worker that serves the app, its baked pages and assets, and
- * forward search's own live API — all from one origin.
+ * The Cloudflare Worker that serves the app, its baked pages and its assets,
+ * and forwards search's own live API, all from one origin.
  *
- * Static assets are handled by the platform before this script runs (see
- * wrangler.jsonc). What reaches this script is the roots of
- * spec/spec/route.json: `/tile/*` and `/asset/*` come straight out of the
- * R2 bucket, and `/geo/*` and `/api/*` are reverse-proxied to GEO_ORIGIN and API_ORIGIN as-is (see infra/README.md),
- * same-origin with the app.
+ * The platform serves static assets before this script runs (wrangler.jsonc).
+ * What reaches this script is the roots of spec/spec/route.json. `/tile/*` and
+ * `/asset/*` come straight out of the R2 bucket. `/geo/*` and `/api/*` are
+ * reverse-proxied as they are to GEO_ORIGIN and API_ORIGIN (infra/README.md),
+ * so that they stay same-origin with the app.
  *
- * The platform types it needs are declared inline.
+ * The platform types the Worker needs are declared inline.
  */
 
 type R2Object = {
@@ -37,19 +37,21 @@ declare global {
   interface ResponseInit {
     encodeBody?: "auto" | "manual";
   }
-  /** Workers' edge cache; `default` is the shared per-colo cache. */
+  /** Workers' edge cache. `default` is the cache shared within one data
+   * center. */
   interface CacheStorage {
     readonly default: Cache;
   }
 }
 
-/** Third handler argument: `waitUntil` keeps work alive past the response. */
+/** The fetch handler's third argument. `waitUntil` keeps work alive after the
+ * response is sent. */
 type ExecutionContext = { waitUntil(p: Promise<unknown>): void };
 
 export type Env = {
   /** The bucket: the baked pages, the assets and `source`. */
   BUCKET: R2Bucket;
-  /** Static asset binding, used only for the fallthrough below. */
+  /** The static assets' binding, used only when no other route matches. */
   ASSETS: { fetch(request: Request): Promise<Response> };
   /** The live API's own origin (infra/README.md), from wrangler.jsonc's
    * `vars`. */
@@ -67,14 +69,15 @@ import {
 import { BASE_LAYERS, TILE_OBJECT, TILE_SPHERE } from "./publication.spec.ts";
 
 /**
- * Object keys this Worker asks R2 for, by shape alone.
+ * The object keys this Worker asks R2 for, told apart by their shape alone.
  *
- * - `<kind>/<object>`: a baked page, a kind of `BASE_LAYERS` and the object
- *   spec/spec/bake/publication.json lays out under it (`TILE_OBJECT`), and the Earth's
- *   picture whole beside its tiles (`TILE_SPHERE`).
- * - `asset/<sha256>.<ext>`: a model or an image named by its bytes alone
- *   (pxl-tool's ingest_asset); a catalog names it by its path and the shipped
- *   table maps that to the key. A changed file is a new name.
+ * - `<kind>/<object>`: a baked page. The kind is one of `BASE_LAYERS`, and the
+ *   object is laid out under it as spec/spec/bake/publication.json says
+ *   (`TILE_OBJECT`). The Earth's picture lies whole beside its tiles
+ *   (`TILE_SPHERE`).
+ * - `asset/<sha256>.<ext>`: a model or an image, named by its bytes alone
+ *   (pxl-tool's ingest_asset). A catalog names it by its path, and the
+ *   shipped table maps the path to the key. A changed file gets a new name.
  * - `source`: the source's declaration (pxl-geo-bake source.rs), the one
  *   object that changes under its key.
  */
@@ -85,19 +88,21 @@ const KEY_RE = new RegExp(
   String.raw`^(?:(?:${KINDS})\/${TILE_OBJECT}|earth\/[^/]+\/${TILE_SPHERE}|asset\/[0-9a-f]{64}\.(?:glb|png|webp)|${SOURCE_KEY})$`,
 );
 
-/** Where a cached entry keeps the encoding its bytes are in: its
- * `content-encoding` under our name, which the cache does not normalize. */
+/** The header in which a cached entry keeps the encoding of its bytes. It
+ * holds the entry's `content-encoding` under a name of our own, which the
+ * cache does not normalize. */
 const CACHED_ENCODING = "pxl-content-encoding";
 
-/** An entry on its way to the client: the encoding back where HTTP expects it,
- * and the body declared final so nothing encodes it a second time.
+/** Sends an entry to the client. The encoding goes back where HTTP expects
+ * it, and the body is declared final, so that nothing encodes it a second
+ * time.
  *
- * Without `encodeBody: "manual"` the runtime compresses the already-packed
- * body again, and decode_terrain() fails far from here.
+ * Without `encodeBody: "manual"`, the runtime compresses the already packed
+ * body again, and the client's decoding then fails far from here.
  *
  * A client that cannot read the encoding cannot be refused here: Cloudflare
- * rewrites `accept-encoding` on the request a Worker is handed and negotiates
- * with the real client itself on the way out. */
+ * rewrites `accept-encoding` on the request a Worker is handed, and
+ * negotiates with the real client itself on the way out. */
 function serve(
   body: ArrayBuffer | ReadableStream | null,
   from: Headers,
@@ -111,7 +116,8 @@ function serve(
   return new Response(body, { headers, encodeBody: "manual" });
 }
 
-/** A page its version leaves out, as the tile servers answer an empty tile. */
+/** The answer for a page its version leaves out: a 204, as the tile servers
+ * answer an empty tile. */
 function left(): Response {
   return new Response(null, { status: 204 });
 }
@@ -127,9 +133,11 @@ async function declaration(request: Request, env: Env): Promise<Response> {
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set("etag", object.httpEtag);
-  // A precondition that failed leaves no body: the client holds the current one.
+  // When the precondition fails, R2 sends no body, and the client already
+  // holds the current copy.
   if (!("body" in object)) return new Response(null, { status: 304, headers });
-  // Whole, so its length is known, as `fetch` below reads a page.
+  // The body is read whole so that its length is known, as `fetch` below
+  // reads a page.
   return new Response(
     request.method === "HEAD" ? null : await object.arrayBuffer(),
     { headers },
@@ -147,10 +155,10 @@ export default {
   ): Promise<Response> {
     const url = new URL(request.url);
 
-    // What the bucket answers, claimed first: the baked pages and the assets,
-    // each under its own root. An asset's key *is* its path without the
-    // leading slash — the root and the bucket's prefix are the same word —
-    // where a page's key is its path with the tile root removed.
+    // What the bucket answers is claimed first: the baked pages and the
+    // assets, each under its own root. An asset's key is its path without the
+    // leading slash, because the route's root and the bucket's prefix are the
+    // same word. A page's key is its path with the tile root removed.
     const bucket = url.pathname.startsWith(TILE_PREFIX)
       ? url.pathname.slice(TILE_PREFIX.length)
       : url.pathname.startsWith(ASSET_PREFIX)
@@ -158,8 +166,8 @@ export default {
         : null;
 
     // Everything else under a claimed root is reverse-proxied to that root's
-    // origin, same path, host header rewritten for Caddy. Neither branch reads
-    // past its prefix.
+    // origin, at the same path, with the host header rewritten for Caddy.
+    // Neither branch reads the path past its prefix.
     if (bucket === null) {
       const origin = url.pathname.startsWith(GEO_PREFIX)
         ? env.GEO_ORIGIN
@@ -189,13 +197,14 @@ export default {
     }
 
     const key = bucket;
-    // Rejected before R2 is touched (KEY_RE).
+    // A key of no known shape (KEY_RE) is refused before R2 is asked.
     if (!KEY_RE.test(key)) return new Response("not found", { status: 404 });
     if (key === SOURCE_KEY) return declaration(request, env);
 
-    // A page a version holds no object for is one its bake leaves out — open
-    // sea, or a child its parent already says — and so is answered empty,
-    // never not found; 404 stays for what names nothing, an asset included.
+    // A page that its version holds no object for is one its bake left out,
+    // such as open sea, or a child that its parent already describes. It is
+    // answered empty, never as not found. A 404 is kept for a key that names
+    // nothing, an asset's included.
     const page = BAKE_KEY.test(key);
     const missing = () =>
       page
@@ -217,26 +226,27 @@ export default {
       return new Response(null, { headers });
     }
 
-    // Edge cache in front of R2, with no invalidation: every bake and asset
-    // is immutable and versioned by URL.
+    // The edge cache sits in front of R2 with no invalidation, because every
+    // bake and asset is immutable and versioned by its URL.
     //
-    // What is cached is the packed bytes, and the client is what unpacks them.
-    // An entry whose `content-encoding` the cache can read is one it stores
-    // decoded and never compresses again (`application/octet-stream`). So
-    // `CACHED_ENCODING` holds the encoding while the entry is stored, and both
-    // paths out put it back on the way to the client.
+    // The cache holds the packed bytes, and the client unpacks them. The cache
+    // stores decoded an entry whose `content-encoding` it can read, and never
+    // compresses it again (`application/octet-stream`). So `CACHED_ENCODING`
+    // holds the encoding while the entry is stored, and both paths out put it
+    // back on the way to the client.
     const object = await env.BUCKET.get(key);
-    // Not cached: a version asked for before it is uploaded would answer empty for good.
+    // A missing object is not cached: a version asked for before it is
+    // uploaded would otherwise answer empty for good.
     if (object === null) return missing();
 
-    // writeHttpMetadata replays what was set at upload time, the
-    // `content-encoding` the object was packed in among it.
+    // writeHttpMetadata replays the headers set at upload time, among them the
+    // `content-encoding` the object was packed in.
     const headers = new Headers();
     object.writeHttpMetadata(headers);
     headers.set("etag", object.httpEtag);
 
-    // `no-transform` so that nothing re-encodes what is already in its final
-    // encoding, on the way out or out of the cache.
+    // `no-transform` keeps anything from re-encoding what is already in its
+    // final encoding, on the way out or out of the cache.
     const cc = headers.get("cache-control");
     if (cc && !cc.includes("no-transform")) {
       headers.set("cache-control", `${cc}, no-transform`);
@@ -248,10 +258,10 @@ export default {
       headers.set(CACHED_ENCODING, encoding);
     }
 
-    // Read whole before anything is answered, so what goes out is a body of
-    // a known length: a body cut short is one a client can tell was cut, and
-    // never stores under `immutable`; an R2 read that fails here throws, and
-    // no 200 goes out at all.
+    // The body is read whole before anything is answered, so that what goes
+    // out has a known length. A client can then tell that a body was cut
+    // short, and never stores it under `immutable`. An R2 read that fails here
+    // throws, and no 200 goes out at all.
     const bytes = await object.arrayBuffer();
     ctx.waitUntil(cache.put(request, new Response(bytes, { headers })));
     return serve(bytes, headers);

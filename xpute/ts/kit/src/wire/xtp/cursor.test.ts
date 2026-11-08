@@ -1,6 +1,7 @@
 // @xpute/kit/wire/xtp/cursor.test.ts
 
-/** The TypeScript half of xpute-kit/wire/xtp/cursor.test.rs, held to the same record. */
+/** The TypeScript side of xpute-kit/wire/xtp/cursor.test.rs, held to the
+ * same golden record, spec/golden/wire/xtp/cursor.tsv. */
 
 import { test } from "vitest";
 import assert from "node:assert/strict";

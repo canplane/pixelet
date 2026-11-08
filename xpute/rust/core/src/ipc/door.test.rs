@@ -91,7 +91,7 @@ fn ring_peaks() {
     );
 }
 
-/// FS_OPENAT's completion's packet: no detail.
+/// The packet of an FS_OPENAT completion, with a detail of 0.
 fn openat_reply() -> Vec<u8> {
     let mut buf = vec![0u8; SLOT as usize];
     let mut w = PacketWriter::new(&mut buf, 1);
@@ -234,7 +234,7 @@ fn xpute_number_unknown_refused() {
     assert_eq!((f.tag, f.result), (5, Errno::ENOSYS as i32));
 }
 
-/// What `call` sends, an import's frame with no fields.
+/// An import with no fields, for `call` to send.
 struct Ping;
 
 impl Import for Ping {

@@ -1,11 +1,12 @@
 // xpute-kit/alloc.rs
 
-//! A buddy of pages and a slab of size classes over it, on a range the
-//! caller names through `Range`.
+//! A buddy allocator of pages, and a slab allocator of size classes that
+//! takes its pages from the buddy. Both manage a range of memory that the
+//! caller describes through the `Range` trait.
 
-/// The bits a range's size and the exponents the buddy keeps fit in: a
-/// core's memory is 32-bit whatever the machine the allocator is built for,
-/// though on a native build the range's base is a full pointer.
+/// The width in bits that a range's size and the buddy's exponents fit in.
+/// A core's memory is 32-bit on every machine the allocator is built for;
+/// on a native build only the range's base is a full pointer.
 pub const ADDR_BITS: usize = 32;
 
 pub mod buddy_tree;

@@ -1,10 +1,11 @@
 // @xpute/runtime/conformance.test.ts
 
 /**
- * Runs the traces under spec/conformance/ against every core, Rust or
- * C++, native or WebAssembly, through this runtime's runtime, under each of the
- * layouts a core draws from its seed (LAYOUTS). Build the cores first
- * (`make build` at xpute's root): Cargo for Rust, cpp/Makefile for C++.
+ * Runs the traces under spec/conformance/ against every core, Rust or C++,
+ * native or WebAssembly, through this package's rings, header and stream,
+ * under each of the layouts a core draws from its seed (LAYOUTS). Build the
+ * cores first with `make build` at xpute's root, which builds Rust with Cargo
+ * and C++ with cpp/Makefile.
  */
 
 import { test } from "vitest";
@@ -39,7 +40,8 @@ import type { Core } from "@xpute/runtime/runtime.ts";
 import { TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
-/** A relative CARGO_TARGET_DIR is cargo's, which the root's tasks run from rust/. */
+/** A relative CARGO_TARGET_DIR is relative to rust/, where the root's tasks
+ * run cargo. */
 const CARGO_TARGET = resolve(
   join(ROOT, "rust"),
   process.env.CARGO_TARGET_DIR ?? "target",
@@ -59,13 +61,14 @@ function library(dir: string, name: string): string {
 const NOW = koffi.proto("double xpute_now(void)");
 const CALL = koffi.proto("int32_t xpute_call(uint32_t at)");
 
-/** Room past the core's range for the module's own stack and data, which the build decides. */
+/** A module's whole memory: the core's range, and room past it for the
+ * module's own stack and data, whose sizes the build decides. */
 const MODULE_BYTES = 4 << 20;
 
 const MODULE_IMPORTS = ["env.call", "env.memory", "env.now"];
 
-/** A core as the runtime holds it, and where its boot answered its front's
- * header is. */
+/** A core as the runtime holds it, with `head_at`, the offset its boot
+ * answered for the front's header. */
 interface Opened extends Core {
   head_at: number;
 }
@@ -76,7 +79,7 @@ interface Opener {
   close(): void;
 }
 
-/** What answers a core's calls until its runtime says. */
+/** Answers a core's calls until its runtime sets an answer. */
 function answer_enosys(): number {
   return Errno.ENOSYS;
 }
@@ -95,9 +98,9 @@ function native(path: string): Opener {
     (at: number) => answer(at),
     koffi.pointer(CALL),
   );
-  // The core keeps the region between calls, so it is memory that does not
-  // move, seen from here without a copy. Words of eight bytes, so it is
-  // 8-aligned, as a core asks.
+  // The core keeps the region between calls, so it must be memory that does
+  // not move and is seen from here without a copy. It is allocated as doubles
+  // so that it is 8-aligned, as a core requires.
   const regions: unknown[] = [];
   return {
     open(seed) {
@@ -192,8 +195,8 @@ class Runtime {
     this.sq = new Ring(mem, head.sq_at);
     this._cq = new Ring(mem, head.cq_at);
     this._stream_at = head.gpu_at;
-    // The fixture's one call, INC: the frame the core laid unpublished at
-    // `at` in its completion ring.
+    // The fixture makes one call, INC, as a frame it laid at `at` in its
+    // completion ring without publishing it.
     core.answer_with((at) => {
       const cq = this._cq;
       const e = cq.entry_of(at);
@@ -212,7 +215,7 @@ class Runtime {
     this._push(tag, cmd, ack ? frame.ACKREQ : 0, 0, args);
   }
 
-  /** The core's request tagged `tag` completed, as a device completes it. */
+  /** Completes the core's request tagged `tag`, as a device completes it. */
   complete(tag: number, cmd: number, result: number, args: number[]): void {
     this._push(tag, cmd, frame.RES, result, args);
   }
@@ -231,7 +234,7 @@ class Runtime {
         sq.write(this._writer, args.length),
         "a full ring takes no packet",
       );
-      // A negative number, such as an open's -errno, as the i32 it is.
+      // A negative number, such as an open's -errno, is written as an i32.
       for (const a of args) {
         if (a < 0) this._writer.i32(a);
         else this._writer.u32(a);
@@ -248,8 +251,8 @@ class Runtime {
     const completions: Completion[] = [];
     const cq = this._cq;
     for (let at = cq.peek(); at >= 0; at = cq.peek()) {
-      // An event of xpute's own, the runtime's control or the file device's,
-      // which no trace's runtime takes.
+      // An event of xpute's own, from the runtime's control or the file
+      // device, is skipped: no trace's runtime takes one.
       if (
         frame.major_of(cq.cmd(at)) < frame.PROGRAM_MAJOR &&
         (cq.flags(at) & frame.RES) === 0
@@ -273,13 +276,14 @@ class Runtime {
     return this.sq.len > 0;
   }
 
-  /** The header's word `name` says. */
+  /** What the header's word `name` holds. */
   word(name: string): number {
     if (!(name in word)) throw new Error(`no header word ${name}`);
     return this.head[word[name as keyof typeof word]];
   }
 
-  /** The ring header's word `at` of the ring the header's `ring_at` names. */
+  /** Word `at` of the own header of the ring that the header word `ring_at`
+   * places. */
   ring_word(ring_at: string, at: number): number {
     return new Uint32Array(
       this.head.buffer,
@@ -294,17 +298,18 @@ const CMD_NAMES = Object.entries(cmd).filter(
   ([, v]) => typeof v === "number",
 ) as [string, number][];
 
-/** xpute's own a trace sends or completes: the runtime's control's and the file device's. */
+/** The commands of xpute's own that a trace sends or completes: the
+ * runtime's control commands and the file device's. */
 const RUNTIME_NAMES: [string, number][] = [
   ["NOP", Command.NOP],
   ["FS_OPENAT", fs.Command.FS_OPENAT],
   ["FS_CLOSE", fs.Command.FS_CLOSE],
 ];
 
-/** The fixture's numbers a header's size words say again. */
+/** The fixture's numbers, which the header's size words must repeat. */
 const SIZES: Record<string, number> = { SQ_CAP, CQ_CAP, SLOT_BYTES };
 
-/** A name of either table, or a number in hex. */
+/** Reads a command named in either table, or written as a number in hex. */
 function cmd_number(name: string): number {
   const found = [...CMD_NAMES, ...RUNTIME_NAMES].find(([n]) => n === name);
   if (found) return found[1];
@@ -320,8 +325,9 @@ function cmd_name(n: number): string {
   );
 }
 
-/** A completion ring's sequence as a trace writes it: a reply TAG:CMD=RESULT,
- * an event TAG:CMD, and a run of one command's events tagged 0 up CMD*n. */
+/** Renders a completion ring's sequence as a trace writes it: a reply as
+ * TAG:CMD=RESULT, an event as TAG:CMD, and a run of one command's events
+ * tagged 0, 1, 2 and up as CMD*n. */
 function render_completions(completions: Completion[]): string {
   const out: string[] = [];
   let run: [number, number] | null = null;
@@ -351,7 +357,9 @@ function render_stream(ops: number[]): string {
   return ops.length === 0 ? "-" : ops.join(" ");
 }
 
-/** A result written `$n` binds on first sight and must match after. */
+/** Matches what was seen against what the trace says. A result written `$n`
+ * binds that variable the first time it is seen, and must match it every
+ * time after. */
 function expect(
   seen: string,
   said: string,
@@ -391,8 +399,8 @@ function expect(
   });
 }
 
-/** A number a trace writes: a literal, `$n`, or `slot $n`, the slot a handle
- * names. */
+/** Reads a number a trace writes: a literal, `$n`, or `slot $n`, the slot
+ * that the handle bound to `$n` names. */
 function val(term: string, vars: Map<string, number>): number {
   const bound = (v: string) => {
     const n = vars.get(v);
@@ -404,7 +412,8 @@ function val(term: string, vars: Map<string, number>): number {
   return term.startsWith("$") ? bound(term) : Number(term);
 }
 
-/** A relation a trace says holds between what was seen: `A == B` or `A != B`. */
+/** Checks a relation the trace says holds between numbers seen: `A == B` or
+ * `A != B`. */
 function relation(said: string, vars: Map<string, number>, what: string): void {
   if (said.includes(" == ")) {
     const [a, b] = said.split(" == ");
@@ -417,8 +426,8 @@ function relation(said: string, vars: Map<string, number>, what: string): void {
   }
 }
 
-/** Any negative is none, as the contract says (ARCHITECTURE.md, the turn): each
- * language's `NO_WAKE` is its own pick of one. */
+/** Any negative wake means none, as the contract says (ARCHITECTURE.md, the
+ * turn); each language's `NO_WAKE` is its own choice of a negative number. */
 function wake_name(wake: number): string {
   return wake === 0 ? "next" : wake > 0 ? "later" : "none";
 }

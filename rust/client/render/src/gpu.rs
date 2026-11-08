@@ -1,6 +1,7 @@
 // pxl-render/gpu.rs
 
-//! Everything that lives on the device. The one layer that talks to WebGPU; it decides nothing.
+//! Everything that lives on the device. This is the one layer that talks to WebGPU, and it
+//! decides nothing.
 
 pub mod ao;
 pub mod api;
@@ -22,11 +23,12 @@ pub mod read;
 pub mod renderer;
 pub mod resolve;
 pub mod shadow;
+pub mod sky;
 #[path = "gpu/span.spec.rs"]
 pub mod span_spec;
 pub mod split;
 pub mod star;
 pub mod surface;
 pub mod text;
-pub mod tiles;
+pub mod tile;
 pub mod upload;

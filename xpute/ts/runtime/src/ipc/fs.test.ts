@@ -38,7 +38,7 @@ class Turn {
     this._frames.push([cmd, buf.slice(0, w.finish())]);
   }
 
-  /** The frames handed to the device, as its runtime hands them. */
+  /** Hands the turn's frames to the device, as its runtime hands them. */
   take(server: FsServer): void {
     const listener = fs_imports(server);
     for (const [cmd, pkt] of this._frames) {
@@ -111,7 +111,8 @@ async function run(g: Golden, scenario: string): Promise<void> {
         break;
       case "write": {
         const bytes = text.encode(a[1]);
-        // Each write its own bytes: the runtime reads them only at the close.
+        // Each write gets bytes of its own, since the runtime reads them only
+        // at the close.
         const at_ = SCRATCH + 4096 + 64 * turn.writes++;
         new Uint8Array(turn.mem, at_, bytes.length).set(bytes);
         turn.post(Command.FS_WRITE, 3, (w) =>

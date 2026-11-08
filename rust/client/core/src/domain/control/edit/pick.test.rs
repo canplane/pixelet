@@ -1,8 +1,8 @@
 // pxl-core/domain/control/edit/pick.test.rs
 
-// A carve writes a cell-sized AIR leaf, so its corner must be the cell's,
-// not the size tier's; the store is saved, so a wrong bite outlives the
-// session.
+// A carve writes an AIR leaf the size of a cell, so its corner must be the
+// cell's, not the size tier's. The store is saved, so a carve in the wrong
+// place outlives the session.
 
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
 use pxl_spec::space::coord::q3::{FRAC_W, Q3};
@@ -11,7 +11,8 @@ use pxl_spec::space::layer::lattice::GROUND;
 
 use super::*;
 
-/// HitKind at a point off every tier boundary.
+/// A ground hit on the unit box at (3, 5, 2), at a point off every tier's
+/// boundary.
 fn struck(normal: V3, point: V3) -> Hit {
     Hit {
         t: 1.0,
@@ -33,6 +34,13 @@ fn cases() -> [(&'static str, Hit); 3] {
     ]
 }
 
+fn pick(hit: Hit) -> Pick {
+    Pick {
+        hit,
+        ray_zoom: None,
+    }
+}
+
 fn lattice(p: &Q3) -> (i32, i32, i32) {
     let [x, y, z] = idx_of(UNIT_ZOOM, p);
     (x, y, z)
@@ -41,7 +49,7 @@ fn lattice(p: &Q3) -> (i32, i32, i32) {
 #[test]
 fn struck_corner_lands_on_cell() {
     for (name, hit) in cases() {
-        let p = world_struck_corner(&hit, GROUND.cell());
+        let p = pick(hit).struck_corner(GROUND.leaf_cell_zoom());
         assert_eq!(lattice(&p), (3, 5, 2), "{name}");
         assert_eq!(p.map(|v| v.rem_euclid(1 << FRAC_W)), [0, 0, 0], "{name}");
     }
@@ -50,10 +58,10 @@ fn struck_corner_lands_on_cell() {
 #[test]
 fn struck_corner_names_cell() {
     for (name, hit) in cases() {
-        let cell = lattice(&world_struck_corner(&hit, GROUND.cell()));
+        let cell = lattice(&pick(hit).struck_corner(GROUND.leaf_cell_zoom()));
         for zoom in OBJECT_COARSEST..=OBJECT_FINEST {
             assert_eq!(
-                lattice(&world_struck_corner(&hit, zoom)),
+                lattice(&pick(hit).struck_corner(zoom)),
                 cell,
                 "{name} at zoom {zoom}"
             );

@@ -73,8 +73,8 @@ std::size_t base64url_encode(std::span<const std::uint8_t> in, std::span<char> o
 }
 
 Result<std::size_t> base64url_decode(std::string_view in, std::span<std::uint8_t> out) noexcept {
-    // A final group of one character carries six bits, which is no whole
-    // byte: no encoding ends that way.
+    // A final group of one character carries only six bits, less than a
+    // byte, so no encoding ends that way.
     if (in.size() % 4 == 1) return marshal_error(Errno::ebadmsg);
     std::size_t bytes = in.size() / 4 * 3 + (in.size() % 4 == 0 ? 0 : in.size() % 4 - 1);
     ensure(out.size() >= bytes, Errno::enospc, out.size(), bytes);

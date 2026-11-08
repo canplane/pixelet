@@ -1,8 +1,8 @@
 // @xpute/example/web/main.ts
 
 /**
- * The page: the core started in its worker, its turns let run, and SUM asked
- * across the port, the core calling ASK as it adds.
+ * The page. It starts the core in its worker, lets its turns run, and asks
+ * SUM across the port; the core calls ASK as it adds.
  */
 
 import { QUIET, start } from "@xpute/runtime";

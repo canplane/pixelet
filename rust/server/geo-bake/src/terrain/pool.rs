@@ -67,19 +67,19 @@ pub(crate) fn check(set: &Staged<'_>, workers: usize) -> Result<Vec<(Quadrant, S
     let worst: BTreeMap<Zoom, ([i32; 2], u64)> = all
         .bricks
         .iter()
-        .map(|(&cell, bricks)| (cell, most(bricks)))
+        .map(|(&cell_zoom, bricks)| (cell_zoom, most(bricks)))
         .collect();
-    let needs = terrain::pool_needs(|cell| worst.get(&cell).map_or(0, |w| w.1));
+    let needs = terrain::pool_needs(|cell_zoom| worst.get(&cell_zoom).map_or(0, |w| w.1));
     if needs <= u64::from(POOL_CHILD_GROUPS) {
         all.tiles.sort_unstable_by_key(|(p, _)| *p);
         return Ok(all.tiles);
     }
-    let (cell, (first, n)) = worst
+    let (cell_zoom, (first, n)) = worst
         .iter()
         .max_by_key(|(_, w)| w.1)
         .map(|(&c, &w)| (c, w))
         .unwrap_or((0, ([0; 2], 0)));
-    let zoom = GROUND.tile_zoom(cell) as Zoom;
+    let zoom = GROUND.tile_zoom(cell_zoom) as Zoom;
     let mut under: Vec<String> = (0..ACROSS as i32 * ACROSS as i32)
         .map(|k| {
             Quadrant::new(
@@ -95,7 +95,7 @@ pub(crate) fn check(set: &Staged<'_>, workers: usize) -> Result<Vec<(Quadrant, S
     under.sort_unstable();
     under.dedup();
     Err(format!(
-        "its ways' trees need {needs} of the pool's {POOL_CHILD_GROUPS} child groups: the window at cells {cell} from brick ({}, {}) holds {n}, over tiles {}, and a brick takes {} before its fold",
+        "its ways' trees need {needs} of the pool's {POOL_CHILD_GROUPS} child groups: the window at cells {cell_zoom} from brick ({}, {}) holds {n}, over tiles {}, and a brick takes {} before its fold",
         first[0],
         first[1],
         under.join(" "),
@@ -119,8 +119,8 @@ fn set_bricks(
         if fit == Fit::default() {
             continue;
         }
-        let cell = GROUND.cell_zoom(p.zoom);
-        let bricks = out.bricks.entry(cell).or_default();
+        let cell_zoom = GROUND.cell_zoom(p.zoom);
+        let bricks = out.bricks.entry(cell_zoom).or_default();
         for &(k, groups) in &fit.bricks {
             let at = [
                 p.at[0] * SIDE as i32 + (k % SIDE) as i32,

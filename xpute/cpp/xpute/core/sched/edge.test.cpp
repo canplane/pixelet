@@ -1,7 +1,7 @@
 // cpp/xpute/core/sched/edge.test.cpp
 //
-// Tasks on an executor of the test's own: a queue resumed in order, which is
-// all an executor owes the edge. The clock is the test's.
+// The tasks run on the test's own executor, a queue resumed in order, which
+// is all an edge needs of an executor. The test owns the clock.
 
 #include "edge.hpp"
 

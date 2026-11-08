@@ -1,13 +1,13 @@
 // pxl-geo-bake/bin/serve_tiles.rs
 
-//! Local demand bakes. --cache holds them a kind a directory, across
-//! restarts; a re-ingest or a bake change is a purge by command. The
-//! Earth's picture is baked offline by pxl-tool, so it is served from that
-//! bake (`--out`), under the names the bucket holds, whichever way the rest is.
-//! `--shelf` serves each kind's set (tile/shard.rs), so a bake is looked at
-//! before anything is published. A tile goes out immutable under a version
-//! that names what is served, as the Worker's do: a set's, its manifest's
-//! digest; the oven's, the token its cache holds (`version_of`).
+//! The dev tile server, baking on demand. `--cache` keeps what it bakes, one directory a
+//! kind, across restarts; after a re-ingest or a change to a bake, the cache is purged by
+//! command. The Earth's picture is baked offline (bin/bake_earth.rs), so it is served from
+//! that bake (`--out`), under the names the bucket holds, however the rest is served.
+//! `--shelf` serves each kind's set (tile/shard.rs), so a bake can be looked at before
+//! anything is published. A tile goes out immutable under a version that names what is
+//! served, as the Worker's tiles do: a set's version is its manifest's digest, and the oven's
+//! is the token its cache holds (`version_of`).
 
 use axum::body::Bytes;
 use axum::extract::{Path, State};
@@ -29,7 +29,7 @@ use pxl_spec::bake::publication::{tile_object_parts, BaseLayer, FORMAT, TILE_SPH
 use pxl_spec::bake::source::is_sharded;
 use pxl_spec::route::{ASSET_ROOT, TILE_ROOT};
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, TOP_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, MIN_ZOOM};
 use std::path::{Path as FsPath, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -48,7 +48,7 @@ struct App {
     tile_source: TileSource,
     /// The oven's cache, whose token names what it serves.
     cache: PathBuf,
-    top_zoom: Zoom,
+    min_zoom: Zoom,
     coverage: Vec<String>,
     asset_dir: PathBuf,
     out: PathBuf,
@@ -65,8 +65,8 @@ fn bytes_version(bytes: &[u8]) -> String {
     format!("dev-{:016x}", std::hash::Hasher::finish(&h))
 }
 
-/// What a kind is served under now: a set's, its manifest's digest, which
-/// every bake writes again; the oven's, its cache's token.
+/// The version a kind is served under now: for a set, its manifest's digest, which every bake
+/// writes again; for the oven, its cache's token.
 fn version_of(app: &App, layer: BaseLayer) -> Result<String, String> {
     let read = |path: &FsPath| std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()));
     match &app.tile_source {
@@ -92,9 +92,9 @@ fn version_of(app: &App, layer: BaseLayer) -> Result<String, String> {
     }
 }
 
-/// The source's declaration (pxl-geo-bake source.rs) as the server stands
-/// now: a shelf's sets as their manifests say, the oven the coverage in the
-/// formats this code writes; the Earth's picture its bake's.
+/// The source's declaration (pxl-geo-bake source.rs) for the server as it stands: a shelf's
+/// sets as their manifests say; for the oven, the coverage in the formats this code writes;
+/// and for the Earth's picture, its bake's.
 fn declaration(app: &App) -> Result<String, String> {
     let kinds = source::try_kinds(|l| {
         let version = version_of(app, l)?;
@@ -117,7 +117,7 @@ fn declaration(app: &App) -> Result<String, String> {
             }),
         }
     })?;
-    Ok(source::declaration(app.top_zoom, &kinds, &Overrides::new())?.to_string())
+    Ok(source::declaration(app.min_zoom, &kinds, &Overrides::new())?.to_string())
 }
 
 const EARTH: &str = "earth";
@@ -292,16 +292,16 @@ fn run() -> Result<(), String> {
         }
     }
 
-    let (tile_source, top_zoom) = match shelf {
-        Some(dir) => (TileSource::Shelf(dir), TOP_ZOOM),
+    let (tile_source, min_zoom) = match shelf {
+        Some(dir) => (TileSource::Shelf(dir), MIN_ZOOM),
         None => {
-            let top_zoom = LEAF_ZOOM
+            let min_zoom = LEAF_ZOOM
                 .checked_sub(folds)
-                .filter(|&z| z >= TOP_ZOOM)
+                .filter(|&z| z >= MIN_ZOOM)
                 .ok_or("--folds past the pyramid's top")?;
             (
-                TileSource::Oven(Server::open(workers, cache.clone(), top_zoom, limits)?),
-                top_zoom,
+                TileSource::Oven(Server::open(workers, cache.clone(), min_zoom, limits)?),
+                min_zoom,
             )
         }
     };
@@ -309,7 +309,7 @@ fn run() -> Result<(), String> {
     let app = Arc::new(App {
         tile_source,
         cache: cache.clone(),
-        top_zoom,
+        min_zoom,
         coverage,
         asset_dir,
         out,

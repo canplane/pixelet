@@ -5,7 +5,8 @@ import { type ReactNode, useState } from "react";
 import { PanelBar, PanelBody, PanelScroll } from "@/ui/component/panel.tsx";
 import { Segmented, type SegmentedProps } from "@/ui/component/segmented.tsx";
 
-/** A panel's body whose top row is its tabs, opening on the first, and whose scroller is the tab's own. */
+/** A panel's body whose top row holds its tabs. It opens on the first tab, and
+ * each tab has a scroller of its own. */
 export function Tabbed<T extends string | number>({
   tabs,
   onClose,

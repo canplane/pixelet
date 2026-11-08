@@ -1,6 +1,7 @@
 // @xpute/kit/wire/xtp/encode.test.ts
 
-/** The TypeScript half of xpute-kit/wire/xtp/encode.test.rs, held to the same bytes. */
+/** The TypeScript side of xpute-kit/wire/xtp/encode.test.rs, held to the
+ * same bytes, spec/golden/wire/xtp/encode.tsv. */
 
 import { test } from "vitest";
 import assert from "node:assert/strict";

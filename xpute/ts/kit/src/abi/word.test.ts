@@ -5,8 +5,8 @@ import assert from "node:assert/strict";
 
 import { FIELD_MASK, FIELD_MASK64 } from "./word.ts";
 
-// The same answers as xpute-kit's field_mask32 and field_mask64, the
-// whole-word field and the one past the word among them.
+// The answers xpute-kit's `field_mask32` and `field_mask64` give, including
+// those for a whole-word field and for one that starts past the word.
 test("a field mask is the field, the whole word, or nothing past the word", () => {
   assert.deepStrictEqual(
     [

@@ -3,9 +3,9 @@
 /**
  * What a dev server and the page's preview (script/web.ts `serve`) answer
  * besides the bundle: the routes the page asks of its own origin, forwarded
- * where the tiles come from. A device's console is @pxl/build/console.ts's.
- * Loaded by Expo's transform for metro.config.ts as well as by Node, so it
- * reads no `import.meta`.
+ * to wherever the tiles come from. A device's console is answered by
+ * @pxl/build/console.ts instead. Expo's transform loads this file for
+ * metro.config.ts, and Node loads it too, so it must not read `import.meta`.
  */
 
 import * as http from "node:http";
@@ -18,15 +18,17 @@ import {
   GEO_PREFIX,
   SITE_URL,
   TILE_PREFIX,
-} from "@pxl/client/origin/route.spec.ts";
+} from "@pxl/client/service/origin/route.spec.ts";
 
 /**
- * Where a dev server forwards each route the page asks of its own origin,
- * split as the Worker splits them, by the source the tiles come from
- * (PXL_DEV_SOURCE, the Makefile's `dev`, `dev-oven`, `dev-shelf`):
- * `delivery`, the published deployment (PXL_REMOTE_ORIGIN, else the site);
- * `oven` and `shelf`, the local servers, the tiles' and assets' to the tile
- * server, the API to the API server, the rest to the search server.
+ * Where a dev server forwards a route the page asks of its own origin. The
+ * routes split as the Worker splits them, and where they go depends on the
+ * source the tiles come from, PXL_DEV_SOURCE, which the Makefile's `dev`,
+ * `dev-oven` and `dev-shelf` set. Under `delivery`, every route goes to the
+ * published deployment (PXL_REMOTE_ORIGIN, or else the site). Under `oven` and
+ * `shelf`, the routes go to the local servers: the tiles and the assets to
+ * the tile server, the API to the API server, and the rest to the search
+ * server.
  */
 export function route_target(url: string): string | null {
   const local = {
@@ -46,9 +48,10 @@ export function route_target(url: string): string | null {
   return delivery ? process.env.PXL_REMOTE_ORIGIN || SITE_URL : hit[1];
 }
 
-/** The request forwarded whole and unrewritten. What comes back is never
- * stored: the objects behind it are `immutable` for a year, and a restart of
- * this server cuts a body in flight. */
+/** Forwards the request whole and unrewritten. The answer is marked
+ * `no-store`, so that the browser never keeps it. The objects behind it are
+ * served as `immutable` for a year, and a restart of this server can cut a
+ * body in flight, which the browser would then keep as if it were whole. */
 export function forward(
   target: string,
   req: http.IncomingMessage,

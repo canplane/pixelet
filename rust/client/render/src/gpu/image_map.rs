@@ -44,7 +44,8 @@ impl ImageMap {
         }
     }
 
-    /// Whether the image came this frame.
+    /// Copies the image in and builds its mips the first time it arrives. Returns whether it
+    /// arrived this frame.
     pub fn step(&mut self, g: &Gpu, mips: &MipPass, image: Option<Image>) -> bool {
         if self.loaded {
             return false;

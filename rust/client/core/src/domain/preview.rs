@@ -1,10 +1,10 @@
 // pxl-core/domain/preview.rs
 
-//! An edit not yet made, as both heads see it: control decides it, and the
-//! turn hands it to the scene, which draws it (pxl-core turn.rs). What it
-//! changes in what is drawn, which the world as drawn composes
-//! (`World::previewing`); the ghost it shows under the pointer (`Ghost`); and
-//! a marker's draft, drawn with the text it has so far.
+//! An edit not yet made, in the form both heads share. Control decides the
+//! preview, and the turn hands it to the scene, which draws it (turn.rs). A
+//! preview has three parts: what it changes in the world as drawn, which
+//! `World::previewing` composes; the ghost it shows under the pointer; and a
+//! marker's draft, drawn with the text typed so far.
 
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::asset::AssetId;
@@ -12,34 +12,36 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::octant::Octant;
 
-/// What the eraser's preview changes in what is drawn only: every mechanic
-/// — the pick, a walk, the camera's clearance, an edit's own reads, decor's
-/// column surface — asks the stored world (`World::now`), or hover would clear,
-/// the hide lift and the pick hit it again, forever, and a walker would fall
-/// into a hole not dug. No revision moves, so saves do not see the hover.
+/// What the eraser's preview changes in the world as drawn, and nowhere
+/// else. Every mechanic (the pick, a walk, the camera's clearance, an edit's
+/// own reads, decor's column surface) asks the stored world (`World::now`).
+/// If the pick saw the preview, a hover would hide what it points at, the
+/// hide would lift, and the pick would hit it again, forever. A walker would
+/// fall into a hole not yet dug. The preview moves no revision, so saves
+/// never see a hover.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct RenderEdits {
-    /// The placed object hidden, by its key, whatever its kind: the rays
-    /// cut it and decor's records leave it out, each meeting it only where
-    /// it holds it.
+    /// The key of the placed object hidden, whatever its kind. The rays cut
+    /// it and decor's records leave it out, each reader only where it holds
+    /// that object.
     pub hide: Option<Octant>,
-    /// An AIR entry over bare terrain, which has no leaf to hide.
+    /// Where the eraser over bare terrain draws AIR, because bare terrain
+    /// has no leaf to hide.
     pub carve: Option<Octant>,
-    /// The scattered decor hidden, by the cell it stands in.
+    /// The cell whose scattered decor is hidden.
     pub scattered_cell: Option<[i32; 3]>,
 }
 
-/// What the pointer's tool would show where it is: nothing, a decor
-/// instance, or a box, an instance in the pointer's frame. The tool decides
-/// it (pxl-core domain/control/edit/ghost.rs `ghost`), and the scene
-/// draws it half transparent as its kind is drawn
-/// (domain/scene/indicator/ghost.rs `GhostDraw::set`).
+/// What the pointer's tool would show where the pointer is. The tool decides
+/// it (domain/control/edit/ghost.rs `ghost`), and the scene draws it half
+/// transparent, the way its kind is drawn (domain/scene/indicator/ghost.rs
+/// `GhostDraw::set`).
 #[derive(Clone, Copy)]
 pub enum Ghost {
     None,
-    /// `decor`'s `variant`, its base at `at` in the world's frame. `stand_in`
-    /// is the box a placement would show in its place, none for an instance
-    /// the world already holds.
+    /// A decor instance whose base stands at `at` in the world's frame.
+    /// `stand_in` is the box a placement shows in its place, and is None for
+    /// an instance the world already holds.
     Decor {
         at: V3,
         decor: &'static Decor,
@@ -51,9 +53,10 @@ pub enum Ghost {
     Box(GhostBox),
 }
 
-/// A box the tool would fill or carve: its corner in the world's frame, the
-/// zoom of its cube, the cube it would be or carve (none where there is no one cube), and
-/// whether the eraser holds it.
+/// A box the tool would fill or carve. `at` is its corner in the world's
+/// frame and `zoom` the zoom of its cube. `cube` is the cube it would place
+/// or carve, and is None where the box is not one cube. `erase` is set when
+/// the tool is the eraser.
 #[derive(Clone, Copy)]
 pub struct GhostBox {
     pub at: V3,
@@ -62,8 +65,8 @@ pub struct GhostBox {
     pub erase: bool,
 }
 
-/// A marker's draft: its place, free or holding a marker, and its text so
-/// far; committed, it is the marker that stands there.
+/// A marker being written. Its place may be free or may already hold a
+/// marker. Once committed, the draft is the marker at that place.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Draft {
     pub at: Octant,

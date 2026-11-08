@@ -1,9 +1,10 @@
 // xpute-gpu/runtime/image.rs
 
-//! COPY_EXTERNAL_IMAGE on a native device: what the web asks of its browser
-//! (createImageBitmap), decoded here on a thread of its own and landed at a
-//! later poll. PNG, JPEG and WebP, what a browser is sure to read; anything
-//! else is left out, as there.
+//! COPY_EXTERNAL_IMAGE on a native device. The web asks its browser to decode
+//! the image (createImageBitmap); here a thread of the runtime's own decodes
+//! it, and a later poll lands it in its texture. The formats are PNG, JPEG and
+//! WebP, the ones every browser is sure to read, so a core can count on them
+//! on either runtime. Any other format is refused here.
 
 use std::io::Cursor;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -16,10 +17,11 @@ use super::run::OwnedTexture;
 use super::GpuRuntime;
 use crate::spec::RESULT;
 
-/// An image sent the decoder, landed in its texture at the poll after its
-/// decode comes back.
+/// An image sent to the decoder. It lands in its texture at the first poll
+/// after its decode comes back.
 pub(super) struct Decoding {
-    /// Its place in what was sent, which the decoder answers in order.
+    /// Its number among the jobs sent. The decoder answers in the order it
+    /// was sent them.
     job: u64,
     to: OwnedTexture,
     word: u32,
@@ -36,8 +38,8 @@ pub(super) struct Decoder {
 }
 
 impl Decoder {
-    /// Each answer `wake`s the runtime's loop: nothing else asks for the poll
-    /// that lands it.
+    /// The decoder's thread calls `wake` after each answer, since nothing
+    /// else asks for the poll that lands it.
     pub(super) fn new(wake: fn()) -> Decoder {
         let (ask, jobs) = channel::<Job>();
         let (answer, answers) = channel();
@@ -61,8 +63,8 @@ impl Decoder {
 }
 
 impl GpuRuntime {
-    /// `bytes` copied now, since they are the core's again once the stream
-    /// is handed back (xpute-core ipc/stream.rs R3).
+    /// Copies `bytes` now, since they are the core's again once the stream is
+    /// handed back (xpute-core ipc/stream.rs R3).
     pub(super) fn copy_external_image(
         &mut self,
         to: OwnedTexture,
@@ -86,11 +88,11 @@ impl GpuRuntime {
         });
     }
 
-    /// Each decoded image written to its texture, ahead in the queue of
-    /// anything the core submits from here, and answered OK. One the runtime
-    /// cannot decode is answered REFUSED, as on the web; one whose texture
-    /// went has nowhere to land, and one the device's loss forgot, and
-    /// neither is answered.
+    /// Writes each decoded image into its texture, ahead in the queue of
+    /// anything the core submits from now on, and answers OK. An image the
+    /// runtime cannot decode is answered REFUSED, as on the web. An image
+    /// whose texture is gone, or which the device's loss forgot, has nowhere
+    /// to land and is not answered.
     pub(super) fn land_images(&mut self, memory: &mut Memory<'_>) {
         while let Ok((job, image)) = self.decoder.answers.try_recv() {
             let Some(d) = self.decoding.pop_front_if(|d| d.job == job) else {
@@ -161,8 +163,8 @@ fn decode(bytes: &[u8], flip_y: bool, premultiplied: bool) -> Option<Image> {
     Some(image)
 }
 
-/// Pixels of `channels` bytes each, as RGBA8: gray spread to the three
-/// colors, a missing alpha opaque.
+/// Pixels of `channels` bytes each, as RGBA8. Gray is spread to the three
+/// colors, and a missing alpha is opaque.
 fn rgba(width: u32, height: u32, channels: usize, from: &[u8]) -> Image {
     let rgba = match channels {
         4 => from.to_vec(),

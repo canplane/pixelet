@@ -1,8 +1,10 @@
 // pxl-core/domain/scene/animation.rs
 
-//! Whether anything the scene animates stepped this turn, waking the turn at
-//! its own steps (`animated`), which the renderer reads so the resolve asks
-//! no frame after it (pxl-render `FrameInput::animated`).
+//! Whether an animation of the scene stepped this turn. An animation (a
+//! character, the clouds, the location indicator) wakes the turn itself at
+//! each of its steps. The renderer reads this flag (pxl-render
+//! `FrameInput::animated`) so that a frame drawn for an animation's step asks
+//! for no frames after it: the animation's next step wakes the turn again.
 
 use xpute_core::global::Global;
 
@@ -17,13 +19,15 @@ fn animation() -> &'static mut Animation {
     ANIMATION.get(Animation::default)
 }
 
-/// What the scene animates stepped this turn: what wakes the turn at its
-/// own steps, so no frame is asked after it.
+/// Records that an animation stepped this turn. Only an animation that wakes
+/// the turn at its own next step calls this, since the renderer then asks for
+/// no frame after this one.
 pub fn note_animation() {
     animation().animated = true;
 }
 
-/// Whether what is animated stepped; the turn's taken.
+/// Whether an animation stepped this turn. Reading it clears it, so the stage
+/// reads it once a turn.
 pub fn take() -> bool {
     core::mem::take(&mut animation().animated)
 }

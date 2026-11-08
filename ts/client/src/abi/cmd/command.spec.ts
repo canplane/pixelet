@@ -1,6 +1,6 @@
 // ts/client/src/abi/cmd/command.spec.ts
 //
-// GENERATED from rust/client/core/ui.json
+// GENERATED from spec/client/core/door/ui.json
 
 // Every command, by the side that sends it.
 
@@ -20,7 +20,7 @@ export const SENSOR_ERR = 0x120b;
 export const TURN_GRANT = 0x1d01;
 /** What the tile source declares of itself, once the client has it: the tile root's
  * `source`, the published one out of the bucket or the dev tile server's, read by the
- * client (ts/client/src/sys/fs/source.ts) and handed over as numbers and names.
+ * client (ts/client/src/service/sys/fs/source.ts) and handed over as numbers and names.
  * Until it comes nothing is observed: the floor is held at the zoom it names, and no
  * tile is asked for that no shard it serves is over or under (pxl-core sys/io/source.rs). */
 export const SOURCE_DECLARE = 0x1301;
@@ -71,9 +71,9 @@ export const CAMERA_GOTO = 0x1804;
 /** A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
  * (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
  * first of a run is taken to be where the camera already is, so nothing moves as
- * it begins; the camera follows the tracker from there until POSE_END.
- * Nothing sends it yet: it is where an immersive mode's head pose (a Quest's, a Vision Pro's) would drive
- * the camera, sent by the device app. */
+ * it begins; the camera follows the tracker from there until POSE_END. No client
+ * sends it: it is the way in by which an immersive mode's head pose (a Quest's, a
+ * Vision Pro's) drives the camera, sent by the device app. */
 export const INPUT_XR_POSE = 0x1109;
 /** The tracker let the camera go: back to the controller it had. */
 export const INPUT_XR_POSE_END = 0x110a;

@@ -1,8 +1,9 @@
 // pxl-render/gpu/pass.rs
 
-//! Passes other than the world: markers, decor and impostors, the location indicator and
-//! characters, the marks of the draws among them that changed, the world gizmo and the
-//! character surface.
+//! The passes that draw what the core lists over the world its rays cast (gpu/ray.rs): the
+//! markers, the decor and its impostors, the location indicator and the characters. All but
+//! the markers mark the tiles their changed draws cover (`mark`). The dev gizmos and the
+//! character surface are passes of their own here as well.
 
 pub mod character;
 pub mod debug;

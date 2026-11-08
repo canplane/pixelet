@@ -1,6 +1,6 @@
 // xpute-gpu/runtime/object.rs
 
-//! The objects a core made, each at its handle's slot.
+//! The objects a core made, each kept at its handle's slot.
 
 use xpute_core::abi::handle::handle_slot;
 
@@ -9,7 +9,7 @@ use super::GpuRuntime;
 pub(super) enum Object {
     Buffer(wgpu::Buffer),
     Texture(wgpu::Texture),
-    /// With its format, which a depth attachment asks of it.
+    /// A view with its format, which a depth attachment needs to know.
     View(wgpu::TextureView, wgpu::TextureFormat),
     Sampler(wgpu::Sampler),
     Shader(wgpu::ShaderModule),
@@ -20,7 +20,7 @@ pub(super) enum Object {
     ComputePipeline(wgpu::ComputePipeline),
     QuerySet(wgpu::QuerySet),
     Encoder(wgpu::CommandEncoder),
-    /// Boxed, so a slot is a handle's size and not a pass's.
+    /// Boxed, so that a pass's size does not set every slot's size.
     RenderPass(Box<wgpu::RenderPass<'static>>),
     ComputePass(Box<wgpu::ComputePass<'static>>),
 }

@@ -10,9 +10,9 @@ body,
   overflow: hidden;
 }
 
-/* Flex, since RN-web lays its root out as a flex child. Fixed and black:
-   without a fixed element meeting the edges, Safari blurs the top bar over
-   the map. */
+/* Flex, because React Native for Web lays its root out as a flex child.
+   Fixed and black, because without a fixed element that meets the edges,
+   Safari blurs its top bar over the map. */
 #root {
   display: flex;
   position: fixed;
@@ -26,19 +26,21 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* A long press aims at a control (the size popover); the iOS callout,
-     selection and drag ghost would interrupt it. */
+  /* A long press opens a control (the size popover), and the iOS callout,
+     text selection and drag ghost would interrupt it. */
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
 }
 
-/* Does not inherit. Safe only because nothing uses native drag and drop. */
+/* -webkit-user-drag does not inherit, so it is set on every element. This is
+   safe only because nothing uses native drag and drop. */
 * {
   -webkit-user-drag: none;
 }
 
-/* Safari will not select inside a field under a user-select:none ancestor. */
+/* Safari will not select text in a field under a user-select: none ancestor,
+   so fields turn selection back on. */
 input,
 textarea,
 [contenteditable] {
@@ -46,7 +48,7 @@ textarea,
   user-select: text;
 }
 
-/* No focus ring, as on a device; RN styles cannot say it. */
+/* No focus ring, as on a device. React Native's styles cannot express this. */
 input:focus,
 textarea:focus {
   outline: none;

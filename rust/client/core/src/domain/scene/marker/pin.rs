@@ -1,13 +1,14 @@
 // pxl-core/domain/scene/marker/pin.rs
 
-//! The marker kind's pins someone put up, as the object store holds them,
-//! drawn as scene markers: each its text
-//! on a pill at its own cell, or where more than one stands in a pin's cell
-//! (`marker_cell`), their count at the cell's middle on a pin's pill in its
-//! colors turned over, the pins' own rule (`asset/marker.json`); the draft
-//! wherever it is. A pin is read with the brick it
-//! stands in and shown at the camera grid's cell where it stands, its own
-//! point's, so it shows and is counted as the zoom drawn there says.
+//! The pins people put up, objects of the marker kind as the object store
+//! holds them, drawn as scene markers. Each pin shows its text on a pill at
+//! its own cell. Where more than one pin stands in a pin's cell
+//! (`marker_cell_zoom`), their count shows instead, at the cell's middle, on
+//! a pill with the pin's colors turned over. That is the pins' own rule
+//! (`asset/marker.json`). The draft shows wherever it is. A pin is read with
+//! the brick it stands in, and it is shown at the camera grid's cell at its
+//! own point, so whether it shows and how it is counted follow the zoom
+//! drawn there.
 
 use core::hash::Hasher;
 
@@ -29,18 +30,18 @@ use pxl_spec::space::layer::octant::Octant;
 /// A pin's cell (`marker_cell_of`): its zoom and place.
 type Cell = (Zoom, [i32; 3]);
 
-/// What holds a pin's instance: its entry, or the pin's cell its
-/// count stands for.
+/// What a pin instance stands for: one pin's entry, or the pin's cell whose
+/// count it shows.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) enum Holder {
     One(Octant),
     Cell(Cell),
 }
 
-/// A pin read from a drawn brick: its pill, where it stands and its base;
-/// and as the last run showed it, the camera grid's cell zoom at its base
-/// and its pin's cell, none where it did not show, and where its cell's
-/// count stood, of the cell it was then.
+/// A pin read from a drawn brick: its pill, where it stands, and its base.
+/// It also keeps what the last run showed: the camera grid's cell zoom at its
+/// base (`grid`), its pin's cell or None where it did not show (`cell`), and
+/// where its cell's count stood, with the cell that was then (`crowd`).
 #[derive(Clone)]
 pub(super) struct Pin {
     pub(super) brick: Brick,
@@ -53,8 +54,9 @@ pub(super) struct Pin {
     crowd: Option<(Cell, Q3)>,
 }
 
-/// A product choice: the length a one-line pin still reads as a name at.
-/// Code points, so a non-BMP character is never cut in half.
+/// The longest a one-line pin's text runs and still reads as a name, a
+/// product choice. It counts code points, so a character outside the BMP is
+/// never cut in half.
 const SHOWN_CHARS: usize = 12;
 
 /// A pin's text, cut to `SHOWN_CHARS`, on its pill.
@@ -80,8 +82,8 @@ fn cnt(n: usize) -> Design {
     }
 }
 
-/// One pin, taken to its entry, which the tool held decides what to do
-/// with.
+/// One pin's instance. A tap on it goes to the pin's entry, and the tool held
+/// decides what to do with it.
 fn one(at: Octant, design: Design, stands: Q3) -> Instance {
     Instance {
         key: Key::Pin(Holder::One(at)),
@@ -91,8 +93,8 @@ fn one(at: Octant, design: Design, stands: Q3) -> Instance {
     }
 }
 
-/// The pins put up over `brick`, whose columns are `columns`, by the brick
-/// their base is in, so no pin is another brick's too.
+/// Reads the pins put up over `brick`, whose columns are `columns`. A pin
+/// belongs to the brick its base is in, so no pin is read by two bricks.
 pub(super) fn read(brick: Brick, columns: &Aabb, pins: &mut Vec<Pin>) {
     let world = World::now();
     world.placed_in(columns, &mut |e| {
@@ -115,12 +117,13 @@ pub(super) fn read(brick: Brick, columns: &Aabb, pins: &mut Vec<Pin>) {
     });
 }
 
-/// What `pins` show seen from `eye`, into `out`: `draft`,
-/// wherever it is, then each pin where its own point's cell
-/// shows a marker (`marker_shows`), a pin's cell's pins but that one
-/// together: one is itself, more their count, which a tap takes to where it
-/// stands. A cell lies in its brick, finer than it, so a brick's pins are
-/// counted among themselves.
+/// Writes into `out` what `pins` show, seen from `eye`. The draft shows
+/// first, wherever it is. Then each pin shows where the cell at its own point
+/// shows a marker (`marker_shows`). The pins of one pin's cell, the draft
+/// left out, show together: a single pin shows as itself, and more show as
+/// their count, which a tap takes to where the count stands. A pin's cell is
+/// finer than its brick and lies inside it, so a brick's pins are counted
+/// among themselves alone.
 pub(super) fn show(pins: &mut [Pin], eye: V3, draft: Option<&Draft>, out: &mut Vec<Instance>) {
     let drafted = draft.map(|d| d.at);
     out.extend(draft.map(|d| one(d.at, pill(&d.text), pin_at(d.at).0)));
@@ -138,7 +141,8 @@ pub(super) fn show(pins: &mut [Pin], eye: V3, draft: Option<&Draft>, out: &mut V
             out.push(one(first.at, first.design.clone(), first.stands));
             continue;
         }
-        // Where the count stands, asked once the cell it stands for.
+        // Where the count stands is asked once for each cell it stands for,
+        // and kept with the cell's pins.
         let at = match run.iter().find_map(|p| p.crowd.filter(|c| c.0 == cell)) {
             Some((_, at)) => at,
             None => crowd_at(cell, run[0].at.zoom(), GROUND.read_zoom(run[0].grid)),
@@ -153,8 +157,8 @@ pub(super) fn show(pins: &mut [Pin], eye: V3, draft: Option<&Draft>, out: &mut V
     }
 }
 
-/// `draft` as arrangement.rs `Inputs` compares it: its entry and its
-/// text by its hash, so a settled turn asks the heap for nothing.
+/// `draft` as arrangement.rs `Inputs` compares it: its entry, and its text by
+/// the text's hash, so a turn where nothing changed allocates nothing.
 pub(super) fn draft_key(draft: Option<&Draft>) -> Option<(Octant, u64)> {
     draft.map(|d| {
         let mut h = fnv::FnvHasher::default();
@@ -163,9 +167,10 @@ pub(super) fn draft_key(draft: Option<&Draft>) -> Option<(Octant, u64)> {
     })
 }
 
-/// Where the count of a pin's cell `(zoom, at)` stands: at its middle, half
-/// a pin at `pin` over what is drawn there first within it at `detail`, or
-/// over its floor.
+/// Where the count of the pin's cell `(zoom, at)` stands: at the cell's
+/// middle, half a pin of zoom `pin` above the first thing a ray down meets
+/// within the cell at `detail`, or above the cell's floor where it meets
+/// nothing.
 fn crowd_at((zoom, at): Cell, pin: Zoom, detail: Zoom) -> Q3 {
     let c = cube(zoom, at);
     let [x, y, _] = c.center();
@@ -173,8 +178,9 @@ fn crowd_at((zoom, at): Cell, pin: Zoom, detail: Zoom) -> Q3 {
     point(x, y, top + units(pin) / 2.0)
 }
 
-/// A pin at its own cell's center, half a cell over the floor it stands
-/// on, where the dot under its pill is drawn, and its base.
+/// Where a pin stands, and its base. It stands at its own cell's center, half
+/// a cell above the floor it stands on, which is where the dot under its pill
+/// is drawn.
 fn pin_at(at: Octant) -> (Q3, V3) {
     let c = cube(at.zoom(), at.at());
     let [x, y, z] = c.center();

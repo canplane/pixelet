@@ -1,10 +1,10 @@
 // pxl-core/door/executor.rs
 
-//! embassy's raw executor behind xpute's `Executor`, installed at boot. The
-//! pender only records that work is queued: poll is never called from it,
-//! which the executor forbids, and `pending` tells the falling edge. No
-//! core task is ordered before another, so each is spawned at priority 0
-//! and the priority is dropped.
+//! embassy's raw executor, installed at boot as xpute's `Executor`. The
+//! pender only records that work is queued, because embassy forbids calling
+//! poll from it, and `pending` reports that record at the turn's end. No core
+//! task is ordered before another, so every task is spawned at priority 0 and
+//! the priority is ignored.
 
 use crate::domain::scene::model::asset::REGISTRATIONS;
 use crate::sys::load::LOAD_FILES;
@@ -12,10 +12,11 @@ use embassy_executor::raw::Executor as Raw;
 use xpute_core::global::Global;
 use xpute_core::sched::task::{self, Executor, Priority, Task};
 
-/// The core's tasks, the executor's pool: the two that run for good
-/// (turn.rs `world_tasks`), one for each file in flight, a slot's, the
-/// catalog's or the sphere's (sys/io/loader.rs `arrival`), and one for each
-/// model registering (domain/scene/model/asset.rs `registration`).
+/// The size of the executor's pool, which holds every core task: the two
+/// that run for the core's life (turn.rs `world_tasks`), one for each file in
+/// flight, whether a slot's, the catalog's or the sphere's (sys/io/loader.rs
+/// `arrival`), and one for each model being registered
+/// (domain/scene/model/asset.rs `registration`).
 pub(crate) const TASKS: usize = 2 + LOAD_FILES + REGISTRATIONS;
 
 struct OneThread;
@@ -74,7 +75,7 @@ impl Executor for Embassy {
 
 static EMBASSY: Embassy = Embassy;
 
-/// Before the core spawns anything.
+/// Must run before the core spawns anything.
 pub(super) fn install() {
     task::set(&EMBASSY);
 }

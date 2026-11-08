@@ -1,8 +1,8 @@
 // pxl-spec/space/coord/world.rs
 
-//! What a position means: X goes once round the world, zoom 0's side; Y and
-//! Z end where the world does. A position enters the world only here, held
-//! inside it, so nothing goes round where the world does not.
+//! What a position means: X goes once around the world in zoom 0's side, and Y and Z end
+//! where the world does. A position enters the world only here, held inside it, so nothing
+//! wraps around where the world does not.
 
 use super::aabb::Aabb;
 use super::q3::{from_real, FRAC_W, ONE, Q3};
@@ -11,11 +11,11 @@ use super::zoom::{cube, units, Zoom};
 
 /// The world's extent an axis, in bits of a unit:
 ///
-/// - X, 24: a unit is a z24 cell's side, so the round is 2^24 units
-///   (`zoom.rs` `UNIT_ZOOM`), a web map's z16 pixel a z24 cell;
+/// - X, 24: a unit is a z24 cell's side, so a lap is 2^24 units (`zoom.rs` `UNIT_ZOOM`), and
+///   a web map's z16 pixel is a z24 cell;
 /// - Y, 24: the Mercator plane is a square;
-/// - Z, 16: ±2^15 units of height, as the terrain stores a height, an `i16`
-///   in ground cells, a ground cell a unit (`bake/constant.rs`).
+/// - Z, 16: ±2^15 units of height, as the terrain stores a height, an `i16` in ground cells,
+///   a ground cell being a unit (`bake/constant.rs`).
 pub const EXTENT: [u32; 3] = [
     pxl_engine::UNIT_ZOOM,
     pxl_engine::UNIT_ZOOM,
@@ -29,7 +29,7 @@ const _: () = assert!(
     "X and Y fill a position's i32, so X goes round as one does"
 );
 
-/// Every point the world holds, in units. X is unbounded: it goes round.
+/// Every point the world holds, in units. X is unbounded, since it wraps around.
 pub const BOUNDS: Aabb = {
     let (y, z) = (
         (1u64 << (EXTENT[1] - 1)) as f64,
@@ -51,8 +51,8 @@ pub fn within(v: V3) -> V3 {
     ]
 }
 
-/// The one door into a position, from steps of 1/256 unit: X goes round
-/// the world as an `i32` does, Y and Z stop at its ends.
+/// The one door into a position, from steps of 1/256 unit: X wraps around the world as an
+/// `i32` does, and Y and Z stop at the world's ends.
 pub fn at(x: i64, y: i64, z: i64) -> Q3 {
     let hold = |v: i64, k: usize| {
         let half = 1i64 << (EXTENT[k] - 1 + FRAC_W);
@@ -66,18 +66,17 @@ pub fn point(x: f64, y: f64, z: f64) -> Q3 {
     at(from_real(x), from_real(y), from_real(z))
 }
 
-/// A ray's origin from units, which may stand off the world, as an eye
-/// over it does: X goes round as at `at`, Y and Z stop only where an `i32`
-/// does. Y fills its `i32`, so it stops where the world does; Z's spare
-/// bits hold what is over the world, and a ray from there passes it whole
-/// on its way down, as it passes any empty node.
+/// A ray's origin from units, which may stand off the world, as an eye above it does: X wraps
+/// as in `at`, and Y and Z stop only where an `i32` does. Y fills its `i32`, so it stops where
+/// the world does; Z's spare bits hold what is above the world, and a ray from there passes
+/// through it whole on its way down, as it passes any empty node.
 pub fn origin(x: f64, y: f64, z: f64) -> Q3 {
     let hold = |v: f64| from_real(v).clamp(i32::MIN.into(), i32::MAX.into()) as i32;
     [from_real(x) as i32, hold(y), hold(z)]
 }
 
-/// From `a` to `b`, in steps: X the short way round, as an `i32` wraps; Y
-/// and Z as they are, wide, since Y does not go round.
+/// The offset from `a` to `b`, in steps: X the short way around, as an `i32` wraps; Y and Z
+/// as they are, in a wide integer, since Y does not wrap.
 pub fn between(a: &Q3, b: &Q3) -> [i64; 3] {
     [
         i64::from(b[0].wrapping_sub(a[0])),
@@ -86,7 +85,7 @@ pub fn between(a: &Q3, b: &Q3) -> [i64; 3] {
     ]
 }
 
-/// One round of the world, in units: zoom 0's side.
+/// One lap of the world, in units: zoom 0's side.
 pub const ROUND: f64 = units(0);
 
 /// How many cells at `z` stand around the world, and as many from its south edge to its north.
@@ -94,8 +93,8 @@ pub const fn around(zoom: Zoom) -> i64 {
     1i64 << zoom
 }
 
-/// A cell at `z` named as pxl-engine's `wrap_idx` names its X, which
-/// every key goes through.
+/// A cell at `zoom` with its X named as pxl-engine's `wrap_idx` names it; every key goes
+/// through this.
 pub fn wrap_cell(zoom: Zoom, [x, y, h]: [i32; 3]) -> [i32; 3] {
     [pxl_engine::wrap_idx(zoom, x), y, h]
 }
@@ -106,7 +105,7 @@ pub fn nearest(x: f64, about: f64) -> f64 {
     x - ROUND * libm::rint((x - about) / ROUND)
 }
 
-/// `b` moved round the world to the copy nearest `about`.
+/// `b` moved around the world to the copy nearest `about`.
 pub fn nearest_box(b: &Aabb, about: f64) -> Aabb {
     let x = (b.min[0] + b.max[0]) / 2.0;
     if !x.is_finite() {
@@ -115,8 +114,8 @@ pub fn nearest_box(b: &Aabb, about: f64) -> Aabb {
     b.moved([nearest(x, about) - x, 0.0, 0.0])
 }
 
-/// A node's X moved by whole rounds to the round nearest `about`; as it is
-/// where `about` is not finite.
+/// A node's X moved by whole laps to the lap nearest `about`; unchanged where `about` is not
+/// finite.
 pub fn node_near(zoom: Zoom, at: [i32; 3], about: f64) -> [i32; 3] {
     if !about.is_finite() {
         return at;

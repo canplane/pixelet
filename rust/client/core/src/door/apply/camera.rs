@@ -1,6 +1,7 @@
 // pxl-core/door/apply/camera.rs
 
-//! CAMERA: the camera's: the tracking button, the compass, a search result.
+//! The CAMERA major's commands: the tracking button, the compass, and going
+//! to a search result.
 
 use super::State;
 use super::{ask_turn, on_earth, refuse_unless};
@@ -20,7 +21,8 @@ pub(super) fn tracking(c: abi::CameraTracking) -> Outcome {
 }
 
 pub(super) fn north_up(s: &mut State) -> Outcome {
-    // Following the heading would turn it straight back.
+    // While the camera follows the device's heading, a reset azimuth would
+    // turn straight back, so it is left alone.
     if !follow_mode::following() {
         controller::reset_azimuth();
     }

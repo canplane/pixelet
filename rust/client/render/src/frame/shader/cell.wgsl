@@ -1,21 +1,21 @@
 // pxl-render/cell.wgsl
 
-// Where each of the eye's camera grid's cells' rays start (pxl-engine `beam::CELL_WORDS`),
-// a thread a cell: the least of the beam rays' hand-on distances within its window of
-// corners (`beam::Grid::cell_window`, window.wgsl), and that corner, whose line its rays
-// resume from.
-// The shadow map's are light_cell.wgsl's.
+// Finds where the rays of each cell of the eye's camera grid start, one thread a cell
+// (pxl-engine `beam::CELL_WORDS`). A cell's rays start at the least distance that the beam rays
+// in its window of corners hand on (`beam::Grid::cell_window`, window.wgsl), and they resume from
+// that corner's line. light_cell.wgsl does the same for the shadow map.
 //
-// The window is f32 as the Rust's, a ceiling over a square root and a division by what varies
-// from cell to cell, a cell taken by its reciprocal (`grid::CELL_INVERSE`): where
-// what it takes the ceiling of falls within a few ulps of a whole number, a GPU's rounding
-// may take the next window.
+// The window is computed in f32, as the Rust computes it: a ceiling over a square root and a
+// division by what varies from cell to cell, with the cell taken by its reciprocal
+// (`grid::CELL_INVERSE`). Where the value under the ceiling falls within a few ulps of a whole
+// number, a GPU's rounding may take the next window.
 
 @group(0) @binding(8) var<storage, read_write> beams: array<u32>;
 
-/// The corners a side about the screen's cell `c` whose least start its rays take, from
-/// the screen's left and top, less two and halved (`Grid::cell_window`, `Grid::window`): at
-/// its corner farthest from the screen's axis, as the slope grows outward.
+/// The window about the screen's cell `c`, counted from the screen's left and top, whose least
+/// start the cell's rays take. It is given as the window's side in corners, less two and halved
+/// (`Grid::cell_window`, `Grid::window`). It is measured at the cell's corner farthest from the
+/// screen's axis, as the slope grows outward.
 fn cell_window(c: vec2<u32>) -> u32 {
   let tan_xy = vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u));
   let at = max(abs(-tan_xy + vec2<f32>(c) * GRID_CELL), abs(-tan_xy + vec2<f32>(c + 1u) * GRID_CELL));
@@ -32,16 +32,17 @@ fn cell_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x >= eye_word(GRID + GRID_SPAN) || id.y >= eye_word(GRID + GRID_SPAN + 1u)) {
     return;
   }
-  // No wider than the last cell's, which the grid's corners are laid for (`Grid::of`'s
-  // `past`): a GPU's ceiling may take the next window for it.
+  // The window is held to the last cell's, for which the grid's corners are laid (`Grid::of`,
+  // `past`), as a GPU's ceiling may take the next window for that cell.
   let k = min(cell_window(id.xy), eye_word(GRID + GRID_PAST));
   let first = id.xy + vec2<u32>(eye_word(GRID + GRID_PAST)) - vec2<u32>(k);
-  // How far each corner's rays start, a word a corner past the lines (`Grid::hand_at`).
+  // How far each corner's rays start lies in one word a corner, past the lines
+  // (`Grid::hand_at`).
   let least = window_least(eye_word(GRID + GRID_HANDS_AT), eye_word(GRID + GRID_CORNERS), first, 2u + 2u * k);
   let at = cell_start(id.xy);
   beams[at + CELL_T] = least.x;
   beams[at + CELL_CORNER] = least.y;
-  // The eye's cells and corners ask its one detail, alike everywhere (`Detail::alike`), so
-  // every cell's rays resume from its corner's line.
+  // The eye's cells and corners all ask at the eye's one detail (`Detail::alike`), so the rays
+  // of every cell resume from its corner's line.
   beams[at + CELL_RESUMES] = 1u;
 }

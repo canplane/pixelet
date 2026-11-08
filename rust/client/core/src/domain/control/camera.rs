@@ -1,11 +1,14 @@
 // pxl-core/domain/control/camera.rs
 
-//! The camera, an eye and its facing, and the controllers that move it, in
-//! one order: the camera itself here, under everything in the folder; what
-//! the controls ask (`state`) and a gesture's anchor (`gesture`); the orbit
-//! and the first-person camera, each turning about its own pivot; and over
-//! them `controller`, which one moves it and where its pivot is. What asks
-//! them to is above it (domain/control/input.rs, navigation).
+//! The camera, which is an eye and a facing, and the controllers that move
+//! it. The folder is layered, and a part names only the parts below it
+//! (pxl-tool check_rules.rs `CAMERA_ORDER`). The camera itself, here, is at
+//! the bottom, beside a gesture's anchor (`gesture`). Above them is what the
+//! controls ask for (`state`). Above that are the orbit and the first-person
+//! camera, and each turns about its own pivot. At the top, `controller`
+//! decides which of the two moves the camera and where its pivot is. What
+//! asks the camera to move lives outside the folder (domain/control/input.rs,
+//! navigation).
 
 pub mod controller;
 pub mod first_person;
@@ -20,10 +23,11 @@ use xpute_kit::math::scalar::wrap;
 
 use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_POLAR};
 
-// A facing in spherical coordinates about the world's Z, θ = polar and
-// φ = azimuth: θ from straight down, clamped to [0, π]; φ from north toward
-// east, wrapped. At either pole φ still names the direction the facing returns
-// along. The orbit adds r = dist. There is no roll control.
+// A facing is a direction in spherical coordinates about the world's Z
+// axis. The polar angle θ is measured from straight down and is clamped to
+// [0, π]. The azimuth φ is measured from north toward east and wraps. At
+// either pole φ still matters: it names the direction the facing leaves the
+// pole along. The orbit adds the distance r. The camera has no roll.
 pub fn facing_domain(polar: f64, azimuth: f64) -> (f64, f64) {
     (
         polar.clamp(0.0, core::f64::consts::PI),
@@ -37,8 +41,9 @@ pub fn facing_dir(polar: f64, azimuth: f64) -> V3 {
     [st * sp, st * cp, -ct]
 }
 
-/// Straight down at polar 0 with the azimuth up the screen; at the poles the
-/// azimuth only turns the screen about the facing.
+/// The rotation matrix of a facing. At polar 0 the
+/// facing looks straight down and the azimuth points up the screen. At
+/// either pole the azimuth only turns the screen about the facing.
 pub fn facing_rot(polar: f64, azimuth: f64) -> Mat4 {
     let mut about_z = mat4::new();
     mat4::rot_z(&mut about_z, azimuth);
@@ -50,20 +55,22 @@ pub fn facing_rot(polar: f64, azimuth: f64) -> Mat4 {
     rot
 }
 
-/// The eye is kept in the world's doubles: a canonical point's 1/256 rounding
-/// held in it would walk the pivot as the orbit re-derives the eye each
-/// frame.
+/// The camera as it is drawn. The eye is kept in world doubles, not as a
+/// canonical point. A canonical point rounds to 1/256, and the orbit derives
+/// the eye again each frame, so that rounding would make the pivot drift.
 pub struct Camera {
     pub eye: Option<V3>,
-    /// Heading about Z, and the angle down from vertical.
+    /// Radians about Z from north toward east.
     pub azimuth: f64,
+    /// Radians from straight down.
     pub polar: f64,
 }
 
 static CAMERA: Global<Camera> = Global::new();
 
 pub fn camera() -> &'static mut Camera {
-    // Where the controls start, so nothing eases at the first frame.
+    // The camera starts where the controls' intent starts (state.rs
+    // `CameraState::new`), so nothing eases on the first frame.
     CAMERA.get(|| Camera {
         eye: None,
         azimuth: DEFAULT_AZIMUTH,
@@ -79,12 +86,12 @@ pub fn set_eye_world(at: &V3) {
     camera().eye = Some(*at);
 }
 
-/// The drawn azimuth, radians from north toward east.
+/// The azimuth the camera is drawn at, in radians from north toward east.
 pub fn azimuth() -> f64 {
     camera().azimuth
 }
 
-/// Radians from straight down.
+/// The polar angle the camera is drawn at, in radians from straight down.
 pub fn polar() -> f64 {
     camera().polar
 }

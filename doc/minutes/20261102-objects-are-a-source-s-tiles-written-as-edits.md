@@ -51,8 +51,7 @@ too.
 ## What was weighed and not taken
 
 - **The client writing whole shard files**, as the first step did: with two
-  editors, the later write erases the earlier. Kept only until the edits path
-  lands.
+  editors, the later write erases the earlier.
 - **A list file the client keeps** for which shards hold objects: one file every
   write anywhere touches, and derived data with the client as its owner.
 - **A summary file at every zoom**, as the terrain's pyramid is baked: what the

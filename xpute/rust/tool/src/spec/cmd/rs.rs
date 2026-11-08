@@ -1,7 +1,7 @@
 // xpute-tool/spec/cmd/rs.rs
 
-//! The command table as Rust: its enums, each packet's reader and each
-//! import's writer, for a Rust core.
+//! Writes a command table as Rust for a Rust core: its enums, a reader for
+//! each packet and a writer for each import.
 
 use super::{literal, members, Apart, Entry, Enum, Field, Kind, Member, Spec, Target};
 use crate::spec::{file, generated, pascal, rs_doc};
@@ -129,7 +129,8 @@ fn rs_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
             rs_record(spec, &f.ty, "'_")?
         ));
     }
-    // An optional str is borrowed as it stands; a present one may be any Display.
+    // An optional string is borrowed as a `&str`; a required one may be any
+    // `Display`.
     if f.optional && kind == Kind::Str {
         return Ok("Option<&'a str>".to_string());
     }
@@ -147,8 +148,8 @@ fn rs_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
     })
 }
 
-/// A list is walked twice, once to count, since a branch's table precedes its
-/// children.
+/// A list is walked twice, first to count its items, because an XTP branch's
+/// table comes before its children.
 fn rs_write(spec: &Spec, f: &Field) -> Result<Vec<String>, String> {
     let kind = spec.kind(&f.ty)?;
     let v = format!("self.{}", f.name);
@@ -230,7 +231,8 @@ fn rs_writer(
     Ok(())
 }
 
-/// `e` as a Rust enum, each member its number, and `of` reading one.
+/// Writes `e` as a Rust enum whose members carry their numbers, with an `of`
+/// that reads a number into a member.
 fn enum_decl(e: &Enum, out: &mut Vec<String>) {
     let all: Vec<&Member> = members(e).collect();
     out.push(String::new());
@@ -283,8 +285,9 @@ fn enum_decl(e: &Enum, out: &mut Vec<String>) {
     ]);
 }
 
-/// The protocol's messages as Rust; the enums `apart` names are written
-/// apart (`emit_apart`) and named from there.
+/// Writes the protocol's messages as Rust. The enums that `apart` names are
+/// written into a file of their own (`emit_apart`), and this file names them
+/// from there.
 pub(super) fn emit(spec: &Spec, t: &Target, apart: Option<&Apart>) -> Result<String, String> {
     let mut out = vec![
         format!("// {}", t.rs_logical),
@@ -308,7 +311,8 @@ pub(super) fn emit(spec: &Spec, t: &Target, apart: Option<&Apart>) -> Result<Str
         ]
         .map(String::from),
     );
-    // A list of strings is read as xpute's `Strs`, named only where one is.
+    // A list of strings is read as xpute's `Strs`, which is imported only
+    // where a packet has such a list.
     let strs = spec
         .commands()?
         .iter()
@@ -414,8 +418,8 @@ pub(super) fn emit(spec: &Spec, t: &Target, apart: Option<&Apart>) -> Result<Str
     Ok(file(&out))
 }
 
-/// The enums `a` names, as `emit` would write them, in a file of their own
-/// at `at`.
+/// Writes the enums `a` names, as `emit` would write them, into a file of
+/// their own at `at`.
 pub(super) fn emit_apart(spec: &Spec, t: &Target, at: &str, a: &Apart) -> String {
     let mut out = vec![
         format!("// {at}"),

@@ -2,11 +2,12 @@
 
 #![cfg(any(test, feature = "golden"))]
 
-//! Reads golden records: lines of `dotted.path<TAB>value`.
+//! Reads golden records, files of lines `dotted.path<TAB>value`.
 //!
-//! Every record binds every language that reads it and is never re-recorded
-//! to make a test pass: a difference means one side moved. One changed on
-//! purpose changes for every language at once.
+//! A record holds every language that reads it to the same answer. It is
+//! never recorded again to make a test pass: a difference means that one
+//! implementation has drifted. A record changed on purpose changes for
+//! every language at once.
 
 use std::collections::HashMap;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -46,7 +47,8 @@ impl Golden {
         self.s(key).parse().unwrap_or_else(|_| crate::bug!(EINVAL))
     }
 
-    /// A double written through f64_bits.
+    /// A double recorded as the hex of its bits, so it reads back exactly,
+    /// -0 and a NaN's payload included.
     pub fn f64(&self, key: &str) -> f64 {
         let text = self.s(key);
         f64::from_bits(
@@ -63,7 +65,7 @@ impl Golden {
         }
     }
 
-    /// Bytes written as hex.
+    /// Bytes recorded as hex, two digits a byte.
     pub fn bytes(&self, key: &str) -> Vec<u8> {
         let text = self.s(key);
         (0..text.len())
@@ -74,7 +76,8 @@ impl Golden {
             .collect()
     }
 
-    /// Calls `f` with `base.0`, `base.1`, … while an entry has that prefix.
+    /// Calls `f` with `base.0`, `base.1` and so on, for as long as some
+    /// record's key starts with that prefix. A list with no item is a bug.
     pub fn each(&self, base: &str, mut f: impl FnMut(&str)) {
         let mut k = 0;
         loop {
@@ -108,7 +111,8 @@ impl Golden {
     }
 }
 
-/// None where the call panicked: "throw" in a record.
+/// Runs `f` and returns None if it panicked, for a record whose expected
+/// value is "throw". The panic hook is silenced while `f` runs.
 pub fn catch<T>(f: impl FnOnce() -> T) -> Option<T> {
     let hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));

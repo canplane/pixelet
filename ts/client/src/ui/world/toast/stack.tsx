@@ -23,14 +23,17 @@ import { Toast, TOAST_SIDE } from "./item.tsx";
 
 const PEEK_PX = 8;
 
-/** Pushed-back cards wait half the arrival, so the deck's front never drops before the new card is visible. */
+/** The cards that a new card pushes back wait for half of its arrival before
+ * they move, so that the front of the deck never empties before the new card
+ * shows. */
 const MAKE_ROOM = after(SETTLE, SETTLE.durationMs / 2);
 
 export function Toaster() {
   const entries = useToastEntries();
   const turns = useToastTurns();
   const { list, gone } = usePresent(entries, (e) => e.id);
-  // On a whole pixel: half an odd width is not one.
+  // The center is rounded to a whole pixel, because half of an odd width is
+  // not one.
   const [center, setCenter] = useState(0);
 
   // A leaving card keeps its place until it has faded, so the cards behind
@@ -42,7 +45,9 @@ export function Toaster() {
     order.filter((key) => !lastOrder.current.includes(key)),
   );
   const arrived = arrivals.size;
-  // Behind the card it was behind, and behind any that came in there: a new card goes in by rank, not only in front.
+  // A leaving card stays behind the card it was behind, and behind any card
+  // that has just come in there. A new card goes in by rank, so it can land
+  // anywhere in the deck, not only at the front.
   for (const key of list
     .filter((c) => !c.present)
     .map((c) => c.key)
@@ -63,7 +68,8 @@ export function Toaster() {
   const swipe = useRef<ReturnType<typeof PanResponder.create> | null>(null);
   if (!swipe.current) {
     swipe.current = PanResponder.create({
-      // On press: by the first move, a swipe down has left the pointer to the dock.
+      // The stack claims a touch as it starts. By the first move it would be
+      // too late: a swipe down has already gone to the dock by then.
       onStartShouldSetPanResponder: () => toastCount() > 1,
       ...deckSwipe(rotateToasts, { drag: setToastDragging }),
     });
@@ -79,7 +85,9 @@ export function Toaster() {
       }
     >
       {
-        // In a fixed order, stacked by zIndex alone: a card React moves in the tree drops its running animation.
+        // The cards render in a fixed order and stack by zIndex alone,
+        // because a card that React moves within the tree drops its running
+        // animation.
       }
       {[...list]
         .sort((a, b) => (a.key as number) - (b.key as number))
@@ -96,7 +104,8 @@ export function Toaster() {
               : arrived > 0
                 ? MAKE_ROOM
                 : SETTLE;
-          // No opacity here: it would hide a device's glass wrongly.
+          // This view takes no opacity, because an opacity over a device's
+          // glass draws the glass wrongly. The card fades through `fade`.
           return (
             <Motion
               key={key}
@@ -130,7 +139,7 @@ export function Toaster() {
 }
 
 const styles = StyleSheet.create({
-  // No card is placed by measuring another.
+  // Every card is placed from this anchor, and none by measuring another.
   anchor: {
     alignItems: "center",
     height: TOAST_SIDE,

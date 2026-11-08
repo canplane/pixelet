@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/marker_region.wgsl
 
-// Each marker's region at its twin's depth, as its number in four bytes,
-// where the world leaves its anchor seen (marker.wgsl).
+// Draws each marker's region at its twin's depth, as the marker's number in
+// four bytes, where the world leaves its anchor seen (marker.wgsl).
 
 @group(2) @binding(1) var world_depth: texture_depth_2d;
 

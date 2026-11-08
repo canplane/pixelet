@@ -1,17 +1,18 @@
 // xpute-core/ipc/fs.rs
 
-//! The file device's core end, as ipc/fs.json numbers it: a descriptor, and
-//! what one posts in a turn. Its calls are `Door`'s (ipc/door.rs), its opens'
-//! owners `Files`' (ipc/file.rs).
+//! The core's end of the file device, as ipc/fs.json numbers it: a
+//! descriptor, and what one descriptor posts in a turn. The file calls are
+//! `Door`'s (ipc/door.rs), and `Files` keeps the owner of each open
+//! (ipc/file.rs).
 
 #[path = "fs.spec.rs"]
 pub mod spec;
 
 pub type Fd = u32;
 
-/// An FS_OPENAT completed (abi/fs.json): its descriptor, the frame's tag; the
-/// file's size, or -errno; and whatever number the runtime refused with, for a
-/// reader to print.
+/// A completed FS_OPENAT (abi/fs.json): its descriptor, which is the frame's
+/// tag; the file's size, or a negative errno; and any number the runtime
+/// refused with, kept only for a reader to print.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FsOpened {
     pub fd: Fd,
@@ -19,8 +20,8 @@ pub struct FsOpened {
     pub detail: u32,
 }
 
-/// An FS_CLOSE completed: its descriptor, and 0, or -errno where a file
-/// opened for writing could not be replaced.
+/// A completed FS_CLOSE: its descriptor, and 0, or a negative errno when a
+/// file opened for writing could not be replaced.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FsClosed {
     pub fd: Fd,
@@ -28,5 +29,5 @@ pub struct FsClosed {
 }
 
 /// The most frames one descriptor posts in a turn: its open, a read or a
-/// write, and its close, twice where it is stopped.
+/// write, and its close, which a stopped descriptor may post twice.
 pub const FD_TURN_FRAMES: u32 = 4;

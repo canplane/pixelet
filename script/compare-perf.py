@@ -48,7 +48,7 @@ READ = """(async () => {
   const f = r.frames;
   return {
     load: Math.max(0, ...r.longs.map((l) => l.durationMs)),
-    gpu: f ? [f.gpu_busy.p50, f.gpu_busy.p95, f.n, f.gpu_read] : [null, null, 0, 0],
+    gpu: f ? [f.gpu_busy.p50, f.gpu_busy.p95, f.n, f.gpu_timed] : [null, null, 0, 0],
     tick: f ? [f.tick.p50, f.tick.p95] : [null, null],
   };
 })()"""

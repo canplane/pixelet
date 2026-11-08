@@ -1,12 +1,13 @@
 // pxl-core/domain/layer/terrain/tile.rs
 
-//! Terrain as a layer of the pyramid; a tile's record is a room in
-//! `.fixed.terrain` for what is read of it whole, its lines and its samples,
-//! decoded into straight from the packet. Its cells are its clip levels'
-//! (domain/layer/terrain/clipmap.rs), which cut what they want of them off
-//! the packet in the turn it lands, and it goes. A tile the bake left as
-//! no object is drawn from the tile over it, whose cells there are open water;
-//! at the source's top, it is void.
+//! Terrain tiles as a layer of the pyramid. A tile's record is a room in
+//! `.fixed.terrain` for the parts read of the tile as a whole, its
+//! separation lines and its elevation samples, which are decoded into it
+//! straight from the packet. A tile's cells belong to the clip levels
+//! (clipmap.rs): they cut what they want of them from the packet in the turn
+//! it lands, and the packet is then freed. A tile the bake left without an
+//! object is drawn from the tile over it, whose cells there are open water;
+//! at the source's top, such a tile is void.
 
 use crate::domain::layer::tile_cache::TileCache;
 use pxl_spec::bake::separation;
@@ -37,7 +38,7 @@ static TERRAIN: Global<TileCache<TerrainTile>> = Global::new();
 impl Base for TerrainTile {
     const STREAM: Stream = Stream::terrain;
     const LATTICE: Lattice = GROUND;
-    /// The pivot's and a destination's clip levels' tiles.
+    /// The tiles of the clip levels around the pivot and a destination.
     const PIN_CAP: u32 = clipmap::PINNED_TILES;
 
     fn occupancy(&self) -> Occupancy {
@@ -52,8 +53,8 @@ impl Base for TerrainTile {
         Some(TerrainTile::void())
     }
 
-    /// One pass from the packet: nothing tile-sized stands between arrival and
-    /// drawing.
+    /// Decodes the packet into the record in one pass, so no tile-sized copy
+    /// stands between arrival and drawing.
     fn receive(
         _tile: Quadrant,
         record: u32,
@@ -67,8 +68,8 @@ impl Base for TerrainTile {
         Ok(terrain)
     }
 
-    /// What its clip levels want of it cut off the packet, which goes: none is
-    /// kept past its turn.
+    /// Lets the clip levels cut what they want from the packet, then frees
+    /// it. No terrain packet is kept past its turn.
     fn keep(record: Option<u32>, block: Block) {
         if let Some(t) = record.and_then(|r| TerrainTile::tile_cache().in_slot(r)) {
             clipmap::cut(t, fetch::body(block));
@@ -77,11 +78,12 @@ impl Base for TerrainTile {
     }
 }
 
-/// How many tiles may be asked again for their packets now: the spare
-/// slots (sys/io/request.rs `spare_slots`) less those asked again and not yet
-/// come (domain/layer/terrain/clipmap.rs `step`).
+/// How many tiles may be asked for their packets again now: the spare body
+/// slots (sys/io/request.rs `spare_slots`) less the tiles already asked
+/// again whose packets have not come (clipmap.rs `step`).
 pub fn again_room() -> u32 {
-    // Not one whose object failed: it is not read again while it is wanted.
+    // A tile whose object failed is not counted, since it is not read again
+    // while it is wanted.
     let coming = TerrainTile::tile_cache()
         .asked_again(|p| !request::has_object_failed(Stream::terrain, p.id()));
     request::spare_slots().saturating_sub(coming)
@@ -95,11 +97,12 @@ unsafe fn ele_of(record: u32) -> &'static mut [i16] {
 }
 
 /// # Safety
-/// The record's columns are the tile's that is given them, and no other's,
-/// from now until another tile takes the record.
+/// The record's columns must belong to the tile given them, and to no other
+/// tile, from now until another tile takes the record.
 unsafe fn room_of(record: u32) -> separation::Room {
-    /// Column `K` of the record, as long as the layout makes it, its element
-    /// the room's own and as wide as the layout counts it.
+    /// Column `K` of the record, as long as the layout makes it, with
+    /// elements of the room's own type, which must be as wide as the layout
+    /// counts them.
     ///
     /// # Safety
     /// As `room_of`'s.
@@ -111,7 +114,8 @@ unsafe fn room_of(record: u32) -> separation::Room {
             );
         };
         let (at, bytes) = separation_column(record, K);
-        // Inside the range by the layout, so past its end is a bug.
+        // The layout keeps every column inside the range, so a column past
+        // its end is a bug.
         let at = RANGE.get().at(at, bytes).or_bug(Errno::ENOTRECOVERABLE) as usize;
         // SAFETY: the column is core memory at its own size, never freed, and
         // the caller's contract makes it this tile's alone.

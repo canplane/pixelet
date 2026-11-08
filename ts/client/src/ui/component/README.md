@@ -6,14 +6,15 @@ as React Native names them: `segmented.tsx` is the page's and Android's,
 takes the file of the platform it builds for, the page the default
 (`ts/client/metro.config.ts` `ownPlatform`), and every import names the default.
 An override re-exports the default and replaces only what it draws itself, and
-`ts/client/src/ui/component/conform.ts` holds each to its default's exports. What
-only the place gives — the core's memory, the GPU, storage, text, the
+`ts/client/src/ui/component/conform.ts` holds each to its default's exports.
+What only the place gives — the core's memory, the GPU, storage, text, the
 network, the sensors, the surfaces — is not here but in the client's services
-(`ts/client/src/service/`), a page's file beside a device's: the world's
-surface, for one, is a canvas on the page (`service/surface.tsx`) and a
-native view on a device (`service/surface.native.tsx`). This page says
-each piece's implementation side by side, so where the platforms part shows in
-one place, as the colors that part do in `theme.ts`.
+(`ts/client/src/service/platform/`), a page's file beside a device's: the
+world's surface, for one, is a canvas on the page
+(`service/platform/surface.tsx`) and a native view on a device
+(`service/platform/surface.native.tsx`). This page says each piece's
+implementation side by side, so where the platforms part shows in one place, as
+the colors that part do in `theme.ts`.
 
 ## Which technology draws what
 

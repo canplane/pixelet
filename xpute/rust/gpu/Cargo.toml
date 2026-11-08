@@ -37,6 +37,7 @@ runtime = ["dep:xpute-runtime", "dep:wgpu", "dep:serde", "dep:png", "dep:image-w
 # The golden records' reader, and a device asked for without a runtime.
 xpute-kit = { workspace = true, features = ["golden"] }
 pollster = "1"
-# A device with no GPU under it, which makes and maps buffers and runs
-# nothing: what the runtime's CPU tests stage writes on (src/runtime/belt.test.rs).
+# A device with no GPU under it, which makes and maps buffers but runs
+# nothing. The runtime's CPU tests stage their writes on it
+# (src/runtime.noop.test.rs).
 wgpu = { version = "30", default-features = false, features = ["noop"] }

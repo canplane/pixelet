@@ -6,14 +6,15 @@ fn tile(name: &str) -> Quadrant {
     Quadrant::of_key(name).expect("a tile's name")
 }
 
-/// The formats this client reads, by each kind's bake number: the published
-/// table's (pxl-spec bake/publication.json `FORMAT`).
+/// The formats this client reads, by each kind's bake number, as the
+/// published table gives them (pxl-spec bake/publication.json `FORMAT`).
 fn formats() -> Vec<u32> {
     BaseLayer::ALL.into_iter().map(|l| FORMAT.of(l)).collect()
 }
 
-// Read off the source parsed, never declared: a declaration is the process's
-// once, and the world's tests walk ground no shard of this one serves.
+// The test reads a parsed source and never declares it. A declaration is
+// made once in a process, and the world's tests walk ground that no shard of
+// this source serves.
 #[test]
 fn src_serves_by_shard() {
     let s = parse(4, &formats(), ["0103300", "01033210"]).expect("a declaration the client reads");
@@ -35,7 +36,8 @@ fn src_serves_by_shard() {
 #[test]
 fn unfollowable_declaration_refused() {
     let f = formats();
-    // A terrain format past the one this client reads, and none for the Earth.
+    // One declaration gives terrain a format past the one this client reads,
+    // and another gives the Earth no format.
     let mut unread = f.clone();
     unread[BaseLayer::terrain as usize] += 1;
     let short = &f[..f.len() - 1];

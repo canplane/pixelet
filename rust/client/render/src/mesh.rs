@@ -1,7 +1,6 @@
 // pxl-render/mesh.rs
 
-//! What a cell is painted as (its look's words and layers), and the hover
-//! ghost's box.
+//! How a cell is painted (its look's words and layers), and the box of the hover ghost.
 
 pub mod ghost;
 pub mod paint;

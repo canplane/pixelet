@@ -1,8 +1,9 @@
-//! What answers the core's files here, as ts/client/src/sys/fs/ binds its roots on a
-//! device: the shipped assets from the repository (the catalog the client plugs in, each
-//! file it names from asset/content/); the terrain made here, tile by tile, as the bake
-//! writes a tile (`terrain`); no tile of the other bakes, nothing in the platform's storage
-//! or the objects' source; and a write taken and let go.
+//! Answers the core's files in this harness, standing in for how ts/client/src/service/sys/fs/
+//! binds the roots on a device. The shipped assets come from the repository: the catalog
+//! the client plugs in, and each file it names from asset/content/. The terrain is made
+//! here tile by tile, encoded as the bake writes a tile (`terrain`). The other bakes have
+//! no tiles, and the platform's storage and the objects' source hold nothing. A write is
+//! accepted and dropped.
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
@@ -23,8 +24,9 @@ use crate::spec;
 /// The ground's height everywhere, in leaf cells over the sea.
 const HEIGHT: i16 = 8;
 
-/// The terrain tile named `key`: level ground at `HEIGHT`, forest in bands across grass so
-/// the decor stands on it and casts, every child a tile down to the leaves.
+/// The terrain tile named `key`: level ground at `HEIGHT`, with bands of forest across grass
+/// so decor stands on it and casts shadows. Every tile has all four children, down to the
+/// leaves.
 fn terrain(key: &str) -> Option<Vec<u8>> {
     let q = Quadrant::of_key(key)?;
     let cell = |c: usize| {
@@ -46,7 +48,8 @@ fn terrain(key: &str) -> Option<Vec<u8>> {
             Separation::default(),
         )
     } else {
-        // Each cell's four palette indices its own, as a fold of one class holds them.
+        // Each cell repeats its class in all four palette indices, as a fold of one class
+        // does.
         let cells = (0..PALETTE_COLUMN).map(|i| cell(i / 4)).collect::<Vec<_>>();
         TerrainTile::of(
             ele,
@@ -69,16 +72,17 @@ pub struct Files {
     open: BTreeMap<u32, Open>,
     asset: u32,
     catalog: u32,
-    /// Each shipped file's path below asset/content/, file n at n - 1
+    /// Each shipped file's path below asset/content/, with file number n at index n - 1
     /// (spec/spec/asset/ingest.json).
     assets: Vec<String>,
-    /// How FS_OPENAT asks to write (xpute spec/ipc/fs.json).
+    /// The flag FS_OPENAT passes to open a file for writing (xpute spec/ipc/fs.json).
     wronly: u32,
 }
 
-/// The catalog as the client plugs it in (ts/client/src/sys/fs/catalog.spec.ts, generated).
+/// The catalog's bytes, read from the generated file the client plugs it in from
+/// (ts/client/src/service/sys/fs/catalog.spec.ts).
 fn catalog() -> Vec<u8> {
-    let at = Path::new(env!("PXL_REPO")).join("ts/client/src/sys/fs/catalog.spec.ts");
+    let at = Path::new(env!("PXL_REPO")).join("ts/client/src/service/sys/fs/catalog.spec.ts");
     let text = std::fs::read_to_string(&at).unwrap_or_else(|e| panic!("{}: {e}", at.display()));
     let hex = text
         .split("CATALOG_HEX =")
@@ -109,7 +113,7 @@ impl Files {
         }
     }
 
-    /// The file at `path` below `root`, whole, or its errno.
+    /// The whole file at `path` below `root`, or the errno the client would answer.
     fn bytes(&self, root: u32, path: &str) -> Result<Vec<u8>, Errno> {
         if root == BaseLayer::terrain as u32 {
             return terrain(path).ok_or(Errno::ENOENT);
@@ -126,7 +130,7 @@ impl Files {
             .map_err(|_| Errno::ENOENT)
     }
 
-    /// FS_OPENAT: its completion's result, the file's size or its errno.
+    /// Answers FS_OPENAT with its completion's result: the file's size, or an errno.
     pub fn open(&mut self, fd: u32, root: u32, flags: u32, path: &str) -> i32 {
         if flags == self.wronly {
             self.open.insert(fd, Open { bytes: None });
@@ -149,7 +153,8 @@ impl Files {
             .unwrap_or_else(|| panic!("a read of {fd}, which is open to read nothing"))
     }
 
-    /// FS_WRITE: kept nowhere, as the file it writes is let go at its close.
+    /// Answers FS_WRITE. The bytes are kept nowhere, because the file written is dropped
+    /// when it closes.
     pub fn write(&self, fd: u32) {
         assert!(
             self.open.get(&fd).is_some_and(|f| f.bytes.is_none()),
@@ -157,7 +162,7 @@ impl Files {
         );
     }
 
-    /// FS_CLOSE: its completion's result.
+    /// Answers FS_CLOSE with its completion's result.
     pub fn close(&mut self, fd: u32) -> i32 {
         match self.open.remove(&fd) {
             Some(_) => 0,

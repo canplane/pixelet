@@ -1,9 +1,10 @@
 // cpp/xpute/core/sched/task.hpp
 
-// Coroutine tasks and the executor they run on, installed once like a global
-// allocator. A task's frame comes from the core's heap; one that finds no
-// room makes no task. An executor may ignore priority, so nothing may rest on
-// the order tasks are polled in.
+// Coroutine tasks and the executor they run on, installed once, as a global
+// allocator is. A task's frame comes from the core's heap; when the heap has
+// no room, no task is made. An executor may ignore priority, so no
+// correctness may rest on the order in which tasks are polled. Work that must
+// run in order within a turn runs in one task.
 
 #pragma once
 
@@ -18,14 +19,14 @@
 
 namespace xpute {
 
-// Lower is sooner.
+// A lower number runs sooner.
 using Priority = std::uint8_t;
 
 class Executor {
   public:
     virtual bool spawn(std::coroutine_handle<> task, Priority priority) noexcept = 0;
     virtual void wake(std::coroutine_handle<> task) noexcept = 0;
-    // Never from inside a task.
+    // Must not be called from inside a task.
     virtual void poll() noexcept = 0;
     virtual bool pending() const noexcept = 0;
 
@@ -68,7 +69,7 @@ struct PromiseBase {
     };
     Final final_suspend() const noexcept { return {}; }
 
-    // Exceptions are off; nothing can arrive here.
+    // The core is built with exceptions off, so nothing can reach this.
     void unhandled_exception() const noexcept { std::abort(); }
 };
 

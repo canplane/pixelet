@@ -1,8 +1,9 @@
 // pxl-core/domain/param.rs
 
-//! What both heads tune alike: the scene's and control's knobs are each
-//! their own, and the one they share is here, the lowest place both read.
+//! The tuning the scene and control share. Each head keeps its own knobs,
+//! and a value both must agree on lives here, the lowest module both read.
 
-/// The rate a position eases at (approach.rs), the camera's and the
-/// characters' alike.
+/// The rate at which an eased position approaches its target, per second
+/// (smooth.rs `smoothing_factor`). The camera and the characters ease at the
+/// same rate.
 pub const POS_DAMP: f64 = 10.0;

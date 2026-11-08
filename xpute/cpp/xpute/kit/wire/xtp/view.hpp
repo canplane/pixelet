@@ -1,7 +1,9 @@
 // cpp/xpute/kit/wire/xtp/view.hpp
 
-// The write end as a tree. A node borrows what it carries (an array, a string,
-// a graft's packet), so the caller keeps them alive until the tree is encoded.
+// The write side of XTP as a tree: nodes built in memory, which `encode` then
+// lays out as a packet. A node borrows what it carries (an array, a string, a
+// graft's packet), so the caller must keep them alive until the tree is
+// encoded.
 
 #pragma once
 
@@ -28,9 +30,9 @@ template <class Alloc = std::allocator<std::byte>> struct Node {
 
     NodeKind kind = NodeKind::nil;
     NodeType type = type_of(SpecialType::nil);
-    // A typed null keeps its type and is absent.
+    // False for a typed null, an absent node that keeps its type.
     bool present = true;
-    // Little end first.
+    // A scalar's value, its bytes copied into the start of this word.
     std::uint64_t bits = 0;
     std::span<const std::uint8_t> bytes;
     std::string_view str;
@@ -75,7 +77,7 @@ template <class Alloc = std::allocator<std::byte>> struct ViewValue {
         v;
 };
 
-// `Self::write` replaces a tree's root or appends a branch's child.
+// On a tree, `Self::write` replaces the root; on a branch, it appends a child.
 template <class Self, class Alloc> class NodeView {
   public:
     Self &nil() { return self().write(Node<Alloc>(alloc())); }
@@ -105,7 +107,7 @@ template <class Self, class Alloc> class NodeView {
     Self &f32_array(std::optional<std::span<const float>> a) { return self().write(view_detail::array(a, alloc())); }
     Self &f64_array(std::optional<std::span<const double>> a) { return self().write(view_detail::array(a, alloc())); }
 
-    // Bits given a byte each, nonzero for set.
+    // `bits` holds one byte for each bit, nonzero for set.
     Self &bitset(std::optional<std::span<const std::uint8_t>> bits) {
         Node<Alloc> n(alloc());
         n.kind = NodeKind::bitset;
@@ -133,12 +135,12 @@ template <class Self, class Alloc> class NodeView {
         return self().write(std::move(n));
     }
 
-    // With no `fill`, an absent branch that keeps its type.
     template <class F> Self &branch(F &&fill) {
         BranchView<Alloc> b(alloc());
         fill(b);
         return self().write(std::move(b.node()));
     }
+    // An absent branch, which keeps its type.
     Self &no_branch() {
         Node<Alloc> n(alloc());
         n.kind = NodeKind::branch;
@@ -147,7 +149,8 @@ template <class Self, class Alloc> class NodeView {
         return self().write(std::move(n));
     }
 
-    // Only the construction is checked here; the header is read at encode.
+    // `pkt` must be an encoded packet. It is checked when the tree is encoded,
+    // not here.
     Self &graft(std::span<const std::uint8_t> pkt) {
         Node<Alloc> n(alloc());
         n.kind = NodeKind::graft;
@@ -182,7 +185,8 @@ template <class Self, class Alloc> class NodeView {
                     n.str = x;
                     return n;
                 } else if constexpr (std::is_same_v<T, typename V::Array>) {
-                    // A number array of whole elements, or a bitset, as the Rust encoder takes.
+                    // The arrays the Rust encoder accepts: numbers in whole
+                    // elements, or a bitset; anything else is EBADMSG.
                     bool bitset = x.type == SequenceType::bitset;
                     if (!bitset && (type_is_nonnum(type_of(x.type)) || x.bytes.size() % elem_sz(x.type) != 0)) return marshal_error(Errno::ebadmsg);
                     Node<Alloc> n(a);
@@ -275,7 +279,8 @@ template <class Alloc = std::allocator<std::byte>> class BranchView : public Nod
 };
 
 struct TreeEncoderOptions {
-    // The first buffer's size; it doubles where the tree overflows it.
+    // The size of the first buffer tried; it doubles each time the packet
+    // does not fit.
     std::uint32_t init_cap;
     std::optional<std::uint32_t> max_cap;
 };
@@ -369,7 +374,10 @@ template <class Alloc> void walk(PacketWriter &w, const Node<Alloc> &n) {
 
 } // namespace view_detail
 
-// EINVAL for a cap outside a packet's sizes, EOVERFLOW for a tree past the cap.
+// Encodes a tree by walking it onto `PacketWriter`. The first buffer has
+// `init_cap` bytes; each time the packet overflows it, the tree is walked
+// again into one twice as large, up to `max_cap`. A `max_cap` below HDR_SZ or
+// above MAX_PKT_SZ is EINVAL; a packet larger than `max_cap` is EOVERFLOW.
 template <class Alloc, class View>
 Result<std::vector<std::uint8_t, typename std::allocator_traits<Alloc>::template rebind_alloc<std::uint8_t>>> encode(const View &view, TreeEncoderOptions opts = {},
                                                                                                                      const Alloc &alloc = Alloc()) {

@@ -1,13 +1,19 @@
 // @xpute/kit/wire/tlv.ts
 
-// A forward-only sequence of [u8 tag | payload] closed by END, read once in
-// order with no table or offsets (XTP is the retained form). Little-endian; a
-// scalar's tag is its length, so an unknown tag cannot be skipped.
+// TLV, a sequence of values read once, front to back, with no table and no
+// offset. Each value is a tag byte and its little-endian payload, and END
+// closes the sequence. A tag fixes its payload's size, except STR and BYTES,
+// whose payload starts with its length as a u32; a reader cannot skip a tag it
+// does not know, so an unknown tag is EBADMSG.
 //
-// The reader reports how a sequence ended (`end`): closed by END, unclosed at an
-// element boundary, or cut inside one (EBADMSG, the values before it stand).
-// Equal values are equal bytes only under a schema that fixes each type: 1 may
-// be written as a U8, a U32 or an F64.
+// The reader tells how the sequence ended (`end`): closed by END, or unclosed,
+// where the input ran out between two values, which the caller may or may not
+// accept. Input that runs out inside a value is EBADMSG, and the values read
+// before it stand.
+//
+// A STR that is not UTF-8 reads with U+FFFD in place of each bad sequence.
+// Equal values give equal bytes only under a schema that fixes their types: 1
+// may be written as a U8, a U32 or an F64.
 
 import type {
   f32,
@@ -39,8 +45,8 @@ import * as scalar from "@xpute/kit/wire/scalar.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
 
-// The tags, tlv.ts's own as Rust's `Tag` is tlv.rs's: written as a `Tag`,
-// read as a u8 compared to one.
+// The tags are private to this file. A writer takes a `Tag`; a reader reads a
+// plain u8 and compares it with each, since a byte off the wire may be no tag.
 const Tag = {
   END: 0x00,
 
@@ -57,7 +63,7 @@ const Tag = {
   F32: 0x0a,
   F64: 0x0b,
 
-  STR: 0x10, // [u32 len][utf8 bytes]
+  STR: 0x10,
 
   BYTES: 0x20,
 } as const;
@@ -88,7 +94,8 @@ export class TlvWriter {
       new_buf.set(this._buf);
       this._buf = new_buf;
 
-      // The stream holds the buffer, so it must be rebound to the new one.
+      // The stream keeps its own reference to the buffer and a view of it, so
+      // both must point at the new buffer.
       this._stream.buf = this._buf;
       this._stream.view = new DataView(
         this._buf.buffer,
@@ -102,7 +109,7 @@ export class TlvWriter {
     return this._buf.subarray(0, this._stream.off);
   }
 
-  /** Seal stream by appending END. Writer must not be used after this. */
+  /** Appends END, once. A write after it throws EBADMSG. */
   finish(): Bytes {
     if (!this._sealed) {
       this._ensure(1);
@@ -251,8 +258,8 @@ export class TlvWriter {
   }
 }
 
-/** Where a sequence stopped without a fault: END read, or the input run out
- * at an element's boundary. */
+/** How a sequence stopped without a fault: END was read, or the input ran out
+ * between two values. */
 export type TlvEnd = "closed" | "unclosed";
 
 export class TlvReader implements Iterable<TlvValue> {
@@ -268,7 +275,7 @@ export class TlvReader implements Iterable<TlvValue> {
     this._end = _buf.byteLength;
   }
 
-  /** How the sequence ended, once reading has reached its end: null while
+  /** How the sequence ended, once the reader has reached its end; null while
    * values remain, and after a fault. */
   end(): TlvEnd | null {
     return this._ending;

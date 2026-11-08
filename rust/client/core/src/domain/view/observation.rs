@@ -1,8 +1,10 @@
 // pxl-core/domain/view/observation.rs
 
-//! The core's side of an observation: what the eye looks at as the turn
-//! composed the view (domain/view/frame/pose.rs), and what is known of what
-//! a box of the world holds.
+//! The core's side of an observation (pxl-spec `camera::eye::Observation`).
+//! The observation is made from the view as the turn composed it
+//! (domain/view/frame/pose.rs) and from what the world is known to hold.
+//! From it come the bricks of the eye's clip levels, the tiles each layer is
+//! asked for, and the order a tile is read in.
 
 use crate::sys::io::demand::Order;
 use pxl_spec::space::layer::lattice::{demand_dist, draw_dist};
@@ -28,29 +30,30 @@ use crate::sys::io::source;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::zoom::Zoom;
 
-/// How far from the eye the layers are demanded and the clip levels hold: as
-/// far as the source's top is, past where it is drawn by the clip levels'
-/// margin. None before the source declares its top.
+/// How far from the eye, in world units, the layers are asked for and the
+/// clip levels hold. This reaches as far as the source's top zoom does, past
+/// the draw distance (`eye_draw_dist`) by the clip levels' margin. None until
+/// the source declares its top.
 pub fn eye_demand_dist() -> Option<f64> {
-    source::top().map(|top| demand_dist(GROUND, top))
+    source::min_zoom().map(|min| demand_dist(GROUND, min))
 }
 
-/// How far the eye draws, the rays and the clouds alike: as far as the
-/// source's top is drawn, short of what the clip levels hold past it
-/// (`eye_demand_dist`). None before the source declares its top.
+/// How far the eye draws, in world units. The rays and the clouds both stop
+/// here, short of `eye_demand_dist` by the margin the clip levels hold past
+/// it. None until the source declares its top.
 pub fn eye_draw_dist() -> Option<f64> {
-    source::top().map(|top| draw_dist(GROUND, top))
+    source::min_zoom().map(|min| draw_dist(GROUND, min))
 }
 
-/// The observation as its last reader made it: the eye, its frustum and its
-/// reach as the view and the source stood, and the ground's floor under the
-/// eye, asked once however many read it.
+/// The observation the last reader made. It is kept so that the floor under
+/// the eye is looked up once however many parts read the observation.
+/// `Some(None)` means the last reader found no eye or no demand distance.
 static OBSERVATION: Global<Option<Option<Observation>>> = Global::new();
 
-/// A frame turn begins: the observation stands where no change touched the
-/// ground under the eye, whose height over it it holds (`changes::within`,
-/// asked each frame turn, so each change is seen once); else it is made
-/// again.
+/// Called as a frame turn begins. The kept observation holds the eye's
+/// height over the ground under it, so it is dropped when a change touched
+/// that ground. `changes::within` is asked every frame turn, so each change
+/// is seen once.
 pub fn turn() {
     let made = OBSERVATION.get(|| None);
     if made.is_some_and(|o| o.is_some_and(|o| changes::within([[o.eye[0], o.eye[1]]; 2], &[]))) {
@@ -58,9 +61,9 @@ pub fn turn() {
     }
 }
 
-/// Out to `eye_demand_dist`, made again where the eye, its frustum or its
-/// reach is not what it was made of. None before the camera stands anywhere
-/// or the source declares its top.
+/// The observation out to `eye_demand_dist`. It is made again when the eye,
+/// the frustum or the demand distance differs from what it was made of. None
+/// until the camera stands somewhere and the source declares its top.
 pub fn observation() -> Option<Observation> {
     let (eye, frustum, demand_dist) = (eye(), view().frustum, eye_demand_dist());
     let made = OBSERVATION.get(|| None);
@@ -82,22 +85,27 @@ pub fn observation() -> Option<Observation> {
     made.flatten()
 }
 
-/// The eye's clip levels' bricks (pxl-engine clipmap.rs), the ground about
-/// the eye cut into one partition: from the coarsest bricks within the
-/// floor's ring (tile_cache/floor.rs `ring`), the far edge cut by the ground,
-/// a brick splits into its four while its nearest point is nearer than its
-/// cells' split distance (pxl-spec space/camera/grid.rs `split_dist`),
-/// the rule a ray's descent asks by, taken about the eye's height; each brick left is at the zoom
-/// its nearest point asks, and handed with the heights the world stands
-/// between in it. A function of the eye and the world alone, never of what
-/// a ray met; a column it knows nothing of yet is handed none, as nothing
-/// there is to stand in.
+/// Cuts the ground around the eye into the bricks of the eye's clip levels
+/// (pxl-engine clipmap.rs), one partition with no overlap, and hands each
+/// brick to `each` with the lowest and highest height the world holds in it.
+///
+/// The cut starts from the coarsest bricks within the floor's ring
+/// (tile_cache/floor.rs `ring`) and ends at the demand distance. A brick
+/// splits into its four while its nearest point is nearer than the split
+/// distance of its cells (pxl-spec space/camera/grid.rs `split_dist`),
+/// measured with the eye's height over the ground. That is the rule a ray's
+/// descent uses, so each brick handed on is at the zoom its nearest point
+/// asks for.
+///
+/// The bricks depend on the eye and the world alone, never on what a ray
+/// met. A column the world knows nothing of yet gets no brick, since there is
+/// nothing in it for a brick to stand in.
 pub fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
-    let (Some(top), Some(flat)) = (TerrainTile::top(), floor::ring(o)) else {
+    let (Some(min_zoom), Some(flat)) = (TerrainTile::min_zoom(), floor::ring(o)) else {
         return;
     };
     let over = (o.eye[2] - o.ground).max(0.0);
-    let coarsest = GROUND.grid_zoom(top).max(BRICK_SHIFT);
+    let coarsest = GROUND.grid_zoom(min_zoom).max(BRICK_SHIFT);
     let near = |zoom: Zoom, [x, y]: [i32; 2]| {
         let side = units(zoom);
         let gap = |lo: f64, e: f64| (lo - e).max(e - lo - side).max(0.0);
@@ -110,23 +118,28 @@ pub fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
         )
     };
     let zoom = bricks_zoom(coarsest);
-    // Its room kept from one walk to the next.
+    // The stack's allocation is kept from one call to the next.
     static STACK: Global<Vec<(Zoom, [i32; 2])>> = Global::new();
     let mut stack = core::mem::take(STACK.get(Vec::new));
     stack.clear();
     stack.extend(squares_within(zoom, [o.eye[0], o.eye[1]], flat).map(|xy| (zoom, xy)));
-    // Depth first, so each brick's lines step from its neighbor's.
+    // The cut goes depth first, so each brick's column walk steps on from
+    // the brick walked just before it, which is its neighbor.
     let (world, mut walked) = (World::now(), ColumnWalk::default());
     while let Some((zoom, xy)) = stack.pop() {
-        let (cell, d) = (zoom + BRICK_SHIFT, near(zoom, xy));
+        let (cell_zoom, d) = (zoom + BRICK_SHIFT, near(zoom, xy));
         if d > o.demand_dist {
             continue;
         }
-        if cell < GROUND.cell() && d < split_dist(cell) {
+        if cell_zoom < GROUND.leaf_cell_zoom() && d < split_dist(cell_zoom) {
             stack.extend((0..4).map(|k| (zoom + 1, [2 * xy[0] + (k & 1), 2 * xy[1] + (k >> 1)])));
             continue;
         }
-        let Some(b) = world.bounds(&mut walked, (zoom, xy), cell).val().flatten() else {
+        let Some(b) = world
+            .bounds(&mut walked, (zoom, xy), cell_zoom)
+            .val()
+            .flatten()
+        else {
             continue;
         };
         each((zoom, xy), [b.min[2], b.max[2]]);
@@ -134,9 +147,10 @@ pub fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
     *STACK.get(Vec::new) = stack;
 }
 
-/// How far from the eye a layer's tiles at `zoom` are asked for: at the
-/// source's `top` the floor's (tile_cache/floor.rs `ring`), past it the
-/// zoom's band (pxl-spec layer/demand.rs `band`); none past the far edge.
+/// How far from the eye a layer's tiles at `zoom` are asked for. At the
+/// source's `min_zoom` this is the floor's ring (tile_cache/floor.rs `ring`).
+/// At a finer zoom it is the outer edge of the zoom's band (pxl-spec
+/// layer/demand.rs `band`), and None when that band lies past the far edge.
 pub fn demand_radius(o: &Observation, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option<f64> {
     if zoom == top {
         return floor::ring(o);
@@ -144,19 +158,24 @@ pub fn demand_radius(o: &Observation, lattice: Lattice, top: Zoom, zoom: Zoom) -
     band(o, lattice, top, zoom).map(|(_, to)| to)
 }
 
-/// What the view asks a layer for: at each zoom under the source's top, which
-/// the floor holds, to the leaves, every tile within `demand_radius` of the eye. It
-/// is a function of the eye alone, never of what the rays met, so what is
-/// asked, and so what is read, cannot depend on what was held before: the
-/// rays only see it arrive.
-/// It asks by x and y alone, the eye's height no part of it: a ray picks a
-/// cell's zoom by its distance in 3D (pxl-engine `grid::cell_zoom_at`),
-/// never shorter than its distance across the ground, so more is asked than is
-/// read and never less.
+/// What the view asks a layer for: at each zoom finer than the source's top,
+/// down to the leaves, every tile within `demand_radius` of the eye. The
+/// floor holds the top zoom itself.
+///
+/// The demand depends on the eye alone, never on what the rays met. So what
+/// is asked for, and therefore what is read, cannot depend on what was held
+/// before; the rays only see the tiles arrive.
+///
+/// The demand measures distance across the ground and leaves out the eye's
+/// height. A ray picks a cell's zoom by its distance in 3D (pxl-engine
+/// `grid::cell_zoom_at`), which is never shorter than the distance across
+/// the ground, so the demand asks for at least what the rays read.
 pub struct ByEye {
-    /// The layer's, whose tiles' cells say which zoom a distance asks for.
+    /// The layer's lattice. Its tiles' cells decide which zoom a distance
+    /// asks for.
     pub lattice: Lattice,
-    /// The coarsest zoom the source supplies whole; no requirement is coarser.
+    /// The coarsest zoom the source supplies whole. No tile is asked for at a
+    /// coarser zoom.
     pub top: Zoom,
 }
 
@@ -170,9 +189,10 @@ impl ByEye {
     }
 }
 
-/// A layer's tile's order, from where anything stands in it as the grid's
-/// cells its own fold into read it, stepped from where `walked` last went:
-/// all of it where nothing is known or nothing stands.
+/// The order a layer's tile `p` is read in, judged by the box of what stands
+/// in it. That box is the world's bounds over the tile at the grid zoom the
+/// tile's own cells fold into, walked on from where `walked` last stopped.
+/// Where nothing is known or nothing stands, the tile's whole region is used.
 pub fn order_of_tile(
     o: &Observation,
     lattice: Lattice,
@@ -184,7 +204,7 @@ pub fn order_of_tile(
 }
 
 /// Where the box `b` stands in the view of `o`: whether it is seen, and how
-/// near (`Order`).
+/// near it is (`Order`).
 pub fn order_of(o: &Observation, b: &Aabb) -> Order {
     let m = o.measure(b);
     Order {

@@ -1,5 +1,6 @@
-// Bakes the cloud tile once per device. A texel stores opacity, not shape, so
-// the mips average what a wide pixel needs: half a cloud is half opaque.
+// Bakes the cloud tile once per device. A texel stores opacity rather than
+// shape, so the mips average what a wide pixel needs: a texel half covered by
+// cloud is half opaque.
 
 @fragment
 fn fs(v: TableOut) -> @location(0) vec4f {

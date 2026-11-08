@@ -1,8 +1,10 @@
 // @pxl/client/ui/debug/perf/gauge.tsx
 
 /**
- * The core's numbers over the last few seconds as a corner panel, read in
- * place from the summary the report is built from. Read-only.
+ * The figures the profiler panel shows over the last few seconds, and the
+ * positions the view panel shows live. Both come from the same summary the
+ * report is built from (view.ts). The panels only show them: nothing here
+ * changes the core.
  */
 
 import type { ReactNode } from "react";
@@ -53,7 +55,8 @@ const geo = (lat: number, lon: number) =>
   Number.isNaN(lat) ? "-" : `${fixed(lat, 5)}°, ${fixed(lon, 5)}°`;
 const meters = (m: number) => (Number.isNaN(m) ? "-" : `${n1(m)} m`);
 
-/** What the pick met, shown for each of the core's kinds (perf.json `HIT_KINDS`). */
+/** The words shown for what the pointer's pick hit, one for each kind the
+ * core reports (perf.json `HIT_KINDS`). */
 const HIT_KIND_TEXT: Record<(typeof HIT_KINDS)[number], string> = {
   ground: "ground",
   object: "cube",
@@ -65,16 +68,18 @@ const hitKindText = (k: number) => {
   return kind === undefined ? "-" : HIT_KIND_TEXT[kind];
 };
 
-/** A unit to an eighth, the finest cell (z27), with no trailing zeros. */
+/** A coordinate in units, to three decimals: enough for an eighth of a unit,
+ * the side of the finest cell (z27). Trailing zeros are dropped. */
 const unit = (u: number) => fixed(u, 3).replace(/\.?0+$/, "");
 const coord = (x: number, y: number, z: number) =>
   Number.isNaN(x) ? "-" : `${unit(x)}, ${unit(y)}, ${unit(z)}`;
 
 /**
- * Live: where the camera's eye, its pivot and the pointer are now, not over
- * the window, each a coord in units and the pivot on the Earth as well. The
- * pointer twice: what it meets at the eye's zooms, and what the tool held
- * strikes there, so a hover that takes nothing shows where the two part.
+ * Where the camera's eye, its pivot and the pointer are at this moment, not
+ * over the window. Each is a coordinate in units, and the pivot is also given
+ * on the Earth. The pointer is shown twice: what it meets at the zooms the
+ * eye draws, and where the tool in hand would strike there. When a hover
+ * would do nothing, the two show where they part.
  */
 export function PerfView({ v }: { v: Gauge["view"] }) {
   const picked = !Number.isNaN(v.hit_kind);
@@ -94,7 +99,7 @@ export function PerfView({ v }: { v: Gauge["view"] }) {
       <Row k="altitude" v={meters(v.pivot_alt)} />
       <Head>Pointer</Head>
       <Row k="coord" v={coord(v.hover_x, v.hover_y, v.hover_z)} />
-      <Row k="drawn at" v={zoomName(v.cell)} />
+      <Row k="drawn at" v={zoomName(v.cell_zoom)} />
       <Row
         k="hit"
         v={
@@ -128,7 +133,6 @@ export function PerfView({ v }: { v: Gauge["view"] }) {
   );
 }
 
-/** Whether the window is recording, under the buttons that start and stop it. */
 export function PerfRec({ rec }: { rec: Gauge["rec"] }) {
   return (
     <View style={gauge.rec}>
@@ -161,12 +165,14 @@ export function PerfGauge({ g }: { g: Gauge | null }) {
       .filter((r) => by(r) > 0);
   const failing = g.tasks.filter((t) => t.err > 0);
 
-  // A glance: how smooth, where the frame's time goes, what it is drawn at,
-  // and whether anything leaks or fails. The report holds the rest.
+  // The gauge is a glance: how smooth the frames are, where a frame's time
+  // goes, the scale it is drawn at, and whether anything leaks or fails. The
+  // report holds the rest, so the other groups show nothing here.
   const sections: Record<FrameGroup, ReactNode> = {
     time: f !== null && (
       <>
-        {/* Frames a second over the window, and at the median interval. */}
+        {/* The frame rate over the window, and the rate the median interval
+            gives. */}
         <Row
           k="fps window/p50"
           v={`${or(fps(f) ?? NaN)}/${
@@ -198,11 +204,12 @@ export function PerfGauge({ g }: { g: Gauge | null }) {
     frame: null,
     gpu: f !== null && (
       <>
-        {/* Over the frames a GPU read timed; none timed is no measure, not 0. */}
+        {/* GPU time is known only for the frames a GPU read timed. When none
+            was timed there is no measure, and it is shown as such, not as 0. */}
         <Row
           k="gpu busy p95"
-          v={f.gpu_read > 0 ? `${n1(f.gpu_busy.p95)} ms` : "no timestamps"}
-          warn={f.gpu_read > 0 && f.gpu_busy.p95 > f.last.paced_ms}
+          v={f.gpu_timed > 0 ? `${n1(f.gpu_busy.p95)} ms` : "no timestamps"}
+          warn={f.gpu_timed > 0 && f.gpu_busy.p95 > f.last.paced_ms}
         />
         {heaviest(f.gpu_spans, (s) => s.p95, SPAN_ROWS).map((s) => (
           <Row key={s.name} k={`  ${s.name} p95`} v={`${n1(s.p95)} ms`} />
@@ -260,7 +267,7 @@ export function PerfGauge({ g }: { g: Gauge | null }) {
 }
 
 export const gauge = StyleSheet.create({
-  // Figures a fixed width, so a column of them lines up.
+  // Every digit takes the same width, so that a column of figures lines up.
   text: {
     fontSize: 10.5,
     lineHeight: 16,
@@ -277,7 +284,8 @@ export const gauge = StyleSheet.create({
     marginTop: 8,
     marginBottom: 2,
   },
-  // macOS's smallest text style; smaller does not render on a 1x screen.
+  // 10 is macOS's smallest text style: smaller text does not render on a 1x
+  // screen.
   headText: { fontSize: 10, color: alpha(color.white, 0.3) },
   rec: { marginTop: 8 },
   recState: { flexDirection: "row", alignItems: "center", gap: 6 },

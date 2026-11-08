@@ -30,10 +30,9 @@ struct Chain {
     written: Vec<Id>,
 }
 
-/// A pass being recorded, as its recorder names it and as it is recorded
-/// now, on its encoder as named; for a compute pass, what its next part is
-/// begun with where it is cut: its pipeline, its groups and their offsets,
-/// and its span's query set and end.
+/// A pass being recorded: the handle its recorder names it by, the pass it is recorded as now,
+/// and its encoder as named. A compute pass also holds what its next part is begun with where
+/// it is cut: its pipeline, its groups and their offsets, and its span's query set and end.
 pub struct Open {
     named: Id,
     pub at: Id,
@@ -64,7 +63,8 @@ pub struct Splits {
 }
 
 impl Splits {
-    /// A buffer made at source line `line`: an args buffer where it was made `INDIRECT`.
+    /// Records a buffer made at source line `line`. It is an args buffer when it was made
+    /// `INDIRECT`.
     pub fn made(&mut self, buf: Id, indirect: bool, line: u32) {
         self.let_go(buf);
         if indirect {
@@ -85,8 +85,8 @@ impl Splits {
             .map_or(0, |&(_, line)| line)
     }
 
-    /// A bind group made, binding `writable` as writable storage, each at its
-    /// binding: the args among them are what a call through it writes.
+    /// Records a bind group made with `writable` bound as writable storage, each at its
+    /// binding. The args buffers among them are what a call through the group writes.
     pub fn grouped(&mut self, group: Id, writable: impl Iterator<Item = (u32, Id)>) {
         self.let_go(group);
         let args: Vec<(u32, Id)> = writable.filter(|(_, b)| self.is_args(*b)).collect();
@@ -95,28 +95,30 @@ impl Splits {
         }
     }
 
-    /// An object let go: its handle may name another next.
+    /// Records that an object was let go. Its handle may name another object next.
     pub fn let_go(&mut self, id: Id) {
         self.args.retain(|&(b, _)| b != id);
         self.writes.retain(|(g, _)| *g != id);
         self.records.retain(|&(p, _)| p != id);
     }
 
-    /// A render pipeline made of record `record` (frame/shader/record.rs `pipeline`).
+    /// Records a render pipeline made from record `record` (frame/shader/record.rs
+    /// `pipeline`).
     pub fn recorded(&mut self, pipeline: Id, record: u32) {
         self.let_go(pipeline);
         self.records.push((pipeline, record));
     }
 
-    /// Render pass `pass` declared to draw `pipelines` alone, by their records' numbers.
+    /// Records that render pass `pass` declares it draws `pipelines` alone, by their records'
+    /// numbers.
     pub fn declared(&mut self, pass: Id, pipelines: &'static [u32]) {
         if let Some(o) = self.open(pass) {
             o.declared = pipelines;
         }
     }
 
-    /// Where `pipeline` is set in a pass that declares what it draws and is not among those,
-    /// its record's number (`u32::MAX` for a pipeline made of none).
+    /// When `pipeline` is set in a pass that declares what it draws and is not among those,
+    /// its record's number (`u32::MAX` for a pipeline made from no record).
     pub fn undeclared(&self, pass: Id, pipeline: Id) -> Option<u32> {
         let o = self.open_of(pass)?;
         if o.declared.is_empty() {
@@ -130,7 +132,7 @@ impl Splits {
         (!o.declared.contains(&record)).then_some(record)
     }
 
-    /// An encoder begun, recorded into itself until it is cut.
+    /// Records that `encoder` was begun. It records into itself until it is cut.
     pub fn begun(&mut self, encoder: Id) {
         self.chains.push(Chain {
             named: encoder,
@@ -154,15 +156,15 @@ impl Splits {
         self.chain(encoder).map_or(encoder, |c| c.at)
     }
 
-    /// Whether a render pass on `encoder` begins a command buffer of its
-    /// own: where any args were written in the one it would join.
+    /// Whether a render pass on `encoder` begins a command buffer of its own, which it does
+    /// when any args were written in the one it would join.
     pub fn draws_apart(&self, encoder: Id) -> bool {
         self.chain(encoder).is_some_and(|c| !c.written.is_empty())
     }
 
-    /// Whether an indirect call of `pass` reading `buf` is recorded in a
-    /// command buffer of its own: where `buf` was written in the one the
-    /// pass records into now. The one place a frame is cut.
+    /// Whether an indirect call of `pass` that reads `buf` is recorded in a command buffer of
+    /// its own, which it is when `buf` was written in the one the pass records into now. This
+    /// is the one place a frame is cut.
     pub fn cuts(&self, pass: Id, buf: Id) -> bool {
         self.open_of(pass)
             .and_then(|o| self.chain(o.encoder))
@@ -177,12 +179,13 @@ impl Splits {
             .map(|&(binding, _)| binding)
     }
 
-    /// Where a group of `pass` binds `buf` writable, where an indirect call of the pass reads
-    /// its count from `buf`: the group, as its index among those set or, for a render pass,
-    /// its handle, and the binding. A compute dispatch is one usage scope, so the groups set
-    /// for it; a render pass is one whole, so every group set in it. WebGPU refuses a scope
-    /// holding `buf` both `INDIRECT` and writable storage; `buf` is then read, for a later
-    /// group of a render pass to be held to (`binds_read`).
+    /// Where a group of `pass` binds `buf` writable, for an indirect call of the pass that
+    /// reads its count from `buf`: the group, as its index among those set or, for a render
+    /// pass, as its handle, and the binding. WebGPU refuses a usage scope that holds `buf` both
+    /// as `INDIRECT` and as writable storage. A compute dispatch is one usage scope, so the
+    /// groups set for it are checked. A whole render pass is one usage scope, so every group
+    /// set in it is checked. `buf` is then noted as read, so a group set later in a render pass
+    /// is held to it too (`binds_read`).
     pub fn binds_writable(&mut self, pass: Id, buf: Id) -> Option<(u32, u32)> {
         let o = self.open_of(pass)?;
         if !o.compute {
@@ -203,8 +206,8 @@ impl Splits {
             .find_map(|(idx, (g, _))| self.writes_at(*g, buf).map(|binding| (idx as u32, binding)))
     }
 
-    /// Where `group`, set in render pass `pass`, binds writable a buffer an indirect draw of
-    /// the pass read its count from: that buffer and the binding.
+    /// Where `group`, set in render pass `pass`, binds writable a buffer from which an indirect
+    /// draw of the pass read its count: that buffer and the binding.
     pub fn binds_read(&self, pass: Id, group: Id) -> Option<(Id, u32)> {
         let o = self.open_of(pass).filter(|o| !o.compute)?;
         o.drawn_args
@@ -212,8 +215,8 @@ impl Splits {
             .find_map(|&buf| self.writes_at(group, buf).map(|b| (buf, b)))
     }
 
-    /// `encoder` recorded into `next` from here, the command buffer it was
-    /// recorded into ended.
+    /// Records that `encoder` records into `next` from here, and that the command buffer it
+    /// recorded into before is ended.
     pub fn split(&mut self, encoder: Id, next: Id) {
         if let Some(c) = self.chain_mut(encoder) {
             c.ended.push(core::mem::replace(&mut c.at, next));
@@ -221,8 +224,7 @@ impl Splits {
         }
     }
 
-    /// A pass begun on `encoder`, recorded as `pass`, its span ending at
-    /// `end` of its query set.
+    /// Records a pass begun on `encoder` as `pass`, whose span ends at `end` of its query set.
     pub fn opened(&mut self, pass: Id, encoder: Id, compute: bool, end: Option<(Id, u32)>) {
         self.open.push(Open {
             named: pass,
@@ -242,13 +244,13 @@ impl Splits {
         self.open.iter().find(|o| o.named == pass)
     }
 
-    /// The pass `pass` is recorded as now, its encoder as named, and
-    /// whether it is a compute pass.
+    /// The open pass `pass`: what it is recorded as now, its encoder as named, and whether it
+    /// is a compute pass.
     pub fn open(&mut self, pass: Id) -> Option<&mut Open> {
         self.open.iter_mut().find(|o| o.named == pass)
     }
 
-    /// The pass `pass` is recorded as now: itself where never cut.
+    /// The pass `pass` is recorded as now, which is itself when it was never cut.
     pub fn pass_at(&self, pass: Id) -> Id {
         self.open_of(pass).map_or(pass, |o| o.at)
     }
@@ -258,14 +260,14 @@ impl Splits {
         self.open_of(pass).map(|o| (o.encoder, o.compute))
     }
 
-    /// `pipeline` set on `pass`.
+    /// Records that `pipeline` was set on `pass`.
     pub fn piped(&mut self, pass: Id, pipeline: Id) {
         if let Some(o) = self.open(pass) {
             o.pipeline = pipeline;
         }
     }
 
-    /// `group` bound at `idx` of `pass` with `offsets`.
+    /// Records that `group` was bound at `idx` of `pass` with `offsets`.
     pub fn bound(&mut self, pass: Id, idx: u32, group: Id, offsets: &[u32]) {
         if let Some(o) = self.open(pass) {
             o.groups[idx as usize] = (group, offsets.to_vec());
@@ -275,7 +277,8 @@ impl Splits {
         }
     }
 
-    /// A call of `pass` ran: the args its groups bind writable are written.
+    /// Records that a call of `pass` ran, so the args buffers its groups bind writable are
+    /// written.
     pub fn ran(&mut self, pass: Id) {
         let Some(o) = self.open_of(pass) else {
             return;
@@ -296,7 +299,7 @@ impl Splits {
         }
     }
 
-    /// `to` copied into on `encoder`: written where it is an args buffer.
+    /// Records a copy into `to` on `encoder`, which writes `to` when it is an args buffer.
     pub fn copied(&mut self, encoder: Id, to: Id) {
         if self.is_args(to) {
             if let Some(c) = self.chain_mut(encoder) {
@@ -307,13 +310,13 @@ impl Splits {
         }
     }
 
-    /// `pass` ended.
+    /// Records that `pass` ended.
     pub fn closed(&mut self, pass: Id) {
         self.open.retain(|o| o.named != pass);
     }
 
-    /// The command buffers `encoder` was cut into, in the order they run,
-    /// let go of here: itself alone where it was never cut.
+    /// The command buffers `encoder` was cut into, in the order they run, which are forgotten
+    /// here. It is `encoder` alone when it was never cut.
     pub fn submitted(&mut self, encoder: Id) -> Vec<Id> {
         match self.chains.iter().position(|c| c.named == encoder) {
             Some(k) => {

@@ -1,15 +1,16 @@
 // @pxl/shader/pipeline.ts
 
 /**
- * The pipelines the renderer makes over its modules, render and compute, each
- * by the entry points it runs (pxl-render examples/assembled.rs,
- * pipelines.json), made here as WebGPU takes them: a compute entry with the
- * layout it declares; a vertex entry with its vertex buffers, its fragment
- * entry where it has one writing a target a location it returns, and a depth
- * where its record tests one.
+ * The pipelines the renderer makes over its modules, render and compute,
+ * each named by the entry points it runs (pxl-render examples/assembled.rs,
+ * pipelines.json). They are made here as WebGPU takes them. A compute
+ * pipeline gets the layout its entry declares. A render pipeline gets its
+ * vertex buffers; its fragment entry, where it has one, writing one target
+ * for each location the entry returns; and a depth buffer, where its record
+ * tests depth.
  */
 
-/** A pipeline as pipelines.json says it. */
+/** A pipeline as pipelines.json describes it. */
 export interface Pipeline {
   module: string;
   compute?: string;
@@ -20,13 +21,13 @@ export interface Pipeline {
   depth?: boolean;
 }
 
-/** The entry points `p` runs, as a line names them. */
+/** The entry points `p` runs, as one line of output names them. */
 export function entries(p: Pipeline): string {
   return p.compute ?? [p.vertex, p.fragment].filter(Boolean).join("+");
 }
 
-/** A color target of the type a location returns: an integer one for an
- * integer. */
+/** A color target for the type a location returns: an integer format for an
+ * integer type, and a float format otherwise. */
 function target(ty: string): GPUColorTargetState {
   const format = /\bu32\b|vec\du\b/.test(ty)
     ? "r32uint"
@@ -36,8 +37,8 @@ function target(ty: string): GPUColorTargetState {
   return { format };
 }
 
-/** The color targets the fragment entry `fs` of `code` writes: one a
- * location it returns, alone or as its struct's fields. */
+/** The color targets that the fragment entry `fs` of `code` writes: one for
+ * each location it returns, alone or as the fields of a struct. */
 function targets(code: string, fs: string): GPUColorTargetState[] {
   const ret = code.match(
     new RegExp(`\\bfn\\s+${fs}\\s*\\([^]*?\\)\\s*->\\s*([^{]+)\\{`),
@@ -54,8 +55,8 @@ function targets(code: string, fs: string): GPUColorTargetState[] {
     .map(target);
 }
 
-/** `p` made over `module`, its source `code`, by WebGPU's async call: what
- * it refuses rejects. */
+/** Makes `p` over `module`, whose source is `code`, through WebGPU's async
+ * call, so that a pipeline WebGPU refuses rejects the promise. */
 export function make(
   device: GPUDevice,
   module: GPUShaderModule,

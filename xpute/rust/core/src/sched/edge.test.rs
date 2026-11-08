@@ -77,7 +77,8 @@ fn falling_edge_earliest_wait() {
     assert_eq!(edge().fall(), 0.0);
 }
 
-/// A task waiting on its runtime asks for no turn, and is woken at the next.
+/// A task waiting on its runtime asks for no turn, and is woken at the next
+/// turn the runtime begins.
 #[test]
 fn runtime_turn_asks_none() {
     let _g = serial();

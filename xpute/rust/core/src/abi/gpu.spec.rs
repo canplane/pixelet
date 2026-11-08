@@ -2,12 +2,14 @@
 //
 // GENERATED from spec/abi/gpu.json
 
-//! The GPU device's protocol, on major GPU: its state and the surfaces a UI lends it. The
-//! calls a core makes to the GPU are records of its stream (gpu/api.json), not commands.
-//! GPU_READY tells the core the device the machine asked for answered. A surface is a
-//! canvas or a view the UI hands over and the core alone draws from then on, by the handle
-//! GPU_SURFACE_OPEN answers, the handle the UI binds the canvas under (@xpute/runtime
-//! `Link.bind`) and the stream's CONFIGURE and CURRENT name. What it shows is the program's.
+//! The GPU device's protocol on major GPU, which tells the core the device's state and the
+//! surfaces the UI lends it. The core's own calls to the GPU are not commands: they are
+//! records in its GPU stream (gpu/api.json). GPU_READY tells the core that the device its
+//! machine asked for has answered. A surface is a canvas or a view that the UI hands over,
+//! and from then on only the core draws into it. The surface is named by the handle that
+//! GPU_SURFACE_OPEN answers with: the UI binds its canvas under that handle (@xpute/runtime
+//! `Link.bind`), and the stream's CONFIGURE and CURRENT records name the surface by it. What
+//! a surface shows is the program's to decide.
 
 // A list a record carries is a function handing out its items, whose
 // type is long to spell and is spelled once, here, for each. A table
@@ -29,7 +31,7 @@ use crate::abi::number::{finite, integer, unknown};
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{PacketWriter, TreeReader};
 
-/// What a command is about.
+/// A command's major, the high byte of its number, by which the runtime routes the frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Major {
@@ -45,7 +47,6 @@ impl Major {
     }
 }
 
-/// The GPU's state and its surfaces.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum GpuMinor {
@@ -74,15 +75,17 @@ impl GpuMinor {
 #[repr(u32)]
 pub enum Command {
     // ---- gpu, export ----
-    /// The GPU the machine asked for answered, the first time or again after a loss, whose
-    /// sign is in the stream's device block.
+    /// The GPU the machine asked for has answered, for the first time or again after the device
+    /// was lost. The STATUS word of the stream's device block tells the core the device's state.
     GPU_READY = 0x0201,
-    /// Answered with the surface's handle, 0 where the core opens none.
+    /// Asks the core to open a surface. The core answers with the surface's handle, or with 0
+    /// when it opens none.
     GPU_SURFACE_OPEN = 0x0202,
-    /// The surface's layout box in device pixels, transforms aside, and the device pixel ratio;
-    /// the buffer it is drawn into is the core's.
+    /// The surface's layout box in device pixels, ignoring transforms, and the device pixel
+    /// ratio. The size of the buffer the surface is drawn into is the core's to choose.
     GPU_SURFACE_RESIZE = 0x0203,
-    /// The surface is going: what it drew and held on the device is let go.
+    /// The surface is going away, and the core lets go of what it drew and held on the device
+    /// for it.
     GPU_SURFACE_CLOSE = 0x0204,
 }
 

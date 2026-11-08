@@ -3,8 +3,8 @@
 /**
  * The app as Expo builds it, for a device and for the page. The icon is the
  * client's brand, found from the workspace (ts/build/paths.ts). The page is
- * one HTML file over one bundle (`output: "single"`), from the template
- * script/web.ts makes of index.html into public/.
+ * one HTML file over one bundle (`output: "single"`), filled from the template
+ * that script/web.ts makes of index.html in public/.
  */
 
 import * as path from "node:path";

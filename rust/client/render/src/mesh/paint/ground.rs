@@ -1,8 +1,8 @@
 // pxl-render/mesh/paint/ground.rs
 
-//! What an asset that fills is drawn as, by its value alone: its swatch and
-//! texture layer as the catalog's painter teaches them (object.rs), a ground
-//! look's and a placed cube of that look's one entry.
+//! How an asset that fills a cell is drawn, by its value alone: its swatch and texture layer
+//! as the catalog's painter gives them (object.rs). A ground look and a placed cube of that
+//! look share one entry.
 
 use pxl_spec::asset::color;
 use pxl_spec::asset::cube::sentinel;
@@ -12,18 +12,17 @@ use crate::look::color::linear;
 use crate::mesh::paint::object::PAINTER;
 use crate::mesh::paint::palette::{layer_mean, rgb255, sentinel_layer};
 
-/// The ground's bytes, which every value under them is one of.
+/// The number of values a ground's byte can take. Every value below it is one of them.
 const BYTES: usize = u8::MAX as usize + 1;
 
-/// Each value's look as a ray's pixel paints it (frame/shader/screen_ray.wgsl
-/// `drawn`), by value alone, whichever source holds it, four words, its
-/// colors in linear light, which a pixel lights in: its swatch's red and
-/// green, its blue with its layer over it, then what it reads as from afar (`layer_mean`),
-/// red and green, then blue; each channel 16 bits of the unit (WGSL
-/// `unpack2x16unorm`), which darks keep without bands. A cube the catalog
-/// teaches is its painter's (object.rs `look_of`), a ground look's the cube
-/// of that look; a value none is, the bedrock's `unknown` and the bytes no
-/// look names among them, is drawn as `unknown`.
+/// Each value's look as a ray's pixel paints it (frame/shader/screen_ray.wgsl `drawn`). The look
+/// depends on the value alone, whichever source holds it. It is four words, its colors in
+/// linear light, which a pixel is lit in: the swatch's red and green; its blue, with the
+/// texture layer above it; the color it reads as from afar (`layer_mean`), red and green; then
+/// that color's blue. Each channel is 16 bits of the unit (WGSL `unpack2x16unorm`), which keeps
+/// dark colors free of bands. A cube the catalog names takes its painter's look (object.rs
+/// `look_of`), and a ground look takes the look of its cube. A value with no look, such as the
+/// bedrock's `unknown` or a byte no look names, is drawn as `unknown`.
 pub fn look_words() -> Vec<[u32; 4]> {
     let unknown = (
         color::sentinel(sentinel::unknown).map_or([0; 3], |s| rgb255(s.rgb)),

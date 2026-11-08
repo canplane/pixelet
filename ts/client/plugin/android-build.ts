@@ -1,23 +1,26 @@
 // @pxl/client/plugin/android-build.ts
 
 /**
- * What an Android build of this app is for, written into the Gradle
- * properties, the app's build script and the daemon's criteria `expo
- * prebuild` generates (android/ is its, and not kept).
+ * Writes what an Android build of this app needs into the files `expo
+ * prebuild` generates: the Gradle properties, the app's build script and the
+ * Gradle daemon's criteria. android/ is generated and not kept, so the
+ * choices are made here.
  *
- * - One ABI, arm64-v8a: the core is built for aarch64-linux-android alone
- *   (@xpute/native script/build-core.py), and an ABI packed without it is an app that
- *   dies loading its library on the phones that take that ABI.
- * - The SDK floor: the Vulkan this build takes for wgpu.
+ * - One ABI, arm64-v8a. The core is built for aarch64-linux-android alone
+ *   (@xpute/native script/build-core.py), and an app that packs another ABI
+ *   without the core dies loading its library on the phones that take that
+ *   ABI.
+ * - The SDK floor is set by the Vulkan that this build needs for wgpu.
  * - The debug builds of both flavors, a phone's and a Quest's (the `mobile`
- *   and `quest` expo-horizon-core adds), load their JavaScript from Metro.
- *   React Native takes a variant for a debug build only by its whole name,
- *   `debug` unless told, and bundles every other one into its APK.
- * - Gradle's daemon on Java 17, whatever launches it: the NDK's native build
- *   of expo-modules-core fails under a newer Java ("A restricted method in
- *   java.lang.System has been called"). Android Studio's sync writes the
+ *   and `quest` flavors that expo-horizon-core adds), load their JavaScript
+ *   from Metro. React Native treats a variant as a debug build only when its
+ *   whole name is listed, which is `debug` by default, and bundles the
+ *   JavaScript into the APK of every other variant.
+ * - Gradle's daemon runs on Java 17, whatever launches it, because the NDK
+ *   build of expo-modules-core fails under a newer Java ("A restricted method
+ *   in java.lang.System has been called"). Android Studio's sync writes the
  *   daemon's criteria for its own bundled Java 25, and the criteria outrank
- *   `JAVA_HOME`, so the criteria are written here.
+ *   `JAVA_HOME`, so this plugin writes them.
  */
 
 import * as fs from "node:fs";

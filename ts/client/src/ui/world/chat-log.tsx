@@ -8,7 +8,6 @@ import { cornerCard } from "@/ui/component/corner-card.ts";
 import { alpha, color, textStyle, weight } from "@/ui/component/theme.ts";
 import { textEdge } from "@/ui/component/typeface.ts";
 
-/** The lines said, oldest faintest. */
 export function ChatLog() {
   const { t } = useTranslation();
   const chatLines = useChatLines();

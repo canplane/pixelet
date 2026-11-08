@@ -1,13 +1,14 @@
 // pxl-core/domain/scene/marker/arrangement.rs
 
-//! The markers' arrangement: where each is drawn, read by its own source
-//! over the eye's clip levels' bricks, as decor is generated over them
-//! (domain/view/observation.rs `bricks`), and shown at the zoom the camera
-//! grid's cell at its own point is: a place as Carto draws it at that zoom
-//! (`place.rs`); a pin someone put up, near enough (`pin.rs`); a line said,
-//! hung over its speaker's head where its speaker shows it (`line.rs`). A
-//! brick is only what a source is read over. Each source hands the
-//! arrangement an `Instance`, and the arrangement asks each the same: its
+//! The markers' arrangement: where each marker is drawn. Each source reads
+//! its markers over the bricks of the eye's clip levels, the bricks decor is
+//! generated over (domain/view/observation.rs `bricks`). It shows each
+//! marker at the zoom of the camera grid's cell at the marker's own point. A
+//! place shows as Carto draws it at that zoom (`place.rs`). A pin someone put
+//! up shows when it is near enough (`pin.rs`). A line said hangs over its
+//! speaker's head while its speaker shows it (`line.rs`). A brick is only
+//! what a source is read over. Each source hands the arrangement an
+//! `Instance`, and the arrangement asks the same of every instance: its
 //! design, its size, its slot and whether it is ready (`design.rs`), and
 //! where a tap on it goes.
 
@@ -19,8 +20,8 @@ use crate::domain::query::{at_zoom, Ray, World};
 use crate::domain::scene::marker::candidate::Candidates;
 use crate::domain::scene::marker::design::{self, Design};
 use crate::domain::scene::marker::set::{self, Set};
+use crate::domain::setting::store::settings;
 use crate::domain::view::frame::screen::{ndc_to_px, units_per_px_at};
-use crate::domain::view::setting::store::settings_store;
 use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::shelf::NO_SLOT;
 use pxl_spec::space::coord::v3;
@@ -31,6 +32,7 @@ use xpute_kit::status::errno::Errno;
 
 use crate::domain::query::changes;
 use crate::domain::scene::frame::Frame;
+use crate::domain::scene::marker::param::SPACING_PX;
 use crate::domain::scene::model;
 use crate::domain::view::frame::{coord, pose};
 use crate::domain::view::observation;
@@ -46,12 +48,13 @@ use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::quadrant::Quadrant;
 
-/// A brick of the eye's clip levels the markers are read over, by its zoom
-/// and place, X running on round the world as the view's frame does
-/// (domain/view/observation.rs `bricks`).
+/// A brick of the eye's clip levels that markers are read over, named by its
+/// zoom and place. Its X runs on round the world without wrapping, as the
+/// view's frame does (domain/view/observation.rs `bricks`).
 pub(super) type Brick = Node<2>;
 
-/// Its cells' zoom: the camera grid's at its nearest point, its finest.
+/// The zoom of a brick's cells: the camera grid's zoom at the brick's
+/// nearest point, the finest the brick draws.
 pub(super) fn cell_zoom((zoom, _): Brick) -> Zoom {
     zoom + BRICK_SHIFT
 }
@@ -72,54 +75,59 @@ struct Arrangement {
     visible: Vec<u32>,
     set: Set,
     draw_order: Vec<u32>,
-    /// Nearest the eye first: screen box, and where a tap on it goes.
+    /// Each drawn marker's screen box and where a tap on it goes, nearest
+    /// the eye first.
     hits: Vec<([f64; 4], MarkerHit)>,
-    /// Kept so a settled turn asks the heap for nothing; a brick's in a
-    /// run, as each source reads it (`pin.rs`, `place.rs`).
+    /// The pins and places read so far, a brick's together, as each source
+    /// reads them (`pin.rs`, `place.rs`). These buffers, like the others
+    /// here, are kept between turns so a turn where nothing changed
+    /// allocates nothing.
     pins: Vec<pin::Pin>,
     places: Vec<place::Place>,
-    /// What the sources show this run, its room kept.
+    /// What the sources show this run.
     shown: Vec<Instance>,
-    /// The drawn bricks `pins` and `places` were read from: a brick drawn
-    /// still keeps what was read from it, so an eye move casts rays only in
-    /// the bricks it enters.
+    /// The drawn bricks `pins` and `places` were read from. A brick still
+    /// drawn keeps what was read from it, so an eye that moves casts rays
+    /// only in the bricks it enters.
     found_for: Option<Read>,
-    /// The same, read this turn.
+    /// The same, for the bricks read this turn.
     now: Read,
-    /// Places, ground or objects moved since they were read.
-    moved: bool,
-    /// The place tiles whose answer moved, beside the ground's
-    /// (domain/query/changes.rs): a brick they touch is read again.
-    moved_places: Vec<Quadrant>,
-    /// The bricks this turn would read, by how far from the eye, with
+    /// Whether places, ground or objects changed since they were read.
+    changed: bool,
+    /// The place tiles whose answer changed, besides the ground's changes
+    /// (domain/query/changes.rs). A brick they touch is read again.
+    changed_places: Vec<Quadrant>,
+    /// The bricks this turn would read, with their distance from the eye and
     /// their columns.
     entering: Vec<(f64, Brick, Aabb)>,
     sized: Vec<Instance>,
-    /// Last turn's `sized`, its buffer reused.
+    /// Last turn's `sized`, whose buffer is reused.
     spare: Vec<Instance>,
-    /// Designs not ready yet, kept to become so, each by the index in
-    /// `sized` of the instance showing its old drawing meanwhile.
+    /// The designs not ready yet, each with the index in `sized` of the
+    /// instance that shows its old drawing until it is.
     pending: Vec<(u32, Design)>,
-    /// What was drawn last by its holder's key, and the designs the markers
-    /// keep: made each run, their room kept.
+    /// What was drawn last, by its holder's key, and the designs the markers
+    /// keep. Both are rebuilt each run.
     before: FnvHashMap<Key, Design>,
     keep: FnvHashSet<Design>,
     /// What the marker set holds, and the buffer the next run lays out
-    /// into, swapped as `sized` and `spare` are.
+    /// into. They are swapped as `sized` and `spare` are.
     instances: Vec<u32>,
     spare_instances: Vec<u32>,
-    /// What the last run read, compared by value: equal, with nothing moved
-    /// and nothing left waiting, the designs it laid out stand.
+    /// What the last run read, compared by value. While it is equal, nothing
+    /// changed and nothing is left waiting, the last layout stands and the
+    /// step does nothing.
     last: Option<Inputs>,
-    /// The last run left a design not laid out or not painted, which a later
-    /// turn has, or a brick not read yet: the next runs again.
+    /// Whether the last run left a design not laid out or not painted, which
+    /// a later turn brings, or a brick not read yet. If so, the next turn
+    /// runs again.
     waiting: bool,
 }
 
-/// Everything `step` reads, by value, as the demand's `Key` is: the eye and
-/// its view (the observation holds its frustum), the places
-/// setting, the pin being written and the chat's line and where it hangs. A
-/// new input goes here or the step never sees it change.
+/// Everything `step` reads, compared by value, as the demand's `Key` is: the
+/// eye and its view (the observation holds its frustum), the places setting,
+/// the pin being written, and the chat's line with where it hangs. An input
+/// the step reads must be added here, or the step never sees it change.
 #[derive(Clone, PartialEq)]
 struct Inputs {
     o: Observation,
@@ -128,12 +136,13 @@ struct Inputs {
     bubble: line::Bubble,
 }
 
-/// The name a holder calls what it shows by, from one run to the next, and
-/// none of what is painted (`design.rs`): a pin by its own
-/// (`pin::Holder`), a place by its tile and its index there, the chat's line
-/// by its speaker, of whom there is one. The arrangement only tells one from
-/// another, to keep an instance's old drawing until its new one is painted;
-/// where a tap goes is the instance's own (`Instance::tap`).
+/// The name a holder gives what it shows, stable from one run to the next
+/// and independent of what is painted (`design.rs`). A pin is named by its
+/// holder (`pin::Holder`), a place by its tile and its index there, and the
+/// chat's line by its speaker, of whom there is one. The arrangement uses the
+/// key only to tell instances apart, so it can keep an instance's old drawing
+/// until its new one is painted. Where a tap goes is the instance's own
+/// (`Instance::tap`).
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) enum Key {
     Pin(pin::Holder),
@@ -141,8 +150,9 @@ pub(super) enum Key {
     Line,
 }
 
-/// What a source hands the arrangement: by its holder's key, the design it paints,
-/// where it stands, and where a tap on it goes, none where it takes none.
+/// What a source hands the arrangement: its holder's key, the design it
+/// paints, where it stands, and where a tap on it goes, or None where it
+/// takes no tap.
 #[derive(Clone)]
 pub(super) struct Instance {
     pub(super) key: Key,
@@ -154,31 +164,31 @@ pub(super) struct Instance {
 static ARRANGEMENT: Global<Arrangement> = Global::new();
 
 /// What `pins` and `places` were read from: the drawn bricks, and whether
-/// places were on. What a brick holds is read over its whole columns, so
-/// it stands while no change touches them, whatever heights the world
-/// stands between in it.
+/// places were on. A brick is read over its whole columns, so what was read
+/// stays valid while no change touches those columns, whatever heights the
+/// world spans in them.
 #[derive(Default, PartialEq)]
 struct Read {
     bricks: Vec<Brick>,
     places: bool,
 }
 
-/// The most a marker is drawn past where it stands, in pixels, which the
-/// cull of a brick leaves it: a bound, twice a place's cell, the width its
-/// name wraps to (`SPACING_PX`), past a pin's longest pill and a name's
-/// lines over its icon.
+/// The farthest a marker is drawn past where it stands, in pixels, which the
+/// cull of a brick must leave room for. The bound is twice the width a place
+/// keeps and its name wraps to (`SPACING_PX`), which is more than a pin's
+/// longest pill or a place's name lines over its icon.
 fn extent_px(spacing: f64) -> f64 {
     2.0 * spacing
 }
 
-pub fn on_moved(places: &[Quadrant]) {
+pub fn on_changed(places: &[Quadrant]) {
     let p = ARRANGEMENT.get(Arrangement::default);
-    p.moved = true;
-    p.moved_places.extend_from_slice(places);
+    p.changed = true;
+    p.changed_places.extend_from_slice(places);
 }
 
-/// The height a ray down over `at` from `high` first meets what is drawn,
-/// above `low`; none where nothing there is known.
+/// The height at which a ray down over `at`, from `high`, first meets what is
+/// drawn at `zoom` above `low`, or None where nothing there is known.
 pub(super) fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f64> {
     let xy = q3::unpack(at);
     let ray = Ray {
@@ -193,49 +203,45 @@ pub(super) fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f6
     Some(high - hit.t)
 }
 
-/// The width a place keeps to itself on the screen, in CSS pixels: its name
-/// wraps to it and its marker's region is it. A marker is laid out as the
-/// UI's text is, in CSS pixels, so the width is one on every screen, set
-/// by eye to hold a name of a few words.
-const SPACING_PX: f64 = 193.0;
-
-/// The markers laid out for `frame`, `draft` the marker tool's as the turn
-/// hands it (pxl-core turn.rs `scene_tick`).
+/// Lays out the markers for `frame`. `draft` is the marker tool's draft as
+/// the turn hands it (turn.rs `scene_tick`).
 pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     let p = ARRANGEMENT.get(Arrangement::default);
     if pose::eye().is_none() {
         if p.set.free(model::draw_list()) {
             ctx.invalidate();
         }
-        // Nothing is drawn now: what comes back is laid out afresh.
+        // Nothing is drawn now, so what comes back is laid out afresh.
         (p.last, p.waiting, p.found_for) = (None, false, None);
-        p.moved_places.clear();
+        p.changed_places.clear();
         p.instances.clear();
         p.hits.clear();
         design::retain(&FnvHashSet::default());
         return;
     }
-    // No observation yet, the source's reach not declared: laid out afresh
-    // once there is one, so the tiles that moved meanwhile are not kept.
+    // With no observation yet, the source's reach is not declared. The
+    // markers are laid out afresh once there is one, so the tiles that
+    // changed meanwhile are not kept.
     let Some(o) = observation::observation() else {
         (p.last, p.found_for) = (None, None);
-        p.moved_places.clear();
+        p.changed_places.clear();
         return;
     };
     let seen = Inputs {
         o,
-        places: settings_store().place,
+        places: settings().place,
         drafted: pin::draft_key(draft),
         bubble: line::bubble(o.eye),
     };
-    if !p.waiting && !p.moved && p.last.as_ref() == Some(&seen) {
+    if !p.waiting && !p.changed && p.last.as_ref() == Some(&seen) {
         return;
     }
     p.last = Some(seen.clone());
-    // The eye's clip levels' bricks in view (domain/view/observation.rs
-    // `bricks`), as decor's are: the box the world stands in over each,
-    // grown by what a marker draws past it at the box's far side; none past
-    // where the rays end, over ground the sky's Earth stands for.
+    // The bricks of the eye's clip levels that are in view
+    // (domain/view/observation.rs `bricks`), as decor's are. Each is tested
+    // as the box the world stands in over it, grown by how far a marker
+    // draws past it at the box's far side. No brick past where the rays end
+    // is taken, since there the sky's Earth stands for the ground.
     let now = &mut p.now;
     now.bricks.clear();
     let extent = extent_px(SPACING_PX);
@@ -254,31 +260,31 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
         }
     });
     now.bricks.sort_unstable();
-    // Places are a setting; what someone placed is always shown.
-    now.places = settings_store().place;
+    // Places are a setting, while what someone placed always shows.
+    now.places = settings().place;
     let places = now.places;
-    // What was read stands for a brick still drawn whose columns no change
-    // touches (domain/query/changes.rs), while places did not turn: a
-    // brick left or touched drops its run, and only one entered or touched
-    // is read, as many a turn as a pass of the tick's budget reads and at
-    // least one, nearest the eye first; the rest are not read yet, so a
-    // later turn reads them.
-    p.moved = false;
+    // What was read stays for a brick that is still drawn and whose columns
+    // no change touches (domain/query/changes.rs), as long as the places
+    // setting did not turn. A brick left or touched drops what was read from
+    // it. Only bricks entered or touched are read, nearest the eye first, as
+    // many a turn as one pass of the tick's budget reads and at least one.
+    // The rest are not read yet, so a later turn reads them.
+    p.changed = false;
     let before = match &p.found_for {
         Some(f) if f.places == places => f.bricks.as_slice(),
         _ => &[],
     };
-    let moved_places = &p.moved_places;
+    let changed_places = &p.changed_places;
     let columns = |s: Brick| region(s, [BOUNDS.min[2], BOUNDS.max[2]]);
-    // Whether each drawn brick stands, asked once a brick however many pins
-    // and places it holds.
+    // Whether each drawn brick keeps what was read from it, asked once for
+    // each brick however many pins and places it holds.
     let stood: Vec<bool> = now
         .bricks
         .iter()
         .map(|&s| {
             let r = columns(s);
             before.binary_search(&s).is_ok()
-                && !changes::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], moved_places)
+                && !changes::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], changed_places)
         })
         .collect();
     let stands = |s: &Brick| now.bricks.binary_search(s).is_ok_and(|k| stood[k]);
@@ -319,12 +325,13 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
         )
         .step_cnt as usize;
     let unread = entering.len() - read;
-    // Not read, so not what they were read from.
+    // The bricks not read yet are not among those the markers were read
+    // from.
     let later = &mut entering[read..];
     later.sort_unstable_by_key(|e| e.1);
     now.bricks
         .retain(|d| later.binary_search_by_key(d, |e| e.1).is_err());
-    p.moved_places.clear();
+    p.changed_places.clear();
     if p.found_for.as_ref() != Some(&p.now) {
         let now = core::mem::take(&mut p.now);
         p.now = p.found_for.replace(now).unwrap_or_default();
@@ -334,16 +341,15 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     let mut sized = core::mem::take(&mut p.spare);
     sized.clear();
     p.pending.clear();
-    // Each shown at the zoom the grid's cell at its own point is.
+    // Each marker shows at the zoom of the grid's cell at its own point.
     let mut shown = core::mem::take(&mut p.shown);
     shown.clear();
     pin::show(&mut pins, o.eye, draft, &mut shown);
     place::show(&mut read_places, o.eye, &mut shown);
     shown.extend(seen.bubble.instance());
     let spacing = SPACING_PX;
-    // What was drawn last by its holder's key, read once: what a holder
-    // shows changed, and what was drawn stays until the new one is ready to
-    // show.
+    // What was drawn last, by its holder's key. When what a holder shows
+    // changes, the old drawing stays until the new one is ready to show.
     let before = &mut p.before;
     before.clear();
     before.extend(drawn_before.iter().map(|s| (s.key, s.design.clone())));
@@ -358,7 +364,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
             }
             _ => (design, None),
         };
-        // Its text is laid out by a later turn.
+        // The design's text is not laid out yet. A later turn lays it out.
         let Some([width, height, anchor]) = design::size(&design) else {
             unlaid = true;
             continue;
@@ -388,12 +394,12 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     let freed = design::retain(&p.keep);
     (p.pins, p.places, p.shown) = (pins, read_places, shown);
     select_visible(&mut p.candidates, &mut p.visible);
-    // A design held for an instance seen asks its slot now, after the slots
-    // let go are freed, so it is painted at render. Where the atlas has no
-    // room for it, the hold is let go: the instance shows the new design,
-    // which waits, and the next run frees the old one's slot and asks again.
-    // One whose text is not laid out yet stays held and asks nothing: it
-    // asks the turn its text comes (`design::coming`).
+    // A held design of a visible instance asks for its slot now, after the
+    // dropped designs' slots are freed, so the render paints it. Where the
+    // atlas has no room for it, the hold is given up: the instance shows the
+    // new design, which waits, and the next run frees the old design's slot
+    // and asks again. A design whose text is not laid out yet stays held and
+    // asks nothing. It asks on the turn its text arrives (`design::coming`).
     let mut refused = false;
     for &i in &p.visible {
         let Ok(k) = p.pending.binary_search_by_key(&i, |w| w.0) else {
@@ -407,10 +413,10 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
             refused = true;
         }
     }
-    // Painted at render, or laid out by the client, neither of which asks a
-    // turn: one looks again, while a design is on its way (`design::coming`),
-    // once a slot let go may make room for one that had none, or once a
-    // hold let go frees the old slot.
+    // Neither the render's painting nor the client's layout asks for a turn,
+    // so the arrangement asks for one itself: while a design is on its way
+    // (`design::coming`), when a freed slot may make room for a design that
+    // had none, or when a hold given up frees the old slot.
     let pending = p.pending.iter().any(|w| design::coming(&w.1)) || freed && !p.pending.is_empty();
     p.waiting = pending || refused || unlaid || unread > 0;
     if p.waiting {
@@ -439,9 +445,9 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     );
     let mut instances = core::mem::take(&mut p.spare_instances);
     instances.clear();
-    // Each where it stands, its Q3, which holds no eye: the instances are
-    // written again only where the selection, the order or a design
-    // changed.
+    // Each instance holds its stand as Q3, with nothing of the eye, so the
+    // instances change only when the selection, the order or a design
+    // changes.
     for &i in &p.draw_order {
         let i = i as usize;
         let design = &sized[i].design;
@@ -454,7 +460,8 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
             f64::from(p.candidates.region_px[i]),
         ));
     }
-    // Written, and a frame asked, only where what is drawn changed.
+    // The set is written, and a frame asked for, only when what is drawn
+    // changed.
     if instances != p.instances {
         p.set.write(model::draw_list(), &instances);
         ctx.invalidate();
@@ -463,19 +470,20 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     (p.sized, p.spare, p.spare_instances) = (sized, drawn_before, drawn_instances);
 }
 
-/// The markers the last step laid out, into the frame's list.
 pub fn draw(draw: &mut DrawList) {
     ARRANGEMENT.get(Arrangement::default).set.draw(draw);
 }
 
-/// What a tap on a scene marker hit: a place to go to; a pin, its entry's, which the tool held decides what to do with.
+/// What a tap on a scene marker hit: a place to go to, or a pin's entry,
+/// which the tool held decides what to do with.
 #[derive(Clone, Copy)]
 pub enum MarkerHit {
     To(Q3),
     Pin(Octant, Q3),
 }
 
-/// `ndc` in [−1, 1], y up. The marker that took the tap, if any.
+/// The marker that took a tap at `ndc_x`, `ndc_y`, in [−1, 1] with y up, or
+/// None.
 pub fn tap(ndc_x: f64, ndc_y: f64) -> Option<MarkerHit> {
     let [x, y] = ndc_to_px([ndc_x, ndc_y]);
     let hits = &ARRANGEMENT.get(Arrangement::default).hits;

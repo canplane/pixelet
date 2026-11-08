@@ -1,41 +1,44 @@
 // pxl-render/sample_box.wgsl
 
-// An observer's samples as stops into what draws the node cache's entries (record_put.wgsl
-// `observe_stop`; pxl-engine record.rs), the eye's and the light's alike, each as its
-// sample.eye.wgsl or sample.light.wgsl and its sample_box.eye.wgsl or sample_box.light.wgsl
-// take it, a thread a sample: every stopped sample finds its node's entry, which the walk that
-// stopped it kept, and sets the face it entered across, asking that face's word the first time
-// where its observer reads one (`sample_asks`).
+// Writes an observer's samples into the record as stops, the eye's and the light's alike, one
+// thread a sample (record_put.wgsl `observe_hit`; pxl-engine record.rs). Each sample that
+// stopped finds its node's entry, which the walk that stopped it kept, and sets the face it
+// entered across. Where its observer reads faces' words, the first sample to enter a face asks
+// that face's word (`sample_asks`). What differs by observer comes from sample.eye.wgsl or
+// sample.light.wgsl, and from sample_box.eye.wgsl or sample_box.light.wgsl.
 
-/// Whether sample `s` stopped on a node: not gone on to its reach, and not parked
-/// (`beam::SAMPLE_PARKED`).
+/// Whether sample `s` stopped on a node: it neither went on to its reach nor is parked,
+/// waiting in the queue (pxl-engine `beam::SAMPLE_PARKED`).
 fn stopped(s: vec2<u32>) -> bool {
   let zoom = beams[sample_word(s) + SAMPLE_NODE + NODE_ZOOM];
   return zoom != SAMPLE_NONE && zoom != SAMPLE_PARKED;
 }
 
-/// Sample `s`'s node, its roots world-absolute from where its ray starts.
-fn sample_kept(s: vec2<u32>) -> Node {
-  return kept_at(sample_word(s) + SAMPLE_NODE, sample_aim(s).origin);
+/// The node sample `s` stopped on, as a walk from where its ray starts holds it, with its roots
+/// counted over the whole world.
+fn sample_node(s: vec2<u32>) -> Node {
+  return node_at(sample_word(s) + SAMPLE_NODE, sample_aim(s).origin);
 }
 
-/// Sample `s`'s stop: its answer, the face it entered across, and the line its cell's rays
-/// resumed from (`record_put.wgsl` `Stop`).
-fn sample_stop(s: vec2<u32>) -> Stop {
+/// What sample `s` found where it stopped (record_put.wgsl `Hit`). The sample keeps only the
+/// axis it entered across. Its face is the axis's low side where its ray runs up the axis, and
+/// the high side otherwise. Its line is the one its cell's rays resumed from.
+fn sample_hit(s: vec2<u32>) -> Hit {
   let w = sample_word(s);
   let axis = beams[w + SAMPLE_AXIS];
   let dir = sample_aim(s).dir;
   let along = select(select(dir.z, dir.y, axis == 1u), dir.x, axis == 0u);
-  return Stop(
+  return Hit(
     vec2<u32>(beams[w + SAMPLE_ASSET], beams[w + SAMPLE_ASSET + 1u]),
     beams[w + SAMPLE_LACKS] != 0u,
-    sample_whole(s, sample_kept(s)),
+    sample_whole(s, sample_node(s)),
     2u * axis + select(0u, 1u, along > 0.0),
     sample_line(s),
   );
 }
 
-/// The sample the thread at `id` takes, where the lattice holds it and it stopped.
+/// The sample the thread at `id` takes, or `NO_ENTRY` where the lattice does not hold it or
+/// it did not stop.
 fn stopped_item(id: vec2<u32>) -> vec2<u32> {
   let n = sample_lattice();
   let s = sample_item(id);
@@ -51,5 +54,5 @@ fn sample_box_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (s.x == NO_ENTRY) {
     return;
   }
-  observe_stop(sample_kept(s), sample_stop(s), sample_asks());
+  observe_hit(sample_node(s), sample_hit(s), sample_asks());
 }

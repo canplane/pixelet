@@ -8,7 +8,17 @@
   },
   "dependencies": {
     "@xpute/runtime": "workspace:*",
-    "@xpute/kit": "workspace:*",
+    "@xpute/kit": "workspace:*"
+  },
+  "peerDependencies": {
+    "@xpute/native": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@xpute/native": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
     "@xpute/native": "workspace:*"
   }
 }

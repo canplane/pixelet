@@ -151,7 +151,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let (rows, pack) = (files()?, pack()?);
     Ok(vec![
         Output::new(
-            "ts/client/src/origin/ingest.spec.ts",
+            "ts/client/src/service/origin/ingest.spec.ts",
             render_ts(&rows, &pack)?,
         ),
         Output::new("rust/spec/src/asset/ingest.spec.rs", render_rs(&pack)?),
@@ -161,11 +161,11 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 fn render_ts(rows: &[File], pack: &Pack) -> Result<String, String> {
     let mut out = String::with_capacity(rows.len() * 160);
     out.push_str(
-        r#"// @pxl/client/origin/ingest.spec.ts
+        r#"// @pxl/client/service/origin/ingest.spec.ts
 //
 // GENERATED from spec/spec/asset/ingest.json
 // Every shipped asset by its number below the asset root, file n at
-// `ASSET_FILES[n - 1]` (ts/client/src/sys/fs/asset.ts): the bucket key
+// `ASSET_FILES[n - 1]` (ts/client/src/service/sys/fs/asset.ts): the bucket key
 // (the SHA-256 of its bytes, which where it lies does not change), its size,
 // and for a model its extent in ENU world units, measured from the glb. The
 // bytes themselves are in the bucket.

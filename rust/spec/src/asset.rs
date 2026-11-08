@@ -1,12 +1,11 @@
 // pxl-spec/asset.rs
 
-//! The content library: every asset the specs declare (`spec/spec/asset/`),
-//! each a definition of a kind — the cubes and their colors, the decors, the
-//! marker, the characters, the sky — numbered by its id, its kind over its shape
-//! (`id`), and each file a definition references a slot, which the catalog
-//! the client plugs in fills (`catalog`). The texture pack is the cube kind's:
-//! which of its tiles a cube wears on each face (`ingest`). A cube with no
-//! image still draws as its catalog color.
+//! The content library: every asset the specs declare (`spec/spec/asset/`), each a
+//! definition of a kind (the cubes and their colors, the decors, the marker, the characters,
+//! the sky), numbered by its id, which is its kind over its shape (`id`). Each file a
+//! definition references is a slot, which the catalog the client plugs in fills (`catalog`).
+//! The texture pack belongs to the cube kind: it says which of its tiles a cube wears on each
+//! face (`ingest`). A cube with no image still draws in its catalog color.
 
 pub mod catalog;
 #[path = "asset/character.spec.rs"]
@@ -49,9 +48,9 @@ impl Swatch {
 }
 
 impl decor::Variant {
-    /// The largest dimension of its model, in units, as the catalog measures
-    /// it, and none before one is read; NaN is kept rather than dropped, so
-    /// a model the ingest could not measure is never taken for none.
+    /// The largest dimension of its model, in units, as the catalog measures it, or none before
+    /// one is read. NaN is kept rather than dropped, so a model the ingest could not measure is
+    /// never taken for none.
     pub fn extent(&self, catalog: Option<&Catalog>) -> f64 {
         model_extent(self, catalog).into_iter().fold(0.0, largest)
     }
@@ -94,9 +93,9 @@ impl decor::Decor {
             .map(|n| f64::from(n) * units(UNIT_ZOOM))
     }
 
-    /// `variant` turned `turn` with its box's min corner at `corner`, in
-    /// units: where it stands, its base's middle, which its model's origin is
-    /// put at, and what it carries at `scale`.
+    /// `variant` turned `turn` with its box's min corner at `corner`, in units: where it stands,
+    /// which is its base's middle, where its model's origin is put, and what it carries at
+    /// `scale`.
     pub fn stand(
         &self,
         corner: [f64; 3],
@@ -116,7 +115,8 @@ impl decor::Decor {
         )
     }
 
-    /// The box one standing at `at`, carrying `m`, claims: every cell in it is its.
+    /// The box that a decor standing at `at` and carrying `m` claims: every cell in it is the
+    /// decor's.
     pub fn claim(&self, at: [f64; 3], m: &decor::DecorMeta) -> Aabb {
         let [x, y, z] = self.sides(m.variant, m.turn);
         let min = [at[0] - x / 2.0, at[1] - y / 2.0, at[2]];
@@ -127,7 +127,7 @@ impl decor::Decor {
     }
 
     /// Where its variants are numbered from as draw groups, as the GPU's
-    /// decor numbers them (pxl-content scatter.rs `first_group`).
+    /// decor numbers them (pxl-content generation.rs `first_group`).
     pub fn first_group(&self) -> u32 {
         let kind = decor::DECORS.iter().take_while(|d| d.id != self.id).count();
         generation::first_group(&DECORS, kind as u32)
@@ -189,7 +189,7 @@ pub fn shipped_tile_mean(cube: AssetId, face: CubeFace) -> Option<[u8; 3]> {
     PACK.means.get(tile_of(cube, face)? as usize).copied()
 }
 
-/// A sentinel's tile's, as `shipped_tile_mean`.
+/// A sentinel's tile's mean color, as `shipped_tile_mean` gives a cube's.
 pub fn shipped_sentinel_mean(sentinel: u8) -> Option<[u8; 3]> {
     PACK.means
         .get(sentinel_tile_of(sentinel)? as usize)
@@ -208,7 +208,7 @@ pub fn shipped_texture_tile(cube: AssetId, face: CubeFace) -> Option<TileOrigin>
     tile_of(cube, face).map(origin)
 }
 
-/// A sentinel's tile's, as `shipped_texture_tile`.
+/// A sentinel's tile's pixel origin, as `shipped_texture_tile` gives a cube's.
 pub fn shipped_sentinel_tile(sentinel: u8) -> Option<TileOrigin> {
     sentinel_tile_of(sentinel).map(origin)
 }

@@ -42,17 +42,27 @@ the table that names them, `spec/spec/asset/ingest.json`, and draws
 `raw/place/symbol/` into the code that carries the place icons. Then it writes
 what the spec generates from the table:
 
-- `ts/client/src/origin/ingest.spec.ts` — the host's table, a key for each
-  file's number
-- `ts/client/src/sys/fs/catalog.spec.ts` — the catalog the host plugs in,
-  which file each of the core's slots names
+- `ts/client/src/service/origin/ingest.spec.ts` — the host's table, a key for
+  each file's number
+- `ts/client/src/service/sys/fs/catalog.spec.ts` — the catalog the host plugs
+  in, which file each of the core's slots names
 - `rust/spec/src/asset/ingest.spec.rs` — the pack's layout, which the renderer
   compiles
 
 **Commit the table and what it generates with the asset change, and upload
 before deploying.** The shipped palette reads that table, and a key it names
-that is not in the bucket is a 404 on the live site. Uploading is the
-`publish-bucket` skill.
+that is not in the bucket is a 404 on the live site. The upload is a sync of
+`./out/asset` to the bucket's `asset/` prefix, one type at a time so each
+carries its content type, with no content encoding and
+`public, max-age=31536000, immutable`:
+
+```sh
+for t in glb:model/gltf-binary png:image/png webp:image/webp; do
+  AWS_REQUEST_CHECKSUM_CALCULATION=when_required aws s3 sync ./out/asset s3://pixelet-bucket/asset \
+    --profile r2 --exclude "*" --include "*.${t%%:*}" \
+    --content-type ${t#*:} --cache-control "public, max-age=31536000, immutable"
+done
+```
 
 ### After changing which texture pack is used
 
@@ -74,8 +84,8 @@ make download-moon
 
 It fetches the CGI Moon Kit's 1K color map into `raw/sky/moon/`, cuts the near
 side, takes it to gray reflectance and writes `content/sky/moon.png`, and prints
-the face's mean, which pxl-render frame/shader/word.rs `MOON_MAP_MEAN` has
-to equal. Run the ingest afterward.
+the face's mean, which pxl-render frame/shader/word.rs `MOON_MAP_MEAN` has to
+equal. Run the ingest afterward.
 
 The Earth's picture is not here: it is the earth layer's, its source in
 `infra/earth/` and both its forms, the tiles and the picture whole, in the

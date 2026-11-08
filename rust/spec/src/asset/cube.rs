@@ -1,8 +1,7 @@
 // pxl-spec/asset/cube.rs
 
-//! The cube kind (`spec/spec/asset/cube.json`): the ground and the cubes,
-//! one table with the GPU's (pxl-content), and a cube as the catalog
-//! gives it out to be placed.
+//! The cube kind (`spec/spec/asset/cube.json`): the ground and the cubes, in one table
+//! shared with the GPU's (pxl-content), and a cube as the catalog gives it out to be placed.
 
 use std::sync::LazyLock;
 

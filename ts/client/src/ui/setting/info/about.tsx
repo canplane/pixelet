@@ -6,35 +6,39 @@ import { StyleSheet, Text, View } from "react-native";
 import { Prose, Section, settingText } from "@/ui/setting/row.tsx";
 import { BrandSymbol } from "./brand-symbol.tsx";
 import { textStyle } from "@/ui/component/theme.ts";
-import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE } from "@/deploy.ts";
+import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE } from "@/build.ts";
 import { format } from "@/abi/file.spec.ts";
 import { LABEL } from "@/ui/component/palette.ts";
-import { useSourceVersions } from "@/ui/store/watch.ts";
+import { useSourceVersions } from "@/ui/watch.ts";
 
 const ENV_SHORT: Record<string, string> = {
   development: "dev",
   staging: "stg",
 };
 
-/** `dev`, or the task that served it: `dev:oven`, `dev:shelf`. */
+/** The environment's short name, followed by the tile source when it is not
+ * the deployment's: `dev`, `dev:oven` or `dev:shelf`. */
 function envLabel(): string {
   const env = ENV_SHORT[APP_ENV] ?? APP_ENV;
   return DEV_SOURCE === "delivery" ? env : `${env}:${DEV_SOURCE}`;
 }
 
-/** Each bake a line, as the source declares where it is read from. */
+/** One line for each bake: its kind and the version the source declares it
+ * is read under. */
 function bakeLines(source: Readonly<Record<string, string>> | null): string[] {
   return Object.entries(source ?? {}).map(
     ([kind, version]) => `${kind}/${version}`,
   );
 }
 
-/** The objects one has placed, kept a shard at a time: the format this build reads them in. */
+/** The placed objects are kept a shard at a time. This names the format this
+ * build reads them in. */
 function objectLabel(): string {
   return `objects · format ${format.OBJECT}`;
 }
 
-/** UTC: a stamp in the viewer's zone said different things on two phones. */
+/** The build time is shown in UTC, because a time in the viewer's zone reads
+ * differently on two phones. */
 function buildLabel(): string {
   const d = new Date(BUILD_TIME);
   if (Number.isNaN(d.getTime())) return BUILD_TIME;

@@ -1,9 +1,9 @@
 // @pxl/client/remote-console.ts
 
 /**
- * Forwards a device's console to the dev server's terminal, since a phone over
- * a tunnel has no attachable devtools. Dev only: page.ts installs it in a
- * development bundle. Wraps the console rather than replacing it.
+ * Forwards a device's console to the dev server's terminal, because a phone
+ * reached over a tunnel has no devtools to attach. page.ts installs it only in
+ * a development bundle. It wraps the console rather than replacing it.
  */
 
 const ENDPOINT = "/__console";
@@ -11,8 +11,9 @@ const ENDPOINT = "/__console";
 const queue: string[] = [];
 let scheduled = false;
 
-/** A message's first and last characters kept: a compiler's error follows
- * the source it quotes, so a long one keeps its end. */
+/** How many of a long message's first and last characters are kept. A
+ * compiler's error comes after the source it quotes, so more of the end is
+ * kept. */
 const HEAD_MAX = 1000;
 const TAIL_MAX = 8000;
 
@@ -49,7 +50,8 @@ function flush(): void {
   if (queue.length === 0) return;
   const body = queue.join("\n");
   queue.length = 0;
-  // `keepalive` lands a line logged as the page unloads; a failure is swallowed.
+  // `keepalive` delivers a line logged while the page unloads. A failed post
+  // is dropped.
   fetch(ENDPOINT, { method: "POST", body, keepalive: true }).then(
     (r) => r.body?.cancel(),
     () => {},

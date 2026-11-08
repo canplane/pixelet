@@ -1,6 +1,7 @@
 // @pxl/client/ui/world/dock/card.tsx
 
-/** A card of the dock's deck, one a mode: the chosen one in front, the other peeking out under it. */
+/** A card of the dock's deck. Each mode has one card. The current mode's card
+ * stands in front, and the other peeks out under it. */
 
 import type { ReactNode } from "react";
 import { StyleSheet } from "react-native";
@@ -20,10 +21,11 @@ const PEEK_PX = 10;
 /** The dock stands tall enough for the card behind to peek out under the front one. */
 export const DOCK_HEIGHT = chrome.control + PEEK_PX;
 
-/** The bar's swipe takes the card's drags; this only keeps a touch on it off the world. */
+/** Handlers that do nothing. The bar's swipe handles the drags on a card;
+ * these only make the front card take its touches, so that none reaches the
+ * world under it. */
 const BAR_TOUCH = {};
 
-/** The dock's cards, one a mode. */
 const MODES = 2;
 
 interface CardProps {
@@ -33,7 +35,7 @@ interface CardProps {
   tint?: string;
   x: f64;
   width: f64;
-  /** The bar's width. */
+  /** `span` is the bar's width. */
   span: f64;
   onContentWidth?: (w: f64) => void;
   children: ReactNode;
@@ -52,7 +54,8 @@ export function Card({
 }: CardProps) {
   const depth = pane === mode ? 0 : 1;
   const pose = cardPose(depth, PEEK_PX);
-  // However it was chosen, the chosen card comes forward from behind.
+  // The current mode's card always comes forward from behind, whatever chose
+  // the mode: a swipe, a key or a marker's draft.
   return (
     <Motion
       to={pose.rest}

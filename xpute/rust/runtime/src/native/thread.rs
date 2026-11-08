@@ -1,42 +1,48 @@
 // xpute-runtime/native/thread.rs
 
-//! The core's own thread, a vCPU that runs while the core has work: it runs
-//! a turn (`Vcpu::turn`) whenever it is kicked, and sleeps otherwise. A kick
-//! carries the next turn's deadline, ms from its rise, the latest of the
-//! kicks since; a turn no kick gave one has a deadline of 0, and applies what
-//! was sent, as a page's doorbell rings for it. A caller's work (`run`), such
-//! as a device's, runs on it between turns while the caller waits. The thread
-//! keeps no timer: when a turn asks to be woken, at once or in `n` ms, it is
-//! told the runtime (`turns`, `ring`), whose scheduler asks its policy for the
-//! moment, as a page's does (@xpute/runtime sched/scheduler.ts), and kicks then, so
-//! no turn runs between a display's frames. Paused (`pause`), it runs only
+//! The core's own thread, a vCPU that runs while the core has work. It runs
+//! a turn (`Vcpu::turn`) whenever it is kicked, and sleeps otherwise.
+//!
+//! A kick may carry a deadline for the next turn, in ms from the turn's
+//! rise; when several kicks come before a turn, the turn takes the latest of
+//! their deadlines. A turn that no kick gave a deadline gets 0, and so only
+//! applies what was submitted, as a page's doorbell does when it rings for a
+//! submission. A caller's work (`run`), such as a device's, runs on this
+//! thread between turns while the caller waits.
+//!
+//! The thread keeps no timer. When a turn asks to be woken, at once or in
+//! `n` ms, the thread tells the runtime (`turns`, `ring`). The runtime's
+//! scheduler asks its policy for the moment, as a page's scheduler does
+//! (@xpute/runtime sched/scheduler.ts), and kicks then, so that no turn runs
+//! between a display's frames. While paused (`pause`), the thread runs only
 //! the turns a caller rings, and its kicks wait for `resume`.
 //!
-//! The core's calls are answered on a thread outside it. A call made
-//! by a caller's work is handed to that caller. One made by a turn is handed
-//! to a caller waiting in `ring` where there is one; otherwise it is told the
-//! program (`notify_on`), which answers it on its own thread (`answer`),
-//! while the core's thread waits, as a vCPU waits out an exit.
+//! The core's calls are answered on a thread outside the core. A call made
+//! by a caller's work is handed to that caller. A call made by a turn is
+//! handed to a caller waiting in `ring` if there is one; otherwise the
+//! program is told (`notify_on`) and answers it on its own thread
+//! (`answer`). The core's thread waits meanwhile, as a vCPU waits out an
+//! exit.
 //!
-//! Three rules hold the loop:
+//! Four rules hold the loop:
 //!
 //! - No kick is lost. A kick sets `kicked` under `LOOP`'s lock and wakes the
-//!   thread; the thread reads `kicked` and its work under that lock before
+//!   thread. The thread reads `kicked` and its work under that lock before
 //!   it waits, and `Condvar::wait` gives the lock up as it sleeps, so a kick
-//!   lands before the check or wakes the wait.
-//! - Every wait has its answerer. The core's thread waits for an answer only
-//!   while a call is in `LOOP`: a caller waiting in `ring`, or in `run`
-//!   on the thread that rings, answers it there, and with none waiting the
-//!   program is told and answers it on that thread. The runtime's thread
-//!   waits on the core only in `ring` and `run`, and answers in both, so the
-//!   two never wait on each other.
-//! - A turn begins only where the core can post what one may (`Vcpu::ready`,
-//!   the door's room in the completion ring), read under the lock. Where it
-//!   cannot, the thread says so to a caller in `ring` and to the runtime, and
-//!   waits for the kick that follows the runtime's read.
-//! - Every pass drains the submission ring first: a turn applies what waits
-//!   there before any phase's budget (xpute-core ipc/door.rs `receive`), so
-//!   a turn the core asked for itself carries the runtime's kicks too.
+//!   either lands before the check or wakes the wait.
+//! - Every wait has someone to answer it. The core's thread waits for an
+//!   answer only while a call is in `LOOP`. A caller waiting in `ring`, or
+//!   in `run` on the thread that rings, answers the call there; when none
+//!   waits, the program is told and answers it on its own thread. The
+//!   runtime's thread waits on the core only in `ring` and `run`, and
+//!   answers calls in both, so the two threads never wait on each other.
+//! - A turn begins only when the core can post all that one turn may post
+//!   (`Vcpu::ready`, the door's room in the completion ring), read under the
+//!   lock. When it cannot, the thread tells a caller in `ring` and the
+//!   runtime, and waits for the kick that follows the runtime's read.
+//! - Every turn drains the submission ring first, applying what waits there
+//!   before any phase's budget (xpute-core ipc/door.rs `receive`), so a turn
+//!   the core asked for itself also applies what the runtime's kicks sent.
 
 use core::cell::Cell;
 use core::panic::AssertUnwindSafe;
@@ -45,69 +51,72 @@ use std::time::{Duration, Instant};
 
 use xpute_core::global::on_marked_thread;
 
-/// What the core's thread runs as it loops: a turn of a deadline, answering
-/// when the core wants the next (`xpute_core::entry::Entry`), and whether
-/// one may begin.
+/// What the core's thread calls as it loops. `turn` runs a turn with a
+/// deadline and answers when the core wants the next
+/// (`xpute_core::entry::Entry`); `ready` says whether a turn may begin.
 #[derive(Clone, Copy)]
 pub struct Vcpu {
     pub turn: fn(deadline_ms: f64) -> f64,
     pub ready: fn() -> bool,
 }
 
-/// A caller's work, borrowed: the caller waits until it has run.
+/// A caller's work, borrowed from the caller, which waits until it has run.
 struct Job(*mut (dyn FnMut() + Send + 'static));
 
 // SAFETY: the closure it points at is `Send`, and only the core's thread
 // runs it, while the caller that owns it waits.
 unsafe impl Send for Job {}
 
-/// Who answers a call.
+/// What made a call, which decides who answers it.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Asker {
-    /// The caller whose work made it.
+    /// A caller's work made the call, and that caller answers it.
     Job,
-    /// The thread that rings: a turn made it.
+    /// A turn made the call, and the thread that rings answers it.
     Turn,
 }
 
 /// What the runtime reads of the turns since it last asked (`turns`).
 struct Turns {
-    /// A turn answered 0: the core wants the next at once.
+    /// Some turn answered 0: the core wants the next turn at once.
     resched: bool,
-    /// The longest turn, in ms.
+    /// How long the longest turn took, in ms.
     turn_ms: f64,
-    /// The runtime is told and has not asked since, so it is not told again.
+    /// The runtime has been told and has not asked since, so it is not told
+    /// again.
     told: bool,
 }
 
 struct Loop {
     kicked: bool,
-    /// The next turn's deadline, the latest a kick since gave.
+    /// The next turn's deadline: the latest any kick has given since the
+    /// last turn began.
     deadline: Option<f64>,
-    /// When the last turn asked to be woken, past now, as the runtime is
-    /// told it (`wake_of`); one that answered 0 is `Turns::resched`. The thread
-    /// waits on it not: the runtime's kick wakes it.
+    /// When the last turn asked to be woken, if that is later than now; the
+    /// runtime is told it through `wake_of`. A turn that answered 0 sets
+    /// `Turns::resched` instead. The thread does not wait for this moment
+    /// itself: the runtime's kick wakes it.
     wake_at: Option<Instant>,
     job: Option<Job>,
     job_ends: u64,
     starts: u64,
     ends: u64,
-    /// The thread's looks at whether a turn may begin, and the last that found
-    /// it could not.
+    /// `looks` counts the times the thread checked whether a turn may begin;
+    /// `stall_at` is the count at the last check that found it could not.
     looks: u64,
     stall_at: u64,
     call: Option<(u32, Asker)>,
     ret: Option<i32>,
     /// Callers waiting in `ring`.
     ringers: u32,
-    /// The turn those callers wait for, by `starts`: while paused, turns begin
-    /// only until it has.
+    /// The turn those callers wait for, counted in `starts`. While paused,
+    /// turns begin only until that one has begun.
     ring_until: u64,
     /// Callers in `while_idle`.
     idlers: u32,
-    /// The core's thread runs a turn or a caller's work.
+    /// The core's thread is running a turn or a caller's work.
     busy: bool,
-    /// No turn begins but a caller's in `ring` (`pause`, `resume`).
+    /// Only a turn a caller rings may begin (`pause`, `resume`).
     paused: bool,
     turns: Turns,
     terminated: bool,
@@ -138,13 +147,14 @@ static LOOP: Mutex<Loop> = Mutex::new(Loop {
     terminated: false,
 });
 
-/// What the core's thread waits on: a kick, work, an answer, a hold let go.
+/// The core's thread waits on this for a kick, for work, for an answer, or
+/// for the last `while_idle` to end.
 static CORE_CV: Condvar = Condvar::new();
-/// What a caller waits on: a turn ended or stalled, work done, a call,
-/// the core idle or stopped.
+/// Callers wait on this for a turn that ended or stalled, for work done, for
+/// a call to answer, or for the core to go idle or stop.
 static RUNTIME_CV: Condvar = Condvar::new();
 
-/// One caller's work at a time.
+/// Lets one caller's work through at a time.
 static JOBS: Mutex<()> = Mutex::new(());
 
 fn state() -> MutexGuard<'static, Loop> {
@@ -155,12 +165,14 @@ fn wait<'a>(cv: &Condvar, g: MutexGuard<'a, Loop>) -> MutexGuard<'a, Loop> {
     cv.wait(g).unwrap_or_else(PoisonError::into_inner)
 }
 
-/// The runtime's answer to a call, run on the answering thread.
+/// The runtime's function that answers a call; it runs on the answering
+/// thread.
 pub type Answer = extern "C" fn(at: u32) -> i32;
 
 static ANSWER: Mutex<Option<Answer>> = Mutex::new(None);
 
-/// `answer` answers the core's calls from the next on; none, ENOSYS.
+/// Makes `answer` answer the core's calls from the next call on. With none,
+/// every call fails with ENOSYS.
 pub fn answer_with(answer: Option<Answer>) {
     *ANSWER.lock().unwrap_or_else(PoisonError::into_inner) = answer;
 }
@@ -170,15 +182,17 @@ fn answer_of(at: u32) -> i32 {
     answer.map_or(xpute_kit::status::errno::Errno::ENOSYS as i32, |f| f(at))
 }
 
-/// What tells the runtime, from the core's thread, that the core has
-/// posted or asked since it last read (`turns`), that a turn's call
-/// waits for its answer (`answer`), or that the core has stopped. It must
-/// not call into the core: it hands the news to the runtime's thread.
+/// Tells the runtime, from the core's thread, one of three pieces of news:
+/// the core has posted or asked for a turn since the runtime last read
+/// `turns`; a turn's call waits for its answer (`answer`); or the core has
+/// stopped. It must not call into the core; it hands the news to the
+/// runtime's thread.
 pub type Notify = extern "C" fn();
 
 static NOTIFY: Mutex<Option<Notify>> = Mutex::new(None);
 
-/// `notify` tells the runtime from the next news on; none, nothing is told.
+/// Makes `notify` tell the runtime from the next piece of news on. With
+/// none, nothing is told.
 pub fn notify_on(notify: Option<Notify>) {
     *NOTIFY.lock().unwrap_or_else(PoisonError::into_inner) = notify;
 }
@@ -197,12 +211,13 @@ thread_local! {
     /// This thread rings the core, so it answers a turn's calls.
     #[cfg_attr(target_os = "android", allow(clippy::missing_const_for_thread_local, reason = "already const; the lint misreads Android's expansion"))]
     static RINGS: Cell<bool> = const { Cell::new(false) };
-    /// On the core's thread: a caller's work runs, not a turn.
+    /// Set on the core's thread while it runs a caller's work rather than a
+    /// turn.
     #[cfg_attr(target_os = "android", allow(clippy::missing_const_for_thread_local, reason = "already const; the lint misreads Android's expansion"))]
     static IN_JOB: Cell<bool> = const { Cell::new(false) };
 }
 
-/// This thread waits on the core until it is let go.
+/// Marks this thread as waiting on the core until the value drops.
 struct Hold;
 
 impl Drop for Hold {
@@ -211,8 +226,8 @@ impl Drop for Hold {
     }
 }
 
-/// Refused where waiting would wait for itself: on the core's thread, or
-/// on one that already waits on it.
+/// Panics where the wait would wait for itself: on the core's thread, or on
+/// a thread that already waits on the core.
 fn hold() -> Hold {
     assert!(
         !on_marked_thread(),
@@ -242,16 +257,17 @@ pub(super) fn start(
     run(first);
 }
 
-/// What the core's thread does next: a caller's work, or a turn of a deadline.
 enum Next {
     Job(Job),
     Turn { deadline_ms: f64 },
 }
 
-/// The core's thread: its turns and callers' work until a panic unwinds out of one, the
-/// core's stop, which its hook has told (xpute-core stop.rs, `stopped`). The thread then
-/// ends the core here, outside the hook (`terminate`), and stays, with the core's memory
-/// as the panic left it, so the process goes on without it.
+/// The core's thread runs turns and callers' work until a panic unwinds out
+/// of one. That panic is the core's stop, which the stop hook has already
+/// told (xpute-core stop.rs, `stopped`). The thread then ends the core here,
+/// outside the hook (`terminate`), and parks for good, leaving the core's
+/// memory as the panic left it, so that the process goes on without the
+/// core.
 fn run_loop(vcpu: Vcpu) {
     if std::panic::catch_unwind(AssertUnwindSafe(|| serve(vcpu))).is_err() {
         terminate();
@@ -301,11 +317,11 @@ fn duration_of(ms: f64) -> Duration {
     Duration::try_from_secs_f64(ms / 1000.0).unwrap_or(Duration::MAX)
 }
 
-/// The next work or turn, waiting for it: a caller's work first, then a
-/// turn once kicked, where one may begin and the thread is not paused
-/// or a caller rings. Whether one may is read under the lock, so the
-/// program's read of the completion ring lands before it or is followed by
-/// the kick that wakes the wait below.
+/// Waits for what the thread runs next. A caller's work goes first. A turn
+/// follows once the thread is kicked, if a turn may begin and the thread is
+/// either not paused or rung by a caller. Whether a turn may begin is read
+/// under the lock, so the program's read of the completion ring either lands
+/// before that check or is followed by the kick that wakes the wait below.
 fn next(vcpu: Vcpu) -> Next {
     let mut g = state();
     loop {
@@ -339,8 +355,8 @@ fn next(vcpu: Vcpu) -> Next {
     }
 }
 
-/// A turn wanted at once, the next ending no sooner than `deadline` from its rise where one is
-/// given, from any thread; it returns at once.
+/// Asks for a turn at once, from any thread, without waiting. With a
+/// `deadline`, the next turn ends no sooner than that many ms after its rise.
 fn kick_with(deadline: Option<f64>) {
     kick_locked(&mut state(), deadline);
 }
@@ -353,8 +369,8 @@ fn kick_locked(g: &mut Loop, deadline: Option<f64>) {
     CORE_CV.notify_all();
 }
 
-/// When the core wants the next turn, in ms from now: 0 where a turn since
-/// the runtime last read answered 0, `NO_WAKE` for none.
+/// When the core wants the next turn, in ms from now: 0 if a turn since the
+/// runtime last read answered 0, and `NO_WAKE` if no turn asked for one.
 fn wake_of(g: &Loop) -> f64 {
     match g.wake_at {
         _ if g.turns.resched => 0.0,
@@ -363,22 +379,24 @@ fn wake_of(g: &Loop) -> f64 {
     }
 }
 
-/// A device's kick, from whichever thread learned of a completion: the next
-/// turn reads it.
+/// A device's kick, from whichever thread learned of a completion, so that
+/// the next turn reads the completion.
 pub fn kick() {
     kick_with(None);
 }
 
-/// The runtime's kick, after it has written the submission ring: the next
-/// turn ending no sooner than `deadline_ms` from its rise, none of its own where negative. This
-/// thread is the one that answers a turn's calls from now on.
+/// The runtime's kick, after it has written the submission ring. The next
+/// turn ends no sooner than `deadline_ms` after its rise; a negative
+/// `deadline_ms` sets no deadline. From now on this thread answers the
+/// calls of turns.
 pub fn kick_deadline(deadline_ms: f64) {
     RINGS.with(|r| r.set(true));
     kick_with((deadline_ms >= 0.0).then_some(deadline_ms));
 }
 
-/// The call waiting in `LOOP`, if this thread is its answerer, answered
-/// here; whether one was. `g` is the lock, given back.
+/// Answers here the call waiting in `LOOP`, if `takes` says this thread is
+/// its answerer, and says whether it did. The lock `g` is let go while the
+/// answer runs, then handed back.
 fn answer_here<'a>(
     mut g: MutexGuard<'a, Loop>,
     takes: impl Fn(Asker) -> bool,
@@ -398,20 +416,21 @@ fn answer_here<'a>(
     (g, true)
 }
 
-/// No turn begins from now on but one a caller rings (`ring`); a kick waits
-/// for `resume`. A caller's work still runs.
+/// From now on, only a turn a caller rings (`ring`) may begin, and a kick
+/// waits for `resume`. A caller's work still runs.
 pub fn pause() {
     state().paused = true;
 }
 
-/// Turns begin again as kicks ask, one that came while paused at once.
+/// Turns begin again as kicks ask, and a kick that came while paused takes
+/// effect at once.
 pub fn resume() {
     state().paused = false;
     CORE_CV.notify_all();
 }
 
-/// The core's call, on its own thread: handed to its answerer, which
-/// runs the runtime's answer, the core waiting.
+/// The core makes a call on its own thread. The call is handed to its
+/// answerer, which runs the runtime's answer while the core waits.
 pub(super) fn call(at: u32) -> i32 {
     let asker = if IN_JOB.with(Cell::get) {
         Asker::Job
@@ -436,17 +455,18 @@ pub(super) fn call(at: u32) -> i32 {
     }
 }
 
-/// The turn's call waiting, if one does, answered on this thread, the
-/// program's: what its `Notify` was told of.
+/// Answers, on this thread of the program's, the turn's call that waits, if
+/// one does; this is the call the program's `Notify` was told of.
 pub fn answer() {
     RINGS.with(|r| r.set(true));
     let g = state();
     let _ = answer_here(g, |a| a == Asker::Turn);
 }
 
-/// What the turns since the last call asked, for the runtime's thread: when
-/// the core wants the next, in ms (0 where a turn answered 0, `NO_WAKE` for
-/// none, NaN once it has stopped), and the longest of them, in ms.
+/// Tells the runtime's thread what the turns since the last call asked:
+/// when the core wants the next turn, in ms (0 if a turn answered 0,
+/// `NO_WAKE` if none asked, NaN once the core has stopped), and how long the
+/// longest of those turns took, in ms.
 pub fn turns() -> (f64, f64) {
     let mut g = state();
     g.turns.told = false;
@@ -455,10 +475,11 @@ pub fn turns() -> (f64, f64) {
     (wake, core::mem::take(&mut g.turns.turn_ms))
 }
 
-/// A turn ending no sooner than `deadline_ms` from its rise, this thread waiting until one begun
-/// after this call has ended, answering the turns' calls meanwhile: when
-/// the core wants the next, in ms. Back early where no turn may begin until
-/// the runtime reads the completion ring; none where the core has stopped.
+/// Rings a turn that ends no sooner than `deadline_ms` after its rise, and
+/// waits until a turn begun after this call has ended, answering the turns'
+/// calls meanwhile. Returns when the core wants the next turn, in ms. It
+/// returns early if no turn may begin until the runtime reads the completion
+/// ring, and returns `None` if the core has stopped.
 pub fn ring(deadline_ms: f64) -> Option<f64> {
     let _hold = hold();
     let mut g = state();
@@ -492,13 +513,14 @@ pub fn ring(deadline_ms: f64) -> Option<f64> {
     out
 }
 
-/// The core has stopped, told by its hook on the core's thread, inside the panic hook
-/// (say.rs `stop_hook`). Where a panic unwinds it returns, and the thread ends the core
-/// outside the hook (`run_loop`).
+/// The stop hook calls this on the core's thread, inside the panic hook,
+/// once the core has stopped (say.rs `stop_hook`). Where panics unwind, it
+/// returns, and the thread ends the core outside the hook (`run_loop`).
 pub(super) fn stopped() {
-    // Where a panic aborts, nothing unwinds out of the hook, and returning would end the
-    // process, which outlives its core to show the stop's report: the core is ended here
-    // and its thread kept inside the hook, which nothing in such a program replaces.
+    // Where panics abort, nothing unwinds out of the hook, and returning from
+    // it would end the process. The process must outlive its core to show the
+    // stop's report, so the core is ended here and its thread stays inside the
+    // hook for good. Nothing in such a program replaces the hook afterwards.
     #[cfg(panic = "abort")]
     {
         terminate();
@@ -508,7 +530,7 @@ pub(super) fn stopped() {
     }
 }
 
-/// The core has stopped, told from its own thread: every caller waiting is told, and so
+/// Ends the core, from its own thread: every waiting caller is told, and so
 /// is the runtime.
 fn terminate() {
     let mut g = state();
@@ -520,10 +542,6 @@ fn terminate() {
     notify();
 }
 
-/// `f` on the core's thread between turns, the caller waiting; each call
-/// it makes meanwhile answered on the caller's, and on the thread that rings
-/// a turn's as well. None where the core has stopped, in this call or
-/// before it.
 pub(super) fn run<R: Send>(f: impl FnOnce() -> R + Send) -> Option<R> {
     let _hold = hold();
     let _one = JOBS.lock().unwrap_or_else(PoisonError::into_inner);
@@ -561,7 +579,6 @@ pub(super) fn run<R: Send>(f: impl FnOnce() -> R + Send) -> Option<R> {
     Some(out.expect("the core's thread ran the call"))
 }
 
-/// `f` on this thread while the core's runs nothing.
 pub(super) fn while_idle<R>(f: impl FnOnce() -> R) -> R {
     let _hold = hold();
     let mut g = state();

@@ -1,7 +1,7 @@
 // @xpute/kit/wire/xtp/spec.test.ts
 
-/** The type bytes as constants: each of a group is of its kind and a type
- * the wire carries, and no two types share a byte. */
+/** Each type constant is of its group's kind and may appear on the wire,
+ * and no two constants share a byte. */
 
 import { test } from "vitest";
 import assert from "node:assert/strict";
@@ -31,7 +31,8 @@ test("each type is of its group's kind and one the wire carries", () => {
   for (const [name, type] of values(SpecialType)) {
     assert.ok(TYPE_IS_SPECIAL(type), `SpecialType.${name}`);
   }
-  // A graft is spliced in by the encoder and never read off the wire as itself.
+  // GRAFT is left out: the encoder splices a graft in, so it is never on the
+  // wire as itself.
   assert.ok(
     TYPE_IS_KNOWN(SpecialType.NIL) && TYPE_IS_KNOWN(SpecialType.BRANCH),
   );

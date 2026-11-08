@@ -34,18 +34,18 @@ pub enum GpuSpanName {
     cast = 10,
     beam_hit = 11,
     beam = 12,
-    cell = 13,
+    grid_cell = 13,
     sample_hit = 14,
     sample = 15,
-    sample_box = 16,
+    raster_box = 16,
     sraster = 17,
     px = 18,
-    miss = 19,
-    light_receivers = 20,
+    hole = 19,
+    light_world_receivers = 20,
     light_draws = 21,
     light_slide = 22,
     light_propagate = 23,
-    light_claim = 24,
+    light_damage = 24,
     light_beam_hit = 25,
     light_beam = 26,
     light_sample = 27,
@@ -56,8 +56,8 @@ pub enum GpuSpanName {
     generate = 32,
     shadow = 33,
     face = 34,
-    mark = 35,
-    light_mark = 36,
+    damage = 35,
+    shadow_damage = 36,
     propagate = 37,
 }
 
@@ -77,18 +77,18 @@ impl GpuSpanName {
         GpuSpanName::cast,
         GpuSpanName::beam_hit,
         GpuSpanName::beam,
-        GpuSpanName::cell,
+        GpuSpanName::grid_cell,
         GpuSpanName::sample_hit,
         GpuSpanName::sample,
-        GpuSpanName::sample_box,
+        GpuSpanName::raster_box,
         GpuSpanName::sraster,
         GpuSpanName::px,
-        GpuSpanName::miss,
-        GpuSpanName::light_receivers,
+        GpuSpanName::hole,
+        GpuSpanName::light_world_receivers,
         GpuSpanName::light_draws,
         GpuSpanName::light_slide,
         GpuSpanName::light_propagate,
-        GpuSpanName::light_claim,
+        GpuSpanName::light_damage,
         GpuSpanName::light_beam_hit,
         GpuSpanName::light_beam,
         GpuSpanName::light_sample,
@@ -99,8 +99,8 @@ impl GpuSpanName {
         GpuSpanName::generate,
         GpuSpanName::shadow,
         GpuSpanName::face,
-        GpuSpanName::mark,
-        GpuSpanName::light_mark,
+        GpuSpanName::damage,
+        GpuSpanName::shadow_damage,
         GpuSpanName::propagate,
     ];
 
@@ -122,17 +122,17 @@ impl GpuSpanName {
         GpuSpanName::resolve,
         GpuSpanName::sraster,
         GpuSpanName::px,
-        GpuSpanName::miss,
-        GpuSpanName::light_receivers,
-        GpuSpanName::mark,
+        GpuSpanName::hole,
+        GpuSpanName::light_world_receivers,
+        GpuSpanName::damage,
         GpuSpanName::propagate,
     ];
 }
 
-pub const LIGHT_MOVED: usize = 5;
+pub const LIGHT_CHANGED: usize = 5;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
-pub enum LightMoved {
+pub enum LightChanged {
     content = 0,
     slide = 1,
     receivers = 2,
@@ -140,20 +140,20 @@ pub enum LightMoved {
     world = 4,
 }
 
-impl LightMoved {
+impl LightChanged {
     /// Every member, in the JSON's own order.
-    pub const ALL: [LightMoved; 5] = [
-        LightMoved::content,
-        LightMoved::slide,
-        LightMoved::receivers,
-        LightMoved::footprint,
-        LightMoved::world,
+    pub const ALL: [LightChanged; 5] = [
+        LightChanged::content,
+        LightChanged::slide,
+        LightChanged::receivers,
+        LightChanged::footprint,
+        LightChanged::world,
     ];
 
     /// The member a number names, or none for a number the set does not
     /// give out.
-    pub fn of(val: u8) -> Option<LightMoved> {
-        LightMoved::ALL
+    pub fn of(val: u8) -> Option<LightChanged> {
+        LightChanged::ALL
             .into_iter()
             .find(|member| *member as u8 == val)
     }
@@ -165,14 +165,14 @@ pub const FRAME_KINDS: usize = 10;
 pub enum FrameKind {
     none = 0,
     unready = 1,
-    held = 2,
+    stream_busy = 2,
     dropped = 3,
     plain = 4,
-    standing = 5,
+    still = 5,
     cast = 6,
-    stood = 7,
+    unchanged = 7,
     px = 8,
-    gated = 9,
+    masked = 9,
 }
 
 impl FrameKind {
@@ -180,14 +180,14 @@ impl FrameKind {
     pub const ALL: [FrameKind; 10] = [
         FrameKind::none,
         FrameKind::unready,
-        FrameKind::held,
+        FrameKind::stream_busy,
         FrameKind::dropped,
         FrameKind::plain,
-        FrameKind::standing,
+        FrameKind::still,
         FrameKind::cast,
-        FrameKind::stood,
+        FrameKind::unchanged,
         FrameKind::px,
-        FrameKind::gated,
+        FrameKind::masked,
     ];
 
     /// The member a number names, or none for a number the set does not

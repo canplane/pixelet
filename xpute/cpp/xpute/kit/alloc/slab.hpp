@@ -1,9 +1,16 @@
 // cpp/xpute/kit/alloc/slab.hpp
 
-// Size classes over buddy_tree.hpp, as SLUB: a class with no free slot borrows
-// a run from the buddy and returns it when its last slot is freed. A slot finds
-// its run by masking its offset, which holds because the buddy aligns a block
-// to its own size.
+// A slab allocator of size classes for requests smaller than a page, over the
+// buddy allocator of buddy_tree.hpp, whose smallest block is a page. Each class
+// borrows a run of pages from the buddy and carves it into slots as SLUB does:
+// the free slots form a list threaded through themselves, and the run's header
+// sits in its leading slots. A run goes back to the buddy when its last slot
+// is freed. A request of a page or more goes straight to the buddy.
+//
+// A slot finds its run by masking its offset from the range's base, which
+// works because the buddy aligns every block to its own size from the base.
+// Masking the address would not: the base is aligned only to a page, and a run
+// can be larger than a page.
 
 #pragma once
 
@@ -18,9 +25,11 @@
 namespace xpute {
 
 template <Range R> class SlabMalloc {
-    // Below 16 bytes a class costs more in run headers than it saves.
+    // The smallest class is sixteen bytes: below that, a class costs more in
+    // run headers than it saves.
     static constexpr std::size_t MIN_CLASS_LOG2 = 4;
-    // So a run's header is at most a sixteenth of it.
+    // A run holds at least sixteen slots, so its header takes a small share of
+    // the run.
     static constexpr std::size_t MIN_SLOTS_LOG2 = 4;
     static constexpr std::size_t CLASS_CNT = R::MIN_LOG2 - MIN_CLASS_LOG2;
 
@@ -71,8 +80,8 @@ template <Range R> class SlabMalloc {
     void *alloc(std::size_t bytes, std::size_t align) noexcept {
         std::size_t c;
         if (!class_for(bytes, align, c)) {
-            // A page or more: the buddy's placement satisfies any alignment up
-            // to a page and none past one.
+            // A page or more goes to the buddy. The range's base is aligned
+            // only to a page, so no block is sure of a larger alignment.
             void *at = align > std::size_t{1} << R::MIN_LOG2 ? nullptr : buddy_.malloc(bytes);
             if (at == nullptr) refusals_++;
             else allocs_++;
@@ -111,8 +120,9 @@ template <Range R> class SlabMalloc {
         run->inuse--;
         slot_live_ -= std::size_t{1} << class_log2(c);
         if (run->inuse == 0) {
-            // The last slot: the run goes back, and every class gets the pages
-            // rather than this one keeping them.
+            // The run's last slot is free, so the run goes back to the buddy,
+            // where any class can have its pages, rather than staying with
+            // this class.
             if (!was_full) drop_partial(c, run);
             run_live_ -= run_bytes;
             buddy_.free(run, run_bytes);
@@ -125,9 +135,10 @@ template <Range R> class SlabMalloc {
     void free(void *at, std::size_t bytes) noexcept { dealloc(at, bytes, 8); }
 
   private:
-    // The class a request falls in, or false where it is the buddy's. The
-    // alignment is folded into the size: a slot sits at a multiple of its
-    // class from a run base that is a multiple of its own size.
+    // The class for a request, or false when the buddy serves it. A slot is
+    // aligned to its own size, since it sits at a multiple of its class from
+    // a run base aligned to the run's size, so a request's alignment is met
+    // by raising its size to the alignment.
     static bool class_for(std::size_t bytes, std::size_t align, std::size_t &c) noexcept {
         std::size_t need = std::max({bytes, align, std::size_t{1}});
         if (need >= std::size_t{1} << R::MIN_LOG2) return false;
@@ -145,7 +156,8 @@ template <Range R> class SlabMalloc {
         if (at == nullptr) return nullptr;
         std::size_t cls = std::size_t{1} << class_log2(c);
         std::uint8_t *next = nullptr;
-        // From the back, so a run's first slots out are its lowest addresses.
+        // The free list is built from the last slot back, so the first slots
+        // handed out have the lowest addresses.
         for (std::size_t i = slots(c); i > head_slots(c);) {
             i--;
             set_next(at + i * cls, next);

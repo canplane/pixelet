@@ -1,12 +1,17 @@
 // xpute-kit/alloc/slab.rs
 
-//! Size classes over `buddy_tree.rs`, whose smallest block is a page. A class
-//! borrows a run of pages, carves it into slots SLUB-style (free list through
-//! the free slots, header in the run's leading slots), and gives the run back
-//! when its last slot is freed. A page or more goes straight to the buddy.
+//! A slab allocator of size classes for requests smaller than a page, over
+//! the buddy allocator of `buddy_tree.rs`, whose smallest block is a page.
+//! Each class borrows a run of pages from the buddy and carves it into
+//! slots as SLUB does: the free slots form a list threaded through
+//! themselves, and the run's header sits in its leading slots. A run goes
+//! back to the buddy when its last slot is freed. A request of a page or
+//! more goes straight to the buddy.
 //!
-//! A slot finds its run by masking its offset from the range's base, not its
-//! address: the base is only page-aligned.
+//! A slot finds its run by masking its offset from the range's base, which
+//! works because the buddy aligns every block to its own size from the base.
+//! Masking the address would not: the base is aligned only to a page, and a
+//! run can be larger than a page.
 
 use core::alloc::{GlobalAlloc, Layout};
 use core::cell::UnsafeCell;
@@ -14,17 +19,21 @@ use core::ptr;
 
 use super::buddy_tree::{BuddyMalloc, Range};
 
-/// Below sixteen bytes a class costs more in headers than it saves.
+/// The smallest class is sixteen bytes: below that, a class costs more in
+/// run headers than it saves.
 const MIN_CLASS_LOG2: usize = 4;
 
-/// Enough for any smallest block in the address space.
+/// Enough partial list heads for a range whose smallest block is any size
+/// the address space allows.
 const MAX_CLASSES: usize = super::ADDR_BITS;
 
-/// At least sixteen slots a run, so its header takes at most a sixteenth.
+/// A run holds at least sixteen slots, so its header takes a small share of
+/// the run.
 const MIN_SLOTS_LOG2: usize = 4;
 
-/// A run's header, in its leading slots. `prev`/`next` link the class's
-/// partial list; a full or returned run is in no list.
+/// A run's header, kept in the run's leading slots. `prev` and `next` link
+/// the run into its class's partial list, the runs that have a free slot. A
+/// full run, or one given back to the buddy, is in no list.
 #[repr(C)]
 struct Run {
     prev: *mut Run,
@@ -47,8 +56,8 @@ pub struct SlabMalloc<R: Range> {
     partial: UnsafeCell<[*mut Run; MAX_CLASSES]>,
     allocs: UnsafeCell<u32>,
     refusals: UnsafeCell<u32>,
-    /// `run_live - slot_live` is what carving costs; the buddy's `live`
-    /// counts a run whole.
+    /// The bytes of the runs that are out, and of the slots handed out from
+    /// them. `run_live - slot_live` is what carving runs into slots costs.
     run_live: UnsafeCell<usize>,
     slot_live: UnsafeCell<usize>,
 }
@@ -97,8 +106,9 @@ impl<R: Range> SlabMalloc<R> {
         }
     };
 
-    /// None where it belongs to the buddy. A slot is aligned to its class, so
-    /// alignment folds into size.
+    /// The class for a request, or None when the buddy serves it. A slot is
+    /// aligned to its own size, so a request's alignment is met by raising
+    /// its size to the alignment.
     fn class_for(layout: Layout) -> Option<usize> {
         let need = layout.size().max(layout.align()).max(1);
         if need >= 1 << R::MIN_LOG2 {
@@ -109,7 +119,8 @@ impl<R: Range> SlabMalloc<R> {
     }
 
     pub const fn new() -> SlabMalloc<R> {
-        // An associated const is only evaluated where it is named.
+        // Naming `CHECK` makes the compiler evaluate its assertions: an
+        // associated const is evaluated only where it is named.
         let () = Self::CHECK;
         SlabMalloc {
             buddy: BuddyMalloc::new(),
@@ -129,7 +140,8 @@ impl<R: Range> SlabMalloc<R> {
         self.buddy.peak()
     }
 
-    /// Runs count whole, not their live slots.
+    /// Bytes live as the buddy counts them: a run counts whole, however few
+    /// of its slots are in use.
     pub fn live(&self) -> usize {
         self.buddy.live()
     }
@@ -138,9 +150,10 @@ impl<R: Range> SlabMalloc<R> {
         self.buddy.range_bytes()
     }
 
-    /// Page-level releases only. A slot returning to a run that stays in use
-    /// is not counted: it could serve a request of its own class refused
-    /// before, which this count misses, so such a request waits for a page.
+    /// Counts only the blocks given back to the buddy, not a slot freed into
+    /// a run that stays in use. Such a slot could serve a refused request of
+    /// its class, but a caller that waits for this count to change before it
+    /// retries waits for a block instead.
     pub fn releases(&self) -> u32 {
         self.buddy.releases()
     }
@@ -174,14 +187,15 @@ impl<R: Range> SlabMalloc<R> {
     }
 
     /// # Safety
-    /// The range `R` names must be this module's.
+    /// The range `R` names must be this module's own memory.
     pub unsafe fn malloc(&self, bytes: usize) -> *mut u8 {
         // SAFETY: the caller's.
         unsafe { self.alloc(Self::layout(bytes)) }
     }
 
     /// # Safety
-    /// `at` came from `malloc(bytes)` and has not been given back.
+    /// `at` was returned by `malloc` with the same `bytes`, and has not been
+    /// freed since.
     pub unsafe fn free(&self, at: *mut u8, bytes: usize) {
         // SAFETY: the caller's.
         unsafe { self.dealloc(at, Self::layout(bytes)) }
@@ -202,7 +216,8 @@ impl<R: Range> SlabMalloc<R> {
         }
         let class = 1usize << class_log2(c);
         let mut next: *mut u8 = ptr::null_mut();
-        // From the back, so the first allocations are the lowest addresses.
+        // The free list is built from the last slot back, so the first slots
+        // handed out have the lowest addresses.
         let mut i = Self::slots(c);
         while i > Self::head_slots(c) {
             i -= 1;
@@ -267,7 +282,8 @@ unsafe impl<R: Range> GlobalAlloc for SlabMalloc<R> {
         let refused = || unsafe { *self.refusals.get() = (*self.refusals.get()).wrapping_add(1) };
 
         let Some(c) = Self::class_for(layout) else {
-            // The range's base is only page-aligned.
+            // The range's base is aligned only to a page, so no block is sure
+            // of a larger alignment.
             if layout.align() > 1 << R::MIN_LOG2 {
                 refused();
                 return ptr::null_mut();

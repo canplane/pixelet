@@ -1,9 +1,10 @@
 // @pxl/client/plugin/ios-build.ts
 
 /**
- * The iOS a build targets, written into what `expo prebuild` generates
- * (ios/ is its, and not kept), the pods and the app alike: the highest floor
- * of what it links. Liquid Glass is asked for at run time.
+ * Sets the iOS version a build targets, in the pods and the app alike, within
+ * the files `expo prebuild` generates (ios/ is generated and not kept). The
+ * target is the highest floor among the libraries the app links. Liquid
+ * Glass needs a later iOS, so the app checks for it at run time.
  */
 
 import { withPodfileProperties, withXcodeProject } from "expo/config-plugins";

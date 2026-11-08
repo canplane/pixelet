@@ -6,22 +6,26 @@
 
 // ---- sys, export ----
 
-/** Replies with its packet's value, or 0 where it has none — the rings' own test. */
+/** The rings' own test. The reply carries the packet's value, or 0 when the frame has no
+ * packet. */
 export const NOP = 0x0000;
-/** A runtime has attached, the first or again after one before it went: the mount sends it
- * once the front is laid. What the old runtime's requests leave behind is the core's to let go. */
+/** A runtime has attached, for the first time or after an earlier runtime went away. The
+ * runtime sends it once it has laid the front of the core's memory (ipc/head.json). The core
+ * lets go of whatever the earlier runtime's requests left behind. */
 export const SYS_ATTACH = 0x0102;
-/** The core is about to be frozen, its turns stopped for as long as its runtime is hidden:
- * its last sure moment to save. A call, rung at once. */
+/** The core is about to be frozen: its turns stop for as long as its runtime is hidden. This
+ * is the core's last sure moment to save. It is a call, and the runtime rings the core at
+ * once to have it answered. */
 export const SYS_SUSPEND = 0x0103;
-/** The core woken from SYS_SUSPEND. A call, rung at once. */
+/** The core has been woken after SYS_SUSPEND. It is a call, rung at once as SYS_SUSPEND is. */
 export const SYS_RESUME = 0x0104;
-/** A turn the scheduling policy grants, sent before it rings after what the program
- * submits for it, as against a turn rung for a command alone: the wall clock, in Unix
- * milliseconds. What else the policy says of the turn is the program's to send. */
+/** Marks a turn that the scheduling policy grants, as opposed to a turn rung only because a
+ * command arrived. The runtime submits it after what the program submits for that turn,
+ * and before it rings. It carries the wall clock in Unix milliseconds. Anything else the
+ * policy has to say about the turn, the program sends in commands of its own. */
 export const SYS_TURN = 0x0105;
 
 // ---- sys, import ----
 
-/** The broken invariant the core reports as it stops (xpute-kit status/bug.rs). */
+/** Reports the broken invariant the core stops on (xpute-kit status/bug.rs). */
 export const SYS_ABORT = 0x0101;

@@ -1,12 +1,11 @@
 // xpute-tool/spec/cmd/ts.rs
 
-//! The command table as TypeScript: its enums, each packet's writer and each
-//! import's reader, for the runtime.
+//! Writes a command table as TypeScript for the runtime: its enums, a writer
+//! for each packet and a reader for each import.
 
 use super::{literal, Entry, Field, Kind, Spec, Target, NUMBERS};
 use crate::spec::{file, generated, pascal, snake, ts_doc, Output};
 
-/// Only a list of u32 is packed.
 fn check_packed(f: &Field) -> Result<(), String> {
     if f.ty == "u32" {
         Ok(())
@@ -99,8 +98,9 @@ impl TsUses {
         }
     }
 
-    /// The word and array types `fields` are spelled with; a packet's list
-    /// is handed in as a plain array, so names no array type (`read`).
+    /// Collects the word and array types that `fields` are spelled with.
+    /// Only a reader (`read`) names a typed array for a list of numbers; a
+    /// writer is handed the list as a plain array.
     fn note(&mut self, spec: &Spec, fields: &[Field], read: bool) -> Result<(), String> {
         for f in fields {
             if NUMBERS.contains(&f.ty.as_str()) {
@@ -192,7 +192,8 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
             let Some(pkt) = pkt else {
                 continue;
             };
-            // Written in place, its fields handed over as they are: no record is made for it.
+            // The packet is written in place from the fields as they are handed
+            // over, so no record type is made for it.
             uses.note(spec, pkt, false)?;
             let mut doc = vec![format!(
                 "Command.{}'s {what}, written in place into `to`.",
@@ -240,7 +241,8 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
     }
     uses.arrays.sort();
     uses.words.sort();
-    // A helper, and a cursor type, only where a reader reads through it: an unread one fails lint.
+    // A helper or a cursor type is written only where a reader uses it,
+    // because an unused one fails the lint.
     let reads = |tail: &[String], call: &str| tail.iter().any(|l| l.contains(call));
     let mut helpers: Vec<&str> = Vec::new();
     if reads(&tail, "list(") {
@@ -284,7 +286,8 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
             ));
         }
     }
-    // A packed list is written by its sequence type, a value rather than a type.
+    // A packed list is written through its SequenceType, which is a value and
+    // not a type, so it takes a plain import.
     if reads(&tail, "SequenceType.") {
         out.push("import { SequenceType } from \"@xpute/kit/wire/xtp/mod.ts\";".to_string());
     }
@@ -317,14 +320,15 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
     Ok(outputs)
 }
 
-/// The table's file name less `.spec.ts`: the folder its enums' modules are in.
+/// The table's file name without `.spec.ts`, which names the folder its enums'
+/// modules lie in.
 fn stem_of(ts: &str) -> &str {
     let name = ts.rsplit_once('/').map_or(ts, |(_, n)| n);
     name.strip_suffix(".spec.ts").unwrap_or(name)
 }
 
-/// An enum's module beside the table's, in the folder named as the table is
-/// (`cmd.spec.ts`'s in `cmd/`), and its logical path.
+/// The path of an enum's module, in the folder beside the table that is named
+/// after it (`cmd.spec.ts`'s enums go in `cmd/`), with its logical path.
 fn enum_module(t: &Target, name: &str) -> (String, String) {
     let stem = stem_of(t.ts);
     let at = |p: &str| {
@@ -334,7 +338,8 @@ fn enum_module(t: &Target, name: &str) -> (String, String) {
     (at(t.ts), at(t.ts_logical))
 }
 
-/// An enum as a module of its members' constants, each its literal.
+/// Writes an enum as a module that holds one constant per member, whose value
+/// is the member's literal.
 fn constants(e: &super::Enum, logical: &str, json: &str) -> String {
     let mut out = vec![
         format!("// {logical}"),

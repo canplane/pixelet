@@ -7,13 +7,13 @@ import { Motion } from "@/ui/component/motion/motion.tsx";
 import { Dim } from "@/ui/component/motion/dim.ts";
 import { DIM } from "@/ui/component/motion/transition.ts";
 import { touches } from "@/ui/component/touch.ts";
-import * as device from "@/service/device.ts";
-import { useCore } from "@/ui/store/watch.ts";
+import * as device from "@/service/platform/device.ts";
+import { useCore } from "@/ui/watch.ts";
 
 /**
- * On a desktop, the chrome dims and takes no clicks while the world is dragged:
- * releasing a drag over a control clicks it. A handheld's finger cannot do
- * that, so it is left alone.
+ * On a desktop, the chrome dims and takes no clicks while the world is
+ * dragged, because releasing a drag over a control would click it. A
+ * handheld's finger cannot do that, so on a handheld the chrome is left alone.
  */
 export function BusyDim({
   style,

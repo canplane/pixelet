@@ -1,24 +1,55 @@
 // pxl-core/sys/io/failure.rs
 
-//! What a task's run came to, and why it failed.
+//! How a read's attempt ended, and why a failed one failed.
 
 use core::panic::Location;
 
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
+pub use crate::sys::io::demand_spec::OutcomeName as Outcome;
 use crate::sys::io::file::Opened;
 use crate::sys::io::room::Refusal;
 
-pub use crate::sys::io::demand_spec::OutcomeName as Outcome;
+/// How an attempt ended, as one value, so an attempt that ended well cannot
+/// carry a failure and a failed one always carries its own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Exit {
+    Ok,
+    Aborted,
+    Failed(Failure),
+    /// The heap or the body slots refused the body room. Neither the object
+    /// nor the server failed, and the want may start again once what refused
+    /// it gives some room back (`Refusal::over`).
+    Refused(Refusal),
+}
 
-/// Why a task failed, as numbers the statistics count by. A core-made
-/// failure carries its source location.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+/// Why an attempt failed, in the numbers the statistics count by. A failure
+/// the core raised itself carries the source location that raised it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Failure {
     pub errnum: Errno,
     pub detail: u16,
     pub at: Option<&'static Location<'static>>,
+}
+
+impl Exit {
+    pub fn outcome(&self) -> Outcome {
+        match self {
+            Exit::Ok => Outcome::ok,
+            Exit::Aborted => Outcome::aborted,
+            Exit::Failed(_) | Exit::Refused(_) => Outcome::err,
+        }
+    }
+}
+
+impl From<Result<(), Failure>> for Exit {
+    fn from(result: Result<(), Failure>) -> Exit {
+        match result {
+            Ok(()) => Exit::Ok,
+            Err(fail) => Exit::Failed(fail),
+        }
+    }
 }
 
 impl From<Errno> for Failure {
@@ -32,7 +63,8 @@ impl From<Errno> for Failure {
     }
 }
 
-/// An open that came to no bytes, as its run's failure.
+/// The failure of an open that brought no bytes. An open that brought bytes
+/// is no failure, and taking it for one is a bug.
 impl From<Opened> for Failure {
     #[track_caller]
     fn from(opened: Opened) -> Failure {
@@ -54,38 +86,6 @@ impl From<MarshalError> for Failure {
             errnum: err.errnum,
             detail: 0,
             at: Some(err.at),
-        }
-    }
-}
-
-/// How a run ended: one value, so a run that ended well carries no failure
-/// and a failed one always does.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Ended {
-    Ok,
-    Aborted,
-    Failed(Failure),
-    /// Its body was refused room, by the heap or the body slots: no failure
-    /// of the object's or the server's, and over once what refused it gives
-    /// some back (`Refusal::over`).
-    Refused(Refusal),
-}
-
-impl Ended {
-    pub fn outcome(&self) -> Outcome {
-        match self {
-            Ended::Ok => Outcome::ok,
-            Ended::Aborted => Outcome::aborted,
-            Ended::Failed(_) | Ended::Refused(_) => Outcome::err,
-        }
-    }
-}
-
-impl From<Result<(), Failure>> for Ended {
-    fn from(result: Result<(), Failure>) -> Ended {
-        match result {
-            Ok(()) => Ended::Ok,
-            Err(fail) => Ended::Failed(fail),
         }
     }
 }

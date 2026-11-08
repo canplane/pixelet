@@ -12,11 +12,12 @@ use pxl_spec::asset::AssetId;
 use pxl_spec::asset::{shipped_sentinel_mean, shipped_tile_mean};
 use std::sync::LazyLock;
 
-/// The sentinels the world draws, each a layer past the cubes': the bedrock.
+/// The sentinels the world draws, each with a layer after the cubes'. The only one is the
+/// bedrock's.
 pub const SENTINELS: [u8; 1] = [sentinel::unknown];
 
-/// The texture array's layers, one a placeable cube in the catalog's order, so
-/// a cube of a look is drawn as its ground is, then one a sentinel drawn.
+/// The texture array's layers: one for each placeable cube, in the catalog's order, so a cube
+/// of a look is drawn as its ground is; then one for each drawn sentinel.
 pub const LAYERS: usize = Object::ALL.len() + Ground::ALL.len() + SENTINELS.len();
 
 /// A drawn sentinel's layer, past every cube's.
@@ -43,9 +44,9 @@ pub fn rgb255(rgb: u32) -> [u8; 3] {
     ]
 }
 
-/// What a layer reads as once its tile is too small to see: the tile's mean,
-/// or the swatch with no tile. One mean a layer, its top's, on every face, so
-/// far off a cliff reads as its land use.
+/// The color a layer reads as once its tile is too small to see: the tile's mean, or the
+/// swatch where there is no tile. Each layer has one mean, its top face's, used on every face,
+/// so a cliff far off reads as its land use.
 pub static LAYER_MEAN: LazyLock<Vec<[u8; 3]>> = LazyLock::new(|| {
     palette()
         .map(|cube| {

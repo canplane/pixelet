@@ -3,7 +3,7 @@
 // GENERATED from spec/client/core/sys/io/file.json
 //
 // The core's files: the roots it opens them below, the names below each and what a
-// file holds (pxl-core sys/io/file.rs, ts/client/src/sys/fs/).
+// file holds (pxl-core sys/io/file.rs, ts/client/src/service/sys/fs/).
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import * as root from "./file/root.spec.ts";
@@ -14,9 +14,9 @@ import * as format from "./file/format.spec.ts";
 
 /** The roots the core opens files below (xpute's OPENAT). Below STORAGE a root is a
  * bake, numbered by its kind (pxl-spec bake/publication.spec.rs). Below every root a path is
- * one name: a tile's quadkey (pxl-spec space/layer/tile.rs), or what the root says. What it
+ * one name: a tile's quadkey (pxl-spec space/layer/quadrant.rs), or what the root says. What it
  * is called and where past that, a tile's version and URL, a storage key, is what the client
- * (ts/client/src/sys/fs/) binds the root to, `@xpute/runtime` carrying the open there. */
+ * (ts/client/src/service/sys/fs/) binds the root to, `@xpute/runtime` carrying the open there. */
 export { root };
 
 /** Below the asset root, the catalog the client plugs in (pxl-spec asset/catalog.rs): the

@@ -1,6 +1,7 @@
 // @xpute/kit/collection/heap.ts
-// Binary min/max heaps over a caller-owned array, with no defensive checks.
-// A NaN key breaks the order.
+// Binary min-heaps and max-heaps over an array the caller owns. They check
+// nothing; a key that compares with nothing, as a NaN does, breaks the heap's
+// order.
 
 import type { primitive, u32 } from "../abi/word.ts";
 
@@ -28,7 +29,10 @@ export class MinHeap<K extends primitive, T> {
     return this.a.length ? this.a[0] : undefined;
   }
 
-  /** Assumes both child subtrees are already heaps. */
+  /**
+   * Sifts the element at `root` down within the first `sz` elements. Both
+   * subtrees of `root` must already be heaps.
+   */
   static heapify<K extends primitive, T>(
     a: Element<K, T>[],
     root: u32,
@@ -92,7 +96,10 @@ export class MinHeap<K extends primitive, T> {
     return out;
   }
 
-  /** The heap must not be empty. */
+  /**
+   * Replaces the top element and restores the order. The heap must not be
+   * empty.
+   */
   replace_root(e: Element<K, T>): void {
     this.a[0] = e;
     MinHeap.heapify(this.a, 0, this.a.length);
@@ -118,7 +125,10 @@ export class MaxHeap<K extends primitive, T> {
     return this.a.length ? this.a[0] : undefined;
   }
 
-  /** Assumes both child subtrees are already heaps. */
+  /**
+   * Sifts the element at `root` down within the first `sz` elements. Both
+   * subtrees of `root` must already be heaps.
+   */
   static heapify<K extends primitive, T>(
     a: Element<K, T>[],
     root: u32,
@@ -182,14 +192,17 @@ export class MaxHeap<K extends primitive, T> {
     return out;
   }
 
-  /** The heap must not be empty. */
+  /**
+   * Replaces the top element and restores the order. The heap must not be
+   * empty.
+   */
   replace_root(e: Element<K, T>): void {
     this.a[0] = e;
     MaxHeap.heapify(this.a, 0, this.a.length);
   }
 }
 
-/** Unstable, in place, ascending by key. */
+/** Sorts by key, ascending and in place. The sort is not stable. */
 export function heapsort<K extends primitive, T>(a: Element<K, T>[]): void {
   const n = a.length;
   if (n <= 1) return;

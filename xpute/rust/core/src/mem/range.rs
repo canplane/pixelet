@@ -1,9 +1,9 @@
 // xpute-core/mem/range.rs
 
-//! A range of the core's own ahead of its heap: placed once at boot, never
-//! freed, sized at compile time. Whoever lays the memory out hands each owner
-//! its range once (`OwnedRange`); a range is read only through `arr` and
-//! `Section::at`, which check its end.
+//! The core's fixed ranges: ranges of its own memory below its heap, sized
+//! at compile time, placed once at boot and never freed. Whoever lays out
+//! the memory hands each owner its range once (`OwnedRange`). A range is
+//! read only through `arr` and `Section::at`, which check its end.
 
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -12,7 +12,8 @@ use crate::global::Global;
 use crate::mem;
 use crate::mem::section::Section;
 
-/// One owner's range, handed in once at boot; asking before is a bug.
+/// One owner's range, handed in once at boot. Asking for it before then is a
+/// bug.
 pub struct OwnedRange(Global<Option<Section>>);
 
 impl Default for OwnedRange {
@@ -35,20 +36,22 @@ impl OwnedRange {
     }
 }
 
-/// A cache line, which an array is laid on.
+/// A cache line. Arrays are laid out in whole lines.
 const LINE_BYTES: usize = 64;
 
-/// `cnt` of `size` bytes, rounded up to a whole cache line, as an array is laid.
+/// The bytes an array of `cnt` items of `size` bytes takes, rounded up to
+/// whole cache lines.
 pub const fn arr_bytes(cnt: usize, size: usize) -> u32 {
     ((cnt * size).div_ceil(LINE_BYTES) * LINE_BYTES) as u32
 }
 
-/// `n` of `T` from `off` into `s`, in the core's own memory. Sizes are fixed
-/// at compile time, so out of bounds or misaligned is a bug, not a refusal.
+/// An array of `n` items of `T`, at `off` into `s` in the core's own memory.
+/// Sizes are fixed at compile time, so an array out of bounds or misaligned
+/// is a bug, not a refusal.
 ///
 /// # Safety
-/// The caller holds those bytes alone while it keeps the array, and they are
-/// a valid `T` (zeroed, for plain numbers).
+/// The caller must hold those bytes alone for as long as it keeps the array,
+/// and they must be valid `T`s (zeroed, for plain numbers).
 pub unsafe fn arr<T>(s: Section, off: u32, n: usize) -> &'static mut [T] {
     let at = u32::try_from(n * size_of::<T>())
         .ok()

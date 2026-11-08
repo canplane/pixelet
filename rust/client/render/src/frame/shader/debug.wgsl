@@ -1,13 +1,14 @@
 // pxl-render/frame/shader/debug.wgsl
 
-// Debug gizmos as segments, hidden behind the gizmos' own faces and nothing
-// else; the faces draw only their depth (`vs_depth`). A line primitive is one pixel wide on every device, so each segment
-// is a quad its width across on the screen.
+// Draws the debug gizmos as segments, which only the gizmos' own faces hide.
+// The faces draw only their depth (`vs_depth`). A line primitive is one pixel
+// wide on every device, so each segment is drawn as a quad its width across on
+// the screen.
 
 const WIDTH_PX: f32 = 3.0;
 
-// Read field by field from vec4 words, never as a struct: a struct here lost
-// Safari's WebGPU its GPU process.
+// The draw's words, read field by field from vec4s and never as a struct: a
+// uniform struct crashed the GPU process of Safari's WebGPU.
 @group(1) @binding(0) var<uniform> draw_words: array<vec4f, DRAW_VEC4S>;
 
 fn draw_translation() -> vec3f { return from_eye(draw_q(), draw_r()); }
@@ -17,7 +18,8 @@ struct VertexOut {
   @location(0) color: vec4f,
 };
 
-// Two triangles: which end, and which side of the segment.
+// The quad's two triangles: for each vertex, which end of the segment it lies
+// at, and on which side.
 const ENDS = array<u32, 6>(0u, 0u, 1u, 1u, 0u, 1u);
 const SIDES = array<f32, 6>(-1.0, 1.0, -1.0, -1.0, 1.0, 1.0);
 

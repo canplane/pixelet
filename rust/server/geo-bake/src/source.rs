@@ -15,7 +15,7 @@ use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::source::{is_sharded, is_version, key};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
-use pxl_spec::space::layer::quadrant::{Quadrant, TOP_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, MIN_ZOOM};
 use serde_json::{json, Map, Value};
 
 use crate::pyramid::MANIFEST;
@@ -49,7 +49,7 @@ pub type Overrides = BTreeMap<Quadrant, Vec<(BaseLayer, String)>>;
 /// Refused for anything a client would refuse (pxl-spec bake/source.rs), or
 /// would serve wrongly: a version that is no URL segment, a sharded kind holding no shards
 /// or another holding some, an override on anything but a shard served.
-pub fn declaration(top_zoom: Zoom, kinds: &Kinds, overrides: &Overrides) -> Result<Value, String> {
+pub fn declaration(min_zoom: Zoom, kinds: &Kinds, overrides: &Overrides) -> Result<Value, String> {
     for l in BaseLayer::ALL {
         let k = &kinds[l as usize];
         if k.shard.is_some() != is_sharded(l) {
@@ -113,14 +113,14 @@ pub fn declaration(top_zoom: Zoom, kinds: &Kinds, overrides: &Overrides) -> Resu
         shard.insert(t.key(), json!({ "version": version }));
     }
     Ok(
-        json!({ "top_zoom": top_zoom, "shard": shard, "format": named(&|k| json!(k.format)), "version": named(&|k| json!(k.version)) }),
+        json!({ "min_zoom": min_zoom, "shard": shard, "format": named(&|k| json!(k.format)), "version": named(&|k| json!(k.version)) }),
     )
 }
 
 /// Four siblings all held, written as their parent, up to the pyramid's top.
 fn folded(mut keys: BTreeSet<Quadrant>) -> BTreeSet<Quadrant> {
-    let finest = keys.iter().map(|t| t.zoom).max().unwrap_or(TOP_ZOOM);
-    for zoom in (TOP_ZOOM + 1..=finest).rev() {
+    let finest = keys.iter().map(|t| t.zoom).max().unwrap_or(MIN_ZOOM);
+    for zoom in (MIN_ZOOM + 1..=finest).rev() {
         let parents: BTreeSet<Quadrant> = keys
             .iter()
             .filter(|t| t.zoom == zoom)
@@ -138,7 +138,7 @@ fn folded(mut keys: BTreeSet<Quadrant>) -> BTreeSet<Quadrant> {
     keys
 }
 
-/// Shards by name: a shard's each, no node over them.
+/// Shards by name, each a shard's, with no node over shards.
 pub fn tiles<'a>(names: impl IntoIterator<Item = &'a str>) -> Result<BTreeSet<Quadrant>, String> {
     names
         .into_iter()
@@ -220,7 +220,7 @@ pub fn declaration_of(record: &Value) -> Result<Value, String> {
         }
         overrides.insert(tile, own);
     }
-    declaration(TOP_ZOOM, &kinds, &overrides)
+    declaration(MIN_ZOOM, &kinds, &overrides)
 }
 
 #[cfg(test)]

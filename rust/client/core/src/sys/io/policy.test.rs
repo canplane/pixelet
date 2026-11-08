@@ -2,51 +2,45 @@
 
 use super::*;
 
-/// The objects' ids are files' numbers, the top's 0 no tile: it is
-/// ranked without a tile read off it.
+/// An object's id is a file's number, and the top's id 0 names no tile, so
+/// the top must rank without a tile read from its id.
 #[test]
 fn object_top_ranked() {
-    let r = Policy::standard().rank(Stream::object, 0, Order::FIRST, 0.0);
+    let r = rank(Stream::object, 0, Order::FIRST);
     assert_eq!((r.class, r.detail), (OBJECT, 0));
 }
 
-/// The pictures start before the catalog's models: the Earth's sphere and a
-/// picture ahead of every model, the Earth's tiles with them; the models still
-/// ahead of places.
+/// The pictures start before the catalog's models. The Earth's sphere, any
+/// other picture and the Earth's tiles all rank ahead of every model, and the
+/// models still rank ahead of places.
 #[test]
 fn pictures_before_models() {
     use crate::sys::io::loader::id_of;
     use crate::sys::load::{Load, LoadKind};
-    let p = Policy::standard();
-    let model = p.rank(
+    let model = rank(
         Stream::asset,
         id_of(LoadKind::Gltf, Load::File(0)),
         Order::LAST,
-        0.0,
     );
-    let sphere = p.rank(
+    let sphere = rank(
         Stream::asset,
         id_of(LoadKind::Image, Load::Sphere),
         Order::LAST,
-        0.0,
     );
-    let picture = p.rank(
+    let picture = rank(
         Stream::asset,
         id_of(LoadKind::Image, Load::File(7)),
         Order::LAST,
-        0.0,
     );
-    let earth = p.rank(
+    let earth = rank(
         Stream::earth,
         Quadrant::of_key("0103").expect("a tile").id(),
         Order::FIRST,
-        0.0,
     );
-    let place = p.rank(
+    let place = rank(
         Stream::place,
         Quadrant::of_key("0103").expect("a tile").id(),
         Order::FIRST,
-        0.0,
     );
     assert!(sphere.class < model.class);
     assert!(picture.class < model.class);

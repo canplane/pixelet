@@ -15,8 +15,8 @@ import {
   decorLabel,
   decorSection,
   MARKER,
-} from "@/ui/catalog/asset/mod.ts";
-import { PIN_LABEL } from "@/ui/catalog/asset/marker.spec.ts";
+} from "@/ui/asset/catalog.ts";
+import { PIN_LABEL } from "@/ui/asset/marker.spec.ts";
 
 import { selectAsset, useInHand } from "@/ui/world/dock/store.ts";
 import { Panel } from "@/ui/component/panel.tsx";
@@ -25,13 +25,14 @@ import { Glyph } from "@/ui/component/glyph.tsx";
 import { chrome, color } from "@/ui/component/theme.ts";
 import { SectionTitle } from "@/ui/component/section-title.tsx";
 import { CharacterPicker } from "@/ui/drawer/character/picker.tsx";
-import { CubeSwatch, decorGlyph } from "@/ui/catalog/asset/swatch.tsx";
+import { CubeSwatch, decorGlyph } from "@/ui/asset/swatch.tsx";
 import type { GlyphName } from "@/ui/component/icon.tsx";
 import { LABEL } from "@/ui/component/palette.ts";
 import { Grid, Item, itemOf, mark } from "./grid.tsx";
 import { NameTipLayer } from "./name-tip.tsx";
 
-/** Each section's items, in the catalog's order. */
+/** Groups `items` by section. The sections, and the items in each, keep the
+ * catalog's order. */
 function sectioned<S, T>(
   items: readonly T[],
   sectionOf: (item: T) => S,
@@ -48,7 +49,8 @@ function sectioned<S, T>(
 const SECTIONS = sectioned(allCubes, cubeSection);
 const DECOR_SECTIONS = sectioned(decorIds, decorSection);
 
-// A circle cut a block's texture away, so a rounded square.
+// An item is a rounded square: a circle would cut away too much of a block's
+// texture.
 const ITEM_RADIUS = 12;
 
 function CubeItem({
@@ -79,7 +81,7 @@ function CubeItem({
   );
 }
 
-/** An asset drawn as its glyph: a decor, or a marker. */
+/** An item for an asset drawn as a glyph: a decor or the marker. */
 function GlyphItem({
   id,
   label,
@@ -110,7 +112,6 @@ function GlyphItem({
   );
 }
 
-/** A tab's sections, each a grid of its items under the section's title. */
 function Sections<S extends string, T>({
   kind,
   sections,
@@ -135,11 +136,12 @@ function Sections<S extends string, T>({
 
 const CUBE_TAB = 0;
 const DECOR_TAB = 1;
-/** A temporary way in: one marker, its words not kept yet. */
 const MARKER_TAB = 2;
 const CHARACTER_TAB = 3;
 
-/** Cube, decor and marker picks close the sheet; character picks apply at once and leave it open. */
+/** The drawer sheet. Picking a cube, a decor or the marker puts it in hand and
+ * closes the sheet. Picking a character applies it at once and leaves the
+ * sheet open. */
 export function DrawerModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
 

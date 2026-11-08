@@ -1,31 +1,32 @@
 // @pxl/client/runtime/open.ts
 
 /**
- * A page's core, in a worker of its own (worker.ts): the UI's
- * link is xpute's, across the worker's port; what a worker cannot read of the
- * page and the files the core refused go to it, and what it keeps and reads
- * comes back (page.ts).
+ * A page's core, in a worker of its own (worker.ts). The UI's link to it is
+ * xpute's, across the worker's port. The worker is sent what it cannot read
+ * of the page, and the files the core refused. What it keeps in storage, the
+ * source's state and the profiler's reads come back (page.ts).
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { start } from "@xpute/runtime";
-import { mirror_source, settled } from "@/sys/fs/source.ts";
-import { is_kept } from "@/sys/fs/storage.ts";
-import { set_online } from "@/origin/online.ts";
-import { set_core } from "@/port/core.ts";
+import { mirror_source, settled } from "@/service/sys/fs/source.ts";
+import { is_kept } from "@/service/sys/fs/storage.ts";
+import { set_online } from "@/service/origin/online.ts";
+import { set_core } from "@/service/core/core.ts";
 import type { ToCore, ToUi } from "@/runtime/page.ts";
 import { manifest } from "@/runtime/start.ts";
 import { type OnOpen, started, ui } from "@/runtime/ui.ts";
-import { gpu_present } from "@/port/gpu.ts";
-import * as device from "@/service/device.ts";
-import * as online from "@/service/online.ts";
-import * as storage from "@/service/storage.ts";
+import { gpu_present } from "@/service/sys/gpu.ts";
+import * as device from "@/service/platform/device.ts";
+import * as online from "@/service/platform/online.ts";
+import * as storage from "@/service/platform/storage.ts";
 
-/** Settled once a GPU has answered and the source is declared, true where
- * it was. */
+/** Resolves once a GPU is present and the source is settled: true when the
+ * source was declared, false when it was refused. */
 export async function open(on: OnOpen): Promise<boolean> {
-  // Against the page, not `import.meta.url`: Expo's stand-in for that comes
-  // with `expo`, which the boot runs ahead of (index.ts).
+  // The worker's URL is resolved against the page rather than
+  // `import.meta.url`. Expo's stand-in for `import.meta` comes with `expo`,
+  // and the boot runs before `expo` is imported (index.ts).
   const worker = new Worker(new URL("./worker.ts", location.href), {
     type: "module",
   });

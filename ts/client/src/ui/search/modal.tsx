@@ -43,10 +43,10 @@ import { DIVISION_SUBTYPE } from "@/ui/division/division.spec.ts";
 import { fetchSearch, type SearchResult } from "./fetch.ts";
 import { fixed } from "@/ui/fixed.ts";
 import { touchOutset } from "@/ui/component/touch.ts";
-import { useCore } from "@/ui/store/watch.ts";
-import * as camera from "@/port/camera.ts";
-import * as sensor from "@/port/sensor.ts";
-import * as snapshot from "@/port/snapshot.ts";
+import { useCore } from "@/ui/watch.ts";
+import * as camera from "@/service/core/camera.ts";
+import * as sensor from "@/service/core/sensor.ts";
+import * as snapshot from "@/service/core/snapshot.ts";
 
 const DEBOUNCE_MS = 300;
 
@@ -56,8 +56,9 @@ function formatDistance(m: f64): string {
   return `${round(m / 1000).toLocaleString()}km`;
 }
 
-/** Where a result is comes from its coordinates, never a source's address text, which could name another city.
- * The country is its section's title, so the row leaves it out. */
+/** A result's place is read from the divisions around its coordinates, never
+ * from a source's address text, which can name another city. The row leaves
+ * out the country, because the country is its section's title. */
 function ResultRow({
   result,
   distance,
@@ -117,7 +118,9 @@ function ResultRow({
   );
 }
 
-/** The country a result is in, or is; null for one no country holds, at sea or past the divisions. */
+/** The country a result lies in, or the result's own name when it is a
+ * country. It is null for a result no country holds, such as one at sea or
+ * beyond the mapped divisions. */
 function countryOf(result: SearchResult): string | null {
   if (
     result.kind === SEARCH_KIND.DIVISION &&
@@ -136,8 +139,9 @@ interface CountrySection {
   rows: SearchResult[];
 }
 
-/** By country: the pivot's first, as
- * the API ranks it, then each where its best result ranked, none last. */
+/** Groups the results by country. The pivot's country comes first, then each
+ * other country where its best result was ranked, and the results with no
+ * country come last. Within a section, results keep the API's order. */
 function byCountry(
   results: SearchResult[],
   home: string | null,
@@ -197,7 +201,8 @@ function LocateCard() {
   );
 }
 
-/** Where the search looks from: the pivot, which is not the device's location. */
+/** Shows where the search looks from. That is the pivot, not the device's
+ * location. */
 function MapCenter() {
   const { t } = useTranslation();
   const place = useDivisionLabel();
@@ -220,15 +225,16 @@ function MapCenter() {
   );
 }
 
-/** The pivot's country is taken where the query ran, as the API measured each
- * result's distance from, so both agree with its order while the camera drifts. */
+/** A query's results, with `home`, the pivot's country, taken where the
+ * query ran. The API measured each result's distance from that same point,
+ * so the sections and the distances agree with the results' order even after
+ * the camera moves on. */
 interface Found {
   query: string;
   results: SearchResult[];
   home: string | null;
 }
 
-/** Forward search, always live: nothing is baked for it. */
 export function SearchModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
 
@@ -449,9 +455,10 @@ const styles = StyleSheet.create({
   dot: { width: 10, height: 10, borderRadius: 5 },
 });
 
-/** What Carto draws a place's kind as, as the world does
- * (`place_theme.spec.ts`): its symbol in its fill, or a dot of the fill for
- * a kind with none; nothing for a kind Carto draws no point for. */
+/** How Carto draws a place of `category`, the same way the world draws it
+ * (place_theme.spec.ts): its symbol in its fill color, or a dot of that fill
+ * for a category with no symbol. It is null for a category Carto draws no
+ * point for. */
 function placeTheme(
   category: number,
 ): { fill: string; symbol: PlaceSymbol | undefined } | null {

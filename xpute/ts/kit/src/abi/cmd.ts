@@ -1,6 +1,7 @@
 // @xpute/kit/abi/cmd.ts
 
-/** `major << 8 | minor` in the 16 bits ipc/frame's word 1 carries. */
+// A command number is `major << 8 | minor`, which fits the 16 bits a frame
+// carries for it.
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 

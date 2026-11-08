@@ -1,9 +1,9 @@
 // xpute-gpu/runtime.noop.test.rs
 
-//! The runtime's own bookkeeping, on wgpu's noop backend: it makes and maps
-//! buffers and runs nothing, and the queue's work is done as it is
-//! submitted. No GPU is touched, so these run with the CPU tests
-//! (runtime.test.rs holds those that need one).
+//! Tests of the runtime's own bookkeeping, on wgpu's noop backend. That
+//! backend makes and maps buffers but runs nothing, and the queue's work is
+//! done as it is submitted. No GPU is touched, so these tests need none;
+//! runtime.test.rs holds those that do.
 
 use xpute_runtime::mem::Memory;
 
@@ -13,7 +13,6 @@ use super::*;
 
 const CHUNK_BYTES: u64 = 64;
 
-/// A runtime at `frame_latency`, its chunks `CHUNK_BYTES` each.
 fn runtime(
     adapter: wgpu::Adapter,
     device: &wgpu::Device,
@@ -51,7 +50,7 @@ fn device() -> (wgpu::Adapter, wgpu::Device, wgpu::Queue) {
     (adapter, device, queue)
 }
 
-/// Once every chunk is taken, nothing more is until the queue gives one
+/// Once every chunk is taken, no more is taken until the queue gives one
 /// back, and the pool keeps its size.
 #[test]
 fn pool_never_grows() {
@@ -77,8 +76,8 @@ fn pool_never_grows() {
     assert!(belt.take(4).is_none(), "and no more than the pool");
 }
 
-/// A chunk is written piece by piece at the mapping's alignment, and a
-/// write past its room takes what is left.
+/// A chunk is written piece by piece, each piece at the mapping's alignment,
+/// and a write past the chunk's room takes what is left.
 #[test]
 fn take_keeps_alignment() {
     let (_, device, _) = device();
@@ -88,8 +87,8 @@ fn take_keeps_alignment() {
     assert!(belt.take(4).is_none(), "the one chunk full");
 }
 
-/// A write larger than the whole pool is staged across it, the runtime waiting
-/// for chunks to come back, and the pool keeps its size.
+/// A write larger than the whole pool is staged across it while the runtime
+/// waits for chunks to come back, and the pool keeps its size.
 #[test]
 fn write_waits_for_chunks() {
     let (adapter, device, queue) = device();
@@ -118,9 +117,9 @@ fn write_waits_for_chunks() {
     assert!(h.belt.take(4).is_none(), "and no chunk made past them");
 }
 
-/// The frames a runtime admitted and has not seen done are told the core in
-/// the device's block, the word before STATUS, as each turn begins; the runtime
-/// admits by the same rule the page's core reads that word by.
+/// A runtime writes the frames it admitted and has not seen done into the
+/// device's block, in the word before STATUS, as each turn begins. It admits
+/// by the same rule that a page's core applies to that word.
 #[test]
 fn native_tells_unfinished() {
     let (adapter, device, queue) = device();

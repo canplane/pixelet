@@ -8,17 +8,18 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 /**
- * xpute's module on Android (src/mod.ts), ios/XputeModule.swift's under the
- * same names: the core (Core.kt), its GPU runtime (Gpu.kt) and the view its
- * surface draws into (SurfaceView.kt).
+ * xpute's native module on Android (src/mod.ts), the same as
+ * ios/XputeModule.swift under the same names. It holds the core (Core.kt),
+ * its GPU runtime (Gpu.kt) and the view its surface draws into
+ * (SurfaceView.kt).
  */
 class XputeModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("Xpute")
 
-    /** The core has posted or asked, a call waits for `answer`, or the
-     * core has stopped. Sent from the core's thread; Expo carries the
-     * event to the JavaScript thread. */
+    /** Fires when the core has posted or asked for a turn, when a call waits
+     * for `answer`, or when the core has stopped. It is sent from the core's
+     * thread, and Expo carries the event to the JavaScript thread. */
     Events("onNotify")
 
     OnCreate { Core.notify = { sendEvent("onNotify") } }
@@ -28,8 +29,8 @@ class XputeModule : Module() {
       Core.answer = null
     }
 
-    // The region is the core's for the app's life: nothing is let go when
-    // the buffer is.
+    // The region belongs to the core for the app's whole life, so nothing is
+    // freed when the buffer is.
     Function("mem") { NativeArrayBuffer(Core.mem()) }
 
     Function("load") { at: Double -> Core.load(at) }
@@ -48,7 +49,9 @@ class XputeModule : Module() {
 
     Function("turns") { Core.turns().toList() }
 
-    Function("callOn") { answer: JavaScriptFunction<Int> -> Core.answer = answer }
+    // @xpute/runtime's answer, called on the JavaScript thread, which is the
+    // app's thread here.
+    Function("callOn") { answer: JavaScriptFunction<Int> -> Core.answer = { at -> answer.invoke(at) } }
 
     Function("gpuOpen") { Gpu.open() }
 

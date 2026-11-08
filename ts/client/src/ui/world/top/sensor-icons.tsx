@@ -9,12 +9,11 @@ import { SensorStatus } from "@/abi/cmd.spec.ts";
 import type { GlyphName } from "@/ui/component/icon.tsx";
 import { haloGap, HaloIcon } from "./halo.tsx";
 import { color } from "@/ui/component/theme.ts";
-import * as device from "@/service/device.ts";
-import { useCore } from "@/ui/store/watch.ts";
+import * as device from "@/service/platform/device.ts";
+import { useCore } from "@/ui/watch.ts";
 
-/** A sensor's status as a color: `tone.pending` while its reading is asked
- * for, `tone.failed` where it failed, else `base`. Each surface gives its own
- * tones, the world's glyphs paler than a sheet's. */
+/** A sensor's status as a color. Each surface passes its own `tone`, and the
+ * glyphs over the world are paler than a sheet's. */
 export function statusColor(
   status: SensorStatus,
   base: string,
@@ -44,7 +43,8 @@ export function SensorIcons() {
   const location = useCore((s) => s.location.status);
   const orientation = useCore((s) => s.orient.status);
 
-  // Faded as one layer with its halo: faded apart, the halo grayed the glyph.
+  // The glyph and its halo fade as one layer. Faded apart, the halo would
+  // show through and gray the glyph.
   const icon = (glyph: GlyphName, status: SensorStatus) => (
     <View needsOffscreenAlphaCompositing style={{ opacity: PRESENCE[status] }}>
       <HaloIcon

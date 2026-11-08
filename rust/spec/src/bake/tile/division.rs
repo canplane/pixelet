@@ -65,8 +65,8 @@ pub struct Division {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DivisionTile {
-    /// Each cell's division, by `GROUND.cell_idx`; `NONE` in none. The
-    /// bake's own; a client's borrowed from the room it decoded them into.
+    /// Each cell's division, by `GROUND.cell_idx`; `NONE` in none. The bake owns its cells; a
+    /// client's are borrowed from the room it decoded them into.
     pub cells: Cow<'static, [u32]>,
     pub divisions: Vec<Division>,
     pub occupancy: Occupancy,
@@ -112,7 +112,7 @@ impl DivisionTile {
 }
 
 impl Default for DivisionTile {
-    /// In no division: what a tile the set holds no object for is.
+    /// A tile in no division, which is what a tile the set holds no object for is.
     fn default() -> DivisionTile {
         DivisionTile {
             cells: vec![NONE; CELLS].into(),
@@ -238,7 +238,7 @@ impl<'a> DivisionTileView<'a> {
     }
 }
 
-/// Copied out as the bake holds it.
+/// Decodes a tile into a copy, as the bake holds it.
 pub fn decode(pkt: &[u8]) -> Result<DivisionTile, MarshalError> {
     let v = open(pkt)?;
     Ok(DivisionTile {
@@ -289,7 +289,7 @@ fn of(v: &DivisionTileView<'_>) -> Result<DivisionTile, MarshalError> {
 /// compared by id; a child is kept where it has children of its own or its
 /// cells are not its parent's, each repeated.
 pub fn fold(children: [&DivisionTile; 4], zoom: Zoom) -> DivisionTile {
-    // every child's divisions under one numbering, by id
+    // Every child's divisions under one numbering, by id.
     let mut all: Vec<Division> = Vec::new();
     let mut by_id: FnvHashMap<String, u32> = FnvHashMap::default();
     let mut local: [Vec<u32>; 4] = Default::default();
@@ -340,7 +340,7 @@ pub fn fold(children: [&DivisionTile; 4], zoom: Zoom) -> DivisionTile {
             })
     });
 
-    // only the divisions a cell names, and their ancestors, renumbered
+    // Only the divisions a cell names, and their ancestors, renumbered.
     let mut used = vec![false; all.len()];
     for &c in cells.iter().filter(|&&c| c != NONE) {
         let mut at = c;

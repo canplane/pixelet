@@ -1,8 +1,8 @@
 // pxl-geo-bake/coverage.rs
 
-//! What the bakes publish — the shards `infra/geo/coverage.json`
-//! names, a tile at `SHARD_ZOOM` each — which are what the ingests take, and the
-//! one door to the DB.
+//! What the bakes publish: the shards `infra/geo/coverage.json` names, each a tile at
+//! `SHARD_ZOOM`, which are also what the ingests take. The module is also the one door to the
+//! DB.
 
 use std::collections::BTreeSet;
 use std::sync::LazyLock;
@@ -25,7 +25,7 @@ pub type Shard = [i32; 2];
 /// What an edge may be off by, in units: a ground cell, the finest thing a
 /// bake tells apart, and more than the meter a shard's edges and a feature's
 /// extent are each rounded to.
-pub const EPS: f64 = units(GROUND.cell());
+pub const EPS: f64 = units(GROUND.leaf_cell_zoom());
 
 /// How far past a leaf any bake reads, in units: a z13 tile, four terrain
 /// leaves. A terrain leaf's reads stay within its 2-ring; a
@@ -300,7 +300,7 @@ pub(crate) fn holdings(
     Ok(serde_json::json!({ "overture": overture, "elevation": ele, "coastline": coastline }))
 }
 
-/// `holdings`, for a set's manifest.
+/// `holdings`, as JSON for a set's manifest.
 pub(crate) fn src_of(reads: &[&[&str]]) -> Result<serde_json::Value, String> {
     let (_, mut client) = Overture::reading(reads, &BTreeSet::new())?;
     holdings(&mut client, reads)

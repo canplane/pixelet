@@ -1,7 +1,8 @@
 // xpute-kit/collection/heap.rs
 
-//! A binary heap over an array the caller owns, keyed by any `PartialOrd`.
-//! A NaN key breaks the order.
+//! A binary heap over a vector the caller owns, keyed by any `PartialOrd`
+//! type; `MIN` picks a min-heap or a max-heap. A key that compares with
+//! nothing, as a NaN does, breaks the heap's order.
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Element<K, T> {
@@ -35,7 +36,8 @@ impl<K: PartialOrd + Copy, T: Copy, const MIN: bool> Heap<'_, K, T, MIN> {
         self.a.first()
     }
 
-    /// Sifts `root` down; both of its subtrees must already be heaps.
+    /// Sifts the element at `root` down within the first `sz` elements. Both
+    /// subtrees of `root` must already be heaps.
     pub fn heapify(a: &mut [Element<K, T>], root: usize, sz: usize) {
         let mut i = root;
         let e = a[i];
@@ -97,7 +99,8 @@ impl<K: PartialOrd + Copy, T: Copy, const MIN: bool> Heap<'_, K, T, MIN> {
         Some(out)
     }
 
-    /// The heap must not be empty.
+    /// Replaces the top element and restores the order. The heap must not be
+    /// empty.
     pub fn replace_root(&mut self, e: Element<K, T>) {
         self.a[0] = e;
         let n = self.a.len();
@@ -105,7 +108,7 @@ impl<K: PartialOrd + Copy, T: Copy, const MIN: bool> Heap<'_, K, T, MIN> {
     }
 }
 
-/// Ascending, unstable, in place.
+/// Sorts by key, ascending and in place. The sort is not stable.
 pub fn heapsort<K: PartialOrd + Copy, T: Copy>(a: &mut [Element<K, T>]) {
     let n = a.len();
     if n <= 1 {

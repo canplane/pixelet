@@ -88,7 +88,8 @@ std::optional<std::uint32_t> PacketWriter::str_commit(std::uint32_t len) noexcep
 
 PacketWriter &PacketWriter::str(std::optional<std::string_view> s) noexcept {
     if (!s) return entry(std::nullopt, type_of(SequenceType::str));
-    // Copied the way a string written in place goes in, so the two lay out alike.
+    // Copied through `str_with`, as a string written in place is, so that the
+    // two fit and lay out alike.
     return str_with([&](std::span<char> room) -> std::optional<std::size_t> {
         if (s->size() > room.size()) return std::nullopt;
         std::memcpy(room.data(), s->data(), s->size());
@@ -125,8 +126,9 @@ std::optional<std::uint32_t> PacketWriter::branch_open(std::uint32_t cnt) noexce
     return at;
 }
 
-// A branch ends on a word, so what follows it starts where the encoder
-// starts it.
+// A branch's extent ends on a word boundary, so a node after it starts on the
+// next word even when it needs less alignment. Every language pads the same
+// way, which keeps their bytes equal.
 std::optional<std::uint32_t> PacketWriter::branch_close(std::optional<std::uint32_t> at) noexcept {
     if (!at || err_) return at;
     std::uint64_t end = word_up(lim_);

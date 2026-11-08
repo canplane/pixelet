@@ -1,4 +1,4 @@
-// Decor: instanced variant models, placed as decor_place.wgsl lays them.
+// Draws decor as instanced models of its variants, placed as decor_place.wgsl places them.
 
 @vertex
 fn vs(v: VertexIn) -> VertexOut {

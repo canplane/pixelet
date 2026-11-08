@@ -1,20 +1,20 @@
 // @pxl/client/script/web.ts
 
 /**
- * What the page needs beside what Expo's web build makes (app.config.ts):
+ * What the page needs besides what Expo's web build makes (app.config.ts):
  *
- *   web.ts html    public/index.html, the template Expo fills, from
- *                  index.html with the site's URL (`%SITE_URL%`, its links'
- *                  previews, spec/spec/route.json `origins`) and the UI's
- *                  ground (`%GROUND%`, its first paint) put in and the
- *                  comments, which are the source's, out;
- *   web.ts stamp   dist/build.json, what the deployment says it is, so a
- *                  checkout learns the number being served with no
- *                  credential (ts/build/stamp.ts);
- *   web.ts serve   dist/ on PXL_PREVIEW_PORT (4173), the export a deploy
- *                  publishes measured against the same routes a dev server
- *                  forwards (proxy.ts), an unknown path answered with the
- *                  page, as the Worker answers it.
+ *   web.ts html    writes public/index.html, the template Expo fills, from
+ *                  index.html. It puts in the site's URL (`%SITE_URL%`, for
+ *                  link previews; spec/spec/route.json `origins`) and the
+ *                  UI's ground (`%GROUND%`, for the first paint), and takes
+ *                  out the comments, which are only for the source.
+ *   web.ts stamp   writes dist/build.json, which says what the deployment
+ *                  is, so that a checkout learns the number being served
+ *                  without a credential (ts/build/stamp.ts).
+ *   web.ts serve   serves dist/, the export a deploy publishes, on
+ *                  PXL_PREVIEW_PORT (4173), forwarding the same routes a dev
+ *                  server forwards (proxy.ts). An unknown path is answered
+ *                  with the page, as the Worker answers it.
  */
 
 import * as fs from "node:fs";
@@ -23,7 +23,7 @@ import * as path from "node:path";
 import process from "node:process";
 
 import { stamp } from "@pxl/build/stamp.ts";
-import { SITE_URL } from "@pxl/client/origin/route.spec.ts";
+import { SITE_URL } from "@pxl/client/service/origin/route.spec.ts";
 import { GROUND } from "@pxl/client/ui/component/ground.ts";
 import { forward, route_target } from "./proxy.ts";
 

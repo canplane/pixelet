@@ -1,7 +1,10 @@
 // @xpute/kit/collection/arena.ts
 
-// Bump allocators with mark/rewind: Arena reuses preconstructed objects, which
-// alloc() hands out uninitialized; Vector is typed-array scratch.
+// Pools that hand out slots in order and take them back by rewinding to an
+// earlier length. `Arena` holds objects its factory constructs once, and
+// reuses them: `alloc` hands one out in whatever state its last user left it,
+// and the caller must reinitialize it. `Vector` does the same over a typed
+// array of numbers.
 
 import type { u32 } from "../abi/word.ts";
 import type {
@@ -57,7 +60,10 @@ export class Arena<T extends object> {
     this._grow(this._len + cnt);
   }
 
-  /** A `new_len` past the current length is a broken invariant, not a clamp. */
+  /**
+   * Rewinds to `new_len` slots. A `new_len` above the current length is a
+   * bug, not a way to grow.
+   */
   truncate(new_len: u32): void {
     if (new_len > this._len) {
       throw new InvariantError(Errno.EINVAL);
@@ -65,7 +71,8 @@ export class Arena<T extends object> {
     this._len = new_len;
   }
 
-  // Doubling stops at the cap, so the cap refuses only what does not fit.
+  // The capacity doubles but stops at `max_cap`, so a request is refused
+  // only when it does not fit under `max_cap`.
   private _grow(req: u32): void {
     if (req <= this._cap) return;
     if (req > this.max_cap) throw new MarshalError(Errno.EOVERFLOW);
@@ -126,7 +133,11 @@ export class Vector<T extends AnyTypedArray> {
     return this.mem[idx] as AnyElementOf<T>;
   }
 
-  /** At most one past the length: a gap would hold what a truncate left. */
+  /**
+   * Sets the element at `idx`, at most one past the length, where it is
+   * pushed. A gap is refused: the elements in it would still hold what a
+   * truncate left behind.
+   */
   set(idx: u32, v: AnyElementOf<T>): void {
     if (idx > this._len) throw new InvariantError(Errno.EINVAL);
     if (idx === this._len) this.push(v);
@@ -145,21 +156,25 @@ export class Vector<T extends AnyTypedArray> {
     this._grow(this._len + cnt);
   }
 
-  /** A `new_len` past the current length is a broken invariant, not a clamp. */
+  /**
+   * Rewinds to `new_len` elements. A `new_len` above the current length is a
+   * bug, not a way to grow.
+   */
   truncate(new_len: u32): void {
     if (new_len > this._len) throw new InvariantError(Errno.EINVAL);
     this._len = new_len;
   }
 
-  // Doubling stops at the cap, so the cap refuses only what does not fit.
+  // The capacity doubles but stops at `max_cap`, so a request is refused
+  // only when it does not fit under `max_cap`.
   private _grow(req: u32): void {
     if (req <= this._cap) return;
     if (req > this.max_cap) throw new MarshalError(Errno.EOVERFLOW);
     const new_cap = Math.min(Math.max(this._cap * 2, req), this.max_cap);
 
     const new_mem: T = new this.ctor(new_cap);
-    // `set` cannot be typed across the number and bigint array families;
-    // both arrays are always the same one.
+    // TypeScript cannot type `set` across the number and bigint array
+    // families, but the two arrays here are always of the same family.
     new_mem.set(this.mem as any);
 
     this.mem = new_mem;

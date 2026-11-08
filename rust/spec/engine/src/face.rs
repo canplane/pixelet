@@ -1,50 +1,49 @@
 // pxl-engine/face.rs
 
-//! gpu-portable: what lies about a face of a cell, as the cast hands it to
-//! the screen pass in a ray's own words (`ray::FACES`): across each of the
-//! face's four edges, the air, the next cell of a flat run, or a cell
-//! rising in front of the face; and at each of its four corners, a cell
-//! rising there alone. Asked of the world's one query, at the cell's own
-//! zoom, of the cells beside it (pxl-render face.wgsl), once where a
-//! sample stops and handed with its hit to every pixel that shows that
-//! cell: so every pixel of a cell is painted by the same bits in a frame,
-//! whatever the screen shows about it.
+//! gpu-portable: the word that says what lies around a face of a cell, which the cast hands
+//! to the screen pass in a ray's own words (`ray::FACES`). Across each of the face's four
+//! edges lies the air, the next cell of a flat run, or a cell rising in front of the face. At
+//! each of its four corners there may be a cell rising there alone. The word is asked of the
+//! world's one query, about the cells beside the cell at the cell's own zoom (pxl-render
+//! face.wgsl). It is asked once, where a sample stops, and handed with the hit to every pixel
+//! that shows the cell, so every pixel of a cell is painted from the same bits in a frame,
+//! whatever else the screen shows around it.
 //!
-//! The face's edges are named by the way across each along the face, `+u`,
-//! `−u`, `+v`, `−v`, `u` and `v` the axes after the face's own in turn
-//! (x: y, z; y: z, x; z: x, y); its corners by the two edges that meet
-//! there, corner `k` across edge `k & 1` and edge `2 + (k >> 1)`: `+u+v`,
-//! `−u+v`, `+u−v`, `−u−v`.
+//! A face's edges are named by the direction one crosses each in, along the face: `+u`, `−u`,
+//! `+v`, `−v`, where `u` and `v` are the two axes after the face's own, in turn (for x: y, z;
+//! for y: z, x; for z: x, y). Its corners are named by the two edges that meet there: corner
+//! `k` lies across edge `k & 1` and edge `2 + (k >> 1)`, giving `+u+v`, `−u+v`, `+u−v`,
+//! `−u−v`.
 
 use crate::{wrap_idx, Zoom};
 
-/// A face's edges, and its corners.
+/// The number of a face's edges, which is also the number of its corners.
 pub const EDGES: u32 = 4;
-/// Bit `k` of each field is edge `k`'s or corner `k`'s, the fields in the
-/// order they are asked, each deciding what the next asks. A cell hides
-/// what is in front of the face across the edge: the face meets a wall there, and
-/// closes in towards it.
+/// The word's three fields, in the order they are asked; what one field holds decides what
+/// the next asks. Bit `k` of a field belongs to edge `k`, or to corner `k`. A rise bit is set
+/// where a cell hides what is in front of the face across the edge: the face meets a wall
+/// there and closes in towards it.
 pub const RISE_SHIFT: u32 = 0;
-/// The edge meets the air: neither the cell in front of the face across
-/// it nor the one beside it hides it, a convex edge or a step down, drawn as
-/// a line.
+/// A line bit is set where the edge meets the air: neither the cell in front of the face
+/// across it nor the cell beside it hides it. Such an edge is convex or a step down, and it is
+/// drawn as a line.
 pub const LINE_SHIFT: u32 = EDGES;
-/// A cell hides what is in front of the face across the corner, and none across
-/// either edge meeting there, which closes the corner in already.
+/// A corner bit is set where a cell hides what is in front of the face across the corner and
+/// none does across either edge that meets there, since such an edge closes the corner in
+/// already.
 pub const CORNER_SHIFT: u32 = 2 * EDGES;
 pub const BITS: u32 = 3 * EDGES;
 
-/// The bits of a face of a cell filled short of its cube
-/// (`answer::fill_eighths`), a box inset in it apart from every cell about it:
-/// every edge meets the air, and nothing rises across one. Beside it, it is
-/// no cell that hides for a face's bits (`answer::whole`).
+/// The bits of a face of a cell filled short of its cube (`answer::fill_eighths`): a box
+/// inset in the cube, apart from every cell around it, so every edge meets the air and nothing
+/// rises across one. As a neighbor, such a cell hides no face (`answer::whole`).
 pub const BOX: u32 = ((1 << EDGES) - 1) << LINE_SHIFT;
 
-/// The bits of face `face` (a ray's: 2·axis, plus one where its outward
-/// normal points down the axis) of a cell, `hides(d)` whether the cell
-/// `d` cells from it hides its cube whole (`answer::whole`): bit `i` answers the
-/// `i`th cell asked, and a cell is not asked where a bit already set
-/// decides it. One place asks, as a shader inlines each.
+/// The bits of face `face` of a cell, numbered as a ray numbers faces: 2·axis, plus one where
+/// the outward normal points down the axis. `hides(d)` says whether the cell `d` cells away
+/// hides its cube whole (`answer::whole`). Bit `i` answers the `i`th cell asked, and a cell
+/// is not asked where a bit already set decides it. The asking lives in this one place,
+/// because a shader inlines every call.
 pub fn word(face: u32, mut hides: impl FnMut([i32; 3]) -> bool) -> u32 {
     let axis = face / 2;
     let n = unit(axis, 1 - 2 * (face & 1) as i32);
@@ -63,8 +62,8 @@ pub fn word(face: u32, mut hides: impl FnMut([i32; 3]) -> bool) -> u32 {
                 w >> RISE_SHIFT & (1 << a | 1 << b) == 0,
             ),
         };
-        // A line where the cell beside does not hide; a rise or a corner
-        // where the one in front does.
+        // A line bit where the cell beside does not hide; a rise or corner bit where the cell in
+        // front does.
         if open && hides(d) != (field == 1) {
             w |= 1 << i;
         }
@@ -73,8 +72,7 @@ pub fn word(face: u32, mut hides: impl FnMut([i32; 3]) -> bool) -> u32 {
     w
 }
 
-/// The node `d` from node `c` at `zoom`, X named as the world names it
-/// going round (`wrap_idx`).
+/// The node `d` away from node `c` at `zoom`, with X wrapped around the world (`wrap_idx`).
 pub fn beside(zoom: Zoom, c: [i32; 3], d: [i32; 3]) -> [i32; 3] {
     [
         wrap_idx(zoom, c[0].wrapping_add(d[0])),
@@ -83,12 +81,12 @@ pub fn beside(zoom: Zoom, c: [i32; 3], d: [i32; 3]) -> [i32; 3] {
     ]
 }
 
-/// Edge `k`'s way across, along `u` or `v`.
+/// The step across edge `k`, along `u` or `v`.
 fn edge(u: u32, v: u32, k: u32) -> [i32; 3] {
     unit(if k < 2 { u } else { v }, 1 - 2 * (k & 1) as i32)
 }
 
-// [naga] each axis by itself, not an index (cast.rs `grid_of`).
+// [naga] Each axis is set by itself rather than indexed, as in cast.rs `grid_of`.
 fn unit(axis: u32, s: i32) -> [i32; 3] {
     [
         if axis == 0 { s } else { 0 },
@@ -108,8 +106,8 @@ mod tests {
     const TOP: u32 = 4;
     const WEST: u32 = 1;
 
-    /// The bits of `face` among the cells `filled`, offsets from the
-    /// cell's, and how many cells were asked.
+    /// The bits of `face` among the cells `filled`, given as offsets from the cell, and how many
+    /// cells were asked.
     fn bits(face: u32, filled: &[[i32; 3]]) -> (u32, u32) {
         let mut asked = 0;
         let w = word(face, |d| {
@@ -119,8 +117,8 @@ mod tests {
         (w, asked)
     }
 
-    /// Every cell of the layer below `z` 1 of a 5 × 5 about the cell,
-    /// and those `more`.
+    /// A flat ground: every cell at `z` 0 in a 5 × 5 square around the cell, and the cells
+    /// `more`.
     fn ground(more: &[[i32; 3]]) -> [[i32; 3]; 64] {
         let mut out = [[9, 9, 9]; 64];
         let mut i = 0;
@@ -154,26 +152,26 @@ mod tests {
 
     #[test]
     fn wall_closes_once() {
-        // A wall along +x, its cells one up beside the cell's every y,
-        // the edge +u of a top (u = x): no line there, the edge rising, and
-        // the corners at it closed by the edge, not again by the diagonal.
+        // A wall along +x, one cell up, beside every y of the cell, at the top face's edge +u
+        // (u = x): that edge has no line and rises, and the corners at it are closed by the edge,
+        // not again by the diagonal.
         let (w, asked) = bits(TOP, &ground(&[[1, -1, 1], [1, 0, 1], [1, 1, 1]]));
         assert_eq!(w, 1 << RISE_SHIFT);
-        // Its edge decided by the wall alone; its corners by the edges.
+        // The wall alone decides the edge, and the edges decide its corners, so three cells go
+        // unasked.
         assert_eq!(asked, 12 - 1 - 2);
     }
 
     #[test]
     fn corner_cell_closes() {
-        // One cell up at −x, +y: corner −u+v, 1.
+        // One cell up at −x, +y: corner −u+v, which is corner 1.
         let (w, _) = bits(TOP, &ground(&[[-1, 1, 1]]));
         assert_eq!(w, 1 << (CORNER_SHIFT + 1));
     }
 
     #[test]
     fn step_down_lined() {
-        // The ground dropping one past +y: the edge +v (v = y) of the top
-        // meets the air.
+        // The ground drops one past +y, so the top's edge +v (v = y) meets the air.
         let mut low = ground(&[]);
         for b in low.iter_mut() {
             if b[1] > 0 && b[2] == 0 {
@@ -186,9 +184,8 @@ mod tests {
 
     #[test]
     fn side_face_axes() {
-        // The west face (−x, u = y, v = z) of a cell on flat ground: the
-        // ground running on in front of it closes its foot in, across −v;
-        // above and to either side the air, lined.
+        // The west face (−x, u = y, v = z) of a cell on flat ground: the ground running on in front
+        // of it closes the face's foot in, across −v, and the air above and to either side lines it.
         let (w, _) = bits(
             WEST,
             &[
@@ -201,8 +198,7 @@ mod tests {
             ],
         );
         assert_eq!(w, 1 << (RISE_SHIFT + 3) | 0b0111 << LINE_SHIFT);
-        // A cell in front of it, one west and one up: −x then +z, a rise
-        // across +v.
+        // A cell in front of it, one west and one up (−x, then +z), makes a rise across +v.
         let (w, _) = bits(WEST, &[[-1, 0, 1]]);
         assert_eq!(w, 1 << (RISE_SHIFT + 2) | 0b1011 << LINE_SHIFT);
     }

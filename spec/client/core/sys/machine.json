@@ -1,0 +1,109 @@
+{
+  "$doc": [
+    "The core's machine (xpute spec/machine.schema.json): the memory a device gives it,",
+    "its stack, its rings and the GPU it asks for.",
+    "",
+    "`turn_posts` is what the core's turn may post besides its replies: a sensor's start",
+    "or stop each, the snapshot, the view, the files' imports at their most and a call's slot",
+    "(door.rs `EVENTS`, which it checks against this)."
+  ],
+  "gen": {
+    "ts": "../../../../ts/client/src/abi/machine.spec.ts",
+    "rs": "../../../../rust/client/core/src/sys/machine.spec.rs"
+  },
+  "mem": {
+    "$doc": [
+      "`bytes`: what a desktop is asked to reserve, then a handheld. A handheld's is half of",
+      "the desktop's, because a reservation is committed lazily by the OS but JavaScriptCore",
+      "reports the whole of it as the page's JavaScript memory — a Safari heap timeline read",
+      "it as one ArrayBuffer. The smaller is also the floor the module declares to the",
+      "engine (`--initial-memory`), so a page that reserves less fails to instantiate rather",
+      "than booting into a core with nowhere to put the terrain.",
+      "",
+      "`region_bytes`: a reservation is a whole number of these and the bytes past the last",
+      "one are left out.",
+      "",
+      "`min_heap_bytes`: the heap a phone is guaranteed, and so what everything in front of",
+      "it is checked against: the front, the module's data and the fixed ranges together",
+      "must leave this much of the smaller size. Measured from where the heap begins, so",
+      "the question is asked twice: at compile time against the lowest the heap could start",
+      "(the front's end plus the fixed ranges, xpute-core machine.rs `check`), so a terrain",
+      "grown past a phone fails to build; and at boot against where it actually started and",
+      "what the device gave.",
+      "",
+      "256 MiB. The fixed ranges take 87.31 MiB, the terrain's 77.99 MiB of them.",
+      "",
+      "The heap's bounded flows at their worst are checked against it at compile time too",
+      "(door/layout.rs `HEAP_FLOWS_BYTES`): the runs that `BODY_SLOTS` terrain and Earth",
+      "bodies fill (sys/io/body.rs), a body on every credit in the buddy's block for a",
+      "division's, the ways' pool at its cap, and the profiler's lanes while its setting is",
+      "on, each in the buddy's blocks, a power of two, 164.56 MiB.",
+      "",
+      "Each figure here in MiB to two places is held to the code by a test",
+      "(door/layout.test.rs); the data's end is a build's, and read off one."
+    ],
+    "bytes": [
+      1073741824,
+      536870912
+    ],
+    "region_bytes": 67108864,
+    "min_heap_bytes": 268435456
+  },
+  "stack": {
+    "$doc": [
+      "`module_bytes`: the stack, at the bottom of the memory, first so that an overflow",
+      "goes below zero, wraps as an unsigned 32-bit address and lands outside the memory,",
+      "which traps. With the stack after the data it would write over `.data` silently",
+      "instead. There is no MMU here and so no guard page: the wraparound is the whole of",
+      "the protection.",
+      "",
+      "`thread_bytes`: the core's thread's stack on a device, where the core is a library",
+      "on a thread of its own: a main thread's 8 MiB, since React Native's JavaScript thread",
+      "has 1 MiB and wgpu's depth has no bound to state."
+    ],
+    "module_bytes": 1048576,
+    "thread_bytes": 8388608
+  },
+  "rings": {
+    "$doc": [
+      "`slot_bytes`: a page, since a SOURCE_DECLARE's or a SCENE_CHAT's packet can come near one.",
+      "",
+      "`sq_cap`: sized to what a turn is sent, not to a burst: a full ring loses nothing,",
+      "since the runtime rings with a deadline of 0 until there is room (@xpute/runtime/ipc/doorbell.ts).",
+      "And small because every slot ends up resident: a position only grows, so each slot is",
+      "written in turn.",
+      "",
+      "`cq_cap`: everything one turn leaves, since the runtime reads it dry before it rings",
+      "again: a reply to each command it applies and `turn_posts`, so a drain never stops",
+      "partway. Nothing is overrun if it is short: a command whose posts and reply would not",
+      "fit waits for the next turn (xpute-core ipc/door.rs)."
+    ],
+    "slot_bytes": 4096,
+    "sq_cap": 512,
+    "cq_cap": 1024,
+    "turn_posts": 173
+  },
+  "fs": {
+    "$doc": [
+      "Its roots: the bakes' tiles, the shipped assets, the platform's storage and the placed objects' source (ts/client/src/service/sys/fs/namespace.ts)."
+    ]
+  },
+  "gpu": {
+    "$doc": [
+      "The renderer's stream (pxl-render gpu/api.rs): `bytes` what one turn may send the",
+      "device, then at its end the encoder's handle table, a product number said rather than",
+      "derived. The stream says its own head. The device must have a depth-stencil format",
+      "the renderer draws with, and takes timestamps where the adapter has them."
+    ],
+    "bytes": 4194304,
+    "power": "high-performance",
+    "features": {
+      "required": [
+        "depth32float-stencil8"
+      ],
+      "optional": [
+        "timestamp-query"
+      ]
+    }
+  }
+}

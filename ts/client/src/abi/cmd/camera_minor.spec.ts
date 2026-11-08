@@ -1,6 +1,6 @@
 // ts/client/src/abi/cmd/camera_minor.spec.ts
 //
-// GENERATED from rust/client/core/ui.json
+// GENERATED from spec/client/core/door/ui.json
 
 // The camera's: the tracking button, the compass, a search result.
 

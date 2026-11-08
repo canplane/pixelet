@@ -1,13 +1,14 @@
 // pxl-render/examples/assembled.rs
 
-//! Every shader by hand as the page takes it, and the world's asked one, written into the
-//! directory named, a file each; and every pipeline the renderer makes over them, render and
-//! compute, its entry points as the renderer names them (pipelines.json): for Tint
-//! (ts/tool/shader/shader.test.ts) and the device's own compiler (ts/tool/shader/probe.html).
+//! Writes into the named directory every shader as the page receives it, one file each, and
+//! the world's asked module. It also writes pipelines.json: every pipeline the renderer makes
+//! over those shaders, render and compute, with its entry points named as the renderer names
+//! them. Tint compiles them in ts/tool/shader/shader.test.ts, and a device's own browser
+//! compiles them in ts/tool/shader/probe.html.
 
 use pxl_render::frame::shader::record::{
-    self, compute, COMPUTES, FRAGMENT_ENTRY, HEAD, NO_DEPTH, PARTS, PER_INSTANCE, PIPELINES, STRIP,
-    VERTEX_ENTRY,
+    self, compute, COMPUTES, FRAGMENT_ENTRY, HEADER, NO_DEPTH, PARTS, PER_INSTANCE, PIPELINES,
+    STRIP, VERTEX_ENTRY,
 };
 use pxl_render::gpu::api::vertex_format;
 use xpute_gpu::enums::VERTEX_FORMAT;
@@ -32,7 +33,7 @@ fn main() {
     let mut pipelines: Vec<String> = Vec::new();
     for id in 0..PIPELINES {
         let words = record::pipeline(id);
-        let mut at = HEAD as usize;
+        let mut at = HEADER as usize;
         let mut next = || {
             at += 1;
             words[at - 1]
@@ -73,7 +74,7 @@ fn main() {
         pipelines.push(format!(
             r#"{{"module":"{}","vertex":"{}"{fragment},"buffers":[{}],"topology":"{topology}","depth":{}}}"#,
             names[words[0] as usize],
-            VERTEX_ENTRY[words[HEAD as usize - 1] as usize],
+            VERTEX_ENTRY[words[HEADER as usize - 1] as usize],
             buffers.join(","),
             words[5] != NO_DEPTH
         ));
@@ -85,7 +86,7 @@ fn main() {
             names[shader as usize]
         ));
     }
-    // Pipelines alike in all the checks make of them are made once.
+    // Two pipelines that no check can tell apart are written once.
     let mut made: Vec<String> = Vec::new();
     for p in pipelines {
         if !made.contains(&p) {

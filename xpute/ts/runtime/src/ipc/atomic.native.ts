@@ -2,10 +2,10 @@
 
 /**
  * A word of the core's memory that both ends touch, where the JavaScript
- * engine has no `Atomics` (Hermes) and the core runs on a thread of its own:
- * the load and the store are made in native code, as the core makes its own
- * (xpute-runtime `Core::load`, `Core::store`). `w` is a view of `XPUTE.mem()`,
- * so its byte offset is the word's place in the memory.
+ * engine has no `Atomics` (Hermes) and the core runs on a thread of its own.
+ * The load and the store are made in native code, as the core makes its own
+ * (xpute-runtime `Core::load`, `Core::store`). `w` must be a view of
+ * `XPUTE.mem()`, so that its byte offset is the word's place in the memory.
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";

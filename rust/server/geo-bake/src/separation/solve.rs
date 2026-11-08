@@ -14,30 +14,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A tile's bridges and tunnels, solved: what it reads, the structures in
-//! scope, the stretches of them it sees (`Stretch`), and the lines it keeps; the
-//! bridges are `bridge`'s, the tunnels `tunnel`'s. It began as louis-e/arnis `c96872e`
-//! ported, read for Overture's fields where Arnis reads OSM's tags, its widths
-//! the ground's, and its numbers, meters (a block a meter upright on the
-//! Earth, as its celestial bodies say), taken into the tile's cells, half to
-//! even. What is read is the tile and as much of its 1-ring as the structures
-//! touching it reach, and no further.
+//! A tile's bridges and tunnels, solved: what the solve reads, the structures in scope, the
+//! stretches of them it sees (`Stretch`), and the lines it keeps; the bridges are `bridge`'s
+//! and the tunnels `tunnel`'s. It is a port of louis-e/arnis `c96872e`, reading Overture's
+//! fields where Arnis reads OSM's tags, taking its widths from the ground, and taking its
+//! numbers, which are meters (a block is a meter upright on the Earth, as its celestial
+//! bodies say), into the tile's cells, rounded half to even. What is read is the tile and as
+//! much of its 1-ring as the structures touching it reach, and no further.
 //!
-//! The 1-ring is the most a tile may consult, not what it must: nothing is
-//! read past it, and nothing reads all of it where less will do. A tile draws
-//! only itself (`terrain/pipeline/separation.rs` keeps what lies in it). Two
-//! rules follow, and a change here or in `bridge` or `tunnel` keeps both:
+//! The 1-ring is the most a tile may consult, not what it must: nothing is read past it, and
+//! nothing reads all of it where less will do. A tile draws only itself
+//! (`terrain/pipeline/separation.rs` keeps what lies in it). Two rules follow, and a change
+//! here or in `bridge` or `tunnel` keeps both:
 //!
-//! - Where the ring cuts a piece is no end of it. A cut lies a tile from every
-//!   cell its tile draws, so a height that leans on nothing further than a
-//!   tile comes out the same in two neighbors, who both see the cells where
-//!   they meet; a height drawn from the cut, or from anything only the whole
-//!   piece shows (its lowest point, the straight run between its portals),
-//!   comes out different, and their tiles step at the seam.
-//! - What only the whole piece can answer is not answered by reading past the
-//!   ring for it. A tile that cannot see it does without it, by a rule that
-//!   leans on what it sees (a long bore, `tunnel::road_bores`; a deck,
-//!   `bridge::deck_panel`).
+//! - Where the ring cuts a piece is no end of it. A cut lies a tile away from every cell its
+//!   tile draws, so a height that leans on nothing further than a tile comes out the same in
+//!   two neighbors, who both see the cells where they meet. A height drawn from the cut, or
+//!   from anything only the whole piece shows (its lowest point, the straight run between its
+//!   portals), comes out different, and their tiles step at the seam.
+//! - What only the whole piece can answer is not answered by reading past the ring for it. A
+//!   tile that cannot see it does without it, by a rule that leans on what it sees (a long
+//!   bore, `tunnel::road_bores`; a deck, `bridge::deck_panel`).
 
 mod bridge;
 mod tunnel;
@@ -92,7 +89,7 @@ struct Ring {
     fresh: Vec<PartId>,
 }
 
-/// A piece, and once wanted its samples a cell apart along its way inside the ring.
+/// A piece, and, once wanted, its samples a cell apart along its way inside the ring.
 struct Sampled {
     piece: Piece,
     n: usize,
@@ -134,9 +131,9 @@ impl Stretch {
     }
 }
 
-/// A way at grade made to stand off it, a bridge's ramp or a tunnel's
-/// approach: a grade line at `points`, which ends where the way does at
-/// either end `ends` says (`coarsest`), drawing `range` of its segment.
+/// A way at grade made to stand off the ground, a bridge's ramp or a tunnel's approach: a
+/// grade line at `points`, which ends where the way does at whichever ends `ends` says
+/// (`coarsest`), drawing `range` of its segment.
 fn grade_line(
     way: &Way,
     points: Vec<[f64; 3]>,
@@ -188,20 +185,20 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solution
     };
     src.load(r, tile)?;
 
-    // ---- the structures the tile holds and every one they reach: shared ends, decks
-    // beside or across them; each read as far as the ring ----
+    // ---- The structures the tile holds, and every one they reach through shared ends or decks
+    // beside or across them, each read as far as the ring. ----
     let own = [[pmin[0], pmin[1]], [pmax[0], pmax[1]]];
-    // a road tunnel whose portal lies within its approaches' reach of the tile sinks ways the tile
-    // draws, whether or not it touches the tile: the tunnels about the tile are asked for alone, as far
-    // as the deepest one's approaches run, a reach well inside the ring, and only about a portal that
-    // near are the ring's tiles read, as far as its approaches run
+    // A road tunnel whose portal lies within its approaches' reach of the tile sinks ways the
+    // tile draws, whether or not it touches the tile. So the tunnels around the tile are asked for
+    // alone, as far as the deepest one's approaches run, a reach well inside the ring, and the
+    // ring's tiles are read only around a portal that near, as far as its approaches run.
     let approach_of = |level: i64| tunnel::approach_run(level, scale);
     let off = |p: [f64; 2]| {
         let d = [0, 1].map(|k| (own[0][k] - p[k]).max(p[k] - own[1][k]).max(0.0));
         libm::hypot(d[0], d[1])
     };
-    // and never past the ring, whatever the reach comes to: the query is cut to the ring's box, as `load`
-    // refuses a tile past it
+    // The query never reaches past the ring, whatever the reach comes to: it is cut to the ring's
+    // box, as `load` refuses a tile past it.
     let asked = grown(own, approach_of(tunnel::DEEPEST));
     let asked = [
         [asked[0][0].max(lo[0]), asked[0][1].max(lo[1])],
@@ -234,13 +231,13 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solution
         .filter(|(_, s)| s.piece.touches(own) || portal_near(s))
         .map(|(id, _)| id.clone())
         .collect();
-    // a tile no structure touches nor sinks into has nothing to solve
+    // A tile that no structure touches or sinks into has nothing to solve.
     if queue.is_empty() {
         return Ok(Solution::default());
     }
     let radius = merc_from_u(f64::from(scale.c(bridge::DUAL_CARRIAGEWAY_MAX_DIST_M) + 16) * CELL_U);
-    // each piece is looked at once, against the pieces read so far; a piece a later read brings in
-    // is held against what was looked at before it (`seen`), so no pass is repeated
+    // Each piece is looked at once, against the pieces read so far; a piece that a later read
+    // brings in is held against what was looked at before it (`seen`), so no pass is repeated.
     let lies_on = |o: &Piece, ends: &FnvHashSet<End>| {
         (o.form == Form::Bridge || is_road_tunnel(o))
             && o.way
@@ -270,8 +267,8 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solution
             .collect();
         seen_ends.extend(s.piece.way.ends.iter().cloned());
         if is_road_tunnel(&s.piece) {
-            // what an end of it lies on, at that one's end or along it: a deck its portal opens
-            // on, or a road tunnel it runs on in
+            // What an end of it lies on, at that one's end or along it: a deck its portal opens onto, or
+            // a road tunnel it runs on into.
             let ends: FnvHashSet<End> = s.piece.way.ends.iter().cloned().collect();
             reached.extend(
                 src.pieces
@@ -291,7 +288,7 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solution
             );
             seen_decks.push(b);
         }
-        // a tile read late can hold what one looked at early meets or stands beside
+        // A tile read late can hold what a piece looked at early meets or stands beside.
         for f in std::mem::take(&mut src.fresh) {
             let o = &src.pieces[&f].piece;
             if o.way.ends.iter().any(|e| seen_ends.contains(e))
@@ -306,18 +303,18 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solution
     let stretches = stretches_of(&src, &scope, lo);
     let mut lines: Vec<(Line, WayRange)> = Vec::new();
 
-    // ---- road bridges, lower first; rail bridges over them; then the tunnels ----
+    // ---- Road bridges, lower first; rail bridges over them; then the tunnels. ----
     let decks = bridge::decks(&src, &stretches, [lo, hi], scale, &mut lines);
     tunnel::bores(&src, &stretches, &decks, scale, &mut lines);
     let mut out = Solution::default();
-    for (line, drawn) in lines.into_iter().filter(|(l, _)| l.points.len() >= 2) {
+    for (line, ranges) in lines.into_iter().filter(|(l, _)| l.points.len() >= 2) {
         out.lines.push(line);
-        out.way_ranges.push(drawn);
+        out.way_ranges.push(ranges);
     }
     Ok(out)
 }
 
-/// Of a piece's samples, its cells in the ring.
+/// The box of a piece's samples, its cells in the ring.
 fn bbox_of(s: &Sampled) -> [[f64; 2]; 2] {
     let mut b = [[f64::INFINITY; 2], [f64::NEG_INFINITY; 2]];
     for (q, _) in s.samples.iter().flat_map(|m| m.values()) {
@@ -467,9 +464,9 @@ fn stretches_of(src: &Ring, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<S
             }
             let at: Vec<[f64; 2]> = (k0..=k1).map(|k| samples[&k].0).collect();
             let terrain: Vec<i32> = (k0..=k1).map(|k| samples[&k].1).collect();
-            // a stretch's end the ring cut (`End::Ring`) marks where this tile stops looking, never an
-            // end of the piece: nothing joins there, and no height may be drawn from it (the module's
-            // rules)
+            // A stretch's end that the ring cut (`End::Ring`) marks where this tile stops looking, never
+            // an end of the piece: nothing joins there, and no height may be drawn from it (the module's
+            // rules).
             let clipped = [k0 != 0, k1 != s.n];
             let cut = |k: usize| End::Ring(id.clone(), k as u64);
             let ends = [
@@ -520,8 +517,8 @@ fn stretches_of(src: &Ring, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<S
     out
 }
 
-/// The cells about one whose centers lie within `radius` cells of its own, as
-/// a way covers them (pxl-engine `covers`, here its distance to its own).
+/// The cells around one whose centers lie within `radius` cells of its own, as a way covers
+/// them (pxl-engine `covers`, here by distance to its own).
 fn disk(radius: f32) -> Vec<[i64; 2]> {
     let r = libm::ceilf(radius) as i64;
     (-r..=r)
@@ -576,7 +573,7 @@ fn line_of(r: &Stretch, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8) -
     }
     keep.sort_by(|x, y| x.0.total_cmp(&y.0));
     keep.dedup_by(|x, y| x.0 == y.0);
-    let fraction = |d: f64| r.piece.way.span[0] + d / r.piece.way.segment_length;
+    let fraction = |d: f64| r.piece.way.between[0] + d / r.piece.way.segment_length;
     let points: Vec<[f64; 3]> = keep.iter().map(|(_, p, z)| [p[0], p[1], *z]).collect();
     let last = r.at.len() - 1;
     (

@@ -1,6 +1,6 @@
 // ts/client/src/abi/cmd.spec.ts
 //
-// GENERATED from rust/client/core/ui.json
+// GENERATED from spec/client/core/door/ui.json
 
 /**
  * The UI's protocol with the core: its commands, by number (@xpute/kit/abi/cmd.ts:
@@ -8,9 +8,9 @@
  * it carries — an XTP branch whose children are its fields, in order. A command with no
  * fields carries no packet. The JavaScript around the core is two
  * things to it, its runtime, which holds the turns and carries its imports to what
- * answers them (ts/client/src/sys/), and its UI, which sends what the user
+ * answers them (ts/client/src/service/sys/), and its UI, which sends what the user
  * does and what the place's sensors, visibility and frames tell it
- * (ts/client/src/port/). A command's major is the module it is for.
+ * (ts/client/src/service/core/). A command's major is the module it is for.
  *
  * `export` is what the UI sends the core and `import` what the core posts to it, `call`
  * one its sender waits on. Each is written and read by what this file generates, on
@@ -352,7 +352,7 @@ export function encode_sensor_orient(
 
 /** Command.SENSOR_ERR's packet, written in place into `to`.
  *
- * @param code Geolocation's; orientation gives none today. */
+ * @param code Geolocation's; orientation gives none. */
 export function encode_sensor_err(
   to: PacketRoom,
   sensor: Sensor,
@@ -381,18 +381,18 @@ export function encode_turn_grant(
 
 /** Command.SOURCE_DECLARE's packet, written in place into `to`.
  *
- * @param top_zoom The coarsest zoom the source supplies whole.
+ * @param min_zoom The coarsest zoom the source supplies whole.
  * @param format Each kind's format, one a kind, indexed by its bake's number (pxl-spec bake/publication.spec.rs).
  * @param shard The shards it serves, by name. Their order means nothing: no two at a zoom are over one node, and the finer wins. */
 export function encode_source_declare(
   to: PacketRoom,
-  top_zoom: u32,
+  min_zoom: u32,
   format: u32[],
   shard: string[],
 ): PacketWriter {
   return to
     .writer(3)
-    .u32(top_zoom)
+    .u32(min_zoom)
     .array(SequenceType.U32_ARRAY, Uint32Array.from(format))
     .strs(shard);
 }
@@ -650,9 +650,9 @@ export function ui_exports(runtime: Sender) {
       runtime.send(Command.TURN_GRANT, (r) =>
         encode_turn_grant(r, refresh_ms, paced_ms, interactive, credits),
       ),
-    source_declare: (top_zoom: u32, format: u32[], shard: string[]): i32 =>
+    source_declare: (min_zoom: u32, format: u32[], shard: string[]): i32 =>
       runtime.call(Command.SOURCE_DECLARE, (r) =>
-        encode_source_declare(r, top_zoom, format, shard),
+        encode_source_declare(r, min_zoom, format, shard),
       ),
     sensor_permission: (sensor: Sensor, answer: PermissionAnswer): void =>
       runtime.send(Command.SENSOR_PERMISSION, (r) =>

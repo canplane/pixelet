@@ -1,16 +1,14 @@
 // pxl-render/gpu/finish.rs
 
-//! The canvas from the world's color: what its passes left there, toned and
-//! blended linear (gpu/surface.rs `WORLD_COLOR`), the world's gathered over
-//! frames (gpu/resolve.rs), brought from the world's pixels up to the
-//! canvas's and encoded once (screen_finish.wgsl), at the frame's vignette;
-//! and the world's depth carried up to the canvas's size with it
-//! (`Surface::screen_depth`). The world's is finished in one pass onto the
-//! canvas and into the picture it keeps at the canvas's size
-//! (`Surface::picture`), two targets of one color. A frame not drawn whole
-//! shows the picture whole on the canvas first, whose texture is a new one
-//! each frame, then finishes both again only in its claimed tiles
-//! (screen_tiles.wgsl).
+//! Finishes the canvas from the world's color. The world's passes leave their color toned and
+//! blended in linear light (gpu/api.rs `WORLD_COLOR`), and the world's is gathered over
+//! frames (gpu/resolve.rs). The finish brings it up from the world's pixels to the canvas's
+//! and encodes it once, at the frame's vignette (screen_finish.wgsl). It carries the world's
+//! depth up to the canvas's size with it (`Surface::screen_depth`). One pass finishes the
+//! world onto two targets of one color: the canvas, and the picture kept at the canvas's size
+//! (`Surface::picture`). The canvas's texture is a new one each frame, so a frame not drawn
+//! whole first shows the picture whole on the canvas, then finishes both targets again only in
+//! its claimed tiles (screen_tiles.wgsl).
 
 use crate::frame::shader::record::{PIPELINE_SCREEN_FINISH, PIPELINE_SCREEN_SHOW};
 use crate::gpu::api::{
@@ -20,22 +18,21 @@ use crate::gpu::api::{
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::Surface;
-use crate::gpu::tiles::{Tiles, SIDE};
+use crate::gpu::tile::{Tiles, SIDE};
 
 pub struct Finish {
-    /// Onto the canvas alone, a character surface's; and onto the canvas and the
-    /// picture, the world's.
+    /// `pipeline` finishes onto the canvas alone, for a character surface. `kept` finishes
+    /// onto the canvas and the picture, for the world.
     pipeline: Pipeline,
     kept: Pipeline,
-    /// The tiles' uniform it draws them by, at the canvas's scale, and the
-    /// words it binds where it draws a surface with no tiles, which none
-    /// reads.
+    /// `tiles` is the uniform the finish draws the tiles by, at the canvas's scale. `every` is
+    /// bound in place of the tiles' words for a surface with no tiles, and nothing reads it.
     tiles: u32,
     every: u32,
-    /// The picture at the canvas's size shown on the canvas.
+    /// Shows the picture kept at the canvas's size on the canvas.
     show: Pipeline,
-    /// Its groups (`set_groups`): the finish's of each color it encodes, a
-    /// world's history each or a character surface's color, and the show's.
+    /// The groups `set_groups` sets: a finish group for each color the finish encodes, which
+    /// is each of a world's histories or a character surface's one color; and the show's.
     groups: [Group; 2],
     show_group: Group,
 }
@@ -63,10 +60,10 @@ impl Finish {
         self.show_group.release();
     }
 
-    /// Its groups for `s`, before the frame's commands, by the frame words
-    /// in `frame`: where `s` keeps its picture, the world's, over each of its
-    /// histories, the screen's tiles `tiles` and the picture; else over its
-    /// color alone.
+    /// Sets the groups for `s` before the frame's commands, over the frame words in `frame`.
+    /// When `s` keeps its picture, as the world does, a group is set over each of its histories
+    /// with the screen's `tiles`, and the show's over the picture. Otherwise one group is set
+    /// over its color.
     pub fn set_groups(&mut self, g: &Gpu, frame: u32, s: &Surface, tiles: Option<&Tiles>) {
         let kept = s.picture_view != 0;
         let (layout, colors) = if kept {
@@ -98,14 +95,13 @@ impl Finish {
         }
     }
 
-    /// `color`, `s`'s world color as it is shown, one its groups were set
-    /// over (`set_groups`), onto `canvas` and `s`'s depth into its screen's,
-    /// a pass of its own, its time counted in `span`, by `tiles`, the
-    /// screen's tiles the groups bind (`Tiles`) where `s` has them, and
-    /// whether only their claimed tiles are finished. Where `s` keeps its
-    /// picture (`Surface::picture`), into it as well; and where only the
-    /// claimed are, the picture shown whole on `canvas` first, the rest as
-    /// an earlier frame left it.
+    /// Finishes `color`, `s`'s world color as it is shown, onto `canvas`, and `s`'s depth into
+    /// its screen depth, in a pass of its own whose time is counted in `span`. `color` is one
+    /// of the colors `set_groups` set a group over. `tiles` holds the screen's tiles the groups
+    /// bind, where `s` has them, and whether only their claimed tiles are finished. When `s`
+    /// keeps its picture (`Surface::picture`), the pass writes it as well. When only the
+    /// claimed tiles are finished, the picture is first shown whole on `canvas`, so the rest
+    /// stands as an earlier frame left it.
     pub fn draw(
         &self,
         ctx: &mut RenderContext,
@@ -121,15 +117,15 @@ impl Finish {
             .map(|(t, _)| t);
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(span);
-        // The group of the history `color` is, a world's; a character surface's one
-        // color has the first.
+        // The group of the world history that `color` is. A character surface's one color
+        // uses the first group.
         let group = self.groups[usize::from(kept && color == s.history_view[1])].id();
-        // A tile's quad grown by a canvas pixel each way, in the world's
-        // pixels, for the world texels a pixel at its edge reads.
+        // A tile's quad is grown by one canvas pixel each way, measured in the world's pixels,
+        // to cover the world texels that a pixel at its edge reads.
         let grow = s.width as f32 / s.screen.0.max(1) as f32;
         let squares = [s.width, s.height].map(|v| v.div_ceil(SIDE));
         let t = match tiles {
-            Some((t, _)) => t.words(grow, claimed.map_or(u32::MAX, Tiles::claimed_for)),
+            Some((t, _)) => t.words(grow, claimed.map_or(u32::MAX, Tiles::damage_frames)),
             None => [
                 squares[0],
                 squares[1],

@@ -7,8 +7,9 @@ use pxl_content::cloud::drift;
 use pxl_render::gpu::draw::{lists_bytes, set_lists};
 use xpute_core::mem::heap::alloc;
 
-/// The drift's step as it was written before the view held the seen step:
-/// a twelfth of a cell at the nearest drawn, over the wind's speed.
+/// The drift's step written out by hand: a twelfth of a camera grid cell at
+/// the nearest drawn cloud, over the wind's speed. `drift_step_s` must give
+/// the same bits.
 fn drift_step_s_as_written(seen: f64) -> f64 {
     1.0 / 12.0 * lens::cell_there(seen) / libm::hypot(WIND[0], WIND[1])
 }
@@ -28,10 +29,11 @@ fn cloud_steps_unchanged() {
     clouds().seen = was;
 }
 
-/// A still eye under the wind: only time moves, and a patch's draw stands in the list, its
-/// record and uniform as they were, and so does its stand, until the drift crosses into the
-/// next cell, which moves the stand alone; and every stand holds the patch as it is drawn,
-/// moved by the drift (`stood_corner`, `patch_stand`).
+/// With the eye still and only time moving the clouds, a patch's draw stays in
+/// the list unchanged, its record and uniform as they were. Its stand stays
+/// too, until the drift crosses into the next cell, and then only the stand
+/// moves. At every time the stand holds the patch as drawn, moved by the
+/// drift (`box_corner`, `patch_box`).
 #[test]
 fn only_time_moving_moves_no_draw() {
     let _g = sys::serial();
@@ -49,19 +51,19 @@ fn only_time_moving_moves_no_draw() {
     let (mut list, id) = (DrawList::default(), DrawId::default());
     let mut turn = |time: f64| {
         let off = drift(time);
-        let stand = patch_stand(stood_corner(key, off, eye), PATCH, e, heights);
+        let receiver = patch_box(box_corner(key, off, eye), PATCH, e, heights);
         let corner = [
             key[0] as f64 * PATCH - off[0],
             key[1] as f64 * PATCH - off[1],
         ];
-        let drawn = Stand::of(
+        let drawn = ReceiverBox::of(
             [corner[0] - e, corner[1] - e, heights[0] - e],
             [corner[0] + PATCH + e, corner[1] + PATCH + e, heights[1] + e],
         );
         for k in 0..3 {
             assert!(
-                stand.0[0][k] <= drawn.0[0][k] && drawn.0[1][k] <= stand.0[1][k],
-                "{time} s: {stand:?} holds {drawn:?}"
+                receiver.0[0][k] <= drawn.0[0][k] && drawn.0[1][k] <= receiver.0[1][k],
+                "{time} s: {receiver:?} holds {drawn:?}"
             );
         }
         list.draw_instances(
@@ -74,18 +76,19 @@ fn only_time_moving_moves_no_draw() {
             patch_place(key),
             1.0,
             true,
-            Some(stand),
+            Some(receiver),
         );
         let l = list.take();
-        (l.changes.len(), l.stands.to_vec())
+        (l.changes.len(), l.receivers.to_vec())
     };
     let (changes, first) = turn(0.0);
     assert_eq!(changes, 1, "drawn first");
-    // Within a cell of drift: X's wind carries the field a cell in 4096 / 24 seconds.
+    // These times stay within a cell of drift: the wind along X carries the
+    // field a cell in 4096 / 24 seconds.
     for time in [0.29, 1.0, 10.0, 100.0, 170.0] {
         assert_eq!(turn(time), (0, first.clone()), "{time} s");
     }
-    let (changes, stands) = turn(200.0);
+    let (changes, receivers) = turn(200.0);
     assert_eq!(changes, 0, "the record stands");
-    assert_ne!(stands, first, "past a cell the stand moves");
+    assert_ne!(receivers, first, "past a cell the stand moves");
 }

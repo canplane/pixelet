@@ -41,7 +41,8 @@ XPUTE_TEST(xtp_tree_matches_other_languages) {
         });
         XPUTE_CHECK(!k.empty());
         XPUTE_CHECK_EQ(encoded(build), v.s(k + ".packet"), name);
-        // From a buffer that has to grow, the same bytes.
+        // A first buffer too small for the packet must give the same bytes
+        // once it has grown.
         XPUTE_CHECK_EQ(encoded(build, 16), v.s(k + ".packet"), name);
     };
     check("nil", [](TreeView<> &t) { t.nil(); });

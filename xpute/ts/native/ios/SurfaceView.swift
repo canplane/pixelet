@@ -6,12 +6,13 @@ import QuartzCore
 import UIKit
 
 /// A view backed by a Metal layer, which a core's surface draws into. The
-/// view owns its layer, so it binds the core's surface to it itself: the
-/// surface the app names (`surface`), while the view is in a window, and
-/// never past the moment it lets the layer go. A view reaches its window
-/// after it is mounted and laid out, so it says when it is bound (`onAttach`)
-/// and when it is not (`onDetach`). The core sizes the surface and draws
-/// every frame inside a turn, so nothing here draws.
+/// view owns its layer, so it binds the core's surface to the layer itself:
+/// it binds the surface the app names (`surface`) while the view is in a
+/// window, and never past the moment it lets the layer go. A view reaches
+/// its window only after it is mounted and laid out, so it tells when the
+/// surface is bound (`onAttach`) and when it no longer is (`onDetach`). The
+/// core sizes the surface and draws every frame inside a turn, so nothing
+/// here draws.
 class SurfaceView: ExpoView {
   override class var layerClass: AnyClass { CAMetalLayer.self }
 
@@ -31,7 +32,8 @@ class SurfaceView: ExpoView {
     rebind()
   }
 
-  /// Binds the layer to what is wanted, letting go of what is not.
+  /// Binds the layer to the surface wanted now, and lets go of one no longer
+  /// wanted.
   private func rebind() {
     let wanted = window == nil ? 0 : surface
     if bound == wanted { return }

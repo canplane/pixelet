@@ -94,6 +94,9 @@ found. Run it again:
 
 - A `/geo/search` 521 that passes on the second try: the stack was still
   restarting.
+- A `/geo/search` 500 at the origin: `api` logs `[search] db error`. Where
+  the server reads a table shape the search tables lack, copy them
+  (infra/README.md "Copying the search tables").
 - Fails at the origin too: the server. Check `docker compose ps` and
   `docker compose logs` in `/opt/pixelet/infra/prod` on the VM
   (infra/README.md §3).

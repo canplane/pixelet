@@ -2,10 +2,11 @@
 
 /**
  * The dev server's half of a device's remote console (the app's
- * remote-console.ts): what a page posts to `/__console` is printed where the
- * server's own output goes and appended to `log`, so a phone on a tunnel is read
- * without a debugger attached. Each dev server mounts it at that path: Metro's
- * (the app's metro.config.ts) and the shader probe's (tool/shader).
+ * remote-console.ts). What a page posts to `/__console` is printed where the
+ * server's own output goes and appended to `log`, so that a phone on a tunnel
+ * can be read without a debugger attached. Each dev server mounts it at that
+ * path: Metro's (the app's metro.config.ts) and the shader probe's
+ * (tool/shader).
  */
 
 import { appendFileSync } from "node:fs";
@@ -13,8 +14,8 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 export const CONSOLE_PATH = "/__console";
 
-/** The bytes of one post taken. Past them the post is cut after its last
- * whole line, and the cut is printed as a line of its own. */
+/** How many bytes of one post are taken. A longer post is cut after its last
+ * whole line, and the cut is reported as a line of its own. */
 const POST_MAX = 1 << 16;
 
 export function consoleHandler(

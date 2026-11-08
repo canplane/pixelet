@@ -18,12 +18,12 @@ const POLICY: FramePacingConfig = {
   settle_ms: 150,
 };
 
-/** `a` within `tol` of `b`. */
 function near(a: number, b: number, tol: number): void {
   assert.ok(Math.abs(a - b) <= tol, `${a} is not within ${tol} of ${b}`);
 }
 
-/** A window of animation frames `gap_ms` apart, then the grant after a turn that asked for the next edge. */
+/** Feeds a window of animation frames `gap_ms` apart, then returns the grant
+ * after a turn that asked for the next turn at once. */
 function grant_after_gaps(q: FramePacing, gap_ms: number): FrameGrant {
   for (let i = 0; i < FRAME_WINDOW; i++) q.gap(gap_ms);
   q.observe(0, q.grant(0), 0);
@@ -53,7 +53,8 @@ test("frame pacing - turns are paced at the most whole refreshes within the prog
   near(paced(144), 2000 / 144, 1e-9);
   near(paced(165), 2000 / 165, 1e-9);
   near(paced(90), 1000 / 90, 1e-9);
-  // A browser capping its frames at 30 Hz (a battery saver): the refresh itself.
+  // A browser that caps its frames at 30 Hz, as a battery saver does, is
+  // paced at the refresh itself.
   near(paced(30), 1000 / 30, 1e-9);
 });
 
@@ -78,9 +79,10 @@ test("frame pacing - turns are paced at the fewest whole refreshes that reach th
   near(paced(120, 1000 / 30), 4000 / 120, 1e-9);
   near(paced(120, 3000 / 120), 3000 / 120, 1e-9);
   near(paced(60, 1000 / 30), 2000 / 60, 1e-9);
-  // No whole refresh is 30 Hz here: the next that reaches it, not the last short of it.
+  // No whole number of 144 Hz refreshes makes 30 Hz, so the pace is the first
+  // multiple that reaches it, not the last one short of it.
   near(paced(144, 1000 / 30), 5000 / 144, 1e-9);
-  // A refresh read a hair long takes no refresh more.
+  // A refresh measured a hair long does not add a refresh.
   near(paced(1000 / 8.34, 3 * 8.33), 3 * 8.34, 1e-9);
 });
 

@@ -1,7 +1,8 @@
 // xpute-tool/spec/cmd/cpp.rs
 
-//! The command table as a C++ core's header: its enums and each packet's
-//! reader, and each import's struct and writer; a C++ core writes no record.
+//! Writes a command table as a C++ core's header: its enums, a reader for
+//! each packet, and a struct and a writer for each import. A C++ core writes
+//! no record.
 
 use super::{literal, members, Entry, Field, Kind, Member, Spec, Target};
 use crate::spec::{file, generated, pascal};
@@ -38,7 +39,8 @@ fn cpp_number(ty: &str) -> &'static str {
     }
 }
 
-/// A number is checked as the Rust core's is (`abi/number.rs`), never cast into its type.
+/// A number is checked as the Rust core checks one (`abi/number.rs`), and is
+/// never simply cast into its type.
 fn cpp_read_one(spec: &Spec, f: &Field, c: &str, to: &str) -> Result<Vec<String>, String> {
     let read = |call: String| {
         vec![
@@ -111,7 +113,8 @@ fn cpp_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
     })
 }
 
-/// The writer's call for `f`, which takes a value or none as the field is.
+/// The writer's call for `f`. It takes the field's value, or the optional
+/// itself where the field is optional.
 fn cpp_write(spec: &Spec, f: &Field) -> Result<String, String> {
     let method = match spec.kind(&f.ty)? {
         Kind::Bool => "boolean",
@@ -121,8 +124,8 @@ fn cpp_write(spec: &Spec, f: &Field) -> Result<String, String> {
     Ok(format!("w.{method}({});", f.name))
 }
 
-/// An import, a frame the core posts: its number, the children it is written
-/// as, and its writer (cpp/xpute/core/ipc/door.hpp `Import`).
+/// An import, which is a frame the core posts: its number, the children its
+/// packet is written as, and its writer (cpp/xpute/core/ipc/door.hpp `Import`).
 fn cpp_import(
     spec: &Spec,
     out: &mut Vec<String>,

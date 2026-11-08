@@ -1,58 +1,31 @@
 // pxl-core/domain/scene/resolution.rs
 
-//! Device pixels per CSS pixel a surface is drawn at: the display's, and the
-//! world's as the `resolution` setting says. The world's rays are cast at the
-//! display's pixels times `scale` each way, and the renderer's finish brings
-//! them up to the canvas's, the display's (pxl-render gpu/finish.rs): render
-//! resolution apart from display resolution where a screen outgrows its GPU
-//! (Unreal's screen percentage). `fixed` draws
-//! whole, `low` at `RES_MIN`, `auto`'s floor, each with turns at the
-//! display's rate, and
-//! `auto` one of `RES_STEPS` steps between whole and `RES_MIN`, each a like
-//! share of the last, so every move lays the pixels on one of a few grids,
-//! and a rate down to `RATE_MIN_HZ`.
+//! The device pixels per CSS pixel each surface is drawn at. A surface takes
+//! the display's ratio, except the world, which the `resolution` setting may
+//! scale down. The world's rays are cast at the display's pixels times the
+//! scale on each axis, and the renderer's finish brings them up to the
+//! display's pixels (pxl-render gpu/finish.rs). Render resolution is so kept
+//! apart from display resolution, as Unreal's screen percentage keeps it, for
+//! a screen with more pixels than its GPU can fill.
 //!
-//! `auto` is a budget controller, as congestion control is, over two knobs
-//! and the one budget: the rate, the interval it asks between turns, a
-//! refresh a step, which buys back no work a frame but gives every frame's
-//! work, whatever it runs over, more time; and the scale, which buys back the
-//! work done a drawn pixel at a time (span.json `per_px`). The camera grid's
-//! cells, the samples, the light's passes, on its map's texels, and the finish
-//! and the markers, at the display's pixels, cost what they cost at the
-//! scale's knob. The rate is the runtime's: `TURN_PACE` asks it, each turn's
-//! grant says what it is (`paced_ms`), and the judge keeps no copy.
+//! `fixed` draws the world whole and `low` draws it at `RES_MIN`; both turn at
+//! the display's rate. `auto` chooses one of `RES_STEPS` steps between whole
+//! and `RES_MIN`, each the same fraction of the one before, so the pixels lie
+//! on one of a few grids. `auto` may also slow the turns down to
+//! `RATE_MIN_HZ`.
 //!
-//! It judges only frames that move: the gap before the first is how long
-//! the view stood still, so moving starts a fresh window, and the quiet
-//! windows judged before the pause still count. A window is
-//! `RES_WINDOW_MS` of the moving frames' budgets, the paced interval the
-//! runtime grants (@xpute/runtime sched/frame_pacing.ts `FrameGrant::paced_ms`) no tighter
-//! than `RES_BUDGET_FLOOR_MS`, and its load is the samples its frames took,
-//! summed against their own budgets. Where the device keeps timestamps a
-//! sample is a GPU read's that landed, which not every frame has, timed at
-//! the pixels drawn now: its per-pixel spans' time P (pxl-render
-//! gpu/renderer.rs `GpuRead::px_ms`) and the rest of the GPU's busy time F; a
-//! window none landed in is not judged. Timed, a window whose load, F + P, is over
-//! its budget by more than `RES_BAND` steps down at once, and
-//! `RES_UP_WINDOWS` windows in a row in which the step above, F + P·(its
-//! share over this one)², fits under its budget, this one's by the interval
-//! there over the interval here, by that much step up, so the knobs do not
-//! swing between two steps. Down, the rate goes first, to `RATE_MIN_HZ`, then
-//! the scale, to `RES_MIN`; up, the scale first, then the rate. Where it keeps
-//! none the sample is the frame's gap, which never falls below the paced
-//! interval, so room cannot be foreseen and only the scale moves: a window
-//! whose gaps average past `SCALE_MISSED` budgets steps down, and a step up
-//! waits for `SCALE_PROBE_WINDOWS` quiet ones. Either way a step up is on
-//! trial: one that goes over within `RES_TRUST_WINDOWS` steps back and doubles
-//! the wait for the next, up to `RES_UP_WINDOWS_MAX`, which is what stops two
-//! steps swinging where a prediction falls a little short, and one that
-//! outlasts them stands and the wait is as it was. A change moves one knob a step: the scale's
-//! rebuilds the targets, so no frame is summed while it waits to be drawn,
-//! and asks for the frame that draws it; the rate's holds from the next grant.
-//! The `RES_SETTLE_WINDOWS` after any are not judged.
+//! `auto` is a budget controller, in the manner of congestion control, with
+//! one budget and two knobs. The rate knob is the interval between turns, one
+//! display refresh a step. It saves no work in a frame, but it gives all of a
+//! frame's work more time. The scale knob saves only the work done once for
+//! each drawn pixel (span.json `per_px`). The camera grid's cells, the
+//! samples, the light's passes over its map's texels, the finish and the
+//! markers cost the same at every scale. The runtime owns the rate: `TURN_PACE`
+//! asks it for one, each turn's grant reports the rate in force (`paced_ms`),
+//! and the judge keeps no copy of it.
 
 use crate::domain::scene::param;
-use crate::domain::view::setting::store::{settings_store, ResMode};
+use crate::domain::setting::store::{settings, ResMode};
 use crate::sys::sched::edge;
 use crate::sys::sched::pacing_spec::{PACE_HZ, RATE_MIN_HZ};
 use pxl_render::api_spec::surface_role;
@@ -61,46 +34,50 @@ use pxl_render::gpu::renderer::GpuRead;
 use pxl_render::gpu::surface::{surfaces, Surface};
 use xpute_core::global::Global;
 
-/// A frame as the turn paced it.
+/// How the turn paced a frame.
 #[derive(Clone, Copy)]
 pub struct Pace {
-    /// The display's refresh, in ms.
+    /// The display's refresh interval, in ms.
     pub refresh_ms: f64,
-    /// The interval the runtime paced it at, in ms, a whole number of
-    /// refreshes.
+    /// The interval the runtime paced the frame at, in ms. It is a whole
+    /// number of refreshes.
     pub paced_ms: f64,
-    /// The real gap since the last frame, in ms.
+    /// The real time since the last frame, in ms.
     pub gap_ms: f64,
-    /// The view moved (the runtime's `interactive`).
+    /// Whether the view moved (the runtime's `interactive`).
     pub moving: bool,
 }
 
 impl Pace {
-    /// The refresh's eighth the runtime allows for the spread of its measure
-    /// (@xpute/runtime sched/frame_pacing.ts `pace_ms`).
+    /// The tolerance the runtime allows for the spread of its measure of the
+    /// refresh, an eighth of a refresh (@xpute/runtime sched/frame_pacing.ts
+    /// `pace_ms`).
     fn spread(&self) -> f64 {
         self.refresh_ms / 8.0
     }
 
-    /// Whether turns go slower than the display's own rate: past the most
-    /// refreshes within one interval at `PACE_HZ`, one at least.
+    /// Whether turns run slower than the display's own rate. They do when the
+    /// paced interval is longer than one interval at `PACE_HZ`, with the
+    /// spread allowed, and longer than one refresh.
     fn slowed(&self) -> bool {
         self.paced_ms > (1000.0 / PACE_HZ + self.spread()).max(self.refresh_ms)
     }
 
-    /// Whether another refresh a turn keeps within `RATE_MIN_HZ`.
+    /// Whether one more refresh a turn still keeps the rate at or above
+    /// `RATE_MIN_HZ`.
     fn may_slow(&self) -> bool {
         self.paced_ms + self.refresh_ms <= 1000.0 / RATE_MIN_HZ + self.spread()
     }
 }
 
-/// The frame's budget turns `paced_ms` apart take, in ms.
+/// The budget, in ms, of a frame whose turns are `paced_ms` apart.
 fn budget(paced_ms: f64) -> f64 {
     paced_ms.max(param::RES_BUDGET_FLOOR_MS)
 }
 
-/// A frame's cost, the judge's sample of it, in ms: the time the scale buys
-/// back and the rest, which it does not; untimed, the gap alone, as the rest.
+/// The judge's sample of a frame's cost, in ms. `px_ms` is the time the scale
+/// can save and `rest_ms` the time it cannot. Without GPU timestamps the
+/// frame's whole gap counts as `rest_ms`.
 #[derive(Clone, Copy, Default)]
 struct Cost {
     px_ms: f64,
@@ -114,27 +91,69 @@ impl Cost {
     }
 }
 
-/// The knobs: the interval between turns, in ms, and the scale's step, 0
-/// whole.
+/// The two knobs: the interval between turns in ms, and the scale's step,
+/// where step 0 draws whole.
 type Knobs = (f64, i32);
 
-/// The scale's knob, and the window being judged.
+/// `auto`'s judge: the scale's step and the window being judged.
+///
+/// It judges only frames in which the view moves. The gap before the first
+/// moving frame is how long the view stood still, so motion starts a fresh
+/// window, while the quiet windows judged before the pause still count. A
+/// window lasts until its frames' budgets sum to `RES_WINDOW_MS`. A frame's
+/// budget is the interval the runtime paced it at (@xpute/runtime
+/// sched/frame_pacing.ts `FrameGrant::paced_ms`), and never less than
+/// `RES_BUDGET_FLOOR_MS`. A window's load is its samples summed over the
+/// budgets of the frames that took them.
+///
+/// Where the device keeps GPU timestamps, a sample is a GPU read that landed,
+/// which not every frame has, timed at the pixels drawn now. It splits into P,
+/// the time of the per-pixel spans (pxl-render gpu/renderer.rs
+/// `GpuRead::px_ms`), and F, the rest of the GPU's busy time. A window in
+/// which no read landed is not judged. A window whose load F + P is over its
+/// budget by more than `RES_BAND` steps down at once. The judge steps up after
+/// `RES_UP_WINDOWS` windows in a row in which the step above would fit under
+/// its budget by `RES_BAND` as well; the band keeps the knobs from swinging
+/// between two steps. The load predicted at the step above keeps F, takes P
+/// times the square of that step's share over this one's, and is measured
+/// against the budget of that step's interval. Down, the rate moves first, to
+/// `RATE_MIN_HZ`, and then the scale, to `RES_MIN`. Up, the scale moves first,
+/// then the rate.
+///
+/// Where the device keeps no timestamps, a sample is the frame's gap. A gap
+/// never falls below the paced interval, so the room a step up would have
+/// cannot be foreseen, and only the scale moves. A window whose gaps average
+/// more than `SCALE_MISSED` budgets steps down, and a step up waits for
+/// `SCALE_PROBE_WINDOWS` quiet windows.
+///
+/// Either way, a step up is on trial. One that goes over within
+/// `RES_TRUST_WINDOWS` steps back down and doubles the wait for the next step
+/// up, to at most `RES_UP_WINDOWS_MAX`; this stops two steps swinging where a
+/// prediction falls a little short. A step that outlasts its trial stands, and
+/// the wait returns to its first length.
+///
+/// A change moves one knob by one step. A change of scale rebuilds the
+/// render targets, so no frame is counted until one is drawn at the new size,
+/// and it asks for that frame. A change of rate holds from the next grant. The
+/// `RES_SETTLE_WINDOWS` windows after any change are not judged.
 struct Judge {
     step: i32,
-    /// The window's frames' budgets summed, in ms: its clock.
+    /// The sum of the window's frames' budgets, in ms, which is the window's
+    /// clock.
     window_ms: f64,
-    /// The samples, and the budgets of the frames that took them, summed
-    /// over the window, in ms: its load.
+    /// The window's samples summed, in ms. Over `budget_ms`, the budgets of
+    /// the frames that took them, they give the window's load.
     cost: Cost,
     budget_ms: f64,
-    /// Windows in a row with room: the step above would fit, or, untimed,
-    /// none went over.
+    /// The windows in a row with room: the step above would have fit, or,
+    /// without timestamps, no window went over.
     quiet: u32,
-    /// Windows ended since the last change.
+    /// The windows ended since the last change.
     since: u32,
-    /// How many times over the wait for a step up runs, for the steps up
-    /// that fell back, and whether the step is one on trial.
+    /// The factor on the wait for a step up. Each step up that fails its
+    /// trial doubles it.
     backoff: u32,
+    /// Whether the step in force is a step up still on trial.
     on_trial: bool,
     moving: bool,
 }
@@ -155,15 +174,14 @@ impl Judge {
         moving: false,
     };
 
-    /// A fresh window: its sums, not the quiet windows already judged, so a
-    /// pause in moving neither breaks a run toward a step up nor a probe's
-    /// hold.
+    /// Starts a fresh window. It clears the window's sums but keeps the count
+    /// of quiet windows already judged, so a pause in motion breaks neither a
+    /// run toward a step up nor the wait before a probe.
     fn restart(&mut self) {
         (self.window_ms, self.cost, self.budget_ms) = (0.0, Cost::default(), 0.0);
     }
 
-    /// The knobs a step down: timed, the rate's, to `RATE_MIN_HZ`; the
-    /// scale's, to `RES_MIN`; none past both.
+    /// The knobs one step down, or None when neither can go lower.
     fn down(&self, pace: &Pace, timed: bool) -> Option<Knobs> {
         if timed && pace.may_slow() {
             Some((pace.paced_ms + pace.refresh_ms, self.step))
@@ -174,7 +192,8 @@ impl Judge {
         }
     }
 
-    /// The knobs a step up: the scale's, then the rate's; none at all whole.
+    /// The knobs one step up, or None when the world is drawn whole at the
+    /// display's rate.
     fn up(&self, pace: &Pace) -> Option<Knobs> {
         if self.step > 0 {
             Some((pace.paced_ms, self.step - 1))
@@ -185,7 +204,7 @@ impl Judge {
         }
     }
 
-    /// The windows with room a step up waits for.
+    /// The number of windows with room that a step up waits for.
     fn hold(&self, timed: bool) -> u32 {
         let wait = if timed {
             param::RES_UP_WINDOWS
@@ -195,18 +214,20 @@ impl Judge {
         (wait * self.backoff).min(param::RES_UP_WINDOWS_MAX)
     }
 
-    /// The load `cost` over `budget_ms` of frames paced as `pace` would be at
-    /// the knobs `(paced_ms, step)`: the rest as it is, the per-pixel time by
-    /// the pixels there over these, the budget by the frame's there over here.
+    /// The load that frames paced as `pace`, which cost `cost` over budgets
+    /// summing to `budget_ms`, would have at the knobs `(paced_ms, step)`. The
+    /// rest stays as it is, the per-pixel time scales by the pixel count there
+    /// over here, and the budget by a frame's budget there over here.
     fn predicted(&self, cost: Cost, budget_ms: f64, pace: &Pace, (paced_ms, step): Knobs) -> f64 {
         let px = libm::pow(share(step) / share(self.step), 2.0);
         let rate = budget(pace.paced_ms) / budget(paced_ms);
         (cost.rest_ms + cost.px_ms * px) * rate / budget_ms
     }
 
-    /// Counts one frame's budget to the window, and its sample, where it
-    /// took one, against it; at a window's end, judges it, a knob a step at
-    /// the most. The knobs it moved to, where it moved one.
+    /// Adds one frame to the window: its budget always, and its sample if it
+    /// took one. At the window's end it judges the window and moves at most
+    /// one knob by one step. It returns the knobs it moved to, if it moved
+    /// one.
     fn judge(&mut self, cost: Option<Cost>, pace: &Pace, timed: bool) -> Option<Knobs> {
         let budget_ms = budget(pace.paced_ms);
         self.window_ms += budget_ms;
@@ -276,7 +297,7 @@ fn state() -> &'static mut Judge {
     JUDGE.get(|| Judge::NEW)
 }
 
-/// The share of the display's pixels, each way, step `step` draws at.
+/// The share of the display's pixels on each axis that step `step` draws at.
 fn share(step: i32) -> f64 {
     libm::pow(
         param::RES_MIN,
@@ -284,19 +305,19 @@ fn share(step: i32) -> f64 {
     )
 }
 
-/// The share of the display's pixels, each way, the world is drawn at: the
-/// setting's, `auto`'s by its step.
+/// The share of the display's pixels on each axis that the setting, and
+/// under `auto` the judge's step, asks the world to be drawn at.
 fn scale() -> f64 {
-    match settings_store().res {
+    match settings().res {
         ResMode::auto => share(state().step),
         ResMode::fixed => 1.0,
         ResMode::low => param::RES_MIN,
     }
 }
 
-/// The share of the display's pixels, each way, the world was last drawn
-/// at: its rays' width over the display's, which lags `scale` while a change
-/// waits to be drawn; whole before it has any.
+/// The share of the display's pixels on each axis that the world was last
+/// drawn at. It lags `scale` while a change waits to be drawn, and it is 1
+/// before the world has a surface.
 pub fn drawn_scale() -> f64 {
     world()
         .filter(|s| s.width > 0 && s.px_w > 0)
@@ -306,14 +327,14 @@ pub fn drawn_scale() -> f64 {
         })
 }
 
-/// Device pixels per CSS pixel a display of `dpr` is drawn at whole: its
-/// own.
+/// The device pixels per CSS pixel at which a display of `dpr` is drawn
+/// whole.
 fn device(dpr: f64) -> f64 {
     dpr
 }
 
-/// Device pixels per CSS pixel of the display the world is shown on, its
-/// surface's; one before it has one.
+/// Device pixels per CSS pixel of the display the world is shown on, as the
+/// world's surface reports it. It is 1 before there is a surface.
 pub fn dpr() -> f64 {
     world()
         .map(|s| s.dpr)
@@ -325,8 +346,10 @@ fn world() -> Option<&'static mut Surface> {
     surfaces().find(|s| s.role == surface_role::WORLD)
 }
 
-/// The ratio a surface is drawn at: the display's; the world's scaled as the
-/// setting says; a character surface's within its thumbnail.
+/// The device pixels per CSS pixel a surface is drawn at. A surface takes the
+/// display's ratio, the world scales it as the setting says, and a character
+/// surface caps it so that the surface stays thumbnail size
+/// (`CHARACTER_LONG_SIDE_MAX`).
 pub fn surface_ratio(role: u32, px: [u32; 2], dpr: f64) -> f64 {
     let device = device(dpr);
     match role {
@@ -338,18 +361,20 @@ pub fn surface_ratio(role: u32, px: [u32; 2], dpr: f64) -> f64 {
     }
 }
 
-/// A frame was paced: `gpu`, where a GPU read landed with it, is what that
-/// read timed. A frame drawn at another size than now is not counted, and a
-/// read timed at another size is no sample; the world's
-/// surface takes the scale the setting and the judge leave. The interval a rate changed asks of the
-/// runtime, 0 for its own under any setting but `auto`.
+/// Counts a paced frame toward the judge, and sets the world surface's ratio
+/// to the scale the setting and the judge leave. `gpu` is what a GPU read that
+/// landed with the frame timed. A frame drawn at another size than the
+/// current one is not counted, and a read timed at another pixel count is not
+/// a sample. It returns the interval to ask the runtime for when the rate
+/// changes. Under any setting but `auto` that is 0 while the turns are
+/// slowed, which asks for the runtime's own rate.
 pub fn load(pace: Pace, gpu: Option<GpuRead>) -> Option<f64> {
     let s = world()?;
     let mut interval_ms = None;
     let k = state();
     let started = pace.moving && !k.moving;
     k.moving = pace.moving;
-    if settings_store().res != ResMode::auto {
+    if settings().res != ResMode::auto {
         (k.step, k.quiet) = (0, 0);
         k.restart();
         interval_ms = pace.slowed().then_some(0.0);

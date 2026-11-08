@@ -1,7 +1,8 @@
 //! The protocols the harness speaks, read from the JSON they are generated from: the UI's
-//! (ui.json), xpute's own (xpute/spec/abi/cmd.json, fs.json) and the core's files'
-//! roots (spec/client/core/sys/io/file.json). A command, a field, an enum's member and a
-//! setting are named here as the spec names them, so no number of theirs is written twice.
+//! (ui.json), xpute's own (xpute/spec/abi/sys.json, gpu.json, fs.json) and the core's
+//! files' roots (spec/client/core/sys/io/file.json). The harness names a command, a field,
+//! an enum's member or a setting as the spec names it, so none of their numbers is written
+//! twice.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -9,7 +10,7 @@ use std::path::Path;
 use serde_json::Value;
 use xpute_kit::wire::xtp::{BranchCursor, Cursor, PacketWriter, TreeReader};
 
-/// A file of the repository, parsed.
+/// Parses a JSON file of the repository.
 pub fn json(path: &str) -> Value {
     let at = Path::new(env!("PXL_REPO")).join(path);
     let text = std::fs::read_to_string(&at).unwrap_or_else(|e| panic!("{}: {e}", at.display()));
@@ -26,11 +27,11 @@ pub struct Field {
 pub struct Command {
     pub val: u32,
     pub fields: Vec<Field>,
-    /// What a completion of it carries, where the spec says.
+    /// The fields a completion of the command carries, when the spec gives any.
     pub reply: Vec<Field>,
 }
 
-/// A command spec's commands, both ways, its enums' members and its records.
+/// A command spec's commands in both directions, its enums' members and its records.
 pub struct Protocol {
     commands: BTreeMap<String, Command>,
     enums: BTreeMap<String, BTreeMap<String, u32>>,
@@ -70,7 +71,7 @@ impl Protocol {
         }
         let mut enums = BTreeMap::new();
         for e in j["enums"].as_array().into_iter().flatten() {
-            // A section's heading among the members is none of them.
+            // An entry without a name and a value is a section heading, not a member.
             let members = e["entries"]
                 .as_array()
                 .into_iter()
@@ -98,8 +99,8 @@ impl Protocol {
         }
     }
 
-    /// The protocols at `paths` as one, their commands and records together;
-    /// an enum two of them name is the last's.
+    /// The protocols at `paths` merged into one. Where two name the same enum, the last
+    /// one's wins.
     pub fn load_each(paths: &[&str]) -> Protocol {
         let mut all = Protocol::load(paths[0]);
         for path in &paths[1..] {
@@ -127,7 +128,7 @@ impl Protocol {
         self.command(name).val
     }
 
-    /// The command `number` is, if this protocol gives it.
+    /// The name of the command numbered `number`, if this protocol gives it.
     pub fn name_of(&self, number: u32) -> Option<&str> {
         self.commands
             .iter()
@@ -143,13 +144,13 @@ impl Protocol {
             .unwrap_or_else(|| panic!("no {of}::{name}"))
     }
 
-    /// Where `field` is among the children of `command`'s packet.
+    /// The index of `field` among the children of `command`'s packet.
     pub fn at(&self, command: &str, field: &str) -> u32 {
         index(&self.command(command).fields, field)
             .unwrap_or_else(|| panic!("{command} has no field {field}"))
     }
 
-    /// Where `field` is among the children of `record`.
+    /// The index of `field` among the children of `record`.
     pub fn record_at(&self, record: &str, field: &str) -> u32 {
         self.records
             .get(record)
@@ -171,8 +172,9 @@ pub enum V {
     Strs(Vec<String>),
 }
 
-/// The packet of `command` written into `buf`, each field from `values` by its name, an
-/// optional one left out absent: its length, or none for a command that carries none.
+/// Writes the packet of `command` into `buf`, taking each field from `values` by name and
+/// writing an optional field left out as absent. Returns the packet's length, or None for a
+/// command that carries no packet.
 pub fn write(command: &Command, values: &[(&str, V)], buf: &mut [u8]) -> Option<u32> {
     for (name, _) in values {
         assert!(
@@ -223,9 +225,9 @@ pub fn flag(c: Cursor<'_>) -> bool {
     c.get_bool().expect("a bool")
 }
 
-/// A setting's number by its key (spec/client/core/domain/view/setting/schema.json).
+/// A setting's number by its key (spec/client/core/domain/setting/schema.json).
 pub fn setting(key: &str) -> u32 {
-    let j = json("spec/client/core/domain/view/setting/schema.json");
+    let j = json("spec/client/core/domain/setting/schema.json");
     j["SETTING"][key]["number"]
         .as_u64()
         .unwrap_or_else(|| panic!("no setting {key}")) as u32

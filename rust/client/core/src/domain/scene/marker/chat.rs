@@ -1,10 +1,10 @@
 // pxl-core/domain/scene/marker/chat.rs
 
-//! The (dev-only) map chat's latest line: what was said and when, its text
-//! on a bubble. Its speaker is the person, who hangs the bubble over
-//! its head and says whether it shows (pxl-core
-//! domain/scene/character/companion.rs `line_hangs`); `line.rs` hands it to
-//! the arrangement.
+//! The latest line of the map chat, a feature for development only: what was
+//! said, when, and its text on a bubble. Its speaker is the person, who hangs
+//! the bubble over its head and decides whether it shows
+//! (domain/scene/character/companion.rs `line_hangs`). `line.rs` hands the
+//! line to the arrangement.
 
 use std::rc::Rc;
 
@@ -12,14 +12,13 @@ use xpute_core::clock::now;
 use xpute_core::global::Global;
 
 use crate::domain::scene::marker::design::Design;
+use crate::domain::scene::marker::param::SHOWN_MS;
 use crate::sys::sched::edge::wake_at;
 
-/// Chat has no expiry of its own; a line shows this long.
-const SHOWN_MS: f64 = 8000.0;
-
-/// Stamped with the runtime's clock, not the frame's: a line said after a still
-/// spell would take the last frame's time and read as long gone. A
-/// character swap cannot make a dismissed line look new.
+/// A line is stamped with the runtime's clock, not the frame's. A line said
+/// after a still spell would otherwise take the last frame's time and read
+/// as long gone. The stamp is the line's own, so a swap of character cannot
+/// make a dismissed line look new.
 struct Line {
     text: Rc<str>,
     said: f64,
@@ -43,8 +42,8 @@ pub fn append_chat_line(text: &str) {
     });
 }
 
-/// The line to show, in its bubble, none once shown its while; the turn is
-/// woken then.
+/// The line to show, in its bubble, or None once it has shown for
+/// `SHOWN_MS`. While it shows, the turn is woken for the moment it expires.
 pub(super) fn shown_line() -> Option<Design> {
     let line = chat().line.as_ref()?;
     if line.said + SHOWN_MS <= now() {

@@ -84,7 +84,7 @@ fn tile_bbox_exclusive_edge() {
 fn height_meters_baked_scale() {
     use crate::procedural::Frame;
     use crate::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
-    use pxl_engine::LEAF_CELL;
+    use pxl_engine::LEAF_CELL_ZOOM;
     let [x, y] = [14139274.0, 4508140.0].map(u_from_merc);
     let tile = Quadrant::new(
         LEAF_ZOOM,
@@ -92,12 +92,12 @@ fn height_meters_baked_scale() {
     );
     let per_m = f64::from(Frame::of(tile).per_m());
     let cells = 1000.0;
-    let at = world::point(x, y, cells * units(LEAF_CELL));
+    let at = world::point(x, y, cells * units(LEAF_CELL_ZOOM));
     let m = unproject(&at)[2];
     assert_almost(m, cells / per_m, 1e-3);
     let back = project(merc_from_u(x), merc_from_u(y), cells / per_m);
     assert_almost(
-        q3::to_real(i64::from(back[2])) / units(LEAF_CELL),
+        q3::to_real(i64::from(back[2])) / units(LEAF_CELL_ZOOM),
         cells,
         1e-3,
     );

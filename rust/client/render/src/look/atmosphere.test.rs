@@ -5,7 +5,7 @@ use crate::look::color::linear_rgb;
 
 #[test]
 fn linear_color_is_hex() {
-    // Written to four places.
+    // The linear values are written to four decimal places.
     for (hex, linear) in [(0x9fb4d6, NIGHT_COLOR), (0xf9f0da, CITY_COLOR)] {
         for (want, got) in linear_rgb(hex).into_iter().zip(linear) {
             assert!(

@@ -91,7 +91,11 @@ export const HAS_BITS = (u: u32, bits: u32): boolean => (u & bits) !== 0;
 export const BIT = (nbit: u32): u32 => U32(1 << nbit);
 export const HAS_BIT = (u: u32, nbit: u32): boolean => HAS_BITS(u, BIT(nbit));
 
-/** JS takes a shift count modulo 32, so a whole-word field and one past the word are special-cased, as xpute-kit's field_mask32. */
+/**
+ * JavaScript takes a shift count modulo 32, so a field as wide as the whole
+ * word, and one that starts past it, are handled apart, as Rust's
+ * `field_mask32` handles them.
+ */
 export const FIELD_MASK = (nbit: u32, shamt: u32 = 0): u32 => {
   if (shamt >= 32) return 0;
   const field = nbit >= 32 ? 0xffff_ffff : (1 << nbit) - 1;

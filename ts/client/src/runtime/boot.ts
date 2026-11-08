@@ -1,13 +1,14 @@
 // @pxl/client/runtime/boot.ts
 
 /**
- * Boots the client, bottom up, on its platform's services (service/): the
- * runtime opened where its platform places it (open.ts, a page's in the
- * core's worker; open.native.ts, a device's beside the UI), the core's
- * commands bound to it, then where the boot stands as the runtime starts, the
- * GPU answers, the world's source is declared and the core's snapshots come.
- * The UI is no part of it: it reads where the boot stands through the port
- * (port/ui.ts), and what the core shows it once it has started.
+ * Boots the client from the bottom up, on its platform's services
+ * (service/platform/). It opens the runtime where the platform places it: on
+ * a page in the core's worker (open.ts), and on a device beside the UI
+ * (open.native.ts). It binds the core's commands to the runtime. Then it
+ * moves where the boot stands as the runtime starts, the GPU answers, the
+ * world's source is declared and the core's snapshots arrive. The UI takes no
+ * part in the boot. It reads where the boot stands (service/sys/boot.ts),
+ * and, once the core has started, what the core shows it.
  */
 
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
@@ -21,15 +22,15 @@ import {
   BOOT_STARTING,
   BOOT_TERMINATED,
 } from "@/abi/state.ts";
-import { boot_state, set_boot } from "@/port/boot.ts";
-import * as snapshot from "@/port/snapshot.ts";
+import { boot_state, set_boot } from "@/service/sys/boot.ts";
+import * as snapshot from "@/service/core/snapshot.ts";
 import { open } from "@/runtime/open.ts";
 
 let called = false;
 
-/** Whether the world has come, or nothing will show of it: every pipeline made,
- * and the view drawn or past the service area. A failed location draws the view
- * at its default. */
+/** Whether the world has arrived, or nothing of it will show: every pipeline
+ * is made, and the view is drawn or lies past the service area. When locating
+ * fails, the view is drawn at its default place. */
 function loaded(s: Snapshot): boolean {
   return (
     s.renderer_progress === 1 &&
@@ -37,8 +38,8 @@ function loaded(s: Snapshot): boolean {
   );
 }
 
-/** Called once by the app, ahead of the UI (src/boot.ts); where it stands
- * is `boot_state`. A second call is refused. */
+/** Called once by the app, ahead of the UI (boot.ts). `boot_state` says
+ * where the boot stands. A second call is refused. */
 export function boot(): void {
   if (called) throw new InvariantError(Errno.EALREADY);
   called = true;
@@ -50,7 +51,7 @@ export function boot(): void {
       if (boot_state() === BOOT_LOADING && loaded(snapshot.current()))
         set_boot(BOOT_STARTED);
     },
-    // Its turns end with it.
+    // When the core stops, its turns end with it, whatever the boot's state.
     terminated: () => set_boot(BOOT_TERMINATED),
   }).then(
     (declared) => {

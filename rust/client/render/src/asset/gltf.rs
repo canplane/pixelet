@@ -98,9 +98,9 @@ const CHUNK_BIN: u32 = 0x004e_4942;
 /// names many times its size; the shipped models yield about one.
 const COMPS_PER_BYTE: usize = 4;
 
-/// The most the scene may draw, a mesh counted at every node that draws it: a
-/// mesh is decoded once but laid out for each. What an upload may claim is
-/// for whatever accepts it to bound tighter.
+/// The most the scene may draw. A mesh counts at every node that draws it, as it is decoded
+/// once but laid out for each node. Whatever accepts an upload may bound what it claims more
+/// tightly.
 pub const MAX_SCENE_VERTICES: u32 = 1 << 20;
 pub const MAX_SCENE_IDXS: u32 = 1 << 22;
 pub const MAX_SCENE_PRIMITIVES: u32 = 1 << 12;
@@ -320,7 +320,7 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
         Ok(())
     }
 
-    /// Accessor `index`, which must be of `kind`, its components converted.
+    /// Reads accessor `index`, which must be of `kind`, with its components converted.
     async fn read<T: Copy + Default>(
         &self,
         idx: usize,
@@ -651,7 +651,8 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
                 .await?;
             let interpolation = sampler.interpolation;
             if interpolation == "CUBICSPLINE" {
-                // In-tangent, value, out-tangent: keep the value.
+                // A cubic spline holds an in-tangent, the value and an out-tangent for each
+                // key. Only the value is kept.
                 vals = (0..times.len())
                     .filter_map(|t| vals.get(t * width * 3 + width..t * width * 3 + width * 2))
                     .flatten()
@@ -683,15 +684,15 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
     };
     let roots = match scene.and_then(|s| s.get("nodes")) {
         Some(list) => {
-            let mut listed = vec![false; n];
+            let mut seen = vec![false; n];
             let mut roots = Vec::new();
             for v in arr(Some(list)) {
                 let i = idx_in(Some(v), n)?;
                 // Parentless and listed once, so no node is walked twice.
-                if parents[i] >= 0 || listed[i] {
+                if parents[i] >= 0 || seen[i] {
                     return Err(malformed());
                 }
-                listed[i] = true;
+                seen[i] = true;
                 roots.push(i as u32);
             }
             roots

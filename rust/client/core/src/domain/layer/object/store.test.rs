@@ -11,7 +11,7 @@ use pxl_spec::space::coord::zoom::SHARD_ZOOM;
 use super::*;
 use crate::domain::layer::Query;
 use pxl_engine::answer;
-use pxl_engine::overwrite::{self, Cut};
+use pxl_engine::object::{self, Cut};
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 use xpute_kit::math::rng::SplitMix64;
@@ -37,7 +37,7 @@ fn write_undo_round_trip() {
                 let slot = store.cursor((OBJECT_FINEST, finest), OBJECT_FINEST);
                 slot.holds()
                     && !slot.is_folded()
-                    && overwrite::val(&store.columns(), slot, Cut::NONE, OBJECT_FINEST, finest) == 3
+                    && object::val(&store.columns(), slot, Cut::NONE, OBJECT_FINEST, finest) == 3
             },
             "a cell leaf covers its steps"
         );
@@ -75,7 +75,7 @@ fn write_undo_round_trip() {
     }
 }
 
-/// Deterministic edits on every run.
+/// A seeded generator, so the random edits are the same on every run.
 struct Rng(SplitMix64);
 
 impl Rng {
@@ -97,13 +97,13 @@ fn some_node(rng: &mut Rng, radius: f64) -> Node<3> {
     (zoom, at)
 }
 
-/// What the objects' pyramid holds at a cell: its value and the eighths of
-/// its cube it keeps (pxl-engine `answer::eighths`).
+/// What the store's folded tree holds at each cell: its value and how many
+/// eighths of the cell's cube are filled (pxl-engine `answer::eighths`).
 type Contents = FnvHashMap<[i32; 3], (u32, u32)>;
 
-/// Whole cells from a corner, and what the objects' pyramid holds at
-/// `zoom`'s cells, read through the store's query, where it keeps any, and
-/// the corner in that zoom's cells.
+/// Writes `cells`, whole cells offset from a fixed corner, and reads back
+/// through the store's query what the folded tree holds at `zoom`'s cells,
+/// wherever it holds anything. Also returns the corner in that zoom's cells.
 fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Contents, [i32; 2]) {
     let mut store = Store::default();
     let base = [64, -64];
@@ -113,15 +113,15 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Contents, [i32; 2]) {
         ext: None,
     }));
     let target = GROUND.cell_zoom(zoom);
-    let corner = base.map(|v| v >> (GROUND.cell() - target));
-    let per = 64 >> (GROUND.cell() - target);
+    let corner = base.map(|v| v >> (GROUND.leaf_cell_zoom() - target));
+    let per = 64 >> (GROUND.leaf_cell_zoom() - target);
     let mut out = FnvHashMap::default();
     for z in -4..8 {
         for y in corner[1]..corner[1] + per {
             for x in corner[0]..corner[0] + per {
                 let slot = store.cursor((target, [x, y, z]), target);
-                let v = overwrite::val(&store.columns(), slot, Cut::NONE, target, [x, y, z]);
-                let eighths = answer::eighths(overwrite::fill_share(&store.columns(), slot));
+                let v = object::val(&store.columns(), slot, Cut::NONE, target, [x, y, z]);
+                let eighths = answer::eighths(object::fill_share(&store.columns(), slot));
                 if v != VOID && eighths > 0 {
                     out.insert([x, y, z], (v, eighths));
                 }
@@ -233,8 +233,8 @@ fn column_extent() {
         ];
         cube_at(&mut store, at, rng.pick(&[red, red, AIR]));
     }
-    // Each leaf's extent along z in the column, as the cube of the column's
-    // zoom it lies in where it is finer.
+    // Each leaf's extent along z in the column. A leaf finer than the
+    // column's zoom counts as the whole cube of that zoom it lies in.
     let extent = |(zoom, [x, y]): Node<2>| {
         let mut z: Option<[f64; 2]> = None;
         store.each(&mut |e| {
@@ -293,7 +293,7 @@ fn leaf_words_freed_on_erase() {
         ext: None,
     }]);
     assert!(store.read((zoom, at)).entry().is_none());
-    // The freed slot is the next one taken: nothing outlived its leaf.
+    // The freed slot is the next one taken, so no record outlived its leaf.
     store.write([Write {
         at: id_of(zoom, at),
         id: MARKER,
@@ -317,7 +317,8 @@ fn marker_text_change_cube() {
         }])
     };
     assert_eq!(put(&mut store, "cafe").len(), 1);
-    // The old record's slot is the one reused, so the word is the same.
+    // The old record's slot is reused, so the leaf's word stays the same,
+    // and the cube must still count as changed.
     assert_eq!(put(&mut store, "bar").len(), 1);
     let e = store.read((zoom, at)).entry().expect("placed");
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("bar".into())));
@@ -332,7 +333,7 @@ fn eight_markers_stay() {
         .map(|k| Write {
             at: id_of(
                 OBJECT_COARSEST + 1,
-                overwrite::child_at(OBJECT_COARSEST, parent, k),
+                object::child_at(OBJECT_COARSEST, parent, k),
             ),
             id: MARKER,
             ext: marker_text(&format!("m{k}")),
@@ -356,7 +357,8 @@ fn whole_shard_meets_leaves() {
         id: 3,
         ext: None,
     }]);
-    // The node of a whole shard: its tree's root, read through the region.
+    // The node of the whole shard, which is the root of the shard's own
+    // tree.
     let shard = [
         at[0] >> (OBJECT_COARSEST - SHARD_ZOOM),
         at[1] >> (OBJECT_COARSEST - SHARD_ZOOM),

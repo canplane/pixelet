@@ -1,7 +1,7 @@
 // @xpute/kit/abi/array.ts
 
-// Typed-array helpers over an ArrayBuffer, with the number and bigint families
-// kept apart because no typed-array API spans both.
+// Typed-array helpers over an ArrayBuffer. The number and bigint families are
+// kept apart, because no typed-array API spans both.
 
 import type { f32, f64, i16, i32, i64, i8, u16, u32, u64, u8 } from "./word.ts";
 
@@ -75,7 +75,11 @@ export const is_ta_sab = <T extends TypedArray>(
 ): vals is T & { buffer: SharedArrayBuffer } =>
   !!vals && is_ta(vals) && is_sab(vals.buffer);
 
-/** Wraps an AB-backed view without copying; copies one over a SharedArrayBuffer or a plain array. */
+/**
+ * A view of `ctor` whose memory is a plain ArrayBuffer. A view already over
+ * an ArrayBuffer is wrapped where it lies, without a copy; a view over a
+ * SharedArrayBuffer, or a plain array, is copied.
+ */
 export const as_ta_ab = <T extends TypedArray>(
   vals: ArrayBuffer | TypedArray | ArrayLike<number>,
   ctor: TypedArrayCtor<T>,
@@ -87,7 +91,8 @@ export const as_ta_ab = <T extends TypedArray>(
   if (is_ta(vals)) {
     const buf = vals.buffer;
 
-    // The same bytes in `ctor`'s elements, wrapped where they lie, copied out of shared memory.
+    // The view's bytes are read as `ctor`'s elements, not converted value by
+    // value.
     const len = vals.byteLength / ctor.BYTES_PER_ELEMENT;
     if (is_ab(buf)) return new ctor(buf, vals.byteOffset, len);
 
@@ -170,7 +175,11 @@ export const is_bta_sab = <T extends BigTypedArray>(
 ): vals is T & { buffer: SharedArrayBuffer } =>
   !!vals && is_bta(vals) && is_sab(vals.buffer);
 
-/** Wraps an AB-backed view without copying; copies one over a SharedArrayBuffer or a plain array. */
+/**
+ * A view of `ctor` whose memory is a plain ArrayBuffer. A view already over
+ * an ArrayBuffer is wrapped where it lies, without a copy; a view over a
+ * SharedArrayBuffer, or a plain array, is copied.
+ */
 export const as_bta_ab = <T extends BigTypedArray>(
   vals: ArrayBuffer | BigTypedArray | ArrayLike<bigint>,
   ctor: BigTypedArrayCtor<T>,
@@ -182,7 +191,8 @@ export const as_bta_ab = <T extends BigTypedArray>(
   if (is_bta(vals)) {
     const buf = vals.buffer;
 
-    // The same bytes in `ctor`'s elements, wrapped where they lie, copied out of shared memory.
+    // The view's bytes are read as `ctor`'s elements, not converted value by
+    // value.
     const len = vals.byteLength / ctor.BYTES_PER_ELEMENT;
     if (is_ab(buf)) return new ctor(buf, vals.byteOffset, len);
 

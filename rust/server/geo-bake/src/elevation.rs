@@ -166,20 +166,20 @@ impl Raster {
         i: usize,
     ) -> Result<Arc<RasterTile>, postgres::Error> {
         let slot = {
-            let mut held = self.cache.lock().expect("raster");
-            held.tick += 1;
-            let tick = held.tick;
-            if !held.slots.contains_key(&i) && held.slots.len() >= CACHE_CAP {
-                let oldest = held
+            let mut cache = self.cache.lock().expect("raster");
+            cache.tick += 1;
+            let tick = cache.tick;
+            if !cache.slots.contains_key(&i) && cache.slots.len() >= CACHE_CAP {
+                let oldest = cache
                     .slots
                     .iter()
                     .min_by_key(|(_, (t, _))| *t)
                     .map(|(&k, _)| k);
                 if let Some(k) = oldest {
-                    held.slots.remove(&k);
+                    cache.slots.remove(&k);
                 }
             }
-            let entry = held
+            let entry = cache
                 .slots
                 .entry(i)
                 .or_insert_with(|| (tick, Arc::new(Mutex::new(None))));
@@ -368,8 +368,8 @@ impl RasterTile {
 
     fn read(b: &[u8], px: usize) -> Option<RasterTile> {
         let le = *b.first()? == 1;
-        // endian 1, version 2, bands 2, scale, origin and skew as f64, srid 4,
-        // width 2, height 2, then the band's pixel type and nodata.
+        // The header, in bytes: endian 1, version 2, bands 2, scale, origin and skew as f64, srid 4,
+        // width 2, height 2; then the band's pixel type and nodata.
         let band = *b.get(61)?;
         const PT_32BF: u8 = 10;
         const IS_OFFLINE: u8 = 0x80;

@@ -54,8 +54,8 @@ Result<Bitset> Cursor::bitset() const noexcept {
     return Bitset{pkt_.subspan(payload, bytes), *len};
 }
 
-// The wire carries a NUL after the bytes, which the length leaves out and a
-// string that reads must have; the bytes are UTF-8 or refused.
+// A str must end with the NUL that `len` does not count, and its bytes must
+// be UTF-8.
 Result<std::string_view> Cursor::str() const noexcept {
     std::uint64_t payload = std::uint64_t{base_} + WORD_SZ;
     if (payload > pkt_.size()) return marshal_error(Errno::ebadmsg);

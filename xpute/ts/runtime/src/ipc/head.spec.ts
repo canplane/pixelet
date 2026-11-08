@@ -2,21 +2,24 @@
 //
 // GENERATED from spec/ipc/head.json
 //
-// The front's header: the words a runtime writes on the page past a core's stack before its
-// first turn, as io_uring's setup lays its rings, and that the core's boot holds to its
-// machine, stopping with ENOEXEC where one differs (xpute-core machine.rs). Both ends
-// compute every number in it from the same machine, so it names what the runtime laid, not
-// where to look: the rings' sizes and places, and the GPU stream's. The runtime lays each
-// ring's own header too (ring.json), its positions at 0.
+// The header at the front of a core's memory. The front is what the runtime lays out before
+// the core's first turn: this header, the two rings and their slots, and the GPU stream
+// (ARCHITECTURE.md). The header lies on the page past the core's stack. The runtime writes it
+// as io_uring's setup lays its rings, and lays each ring's own header too (ring.json), with
+// its positions at 0. Both ends compute every number in the header from the same machine, so
+// the header records what the runtime laid; it does not tell the core where to look. On its
+// first turn the core holds each word to its machine and stops with ENOEXEC where one
+// differs (xpute-core machine.rs).
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import * as word from "./head/word.spec.ts";
 
-/** "XPUT" as four bytes read little-endian: what tells a header from memory nothing wrote. */
+/** The bytes "XPUT" read as a little-endian word. It tells a laid header from memory that
+ * nothing has written. */
 export const MAGIC: u32 = 1414877272 as number;
 
-/** Where each of the header's words is, from its start. */
+/** The index of each header word, counted from the header's start. */
 export { word };
 
-/** Words the header takes. */
+/** The header's length in words. */
 export const WORDS: u32 = 7 as number;

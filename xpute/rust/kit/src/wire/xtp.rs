@@ -1,7 +1,9 @@
 // xpute-kit/wire/xtp.rs
 
-//! XTP, the Xpute Tree Packet: a relocatable binary tree packet. Its format is stated in
-//! `ts/kit/src/wire/xtp/README.md`.
+//! XTP, the Xpute Tree Packet: a tree of values in one buffer, read in place.
+//! The format is described in `ts/kit/src/wire/xtp/README.md`, and the golden
+//! records under `spec/golden/wire/xtp/` hold the Rust, C++ and TypeScript
+//! sides to the same bytes.
 
 pub mod cursor;
 pub mod encode;

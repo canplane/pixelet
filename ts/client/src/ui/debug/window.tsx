@@ -1,7 +1,11 @@
 // @pxl/client/ui/debug/window.tsx
 
-/** A panel for every debug setting, stacked in the order the settings sheet lists them: one window
- * in the corner (`ui/world/corner.tsx`), which the chat's lines give way to while any of it is up. */
+/**
+ * The debug window: a panel for each debug setting that has one, stacked in
+ * the order the settings sheet lists the settings. The window takes the
+ * corner (ui/world/corner.tsx), and the chat's lines give way to it while
+ * any panel is shown.
+ */
 
 import type { ComponentType } from "react";
 
@@ -9,7 +13,7 @@ import { SETTING, type SettingName, settingsIn } from "@/ui/setting/schema.ts";
 import { WorldGizmoLegend } from "./legend.tsx";
 import { PerfPanel } from "./perf.tsx";
 import { ViewPanel } from "./view.tsx";
-import { useCore } from "@/ui/store/watch.ts";
+import { useCore } from "@/ui/watch.ts";
 
 const PANEL = {
   view: ViewPanel,
@@ -18,15 +22,16 @@ const PANEL = {
 } satisfies Partial<Record<SettingName, ComponentType>>;
 
 /**
- * A debug setting that has a panel, which its accordion panel is named by
- * (accordion.tsx).
+ * A debug setting that has a panel. The accordion (accordion.tsx) tells its
+ * panels apart by this name.
  */
 export type PanelName = keyof typeof PANEL;
 
 const isPanel = (name: SettingName): name is PanelName =>
   Object.hasOwn(PANEL, name);
 
-/** Whether any panel is up, so the corner is the window's. */
+/** Whether any panel's setting is on. While one is, the corner shows the
+ * debug window. */
 export function useDebugWindow(): boolean {
   return useCore((s) =>
     settingsIn("debug").some(

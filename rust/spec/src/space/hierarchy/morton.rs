@@ -1,12 +1,11 @@
 // pxl-spec/space/hierarchy/morton.rs
 
-//! A node's one key at any zoom: its index's digits in two's complement, as
-//! the signed indices are, interleaved a zoom at a time from the coarsest in
-//! `child_idx`'s order, left-aligned, then a 1 that marks where they end. An
-//! axis has a digit from the zoom its extent reaches (`world.rs` `EXTENT`): X
-//! and Y from z1, Z, 16 bits under X's 24, from z9, so a 3D key is the 2D one to z8 and an axis's
-//! first digit is its sign. A coarser key's digits prefix a finer one's over
-//! the same ground, in any number of axes.
+//! A node's one key at any zoom: its index's digits in two's complement, as the signed
+//! indices are, interleaved a zoom at a time from the coarsest in `child_idx`'s order,
+//! left-aligned, then a 1 that marks where they end. An axis has digits from the zoom its
+//! extent reaches (`world.rs` `EXTENT`): X and Y from z1, and Z, with 16 bits to X's 24, from
+//! z9. So a 3D key equals the 2D one down to z8, and an axis's first digit is its sign. A
+//! coarser key's digits prefix a finer one's over the same ground, in any number of axes.
 
 use super::tree::Node;
 use crate::space::coord::world::EXTENT;
@@ -130,9 +129,10 @@ pub fn node_of<const D: usize>(key: u128) -> Node<D> {
     )
 }
 
-/// A key written a character a zoom, coarsest first: the digits that zoom
-/// adds as one digit, so a coarser node's name prefixes a finer one's and the
-/// length is the zoom. In 2D a quadkey; in 3D an octkey, the same to z8. Written, not built, so a read allocates nothing.
+/// A key written one character a zoom, coarsest first, each character being the digits that
+/// zoom adds, so a coarser node's name prefixes a finer one's and the length is the zoom. In
+/// 2D it is a quadkey; in 3D an octkey, the same as the quadkey down to z8. It is written into
+/// `out` rather than built, so reading a key allocates nothing.
 pub(crate) fn write_name<const D: usize>(out: &mut impl fmt::Write, key: u128) -> fmt::Result {
     let n = len(key);
     let (mut zoom, mut read) = (0, 0);

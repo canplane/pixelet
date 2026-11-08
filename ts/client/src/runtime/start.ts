@@ -1,11 +1,11 @@
 // @pxl/client/runtime/start.ts
 
 /**
- * The core as xpute's runtime boots it, where the core's memory is (a
- * device's UI thread, a page's worker): its module, its files, the GPU, the
- * frame pacing and each turn's grant. What the core asks there it answers by
- * a table: the text, and the rate, which the pacing keeps; and the profiler's
- * reads, made here.
+ * The core as xpute's runtime boots it where the core's memory is, on a
+ * device's UI thread or in a page's worker: its module, its files, the GPU,
+ * the frame pacing and each turn's grant. What the core asks on that side is
+ * answered through a table: the text, and the rate, which the pacing keeps.
+ * The profiler's reads are made here too.
  */
 
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
@@ -21,13 +21,13 @@ import {
   PACE_HZ,
   SETTLE_MS,
 } from "@/abi/pacing.spec.ts";
-import { namespace } from "@/sys/fs/namespace.ts";
-import { submit_grant } from "@/port/surface.ts";
-import { text_layout, text_raster } from "@/port/text.ts";
-import { answer, type PerfRead } from "@/port/perf.ts";
-import type { Perf } from "@/port/core.ts";
-import { source } from "@/service/core.ts";
-import { gpu } from "@/service/gpu.ts";
+import { namespace } from "@/service/sys/fs/namespace.ts";
+import { submit_grant } from "@/service/core/turn.ts";
+import { text_layout, text_raster } from "@/service/core/text.ts";
+import { answer, type PerfRead } from "@/service/core/perf.ts";
+import type { Perf } from "@/service/core/core.ts";
+import { source } from "@/service/platform/core.ts";
+import { gpu } from "@/service/platform/gpu.ts";
 
 /** What the core asks on this side. */
 function calls(pacing: FramePacing) {
@@ -39,7 +39,8 @@ function calls(pacing: FramePacing) {
 }
 
 export function config(handheld: boolean): Config<FrameGrant> {
-  // A phone gets less: JavaScriptCore counts the whole reservation as page memory.
+  // A handheld device gets the smaller memory, because JavaScriptCore counts
+  // the whole reservation as the page's memory.
   const sizes = MACHINE.mem_bytes;
   const pacing = new FramePacing(
     {
@@ -68,6 +69,6 @@ export function manifest(handheld: boolean): Manifest<FrameGrant> {
   return { machine: MACHINE, core: () => config(handheld) };
 }
 
-/** The profiler read beside the core's memory. */
+/** Makes the profiler's reads here, beside the core's memory. */
 export const perf_here: Perf = (what, args) =>
   Promise.resolve(answer(what as PerfRead, args));

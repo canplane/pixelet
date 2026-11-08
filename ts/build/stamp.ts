@@ -1,13 +1,14 @@
 // @pxl/build/stamp.ts
 
 /**
- * What a build is — when, from which source, under which number — which the
- * bundle carries (`virtual:pxl-build`, deploy.ts reads it) and the page's
- * export states at /build.json. The source is git's short hash, `-dirty` where
- * the tree had changes; the number is `#<n>` where CI handed the build one
- * (PXL_BUILD_NUMBER), or else `#<n>-<id>` from the number the deployment
- * serves (ts/client/.build_number, script/build-number.py), or the id alone
- * before any is cached.
+ * What a build is: when it was made, from which source, and under which
+ * number. The bundle carries it (`virtual:pxl-build`, which the app's
+ * build.ts reads), and the page's export states it at /build.json. The source
+ * is git's short hash, with `-dirty` when the tree had changes. The number is
+ * `#<n>` when CI handed the build one (PXL_BUILD_NUMBER). Otherwise it is
+ * `#<n>-<id>`, from the number the deployment serves (ts/client/.build_number,
+ * kept by script/build-number.py), or the id alone before any number is
+ * cached.
  */
 
 import { execSync } from "node:child_process";
@@ -20,7 +21,7 @@ export interface Stamp {
   time: string;
   id: string;
   number: string;
-  /** CI's number, none for a build CI did not number. */
+  /** CI's number, or null for a build CI did not number. */
   official: number | null;
 }
 
@@ -38,7 +39,7 @@ export function stamp(): Stamp {
       git("status --porcelain") !== "" ? "-dirty" : ""
     }`;
   } catch {
-    /* not a checkout */
+    /* The tree is not a git checkout. */
   }
   const official = process.env.PXL_BUILD_NUMBER;
   let number = id;
@@ -50,7 +51,7 @@ export function stamp(): Stamp {
         .trim();
       if (/^\d+$/.test(last)) number = `#${last}-${id}`;
     } catch {
-      /* none seen yet */
+      /* No number the deployment serves is cached yet. */
     }
   }
   return {

@@ -1,8 +1,8 @@
 // pxl-render/frame/shader/tile_quad.wgsl
 
-// The vertex stage of a pass that draws the claimed tiles alone, or every one,
-// a quad each (screen_tiles.wgsl `tile_clip`). A part of its own: screen_tiles.wgsl
-// is also part of a compute shader, which runs no vertex stage.
+// The vertex stage of a pass that draws a quad a tile, over the claimed tiles or over every
+// tile (screen_tiles.wgsl `tile_clip`). It is a part of its own because screen_tiles.wgsl is
+// also part of compute shaders, which run no vertex stage.
 
 struct VertexOut {
   @builtin(position) clip: vec4f,

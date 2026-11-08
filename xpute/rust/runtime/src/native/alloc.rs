@@ -1,11 +1,13 @@
 // xpute-runtime/native/alloc.rs
 
-//! The process's allocator: the core's thread's blocks in the core memory,
-//! by xpute's slab over a buddy (xpute_core::mem::heap), so what the core
-//! hands its runtime lies where the runtime reads; every other thread's the
-//! system's. A block goes back to whichever holds its address, and the slab
-//! is locked since a driver may free a core's block on its own thread. The
-//! `#[global_allocator]` static is the program's: one a crate graph.
+//! The process's allocator. A block asked for on the core's thread comes from
+//! the core's memory, through xpute's slab over a buddy allocator
+//! (xpute_core::mem::heap), so what the core hands its runtime lies where the
+//! runtime can read it. A block asked for on any other thread comes from the
+//! system. A freed block goes back to whichever of the two holds its address.
+//! The slab is locked, because a driver may free one of the core's blocks on
+//! the driver's own thread. The program declares the `#[global_allocator]`
+//! static, since a crate graph may have only one.
 
 use std::alloc::{GlobalAlloc, Layout, System};
 
@@ -14,7 +16,8 @@ use xpute_core::mem::heap::{heap_stat, Bounds, Heap, HeapStat};
 
 use super::reserve::core;
 
-/// The heap: from `heap_at` to the memory's end, read only once booted.
+/// The heap's bounds, from `heap_at` to the memory's end. They are read only
+/// once the core has booted.
 struct Range;
 
 impl Bounds for Range {
@@ -28,8 +31,9 @@ impl Bounds for Range {
     }
 }
 
-/// A lock that allocates nothing, since it is taken inside the allocator:
-/// `os_unfair_lock` on Apple's systems, whose std `Mutex` may box.
+/// A lock that allocates nothing, because the allocator itself takes it. On
+/// Apple's systems it is `os_unfair_lock`, since std's `Mutex` there may
+/// allocate a box.
 #[cfg(target_vendor = "apple")]
 #[repr(C)]
 struct SysLock(core::cell::UnsafeCell<u32>);
@@ -57,7 +61,7 @@ impl SysLock {
     }
 }
 
-/// Elsewhere std's `Mutex`, a futex word.
+/// Elsewhere it is std's `Mutex`, a futex word, which allocates nothing.
 #[cfg(not(target_vendor = "apple"))]
 struct SysLock(std::sync::Mutex<()>);
 
@@ -68,7 +72,8 @@ impl SysLock {
     }
 
     fn hold<R>(&self, f: impl FnOnce() -> R) -> R {
-        // A panic under the lock stops the core; the slab is still the slab.
+        // A panic under the lock stops the core, so the lock's poison is
+        // ignored and the slab is used as it stands.
         let _held = self
             .0
             .lock()
@@ -145,7 +150,8 @@ unsafe impl GlobalAlloc for Alloc {
                 unsafe { System.realloc(ptr, layout, new_sz) }
             };
         }
-        // Grown across the line from where it was made: moved to this thread's side.
+        // The block lies on the other side from this thread's allocator (the
+        // core's memory or the system's), so growing it moves it to this side.
         // SAFETY: a layout the caller's allocation was valid under, resized.
         let grown =
             unsafe { self.alloc(Layout::from_size_align_unchecked(new_sz, layout.align())) };

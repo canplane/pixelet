@@ -1,18 +1,22 @@
 // xpute-gpu/device.rs
 
-//! The device's block (spec DEVICE) by word: where a runtime writes each part
-//! of it and a core reads it. Its limits come first, a word each (LIMIT_NAME).
+//! The word offsets of the device's block (spec DEVICE). The runtime writes
+//! the block where the core asks for it (`call::device`), and the core reads
+//! it. The limits come first, one word for each name in LIMIT_NAME.
 
 use crate::enums::{FEATURE_NAME, LIMIT_NAME};
 
-/// Its features, a bit each (FEATURE_NAME).
+/// The features, one bit for each name in FEATURE_NAME.
 pub const FEATURES_AT: usize = LIMIT_NAME.len();
-/// Its timestamp period, f32 bits.
+/// The timestamp period, in nanoseconds per tick, as f32 bits.
 pub const PERIOD_AT: usize = FEATURES_AT + FEATURE_NAME.len().div_ceil(32);
-/// The surface format it prefers (TEXTURE_FORMAT).
+/// The surface format the runtime prefers, as an index into TEXTURE_FORMAT.
 pub const FORMAT_AT: usize = PERIOD_AT + 1;
-/// The frames unfinished.
+/// How many of the core's frames the GPU has not yet finished. The runtime
+/// keeps it up to date.
 pub const UNFINISHED_AT: usize = FORMAT_AT + 1;
-/// Its STATUS, the block's last word.
+/// The device's STATUS, the block's last word. The runtime stores it with
+/// release after the rest of the block, so a core that loads READY with
+/// acquire sees the whole block.
 pub const STATUS_AT: usize = UNFINISHED_AT + 1;
 pub const WORDS: usize = STATUS_AT + 1;

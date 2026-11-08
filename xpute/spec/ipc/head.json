@@ -1,64 +1,65 @@
 {
   "$doc": [
-    "The front's header: the words a runtime writes on the page past a core's stack before its",
-    "first turn, as io_uring's setup lays its rings, and that the core's boot holds to its",
-    "machine, stopping with ENOEXEC where one differs (xpute-core machine.rs). Both ends",
-    "compute every number in it from the same machine, so it names what the runtime laid, not",
-    "where to look: the rings' sizes and places, and the GPU stream's. The runtime lays each",
-    "ring's own header too (ring.json), its positions at 0."
+    "The header at the front of a core's memory. The front is what the runtime lays out before",
+    "the core's first turn: this header, the two rings and their slots, and the GPU stream",
+    "(ARCHITECTURE.md). The header lies on the page past the core's stack. The runtime writes it",
+    "as io_uring's setup lays its rings, and lays each ring's own header too (ring.json), with",
+    "its positions at 0. Both ends compute every number in the header from the same machine, so",
+    "the header records what the runtime laid; it does not tell the core where to look. On its",
+    "first turn the core holds each word to its machine and stops with ENOEXEC where one",
+    "differs (xpute-core machine.rs)."
   ],
   "MAGIC": {
     "$val": 1414877272,
     "$type": "u32",
     "$doc": [
-      "\"XPUT\" as four bytes read little-endian: what tells a header from memory nothing wrote."
+      "The bytes \"XPUT\" read as a little-endian word. It tells a laid header from memory that",
+      "nothing has written."
     ]
   },
   "word": {
     "$type": "u32",
     "$doc": [
-      "Where each of the header's words is, from its start."
+      "The index of each header word, counted from the header's start."
     ],
     "MAGIC": {
-      "$val": 0,
-      "$doc": [
-        "Where MAGIC is."
-      ]
+      "$val": 0
     },
     "SQ_CAP": {
       "$val": 1,
       "$doc": [
-        "Frames the submission ring holds."
+        "How many frames the submission ring holds."
       ]
     },
     "CQ_CAP": {
       "$val": 2,
       "$doc": [
-        "Frames the completion ring holds."
+        "How many frames the completion ring holds."
       ]
     },
     "SLOT_BYTES": {
       "$val": 3,
       "$doc": [
-        "A ring slot's payload, the same for both rings."
+        "The size of one ring slot in bytes, the same for both rings."
       ]
     },
     "SQ_AT": {
       "$val": 4,
       "$doc": [
-        "Where the submission ring's words begin."
+        "The offset in the memory where the submission ring begins."
       ]
     },
     "CQ_AT": {
       "$val": 5,
       "$doc": [
-        "Where the completion ring's words begin."
+        "The offset in the memory where the completion ring begins."
       ]
     },
     "GPU_AT": {
       "$val": 6,
       "$doc": [
-        "Where the GPU stream is, which the runtime runs after each turn; 0 where the machine asks for no GPU."
+        "The offset of the GPU stream, which the runtime runs after each turn; 0 when the machine",
+        "asks for no GPU."
       ]
     }
   },
@@ -66,7 +67,7 @@
     "$val": 7,
     "$type": "u32",
     "$doc": [
-      "Words the header takes."
+      "The header's length in words."
     ]
   }
 }

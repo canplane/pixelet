@@ -1,8 +1,9 @@
 // pxl-core/turn.rs
 
-//! Every layer's turn, in one place. The frame is one task: the effects,
-//! then the tick's phases under one budget, then the draw. The other tasks
-//! wait on what they work on.
+//! The order of a world turn is written here and nowhere else. A frame runs
+//! as one task: first the effects, then the tick's phases under one shared
+//! budget, then the draw. Every other task waits on its own input and runs
+//! apart from the frame.
 
 #[path = "turn/step.spec.rs"]
 pub mod spec;
@@ -47,13 +48,13 @@ use crate::domain::scene::marker;
 use crate::domain::scene::model::draw_list;
 use crate::domain::scene::resolution::Pace;
 use crate::domain::scene::stage;
-use crate::domain::scene::stage::visible_step;
+use crate::domain::scene::stage::scene_step;
+use crate::domain::setting::store;
 use crate::domain::view::demand;
-use crate::domain::view::demand::Observed as _;
+use crate::domain::view::demand::ViewLayer as _;
 use crate::domain::view::frame::coord;
 use crate::domain::view::frame::pose;
 use crate::domain::view::observation;
-use crate::domain::view::setting::store;
 use crate::perf::record::perf_recording;
 use crate::perf::report::{perf_frame, set_renderer_frame, FrameTurn};
 use crate::perf::window::perf_follow;
@@ -64,7 +65,7 @@ use crate::sys::io::loader;
 use crate::sys::io::request;
 use crate::sys::sched::edge;
 use crate::sys::sched::edge::{request_world_tick, world_edge};
-use crate::sys::sched::tick::{on_tick, run_tick, TickContext};
+use crate::sys::sched::tick::{tick, TickContext};
 use pxl_render::gpu::api;
 use pxl_spec::bake::tile::division::DivisionTile;
 use pxl_spec::space::layer::quadrant::Quadrant;
@@ -72,15 +73,17 @@ use xpute_core::clock::now;
 use xpute_core::global::Global;
 use xpute_core::sched::tick::TickReport;
 
+use crate::sys::sched::param::MAX_STEP_S;
 use crate::sys::sched::phase_spec::Phase;
 
-/// The camera as the companion's walk reads it; none while the eye is the
-/// pivot, when the person is the one looking.
+/// The camera as the companion's walk reads it. It is None in first person,
+/// where the eye stands at the pivot and the person is the one looking.
 fn companion_camera() -> Option<Camera> {
     if controller::active() != Active::Orbit {
         return None;
     }
-    // Where the camera is going, not where its easing has got to.
+    // The pivot the camera is easing toward, not the one its easing has
+    // reached so far.
     let goal = controller::pivot_to().or_else(controller::pivot)?;
     let eye = coord::world_to_canonical(&camera::eye_world()?);
     let at = coord::to_world(&goal);
@@ -95,16 +98,17 @@ fn companion_camera() -> Option<Camera> {
     })
 }
 
-/// The edit the pointer would make, of what it is over where the camera now
-/// stands (`camera_tick`), so the scene draws it this turn, not the next.
+/// Works out the edit the pointer would make on what it is over. It runs
+/// after `camera_tick` has placed the camera, so the scene draws the edit
+/// this turn and not the next.
 fn edit_tick(_: &mut TickContext) {
-    // A new preview moves the world as drawn where it was and where it is.
+    // A changed preview changes the world as drawn, both where the old
+    // preview was and where the new one is.
     if write::preview_step() {
         request_world_tick();
     }
 }
 
-/// The tool's ghost of that edit, drawn by the scene.
 fn ghost_tick(_: &mut TickContext) {
     use crate::domain::control::edit::ghost::ghost;
     if ghost_set(draw_list(), &ghost()) {
@@ -116,10 +120,10 @@ fn companion_tick(ctx: &mut TickContext) {
     companion_step(ctx, companion_camera());
 }
 
-/// Each pyramid layer's tiles, from the live eye.
+/// Asks every tile pyramid for the tiles the eye needs now.
 fn demand_tick(ctx: &mut TickContext) {
-    // The ground's clip levels where their centers now stand, before what
-    // arrives fills them.
+    // The ground's clip levels move to their new centers before arrived
+    // tiles are admitted, so each arrival fills a level where it now stands.
     let at = |q: Q3| [q3::to_real(i64::from(q[0])), q3::to_real(i64::from(q[1]))];
     let pinned = clipmap::step(
         [
@@ -130,13 +134,13 @@ fn demand_tick(ctx: &mut TickContext) {
         api::device_generation(),
     );
     if pinned {
-        TerrainTile::demand().on_moved();
+        TerrainTile::demand().on_changed();
     }
     demand::admit_arrived(&ctx.pass);
     changes_step();
     TerrainTile::demand().step(destination::tile(), clipmap::pinned_tiles());
-    // Nothing is fetched while places are hidden.
-    match store::settings_store().place {
+    // No place tile is fetched while places are hidden.
+    match store::settings().place {
         true => PlaceTile::demand().step(None, &[]),
         false => PlaceTile::demand().idle(),
     }
@@ -145,12 +149,12 @@ fn demand_tick(ctx: &mut TickContext) {
     demand::object_step();
 }
 
-/// The scene's turn, handed what control decided: the camera's pivot and,
-/// third person, its heading, which the world gizmo is drawn about; the
-/// edit's preview, which decor leaves out; and the marker's draft.
+/// Runs the scene's turn with what control decided. The world gizmo is drawn
+/// about the camera's pivot, and in third person also about its heading.
+/// Decor leaves out what the edit's preview takes away.
 fn scene_tick(ctx: &mut TickContext) {
     let third_person = controller::active() == Active::Orbit;
-    visible_step(
+    scene_step(
         ctx,
         controller::pivot(),
         third_person.then(camera::azimuth),
@@ -163,11 +167,11 @@ fn camera_input_tick(_: &mut TickContext) {
     camera_input_step();
 }
 
-/// The camera's last writer, then the view composed where it stands and the
-/// observation let go where the ground under the eye moved: after every
-/// writer of the pose (the door's events, the turn's effects, the
-/// controllers), before the phases that observe it. The pointer is picked
-/// again from there, so what it is over follows a view moved under it.
+/// Writes the camera for the last time this turn and composes the view where
+/// it now stands. It must run after every writer of the pose (the door's
+/// events, the turn's effects, the controllers) and before every phase that
+/// observes the view. The pointer is picked again from the new view, so what
+/// it is over stays right when the view moves under a still pointer.
 fn camera_tick(ctx: &mut TickContext) {
     controller::camera_step(ctx);
     let moved = pose::view_compose(controller::pose());
@@ -181,39 +185,44 @@ fn environment_tick(_: &mut TickContext) {
     environment_step();
 }
 
-/// Registers the tick's steps and spawns the tasks. Called from outside a
-/// frame, since the frame task waits for the runtime's first frame.
+/// Runs once, outside any frame. The frame task it spawns sleeps until the
+/// runtime grants the first frame.
 pub fn boot() {
-    on_tick(
-        Phase::interaction,
+    tick().on_tick(
+        Phase::interaction as u8,
         controller::controller_step,
         StepName::controller as u32,
     );
-    on_tick(
-        Phase::interaction,
+    tick().on_tick(
+        Phase::interaction as u8,
         camera_input_tick,
         StepName::input as u32,
     );
-    on_tick(Phase::interaction, camera_tick, StepName::camera as u32);
-    on_tick(Phase::interaction, edit_tick, StepName::edit as u32);
-    on_tick(Phase::interaction, ghost_tick, StepName::ghost as u32);
-    // After the view has moved, so the environment sees this tick's camera.
-    on_tick(
-        Phase::interaction,
+    tick().on_tick(
+        Phase::interaction as u8,
+        camera_tick,
+        StepName::camera as u32,
+    );
+    tick().on_tick(Phase::interaction as u8, edit_tick, StepName::edit as u32);
+    tick().on_tick(Phase::interaction as u8, ghost_tick, StepName::ghost as u32);
+    // The environment runs after the camera, so it sees this tick's camera.
+    tick().on_tick(
+        Phase::interaction as u8,
         environment_tick,
         StepName::environment as u32,
     );
-    on_tick(
-        Phase::interaction,
+    tick().on_tick(
+        Phase::interaction as u8,
         companion_tick,
         StepName::companion as u32,
     );
-    on_tick(Phase::visible, demand_tick, StepName::demand as u32);
-    on_tick(Phase::visible, scene_tick, StepName::scene as u32);
+    tick().on_tick(Phase::visible as u8, demand_tick, StepName::demand as u32);
+    tick().on_tick(Phase::visible as u8, scene_tick, StepName::scene as u32);
     world_tasks();
 }
 
-/// No more than the executor's pool (door/executor.rs `TASKS`); a refusal means it holds fewer, and aborts.
+/// The world's tasks must fit in the executor's pool (door/executor.rs
+/// `TASKS`). A refused spawn means the pool is too small, and the core aborts.
 fn world_tasks() {
     use xpute_core::sched::task::spawn;
     let spawned = spawn(frame_task(), 0) && spawn(fetch::fetch_task(), 0);
@@ -222,15 +231,17 @@ fn world_tasks() {
     }
 }
 
-/// Each effect's time in the last turn, in EFFECT_NAMES' order.
+/// The milliseconds each effect took in the last turn, indexed by
+/// `EffectName`.
 static EFFECTS: Global<[f64; spec::EFFECT_NAMES]> = Global::new();
 
 pub fn effect_times() -> [f64; spec::EFFECT_NAMES] {
     *EFFECTS.get(|| [0.0; spec::EFFECT_NAMES])
 }
 
-/// Effects are not budgeted, so nothing in them may be real work. Each is
-/// timed only while the profiler records, which alone reads the times.
+/// Effects run outside the tick's budget, so an effect must not do real
+/// work. An effect is timed only while the profiler records, because the
+/// profiler is the only reader of the times.
 macro_rules! effect {
     ($times:ident, $name:ident, $step:expr) => {{
         match $times.as_mut() {
@@ -244,14 +255,15 @@ macro_rules! effect {
     }};
 }
 
-/// Returns how long it took.
+/// Runs the turn's effects and returns how long they took, in milliseconds.
 pub fn world_turn() -> f64 {
     let at = now();
     let mut times = perf_recording().then_some([0.0; spec::EFFECT_NAMES]);
-    // First, so the turn they are read in is the first to see them.
+    // Settings load first, so the turn that reads new settings is also the
+    // first to act on them.
     effect!(times, settings, {
         if store::settings_load_step() {
-            perf_follow(store::settings_store().perf);
+            perf_follow(store::settings().perf);
         }
     });
     effect!(times, navigation, off_center_step());
@@ -259,28 +271,29 @@ pub fn world_turn() -> f64 {
     effect!(times, orient, orient_watchdog_step());
     effect!(times, follow, follow_mode_step());
     effect!(times, dst, {
-        // What the walker found under an unknown Z, let go where it moved.
+        // The floors the walker found under a position of unknown height
+        // are dropped where the ground changed under them.
         support::support_step();
         destination::dst_step();
     });
     effect!(times, decor, decor_models_step());
     effect!(times, objects, repository::step());
-    // device_coord is not gated like pivot: the location indicator keeps its last coordinate across a transient none.
+    // The indicator is handed the device's coordinate as reported, None
+    // included. It keeps showing its last coordinate while the device briefly
+    // reports none.
     effect!(times, location, location_step(off_center().device_coord));
     effect!(times, settings, store::settings_keep_step());
     *EFFECTS.get(|| [0.0; spec::EFFECT_NAMES]) = times.unwrap_or_default();
     now() - at
 }
 
-/// Longest gap still stepped as motion; past it (a hidden tab, a stall) the
-/// world holds still rather than leaping.
-const MAX_STEP_S: f64 = 0.1;
-
 pub struct TurnGrant {
     pub delta: f64,
-    /// The display's refresh, and the interval the runtime paces turns at, a
-    /// whole number of refreshes: the frame's budget (the pacing the client
-    /// boots xpute's runtime with, @xpute/runtime sched/frame_pacing.ts `FrameGrant`).
+    /// The display's refresh interval, and the interval the runtime paces
+    /// turns at (`paced_ms`), both in milliseconds. The paced interval is a
+    /// whole number of refreshes and is the frame's budget. The client sets
+    /// this pacing when it boots xpute's runtime (@xpute/runtime
+    /// sched/frame_pacing.ts `FrameGrant`).
     pub refresh_ms: f64,
     pub paced_ms: f64,
     pub interactive: bool,
@@ -289,13 +302,14 @@ pub struct TurnGrant {
 
 static FRAME: Global<Option<TurnGrant>> = Global::new();
 static FRAMES: Global<Notify> = Global::new();
-static WORLD_DRAWN: Global<bool> = Global::new();
+static NEW_FRAME: Global<bool> = Global::new();
 
 fn frames() -> &'static mut Notify {
     FRAMES.get(Notify::new)
 }
 
-/// A frame turn granted: one still waiting for the GPU takes this one's place, its time added.
+/// Takes a frame the runtime granted. A frame still waiting for the GPU is
+/// replaced by this one, and its elapsed time is added to this one's.
 pub fn on_world_frame_asked(grant: TurnGrant) {
     let frame = FRAME.get(|| None);
     let delta = frame.take().map_or(0.0, |was| was.delta);
@@ -306,22 +320,24 @@ pub fn on_world_frame_asked(grant: TurnGrant) {
     frames().notify();
 }
 
-/// A turn carrying a frame polls the tasks whatever its deadline, so a turn past its deadline still draws.
+/// Whether a granted frame waits to run. A turn that carries a frame polls
+/// the tasks whatever its deadline, so even a late turn draws.
 pub fn world_frame_waiting() -> bool {
     FRAME.get(|| None).is_some()
 }
 
-pub fn take_world_drawn() -> bool {
-    core::mem::take(WORLD_DRAWN.get(|| false))
+pub fn take_new_frame() -> bool {
+    core::mem::take(NEW_FRAME.get(|| false))
 }
 
-/// One task, because the frame's parts have an order and the executor's
-/// order among tasks is never relied on.
+/// The frame runs as one task because its parts must run in order, and
+/// nothing may rely on the order in which the executor runs tasks.
 async fn frame_task() {
     loop {
         notified(frames).await;
-        // A frame the GPU cannot take without blocking (xpute_gpu::admit) is not run: its grant
-        // waits for the next, so the turn hands the renderer nothing it would have to put off.
+        // A frame the GPU cannot take without blocking (xpute_gpu::admit) does
+        // not run. Its grant waits for the next turn, so the renderer is never
+        // handed a frame it would have to put off.
         if api::device().is_some() && !boot::admit_frame()() {
             request_world_tick();
             continue;
@@ -334,7 +350,7 @@ async fn frame_task() {
         world_frame(grant, edge.deadline_ms(), edge.edge_at());
         edge::tasks_after_frame(paced_ms);
         clipmap::fill_share();
-        WORLD_DRAWN.set(true);
+        NEW_FRAME.set(true);
     }
 }
 
@@ -350,16 +366,17 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
     set_credits(credits);
     text_rise();
     let effects_ms = world_turn();
-    // Step by at most MAX_STEP_S, or a pause makes a character cross a wall or
-    // a damped camera overshoot.
+    // A step longer than MAX_STEP_S would carry a character through a wall
+    // or make a damped camera overshoot.
     let step = delta.min(MAX_STEP_S);
-    let report = run_tick(step, deadline_ms, edge_at);
+    let report = tick().run(step, deadline_ms, edge_at);
     let after_tick = now();
-    // The turn's one pump, after every producer has spoken: the effects, the
-    // tick's tile streams (`demand_tick`), and the assets asked for by either.
+    // Requests are pumped once a turn, after every producer has declared its
+    // wants: the effects, the tick's tile streams (`demand_tick`), and the
+    // assets either of them asked for.
     request::declare(Stream::asset, loader::load_wants());
     pump();
-    let drawn = stage::stage_render(
+    let frame = stage::stage_render(
         Pace {
             refresh_ms,
             paced_ms,
@@ -368,8 +385,8 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
         },
         &write::preview().edits,
     );
-    set_renderer_frame(&drawn);
-    if let Some(interval_ms) = drawn.interval_ms {
+    set_renderer_frame(&frame);
+    if let Some(interval_ms) = frame.interval_ms {
         cmd::ui::turn_pace(&cmd::TurnPace { interval_ms });
     }
     let done = now();
@@ -389,30 +406,30 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
     report
 }
 
-/// What moved this turn, told to what reads it: the tiles whose answer moved
-/// (identities, not contents, which a tile's identity fixes) and where the
-/// objects were written, the ground's held by the query
-/// (domain/query/changes.rs). Taken after arrivals are admitted, before the
-/// layers observe.
+/// Tells each reader what changed this turn: the tiles whose answer changed
+/// and the boxes where objects were written. A tile is reported by its
+/// identity, which fixes its contents. The query holds the ground's changes
+/// (domain/query/changes.rs). This runs after arrivals are admitted and
+/// before the layers observe.
 fn changes_step() {
-    static MOVED: Global<[Vec<Quadrant>; 3]> = Global::new();
-    let [places, earth, divisions] = MOVED.get(Default::default);
+    static CHANGED: Global<[Vec<Quadrant>; 3]> = Global::new();
+    let [places, earth, divisions] = CHANGED.get(Default::default);
     let shared = changes::take();
     gpu::note_edited(changes::written_boxes());
-    PlaceTile::tile_cache().take_moved(places);
-    Earth::tile_cache().take_moved(earth);
-    DivisionTile::tile_cache().take_moved(divisions);
+    PlaceTile::tile_cache().take_changed(places);
+    Earth::tile_cache().take_changed(earth);
+    DivisionTile::tile_cache().take_changed(divisions);
     if shared {
-        TerrainTile::demand().on_moved();
+        TerrainTile::demand().on_changed();
     }
     if shared || !places.is_empty() {
-        PlaceTile::demand().on_moved();
-        marker::on_moved(places);
+        PlaceTile::demand().on_changed();
+        marker::on_changed(places);
     }
     if shared || !earth.is_empty() {
-        Earth::demand().on_moved();
+        Earth::demand().on_changed();
     }
     if !divisions.is_empty() {
-        DivisionTile::demand().on_moved();
+        DivisionTile::demand().on_changed();
     }
 }

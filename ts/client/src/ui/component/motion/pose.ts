@@ -1,8 +1,9 @@
 // @pxl/client/ui/component/motion/pose.ts
 
 /**
- * Where a moving view stands: opacity and transform only, so a pose never
- * reflows and iOS WebKit has nothing to ghost.
+ * A pose is where a moving view stands: its opacity and its transform, and
+ * nothing else. A change of pose therefore never reflows the layout, and iOS
+ * WebKit leaves no ghost of the move.
  */
 
 import { type ReactNode, useRef } from "react";
@@ -11,7 +12,8 @@ import type { LayoutChangeEvent, StyleProp, ViewStyle } from "react-native";
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { Transition } from "./transition.ts";
 
-/** A channel left out stands at rest: opaque, in place, at scale, upright. */
+/** A channel left out takes its rest value: fully opaque, not translated, at
+ * scale 1 and not rotated. `rotate` is in degrees. */
 export interface Pose {
   opacity?: f64;
   translateX?: f64;
@@ -28,7 +30,6 @@ const REST: Required<Pose> = {
   rotate: 0,
 };
 
-/** Every channel, each moved on its own. */
 export const CHANNELS: readonly (keyof Pose)[] = [
   "opacity",
   "translateX",
@@ -46,7 +47,7 @@ type Replay = string | number | null;
 export interface MotionProps {
   to: Pose;
   from?: Pose;
-  /** A new non-null value starts it over from `from`. */
+  /** A change to a new non-null value plays the motion again from `from`. */
   replay?: Replay;
   transition: Transition;
   onSettled?: () => void;
@@ -55,7 +56,8 @@ export interface MotionProps {
   children?: ReactNode;
 }
 
-/** Whether this run of a Motion's effect is a replay, asked once a run. */
+/** Returns a check of whether the current run of a Motion's effect is a
+ * replay. Call it once in each run: it records the value it has seen. */
 export function useReplay(replay: Replay): () => boolean {
   const replayed = useRef(replay);
   return () => {

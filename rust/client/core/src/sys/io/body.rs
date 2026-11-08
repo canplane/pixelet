@@ -1,41 +1,25 @@
 // pxl-core/sys/io/body.rs
 
-//! The blocks bodies are read into. Terrain's and the Earth's packets run
-//! just past a mebibyte (a tile's palette indices and the Earth's texels are one
-//! each, pxl-spec `bake::tile::max_pkt_bytes`), where the buddy would
-//! give each body a block of two. Their bodies take slots instead, each
-//! their longest packet in pages, carved from a run the heap gives whole
-//! and takes back once its last slot is free: a cache for one kind of
-//! object, as Bonwick's slab allocator keeps a large object's, its
-//! bookkeeping off the run, picked by the stream rather than by size as
-//! xpute's `SlabMalloc` picks. A run is borrowed only when
-//! every one held is full, so no more are held than the most slots out at
-//! once fill, and never more slots than `BODY_SLOTS` (sys/io/param.rs), which
-//! bounds what the heap gives them. Every other body is a heap block of its
-//! own: a place's or a division's is at most a power of two the buddy gives
-//! whole, and freed as it is decoded.
+//! The blocks that bodies are read into. Terrain and Earth packets run just
+//! past a mebibyte (pxl-spec `bake::tile::max_pkt_bytes`), where the buddy
+//! allocator would give each a block of two. Their bodies take slots
+//! instead. A slot is the longest such packet rounded up to whole pages, cut
+//! from a run that the heap gives whole and takes back once the run's last
+//! slot is free. This is Bonwick's slab allocator for one large object, with
+//! its bookkeeping kept outside the run, and the stream decides whether a
+//! body takes a slot. A new run is taken only when every run held is full,
+//! and no more than `BODY_SLOTS` slots are out at once (sys/io/param.rs).
+//! Every other body is a heap block of its own, freed as it is decoded.
 //!
-//! The slots never stop the reads, drawn or not. A body on a credit needs
-//! no other to be decoded (domain/view/demand.rs `admit_arrived`, one a pass at
-//! least), and is then freed or kept. A terrain packet is freed once decoded,
-//! its clip levels having cut what they want of it
-//! (domain/layer/terrain/clipmap.rs `cut`). An Earth packet is given back only by
-//! a drawn frame (domain/layer/earth.rs `earth_upload`), so it is bounded
-//! apart from it, by its frames. The kept thus leave a
-//! slot for every credit, and a body on one finds one: the tile cache,
-//! which the query and the controls read, fills with no frame drawn.
-//!
-//! A body is refused a slot in two cases, and its want waits on what can
-//! end it (sys/io/room.rs `Refusal`): one that came for a read since stopped,
-//! held a turn until it is dropped (sys/io/fetch.rs `fetch_task`), can find
-//! every slot out, and waits for one given back; and one that needs a run
-//! when the heap can give none waits for the heap's pages or a slot given
-//! back in a run held. Either way the next slot given back asks a turn, in
-//! which the want is asked again.
-//!
-//! A brick that enters asks its tile again on the next step, no more of them
-//! than the slots spare less those already asked and not yet come
-//! (domain/layer/terrain/tile.rs `again_room`).
+//! A terrain body is freed once it is decoded. An Earth body is freed only
+//! when a drawn frame takes it (domain/layer/earth.rs `earth_upload`). The
+//! Earth's frames bound those bodies apart from the rest, so a body on every
+//! credit still finds a slot and the tile cache fills while no frame is
+//! drawn. A refused body waits on what refused it (sys/io/room.rs). When
+//! every slot was out, it waits for a slot to be given back. When the heap
+//! could not give a run, it waits for the heap to get pages back or for a
+//! slot in a run held to be given back. After a refusal, the next slot given
+//! back asks for a turn, in which the want is asked again.
 
 use xpute_core::global::Global;
 use xpute_core::mem::heap::{alloc, free, Block};
@@ -46,7 +30,26 @@ use crate::sys::io::param::{BODY_RUN_BYTES, BODY_SLOTS};
 use crate::sys::io::room::Refusal;
 use crate::sys::sched::edge;
 
-/// A slotted stream's longest packet; 0 for one whose bodies take no slot.
+struct Run {
+    at: usize,
+    /// One bit for each slot, set while the slot is out.
+    out: u32,
+}
+
+#[derive(Default)]
+struct Slots {
+    runs: Vec<Run>,
+    /// A count that moves with every slot given back. A refusal by the body
+    /// slots waits on it (`Refusal::bodies`).
+    releases: u32,
+    /// The most slots out at once since the profiler last took the peak.
+    peak: u32,
+    /// A body was refused, so the next slot given back asks for a turn.
+    waited: bool,
+}
+
+/// The longest packet of a slotted stream, or 0 for a stream whose bodies
+/// take no slot.
 const fn longest(stream: Stream) -> u32 {
     match stream.max_body() {
         Some(max) if stream.row().slotted => max,
@@ -54,10 +57,10 @@ const fn longest(stream: Stream) -> u32 {
     }
 }
 
-/// The longest slotted packet, in whole pages.
+/// The size of a slot: the longest slotted packet, rounded up to whole
+/// pages.
 const SLOT_BYTES: u32 = {
-    let mut most = 0;
-    let mut k = 0;
+    let (mut most, mut k) = (0, 0);
     while k < Stream::ALL.len() {
         if longest(Stream::ALL[k]) > most {
             most = longest(Stream::ALL[k]);
@@ -67,14 +70,10 @@ const SLOT_BYTES: u32 = {
     most.div_ceil(PAGE_BYTES) * PAGE_BYTES
 };
 
-/// Seven at today's packets.
+/// The slots in a run: seven at the current packet sizes.
 const SLOTS: u32 = BODY_RUN_BYTES / SLOT_BYTES;
 
-const FULL: u32 = if SLOTS == u32::BITS {
-    u32::MAX
-} else {
-    (1 << SLOTS) - 1
-};
+const FULL: u32 = u32::MAX >> (u32::BITS - SLOTS);
 
 const _: () = {
     assert!(
@@ -87,38 +86,14 @@ const _: () = {
     );
     let mut k = 0;
     while k < Stream::ALL.len() {
+        let s = Stream::ALL[k];
         assert!(
-            !Stream::ALL[k].row().slotted
-                || BODY_RUN_BYTES / SLOTS < longest(Stream::ALL[k]).next_power_of_two(),
+            !s.row().slotted || BODY_RUN_BYTES / SLOTS < longest(s).next_power_of_two(),
             "a slot with its share of the run costs less than the buddy's block for it"
         );
         k += 1;
     }
 };
-
-/// The heap `slots` slots out at once take at worst: the runs that hold them.
-pub const fn slots_bytes(slots: u32) -> u64 {
-    slots.div_ceil(SLOTS) as u64 * BODY_RUN_BYTES as u64
-}
-
-struct Run {
-    at: usize,
-    /// A bit a slot out.
-    out: u32,
-}
-
-#[derive(Default)]
-struct Slots {
-    runs: Vec<Run>,
-    /// Slots out, across every run.
-    out: u32,
-    releases: u32,
-    /// The most slots out at once since the profiler last took it.
-    peak: u32,
-    /// A body was refused for want of a slot, so the next given back asks a
-    /// turn for its want to be asked again in (sys/io/request.rs `pump`).
-    waited: bool,
-}
 
 static SLOT_TABLE: Global<Slots> = Global::new();
 
@@ -126,16 +101,28 @@ fn slot_table() -> &'static mut Slots {
     SLOT_TABLE.get(Slots::default)
 }
 
-/// A block for a body of `n` bytes, of `stream` where the request
-/// scheduler still holds it; refused where every slot is out, or where the
-/// heap had no room for it or for a run of slots, each refusal waiting on
-/// what refused it.
+impl Slots {
+    fn out(&self) -> u32 {
+        self.runs.iter().map(|r| r.out.count_ones()).sum()
+    }
+}
+
+/// The most heap that `slots` slots out at once can take: the whole runs that
+/// hold them.
+pub const fn slots_bytes(slots: u32) -> u64 {
+    slots.div_ceil(SLOTS) as u64 * BODY_RUN_BYTES as u64
+}
+
+/// A block for a body of `n` bytes. `stream` is the body's stream, or None
+/// where the scheduler no longer holds its attempt. The block is a slot where
+/// the stream's bodies take one, and a heap block of its own otherwise.
 pub fn take(stream: Option<Stream>, n: u32) -> Result<Block, Refusal> {
     if !stream.is_some_and(|s| s.row().slotted) || n > SLOT_BYTES {
         return alloc(n).ok_or_else(Refusal::now);
     }
     let s = slot_table();
-    if s.out >= BODY_SLOTS {
+    let out = s.out();
+    if out >= BODY_SLOTS {
         s.waited = true;
         return Err(Refusal::bodies());
     }
@@ -150,11 +137,10 @@ pub fn take(stream: Option<Stream>, n: u32) -> Result<Block, Refusal> {
             s.runs.len() - 1
         }
     };
+    s.peak = s.peak.max(out + 1);
     let run = &mut s.runs[i];
     let slot = (!run.out).trailing_zeros();
     run.out |= 1 << slot;
-    s.out += 1;
-    s.peak = s.peak.max(s.out);
     Ok((run.at + (slot * SLOT_BYTES) as usize, n))
 }
 
@@ -172,7 +158,8 @@ pub unsafe fn give(block: Block) {
     };
     let run = &mut s.runs[i];
     let off = block.0 - run.at;
-    // A block inside a run that is not a slot out is given back twice, or was never taken.
+    // A block in a run that is not a slot out was given back twice or never
+    // taken.
     xpute_kit::ensure!(
         off < (SLOTS * SLOT_BYTES) as usize && off.is_multiple_of(SLOT_BYTES as usize),
         ENOTRECOVERABLE,
@@ -181,7 +168,6 @@ pub unsafe fn give(block: Block) {
     let bit = 1 << (off / SLOT_BYTES as usize);
     xpute_kit::ensure!(run.out & bit != 0, ENOTRECOVERABLE, off);
     run.out &= !bit;
-    s.out -= 1;
     s.releases = s.releases.wrapping_add(1);
     if core::mem::take(&mut s.waited) {
         edge::request_world_tick();
@@ -193,17 +179,16 @@ pub unsafe fn give(block: Block) {
     }
 }
 
-/// Moves whenever a slot is given back: a body refused one (`Refusal::bodies`)
-/// may be served once it has.
 pub fn releases() -> u32 {
     slot_table().releases
 }
 
-/// The most slots out at once since the last call, the profiler's
-/// (perf/report.rs `perf_frame`): what `BODY_SLOTS` is measured by.
+/// The most slots out at once since the last call. The profiler takes it
+/// (perf/report.rs `perf_frame`), and `BODY_SLOTS` is judged against it.
 pub fn take_peak() -> u32 {
     let s = slot_table();
-    core::mem::replace(&mut s.peak, s.out)
+    let out = s.out();
+    core::mem::replace(&mut s.peak, out)
 }
 
 #[cfg(test)]

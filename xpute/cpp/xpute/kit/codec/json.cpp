@@ -53,7 +53,8 @@ std::optional<std::uint32_t> hex4(std::string_view s, std::size_t at) noexcept {
 using json_detail::hex4;
 using json_detail::skip_ws;
 
-// The check recurses, and a module's stack is fixed.
+// The grammar check recurses once for each level of nesting, and a module's
+// stack has a fixed size, so a deeper text is refused.
 static constexpr std::uint32_t MAX_DEPTH = 128;
 
 static std::optional<std::size_t> skip_string(std::string_view s, std::size_t at) noexcept {
@@ -75,13 +76,15 @@ static std::optional<std::size_t> skip_string(std::string_view s, std::size_t at
             continue;
         }
         if (b < 0x20) return std::nullopt;
-        // A UTF-8 continuation byte is never a quote or a backslash.
+        // Every byte of a multi-byte UTF-8 sequence is above 0x7F and so is
+        // never a quote or a backslash; a string can be walked a byte at a
+        // time.
         at++;
     }
 }
 
-// By JSON's grammar: `+1`, `.5`, `1.` and `01` are refused, as `JSON.parse`
-// refuses them.
+// Follows JSON's number grammar: `+1`, `.5`, `1.` and `01` are refused, as the
+// runtime's `JSON.parse` refuses them.
 static std::optional<std::size_t> skip_number(std::string_view s, std::size_t at) noexcept {
     auto digits = [&](std::size_t from) {
         std::size_t i = from;
@@ -177,9 +180,11 @@ std::optional<bool> JsonValue::as_bool() const noexcept {
     return std::nullopt;
 }
 
-// Past the doubles, JSON.parse and Rust's `parse` read a magnitude over the
-// largest as an infinity and one under the least as a zero: which, by the
-// place of the leading digit plus the exponent.
+// The value of a number beyond the range of doubles, which `from_chars`
+// refuses. `JSON.parse` and Rust's `parse` read a magnitude above the largest
+// double as an infinity and one below the least as zero, and so does this; it
+// tells the two apart by the decimal place of the leading digit plus the
+// exponent.
 static double beyond_doubles(std::string_view t) noexcept {
     bool neg = t.front() == '-';
     std::size_t e = t.find_first_of("eE");
@@ -192,7 +197,8 @@ static double beyond_doubles(std::string_view t) noexcept {
         std::size_t i = e + 1;
         bool exp_neg = t[i] == '-';
         if (t[i] == '-' || t[i] == '+') i++;
-        // Clamped: past this, any exponent decides alone.
+        // The exponent is clamped: beyond this size it decides the result
+        // alone, whatever the mantissa.
         for (; i < t.size(); i++) exp = std::min(exp * 10 + (t[i] - '0'), 100000L);
         if (exp_neg) exp = -exp;
     }
@@ -247,7 +253,8 @@ std::optional<JsonValue> JsonItems::next() noexcept {
         at_ = s_.size();
         return std::nullopt;
     }
-    // The text was checked whole.
+    // `read_json` checked the whole text, so a value starts here and the
+    // skip cannot fail.
     std::size_t end = *skip_val(s_, start, 0);
     at_ = skip_ws(s_, end) + 1;
     return JsonValue(s_.substr(start, end - start));

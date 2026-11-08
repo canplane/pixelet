@@ -1,6 +1,6 @@
 // @pxl/client/abi/gpu.spec.ts
 //
-// GENERATED from spec/client/render/gpu/api.json
+// GENERATED from spec/client/render/api.json
 //
 // pixelet's conventions over xpute's GPU calls (xpute/spec/gpu/api.json), which
 // the renderer writes through xpute's encoder (gpu/api.rs): the stream it writes
@@ -16,7 +16,7 @@ export { surface_role };
 /** The one place the renderer's calls cross (gpu/api.rs): a stream
  * (xpute-core ipc/stream.rs) in the core's machine's GPU socket, which the
  * core writes its calls into during a turn and the runtime runs once the turn
- * has returned. Its size is the socket's (rust/client/core/machine.json `gpu`).
+ * has returned. Its size is the socket's (spec/client/core/sys/machine.json `gpu`).
  *
  * Its head, past the stream's own words, is what the runtime writes for the
  * core: the device's block (xpute DEVICE) and the timed spans' reads, three

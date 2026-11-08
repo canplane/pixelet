@@ -4,7 +4,8 @@
 
 import { PlatformColor } from "react-native";
 
-/** Typed as a string though it is an object, so react-native-svg's color check accepts it. */
+/** A PlatformColor is an object. It is typed here as a string so that
+ * react-native-svg's color props accept it. */
 function system(name: string): string {
   return PlatformColor(name) as unknown as string;
 }

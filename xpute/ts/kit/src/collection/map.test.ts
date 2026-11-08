@@ -47,7 +47,7 @@ function agrees_with_map<K extends number | bigint>(
       ref.delete(k);
       if (from !== pos) ref.set(moved, pos);
     } else {
-      // Clustered keys, the case linear probing is worst at.
+      // Clustered keys are the case linear probing handles worst.
       const k = make(rnd() % 4096);
       if (!ref.has(k)) {
         live.push(k);

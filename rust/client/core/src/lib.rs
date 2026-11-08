@@ -1,39 +1,34 @@
 // pxl-core/lib.rs
 
-//! pixelet's core: the world's state and what runs over it, and the
-//! artifact it is built as. Its form is xpute's for the target
-//! (`xpute_core::core!`): a WebAssembly module a page instantiates, whose
-//! browser draws its frames, or a library a device's app links, with xpute's
-//! GPU runtime around each turn and its admission handed the core's entry
-//! (door.rs `run`). Nothing else here knows of WebAssembly, a browser or
-//! threads. What a device's app calls besides xpute's names is the
-//! transport's decoder (unpack.rs, include/pxl_native.h).
+//! pixelet's core holds the world's state and runs everything that works on
+//! it. `xpute_core::core!` builds it in the form its target takes. On the
+//! page it is a WebAssembly module, and the browser draws its frames. On a
+//! device it is a library the app links, and xpute's GPU runtime runs beside
+//! it and admits each frame. Every turn enters the core through door.rs
+//! `run`. No other file of the core knows about WebAssembly, the browser or
+//! threads. The only function a device's app calls outside xpute's names is
+//! the transport's decoder (sys/unpack.rs, include/pxl_native.h).
 
 pub(crate) mod domain;
 pub mod door;
-#[path = "machine.spec.rs"]
-pub mod machine;
 pub(crate) mod perf;
 pub(crate) mod pointer;
 pub mod sys;
 pub(crate) mod turn;
 pub(crate) mod ui;
-#[cfg(not(target_arch = "wasm32"))]
-mod unpack;
 
 use door::layout::FIXED_BYTES;
-use machine::MACHINE;
 use pxl_render::api_spec::device;
+use sys::machine::MACHINE;
 use xpute_gpu::Numbers;
 
-/// What a device's GPU runtime runs the renderer's stream by
-/// (spec/client/render/gpu/api.json `device`).
+/// How a device's GPU runtime paces the renderer's stream, as
+/// spec/client/render/api.json `device` sets it.
 const GPU: Numbers = Numbers {
     frame_latency: device::FRAME_LATENCY,
     upload_chunk_bytes: device::UPLOAD_CHUNK_BYTES as u64,
 };
 
-// The core on its machine: the front its runtime laid, as the machine
-// places it, opened on the first turn, the heap past `.fixed`
-// (door/layout.rs), and its door's turn as the entry.
+// The heap starts past the core's fixed ranges (door/layout.rs). The first
+// turn opens the front the runtime laid out where the machine places it.
 xpute_core::core!(MACHINE, FIXED_BYTES, door::run, gpu: GPU);

@@ -1,11 +1,14 @@
 // pxl-core/domain/layer/division.rs
 
-//! The divisions as a layer of the pyramid, held over the pivot alone: its
-//! line is asked as a destination's, and the deepest tile held on it names
-//! the cell. Nothing here is drawn; the name is read straight into the UI
-//! snapshot. A tile's record is a room in `.fixed.division` for its cells,
-//! decoded into straight from the packet; its divisions, a handful, are on
-//! the heap.
+//! The division layer: the named divisions of the map that hold the pivot.
+//! Only the tiles over the pivot are held. Their line is asked for as a
+//! destination's line is, and the finest tile held on it names the cell the
+//! pivot is in. Nothing of this layer is drawn; the names go straight into
+//! the UI snapshot.
+//!
+//! Each tile's record is a room in `.fixed.division`, and the tile's cells
+//! are decoded into it straight from the packet. The tile's divisions, a
+//! handful, live on the heap.
 
 use pxl_spec::bake::tile::division::{self, Division, DivisionTile, CELLS, DIVISION_LEAF};
 use pxl_spec::bake::tile::Occupancy;
@@ -25,13 +28,15 @@ use crate::sys::io::failure::Failure;
 
 static DIVISION: Global<TileCache<DivisionTile>> = Global::new();
 
-/// `.fixed.division`, handed in at boot.
+/// The `.fixed.division` section, which the boot hands in.
 pub static RANGE: OwnedRange = OwnedRange::new();
 
-/// A record's cells, a word each, on a whole cache line.
+/// The bytes of one record: a word for each cell, rounded up to whole cache
+/// lines.
 const RECORD_BYTES: u32 = range::arr_bytes(CELLS, 4);
 
-/// A record a frame, end to end.
+/// The size of `.fixed.division`: one record for each slot of the tile
+/// cache, end to end.
 pub const DIVISION_BYTES: u32 = TileCache::<DivisionTile>::SLOTS * RECORD_BYTES;
 
 impl Base for DivisionTile {
@@ -48,8 +53,6 @@ impl Base for DivisionTile {
         DIVISION.get(TileCache::default)
     }
 
-    /// Its cells into its record; its divisions, a handful over the pivot,
-    /// held on the heap with their names decoded.
     fn receive(
         _tile: Quadrant,
         record: u32,
@@ -62,7 +65,8 @@ impl Base for DivisionTile {
     }
 }
 
-/// The finest tile of the pivot's line, which demand asks for with the line.
+/// The finest tile on the pivot's line. The demand asks for it together with
+/// every tile over it.
 pub fn line(pivot: Option<Q3>) -> Option<Quadrant> {
     pivot.map(|at| {
         let [x, y, _] = idx_of(LEAF_ZOOM, &at);
@@ -70,15 +74,17 @@ pub fn line(pivot: Option<Q3>) -> Option<Quadrant> {
     })
 }
 
-/// Where the divisions of the cell `at` is in are named: the deepest tile
-/// held over it, the held parent while the tile under it is on its way, and
-/// the cell in it. A tile's identity fixes what it names.
+/// The tile and cell that name the divisions around `at`: the finest tile
+/// held over `at`, which is a held parent while the finer tile is on its way,
+/// and the index of `at`'s cell in that tile. The same tile always names the
+/// same divisions.
 pub fn naming(at: &Q3) -> Option<(Quadrant, u32)> {
     let from = line(Some(*at)).and_then(|p| DivisionTile::tile_cache().finest_resident(p))?;
     Some((from, GROUND.cell_of(from.zoom, at).idx()))
 }
 
-/// The divisions named at `naming`'s cell, broad to narrow.
+/// Calls `each` with the divisions named at a cell from `naming`, from the
+/// broadest to the narrowest.
 pub fn each_division((from, cell): (Quadrant, u32), each: impl FnMut(&Division)) {
     if let Some(tile) = DivisionTile::tile_cache().get(from) {
         tile.name_at(cell).for_each(each);
