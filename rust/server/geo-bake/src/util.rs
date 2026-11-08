@@ -56,6 +56,7 @@ fn digest_tree(path: &Path, name: &Path, h: &mut FnvHasher) -> Result<(), String
     Ok(())
 }
 
+/// FNV-1a 64.
 pub const fn fnv1a(bytes: &[u8]) -> u64 {
     let (mut h, mut i) = (0xcbf2_9ce4_8422_2325u64, 0);
     while i < bytes.len() {

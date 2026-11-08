@@ -15,6 +15,7 @@ import type {
   types as BabelTypes,
 } from "@babel/core";
 
+/** The part of Babel a plugin is handed. */
 type Babel = { types: typeof BabelTypes };
 
 export default (api: ConfigAPI): TransformOptions => {
@@ -30,6 +31,8 @@ export default (api: ConfigAPI): TransformOptions => {
     __DEV_SOURCE__: source,
   };
 
+  /** Replaces each name in DEFINE with its value, wherever the name is not
+   * bound in its own scope. */
   const define = ({ types: t }: Babel): PluginObj => ({
     visitor: {
       Identifier(p) {

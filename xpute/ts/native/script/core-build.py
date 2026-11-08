@@ -48,7 +48,7 @@ HEADERS = [
 
 
 def fail(message):
-    print(f"[build-core] {message}", file=sys.stderr)
+    print(f"[core-build] {message}", file=sys.stderr)
     sys.exit(1)
 
 
@@ -177,7 +177,7 @@ def main():
             for src in own.iterdir():
                 write_changed(src, include / src.name)
 
-    print(f"[build-core] {which} {package} {build['target']} -> {linked}")
+    print(f"[core-build] {which} {package} {build['target']} -> {linked}")
     return 0
 
 

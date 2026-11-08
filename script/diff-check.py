@@ -144,10 +144,10 @@ if xpute:
     task("test-xpute")
 cargo("test-")
 
-print(f"check-diff: {len(changed)} changed file(s); crates {', '.join(sorted(touched)) or 'none'}")
+print(f"diff-check: {len(changed)} changed file(s); crates {', '.join(sorted(touched)) or 'none'}")
 for label, argv, cwd in runs:
-    print(f"check-diff: {label}", flush=True)
+    print(f"diff-check: {label}", flush=True)
     status = subprocess.run(argv, cwd=cwd).returncode
     if status != 0:
-        print(f"check-diff: {label} failed", file=sys.stderr)
+        print(f"diff-check: {label} failed", file=sys.stderr)
         sys.exit(status or 1)

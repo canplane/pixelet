@@ -321,6 +321,7 @@ fn run() -> Result<(), String> {
     Ok(())
 }
 
+/// Whether a table is keyed as this script keys it.
 fn is_keyed(client: &mut Client, table: &str, want: &[&str]) -> Result<bool, String> {
     let key: Vec<String> = client
         .query(
@@ -445,6 +446,7 @@ fn download<'a>(
     Ok(out)
 }
 
+/// The staging table a type's shards are written from.
 fn staging(ty: &Type) -> String {
     format!("{}_staging", ty.table)
 }

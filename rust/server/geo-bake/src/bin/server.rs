@@ -299,9 +299,20 @@ fn run() -> Result<(), String> {
         return Err("--shelf serves no oven, so the --oven flags do not apply".into());
     }
 
-    // A shelf's server has no oven, so it names no folder for one.
+    // A shelf's server has no oven, so it names no folder for one. The default oven is named by
+    // the code that bakes, and an oven another code baked is stale, so it is removed.
     let oven = match (oven, &shelf) {
-        (None, None) => directory::cache_dir("oven")?.join(format!("{:016x}", code_digest()?)),
+        (None, None) => {
+            let ovens = directory::cache_dir("oven")?;
+            let own = format!("{:016x}", code_digest()?);
+            for e in std::fs::read_dir(&ovens).into_iter().flatten().flatten() {
+                if e.file_name() != own.as_str() {
+                    std::fs::remove_dir_all(e.path())
+                        .map_err(|err| format!("{}: {err}", e.path().display()))?;
+                }
+            }
+            ovens.join(own)
+        }
         (oven, _) => oven.unwrap_or_default(),
     };
     // The folder the bakes write to: everything the server reads from it follows `--shelf`.
@@ -313,7 +324,7 @@ fn run() -> Result<(), String> {
             let min_zoom = LEAF_ZOOM
                 .checked_sub(folds)
                 .filter(|&z| z >= MIN_ZOOM)
-                .ok_or("--folds past the pyramid's top")?;
+                .ok_or("--oven-folds past the pyramid's top")?;
             (
                 TileSource::Oven(Server::open(workers, oven.clone(), min_zoom, limits)?),
                 min_zoom,

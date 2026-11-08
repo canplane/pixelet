@@ -53,7 +53,7 @@ def main():
     parser.add_argument("--interval", type=float, default=0.5, help="seconds between looks at the tree (0.5)")
     args = parser.parse_args()
 
-    print(f"[watch-wasm] watching {RUST}", flush=True)
+    print(f"[wasm-watch] watching {RUST}", flush=True)
     last = tree()
     while True:
         time.sleep(args.interval)
@@ -66,9 +66,9 @@ def main():
         before = mtime(OUT)
         status = subprocess.run([sys.executable, str(BUILD)], cwd=APP).returncode
         if status != 0:
-            print(f"[watch-wasm] build failed ({status}); the page keeps the module it has", file=sys.stderr, flush=True)
+            print(f"[wasm-watch] build failed ({status}); the page keeps the module it has", file=sys.stderr, flush=True)
         elif mtime(OUT) != before:
-            print("[watch-wasm] public/core.wasm rebuilt: reload the page", flush=True)
+            print("[wasm-watch] public/core.wasm rebuilt: reload the page", flush=True)
 
 
 if __name__ == "__main__":

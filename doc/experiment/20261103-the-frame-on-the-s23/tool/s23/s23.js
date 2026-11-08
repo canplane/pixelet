@@ -3,7 +3,7 @@
 // env
 //   VPORT     the page's port on the Mac, a Metro dev bundle (default 8081); `adb reverse`d.
 //   LABEL     the run's name: files are OUT/LABEL*.
-//   OUT       where data and shots go (default <repo>/out/s23).
+//   OUT       where data and shots go (default <repo>/cache/s23).
 //   SCENES    in order, comma-separated (default off,on,drive):
 //               off, on   a 25 s circle with the shadows off / on, its frames' rows, then an 8 s
 //                         window with ray_counts on (`counts off|on` in the log)
@@ -45,7 +45,7 @@ import { execSync } from "node:child_process";
 const env = process.env;
 const VPORT = Number(env.VPORT || 8081), PORT = 9333, O = `http://localhost:${VPORT}`;
 const REPO = path.resolve(new URL(".", import.meta.url).pathname, "../../../..");
-const OUT = env.OUT || path.join(REPO, "out/s23");
+const OUT = env.OUT || path.join(REPO, "cache/s23");
 fs.mkdirSync(OUT, { recursive: true });
 const L = env.LABEL || `run-${VPORT}`;
 const SCENES = (env.SCENES || "off,on,drive").split(",");

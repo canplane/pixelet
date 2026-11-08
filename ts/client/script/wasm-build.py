@@ -85,7 +85,7 @@ def optimized(src, out):
     try:
         done = subprocess.run(["wasm-opt", *WASM_OPT, str(src), "-o", str(out)])
     except FileNotFoundError:
-        raise Failed(1, "[build-wasm] wasm-opt did not run. The module is finished by Binaryen: brew install binaryen (or your platform's package).")
+        raise Failed(1, "[wasm-build] wasm-opt did not run. The module is finished by Binaryen: brew install binaryen (or your platform's package).")
     if done.returncode != 0:
         raise Failed(done.returncode or 1)
 
@@ -114,7 +114,7 @@ def main():
             env={**os.environ, "RUSTFLAGS": remapped()},
         )
     except FileNotFoundError as err:
-        print(f"[build-wasm] cargo did not run ({err}). The core needs a Rust toolchain with the {TARGET} target: rustup target add {TARGET}", file=sys.stderr)
+        print(f"[wasm-build] cargo did not run ({err}). The core needs a Rust toolchain with the {TARGET} target: rustup target add {TARGET}", file=sys.stderr)
         return 1
     if status.returncode != 0:
         return status.returncode
@@ -125,7 +125,7 @@ def main():
     # are equal. The dev server's build and the published one are separate
     # files, and either may have been finished last.
     if before is not None and mtime(BUILT) == before and mtime(OUT) == before:
-        print("[build-wasm] up to date -> public/core.wasm")
+        print("[wasm-build] up to date -> public/core.wasm")
         return 0
 
     # Each run works in its own directory under cargo's target, removed whole
@@ -133,7 +133,7 @@ def main():
     # leaves its directory where `cargo clean` removes it, and a dev server's
     # build and a check's never share a file. The directory is on the module's
     # volume, so its files can be renamed into place.
-    work = Path(tempfile.mkdtemp(dir=TARGET_DIR, prefix="build-wasm-"))
+    work = Path(tempfile.mkdtemp(dir=TARGET_DIR, prefix="wasm-build-"))
     try:
         linked_file, done = work / "linked.wasm", work / "done.wasm"
         shutil.copyfile(BUILT, linked_file)
@@ -149,7 +149,7 @@ def main():
         os.utime(done, ns=(built, built))
         os.replace(done, OUT)
         said = (", without the dev-only settings" if PUBLISHED else "") + (f", and {paths} source paths numbered" if paths > 0 else "")
-        print(f"[build-wasm] {linked} -> {OUT.stat().st_size} bytes, stripped{said} -> public/core.wasm")
+        print(f"[wasm-build] {linked} -> {OUT.stat().st_size} bytes, stripped{said} -> public/core.wasm")
         return 0
     except Failed as err:
         if str(err):

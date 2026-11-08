@@ -14,155 +14,156 @@
 )]
 
 pub mod sentinel {
-    /// nothing painted: the ground before a bake writes it, and an object cell no leaf holds
+    /// Nothing is painted: the ground before a bake writes it, and an object cell no leaf holds.
     pub const void: u8 = 0x00;
-    /// bedrock, where the world holds no more: the floor under the ground and the wall just inside the service area (`pxl-spec limit.rs`); a cell past the area or the coverage, which no source here describes, reads as it and is drawn as nothing, as is a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; nothing is placed on or taken from it
+    /// Bedrock, where the world holds no more: the floor under the ground and the wall just inside the service area (`pxl-spec limit.rs`). A cell past the area or the coverage, which no source here describes, reads as it and is drawn as nothing, and so is a byte no bake wrote. The value is 0xFF so that memory filled with 0xFF reads as unknown. Nothing is placed on it or taken from it.
     pub const unknown: u8 = 0xff;
 }
 
 // The ground: one byte a cell, a palette entry from OpenStreetMap Carto, numbered in
 // the order Carto paints.
-// `transport` marks a way: decor faces along it and no pier stands on it;
-// every palette entry stands at its sampled height. The byte's values: 1 to 63
-// Carto's palette entries, in its paint order; from 64 pixelet's own, the
-// underground, which Carto paints nothing of; 0 and 255 the sentinels.
+// `transport` marks a way: decor faces along it and no pier stands on it.
+// Whatever the palette entry, a cell's top is the height sampled from the
+// elevation; no entry raises or lowers it. The byte's values are these: 1 to 63
+// are Carto's palette entries, in its paint order; from 64 on are pixelet's own,
+// the underground, of which Carto paints nothing; 0 and 255 are the sentinels.
 pub mod ground {
 
     // ---- landcover ----
 
-    /// land no feature covers, and what Carto draws no fill for: Carto's background, @land-color
+    /// Land no feature covers, and what Carto draws no fill for, takes Carto's background, @land-color.
     pub const land: u8 = 1;
-    /// bare rock, scree, shingle: Carto @bare_ground
+    /// Bare rock, scree and shingle take Carto's @bare_ground.
     pub const bare_ground: u8 = 2;
-    /// sand: Carto @sand
+    /// Sand takes Carto's @sand.
     pub const sand: u8 = 3;
-    /// beach and shoal: Carto @beach
+    /// Beach and shoal take Carto's @beach.
     pub const beach: u8 = 4;
-    /// heath and bog: Carto @heath
+    /// Heath and bog take Carto's @heath.
     pub const heath: u8 = 5;
-    /// scrub and mangrove: Carto @scrub
+    /// Scrub and mangrove take Carto's @scrub.
     pub const scrub: u8 = 6;
-    /// grass, meadow, garden, village green, marsh, wet meadow: Carto @grass
+    /// Grass, meadow, garden, village green, marsh and wet meadow take Carto's @grass.
     pub const grass: u8 = 7;
-    /// park: Carto @park
+    /// A park takes Carto's @park.
     pub const park: u8 = 8;
-    /// playground, recreation ground, stadium, sports center: Carto @leisure, lighten(@park, 5%)
+    /// A playground, recreation ground, stadium or sports center takes Carto's @leisure, lighten(@park, 5%).
     pub const leisure: u8 = 9;
-    /// pitch and track: Carto @pitch
+    /// A pitch or a track takes Carto's @pitch.
     pub const pitch: u8 = 10;
-    /// forest, wood, swamp: Carto @forest
+    /// Forest, wood and swamp take Carto's @forest.
     pub const forest: u8 = 11;
-    /// orchard, vineyard, plant nursery: Carto @orchard
+    /// An orchard, vineyard or plant nursery takes Carto's @orchard.
     pub const orchard: u8 = 12;
-    /// allotments: Carto @allotments
+    /// Allotments take Carto's @allotments.
     pub const allotments: u8 = 13;
-    /// farmland and greenhouses: Carto @farmland
+    /// Farmland and greenhouses take Carto's @farmland.
     pub const farmland: u8 = 14;
-    /// farmyard: Carto @farmyard
+    /// A farmyard takes Carto's @farmyard.
     pub const farmyard: u8 = 15;
-    /// campsite and golf course: Carto @campsite
+    /// A campsite or golf course takes Carto's @campsite.
     pub const campsite: u8 = 16;
-    /// cemetery and grave yard: Carto @cemetery
+    /// A cemetery or grave yard takes Carto's @cemetery.
     pub const cemetery: u8 = 17;
-    /// residential: Carto @residential
+    /// Residential land takes Carto's @residential.
     pub const residential: u8 = 18;
-    /// garages: Carto @garages
+    /// Garages take Carto's @garages.
     pub const garages: u8 = 19;
-    /// retail: Carto @retail
+    /// Retail land takes Carto's @retail.
     pub const retail: u8 = 20;
-    /// commercial: Carto @commercial
+    /// Commercial land takes Carto's @commercial.
     pub const commercial: u8 = 21;
-    /// industrial, railway, works: Carto @industrial
+    /// Industrial land, railway land and works take Carto's @industrial.
     pub const industrial: u8 = 22;
-    /// power plant and substation: Carto @power, darken(@industrial, 5%)
+    /// A power plant or substation takes Carto's @power, darken(@industrial, 5%).
     pub const power: u8 = 23;
-    /// landfill: Carto's landuse_landfill, a value with no name
+    /// Landfill takes Carto's landuse_landfill, a value with no name.
     pub const landfill: u8 = 24;
-    /// quarry: Carto @quarry
+    /// A quarry takes Carto's @quarry.
     pub const quarry: u8 = 25;
-    /// school, college, university, hospital, clinic: Carto @societal_amenities
+    /// A school, college, university, hospital or clinic takes Carto's @societal_amenities.
     pub const societal_amenities: u8 = 26;
-    /// a religious site: Carto @place_of_worship
+    /// A religious site takes Carto's @place_of_worship.
     pub const place_of_worship: u8 = 27;
-    /// aerodrome, bus station, ferry terminal: Carto @transportation-area
+    /// An aerodrome, bus station or ferry terminal takes Carto's @transportation-area.
     pub const transportation_area: u8 = 28;
-    /// parking: Carto @parking
+    /// Parking takes Carto's @parking.
     pub const parking: u8 = 29;
-    /// apron: Carto @apron
+    /// An apron takes Carto's @apron.
     pub const apron: u8 = 30;
 
     // ---- water ----
 
-    /// glacier: Carto @glacier, drawn with the water areas
+    /// A glacier takes Carto's @glacier; Carto draws it with the water areas.
     pub const glacier: u8 = 31;
-    /// sea, lake, river, canal, any water: Carto @water-color
+    /// Sea, lake, river, canal and any other water take Carto's @water-color.
     pub const water: u8 = 32;
 
     // ---- water_features ----
 
-    /// dam: Carto @dam
+    /// A dam takes Carto's @dam.
     pub const dam: u8 = 33;
-    /// breakwater, groyne, weir: Carto @breakwater-color, @weir-line
+    /// A breakwater, groyne or weir takes Carto's @breakwater-color or @weir-line.
     pub const breakwater: u8 = 34;
 
     // ---- buildings ----
 
-    /// a building: Carto @building-fill
+    /// A building takes Carto's @building-fill.
     pub const building: u8 = 35;
-    /// a place of worship, a terminal, a station: Carto @building-major-fill at z16 and finer, as a cell is z16
+    /// A place of worship, a terminal or a station takes Carto's @building-major-fill at z16 and finer, as a cell is z16.
     pub const building_major: u8 = 36;
 
     // ---- roads ----
 
-    /// footway, steps, path: Carto @footway-fill, @steps-fill
+    /// Footways, steps and paths take Carto's @footway-fill or @steps-fill.
     pub const footway: u8 = 37;
-    /// cycleway: Carto @cycleway-fill
+    /// A cycleway takes Carto's @cycleway-fill.
     pub const cycleway: u8 = 38;
-    /// bridleway: Carto @bridleway-fill
+    /// A bridleway takes Carto's @bridleway-fill.
     pub const bridleway: u8 = 39;
-    /// track, an agricultural or forest way: Carto @track-fill
+    /// A track, an agricultural or forest way, takes Carto's @track-fill.
     pub const track: u8 = 40;
-    /// pedestrian street: Carto @pedestrian-fill
+    /// A pedestrian street takes Carto's @pedestrian-fill.
     pub const pedestrian: u8 = 41;
-    /// living street: Carto @living-street-fill
+    /// A living street takes Carto's @living-street-fill.
     pub const living_street: u8 = 42;
-    /// tertiary, residential, unclassified and service, told apart by width: Carto @tertiary-fill, @residential-fill, @service-fill
+    /// A tertiary, residential, unclassified or service road takes Carto's @tertiary-fill, @residential-fill or @service-fill, told apart by width.
     pub const residential_road: u8 = 43;
-    /// a road of no known class: Carto @road-fill
+    /// A road of no known class takes Carto's @road-fill.
     pub const road: u8 = 44;
-    /// secondary: Carto @secondary-fill
+    /// A secondary road takes Carto's @secondary-fill.
     pub const secondary: u8 = 45;
-    /// primary: Carto @primary-fill
+    /// A primary road takes Carto's @primary-fill.
     pub const primary: u8 = 46;
-    /// trunk: Carto @trunk-fill
+    /// A trunk road takes Carto's @trunk-fill.
     pub const trunk: u8 = 47;
-    /// motorway: Carto @motorway-fill
+    /// A motorway takes Carto's @motorway-fill.
     pub const motorway: u8 = 48;
-    /// platform: Carto @platform-fill
+    /// A platform takes Carto's @platform-fill.
     pub const platform: u8 = 49;
-    /// tram: Carto's railway_tram, a value with no name
+    /// A tram takes Carto's railway_tram, a value with no name.
     pub const tram: u8 = 50;
-    /// light rail, narrow gauge, funicular: Carto's railway_light_rail, a value with no name
+    /// Light rail, narrow gauge and funicular take Carto's railway_light_rail, a value with no name.
     pub const light_rail: u8 = 51;
-    /// subway: Carto's railway_subway, a value with no name
+    /// A subway takes Carto's railway_subway, a value with no name.
     pub const subway: u8 = 52;
-    /// monorail: Carto's railway_monorail, a value with no name
+    /// A monorail takes Carto's railway_monorail, a value with no name.
     pub const monorail: u8 = 53;
-    /// rail: Carto's railway_rail, a value with no name
+    /// A railway takes Carto's railway_rail, a value with no name.
     pub const rail: u8 = 54;
 
     // ---- aeroways ----
 
-    /// runway, taxiway, helipad: Carto @aeroway-fill, @runway-fill, @taxiway-fill, @helipad-fill
+    /// A runway, taxiway or helipad takes Carto's @aeroway-fill, @runway-fill, @taxiway-fill or @helipad-fill.
     pub const aeroway: u8 = 55;
 
     // ---- underground ----
 
-    /// under a face: Minecraft Beta's filler, dirt; Carto paints nothing under the ground, and no bake writes it
+    /// What lies under a face: Minecraft Beta's filler, dirt. Carto paints nothing under the ground, and no bake writes it.
     pub const soil: u8 = 64;
-    /// under sand's filler: Minecraft Beta's sandstone
+    /// What lies under sand's filler: Minecraft Beta's sandstone.
     pub const sandstone: u8 = 65;
-    /// under the filler: Minecraft Beta's stone
+    /// What lies under the filler: Minecraft Beta's stone.
     pub const stone: u8 = 66;
 
     pub const ENTRIES: &[(&str, u8)] = &[
@@ -233,7 +234,7 @@ pub mod ground {
 // What only an object can be: past a byte, so no ground cell holds it. An
 // object's value is a u16 whose byte range is the ground's palette.
 pub mod object {
-    /// explicit air: retains this leaf and erases the layers under it; no ground cell can hold it, as it is past a byte
+    /// Explicit air: the leaf stays and erases the layers under it.
     pub const air: u16 = 256;
 
     // ---- colors ----

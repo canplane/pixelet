@@ -77,8 +77,8 @@ asked; `tool/s23/ab.sh` alternates two trees, a fresh load each, and `tool/s23/s
 `tool/s23/trace.py` read what the runs saved. S23 figures are ms p50 / p95 over fresh loads
 that alternate base and change in one sitting, two loads a side unless a run says otherwise.
 From the visit A/B on, a load is timed only once the ground's textures have landed;
-before, whether they had was a confound. Data and shots went under `out/s23/`, which is not
-kept.
+before, whether they had was a confound. Data and shots are under `cache/s23/`, which git does
+not keep.
 
 **From 11-07, against the deployed build.** The bar is the deployed build: `e317a3644b`
 with `e2b019f1b0` and `b6dac91e78`, so that its drive is not pinned, served by Vite from its
@@ -1549,7 +1549,7 @@ which hides a small change ("What 'other zooms' is"). Each change's own comparis
 change.
 
 **What the hot phone showed on 11-06** (`ef8d1621b7`, hot1 and hot2, and `034ddad063`, hot3; shots
-every 10 or 20 s under `out/s23/hot*-shots/`, not kept):
+every 10 or 20 s under `cache/s23/hot*-shots/`, not kept):
 
 - From about 100 m out the ground breaks into thin vertical slivers and fragments over a flat
   untextured green (hot2 s-t0086, s-t0096, s-t0136, s-t0166). With the indirect scope fixed, at 2 km
@@ -1597,7 +1597,7 @@ run 5.9 on 11-03, with GPU p50 21–24 ms and `sample` p95 5.6–7.0 against 133
 warmed the phone from 43 to 48 °C with fps drifting down, so this is a reference, not a fixed number.
 
 **Morning against night.** `a449637a35` against `c3847db899` on the S23, both off the shelf,
-alternating twice, the phone warming to thermal 1 alike on both sides (data `out/s23/day*`):
+alternating twice, the phone warming to thermal 1 alike on both sides (data `cache/s23/day*`):
 
 | | morning | night |
 | --- | --- | --- |
@@ -1620,7 +1620,7 @@ FRAMES=1`, and hot2, after 3 min off, with `SCENES=drive,rest,rest`, `DRIVE_S=18
 5 s, the GPU's clock cap (kgsl `max_freq`, `thermal_pwrlevel`) and the AP's and the skin's
 temperatures were logged, with an adb screencap every 20 s and every 10 s; beside hot2, a second
 DevTools client kept every console error. The profiler keeps the last 60 s, so each figure is the
-drive's last minute (data, shots and clock logs `out/s23/hot1*`, `out/s23/hot2*`).
+drive's last minute (data, shots and clock logs `cache/s23/hot1*`, `cache/s23/hot2*`).
 
 | | hot1, still throttling | hot2, settled hot |
 | --- | --- | --- |
@@ -1662,7 +1662,7 @@ Both logged the clock cap and took shots every 10 s, and hot3 also had the conso
 page logged a console error (`errs []`, and the listener wrote nothing). The clock cap fell to
 550 MHz (level 3) 81 s into hot3 and stayed there to the end, status 1, skin 40.1–40.5 °C. It did not
 reach hot2's 348 MHz, so hot3 is set against hot1, which had the same cap (615 to 550 MHz). Data:
-`out/s23/hot3*`. Pass times are ms p50 / p95 over the drive's last minute.
+`cache/s23/hot3*`. Pass times are ms p50 / p95 over the drive's last minute.
 
 | | hot1, ef8d1621b7, 615→550 MHz | hot3w, counts off, 615 MHz | hot3, counts on, 550 MHz |
 | --- | --- | --- | --- |

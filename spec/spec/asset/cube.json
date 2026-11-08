@@ -56,7 +56,7 @@
         "val": 2,
         "$doc": ["Bare rock, scree and shingle take Carto's @bare_ground."]
       },
-      { "name": "sand", "label": "Sand", "val": 3 },
+      { "name": "sand", "label": "Sand", "val": 3, "$doc": ["Sand takes Carto's @sand."] },
       { "name": "beach", "label": "Beach", "val": 4, "$doc": ["Beach and shoal take Carto's @beach."] },
       { "name": "heath", "label": "Heath", "val": 5, "$doc": ["Heath and bog take Carto's @heath."] },
       { "name": "scrub", "label": "Scrub", "val": 6, "$doc": ["Scrub and mangrove take Carto's @scrub."] },
@@ -67,7 +67,7 @@
           "Grass, meadow, garden, village green, marsh and wet meadow take Carto's @grass."
         ]
       },
-      { "name": "park", "label": "Park", "val": 8 },
+      { "name": "park", "label": "Park", "val": 8, "$doc": ["A park takes Carto's @park."] },
       {
         "name": "leisure", "label": "Leisure",
         "val": 9,
@@ -88,14 +88,15 @@
       },
       {
         "name": "allotments", "label": "Allotments",
-        "val": 13
+        "val": 13,
+        "$doc": ["Allotments take Carto's @allotments."]
       },
       {
         "name": "farmland", "label": "Farmland",
         "val": 14,
         "$doc": ["Farmland and greenhouses take Carto's @farmland."]
       },
-      { "name": "farmyard", "label": "Farmyard", "val": 15 },
+      { "name": "farmyard", "label": "Farmyard", "val": 15, "$doc": ["A farmyard takes Carto's @farmyard."] },
       {
         "name": "campsite", "label": "Campsite",
         "val": 16,
@@ -108,13 +109,15 @@
       },
       {
         "name": "residential", "label": "Residential",
-        "val": 18
+        "val": 18,
+        "$doc": ["Residential land takes Carto's @residential."]
       },
-      { "name": "garages", "label": "Garages", "val": 19 },
-      { "name": "retail", "label": "Retail", "val": 20 },
+      { "name": "garages", "label": "Garages", "val": 19, "$doc": ["Garages take Carto's @garages."] },
+      { "name": "retail", "label": "Retail", "val": 20, "$doc": ["Retail land takes Carto's @retail."] },
       {
         "name": "commercial", "label": "Commercial",
-        "val": 21
+        "val": 21,
+        "$doc": ["Commercial land takes Carto's @commercial."]
       },
       {
         "name": "industrial", "label": "Industrial",
@@ -131,7 +134,7 @@
         "val": 24,
         "$doc": ["Landfill takes Carto's landuse_landfill, a value with no name."]
       },
-      { "name": "quarry", "label": "Quarry", "val": 25 },
+      { "name": "quarry", "label": "Quarry", "val": 25, "$doc": ["A quarry takes Carto's @quarry."] },
       {
         "name": "societal_amenities", "label": "Societal Amenities",
         "val": 26,
@@ -141,15 +144,16 @@
       },
       {
         "name": "place_of_worship", "label": "Place of Worship",
-        "val": 27
+        "val": 27,
+        "$doc": ["A religious site takes Carto's @place_of_worship."]
       },
       {
         "name": "transportation_area", "label": "Transportation Area",
         "val": 28,
         "$doc": ["An aerodrome, bus station or ferry terminal takes Carto's @transportation-area."]
       },
-      { "name": "parking", "label": "Parking", "val": 29 },
-      { "name": "apron", "label": "Apron", "val": 30 },
+      { "name": "parking", "label": "Parking", "val": 29, "$doc": ["Parking takes Carto's @parking."] },
+      { "name": "apron", "label": "Apron", "val": 30, "$doc": ["An apron takes Carto's @apron."] },
       { "section": "water" },
       { "name": "glacier", "label": "Glacier", "val": 31, "$doc": ["A glacier takes Carto's @glacier; Carto draws it with the water areas."] },
       {
@@ -160,7 +164,8 @@
       { "section": "water_features" },
       {
         "name": "dam", "label": "Dam",
-        "val": 33
+        "val": 33,
+        "$doc": ["A dam takes Carto's @dam."]
       },
       {
         "name": "breakwater", "label": "Breakwater",
@@ -170,7 +175,8 @@
       { "section": "buildings" },
       {
         "name": "building", "label": "Building",
-        "val": 35
+        "val": 35,
+        "$doc": ["A building takes Carto's @building-fill."]
       },
       {
         "name": "building_major", "label": "Major Building",
@@ -189,12 +195,14 @@
       {
         "name": "cycleway", "label": "Cycleway",
         "val": 38,
-        "transport": true
+        "transport": true,
+        "$doc": ["A cycleway takes Carto's @cycleway-fill."]
       },
       {
         "name": "bridleway", "label": "Bridleway",
         "val": 39,
-        "transport": true
+        "transport": true,
+        "$doc": ["A bridleway takes Carto's @bridleway-fill."]
       },
       {
         "name": "track", "label": "Track",
@@ -205,12 +213,14 @@
       {
         "name": "pedestrian", "label": "Pedestrian Street",
         "val": 41,
-        "transport": true
+        "transport": true,
+        "$doc": ["A pedestrian street takes Carto's @pedestrian-fill."]
       },
       {
         "name": "living_street", "label": "Living Street",
         "val": 42,
-        "transport": true
+        "transport": true,
+        "$doc": ["A living street takes Carto's @living-street-fill."]
       },
       {
         "name": "residential_road", "label": "Residential Road",
@@ -227,23 +237,27 @@
       {
         "name": "secondary", "label": "Secondary Road",
         "val": 45,
-        "transport": true
+        "transport": true,
+        "$doc": ["A secondary road takes Carto's @secondary-fill."]
       },
       {
         "name": "primary", "label": "Primary Road",
         "val": 46,
-        "transport": true
+        "transport": true,
+        "$doc": ["A primary road takes Carto's @primary-fill."]
       },
-      { "name": "trunk", "label": "Trunk Road", "val": 47, "transport": true },
+      { "name": "trunk", "label": "Trunk Road", "val": 47, "transport": true, "$doc": ["A trunk road takes Carto's @trunk-fill."] },
       {
         "name": "motorway", "label": "Motorway",
         "val": 48,
-        "transport": true
+        "transport": true,
+        "$doc": ["A motorway takes Carto's @motorway-fill."]
       },
       {
         "name": "platform", "label": "Platform",
         "val": 49,
-        "transport": true
+        "transport": true,
+        "$doc": ["A platform takes Carto's @platform-fill."]
       },
       {
         "name": "tram", "label": "Tram",
