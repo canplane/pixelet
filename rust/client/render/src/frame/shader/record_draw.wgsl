@@ -5,13 +5,12 @@
 // the entry drawn with the frame's number (`node_cache::R_DRAWN`), which keeps it from eviction
 // (`record::drawn`).
 //
-// The eye's draw (`record_draw_cs`) writes a box for each drawable entry in view, which draws
-// the faces an eye's ray asked about (pxl-engine `record::ASKED`). A stale entry draws behind
-// every fresh one (pxl-engine `raster::STALE`), and two kinds of stale entry do not draw at
-// all. The draw records the frame it ran in (`node_cache::DRAWN`). Where the light's cast
+// The eye's draw (`record_draw_cs`) writes a box for each fresh drawable entry in view, which
+// draws the faces an eye's ray asked about (pxl-engine `record::ASKED`). The draw records the
+// frame it ran in (`node_cache::DRAWN`). Where the light's cast
 // stands the world's receivers this frame (`light::HEADER_WORLD_RECEIVERS`), the draw also
 // stands a receiver on each box it writes, by the rule every receiver stands by (light_box.wgsl
-// `box_tiles`, light_receiver_tiles.wgsl). A pixel that takes the box's voxel has its hit
+// `box_tiles`, light_receiver_tile.wgsl). A pixel that takes the box's voxel has its hit
 // inside the box (visible.wgsl `visible_cell`), so the tiles the box stands on cover the hit.
 //
 // The light's draw (`light_record_draw_cs`) writes a box for each drawable entry that lies on
@@ -120,13 +119,10 @@ fn record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (!near && !in_view(b.lo, b.hi)) {
     return;
   }
-  let whole = (state & RECORD_WHOLE) != 0u;
-  let fresh = kept_fresh(k, whole, o);
-  // Two kinds of stale box are not drawn (pxl-engine record.rs, "Fresh or stale"). A box
-  // around the eye would cover the whole screen in front of every other stale box. A box more
-  // than a zoom coarser than the eye asks where it lies, unless a ray stopped on it whole,
-  // belongs to a far view and would stand as a wall where the rays go on to the sky.
-  if (!fresh && (near || (!whole && k.zoom + 1u < asked_near(kept_planes(k, o))))) {
+  // A stale voxel is no pixel's answer: a pixel only it covers walks as if no box stood there
+  // (pxl-engine record.rs, "Fresh or stale"). Left undrawn, it stands no receiver and may be
+  // evicted.
+  if (!kept_fresh(k, (state & RECORD_WHOLE) != 0u, o)) {
     return;
   }
   let place = box_place(RECORD_EYE_DRAWS);
@@ -134,7 +130,7 @@ fn record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     return;
   }
   mark_drawn(id.x);
-  put_draw(place, id.x, kind, select(0u, RASTER_EYED, near) | select(RASTER_STALE, 0u, fresh));
+  put_draw(place, id.x, kind, select(0u, RASTER_EYED, near));
   if (header_word(LIGHT_HEADER_WORLD_RECEIVERS) != 0u) {
     let t = box_tiles(b.lo, b.hi);
     if (t.got) {

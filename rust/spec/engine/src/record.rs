@@ -79,20 +79,11 @@
 //! its own nearest point, so it is asked no coarser a zoom, and the parent's test holds for it
 //! as well. So two fresh entries never nest.
 //!
-//! A stale entry is drawn behind every fresh one (`raster::STALE`) and is never a pixel's
-//! answer, as the light never takes a stale one. A pixel no fresh voxel covers is a hole: it
-//! shows what was last found there until its walk ends (pxl-render cast.wgsl `cast_cs`). The
-//! walk's stop then draws the fresh voxel, after which the stale one goes undrawn and is
-//! evicted (`drawn`). A pixel a fresh voxel covers takes the fresh one, so no pixel shows a
-//! second surface.
-//!
-//! Two kinds of stale voxel are not drawn at all. A stale voxel more than a zoom coarser than
-//! the eye asks where it lies is not drawn: a voxel of a far view seen from near would stand
-//! as a wall where the ray goes on to the sky, which no fresh voxel covers, and left undrawn
-//! it is evicted. A stale box around the eye (`raster::is_eyed`) is not drawn either: it would
-//! cover the whole screen at the nearest stale depth, in front of every other stale box, and
-//! show at every pixel no fresh box covers, though it lies at none of them. The node at the
-//! zoom now asked is a different node, drawn once a sample or a hole's walk stops on it.
+//! A stale entry is never a pixel's answer. A pixel no fresh voxel covers is a hole, which its
+//! walk answers in its frame (pxl-render cast.wgsl `cast_px`), so the eye draws no stale entry
+//! and leaves it to be evicted (`drawn`). The light draws its stale entries behind every fresh
+//! one (`raster::STALE`): a tile is cast once in an epoch, and a stale box keeps a texel no
+//! fresh voxel covers from being taken for the sky (pxl-render light.wgsl).
 //!
 //! **Edits:** every write to what is placed that changes the tree or a record names the cube
 //! it wrote (pxl-core domain/layer/object/store.rs `Store::write`, `set_fold`, `clear_fold`).
@@ -203,8 +194,8 @@ const fn ceil(v: f32) -> u32 {
 }
 /// The most boxes an observer's draw writes, one word for each drawable entry
 /// (`raster::draw_word`): `CELL_NODES` for each of its cells (`EYE_CELLS_CAP`,
-/// `LIGHT_CELLS_CAP`).
-pub const EYE_DRAWS: u32 = EYE_CELLS_CAP * CELL_NODES;
+/// `LIGHT_CELLS_CAP`), but for the stale ones, which the eye does not draw.
+pub const EYE_DRAWS: u32 = EYE_CELLS_CAP * CELL_NODES / CELL_STALE;
 pub const LIGHT_DRAWS: u32 = LIGHT_CELLS_CAP * CELL_NODES;
 
 /// The bits of an entry's state word (`node_cache::STATES_AT`). `FACES` holds a bit for each

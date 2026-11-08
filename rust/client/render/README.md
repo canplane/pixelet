@@ -19,7 +19,8 @@ one queue (`queue_cs`), walked by the same code as the holes later.
 The raster (`gpu/ray/raster.rs`, `raster.wgsl`) draws every box of the record
 into a visibility buffer. A face keeps a pixel only where the pixel's own ray
 enters the box across that face, so the depth test keeps the nearest box the ray
-enters, at the point where it enters, and a fresh voxel wins over a stale one.
+enters, at the point where it enters. The eye draws only fresh voxels; the light
+draws its stale ones behind the fresh.
 `cast_cs` then reads each pixel: a fresh voxel gives the pixel its ray; a pixel
 no sample's cell met anything in is sky; any other pixel is a hole, listed for
 the queue, and walked to its first hit (`queue_walk.wgsl`, `queue_ask_cs`,
@@ -68,8 +69,8 @@ probe whose failure doubles the wait before the next.
 ## The shadow map
 
 The sun is a second observer. The same passes run for it over the parts each
-observer gives (`beam.eye.wgsl` and `beam.light.wgsl`, `samples_run.eye.wgsl`
-and `samples_run.light.wgsl`), into a map of the world's depth along the light
+observer gives (`beam.eye.wgsl` and `beam.light.wgsl`, `sample_run.eye.wgsl`
+and `sample_run.light.wgsl`), into a map of the world's depth along the light
 in a square box about the eye (`gpu/shadow.rs`). Each texel is fixed in the
 world and held in a slot by its index modulo the map's side, and its ray starts
 at a fixed point, summed in integers (`light_aim.wgsl` `texel_start`).

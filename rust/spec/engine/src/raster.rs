@@ -12,8 +12,8 @@
 //! (`cast::entry`'s test; raster.wgsl `fs`): a face that some ray reached through air may show
 //! at a pixel whose ray enters across it. A ray enters a box through one face, so what is
 //! kept lies where the ray enters, at the depth the raster draws it. The depth test then keeps
-//! the nearest box the pixel's ray enters, a fresh voxel before any stale one (`STALE`), and
-//! leaves that voxel's number at the pixel (`id_of`). For a hit the number names the cell;
+//! the nearest box the pixel's ray enters, for the light a fresh voxel before any stale one
+//! (`STALE`), and leaves that voxel's number at the pixel (`id_of`). For a hit the number names the cell;
 //! for a lack, the pixel walks the node itself.
 
 use crate::node_cache::ENTRIES;
@@ -27,7 +27,7 @@ use crate::node_cache::ENTRIES;
 /// `beam::Grid::asks_at`), and last the boxes counted as they are written (`ARGS_CNT`), of
 /// which `ARGS_INSTANCES` is the part the boxes' room holds.
 ///
-/// The eye's boxes are its drawable entries in view, at most `record::EYE_DRAWS`; the
+/// The eye's boxes are its fresh drawable entries in view, at most `record::EYE_DRAWS`; the
 /// light's are those on its box, at most `record::LIGHT_DRAWS`. The faces' asks are at most
 /// one a sample, with `param::beam::SAMPLE` samples a camera grid cell a side: about 270
 /// thousand on a 16:9 view, whatever its pixels, where one dispatch's 65535 workgroups hold
@@ -39,7 +39,7 @@ use crate::node_cache::ENTRIES;
 ///
 /// The draws' buffer follows, one word a box (`draw_word`): the voxel's number (`id_of`), with
 /// `EYED` where the box lies around the eye (`is_eyed`) and `STALE` where the voxel is not the
-/// node the observer's walk stops on there (`record::fresh`, `record::light_fresh`). The box
+/// node the light's walk stops on there (`record::light_fresh`). The box
 /// itself belongs to the entry, which the raster's vertex stage reads by the voxel's slot: the
 /// node's planes from the observer's origin, the cell its asset keeps inset
 /// (`cast::asset_box`), and the faces it draws, one bit a side (`faces`). The eye draws the

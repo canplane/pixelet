@@ -2,8 +2,9 @@
 
 //! The order of a world turn is written here and nowhere else. A frame runs
 //! as one task: first the effects, then the tick's phases under one shared
-//! budget, then the draw. Every other task waits on its own input and runs
-//! apart from the frame.
+//! budget, then the draw. A turn that draws no frame takes in the world's
+//! content alone. Every other task waits on its own input and runs apart
+//! from the frame.
 
 #[path = "turn/step.spec.rs"]
 pub mod spec;
@@ -37,7 +38,7 @@ use crate::domain::layer::division;
 use crate::domain::layer::earth::Earth;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::terrain::clipmap;
-use crate::domain::query::changes;
+use crate::domain::query::change;
 use crate::domain::scene::character::companion::{self, companion_step, Camera};
 use crate::domain::scene::decor::asset::decor_models_step;
 use crate::domain::scene::decor::gpu;
@@ -67,14 +68,17 @@ use crate::sys::sched::edge;
 use crate::sys::sched::edge::{request_world_tick, world_edge};
 use crate::sys::sched::tick::{tick, TickContext};
 use pxl_render::gpu::api;
+use pxl_render::gpu::span_spec::FrameKind;
 use pxl_spec::bake::tile::division::DivisionTile;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
+use xpute_core::sched::pass::Pass;
 use xpute_core::sched::tick::TickReport;
 
-use crate::sys::sched::param::MAX_STEP_S;
+use crate::sys::sched::param::{HARD_SLACK_MS, MAX_STEP_S};
 use crate::sys::sched::phase_spec::Phase;
+use crate::sys::sched::queue::Queue;
 
 /// The camera as the companion's walk reads it. It is None in first person,
 /// where the eye stands at the pivot and the person is the one looking.
@@ -303,9 +307,36 @@ pub struct TurnGrant {
 static FRAME: Global<Option<TurnGrant>> = Global::new();
 static FRAMES: Global<Notify> = Global::new();
 static NEW_FRAME: Global<bool> = Global::new();
+static QUEUE: Global<Queue> = Global::new();
 
 fn frames() -> &'static mut Notify {
     FRAMES.get(Notify::new)
+}
+
+fn queue() -> &'static mut Queue {
+    QUEUE.get(Queue::default)
+}
+
+/// Whether this turn draws the frame it was granted. It does not where the GPU cannot take the
+/// frame without blocking (xpute_gpu::admit), where the runtime still holds the stream, or
+/// where a later turn would still reach the GPU in time, which shows a newer input.
+fn frame_due() -> bool {
+    let paced_ms = FRAME.get(|| None).as_ref().map_or(0.0, |g| g.paced_ms);
+    boot::admit_frame()() && api::stream_free() && queue().due(now(), api::unfinished(), paced_ms)
+}
+
+/// A turn that draws no frame still takes in what arrived, starts the reads that freed and
+/// fills the bricks due, so the world's content does not wait on the GPU. It works from what
+/// the last frame asked for and where its clip levels stand, which only a frame moves.
+fn content_turn() {
+    let edge = world_edge();
+    demand::admit_arrived(&Pass::new(
+        edge.deadline_ms(),
+        edge.edge_at(),
+        HARD_SLACK_MS,
+    ));
+    pump();
+    clipmap::fill_share();
 }
 
 /// Takes a frame the runtime granted. A frame still waiting for the GPU is
@@ -335,10 +366,10 @@ pub fn take_new_frame() -> bool {
 async fn frame_task() {
     loop {
         notified(frames).await;
-        // A frame the GPU cannot take without blocking (xpute_gpu::admit) does
-        // not run. Its grant waits for the next turn, so the renderer is never
-        // handed a frame it would have to put off.
-        if api::device().is_some() && !boot::admit_frame()() {
+        // A frame not due does not run. Its grant waits for the next turn, so
+        // the renderer is never handed a frame it would have to put off.
+        if api::device().is_some() && !frame_due() {
+            content_turn();
             request_world_tick();
             continue;
         }
@@ -390,6 +421,13 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
         cmd::ui::turn_pace(&cmd::TurnPace { interval_ms });
     }
     let done = now();
+    if let Some(gpu) = frame.stat.and_then(|stat| stat.gpu) {
+        queue().measure(gpu.busy_ms);
+    }
+    // A frame counted from 1 was encoded; 0 stood and drew nothing.
+    if frame.kind != FrameKind::dropped && frame.stat.is_some_and(|stat| stat.frame > 0.0) {
+        queue().submit(done, done - t0);
+    }
     perf_frame(FrameTurn {
         tick: report,
         interval_ms: delta * 1000.0,
@@ -409,13 +447,13 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
 /// Tells each reader what changed this turn: the tiles whose answer changed
 /// and the boxes where objects were written. A tile is reported by its
 /// identity, which fixes its contents. The query holds the ground's changes
-/// (domain/query/changes.rs). This runs after arrivals are admitted and
+/// (domain/query/change.rs). This runs after arrivals are admitted and
 /// before the layers observe.
 fn changes_step() {
     static CHANGED: Global<[Vec<Quadrant>; 3]> = Global::new();
     let [places, earth, divisions] = CHANGED.get(Default::default);
-    let shared = changes::take();
-    gpu::note_edited(changes::written_boxes());
+    let shared = change::take();
+    gpu::note_edited(change::written_boxes());
     PlaceTile::tile_cache().take_changed(places);
     Earth::tile_cache().take_changed(earth);
     DivisionTile::tile_cache().take_changed(divisions);

@@ -742,7 +742,7 @@ fn within_by(d: f32, reach: f32) -> (bool, bool) {
     (d <= reach - edge, d <= reach + edge)
 }
 
-/// Checks that the hand-written receivers' passes (light_mark.wgsl, light_receiver_tiles.wgsl)
+/// Checks that the hand-written receivers' passes (light_mark.wgsl, light_receiver_tile.wgsl)
 /// stand on the tiles that pxl-engine's one rule gives (`Light::box_tiles`, with the footprint
 /// where the head asks for it), over the real world of tests/real_world. Each tile must be
 /// listed once (`light::LIST_RECEIVERS`), with the count in the stood list's args
@@ -751,7 +751,7 @@ fn within_by(d: f32, reach: f32) -> (bool, bool) {
 /// Two passes stand receivers. `light_mark_walked_cs` stands the pixels the eye walked apart,
 /// which it finds by their walked bits past the grid's words (`ray::hole_bit`), each hit a box
 /// of one point. `record_draw_cs` (record_draw.wgsl) stands every box the eye's draw writes,
-/// one for each held voxel in view, with its planes as `cast::asset_box` lays them. It stands
+/// one for each fresh held voxel in view, with its planes as `cast::asset_box` lays them. It stands
 /// each box as it writes it, where the head says the world's receivers stand
 /// (`light::HEADER_WORLD_RECEIVERS`).
 ///
@@ -1051,10 +1051,11 @@ fn run_marks(
             }
         }
         Marks::Voxels => {
-            // Each stopped sample's node becomes a held voxel of the record, in a slot of its
-            // own, as the samples write it (sample_box.wgsl). The draw writes each voxel in
-            // view as a box and stands it.
+            // Each node a sample stopped on becomes one held voxel of the record, as the samples
+            // write it (sample_box.wgsl). The draw writes each voxel in view as a box and stands
+            // it.
             let mut slot = 0u32;
+            let mut laid = BTreeSet::new();
             for j in 0..grid.samples[1] {
                 for i in 0..grid.samples[0] {
                     let t = grid.sample([i, j]);
@@ -1078,16 +1079,24 @@ fn run_marks(
                     let whole = record::stopped_whole(c.origin, &m.hit.node, range);
                     let state =
                         face | face << record::ASKED_SHIFT | if whole { record::WHOLE } else { 0 };
-                    lay_entry(
-                        &mut rec,
-                        slot,
-                        c.origin,
-                        &m.hit.node,
-                        (kind, m.hit.asset),
-                        state,
-                    );
-                    slot += 1;
-                    kinds.add("voxels", true);
+                    if laid.insert((m.hit.node.corner, m.hit.node.zoom, m.hit.node.roots)) {
+                        lay_entry(
+                            &mut rec,
+                            slot,
+                            c.origin,
+                            &m.hit.node,
+                            (kind, m.hit.asset),
+                            state,
+                        );
+                        slot += 1;
+                        kinds.add("voxels", true);
+                    }
+                    // A stale voxel draws no box, so it stands on no tile.
+                    let fresh = record::fresh(c.origin, &m.hit.node, whole, range);
+                    kinds.add("voxels, stale", !fresh);
+                    if !fresh {
+                        continue;
+                    }
                     // The draw writes a box that is in view or by the eye. A GPU's rounding may
                     // move a tile's edge or the view's, so the box a hair smaller gives the
                     // tiles it must stand on, and the box a hair larger those it may.

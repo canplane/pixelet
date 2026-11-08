@@ -90,15 +90,13 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
   // `record::FACES`).
   let state = node_cache_word(state_at(slot));
   let faces = select((state & RECORD_ASKED) >> RECORD_ASKED_SHIFT, state & RECORD_FACES, raster.turn.y != 0u);
-  // The factor on the depth that puts a stale voxel behind every fresh one.
-  let behind = select(1.0, RASTER_STALE_DEPTH, (word & RASTER_STALE) != 0u);
   if ((word & RASTER_EYED) != 0u) {
     o.axis = RASTER_ANY;
     if (vi < 3u) {
       // One triangle, wound counter-clockwise, covers the whole screen. The depth is reversed,
       // so a lack, at 1, lies before a hit, at `RASTER_EYED_DEPTH`.
       let xy = vec2f(f32((vi & 1u) * 4u) - 1.0, f32((vi >> 1u) * 4u) - 1.0);
-      o.clip = vec4f(xy, select(RASTER_EYED_DEPTH, 1.0, lacks) * behind, 1.0);
+      o.clip = vec4f(xy, select(RASTER_EYED_DEPTH, 1.0, lacks), 1.0);
     }
     return o;
   }
@@ -144,6 +142,8 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
     let q = p - raster.first.xyz;
     let i = dot(q, raster.right.xyz) / raster.right.w;
     let j = dot(q, raster.up.xyz) / raster.up.w;
+    // The factor on the depth that puts a stale voxel behind every fresh one.
+    let behind = select(1.0, RASTER_STALE_DEPTH, (word & RASTER_STALE) != 0u);
     o.clip = vec4f(
       (i + 0.5) / raster.screen.y * 2.0 - 1.0,
       1.0 - (j + 0.5) / raster.screen.z * 2.0,
@@ -161,7 +161,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
   o.clip = vec4f(
     dot(p, raster.right.xyz) / raster.right.w - off.x * depth,
     dot(p, raster.up.xyz) / raster.up.w - off.y * depth,
-    raster.forward.w * behind,
+    raster.forward.w,
     depth,
   );
   return o;

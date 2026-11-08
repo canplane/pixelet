@@ -1,7 +1,7 @@
 //! Checks that the hand-written walks answer as pxl-engine's walk from the root answers the
 //! same ray, over the real world of tests/real_world.
 //!
-//! The samples' run (queue_walk.wgsl, queue_ask.wgsl and queue_last.wgsl over samples.wgsl),
+//! The samples' run (queue_walk.wgsl, queue_ask.wgsl and queue_last.wgsl over sample.wgsl),
 //! for the eye and for the light (sample.eye.wgsl, sample.light.wgsl), starts from what the
 //! beam passes leave. Each sample must stop where the Rust stops it, in a first frame and in
 //! the next frame over the node cache the first left. The beam rays themselves, the holes'
@@ -2299,9 +2299,9 @@ fn light_raster_drawn(
 /// against `boxes_want` and pxl-engine `record`. Each such entry's state must be whole where
 /// its ray stopped coarser than it asked. Its faces, entered and asked, must be those `was`
 /// held and those its samples entered across, and it must be marked drawn in the frame where
-/// it is drawn. Each box written must be a drawable entry's, word for word, with `STALE` set
-/// where the entry is not fresh (`record::fresh`). Every voxel in view (`record::in_view`)
-/// must be drawn, and the draw must name the frame it ran in (`node_cache::DRAWN`). Returns
+/// it is drawn. Each box written must be a fresh drawable entry's, word for word
+/// (`record::fresh`). Every fresh voxel in view (`record::in_view`) must be drawn, and the
+/// draw must name the frame it ran in (`node_cache::DRAWN`). Returns
 /// the node cache after the draw, and puts failures into `failed`.
 #[expect(
     clippy::too_many_arguments,
@@ -2480,13 +2480,17 @@ fn record_case(
             eprintln!("DIFFERS {name}: box {place}'s entry not marked drawn");
         }
         let state = got[node_cache::state_at(slot) as usize];
-        let fresh = record::fresh(origin, &node_of(&key), state & record::WHOLE != 0, range);
-        stale += u64::from(!fresh);
+        stale += u64::from(!record::fresh(
+            origin,
+            &node_of(&key),
+            state & record::WHOLE != 0,
+            range,
+        ));
         let want_word = raster::draw_word(
             slot,
             w[BOX_ID as usize] & raster::LACK != 0,
             w[BOX_FACES as usize] & raster::EYED != 0,
-            fresh,
+            true,
         );
         if b == want_word {
             same += 1;
@@ -2497,27 +2501,21 @@ fn record_case(
             }
         }
     }
-    // Every voxel in view must be drawn, but for a stale one about the eye, and a stale one
-    // more than a zoom coarser than the eye asks where it lies. A voxel not drawn counts as
-    // out of view only where it lies outside the view grown by the device's rounding.
-    let whole_of = |key: &Key| {
+    // Every fresh voxel in view must be drawn. A voxel not drawn counts as out of view only
+    // where it lies outside the view grown by the device's rounding.
+    let fresh_of = |key: &Key| {
         let state = held
             .get(key)
             .map_or(0, |slots| got[node_cache::state_at(slots[0]) as usize]);
-        state & record::WHOLE != 0
-    };
-    let fresh_of = |key: &Key| record::fresh(origin, &node_of(key), whole_of(key), range);
-    let wall = |key: &Key| {
-        let n = node_of(key);
-        let detail = Detail {
-            range,
-            spacing: Spacing::NONE,
-        };
-        !fresh_of(key) && !whole_of(key) && n.zoom + 1 < cast::node_zooms(origin, &n, detail)[1]
+        record::fresh(origin, &node_of(key), state & record::WHOLE != 0, range)
     };
     let mut missed = 0u64;
     for (key, w) in &want {
         if drawn.contains(key) || !held.contains_key(key) {
+            continue;
+        }
+        if !fresh_of(key) {
+            kinds.add("voxels, stale, not drawn", true);
             continue;
         }
         let b = |k: u32| f32::from_bits(w[k as usize]);
@@ -2525,14 +2523,6 @@ fn record_case(
         let hi = [0, 1, 2].map(|a| b(BOX_HI + a));
         let grown = [tan[0] * 1.001, tan[1] * 1.001];
         let eyed = w[BOX_FACES as usize] & raster::EYED != 0;
-        if eyed && !fresh_of(key) {
-            kinds.add("boxes, eyed, stale, not drawn", true);
-            continue;
-        }
-        if wall(key) {
-            kinds.add("boxes, stale, too coarse, not drawn", true);
-            continue;
-        }
         if eyed || record::in_view((lo, hi), axes, tan, far) {
             missed += 1;
         } else {
@@ -2548,11 +2538,10 @@ fn record_case(
          not drawn",
         want.len()
     );
-    kinds.count("boxes, stale", stale);
-    if none != 0 || twice != 0 || entries_differ != 0 || differ != 0 || missed != 0 {
+    if none != 0 || twice != 0 || entries_differ != 0 || differ != 0 || stale != 0 || missed != 0 {
         fail(format!(
             "{none} voxels not held, {twice} held twice, {entries_differ} entries differ, \
-             {differ} boxes differ, {missed} in view not drawn"
+             {differ} boxes differ, {stale} stale boxes, {missed} in view not drawn"
         ));
     }
     if same == 0 {
@@ -3051,10 +3040,9 @@ fn hand_eye_record_answers_as_raster() {
     assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 
-/// The draw must write no box for a stale voxel whose box lies about the eye. Such a box would
-/// be drawn over the whole screen, before every other stale box, and every pixel that no fresh
-/// box covers would take it (pxl-engine `record`, "Fresh or stale"). The record is the one a
-/// cast from over the ground wrote. The draw then runs alone from the middle of each coarse
+/// The draw must write no box for a stale voxel (pxl-engine `record`, "Fresh or stale"), even
+/// one that lies about the eye, whose box would be drawn over the whole screen. The record is
+/// the one a cast from over the ground wrote. The draw then runs alone from the middle of each coarse
 /// voxel's box, where the eye asks finer than the voxel, so the voxel is stale
 /// (`record::fresh`) and its box lies about the eye (`raster::is_eyed`).
 #[test]
@@ -3324,7 +3312,7 @@ fn hand_light_record_answers_as_raster() {
     assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 
-/// The beam rays' run (corners.wgsl over beam.eye.wgsl) over a node cache that holds part of
+/// The beam rays' run (corner.wgsl over beam.eye.wgsl) over a node cache that holds part of
 /// what the beam rays meet. A beam ray that its walks over the node cache park must go on from
 /// the state it was parked in. Every corner must stop where the walk from the root stops the
 /// same ray, at the same node, and must hand on the same distance (`Grid::hand_dist`). The
@@ -3456,7 +3444,7 @@ impl Keep<Inheritance> for Handed {
     }
 }
 
-/// The beam rays' run for the light's map (corners.wgsl over beam.light.wgsl) over a node cache
+/// The beam rays' run for the light's map (corner.wgsl over beam.light.wgsl) over a node cache
 /// that holds part of what its beam rays meet. Every beam ray must stop where the walk from the
 /// root stops the same ray from the origin the pass laid, at the same node. It must hand on the
 /// same distance (`light::margin`) under either rounding a device may take (`margins`), and its
