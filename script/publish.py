@@ -34,6 +34,8 @@ from pathlib import Path
 
 
 REPO = Path(__file__).resolve().parent.parent
+# Where a file made for one upload lies until the upload ends (AGENTS.md).
+TMP = REPO / "tmp"
 BUCKET = "pixelet-bucket"
 KINDS = ["terrain", "place", "division", "earth"]
 SOURCE = "source"
@@ -120,7 +122,8 @@ def declared(record):
 
 def serve(declaration):
     """Revalidated on every boot, so a publish is seen at once."""
-    with tempfile.NamedTemporaryFile(suffix=".json") as f:
+    TMP.mkdir(exist_ok=True)
+    with tempfile.NamedTemporaryFile(suffix=".json", dir=TMP) as f:
         f.write(declaration)
         f.flush()
         aws(["s3", "cp", f.name, f"s3://{BUCKET}/{SOURCE}", "--content-type", "application/json", "--cache-control", "no-cache"], inherit=True)

@@ -25,7 +25,7 @@
 - Work in the main checkout and commit only your own paths; a worktree only for
   a tree that must be built apart.
 - `out/` holds what a build makes, and no drafts. A temporary folder, an
-  experiment's data too, goes under `cache/` at the checkout's root.
+  experiment's data too, goes under `tmp/` at the checkout's root.
 - Cargo builds into `<root>/rust/target/session/<id>`, written absolute, `<id>`
   the session's (`$CLAUDE_CODE_SESSION_ID`).
 

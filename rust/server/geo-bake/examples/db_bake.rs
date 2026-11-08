@@ -29,7 +29,7 @@ fn main() {
     .expect("geo DB");
     let raster = Arc::new(Raster::open(&mut client).expect("raster"));
     let repo = TerrainRepository::prepare(&mut client, raster).expect("prepare");
-    let memo = directory::temp_dir("source");
+    let memo = directory::tmp_dir("source");
 
     for tile in tiles {
         let idx = Quadrant::of_key(tile)

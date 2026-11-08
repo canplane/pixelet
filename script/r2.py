@@ -11,6 +11,9 @@ import subprocess
 import tempfile
 
 BUCKET = "pixelet-bucket"
+# Where an object's bytes lie on their way, until the read or write ends: the
+# checkout's tmp/ (AGENTS.md).
+TMP = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tmp")
 
 
 class Unreachable(Exception):
@@ -39,7 +42,8 @@ def s3api(*args):
 
 def get(key):
     """The object's bytes; None where there is no such object."""
-    with tempfile.TemporaryDirectory() as d:
+    os.makedirs(TMP, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=TMP) as d:
         out = os.path.join(d, "body")
         run = s3api("get-object", "--bucket", BUCKET, "--key", key, out)
         if run.returncode != 0:
@@ -53,7 +57,8 @@ def get(key):
 
 def put(key, body, content_type):
     """Writes the object whole; R2 has no append."""
-    with tempfile.NamedTemporaryFile(delete=False) as f:
+    os.makedirs(TMP, exist_ok=True)
+    with tempfile.NamedTemporaryFile(delete=False, dir=TMP) as f:
         f.write(body)
     try:
         run = s3api("put-object", "--bucket", BUCKET, "--key", key, "--body", f.name, "--content-type", content_type)

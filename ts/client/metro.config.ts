@@ -105,11 +105,23 @@ const resolveRequest: NonNullable<typeof base.resolver.resolveRequest> = (
 
 const devConsole = consoleHandler(path.join(here, ".dev-console.log"));
 
+/** Metro's caches, its transforms' and its file map's, lie in the checkout's
+ * tmp/ (AGENTS.md), each tree's its own, where Expo would put them in the
+ * system's temporary folder. The store is the kind Expo makes, rooted there;
+ * Expo does not export its class, so it is taken from Expo's own store. */
+const CACHE = path.join(REPO, "tmp/metro");
+fs.mkdirSync(CACHE, { recursive: true });
+const Store = base.cacheStores[0].constructor as new (options: {
+  root: string;
+}) => (typeof base.cacheStores)[number];
+
 export default {
   ...base,
   // The UI's files, xpute's and pnpm's store all lie outside this app's
   // directory. The bundle reads nothing outside these folders.
   watchFolders: [WORKSPACE, path.join(REPO, "xpute/ts")],
+  cacheStores: [new Store({ root: CACHE })],
+  fileMapCacheDirectory: CACHE,
   resolver: { ...base.resolver, resolveRequest },
   server: {
     ...base.server,

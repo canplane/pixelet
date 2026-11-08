@@ -42,7 +42,7 @@ impl<const PLACE: bool> Base for Count<PLACE> {
 
 /// The zooms one leaf folds to.
 fn folded<const PLACE: bool>() -> Vec<Zoom> {
-    let root = directory::temp_dir(&format!("pyramid-{PLACE}-{}", std::process::id()));
+    let root = directory::tmp_dir(&format!("pyramid-{PLACE}-{}", std::process::id()));
     let (set, stage) = (
         TileSet::new(root.join("set")),
         TileSet::new(root.join("stage")),

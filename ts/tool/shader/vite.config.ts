@@ -11,7 +11,6 @@
 
 import { execFile } from "node:child_process";
 import * as fs from "node:fs/promises";
-import * as os from "node:os";
 import * as path from "node:path";
 import { promisify } from "node:util";
 
@@ -26,7 +25,9 @@ async function assembled(): Promise<{
   modules: Record<string, string>;
   pipelines: unknown[];
 }> {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pxl-probe-"));
+  const tmp = path.join(REPO, "tmp");
+  await fs.mkdir(tmp, { recursive: true });
+  const dir = await fs.mkdtemp(path.join(tmp, "probe-"));
   try {
     await promisify(execFile)(
       "cargo",

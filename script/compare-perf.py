@@ -46,6 +46,9 @@ LOAD_CAP_S = 90
 # The longest the page may take to answer one ask, a drive included.
 EVAL_CAP_S = 120
 DRIVE_S = 20
+# Where each run's Chrome keeps its profile, removed when the run ends: the
+# checkout's tmp/ (AGENTS.md).
+TMP = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tmp")
 
 READ = """(async () => {
   const r = await pxl.perf.read();
@@ -66,7 +69,8 @@ class Page:
     ended by a NUL."""
 
     def __init__(self, url):
-        self.dir = tempfile.mkdtemp(prefix="pxl-compare-perf-")
+        os.makedirs(TMP, exist_ok=True)
+        self.dir = tempfile.mkdtemp(prefix="compare-perf-", dir=TMP)
         to_r, self.to = os.pipe()
         self.of, of_w = os.pipe()
 

@@ -5,7 +5,7 @@ use pxl_spec::directory;
 
 #[test]
 fn restart_keeps_tiles() {
-    let base = directory::temp_dir(&format!("oven-claim-{}", std::process::id()));
+    let base = directory::tmp_dir(&format!("oven-claim-{}", std::process::id()));
     let root = base.join("place");
     let tile = root.join("0").join("010332102301230");
     let work = root.join(".work-0");

@@ -1,7 +1,7 @@
 // pxl-geo-bake/bin/server.rs
 
 //! The dev tile server, baking on demand. It keeps what it bakes, one directory a kind, across
-//! restarts, in `--oven` or else in the machine's cache under the digest of the code that
+//! restarts, in `--oven` or else in the checkout's tmp/ under the digest of the code that
 //! bakes, so a change to a bake starts afresh. After a re-ingest the oven is purged by
 //! command. The Earth's picture is baked offline (bin/earth.rs), so it is served from
 //! that bake (`./out`, or `--shelf`), under the names the bucket holds, however the rest is
@@ -303,7 +303,7 @@ fn run() -> Result<(), String> {
     // the code that bakes, and an oven another code baked is stale, so it is removed.
     let oven = match (oven, &shelf) {
         (None, None) => {
-            let ovens = directory::cache_dir("oven")?;
+            let ovens = directory::tmp_dir("oven");
             let own = format!("{:016x}", code_digest()?);
             for e in std::fs::read_dir(&ovens).into_iter().flatten().flatten() {
                 if e.file_name() != own.as_str() {

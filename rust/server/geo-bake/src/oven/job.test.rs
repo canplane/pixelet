@@ -23,7 +23,7 @@ async fn outcomes_reported() {
 
 #[test]
 fn staging_publish() {
-    let base = directory::temp_dir(&format!("oven-publication-{}", std::process::id()));
+    let base = directory::tmp_dir(&format!("oven-publication-{}", std::process::id()));
     let runner = Runner::new(1, Limit::default()).unwrap();
     let data = Dataset::open(&base, super::super::Kind::Place, &runner).unwrap();
     let stage = Staging(data.cache.root.join("stage"));
@@ -39,6 +39,7 @@ fn staging_publish() {
     drop(stage);
     assert!(!data.cache.root.join("stage").exists());
     assert!(!data.cache.root.join("packet").exists());
+    std::fs::remove_dir_all(base).unwrap();
 }
 
 #[tokio::test]

@@ -94,7 +94,7 @@ catalog the sky draws and the geoid table that GPS heights are corrected by.
 `make ingest-overture` fills the local geographic database, and
 [infra/geo/README.md](./infra/geo/README.md) describes each source's ingest.
 A change to a bake starts the dev tile server's cache afresh by itself. After a
-re-ingest, empty what it made by hand (`rm -rf ~/Library/Caches/pixelet/oven`, or
+re-ingest, empty what it made by hand (`rm -rf tmp/oven`, or
 `out/<kind>*` to bake one kind from nothing).
 
 ## Checking a change

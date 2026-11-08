@@ -1,10 +1,10 @@
 # python3 -I show.py SPANS NAME:LABEL,LABEL NAME:LABEL,LABEL … : runs side by side, from OUT (default
-# <repo>/cache/s23): each circle's and walk's fps, frame GPU busy p50/p95 and each named span's p50/p95
+# <repo>/tmp/s23): each circle's and walk's fps, frame GPU busy p50/p95 and each named span's p50/p95
 # (SPANS comma-separated); the drive's fps, its cast frames' busy and the spans' p95 as the report
 # gives them; the eye's and the light's nodes a cast from the counts windows; errors.
 import json, os, re, sys
 
-OUT = os.environ.get('OUT') or os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../../../cache/s23')
+OUT = os.environ.get('OUT') or os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../../../tmp/s23')
 SP = sys.argv[1].split(',')
 groups = [a.split(':') for a in sys.argv[2:]]
 Q = lambda a, q: a[min(len(a) - 1, int(len(a) * q))] if a else float('nan')

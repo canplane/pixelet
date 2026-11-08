@@ -1,6 +1,6 @@
 # Tools
 
-How the S23 runs of [the record](../../README.md) were taken. Data and shots go under `cache/s23/` at the
+How the S23 runs of [the record](../../README.md) were taken. Data and shots go under `tmp/s23/` at the
 repository's root (gitignored).
 
 ## A tree on the phone
@@ -84,4 +84,4 @@ the main checkout's page, served by Metro on 8298, both off the shelf on 3001:
   every 5 s, and with `REST=65` the standing window after it; `cmp-s23.sh` runs the pages by
   turns; `cmp-s23tab.py` tabulates them with their clocks.
 
-Each runs under the GPU lock (`lockf -k <workspace>/.gpu.lock`); their data go under cache/cmp/.
+Each runs under the GPU lock (`lockf -k <workspace>/.gpu.lock`); their data go under tmp/cmp/.

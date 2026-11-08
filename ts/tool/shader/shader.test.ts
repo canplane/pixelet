@@ -15,33 +15,44 @@
 import { test } from "vitest";
 import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { REPO } from "@pxl/build/path.ts";
 import { create, globals } from "webgpu";
 
 import { entries, make, type Pipeline } from "./pipeline.ts";
 
-function assembled(): { modules: string[]; pipelines: Pipeline[] } {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pxl-wgsl-"));
-  execFileSync(
-    "cargo",
-    ["run", "-q", "-p", "pxl-render", "--example", "assembled", "--", dir],
-    { cwd: path.join(REPO, "rust"), stdio: "inherit" },
-  );
-  const files = fs
-    .readdirSync(dir)
-    .filter((f) => f.endsWith(".wgsl"))
-    .sort();
-  if (!files.includes("world_asked.wgsl") || files.length < 2) {
-    throw new Error(`no hand module under ${dir}`);
+function assembled(): {
+  modules: { file: string; code: string }[];
+  pipelines: Pipeline[];
+} {
+  const tmp = path.join(REPO, "tmp");
+  fs.mkdirSync(tmp, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(tmp, "wgsl-"));
+  try {
+    execFileSync(
+      "cargo",
+      ["run", "-q", "-p", "pxl-render", "--example", "assembled", "--", dir],
+      { cwd: path.join(REPO, "rust"), stdio: "inherit" },
+    );
+    const files = fs
+      .readdirSync(dir)
+      .filter((f) => f.endsWith(".wgsl"))
+      .sort();
+    if (!files.includes("world_asked.wgsl") || files.length < 2) {
+      throw new Error(`no hand module under ${dir}`);
+    }
+    return {
+      modules: files.map((file) => ({
+        file,
+        code: fs.readFileSync(path.join(dir, file), "utf8"),
+      })),
+      pipelines: JSON.parse(
+        fs.readFileSync(path.join(dir, "pipelines.json"), "utf8"),
+      ),
+    };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
-  return {
-    modules: files.map((f) => path.join(dir, f)),
-    pipelines: JSON.parse(
-      fs.readFileSync(path.join(dir, "pipelines.json"), "utf8"),
-    ),
-  };
 }
 
 test("Tint takes every shader", { timeout: 1_200_000 }, async () => {
@@ -55,10 +66,8 @@ test("Tint takes every shader", { timeout: 1_200_000 }, async () => {
   if (!adapter) throw new Error("no WebGPU adapter to compile on");
   const device = await adapter.requestDevice();
   const refused: string[] = [];
-  for (const at of modules) {
-    const file = path.basename(at);
+  for (const { file, code } of modules) {
     const name = file.replace(/\.wgsl$/, "");
-    const code = fs.readFileSync(at, "utf8");
     device.pushErrorScope("validation");
     const module = device.createShaderModule({ code });
     const errors = (await module.getCompilationInfo()).messages.filter(

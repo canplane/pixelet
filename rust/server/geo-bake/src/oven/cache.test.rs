@@ -6,25 +6,36 @@ use pxl_spec::directory;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::time;
 
-fn cache() -> Arc<Cache> {
+/// The folder a test's caches lie in, under the checkout's tmp/, removed when the test ends.
+struct Folder(PathBuf);
+
+impl Drop for Folder {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// A cache in a folder of the test's own, with the folder; what the test makes beside the
+/// cache lies in the folder too.
+fn cache() -> (Arc<Cache>, Folder) {
     static SERIAL: AtomicUsize = AtomicUsize::new(0);
-    Arc::new(
-        Cache::new(
-            directory::temp_dir(&format!(
-                "oven-{}-{}",
-                std::process::id(),
-                SERIAL.fetch_add(1, Ordering::Relaxed)
-            )),
-            Arc::new(Semaphore::new(32)),
-            std::time::Duration::from_secs(30),
-        )
-        .unwrap(),
+    let folder = Folder(directory::tmp_dir(&format!(
+        "oven-{}-{}",
+        std::process::id(),
+        SERIAL.fetch_add(1, Ordering::Relaxed)
+    )));
+    let cache = Cache::new(
+        folder.0.join("cache"),
+        Arc::new(Semaphore::new(32)),
+        std::time::Duration::from_secs(30),
     )
+    .unwrap();
+    (Arc::new(cache), folder)
 }
 
 #[tokio::test]
 async fn concurrent_publish_once() {
-    let cache = cache();
+    let (cache, _folder) = cache();
     let calls = Arc::new(AtomicUsize::new(0));
     let mut tasks = Vec::new();
     for _ in 0..10 {
@@ -66,7 +77,7 @@ async fn concurrent_publish_once() {
 
 #[tokio::test]
 async fn disconnect_keeps_publication() {
-    let c = cache();
+    let (c, _folder) = cache();
     let entered = Arc::new(Notify::new());
     let release = Arc::new(Notify::new());
     let task = {
@@ -101,7 +112,7 @@ async fn disconnect_keeps_publication() {
 
 #[tokio::test]
 async fn shared_admission() {
-    let a = cache();
+    let (a, _folder) = cache();
     let b = Cache::new(
         a.root.with_extension("other"),
         a.admission.clone(),
@@ -137,9 +148,10 @@ async fn shared_admission() {
 
 #[tokio::test]
 async fn expired_work_joinable() {
+    let (made, _folder) = cache();
     let c = Arc::new(
         Cache::new(
-            cache().root.with_extension("cleanup"),
+            made.root.with_extension("cleanup"),
             Arc::new(Semaphore::new(1)),
             std::time::Duration::from_millis(20),
         )

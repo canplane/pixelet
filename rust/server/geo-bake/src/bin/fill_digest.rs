@@ -37,9 +37,9 @@ use pxl_spec::space::coord::zoom::Zoom;
 /// bake writes while it is read (out/terrain.stage is).
 const SET: &str = "out/terrain";
 
-/// Where the machine keeps the lines, a file a digest.
-fn lines_dir() -> Result<PathBuf, String> {
-    directory::cache_dir("fill")
+/// Where the lines are kept, a file a digest.
+fn lines_dir() -> PathBuf {
+    directory::tmp_dir("fill")
 }
 
 /// The set's tiles as listed, each its name, length and time: what the
@@ -165,10 +165,10 @@ fn lines(set: &TileSet, workers: usize) -> Result<Vec<String>, String> {
     Ok(all)
 }
 
-/// The lines of `set`, made where the machine keeps none of this digest:
+/// The lines of `set`, made where none of this digest are kept:
 /// their path.
 fn lines_path(set: &Path, workers: usize) -> Result<PathBuf, String> {
-    let dir = lines_dir()?;
+    let dir = lines_dir();
     let path = dir.join(key(set)?);
     if path.is_file() {
         return Ok(path);
