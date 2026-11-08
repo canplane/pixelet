@@ -27,7 +27,7 @@ use pxl_engine::LEAF_CELL_ZOOM;
 use pxl_render::gpu::api;
 use pxl_render::gpu::ray::{BrickWrite, TerrainWrite};
 use pxl_spec::bake::tile::terrain::{
-    brick_lines, palette_cells, GroundId, TerrainTile, ELE_COLUMN, PALETTE_COLUMN,
+    brick_lines, palette_cells, TerrainTile, ELE_COLUMN, PALETTE_COLUMN,
 };
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
@@ -692,11 +692,9 @@ const _: () = assert!(
 );
 
 /// The room a brick's fill works in, arrays of `.fixed.terrain` (fixed.rs
-/// `FILL_ARRAY_BYTES`): a tile's palette indices four a cell as a packet
-/// gives them, its samples, its lines and the pairs they are laid with, its
-/// spans, its tree as it is built, and the walk that lays it in the pool.
+/// `FILL_ARRAY_BYTES`): a tile's samples, its lines and the pairs they are laid
+/// with, its spans, its tree as it is built, and the walk that lays it in the pool.
 struct FillScratch {
-    room: &'static mut [GroundId],
     ele: &'static mut [i16],
     lines: &'static mut [u32],
     pairs: &'static mut [(u32, u32)],
@@ -713,13 +711,12 @@ fn fill_scratch() -> &'static mut FillScratch {
         // SAFETY: the fill's arrays are its alone, plain numbers, zeroed at boot.
         unsafe {
             FillScratch {
-                room: arr(r, fill_off(0), PALETTE_COLUMN),
-                ele: arr(r, fill_off(1), ELE_COLUMN),
-                lines: arr(r, fill_off(2), LINES_WORDS as usize),
-                pairs: arr(r, fill_off(3), WAYS_BRICK_SEGMENTS as usize),
-                spans: arr(r, fill_off(4), SPANS_WORDS as usize),
-                build: arr(r, fill_off(5), BUILD_WORDS),
-                order: arr(r, fill_off(6), tree::BRICK_CHILD_GROUPS as usize + 1),
+                ele: arr(r, fill_off(0), ELE_COLUMN),
+                lines: arr(r, fill_off(1), LINES_WORDS as usize),
+                pairs: arr(r, fill_off(2), WAYS_BRICK_SEGMENTS as usize),
+                spans: arr(r, fill_off(3), SPANS_WORDS as usize),
+                build: arr(r, fill_off(4), BUILD_WORDS),
+                order: arr(r, fill_off(5), tree::BRICK_CHILD_GROUPS as usize + 1),
             }
         }
     })
@@ -743,19 +740,9 @@ pub fn cut(tile: Quadrant, pkt: &[u8]) {
     if !(0..SLOTS).any(|b| slot_wants(w, tile, b)) {
         return;
     }
-    let f = fill_scratch();
-    let Ok(indices) = palette_cells(pkt, f.room) else {
+    let Ok(cells) = palette_cells(pkt) else {
         w.filled = true;
         return;
-    };
-    let four = |c: usize| {
-        let at = 4 * c;
-        u32::from_le_bytes([
-            indices[at],
-            indices[at + 1],
-            indices[at + 2],
-            indices[at + 3],
-        ])
     };
     for b in 0..SLOTS {
         if !slot_wants(w, tile, b) {
@@ -766,7 +753,20 @@ pub fn cut(tile: Quadrant, pkt: &[u8]) {
             continue;
         }
         let held = w.slots[b as usize];
-        cut_into(b, tile_of(held.cell_zoom, held.brick).1, &four);
+        let place = tile_of(held.cell_zoom, held.brick).1;
+        // Each way a packet holds them its own loop, not a branch a cell.
+        match cells.len() {
+            PALETTE_COLUMN => cut_into(b, place, &|c: usize| {
+                u32::from_le_bytes([
+                    cells[4 * c],
+                    cells[4 * c + 1],
+                    cells[4 * c + 2],
+                    cells[4 * c + 3],
+                ])
+            }),
+            1 => cut_into(b, place, &|_| word([u32::from(cells[0]); 4])),
+            _ => cut_into(b, place, &|c: usize| word([u32::from(cells[c]); 4])),
+        }
         w.slots[b as usize].fill = Fill::Cut;
     }
     w.due_stale = true;
@@ -779,9 +779,13 @@ fn cut_into(b: u32, place: [u32; 2], four: &impl Fn(usize) -> u32) {
     let at = (b * PALETTE_ARR_BYTES / 4) as usize;
     let side = GROUND.tile_cells() as usize;
     let (x0, y0) = ((place[0] * BRICK) as usize, (place[1] * BRICK) as usize);
-    for i in 0..BRICK_CELLS {
-        let [x, y] = clipmap::of_idx(i);
-        planes().palette[at + i as usize] = four((y0 + y as usize) * side + x0 + x as usize);
+    let palette = &mut planes().palette[at..at + BRICK_CELLS as usize];
+    let across: [u32; BRICK as usize] = core::array::from_fn(|x| clipmap::idx_of([x as u32, 0]));
+    for y in 0..BRICK {
+        let (row, down) = ((y0 + y as usize) * side + x0, clipmap::idx_of([0, y]));
+        for (x, &a) in across.iter().enumerate() {
+            palette[(a | down) as usize] = four(row + x);
+        }
     }
 }
 

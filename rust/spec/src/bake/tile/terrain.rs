@@ -577,21 +577,11 @@ fn read_tile(pkt: &[u8]) -> Result<Columns<'_>, MarshalError> {
     })
 }
 
-/// A packet's palette indices, four a cell, a column of one palette index a cell
-/// expanded into `room`, each its own four: what a client's clip levels cut
+/// A packet's palette indices as it holds them, four a cell (`PALETTE_COLUMN`), one a
+/// cell, each its own four, or one for the whole tile: which a client's clip levels cut
 /// their bricks' from.
-pub fn palette_cells<'a>(
-    pkt: &'a [u8],
-    room: &'a mut [GroundId],
-) -> Result<&'a [GroundId], MarshalError> {
-    let Columns { ground, .. } = read_tile(pkt)?;
-    if ground.len() == PALETTE_COLUMN {
-        return Ok(ground);
-    }
-    for (c, q) in room[..PALETTE_COLUMN].chunks_mut(4).enumerate() {
-        q.copy_from_slice(&four_palette_indices(ground, c));
-    }
-    Ok(&room[..PALETTE_COLUMN])
+pub fn palette_cells(pkt: &[u8]) -> Result<&[GroundId], MarshalError> {
+    Ok(read_tile(pkt)?.ground)
 }
 
 /// Decode a tile straight into its resident room in `.fixed.terrain`: its

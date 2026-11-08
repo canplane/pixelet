@@ -10,22 +10,7 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P0
 
-- **Faster than the deployed build, on every axis**
-  ([the deployed build is the bar](./minutes/20261107-the-deployed-build-is-the-bar.md)). The
-  Mac's gate passes, its tick p95 2.20 to 3.00 ms the one axis worse. The S23 at 719 MHz: GPU p50
-  6.1× the deployed build's, p95 5.7× on one pair, the deployed build's p95 reading 437–1282 ms
-  ([the journal](./experiment/20261105-the-frame-on-the-s23/journal.md), 11-08).
-
 ## P1
-
-- **The light by a list and the raster.** Each tile's voxels at its band listed through the
-  query and drawn from the sun, in place of the light's rays and its holes' walk: 11-06's open
-  question ([the frame is what it must draw](./minutes/20261106-the-frame-is-what-it-must-draw.md),
-  [cell raster](./minutes/20261106-cell-raster.md)). The counts put a list near 100 k cells (the
-  journal, 11-08). First `list::light` on the CPU, held to `cast::first`, which measures the
-  real list.
-- **A bright teal wedge beside the character at load.** At 38.1193, 128.4656, by its right arm,
-  since it stands clear of the wall. Read as the location zone on the step's wall, unchecked.
 
 ## P2
 
@@ -34,9 +19,6 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
   happened. In order: every domain noun listed with what it names (read-only, by
   area), a glossary decided with the user, conventional names first and cited, put
   in the naming skill; then the renames by area, one names commit each.
-- **A login screen is to come.** Another kind of `Cover`, over `Starting` or
-  `Loading`, so the world is made while it stands —
-  [20261103-what-stands-over-the-app.md](./minutes/20261103-what-stands-over-the-app.md).
 
 ## Parked, with the reason on file
 
