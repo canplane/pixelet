@@ -8,8 +8,8 @@
 //!
 //! A brick is filled here from its tile in two stages. Its palette, four
 //! indices per cell, is cut from the tile's packet in the turn the packet
-//! lands, and the packet is then freed (`cut`). Later, after the frame or in
-//! a turn that draws none, as far as the turn leaves room (`fill_share`), its cells
+//! lands, and the packet is then freed (`cut`). Later, after the frame and
+//! as far as the turn's share for tasks leaves room (`fill_share`), its cells
 //! and its ways' tree are built from that palette and the tile's samples and
 //! lines, into `.fixed.terrain` and the ways' pool (pool.rs). The next frame
 //! hands the brick to the GPU, and it is present from then on (`upload`).
@@ -861,11 +861,10 @@ enum Fills {
     Done,
 }
 
-/// Fills the due bricks one part at a time (`fill_stage`), after the frame
-/// or in a turn that draws none (turn.rs `content_turn`). It runs as far as
-/// the turn's edge holds: after a frame, the frame's share however far the
-/// frame overran (sys/sched/edge.rs `tasks_after_frame`). It runs always at
-/// least one part, so a turn that spent its share
+/// Fills the due bricks one part at a time (`fill_stage`), after the frame.
+/// It runs as far as the turn's share for tasks holds (sys/sched/edge.rs
+/// `tasks_after_frame`), which is the frame's share however far the frame
+/// overran, and always at least one part, so a turn that spent its share
 /// before this point still moves the fill. What is left, and a filled brick
 /// waiting to be handed over, ask for the next turn.
 pub fn fill_share() {

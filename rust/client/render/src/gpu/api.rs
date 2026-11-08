@@ -795,12 +795,6 @@ pub fn stream_free() -> bool {
     STATE.get(|| None).as_mut().is_none_or(writable)
 }
 
-/// The frames on the GPU and not yet finished, as the runtime last wrote them to the device's
-/// block. It is read once a device is ready.
-pub fn unfinished() -> u32 {
-    load_acquire(header(DEVICE_AT + device::UNFINISHED_AT))
-}
-
 /// `stream_free`, and once the stream is free, records what waited for it: it asks for the
 /// device's block and destroys the objects let go meanwhile.
 fn writable(s: &mut State) -> bool {
