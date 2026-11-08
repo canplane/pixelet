@@ -6,8 +6,6 @@
 //! ghost shows a decor it is over as that decor and anything else as a box,
 //! never as a cube.
 
-use pxl_spec::space::layer::lattice::GROUND;
-
 use crate::domain::control::camera::controller::Motion;
 use crate::domain::control::edit::collision::anchor_center;
 use crate::domain::control::edit::ghost::{at_corner, decor_of, prop};
@@ -25,7 +23,7 @@ pub(super) fn tap(hover: &Hover) {
 }
 
 pub(super) fn preview(hover: &Hover) -> Preview {
-    let (object, zoom) = hover.pointed();
+    let (object, zoom) = hover.object();
     Preview {
         object,
         zoom,
@@ -40,7 +38,5 @@ pub(super) fn ghost(hover: &Hover, p: &Preview) -> Ghost {
     let Some(h) = hover.coord else {
         return Ghost::None;
     };
-    // Over the ground the box is a leaf cell, whatever the size tier.
-    let zoom = p.object.map_or(GROUND.leaf_cell_zoom(), |o| o.zoom);
-    at_corner(h, zoom, None, false, p.object.as_ref().and_then(decor_of))
+    at_corner(h, p.zoom, None, false, p.object.as_ref().and_then(decor_of))
 }

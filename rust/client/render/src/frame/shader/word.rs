@@ -213,7 +213,7 @@ pub const FRAME_FLOATS: usize = floats(frame::FIELDS);
 
 uniform! {
     /// The sky's uniform (sky_word.wgsl). `RAY` gives the ray through each
-    /// point of the screen (gpu/renderer.rs `put_ray`), `POLE` is the
+    /// point of the screen (gpu/sky.rs `put_ray`), `POLE` is the
     /// celestial pole, and `MAPPED` is 1 once the moon's face has arrived.
     sky {
         RAY: Mat3 = 0,

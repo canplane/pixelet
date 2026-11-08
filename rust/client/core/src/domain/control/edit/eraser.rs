@@ -28,7 +28,7 @@ pub(super) fn tap(hover: &Hover) {
 }
 
 pub(super) fn preview(hover: &Hover) -> Preview {
-    let (object, zoom) = hover.pointed();
+    let (object, zoom) = hover.object();
     let prop = hover.prop();
     let edits = RenderEdits {
         // The real object is hidden a tick or more after the ghost appears.

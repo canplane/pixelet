@@ -71,23 +71,23 @@ pub fn eye(o: &Observation, edits: &RenderEdits) -> Option<[u32; eye::WORDS]> {
 /// What the GPU was last handed of the placed objects: the store's revision
 /// at that hand, and the child groups written between the hand before it and
 /// it, by their first slots (`objects`).
-struct Handed {
+struct Upload {
     since: u32,
     written: Vec<u32>,
 }
 
-static HANDED: Global<Handed> = Global::new();
+static UPLOAD: Global<Upload> = Global::new();
 
 /// The placed objects for the GPU (domain/layer/object/store.rs
 /// `gpu_columns`). The tree's lanes are handed where they live. A GPU that
 /// holds the revision last handed copies again only the child groups written
 /// since that revision.
 pub fn objects() -> Objects<'static> {
-    let h = HANDED.get(|| Handed {
+    let h = UPLOAD.get(|| Upload {
         since: 0,
         written: Vec::new(),
     });
-    object_mut().take_written(&mut h.written);
+    object_mut().take_written_groups(&mut h.written);
     let l = object().gpu_columns();
     Objects {
         first_child: l.first_child,

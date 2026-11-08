@@ -262,7 +262,7 @@ impl Store {
     /// Moves into `into` the child groups the tree wrote since they were last
     /// taken, by their first slots, each once. The one who takes them keeps
     /// what it took (domain/scene/cast.rs `objects`).
-    pub fn take_written(&mut self, into: &mut Vec<u32>) {
+    pub fn take_written_groups(&mut self, into: &mut Vec<u32>) {
         self.tree.take_written(into);
         into.sort_unstable();
         into.dedup();

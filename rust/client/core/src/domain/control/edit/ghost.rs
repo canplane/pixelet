@@ -69,12 +69,17 @@ pub(super) fn prop(i: Instance) -> Option<Ghost> {
     })
 }
 
+/// How `d` placed with its box's corner at `corner` stands: the variant and
+/// heading its corner picks (`user_decor_pick`).
+pub(super) fn stand_at(corner: &Q3, d: &Decor) -> ([f64; 3], DecorMeta) {
+    let (variant, turn) = user_decor_pick(corner, d);
+    d.stand(q3::unpack(corner), variant, turn, 1.0)
+}
+
 /// The decor a placed object is, standing as it stands.
 pub(super) fn decor_of(o: &Entry) -> Option<(&'static Decor, ([f64; 3], DecorMeta))> {
     let d = o.asset().decor()?;
-    let c = o.corner();
-    let (variant, turn) = user_decor_pick(&c, d);
-    Some((d, d.stand(q3::unpack(&c), variant, turn, 1.0)))
+    Some((d, stand_at(&o.corner(), d)))
 }
 
 /// The ghost at the hovered corner `h`: the box of `zoom` it would fill or

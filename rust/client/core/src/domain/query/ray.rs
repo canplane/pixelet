@@ -52,7 +52,7 @@ pub fn at_zoom(tile: Zoom) -> Detail {
 /// The level of detail that reads what is held as finely as it is held: the
 /// ground at its cells, which answer the same when asked finer, and what is
 /// placed at its own zoom. Where the eye draws something coarser, the asker
-/// judges that by `by_dist` (domain/control/edit.rs `Pick`).
+/// judges that by `by_dist` (domain/control/edit/pick.rs `Pick`).
 pub fn finest() -> Detail {
     let [_, finest] = zoom_range();
     Detail {

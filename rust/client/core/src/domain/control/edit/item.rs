@@ -7,16 +7,14 @@
 //! stand, or as the instance the ground would bring back, with its box as a
 //! stand-in; any other item as its box.
 
-use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::zoom::Zoom;
 
 use crate::domain::control::edit::collision::{is_placement_blocked, placement_reads};
-use crate::domain::control::edit::ghost::at_corner;
+use crate::domain::control::edit::ghost::{at_corner, stand_at};
 use crate::domain::control::edit::pick::Pick;
 use crate::domain::control::edit::write::{restores_scattered, Preview};
 use crate::domain::control::edit::Hover;
 use crate::domain::layer::object::asset::Asset;
-use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::preview::Ghost;
 use crate::domain::query::changes;
 use crate::domain::query::World;
@@ -64,7 +62,7 @@ pub(super) fn preview(asset: Asset, zoom: Zoom, hover: &Hover, was: &Preview) ->
     }
 }
 
-pub(super) fn ghost(asset: Asset, zoom: Zoom, hover: &Hover, p: &Preview) -> Ghost {
+pub(super) fn ghost(asset: Asset, hover: &Hover, p: &Preview) -> Ghost {
     let Some(h) = hover.coord.filter(|_| !p.blocked) else {
         return Ghost::None;
     };
@@ -75,14 +73,10 @@ pub(super) fn ghost(asset: Asset, zoom: Zoom, hover: &Hover, p: &Preview) -> Gho
             Asset::Decor(id) => restores_scattered(&h, id),
             _ => None,
         };
-        let stand = restored.map_or_else(
-            || {
-                let (variant, turn) = user_decor_pick(&h, d);
-                d.stand(q3::unpack(&h), variant, turn, 1.0)
-            },
-            |i| (i.at, i.meta),
-        );
-        (d, stand)
+        (
+            d,
+            restored.map_or_else(|| stand_at(&h, d), |i| (i.at, i.meta)),
+        )
     });
-    at_corner(h, zoom, asset.cube(), false, decor)
+    at_corner(h, p.zoom, asset.cube(), false, decor)
 }

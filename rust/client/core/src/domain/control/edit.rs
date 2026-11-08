@@ -2,9 +2,10 @@
 
 //! What the pointer picks and edits in the world. What it does to the
 //! camera is in input.rs. This module keeps the tool the pointer holds and
-//! what is under the pointer. Each tool does every step of an edit in its own
-//! module: what it points at, what a tap does, the edit it previews and the
-//! ghost it shows (pointer.rs, eraser.rs, item.rs).
+//! what is under the pointer. Each tool does the steps of an edit in its own
+//! module: what a tap does, the edit it previews and the ghost it shows
+//! (pointer.rs, eraser.rs, item.rs). The pointer and the eraser point at what
+//! the pick struck alike (`aim`); the item at the corner flush against it.
 
 pub mod collision;
 mod eraser;
@@ -82,7 +83,7 @@ impl Tool {
         match self {
             Tool::Pointer => pointer::ghost(hover, preview),
             Tool::Eraser => eraser::ghost(hover, preview),
-            Tool::Item { asset, zoom } => item::ghost(asset, zoom, hover, preview),
+            Tool::Item { asset, .. } => item::ghost(asset, hover, preview),
         }
     }
 }
@@ -177,7 +178,7 @@ impl Hover {
     /// The placed object pointed at, as stored, and the zoom of the cube an
     /// edit there takes: the object's, or else a whole leaf cell, as a carve
     /// of the ground takes it.
-    fn pointed(&self) -> (Option<Entry>, Zoom) {
+    fn object(&self) -> (Option<Entry>, Zoom) {
         let object = self.object_at().and_then(|at| World::now().entry_at(at));
         let zoom = object.map_or(GROUND.leaf_cell_zoom(), |o| o.zoom);
         (object, zoom)
