@@ -160,7 +160,7 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
     .map(String::from)
     .to_vec();
 
-    let mut ts = vec!["// @pxl/client/ui/catalog/asset/color.spec.ts".to_string()];
+    let mut ts = vec!["// @pxl/client/ui/asset/color.spec.ts".to_string()];
     ts.extend(header.iter().cloned());
     ts.extend([
         String::new(),
@@ -241,7 +241,7 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
         rs.extend(["    }", "}"].map(String::from));
     }
     Ok(vec![
-        Output::new("ts/client/src/ui/catalog/asset/color.spec.ts", file(&ts)),
+        Output::new("ts/client/src/ui/asset/color.spec.ts", file(&ts)),
         Output::new("rust/spec/src/asset/color.spec.rs", file(&rs)),
     ])
 }
@@ -356,7 +356,7 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
     };
 
     // TS
-    let mut ts = vec!["// @pxl/client/ui/catalog/asset/cube.spec.ts".to_string()];
+    let mut ts = vec!["// @pxl/client/ui/asset/cube.spec.ts".to_string()];
     ts.extend(header.iter().cloned());
     // Every placeable cube under its heading: the ground's palette entries, and the colors past a ground byte.
     let cube_sections: Vec<(&str, &Entry)> = with_sections(&ground)
@@ -388,7 +388,7 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
         ("ground", ground_node, &ground),
         ("object", object_node, &object),
     ] {
-        let logical = format!("@pxl/client/ui/catalog/asset/cube/{group}.spec.ts");
+        let logical = format!("@pxl/client/ui/asset/cube/{group}.spec.ts");
         let mut m = vec![
             format!("// {logical}"),
             "//".to_string(),
@@ -414,7 +414,7 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
             }
         }
         modules.push(Output::new(
-            &format!("ts/client/src/ui/catalog/asset/cube/{group}.spec.ts"),
+            &format!("ts/client/src/ui/asset/cube/{group}.spec.ts"),
             file(&m),
         ));
     }
@@ -466,11 +466,11 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
 
     // Which values a word names, for what folds the objects' tree beside the
     // core: the client's source of placed objects
-    // (ts/client/src/sys/fs/object_tree.ts).
+    // (ts/client/src/service/sys/fs/object_tree.ts).
     let air = cube_entries(&object)
         .find(|e| e.name == "air")
         .ok_or(format!("{CUBE_JSON}: no object.air"))?;
-    let mut voxel = vec!["// @pxl/client/abi/voxel.spec.ts".to_string()];
+    let mut voxel = vec!["// @pxl/client/service/sys/fs/voxel.spec.ts".to_string()];
     voxel.extend(header.iter().cloned());
     voxel.push(String::new());
     if let Some(doc) = &air.doc {
@@ -673,8 +673,8 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
         "}".into(),
     ]);
     let mut out = vec![
-        Output::new("ts/client/src/ui/catalog/asset/cube.spec.ts", file(&ts)),
-        Output::new("ts/client/src/abi/voxel.spec.ts", file(&voxel)),
+        Output::new("ts/client/src/ui/asset/cube.spec.ts", file(&ts)),
+        Output::new("ts/client/src/service/sys/fs/voxel.spec.ts", file(&voxel)),
         Output::new(
             "rust/spec/content/src/cube.spec.rs",
             file(&unwrapped(rs, "pub mod cubes {")),
@@ -757,11 +757,11 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
         .unwrap_or_default();
     let (portable, table) = decor_table(&spec, &ground_palette()?)?;
 
-    let mut ts = vec!["// @pxl/client/ui/catalog/asset/decor.spec.ts".to_string()];
+    let mut ts = vec!["// @pxl/client/ui/asset/decor.spec.ts".to_string()];
     ts.extend(header.iter().cloned());
     ts.extend(doc.iter().map(|l| format!("// {l}")));
     let mut constants = vec![
-        "// @pxl/client/ui/catalog/asset/decor/decor.spec.ts".to_string(),
+        "// @pxl/client/ui/asset/decor/decor.spec.ts".to_string(),
         "//".to_string(),
         "// GENERATED from spec/spec/asset/decor.json".to_string(),
     ];
@@ -838,9 +838,9 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
     );
     row.extend(portable);
     Ok(vec![
-        Output::new("ts/client/src/ui/catalog/asset/decor.spec.ts", file(&ts)),
+        Output::new("ts/client/src/ui/asset/decor.spec.ts", file(&ts)),
         Output::new(
-            "ts/client/src/ui/catalog/asset/decor/decor.spec.ts",
+            "ts/client/src/ui/asset/decor/decor.spec.ts",
             file(&constants),
         ),
         Output::new(

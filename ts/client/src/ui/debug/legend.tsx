@@ -12,7 +12,7 @@ import { SETTING } from "@/ui/setting/schema.ts";
 import { gauge, Head } from "./perf/gauge.tsx";
 import { Accordion } from "./accordion.tsx";
 import { coverage, frame } from "@/abi/gizmo.spec.ts";
-import { useCore } from "@/ui/store/watch.ts";
+import { useCore } from "@/ui/watch.ts";
 
 interface Look {
   rgb: number;

@@ -11,8 +11,8 @@ import {
   settingsIn,
 } from "@/ui/setting/schema.ts";
 import { Section, SettingChoiceRow, SettingGroup, SettingRow } from "./row.tsx";
-import { useCore } from "@/ui/store/watch.ts";
-import { set as setSetting } from "@/port/setting.ts";
+import { useCore } from "@/ui/watch.ts";
+import { set as setSetting } from "@/service/core/setting.ts";
 
 const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
   display: "eye",

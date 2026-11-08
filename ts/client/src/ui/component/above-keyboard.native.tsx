@@ -9,7 +9,7 @@ import {
   bottomRest,
 } from "@/ui/component/bottom-rest.ts";
 import { layer } from "@/ui/component/theme.ts";
-import { useSafeArea } from "@/service/safe-area.ts";
+import { useSafeArea } from "@/service/platform/safe-area.ts";
 
 interface KeyboardDockProps extends ViewProps {
   clearance: number;

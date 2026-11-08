@@ -9,17 +9,17 @@
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { start } from "@xpute/runtime";
-import { mirror_source, settled } from "@/sys/fs/source.ts";
-import { is_kept } from "@/sys/fs/storage.ts";
-import { set_online } from "@/origin/online.ts";
-import { set_core } from "@/port/core.ts";
+import { mirror_source, settled } from "@/service/sys/fs/source.ts";
+import { is_kept } from "@/service/sys/fs/storage.ts";
+import { set_online } from "@/service/origin/online.ts";
+import { set_core } from "@/service/core/core.ts";
 import type { ToCore, ToUi } from "@/runtime/page.ts";
 import { manifest } from "@/runtime/start.ts";
 import { type OnOpen, started, ui } from "@/runtime/ui.ts";
-import { gpu_present } from "@/port/gpu.ts";
-import * as device from "@/service/device.ts";
-import * as online from "@/service/online.ts";
-import * as storage from "@/service/storage.ts";
+import { gpu_present } from "@/service/sys/gpu.ts";
+import * as device from "@/service/platform/device.ts";
+import * as online from "@/service/platform/online.ts";
+import * as storage from "@/service/platform/storage.ts";
 
 /** Resolves once a GPU is present and the source is settled: true when the
  * source was declared, false when it was refused. */

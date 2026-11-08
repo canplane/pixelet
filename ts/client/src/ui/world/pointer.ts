@@ -18,7 +18,7 @@ import {
   setDockMode,
   watchDockMode,
 } from "@/ui/world/dock/store.ts";
-import * as input from "@/port/input.ts";
+import * as input from "@/service/core/input.ts";
 
 /** The pointers whose press ended the typing. Each one's lift is sent as a
  * cancel, so that it taps nothing. */

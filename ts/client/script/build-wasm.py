@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Builds the core's module (rust/client/core) to public/,
 # where the page fetches it as /core.wasm
-# (ts/client/src/service/core.ts).
+# (ts/client/src/service/platform/core.ts).
 #
 #   ./script/build-wasm.py [--published]
 

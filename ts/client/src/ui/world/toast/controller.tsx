@@ -8,7 +8,7 @@ import { GroundStatus, Message, SensorStatus } from "@/abi/cmd.spec.ts";
 import { GPU_WAITING, type Gpu } from "@/abi/state.ts";
 
 import { dismissToast, showToast, ToastTone } from "./store.ts";
-import { useGpu, useCore, useOnline } from "@/ui/store/watch.ts";
+import { useGpu, useCore, useOnline } from "@/ui/watch.ts";
 
 /** The reports that can each show a toast. Among toasts of one tone, a lower
  * number ranks higher: a cause comes before what it holds up, the device's
@@ -82,8 +82,8 @@ const error = (key: string): Notice => ({ key, tone: ToastTone.Error });
 const loading = (key: string): Notice => ({ key, tone: ToastTone.Loading });
 
 /** Only a page times out a location request, when its permission prompt has
- * gone unanswered for `PROMPT_MS` (service/sensor.ts). That is not a failure,
- * so it shows no toast. */
+ * gone unanswered for `PROMPT_MS` (service/platform/sensor.ts). That is not a
+ * failure, so it shows no toast. */
 function location(
   status: SensorStatus,
   failure: Message | null,

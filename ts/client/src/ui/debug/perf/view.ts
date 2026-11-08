@@ -2,12 +2,12 @@
 
 /**
  * Reads what the profiler panel and the report show: the core's records as
- * port/perf.ts decodes them, the platform's long frames beside them
+ * service/core/perf.ts decodes them, the platform's long frames beside them
  * (long-frame.ts), and the build they were recorded on.
  */
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
-import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/deploy.ts";
+import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/build.ts";
 import {
   type FrameSummary,
   read,
@@ -17,8 +17,8 @@ import {
   type TaskSummary,
   type ViewSection,
   type Worst,
-} from "@/port/perf.ts";
-import type { LongFrame } from "@/service/types.ts";
+} from "@/service/core/perf.ts";
+import type { LongFrame } from "@/service/platform/types.ts";
 import { longFramesSince } from "./long-frame.ts";
 
 const RECENT_TASKS = 20;

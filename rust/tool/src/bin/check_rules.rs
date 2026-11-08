@@ -4,11 +4,11 @@
 //! casts in the crates that address memory by offset; any rounding other than half to even
 //! where clippy does not see it; any CommonJS file; and any name, in the layers' orders, of
 //! what stands above the naming file: across a crate's folders and the client's, and inside
-//! the core's heads, pxl-render's, the camera's and the view's. It also holds that only the
-//! top names the profiler, that no renderer stands under the core's sys/, that only the query
-//! reads the layers, that only the screen reads the screen's pixels, and that no Rust file
-//! lies outside a crate's module tree. A rule Rust alone can keep is clippy's
-//! (rust/clippy.toml, xpute/rust/clippy.toml).
+//! the client's services, the core's heads, pxl-render's, the camera's and the view's. It
+//! also holds that only the top names the profiler, that no renderer stands under the core's
+//! sys/, that only the query reads the layers, that only the screen reads the screen's
+//! pixels, and that no Rust file lies outside a crate's module tree. A rule Rust alone can
+//! keep is clippy's (rust/clippy.toml, xpute/rust/clippy.toml).
 //!
 //!   cargo check-rules            (in rust/; make check-rules from the root)
 
@@ -290,33 +290,31 @@ const PASS_ORDER: [(&str, u8); 9] = [
 ];
 
 /// The client's order (ts/client/src, AGENTS.md): its entry over the UI
-/// and the wiring that opens the runtime, the two heads; under them the port,
-/// the one way to the core; the files the core opens; the server they
-/// are read from; what each platform gives; and at the bottom the numbers
-/// both read and the build's values.
+/// and the wiring that opens the runtime, the two heads; under them the
+/// services; and at the bottom the numbers both read and the build's values.
 const CLIENT: &str = "ts/client/src/";
-const CLIENT_ORDER: [(&str, u8); 12] = [
-    ("app", 6),
-    ("boot", 6),
-    ("page", 6),
-    ("ui", 5),
-    ("runtime", 5),
-    ("port", 4),
-    ("sys", 3),
-    ("origin", 2),
+const CLIENT_ORDER: [(&str, u8); 6] = [
+    ("app", 3),
+    ("ui", 2),
+    ("runtime", 2),
     ("service", 1),
     ("abi", 0),
-    ("deploy", 0),
-    ("remote-console", 0),
+    ("build", 0),
 ];
 const CLIENT_HEADS: [&str; 2] = ["ui", "runtime"];
+
+/// The services' own order (ts/client/src/service): the client's side of the
+/// app's protocol, the one way to the core; the files the core opens; the
+/// server they are read from; and what each platform gives.
+const SERVICE: &str = "ts/client/src/service/";
+const SERVICE_ORDER: [(&str, u8); 4] = [("core", 3), ("sys", 2), ("origin", 1), ("platform", 0)];
 
 /// Where TypeScript's aliases are (`paths`), every reader's.
 const TSCONFIG: &str = "ts/tsconfig.json";
 
 /// Every order held. A folder whose root holds only its modules gives the root's own items a
 /// level above all of them, so no part reaches back to it.
-const ORDERS: [Order; 13] = [
+const ORDERS: [Order; 14] = [
     Order {
         root: CORE,
         path: "crate",
@@ -346,6 +344,14 @@ const ORDERS: [Order; 13] = [
         path: "",
         levels: &CLIENT_ORDER,
         heads: &CLIENT_HEADS,
+        beside: &[],
+        own: None,
+    },
+    Order {
+        root: SERVICE,
+        path: "",
+        levels: &SERVICE_ORDER,
+        heads: &[],
         beside: &[],
         own: None,
     },
@@ -1146,7 +1152,7 @@ mod spec;"
             ("app", 3),
             ("ui", 2),
             ("runtime", 2),
-            ("port", 1),
+            ("service", 1),
             ("abi", 0),
         ];
         let order = Order {
@@ -1157,12 +1163,22 @@ mod spec;"
             beside: &[],
             own: None,
         };
+        const PARTS: [(&str, u8); 2] = [("core", 1), ("platform", 0)];
+        let parts = Order {
+            root: "ts/c/src/service/",
+            path: "",
+            levels: &PARTS,
+            heads: &[],
+            beside: &[],
+            own: None,
+        };
         let files = [
             "ts/tsconfig.json",
             "ts/c/src/app.tsx",
             "ts/c/src/ui/view.tsx",
             "ts/c/src/runtime/open.ts",
-            "ts/c/src/port/core.ts",
+            "ts/c/src/service/core/core.ts",
+            "ts/c/src/service/platform/db.ts",
             "ts/c/src/abi/cmd.spec.ts",
         ];
         let read = |f: &str| {
@@ -1173,32 +1189,36 @@ mod spec;"
                     }
                     "ts/c/src/app.tsx" => "import { App } from \"@/ui/view.tsx\";\nimport \"./runtime/open.ts\";",
                     "ts/c/src/ui/view.tsx" => {
-                        "import { k } from \"@/port/core.ts\";\n/** as from \"@/runtime/open.ts\" */\nimport { open } from \"../runtime/open.ts\";"
+                        "import { k } from \"@/service/core/core.ts\";\n/** as from \"@/runtime/open.ts\" */\nimport { open } from \"../runtime/open.ts\";"
                     }
                     "ts/c/src/runtime/open.ts" => {
-                        "import {\n  k,\n} from \"@pxl/c/port/core.ts\";\nnew Worker(new URL(\"./worker.ts\", location.href));"
+                        "import {\n  k,\n} from \"@pxl/c/service/core/core.ts\";\nnew Worker(new URL(\"./worker.ts\", location.href));"
                     }
-                    "ts/c/src/port/core.ts" => {
-                        "import type { View } from \"@pxl/c/ui/view.tsx\";\nimport { useState } from \"react\";"
+                    "ts/c/src/service/core/core.ts" => {
+                        "import type { View } from \"@pxl/c/ui/view.tsx\";\nimport { db } from \"../platform/db.ts\";\nimport { useState } from \"react\";"
                     }
-                    "ts/c/src/abi/cmd.spec.ts" => "export { k } from \"../port/core.ts\";",
+                    "ts/c/src/service/platform/db.ts" => "import { k } from \"@/service/core/core.ts\";",
+                    "ts/c/src/abi/cmd.spec.ts" => "export { k } from \"../service/core/core.ts\";",
                     _ => "",
                 }
                 .to_string(),
             )
         };
-        let found: Vec<String> = out_of_order(&files, &read, &order)
-            .iter()
-            .map(|p| p.split(": ").next().unwrap_or("").to_string())
-            .collect();
+        let at = |o: &Order| -> Vec<String> {
+            out_of_order(&files, &read, o)
+                .iter()
+                .map(|p| p.split(": ").next().unwrap_or("").to_string())
+                .collect()
+        };
         assert_eq!(
-            found,
+            at(&order),
             [
                 "ts/c/src/ui/view.tsx:3",
-                "ts/c/src/port/core.ts:1",
+                "ts/c/src/service/core/core.ts:1",
                 "ts/c/src/abi/cmd.spec.ts:1"
             ]
         );
+        assert_eq!(at(&parts), ["ts/c/src/service/platform/db.ts:1"]);
     }
 
     #[test]

@@ -4,9 +4,9 @@ import CoreText
 import UIKit
 
 // Text in the platform's own font, as the core asks for it
-// (ts/client/src/service/text.native.ts): how wide a line runs, and a line
-// drawn. The font is the system's, which falls back through every script and
-// draws color emoji as the app's own text does.
+// (ts/client/src/service/platform/text.native.ts): how wide a line runs, and a
+// line drawn. The font is the system's, which falls back through every script
+// and draws color emoji as the app's own text does.
 
 /// How far a line of `text` runs at a CSS weight and a size, in pixels.
 func textWidth(_ text: String, _ weight: Double, _ px: Double) -> Double {

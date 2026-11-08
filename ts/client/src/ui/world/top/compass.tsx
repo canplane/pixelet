@@ -6,7 +6,7 @@ import { Path, Svg } from "react-native-svg";
 import { LABEL, NORTH } from "@/ui/component/palette.ts";
 import { chrome, SECONDARY } from "@/ui/component/theme.ts";
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import { useView } from "@/ui/store/watch.ts";
+import { useView } from "@/ui/watch.ts";
 
 const NEEDLE_HALF = 16;
 const NEEDLE_WIDTH = 9;

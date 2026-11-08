@@ -26,9 +26,9 @@ import {
 } from "./perf/long-frame.ts";
 import { perfTraceSave } from "./perf/trace.ts";
 import { SETTING, type SettingName, settingsIn } from "@/ui/setting/schema.ts";
-import { useCore } from "@/ui/store/watch.ts";
-import * as perf from "@/port/perf.ts";
-import * as setting from "@/port/setting.ts";
+import { useCore } from "@/ui/watch.ts";
+import * as perf from "@/service/core/perf.ts";
+import * as setting from "@/service/core/setting.ts";
 
 const PLAIN = 0;
 const GO = 1;

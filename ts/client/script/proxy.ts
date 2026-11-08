@@ -18,7 +18,7 @@ import {
   GEO_PREFIX,
   SITE_URL,
   TILE_PREFIX,
-} from "@pxl/client/origin/route.spec.ts";
+} from "@pxl/client/service/origin/route.spec.ts";
 
 /**
  * Where a dev server forwards a route the page asks of its own origin. The

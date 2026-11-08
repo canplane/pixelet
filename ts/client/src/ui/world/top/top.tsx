@@ -19,8 +19,8 @@ import { ViewButtons } from "./view-buttons.tsx";
 import { BusyDim } from "@/ui/world/busy-dim.tsx";
 import { useChromeTop } from "@/ui/world/chrome.ts";
 import { CircularButton } from "@/ui/component/circular-button.tsx";
-import { useWindowSize } from "@/service/viewport.ts";
-import { useCore } from "@/ui/store/watch.ts";
+import { useWindowSize } from "@/service/platform/viewport.ts";
+import { useCore } from "@/ui/watch.ts";
 
 export function TopOverlays() {
   const { t } = useTranslation();

@@ -15,8 +15,8 @@ import {
   decorLabel,
   decorSection,
   MARKER,
-} from "@/ui/catalog/asset/mod.ts";
-import { PIN_LABEL } from "@/ui/catalog/asset/marker.spec.ts";
+} from "@/ui/asset/catalog.ts";
+import { PIN_LABEL } from "@/ui/asset/marker.spec.ts";
 
 import { selectAsset, useInHand } from "@/ui/world/dock/store.ts";
 import { Panel } from "@/ui/component/panel.tsx";
@@ -25,7 +25,7 @@ import { Glyph } from "@/ui/component/glyph.tsx";
 import { chrome, color } from "@/ui/component/theme.ts";
 import { SectionTitle } from "@/ui/component/section-title.tsx";
 import { CharacterPicker } from "@/ui/drawer/character/picker.tsx";
-import { CubeSwatch, decorGlyph } from "@/ui/catalog/asset/swatch.tsx";
+import { CubeSwatch, decorGlyph } from "@/ui/asset/swatch.tsx";
 import type { GlyphName } from "@/ui/component/icon.tsx";
 import { LABEL } from "@/ui/component/palette.ts";
 import { Grid, Item, itemOf, mark } from "./grid.tsx";

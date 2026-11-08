@@ -16,12 +16,12 @@ import { putKeyboardAway } from "@/ui/component/keyboard.tsx";
 import { LABEL } from "@/ui/component/palette.ts";
 import { TextField } from "@/ui/component/text-field.tsx";
 import { chrome, color, disabledContent } from "@/ui/component/theme.ts";
-import { useCore } from "@/ui/store/watch.ts";
+import { useCore } from "@/ui/watch.ts";
 import { appendChatLine, DockMode, setDockMode } from "./store.ts";
 import { SLOT } from "./strip.tsx";
-import * as edit from "@/port/edit.ts";
-import * as scene from "@/port/scene.ts";
-import * as snapshot from "@/port/snapshot.ts";
+import * as edit from "@/service/core/edit.ts";
+import * as scene from "@/service/core/scene.ts";
+import * as snapshot from "@/service/core/snapshot.ts";
 
 /** The message field's text and its sending. The dock holds this state, so
  * that it is there whether or not the cards are drawn yet. */

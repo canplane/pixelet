@@ -4,10 +4,10 @@ import { Component, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { BOOT_LOADING, BOOT_STARTED } from "@/abi/state.ts";
-import { useStanding } from "./boot.ts";
-import { coverOf, UI_PANIC } from "./cover.ts";
+import { useStanding } from "./cover/standing.ts";
+import { coverOf, UI_PANIC } from "./cover/cover.ts";
 import { Modals } from "./modal.tsx";
-import { Screen } from "./screens.tsx";
+import { Screen } from "./cover/screen.tsx";
 import { KeyboardAway } from "@/ui/component/keyboard.tsx";
 import { DockMode, setDockMode } from "@/ui/world/dock/store.ts";
 

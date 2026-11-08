@@ -4,8 +4,8 @@ import { useTranslation } from "react-i18next";
 
 import { SETTING } from "@/ui/setting/schema.ts";
 import { ButtonStack } from "./button-stack.tsx";
-import { useCore } from "@/ui/store/watch.ts";
-import * as setting from "@/port/setting.ts";
+import { useCore } from "@/ui/watch.ts";
+import * as setting from "@/service/core/setting.ts";
 
 const MODE = SETTING.camera_mode;
 const FIRST_PERSON = MODE.options.first_person;

@@ -1,17 +1,17 @@
 // @pxl/client/ui/debug/perf/poll.ts
 
 /**
- * The one poll of the profiler that the debug panels share. While the
- * profiler panel is shown, it reads the gauge over the live window, and the
- * view panel takes its view from that gauge. While only the view panel is
- * shown, it reads the view alone (`read("view")` in port/perf.ts). While
- * neither is shown, it reads nothing.
+ * The one poll of the profiler that the debug panels share. While the profiler
+ * panel is shown, it reads the gauge over the live window, and the view panel
+ * takes its view from that gauge. While only the view panel is shown, it reads
+ * the view alone (`read("view")` in service/core/perf.ts). While neither is
+ * shown, it reads nothing.
  */
 
 import { useEffect } from "react";
 import { create } from "zustand";
 
-import { read as perf_read } from "@/port/perf.ts";
+import { read as perf_read } from "@/service/core/perf.ts";
 import { type Gauge, perfGaugeRead } from "./view.ts";
 
 const POLL_MS = 500;

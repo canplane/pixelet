@@ -34,7 +34,7 @@ const DATA_SPECS: [DataSpec; 19] = [
     },
     DataSpec {
         json: "spec/spec/asset/marker.json",
-        ts: Some("ts/client/src/ui/catalog/asset/marker.spec.ts"),
+        ts: Some("ts/client/src/ui/asset/marker.spec.ts"),
         ts_names: Some(&["PIN_LABEL", "MARKER_TEXT_CHARS"]),
         rs: Some("rust/spec/src/asset/marker.spec.rs"),
         module: "marker",
@@ -42,7 +42,7 @@ const DATA_SPECS: [DataSpec; 19] = [
     },
     DataSpec {
         json: "spec/spec/asset/id.json",
-        ts: Some("ts/client/src/ui/catalog/asset/id.spec.ts"),
+        ts: Some("ts/client/src/ui/asset/id.spec.ts"),
         rs: Some("rust/spec/src/asset/id.spec.rs"),
         module: "id",
         enums: Enums::All,
@@ -62,7 +62,7 @@ const DATA_SPECS: [DataSpec; 19] = [
     },
     DataSpec {
         json: "spec/spec/asset/character.json",
-        ts: Some("ts/client/src/ui/catalog/asset/character.spec.ts"),
+        ts: Some("ts/client/src/ui/asset/character.spec.ts"),
         ts_names: Some(&["groups", "GENDER"]),
         rs: Some("rust/spec/src/asset/character.spec.rs"),
         module: "character",

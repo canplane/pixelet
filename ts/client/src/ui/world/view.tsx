@@ -4,12 +4,12 @@ import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AboveKeyboard } from "@/ui/component/above-keyboard.tsx";
-import { type InputDriver } from "@/service/types.ts";
-import * as surface from "@/service/surface.tsx";
-import { useSafeArea } from "@/service/safe-area.ts";
-import { useVisualViewport } from "@/service/viewport.ts";
-import { POINTER_KIND, POINTER_PHASE } from "@/port/input.ts";
-import { surface_driver } from "@/port/surface.ts";
+import { type InputDriver } from "@/service/platform/types.ts";
+import * as surface from "@/service/platform/surface.tsx";
+import { useSafeArea } from "@/service/platform/safe-area.ts";
+import { useVisualViewport } from "@/service/platform/viewport.ts";
+import { POINTER_KIND, POINTER_PHASE } from "@/service/core/input.ts";
+import { surface_driver } from "@/service/core/surface.ts";
 import { keyDown, keyUp, releaseKeys } from "./keyboard.ts";
 import { releasePointers, worldPointer } from "./pointer.ts";
 import { Corner } from "./corner.tsx";
@@ -24,9 +24,9 @@ import { Dock } from "./dock/dock.tsx";
 import { TopOverlays } from "@/ui/world/top/top.tsx";
 import { DOCK_HEIGHT } from "./dock/card.tsx";
 import { ToastController } from "@/ui/world/toast/controller.tsx";
-import { useCore } from "@/ui/store/watch.ts";
-import * as input from "@/port/input.ts";
-import * as scene from "@/port/scene.ts";
+import { useCore } from "@/ui/watch.ts";
+import * as input from "@/service/core/input.ts";
+import * as scene from "@/service/core/scene.ts";
 
 const TOAST_LIFT_PX = chrome.inset + 20;
 
@@ -36,7 +36,7 @@ const WORLD = surface_driver(scene.draw_world);
 
 /** The world's input from the platform. Pointers and keys pass through the
  * UI's own handling first (`worldPointer` and `keyDown`). The rest goes to
- * port/input.ts as it comes. */
+ * service/core/input.ts as it comes. */
 const INPUT: InputDriver = {
   open: input.open,
   pointer: (phase, kind, id, button, x, y) =>

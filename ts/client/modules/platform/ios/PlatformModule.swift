@@ -7,9 +7,9 @@ import PxlNative
 import UIKit
 
 /// The device's half of the client's services on iOS (the .native files in
-/// ts/client/src/service/), as one module that answers what the UI asks of the
-/// system. The core, and the view it draws into, are in xpute's own module
-/// (@xpute/native).
+/// ts/client/src/service/platform/), as one module that answers what the UI
+/// asks of the system. The core, and the view it draws into, are in xpute's own
+/// module (@xpute/native).
 public class PlatformModule: Module {
 
   public func definition() -> ModuleDefinition {
@@ -24,7 +24,7 @@ public class PlatformModule: Module {
       ViewModifierRegistry.unregister(contentScrollsModifier)
     }
 
-    // ---- the transport (service/origin.native.ts) ----
+    // ---- the transport (service/platform/origin.native.ts) ----
 
     /// Decodes a body that arrived still zstd-compressed. It runs on the
     /// module's queue, off the JavaScript thread. The bytes are the library's:
@@ -40,7 +40,7 @@ public class PlatformModule: Module {
       return try NativeArrayBuffer.wrap(dataWithoutCopy: UnsafeMutableRawBufferPointer(start: bytes, count: count), cleanup: { pxl_unpacked_free(bytes, count) })
     }
 
-    // ---- storage (service/storage.native.ts) ----
+    // ---- storage (service/platform/storage.native.ts) ----
     //
     // UserDefaults is the system's store for an app's small values, as
     // localStorage is the browser's for a page.
@@ -53,7 +53,7 @@ public class PlatformModule: Module {
       UserDefaults.standard.set(value, forKey: key)
     }
 
-    // ---- the clipboard (service/share.native.ts) ----
+    // ---- the clipboard (service/platform/share.native.ts) ----
     //
     // The general pasteboard serves as navigator.clipboard does on a page.
     // React Native's JavaScript has no clipboard of its own.
@@ -62,7 +62,7 @@ public class PlatformModule: Module {
       UIPasteboard.general.string = text
     }
 
-    // ---- text (service/text.native.ts, Text.swift) ----
+    // ---- text (service/platform/text.native.ts, Text.swift) ----
 
 
     Function("textWidth") { (weight: Double, px: Double, text: String) -> Double in
@@ -78,7 +78,7 @@ public class PlatformModule: Module {
       textRaster(text, weight, px, rgba, x, width, height, out.rawPointer)
     }
 
-    // ---- the compass (service/sensor.native.ts) ----
+    // ---- the compass (service/platform/sensor.native.ts) ----
 
     /// Whether the device has a compass at all. expo-horizon-location tells that
     /// only by failing a watch, and a failed watch reads as a compass lost

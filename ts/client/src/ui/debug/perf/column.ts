@@ -2,7 +2,7 @@
 
 /**
  * How the report, the panel and the trace show a frame's columns, as
- * port/perf.ts decodes them. A column's name ends in its unit: `_ms`,
+ * service/core/perf.ts decodes them. A column's name ends in its unit: `_ms`,
  * `_bytes`, `_px`, or `_name` for an index into a list of names, as FRAME in
  * perf.json defines. So a column the core adds needs nothing here. Only the
  * names of a list column's slots are spelled out.
@@ -13,7 +13,7 @@ import { round } from "@xpute/kit/math/scalar.ts";
 
 import { PHASES } from "@/abi/phase.spec.ts";
 import { FRAME_GROUP, WAKES } from "@/abi/perf.spec.ts";
-import type { FrameColumn, ListColumn } from "@/port/perf.ts";
+import type { FrameColumn, ListColumn } from "@/service/core/perf.ts";
 import { EFFECT_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
 import { fixed } from "@/ui/fixed.ts";

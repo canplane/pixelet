@@ -13,7 +13,7 @@ import { SETTING, type SettingName, settingsIn } from "@/ui/setting/schema.ts";
 import { WorldGizmoLegend } from "./legend.tsx";
 import { PerfPanel } from "./perf.tsx";
 import { ViewPanel } from "./view.tsx";
-import { useCore } from "@/ui/store/watch.ts";
+import { useCore } from "@/ui/watch.ts";
 
 const PANEL = {
   view: ViewPanel,

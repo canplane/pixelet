@@ -10,7 +10,7 @@ import { Presence } from "@/ui/component/motion/presence.tsx";
 import { LEAVE, SETTLE } from "@/ui/component/motion/transition.ts";
 import { HaloPath, HaloText } from "./halo.tsx";
 import { color, halo, textStyle, weight } from "@/ui/component/theme.ts";
-import { useView } from "@/ui/store/watch.ts";
+import { useView } from "@/ui/watch.ts";
 
 const TICK_PX = 5;
 const QUARTER_TICK_PX = 3;

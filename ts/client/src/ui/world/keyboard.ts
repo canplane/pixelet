@@ -13,8 +13,8 @@
 
 import type { i32 } from "@xpute/kit/abi/word.ts";
 import { Tool } from "@/abi/cmd.spec.ts";
-import { KIND } from "@/ui/catalog/asset/id.spec.ts";
-import { kindOf } from "@/ui/catalog/asset/mod.ts";
+import { KIND } from "@/ui/asset/id.spec.ts";
+import { kindOf } from "@/ui/asset/catalog.ts";
 import { closeModal, modalOpen, openModal } from "@/ui/modal.tsx";
 import {
   DockMode,
@@ -28,7 +28,7 @@ import {
   stepScale,
   switchDockMode,
 } from "@/ui/world/dock/store.ts";
-import * as input from "@/port/input.ts";
+import * as input from "@/service/core/input.ts";
 
 const MOVE: Record<string, [i32, i32]> = {
   KeyW: [0, -1],

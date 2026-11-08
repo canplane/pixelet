@@ -10,14 +10,14 @@
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 
-import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/deploy.ts";
+import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/build.ts";
 
-import { type Frame, is_list, COLUMNS, read } from "@/port/perf.ts";
+import { type Frame, is_list, COLUMNS, read } from "@/service/core/perf.ts";
 import { LIST_NAMES } from "./column.ts";
 import { failText } from "./report.ts";
 import { longFramesSince } from "./long-frame.ts";
 import { fixed } from "@/ui/fixed.ts";
-import * as share from "@/service/share.ts";
+import * as share from "@/service/platform/share.ts";
 
 const PID = 1;
 const TID_FRAMES = 1;

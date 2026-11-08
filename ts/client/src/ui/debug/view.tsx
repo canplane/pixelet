@@ -11,7 +11,7 @@ import { fixed } from "@/ui/fixed.ts";
 import { Accordion } from "./accordion.tsx";
 import { PerfView } from "./perf/gauge.tsx";
 import { usePerfView } from "./perf/poll.ts";
-import { useCore } from "@/ui/store/watch.ts";
+import { useCore } from "@/ui/watch.ts";
 
 export function ViewPanel() {
   const show = useCore((s) => s.settings[SETTING.view.key] === 1);

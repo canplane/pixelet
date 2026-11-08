@@ -15,17 +15,17 @@ import {
   source_declaration,
   source_state,
   watch_source,
-} from "@/sys/fs/source.ts";
-import { follow_refused_files } from "@/sys/fs/refusal.ts";
-import { set_storage } from "@/sys/fs/storage.ts";
-import { set_online } from "@/origin/online.ts";
+} from "@/service/sys/fs/source.ts";
+import { follow_refused_files } from "@/service/sys/fs/refusal.ts";
+import { set_storage } from "@/service/sys/fs/storage.ts";
+import { set_online } from "@/service/origin/online.ts";
 import { config, perf_here } from "@/runtime/start.ts";
-import { set_core } from "@/port/core.ts";
+import { set_core } from "@/service/core/core.ts";
 import type { Page, ToCore, ToUi } from "@/runtime/page.ts";
-import { fs_changed } from "@/port/fs.ts";
-import { answer, type PerfRead } from "@/port/perf.ts";
-import { source_declare } from "@/port/source.ts";
-import * as online from "@/service/online.ts";
+import { fs_changed } from "@/service/core/fs.ts";
+import { answer, type PerfRead } from "@/service/core/perf.ts";
+import { source_declare } from "@/service/core/source.ts";
+import * as online from "@/service/platform/online.ts";
 
 const tell = (m: ToUi) => postMessage(m);
 const page = Promise.withResolvers<Page>();

@@ -5,7 +5,7 @@ export {};
 declare global {
   // Constants that babel.config.ts writes into the code at build time, on a
   // page and on a device. A branch on one is folded away in the bundle. The
-  // deployment's values are read through deploy.ts.
+  // deployment's values are read through build.ts.
   const __APP_ENV__: string;
   const __IS_DEV__: boolean;
 

@@ -15,8 +15,8 @@
 import { SETTING } from "@/ui/setting/schema.ts";
 import { perfReportText } from "./report.ts";
 import { perfReportRead } from "./view.ts";
-import * as perf from "@/port/perf.ts";
-import * as setting from "@/port/setting.ts";
+import * as perf from "@/service/core/perf.ts";
+import * as setting from "@/service/core/setting.ts";
 
 /** One input is sent each step, about one frame at 60 Hz. */
 const STEP_MS = 16;

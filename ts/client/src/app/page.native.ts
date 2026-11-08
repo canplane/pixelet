@@ -1,0 +1,7 @@
+// @pxl/client/app/page.native.ts
+
+/** A device has no document to style, and keeps its own console (page.ts).
+ * What it needs first is Expo's globals, among them the text codecs, which
+ * xpute's kit reads as it loads. */
+
+import "expo";

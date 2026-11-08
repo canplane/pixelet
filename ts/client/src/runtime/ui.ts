@@ -18,14 +18,18 @@ import {
   read_sensor_stop,
   read_ui_view,
 } from "@/abi/cmd.spec.ts";
-import { onabort } from "@/sys/abort.ts";
-import { core, ui as link } from "@/port/core.ts";
-import { GPU_STATE, set_gpu } from "@/port/gpu.ts";
-import { SENSOR_LISTENER, sensor_start, sensor_stop } from "@/port/sensor.ts";
-import * as snapshot from "@/port/snapshot.ts";
-import * as sensor from "@/service/sensor.ts";
-import { listen } from "@/service/sensor-listener.ts";
-import * as visibility from "@/service/visibility.ts";
+import { onabort } from "@/service/sys/abort.ts";
+import { core, ui as link } from "@/service/core/core.ts";
+import { GPU_STATE, set_gpu } from "@/service/sys/gpu.ts";
+import {
+  SENSOR_LISTENER,
+  sensor_start,
+  sensor_stop,
+} from "@/service/core/sensor.ts";
+import * as snapshot from "@/service/core/snapshot.ts";
+import * as sensor from "@/service/platform/sensor.ts";
+import { listen } from "@/service/platform/sensor-listener.ts";
+import * as visibility from "@/service/platform/visibility.ts";
 
 /** What the client's boot hears as the runtime opens (boot.ts). */
 export interface OnOpen {

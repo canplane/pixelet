@@ -1,7 +1,7 @@
 // @pxl/client/@types/virtual.d.ts
 
 /** What the build is, written by metro.config.ts `buildStamp` from
- * ts/build/stamp.ts. Code reads it through deploy.ts, which says what each
+ * ts/build/stamp.ts. Code reads it through build.ts, which says what each
  * field means. */
 declare module "virtual:pxl-build" {
   export const time: string;
@@ -9,6 +9,6 @@ declare module "virtual:pxl-build" {
   export const number: string;
 }
 
-/** A stylesheet the page imports for its document (src/page.ts). Metro
+/** A stylesheet the page imports for its document (src/app/page.ts). Metro
  * bundles it as CSS, and nothing reads it as a module. */
 declare module "*.css";

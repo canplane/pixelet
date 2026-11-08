@@ -14,14 +14,14 @@ import type {
   TaskSummary,
   ViewSection,
   Worst,
-} from "@/port/perf.ts";
+} from "@/service/core/perf.ts";
 import { n1, pct, phaseText, tris, valueText } from "./column.ts";
 import { fps, type PerfReport } from "./view.ts";
 import { fixed } from "@/ui/fixed.ts";
 import { EFFECT_NAMES } from "@/abi/step.spec.ts";
-import { type LongFrame } from "@/service/types.ts";
-import * as long_frame from "@/service/long-frame.ts";
-import * as share from "@/service/share.ts";
+import { type LongFrame } from "@/service/platform/types.ts";
+import * as long_frame from "@/service/platform/long-frame.ts";
+import * as share from "@/service/platform/share.ts";
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
 const signedBytes = (b: number) =>

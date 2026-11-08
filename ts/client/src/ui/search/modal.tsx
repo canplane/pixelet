@@ -43,10 +43,10 @@ import { DIVISION_SUBTYPE } from "@/ui/division/division.spec.ts";
 import { fetchSearch, type SearchResult } from "./fetch.ts";
 import { fixed } from "@/ui/fixed.ts";
 import { touchOutset } from "@/ui/component/touch.ts";
-import { useCore } from "@/ui/store/watch.ts";
-import * as camera from "@/port/camera.ts";
-import * as sensor from "@/port/sensor.ts";
-import * as snapshot from "@/port/snapshot.ts";
+import { useCore } from "@/ui/watch.ts";
+import * as camera from "@/service/core/camera.ts";
+import * as sensor from "@/service/core/sensor.ts";
+import * as snapshot from "@/service/core/snapshot.ts";
 
 const DEBOUNCE_MS = 300;
 

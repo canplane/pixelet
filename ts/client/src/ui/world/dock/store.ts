@@ -10,8 +10,8 @@ import { create } from "zustand";
 
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
-import { ground, object } from "@/ui/catalog/asset/cube.spec.ts";
-import { KIND } from "@/ui/catalog/asset/id.spec.ts";
+import { ground, object } from "@/ui/asset/cube.spec.ts";
+import { KIND } from "@/ui/asset/id.spec.ts";
 import {
   allCubes,
   type AssetId,
@@ -19,13 +19,13 @@ import {
   decorIds,
   kindOf,
   MARKER,
-} from "@/ui/catalog/asset/mod.ts";
+} from "@/ui/asset/catalog.ts";
 import { Tool } from "@/abi/cmd.spec.ts";
 import { OBJECT_SCALES } from "@/ui/world/object.spec.ts";
-import * as storage from "@/service/storage.ts";
+import * as storage from "@/service/platform/storage.ts";
 import * as DockMode from "./mode.ts";
-import * as edit from "@/port/edit.ts";
-import * as scene from "@/port/scene.ts";
+import * as edit from "@/service/core/edit.ts";
+import * as scene from "@/service/core/scene.ts";
 
 interface ChatLine {
   id: number;

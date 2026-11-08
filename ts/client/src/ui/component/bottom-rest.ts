@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-import type { SafeArea } from "@/service/types.ts";
+import type { SafeArea } from "@/service/platform/types.ts";
 
 export interface AboveKeyboardProps {
   inset: number;

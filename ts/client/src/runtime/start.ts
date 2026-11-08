@@ -21,13 +21,13 @@ import {
   PACE_HZ,
   SETTLE_MS,
 } from "@/abi/pacing.spec.ts";
-import { namespace } from "@/sys/fs/namespace.ts";
-import { submit_grant } from "@/port/surface.ts";
-import { text_layout, text_raster } from "@/port/text.ts";
-import { answer, type PerfRead } from "@/port/perf.ts";
-import type { Perf } from "@/port/core.ts";
-import { source } from "@/service/core.ts";
-import { gpu } from "@/service/gpu.ts";
+import { namespace } from "@/service/sys/fs/namespace.ts";
+import { submit_grant } from "@/service/core/turn.ts";
+import { text_layout, text_raster } from "@/service/core/text.ts";
+import { answer, type PerfRead } from "@/service/core/perf.ts";
+import type { Perf } from "@/service/core/core.ts";
+import { source } from "@/service/platform/core.ts";
+import { gpu } from "@/service/platform/gpu.ts";
 
 /** What the core asks on this side. */
 function calls(pacing: FramePacing) {

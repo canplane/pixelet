@@ -4,7 +4,7 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 
 import { FRAME, FRAME_GROUP } from "@/abi/perf.spec.ts";
-import { is_list, COLUMNS } from "@/port/perf.ts";
+import { is_list, COLUMNS } from "@/service/core/perf.ts";
 import { GROUPS, LIST_NAMES } from "./column.ts";
 
 test("FRAME_GROUP - every column is printed, in one group", () => {

@@ -6,10 +6,10 @@ import { StyleSheet, Text, View } from "react-native";
 import { Prose, Section, settingText } from "@/ui/setting/row.tsx";
 import { BrandSymbol } from "./brand-symbol.tsx";
 import { textStyle } from "@/ui/component/theme.ts";
-import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE } from "@/deploy.ts";
+import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE } from "@/build.ts";
 import { format } from "@/abi/file.spec.ts";
 import { LABEL } from "@/ui/component/palette.ts";
-import { useSourceVersions } from "@/ui/store/watch.ts";
+import { useSourceVersions } from "@/ui/watch.ts";
 
 const ENV_SHORT: Record<string, string> = {
   development: "dev",

@@ -34,7 +34,7 @@ import {
   textStyle,
 } from "@/ui/component/theme.ts";
 import { type ToastSpec, ToastTone } from "./store.ts";
-import { useWindowSize } from "@/service/viewport.ts";
+import { useWindowSize } from "@/service/platform/viewport.ts";
 
 export const TOAST_SIDE = 32;
 const MESSAGE_PAD = 4;

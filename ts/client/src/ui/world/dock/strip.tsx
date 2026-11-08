@@ -34,7 +34,7 @@ import {
   useSwatchFlash,
 } from "./store.ts";
 import { Tool } from "@/abi/cmd.spec.ts";
-import { KIND } from "@/ui/catalog/asset/id.spec.ts";
+import { KIND } from "@/ui/asset/id.spec.ts";
 import {
   type AssetId,
   type Cube,
@@ -42,13 +42,9 @@ import {
   decorLabel,
   kindOf,
   MARKER,
-} from "@/ui/catalog/asset/mod.ts";
-import { PIN_LABEL } from "@/ui/catalog/asset/marker.spec.ts";
-import {
-  CubeSwatch,
-  decorGlyph,
-  selectionRing,
-} from "@/ui/catalog/asset/swatch.tsx";
+} from "@/ui/asset/catalog.ts";
+import { PIN_LABEL } from "@/ui/asset/marker.spec.ts";
+import { CubeSwatch, decorGlyph, selectionRing } from "@/ui/asset/swatch.tsx";
 
 /** On a page, the browser scrolls the strip sideways itself and leaves holds
  * and vertical drags to the view's own gestures. On a device, React Native's

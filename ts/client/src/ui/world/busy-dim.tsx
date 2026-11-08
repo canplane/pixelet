@@ -7,8 +7,8 @@ import { Motion } from "@/ui/component/motion/motion.tsx";
 import { Dim } from "@/ui/component/motion/dim.ts";
 import { DIM } from "@/ui/component/motion/transition.ts";
 import { touches } from "@/ui/component/touch.ts";
-import * as device from "@/service/device.ts";
-import { useCore } from "@/ui/store/watch.ts";
+import * as device from "@/service/platform/device.ts";
+import { useCore } from "@/ui/watch.ts";
 
 /**
  * On a desktop, the chrome dims and takes no clicks while the world is

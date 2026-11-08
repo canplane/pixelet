@@ -10,10 +10,11 @@
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import type { RefusedFile } from "@/abi/cmd.spec.ts";
 import type { Source } from "@/abi/state.ts";
-import type { Declaration } from "@/sys/fs/source.ts";
+import type { Declaration } from "@/service/sys/fs/source.ts";
 
-/** What a worker cannot read of the page, sent before anything else: its
- * kept keys, and whether the device is held in the hand (service/device.ts). */
+/** What a worker cannot read of the page, sent before anything else: its kept
+ * keys, and whether the device is held in the hand
+ * (service/platform/device.ts). */
 export interface Page {
   kind: "page";
   keys: [string, string][];

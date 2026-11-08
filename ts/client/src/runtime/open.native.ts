@@ -6,17 +6,17 @@
  */
 
 import { start } from "@xpute/runtime";
-import { follow_refused_files } from "@/sys/fs/refusal.ts";
-import { declare_source, settled } from "@/sys/fs/source.ts";
-import { set_online } from "@/origin/online.ts";
+import { follow_refused_files } from "@/service/sys/fs/refusal.ts";
+import { declare_source, settled } from "@/service/sys/fs/source.ts";
+import { set_online } from "@/service/origin/online.ts";
 import { manifest, perf_here } from "@/runtime/start.ts";
-import { set_core } from "@/port/core.ts";
+import { set_core } from "@/service/core/core.ts";
 import { type OnOpen, started, ui } from "@/runtime/ui.ts";
-import { fs_changed } from "@/port/fs.ts";
-import { gpu_present } from "@/port/gpu.ts";
-import { source_declare } from "@/port/source.ts";
-import * as device from "@/service/device.ts";
-import * as online from "@/service/online.ts";
+import { fs_changed } from "@/service/core/fs.ts";
+import { gpu_present } from "@/service/sys/gpu.ts";
+import { source_declare } from "@/service/core/source.ts";
+import * as device from "@/service/platform/device.ts";
+import * as online from "@/service/platform/online.ts";
 
 /** Resolves once a GPU is present and the source is settled: true when the
  * source was declared, false when it was refused. */

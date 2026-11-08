@@ -25,8 +25,8 @@ import { ease, SLIDE, SLIDE_AWAY } from "@/ui/component/motion/transition.ts";
 import { LABEL } from "@/ui/component/palette.ts";
 import { alpha, chrome, color, layer, material } from "@/ui/component/theme.ts";
 import { touches } from "@/ui/component/touch.ts";
-import { useSafeArea } from "@/service/safe-area.ts";
-import { useWindowSize } from "@/service/viewport.ts";
+import { useSafeArea } from "@/service/platform/safe-area.ts";
+import { useWindowSize } from "@/service/platform/viewport.ts";
 
 export const PANEL_CONTROL = chrome.target;
 /** The inset of iOS 26 Maps' sheet. The top row's controls and the content

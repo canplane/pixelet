@@ -2,12 +2,13 @@
 
 /**
  * What a build is: when it was made, from which source, and under which
- * number. The bundle carries it (`virtual:pxl-build`, which deploy.ts reads),
- * and the page's export states it at /build.json. The source is git's short
- * hash, with `-dirty` when the tree had changes. The number is `#<n>` when CI
- * handed the build one (PXL_BUILD_NUMBER). Otherwise it is `#<n>-<id>`, from
- * the number the deployment serves (ts/client/.build_number, kept by
- * script/build-number.py), or the id alone before any number is cached.
+ * number. The bundle carries it (`virtual:pxl-build`, which the app's
+ * build.ts reads), and the page's export states it at /build.json. The source
+ * is git's short hash, with `-dirty` when the tree had changes. The number is
+ * `#<n>` when CI handed the build one (PXL_BUILD_NUMBER). Otherwise it is
+ * `#<n>-<id>`, from the number the deployment serves (ts/client/.build_number,
+ * kept by script/build-number.py), or the id alone before any number is
+ * cached.
  */
 
 import { execSync } from "node:child_process";

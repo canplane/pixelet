@@ -9,12 +9,12 @@ import { type StyleProp, StyleSheet, View, type ViewStyle } from "react-native";
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { Spinner } from "@/ui/component/icon.tsx";
 import { LABEL } from "@/ui/component/palette.ts";
-import { surface_driver } from "@/port/surface.ts";
+import { surface_driver } from "@/service/core/surface.ts";
 import type { Character } from "./character.ts";
 import { chrome, color } from "@/ui/component/theme.ts";
-import { CharacterSurface } from "@/service/surface.tsx";
-import { useCore } from "@/ui/store/watch.ts";
-import * as scene from "@/port/scene.ts";
+import { CharacterSurface } from "@/service/platform/surface.tsx";
+import { useCore } from "@/ui/watch.ts";
+import * as scene from "@/service/core/scene.ts";
 
 const SURFACE = surface_driver();
 const BACKDROP = parseInt(color.backdrop.slice(1), 16);

@@ -9,8 +9,8 @@ import { SensorStatus } from "@/abi/cmd.spec.ts";
 import type { GlyphName } from "@/ui/component/icon.tsx";
 import { haloGap, HaloIcon } from "./halo.tsx";
 import { color } from "@/ui/component/theme.ts";
-import * as device from "@/service/device.ts";
-import { useCore } from "@/ui/store/watch.ts";
+import * as device from "@/service/platform/device.ts";
+import { useCore } from "@/ui/watch.ts";
 
 /** A sensor's status as a color. Each surface passes its own `tone`, and the
  * glyphs over the world are paler than a sheet's. */

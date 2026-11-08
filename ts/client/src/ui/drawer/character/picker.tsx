@@ -27,9 +27,9 @@ import {
 } from "./character.ts";
 import { LABEL } from "@/ui/component/palette.ts";
 import { PANEL_EDGE, PANEL_SECTION_GAP } from "@/ui/component/panel.tsx";
-import { useCore } from "@/ui/store/watch.ts";
+import { useCore } from "@/ui/watch.ts";
 import { touchOutset } from "@/ui/component/touch.ts";
-import * as setting from "@/port/setting.ts";
+import * as setting from "@/service/core/setting.ts";
 
 // A chip is drawn 32 high, and a press lands on a 44-high box laid out around
 // it.

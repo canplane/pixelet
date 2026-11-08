@@ -80,9 +80,9 @@ pub struct Files {
 }
 
 /// The catalog's bytes, read from the generated file the client plugs it in from
-/// (ts/client/src/sys/fs/catalog.spec.ts).
+/// (ts/client/src/service/sys/fs/catalog.spec.ts).
 fn catalog() -> Vec<u8> {
-    let at = Path::new(env!("PXL_REPO")).join("ts/client/src/sys/fs/catalog.spec.ts");
+    let at = Path::new(env!("PXL_REPO")).join("ts/client/src/service/sys/fs/catalog.spec.ts");
     let text = std::fs::read_to_string(&at).unwrap_or_else(|e| panic!("{}: {e}", at.display()));
     let hex = text
         .split("CATALOG_HEX =")

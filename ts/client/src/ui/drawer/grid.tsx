@@ -9,7 +9,7 @@ import {
 } from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import { selectionRing } from "@/ui/catalog/asset/swatch.tsx";
+import { selectionRing } from "@/ui/asset/swatch.tsx";
 import { chrome, color, hairline } from "@/ui/component/theme.ts";
 import { NamingContext } from "./name-tip.tsx";
 

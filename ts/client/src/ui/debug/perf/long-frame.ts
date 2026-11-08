@@ -1,12 +1,12 @@
 // @pxl/client/ui/debug/perf/long-frame.ts
 //
-// Keeps the platform's long frames (service/long-frame.ts) in one ring, for
-// the profiler to show beside the core's frames. Both are timed on the clock
-// of `performance.now()`, so they line up.
+// Keeps the platform's long frames (service/platform/long-frame.ts) in one
+// ring, for the profiler to show beside the core's frames. Both are timed on
+// the clock of `performance.now()`, so they line up.
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import { type LongFrame } from "@/service/types.ts";
-import * as long_frame from "@/service/long-frame.ts";
+import { type LongFrame } from "@/service/platform/types.ts";
+import * as long_frame from "@/service/platform/long-frame.ts";
 import { LIMIT } from "@/abi/perf.spec.ts";
 
 // The ring spans the same window as the core's rings (perf.json

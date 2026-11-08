@@ -11,8 +11,8 @@ import { ButtonStack } from "./button-stack.tsx";
 import { Glyph } from "@/ui/component/glyph.tsx";
 import { SETTLE } from "@/ui/component/motion/transition.ts";
 import { chrome, color } from "@/ui/component/theme.ts";
-import { useCore } from "@/ui/store/watch.ts";
-import * as camera from "@/port/camera.ts";
+import { useCore } from "@/ui/watch.ts";
+import * as camera from "@/service/core/camera.ts";
 
 /** The glyphs follow MapKit's MKUserTrackingButton. */
 const PRESS: Record<Tracking, { glyph: GlyphName; label: string }> = {
