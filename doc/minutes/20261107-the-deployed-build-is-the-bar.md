@@ -2,7 +2,7 @@
 
 **2026-11-07** — recorded with the user, in the session that compared the frame with the
 deployed build and took out what the frame carried over frames. The measurements are in
-[the frame on the S23](../experiment/20261105-the-frame-on-the-s23/journal.md), its 11-07
+[the frame on the S23](../experiment/20261103-the-frame-on-the-s23/README.md), its 11-07
 section; the decision on the frame itself is [a ray ends in its frame](./20261107-a-ray-ends-in-its-frame.md).
 
 ## What the user decided

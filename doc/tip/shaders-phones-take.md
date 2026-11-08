@@ -4,7 +4,7 @@
 it, learned on a Galaxy S23 (Adreno 740, Chrome) and an iPhone 13
 mini (Safari 27), with Safari on the Mac failing as the iPhone does. The
 evidence, the reduced cases and the tools are
-[the shaders on two phones](../experiment/20261103-shaders-on-two-phones/).
+[the shaders on two phones](../experiment/20261103-the-shaders-by-hand/README.md).
 These hold whatever language the shaders are written in: they are about the
 WGSL a browser receives and what its compiler and the phone's driver do with
 it. The shaders were then generated from Rust (rust-gpu, naga, a rewriter);
@@ -78,7 +78,7 @@ struct, a struct- or array-typed local, `i32::MIN` and
 about 1.0 MB, the largest (`light_beam`) 57 KB, against 5.5 MB generated;
 part.rs `SHADERS` counts 92 now. The S23 has drawn with the shaders by hand
 since 2026-11-05
-([the frame on the S23](../experiment/20261105-the-frame-on-the-s23/journal.md)).
+([the frame on the S23](../experiment/20261103-the-frame-on-the-s23/README.md)).
 
 ## What the host and a shader share
 

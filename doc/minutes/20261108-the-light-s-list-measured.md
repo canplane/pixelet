@@ -39,7 +39,7 @@ the grazing rows, goes.
   texel's middle falls on its projection, the light being orthographic.
 - What a whole cast of the light reads on the Mac's drive: 30–38 k boxes at the median, 1.9 M
   texels cast, 146 k of them walked. A list was put near 100 k cells, the cells the sun does
-  not see uncounted ([the journal](../experiment/20261105-the-frame-on-the-s23/journal.md),
+  not see uncounted ([the journal](../experiment/20261103-the-frame-on-the-s23/README.md),
   11-08).
 - A list kept across frames would be the meshes of 10-12 again under another name; none is.
 - The eye and the light share the walk's code and its tests today; the light's list needs its

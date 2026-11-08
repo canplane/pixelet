@@ -47,7 +47,7 @@ and ended on whether a program outside this tree can take xpute today.
   about here**: `decor::hand_frames_answer_as_the_rust`, broken since
   `3d9aa5b91e` (originally `728020efcc` on `original`), is `small`'s; what it
   was and how it was fixed is in
-  [taking rust-gpu out](../experiment/20261104-taking-rust-gpu-out/journal.md).
+  [taking rust-gpu out](../experiment/20261103-the-shaders-by-hand/README.md).
 - **Frame pacing stays in xpute, whole** (`@xpute/host` `sched/frame_pacing.ts`),
   as the agents advised and the user took. The display's part, the refresh
   read off the animation frames and turns a whole number of refreshes apart,

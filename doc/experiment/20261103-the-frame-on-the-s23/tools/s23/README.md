@@ -1,6 +1,6 @@
 # Tools
 
-How the journal's S23 runs were taken. Data and shots go under `out/s23/` at the
+How the S23 runs of [the record](../../README.md) were taken. Data and shots go under `out/s23/` at the
 repository's root (gitignored).
 
 ## A tree on the phone

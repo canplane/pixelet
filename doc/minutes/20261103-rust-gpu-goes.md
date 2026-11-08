@@ -40,7 +40,7 @@ of locals, 6,000 of them scoped to code that never runs costing nothing, but the
 words live across the loop. It holds to 150, rises at 175, refuses a pipeline at
 200 and takes 80 to 240 ns a visit past that, in a synthetic pass. `sample` peaks at
 301 at `d25f5b631` and at 207 with the 8 entries, its 111 ns a node unmoved
-([the record](../experiment/20261103-the-walk-on-a-phone/README.md)). So the shape
+([the record](../experiment/20261103-the-frame-on-the-s23/README.md)). So the shape
 that matters is what stays live, which naga and the inlining made for Adreno both
 bear on; rust-gpu's share of it is not measured.
 

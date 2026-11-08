@@ -3,7 +3,7 @@
 **2026-11-05.** Why the same formula, in the same source, gives the CPU and a
 GPU different answers, when that matters, and how a rule is written so it does
 not. Met while holding the hand WGSL to pxl-engine word for word
-([the journal](../experiment/20261104-taking-rust-gpu-out/journal.md),
+([the journal](../experiment/20261103-the-shaders-by-hand/README.md),
 [the minutes](../minutes/20261105-the-shaders-by-hand-held-to-the-engine.md)).
 It is a general problem, known from games run in lockstep and from GPU
 computing; the references are at the end.
