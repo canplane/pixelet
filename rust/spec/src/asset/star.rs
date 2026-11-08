@@ -2,7 +2,7 @@
 
 //! A star of the Yale Bright Star Catalog (Hoffleit and Warren 1991, CDS
 //! V/50) as the sky's catalog holds it, written by the bake
-//! (pxl-geo-bake bin/bake_star.rs) and read by the sky (pxl-render
+//! (pxl-geo-bake bin/star.rs) and read by the sky (pxl-render
 //! gpu/star.rs): one layout, these two functions.
 //!
 //! A record is `RECORD_BYTES` little-endian: the right ascension a u16 of a
@@ -22,7 +22,6 @@ pub struct Star {
     pub bv: f64,
 }
 
-/// `star`'s record.
 pub fn record(star: &Star) -> [u8; RECORD_BYTES] {
     let ra = (libm::rint(star.ra / 360.0 * 65536.0) as u32 % 65536) as u16;
     let dec = libm::rint(star.dec / 90.0 * 32767.0) as i16;
@@ -35,7 +34,6 @@ pub fn record(star: &Star) -> [u8; RECORD_BYTES] {
     r
 }
 
-/// The star a record holds (`record`).
 pub fn star(r: &[u8; RECORD_BYTES]) -> Star {
     let word = |k: usize| [r[2 * k], r[2 * k + 1]];
     Star {

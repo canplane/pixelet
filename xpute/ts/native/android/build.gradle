@@ -1,9 +1,9 @@
 // @xpute/native/android/build.gradle
 //
-// xpute's module on Android (src/main/java/xpute/), and the core linked with
-// it: the app's core crate, as the app's package.json `xpute.core` names it,
-// built by script/build-core.py for each variant the app is built as, before
-// the variant's native libraries are merged.
+// This is xpute's module on Android (src/main/java/xpute/), and the core linked
+// with it: the app's core crate, as the app's package.json `xpute.core` names
+// it, which script/core-build.py builds for each variant the app is built as,
+// before the variant's native libraries are merged.
 
 import groovy.json.JsonSlurper
 
@@ -36,8 +36,8 @@ android {
   }
 }
 
-// Each variant's library in a directory of its own, which the variant alone
-// packs.
+// Each variant's library lies in a directory of its own, which that variant
+// alone packs.
 ["debug", "release"].each { variant ->
   def out = layout.buildDirectory.dir("core/${variant}")
   android.sourceSets[variant].jniLibs.srcDirs += out.get().asFile
@@ -51,7 +51,7 @@ android {
     // Gradle's PATH need not name.
     environment "PATH", "${home}/.cargo/bin:${System.getenv("PATH")}"
     doFirst {
-      commandLine "${projectDir}/../script/build-core.py", "--android",
+      commandLine "${projectDir}/../script/core-build.py", "--android",
         "--app", app.absolutePath,
         "--variant", variant,
         "--out", out.get().asFile.absolutePath,

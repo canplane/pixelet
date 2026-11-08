@@ -4,9 +4,9 @@
 //! sys/io/source.rs reads: the coarsest zoom supplied whole, each kind's format
 //! and version, and the shards every kind holds, four siblings written as their
 //! parent, with each override's version. The published one is made from a
-//! record of what the bucket serves (bin/declare_source.rs, which
+//! record of what the bucket serves (bin/declaration.rs, which
 //! script/publish.py gathers out of the bucket and uploads), a dev tile
-//! server's from what it serves (bin/serve_tiles.rs).
+//! server's from what it serves (bin/server.rs).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;

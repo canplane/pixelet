@@ -19,36 +19,36 @@ test-core-published = ["test", "-p", "pxl-core", "--no-default-features"]
 test-bake-serve = ["test", "-p", "pxl-geo-bake", "--features", "serve"]
 # The code generated from spec/: `cargo spec` says what is stale, `cargo spec --write` writes it.
 spec = ["run", "-q", "-p", "pxl-tool", "--bin", "spec", "--"]
-# What the tree must keep that no compiler sees (pxl-tool bin/check_rules.rs).
-check-rules = ["run", "-q", "-p", "pxl-tool", "--bin", "check_rules", "--"]
+# What the tree must keep that no compiler sees (pxl-tool bin/rule.rs).
+check-rules = ["run", "-q", "-p", "pxl-tool", "--bin", "rule", "--"]
 
 # The binaries that make the repository's data and the servers a dev run
 # starts, each with its profile and features: `server` where a debug build is
 # felt on every tile, `release` for one long run. Each works in the checkout's
 # root wherever it is started. The ones that read the databases or are servers
 # want the local environment, which the root's make gives them
-# (script/with-env.sh): `make bake-terrain ARGS="--step leaf"`.
-bake-terrain = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--bin", "bake_terrain", "--"]
-bake-place = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--bin", "bake_place", "--"]
-bake-division = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--bin", "bake_division", "--"]
-bake-earth = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--bin", "bake_earth", "--"]
-bake-star = ["run", "-p", "pxl-geo-bake", "--bin", "bake_star", "--"]
-bake-geoid = ["run", "--profile", "release", "-p", "pxl-tool", "--bin", "bake_geoid", "--"]
+# (script/env.sh): `make bake-terrain ARGS="--step leaf"`.
+bake-terrain = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--bin", "terrain", "--"]
+bake-place = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--bin", "place", "--"]
+bake-division = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--bin", "division", "--"]
+bake-earth = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--bin", "earth", "--"]
+bake-star = ["run", "-p", "pxl-geo-bake", "--bin", "star", "--"]
+bake-geoid = ["run", "--profile", "release", "-p", "pxl-tool", "--bin", "geoid", "--"]
 # Every Overture type into db-geo, a shard at a time (infra/geo/README.md).
-ingest-overture = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--features", "ingest", "--bin", "ingest_overture", "--"]
-download-pack = ["run", "-p", "pxl-tool", "--bin", "download_texture_pack", "--"]
-download-moon = ["run", "-p", "pxl-tool", "--bin", "download_moon", "--"]
-download-earth = ["run", "-p", "pxl-tool", "--bin", "download_earth", "--"]
-download-star = ["run", "-p", "pxl-tool", "--bin", "download_star", "--"]
+ingest-overture = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--features", "ingest", "--bin", "overture", "--"]
+download-pack = ["run", "-p", "pxl-tool", "--bin", "download", "--", "pack"]
+download-moon = ["run", "-p", "pxl-tool", "--bin", "download", "--", "moon"]
+download-earth = ["run", "-p", "pxl-tool", "--bin", "download", "--", "earth"]
+download-star = ["run", "-p", "pxl-tool", "--bin", "download", "--", "star"]
 # After any change under asset/content/.
-ingest-asset = ["run", "-p", "pxl-tool", "--bin", "ingest_asset", "--"]
+ingest-asset = ["run", "-p", "pxl-tool", "--bin", "asset", "--"]
 # The symbol's outline both apps bundle, when ts/client/brand's symbol changes;
 # the page's icons are made by its build (ts/client build:brand).
-render-brand = ["run", "-p", "pxl-tool", "--bin", "render_brand", "--", "--symbol"]
+render-brand = ["run", "-p", "pxl-tool", "--bin", "brand", "--", "--symbol"]
 serve-geo = ["run", "--profile", "server", "-p", "pxl-geo", "--bin", "pxl-geo", "--"]
 serve-api = ["run", "--profile", "server", "-p", "pxl-api", "--bin", "pxl-api", "--"]
 # The dev tile server, its sets baked on demand or off the shelf.
-serve-tile = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--features", "serve", "--bin", "serve_tiles", "--"]
+serve-tile = ["run", "--profile", "server", "-p", "pxl-geo-bake", "--features", "serve", "--bin", "server", "--"]
 
 # Every rustc a build runs, through the machine's compile cache where it has
 # one (.cargo/rustc.sh); relative to rust/, where this .cargo is.

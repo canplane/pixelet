@@ -3,8 +3,7 @@
 /**
  * What a dev server and the page's preview (script/web.ts `serve`) answer
  * besides the bundle: the routes the page asks of its own origin, forwarded
- * to wherever the tiles come from. A device's console is answered by
- * @pxl/build/console.ts instead. Expo's transform loads this file for
+ * to wherever the tiles come from. Expo's transform loads this file for
  * metro.config.ts, and Node loads it too, so it must not read `import.meta`.
  */
 
@@ -23,7 +22,7 @@ import {
 /**
  * Where a dev server forwards a route the page asks of its own origin. The
  * routes split as the Worker splits them, and where they go depends on the
- * source the tiles come from, PXL_DEV_SOURCE, which the Makefile's `dev`,
+ * source the tiles come from, PXL_TILE_SOURCE, which the Makefile's `dev`,
  * `dev-oven` and `dev-shelf` set. Under `delivery`, every route goes to the
  * published deployment (PXL_REMOTE_ORIGIN, or else the site). Under `oven` and
  * `shelf`, the routes go to the local servers: the tiles and the assets to
@@ -36,7 +35,7 @@ export function route_target(url: string): string | null {
     tile: process.env.PXL_TILE_BASE_URL || "http://127.0.0.1:3001",
     api: process.env.PXL_API_BASE_URL || "http://127.0.0.1:3002",
   };
-  const delivery = (process.env.PXL_DEV_SOURCE || "delivery") === "delivery";
+  const delivery = (process.env.PXL_TILE_SOURCE || "delivery") === "delivery";
   const routes: [string, string][] = [
     [TILE_PREFIX, local.tile],
     [ASSET_PREFIX, local.tile],

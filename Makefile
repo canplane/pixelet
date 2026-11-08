@@ -24,7 +24,7 @@
 	fmt fmt-ts fmt-rust \
 	lint lint-ts \
 	spec dev dev-oven dev-shelf dev-native preview preview-oven preview-shelf \
-	serve-shelf watch-wasm web web-oven web-shelf web-preview-oven web-preview-shelf \
+	serve-tile watch-wasm web web-preview \
 	sync-build-number deploy
 
 # Each tree's packages, by its own manager: ts/'s here, xpute's by its make.
@@ -78,57 +78,47 @@ spec:
 	+cd rust && cargo spec --write
 	$(MAKE) -C xpute spec
 
-# Where the tiles come from, a bakery's three: `dev` has them delivered,
+# Where the tiles come from (SOURCE), a bakery's three: `dev` has them delivered,
 # every route the published deployment's, so not for bake work, its tile
 # prefix frozen; `dev-oven` bakes each on demand; `dev-shelf` takes each
 # kind's set under ./out. The two local ones run the three servers beside the
 # client, each its own job, so Ctrl-C stops them all. Each dev target runs
-# the module's watcher beside the client (ts/client/script/watch-wasm.py): a
+# the module's watcher beside the client (ts/client/script/wasm-watch.py): a
 # change under rust/ rebuilds public/core.wasm and the page is reloaded by
 # hand. `preview` is the bundle a deploy builds, to measure the client by.
 dev: sync-build-number
 	$(MAKE) -j2 watch-wasm web
-dev-oven: sync-build-number
-	$(MAKE) -j5 serve-geo serve-api serve-tile watch-wasm web-oven
-dev-shelf: sync-build-number
-	$(MAKE) -j5 serve-geo serve-api serve-shelf watch-wasm web-shelf
+dev-oven dev-shelf: sync-build-number
+	$(MAKE) -j5 serve-geo serve-api serve-tile watch-wasm web SOURCE=$(@:dev-%=%)
 dev-native:
 	pnpm --dir ts/client start
 preview: sync-build-number
-	pnpm --dir ts/client preview
-preview-oven: sync-build-number
-	$(MAKE) -j4 serve-geo serve-api serve-tile web-preview-oven
-preview-shelf: sync-build-number
-	$(MAKE) -j4 serve-geo serve-api serve-shelf web-preview-shelf
+	$(MAKE) web-preview
+preview-oven preview-shelf: sync-build-number
+	$(MAKE) -j4 serve-geo serve-api serve-tile web-preview SOURCE=$(@:preview-%=%)
 
-serve-shelf:
-	+cd rust && $(CURDIR)/script/with-env.sh cargo serve-tile --shelf ./out
+serve-tile:
+	+cd rust && $(CURDIR)/script/env.sh cargo serve-tile $(if $(filter shelf,$(SOURCE)),--shelf ./out) $(ARGS)
 watch-wasm:
-	./ts/client/script/watch-wasm.py
+	./ts/client/script/wasm-watch.py
 web:
-	pnpm --dir ts/client web
-web-oven:
-	pnpm --dir ts/client web:oven
-web-shelf:
-	pnpm --dir ts/client web:shelf
-web-preview-oven:
-	pnpm --dir ts/client preview:oven
-web-preview-shelf:
-	pnpm --dir ts/client preview:shelf
+	PXL_TILE_SOURCE=$(SOURCE) pnpm --dir ts/client web
+web-preview:
+	PXL_TILE_SOURCE=$(SOURCE) pnpm --dir ts/client preview
 
 # The binaries that make the repository's data and the dev servers, each
 # rust/'s `cargo <name>` (rust/.cargo/config.toml) under the local databases'
-# addresses and the servers' numbers (script/with-env.sh). Each works in the
+# addresses and the servers' numbers (script/env.sh). Each works in the
 # checkout's root, so ./out and what ARGS names are the root's:
 #
 #   make bake-terrain ARGS="--shard 01033210 --step leaf"
 #   make bake-geoid ARGS=egm2008-5.pgm
 TOOLS := bake-terrain bake-place bake-division bake-earth bake-star bake-geoid ingest-overture \
 	download-pack download-moon download-earth download-star ingest-asset render-brand \
-	serve-geo serve-api serve-tile
+	serve-geo serve-api
 .PHONY: $(TOOLS)
 $(TOOLS):
-	+cd rust && $(CURDIR)/script/with-env.sh cargo $@ $(ARGS)
+	+cd rust && $(CURDIR)/script/env.sh cargo $@ $(ARGS)
 
 # ts/client/.build_number, the number the deployment serves, which a build CI
 # did not number is labeled after.

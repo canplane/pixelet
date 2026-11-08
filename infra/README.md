@@ -40,7 +40,7 @@ db-geo's volume is the only copy of hours of ingest, so it is never removed
 with `down -v` ([geo/README.md](./geo/README.md)).
 
 In development a tile server stands in for the bucket (`pxl-geo-bake
-bin/serve_tiles.rs`). It answers the bucket's declaration in the published
+bin/server.rs`). It answers the bucket's declaration in the published
 shape, so the client cannot tell the difference.
 
 ## 2. Filling db-geo

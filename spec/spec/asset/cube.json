@@ -5,7 +5,7 @@
       "The texture pack, the file the cube kind's palette entry is drawn from: one image",
       "of every tile under asset/content/cube/, which the asset ingest composes",
       "and ships as the table's file at this path, with which tile each cube",
-      "wears on which face (pxl-tool bin/ingest_asset.rs, ingest.json); the",
+      "wears on which face (pxl-tool bin/asset.rs, ingest.json); the",
       "catalog names it as the cube kind's `pack` slot (pxl_spec::asset::catalog)."
     ]
   },
@@ -21,14 +21,14 @@
       "name": "void",
       "val": 0,
       "$doc": [
-        "nothing painted: the ground before a bake writes it, and an object cell no leaf holds"
+        "Nothing is painted: the ground before a bake writes it, and an object cell no leaf holds."
       ]
     },
     {
       "name": "unknown",
       "val": 255,
       "$doc": [
-        "bedrock, where the world holds no more: the floor under the ground and the wall just inside the service area (`pxl-spec limit.rs`); a cell past the area or the coverage, which no source here describes, reads as it and is drawn as nothing, as is a byte no bake wrote: 0xFF, so memory filled with 0xFF reads as unknown; nothing is placed on or taken from it"
+        "Bedrock, where the world holds no more: the floor under the ground and the wall just inside the service area (`pxl-spec limit.rs`). A cell past the area or the coverage, which no source here describes, reads as it and is drawn as nothing, and so is a byte no bake wrote. The value is 0xFF so that memory filled with 0xFF reads as unknown. Nothing is placed on it or taken from it."
       ]
     }
   ],
@@ -36,10 +36,11 @@
     "$doc": [
       "The ground: one byte a cell, a palette entry from OpenStreetMap Carto, numbered in",
       "the order Carto paints.",
-      "`transport` marks a way: decor faces along it and no pier stands on it;",
-      "every palette entry stands at its sampled height. The byte's values: 1 to 63",
-      "Carto's palette entries, in its paint order; from 64 pixelet's own, the",
-      "underground, which Carto paints nothing of; 0 and 255 the sentinels."
+      "`transport` marks a way: decor faces along it and no pier stands on it.",
+      "Whatever the palette entry, a cell's top is the height sampled from the",
+      "elevation; no entry raises or lowers it. The byte's values are these: 1 to 63",
+      "are Carto's palette entries, in its paint order; from 64 on are pixelet's own,",
+      "the underground, of which Carto paints nothing; 0 and 255 are the sentinels."
     ],
     "entries": [
       { "section": "landcover" },
@@ -47,246 +48,232 @@
         "name": "land", "label": "Land",
         "val": 1,
         "$doc": [
-          "land no feature covers, and what Carto draws no fill for: Carto's background, @land-color"
+          "Land no feature covers, and what Carto draws no fill for, takes Carto's background, @land-color."
         ]
       },
       {
         "name": "bare_ground", "label": "Bare Ground",
         "val": 2,
-        "$doc": ["bare rock, scree, shingle: Carto @bare_ground"]
+        "$doc": ["Bare rock, scree and shingle take Carto's @bare_ground."]
       },
-      { "name": "sand", "label": "Sand", "val": 3, "$doc": ["sand: Carto @sand"] },
-      { "name": "beach", "label": "Beach", "val": 4, "$doc": ["beach and shoal: Carto @beach"] },
-      { "name": "heath", "label": "Heath", "val": 5, "$doc": ["heath and bog: Carto @heath"] },
-      { "name": "scrub", "label": "Scrub", "val": 6, "$doc": ["scrub and mangrove: Carto @scrub"] },
+      { "name": "sand", "label": "Sand", "val": 3 },
+      { "name": "beach", "label": "Beach", "val": 4, "$doc": ["Beach and shoal take Carto's @beach."] },
+      { "name": "heath", "label": "Heath", "val": 5, "$doc": ["Heath and bog take Carto's @heath."] },
+      { "name": "scrub", "label": "Scrub", "val": 6, "$doc": ["Scrub and mangrove take Carto's @scrub."] },
       {
         "name": "grass", "label": "Grass",
         "val": 7,
         "$doc": [
-          "grass, meadow, garden, village green, marsh, wet meadow: Carto @grass"
+          "Grass, meadow, garden, village green, marsh and wet meadow take Carto's @grass."
         ]
       },
-      { "name": "park", "label": "Park", "val": 8, "$doc": ["park: Carto @park"] },
+      { "name": "park", "label": "Park", "val": 8 },
       {
         "name": "leisure", "label": "Leisure",
         "val": 9,
         "$doc": [
-          "playground, recreation ground, stadium, sports center: Carto @leisure, lighten(@park, 5%)"
+          "A playground, recreation ground, stadium or sports center takes Carto's @leisure, lighten(@park, 5%)."
         ]
       },
-      { "name": "pitch", "label": "Pitch", "val": 10, "$doc": ["pitch and track: Carto @pitch"] },
+      { "name": "pitch", "label": "Pitch", "val": 10, "$doc": ["A pitch or a track takes Carto's @pitch."] },
       {
         "name": "forest", "label": "Forest",
         "val": 11,
-        "$doc": ["forest, wood, swamp: Carto @forest"]
+        "$doc": ["Forest, wood and swamp take Carto's @forest."]
       },
       {
         "name": "orchard", "label": "Orchard",
         "val": 12,
-        "$doc": ["orchard, vineyard, plant nursery: Carto @orchard"]
+        "$doc": ["An orchard, vineyard or plant nursery takes Carto's @orchard."]
       },
       {
         "name": "allotments", "label": "Allotments",
-        "val": 13,
-        "$doc": ["allotments: Carto @allotments"]
+        "val": 13
       },
       {
         "name": "farmland", "label": "Farmland",
         "val": 14,
-        "$doc": ["farmland and greenhouses: Carto @farmland"]
+        "$doc": ["Farmland and greenhouses take Carto's @farmland."]
       },
-      { "name": "farmyard", "label": "Farmyard", "val": 15, "$doc": ["farmyard: Carto @farmyard"] },
+      { "name": "farmyard", "label": "Farmyard", "val": 15 },
       {
         "name": "campsite", "label": "Campsite",
         "val": 16,
-        "$doc": ["campsite and golf course: Carto @campsite"]
+        "$doc": ["A campsite or golf course takes Carto's @campsite."]
       },
       {
         "name": "cemetery", "label": "Cemetery",
         "val": 17,
-        "$doc": ["cemetery and grave yard: Carto @cemetery"]
+        "$doc": ["A cemetery or grave yard takes Carto's @cemetery."]
       },
       {
         "name": "residential", "label": "Residential",
-        "val": 18,
-        "$doc": ["residential: Carto @residential"]
+        "val": 18
       },
-      { "name": "garages", "label": "Garages", "val": 19, "$doc": ["garages: Carto @garages"] },
-      { "name": "retail", "label": "Retail", "val": 20, "$doc": ["retail: Carto @retail"] },
+      { "name": "garages", "label": "Garages", "val": 19 },
+      { "name": "retail", "label": "Retail", "val": 20 },
       {
         "name": "commercial", "label": "Commercial",
-        "val": 21,
-        "$doc": ["commercial: Carto @commercial"]
+        "val": 21
       },
       {
         "name": "industrial", "label": "Industrial",
         "val": 22,
-        "$doc": ["industrial, railway, works: Carto @industrial"]
+        "$doc": ["Industrial land, railway land and works take Carto's @industrial."]
       },
       {
         "name": "power", "label": "Power",
         "val": 23,
-        "$doc": ["power plant and substation: Carto @power, darken(@industrial, 5%)"]
+        "$doc": ["A power plant or substation takes Carto's @power, darken(@industrial, 5%)."]
       },
       {
         "name": "landfill", "label": "Landfill",
         "val": 24,
-        "$doc": ["landfill: Carto's landuse_landfill, a value with no name"]
+        "$doc": ["Landfill takes Carto's landuse_landfill, a value with no name."]
       },
-      { "name": "quarry", "label": "Quarry", "val": 25, "$doc": ["quarry: Carto @quarry"] },
+      { "name": "quarry", "label": "Quarry", "val": 25 },
       {
         "name": "societal_amenities", "label": "Societal Amenities",
         "val": 26,
         "$doc": [
-          "school, college, university, hospital, clinic: Carto @societal_amenities"
+          "A school, college, university, hospital or clinic takes Carto's @societal_amenities."
         ]
       },
       {
         "name": "place_of_worship", "label": "Place of Worship",
-        "val": 27,
-        "$doc": ["a religious site: Carto @place_of_worship"]
+        "val": 27
       },
       {
         "name": "transportation_area", "label": "Transportation Area",
         "val": 28,
-        "$doc": ["aerodrome, bus station, ferry terminal: Carto @transportation-area"]
+        "$doc": ["An aerodrome, bus station or ferry terminal takes Carto's @transportation-area."]
       },
-      { "name": "parking", "label": "Parking", "val": 29, "$doc": ["parking: Carto @parking"] },
-      { "name": "apron", "label": "Apron", "val": 30, "$doc": ["apron: Carto @apron"] },
+      { "name": "parking", "label": "Parking", "val": 29 },
+      { "name": "apron", "label": "Apron", "val": 30 },
       { "section": "water" },
-      { "name": "glacier", "label": "Glacier", "val": 31, "$doc": ["glacier: Carto @glacier, drawn with the water areas"] },
+      { "name": "glacier", "label": "Glacier", "val": 31, "$doc": ["A glacier takes Carto's @glacier; Carto draws it with the water areas."] },
       {
         "name": "water", "label": "Water",
         "val": 32,
-        "$doc": ["sea, lake, river, canal, any water: Carto @water-color"]
+        "$doc": ["Sea, lake, river, canal and any other water take Carto's @water-color."]
       },
       { "section": "water_features" },
       {
         "name": "dam", "label": "Dam",
-        "val": 33,
-        "$doc": ["dam: Carto @dam"]
+        "val": 33
       },
       {
         "name": "breakwater", "label": "Breakwater",
         "val": 34,
-        "$doc": ["breakwater, groyne, weir: Carto @breakwater-color, @weir-line"]
+        "$doc": ["A breakwater, groyne or weir takes Carto's @breakwater-color or @weir-line."]
       },
       { "section": "buildings" },
       {
         "name": "building", "label": "Building",
-        "val": 35,
-        "$doc": ["a building: Carto @building-fill"]
+        "val": 35
       },
       {
         "name": "building_major", "label": "Major Building",
         "val": 36,
         "$doc": [
-          "a place of worship, a terminal, a station: Carto @building-major-fill at z16 and finer, as a cell is z16"
+          "A place of worship, a terminal or a station takes Carto's @building-major-fill at z16 and finer, as a cell is z16."
         ]
       },
-      { "section": "roads", "$doc": ["by Carto's z"] },
+      { "section": "roads", "$doc": ["These are numbered by Carto's z-order."] },
       {
         "name": "footway", "label": "Footway",
         "val": 37,
         "transport": true,
-        "$doc": ["footway, steps, path: Carto @footway-fill, @steps-fill"]
+        "$doc": ["Footways, steps and paths take Carto's @footway-fill or @steps-fill."]
       },
       {
         "name": "cycleway", "label": "Cycleway",
         "val": 38,
-        "transport": true,
-        "$doc": ["cycleway: Carto @cycleway-fill"]
+        "transport": true
       },
       {
         "name": "bridleway", "label": "Bridleway",
         "val": 39,
-        "transport": true,
-        "$doc": ["bridleway: Carto @bridleway-fill"]
+        "transport": true
       },
       {
         "name": "track", "label": "Track",
         "val": 40,
         "transport": true,
-        "$doc": ["track, an agricultural or forest way: Carto @track-fill"]
+        "$doc": ["A track, an agricultural or forest way, takes Carto's @track-fill."]
       },
       {
         "name": "pedestrian", "label": "Pedestrian Street",
         "val": 41,
-        "transport": true,
-        "$doc": ["pedestrian street: Carto @pedestrian-fill"]
+        "transport": true
       },
       {
         "name": "living_street", "label": "Living Street",
         "val": 42,
-        "transport": true,
-        "$doc": ["living street: Carto @living-street-fill"]
+        "transport": true
       },
       {
         "name": "residential_road", "label": "Residential Road",
         "val": 43,
         "transport": true,
-        "$doc": ["tertiary, residential, unclassified and service, told apart by width: Carto @tertiary-fill, @residential-fill, @service-fill"]
+        "$doc": ["A tertiary, residential, unclassified or service road takes Carto's @tertiary-fill, @residential-fill or @service-fill, told apart by width."]
       },
       {
         "name": "road", "label": "Road",
         "val": 44,
         "transport": true,
-        "$doc": ["a road of no known class: Carto @road-fill"]
+        "$doc": ["A road of no known class takes Carto's @road-fill."]
       },
       {
         "name": "secondary", "label": "Secondary Road",
         "val": 45,
-        "transport": true,
-        "$doc": ["secondary: Carto @secondary-fill"]
+        "transport": true
       },
       {
         "name": "primary", "label": "Primary Road",
         "val": 46,
-        "transport": true,
-        "$doc": ["primary: Carto @primary-fill"]
+        "transport": true
       },
-      { "name": "trunk", "label": "Trunk Road", "val": 47, "transport": true, "$doc": ["trunk: Carto @trunk-fill"] },
+      { "name": "trunk", "label": "Trunk Road", "val": 47, "transport": true },
       {
         "name": "motorway", "label": "Motorway",
         "val": 48,
-        "transport": true,
-        "$doc": ["motorway: Carto @motorway-fill"]
+        "transport": true
       },
       {
         "name": "platform", "label": "Platform",
         "val": 49,
-        "transport": true,
-        "$doc": ["platform: Carto @platform-fill"]
+        "transport": true
       },
       {
         "name": "tram", "label": "Tram",
         "val": 50,
         "transport": true,
-        "$doc": ["tram: Carto's railway_tram, a value with no name"]
+        "$doc": ["A tram takes Carto's railway_tram, a value with no name."]
       },
       {
         "name": "light_rail", "label": "Light Rail",
         "val": 51,
         "transport": true,
-        "$doc": ["light rail, narrow gauge, funicular: Carto's railway_light_rail, a value with no name"]
+        "$doc": ["Light rail, narrow gauge and funicular take Carto's railway_light_rail, a value with no name."]
       },
       {
         "name": "subway", "label": "Subway",
         "val": 52,
         "transport": true,
-        "$doc": ["subway: Carto's railway_subway, a value with no name"]
+        "$doc": ["A subway takes Carto's railway_subway, a value with no name."]
       },
       {
         "name": "monorail", "label": "Monorail",
         "val": 53,
         "transport": true,
-        "$doc": ["monorail: Carto's railway_monorail, a value with no name"]
+        "$doc": ["A monorail takes Carto's railway_monorail, a value with no name."]
       },
       {
         "name": "rail", "label": "Railway",
         "val": 54,
         "transport": true,
-        "$doc": ["rail: Carto's railway_rail, a value with no name"]
+        "$doc": ["A railway takes Carto's railway_rail, a value with no name."]
       },
       { "section": "aeroways" },
       {
@@ -294,7 +281,7 @@
         "val": 55,
         "transport": true,
         "$doc": [
-          "runway, taxiway, helipad: Carto @aeroway-fill, @runway-fill, @taxiway-fill, @helipad-fill"
+          "A runway, taxiway or helipad takes Carto's @aeroway-fill, @runway-fill, @taxiway-fill or @helipad-fill."
         ]
       },
       { "section": "underground" },
@@ -302,21 +289,21 @@
         "name": "soil", "label": "Dirt",
         "val": 64,
         "$doc": [
-          "under a face: Minecraft Beta's filler, dirt; Carto paints nothing under the ground, and no bake writes it"
+          "What lies under a face: Minecraft Beta's filler, dirt. Carto paints nothing under the ground, and no bake writes it."
         ]
       },
       {
         "name": "sandstone", "label": "Sandstone",
         "val": 65,
         "$doc": [
-          "under sand's filler: Minecraft Beta's sandstone"
+          "What lies under sand's filler: Minecraft Beta's sandstone."
         ]
       },
       {
         "name": "stone", "label": "Stone",
         "val": 66,
         "$doc": [
-          "under the filler: Minecraft Beta's stone"
+          "What lies under the filler: Minecraft Beta's stone."
         ]
       }
     ]
@@ -331,7 +318,7 @@
         "name": "air",
         "val": 256,
         "$doc": [
-          "explicit air: retains this leaf and erases the layers under it; no ground cell can hold it, as it is past a byte"
+          "Explicit air: the leaf stays and erases the layers under it."
         ]
       },
       { "section": "colors" },

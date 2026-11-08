@@ -5,6 +5,7 @@ pub mod asset;
 /// (Cargo.toml says why), so the project's folders are still named in one place.
 #[path = "../../spec/src/directory.rs"]
 pub mod directory;
+pub mod download;
 pub mod fetch;
 /// pxl-spec's file, compiled here as `directory` is, so a model is measured by the same
 /// transforms the client places it by.

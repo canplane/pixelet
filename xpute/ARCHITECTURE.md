@@ -578,7 +578,7 @@ The code, in the order its parts depend on each other.
 - `ts/gpu` (`@xpute/gpu`) is the GPU runtime on WebGPU (`GpuRuntime`, `WebGpu`),
   and `NativeGpu`, which opens a device's GPU through the native module.
 - `ts/native` (`@xpute/native`) is the React Native module: the Kotlin and the
-  Swift over the C ABI and JNI, the `SurfaceView`, and `script/build-core.py`,
+  Swift over the C ABI and JNI, the `SurfaceView`, and `script/core-build.py`,
   which builds the app's core crate as the app builds.
 - `rust/conformance` and `cpp/conformance` are a core in each language for the
   traces, and `ts/runtime/src/conformance.test.ts` is the one runtime that runs

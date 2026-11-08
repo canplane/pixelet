@@ -56,7 +56,7 @@ make bake-terrain ARGS="--step fold --step commit"
 
 1. **Zero failures** in the leaf step's `failed=`.
 2. **Terrain: spot-check against the dev tile server, at more than one zoom.**
-   Compare the decompressed packets, not the files. Run `make serve-oven`, not
+   Compare the decompressed packets, not the files. Run `make serve-tile`, not
    `dev`:
 
    ```bash

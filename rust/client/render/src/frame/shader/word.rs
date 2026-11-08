@@ -506,7 +506,7 @@ pub const CLOUD_TILE_TEXELS: u32 = 1024;
 /// (gpu/atmosphere.rs).
 pub const EARTH_TILE_BITS: u32 = 4;
 
-/// The side in texels of the moon's near side as download_moon cuts it.
+/// The side in texels of the moon's near side as `make download-moon` cuts it.
 /// The disc's radius is half of it.
 pub const MOON_TEXELS: u32 = 512;
 /// The moon's angular radius: its equatorial radius, 1738.1 km, over its
@@ -514,7 +514,7 @@ pub const MOON_TEXELS: u32 = 512;
 pub const MOON_ANGULAR_RADIUS: f32 = 1738.1 / 384_400.0;
 /// The moon's geometric albedo.
 pub const MOON_ALBEDO: f32 = 0.12;
-/// The moon map's mean reflectance over the disc, as download_moon prints it
+/// The moon map's mean reflectance over the disc, as `make download-moon` prints it
 /// from the raw map; word.test.rs checks the shipped map against it. The map
 /// is scaled by `MOON_ALBEDO` over this mean.
 pub const MOON_MAP_MEAN: f32 = 0.2459;

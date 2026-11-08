@@ -28,6 +28,7 @@ use pxl_engine::object::{self, Columns, NodeSlot};
 use pxl_engine::way::tree::{self, Read};
 use pxl_engine::{clipmap, fill};
 use pxl_geo_bake::pyramid::{Base, TileSet};
+use pxl_geo_bake::util::code_digest;
 use pxl_spec::bake::tile::terrain::{self, BrickWords, TerrainTile};
 use pxl_spec::directory;
 use pxl_spec::space::coord::zoom::Zoom;
@@ -36,47 +37,9 @@ use pxl_spec::space::coord::zoom::Zoom;
 /// bake writes while it is read (out/terrain.stage is).
 const SET: &str = "out/terrain";
 
-/// What makes the lines, read off the disk of the checkout the bin was
-/// built in: the crates it compiles of this tree, and the workspace's
-/// manifest and lock.
-const SOURCES: [&str; 6] = [
-    "rust/spec/engine",
-    "rust/spec",
-    "rust/server/geo-bake",
-    "xpute/rust/kit",
-    "rust/Cargo.toml",
-    "rust/Cargo.lock",
-];
-
-/// The checkout the bin was built in.
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
-}
-
 /// Where the machine keeps the lines, a file a digest.
 fn lines_dir() -> Result<PathBuf, String> {
     directory::cache_dir("fill")
-}
-
-/// Every file under `path`, a directory's in name order, `target`
-/// directories left out, each its path and bytes into `h`.
-fn digest_tree(path: &Path, h: &mut FnvHasher) -> Result<(), String> {
-    let meta = std::fs::metadata(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    if meta.is_file() {
-        h.write(path.to_string_lossy().as_bytes());
-        h.write(&std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?);
-        return Ok(());
-    }
-    let mut names: Vec<_> = std::fs::read_dir(path)
-        .map_err(|e| format!("{}: {e}", path.display()))?
-        .filter_map(|e| e.ok().map(|e| e.file_name()))
-        .filter(|n| n != "target")
-        .collect();
-    names.sort();
-    for n in names {
-        digest_tree(&path.join(n), h)?;
-    }
-    Ok(())
 }
 
 /// The set's tiles as listed, each its name, length and time: what the
@@ -101,14 +64,10 @@ fn digest_set(set: &Path, h: &mut FnvHasher) -> Result<(), String> {
     Ok(())
 }
 
-/// The digest of the sources at `root` and the set: the lines' name.
-fn key(root: &Path, set: &Path) -> Result<String, String> {
-    let (mut sources, mut data) = (FnvHasher::default(), FnvHasher::default());
-    for s in SOURCES {
-        digest_tree(&root.join(s), &mut sources)?;
-    }
+fn key(set: &Path) -> Result<String, String> {
+    let mut data = FnvHasher::default();
     digest_set(set, &mut data)?;
-    Ok(format!("{:016x}{:016x}", sources.finish(), data.finish()))
+    Ok(format!("{:016x}{:016x}", code_digest()?, data.finish()))
 }
 
 /// The node `at` of `zoom` and every node under it a reader steps to, into
@@ -210,7 +169,7 @@ fn lines(set: &TileSet, workers: usize) -> Result<Vec<String>, String> {
 /// their path.
 fn lines_path(set: &Path, workers: usize) -> Result<PathBuf, String> {
     let dir = lines_dir()?;
-    let path = dir.join(key(&root(), set)?);
+    let path = dir.join(key(set)?);
     if path.is_file() {
         return Ok(path);
     }
