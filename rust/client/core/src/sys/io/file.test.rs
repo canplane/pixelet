@@ -3,26 +3,31 @@
 use super::*;
 use crate::sys;
 
-fn read(file: StorageFile, bytes: &[u8]) -> Option<Vec<u8>> {
-    match storage_of(file, bytes.to_vec()) {
+/// The client's answer to `open_storage` where there is no runtime: `bytes`
+/// read whole, or an open that came to none.
+pub fn on_storage_answered(answer: Result<&[u8], Opened>) {
+    match answer {
+        Ok(bytes) => set_read(ReadState::Read(storage_of(bytes.to_vec()))),
+        Err(opened) => on_storage_opened(0, opened),
+    }
+}
+
+fn read(bytes: &[u8]) -> Option<Vec<u8>> {
+    match storage_of(bytes.to_vec()) {
         StorageRead::Bytes(bytes) => Some(bytes),
         StorageRead::None | StorageRead::Unreadable => None,
     }
 }
 
-/// What an owner keeps reads back as it wrote it, its slot's format first.
+/// What the settings keep is read past their format byte.
 #[test]
 fn storage_file_format() {
     let _g = sys::serial();
-    for file in StorageFile::ALL {
-        on_emptied(file);
-        let bytes = seal(file, &[7, 0, 255]);
-        assert_eq!(bytes.first(), Some(&file.format()));
-        assert_eq!(read(file, &bytes), Some(vec![7, 0, 255]));
-        assert_eq!(read(file, &seal(file, &[])), Some(vec![]));
-        assert!(matches!(storage_of(file, Vec::new()), StorageRead::None));
-        assert!(!is_refused(file));
-    }
+    on_storage_emptied();
+    assert_eq!(read(&[format::SETTINGS, 7, 0, 255]), Some(vec![7, 0, 255]));
+    assert_eq!(read(&[format::SETTINGS]), Some(vec![]));
+    assert!(matches!(storage_of(Vec::new()), StorageRead::None));
+    assert!(!is_storage_refused());
 }
 
 /// Another format, or a packet stored with no format before it, is refused
@@ -34,15 +39,12 @@ fn foreign_format_refused() {
     // An XTP packet begins "XTP\0".
     let unformatted = b"XTP\0\0\0\0\0".to_vec();
     for bytes in [foreign, unformatted, br#"{"ao":"screen"}"#.to_vec()] {
-        on_emptied(StorageFile::Settings);
-        assert!(matches!(
-            storage_of(StorageFile::Settings, bytes),
-            StorageRead::Unreadable
-        ));
-        assert!(is_refused(StorageFile::Settings));
+        on_storage_emptied();
+        assert!(matches!(storage_of(bytes), StorageRead::Unreadable));
+        assert!(is_storage_refused());
     }
-    on_emptied(StorageFile::Settings);
-    assert!(!is_refused(StorageFile::Settings));
+    on_storage_emptied();
+    assert!(!is_storage_refused());
 }
 
 /// A file its backend cannot read as bytes is refused as one of another
@@ -51,19 +53,13 @@ fn foreign_format_refused() {
 fn unreadable_bytes_refused() {
     let _g = sys::serial();
     for (errnum, refused) in [(Errno::EBADMSG, true), (Errno::EIO, false)] {
-        on_emptied(StorageFile::Settings);
-        while take_storage(StorageFile::Settings).is_some() {}
-        on_storage_answered(
-            StorageFile::Settings,
-            Err(Opened::Failed { errnum, detail: 0 }),
-        );
-        assert!(matches!(
-            take_storage(StorageFile::Settings),
-            Some(StorageRead::Unreadable)
-        ));
-        assert_eq!(is_refused(StorageFile::Settings), refused);
+        on_storage_emptied();
+        while take_storage().is_some() {}
+        on_storage_answered(Err(Opened::Failed { errnum, detail: 0 }));
+        assert!(matches!(take_storage(), Some(StorageRead::Unreadable)));
+        assert_eq!(is_storage_refused(), refused);
     }
-    on_emptied(StorageFile::Settings);
+    on_storage_emptied();
 }
 
 #[test]
@@ -71,10 +67,7 @@ fn object_path_decimal() {
     for n in [0, 1, 9, 10, 702561541869797376, u64::MAX] {
         assert_eq!(Path::of_id(n).as_str(), n.to_string());
     }
-    for file in StorageFile::ALL {
-        assert_eq!(file.path().as_str(), file.slot().to_string());
-        assert_eq!(StorageFile::of_slot(file.slot()), Some(file));
-    }
+    assert_eq!(storage_path().as_str(), storage::SETTINGS.to_string());
 }
 
 /// A key's path and back: a shard's quadkey and the top's own name.

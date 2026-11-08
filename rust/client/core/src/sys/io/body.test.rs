@@ -2,8 +2,7 @@
 
 use super::*;
 use crate::sys;
-use crate::sys::boot::set_heap_stat;
-use crate::sys::boot::test::{heap_release, set_counted_heap};
+use crate::sys::boot::test::{heap_release, set_counted_heap, set_heap_stat};
 use crate::sys::io::room::Refusal;
 use xpute_core::mem;
 use xpute_core::mem::heap::HeapStat;

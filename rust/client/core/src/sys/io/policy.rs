@@ -24,8 +24,8 @@ use crate::sys::io::demand::{Class, Order, Stream};
 use crate::sys::io::failure::Failure;
 use crate::sys::io::loader::of_id;
 use crate::sys::io::param;
-use crate::sys::io::request::{Fault, Rank, Serve};
 use crate::sys::load::LoadKind;
+use core::cmp::Ordering;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_kit::math::rng::{u32_to_unit, SplitMix64};
 use xpute_kit::status::errno::Errno;
@@ -44,79 +44,91 @@ const ASSET: u8 = PICTURE + SHELLS;
 const PLACE: u8 = ASSET + 1;
 const ASIDE: u8 = PLACE + SHELLS;
 
-pub struct Policy {
-    pub intake: u32,
+/// Ordered by `class`, then `dist`, lower first, then `detail`, higher first.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Rank {
+    pub class: u8,
+    pub dist: f64,
+    pub detail: u8,
 }
 
-impl Policy {
-    pub const fn standard() -> Policy {
-        Policy {
-            intake: param::INTAKE,
-        }
+impl Rank {
+    pub fn cmp(&self, other: &Rank) -> Ordering {
+        self.class
+            .cmp(&other.class)
+            .then(self.dist.total_cmp(&other.dist))
+            .then(other.detail.cmp(&self.detail))
     }
 }
 
-impl Serve for Policy {
-    fn rank(&self, stream: Stream, id: u64, order: Order, _enqueue_ms: f64) -> Rank {
-        let unseen = !order.seen as u8;
-        // A zoom fits the rank's byte. The objects' ids are the top's, no
-        // tile's, and shards' all at `SHARD_ZOOM`, which no zoom orders.
-        let zoom = || Quadrant::of_id(id).zoom as u8;
-        let (class, dist, detail) = match stream.row().class {
-            Class::File => match of_id(id) {
-                Some((LoadKind::Image, _)) => (PICTURE, 0.0, 0),
-                _ => (ASSET, 0.0, 0),
-            },
-            Class::Aside => (ASIDE, 0.0, 0),
-            // A want with no place in the view.
-            _ if order == Order::LAST => (ASIDE, 0.0, 0),
-            Class::Ground => (TERRAIN + unseen * GROUND_SHELL, order.near, zoom()),
-            Class::OnGround => (OBJECT + unseen * GROUND_SHELL, order.near, 0),
-            Class::Picture => (PICTURE + unseen, order.near, zoom()),
-            Class::Place => (PLACE + unseen, order.near, zoom()),
-        };
-        Rank {
-            class,
-            dist,
-            detail,
-        }
-    }
+/// Whose a failure is, which decides what waits on it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Fault {
+    /// The object's own: asking again brings the same.
+    Object,
+    /// No way to the server: waited on, never given up.
+    Network,
+    /// The server's: counted toward giving up.
+    Server,
+}
 
-    fn intake(&self) -> u32 {
-        self.intake
+pub fn rank(stream: Stream, id: u64, order: Order) -> Rank {
+    let unseen = !order.seen as u8;
+    // A zoom fits the rank's byte. The objects' ids are the top's, no
+    // tile's, and shards' all at `SHARD_ZOOM`, which no zoom orders.
+    let zoom = || Quadrant::of_id(id).zoom as u8;
+    let (class, dist, detail) = match stream.row().class {
+        Class::File => match of_id(id) {
+            Some((LoadKind::Image, _)) => (PICTURE, 0.0, 0),
+            _ => (ASSET, 0.0, 0),
+        },
+        Class::Aside => (ASIDE, 0.0, 0),
+        // A want with no place in the view.
+        _ if order == Order::LAST => (ASIDE, 0.0, 0),
+        Class::Ground => (TERRAIN + unseen * GROUND_SHELL, order.near, zoom()),
+        Class::OnGround => (OBJECT + unseen * GROUND_SHELL, order.near, 0),
+        Class::Picture => (PICTURE + unseen, order.near, zoom()),
+        Class::Place => (PLACE + unseen, order.near, zoom()),
+    };
+    Rank {
+        class,
+        dist,
+        detail,
     }
+}
 
-    /// As the client's read classes them (`ts/client/src/sys/fs/read.ts`). An object's
-    /// failure comes back the same however often it is asked: the bytes are
-    /// fixed by the key within a version.
-    fn fault(&self, failure: Failure) -> Fault {
-        match failure.errnum {
-            // The browser says it is offline.
-            Errno::ENETUNREACH => Fault::Network,
-            // Any other status but 204 and 404, or no response while online. The
-            // Worker answers only 200, 204 and 404, so this is the platform under
-            // it: R2's internal error, a Cloudflare incident, the free plan's
-            // daily cap failing closed, an edge refusing the connection.
-            Errno::EACCES | Errno::EIO => Fault::Server,
-            // ENXIO: 404, a key that names nothing. EBADMSG: a body empty or not
-            // decoding, one still packed in an encoding this browser does not undo
-            // among them.
-            // EFBIG: larger than the heap takes, or than its kind's packet can be.
-            _ => Fault::Object,
-        }
+/// As the client's read classes them (`ts/client/src/sys/fs/read.ts`). An object's
+/// failure comes back the same however often it is asked: the bytes are
+/// fixed by the key within a version.
+pub fn fault(failure: Failure) -> Fault {
+    match failure.errnum {
+        // The browser says it is offline.
+        Errno::ENETUNREACH => Fault::Network,
+        // Any other status but 204 and 404, or no response while online. The
+        // Worker answers only 200, 204 and 404, so this is the platform under
+        // it: R2's internal error, a Cloudflare incident, the free plan's
+        // daily cap failing closed, an edge refusing the connection.
+        Errno::EACCES | Errno::EIO => Fault::Server,
+        // ENXIO: 404, a key that names nothing. EBADMSG: a body empty or not
+        // decoding, one still packed in an encoding this browser does not undo
+        // among them.
+        // EFBIG: larger than the heap takes, or than its kind's packet can be.
+        _ => Fault::Object,
     }
+}
 
-    /// Exponential because the server is shared, so every client's retries add up
-    /// on it; AWS's "full jitter", uniform up to the capped exponential, so
-    /// clients one outage failed together do not return together.
-    fn backoff(&self, failures: u32, seed: u64) -> Option<f64> {
-        if failures > param::RETRY_ATTEMPTS {
-            return None;
-        }
-        let ceiling =
-            (param::RETRY_BASE_MS * libm::exp2(f64::from(failures - 1))).min(param::RETRY_CAP_MS);
-        Some(ceiling * u32_to_unit(SplitMix64::new(seed).next_u32()))
+/// Exponential because the server is shared, so every client's retries add up
+/// on it; AWS's "full jitter", uniform up to the capped exponential, so
+/// clients one outage failed together do not return together.
+/// The wait after the server's `failures`th failure in a row, none once it
+/// is given up; `seed` differs per failure.
+pub fn backoff(failures: u32, seed: u64) -> Option<f64> {
+    if failures > param::RETRY_ATTEMPTS {
+        return None;
     }
+    let ceiling =
+        (param::RETRY_BASE_MS * libm::exp2(f64::from(failures - 1))).min(param::RETRY_CAP_MS);
+    Some(ceiling * u32_to_unit(SplitMix64::new(seed).next_u32()))
 }
 
 #[cfg(test)]

@@ -26,7 +26,7 @@ use crate::perf::spec::{self, LIMIT, NOW, STAT};
 use crate::perf::task::TaskRow;
 use crate::perf::word::put;
 use crate::sys::io::failure::Outcome;
-use crate::sys::sched::tick::tick_step_stats;
+use crate::sys::sched::tick::tick;
 use pxl_render::gpu::span_spec::FRAME_KINDS;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3;
@@ -343,7 +343,8 @@ fn view() -> ViewSection {
 
 fn steps() -> StepsSection {
     let mut steps = StepsSection::default();
-    for s in tick_step_stats()
+    for s in tick()
+        .step_stats()
         .iter()
         .filter(|s| s.cnt > 0)
         .take(STEP_SLOTS)

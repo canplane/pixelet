@@ -7,8 +7,8 @@ use super::{or_refuse, refuse_unless};
 use crate::domain::layer::object::repository;
 use crate::domain::view::setting::store;
 use crate::door::cmd as abi;
-use crate::sys::io::file::{self, StorageFile};
-use crate::sys::io::file_spec::root;
+use crate::sys::io::file;
+use crate::sys::io::file_spec::{root, storage};
 use crate::sys::io::source;
 use xpute_core::abi::fs::FsChanged;
 use xpute_core::ipc::door::Outcome;
@@ -26,19 +26,13 @@ pub(super) fn declare(c: abi::SourceDeclare<'_>) -> Outcome {
 pub(in crate::door) fn changed(c: FsChanged<'_>) -> Outcome {
     match c.root {
         root::STORAGE => {
-            let file = or_refuse(
-                c.path
-                    .parse()
-                    .ok()
-                    .and_then(StorageFile::of_slot)
-                    .filter(|&k| file::is_refused(k)),
+            refuse_unless(
+                c.path.parse::<u32>() == Ok(storage::SETTINGS) && file::is_storage_refused(),
                 Errno::EINVAL,
             )?;
-            file::on_emptied(file);
+            file::on_storage_emptied();
             // The settings write what they hold from the next keep on.
-            match file {
-                StorageFile::Settings => store::on_settings_emptied(),
-            }
+            store::on_settings_emptied();
         }
         // Read again, as its source holds it now.
         root::OBJECT => {

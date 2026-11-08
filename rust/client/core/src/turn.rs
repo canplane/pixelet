@@ -64,7 +64,7 @@ use crate::sys::io::loader;
 use crate::sys::io::request;
 use crate::sys::sched::edge;
 use crate::sys::sched::edge::{request_world_tick, world_edge};
-use crate::sys::sched::tick::{on_tick, run_tick, TickContext};
+use crate::sys::sched::tick::{tick, TickContext};
 use pxl_render::gpu::api;
 use pxl_spec::bake::tile::division::DivisionTile;
 use pxl_spec::space::layer::quadrant::Quadrant;
@@ -184,32 +184,36 @@ fn environment_tick(_: &mut TickContext) {
 /// Registers the tick's steps and spawns the tasks. Called from outside a
 /// frame, since the frame task waits for the runtime's first frame.
 pub fn boot() {
-    on_tick(
-        Phase::interaction,
+    tick().on_tick(
+        Phase::interaction as u8,
         controller::controller_step,
         StepName::controller as u32,
     );
-    on_tick(
-        Phase::interaction,
+    tick().on_tick(
+        Phase::interaction as u8,
         camera_input_tick,
         StepName::input as u32,
     );
-    on_tick(Phase::interaction, camera_tick, StepName::camera as u32);
-    on_tick(Phase::interaction, edit_tick, StepName::edit as u32);
-    on_tick(Phase::interaction, ghost_tick, StepName::ghost as u32);
+    tick().on_tick(
+        Phase::interaction as u8,
+        camera_tick,
+        StepName::camera as u32,
+    );
+    tick().on_tick(Phase::interaction as u8, edit_tick, StepName::edit as u32);
+    tick().on_tick(Phase::interaction as u8, ghost_tick, StepName::ghost as u32);
     // After the view has moved, so the environment sees this tick's camera.
-    on_tick(
-        Phase::interaction,
+    tick().on_tick(
+        Phase::interaction as u8,
         environment_tick,
         StepName::environment as u32,
     );
-    on_tick(
-        Phase::interaction,
+    tick().on_tick(
+        Phase::interaction as u8,
         companion_tick,
         StepName::companion as u32,
     );
-    on_tick(Phase::visible, demand_tick, StepName::demand as u32);
-    on_tick(Phase::visible, scene_tick, StepName::scene as u32);
+    tick().on_tick(Phase::visible as u8, demand_tick, StepName::demand as u32);
+    tick().on_tick(Phase::visible as u8, scene_tick, StepName::scene as u32);
     world_tasks();
 }
 
@@ -353,7 +357,7 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
     // Step by at most MAX_STEP_S, or a pause makes a character cross a wall or
     // a damped camera overshoot.
     let step = delta.min(MAX_STEP_S);
-    let report = run_tick(step, deadline_ms, edge_at);
+    let report = tick().run(step, deadline_ms, edge_at);
     let after_tick = now();
     // The turn's one pump, after every producer has spoken: the effects, the
     // tick's tile streams (`demand_tick`), and the assets asked for by either.

@@ -34,7 +34,7 @@ use crate::door::cmd::{
     PivotState, RefusedFile, Snapshot, UiView,
 };
 use crate::pointer;
-use crate::sys::io::file::{self, Path, StorageFile};
+use crate::sys::io::file::{self, Path};
 use crate::sys::io::file_spec::root;
 use crate::sys::io::request;
 use crate::sys::io::source;
@@ -101,10 +101,10 @@ pub struct SnapshotInputs {
     area_progress: f64,
 }
 
-/// The refused files a snapshot names at once: every storage file, and as
+/// The refused files a snapshot names at once: the storage file, and as
 /// many of the objects' as the view asks for at once; the rest are named as
 /// the client empties those.
-const REFUSED_SHOWN: usize = StorageFile::ALL.len() + repository::WANTS as usize;
+const REFUSED_SHOWN: usize = 1 + repository::WANTS as usize;
 
 fn snapshot_inputs() -> SnapshotInputs {
     let (location, settings) = (device_location_store(), settings_store());
@@ -152,10 +152,9 @@ fn snapshot_inputs() -> SnapshotInputs {
         stall: stall(),
         declared: source::top().is_some(),
         refused_files: {
-            let stored = StorageFile::ALL
-                .into_iter()
-                .filter(|&k| file::is_refused(k))
-                .map(|k| (root::STORAGE, k.path()));
+            let stored = file::is_storage_refused()
+                .then(|| (root::STORAGE, file::storage_path()))
+                .into_iter();
             let objects = repository::refused_files()
                 .iter()
                 .map(|&s| (root::OBJECT, Path::of_quadrant(s)));

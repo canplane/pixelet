@@ -4,7 +4,7 @@
 //! on and off together.
 
 use crate::perf::record::{perf_recording_start, perf_recording_stop, perf_release};
-use crate::sys::sched::tick::{set_step_timing, tick_step_stats_reset};
+use crate::sys::sched::tick::tick;
 
 /// Called with the stored setting the turn the settings are read, a few
 /// turns from boot, so a profiler left on has the world's start in its
@@ -23,12 +23,12 @@ pub fn perf_window_start() -> bool {
     if !perf_recording_start() {
         return false;
     }
-    tick_step_stats_reset();
-    set_step_timing(true);
+    tick().step_stats_reset();
+    tick().set_step_timing(true);
     true
 }
 
 pub fn perf_window_stop() {
     perf_recording_stop();
-    set_step_timing(false);
+    tick().set_step_timing(false);
 }

@@ -2,10 +2,10 @@
 
 //! A request refused room, by the heap or by the body slots (sys/io/body.rs),
 //! as what refused it counted its releases then: it waits until that gives
-//! some room back, not on the other. A slot given back gives the heap nothing
-//! until its run is empty, which the heap's count then shows; the heap's
-//! pages given back give no slot. A body refused a run of slots waits on
-//! both, since a slot given back in a run held serves it as well.
+//! some back, not on the other. A slot given back gives the heap nothing
+//! until its run is empty, which the heap's count then shows, and the heap's
+//! pages give no slot; a body refused a run of slots waits on both, as a
+//! slot given back in a run held serves it too.
 
 use crate::sys::boot::heap_stat;
 use crate::sys::io::body;
@@ -17,7 +17,6 @@ pub struct Refusal(Room, u32);
 enum Room {
     Heap,
     Bodies,
-    /// A run of slots: the heap's or a slot.
     Run,
 }
 
@@ -47,7 +46,7 @@ impl Refusal {
         Refusal(Room::Run, Room::Run.release_cnt())
     }
 
-    /// Whether room has been given back since, so asking again may be served.
+    /// Room has been given back since, so asking again may be served.
     pub fn over(self) -> bool {
         self.0.release_cnt() != self.1
     }

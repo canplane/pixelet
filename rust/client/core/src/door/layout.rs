@@ -15,7 +15,7 @@ use crate::machine::MACHINE;
 use crate::perf::record;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::param;
-use crate::sys::mem::section::{self, map};
+use crate::sys::mem::section;
 use pxl_render::gpu::api;
 use pxl_render::gpu::upload;
 use xpute_core::entry::BootInfo;
@@ -118,16 +118,15 @@ const _: () = assert!(
 /// Asking before boot lays out memory is a bug.
 pub(crate) fn range(f: Fixed) -> Section {
     use xpute_kit::status::bug::OrBug;
-    map()
+    section::fixed()
         .or_bug(Errno::ENOTRECOVERABLE)
-        .fixed
         .nth(&FIXED, PAGE_BYTES, f as usize)
 }
 
 /// Lays the memory map and hands each range of `.fixed` to its owner, and
 /// the GPU device's stream to the renderer.
 pub(crate) fn install(b: &BootInfo) {
-    section::set_map(section::lay_out(b.given, b.form.data_end, FIXED_BYTES));
+    section::set_fixed(section::lay_out(b.given, b.form.data_end, FIXED_BYTES));
     fixed::RANGE.set(range(Fixed::Terrain));
     division::RANGE.set(range(Fixed::Division));
     // SAFETY: `.fixed.uploads` and the GPU device's stream, zeroed, each the

@@ -1,54 +1,21 @@
 // pxl-core/sys/io/demand.rs
 
-//! One deferrable read for the request scheduler (sys/io/request.rs). The scheduler
-//! orders and cancels; the UI does the transport.
+//! What a request is for: its stream (demand.json `STREAM_NAMES`), each as
+//! one row says, and its want's order in the view; and the timings its run
+//! reports.
 
-use pxl_spec::bake::publication::BaseLayer;
-
-pub use crate::sys::io::demand_spec::TaskPhaseName;
 use core::cmp::Ordering;
 
-pub const PHASES_MAX: usize = demand_spec::TASK_PHASES_MAX as usize;
-
-/// Sub-timings a run reports (e.g. network vs decode), named by the run.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Phases {
-    items: [(TaskPhaseName, f64); PHASES_MAX],
-    len: usize,
-}
-
-impl Default for Phases {
-    fn default() -> Phases {
-        Phases {
-            items: [(TaskPhaseName::net_ms, 0.0); PHASES_MAX],
-            len: 0,
-        }
-    }
-}
-
-impl Phases {
-    /// Past PHASES_MAX a timing is left out.
-    pub fn push(&mut self, name: TaskPhaseName, val: f64) {
-        if self.len < PHASES_MAX {
-            self.items[self.len] = (name, val);
-            self.len += 1;
-        }
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = (TaskPhaseName, f64)> + '_ {
-        self.items[..self.len].iter().copied()
-    }
-}
-
-use crate::sys::io::demand_spec;
-/// A stream of demands (spec `STREAM_NAMES`). An asset shares the
-/// tiles' credits but is never withdrawn.
-pub use crate::sys::io::demand_spec::StreamName as Stream;
-use crate::sys::io::file_spec::root;
+use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::tile;
 
-/// What a stream's wants are: a file of the catalog's, by its id, which the
-/// loader opens below ASSET (sys/io/loader.rs); a bake's tile, by its
+use crate::sys::io::demand_spec;
+pub use crate::sys::io::demand_spec::StreamName as Stream;
+pub use crate::sys::io::demand_spec::TaskPhaseName;
+use crate::sys::io::file_spec::root;
+
+/// What a stream's wants are: a file of the catalog's by its id, which the
+/// loader opens below ASSET (sys/io/loader.rs); a bake's tile by its
 /// quadrant, below its kind's root; or a shard's objects or their top, which
 /// no bake makes, below OBJECT.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -58,8 +25,8 @@ pub enum Source {
     Objects,
 }
 
-/// Where a stream's wants stand in the order a view builds up, which the
-/// serve policy ranks (sys/io/policy.rs).
+/// Where a stream's wants stand in the order a view builds up, as the
+/// policy ranks them (sys/io/policy.rs).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Class {
     /// The ground's shells, seen then unseen, the finer first.
@@ -77,7 +44,6 @@ pub enum Class {
     Aside,
 }
 
-/// A stream as everything that reads one reads it.
 #[derive(Clone, Copy)]
 pub struct Row {
     pub source: Source,
@@ -86,8 +52,26 @@ pub struct Row {
     pub class: Class,
 }
 
+/// Seen before unseen, then nearer first: every layer's work is taken in
+/// this order, and evicted in reverse.
+#[derive(Clone, Copy, Debug)]
+pub struct Order {
+    pub seen: bool,
+    pub near: f64,
+}
+
+pub const PHASES_MAX: usize = demand_spec::TASK_PHASES_MAX as usize;
+
+/// The timings a run reports, each by the name its run gives it; one past
+/// `PHASES_MAX` is left out.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Phases {
+    items: [(TaskPhaseName, f64); PHASES_MAX],
+    len: usize,
+}
+
 impl Stream {
-    /// Its row: the one table of what each stream is.
+    /// The one table of what each stream is.
     pub const fn row(self) -> Row {
         let (source, slotted, class) = match self {
             Stream::terrain => (Source::Bake(BaseLayer::terrain), true, Class::Ground),
@@ -104,7 +88,6 @@ impl Stream {
         }
     }
 
-    /// The bake whose tiles it carries.
     pub const fn bake(self) -> Option<BaseLayer> {
         match self.row().source {
             Source::Bake(layer) => Some(layer),
@@ -112,8 +95,8 @@ impl Stream {
         }
     }
 
-    /// The root a want's file is opened below (file.json `root`), its id
-    /// the path; none for a load, which the loader opens.
+    /// The root its wants' files are opened below (file.json `root`), a
+    /// want's id the path; none for a load, which the loader opens.
     pub const fn root(self) -> Option<u32> {
         match self.row().source {
             Source::Bake(layer) => Some(layer as u32),
@@ -123,23 +106,14 @@ impl Stream {
     }
 
     /// The most bytes a body of its takes, its kind's packet at its longest
-    /// (pxl-spec `bake::tile::max_pkt_bytes`): one past it is refused
-    /// before the heap is asked (sys/io/fetch.rs `on_opened`). None for a
-    /// load or a shard's objects, which the heap alone bounds.
+    /// (pxl-spec `bake::tile::max_pkt_bytes`); none for a load or a shard's
+    /// objects, which the heap alone bounds.
     pub const fn max_body(self) -> Option<u32> {
         match self.bake() {
             Some(layer) => Some(tile::max_pkt_bytes(layer) as u32),
             None => None,
         }
     }
-}
-
-/// Seen before unseen, then nearer first. Every layer's work is taken in
-/// this order, and eviction in reverse.
-#[derive(Clone, Copy, Debug)]
-pub struct Order {
-    pub seen: bool,
-    pub near: f64,
 }
 
 impl Order {
@@ -177,3 +151,25 @@ impl PartialEq for Order {
 }
 
 impl Eq for Order {}
+
+impl Default for Phases {
+    fn default() -> Phases {
+        Phases {
+            items: [(TaskPhaseName::net_ms, 0.0); PHASES_MAX],
+            len: 0,
+        }
+    }
+}
+
+impl Phases {
+    pub fn push(&mut self, name: TaskPhaseName, val: f64) {
+        if self.len < PHASES_MAX {
+            self.items[self.len] = (name, val);
+            self.len += 1;
+        }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (TaskPhaseName, f64)> + '_ {
+        self.items[..self.len].iter().copied()
+    }
+}

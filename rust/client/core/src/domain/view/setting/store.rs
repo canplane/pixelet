@@ -5,16 +5,16 @@
 //! default would be a decision nobody made, and changing it in source would
 //! then reach only people with empty storage. It keeps them by number, a
 //! setting's and its value as it crosses (a choice's option by its number),
-//! each pair two unsigned LEB128s, in its storage file (sys/io/file.rs `StorageFile`, which
-//! checks the slot's format). schema.json gives a number out once, so what
-//! was kept never reads as another setting. A setting schema.json marks
-//! `stored` false is the session's: neither written nor read, so it starts at
-//! its default.
+//! each pair two unsigned LEB128s, in the storage file (sys/io/file.rs
+//! `open_storage`, which checks the slot's format). schema.json gives a
+//! number out once, so what was kept never reads as another setting. A
+//! setting schema.json marks `stored` false is the session's: neither written
+//! nor read, so it starts at its default.
 
 pub use crate::domain::view::setting::schema_spec::{
     AoMode, CameraMode, OrbitObstacleMode, ResMode, SettingKey, Settings,
 };
-use crate::sys::io::file::{self, StorageFile, StorageRead};
+use crate::sys::io::file::{self, StorageRead};
 use xpute_core::global::Global;
 
 static DEVELOPMENT: Global<bool> = Global::new();
@@ -101,15 +101,15 @@ static SETTINGS_STORE: Global<Settings> = Global::new();
 static UNSAVED: Global<bool> = Global::new();
 
 /// The store against its storage file, opened on the storage root
-/// (sys/io/file.rs `StorageFile`). Until the slot is read
+/// (sys/io/file.rs `open_storage`). Until the slot is read
 /// the store holds the defaults and nothing is written over it.
 #[derive(Clone, Copy, PartialEq)]
 enum Load {
     Asked,
     /// What it held, or nothing: written from now on.
     Loaded,
-    /// Refused (sys/io/file.rs `is_refused`): the defaults, and not written
-    /// over until the client sets it aside and empties the slot.
+    /// Refused (sys/io/file.rs `is_storage_refused`): the defaults, and not
+    /// written over until the client sets it aside and empties the slot.
     Refused,
     /// There and not readable here otherwise: the defaults, and never
     /// written over this session.
@@ -125,7 +125,7 @@ fn load() -> &'static mut Load {
 /// Asks for the slot, at boot.
 pub fn settings_open() {
     *load() = Load::Asked;
-    file::open_storage(StorageFile::Settings);
+    file::open_storage();
 }
 
 /// The slot was read, whatever it held: from here the store is what this
@@ -140,15 +140,13 @@ pub fn settings_load_step() -> bool {
     if are_settings_loaded() {
         return false;
     }
-    let Some(file) = file::take_storage(StorageFile::Settings) else {
+    let Some(file) = file::take_storage() else {
         return false;
     };
     let (s, now) = match file {
         StorageRead::Bytes(bytes) => (read_stored(&bytes), Load::Loaded),
         StorageRead::None => (Settings::DEFAULT, Load::Loaded),
-        StorageRead::Unreadable if file::is_refused(StorageFile::Settings) => {
-            (Settings::DEFAULT, Load::Refused)
-        }
+        StorageRead::Unreadable if file::is_storage_refused() => (Settings::DEFAULT, Load::Refused),
         StorageRead::Unreadable => (Settings::DEFAULT, Load::Unreadable),
     };
     SETTINGS_STORE.set(s);
@@ -168,7 +166,7 @@ pub fn on_settings_emptied() {
 /// Only a slot read is written; a refused or unreadable one holds its changes.
 pub fn settings_keep_step() {
     if *load() == Load::Loaded && core::mem::take(UNSAVED.get(|| false)) {
-        file::write_storage(StorageFile::Settings, &settings_store().storage_bytes());
+        file::write_storage(&settings_store().storage_bytes());
     }
 }
 

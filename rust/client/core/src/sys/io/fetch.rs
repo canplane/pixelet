@@ -1,14 +1,13 @@
 // pxl-core/sys/io/fetch.rs
 
-//! The world's reads. The core opens a tile as its bake's object by its
-//! quadkey, and a shard's objects below OBJECT by the shard's, their top by
-//! its own name (sys/io/file.rs);
-//! a version, an address, a protocol or a storage key is the client's
-//! (ts/client/src/sys/fs/tile.ts, object.ts). What an absent object
-//! means is decided here per stream.
-//! Every body is a block (`sys/io/body.rs`) released in the command that
-//! decodes it, unless a store keeps it.
+//! The world's reads: a tile below its bake's root by its quadkey, a shard's
+//! objects and their top below OBJECT (sys/io/file.rs). A body is read into
+//! a block (sys/io/body.rs) and answered, as an absence is, to the layer
+//! that asked, whose it is to say what an absence means, to settle the fetch
+//! and to release the block or keep it.
 
+use xpute_core::clock::now;
+use xpute_core::global::Global;
 use xpute_core::ipc::door::Pos;
 use xpute_core::ipc::fs::Fd;
 use xpute_core::mem;
@@ -18,79 +17,26 @@ use xpute_kit::collection::list::List;
 use xpute_kit::status::errno::Errno;
 
 use crate::sys::io::body;
-use crate::sys::io::demand::{Phases, Source, Stream, TaskPhaseName};
+use crate::sys::io::demand::{Phases, Stream, TaskPhaseName};
 use crate::sys::io::failure::{Ended, Failure};
 use crate::sys::io::file::{self, Opened, Owner, Path};
 use crate::sys::io::param::MAX_CREDITS;
-use crate::sys::io::request::{attempt_of, settle, Credit};
-use crate::sys::io::room::Refusal;
+use crate::sys::io::request::{attempt_of, settle};
 use crate::sys::sched::edge::{request_world_tick, world_edge};
-use xpute_core::clock::now;
-use xpute_core::global::Global;
 
-/// Assets are opened below the assets' root (sys/io/loader.rs), never here.
-pub fn start(credit: Credit, stream: Stream, id: u64) {
-    let Some(root) = stream.root() else { return };
-    let owner = Owner::Fetch {
-        key: credit.key(),
-        at_ms: now(),
-    };
-    file::open(credit, root, Path::of_quadrant(id), owner);
-}
-
-/// Settled as stopped at once: nothing is reported for a closed descriptor.
-pub fn cancel(key: u64) -> bool {
-    let Some(fd) = file::find(|o| matches!(o, Owner::Fetch { key: k, .. } if *k == key)) else {
-        return false;
-    };
-    file::close(fd);
-    settle(key, Ended::Aborted, None);
-    true
-}
-
-pub fn release(block: Option<Block>) {
-    if let Some(block) = block {
-        // SAFETY: a body's block, acquired by `on_opened` and released once.
-        unsafe { body::give(block) };
-    }
-}
-
-pub fn body<'a>((at, bytes): Block) -> &'a [u8] {
-    // SAFETY: the block `on_opened` acquired for this body alone, `bytes` long,
-    // not released while the view is read.
-    unsafe { core::slice::from_raw_parts(mem::at::<u8>(at), bytes as usize) }
-}
-
-enum Receipt {
-    /// None for an empty file.
-    Read(Option<Block>),
-    Absent,
-    Failed(Failure),
-    /// The body was refused room (sys/io/body.rs `take`).
-    Refused(Refusal),
-}
-
+/// An open answered, until its body is filled.
 struct Arrival {
     key: u64,
-    receipt: Receipt,
-    /// The read that fills its body, none where nothing was read: the body
-    /// is the runtime's until `file::is_consumed` says its head has passed it.
+    /// Its body, none where the source has no object, or how it ended
+    /// without one.
+    got: Result<Option<Block>, Ended>,
+    /// The read that fills the body, the runtime's until its head has passed
+    /// it.
     read: Option<Pos>,
     net_ms: f64,
 }
 
-impl Arrival {
-    fn is_filled(&self) -> bool {
-        self.read.is_none_or(file::is_consumed)
-    }
-}
-
-/// No more arrive at once than fetches are out, each on its credit.
-static ARRIVAL_QUEUE: Global<List<Arrival, { MAX_CREDITS as usize }>> = Global::new();
-
-/// An answer, a body or the source's absence, kept for its owner to take:
-/// what it does with it (admits a tile, opens a group) is the owner's. The
-/// fetch stays out until the owner settles it.
+/// A body, or the source's absence, until the layer that asked takes it.
 pub struct Response {
     pub key: u64,
     pub stream: Stream,
@@ -100,128 +46,122 @@ pub struct Response {
     pub phases: Phases,
 }
 
-/// No more are kept than fetches are out, each on its credit, oldest first.
-static ANSWERS: Global<List<Response, { MAX_CREDITS as usize }>> = Global::new();
+const CREDITS: usize = MAX_CREDITS as usize;
 
-/// How many answers of one of `of` are not yet taken.
-pub fn answer_cnt(of: &[Stream]) -> usize {
-    ANSWERS
-        .get(List::new)
-        .iter()
-        .filter(|a| of.contains(&a.stream))
-        .count()
+/// No more of either than fetches are out, each on its credit; oldest first.
+struct Queue {
+    arrivals: List<Arrival, CREDITS>,
+    answers: List<Response, CREDITS>,
+    notify: Notify,
 }
 
-/// The oldest answer of one of `of`, not yet taken.
-pub fn take_answer(of: &[Stream]) -> Option<Response> {
-    let all = ANSWERS.get(List::new);
-    let at = all.iter().position(|a| of.contains(&a.stream))?;
-    Some(all.remove(at))
+static QUEUE: Global<Queue> = Global::new();
+
+fn queue() -> &'static mut Queue {
+    QUEUE.get(|| Queue {
+        arrivals: List::new(),
+        answers: List::new(),
+        notify: Notify::new(),
+    })
 }
 
-/// An answer's fetch settles once its owner has taken it in, or refused it.
-pub fn on_answer_settled(key: u64, result: Result<(), Failure>, phases: Phases) {
-    settle(key, Ended::from(result), Some(phases));
-}
-static ARRIVALS: Global<Notify> = Global::new();
-
-fn arrival_queue() -> &'static mut List<Arrival, { MAX_CREDITS as usize }> {
-    ARRIVAL_QUEUE.get(List::new)
+fn notify() -> &'static mut Notify {
+    &mut queue().notify
 }
 
-fn arrivals() -> &'static mut Notify {
-    ARRIVALS.get(Notify::new)
+impl Arrival {
+    fn is_filled(&self) -> bool {
+        self.read.is_none_or(file::is_consumed)
+    }
 }
 
-/// `detail` is only printed by the profiler.
+pub fn start(key: u64, stream: Stream, id: u64) {
+    let Some(root) = stream.root() else { return };
+    let owner = Owner::Fetch { key, at_ms: now() };
+    file::open(root, Path::of_quadrant(id), owner);
+}
+
+/// The open answered: a body's block taken and its read posted, the
+/// descriptor closed either way.
 pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
     let stream = attempt_of(key).map(|(stream, _)| stream);
     let mut read = None;
     let got = match opened {
-        Opened::Absent => Receipt::Absent,
-        failed @ Opened::Failed { .. } => Receipt::Failed(Failure::from(failed)),
+        Opened::Absent => Ok(None),
+        Opened::Failed { .. } => Err(Ended::Failed(Failure::from(opened))),
+        // Only an absence says there is none: an empty file is no object.
         Opened::Bytes(0) => {
             file::close(fd);
-            Receipt::Read(None)
+            Err(Ended::Failed(Failure::from(Errno::EBADMSG)))
         }
-        // Longer than its kind's packet can be: what the heap budgets a body at.
+        // Longer than its kind's packet can be.
         Opened::Bytes(n) if stream.and_then(Stream::max_body).is_some_and(|max| n > max) => {
             file::close(fd);
-            Receipt::Failed(Failure::from(Errno::EFBIG))
+            Err(Ended::Failed(Failure::from(Errno::EFBIG)))
         }
         Opened::Bytes(n) => {
             let got = match body::take(stream, n) {
                 Ok(block) => {
-                    // SAFETY: a block just acquired, `n` long, and no one
-                    // else's; the arrival holds it, unread, until the runtime's
-                    // head has passed the read.
+                    // SAFETY: a block just taken, `n` long and no one else's,
+                    // held unread by its arrival until the runtime's head has
+                    // passed the read.
                     read = Some(unsafe {
                         file::read(
                             fd,
                             core::slice::from_raw_parts_mut(mem::at::<u8>(block.0), n as usize),
                         )
                     });
-                    Receipt::Read(Some(block))
+                    Ok(Some(block))
                 }
-                Err(refused) => Receipt::Refused(refused),
+                Err(refused) => Err(Ended::Refused(refused)),
             };
             file::close(fd);
             got
         }
     };
-    arrival_queue().push(Arrival {
+    let q = queue();
+    q.arrivals.push(Arrival {
         key,
-        receipt: got,
+        got,
         read,
         net_ms: now() - at_ms,
     });
-    arrivals().notify();
+    q.notify.notify();
 }
 
-/// Arrivals are handed to their owners once their bodies are filled, oldest
-/// first, yielding where the turn is spent; the owner decodes them
-/// (domain/view/demand.rs `admit_arrived`).
+/// Each arrival handed on once its body is filled, oldest first, yielding
+/// where the turn is spent; the layer decodes it (domain/view/demand.rs
+/// `admit_arrived`).
 pub async fn fetch_task() {
     loop {
-        notified(arrivals).await;
-        while !arrival_queue().is_empty() {
+        notified(notify).await;
+        while !queue().arrivals.is_empty() {
             yield_if_spent(world_edge).await;
-            match arrival_queue().iter().position(Arrival::is_filled) {
-                Some(at) => on_fetch_arrived(arrival_queue().remove(at)),
+            let filled = queue().arrivals.iter().position(Arrival::is_filled);
+            match filled {
+                Some(at) => arrived(queue().arrivals.remove(at)),
                 None => runtime_turn(world_edge).await,
             }
         }
     }
 }
 
-fn on_fetch_arrived(
-    Arrival {
-        key,
-        receipt: got,
-        net_ms,
-        ..
-    }: Arrival,
-) {
-    let block = match got {
-        Receipt::Read(block) => block,
-        _ => None,
-    };
-    // A key the request scheduler does not hold is one a reset forgot.
+/// A body or an absence answered, and a turn asked to take it; anything
+/// else settled.
+fn arrived(a: Arrival) {
+    let key = a.key;
+    // A key the requests do not hold is one a reset forgot.
     let Some((stream, id)) = attempt_of(key) else {
-        release(block);
-        return;
+        return release(a.got.ok().flatten());
     };
     let mut phases = Phases::default();
-    phases.push(TaskPhaseName::net_ms, net_ms);
-    if let Some((_, bytes)) = block {
-        phases.push(TaskPhaseName::bytes, bytes as f64);
-    }
-    let fail = match got {
-        // Taken by its owner, which settles it; and a turn asked, so one takes it.
-        Receipt::Absent | Receipt::Read(Some(_)) => {
-            // An asset loads through the loader (sys/io/loader.rs), never a fetch: nothing would take its answer.
-            xpute_kit::ensure!(stream.row().source != Source::Load, ENOTRECOVERABLE);
-            ANSWERS.get(List::new).push(Response {
+    phases.push(TaskPhaseName::net_ms, a.net_ms);
+    match a.got {
+        Ok(block) => {
+            if let Some((_, bytes)) = block {
+                phases.push(TaskPhaseName::bytes, f64::from(bytes));
+            }
+            queue().answers.push(Response {
                 key,
                 stream,
                 id,
@@ -229,12 +169,33 @@ fn on_fetch_arrived(
                 phases,
             });
             request_world_tick();
-            return;
         }
-        // Only an absence says there is none; an empty read is not an object.
-        Receipt::Read(None) => Failure::from(Errno::EBADMSG),
-        Receipt::Failed(fail) => fail,
-        Receipt::Refused(refused) => return settle(key, Ended::Refused(refused), Some(phases)),
-    };
-    settle(key, Ended::Failed(fail), Some(phases));
+        Err(ended) => settle(key, ended, Some(phases)),
+    }
+}
+
+/// How many answers to one of `of` wait to be taken.
+pub fn answer_cnt(of: &[Stream]) -> usize {
+    let answers = &queue().answers;
+    answers.iter().filter(|a| of.contains(&a.stream)).count()
+}
+
+/// The oldest answer to one of `of`.
+pub fn take_answer(of: &[Stream]) -> Option<Response> {
+    let answers = &mut queue().answers;
+    let at = answers.iter().position(|a| of.contains(&a.stream))?;
+    Some(answers.remove(at))
+}
+
+pub fn body<'a>((at, bytes): Block) -> &'a [u8] {
+    // SAFETY: the block `on_opened` took for this body alone, `bytes` long,
+    // not released while it is read.
+    unsafe { core::slice::from_raw_parts(mem::at::<u8>(at), bytes as usize) }
+}
+
+pub fn release(block: Option<Block>) {
+    if let Some(block) = block {
+        // SAFETY: a body's block, taken by `on_opened` and released once.
+        unsafe { body::give(block) };
+    }
 }

@@ -987,7 +987,7 @@ Models and textures spend the same credits (`sys/io/loader.rs`), and so do the
 objects' shards, wanted as a layer's tiles are.
 
 `STORAGE` holds the settings, the one storage file, opened by its id
-(`sys/io/file.rs` `StorageFile`). A file is bytes to the core; a backend over
+(`sys/io/file.rs` `open_storage`). A file is bytes to the core; a backend over
 a platform that keeps text keeps their base64url (`sys/fs/storage.ts`), and
 `OBJECT`'s database keeps the bytes. A storage file begins with its slot's
 format byte, and each file below `OBJECT` with its own (`file.json` `format`);

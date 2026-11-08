@@ -670,7 +670,7 @@ fn handing_shows_everywhere() {
 
 #[test]
 fn heap_wait_rehanded() {
-    use crate::sys::boot::set_heap_stat;
+    use crate::sys::boot::test::set_heap_stat;
     use core::sync::atomic::{AtomicU32, Ordering};
     use xpute_core::mem::heap::HeapStat;
     static RELEASES: AtomicU32 = AtomicU32::new(0);

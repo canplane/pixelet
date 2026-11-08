@@ -1,54 +1,35 @@
 // pxl-core/sys/io/request.test.rs
 //
-// What the request scheduler keeps whatever its policy. The policy here orders the seen
-// before the unseen, then by distance, blames by errno as the core's does, and waits 2 s after a failure,
-// giving the server up after its second.
+// What the requests keep, under the policy and a clock the test sets.
 
 use super::*;
+use core::cell::Cell;
+use std::sync::MutexGuard;
+use xpute_core::clock;
 use xpute_core::mem::heap::HeapStat;
 use xpute_kit::status::errno::Errno;
 
 use crate::sys;
-use crate::sys::boot::set_heap_stat;
-use crate::sys::boot::test::{heap_release, set_counted_heap};
-use crate::sys::io::demand::Order;
-use crate::sys::io::failure::{Ended, Failure};
+use crate::sys::boot::test::{heap_release, set_counted_heap, set_heap_stat};
+use crate::sys::io::param::RETRY_ATTEMPTS;
 
-struct BySeen;
-
-impl Serve for BySeen {
-    fn rank(&self, _category: Stream, _subject: u64, order: Order, _enqueue_ms: f64) -> Rank {
-        Rank {
-            class: !order.seen as u8,
-            dist: order.near,
-            detail: 0,
-        }
-    }
-
-    fn intake(&self) -> u32 {
-        u32::MAX
-    }
-
-    fn fault(&self, failure: Failure) -> Fault {
-        match failure.errnum {
-            Errno::ENETUNREACH => Fault::Network,
-            Errno::EACCES => Fault::Server,
-            _ => Fault::Object,
-        }
-    }
-
-    fn backoff(&self, failures: u32, _seed: u64) -> Option<f64> {
-        (failures <= 2).then_some(2_000.0)
-    }
+thread_local! {
+    static NOW: Cell<f64> = const { Cell::new(0.0) };
 }
 
-/// Room for every test's wants in each stream.
-const BOUNDS: Bounds = [64; Stream::ALL.len()];
+fn at(t: f64) {
+    NOW.set(t);
+    clock::set(|| NOW.get());
+}
 
-fn scheduler() -> RequestScheduler<BySeen> {
-    let mut l = RequestScheduler::new(BySeen, BOUNDS);
-    l.set_credits(2);
-    l
+/// Room for every test's wants in each stream, and two credits; the requests
+/// the caller's while it holds what this returns.
+fn begin() -> MutexGuard<'static, ()> {
+    let serial = sys::serial();
+    at(0.0);
+    open(|_| 64);
+    set_credits(2);
+    serial
 }
 
 fn seen(near: f64) -> Order {
@@ -60,23 +41,22 @@ fn unseen(near: f64) -> Order {
     Order { seen: false, near }
 }
 
-/// A scheduler with one terrain want, 1, declared and started: it, and the
-/// key started.
-fn one_out() -> (RequestScheduler<BySeen>, u64) {
-    let mut l = scheduler();
-    l.declare(Stream::terrain, &[(1, seen(0.0))], 0.0);
-    l.pump(0.0);
-    let (starts, _) = taken(&mut l);
+/// One terrain want, 1, declared and started: its key.
+fn one_out() -> (MutexGuard<'static, ()>, u64) {
+    let serial = begin();
+    declare(Stream::terrain, &[(1, seen(0.0))]);
+    pump();
+    let (starts, _) = taken();
     assert_eq!(starts.len(), 1);
-    (l, starts[0])
+    (serial, starts[0])
 }
 
 /// The keys started and stopped since last taken, every event taken.
-fn taken<S: Serve>(l: &mut RequestScheduler<S>) -> (Vec<u64>, Vec<u64>) {
+fn taken() -> (Vec<u64>, Vec<u64>) {
     let (mut starts, mut stops) = (Vec::new(), Vec::new());
-    while let Some(event) = l.take_event() {
+    while let Some(event) = take_event() {
         match event {
-            Event::Start(credit, _, _) => starts.push(credit.key()),
+            Event::Start(key, _, _) => starts.push(key),
             Event::Stop(key) => stops.push(key),
             Event::End(..) => {}
         }
@@ -84,31 +64,43 @@ fn taken<S: Serve>(l: &mut RequestScheduler<S>) -> (Vec<u64>, Vec<u64>) {
     (starts, stops)
 }
 
-fn ok<S: Serve>(l: &mut RequestScheduler<S>, key: u64, at: f64) {
-    l.settle(key, Ended::Ok, None, at);
+/// `stream`'s wants waiting for a credit and out on one.
+fn counts(stream: Stream) -> (usize, usize) {
+    let s = sched();
+    let waiting = s.wants[stream as usize]
+        .iter()
+        .filter(|w| !attempting(s, stream, w.id))
+        .count();
+    let out = s.slots.iter().flat_map(|c| c.out);
+    (waiting, out.filter(|a| a.stream == stream).count())
 }
 
-fn failed<S: Serve>(l: &mut RequestScheduler<S>, key: u64, at: f64) {
-    failed_with(l, key, Errno::ENETUNREACH, at);
+fn until() -> f64 {
+    sched().outage.until
 }
 
-fn failed_with<S: Serve>(l: &mut RequestScheduler<S>, key: u64, errnum: Errno, at: f64) {
+fn ok(key: u64) {
+    settle(key, Ended::Ok, None);
+}
+
+fn failed(key: u64, errnum: Errno) {
     let fail = Failure {
         errnum,
         detail: 0,
         at: None,
     };
-    l.settle(key, Ended::Failed(fail), None, at);
+    settle(key, Ended::Failed(fail), None);
 }
 
 #[test]
 fn same_set_no_change() {
-    let (mut l, _) = one_out();
+    let _serial = one_out();
     for _ in 0..5 {
-        l.declare(Stream::terrain, &[(1, seen(0.0))], 0.0);
-        l.pump(0.0);
+        at(0.0);
+        declare(Stream::terrain, &[(1, seen(0.0))]);
+        pump();
         assert!(
-            taken(&mut l).0.is_empty(),
+            taken().0.is_empty(),
             "already out, so nothing is started again"
         );
     }
@@ -116,94 +108,83 @@ fn same_set_no_change() {
 
 #[test]
 fn answer_asked_once() {
-    let (mut l, key) = one_out();
-    ok(&mut l, key, 0.0);
-    l.pump(0.0);
-    let (starts, stops) = taken(&mut l);
+    let (_serial, key) = one_out();
+    ok(key);
+    at(0.0);
+    pump();
+    let (starts, stops) = taken();
     assert!(starts.is_empty(), "an answered want was asked again");
     assert!(stops.is_empty());
-    assert_eq!(l.stream_counts(Stream::terrain), (0, 0));
-    l.declare(Stream::terrain, &[(1, seen(0.0))], 1.0);
-    l.pump(1.0);
-    assert_eq!(taken(&mut l).0.len(), 1);
+    assert_eq!(counts(Stream::terrain), (0, 0));
+    at(1.0);
+    declare(Stream::terrain, &[(1, seen(0.0))]);
+    pump();
+    assert_eq!(taken().0.len(), 1);
 }
 
 #[test]
 fn failure_backs_off() {
-    let (mut l, key) = one_out();
-    failed(&mut l, key, 0.0);
+    let (_serial, key) = one_out();
+    failed(key, Errno::ENETUNREACH);
     // A failure is not a withdrawal.
     for t in 0..5 {
-        l.declare(Stream::terrain, &[(1, seen(0.0))], t as f64);
-        l.pump(t as f64);
-        assert!(
-            taken(&mut l).0.is_empty(),
-            "held back, not re-asked every turn"
-        );
+        at(until() * f64::from(t) / 5.0);
+        declare(Stream::terrain, &[(1, seen(0.0))]);
+        pump();
+        assert!(taken().0.is_empty(), "held back, not re-asked every turn");
     }
-    assert_eq!(
-        l.stream_counts(Stream::terrain),
-        (1, 0),
-        "wanted, nothing out"
-    );
-    l.pump(2_000.0);
-    assert_eq!(
-        taken(&mut l).0.len(),
-        1,
-        "and tried again once the wait is over"
-    );
+    assert_eq!(counts(Stream::terrain), (1, 0), "wanted, nothing out");
+    at(until());
+    pump();
+    assert_eq!(taken().0.len(), 1, "and tried again once the wait is over");
 }
 
 #[test]
 fn failed_object_dropped() {
-    let mut l = scheduler();
+    let _serial = begin();
     let want = [(1u64, seen(0.0)), (2, seen(1.0))];
-    l.declare(Stream::terrain, &want, 0.0);
-    l.pump(0.0);
-    let out = taken(&mut l).0;
-    failed_with(&mut l, out[0], Errno::ENXIO, 0.0);
-    ok(&mut l, out[1], 0.0);
+    at(0.0);
+    declare(Stream::terrain, &want);
+    pump();
+    let out = taken().0;
+    at(0.0);
+    failed(out[0], Errno::ENXIO);
+    ok(out[1]);
     for t in 0..5 {
-        l.declare(Stream::terrain, &want[..1], t as f64 * 1_000.0);
-        l.pump(t as f64 * 1_000.0);
-        assert!(
-            taken(&mut l).0.is_empty(),
-            "a missing object is not asked again"
-        );
+        at(t as f64 * 1_000.0);
+        declare(Stream::terrain, &want[..1]);
+        pump();
+        assert!(taken().0.is_empty(), "a missing object is not asked again");
     }
-    l.declare(Stream::terrain, &[(3, seen(0.0))], 5_000.0);
-    l.pump(5_000.0);
-    assert_eq!(
-        taken(&mut l).0.len(),
-        1,
-        "and the server is not held for it"
-    );
+    at(5_000.0);
+    declare(Stream::terrain, &[(3, seen(0.0))]);
+    pump();
+    assert_eq!(taken().0.len(), 1, "and the server is not held for it");
 }
 
 #[test]
 fn heap_refusal_waits_release() {
-    let _g = sys::serial();
+    let (_serial, key) = one_out();
     set_counted_heap();
-    let (mut l, key) = one_out();
-    l.settle(key, Ended::Refused(Refusal::now()), None, 0.0);
+    at(0.0);
+    settle(key, Ended::Refused(Refusal::now()), None);
     for t in 0..5 {
-        l.declare(Stream::terrain, &[(1, seen(0.0))], t as f64 * 10_000.0);
-        l.pump(t as f64 * 10_000.0);
-        assert!(taken(&mut l).0.is_empty(), "no time ends a heap's refusal");
+        at(t as f64 * 10_000.0);
+        declare(Stream::terrain, &[(1, seen(0.0))]);
+        pump();
+        assert!(taken().0.is_empty(), "no time ends a heap's refusal");
     }
     let both = [(1, seen(0.0)), (2, seen(0.0))];
-    l.declare(Stream::terrain, &both, 50_000.0);
-    l.pump(50_000.0);
-    assert_eq!(
-        taken(&mut l).0.len(),
-        1,
-        "and the server is not held for it"
-    );
+    at(50_000.0);
+    declare(Stream::terrain, &both);
+    pump();
+    assert_eq!(taken().0.len(), 1, "and the server is not held for it");
     heap_release();
-    l.declare(Stream::terrain, &both, 50_000.0);
-    l.pump(50_000.0);
+    at(50_000.0);
+    declare(Stream::terrain, &both);
+    pump();
     assert_eq!(
-        taken(&mut l).0.len(),
+        taken().0.len(),
         1,
         "asked again once the heap gives some back"
     );
@@ -212,17 +193,18 @@ fn heap_refusal_waits_release() {
 
 #[test]
 fn early_release_not_rewaited() {
-    let _g = sys::serial();
+    let (_serial, key) = one_out();
     set_counted_heap();
-    let (mut l, key) = one_out();
     // Refused, then room given back before the refusal is settled.
     let refused = Refusal::now();
     heap_release();
-    l.settle(key, Ended::Refused(refused), None, 0.0);
-    l.declare(Stream::terrain, &[(1, seen(0.0))], 0.0);
-    l.pump(0.0);
+    at(0.0);
+    settle(key, Ended::Refused(refused), None);
+    at(0.0);
+    declare(Stream::terrain, &[(1, seen(0.0))]);
+    pump();
     assert_eq!(
-        taken(&mut l).0.len(),
+        taken().0.len(),
         1,
         "the release after the refusal already ends its wait"
     );
@@ -231,73 +213,83 @@ fn early_release_not_rewaited() {
 
 #[test]
 fn failing_server_probe() {
-    let mut l = scheduler();
-    let want: Vec<(u64, Order)> = (0..4).map(|k| (k, seen(k as f64))).collect();
-    l.declare(Stream::terrain, &want, 0.0);
-    l.pump(0.0);
-    let out = taken(&mut l).0;
-    failed_with(&mut l, out[0], Errno::EACCES, 0.0);
-    l.pump(1_000.0);
+    let _serial = begin();
+    let want: Vec<(u64, Order)> = (1..5).map(|k| (k, seen(k as f64))).collect();
+    declare(Stream::terrain, &want);
+    pump();
+    let out = taken().0;
+    failed(out[0], Errno::EACCES);
+    at(until() / 2.0);
+    pump();
     assert!(
-        taken(&mut l).0.is_empty(),
+        taken().0.is_empty(),
         "held: the credit freed starts nothing"
     );
-    l.pump(2_000.0);
-    assert_eq!(
-        taken(&mut l).0.len(),
-        0,
+    at(until());
+    pump();
+    assert!(
+        taken().0.is_empty(),
         "one out already: the other attempt is the probe"
     );
-    failed_with(&mut l, out[1], Errno::EACCES, 2_000.0);
-    assert_eq!(l.failures, 1, "out before the failure, so the same outage");
-    let mut at = 2_000.0;
-    for n in 2..=3 {
-        l.pump(at);
-        let probe = taken(&mut l).0;
+    failed(out[1], Errno::EACCES);
+    assert_eq!(
+        sched().outage.failures,
+        1,
+        "out before the failure, so the same outage"
+    );
+    for n in 2..=RETRY_ATTEMPTS + 1 {
+        at(until());
+        pump();
+        let probe = taken().0;
         assert_eq!(probe.len(), 1, "one probe after the wait");
-        failed_with(&mut l, probe[0], Errno::EACCES, at);
-        assert_eq!(l.failures, n);
-        at += 2_000.0;
+        failed(probe[0], Errno::EACCES);
+        assert_eq!(sched().outage.failures, n);
     }
-    assert!(l.given_up, "past the last wait");
-    l.pump(100_000.0);
-    assert!(taken(&mut l).0.is_empty(), "nothing is asked once given up");
+    assert!(given_up(), "past the last wait");
+    at(until() + 1e9);
+    pump();
+    assert!(taken().0.is_empty(), "nothing is asked once given up");
 }
 
 #[test]
 fn outage_counts_once() {
-    let mut l = scheduler();
-    l.declare(Stream::terrain, &[(1, seen(0.0)), (2, seen(1.0))], 0.0);
-    l.pump(0.0);
-    for key in taken(&mut l).0 {
-        failed_with(&mut l, key, Errno::EACCES, 10.0);
+    let _serial = begin();
+    at(0.0);
+    declare(Stream::terrain, &[(1, seen(0.0)), (2, seen(1.0))]);
+    pump();
+    for key in taken().0 {
+        at(10.0);
+        failed(key, Errno::EACCES);
     }
-    assert_eq!(l.failures, 1, "one outage, one wait");
-    assert!(!l.given_up);
+    assert_eq!(sched().outage.failures, 1, "one outage, one wait");
+    assert!(!given_up());
 }
 
 #[test]
 fn cur_demand_said() {
-    let mut l = scheduler();
-    l.declare(Stream::terrain, &[(1, unseen(0.0)), (2, unseen(1.0))], 0.0);
-    l.pump(0.0);
-    let out = taken(&mut l).0;
+    let _serial = begin();
+    at(0.0);
+    declare(Stream::terrain, &[(1, unseen(0.0)), (2, unseen(1.0))]);
+    pump();
+    let out = taken().0;
     assert_eq!(out.len(), 2);
-    l.declare(Stream::terrain, &[(3, seen(0.0))], 0.0);
+    at(0.0);
+    declare(Stream::terrain, &[(3, seen(0.0))]);
     assert_eq!(
-        l.stream_counts(Stream::terrain).0,
+        counts(Stream::terrain).0,
         1,
         "the new want is representable with both credits spent"
     );
-    l.pump(0.0);
+    at(0.0);
+    pump();
     // What the camera left is stopped the turn it leaves, and its credits
     // start what is wanted now in the same turn.
-    let (starts, stops) = taken(&mut l);
+    let (starts, stops) = taken();
     assert_eq!(stops.len(), 2, "every obsolete attempt is told to stop");
     assert_eq!(starts.len(), 1, "and the current want starts at once");
-    ok(&mut l, out[0], 0.0);
+    ok(out[0]);
     assert_eq!(
-        l.stream_counts(Stream::terrain),
+        counts(Stream::terrain),
         (0, 1),
         "the late report neither frees nor ends anything"
     );
@@ -305,67 +297,43 @@ fn cur_demand_said() {
 
 #[test]
 fn running_attempt_kept() {
-    let mut l = scheduler();
-    l.set_credits(1);
-    l.declare(Stream::terrain, &[(1, unseen(5.0))], 0.0);
-    l.pump(0.0);
-    let _ = taken(&mut l);
-    l.declare(Stream::terrain, &[(1, unseen(5.0)), (2, unseen(0.0))], 0.0);
-    l.pump(0.0);
-    let (starts, stops) = taken(&mut l);
+    let _serial = begin();
+    set_credits(1);
+    declare(Stream::terrain, &[(1, unseen(5.0))]);
+    pump();
+    let _ = taken();
+    declare(Stream::terrain, &[(1, unseen(5.0)), (2, unseen(0.0))]);
+    pump();
+    let (starts, stops) = taken();
     assert!(
         stops.is_empty(),
         "distance says which to start, not which to restart"
     );
     assert!(starts.is_empty());
-    l.declare(Stream::terrain, &[(1, unseen(5.0)), (3, seen(9.0))], 0.0);
-    l.pump(0.0);
-    let (starts, stops) = taken(&mut l);
+    at(0.0);
+    declare(Stream::terrain, &[(1, unseen(5.0)), (3, seen(9.0))]);
+    pump();
+    let (starts, stops) = taken();
     assert!(stops.is_empty(), "a class better waits for a free credit");
     assert!(starts.is_empty(), "and starts nothing meanwhile");
 }
 
-/// Takes one want a pump, every want ranked alike.
-struct Restless;
-
-impl Serve for Restless {
-    fn rank(&self, _category: Stream, _subject: u64, order: Order, _enqueue_ms: f64) -> Rank {
-        Rank {
-            class: 0,
-            dist: order.near,
-            detail: 0,
-        }
-    }
-
-    fn intake(&self) -> u32 {
-        1
-    }
-
-    fn fault(&self, _failure: Failure) -> Fault {
-        Fault::Network
-    }
-
-    fn backoff(&self, _strikes: u32, _seed: u64) -> Option<f64> {
-        Some(0.0)
-    }
-}
-
 #[test]
 fn wants_served_at_rest() {
-    let mut l = RequestScheduler::new(Restless, BOUNDS);
-    l.set_credits(2);
-    let mut wanted: Vec<(u64, Order)> = (0..12).map(|k| (k, seen((k * 7 % 12) as f64))).collect();
+    let _serial = begin();
+    let mut wanted: Vec<(u64, Order)> = (1..13).map(|k| (k, seen((k * 7 % 12) as f64))).collect();
     let mut out: Vec<u64> = Vec::new();
     for turn in 0..200 {
-        l.declare(Stream::place, &wanted, turn as f64);
-        l.pump(turn as f64);
-        let (starts, stops) = taken(&mut l);
+        at(turn as f64);
+        declare(Stream::place, &wanted);
+        pump();
+        let (starts, stops) = taken();
         out.retain(|k| !stops.contains(k));
         out.extend(starts);
         assert!(out.len() <= 2, "never more out than the credits");
         if let Some(key) = out.first().copied() {
-            let (_, id) = l.attempt_of(key).expect("out");
-            ok(&mut l, key, turn as f64);
+            let (_, id) = attempt_of(key).expect("out");
+            ok(key);
             out.remove(0);
             wanted.retain(|&(s, _)| s != id);
         }
@@ -378,35 +346,35 @@ fn wants_served_at_rest() {
 
 #[test]
 fn asset_shares_credits() {
-    let mut l = scheduler();
-    l.set_credits(1);
-    l.declare(Stream::terrain, &[(1, seen(0.0))], 0.0);
-    l.declare(Stream::asset, &[(7, Order::LAST)], 0.0);
-    l.pump(0.0);
+    let _serial = begin();
+    set_credits(1);
+    at(0.0);
+    declare(Stream::terrain, &[(1, seen(0.0))]);
+    at(0.0);
+    declare(Stream::asset, &[(7, Order::LAST)]);
+    pump();
     assert_eq!(
-        taken(&mut l).0.len(),
+        taken().0.len(),
         1,
         "one credit, one read — an asset does not go beside the tiles"
     );
-    assert_eq!(
-        l.stream_counts(Stream::asset),
-        (1, 0),
-        "and it is what is waiting"
-    );
+    assert_eq!(counts(Stream::asset), (1, 0), "and it is what is waiting");
 }
 
 #[test]
 fn failed_want_reported() {
-    let (mut l, key) = one_out();
-    assert!(!l.has_object_failed(Stream::terrain, 1));
-    failed_with(&mut l, key, Errno::EBADMSG, 0.0);
+    let (_serial, key) = one_out();
+    assert!(!has_object_failed(Stream::terrain, 1));
+    at(0.0);
+    failed(key, Errno::EBADMSG);
     assert!(
-        l.has_object_failed(Stream::terrain, 1),
+        has_object_failed(Stream::terrain, 1),
         "its object's failure holds it"
     );
-    l.declare(Stream::terrain, &[], 0.0);
+    at(0.0);
+    declare(Stream::terrain, &[]);
     assert!(
-        !l.has_object_failed(Stream::terrain, 1),
+        !has_object_failed(Stream::terrain, 1),
         "and nothing once it is no longer wanted"
     );
 }

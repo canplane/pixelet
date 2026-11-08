@@ -3,6 +3,7 @@
 use super::*;
 use crate::domain::view::setting::schema_spec::SettingKind;
 use crate::sys;
+use crate::sys::io::file_spec::format;
 use xpute_kit::status::errno::Errno;
 
 fn storage_of(pairs: &[(u32, u32)]) -> Vec<u8> {
@@ -130,7 +131,7 @@ fn session_setting_not_stored() {
     ));
     assert_eq!(back, Settings::DEFAULT, "nothing of {session:?} is read");
     open_slot();
-    file::on_storage_answered(StorageFile::Settings, Err(file::Opened::Absent));
+    file::test::on_storage_answered(Err(file::Opened::Absent));
     assert!(settings_load_step());
     for &key in session.iter().filter(|&&k| is_offered(k, other(k))) {
         assert_eq!(settings_store().set_setting(key, other(key)), Some(true));
@@ -143,15 +144,15 @@ fn session_setting_not_stored() {
 
 /// What storage holds of the slot, as the client hands it over.
 fn file_of(pairs: &[(u32, u32)]) -> Vec<u8> {
-    let mut bytes = vec![StorageFile::Settings.format()];
+    let mut bytes = vec![format::SETTINGS];
     bytes.extend(storage_of(pairs));
     bytes
 }
 
 /// The slot opened at boot, with nothing waiting and nothing to keep.
 fn open_slot() {
-    file::on_emptied(StorageFile::Settings);
-    while file::take_storage(StorageFile::Settings).is_some() {}
+    file::on_storage_emptied();
+    while file::take_storage().is_some() {}
     settings_open();
     UNSAVED.set(false);
 }
@@ -182,10 +183,7 @@ fn read_before_write() {
         held_after_a_change(),
         "nothing is written before the slot is read"
     );
-    file::on_storage_answered(
-        StorageFile::Settings,
-        Ok(&file_of(&[(SettingKey::tilt_lock as u32, tilt)])),
-    );
+    file::test::on_storage_answered(Ok(&file_of(&[(SettingKey::tilt_lock as u32, tilt)])));
     assert!(settings_load_step() && are_settings_loaded());
     assert_eq!(settings_store().get(SettingKey::tilt_lock), tilt);
     assert!(!*UNSAVED.get(|| false), "what was read is not written back");
@@ -198,7 +196,7 @@ fn read_before_write() {
 fn empty_slot_defaults() {
     let _g = sys::serial();
     open_slot();
-    file::on_storage_answered(StorageFile::Settings, Err(file::Opened::Absent));
+    file::test::on_storage_answered(Err(file::Opened::Absent));
     assert!(settings_load_step());
     assert_eq!(*settings_store(), Settings::DEFAULT);
     assert!(!held_after_a_change());
@@ -218,18 +216,18 @@ fn bad_slot_refused() {
         Ok(&br#"{"ao":"screen"}"#[..]),
     ] {
         open_slot();
-        file::on_storage_answered(StorageFile::Settings, answer);
+        file::test::on_storage_answered(answer);
         assert!(
             settings_load_step() && are_settings_loaded(),
             "the world need not wait on it"
         );
         assert_eq!(*settings_store(), Settings::DEFAULT);
-        assert!(file::is_refused(StorageFile::Settings));
+        assert!(file::is_storage_refused());
         assert!(
             held_after_a_change(),
             "a refused slot's change waits for it to be emptied"
         );
-        file::on_emptied(StorageFile::Settings);
+        file::on_storage_emptied();
         on_settings_emptied();
         settings_keep_step();
         assert!(!*UNSAVED.get(|| false));
@@ -242,15 +240,12 @@ fn bad_slot_refused() {
 fn unreadable_slot_stored() {
     let _g = sys::serial();
     open_slot();
-    file::on_storage_answered(
-        StorageFile::Settings,
-        Err(file::Opened::Failed {
-            errnum: Errno::EIO,
-            detail: 0,
-        }),
-    );
+    file::test::on_storage_answered(Err(file::Opened::Failed {
+        errnum: Errno::EIO,
+        detail: 0,
+    }));
     assert!(settings_load_step());
-    assert!(!file::is_refused(StorageFile::Settings));
+    assert!(!file::is_storage_refused());
     assert!(held_after_a_change());
     on_settings_emptied();
     assert!(held_after_a_change());

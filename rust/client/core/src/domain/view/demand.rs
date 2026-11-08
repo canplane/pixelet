@@ -18,8 +18,8 @@ use crate::domain::layer::earth::Earth;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::{Source, Stream};
-use crate::sys::io::fetch::{answer_cnt, body, on_answer_settled, release, take_answer, Response};
-use crate::sys::io::request::attempt_of;
+use crate::sys::io::fetch::{answer_cnt, body, release, take_answer, Response};
+use crate::sys::io::request::{attempt_of, settle};
 use pxl_spec::bake::tile::division::DivisionTile;
 use xpute_core::mem::heap::Block;
 use xpute_core::sched::pass::Pass;
@@ -36,7 +36,7 @@ use crate::domain::query::ColumnWalk;
 use crate::domain::view::observation;
 use crate::domain::view::observation::{observation, ByEye};
 use crate::sys::io::demand::{Order, Phases};
-use crate::sys::io::failure::Failure;
+use crate::sys::io::failure::{Ended, Failure};
 use crate::sys::io::request::declare;
 use crate::sys::io::source;
 use crate::sys::sched::edge;
@@ -215,7 +215,7 @@ pub struct Demand<L: Observed> {
     /// Each ask in the view and the tile its place in the view is taken of:
     /// a demanded tile's for the tile its ground is asked of, a line's or the
     /// floor's its own, by the ask's id. Read only for the asks left
-    /// unanswered, the wants, whose order alone is read (`Policy::rank`),
+    /// unanswered, the wants, whose order alone is read (`policy::rank`),
     /// and kept to order them again (`reorder`).
     placed: Vec<(Quadrant, Quadrant)>,
     /// The tile cache's revision as it idled it (`idle`), none while it steps.
@@ -641,7 +641,7 @@ pub fn admit_arrived(pass: &Pass) {
                     Err(Errno::ENOTRECOVERABLE.into())
                 }
             };
-            on_answer_settled(key, result, phases);
+            settle(key, Ended::from(result), Some(phases));
             true
         },
         None,

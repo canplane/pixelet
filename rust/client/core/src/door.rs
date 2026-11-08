@@ -148,7 +148,7 @@ fn boot(b: BootInfo) {
 /// admission among it.
 pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     use crate::turn::{take_world_drawn, world_frame_waiting};
-    if section::map().is_none() {
+    if section::fixed().is_none() {
         boot(boot_info());
     }
     let s = state();
@@ -198,7 +198,7 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     // start or a stop handed to its reader, an end a row of the profiler's.
     while let Some(event) = request::take_event() {
         match event {
-            Event::Start(credit, stream, id) => dispatch::start(credit, stream, id),
+            Event::Start(key, stream, id) => dispatch::start(key, stream, id),
             Event::Stop(key) => dispatch::stop(key),
             Event::End(a, at, ended, phases) => {
                 perf_record(|| TaskRow::of(&a, at, ended, phases));

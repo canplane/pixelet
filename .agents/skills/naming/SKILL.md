@@ -37,7 +37,10 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   best one.
 - A type alias names a meaning (`pub type Block = (usize, u32)`); add no newtype
   or guard to enforce it.
-- Mind a loose word where several modules use it for different things.
+- A word may mean different things in different parts where each is its
+  field's word (a map's tile, a screen's tile, a shadow map's tile). A name
+  changes when it is not its field's word or not what the thing is, not to
+  keep words apart.
 - Snake_case and SCREAMING abbreviate; PascalCase types, camelCase and the
   React UI's own names stay whole (`let cfg: Config`).
 - In TypeScript, a `private` member takes a leading `_` (`private _cap`,
@@ -73,6 +76,16 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | a quadrant fetched and stored as one, and what it holds | a tile (`TerrainTile`, `TileCache`) | |
   | a node's name as text, a quadkey or an octkey | its `key` | |
   | a node's name as a number, its morton code | its `id` | subject, morton |
+  | a zoom told by its cells | `cell_zoom` | cell |
+  | a level of a brick's min-max pyramid | a `mip` | level |
+  | a value that differs from the turn before | `changed` | moved |
+  | a box on a plane | a `rect` | box |
+  | the most a thing holds | its `cap` | room, most, limit |
+  | a buffer's fixed first words | its `header` | head |
+  | the pixels a change covers, to be drawn again | the `damage` | mark, claimed |
+  | what a player places in the world | an `object` | overwrite |
+  | where a ray ends | its `hit` | stop |
+  | decor drawn as a model, an impostor or not at all by its distance | its `lod` | tier |
 
   `at` is where a thing is, `to` where it is going.
 - xpute's names are the mechanism's: the core, the runtime, the UI, a device,

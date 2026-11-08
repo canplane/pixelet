@@ -1,13 +1,14 @@
 // pxl-core/sys/load.rs
 
-//! What the core loads, and how many: the catalog, the files it names,
-//! each by its number below the asset root, and the Earth's sphere, each as
-//! the catalog, a model or an image. A leaf: io loads them, a task a file
-//! in flight (`LOAD_FILES`).
+//! What the core loads, and how many: the catalog, the files it names, each
+//! by its number below the asset root, and the Earth's sphere, each read as
+//! the catalog, a model or an image. sys/io loads them, a task a file in
+//! flight (`LOAD_FILES`).
 
-use crate::sys::io::file::Path;
 use pxl_spec::asset::catalog::SLOTS;
 use pxl_spec::bake::publication::TILE_SPHERE;
+
+use crate::sys::io::file::Path;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LoadKind {
@@ -16,9 +17,9 @@ pub enum LoadKind {
     Catalog = 2,
 }
 
-/// A file below the asset root, by its id, the catalog's
-/// (file.json `CATALOG`) or one it names; the Earth's picture whole is the
-/// earth layer's, under its version.
+/// A file below the asset root by its id, the catalog's (file.json
+/// `CATALOG`) or one it names; or the Earth's picture whole, the earth
+/// layer's, under its version.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Load {
     File(u32),
@@ -27,6 +28,15 @@ pub enum Load {
 
 /// The sphere's id, past every one below the asset root, which a u16 holds.
 const SPHERE: u32 = 1 << 16;
+
+/// The files that can be in flight at once: a slot's each, wanted as one
+/// kind, the catalog and the sphere.
+pub const LOAD_FILES: usize = SLOTS + 2;
+
+impl LoadKind {
+    /// By number.
+    pub const ALL: [LoadKind; 3] = [LoadKind::Gltf, LoadKind::Image, LoadKind::Catalog];
+}
 
 impl Load {
     /// Its path below its root.
@@ -52,7 +62,3 @@ impl Load {
         }
     }
 }
-
-/// The files that can be in flight at once: a slot's each, which is wanted
-/// as one kind, the catalog and the sphere.
-pub const LOAD_FILES: usize = SLOTS + 2;

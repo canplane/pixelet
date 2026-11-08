@@ -1,9 +1,9 @@
 // pxl-core/sys.rs
 
 //! What all of the domain stands on: the reads (`io`), a turn's mechanics
-//! (`sched`), the core memory's sections (`mem`), what the core loads, the
-//! table io and sched both read (`load`), and what it was booted
-//! with (`boot`). Nothing here names the domain.
+//! (`sched`), the core memory's sections (`mem`), what the core loads and how
+//! many at once (`load`), and what it was booted with (`boot`). Nothing here
+//! names the domain.
 
 pub(crate) mod boot;
 pub(crate) mod io;

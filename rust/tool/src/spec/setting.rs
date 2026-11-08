@@ -31,7 +31,7 @@ impl Setting<'_> {
     fn flag(&self, name: &str) -> bool {
         self.spec.get(name) == Some(&Node::Bool(true))
     }
-    /// StorageFile unless marked `"stored": false`; anything else there is refused.
+    /// Stored unless marked `"stored": false`; anything else there is refused.
     fn stored(&self) -> Result<bool, String> {
         match self.spec.get("stored") {
             None | Some(Node::Bool(true)) => Ok(true),
