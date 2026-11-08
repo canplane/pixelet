@@ -131,7 +131,7 @@ fn descend(
         if moving && *seen != Lookup::NONE && draw.next().is_multiple_of(16) {
             at.ground = *seen;
             foreign = true;
-            tally.add("inheritance another descent's place", true);
+            tally.add("handed another descent's place", true);
         }
         let before = at;
         let mut held = w;
@@ -147,7 +147,7 @@ fn descend(
             if again != got {
                 tally.add(OTHERWISE, true);
                 eprintln!(
-                    "answered otherwise from the top: z {z} {c:?} {zooms:?}: {again:?} against {got:?}, inheritance {:x?}",
+                    "answered otherwise from the top: z {z} {c:?} {zooms:?}: {again:?} against {got:?}, handed {:x?}",
                     before.words()
                 );
             }
@@ -834,7 +834,7 @@ fn hand_world_answers_as_the_rust() {
     assert_eq!(
         tally.0.get(OTHERWISE).copied().unwrap_or(0),
         0,
-        "a node answers as it does from the top off what its parent inheritance it"
+        "a node answers as it does from the top off what its parent handed it"
     );
 
     let instance =
@@ -977,7 +977,7 @@ fn hand_world_answers_as_the_rust() {
         ("cell, unknown", 10461),
         ("child", 629146),
         ("child, ways' cursor held", 23870),
-        ("inheritance another descent's place", 7843),
+        ("handed another descent's place", 7843),
         ("lack", 1226),
         ("past the area", 139883),
         ("past the leaves, the node 0, 0, 0, coarser than asked", 11),

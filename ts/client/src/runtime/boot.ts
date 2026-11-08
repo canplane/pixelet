@@ -38,7 +38,7 @@ function loaded(s: Snapshot): boolean {
   );
 }
 
-/** Called once by the app, ahead of the UI (app/boot.ts). `boot_state` says
+/** Called once by the app, ahead of the UI (boot.ts). `boot_state` says
  * where the boot stands. A second call is refused. */
 export function boot(): void {
   if (called) throw new InvariantError(Errno.EALREADY);

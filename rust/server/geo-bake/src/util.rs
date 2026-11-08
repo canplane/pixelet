@@ -122,15 +122,15 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 }
 
 /// A set's manifest at `path`: `fields`, and what every set says of itself;
-/// `built` is the `git_sha` the bake started at.
+/// `git_sha` is what `git_sha()` read as the bake started.
 pub fn write_manifest(
     path: &Path,
-    built: Option<&str>,
+    git_sha: Option<&str>,
     fields: serde_json::Value,
 ) -> Result<(), String> {
     let mut manifest = serde_json::json!({
         "updated_at": now_iso8601(),
-        "git_sha": built,
+        "git_sha": git_sha,
         "content_encoding": CONTENT_ENCODING,
         "content_type": "application/octet-stream",
     });

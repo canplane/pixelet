@@ -1,9 +1,9 @@
 // pxl-render/frame/shader/decor_cull.wgsl
 
 // Picks what a frame through the gate draws of the decor generated (gpu/generator.rs
-// `Generator::mask`). Of each region's instances, it lists those whose ball (decor_ball.wgsl)
+// `Generator::cull`). Of each region's instances, it lists those whose ball (decor_ball.wgsl)
 // meets the box of the claimed tiles (damage_rect.wgsl) as the frame sees it. They are listed
-// at the region's own place in a list beside the instances (`masked`), and the region's args
+// at the region's own place in a list beside the instances (`culled`), and the region's args
 // count the instances listed. The draws read this list in place of the instances' own
 // (instance.wgsl `order`). A pixel past the claimed tiles keeps the last frame's color, so an
 // instance whose ball meets none of them has nothing to draw.
@@ -11,7 +11,7 @@
 @group(0) @binding(1) var<storage, read> uniforms: array<u32>;
 @group(0) @binding(2) var<storage, read> args: array<u32>;
 @group(0) @binding(3) var<storage, read> instances: array<u32>;
-@group(0) @binding(4) var<storage, read_write> masked: array<u32>;
+@group(0) @binding(4) var<storage, read_write> culled: array<u32>;
 @group(0) @binding(5) var<storage, read_write> culled_args: array<atomic<u32>>;
 @group(0) @binding(6) var<storage, read> damage_rect: array<u32, 4>;
 /// Each region's count, then its end. The end holds the region's first slot as the args pass
@@ -102,6 +102,6 @@ fn decor_cull_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (inside(row[0] - x.x * row[3], c, r) && inside(x.y * row[3] - row[0], c, r)
     && inside(y.x * row[3] - row[1], c, r) && inside(row[1] - y.y * row[3], c, r)) {
     let n = atomicAdd(&culled_args[region * ARGS_WORDS + 1u], 1u);
-    masked[region_word(region, UNIFORM_IDX) + n] = slot;
+    culled[region_word(region, UNIFORM_IDX) + n] = slot;
   }
 }

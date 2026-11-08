@@ -844,7 +844,7 @@ fn hand_pixels_answer_as_cast_entry() {
                 1,
             ],
         );
-        let list_of = gpu.read(&list)[0];
+        let tile_cnt = gpu.read(&list)[0];
 
         let table_buf = gpu.buffer(&cast.table, store());
         let marks = gpu.buffer(&ray::MISS_ARGS_EMPTY, store());
@@ -863,7 +863,7 @@ fn hand_pixels_answer_as_cast_entry() {
                 (14, marks.as_entire_binding()),
                 (30, list.as_entire_binding()),
             ],
-            [list_of, per_tile, per_tile],
+            [tile_cnt, per_tile, per_tile],
         );
 
         // Each pixel the device drew must hold what the Rust gives along the device's ray: the
@@ -1093,7 +1093,7 @@ fn hand_stale_voxel_is_a_hole() {
                     1,
                 ],
             );
-            let list_of = gpu.read(&list)[0];
+            let tile_cnt = gpu.read(&list)[0];
             let table_buf = gpu.buffer(&cast.table, store());
             let marks = gpu.buffer(&ray::MISS_ARGS_EMPTY, store());
             // The beam rays' buffer needs room past the grid's words for this screen's holes.
@@ -1112,13 +1112,13 @@ fn hand_stale_voxel_is_a_hole() {
                     (14, marks.as_entire_binding()),
                     (30, list.as_entire_binding()),
                 ],
-                [list_of, per_tile, per_tile],
+                [tile_cnt, per_tile, per_tile],
             );
             let words = gpu.read(&beams);
             let holes = gpu.read(&marks)[ray::MISS_ARGS_CNT as usize] as usize;
             let list = walked_at + ray::holes_at(size) as usize + 1;
-            let list_of: BTreeSet<u32> = words[list..list + holes].iter().copied().collect();
-            assert_eq!(list_of.len(), holes, "a hole list_of twice");
+            let hole_set: BTreeSet<u32> = words[list..list + holes].iter().copied().collect();
+            assert_eq!(hole_set.len(), holes, "a hole listed twice");
             let walked = |px: [u32; 2]| {
                 let (w, bit) = ray::hole_bit(px, [wd, ht]);
                 words[walked_at + w as usize] & 1 << bit != 0
@@ -1127,7 +1127,7 @@ fn hand_stale_voxel_is_a_hole() {
                 let px = [p % wd, p / wd];
                 assert_eq!(
                     walked(px),
-                    list_of.contains(&(px[0] | px[1] << 16)),
+                    hole_set.contains(&(px[0] | px[1] << 16)),
                     "pixel {px:?}: its walked bit and the holes' list"
                 );
             }

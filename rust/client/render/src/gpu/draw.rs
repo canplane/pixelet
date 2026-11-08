@@ -324,8 +324,8 @@ pub struct DrawList {
     drifting: u32,
     /// The box each drawn thing that reads the shadow map stands within (`ReceiverBox`), as
     /// this turn set them and as `take` last handed them.
-    stands: Vec<ReceiverBox>,
-    taken_stands: Vec<ReceiverBox>,
+    receivers: Vec<ReceiverBox>,
+    taken_receivers: Vec<ReceiverBox>,
 }
 
 /// The box that a drawn thing reading the shadow map stands within, in the world and
@@ -407,7 +407,7 @@ pub struct Lists<'a> {
     pub reordered: bool,
     /// The box each drawn thing that reads the shadow map stands within, as its draw was set
     /// (`ReceiverBox`).
-    pub stands: &'a [ReceiverBox],
+    pub receivers: &'a [ReceiverBox],
 }
 
 /// The draws as a turn left them: each pipeline's records in the order they are drawn, and
@@ -676,21 +676,21 @@ impl DrawList {
         self.set[p] += 1;
     }
 
-    /// Records where the draw of `pipeline` stands, the box `stand`. Every draw whose shader
+    /// Records where the draw of `pipeline` stands, the box `receiver`. Every draw whose shader
     /// reads the shadow map gives a box and no other draw does (record.rs `reads_shadow_map`),
     /// so whatever reads the map stands somewhere. Past `light::RECEIVER_BOXES` boxes, the box
     /// is taken into the last one.
-    fn stand(&mut self, pipeline: u32, stand: Option<ReceiverBox>) {
+    fn stand(&mut self, pipeline: u32, receiver: Option<ReceiverBox>) {
         xpute_kit::ensure!(
-            reads_shadow_map(pipeline) == stand.is_some(),
+            reads_shadow_map(pipeline) == receiver.is_some(),
             EINVAL,
             pipeline
         );
-        let Some(b) = stand else { return };
-        let full = self.stands.len() == light::RECEIVER_BOXES;
-        match self.stands.last_mut() {
+        let Some(b) = receiver else { return };
+        let full = self.receivers.len() == light::RECEIVER_BOXES;
+        match self.receivers.last_mut() {
             Some(last) if full => last.hold(&b),
-            _ => self.stands.push(b),
+            _ => self.receivers.push(b),
         }
     }
 
@@ -703,9 +703,9 @@ impl DrawList {
         record: [u32; 3],
         at: Position,
         words: &[(usize, f32)],
-        stand: Option<ReceiverBox>,
+        receiver: Option<ReceiverBox>,
     ) {
-        self.stand(pipeline, stand);
+        self.stand(pipeline, receiver);
         self.set(id, pipeline, record, uniform(at, words));
     }
 
@@ -725,10 +725,10 @@ impl DrawList {
         rot: f32,
         opacity: f32,
         scale: f32,
-        stand: Option<ReceiverBox>,
+        receiver: Option<ReceiverBox>,
     ) {
         let (d, u) = scaled_draw(pipeline, handle, a, b, at, rot, opacity, scale);
-        self.stand(pipeline, stand);
+        self.stand(pipeline, receiver);
         self.set(id, pipeline, [d[0], d[1], d[2]], u);
     }
 
@@ -745,9 +745,9 @@ impl DrawList {
         a: u32,
         b: u32,
         at: Position,
-        stand: Option<ReceiverBox>,
+        receiver: Option<ReceiverBox>,
     ) {
-        self.put(id, pipeline, [handle, a, b], at, &[], stand);
+        self.put(id, pipeline, [handle, a, b], at, &[], receiver);
     }
 
     /// Draws the location indicator's beacon at `at`, spun `spin` about Z, with the night's
@@ -758,7 +758,7 @@ impl DrawList {
         at: Position,
         spin: f32,
         night: bool,
-        stand: ReceiverBox,
+        receiver: ReceiverBox,
     ) {
         let night = if night { 1.0 } else { 0.0 };
         let words = [(location::SPIN, spin), (location::NIGHT, night)];
@@ -768,7 +768,7 @@ impl DrawList {
             [0; 3],
             at,
             &words,
-            Some(stand),
+            Some(receiver),
         );
     }
 
@@ -787,7 +787,7 @@ impl DrawList {
         opacity: f32,
         unit: f32,
         z_step: f32,
-        stand: Option<ReceiverBox>,
+        receiver: Option<ReceiverBox>,
     ) {
         let words = [
             (ghost_box::OPACITY, opacity),
@@ -795,7 +795,7 @@ impl DrawList {
             (ghost_box::Z_STEP, z_step),
         ];
         let record = [handle, vertex_cnt, idx_cnt];
-        self.put(id, pipeline, record, at, &words, stand);
+        self.put(id, pipeline, record, at, &words, receiver);
     }
 
     /// A draw that `drifts` is a cloud's. Its `at` is its place on the cloud field's map,
@@ -817,7 +817,7 @@ impl DrawList {
         at: Position,
         opacity: f32,
         drifts: bool,
-        stand: Option<ReceiverBox>,
+        receiver: Option<ReceiverBox>,
     ) {
         let [off, stride, idx] = columns;
         let words = [
@@ -827,7 +827,7 @@ impl DrawList {
             (instance::IDX, f32::from_bits(idx)),
             (instance::DRIFTS, if drifts { 1.0 } else { 0.0 }),
         ];
-        self.put(id, pipeline, [handle, group, cnt], at, &words, stand);
+        self.put(id, pipeline, [handle, group, cnt], at, &words, receiver);
     }
 
     /// Hands the turn's lists to the renderer. The draws the turn did not set are let go, and
@@ -851,8 +851,8 @@ impl DrawList {
         }
         core::mem::swap(&mut self.changes, &mut self.taken_changes);
         self.changes.clear();
-        core::mem::swap(&mut self.stands, &mut self.taken_stands);
-        self.stands.clear();
+        core::mem::swap(&mut self.receivers, &mut self.taken_receivers);
+        self.receivers.clear();
         self.taken_reordered = core::mem::take(&mut self.reordered);
         let turn = self.turn;
         self.turn = self.turn.wrapping_add(1);
@@ -875,7 +875,7 @@ impl DrawList {
             },
             changes: &self.taken_changes,
             reordered: self.taken_reordered,
-            stands: &self.taken_stands,
+            receivers: &self.taken_receivers,
         }
     }
 }

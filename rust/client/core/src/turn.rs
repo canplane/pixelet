@@ -306,7 +306,7 @@ pub struct TurnGrant {
 
 static FRAME: Global<Option<TurnGrant>> = Global::new();
 static FRAMES: Global<Notify> = Global::new();
-static UNSENT_FRAME: Global<bool> = Global::new();
+static NEW_FRAME: Global<bool> = Global::new();
 
 fn frames() -> &'static mut Notify {
     FRAMES.get(Notify::new)
@@ -330,8 +330,8 @@ pub fn world_frame_waiting() -> bool {
     FRAME.get(|| None).is_some()
 }
 
-pub fn take_unsent_frame() -> bool {
-    core::mem::take(UNSENT_FRAME.get(|| false))
+pub fn take_new_frame() -> bool {
+    core::mem::take(NEW_FRAME.get(|| false))
 }
 
 /// The frame runs as one task because its parts must run in order, and
@@ -354,7 +354,7 @@ async fn frame_task() {
         world_frame(grant, edge.deadline_ms(), edge.edge_at());
         edge::tasks_after_frame(paced_ms);
         clipmap::fill_share();
-        UNSENT_FRAME.set(true);
+        NEW_FRAME.set(true);
     }
 }
 
@@ -380,7 +380,7 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
     // assets either of them asked for.
     request::declare(Stream::asset, loader::load_wants());
     pump();
-    let drawn = stage::stage_render(
+    let frame = stage::stage_render(
         Pace {
             refresh_ms,
             paced_ms,
@@ -389,8 +389,8 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
         },
         &write::preview().edits,
     );
-    set_renderer_frame(&drawn);
-    if let Some(interval_ms) = drawn.interval_ms {
+    set_renderer_frame(&frame);
+    if let Some(interval_ms) = frame.interval_ms {
         cmd::ui::turn_pace(&cmd::TurnPace { interval_ms });
     }
     let done = now();

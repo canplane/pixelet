@@ -314,7 +314,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
             idx: b.idx,
             bytes: b.bytes,
             corner: [nearest(corner[0], eye[0]), corner[1]],
-            stood: stood_corner(key, off, eye),
+            box_corner: box_corner(key, off, eye),
             side: PATCH,
             heights: b.heights,
             draws: &b.draws,
@@ -340,25 +340,25 @@ fn patch_place(key: [i64; 2]) -> Position {
 }
 
 /// The corner of patch `key` that its draws' stand is built about
-/// (`patch_stand`), on the lap of X nearest `eye`. It is where the drift
+/// (`patch_box`), on the lap of X nearest `eye`. It is where the drift
 /// `off`, rounded down to a whole cell of the lattice, leaves the corner. The
 /// corner as drawn lies less than a cell short of it. A stand grown a cell
 /// back from it therefore holds the drawn patch at every drift until the
 /// drift crosses into the next cell. Meanwhile the stand stays still, for as
 /// long as the wind takes to carry the field a cell.
-fn stood_corner(key: [i64; 2], off: [f64; 2], eye: V3) -> [f64; 2] {
+fn box_corner(key: [i64; 2], off: [f64; 2], eye: V3) -> [f64; 2] {
     let held = off.map(|v| libm::floor(v / CELL) * CELL);
     let x = key[0] as f64 * PATCH - held[0];
     [nearest(x, eye[0]), key[1] as f64 * PATCH - held[1]]
 }
 
 /// A patch's stand: the box its draws declare they stand within (pxl-render
-/// `ReceiverBox`). The patch's stood corner is `stood` (`stood_corner`), its
+/// `ReceiverBox`). The patch's stood corner is `corner` (`box_corner`), its
 /// side is `side`, its instances lie between the heights `[zlo, zhi]`, and
 /// its models reach `e` past them. The box is grown a cell back from the
 /// corner, so it holds the patch at every drift for which that corner holds.
-fn patch_stand(stood: [f64; 2], side: f64, e: f64, [zlo, zhi]: [f64; 2]) -> ReceiverBox {
-    let [x, y] = stood;
+fn patch_box(corner: [f64; 2], side: f64, e: f64, [zlo, zhi]: [f64; 2]) -> ReceiverBox {
+    let [x, y] = corner;
     ReceiverBox::of(
         [x - CELL - e, y - CELL - e, zlo - e],
         [x + side + e, y + side + e, zhi + e],
@@ -517,8 +517,8 @@ struct PatchDraw<'a> {
     idx: u32,
     bytes: u32,
     corner: [f64; 2],
-    /// The corner its draws stand by (`stood_corner`).
-    stood: [f64; 2],
+    /// The corner its draws stand by (`box_corner`).
+    box_corner: [f64; 2],
     side: f64,
     heights: [f32; 2],
     draws: &'a [[DrawId; 2]],
@@ -615,8 +615,8 @@ fn present_patch(
         // within. It is the patch's box grown by the reach of the group's
         // models at their most scale, and grown a cell back from the stood
         // corner, so it holds the draws at every drift that corner holds
-        // (`stood_corner`).
-        let stand = patch_stand(b.stood, b.side, extent * most, [zlo, zhi]);
+        // (`box_corner`).
+        let receiver = patch_box(b.box_corner, b.side, extent * most, [zlo, zhi]);
         if models > 0 {
             let pipeline = if opacity < 1.0 {
                 PIPELINE_GHOST_DECOR
@@ -633,7 +633,7 @@ fn present_patch(
                 pos,
                 opacity,
                 true,
-                Some(stand),
+                Some(receiver),
             );
         }
         if !impostors.is_empty() {
@@ -647,7 +647,7 @@ fn present_patch(
                 pos,
                 1.0,
                 true,
-                Some(stand),
+                Some(receiver),
             );
         }
     }

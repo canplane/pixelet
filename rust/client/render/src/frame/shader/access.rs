@@ -363,7 +363,7 @@ pub const TOUCHES: &[Touch] = {
     /// its args that a receivers' pass writes as it lists a tile: its dispatch's x, its count
     /// and the slide's x (light_receiver_tiles.wgsl `receiver_tiles_put`,
     /// `receiver_tiles_first`).
-    const STOOD: [u32; 2] = [light::RECEIVER_TILES_LIST, light::RECEIVER_TILES_SLIDE + 1];
+    const RECEIVER_TILES: [u32; 2] = [light::RECEIVER_TILES_LIST, light::RECEIVER_TILES_SLIDE + 1];
     /// The args of a raster's draw, and the faces' asks a pass lays out at `at`
     /// (record_put.wgsl).
     const DRAW_ARGS: [u32; 2] = [0, raster::ARGS_WORDS];
@@ -491,20 +491,20 @@ pub const TOUCHES: &[Touch] = {
         Touch {
             compute: COMPUTE_LIGHT_MARK_WALKED,
             binding: 22,
-            writes: &[STOOD],
-            reads: &[STOOD],
+            writes: &[RECEIVER_TILES],
+            reads: &[RECEIVER_TILES],
         },
         Touch {
             compute: COMPUTE_LIGHT_MARK_DRAWS,
             binding: 22,
-            writes: &[STOOD],
-            reads: &[STOOD],
+            writes: &[RECEIVER_TILES],
+            reads: &[RECEIVER_TILES],
         },
         Touch {
             compute: COMPUTE_RECORD_DRAW,
             binding: 22,
-            writes: &[STOOD],
-            reads: &[STOOD],
+            writes: &[RECEIVER_TILES],
+            reads: &[RECEIVER_TILES],
         },
         // In the node cache's head, the last walk adds to the stops' dispatch and count, and to
         // the frame's asks (queue_last.wgsl).
@@ -1327,13 +1327,13 @@ pub const fn check(f: &Frame, known: &[KnownHazard]) {
     let (found, n) = hazards(f);
     let mut k = 0;
     while k < n {
-        let mut list_of = false;
+        let mut is_known = false;
         let mut m = 0;
         while m < known.len() {
-            list_of |= names(f, &known[m], &found[k]);
+            is_known |= names(f, &known[m], &found[k]);
             m += 1;
         }
-        if !list_of {
+        if !is_known {
             let name = f.steps[found[k].step].name;
             match found[k].rule {
                 1 => refuse_args_bound_writable(name),

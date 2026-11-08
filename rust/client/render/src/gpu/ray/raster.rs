@@ -115,7 +115,7 @@ pub(super) struct LightRaster {
     record_bufs: [u32; 7],
     /// The group of its holes' stops (`LIGHT_RECORD_HITS_GROUP`), made again with the record's
     /// draw group.
-    stops_group: u32,
+    record_hits_group: u32,
 }
 
 impl Raster {
@@ -176,7 +176,7 @@ impl Raster {
     /// eye's words `e`. Where the samples are cast again (`samples_cast`), it clears the args;
     /// otherwise the boxes the last cast left are kept. The groups bind the cast's eye, beams
     /// and node cache, the world query's buffers the faces' asks read, and the rays, at whose
-    /// pixels the holes' faces are put (`stops`).
+    /// pixels the holes' faces are put (`record_hits`).
     pub(super) fn prepare(
         &mut self,
         g: &Gpu,
@@ -364,7 +364,7 @@ impl Raster {
     /// copied out of the node cache's head first (`hits`). Then, in one pass timed in `span`,
     /// the stops are written into their entries, the faces they opened are asked, and each
     /// stop's face word is put at its pixel off its entry.
-    pub(super) fn stops(&self, ctx: &mut RenderContext, node_cache: u32, span: GpuSpanName) {
+    pub(super) fn record_hits(&self, ctx: &mut RenderContext, node_cache: u32, span: GpuSpanName) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         g.copy_buf(
             encoder,
@@ -516,7 +516,7 @@ impl Raster {
         for id in [
             s.group,
             s.record_group,
-            s.stops_group,
+            s.record_hits_group,
             s.visibility_view,
             s.visibility_array,
             s.visibility,
@@ -638,13 +638,13 @@ impl Raster {
             buf,
             &rest,
         );
-        release(s.stops_group);
+        release(s.record_hits_group);
         let rest = [
             buf_entry(0, eye),
             view_entry(3, map),
             buf_entry(HEADER_BINDING, header),
         ];
-        s.stops_group = g.frame_group(
+        s.record_hits_group = g.frame_group(
             self.light_record_hits.layouts[0],
             &LIGHT_RECORD_HITS_BINDS,
             buf,
@@ -653,7 +653,7 @@ impl Raster {
         s.record_bufs = bound;
     }
 
-    /// Records the light's holes' stops after the light's queue, as `stops` does the eye's.
+    /// Records the light's holes' stops after the light's queue, as `record_hits` does the eye's.
     /// Their dispatch is copied out of the node cache's head, then a pass timed in `span`
     /// writes them into their entries (record_hits.wgsl over record_hits.light.wgsl). The
     /// light's next draw takes them. The light's slots read no face word, so no face is asked
@@ -665,7 +665,7 @@ impl Raster {
         span: GpuSpanName,
     ) {
         let s = &self.light;
-        if s.stops_group == 0 {
+        if s.record_hits_group == 0 {
             return;
         }
         let (g, encoder) = (ctx.g, ctx.encoder);
@@ -676,7 +676,7 @@ impl Raster {
             word_bytes(3),
         );
         let pass = g.compute_pass(encoder, ctx.stamp(span).pass());
-        g.set_bind_group(pass, 0, s.stops_group, &[]);
+        g.set_bind_group(pass, 0, s.record_hits_group, &[]);
         g.set_pipeline(pass, self.light_record_hits.id);
         g.dispatch_indirect(pass, s.hits, sequence::LIGHT_RECORD_HITS.at());
         g.end(pass);

@@ -96,7 +96,7 @@ pub fn ghost() -> Ghost {
     };
     let erase = ui == Tool::Eraser;
     let scattered_ghost = hover
-        .scattered_decor()
+        .prop()
         .filter(|_| matches!(ui, Tool::Pointer | Tool::Eraser))
         .and_then(|s| {
             let (m, decor) = (s.meta, Asset::of(u32::from(s.id)).decor()?);

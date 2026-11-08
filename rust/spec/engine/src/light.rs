@@ -240,30 +240,30 @@ impl Light {
     }
 
     /// Whether box tile `tile`, of a map `size` texels a side, keeps what a cast left in it when
-    /// the box slid to its corner from `was`, with the eye's zooms `range` now and the cast's
-    /// `range_was` before. It does where the tile lay in the box under `was` too, and its band
-    /// there under `range_was` is its band here under `range` (`band`). A tile's slots answer
-    /// only its band's cells, so a tile whose band neither the slide nor the zooms moved answers
-    /// as before. This is the one rule of what a slide and a step of the eye's zooms keep
-    /// (pxl-render light_slide.wgsl).
+    /// the box slid to its corner from `last_corner`, with the eye's zooms `range` now and the
+    /// cast's `last_range` before. It does where the tile lay in the box under `last_corner` too,
+    /// and its band there under `last_range` is its band here under `range` (`band`). A tile's
+    /// slots answer only its band's cells, so a tile whose band neither the slide nor the zooms
+    /// moved answers as before. This is the one rule of what a slide and a step of the eye's
+    /// zooms keep (pxl-render light_slide.wgsl).
     pub fn keeps(
         &self,
         size: u32,
-        [range, range_was]: [[Zoom; 2]; 2],
+        [range, last_range]: [[Zoom; 2]; 2],
         tile: [u32; 2],
-        was: [i32; 2],
+        last_corner: [i32; 2],
     ) -> bool {
         let (n, t) = (tiles(size) as i32, TILE as i32);
         let from = [
-            tile[0] as i32 + self.corner[0].wrapping_sub(was[0]) / t,
-            tile[1] as i32 + self.corner[1].wrapping_sub(was[1]) / t,
+            tile[0] as i32 + self.corner[0].wrapping_sub(last_corner[0]) / t,
+            tile[1] as i32 + self.corner[1].wrapping_sub(last_corner[1]) / t,
         ];
         let here = [tile[0] as i32, tile[1] as i32];
         from[0] >= 0
             && from[1] >= 0
             && from[0] < n
             && from[1] < n
-            && self.band(size, range_was, from) == self.band(size, range, here)
+            && self.band(size, last_range, from) == self.band(size, range, here)
     }
 
     /// Whether the rays of box tile `tile`, of a map `size` texels a side, asking at its band
@@ -548,10 +548,10 @@ pub const HEADER_SAMPLES_ACROSS: usize = HEADER_CELLS + 3;
 pub const HEADER_READS: usize = HEADER_CELLS + 4;
 pub const HEADER_TILES: usize = HEADER_CELLS + 5;
 pub const HEADER_HANDS: usize = HEADER_CELLS + 6;
-/// What a cast keeps for the next (`kept_at`).
+/// What a cast keeps for the next (`carry_at`).
 pub const HEADER_CARRY: usize = HEADER_CELLS + 7;
 pub const HEADER_BEAM_ACROSS: usize = HEADER_CELLS + 8;
-/// Each list's marks (`list_marks_at`), then each list (`listed_at`), a word each in the
+/// Each list's marks (`list_marks_at`), then each list (`list_cnt_at`), a word each in the
 /// lists' order (`LIST_CORNERS`).
 pub const HEADER_MARKS: usize = HEADER_CELLS + 9;
 pub const HEADER_LISTS: usize = HEADER_MARKS + LISTS as usize;
@@ -965,7 +965,7 @@ impl Light {
     /// eye's draw writes for a voxel in view (`cast::asset_box`; pxl-render record_draw.wgsl
     /// `record_draw_cs`, which stands it as it writes it), on which every pixel that took that
     /// voxel hit (visible.wgsl `visible_cell`); a walked pixel's hit, as a box of one point
-    /// (light_mark.wgsl); and the box a host's draw stands within (gpu/draw.rs `Stand`,
+    /// (light_mark.wgsl); and the box a host's draw stands within (gpu/draw.rs `ReceiverBox`,
     /// light_mark_draws.wgsl). A placed decor asks the reach of the box its ball stands in and
     /// stands on its footprint alone (`corner_tiles`).
     pub fn box_tiles(
@@ -1033,7 +1033,7 @@ impl Light {
 /// read list's words instead name the cast in which the world's receivers were last stood
 /// afresh (`HEADER_WORLD`): a tile stood on, by the world's receivers or a drawn one, and a
 /// tile read, stay listed in every cast after it until they are stood afresh again, each cast
-/// adding what it stands on and what that reads (`kept_at`). The passes that cast tiles take
+/// adding what it stands on and what that reads (`carry_at`). The passes that cast tiles take
 /// their threads from the first three lists (pxl-render light_list.wgsl `light_item`):
 /// `LIST_ACROSS` workgroups of `LIST_LANES` to a row, an entry taking its side's square of
 /// them; the propagation takes one thread for each stood tile.
@@ -1095,8 +1095,8 @@ pub const fn corner_states_at(size: u32) -> u32 {
 /// light_slide.wgsl). `READS_FROM` is the number of the first cast whose reads hold where a
 /// cast that owed a slide stood no receiver and so ran none. It is set by the one thread that
 /// lists a cast's first stood tile, where the slide last ran before the last cast that owed
-/// one (`HEADER_SLIDE_CAST`; light_receiver_tiles.wgsl `stood_first`). The reads' epoch is the
-/// later of it and `HEADER_EPOCH` (`reads_epoch`).
+/// one (`HEADER_SLIDE_CAST`; light_receiver_tiles.wgsl `receiver_tiles_first`). The reads'
+/// epoch is the later of it and `HEADER_EPOCH` (`reads_epoch`).
 pub const fn slide_at(size: u32) -> u32 {
     corner_states_at(size) + beam_across(size) * beam_across(size) * ray::STATE_WORDS
 }
@@ -1106,7 +1106,7 @@ pub const READS_FROM: u32 = 1;
 /// Past them, what a cast keeps for the next until the world's receivers are stood afresh
 /// (`HEADER_WORLD`), copied out once its propagation is done and back in as the next cast
 /// begins (pxl-render gpu/ray/cast.rs): the stood list's first `RECEIVER_TILES_CARRY` argument
-/// words, then the read list's count (`KEPT_READ`). The count kept is the number of stood
+/// words, then the read list's count (`CARRY_READ`). The count kept is the number of stood
 /// tiles the casts before propagated, so a cast propagates only those stood after them
 /// (light_propagate.wgsl); it is none where they are stood afresh.
 pub const fn carry_at(size: u32) -> u32 {
@@ -1142,7 +1142,7 @@ pub const fn buffer_words(size: u32) -> u32 {
 /// tiles' workgroups across, once a tile is stood, set by the stood list's first entry, and
 /// down where the cast owes a slide, set by the host, so a cast that owes one and stands
 /// nothing slides nothing (`READS_FROM`). The first `RECEIVER_TILES_CARRY` words are kept
-/// from cast to cast until the world's receivers are stood afresh (`kept_at`); the host sets
+/// from cast to cast until the world's receivers are stood afresh (`carry_at`); the host sets
 /// the rest each cast.
 pub const RECEIVER_TILES_LIST: u32 = 0;
 pub const RECEIVER_TILES_CNT: u32 = 3;
@@ -1165,12 +1165,12 @@ pub const fn reads_epoch(epoch: u32, reads_from: u32) -> u32 {
 /// four (`ARGS_LAY`), a draw's, `ARGS_PASSES` in all, and each list's count (`ARGS_COUNTS`).
 /// A cast starts with none: `LIST_ACROSS` workgroups to a row and no rows, no list holding
 /// anything. A tile claimed as the cast's to cast (pxl-render light_propagate.wgsl) opens the
-/// rows that what it lists takes (`listed_at`); a cast that claims none, as where the
+/// rows that what it lists takes (`list_cnt_at`); a cast that claims none, as where the
 /// receivers moved only within the tiles already cast, casts none. The lay draws six vertices
 /// and one instance for each tile read (light_propagate.wgsl). So a cast whose receivers stand
 /// on nothing claims, lays and draws no tile. Past `ARGS_WORDS`, which a cast writes, lie the
 /// lists' marks, which last from cast to cast (`args_words`). The lay's instances are the read
-/// list's count, kept from cast to cast with the list (`KEPT_READ`) and set once the tiles
+/// list's count, kept from cast to cast with the list (`CARRY_READ`) and set once the tiles
 /// wanted are listed (light_propagate.wgsl `light_damage_cs`). The passes that write these
 /// read no count of theirs here: the drawn receivers' dispatch is a buffer of its own
 /// (`DRAWS_DISPATCH_WORDS`).

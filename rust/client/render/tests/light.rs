@@ -87,7 +87,7 @@ struct SlotCase {
     range: [Zoom; 2],
     /// `None` makes the cast the first of its epoch, where every tile read is claimed. `Some(k)`
     /// puts it later in its epoch, where about one tile in `k` is claimed.
-    list_of: Option<u32>,
+    one_in: Option<u32>,
 }
 
 /// The node, the asset and the axis of the sample whose words begin at word `k` of the list.
@@ -128,7 +128,7 @@ fn hand_light_cs_answers_as_the_rust() {
                 [1300, -900],
             ),
             range: [8, FINEST],
-            list_of: None,
+            one_in: None,
         },
         SlotCase {
             name: "reaching about the ground, the sky between",
@@ -141,7 +141,7 @@ fn hand_light_cs_answers_as_the_rust() {
                 [-77, 4093],
             ),
             range: [8, FINEST],
-            list_of: None,
+            one_in: None,
         },
         SlotCase {
             name: "short of the ground, the sky about every band's edge",
@@ -154,7 +154,7 @@ fn hand_light_cs_answers_as_the_rust() {
                 [1300, -900],
             ),
             range: [8, FINEST],
-            list_of: None,
+            one_in: None,
         },
         SlotCase {
             name: "tiles claimed within the epoch",
@@ -167,7 +167,7 @@ fn hand_light_cs_answers_as_the_rust() {
                 [1296, -904],
             ),
             range: [10, FINEST],
-            list_of: Some(3),
+            one_in: Some(3),
         },
     ];
     for c in &cases {
@@ -189,7 +189,7 @@ fn hand_light_cs_answers_as_the_rust() {
             [1300, -900],
         ),
         range: [8, FINEST],
-        list_of: Some(2),
+        one_in: Some(2),
     };
     run_slots(&gpu, &pipe, zero.world(), &c, &mut tally, &mut kinds);
     kinds.hold(&[
@@ -360,7 +360,7 @@ fn run_slots(
     for j in 0..tiles {
         for i in 0..tiles {
             let t = j * tiles + i;
-            let (claimed, word) = match c.list_of {
+            let (claimed, word) = match c.one_in {
                 Some(every) => {
                     let claimed = (i + 2 * j).is_multiple_of(every) || i == 0 || j == tiles - 1;
                     (claimed, if claimed { CAST } else { CAST - 1 })
@@ -410,7 +410,7 @@ fn run_slots(
     eye_words[eye::RANGE + 1] = c.range[1];
     let mut header = vec![0u32; light::HEADER_WORDS];
     header[light::HEADER_CAST] = CAST;
-    header[light::HEADER_EPOCH] = if c.list_of.is_some() { CAST - 3 } else { CAST };
+    header[light::HEADER_EPOCH] = if c.one_in.is_some() { CAST - 3 } else { CAST };
     for (k, v) in light::header_layout(SIZE) {
         header[k] = v;
     }
@@ -620,10 +620,10 @@ fn run_slots(
     // The slots listed for their walk must be those the Rust walks, each listed once.
     let listed_alike = had.len() == had_set.len() && had_set == walked;
     tally.compare(
-        &format!("{name}: the slots list_of, as a set"),
+        &format!("{name}: the slots listed, as a set"),
         &[u32::from(true)],
         &[u32::from(listed_alike)],
-        |_| format!("{} list_of, {} to walk", had.len(), walked.len()),
+        |_| format!("{} listed, {} to walk", had.len(), walked.len()),
     );
     let walked_n = walked.len() as u32;
     eprintln!(
@@ -1197,11 +1197,11 @@ fn run_marks(
     let out_receiver_tiles = gpu.read(&receiver_tiles_buf);
     let cnt = out_receiver_tiles[light::RECEIVER_TILES_CNT as usize] as usize;
     let at = light::list_cnt_at(SIZE, light::LIST_RECEIVERS) as usize;
-    let list_of: Vec<[i32; 2]> = out[at + 1..at + 1 + cnt.min((n * n) as usize)]
+    let entries: Vec<[i32; 2]> = out[at + 1..at + 1 + cnt.min((n * n) as usize)]
         .iter()
         .map(|&w| [(w & 0xffff) as i32, (w >> 16) as i32])
         .collect();
-    let got: BTreeSet<[i32; 2]> = list_of.iter().copied().collect();
+    let got: BTreeSet<[i32; 2]> = entries.iter().copied().collect();
     let name = c.name;
     let case = |what: &str| {
         format!(
@@ -1212,10 +1212,10 @@ fn run_marks(
     // Each tile must be listed once. Every tile the receivers must stand on must be listed, and
     // no tile they may not stand on.
     tally.compare(
-        &case("each list_of once"),
-        &[list_of.len() as u32],
+        &case("each listed once"),
+        &[entries.len() as u32],
         &[got.len() as u32],
-        |_| "list_of".into(),
+        |_| "listed".into(),
     );
     let must: Vec<[i32; 2]> = want.must.iter().copied().collect();
     tally.compare(

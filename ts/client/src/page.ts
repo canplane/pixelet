@@ -1,4 +1,4 @@
-// @pxl/client/app/page.ts
+// @pxl/client/page.ts
 
 /** What the page has and a device does not: the document the views are put
  * into (document.css), and, in a development bundle, the console forwarded

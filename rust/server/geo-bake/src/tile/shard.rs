@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 use crate::cli::Flags;
 use crate::coverage::{src_of, Coverage, Node};
 use crate::pyramid::{
-    coarser_tiles, fold, write_manifest, Absent, Base, Staged, TileSet, FITS, MANIFEST,
+    fold, orphan_tiles, write_manifest, Absent, Base, Staged, TileSet, FITS, MANIFEST,
 };
 use crate::source;
 use crate::util;
@@ -64,9 +64,13 @@ impl Stage {
         self.stage.root.join(format!("{unit}.done"))
     }
 
-    fn write_done(&self, unit: &str, gone: impl Iterator<Item = Quadrant>) -> Result<(), String> {
+    fn write_done(
+        &self,
+        unit: &str,
+        removed: impl Iterator<Item = Quadrant>,
+    ) -> Result<(), String> {
         let path = self.done_path(unit);
-        let names: Vec<String> = gone.map(Quadrant::key).collect();
+        let names: Vec<String> = removed.map(Quadrant::key).collect();
         util::write_atomic(&path, names.join("\n").as_bytes()).map_err(|e| io(&path, e))
     }
 
@@ -104,19 +108,20 @@ impl Stage {
     /// The shards the set holds once what is staged is in: those its
     /// manifest names and those staged whole. None where it holds tiles and
     /// its manifest names no shards, which nothing then knows.
-    fn will_hold(&self) -> Result<Option<BTreeSet<Quadrant>>, String> {
-        let held = match source::manifest(&self.set.root)?
+    fn next_shards(&self) -> Result<Option<BTreeSet<Quadrant>>, String> {
+        let shards = match source::manifest(&self.set.root)?
             .as_ref()
             .map(source::manifest_shards)
             .transpose()?
             .flatten()
         {
-            Some(held) => held,
+            Some(shards) => shards,
             None if self.set.by_zoom()?.is_empty() => BTreeSet::new(),
             None => return Ok(None),
         };
         Ok(Some(
-            held.into_iter()
+            shards
+                .into_iter()
                 .chain(self.whole()?.into_iter().map(shard_tile))
                 .collect(),
         ))
@@ -163,10 +168,10 @@ impl Stage {
         }
         fill(&self.stage)?;
         let made: FnvHashSet<Quadrant> = under(&self.stage)?.into_iter().collect();
-        let held = under(&self.set)?;
+        let base = under(&self.set)?;
         self.write_done(
             &shard.name(),
-            held.into_iter().filter(|p| !made.contains(p)),
+            base.into_iter().filter(|p| !made.contains(p)),
         )
     }
 
@@ -205,11 +210,11 @@ impl Stage {
 
     /// The leaves the whole shards' stages take away.
     fn leaves_removed(&self, whole: &[Node]) -> Result<FnvHashSet<Quadrant>, String> {
-        let mut gone = FnvHashSet::default();
+        let mut removed = FnvHashSet::default();
         for shard in whole {
-            gone.extend(self.read_done(&shard.name())?);
+            removed.extend(self.read_done(&shard.name())?);
         }
-        Ok(gone)
+        Ok(removed)
     }
 
     /// Moves what is staged into the set and takes away what each `.done`
@@ -226,24 +231,24 @@ impl Stage {
             // The set as it will be, refused before anything moves.
             let whole = self.whole()?;
             let tiles: FnvHashSet<Quadrant> = whole.iter().copied().map(shard_tile).collect();
-            let mut gone = self.leaves_removed(&whole)?;
-            gone.extend(self.read_done(FOLD)?);
+            let mut removed = self.leaves_removed(&whole)?;
+            removed.extend(self.read_done(FOLD)?);
             let view = Staged {
                 base: &self.set,
                 stage: &self.stage,
                 leaf: L::LEAF,
                 whole: &tiles,
-                removed: gone,
+                removed,
             };
             let fits = L::check_pool(&view, workers)?;
             // Before anything moves: a commit once begun is finished, never undone, so the set will hold
             // these, and a commit cut short leaves them recorded.
-            if let Some(held) = self.will_hold()? {
+            if let Some(shards) = self.next_shards()? {
                 let path = self.set.root.join(MANIFEST);
                 let mut manifest =
                     source::manifest(&self.set.root)?.unwrap_or_else(|| serde_json::json!({}));
                 manifest["shard"] =
-                    serde_json::json!(held.iter().map(|t| t.key()).collect::<Vec<_>>());
+                    serde_json::json!(shards.iter().map(|t| t.key()).collect::<Vec<_>>());
                 fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
                 util::write_atomic(
                     &path,
@@ -340,7 +345,7 @@ impl Stage {
         fs::create_dir_all(to).map_err(|e| io(to, e))?;
         // A reader starts at the kind's coarsest, so no tile there goes.
         let skip = if pruned {
-            coarser_tiles::<L>(&self.set, L::COARSEST)?
+            orphan_tiles::<L>(&self.set, L::COARSEST)?
         } else {
             FnvHashSet::default()
         };
@@ -433,11 +438,11 @@ impl Run {
     /// The shards the set holds once what is staged is in: what its fold
     /// reads as baked, and nothing else.
     pub fn read_baked(&self) -> Result<Coverage, String> {
-        let held = self.stage.will_hold()?.ok_or(format!(
+        let shards = self.stage.next_shards()?.ok_or(format!(
             "{}: its manifest names no shards it holds, so which are baked is unknown",
             self.stage.set.root.display()
         ))?;
-        Ok(Coverage::of_shards(held))
+        Ok(Coverage::of_shards(shards))
     }
 
     /// Every stage after the leaves; the set's manifest says what it was
@@ -457,14 +462,14 @@ impl Run {
             let mut fields =
                 serde_json::json!({ "source": src_of(reads)?, "format": FORMAT.of(L::LAYER) });
             // The commit wrote them before it moved anything.
-            if let Some(held) = source::manifest(&self.stage.set.root)?
+            if let Some(shards) = source::manifest(&self.stage.set.root)?
                 .as_ref()
                 .map(source::manifest_shards)
                 .transpose()?
                 .flatten()
             {
                 fields["shard"] =
-                    serde_json::json!(held.iter().map(|t| t.key()).collect::<Vec<_>>());
+                    serde_json::json!(shards.iter().map(|t| t.key()).collect::<Vec<_>>());
             }
             write_manifest(&self.stage.set, L::COARSEST, git_sha().as_deref(), fields)?;
         }

@@ -105,7 +105,7 @@ extern "C" fn call(at: u32) -> i32 {
     };
     let mut e: *mut JNIEnv = core::ptr::null_mut();
     // SAFETY: the VM GetJavaVM gave, which lives as long as the process; the
-    // class and method JNI gave in `hold`, the class held.
+    // class `init` holds globally, and the ID of its `call(I)I`.
     unsafe {
         let get = (**vm).GetEnv.or_bug(Errno::ENOSYS);
         if get(vm, (&raw mut e).cast(), JNI_VERSION_1_6) != JNI_OK {
@@ -138,7 +138,7 @@ extern "C" fn notify() {
     };
     let mut e: *mut JNIEnv = core::ptr::null_mut();
     // SAFETY: the VM GetJavaVM gave, which lives as long as the process; the
-    // class and method JNI gave in `hold`, the class held.
+    // class `init` holds globally, and the ID of its `onNotify()V`.
     unsafe {
         let attach = (**vm).AttachCurrentThreadAsDaemon.or_bug(Errno::ENOSYS);
         if attach(vm, (&raw mut e).cast(), core::ptr::null_mut()) != JNI_OK {

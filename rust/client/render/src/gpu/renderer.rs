@@ -319,7 +319,7 @@ impl Seen {
 /// says that the listed draws are drawn as the last frame drew them (`Seen`).
 /// `clouds_damage` says that the cloud sheets in view moved. The rest are the
 /// rays' own: whether the light's receivers are marked afresh, which casts
-/// every pixel (`ungated`, `RaysPass::ungated`), whether the rays cast pixels
+/// every pixel (`unmasked`, `RaysPass::unmasked`), whether the rays cast pixels
 /// (`casts_px`) and whether the light casts (`light_casts`).
 #[derive(Clone, Copy, Debug, Default)]
 struct Reads {
@@ -327,7 +327,7 @@ struct Reads {
     stands: bool,
     lists_same: bool,
     clouds_damage: bool,
-    ungated: bool,
+    unmasked: bool,
     casts_px: bool,
     light_casts: bool,
 }
@@ -353,7 +353,7 @@ impl FramePlan {
         let quiet = r.stands && r.lists_same && !r.clouds_damage;
         FramePlan {
             quiet,
-            masked: r.partial && r.stands && !r.ungated,
+            masked: r.partial && r.stands && !r.unmasked,
             stood: quiet && !r.casts_px && !r.light_casts,
         }
     }
@@ -1282,7 +1282,7 @@ impl Renderer {
             stands,
             lists_same,
             clouds_damage,
-            ungated: self.screen.ungated(),
+            unmasked: self.screen.unmasked(),
             casts_px: self.screen.casts_px(),
             light_casts: self.screen.light_casts(),
         });
@@ -1412,7 +1412,7 @@ impl Renderer {
         }
         // In a frame through the gate, generated decor is drawn only where it
         // meets the tiles the frame claims. It is culled to them now that the
-        // marks are made (`Generator::mask`).
+        // marks are made (`Generator::cull`).
         let generated = if masked {
             let tiles = &self.resolve.tiles;
             self.screen
@@ -1453,7 +1453,7 @@ impl Renderer {
             self.light_tiles.dispatch_rect_args(&mut ctx);
             // Generated decor is drawn into the map only where it meets the
             // tiles the map claims, as the screen's gate draws it
-            // (`Generator::mask`).
+            // (`Generator::cull`).
             let (light_frame, _) = self.shadow.frame_and_map();
             self.screen
                 .cull_decor(&mut ctx, Mask::Light, light_frame, &self.light_tiles);

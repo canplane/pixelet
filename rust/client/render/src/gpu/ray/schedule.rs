@@ -88,7 +88,7 @@ pub(super) struct Plan {
     /// Whether every pixel is cast again though only the claimed tiles moved. The light's cast
     /// needs walked bits that cover every pixel where it marks the world's receivers afresh,
     /// and a gated cast would leave them covering the claimed tiles alone.
-    pub ungated: bool,
+    pub unmasked: bool,
     /// What the light's cast does, or none where it does not cast.
     pub light: Option<Light>,
 }
@@ -96,7 +96,7 @@ pub(super) struct Plan {
 impl Plan {
     const PLAIN: Plan = Plan {
         kind: FrameKind::plain,
-        ungated: false,
+        unmasked: false,
         light: None,
     };
 
@@ -187,7 +187,7 @@ impl Schedule {
         // and a fresh marking reads every pixel's walk. The owed footprints read every pixel's
         // walk too, as the pixels the walked bits leave out still owe theirs. Where the walked
         // bits would cover the claimed tiles alone, because the last pixels' cast or this
-        // frame's is gated, every pixel is cast again now (`ungated`), so the bits cover every
+        // frame's is gated, every pixel is cast again now (`unmasked`), so the bits cover every
         // pixel. The marking then follows the bits alone (`walked_whole`): it starts afresh
         // where they cover every pixel, and is added to the marks already made otherwise, the
         // light and the box being as they were.
@@ -196,12 +196,12 @@ impl Schedule {
         } else {
             !self.walked_whole
         };
-        let ungated = light_on && (!held || slid || footprint_owed) && partial;
-        if ungated && kind == FrameKind::standing {
+        let unmasked = light_on && (!held || slid || footprint_owed) && partial;
+        if unmasked && kind == FrameKind::standing {
             kind = FrameKind::px;
         }
         let casts = casts_px(kind);
-        let walked_whole = !partial || ungated;
+        let walked_whole = !partial || unmasked;
         let moved = LightMoved::ALL
             .into_iter()
             .filter(|m| match m {
@@ -245,11 +245,11 @@ impl Schedule {
             }
         });
         if casts {
-            self.walked_whole = !(r.partial && kind == FrameKind::px && !ungated);
+            self.walked_whole = !(r.partial && kind == FrameKind::px && !unmasked);
         }
         self.plan = Plan {
             kind,
-            ungated,
+            unmasked,
             light,
         };
         self.plan

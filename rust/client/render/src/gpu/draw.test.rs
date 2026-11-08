@@ -186,12 +186,12 @@ fn a_draw_set_as_it_was_is_no_change() {
     turn(&mut d, box_at, None);
     let l = d.take();
     assert!(l.changes.is_empty() && !l.reordered);
-    assert_eq!(l.stands, &[box_at]);
+    assert_eq!(l.receivers, &[box_at]);
     let moved = ReceiverBox::of([-1.0, 5.0, 0.0], [1.0, 6.0, 3.0]);
     turn(&mut d, moved, None);
     let l = d.take();
     assert!(l.changes.is_empty(), "a stand is no draw's");
-    assert_eq!(l.stands, &[moved], "a stand moved");
+    assert_eq!(l.receivers, &[moved], "a stand moved");
     turn(&mut d, box_at, Some(0.0));
     let l = d.take();
     assert_eq!(l.changes.len(), 1);
@@ -311,13 +311,13 @@ fn every_lit_draw_stands_its_box() {
         );
     }
     d.draw_as(&ids[n], PIPELINE_MARKER, 0, 0, 0, Position::NONE, None);
-    assert_eq!(d.stands.len(), light::RECEIVER_BOXES);
-    let last = d.stands[light::RECEIVER_BOXES - 1];
+    assert_eq!(d.receivers.len(), light::RECEIVER_BOXES);
+    let last = d.receivers[light::RECEIVER_BOXES - 1];
     assert_eq!(
         last,
         ReceiverBox([[unit(light::RECEIVER_BOXES - 1); 3], [unit(n); 3]])
     );
-    for (k, b) in d.stands[..light::RECEIVER_BOXES - 1].iter().enumerate() {
+    for (k, b) in d.receivers[..light::RECEIVER_BOXES - 1].iter().enumerate() {
         assert_eq!(*b, ReceiverBox([[unit(k); 3], [unit(k + 1); 3]]));
     }
 }

@@ -158,7 +158,7 @@ impl DecorQuery for Generating<'_, '_> {
         self.tally.add("surface: columns walked", true);
         assert!(
             f.ends != End::Lacks,
-            "a list_of pair's brick holds its leaves' columns"
+            "a listed pair's brick holds its leaves' columns"
         );
         self.tally
             .add("surface: nothing fills", f.ends == End::Miss);
@@ -226,7 +226,7 @@ impl DecorQuery for Generating<'_, '_> {
         let (f, _) = clip::step(&self.w, Lookup::NONE, LEAF_CELL_ZOOM, g);
         assert!(
             f.here() && f.from() >= cell_zoom,
-            "a list_of pair's brick holds its leaf columns, at its clip level or finer"
+            "a listed pair's brick holds its leaf columns, at its clip level or finer"
         );
         self.tally.add(
             "finest: a finer clip level holds the leaf column",
@@ -3128,7 +3128,7 @@ fn hand_frames_answer_as_the_rust() {
             &mut claims,
         );
         let row = |s: u32| built.clipmap[s as usize];
-        let inheritance: Vec<([i32; 4], Zoom)> = (0..9u32)
+        let bricks: Vec<([i32; 4], Zoom)> = (0..9u32)
             .map(|k| {
                 let cell_zoom = 22 + k % 3;
                 let s = (cell_zoom - FIRST_CELL_ZOOM) * ENTRIES + k * 7;
@@ -3141,9 +3141,9 @@ fn hand_frames_answer_as_the_rust() {
         step(
             &mut model,
             Frame {
-                name: "bricks inheritance",
+                name: "bricks handed",
                 every: false,
-                boxes: inheritance,
+                boxes: bricks,
                 placed_decor: false,
                 ..first.clone()
             },

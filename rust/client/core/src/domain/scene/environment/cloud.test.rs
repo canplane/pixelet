@@ -33,7 +33,7 @@ fn cloud_steps_unchanged() {
 /// the list unchanged, its record and uniform as they were. Its stand stays
 /// too, until the drift crosses into the next cell, and then only the stand
 /// moves. At every time the stand holds the patch as drawn, moved by the
-/// drift (`stood_corner`, `patch_stand`).
+/// drift (`box_corner`, `patch_box`).
 #[test]
 fn only_time_moving_moves_no_draw() {
     let _g = sys::serial();
@@ -51,7 +51,7 @@ fn only_time_moving_moves_no_draw() {
     let (mut list, id) = (DrawList::default(), DrawId::default());
     let mut turn = |time: f64| {
         let off = drift(time);
-        let stand = patch_stand(stood_corner(key, off, eye), PATCH, e, heights);
+        let receiver = patch_box(box_corner(key, off, eye), PATCH, e, heights);
         let corner = [
             key[0] as f64 * PATCH - off[0],
             key[1] as f64 * PATCH - off[1],
@@ -62,8 +62,8 @@ fn only_time_moving_moves_no_draw() {
         );
         for k in 0..3 {
             assert!(
-                stand.0[0][k] <= drawn.0[0][k] && drawn.0[1][k] <= stand.0[1][k],
-                "{time} s: {stand:?} holds {drawn:?}"
+                receiver.0[0][k] <= drawn.0[0][k] && drawn.0[1][k] <= receiver.0[1][k],
+                "{time} s: {receiver:?} holds {drawn:?}"
             );
         }
         list.draw_instances(
@@ -76,10 +76,10 @@ fn only_time_moving_moves_no_draw() {
             patch_place(key),
             1.0,
             true,
-            Some(stand),
+            Some(receiver),
         );
         let l = list.take();
-        (l.changes.len(), l.stands.to_vec())
+        (l.changes.len(), l.receivers.to_vec())
     };
     let (changes, first) = turn(0.0);
     assert_eq!(changes, 1, "drawn first");
@@ -88,7 +88,7 @@ fn only_time_moving_moves_no_draw() {
     for time in [0.29, 1.0, 10.0, 100.0, 170.0] {
         assert_eq!(turn(time), (0, first.clone()), "{time} s");
     }
-    let (changes, stands) = turn(200.0);
+    let (changes, receivers) = turn(200.0);
     assert_eq!(changes, 0, "the record stands");
-    assert_ne!(stands, first, "past a cell the stand moves");
+    assert_ne!(receivers, first, "past a cell the stand moves");
 }

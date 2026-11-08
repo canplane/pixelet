@@ -4,7 +4,7 @@
 // (pxl-engine record.rs, the third of its writers). The holes' queue keeps every stop, whatever
 // it stopped on (queue_walk.wgsl, queue_last.wgsl `keep_hit`; pxl-engine `beam::HIT_WORDS`).
 // This pass runs once the queue is done, a thread a stop. Its dispatch reads the stops' count
-// from a copy of the node cache's head (`node_cache::HITS_ARGS`; gpu/ray/raster.rs `stops`),
+// from a copy of the node cache's head (`node_cache::HITS_ARGS`; gpu/ray/raster.rs `record_hits`),
 // because the pass binds the node cache writable and a dispatch cannot take its arguments from
 // a buffer it writes.
 //

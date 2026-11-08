@@ -39,7 +39,6 @@ pub struct RaysPass {
     /// claimed tiles' words and uniform.
     group: u32,
     bindings: [u32; 4],
-    rays_eye: [u32; 2],
     /// The claimed tiles' words and uniform (`Resolve::tiles`), and the
     /// number of tiles on the screen. The pixels' cast casts the claimed
     /// tiles alone, and the screen pass draws a quad for every tile, an
@@ -68,7 +67,6 @@ impl RaysPass {
             pipeline,
             group: 0,
             bindings: [0; 4],
-            rays_eye: [0; 2],
             tiles: ((0, 0), 0),
             lit: Vec::new(),
             looks,
@@ -100,7 +98,6 @@ impl RaysPass {
     /// the tiles changed, or when `set_lit` released it. No group is made
     /// until the lit entries and every buffer exist.
     fn regroup(&mut self, g: &Gpu, [rays, eye]: [u32; 2]) {
-        self.rays_eye = [rays, eye];
         let ((changed_at, tiles), _) = self.tiles;
         let bindings = [rays, eye, changed_at, tiles];
         if bindings == self.bindings || self.lit.is_empty() || bindings.contains(&0) {

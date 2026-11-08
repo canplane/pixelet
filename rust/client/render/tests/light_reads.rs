@@ -53,17 +53,22 @@ fn eye_words(l: &Light) -> Vec<u32> {
     w
 }
 
-/// The light's head for cast `current` in `epoch`. `was` is the box's corner in the cast
-/// before, and `last_range` holds the eye's zooms that cast was cast under.
-fn header_words(current: u32, epoch: u32, was: [i32; 2], last_range: [Zoom; 2]) -> Vec<u32> {
+/// The light's head for cast `current` in `epoch`. `last_corner` is the box's corner in the
+/// cast before, and `last_range` holds the eye's zooms that cast was cast under.
+fn header_words(
+    current: u32,
+    epoch: u32,
+    last_corner: [i32; 2],
+    last_range: [Zoom; 2],
+) -> Vec<u32> {
     let mut header = vec![0u32; light::HEADER_WORDS];
     header[light::HEADER_CAST] = current;
     header[light::HEADER_EPOCH] = epoch;
     for (k, v) in light::header_layout(SIZE) {
         header[k] = v;
     }
-    header[light::HEADER_LAST_CORNER] = was[0] as u32;
-    header[light::HEADER_LAST_CORNER + 1] = was[1] as u32;
+    header[light::HEADER_LAST_CORNER] = last_corner[0] as u32;
+    header[light::HEADER_LAST_CORNER + 1] = last_corner[1] as u32;
     header[light::HEADER_LAST_RANGE] = last_range[0];
     header[light::HEADER_LAST_RANGE + 1] = last_range[1];
     header
@@ -74,10 +79,16 @@ fn run(
     p: &wgpu::ComputePipeline,
     l: &Light,
     list: &[u32],
-    was: [i32; 2],
-    range_was: [Zoom; 2],
+    last_corner: [i32; 2],
+    last_range: [Zoom; 2],
 ) -> Vec<u32> {
-    run_with(gpu, p, l, list, header_words(40, 37, was, range_was))
+    run_with(
+        gpu,
+        p,
+        l,
+        list,
+        header_words(40, 37, last_corner, last_range),
+    )
 }
 
 fn run_with(
@@ -148,12 +159,12 @@ fn hand_slide_forgets_what_moved() {
             step,
         ),
     ];
-    for (n, (name, was, corner, range_was)) in slides.into_iter().enumerate() {
+    for (n, (name, last_corner, corner, last_range)) in slides.into_iter().enumerate() {
         let l = box_of([0.3, 0.2, -0.93], 0.0625, 0.75, corner);
         let list: Vec<u32> = (0..light::list_words(SIZE))
             .map(|k| mix(k, n as u32) | 1)
             .collect();
-        let have = run(&gpu, &p, &l, &list, was, range_was);
+        let have = run(&gpu, &p, &l, &list, last_corner, last_range);
         // The slide's first thread must write this cast's number as the last cast the slide ran
         // in (`light::SLIDE_RAN`).
         let ran = (light::slide_at(SIZE) + light::SLIDE_RAN) as usize;
@@ -168,7 +179,7 @@ fn hand_slide_forgets_what_moved() {
         let (mut case_kept, mut case_off) = (0, 0);
         for j in 0..N {
             for i in 0..N {
-                if l.keeps(SIZE, [RANGE, range_was], [i, j], was) {
+                if l.keeps(SIZE, [RANGE, last_range], [i, j], last_corner) {
                     case_kept += 1;
                     continue;
                 }
@@ -176,8 +187,8 @@ fn hand_slide_forgets_what_moved() {
                 got.push(have[(reads + j * N + i) as usize]);
                 case_off += 1;
                 let d = [
-                    corner[0].wrapping_sub(was[0]) / t,
-                    corner[1].wrapping_sub(was[1]) / t,
+                    corner[0].wrapping_sub(last_corner[0]) / t,
+                    corner[1].wrapping_sub(last_corner[1]) / t,
                 ];
                 let from = [i as i32 + d[0], j as i32 + d[1]];
                 if (0..N as i32).contains(&from[0]) && (0..N as i32).contains(&from[1]) {
@@ -483,11 +494,11 @@ fn hand_propagation_reads_what_stands() {
         let out_args = gpu.read(&args_buf);
         let read_cnt = out_args[(light::ARGS_COUNTS + light::LIST_READS) as usize] as usize;
         let at = light::list_cnt_at(SIZE, light::LIST_READS) as usize;
-        let list_of: Vec<[i32; 2]> = out[at + 1..at + 1 + read_cnt]
+        let entries: Vec<[i32; 2]> = out[at + 1..at + 1 + read_cnt]
             .iter()
             .map(|&w| [(w & 0xffff) as i32, (w >> 16) as i32])
             .collect();
-        let got: std::collections::BTreeSet<[i32; 2]> = list_of.iter().copied().collect();
+        let got: std::collections::BTreeSet<[i32; 2]> = entries.iter().copied().collect();
         // A decor's pixel may lie anywhere on its model, from a tenth of a unit under its base,
         // where a pine sinks, up to the tallest decor's height. It reads a texel off along its
         // normal, then a tap and the neighbor it filters in each way (pxl-render shadow.wgsl
@@ -525,7 +536,7 @@ fn hand_propagation_reads_what_stands() {
             &format!("{case}: the tiles read, each once, the lay's instances as many"),
             &[read_cnt as u32, read_cnt as u32],
             &[got.len() as u32, lay],
-            |k| ["list_of once", "the lay's instances"][k].into(),
+            |k| ["listed once", "the lay's instances"][k].into(),
         );
         tally.compare(
             &format!("{case}: the tiles read, none missing, none past"),
@@ -549,7 +560,7 @@ fn hand_propagation_reads_what_stands() {
             format!("tile {} {}", k as u32 % N, k as u32 / N)
         });
         tally.compare(
-            &format!("{case}: the claimed list_of"),
+            &format!("{case}: the claimed listed"),
             &[claimed],
             &[out_args[(light::ARGS_COUNTS + light::LIST_DAMAGE) as usize]],
             |_| "the claimed list's count".into(),

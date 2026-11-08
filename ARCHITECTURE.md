@@ -159,10 +159,10 @@ shard read stays.
 Writes go up as **edits**: each batch the writes `<key, id, ext>` the tree took,
 in the order made (`object.EDITS`), sent a while after the first and no more
 than a turn allows. The objects' source applies them to its shards and rebuilds
-the top's rows of the shards they reach; the core writes no shard and no top.
-It folds as the tree does, a rule the client's `OBJECT` backend holds again
-(`ts/client/src/sys/fs/object_tree.ts`), held to the store by one
-record both read (`rust/spec/golden/object/top.tsv`). Which source answers, the
+the top's rows of the shards they reach; the core writes no shard and no top. It
+folds as the tree does, a rule the client's `OBJECT` backend holds again
+(`ts/client/src/service/sys/fs/object_tree.ts`), held to the store by one record
+both read (`rust/spec/golden/object/top.tsv`). Which source answers, the
 client's own database or a server, the core cannot tell.
 
 **Places** are tiles named like the ground tiles under them, each holding what
@@ -674,25 +674,25 @@ over        markers → debug lines → character surfaces
 ```
 
 The calls are WebGPU's, written through xpute's encoder (`gpu/api.rs`) into one
-stream, which xpute's GPU runtime runs: the page's on WebGPU after the turn returns
-(`@xpute/gpu` `WebGpu`, `ts/client/src/service/gpu.ts`), the device app's on
-wgpu around each turn (`xpute-gpu/runtime/native.rs`). A frame where nothing it
-reads moved submits nothing, and the canvas keeps its frame.
+stream, which xpute's GPU runtime runs: the page's on WebGPU after the turn
+returns (`@xpute/gpu` `WebGpu`, `ts/client/src/service/platform/gpu.ts`), the
+device app's on wgpu around each turn (`xpute-gpu/runtime/native.rs`). A frame
+where nothing it reads moved submits nothing, and the canvas keeps its frame.
 
-The renderer is made before its first frame, in three steps
-(`gpu/renderer.rs` `render_frame`, `gpu/pipeline.rs` `Pipelines`), so that
-making it never holds the GPU process's main thread, which every frame the
-browser presents waits on: every shader's module, a few a turn, within
-`stream::MODULE_BYTES` and the stream's room; then the renderer, each of its
-pipelines made by WebGPU's async call, which compiles off that thread, its
-completion a ticket's word (xpute `RENDER_PIPELINE_ASYNC`,
-`COMPUTE_PIPELINE_ASYNC`); then no frame until every word says it is made. A
-frame turn before then draws nothing and asks for the next, and the core's
-snapshot carries how much is made (`renderer_progress`), which the bar over the
-world shows until the view is first drawn (`ui/cover.ts`). Every pipeline it draws with
-is asked for in the second step, the cast's and the ground's included; one
-asked for once it draws is a bug (`EBUSY`). The device app's wgpu has no async
-call, and its GPU runtime answers the same op at once by the same ticket.
+The renderer is made before its first frame, in three steps (`gpu/renderer.rs`
+`render_frame`, `gpu/pipeline.rs` `Pipelines`), so that making it never holds
+the GPU process's main thread, which every frame the browser presents waits on:
+every shader's module, a few a turn, within `stream::MODULE_BYTES` and the
+stream's room; then the renderer, each of its pipelines made by WebGPU's async
+call, which compiles off that thread, its completion a ticket's word (xpute
+`RENDER_PIPELINE_ASYNC`, `COMPUTE_PIPELINE_ASYNC`); then no frame until every
+word says it is made. A frame turn before then draws nothing and asks for the
+next, and the core's snapshot carries how much is made (`renderer_progress`),
+which the bar over the world shows until the view is first drawn
+(`ui/cover/cover.ts`). Every pipeline it draws with is asked for in the second
+step, the cast's and the ground's included; one asked for once it draws is a bug
+(`EBUSY`). The device app's wgpu has no async call, and its GPU runtime answers
+the same op at once by the same ticket.
 
 A frame where only the draws the core bounds moved is drawn again in the
 screen's **tiles** alone (`gpu/tiles.rs` `Tiles`), by the shape the light's cast
@@ -813,7 +813,7 @@ world:
   (`ts/client/src/ui/`);
 - the **services**, what answers the core's app ABI and what each platform
   gives — the surfaces, the position, storage, files, text and the server
-  (`ts/client/src/service/`, `port/`, `sys/`, `origin/`);
+  (`ts/client/src/service/`);
 - the **runtime**, xpute's, the core's VMM, booted once by the client
   (`ts/client/src/runtime/boot.ts`) and kept for the rest of it
   (`ts/client/src/runtime/`).
@@ -830,19 +830,19 @@ and the rest, where the boot stands, the GPU's and the network's states, the
 kept settings, a canvas lent and the profiler's readings, as
 `runtime/page.ts` says.
 
-The core's crate is its artifact, in xpute's core form for its target
-(`pxl-core lib.rs`, one `xpute_core::core!` over its machine,
-`rust/client/core/machine.json`): the core implements xpute's entry
-(`door.rs` `run`), and the form hands it what it hands any core
-(`xpute_core::entry` `BootInfo`: where a form sharing its process says what
-stopped it, `stop_hook`, and its GPU runtime's answer, `admit`). On wasm32 it is
-the WebAssembly module the page runs (`ts/client/src/service/core.ts`);
-anywhere else it is the library linked into the device app under xpute's native
-runtime (`xpute_gpu::native_core!` over `xpute_runtime::native_core!`), which runs
-each call on the core's own thread, since a turn that draws through wgpu
-outgrows React Native's JavaScript stack, runs the GPU's runtime around each turn,
-and exports it to the app through xpute's native module (`@xpute/native`). What
-the app calls besides xpute's names is the transport's decoder (`unpack.rs`,
+The core's crate is its artifact, in xpute's core form for its target (`pxl-core
+lib.rs`, one `xpute_core::core!` over its machine,
+`rust/client/core/machine.json`): the core implements xpute's entry (`door.rs`
+`run`), and the form hands it what it hands any core (`xpute_core::entry`
+`BootInfo`: where a form sharing its process says what stopped it, `stop_hook`,
+and its GPU runtime's answer, `admit`). On wasm32 it is the WebAssembly module
+the page runs (`ts/client/src/service/platform/core.ts`); anywhere else it is
+the library linked into the device app under xpute's native runtime
+(`xpute_gpu::native_core!` over `xpute_runtime::native_core!`), which runs each
+call on the core's own thread, since a turn that draws through wgpu outgrows
+React Native's JavaScript stack, runs the GPU's runtime around each turn, and
+exports it to the app through xpute's native module (`@xpute/native`). What the
+app calls besides xpute's names is the transport's decoder (`unpack.rs`,
 `rust/client/core/include/pxl_native.h`). Outside either form the core runs
 under `cargo test`.
 
@@ -852,28 +852,29 @@ the file device for its files and posts its report, during a turn and taken
 after it returns, so each is done before the next turn begins
 (`sys/io/runtime.rs`), and the runtime raises the core's interrupts: its life
 (`SYS_ATTACH`, `SYS_SUSPEND`, `SYS_RESUME`, `door/life.rs`) and a GPU answered
-(`GPU_READY`), and completes its opens and closes (`FS_OPENAT`, `FS_CLOSE`). **The app's ABI** is what the
-app defines, two protocols: the UI's, `rust/client/core/ui.json`, its
-intents and what the platform's services give, the surfaces, the sensors, the
-data and each turn's grant; and the text device's, `text.json` beside it, the
-platform's text, which the runtime answers beside the core. Both sides' readers,
-writers and bindings are generated from each (`door/cmd.spec.rs`, the enums the
-domain reads apart in `domain/cmd.spec.rs`, and `ts/client/src/abi/cmd.spec.ts`;
-`sys/io/text.spec.rs`, `ts/client/src/abi/text.spec.ts`), each packet an XTP tree, xpute's relocatable
-binary tree. The UI's exports are what the UI and the services submit; its
-imports are what the core posts unasked, the snapshot, the view's azimuth and
-scale apart from it (`UI_VIEW`) and the sensors it starts and stops. The text
-device's are the calls for a text's lines and its pixels (`TEXT_LAYOUT`,
-`TEXT_RASTER`), answered before the call returns (`sys/io/text.rs`,
-`ts/client/src/runtime/start.ts`, `port/text.ts`): a page's runtime through the
-module's import, a device's on the JavaScript thread that waits on the turn. A
-command's major is the module it is for (`INPUT`, `SENSOR`, `FS`, `SURFACE`,
-`SETTING`, `SCENE`, `CAMERA`, `PERF`, `EDIT`, `UI`, `TEXT`, `TURN`): the door
-applies each major's in its own file (`door/apply/`), and the client sends each
-from its major's file in `port/`. Beside the two ABIs, only what xpute's form
-hands over is called directly. An answer comes back as a number, read once by
-`answer_of` into a count or one of xpute's `Errno` members; a code no member
-names is the runtime breaking the protocol.
+(`GPU_READY`), and completes its opens and closes (`FS_OPENAT`, `FS_CLOSE`).
+**The app's ABI** is what the app defines, two protocols: the UI's,
+`rust/client/core/ui.json`, its intents and what the platform's services give,
+the surfaces, the sensors, the data and each turn's grant; and the text
+device's, `text.json` beside it, the platform's text, which the runtime answers
+beside the core. Both sides' readers, writers and bindings are generated from
+each (`door/cmd.spec.rs`, the enums the domain reads apart in
+`domain/cmd.spec.rs`, and `ts/client/src/abi/cmd.spec.ts`;
+`sys/io/text.spec.rs`, `ts/client/src/abi/text.spec.ts`), each packet an XTP
+tree, xpute's relocatable binary tree. The UI's exports are what the UI and the
+services submit; its imports are what the core posts unasked, the snapshot, the
+view's azimuth and scale apart from it (`UI_VIEW`) and the sensors it starts and
+stops. The text device's are the calls for a text's lines and its pixels
+(`TEXT_LAYOUT`, `TEXT_RASTER`), answered before the call returns
+(`sys/io/text.rs`, `ts/client/src/runtime/start.ts`, `service/core/text.ts`): a
+page's runtime through the module's import, a device's on the JavaScript thread
+that waits on the turn. A command's major is the module it is for (`INPUT`,
+`SENSOR`, `FS`, `SURFACE`, `SETTING`, `SCENE`, `CAMERA`, `PERF`, `EDIT`, `UI`,
+`TEXT`, `TURN`): the door applies each major's in its own file (`door/apply/`),
+and the client sends each from its major's file in `service/core/`. Beside the
+two ABIs, only what xpute's form hands over is called directly. An answer comes
+back as a number, read once by `answer_of` into a count or one of xpute's
+`Errno` members; a code no member names is the runtime breaking the protocol.
 
 The **client** (`ts/client`) is the TypeScript the app bundles. Its boot
 (`ts/client/src/runtime/boot.ts`) starts the core with `@xpute/runtime`'s
@@ -881,37 +882,37 @@ The **client** (`ts/client`) is the TypeScript the app bundles. Its boot
 core's machine declares it (generated into `abi/machine.spec.ts`), which asks
 for both of xpute's devices, the GPU and the files (`gpu`, `fs`). The config,
 made where the core runs (`runtime/start.ts`), holds what backs the files
-(`sys/fs/namespace.ts` `namespace`), the app ABI's handlers (`ui_imports`),
-what the core places with the UI, the frame pacing and each turn's
-submission (`port/surface.ts` `submit_grant`); `port/core.ts` keeps the
-runtime's link and the generated stubs bound to it (`core`). What else differs
-by platform is a file pair in `ts/client/src/service/`, `<x>.ts` the page's
-beside `<x>.native.ts` the device's, which Metro picks by the platform it
-bundles for (`ts/client/metro.config.ts` `ownPlatform`), with the shapes both
-share in `service/types.ts`: the core's module or none on a device
-(`core.ts`), the GPU xpute grants (`gpu.ts`, `@xpute/gpu` `WebGpu`,
-`NativeGpu`), the sensors, the visibility, storage, text, the network and the
-surfaces; the app's own native module is bound in `service/pxl-platform.ts`.
-What answers the core's files is `ts/client/src/sys/`: their names, versions,
-kept keys and refusals (`sys/fs/`), and its stop report beside. What the app
-ABI's client end carries is `ts/client/src/port/`, a file a major (UI's
-snapshot in `snapshot.ts`, `ui.ts` the UI's way in). The server the client
-reads from, its routes, its published tables and whether the device is online,
-is `ts/client/src/origin/`; the numbers both read, generated from `spec/` or,
-for the states the client reports and the UI shows, written beside it
+(`service/sys/fs/namespace.ts` `namespace`), the app ABI's handlers
+(`ui_imports`), what the core places with the UI, the frame pacing and each
+turn's submission (`service/core/turn.ts` `submit_grant`);
+`service/core/core.ts` keeps the runtime's link and the generated stubs bound to
+it (`core`). What else differs by platform is a file pair in
+`ts/client/src/service/platform/`, `<x>.ts` the page's beside `<x>.native.ts`
+the device's, which Metro picks by the platform it bundles for
+(`ts/client/metro.config.ts` `ownPlatform`), with the shapes both share in
+`platform/types.ts`: the core's module or none on a device (`core.ts`), the GPU
+xpute grants (`gpu.ts`, `@xpute/gpu` `WebGpu`, `NativeGpu`), the sensors, the
+visibility, storage, text, the network and the surfaces; the app's own native
+module is bound in `platform/pxl-platform.ts`. What answers the core's files is
+`ts/client/src/service/sys/`: their names, versions, kept keys and refusals
+(`sys/fs/`), and its stop report and the boot's and the GPU's states beside.
+What the app ABI's client end carries is `ts/client/src/service/core/`, a file a
+major (UI's snapshot in `snapshot.ts`). The server the client reads from, its
+routes, its published tables and whether the device is online, is
+`ts/client/src/service/origin/`; the numbers both read, generated from `spec/`
+or, for the states the client reports and the UI shows, written beside it
 (`abi/state.ts`), are `ts/client/src/abi/`.
 
-The **UI** (`ts/client/src/ui/`) is React over the core's **snapshot**,
-where every control is a command. The snapshot is replaced whole after a turn
-only when what it is made of moved (`ui.rs` `SnapshotInputs`), and carries
-only what the core owns; what is rounded or timed for presentation is the
-UI's. The UI lends the core the surfaces to draw into and computes no
-coordinate, tile or draw; what it needs of the model is generated from the same
-JSON as the Rust. The runtime, `service/`, `sys/`, `port/`, `origin/`, `abi/` and
-the UI are one package, `ts/client`, which one Expo app, `ts/client`, bundles
-for iOS, Android and the page; the UI reaches the core, `sys/` and
-`origin/` through `port/` alone, and `port/` reaches the core through the
-generated stubs alone.
+The **UI** (`ts/client/src/ui/`) is React over the core's **snapshot**, where
+every control is a command. The snapshot is replaced whole after a turn only
+when what it is made of moved (`ui.rs` `SnapshotInputs`), and carries only what
+the core owns; what is rounded or timed for presentation is the UI's. The UI
+lends the core the surfaces to draw into and computes no coordinate, tile or
+draw; what it needs of the model is generated from the same JSON as the Rust.
+The runtime, `service/`, `abi/` and the UI are one package, `ts/client`, which
+one Expo app, `ts/client`, bundles for iOS, Android and the page; the UI reaches
+what is below it through `service/` alone, the core through `service/core/`
+alone, and `service/core/` reaches the core through the generated stubs alone.
 
 The stack reads UI and services, core, runtime: the clients outside the VM,
 the unikernel, and its VMM. Both ABIs ride xpute's one pair of rings, the device
@@ -922,8 +923,8 @@ visibility), through `@xpute/runtime`'s TypeScript API.
 
 ```text
   UI         React over the snapshot         ts/client/src/ui/
-  services   the app ABI's client end, what  ts/client/src/service/,
-             each platform gives             port/, sys/, origin/
+  services   the app ABI's client end, what  ts/client/src/service/
+             each platform gives
     │ ▲   the app's ABI, ui.json and text.json: commands submitted and
     ▼ │   completed; imports: the snapshot, a sensor started, the text called for
   core       decides all, owns no device     pxl-core's core!
@@ -934,30 +935,29 @@ visibility), through `@xpute/runtime`'s TypeScript API.
 
 What crosses each edge:
 
-| Edge                                        | Down                                                                                                                                                                                                                                                                                        | Up                                                                                                                                                                                   |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| the UI and services, and core, `port/`      | a command for each control and the input it routes (`INPUT_*`), each turn's grant (`TURN_GRANT`), a sensor's reading, the tile source's part (`SOURCE_DECLARE`, decided in `sys/fs/`), the profiler's reads, the text answered for | the snapshot, replaced whole when it moved, and the events it is told by, a sensor started or stopped among them, the text it calls for (`TEXT_*`), answered before the call returns |
-| core and runtime, xpute's ABI               | opens, reads and writes, the stop report                                                                                                                                                                                                                                                    | a file read whole or changed (`FS_CHANGED`), the core's life and each turn's pacing (`SYS_TURN`), a GPU answered and the surfaces the UI lends (`GPU_SURFACE_*`)                                                                                                                                      |
-| runtime and core, xpute                     | a turn with its deadline, the memory once, the clock and the GPU's admit; the commands on the rings                                                                                                                                                                                            | completions, imports and the GPU stream's records, xpute's stop hook if it stops                                                                                            |
+| Edge                                           | Down                                                                                                                                                                                                                                                                                        | Up                                                                                                                                                                                   |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| the UI and services, and core, `service/core/` | a command for each control and the input it routes (`INPUT_*`), each turn's grant (`TURN_GRANT`), a sensor's reading, the tile source's part (`SOURCE_DECLARE`, decided in `service/sys/fs/`), the profiler's reads, the text answered for | the snapshot, replaced whole when it moved, and the events it is told by, a sensor started or stopped among them, the text it calls for (`TEXT_*`), answered before the call returns |
+| core and runtime, xpute's ABI                  | opens, reads and writes, the stop report                                                                                                                                                                                                                                                    | a file read whole or changed (`FS_CHANGED`), the core's life and each turn's pacing (`SYS_TURN`), a GPU answered and the surfaces the UI lends (`GPU_SURFACE_*`)                                                                                                                                      |
+| runtime and core, xpute                        | a turn with its deadline, the memory once, the clock and the GPU's admit; the commands on the rings                                                                                                                                                                                            | completions, imports and the GPU stream's records, xpute's stop hook if it stops                                                                                            |
 
 ## Reads, and the one request scheduler
 
-A read is a file in xpute's sense
-([xpute's imports and files](./xpute/ARCHITECTURE.md#the-file-device)):
-the core names a root by its number and an object below it by one name,
-and the client binds each root to what answers it, once at boot
-(`ts/client/src/sys/fs/namespace.ts` `namespace`). The roots are
-`spec/client/core/sys/io/file.json` `root`'s: the bakes and the assets
-read-only, `STORAGE` holding the core's own files, each a **storage file** on
-the device, and `OBJECT` the placed objects' source, its shards and their top
-read and its edits written:
+A read is a file in xpute's sense ([xpute's imports and
+files](./xpute/ARCHITECTURE.md#the-file-device)): the core names a root by its
+number and an object below it by one name, and the client binds each root to
+what answers it, once at boot (`ts/client/src/service/sys/fs/namespace.ts`
+`namespace`). The roots are `spec/client/core/sys/io/file.json` `root`'s: the
+bakes and the assets read-only, `STORAGE` holding the core's own files, each a
+**storage file** on the device, and `OBJECT` the placed objects' source, its
+shards and their top read and its edits written:
 
-| Root               | The core's path                                 | What the client binds it to                                                                               |
-| ------------------ | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| each bake, by kind | a tile's quadkey; the Earth's `sphere`          | the edge's `/tile/<kind>/<version>/<name>`, under the version the declaration gives it (`sys/fs/tile.ts`) |
-| `ASSET`            | a load's id, in decimal                         | the shipped asset that id is, by its hash (`sys/fs/asset.ts`)                                             |
-| `STORAGE`          | a storage file's id, in decimal (`storage`)     | the platform's storage, under a key it picks (`sys/fs/storage.ts`)                                        |
-| `OBJECT`           | a shard's quadkey; `object.TOP`; `object.EDITS` | for now a loopback over the place's database, which applies the edits (`sys/fs/object.ts`)                |
+| Root               | The core's path                                 | What the client binds it to                                                                                       |
+| ------------------ | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| each bake, by kind | a tile's quadkey; the Earth's `sphere`          | the edge's `/tile/<kind>/<version>/<name>`, under the version the declaration gives it (`service/sys/fs/tile.ts`) |
+| `ASSET`            | a load's id, in decimal                         | the shipped asset that id is, by its hash (`service/sys/fs/asset.ts`)                                             |
+| `STORAGE`          | a storage file's id, in decimal (`storage`)     | the platform's storage, under a key it picks (`service/sys/fs/storage.ts`)                                        |
+| `OBJECT`           | a shard's quadkey; `object.TOP`; `object.EDITS` | for now a loopback over the place's database, which applies the edits (`service/sys/fs/object.ts`)                |
 
 So the core names no URL, version, storage key or platform: a path is a
 name, and where it leads is the client's. The client reads the declaration
@@ -991,15 +991,15 @@ Models and textures spend the same credits (`sys/io/loader.rs`), and so do the
 objects' shards, wanted as a layer's tiles are.
 
 `STORAGE` holds the settings, the one storage file, opened by its id
-(`sys/io/file.rs` `open_storage`). A file is bytes to the core; a backend over
-a platform that keeps text keeps their base64url (`sys/fs/storage.ts`), and
-`OBJECT`'s database keeps the bytes. A storage file begins with its slot's
+(`sys/io/file.rs` `open_storage`). A file is bytes to the core; a backend over a
+platform that keeps text keeps their base64url (`service/sys/fs/storage.ts`),
+and `OBJECT`'s database keeps the bytes. A storage file begins with its slot's
 format byte, and each file below `OBJECT` with its own (`file.json` `format`);
-the core refuses one of another format, one its backend cannot read as bytes,
-or one that does not decode, as a driver refuses a superblock it does
-not know, and never writes over it. It names each refused file in the snapshot
-(`refused_files`); the client sets it aside, empties it and says so
-(xpute's `FS_CHANGED`, `sys/fs/refusal.ts`), and the core reads it again. A shard
+the core refuses one of another format, one its backend cannot read as bytes, or
+one that does not decode, as a driver refuses a superblock it does not know, and
+never writes over it. It names each refused file in the snapshot
+(`refused_files`); the client sets it aside, empties it and says so (xpute's
+`FS_CHANGED`, `service/sys/fs/refusal.ts`), and the core reads it again. A shard
 whose file is refused stays unread meanwhile, and no edit stands in it.
 
 ## When something goes wrong
@@ -1009,12 +1009,12 @@ detail and the source location (`sys/io/failure.rs` `Exit`): a failed fetch is
 asked again later, a failed parse is final, and neither touches what is drawn,
 until the server stays down past its last wait and the reads are given up, when
 the page shows the blue screen `WORLD_UNAVAILABLE`
-(`ts/client/src/ui/cover.ts` `coverOf`). A broken invariant is a **bug**,
-and it ends the core (`xpute_core::stop`, its record `SYS_ABORT`), and
-the UI shows the blue screen with the errno and place as its
-stop code, as it does for a GPU lost for good: a page's module traps, and on a
-device xpute's stop hook says why and the core's thread stops there, the
-process going on. Memory pressure is neither; the memory map says how each range meets it.
+(`ts/client/src/ui/cover/cover.ts` `coverOf`). A broken invariant is a **bug**,
+and it ends the core (`xpute_core::stop`, its record `SYS_ABORT`), and the UI
+shows the blue screen with the errno and place as its stop code, as it does for
+a GPU lost for good: a page's module traps, and on a device xpute's stop hook
+says why and the core's thread stops there, the process going on. Memory
+pressure is neither; the memory map says how each range meets it.
 
 ## The turn
 
@@ -1044,20 +1044,19 @@ turn.
 ```
 
 Before each turn the client submits one `TURN_GRANT` on the core's rings, the
-turn's pacing and the reads allowed out (`ts/client/src/port/surface.ts`
-`submit_grant`), and the runtime then its `SYS_TURN`, the clock; a turn rung
-for a command alone carries neither and draws nothing. The view each frame is
-drawn at is the world surface's layout box, in CSS pixels
-(`GPU_SURFACE_RESIZE`), and a
-pointer is placed on it from its top left (`INPUT_POINTER`). The runtime's turns are paced to the display by
-the frame pacing the client boots it with (`ts/client/src/runtime/start.ts`,
-`@xpute/runtime/sched/frame_pacing.ts`), its numbers the core's
-(`spec/client/core/sys/sched/pacing.json`), at no less than the interval the
-core last asked (`TURN_PACE`); an input makes the turns after it
-interactive (`ts/client/src/port/input.ts` `send_input`) and hurries none past
-that interval. The tick's phases are
-the core's (`spec/client/core/sys/sched/phase.json`), and `visible` holds back
-the content's share (`sys/sched/tick.rs` `POLICY`). What moves the eye runs in
+turn's pacing and the reads allowed out (`ts/client/src/service/core/turn.ts`
+`submit_grant`), and the runtime then its `SYS_TURN`, the clock; a turn rung for
+a command alone carries neither and draws nothing. The view each frame is drawn
+at is the world surface's layout box, in CSS pixels (`GPU_SURFACE_RESIZE`), and
+a pointer is placed on it from its top left (`INPUT_POINTER`). The runtime's
+turns are paced to the display by the frame pacing the client boots it with
+(`ts/client/src/runtime/start.ts`, `@xpute/runtime/sched/frame_pacing.ts`), its
+numbers the core's (`spec/client/core/sys/sched/pacing.json`), at no less than
+the interval the core last asked (`TURN_PACE`); an input makes the turns after
+it interactive (`ts/client/src/service/core/input.ts` `send_input`) and hurries
+none past that interval. The tick's phases are the core's
+(`spec/client/core/sys/sched/phase.json`), and `visible` holds back the
+content's share (`sys/sched/tick.rs` `POLICY`). What moves the eye runs in
 `interaction`, and after it what the pointer is over where the eye now stands,
 the edit it would make and its ghost; what the eye then sees, demand and the
 scene, in `visible`; and the later phases hold what the deadline leaves them
@@ -1276,7 +1275,7 @@ The asset ingest takes every file under `asset/content/` into the bucket's form,
 keyed by the SHA-256 of its bytes, so moving a file changes no key, and writes
 the table that numbers each (`spec/spec/asset/ingest.json`, `pxl-tool
 bin/ingest_asset.rs`). The client binds an id to its key
-(`ts/client/src/sys/fs/asset.ts`).
+(`ts/client/src/service/sys/fs/asset.ts`).
 
 The texture pack is one WebP image of every cube's tiles, the file the cube
 kind's definition names (`spec/spec/asset/cube.json` `pack`), and one table of

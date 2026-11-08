@@ -247,7 +247,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
     let uniforms_buf = gpu.buffer(&uniforms, storage);
     let args_buf = gpu.buffer(&args, storage);
     let instances_buf = gpu.buffer(&instances, storage);
-    let masked = gpu.buffer(&vec![u32::MAX; instances.len()], storage);
+    let culled = gpu.buffer(&vec![u32::MAX; instances.len()], storage);
     let culled_args = gpu.buffer(&vec![u32::MAX; args.len()], storage);
     let box_buf = gpu.buffer(&t.claimed, storage);
     let regions_buf = gpu.buffer(&region_words, storage);
@@ -256,7 +256,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
         (0, frame_buf.as_entire_binding()),
         (1, uniforms_buf.as_entire_binding()),
         (3, instances_buf.as_entire_binding()),
-        (4, masked.as_entire_binding()),
+        (4, culled.as_entire_binding()),
         (5, culled_args.as_entire_binding()),
         (6, box_buf.as_entire_binding()),
         (7, regions_buf.as_entire_binding()),
@@ -280,10 +280,10 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
         [CAP.div_ceil(64), 1, 1],
     );
     let got_args = gpu.read(&culled_args);
-    let got = gpu.read(&masked);
+    let got = gpu.read(&culled);
 
     let radius = f64::from(generation::TALLEST + generation::WIDEST);
-    let (mut list_of, mut left, mut near, mut wrong) = (0, 0, 0, Vec::new());
+    let (mut met, mut left, mut near, mut wrong) = (0, 0, 0, Vec::new());
     let mut first = 0u32;
     for (r, &count) in counts.iter().enumerate() {
         let a = r * drawn::ARGS_WORDS as usize;
@@ -301,7 +301,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
         let have: BTreeSet<u32> = got[at..at + n as usize].iter().copied().collect();
         if have.len() != n as usize {
             wrong.push(format!(
-                "region {r}: {n} list_of, {} of them apart",
+                "region {r}: {n} listed, {} of them apart",
                 have.len()
             ));
         }
@@ -320,19 +320,19 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
             let wants = d > 0.0;
             if wants != have.contains(&slot) {
                 wrong.push(format!(
-                    "region {r} slot {slot}: list_of {}, {d:+} from the box",
+                    "region {r} slot {slot}: listed {}, {d:+} from the box",
                     !wants
                 ));
             }
-            list_of += u32::from(wants);
+            met += u32::from(wants);
             left += u32::from(!wants);
         }
         first += count;
     }
-    eprintln!("{total} instances: {list_of} meet the box, {left} past it, {near} within a hair");
+    eprintln!("{total} instances: {met} meet the box, {left} past it, {near} within a hair");
     assert!(
-        list_of > 0 && left > 0,
-        "the case lists all or none: {list_of} {left}"
+        met > 0 && left > 0,
+        "the case lists all or none: {met} {left}"
     );
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }

@@ -109,18 +109,23 @@ pub(super) fn generated_at(
     boxed: bool,
 ) -> Option<(Instance, bool)> {
     let candidate = scatter_at(decor.row, cell)?;
-    let (g, has_footing, generates) =
+    let (prop, has_footing, generates) =
         generation::placement(asked, decor.row, GROUND.leaf_cell_zoom(), &candidate, boxed);
-    has_footing.then(|| (instance(decor, &g), generates))
+    has_footing.then(|| (instance(decor, &prop), generates))
 }
 
-/// The instance of decor standing as `g`. Its box's min corner is at a leaf
+/// The instance of decor standing as `prop`. Its box's min corner is at a leaf
 /// cell's corner, and its base sinks under that corner as the GPU draws it
 /// (`Prop::sink`).
-pub(super) fn instance(decor: &Decor, g: &Prop) -> Instance {
-    let [x, y, z] = g.at;
-    let base = f64::from(z) - f64::from(g.sink) / f64::from(1u32 << FRAC_W);
-    let (at, meta) = decor.stand([f64::from(x), f64::from(y), base], g.variant, g.turn, 1.0);
+pub(super) fn instance(decor: &Decor, prop: &Prop) -> Instance {
+    let [x, y, z] = prop.at;
+    let base = f64::from(z) - f64::from(prop.sink) / f64::from(1u32 << FRAC_W);
+    let (at, meta) = decor.stand(
+        [f64::from(x), f64::from(y), base],
+        prop.variant,
+        prop.turn,
+        1.0,
+    );
     Instance {
         id: decor.val(),
         at,

@@ -529,7 +529,7 @@ pub const RECORD_GROUP: [u32; 24] = [
 /// beam rays' words, the node cache that holds their count and whose drawable entries they
 /// set, and the args of the faces' asks. It does not bind the stops' dispatch: that is copied
 /// out of the node cache, so that no pass reads its count from a buffer it binds writable
-/// (gpu/ray/raster.rs `Raster::stops`).
+/// (gpu/ray/raster.rs `Raster::record_hits`).
 pub const RECORD_HITS_GROUP: [u32; 15] = [
     0,
     COMPUTE,
@@ -672,7 +672,7 @@ pub const ARGS_GROUP: [u32; 15] = [
 /// The group of `decor_cull_cs` and `decor_cull_args_cs` (decor_cull.wgsl): the frame's
 /// words, the regions' uniforms and args, the instances, the gated list and its args, the box
 /// of the claimed tiles, the regions' counts and first slots, and the tiles' uniform.
-pub const MASK_GROUP: [u32; 27] = [
+pub const CULL_GROUP: [u32; 27] = [
     0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE, 4, COMPUTE,
     STORAGE_RW, 5, COMPUTE, STORAGE_RW, 6, COMPUTE, STORAGE, 7, COMPUTE, STORAGE, 31, COMPUTE,
     UNIFORM,
@@ -681,7 +681,7 @@ pub const MASK_GROUP: [u32; 27] = [
 // Each compute group here against what its shader reads, as its declarations take it
 // (build.rs `BINDS`).
 const _: () = assert!(
-    binds(&[COMPUTE_DECOR_CULL, COMPUTE_DECOR_CULL_ARGS], &MASK_GROUP)
+    binds(&[COMPUTE_DECOR_CULL, COMPUTE_DECOR_CULL_ARGS], &CULL_GROUP)
         && binds(&[COMPUTE_GENERATION_MARK], &MARK_GROUP)
         && binds(&[COMPUTE_GENERATION_THIN], &THIN_GROUP)
         && binds(&[COMPUTE_GENERATION], &GENERATE_GROUP)
@@ -698,7 +698,7 @@ const _: () = assert!(
         && floor::holds(&[&CNT_GROUP])
         && floor::holds(&[&COMPACT_GROUP])
         && floor::holds(&[&ARGS_GROUP])
-        && floor::holds(&[&MASK_GROUP]),
+        && floor::holds(&[&CULL_GROUP]),
     "a decor pass's group binds past WebGPU's floor"
 );
 
@@ -766,8 +766,8 @@ pub const BUFFERS: &[Buffer] = &[
     buffer("light_tiles.rect_args", ARGS),
     buffer("generator.list", ARGS),
     buffer("generator.args", ARGS),
-    buffer("generator.masked[Screen].args", ARGS),
-    buffer("generator.masked[Light].args", ARGS),
+    buffer("generator.culled[Screen].args", ARGS),
+    buffer("generator.culled[Light].args", ARGS),
     buffer("beams", LIST),
 ];
 
@@ -925,12 +925,12 @@ pub const GENERATION_ARGS_OF_BINDS: Group = Group {
     layout: &ARGS_GROUP,
     binds: &[bind(2, GENERATION_ARGS)],
 };
-pub const MASK_SCREEN_BINDS: Group = Group {
-    layout: &MASK_GROUP,
+pub const CULL_SCREEN_BINDS: Group = Group {
+    layout: &CULL_GROUP,
     binds: &[bind(2, GENERATION_ARGS), bind(5, CULLED_SCREEN_ARGS)],
 };
-pub const MASK_LIGHT_BINDS: Group = Group {
-    layout: &MASK_GROUP,
+pub const CULL_LIGHT_BINDS: Group = Group {
+    layout: &CULL_GROUP,
     binds: &[bind(2, GENERATION_ARGS), bind(5, CULLED_LIGHT_ARGS)],
 };
 pub const LIGHT_RECT_BINDS: Group = Group {

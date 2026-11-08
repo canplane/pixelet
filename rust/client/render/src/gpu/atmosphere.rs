@@ -200,7 +200,7 @@ const EXPOSURE_READS: [Range<usize>; 3] =
 
 /// Where each light's layout words and its reach flag lie (atmos_medium.wgsl `view_layout`,
 /// `reaches`), the sun's first.
-const LAID: [usize; 2] = [SUN_LAYOUT, MOON_LAYOUT];
+const LAYOUTS: [usize; 2] = [SUN_LAYOUT, MOON_LAYOUT];
 const REACHES: [usize; 2] = [SUN_REACHES, MOON_REACHES];
 
 /// A quantity at which a table is held until it moves a share of its measured step: a
@@ -708,7 +708,7 @@ impl Atmosphere {
                 0,
                 bytes(&[k as f32, flag(height), flag(eye), 0.0]),
             );
-            self.words[LAID[k]..LAID[k] + 3].copy_from_slice(&laid(alt));
+            self.words[LAYOUTS[k]..LAYOUTS[k] + 3].copy_from_slice(&view_layout(alt));
         }
         let ground = self.words[LAND_ALT_KM];
         let e = &mut self.exposure_read;
@@ -886,7 +886,7 @@ fn alt_sample(alt: f32) -> f32 {
 /// equator (pxl-spec procedural.rs `height_u_per_m`). So an eye high over the world spends no
 /// slice on the empty air under it, whatever latitude a unit is measured at. The far end is
 /// how far a ray from the eye runs, past the horizon, to where it leaves the air.
-fn laid(alt: f32) -> [f32; 3] {
+fn view_layout(alt: f32) -> [f32; 3] {
     let (b, t) = (model::BOTTOM_RADIUS_KM, model::TOP_RADIUS_KM);
     let alt = f64::from(alt);
     let r = b + alt.max(0.001);

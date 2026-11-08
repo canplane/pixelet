@@ -16,7 +16,7 @@
 
 import { round } from "@xpute/kit/math/scalar.ts";
 
-import { install } from "../../client/src/app/remote-console.ts";
+import { install } from "../../client/src/remote-console.ts";
 import { entries, make, type Pipeline } from "./pipeline.ts";
 
 /** The experiments' shaders, which `?src=` names by their path under

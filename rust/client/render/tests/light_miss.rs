@@ -917,7 +917,7 @@ fn an_edited_brick_is_never_answered_as_it_was() {
         EYE,
         LEAF_CELL_ZOOM,
         [90, 90],
-        "about the eye, its leaf bricks inheritance between the frames",
+        "about the eye, its leaf bricks handed between the frames",
     );
 }
 
@@ -928,7 +928,7 @@ fn an_edited_coarse_brick_is_never_answered_as_it_was() {
         EYE,
         LEAF_CELL_ZOOM - 1,
         [90, 90],
-        "about the eye, a coarser level's bricks inheritance between the frames",
+        "about the eye, a coarser level's bricks handed between the frames",
     );
 }
 
@@ -940,7 +940,7 @@ fn an_edited_brick_over_the_seam_is_never_answered_as_it_was() {
         EYE_SEAM,
         LEAF_CELL_ZOOM,
         [4, 90],
-        "on the seam, the leaf bricks either side of it inheritance between the frames",
+        "on the seam, the leaf bricks either side of it handed between the frames",
     );
 }
 
@@ -1147,7 +1147,7 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
     // (gpu/ray/cast.rs).
     let g = [EYE[0] + 90, EYE[1] + 90];
     let bricks_case = Case {
-        name: "bricks of the leaf clip level inheritance",
+        name: "bricks of the leaf clip level handed",
         origin: over(g, 40),
         dir: [0.3, 0.2, -0.93],
         side: 1.0,
@@ -1189,7 +1189,7 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
     // A brick of a clip level over the leaf's is handed in. A band finer than that level reads
     // it only where the leaf level's bricks are not present.
     let over_case = Case {
-        name: "a brick over the leaf's inheritance",
+        name: "a brick over the leaf's handed",
         ..bricks_case
     };
     let row_of = |cell_zoom: Zoom, q: [i32; 2]| {

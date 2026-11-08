@@ -153,7 +153,7 @@ fn boot(b: BootInfo) {
 /// first turn boots from what the runtime's form hands it (`boot_info`),
 /// which includes the stop hook and the GPU runtime's admission.
 pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
-    use crate::turn::{take_unsent_frame, world_frame_waiting};
+    use crate::turn::{take_new_frame, world_frame_waiting};
     if section::fixed().is_none() {
         boot(boot_info());
     }
@@ -198,7 +198,7 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     // The UI is posted to at most once a turn, and only when a frame was
     // drawn, a UI command was applied, or a snapshot was put off.
     let due = core::mem::take(&mut s.snapshot_due);
-    if take_unsent_frame() || due || core::mem::take(&mut s.snapshot_pending) {
+    if take_new_frame() || due || core::mem::take(&mut s.snapshot_pending) {
         post_ui(s);
     }
     // The request scheduler's events, in order. A start or a stop goes to

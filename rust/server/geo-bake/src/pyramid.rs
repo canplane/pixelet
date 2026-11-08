@@ -334,7 +334,7 @@ pub fn fold<L: Base>(
 
 /// Every tile its parent marks as no tile (`Base::occupancy`), under
 /// `top`: what a reader never asks for.
-pub(crate) fn coarser_tiles<L: Base>(
+pub(crate) fn orphan_tiles<L: Base>(
     set: &TileSet,
     top: Zoom,
 ) -> Result<FnvHashSet<Quadrant>, String> {
@@ -363,7 +363,7 @@ pub(crate) fn coarser_tiles<L: Base>(
 pub fn write_manifest(
     set: &TileSet,
     top: Zoom,
-    built: Option<&str>,
+    git_sha: Option<&str>,
     layer: serde_json::Value,
 ) -> Result<(), String> {
     // The tiles, a zoom at a time; the set is its tiles and the manifest.
@@ -383,7 +383,7 @@ pub fn write_manifest(
     if let (Some(out), serde_json::Value::Object(layer)) = (fields.as_object_mut(), layer) {
         out.extend(layer);
     }
-    util::write_manifest(&set.root.join(MANIFEST), built, fields)
+    util::write_manifest(&set.root.join(MANIFEST), git_sha, fields)
 }
 
 /// The parents whose `sources` read any of `below`, sorted by row. A

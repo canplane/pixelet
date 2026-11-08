@@ -98,12 +98,12 @@ fn run() -> Result<(), String> {
                     1000,
                     |[x, y]| format!("{x}:{y}"),
                     || Ok((connect(&src, &raster)?, separation::source::Walk::default())),
-                    |(db, held), tile| {
-                        held.keep_around(tile);
+                    |(db, walk), tile| {
+                        walk.keep_around(tile);
                         let reader = &mut separation::Reader {
                             client: &mut db.client,
                             repo: &db.repo,
-                            store: held,
+                            store: walk,
                         };
                         let terrain = bake_leaf(reader, tile)?;
                         let at = Quadrant::new(LEAF_ZOOM, tile);

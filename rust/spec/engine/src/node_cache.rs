@@ -46,7 +46,7 @@
 //! another pair of zooms, so it is kept at the pair asked. A walk asking for a node at any
 //! pair takes the slot that keeps it at that pair, or one that keeps it as a cell its query
 //! would answer there too: asked at the cell's zoom or coarser, or the cell whole
-//! (`holds_for`; pxl-render ask.wgsl `ask_node`, `kept_at`, cached.wgsl `node_answer`). The
+//! (`holds_for`; pxl-render ask.wgsl `ask_node`, `holds_node`, cached.wgsl `node_answer`). The
 //! two kinds of key never both hold a node for one pair: where the query answers a node by its
 //! cell at a pair, no split's rule answers it there. A walk that finds a cell whole that is
 //! kept already but not whole sets it whole (ask.wgsl `holds_cell`); the entry's stamp leaves

@@ -64,7 +64,7 @@ fn the_host_declares_each_render_pass_of_an_indirect_draw() {
 #[test]
 fn the_frame_holds_the_hazards_known_names() {
     let found = found(&FRAME);
-    let list_of: Vec<String> = found
+    let lines: Vec<String> = found
         .iter()
         .map(|(rule, step, with)| format!("rule {rule}: {step} with {with}"))
         .collect();
@@ -72,7 +72,7 @@ fn the_frame_holds_the_hazards_known_names() {
         found.len(),
         KNOWN.len(),
         "the frame's hazards:\n{}",
-        list_of.join("\n")
+        lines.join("\n")
     );
 }
 

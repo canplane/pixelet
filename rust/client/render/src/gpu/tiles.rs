@@ -361,13 +361,13 @@ impl Tiles {
     }
 
     /// Prepares the pass `desc` that draws the target these tiles cover, through its gate
-    /// where `gating`. It returns the pass and the number the gate writes into the claimed
+    /// where `masked`. It returns the pass and the number the gate writes into the claimed
     /// tiles' stencil, which counts from 1 and comes round after `MASK_NUMBERS`. The pass
     /// keeps the stencil the last gated frame left, except when the numbers come round, and
     /// then it clears the stencil. The number is none where the target is drawn whole, which
     /// clears the stencil.
-    pub fn mask(&mut self, desc: PassDesc, gating: bool) -> (PassDesc, Option<u32>) {
-        let number = gating.then(|| self.mask_number % MASK_NUMBERS + 1);
+    pub fn mask(&mut self, desc: PassDesc, masked: bool) -> (PassDesc, Option<u32>) {
+        let number = masked.then(|| self.mask_number % MASK_NUMBERS + 1);
         self.mask_number = number.unwrap_or(0);
         let desc = if number.is_some_and(|n| n > 1) {
             desc.load_stencil()

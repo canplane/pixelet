@@ -139,7 +139,7 @@ impl Hover {
         }
     }
 
-    pub fn scattered_decor(&self) -> Option<Instance> {
+    pub fn prop(&self) -> Option<Instance> {
         match self.target {
             Some(Target::Prop(_, i)) => Some(i),
             _ => None,

@@ -108,7 +108,7 @@ pub const PX: Step = Step::dispatch_off(
     (CAST_TILES, 0),
 );
 /// The eye's holes' stops into the node cache's drawable entries (gpu/ray/raster.rs
-/// `Raster::stops`). Their dispatch is first copied out of the node cache's head, because the
+/// `Raster::record_hits`). Their dispatch is first copied out of the node cache's head, because the
 /// stops bind the node cache writable and a call cannot read its count from a buffer a group
 /// set for it binds writable (access.rs rule 1).
 pub const RECORD_HITS_DISPATCH: Step = Step::copy(
@@ -213,8 +213,8 @@ pub const LIGHT_SLOTS: Step = Step::dispatch_off(
     (LIGHT_ARGS, light::ARGS_SLOT),
 );
 /// The light's holes' stops into the node cache's drawable entries (gpu/ray/raster.rs
-/// `Raster::light_stops`). Their dispatch is first copied out of the node cache's head, as the
-/// eye's is.
+/// `Raster::light_record_hits`). Their dispatch is first copied out of the node cache's head,
+/// as the eye's is.
 pub const LIGHT_RECORD_HITS_DISPATCH: Step = Step::copy(
     "light_record_hits_dispatch",
     IN_LIGHT_HOLES,
@@ -599,18 +599,18 @@ pub const FRAME: Frame = Frame {
         OPEN_GENERATION_RECTS,
         // The cull of the decor generated last frame, which is drawn through the screen's
         // gate: it opens the regions' args, then lists each region's instances in the claimed
-        // tiles (gpu/generator.rs `Generator::mask`).
+        // tiles (gpu/generator.rs `Generator::cull`).
         Step::dispatch(
             "decor_cull_args",
             IN_SCREEN_MASK,
             COMPUTE_DECOR_CULL_ARGS,
-            &[&MASK_SCREEN_BINDS],
+            &[&CULL_SCREEN_BINDS],
         ),
         Step::dispatch(
             "decor_cull",
             IN_SCREEN_MASK,
             COMPUTE_DECOR_CULL,
-            &[&MASK_SCREEN_BINDS],
+            &[&CULL_SCREEN_BINDS],
         ),
         // The box the light's tiles' marks cover, written as the args of the light's gate's
         // draw (gpu/tiles.rs `dispatch_rect_args`).
@@ -630,13 +630,13 @@ pub const FRAME: Frame = Frame {
             "decor_cull_args_light",
             IN_LIGHT_MASK,
             COMPUTE_DECOR_CULL_ARGS,
-            &[&MASK_LIGHT_BINDS],
+            &[&CULL_LIGHT_BINDS],
         ),
         Step::dispatch(
             "decor_cull_light",
             IN_LIGHT_MASK,
             COMPUTE_DECOR_CULL,
-            &[&MASK_LIGHT_BINDS],
+            &[&CULL_LIGHT_BINDS],
         ),
         // The eye's cast: its beam rays, their cells, its samples, the draw of its record, and
         // its pixels. First the run of its beam rays (gpu/ray/cast.rs `walk_run`).
@@ -977,7 +977,7 @@ const fn persistent_marks(which: u32, owner: &'static str) -> Persistent {
         range: at(LIGHT_ARGS, first, words),
         owner,
         by: &[],
-        invalidation: "a tile's mark is the number of the cast that last list_of it, stale under \
+        invalidation: "a tile's mark is the number of the cast that last listed it, stale under \
             any other cast's (light_enlist.wgsl `enlist_in`)",
     }
 }
@@ -991,7 +991,7 @@ const fn persistent_world_marks(which: u32, owner: &'static str) -> Persistent {
         owner,
         by: &[],
         invalidation: "a tile's mark is the number of the cast the world's receivers were last \
-            stood afresh in, stale under any other: every tile stood on or read is list_of again \
+            stood afresh in, stale under any other: every tile stood on or read is listed again \
             where they are (light_receiver_tiles.wgsl `stand`, light_propagate.wgsl `read_tile`)",
     }
 }

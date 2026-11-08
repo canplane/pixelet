@@ -99,7 +99,7 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> FrameReport {
     // no large eye position cancels in f32.
     let (view_proj, rot) = v.eye_frame();
     let lists = draw_list().take();
-    let stands = lists.stands;
+    let receivers = lists.receivers;
     let models = model::models();
     // Each decor variant takes the slot of its draw group (pxl-content
     // generation.rs `first_group`).
@@ -193,7 +193,7 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> FrameReport {
             shards: cast::shards(),
             objects: cast::objects(),
             decor: gpu::frame(),
-            stands,
+            receivers,
             ray_counts: settings.ray_counts,
         }),
         text: marker::text_raster,

@@ -173,7 +173,7 @@ fn arrived(a: Arrival) {
             });
             request_world_tick();
         }
-        Err(ended) => settle(key, ended, Some(phases)),
+        Err(exit) => settle(key, exit, Some(phases)),
     }
 }
 

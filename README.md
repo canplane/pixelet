@@ -65,13 +65,13 @@ Expo app (`ts/client`) is built for iOS, Android and the page. In a browser tab
 the core is one WebAssembly module, which the page runs on the browser's
 WebGPU; on a device it is the library linked into the app, whose GPU calls
 xpute's runtime runs on wgpu. The app bundles the **client** (`ts/client`): the
-runtime (`src/runtime/`); the services, what each platform gives, the core,
-storage, text, the network, the sensors and the surfaces (`src/service/`, a
-page's `x.ts` beside a device's `x.native.ts`), what answers the core's
-imports, its files among them (`src/sys/`), what the app's ABI carries
-(`src/port/`) and the server it reads from (`src/origin/`); the numbers both
-read and the boot (`src/abi/`); and the **UI** (`src/ui/`), the client outside
-the VM, which changes the world only by commands the core applies.
+runtime (`src/runtime/`); the services (`src/service/`), what each platform
+gives, the core, storage, text, the network, the sensors and the surfaces
+(`platform/`, a page's `x.ts` beside a device's `x.native.ts`), what answers
+the core's imports, its files among them (`sys/`), what the app's ABI carries
+(`core/`) and the server it reads from (`origin/`); the numbers both read and
+the boot (`src/abi/`); and the **UI** (`src/ui/`), the client outside the VM,
+which changes the world only by commands the core applies.
 
 Almost nothing is computed at request time. Tiles and assets are served from a
 bucket under names that never come to mean something else, a tile under its
@@ -229,16 +229,16 @@ language by where a thing runs.
 ```
 .
 ├── ts/                  # The TypeScript workspace (pnpm)
-│   ├── client/          #   the client the app bundles
+│   ├── client/          #   the Expo app: iOS, Android and the page
 │   │   └── src/
 │   │       ├── runtime/  #     xpute's runtime, mounted
-│   │       ├── service/ #     what each platform gives
-│   │       ├── sys/      #     what answers the core's imports
-│   │       ├── port/     #     what the app's ABI carries
-│   │       ├── origin/   #     the server the client reads from
-│   │       ├── abi/      #     the numbers both read, and the boot
+│   │       ├── service/  #     the services
+│   │       │   ├── core/     #   what the app's ABI carries
+│   │       │   ├── sys/      #   what answers the core's imports
+│   │       │   ├── origin/   #   the server the client reads from
+│   │       │   └── platform/ #   what each platform gives
+│   │       ├── abi/      #     the numbers both read
 │   │       └── ui/       #     the UI
-│   ├── app/             #   the Expo app: iOS, Android and the page
 │   ├── server/edge/     #   the Cloudflare Worker that serves it all
 │   └── build/           #   what the bundlers read the workspace through
 ├── rust/                # The Rust workspace (Cargo)

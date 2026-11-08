@@ -74,7 +74,7 @@ pub(super) struct GroundBuffers {
     /// The bricks this frame handed, by cells' zoom and place. Decor's
     /// generation reads them as the bricks filled this frame
     /// (gpu/generator.rs `Generation::fresh`).
-    pub(super) inheritance: List<(Zoom, [i32; 2]), { FRAME_BRICKS as usize }>,
+    pub(super) bricks: List<(Zoom, [i32; 2]), { FRAME_BRICKS as usize }>,
 }
 
 impl GroundBuffers {
@@ -146,15 +146,14 @@ impl RaysPass {
                 palette_indices: g.buf(PALETTE_BYTES as u32, storage),
                 pool: pool_buf(g, child_groups),
                 child_groups,
-                inheritance: List::new(),
+                bricks: List::new(),
             }
         });
         gb.grow(g, ground.pool);
-        gb.inheritance.clear();
+        gb.bricks.clear();
         (ground.upload)(&mut |q| {
             let records = 2 + q.tree.len();
-            if gb.inheritance.len() == FRAME_BRICKS as usize
-                || !room(records * write_buffer_bytes(&[]))
+            if gb.bricks.len() == FRAME_BRICKS as usize || !room(records * write_buffer_bytes(&[]))
             {
                 return false;
             }
@@ -167,7 +166,7 @@ impl RaysPass {
             for &(first, words) in q.tree {
                 g.upload_buf(gb.pool, pool_bytes(first), bytes(words));
             }
-            gb.inheritance.push((q.cell_zoom, q.brick));
+            gb.bricks.push((q.cell_zoom, q.brick));
             true
         });
     }

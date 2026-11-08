@@ -95,10 +95,10 @@ pub struct Cast<'a> {
     /// The input of the decor the GPU generates over the same world (gpu/generator.rs).
     pub decor: DecorFrame<'a>,
     /// The box each of the host's draws that reads the shadow map stands within, in the
-    /// world's Q3, as gpu/draw.rs `Lists::stands` records it. These draws receive the map as
+    /// world's Q3, as gpu/draw.rs `Lists::receivers` records it. These draws receive the map as
     /// decor does (pxl-engine `light::RECEIVER_BOXES_AT`), and their boxes are taken from the
     /// eye's `ORIGIN` when the light's head is written.
-    pub stands: &'a [ReceiverBox],
+    pub receivers: &'a [ReceiverBox],
     /// Whether the cast counts what the eye's rays and the light's walked and reused
     /// (ray/count.rs).
     pub ray_counts: bool,
@@ -282,7 +282,7 @@ pub(super) struct CastBuffers {
     light_receivers: Read,
     /// The host's draws' boxes within the effects' reach this frame. `light_receivers` reads
     /// their tiles, and the light's head is handed their bounds.
-    light_receiver_boxes: Vec<ReceiverTiles>,
+    light_receiver_boxes: Vec<Receiver>,
     /// The light's head, which its passes read beside the eye's words (pxl-engine
     /// `light::HEADER_WORDS`).
     light_header: u32,
@@ -390,7 +390,7 @@ const _: () = assert!(
 /// eye, as the light's passes read them (`ReceiverBox::from_eye`), and the first and last tiles
 /// of the light's box it stands on (pxl-engine `Light::box_tiles`).
 #[derive(Clone, Copy)]
-struct ReceiverTiles {
+struct Receiver {
     bounds: [[f32; 3]; 2],
     tiles: [[i32; 2]; 2],
 }
@@ -692,7 +692,7 @@ impl RaysPass {
                 },
             decor,
             // Only the light's cast reads these, with the look (below).
-            stands: _,
+            receivers: _,
             ray_counts,
         } = &cast;
         let ray_counts = *ray_counts;
@@ -763,14 +763,14 @@ impl RaysPass {
             } else {
                 c.forget = true;
             }
-            let list_of = |lane: &[u32]| {
+            let written_bytes = |lane: &[u32]| {
                 o.written_groups
                     .iter()
                     .map(|&f| write_buffer_bytes(bytes(child_group(lane, f))))
                     .sum::<usize>()
             };
             if c.object_revision == Some(o.since)
-                && api::room(list_of(o.first_child) + list_of(o.data))
+                && api::room(written_bytes(o.first_child) + written_bytes(o.data))
             {
                 for &first in o.written_groups {
                     g.write_buf(
@@ -910,10 +910,7 @@ impl RaysPass {
             cuts: cast.eye[eye::CARVE..eye::CARVE + eye::CUTS]
                 .try_into()
                 .or_bug(Errno::ENOTRECOVERABLE),
-            fresh: self
-                .ground
-                .as_ref()
-                .map_or(&[][..], |gb| &gb.inheritance[..]),
+            fresh: self.ground.as_ref().map_or(&[][..], |gb| &gb.bricks[..]),
             eye: &cast.eye,
         };
         c.generator
@@ -956,10 +953,10 @@ impl RaysPass {
                 .or_bug(Errno::ENOTRECOVERABLE);
             let lit = light::Light::of_words(words);
             let origin: [i32; 3] = core::array::from_fn(|k| cast.eye[eye::ORIGIN + k] as i32);
-            for s in cast.stands.iter().take(light::RECEIVER_BOXES) {
+            for s in cast.receivers.iter().take(light::RECEIVER_BOXES) {
                 let [lo, hi] = s.from_eye(origin);
                 if let Some(tiles) = lit.box_tiles(SHADOW_SIZE, lo, hi, stands) {
-                    c.light_receiver_boxes.push(ReceiverTiles {
+                    c.light_receiver_boxes.push(Receiver {
                         bounds: [lo, hi],
                         tiles,
                     });
@@ -1063,7 +1060,7 @@ impl RaysPass {
             header[at] = n as u32;
             for (
                 k,
-                &ReceiverTiles {
+                &Receiver {
                     bounds: [lo, hi], ..
                 },
             ) in c.light_receiver_boxes.iter().enumerate()
@@ -1451,10 +1448,10 @@ impl RaysPass {
     /// Whether this frame casts every pixel again though only the claimed tiles moved, as the
     /// light marks the world's receivers afresh and needs walked bits that cover every pixel.
     /// The frame is then drawn whole.
-    pub fn ungated(&self) -> bool {
+    pub fn unmasked(&self) -> bool {
         self.cast
             .as_ref()
-            .is_some_and(|c| c.schedule.last().ungated)
+            .is_some_and(|c| c.schedule.last().unmasked)
     }
 
     /// What this frame casts of the eye's rays, as `prepare` decided it
@@ -1649,8 +1646,8 @@ impl RaysPass {
             );
             g.end(pass);
             // Every stop is recorded, its new faces are asked, and its face word is put at its
-            // pixel (ray/raster.rs `stops`). The next frame's raster draws them.
-            c.raster.stops(ctx, c.node_cache, GpuSpanName::miss);
+            // pixel (ray/raster.rs `record_hits`). The next frame's raster draws them.
+            c.raster.record_hits(ctx, c.node_cache, GpuSpanName::miss);
         }
         // Decor is generated after the rays and before the light's cast, which marks where
         // decor stands (`light_mark_draws_cs`).
@@ -1982,10 +1979,10 @@ impl RaysPass {
     }
 
     /// Culls the decor generated to the instances a frame draws through `mask`
-    /// (`Generator::mask`).
+    /// (`Generator::cull`).
     pub fn cull_decor(&self, ctx: &mut RenderContext, mask: Mask, frame: u32, tiles: &Tiles) {
         if let Some(c) = self.cast.as_ref() {
-            c.generator.mask(ctx, mask, frame, tiles);
+            c.generator.cull(ctx, mask, frame, tiles);
         }
     }
 

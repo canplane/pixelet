@@ -437,8 +437,8 @@ pub fn placement(
     if !has_footing {
         return (Prop::NONE, false, false);
     }
-    let (g, generates) = pose(q, &f, decor, cell_zoom, c.seed, &ft, boxed);
-    (g, true, generates)
+    let (prop, generates) = pose(q, &f, decor, cell_zoom, c.seed, &ft, boxed);
+    (prop, true, generates)
 }
 
 /// Where a candidate in the leaf cell `leaf` stands at `cell_zoom` before it is posed
@@ -447,7 +447,7 @@ pub fn placement(
 /// whether that zoom's column surface was found, `held`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Footing {
-    pub g: Prop,
+    pub prop: Prop,
     pub zoom: Zoom,
     pub base: i32,
     pub held: bool,
@@ -477,7 +477,7 @@ pub fn footing<Q: DecorQuery>(
         if (k == 0 && !here) || k == 1 || zoom == cell_zoom {
             let (floor, rise) = first;
             let ft = Footing {
-                g: Prop {
+                prop: Prop {
                     variant: 0,
                     turn: 0,
                     at: [leaf[0], leaf[1], (floor + 1) * (1 << s)],
@@ -505,16 +505,16 @@ pub fn pose<Q: DecorQuery>(
     ft: &Footing,
     boxed: bool,
 ) -> (Prop, bool) {
-    let (g, generates) = asks(q, f, decor, (ft.zoom, ft.base), seed, ft.g, boxed);
+    let (prop, generates) = asks(q, f, decor, (ft.zoom, ft.base), seed, ft.prop, boxed);
     (
-        g,
-        ft.held && generates && stands_at(decor, g.variant, cell_zoom),
+        prop,
+        ft.held && generates && stands_at(decor, prop.variant, cell_zoom),
     )
 }
 
 /// Every cell that generating decor asks of the world, at one place, since a GPU inlines a
 /// call once for each place it is called from. A candidate is posed by its `seed`: first the
-/// cells around its column surface that its pose votes on, then, where `boxed`, the box of `g`
+/// cells around its column surface that its pose votes on, then, where `boxed`, the box of `prop`
 /// as that pose turned it (`placement`'s rule), each a cell at `zoom` around the column
 /// surface `about`, whose top cell is `base`. The pose is the candidate's variant and its
 /// heading in quarter turns, its seed's draws in order. Along transport, the heading is a
@@ -529,20 +529,20 @@ fn asks<Q: DecorQuery>(
     decor: &Decor,
     (zoom, base): (Zoom, i32),
     seed: u32,
-    mut g: Prop,
+    mut prop: Prop,
     boxed: bool,
 ) -> (Prop, bool) {
     let s = LEAF_CELL_ZOOM - zoom;
     let (mut flip, mut voting) = (0, 0);
     let mut draws = SplitMix32::new(seed);
-    g.variant = variant_of(decor, &mut draws);
+    prop.variant = variant_of(decor, &mut draws);
     if decor.orientation == Orientation::along_transport {
         flip = draws.next_u32() >> 31;
         voting = 4 * ALIGN_NEIGHBOR_RADIUS;
     } else {
-        g.turn = draws.next_u32() >> (u32::BITS - TURN_BITS);
+        prop.turn = draws.next_u32() >> (u32::BITS - TURN_BITS);
     }
-    let foot = [g.at[0] >> s, g.at[1] >> s, base];
+    let foot = [prop.at[0] >> s, prop.at[1] >> s, base];
     let (mut horizontal, mut vertical) = (0, 0);
     // The box, laid out once the vote is in: its cells, from the one under
     // its base up, a column at a time.
@@ -557,13 +557,13 @@ fn asks<Q: DecorQuery>(
         if voted && j == 0 && !edited {
             // The vote is in: the turn it gives, then the box it turns.
             if voting > 0 {
-                g.turn = u32::from(horizontal > vertical) + 2 * flip;
+                prop.turn = u32::from(horizontal > vertical) + 2 * flip;
             }
             if !boxed {
                 break;
             }
-            let [w, d, h] = decor.cells(g.variant, g.turn);
-            let [x0, y0, _] = g.at;
+            let [w, d, h] = decor.cells(prop.variant, prop.turn);
+            let [x0, y0, _] = prop.at;
             lo = [x0 >> s, y0 >> s, base];
             let hi = [
                 (x0 + w as i32 - 1) >> s,
@@ -594,7 +594,7 @@ fn asks<Q: DecorQuery>(
         if edited {
             // Void unplaced: it holds where no edit does.
             if answer::is_placed(v) {
-                return (g, false);
+                return (prop, false);
             }
             edited = false;
         } else if voted {
@@ -606,7 +606,7 @@ fn asks<Q: DecorQuery>(
                 v == value::VOID
             };
             if !holds {
-                return (g, false);
+                return (prop, false);
             }
             if b[2] != lo[2] {
                 edited = true;
@@ -621,10 +621,10 @@ fn asks<Q: DecorQuery>(
         }
         ask += 1;
     }
-    let [w, d, h] = decor.cells(g.variant, g.turn);
+    let [w, d, h] = decor.cells(prop.variant, prop.turn);
     (
-        g,
-        !boxed || !overlaps_placed(q, g.at, [w as i32, d as i32, h as i32]),
+        prop,
+        !boxed || !overlaps_placed(q, prop.at, [w as i32, d as i32, h as i32]),
     )
 }
 

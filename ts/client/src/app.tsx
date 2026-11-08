@@ -1,4 +1,4 @@
-// @pxl/client/app/app.tsx
+// @pxl/client/app.tsx
 
 import { StrictMode } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";

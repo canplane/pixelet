@@ -314,7 +314,7 @@ fn kept_draws_answer_as_the_rebuilt_lists_did() {
         let kept_same =
             !kept_changed && !uploads_changed && !(lists.draws.drifting() && drift_changed);
         assert_eq!(kept_changed, rebuilt_changed, "turn {k}: lists changed");
-        assert_eq!(kept_same, rebuilt_same, "turn {k}: list_of the same");
+        assert_eq!(kept_same, rebuilt_same, "turn {k}: listed the same");
         assert_eq!(
             beside_changed(&lists, &t.touched),
             rebuilt_beside(&was, &now, &t.touched),
@@ -444,12 +444,12 @@ fn a_frame_decides_as_its_conditions_did_over_every_read() {
             stands: bit(1),
             lists_same: bit(2),
             clouds_damage: bit(3),
-            ungated: bit(4),
+            unmasked: bit(4),
             casts_px: bit(5),
             light_casts: bit(6),
         };
         let quiet = r.stands && r.lists_same && !r.clouds_damage;
-        let masked = r.partial && r.stands && !r.ungated;
+        let masked = r.partial && r.stands && !r.unmasked;
         let stood = quiet && !r.casts_px && !r.light_casts;
         let d = FramePlan::of(r);
         assert_eq!(

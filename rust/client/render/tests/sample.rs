@@ -234,7 +234,7 @@ struct LightCase {
     size: u32,
     /// `None` casts the whole lattice, as the first cast of an epoch does. `Some(k)` casts only
     /// the tiles listed, about one in `k` (`light_beams`).
-    list_of: Option<u32>,
+    one_in: Option<u32>,
 }
 
 /// The eye of `c`, its origin moved by `moved` Q3 steps along each axis.
@@ -391,15 +391,15 @@ fn light_of(c: &LightCase, moved: [i32; 2]) -> Observed {
     }
 }
 
-/// Runs the light's beam rays and cells over the whole box. Then, where `list_of` is given, it
-/// cuts the cast down to the tiles listed as fed, about one in `list_of`, and the rest are not
+/// Runs the light's beam rays and cells over the whole box. Then, where `one_in` is given, it
+/// cuts the cast down to the tiles listed as fed, about one in `one_in`, and the rest are not
 /// read. Some samples are then not taken, and some are taken but not needed.
 fn light_beams(
     gpu: &Gpu,
     b: &WorldBufs,
     obs: &mut Observed,
     table: &wgpu::Buffer,
-    list_of: Option<u32>,
+    one_in: Option<u32>,
 ) -> Vec<u32> {
     let Rays::Light { size, .. } = obs.rays else {
         unreachable!()
@@ -442,7 +442,7 @@ fn light_beams(
     else {
         unreachable!()
     };
-    if let Some(every) = list_of {
+    if let Some(every) = one_in {
         // Some tiles are read, the box's corners among them. The tiles listed as fed are those
         // beside a read tile, as the propagation lists them (light_propagate.wgsl `enlist`),
         // but only about one in `every` and those on the box's first column and last row.
@@ -1091,10 +1091,10 @@ fn hand_light_samples_answer_as_cast_walk() {
             corner: [1304, -896],
             cuts: none,
             size: SIZE,
-            list_of: None,
+            one_in: None,
         },
         LightCase {
-            name: "the light, its tiles list_of",
+            name: "the light, its tiles listed",
             origin: over([EYE[0] + 90, EYE[1] + 90], 40),
             dir: [0.3, 0.2, -0.93],
             side: 1.0,
@@ -1104,10 +1104,10 @@ fn hand_light_samples_answer_as_cast_walk() {
             corner: [1304, -896],
             cuts: none,
             size: SIZE,
-            list_of: Some(3),
+            one_in: Some(3),
         },
         LightCase {
-            name: "the light, every tile list_of, the list's row full",
+            name: "the light, every tile listed, the list's row full",
             origin: over([EYE[0] + 90, EYE[1] + 90], 40),
             dir: [0.3, 0.2, -0.93],
             side: 1.0,
@@ -1117,10 +1117,10 @@ fn hand_light_samples_answer_as_cast_walk() {
             corner: [1304, -896],
             cuts: none,
             size: SIZE,
-            list_of: Some(1),
+            one_in: Some(1),
         },
         LightCase {
-            name: "the light, its tiles list_of, the shipped map's size",
+            name: "the light, its tiles listed, the shipped map's size",
             origin: over([EYE[0] + 90, EYE[1] + 90], 40),
             dir: [0.3, 0.2, -0.93],
             side: 0.5,
@@ -1130,7 +1130,7 @@ fn hand_light_samples_answer_as_cast_walk() {
             corner: [1304, -896],
             cuts: none,
             size: SHADOW_SIZE,
-            list_of: Some(23),
+            one_in: Some(23),
         },
         LightCase {
             name: "the light, one band everywhere",
@@ -1143,7 +1143,7 @@ fn hand_light_samples_answer_as_cast_walk() {
             corner: [1304, -896],
             cuts: none,
             size: SIZE,
-            list_of: None,
+            one_in: None,
         },
         LightCase {
             name: "the light, where no clip level holds the ground",
@@ -1156,7 +1156,7 @@ fn hand_light_samples_answer_as_cast_walk() {
             corner: [0, 0],
             cuts: none,
             size: SIZE,
-            list_of: None,
+            one_in: None,
         },
         LightCase {
             name: "the light, wide, over the clip levels",
@@ -1169,7 +1169,7 @@ fn hand_light_samples_answer_as_cast_walk() {
             corner: [80, 8],
             cuts: none,
             size: SIZE,
-            list_of: None,
+            one_in: None,
         },
         LightCase {
             name: "the light, on what is placed, cut and hid",
@@ -1191,7 +1191,7 @@ fn hand_light_samples_answer_as_cast_walk() {
                 },
             ],
             size: SIZE,
-            list_of: None,
+            one_in: None,
         },
         LightCase {
             name: "the light, on a bridge, along an axis",
@@ -1204,10 +1204,10 @@ fn hand_light_samples_answer_as_cast_walk() {
             corner: [-16, 32],
             cuts: none,
             size: SIZE,
-            list_of: None,
+            one_in: None,
         },
         LightCase {
-            name: "the light, on a bridge, list_of, the box wrapping",
+            name: "the light, on a bridge, listed, the box wrapping",
             origin: q8([at.bridge[0], at.bridge[1], at.bridge[2] + 30]),
             dir: [0.3, -0.1, -0.95],
             side: 0.5,
@@ -1217,7 +1217,7 @@ fn hand_light_samples_answer_as_cast_walk() {
             corner: [-16, 32],
             cuts: none,
             size: SIZE,
-            list_of: Some(3),
+            one_in: Some(3),
         },
     ];
     let mut kinds = Kinds::new();
@@ -1231,7 +1231,7 @@ fn hand_light_samples_answer_as_cast_walk() {
             w,
             &mut first,
             &mut next,
-            &mut |o, table| light_beams(&gpu, &b, o, table, c.list_of),
+            &mut |o, table| light_beams(&gpu, &b, o, table, c.one_in),
             &mut kinds,
             &mut failed,
         );
@@ -1255,7 +1255,7 @@ fn hand_light_samples_answer_as_cast_walk() {
         corner: [1304, -896],
         cuts: none,
         size: SIZE,
-        list_of: None,
+        one_in: None,
     };
     let mut first = light_of(&c, [0, 0]);
     let mut next = light_of(&c, [0, 0]);
@@ -1265,7 +1265,7 @@ fn hand_light_samples_answer_as_cast_walk() {
         west.world(),
         &mut first,
         &mut next,
-        &mut |o, table| light_beams(&gpu, &bw, o, table, c.list_of),
+        &mut |o, table| light_beams(&gpu, &bw, o, table, c.one_in),
         &mut kinds,
         &mut failed,
     );
@@ -1289,7 +1289,7 @@ fn hand_light_samples_answer_as_cast_walk() {
         corner: [1304, -896],
         cuts: none,
         size: SIZE,
-        list_of: None,
+        one_in: None,
     };
     let mut first = light_of(&c, [0, 0]);
     let mut next = light_of(&c, [0, 0]);
@@ -1299,7 +1299,7 @@ fn hand_light_samples_answer_as_cast_walk() {
         zero.world(),
         &mut first,
         &mut next,
-        &mut |o, table| light_beams(&gpu, &bz, o, table, c.list_of),
+        &mut |o, table| light_beams(&gpu, &bz, o, table, c.one_in),
         &mut kinds,
         &mut failed,
     );
@@ -1322,7 +1322,7 @@ fn hand_light_samples_answer_as_cast_walk() {
         zero.world(),
         &mut first,
         &mut next,
-        &mut |o, table| light_beams(&gpu, &bz, o, table, c.list_of),
+        &mut |o, table| light_beams(&gpu, &bz, o, table, c.one_in),
         &mut kinds,
         &mut failed,
     );
@@ -1439,7 +1439,7 @@ fn hand_missed_pixels_answer_as_cast_walk() {
     ];
     let screens = [
         Screen {
-            name: "every pixel marked and list_of",
+            name: "every pixel marked and listed",
             size: [96, 61],
             jitter: [0.0, 0.0],
             marked_in: 1,
@@ -1671,7 +1671,7 @@ fn hand_missed_pixels_at_an_edge_answer_as_cast_walk() {
         ),
     ];
     let s = Screen {
-        name: "every pixel marked and list_of",
+        name: "every pixel marked and listed",
         size: [131, 77],
         jitter: [0.25, -0.375],
         marked_in: 1,
@@ -3119,28 +3119,28 @@ fn hand_light_record_answers_as_raster() {
         corner: [1304, -896],
         cuts: none,
         size: SIZE,
-        list_of: None,
+        one_in: None,
     };
     let cases = [
         LightCase { ..about },
         LightCase {
-            name: "the light, its tiles list_of",
+            name: "the light, its tiles listed",
             corner: [1304, -896],
-            list_of: Some(3),
+            one_in: Some(3),
             ..about
         },
         LightCase {
-            name: "the light, every tile list_of, the list's row full",
+            name: "the light, every tile listed, the list's row full",
             corner: [1304, -896],
-            list_of: Some(1),
+            one_in: Some(1),
             ..about
         },
         LightCase {
-            name: "the light, its tiles list_of, the shipped map's size",
+            name: "the light, its tiles listed, the shipped map's size",
             side: 0.5,
             corner: [1304, -896],
             size: SHADOW_SIZE,
-            list_of: Some(23),
+            one_in: Some(23),
             ..about
         },
         LightCase {
@@ -3169,15 +3169,12 @@ fn hand_light_record_answers_as_raster() {
     let mut run = |b: &WorldBufs, c: &LightCase, kinds: &mut Kinds| {
         let mut obs = light_of(c, [0, 0]);
         let table = gpu.buffer(&frame_table(), store_of());
-        let lines = light_beams(&gpu, b, &mut obs, &table, c.list_of);
+        let lines = light_beams(&gpu, b, &mut obs, &table, c.one_in);
         let table = gpu.read(&table);
         // Where the cast lists its tiles, each sample is first laid as the whole cast of the
         // same box left it, and a sample not taken must keep what it held.
-        let prior = c.list_of.map(|_| {
-            let whole = LightCase {
-                list_of: None,
-                ..*c
-            };
+        let prior = c.one_in.map(|_| {
+            let whole = LightCase { one_in: None, ..*c };
             let mut o = light_of(&whole, [0, 0]);
             let t = gpu.buffer(&frame_table(), store_of());
             let lines = light_beams(&gpu, b, &mut o, &t, None);
@@ -3188,7 +3185,7 @@ fn hand_light_record_answers_as_raster() {
         // The record pass dispatches over the rows the list's entries open, as the sample pass
         // does.
         let groups = obs.groups;
-        kinds.add("list_of", c.list_of.is_some());
+        kinds.add("listed", c.one_in.is_some());
         // The light asks nothing, since its slots read no faces' words.
         light_record_case(&gpu, &pass, &obs, &words, groups, FRAME, kinds, &mut failed);
     };
@@ -3214,7 +3211,7 @@ fn hand_light_record_answers_as_raster() {
         "voxels, lacks",
         "voxels, short of its cube",
         "voxels, in another root",
-        "list_of",
+        "listed",
     ] {
         if kinds.get(what) == 0 {
             failed.push(format!("none of {what} to say"));
@@ -3387,7 +3384,7 @@ fn hand_light_beam_rays_answer_as_cast_walk() {
             corner: [1304, -896],
             cuts: none,
             size: SIZE,
-            list_of: None,
+            one_in: None,
         },
         LightCase {
             name: "the light, narrow and slanting",
@@ -3400,7 +3397,7 @@ fn hand_light_beam_rays_answer_as_cast_walk() {
             corner: [-16, 32],
             cuts: none,
             size: SIZE,
-            list_of: None,
+            one_in: None,
         },
     ];
     let mut failed = Vec::new();

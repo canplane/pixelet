@@ -354,15 +354,15 @@ fn groups<'a>(shards: &[&'a Shard]) -> Vec<Vec<&'a Shard>> {
                 .iter_mut()
                 .find(|(c, last, _)| *c == cols && *last == y - 1)
             {
-                Some((_, last, held)) => {
+                Some((_, last, shards)) => {
                     *last = y;
-                    held.extend_from_slice(run);
+                    shards.extend_from_slice(run);
                 }
                 None => out.push((cols, y, run.to_vec())),
             }
         }
     }
-    out.into_iter().map(|(_, _, held)| held).collect()
+    out.into_iter().map(|(_, _, shards)| shards).collect()
 }
 
 /// A type's extracts, one CLI call for each rectangle of shards, made one after another,
@@ -519,7 +519,7 @@ fn copy_extracts<'a>(
 /// once.
 fn ancestors(client: &mut Client, ty: &Type, release: &str, live: bool) -> Result<usize, String> {
     let t = staging(ty);
-    let held = if live {
+    let not_live = if live {
         format!(
             " AND NOT EXISTS (SELECT 1 FROM {} l WHERE l.gers_id = p.id AND l.release = '{release}')",
             ty.table
@@ -528,7 +528,7 @@ fn ancestors(client: &mut Client, ty: &Type, release: &str, live: bool) -> Resul
         String::new()
     };
     let missing_sql = format!(
-        "SELECT DISTINCT p.id FROM (SELECT properties::jsonb->>'{}' AS id FROM {t}) p WHERE p.id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM {t} s WHERE s.gers_id = p.id){held} ORDER BY p.id",
+        "SELECT DISTINCT p.id FROM (SELECT properties::jsonb->>'{}' AS id FROM {t}) p WHERE p.id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM {t} s WHERE s.gers_id = p.id){not_live} ORDER BY p.id",
         PARENT.1
     );
     let prefix = format!("{}-ancestor.", ty.overture);
@@ -565,15 +565,15 @@ fn ancestors(client: &mut Client, ty: &Type, release: &str, live: bool) -> Resul
                     ])
                     .output()
                     .map_err(|e| format!("{TOOLS}: {e}"))?;
-                let said = String::from_utf8_lossy(&out.stderr);
+                let stderr = String::from_utf8_lossy(&out.stderr);
                 if !out.status.success() {
-                    return Err(format!("gers {id}: {}", said.trim()));
+                    return Err(format!("gers {id}: {}", stderr.trim()));
                 }
                 // The registry says the release it found the feature in, on stderr.
-                if !said.contains(&format!("in release {release}")) {
+                if !stderr.contains(&format!("in release {release}")) {
                     return Err(format!(
                         "gers {id}: not found in release {release}: {}",
-                        said.trim()
+                        stderr.trim()
                     ));
                 }
                 std::fs::rename(&part, &extract).map_err(|e| e.to_string())?;
@@ -724,8 +724,8 @@ fn add(
         let older = tx
             .execute(&delete, &[&release, &left, &bottom, &right, &top])
             .map_err(db)?;
-        let held: i64 = tx.query_one(&staged, &[&s.name]).map_err(db)?.get(0);
-        if held == 0 && older > 0 {
+        let staged_cnt: i64 = tx.query_one(&staged, &[&s.name]).map_err(db)?.get(0);
+        if staged_cnt == 0 && older > 0 {
             return Err(format!(
                 "{}: {} came back empty and holds {older} features of an older release; nothing written",
                 ty.table, s.name

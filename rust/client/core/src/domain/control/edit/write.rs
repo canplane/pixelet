@@ -286,7 +286,7 @@ pub fn preview_step() -> bool {
     let hovered = hover.coord;
     let world = World::now();
     let object = hover.object_at().and_then(|at| world.entry_at(at));
-    let scattered = hover.scattered_decor().is_some();
+    let scattered = hover.prop().is_some();
     let digging = ui == Tool::Eraser && object.is_none() && !scattered;
     let asset = ui.asset();
     let zoom = match (asset, &object) {
@@ -325,7 +325,7 @@ pub fn preview_step() -> bool {
             .filter(|_| digging)
             .map(|h| Octant::holding(zoom, &h)),
         scattered_cell: hover
-            .scattered_decor()
+            .prop()
             .filter(|_| ui == Tool::Eraser)
             .and_then(|s| s.generated_in()),
     };

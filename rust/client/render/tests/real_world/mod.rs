@@ -256,7 +256,7 @@ pub type Point = (Zoom, u32, [i32; 3]);
 
 /// What a brick is filled from (pxl-engine `fill::Site`): four palette indices for each cell,
 /// the samples of its tile, and its lines.
-pub struct Handed {
+pub struct Source {
     pub four: Vec<u32>,
     pub ele: Vec<i16>,
     pub lines: Vec<u32>,
@@ -264,15 +264,15 @@ pub struct Handed {
 
 /// What the core hands the fill for brick `q` of the clip level at `cell_zoom`. The brick has
 /// lines only where `lined` is set, and the middles of its ways are added to `ways`.
-pub fn inheritance(
+pub fn source(
     eye: [i32; 2],
     cell_zoom: Zoom,
     q: [i32; 2],
     lined: bool,
     ways: &mut Vec<Point>,
-) -> Handed {
+) -> Source {
     let span = (ground::ELE_PADDED_SPAN * ground::ELE_PADDED_SPAN) as usize;
-    let mut inheritance = Handed {
+    let mut source = Source {
         four: vec![0; BRICK_CELLS as usize],
         ele: vec![0; span],
         lines: vec![0; LINES_WORDS as usize],
@@ -307,7 +307,7 @@ pub fn inheritance(
         } else {
             [ground::UNKNOWN; 4]
         };
-        inheritance.four[i as usize] = ground::word(four);
+        source.four[i as usize] = ground::word(four);
     }
     // The tile's elevation samples, each at the middle of its step on the padded grid over the
     // tile's cells.
@@ -326,7 +326,7 @@ pub fn inheritance(
                 at(sx, first[0]) as i32,
                 at(sy, first[1]) as i32,
             );
-            inheritance.ele[ground::ele_idx(sx, sy)] = e as i16;
+            source.ele[ground::ele_idx(sx, sy)] = e as i16;
         }
     }
     // The tile's lines, each listed in every bin of the brick. They are bridges, bores and an
@@ -337,9 +337,9 @@ pub fn inheritance(
         phase: [[0; 2], [3 << s, 5 << s]],
         leaf: 1 << s,
     };
-    inheritance.lines[..way::HEADER_WORDS as usize].copy_from_slice(&way::header(per_m, &stations));
+    source.lines[..way::HEADER_WORDS as usize].copy_from_slice(&way::header(per_m, &stations));
     if !lined {
-        return inheritance;
+        return source;
     }
     let mut segments = Vec::new();
     for line in 0..5u32 {
@@ -393,16 +393,16 @@ pub fn inheritance(
     }
     let n = segments.len() as u32;
     for b in 0..clip::WAYS_BINS {
-        inheritance.lines[(way::HEADER_WORDS + b) as usize] = n << 16;
+        source.lines[(way::HEADER_WORDS + b) as usize] = n << 16;
     }
     for e in 0..n {
-        inheritance.lines[(LINES_ENTRIES_AT + e / 2) as usize] |= e << (16 * (e % 2));
+        source.lines[(LINES_ENTRIES_AT + e / 2) as usize] |= e << (16 * (e % 2));
     }
     for (k, w) in segments.iter().enumerate() {
         let at = LINES_SEGMENTS_AT as usize + k * way::SEGMENT_WORDS;
-        inheritance.lines[at..at + way::SEGMENT_WORDS].copy_from_slice(w);
+        source.lines[at..at + way::SEGMENT_WORDS].copy_from_slice(w);
     }
-    inheritance
+    source
 }
 
 /// What is placed, as the store lays it. The words are every slot's child pointer, then every
@@ -618,7 +618,7 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
                 continue;
             }
             let lined = !(h >> 8).is_multiple_of(3);
-            let brick = inheritance(eye, cell_zoom, q, lined, &mut way_points);
+            let brick = source(eye, cell_zoom, q, lined, &mut way_points);
             lane.fill(0);
             palette_words.extend_from_slice(&brick.four);
             let site = fill::Site {

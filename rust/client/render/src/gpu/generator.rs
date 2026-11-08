@@ -19,10 +19,10 @@ use pxl_engine::{clipmap, eye, object, Zoom};
 use pxl_spec::space::coord::q3::Q3;
 
 use crate::frame::shader::group::{
-    ARGS_GROUP, CNT_GROUP, COMPACT_GROUP, CULLED_LIGHT_ARGS, CULLED_SCREEN_ARGS, GENERATE_GROUP,
-    GENERATION_ARGS, GENERATION_ARGS_OF_BINDS, GENERATION_BINDS, GENERATION_LIST,
-    GENERATION_MARK_BINDS, GENERATION_THIN_BINDS, MARK_GROUP, MASK_GROUP, MASK_LIGHT_BINDS,
-    MASK_SCREEN_BINDS, THIN_GROUP,
+    ARGS_GROUP, CNT_GROUP, COMPACT_GROUP, CULLED_LIGHT_ARGS, CULLED_SCREEN_ARGS, CULL_GROUP,
+    CULL_LIGHT_BINDS, CULL_SCREEN_BINDS, GENERATE_GROUP, GENERATION_ARGS, GENERATION_ARGS_OF_BINDS,
+    GENERATION_BINDS, GENERATION_LIST, GENERATION_MARK_BINDS, GENERATION_THIN_BINDS, MARK_GROUP,
+    THIN_GROUP,
 };
 use crate::frame::shader::record::PIPELINE_DECOR;
 use crate::frame::shader::record::{
@@ -113,11 +113,11 @@ pub struct Generator {
     draw_layouts: [Layout; 2],
     uniform_group: u32,
     instances_group: u32,
-    /// What a frame drawn through a gate draws in place of the instances (`mask`), one for
+    /// What a frame drawn through a gate draws in place of the instances (`cull`), one for
     /// each gate (`Mask`), and the passes that make it.
     culled: [Culled; 2],
     cull_args: Pipeline,
-    mask: Pipeline,
+    cull: Pipeline,
     cap: u32,
     /// How many placed decor records were last handed.
     placed_cnt: u32,
@@ -215,8 +215,8 @@ impl Generator {
                 ),
                 group: 0,
             }),
-            cull_args: pipelines.build_compute(g, COMPUTE_DECOR_CULL_ARGS, &MASK_GROUP),
-            mask: pipelines.build_compute(g, COMPUTE_DECOR_CULL, &MASK_GROUP),
+            cull_args: pipelines.build_compute(g, COMPUTE_DECOR_CULL_ARGS, &CULL_GROUP),
+            cull: pipelines.build_compute(g, COMPUTE_DECOR_CULL, &CULL_GROUP),
             cap: 0,
             placed_cnt: 0,
             bindings: [0; 6],
@@ -590,11 +590,11 @@ impl Generator {
                 1,
                 1,
             );
-            let list_of = [
+            let passes = [
                 (&self.thin, self.groups[1], &sequence::THIN),
                 (&self.generate, self.groups[2], &sequence::GENERATE),
             ];
-            for (pipeline, group, step) in list_of {
+            for (pipeline, group, step) in passes {
                 g.set_pipeline(pass, pipeline.id);
                 g.set_bind_group(pass, 0, group, &[]);
                 g.dispatch_indirect(pass, self.list, step.at());
@@ -656,7 +656,7 @@ impl Generator {
     /// meets the box of the claimed tiles of `tiles`, as the frame's words `frame` see it
     /// (damage_rect.wgsl, decor_cull.wgsl). It runs once the tiles' marks are made, timed in
     /// the marks' span.
-    pub fn mask(&self, ctx: &mut RenderContext, mask: Mask, frame: u32, tiles: &Tiles) {
+    pub fn cull(&self, ctx: &mut RenderContext, mask: Mask, frame: u32, tiles: &Tiles) {
         if !(self.on && self.instances != 0) {
             return;
         }
@@ -664,11 +664,11 @@ impl Generator {
         let culled = &self.culled[mask as usize];
         let g = ctx.g;
         let table = match mask {
-            Mask::Screen => &MASK_SCREEN_BINDS,
-            Mask::Light => &MASK_LIGHT_BINDS,
+            Mask::Screen => &CULL_SCREEN_BINDS,
+            Mask::Light => &CULL_LIGHT_BINDS,
         };
         let group = g.frame_group(
-            self.mask.layouts[0],
+            self.cull.layouts[0],
             table,
             |b| self.buf_of(b),
             &[
@@ -685,14 +685,14 @@ impl Generator {
         g.set_bind_group(pass, 0, group, &[]);
         g.set_pipeline(pass, self.cull_args.id);
         g.dispatch(pass, drawn::REGIONS.div_ceil(64), 1, 1);
-        g.set_pipeline(pass, self.mask.id);
+        g.set_pipeline(pass, self.cull.id);
         g.dispatch(pass, self.cap.div_ceil(64), 1, 1);
         g.end(pass);
         release(group);
     }
 }
 
-/// The gate a frame draws decor through (`Generator::mask`): the screen's claimed tiles, or
+/// The gate a frame draws decor through (`Generator::cull`): the screen's claimed tiles, or
 /// the light map's. Both are drawn in one frame, so each keeps its own list.
 #[derive(Clone, Copy)]
 pub enum Mask {
@@ -728,7 +728,7 @@ pub struct IndirectDraw {
     pub instances_group: u32,
     pub args: u32,
     pub uniform_group: u32,
-    /// The group and the args a frame draws by through each gate (`Generator::mask`).
+    /// The group and the args a frame draws by through each gate (`Generator::cull`).
     pub culled: [(u32, u32); 2],
     /// The gate it is drawn through, none where it is drawn whole.
     pub mask: Option<Mask>,
@@ -736,7 +736,7 @@ pub struct IndirectDraw {
 
 impl IndirectDraw {
     /// The draw a frame makes through `mask`: its list and args in place of the instances'
-    /// own (`Generator::mask`).
+    /// own (`Generator::cull`).
     pub fn through_mask(self, mask: Mask) -> IndirectDraw {
         let (instances_group, args) = self.culled[mask as usize];
         IndirectDraw {

@@ -1,4 +1,4 @@
-// @pxl/client/app/remote-console.ts
+// @pxl/client/remote-console.ts
 
 /**
  * Forwards a device's console to the dev server's terminal, because a phone

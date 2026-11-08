@@ -68,12 +68,12 @@ fn an_eye_moved_changes_no_draw() {
         3,
         "the box and both gizmos are drawn"
     );
-    let stands = was.stands.to_vec();
-    assert_eq!(stands.len(), 1, "the box stands");
+    let receivers = was.receivers.to_vec();
+    assert_eq!(receivers.len(), 1, "the box stands");
     view_compose(pose([-8_388_600.0 + 0.5, 3.9e6, -2000.25]));
     draw(&mut list);
     let now = list.take();
     view_compose(held);
     assert!(now.changes.is_empty() && !now.reordered, "no draw changed");
-    assert_eq!(now.stands, &stands[..]);
+    assert_eq!(now.receivers, &receivers[..]);
 }

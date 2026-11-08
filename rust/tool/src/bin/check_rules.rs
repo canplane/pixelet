@@ -293,13 +293,16 @@ const PASS_ORDER: [(&str, u8); 9] = [
 /// and the wiring that opens the runtime, the two heads; under them the
 /// services; and at the bottom the numbers both read and the build's values.
 const CLIENT: &str = "ts/client/src/";
-const CLIENT_ORDER: [(&str, u8); 6] = [
+const CLIENT_ORDER: [(&str, u8); 9] = [
     ("app", 3),
+    ("boot", 3),
+    ("page", 3),
     ("ui", 2),
     ("runtime", 2),
     ("service", 1),
     ("abi", 0),
     ("build", 0),
+    ("remote-console", 0),
 ];
 const CLIENT_HEADS: [&str; 2] = ["ui", "runtime"];
 

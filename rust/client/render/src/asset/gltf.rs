@@ -684,15 +684,15 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
     };
     let roots = match scene.and_then(|s| s.get("nodes")) {
         Some(list) => {
-            let mut list_of = vec![false; n];
+            let mut seen = vec![false; n];
             let mut roots = Vec::new();
             for v in arr(Some(list)) {
                 let i = idx_in(Some(v), n)?;
                 // Parentless and listed once, so no node is walked twice.
-                if parents[i] >= 0 || list_of[i] {
+                if parents[i] >= 0 || seen[i] {
                     return Err(malformed());
                 }
-                list_of[i] = true;
+                seen[i] = true;
                 roots.push(i as u32);
             }
             roots
