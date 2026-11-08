@@ -33,12 +33,27 @@ the Mac.
 
 **11-03 and 11-04.** Both devices ran the same dev build of a clean worktree of
 `d25f5b631`, the commit then deployed (`watch` wasm profile, delivery data), each at the
-same place (38.1193, 128.4656), driven over the DevTools protocol (`tools/walk/run4.mjs`,
-`tools/walk/cdp.mjs`). The profiler is `pxl.perf`, which only a dev build installs. The
-shell scripts in [`tools/walk/`](tools/walk/) serve each commit's page from `ts/app/web`,
+same place (38.1193, 128.4656), driven over the DevTools protocol (`tool/walk/run4.js`,
+`tool/walk/cdp.js`). The profiler is `pxl.perf`, which only a dev build installs. The
+shell scripts in [`tool/walk/`](tool/walk/) serve each commit's page from `ts/app/web`,
 the page's tree of the time, in worktrees of their own; the scratchpad and the cargo target
 they name were those of the session that ran them (`572d46ae`), and both are gone.
-[`reports/`](reports/) holds each window's whole report, and `tools/walk/show4.py` prints
+
+**Where these runs stood.** A rename on 10-29 (`98ed13185d`) stored the leaf tile's corner
+in place of the GPS fix, until 11-08 (`bb12471c6e`). So every run in this journal, and every
+`compare-perf`, asked for the ridge at 38.1193, 128.4656 and stood about 300 m away, at
+38.11727, 128.46313. The numbers below are that corner's. A drive from the corner and one
+from the ridge were not the same measurement, and what differed was the camera, not the
+ground. The drive sweeps the zoom by relative wheel steps, and under the default `climb` the
+terrain stops a zoom out that would put the eye in the ground, so the steps it stopped are
+lost. On 11-08, on the Mac, the eye's median distance from the pivot was 11 u from the
+corner, where it sat at its nearest, 2 u, for much of the window, and 630 to 740 u from the
+ridge. Tasks took 0.1 ms a turn against 9 ms, terrain tile reads were about 800 against
+1,200, and the GPU's p50 was 19.8 ms against 23.5 ms. With `orbit_obstacle` at `through`,
+the ridge, the corner, 38.1150, 128.4700 and 38.1300, 128.5000 all had a median distance of
+1,560 to 1,880 u, 9.8 to 10.0 ms of tasks, 1,296 to 1,369 tile reads and a GPU p50 of 22.4
+to 23.2 ms. The drive holds the gate at `through` from that day on.
+[`report/`](report/) holds each window's whole report, and `tool/walk/show4.py` prints
 them. The scenes were these:
 
 - **The circle**: fixed resolution, shadows off, the default view (distance 16 u, polar 60),
@@ -47,7 +62,7 @@ them. The scenes were these:
   circle at that period.
 - **The drive**: `pxl.perf.drive(25)`, which turns the shadows on.
 - **Auto**: the S23 alone, the circle for seven windows of 25 s.
-- **Resolution**: `reports/s23-by-resolution.json`, the S23 alone, an earlier run of the same
+- **Resolution**: `report/s23-by-resolution.json`, the S23 alone, an earlier run of the same
   circle on the same commit, with the shadows at their default, off.
 
 A span's figure in these runs is its p95 in ms over the frames a read timed that ran it, as
@@ -57,26 +72,26 @@ one device with the other and is no mean cost.
 **11-05 to 11-08.** The page is the main checkout's, its guest built (`pnpm build:wasm`)
 and served by its own Metro as a dev bundle, with the tiles and assets from the local shelf
 (`PXL_DEV_SOURCE=shelf`) instead of plei.me unless a run says otherwise.
-`tools/s23/s23.mjs` loads a page on the S23's Chrome over adb, settles, and runs the scenes
-asked; `tools/s23/ab.sh` alternates two trees, a fresh load each, and `tools/s23/show.py` and
-`tools/s23/trace.py` read what the runs saved. S23 figures are ms p50 / p95 over fresh loads
+`tool/s23/s23.js` loads a page on the S23's Chrome over adb, settles, and runs the scenes
+asked; `tool/s23/ab.sh` alternates two trees, a fresh load each, and `tool/s23/show.py` and
+`tool/s23/trace.py` read what the runs saved. S23 figures are ms p50 / p95 over fresh loads
 that alternate base and change in one sitting, two loads a side unless a run says otherwise.
 From the visit A/B on, a load is timed only once the ground's textures have landed;
-before, whether they had was a confound. Data and shots went under `out/s23/`, which is not
-kept.
+before, whether they had was a confound. Data and shots are under `tmp/s23/`, which git does
+not keep.
 
 **From 11-07, against the deployed build.** The bar is the deployed build: `e317a3644b`
 with `e2b019f1b0` and `b6dac91e78`, so that its drive is not pinned, served by Vite from its
 own tree (`.claude/worktrees/deployed`) on port 8291. The change is main with its working
 tree, served by Metro on 8298. Both are dev builds, both off the shelf on 3001. The Mac's
 figures come from the gate, `script/compare-perf.py`, which runs base and change by turns
-for the rounds named; `tools/s23/cmp-prof.py` takes one drive's `pxl.perf.report()` on the
-Mac, and `tools/s23/cmp-rest.py` takes 8 s of the drive, then 65 s untouched, and shots. The
+for the rounds named; `tool/s23/cmp-prof.py` takes one drive's `pxl.perf.report()` on the
+Mac, and `tool/s23/cmp-rest.py` takes 8 s of the drive, then 65 s untouched, and shots. The
 S23's figures are `pxl.perf.drive(120)` and then 65 s untouched, fresh loads by turns, with
-the GPU's clock read every 5 s (`tools/s23/cmp-hot.mjs`, run by turns by `cmp-s23.sh` and
+the GPU's clock read every 5 s (`tool/s23/cmp-hot.js`, run by turns by `cmp-s23.sh` and
 tabulated with the clocks by `cmp-s23tab.py`). Each tool runs under the GPU lock, and the
 data went under `out/cmp/`, not kept. Safari's runs are under "Memory, submits and Safari".
-[tools/s23/README.md](tools/s23/README.md) gives the commands.
+[tool/s23/README.md](tool/s23/README.md) gives the commands.
 
 **The drive was pinned until a fix made before the hot runs of 11-06.** A held drag and the
 wheel past the horizon left the camera 2 u under the level, where every step but a vertical
@@ -89,7 +104,7 @@ close. The honest
 drive's baseline, from one run: 326 frames, all cast, 16.4 fps, busy 52 / 115 ms,
 `light_walk` p95 39, `miss` 27, `light_sample` 18.5, `sample` 17.
 
-**Static reach.** `tools/walk/scip.py`, `tools/walk/reach.py` and `tools/walk/block.py` read
+**Static reach.** `tool/walk/scip.py`, `tool/walk/reach.py` and `tool/walk/block.py` read
 rust-analyzer's SCIP index of the main and the shader workspaces (`rust-analyzer scip`) into
 what the GPU and the CPU reach of pxl-engine and pxl-content: the figures in the minutes'
 "What one source is for". They match trait impls by name and take every non-test function of
@@ -126,7 +141,7 @@ subject. Main holds the hand walks squashed in `6c196144d4`, `f9f66682e` and `e8
   canvas is 300×150 and no frame comes. Hold a wake lock from the first moment, not once the
   world is shown.
 - The S23 loses its device on a pass that runs too long, with no shader error.
-  `tools/walk/visit.mjs` sizes each variant's pass to about 50 ms from its first run.
+  `tool/walk/visit.js` sizes each variant's pass to about 50 ms from its first run.
 - The S23's GPU clock climbs under load: one dispatch from idle read up to 3 times the warmed
   time. Warm it first.
 - A tab left open for each run piled 32 tabs on the phone and took an hour's numbers low.
@@ -153,7 +168,7 @@ subject. Main holds the hand walks squashed in `6c196144d4`, `f9f66682e` and `e8
   Mac: 411×750 at 2.625 stayed 822×1500, while 540×984 at a factor of 0 gives 1080×1968. A
   device-scale override changes `devicePixelRatio`, not the canvas. Read `canvas.width`.
 - A window with no GPU read is no measurement, whatever its fps: `stood`, `draws 0`,
-  `no timestamps`. `tools/walk/run4.mjs` stops where no read landed.
+  `no timestamps`. `tool/walk/run4.js` stops where no read landed.
 - The toast the script waits on is Korean, so Chrome on the Mac starts with `--lang=ko`.
 - A wait of 90 s failed a cold load.
 - `main` renames what a harness imports, and a run that cannot turn the profiler on reads as
@@ -161,7 +176,7 @@ subject. Main holds the hand walks squashed in `6c196144d4`, `f9f66682e` and `e8
   `FS_MOUNT` refused with `EINVAL`; that commit changes `spec/spec/bake/publication.json`, so
   the delivery data may lag it, and the cause was not traced. Since `2651534165` main names
   `src/services/share.ts` `src/service/share.ts` and no longer exports `perf_frames` from
-  `src/port/perf.ts`, so `tools/s23/s23.mjs`, which reaches the page's modules by path, does
+  `src/port/perf.ts`, so `tool/s23/s23.js`, which reaches the page's modules by path, does
   not run against main.
 - `pxl.perf.drive` sets `res` to fixed itself. The `perf` setting does not stop the
   timestamps' read; it only shows the panel.
@@ -169,7 +184,7 @@ subject. Main holds the hand walks squashed in `6c196144d4`, `f9f66682e` and `e8
 **Noise.**
 
 - One sitting drifts as the phone warms. Four 25 s circles in order with the shadows never
-  on (`tools/walk/four.sh`) read `06a46035c` 24.1 fps, `6e9a7cb83` 22.1, `e8d616ba4` 19.8 and
+  on (`tool/walk/four.sh`) read `06a46035c` 24.1 fps, `6e9a7cb83` 22.1, `e8d616ba4` 19.8 and
   `06a46035c` again 19.4, with thermal status 0 throughout and every pass rising together: a
   run late in a sitting reads about 20% below an early one. With the shadows off the light's
   walks do not run, so these runs say nothing of `e8d616ba4`'s cost to the eye; they say only
@@ -248,13 +263,13 @@ a node's time is the driver's and Chrome's path, and another Adreno or a Mali.
 
 ### What a visit pays
 
-A synthetic pass (`tools/walk/visit.mjs`, a page of its own with no renderer) takes the real
+A synthetic pass (`tool/walk/visit.js`, a page of its own with no renderer) takes the real
 pass's size: workgroup 8×8, dispatch 28×49, 14 steps, 1.23 million visits over a table of
 2^19 entries of 12 words (25 MB), read at a hash of the coarse pixel and the step so that
 neighbours share nodes. A visit hits at its first slot in 13 loads, as `sample.gen.wgsl`
 does, where every read of the pyramid is an `atomicLoad`, and each thread's hits are read
 back. Each variant is warmed for a second and timed by the pass's timestamps over 3 rounds of
-12, in ns a visit; the wall clock agrees (`reports/visit-*.json`).
+12, in ns a visit; the wall clock agrees (`report/visit-*.json`).
 
 | Variant | S23 | Mac |
 | --- | --- | --- |
@@ -286,7 +301,7 @@ and read only after it, on a dispatch of 7×12; the full dispatch lost the S23's
   the fill.
 - **All-atomic loads take 6 to 19 times as long as keys-only loads.** The figure moved between
   runs: 8.85 here, 28.63 and, unwarmed, 10.3 in the runs before
-  (`reports/visit-s23-first.json`). Only its order holds. The two rows of random addresses are
+  (`report/visit-s23-first.json`). Only its order holds. The two rows of random addresses are
   of that earlier run, the rest of the last.
 - **The costs do not add.** Atomic loads with the 33-entry stack took 17.4 ns where plain loads
   with it took 21.4.
@@ -294,7 +309,7 @@ and read only after it, on a dispatch of 7×12; the full dispatch lost the S23's
 ### Live words, and the cliff
 
 The locals above are live across the loop, each assigned in it and read after it; `sample`'s
-are not. `tools/walk/live.py`, a structured backward liveness over the generated WGSL, counts
+are not. `tool/walk/live.py`, a structured backward liveness over the generated WGSL, counts
 function_1 at `d25f5b631`:
 
 | | Vars | At the walk's head | Peak, vars and lets |
@@ -306,7 +321,7 @@ function_1 at `d25f5b631`:
 A let counts as one word here, whatever its type, so the words are a lower bound.
 
 The synthetic pass again, on a dispatch of 7×12, in ns a visit
-(`reports/visit-*-ladder.json`), with locals live across the loop and, beside them, locals of
+(`report/visit-*-ladder.json`), with locals live across the loop and, beside them, locals of
 `sample`'s shape: declared at the function's top, assigned and read inside the block that
 never runs, so that none is live across anything.
 
@@ -369,7 +384,7 @@ draws says no more than that its reads are not all lost. The fault was not repor
 
 Whether the real page does the same was read at `d25f5b631` through a wrapper of
 `createBuffer` that finds the pyramid by its size and reads it back between frames
-(`tools/walk/pyramid.mjs`, `tools/walk/cmp3.py`, `reports/pyramid-*.json`). Each kept entry was
+(`tool/walk/pyramid.js`, `tool/walk/cmp3.py`, `report/pyramid-*.json`). Each kept entry was
 checked against the code: its slot in the bucket its zoom and node hash to, a node one under the
 world's roots, a kind that exists. At the default view, over the circle, and in the drive with the
 shadows on, 7 reads a run kept about 54 thousand entries on the Mac and 52 thousand on the S23,
@@ -394,9 +409,9 @@ to a run that stopped early. The page's other buffers were not read.
 
 The Android app at `e8d616ba4` on the S23, a Release build, ran against the page at the same
 commit, one load each, at the same place with the same motion. The app runs wgpu and naga on
-Vulkan, with no browser. `tools/walk/app-probe.patch` is what the scratch build changed: the
+Vulkan, with no browser. `tool/walk/app-probe.patch` is what the scratch build changed: the
 probe, a fixed position, the kernel's and the shell's dev settings, and the surface's alpha
-below (`reports/app-s23.txt`).
+below (`report/app-s23.txt`).
 
 | Shadows off, 25 s circle | Page | App |
 | --- | --- | --- |
@@ -439,7 +454,7 @@ left, each against the commit before.
 `sample.gen.wgsl` that makes 2,201 `var`s and a peak of 207 live words where it was 301, with
 58 words at the walk's head where there were 150; `beam`, which keeps its 33 entries, peaks at
 311. The matched circle ran on the same dev build's profile, the phone cooler at the start
-(`reports/s23-step-1a.json` against `reports/s23-matched.json`):
+(`report/s23-step-1a.json` against `report/s23-matched.json`):
 
 | | `d25f5b631` | `05e8ae4a5` |
 | --- | --- | --- |
@@ -466,9 +481,9 @@ The short stack went at `94d6e9284`, once `sample` walked only what the hand pas
 
 `749560da1`: `sample_hit.wgsl`, 367 lines by hand, runs before `sample_cs` over the pyramid
 alone, read-only, with no atomics, no stack and no `world::node`. What it cannot end it leaves
-to `sample_cs`, which walks it from the start. Its live words (`tools/walk/livehand.py`) peak at
+to `sample_cs`, which walks it from the start. Its live words (`tool/walk/livehand.py`) peak at
 47 in its entry, its callees' own not counted, against `sample`'s 301. The matched circle, two
-windows each (`reports/s23-hand-kernel.json`):
+windows each (`report/s23-hand-kernel.json`):
 
 | | `d25f5b631` | `749560da1` |
 | --- | --- | --- |
@@ -505,7 +520,7 @@ written twice, and only this picture held the two together.
 
 `94d6e9284` runs `sample_cs` by an indirect dispatch over only what `sample_hit` left, so that
 against `749560da1` the change is the cost of being entered; the rule for what is left is the
-same (`tools/walk/run6.mjs`, `reports/s23-left-only.json`, `reports/mac-left-by-speed.json`). A
+same (`tool/walk/run6.js`, `report/s23-left-only.json`, `report/mac-left-by-speed.json`). A
 turn of the circle in seconds, the Mac at `749560da1`, the S23 at `94d6e9284`:
 
 | | Turn | fps | Left, nodes a cast | `sample` p95 | `miss` p95 | `beam` p95 |
@@ -531,7 +546,7 @@ turn of the circle in seconds, the Mac at `749560da1`, the S23 at `94d6e9284`:
 `e7757099f`: `miss_hit_cs` runs ahead of `miss_list_cs` over the same marked list, the pyramid
 read-only, with atomics only on its own 8-word buffer; `walk.wgsl` holds the walk it shares with
 `sample_hit`. The span `miss` covers both passes, and `ray_counts`' lane what is left
-(`reports/s23-miss-by-hand.json`). The S23, a 6 s turn, four windows:
+(`report/s23-miss-by-hand.json`). The S23, a 6 s turn, four windows:
 
 | | `94d6e9284` | `e7757099f` |
 | --- | --- | --- |
@@ -557,7 +572,7 @@ read-only, with atomics only on its own 8-word buffer; `walk.wgsl` holds the wal
 `8ac7315b1`: `beam_hit_cs` runs over the pyramid read-only and writes each node's `Inheritance`
 straight to its line, with no stack. What it leaves, `beam_cs` walks by indirect dispatch, with
 the 33 entries, the atomics and every write to the pyramid. The span `beam` covers both, and
-`ray_counts`' lane what is left (`reports/s23-beam-by-hand.json`). The S23, a 6 s turn, four
+`ray_counts`' lane what is left (`report/s23-beam-by-hand.json`). The S23, a 6 s turn, four
 windows:
 
 | | `e7757099f` | `8ac7315b1` |
@@ -582,7 +597,7 @@ windows:
 - **It draws.** No view moved unasked in these windows (16 u, polar 60).
 
 The picture against `d25f5b631`, on the S23 at rest, sky fixed, two runs of each
-(`tools/walk/shotcmp.py`, the companion left out):
+(`tool/walk/shotcmp.py`, the companion left out):
 
 | | Differ | Over 2 | Over 8 | Over 32 | Mean |
 | --- | --- | --- | --- | --- | --- |
@@ -631,10 +646,10 @@ over a moved brick.
 
 ### Where a left ray first stops
 
-`8ac7315b1`, instrumented in a scratch tree (`tools/walk/left-instrument.patch`, none of it on
+`8ac7315b1`, instrumented in a scratch tree (`tool/walk/left-instrument.patch`, none of it on
 the branch): at the node a ray first stopped on, the hand pass records the node and why no slot
-served it. `tools/walk/left.mjs` reads that and the pyramid on two consecutive frames while the
-camera circles, 10 frames on the S23 and 6 on the Mac (`reports/left-*.json`). The copies are
+served it. `tool/walk/left.js` reads that and the pyramid on two consecutive frames while the
+camera circles, 10 frames on the S23 and 6 on the Mac (`report/left-*.json`). The copies are
 25 MB and slow what they read, so only counts are taken from them.
 
 | | Left rays | Distinct first stops, summed by frame | Rays a node | Other zooms | Absent, room in the bucket | Absent, bucket full |
@@ -661,7 +676,7 @@ camera circles, 10 frames on the S23 and 6 on the Mac (`reports/left-*.json`). T
 ### What "other zooms" is
 
 `2a9b235f3`: the hand walk takes a slot held from a coarser `far` for the same `near`, and
-`beam_cs` keeps the exact key (`reports/s23-rekey.json`). The S23, a 6 s turn, four windows,
+`beam_cs` keeps the exact key (`report/s23-rekey.json`). The S23, a 6 s turn, four windows,
 against `8ac7315b1`:
 
 | | `8ac7315b1` | `2a9b235f3` |
@@ -678,7 +693,7 @@ against `8ac7315b1`:
 `beam` did not move. `face` came back to its old value with no fewer left beams, and that was the
 run, not this change (under Noise). How
 many of the "other zooms" differ in `far` alone was then counted with the misses instrumented as
-before (`tools/walk/left-instrument-split.patch`, `reports/left-split-*.json`), the left beams'
+before (`tool/walk/left-instrument-split.patch`, `report/left-split-*.json`), the left beams'
 reason split by how the slot held differs from what was asked, as held minus asked. The walk
 takes a coarser `far` already, so what differs in `far` alone here is a finer one held. 14 frames
 on the S23, 8 on the Mac:
@@ -697,7 +712,7 @@ on the S23, 8 on the Mac:
 - `sample` and `miss` stay nodes never asked: 23,869 of 25,161 and 3,466 of 3,514 on the S23.
 
 The node that stops a frame was then read at `7bf251816`, a first stop's distances against its
-side (`reports/left-near-s23.json`). Two frames of 16 left 6,848 beams, every one of the grid's
+side (`report/left-near-s23.json`). Two frames of 16 left 6,848 beams, every one of the grid's
 corners, to one node: zoom 17, side 128 u, the eye inside it (near 0), its far corner at 192 u,
 asked [23, 27] and held [22, 26]. Other bursts are alike: a node of the chain over the eye, with
 near or far on a boundary of `zoom_at` (12, 24, 48, 96 or 192 u).
@@ -723,7 +738,7 @@ detail was not compared, nor `2a9b235f3`'s run b, which opened at 20.2 u, polar 
 ### A Split held at other zooms
 
 `2f7d18b37` passes through a Split held at other zooms; it ran against `1af780b72` in one
-sitting, by turns (`tools/walk/ab2.sh`, `tools/walk/ab3.sh`):
+sitting, by turns (`tool/walk/ab2.sh`, `tool/walk/ab3.sh`):
 
 | | `1af780b72` | `2f7d18b37` |
 | --- | --- | --- |
@@ -749,8 +764,8 @@ and the toast "동행을 준비하고 있습니다" was still up at 70 s, so a s
 The reads of "Where a left ray first stops" and "How deep a queue goes" took the second of two
 frames after the stall of a 25 MB copy, and missed most of this. It was read instead without that
 copy, the record zones as fast as they come, one distinct frame in about 3.5, with each frame's
-head beside them (`tools/walk/left4.mjs` with `MODE=scan`, `tools/walk/left-why.patch`,
-`reports/scan-s23.json`): `2f7d18b37` on the S23, a 6 s turn, 328 frames.
+head beside them (`tool/walk/left4.js` with `MODE=scan`, `tool/walk/left-why.patch`,
+`report/scan-s23.json`): `2f7d18b37` on the S23, a 6 s turn, 328 frames.
 
 | Forgets | Moved bricks | Boxes, writes | Beam rays left | Frames |
 | --- | --- | --- | --- | --- |
@@ -786,7 +801,7 @@ no storage cleared but the camera's:
 | GPU most, ms | 377, 315 | 233, 227 |
 | interval p95, ms | 174, 187 | 174, 198 |
 
-Frame by frame with it (`reports/scan-forget-s23.json`, 153 frames), 1 frame left the whole grid,
+Frame by frame with it (`report/scan-forget-s23.json`, 153 frames), 1 frame left the whole grid,
 where 30 of 328 had before the fix on the earlier base. Of the 31 frames that moved a brick, 13
 left few rays and 18 part of the grid, none all. The parent's own scan did not draw, so that
 comparison is across bases. What stays is 71 frames over 1,500 beam rays, nearly all stopped on a
@@ -796,8 +811,8 @@ fixed, one run each, differs by a mean of 0.54 at the default view, 0.54 at 93 u
 
 ### What a Cell held at other zooms answers when asked again
 
-`981947702`, instrumented (`tools/walk/left-cells.patch`, `tools/walk/left5.mjs`,
-`reports/cells-s23.json`), records for each node a beam ray stopped on that was kept at other
+`981947702`, instrumented (`tool/walk/left-cell.patch`, `tool/walk/left5.js`,
+`report/cell-s23.json`), records for each node a beam ray stopped on that was kept at other
 zooms its slot's kind and asset before `beam_cs`, and then the slot the frame wrote at the zooms
 asked. 285 frames were read whole, so each follows the stall of a 25 MB copy: 8,220 nodes held as
 a Cell and asked again, on 520,417 rays.
@@ -843,7 +858,7 @@ is never answered as it was is held end to end; that test fails with forgetting 
 ### What a frame pays for what it leaves
 
 `7bf251816` runs the passes of `8ac7315b1`. The profiler's rows put each frame's GPU time and
-spans beside its `ray_counts` lanes (`reports/s23-frames.json`, `tools/walk/tail.py`): 149
+spans beside its `ray_counts` lanes (`report/s23-frame.json`, `tool/walk/tail.py`): 149
 frames with both, a 6 s turn, `ray_counts` on.
 
 | Left nodes, all passes | Frames | GPU busy, ms | `beam` | `sample` | `miss` |
@@ -860,7 +875,7 @@ correlation of 0.96. By pass, at no node left and a left node's cost: `beam` 4.1
 of left rays above, which the first reads had left as a reading.
 
 The floor of 32 ms is high because `ray_counts` costs. Every span of each frame, in one sitting,
-mean ms (`reports/s23-frames-all-spans*.json`):
+mean ms (`report/s23-frames-all-spans*.json`):
 
 | | Frames | Busy | `world` | `beam` | `px` | `face` | `finish` | `sraster` | `generate` | `resolve` | `miss` | `sample_hit` | `sample` |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -875,9 +890,9 @@ the p50 is 31.4 ms and the mean 50.6.
 
 ### How deep a queue goes
 
-`tools/walk/left.mjs` with `MODE=depth`, with no shader change, counts a frame's entries that the
+`tool/walk/left.js` with `MODE=depth`, with no shader change, counts a frame's entries that the
 pyramid tags with that frame and pass, each one deeper than its parent if the parent is new too.
-The depth is the round of a queue that asks one layer a round (`reports/s23-depth.json`). 12
+The depth is the round of a queue that asks one layer a round (`report/s23-depth.json`). 12
 frames on the S23:
 
 | | Nodes in `beam` | Rounds | Nodes by round |
@@ -890,8 +905,8 @@ opaque cell that a beam does not keep is not among them, and these figures bound
 
 ### A queue
 
-`3e7ba241d` ran against `7bf251816` in one sitting by turns (`tools/walk/ab2.sh`,
-`tools/walk/ab3.sh`): each left beam's first stop is asked
+`3e7ba241d` ran against `7bf251816` in one sitting by turns (`tool/walk/ab2.sh`,
+`tool/walk/ab3.sh`): each left beam's first stop is asked
 once, and then the hand walk runs again. It left 115 thousand nodes a cast against 155–166
 thousand, but it took `beam` from 44–60 ms to 88–99 and GPU p95 from 108–167 to 175–217, at
 13.0–17.2 fps against 15.8–23.4. It was reverted. `ask.gen.wgsl` peaks at 95 live words, so the
@@ -1028,8 +1043,8 @@ cast; on the S23 all 38 did, so the slow phone does again what the Mac's frames 
 p95 1,028 ms, since the light's walks were still the old shader's.
 
 **The light's missed slots by hand** (`355b65140` against `e8d616ba4`, alternating in one
-sitting, shadows on, a 25 s circle at noon, caches kept; `tools/walk/w355b.sh`,
-`reports/light-miss-by-hand-s23.txt`):
+sitting, shadows on, a 25 s circle at noon, caches kept; `tool/walk/w355b.sh`,
+`report/light-miss-by-hand-s23.txt`):
 
 | Run | fps | GPU p50 / p95, ms | `light_walk` p50 / p95, ms | Light `miss` a cast | Eye walked |
 | --- | --- | --- | --- | --- | --- |
@@ -1052,7 +1067,7 @@ sitting, shadows on, a 25 s circle at noon, caches kept; `tools/walk/w355b.sh`,
 
 **The light keeps its cells, and the eye does not pay** (`f9f66682e` in runs 1 and 3,
 `e8d616ba4`, which keeps them, in runs 2 and 4; alternating in one sitting, shadows on, a 25 s
-circle at noon, caches kept; `tools/walk/pair.sh`, `reports/light-keeps-s23.txt`):
+circle at noon, caches kept; `tool/walk/pair.sh`, `report/light-keeps-s23.txt`):
 
 | Run | fps | GPU p50 / p95, ms | `light_walk` p50 / p95, ms | Eye walked | Eye `miss` a cast |
 | --- | --- | --- | --- | --- | --- |
@@ -1066,7 +1081,7 @@ mean of 0.56, and each differs from itself by 0.50 and 0.59. By eye no color is 
 right after stopping, at phone size. A long drive, where the pyramid's slots run out, was not run.
 
 **Trees cast at noon.** At `e8d616ba4`, noon, with shadows off, on and off again, no camera
-move, 10 s each (`tools/walk/tree.mjs`), on against off differs by a mean of 1.80 with 5.55% of
+move, 10 s each (`tool/walk/tree.js`), on against off differs by a mean of 1.80 with 5.55% of
 pixels over 8, and off against off by 0.40 with 0.14%. The crowns darken the ground and water,
 not only walls. An earlier shot at `6e9a7cb83`, taken with no control, had been read as showing
 no shadow.
@@ -1453,7 +1468,7 @@ tested in Safari. **The frame in stages, 4–6 submits** (`submits.patch`, held 
 tests) costs nothing on the S23, shadows-on busy p95 53 to 46 ms; its Safari run waited for a
 force-quit, and whether it stops the hang is untested.
 
-**Safari with shadows on, rechecked on 11-08** (Safari 27.0.1, `tools/s23/measure.mjs`, a watcher to
+**Safari with shadows on, rechecked on 11-08** (Safari 27.0.1, `tool/s23/measure.js`, a watcher to
 force-quit it): no pin. With shadows off through 120 s of the far zoom and on for 90 s at the
 default, the GPU reached 79% at most, the Mac's other work about 40–50%. With shadows on from the
 start through 180 s of the far zoom, the sky's time moving, it reached 72% at most, the GPU process
@@ -1461,12 +1476,12 @@ at 310 MB, with no page error. The page's live bytes read 0: the proxy's counter
 worker's device. No shot was taken in Safari, so that it drew is read from the load's end and from
 the utilization moving by phase.
 
-`tools/s23/measure.mjs` loads a page in the Mac's Safari through safaridriver (`safaridriver -p
+`tool/s23/measure.js` loads a page in the Mac's Safari through safaridriver (`safaridriver -p
 4444`) and runs its phases: the default zoom, the farthest zoom with the sky's time moving, back, and
 shadows on. Every 5 s it logs the page's live GPU bytes and object count, the GPU process's footprint
 and the GPU's utilization to `<label>.jsonl`, and it stops if the GPU pins at 100% or the footprint
-passes 1.2 GB. The page is served behind `tools/s23/mem-proxy.mjs`, which counts every buffer and
-texture from before the first frame, or `tools/s23/pass-proxy.mjs`, which also gives each pass its
+passes 1.2 GB. The page is served behind `tool/s23/mem-proxy.js`, which counts every buffer and
+texture from before the first frame, or `tool/s23/pass-proxy.js`, which also gives each pass its
 own submit and logs the passes still outstanding. A pin holds the GPU until Safari is force-quit.
 
 **Safari over `http://localhost` asks no zstd** and gets the 1 MB tile form; over https Safari takes
@@ -1480,12 +1495,12 @@ phone".
 **On 11-03 a cold first load took about 94 s to the world on plei.me**, with one restart of the page
 near 60 s that logcat does not explain, and 91 s on the dev build with none; warm, it took 15 s.
 Moving on plei.me over `requestAnimationFrame`, the page ran 7.5 fps, p50 33.9 and p95 550.1 ms, with
-no long task (`tools/walk/raf.mjs`). The 90 s were later found to be the data's format and the
+no long task (`tool/walk/raf.js`). The 90 s were later found to be the data's format and the
 harness ([taking rust-gpu out, the journal](../20261103-the-shaders-by-hand/README.md), "Did not
 work"). On the rebase over main at `430cdc831`, which reads `division` 9, the evening's runs at
 `pivot -` had been a build of format 8 refused its source, not the page, and with the harness's own
-faults they are no evidence. `tools/walk/load.mjs` wraps the page's calls before its first script
-(`reports/load-*.json`); seconds from navigation on the S23:
+faults they are no evidence. `tool/walk/load.js` wraps the page's calls before its first script
+(`report/load-*.json`); seconds from navigation on the S23:
 
 | | First pipeline | All made (of) | Wall | World |
 | --- | --- | --- | --- | --- |
@@ -1517,7 +1532,7 @@ dev link.
 **plei.me answers Korea from LAX** at 60–110 KB/s; this is left as it is.
 
 **A load that never draws**, seen on the S23 on `7bf251816` as on `d25f5b631`: the world never comes,
-and the toast stays on "공간을 불러오고 있습니다", "위치 찾는 중…" (`reports/s23-failed-load.json`).
+and the toast stays on "공간을 불러오고 있습니다", "위치 찾는 중…" (`report/s23-failed-load.json`).
 When caught, `navigator.geolocation.getCurrentPosition` at 5 s gave error 3, timeout, with permission
 granted, where the same call answered at the page's first moment; the page showed `pivot -`, frames
 `plain` and `stood`, and no failed resource. So the page was waiting on a position that never came.
@@ -1528,13 +1543,13 @@ harness's. Whether a real device's silence holds the page the same way was not t
 
 **How pictures are compared.** A picture is shot at rest with the sky fixed, the origin's storage
 cleared before each load and the camera logged, and compared with the companion left out
-(`tools/walk/shotcmp.py`). Two frames of one run differ only on the companion, but two runs of one
+(`tool/walk/shotcmp.py`). Two frames of one run differ only on the companion, but two runs of one
 commit differ by a mean of up to 6.69, from what is still arriving, the toast and the companion,
 which hides a small change ("What 'other zooms' is"). Each change's own comparison is with the
 change.
 
 **What the hot phone showed on 11-06** (`ef8d1621b7`, hot1 and hot2, and `034ddad063`, hot3; shots
-every 10 or 20 s under `out/s23/hot*-shots/`, not kept):
+every 10 or 20 s under `tmp/s23/hot*-shots/`, not kept):
 
 - From about 100 m out the ground breaks into thin vertical slivers and fragments over a flat
   untextured green (hot2 s-t0086, s-t0096, s-t0136, s-t0166). With the indirect scope fixed, at 2 km
@@ -1582,7 +1597,7 @@ run 5.9 on 11-03, with GPU p50 21–24 ms and `sample` p95 5.6–7.0 against 133
 warmed the phone from 43 to 48 °C with fps drifting down, so this is a reference, not a fixed number.
 
 **Morning against night.** `a449637a35` against `c3847db899` on the S23, both off the shelf,
-alternating twice, the phone warming to thermal 1 alike on both sides (data `out/s23/day*`):
+alternating twice, the phone warming to thermal 1 alike on both sides (data `tmp/s23/day*`):
 
 | | morning | night |
 | --- | --- | --- |
@@ -1600,12 +1615,12 @@ The largest moves: the tails of `light_hit` and `light_walk` −90%, `light_rece
 ### On a hot phone
 
 The batch of 11-06 on main at `ef8d1621b7` ran on the user's drive, shadows on, `res fixed`, off the
-shelf. Two fresh loads ran with `tools/s23/s23.mjs`: hot1 with `SCENES=drive,rest`, `DRIVE_S=300
+shelf. Two fresh loads ran with `tool/s23/s23.js`: hot1 with `SCENES=drive,rest`, `DRIVE_S=300
 FRAMES=1`, and hot2, after 3 min off, with `SCENES=drive,rest,rest`, `DRIVE_S=180`. Beside each, every
 5 s, the GPU's clock cap (kgsl `max_freq`, `thermal_pwrlevel`) and the AP's and the skin's
 temperatures were logged, with an adb screencap every 20 s and every 10 s; beside hot2, a second
 DevTools client kept every console error. The profiler keeps the last 60 s, so each figure is the
-drive's last minute (data, shots and clock logs `out/s23/hot1*`, `out/s23/hot2*`).
+drive's last minute (data, shots and clock logs `tmp/s23/hot1*`, `tmp/s23/hot2*`).
 
 | | hot1, still throttling | hot2, settled hot |
 | --- | --- | --- |
@@ -1647,7 +1662,7 @@ Both logged the clock cap and took shots every 10 s, and hot3 also had the conso
 page logged a console error (`errs []`, and the listener wrote nothing). The clock cap fell to
 550 MHz (level 3) 81 s into hot3 and stayed there to the end, status 1, skin 40.1–40.5 °C. It did not
 reach hot2's 348 MHz, so hot3 is set against hot1, which had the same cap (615 to 550 MHz). Data:
-`out/s23/hot3*`. Pass times are ms p50 / p95 over the drive's last minute.
+`tmp/s23/hot3*`. Pass times are ms p50 / p95 over the drive's last minute.
 
 | | hot1, ef8d1621b7, 615→550 MHz | hot3w, counts off, 615 MHz | hot3, counts on, 550 MHz |
 | --- | --- | --- | --- |
@@ -1721,3 +1736,46 @@ At 719 MHz main's p50 is 6.1 times better than the deployed build's and its p95 
 deployed build's p95 has read 437.6 to 1282.1 ms over its runs, on 60–92 timed frames, so 11-07's
 1.2 times at 550 MHz and this 5.7 times are one pair each; no pair at 550 MHz was taken again.
 Against the deployed build's best run, 437.6 ms, main's p95 is 1.7 to 2 times better.
+
+### The eye's stale voxels and the turns without a frame, 11-08
+
+`9c4560ef05` made three changes at once. The eye drew no stale voxel, so a pixel only a stale
+box covered was a hole walked in its frame. A turn whose frame the GPU could not take still
+took in what arrived, started fetches and filled bricks. And a frame began in the turn before
+the GPU was expected to finish the last. Each was run on the S23 against `71b51d722a`, both
+sides with the drive's camera passing through the ground (`453a5434d8`), standing on the
+ridge; 60 s drives, fresh loads by turns, each begun once the AP had cooled to 36 °C. Data are
+under `tmp/s23/stale-9c4560ef05/` and `tmp/s23/stale-dcff657a80/`.
+
+| run | clock, MHz | frames a second | GPU p50 / p95 | tasks p50 | `light_hit` p95 |
+| --- | --- | --- | --- | --- | --- |
+| base-1 | 615–719 | 8.7 | 64.0 / 282.7 | 3.1 | 105.1 |
+| change-1 | 348–680 | 7.0 | 71.2 / 321.0 | 46.2 | 117.2 |
+| change-2 | 348–719 | 6.7 | 72.4 / 361.4 | 45.1 | 140.0 |
+| base-2 | 550–719 | 8.7 | 65.2 / 289.1 | 3.1 | 108.6 |
+| base-3 | 550–719 | 8.9 | 66.1 / 291.4 | 3.1 | 110.4 |
+| change-3 | 401–719 | 6.8 | 75.5 / 361.3 | 45.8 | 136.2 |
+
+The change lost on every measure. Its frame interval sat at exactly 100 ms at the median in all
+three runs, against 52 to 65 ms, and its tasks took 46 ms a turn against 3. Each of its runs
+ended at 348 to 401 MHz, thermal level 5 or 6, against 550 to 680 MHz, level 1 to 3. The
+Mac's gate passed it, GPU p50 21.63 to 22.15 ms and frames 804 to 779. The code showed why. A
+turn without a frame spent the turn's whole deadline on admits and fills, not the content's
+share, so the phone ran hotter and its GPU slower. The frame's start was timed by the GPU's
+expected time, which the S23's spread (p95 four times p50) put wrong: one frame ran at a time,
+every frame's read landed, and `auto` read the load as high and held the turns at 100 ms.
+Both were reverted (`dcff657a80`), and the stale voxels were measured alone:
+
+| run | clock, MHz | frames a second | GPU p50 / p95 | tasks p50 | `light_hit` p95 |
+| --- | --- | --- | --- | --- | --- |
+| base-1 | 719 | 10.8 | 55.7 / 242.2 | 3.2 | 91.0 |
+| change-1 | 680–719 | 9.5 | 59.3 / 269.3 | 3.1 | 98.2 |
+| change-2 | 615–719 | 8.6 | 65.9 / 290.8 | 3.1 | 108.9 |
+| base-2 | 615–719 | 9.0 | 64.8 / 278.5 | 3.1 | 106.4 |
+| base-3 | 615–719 | 8.6 | 66.9 / 288.3 | 3.2 | 107.6 |
+| change-3 | 550–719 | 8.9 | 68.3 / 292.0 | 3.1 | 112.9 |
+
+base-1 began at 31.8 °C and held 719 MHz throughout; the rest began at 36 °C. At a like clock
+the two sides are alike: `raster_box` p95 2.9 to 3.4 ms and `hole` 8.1 to 9.2 ms on both. The
+stale voxels are kept out of the eye's draw, which a lack's answer from the deepest node held
+(`edd74fc899`) leaves no pixel needing.

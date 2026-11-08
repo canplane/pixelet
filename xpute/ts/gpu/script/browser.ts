@@ -7,16 +7,15 @@
 //   pnpm --dir ts test:gpu:web          ($CHROME names the browser's binary)
 
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "vite";
 
-/** xpute's root, three directories up. It holds the spec the server serves
- * and ts/target/, which the test is bundled into. */
+/** This is xpute's root, three directories up. It holds the spec the server
+ * serves and ts/target/, which the test is bundled into. */
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const TEST = "ts/gpu/src/runtime.test.ts";
 const BUNDLE = join(ROOT, "ts/target/browser/runtime.test.js");
@@ -73,7 +72,9 @@ async function main(): Promise<number> {
   });
   await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
   const { port } = server.address() as AddressInfo;
-  const profile = await mkdtemp(join(tmpdir(), "xpute-browser-"));
+  // The profile lies in the checkout's tmp/ until the run ends.
+  await mkdir(join(ROOT, "tmp"), { recursive: true });
+  const profile = await mkdtemp(join(ROOT, "tmp", "browser-"));
   const chrome = spawn(
     CHROME,
     [

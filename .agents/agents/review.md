@@ -20,9 +20,7 @@ meant to do and where it is, not why its author thinks it is right.
 
 - **Correctness.** For each claim the change depends on, read the code that
   could break it: a caller with other inputs, an edge case (zero, negative,
-  wrap-around, a bound's last value), a path still doing it the old way. On the
-  GPU, a barrier is in uniform control flow: no bounds check's panic or early
-  return before it. A generated file matches its sources.
+  wrap-around, a bound's last value), a path still doing it the old way.
 - **Structure.** A concept living twice or derived again; a pass reading
   another layer's storage or going around the query; machinery that removes
   nothing; a dead item, or a doc or citation naming what is gone.

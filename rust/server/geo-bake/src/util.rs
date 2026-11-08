@@ -1,8 +1,10 @@
 // pxl-geo-bake/util.rs
 
+use std::hash::Hasher;
 use std::path::Path;
 use std::process::Command;
 
+use fnv::FnvHasher;
 use pxl_spec::directory;
 use xpute_kit::math::scalar::round;
 use zstd::bulk;
@@ -10,6 +12,49 @@ use zstd::stream;
 
 /// The `Content-Encoding` every baked tile is uploaded with, so the transport decodes it.
 pub const CONTENT_ENCODING: &str = "zstd";
+
+/// What a bake's output is a function of besides its data, from the checkout's root: the crates
+/// it compiles of this tree, and the workspace's manifest and lock.
+const CODE: [&str; 6] = [
+    "rust/spec/engine",
+    "rust/spec",
+    "rust/server/geo-bake",
+    "xpute/rust/kit",
+    "rust/Cargo.toml",
+    "rust/Cargo.lock",
+];
+
+/// The digest of the code of the checkout the bin was built in, read off its disk. Every
+/// checkout of the same code has the same digest, so what is kept under it is found from any.
+pub fn code_digest() -> Result<u64, String> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let mut h = FnvHasher::default();
+    for c in CODE {
+        digest_tree(&root.join(c), Path::new(c), &mut h)?;
+    }
+    Ok(h.finish())
+}
+
+/// Every file under `path`, a directory's in name order, `target` directories left out, each
+/// its name and bytes into `h`. `name` is `path` from the checkout's root.
+fn digest_tree(path: &Path, name: &Path, h: &mut FnvHasher) -> Result<(), String> {
+    let meta = std::fs::metadata(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    if meta.is_file() {
+        h.write(name.to_string_lossy().as_bytes());
+        h.write(&std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?);
+        return Ok(());
+    }
+    let mut names: Vec<_> = std::fs::read_dir(path)
+        .map_err(|e| format!("{}: {e}", path.display()))?
+        .filter_map(|e| e.ok().map(|e| e.file_name()))
+        .filter(|n| n != "target")
+        .collect();
+    names.sort();
+    for n in names {
+        digest_tree(&path.join(&n), &name.join(&n), h)?;
+    }
+    Ok(())
+}
 
 /// FNV-1a 64.
 pub const fn fnv1a(bytes: &[u8]) -> u64 {
@@ -60,7 +105,7 @@ pub(crate) fn fmt_dur(ms: f64) -> String {
 /// starts, which is when its binary was built: commits made while it runs
 /// are not what it ran.
 pub fn git_sha() -> Option<String> {
-    let idx = directory::temp_dir(&format!("bake-index-{}", std::process::id()));
+    let idx = directory::tmp_dir(&format!("bake-index-{}", std::process::id()));
     std::fs::create_dir_all(idx.parent()?).ok()?;
     let git = |args: &[&str]| {
         let out = Command::new("git")

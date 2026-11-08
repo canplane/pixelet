@@ -50,7 +50,7 @@ change where they go:
 
 | Variable                                                    | What it sets                                                       |
 | ----------------------------------------------------------- | ------------------------------------------------------------------ |
-| `PXL_DEV_SOURCE`                                            | `delivery` (the default), `oven` or `shelf`, as the targets set it |
+| `PXL_TILE_SOURCE`                                            | `delivery` (the default), `oven` or `shelf`, as the targets set it |
 | `PXL_REMOTE_ORIGIN`                                         | the deployment that `delivery` reads from                          |
 | `PXL_GEO_BASE_URL`, `PXL_TILE_BASE_URL`, `PXL_API_BASE_URL` | the local servers, `127.0.0.1` on 3000, 3001 and 3002 by default   |
 | `PXL_PREVIEW_PORT`                                          | the preview's port, 4173 by default                                |
@@ -93,8 +93,9 @@ make bake-terrain ARGS="--shard 01033210 --step fold --step commit"
 catalog the sky draws and the geoid table that GPS heights are corrected by.
 `make ingest-overture` fills the local geographic database, and
 [infra/geo/README.md](./infra/geo/README.md) describes each source's ingest.
-After a re-ingest or a change to a bake, empty what it made by hand
-(`rm -rf out/oven`, or `out/<kind>*` to bake one kind from nothing).
+A change to a bake starts the dev tile server's cache afresh by itself. After a
+re-ingest, empty what it made by hand (`rm -rf tmp/oven`, or
+`out/<kind>*` to bake one kind from nothing).
 
 ## Checking a change
 
@@ -107,6 +108,15 @@ make -j8 test
 such as `check-ts` or `test-rust`. A change to a shader or to how the renderer
 encodes its GPU calls also takes `make -C xpute test-gpu`, which needs a GPU and
 Chrome. `make fmt` and `make lint` format and lint.
+
+`make check` also lints Android, which needs the NDK's compiler at the app's
+minSdk:
+
+```bash
+ndk=~/Library/Android/sdk/ndk/<version>/toolchains/llvm/prebuilt/darwin-x86_64/bin
+export CC_aarch64_linux_android=$ndk/aarch64-linux-android29-clang \
+  AR_aarch64_linux_android=$ndk/llvm-ar
+```
 
 Code generated from the JSON under `spec/` is never edited by hand: change the
 JSON and run `make spec`.

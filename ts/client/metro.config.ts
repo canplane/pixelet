@@ -5,14 +5,14 @@
  * device's own file sits beside a default and is named by React Native's
  * suffixes (pill.ios.tsx beside pill.tsx); the page takes the default. Every
  * alias is tsconfig.json's, and every workspace package resolves to its source
- * (ts/build/paths.ts), so that Metro reads the client exactly as the
+ * (ts/build/path.ts), so that Metro reads the client exactly as the
  * type-check reads it.
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { getDefaultConfig } from "expo/metro-config";
-import { REPO, treeFile, WORKSPACE } from "@pxl/build/paths.ts";
+import { REPO, treeFile, WORKSPACE } from "@pxl/build/path.ts";
 import { CONSOLE_PATH, consoleHandler } from "@pxl/build/console.ts";
 import { stamp } from "@pxl/build/stamp.ts";
 import { forward, type Middleware, route_target } from "./script/proxy.ts";
@@ -29,9 +29,8 @@ const here = path.join(WORKSPACE, "client");
 const SINGLETONS = ["react", "react-native"];
 const FROM_APP = path.join(here, "index.ts");
 
-/** Writes the build's stamp (ts/build/stamp.ts) as the module
- * `virtual:pxl-build`. It is written once, when Metro starts, so a dev
- * server's stamp is the one it started under. */
+/** The stamp is written once, when Metro starts, so a dev server's stamp is
+ * the one it started under. */
 function buildStamp(): string {
   const { time, id, number } = stamp();
   const file = path.join(here, ".expo/pxl-build.js");
@@ -64,8 +63,6 @@ function ownPlatform(
   const ext = path.extname(file);
   const stem = file.slice(0, -ext.length);
   if (from.startsWith(`${stem}.`)) return file;
-  // The page takes a `.web` file, or else the default. A device takes its own
-  // system's file, or else the `.native` one.
   for (const which of platform === "web" ? ["web"] : [platform, "native"]) {
     const own = `${stem}.${which}${ext}`;
     if (fs.existsSync(own)) return own;
@@ -90,8 +87,6 @@ const resolveRequest: NonNullable<typeof base.resolver.resolveRequest> = (
   if (name === "virtual:pxl-build") {
     return { type: "sourceFile", filePath: BUILD_STAMP };
   }
-  // A file that an import names, through an alias, a workspace package or a
-  // relative path, is resolved to this platform's own file.
   const from = context.originModulePath;
   const file = name.startsWith(".")
     ? path.extname(name) !== ""
@@ -108,14 +103,25 @@ const resolveRequest: NonNullable<typeof base.resolver.resolveRequest> = (
   return context.resolveRequest(context, name, platform);
 };
 
-/** A device's console lines, appended to the app's `.dev-console.log`. */
 const devConsole = consoleHandler(path.join(here, ".dev-console.log"));
+
+/** Metro's caches, its transforms' and its file map's, lie in the checkout's
+ * tmp/ (AGENTS.md), each tree's its own, where Expo would put them in the
+ * system's temporary folder. The store is the kind Expo makes, rooted there;
+ * Expo does not export its class, so it is taken from Expo's own store. */
+const CACHE = path.join(REPO, "tmp/metro");
+fs.mkdirSync(CACHE, { recursive: true });
+const Store = base.cacheStores[0].constructor as new (options: {
+  root: string;
+}) => (typeof base.cacheStores)[number];
 
 export default {
   ...base,
   // The UI's files, xpute's and pnpm's store all lie outside this app's
   // directory. The bundle reads nothing outside these folders.
   watchFolders: [WORKSPACE, path.join(REPO, "xpute/ts")],
+  cacheStores: [new Store({ root: CACHE })],
+  fileMapCacheDirectory: CACHE,
   resolver: { ...base.resolver, resolveRequest },
   server: {
     ...base.server,

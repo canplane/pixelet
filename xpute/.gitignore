@@ -37,3 +37,6 @@ ts/native/android/.gradle/
 # A library's locks are its consumer's to keep.
 rust/Cargo.lock
 pnpm-lock.yaml
+
+# What a run keeps or leaves for itself: caches and temporary folders.
+/tmp/

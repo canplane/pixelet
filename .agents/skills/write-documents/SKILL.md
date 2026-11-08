@@ -29,14 +29,12 @@ against is reference, kept in `spec/` and the generated code's comments.
 - **Whole sentences that people want to read.** Write what matters, the core and
   its reason, not an inventory of every member. A list is for things that are
   really parallel, never for an argument.
-- **Facts are checked against the code.** Every fact taken from an older text is
-  checked in the code before it is written again; older texts hold stale names
-  and wrong claims. Name the files, types and functions a reader needs to find
-  the thing, and no more: a codemap is a map, not an atlas.
+- **Facts are checked against the code**, older texts holding stale names and
+  wrong claims. Name only the files, types and functions a reader needs to find
+  the thing.
 - **Earn a name before you use it.** Say the need first, then name what meets
-  it, in a main clause. A name this project made needs this, and so does a
-  field's term the reader may not bring (`ring` as io_uring uses it). Which name
-  a thing gets is the naming skill's.
+  it. A name this project made needs this, and so does a field's term the reader
+  may not bring (`ring` as io_uring uses it).
 - **Order by dependency.** A model's vocabulary comes before the machine that
   uses it, and a map of the code comes last.
 - **Diagrams** are hand-aligned ASCII under about 78 columns; a diagram's

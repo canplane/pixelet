@@ -7,7 +7,8 @@
 # the core's tick over the one measurement (perf/drive.ts). Fails where the
 # change's median runs past the base's: its load's longest frame by more than
 # `LOAD_SLACK_MS`, its GPU's or its tick's p50 or p95 by more than `P50_SHARE`
-# or `P95_SHARE`, its tick also by more than `TICK_SLACK_MS`.
+# or `P95_SHARE`, its tick also by more than `TICK_SLACK_MS`. Both pages must
+# stand at `PLACE`, or nothing is compared.
 #
 #   ./script/compare-perf.py <base url> <change url> [rounds]
 
@@ -29,6 +30,9 @@ SIZE = {"width": 1920, "height": 1080}
 # Where the device stands, so the view opens there as a user's does: on
 # Seoraksan, whose ridges the drive's eye meets at the horizon.
 PLACE = {"latitude": 38.1193, "longitude": 128.4656}
+# How far a page's pivot may lie from `PLACE`, in degrees: about ten meters. Two
+# pages are compared only on the same ground.
+PLACE_SLACK_DEG = 1e-4
 # How much longer the change's first load may block the page than the base's.
 LOAD_SLACK_MS = 3000
 # How much more the change's GPU time may take than the base's.
@@ -42,6 +46,9 @@ LOAD_CAP_S = 90
 # The longest the page may take to answer one ask, a drive included.
 EVAL_CAP_S = 120
 DRIVE_S = 20
+# Where each run's Chrome keeps its profile, removed when the run ends: the
+# checkout's tmp/ (AGENTS.md).
+TMP = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tmp")
 
 READ = """(async () => {
   const r = await pxl.perf.read();
@@ -50,6 +57,7 @@ READ = """(async () => {
     load: Math.max(0, ...r.longs.map((l) => l.durationMs)),
     gpu: f ? [f.gpu_busy.p50, f.gpu_busy.p95, f.n, f.gpu_timed] : [null, null, 0, 0],
     tick: f ? [f.tick.p50, f.tick.p95] : [null, null],
+    pivot: [r.view.pivot_lat, r.view.pivot_lon],
   };
 })()"""
 LAST_END = "Math.max(0, ...performance.getEntriesByType('resource').map((e) => e.responseEnd))"
@@ -61,7 +69,8 @@ class Page:
     ended by a NUL."""
 
     def __init__(self, url):
-        self.dir = tempfile.mkdtemp(prefix="pxl-compare-perf-")
+        os.makedirs(TMP, exist_ok=True)
+        self.dir = tempfile.mkdtemp(prefix="compare-perf-", dir=TMP)
         to_r, self.to = os.pipe()
         self.of, of_w = os.pipe()
 
@@ -173,6 +182,18 @@ class Page:
         shutil.rmtree(self.dir, ignore_errors=True)
 
 
+def at_place(pivot):
+    """Whether a page's pivot, its latitude and longitude, is at `PLACE`. One
+    with no place reads as null."""
+    lat, lon = pivot
+    return (
+        lat is not None
+        and lon is not None
+        and abs(lat - PLACE["latitude"]) <= PLACE_SLACK_DEG
+        and abs(lon - PLACE["longitude"]) <= PLACE_SLACK_DEG
+    )
+
+
 def once(url):
     """One page: its load's longest frame and its GPU busy time. A
     page a run, so each run's load is a first load."""
@@ -191,7 +212,10 @@ def once(url):
         # The drive turns the profiler on, which installs the long-frame
         # observers, and they replay the load.
         page.ev(f"pxl.perf.drive({DRIVE_S})")
-        return page.ev(READ)
+        run = page.ev(READ)
+        if not at_place(run["pivot"]):
+            sys.exit(f"{url} stands at {run['pivot']}, not at {PLACE}: not compared")
+        return run
     finally:
         page.close()
 

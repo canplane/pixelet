@@ -3,7 +3,7 @@
 # clients read at boot, is the one record of which version of each kind is
 # served, and each version holds its own manifest beside its tiles, its format
 # and shards. A publish reads both out of the bucket, makes the declaration
-# of them (pxl-geo-bake bin/declare_source.rs, refusing what a client would)
+# of them (pxl-geo-bake bin/declaration.rs, refusing what a client would)
 # and uploads it; nothing in the tree changes, so nothing is deployed, and
 # the one thing built is that declaring tool.
 #
@@ -34,6 +34,8 @@ from pathlib import Path
 
 
 REPO = Path(__file__).resolve().parent.parent
+# Where a file made for one upload lies until the upload ends (AGENTS.md).
+TMP = REPO / "tmp"
 BUCKET = "pixelet-bucket"
 KINDS = ["terrain", "place", "division", "earth"]
 SOURCE = "source"
@@ -108,19 +110,20 @@ def served_now():
 
 
 def declared(record):
-    """The declaration pxl-geo-bake writes of a record (bin/declare_source.rs), refusing what a client would."""
+    """The declaration pxl-geo-bake writes of a record (bin/declaration.rs), refusing what a client would."""
     out = subprocess.run(
-        ["cargo", "run", "-q", "-p", "pxl-geo-bake", "--bin", "declare_source"],
+        ["cargo", "run", "-q", "-p", "pxl-geo-bake", "--bin", "declaration"],
         cwd=REPO / "rust",
         input=json.dumps(record).encode(),
         stdout=subprocess.PIPE,
     )
-    return out.stdout if out.returncode == 0 else die("declare_source refused it")
+    return out.stdout if out.returncode == 0 else die("declaration refused it")
 
 
 def serve(declaration):
     """Revalidated on every boot, so a publish is seen at once."""
-    with tempfile.NamedTemporaryFile(suffix=".json") as f:
+    TMP.mkdir(exist_ok=True)
+    with tempfile.NamedTemporaryFile(suffix=".json", dir=TMP) as f:
         f.write(declaration)
         f.flush()
         aws(["s3", "cp", f.name, f"s3://{BUCKET}/{SOURCE}", "--content-type", "application/json", "--cache-control", "no-cache"], inherit=True)
