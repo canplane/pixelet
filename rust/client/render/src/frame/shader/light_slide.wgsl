@@ -2,9 +2,9 @@
 
 // The tiles of the box an earlier cast of the epoch cast, where the box slid since, a
 // `TILE`-aligned corner at a time (gpu/shadow.rs `aim`), the eye's zooms moved
-// (`light::HEAD_RANGE_WAS`), or the world under it changed: a
+// (`light::HEADER_LAST_RANGE`), or the world under it changed: a
 // thread a tile, after the host moved the reads with the box, each tile's word the word of
-// the tile that held its world texels under the corner before (`light::HEAD_CORNER_WAS`;
+// the tile that held its world texels under the corner before (`light::HEADER_LAST_CORNER`;
 // gpu/ray/cast.rs `prepare`). A tile the box slid onto, one the slide or the zooms moved into
 // another band (`Light::keeps`), and one whose rays may meet a cell of its band over a column of the world
 // that changed (`Light::reaches`, `light::COLUMNS_AT`), is set to none, so the propagation
@@ -12,7 +12,7 @@
 // Each writes its own word alone, and the first the cast's number as the last the slide ran in
 // (`light::SLIDE_RAN`). Run where the box slid, the zooms moved or the world changed and a
 // receiver stands
-// (`light::STOOD_SLIDE`), after the receivers stood, before the propagation.
+// (`light::RECEIVER_TILES_SLIDE`), after the receivers stood, before the propagation.
 
 /// Whether box tile `tile`'s rays, at its band, may meet a cell over the world's column `c`,
 /// `[x0, y0, x1, y1]` units from the eye (`Light::reaches`), where its band is among `bands`,
@@ -60,15 +60,15 @@ fn light_slide_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     return;
   }
   if (all(id.xy == vec2<u32>(0u))) {
-    list_put(head_word(LIGHT_HEAD_SLIDE) + LIGHT_SLIDE_RAN, cast_number());
+    list_put(header_word(LIGHT_HEADER_SLIDE) + LIGHT_SLIDE_RAN, cast_number());
   }
-  let was = vec2<i32>(i32(head_word(LIGHT_HEAD_CORNER_WAS)), i32(head_word(LIGHT_HEAD_CORNER_WAS + 1u)));
+  let was = vec2<i32>(i32(header_word(LIGHT_HEADER_LAST_CORNER)), i32(header_word(LIGHT_HEADER_LAST_CORNER + 1u)));
   var reached = !keeps_tile(id.xy, was);
   // The head holds `LIGHT_COLUMNS` columns at most (pxl-engine `light::COLUMNS`).
-  let columns = min(u32(head[LIGHT_COLUMNS_AT].x), LIGHT_COLUMNS);
+  let columns = min(u32(header[LIGHT_COLUMNS_AT].x), LIGHT_COLUMNS);
   for (var k = 0u; k < columns && !reached; k += 1u) {
     let at = LIGHT_COLUMNS_AT + 1u + 2u * k;
-    reached = reaches(id.xy, bitcast<vec4<f32>>(head[at]), bitcast<vec2<u32>>(head[at + 1u].xy));
+    reached = reaches(id.xy, bitcast<vec4<f32>>(header[at]), bitcast<vec2<u32>>(header[at + 1u].xy));
   }
   if (reached) {
     list_put(reads_at() + id.y * tiles + id.x, 0u);

@@ -26,7 +26,7 @@ use crate::gpu::text::TextOf;
 use crate::gpu::upload::Uploads;
 use crate::look::marker::ATLAS_SCALE;
 use crate::look::marker::{
-    bubble_box_h, point_mark, BLACK, BORDER, BUBBLE_FONT, DOT_BORDER, DOT_CY, DOT_DIAM, DOT_FILL,
+    bubble_rect_h, point_mark, BLACK, BORDER, BUBBLE_FONT, DOT_BORDER, DOT_CY, DOT_DIAM, DOT_FILL,
     DOT_RING, LINE_H, NOTCH, PADDING_Y, PILL_FONT, PILL_H, PILL_R, POINT_FONT, POINT_GAP,
     POINT_LINE, POINT_PAD, POINT_PITCH, POINT_RIM, POINT_RIM_FILL, POINT_SHADE, POINT_SHADOW_BLUR,
     POINT_SHADOW_DY, POINT_SHADOW_FILL, POINT_TEXT_HALO, TAIL_H, TAIL_W, WHITE,
@@ -95,7 +95,7 @@ fn notched_rect(p: &mut DisplayList, x: f32, y: f32, w: f32, h: f32, notch: f32,
 }
 
 fn bubble(p: &mut DisplayList, lines: &[String], box_w: f32) {
-    let box_h = bubble_box_h(lines.len());
+    let box_h = bubble_rect_h(lines.len());
     notched_rect(p, 0.0, 0.0, box_w, box_h, NOTCH, BLACK);
     notched_rect(
         p,

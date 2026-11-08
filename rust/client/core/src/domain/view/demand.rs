@@ -36,7 +36,7 @@ use crate::domain::query::ColumnWalk;
 use crate::domain::view::observation;
 use crate::domain::view::observation::{observation, ByEye};
 use crate::sys::io::demand::{Order, Phases};
-use crate::sys::io::failure::{Ended, Failure};
+use crate::sys::io::failure::{Exit, Failure};
 use crate::sys::io::request::declare;
 use crate::sys::io::source;
 use crate::sys::sched::edge;
@@ -46,7 +46,7 @@ use pxl_spec::space::layer::demand::tiles_within;
 use pxl_spec::space::layer::lattice::GROUND;
 
 /// A layer as the view asks of it: its demand, held beside its records.
-pub trait Observed: Base {
+pub trait ViewLayer: Base {
     fn demand() -> &'static mut Demand<Self>;
 
     /// How far from the eye the layer draws anything; past it nothing of it
@@ -61,25 +61,25 @@ static PLACE: Global<Demand<PlaceTile>> = Global::new();
 static EARTH: Global<Demand<Earth>> = Global::new();
 static DIVISION: Global<Demand<DivisionTile>> = Global::new();
 
-impl Observed for TerrainTile {
+impl ViewLayer for TerrainTile {
     fn demand() -> &'static mut Demand<TerrainTile> {
         TERRAIN.get(Demand::default)
     }
 }
 
-impl Observed for PlaceTile {
+impl ViewLayer for PlaceTile {
     fn demand() -> &'static mut Demand<PlaceTile> {
         PLACE.get(Demand::default)
     }
 }
 
-impl Observed for DivisionTile {
+impl ViewLayer for DivisionTile {
     fn demand() -> &'static mut Demand<DivisionTile> {
         DIVISION.get(Demand::default)
     }
 }
 
-impl Observed for Earth {
+impl ViewLayer for Earth {
     fn demand() -> &'static mut Demand<Earth> {
         EARTH.get(Demand::default)
     }
@@ -99,7 +99,7 @@ pub struct Layer {
     on_arrival: fn(u64, Option<Block>, &mut Phases) -> Result<(), Failure>,
 }
 
-const fn layer<L: Observed>() -> Layer {
+const fn layer<L: ViewLayer>() -> Layer {
     Layer {
         stream: L::STREAM,
         slots: TileCache::<L>::SLOTS,
@@ -187,7 +187,7 @@ struct Key {
     dst: Option<Quadrant>,
 }
 
-pub struct Demand<L: Observed> {
+pub struct Demand<L: ViewLayer> {
     layer: core::marker::PhantomData<L>,
     observation: Option<Observation>,
     wants: Vec<(u64, Order)>,
@@ -206,7 +206,7 @@ pub struct Demand<L: Observed> {
     /// (`observe`); reused across observations.
     gone: Vec<Quadrant>,
     /// What it reads moved since it last observed.
-    moved: bool,
+    changed: bool,
     /// Where an observation builds the estimator's tiles and its asks, kept
     /// so observing stops allocating once warm. Empty between observations:
     /// what was asked is the tile cache's (`TileCache::ask`).
@@ -222,7 +222,7 @@ pub struct Demand<L: Observed> {
     idle_revision: Option<u32>,
 }
 
-impl<L: Observed> Default for Demand<L> {
+impl<L: ViewLayer> Default for Demand<L> {
     fn default() -> Self {
         Demand {
             layer: core::marker::PhantomData,
@@ -234,7 +234,7 @@ impl<L: Observed> Default for Demand<L> {
             required: Vec::new(),
             floor: Vec::new(),
             gone: Vec::new(),
-            moved: false,
+            changed: false,
             asks: FnvHashMap::with_capacity_and_hasher(
                 TileCache::<L>::SLOTS as usize,
                 Default::default(),
@@ -245,7 +245,7 @@ impl<L: Observed> Default for Demand<L> {
     }
 }
 
-impl<L: Observed> Demand<L> {
+impl<L: ViewLayer> Demand<L> {
     /// The floor's tiles as last observed.
     pub fn floor(&self) -> impl Iterator<Item = Quadrant> + Clone + '_ {
         self.floor.iter().copied()
@@ -501,8 +501,8 @@ impl<L: Observed> Demand<L> {
     ) {
         self.idle_revision = None;
         let now = Key { o, dst };
-        let moved = core::mem::take(&mut self.moved);
-        if !moved && self.last == Some(now) {
+        let changed = core::mem::take(&mut self.changed);
+        if !changed && self.last == Some(now) {
             return;
         }
         let estimator = ByEye {
@@ -510,7 +510,7 @@ impl<L: Observed> Demand<L> {
             top,
         };
         // A turn of the frustum alone names what the last did.
-        let named = !moved
+        let named = !changed
             && self.last.is_some_and(|k| {
                 k.dst == dst
                     && k.o.zip(o).is_some_and(|(was, is)| {
@@ -536,8 +536,8 @@ impl<L: Observed> Demand<L> {
     }
 
     /// What it reads moved: its own tiles', the ground's, or the objects'.
-    pub fn on_moved(&mut self) {
-        self.moved = true;
+    pub fn on_changed(&mut self) {
+        self.changed = true;
     }
 
     /// A layer the view does not show keeps what it holds and asks for
@@ -641,7 +641,7 @@ pub fn admit_arrived(pass: &Pass) {
                     Err(Errno::ENOTRECOVERABLE.into())
                 }
             };
-            settle(key, Ended::from(result), Some(phases));
+            settle(key, Exit::from(result), Some(phases));
             true
         },
         None,
@@ -652,7 +652,7 @@ pub fn admit_arrived(pass: &Pass) {
 }
 
 /// None is no object for the tile `id` names.
-fn on_arrived<L: Observed>(
+fn on_arrived<L: ViewLayer>(
     id: u64,
     block: Option<Block>,
     phases: &mut Phases,

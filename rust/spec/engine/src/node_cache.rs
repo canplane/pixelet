@@ -17,7 +17,7 @@
 //! One buffer of words:
 //!
 //! - its head: the frame's number, what is forgotten, and the eye's
-//!   clip levels' entries that moved (`HEAD_WORDS`);
+//!   clip levels' entries that moved (`HEADER_WORDS`);
 //! - the frame the eye's draw last ran (`DRAWN`);
 //! - the keys, a word a slot, a bucket's side by side (`KEYS_AT`);
 //! - the states, a word a slot (`STATES_AT`);
@@ -47,7 +47,7 @@
 //! whole (`holds_for`; pxl-render ask.wgsl `ask_node`, `kept_at`, cached.wgsl
 //! `node_answer`). The two never both hold a node for one pair: where the query answers a
 //! node its cell at a pair, no split's rule answers it there. A walk that finds a cell whole,
-//! kept already but not whole, sets it whole (ask.wgsl `cell_kept`); its stamp takes no
+//! kept already but not whole, sets it whole (ask.wgsl `holds_cell`); its stamp takes no
 //! whole (`entry_stamp`). Forget, what draws an entry and eviction read the node and the
 //! frame, not the zooms, and are the same for either key.
 //!
@@ -76,18 +76,18 @@ use crate::answer::Kind;
 use crate::clipmap::{self, EYE_CLIP_LEVELS};
 use crate::count;
 use crate::ground::VOID;
-use crate::overwrite::BOXES;
+use crate::object::RECTS;
 use crate::world::INHERITANCE_WORDS;
 use crate::{Zoom, ZOOM_BITS};
 
 /// The head's words: the frame's number, what this frame forgets
-/// (`FORGETS_NONE`, `FORGETS_ALL`, `FORGETS_MOVED`), a bit an entry of the
+/// (`FORGETS_NONE`, `FORGETS_ALL`, `FORGETS_CHANGED`), a bit an entry of the
 /// eye's clip levels, a clip level's `clipmap::ENTRIES` bits in turn, set where
 /// the brick it holds moved or was handed since the last cast, and the box those bricks lie
-/// in a clip level (`MOVED_BRICKS_AT`); and the boxes of
+/// in a clip level (`CHANGED_BRICKS_AT`); and the boxes of
 /// leaf cells whose columns what is placed or a preview's cuts changed since
-/// the last cast, how many (`BOXES_AT`) then four words each, the boxes decor's
-/// generation is asked over (`overwrite::BOXES`, `overwrite::cut_box`;
+/// the last cast, how many (`RECTS_AT`) then four words each, the boxes decor's
+/// generation is asked over (`object::RECTS`, `object::cut_rect`;
 /// pxl-render gpu/generator.rs); and the child groups of what is placed written
 /// since the last cast, by their first slots, how many (`WRITTEN_AT`) then
 /// `WRITTEN_CAP` at most, past which all is forgotten (pxl-render forget.wgsl
@@ -96,15 +96,15 @@ use crate::{Zoom, ZOOM_BITS};
 /// `COUNT_AT`).
 pub const FRAME: u32 = 0;
 pub const FORGETS: u32 = 1;
-pub const MOVED_AT: u32 = 2;
-pub const MOVED_WORDS: u32 = (EYE_CLIP_LEVELS * clipmap::ENTRIES).div_ceil(32);
-/// Each of the eye's clip levels' bricks that moved held present (`Entry::held_moved_from`), the
+pub const CHANGED_AT: u32 = 2;
+pub const CHANGED_WORDS: u32 = (EYE_CLIP_LEVELS * clipmap::ENTRIES).div_ceil(32);
+/// Each of the eye's clip levels' bricks that moved held present (`Entry::held_changed_from`), the
 /// box they lie in, `[x0, y0, x1, y1]` from first to last, none as `NO_BRICKS`: an entry's bit
 /// holds any brick of its place modulo `clipmap::ACROSS`, the box tells them from those of other
 /// places, for the nodes that read bricks held present alone (pxl-render forget.wgsl `forgets`).
-pub const MOVED_BRICKS_AT: u32 = MOVED_AT + MOVED_WORDS;
-pub const BOXES_AT: u32 = MOVED_BRICKS_AT + 4 * EYE_CLIP_LEVELS;
-pub const WRITTEN_AT: u32 = BOXES_AT + 1 + 4 * BOXES;
+pub const CHANGED_BRICKS_AT: u32 = CHANGED_AT + CHANGED_WORDS;
+pub const RECTS_AT: u32 = CHANGED_BRICKS_AT + 4 * EYE_CLIP_LEVELS;
+pub const WRITTEN_AT: u32 = RECTS_AT + 1 + 4 * RECTS;
 pub const WRITTEN_CAP: u32 = 32;
 /// Which observers' walks and pixels count what they ask, a bit an observer (`count::EYE`,
 /// `count::LIGHT`), set where the `ray_counts` setting asks and the observer casts, and the
@@ -120,15 +120,15 @@ pub const HITS_ARGS: u32 = COUNT_AT + COUNT_WORDS;
 pub const HITS_CNT: u32 = HITS_ARGS + 3;
 /// The next ray the holes' queue's last walk takes (pxl-render queue_last.wgsl), each
 /// observer's in turn, set back to 0 by the asks that run before it (queue_ask.wgsl).
-pub const LAST_TAKEN: u32 = HITS_CNT + 1;
+pub const LAST_NEXT: u32 = HITS_CNT + 1;
 /// The nodes the frame asked of the world so far, every run's together (`ray::ASKS_A_FRAME`):
 /// set to none by the host each frame a run runs.
-pub const ASKED: u32 = LAST_TAKEN + 1;
-pub const HEAD_WORDS: u32 = ASKED + 1;
+pub const ASKED: u32 = LAST_NEXT + 1;
+pub const HEADER_WORDS: u32 = ASKED + 1;
 /// The frame the eye's draw last ran, written by it (pxl-render record_draw.wgsl
 /// `record_draw_cs`): the boxes the raster draws until it runs again name the entries it
 /// marked seen then (`record::drawn`). Past the head the host writes each frame.
-pub const DRAWN: u32 = HEAD_WORDS;
+pub const DRAWN: u32 = HEADER_WORDS;
 /// Where `observer`'s walks count lane `lane` (pxl-engine `count::BEAM`
 /// to `count::MISS`) in the head.
 pub const fn lane_at(observer: u32, lane: u32) -> u32 {
@@ -139,11 +139,11 @@ pub const fn lane_at(observer: u32, lane: u32) -> u32 {
 /// asked of moved (the service area) or the keys' frames ran out; the nodes
 /// over the bricks that moved, over a box of what is placed or cut that
 /// changed, or handed a slot of a child group of what is placed that was
-/// written (pxl-render forget.wgsl `forgets`, `over_box`, `reads_written`).
-/// A clip level's moved bricks' box where none moved (`MOVED_BRICKS_AT`).
+/// written (pxl-render forget.wgsl `forgets`, `over_rect`, `reads_written`).
+/// A clip level's moved bricks' box where none moved (`CHANGED_BRICKS_AT`).
 pub const NO_BRICKS: [i32; 4] = [i32::MAX, i32::MAX, i32::MIN, i32::MIN];
 
-/// The box of what boxes `a` and `b` hold (`MOVED_BRICKS_AT`).
+/// The box of what boxes `a` and `b` hold (`CHANGED_BRICKS_AT`).
 pub const fn bricks_joined(a: [i32; 4], b: [i32; 4]) -> [i32; 4] {
     const fn most(x: i32, y: i32) -> i32 {
         if x > y {
@@ -169,7 +169,7 @@ pub const fn bricks_joined(a: [i32; 4], b: [i32; 4]) -> [i32; 4] {
 
 pub const FORGETS_NONE: u32 = 0;
 pub const FORGETS_ALL: u32 = 1;
-pub const FORGETS_MOVED: u32 = 2;
+pub const FORGETS_CHANGED: u32 = 2;
 
 /// An entry's words.
 pub const W_KIND: u32 = 0;

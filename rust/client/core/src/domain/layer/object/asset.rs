@@ -64,7 +64,7 @@ impl Asset {
             Asset::Cube(_) => object_zoom_of(scale_steps),
             Asset::Decor(_) => UNIT_ZOOM,
             Asset::Marker => MARKER_ZOOM,
-            Asset::Unknown => GROUND.cell(),
+            Asset::Unknown => GROUND.leaf_cell_zoom(),
         }
     }
 }

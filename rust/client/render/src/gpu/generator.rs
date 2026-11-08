@@ -17,18 +17,18 @@ use crate::frame::shader::access;
 use crate::frame::shader::sequence;
 use pxl_content::decor::DECORS;
 use pxl_content::generation::{self, drawn, GROUPS};
-use pxl_engine::{clipmap, eye, overwrite, Zoom};
+use pxl_engine::{clipmap, eye, object, Zoom};
 use pxl_spec::space::coord::q3::Q3;
 
 use crate::frame::shader::group::{
-    ARGS_GROUP, CNT_GROUP, COMPACT_GROUP, GATED_LIGHT_ARGS, GATED_SCREEN_ARGS, GATE_GROUP,
-    GATE_LIGHT_BINDS, GATE_SCREEN_BINDS, GENERATE_GROUP, GENERATION_ARGS, GENERATION_ARGS_OF_BINDS,
-    GENERATION_BINDS, GENERATION_LIST, GENERATION_MARK_BINDS, GENERATION_THIN_BINDS, MARK_GROUP,
-    THIN_GROUP,
+    ARGS_GROUP, CNT_GROUP, COMPACT_GROUP, CULLED_LIGHT_ARGS, CULLED_SCREEN_ARGS, GENERATE_GROUP,
+    GENERATION_ARGS, GENERATION_ARGS_OF_BINDS, GENERATION_BINDS, GENERATION_LIST,
+    GENERATION_MARK_BINDS, GENERATION_THIN_BINDS, MARK_GROUP, MASK_GROUP, MASK_LIGHT_BINDS,
+    MASK_SCREEN_BINDS, THIN_GROUP,
 };
 use crate::frame::shader::record::PIPELINE_DECOR;
 use crate::frame::shader::record::{
-    COMPUTE_DECOR_GATE, COMPUTE_DECOR_GATE_ARGS, COMPUTE_GENERATION, COMPUTE_GENERATION_ARGS,
+    COMPUTE_DECOR_CULL, COMPUTE_DECOR_CULL_ARGS, COMPUTE_GENERATION, COMPUTE_GENERATION_ARGS,
     COMPUTE_GENERATION_CNT, COMPUTE_GENERATION_COMPACT, COMPUTE_GENERATION_MARK,
     COMPUTE_GENERATION_THIN,
 };
@@ -58,7 +58,7 @@ pub struct DecorFrame<'a> {
     /// draw's Q3 (gpu/draw.rs `Position`): where the decor's instances are
     /// drawn, against the frame's eye (word.rs `frame::EYE`).
     pub anchor: Q3,
-    /// What overwrites wrote since the last frame, `overwrite::EDITS` boxes
+    /// What overwrites wrote since the last frame, `object::EDITS` boxes
     /// of leaf cells at most (pxl-content `generation::meets`): the slots
     /// whose decor they reach generate again.
     pub edits: &'a [[i32; 4]],
@@ -115,11 +115,11 @@ pub struct Generator {
     draw_layouts: [Layout; 2],
     uniform_group: u32,
     instances_group: u32,
-    /// What a frame through a gate draws in their place (`gate`), each gate's its own
-    /// (`Gate`), and the passes that make it.
-    gated: [Gated; 2],
-    gate_args: Pipeline,
-    gate: Pipeline,
+    /// What a frame through a gate draws in their place (`mask`), each gate's its own
+    /// (`Mask`), and the passes that make it.
+    culled: [Culled; 2],
+    cull_args: Pipeline,
+    mask: Pipeline,
     cap: u32,
     /// The placed decor's records, as last handed.
     placed_cnt: u32,
@@ -137,13 +137,13 @@ pub struct Generator {
     /// The boxes the slots they meet generate again in, held until a frame
     /// that marks by them is drawn: one dropped, or handed and never drawn,
     /// hands them again, as generating a slot twice generates it the same.
-    /// Past `overwrite::BOXES`, the rest joined into the last.
-    pending_boxes: [[i32; 4]; overwrite::BOXES as usize],
+    /// Past `object::RECTS`, the rest joined into the last.
+    pending_rects: [[i32; 4]; object::RECTS as usize],
     holding: usize,
-    /// How many of `pending_boxes` this frame marks by, and how many boxes it marks
-    /// by in all, the bricks handed with them (`marked_boxes`).
+    /// How many of `pending_rects` this frame marks by, and how many boxes it marks
+    /// by in all, the bricks handed with them (`marked_rects`).
     marked: usize,
-    boxes: u32,
+    rects: u32,
     /// Whether the slots' records were not kept, decor having been off: the
     /// next frame drawn with decor generates every slot.
     stale: bool,
@@ -171,8 +171,8 @@ impl Generator {
             core::slice::from_raw_parts(table.as_ptr().cast::<u32>(), size_of_val(&table) / 4)
         };
         g.write_buf(rows, 0, bytes(words));
-        let drawn_by = pipelines.build_world(g, PIPELINE_DECOR);
-        let draw_layouts = [drawn_by.layouts[1], drawn_by.layouts[3]];
+        let decor_pipeline = pipelines.build_world(g, PIPELINE_DECOR);
+        let draw_layouts = [decor_pipeline.layouts[1], decor_pipeline.layouts[3]];
         let uniforms = buf(
             word_bytes((drawn::UNIFORM_WORDS * drawn::REGIONS) as usize),
             storage | buffer_usage::UNIFORM,
@@ -207,7 +207,7 @@ impl Generator {
                 &[buf_range_entry(0, uniforms, 0, word_bytes(DRAW_FLOATS))],
             ),
             instances_group: 0,
-            gated: [Gate::Screen, Gate::Light].map(|_| Gated {
+            culled: [Mask::Screen, Mask::Light].map(|_| Culled {
                 list: 0,
                 args: buf(
                     word_bytes((drawn::ARGS_WORDS * drawn::REGIONS) as usize),
@@ -215,8 +215,8 @@ impl Generator {
                 ),
                 group: 0,
             }),
-            gate_args: pipelines.build_compute(g, COMPUTE_DECOR_GATE_ARGS, &GATE_GROUP),
-            gate: pipelines.build_compute(g, COMPUTE_DECOR_GATE, &GATE_GROUP),
+            cull_args: pipelines.build_compute(g, COMPUTE_DECOR_CULL_ARGS, &MASK_GROUP),
+            mask: pipelines.build_compute(g, COMPUTE_DECOR_CULL, &MASK_GROUP),
             cap: 0,
             placed_cnt: 0,
             bindings: [0; 6],
@@ -228,10 +228,10 @@ impl Generator {
             count_read: Read::default(),
             counting: false,
             marking: false,
-            pending_boxes: [[0; 4]; overwrite::BOXES as usize],
+            pending_rects: [[0; 4]; object::RECTS as usize],
             holding: 0,
             marked: 0,
-            boxes: 0,
+            rects: 0,
             stale: true,
         }
     }
@@ -280,16 +280,16 @@ impl Generator {
                 self.draw_layouts[1],
                 &[buf_entry(0, self.instances), buf_entry(1, self.instances)],
             );
-            for gated in &mut self.gated {
-                release(gated.group);
-                release(gated.list);
-                gated.list = g.buf(
+            for culled in &mut self.culled {
+                release(culled.group);
+                release(culled.list);
+                culled.list = g.buf(
                     word_bytes(((drawn::COLUMNS + 1) * need) as usize),
                     buffer_usage::STORAGE,
                 );
-                gated.group = g.bind_group(
+                culled.group = g.bind_group(
                     self.draw_layouts[1],
-                    &[buf_entry(0, self.instances), buf_entry(1, gated.list)],
+                    &[buf_entry(0, self.instances), buf_entry(1, culled.list)],
                 );
             }
             self.cap = need;
@@ -313,49 +313,49 @@ impl Generator {
         // cut that moved as it was and as it is, held with any a frame not
         // drawn handed.
         for &b in f.edits {
-            hold(&mut self.pending_boxes, &mut self.holding, b);
+            hold(&mut self.pending_rects, &mut self.holding, b);
         }
-        cut_boxes(&self.cuts, generation.cuts, |b| {
-            hold(&mut self.pending_boxes, &mut self.holding, b);
+        cut_rects(&self.cuts, generation.cuts, |b| {
+            hold(&mut self.pending_rects, &mut self.holding, b);
         });
         self.cuts = *generation.cuts;
         let w = &mut self.clipmap;
         w.begin();
         w.read(generation.clipmap);
-        let moved = !w.end();
+        let changed = !w.end();
         self.marked = self.holding;
         // A brick filled at any clip level generates decor there and coarser.
         let fresh = !generation.fresh.is_empty();
-        self.marking = self.stale || moved || fresh || self.marked != 0;
-        self.boxes = 0;
+        self.marking = self.stale || changed || fresh || self.marked != 0;
+        self.rects = 0;
         if self.marking {
             // The boxes held, at every zoom, then each brick handed, at
             // its clip level's and coarser.
-            let mut boxes = [0u32; (generation::BOX_CAP * generation::BOX_WORDS) as usize];
+            let mut rects = [0u32; (generation::RECT_CAP * generation::RECT_WORDS) as usize];
             let fresh = generation
                 .fresh
                 .iter()
-                .map(|&(cell, q)| (generation::brick_box(cell, q), cell));
-            let pending_boxes = self.pending_boxes[..self.marked]
+                .map(|&(cell_zoom, q)| (generation::brick_rect(cell_zoom, q), cell_zoom));
+            let pending_rects = self.pending_rects[..self.marked]
                 .iter()
                 .map(|&b| (b, generation::EVERY));
             let mut n = 0;
-            for (b, zoom) in pending_boxes
+            for (b, zoom) in pending_rects
                 .chain(fresh)
-                .take(generation::BOX_CAP as usize)
+                .take(generation::RECT_CAP as usize)
             {
-                let at = n * generation::BOX_WORDS as usize;
-                boxes[at..at + 4].copy_from_slice(&b.map(|v| v as u32));
-                boxes[at + 4] = zoom;
+                let at = n * generation::RECT_WORDS as usize;
+                rects[at..at + 4].copy_from_slice(&b.map(|v| v as u32));
+                rects[at + 4] = zoom;
                 n += 1;
             }
-            self.boxes = n as u32;
+            self.rects = n as u32;
             // The list's head (pxl-content `generation::THIN_ARGS`): each
             // pass's workgroups across and up, the pairs listed 0 until
             // `decor_mark_cs` lists them; whether every entry generates
             // whole, the boxes, and no pair yet in part.
-            let mut head = [0u32; generation::BOXES_AT as usize];
-            let mut put = |at: u32, val: u32| head[at as usize] = val;
+            let mut header = [0u32; generation::RECTS_AT as usize];
+            let mut put = |at: u32, val: u32| header[at as usize] = val;
             put(
                 generation::THIN_ARGS,
                 clipmap::BRICK_CELLS.div_ceil(generation::LANES),
@@ -367,28 +367,28 @@ impl Generator {
             );
             put(generation::GENERATE_ARGS + 1, 1);
             put(generation::LIST_EVERY, u32::from(self.stale));
-            put(generation::LIST_BOXES, n as u32);
+            put(generation::LIST_RECTS, n as u32);
             put(generation::LIST_PARTS, 0);
             g.write_buf(
                 self.list,
                 sequence::OPEN_GENERATION_LIST.to_at(),
-                bytes(&head),
+                bytes(&header),
             );
             g.write_buf(
                 self.list,
-                sequence::OPEN_GENERATION_BOXES.to_at(),
-                bytes(&boxes[..n * generation::BOX_WORDS as usize]),
+                sequence::OPEN_GENERATION_RECTS.to_at(),
+                bytes(&rects[..n * generation::RECT_WORDS as usize]),
             );
         }
         let p = &mut self.placed;
         p.begin();
         p.read(f.placed_records);
-        let placed_moved = !p.end();
+        let placed_changed = !p.end();
         self.placed_cnt = f.placed_records.len() as u32;
-        if placed_moved {
+        if placed_changed {
             g.write_buf(
                 self.records,
-                generation::PLACED_HEAD * 4,
+                generation::PLACED_HEADER * 4,
                 bytes(&[f.placed_records.len() as u32, 0, 0, 0]),
             );
             if !f.placed_records.is_empty() {
@@ -411,7 +411,7 @@ impl Generator {
         c.read(f.drawing);
         c.read(meshes);
         c.read(&f.anchor);
-        c.mark(self.marking || placed_moved || regroup);
+        c.mark(self.marking || placed_changed || regroup);
         self.counting = !c.end();
         if !self.counting {
             return;
@@ -440,8 +440,8 @@ impl Generator {
         match buf {
             GENERATION_LIST => self.list,
             GENERATION_ARGS => self.args,
-            GATED_SCREEN_ARGS => self.gated[Gate::Screen as usize].args,
-            GATED_LIGHT_ARGS => self.gated[Gate::Light as usize].args,
+            CULLED_SCREEN_ARGS => self.culled[Mask::Screen as usize].args,
+            CULLED_LIGHT_ARGS => self.culled[Mask::Light as usize].args,
             _ => 0,
         }
     }
@@ -466,7 +466,7 @@ impl Generator {
         for id in self.groups {
             release(id);
         }
-        let [eye, clipmap, ground, shards, overwrites, pool] = world;
+        let [eye, clipmap, ground, shards, objects, pool] = world;
         let groups = [
             framed(
                 &self.mark,
@@ -486,7 +486,7 @@ impl Generator {
                     (1, clipmap),
                     (2, ground),
                     (5, shards),
-                    (6, overwrites),
+                    (6, objects),
                     (7, pool),
                     (9, self.records),
                     (10, self.rows),
@@ -531,16 +531,16 @@ impl Generator {
     /// every slot (`stale`).
     pub fn off(&mut self) {
         self.on = false;
-        self.boxes = 0;
+        self.rects = 0;
         self.stale = true;
         self.count_read.forget();
     }
 
     /// The frame was drawn: the boxes it marked by and its every-slot
     /// generation are done with.
-    pub fn drawn_frame(&mut self) {
+    pub fn on_drawn(&mut self) {
         if self.marking {
-            self.pending_boxes.copy_within(self.marked..self.holding, 0);
+            self.pending_rects.copy_within(self.marked..self.holding, 0);
             self.holding -= self.marked;
             self.stale = false;
         }
@@ -567,7 +567,7 @@ impl Generator {
     /// A frame's decor handed and never drawn: its edits held for the next.
     pub fn carry_edits(&mut self, edits: &[[i32; 4]]) {
         for &b in edits {
-            hold(&mut self.pending_boxes, &mut self.holding, b);
+            hold(&mut self.pending_rects, &mut self.holding, b);
         }
     }
 
@@ -588,11 +588,11 @@ impl Generator {
                 1,
                 1,
             );
-            let listed = [
+            let list_of = [
                 (&self.thin, self.groups[1], &sequence::THIN),
                 (&self.generate, self.groups[2], &sequence::GENERATE),
             ];
-            for (pipeline, group, step) in listed {
+            for (pipeline, group, step) in list_of {
                 g.set_pipeline(pass, pipeline.id);
                 g.set_bind_group(pass, 0, group, &[]);
                 g.dispatch_indirect(pass, self.list, step.at());
@@ -618,10 +618,10 @@ impl Generator {
     }
 
     /// The boxes this frame marks slots by to generate again: the edits and
-    /// cuts held and the bricks handed, `generation::BOX_CAP` at most; 0
+    /// cuts held and the bricks handed, `generation::RECT_CAP` at most; 0
     /// where it marks none.
-    pub fn marked_boxes(&self) -> u32 {
-        self.boxes
+    pub fn marked_rects(&self) -> u32 {
+        self.rects
     }
 
     /// Whether decor is compacted again this frame, so stands elsewhere.
@@ -646,54 +646,54 @@ impl Generator {
             instances_group: self.instances_group,
             args: self.args,
             uniform_group: self.uniform_group,
-            gated: self.gated.map(|gated| (gated.group, gated.args)),
-            gate: None,
+            culled: self.culled.map(|culled| (culled.group, culled.args)),
+            mask: None,
         })
     }
 
-    /// The instances a frame draws through `gate`, those whose ball meets the box of the
-    /// claimed tiles of `tiles` (claimed_box.wgsl, decor_gate.wgsl) as the frame's words
+    /// The instances a frame draws through `mask`, those whose ball meets the box of the
+    /// claimed tiles of `tiles` (damage_rect.wgsl, decor_cull.wgsl) as the frame's words
     /// `frame` see it, once the tiles' marks are made: timed with the marks.
-    pub fn gate(&self, ctx: &mut RenderContext, gate: Gate, frame: u32, tiles: &Tiles) {
+    pub fn mask(&self, ctx: &mut RenderContext, mask: Mask, frame: u32, tiles: &Tiles) {
         if !(self.on && self.instances != 0) {
             return;
         }
-        let claimed_box = tiles.dispatch_claimed_box(ctx);
-        let gated = &self.gated[gate as usize];
+        let damage_rect = tiles.dispatch_damage_rect(ctx);
+        let culled = &self.culled[mask as usize];
         let g = ctx.g;
-        let table = match gate {
-            Gate::Screen => &GATE_SCREEN_BINDS,
-            Gate::Light => &GATE_LIGHT_BINDS,
+        let table = match mask {
+            Mask::Screen => &MASK_SCREEN_BINDS,
+            Mask::Light => &MASK_LIGHT_BINDS,
         };
         let group = g.frame_group(
-            self.gate.layouts[0],
+            self.mask.layouts[0],
             table,
             |b| self.buf_of(b),
             &[
                 buf_entry(0, frame),
                 buf_entry(1, self.uniforms),
                 buf_entry(3, self.instances),
-                buf_entry(4, gated.list),
-                buf_entry(6, claimed_box),
+                buf_entry(4, culled.list),
+                buf_entry(6, damage_rect),
                 buf_entry(7, self.regions),
                 buf_entry(31, tiles.this_frame().1),
             ],
         );
         let pass = g.compute_pass(ctx.encoder, ctx.stamp(tiles.span()).pass());
         g.set_bind_group(pass, 0, group, &[]);
-        g.set_pipeline(pass, self.gate_args.id);
+        g.set_pipeline(pass, self.cull_args.id);
         g.dispatch(pass, drawn::REGIONS.div_ceil(64), 1, 1);
-        g.set_pipeline(pass, self.gate.id);
+        g.set_pipeline(pass, self.mask.id);
         g.dispatch(pass, self.cap.div_ceil(64), 1, 1);
         g.end(pass);
         release(group);
     }
 }
 
-/// The gate a frame draws decor through (`Generator::gate`): the screen's claimed tiles, or
+/// The gate a frame draws decor through (`Generator::mask`): the screen's claimed tiles, or
 /// the light map's. Both are drawn in one frame, so each keeps its own list.
 #[derive(Clone, Copy)]
-pub enum Gate {
+pub enum Mask {
     Screen,
     Light,
 }
@@ -702,7 +702,7 @@ pub enum Gate {
 /// claimed tiles, listed at each region's place, the regions' args with them, and the draws'
 /// group over that list.
 #[derive(Clone, Copy)]
-struct Gated {
+struct Culled {
     list: u32,
     args: u32,
     group: u32,
@@ -726,21 +726,21 @@ pub struct IndirectDraw {
     pub instances_group: u32,
     pub args: u32,
     pub uniform_group: u32,
-    /// The group and the args a frame draws by through each gate (`Generator::gate`).
-    pub gated: [(u32, u32); 2],
+    /// The group and the args a frame draws by through each gate (`Generator::mask`).
+    pub culled: [(u32, u32); 2],
     /// The gate it is drawn through, none where it is drawn whole.
-    pub gate: Option<Gate>,
+    pub mask: Option<Mask>,
 }
 
 impl IndirectDraw {
-    /// The draw a frame makes through `gate`: its list and args in place of the instances'
-    /// own (`Generator::gate`).
-    pub fn through_gate(self, gate: Gate) -> IndirectDraw {
-        let (instances_group, args) = self.gated[gate as usize];
+    /// The draw a frame makes through `mask`: its list and args in place of the instances'
+    /// own (`Generator::mask`).
+    pub fn through_mask(self, mask: Mask) -> IndirectDraw {
+        let (instances_group, args) = self.culled[mask as usize];
         IndirectDraw {
             instances_group,
             args,
-            gate: Some(gate),
+            mask: Some(mask),
             ..self
         }
     }
@@ -756,15 +756,15 @@ impl IndirectDraw {
     }
 }
 
-/// Box `b` held among the `holding` boxes of `pending_boxes`, past the room joined
+/// Box `b` held among the `holding` boxes of `pending_rects`, past the room joined
 /// into the last: what decor's generation (`Generator`) and the node cache's
 /// forgetting (ray/cast.rs) are asked over.
-pub(crate) fn hold(pending_boxes: &mut [[i32; 4]], holding: &mut usize, b: [i32; 4]) {
-    if *holding < pending_boxes.len() {
-        pending_boxes[*holding] = b;
+pub(crate) fn hold(pending_rects: &mut [[i32; 4]], holding: &mut usize, b: [i32; 4]) {
+    if *holding < pending_rects.len() {
+        pending_rects[*holding] = b;
         *holding += 1;
     } else {
-        let last = &mut pending_boxes[*holding - 1];
+        let last = &mut pending_rects[*holding - 1];
         *last = [
             last[0].min(b[0]),
             last[1].min(b[1]),
@@ -775,8 +775,8 @@ pub(crate) fn hold(pending_boxes: &mut [[i32; 4]], holding: &mut usize, b: [i32;
 }
 
 /// The boxes a preview's cuts changed, `was` against `is`: each cut that
-/// moved as it was and as it is (pxl-engine `overwrite::cut_box`).
-pub(crate) fn cut_boxes(
+/// moved as it was and as it is (pxl-engine `object::cut_rect`).
+pub(crate) fn cut_rects(
     was: &[u32; eye::CUTS],
     is: &[u32; eye::CUTS],
     mut each: impl FnMut([i32; 4]),
@@ -785,7 +785,7 @@ pub(crate) fn cut_boxes(
         let (was, is) = (&was[k..k + eye::CUT_WORDS], &is[k..k + eye::CUT_WORDS]);
         if was != is {
             for c in [was, is].into_iter().filter(|c| c[3] != eye::NO_CUT) {
-                each(overwrite::cut_box(
+                each(object::cut_rect(
                     c[3],
                     [c[0] as i32, c[1] as i32, c[2] as i32],
                 ));

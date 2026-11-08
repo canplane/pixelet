@@ -64,7 +64,7 @@ pub mod device {
 }
 
 /// A pipeline record's codes (frame/shader/record.rs, expanded into xpute's
-/// descriptors by gpu/api.rs), and HEAD, the words it opens with before its
+/// descriptors by gpu/api.rs), and HEADER, the words it opens with before its
 /// vertex buffers. Then: the topology, the cull mode, the depth compare under
 /// reversed Z (LESS is plain depth, for a depth-only pass; NO_DEPTH, no
 /// depth attachment), the blend, which vertex entry point of
@@ -81,7 +81,7 @@ pub mod device {
 /// compares a depth texture's texels against a reference (the light's shadow
 /// map, gpu/shadow.rs).
 pub mod record {
-    pub const HEAD: u32 = 10;
+    pub const HEADER: u32 = 10;
     pub const TRIANGLES: u32 = 0;
     pub const STRIP: u32 = 1;
     pub const CULL_NONE: u32 = 0;

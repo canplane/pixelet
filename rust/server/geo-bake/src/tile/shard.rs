@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 use crate::cli::Flags;
 use crate::coverage::{src_of, Coverage, Node};
 use crate::pyramid::{
-    fold, unasked_tiles, write_manifest, Absent, Base, Staged, TileSet, FITS, MANIFEST,
+    coarser_tiles, fold, write_manifest, Absent, Base, Staged, TileSet, FITS, MANIFEST,
 };
 use crate::source;
 use crate::util;
@@ -187,24 +187,27 @@ impl Stage {
             .into_iter()
             .filter(|&p| tiles.contains(&p.shard()))
             .collect();
-        let leaves_gone = self.leaves_gone(&whole)?;
-        changed.extend(leaves_gone.iter().copied());
+        let leaves_removed = self.leaves_removed(&whole)?;
+        changed.extend(leaves_removed.iter().copied());
         let mut staged = Staged {
             base: &self.set,
             stage: &self.stage,
             leaf: L::LEAF,
             whole: &tiles,
-            gone: leaves_gone.clone(),
+            removed: leaves_removed.clone(),
         };
         fold(&mut staged, changed, absent, workers)?;
         self.write_done(
             FOLD,
-            staged.gone.into_iter().filter(|p| !leaves_gone.contains(p)),
+            staged
+                .removed
+                .into_iter()
+                .filter(|p| !leaves_removed.contains(p)),
         )
     }
 
     /// The leaves the whole shards' stages take away.
-    fn leaves_gone(&self, whole: &[Node]) -> Result<FnvHashSet<Quadrant>, String> {
+    fn leaves_removed(&self, whole: &[Node]) -> Result<FnvHashSet<Quadrant>, String> {
         let mut gone = FnvHashSet::default();
         for shard in whole {
             gone.extend(self.read_done(&shard.name())?);
@@ -226,14 +229,14 @@ impl Stage {
             // The set as it will be, refused before anything moves.
             let whole = self.whole()?;
             let tiles: FnvHashSet<Quadrant> = whole.iter().copied().map(shard_tile).collect();
-            let mut gone = self.leaves_gone(&whole)?;
+            let mut gone = self.leaves_removed(&whole)?;
             gone.extend(self.read_done(FOLD)?);
             let view = Staged {
                 base: &self.set,
                 stage: &self.stage,
                 leaf: L::LEAF,
                 whole: &tiles,
-                gone,
+                removed: gone,
             };
             let fits = L::check_pool(&view, workers)?;
             // Before anything moves: a commit begun is finished, never undone, so
@@ -340,7 +343,7 @@ impl Stage {
         fs::create_dir_all(to).map_err(|e| io(to, e))?;
         // A reader starts at the kind's coarsest, so no tile there goes.
         let skip = if pruned {
-            unasked_tiles::<L>(&self.set, L::COARSEST)?
+            coarser_tiles::<L>(&self.set, L::COARSEST)?
         } else {
             FnvHashSet::default()
         };

@@ -6,7 +6,7 @@
 //! GPU once it is filled (domain/layer/terrain/clipmap.rs `upload`).
 
 use pxl_engine::eye;
-use pxl_render::gpu::ray::Overwrites;
+use pxl_render::gpu::ray::Objects;
 use pxl_spec::space::camera::eye::Observation;
 use xpute_core::global::Global;
 
@@ -68,12 +68,12 @@ pub fn eye(o: &Observation, edits: &RenderEdits) -> Option<[u32; eye::WORDS]> {
 /// room either has, the store's revision, and the child groups written since the
 /// revision the lanes were last handed at, so the GPU takes only those
 /// again where it holds that one (domain/layer/object/store.rs `gpu_columns`).
-pub fn overwrites() -> Overwrites<'static> {
+pub fn objects() -> Objects<'static> {
     let l = object().gpu_columns();
-    Overwrites {
+    Objects {
         first_child: l.first_child,
         data: l.data,
-        room: l.room,
+        cap: l.cap,
         revision: l.revision,
         since: l.since,
         written_groups: l.written_groups,

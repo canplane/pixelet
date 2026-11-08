@@ -151,7 +151,7 @@ pub(crate) const fn box_of(w: BoxWords) -> ([u32; 3], [u32; 3]) {
 /// and passes on, whichever source holds it. What every ray sees by
 /// (cast.rs `walk`), and the one place a value is told to be so: what
 /// nothing is painted on and what is placed as nothing. What is placed
-/// answers a voxel alone (`overwrite::value`), so no decor or marker is
+/// answers a voxel alone (`object::value`), so no decor or marker is
 /// among them. A question of light, not of matter (`fills`): matter a ray
 /// sees through would answer yes to both.
 pub fn transparent(val: u32) -> bool {

@@ -7,7 +7,7 @@
 //! area, the Earth's ground.
 
 use pxl_engine::ground::{face_height, leaf_cells, rock, UNKNOWN, VOID};
-use pxl_engine::{Zoom, LEAF_CELL, SEA_LEVEL};
+use pxl_engine::{Zoom, LEAF_CELL_ZOOM, SEA_LEVEL};
 
 use crate::cube::ground;
 use crate::param::strata::{BEDROCK_DEPTH, FILLER_DEPTH, HEADROOM, SANDSTONE_DEPTH};
@@ -31,18 +31,18 @@ pub fn ceiling(face: i32) -> i32 {
     face.max(SEA_LEVEL) + HEADROOM
 }
 
-/// What the ground is in cell `z` of a column of `cell` whose palette index is `palette_idx`
+/// What the ground is in cell `z` of a column of `cell_zoom` whose palette index is `palette_idx`
 /// and whose top is `top` cells: by depth under its top, `void` over it. A
 /// column coarser than the leaves' is a summary of the faces under it, its
 /// ground its face whole; the wall (`unknown`) is itself all through.
-pub fn by_depth(cell: Zoom, palette_idx: u32, top: i32, z: i32) -> u32 {
+pub fn by_depth(cell_zoom: Zoom, palette_idx: u32, top: i32, z: i32) -> u32 {
     if z >= top {
         return VOID;
     }
-    if cell < LEAF_CELL || palette_idx == UNKNOWN {
+    if cell_zoom < LEAF_CELL_ZOOM || palette_idx == UNKNOWN {
         return palette_idx;
     }
-    let s = leaf_cells(cell);
+    let s = leaf_cells(cell_zoom);
     // Water's filler is water, as sand's is sand: under a face it is the
     // same cell.
     let (filler, sandstone) = match palette_idx {
@@ -58,7 +58,7 @@ pub fn by_depth(cell: Zoom, palette_idx: u32, top: i32, z: i32) -> u32 {
         filler
     } else if z >= filled - sandstone * s {
         SANDSTONE
-    } else if z >= rock::<Pixelet>(cell, face_height(cell, top)) {
+    } else if z >= rock::<Pixelet>(cell_zoom, face_height(cell_zoom, top)) {
         STONE
     } else {
         UNKNOWN

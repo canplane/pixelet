@@ -32,9 +32,9 @@ use xpute_core::mem::off_of;
 use crate::frame::shader::word::atmos::{
     BOTTOM_RADIUS, CAMERA_ALT, CITY_LIGHT, DRAWN, EARTH_DIST, EARTH_TILES, EARTH_WINDOW, EXPOSURE,
     GROUND_ALBEDO, HORIZON_TO_TOP, KM_PER_U, LAND_ALT_KM, MIE_EXTINCTION, MIE_G, MIE_SCALE_HEIGHT,
-    MIE_SCATTERING, MOON_COLOR, MOON_DIR, MOON_LAID, MOON_LIGHT, MOON_REACHES, NIGHT_SKY,
+    MIE_SCATTERING, MOON_COLOR, MOON_DIR, MOON_LAYOUT, MOON_LIGHT, MOON_REACHES, NIGHT_SKY,
     NIGHT_STOPS, OZONE_ABSORPTION, OZONE_CENTER, OZONE_HALF_WIDTH, RAYLEIGH_SCALE_HEIGHT,
-    RAYLEIGH_SCATTERING, SHOWN_FALL, SUN_ANGULAR_RADIUS, SUN_DIR, SUN_LAID, SUN_REACHES,
+    RAYLEIGH_SCATTERING, SHOWN_FALL, SUN_ANGULAR_RADIUS, SUN_DIR, SUN_LAYOUT, SUN_REACHES,
     TOP_RADIUS,
 };
 use crate::frame::shader::word::{
@@ -193,9 +193,9 @@ impl Measure {
 const EXPOSURE_READS: [Range<usize>; 3] =
     [0..CAMERA_ALT, MIE_EXTINCTION..DRAWN, NIGHT_SKY..LAND_ALT_KM];
 
-/// Each light's words as laid (atmos_medium.wgsl `laid`, `reaches`), the
+/// Each light's words as laid (atmos_medium.wgsl `view_layout`, `reaches`), the
 /// sun's first.
-const LAID: [usize; 2] = [SUN_LAID, MOON_LAID];
+const LAID: [usize; 2] = [SUN_LAYOUT, MOON_LAYOUT];
 const REACHES: [usize; 2] = [SUN_REACHES, MOON_REACHES];
 
 /// A quantity a table is held at by a measured step: a light's height, the
@@ -215,7 +215,7 @@ struct TableInput {
 impl TableInput {
     /// Moved `STEP_SHARE` of its step since it was held; any move before a
     /// step has landed.
-    fn moved(&self, now: f32) -> bool {
+    fn changed(&self, now: f32) -> bool {
         match (self.at, self.step) {
             (None, _) => true,
             (Some(at), None) => at != now,
@@ -642,7 +642,7 @@ impl Atmosphere {
     /// What this frame draws of the tables and what each measures, before
     /// the uniform is written, so it holds each light's words as laid. A
     /// light's view and air are drawn where its height or the eye's altitude
-    /// has moved half its step (`TableInput::moved`), or where it has come to reach
+    /// has moved half its step (`TableInput::changed`), or where it has come to reach
     /// the air since they were last held, and only where it reaches the air
     /// by `REACH`; the reader reads them only then (atmos_medium.wgsl
     /// `reaches`). The exposure is drawn where the words it reads moved
@@ -667,13 +667,13 @@ impl Atmosphere {
                 step: l.step(),
                 ..l.height
             };
-            let moved = height.moved(mu) || l.alt.moved(alt);
+            let changed = height.changed(mu) || l.alt.changed(alt);
             let reaches = l.reaches.unwrap_or(true);
-            let draw = reaches && (moved || !l.drawn);
-            due |= moved;
+            let draw = reaches && (changed || !l.drawn);
+            due |= changed;
             self.words[REACHES[k]] = f32::from(u8::from(reaches));
             self.plan.lights[k] = draw;
-            if moved || draw {
+            if changed || draw {
                 (l.height.at, l.alt.at, l.drawn) = (Some(mu), Some(alt), draw);
             }
             if !draw {
@@ -707,7 +707,7 @@ impl Atmosphere {
         for at in EXPOSURE_READS {
             e.read(&self.words[at]);
         }
-        e.mark(fresh || due || self.ground.moved(ground));
+        e.mark(fresh || due || self.ground.changed(ground));
         self.plan.exposure = !e.end();
         if self.plan.exposure {
             self.ground.at = Some(ground);
@@ -784,7 +784,7 @@ impl Atmosphere {
     /// Whether measures landed for a frame to take (`take_slopes`): a
     /// mapping refused asks none, what it carried copied again with the next
     /// frame drawn.
-    pub fn landed(&self) -> bool {
+    pub fn complete(&self) -> bool {
         self.mapped && signaled(&self.mapping[0], self.ticket) && self.mapping[1] == RESULT::OK
     }
 
@@ -874,7 +874,7 @@ fn alt_sample(alt: f32) -> f32 {
 }
 
 /// A light's tables as laid with the eye at `alt` km (atmos_medium.wgsl
-/// `laid`): the angle from straight down to the horizon there, and the near
+/// `view_layout`): the angle from straight down to the horizon there, and the near
 /// and far ends of the air's depth law, in km. The near end is how far the
 /// eye stands over the world's top where it is highest, a pos's Z ending
 /// `HEIGHT_BITS` about sea level and a unit longest at the equator, its

@@ -59,14 +59,14 @@ pub(super) struct Counts {
 
 /// The array and its readback, one copy out at a time, from the frame that encodes it (`copied`)
 /// to the mapping the next frame asks (`mapped`) and its landing; whether this frame counts
-/// (`on`), what the CPU knew of the frame copied (`copied_frame`), and the counts that landed,
+/// (`on`), what the CPU knew of the frame copied (`copying`), and the counts that landed,
 /// until taken (`take`).
 pub(super) struct Counter {
     counts: u32,
     read: u32,
     on: bool,
     frame: Frame,
-    copied_frame: Frame,
+    copying: Frame,
     copied: bool,
     mapped: bool,
     read_counts: Box<[u32; WORDS]>,
@@ -91,7 +91,7 @@ impl Counter {
             ),
             on: false,
             frame: Frame::default(),
-            copied_frame: Frame::default(),
+            copying: Frame::default(),
             copied: false,
             mapped: false,
             read_counts: Box::new([0; WORDS]),
@@ -116,14 +116,14 @@ impl Counter {
         }
         // Each observer's walks and pixels count where it casts, a bit each: an eye's pixels
         // cast again in a frame that casts the light alone count nothing.
-        let mut head = [0u32; 1 + (count::OBSERVERS * count::WALKS) as usize];
+        let mut header = [0u32; 1 + (count::OBSERVERS * count::WALKS) as usize];
         for (o, &cast) in frame.casts.iter().enumerate() {
-            head[0] |= u32::from(self.on && cast) << o;
+            header[0] |= u32::from(self.on && cast) << o;
         }
         g.write_buf(
             node_cache,
             word_bytes(node_cache::COUNT_ON as usize),
-            bytes(&head),
+            bytes(&header),
         );
         if !self.on {
             return;
@@ -170,7 +170,7 @@ impl Counter {
             }
         }
         g.copy_buf(encoder, (self.counts, 0), (self.read, 0), word_bytes(WORDS));
-        self.copied_frame = self.frame;
+        self.copying = self.frame;
     }
 
     /// The counts copied last frame mapped back, and those that landed
@@ -181,7 +181,7 @@ impl Counter {
         if self.mapped && signaled {
             self.mapped = false;
             if self.mapping[1] == RESULT::OK {
-                let (l, f) = (&self.read_counts, self.copied_frame);
+                let (l, f) = (&self.read_counts, self.copying);
                 let mut counts = [0.0; RAY_COUNTS];
                 for o in 0..count::OBSERVERS {
                     if !f.casts[o as usize] {

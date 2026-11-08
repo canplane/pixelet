@@ -129,7 +129,7 @@ impl Finish {
         let grow = s.width as f32 / s.screen.0.max(1) as f32;
         let squares = [s.width, s.height].map(|v| v.div_ceil(SIDE));
         let t = match tiles {
-            Some((t, _)) => t.words(grow, claimed.map_or(u32::MAX, Tiles::claimed_for)),
+            Some((t, _)) => t.words(grow, claimed.map_or(u32::MAX, Tiles::damage_frames)),
             None => [
                 squares[0],
                 squares[1],

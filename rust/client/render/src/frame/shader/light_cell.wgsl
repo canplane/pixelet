@@ -15,7 +15,7 @@
 /// light's list's lanes, as `light_item` reads them.
 @compute @workgroup_size(SAMPLE_SIDE, SAMPLE_SIDE, 1)
 fn light_cell_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  let cells = head_word(LIGHT_HEAD_CELLS_ACROSS);
+  let cells = header_word(LIGHT_HEADER_CELLS_ACROSS);
   let c = light_item(LEVEL_CELL, id.xy);
   if (c.x >= cells || c.y >= cells) {
     return;

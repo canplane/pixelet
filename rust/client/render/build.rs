@@ -11,7 +11,7 @@ use pxl_engine::ground;
 use pxl_engine::lattice;
 use pxl_engine::light::TILE as LIGHT_TILE;
 use pxl_engine::param::light;
-use pxl_engine::WORKGROUPS_MOST;
+use pxl_engine::WORKGROUPS_CAP;
 use pxl_spec::space::layer::lattice::EFFECT_REACH;
 use std::path::Path;
 
@@ -64,10 +64,10 @@ fn main() {
     // pxl-engine, where the cast reads them: a ray is painted by its
     // cell's zoom against these, its cell placed off the eye's Q3 steps.
     let lattice = format!(
-        "const UNIT_ZOOM: u32 = {}u;\nconst FRAC_W: u32 = {}u;\nconst GROUND_CELL: u32 = {}u;\n",
+        "const UNIT_ZOOM: u32 = {}u;\nconst FRAC_W: u32 = {}u;\nconst GROUND_CELL_ZOOM: u32 = {}u;\n",
         pxl_engine::UNIT_ZOOM,
         pxl_engine::FRAC_W,
-        lattice::GROUND.cell()
+        lattice::GROUND.leaf_cell_zoom()
     );
     std::fs::write(out.join("lattice.wgsl"), lattice).expect("the lattice's shader");
     std::fs::write(out.join("walk_word.wgsl"), walk_word()).expect("the walk's words");
@@ -234,7 +234,7 @@ const _: () = assert!(
 fn walk_word() -> String {
     use pxl_engine::area::Shard;
     use pxl_engine::clipmap::{self, Lookup};
-    use pxl_engine::overwrite::{NodeSlot, BOXES};
+    use pxl_engine::object::{NodeSlot, RECTS};
     use pxl_engine::{
         answer, beam, cast, count, eye, face, light, node_cache, param, raster, ray, record, value,
         SHARD_ZOOM,
@@ -300,17 +300,17 @@ fn walk_word() -> String {
         ("EIGHTHS", answer::EIGHTHS),
         ("BOX_BITS", answer::BOX_BITS),
         ("BOX_STEPS", answer::BOX_STEPS),
-        ("STEPS_MOST", cast::STEPS_MOST),
+        ("STEPS_CAP", cast::STEPS_CAP),
         ("JITTER", eye::JITTER as u32),
         ("LIGHT", eye::LIGHT as u32),
-        ("LIGHT_HEAD_VEC4S", light::HEAD_VEC4S as u32),
-        ("LIGHT_HEAD_HOLES", light::HEAD_HOLES as u32),
+        ("LIGHT_HEADER_VEC4S", light::HEADER_VEC4S as u32),
+        ("LIGHT_HEADER_HOLES", light::HEADER_HOLES as u32),
         ("LIGHT_STARTS_AT", light::STARTS_AT as u32),
         ("LIGHT_ANCHOR", light::ANCHOR as u32),
         ("LIGHT_STEP_BITS", light::STEP_BITS),
         ("LIGHT_TILE", light::TILE),
         ("LIGHT_DEPTH_ONE", light::DEPTH_ONE),
-        ("LIGHT_HEAD_SIZE", light::HEAD_SIZE as u32),
+        ("LIGHT_HEADER_SIZE", light::HEADER_SIZE as u32),
         ("MISSED_PASS", node_cache::MISSED_PASS),
         (
             "EYE_MISS_COUNT",
@@ -335,45 +335,54 @@ fn walk_word() -> String {
         ("LIGHT_BAND_SCALE", light::W_BAND_SCALE as u32),
         ("LIGHT_CORNER_X", light::CORNER[0] as u32),
         ("LIGHT_CORNER_Y", light::CORNER[1] as u32),
-        ("LIGHT_HEAD_CAST", light::HEAD_CAST as u32),
-        ("LIGHT_HEAD_EPOCH", light::HEAD_EPOCH as u32),
-        ("LIGHT_HEAD_CELLS", light::HEAD_CELLS as u32),
-        ("LIGHT_HEAD_CELLS_ACROSS", light::HEAD_CELLS_ACROSS as u32),
-        ("LIGHT_HEAD_SAMPLES", light::HEAD_SAMPLES as u32),
+        ("LIGHT_HEADER_CAST", light::HEADER_CAST as u32),
+        ("LIGHT_HEADER_EPOCH", light::HEADER_EPOCH as u32),
+        ("LIGHT_HEADER_CELLS", light::HEADER_CELLS as u32),
         (
-            "LIGHT_HEAD_SAMPLES_ACROSS",
-            light::HEAD_SAMPLES_ACROSS as u32,
+            "LIGHT_HEADER_CELLS_ACROSS",
+            light::HEADER_CELLS_ACROSS as u32,
         ),
-        ("LIGHT_HEAD_READS", light::HEAD_READS as u32),
-        ("LIGHT_HEAD_TILES", light::HEAD_TILES as u32),
-        ("LIGHT_HEAD_HANDS", light::HEAD_HANDS as u32),
-        ("LIGHT_HEAD_KEPT", light::HEAD_KEPT as u32),
-        ("LIGHT_HEAD_SLIDE", light::HEAD_SLIDE as u32),
-        ("LIGHT_HEAD_WORLD", light::HEAD_WORLD as u32),
-        ("LIGHT_HEAD_SLIDE_OWED", light::HEAD_SLIDE_OWED as u32),
-        ("LIGHT_HEAD_STANDS_WORLD", light::HEAD_STANDS_WORLD as u32),
-        ("LIGHT_HEAD_POOL", light::HEAD_POOL as u32),
-        ("LIGHT_HEAD_HITS", light::HEAD_HITS as u32),
+        ("LIGHT_HEADER_SAMPLES", light::HEADER_SAMPLES as u32),
+        (
+            "LIGHT_HEADER_SAMPLES_ACROSS",
+            light::HEADER_SAMPLES_ACROSS as u32,
+        ),
+        ("LIGHT_HEADER_READS", light::HEADER_READS as u32),
+        ("LIGHT_HEADER_TILES", light::HEADER_TILES as u32),
+        ("LIGHT_HEADER_HANDS", light::HEADER_HANDS as u32),
+        ("LIGHT_HEADER_CARRY", light::HEADER_CARRY as u32),
+        ("LIGHT_HEADER_SLIDE", light::HEADER_SLIDE as u32),
+        ("LIGHT_HEADER_WORLD", light::HEADER_WORLD as u32),
+        ("LIGHT_HEADER_SLIDE_CAST", light::HEADER_SLIDE_CAST as u32),
+        (
+            "LIGHT_HEADER_WORLD_RECEIVERS",
+            light::HEADER_WORLD_RECEIVERS as u32,
+        ),
+        ("LIGHT_HEADER_POOL", light::HEADER_POOL as u32),
+        ("LIGHT_HEADER_HITS", light::HEADER_HITS as u32),
         ("LIGHT_SLIDE_RAN", light::SLIDE_RAN),
         ("LIGHT_READS_FROM", light::READS_FROM),
-        ("LIGHT_HEAD_BEAM_ACROSS", light::HEAD_BEAM_ACROSS as u32),
-        ("LIGHT_HEAD_CORNER_STATES", light::HEAD_CORNER_STATES as u32),
-        ("LIGHT_HEAD_RANGE_WAS", light::HEAD_RANGE_WAS as u32),
-        ("LIGHT_HEAD_MARKS", light::HEAD_MARKS as u32),
-        ("LIGHT_HEAD_LISTED", light::HEAD_LISTED as u32),
+        ("LIGHT_HEADER_BEAM_ACROSS", light::HEADER_BEAM_ACROSS as u32),
+        (
+            "LIGHT_HEADER_CORNER_STATES",
+            light::HEADER_CORNER_STATES as u32,
+        ),
+        ("LIGHT_HEADER_LAST_RANGE", light::HEADER_LAST_RANGE as u32),
+        ("LIGHT_HEADER_MARKS", light::HEADER_MARKS as u32),
+        ("LIGHT_HEADER_LISTS", light::HEADER_LISTS as u32),
         ("LIGHT_LIST_ACROSS", light::LIST_ACROSS),
-        ("LIGHT_LISTED_LANES", light::LISTED_LANES),
+        ("LIGHT_LIST_LANES", light::LIST_LANES),
         ("LIGHT_BEAM", light::BEAM),
         ("LIGHT_SAMPLE", param::light::SAMPLE),
         ("LIGHT_LINE_WORDS", light::LINE_WORDS),
         ("LIGHT_LINE_ORIGIN", light::LINE_ORIGIN),
         ("LIGHT_BEAM_WINDOW", light::BEAM_WINDOW),
-        ("LIGHT_LISTED_CORNERS", light::LISTED_CORNERS),
-        ("LIGHT_LISTED_FED", light::LISTED_FED),
-        ("LIGHT_LISTED_CLAIMED", light::LISTED_CLAIMED),
-        ("LIGHT_LISTED_STOOD", light::LISTED_STOOD),
-        ("LIGHT_LISTED_READ", light::LISTED_READ),
-        ("LIGHT_HEAD_COUNTED", light::HEAD_COUNTED as u32),
+        ("LIGHT_LIST_CORNERS", light::LIST_CORNERS),
+        ("LIGHT_LIST_SOURCES", light::LIST_SOURCES),
+        ("LIGHT_LIST_DAMAGE", light::LIST_DAMAGE),
+        ("LIGHT_LIST_RECEIVERS", light::LIST_RECEIVERS),
+        ("LIGHT_LIST_READS", light::LIST_READS),
+        ("LIGHT_HEADER_COUNTED", light::HEADER_COUNTED as u32),
         ("LIGHT_BEAM_PASS", node_cache::LIGHT_BEAM_PASS),
         (
             "LIGHT_BEAM_COUNT",
@@ -409,7 +418,7 @@ fn walk_word() -> String {
         ("GRID_SAMPLES_AT", beam::GRID_SAMPLES_AT as u32),
         ("GRID_HITS_AT", beam::GRID_HITS_AT as u32),
         ("GRID_ASKS_AT", beam::GRID_ASKS_AT as u32),
-        ("GRID_STOP_ASKS_AT", beam::GRID_STOP_ASKS_AT as u32),
+        ("GRID_HIT_ASKS_AT", beam::GRID_HIT_ASKS_AT as u32),
         ("GRID_WALKED_AT", beam::GRID_WALKED_AT as u32),
         ("GRID_CORNER_STATES_AT", beam::GRID_CORNER_STATES_AT as u32),
         ("GRID_HANDS_AT", beam::GRID_HANDS_AT as u32),
@@ -447,7 +456,7 @@ fn walk_word() -> String {
         ("PARK_WORDS", ray::PARK_WORDS),
         ("POOL_CNT", ray::POOL_CNT),
         ("POOL_STATES", ray::POOL_STATES),
-        ("STOPS_A_FRAME", ray::STOPS_A_FRAME),
+        ("HITS_A_FRAME", ray::HITS_A_FRAME),
         ("HIT_LANES", beam::HIT_LANES),
         ("HIT_WORDS", beam::HIT_WORDS),
         ("HIT_NODE", beam::HIT_NODE),
@@ -458,8 +467,8 @@ fn walk_word() -> String {
         ("QUEUE_LANES", ray::QUEUE_LANES),
         ("QUEUE_GROUPS", ray::QUEUE_GROUPS),
         ("QUEUE_STEPS", ray::QUEUE_STEPS),
-        ("QUEUE_TAKEN", ray::QUEUE_TAKEN),
-        ("QUEUE_TAKEN_AGAIN", ray::QUEUE_TAKEN_AGAIN),
+        ("QUEUE_NEXT", ray::QUEUE_NEXT),
+        ("QUEUE_NEXT_AGAIN", ray::QUEUE_NEXT_AGAIN),
         ("QUEUE_ASKS", ray::QUEUE_ASKS),
         ("QUEUE_ASKS_AGAIN", ray::QUEUE_ASKS_AGAIN),
         ("QUEUE_HITS", ray::QUEUE_HITS),
@@ -489,10 +498,10 @@ fn walk_word() -> String {
             ray::queue_records_at(ray::QUEUE_LIGHT_HOLES),
         ),
         ("QUEUE_RECORD_WORDS", ray::QUEUE_RECORD_WORDS),
-        ("QUEUE_RECORDS_ROOM", ray::QUEUE_RECORDS_ROOM),
+        ("QUEUE_RECORDS_CAP", ray::QUEUE_RECORDS_CAP),
         ("STATE_WORDS", ray::STATE_WORDS),
         ("PARKED", ray::PARKED),
-        ("LAST_TAKEN", node_cache::LAST_TAKEN),
+        ("LAST_NEXT", node_cache::LAST_NEXT),
         ("ASKED", node_cache::ASKED),
         ("ASKS_A_FRAME", ray::ASKS_A_FRAME),
         ("HIT_ASSET", beam::HIT_ASSET),
@@ -504,7 +513,7 @@ fn walk_word() -> String {
         ("CAST_SIDE", ray::CAST_SIDE),
         ("SCREEN_TILE", screen::TILE),
         ("RASTER_ASKED_AT", raster::ASKED_AT),
-        ("RASTER_STOP_ASKED_AT", raster::STOP_ASKED_AT),
+        ("RASTER_HIT_ASKED_AT", raster::HIT_ASKED_AT),
         ("BEAM_PASS", node_cache::BEAM_PASS),
         (
             "EYE_BEAM_COUNT",
@@ -514,17 +523,17 @@ fn walk_word() -> String {
         ("RASTER_ARGS_ASKS", raster::ARGS_ASKS),
         ("RASTER_ARGS_CNT", raster::ARGS_CNT),
         ("RASTER_FACES_LANES", raster::FACES_LANES),
-        ("LIGHT_HEAD_CORNER_WAS", light::HEAD_CORNER_WAS as u32),
-        ("LIGHT_HEAD_FOOTPRINT", light::HEAD_FOOTPRINT as u32),
-        ("LIGHT_STANDS_AT", light::STANDS_AT as u32),
-        ("LIGHT_STANDS", light::STANDS as u32),
+        ("LIGHT_HEADER_LAST_CORNER", light::HEADER_LAST_CORNER as u32),
+        ("LIGHT_HEADER_FOOTPRINT", light::HEADER_FOOTPRINT as u32),
+        ("LIGHT_RECEIVER_BOXES_AT", light::RECEIVER_BOXES_AT as u32),
+        ("LIGHT_RECEIVER_BOXES", light::RECEIVER_BOXES as u32),
         ("LIGHT_COLUMNS_AT", light::COLUMNS_AT as u32),
         ("LIGHT_COLUMNS", light::COLUMNS as u32),
         ("LIGHT_REACH_NDC", light::REACH_NDC as u32),
         ("LIGHT_ARGS_CELLS", light::ARGS_CELLS),
         ("LIGHT_ARGS_SAMPLE_BOX", light::ARGS_SAMPLE_BOX),
         ("LIGHT_ARGS_SLOT", light::ARGS_SLOT),
-        ("LIGHT_STOOD_CNT", light::STOOD_CNT),
+        ("LIGHT_RECEIVER_TILES_CNT", light::RECEIVER_TILES_CNT),
         ("LIGHT_ARGS_LAY", light::ARGS_LAY),
         ("LIGHT_ARGS_PASSES", light::ARGS_PASSES),
         ("LIGHT_LISTS", light::LISTS),
@@ -540,12 +549,15 @@ fn walk_word() -> String {
         ("RASTER_ARGS_FACES", raster::ARGS_FACES),
         ("NODE_CACHE_FORGETS", node_cache::FORGETS),
         ("FORGETS_ALL", node_cache::FORGETS_ALL),
-        ("NODE_CACHE_MOVED_AT", node_cache::MOVED_AT),
-        ("NODE_CACHE_MOVED_BRICKS_AT", node_cache::MOVED_BRICKS_AT),
-        ("NODE_CACHE_BOXES_AT", node_cache::BOXES_AT),
+        ("NODE_CACHE_CHANGED_AT", node_cache::CHANGED_AT),
+        (
+            "NODE_CACHE_CHANGED_BRICKS_AT",
+            node_cache::CHANGED_BRICKS_AT,
+        ),
+        ("NODE_CACHE_RECTS_AT", node_cache::RECTS_AT),
         ("NODE_CACHE_WRITTEN_AT", node_cache::WRITTEN_AT),
         ("NODE_CACHE_WRITTEN_CAP", node_cache::WRITTEN_CAP),
-        ("NODE_CACHE_BOXES", BOXES),
+        ("NODE_CACHE_RECTS", RECTS),
         ("KEYS_AT", node_cache::KEYS_AT),
         ("STATES_AT", node_cache::STATES_AT),
         ("RECORDS_AT", node_cache::RECORDS_AT),
@@ -620,12 +632,12 @@ fn world_word() -> String {
     use pxl_content::cube::ground as palette;
     use pxl_content::param::{cave, strata};
     use pxl_engine::clipmap as clip;
-    use pxl_engine::overwrite::{self, Cut};
+    use pxl_engine::object::{self, Cut};
     use pxl_engine::way::tree;
     use pxl_engine::{area, seed, value};
     use xpute_kit::math::rng;
     let words: &[(&str, u32)] = &[
-        ("LEAF_CELL", pxl_engine::LEAF_CELL),
+        ("LEAF_CELL_ZOOM", pxl_engine::LEAF_CELL_ZOOM),
         ("TOP_ZOOM", pxl_engine::TOP_ZOOM),
         ("VALUE_UNKNOWN", value::UNKNOWN),
         ("GROUNDS_FIRST", value::GROUNDS[0]),
@@ -636,12 +648,12 @@ fn world_word() -> String {
         ("FULL", answer::FULL),
         ("FULL_BITS", answer::FULL.trailing_zeros()),
         ("FILL_BITS", answer::FILL_BITS),
-        ("BRANCH", overwrite::BRANCH),
-        ("OBJECT_ROOT", overwrite::OBJECT_ROOT),
-        ("CHILDREN", overwrite::CHILDREN),
-        ("SLOT_FOLDED", overwrite::FOLDED),
-        ("SLOT_ZOOM_MASK", overwrite::ZOOM_MASK),
-        ("SLOT_SHIFT", overwrite::SLOT_SHIFT),
+        ("BRANCH", object::BRANCH),
+        ("OBJECT_ROOT", object::ROOT),
+        ("CHILDREN", object::CHILDREN),
+        ("SLOT_FOLDED", object::FOLDED),
+        ("SLOT_ZOOM_MASK", object::ZOOM_MASK),
+        ("SLOT_SHIFT", object::SLOT_SHIFT),
         ("POOL_CHILD_GROUPS", tree::POOL_CHILD_GROUPS),
         ("ROOT_ID_BITS", tree::ROOT_ID_BITS),
         ("ROOT_NODES", tree::ROOT_NODES),
@@ -652,24 +664,24 @@ fn world_word() -> String {
         ("BRICK_SHIFT", clip::BRICK_SHIFT),
         ("BRICK_CELLS", clip::BRICK_CELLS),
         ("BRICK_WORDS", clip::BRICK_WORDS),
-        ("BRICK_LEVELS", clip::BRICK_LEVELS),
+        ("BRICK_MIPS", clip::BRICK_MIPS),
         ("ACROSS", clip::ACROSS),
         ("CLIP_ENTRIES", clip::ENTRIES),
-        ("FIRST_CELL", clip::FIRST_CELL),
+        ("FIRST_CELL_ZOOM", clip::FIRST_CELL_ZOOM),
         ("ORIGIN_AT", clip::ORIGIN_AT),
         ("JOINED_AT", clip::JOINED_AT),
         ("JOINED_ENTRIES", clip::JOINED_ENTRIES),
-        ("JOINED_LEVELS", clip::JOINED_LEVELS),
+        ("JOINED_MIPS", clip::JOINED_MIPS),
         ("COLUMNS_AT", clip::COLUMNS_AT),
         ("BOUNDS_AT", clip::BOUNDS_AT),
         ("BOUND_ENTRY_WORDS", clip::BOUND_ENTRY_WORDS),
-        ("LAID_AT", clip::LAID_AT),
-        ("LAID_CELLS", clip::LAID_CELLS),
+        ("OWN_AT", clip::OWN_AT),
+        ("OWN_CELLS", clip::OWN_CELLS),
         ("ROOT_AT", clip::ROOT_AT),
         ("LOOKUP_SLOT_BITS", clip::LOOKUP_SLOT_BITS),
         ("LOOKUP_FROM_SHIFT", clip::LOOKUP_FROM_SHIFT),
-        ("LOOKUP_CELL_SHIFT", clip::LOOKUP_CELL_SHIFT),
-        ("LOOKUP_AT", (1 << clip::LOOKUP_CELL_SHIFT) - 1),
+        ("LOOKUP_CELL_ZOOM_SHIFT", clip::LOOKUP_CELL_ZOOM_SHIFT),
+        ("LOOKUP_AT", (1 << clip::LOOKUP_CELL_ZOOM_SHIFT) - 1),
         ("STRATA_SAND", palette::sand as u32),
         ("STRATA_BEACH", palette::beach as u32),
         ("STRATA_WATER", palette::water as u32),
@@ -733,13 +745,13 @@ fn world_word() -> String {
         "fn tunnel_blocks(k: u32) -> u32 {{ switch k {{ {cases}default: {{ return {}u; }} }} }}\n",
         cave::BLOCKS_A_TUNNEL[4]
     );
-    // Where a brick's level `j` begins among its levels, in entries (`clipmap::bound_level_at`).
-    let cases: String = (0..=clip::BRICK_LEVELS)
-        .map(|j| format!("case {j}u: {{ return {}u; }} ", clip::bound_level_at(j)))
+    // Where a brick's level `j` begins among its levels, in entries (`clipmap::bound_mip_at`).
+    let cases: String = (0..=clip::BRICK_MIPS)
+        .map(|j| format!("case {j}u: {{ return {}u; }} ", clip::bound_mip_at(j)))
         .collect();
     out + &format!(
-        "fn bound_level_at(j: u32) -> u32 {{ switch j {{ {cases}default: {{ return {}u; }} }} }}\n",
-        clip::bound_level_at(clip::BRICK_LEVELS + 1)
+        "fn bound_mip_at(j: u32) -> u32 {{ switch j {{ {cases}default: {{ return {}u; }} }} }}\n",
+        clip::bound_mip_at(clip::BRICK_MIPS + 1)
     )
 }
 
@@ -757,7 +769,7 @@ fn decor_word() -> String {
     let words: &[(&str, u32)] = &[
         ("LANES", g::LANES),
         ("RECORD_WORDS", g::RECORD_WORDS),
-        ("HEAD_WORDS", g::HEAD_WORDS),
+        ("HEADER_WORDS", g::HEADER_WORDS),
         ("CNT_AT", g::CNT_AT),
         ("SLOTS_AT", g::SLOTS_AT),
         ("BRICK_RECORDS", g::BRICK_RECORDS),
@@ -765,21 +777,21 @@ fn decor_word() -> String {
         ("TURN_SHIFT", g::TURN_SHIFT),
         ("VARIANT_SHIFT", g::VARIANT_SHIFT),
         ("TURN_BITS", g::TURN_BITS),
-        ("CELL_SHIFT", g::CELL_SHIFT),
+        ("CELL_ZOOM_SHIFT", g::CELL_ZOOM_SHIFT),
         ("THIN_ARGS", g::THIN_ARGS),
         ("THIN_CNT", g::THIN_CNT),
         ("GENERATE_CNT", g::GENERATE_CNT),
-        ("LIST_BOXES", g::LIST_BOXES),
-        ("BOXES_AT", g::BOXES_AT),
-        ("BOX_WORDS", g::BOX_WORDS),
-        ("BOX_CAP", g::BOX_CAP),
+        ("LIST_RECTS", g::LIST_RECTS),
+        ("RECTS_AT", g::RECTS_AT),
+        ("RECT_WORDS", g::RECT_WORDS),
+        ("RECT_CAP", g::RECT_CAP),
         ("EVERY", g::EVERY),
         ("LIST_EVERY", g::LIST_EVERY),
         ("LIST_PARTS", g::LIST_PARTS),
         ("GENERATE_ARGS", g::GENERATE_ARGS),
         ("SLOT_RECORDS", g::SLOT_RECORDS),
-        ("PLACED_HEAD", g::PLACED_HEAD),
-        ("PLACED_HEAD_WORDS", g::PLACED_HEAD_WORDS),
+        ("PLACED_HEADER", g::PLACED_HEADER),
+        ("PLACED_HEADER_WORDS", g::PLACED_HEADER_WORDS),
         ("RUN", g::RUN),
         ("RUNS", g::RUNS),
         ("EYE_ENTRIES", g::EYE_ENTRIES),
@@ -906,23 +918,23 @@ fn decor_word() -> String {
 
 /// The tiles' uniform as every pass reads it (pxl-engine
 /// `screen::TILES_WORDS`, gpu/tiles.rs `Tiles::words`), and a tile's word
-/// read by it as word.rs's `screen::age` and `screen::claimed` read it:
+/// read by it as word.rs's `screen::age` and `screen::in_damage` read it:
 /// the frames since it changed, wrapping, and claimed while fewer than the
-/// uniform's `claimed_for`. The one rule every pass that reads the tiles
+/// uniform's `damage_frames`. The one rule every pass that reads the tiles
 /// claims by (screen_tiles.wgsl, screen_propagate.wgsl, cast_tiles.wgsl).
 fn tile_word() -> String {
     // The Rust's rule, as the WGSL below spells it: a u32's difference that
-    // wraps, a claim that ends at `claimed_for`.
+    // wraps, a claim that ends at `damage_frames`.
     assert_eq!(screen::age(0, u32::MAX), 1);
     assert_eq!(screen::age(5, 5), 0);
-    assert!(screen::claimed(0, 1) && !screen::claimed(1, 1));
-    assert!(screen::claimed(u32::MAX - 1, u32::MAX) && !screen::claimed(u32::MAX, u32::MAX));
+    assert!(screen::in_damage(0, 1) && !screen::in_damage(1, 1));
+    assert!(screen::in_damage(u32::MAX - 1, u32::MAX) && !screen::in_damage(u32::MAX, u32::MAX));
     format!(
         concat!(
             "const CAST_TILES_LANES: u32 = {}u;\n",
             "struct Tiles {{ count: vec4u, size: vec4f, }};\n",
             "fn tiles_age(t: Tiles, changed_at: u32) -> u32 {{ return t.count.w - changed_at; }}\n",
-            "fn tiles_claimed(t: Tiles, changed_at: u32) -> bool {{ return tiles_age(t, changed_at) < t.count.z; }}\n",
+            "fn tiles_in_damage(t: Tiles, changed_at: u32) -> bool {{ return tiles_age(t, changed_at) < t.count.z; }}\n",
         ),
         screen::CAST_TILES_LANES
     )
@@ -1001,7 +1013,7 @@ fn words() -> String {
         format!("const SLOT_BITS: u32 = {SLOT_BITS}u;\nconst NO_SLOT: u32 = {NO_SLOT}u;\n"),
         format!("const IMAGE_TOP: u32 = {IMAGE_TOP}u;\nconst IMAGE_SIDE: u32 = {IMAGE_SIDE}u;\nconst IMAGE_BOTTOM: u32 = {IMAGE_BOTTOM}u;\n"),
         format!("const EARTH_TILE_BITS: u32 = {EARTH_TILE_BITS}u;\n"),
-        format!("const WORKGROUPS_MOST: u32 = {WORKGROUPS_MOST}u;\n"),
+        format!("const WORKGROUPS_CAP: u32 = {WORKGROUPS_CAP}u;\n"),
         format!("const AIR_FROXELS: u32 = {AIR_FROXELS}u;\n"),
         format!("const SQUARE_SIDE: u32 = {SQUARE_SIDE}u;\nconst ROW_LANES: u32 = {ROW_LANES}u;\n"),
         format!("const CELL_SIDE: u32 = {CELL_SIDE}u;\n"),
@@ -1387,14 +1399,18 @@ fn assemble(out: &Path) {
             );
         }
         // The lists' words as pxl-engine lays them (visible.wgsl `MissArgs`;
-        // light_stood.wgsl `Stood`): each member's first word.
+        // light_receiver_tiles.wgsl `ReceiverArgs`): each member's first word.
         {
             use pxl_engine::{light, ray};
             let words: [(&str, &[u32]); 2] = [
                 ("MissArgs", &[ray::MISS_ARGS_CNT, ray::MISS_ARGS_COUNT]),
                 (
-                    "Stood",
-                    &[light::STOOD_LIST, light::STOOD_CNT, light::STOOD_SLIDE],
+                    "ReceiverArgs",
+                    &[
+                        light::RECEIVER_TILES_LIST,
+                        light::RECEIVER_TILES_CNT,
+                        light::RECEIVER_TILES_SLIDE,
+                    ],
                 ),
             ];
             for (name, want) in words {
@@ -1421,11 +1437,11 @@ fn assemble(out: &Path) {
                         "`MissArgs` against `ray::MISS_ARGS_WORDS`"
                     );
                 }
-                if name == "Stood" {
+                if name == "ReceiverArgs" {
                     assert_eq!(
                         span,
-                        4 * light::STOOD_WORDS,
-                        "`Stood` against `light::STOOD_WORDS`"
+                        4 * light::RECEIVER_TILES_WORDS,
+                        "`ReceiverArgs` against `light::RECEIVER_TILES_WORDS`"
                     );
                 }
             }
@@ -1551,7 +1567,7 @@ fn assemble(out: &Path) {
         "clip",
         "palette",
         "brick",
-        "level",
+        "bound_mip",
         "answer",
         "world",
         "world_split",

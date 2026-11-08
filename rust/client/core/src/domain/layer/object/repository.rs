@@ -28,7 +28,7 @@
 use fnv::FnvHashSet;
 use pxl_engine::answer::FULL;
 use pxl_engine::area::shard_over;
-use pxl_engine::overwrite;
+use pxl_engine::object;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::zoom::{units, CUBE_ZOOM, SHARD_ZOOM};
@@ -202,7 +202,7 @@ pub fn revision() -> u32 {
     state().revision
 }
 
-fn moved() {
+fn changed() {
     let st = state();
     st.revision = st.revision.wrapping_add(1);
 }
@@ -237,7 +237,7 @@ fn admit(id: u64, bytes: Option<&[u8]>) -> Result<(), MarshalError> {
     };
     if result.is_err() && !state().refused_files.contains(&id) {
         state().refused_files.push(id);
-        moved();
+        changed();
         request_world_tick();
     }
     result
@@ -254,14 +254,14 @@ fn on_top(rows: Vec<(u64, u32)>) {
         }
     }
     state().top_shards = Some(listed);
-    moved();
+    changed();
 }
 
 /// The shard `id` read: its folds let go and its leaves written.
 fn on_shard(id: u64, writes: Vec<Write>) {
     change(Change::Shard(Quadrant::of_id(id).at, writes));
     state().read.insert(id);
-    moved();
+    changed();
 }
 
 /// The files refused and not yet emptied, by id below OBJECT.
@@ -408,7 +408,7 @@ fn decode_top(bytes: &[u8]) -> Result<Vec<(u64, u32)>, MarshalError> {
         .enumerate()
         .map(|(r, quadkey)| {
             Quadrant::of_key(quadkey)
-                .filter(|t| t.zoom == SHARD_ZOOM && overwrite::high(fold[r]) <= FULL)
+                .filter(|t| t.zoom == SHARD_ZOOM && object::high(fold[r]) <= FULL)
                 .map(|t| (t.id(), fold[r]))
                 .ok_or(MarshalError::new(Errno::EINVAL))
         })

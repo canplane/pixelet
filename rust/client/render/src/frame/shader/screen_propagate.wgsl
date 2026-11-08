@@ -16,7 +16,7 @@
 // the frame it runs in is one whose drawn marks it counts. Bounds that
 // cover: a tile too many costs, one missing is a failure.
 
-// `Tiles`, `tiles_age` and `tiles_claimed` are tile_word.wgsl's (build.rs,
+// `Tiles`, `tiles_age` and `tiles_in_damage` are tile_word.wgsl's (build.rs,
 // word.rs `screen`).
 
 struct Propagate {
@@ -40,8 +40,8 @@ struct Propagate {
 @group(0) @binding(6) var<storage, read> bounds: array<vec2f>;
 // The map's tiles the frame's marks cover, from the first across and down to
 // past the last, as the host handed them and the drawn marks widened them
-// (gpu/tiles.rs `Tiles::marks_box`, tile_mark.wgsl): none changed off them.
-@group(0) @binding(7) var<storage, read> marks_box: vec4u;
+// (gpu/tiles.rs `Tiles::new_damage_rect`, tile_mark.wgsl): none changed off them.
+@group(0) @binding(7) var<storage, read> new_damage_rect: vec4u;
 
 // Whether tile `t` of the map changed this frame: claimed by its words.
 fn propagate_changed(t: vec2i) -> bool {
@@ -50,7 +50,7 @@ fn propagate_changed(t: vec2i) -> bool {
     return false;
   }
   let ii = u32(t.y * n.x + t.x);
-  return tiles_claimed(light_tiles, light_changed_at[ii]);
+  return tiles_in_damage(light_tiles, light_changed_at[ii]);
 }
 
 // The depth the world's pass left at pixel `p` of a target `size`, 0 past
@@ -83,9 +83,9 @@ fn propagate_range(lo: vec2f, hi: vec2f) -> vec4i {
 }
 
 // Whether any tile `propagate_range` holds lies among those the marks cover.
-fn propagate_in_marks_box(lo: vec2f, hi: vec2f) -> bool {
+fn propagate_in_damage(lo: vec2f, hi: vec2f) -> bool {
   let r = propagate_range(lo, hi);
-  let m = vec4i(marks_box);
+  let m = vec4i(new_damage_rect);
   return r.x < m.z && r.z >= m.x && r.y < m.w && r.w >= m.y;
 }
 
@@ -109,7 +109,7 @@ fn propagate_slab(at: vec2u, side: u32, far: f32, near: f32, size: vec2u) -> arr
 // lies on a tile the marks cover.
 var<workgroup> slab_far: atomic<u32>;
 var<workgroup> slab_near: atomic<u32>;
-var<workgroup> slab_in_marks_box: bool;
+var<workgroup> slab_in_damage: bool;
 
 // How many tiles `propagate_range` holds.
 fn propagate_tiles(lo: vec2f, hi: vec2f) -> i32 {
@@ -118,7 +118,7 @@ fn propagate_tiles(lo: vec2f, hi: vec2f) -> i32 {
 }
 
 // Whether any tile `propagate_range` holds changed this frame.
-fn propagate_box(lo: vec2f, hi: vec2f) -> bool {
+fn propagate_rect(lo: vec2f, hi: vec2f) -> bool {
   let r = propagate_range(lo, hi);
   var hit = false;
   for (var y = r.y; y <= r.w; y++) {
@@ -130,7 +130,7 @@ fn propagate_box(lo: vec2f, hi: vec2f) -> bool {
 }
 
 // The tiles a square's box asks at most before each pixel is asked alone.
-const PROPAGATE_BOX_MOST: i32 = 16;
+const PROPAGATE_RECT_CAP: i32 = 16;
 
 @compute @workgroup_size(BOUND_SQUARES, BOUND_SQUARES, 1)
 fn screen_propagate_cs(
@@ -167,11 +167,11 @@ fn screen_propagate_cs(
   // frame already.
   if (li == 0u) {
     let near = bitcast<f32>(atomicLoad(&slab_near));
-    let box = propagate_slab(tile * side, side, bitcast<f32>(atomicLoad(&slab_far)), near, size);
+    let rect = propagate_slab(tile * side, side, bitcast<f32>(atomicLoad(&slab_far)), near, size);
     let changed = tiles_age(tiles, changed_at[ti]) == 0u;
-    slab_in_marks_box = !changed && near > 0.0 && propagate_in_marks_box(box[0], box[1]);
+    slab_in_damage = !changed && near > 0.0 && propagate_in_damage(rect[0], rect[1]);
   }
-  if (!workgroupUniformLoad(&slab_in_marks_box)) {
+  if (!workgroupUniformLoad(&slab_in_damage)) {
     return;
   }
   let far = b.x;
@@ -180,15 +180,15 @@ fn screen_propagate_cs(
     return;
   }
   // The square's slab: what its pixels read lies within its box.
-  let box = propagate_slab(at, BOUND_STEP, far, near, size);
-  let lo = box[0];
-  let hi = box[1];
-  if (!propagate_in_marks_box(lo, hi)) {
+  let rect = propagate_slab(at, BOUND_STEP, far, near, size);
+  let lo = rect[0];
+  let hi = rect[1];
+  if (!propagate_in_damage(lo, hi)) {
     return;
   }
   var hit = false;
-  if (propagate_tiles(lo, hi) <= PROPAGATE_BOX_MOST) {
-    hit = propagate_box(lo, hi);
+  if (propagate_tiles(lo, hi) <= PROPAGATE_RECT_CAP) {
+    hit = propagate_rect(lo, hi);
   } else {
     // A box past a few tiles (an edge between near and far): each pixel
     // its own, as tight as before.
@@ -199,7 +199,7 @@ fn screen_propagate_cs(
         continue;
       }
       let t = propagate_texel(vec2f(p) + 0.5, v, size);
-      hit = propagate_box(t, t);
+      hit = propagate_rect(t, t);
     }
   }
   if (hit) {

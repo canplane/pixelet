@@ -109,8 +109,8 @@ fn land_radius() -> f32 {
 // under the level the horizon dips from the eye's radius they were drawn at,
 // in radians, and the near and far ends of the air's depth law laid there,
 // in km (`air_dist`).
-fn laid(k: u32) -> vec3f {
-  return select(atmos_sun_laid(), atmos_moon_laid(), k == 1u);
+fn view_layout(k: u32) -> vec3f {
+  return select(atmos_sun_layout(), atmos_moon_layout(), k == 1u);
 }
 
 // Whether a light reaches the air by half a display level: only then are its
@@ -130,7 +130,7 @@ fn light_gain(k: u32) -> f32 {
 
 // The volume's depth, one law for every direction: slice z, 0 to 1, lies
 // `air_dist(z, e)` km out, the cube of z over the span between the ends `e`
-// it was laid with (`laid`).
+// it was laid with (`view_layout`).
 fn air_dist(z: f32, e: vec2f) -> f32 {
   return e.x + (e.y - e.x) * z * z * z;
 }
@@ -204,7 +204,7 @@ fn multiscatter_uv(r: f32, mu_s: f32) -> vec2f {
 
 // Hillaire's directions, 0 to 1 each: across, the azimuth from the light's,
 // squared toward it; up, the zenith, squared toward the horizon from either
-// side, the horizon dipping `beta` under the level (`laid`). A light's sky
+// side, the horizon dipping `beta` under the level (`view_layout`). A light's sky
 // view and its share of the air's volume are both laid by them
 // (atmos_sky.wgsl `table_unit`).
 fn view_unit(beta: f32, mu: f32, light_cos: f32) -> vec2f {

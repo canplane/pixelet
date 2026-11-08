@@ -39,11 +39,11 @@ fn drawn_within_the_floor() {
             if drawn_fits(whole) {
                 assert_eq!((w, h), (whole[0], whole[1]), "{px:?} at {share}");
             } else {
-                let side = w.max(h) == DRAWN_MOST[0];
+                let side = w.max(h) == DRAWN_CAP[0];
                 let tiles = [w, h].map(|v| v.div_ceil(TILE) + 1);
                 let area = f64::from(w) * f64::from(h) > 0.99 * f64::from(DRAWN_AREA);
                 assert!(
-                    side || area || tiles[0] * tiles[1] > WORKGROUPS_MOST,
+                    side || area || tiles[0] * tiles[1] > WORKGROUPS_CAP,
                     "{px:?} at {share}: {w}x{h} short of the most"
                 );
             }
@@ -54,7 +54,7 @@ fn drawn_within_the_floor() {
 /// At the most drawn, of every shape from a square to 32:9, the beam rays' buffer, the camera
 /// grid's words at that shape's field and the eye's holes past them, fits the floor.
 #[test]
-fn most_drawn_fits_every_buffer() {
+fn drawn_cap_fits_every_buffer() {
     for wide in [1.0f32, 16.0 / 9.0, 21.0 / 9.0, 32.0 / 9.0] {
         let short = (DRAWN_AREA as f32 / wide).sqrt();
         let long = short * wide;

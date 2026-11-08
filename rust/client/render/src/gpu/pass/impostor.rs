@@ -218,13 +218,13 @@ impl ImpostorPass {
 
     /// Every upload group the draws will bind is made here, so drawing makes
     /// nothing that outlives its frame.
-    /// `moved` whether the lists the draws are made from moved.
+    /// `changed` whether the lists the draws are made from moved.
     pub fn prepare<'a>(
         &mut self,
         g: &Gpu,
         draws: impl ExactSizeIterator<Item = &'a [u32; DRAW_WORDS]> + Clone,
         uniforms: &[f32],
-        moved: bool,
+        changed: bool,
         uploads: &mut Uploads,
     ) {
         self.uniforms.write(
@@ -232,7 +232,7 @@ impl ImpostorPass {
             self.draw.layouts[1],
             draws.len() as u32,
             draws.clone(),
-            moved,
+            changed,
             |buf, d| {
                 put_instances(buf, uniform_of(uniforms, d), d[1]);
             },
@@ -274,10 +274,10 @@ impl ImpostorPass {
         frame: u32,
     ) {
         let Some(d) = generated else { return };
-        let step = if d.gate.is_none() {
+        let step = if d.mask.is_none() {
             &sequence::IMPOSTOR_LIT
         } else {
-            &sequence::IMPOSTOR_LIT_GATED
+            &sequence::IMPOSTOR_LIT_MASKED
         };
         pass.set_pipeline(self.draw.id);
         pass.set_bind_group(0, frame, &[]);

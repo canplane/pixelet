@@ -84,12 +84,12 @@ pub fn holds_cloud(cell: [i32; 2], mean: u32) -> bool {
             let far = 128 - (128 - x.abs()) * (128 - x.abs()) / 128;
             (32768 + x.signum() * far * 255) as u32
         };
-        let room = 1u32 << (2 * (CELL_ZOOM - z - 1));
+        let cap = 1u32 << (2 * (CELL_ZOOM - z - 1));
         let c = at(z + 1);
         let quarter = (c[0] & 1 | (c[1] & 1) << 1) as usize;
         n = share::quarter(
             n,
-            room,
+            cap,
             [w(0) << 16 | (h >> 16), w(8) << 16 | (h & 0xffff)],
             quarter as u32,
         );

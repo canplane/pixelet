@@ -54,7 +54,7 @@ fn only_time_moving_moves_no_draw() {
             key[0] as f64 * PATCH - off[0],
             key[1] as f64 * PATCH - off[1],
         ];
-        let drawn = Stand::of(
+        let drawn = ReceiverBox::of(
             [corner[0] - e, corner[1] - e, heights[0] - e],
             [corner[0] + PATCH + e, corner[1] + PATCH + e, heights[1] + e],
         );

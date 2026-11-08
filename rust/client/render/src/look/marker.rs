@@ -162,13 +162,13 @@ pub const TAIL_W: f32 = 14.0;
 pub const TAIL_H: f32 = 10.0;
 
 /// A bubble's box for `lines` lines, its tail not counted.
-pub fn bubble_box_h(lines: usize) -> f32 {
+pub fn bubble_rect_h(lines: usize) -> f32 {
     lines as f32 * LINE_H + PADDING_Y * 2.0
 }
 
 /// A bubble's sprite for `lines` lines as wide as `text_w`: its width,
 /// height with the tail, and where its speaker is, at the tail's tip.
 pub fn bubble_size(text_w: f64, lines: usize) -> [f64; 3] {
-    let h = f64::from(bubble_box_h(lines) + TAIL_H);
+    let h = f64::from(bubble_rect_h(lines) + TAIL_H);
     [text_w.ceil() + f64::from(PADDING_X) * 2.0, h, h]
 }

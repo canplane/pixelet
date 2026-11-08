@@ -43,7 +43,7 @@ pub fn ghost() -> Ghost {
     let box_zoom = if use_object_style {
         preview_zoom
     } else {
-        GROUND.cell()
+        GROUND.leaf_cell_zoom()
     };
 
     let carved = CARVE_CUBE.get(|| Memo::NONE);
@@ -54,7 +54,7 @@ pub fn ghost() -> Ghost {
     let carved_style_cube: Option<AssetId> = match (&hovered, digging_terrain) {
         (Some(h), true) => carved.of(World::now(), *h, |w| {
             Asset::of(
-                w.asset_of(&middle(Octant::holding(GROUND.cell(), h)))
+                w.asset_of(&middle(Octant::holding(GROUND.leaf_cell_zoom(), h)))
                     .val()
                     .map_or(0, answer::val),
             )

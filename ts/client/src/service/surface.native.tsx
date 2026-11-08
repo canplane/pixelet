@@ -32,12 +32,12 @@ function useSurface(
 ) {
   const [handle, setHandle] = useState<u32>(0);
   const size = useRef<Viewport>({ width: 0, height: 0, dpr: PixelRatio.get() });
-  const bound = useRef<u32>(0);
+  const attached = useRef<u32>(0);
   const open = useRef(opened);
   open.current = opened;
 
   const send = () => {
-    const surface = bound.current;
+    const surface = attached.current;
     if (surface === 0) return;
     const { width, height, dpr } = size.current;
     driver.size(surface, round(width * dpr), round(height * dpr), dpr);
@@ -74,11 +74,11 @@ function useSurface(
       send();
     },
     onAttach: (e) => {
-      bound.current = e.nativeEvent.surface;
+      attached.current = e.nativeEvent.surface;
       send();
     },
     onDetach: () => {
-      bound.current = 0;
+      attached.current = 0;
     },
   };
   return { size, props };

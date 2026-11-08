@@ -62,11 +62,11 @@ fn zigzag(band: &[[i32; 2]]) -> Vec<[i32; 2]> {
 fn land(client: &mut Client, candidates: &[[i32; 2]]) -> Result<Vec<[i32; 2]>, String> {
     let mut out = Vec::new();
     for batch in candidates.chunks(CLASSIFY_BATCH) {
-        for (&tile, drawn) in batch
+        for (&tile, grounded) in batch
             .iter()
             .zip(has_ground(client, batch).map_err(|e| e.to_string())?)
         {
-            if drawn {
+            if grounded {
                 out.push(tile);
             }
         }

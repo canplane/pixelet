@@ -52,11 +52,11 @@ impl DecorPass {
         DecorPass {
             lit: pipelines.build_world(g, PIPELINE_DECOR),
             ghost: pipelines.build_world(g, PIPELINE_GHOST_DECOR),
-            depth: pipelines.build_gated(
+            depth: pipelines.build_masked(
                 g,
                 PIPELINE_DECOR_DEPTH,
                 Format::depth32float,
-                Stencil::Gated,
+                Stencil::Masked,
             ),
             uniforms: DrawUniforms::new(DRAW_BYTES, align),
             groups: [(0, None); DECOR_GROUPS],
@@ -95,7 +95,7 @@ impl DecorPass {
         };
         for m in marks {
             m.draw(pass, frames, |pass, d, upload| {
-                let Some((model, vertex_cnt, idx_cnt, skin)) = self.model_drawn(d[1], uploads)
+                let Some((model, vertex_cnt, idx_cnt, skin)) = self.model_binding(d[1], uploads)
                 else {
                     return;
                 };
@@ -132,7 +132,7 @@ impl DecorPass {
     }
 
     /// As a frame's draws bind it: a skin its prepare made, or none.
-    fn model_drawn(&self, group: u32, uploads: &Uploads) -> Option<(u32, u32, u32, u32)> {
+    fn model_binding(&self, group: u32, uploads: &Uploads) -> Option<(u32, u32, u32, u32)> {
         self.model(group, uploads, |image| skin_made(image.0))
     }
 
@@ -164,13 +164,13 @@ impl DecorPass {
 
     /// Every skin and upload group the draws will bind is made here, so drawing
     /// makes nothing that outlives its frame.
-    /// `moved` whether the lists the draws are made from moved.
+    /// `changed` whether the lists the draws are made from moved.
     pub fn prepare(
         &mut self,
         g: &Gpu,
         draws: &Draws,
         uniforms: &[f32],
-        moved: bool,
+        changed: bool,
         uploads: &mut Uploads,
     ) {
         let (opaque, ghost) = (draws.of(PIPELINE_DECOR), draws.of(PIPELINE_GHOST_DECOR));
@@ -180,7 +180,7 @@ impl DecorPass {
             self.lit.layouts[1],
             cnt,
             opaque.clone().chain(ghost.clone()),
-            moved,
+            changed,
             |buf, d| {
                 put_instances(buf, uniform_of(uniforms, d), 0);
             },
@@ -256,7 +256,7 @@ impl DecorPass {
             slots.skip(first),
             draws.of(which),
             |d| {
-                let (model, vertex_cnt, idx_cnt, skin) = self.model_drawn(d[1], uploads)?;
+                let (model, vertex_cnt, idx_cnt, skin) = self.model_binding(d[1], uploads)?;
                 let upload = uploads.group_of(d[0])?;
                 Some(ModelDraw {
                     groups: [skin, upload],
@@ -278,17 +278,18 @@ impl DecorPass {
         frame: u32,
     ) {
         let Some(d) = generated else { return };
-        let step = match (stage, d.gate) {
+        let step = match (stage, d.mask) {
             (Stage::Depth, None) => &sequence::DECOR_MAP,
-            (Stage::Depth, Some(_)) => &sequence::DECOR_MAP_GATED,
+            (Stage::Depth, Some(_)) => &sequence::DECOR_MAP_MASKED,
             (Stage::Lit, None) => &sequence::DECOR_LIT,
-            (Stage::Lit, Some(_)) => &sequence::DECOR_LIT_GATED,
+            (Stage::Lit, Some(_)) => &sequence::DECOR_LIT_MASKED,
         };
         pass.set_pipeline(self.pipeline(stage));
         pass.set_bind_group(0, frame, &[]);
         pass.set_bind_group(3, d.instances_group, &[]);
         for group in 0..generation::GROUPS {
-            let Some((model, vertex_cnt, idx_cnt, skin)) = self.model_drawn(group, uploads) else {
+            let Some((model, vertex_cnt, idx_cnt, skin)) = self.model_binding(group, uploads)
+            else {
                 continue;
             };
             pass.set_bind_group(1, d.uniform_group, &[d.uniform_at(2 * group)]);

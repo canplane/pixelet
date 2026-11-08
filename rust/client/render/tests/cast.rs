@@ -32,10 +32,10 @@ use gpu::{
 use pxl_engine::answer::{self, Kind};
 use pxl_engine::beam::{self, Grid};
 use pxl_engine::cast::{self, Node, Ray};
-use pxl_engine::overwrite::{ancestor_at, Cut};
+use pxl_engine::object::{ancestor_at, Cut};
 use pxl_engine::support::{self, Ancestors};
 use pxl_engine::world::Inheritance;
-use pxl_engine::{eye, face, node_cache, raster, ray, record, Zoom, LEAF_CELL};
+use pxl_engine::{eye, face, node_cache, raster, ray, record, Zoom, LEAF_CELL_ZOOM};
 use pxl_render::frame::shader::record::{
     src, SHADER_CAST, SHADER_CAST_TILES, SHADER_CELL, SHADER_FACE, SHADER_SAMPLE_BOX,
 };
@@ -143,7 +143,7 @@ fn world_bufs(gpu: &Gpu, built: &Built) -> WorldBufs {
         ground: gpu.buffer(&built.ground, store()),
         palette: gpu.buffer(&built.palette, store()),
         shards: gpu.buffer(&flat_u(&built.shards), store()),
-        placed: gpu.buffer(&built.overwrites, store()),
+        placed: gpu.buffer(&built.objects, store()),
         pool: gpu.buffer(&built.pool, store()),
     }
 }
@@ -227,7 +227,7 @@ fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline
     laid[asked_at + raster::ARGS_FACES as usize + 1] = 1;
     laid[asked_at + raster::ARGS_FACES as usize + 2] = 1;
     laid[asked_at + raster::ARGS_ASKS as usize] = grid.asks_at;
-    let box_args = gpu.buffer(&laid, store());
+    let rect_args = gpu.buffer(&laid, store());
     // The samples' stops into the entries their walks kept.
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_SAMPLE_BOX), "sample_box_cs"),
@@ -235,7 +235,7 @@ fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline
             (0, eye_buf.as_entire_binding()),
             (8, beams.as_entire_binding()),
             (9, table.as_entire_binding()),
-            (16, box_args.as_entire_binding()),
+            (16, rect_args.as_entire_binding()),
         ],
         [
             grid.samples[0].div_ceil(SQUARE_SIDE),
@@ -244,7 +244,7 @@ fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline
         ],
     );
     let asked = gpu.read(&beams);
-    let laid = gpu.read(&box_args);
+    let laid = gpu.read(&rect_args);
     let (mut stopped, mut lacks) = (0, 0);
     for j in 0..grid.samples[1] {
         for i in 0..grid.samples[0] {
@@ -260,7 +260,7 @@ fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline
         laid[asked_at + raster::ARGS_INSTANCES as usize],
     );
 
-    let mut binds = face_binds(b, &eye_buf, &beams, &box_args, raster::ASKED_AT);
+    let mut binds = face_binds(b, &eye_buf, &beams, &rect_args, raster::ASKED_AT);
     binds.push((9, table.as_entire_binding()));
     gpu.dispatch(
         face_p,
@@ -431,12 +431,16 @@ fn eyes(built: &Built) -> Vec<EyeCase> {
     let bridge = built
         .way_points
         .iter()
-        .find(|p| p.0 == LEAF_CELL && [0, 3].contains(&p.1) && p.2[0] > 0)
+        .find(|p| p.0 == LEAF_CELL_ZOOM && [0, 3].contains(&p.1) && p.2[0] > 0)
         .expect("a way")
         .2;
     // A cube of the ground carved under an eye looking down into it, the leaf beside hid.
     let hole = [(leaf_c[0] >> 1) + 6, (leaf_c[1] >> 1) + 6];
-    let carved = ancestor_at(LEAF_CELL, [hole[0], hole[1], built.top_at(hole) - 1], 3);
+    let carved = ancestor_at(
+        LEAF_CELL_ZOOM,
+        [hole[0], hole[1], built.top_at(hole) - 1],
+        3,
+    );
     vec![
         EyeCase {
             name: "the eye, over the ground",
@@ -462,7 +466,7 @@ fn eyes(built: &Built) -> Vec<EyeCase> {
             look: [0.02, 0.03, -1.0],
             tan: [0.3, 0.4],
             far: 400.0,
-            range: [LEAF_CELL, FINEST],
+            range: [LEAF_CELL_ZOOM, FINEST],
             cuts: [
                 Cut {
                     zoom: 22,
@@ -484,7 +488,7 @@ fn eyes(built: &Built) -> Vec<EyeCase> {
             look: [0.5, -0.3, -0.8],
             tan: [0.3, 0.3],
             far: 600.0,
-            range: [LEAF_CELL, FINEST],
+            range: [LEAF_CELL_ZOOM, FINEST],
             cuts: none,
         },
         EyeCase {
@@ -505,7 +509,7 @@ fn eyes(built: &Built) -> Vec<EyeCase> {
             range: [8, FINEST],
             cuts: [
                 Cut {
-                    zoom: LEAF_CELL - 3,
+                    zoom: LEAF_CELL_ZOOM - 3,
                     at: carved,
                 },
                 Cut {
@@ -797,14 +801,14 @@ fn hand_pixels_answer_as_cast_entry() {
         let changed: Vec<u32> = (0..tiles[0] * tiles[1])
             .map(|t| {
                 if s.unclaimed_in != 0 && mix(t, 5).is_multiple_of(s.unclaimed_in) {
-                    now - screen::CLAIMED_FOR
+                    now - screen::DAMAGE_FRAMES
                 } else {
-                    now - mix(t, 6) % screen::CLAIMED_FOR
+                    now - mix(t, 6) % screen::DAMAGE_FRAMES
                 }
             })
             .collect();
         let mut uniform = [0u32; screen::TILES_WORDS];
-        uniform[..4].copy_from_slice(&[tiles[0], tiles[1], screen::CLAIMED_FOR, now]);
+        uniform[..4].copy_from_slice(&[tiles[0], tiles[1], screen::DAMAGE_FRAMES, now]);
         let changed_buf = gpu.buffer(&changed, store());
         let tiles_buf = gpu.buffer(&uniform, wgpu::BufferUsages::UNIFORM);
         let mut list_words = vec![0u32; 4 + (tiles[0] * tiles[1]) as usize];
@@ -824,7 +828,7 @@ fn hand_pixels_answer_as_cast_entry() {
                 1,
             ],
         );
-        let listed = gpu.read(&list)[0];
+        let list_of = gpu.read(&list)[0];
 
         let table_buf = gpu.buffer(&cast.table, store());
         let marks = gpu.buffer(&ray::MISS_ARGS_EMPTY, store());
@@ -843,7 +847,7 @@ fn hand_pixels_answer_as_cast_entry() {
                 (14, marks.as_entire_binding()),
                 (30, list.as_entire_binding()),
             ],
-            [listed, per_tile, per_tile],
+            [list_of, per_tile, per_tile],
         );
 
         // The Rust, along the device's ray, at each pixel the device drew: a pixel the visible
@@ -1050,7 +1054,7 @@ fn hand_stale_voxel_is_a_hole() {
             let tiles = [wd.div_ceil(screen::TILE), ht.div_ceil(screen::TILE)];
             let changed = vec![now; (tiles[0] * tiles[1]) as usize];
             let mut uniform = [0u32; screen::TILES_WORDS];
-            uniform[..4].copy_from_slice(&[tiles[0], tiles[1], screen::CLAIMED_FOR, now]);
+            uniform[..4].copy_from_slice(&[tiles[0], tiles[1], screen::DAMAGE_FRAMES, now]);
             let changed_buf = gpu.buffer(&changed, store());
             let tiles_buf = gpu.buffer(&uniform, wgpu::BufferUsages::UNIFORM);
             let mut list_words = vec![0u32; 4 + (tiles[0] * tiles[1]) as usize];
@@ -1070,7 +1074,7 @@ fn hand_stale_voxel_is_a_hole() {
                     1,
                 ],
             );
-            let listed = gpu.read(&list)[0];
+            let list_of = gpu.read(&list)[0];
             let table_buf = gpu.buffer(&cast.table, store());
             let marks = gpu.buffer(&ray::MISS_ARGS_EMPTY, store());
             // Room past the grid's words for this screen's holes.
@@ -1089,13 +1093,13 @@ fn hand_stale_voxel_is_a_hole() {
                     (14, marks.as_entire_binding()),
                     (30, list.as_entire_binding()),
                 ],
-                [listed, per_tile, per_tile],
+                [list_of, per_tile, per_tile],
             );
             let words = gpu.read(&beams);
             let holes = gpu.read(&marks)[ray::MISS_ARGS_CNT as usize] as usize;
             let list = walked_at + ray::holes_at(size) as usize + 1;
-            let listed: BTreeSet<u32> = words[list..list + holes].iter().copied().collect();
-            assert_eq!(listed.len(), holes, "a hole listed twice");
+            let list_of: BTreeSet<u32> = words[list..list + holes].iter().copied().collect();
+            assert_eq!(list_of.len(), holes, "a hole list_of twice");
             let walked = |px: [u32; 2]| {
                 let (w, bit) = ray::hole_bit(px, [wd, ht]);
                 words[walked_at + w as usize] & 1 << bit != 0
@@ -1104,7 +1108,7 @@ fn hand_stale_voxel_is_a_hole() {
                 let px = [p % wd, p / wd];
                 assert_eq!(
                     walked(px),
-                    listed.contains(&(px[0] | px[1] << 16)),
+                    list_of.contains(&(px[0] | px[1] << 16)),
                     "pixel {px:?}: its walked bit and the holes' list"
                 );
             }

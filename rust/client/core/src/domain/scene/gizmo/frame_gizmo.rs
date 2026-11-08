@@ -85,8 +85,11 @@ fn sketch(s: &mut Sketch, pivot: &Q3, heading: Option<f64>) {
     s.about = at;
     s.lines.clear();
     let ground = World::now().floor_under(pivot, LEAF_ZOOM).val().flatten();
-    let cell = v3::floor(&[at[0], at[1], ground.unwrap_or(0.0)], units(GROUND.cell()));
-    s.cube(cell, units(GROUND.cell()));
+    let cell = v3::floor(
+        &[at[0], at[1], ground.unwrap_or(0.0)],
+        units(GROUND.leaf_cell_zoom()),
+    );
+    s.cube(cell, units(GROUND.leaf_cell_zoom()));
     s.point(at, linear_rgb(frame::pivot::rgb));
     // First person the eye is the pivot, and nothing about it is seen.
     let Some(azimuth) = heading else { return };

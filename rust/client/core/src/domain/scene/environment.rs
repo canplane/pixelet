@@ -18,7 +18,7 @@ use crate::domain::scene::animation;
 use crate::domain::scene::environment::param::SKY_EASE_RATE;
 use crate::domain::scene::frame::Frame;
 use crate::domain::view::frame::pose::{anchor, km_per_u};
-use crate::domain::view::lens::Stepped;
+use crate::domain::view::lens::StepClock;
 use crate::domain::view::observation;
 use crate::domain::view::setting::schema_spec::SkyTime;
 use crate::domain::view::setting::store::settings_store;
@@ -134,8 +134,8 @@ pub struct EnvironmentDraw {
     alt_km: f64,
     /// Where the sky's hour and the clouds' wall clock last stepped, in
     /// Unix ms.
-    sky_at: Stepped,
-    clouds_at: Stepped,
+    sky_at: StepClock,
+    clouds_at: StepClock,
     first_ms: Option<f64>,
     out: [f32; ENV_FLOATS],
 }
@@ -155,8 +155,8 @@ impl Default for EnvironmentDraw {
             stars: 0.0,
             drift: [0.0; 2],
             alt_km: 0.0,
-            sky_at: Stepped::default(),
-            clouds_at: Stepped::default(),
+            sky_at: StepClock::default(),
+            clouds_at: StepClock::default(),
             first_ms: None,
             out: [0.0; ENV_FLOATS],
         }
@@ -202,7 +202,7 @@ impl EnvironmentDraw {
     /// moves; a light with no step landed yet asks the least, so every
     /// observation steps until one lands. The clouds' is the wind carrying them the
     /// seen step at the nearest (`cloud::drift_step_s`). Between steps their
-    /// words stand (`lens::Stepped`); before the sky starts, every
+    /// words stand (`lens::StepClock`); before the sky starts, every
     /// observation steps them. A clock set back before where a light last
     /// stepped steps it there at once. The sky's clock is the hour
     /// the `sky_time` setting shows (`sky_clock`), which a held hour never steps;
@@ -216,7 +216,7 @@ impl EnvironmentDraw {
         // As fast as each height moves over the minute from `at`, when it will
         // have moved a step. A light with no step landed (`unknown`) steps at
         // every observation and wakes no turn: its measures' landing does
-        // (pxl-render `landed`).
+        // (pxl-render `complete`).
         const MINUTE_MS: f64 = 60_000.0;
         let rate = |at: f64, unknown: f64| {
             let days = j2000_days(at);

@@ -60,7 +60,7 @@ pub const PLACE_FIRST: Zoom = {
 
 // A place stands at its ground leaf cell, an offset in the tile a half-word a lane.
 const _: () = assert!(
-    GROUND.cell() - PLACE_FIRST <= 16,
+    GROUND.leaf_cell_zoom() - PLACE_FIRST <= 16,
     "a tile's ground leaf cells no longer fit a half-word a lane"
 );
 
@@ -142,7 +142,7 @@ pub struct Place<'a> {
 /// A place a tile holds: what a source gave, the zoom it is shown from, and
 /// the ground leaf cell it stands in, as an offset in the tile.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Placed<'a> {
+pub struct TilePlace<'a> {
     pub place: Place<'a>,
     pub from: Zoom,
     pub at: [u32; 2],
@@ -169,9 +169,9 @@ impl PlaceTile {
         self.categories.is_empty()
     }
 
-    pub fn get(&self, i: u32) -> Placed<'_> {
+    pub fn get(&self, i: u32) -> TilePlace<'_> {
         let k = i as usize;
-        Placed {
+        TilePlace {
             place: Place {
                 name: self.names.get(i),
                 category: self.categories[k],
@@ -182,11 +182,11 @@ impl PlaceTile {
         }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (u32, Placed<'_>)> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = (u32, TilePlace<'_>)> + '_ {
         (0..self.len()).map(|i| (i, self.get(i)))
     }
 
-    fn push(&mut self, h: &Placed) {
+    fn push(&mut self, h: &TilePlace) {
         self.at.push(h.at.map(|v| v as u16));
         self.categories.push(h.place.category);
         // The record keeps a zoom in a byte.
@@ -235,7 +235,7 @@ impl PlaceTile {
         }
         let placed = (0..names.len()).filter_map(|p| {
             let (cell, _, name, place) = &names[p];
-            Some(Placed {
+            Some(TilePlace {
                 place: Place {
                     name: name.as_str(),
                     ..*place
@@ -251,7 +251,7 @@ impl PlaceTile {
 /// The cell a place keeps at Carto's `zoom`, over the ground leaf cell it
 /// stands in: past the ground's own, that cell.
 fn place_cell(stands: Cell, zoom: Zoom) -> Cell {
-    stands.up(GROUND.cell().saturating_sub(zoom + SPACING_STEPS))
+    stands.up(GROUND.leaf_cell_zoom().saturating_sub(zoom + SPACING_STEPS))
 }
 
 /// The ground leaf cell a place a tile holds stands in.
@@ -263,7 +263,7 @@ pub fn stands(tile: Quadrant, at: [u32; 2]) -> Cell {
 /// shown from `p`'s zoom on. A child is a tile where it holds more, or has a
 /// child that does, so a place first shown deeper stays reachable.
 pub fn fold(p: Quadrant, children: [&PlaceTile; 4]) -> PlaceTile {
-    let side = 1u32 << (GROUND.cell() - p.zoom - 1);
+    let side = 1u32 << (GROUND.leaf_cell_zoom() - p.zoom - 1);
     let mut placed = Vec::new();
     let mut has_child = [false; 4];
     for (q, (k, child)) in p.children().into_iter().zip(children).enumerate() {
@@ -273,7 +273,7 @@ pub fn fold(p: Quadrant, children: [&PlaceTile; 4]) -> PlaceTile {
             child
                 .iter()
                 .filter(|(_, h)| h.from <= p.zoom)
-                .map(|(_, h)| Placed {
+                .map(|(_, h)| TilePlace {
                     at: [cx * side + h.at[0], cy * side + h.at[1]],
                     ..h
                 }),
@@ -283,8 +283,8 @@ pub fn fold(p: Quadrant, children: [&PlaceTile; 4]) -> PlaceTile {
 }
 
 /// Places ascending by where they stand.
-fn tile_of<'a>(placed: impl IntoIterator<Item = Placed<'a>>, occupancy: Occupancy) -> PlaceTile {
-    let mut placed: Vec<Placed> = placed.into_iter().collect();
+fn tile_of<'a>(placed: impl IntoIterator<Item = TilePlace<'a>>, occupancy: Occupancy) -> PlaceTile {
+    let mut placed: Vec<TilePlace> = placed.into_iter().collect();
     placed.sort_by_key(|h| [h.at[1], h.at[0]]);
     let mut tile = PlaceTile {
         occupancy,
@@ -339,7 +339,7 @@ pub fn decode(bytes: &[u8]) -> Result<PlaceTile, MarshalError> {
         ..PlaceTile::default()
     };
     for i in 0..n {
-        tile.push(&Placed {
+        tile.push(&TilePlace {
             place: Place {
                 name: names.get(i as u32).ok_or_else(malformed)?,
                 category: categories[i],
@@ -361,7 +361,7 @@ fn validate(tile: &PlaceTile) -> Result<(), MarshalError> {
         .at
         .windows(2)
         .all(|w| [w[0][1], w[0][0]] < [w[1][1], w[1][0]]);
-    let bad = |(_, h): (u32, Placed)| {
+    let bad = |(_, h): (u32, TilePlace)| {
         let shows = first_zoom(h.place.category);
         shows.is_none_or(|z| h.from < z || h.from > PLACE_LAST)
             || h.place.name.chars().nth(NAME_CHARS).is_some()

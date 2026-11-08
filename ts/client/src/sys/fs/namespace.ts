@@ -21,7 +21,7 @@ import { read_object } from "@/sys/fs/tile.ts";
 /** Each bake to its tiles at the edge, ASSET to the shipped assets, STORAGE
  * to the platform's storage, OBJECT to the placed objects' source. */
 export function namespace(): Namespace {
-  const bound: [u32, Binding][] = [
+  const bindings: [u32, Binding][] = [
     ...BASE_LAYERS.map((_, bake): [u32, Binding] => [
       bake,
       {
@@ -45,5 +45,5 @@ export function namespace(): Namespace {
       },
     ],
   ];
-  return new Namespace(bound);
+  return new Namespace(bindings);
 }

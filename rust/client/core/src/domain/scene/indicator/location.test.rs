@@ -9,7 +9,7 @@ use xpute_core::clock;
 /// its four sides, what `lay_zone` must lay the same bytes as.
 fn laid_asking_each(center_pos: V3, mut ground: impl FnMut(&Q3) -> Option<f64>) -> Vec<f32> {
     let mut instances = Vec::new();
-    let cell = units(GROUND.cell());
+    let cell = units(GROUND.leaf_cell_zoom());
     let mut box_at = |off: V3| {
         let v = v3::add(&center_pos, &off);
         let coord = world::point(v[0], v[1], v[2]);
@@ -44,7 +44,7 @@ fn laid_asking_each(center_pos: V3, mut ground: impl FnMut(&Q3) -> Option<f64>) 
 /// A rough ground over the cell a point is in: steps up and down, a fraction
 /// of a cell high, and a column here and there not known.
 fn rough(at: &Q3) -> Option<f64> {
-    let cell = units(GROUND.cell());
+    let cell = units(GROUND.leaf_cell_zoom());
     let [x, y] = [0, 1].map(|k| (q3::to_real(i64::from(at[k])) / cell).floor() as i64);
     let h = (x * 7 + y * 13).rem_euclid(11);
     (h != 4).then(|| 3.0 + h as f64 * 0.375 - (x - y).rem_euclid(3) as f64)
@@ -52,7 +52,7 @@ fn rough(at: &Q3) -> Option<f64> {
 
 #[test]
 fn zone_cells_once() {
-    let cell = units(GROUND.cell());
+    let cell = units(GROUND.leaf_cell_zoom());
     for center in [[0.0, 0.0, 3.0], [10.0, -7.0, 5.0], [-123.0, 456.0, -2.0]] {
         let center = center.map(|v| v * cell);
         let (mut asked, mut rise, mut instances) = (0, Vec::new(), Vec::new());
@@ -100,7 +100,7 @@ fn beacon_holds_on_stall() {
             night: false,
             time: 0.0,
             run: 0.0,
-            clock: Stepped::default(),
+            clock: StepClock::default(),
             visible: false,
             zone_drawn: false,
         }),

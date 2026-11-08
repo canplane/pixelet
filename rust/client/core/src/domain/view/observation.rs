@@ -118,15 +118,19 @@ pub fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
     // Depth first, so each brick's lines step from its neighbor's.
     let (world, mut walked) = (World::now(), ColumnWalk::default());
     while let Some((zoom, xy)) = stack.pop() {
-        let (cell, d) = (zoom + BRICK_SHIFT, near(zoom, xy));
+        let (cell_zoom, d) = (zoom + BRICK_SHIFT, near(zoom, xy));
         if d > o.demand_dist {
             continue;
         }
-        if cell < GROUND.cell() && d < split_dist(cell) {
+        if cell_zoom < GROUND.leaf_cell_zoom() && d < split_dist(cell_zoom) {
             stack.extend((0..4).map(|k| (zoom + 1, [2 * xy[0] + (k & 1), 2 * xy[1] + (k >> 1)])));
             continue;
         }
-        let Some(b) = world.bounds(&mut walked, (zoom, xy), cell).val().flatten() else {
+        let Some(b) = world
+            .bounds(&mut walked, (zoom, xy), cell_zoom)
+            .val()
+            .flatten()
+        else {
             continue;
         };
         each((zoom, xy), [b.min[2], b.max[2]]);

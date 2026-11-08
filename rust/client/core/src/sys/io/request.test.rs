@@ -80,7 +80,7 @@ fn until() -> f64 {
 }
 
 fn ok(key: u64) {
-    settle(key, Ended::Ok, None);
+    settle(key, Exit::Ok, None);
 }
 
 fn failed(key: u64, errnum: Errno) {
@@ -89,7 +89,7 @@ fn failed(key: u64, errnum: Errno) {
         detail: 0,
         at: None,
     };
-    settle(key, Ended::Failed(fail), None);
+    settle(key, Exit::Failed(fail), None);
 }
 
 #[test]
@@ -167,7 +167,7 @@ fn heap_refusal_waits_release() {
     let (_serial, key) = one_out();
     set_counted_heap();
     at(0.0);
-    settle(key, Ended::Refused(Refusal::now()), None);
+    settle(key, Exit::Refused(Refusal::now()), None);
     for t in 0..5 {
         at(t as f64 * 10_000.0);
         declare(Stream::terrain, &[(1, seen(0.0))]);
@@ -199,7 +199,7 @@ fn early_release_not_rewaited() {
     let refused = Refusal::now();
     heap_release();
     at(0.0);
-    settle(key, Ended::Refused(refused), None);
+    settle(key, Exit::Refused(refused), None);
     at(0.0);
     declare(Stream::terrain, &[(1, seen(0.0))]);
     pump();

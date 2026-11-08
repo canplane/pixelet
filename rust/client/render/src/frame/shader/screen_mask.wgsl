@@ -1,4 +1,4 @@
-// pxl-render/frame/shader/screen_gate.wgsl
+// pxl-render/frame/shader/screen_mask.wgsl
 
 // The gate a frame not drawn whole is drawn through (gpu/renderer.rs `frame`):
 // each claimed tile (screen_tiles.wgsl) set back to what a cleared pass starts

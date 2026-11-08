@@ -31,9 +31,9 @@ fn box_join(a: vec2<u32>, b: vec2<u32>) -> vec2<u32> {
   return box_word(min(box_first(a), box_first(b)), max(box_past(a), box_past(b)));
 }
 
-// ---- overwrite.rs ----
+// ---- object.rs ----
 
-/// `overwrite::object_box`, under a split.
+/// `object::object_box`, under a split.
 fn object_box(s: u32, zoom: u32) -> vec2<u32> {
   if (s == SLOT_NOTHING) {
     return BOX_NONE;
@@ -59,7 +59,7 @@ fn object_box(s: u32, zoom: u32) -> vec2<u32> {
   return box_word(select(vec3<u32>(half), vec3<u32>(0u), lows != vec3<u32>(0u)), select(vec3<u32>(half), vec3<u32>(BOX_STEPS), highs != vec3<u32>(0u)));
 }
 
-/// `overwrite::cells_by`.
+/// `object::cells_by`.
 fn cells_by(s: u32, d: u32) -> bool {
   if (s == SLOT_NOTHING) {
     return false;
@@ -72,7 +72,7 @@ fn cells_by(s: u32, d: u32) -> bool {
   return (word >> 16u) + 2u > select(0u, FULL >> (shift & 31u), shift <= FULL_BITS);
 }
 
-/// `overwrite::whole`.
+/// `object::whole`.
 fn whole(s: u32, carve: vec4<i32>, zoom: u32, at: vec3<i32>) -> bool {
   if (is_folded(s)) {
     return false;
@@ -102,8 +102,8 @@ fn slab_over(zoom: u32, relief_hi: i32, far: u32, near: u32) -> i32 {
 
 /// `ground::meets`.
 fn meets(span: vec2<i32>, zoom: u32, z: i32, near: u32) -> bool {
-  let e = max(near, LEAF_CELL) - LEAF_CELL;
-  let s = LEAF_CELL + e - zoom;
+  let e = max(near, LEAF_CELL_ZOOM) - LEAF_CELL_ZOOM;
+  let s = LEAF_CELL_ZOOM + e - zoom;
   let first = ((z + z_start(zoom)) << s) - (SEA_CELLS << e);
   return first < (span.y << e) && first + (1i << s) > (span.x << e);
 }
@@ -120,10 +120,10 @@ fn box_along_z(span: vec2<i32>, zoom: u32, z_at: i32) -> vec2<u32> {
   if (span.x >= span.y) {
     return BOX_NONE;
   }
-  if (zoom >= LEAF_CELL) {
+  if (zoom >= LEAF_CELL_ZOOM) {
     return BOX_WHOLE;
   }
-  let shift = LEAF_CELL - zoom;
+  let shift = LEAF_CELL_ZOOM - zoom;
   let z = z_at + z_start(zoom);
   let first = z_step(span.x, z, shift);
   let past = select(z_step(span.y, z, shift), z_step(span.y - 1i, z, shift) + 1i, shift >= BOX_BITS);
@@ -143,8 +143,8 @@ fn way_slab(bound: vec2<i32>, first: u32, near: u32) -> vec2<i32> {
   var span = vec2<i32>(EMPTY_LO, EMPTY_HI);
   for (var z = first; z <= near; z += 1u) {
     var got = bound;
-    if (z < LEAF_CELL) {
-      let k = LEAF_CELL - z;
+    if (z < LEAF_CELL_ZOOM) {
+      let k = LEAF_CELL_ZOOM - z;
       let half = 1i << (k - 1u);
       got = vec2<i32>(((bound.x + half) >> k) << k, -(((half - bound.y) >> k) << k));
     }
@@ -224,7 +224,7 @@ fn world_split(above: vec4<u32>, shard: u32, zoom: u32, c: vec3<i32>, far: u32, 
 /// node over it handed it (`world::node`).
 fn world_node(above: vec4<u32>, zoom: u32, c: vec3<i32>, far: u32, near: u32, carve: vec4<i32>, hide: vec4<i32>) -> Answer {
   let shard = shard_at(above.y, zoom, c.xy);
-  if (zoom >= near || (zoom >= LEAF_CELL && whole(above.x, carve, zoom, c))) {
+  if (zoom >= near || (zoom >= LEAF_CELL_ZOOM && whole(above.x, carve, zoom, c))) {
     return world_cell(above, shard, zoom, c, carve, hide);
   }
   return world_split(above, shard, zoom, c, far, near);

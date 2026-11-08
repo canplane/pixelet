@@ -13,7 +13,7 @@
 // the ray either way. Past one it may meet a lack a box would have kept it from, so the node
 // cache's walk stops at no lack: the walk that asks walks that ray again whole
 // (`lack_ends`). So a ray stops where `cast::walk` stops. A ray
-// walked on from the state a walk returns (`Walked`, `Start`) goes on as one unbroken walk. A
+// walked on from the state a walk returns (`WalkEnd`, `Start`) goes on as one unbroken walk. A
 // ray the first module left and the second walks on from its `t` alone (resume.wgsl
 // `resumed_at`, `line_resumed`) stops where one unbroken walk stops, as the partition of its
 // interval past that point is the same; it looks again at the nodes over the one it was left
@@ -28,31 +28,31 @@ const KIND_BLIND = 0xfffffffdu;
 const ENDS_AGAIN = 6u;
 
 /// What was handed the line's node at `zoom`, at `line` (`beam::LINE_INHERITANCE`).
-fn line_handed(line: u32, zoom: u32) -> vec4<u32> {
+fn line_inheritance(line: u32, zoom: u32) -> vec4<u32> {
   let k = line + LINE_INHERITANCE + LINE_STEP * zoom;
   return vec4<u32>(beams[k], beams[k + 1u], beams[k + 2u], beams[k + 3u]);
 }
 
-fn line_hand(line: u32, zoom: u32, handed: vec4<u32>) {
+fn line_hand(line: u32, zoom: u32, inheritance: vec4<u32>) {
   let k = line + LINE_INHERITANCE + LINE_STEP * zoom;
-  beams[k] = handed.x;
-  beams[k + 1u] = handed.y;
-  beams[k + 2u] = handed.z;
-  beams[k + 3u] = handed.w;
+  beams[k] = inheritance.x;
+  beams[k + 1u] = inheritance.y;
+  beams[k + 2u] = inheritance.z;
+  beams[k + 3u] = inheritance.w;
 }
 
 /// The ray `aim` from `start`, at most `steps` steps more, to the first cell its stop rule stops
 /// at, the first that lacks, its reach, or, for a beam ray, the first split too narrow to share
-/// with its beam's rays (`cast::walk_at_most`: at most `STEPS_MOST` steps in all, past which it
+/// with its beam's rays (`cast::walk_at_most`: at most `STEPS_CAP` steps in all, past which it
 /// has gone to its reach). A step is a node looked at; what it carries from one step to the
 /// next is `Start`'s words and nothing else, so a walk stopped after any step and walked on
-/// from the state it returns (`Walked`) looks at the nodes, and stops where, one walk given
+/// from the state it returns (`WalkEnd`) looks at the nodes, and stops where, one walk given
 /// both their steps does. A beam ray's line (`aim.line`, `beam::LINE_WORDS`) holds what was
 /// handed each node it goes into and the one it ends at, written as it goes, and is read back
 /// where the walk pops to a node's child, in place of a stack; and the node it ends or is left
-/// at. `ends` (`Walked`): 4 by cached.wgsl, at a node no slot keeps or at the end of a line
+/// at. `ends` (`WalkEnd`): 4 by cached.wgsl, at a node no slot keeps or at the end of a line
 /// whose last node's handed words it cannot find; 5 where `steps` ran out first.
-fn walk(aim: Aim, start: Start, steps: u32) -> Walked {
+fn walk(aim: Aim, start: Start, steps: u32) -> WalkEnd {
   let beam = aim.until == UNTIL_BEAM;
   let line = aim.line;
   let dir = ray_dir(aim.dir);
@@ -73,10 +73,10 @@ fn walk(aim: Aim, start: Start, steps: u32) -> Walked {
   var parent = start.parent;
   var top = start.top;
   if (line != NONE && zoom != 0u) {
-    parent = line_handed(line, zoom - 1u);
+    parent = line_inheritance(line, zoom - 1u);
     top = false;
   }
-  let last = start.step + min(steps, STEPS_MOST - min(start.step, STEPS_MOST));
+  let last = start.step + min(steps, STEPS_CAP - min(start.step, STEPS_CAP));
   // 0 goes on.
   var ends = 0u;
   var asset = vec2<u32>(0u);
@@ -84,7 +84,7 @@ fn walk(aim: Aim, start: Start, steps: u32) -> Walked {
   var hit_t = t_max;
   var visits = 0u;
   // Whether what was handed the node it ends at is in the line.
-  var handed_ended = false;
+  var end_in_line = false;
   var step = start.step;
   for (; step < last; step += 1u) {
     let u = under(zoom);
@@ -95,7 +95,7 @@ fn walk(aim: Aim, start: Start, steps: u32) -> Walked {
     let t1 = min(t_max, smallest(s.far));
     var into = false;
     var stops = false;
-    var handed = vec4<u32>(0u);
+    var inheritance = vec4<u32>(0u);
     // Only touched, at a face or an edge: not entered, nothing in it met.
     if (t1 > t0) {
       let zooms = asked_zooms(lo, hi, range);
@@ -106,7 +106,7 @@ fn walk(aim: Aim, start: Start, steps: u32) -> Walked {
         break;
       }
       visits += 1u;
-      handed = a.handed;
+      inheritance = a.inheritance;
       asset = a.asset;
       let v = asset.x & VAL_MASK;
       let clear = v == VALUE_VOID || v == VALUE_AIR;
@@ -169,8 +169,8 @@ fn walk(aim: Aim, start: Start, steps: u32) -> Walked {
         stops = true;
       }
       if (line != NONE && (into || stops || t1 >= t_max)) {
-        line_hand(line, zoom, handed);
-        handed_ended = !into;
+        line_hand(line, zoom, inheritance);
+        end_in_line = !into;
       }
       if (stops) {
         // Where the ray enters the node, or its share's box (`entry_plane`).
@@ -191,7 +191,7 @@ fn walk(aim: Aim, start: Start, steps: u32) -> Walked {
       corner = corner | select(vec3<u32>(0u), vec3<u32>(half), crossed);
       zoom += 1u;
       t = t0;
-      parent = handed;
+      parent = inheritance;
       top = false;
     } else {
       if (t1 >= t_max) {
@@ -205,7 +205,7 @@ fn walk(aim: Aim, start: Start, steps: u32) -> Walked {
       let old = corner[e];
       let new_c = select(old - u - 1u, old + u + 1u, up);
       t = max(t, t1);
-      handed_ended = false;
+      end_in_line = false;
       if ((up && old + u == 0xffffffffu) || (!up && old == 0u)) {
         // Past a root: into the next, from its top.
         roots[e] += select(-1i, 1i, up);
@@ -219,16 +219,16 @@ fn walk(aim: Aim, start: Start, steps: u32) -> Walked {
         zoom = FINEST_ZOOM - h;
         top = line == NONE;
         if (!top) {
-          parent = line_handed(line, zoom - 1u);
+          parent = line_inheritance(line, zoom - 1u);
         }
       }
     }
   }
   if (ends == 0u) {
-    // Out of its steps: gone to its reach where they were the last of `STEPS_MOST`, as a float
+    // Out of its steps: gone to its reach where they were the last of `STEPS_CAP`, as a float
     // gone wrong ends; else stopped where it is.
-    ends = select(5u, 3u, step >= STEPS_MOST);
-    hit_t = select(t, t_max, step >= STEPS_MOST);
+    ends = select(5u, 3u, step >= STEPS_CAP);
+    hit_t = select(t, t_max, step >= STEPS_CAP);
   }
   if (line != NONE) {
     // The node it ended or was left at, which a walk resumed from the line starts from
@@ -242,16 +242,16 @@ fn walk(aim: Aim, start: Start, steps: u32) -> Walked {
     beams[n + NODE_ROOTS] = u32(roots.x);
     beams[n + NODE_ROOTS + 1u] = u32(roots.y);
     beams[n + NODE_ROOTS + 2u] = u32(roots.z);
-    if (ends <= 3u && !handed_ended && !hand_end(line, parent, top, zoom, idx_of(corner, zoom, roots, r0))) {
+    if (ends <= 3u && !end_in_line && !hand_end(line, parent, top, zoom, idx_of(corner, zoom, roots, r0))) {
       ends = 4u;
     }
   }
-  return Walked(ends, zoom, corner, roots, asset, axis, hit_t, visits, parent, top, step);
+  return WalkEnd(ends, zoom, corner, roots, asset, axis, hit_t, visits, parent, top, step);
 }
 
 /// A walk `w` whose ray goes no further, a lack at the deepest node held.
-fn to_lack(w: Walked) -> Walked {
-  return Walked(2u, w.zoom, w.corner, w.roots, w.asset, w.axis, w.t, w.visits, w.parent, w.top, w.step);
+fn to_lack(w: WalkEnd) -> WalkEnd {
+  return WalkEnd(2u, w.zoom, w.corner, w.roots, w.asset, w.axis, w.t, w.visits, w.parent, w.top, w.step);
 }
 
 /// The zooms the ray `aim` asks the node at `corner`, `zoom` and `roots` at, as its walk asks

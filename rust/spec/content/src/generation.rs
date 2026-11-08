@@ -8,13 +8,13 @@
 
 use pxl_engine::answer::{self, val};
 use pxl_engine::clipmap;
-use pxl_engine::clipmap::{BRICK, BRICK_SHIFT, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL};
-use pxl_engine::overwrite;
+use pxl_engine::clipmap::{BRICK, BRICK_SHIFT, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL_ZOOM};
+use pxl_engine::object;
 use pxl_engine::seed::node_seed;
 use pxl_engine::value;
 use pxl_engine::world::{placed_in, PlacedCursor};
-use pxl_engine::WORKGROUPS_MOST;
-use pxl_engine::{wrap_idx, Zoom, FINEST_ZOOM, FRAC_W, LEAF_CELL, UNIT_ZOOM, ZOOM_BITS};
+use pxl_engine::WORKGROUPS_CAP;
+use pxl_engine::{wrap_idx, Zoom, FINEST_ZOOM, FRAC_W, LEAF_CELL_ZOOM, UNIT_ZOOM, ZOOM_BITS};
 use xpute_kit::math::rng::SplitMix32;
 
 use crate::decor::{Decor, Orientation, DECORS};
@@ -62,14 +62,14 @@ const _: () = assert!(
 
 /// A record of decor the GPU draws: its first word (`record_word`), then
 /// its box's min corner in leaf cells, then how far its base sinks under
-/// it (`Generated::sink`).
+/// it (`Prop::sink`).
 pub const RECORD_WORDS: u32 = 5;
 
 /// The eye's clip levels' bricks, an entry each: what the GPU generates decor
 /// in, entry `s` the brick the clip levels' table holds at `s`.
 pub const EYE_ENTRIES: u32 = EYE_CLIP_LEVELS * ENTRIES;
 const _: () = assert!(
-    EYE_ENTRIES * DECORS.len() as u32 <= WORKGROUPS_MOST,
+    EYE_ENTRIES * DECORS.len() as u32 <= WORKGROUPS_CAP,
     "every entry's pairs listed, a workgroup deep each, fit one dispatch (decor_mark.wgsl)"
 );
 
@@ -92,25 +92,25 @@ const _: () = assert!(
 /// (`generated_for`) — then how many records each decor laid (`cnt_at`).
 /// Placed decor's head is its count.
 pub const CNT_AT: u32 = 3;
-pub const HEAD_WORDS: u32 = CNT_AT + DECORS.len() as u32;
-pub const SLOTS_AT: u32 = EYE_ENTRIES * HEAD_WORDS;
+pub const HEADER_WORDS: u32 = CNT_AT + DECORS.len() as u32;
+pub const SLOTS_AT: u32 = EYE_ENTRIES * HEADER_WORDS;
 /// Records the entries hold, every one, ahead of placed decor's.
 pub const SLOT_RECORDS: u32 = EYE_ENTRIES * BRICK_RECORDS;
-pub const PLACED_HEAD: u32 = SLOTS_AT + SLOT_RECORDS * RECORD_WORDS;
-pub const PLACED_HEAD_WORDS: u32 = 4;
+pub const PLACED_HEADER: u32 = SLOTS_AT + SLOT_RECORDS * RECORD_WORDS;
+pub const PLACED_HEADER_WORDS: u32 = 4;
 
 /// The runs of records a decor pass's workgroup reads (decor_run.wgsl
 /// `run_of`): an entry's, `RUN` records each; placed decor's, a record each.
 pub const RUNS: u32 = BRICK_RECORDS / RUN;
 
 /// Entry `s`'s head.
-pub const fn head_at(s: u32) -> u32 {
-    s * HEAD_WORDS
+pub const fn header_at(s: u32) -> u32 {
+    s * HEADER_WORDS
 }
 
 /// The word of entry `s`'s head counting the records decor `k` laid.
 pub const fn cnt_at(s: u32, k: u32) -> u32 {
-    head_at(s) + CNT_AT + k
+    header_at(s) + CNT_AT + k
 }
 
 /// Where `rows`' decor `k`'s records start among an entry's: the decors'
@@ -136,24 +136,24 @@ pub const fn record_at(n: u32) -> u32 {
     if n < SLOT_RECORDS {
         SLOTS_AT + n * RECORD_WORDS
     } else {
-        PLACED_HEAD + PLACED_HEAD_WORDS + (n - SLOT_RECORDS) * RECORD_WORDS
+        PLACED_HEADER + PLACED_HEADER_WORDS + (n - SLOT_RECORDS) * RECORD_WORDS
     }
 }
 
 /// Whether an entry's head says its records were generated for the brick `q`.
-pub const fn generated_for(head: [u32; 3], q: [i32; 2]) -> bool {
-    head[2] == 1 && head[0] as i32 == q[0] && head[1] as i32 == q[1]
+pub const fn generated_for(header: [u32; 3], q: [i32; 2]) -> bool {
+    header[2] == 1 && header[0] as i32 == q[0] && header[1] as i32 == q[1]
 }
 
 /// The boxes a frame's generation is asked over at most: the edits and cuts
-/// held (`overwrite::BOXES`), and each brick handed this frame, which
+/// held (`object::RECTS`), and each brick handed this frame, which
 /// reaches its clip level's zoom and every coarser one (`asks`'s vote).
-pub const BOX_CAP: u32 = overwrite::BOXES + clipmap::FRAME_BRICKS;
+pub const RECT_CAP: u32 = object::RECTS + clipmap::FRAME_BRICKS;
 /// A box's words: its leaf cells `[x0, y0, x1, y1)`, X on any lap, then the
 /// finest clip level zoom whose candidates it reaches, `EVERY` for all.
-pub const BOX_WORDS: u32 = 5;
+pub const RECT_WORDS: u32 = 5;
 pub const EVERY: u32 = 0;
-const _: () = assert!(FIRST_CELL > EVERY);
+const _: () = assert!(FIRST_CELL_ZOOM > EVERY);
 
 /// What `decor_mark_cs` reads and lists and `decor_thin_cs` and `decor_cs`
 /// are dispatched by, in words: each one's workgroups across, up and the
@@ -161,8 +161,8 @@ const _: () = assert!(FIRST_CELL > EVERY);
 /// `GENERATE_ARGS`), then the pairs it counted as it listed them
 /// (`THIN_CNT`, `GENERATE_CNT`); whether
 /// every entry generates whole, decor having been off (`LIST_EVERY`), how
-/// many boxes (`LIST_BOXES`), how many pairs generate again in part
-/// (`LIST_PARTS`), a pad; the boxes, `BOX_WORDS` each; then the list, an
+/// many boxes (`LIST_RECTS`), how many pairs generate again in part
+/// (`LIST_PARTS`), a pad; the boxes, `RECT_WORDS` each; then the list, an
 /// entry and its decor (`<< 16`) each, in no order: the pairs generated
 /// whole from its start, which `decor_thin_cs` thins and `decor_cs`
 /// generates, the pairs generated in part from its end (`part_at`), which
@@ -173,10 +173,10 @@ pub const THIN_CNT: u32 = 3;
 pub const GENERATE_ARGS: u32 = 4;
 pub const GENERATE_CNT: u32 = 7;
 pub const LIST_EVERY: u32 = 8;
-pub const LIST_BOXES: u32 = 9;
+pub const LIST_RECTS: u32 = 9;
 pub const LIST_PARTS: u32 = 10;
-pub const BOXES_AT: u32 = 12;
-pub const LIST_AT: u32 = BOXES_AT + BOX_CAP * BOX_WORDS;
+pub const RECTS_AT: u32 = 12;
+pub const LIST_AT: u32 = RECTS_AT + RECT_CAP * RECT_WORDS;
 
 /// The words of what `decor_mark_cs` lists.
 pub const LIST_WORDS: u32 = LIST_AT + EYE_ENTRIES * DECORS.len() as u32;
@@ -211,26 +211,26 @@ pub const fn pair_of(w: u32) -> (u32, u32) {
 pub const READ_REACH: i32 = ALIGN_NEIGHBOR_RADIUS + WIDEST;
 
 /// The leaf cells, `[x0, y0, x1, y1)`, of brick `q` of the clip level at
-/// `cell`.
-pub const fn brick_box(cell: Zoom, q: [i32; 2]) -> [i32; 4] {
-    let k = BRICK_SHIFT + LEAF_CELL - cell;
+/// `cell_zoom`.
+pub const fn brick_rect(cell_zoom: Zoom, q: [i32; 2]) -> [i32; 4] {
+    let k = BRICK_SHIFT + LEAF_CELL_ZOOM - cell_zoom;
     [q[0] << k, q[1] << k, (q[0] + 1) << k, (q[1] + 1) << k]
 }
 
-/// Whether a box of the frame's, `b` of leaf cells at `zoom` (`BOX_WORDS`),
+/// Whether a box of the frame's, `b` of leaf cells at `zoom` (`RECT_WORDS`),
 /// reaches what a candidate in `at` reads, leaf cells of the clip level at
-/// `cell`: a brick's (`brick_box`), or one candidate's own. A candidate reads
+/// `cell_zoom`: a brick's (`brick_rect`), or one candidate's own. A candidate reads
 /// the world at its clip level's zoom and finer, each a cell within
 /// `READ_REACH` of its own at that zoom; a brick filled at `zoom` answers a
 /// read at `zoom` or finer alone (`clipmap::step`), so it reaches the clip
 /// levels at `zoom` and coarser, within `READ_REACH` of its cells, not of
 /// theirs; an edit or a cut (`EVERY`) is read at every zoom, so within
 /// `READ_REACH` of the clip level's own cells.
-pub fn reaches(b: [i32; 4], zoom: Zoom, cell: Zoom, at: [i32; 4]) -> bool {
-    if zoom != EVERY && zoom < cell {
+pub fn reaches(b: [i32; 4], zoom: Zoom, cell_zoom: Zoom, at: [i32; 4]) -> bool {
+    if zoom != EVERY && zoom < cell_zoom {
         return false;
     }
-    let s = LEAF_CELL - if zoom == EVERY { cell } else { zoom };
+    let s = LEAF_CELL_ZOOM - if zoom == EVERY { cell_zoom } else { zoom };
     let r = READ_REACH << s;
     // `at` laid out to the cells it lies in at that zoom.
     let reads = [
@@ -247,12 +247,12 @@ pub fn reaches(b: [i32; 4], zoom: Zoom, cell: Zoom, at: [i32; 4]) -> bool {
 pub fn meets(reads: [i32; 4], b: [i32; 4]) -> bool {
     let wide = reads[2] - reads[0];
     // The box's first column from the region's, the short way round.
-    let (from, width) = (wrap_idx(LEAF_CELL, b[0] - reads[0]), b[2] - b[0]);
+    let (from, width) = (wrap_idx(LEAF_CELL_ZOOM, b[0] - reads[0]), b[2] - b[0]);
     // Met where it starts in the region or over it, or runs on round the
     // world into it.
-    let across = width >= 1 << LEAF_CELL
+    let across = width >= 1 << LEAF_CELL_ZOOM
         || (from < wide && from + width > 0)
-        || from + width > 1 << LEAF_CELL;
+        || from + width > 1 << LEAF_CELL_ZOOM;
     across && b[1] < reads[3] && b[3] > reads[1]
 }
 
@@ -260,8 +260,8 @@ pub fn meets(reads: [i32; 4], b: [i32; 4]) -> bool {
 /// quarters, and the clip level zoom it was generated at, or for placed decor
 /// the coarsest it stands at (`scatter::coarsest_stand`); past them, once
 /// sized, its region (`drawn::REGION_SHIFT`).
-pub const fn record_word(decor: u32, variant: u32, turn: u32, cell: Zoom) -> u32 {
-    decor | variant << VARIANT_SHIFT | turn << TURN_SHIFT | cell << CELL_SHIFT
+pub const fn record_word(decor: u32, variant: u32, turn: u32, cell_zoom: Zoom) -> u32 {
+    decor | variant << VARIANT_SHIFT | turn << TURN_SHIFT | cell_zoom << CELL_ZOOM_SHIFT
 }
 
 /// A record's turn's place and width in its first word, and its zoom's
@@ -270,7 +270,7 @@ pub const TURN_SHIFT: u32 = 16;
 /// A record's variant's place past its decor, a byte each (`record_word`).
 pub const VARIANT_SHIFT: u32 = 8;
 pub const TURN_BITS: u32 = 2;
-pub const CELL_SHIFT: u32 = TURN_SHIFT + TURN_BITS;
+pub const CELL_ZOOM_SHIFT: u32 = TURN_SHIFT + TURN_BITS;
 
 /// A record's decor, variant, turn and zoom (`record_word`).
 pub const fn record_of(w: u32) -> (u32, u32, u32, Zoom) {
@@ -278,7 +278,7 @@ pub const fn record_of(w: u32) -> (u32, u32, u32, Zoom) {
         w & ((1 << VARIANT_SHIFT) - 1),
         (w >> VARIANT_SHIFT) & ((1 << VARIANT_SHIFT) - 1),
         (w >> TURN_SHIFT) & ((1 << TURN_BITS) - 1),
-        (w >> CELL_SHIFT) & ((1 << ZOOM_BITS) - 1),
+        (w >> CELL_ZOOM_SHIFT) & ((1 << ZOOM_BITS) - 1),
     )
 }
 
@@ -317,7 +317,7 @@ pub mod drawn {
     pub const NONE: u32 = 0xff;
     /// What a record's first word holds past its decor, variant and turn:
     /// its region, once sized.
-    pub const REGION_SHIFT: u32 = super::CELL_SHIFT + pxl_engine::ZOOM_BITS;
+    pub const REGION_SHIFT: u32 = super::CELL_ZOOM_SHIFT + pxl_engine::ZOOM_BITS;
     pub const COLUMNS: u32 = 5;
     /// Each region's indirect args, `ARGS_WORDS` a region: a model's
     /// indexed, an impostor's a strip of four corners an instance; its first
@@ -359,10 +359,10 @@ pub mod drawn {
     pub const IMPOSTOR: u32 = 1;
     pub const CULLED: u32 = 2;
 
-    /// The tier of what spans `across` radians, against the model's and the
+    /// The lod of what spans `across` radians, against the model's and the
     /// impostor's floors: the one rule decor's count and the CPU's clouds
     /// both size by.
-    pub fn tier(across: f32, model: f32, impostor: f32) -> u32 {
+    pub fn lod(across: f32, model: f32, impostor: f32) -> u32 {
         if across >= model {
             MODEL
         } else if across >= impostor {
@@ -384,19 +384,19 @@ pub trait DecorQuery {
     /// The catalog's rows (`decor::DECORS`), as this side holds them: a GPU
     /// reads them from a buffer.
     fn rows(&self) -> &[Decor];
-    /// The column surface down column `g` at `cell` of the world unplaced,
+    /// The column surface down column `g` at `cell_zoom` of the world unplaced,
     /// what is placed left out: the query's support (`support::column_surface`) as
     /// this side asks it; its top (`cast::top`), false where nothing fills
     /// there or the world lacks it.
     fn column_surface(
         &mut self,
-        cell: Zoom,
+        cell_zoom: Zoom,
         g: [i32; 2],
     ) -> (Self::ColumnSurface, (i32, f32), bool);
-    /// The finest zoom, `cell` or finer, this side holds the ground's leaf
+    /// The finest zoom, `cell_zoom` or finer, this side holds the ground's leaf
     /// column `g` at: where a candidate there is asked whether it stands and
     /// which way it faces (`placement`), the same whatever clip level asks.
-    fn finest(&mut self, cell: Zoom, g: [i32; 2]) -> Zoom;
+    fn finest(&mut self, cell_zoom: Zoom, g: [i32; 2]) -> Zoom;
     /// What is in the cell `c` of `zoom`: the world unplaced's answer about
     /// the column surface `f` (`support::asset`), `void` or the ground's value;
     /// or, `edited`, the world as edited's down the cell's own line, which an
@@ -414,15 +414,15 @@ pub trait DecorQuery {
 /// column surface's top kept short of its cube (`cast::top`), so it stands on the
 /// top as drawn, not its cube's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Generated {
+pub struct Prop {
     pub variant: u32,
     pub turn: u32,
     pub at: [i32; 3],
     pub sink: u32,
 }
 
-impl Generated {
-    pub const NONE: Generated = Generated {
+impl Prop {
+    pub const NONE: Prop = Prop {
         variant: 0,
         turn: 0,
         at: [0; 3],
@@ -430,7 +430,7 @@ impl Generated {
     };
 }
 
-/// Where candidate `c` of `decor` stands at `cell`: on its column's surface in
+/// Where candidate `c` of `decor` stands at `cell_zoom`: on its column's surface in
 /// the world unplaced, the ground's alone, so no edit moves it or takes it from
 /// under it; facing as the cells beside it vote (`asks`); then, where `boxed`,
 /// whether it generates there: every cell of its box void and every one under
@@ -446,56 +446,56 @@ impl Generated {
 pub fn placement(
     q: &mut impl DecorQuery,
     decor: &Decor,
-    cell: Zoom,
+    cell_zoom: Zoom,
     c: &Candidate,
     boxed: bool,
-) -> (Generated, bool, bool) {
-    let (f, ft, has_footing) = footing(q, cell, c.cell);
+) -> (Prop, bool, bool) {
+    let (f, ft, has_footing) = footing(q, cell_zoom, c.cell);
     if !has_footing {
-        return (Generated::NONE, false, false);
+        return (Prop::NONE, false, false);
     }
-    let (g, generates) = pose(q, &f, decor, cell, c.seed, &ft, boxed);
+    let (g, generates) = pose(q, &f, decor, cell_zoom, c.seed, &ft, boxed);
     (g, true, generates)
 }
 
-/// Where a candidate in the leaf cell `leaf` stands at `cell`, before it is
-/// posed (`placement`): its box's min corner and sink, `Generated`'s with no
+/// Where a candidate in the leaf cell `leaf` stands at `cell_zoom`, before it is
+/// posed (`placement`): its box's min corner and sink, `Prop`'s with no
 /// pose; the finest zoom it is posed at (`DecorQuery::finest`) and its
 /// column surface's top cell there, `base`; and whether that zoom's column
 /// surface was found, `held`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Footing {
-    pub g: Generated,
+    pub g: Prop,
     pub zoom: Zoom,
     pub base: i32,
     pub held: bool,
 }
 
-/// The column surfaces under leaf cell `leaf` at `cell` (`placement`'s
+/// The column surfaces under leaf cell `leaf` at `cell_zoom` (`placement`'s
 /// first half): its clip level's, then the finest's where that is another,
 /// one ask, so a GPU's walk down a column is written once. The last asked,
 /// what its pose is asked about, its `Footing`, and whether the clip level's
 /// was found; none stands where it was not.
 pub fn footing<Q: DecorQuery>(
     q: &mut Q,
-    cell: Zoom,
+    cell_zoom: Zoom,
     leaf: [i32; 2],
 ) -> (Q::ColumnSurface, Footing, bool) {
-    let s = LEAF_CELL - cell;
-    let zoom = q.finest(cell, leaf);
+    let s = LEAF_CELL_ZOOM - cell_zoom;
+    let zoom = q.finest(cell_zoom, leaf);
     let mut first = (0, 0.0);
     let mut k = 0;
     loop {
-        let z = if k == 0 { cell } else { zoom };
-        let t = LEAF_CELL - z;
+        let z = if k == 0 { cell_zoom } else { zoom };
+        let t = LEAF_CELL_ZOOM - z;
         let (f, top, here) = q.column_surface(z, [leaf[0] >> t, leaf[1] >> t]);
         if k == 0 {
             first = top;
         }
-        if (k == 0 && !here) || k == 1 || zoom == cell {
+        if (k == 0 && !here) || k == 1 || zoom == cell_zoom {
             let (floor, rise) = first;
             let ft = Footing {
-                g: Generated {
+                g: Prop {
                     variant: 0,
                     turn: 0,
                     at: [leaf[0], leaf[1], (floor + 1) * (1 << s)],
@@ -512,19 +512,22 @@ pub fn footing<Q: DecorQuery>(
 }
 
 /// How a candidate of `decor` with its `seed` stands on its footing `ft` at
-/// `cell` (`placement`'s second half), its pose asked about the column
+/// `cell_zoom` (`placement`'s second half), its pose asked about the column
 /// surface `f` (`asks`), and whether it generates there.
 pub fn pose<Q: DecorQuery>(
     q: &mut Q,
     f: &Q::ColumnSurface,
     decor: &Decor,
-    cell: Zoom,
+    cell_zoom: Zoom,
     seed: u32,
     ft: &Footing,
     boxed: bool,
-) -> (Generated, bool) {
+) -> (Prop, bool) {
     let (g, generates) = asks(q, f, decor, (ft.zoom, ft.base), seed, ft.g, boxed);
-    (g, ft.held && generates && stands_at(decor, g.variant, cell))
+    (
+        g,
+        ft.held && generates && stands_at(decor, g.variant, cell_zoom),
+    )
 }
 
 /// Every cell generating decor asks of the world, at one place, as a GPU
@@ -545,10 +548,10 @@ fn asks<Q: DecorQuery>(
     decor: &Decor,
     (zoom, base): (Zoom, i32),
     seed: u32,
-    mut g: Generated,
+    mut g: Prop,
     boxed: bool,
-) -> (Generated, bool) {
-    let s = LEAF_CELL - zoom;
+) -> (Prop, bool) {
+    let s = LEAF_CELL_ZOOM - zoom;
     let (mut flip, mut voting) = (0, 0);
     let mut draws = SplitMix32::new(seed);
     g.variant = variant_of(decor, &mut draws);
@@ -661,7 +664,7 @@ pub fn distance2(origin: [i32; 3], at: [i32; 3]) -> f32 {
 }
 
 /// Whether decor is drawn where the rays ask zoom `at` (`Detail::at` at its
-/// distance, `distance2`), its record's zoom `cell` (`record_of`): one
+/// distance, `distance2`), its record's zoom `cell_zoom` (`record_of`): one
 /// generated at a coarser clip level where `at` is that clip level's, so
 /// each distance draws one clip level's, and one at the leaves' where `at`
 /// is the leaf cell's or finer; one `placed` where `at` is the coarsest it
@@ -670,13 +673,13 @@ pub fn distance2(origin: [i32; 3], at: [i32; 3]) -> f32 {
 /// (`held_at`), as a ray there draws. Each clip level generates what stands
 /// as itself at it (pxl-core domain/scene/decor/gpu.rs `shown`,
 /// `stands_at`).
-pub fn drawn_at(at: Zoom, cell: Zoom, placed: bool) -> bool {
+pub fn drawn_at(at: Zoom, cell_zoom: Zoom, placed: bool) -> bool {
     if placed {
-        at >= cell
-    } else if cell >= LEAF_CELL {
-        at >= LEAF_CELL
+        at >= cell_zoom
+    } else if cell_zoom >= LEAF_CELL_ZOOM {
+        at >= LEAF_CELL_ZOOM
     } else {
-        at == cell
+        at == cell_zoom
     }
 }
 
@@ -689,7 +692,7 @@ pub fn drawn_at(at: Zoom, cell: Zoom, placed: bool) -> bool {
 /// it.
 pub fn held_at(w: &impl clipmap::Presence, at: Zoom, c: [i32; 2]) -> Zoom {
     let z = clipmap::held_to(at);
-    let s = LEAF_CELL - z;
+    let s = LEAF_CELL_ZOOM - z;
     let g = [wrap_idx(z, c[0] >> s), c[1] >> s];
     let (f, _) = clipmap::step(w, clipmap::Lookup::NONE, z, g);
     if at < f.from() {
@@ -798,8 +801,12 @@ impl Decor {
     /// more.
     pub const fn cap(&self) -> u32 {
         let root = root(self);
-        let cell = if root > FIRST_CELL { root } else { FIRST_CELL };
-        let side = BRICK << (LEAF_CELL - cell);
+        let cell_zoom = if root > FIRST_CELL_ZOOM {
+            root
+        } else {
+            FIRST_CELL_ZOOM
+        };
+        let side = BRICK << (LEAF_CELL_ZOOM - cell_zoom);
         let cells = if side < 1 << 16 {
             side * side
         } else {

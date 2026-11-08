@@ -31,7 +31,7 @@ pub mod ground;
 pub mod lattice;
 pub mod light;
 pub mod node_cache;
-pub mod overwrite;
+pub mod object;
 pub mod param;
 pub mod raster;
 pub mod ray;
@@ -59,7 +59,7 @@ pub const TOP_ZOOM: Zoom = 4;
 
 /// A tile is 2^9 cells a side, so a leaf tile's cells are at this zoom: the
 /// ground's finest cell (`lattice::GROUND`).
-pub const LEAF_CELL: Zoom = LEAF_ZOOM + 9;
+pub const LEAF_CELL_ZOOM: Zoom = LEAF_ZOOM + 9;
 
 /// Sea level, in leaf cells: the height heights are counted from, where the
 /// water stands and under which the Earth past the service area is rock.
@@ -88,7 +88,7 @@ pub const HEIGHT_BITS: u32 = 16;
 /// device keeps, as it asks for no limits; a native device's adapter allows
 /// at least as many. Each count a pass writes for an indirect dispatch is
 /// held under it by the room it lists into.
-pub const WORKGROUPS_MOST: u32 = 65_535;
+pub const WORKGROUPS_CAP: u32 = 65_535;
 
 /// The words a storage buffer's view is bound at a multiple of: WebGPU's
 /// `minStorageBufferOffsetAlignment` at its default, 256 bytes, the most any

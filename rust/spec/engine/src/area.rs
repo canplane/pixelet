@@ -8,7 +8,7 @@
 //! edge at every zoom. The area runs on shards' edges, which no node a
 //! shard or finer straddles.
 
-use crate::{idx_at, wrap_idx as wrap, Zoom, LEAF_CELL, LEAF_ZOOM, SHARD_ZOOM};
+use crate::{idx_at, wrap_idx as wrap, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, SHARD_ZOOM};
 
 /// The shards a source serves, as the pyramid's own level at `SHARD_ZOOM`
 /// both sides read (`nine_at`): every cell there, addressed by its key
@@ -215,37 +215,37 @@ pub fn tile_at(zoom: Zoom, c: [i32; 2]) -> [i32; 2] {
 }
 
 /// The service area's wall, its one rule, which every reader asks on the
-/// CPU and a GPU alike: the column `b` at `cell` is the wall exactly where it
+/// CPU and a GPU alike: the column `b` at `cell_zoom` is the wall exactly where it
 /// is a leaf's or finer and the leaf cell holding it has a leaf cell beside
 /// it past the area, so the wall is a leaf column thick at every zoom past
 /// the leaves, bedrock (`UNKNOWN`) up to its own face, its outer face on the
-/// area's edge. The area alone says it, off `shard`, the node `(cell, b)`'s
+/// area's edge. The area alone says it, off `shard`, the node `(cell_zoom, b)`'s
 /// (`Shard::at`). What a column is read as (`clipmap::ground`), what the
 /// ways' fill writes no way in (`way::Columns::is_walled`), and what
 /// `World::within` and `World::editable` refuse (pxl-core
 /// domain/query/limit.rs).
-pub fn is_wall(shard: Shard, cell: Zoom, b: [i32; 2]) -> bool {
-    if cell < LEAF_CELL {
+pub fn is_wall(shard: Shard, cell_zoom: Zoom, b: [i32; 2]) -> bool {
+    if cell_zoom < LEAF_CELL_ZOOM {
         return false;
     }
-    let s = cell - LEAF_CELL;
+    let s = cell_zoom - LEAF_CELL_ZOOM;
     let l = [b[0] >> s, b[1] >> s];
-    shard.walls((cell, b), [l, l])
+    shard.walls((cell_zoom, b), [l, l])
 }
 
 /// Whether the wall (`is_wall`) may stand in the node `(zoom, c)` asked at
-/// `cell`: one of its columns is the wall, a leaf cell in it or beside it
+/// `cell_zoom`: one of its columns is the wall, a leaf cell in it or beside it
 /// past the area (`Shard::walls`). A node wider than a shard may hold the
 /// area's edge anywhere.
-pub fn is_walled(shard: Shard, cell: Zoom, (zoom, c): (Zoom, [i32; 2])) -> bool {
-    if cell < LEAF_CELL {
+pub fn is_walled(shard: Shard, cell_zoom: Zoom, (zoom, c): (Zoom, [i32; 2])) -> bool {
+    if cell_zoom < LEAF_CELL_ZOOM {
         return false;
     }
     if zoom < SHARD_ZOOM {
         return true;
     }
-    let first = |v: i32| idx_at(zoom, v, LEAF_CELL);
-    let last = |v: i32| (idx_at(zoom, v + 1, LEAF_CELL) - 1).max(first(v));
+    let first = |v: i32| idx_at(zoom, v, LEAF_CELL_ZOOM);
+    let last = |v: i32| (idx_at(zoom, v + 1, LEAF_CELL_ZOOM) - 1).max(first(v));
     shard.walls(
         (zoom, c),
         [[first(c[0]), first(c[1])], [last(c[0]), last(c[1])]],
@@ -266,7 +266,7 @@ pub fn walls_in(area: &impl Area, lo_hi: [[i32; 2]; 2]) -> bool {
 /// its shard many leaf cells a side, so its own is asked with the eight
 /// about it: the wall's rule (`is_wall`) over every leaf column in the box.
 fn past_about([lo, hi]: [[i32; 2]; 2], past: impl Fn([i32; 2]) -> bool) -> bool {
-    let t = LEAF_CELL - SHARD_ZOOM;
+    let t = LEAF_CELL_ZOOM - SHARD_ZOOM;
     let mut y = (lo[1] - 1) >> t;
     while y <= (hi[1] + 1) >> t {
         let mut x = (lo[0] - 1) >> t;
@@ -280,4 +280,4 @@ fn past_about([lo, hi]: [[i32; 2]; 2], past: impl Fn([i32; 2]) -> bool) -> bool 
     }
     false
 }
-const _: () = assert!(LEAF_CELL > SHARD_ZOOM);
+const _: () = assert!(LEAF_CELL_ZOOM > SHARD_ZOOM);

@@ -54,7 +54,7 @@ fn window(k: &mut Judge, p: &mut Pace, load: f64, timed: bool) -> Option<Knobs> 
 
 /// `window` over and over, at most `n` times: the knobs the first that moved
 /// one moved to.
-fn until_moved(k: &mut Judge, p: &mut Pace, load: f64, n: u32) -> Option<Knobs> {
+fn until_changed(k: &mut Judge, p: &mut Pace, load: f64, n: u32) -> Option<Knobs> {
     (0..n).find_map(|_| window(k, p, load, true))
 }
 
@@ -364,13 +364,13 @@ fn up_rate_last() {
     };
     let mut p = on(120.0, 3.0);
     let wait = param::RES_SETTLE_WINDOWS + param::RES_UP_WINDOWS + 1;
-    assert!(until_moved(&mut k, &mut p, 0.1, wait).is_some());
+    assert!(until_changed(&mut k, &mut p, 0.1, wait).is_some());
     assert_eq!(k.step, 0, "the scale first");
     assert!(near(p.paced_ms, on(120.0, 3.0).paced_ms));
-    assert!(until_moved(&mut k, &mut p, 0.1, wait).is_some());
+    assert!(until_changed(&mut k, &mut p, 0.1, wait).is_some());
     assert!(near(p.paced_ms, on(120.0, 2.0).paced_ms), "the rate last");
     assert_eq!(
-        until_moved(&mut k, &mut p, 0.1, 4 * wait),
+        until_changed(&mut k, &mut p, 0.1, 4 * wait),
         None,
         "all whole"
     );
@@ -381,8 +381,8 @@ fn up_rate_last() {
 #[test]
 fn rate_up_judges_its_budget() {
     let (mut k, mut p) = (Judge::NEW, on(120.0, 4.0));
-    assert_eq!(until_moved(&mut k, &mut p, 0.8, 40), None);
-    assert!(until_moved(&mut k, &mut p, 0.6, 40).is_some());
+    assert_eq!(until_changed(&mut k, &mut p, 0.8, 40), None);
+    assert!(until_changed(&mut k, &mut p, 0.6, 40).is_some());
     assert!(near(p.paced_ms, on(120.0, 3.0).paced_ms));
 }
 
@@ -392,7 +392,7 @@ fn rate_up_judges_its_budget() {
 fn rate_up_backoff() {
     let (mut k, mut p) = (Judge::NEW, on(120.0, 3.0));
     let wait = param::RES_UP_WINDOWS;
-    assert!(until_moved(&mut k, &mut p, 0.3, wait).is_some());
+    assert!(until_changed(&mut k, &mut p, 0.3, wait).is_some());
     assert!(k.on_trial && near(p.paced_ms, on(120.0, 2.0).paced_ms));
     settle(&mut k, &mut p, 0.3, true);
     assert!(window(&mut k, &mut p, 1.5, true).is_some(), "it falls back");

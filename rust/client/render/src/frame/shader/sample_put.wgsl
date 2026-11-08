@@ -4,7 +4,7 @@
 
 /// The ended walk `w` put at word `base` (pxl-engine `beam::SAMPLE_WORDS`): `SAMPLE_NONE` where
 /// it went on to its reach.
-fn sample_put(base: u32, w: Walked) {
+fn sample_put(base: u32, w: WalkEnd) {
   let at = base + SAMPLE_NODE;
   beams[at + NODE_ZOOM] = select(w.zoom, SAMPLE_NONE, w.ends == 3u);
   beams[at + NODE_CORNER] = w.corner.x;

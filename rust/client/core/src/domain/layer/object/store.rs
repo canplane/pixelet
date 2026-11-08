@@ -32,7 +32,7 @@ use xpute_kit::status::errno::Errno;
 use crate::domain::layer::object::ext::{Ext, Pools, NONE};
 use crate::domain::layer::{Answer, Query};
 use crate::sys::sched::edge::request_world_tick;
-use pxl_engine::overwrite::{self, path, NodeSlot};
+use pxl_engine::object::{self, path, NodeSlot};
 use pxl_render::gpu::api;
 use pxl_spec::object::ext::class_of;
 use pxl_spec::object::volume::fold;
@@ -120,14 +120,14 @@ pub(super) const EMPTY: Leaf = Leaf {
 impl Leaf {
     pub(super) fn of(word: u32) -> Leaf {
         Leaf {
-            id: overwrite::low(word) as u16,
-            ext: overwrite::high(word) as u16,
+            id: object::low(word) as u16,
+            ext: object::high(word) as u16,
         }
     }
 
-    /// Its word in the tree (pxl-engine `overwrite::leaf_word`).
+    /// Its word in the tree (pxl-engine `object::leaf_word`).
     pub(super) const fn word(self) -> u32 {
-        overwrite::leaf_word(self.id as u32, self.ext as u32)
+        object::leaf_word(self.id as u32, self.ext as u32)
     }
 }
 
@@ -136,10 +136,10 @@ const fn depth(zoom: Zoom) -> u32 {
     zoom + 1
 }
 
-/// The tree's columns as pxl-engine `overwrite` reads them, the CPU as a GPU.
+/// The tree's columns as pxl-engine `object` reads them, the CPU as a GPU.
 pub struct Columns<'a>(&'a Tree);
 
-impl overwrite::Columns for Columns<'_> {
+impl object::Columns for Columns<'_> {
     fn first_child(&self, slot: u32) -> u32 {
         self.0.first_child()[slot as usize]
     }
@@ -203,7 +203,7 @@ pub struct Store {
 pub struct GpuColumns<'a> {
     pub first_child: &'a [u32],
     pub data: &'a [u32],
-    pub room: usize,
+    pub cap: usize,
     pub revision: u32,
     pub since: u32,
     pub written_groups: &'a [u32],
@@ -250,7 +250,7 @@ impl Store {
         GpuColumns {
             first_child: self.tree.first_child(),
             data: self.tree.data(),
-            room: self.tree.room(),
+            cap: self.tree.cap(),
             revision: self.revision,
             since,
             written_groups: &self.written_groups,
@@ -265,7 +265,7 @@ impl Store {
     }
 
     /// `descend` under the node `at` of `zoom` that holds `slot`, by the step
-    /// every descent of the tree takes (`overwrite::child`).
+    /// every descent of the tree takes (`object::child`).
     fn walk(&self, slot: NodeSlot, zoom: Zoom, at: [i32; 3], about: f64, enter: &mut Enter) {
         if !slot.holds() {
             return;
@@ -276,7 +276,7 @@ impl Store {
             return;
         }
         for k in 0..8 {
-            let child = wrap_cell(zoom + 1, overwrite::child_at(zoom, at, k));
+            let child = wrap_cell(zoom + 1, object::child_at(zoom, at, k));
             self.walk(
                 self.child(&slot, (zoom + 1, child), zoom + 1),
                 zoom + 1,
@@ -309,7 +309,7 @@ impl Store {
         self.walk(
             slot,
             z,
-            overwrite::ancestor_at(zoom, at, zoom - z),
+            object::ancestor_at(zoom, at, zoom - z),
             about(&cube(zoom, at)),
             &mut |zoom, at, _, leaf| {
                 if let Some(v) = leaf {
@@ -393,7 +393,7 @@ impl Store {
     }
 
     /// The shard `at` held as `word`, what its leaves fold to
-    /// (pxl-engine `overwrite::fold_word`), they not here: a branch whose
+    /// (pxl-engine `object::fold_word`), they not here: a branch whose
     /// children hold nothing, so it is drawn as its fold from where its zoom
     /// or a coarser one is a cell, and nothing finer is met in it. Its cube.
     pub(crate) fn set_fold(&mut self, [x, y]: [i32; 2], word: u32) -> Aabb {
@@ -495,25 +495,20 @@ impl Cells<'_> {
 }
 
 impl Query for Store {
-    /// What a cube holds, its parent's handed down (pxl-engine `overwrite`);
+    /// What a cube holds, its parent's handed down (pxl-engine `object`);
     /// a node over the ground's two axes is read under it.
     type Cursor = NodeSlot;
 
     fn cursor<const D: usize>(&self, (zoom, at): Node<D>, _: Zoom) -> NodeSlot {
         match D {
-            3 => overwrite::cursor(
-                &self.columns(),
-                overwrite::OBJECT_ROOT,
-                zoom,
-                [at[0], at[1], at[2]],
-            ),
+            3 => object::cursor(&self.columns(), object::ROOT, zoom, [at[0], at[1], at[2]]),
             _ => NodeSlot::branch(0, zoom),
         }
     }
 
     fn child<const D: usize>(&self, parent: &NodeSlot, (zoom, at): Node<D>, _: Zoom) -> NodeSlot {
         match D {
-            3 => overwrite::child(
+            3 => object::child(
                 &self.columns(),
                 *parent,
                 zoom,
@@ -545,7 +540,7 @@ impl Query for Store {
 /// next (`Store::column`): for each zoom it stepped through, the column it
 /// stood in there, where that zoom's run of `slots` ends and the z the
 /// leaves over it span; each run, the branches the tree holds in that
-/// column at that zoom, by index (`overwrite::path`) with what each holds.
+/// column at that zoom, by index (`object::path`) with what each holds.
 /// A walk to a column beside the last steps down only from where their
 /// columns part. Good while the store is unchanged.
 #[derive(Default)]
@@ -579,7 +574,7 @@ pub(in crate::domain) trait ObjectQuery {
     fn entries_in(&self, query: &Aabb, visit: &mut dyn FnMut(&Entry));
 
     /// `entries_in`, from the nodes `from` names, each with what the tree holds
-    /// there (`overwrite::NodeSlot`, a descent's), none under another and
+    /// there (`object::NodeSlot`, a descent's), none under another and
     /// `query` within them: each walked from its slot, so what is found and
     /// the order it is found in are the walk's from the roots, taken in the
     /// tree's own order (`tree_key`).
@@ -640,7 +635,7 @@ impl ObjectQuery for Store {
                 continue;
             }
             let z = slot.zoom();
-            let at = wrap_cell(z, overwrite::ancestor_at(zoom, at, zoom - z));
+            let at = wrap_cell(z, object::ancestor_at(zoom, at, zoom - z));
             self.walk(slot, z, at, about, &mut |zoom, at, whole, leaf| {
                 if whole.meet(*query).is_none() {
                     return false;
@@ -705,9 +700,9 @@ impl ObjectQuery for Store {
                 Some(o) => {
                     for i in walk.start(o)..walk.at[o].end {
                         let (at, h) = walk.slots[i];
-                        let z = 2 * (at[2] + overwrite::z_start(k as Zoom - 1))
-                            - overwrite::z_start(k as Zoom);
-                        let y = c[1] - overwrite::y_start(k as Zoom);
+                        let z = 2 * (at[2] + object::z_start(k as Zoom - 1))
+                            - object::z_start(k as Zoom);
+                        let y = c[1] - object::y_start(k as Zoom);
                         for child in [z, z + 1].map(|z| [c[0], y, z]) {
                             met(
                                 &mut walk.slots,

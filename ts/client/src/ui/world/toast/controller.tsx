@@ -40,7 +40,7 @@ const READY_MS = 3000;
 const SERVER_HOLD_MS = 3000;
 
 /** A toast's words, as a locale key. */
-interface Said {
+interface Notice {
   key: string;
   tone: ToastTone;
 }
@@ -53,11 +53,11 @@ function useWords(): (key: string) => string {
   return useRef((key: string) => tRef.current(key)).current;
 }
 
-/** A state's toast: shown while `said` is, gone with it, `holdMs` later. */
-function useSaid(id: Report, said: Said | null, holdMs = 0): void {
+/** A state's toast: shown while `notice` is, gone with it, `holdMs` later. */
+function useNotice(id: Report, notice: Notice | null, holdMs = 0): void {
   const words = useWords();
-  const key = said?.key ?? null;
-  const tone = said?.tone ?? null;
+  const key = notice?.key ?? null;
+  const tone = notice?.tone ?? null;
   useEffect(() => {
     if (key !== null && tone !== null) {
       showToast(id, { message: words(key), tone });
@@ -72,12 +72,15 @@ function useSaid(id: Report, said: Said | null, holdMs = 0): void {
   }, [id, key, tone, words, holdMs]);
 }
 
-const error = (key: string): Said => ({ key, tone: ToastTone.Error });
-const loading = (key: string): Said => ({ key, tone: ToastTone.Loading });
+const error = (key: string): Notice => ({ key, tone: ToastTone.Error });
+const loading = (key: string): Notice => ({ key, tone: ToastTone.Loading });
 
 /** A timeout is only the page's, on a prompt no one answered yet (web sensor.ts
  * `PROMPT_MS`), which is no failure to report. */
-function location(status: SensorStatus, failure: Message | null): Said | null {
+function location(
+  status: SensorStatus,
+  failure: Message | null,
+): Notice | null {
   if (failure === Message.GeolocationTimeout) return null;
   if (failure !== null) return error(messageKey(failure));
   return status === SensorStatus.Loading
@@ -86,12 +89,12 @@ function location(status: SensorStatus, failure: Message | null): Said | null {
 }
 
 /** The GPU's: none answered yet, or the one drawing is lost. */
-function gpuError(gpu: Gpu): Said | null {
+function gpuError(gpu: Gpu): Notice | null {
   return gpu === GPU_WAITING ? error("toast.gpu_unstable") : null;
 }
 
 /** The server's: the reads that reach it failing. */
-function serverError(stall: Message | null): Said | null {
+function serverError(stall: Message | null): Notice | null {
   return stall === Message.WorldReadFailing ? error(messageKey(stall)) : null;
 }
 
@@ -101,7 +104,7 @@ function world(
   shown: boolean,
   companionLoading: boolean,
   greeting: Greeting,
-): Said | null {
+): Notice | null {
   if (outside) return error("toast.outside");
   if (!shown) return loading("toast.world_loading");
   if (companionLoading) return loading("toast.companion_loading");
@@ -114,19 +117,19 @@ function world(
 export function ToastController() {
   const locationStatus = useCore((s) => s.location.status);
   const locationError = useCore((s) => s.location.err);
-  useSaid(LOCATION, location(locationStatus, locationError));
+  useNotice(LOCATION, location(locationStatus, locationError));
 
   const orientationError = useCore((s) => s.orient.err);
-  useSaid(
+  useNotice(
     ORIENTATION,
     orientationError !== null ? error(messageKey(orientationError)) : null,
   );
 
   const gpu = useGpu();
   const stall = useCore((s) => s.stall);
-  useSaid(GPU, gpuError(gpu));
-  useSaid(NETWORK, useOnline() ? null : error("toast.network_unstable"));
-  useSaid(SERVER, serverError(stall), SERVER_HOLD_MS);
+  useNotice(GPU, gpuError(gpu));
+  useNotice(NETWORK, useOnline() ? null : error("toast.network_unstable"));
+  useNotice(SERVER, serverError(stall), SERVER_HOLD_MS);
 
   const outside = useCore((s) => s.pivot.outside);
   const shown = useCore((s) => s.pivot.status === GroundStatus.Success);
@@ -145,7 +148,7 @@ export function ToastController() {
     const timer = setTimeout(() => setGreeting(SAID), READY_MS);
     return () => clearTimeout(timer);
   }, [greeting]);
-  useSaid(WORLD, world(outside, shown, companionLoading, greeting));
+  useNotice(WORLD, world(outside, shown, companionLoading, greeting));
 
   return null;
 }

@@ -62,7 +62,7 @@ fn the_host_declares_each_render_pass_of_an_indirect_draw() {
 #[test]
 fn the_frame_holds_the_hazards_known_names() {
     let found = found(&FRAME);
-    let listed: Vec<String> = found
+    let list_of: Vec<String> = found
         .iter()
         .map(|(rule, step, with)| format!("rule {rule}: {step} with {with}"))
         .collect();
@@ -70,7 +70,7 @@ fn the_frame_holds_the_hazards_known_names() {
         found.len(),
         KNOWN.len(),
         "the frame's hazards:\n{}",
-        listed.join("\n")
+        list_of.join("\n")
     );
 }
 
@@ -184,7 +184,7 @@ fn the_host_calls_off_the_steps_in_their_order() {
 fn a_binding_takes_its_role_from_its_buffer_and_its_call() {
     assert_eq!(role(&FRAME, &PX, 30), ARGS_INDIRECT);
     assert_eq!(role(&FRAME, &FACE, 16), ARGS_INDIRECT);
-    assert_eq!(role(&FRAME, &STOPS, 9), STATE);
+    assert_eq!(role(&FRAME, &RECORD_HITS, 9), STATE);
     let corners = FRAME.steps.iter().find(|s| s.name == "corners");
     assert_eq!(corners.map(|s| role(&FRAME, s, 9)), Some(STATE));
 }
@@ -203,7 +203,7 @@ fn an_indirect_call_off_args_its_group_binds_writable_is_found() {
         appends: &[],
         seeds: &[],
         bounds: &[],
-        kept: &[],
+        persistent: &[],
         steps: &[
             Step::write("light_args", at(0, 0, light::ARGS_WORDS)),
             Step::dispatch_off(

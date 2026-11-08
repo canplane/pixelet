@@ -7,7 +7,7 @@
 struct Answer {
   kind: u32,
   asset: vec2<u32>,
-  handed: vec4<u32>,
+  inheritance: vec4<u32>,
 }
 
 /// A split's box, the steps its content lies in (`answer::box_of`): its first step on each axis,

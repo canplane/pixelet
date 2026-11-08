@@ -34,7 +34,7 @@ fn changes() -> &'static mut Changes {
 /// many of its bricks or entries moved; true where any moved.
 pub(crate) fn take() -> bool {
     let c = changes();
-    TerrainTile::tile_cache().take_moved(&mut c.ground);
+    TerrainTile::tile_cache().take_changed(&mut c.ground);
     c.ground.sort_unstable();
     c.ground.dedup();
     store::take_written(&mut c.written);

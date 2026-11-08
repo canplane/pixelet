@@ -20,7 +20,7 @@ fn decor_args_cs() {
     uniforms[r * UNIFORM_WORDS + UNIFORM_IDX] += first;
     let a = ARGS_WORDS * r;
     args[a] = select(IMPOSTOR_CORNERS, meshes[r / 2u], (r & 1u) == 0u);
-    args[a + 1u] = in_room(n, cap - min(first, cap));
+    args[a + 1u] = in_cap(n, cap - min(first, cap));
     args[a + 2u] = 0u;
     args[a + 3u] = 0u;
     args[a + 4u] = 0u;

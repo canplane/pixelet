@@ -44,8 +44,8 @@ impl Base for PlaceTile {
     }
 }
 
-/// Carto's zoom a grid cell at `cell` is drawn at: the tile zoom whose cell,
+/// Carto's zoom a grid cell at `cell_zoom` is drawn at: the tile zoom whose cell,
 /// an icon wide, it is, past the leaf too.
-pub fn carto_zoom(cell: Zoom) -> i32 {
-    PLACE_LATTICE.tile_zoom_of_grid(cell)
+pub fn carto_zoom(cell_zoom: Zoom) -> i32 {
+    PLACE_LATTICE.tile_zoom_of_grid(cell_zoom)
 }

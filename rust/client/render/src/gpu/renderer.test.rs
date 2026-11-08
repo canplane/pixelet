@@ -6,7 +6,7 @@ use crate::frame::shader::record::{
     PIPELINE_DEBUG, PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE, PIPELINE_MARKER,
 };
 use crate::frame::shader::word::{draw, ghost_box, instance};
-use crate::gpu::draw::{drifted, test_lists, Draw, DrawId, DrawList, Stand};
+use crate::gpu::draw::{drifted, test_lists, Draw, DrawId, DrawList, ReceiverBox};
 use crate::gpu::pass::mark::{marked, Shown, UploadOf};
 
 /// The only test here that installs the calls' state; the lists' tests read
@@ -121,9 +121,9 @@ fn rebuilt(t: &Turn) -> Rebuilt {
 
 /// A mark as the passes draw it: its record but its uniform's place, its
 /// uniform's bits, and whether it is the draw as it is.
-type Mark = ([u32; 4], [u32; DRAW_FLOATS], bool);
+type Damage = ([u32; 4], [u32; DRAW_FLOATS], bool);
 
-fn mark_of((d, u): &Draw, now: bool) -> Mark {
+fn damage_of((d, u): &Draw, now: bool) -> Damage {
     ([d[0], d[1], d[2], d[4]], u.map(f32::to_bits), now)
 }
 
@@ -131,8 +131,8 @@ fn mark_of((d, u): &Draw, now: bool) -> Mark {
 /// them, at its drift, matched against the last frame's alike, their records
 /// but their uniforms' places and their uniforms bit for bit, as
 /// gpu/pass/mark.rs did before the turns kept them.
-fn rebuilt_marks(was: &Rebuilt, now: &Rebuilt, touched: &[u32]) -> Vec<Mark> {
-    let alike = |a: &Draw, b: &Draw| mark_of(a, true) == mark_of(b, true);
+fn rebuilt_marks(was: &Rebuilt, now: &Rebuilt, touched: &[u32]) -> Vec<Damage> {
+    let alike = |a: &Draw, b: &Draw| damage_of(a, true) == damage_of(b, true);
     let mut out = Vec::new();
     for (pipeline, read, shown) in passes() {
         let of = |r: &Rebuilt| -> Vec<Draw> {
@@ -148,18 +148,18 @@ fn rebuilt_marks(was: &Rebuilt, now: &Rebuilt, touched: &[u32]) -> Vec<Mark> {
                 .collect()
         };
         let (was, now) = (of(was), of(now));
-        let moved = |d: &Draw| read(&d.0) != 0 && touched.binary_search(&read(&d.0)).is_ok();
+        let changed = |d: &Draw| read(&d.0) != 0 && touched.binary_search(&read(&d.0)).is_ok();
         let drawn = |list: &[Draw], k: usize, d: &Draw| {
             list.get(k).is_some_and(|w| alike(w, d)) || list.iter().any(|w| alike(w, d))
         };
         for (k, d) in now.iter().enumerate() {
-            if moved(d) || !drawn(&was, k, d) {
-                out.push(mark_of(d, true));
+            if changed(d) || !drawn(&was, k, d) {
+                out.push(damage_of(d, true));
             }
         }
         for (k, w) in was.iter().enumerate() {
-            if moved(w) || !drawn(&now, k, w) {
-                out.push(mark_of(w, false));
+            if changed(w) || !drawn(&now, k, w) {
+                out.push(damage_of(w, false));
             }
         }
     }
@@ -195,7 +195,7 @@ fn rebuilt_beside(was: &Rebuilt, now: &Rebuilt, touched: &[u32]) -> bool {
 fn kept_draws_answer_as_the_rebuilt_lists_did() {
     let _l = test_lists();
     // In the order the core sets them (pxl-core domain/scene/stage.rs
-    // `visible_step`): the ghost first, then the characters, the location, the
+    // `scene_step`): the ghost first, then the characters, the location, the
     // gizmos, the clouds and the markers.
     let base = vec![
         spec(4, PIPELINE_GHOST_BOX, [40, 1, 0], [6.0, 6.0, 6.0]),
@@ -276,7 +276,7 @@ fn kept_draws_answer_as_the_rebuilt_lists_did() {
     for (k, t) in turns.iter().enumerate() {
         for s in &t.specs {
             let stand =
-                reads_shadow_map(s.pipeline).then(|| Stand::of(s.at, s.at.map(|v| v + 1.0)));
+                reads_shadow_map(s.pipeline).then(|| ReceiverBox::of(s.at, s.at.map(|v| v + 1.0)));
             let [w0, w1, w2] = s.words;
             let at = Position::of(s.at);
             match s.pipeline {
@@ -291,40 +291,41 @@ fn kept_draws_answer_as_the_rebuilt_lists_did() {
         let lists = list.take();
         let now = rebuilt(t);
         let first = k == 0;
-        let uploads_moved = !t.touched.is_empty();
-        let drift_moved = now.drift != was.drift;
+        let uploads_changed = !t.touched.is_empty();
+        let drift_changed = now.drift != was.drift;
         // The rebuilt lists' answers (gpu/renderer.rs `frame`).
-        let records_moved = was.records != now.records;
+        let records_changed = was.records != now.records;
         let bits = |r: &Rebuilt| {
             r.uniforms
                 .iter()
                 .map(|u| u.map(f32::to_bits))
                 .collect::<Vec<_>>()
         };
-        let uniforms_moved = first || bits(&was) != bits(&now);
-        let rebuilt_moved = records_moved || uniforms_moved;
+        let uniforms_changed = first || bits(&was) != bits(&now);
+        let rebuilt_changed = records_changed || uniforms_changed;
         let drifting = now.uniforms.iter().any(|u| drifts(u));
-        let rebuilt_same = !rebuilt_moved && !uploads_moved && !(drifting && drift_moved);
+        let rebuilt_same = !rebuilt_changed && !uploads_changed && !(drifting && drift_changed);
         // The kept draws' answers.
-        let kept_moved = first || !lists.changes.is_empty() || lists.reordered;
-        let kept_same = !kept_moved && !uploads_moved && !(lists.draws.drifting() && drift_moved);
-        assert_eq!(kept_moved, rebuilt_moved, "turn {k}: lists moved");
-        assert_eq!(kept_same, rebuilt_same, "turn {k}: listed the same");
+        let kept_changed = first || !lists.changes.is_empty() || lists.reordered;
+        let kept_same =
+            !kept_changed && !uploads_changed && !(lists.draws.drifting() && drift_changed);
+        assert_eq!(kept_changed, rebuilt_changed, "turn {k}: lists changed");
+        assert_eq!(kept_same, rebuilt_same, "turn {k}: list_of the same");
         assert_eq!(
             beside_changed(&lists, &t.touched),
             rebuilt_beside(&was, &now, &t.touched),
             "turn {k}: beside"
         );
-        let m = MarkInput {
+        let m = DamageInput {
             draws: lists.draws,
             changes: lists.changes,
             touched: &t.touched,
             drift: [now.drift, was.drift],
         };
-        let mut kept: Vec<Mark> = Vec::new();
+        let mut kept: Vec<Damage> = Vec::new();
         for (pipeline, read, shown) in passes() {
             marked(pipeline, (read, shown), &m, |d, is| {
-                kept.push(mark_of(&d, is));
+                kept.push(damage_of(&d, is));
             });
         }
         kept.sort_unstable();
@@ -383,10 +384,10 @@ fn seen_answers_as_the_reads_did_in_every_state() {
     // The rebuilt lists' reads, whether each holds what the last frame drew.
     let read = |held: [bool; 2], e: Event| -> ([bool; 2], Option<(bool, bool)>) {
         match e {
-            Event::Frame([moved, uploads, drifted, beside]) => (
+            Event::Frame([changed, uploads, drifted, beside]) => (
                 [true; 2],
                 Some((
-                    held[0] && !moved && !uploads && !drifted,
+                    held[0] && !changed && !uploads && !drifted,
                     !held[1] || beside,
                 )),
             ),
@@ -435,29 +436,29 @@ fn a_frame_decides_as_its_conditions_did_over_every_read() {
         let r = Reads {
             partial: bit(0),
             stands: bit(1),
-            listed_same: bit(2),
-            clouds_drawn: bit(3),
+            lists_same: bit(2),
+            clouds_damage: bit(3),
             ungated: bit(4),
             casts_px: bit(5),
             light_casts: bit(6),
         };
-        let quiet = r.stands && r.listed_same && !r.clouds_drawn;
-        let gated = r.partial && r.stands && !r.ungated;
+        let quiet = r.stands && r.lists_same && !r.clouds_damage;
+        let masked = r.partial && r.stands && !r.ungated;
         let stood = quiet && !r.casts_px && !r.light_casts;
-        let d = Decided::of(r);
+        let d = FramePlan::of(r);
         assert_eq!(
             d,
-            Decided {
+            FramePlan {
                 quiet,
-                gated,
+                masked,
                 stood
             },
             "{r:?}"
         );
         assert!(!d.stood || d.quiet, "{r:?}: what stands is quiet");
         assert!(
-            !(d.gated || d.quiet) || r.stands,
-            "{r:?}: what is gated or quiet stands"
+            !(d.masked || d.quiet) || r.stands,
+            "{r:?}: what is masked or quiet stands"
         );
     }
 }

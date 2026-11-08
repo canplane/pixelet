@@ -13,7 +13,7 @@ fn sample_item(id: vec2<u32>) -> vec2<u32> {
 }
 
 /// The samples a run takes: the whole lattice, a sample's place its index row by row.
-fn samples_listed() -> u32 {
+fn sample_cnt() -> u32 {
   let n = sample_lattice();
   return n.x * n.y;
 }

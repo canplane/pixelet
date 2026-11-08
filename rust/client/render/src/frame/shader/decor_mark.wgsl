@@ -12,7 +12,7 @@
 /// boxes are the host's, only read here; a pair is written by the one thread whose add took
 /// its place, and read by the passes after.
 struct List {
-  head: array<atomic<u32>, BOXES_AT>,
+  header: array<atomic<u32>, RECTS_AT>,
   words: array<u32>,
 }
 
@@ -20,10 +20,10 @@ struct List {
 @group(0) @binding(12) var<storage, read> shown: array<u32>;
 
 fn list_word(k: u32) -> u32 {
-  if (k < BOXES_AT) {
-    return atomicLoad(&list.head[k]);
+  if (k < RECTS_AT) {
+    return atomicLoad(&list.header[k]);
   }
-  return list.words[k - BOXES_AT];
+  return list.words[k - RECTS_AT];
 }
 
 @compute @workgroup_size(LANES)
@@ -33,10 +33,10 @@ fn decor_mark_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (row.z == 0i) {
     return;
   }
-  let cell = FIRST_CELL + s / CLIP_ENTRIES;
+  let cell_zoom = FIRST_CELL_ZOOM + s / CLIP_ENTRIES;
   let whole = list_word(LIST_EVERY) != 0u || !generated_for(s, row.xy);
   if (whole) {
-    let h = s * HEAD_WORDS;
+    let h = s * HEADER_WORDS;
     records[h] = u32(row.x);
     records[h + 1u] = u32(row.y);
     records[h + 2u] = 1u;
@@ -44,31 +44,31 @@ fn decor_mark_cs(@builtin(global_invocation_id) id: vec3<u32>) {
       records[cnt_at(s, k)] = 0u;
     }
   } else {
-    let k = BRICK_SHIFT + LEAF_CELL - cell;
+    let k = BRICK_SHIFT + LEAF_CELL_ZOOM - cell_zoom;
     let cells = vec4<i32>(row.xy << vec2<u32>(k), (row.xy + 1i) << vec2<u32>(k));
-    if (!is_changed(cell, cells)) {
+    if (!is_changed(cell_zoom, cells)) {
       return;
     }
   }
   // The pairs listed whole and in part together take no more places than the list holds,
   // so the two never meet.
-  let room = LIST_WORDS - LIST_AT;
+  let cap = LIST_WORDS - LIST_AT;
   for (var j = 0u; j < DECORS; j += 1u) {
-    if (((shown[j] >> (cell - FIRST_CELL)) & 1u) != 0u) {
-      let all = atomicAdd(&list.head[GENERATE_CNT], 1u);
-      if (all >= room) {
+    if (((shown[j] >> (cell_zoom - FIRST_CELL_ZOOM)) & 1u) != 0u) {
+      let all = atomicAdd(&list.header[GENERATE_CNT], 1u);
+      if (all >= cap) {
         continue;
       }
-      atomicMax(&list.head[GENERATE_ARGS + 2u], workgroups(all + 1u, room, 1u));
+      atomicMax(&list.header[GENERATE_ARGS + 2u], workgroups(all + 1u, cap, 1u));
       var w = 0u;
       if (whole) {
-        let n = atomicAdd(&list.head[THIN_CNT], 1u);
-        atomicMax(&list.head[THIN_ARGS + 2u], workgroups(n + 1u, room, 1u));
+        let n = atomicAdd(&list.header[THIN_CNT], 1u);
+        atomicMax(&list.header[THIN_ARGS + 2u], workgroups(n + 1u, cap, 1u));
         w = LIST_AT + n;
       } else {
-        w = part_at(atomicAdd(&list.head[LIST_PARTS], 1u));
+        w = part_at(atomicAdd(&list.header[LIST_PARTS], 1u));
       }
-      list.words[w - BOXES_AT] = pair_word(s, j);
+      list.words[w - RECTS_AT] = pair_word(s, j);
     }
   }
 }

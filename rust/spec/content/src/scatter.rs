@@ -14,7 +14,7 @@
 
 use pxl_engine::answer::EIGHTHS;
 use pxl_engine::seed::node_seed;
-use pxl_engine::{Zoom, LEAF_CELL, UNIT_ZOOM};
+use pxl_engine::{Zoom, LEAF_CELL_ZOOM, UNIT_ZOOM};
 use xpute_kit::math::rng::SplitMix32;
 
 use crate::decor::{Decor, DECORS};
@@ -43,14 +43,14 @@ impl Candidate {
 /// cell holds one (`count`).
 pub fn candidate_at(decor: &Decor, cell: [i32; 2]) -> (Candidate, bool) {
     let k = kind_of(decor.val);
-    let mut draws = SplitMix32::new(node_seed(SEEDS[k], (LEAF_CELL, cell)));
+    let mut draws = SplitMix32::new(node_seed(SEEDS[k], (LEAF_CELL_ZOOM, cell)));
     (
         Candidate {
             cell,
             draw: draws.next_u32(),
             seed: draws.next_u32(),
         },
-        count(k, LEAF_CELL, cell) > 0,
+        count(k, LEAF_CELL_ZOOM, cell) > 0,
     )
 }
 
@@ -116,7 +116,7 @@ pub fn count_of([seed, chance, root]: [u32; 3], zoom: Zoom, b: [i32; 2]) -> u32 
     }
     let at = |z: Zoom| [b[0] >> (zoom - z), b[1] >> (zoom - z)];
     // The mean in 16.16, the chance's top half a leaf cell.
-    let mean = (chance >> 16) << (2 * (LEAF_CELL - root));
+    let mean = (chance >> 16) << (2 * (LEAF_CELL_ZOOM - root));
     let draw = node_seed(seed ^ COUNT, (root, at(root)));
     let mut n = (mean + (draw & 0xffff)) >> 16;
     let mut z = root;
@@ -127,14 +127,9 @@ pub fn count_of([seed, chance, root]: [u32; 3], zoom: Zoom, b: [i32; 2]) -> u32 
         let mut draws = SplitMix32::new(node_seed(seed ^ SPLIT, (z, at(z))));
         let c = at(z + 1);
         let quarter = (c[0] & 1 | (c[1] & 1) << 1) as usize;
-        let room = 1u32 << (2 * (LEAF_CELL - z - 1));
-        let room = if room > 0xffff { 0xffff } else { room };
-        n = share::quarter(
-            n,
-            room,
-            [draws.next_u32(), draws.next_u32()],
-            quarter as u32,
-        );
+        let cap = 1u32 << (2 * (LEAF_CELL_ZOOM - z - 1));
+        let cap = if cap > 0xffff { 0xffff } else { cap };
+        n = share::quarter(n, cap, [draws.next_u32(), draws.next_u32()], quarter as u32);
         z += 1;
     }
     n
@@ -213,48 +208,48 @@ pub fn scatter_at(decor: &Decor, cell: [i32; 2]) -> Option<Candidate> {
     (here && retained(decor, &c)).then_some(c)
 }
 
-/// Whether `variant` of `decor` stands as itself in a clip level at `cell`, by
+/// Whether `variant` of `decor` stands as itself in a clip level at `cell_zoom`, by
 /// its own size, not the clip level's: at the leaves' always, the finest clip
 /// level there is; at a coarser one where its box, in one of the clip level's
 /// cells, keeps an eighth of it or more, floored as a folded cube's share is
 /// (`answer::eighths`), so a decor stands at the zooms a cube of its box is
 /// drawn at (`stands`). Where it keeps none it is none there, and in none
 /// coarser.
-pub const fn stands_at(decor: &Decor, variant: u32, cell: Zoom) -> bool {
-    stands(decor.sizes[variant as usize], UNIT_ZOOM, cell)
+pub const fn stands_at(decor: &Decor, variant: u32, cell_zoom: Zoom) -> bool {
+    stands(decor.sizes[variant as usize], UNIT_ZOOM, cell_zoom)
 }
 
 /// `stands_at` of a box `[x, y, z]` in cells at `own`, by value: the eighths
-/// of a cell at `cell` its volume fills, floored (`answer::eighths`), one or
+/// of a cell at `cell_zoom` its volume fills, floored (`answer::eighths`), one or
 /// more.
-const fn stands([x, y, z]: [u32; 3], own: Zoom, cell: Zoom) -> bool {
-    let steps = 3 * (own - if own < cell { own } else { cell });
-    cell >= LEAF_CELL || (steps < u32::BITS && (EIGHTHS * x * y * z) >> steps >= 1)
+const fn stands([x, y, z]: [u32; 3], own: Zoom, cell_zoom: Zoom) -> bool {
+    let steps = 3 * (own - if own < cell_zoom { own } else { cell_zoom });
+    cell_zoom >= LEAF_CELL_ZOOM || (steps < u32::BITS && (EIGHTHS * x * y * z) >> steps >= 1)
 }
 
 /// The coarsest clip level zoom `variant` of `decor` stands at (`stands_at`).
 pub const fn coarsest_stand(decor: &Decor, variant: u32) -> Zoom {
-    let mut cell = LEAF_CELL;
-    while cell > 0 && stands_at(decor, variant, cell - 1) {
-        cell -= 1;
+    let mut cell_zoom = LEAF_CELL_ZOOM;
+    while cell_zoom > 0 && stands_at(decor, variant, cell_zoom - 1) {
+        cell_zoom -= 1;
     }
-    cell
+    cell_zoom
 }
 
 /// The coarsest clip level zoom any variant of `decor` stands at
 /// (`any_stands_at`).
 pub const fn root(decor: &Decor) -> Zoom {
-    let mut cell = LEAF_CELL;
-    while cell > 0 && any_stands_at(decor, cell - 1) {
-        cell -= 1;
+    let mut cell_zoom = LEAF_CELL_ZOOM;
+    while cell_zoom > 0 && any_stands_at(decor, cell_zoom - 1) {
+        cell_zoom -= 1;
     }
-    cell
+    cell_zoom
 }
 
 /// Each decor's counts' root (`count`, `root`): where a clip level first reads
 /// its columns.
 pub const ROOTS: [Zoom; DECORS.len()] = {
-    let mut roots = [LEAF_CELL; DECORS.len()];
+    let mut roots = [LEAF_CELL_ZOOM; DECORS.len()];
     let mut k = 0;
     while k < DECORS.len() {
         roots[k] = root(&DECORS[k]);
@@ -265,7 +260,7 @@ pub const ROOTS: [Zoom; DECORS.len()] = {
 const _: () = {
     let mut k = 0;
     while k < DECORS.len() {
-        let shift = 2 * (LEAF_CELL - ROOTS[k]);
+        let shift = 2 * (LEAF_CELL_ZOOM - ROOTS[k]);
         assert!(
             shift < u32::BITS,
             "a decor's root column's leaf cells, a shift, fit a u32 (`count`)"
@@ -279,11 +274,11 @@ const _: () = {
     }
 };
 
-/// Whether any variant of `decor` stands at `cell` (`stands_at`).
-pub const fn any_stands_at(decor: &Decor, cell: Zoom) -> bool {
+/// Whether any variant of `decor` stands at `cell_zoom` (`stands_at`).
+pub const fn any_stands_at(decor: &Decor, cell_zoom: Zoom) -> bool {
     let mut v = 0;
     while v < decor.variants {
-        if stands_at(decor, v, cell) {
+        if stands_at(decor, v, cell_zoom) {
             return true;
         }
         v += 1;

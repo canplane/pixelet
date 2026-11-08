@@ -9,7 +9,7 @@ use pxl_engine::FINEST_ZOOM;
 // Elevation is sampled at cell centers (x + 0.5, y + 0.5) by both the SQL
 // resample and the bake's bicubic, and stored as i16 ground cells.
 const _: () = assert!(
-    EXTENT[2] == i16::BITS && GROUND.cell() == UNIT_ZOOM,
+    EXTENT[2] == i16::BITS && GROUND.leaf_cell_zoom() == UNIT_ZOOM,
     "a height in i16 ground cells is the world's height"
 );
 /// A leaf's elevation samples and their padding, which the bake draws its

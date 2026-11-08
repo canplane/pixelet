@@ -36,7 +36,7 @@ impl Base for Probe {
     }
 }
 
-impl Observed for Probe {
+impl ViewLayer for Probe {
     fn demand() -> &'static mut Demand<Probe> {
         PROBE.get(Demand::default)
     }
@@ -94,7 +94,7 @@ fn turns_ask_what_a_fresh_observation_asks() {
     }
     let dst = Quadrant::new(LEAF_ZOOM, [0, 0]);
     let held = Probe::demand();
-    let mut moved = Vec::new();
+    let mut changed = Vec::new();
     for (k, o) in turns.iter().enumerate() {
         let dst = (k >= 20).then_some(dst);
         held.turn(Some(*o), dst, &[], top);
@@ -112,9 +112,9 @@ fn turns_ask_what_a_fresh_observation_asks() {
             Probe::tile_cache().set(p, Probe);
         }
         // What moved told, as the turn tells it (turn.rs `changes_step`).
-        Probe::tile_cache().take_moved(&mut moved);
-        if !moved.is_empty() {
-            held.on_moved();
+        Probe::tile_cache().take_changed(&mut changed);
+        if !changed.is_empty() {
+            held.on_changed();
         }
     }
 }

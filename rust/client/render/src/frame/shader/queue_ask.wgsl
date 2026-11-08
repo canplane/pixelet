@@ -22,7 +22,7 @@ fn ask_once(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32) {
     return;
   }
   let first = bucket_of(zoom, c);
-  if (kept_at(first, zoom, c, zooms)) {
+  if (holds_node(first, zoom, c, zooms)) {
     return;
   }
   let tag = walk_tag();
@@ -38,7 +38,7 @@ fn ask_once(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32) {
   // by its node alone already keeps it, the claim let go.
   let a = world_answer(parent, top, zoom, c, zooms, asked_at());
   let kz = key_zooms(zoom, zooms, a);
-  if (kz != zooms && cell_kept(first, zoom, c, kz != CELL_FAR)) {
+  if (kz != zooms && holds_cell(first, zoom, c, kz != CELL_FAR)) {
     atomicStore(&node_cache[key_at(got.x)], got.y);
     return;
   }
@@ -47,7 +47,7 @@ fn ask_once(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32) {
 
 /// The nodes the walk `again` or the first listed, each asked once.
 fn queue_ask(again: bool, id: u32) {
-  let n = in_room(atomicLoad(&queue[select(QUEUE_ASKS, QUEUE_ASKS_AGAIN, again)]), QUEUE_RECORDS_ROOM);
+  let n = in_cap(atomicLoad(&queue[select(QUEUE_ASKS, QUEUE_ASKS_AGAIN, again)]), QUEUE_RECORDS_CAP);
   for (var k = id; k < n; k += QUEUE_GROUPS * QUEUE_LANES) {
     let at = queue_records_at() + k * QUEUE_RECORD_WORDS;
     let c = vec3<i32>(
@@ -75,7 +75,7 @@ fn queue_ask_cs(@builtin(global_invocation_id) id: vec3<u32>) {
 @compute @workgroup_size(QUEUE_LANES)
 fn queue_ask_parked_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x == 0u) {
-    atomicStore(&node_cache[LAST_TAKEN], 0u);
+    atomicStore(&node_cache[LAST_NEXT], 0u);
   }
   queue_ask(true, id.x);
 }

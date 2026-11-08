@@ -26,7 +26,7 @@ use crate::way;
 use crate::way::Columns;
 use crate::way::Segment;
 use crate::way::Stations;
-use crate::{wrap_idx, Zoom, LEAF_CELL, TOP_ZOOM};
+use crate::{wrap_idx, Zoom, LEAF_CELL_ZOOM, TOP_ZOOM};
 
 /// A brick's side in cells, as a shift.
 pub const BRICK_SHIFT: u32 = 6;
@@ -40,15 +40,15 @@ pub const ENTRIES: u32 = ACROSS * ACROSS;
 /// A clip level's side in cells.
 pub const CLIP_SIZE: u32 = ACROSS * BRICK;
 /// The eye's coarsest clip level's cells' zoom: the top's.
-pub const FIRST_CELL: Zoom = GROUND.cell_zoom(TOP_ZOOM);
+pub const FIRST_CELL_ZOOM: Zoom = GROUND.cell_zoom(TOP_ZOOM);
 /// The eye's clip levels, every zoom the pyramid draws, coarsest first, which
-/// the GPU's cast reads: the one at `cell` is `cell − FIRST_CELL`.
-pub const EYE_CLIP_LEVELS: u32 = LEAF_CELL - FIRST_CELL + 1;
+/// the GPU's cast reads: the one at `cell_zoom` is `cell_zoom − FIRST_CELL_ZOOM`.
+pub const EYE_CLIP_LEVELS: u32 = LEAF_CELL_ZOOM - FIRST_CELL_ZOOM + 1;
 
 /// The cells' zoom of the eye's clip level `w`, coarsest first: what the layout
 /// lays it at and the GPU's decor reads a brick's clip level at.
-pub const fn eye_cell(w: u32) -> Zoom {
-    FIRST_CELL + w
+pub const fn eye_cell_zoom(w: u32) -> Zoom {
+    FIRST_CELL_ZOOM + w
 }
 /// Every clip level: the eye's; the pivot's, the leaves' and one over, what
 /// walking and editing read; a destination's one, at the zoom its line says
@@ -62,7 +62,7 @@ pub const CLIP_LEVELS: u32 = EYE_CLIP_LEVELS + 3;
 pub const SLOTS: u32 = CLIP_LEVELS * ENTRIES;
 /// The bricks a frame hands the GPU at most, the core's fill having filled
 /// them (pxl-core domain/layer/terrain/clipmap.rs `upload`): each is a box of
-/// decor's generation (pxl-content `generation::BOX_CAP`), and what is past
+/// decor's generation (pxl-content `generation::RECT_CAP`), and what is past
 /// them is handed by the frames after.
 pub const FRAME_BRICKS: u32 = 9;
 
@@ -71,18 +71,18 @@ pub const FRAME_BRICKS: u32 = 9;
 /// clip level holds `CLIP_MARGIN` times that (`grid::CLIP_CELLS_A_RAD`).
 pub const RADIUS: u32 = grid::CLIP_CELLS_A_RAD as u32;
 
-/// The first brick of the clip level at `cell` about the cell `c`:
+/// The first brick of the clip level at `cell_zoom` about the cell `c`:
 /// ⌊(c − RADIUS) / BRICK⌋ a side, X wrapped round the world. Its bricks
 /// hold the cells [c − RADIUS, c + RADIUS] wherever in a brick `c` lies.
-pub fn origin(cell: Zoom, c: [i32; 2]) -> [i32; 2] {
+pub fn origin(cell_zoom: Zoom, c: [i32; 2]) -> [i32; 2] {
     let first = |v: i32| (v - RADIUS as i32) >> BRICK_SHIFT;
-    [wrap_idx(bricks_zoom(cell), first(c[0])), first(c[1])]
+    [wrap_idx(bricks_zoom(cell_zoom), first(c[0])), first(c[1])]
 }
 
 /// The zoom a clip level's bricks are counted at: its cells' over
 /// `BRICK_SHIFT`.
-pub const fn bricks_zoom(cell: Zoom) -> Zoom {
-    cell - BRICK_SHIFT
+pub const fn bricks_zoom(cell_zoom: Zoom) -> Zoom {
+    cell_zoom - BRICK_SHIFT
 }
 
 /// The entry brick `q` is held in.
@@ -105,15 +105,15 @@ pub fn brick_of(g: [i32; 2]) -> ([i32; 2], [u32; 2]) {
 /// Where a brick's levels begin among them, in entries: level `j`, from 0,
 /// each entry the lowest and highest of the 2^j × 2^j cells under it, the
 /// ground's and the ways' apart (`ground::Bounds`) — level 0 a cell's own
-/// column (`fill::level`).
-pub const fn bound_level_at(j: u32) -> u32 {
+/// column (`fill::mip`).
+pub const fn bound_mip_at(j: u32) -> u32 {
     (4 * BRICK_CELLS - ((4 * BRICK_CELLS) >> (2 * j))) / 3
 }
 
 /// Entry `[x, y]` of level `j` among a brick's levels, each level laid as
 /// its cells are (`idx_of`).
-pub(crate) const fn level_idx(j: u32, at: [u32; 2]) -> u32 {
-    bound_level_at(j) + idx_of(at)
+pub(crate) const fn mip_idx(j: u32, at: [u32; 2]) -> u32 {
+    bound_mip_at(j) + idx_of(at)
 }
 
 /// Cell `[x, y]`'s index among a brick's cells (or a level's entries), the
@@ -148,10 +148,10 @@ const fn gather(v: u32) -> u32 {
     (v | v >> 8) & 0x0000_ffff
 }
 const _: () = assert!(BRICK <= 1 << 16, "a brick's side spreads in sixteen bits");
-pub const BRICK_LEVELS: u32 = BRICK_SHIFT;
+pub const BRICK_MIPS: u32 = BRICK_SHIFT;
 /// A level entry's words: its bounds' (`ground::Bounds`), each a bound word.
 pub const BOUND_ENTRY_WORDS: u32 = 2;
-pub const BOUND_WORDS: u32 = BOUND_ENTRY_WORDS * bound_level_at(BRICK_LEVELS + 1);
+pub const BOUND_WORDS: u32 = BOUND_ENTRY_WORDS * bound_mip_at(BRICK_MIPS + 1);
 
 /// A tile's ways are cut into bins `WAYS_ACROSS` a side, each
 /// `1 << WAYS_SHIFT` cells: a brick lays its lines by them
@@ -181,7 +181,7 @@ pub const LINES_WORDS: u32 = LINES_SEGMENTS_AT + WAYS_BRICK_SEGMENTS * way::SEGM
 /// A brick's scratch while it is filled: its columns' spans, the brick's and
 /// the ring of columns about it, which a column's cells read beside its own
 /// (pxl-engine fill.rs `spans`). Its levels' ways' bound and its ways' tree
-/// are made off them (fill.rs `level`, `way::tree::leaf`), and they go with
+/// are made off them (fill.rs `mip`, `way::tree::leaf`), and they go with
 /// its fill.
 pub const SPANS_AT: u32 = 0;
 /// The columns whose spans a brick's cells read: the brick's and a ring
@@ -191,7 +191,7 @@ pub const SPANS_ACROSS: u32 = BRICK + 2;
 pub const SPANS_COLUMNS: u32 = SPANS_ACROSS * SPANS_ACROSS;
 /// A column's spans in words (`way::Spans`): a head word, its count, the
 /// count's high bit set where they did not fit `way::SPANS`, and its face
-/// cell over them, an `i16`, `i16::MIN` for none (fill.rs `head_word`);
+/// cell over them, an `i16`, `i16::MIN` for none (fill.rs `header_word`);
 /// then each span's lowest and past its highest, an `i16` each as the
 /// world's z is, held to it (`answer::bound_word`), and its value.
 pub const SPANS_COLUMN_WORDS: u32 = 1 + 2 * way::SPANS as u32;
@@ -207,17 +207,17 @@ pub const fn column_top(w: u32) -> i32 {
 }
 
 /// A brick's cells as its fill lays them, four a word, cell `i` in the
-/// `i % 4`-th byte (`laid_at`): its own palette index (`ground::own` of its
+/// `i % 4`-th byte (`own_at`): its own palette index (`ground::own` of its
 /// four at the brick's zoom).
-pub const LAID_WORDS: u32 = BRICK_CELLS / LAID_CELLS;
+pub const OWN_WORDS: u32 = BRICK_CELLS / OWN_CELLS;
 /// The cells a laid word holds, a byte each: in the cells' order
 /// (`idx_of`), a 2×2 square.
-pub const LAID_CELLS: u32 = 4;
-const _: () = assert!(BRICK_CELLS.is_multiple_of(LAID_CELLS));
+pub const OWN_CELLS: u32 = 4;
+const _: () = assert!(BRICK_CELLS.is_multiple_of(OWN_CELLS));
 
 /// Cell `i`'s palette index in a laid word `w`.
-pub(crate) const fn laid_at(w: u32, i: u32) -> u32 {
-    (w >> (8 * (i % LAID_CELLS))) & 0xff
+pub(crate) const fn own_at(w: u32, i: u32) -> u32 {
+    (w >> (8 * (i % OWN_CELLS))) & 0xff
 }
 
 /// A brick's words, what outlives its fill, the CPU's and a GPU's alike, its
@@ -226,49 +226,49 @@ pub(crate) const fn laid_at(w: u32, i: u32) -> u32 {
 /// a GPU, under WebGPU's floor (pxl-render gpu/ray/ground.rs `GROUND_BYTES`).
 pub const COLUMNS_AT: u32 = 0;
 pub const BOUNDS_AT: u32 = COLUMNS_AT + COLUMN_WORDS;
-pub const LAID_AT: u32 = BOUNDS_AT + BOUND_WORDS;
+pub const OWN_AT: u32 = BOUNDS_AT + BOUND_WORDS;
 /// Its ways' tree's root word: the child group of its own nodes along z in the
 /// pool and the first one's Z (`way::tree::root_word`); 0, child group 0, never
 /// handed out, where it has none.
-pub const ROOT_AT: u32 = LAID_AT + LAID_WORDS;
+pub const ROOT_AT: u32 = OWN_AT + OWN_WORDS;
 pub const BRICK_WORDS: u32 = ROOT_AT + 1;
 /// Which bricks the clip levels hold present, all `step` reads: the clip
 /// levels' table alone.
 pub trait Presence {
-    /// The slot brick `q` at `cell` is held present in, which the reads
+    /// The slot brick `q` at `cell_zoom` is held present in, which the reads
     /// of `Bricks` take (`Entry::slot`); false where no clip level holds it.
-    fn present(&self, cell: Zoom, q: [i32; 2]) -> (u32, bool);
+    fn present(&self, cell_zoom: Zoom, q: [i32; 2]) -> (u32, bool);
 }
 
 /// The clip levels as one side holds them: per clip level, a zoom's cells
 /// about its center, which brick each entry holds once present
 /// (`Presence`), and the slots their cells are held in.
 pub trait Bricks: Presence {
-    /// The brick the eye's clip level at `cell` wants in `entry`, and whether
+    /// The brick the eye's clip level at `cell_zoom` wants in `entry`, and whether
     /// present: `present` the other way.
-    fn brick(&self, cell: Zoom, entry: u32) -> ([i32; 2], bool);
+    fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool);
     /// The four palette indices of cell `i` of the brick in `slot` (`ground::palette_indices`).
-    fn palette_word(&self, cell: Zoom, slot: u32, i: u32) -> u32;
+    fn palette_word(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32;
     /// Column word `i` of the brick in `slot` (`COLUMN_WORDS`), `i` to
     /// `BRICK_CELLS`.
-    fn column(&self, cell: Zoom, slot: u32, i: u32) -> u32;
+    fn column(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32;
     /// Entry `at` of level `j` of the brick in `slot`, its bounds
     /// (`ground::Bounds`) as bound words (`answer::bound_word`): its
     /// columns' joined (`join`), level 0 one.
-    fn bound_level(&self, cell: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2];
-    /// Cell `i`'s own palette index as its fill laid it (`LAID_WORDS`,
-    /// `laid_at`).
-    fn laid(&self, cell: Zoom, slot: u32, i: u32) -> u32;
-    /// Entry `e` of the eye's clip level at `cell`'s levels over its bricks
+    fn bound_mip(&self, cell_zoom: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2];
+    /// Cell `i`'s own palette index as its fill laid it (`OWN_WORDS`,
+    /// `own_at`).
+    fn own(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32;
+    /// Entry `e` of the eye's clip level at `cell_zoom`'s levels over its bricks
     /// (`JOINED_WORDS`, `fold`), as this side folded them over the bricks
     /// it holds; the zero entry, none, where it holds no fold.
-    fn joined(&self, cell: Zoom, e: u32) -> [u32; JOINED_WORDS as usize];
-    /// The eye's clip level at `cell`'s first brick, which its blocks of
+    fn joined(&self, cell_zoom: Zoom, e: u32) -> [u32; JOINED_WORDS as usize];
+    /// The eye's clip level at `cell_zoom`'s first brick, which its blocks of
     /// bricks are counted from (`fold`), and whether it is laid out
     /// (`ORIGIN_AT`).
-    fn origin(&self, cell: Zoom) -> ([i32; 2], bool);
+    fn origin(&self, cell_zoom: Zoom) -> ([i32; 2], bool);
     /// The root of the brick in `slot`'s ways' tree (`ROOT_AT`), 0 for none.
-    fn root(&self, cell: Zoom, slot: u32) -> u32;
+    fn root(&self, cell_zoom: Zoom, slot: u32) -> u32;
 }
 
 /// One brick as its fill reads it, for the ways' one rule
@@ -276,20 +276,20 @@ pub trait Bricks: Presence {
 /// bricks), its first cell as the world names it, X wrapped there, and what
 /// is known of the area at it (`area::Shard`), which its columns are asked
 /// the wall by (`area::is_wall`), word `k` of its lines (`LINES_ENTRIES_AT`), cell
-/// `i`'s own palette index as `columns` laid it (`LAID_WORDS`), and
+/// `i`'s own palette index as `columns` laid it (`OWN_WORDS`), and
 /// column `c`'s height off its tile's samples, `c`
 /// counted from its first cell, the ring of columns about it included.
 /// Its columns are its cells and that ring, a ring column read off the
 /// edge bin it borders, whose lines hold every one that reaches it
 /// (`way::footprint`); one past the ring has no segment.
 pub trait Brick {
-    fn cell(&self) -> Zoom;
+    fn cell_zoom(&self) -> Zoom;
     fn place(&self) -> [u32; 2];
     fn first(&self) -> [i32; 2];
     fn shard(&self) -> Shard;
     fn line(&self, k: u32) -> u32;
-    /// Cell `i`'s own palette index as its fill laid it (`LAID_WORDS`).
-    fn laid(&self, i: u32) -> u32;
+    /// Cell `i`'s own palette index as its fill laid it (`OWN_WORDS`).
+    fn own(&self, i: u32) -> u32;
     fn height(&self, c: [i32; 2]) -> i32;
 }
 
@@ -349,8 +349,8 @@ fn header_of(sq: &impl Brick) -> (f32, Stations) {
 
 /// A brick's columns as its lines and its cells give them.
 impl<Q: Brick> Columns for Q {
-    fn cell(&self) -> Zoom {
-        Brick::cell(self)
+    fn cell_zoom(&self) -> Zoom {
+        Brick::cell_zoom(self)
     }
     fn per_m(&self) -> f32 {
         header_of(self).0
@@ -374,29 +374,29 @@ impl<Q: Brick> Columns for Q {
     }
     /// The wall's one rule (`area::is_wall`), the ring's columns too.
     fn is_walled(&self, c: [i32; 2]) -> bool {
-        let (cell, first) = (Brick::cell(self), self.first());
-        let b = [wrap_idx(cell, first[0] + c[0]), first[1] + c[1]];
-        area::is_wall(self.shard(), cell, b)
+        let (cell_zoom, first) = (Brick::cell_zoom(self), self.first());
+        let b = [wrap_idx(cell_zoom, first[0] + c[0]), first[1] + c[1]];
+        area::is_wall(self.shard(), cell_zoom, b)
     }
     fn stations(&self) -> Stations {
         header_of(self).1
     }
-    /// Its own palette index as its fill laid it (`LAID_WORDS`), the wall
+    /// Its own palette index as its fill laid it (`OWN_WORDS`), the wall
     /// apart (`is_walled`).
     fn palette_idx(&self, c: [i32; 2]) -> u32 {
         let i = cell_idx(c);
         if i == BRICK_CELLS {
             VOID
         } else {
-            self.laid(i)
+            self.own(i)
         }
     }
     fn face(&self, c: [i32; 2]) -> i32 {
         if !is_held(c) {
             return 0;
         }
-        let cell = Brick::cell(self);
-        ground::face_height(cell, ground::cells(cell, self.height(c) as f32))
+        let cell_zoom = Brick::cell_zoom(self);
+        ground::face_height(cell_zoom, ground::cells(cell_zoom, self.height(c) as f32))
     }
     /// The entry is the one after the one before it, and its segment
     /// continues the one stored before it.
@@ -410,11 +410,11 @@ impl<Q: Brick> Columns for Q {
     }
 }
 
-/// Where a node's cells at `cell`, a brick's or fewer, are held, as `step`
+/// Where a node's cells at `cell_zoom`, a brick's or fewer, are held, as `step`
 /// finds them: the zoom they were asked at, the clip level holding them present
-/// (its zoom `from`, at `cell` or coarser, and the slot), or none; one word,
-/// as a descent carries it down beside what is placed (`overwrite::NodeSlot`).
-/// `step` reads only the brick at `cell` holding them and the bricks over
+/// (its zoom `from`, at `cell_zoom` or coarser, and the slot), or none; one word,
+/// as a descent carries it down beside what is placed (`object::NodeSlot`).
+/// `step` reads only the brick at `cell_zoom` holding them and the bricks over
 /// it, so every node whose cells lie in that brick has this answer: a
 /// descent hands it from a node to the nodes under it (`step`). `NONE` was
 /// asked at no zoom.
@@ -425,30 +425,30 @@ pub struct Lookup(u32);
 pub const LOOKUP_SLOT_BITS: u32 = SLOTS.next_power_of_two().trailing_zeros();
 const LOOKUP_HERE: u32 = 1 << LOOKUP_SLOT_BITS;
 pub const LOOKUP_FROM_SHIFT: u32 = LOOKUP_SLOT_BITS + 1;
-pub const LOOKUP_CELL_SHIFT: u32 = LOOKUP_FROM_SHIFT + crate::ZOOM_BITS;
+pub const LOOKUP_CELL_ZOOM_SHIFT: u32 = LOOKUP_FROM_SHIFT + crate::ZOOM_BITS;
 const LOOKUP_ZOOM_MASK: u32 = (1 << crate::ZOOM_BITS) - 1;
 /// A `Lookup`'s word's bits: its slot, here, and its two zooms.
-const LOOKUP_BITS: u32 = LOOKUP_CELL_SHIFT + crate::ZOOM_BITS;
+const LOOKUP_BITS: u32 = LOOKUP_CELL_ZOOM_SHIFT + crate::ZOOM_BITS;
 const _: () = assert!(LOOKUP_BITS <= 32);
 const _: () = assert!(
-    FIRST_CELL >= 2,
+    FIRST_CELL_ZOOM >= 2,
     "a zoom asked is never NONE's, nor one finer"
 );
 
 impl Lookup {
     pub const NONE: Lookup = Lookup(0);
 
-    const fn of(cell: Zoom, from: Zoom, slot: u32, here: bool) -> Lookup {
+    const fn of(cell_zoom: Zoom, from: Zoom, slot: u32, here: bool) -> Lookup {
         Lookup(
-            cell << LOOKUP_CELL_SHIFT
+            cell_zoom << LOOKUP_CELL_ZOOM_SHIFT
                 | from << LOOKUP_FROM_SHIFT
                 | (here as u32) << LOOKUP_SLOT_BITS
                 | slot,
         )
     }
     /// The zoom its cells were asked at.
-    pub const fn cell(self) -> Zoom {
-        self.0 >> LOOKUP_CELL_SHIFT
+    pub const fn cell_zoom(self) -> Zoom {
+        self.0 >> LOOKUP_CELL_ZOOM_SHIFT
     }
     /// The clip level's zoom.
     pub const fn from(self) -> Zoom {
@@ -474,7 +474,7 @@ fn cell_at(zoom: Zoom, from: Zoom, c: [i32; 2]) -> [i32; 2] {
     [wrap_idx(from, c[0] >> s), c[1] >> s]
 }
 
-/// The clip level holding a node's cells at `cell` from its first, `g`, stepped
+/// The clip level holding a node's cells at `cell_zoom` from its first, `g`, stepped
 /// from `above`, what a node over it found, or `NONE`, reading only what
 /// `above` leaves unknown. Only a node a brick wide or less sets a place
 /// (`bounded`), so every node a descent asks under it, a sibling from its
@@ -487,51 +487,59 @@ fn cell_at(zoom: Zoom, from: Zoom, c: [i32; 2]) -> [i32; 2] {
 /// Asked finer, only the zooms finer than `above`'s are unknown: they are
 /// looked at finest first, then `above`'s answer stands, a look a zoom of
 /// the step. With nothing above, or coarser than `above`'s clip level, every
-/// clip level from `cell`'s to the first (`FIRST_CELL`) is looked at, and none
+/// clip level from `cell_zoom`'s to the first (`FIRST_CELL_ZOOM`) is looked at, and none
 /// holding it is a lack.
-pub fn step(w: &impl Presence, above: Lookup, cell: Zoom, g: [i32; 2]) -> (Lookup, [u32; 2]) {
+pub fn step(w: &impl Presence, above: Lookup, cell_zoom: Zoom, g: [i32; 2]) -> (Lookup, [u32; 2]) {
     // The zooms `above` leaves unknown, finest first, down to the one it
     // answers, or to the first clip level where it answers none.
-    let known = above != Lookup::NONE && cell >= above.from();
+    let known = above != Lookup::NONE && cell_zoom >= above.from();
     let (floor, mut f) = if known {
         (
-            above.cell(),
-            Lookup::of(cell, above.from(), above.slot(), above.here()),
+            above.cell_zoom(),
+            Lookup::of(cell_zoom, above.from(), above.slot(), above.here()),
         )
     } else {
-        (FIRST_CELL - 1, Lookup::of(cell, FIRST_CELL, 0, false))
+        (
+            FIRST_CELL_ZOOM - 1,
+            Lookup::of(cell_zoom, FIRST_CELL_ZOOM, 0, false),
+        )
     };
-    let mut c = cell;
+    let mut c = cell_zoom;
     while c > floor {
-        let (slot, here) = w.present(c, brick_of(cell_at(cell, c, g)).0);
+        let (slot, here) = w.present(c, brick_of(cell_at(cell_zoom, c, g)).0);
         if here {
-            f = Lookup::of(cell, c, slot, true);
+            f = Lookup::of(cell_zoom, c, slot, true);
             break;
         }
         c -= 1;
     }
-    (f, brick_of(cell_at(cell, f.from(), g)).1)
+    (f, brick_of(cell_at(cell_zoom, f.from(), g)).1)
 }
 
-/// The zoom a cell at `cell` is read at, the eye's clip levels' (`FIRST_CELL`
-/// to `LEAF_CELL`): past the leaves a leaf's, coarser than the coarsest
+/// The zoom a cell at `cell_zoom` is read at, the eye's clip levels' (`FIRST_CELL_ZOOM`
+/// to `LEAF_CELL_ZOOM`): past the leaves a leaf's, coarser than the coarsest
 /// clip level that clip level's.
-pub const fn held_to(cell: Zoom) -> Zoom {
-    if cell > LEAF_CELL {
-        LEAF_CELL
-    } else if cell < FIRST_CELL {
-        FIRST_CELL
+pub const fn held_to(cell_zoom: Zoom) -> Zoom {
+    if cell_zoom > LEAF_CELL_ZOOM {
+        LEAF_CELL_ZOOM
+    } else if cell_zoom < FIRST_CELL_ZOOM {
+        FIRST_CELL_ZOOM
     } else {
-        cell
+        cell_zoom
     }
 }
 
-/// The ground's cell `g` at `cell`, off the finest clip level holding it
+/// The ground's cell `g` at `cell_zoom`, off the finest clip level holding it
 /// present, stepped from `place` (`step`): its four palette indices, its column's
 /// word (its height), its own palette index as laid, and where it is held;
 /// `void` at sea level where none holds it.
-pub fn cell(w: &impl Bricks, place: Lookup, cell: Zoom, g: [i32; 2]) -> (u32, u32, u32, Lookup) {
-    let (f, at) = step(w, place, cell, g);
+pub fn cell(
+    w: &impl Bricks,
+    place: Lookup,
+    cell_zoom: Zoom,
+    g: [i32; 2],
+) -> (u32, u32, u32, Lookup) {
+    let (f, at) = step(w, place, cell_zoom, g);
     if !f.here() {
         return (VOID, 0, VOID, f);
     }
@@ -539,7 +547,7 @@ pub fn cell(w: &impl Bricks, place: Lookup, cell: Zoom, g: [i32; 2]) -> (u32, u3
     (
         w.palette_word(from, slot, i),
         w.column(from, slot, i),
-        w.laid(from, slot, i),
+        w.own(from, slot, i),
         f,
     )
 }
@@ -577,9 +585,9 @@ pub fn ground(
 /// Entry `at` of level `j` of a brick, from 1, over the level under it,
 /// written before: the join of the four under it, each source's its own
 /// (`ground::joined`), as bound words.
-pub fn join(w: &impl Bricks, cell: Zoom, slot: u32, j: u32, [x, y]: [u32; 2]) -> [i32; 2] {
+pub fn join(w: &impl Bricks, cell_zoom: Zoom, slot: u32, j: u32, [x, y]: [u32; 2]) -> [i32; 2] {
     let under = |q: u32| {
-        ground::bounds_of(w.bound_level(cell, slot, j - 1, [2 * x + q % 2, 2 * y + q / 2]))
+        ground::bounds_of(w.bound_mip(cell_zoom, slot, j - 1, [2 * x + q % 2, 2 * y + q / 2]))
     };
     let mut b = under(0);
     let mut q = 1;
@@ -592,16 +600,16 @@ pub fn join(w: &impl Bricks, cell: Zoom, slot: u32, j: u32, [x, y]: [u32; 2]) ->
 
 /// Levels a clip level bounds a node over, its bricks' own and then theirs
 /// joined, to the clip level whole.
-pub(crate) const BOUND_LEVELS: u32 = BRICK_LEVELS + ACROSS.trailing_zeros();
+pub(crate) const BOUND_MIPS: u32 = BRICK_MIPS + ACROSS.trailing_zeros();
 
 /// The levels over a clip level's bricks, from one over a brick
-/// (`BRICK_LEVELS + 1`) to the clip level whole: a node wider than a brick bounded
+/// (`BRICK_MIPS + 1`) to the clip level whole: a node wider than a brick bounded
 /// by the join of the bricks it covers, folded where the clip levels' entries
 /// are written (`fold`) and read as one entry (`bounded`).
-pub const JOINED_LEVELS: u32 = BOUND_LEVELS - BRICK_LEVELS;
+pub const JOINED_MIPS: u32 = BOUND_MIPS - BRICK_MIPS;
 /// A clip level's entries: level `l` over a brick has `(ACROSS >> l)²`, an
 /// aligned block of `2^l` bricks a side each.
-pub const JOINED_ENTRIES: u32 = joined_idx(JOINED_LEVELS + 1, [0, 0]);
+pub const JOINED_ENTRIES: u32 = joined_idx(JOINED_MIPS + 1, [0, 0]);
 /// An entry's words: its key, the block's first brick at its cells' zoom,
 /// X then Y, each with its sign flipped (`key_word`), so the zero entry,
 /// as fresh memory holds it, names no brick; then the join's bounds, the
@@ -661,17 +669,17 @@ impl Entry {
     /// Whether a query, or what one handed on, reads it other than as `was`: another brick
     /// or slot. A brick wanted absent is read as well, its cells off a coarser clip level
     /// where its block's bound is folded (`fold`).
-    pub fn moved_from(&self, was: Entry) -> bool {
+    pub fn changed_from(&self, was: Entry) -> bool {
         self.brick[0] != was.brick[0]
             || self.brick[1] != was.brick[1]
             || self.present != was.present
     }
 
     /// Whether a query that reads bricks held present alone (`Presence`) reads it other than
-    /// as `was`: moved (`moved_from`), held present on either side. A brick wanted absent for
+    /// as `was`: moved (`changed_from`), held present on either side. A brick wanted absent for
     /// another moves only what reads the fold.
-    pub fn held_moved_from(&self, was: Entry) -> bool {
-        self.moved_from(was) && (self.present != 0 || was.present != 0)
+    pub fn held_changed_from(&self, was: Entry) -> bool {
+        self.changed_from(was) && (self.present != 0 || was.present != 0)
     }
 }
 
@@ -683,8 +691,8 @@ pub const ORIGIN_AT: u32 = SLOTS;
 /// The row of the clip levels' buffer the eye's clip levels' entries begin at:
 /// past their entries and their first bricks.
 pub const JOINED_AT: u32 = ORIGIN_AT + CLIP_LEVELS;
-/// The eye's clip levels' entries, as the GPU lays them: clip level `cell −
-/// FIRST_CELL` a run of `JOINED_ENTRIES`.
+/// The eye's clip levels' entries, as the GPU lays them: clip level `cell_zoom −
+/// FIRST_CELL_ZOOM` a run of `JOINED_ENTRIES`.
 pub const EYE_JOINED_WORDS: u32 = JOINED_ENTRIES * JOINED_WORDS * EYE_CLIP_LEVELS;
 /// The clip levels' buffer in words: its entries, its first bricks and the eye's
 /// clip levels' levels, all of it the core's (pxl-core
@@ -701,7 +709,7 @@ pub const fn joined_idx(l: u32, at: [u32; 2]) -> u32 {
     let under = ACROSS >> (l - 1);
     (ACROSS * ACROSS - under * under) / 3 + idx_of(at)
 }
-const _: () = assert!(ACROSS.is_power_of_two() && JOINED_LEVELS < ACROSS.trailing_zeros() + 1);
+const _: () = assert!(ACROSS.is_power_of_two() && JOINED_MIPS < ACROSS.trailing_zeros() + 1);
 
 /// A key's word: `v` with its sign flipped, so no brick's is 0.
 const fn key_word(v: i32) -> u32 {
@@ -709,8 +717,8 @@ const fn key_word(v: i32) -> u32 {
 }
 
 /// Entry `b` of level `l` over a brick, its Morton index there
-/// (`joined_idx`), of the eye's clip level at `cell`, folded off the level
-/// under it: what a ray reads at `cell` in the block of `2^l` entries a side
+/// (`joined_idx`), of the eye's clip level at `cell_zoom`, folded off the level
+/// under it: what a ray reads at `cell_zoom` in the block of `2^l` entries a side
 /// at `b`, aligned as the entries are (`ACROSS` a multiple of the block's
 /// side), the join of its four halves' joins, each read once where the
 /// level under it laid it (`Bricks::joined`; at level 1 a brick's own,
@@ -721,9 +729,9 @@ const fn key_word(v: i32) -> u32 {
 /// which bounds either from over. The zero entry where the clip level is not
 /// laid out or no clip level holds a brick of the block, a lack. A level is
 /// folded once the one under it is.
-pub fn fold(w: &impl Bricks, cell: Zoom, l: u32, b: u32) -> [u32; JOINED_WORDS as usize] {
+pub fn fold(w: &impl Bricks, cell_zoom: Zoom, l: u32, b: u32) -> [u32; JOINED_WORDS as usize] {
     let [x, y] = of_idx(b);
-    let (first, laid) = w.origin(cell);
+    let (first, laid) = w.origin(cell_zoom);
     let key = [key_word(first[0]), key_word(first[1])];
     let half = 1 << (l - 1);
     let mut joined = [ground::EMPTY; 2];
@@ -732,12 +740,15 @@ pub fn fold(w: &impl Bricks, cell: Zoom, l: u32, b: u32) -> [u32; JOINED_WORDS a
         let (dx, dy) = ((k & 1) * half, (k >> 1) * half);
         let got = if l == 1 {
             let (q, _) = w.brick(
-                cell,
+                cell_zoom,
                 entry([((x << l) + dx) as i32, ((y << l) + dy) as i32]),
             );
-            held_brick(w, cell, q)
+            held_brick(w, cell_zoom, q)
         } else {
-            unfold(w.joined(cell, joined_idx(l - 1, [0, 0]) + 4 * b + k), first)
+            unfold(
+                w.joined(cell_zoom, joined_idx(l - 1, [0, 0]) + 4 * b + k),
+                first,
+            )
         };
         // Component-wise: a GPU has no array equality. A half no clip level
         // holds is none of either source.
@@ -754,16 +765,16 @@ pub fn fold(w: &impl Bricks, cell: Zoom, l: u32, b: u32) -> [u32; JOINED_WORDS a
     [key[0], key[1], g as u32, ways as u32]
 }
 
-/// What a ray reads of brick `q` at `cell`: its cells off the finest
+/// What a ray reads of brick `q` at `cell_zoom`: its cells off the finest
 /// clip level holding them present, this one or a coarser one, as a node a
 /// brick wide reads them (`bounded`), so a brick this clip level has yet to
 /// hold is bounded by the cells read in its place; none
 /// (`ground::UNBOUNDED`) where no clip level holds it, a lack. Only the
 /// bricks' own levels are read, never another clip level's entries, so the
 /// clip levels fold in any order.
-fn held_brick(w: &impl Bricks, cell: Zoom, q: [i32; 2]) -> Bounds {
+fn held_brick(w: &impl Bricks, cell_zoom: Zoom, q: [i32; 2]) -> Bounds {
     let mut place = Lookup::NONE;
-    let (b, _, here, _) = bounded(w, &mut place, cell, (cell - BRICK_LEVELS, q));
+    let (b, _, here, _) = bounded(w, &mut place, cell_zoom, (cell_zoom - BRICK_MIPS, q));
     if here {
         b
     } else {
@@ -771,8 +782,8 @@ fn held_brick(w: &impl Bricks, cell: Zoom, q: [i32; 2]) -> Bounds {
     }
 }
 const _: () = assert!(
-    FIRST_CELL >= BRICK_LEVELS,
-    "a brick is a node at its cells' zoom less `BRICK_LEVELS`"
+    FIRST_CELL_ZOOM >= BRICK_MIPS,
+    "a brick is a node at its cells' zoom less `BRICK_MIPS`"
 );
 
 /// The joins an entry `e` holds of a clip level whose first brick is `q`
@@ -786,7 +797,7 @@ fn unfold(e: [u32; JOINED_WORDS as usize], q: [i32; 2]) -> Bounds {
     }
 }
 
-/// What the eye's clip level at `cell` holds of a node wider than a brick, its
+/// What the eye's clip level at `cell_zoom` holds of a node wider than a brick, its
 /// first cell there `g` and `2^l` bricks a side, `l` from 1: one entry, its
 /// entry block's (`fold`), the node's bricks exactly where it lies in the clip
 /// level's range and a superset where it crosses the seam; a node wider than
@@ -796,32 +807,32 @@ fn unfold(e: [u32; JOINED_WORDS as usize], q: [i32; 2]) -> Bounds {
 /// nothing bounds the node, which only splits more. What the clip level does
 /// not reach of the node a coarser clip level holds, as a cell's (`step`). The
 /// one reader of every entry.
-fn held_of(w: &impl Bricks, cell: Zoom, g: [i32; 2], l: u32) -> (Bounds, bool) {
-    let (first, laid) = w.origin(cell);
+fn held_of(w: &impl Bricks, cell_zoom: Zoom, g: [i32; 2], l: u32) -> (Bounds, bool) {
+    let (first, laid) = w.origin(cell_zoom);
     if !laid {
         return ([ground::EMPTY; 2], false);
     }
-    let (q, _) = brick_of([wrap_idx(cell, g[0]), g[1]]);
+    let (q, _) = brick_of([wrap_idx(cell_zoom, g[0]), g[1]]);
     // The node's first brick from the clip level's, X the short way round.
     let d = [
-        wrap_idx(bricks_zoom(cell), q[0] - first[0]),
+        wrap_idx(bricks_zoom(cell_zoom), q[0] - first[0]),
         q[1] - first[1],
     ];
     let (side, across) = (1i32 << l, ACROSS as i32);
     if d[0] >= across || d[1] >= across || d[0] + side <= 0 || d[1] + side <= 0 {
         return ([ground::EMPTY; 2], false);
     }
-    let all = l <= JOINED_LEVELS
+    let all = l <= JOINED_MIPS
         && d[0] >= 0
         && d[1] >= 0
         && d[0] + side <= across
         && d[1] + side <= across;
-    let (level, m) = (
-        if l > JOINED_LEVELS { JOINED_LEVELS } else { l },
+    let (mip, m) = (
+        if l > JOINED_MIPS { JOINED_MIPS } else { l },
         (ACROSS - 1) as i32,
     );
-    let at = [((q[0] & m) as u32) >> level, ((q[1] & m) as u32) >> level];
-    let b = unfold(w.joined(cell, joined_idx(level, at)), first);
+    let at = [((q[0] & m) as u32) >> mip, ((q[1] & m) as u32) >> mip];
+    let b = unfold(w.joined(cell_zoom, joined_idx(mip, at)), first);
     // A brick no clip level holds: no coarser clip level bounds it either.
     if b[0][0] == ground::UNBOUNDED[0] && b[0][1] == ground::UNBOUNDED[1] {
         return (b, true);
@@ -862,7 +873,7 @@ pub fn bound_over(
         // A read off a coarser clip level than asked is every zoom's down to
         // it: none between holds the node's brick, so each would read it again.
         let open = b[0][0] <= ground::UNBOUNDED[0] && b[0][1] >= ground::UNBOUNDED[1];
-        if open || from <= bottom && all || from == FIRST_CELL {
+        if open || from <= bottom && all || from == FIRST_CELL_ZOOM {
             return (
                 if from <= bottom && all || open {
                     b
@@ -877,30 +888,30 @@ pub fn bound_over(
     }
 }
 
-/// The lowest and highest the cells at `cell` reach under the node
+/// The lowest and highest the cells at `cell_zoom` reach under the node
 /// `(zoom, c)`: off the finest clip level holding them present, stepped from
 /// `place`, which becomes where they are held (`step`), one entry of its
 /// brick's levels, level 0 the column holding a node no wider than a
 /// cell, and that clip level's zoom; a node wider than a brick, what the
-/// clip level at `cell` holds of it (`held_of`), and whether it holds all of it
+/// clip level at `cell_zoom` holds of it (`held_of`), and whether it holds all of it
 /// (`bound_over` reads on where it does not). False where no clip level holds
 /// it, a lack.
 fn bounded(
     w: &impl Bricks,
     place: &mut Lookup,
-    cell: Zoom,
+    cell_zoom: Zoom,
     (zoom, c): (Zoom, [i32; 2]),
 ) -> (Bounds, Zoom, bool, bool) {
-    // The node's first cell at `cell`, or the cell holding it.
+    // The node's first cell at `cell_zoom`, or the cell holding it.
     let g = [
-        crate::idx_at(zoom, c[0], cell),
-        crate::idx_at(zoom, c[1], cell),
+        crate::idx_at(zoom, c[0], cell_zoom),
+        crate::idx_at(zoom, c[1], cell_zoom),
     ];
-    if cell > zoom + BRICK_LEVELS {
-        let (b, all) = held_of(w, cell, g, cell - zoom - BRICK_LEVELS);
-        return (b, cell, true, all);
+    if cell_zoom > zoom + BRICK_MIPS {
+        let (b, all) = held_of(w, cell_zoom, g, cell_zoom - zoom - BRICK_MIPS);
+        return (b, cell_zoom, true, all);
     }
-    let (f, p) = step(w, *place, cell, g);
+    let (f, p) = step(w, *place, cell_zoom, g);
     *place = f;
     let (from, slot) = (f.from(), f.slot());
     if !f.here() {
@@ -908,7 +919,7 @@ fn bounded(
     }
     let (j, at) = entry_at(zoom, from, p);
     (
-        ground::bounds_of(w.bound_level(from, slot, j, at)),
+        ground::bounds_of(w.bound_mip(from, slot, j, at)),
         from,
         true,
         true,
@@ -928,22 +939,22 @@ mod tests {
     use super::Entry;
 
     #[test]
-    fn moved_from_reads_what_a_query_reads() {
+    fn changed_from_reads_what_a_query_reads() {
         let at = Entry::at;
         // Present: another brick or slot moved it.
-        assert!(at([1, 2], 3).moved_from(at([1, 5], 3)));
-        assert!(at([1, 2], 3).moved_from(at([4, 2], 3)));
-        assert!(at([1, 2], 3).moved_from(at([1, 2], 4)));
-        assert!(!at([1, 2], 3).moved_from(at([1, 2], 3)));
+        assert!(at([1, 2], 3).changed_from(at([1, 5], 3)));
+        assert!(at([1, 2], 3).changed_from(at([4, 2], 3)));
+        assert!(at([1, 2], 3).changed_from(at([1, 2], 4)));
+        assert!(!at([1, 2], 3).changed_from(at([1, 2], 3)));
         // Present on one side alone.
-        assert!(at([1, 2], 3).moved_from(at([1, 2], 0)));
-        assert!(at([1, 2], 0).moved_from(at([1, 2], 3)));
+        assert!(at([1, 2], 3).changed_from(at([1, 2], 0)));
+        assert!(at([1, 2], 0).changed_from(at([1, 2], 3)));
         // Neither present: another brick moved it.
-        assert!(at([1, 2], 0).moved_from(at([8, 9], 0)));
-        assert!(!at([1, 2], 0).moved_from(at([1, 2], 0)));
+        assert!(at([1, 2], 0).changed_from(at([8, 9], 0)));
+        assert!(!at([1, 2], 0).changed_from(at([1, 2], 0)));
         // Held present on one side at least, or a brick wanted absent for another.
-        assert!(at([1, 2], 3).held_moved_from(at([8, 9], 0)));
-        assert!(at([1, 2], 0).held_moved_from(at([8, 9], 3)));
-        assert!(!at([1, 2], 0).held_moved_from(at([8, 9], 0)));
+        assert!(at([1, 2], 3).held_changed_from(at([8, 9], 0)));
+        assert!(at([1, 2], 0).held_changed_from(at([8, 9], 3)));
+        assert!(!at([1, 2], 0).held_changed_from(at([8, 9], 0)));
     }
 }

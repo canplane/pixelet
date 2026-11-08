@@ -1,6 +1,6 @@
 // Hillaire's sky-view table, drawn once for the sun and once for the moon,
 // each relative to its light's azimuth, with its light's share of the air's
-// volume (atmos_froxel.wgsl), as laid (atmos_medium.wgsl `laid`); and,
+// volume (atmos_froxel.wgsl), as laid (atmos_medium.wgsl `view_layout`); and,
 // each where it is to be measured again, its light's slopes (`slopes`).
 
 // Which light, 1 for the moon; 1 where its height's slope is measured with
@@ -80,7 +80,7 @@ fn fs(v: TableOut) -> @location(0) vec4f {
   let uv = v.clip.xy / SKY_VIEW_SIZE;
   let r = camera_r();
   let k = u32(light.x);
-  let dir = view_dir(laid(k).x, vec2f(unit_of(uv.x, SKY_VIEW_SIZE.x), unit_of(uv.y, SKY_VIEW_SIZE.y)));
+  let dir = view_dir(view_layout(k).x, vec2f(unit_of(uv.x, SKY_VIEW_SIZE.x), unit_of(uv.y, SKY_VIEW_SIZE.y)));
   let mu = dot(light_dir(k), frame_up());
   let radiance = sky_radiance(r, dir, view_light(mu), ATMOS_SKY_VIEW_STEPS);
   if (light.y > 0.5) {

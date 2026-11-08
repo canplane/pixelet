@@ -13,7 +13,7 @@
 //! sequence; where it changed this frame, what the frames before left is
 //! moved to where this frame's eye sees it and held within what this
 //! frame's pixels about it hold. A tile is claimed, drawn again, until it
-//! has run through the sequence (word.rs `screen::CLAIMED_FOR`,
+//! has run through the sequence (word.rs `screen::DAMAGE_FRAMES`,
 //! screen_tiles.wgsl); once every one has,
 //! the jitter holds, and the frame stands. The tiles' words are the GPU's,
 //! as the light's are (gpu/tiles.rs): each the number of the frame it last
@@ -27,7 +27,7 @@ use pxl_spec::space::coord::world;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::record::{PIPELINE_SCREEN_RESOLVE, PIPELINE_SCREEN_WRITE_BACK};
-use crate::frame::shader::word::screen::{CLAIMED_FOR, JITTERS};
+use crate::frame::shader::word::screen::{DAMAGE_FRAMES, JITTERS};
 use crate::gpu::api::WORLD_COLOR;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, sampler_entry, view_entry, Gpu, Group, Load,
@@ -103,7 +103,7 @@ impl Resolve {
             last: (mat4::new(), [0.0; 3]),
             phase: 0,
             jitter: [0.0; 2],
-            tiles: Tiles::new(g, pipelines, SIDE, CLAIMED_FOR, GpuSpanName::mark),
+            tiles: Tiles::new(g, pipelines, SIDE, DAMAGE_FRAMES, GpuSpanName::mark),
         }
     }
 
@@ -161,12 +161,12 @@ impl Resolve {
 
     /// The frame's world color, `s`'s, blended into what the frames before
     /// left, into the history its turn writes, each tile by its age
-    /// (`age`). Where the frame is drawn through the gate (`gated`), only the
+    /// (`age`). Where the frame is drawn through the gate (`masked`), only the
     /// claimed tiles, written back into the last history, which stays the
     /// one read. Passes of their own over the groups set for `s`
     /// (`set_groups`), their time counted in the span `resolve`; the history
     /// the finish encodes.
-    pub fn draw(&mut self, ctx: &mut RenderContext, s: &Surface, gated: bool) -> u32 {
+    pub fn draw(&mut self, ctx: &mut RenderContext, s: &Surface, masked: bool) -> u32 {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::resolve);
         if s.history_view != self.histories {
@@ -189,7 +189,7 @@ impl Resolve {
         g.write_buf(self.uniform, 0, bytes(&u));
         let [across, down] = self.tiles.squares();
         let tiles = across * down;
-        let load = if gated { Load::Load } else { Load::Clear };
+        let load = if masked { Load::Load } else { Load::Clear };
         let pass = g.pass(
             encoder,
             &pass_desc(s.history_view[k], load, 0, Load::Clear, 0.0, stamp.pass()),
@@ -198,7 +198,7 @@ impl Resolve {
         g.set_bind_group(pass, 0, self.groups[was].id(), &[]);
         g.draw(pass, 6, tiles, 0, 0);
         g.end(pass);
-        if !gated {
+        if !masked {
             return s.history_view[k];
         }
         let pass = g.pass(
@@ -238,11 +238,11 @@ impl Resolve {
     }
 
     /// The frame was drawn: its history is the next's to read, unless it was
-    /// drawn through the gate (`gated`), written back into the last; its
+    /// drawn through the gate (`masked`), written back into the last; its
     /// view the last, and the jitter moves on where the frame took a place of
     /// the sequence (`asks`, as `jitter` read it).
-    pub fn on_drawn(&mut self, gated: bool) {
-        if !gated {
+    pub fn on_drawn(&mut self, masked: bool) {
+        if !masked {
             self.turn = 1 - self.turn;
         }
         self.gathered = self.gathered.saturating_add(1);

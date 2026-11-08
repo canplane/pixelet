@@ -40,7 +40,7 @@ fn went_on_alike(s: vec2<u32>, band: u32, p: vec2<u32>) -> bool {
 /// (pxl-engine `light::samples_about`).
 fn sky(at: vec2<u32>, p: vec2<u32>, band: u32) -> bool {
   let d = LIGHT_SAMPLE;
-  let n = head_word(LIGHT_HEAD_SIZE);
+  let n = header_word(LIGHT_HEADER_SIZE);
   let r = at % d;
   let about = p.x >= r.x && p.x - r.x + d < n && p.y >= r.y && p.y - r.y + d < n;
   let s = at / d;
@@ -59,12 +59,12 @@ fn light_cs(
   @builtin(workgroup_id) group: vec3<u32>,
   @builtin(local_invocation_id) lane: vec3<u32>,
 ) {
-  let size = head_word(LIGHT_HEAD_SIZE);
+  let size = header_word(LIGHT_HEADER_SIZE);
   let at = light_item(LEVEL_RAY, group.xy * LIGHT_TILE + lane.xy);
   if (at.x >= size || at.y >= size) {
     return;
   }
-  let on = head_word(LIGHT_HEAD_COUNTED) != 0u;
+  let on = header_word(LIGHT_HEADER_COUNTED) != 0u;
   let p = slot_texel(at);
   let aim = light_aim(p);
   let band = aim.range.x;
@@ -75,14 +75,14 @@ fn light_cs(
     let state = node_cache_word(state_at(slot));
     let faces = state & RECORD_FACES;
     if ((visible & VISIBLE_LACK) == 0u && entry_kind(slot) != KIND_SPLIT && faces != 0u) {
-      let k = entry_kept(slot, vec3<i32>(aim.origin));
+      let k = entry_node(slot, vec3<i32>(aim.origin));
       let fill = (node_cache_word(entry_at(slot) + W_ASSET) >> FILL_SHIFT) & (EIGHTHS - 1u);
       let entry = visible_cell(aim, k.zoom, k.corner, k.roots - origin_roots(aim.origin), fill, faces);
       // Taken only where the voxel is the node a ray asking the slot's band stops on
       // (pxl-engine `Light::band`, `record::band_fresh`).
       if (entry.enters && band_fresh(k.zoom, (state & RECORD_WHOLE) != 0u, band)) {
         add_cnt(on, COUNT_REUSED);
-        textureStore(light, at, 0u, vec4<u32>(stop_word(entry.t, entry.axis), 0u, 0u, 0u));
+        textureStore(light, at, 0u, vec4<u32>(hit_word(entry.t, entry.axis), 0u, 0u, 0u));
         return;
       }
     }
@@ -93,5 +93,5 @@ fn light_cs(
     return;
   }
   add_cnt(on, COUNT_WALKED);
-  list_hole(head_word(LIGHT_HEAD_HOLES), at);
+  list_hole(header_word(LIGHT_HEADER_HOLES), at);
 }

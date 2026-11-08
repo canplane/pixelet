@@ -90,9 +90,9 @@ export interface IconProps {
 }
 
 export function Icon({ glyph, size, color, weight = "regular" }: IconProps) {
-  const [Drawn, filled, turn] = PHOSPHOR[glyph];
+  const [Phosphor, filled, turn] = PHOSPHOR[glyph];
   return (
-    <Drawn
+    <Phosphor
       size={size}
       color={color}
       weight={filled ? "fill" : WEIGHT[weight]}

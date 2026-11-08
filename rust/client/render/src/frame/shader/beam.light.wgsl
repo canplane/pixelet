@@ -12,8 +12,8 @@ fn beam_lattice() -> vec2<u32> {
 
 /// The beam rays a run takes: those listed for the tiles the cast claimed, a beam ray a place
 /// (light_list.wgsl `light_item_at`).
-fn corners_listed() -> u32 {
-  return in_room(beams[listed_at(LIGHT_LISTED_CORNERS)], beam_across() * beam_across());
+fn corner_cnt() -> u32 {
+  return in_cap(beams[list_cnt_at(LIGHT_LIST_CORNERS)], beam_across() * beam_across());
 }
 
 fn corner_queued(k: u32) -> vec2<u32> {
@@ -22,7 +22,7 @@ fn corner_queued(k: u32) -> vec2<u32> {
 
 /// The first word of beam ray `c`'s parked state (`light::corner_states_at`).
 fn corner_state_at(c: vec2<u32>) -> u32 {
-  return head_word(LIGHT_HEAD_CORNER_STATES) + (c.y * beam_across() + c.x) * STATE_WORDS;
+  return header_word(LIGHT_HEADER_CORNER_STATES) + (c.y * beam_across() + c.x) * STATE_WORDS;
 }
 
 /// The first word of beam ray `c`'s line (`light::line`).

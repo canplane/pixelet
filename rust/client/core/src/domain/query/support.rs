@@ -32,12 +32,12 @@ use pxl_spec::space::layer::quadrant::Quadrant;
 /// The center's height over a floor whose top is `top`: half a cell up, as a
 /// cell's center stands over its ground.
 pub fn over(top: f64) -> f64 {
-    top + units(GROUND.cell()) / 2.0
+    top + units(GROUND.leaf_cell_zoom()) / 2.0
 }
 
 /// The floor under a center at `z`: what `over` lifts it from.
 pub fn under(z: f64) -> f64 {
-    z - units(GROUND.cell()) / 2.0
+    z - units(GROUND.leaf_cell_zoom()) / 2.0
 }
 
 /// Whether a walker at `at`, seen from `eye`, walks: the camera grid draws
@@ -45,7 +45,7 @@ pub fn under(z: f64) -> f64 {
 /// Else the world is a map to it (`step_slide`).
 pub fn walks(at: &Q3, eye: &Q3) -> bool {
     let (a, e) = (q3::unpack(at), q3::unpack(eye));
-    cell_zoom_at(e, [world::nearest(a[0], e[0]), a[1], a[2]]) == GROUND.cell()
+    cell_zoom_at(e, [world::nearest(a[0], e[0]), a[1], a[2]]) == GROUND.leaf_cell_zoom()
 }
 
 /// A point's place on the ground, in units.
@@ -73,8 +73,8 @@ struct CellColumns<'w, 'a> {
 
 impl<'w, 'a> CellColumns<'w, 'a> {
     fn new(world: &'w World<'a>, xy: [f64; 2], zoom: Zoom, lines: Lines) -> CellColumns<'w, 'a> {
-        let cell = GROUND.cell_zoom(zoom);
-        let side = units(cell);
+        let cell_zoom = GROUND.cell_zoom(zoom);
+        let side = units(cell_zoom);
         let corner = xy.map(|v| libm::floor(v / side) * side);
         let column = Aabb {
             min: [corner[0], corner[1], BOUNDS.min[2]],
@@ -87,7 +87,7 @@ impl<'w, 'a> CellColumns<'w, 'a> {
         };
         let finer = world
             .finest_in(&column)
-            .map_or(0, |z| z.min(read.range[1]).saturating_sub(cell));
+            .map_or(0, |z| z.min(read.range[1]).saturating_sub(cell_zoom));
         CellColumns {
             world,
             corner,
@@ -209,8 +209,8 @@ impl<'w, 'a> CellColumns<'w, 'a> {
     /// column's surface at its zoom, the one support every reader asks
     /// (`World::column_surface`, pxl-engine `support::column_surface`).
     fn highest(&mut self) -> Option<f64> {
-        let cell = self.detail.range[0];
-        let unit = units(cell);
+        let cell_zoom = self.detail.range[0];
+        let unit = units(cell_zoom);
         let mut most: Option<f64> = None;
         for k in 0..self.across * self.across {
             let middle = |i: u32, c: f64| c + (f64::from(i) + 0.5) * self.side;
@@ -219,7 +219,7 @@ impl<'w, 'a> CellColumns<'w, 'a> {
                 middle(k / self.across, self.corner[1]),
             ]
             .map(|v| libm::floor(v / unit) as i32);
-            let (answer, _) = self.world.column_surface(cell, g);
+            let (answer, _) = self.world.column_surface(cell_zoom, g);
             if let Some(l) = answer.lack() {
                 self.lack.get_or_insert(l);
             }
@@ -233,10 +233,10 @@ impl<'w, 'a> CellColumns<'w, 'a> {
 
     /// The cell's ground's top, in units.
     fn surface(&mut self) -> Option<f64> {
-        let cell = GROUND.cell_zoom(self.zoom);
-        let side = units(cell);
+        let cell_zoom = GROUND.cell_zoom(self.zoom);
+        let side = units(cell_zoom);
         let answer = self.world.surface_of(
-            cell,
+            cell_zoom,
             self.corner
                 .map(|v| libm::floor((v + side / 2.0) / side) as i32),
         );
@@ -259,9 +259,12 @@ impl<'a> World<'a> {
     /// What is in the leaf cell at `at`, as the cast draws it: its value
     /// (pxl-engine `world::node`'s), void where none.
     pub fn asset_of(&self, at: &Q3) -> Answer<u32> {
-        let side = units(GROUND.cell());
+        let side = units(GROUND.leaf_cell_zoom());
         let p = [i64::from(at[0]), i64::from(at[1]), i64::from(at[2])].map(q3::to_real);
-        self.asset((GROUND.cell(), p.map(|v| (v / side).floor() as i32)))
+        self.asset((
+            GROUND.leaf_cell_zoom(),
+            p.map(|v| (v / side).floor() as i32),
+        ))
     }
 
     /// Where a walker stands from the drawn surface, ignoring `at`'s height
@@ -376,7 +379,7 @@ impl<'a> World<'a> {
         }
         // The short way round the world, across the antimeridian too.
         let way = [wrap(tx - sx, -ROUND / 2.0, ROUND / 2.0), ty - sy];
-        let s = units(GROUND.cell());
+        let s = units(GROUND.leaf_cell_zoom());
         let center = |c: [f64; 2]| [(c[0] + 0.5) * s, (c[1] + 0.5) * s];
         let mut end = [sx + way[0], sy + way[1]];
         let mut blocked = [false; 2];
@@ -461,7 +464,7 @@ impl<'a> World<'a> {
         if walled && !within(to) && within(from) {
             return Some(None);
         }
-        let cell = units(GROUND.cell());
+        let cell = units(GROUND.leaf_cell_zoom());
         let mut c = CellColumns::new(self, to, LEAF_ZOOM, *lines);
         let mut z = c.lift(floor);
         let moved = if z > floor {

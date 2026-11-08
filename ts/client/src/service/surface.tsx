@@ -61,7 +61,7 @@ function openSurface(
     if (handle === 0) return;
     // Closed before the core answered: the handle is let go at once.
     if (gone) return surface.close(handle);
-    close = bound(canvas, surface, handle, opened);
+    close = attach(canvas, surface, handle, opened);
   });
   return () => {
     gone = true;
@@ -70,7 +70,7 @@ function openSurface(
 }
 
 /** `handle` bound to the canvas and sized to it; the returned call lets it go. */
-function bound(
+function attach(
   canvas: HTMLCanvasElement,
   surface: SurfaceDriver,
   handle: u32,
@@ -126,9 +126,9 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   const { keyDown, keyUp, releaseKeys, releasePointers } = input;
   // Where the canvas is drawn on the page, transforms and all: a pointer's
   // client place is read against it into the layout box's CSS pixels.
-  let drawn = canvas.getBoundingClientRect();
+  let rect = canvas.getBoundingClientRect();
   const place = () => {
-    drawn = canvas.getBoundingClientRect();
+    rect = canvas.getBoundingClientRect();
   };
   const pointer = (phase: PointerPhase) => (e: PointerEvent) =>
     input.pointer(
@@ -136,8 +136,8 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
       pointerKind(e),
       e.pointerId,
       e.button,
-      ((e.clientX - drawn.left) * canvas.clientWidth) / (drawn.width || 1),
-      ((e.clientY - drawn.top) * canvas.clientHeight) / (drawn.height || 1),
+      ((e.clientX - rect.left) * canvas.clientWidth) / (rect.width || 1),
+      ((e.clientY - rect.top) * canvas.clientHeight) / (rect.height || 1),
     );
   const onMove = pointer("move");
   const onUp = pointer("up");

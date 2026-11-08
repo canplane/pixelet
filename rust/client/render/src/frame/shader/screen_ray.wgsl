@@ -109,7 +109,7 @@ struct Appearance {
 fn appearance(c: vec3u) -> Appearance {
   let val = ray_val(c.x);
   let l = look(val);
-  if (ray_zoom(c.x) >= GROUND_CELL) {
+  if (ray_zoom(c.x) >= GROUND_CELL_ZOOM) {
     return Appearance(swatch(l), f32(l.y >> 16u));
   }
   let fold = ray_palette_indices(c.z);

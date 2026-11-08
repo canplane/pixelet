@@ -1,7 +1,7 @@
 use super::{blocks, hollow, ROOT, ROOT_BLOCKS};
 use pxl_engine::answer::FULL;
 use pxl_engine::seed::node_seed;
-use pxl_engine::LEAF_CELL;
+use pxl_engine::LEAF_CELL_ZOOM;
 
 fn children(zoom: u32, c: [i32; 3]) -> impl Iterator<Item = (u32, [i32; 3])> {
     (0..8).map(move |k| {
@@ -34,7 +34,7 @@ fn a_node_is_its_children() {
         ];
         // Down a line from the root, checking each node on it and a sibling.
         let mut node = (ROOT, r);
-        while node.0 < LEAF_CELL {
+        while node.0 < LEAF_CELL_ZOOM {
             let sum: u32 = children(node.0, node.1).map(blocks_or_leaves).sum();
             assert_eq!(blocks_or_leaves(node), sum, "node {node:?}");
             let k = next() % 8;
@@ -45,7 +45,7 @@ fn a_node_is_its_children() {
 
 /// Its leaves of caves: a block is 8, a leaf its block's one.
 fn blocks_or_leaves(node: (u32, [i32; 3])) -> u32 {
-    if node.0 == LEAF_CELL {
+    if node.0 == LEAF_CELL_ZOOM {
         blocks(node)
     } else {
         blocks(node) * 8
@@ -178,9 +178,9 @@ fn every_node_of_a_root_is_its_children() {
 #[test]
 fn finer_than_a_leaf_is_its_leaf() {
     for c in [[5, 9, 3], [-11, 40, -2]] {
-        let leaf = hollow((LEAF_CELL, c));
+        let leaf = hollow((LEAF_CELL_ZOOM, c));
         assert_eq!(
-            hollow((LEAF_CELL + 2, [c[0] * 4 + 1, c[1] * 4 + 3, c[2] * 4])),
+            hollow((LEAF_CELL_ZOOM + 2, [c[0] * 4 + 1, c[1] * 4 + 3, c[2] * 4])),
             leaf
         );
     }
@@ -204,7 +204,7 @@ fn band() {
             for z in sea - 64..sea {
                 all += 1;
                 // Columns 37 units apart, over 18 roots across.
-                if hollow((LEAF_CELL, [x * 37, y * 37, z])) >= FULL {
+                if hollow((LEAF_CELL_ZOOM, [x * 37, y * 37, z])) >= FULL {
                     hollow_n += 1;
                     any = true;
                 }
@@ -222,7 +222,7 @@ fn band() {
         let mut n = 0;
         for y in 0..128 {
             for x in 0..128 {
-                n += (hollow((LEAF_CELL, [x * 37, y * 37, sea - 1 - d])) >= FULL) as u64;
+                n += (hollow((LEAF_CELL_ZOOM, [x * 37, y * 37, sea - 1 - d])) >= FULL) as u64;
             }
         }
         deep += n;

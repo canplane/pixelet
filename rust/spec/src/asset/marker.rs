@@ -21,24 +21,24 @@ pub const MARKER: AssetId = asset_id(Kind::marker, 0);
 /// finer than the tile, the cell Carto keeps its 14-pixel icons apart in.
 pub(crate) const MARK_STEPS: Zoom = 4;
 
-/// A marker's cell where the camera grid's cell is at `cell`: its scale on
+/// A marker's cell where the camera grid's cell is at `cell_zoom`: its scale on
 /// the grid (`asset/marker.json`).
-pub const fn marker_cell(cell: Zoom) -> i32 {
-    cell as i32 + MARKER_SCALE_STEPS as i32
+pub const fn marker_cell_zoom(cell_zoom: Zoom) -> i32 {
+    cell_zoom as i32 + MARKER_SCALE_STEPS as i32
 }
 
 /// The marker's cell holding a marker at `at` where the camera grid's cell
-/// is at `cell`, which counts the markers in it as one; the marker's own
+/// is at `cell_zoom`, which counts the markers in it as one; the marker's own
 /// where it is finer.
-pub fn marker_cell_of(cell: Zoom, at: Octant) -> (Zoom, [i32; 3]) {
-    let z = (marker_cell(cell).max(0) as Zoom).min(at.zoom());
+pub fn marker_cell_of(cell_zoom: Zoom, at: Octant) -> (Zoom, [i32; 3]) {
+    let z = (marker_cell_zoom(cell_zoom).max(0) as Zoom).min(at.zoom());
     (z, ancestor_of(at.at(), at.zoom() - z))
 }
 
-/// Whether a marker shows where the camera grid's cell is at `cell`: no
+/// Whether a marker shows where the camera grid's cell is at `cell_zoom`: no
 /// coarser than `MARKER_SHOWN_FROM`.
-pub const fn marker_shows(cell: Zoom) -> bool {
-    cell >= MARKER_SHOWN_FROM as Zoom
+pub const fn marker_shows(cell_zoom: Zoom) -> bool {
+    cell_zoom >= MARKER_SHOWN_FROM as Zoom
 }
 
 #[cfg(test)]

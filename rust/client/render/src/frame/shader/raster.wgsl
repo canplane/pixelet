@@ -82,7 +82,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
   let lacks = (o.id & RASTER_LACK) != 0u;
   let slot = (o.id & ~RASTER_LACK) - 1u;
   let origin = raster.origin.xyz;
-  let b = entry_box(slot, entry_kept(slot, origin), origin);
+  let b = entry_box(slot, entry_node(slot, origin), origin);
   let lo = b.lo;
   let hi = b.hi;
   o.lo = lo;

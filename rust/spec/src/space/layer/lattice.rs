@@ -33,7 +33,7 @@ pub const fn draw_dist(lattice: Lattice, zoom: Zoom) -> f64 {
 /// Every effect's one reach from the eye: out to where the grid's cells one zoom coarser
 /// than the ground's leaf begin, where the casters are drawn whole and a face's bits read the
 /// leaf's (pxl-render frame/shader/effect.wgsl `effect_share`, gpu/shadow.rs `half_width`).
-pub const EFFECT_REACH: f64 = split_dist(GROUND.cell() - 1);
+pub const EFFECT_REACH: f64 = split_dist(GROUND.leaf_cell_zoom() - 1);
 
 const _: () = assert!(
     draw_dist(GROUND, TOP_ZOOM) < REACH as f64,
@@ -51,7 +51,7 @@ pub const fn demand_dist(lattice: Lattice, zoom: Zoom) -> f64 {
 /// A lattice placed in the world: the tiles and cells a node, a point or an
 /// index names.
 pub trait Cells {
-    fn read_tile(self, node: (Zoom, [i32; 2]), cell: Zoom) -> Quadrant;
+    fn read_tile(self, node: (Zoom, [i32; 2]), cell_zoom: Zoom) -> Quadrant;
     fn z_at(self, r2: f64) -> Zoom;
     fn cell_of(self, zoom: Zoom, at: &Q3) -> Cell;
     fn cell_at(self, tile: Quadrant, idx: u32) -> Cell;
@@ -60,8 +60,8 @@ pub trait Cells {
 }
 
 impl Cells for Lattice {
-    fn read_tile(self, (zoom, column): (Zoom, [i32; 2]), cell: Zoom) -> Quadrant {
-        let z = self.read_zoom(cell);
+    fn read_tile(self, (zoom, column): (Zoom, [i32; 2]), cell_zoom: Zoom) -> Quadrant {
+        let z = self.read_zoom(cell_zoom);
         Quadrant::new(z, ancestor_of(column, zoom - z))
     }
 

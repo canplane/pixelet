@@ -59,7 +59,7 @@ fn submit(write: Write) {
 /// Whether a whole-cell pick only undoes a carve: the cell holds an AIR leaf, and
 /// the ground there without it is that cube, its stratum's at that depth.
 fn place_val_is_redundant(world: World, at: &Q3, zoom: Zoom, cube: AssetId) -> bool {
-    if zoom > GROUND.cell() || !is_carved(&world, at) {
+    if zoom > GROUND.leaf_cell_zoom() || !is_carved(&world, at) {
         return false;
     }
     let entry = Octant::holding(zoom, at);
@@ -222,7 +222,7 @@ pub fn remove(at: Octant) {
         .generated_over(&cube(at.zoom(), at.at()))
         .into_iter()
         .filter_map(|i| i.generated_in())
-        .filter(|&c| is_carved(&World::now(), &base_of(GROUND.cell(), c)))
+        .filter(|&c| is_carved(&World::now(), &base_of(GROUND.leaf_cell_zoom(), c)))
         .collect();
     // Only the resident finest leaf can say what fills the cube without it, as
     // `place_val_is_redundant` asks; elsewhere it is emptied as asked.
@@ -241,7 +241,7 @@ pub fn remove(at: Octant) {
         ext: None,
     });
     for c in erased {
-        write_object_val(Octant::new(GROUND.cell(), c), VOID);
+        write_object_val(Octant::new(GROUND.leaf_cell_zoom(), c), VOID);
     }
 }
 
@@ -285,7 +285,7 @@ pub fn preview_step() -> bool {
         (None, Some(o)) => o.zoom,
         // A terrain carve is a whole cell: the scan emits nothing for a zero
         // material whatever its sub-cell bytes, so the cell goes whole anyway.
-        (None, None) => GROUND.cell(),
+        (None, None) => GROUND.leaf_cell_zoom(),
     };
     let (blocked, blocked_key) = match (&hovered, asset) {
         (Some(h), Some((asset, _))) => {

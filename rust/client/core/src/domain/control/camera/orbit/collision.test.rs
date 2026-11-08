@@ -12,7 +12,7 @@ use crate::domain::query::test::{flat_at_five, write};
 use crate::sys::serial;
 use pxl_content::cave::hollow;
 use pxl_engine::answer::FULL;
-use pxl_engine::LEAF_CELL;
+use pxl_engine::LEAF_CELL_ZOOM;
 use pxl_spec::asset::cube::{self};
 use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::OBJECT_COARSEST;
@@ -475,7 +475,7 @@ fn a_cave_is_not_climbed_out_of() {
         })
         .find(|at| {
             let e = eye(at).0;
-            e[2] < 4.0 && hollow((LEAF_CELL, e.map(|v| v.floor() as i32))) >= FULL
+            e[2] < 4.0 && hollow((LEAF_CELL_ZOOM, e.map(|v| v.floor() as i32))) >= FULL
         })
         .expect("an eye in a cave under the ground");
     assert!(!in_solid(&at, &access), "{at:?}");

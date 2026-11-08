@@ -90,9 +90,9 @@ pub fn drifted(u: &mut [f32], drift: Position) {
 ///   (selection, collision, visibility, culling, LOD, the shadow's
 ///   receivers) reads Q3 or f64.
 /// - Nothing decided on the GPU reads a remainder: decor's gate
-///   (decor_gate.wgsl) reads decor's anchor, on Q3, and the light's
-///   receivers read each `Stand` rounded outward from Q3
-///   (`Stand::from_eye`). The screen tiles a draw marks (tile_mark.wgsl) are
+///   (decor_cull.wgsl) reads decor's anchor, on Q3, and the light's
+///   receivers read each `ReceiverBox` rounded outward from Q3
+///   (`ReceiverBox::from_eye`). The screen tiles a draw marks (tile_mark.wgsl) are
 ///   where it is drawn, by the same placing.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Position {
@@ -328,35 +328,35 @@ pub struct DrawList {
     /// The draws that drift with the wind.
     drifting: u32,
     /// The box each drawn thing that reads the shadow map stands within
-    /// (`Stand`), as this turn set them, and as `take` handed them.
-    stands: Vec<Stand>,
-    taken_stands: Vec<Stand>,
+    /// (`ReceiverBox`), as this turn set them, and as `take` handed them.
+    stands: Vec<ReceiverBox>,
+    taken_stands: Vec<ReceiverBox>,
 }
 
 /// The box a drawn thing that reads the shadow map stands within, in the world, free of the
 /// eye: its lowest corner's Q3 rounded down and its highest's rounded up, so it holds the box
 /// asked. A receiver of the map stands by the rule every receiver does (pxl-engine
-/// `light::STANDS_AT`, `Light::box_tiles`), and which of the light's tiles it stands on is a
+/// `light::RECEIVER_BOXES_AT`, `Light::box_tiles`), and which of the light's tiles it stands on is a
 /// decision, so the box stays exact: Q3, taken against the eye on the CPU in integers and
 /// rounded outward to the f32 the light's passes read (`from_eye`). X goes round as a
 /// `Position`'s does; a box is no wider than the draw distance, so its corners' differences
 /// are the true ones.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Stand(pub [Q3; 2]);
+pub struct ReceiverBox(pub [Q3; 2]);
 
-impl Stand {
+impl ReceiverBox {
     /// The box from `lo` to `hi`, in units, held whole.
-    pub fn of(lo: V3, hi: V3) -> Stand {
-        Stand([q3_of(lo), q3_up(hi)])
+    pub fn of(lo: V3, hi: V3) -> ReceiverBox {
+        ReceiverBox([q3_of(lo), q3_up(hi)])
     }
 
     /// The box about the ball a thing standing at `at` stands within: about its middle, as
     /// wide as decor is tall and wide (pxl-render decor_ball.wgsl, which reads a placed
     /// decor's alike).
-    pub fn ball(at: V3) -> Stand {
+    pub fn ball(at: V3) -> ReceiverBox {
         let r = f64::from(TALLEST + WIDEST);
         let middle = [at[0], at[1], at[2] + f64::from(TALLEST) * 0.5];
-        Stand::of(middle.map(|v| v - r), middle.map(|v| v + r))
+        ReceiverBox::of(middle.map(|v| v - r), middle.map(|v| v + r))
     }
 
     /// Its corners in units from the eye whose Q3 is `eye`, as the light's passes read them:
@@ -383,7 +383,7 @@ impl Stand {
 
     /// Grown to hold `b` too, each axis about its own low corner, so X goes round as the
     /// corners do.
-    fn hold(&mut self, b: &Stand) {
+    fn hold(&mut self, b: &ReceiverBox) {
         let [base, top] = self.0;
         let [lo, hi]: [Q3; 2] = [0, 1].map(|end| {
             core::array::from_fn(|k| {
@@ -410,8 +410,8 @@ pub struct Lists<'a> {
     pub changes: &'a [Change],
     pub reordered: bool,
     /// The box each drawn thing that reads the shadow map stands within, as its draw is
-    /// set (`Stand`).
-    pub stands: &'a [Stand],
+    /// set (`ReceiverBox`).
+    pub stands: &'a [ReceiverBox],
 }
 
 /// The draws as a turn left them: each pipeline's records in the order they
@@ -682,15 +682,15 @@ impl DrawList {
 
     /// Where the draw of `pipeline` stands: the box `stand`, which every draw whose shader reads
     /// the shadow map gives and no other does (record.rs `reads_shadow_map`), so whatever reads
-    /// the map stands. Past `light::STANDS` the box is taken into the last.
-    fn stand(&mut self, pipeline: u32, stand: Option<Stand>) {
+    /// the map stands. Past `light::RECEIVER_BOXES` the box is taken into the last.
+    fn stand(&mut self, pipeline: u32, stand: Option<ReceiverBox>) {
         xpute_kit::ensure!(
             reads_shadow_map(pipeline) == stand.is_some(),
             EINVAL,
             pipeline
         );
         let Some(b) = stand else { return };
-        let full = self.stands.len() == light::STANDS;
+        let full = self.stands.len() == light::RECEIVER_BOXES;
         match self.stands.last_mut() {
             Some(last) if full => last.hold(&b),
             _ => self.stands.push(b),
@@ -706,7 +706,7 @@ impl DrawList {
         record: [u32; 3],
         at: Position,
         words: &[(usize, f32)],
-        stand: Option<Stand>,
+        stand: Option<ReceiverBox>,
     ) {
         self.stand(pipeline, stand);
         self.set(id, pipeline, record, uniform(at, words));
@@ -728,7 +728,7 @@ impl DrawList {
         rot: f32,
         opacity: f32,
         scale: f32,
-        stand: Option<Stand>,
+        stand: Option<ReceiverBox>,
     ) {
         let (d, u) = scaled_draw(pipeline, handle, a, b, at, rot, opacity, scale);
         self.stand(pipeline, stand);
@@ -748,14 +748,21 @@ impl DrawList {
         a: u32,
         b: u32,
         at: Position,
-        stand: Option<Stand>,
+        stand: Option<ReceiverBox>,
     ) {
         self.put(id, pipeline, [handle, a, b], at, &[], stand);
     }
 
     /// The location indicator's beacon at `at`, spun `spin` about Z, its
     /// look the night's where `night` (location.slot.wgsl).
-    pub fn draw_beacon(&mut self, id: &DrawId, at: Position, spin: f32, night: bool, stand: Stand) {
+    pub fn draw_beacon(
+        &mut self,
+        id: &DrawId,
+        at: Position,
+        spin: f32,
+        night: bool,
+        stand: ReceiverBox,
+    ) {
         let night = if night { 1.0 } else { 0.0 };
         let words = [(location::SPIN, spin), (location::NIGHT, night)];
         self.put(
@@ -783,7 +790,7 @@ impl DrawList {
         opacity: f32,
         unit: f32,
         z_step: f32,
-        stand: Option<Stand>,
+        stand: Option<ReceiverBox>,
     ) {
         let words = [
             (ghost_box::OPACITY, opacity),
@@ -813,7 +820,7 @@ impl DrawList {
         at: Position,
         opacity: f32,
         drifts: bool,
-        stand: Option<Stand>,
+        stand: Option<ReceiverBox>,
     ) {
         let [off, stride, idx] = columns;
         let words = [

@@ -6,8 +6,8 @@
 //! (ts/tool/shader/shader.test.ts) and the device's own compiler (ts/tool/shader/probe.html).
 
 use pxl_render::frame::shader::record::{
-    self, compute, COMPUTES, FRAGMENT_ENTRY, HEAD, NO_DEPTH, PARTS, PER_INSTANCE, PIPELINES, STRIP,
-    VERTEX_ENTRY,
+    self, compute, COMPUTES, FRAGMENT_ENTRY, HEADER, NO_DEPTH, PARTS, PER_INSTANCE, PIPELINES,
+    STRIP, VERTEX_ENTRY,
 };
 use pxl_render::gpu::api::vertex_format;
 use xpute_gpu::enums::VERTEX_FORMAT;
@@ -32,7 +32,7 @@ fn main() {
     let mut pipelines: Vec<String> = Vec::new();
     for id in 0..PIPELINES {
         let words = record::pipeline(id);
-        let mut at = HEAD as usize;
+        let mut at = HEADER as usize;
         let mut next = || {
             at += 1;
             words[at - 1]
@@ -73,7 +73,7 @@ fn main() {
         pipelines.push(format!(
             r#"{{"module":"{}","vertex":"{}"{fragment},"buffers":[{}],"topology":"{topology}","depth":{}}}"#,
             names[words[0] as usize],
-            VERTEX_ENTRY[words[HEAD as usize - 1] as usize],
+            VERTEX_ENTRY[words[HEADER as usize - 1] as usize],
             buffers.join(","),
             words[5] != NO_DEPTH
         ));

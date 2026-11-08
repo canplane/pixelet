@@ -1,10 +1,10 @@
 // pxl-engine/way/tree.rs
 
 //! gpu-portable: a brick's ways as cells, in a tree of the placed tree's
-//! shape (pxl-engine overwrite.rs), so a reader asks them by the one
+//! shape (pxl-engine object.rs), so a reader asks them by the one
 //! rule it asks what is placed by: from the brick's own nodes along z down
 //! to its cells, a node's eight slots a child group, children only where they
-//! differ, each branch its eight folded (`overwrite::fold`), its leaves what
+//! differ, each branch its eight folded (`object::fold`), its leaves what
 //! the ways write at its cells (`way::way_cell`, read off the brick's spans). A
 //! reader asks a brick's ways only of a node the brick's or under it, a
 //! wider one the clip levels' bound over its bricks (`clipmap::bound_over`), so
@@ -36,8 +36,8 @@
 
 use crate::clipmap::{Bricks, BRICK_SHIFT};
 use crate::fill;
-use crate::overwrite::{self, Columns, NodeSlot, AIR as PLACED_AIR, BRANCH};
-use crate::{ground, Zoom, LEAF_CELL};
+use crate::object::{self, Columns, NodeSlot, AIR as PLACED_AIR, BRANCH};
+use crate::{ground, Zoom, LEAF_CELL_ZOOM};
 
 /// The tree's columns as its builder writes them, a word a slot.
 pub trait Pool: Columns {
@@ -49,7 +49,7 @@ pub trait Pool: Columns {
 /// its eight child pointers then its eight data words, as the core's
 /// and a GPU's do (pxl-render world.wgsl).
 const fn first_child_at(slot: u32) -> u32 {
-    slot / overwrite::CHILDREN * CHILD_GROUP_WORDS + slot % overwrite::CHILDREN
+    slot / object::CHILDREN * CHILD_GROUP_WORDS + slot % object::CHILDREN
 }
 
 /// A pool in one array, the child groups whole, a brick's own as it is built
@@ -61,7 +61,7 @@ impl Columns for Column<'_> {
         crate::at(self.0, first_child_at(slot))
     }
     fn data(&self, slot: u32) -> u32 {
-        crate::at(self.0, first_child_at(slot) + overwrite::CHILDREN)
+        crate::at(self.0, first_child_at(slot) + object::CHILDREN)
     }
 }
 
@@ -70,7 +70,7 @@ impl Pool for Column<'_> {
         fill::put(self.0, first_child_at(slot), v);
     }
     fn set_data(&mut self, slot: u32, v: u32) {
-        fill::put(self.0, first_child_at(slot) + overwrite::CHILDREN, v);
+        fill::put(self.0, first_child_at(slot) + object::CHILDREN, v);
     }
 }
 
@@ -84,7 +84,7 @@ impl Columns for Read<'_> {
         crate::at(self.0, first_child_at(slot))
     }
     fn data(&self, slot: u32) -> u32 {
-        crate::at(self.0, first_child_at(slot) + overwrite::CHILDREN)
+        crate::at(self.0, first_child_at(slot) + object::CHILDREN)
     }
 }
 
@@ -95,7 +95,7 @@ impl Columns for Read<'_> {
 /// domain/layer/terrain/pool.rs), the GPU's following it (pxl-render
 /// gpu/ray/ground.rs `GroundBuffers::grow`); a tree past what it holds is
 /// refused, its brick left absent. Child group 0
-/// is never handed out: its words stay zero, nothing (`overwrite::Columns`),
+/// is never handed out: its words stay zero, nothing (`object::Columns`),
 /// so a root word 0 is a brick with no tree, read as nothing without a
 /// child group of its own (`root_word`).
 pub const POOL_CHILD_GROUPS: u32 = 1 << 20;
@@ -110,7 +110,7 @@ pub const fn root_word(child_group: u32, z0: i32) -> u32 {
 /// A root word's child group's first slot and its first slot's Z.
 pub const fn root_slot(w: u32) -> (u32, i32) {
     (
-        overwrite::CHILDREN * (w & (POOL_CHILD_GROUPS - 1)),
+        object::CHILDREN * (w & (POOL_CHILD_GROUPS - 1)),
         w as i32 >> ROOT_ID_BITS,
     )
 }
@@ -128,13 +128,13 @@ const _: () = assert!(
 /// ways' bound meets no more of them than this; a tile past it fails its
 /// bake (pxl-spec bake/tile/terrain.rs `fill_fit`), its build refused as one
 /// `past` its child groups.
-pub const ROOT_NODES: u32 = overwrite::CHILDREN;
+pub const ROOT_NODES: u32 = object::CHILDREN;
 
 /// The brick's own nodes along z its ways' bound `[lo, hi)` (leaf cells,
-/// `ground::Bounds`) meets, its cells at `cell`: the first's Z and how
+/// `ground::Bounds`) meets, its cells at `cell_zoom`: the first's Z and how
 /// many, none where the bound is empty.
-pub fn span([lo, hi]: [i32; 2], cell: Zoom) -> (i32, u32) {
-    let d = LEAF_CELL - (cell - BRICK_SHIFT);
+pub fn span([lo, hi]: [i32; 2], cell_zoom: Zoom) -> (i32, u32) {
+    let d = LEAF_CELL_ZOOM - (cell_zoom - BRICK_SHIFT);
     if lo >= hi {
         (0, 0)
     } else {
@@ -143,14 +143,20 @@ pub fn span([lo, hi]: [i32; 2], cell: Zoom) -> (i32, u32) {
 }
 
 /// What the node `at` of `zoom` holds of the brick's ways' tree whose root
-/// word is `root`, its cells at `cell`, the node the brick's or under it:
+/// word is `root`, its cells at `cell_zoom`, the node the brick's or under it:
 /// the brick's own node along z over it in the root child group, then down
-/// (`overwrite::down`), as `overwrite::cursor` steps; nothing where the root
+/// (`object::down`), as `object::cursor` steps; nothing where the root
 /// holds no node there. A descent asks this once, where it finds the
 /// brick (pxl-engine world.rs `node`).
-pub fn cursor(columns: &impl Columns, root: u32, cell: Zoom, zoom: Zoom, at: [i32; 3]) -> NodeSlot {
+pub fn cursor(
+    columns: &impl Columns,
+    root: u32,
+    cell_zoom: Zoom,
+    zoom: Zoom,
+    at: [i32; 3],
+) -> NodeSlot {
     let (first, z0) = root_slot(root);
-    let top = cell - BRICK_SHIFT;
+    let top = cell_zoom - BRICK_SHIFT;
     if root == 0 || zoom < top {
         return NodeSlot::NOTHING;
     }
@@ -158,12 +164,12 @@ pub fn cursor(columns: &impl Columns, root: u32, cell: Zoom, zoom: Zoom, at: [i3
     if k < 0 || k >= ROOT_NODES as i32 {
         return NodeSlot::NOTHING;
     }
-    overwrite::down(columns, first + k as u32, top, zoom, at)
+    object::down(columns, first + k as u32, top, zoom, at)
 }
 
 /// A child group's words in a pool: its eight child pointers and its eight data
 /// words.
-pub const CHILD_GROUP_WORDS: u32 = 2 * overwrite::CHILDREN;
+pub const CHILD_GROUP_WORDS: u32 = 2 * object::CHILDREN;
 
 /// The most child groups one brick's build takes before its fold gives any
 /// back: the most of the format-12 set; a tile past it
@@ -209,33 +215,40 @@ pub fn root(pool: &mut impl Pool, z0: i32, root: u32) {
 }
 
 /// Whether the candidate at `slot`, a node of `zoom`, takes a child group for
-/// its children: it is coarser than the brick's cells at `cell`, and its
+/// its children: it is coarser than the brick's cells at `cell_zoom`, and its
 /// Z meets where the brick's ways write under it, the ways' bound of the
-/// brick's levels at its size (`clipmap::Bricks::bound_level`, its slot `s`).
-pub fn flag(pool: &impl Pool, w: &impl Bricks, s: u32, cell: Zoom, zoom: Zoom, slot: u32) -> bool {
+/// brick's levels at its size (`clipmap::Bricks::bound_mip`, its slot `s`).
+pub fn flag(
+    pool: &impl Pool,
+    w: &impl Bricks,
+    s: u32,
+    cell_zoom: Zoom,
+    zoom: Zoom,
+    slot: u32,
+) -> bool {
     let at = unpack(pool.data(slot));
-    if zoom >= cell {
+    if zoom >= cell_zoom {
         return false;
     }
     let e = [at[0] as u32, at[1] as u32];
-    let [lo, hi] = ground::bounds_of(w.bound_level(cell, s, cell - zoom, e))[1];
-    let d = LEAF_CELL - zoom;
+    let [lo, hi] = ground::bounds_of(w.bound_mip(cell_zoom, s, cell_zoom - zoom, e))[1];
+    let d = LEAF_CELL_ZOOM - zoom;
     lo < (at[2] + 1) << d && hi > at[2] << d
 }
 
 /// Whether a level's child groups, a flagged candidate's each, may be taken
 /// together: the pool has `flagged` left of `left`, and the brick, having
-/// taken `taken`, stays within `BRICK_CHILD_GROUPS`. None is taken past either:
+/// taken `used`, stays within `BRICK_CHILD_GROUPS`. None is taken past either:
 /// the tree is refused, its brick absent. The bake bounds a set's and a
 /// brick's (pxl-geo-bake terrain/pool.rs).
-pub fn fits(left: u32, taken: u32, flagged: u32) -> bool {
-    flagged <= left && !past(taken, flagged)
+pub fn fits(left: u32, used: u32, flagged: u32) -> bool {
+    flagged <= left && !past(used, flagged)
 }
 
-/// Whether a level's `flagged` child groups take a brick that has taken `taken`
+/// Whether a level's `flagged` child groups take a brick that has taken `used`
 /// past its most, `BRICK_CHILD_GROUPS`.
-fn past(taken: u32, flagged: u32) -> bool {
-    flagged > BRICK_CHILD_GROUPS - taken
+fn past(used: u32, flagged: u32) -> bool {
+    flagged > BRICK_CHILD_GROUPS - used
 }
 
 /// The flagged candidate at `slot`, a branch whose child group begins
@@ -244,7 +257,7 @@ pub fn branch(pool: &mut impl Pool, slot: u32, first: u32) {
     let at = unpack(pool.data(slot));
     pool.set_first_child(slot, BRANCH | first);
     let mut k = 0;
-    while k < overwrite::CHILDREN {
+    while k < object::CHILDREN {
         let child = [
             2 * at[0] + (k & 1) as i32,
             2 * at[1] + (k >> 1 & 1) as i32,
@@ -265,17 +278,22 @@ pub fn empty(pool: &mut impl Pool, slot: u32) {
 /// The candidate at `slot`, a cell of the brick: a leaf of what the ways
 /// write there (`way::way_cell`, off the spans its fill kept), nothing where
 /// they write none. A bore's air is placed air in the tree, filling what it
-/// holds (`overwrite::voxel`), and the ground's void where a reader reads
+/// holds (`object::voxel`), and the ground's void where a reader reads
 /// it, as the ways write it (`way::AIR`).
-pub fn leaf(pool: &mut impl Pool, column_spans: &impl super::ColumnSpans, cell: Zoom, slot: u32) {
+pub fn leaf(
+    pool: &mut impl Pool,
+    column_spans: &impl super::ColumnSpans,
+    cell_zoom: Zoom,
+    slot: u32,
+) {
     let at = unpack(pool.data(slot));
-    let val = super::way_cell(column_spans, [at[0], at[1]], cell, at[2]);
+    let val = super::way_cell(column_spans, [at[0], at[1]], cell_zoom, at[2]);
     let word = if val == super::NOTHING {
         ground::VOID
     } else if val == super::AIR {
-        overwrite::leaf_word(PLACED_AIR, 0)
+        object::leaf_word(PLACED_AIR, 0)
     } else {
-        overwrite::leaf_word(val, 0)
+        object::leaf_word(val, 0)
     };
     pool.set_first_child(slot, 0);
     pool.set_data(slot, word);
@@ -284,13 +302,13 @@ pub fn leaf(pool: &mut impl Pool, column_spans: &impl super::ColumnSpans, cell: 
 /// The branch at `slot`, a node of `zoom`, its children written: where its
 /// eight are leaves of one word, nothing included, that leaf, and the first
 /// slot of the child group it gives back; else its eight folded by volume
-/// (`overwrite::fold`, each child's share `overwrite::share`), and `NONE`.
+/// (`object::fold`, each child's share `object::share`), and `NONE`.
 pub fn fold(pool: &mut impl Pool, zoom: Zoom, slot: u32) -> u32 {
     let first = pool.first_child(slot) & !BRANCH;
     let word = pool.data(first);
     let mut one = true;
     let mut k = 0;
-    while k < overwrite::CHILDREN {
+    while k < object::CHILDREN {
         one &= pool.first_child(first + k) == 0 && pool.data(first + k) == word;
         k += 1;
     }
@@ -302,12 +320,12 @@ pub fn fold(pool: &mut impl Pool, zoom: Zoom, slot: u32) -> u32 {
     let share = |k: u32| {
         let d = pool.data(first + k);
         if pool.first_child(first + k) == 0 {
-            overwrite::share(d)
+            object::share(d)
         } else {
             d
         }
     };
-    let folded = overwrite::fold(
+    let folded = object::fold(
         [
             share(0),
             share(1),
@@ -342,22 +360,22 @@ pub fn under(pool: &impl Columns, slot: u32) -> u32 {
 /// the build counts them (fill.rs `tree`). The root word it is then read by.
 pub fn lay(from: &impl Columns, root: u32, to: &mut impl Pool, at: u32, order: &mut [u32]) -> u32 {
     let (first, z0) = root_slot(root);
-    order[0] = first / overwrite::CHILDREN;
+    order[0] = first / object::CHILDREN;
     let (mut i, mut n) = (0, 1);
     while i < n {
         let (src, dst) = (
-            overwrite::CHILDREN * order[i],
-            overwrite::CHILDREN * (at + i as u32),
+            object::CHILDREN * order[i],
+            object::CHILDREN * (at + i as u32),
         );
         let mut k = 0;
-        while k < overwrite::CHILDREN {
+        while k < object::CHILDREN {
             let under = under(from, src + k);
             let moved = if under == NONE {
                 0
             } else {
-                order[n] = under / overwrite::CHILDREN;
+                order[n] = under / object::CHILDREN;
                 n += 1;
-                BRANCH | (overwrite::CHILDREN * (at + n as u32 - 1))
+                BRANCH | (object::CHILDREN * (at + n as u32 - 1))
             };
             to.set_first_child(dst + k, moved);
             to.set_data(dst + k, from.data(src + k));
@@ -384,7 +402,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn past_the_bricks_most() {
+    fn past_the_bricks_cap() {
         assert!(past(1, BRICK_CHILD_GROUPS));
     }
 }

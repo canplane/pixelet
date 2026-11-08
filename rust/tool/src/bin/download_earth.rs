@@ -26,7 +26,7 @@ fn run() -> Result<(), String> {
         .collect();
     let raw = root().join("infra/earth/raw");
     for url in &urls {
-        fetch::fetch_kept(url, &raw)?;
+        fetch::download(url, &raw)?;
     }
     println!("[earth] {} files in {}", urls.len(), raw.display());
     Ok(())

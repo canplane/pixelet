@@ -22,7 +22,7 @@ use crate::param::beam::SAMPLE;
 use crate::raster::FACES_LANES;
 use crate::ray;
 use crate::world;
-use crate::WORKGROUPS_MOST;
+use crate::WORKGROUPS_CAP;
 
 /// The camera grid as a frame lays it over the screen, worked out once,
 /// from the screen's tangents (`of`), where the core writes the
@@ -62,13 +62,13 @@ pub struct Grid {
     /// rays' words, past the lines and how far each hands on (`hand_at`);
     /// then the asks of the drawable entries' faces, a sample's room each (`asks_at`;
     /// the voxels themselves are the node cache's, `record`), the holes' stops
-    /// (`hits_at`) and the asks of the faces they opened (`stop_asks_at`), `ray::STOPS_A_FRAME`
+    /// (`hits_at`) and the asks of the faces they opened (`hit_asks_at`), `ray::HITS_A_FRAME`
     /// each.
     cells_at: u32,
     samples_at: u32,
     pub asks_at: u32,
     pub(crate) hits_at: u32,
-    pub stop_asks_at: u32,
+    pub hit_asks_at: u32,
     /// Where the beam rays' runs park them, a state each (`ray::STATE_WORDS`, pxl-render
     /// corners.wgsl), in the corners' order.
     pub corner_states_at: u32,
@@ -91,7 +91,7 @@ pub const SAMPLE_SPACING_INVERSE: f32 = 1.0 / SAMPLE_SPACING;
 /// `ray::holes_words`); then the slope of the screen's sides across and up
 /// (`slope`), f32 bits, rounded once by the host; then where how far each beam
 /// ray hands on starts (`hand_at`), where the asks the hits' stops opened start
-/// (`stop_asks_at`).
+/// (`hit_asks_at`).
 pub const GRID_KEEP: usize = 0;
 pub const GRID_RADIUS: usize = 1;
 pub const GRID_RADIUS_TAN: usize = 2;
@@ -107,9 +107,9 @@ pub const GRID_WALKED_AT: usize = 14;
 pub const GRID_CORNER_STATES_AT: usize = 15;
 pub const GRID_SLOPE: usize = 16;
 pub const GRID_HANDS_AT: usize = 18;
-pub const GRID_STOP_ASKS_AT: usize = 19;
+pub const GRID_HIT_ASKS_AT: usize = 19;
 /// Whole vec4s, as the eye's words bind as a uniform's (`eye::WORDS`).
-pub const GRID_WORDS: usize = (GRID_STOP_ASKS_AT + 1).next_multiple_of(4);
+pub const GRID_WORDS: usize = (GRID_HIT_ASKS_AT + 1).next_multiple_of(4);
 
 impl Grid {
     /// The grid at the screen's tangents `tan`, its beam rays and cells a
@@ -137,7 +137,7 @@ impl Grid {
             samples_at: 0,
             asks_at: 0,
             hits_at: 0,
-            stop_asks_at: 0,
+            hit_asks_at: 0,
             corner_states_at: 0,
         };
         g.past = g.cell_window([span[0] - 1, span[1] - 1]);
@@ -147,8 +147,8 @@ impl Grid {
         g.samples_at = g.cells_at + span[0] * span[1] * CELL_WORDS;
         g.asks_at = g.samples_at + samples[0] * samples[1] * SAMPLE_WORDS;
         g.hits_at = g.asks_at + samples[0] * samples[1] * ASK_WORDS;
-        g.stop_asks_at = g.hits_at + ray::STOPS_A_FRAME * HIT_WORDS;
-        g.corner_states_at = g.stop_asks_at + ray::STOPS_A_FRAME * ASK_WORDS;
+        g.hit_asks_at = g.hits_at + ray::HITS_A_FRAME * HIT_WORDS;
+        g.corner_states_at = g.hit_asks_at + ray::HITS_A_FRAME * ASK_WORDS;
         g
     }
 
@@ -172,7 +172,7 @@ impl Grid {
         ) = (self.cells_at, self.samples_at, self.asks_at, self.hits_at);
         (w[GRID_WALKED_AT], w[GRID_CORNER_STATES_AT]) = (self.size(), self.corner_states_at);
         w[GRID_HANDS_AT] = self.hands_at;
-        w[GRID_STOP_ASKS_AT] = self.stop_asks_at;
+        w[GRID_HIT_ASKS_AT] = self.hit_asks_at;
         let slope = self.slope();
         (w[GRID_SLOPE], w[GRID_SLOPE + 1]) = (slope[0].to_bits(), slope[1].to_bits());
         w
@@ -195,7 +195,7 @@ impl Grid {
             samples_at: w[GRID_SAMPLES_AT],
             asks_at: w[GRID_ASKS_AT],
             hits_at: w[GRID_HITS_AT],
-            stop_asks_at: w[GRID_STOP_ASKS_AT],
+            hit_asks_at: w[GRID_HIT_ASKS_AT],
             corner_states_at: w[GRID_CORNER_STATES_AT],
         }
     }
@@ -401,7 +401,7 @@ pub const SAMPLE_SIDE: u32 = 8;
 /// the first word of the beam ray's line its faces are asked off, the line
 /// its cell's rays resumed from (`CELL_CORNER`), and the word its faces are
 /// left in, `ASK_NONE` where it asks none. A voxel's face's (`Grid::ask_at`,
-/// `stop_asks_at`), asked by the first stop of the voxel to enter it across that
+/// `hit_asks_at`), asked by the first stop of the voxel to enter it across that
 /// face's axis, its node the record's entry (`record::entry_at`) and its face left at
 /// that axis among the entry's words (`record::R_FACES`), the word named under
 /// `record::TO_RECORD`.
@@ -413,13 +413,13 @@ pub const ASK_WORDS: u32 = 4;
 pub const ASK_NONE: u32 = u32::MAX;
 
 /// The stops of the holes' rays (pxl-render miss_word.wgsl `hit_put`, queue.wgsl), every one
-/// whatever it stopped on, which the record takes (`record`, pxl-render record_stops.wgsl),
-/// `ray::STOPS_A_FRAME` at most, a number each as the walks take them, in words: its node (`NODE_WORDS`),
+/// whatever it stopped on, which the record takes (`record`, pxl-render record_hits.wgsl),
+/// `ray::HITS_A_FRAME` at most, a number each as the walks take them, in words: its node (`NODE_WORDS`),
 /// the face its ray entered, `HIT_LACKS` set where it lacks, its pixel, its row over its
 /// column, the asset it stopped at, and the first word of the line its pixel's cell's rays
 /// resumed from, which its face's word is asked off (`ASK_LINE`). A pixel whose stop's face
 /// word is asked holds `HIT_WAITS` and its number in its last ray word until it is put there
-/// off the record (`ray::FACES`, record_stops.wgsl `record_faces_cs`), in the cast's own pass.
+/// off the record (`ray::FACES`, record_hits.wgsl `record_faces_cs`), in the cast's own pass.
 pub const HIT_NODE: u32 = 0;
 pub const HIT_FACE: u32 = NODE_WORDS;
 pub const HIT_PX: u32 = HIT_FACE + 1;
@@ -430,8 +430,8 @@ pub const HIT_LANES: u32 = 64;
 pub const HIT_LACKS: u32 = 1 << 31;
 pub const HIT_WAITS: u32 = 1 << 31;
 const _: () = assert!(
-    ray::STOPS_A_FRAME.div_ceil(HIT_LANES) <= WORKGROUPS_MOST
-        && ray::STOPS_A_FRAME.div_ceil(FACES_LANES) <= WORKGROUPS_MOST,
+    ray::HITS_A_FRAME.div_ceil(HIT_LANES) <= WORKGROUPS_CAP
+        && ray::HITS_A_FRAME.div_ceil(FACES_LANES) <= WORKGROUPS_CAP,
     "the kept hits, and their faces' asks, fit one dispatch"
 );
 

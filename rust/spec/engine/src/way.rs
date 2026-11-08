@@ -33,7 +33,7 @@ use crate::param::way::PIER_MIN_RISE_M;
 use crate::param::way::STACKED_DECK_HEADROOM_M;
 use crate::param::way::WIDE_BEAM_PIER_INTERVAL_M;
 use crate::value;
-use crate::{cells_of_m, Zoom, LEAF_CELL, LEAF_ZOOM, TOP_ZOOM};
+use crate::{cells_of_m, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, TOP_ZOOM};
 
 /// Points are eighths of the tile's cell.
 pub const POINT_SCALE: f32 = 8.0;
@@ -568,7 +568,7 @@ pub fn occupies(c: &Crossing, ground: i32, per_m: f32) -> Occupancy {
 /// in leaf cells. A column the brick does not hold has no segment.
 pub trait Columns {
     /// The cells' zoom, and leaf cells a ground meter over the ground.
-    fn cell(&self) -> Zoom;
+    fn cell_zoom(&self) -> Zoom;
     fn per_m(&self) -> f32;
     /// How many segments may be over column `c`, and the `k`-th of them.
     fn cnt(&self, c: [i32; 2]) -> u32;
@@ -616,8 +616,8 @@ fn visit<C: Columns>(cols: &C, c: [i32; 2], k: u32) -> (Crossing, u32) {
 /// Whether the leaf cells `[lo, hi)` fill cell `z` of the grid's zoom: more
 /// than half its height, as its share of the cell rounds (half to even), so
 /// a run of half a cell or thinner fills none.
-pub fn fills(cell: Zoom, [lo, hi]: [i32; 2], z: i32) -> bool {
-    let d = cell as i32 - LEAF_CELL as i32;
+pub fn fills(cell_zoom: Zoom, [lo, hi]: [i32; 2], z: i32) -> bool {
+    let d = cell_zoom as i32 - LEAF_CELL_ZOOM as i32;
     if d >= 0 {
         let leaf = z >> d;
         return lo <= leaf && leaf < hi;
@@ -630,8 +630,8 @@ pub fn fills(cell: Zoom, [lo, hi]: [i32; 2], z: i32) -> bool {
 /// `[first, last]`, first past last where none: every cell between the
 /// first and the last they reach is filled whole, so only those two can
 /// fail, and a cell finer than a leaf fills as its leaf does.
-pub fn fill_range(cell: Zoom, [lo, hi]: [i32; 2]) -> [i32; 2] {
-    let d = LEAF_CELL as i32 - cell as i32;
+pub fn fill_range(cell_zoom: Zoom, [lo, hi]: [i32; 2]) -> [i32; 2] {
+    let d = LEAF_CELL_ZOOM as i32 - cell_zoom as i32;
     if lo >= hi {
         return [1, 0];
     }
@@ -640,12 +640,12 @@ pub fn fill_range(cell: Zoom, [lo, hi]: [i32; 2]) -> [i32; 2] {
     }
     let (first, last) = (lo >> d, (hi - 1) >> d);
     [
-        if fills(cell, [lo, hi], first) {
+        if fills(cell_zoom, [lo, hi], first) {
             first
         } else {
             first + 1
         },
-        if fills(cell, [lo, hi], last) {
+        if fills(cell_zoom, [lo, hi], last) {
             last
         } else {
             last - 1
@@ -654,8 +654,8 @@ pub fn fill_range(cell: Zoom, [lo, hi]: [i32; 2]) -> [i32; 2] {
 }
 
 /// Whether the leaf cells `[lo, hi)` fill any cell of the grid's zoom.
-pub fn fills_any(cell: Zoom, run: [i32; 2]) -> bool {
-    let [first, last] = fill_range(cell, run);
+pub fn fills_any(cell_zoom: Zoom, run: [i32; 2]) -> bool {
+    let [first, last] = fill_range(cell_zoom, run);
     first <= last
 }
 
@@ -808,17 +808,17 @@ pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
         return (spans, fits);
     }
     // The column's face and the tile's scale, read once for all its visits.
-    let cell = cols.cell();
+    let cell_zoom = cols.cell_zoom();
     let ground = (cols.face(c), cols.per_m());
-    spans.face = ground::face_cell(cell, ground.0);
+    spans.face = ground::face_cell(cell_zoom, ground.0);
     let mut k = 0;
     while k < cols.cnt(c) {
         let (w, next) = writes(cols, c, k, ground);
         k = next;
-        if w.val != NOTHING && fills_any(cell, w.run) {
+        if w.val != NOTHING && fills_any(cell_zoom, w.run) {
             fits &= spans.push(w.run, w.val);
         }
-        if w.val != NOTHING && fills_any(cell, w.pier) {
+        if w.val != NOTHING && fills_any(cell_zoom, w.pier) {
             fits &= spans.push(w.pier, PIER);
         }
     }
@@ -830,20 +830,20 @@ pub fn column<C: Columns>(cols: &C, c: [i32; 2]) -> (Spans, bool) {
 /// cell and how many spans it has (`Spans`), and its `j`-th span and its
 /// value.
 pub trait ColumnSpans {
-    fn head(&self, c: [i32; 2]) -> (i32, u32);
+    fn header(&self, c: [i32; 2]) -> (i32, u32);
     fn span(&self, c: [i32; 2], j: u32) -> ([i32; 2], u32);
 }
 
-/// What the ways write in cell `z` at zoom `cell` of column `c`, its `n` spans
+/// What the ways write in cell `z` at zoom `cell_zoom` of column `c`, its `n` spans
 /// kept in `k`: a deck's slab or its pier, the highest of those over it
 /// keeping what two share, a slab before its pier; else the first air over
 /// it (`AIR_OF` over its way's palette index); else `NOTHING`.
-fn at(k: &impl ColumnSpans, c: [i32; 2], n: u32, cell: Zoom, z: i32) -> u32 {
+fn at(k: &impl ColumnSpans, c: [i32; 2], n: u32, cell_zoom: Zoom, z: i32) -> u32 {
     let (mut best, mut palette_idx, mut air) = ([i32::MIN, i32::MIN], NOTHING, NOTHING);
     let mut j = 0;
     while j < n {
         let (run, v) = k.span(c, j);
-        if fills(cell, run, z) {
+        if fills(cell_zoom, run, z) {
             if v & AIR_OF != 0 {
                 if air == NOTHING {
                     air = v;
@@ -897,8 +897,8 @@ pub fn slab([lo, hi]: [i32; 2], [coarsest, near]: [Zoom; 2]) -> [i32; 2] {
     let [mut under, mut over] = ground::EMPTY;
     let mut z = coarsest;
     while z <= near {
-        let (a, b) = if z < LEAF_CELL {
-            let k = LEAF_CELL - z;
+        let (a, b) = if z < LEAF_CELL_ZOOM {
+            let k = LEAF_CELL_ZOOM - z;
             let half = 1 << (k - 1);
             ((lo + half) >> k << k, -((half - hi) >> k << k))
         } else {
@@ -918,7 +918,7 @@ fn beside(c: [i32; 2], m: u32, z: i32) -> ([i32; 2], i32) {
     ([c[0] + d[0], c[1] + d[1]], z + d[2])
 }
 
-/// What the ways write in cell `z` of column `c` at zoom `cell`, its spans and
+/// What the ways write in cell `z` of column `c` at zoom `cell_zoom`, its spans and
 /// those beside it kept in `k` (`at` of its own): a deck's slab or its
 /// pier, else a bore's air (`AIR`); else, under its face cell, where a
 /// cave may take it (`ground::face_cell`), the way's palette index where a bore's
@@ -926,16 +926,16 @@ fn beside(c: [i32; 2], m: u32, z: i32) -> ([i32; 2], i32) {
 /// the first in `near`'s order — so a cave never opens into a way, whatever
 /// carves the ground; else `NOTHING`. Read off the spans in place, the
 /// column's own first: a cell it writes reads none beside it.
-pub fn way_cell(k: &impl ColumnSpans, c: [i32; 2], cell: Zoom, z: i32) -> u32 {
-    let (face, n) = k.head(c);
-    let v = at(k, c, n, cell, z);
+pub fn way_cell(k: &impl ColumnSpans, c: [i32; 2], cell_zoom: Zoom, z: i32) -> u32 {
+    let (face, n) = k.header(c);
+    let v = at(k, c, n, cell_zoom, z);
     if v != NOTHING {
         return if v & AIR_OF != 0 { AIR } else { v };
     }
     let mut m = 1;
     while z < face && m < 7 {
         let (b, zb) = beside(c, m, z);
-        let v = at(k, b, k.head(b).1, cell, zb);
+        let v = at(k, b, k.header(b).1, cell_zoom, zb);
         if v != NOTHING && v & AIR_OF != 0 {
             return v & !AIR_OF;
         }
@@ -944,7 +944,7 @@ pub fn way_cell(k: &impl ColumnSpans, c: [i32; 2], cell: Zoom, z: i32) -> u32 {
     NOTHING
 }
 
-/// The leaf cells between which column `c`'s cells at zoom `cell` hold what
+/// The leaf cells between which column `c`'s cells at zoom `cell_zoom` hold what
 /// the ways write there (`way_cell`), its ground's top `top` leaf cells: from
 /// the lowest to past the highest, `ground::EMPTY` where they write none.
 /// Its own spans' cells (`fill_range`), a bore's air only as far as the top,
@@ -953,14 +953,14 @@ pub fn way_cell(k: &impl ColumnSpans, c: [i32; 2], cell: Zoom, z: i32) -> u32 {
 /// column fills the cell read (`bare`). A lined cell is under the face's
 /// cell, so under the top: the hull of the cells `way_cell` reads something
 /// in, exactly, off the spans.
-pub fn lined_hull(k: &impl ColumnSpans, c: [i32; 2], cell: Zoom, top: i32) -> [i32; 2] {
-    let s = 1i32 << (LEAF_CELL - cell);
-    let (face, n) = k.head(c);
+pub fn lined_hull(k: &impl ColumnSpans, c: [i32; 2], cell_zoom: Zoom, top: i32) -> [i32; 2] {
+    let s = 1i32 << (LEAF_CELL_ZOOM - cell_zoom);
+    let (face, n) = k.header(c);
     let [mut lo, mut hi] = ground::EMPTY;
     let mut j = 0;
     while j < n {
         let (run, v) = k.span(c, j);
-        let [first, last] = fill_range(cell, run);
+        let [first, last] = fill_range(cell_zoom, run);
         let end = if v & AIR_OF != 0 {
             ((last + 1) * s).min(top)
         } else {
@@ -975,17 +975,17 @@ pub fn lined_hull(k: &impl ColumnSpans, c: [i32; 2], cell: Zoom, top: i32) -> [i
     let mut m = if face == i32::MIN { 7 } else { 1 };
     while m < 7 {
         let (b, dz) = beside(c, m, 0);
-        let nb = k.head(b).1;
+        let nb = k.header(b).1;
         let mut j = 0;
         while j < nb {
             let (run, v) = k.span(b, j);
             // Air read at `z + dz` lines `z`, under the face cell, where no
             // slab or pier of its column fills it.
-            let [first, last] = fill_range(cell, run);
+            let [first, last] = fill_range(cell_zoom, run);
             let last = last.min(face - 1 + dz);
             let (from, to) = (
-                bare(k, b, nb, cell, [first, last], 1),
-                bare(k, b, nb, cell, [last, first], -1),
+                bare(k, b, nb, cell_zoom, [first, last], 1),
+                bare(k, b, nb, cell_zoom, [last, first], -1),
             );
             if v & AIR_OF != 0 && from <= last {
                 (lo, hi) = (lo.min((from - dz) * s), hi.max((to - dz + 1) * s));
@@ -1005,7 +1005,7 @@ fn bare(
     k: &impl ColumnSpans,
     b: [i32; 2],
     n: u32,
-    cell: Zoom,
+    cell_zoom: Zoom,
     [from, to]: [i32; 2],
     step: i32,
 ) -> i32 {
@@ -1015,7 +1015,7 @@ fn bare(
         let mut j = 0;
         while j < n {
             let (run, v) = k.span(b, j);
-            let [first, last] = fill_range(cell, run);
+            let [first, last] = fill_range(cell_zoom, run);
             if v & AIR_OF == 0 && first <= z && z <= last {
                 (z, moved) = (if step > 0 { last + 1 } else { first - 1 }, true);
             }
@@ -1050,7 +1050,7 @@ mod tests {
     }
 
     impl ColumnSpans for Five {
-        fn head(&self, c: [i32; 2]) -> (i32, u32) {
+        fn header(&self, c: [i32; 2]) -> (i32, u32) {
             let (face, _, n) = self.of(c);
             (*face, *n)
         }
@@ -1073,12 +1073,12 @@ mod tests {
             seed % m
         };
         for _ in 0..20_000 {
-            let cell = LEAF_CELL - next(4);
-            let s = 1i32 << (LEAF_CELL - cell);
+            let cell_zoom = LEAF_CELL_ZOOM - next(4);
+            let s = 1i32 << (LEAF_CELL_ZOOM - cell_zoom);
             let top = next(120) as i32 - 60;
             let face = ground::face_cell(
-                cell,
-                ground::face_height(cell, ground::cells(cell, top as f32)),
+                cell_zoom,
+                ground::face_height(cell_zoom, ground::cells(cell_zoom, top as f32)),
             );
             let mut five = [(0, [([0, 0], 0); 4], 0); 5];
             for (k, col) in five.iter_mut().enumerate() {
@@ -1102,7 +1102,7 @@ mod tests {
             let k = Five(five);
             let mut hull = ground::EMPTY;
             for z in -200 / s..200 / s {
-                let v = way_cell(&k, [0, 0], cell, z);
+                let v = way_cell(&k, [0, 0], cell_zoom, z);
                 if v == NOTHING {
                     continue;
                 }
@@ -1116,9 +1116,9 @@ mod tests {
                 }
             }
             assert_eq!(
-                lined_hull(&k, [0, 0], cell, top),
+                lined_hull(&k, [0, 0], cell_zoom, top),
                 hull,
-                "{:?} at {cell}, top {top}",
+                "{:?} at {cell_zoom}, top {top}",
                 k.0
             );
         }

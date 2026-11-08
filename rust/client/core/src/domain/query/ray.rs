@@ -16,7 +16,7 @@ use crate::domain::layer::{Answer, Base};
 use pxl_engine::answer::{self, In, Kind};
 pub(super) use pxl_engine::cast::Until;
 use pxl_engine::cast::{self, Detail, End, Query, Spacing};
-use pxl_engine::overwrite;
+use pxl_engine::object;
 use pxl_engine::support;
 use pxl_engine::support::{ColumnSurface, Line};
 use pxl_spec::bake::constant::OBJECT_FINEST;
@@ -78,8 +78,8 @@ pub fn by_dist() -> Detail {
 /// tile draws.
 pub fn cell_zoom_at(eye: V3, at: V3) -> Zoom {
     let v = v3::sub(&at, &eye);
-    let cell = grid::cell_zoom_at(v3::dot(&v, &v)).min(GROUND.cell());
-    TerrainTile::top().map_or(cell, |top| cell.max(GROUND.grid_zoom(top)))
+    let cell_zoom = grid::cell_zoom_at(v3::dot(&v, &v)).min(GROUND.leaf_cell_zoom());
+    TerrainTile::top().map_or(cell_zoom, |top| cell_zoom.max(GROUND.grid_zoom(top)))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -137,9 +137,9 @@ impl<'a> Query for Walker<'_, 'a> {
         self.world.start((0, node))
     }
 
-    /// The child is the one its place in the tree's cut names (`overwrite::path`).
+    /// The child is the one its place in the tree's cut names (`object::path`).
     fn child(&mut self, at: &At, zoom: Zoom, node: [i32; 3]) -> At {
-        let p = overwrite::path(zoom, node);
+        let p = object::path(zoom, node);
         self.world
             .child(at, (p[0] & 1 | (p[1] & 1) << 1 | (p[2] & 1) << 2) as usize)
     }
@@ -167,7 +167,7 @@ impl<'a> Query for Walker<'_, 'a> {
                 s.about.read_columns(self.world, (zoom, [c[0], c[1]]));
             }
         }
-        if zoom == GROUND.cell() {
+        if zoom == GROUND.leaf_cell_zoom() {
             if let Some((ray, s)) = self.decor_ray.as_mut().filter(|(_, s)| t0 < s.draw_dist) {
                 self.world.intersect_near(s, ray, (zoom, c));
             }
@@ -187,7 +187,7 @@ impl<'a> Query for Walker<'_, 'a> {
             Answer::Exact(i) => i,
         };
         self.answered = true;
-        let decor = zoom < GROUND.cell()
+        let decor = zoom < GROUND.leaf_cell_zoom()
             && self.decor_ray.as_ref().is_some_and(|(_, s)| {
                 t0 < s.draw_dist && self.world.may_intersect(s, at.node, at.inheritance.shard)
             });
@@ -285,21 +285,21 @@ impl<'a> World<'a> {
         (answer, walker.decor_ray.map(|(_, s)| s))
     }
 
-    /// The column surface down column `g` at `cell` (pxl-engine
+    /// The column surface down column `g` at `cell_zoom` (pxl-engine
     /// `support::column_surface`): the top of the cell met as drawn, with what the
     /// world lacked on the way, none where nothing a ray cannot see through
     /// is met; and the column surface itself, whose line the cells about it are
     /// asked off (`asset_about`).
     pub(super) fn column_surface(
         &self,
-        cell: Zoom,
+        cell_zoom: Zoom,
         g: [i32; 2],
     ) -> (Answer<Option<(i32, f32)>>, ColumnSurface<At>) {
         let mut walker = self.walker();
-        let side = units(cell);
+        let side = units(cell_zoom);
         let middle = g.map(|v| (f64::from(v) + 0.5) * side);
-        self.read(middle, middle, cell);
-        let f = support::column_surface(&mut walker, cell, g);
+        self.read(middle, middle, cell_zoom);
+        let f = support::column_surface(&mut walker, cell_zoom, g);
         let met = (f.ends == End::Hit).then_some(f.top);
         let answer = match (met, walker.lack, walker.answered) {
             (m, None, _) => Answer::Exact(m),

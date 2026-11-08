@@ -10,9 +10,9 @@ use crate::frame::shader::floor;
 use crate::frame::shader::record::*;
 use pxl_engine::{raster, ray};
 
-/// The binding of a pass's head (pxl-engine `light::HEAD_SIZE`): the light's
+/// The binding of a pass's head (pxl-engine `light::HEADER_SIZE`): the light's
 /// map's, or the eye's, which names none.
-pub const HEAD_BINDING: u32 = 11;
+pub const HEADER_BINDING: u32 = 11;
 
 /// The lattice's runs' walks over the node cache alone (queue_walk.wgsl over samples.wgsl or
 /// corners.wgsl): the eye, the beam's words, the node cache and the queue's words.
@@ -34,7 +34,7 @@ pub const LIGHT_LATTICE_WALK_GROUP: [u32; 15] = [
     10,
     COMPUTE,
     STORAGE_RW,
-    HEAD_BINDING,
+    HEADER_BINDING,
     COMPUTE,
     UNIFORM,
 ];
@@ -55,7 +55,7 @@ pub const LIGHT_GROUP: [u32; 21] = [
     10,
     COMPUTE,
     STORAGE_TEXTURE_RW,
-    HEAD_BINDING,
+    HEADER_BINDING,
     COMPUTE,
     UNIFORM,
     15,
@@ -104,7 +104,7 @@ pub const CAST_TILES_GROUP: [u32; 9] = [
 ];
 
 /// The light's receivers' passes' groups: the eye, the head and the list; the stood list's
-/// args and the light's args, whose marks they swap (light_stood.wgsl); and the rays the eye's
+/// args and the light's args, whose marks they swap (light_receiver_tiles.wgsl); and the rays the eye's
 /// pixels met the world by and its beam rays' words, its walked pixels listed past the grid's
 /// (light_mark.wgsl), or the decor placed
 /// (light_mark_draws.wgsl); or the passes' args alone (light_propagate.wgsl).
@@ -115,7 +115,7 @@ pub const LIGHT_MARK_GROUP: [u32; 21] = [
     3,
     COMPUTE,
     STORAGE_TEXTURE_RW,
-    HEAD_BINDING,
+    HEADER_BINDING,
     COMPUTE,
     UNIFORM,
     12,
@@ -136,7 +136,7 @@ pub const LIGHT_MARK_DRAWS_GROUP: [u32; 24] = [
     0,
     COMPUTE,
     UNIFORM,
-    HEAD_BINDING,
+    HEADER_BINDING,
     COMPUTE,
     UNIFORM,
     12,
@@ -165,7 +165,7 @@ pub const LIGHT_MARK_DRAWS_OPEN_GROUP: [u32; 27] = [
     0,
     COMPUTE,
     UNIFORM,
-    HEAD_BINDING,
+    HEADER_BINDING,
     COMPUTE,
     UNIFORM,
     12,
@@ -195,7 +195,7 @@ pub const LIGHT_PROPAGATE_GROUP: [u32; 12] = [
     0,
     COMPUTE,
     UNIFORM,
-    HEAD_BINDING,
+    HEADER_BINDING,
     COMPUTE,
     UNIFORM,
     12,
@@ -215,7 +215,7 @@ pub const LIGHT_SLIDE_GROUP: [u32; 9] = [
     0,
     COMPUTE,
     UNIFORM,
-    HEAD_BINDING,
+    HEADER_BINDING,
     COMPUTE,
     UNIFORM,
     12,
@@ -245,7 +245,7 @@ pub const WORLD_GROUP: [u32; 12] = [
     9,
     COMPUTE,
     STORAGE_RW,
-    HEAD_BINDING,
+    HEADER_BINDING,
     COMPUTE,
     UNIFORM,
 ];
@@ -269,7 +269,7 @@ pub const QUEUE_GROUP: [u32; 18] = [
     10,
     COMPUTE,
     STORAGE_RW,
-    HEAD_BINDING,
+    HEADER_BINDING,
     COMPUTE,
     UNIFORM,
 ];
@@ -304,7 +304,7 @@ pub const QUEUE_ASK_GROUP: [u32; 30] = [
     10,
     COMPUTE,
     STORAGE_RW,
-    HEAD_BINDING,
+    HEADER_BINDING,
     COMPUTE,
     UNIFORM,
 ];
@@ -342,7 +342,7 @@ pub const QUEUE_LAST_GROUP: [u32; 33] = [
     9,
     COMPUTE,
     STORAGE_RW,
-    HEAD_BINDING,
+    HEADER_BINDING,
     COMPUTE,
     UNIFORM,
 ];
@@ -392,7 +392,7 @@ pub const LIGHT_LATTICE_LAST_GROUP: [u32; 30] = [
     9,
     COMPUTE,
     STORAGE_RW,
-    HEAD_BINDING,
+    HEADER_BINDING,
     COMPUTE,
     UNIFORM,
 ];
@@ -472,7 +472,7 @@ const _: () = assert!(
             &LIGHT_MARK_DRAWS_OPEN_GROUP
         )
         && binds(
-            &[COMPUTE_LIGHT_PROPAGATE, COMPUTE_LIGHT_CLAIM],
+            &[COMPUTE_LIGHT_PROPAGATE, COMPUTE_LIGHT_DAMAGE],
             &LIGHT_PROPAGATE_GROUP
         )
         && binds(&[COMPUTE_LIGHT_SLIDE], &LIGHT_SLIDE_GROUP),
@@ -501,7 +501,7 @@ pub const RECORD_GROUP: [u32; 24] = [
     16,
     COMPUTE,
     STORAGE_RW,
-    HEAD_BINDING,
+    HEADER_BINDING,
     COMPUTE,
     UNIFORM,
     12,
@@ -515,11 +515,11 @@ pub const RECORD_GROUP: [u32; 24] = [
     STORAGE_RW,
 ];
 
-/// The holes' stops (record_stops.wgsl): the eye, the rays, the stops among the beam rays'
+/// The holes' stops (record_hits.wgsl): the eye, the rays, the stops among the beam rays'
 /// words, the node cache their count lies in and whose drawable entries they set, and the
 /// faces' asks' args; not the stops' dispatch, which is copied out of the node cache so that
 /// no pass reads its count from a buffer it binds writable (`Raster::stops`).
-pub const STOPS_GROUP: [u32; 15] = [
+pub const RECORD_HITS_GROUP: [u32; 15] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -537,9 +537,9 @@ pub const STOPS_GROUP: [u32; 15] = [
     STORAGE_RW,
 ];
 
-/// The light's holes' stops (record_stops.wgsl over record_stops.light.wgsl): `STOPS_GROUP`,
+/// The light's holes' stops (record_hits.wgsl over record_hits.light.wgsl): `RECORD_HITS_GROUP`,
 /// its map at 3 and its list at 8, and the light's head its slots' rays are aimed by.
-pub const LIGHT_STOPS_GROUP: [u32; 18] = [
+pub const LIGHT_RECORD_HITS_GROUP: [u32; 18] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -552,7 +552,7 @@ pub const LIGHT_STOPS_GROUP: [u32; 18] = [
     9,
     COMPUTE,
     STORAGE_RW,
-    HEAD_BINDING,
+    HEADER_BINDING,
     COMPUTE,
     UNIFORM,
     16,
@@ -572,7 +572,7 @@ pub const LIGHT_SAMPLE_BOX_GROUP: [u32; 15] = [
     9,
     COMPUTE,
     STORAGE_RW,
-    HEAD_BINDING,
+    HEADER_BINDING,
     COMPUTE,
     UNIFORM,
     16,
@@ -584,8 +584,8 @@ const _: () = assert!(
     floor::holds(&[&SAMPLE_BOX_GROUP])
         && floor::holds(&[&LIGHT_SAMPLE_BOX_GROUP])
         && floor::holds(&[&RECORD_GROUP])
-        && floor::holds(&[&STOPS_GROUP])
-        && floor::holds(&[&LIGHT_STOPS_GROUP]),
+        && floor::holds(&[&RECORD_HITS_GROUP])
+        && floor::holds(&[&LIGHT_RECORD_HITS_GROUP]),
     "the boxes' writing's group binds past WebGPU's floor"
 );
 
@@ -608,8 +608,11 @@ const _: () = assert!(
             &[COMPUTE_RECORD_DRAW, COMPUTE_LIGHT_RECORD_DRAW],
             &RECORD_GROUP
         )
-        && binds(&[COMPUTE_RECORD_STOPS, COMPUTE_RECORD_FACES], &STOPS_GROUP)
-        && binds(&[COMPUTE_LIGHT_RECORD_STOPS], &LIGHT_STOPS_GROUP),
+        && binds(
+            &[COMPUTE_RECORD_HITS, COMPUTE_RECORD_FACES],
+            &RECORD_HITS_GROUP
+        )
+        && binds(&[COMPUTE_LIGHT_RECORD_HITS], &LIGHT_RECORD_HITS_GROUP),
     "a compute group lays out other than its shader reads (record.rs `binds`)"
 );
 
@@ -654,10 +657,10 @@ pub const ARGS_GROUP: [u32; 15] = [
     15, COMPUTE, STORAGE_RW,
 ];
 
-/// `decor_gate_cs`'s and `decor_gate_args_cs`'s (decor_gate.wgsl): the frame's words, the
+/// `decor_cull_cs`'s and `decor_cull_args_cs`'s (decor_cull.wgsl): the frame's words, the
 /// regions' uniforms and args, the instances, the gated list and args, the claimed tiles' box,
 /// the regions' counts and first slots, and the tiles' uniform.
-pub const GATE_GROUP: [u32; 27] = [
+pub const MASK_GROUP: [u32; 27] = [
     0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE, 4, COMPUTE,
     STORAGE_RW, 5, COMPUTE, STORAGE_RW, 6, COMPUTE, STORAGE, 7, COMPUTE, STORAGE, 31, COMPUTE,
     UNIFORM,
@@ -666,7 +669,7 @@ pub const GATE_GROUP: [u32; 27] = [
 // Each compute group here against what its shader reads, as its declarations take it
 // (build.rs `BINDS`).
 const _: () = assert!(
-    binds(&[COMPUTE_DECOR_GATE, COMPUTE_DECOR_GATE_ARGS], &GATE_GROUP)
+    binds(&[COMPUTE_DECOR_CULL, COMPUTE_DECOR_CULL_ARGS], &MASK_GROUP)
         && binds(&[COMPUTE_GENERATION_MARK], &MARK_GROUP)
         && binds(&[COMPUTE_GENERATION_THIN], &THIN_GROUP)
         && binds(&[COMPUTE_GENERATION], &GENERATE_GROUP)
@@ -683,7 +686,7 @@ const _: () = assert!(
         && floor::holds(&[&CNT_GROUP])
         && floor::holds(&[&COMPACT_GROUP])
         && floor::holds(&[&ARGS_GROUP])
-        && floor::holds(&[&GATE_GROUP]),
+        && floor::holds(&[&MASK_GROUP]),
     "a decor pass's group binds past WebGPU's floor"
 );
 
@@ -691,24 +694,24 @@ const _: () = assert!(
 /// the tiles' words.
 pub const SCREEN_MARK_GROUP: [u32; 6] = [0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE_RW];
 
-/// What the box's args' pass binds (box_args.wgsl): the marks' box, the
+/// What the box's args' pass binds (rect_args.wgsl): the marks' box, the
 /// args and the tiles' words.
-pub const BOX_ARGS_GROUP: [u32; 9] = [
+pub const RECT_ARGS_GROUP: [u32; 9] = [
     0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW, 2, COMPUTE, UNIFORM,
 ];
 
-/// What the claimed tiles' box's pass binds (claimed_box.wgsl): the box, the tiles' words
+/// What the claimed tiles' box's pass binds (damage_rect.wgsl): the box, the tiles' words
 /// and uniform.
-pub const CLAIMED_BOX_GROUP: [u32; 9] = [
+pub const DAMAGE_RECT_GROUP: [u32; 9] = [
     0, COMPUTE, STORAGE_RW, 30, COMPUTE, STORAGE, 31, COMPUTE, UNIFORM,
 ];
 
 // Each compute group here against what its shader reads, as its declarations take it
 // (build.rs `BINDS`).
 const _: () = assert!(
-    binds(&[COMPUTE_BOX_ARGS], &BOX_ARGS_GROUP)
+    binds(&[COMPUTE_RECT_ARGS], &RECT_ARGS_GROUP)
         && binds(&[COMPUTE_SCREEN_MARK], &SCREEN_MARK_GROUP)
-        && binds(&[COMPUTE_CLAIMED_BOX], &CLAIMED_BOX_GROUP),
+        && binds(&[COMPUTE_DAMAGE_RECT], &DAMAGE_RECT_GROUP),
     "a compute group lays out other than its shader reads (record.rs `binds`)"
 );
 
@@ -718,19 +721,19 @@ pub const NODE_CACHE: u32 = 1;
 pub const QUEUES: u32 = 2;
 pub const CAST_TILES: u32 = 3;
 pub const RASTER_ARGS: u32 = 4;
-pub const RASTER_STOPS: u32 = 5;
+pub const RASTER_HITS: u32 = 5;
 pub const LIGHT_ARGS: u32 = 6;
 pub const LIGHT_LIST: u32 = 7;
-pub const LIGHT_STOOD: u32 = 8;
+pub const LIGHT_RECEIVER_TILES: u32 = 8;
 pub const LIGHT_DRAWS: u32 = 9;
 pub const LIGHT_MISSES: u32 = 10;
 pub const LIGHT_RASTER_ARGS: u32 = 11;
-pub const LIGHT_RASTER_STOPS: u32 = 12;
-pub const LIGHT_BOX_ARGS: u32 = 13;
+pub const LIGHT_RASTER_HITS: u32 = 12;
+pub const LIGHT_RECT_ARGS: u32 = 13;
 pub const GENERATION_LIST: u32 = 14;
 pub const GENERATION_ARGS: u32 = 15;
-pub const GATED_SCREEN_ARGS: u32 = 16;
-pub const GATED_LIGHT_ARGS: u32 = 17;
+pub const CULLED_SCREEN_ARGS: u32 = 16;
+pub const CULLED_LIGHT_ARGS: u32 = 17;
 pub const BEAMS: u32 = 18;
 
 /// Each buffer, as the host names its field, and its role.
@@ -740,19 +743,19 @@ pub const BUFFERS: &[Buffer] = &[
     buffer("queues", STATE),
     buffer("cast_tiles", ARGS),
     buffer("raster.args", ARGS),
-    buffer("raster.stops", ARGS),
+    buffer("raster.hits", ARGS),
     buffer("light_args", ARGS),
     buffer("light_list", LIST),
-    buffer("light_stood", ARGS),
+    buffer("light_receiver_tiles", ARGS),
     buffer("light_draws_dispatch", ARGS),
     buffer("light_misses", ARGS),
     buffer("raster.light.args", ARGS),
-    buffer("raster.light.stops", ARGS),
-    buffer("light_tiles.box_args", ARGS),
+    buffer("raster.light.hits", ARGS),
+    buffer("light_tiles.rect_args", ARGS),
     buffer("generator.list", ARGS),
     buffer("generator.args", ARGS),
-    buffer("generator.gated[Screen].args", ARGS),
-    buffer("generator.gated[Light].args", ARGS),
+    buffer("generator.masked[Screen].args", ARGS),
+    buffer("generator.masked[Light].args", ARGS),
     buffer("beams", LIST),
 ];
 
@@ -835,7 +838,7 @@ pub const RECORD_BINDS: Group = Group {
         bind(9, NODE_CACHE),
         bind(16, RASTER_ARGS),
         bind(21, LIGHT_ARGS),
-        bind(22, LIGHT_STOOD),
+        bind(22, LIGHT_RECEIVER_TILES),
     ],
 };
 pub const FACES_BINDS: Group = Group {
@@ -846,12 +849,12 @@ pub const FACES_BINDS: Group = Group {
         args_bind(raster::ASKED_AT),
     ],
 };
-pub const STOP_FACES_OF_BINDS: Group = Group {
+pub const HIT_FACES_OF_BINDS: Group = Group {
     layout: &FACE_GROUP,
     binds: &[
         bind(8, BEAMS),
         bind(9, NODE_CACHE),
-        args_bind(raster::STOP_ASKED_AT),
+        args_bind(raster::HIT_ASKED_AT),
     ],
 };
 pub const CAST_TILES_OF_BINDS: Group = Group {
@@ -887,8 +890,8 @@ pub const LAST_BINDS: Group = Group {
     layout: &QUEUE_LAST_GROUP,
     binds: &[bind(8, BEAMS), bind(9, NODE_CACHE)],
 };
-pub const STOPS_OF_BINDS: Group = Group {
-    layout: &STOPS_GROUP,
+pub const RECORD_HITS_OF_BINDS: Group = Group {
+    layout: &RECORD_HITS_GROUP,
     binds: &[bind(8, BEAMS), bind(9, NODE_CACHE), bind(16, RASTER_ARGS)],
 };
 pub const GENERATION_MARK_BINDS: Group = Group {
@@ -907,17 +910,17 @@ pub const GENERATION_ARGS_OF_BINDS: Group = Group {
     layout: &ARGS_GROUP,
     binds: &[bind(2, GENERATION_ARGS)],
 };
-pub const GATE_SCREEN_BINDS: Group = Group {
-    layout: &GATE_GROUP,
-    binds: &[bind(2, GENERATION_ARGS), bind(5, GATED_SCREEN_ARGS)],
+pub const MASK_SCREEN_BINDS: Group = Group {
+    layout: &MASK_GROUP,
+    binds: &[bind(2, GENERATION_ARGS), bind(5, CULLED_SCREEN_ARGS)],
 };
-pub const GATE_LIGHT_BINDS: Group = Group {
-    layout: &GATE_GROUP,
-    binds: &[bind(2, GENERATION_ARGS), bind(5, GATED_LIGHT_ARGS)],
+pub const MASK_LIGHT_BINDS: Group = Group {
+    layout: &MASK_GROUP,
+    binds: &[bind(2, GENERATION_ARGS), bind(5, CULLED_LIGHT_ARGS)],
 };
-pub const LIGHT_BOX_BINDS: Group = Group {
-    layout: &BOX_ARGS_GROUP,
-    binds: &[bind(1, LIGHT_BOX_ARGS)],
+pub const LIGHT_RECT_BINDS: Group = Group {
+    layout: &RECT_ARGS_GROUP,
+    binds: &[bind(1, LIGHT_RECT_ARGS)],
 };
 pub const LIGHT_RECORD_BINDS: Group = Group {
     layout: &RECORD_GROUP,
@@ -926,7 +929,7 @@ pub const LIGHT_RECORD_BINDS: Group = Group {
         bind(9, NODE_CACHE),
         bind(16, LIGHT_RASTER_ARGS),
         bind(21, LIGHT_ARGS),
-        bind(22, LIGHT_STOOD),
+        bind(22, LIGHT_RECEIVER_TILES),
     ],
 };
 pub const LIGHT_MARK_BINDS: Group = Group {
@@ -934,7 +937,7 @@ pub const LIGHT_MARK_BINDS: Group = Group {
     binds: &[
         bind(12, LIGHT_LIST),
         bind(21, LIGHT_ARGS),
-        bind(22, LIGHT_STOOD),
+        bind(22, LIGHT_RECEIVER_TILES),
         bind(23, BEAMS),
     ],
 };
@@ -943,7 +946,7 @@ pub const LIGHT_MARK_DRAWS_OPEN_BINDS: Group = Group {
     binds: &[
         bind(12, LIGHT_LIST),
         bind(21, LIGHT_ARGS),
-        bind(22, LIGHT_STOOD),
+        bind(22, LIGHT_RECEIVER_TILES),
         bind(DRAWS_BINDING, LIGHT_DRAWS),
     ],
 };
@@ -952,7 +955,7 @@ pub const LIGHT_MARK_DRAWS_BINDS: Group = Group {
     binds: &[
         bind(12, LIGHT_LIST),
         bind(21, LIGHT_ARGS),
-        bind(22, LIGHT_STOOD),
+        bind(22, LIGHT_RECEIVER_TILES),
     ],
 };
 pub const LIGHT_SLIDE_BINDS: Group = Group {
@@ -1023,8 +1026,8 @@ pub const LIGHT_LAST_BINDS: Group = Group {
     layout: &QUEUE_LAST_GROUP,
     binds: &[bind(8, LIGHT_LIST), bind(9, NODE_CACHE)],
 };
-pub const LIGHT_STOPS_BINDS: Group = Group {
-    layout: &LIGHT_STOPS_GROUP,
+pub const LIGHT_RECORD_HITS_BINDS: Group = Group {
+    layout: &LIGHT_RECORD_HITS_GROUP,
     binds: &[
         bind(8, LIGHT_LIST),
         bind(9, NODE_CACHE),

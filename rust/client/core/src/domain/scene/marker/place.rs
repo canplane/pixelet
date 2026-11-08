@@ -97,11 +97,12 @@ pub(super) fn show(read: &mut [Place], eye: V3, out: &mut Vec<Instance>) {
             None => top_at(p, GROUND.read_zoom(p.finest)),
         };
         let [x, y, _] = q3::unpack(&p.ground.mid());
-        let cell = cell_zoom_at(eye, [x, y, first.unwrap_or(0.0)]).min(p.finest);
-        let Some(design) = point_of(p.category, p.from, p.name.as_ref(), carto_zoom(cell)) else {
+        let cell_zoom = cell_zoom_at(eye, [x, y, first.unwrap_or(0.0)]).min(p.finest);
+        let Some(design) = point_of(p.category, p.from, p.name.as_ref(), carto_zoom(cell_zoom))
+        else {
             continue;
         };
-        let Some(top) = top_at(p, GROUND.read_zoom(cell)) else {
+        let Some(top) = top_at(p, GROUND.read_zoom(cell_zoom)) else {
             continue;
         };
         let stands = p.ground.center(top);

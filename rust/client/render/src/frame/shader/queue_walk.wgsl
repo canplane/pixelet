@@ -25,11 +25,11 @@ fn held(word: u32) -> u32 {
 /// The next stop's number (queue.wgsl `keep_hit`), and the dispatch over them raised to `rows`:
 /// in the queue's words (`ray::QUEUE_HITS`), which the last walk goes on from as
 /// `node_cache::HITS_ARGS`.
-fn stop_number() -> u32 {
+fn hit_number() -> u32 {
   return atomicAdd(&queue[QUEUE_HITS + 3u], 1u);
 }
 
-fn stop_rows(rows: u32) {
+fn hit_rows(rows: u32) {
   atomicMax(&queue[QUEUE_HITS], rows);
 }
 
@@ -37,23 +37,23 @@ fn stop_rows(rows: u32) {
 /// walk `again` or the first, where it is kept at all (`keeps`): its zoom, its index, the zooms
 /// asked, and what was handed its parent, off the slot that keeps the parent at the zooms the
 /// ray asked it at, a node the walk went through; else it is asked from the top.
-fn list_ask(aim: Aim, w: Walked, again: bool) {
+fn list_ask(aim: Aim, w: WalkEnd, again: bool) {
   let r0 = root_of(aim.origin);
   let c = idx_of(w.corner, w.zoom, w.roots, r0);
   if (!keeps(w.zoom, c)) {
     return;
   }
   let r = atomicAdd(&queue[select(QUEUE_ASKS, QUEUE_ASKS_AGAIN, again)], 1u);
-  if (r >= QUEUE_RECORDS_ROOM) {
+  if (r >= QUEUE_RECORDS_CAP) {
     return;
   }
   var top = true;
-  var handed = vec4<u32>(0u);
+  var inheritance = vec4<u32>(0u);
   if (w.zoom != 0u) {
     let pc = w.corner & vec3<u32>(~under(w.zoom - 1u));
     let p = node_answer(vec4<u32>(0u), true, w.zoom - 1u, idx_of(pc, w.zoom - 1u, w.roots, r0), node_zooms(aim, pc, w.zoom - 1u, w.roots), true);
     top = p.kind == KIND_LEFT;
-    handed = p.handed;
+    inheritance = p.inheritance;
   }
   let at = queue_records_at() + r * QUEUE_RECORD_WORDS;
   atomicStore(&queue[at], w.zoom);
@@ -62,10 +62,10 @@ fn list_ask(aim: Aim, w: Walked, again: bool) {
   atomicStore(&queue[at + 3u], u32(c.z));
   atomicStore(&queue[at + 4u], node_zooms(aim, w.corner, w.zoom, w.roots));
   atomicStore(&queue[at + 5u], select(0u, 1u, top));
-  atomicStore(&queue[at + 6u], handed.x);
-  atomicStore(&queue[at + 7u], handed.y);
-  atomicStore(&queue[at + 8u], handed.z);
-  atomicStore(&queue[at + 9u], handed.w);
+  atomicStore(&queue[at + 6u], inheritance.x);
+  atomicStore(&queue[at + 7u], inheritance.y);
+  atomicStore(&queue[at + 8u], inheritance.z);
+  atomicStore(&queue[at + 9u], inheritance.w);
 }
 
 /// Where item `h` goes on in the walk `again` or the first.

@@ -15,7 +15,7 @@ pub const NEAR: f64 = 0.1;
 // ---- what is seen to move ----
 
 /// The share of a camera grid cell a motion stepped a quantum at a time
-/// carries what it moves a step, at the nearest drawn (`lens::seen_step_s`),
+/// carries what it moves a step, at the nearest drawn (`lens::visible_step_s`),
 /// set by eye on the clouds: a twelfth of a cell, 1/1152 rad, is not seen
 /// to move by itself.
-pub const SEEN_STEP_CELLS: f64 = 1.0 / 12.0;
+pub const VISIBLE_STEP_CELLS: f64 = 1.0 / 12.0;

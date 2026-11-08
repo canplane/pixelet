@@ -1,20 +1,20 @@
 // pxl-render/light_propagate.wgsl
 
 // Which tiles of the box a receiver reads, a thread a tile a receiver stands on
-// (`light::LISTED_STOOD`; light_mark.wgsl, light_mark_draws.wgsl), after every receiver stood
+// (`light::LIST_RECEIVERS`; light_mark.wgsl, light_mark_draws.wgsl), after every receiver stood
 // and the slide (light_slide.wgsl), before the beam: those in the disk it reads
 // (`Light::read`) within a tile and its taps of a step up the way up from it (`up`, `up_at`:
 // a point that far up lies that many tiles over or one more, its taps a tile either side), as
 // decor stands on its footprint (light_mark_draws.wgsl), the characters on what the eye meets, and
 // neither is taller. A tile is listed read by
 // the first thread to swap its mark to the number of the cast the world's receivers were last
-// stood afresh in (`light::HEAD_WORLD`, `light::LISTED_READ`), and stays listed, as the tiles
-// stood on do, until they are stood afresh again (`light::kept_at`): so a cast propagates only
+// stood afresh in (`light::HEADER_WORLD`, `light::LIST_READS`), and stays listed, as the tiles
+// stood on do, until they are stood afresh again (`light::carry_at`): so a cast propagates only
 // the tiles stood on since the casts before it propagated theirs, whose reads it keeps.
 // Then, a thread a tile listed read, each one no cast of the reads' epoch claimed (`reads_epoch`)
 // is claimed: its word names the cast (`light::reads_at`) and what feeds it is listed for the
 // passes that cast it (`enlist`); and the map's lay is opened to every tile read
-// (`light::ARGS_LAY`; gpu/shadow.rs `Shadow::begin`) (`light_claim_cs`).
+// (`light::ARGS_LAY`; gpu/shadow.rs `Shadow::begin`) (`light_damage_cs`).
 
 /// Whether box texel `p` lies where a receiver may read it, grown by `pad` texels
 /// (`Light::read`).
@@ -59,13 +59,13 @@ fn read_tile(world: u32, t: vec2<i32>) {
     return;
   }
   let place = u32(t.y) * n + u32(t.x);
-  let mark = listed_marks_at(LIGHT_LISTED_READ) + place;
+  let mark = list_marks_at(LIGHT_LIST_READS) + place;
   if (atomicLoad(&args.marks[mark]) == world || atomicExchange(&args.marks[mark], world) == world) {
     return;
   }
-  let e = atomicAdd(&args.counts[LIGHT_LISTED_READ], 1u);
+  let e = atomicAdd(&args.counts[LIGHT_LIST_READS], 1u);
   if (e < n * n) {
-    list_put(listed_at(LIGHT_LISTED_READ) + 1u + e, (u32(t.y) << 16u) | u32(t.x));
+    list_put(list_cnt_at(LIGHT_LIST_READS) + 1u + e, (u32(t.y) << 16u) | u32(t.x));
   }
 }
 
@@ -74,18 +74,18 @@ fn light_propagate_cs(
   @builtin(workgroup_id) group: vec3<u32>,
   @builtin(local_invocation_id) lane: vec3<u32>,
 ) {
-  // Its place in the stood list past the tiles the casts before propagated (`light::kept_at`),
+  // Its place in the stood list past the tiles the casts before propagated (`light::carry_at`),
   // as list.wgsl's `list_place` numbers a list walked apart.
   let n = light_tiles();
-  let propagated = in_room(list_at(head_word(LIGHT_HEAD_KEPT) + LIGHT_STOOD_CNT), n * n);
+  let propagated = in_cap(list_at(header_word(LIGHT_HEADER_CARRY) + LIGHT_RECEIVER_TILES_CNT), n * n);
   let k = propagated + (group.y * MISS_ACROSS + group.x) * MISS_LANES + lane.x;
-  let at = listed_at(LIGHT_LISTED_STOOD);
-  if (k >= in_room(list_at(at), n * n)) {
+  let at = list_cnt_at(LIGHT_LIST_RECEIVERS);
+  if (k >= in_cap(list_at(at), n * n)) {
     return;
   }
   let w = list_at(at + 1u + k);
   let s = vec2<i32>(i32(w & 0xffffu), i32(w >> 16u));
-  let world = head_word(LIGHT_HEAD_WORLD);
+  let world = header_word(LIGHT_HEADER_WORLD);
   let u = up();
   // Step `k` lies `k - 1` tiles or more from the tile stood on along the way's longer axis,
   // and a step `n` tiles and its taps' span off reads only tiles past the box: the steps past
@@ -103,17 +103,17 @@ fn light_propagate_cs(
 
 /// Each tile listed read, a thread each: the map's lay opened to them all, and each claimed where
 /// no cast of the reads' epoch claimed it.
-@compute @workgroup_size(LIGHT_LISTED_LANES, 1, 1)
-fn light_claim_cs(@builtin(global_invocation_id) id: vec3<u32>) {
+@compute @workgroup_size(LIGHT_LIST_LANES, 1, 1)
+fn light_damage_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let n = light_tiles();
-  let read = in_room(atomicLoad(&args.counts[LIGHT_LISTED_READ]), n * n);
+  let read = in_cap(atomicLoad(&args.counts[LIGHT_LIST_READS]), n * n);
   if (id.x == 0u) {
     atomicStore(&args.passes[LIGHT_ARGS_LAY + 1u], read);
   }
   if (id.x >= read) {
     return;
   }
-  let w = list_at(listed_at(LIGHT_LISTED_READ) + 1u + id.x);
+  let w = list_at(list_cnt_at(LIGHT_LIST_READS) + 1u + id.x);
   let t = vec2<i32>(i32(w & 0xffffu), i32(w >> 16u));
   let at = reads_at() + u32(t.y) * n + u32(t.x);
   if (list_at(at) < reads_epoch()) {

@@ -10,7 +10,7 @@
 // marched once and each froxel written (`air_held`). Nothing in it is the
 // view's, so a turn of the eye keeps it; it is drawn with its light's sky
 // view, of the same light and altitude and as it laid them
-// (atmos_medium.wgsl `laid`). The sun's half is the first
+// (atmos_medium.wgsl `view_layout`). The sun's half is the first
 // `AIR_FROXELS` across, the moon's the next.
 
 @group(0) @binding(1) var air_out: texture_storage_3d<rgba16float, write>;
@@ -31,8 +31,8 @@ fn column_dir(beta: f32, c: vec2u) -> vec3f {
 // ray's 1 - T (atmos_air.wgsl `air_before`). Before the air takes anything
 // it holds none.
 fn air_held(v: Veil) -> vec4f {
-  let taken = vec3f(1.0) - v.transmittance;
-  return vec4f(select(vec3f(0.0), v.scattered / taken, taken > vec3f(1e-6)), 1.0);
+  let opacity = vec3f(1.0) - v.transmittance;
+  return vec4f(select(vec3f(0.0), v.scattered / opacity, opacity > vec3f(1e-6)), 1.0);
 }
 
 var<workgroup> column_transmittance: array<vec3f, AIR_FROXELS>;
@@ -53,7 +53,7 @@ var<workgroup> column_held: array<vec4f, AIR_FROXELS>;
 fn froxel_cs(@builtin(global_invocation_id) id: vec3u) {
   let r = camera_r();
   let light_k = u32(light.x);
-  let l = laid(light_k);
+  let l = view_layout(light_k);
   let toward = view_light(light_dir(light_k).z);
   let dir = column_dir(l.x, id.xy);
   let e = l.yz;

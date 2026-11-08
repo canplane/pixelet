@@ -26,20 +26,20 @@ fn decor_edges_cell_shares() {
 /// eighth of, as a folded cube of it would keep none.
 #[test]
 fn decor_clip_levels_by_size() {
-    let leaf = 1 << (LEAF_CELL - FIRST_CELL);
+    let leaf = 1 << (LEAF_CELL_ZOOM - FIRST_CELL_ZOOM);
     // From a tuft to a ship, as it shows.
     for extent in [0.5, 2.0, 8.0, 40.0, 400.0] {
         for (k, &bits) in shown_by(|_| extent).iter().enumerate() {
-            let (d, at) = (&DECORS[k], |cell: Zoom| {
-                bits >> (cell - FIRST_CELL) & 1 == 1
+            let (d, at) = (&DECORS[k], |cell_zoom: Zoom| {
+                bits >> (cell_zoom - FIRST_CELL_ZOOM) & 1 == 1
             });
             if bits == 0 {
                 continue;
             }
             assert_ne!(bits & leaf, 0, "{:?} {extent} u: {bits:#b}", d.id);
-            let coarsest = (FIRST_CELL..=LEAF_CELL).find(|&c| at(c)).unwrap();
+            let coarsest = (FIRST_CELL_ZOOM..=LEAF_CELL_ZOOM).find(|&c| at(c)).unwrap();
             assert!(
-                (coarsest..=LEAF_CELL).all(at),
+                (coarsest..=LEAF_CELL_ZOOM).all(at),
                 "{:?} {extent} u: {bits:#b}",
                 d.id
             );
@@ -52,7 +52,7 @@ fn decor_clip_levels_by_size() {
                 })
                 .fold(0.0, f64::max);
             assert!(
-                coarsest == LEAF_CELL
+                coarsest == LEAF_CELL_ZOOM
                     || 8.0 * volume >= units(coarsest) * units(coarsest) * units(coarsest),
                 "{:?}",
                 d.id

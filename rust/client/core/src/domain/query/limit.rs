@@ -65,7 +65,7 @@ impl World<'_> {
 
     /// `editable` against the service area `area`, the shards aside.
     pub(super) fn editable_in(&self, area: &impl Area, space: &Aabb) -> bool {
-        let (cell, unit) = (GROUND.cell(), units(GROUND.cell()));
+        let (cell_zoom, unit) = (GROUND.leaf_cell_zoom(), units(GROUND.leaf_cell_zoom()));
         let first = |k: usize| (space.min[k] / unit).floor() as i32;
         let cnt = |k: usize| ((space.max[k] / unit).ceil() as i32 - first(k)).max(1);
         let last = |k: usize| first(k) + cnt(k) - 1;
@@ -75,15 +75,15 @@ impl World<'_> {
         let s = (cnt(0).max(cnt(1)) as u64)
             .next_power_of_two()
             .trailing_zeros();
-        let zoom = cell - s;
+        let zoom = cell_zoom - s;
         let nodes = |k: usize| first(k) >> s..=(first(k) + cnt(k) - 1) >> s;
         nodes(1).all(|y| {
             nodes(0).all(|x| {
                 let node = (zoom, [wrap_idx(zoom, x), y]);
-                let (line, mut place) = (self.terrain.cursor(node, cell), Lookup::NONE);
+                let (line, mut place) = (self.terrain.cursor(node, cell_zoom), Lookup::NONE);
                 // The ground's faces, in leaf cells.
                 self.terrain
-                    .relief(&line, &mut place, node, [cell, cell])
+                    .relief(&line, &mut place, node, [cell_zoom, cell_zoom])
                     .exact()
                     .is_some_and(|[[lo, hi], _]| {
                         f64::from(bedrock(hi)) * unit <= space.min[2]
@@ -97,6 +97,6 @@ impl World<'_> {
 /// `World::within` against the service area `area`.
 pub(super) fn within_in(area: &impl Area, at: &Q3) -> bool {
     let [x, y] = [i64::from(at[0]), i64::from(at[1])].map(q3::to_real);
-    let (cell, b) = GROUND.cell_of(LEAF_ZOOM, &point(x, y, 0.0)).node();
-    !is_wall(Shard::UNKNOWN.at(area, (cell, b)), cell, b)
+    let (cell_zoom, b) = GROUND.cell_of(LEAF_ZOOM, &point(x, y, 0.0)).node();
+    !is_wall(Shard::UNKNOWN.at(area, (cell_zoom, b)), cell_zoom, b)
 }

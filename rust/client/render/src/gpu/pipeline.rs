@@ -13,10 +13,10 @@
 use crate::api_spec::stream;
 use crate::frame::shader::floor::{BIND_GROUPS, VERTEX_BUFFERS};
 use crate::frame::shader::record::{
-    compute, pipeline as record_of, src, COMPUTES, HEAD, PIPELINES, SHADERS,
+    compute, pipeline as record_of, src, COMPUTES, HEADER, PIPELINES, SHADERS,
 };
 use crate::gpu::api::{
-    room, shader_bytes, signaled, Format, Gpu, Layout, Stencil, GATED_DEPTH, WORLD_COLOR,
+    room, shader_bytes, signaled, Format, Gpu, Layout, Stencil, MASKED_DEPTH, WORLD_COLOR,
 };
 
 #[derive(Clone, Copy, Default)]
@@ -157,22 +157,22 @@ impl Pipelines {
     }
 
     /// Pipeline `id` drawing into a world surface's color and depth
-    /// (`WORLD_COLOR`, `GATED_DEPTH`), through the gate
-    /// (`Stencil::Gated`).
+    /// (`WORLD_COLOR`, `MASKED_DEPTH`), through the gate
+    /// (`Stencil::Masked`).
     pub fn build_world(&mut self, g: &Gpu, id: u32) -> Pipeline {
-        self.build_gated(g, id, WORLD_COLOR, Stencil::Gated)
+        self.build_masked(g, id, WORLD_COLOR, Stencil::Masked)
     }
 
-    /// The gate itself, onto a world surface (`Stencil::Gate`).
-    pub fn build_gate(&mut self, g: &Gpu, id: u32) -> Pipeline {
-        self.build_gated(g, id, WORLD_COLOR, Stencil::Gate)
+    /// The gate itself, onto a world surface (`Stencil::Mask`).
+    pub fn build_mask(&mut self, g: &Gpu, id: u32) -> Pipeline {
+        self.build_masked(g, id, WORLD_COLOR, Stencil::Mask)
     }
 
     /// Pipeline `id` drawing into `format` and a gated depth
-    /// (`GATED_DEPTH`), as `stencil` asks: into the depth alone where
+    /// (`MASKED_DEPTH`), as `stencil` asks: into the depth alone where
     /// `format` is depth32's (`build`).
-    pub fn build_gated(&mut self, g: &Gpu, id: u32, format: Format, stencil: Stencil) -> Pipeline {
-        self.build_onto(g, id, (format, 1), (GATED_DEPTH, stencil))
+    pub fn build_masked(&mut self, g: &Gpu, id: u32, format: Format, stencil: Stencil) -> Pipeline {
+        self.build_onto(g, id, (format, 1), (MASKED_DEPTH, stencil))
     }
 
     fn build_onto(
@@ -198,7 +198,7 @@ impl Pipelines {
         let words = record_of(id);
         let module = self.module(words[0]);
         let mut b = Pipeline::default();
-        let mut at = HEAD as usize;
+        let mut at = HEADER as usize;
         b.lanes = words[at] as usize;
         at += 1;
         for lane in 0..b.lanes {

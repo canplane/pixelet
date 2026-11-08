@@ -10,7 +10,7 @@ mod real_world;
 use gpu::{list_every, margins, Gpu};
 use pxl_engine::cast::{Detail, Keep, Node, Query, Ray, Root, Trace, Until, DEPTH};
 use pxl_engine::light::{self, Light, Starts};
-use pxl_engine::overwrite::Cut;
+use pxl_engine::object::Cut;
 use pxl_engine::world::Inheritance;
 use pxl_engine::{beam, cast};
 use pxl_engine::{eye, node_cache, Zoom, FRAC_W};
@@ -101,7 +101,7 @@ impl Keep<Inheritance> for Unkept {
 
 /// Where beam ray `c` of the light's box, from origin `o`, stops, as `cast::walk_at_most` from
 /// the world's root takes it: its hand with the margin zero.
-fn stop_of(w: World, l: &Light, range: [Zoom; 2], c: [u32; 2], o: [i32; 3]) -> f32 {
+fn hit_of(w: World, l: &Light, range: [Zoom; 2], c: [u32; 2], o: [i32; 3]) -> f32 {
     let p = light::corner_at(c);
     let band = l.band(SIZE, range, p.map(|v| v.div_euclid(light::TILE as i32)));
     let detail = Detail {
@@ -123,7 +123,7 @@ fn stop_of(w: World, l: &Light, range: [Zoom; 2], c: [u32; 2], o: [i32; 3]) -> f
         (Node::ROOT, at, 0.0),
         &Root(at),
         &mut Unkept,
-        cast::STEPS_MOST,
+        cast::STEPS_CAP,
     );
     met.hit.t.max(0.0)
 }
@@ -144,9 +144,9 @@ fn device() -> Option<Gpu> {
 
 /// The light's list after its beam and `light_cell_cs` over a whole cast, from a table no frame
 /// has written.
-fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], head: &[u32]) -> Vec<u32> {
+fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], header: &[u32]) -> Vec<u32> {
     let eye = gpu.buffer(eye, wgpu::BufferUsages::UNIFORM);
-    let head = gpu.buffer(head, wgpu::BufferUsages::UNIFORM);
+    let header = gpu.buffer(header, wgpu::BufferUsages::UNIFORM);
     let mut table = vec![0u32; node_cache::WORDS as usize];
     table[node_cache::FRAME as usize] = FRAME;
     let table = gpu.buffer(&table, store_of());
@@ -154,7 +154,7 @@ fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], head: &[u32]) -> Vec<u32> {
     let mut list = vec![0u32; light::list_words(SIZE) as usize];
     let reads_at = light::reads_at(SIZE) as usize;
     list[reads_at..reads_at + (tiles * tiles) as usize].fill(CAST);
-    let fed = list_every(&mut list, SIZE, light::LISTED_FED, 1);
+    let fed = list_every(&mut list, SIZE, light::LIST_SOURCES, 1);
     let beams = gpu.buffer(&list, store_of());
     gpu.light_beam(
         &[
@@ -167,7 +167,7 @@ fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], head: &[u32]) -> Vec<u32> {
             (7, b.pool.as_entire_binding()),
             (8, beams.as_entire_binding()),
             (9, table.as_entire_binding()),
-            (11, head.as_entire_binding()),
+            (11, header.as_entire_binding()),
         ],
         &beams,
         &table,
@@ -178,7 +178,7 @@ fn beams_of(gpu: &Gpu, b: &WorldBufs, eye: &[u32], head: &[u32]) -> Vec<u32> {
         &[
             (0, eye.as_entire_binding()),
             (8, beams.as_entire_binding()),
-            (11, head.as_entire_binding()),
+            (11, header.as_entire_binding()),
         ],
         [fed[0], fed[1], 1],
     );
@@ -200,7 +200,7 @@ fn light_cells_start_short_by_the_margin() {
         ground: gpu.buffer(&built.ground, store),
         palette: gpu.buffer(&built.palette, store),
         shards: gpu.buffer(&flat_u(&built.shards), store),
-        placed: gpu.buffer(&built.overwrites, store),
+        placed: gpu.buffer(&built.objects, store),
         pool: gpu.buffer(&built.pool, store),
     };
     let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
@@ -239,15 +239,15 @@ fn light_cells_start_short_by_the_margin() {
         eye[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&l.words());
         eye[eye::RANGE] = c.range[0];
         eye[eye::RANGE + 1] = c.range[1];
-        let mut head = vec![0u32; light::HEAD_WORDS];
-        head[light::HEAD_CAST] = CAST;
-        head[light::HEAD_EPOCH] = CAST;
-        for (k, v) in light::head_layout(SIZE) {
-            head[k] = v;
+        let mut header = vec![0u32; light::HEADER_WORDS];
+        header[light::HEADER_CAST] = CAST;
+        header[light::HEADER_EPOCH] = CAST;
+        for (k, v) in light::header_layout(SIZE) {
+            header[k] = v;
         }
-        head[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
+        header[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
             .copy_from_slice(&starts.words());
-        let got = beams_of(&gpu, &b, &eye, &head);
+        let got = beams_of(&gpu, &b, &eye, &header);
         let hand_of = |w: &[u32], k: u32| f32::from_bits(w[light::hand_at(SIZE, k) as usize]);
         // Each beam ray's stop, the engine's walk from the origin the pass laid: a device rounds
         // `Starts::start` a Q3 step off the engine's for some.
@@ -256,7 +256,7 @@ fn light_cells_start_short_by_the_margin() {
             .map(|k| {
                 let f = (k * light::LINE_WORDS + light::LINE_ORIGIN) as usize;
                 let o = [0, 1, 2].map(|a| got[f + a] as i32);
-                stop_of(w, &l, c.range, [k % across, k / across], o)
+                hit_of(w, &l, c.range, [k % across, k / across], o)
             })
             .collect();
         let hands: Vec<f32> = (0..across * across).map(|k| hand_of(&got, k)).collect();

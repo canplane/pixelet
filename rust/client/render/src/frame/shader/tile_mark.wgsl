@@ -22,8 +22,8 @@ struct TileMarks {
 @group(0) @binding(30) var<storage, read_write> changed_at: array<atomic<u32>>;
 @group(0) @binding(31) var<uniform> tile_marks: TileMarks;
 // The tiles the frame's marks cover, from the first across and down to past
-// the last (gpu/tiles.rs `Tiles::marks_box`).
-@group(0) @binding(32) var<storage, read_write> marks_box: array<atomic<u32>, 4>;
+// the last (gpu/tiles.rs `Tiles::new_damage_rect`).
+@group(0) @binding(32) var<storage, read_write> new_damage_rect: array<atomic<u32>, 4>;
 
 @fragment
 fn fs(@builtin(position) clip: vec4f) {
@@ -34,8 +34,8 @@ fn fs(@builtin(position) clip: vec4f) {
   if (atomicLoad(&changed_at[ii]) == now || atomicExchange(&changed_at[ii], now) == now) {
     return;
   }
-  atomicMin(&marks_box[0], t.x);
-  atomicMin(&marks_box[1], t.y);
-  atomicMax(&marks_box[2], t.x + 1u);
-  atomicMax(&marks_box[3], t.y + 1u);
+  atomicMin(&new_damage_rect[0], t.x);
+  atomicMin(&new_damage_rect[1], t.y);
+  atomicMax(&new_damage_rect[2], t.x + 1u);
+  atomicMax(&new_damage_rect[3], t.y + 1u);
 }

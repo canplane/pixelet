@@ -23,7 +23,7 @@ use xpute_core::sched::edge::{runtime_turn, yield_if_spent};
 use xpute_core::sched::task;
 
 use crate::sys::io::demand::Order;
-use crate::sys::io::failure::{Ended, Failure};
+use crate::sys::io::failure::{Exit, Failure};
 use crate::sys::io::file::{self, Opened, Owner, Reading};
 use crate::sys::io::file_spec::{root, CATALOG};
 use crate::sys::io::request::{attempt_of, settle};
@@ -34,12 +34,12 @@ use crate::sys::sched::edge::{request_world_tick, world_edge};
 enum Entry {
     Pending,
     /// Its bytes in its arrival's task, its credit given back.
-    Arrived,
+    InTask,
     /// Its file's bytes, until its reader takes them in: a model's until the
     /// scene takes them, an image's until its texture lands.
     Bytes(Vec<u8>),
     /// Taken in where its reader keeps it, its bytes gone.
-    Landed,
+    InReader,
     Failed,
 }
 
@@ -104,7 +104,7 @@ pub fn take_gltf(load: Load) -> Option<Vec<u8>> {
         return None;
     };
     let bytes = core::mem::take(bytes);
-    *entry = Entry::Landed;
+    *entry = Entry::InReader;
     Some(bytes)
 }
 
@@ -116,7 +116,7 @@ pub fn load_image(load: Load) -> Option<(u32, &'static [u8])> {
         .get_or_insert(Entry::Pending)
     {
         Entry::Bytes(bytes) => Some((load.id(), bytes.as_slice())),
-        Entry::Landed => Some((load.id(), &[])),
+        Entry::InReader => Some((load.id(), &[])),
         _ => None,
     }
 }
@@ -163,7 +163,7 @@ pub fn open_asset(key: u64, load: Load) {
 pub fn on_opened(fd: Fd, key: u64, opened: Opened) {
     let what = attempt_of(key).and_then(|(_, id)| of_id(id));
     let Opened::Bytes(n) = opened else {
-        settle(key, Ended::Failed(Failure::from(opened)), None);
+        settle(key, Exit::Failed(Failure::from(opened)), None);
         if let Some((kind, load)) = what {
             *loader().at(kind, load) = None;
         }
@@ -174,13 +174,13 @@ pub fn on_opened(fd: Fd, key: u64, opened: Opened) {
     };
     match file::read_whole(fd, n) {
         Ok(reading) => {
-            settle(key, Ended::Ok, None);
-            *loader().at(kind, load) = Some(Entry::Arrived);
+            settle(key, Exit::Ok, None);
+            *loader().at(kind, load) = Some(Entry::InTask);
             // The pool holds a task a file in flight (sys/load.rs `LOAD_FILES`).
             let spawned = task::spawn(arrival(kind, load, reading), 0);
             xpute_kit::ensure!(spawned, ENOSPC, load.id());
         }
-        Err(refused) => settle(key, Ended::Refused(refused), None),
+        Err(refused) => settle(key, Exit::Refused(refused), None),
     }
 }
 
@@ -205,7 +205,7 @@ async fn arrival(kind: LoadKind, load: Load, mut reading: Reading) {
         LoadKind::Catalog => {
             l.catalog = Catalog::read(&bytes);
             match l.catalog {
-                Some(_) => Entry::Landed,
+                Some(_) => Entry::InReader,
                 None => Entry::Failed,
             }
         }
@@ -216,12 +216,12 @@ async fn arrival(kind: LoadKind, load: Load, mut reading: Reading) {
 }
 
 /// The renderer took the texture of the image numbered `image`
-/// (pxl-render `take_landed`): its file goes.
-pub fn on_image_landed(image: u32) {
+/// (pxl-render `take_complete`): its file goes.
+pub fn on_image_complete(image: u32) {
     let Some(load) = Load::of(image) else { return };
     let entry = loader().at(LoadKind::Image, load);
     if matches!(entry, Some(Entry::Bytes(_))) {
-        *entry = Some(Entry::Landed);
+        *entry = Some(Entry::InReader);
     }
 }
 
@@ -231,7 +231,7 @@ pub fn on_images_lost() {
     let l = loader();
     let image = LoadKind::Image as usize;
     for entry in l.entries[image].iter_mut().chain([&mut l.sphere[image]]) {
-        if matches!(entry, Some(Entry::Landed)) {
+        if matches!(entry, Some(Entry::InReader)) {
             *entry = None;
         }
     }

@@ -1,9 +1,9 @@
-// pxl-render/frame/shader/decor_gate.wgsl
+// pxl-render/frame/shader/decor_cull.wgsl
 
 // What a frame through the gate draws of decor generated (gpu/generator.rs
-// `Generator::gate`): of each region's instances, those whose ball (decor_ball.wgsl) meets the
-// box of the claimed tiles (claimed_box.wgsl) as the frame sees it, listed at the region's
-// own place in a list beside the instances (`gated`), with the region's args, their count
+// `Generator::mask`): of each region's instances, those whose ball (decor_ball.wgsl) meets the
+// box of the claimed tiles (damage_rect.wgsl) as the frame sees it, listed at the region's
+// own place in a list beside the instances (`masked`), with the region's args, their count
 // the instances listed. The draws read the list in place of the instances' own
 // (instance.wgsl `order`); a pixel past the claimed tiles keeps the last frame's, so an
 // instance whose ball meets none of them draws none of it.
@@ -11,9 +11,9 @@
 @group(0) @binding(1) var<storage, read> uniforms: array<u32>;
 @group(0) @binding(2) var<storage, read> args: array<u32>;
 @group(0) @binding(3) var<storage, read> instances: array<u32>;
-@group(0) @binding(4) var<storage, read_write> gated: array<u32>;
-@group(0) @binding(5) var<storage, read_write> gated_args: array<atomic<u32>>;
-@group(0) @binding(6) var<storage, read> claimed_box: array<u32, 4>;
+@group(0) @binding(4) var<storage, read_write> masked: array<u32>;
+@group(0) @binding(5) var<storage, read_write> culled_args: array<atomic<u32>>;
+@group(0) @binding(6) var<storage, read> damage_rect: array<u32, 4>;
 /// Each region's count, then its end: its first slot as the args pass laid it
 /// (decor_args.wgsl), past its last once compacted (decor_compact.wgsl).
 @group(0) @binding(7) var<storage, read> regions: array<u32>;
@@ -25,14 +25,14 @@ fn region_word(r: u32, k: u32) -> u32 {
 }
 
 /// Each region's args as generated, none of its instances listed yet: a thread a region,
-/// before `decor_gate_cs`.
+/// before `decor_cull_cs`.
 @compute @workgroup_size(64, 1, 1)
-fn decor_gate_args_cs(@builtin(global_invocation_id) id: vec3<u32>) {
+fn decor_cull_args_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x >= REGIONS) {
     return;
   }
   for (var k = 0u; k < ARGS_WORDS; k += 1u) {
-    atomicStore(&gated_args[id.x * ARGS_WORDS + k], select(args[id.x * ARGS_WORDS + k], 0u, k == 1u));
+    atomicStore(&culled_args[id.x * ARGS_WORDS + k], select(args[id.x * ARGS_WORDS + k], 0u, k == 1u));
   }
 }
 
@@ -44,7 +44,7 @@ fn inside(p: vec4<f32>, c: vec3<f32>, r: f32) -> bool {
 
 /// A thread a place of the instances' lists, laid region after region.
 @compute @workgroup_size(64, 1, 1)
-fn decor_gate_cs(@builtin(global_invocation_id) id: vec3<u32>) {
+fn decor_cull_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   // The regions' ends, as the compaction leaves them (decor_compact.wgsl): the region whose
   // list holds the place is the first that ends past it.
   let last = REGIONS - 1u;
@@ -63,7 +63,7 @@ fn decor_gate_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
   let region = first;
   let at = DRAWN_COLUMNS * region_word(0u, 4u) + id.x;
-  let b = claimed_box;
+  let b = damage_rect;
   if (b[0] > b[2] || b[1] > b[3]) {
     return;
   }
@@ -99,7 +99,7 @@ fn decor_gate_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let r = decor_radius();
   if (inside(row[0] - x.x * row[3], c, r) && inside(x.y * row[3] - row[0], c, r)
     && inside(y.x * row[3] - row[1], c, r) && inside(row[1] - y.y * row[3], c, r)) {
-    let n = atomicAdd(&gated_args[region * ARGS_WORDS + 1u], 1u);
-    gated[region_word(region, UNIFORM_IDX) + n] = slot;
+    let n = atomicAdd(&culled_args[region * ARGS_WORDS + 1u], 1u);
+    masked[region_word(region, UNIFORM_IDX) + n] = slot;
   }
 }

@@ -38,7 +38,7 @@ use crate::domain::query::decor::intersect::{box_extent, intersect};
 use pxl_engine::area::{self, Shard};
 use pxl_engine::cast;
 use pxl_engine::clipmap::Lookup;
-use pxl_engine::overwrite::{self, NodeSlot};
+use pxl_engine::object::{self, NodeSlot};
 
 /// One ray's decor tests, carried along its ground walk.
 pub(super) struct DecorRay {
@@ -87,7 +87,7 @@ fn finest(fits: impl Fn(f64) -> bool) -> Zoom {
 
 /// What is placed in the 27 nodes about the node a striking walk is at, at
 /// each zoom it went through: the objects' tree's cursors there
-/// (pxl-engine `overwrite::NodeSlot`), each zoom's the children of the zoom
+/// (pxl-engine `object::NodeSlot`), each zoom's the children of the zoom
 /// over's, as a node's neighbors are its parent's neighbors' children
 /// (Samet 1989, neighbor finding). A walk enters a node through its
 /// parent, so each zoom's is stepped from the one over in 27 `child` reads.
@@ -122,7 +122,7 @@ impl Around {
 
     /// The node `(zoom, c)` entered: its 27, off its parent's where they are
     /// the ones held, else each down from the roots.
-    pub(super) fn visit(&mut self, lanes: &impl overwrite::Columns, (zoom, c): Node<3>) {
+    pub(super) fn visit(&mut self, lanes: &impl object::Columns, (zoom, c): Node<3>) {
         let z = zoom as usize;
         if self.at[z] == c {
             return;
@@ -141,18 +141,18 @@ impl Around {
                     (n[1] >> 1) - p[1] + 1,
                     (n[2] >> 1) - p[2] + 1,
                 ];
-                overwrite::child(
+                object::child(
                     lanes,
                     self.slots[z - 1][(q[0] + 3 * q[1] + 9 * q[2]) as usize],
                     zoom,
-                    overwrite::path(zoom, n),
+                    object::path(zoom, n),
                 )
             } else {
                 // Y and Z run over the world's one root alone; X round it.
                 let inside =
                     (-1..=0).contains(&(n[1] >> zoom)) && (-1..=0).contains(&(n[2] >> zoom));
                 if inside {
-                    overwrite::cursor(lanes, overwrite::OBJECT_ROOT, zoom, n)
+                    object::cursor(lanes, object::ROOT, zoom, n)
                 } else {
                     NodeSlot::NOTHING
                 }
@@ -173,7 +173,7 @@ impl Around {
         }
         let p = [c[0] >> 1, c[1] >> 1];
         let stepped = zoom > 0 && self.columns_at[z - 1] == p;
-        let cell = GROUND.grid_zoom(zoom.min(LEAF_ZOOM));
+        let cell_zoom = GROUND.grid_zoom(zoom.min(LEAF_ZOOM));
         for k in 0..9 {
             let n = [c[0] + (k % 3) as i32 - 1, c[1] + (k / 3) as i32 - 1];
             let over = if stepped {
@@ -182,13 +182,14 @@ impl Around {
             } else {
                 None
             };
-            let line = world
-                .terrain
-                .line_under(over.as_ref().map(|o| &o.line), (zoom, n), cell);
+            let line =
+                world
+                    .terrain
+                    .line_under(over.as_ref().map(|o| &o.line), (zoom, n), cell_zoom);
             let mut found = over.map_or(Lookup::NONE, |o| o.lookup);
             let hi = world
                 .terrain
-                .relief(&line, &mut found, (zoom, n), [cell, cell])
+                .relief(&line, &mut found, (zoom, n), [cell_zoom, cell_zoom])
                 .val()
                 .map(|[[_, hi], _]| hi);
             self.columns[z][k] = Some(Column {
@@ -233,7 +234,7 @@ impl Around {
                 a[2] + (k / 9) as i32 - 1,
             ];
             let h = slot.zoom();
-            let node = (h, overwrite::ancestor_at(zoom, c, zoom - h));
+            let node = (h, object::ancestor_at(zoom, c, zoom - h));
             if !out[..n].iter().any(|&(o, _)| o == node) {
                 out[n] = (node, slot);
                 n += 1;
@@ -276,7 +277,7 @@ impl<'a> World<'a> {
     /// shares room with `space`, whether or not its column surface is there now: what
     /// an erase took away included.
     pub fn generated_over(&self, space: &Aabb) -> Vec<Instance> {
-        let (r, unit) = (box_extent(), units(GROUND.cell()));
+        let (r, unit) = (box_extent(), units(GROUND.leaf_cell_zoom()));
         let cells = |k: usize| {
             libm::floor((space.min[k] - r) / unit) as i32..libm::ceil(space.max[k] / unit) as i32
         };
@@ -298,7 +299,7 @@ impl<'a> World<'a> {
     /// in; none where it generates nothing there or the clip levels do not hold
     /// it.
     pub fn generated_instance(&self, decor: &Decor, at: &Q3) -> Option<Instance> {
-        let [x, y, z] = idx_of(GROUND.cell(), at);
+        let [x, y, z] = idx_of(GROUND.leaf_cell_zoom(), at);
         let mut met = None;
         self.generated_in([x, y], false, |d, i, _| {
             met = Some(i)
@@ -395,7 +396,7 @@ impl<'a> World<'a> {
         let z = s.about_zoom(zoom);
         let a = c.map(|v| v >> (zoom - z));
         let low = cube(zoom, c).min[2] - s.box_extent;
-        let leaf = units(GROUND.cell());
+        let leaf = units(GROUND.leaf_cell_zoom());
         let node = (zoom, [c[0], c[1]]);
         let read = s.about.reliefs((z, [a[0], a[1]]));
         let ground = (-1..=1).any(|dy| {

@@ -47,7 +47,7 @@ pub(super) struct Reads {
 pub(super) struct Light {
     /// Why it casts, a bit each in LIGHT_MOVED's order (span.json); never 0.
     pub moved: u32,
-    /// Whether an epoch begins (pxl-engine `light::HEAD_EPOCH`): what a tile holds moved.
+    /// Whether an epoch begins (pxl-engine `light::HEADER_EPOCH`): what a tile holds moved.
     pub epoch: bool,
     /// Whether the box slid or the eye's zooms moved within the epoch, the reads moved with the
     /// box and a tile whose band moved set again (`light_slide_cs`), and whether the world's
@@ -55,18 +55,18 @@ pub(super) struct Light {
     pub slid: bool,
     pub reached: bool,
     /// The box's corner this cast is cast under, and the one the cast before was
-    /// (`light::HEAD_CORNER_WAS`).
+    /// (`light::HEADER_LAST_CORNER`).
     pub corner: [i32; 2],
-    pub corner_was: [i32; 2],
-    /// The eye's zooms the cast before was cast under (`light::HEAD_RANGE_WAS`).
-    pub range_was: [u32; 2],
-    /// Whether the world's receivers stand in this cast (`light::HEAD_STANDS_WORLD`); whether
+    pub last_corner: [i32; 2],
+    /// The eye's zooms the cast before was cast under (`light::HEADER_LAST_RANGE`).
+    pub last_range: [u32; 2],
+    /// Whether the world's receivers stand in this cast (`light::HEADER_WORLD_RECEIVERS`); whether
     /// they are added to those that stand, the walked bits holding the claimed tiles' alone,
     /// else stood afresh.
     pub world: bool,
     pub adds: bool,
     /// Whether the receivers' stands take their footprints, the eye standing
-    /// (`light::HEAD_FOOTPRINT`).
+    /// (`light::HEADER_FOOTPRINT`).
     pub footprint: bool,
 }
 
@@ -204,8 +204,8 @@ impl Schedule {
         // where the eye stood when they were.
         self.world |= kind == FrameKind::cast || !held || footprint_owed || slid;
         let light = (light_on && moved != 0).then(|| {
-            let corner_was = core::mem::replace(&mut self.corner, r.corner);
-            let range_was = core::mem::replace(&mut self.range, r.range);
+            let last_corner = core::mem::replace(&mut self.corner, r.corner);
+            let last_range = core::mem::replace(&mut self.range, r.range);
             // Added to those that stand where the walked bits hold the claimed tiles' alone,
             // which only a cast within the epoch and under the same box takes.
             let adds = !walked_whole;
@@ -221,8 +221,8 @@ impl Schedule {
                 slid: held && slid,
                 reached: held && r.world_columns,
                 corner: r.corner,
-                corner_was,
-                range_was,
+                last_corner,
+                last_range,
                 world,
                 adds: world && adds,
                 footprint: stands,
@@ -266,7 +266,7 @@ impl Schedule {
 
     /// Whether the samples' raster is drawn through its gate, in the claimed tiles alone: the
     /// pixels cast, their walked bits holding those tiles' alone.
-    pub fn gated(&self) -> bool {
+    pub fn masked(&self) -> bool {
         self.plan.casts() && !self.walked_whole
     }
 }

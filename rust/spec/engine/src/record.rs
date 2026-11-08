@@ -2,7 +2,7 @@
 
 //! gpu-portable: what draws the node cache's entries, the observers' record of voxels, kept
 //! across frames in the node cache's own slots (`node_cache::STATES_AT`; pxl-render
-//! record.wgsl, record_put.wgsl, sample_box.wgsl, record_stops.wgsl, record_draw.wgsl,
+//! record.wgsl, record_put.wgsl, sample_box.wgsl, record_hits.wgsl, record_draw.wgsl,
 //! cast.wgsl, light.wgsl, face.wgsl, forget.wgsl, ask.wgsl; gpu/ray/raster.rs). A voxel is an
 //! entry of a node some ray stopped on: the World Query's answer for it, the node cache's,
 //! and the faces rays entered it across. The rays' stops write the faces where they stop;
@@ -44,16 +44,16 @@
 //!
 //! **Its writers, in a frame's order:**
 //! 1. Forget, the node cache's (pxl-render forget.wgsl `forget_cs`): every slot where it
-//!    forgets all; else a slot whose node its rule forgets (`forgets`, `over_box`,
+//!    forgets all; else a slot whose node its rule forgets (`forgets`, `over_rect`,
 //!    `reads_written`), answer and all; else, where a node beside a drawable entry across a
 //!    face is forgotten so, what draws it, its faces and their words, which read the cells
 //!    beside a face, its answer kept.
 //! 2. The walks, which write an entry's answer and set what draws it to none
 //!    (pxl-render ask.wgsl `fill`).
 //! 3. Stops, each a node a ray stopped on with the face it entered, its answer and the line
-//!    its face's word is asked off (pxl-render record_put.wgsl `observe_stop`), one way in for
+//!    its face's word is asked off (pxl-render record_put.wgsl `observe_hit`), one way in for
 //!    every ray: the samples (sample_box.wgsl), then the missed pixels' hits
-//!    (record_stops.wgsl, `beam::HIT_ASSET`, `HIT_LINE`), after their walk. A stop finds its
+//!    (record_hits.wgsl, `beam::HIT_ASSET`, `HIT_LINE`), after their walk. A stop finds its
 //!    node's entry (above) and sets the face it entered across; an observer that reads faces'
 //!    words, the eye, asks its word the first time it enters it (`ASKED`; face.wgsl, which
 //!    writes `node_cache::R_FACES`). A stop whose node no slot keeps sets none, and its pixel
@@ -87,7 +87,7 @@
 //! dropped (domain/scene/decor/gpu.rs `note_edited`; gpu/ray/cast.rs `hold`); a write that
 //! names none, or child groups past their room, forgets all. A cell's answer reads the
 //! tree along its own path alone, which a write changes only within the cube and over it,
-//! both met by `over_box` on the cell's column; `reads_written` forgets an entry handed a
+//! both met by `over_rect` on the cell's column; `reads_written` forgets an entry handed a
 //! slot of a rewritten child group, a drawable one with the rest: one rule forgets.
 //!
 //! **The faces drawn** are faces, a side of six (`ray::face`), some ray entered the node
@@ -117,14 +117,14 @@ use crate::cast::{self, Detail, Node, Spacing};
 use crate::grid;
 use crate::light::{Light, BEAM, TILE};
 use crate::node_cache::{self, ENTRIES};
-use crate::ray::QUEUE_RECORDS_ROOM;
+use crate::ray::QUEUE_RECORDS_CAP;
 
-use crate::{Zoom, WORKGROUPS_MOST};
+use crate::{Zoom, WORKGROUPS_CAP};
 
 /// The threads of a workgroup of the passes over every slot (pxl-render record_draw.wgsl).
 pub const DRAW_LANES: u32 = 64;
 const _: () = assert!(
-    ENTRIES.is_multiple_of(DRAW_LANES) && ENTRIES / DRAW_LANES <= WORKGROUPS_MOST,
+    ENTRIES.is_multiple_of(DRAW_LANES) && ENTRIES / DRAW_LANES <= WORKGROUPS_CAP,
     "the passes over every slot take each once in one dimension of one dispatch"
 );
 
@@ -134,12 +134,12 @@ const _: () = assert!(
 /// What it holds: every voxel a view can draw, the eye's and the light's, and the nodes a
 /// frame's asks keep. A node is drawn where it spans at least a camera cell (pxl-engine
 /// grid.rs), so the voxels drawn are bounded by the cells: the eye's at the widest view
-/// (`EYE_CELLS_MOST`) and the light's claimed tiles', a cell a tile (`LIGHT_CELLS_MOST`). Each
+/// (`EYE_CELLS_CAP`) and the light's claimed tiles', a cell a tile (`LIGHT_CELLS_CAP`). Each
 /// cell's count is grown by `CELL_NODES`' parts. The asks keep as many nodes a frame as a walk
-/// lists for them (`ray::QUEUE_RECORDS_ROOM`), kept for the two frames an entry is spared
+/// lists for them (`ray::QUEUE_RECORDS_CAP`), kept for the two frames an entry is spared
 /// (`ASKS_KEPT`).
 const _: () = assert!(
-    ENTRIES == entries_for(EYE_CELLS_MOST + LIGHT_CELLS_MOST),
+    ENTRIES == entries_for(EYE_CELLS_CAP + LIGHT_CELLS_CAP),
     "the slots are what the table must hold"
 );
 
@@ -153,16 +153,16 @@ pub const CELL_FRAMES: u32 = 2;
 pub const CELL_NODES: u32 = CELL_OVERLAP * CELL_STALE * CELL_FRAMES;
 
 /// The nodes the asks keep: a frame's, for the two frames an entry is spared.
-pub const ASKS_KEPT: u32 = CELL_FRAMES * QUEUE_RECORDS_ROOM;
+pub const ASKS_KEPT: u32 = CELL_FRAMES * QUEUE_RECORDS_CAP;
 
 /// The eye's camera cells at the widest view (`grid::ASPECT_MOST`), the vertical field's
 /// (`grid::HALF_TAN`) across `grid::CELLS_A_RAD`, as `beam::Grid::of` lays them at the cell.
-pub const EYE_CELLS_MOST: u32 = ceil(2.0 * grid::HALF_TAN * grid::ASPECT_MOST * grid::CELLS_A_RAD)
+pub const EYE_CELLS_CAP: u32 = ceil(2.0 * grid::HALF_TAN * grid::ASPECT_MOST * grid::CELLS_A_RAD)
     * ceil(2.0 * grid::HALF_TAN * grid::CELLS_A_RAD);
 
 /// The light's cells a cast draws, a cell a tile (`light::BEAM` is `light::TILE`): past them a
 /// slot walks.
-pub const LIGHT_CELLS_MOST: u32 = 4096;
+pub const LIGHT_CELLS_CAP: u32 = 4096;
 const _: () = assert!(BEAM == TILE, "a light's cell a tile");
 
 /// The table's load: the share of its slots held, in eighths, with buckets of `BUCKET`.
@@ -184,9 +184,9 @@ const fn ceil(v: f32) -> u32 {
 }
 /// The boxes an observer's draw writes at most, a drawable entry each (pxl-render
 /// record_draw.wgsl; a word each, `raster::draw_word`): the voxels it can draw, `CELL_NODES`
-/// a cell of its (`EYE_CELLS_MOST`, `LIGHT_CELLS_MOST`).
-pub const EYE_DRAWS: u32 = EYE_CELLS_MOST * CELL_NODES;
-pub const LIGHT_DRAWS: u32 = LIGHT_CELLS_MOST * CELL_NODES;
+/// a cell of its (`EYE_CELLS_CAP`, `LIGHT_CELLS_CAP`).
+pub const EYE_DRAWS: u32 = EYE_CELLS_CAP * CELL_NODES;
+pub const LIGHT_DRAWS: u32 = LIGHT_CELLS_CAP * CELL_NODES;
 
 /// The state's bits (`node_cache::STATES_AT`): a face some ray entered a side
 /// (`raster::faces`), whether some ray stopped on it coarser than it asked, a cell the query

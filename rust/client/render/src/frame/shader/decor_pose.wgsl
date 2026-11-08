@@ -40,7 +40,7 @@ fn surface(zoom: u32, g: vec2<i32>) -> Surface {
   // A listed pair's brick is held, so its leaves' columns are, here and at the finest.
   let r = bound_over(LOOKUP_NONE, zoom, zoom, zoom, g);
   let col = ground_column(shard, r.place, zoom, g);
-  let s = LEAF_CELL - zoom;
+  let s = LEAF_CELL_ZOOM - zoom;
   if (r.b.z < r.b.w) {
     let floor = -(1i << (HEIGHT_BITS - 1u - s));
     let z = max((r.b.w - 1i) >> s, col.top - 1i);
@@ -104,7 +104,7 @@ fn overlaps_placed(at: vec3<i32>, size: vec3<i32>) -> bool {
   return false;
 }
 
-/// Child `o` of the node at `p`, its bits X, Y, Z (`overwrite::child`'s order).
+/// Child `o` of the node at `p`, its bits X, Y, Z (`object::child`'s order).
 fn child_at(p: vec3<i32>, o: u32) -> vec3<i32> {
   return 2i * p + vec3<i32>(vec3<u32>(o & 1u, (o >> 1u) & 1u, (o >> 2u) & 1u));
 }
@@ -156,27 +156,27 @@ const STAGE_POSE = 3u;
 @compute @workgroup_size(LANES)
 fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   // The pairs generated whole, of the pairs the list holds (`generation::LIST_WORDS`).
-  let whole = in_room(list[THIN_ARGS + 2u], LIST_WORDS - LIST_AT);
+  let whole = in_cap(list[THIN_ARGS + 2u], LIST_WORDS - LIST_AT);
   let part = id.z >= whole;
   let pair = list[select(LIST_AT + id.z, part_at(id.z - whole), part)];
   let brick = pair_entry(pair);
   let j = pair_decor(pair);
-  if (id.x >= in_room(records[cnt_at(brick, j)], decor_cap(j))) {
+  if (id.x >= in_cap(records[cnt_at(brick, j)], decor_cap(j))) {
     return;
   }
   let r = entry_word(brick, j, id.x);
-  let cell = FIRST_CELL + brick / CLIP_ENTRIES;
+  let cell_zoom = FIRST_CELL_ZOOM + brick / CLIP_ENTRIES;
   let leaf = vec2<i32>(i32(records[r + 1u]), i32(records[r + 2u]));
-  if (part && !is_changed(cell, vec4<i32>(leaf, leaf + 1i))) {
+  if (part && !is_changed(cell_zoom, vec4<i32>(leaf, leaf + 1i))) {
     return;
   }
   // The finest clip level holding its leaf column (`DecorQuery::finest`): its own or finer, as
   // a pair is listed only where its brick's row is held (decor_mark.wgsl).
-  let zoom = lookup_from(step_to(LOOKUP_NONE, LEAF_CELL, leaf).place);
-  let s = LEAF_CELL - zoom;
+  let zoom = lookup_from(step_to(LOOKUP_NONE, LEAF_CELL_ZOOM, leaf).place);
+  let s = LEAF_CELL_ZOOM - zoom;
   // The surface asked, its clip level's and then the finest's; the last its pose's.
   var stage = STAGE_COLUMN;
-  var column_zoom = cell;
+  var column_zoom = cell_zoom;
   var z = 0i;
   var z_end = 0i;
   var eighths = 0u;
@@ -194,7 +194,7 @@ fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   var edited = false;
   loop {
     if (stage == STAGE_COLUMN) {
-      let f = surface(column_zoom, vec2<i32>(wrap_idx(column_zoom, leaf.x >> (LEAF_CELL - column_zoom)), leaf.y >> (LEAF_CELL - column_zoom)));
+      let f = surface(column_zoom, vec2<i32>(wrap_idx(column_zoom, leaf.x >> (LEAF_CELL_ZOOM - column_zoom)), leaf.y >> (LEAF_CELL_ZOOM - column_zoom)));
       if (f.kind == SURFACE_NONE) {
         records[r] = UNGENERATED;
         return;
@@ -205,8 +205,8 @@ fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
       stage = select(STAGE_WALK, STAGE_MET, f.kind == SURFACE_MET);
     }
     if (stage == STAGE_MET) {
-      if (column_zoom == cell) {
-        let q = LEAF_CELL - cell;
+      if (column_zoom == cell_zoom) {
+        let q = LEAF_CELL_ZOOM - cell_zoom;
         records[r + 3u] = u32((z + 1i) * (1i << q));
         records[r + 4u] = u32(sink_share(eighths) * f32(1u << (q + FRAC_W)) + 0.5);
       }
@@ -217,7 +217,7 @@ fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
       }
       // Its seed the leaf cell's again; its draws in order (`generation::asks`).
       base = z;
-      let seed = draw(quad_seed(row_word(j, ROW_SEED), LEAF_CELL, leaf), 1u);
+      let seed = draw(quad_seed(row_word(j, ROW_SEED), LEAF_CELL_ZOOM, leaf), 1u);
       variant = mul_hi(draw(seed, 0u), row_word(j, ROW_VARIANTS));
       if (row_word(j, ROW_ORIENTATION) == ALONG_TRANSPORT) {
         flip = draw(seed, 1u) >> 31u;
@@ -237,7 +237,7 @@ fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     let e = ask - voting * i32(voted);
     if (stage == STAGE_WALK) {
       ask_zoom = column_zoom;
-      c = vec3<i32>(wrap_idx(column_zoom, leaf.x >> (LEAF_CELL - column_zoom)), leaf.y >> (LEAF_CELL - column_zoom), z);
+      c = vec3<i32>(wrap_idx(column_zoom, leaf.x >> (LEAF_CELL_ZOOM - column_zoom)), leaf.y >> (LEAF_CELL_ZOOM - column_zoom), z);
     } else if (!voted) {
       let d = ask / 4i + 1i;
       let along = select(d, -d, (ask & 1i) == 0i);
@@ -313,6 +313,6 @@ fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (overlaps_placed(vec3<i32>(leaf, at_z), cells(j, variant, turn))) {
     records[r] = UNGENERATED;
   } else {
-    records[r] = record_word(j, variant, turn, cell);
+    records[r] = record_word(j, variant, turn, cell_zoom);
   }
 }

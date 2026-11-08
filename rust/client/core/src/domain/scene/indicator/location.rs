@@ -5,7 +5,7 @@
 
 use pxl_render::frame::shader::record::PIPELINE_LOCATION_ZONE;
 use pxl_render::gpu::api::bytes;
-use pxl_render::gpu::draw::{DrawId, DrawList, MirroredBlock, Position, Stand};
+use pxl_render::gpu::draw::{DrawId, DrawList, MirroredBlock, Position, ReceiverBox};
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{self, V3};
@@ -26,7 +26,7 @@ use crate::domain::scene::model::draw_list;
 use crate::domain::smooth::smoothing_factor;
 use crate::domain::view::frame::coord;
 use crate::domain::view::lens;
-use crate::domain::view::lens::{seen_step_s, Stepped};
+use crate::domain::view::lens::{visible_step_s, StepClock};
 use crate::sys::sched::edge::{request_world_tick, wake_at};
 use pxl_render::frame::shader::word;
 use pxl_render::param::location::beacon;
@@ -35,10 +35,10 @@ use xpute_core::global::Global;
 
 // The footprint (`ZONE_FOOTPRINT_U`) in the ground's cells; the .707 is a
 // one-cell diagonal correction.
-const ZONE_RADIUS_CELL: f64 = ZONE_FOOTPRINT_U / units(GROUND.cell()) - 0.707;
+const ZONE_RADIUS_CELL: f64 = ZONE_FOOTPRINT_U / units(GROUND.leaf_cell_zoom()) - 0.707;
 const ZONE_RADIUS2_CELL: f64 = ZONE_RADIUS_CELL * ZONE_RADIUS_CELL;
 /// The zone's, past which the beacon snaps to its target rather than slide.
-const ZONE_RADIUS: f64 = ZONE_RADIUS_CELL * units(GROUND.cell());
+const ZONE_RADIUS: f64 = ZONE_RADIUS_CELL * units(GROUND.leaf_cell_zoom());
 
 /// Which of its sides (top, bottom, right, left) lie on the zone's border.
 struct ZoneSample {
@@ -70,9 +70,9 @@ fn zone_samples() -> impl Iterator<Item = ZoneSample> {
             Some(ZoneSample {
                 at: [dx as i32, dy as i32],
                 off: [
-                    dx * units(GROUND.cell()),
-                    dy * units(GROUND.cell()),
-                    -units(GROUND.cell()),
+                    dx * units(GROUND.leaf_cell_zoom()),
+                    dy * units(GROUND.leaf_cell_zoom()),
+                    -units(GROUND.leaf_cell_zoom()),
                 ],
                 borders: [
                     flag(d_top > ZONE_RADIUS2_CELL),
@@ -123,7 +123,7 @@ fn lay_zone(
     instances: &mut Vec<f32>,
 ) {
     instances.clear();
-    let cell = units(GROUND.cell());
+    let cell = units(GROUND.leaf_cell_zoom());
     const BESIDE: [[i32; 2]; 4] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
     let ring = zone_extent() + 1;
     let across = (2 * ring + 1) as usize;
@@ -199,12 +199,12 @@ struct Zone {
     beacon_at: Option<[f64; 2]>,
     night: bool,
     /// The bob's and the spin's clock as drawn, in seconds: stepped a seen
-    /// step at a time (`lens::Stepped`) off `run`, which runs by the turn's
+    /// step at a time (`lens::StepClock`) off `run`, which runs by the turn's
     /// step, held past a stall (`frame.delta_s`), while the bob spans a
     /// camera cell.
     time: f64,
     run: f64,
-    clock: Stepped,
+    clock: StepClock,
     visible: bool,
     /// Whether the ground under the zone is drawn in its own cells, a leaf's
     /// (`GROUND`), or finer: where it is drawn coarser, the zone's cells are
@@ -280,7 +280,7 @@ impl LocationIndicator {
         }
         let center_z = self.last_known_center_z?;
         let raw = [pos[0], pos[1], center_z];
-        let center_pos = v3::floor(&raw, units(GROUND.cell()));
+        let center_pos = v3::floor(&raw, units(GROUND.leaf_cell_zoom()));
 
         let (mut instances, mut rise) = (
             core::mem::take(&mut self.instances),
@@ -311,7 +311,7 @@ impl LocationIndicator {
                         night: false,
                         time: 0.0,
                         run: 0.0,
-                        clock: Stepped::default(),
+                        clock: StepClock::default(),
                         visible: false,
                         zone_drawn: false,
                     });
@@ -339,7 +339,7 @@ impl LocationIndicator {
     /// under it is drawn in its own cells (`zone_drawn`); and its beacon slides to its
     /// target, a frame a step, only where the slide spans one. Its bob and
     /// spin are stepped a seen step at a time where the bob spans one, the
-    /// turn woken for the next (`lens::Stepped`); else they hold.
+    /// turn woken for the next (`lens::StepClock`); else they hold.
     pub fn tick(&mut self, frame: &Frame) -> bool {
         let Some(p) = self.zone.as_mut() else {
             return false;
@@ -348,7 +348,8 @@ impl LocationIndicator {
         let to = v3::sub(&frame.world_of(p.center), &frame.camera);
         let cell_there = lens::cell_there(v3::len(&to));
         p.visible = frame.sees(p.center, ZONE_RADIUS) && 2.0 * ZONE_RADIUS >= cell_there;
-        p.zone_drawn = p.visible && grid::cell_zoom_at(v3::dot(&to, &to)) >= GROUND.cell();
+        p.zone_drawn =
+            p.visible && grid::cell_zoom_at(v3::dot(&to, &to)) >= GROUND.leaf_cell_zoom();
         let shown = p.beacon_at.get_or_insert(p.target);
         let gap = libm::hypot(p.target[0] - shown[0], p.target[1] - shown[1]);
         let slides = p.visible && gap <= ZONE_RADIUS && gap >= cell_there;
@@ -364,7 +365,7 @@ impl LocationIndicator {
         let mut stepped = false;
         if p.visible && 2.0 * BEACON_BOB >= cell_there {
             p.run += dt;
-            let step = seen_step_s(v3::len(&beacon), beacon_speed());
+            let step = visible_step_s(v3::len(&beacon), beacon_speed());
             let (time, next, s) = p.clock.at(p.run, |at| at + step);
             p.time = time;
             stepped = s;
@@ -407,10 +408,10 @@ impl LocationIndicator {
             rest + libm::sin(p.time * BEACON_BOB_RATE) * BEACON_BOB,
         ]);
         // It reads the sun's map, so it stands within the box its whole bob sweeps, which
-        // holds still while it bobs (pxl-render gpu/draw.rs `Stand`).
+        // holds still while it bobs (pxl-render gpu/draw.rs `ReceiverBox`).
         let r = f64::from(beacon::RADIUS);
         let bob = BEACON_BOB + r;
-        let stand = Stand::of([x - r, y - r, rest - bob], [x + r, y + r, rest + bob]);
+        let stand = ReceiverBox::of([x - r, y - r, rest - bob], [x + r, y + r, rest + bob]);
         let spin = (p.time * BEACON_SPIN_RATE) as f32;
         draw.draw_beacon(&self.beacon_id, beacon, spin, p.night, stand);
     }

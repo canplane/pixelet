@@ -3,7 +3,7 @@
 // The world's depth from the light, as its cast left it a word a slot of the
 // clipmap (light.wgsl `light_cs`, pxl-engine `light::word`; its depth
 // read as `light_depth`, which build.rs makes off its layout), as the map
-// lays it in the light box's own order (light_map.wgsl, light_gate.wgsl):
+// lays it in the light box's own order (light_map.wgsl, light_mask.wgsl):
 // box texel p's slot is its world texel, the box's corner on by p, modulo
 // the map's side. A box tile no cast of the reads' epoch cast yet holds another light
 // frame's depth, or none, and is laid at the far plane, lit until it is cast: its read word
@@ -11,7 +11,7 @@
 
 /// What the lay reads the list by (gpu/shadow.rs `Shadow::begin`): the box's corner, the
 /// host's epoch and where the reads lie; then where the tiles read lie
-/// (`light::LISTED_READ`) and the word of the first cast whose reads hold where a slide went
+/// (`light::LIST_READS`) and the word of the first cast whose reads hold where a slide went
 /// unrun (`light::READS_FROM`).
 struct Lay {
   corner: vec4i,

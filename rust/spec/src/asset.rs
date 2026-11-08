@@ -127,7 +127,7 @@ impl decor::Decor {
     }
 
     /// Where its variants are numbered from as draw groups, as the GPU's
-    /// decor numbers them (pxl-content scatter.rs `first_group`).
+    /// decor numbers them (pxl-content generation.rs `first_group`).
     pub fn first_group(&self) -> u32 {
         let kind = decor::DECORS.iter().take_while(|d| d.id != self.id).count();
         generation::first_group(&DECORS, kind as u32)

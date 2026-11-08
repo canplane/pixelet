@@ -4,16 +4,16 @@
 // as the light's passes by hand take them (pxl-engine light.rs `cell`, `ray`, `Light::band`,
 // `depth`, `word`).
 
-@group(0) @binding(11) var<uniform> head: array<vec4<i32>, LIGHT_HEAD_VEC4S>;
+@group(0) @binding(11) var<uniform> header: array<vec4<i32>, LIGHT_HEADER_VEC4S>;
 
-fn head_word(k: u32) -> u32 {
-  return u32(head[k / 4u][k % 4u]);
+fn header_word(k: u32) -> u32 {
+  return u32(header[k / 4u][k % 4u]);
 }
 
-/// Whether the pass is the light's: a head naming a map (`light::HEAD_SIZE`); the eye's head,
+/// Whether the pass is the light's: a head naming a map (`light::HEADER_SIZE`); the eye's head,
 /// all zero, names none.
 fn light_run() -> bool {
-  return head_word(LIGHT_HEAD_SIZE) != 0u;
+  return header_word(LIGHT_HEADER_SIZE) != 0u;
 }
 
 fn light_v3(k: u32) -> vec3<f32> {
@@ -23,15 +23,15 @@ fn light_v3(k: u32) -> vec3<f32> {
 /// Where the ray of world texel `w` starts (`Starts::start`): its steps summed in fixed
 /// point, exactly, each split into its whole steps and its fraction.
 fn texel_start(w: vec2<i32>) -> vec3<i32> {
-  let base = head[LIGHT_STARTS_AT].xy;
+  let base = header[LIGHT_STARTS_AT].xy;
   let d = w - base;
   let k = d >= vec2<i32>(i32(LIGHT_ANCHOR));
   let ij = d - select(vec2<i32>(0), vec2<i32>(i32(LIGHT_ANCHOR)), k);
   let anchor = u32(k.x) + 2u * u32(k.y);
-  let at = head[LIGHT_STARTS_AT + STARTS_ANCHORS + anchor].xyz;
-  let a = head[LIGHT_STARTS_AT + STARTS_ACROSS].xyz;
-  let b = head[LIGHT_STARTS_AT + STARTS_DOWN].xyz;
-  let frac = head[LIGHT_STARTS_AT + STARTS_FRACS + anchor].xyz;
+  let at = header[LIGHT_STARTS_AT + STARTS_ANCHORS + anchor].xyz;
+  let a = header[LIGHT_STARTS_AT + STARTS_ACROSS].xyz;
+  let b = header[LIGHT_STARTS_AT + STARTS_DOWN].xyz;
+  let frac = header[LIGHT_STARTS_AT + STARTS_FRACS + anchor].xyz;
   let m = vec3<i32>((1i << LIGHT_STEP_BITS) - 1i);
   let s = vec3<u32>(LIGHT_STEP_BITS);
   let low = ij.x * (a & m) + ij.y * (b & m) + frac + vec3<i32>(1i << (LIGHT_STEP_BITS - 1u));
@@ -48,12 +48,12 @@ fn gap(k: i32, half: i32) -> i32 {
 
 /// The first word of cell `c`'s start in the light's list (`light::cell`).
 fn light_cell_at(c: vec2<u32>) -> u32 {
-  return head_word(LIGHT_HEAD_CELLS) + (c.y * head_word(LIGHT_HEAD_CELLS_ACROSS) + c.x) * CELL_WORDS;
+  return header_word(LIGHT_HEADER_CELLS) + (c.y * header_word(LIGHT_HEADER_CELLS_ACROSS) + c.x) * CELL_WORDS;
 }
 
 /// The slot's texel of the box (`Light::texel`).
 fn slot_texel(slot: vec2<u32>) -> vec2<u32> {
-  return vec2<u32>(vec2<i32>(slot) - light_corner()) & vec2<u32>(head_word(LIGHT_HEAD_SIZE) - 1u);
+  return vec2<u32>(vec2<i32>(slot) - light_corner()) & vec2<u32>(header_word(LIGHT_HEADER_SIZE) - 1u);
 }
 
 fn light_corner() -> vec2<i32> {
@@ -69,7 +69,7 @@ fn tile_band(tile: vec2<i32>) -> u32 {
 
 /// `tile_band` under the eye's zooms `range` (`Light::band`).
 fn tile_band_in(tile: vec2<i32>, range: vec2<u32>) -> u32 {
-  let half = i32(head_word(LIGHT_HEAD_SIZE) / 2u);
+  let half = i32(header_word(LIGHT_HEADER_SIZE) / 2u);
   let x = gap(tile.x, half);
   let y = gap(tile.y, half);
   let s2 = f32(x * x + y * y) * eye_f32(LIGHT + LIGHT_BAND_SCALE);
@@ -83,7 +83,7 @@ fn tile_band_in(tile: vec2<i32>, range: vec2<u32>) -> u32 {
 /// between asks a band between those of the one nearest the middle, the middle's clamped
 /// on each axis, and the one farthest from it, each axis's end of the larger gap.
 fn tiles_ask(lo: vec2<i32>, hi: vec2<i32>, band: u32) -> bool {
-  let half = i32(head_word(LIGHT_HEAD_SIZE) / 2u);
+  let half = i32(header_word(LIGHT_HEADER_SIZE) / 2u);
   let near = clamp(vec2<i32>(half / i32(LIGHT_TILE)), lo, hi);
   let far = select(lo, hi, vec2<bool>(gap(hi.x, half) > gap(lo.x, half), gap(hi.y, half) > gap(lo.y, half)));
   return tile_band(near) == band && tile_band(far) == band;
@@ -97,7 +97,7 @@ fn texel_band(texel: vec2<u32>) -> u32 {
 /// The word of a walk that stopped at `t` on `axis`: a share of the box's depth, its t times
 /// the reach's reciprocal, the host's, pushed back as its face's axis is (`light::depth`,
 /// `light::word`).
-fn stop_word(t: f32, axis: u32) -> u32 {
+fn hit_word(t: f32, axis: u32) -> u32 {
   return depth_word(min(t * eye_f32(LIGHT + LIGHT_T_MAX_INVERSE) + light_v3(LIGHT_BIAS)[axis], 1.0));
 }
 
@@ -131,6 +131,6 @@ fn depth_word(d: f32) -> u32 {
 }
 
 /// The word a slot's ended walk leaves: the far plane where it stopped at nothing.
-fn walked_word(w: Walked) -> u32 {
-  return select(depth_word(1.0), stop_word(w.t, w.axis), w.ends == 1u);
+fn walked_word(w: WalkEnd) -> u32 {
+  return select(depth_word(1.0), hit_word(w.t, w.axis), w.ends == 1u);
 }

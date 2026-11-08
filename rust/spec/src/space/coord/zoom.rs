@@ -8,7 +8,7 @@
 use super::aabb::Aabb;
 use super::q3::{FRAC_W, Q3};
 use super::world;
-use pxl_engine::overwrite::{y_start, z_start};
+use pxl_engine::object::{y_start, z_start};
 use xpute_kit::math::scalar::round;
 
 pub use pxl_engine::Zoom;
@@ -71,7 +71,7 @@ pub const fn idx(zoom: Zoom, units: i64) -> i64 {
 }
 
 /// The cell at `zoom` a position stands in, a floor on each axis, Y and Z's
-/// from the world's edge (`overwrite::path`): one above where an axis has no digit.
+/// from the world's edge (`object::path`): one above where an axis has no digit.
 pub fn idx_of(zoom: Zoom, at: &Q3) -> [i32; 3] {
     let shift = FRAC_W as i32 + shamt(zoom);
     // Shifted as an i64, as wide as zoom 0's 32 bits; the index is no wider

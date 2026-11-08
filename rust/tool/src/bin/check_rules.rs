@@ -181,7 +181,7 @@ const ENGINE_ORDER: [(&str, u8); 25] = [
     ("clipmap", 1),
     ("way", 1),
     ("fill", 1),
-    ("overwrite", 1),
+    ("object", 1),
     ("world", 2),
     ("cast", 2),
     ("support", 2),

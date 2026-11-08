@@ -77,7 +77,7 @@
     "$type": "u32",
     "$doc": [
       "A pipeline record's codes (frame/shader/record.rs, expanded into xpute's",
-      "descriptors by gpu/api.rs), and HEAD, the words it opens with before its",
+      "descriptors by gpu/api.rs), and HEADER, the words it opens with before its",
       "vertex buffers. Then: the topology, the cull mode, the depth compare under",
       "reversed Z (LESS is plain depth, for a depth-only pass; NO_DEPTH, no",
       "depth attachment), the blend, which vertex entry point of",
@@ -94,7 +94,7 @@
       "compares a depth texture's texels against a reference (the light's shadow",
       "map, gpu/shadow.rs)."
     ],
-    "HEAD": 10,
+    "HEADER": 10,
     "TRIANGLES": 0,
     "STRIP": 1,
     "CULL_NONE": 0,

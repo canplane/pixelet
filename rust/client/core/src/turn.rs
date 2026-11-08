@@ -47,9 +47,9 @@ use crate::domain::scene::marker;
 use crate::domain::scene::model::draw_list;
 use crate::domain::scene::resolution::Pace;
 use crate::domain::scene::stage;
-use crate::domain::scene::stage::visible_step;
+use crate::domain::scene::stage::scene_step;
 use crate::domain::view::demand;
-use crate::domain::view::demand::Observed as _;
+use crate::domain::view::demand::ViewLayer as _;
 use crate::domain::view::frame::coord;
 use crate::domain::view::frame::pose;
 use crate::domain::view::observation;
@@ -130,7 +130,7 @@ fn demand_tick(ctx: &mut TickContext) {
         api::device_generation(),
     );
     if pinned {
-        TerrainTile::demand().on_moved();
+        TerrainTile::demand().on_changed();
     }
     demand::admit_arrived(&ctx.pass);
     changes_step();
@@ -150,7 +150,7 @@ fn demand_tick(ctx: &mut TickContext) {
 /// edit's preview, which decor leaves out; and the marker's draft.
 fn scene_tick(ctx: &mut TickContext) {
     let third_person = controller::active() == Active::Orbit;
-    visible_step(
+    scene_step(
         ctx,
         controller::pivot(),
         third_person.then(camera::azimuth),
@@ -293,7 +293,7 @@ pub struct TurnGrant {
 
 static FRAME: Global<Option<TurnGrant>> = Global::new();
 static FRAMES: Global<Notify> = Global::new();
-static WORLD_DRAWN: Global<bool> = Global::new();
+static UNSENT_FRAME: Global<bool> = Global::new();
 
 fn frames() -> &'static mut Notify {
     FRAMES.get(Notify::new)
@@ -315,8 +315,8 @@ pub fn world_frame_waiting() -> bool {
     FRAME.get(|| None).is_some()
 }
 
-pub fn take_world_drawn() -> bool {
-    core::mem::take(WORLD_DRAWN.get(|| false))
+pub fn take_unsent_frame() -> bool {
+    core::mem::take(UNSENT_FRAME.get(|| false))
 }
 
 /// One task, because the frame's parts have an order and the executor's
@@ -338,7 +338,7 @@ async fn frame_task() {
         world_frame(grant, edge.deadline_ms(), edge.edge_at());
         edge::tasks_after_frame(paced_ms);
         clipmap::fill_share();
-        WORLD_DRAWN.set(true);
+        UNSENT_FRAME.set(true);
     }
 }
 
@@ -399,24 +399,24 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
 /// (domain/query/changes.rs). Taken after arrivals are admitted, before the
 /// layers observe.
 fn changes_step() {
-    static MOVED: Global<[Vec<Quadrant>; 3]> = Global::new();
-    let [places, earth, divisions] = MOVED.get(Default::default);
+    static CHANGED: Global<[Vec<Quadrant>; 3]> = Global::new();
+    let [places, earth, divisions] = CHANGED.get(Default::default);
     let shared = changes::take();
     gpu::note_edited(changes::written_boxes());
-    PlaceTile::tile_cache().take_moved(places);
-    Earth::tile_cache().take_moved(earth);
-    DivisionTile::tile_cache().take_moved(divisions);
+    PlaceTile::tile_cache().take_changed(places);
+    Earth::tile_cache().take_changed(earth);
+    DivisionTile::tile_cache().take_changed(divisions);
     if shared {
-        TerrainTile::demand().on_moved();
+        TerrainTile::demand().on_changed();
     }
     if shared || !places.is_empty() {
-        PlaceTile::demand().on_moved();
-        marker::on_moved(places);
+        PlaceTile::demand().on_changed();
+        marker::on_changed(places);
     }
     if shared || !earth.is_empty() {
-        Earth::demand().on_moved();
+        Earth::demand().on_changed();
     }
     if !divisions.is_empty() {
-        DivisionTile::demand().on_moved();
+        DivisionTile::demand().on_changed();
     }
 }

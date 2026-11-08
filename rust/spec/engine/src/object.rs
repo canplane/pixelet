@@ -1,4 +1,4 @@
-// pxl-engine/overwrite.rs
+// pxl-engine/object.rs
 
 //! gpu-portable: what is placed, as a descent asks it — the objects' one
 //! tree (pxl-core domain/layer/object/store.rs), read where it lives: two columns
@@ -14,13 +14,13 @@
 //! asset, whatever is under it.
 
 use crate::value;
-use crate::{Zoom, LEAF_CELL, SHARD_ZOOM};
+use crate::{Zoom, LEAF_CELL_ZOOM, SHARD_ZOOM};
 
 /// A slot's child pointer when it is a branch, its child group under it.
 pub const BRANCH: u32 = 1 << 31;
 
 /// The child group of the root what is placed is under.
-pub const OBJECT_ROOT: u32 = 0;
+pub const ROOT: u32 = 0;
 
 use crate::answer;
 use crate::answer::BoxWords;
@@ -39,15 +39,15 @@ pub const EDITS: u32 = 8;
 /// are; past them the rest is joined into the last (pxl-render gpu/generator.rs
 /// `hold`). What reads those columns asks them again: decor's generation, the
 /// node cache's forgetting.
-pub const BOXES: u32 = EDITS + 4;
+pub const RECTS: u32 = EDITS + 4;
 
 /// The leaf cells a preview's entry at `zoom` and `at` covers, as a box.
-pub const fn cut_box(zoom: Zoom, at: [i32; 3]) -> [i32; 4] {
-    if zoom <= LEAF_CELL {
-        let s = LEAF_CELL - zoom;
+pub const fn cut_rect(zoom: Zoom, at: [i32; 3]) -> [i32; 4] {
+    if zoom <= LEAF_CELL_ZOOM {
+        let s = LEAF_CELL_ZOOM - zoom;
         [at[0] << s, at[1] << s, (at[0] + 1) << s, (at[1] + 1) << s]
     } else {
-        let s = zoom - LEAF_CELL;
+        let s = zoom - LEAF_CELL_ZOOM;
         [at[0] >> s, at[1] >> s, (at[0] >> s) + 1, (at[1] >> s) + 1]
     }
 }

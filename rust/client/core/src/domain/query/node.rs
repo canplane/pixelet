@@ -33,7 +33,7 @@
 //! - the ways: by their own rule (pxl-engine `way::slab`) over their
 //!   own bound in the same levels, the leaf cells the ways write in each
 //!   column (pxl-engine `way::lined_hull`) joined apart from the ground's
-//!   (pxl-engine fill.rs `level`); a way a coarser tile drops as
+//!   (pxl-engine fill.rs `mip`); a way a coarser tile drops as
 //!   narrower than half its cell is dropped there, as
 //!   its level of detail does;
 //! - the caves: a cave through all of the node, by the noises' least and
@@ -49,7 +49,7 @@ use pxl_engine::area::{Area, Shard};
 use pxl_engine::clipmap::{self, Lookup};
 use pxl_engine::ground::VOID;
 use pxl_engine::ground::{self, Cell};
-use pxl_engine::overwrite::{child_at, Cut};
+use pxl_engine::object::{child_at, Cut};
 use pxl_engine::world;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::Node;
@@ -121,7 +121,7 @@ impl World<'_> {
         })
     }
 
-    /// A preview's entry as pxl-engine `overwrite` takes it.
+    /// A preview's entry as pxl-engine `object` takes it.
     fn cut(&self, entry: Option<Octant>) -> Cut {
         entry.map_or(Cut::NONE, |e| Cut {
             zoom: e.zoom(),
@@ -159,7 +159,7 @@ impl World<'_> {
             self.object.columns(),
             [self.cut(self.carve), self.cut(self.hide)],
         );
-        let mut reading = Reading::new(self, lines);
+        let mut reading = GroundRead::new(self, lines);
         let i = world::node(
             &mut reading,
             &CpuClipmap,
@@ -177,16 +177,16 @@ impl World<'_> {
 /// The ground as a node's reading holds it (pxl-engine `ground::Resident`):
 /// the world's tile cache down the node's line, the lines its walk read,
 /// and the first tile it found lacked or only a coarser one standing in for.
-struct Reading<'r, 'a> {
+struct GroundRead<'r, 'a> {
     world: &'r World<'a>,
     lines: &'r mut Lines,
     missing: Option<Quadrant>,
     coarser: Option<Quadrant>,
 }
 
-impl<'r, 'a> Reading<'r, 'a> {
-    fn new(world: &'r World<'a>, lines: &'r mut Lines) -> Reading<'r, 'a> {
-        Reading {
+impl<'r, 'a> GroundRead<'r, 'a> {
+    fn new(world: &'r World<'a>, lines: &'r mut Lines) -> GroundRead<'r, 'a> {
+        GroundRead {
             world,
             lines,
             missing: None,
@@ -220,7 +220,7 @@ impl<'r, 'a> Reading<'r, 'a> {
     }
 }
 
-impl Area for Reading<'_, '_> {
+impl Area for GroundRead<'_, '_> {
     fn ends(&self) -> bool {
         source::ServiceArea.ends()
     }
@@ -229,9 +229,9 @@ impl Area for Reading<'_, '_> {
     }
 }
 
-impl ground::Resident for Reading<'_, '_> {
+impl ground::Resident for GroundRead<'_, '_> {
     type Content = Pixelet;
-    /// The bound over the node of the cells at `cell`, off the clip levels,
+    /// The bound over the node of the cells at `cell_zoom`, off the clip levels,
     /// stepped from `place` (pxl-engine `ground::Resident::relief`); its line names the
     /// tile a lack or a coarser clip level stands for; where it lacks, `EMPTY`
     /// and false.

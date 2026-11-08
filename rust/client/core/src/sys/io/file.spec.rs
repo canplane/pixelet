@@ -77,7 +77,7 @@ pub mod top {
     /// strs: the shard it is, by quadkey.
     pub const SHARD: u32 = 0;
     /// u32[]: what its leaves fold to, its word in the objects' tree (pxl-engine
-    /// overwrite.rs `fold`, `fold_word`): the kind most of its fill is and its share filled.
+    /// object.rs `fold`, `fold_word`): the kind most of its fill is and its share filled.
     pub const FOLD: u32 = 1;
 }
 

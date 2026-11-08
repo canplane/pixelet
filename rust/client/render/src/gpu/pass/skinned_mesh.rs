@@ -32,11 +32,11 @@ impl SkinnedPass {
     pub fn new(g: &Gpu, pipelines: &mut Pipelines, align: u32) -> SkinnedPass {
         SkinnedPass {
             lit: pipelines.build_world(g, PIPELINE_SKINNED),
-            depth: pipelines.build_gated(
+            depth: pipelines.build_masked(
                 g,
                 PIPELINE_SKINNED_DEPTH,
                 Format::depth32float,
-                Stencil::Gated,
+                Stencil::Masked,
             ),
             draws: [0; 2],
             draws_buf: 0,

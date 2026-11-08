@@ -157,7 +157,7 @@ export function SizePopover({ popover }: { popover: Popover }) {
 /** The sizes open, a mark a scale. */
 function SizeMarks({ highlighted }: { highlighted: i32 | null }) {
   const { t } = useTranslation();
-  const held = useScale();
+  const scale = useScale();
 
   return (
     <Backing
@@ -185,8 +185,8 @@ function SizeMarks({ highlighted }: { highlighted: i32 | null }) {
                   { width: mark, height: mark, borderRadius: mark / 2 },
                   highlighted === scaleSteps
                     ? styles.markHighlighted
-                    : held === scaleSteps
-                      ? styles.markHeld
+                    : scale === scaleSteps
+                      ? styles.markCurrent
                       : styles.markIdle,
                 ]}
               />
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   markIdle: { backgroundColor: alpha(STRIP.mark, 0.4) },
-  markHeld: { backgroundColor: alpha(STRIP.mark, 0.8) },
+  markCurrent: { backgroundColor: alpha(STRIP.mark, 0.8) },
   markHighlighted: {
     backgroundColor: STRIP.mark,
     boxShadow: `0 0 0 1px ${STRIP.mark}`,

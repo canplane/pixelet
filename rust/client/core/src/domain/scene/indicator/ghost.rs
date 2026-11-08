@@ -11,7 +11,7 @@ use pxl_render::frame::shader::record::BOX_WORDS;
 use pxl_render::frame::shader::record::{PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR};
 use pxl_render::frame::shader::word::NO_LAYER;
 use pxl_render::gpu::api::bytes;
-use pxl_render::gpu::draw::{DrawId, DrawList, MirroredBlock, Position, Stand};
+use pxl_render::gpu::draw::{DrawId, DrawList, MirroredBlock, Position, ReceiverBox};
 use pxl_render::look::color::indicator;
 use pxl_render::mesh::ghost::{on_whole_units, write_lone_box};
 use pxl_render::mesh::paint::object::PAINTER;
@@ -202,7 +202,7 @@ impl GhostDraw {
                 let size = f64::from_bits(size_bits);
                 // It reads the sun's map, so it stands within its cell, its corner off the whole
                 // unit by under one.
-                let stand = Stand::of(whole, whole.map(|v| v + 1.0 + size));
+                let stand = ReceiverBox::of(whole, whole.map(|v| v + 1.0 + size));
                 draw.draw_in(
                     &self.id,
                     PIPELINE_GHOST_BOX,
@@ -228,7 +228,7 @@ impl GhostDraw {
                     Position::of(self.at),
                     GHOST_OPACITY,
                     false,
-                    Some(Stand::ball(self.at)),
+                    Some(ReceiverBox::ball(self.at)),
                 );
             }
         }

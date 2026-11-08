@@ -8,7 +8,7 @@ use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
 
 /// A marker's place: one ground cell, not tied to the object tool's live size.
-pub const MARKER_ZOOM: Zoom = GROUND.cell();
+pub const MARKER_ZOOM: Zoom = GROUND.leaf_cell_zoom();
 
 /// The zoom a cube of `scale_steps` is at, as a decor's (`Decor::cell_zoom`): a
 /// unit's, that many coarser, so each step down halves it. One past the object

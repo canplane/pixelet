@@ -241,7 +241,7 @@ pub struct Staged<'a> {
     pub stage: &'a TileSet,
     pub leaf: Zoom,
     pub whole: &'a FnvHashSet<Quadrant>,
-    pub(crate) gone: FnvHashSet<Quadrant>,
+    pub(crate) removed: FnvHashSet<Quadrant>,
 }
 
 impl Staged<'_> {
@@ -251,7 +251,7 @@ impl Staged<'_> {
                 return Ok(Some(c));
             }
         }
-        if self.gone.contains(&p) {
+        if self.removed.contains(&p) {
             return Ok(None);
         }
         self.base.content(p)
@@ -277,7 +277,7 @@ impl Staged<'_> {
         if (p.zoom != self.leaf || self.whole.contains(&p.shard())) && self.stage.path(p).exists() {
             return self.stage.fit(p);
         }
-        if self.gone.contains(&p) {
+        if self.removed.contains(&p) {
             return Ok(None);
         }
         Ok(base.get(&p).cloned())
@@ -318,30 +318,30 @@ pub fn fold<L: Base>(
             .filter(|c| c.zoom == zoom + 1)
             .collect();
         let at = std::time::Instant::now();
-        let (written, gone) = fold_zoom(set, &readers::<L>(&below), absent, workers)?;
+        let (written, removed) = fold_zoom(set, &readers::<L>(&below), absent, workers)?;
         println!(
             "[bake/pyramid] z{zoom}: {} tiles changed in {:.1}s",
-            written.len() + gone.len(),
+            written.len() + removed.len(),
             at.elapsed().as_secs_f64()
         );
         changed.retain(|c| c.zoom <= zoom);
-        changed.extend(written.iter().chain(&gone));
-        set.gone.extend(gone);
+        changed.extend(written.iter().chain(&removed));
+        set.removed.extend(removed);
     }
     Ok(())
 }
 
 /// Every tile its parent marks as no tile (`Base::occupancy`), under
 /// `top`: what a reader never asks for.
-pub(crate) fn unasked_tiles<L: Base>(
+pub(crate) fn coarser_tiles<L: Base>(
     set: &TileSet,
     top: Zoom,
 ) -> Result<FnvHashSet<Quadrant>, String> {
     let mut out = FnvHashSet::default();
-    let listed = set.by_zoom()?;
+    let by_zoom = set.by_zoom()?;
     for zoom in top + 1..=L::LEAF {
         let mut parents: FnvHashMap<Quadrant, Option<L>> = FnvHashMap::default();
-        for &p in listed.get(&zoom).into_iter().flatten() {
+        for &p in by_zoom.get(&zoom).into_iter().flatten() {
             let parent = p.parent();
             if let std::collections::hash_map::Entry::Vacant(e) = parents.entry(parent) {
                 e.insert(set.read::<L>(parent)?);
@@ -366,12 +366,12 @@ pub fn write_manifest(
     layer: serde_json::Value,
 ) -> Result<(), String> {
     // The tiles, a zoom at a time; the set is its tiles and the manifest.
-    let listed = set.by_zoom()?;
+    let by_zoom = set.by_zoom()?;
     let (mut objects, mut bytes) = (0u64, 0u64);
     let mut zooms = Vec::new();
-    for zoom in (top..=listed.keys().last().copied().unwrap_or(top)).rev() {
+    for zoom in (top..=by_zoom.keys().last().copied().unwrap_or(top)).rev() {
         let (mut n, mut b) = (0u64, 0u64);
-        for &p in listed.get(&zoom).into_iter().flatten() {
+        for &p in by_zoom.get(&zoom).into_iter().flatten() {
             n += 1;
             b += fs::metadata(set.path(p)).map_err(|e| e.to_string())?.len();
         }
@@ -440,7 +440,7 @@ fn fold_band<L: Base>(
     absent: &impl Absent<L>,
 ) -> Result<(Vec<Quadrant>, Vec<Quadrant>), String> {
     let mut sources: FnvHashMap<Quadrant, Option<L>> = FnvHashMap::default();
-    let (mut written, mut gone) = (Vec::new(), Vec::new());
+    let (mut written, mut removed) = (Vec::new(), Vec::new());
     for row in rows {
         let y = row[0].at[1];
         sources.retain(|p, _| p.at[1] >= 2 * y - 1);
@@ -468,11 +468,11 @@ fn fold_band<L: Base>(
                     )?;
                     written.push(parent);
                 }
-                None => gone.push(parent),
+                None => removed.push(parent),
             }
         }
     }
-    Ok((written, gone))
+    Ok((written, removed))
 }
 
 #[cfg(test)]

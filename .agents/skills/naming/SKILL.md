@@ -54,7 +54,7 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   `sample.light.wgsl` beside `sample.wgsl`), and a stand-in that replaces a part
   at assembly with the part, a dot and what it stands in as
   (`atmos_eye.unit.wgsl` for `atmos_eye.wgsl` at exposure 1, `palette.none.wgsl`
-  for `palette.wgsl`); the user's decisions of 2026-11-05.
+  for `palette.wgsl`).
 - Name a new concept the parts share with the user, and use the names already
   chosen with the user:
 

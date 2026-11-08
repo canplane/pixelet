@@ -18,5 +18,7 @@ description: How code in pixelet and xpute is written — fewest concepts, ortho
 - One hand. A file, and a part across files, is written once in one manner:
   the same work in the same shape, the same names for the same things. Do not
   patch a new manner beside an old one; rewrite the part.
-- Comments only where the code cannot say it: the contract at the top, a
-  reason where one is not plain. Short whole sentences.
+- A comment holds what lies between the lines: the contract, the reason, the
+  invariant the code cannot say. Not what the code does, not how it came to
+  be, and none written because a comment was due. A minute under `doc/` is
+  what was said then, never a reason in the code.

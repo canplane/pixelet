@@ -14,7 +14,7 @@
 use std::collections::VecDeque;
 
 use crate::sys::io::demand::{Order, Phases, Source, Stream};
-use crate::sys::io::failure::{Ended, Failure};
+use crate::sys::io::failure::{Exit, Failure};
 use crate::sys::io::param::{BODY_SLOTS, MAX_CREDITS};
 use crate::sys::io::policy::{self, Fault, Rank};
 use crate::sys::io::room::Refusal;
@@ -78,7 +78,7 @@ pub enum Event {
     /// Its key, for its reader to close.
     Stop(u64),
     /// When, as what, and the timings its run reported.
-    End(Attempt, f64, Ended, Option<Phases>),
+    End(Attempt, f64, Exit, Option<Phases>),
 }
 
 /// What holds every start back, gone with the next answer.
@@ -266,16 +266,16 @@ pub fn attempt_of(key: u64) -> Option<(Stream, u64)> {
 }
 
 /// `key`'s attempt is over: an answer ends its want, a failure holds it.
-pub fn settle(key: u64, ended: Ended, phases: Option<Phases>) {
+pub fn settle(key: u64, exit: Exit, phases: Option<Phases>) {
     let (s, at) = (sched(), now());
     let Some(k) = slot_of(s, key) else { return };
     let a = end(s, k);
-    s.events.push_back(Event::End(a, at, ended, phases));
-    let wait = match ended {
-        Ended::Aborted => return,
-        Ended::Ok => None,
-        Ended::Refused(refused) => Some(Wait::Room(refused)),
-        Ended::Failed(f) => match policy::fault(f) {
+    s.events.push_back(Event::End(a, at, exit, phases));
+    let wait = match exit {
+        Exit::Aborted => return,
+        Exit::Ok => None,
+        Exit::Refused(refused) => Some(Wait::Room(refused)),
+        Exit::Failed(f) => match policy::fault(f) {
             Fault::Object => Some(Wait::Object),
             fault => return hold(s, fault, f, a.start_ms, at),
         },
@@ -386,7 +386,7 @@ fn end(s: &mut Sched, k: usize) -> Attempt {
 fn stop(s: &mut Sched, k: usize, at: f64) {
     s.events.push_back(Event::Stop(key(k, s.slots[k].gen)));
     let a = end(s, k);
-    s.events.push_back(Event::End(a, at, Ended::Aborted, None));
+    s.events.push_back(Event::End(a, at, Exit::Aborted, None));
 }
 
 #[cfg(test)]

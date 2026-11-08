@@ -179,7 +179,7 @@ pub fn brick_lines(
 /// index off its four (`palette_indices`), and column `c`'s height,
 /// counted from its first cell, its ring included (`height`).
 pub struct TileBrick<'a, L, H> {
-    pub cell: Zoom,
+    pub cell_zoom: Zoom,
     pub place: [u32; 2],
     pub first: [i32; 2],
     pub lines: &'a [u32],
@@ -188,8 +188,8 @@ pub struct TileBrick<'a, L, H> {
 }
 
 impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> Brick for TileBrick<'_, L, H> {
-    fn cell(&self) -> Zoom {
-        self.cell
+    fn cell_zoom(&self) -> Zoom {
+        self.cell_zoom
     }
     fn place(&self) -> [u32; 2] {
         self.place
@@ -205,8 +205,8 @@ impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> Brick for TileBrick<'_, L, H> {
     fn line(&self, k: u32) -> u32 {
         self.lines[k as usize]
     }
-    fn laid(&self, i: u32) -> u32 {
-        ground::own((self.palette_indices)(i), self.cell)
+    fn own(&self, i: u32) -> u32 {
+        ground::own((self.palette_indices)(i), self.cell_zoom)
     }
     fn height(&self, c: [i32; 2]) -> i32 {
         (self.height)(c)
@@ -240,11 +240,11 @@ fn laid<'a>(
         let at = [0, 1].map(|a| (place[a] * clipmap::BRICK) as i32 + c[a]);
         ground::height(|j| i32::from(ele[j]), at)
     };
-    let cell = GROUND.cell_zoom(tile.zoom);
+    let cell_zoom = GROUND.cell_zoom(tile.zoom);
     TileBrick {
-        cell,
+        cell_zoom,
         place,
-        first: first_cell(tile, cell, place),
+        first: first_cell(tile, cell_zoom, place),
         lines,
         palette_indices,
         height,
@@ -264,11 +264,11 @@ pub(crate) fn brick_spans(
     [lines, column, spans]: [&mut [u32]; 3],
 ) -> u32 {
     let n = brick_lines(tile, &held.separation, place, scratch, lines);
-    let cell = GROUND.cell_zoom(tile.zoom);
+    let cell_zoom = GROUND.cell_zoom(tile.zoom);
     let site = fill::Site {
-        cell,
+        cell_zoom,
         place,
-        first: first_cell(tile, cell, place),
+        first: first_cell(tile, cell_zoom, place),
         shard: Shard::INSIDE,
         ele: &held.ele,
         lines: &lines[..n],
@@ -283,12 +283,12 @@ pub(crate) fn brick_spans(
     fill::brick(column, spans, four, &site)
 }
 
-/// The first cell at `cell`, its cells' zoom, of the clip level's brick at
+/// The first cell at `cell_zoom`, its cells' zoom, of the clip level's brick at
 /// `place` (in bricks) of `tile`, as the world names it.
-pub fn first_cell(tile: Quadrant, cell: Zoom, place: [u32; 2]) -> [i32; 2] {
+pub fn first_cell(tile: Quadrant, cell_zoom: Zoom, place: [u32; 2]) -> [i32; 2] {
     use pxl_engine::clipmap::BRICK;
     let first = [0, 1].map(|k| tile.at[k] * TILE_CELLS as i32 + (place[k] * BRICK) as i32);
-    [pxl_engine::wrap_idx(cell, first[0]), first[1]]
+    [pxl_engine::wrap_idx(cell_zoom, first[0]), first[1]]
 }
 
 /// The child groups the clip levels' trees take wherever the eye is, of the
@@ -296,8 +296,8 @@ pub fn first_cell(tile: Quadrant, cell: Zoom, place: [u32; 2]) -> [i32; 2] {
 /// most at its cells (`worst`, the most any placement of it holds), the others'
 /// each the most of any. A brick without ways takes none.
 pub fn pool_needs(worst: impl Fn(Zoom) -> u64) -> u64 {
-    use pxl_engine::clipmap::{CLIP_LEVELS, EYE_CLIP_LEVELS, FIRST_CELL};
-    let cells = FIRST_CELL..FIRST_CELL + EYE_CLIP_LEVELS;
+    use pxl_engine::clipmap::{CLIP_LEVELS, EYE_CLIP_LEVELS, FIRST_CELL_ZOOM};
+    let cells = FIRST_CELL_ZOOM..FIRST_CELL_ZOOM + EYE_CLIP_LEVELS;
     let most = cells.clone().map(&worst).max().unwrap_or(0);
     cells.map(worst).sum::<u64>() + u64::from(CLIP_LEVELS - EYE_CLIP_LEVELS) * most
 }
@@ -386,10 +386,10 @@ pub enum Unfit {
 /// spans (pxl-engine `fill::brick`), its cells' zoom, and its ways' tree
 /// in a pool of its own, its root word (`way::tree::root_word`) and the
 /// child groups its build took and holds.
-pub struct FilledBrick<'a> {
+pub struct BrickWords<'a> {
     pub column: &'a [u32],
     pub spans: &'a [u32],
-    pub cell: Zoom,
+    pub cell_zoom: Zoom,
     pub pool: &'a [u32],
     pub root: u32,
     pub peak_group_cnt: u32,
@@ -405,7 +405,7 @@ pub struct FilledBrick<'a> {
 pub fn fill_fit(
     tile: Quadrant,
     held: &TerrainTile,
-    mut each: impl FnMut(u32, &FilledBrick<'_>),
+    mut each: impl FnMut(u32, &BrickWords<'_>),
 ) -> Result<Fit, ([u32; 2], Unfit)> {
     use pxl_engine::clipmap::{BRICK, BRICK_WORDS, LINES_WORDS, SPANS_WORDS};
     use pxl_engine::way::tree::{BRICK_CHILD_GROUPS, ROOT_NODES};
@@ -434,32 +434,33 @@ pub fn fill_fit(
         if spans > way::SPANS as u32 {
             return Err((place, Unfit::Spans(spans)));
         }
-        let cell = GROUND.cell_zoom(tile.zoom);
+        let cell_zoom = GROUND.cell_zoom(tile.zoom);
         // Asked before the build, which refuses past either alike.
-        let (_, nodes) = fill::root_span(&column, 0, cell);
+        let (_, nodes) = fill::root_span(&column, 0, cell_zoom);
         if nodes > ROOT_NODES {
             return Err((place, Unfit::Nodes(nodes)));
         }
-        let [taken, child_groups, root] = fill::tree(&column, &span_scratch, cell, &mut pool, 1);
-        if taken == u32::MAX {
+        let [used, child_groups, root] =
+            fill::tree(&column, &span_scratch, cell_zoom, &mut pool, 1);
+        if used == u32::MAX {
             return Err((place, Unfit::ChildGroups));
         }
         each(
             k,
-            &FilledBrick {
+            &BrickWords {
                 column: &column,
                 spans: &span_scratch,
-                cell,
+                cell_zoom,
                 pool: &pool,
                 root,
-                peak_group_cnt: taken,
+                peak_group_cnt: used,
                 group_cnt: child_groups,
             },
         );
         if child_groups > 0 {
             fit.bricks.push((k, child_groups));
         }
-        fit.peak_group_cnt = fit.peak_group_cnt.max(taken);
+        fit.peak_group_cnt = fit.peak_group_cnt.max(used);
     }
     Ok(fit)
 }

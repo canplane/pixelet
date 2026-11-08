@@ -7,7 +7,7 @@
 //! layout written here alone.
 
 use crate::beam;
-use crate::overwrite::Cut;
+use crate::object::Cut;
 
 /// The eye's position in Q3 steps, X, Y and Z, then a word no reader reads, so the next
 /// starts a vec4.
@@ -24,7 +24,7 @@ pub const TAN: usize = 16;
 /// The zooms a cell is asked at, coarsest then finest.
 pub const RANGE: usize = 18;
 /// A preview's cut to air and its left-out leaf, each X, Y, Z and the zoom,
-/// the zoom `NO_CUT` for none (pxl-engine `overwrite::Cut`).
+/// the zoom `NO_CUT` for none (pxl-engine `object::Cut`).
 pub const CARVE: usize = 20;
 pub const HIDE: usize = 24;
 pub const CUT_WORDS: usize = 4;

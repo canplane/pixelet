@@ -27,7 +27,7 @@ pub use crate::answer::VAL_BITS;
 pub const FACE_BITS: u32 = 3;
 use crate::answer;
 pub use crate::answer::FILL_BITS;
-use crate::cast::STEPS_MOST;
+use crate::cast::STEPS_CAP;
 use crate::count;
 use crate::FINEST_ZOOM;
 pub use crate::ZOOM_BITS;
@@ -133,30 +133,30 @@ pub const QUEUE_GROUPS: u32 = 256;
 /// a frame defers is detail. A ray that may ask no more ends as a lack at the deepest node held.
 pub const ASKS_A_FRAME: u32 = 1 << 21;
 
-/// The stops a list holds, an observer's (pxl-render queue.wgsl `stop_room`,
+/// The stops a list holds, an observer's (pxl-render queue.wgsl `hit_in_cap`,
 /// `beam::Grid::hits_at`, `light::hits_at`): a ray past it ends with no stop kept for the
 /// record, its pixel showing no face's word but a box's (pxl-engine `face::BOX`).
-pub const STOPS_A_FRAME: u32 = 1 << 18;
+pub const HITS_A_FRAME: u32 = 1 << 18;
 
 /// The queues' words, one buffer of them (pxl-render queue_walk.wgsl `queue`, queue_ask.wgsl):
-/// a head for each run's queue (`QUEUES`), each `QUEUE_HEAD_STRIDE` words from the last, which
+/// a head for each run's queue (`QUEUES`), each `QUEUE_HEADER_STRIDE` words from the last, which
 /// its run's passes bind their view from (`queue_at`); then the asks' records, one region every
 /// queue's view reaches (`queue_records_at`), as the runs of a frame and the two walks of a run
 /// go one after another and none reads a record past the asks that follow the walk that listed
 /// it.
 ///
-/// A head: the next hole the first walk takes (`QUEUE_TAKEN`) and the next the second takes
-/// (`QUEUE_TAKEN_AGAIN`); the nodes each walk was parked at, listed for the asks (`QUEUE_ASKS`,
+/// A head: the next hole the first walk takes (`QUEUE_NEXT`) and the next the second takes
+/// (`QUEUE_NEXT_AGAIN`); the nodes each walk was parked at, listed for the asks (`QUEUE_ASKS`,
 /// `QUEUE_ASKS_AGAIN`); the stops the two walks listed, as `node_cache::HITS_ARGS` lays them
 /// (`QUEUE_HITS`); and the rays its walks parked in the pool (`QUEUE_PARKED`, `POOL_CNT`). Each
 /// run's start is `QUEUE_EMPTY`.
-pub const QUEUE_TAKEN: u32 = 0;
-pub const QUEUE_TAKEN_AGAIN: u32 = 1;
+pub const QUEUE_NEXT: u32 = 0;
+pub const QUEUE_NEXT_AGAIN: u32 = 1;
 pub const QUEUE_ASKS: u32 = 2;
 pub const QUEUE_ASKS_AGAIN: u32 = 3;
 pub const QUEUE_HITS: u32 = 4;
 pub const QUEUE_PARKED: u32 = 8;
-pub const QUEUE_HEAD_WORDS: u32 = 9;
+pub const QUEUE_HEADER_WORDS: u32 = 9;
 /// The runs' queues, a head each: the eye's beam rays', its samples' and its holes'; the
 /// light's alike.
 pub const QUEUE_EYE_CORNERS: u32 = 0;
@@ -168,15 +168,15 @@ pub const QUEUE_LIGHT_HOLES: u32 = 5;
 pub const QUEUES: u32 = 6;
 /// The words from one head to the next: the offset a storage buffer's view is bound at
 /// (`STORAGE_ALIGN_WORDS`).
-pub const QUEUE_HEAD_STRIDE: u32 = crate::STORAGE_ALIGN_WORDS;
+pub const QUEUE_HEADER_STRIDE: u32 = crate::STORAGE_ALIGN_WORDS;
 const _: () = assert!(
-    QUEUE_HEAD_WORDS <= QUEUE_HEAD_STRIDE,
-    "a head fits its stride"
+    QUEUE_HEADER_WORDS <= QUEUE_HEADER_STRIDE,
+    "a header fits its stride"
 );
 
 /// The first word of queue `queue`'s head, its view's first.
 pub const fn queue_at(queue: u32) -> u32 {
-    queue * QUEUE_HEAD_STRIDE
+    queue * QUEUE_HEADER_STRIDE
 }
 
 /// The first word of the asks' records from queue `queue`'s view's first: past every head.
@@ -189,9 +189,9 @@ pub const fn queue_records_at(queue: u32) -> u32 {
 pub const QUEUE_RECORD_WORDS: u32 = 10;
 /// The nodes one walk lists for the asks after it at most. A ray parked at a node listed past it
 /// is asked by the last walk instead.
-pub const QUEUE_RECORDS_ROOM: u32 = 1 << 17;
-pub const QUEUE_WORDS: u32 = queue_at(QUEUES) + QUEUE_RECORDS_ROOM * QUEUE_RECORD_WORDS;
-pub const QUEUE_EMPTY: [u32; QUEUE_HEAD_WORDS as usize] = [0, 0, 0, 0, 0, 1, 1, 0, 0];
+pub const QUEUE_RECORDS_CAP: u32 = 1 << 17;
+pub const QUEUE_WORDS: u32 = queue_at(QUEUES) + QUEUE_RECORDS_CAP * QUEUE_RECORD_WORDS;
+pub const QUEUE_EMPTY: [u32; QUEUE_HEADER_WORDS as usize] = [0, 0, 0, 0, 0, 1, 1, 0, 0];
 
 /// A parked ray's state, the queue's (pxl-render parked.wgsl), every item kind's alike: its
 /// distance's bits, its node's corner, and its zoom, roots and steps taken packed under `PARKED`,
@@ -199,7 +199,7 @@ pub const QUEUE_EMPTY: [u32; QUEUE_HEAD_WORDS as usize] = [0, 0, 0, 0, 0, 1, 1, 
 pub const STATE_WORDS: u32 = 5;
 pub const PARKED: u32 = 1 << 31;
 const _: () = assert!(
-    STEPS_MOST < 1 << 13 && FINEST_ZOOM < 1 << 6,
+    STEPS_CAP < 1 << 13 && FINEST_ZOOM < 1 << 6,
     "a state's zoom, roots and steps fit under `PARKED`: 6, 9 and 13 bits"
 );
 

@@ -26,7 +26,7 @@ use crate::domain::scene::gizmo::coverage_gizmo::coverage_gizmo_step;
 use crate::domain::scene::gizmo::frame_gizmo::frame_gizmo_step;
 use crate::domain::scene::marker::atlas;
 use crate::domain::scene::model::draw_list;
-use crate::domain::view::demand::Observed as _;
+use crate::domain::view::demand::ViewLayer as _;
 use crate::domain::view::setting::store::{settings_store, AoMode};
 use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::load::Load;
@@ -37,7 +37,7 @@ static SCREEN_DEVICE: Global<Option<u32>> = Global::new();
 
 /// Whether the screen holds a frame of the world: one drawn on the device
 /// there is, as a device that went took what it drew.
-pub fn is_screen_drawn() -> bool {
+pub fn screen_shows_world() -> bool {
     *SCREEN_DEVICE.get(|| None) == Some(api::device_generation())
 }
 
@@ -75,7 +75,7 @@ const _: () = assert!(
 
 /// What the renderer made of the turn's frame, and the scale the world was
 /// drawn at, read before a read can move the next: the top's to record (perf/report.rs `set_renderer_frame`).
-pub struct Drawn {
+pub struct FrameReport {
     pub kind: FrameKind,
     pub stat: Option<FrameStat>,
     pub scale: f64,
@@ -87,7 +87,7 @@ pub struct Drawn {
 /// `pace` is the frame as the turn paced it, which the world's drawn
 /// resolution is judged by (domain/scene/resolution.rs `load`), and
 /// `edits` the pointer's preview as the turn hands it, which the rays cut by.
-pub fn stage_render(pace: Pace, edits: &RenderEdits) -> Drawn {
+pub fn stage_render(pace: Pace, edits: &RenderEdits) -> FrameReport {
     let v = view();
     let settings = settings_store();
     // The GPU gets the eye's frame, where the draws' points are.
@@ -95,7 +95,7 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> Drawn {
     let lists = draw_list().take();
     let stands = lists.stands;
     let models = model::models();
-    // Each decor variant at its draw group (pxl-content scatter.rs `first_group`).
+    // Each decor variant at its draw group (pxl-content generation.rs `first_group`).
     let mut decor = [(0u32, None, [0.0f32; 3]); DECOR_GROUPS];
     for d in &decor::DECORS {
         for (v, variant) in d.variants.iter().enumerate() {
@@ -176,14 +176,14 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> Drawn {
         },
         ground: GroundBricks {
             upload: &mut terrain_upload,
-            pool: clipmap::pool_room()
+            pool: clipmap::pool_top()
                 .max(param::WAYS_POOL_FIRST_BYTES / (4 * tree::CHILD_GROUP_WORDS)),
         },
         cast: o.as_ref().and(eye).map(|eye| Cast {
             eye,
             clipmap: clipmap::table(),
             shards: cast::shards(),
-            overwrites: cast::overwrites(),
+            objects: cast::objects(),
             decor: gpu::frame(),
             stands,
             ray_counts: settings.ray_counts,
@@ -198,14 +198,14 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> Drawn {
         request_world_tick();
     }
     // An image whose texture the frame took needs its file no more.
-    api::take_landed(loader::on_image_landed);
+    api::take_complete(loader::on_image_complete);
     // The scale the world was drawn at, before a read can move the next.
     let scale = resolution::drawn_scale();
     let interval_ms = resolution::load(pace, out.stat.and_then(|stat| stat.gpu));
     if out.stat.is_some() {
         SCREEN_DEVICE.set(Some(api::device_generation()));
     }
-    Drawn {
+    FrameReport {
         kind: out.kind,
         stat: out.stat,
         scale,
@@ -217,7 +217,7 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> Drawn {
 /// turn.rs `scene_tick`): `pivot` and `heading` the camera's, for the world
 /// gizmo, `edits` the pointer's preview, for decor, and `draft` the marker
 /// tool's, for the markers.
-pub fn visible_step(
+pub fn scene_step(
     ctx: &mut TickContext,
     pivot: Option<q3::Q3>,
     heading: Option<f64>,

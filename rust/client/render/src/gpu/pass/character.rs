@@ -103,7 +103,7 @@ impl CharacterPass {
 
     /// `draw`, the character's, into `s` over `bg` (0xRRGGBB, sRGB), the
     /// world's `frame` aimed at the character; nothing where its picture's
-    /// makings stand, `moved` what moved without words.
+    /// makings stand, `changed` what moved without words.
     #[expect(
         clippy::too_many_arguments,
         reason = "each is what its picture is made of, which `read` reads apart to tell whether it stands"
@@ -116,7 +116,7 @@ impl CharacterPass {
         (record, uniform): &Draw,
         image: Image,
         bg: u32,
-        moved: bool,
+        changed: bool,
     ) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::character);
@@ -166,7 +166,7 @@ impl CharacterPass {
         r.read(record);
         r.read(uniform);
         r.read(&[image.0, s.width, s.height, s.depth, bg]);
-        r.mark(moved);
+        r.mark(changed);
         if r.end() {
             return;
         }

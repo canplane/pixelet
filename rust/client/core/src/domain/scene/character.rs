@@ -20,7 +20,7 @@ pub mod surface;
 
 use pxl_render::frame::shader::record::PIPELINE_SKINNED;
 use pxl_render::gpu::api::{word_bytes, Image};
-use pxl_render::gpu::draw::{scaled_draw, Draw, DrawId, DrawList, Position, Stand};
+use pxl_render::gpu::draw::{scaled_draw, Draw, DrawId, DrawList, Position, ReceiverBox};
 use pxl_spec::asset::catalog::Slot;
 use pxl_spec::asset::character::groups::{person, pet};
 pub use pxl_spec::asset::character::Group;
@@ -39,7 +39,7 @@ use crate::domain::scene::model::asset::model_of;
 use crate::domain::scene::model::registry::{blend, Models};
 use crate::domain::scene::model::{draw_list, models};
 use crate::domain::scene::transform::Transform;
-use crate::domain::view::lens::{cell_there, Stepped};
+use crate::domain::view::lens::{cell_there, StepClock};
 use crate::sys::io::loader::{load_image, load_of};
 use crate::sys::sched::edge::wake_at;
 
@@ -65,7 +65,7 @@ fn row(group: Group, number: u8) -> Option<(Slot, Slot, f64, u32)> {
 }
 
 #[derive(Clone, Copy)]
-struct Playing {
+struct ClipTime {
     clip: u32,
     time: f32,
 }
@@ -76,8 +76,8 @@ pub struct Character {
     pub number: u8,
     /// Its model's number in `Models`.
     model: u32,
-    cur: Option<Playing>,
-    previous: Option<Playing>,
+    cur: Option<ClipTime>,
+    previous: Option<ClipTime>,
     fade: f32,
     fade_len: f32,
     palette_at: usize,
@@ -91,15 +91,15 @@ pub struct Character {
     /// it moves where it is seen, or where it does not show them.
     posed: bool,
     /// Whether it spans the impostor's edge at the last tick: drawn at all.
-    drawn: bool,
+    visible: bool,
     /// How long its clip has run while it moves it where it is seen, in
     /// seconds: by the wall clock between its ticks, read at `last`, a stall
     /// taken as one step.
     run: f64,
     last: f64,
     /// Its clip's clock as drawn: `run` stepped a pixel's motion at a time
-    /// (`lens::Stepped`), and the reading its clip last took (`clip_time`).
-    clock: Stepped,
+    /// (`lens::StepClock`), and the reading its clip last took (`clip_time`).
+    clock: StepClock,
     clip_time: f64,
     /// Its draw in the world's list.
     id: DrawId,
@@ -165,10 +165,10 @@ impl Character {
             global: vec![[0.0; 16]; joints],
             from: Vec::new(),
             posed: false,
-            drawn: false,
+            visible: false,
             run: 0.0,
             last: 0.0,
-            clock: Stepped::default(),
+            clock: StepClock::default(),
             clip_time: 0.0,
             id: DrawId::default(),
             transform: None,
@@ -204,7 +204,7 @@ impl Character {
             return;
         }
         self.previous = self.cur;
-        self.cur = Some(Playing { clip, time: 0.0 });
+        self.cur = Some(ClipTime { clip, time: 0.0 });
         self.posed = false;
         self.fade = 0.0;
         self.fade_len = if self.previous.is_some() {
@@ -244,7 +244,7 @@ impl Character {
         let Some(m) = models.get(self.model) else {
             return false;
         };
-        let length = |p: &Playing| m.duration(p.clip).filter(|&d| d > 0.0);
+        let length = |p: &ClipTime| m.duration(p.clip).filter(|&d| d > 0.0);
         // A clip of some length plays, or one fades into the next.
         let playing = self.cur.filter(|p| length(p).is_some());
         let moving = playing.is_some() || self.previous.is_some();
@@ -252,7 +252,7 @@ impl Character {
         // observed, as a decor's model is; what spans the impostor's is
         // drawn, posed or not, as a decor's impostor is.
         let (mut seen, mut world_moves, mut dist, mut scale) = (false, false, 0.0, 1.0);
-        self.drawn = false;
+        self.visible = false;
         if let Some(t) = self.transform {
             scale = t.scale * m.scale();
             let about = v3::sub(&t.at, &frame.anchor);
@@ -260,7 +260,7 @@ impl Character {
             dist = v3::len(&v3::sub(&about, &frame.camera));
             let cell_there = cell_there(dist);
             seen = frame.frustum.sees(about, r) && 2.0 * r >= decor_model_angle() * dist;
-            self.drawn = 2.0 * r >= decor_impostor_angle() * dist;
+            self.visible = 2.0 * r >= decor_impostor_angle() * dist;
             world_moves = seen
                 && (self.previous.is_some()
                     || playing.is_some_and(|p| f64::from(m.motion(p.clip) * scale) >= cell_there));
@@ -303,7 +303,7 @@ impl Character {
         } else {
             self.last = 0.0;
         }
-        let wrap = |p: &mut Playing| {
+        let wrap = |p: &mut ClipTime| {
             p.time += dt;
             if let Some(d) = length(p) {
                 p.time %= d;
@@ -364,7 +364,7 @@ impl Character {
     }
 
     /// Into the world's list, where the walk stands it and it spans the
-    /// impostor's edge (`tick`), within the ball about it (`Stand::ball`),
+    /// impostor's edge (`tick`), within the ball about it (`ReceiverBox::ball`),
     /// its draw and its stand free of the eye: every character the world
     /// draws is a receiver of the sun's map, which reads the ones the eye
     /// sees.
@@ -372,7 +372,7 @@ impl Character {
         let Some(m) = models.get(self.model).filter(|m| m.handle() != 0) else {
             return;
         };
-        let Some(t) = self.transform.filter(|_| self.drawn) else {
+        let Some(t) = self.transform.filter(|_| self.visible) else {
             return;
         };
         draw.draw_scaled(
@@ -385,7 +385,7 @@ impl Character {
             t.rot,
             1.0,
             t.scale * m.scale(),
-            Some(Stand::ball(t.at)),
+            Some(ReceiverBox::ball(t.at)),
         );
     }
 

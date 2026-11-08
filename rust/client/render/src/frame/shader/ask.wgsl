@@ -72,17 +72,17 @@ const CLAIM_READS = 8u;
 /// (`key_zooms`), a hash of its words under its kind (pxl-engine `node_cache::KIND_MASK`): a
 /// walk reads and writes at once here, so takes a slot only where the words it read hash to it.
 /// A cell kept by its node alone hashes as `CELL_FAR`, whole or not, as a walk sets it whole
-/// over its key alone (`cell_kept`).
-fn entry_stamp(kind: u32, zooms: u32, asset: vec2<u32>, handed: vec4<u32>, zoom: u32, c: vec3<i32>) -> u32 {
+/// over its key alone (`holds_cell`).
+fn entry_stamp(kind: u32, zooms: u32, asset: vec2<u32>, inheritance: vec4<u32>, zoom: u32, c: vec3<i32>) -> u32 {
   var h = node_hash(zoom, c);
   h = mix_hash(h, select(zooms, CELL_FAR, (zooms & ((1u << ZOOM_BITS) - 1u)) == CELL_FAR));
   h = mix_hash(h, kind);
   h = mix_hash(h, asset.x);
   h = mix_hash(h, asset.y);
-  h = mix_hash(h, handed.x);
-  h = mix_hash(h, handed.y);
-  h = mix_hash(h, handed.z);
-  h = mix_hash(h, handed.w);
+  h = mix_hash(h, inheritance.x);
+  h = mix_hash(h, inheritance.y);
+  h = mix_hash(h, inheritance.z);
+  h = mix_hash(h, inheritance.w);
   return (h ^ (h >> 16u)) & ~KIND_MASK;
 }
 
@@ -140,18 +140,18 @@ fn world_answer(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u3
   if (asked != NONE && counts(asked)) {
     atomicAdd(&node_cache[asked], 1u);
   }
-  var handed: vec4<u32>;
+  var inheritance: vec4<u32>;
   if (top) {
-    handed = world_root(zoom, c);
+    inheritance = world_root(zoom, c);
   } else {
-    handed = world_child(parent, zoom, c);
+    inheritance = world_child(parent, zoom, c);
   }
-  return world_node(handed, zoom, c, zooms & ((1u << ZOOM_BITS) - 1u), zooms >> ZOOM_BITS, eye_cut(CARVE), eye_cut(HIDE));
+  return world_node(inheritance, zoom, c, zooms & ((1u << ZOOM_BITS) - 1u), zooms >> ZOOM_BITS, eye_cut(CARVE), eye_cut(HIDE));
 }
 
 /// Whether a slot of the bucket from `first` keeps the node `c` at `zoom` for a walk asking it
 /// at `zooms` (`holds_for`), its key read as it stands, of whichever walk and frame.
-fn kept_at(first: u32, zoom: u32, c: vec3<i32>, zooms: u32) -> bool {
+fn holds_node(first: u32, zoom: u32, c: vec3<i32>, zooms: u32) -> bool {
   for (var k = 0u; k < BUCKET; k += 1u) {
     let slot = first + k;
     let key = node_cache_now(key_at(slot));
@@ -183,7 +183,7 @@ fn key_zooms(zoom: u32, zooms: u32, a: Answer) -> u32 {
 /// as it stands: where one does and the walk found it whole, `whole`, set whole where it is not
 /// (`holds_for`), as the query's answer for a node coarser than asked is whole whichever walk
 /// finds it so.
-fn cell_kept(first: u32, zoom: u32, c: vec3<i32>, whole: bool) -> bool {
+fn holds_cell(first: u32, zoom: u32, c: vec3<i32>, whole: bool) -> bool {
   for (var k = 0u; k < BUCKET; k += 1u) {
     let slot = first + k;
     let key = node_cache_now(key_at(slot));
@@ -200,10 +200,10 @@ fn cell_kept(first: u32, zoom: u32, c: vec3<i32>, whole: bool) -> bool {
 
 /// Keeps the node `c` at `zoom` asked at `zooms`, answered `a`, under this pass's `tag`, in the
 /// slot it claims (`claim`, `fill`), at the zooms its answer is kept at (`key_zooms`); none
-/// where a cell is kept by its node alone already (`cell_kept`).
+/// where a cell is kept by its node alone already (`holds_cell`).
 fn keep(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32, a: Answer) {
   let kz = key_zooms(zoom, zooms, a);
-  if (kz != zooms && cell_kept(first, zoom, c, kz != CELL_FAR)) {
+  if (kz != zooms && holds_cell(first, zoom, c, kz != CELL_FAR)) {
     return;
   }
   let slot = claim(first, zoom, c, kz, tag);
@@ -301,13 +301,13 @@ fn fill(slot: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32, a: Answer) {
     atomicStore(&node_cache[face_at(slot, face)], 0u);
   }
   let w = entry_at(slot);
-  atomicStore(&node_cache[w + W_KIND], a.kind | entry_stamp(a.kind, zooms, a.asset, a.handed, zoom, c));
+  atomicStore(&node_cache[w + W_KIND], a.kind | entry_stamp(a.kind, zooms, a.asset, a.inheritance, zoom, c));
   atomicStore(&node_cache[w + W_ASSET], a.asset.x);
   atomicStore(&node_cache[w + W_ASSET + 1u], a.asset.y);
-  atomicStore(&node_cache[w + W_INHERITANCE], a.handed.x);
-  atomicStore(&node_cache[w + W_INHERITANCE + 1u], a.handed.y);
-  atomicStore(&node_cache[w + W_INHERITANCE + 2u], a.handed.z);
-  atomicStore(&node_cache[w + W_INHERITANCE + 3u], a.handed.w);
+  atomicStore(&node_cache[w + W_INHERITANCE], a.inheritance.x);
+  atomicStore(&node_cache[w + W_INHERITANCE + 1u], a.inheritance.y);
+  atomicStore(&node_cache[w + W_INHERITANCE + 2u], a.inheritance.z);
+  atomicStore(&node_cache[w + W_INHERITANCE + 3u], a.inheritance.w);
   atomicStore(&node_cache[w + W_NODE], zoom);
   atomicStore(&node_cache[w + W_NODE + 1u], u32(c.x));
   atomicStore(&node_cache[w + W_NODE + 2u], u32(c.y));

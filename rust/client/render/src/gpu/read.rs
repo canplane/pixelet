@@ -24,8 +24,8 @@ impl Read {
     /// Whether `lane` reads otherwise than it did at this place last time.
     pub(crate) fn take(&mut self, lane: &[u8]) -> bool {
         let end = self.at + lane.len();
-        let moved = self.bytes.get(self.at..end) != Some(lane);
-        if moved {
+        let changed = self.bytes.get(self.at..end) != Some(lane);
+        if changed {
             self.same = false;
             if self.bytes.len() < end {
                 self.bytes.resize(end, 0);
@@ -33,7 +33,7 @@ impl Read {
             self.bytes[self.at..end].copy_from_slice(lane);
         }
         self.at = end;
-        moved
+        changed
     }
 
     /// Whether `lane`, with its length, moved: what its writer needs to
@@ -69,13 +69,13 @@ impl Read {
 /// Whether a buffer of `unit`-byte slots holds what was last written to it,
 /// so a frame writes again only the slots its writer says changed.
 #[derive(Default)]
-pub(crate) struct Written {
+pub(crate) struct SlotMirror {
     held: bool,
     /// The changed slots, sorted, kept for their room.
     slots: Vec<u32>,
 }
 
-impl Written {
+impl SlotMirror {
     /// `now` written over `buf` from 0: where the buffer holds what was last
     /// written, only the runs of the `unit`-byte slots `changed` names that
     /// `now` holds; else, or where those runs do not fit the stream, the

@@ -159,7 +159,7 @@ fn no_surface_placed_stands() {
     assert_eq!(
         access
             .surface_of(
-                GROUND.cell(),
+                GROUND.leaf_cell_zoom(),
                 GROUND.cell_of(LEAF_ZOOM, &point(at[0], at[1])).node().1
             )
             .val()
@@ -262,7 +262,7 @@ fn ray_across_antimeridian() {
     );
     let top = World::new(&tile_cache, &Store::default())
         .surface_of(
-            GROUND.cell(),
+            GROUND.leaf_cell_zoom(),
             GROUND
                 .cell_of(LEAF_ZOOM, &point(-seam + 20.5, 100.5))
                 .node()
@@ -435,7 +435,7 @@ fn walker_stands_any_tier() {
     let (tile_cache, [x, y]) = flat_at_five();
     let red = cube::Object::red as AssetId;
     for zoom in OBJECT_COARSEST..=OBJECT_FINEST {
-        let (cell, side) = (units(GROUND.cell()), units(zoom));
+        let (cell, side) = (units(GROUND.leaf_cell_zoom()), units(zoom));
         let mut store = Store::default();
         // In the cell's far corner, off its middle.
         write(
@@ -519,7 +519,7 @@ fn walker_climbs_or_slides() {
         write(&mut store, [x + 1.0, y, z], OBJECT_COARSEST, red);
     }
     let from = world::point(x + 0.5, y + 0.5, over(5.0));
-    let floor = |p: Q3| q3::to_real(i64::from(p[2])) - units(GROUND.cell()) / 2.0;
+    let floor = |p: Q3| q3::to_real(i64::from(p[2])) - units(GROUND.leaf_cell_zoom()) / 2.0;
     let east = world::point(x + 1.5, y + 0.5, 0.0);
     {
         let access = World::new(&tile_cache, &store);
@@ -593,7 +593,7 @@ fn reading_reports_columns() {
     let store = Store::default();
     let read = changes::Footprint::default();
     let access = World::new(&tile_cache, &store).reading(&read);
-    let cell = units(GROUND.cell());
+    let cell = units(GROUND.leaf_cell_zoom());
     let at = [x + 0.5 * cell, y + 0.5 * cell];
     let c = at.map(|v| libm::floor(v / cell) * cell);
     access.surface_support(&point(at[0], at[1]));
@@ -668,8 +668,8 @@ fn box_placed_matches_store() {
 fn late_brick_spike() {
     use crate::domain::layer::terrain::clipmap::test::{hand, unland};
     use crate::domain::layer::terrain::clipmap::CpuClipmap;
-    use pxl_engine::clipmap::{self as cells, Bricks, Lookup, BRICK, BRICK_LEVELS, CLIP_SIZE};
-    use pxl_engine::LEAF_CELL;
+    use pxl_engine::clipmap::{self as cells, Bricks, Lookup, BRICK, BRICK_MIPS, CLIP_SIZE};
+    use pxl_engine::LEAF_CELL_ZOOM;
     let _g = serial();
     let leaf = top().children()[0];
     let mut heights = vec![5; CELLS];
@@ -685,9 +685,10 @@ fn late_brick_spike() {
     let tile_cache = resident([x0 + 300.0, y0 + 200.0], &[(leaf, spiked)]);
     let store = Store::default();
     // The spike's column in the eye's leaves' clip level.
-    let (first, _) = CpuClipmap.origin(LEAF_CELL);
-    let top =
-        |g: [i32; 2]| cells::column_top(cells::cell(&CpuClipmap, Lookup::NONE, LEAF_CELL, g).1);
+    let (first, _) = CpuClipmap.origin(LEAF_CELL_ZOOM);
+    let top = |g: [i32; 2]| {
+        cells::column_top(cells::cell(&CpuClipmap, Lookup::NONE, LEAF_CELL_ZOOM, g).1)
+    };
     let spike = (0..CLIP_SIZE as i32 * CLIP_SIZE as i32)
         .map(|k| {
             let w = CLIP_SIZE as i32;
@@ -698,7 +699,7 @@ fn late_brick_spike() {
         })
         .find(|&g| top(g) == 400)
         .expect("the spike held");
-    let side = units(GROUND.cell());
+    let side = units(GROUND.leaf_cell_zoom());
     let at = [
         (f64::from(spike[0]) + 0.5) * side,
         (f64::from(spike[1]) + 0.5) * side,
@@ -712,7 +713,7 @@ fn late_brick_spike() {
             .point[2]
     };
     let held = met(&World::new(&tile_cache, &store));
-    unland(LEAF_CELL, spike);
+    unland(LEAF_CELL_ZOOM, spike);
     hand();
     assert_eq!(met(&World::new(&tile_cache, &store)), held, "the spike met");
     let q = cells::brick_of(spike).0;
@@ -723,12 +724,12 @@ fn late_brick_spike() {
             q[1] * BRICK as i32 + (k / BRICK) as i32,
         ];
         let h = top(g);
-        for zoom in TOP_ZOOM..LEAF_CELL - BRICK_LEVELS {
-            let s = LEAF_CELL - zoom;
+        for zoom in TOP_ZOOM..LEAF_CELL_ZOOM - BRICK_MIPS {
+            let s = LEAF_CELL_ZOOM - zoom;
             let (b, _, _) = cells::bound_over(
                 &CpuClipmap,
                 &mut Lookup::NONE.clone(),
-                [LEAF_CELL, LEAF_CELL],
+                [LEAF_CELL_ZOOM, LEAF_CELL_ZOOM],
                 (zoom, [g[0] >> s, g[1] >> s]),
             );
             outside += u32::from(h < b[0][0] || h > b[0][1]);
@@ -744,21 +745,27 @@ fn late_brick_spike() {
 #[test]
 fn device_loss_drops_bounds() {
     use crate::domain::layer::terrain::clipmap::{test::lose, CpuClipmap};
-    use pxl_engine::clipmap::{self as cells, Bricks, Lookup, BRICK, BRICK_LEVELS};
+    use pxl_engine::clipmap::{self as cells, Bricks, Lookup, BRICK, BRICK_MIPS};
     use pxl_engine::ground::UNBOUNDED;
-    use pxl_engine::LEAF_CELL;
+    use pxl_engine::LEAF_CELL_ZOOM;
     let _g = serial();
     let _held = flat_at_five();
-    let (first, _) = CpuClipmap.origin(LEAF_CELL);
-    let zoom = LEAF_CELL - BRICK_LEVELS - 1;
+    let (first, _) = CpuClipmap.origin(LEAF_CELL_ZOOM);
+    let zoom = LEAF_CELL_ZOOM - BRICK_MIPS - 1;
     let over = || {
-        let s = LEAF_CELL - zoom;
+        let s = LEAF_CELL_ZOOM - zoom;
         let g = [
             (first[0] * BRICK as i32) >> s,
             (first[1] * BRICK as i32) >> s,
         ];
         let mut place = Lookup::NONE;
-        cells::bound_over(&CpuClipmap, &mut place, [LEAF_CELL, LEAF_CELL], (zoom, g)).0
+        cells::bound_over(
+            &CpuClipmap,
+            &mut place,
+            [LEAF_CELL_ZOOM, LEAF_CELL_ZOOM],
+            (zoom, g),
+        )
+        .0
     };
     assert_ne!(over(), [UNBOUNDED; 2], "held");
     lose();
@@ -886,7 +893,7 @@ fn area_edge_leaf_cell_thick() {
     let tile_cache = resident([x0 + 10.0, y0 + 10.0], &[(leaf, flat)]);
     let store = Store::default();
     let world = World::new(&tile_cache, &store);
-    let cell = units(GROUND.cell());
+    let cell = units(GROUND.leaf_cell_zoom());
     // The leaf cell `i` east of the leaf's west edge: whether it is the
     // area's, and a cube of it on the ground editable.
     let column = |i: f64| {

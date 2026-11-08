@@ -25,7 +25,7 @@ pub type Shard = [i32; 2];
 /// What an edge may be off by, in units: a ground cell, the finest thing a
 /// bake tells apart, and more than the meter a shard's edges and a feature's
 /// extent are each rounded to.
-pub const EPS: f64 = units(GROUND.cell());
+pub const EPS: f64 = units(GROUND.leaf_cell_zoom());
 
 /// How far past a leaf any bake reads, in units: a z13 tile, four terrain
 /// leaves. A terrain leaf's reads stay within its 2-ring; a

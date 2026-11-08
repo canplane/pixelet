@@ -24,21 +24,21 @@ fn px_start_at(aim: Aim, id: vec2<u32>, size: vec2<u32>, t: f32) -> Start {
 
 /// The face the ray aimed `aim` entered where walk `w` stopped: twice its axis, one more
 /// where the ray runs up that axis (pxl-engine `ray::FACE_SHIFT`'s face).
-fn face_of(aim: Aim, w: Walked) -> u32 {
+fn face_of(aim: Aim, w: WalkEnd) -> u32 {
   return 2u * w.axis + select(0u, 1u, aim.dir[w.axis] > 0.0);
 }
 
 /// The eighths of its cube the cell a walk stopped at keeps, 0 for the whole
 /// (`answer::FILL_SHIFT`).
-fn hit_fill(w: Walked) -> u32 {
+fn hit_fill(w: WalkEnd) -> u32 {
   return (w.asset.x >> FILL_SHIFT) & (EIGHTHS - 1u);
 }
 
 /// Walk `w`'s stop at pixel `id`, entered through `face` (`beam::HIT_LACKS` set where it
-/// lacks), put as stop `r` the record takes (`keep_hit`, `beam::HIT_WORDS`, record_stops.wgsl):
+/// lacks), put as stop `r` the record takes (`keep_hit`, `beam::HIT_WORDS`, record_hits.wgsl):
 /// its node, the asset it stopped at, and the line its pixel's cell's rays resumed from, which
 /// that face's word is asked off.
-fn hit_put(r: u32, w: Walked, face: u32, id: vec2<u32>) {
+fn hit_put(r: u32, w: WalkEnd, face: u32, id: vec2<u32>) {
   let k = hit_at(r);
   beams[k + HIT_NODE + NODE_ZOOM] = w.zoom;
   beams[k + HIT_NODE + NODE_CORNER] = w.corner.x;
@@ -52,7 +52,7 @@ fn hit_put(r: u32, w: Walked, face: u32, id: vec2<u32>) {
   beams[k + HIT_ASSET] = w.asset.x;
   beams[k + HIT_ASSET + 1u] = w.asset.y;
   // The line its pixel's cell's rays resumed from, the eye's; the light asks no face's word
-  // off a line (record_stops.light.wgsl `hit_asks`).
+  // off a line (record_hits.light.wgsl `hit_asks`).
   var line = NONE;
   if (!light_run()) {
     let cell = grid_cell(px_tan(id, textureDimensions(rays).xy));
@@ -63,7 +63,7 @@ fn hit_put(r: u32, w: Walked, face: u32, id: vec2<u32>) {
 
 /// The ray's words where walk `w` ended, entered through `face`, `faces` what lies about that
 /// face (`word`): where it met nothing, every word zero.
-fn ray_word(w: Walked, face: u32, faces: u32) -> vec4<u32> {
+fn ray_word(w: WalkEnd, face: u32, faces: u32) -> vec4<u32> {
   if (w.ends != 1u) {
     return vec4<u32>(0u);
   }

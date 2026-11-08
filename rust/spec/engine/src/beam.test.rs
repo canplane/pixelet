@@ -8,7 +8,7 @@ use crate::answer::{
 };
 use crate::cast::{Detail, End, Node, Query, Ray, Spacing, Trace, Until, DEPTH};
 use crate::content::Sample;
-use crate::overwrite::{ancestor_at, y_start, z_start};
+use crate::object::{ancestor_at, y_start, z_start};
 use crate::HEIGHT_BITS;
 use crate::{wrap_idx, Zoom, FRAC_W, TOP_ZOOM, UNIT_ZOOM};
 use std::vec::Vec;
@@ -113,7 +113,7 @@ impl Query for Stand {
     ) -> In<[u32; 2]> {
         assert_eq!(*at, (zoom, c), "asked");
         let side = libm::ldexpf(1.0, UNIT_ZOOM as i32 - zoom as i32);
-        // Y and Z from the world's edge (`overwrite::path`).
+        // Y and Z from the world's edge (`object::path`).
         let lo = [
             c[0] as f32 * side,
             (c[1] + y_start(zoom)) as f32 * side - (1u32 << (UNIT_ZOOM - 1)) as f32,
@@ -264,24 +264,24 @@ fn each<T: Send>(n: usize, f: impl Fn(usize) -> T + Sync) -> Vec<T> {
 /// `SAMPLE_NONE` is all the raster reads of it (pxl-render boxes.wgsl
 /// `write_box`).
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct Stop {
+struct Hit {
     ends: End,
     node: Node,
     asset: [u32; 2],
     axis: u32,
 }
 
-impl Stop {
-    fn of(met: &Trace<At>) -> Stop {
+impl Hit {
+    fn of(met: &Trace<At>) -> Hit {
         if met.ends == End::Miss {
-            return Stop {
+            return Hit {
                 ends: End::Miss,
                 node: Node::ROOT,
                 asset: AIR,
                 axis: 0,
             };
         }
-        Stop {
+        Hit {
             ends: met.ends,
             node: met.hit.node,
             asset: met.hit.asset,
@@ -295,7 +295,7 @@ impl Stop {
 /// root.
 #[derive(Clone, Copy)]
 struct Cast {
-    stop: Stop,
+    hit: Hit,
     cell: [u32; 2],
     t: f32,
     resumed: bool,
@@ -377,7 +377,7 @@ fn cast_view(view: &View) -> Vec<Cast> {
             &mut (),
         );
         Cast {
-            stop: Stop::of(&met),
+            hit: Hit::of(&met),
             cell,
             t,
             resumed,
@@ -397,7 +397,7 @@ fn sample_hit_is_the_walks_from_the_eye() {
         let [n, m] = g.samples;
         let fresh = each((n * m) as usize, |k| {
             let ray = view.ray(g.sample([k as u32 % n, k as u32 / n]));
-            Stop::of(&cast::first(
+            Hit::of(&cast::first(
                 &mut Stand,
                 view.origin,
                 &ray,
@@ -411,12 +411,12 @@ fn sample_hit_is_the_walks_from_the_eye() {
             let s = [k as u32 % n, k as u32 / n];
             let a = &cast[k];
             assert!(
-                a.stop == *f,
+                a.hit == *f,
                 "{tan:?} sample {s:?}: fresh {f:?}; cell {:?} from {} resumed {}: {:?}",
                 a.cell,
                 a.t,
                 a.resumed,
-                a.stop,
+                a.hit,
             );
             if f.ends == End::Hit {
                 met[fill_eighths(f.asset[0]) as usize] += 1;

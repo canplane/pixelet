@@ -277,7 +277,7 @@ pub struct Frame {
     pub appends: &'static [Range],
     pub seeds: &'static [&'static str],
     pub bounds: &'static [Bound],
-    pub kept: &'static [Kept],
+    pub persistent: &'static [Persistent],
 }
 
 /// A count read as a bound while it is added to, and the most it may run past the bound a
@@ -305,7 +305,7 @@ const fn within_bound(r: Range, bounds: &[Bound]) -> bool {
 /// apply, each through atomics to a value it sets alike wherever it is applied, the range an
 /// append range; and what makes what it holds stale, said.
 #[derive(Clone, Copy)]
-pub struct Kept {
+pub struct Persistent {
     pub range: Range,
     pub owner: &'static str,
     pub by: &'static [&'static str],
@@ -315,18 +315,18 @@ pub struct Kept {
 /// A hazard the frame holds today: its rule (1 to 4), the call and the other call, the buffer
 /// or the kept range's owner it holds it with.
 #[derive(Clone, Copy)]
-pub struct Known {
+pub struct KnownHazard {
     pub rule: u32,
     pub step: &'static str,
     pub with: &'static str,
 }
 
-/// List `which`'s marks in the light's args (pxl-engine `light::listed_marks_at`): a word a
+/// List `which`'s marks in the light's args (pxl-engine `light::list_marks_at`): a word a
 /// tile, the number of the cast that last listed it.
 pub const fn light_marks(which: u32) -> [u32; 2] {
     [
-        light::ARGS_WORDS + light::listed_marks_at(SHADOW_SIZE, which),
-        light::listed_room(SHADOW_SIZE, which),
+        light::ARGS_WORDS + light::list_marks_at(SHADOW_SIZE, which),
+        light::list_cap(SHADOW_SIZE, which),
     ]
 }
 
@@ -347,8 +347,8 @@ pub const TOUCHES: &[Touch] = {
         light_marks(which)
     }
     /// The stood list's args a receivers' pass lists a tile by: its dispatch's x, its count
-    /// and the slide's x (light_stood.wgsl `stood_put`, `stood_first`).
-    const STOOD: [u32; 2] = [light::STOOD_LIST, light::STOOD_SLIDE + 1];
+    /// and the slide's x (light_receiver_tiles.wgsl `receiver_tiles_put`, `receiver_tiles_first`).
+    const STOOD: [u32; 2] = [light::RECEIVER_TILES_LIST, light::RECEIVER_TILES_SLIDE + 1];
     /// A raster's draw's args, and the faces' asks a pass lays at `at` (record_put.wgsl).
     const DRAW_ARGS: [u32; 2] = [0, raster::ARGS_WORDS];
     const fn asks(at: u32) -> [u32; 2] {
@@ -375,7 +375,7 @@ pub const TOUCHES: &[Touch] = {
             reads: &[],
         },
         // The drawable entries' boxes counted into its draw's args, each box's tiles stood on by the
-        // world's receivers (record_draw.wgsl, light_stood.wgsl `stand_box`).
+        // world's receivers (record_draw.wgsl, light_receiver_tiles.wgsl `stand_box`).
         Touch {
             compute: COMPUTE_RECORD_DRAW,
             binding: 16,
@@ -391,19 +391,19 @@ pub const TOUCHES: &[Touch] = {
         Touch {
             compute: COMPUTE_RECORD_DRAW,
             binding: 21,
-            writes: &[marks(light::LISTED_STOOD)],
-            reads: &[marks(light::LISTED_STOOD)],
+            writes: &[marks(light::LIST_RECEIVERS)],
+            reads: &[marks(light::LIST_RECEIVERS)],
         },
-        // The holes' stops: the eye's faces' asks laid at their own place (record_stops.wgsl,
-        // record_stops.eye.wgsl); the light's lay none (record_stops.light.wgsl).
+        // The holes' stops: the eye's faces' asks laid at their own place (record_hits.wgsl,
+        // record_hits.eye.wgsl); the light's lay none (record_hits.light.wgsl).
         Touch {
-            compute: COMPUTE_RECORD_STOPS,
+            compute: COMPUTE_RECORD_HITS,
             binding: 16,
-            writes: &[asks(raster::STOP_ASKED_AT)],
-            reads: &[asks(raster::STOP_ASKED_AT)],
+            writes: &[asks(raster::HIT_ASKED_AT)],
+            reads: &[asks(raster::HIT_ASKED_AT)],
         },
         Touch {
-            compute: COMPUTE_LIGHT_RECORD_STOPS,
+            compute: COMPUTE_LIGHT_RECORD_HITS,
             binding: 16,
             writes: &[],
             reads: &[],
@@ -416,55 +416,55 @@ pub const TOUCHES: &[Touch] = {
             reads: &[DRAW_ARGS],
         },
         // The receivers' marks: the tiles stood on, the world's and the drawn's alike
-        // (light_stood.wgsl `stand`).
+        // (light_receiver_tiles.wgsl `stand`).
         Touch {
             compute: COMPUTE_LIGHT_MARK_WALKED,
             binding: 21,
-            writes: &[marks(light::LISTED_STOOD)],
-            reads: &[marks(light::LISTED_STOOD)],
+            writes: &[marks(light::LIST_RECEIVERS)],
+            reads: &[marks(light::LIST_RECEIVERS)],
         },
         Touch {
             compute: COMPUTE_LIGHT_MARK_DRAWS,
             binding: 21,
-            writes: &[marks(light::LISTED_STOOD)],
-            reads: &[marks(light::LISTED_STOOD)],
+            writes: &[marks(light::LIST_RECEIVERS)],
+            reads: &[marks(light::LIST_RECEIVERS)],
         },
         // The propagation: the tiles read listed (light_propagate.wgsl `light_propagate_cs`).
         Touch {
             compute: COMPUTE_LIGHT_PROPAGATE,
             binding: 21,
-            writes: &[count(light::LISTED_READ), marks(light::LISTED_READ)],
-            reads: &[count(light::LISTED_READ), marks(light::LISTED_READ)],
+            writes: &[count(light::LIST_READS), marks(light::LIST_READS)],
+            reads: &[count(light::LIST_READS), marks(light::LIST_READS)],
         },
         // The claim: each tile read claimed where it is due, what feeds it listed and the passes
         // that cast them opened, and the lay's tiles set to those read (light_propagate.wgsl
-        // `light_claim_cs`, light_enlist.wgsl).
+        // `light_damage_cs`, light_enlist.wgsl).
         Touch {
-            compute: COMPUTE_LIGHT_CLAIM,
+            compute: COMPUTE_LIGHT_DAMAGE,
             binding: 21,
             writes: &[
                 [light::ARGS_LAY + 1, 1],
                 opened(light::ARGS_CELLS),
                 opened(light::ARGS_SAMPLE_BOX),
                 opened(light::ARGS_SLOT),
-                count(light::LISTED_CORNERS),
-                count(light::LISTED_FED),
-                count(light::LISTED_CLAIMED),
-                marks(light::LISTED_CORNERS),
-                marks(light::LISTED_FED),
-                marks(light::LISTED_CLAIMED),
+                count(light::LIST_CORNERS),
+                count(light::LIST_SOURCES),
+                count(light::LIST_DAMAGE),
+                marks(light::LIST_CORNERS),
+                marks(light::LIST_SOURCES),
+                marks(light::LIST_DAMAGE),
             ],
             reads: &[
                 opened(light::ARGS_CELLS),
                 opened(light::ARGS_SAMPLE_BOX),
                 opened(light::ARGS_SLOT),
-                count(light::LISTED_READ),
-                count(light::LISTED_CORNERS),
-                count(light::LISTED_FED),
-                count(light::LISTED_CLAIMED),
-                marks(light::LISTED_CORNERS),
-                marks(light::LISTED_FED),
-                marks(light::LISTED_CLAIMED),
+                count(light::LIST_READS),
+                count(light::LIST_CORNERS),
+                count(light::LIST_SOURCES),
+                count(light::LIST_DAMAGE),
+                marks(light::LIST_CORNERS),
+                marks(light::LIST_SOURCES),
+                marks(light::LIST_DAMAGE),
             ],
         },
         // The stood list's args a receivers' pass or the record's draw lists a tile by.
@@ -783,8 +783,8 @@ const fn within(r: Range, ranges: &[Range]) -> bool {
 /// The kept range `r` lies within, if one does.
 const fn kept_of(f: &Frame, r: Range) -> Option<usize> {
     let mut k = 0;
-    while k < f.kept.len() {
-        if within(r, &[f.kept[k].range]) {
+    while k < f.persistent.len() {
+        if within(r, &[f.persistent[k].range]) {
             return Some(k);
         }
         k += 1;
@@ -820,7 +820,7 @@ pub const fn role(f: &Frame, s: &Step, binding: u32) -> u32 {
 
 /// A hazard: its rule, the step it is held at, and the other step or the buffer.
 #[derive(Clone, Copy)]
-pub struct Found {
+pub struct Hazard {
     pub rule: u32,
     pub step: usize,
     pub other: usize,
@@ -843,8 +843,8 @@ pub const fn declared(f: &Frame) {
         t += 1;
     }
     let mut k = 0;
-    while k < f.kept.len() {
-        let kept = &f.kept[k];
+    while k < f.persistent.len() {
+        let kept = &f.persistent[k];
         let mut by = 0;
         while by < kept.by.len() {
             if !named(f, kept.by[by]) {
@@ -1112,7 +1112,7 @@ const fn unwritten_read(f: &Frame, t: &Table, r: usize) -> Option<(usize, u32)> 
                     before = true;
                 } else if f.steps[w].stage == s.stage
                     && !writes_into(t, r, read)
-                    && !rewrites_kept(f, w, read)
+                    && !rewrites_persistent(f, w, read)
                     && !within_bound(read, f.bounds)
                     && s.kind != WRITE_BY_RUNTIME
                     && f.steps[w].kind != WRITE_BY_RUNTIME
@@ -1136,8 +1136,8 @@ const fn unwritten_read(f: &Frame, t: &Table, r: usize) -> Option<(usize, u32)> 
 const fn not_owner(f: &Frame, t: &Table, w: usize) -> Option<usize> {
     let s = &f.steps[w];
     let mut k = 0;
-    while k < f.kept.len() {
-        let kept = f.kept[k];
+    while k < f.persistent.len() {
+        let kept = f.persistent[k];
         let writes = writes_into(t, w, kept.range);
         let applies = applies(&kept, s.name);
         let owner = same(s.name, kept.owner) || applies;
@@ -1154,7 +1154,7 @@ const fn not_owner(f: &Frame, t: &Table, w: usize) -> Option<usize> {
 }
 
 /// Whether step `name` is one that applies kept range `kept`'s rule.
-const fn applies(kept: &Kept, name: &str) -> bool {
+const fn applies(kept: &Persistent, name: &str) -> bool {
     let mut k = 0;
     while k < kept.by.len() {
         if same(kept.by[k], name) {
@@ -1179,44 +1179,44 @@ const fn owned_with(f: &Frame, w: usize, owner: &str) -> bool {
 
 /// Whether step `w` is the owner of the kept range `read` lies within, which writes it for the
 /// frames after the one that read it.
-const fn rewrites_kept(f: &Frame, w: usize, read: Range) -> bool {
+const fn rewrites_persistent(f: &Frame, w: usize, read: Range) -> bool {
     match kept_of(f, read) {
         Some(k) => {
-            same(f.steps[w].name, f.kept[k].owner)
-                || owned_with(f, w, f.kept[k].owner)
-                || applies(&f.kept[k], f.steps[w].name)
+            same(f.steps[w].name, f.persistent[k].owner)
+                || owned_with(f, w, f.persistent[k].owner)
+                || applies(&f.persistent[k], f.steps[w].name)
         }
         None => false,
     }
 }
 
 /// The most hazards a frame is held to.
-pub const FOUND_CAP: usize = 64;
+pub const HAZARDS_CAP: usize = 64;
 
 /// Every hazard the frame holds, rule by rule, step by step, and how many.
-pub const fn all_found(f: &Frame) -> ([Found; FOUND_CAP], usize) {
-    let none = Found {
+pub const fn hazards(f: &Frame) -> ([Hazard; HAZARDS_CAP], usize) {
+    let none = Hazard {
         rule: 0,
         step: 0,
         other: 0,
         buf: NO_BUFFER,
     };
     let t = table(f);
-    let mut out = [none; FOUND_CAP];
+    let mut out = [none; HAZARDS_CAP];
     let mut n = 0;
     let mut k = 0;
     while k < f.steps.len() {
         let mut each = [none; 4];
         if let Some(kept) = not_owner(f, &t, k) {
-            each[3] = Found {
+            each[3] = Hazard {
                 rule: 4,
                 step: k,
                 other: kept,
-                buf: f.kept[kept].range.buf,
+                buf: f.persistent[kept].range.buf,
             };
         }
         if let Some(g) = bound_writable(f, k) {
-            each[0] = Found {
+            each[0] = Hazard {
                 rule: 1,
                 step: k,
                 other: g,
@@ -1224,7 +1224,7 @@ pub const fn all_found(f: &Frame) -> ([Found; FOUND_CAP], usize) {
             };
         }
         if let Some((b, buf)) = second_writer(f, &t, k) {
-            each[1] = Found {
+            each[1] = Hazard {
                 rule: 2,
                 step: k,
                 other: b,
@@ -1232,7 +1232,7 @@ pub const fn all_found(f: &Frame) -> ([Found; FOUND_CAP], usize) {
             };
         }
         if let Some((w, buf)) = unwritten_read(f, &t, k) {
-            each[2] = Found {
+            each[2] = Hazard {
                 rule: 3,
                 step: k,
                 other: w,
@@ -1242,8 +1242,8 @@ pub const fn all_found(f: &Frame) -> ([Found; FOUND_CAP], usize) {
         let mut e = 0;
         while e < each.len() {
             if each[e].rule != 0 {
-                if n == FOUND_CAP {
-                    panic!("more hazards than `FOUND_CAP`");
+                if n == HAZARDS_CAP {
+                    panic!("more hazards than `HAZARDS_CAP`");
                 }
                 out[n] = each[e];
                 n += 1;
@@ -1257,9 +1257,9 @@ pub const fn all_found(f: &Frame) -> ([Found; FOUND_CAP], usize) {
 
 /// What a hazard is held with, as a known one names it: the other step, or the buffer where
 /// there is none (rule 1, rule 3 with no writer before).
-pub const fn with(f: &Frame, found: &Found) -> &'static str {
+pub const fn with(f: &Frame, found: &Hazard) -> &'static str {
     if found.rule == 4 {
-        f.kept[found.other].owner
+        f.persistent[found.other].owner
     } else if found.rule == 2 || (found.rule == 3 && found.other != usize::MAX) {
         f.steps[found.other].name
     } else {
@@ -1268,7 +1268,7 @@ pub const fn with(f: &Frame, found: &Found) -> &'static str {
 }
 
 /// Whether `known` names `found`.
-const fn names(f: &Frame, known: &Known, found: &Found) -> bool {
+const fn names(f: &Frame, known: &KnownHazard, found: &Hazard) -> bool {
     known.rule == found.rule
         && same(known.step, f.steps[found.step].name)
         && same(known.with, with(f, found))
@@ -1293,18 +1293,18 @@ const fn refuse_known_gone(name: &str) {
 
 /// The frame's declarations held (`declared`), and every hazard it holds one `known` names,
 /// each of them one it holds; refused at the step's name, in the function of its rule.
-pub const fn check(f: &Frame, known: &[Known]) {
+pub const fn check(f: &Frame, known: &[KnownHazard]) {
     declared(f);
-    let (found, n) = all_found(f);
+    let (found, n) = hazards(f);
     let mut k = 0;
     while k < n {
-        let mut listed = false;
+        let mut list_of = false;
         let mut m = 0;
         while m < known.len() {
-            listed |= names(f, &known[m], &found[k]);
+            list_of |= names(f, &known[m], &found[k]);
             m += 1;
         }
-        if !listed {
+        if !list_of {
             let name = f.steps[found[k].step].name;
             match found[k].rule {
                 1 => refuse_args_bound_writable(name),
@@ -1331,7 +1331,7 @@ pub const fn check(f: &Frame, known: &[Known]) {
 
 /// Every hazard the frame holds, each as its rule, its step and what it is held with.
 pub fn found(f: &Frame) -> Vec<(u32, &'static str, &'static str)> {
-    let (found, n) = all_found(f);
+    let (found, n) = hazards(f);
     found[..n]
         .iter()
         .map(|h| (h.rule, f.steps[h.step].name, with(f, h)))

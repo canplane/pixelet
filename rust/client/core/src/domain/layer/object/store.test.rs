@@ -11,7 +11,7 @@ use pxl_spec::space::coord::zoom::SHARD_ZOOM;
 use super::*;
 use crate::domain::layer::Query;
 use pxl_engine::answer;
-use pxl_engine::overwrite::{self, Cut};
+use pxl_engine::object::{self, Cut};
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 use xpute_kit::math::rng::SplitMix64;
@@ -37,7 +37,7 @@ fn write_undo_round_trip() {
                 let slot = store.cursor((OBJECT_FINEST, finest), OBJECT_FINEST);
                 slot.holds()
                     && !slot.is_folded()
-                    && overwrite::val(&store.columns(), slot, Cut::NONE, OBJECT_FINEST, finest) == 3
+                    && object::val(&store.columns(), slot, Cut::NONE, OBJECT_FINEST, finest) == 3
             },
             "a cell leaf covers its steps"
         );
@@ -113,15 +113,15 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Contents, [i32; 2]) {
         ext: None,
     }));
     let target = GROUND.cell_zoom(zoom);
-    let corner = base.map(|v| v >> (GROUND.cell() - target));
-    let per = 64 >> (GROUND.cell() - target);
+    let corner = base.map(|v| v >> (GROUND.leaf_cell_zoom() - target));
+    let per = 64 >> (GROUND.leaf_cell_zoom() - target);
     let mut out = FnvHashMap::default();
     for z in -4..8 {
         for y in corner[1]..corner[1] + per {
             for x in corner[0]..corner[0] + per {
                 let slot = store.cursor((target, [x, y, z]), target);
-                let v = overwrite::val(&store.columns(), slot, Cut::NONE, target, [x, y, z]);
-                let eighths = answer::eighths(overwrite::fill_share(&store.columns(), slot));
+                let v = object::val(&store.columns(), slot, Cut::NONE, target, [x, y, z]);
+                let eighths = answer::eighths(object::fill_share(&store.columns(), slot));
                 if v != VOID && eighths > 0 {
                     out.insert([x, y, z], (v, eighths));
                 }
@@ -332,7 +332,7 @@ fn eight_markers_stay() {
         .map(|k| Write {
             at: id_of(
                 OBJECT_COARSEST + 1,
-                overwrite::child_at(OBJECT_COARSEST, parent, k),
+                object::child_at(OBJECT_COARSEST, parent, k),
             ),
             id: MARKER,
             ext: marker_text(&format!("m{k}")),

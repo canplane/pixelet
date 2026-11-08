@@ -378,7 +378,7 @@ pub fn fold_separation(around: [Option<&Separation>; 16], zoom: Zoom) -> Separat
                 if a.0 == b.0 {
                     continue;
                 }
-                let s = folded.intern(Folding {
+                let s = folded.intern(FoldSegment {
                     a,
                     b,
                     width,
@@ -400,7 +400,7 @@ pub fn fold_separation(around: [Option<&Separation>; 16], zoom: Zoom) -> Separat
 /// surface and the coarsest zoom each is held at, and its line's width,
 /// kind, form and clear.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-struct Folding {
+struct FoldSegment {
     a: ([i32; 2], i16, u8),
     b: ([i32; 2], i16, u8),
     width: u8,
@@ -416,14 +416,14 @@ const SEGMENTS: usize = usize::MAX - 1;
 /// A fold's segments, each once, and the one after and before each.
 #[derive(Default)]
 struct Fold {
-    segments: Vec<Folding>,
-    idx: fnv::FnvHashMap<Folding, usize>,
+    segments: Vec<FoldSegment>,
+    idx: fnv::FnvHashMap<FoldSegment, usize>,
     next: Vec<usize>,
     prev: Vec<usize>,
 }
 
 impl Fold {
-    fn intern(&mut self, s: Folding) -> usize {
+    fn intern(&mut self, s: FoldSegment) -> usize {
         *self.idx.entry(s).or_insert_with(|| {
             self.segments.push(s);
             self.next.push(NO_SEGMENT);
@@ -434,7 +434,7 @@ impl Fold {
 
     /// `s` after `p` in a copy, of one line where both have the same line.
     fn join(&mut self, p: usize, s: usize) {
-        let same = |a: Folding, b: Folding| {
+        let same = |a: FoldSegment, b: FoldSegment| {
             (a.width, a.kind, a.form, a.clear) == (b.width, b.kind, b.form, b.clear)
         };
         if !same(self.segments[p], self.segments[s]) {

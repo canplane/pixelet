@@ -45,9 +45,9 @@ pub const COMPUTE_SCREEN_BOUND: u32 = 24;
 pub const COMPUTE_LIGHT_SLIDE: u32 = 25;
 pub const COMPUTE_QUEUE_LAST: u32 = 26;
 /// What lies about each hole's stop's face put at its pixel off the record
-/// (`SHADER_RECORD_STOPS`).
+/// (`SHADER_RECORD_HITS`).
 pub const COMPUTE_RECORD_FACES: u32 = 27;
-pub const COMPUTE_BOX_ARGS: u32 = 28;
+pub const COMPUTE_RECT_ARGS: u32 = 28;
 pub const COMPUTE_QUEUE_LIGHT_CORNERS: u32 = 29;
 pub const COMPUTE_LIGHT_CELL: u32 = 30;
 pub const COMPUTE_QUEUE_LAST_LIGHT_SAMPLES: u32 = 31;
@@ -60,21 +60,21 @@ pub const COMPUTE_QUEUE_PARKED: u32 = 36;
 pub const COMPUTE_QUEUE_LIGHT_SAMPLES: u32 = 37;
 pub const COMPUTE_QUEUE_LAST_LIGHT_CORNERS: u32 = 38;
 pub const COMPUTE_CAST_TILES: u32 = 39;
-pub const COMPUTE_CLAIMED_BOX: u32 = 40;
-pub const COMPUTE_DECOR_GATE_ARGS: u32 = 41;
-pub const COMPUTE_DECOR_GATE: u32 = 42;
+pub const COMPUTE_DAMAGE_RECT: u32 = 40;
+pub const COMPUTE_DECOR_CULL_ARGS: u32 = 41;
+pub const COMPUTE_DECOR_CULL: u32 = 42;
 /// The node cache's drawable entries drawn as the raster's boxes (record_draw.wgsl).
 pub const COMPUTE_RECORD_DRAW: u32 = 43;
-/// The missed pixels' hits into the node cache's drawable entries (record_stops.wgsl).
-pub const COMPUTE_RECORD_STOPS: u32 = 44;
+/// The missed pixels' hits into the node cache's drawable entries (record_hits.wgsl).
+pub const COMPUTE_RECORD_HITS: u32 = 44;
 /// The node cache's drawable entries drawn as the light's raster's boxes (record_draw.wgsl).
 pub const COMPUTE_LIGHT_RECORD_DRAW: u32 = 45;
-/// The light's holes' stops into the node cache's drawable entries (record_stops.wgsl over
-/// record_stops.light.wgsl).
-pub const COMPUTE_LIGHT_RECORD_STOPS: u32 = 46;
+/// The light's holes' stops into the node cache's drawable entries (record_hits.wgsl over
+/// record_hits.light.wgsl).
+pub const COMPUTE_LIGHT_RECORD_HITS: u32 = 46;
 /// Each tile the light's cast lists read, claimed where its epoch has not cast it
-/// (light_propagate.wgsl `light_claim_cs`).
-pub const COMPUTE_LIGHT_CLAIM: u32 = 47;
+/// (light_propagate.wgsl `light_damage_cs`).
+pub const COMPUTE_LIGHT_DAMAGE: u32 = 47;
 /// The samples' runs' second walks over the node cache alone and their asks, the eye's and the
 /// light's (`SHADER_QUEUE_SAMPLES`, `SHADER_QUEUE_ASK_SAMPLES`).
 pub const COMPUTE_QUEUE_SAMPLES_PARKED: u32 = 48;
@@ -100,9 +100,9 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_ATMOS_EXPOSURE => (SHADER_ATMOS_EXPOSURE, "exposure_cs"),
         COMPUTE_CAST => (SHADER_CAST, "cast_cs"),
         COMPUTE_CAST_TILES => (SHADER_CAST_TILES, "cast_tiles_cs"),
-        COMPUTE_CLAIMED_BOX => (SHADER_CLAIMED_BOX, "claimed_box_cs"),
-        COMPUTE_DECOR_GATE_ARGS => (SHADER_DECOR_GATE, "decor_gate_args_cs"),
-        COMPUTE_DECOR_GATE => (SHADER_DECOR_GATE, "decor_gate_cs"),
+        COMPUTE_DAMAGE_RECT => (SHADER_DAMAGE_RECT, "damage_rect_cs"),
+        COMPUTE_DECOR_CULL_ARGS => (SHADER_DECOR_CULL, "decor_cull_args_cs"),
+        COMPUTE_DECOR_CULL => (SHADER_DECOR_CULL, "decor_cull_cs"),
         COMPUTE_GENERATION => (SHADER_GENERATION, "decor_cs"),
         COMPUTE_GENERATION_CNT => (SHADER_GENERATION_CNT, "decor_cnt_cs"),
         COMPUTE_GENERATION_ARGS => (SHADER_GENERATION_ARGS, "decor_args_cs"),
@@ -125,15 +125,15 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_LIGHT_MARK_DRAWS => (SHADER_LIGHT_MARK_DRAWS, "light_mark_draws_cs"),
         COMPUTE_LIGHT_MARK_DRAWS_OPEN => (SHADER_LIGHT_MARK_DRAWS_OPEN, "light_mark_draws_open_cs"),
         COMPUTE_LIGHT_PROPAGATE => (SHADER_LIGHT_PROPAGATE, "light_propagate_cs"),
-        COMPUTE_LIGHT_CLAIM => (SHADER_LIGHT_PROPAGATE, "light_claim_cs"),
+        COMPUTE_LIGHT_DAMAGE => (SHADER_LIGHT_PROPAGATE, "light_damage_cs"),
         COMPUTE_GENERATION_THIN => (SHADER_GENERATION_THIN, "decor_thin_cs"),
         COMPUTE_SCREEN_PROPAGATE => (SHADER_SCREEN_PROPAGATE, "screen_propagate_cs"),
         COMPUTE_SCREEN_MARK => (SHADER_SCREEN_MARK, "screen_mark_cs"),
         COMPUTE_SCREEN_BOUND => (SHADER_SCREEN_BOUND, "screen_bound_cs"),
         COMPUTE_LIGHT_SLIDE => (SHADER_LIGHT_SLIDE, "light_slide_cs"),
         COMPUTE_QUEUE_LAST => (SHADER_QUEUE_LAST, "queue_last_cs"),
-        COMPUTE_RECORD_FACES => (SHADER_RECORD_STOPS, "record_faces_cs"),
-        COMPUTE_BOX_ARGS => (SHADER_BOX_ARGS, "box_args_cs"),
+        COMPUTE_RECORD_FACES => (SHADER_RECORD_HITS, "record_faces_cs"),
+        COMPUTE_RECT_ARGS => (SHADER_RECT_ARGS, "rect_args_cs"),
         COMPUTE_QUEUE_LIGHT_CORNERS => (SHADER_QUEUE_LIGHT_CORNERS, "queue_cs"),
         COMPUTE_QUEUE_LIGHT_CORNERS_PARKED => (SHADER_QUEUE_LIGHT_CORNERS, "queue_parked_cs"),
         COMPUTE_QUEUE_ASK_LIGHT_CORNERS => (SHADER_QUEUE_ASK_LIGHT_CORNERS, "queue_ask_cs"),
@@ -158,9 +158,9 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         }
         COMPUTE_QUEUE_LAST_LIGHT_CORNERS => (SHADER_QUEUE_LAST_LIGHT_CORNERS, "queue_last_cs"),
         COMPUTE_RECORD_DRAW => (SHADER_RECORD_DRAW, "record_draw_cs"),
-        COMPUTE_RECORD_STOPS => (SHADER_RECORD_STOPS, "record_stops_cs"),
+        COMPUTE_RECORD_HITS => (SHADER_RECORD_HITS, "record_hits_cs"),
         COMPUTE_LIGHT_RECORD_DRAW => (SHADER_RECORD_DRAW, "light_record_draw_cs"),
-        COMPUTE_LIGHT_RECORD_STOPS => (SHADER_LIGHT_RECORD_STOPS, "record_stops_cs"),
+        COMPUTE_LIGHT_RECORD_HITS => (SHADER_LIGHT_RECORD_HITS, "record_hits_cs"),
         _ => panic!("a compute pipeline number with no shader"),
     }
 }
@@ -234,7 +234,7 @@ pub const PIPELINE_SCREEN_FINISH: u32 = 31;
 pub const PIPELINE_SCREEN_RESOLVE: u32 = 32;
 /// The gate a frame not drawn whole is drawn through: the claimed tiles
 /// cleared, their stencil raised (gpu/renderer.rs `frame`).
-pub const PIPELINE_SCREEN_GATE: u32 = 33;
+pub const PIPELINE_SCREEN_MASK: u32 = 33;
 /// The finished picture kept at the canvas's size shown on the canvas
 /// (gpu/finish.rs).
 pub const PIPELINE_SCREEN_SHOW: u32 = 34;
@@ -244,11 +244,11 @@ pub const PIPELINE_SCREEN_WRITE_BACK: u32 = 35;
 /// The gate the samples' raster is drawn through in a frame not drawn whole:
 /// the claimed tiles cleared to the far plane, the rest left at the nearest
 /// (gpu/ray/raster.rs).
-pub const PIPELINE_RASTER_GATE: u32 = 36;
+pub const PIPELINE_RASTER_MASK: u32 = 36;
 /// The gate the light's map is drawn through where only the listed
 /// casters that changed moved: the world's depth laid in the claimed tiles,
 /// their stencil raised (gpu/shadow.rs).
-pub const PIPELINE_LIGHT_GATE: u32 = 37;
+pub const PIPELINE_LIGHT_MASK: u32 = 37;
 /// A character drawn where it was and where it is, its fragments setting their
 /// screen tiles' words (gpu/pass/skinned_mesh.rs `draw_marks`).
 pub const PIPELINE_SKINNED_MARK: u32 = 38;
@@ -313,7 +313,7 @@ const fn i(v: i32) -> u32 {
 }
 
 #[derive(Clone, Copy)]
-struct Head {
+struct Header {
     shader: u32,
     fragment: bool,
     topology: u32,
@@ -326,8 +326,8 @@ struct Head {
     vertex: u32,
 }
 
-const fn lit(shader: u32, cull: u32) -> Head {
-    Head {
+const fn lit(shader: u32, cull: u32) -> Header {
+    Header {
         shader,
         fragment: true,
         topology: TRIANGLES,
@@ -341,8 +341,8 @@ const fn lit(shader: u32, cull: u32) -> Head {
     }
 }
 
-const fn blended(shader: u32, cull: u32) -> Head {
-    Head {
+const fn blended(shader: u32, cull: u32) -> Header {
+    Header {
         shader,
         fragment: true,
         topology: TRIANGLES,
@@ -361,8 +361,8 @@ const DEPTH_SLOPE_BIAS: f32 = light::SLOPE_BIAS;
 
 /// Depth alone: plain less-than, no fragment stage, both sides, pushed back
 /// by its slope as a rasterizer's polygon offset.
-const fn depth_only(shader: u32) -> Head {
-    Head {
+const fn depth_only(shader: u32) -> Header {
+    Header {
         shader,
         fragment: false,
         topology: TRIANGLES,
@@ -379,8 +379,8 @@ const fn depth_only(shader: u32) -> Head {
 /// A changed draw's mark (tile_mark.wgsl): its vertices as its depth pass
 /// lays them, both sides, its fragments writing no color and testing no
 /// depth.
-const fn mark(shader: u32) -> Head {
-    Head {
+const fn mark(shader: u32) -> Header {
+    Header {
         fragment: true,
         depth_write: false,
         depth_compare: ALWAYS,
@@ -389,8 +389,8 @@ const fn mark(shader: u32) -> Head {
     }
 }
 
-const fn screen(shader: u32) -> Head {
-    Head {
+const fn screen(shader: u32) -> Header {
+    Header {
         depth_compare: NO_DEPTH,
         blend: OPAQUE,
         ..blended(shader, CULL_NONE)
@@ -611,19 +611,19 @@ const SKY_GROUP: [[u32; 2]; 14] = and(
 /// stages that read them.
 #[derive(Clone, Copy)]
 struct Descriptor {
-    head: Head,
+    header: Header,
     buffers: &'static [VertexBufferLayout],
     groups: &'static [Group],
 }
 
 impl Descriptor {
     const fn new(
-        head: Head,
+        header: Header,
         buffers: &'static [VertexBufferLayout],
         groups: &'static [Group],
     ) -> Self {
         Self {
-            head,
+            header,
             buffers,
             groups,
         }
@@ -665,7 +665,7 @@ const fn desc_of(id: u32) -> Descriptor {
             &[&LIT_FRAME, &DRAWS],
         ),
         PIPELINE_MARKER => Descriptor::new(
-            Head {
+            Header {
                 topology: STRIP,
                 depth_compare: GREATER_EQUAL,
                 ..blended(SHADER_MARKER, CULL_NONE)
@@ -674,7 +674,7 @@ const fn desc_of(id: u32) -> Descriptor {
             &[FRAME, &DRAW, MARKER_SPRITES, &SKIN],
         ),
         PIPELINE_MARKER_REGION => Descriptor::new(
-            Head {
+            Header {
                 topology: STRIP,
                 depth_write: true,
                 depth_compare: GREATER_EQUAL,
@@ -686,7 +686,7 @@ const fn desc_of(id: u32) -> Descriptor {
         ),
         // Against the gizmos' own faces, not the world's depth.
         PIPELINE_DEBUG => Descriptor::new(
-            Head {
+            Header {
                 blend: ALPHA,
                 ..blended(SHADER_DEBUG, CULL_NONE)
             },
@@ -696,7 +696,7 @@ const fn desc_of(id: u32) -> Descriptor {
         // Pushed back by their slope as a rasterizer's polygon offset is, so
         // the lines that bound a face stay in front of it.
         PIPELINE_DEBUG_FACE => Descriptor::new(
-            Head {
+            Header {
                 cull: CULL_NONE,
                 depth_compare: GREATER,
                 depth_bias: i(-8),
@@ -707,7 +707,7 @@ const fn desc_of(id: u32) -> Descriptor {
             &[FRAME, &DRAW],
         ),
         PIPELINE_SCREEN_RAY => Descriptor::new(
-            Head {
+            Header {
                 depth_write: true,
                 blend: OPAQUE,
                 ..blended(SHADER_SCREEN_RAY, CULL_NONE)
@@ -720,7 +720,7 @@ const fn desc_of(id: u32) -> Descriptor {
         // occlusion's darkening, a draw of the world's pass, its depth not
         // tested or written.
         PIPELINE_AO_APPLY => Descriptor::new(
-            Head {
+            Header {
                 blend: ALPHA,
                 depth_compare: ALWAYS,
                 ..screen(SHADER_AO_APPLY)
@@ -751,7 +751,7 @@ const fn desc_of(id: u32) -> Descriptor {
             Descriptor::new(mark(SHADER_DECOR_MARK), &MODEL_BUFFERS, &MARK_GROUPS)
         }
         PIPELINE_IMPOSTOR_MARK => Descriptor::new(
-            Head {
+            Header {
                 topology: STRIP,
                 ..mark(SHADER_IMPOSTOR_MARK)
             },
@@ -778,7 +778,7 @@ const fn desc_of(id: u32) -> Descriptor {
         // list of those read, before the casters drawn over it, into the depth alone (gpu/api.rs
         // `pipeline`), its fragment the depth.
         PIPELINE_LIGHT_MAP => Descriptor::new(
-            Head {
+            Header {
                 fragment: true,
                 depth_compare: ALWAYS,
                 depth_bias_slope: 0,
@@ -789,14 +789,14 @@ const fn desc_of(id: u32) -> Descriptor {
             &[&[[0, TEXTURE_UINT_ARRAY], [1, UNIFORM], [2, STORAGE]]],
         ),
         // The same in the map's claimed tiles alone, a quad a tile of the
-        // marks' box, raising their stencil (gpu/api.rs `Stencil::Gate`).
-        PIPELINE_LIGHT_GATE => Descriptor::new(
-            Head {
+        // marks' box, raising their stencil (gpu/api.rs `Stencil::Mask`).
+        PIPELINE_LIGHT_MASK => Descriptor::new(
+            Header {
                 fragment: true,
                 depth_compare: ALWAYS,
                 depth_bias_slope: 0,
                 vertex: VS,
-                ..depth_only(SHADER_LIGHT_GATE)
+                ..depth_only(SHADER_LIGHT_MASK)
             },
             &[],
             &[&[
@@ -813,7 +813,7 @@ const fn desc_of(id: u32) -> Descriptor {
         // own (gpu/ray/raster.rs). The vertex stage draws only the faces
         // turned to the eye, so none is culled by its winding.
         PIPELINE_RASTER => Descriptor::new(
-            Head {
+            Header {
                 depth_write: true,
                 depth_compare: GREATER,
                 blend: OPAQUE,
@@ -824,7 +824,7 @@ const fn desc_of(id: u32) -> Descriptor {
         ),
         // Only where the opaque world left the far plane.
         PIPELINE_SKY => Descriptor::new(
-            Head {
+            Header {
                 depth_compare: GREATER_EQUAL,
                 blend: OPAQUE,
                 ..blended(SHADER_SKY, CULL_NONE)
@@ -836,7 +836,7 @@ const fn desc_of(id: u32) -> Descriptor {
         // The world's depth carried to the canvas's size, which what is drawn
         // over the world is tested against.
         PIPELINE_SCREEN_FINISH => Descriptor::new(
-            Head {
+            Header {
                 depth_write: true,
                 depth_compare: ALWAYS,
                 ..screen(SHADER_SCREEN_FINISH)
@@ -850,20 +850,20 @@ const fn desc_of(id: u32) -> Descriptor {
                 [31, UNIFORM],
             ]],
         ),
-        PIPELINE_SCREEN_GATE => Descriptor::new(
-            Head {
+        PIPELINE_SCREEN_MASK => Descriptor::new(
+            Header {
                 depth_write: true,
                 depth_compare: ALWAYS,
-                ..screen(SHADER_SCREEN_GATE)
+                ..screen(SHADER_SCREEN_MASK)
             },
             &[],
             &[&[[30, STORAGE], [31, UNIFORM]]],
         ),
-        PIPELINE_RASTER_GATE => Descriptor::new(
-            Head {
+        PIPELINE_RASTER_MASK => Descriptor::new(
+            Header {
                 depth_write: true,
                 depth_compare: ALWAYS,
-                ..screen(SHADER_RASTER_GATE)
+                ..screen(SHADER_RASTER_MASK)
             },
             &[],
             &[&[[30, STORAGE], [31, UNIFORM]]],
@@ -891,7 +891,7 @@ const fn desc_of(id: u32) -> Descriptor {
             &[&[[1, TEXTURE], [30, STORAGE], [31, UNIFORM]]],
         ),
         PIPELINE_IMPOSTOR => Descriptor::new(
-            Head {
+            Header {
                 topology: STRIP,
                 ..lit(SHADER_IMPOSTOR, CULL_NONE)
             },
@@ -904,7 +904,7 @@ const fn desc_of(id: u32) -> Descriptor {
             ],
         ),
         PIPELINE_IMPOSTOR_BAKE => Descriptor::new(
-            Head {
+            Header {
                 fragment: true,
                 vertex: VS,
                 ..depth_only(SHADER_IMPOSTOR_BAKE)
@@ -913,7 +913,7 @@ const fn desc_of(id: u32) -> Descriptor {
             &[&DRAW, &SKIN],
         ),
         PIPELINE_ATLAS => Descriptor::new(
-            Head {
+            Header {
                 topology: STRIP,
                 blend: ALPHA,
                 ..screen(SHADER_ATLAS)
@@ -979,7 +979,7 @@ const fn desc_of(id: u32) -> Descriptor {
             &[&[AIR[0], AIR[1], AIR[2], MULTISCATTER]],
         ),
         PIPELINE_STAR => Descriptor::new(
-            Head {
+            Header {
                 topology: STRIP,
                 depth_compare: GREATER_EQUAL,
                 blend: ADD,
@@ -1040,7 +1040,7 @@ const fn stages_reading(group: Group, binding: u32) -> u32 {
         let mut k = 0;
         while k < desc.groups.len() {
             if alike(desc.groups[k], group) {
-                stages |= stages_of(desc.head.shader, k as u32, binding);
+                stages |= stages_of(desc.header.shader, k as u32, binding);
             }
             k += 1;
         }
@@ -1051,7 +1051,7 @@ const fn stages_reading(group: Group, binding: u32) -> u32 {
 
 /// A descriptor's record's words (see Record words above).
 const fn words(desc: &Descriptor) -> usize {
-    let mut n = HEAD as usize + 1 + 1;
+    let mut n = HEADER as usize + 1 + 1;
     let mut k = 0;
     while k < desc.buffers.len() {
         n += 3 + 3 * desc.buffers[k].attributes.len();
@@ -1081,8 +1081,8 @@ const RECORD_WORDS: usize = {
 const fn record(id: u32) -> ([u32; RECORD_WORDS], usize) {
     let mut out = [0; RECORD_WORDS];
     let desc = desc_of(id);
-    let h = desc.head;
-    let head = [
+    let h = desc.header;
+    let header = [
         h.shader,
         h.fragment as u32,
         h.topology,
@@ -1095,8 +1095,8 @@ const fn record(id: u32) -> ([u32; RECORD_WORDS], usize) {
         h.vertex,
     ];
     let mut n = 0;
-    while n < head.len() {
-        out[n] = head[n];
+    while n < header.len() {
+        out[n] = header[n];
         n += 1;
     }
     out[n] = desc.buffers.len() as u32;
@@ -1178,7 +1178,7 @@ pub fn reads_shadow_map(id: u32) -> bool {
 /// binds (`floor::holds`), its groups as its record lays them out.
 const fn is_floored(id: u32) -> bool {
     let (words, _) = &RECORDS[id as usize];
-    let mut at = HEAD as usize;
+    let mut at = HEADER as usize;
     let buffers = words[at];
     at += 1;
     let mut k = 0;
@@ -1216,17 +1216,17 @@ const _: () = {
 };
 
 /// Whether pipeline `id`'s groups lay out exactly what its shader reads: every binding the
-/// entry points it runs read (its vertex entry, `Head::vertex`, and `fs` where it has a
+/// entry points it runs read (its vertex entry, `Header::vertex`, and `fs` where it has a
 /// fragment stage) an entry in its group of a kind the binding's declaration takes (build.rs
 /// `layout_kinds`); and every entry read by a pipeline that lays out the same group, as
 /// build.rs `BINDS` holds a compute group.
 const fn lays_out(id: u32) -> bool {
     let desc = desc_of(id);
-    let entries = STAGES[desc.head.shader as usize];
+    let entries = STAGES[desc.header.shader as usize];
     let mut k = 0;
     while k < entries.len() {
         let [g, b, by, takes, vertex] = entries[k];
-        if vertex & 1 << desc.head.vertex != 0 || (desc.head.fragment && by & FRAGMENT != 0) {
+        if vertex & 1 << desc.header.vertex != 0 || (desc.header.fragment && by & FRAGMENT != 0) {
             if g as usize >= desc.groups.len() {
                 return false;
             }

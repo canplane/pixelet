@@ -15,7 +15,7 @@ const SRC: &str = "https://cdsarc.cds.unistra.fr/ftp/V/50/catalog.gz";
 
 fn run() -> Result<(), String> {
     let dir = root().join("asset/raw/sky/star");
-    let bytes = fetch::fetch_kept(SRC, &dir)?;
+    let bytes = fetch::download(SRC, &dir)?;
     println!("[star] {} bytes in {}", bytes.len(), dir.display());
     Ok(())
 }

@@ -147,7 +147,7 @@ fn boot(b: BootInfo) {
 /// its runtime's form hands it (`boot_info`), its stop hook and its GPU runtime's
 /// admission among it.
 pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
-    use crate::turn::{take_world_drawn, world_frame_waiting};
+    use crate::turn::{take_unsent_frame, world_frame_waiting};
     if section::fixed().is_none() {
         boot(boot_info());
     }
@@ -163,7 +163,7 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     }
     // An image or a pipeline the device made since: its fence's store woke
     // this turn, and a frame takes it.
-    if renderer::landed() {
+    if renderer::complete() {
         edge::request_world_tick();
     }
     door().receive(|submission| match submission {
@@ -191,7 +191,7 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     // Once a turn, where a frame was drawn, a UI command applied or a
     // snapshot put off.
     let due = core::mem::take(&mut s.snapshot_due);
-    if take_world_drawn() || due || core::mem::take(&mut s.snapshot_pending) {
+    if take_unsent_frame() || due || core::mem::take(&mut s.snapshot_pending) {
         post_ui(s);
     }
     // What the request scheduler started, stopped and ended, in order: a
@@ -200,8 +200,8 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
         match event {
             Event::Start(key, stream, id) => dispatch::start(key, stream, id),
             Event::Stop(key) => dispatch::stop(key),
-            Event::End(a, at, ended, phases) => {
-                perf_record(|| TaskRow::of(&a, at, ended, phases));
+            Event::End(a, at, exit, phases) => {
+                perf_record(|| TaskRow::of(&a, at, exit, phases));
             }
         }
     }
@@ -251,13 +251,13 @@ fn post_ui(s: &mut State) {
             OrientationCommand::Remove => stop(Sensor::Orientation),
         }
     }
-    if let Some(view) = s.last_snapshot.take_view_moved() {
+    if let Some(view) = s.last_snapshot.take_view_changed() {
         cmd::ui::ui_view(&view);
     }
     if s.snapshot_pos.is_some_and(|p| !door().is_consumed(p)) {
         // The memo is left as it was, so what moved is posted once the runtime lets go.
         s.snapshot_pending = true;
-    } else if let Some(shown) = s.last_snapshot.take_moved() {
+    } else if let Some(shown) = s.last_snapshot.take_changed() {
         let buf = SNAPSHOT.get(Vec::new);
         let len = loop {
             if let Some(len) = ui::snapshot(&shown, buf) {

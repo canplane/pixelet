@@ -96,7 +96,7 @@ each, and that octree is what a ray descends (The query, the only seam). A
 world's whole height over it (`pxl-engine lib.rs` `SHARD_ZOOM`); the world is
 ingested, baked and kept a shard at a time. To a shard the octree is the plane's
 quadtree, Z having no digit yet; the tree and a ray count Y and Z from the world's
-edge (`overwrite.rs` `path`, `cast.rs` `grid_of`), so the world is one root and a
+edge (`object.rs` `path`, `cast.rs` `grid_of`), so the world is one root and a
 shard one cube, split at sea level under it.
 
 A position is a **`Q3`**: three `i32`, one an axis, each counting 256ths of a
@@ -216,7 +216,7 @@ A cell coarser than a leaf is what its zoom holds. The ground's coarse cell
 stands at its folded height, its palette index the majority of those it folds,
 and its top cell is filled to the share its height reaches (`pxl-engine
 ground.rs` `top`). What is placed and the ways fold to the kind most of their
-fill is (`overwrite.rs` `fold`).
+fill is (`object.rs` `fold`).
 
 A coarse cell keeps how much of its cube the ground and what is written over it
 fill (`answer.rs` `cover`), in eighths, floored: its **fill eighths**. It is
@@ -707,7 +707,7 @@ the layouts and numbers they read are generated from pxl-engine by the
 renderer's build. The compute entries over the world (the cast and its
 node cache, the light's and decor's) are each held word for word to pxl-engine's Rust by a test over a real world's buffers
 (`rust/client/render/tests/`). Every walk, the engine's and each by hand,
-ends at `cast::STEPS_MOST` steps (`pxl-engine cast.rs` `walk_at_most`). What
+ends at `cast::STEPS_CAP` steps (`pxl-engine cast.rs` `walk_at_most`). What
 a rule both sides decide divides by, or takes the square root of, the frame
 holds: the renderer rounds it once on the CPU and hands it in a word, and
 both multiply by it (`pxl-engine light.rs` `W_WIDTH` to `W_BAND_SCALE`,
@@ -716,7 +716,7 @@ point, summed in integers (`light.rs` `Starts`, `light_aim.wgsl`
 `texel_start`); the eye's ray at each pixel and a beam's width, which only a
 GPU walks, the GPU works out alone, each in one function (`walk_node.wgsl`
 `eye_aim`, `spacing_width`). The screen's tiles' passes (`screen_*`,
-`box_args_cs`), the air's (`atmos_*`), the clouds and the location indicator
+`rect_args_cs`), the air's (`atmos_*`), the clouds and the location indicator
 are held by none.
 
 The build validates every shader with naga and checks each pipeline's groups,
@@ -1001,7 +1001,7 @@ whose file is refused stays unread meanwhile, and no edit stands in it.
 ## When something goes wrong
 
 A run that does not succeed has **ended**, aborted or failed with an errno, a
-detail and the source location (`sys/io/failure.rs` `Ended`): a failed fetch is
+detail and the source location (`sys/io/failure.rs` `Exit`): a failed fetch is
 asked again later, a failed parse is final, and neither touches what is drawn,
 until the server stays down past its last wait and the reads are given up, when
 the page shows the blue screen `WORLD_UNAVAILABLE`

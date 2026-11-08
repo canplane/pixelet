@@ -87,10 +87,10 @@ struct Arrangement {
     /// The same, read this turn.
     now: Read,
     /// Places, ground or objects moved since they were read.
-    moved: bool,
+    changed: bool,
     /// The place tiles whose answer moved, beside the ground's
     /// (domain/query/changes.rs): a brick they touch is read again.
-    moved_places: Vec<Quadrant>,
+    changed_places: Vec<Quadrant>,
     /// The bricks this turn would read, by how far from the eye, with
     /// their columns.
     entering: Vec<(f64, Brick, Aabb)>,
@@ -171,10 +171,10 @@ fn extent_px(spacing: f64) -> f64 {
     2.0 * spacing
 }
 
-pub fn on_moved(places: &[Quadrant]) {
+pub fn on_changed(places: &[Quadrant]) {
     let p = ARRANGEMENT.get(Arrangement::default);
-    p.moved = true;
-    p.moved_places.extend_from_slice(places);
+    p.changed = true;
+    p.changed_places.extend_from_slice(places);
 }
 
 /// The height a ray down over `at` from `high` first meets what is drawn,
@@ -209,7 +209,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
         }
         // Nothing is drawn now: what comes back is laid out afresh.
         (p.last, p.waiting, p.found_for) = (None, false, None);
-        p.moved_places.clear();
+        p.changed_places.clear();
         p.instances.clear();
         p.hits.clear();
         design::retain(&FnvHashSet::default());
@@ -219,7 +219,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     // once there is one, so the tiles that moved meanwhile are not kept.
     let Some(o) = observation::observation() else {
         (p.last, p.found_for) = (None, None);
-        p.moved_places.clear();
+        p.changed_places.clear();
         return;
     };
     let seen = Inputs {
@@ -228,7 +228,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
         drafted: pin::draft_key(draft),
         bubble: line::bubble(o.eye),
     };
-    if !p.waiting && !p.moved && p.last.as_ref() == Some(&seen) {
+    if !p.waiting && !p.changed && p.last.as_ref() == Some(&seen) {
         return;
     }
     p.last = Some(seen.clone());
@@ -263,12 +263,12 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     // is read, as many a turn as a pass of the tick's budget reads and at
     // least one, nearest the eye first; the rest are not read yet, so a
     // later turn reads them.
-    p.moved = false;
+    p.changed = false;
     let before = match &p.found_for {
         Some(f) if f.places == places => f.bricks.as_slice(),
         _ => &[],
     };
-    let moved_places = &p.moved_places;
+    let changed_places = &p.changed_places;
     let columns = |s: Brick| region(s, [BOUNDS.min[2], BOUNDS.max[2]]);
     // Whether each drawn brick stands, asked once a brick however many pins
     // and places it holds.
@@ -278,7 +278,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
         .map(|&s| {
             let r = columns(s);
             before.binary_search(&s).is_ok()
-                && !changes::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], moved_places)
+                && !changes::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], changed_places)
         })
         .collect();
     let stands = |s: &Brick| now.bricks.binary_search(s).is_ok_and(|k| stood[k]);
@@ -324,7 +324,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     later.sort_unstable_by_key(|e| e.1);
     now.bricks
         .retain(|d| later.binary_search_by_key(d, |e| e.1).is_err());
-    p.moved_places.clear();
+    p.changed_places.clear();
     if p.found_for.as_ref() != Some(&p.now) {
         let now = core::mem::take(&mut p.now);
         p.now = p.found_for.replace(now).unwrap_or_default();

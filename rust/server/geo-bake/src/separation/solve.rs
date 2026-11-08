@@ -310,9 +310,9 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solution
     let decks = bridge::decks(&src, &stretches, [lo, hi], scale, &mut lines);
     tunnel::bores(&src, &stretches, &decks, scale, &mut lines);
     let mut out = Solution::default();
-    for (line, drawn) in lines.into_iter().filter(|(l, _)| l.points.len() >= 2) {
+    for (line, ranges) in lines.into_iter().filter(|(l, _)| l.points.len() >= 2) {
         out.lines.push(line);
-        out.way_ranges.push(drawn);
+        out.way_ranges.push(ranges);
     }
     Ok(out)
 }

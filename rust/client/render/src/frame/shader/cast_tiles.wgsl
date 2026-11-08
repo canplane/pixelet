@@ -24,14 +24,14 @@ struct CastTiles {
 fn cast_tiles_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let across = tiles.count.x;
   // The list holds a place for each tile.
-  let room = across * tiles.count.y;
-  if (id.x >= room || !tiles_claimed(tiles, changed_at[id.x])) {
+  let cap = across * tiles.count.y;
+  if (id.x >= cap || !tiles_in_damage(tiles, changed_at[id.x])) {
     return;
   }
   let place = atomicAdd(&list.cnt, 1u);
-  if (place >= room) {
+  if (place >= cap) {
     return;
   }
-  atomicMax(&list.count, workgroups(place + 1u, room, 1u));
+  atomicMax(&list.count, workgroups(place + 1u, cap, 1u));
   list.at[place] = ((id.x / across) << 16u) | (id.x % across);
 }

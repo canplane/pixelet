@@ -12,7 +12,7 @@
 //! the world (`cast::Query`).
 
 use crate::cast::{self, Detail, End, Keep, Node, Query, Ray, Trace, Until, DEPTH};
-use crate::overwrite::ancestor_at;
+use crate::object::ancestor_at;
 use crate::{Zoom, FINEST_ZOOM, FRAC_W, HEIGHT_BITS};
 
 /// A descent's line: the node it ended at, by its index at its zoom, what
@@ -57,12 +57,12 @@ impl<A: Copy> Keep<A> for ColumnSurface<A> {
     }
 }
 
-/// The column surface down column `g` at `cell`: the first cell that fills on the
-/// world's one ray straight down the column's middle, at the cells of `cell`
+/// The column surface down column `g` at `cell_zoom`: the first cell that fills on the
+/// world's one ray straight down the column's middle, at the cells of `cell_zoom`
 /// alone, from the top of the world (`HEIGHT_BITS`), whichever layer holds
 /// it; its line kept for the assets asked about it (`asset`).
-pub fn column_surface<Q: Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> ColumnSurface<Q::At> {
-    let (o, ray, detail) = down(cell, g);
+pub fn column_surface<Q: Query>(q: &mut Q, cell_zoom: Zoom, g: [i32; 2]) -> ColumnSurface<Q::At> {
+    let (o, ray, detail) = down(cell_zoom, g);
     let at = Node::ROOT.idx(o);
     let root = q.root(at);
     let mut f = ColumnSurface {
@@ -92,10 +92,10 @@ pub fn column_surface<Q: Query>(q: &mut Q, cell: Zoom, g: [i32; 2]) -> ColumnSur
     f
 }
 
-/// The ray down column `g` at `cell`: from the top of the world over the
-/// column's middle, straight down, at the cells of `cell` alone.
-fn down(cell: Zoom, g: [i32; 2]) -> ([i32; 3], Ray, Detail) {
-    let s = FINEST_ZOOM - cell;
+/// The ray down column `g` at `cell_zoom`: from the top of the world over the
+/// column's middle, straight down, at the cells of `cell_zoom` alone.
+fn down(cell_zoom: Zoom, g: [i32; 2]) -> ([i32; 3], Ray, Detail) {
+    let s = FINEST_ZOOM - cell_zoom;
     let mid = |v: i32| v.wrapping_shl(s).wrapping_add((1 << s) >> 1);
     let top = ((1i32 << (HEIGHT_BITS - 1)) << FRAC_W) - 1;
     let o = [mid(g[0]), mid(g[1]), top];
@@ -104,7 +104,7 @@ fn down(cell: Zoom, g: [i32; 2]) -> ([i32; 3], Ray, Detail) {
         o,
         ray,
         Detail {
-            range: [cell, cell],
+            range: [cell_zoom, cell_zoom],
             spacing: cast::Spacing::NONE,
         },
     )

@@ -161,8 +161,8 @@ fn a_draw_set_as_it_was_is_no_change() {
     let (marker, ghost, debug) = (DrawId::default(), DrawId::default(), DrawId::default());
     // An i32 whose bits read as a NaN.
     let at = Position::of([q3::to_real(-1), 5.5, 1.0e-3]);
-    let box_at = Stand::of([-1.0, 5.0, 0.0], [1.0, 6.0, 2.0]);
-    let turn = |d: &mut DrawList, stand: Stand, debug_at: Option<f64>| {
+    let box_at = ReceiverBox::of([-1.0, 5.0, 0.0], [1.0, 6.0, 2.0]);
+    let turn = |d: &mut DrawList, stand: ReceiverBox, debug_at: Option<f64>| {
         d.draw_as(&marker, PIPELINE_MARKER, 3, 2, 0, at, None);
         d.draw_in(
             &ghost,
@@ -188,7 +188,7 @@ fn a_draw_set_as_it_was_is_no_change() {
     let l = d.take();
     assert!(l.changes.is_empty() && !l.reordered);
     assert_eq!(l.stands, &[box_at]);
-    let moved = Stand::of([-1.0, 5.0, 0.0], [1.0, 6.0, 3.0]);
+    let moved = ReceiverBox::of([-1.0, 5.0, 0.0], [1.0, 6.0, 3.0]);
     turn(&mut d, moved, None);
     let l = d.take();
     assert!(l.changes.is_empty(), "a stand is no draw's");
@@ -291,12 +291,12 @@ fn lit_draws_read_the_map() {
     assert!((0..PIPELINES).any(|p| !reads_shadow_map(p)));
 }
 
-/// A draw that reads the map stands its box; past `light::STANDS` the boxes are taken into the
+/// A draw that reads the map stands its box; past `light::RECEIVER_BOXES` the boxes are taken into the
 /// last, which holds every one.
 #[test]
 fn every_lit_draw_stands_its_box() {
     let mut d = DrawList::default();
-    let n = light::STANDS + 5;
+    let n = light::RECEIVER_BOXES + 5;
     let unit = |v: usize| (v as i64 * ONE) as i32;
     let ids: Vec<DrawId> = (0..=n).map(|_| DrawId::default()).collect();
     for (k, id) in ids.iter().enumerate().take(n) {
@@ -308,15 +308,18 @@ fn every_lit_draw_stands_its_box() {
             0,
             0,
             Position::of([v; 3]),
-            Some(Stand::of([v; 3], [v + 1.0; 3])),
+            Some(ReceiverBox::of([v; 3], [v + 1.0; 3])),
         );
     }
     d.draw_as(&ids[n], PIPELINE_MARKER, 0, 0, 0, Position::NONE, None);
-    assert_eq!(d.stands.len(), light::STANDS);
-    let last = d.stands[light::STANDS - 1];
-    assert_eq!(last, Stand([[unit(light::STANDS - 1); 3], [unit(n); 3]]));
-    for (k, b) in d.stands[..light::STANDS - 1].iter().enumerate() {
-        assert_eq!(*b, Stand([[unit(k); 3], [unit(k + 1); 3]]));
+    assert_eq!(d.stands.len(), light::RECEIVER_BOXES);
+    let last = d.stands[light::RECEIVER_BOXES - 1];
+    assert_eq!(
+        last,
+        ReceiverBox([[unit(light::RECEIVER_BOXES - 1); 3], [unit(n); 3]])
+    );
+    for (k, b) in d.stands[..light::RECEIVER_BOXES - 1].iter().enumerate() {
+        assert_eq!(*b, ReceiverBox([[unit(k); 3], [unit(k + 1); 3]]));
     }
 }
 
@@ -324,9 +327,12 @@ fn every_lit_draw_stands_its_box() {
 /// width.
 #[test]
 fn boxes_held_across_the_seam() {
-    let mut s = Stand([[i32::MAX - 10, 0, 0], [i32::MAX - 5, 4, 4]]);
-    s.hold(&Stand([[i32::MIN + 2, -3, 1], [i32::MIN + 9, 2, 8]]));
-    assert_eq!(s, Stand([[i32::MAX - 10, -3, 0], [i32::MIN + 9, 4, 8]]));
+    let mut s = ReceiverBox([[i32::MAX - 10, 0, 0], [i32::MAX - 5, 4, 4]]);
+    s.hold(&ReceiverBox([[i32::MIN + 2, -3, 1], [i32::MIN + 9, 2, 8]]));
+    assert_eq!(
+        s,
+        ReceiverBox([[i32::MAX - 10, -3, 0], [i32::MIN + 9, 4, 8]])
+    );
     let [lo, hi] = s.from_eye([i32::MAX - 10, 0, 0]);
     assert_eq!(lo, [0.0, -3.0 / 256.0, 0.0]);
     assert_eq!(hi, [20.0 / 256.0, 4.0 / 256.0, 8.0 / 256.0]);
@@ -380,8 +386,8 @@ fn ball_holds_decor_ball() {
     let r = f64::from(TALLEST + WIDEST);
     let z = 3.0 + f64::from(TALLEST) * 0.5;
     assert_eq!(
-        Stand::ball([1.0, 2.0, 3.0]),
-        Stand::of([1.0 - r, 2.0 - r, z - r], [1.0 + r, 2.0 + r, z + r])
+        ReceiverBox::ball([1.0, 2.0, 3.0]),
+        ReceiverBox::of([1.0 - r, 2.0 - r, z - r], [1.0 + r, 2.0 + r, z + r])
     );
 }
 
@@ -395,7 +401,7 @@ fn a_stand_from_the_eye_holds_its_box() {
         for _ in 0..100_000 {
             let (eye, lo) = pair(&mut n, reach);
             let hi = lo.map(|v| v + n.next() * 40.0);
-            let [got_lo, got_hi] = Stand::of(lo, hi).from_eye(q3_of(eye));
+            let [got_lo, got_hi] = ReceiverBox::of(lo, hi).from_eye(q3_of(eye));
             for k in 0..3 {
                 let at = |v: f64| if k == 0 { nearest(v, eye[0]) } else { v } - eye[k];
                 let (want_lo, want_hi) = (at(lo[k]), at(hi[k]));

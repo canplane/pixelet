@@ -13,7 +13,7 @@
 //! child group is no reader's until it is allocated again.
 
 use super::tree::{child_idx, children};
-use pxl_engine::overwrite::BRANCH;
+use pxl_engine::object::BRANCH;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Slot<T> {
@@ -68,7 +68,7 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
     }
 
     /// Slots either lane has room for before it grows.
-    pub fn room(&self) -> usize {
+    pub fn cap(&self) -> usize {
         self.first_child.capacity().min(self.data.capacity())
     }
 

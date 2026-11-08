@@ -20,7 +20,7 @@
 //! (screen_bound.wgsl, `set_bounds`), so a frame it runs in reads no pixel's
 //! depth but where a square's bound spans past a few of the map's tiles; and
 //! it passes by what lies off the map's tiles the frame's marks cover, which
-//! the GPU keeps (`Tiles::marks_box`).
+//! the GPU keeps (`Tiles::new_damage_rect`).
 
 use pxl_engine::param::light;
 use pxl_spec::space::coord::mat4::{self, Mat4};
@@ -72,7 +72,7 @@ pub struct Propagate {
     /// the squares across and down it was made for (`size`), and its pass.
     bounds: u32,
     bounds_size: [u32; 2],
-    bounds_built: Pipeline,
+    bounds_pipeline: Pipeline,
     /// The groups of its pass and of the bound's (`set_groups`).
     group: Group,
     bounds_group: Group,
@@ -88,7 +88,7 @@ impl Propagate {
             ),
             bounds: 0,
             bounds_size: [0; 2],
-            bounds_built: pipelines.build_compute(g, COMPUTE_SCREEN_BOUND, &BOUNDS_GROUP),
+            bounds_pipeline: pipelines.build_compute(g, COMPUTE_SCREEN_BOUND, &BOUNDS_GROUP),
             group: Group::default(),
             bounds_group: Group::default(),
         }
@@ -150,7 +150,7 @@ impl Propagate {
         let (l, s) = (light.this_frame(), screen.this_frame());
         self.bounds_group.set(
             g,
-            self.bounds_built.layouts[0],
+            self.bounds_pipeline.layouts[0],
             &[
                 view_entry(0, depth),
                 buf_entry(1, self.bounds),
@@ -169,7 +169,7 @@ impl Propagate {
                 buf_entry(4, s.0),
                 buf_entry(5, s.1),
                 buf_entry(6, self.bounds),
-                buf_entry(7, light.marks_box()),
+                buf_entry(7, light.new_damage_rect()),
             ],
         );
     }
@@ -181,7 +181,7 @@ impl Propagate {
         let g = ctx.g;
         let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::resolve).pass());
         g.set_bind_group(pass, 0, self.bounds_group.id(), &[]);
-        g.set_pipeline(pass, self.bounds_built.id);
+        g.set_pipeline(pass, self.bounds_pipeline.id);
         g.dispatch(pass, tiles[0], tiles[1], 1);
         g.end(pass);
     }
@@ -190,7 +190,7 @@ impl Propagate {
     /// those its groups bind (`set_groups`), the screen's `tiles` across and
     /// down, over the depth's bound and, where a square's spans past a few
     /// tiles, the world's depth, both as the last frame left them, off the
-    /// tiles the frame's marks cover (`Tiles::marks_box`).
+    /// tiles the frame's marks cover (`Tiles::new_damage_rect`).
     pub fn dispatch(&self, ctx: &mut RenderContext, tiles: [u32; 2]) {
         let g = ctx.g;
         let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::propagate).pass());

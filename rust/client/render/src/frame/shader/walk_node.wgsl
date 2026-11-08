@@ -91,7 +91,7 @@ fn root_start() -> Start {
 /// one lacks, 3 gone to its reach, 4 left to the walk that asks, 5 out of the steps it was
 /// given, the last two at `t`, at the node `zoom`, `corner` and `roots` name, which it goes on
 /// from with `parent`, `top` and `step` (`Start`); `visits` the nodes it entered.
-struct Walked {
+struct WalkEnd {
   ends: u32,
   zoom: u32,
   corner: vec3<u32>,
@@ -133,8 +133,8 @@ fn idx_of(corner: vec3<u32>, zoom: u32, roots: vec3<i32>, r0: vec3<i32>) -> vec3
   let low = select(corner >> vec3<u32>((FINEST_ZOOM - zoom) & 31u), vec3<u32>(0u), zoom == 0u);
   let n = vec3<i32>(high + low);
   let x = select((n.x << ((32u - zoom) & 31u)) >> ((32u - zoom) & 31u), 0i, zoom == 0u);
-  // Y's from the world's south edge and Z's from its floor (`overwrite::y_start`,
-  // `overwrite::z_start`).
+  // Y's from the world's south edge and Z's from its floor (`object::y_start`,
+  // `object::z_start`).
   let y_start = select(1i << ((zoom - 1u) & 31u), 0i, zoom == 0u);
   let z_start = select(1i << ((zoom - SHARD_ZOOM - 1u) & 31u), 0i, zoom <= SHARD_ZOOM);
   return vec3<i32>(x, n.y - y_start, n.z - z_start);

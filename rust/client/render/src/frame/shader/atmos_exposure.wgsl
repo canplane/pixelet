@@ -61,7 +61,7 @@ fn ground() {
 // How far light `k` reaches the air, its height `mu` and the eye's stops
 // `stops`: the most display levels its sky shows along its own vertical,
 // toward its azimuth, where the sky about a light is brightest, in
-// `ATMOS_REACH_ROWS` of its view's rows as laid (atmos_medium.wgsl `laid`).
+// `ATMOS_REACH_ROWS` of its view's rows as laid (atmos_medium.wgsl `view_layout`).
 // What the air scatters before a point is no more than the sky along the
 // same ray, so a light whose sky shows under half a level leaves its air
 // under it too.
@@ -71,7 +71,7 @@ fn shows(k: u32, mu: f32, stops: f32) -> f32 {
   let last = f32(ATMOS_REACH_ROWS - 1);
   var most_shown = 0.0;
   for (var j = 0; j < ATMOS_REACH_ROWS; j++) {
-    let dir = view_dir(laid(k).x, vec2f(0.0, f32(j) / last));
+    let dir = view_dir(view_layout(k).x, vec2f(0.0, f32(j) / last));
     most_shown = max(most_shown, most(levels(sky_radiance(r, dir, view_light(mu), ATMOS_SKY_VIEW_STEPS) * shown_by)));
   }
   return most_shown;

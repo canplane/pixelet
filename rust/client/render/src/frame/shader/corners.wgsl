@@ -11,12 +11,12 @@ fn corner_of(item: u32) -> vec2<u32> {
   return vec2<u32>(item & 0xffffu, item >> 16u);
 }
 
-/// The items listed (listed.wgsl).
+/// The items listed (item_list.wgsl).
 fn item_count() -> u32 {
-  return corners_listed();
+  return corner_cnt();
 }
 
-/// The item at place `k` of the list (listed.wgsl).
+/// The item at place `k` of the list (item_list.wgsl).
 fn item_at(k: u32) -> u32 {
   let c = corner_queued(k);
   return c.x | (c.y << 16u);
@@ -61,7 +61,7 @@ fn parked_start(item: u32) -> Start {
 }
 
 /// How far the rays about it start (`beam_hand`), its state no longer parked.
-fn finish(item: u32, aim: Aim, w: Walked) {
+fn finish(item: u32, aim: Aim, w: WalkEnd) {
   let c = corner_of(item);
   beams[corner_state_at(c) + 4u] = 0u;
   beams[beam_hand_at(c)] = bitcast<u32>(beam_hand(w.t));

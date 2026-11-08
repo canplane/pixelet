@@ -27,26 +27,26 @@ pub(super) struct Surface {
 }
 
 impl World<'_> {
-    /// The surface of the cell `c` of `cell`: its ground's top, in units,
+    /// The surface of the cell `c` of `cell_zoom`: its ground's top, in units,
     /// and its face; past the service area the Earth's, at sea level; none
     /// where it has no ground.
-    pub(super) fn surface_of(&self, cell: Zoom, c: [i32; 2]) -> Answer<Option<Surface>> {
-        let shard = Shard::UNKNOWN.at(&CpuClipmap, (cell, c));
+    pub(super) fn surface_of(&self, cell_zoom: Zoom, c: [i32; 2]) -> Answer<Option<Surface>> {
+        let shard = Shard::UNKNOWN.at(&CpuClipmap, (cell_zoom, c));
         if shard.past() {
             return Answer::Exact(Some(Surface {
                 top: f64::from(pxl_engine::SEA_LEVEL),
                 asset: sentinel::unknown,
             }));
         }
-        let side = units(cell);
+        let side = units(cell_zoom);
         let middle = c.map(|v| (f64::from(v) + 0.5) * side);
-        self.read(middle, middle, cell);
-        let line = self.terrain.cursor((cell, c), cell);
+        self.read(middle, middle, cell_zoom);
+        let line = self.terrain.cursor((cell_zoom, c), cell_zoom);
         self.terrain
-            .column(&line, Lookup::NONE, (cell, c))
+            .column(&line, Lookup::NONE, (cell_zoom, c))
             .map(|col| {
                 col.is_grounded().then(|| Surface {
-                    top: f64::from(col.top) * units(cell),
+                    top: f64::from(col.top) * units(cell_zoom),
                     asset: col.palette_idx as GroundId,
                 })
             })

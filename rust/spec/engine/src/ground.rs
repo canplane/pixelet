@@ -21,9 +21,11 @@ use crate::area::{Area, Shard};
 use crate::clipmap::Lookup;
 use crate::content::Content;
 use crate::lattice::TILE_CELLS;
-use crate::overwrite::z_start;
+use crate::object::z_start;
 use crate::value;
-use crate::{Zoom, HEIGHT_BITS, LEAF_CELL, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, TOP_ZOOM, UNIT_ZOOM};
+use crate::{
+    Zoom, HEIGHT_BITS, LEAF_CELL_ZOOM, LEAF_ZOOM, SEA_LEVEL, SHARD_ZOOM, TOP_ZOOM, UNIT_ZOOM,
+};
 
 /// The value space's void and unknown as the words a palette index is read into.
 pub const VOID: u32 = value::VOID;
@@ -87,7 +89,7 @@ pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [i32; 2]) -> i32 {
 
 /// What the clip levels bound under a node, each source its own: the ground's
 /// faces, the lowest and highest, and the leaf cells the ways fill, the
-/// lowest and past the highest (`clipmap::BOUND_WORDS`, `fill::level`).
+/// lowest and past the highest (`clipmap::BOUND_WORDS`, `fill::mip`).
 pub type Bounds = [[i32; 2]; 2];
 
 /// Bounds as their two bound words.
@@ -127,10 +129,10 @@ pub fn word([a, b, c, d]: [u32; 4]) -> u32 {
     a | b << PALETTE_BITS | c << (2 * PALETTE_BITS) | d << (3 * PALETTE_BITS)
 }
 
-/// A cell's own look at `cell`: the majority of the four it folds, as the
+/// A cell's own look at `cell_zoom`: the majority of the four it folds, as the
 /// bake folds a tile's (pxl-spec bake/fold.rs `fold_ground`).
-pub fn own(w: u32, cell: Zoom) -> u32 {
-    majority(palette_indices(w), cell)
+pub fn own(w: u32, cell_zoom: Zoom) -> u32 {
+    majority(palette_indices(w), cell_zoom)
 }
 
 /// Steps of half a cell an elevation sample spans: a cell's center lies on
@@ -214,20 +216,20 @@ pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], parent: Zoom) -> T {
     }
 }
 
-/// A height in leaf cells as cells of `cell` (`top`).
-pub fn cells(cell: Zoom, h: f32) -> i32 {
-    top(cell, h).0
+/// A height in leaf cells as cells of `cell_zoom` (`top`).
+pub fn cells(cell_zoom: Zoom, h: f32) -> i32 {
+    top(cell_zoom, h).0
 }
 
-/// A height in leaf cells as cells of `cell`, and the share of the top one
+/// A height in leaf cells as cells of `cell_zoom`, and the share of the top one
 /// it fills, in `answer::FULL`'s units: shifted past the leaves, every
 /// cell whole; under them, the mean in cells, its top the cell it ends
 /// in where it fills an eighth of it or more (`answer::eighths`), the share
 /// of it filled kept there, else the cell under it, whole. So a coarse
 /// column's ground is the volume its mean height fills, as a cell of it is
 /// drawn: whole under its top, its top a box its share's volume.
-pub fn top(cell: Zoom, h: f32) -> (i32, u32) {
-    let d = cell as i32 - LEAF_CELL as i32;
+pub fn top(cell_zoom: Zoom, h: f32) -> (i32, u32) {
+    let d = cell_zoom as i32 - LEAF_CELL_ZOOM as i32;
     if d >= 0 {
         return ((h as i32) << d, FULL);
     }
@@ -241,17 +243,17 @@ pub fn top(cell: Zoom, h: f32) -> (i32, u32) {
     }
 }
 
-/// Cells of `cell` a leaf cell is tall: one where a cell folds the leaves.
-pub fn leaf_cells(cell: Zoom) -> i32 {
-    1 << (cell as i32 - LEAF_CELL as i32).max(0)
+/// Cells of `cell_zoom` a leaf cell is tall: one where a cell folds the leaves.
+pub fn leaf_cells(cell_zoom: Zoom) -> i32 {
+    1 << (cell_zoom as i32 - LEAF_CELL_ZOOM as i32).max(0)
 }
 
-/// The face of a top of `top` cells of `cell`, in leaf cells, as the grid
+/// The face of a top of `top` cells of `cell_zoom`, in leaf cells, as the grid
 /// draws it: past the leaves the leaf cell the top's cell lies in, rounded
 /// down, under sea level as over it, as a cell's index is; under them the
 /// mean as its cells round it (pxl-render world_rule.wgsl `face_height`).
-pub fn face_height(cell: Zoom, top: i32) -> i32 {
-    let d = cell as i32 - LEAF_CELL as i32;
+pub fn face_height(cell_zoom: Zoom, top: i32) -> i32 {
+    let d = cell_zoom as i32 - LEAF_CELL_ZOOM as i32;
     if d >= 0 {
         top >> d
     } else {
@@ -260,17 +262,17 @@ pub fn face_height(cell: Zoom, top: i32) -> i32 {
 }
 
 /// The face cell of a column whose face is `face` leaf cells, its first
-/// cell in cells of `cell`: under it, the ground under its face, which a
+/// cell in cells of `cell_zoom`: under it, the ground under its face, which a
 /// cave may take (`Cell::opens`) and a way's bore is lined in
 /// (pxl-engine `way::way_cell`).
-pub(crate) fn face_cell(cell: Zoom, face: i32) -> i32 {
-    cells(cell, face as f32) - leaf_cells(cell)
+pub(crate) fn face_cell(cell_zoom: Zoom, face: i32) -> i32 {
+    cells(cell_zoom, face as f32) - leaf_cells(cell_zoom)
 }
 
-/// The bedrock's top under a face at `face` leaf cells, in cells of `cell`,
+/// The bedrock's top under a face at `face` leaf cells, in cells of `cell_zoom`,
 /// `C`'s bedrock (`Content::bedrock`).
-pub fn rock<C: Content>(cell: Zoom, face: i32) -> i32 {
-    cells(cell, C::bedrock(face) as f32)
+pub fn rock<C: Content>(cell_zoom: Zoom, face: i32) -> i32 {
+    cells(cell_zoom, C::bedrock(face) as f32)
 }
 
 /// Where the ground may fill the node `(zoom, c)` along z, at the zooms
@@ -328,8 +330,8 @@ pub const SEA_CELLS: i32 = 1 << (HEIGHT_BITS - 1);
 /// to `near`: past the leaves a leaf cell is cut 2^e a side, so every
 /// height is a whole count.
 pub fn meets([lo, hi]: [i32; 2], (zoom, z): (Zoom, i32), near: Zoom) -> bool {
-    let e = near.max(LEAF_CELL) - LEAF_CELL;
-    let s = LEAF_CELL + e - zoom;
+    let e = near.max(LEAF_CELL_ZOOM) - LEAF_CELL_ZOOM;
+    let s = LEAF_CELL_ZOOM + e - zoom;
     let first = ((z + z_start(zoom)) << s) - (SEA_CELLS << e);
     first < hi << e && first + (1 << s) > lo << e
 }
@@ -348,7 +350,7 @@ pub const EMPTY: [i32; 2] = [i16::MAX as i32, i16::MIN as i32];
 pub trait Resident: Area {
     /// The content whose rules its ground follows: its caves and its strata.
     type Content: Content;
-    /// The lowest and highest the ground's cells at `cell` reach over the
+    /// The lowest and highest the ground's cells at `cell_zoom` reach over the
     /// node `(zoom, c)`, and the ways' over them, apart (`Bounds`), off the
     /// finest held tile they are read from (`clipmap::bound_over`); bounds no
     /// tighter than the heights' whole range (`UNBOUNDED`) where no brick
@@ -528,45 +530,45 @@ impl Cell {
         self.palette_idx == UNKNOWN || value::grounds(self.palette_idx)
     }
 
-    /// Whether a cave may take cell `z` of the column at `cell`: the ground's
+    /// Whether a cave may take cell `z` of the column at `cell_zoom`: the ground's
     /// one rule of where a cave may take it, ground under its face cell, over
     /// its bedrock, off the area's wall, the face and the bedrock rounded to
     /// cells as the column rounds them. Under a top kept short of whole
     /// is ground, as under a shrunk box, so the cell under it is not taken
     /// either.
-    pub fn opens<C: Content>(&self, cell: Zoom, z: i32) -> bool {
-        let face = face_height(cell, self.top);
-        let under = face_cell(cell, face) - (self.part < FULL) as i32;
-        self.palette_idx != UNKNOWN && z < under && z >= rock::<C>(cell, face)
+    pub fn opens<C: Content>(&self, cell_zoom: Zoom, z: i32) -> bool {
+        let face = face_height(cell_zoom, self.top);
+        let under = face_cell(cell_zoom, face) - (self.part < FULL) as i32;
+        self.palette_idx != UNKNOWN && z < under && z >= rock::<C>(cell_zoom, face)
     }
 
-    /// The four palette indices asset `g` of the column at `cell` is drawn by: where it
+    /// The four palette indices asset `g` of the column at `cell_zoom` is drawn by: where it
     /// is the cell's own look at a cell coarser than the leaves', the four
     /// its fold took, whose mean it is drawn as, as the cell reads from afar;
     /// else, a stratum under it or a leaf's cell, `g` four times. A way written over it is its own palette index four
     /// times (`world::node`).
-    pub fn four(&self, cell: Zoom, g: u32) -> [u32; 4] {
-        if cell >= LEAF_CELL || g != self.palette_idx {
+    pub fn four(&self, cell_zoom: Zoom, g: u32) -> [u32; 4] {
+        if cell_zoom >= LEAF_CELL_ZOOM || g != self.palette_idx {
             [g; 4]
         } else {
             self.fold
         }
     }
 
-    /// The asset in cell `z` of the column at `cell`, before the caves take
+    /// The asset in cell `z` of the column at `cell_zoom`, before the caves take
     /// their share (`opens`, `Content::hollow`): the ground's palette index,
     /// its fold's majority at a coarser cell, as what is placed is its
     /// fold's, `void` for air; by `C`'s strata (`Content::by_depth`).
-    pub fn asset<C: Content>(&self, cell: Zoom, z: i32) -> u32 {
+    pub fn asset<C: Content>(&self, cell_zoom: Zoom, z: i32) -> u32 {
         if !self.is_grounded() {
             return VOID;
         }
-        C::by_depth(cell, self.palette_idx, self.top, z)
+        C::by_depth(cell_zoom, self.palette_idx, self.top, z)
     }
 }
 
 const _: () = assert!(
-    LEAF_CELL == UNIT_ZOOM,
+    LEAF_CELL_ZOOM == UNIT_ZOOM,
     "a span's leaf cell is the world's unit"
 );
 const _: () = assert!(
@@ -583,12 +585,12 @@ pub(crate) fn box_along_z([lo, hi]: [i32; 2], (zoom, z): (Zoom, i32)) -> BoxWord
     if lo >= hi {
         return BOX_NONE;
     }
-    if zoom >= LEAF_CELL {
+    if zoom >= LEAF_CELL_ZOOM {
         return BOX_WHOLE;
     }
     // The step of the node a leaf cell `v` lies in, as the node's own
     // steps count it: `v` scaled by `BOX_STEPS` / side, less the node's first.
-    let shift = LEAF_CELL - zoom;
+    let shift = LEAF_CELL_ZOOM - zoom;
     let step = |v: i32| -> i32 {
         let (v, z) = (v + SEA_CELLS, z + z_start(zoom));
         if shift >= BOX_BITS {
@@ -637,7 +639,7 @@ mod tests {
     /// node whole across; none where the node does not meet it.
     #[test]
     fn z_span_rounded_out() {
-        let zoom = LEAF_CELL - 6;
+        let zoom = LEAF_CELL_ZOOM - 6;
         // The node of side 64 leaf cells over [128, 192), 16 steps a leaf
         // cell: [138, 140) is its steps [160, 192).
         assert_eq!(
@@ -665,7 +667,7 @@ mod tests {
         );
         // A node finer than a leaf cell: its steps scale up.
         assert_eq!(
-            box_of(box_along_z([3, 4], (LEAF_CELL - 1, 1))),
+            box_of(box_along_z([3, 4], (LEAF_CELL_ZOOM - 1, 1))),
             ([0, 0, 512], [1024, 1024, 1024])
         );
     }
@@ -673,16 +675,16 @@ mod tests {
     #[test]
     fn coarse_top_eighths() {
         // Cells of eight leaf cells.
-        let cell = LEAF_CELL - 3;
-        assert_eq!(top(cell, 16.0), (2, FULL));
-        assert_eq!(top(cell, 17.0), (3, FULL / 8));
-        assert_eq!(top(cell, 23.0), (3, 7 * FULL / 8));
-        assert_eq!(top(cell, -1.0), (0, 7 * FULL / 8));
+        let cell_zoom = LEAF_CELL_ZOOM - 3;
+        assert_eq!(top(cell_zoom, 16.0), (2, FULL));
+        assert_eq!(top(cell_zoom, 17.0), (3, FULL / 8));
+        assert_eq!(top(cell_zoom, 23.0), (3, 7 * FULL / 8));
+        assert_eq!(top(cell_zoom, -1.0), (0, 7 * FULL / 8));
         // An eighth of a cell of 64 is 8 leaf cells: under it, nothing.
-        assert_eq!(top(LEAF_CELL - 6, 7.0), (0, FULL));
-        assert_eq!(top(LEAF_CELL - 6, 8.0), (1, FULL / 8));
+        assert_eq!(top(LEAF_CELL_ZOOM - 6, 7.0), (0, FULL));
+        assert_eq!(top(LEAF_CELL_ZOOM - 6, 8.0), (1, FULL / 8));
         // At the leaves, every cell whole.
-        assert_eq!(top(LEAF_CELL, 5.0), (5, FULL));
+        assert_eq!(top(LEAF_CELL_ZOOM, 5.0), (5, FULL));
     }
 
     /// A face past the leaves is the leaf cell its top's cell lies in,
@@ -690,12 +692,12 @@ mod tests {
     /// scaled.
     #[test]
     fn face_height_floors() {
-        let cell = LEAF_CELL + 2;
-        assert_eq!(face_height(cell, 8), 2);
-        assert_eq!(face_height(cell, 9), 2);
-        assert_eq!(face_height(cell, -8), -2);
-        assert_eq!(face_height(cell, -9), -3);
-        assert_eq!(face_height(cell, -1), -1);
-        assert_eq!(face_height(LEAF_CELL - 3, -5), -40);
+        let cell_zoom = LEAF_CELL_ZOOM + 2;
+        assert_eq!(face_height(cell_zoom, 8), 2);
+        assert_eq!(face_height(cell_zoom, 9), 2);
+        assert_eq!(face_height(cell_zoom, -8), -2);
+        assert_eq!(face_height(cell_zoom, -9), -3);
+        assert_eq!(face_height(cell_zoom, -1), -1);
+        assert_eq!(face_height(LEAF_CELL_ZOOM - 3, -5), -40);
     }
 }

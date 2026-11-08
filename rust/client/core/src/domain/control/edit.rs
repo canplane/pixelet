@@ -123,7 +123,7 @@ pub enum Target {
     /// A placed object.
     Object(Octant),
     /// A decor the ground generated, which has no entry, in its leaf cell.
-    Generated([i32; 3], Instance),
+    Prop([i32; 3], Instance),
 }
 
 impl Hover {
@@ -136,7 +136,7 @@ impl Hover {
 
     pub fn scattered_decor(&self) -> Option<Instance> {
         match self.target {
-            Some(Target::Generated(_, i)) => Some(i),
+            Some(Target::Prop(_, i)) => Some(i),
             _ => None,
         }
     }
@@ -155,7 +155,7 @@ fn flush_against(hit: &Hit) -> Option<Aabb> {
 fn resolve_target(hit: &Hit) -> Option<Target> {
     match hit.kind {
         Decor(i) => match i.generated_in() {
-            Some(cell) => Some(Target::Generated(cell, i)),
+            Some(cell) => Some(Target::Prop(cell, i)),
             None => resolve_hit_object(hit).map(|o| Target::Object(o.id())),
         },
         _ => resolve_hit_object(hit).map(|o| Target::Object(o.id())),
@@ -233,14 +233,20 @@ pub(crate) fn hover_at(ndc_x: f64, ndc_y: f64) {
     hover.target = target;
     hover.approach = Some(world_adjacent_corner(
         &hit,
-        GROUND.cell(),
+        GROUND.leaf_cell_zoom(),
         flush_against(&hit).as_ref(),
     ));
     let (corner, zoom) = match target {
         Some(Target::Object(at)) => (base_of(at.zoom(), at.at()), at.zoom()),
-        Some(Target::Generated(cell, _)) => (base_of(GROUND.cell(), cell), GROUND.cell()),
+        Some(Target::Prop(cell, _)) => (
+            base_of(GROUND.leaf_cell_zoom(), cell),
+            GROUND.leaf_cell_zoom(),
+        ),
         // On the cell's grid, not the tier's: that is the size a carve is written at.
-        None => (world_struck_corner(&hit, GROUND.cell()), GROUND.cell()),
+        None => (
+            world_struck_corner(&hit, GROUND.leaf_cell_zoom()),
+            GROUND.leaf_cell_zoom(),
+        ),
     };
     // Past where the world takes an edit, nothing is pointed at.
     if !World::now().editable(&cube(zoom, idx_of(zoom, &corner))) {
@@ -278,10 +284,12 @@ pub fn tap(ndc_x: f64, ndc_y: f64) {
         None => {
             match hover.target {
                 Some(Target::Object(at)) => remove(at),
-                Some(Target::Generated(cell, _)) => place_air(Octant::new(GROUND.cell(), cell)),
+                Some(Target::Prop(cell, _)) => {
+                    place_air(Octant::new(GROUND.leaf_cell_zoom(), cell));
+                }
                 // AIR, not VOID: terrain has no leaf to delete. A whole cell, never the
                 // size tier.
-                None => place_air(Octant::holding(GROUND.cell(), &hovered)),
+                None => place_air(Octant::holding(GROUND.leaf_cell_zoom(), &hovered)),
             }
         }
     }

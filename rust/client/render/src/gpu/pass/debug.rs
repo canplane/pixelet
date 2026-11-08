@@ -38,14 +38,14 @@ impl DebugPass {
         }
     }
 
-    pub fn prepare(&mut self, g: &Gpu, draws: &Draws, uniforms: &[f32], moved: bool) {
+    pub fn prepare(&mut self, g: &Gpu, draws: &Draws, uniforms: &[f32], changed: bool) {
         let sets = draws.of(PIPELINE_DEBUG);
         self.uniforms.write(
             g,
             self.pipeline.layouts[1],
             sets.len() as u32,
             sets,
-            moved,
+            changed,
             |buf, d| {
                 buf[..DRAW_BYTES as usize].copy_from_slice(bytes(uniform_of(uniforms, d)));
             },

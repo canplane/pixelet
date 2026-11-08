@@ -8,7 +8,7 @@
 //! `world`, a clipmap the light box slides over a texel at a time, every
 //! texel each frame it is cast (pxl-engine `light`); laid into the map
 //! each frame in the box's own order in the tiles a receiver reads, a quad each
-//! (`PIPELINE_LIGHT_MAP`, `light::LISTED_READ`), the rest cleared to the far plane, and
+//! (`PIPELINE_LIGHT_MAP`, `light::LIST_READS`), the rest cleared to the far plane, and
 //! decor and the characters, which move every frame, drawn over it depth only, from the light's
 //! frame. The lit passes read
 //! the map as a plain light box. At 2048 the world is 16 MiB and the map,
@@ -16,13 +16,13 @@
 //! (`Shadow::made`). Where only the listed casters that changed moved over
 //! the world its cast left as it was, the map is drawn again in the tiles
 //! they set alone (gpu/tiles.rs), through a gate of its own
-//! (light_gate.wgsl), as the world's pass is.
+//! (light_mask.wgsl), as the world's pass is.
 
 use crate::frame::shader::sequence;
 use pxl_engine::cast::REACH;
 use pxl_engine::eye;
 use pxl_engine::light::{self, Light, Starts, ANCHOR};
-use pxl_engine::WORKGROUPS_MOST;
+use pxl_engine::WORKGROUPS_CAP;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::layer::lattice::EFFECT_REACH;
@@ -30,13 +30,13 @@ use xpute_gpu::enums::{AddressMode, CompareFunction, FilterMode, MipmapFilterMod
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_LIGHT_GATE, PIPELINE_LIGHT_MAP};
+use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_LIGHT_MAP, PIPELINE_LIGHT_MASK};
 use crate::frame::shader::word::frame::{DRIFT_Q, EYE, VIEW_PROJ};
 use crate::frame::shader::word::{FRAME_FLOATS, SHADOW_SIZE};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry,
     word_bytes, Entry, Format, Gpu, Group, Load, RenderContext, Stencil, TrackedRenderPass,
-    GATED_DEPTH,
+    MASKED_DEPTH,
 };
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::put::put_mat;
@@ -73,11 +73,11 @@ const _: () = assert!(
     "the box lies in the four anchors about its corner (`Shadow::starts`)"
 );
 const _: () = {
-    let most = WORKGROUPS_MOST;
-    let per = light::LIST_ACROSS * light::LISTED_LANES;
+    let cap = WORKGROUPS_CAP;
+    let per = light::LIST_ACROSS * light::LIST_LANES;
     let corners = light::beam_across(SHADOW_SIZE) * light::beam_across(SHADOW_SIZE);
     assert!(
-        (SHADOW_SIZE * SHADOW_SIZE).div_ceil(per) <= most && corners.div_ceil(per) <= most,
+        (SHADOW_SIZE * SHADOW_SIZE).div_ceil(per) <= cap && corners.div_ceil(per) <= cap,
         "each pass over what the light's cast lists fits one dispatch: its texels' and beam rays' lists"
     );
 };
@@ -97,7 +97,7 @@ fn ortho(out: &mut Mat4, half: f64, near: f64, far: f64) {
 }
 
 /// What a cast map holds, made while the shadows are on (`Shadow::made`):
-/// the map as its pass draws it, with the gate's stencil (`GATED_DEPTH`),
+/// the map as its pass draws it, with the gate's stencil (`MASKED_DEPTH`),
 /// and its depth alone, as the lit passes read it; the world's depth from
 /// the light as its cast leaves it, a word a slot of the clipmap (pxl-engine
 /// `light::word`), which `light_cs` writes and `PIPELINE_LIGHT_MAP` lays
@@ -119,13 +119,13 @@ pub struct Shadow {
     /// The world laid in, over `lay_group`: the world, the corner and the
     /// light's list whose reads hold the epoch's uncast tiles lit; and the
     /// map's gate, which lays it in the claimed tiles alone, over
-    /// `gate_group`: those and the map's tiles' words and uniform and the
-    /// marks' box (`Tiles::marks_box`). Both set before the frame
+    /// `mask_group`: those and the map's tiles' words and uniform and the
+    /// marks' box (`Tiles::new_damage_rect`). Both set before the frame
     /// (`set_groups`).
     lay: Pipeline,
-    gate: Pipeline,
+    mask: Pipeline,
     lay_group: Group,
-    gate_group: Group,
+    mask_group: Group,
     corner: u32,
     /// Group 0 of the casters' depth pipelines: the light's frame.
     pub light_group: u32,
@@ -181,8 +181,8 @@ impl Shadow {
             1,
         );
         let depth = Format::depth32float;
-        let lay = pipelines.build_gated(g, PIPELINE_LIGHT_MAP, depth, Stencil::Unused);
-        let gate = pipelines.build_gated(g, PIPELINE_LIGHT_GATE, depth, Stencil::Gate);
+        let lay = pipelines.build_masked(g, PIPELINE_LIGHT_MAP, depth, Stencil::Unused);
+        let mask = pipelines.build_masked(g, PIPELINE_LIGHT_MASK, depth, Stencil::Mask);
         let corner = g.buf(
             word_bytes(8),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
@@ -201,9 +201,9 @@ impl Shadow {
             blank_view,
             blank_sampler,
             lay,
-            gate,
+            mask,
             lay_group: Group::default(),
-            gate_group: Group::default(),
+            mask_group: Group::default(),
             corner,
             light_group,
             light_frame,
@@ -242,7 +242,7 @@ impl Shadow {
                     SHADOW_SIZE,
                     SHADOW_SIZE,
                     1,
-                    GATED_DEPTH,
+                    MASKED_DEPTH,
                     1,
                     texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING,
                 );
@@ -274,7 +274,7 @@ impl Shadow {
     pub fn set_groups(&mut self, g: &Gpu, tiles: &Tiles, reads: Option<u32>) {
         let (Some(t), Some(reads)) = (&self.targets, reads) else {
             self.lay_group.release();
-            self.gate_group.release();
+            self.mask_group.release();
             return;
         };
         let lay = [
@@ -284,16 +284,16 @@ impl Shadow {
         ];
         self.lay_group.set(g, self.lay.layouts[0], &lay);
         let (words, uniform) = tiles.this_frame();
-        self.gate_group.set(
+        self.mask_group.set(
             g,
-            self.gate.layouts[0],
+            self.mask.layouts[0],
             &[
                 lay[0],
                 lay[1],
                 lay[2],
                 buf_entry(30, words),
                 buf_entry(31, uniform),
-                buf_entry(33, tiles.marks_box()),
+                buf_entry(33, tiles.new_damage_rect()),
             ],
         );
     }
@@ -509,11 +509,11 @@ impl Shadow {
     /// light's cast last listed read, a quad each, as many as it opened (`light::ARGS_LAY`):
     /// every texel a receiver reads lies in one, and the rest hold the far plane, which none
     /// reads. In the claimed tiles of `tiles` alone where it is drawn through
-    /// its gate (`gated`, its stencil numbered by `Tiles::gate`), a frame
+    /// its gate (`masked`, its stencil numbered by `Tiles::mask`), a frame
     /// that casts, the rest kept as the last frame left it: the gate lays
     /// the world there and raises their stencil, a quad a tile of the box
     /// the frame's marks cover, the unclaimed collapsed, as many as the GPU
-    /// counted (`Tiles::box_args`), each over its group set before the frame
+    /// counted (`Tiles::rect_args`), each over its group set before the frame
     /// (`set_groups`). The casters are drawn into it next, through the
     /// stencil, then it ends.
     pub fn begin<'a>(
@@ -521,7 +521,7 @@ impl Shadow {
         ctx: &mut RenderContext<'a>,
         cast: bool,
         tiles: &mut Tiles,
-        gated: bool,
+        masked: bool,
         LightReads { epoch, args, .. }: LightReads,
     ) -> TrackedRenderPass<'a> {
         let (g, encoder) = (ctx.g, ctx.encoder);
@@ -534,26 +534,26 @@ impl Shadow {
             self.light_words[light::CORNER[1]],
             epoch,
             light::reads_at(SHADOW_SIZE),
-            light::listed_at(SHADOW_SIZE, light::LISTED_READ),
+            light::list_cnt_at(SHADOW_SIZE, light::LIST_READS),
             light::slide_at(SHADOW_SIZE) + light::READS_FROM,
             0,
             0,
         ];
         g.write_buf(self.corner, 0, bytes(&corner));
         let stamp = ctx.stamp(GpuSpanName::shadow);
-        let load = if gated { Load::Load } else { Load::Clear };
+        let load = if masked { Load::Load } else { Load::Clear };
         let desc = pass_desc(0, Load::Clear, t.map_view, load, 1.0, stamp.pass());
-        let (desc, number) = tiles.gate(desc, gated);
+        let (desc, number) = tiles.mask(desc, masked);
         let pass = g.pass(encoder, &desc);
         g.declare_pass(pass, sequence::MAP_PASS);
         let mut pass = TrackedRenderPass::new(g, pass);
         if let Some(n) = number {
             xpute_kit::ensure!(cast, EINVAL, n);
             pass.set_stencil_reference(n);
-            pass.set_pipeline(self.gate.id);
-            pass.set_bind_group(0, self.gate_group.id(), &[]);
-            if let Some(args) = tiles.box_args() {
-                pass.draw_indirect(args, sequence::MAP_GATE.at());
+            pass.set_pipeline(self.mask.id);
+            pass.set_bind_group(0, self.mask_group.id(), &[]);
+            if let Some(args) = tiles.rect_args() {
+                pass.draw_indirect(args, sequence::MAP_MASK.at());
             }
         } else if cast {
             pass.set_pipeline(self.lay.id);

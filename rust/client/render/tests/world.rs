@@ -15,12 +15,12 @@ use pxl_content::cave;
 use pxl_content::cube::ground as palette;
 use pxl_engine::answer::{self, In, Kind};
 use pxl_engine::area;
-use pxl_engine::clipmap::{self as clip, Lookup, ACROSS, BRICK_SHIFT, FIRST_CELL, ORIGIN_AT};
+use pxl_engine::clipmap::{self as clip, Lookup, ACROSS, BRICK_SHIFT, FIRST_CELL_ZOOM, ORIGIN_AT};
 use pxl_engine::ground;
-use pxl_engine::overwrite::{self, Columns, Cut};
+use pxl_engine::object::{self, Columns, Cut};
 use pxl_engine::way::{self, tree};
 use pxl_engine::world::{self, Inheritance};
-use pxl_engine::{value, wrap_idx, Zoom, LEAF_CELL, SHARD_ZOOM};
+use pxl_engine::{value, wrap_idx, Zoom, LEAF_CELL_ZOOM, SHARD_ZOOM};
 
 use pxl_render::frame::shader::record::WORLD_ASKED;
 use real_world::{level_first, Draw, World, CORNERS, EYE, FINEST, UNLAID};
@@ -96,7 +96,7 @@ fn descend(
     seen: &mut Lookup,
 ) {
     let idx = |z: Zoom| {
-        let a = overwrite::ancestor_at(FINEST, point, FINEST - z);
+        let a = object::ancestor_at(FINEST, point, FINEST - z);
         [wrap_idx(z, a[0]), a[1], a[2]]
     };
     let pool = tree::Read(w.pool);
@@ -114,7 +114,9 @@ fn descend(
             if moving {
                 match draw.next() % 8 {
                     0..=2 => {
-                        near = near.saturating_sub(1 + draw.next() % 2).max(FIRST_CELL);
+                        near = near
+                            .saturating_sub(1 + draw.next() % 2)
+                            .max(FIRST_CELL_ZOOM);
                         far = (far + 1).min(near);
                     }
                     3 | 4 => near = (near + 2 + draw.next() % 3).min(FINEST),
@@ -129,7 +131,7 @@ fn descend(
         if moving && *seen != Lookup::NONE && draw.next().is_multiple_of(16) {
             at.ground = *seen;
             foreign = true;
-            tally.add("handed another descent's place", true);
+            tally.add("inheritance another descent's place", true);
         }
         let before = at;
         let mut held = w;
@@ -143,7 +145,7 @@ fn descend(
             if again != got {
                 tally.add(OTHERWISE, true);
                 eprintln!(
-                    "answered otherwise from the top: z {z} {c:?} {zooms:?}: {again:?} against {got:?}, handed {:x?}",
+                    "answered otherwise from the top: z {z} {c:?} {zooms:?}: {again:?} against {got:?}, inheritance {:x?}",
                     before.words()
                 );
             }
@@ -183,18 +185,18 @@ fn tell(
     // What was asked of the clip levels against what a node over it found.
     let asked = clip::held_to(if z >= zooms[1] { z } else { zooms[1] });
     let above = before.ground;
-    if above != Lookup::NONE && asked <= z + clip::BRICK_LEVELS {
-        t.add("asked coarser than above's cell", asked < above.cell());
+    if above != Lookup::NONE && asked <= z + clip::BRICK_MIPS {
+        t.add("asked coarser than above's cell", asked < above.cell_zoom());
         t.add("asked coarser than above's clip", asked < above.from());
-        t.add("asked finer by 2 or more", asked >= above.cell() + 2);
+        t.add("asked finer by 2 or more", asked >= above.cell_zoom() + 2);
     }
-    if asked > z + clip::BRICK_LEVELS && !UNLAID.contains(&asked) {
+    if asked > z + clip::BRICK_MIPS && !UNLAID.contains(&asked) {
         let up = asked - z;
         let g = [
             wrap_idx(asked, c[0] << up) >> BRICK_SHIFT,
             (c[1] << up) >> BRICK_SHIFT,
         ];
-        let (first, side) = (level_first(EYE, asked), 1 << (up - clip::BRICK_LEVELS));
+        let (first, side) = (level_first(EYE, asked), 1 << (up - clip::BRICK_MIPS));
         let d = [
             wrap_idx(clip::bricks_zoom(asked), g[0] - first[0]),
             g[1] - first[1],
@@ -206,7 +208,7 @@ fn tell(
     }
     t.add(
         "asked of a level not laid",
-        asked > z + clip::BRICK_LEVELS && UNLAID.contains(&asked),
+        asked > z + clip::BRICK_MIPS && UNLAID.contains(&asked),
     );
     if (pxl_engine::TOP_ZOOM..SHARD_ZOOM).contains(&z) && got.kind == Kind::Split {
         let mut place = before.ground;
@@ -218,16 +220,16 @@ fn tell(
             here && b[0][1] < pxl_engine::SEA_LEVEL,
         );
     }
-    if z >= LEAF_CELL && is_cell && !shard.past() {
-        let leaf = [c[0] >> (z - LEAF_CELL), c[1] >> (z - LEAF_CELL)];
+    if z >= LEAF_CELL_ZOOM && is_cell && !shard.past() {
+        let leaf = [c[0] >> (z - LEAF_CELL_ZOOM), c[1] >> (z - LEAF_CELL_ZOOM)];
         for (name, corner) in CORNERS {
-            let on = wrap_idx(LEAF_CELL, corner[0]) == leaf[0] && corner[1] == leaf[1];
+            let on = wrap_idx(LEAF_CELL_ZOOM, corner[0]) == leaf[0] && corner[1] == leaf[1];
             t.add(name, on && area::is_wall(shard, z, [c[0], c[1]]));
         }
     }
     t.add(
         "past the leaves, the node 0, 0, 0, coarser than asked",
-        z >= LEAF_CELL && c == [0, 0, 0] && z < zooms[1],
+        z >= LEAF_CELL_ZOOM && c == [0, 0, 0] && z < zooms[1],
     );
     t.add("past the poles or the world's height", {
         let row = 1 << (z.max(1) - 1);
@@ -265,7 +267,7 @@ fn tell(
         let word = w.data(at.object.slot());
         t.add(
             "a fold of none, of a kind",
-            overwrite::high(word) == 0 && overwrite::low(word) != 0,
+            object::high(word) == 0 && object::low(word) != 0,
         );
     }
     t.add("split", got.kind == Kind::Split);
@@ -279,7 +281,7 @@ fn tell(
         "cell, air",
         is_cell && v == value::VOID && got.asset[0] == 0,
     );
-    if is_cell && answer::is_placed(got.asset[0]) && z >= FIRST_CELL && !shard.past() {
+    if is_cell && answer::is_placed(got.asset[0]) && z >= FIRST_CELL_ZOOM && !shard.past() {
         let (mut held, mut place) = (w, before.ground);
         let (i, _, _) = ground::node(&mut held, shard, &mut place, (z, c), zooms, true);
         t.add("cell over a lack, placed", i.kind == Kind::Lacks);
@@ -310,7 +312,7 @@ fn tell(
     t.add("cell, unknown", is_cell && v == value::UNKNOWN);
     t.add(
         "cell, coarser than asked, past the leaves",
-        is_cell && z >= LEAF_CELL && z < zooms[1] && v != 0,
+        is_cell && z >= LEAF_CELL_ZOOM && z < zooms[1] && v != 0,
     );
     t.add(
         "cell, four differ",
@@ -327,7 +329,7 @@ fn tell(
     }
     t.add("ways' cursor held", at.ways.holds());
     // What the caves took of it, off the ground's own answer.
-    if is_cell && z >= FIRST_CELL && !shard.past() {
+    if is_cell && z >= FIRST_CELL_ZOOM && !shard.past() {
         let mut held = w;
         let mut place = before.ground;
         let (i, _, _) = ground::node(&mut held, shard, &mut place, (z, c), zooms, true);
@@ -405,12 +407,12 @@ fn taken(device: &wgpu::Device, label: &str, source: &str) -> wgpu::ShaderModule
 fn hand_world_answers_as_the_rust() {
     let built = real_world::build(EYE);
     let w = built.world();
-    let (clipmap, ground_words, palette_words, shards, overwrites, pool) = (
+    let (clipmap, ground_words, palette_words, shards, objects, pool) = (
         &built.clipmap,
         &built.ground,
         &built.palette,
         &built.shards,
-        &built.overwrites,
+        &built.objects,
         &built.pool,
     );
     let (way_points, placed, folds, lone, over_bridges, unheld) = (
@@ -445,8 +447,8 @@ fn hand_world_answers_as_the_rust() {
             EYE[1] + draw.within(0, 300),
         ];
         let z = top_at(g) - draw.within(4, 60);
-        let c = [wrap_idx(LEAF_CELL, g[0]), g[1], z];
-        if cave::hollow((LEAF_CELL, c)) >= answer::FULL {
+        let c = [wrap_idx(LEAF_CELL_ZOOM, g[0]), g[1], z];
+        if cave::hollow((LEAF_CELL_ZOOM, c)) >= answer::FULL {
             points.push([g[0], g[1], z]);
             caves += 1;
             if caves == 800 {
@@ -455,20 +457,23 @@ fn hand_world_answers_as_the_rust() {
         }
     }
     // On the ways: about each line's middle, at its cells' zoom, a clip level's alone.
-    for &(cell, _, p) in &way_points {
-        let s = 1 << (LEAF_CELL - cell);
+    for &(cell_zoom, _, p) in &way_points {
+        let s = 1 << (LEAF_CELL_ZOOM - cell_zoom);
         for _ in 0..12 {
             let d = [
                 draw.within(-3, 3) * s,
                 draw.within(-3, 3) * s,
                 draw.within(-3, 2) * s,
             ];
-            asked_at.push(([p[0] + d[0], p[1] + d[1], p[2] + d[2]], [cell, cell]));
+            asked_at.push((
+                [p[0] + d[0], p[1] + d[1], p[2] + d[2]],
+                [cell_zoom, cell_zoom],
+            ));
         }
     }
     for &p in &over_bridges {
         for d in -2..3 {
-            asked_at.push(([p[0], p[1], p[2] + d], [LEAF_CELL - 1, LEAF_CELL]));
+            asked_at.push(([p[0], p[1], p[2] + d], [LEAF_CELL_ZOOM - 1, LEAF_CELL_ZOOM]));
         }
     }
     for &p in &lone {
@@ -478,7 +483,7 @@ fn hand_world_answers_as_the_rust() {
     // At each corner of the notch.
     for (_, corner) in CORNERS {
         for _ in 0..150 {
-            let leaves = LEAF_CELL + draw.next() % 4;
+            let leaves = LEAF_CELL_ZOOM + draw.next() % 4;
             let z = top_at(corner) + draw.within(-6, 3);
             asked_at.push(([corner[0], corner[1], z], [leaves - 1, leaves]));
         }
@@ -516,12 +521,12 @@ fn hand_world_answers_as_the_rust() {
             g[0] + draw.within(0, 1 << 17),
             g[1] + draw.within(0, 1 << 16),
         ];
-        let near = FIRST_CELL + draw.next() % 3;
+        let near = FIRST_CELL_ZOOM + draw.next() % 3;
         asked_at.push(([g[0], g[1], draw.within(-200, 200)], [near - 1, near]));
     }
     // The first node of the world along x and y, its finer zooms' nodes.
     for z in -2..3 {
-        for near in [LEAF_CELL + 1, LEAF_CELL + 2, FINEST] {
+        for near in [LEAF_CELL_ZOOM + 1, LEAF_CELL_ZOOM + 2, FINEST] {
             for _ in 0..12 {
                 asked_at.push(([0, 0, z], [near - 1, near]));
             }
@@ -529,10 +534,10 @@ fn hand_world_answers_as_the_rust() {
     }
     // On a cell what is placed folds in, asked as that cell.
     for &p in &unheld {
-        asked_at.push((p, [LEAF_CELL - 1, LEAF_CELL]));
+        asked_at.push((p, [LEAF_CELL_ZOOM - 1, LEAF_CELL_ZOOM]));
     }
     for &p in &folds {
-        asked_at.push((p, [LEAF_CELL - 1, LEAF_CELL]));
+        asked_at.push((p, [LEAF_CELL_ZOOM - 1, LEAF_CELL_ZOOM]));
     }
     // About the ways and what is placed, far over and under them.
     for _ in 0..1500 {
@@ -543,9 +548,9 @@ fn hand_world_answers_as_the_rust() {
         points.push([g[0], g[1], top_at(g) + draw.within(-2000, 2000)]);
     }
     // At the edges of every clip level, a node wider than a brick its blocks reach or not.
-    for cell in FIRST_CELL..=LEAF_CELL {
-        let s = LEAF_CELL - cell;
-        let row = clipmap[(ORIGIN_AT + cell - FIRST_CELL) as usize];
+    for cell_zoom in FIRST_CELL_ZOOM..=LEAF_CELL_ZOOM {
+        let s = LEAF_CELL_ZOOM - cell_zoom;
+        let row = clipmap[(ORIGIN_AT + cell_zoom - FIRST_CELL_ZOOM) as usize];
         let (lo, side) = ([row[0], row[1]], ACROSS as i32);
         for _ in 0..500 {
             let along = |d: &mut Draw, v: i32| ((v + d.within(-2, side + 2)) << BRICK_SHIFT) << s;
@@ -557,10 +562,10 @@ fn hand_world_answers_as_the_rust() {
                 [along(&mut draw, lo[0]), edge(&mut draw, lo[1])],
                 [edge(&mut draw, lo[0]), along(&mut draw, lo[1])],
             ] {
-                let far = cell.saturating_sub(draw.next() % 3);
-                let g = [wrap_idx(LEAF_CELL, g[0]), g[1]];
+                let far = cell_zoom.saturating_sub(draw.next() % 3);
+                let g = [wrap_idx(LEAF_CELL_ZOOM, g[0]), g[1]];
                 let z = top_at(g) + 40 + draw.within(0, 1000);
-                asked_at.push(([g[0], g[1], z], [far, cell]));
+                asked_at.push(([g[0], g[1], z], [far, cell_zoom]));
             }
         }
     }
@@ -571,7 +576,7 @@ fn hand_world_answers_as_the_rust() {
             EYE[0] + draw.within(-250, 250),
             EYE[1] + draw.within(0, 250),
         ];
-        let leaves = LEAF_CELL + draw.next() % 4;
+        let leaves = LEAF_CELL_ZOOM + draw.next() % 4;
         asked_at.push((
             [g[0], g[1], top_at(g) - draw.within(1, 70)],
             [leaves - 1, leaves],
@@ -589,10 +594,10 @@ fn hand_world_answers_as_the_rust() {
     // On what is placed.
     for &(zoom, c) in placed.iter().step_by(2) {
         let leaf = |v: i32| {
-            if zoom >= LEAF_CELL {
-                v >> (zoom - LEAF_CELL)
+            if zoom >= LEAF_CELL_ZOOM {
+                v >> (zoom - LEAF_CELL_ZOOM)
             } else {
-                v << (LEAF_CELL - zoom)
+                v << (LEAF_CELL_ZOOM - zoom)
             }
         };
         points.push([leaf(c[0]), leaf(c[1]), leaf(c[2]) + draw.within(-1, 2)]);
@@ -603,7 +608,7 @@ fn hand_world_answers_as_the_rust() {
             EYE[0] + draw.within(-250, 250),
             (40 << 16) + draw.within(-1, 2),
         ];
-        let leaves = LEAF_CELL + draw.next() % 4;
+        let leaves = LEAF_CELL_ZOOM + draw.next() % 4;
         asked_at.push((
             [g[0], g[1], top_at(g) + draw.within(-6, 3)],
             [leaves - 1, leaves],
@@ -621,7 +626,7 @@ fn hand_world_answers_as_the_rust() {
                 (44 << 16) + draw.within(-2, 2),
             ],
         ] {
-            let leaves = LEAF_CELL + draw.next() % 4;
+            let leaves = LEAF_CELL_ZOOM + draw.next() % 4;
             asked_at.push((
                 [g[0], g[1], top_at(g) + draw.within(-6, 3)],
                 [leaves - 1, leaves],
@@ -654,7 +659,7 @@ fn hand_world_answers_as_the_rust() {
         let band = (32 - off.leading_zeros()).saturating_sub(8);
         (
             *p,
-            (LEAF_CELL - band.min(LEAF_CELL - FIRST_CELL)).max(FIRST_CELL),
+            (LEAF_CELL_ZOOM - band.min(LEAF_CELL_ZOOM - FIRST_CELL_ZOOM)).max(FIRST_CELL_ZOOM),
         )
     });
     let all: Vec<_> = by_its_distance
@@ -672,8 +677,8 @@ fn hand_world_answers_as_the_rust() {
             near
         } else {
             match draw.next() % 4 {
-                0 => FIRST_CELL + draw.next() % (FINEST - FIRST_CELL + 1),
-                1 => LEAF_CELL + draw.next() % 4,
+                0 => FIRST_CELL_ZOOM + draw.next() % (FINEST - FIRST_CELL_ZOOM + 1),
+                1 => LEAF_CELL_ZOOM + draw.next() % 4,
                 _ => near,
             }
         };
@@ -691,7 +696,7 @@ fn hand_world_answers_as_the_rust() {
             (p[2] << 3) + draw.within(0, 8),
         ];
         let ancestor = |z: Zoom| {
-            let a = overwrite::ancestor_at(FINEST, point, FINEST - z);
+            let a = object::ancestor_at(FINEST, point, FINEST - z);
             [wrap_idx(z, a[0]), a[1], a[2]]
         };
         let carve = match i % 6 {
@@ -819,7 +824,7 @@ fn hand_world_answers_as_the_rust() {
     assert_eq!(
         tally.0.get(OTHERWISE).copied().unwrap_or(0),
         0,
-        "a node answers as it does from the top off what its parent handed it"
+        "a node answers as it does from the top off what its parent inheritance it"
     );
 
     let instance =
@@ -852,7 +857,7 @@ fn hand_world_answers_as_the_rust() {
         buffer(ground_words, store),
         buffer(palette_words, store),
         buffer(&flat(shards), store),
-        buffer(overwrites, store),
+        buffer(objects, store),
         buffer(pool, store),
     );
     let source = WORLD_ASKED;
@@ -961,7 +966,7 @@ fn hand_world_answers_as_the_rust() {
         ("cell, unknown", 10461),
         ("child", 629146),
         ("child, ways' cursor held", 23870),
-        ("handed another descent's place", 7843),
+        ("inheritance another descent's place", 7843),
         ("lack", 1226),
         ("past the area", 139883),
         ("past the leaves, the node 0, 0, 0, coarser than asked", 11),

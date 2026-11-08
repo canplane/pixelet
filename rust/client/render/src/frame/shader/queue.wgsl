@@ -22,10 +22,10 @@ fn eye_size() -> vec2<u32> {
   return textureDimensions(rays).xy;
 }
 
-/// The observer's pool's first word (`ray::pool_at`, `light::HEAD_POOL`).
+/// The observer's pool's first word (`ray::pool_at`, `light::HEADER_POOL`).
 fn pool_at() -> u32 {
   if (light_run()) {
-    return head_word(LIGHT_HEAD_POOL);
+    return header_word(LIGHT_HEADER_POOL);
   }
   return eye_pool_at(eye_size());
 }
@@ -47,7 +47,7 @@ fn hole_px(hole: u32) -> vec2<u32> {
 /// (`beam::Grid::hits_at`); the light's past its pool (`light::hits_at`).
 fn hits_at() -> u32 {
   if (light_run()) {
-    return head_word(LIGHT_HEAD_HITS);
+    return header_word(LIGHT_HEADER_HITS);
   }
   return eye_word(GRID + GRID_HITS_AT);
 }
@@ -56,7 +56,7 @@ fn hits_at() -> u32 {
 /// `light::holes_at`).
 fn holes_at() -> u32 {
   if (light_run()) {
-    return head_word(LIGHT_HEAD_HOLES);
+    return header_word(LIGHT_HEADER_HOLES);
   }
   return eye_holes_at(eye_size());
 }
@@ -65,17 +65,17 @@ fn holes_at() -> u32 {
 /// takes the rays the first parked, the first the observer's holes.
 fn next_item(again: bool) -> u32 {
   if (again) {
-    let k = take(QUEUE_TAKEN_AGAIN);
+    let k = take(QUEUE_NEXT_AGAIN);
     return select(NONE, SLOT | k, k < min(held(QUEUE_PARKED), POOL_CAP));
   }
-  let k = take(QUEUE_TAKEN);
+  let k = take(QUEUE_NEXT);
   let at = holes_at();
   return select(NONE, beams[at + 1u + k], k < beams[at]);
 }
 
 /// The next ray the last walk takes off the pool, `NONE` past it.
 fn next_last() -> u32 {
-  let k = take(LAST_TAKEN);
+  let k = take(LAST_NEXT);
   return select(NONE, SLOT | k, k < min(beams[pool_at() + POOL_CNT], POOL_CAP));
 }
 
@@ -129,38 +129,38 @@ fn parked_start(hole: u32) -> Start {
   return parked_from(beams[at], vec3<u32>(beams[at + 1u], beams[at + 2u], beams[at + 3u]), beams[at + 4u]);
 }
 
-/// A stop's number for the record, as the walk that ends it numbers them (`stop_number`),
+/// A stop's number for the record, as the walk that ends it numbers them (`hit_number`),
 /// the dispatch over them raised by the number that opens a workgroup; `NONE` past its
-/// list's room (`ray::STOPS_A_FRAME`).
-fn stop_room() -> u32 {
-  let r = stop_number();
-  if (r >= STOPS_A_FRAME) {
+/// list's room (`ray::HITS_A_FRAME`).
+fn hit_in_cap() -> u32 {
+  let r = hit_number();
+  if (r >= HITS_A_FRAME) {
     return NONE;
   }
   if (r % HIT_LANES == 0u) {
-    stop_rows(workgroups(r + 1u, STOPS_A_FRAME, HIT_LANES));
+    hit_rows(workgroups(r + 1u, HITS_A_FRAME, HIT_LANES));
   }
   return r;
 }
 
 /// Stop `r` listed for the record, what lies about its face put at its pixel off it
-/// (miss_word.wgsl `hit_put`, record_stops.wgsl), and its number marked waiting
+/// (miss_word.wgsl `hit_put`, record_hits.wgsl), and its number marked waiting
 /// (`beam::HIT_WAITS`).
-fn keep_hit(r: u32, w: Walked, face: u32, id: vec2<u32>) -> u32 {
+fn keep_hit(r: u32, w: WalkEnd, face: u32, id: vec2<u32>) -> u32 {
   hit_put(r, w, face, id);
   return HIT_WAITS | r;
 }
 
 /// Hole `hole`'s walk `w`, ended, its words written and its stop, whatever it stopped on,
-/// listed for its observer's record (`keep_hit`, record_stops.wgsl), the eye's and the
+/// listed for its observer's record (`keep_hit`, record_hits.wgsl), the eye's and the
 /// light's alike: a slot's depth; the eye's ray's, what lies about the face it stopped on its
 /// box's for a cell short of its cube (pxl-engine `face::BOX`), a lack's none, a whole cell's
-/// put there off the record once its stop is in (record_stops.wgsl `record_faces_cs`).
-fn finish(hole: u32, aim: Aim, w: Walked) {
+/// put there off the record once its stop is in (record_hits.wgsl `record_faces_cs`).
+fn finish(hole: u32, aim: Aim, w: WalkEnd) {
   let stops = w.ends == 1u || w.ends == 2u;
   var r = NONE;
   if (stops) {
-    r = stop_room();
+    r = hit_in_cap();
   }
   let at = hole_px(hole);
   if ((hole & SLOT) != 0u) {

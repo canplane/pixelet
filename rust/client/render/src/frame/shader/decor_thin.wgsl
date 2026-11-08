@@ -12,7 +12,7 @@
 /// record's words are written by the one thread whose add to its decor's count took it, and
 /// read by the passes after.
 struct Records {
-  heads: array<atomic<u32>, SLOTS_AT>,
+  headers: array<atomic<u32>, SLOTS_AT>,
   words: array<u32>,
 }
 
@@ -24,24 +24,24 @@ fn decor_thin_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let pair = list[LIST_AT + id.z];
   let brick = pair_entry(pair);
   let j = pair_decor(pair);
-  let cell = FIRST_CELL + brick / CLIP_ENTRIES;
-  let head = brick * HEAD_WORDS;
-  let q = vec2<i32>(i32(atomicLoad(&records.heads[head])), i32(atomicLoad(&records.heads[head + 1u])));
-  let s = LEAF_CELL - cell;
+  let cell_zoom = FIRST_CELL_ZOOM + brick / CLIP_ENTRIES;
+  let header = brick * HEADER_WORDS;
+  let q = vec2<i32>(i32(atomicLoad(&records.headers[header])), i32(atomicLoad(&records.headers[header + 1u])));
+  let s = LEAF_CELL_ZOOM - cell_zoom;
   let corner = (q << vec2<u32>(BRICK_SHIFT + s))
     + vec2<i32>(i32(id.x % BRICK), i32(id.x / BRICK)) * (1i << s);
-  if (scatter_count(j, cell, corner >> vec2<u32>(s)) == 0u) {
+  if (scatter_count(j, cell_zoom, corner >> vec2<u32>(s)) == 0u) {
     return;
   }
   let side = 1u << s;
   for (var n = 0u; n < side * side; n += 1u) {
     let leaf = corner + vec2<i32>(i32(n % side), i32(n / side));
-    if (scatter_count(j, LEAF_CELL, leaf) == 0u) {
+    if (scatter_count(j, LEAF_CELL_ZOOM, leaf) == 0u) {
       continue;
     }
     let draws = candidate_draws(j, leaf);
-    if (stands_at(j, variant_of(j, draws.y), cell) && retained(j, leaf, draws.x, draws.y)) {
-      let k = atomicAdd(&records.heads[cnt_at(brick, j)], 1u);
+    if (stands_at(j, variant_of(j, draws.y), cell_zoom) && retained(j, leaf, draws.x, draws.y)) {
+      let k = atomicAdd(&records.headers[cnt_at(brick, j)], 1u);
       if (k < decor_cap(j)) {
         let r = entry_word(brick, j, k) - SLOTS_AT;
         records.words[r + 1u] = u32(leaf.x);

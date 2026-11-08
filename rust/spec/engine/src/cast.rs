@@ -26,7 +26,7 @@ use crate::answer::{
     box_of, fill_eighths, side, transparent, In, Kind, AIR, BOX_BITS, BOX_STEPS, EIGHTHS,
 };
 use crate::grid::cell_zoom_at;
-use crate::overwrite::{y_start, z_start};
+use crate::object::{y_start, z_start};
 use crate::{axis, wrap_idx, Zoom, FINEST_ZOOM, FRAC_W, HEIGHT_BITS, UNIT_ZOOM};
 
 /// The direction at the tangents `tx` across and `ty` up from the optical
@@ -345,7 +345,7 @@ pub const Y_START: u32 = 1 << 31;
 pub const Z_START: u32 = 1 << (HEIGHT_BITS - 1 + FRAC_W);
 
 /// The origin `o` on the finest grid within its root: modulo the root's side,
-/// 2^32, X the Q3 itself, Y and Z from the world's edge (`overwrite::path`), so
+/// 2^32, X the Q3 itself, Y and Z from the world's edge (`object::path`), so
 /// the world is one root and a shard one cube.
 pub fn grid_of(o: [i32; 3]) -> [u32; 3] {
     // [naga] each axis by itself, not a loop (seed.rs `node_seed`).
@@ -678,7 +678,7 @@ pub struct Trace<A> {
 /// by hand (pxl-render walk.wgsl), over either node module, end there, gone to their reach. A
 /// float gone wrong ends there, on a phone where a walk that does not end loses the device.
 /// Far more than a ray takes.
-pub const STEPS_MOST: u32 = 4096;
+pub const STEPS_CAP: u32 = 4096;
 
 /// The descent's stack, a zoom an entry, every zoom's: what the query
 /// handed the node there (`Query::At`), the one thing the node's parent
@@ -825,7 +825,7 @@ impl<A: Copy> Keep<A> for () {
 /// by (Amanatides & Woo 1987) and the walk is at the child of the nearest
 /// ancestor holding the next node, by the highest bit the step changed
 /// (POP), or past a root, in the next root, from its top. One loop, of at most
-/// `STEPS_MOST` steps (`walk_at_most`).
+/// `STEPS_CAP` steps (`walk_at_most`).
 #[expect(
     clippy::too_many_arguments,
     reason = "the walk's query, origin, ray, detail, stop and start, the line over its start and what keeps its own, each its own (Laine & Karras 2010)"
@@ -840,7 +840,7 @@ pub fn walk<Q: Query>(
     over: &impl Over<Q::At>,
     keep: &mut impl Keep<Q::At>,
 ) -> Trace<Q::At> {
-    walk_at_most(q, o, ray, detail, until, from, over, keep, STEPS_MOST)
+    walk_at_most(q, o, ray, detail, until, from, over, keep, STEPS_CAP)
 }
 
 /// `walk` of at most `steps` steps, a node it looks at a step, as the walks by hand count
@@ -1246,7 +1246,7 @@ pub(crate) mod tests {
     use crate::answer;
     use crate::answer::{fill_word, BOX_WHOLE, EIGHTHS, FULL};
     use crate::content::Sample;
-    use crate::overwrite::AIR;
+    use crate::object::AIR;
 
     /// One cell of stone at `TARGET`, a unit cell, keeping `fill` eighths of
     /// its cube; air about it.

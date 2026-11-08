@@ -10,7 +10,7 @@ fn beam_lattice() -> vec2<u32> {
 
 /// The beam rays a run takes: every corner of the grid, a corner's place its index row by
 /// row.
-fn corners_listed() -> u32 {
+fn corner_cnt() -> u32 {
   let n = beam_lattice();
   return n.x * n.y;
 }

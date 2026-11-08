@@ -35,7 +35,7 @@ pub(crate) type Shown = fn(&[u32; DRAW_WORDS]) -> bool;
 /// changes, the handles its lists touch, sorted, and how far the wind has
 /// carried the clouds as this frame draws them and as the last frame drew
 /// them (word.rs `frame::DRIFT_Q`).
-pub struct MarkInput<'a> {
+pub struct DamageInput<'a> {
     pub draws: Draws<'a>,
     pub changes: &'a [Change],
     pub touched: &'a [u32],
@@ -62,7 +62,7 @@ fn drawn_at((d, mut u): Draw, drift: Position) -> Draw {
 pub(crate) fn marked(
     pipeline: u32,
     (read, shown): (UploadOf, Shown),
-    m: &MarkInput,
+    m: &DamageInput,
     mut take: impl FnMut(Draw, bool),
 ) {
     let mine = |d: &Draw| d.0[4] == pipeline && shown(&d.0);
@@ -74,17 +74,17 @@ pub(crate) fn marked(
             take(drawn_at(w, m.drift[1]), false);
         }
     }
-    let drift_moved = m.drift[0] != m.drift[1];
-    if m.touched.is_empty() && !drift_moved {
+    let drift_changed = m.drift[0] != m.drift[1];
+    if m.touched.is_empty() && !drift_changed {
         return;
     }
-    let moved = |d: &[u32; DRAW_WORDS]| read(d) != 0 && m.touched.binary_search(&read(d)).is_ok();
+    let changed = |d: &[u32; DRAW_WORDS]| read(d) != 0 && m.touched.binary_search(&read(d)).is_ok();
     for d in m.draws.of(pipeline) {
         if !shown(d) || m.draws.changed(d[3]) {
             continue;
         }
         let Some(d) = m.draws.now(d[3]) else { continue };
-        if moved(&d.0) || (drift_moved && drifts(&d.1)) {
+        if changed(&d.0) || (drift_changed && drifts(&d.1)) {
             take(drawn_at(d, m.drift[0]), true);
             take(drawn_at(d, m.drift[1]), false);
         }
@@ -121,7 +121,7 @@ impl Marks {
         (read, put, shown): (UploadOf, PutMark, Shown),
     ) -> Marks {
         Marks {
-            pipeline: pipelines.build_gated(g, id, Format::depth32float, Stencil::Unused),
+            pipeline: pipelines.build_masked(g, id, Format::depth32float, Stencil::Unused),
             marks_of,
             read,
             put,
@@ -145,7 +145,7 @@ impl Marks {
     pub fn prepare(
         &mut self,
         g: &Gpu,
-        m: &MarkInput,
+        m: &DamageInput,
         uploads: &mut Uploads,
         last_frame_uploads: &UploadCopies,
     ) -> bool {

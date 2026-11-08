@@ -261,7 +261,7 @@ impl Character {
 
 /// Where a walk is drawn, kept by where it stands, its floor there and the
 /// zoom the eye draws it at.
-type Drawn = Memo<([f64; 2], f64, Zoom), ([f64; 2], f64)>;
+type FloorMemo = Memo<([f64; 2], f64, Zoom), ([f64; 2], f64)>;
 
 /// A character's walk: where it is, its heading, its plan and the floor it
 /// stands on.
@@ -277,7 +277,7 @@ pub struct Walk {
     follow_walk_until: f64,
     stands_z: Option<f64>,
     /// Where it is drawn and on what floor (`drawn_at`).
-    drawn: Drawn,
+    drawn: FloorMemo,
 }
 
 impl Walk {
@@ -442,7 +442,13 @@ fn walk_to(
 /// takes there from the eye, kept in `asked` while none of it moves. A coarser
 /// answer is taken where that zoom is not held, as a ray draws the ground it
 /// has.
-fn drawn_at(asked: &mut Drawn, at: [f64; 2], stands: f64, half: f64, camera: &Camera) -> [f64; 3] {
+fn drawn_at(
+    asked: &mut FloorMemo,
+    at: [f64; 2],
+    stands: f64,
+    half: f64,
+    camera: &Camera,
+) -> [f64; 3] {
     let center = [at[0], at[1], over(stands)];
     let eye = to_world(&camera.eye);
     let r2 = (0..3)

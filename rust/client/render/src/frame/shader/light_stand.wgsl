@@ -3,7 +3,7 @@
 // The light's list (pxl-engine light.rs `list_words`) as the passes that stand, read and claim
 // its tiles write it, bound apart from `beams` (light_list.wgsl): a word read or written whole,
 // none past the buffer. No word of it atomic: a listed tile's place is its own, off a count
-// kept atomic apart (light_stood.wgsl, light_propagate.wgsl); a read is the word of the one
+// kept atomic apart (light_receiver_tiles.wgsl, light_propagate.wgsl); a read is the word of the one
 // thread that listed its tile read, a square's the cast's number whichever of its tiles sets
 // it; and the slide's words are each one thread's (`light::slide_at`).
 
@@ -40,5 +40,5 @@ fn tile_place(t: vec2<i32>) -> u32 {
 /// The first cast whose reads hold: the later of the host's epoch and the one a slide unrun
 /// began (`light::reads_epoch`, `light::READS_FROM`).
 fn reads_epoch() -> u32 {
-  return max(light_epoch(), list_at(head_word(LIGHT_HEAD_SLIDE) + LIGHT_READS_FROM));
+  return max(light_epoch(), list_at(header_word(LIGHT_HEADER_SLIDE) + LIGHT_READS_FROM));
 }

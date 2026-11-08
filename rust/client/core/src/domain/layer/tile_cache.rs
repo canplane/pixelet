@@ -70,13 +70,13 @@ pub struct TileCache<L: Base> {
     free: Vec<u32>,
     /// Uploads so `ask` allocates nothing.
     going: Vec<Quadrant>,
-    /// Tiles whose answer moved since `take_moved`: held or let go, answered
+    /// Tiles whose answer moved since `take_changed`: held or let go, answered
     /// from above or no longer. A tile's content is fixed by its identity, so
     /// this is all that changes.
-    moved: Vec<Quadrant>,
+    changed: Vec<Quadrant>,
     /// How many times what it holds moved: a tile held or let go, asked for
     /// again or no longer, answered from above. Not what is read over a
-    /// tile (`moved_at`), which holds nothing.
+    /// tile (`changed_at`), which holds nothing.
     revision: u32,
     /// How many times what is asked of it was set (`ask`), which
     /// `revision` counts only where a held tile's answer moved.
@@ -85,9 +85,9 @@ pub struct TileCache<L: Base> {
     /// as of the two revisions they were counted at: read through `shown`
     /// alone, counted again where either moved.
     shown: core::cell::Cell<Option<([u32; 2], [u32; 2])>>,
-    refused: u32,
-    /// Tiles taken in since `take_landed`, the profiler's.
-    landed: u32,
+    refusals: u32,
+    /// Tiles taken in since `take_loads`, the profiler's.
+    loads: u32,
 }
 
 /// What a layer's tile cache holds at once, from what it asks for. A layer
@@ -154,12 +154,12 @@ impl<L: Base> Default for TileCache<L> {
             // Lowest first, as the slots are taken.
             free: (0..Self::SLOTS).rev().collect(),
             going: Vec::with_capacity(Self::ENTRIES as usize),
-            moved: Vec::new(),
+            changed: Vec::new(),
             revision: 0,
             ask_revision: 0,
             shown: core::cell::Cell::new(None),
-            refused: 0,
-            landed: 0,
+            refusals: 0,
+            loads: 0,
         }
     }
 }
@@ -340,7 +340,7 @@ impl<L: Base> TileCache<L> {
             // answer moved as surely as one arriving or going.
             let read = e.resident.is_some() && was != e.asked;
             if read | (!e.asked && core::mem::take(&mut e.answered)) {
-                self.moved.push(p);
+                self.changed.push(p);
                 self.revision = self.revision.wrapping_add(1);
             }
         }
@@ -389,20 +389,20 @@ impl<L: Base> TileCache<L> {
                 .map(|(&q, _)| q),
         ) else {
             xpute_kit::ensure!(unasked, ENOTRECOVERABLE, p.zoom);
-            self.refused += 1;
+            self.refusals += 1;
             return None;
         };
         self.remove(q)
     }
 
     pub fn take_refusals(&mut self) -> u32 {
-        core::mem::take(&mut self.refused)
+        core::mem::take(&mut self.refusals)
     }
 
     /// The tiles taken in since the last call, in a slot or as an empty
     /// tile, the profiler's (perf/report.rs `perf_frame`).
-    pub fn take_landed(&mut self) -> u32 {
-        core::mem::take(&mut self.landed)
+    pub fn take_loads(&mut self) -> u32 {
+        core::mem::take(&mut self.loads)
     }
 
     /// The slot is emptied first, so a body that fails to decode leaves it free
@@ -500,7 +500,7 @@ impl<L: Base> TileCache<L> {
             return;
         }
         if !core::mem::replace(&mut self.entry_mut(p).answered, true) {
-            self.moved.push(p);
+            self.changed.push(p);
             self.revision = self.revision.wrapping_add(1);
         }
     }
@@ -512,9 +512,9 @@ impl<L: Base> TileCache<L> {
     }
 
     /// The tiles whose answer moved since last taken, into `out`.
-    pub fn take_moved(&mut self, out: &mut Vec<Quadrant>) {
+    pub fn take_changed(&mut self, out: &mut Vec<Quadrant>) {
         out.clear();
-        core::mem::swap(out, &mut self.moved);
+        core::mem::swap(out, &mut self.changed);
     }
 
     fn put(&mut self, p: Quadrant, body: L, slot: Option<u32>) {
@@ -533,9 +533,9 @@ impl<L: Base> TileCache<L> {
         if let Some(f) = slot {
             self.in_slot[f as usize] = Some(p);
         }
-        self.moved.push(p);
+        self.changed.push(p);
         self.revision = self.revision.wrapping_add(1);
-        self.landed = self.landed.wrapping_add(1);
+        self.loads = self.loads.wrapping_add(1);
     }
 
     /// A slotted tile held is fetched once more, read meanwhile: what a
@@ -566,8 +566,8 @@ impl<L: Base> TileCache<L> {
     }
 
     /// What is read over `p` moved, as a tile's arriving would.
-    pub fn moved_at(&mut self, p: Quadrant) {
-        self.moved.push(p);
+    pub fn changed_at(&mut self, p: Quadrant) {
+        self.changed.push(p);
     }
 
     /// The tile held in slot `record`.
@@ -587,7 +587,7 @@ impl<L: Base> TileCache<L> {
         if let Some(f) = held.slot {
             self.in_slot[f as usize] = None;
         }
-        self.moved.push(p);
+        self.changed.push(p);
         self.revision = self.revision.wrapping_add(1);
         held.slot
     }

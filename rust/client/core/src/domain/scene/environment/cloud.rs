@@ -7,8 +7,8 @@
 //! which the wind carries (`pxl-content cloud.rs` `drift`): a patch of
 //! cells there is built once and drawn moved, each instance a model, an
 //! impostor or nothing by its size on the screen (`present_patch`), by the
-//! tiers the GPU draws decor by, one rule (pxl-content scatter.rs
-//! `drawn::tier`). A patch is laid in the columns the decor and impostor
+//! tiers the GPU draws decor by, one rule (pxl-content generation.rs
+//! `drawn::lod`). A patch is laid in the columns the decor and impostor
 //! shaders read (domain/scene/column.rs).
 
 use fnv::FnvHashMap;
@@ -18,7 +18,7 @@ use pxl_content::generation::drawn;
 use pxl_content::param::cloud::{CUMULUS_KM, WIND};
 use pxl_render::frame::shader::record::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::frame::shader::word::DECOR_GROUPS;
-use pxl_render::gpu::draw::{DrawId, DrawList, Position, Stand};
+use pxl_render::gpu::draw::{DrawId, DrawList, Position, ReceiverBox};
 use pxl_spec::asset::catalog::Slot;
 use pxl_spec::asset::sky::cumulus;
 use pxl_spec::space::coord::v3::{self, V3};
@@ -54,7 +54,7 @@ const VARIANTS: [Slot; cumulus::models.len()] = cumulus::models;
 pub const MODELS_MAX: usize = VARIANTS.len();
 
 /// Its draw groups follow the decors' variants, which number the groups
-/// before it (pxl-content scatter.rs `GROUPS`).
+/// before it (pxl-content generation.rs `GROUPS`).
 const FIRST_GROUP: usize = generation::GROUPS as usize;
 const _: () = assert!(
     FIRST_GROUP + VARIANTS.len() <= DECOR_GROUPS,
@@ -150,11 +150,11 @@ fn layer_u() -> f64 {
 }
 
 /// How long the wind takes to carry the clouds the seen step at the nearest
-/// drawn (`lens::seen_step_s`), in seconds: so a drawn cloud lags the wind
+/// drawn (`lens::visible_step_s`), in seconds: so a drawn cloud lags the wind
 /// by up to that, an angle, the same on every screen. Infinite while none
 /// is drawn.
 pub fn drift_step_s() -> f64 {
-    lens::seen_step_s(clouds().seen, libm::hypot(WIND[0], WIND[1]))
+    lens::visible_step_s(clouds().seen, libm::hypot(WIND[0], WIND[1]))
 }
 
 /// How much of the clouds shows, the cumulus and the sheets alike
@@ -214,7 +214,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         for x in span(0) {
             let d = near([x, y]).max(1e-3);
             if d <= dist
-                && drawn::tier(
+                && drawn::lod(
                     (largest / d) as f32,
                     decor_model_angle() as f32,
                     decor_impostor_angle() as f32,
@@ -339,9 +339,9 @@ fn stood_corner(key: [i64; 2], off: [f64; 2], eye: V3) -> [f64; 2] {
 /// (`stood_corner`), its side `side`, its instances between the heights
 /// `[zlo, zhi]`, its models reaching `e` past them: grown a cell back from
 /// the corner, so it holds the patch at every drift the corner holds.
-fn patch_stand(stood: [f64; 2], side: f64, e: f64, [zlo, zhi]: [f64; 2]) -> Stand {
+fn patch_stand(stood: [f64; 2], side: f64, e: f64, [zlo, zhi]: [f64; 2]) -> ReceiverBox {
     let [x, y] = stood;
-    Stand::of(
+    ReceiverBox::of(
         [x - CELL - e, y - CELL - e, zlo - e],
         [x + side + e, y + side + e, zhi + e],
     )
@@ -515,7 +515,7 @@ fn present_patch(
     impostors: &mut Vec<u32>,
 ) {
     let (model, impostor) = (decor_model_angle() as f32, decor_impostor_angle() as f32);
-    let tier = |across: f64| drawn::tier(across as f32, model, impostor);
+    let lod = |across: f64| drawn::lod(across as f32, model, impostor);
     let [x0, y0] = b.corner;
     let [zlo, zhi] = b.heights.map(f64::from);
     let gap = |lo: f64, hi: f64, v: f64| (lo - v).max(v - hi).max(0.0);
@@ -548,8 +548,8 @@ fn present_patch(
         };
         let first = at;
         impostors.clear();
-        let culled = tier(extent * most / nearest) == drawn::CULLED;
-        let modeled = tier(extent * least / farthest) == drawn::MODEL;
+        let culled = lod(extent * most / nearest) == drawn::CULLED;
+        let modeled = lod(extent * least / farthest) == drawn::MODEL;
         for i in 0..if culled { 0 } else { cnt as usize } {
             if (columns_of[column.flags()..][i / 4] >> ((i % 4) * 8)) & 1 != 0 {
                 continue;
@@ -571,7 +571,7 @@ fn present_patch(
                 continue;
             }
             let d = libm::sqrt(d2).max(1e-3);
-            let t = tier(extent * f(4) / d);
+            let t = lod(extent * f(4) / d);
             if t == drawn::MODEL {
                 changed |= list[at] != i as u32;
                 list[at] = i as u32;

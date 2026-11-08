@@ -10,7 +10,7 @@
  * (rust/spec/golden/object/top.tsv): an octkey's digits (pxl-spec
  * space/hierarchy/morton.rs `name`), a write's reach (pxl-spec
  * space/hierarchy/sparse_tree.rs `set`), and the fold (pxl-engine
- * overwrite.rs `fold`, `share`, `voxel`; answer.rs `FULL`). The values a
+ * object.rs `fold`, `share`, `voxel`; answer.rs `FULL`). The values a
  * fold counts as filling are generated (abi/voxel.spec.ts).
  *
  * This source is a mock in the place of a server, and no second owner: leave
@@ -52,7 +52,7 @@ function depth(key: string): number {
 /** The child a leaf lies under at the `j`th zoom past the shard, from 1: its
  * digit there, Z's bit highest, the order of a node's children (pxl-spec
  * space/hierarchy/tree.rs `slot_of`). The tree counts Z from the world's floor
- * (pxl-engine overwrite.rs `path`), the key's first digit its sign: below sea
+ * (pxl-engine object.rs `path`), the key's first digit its sign: below sea
  * level is the first half there. */
 function slot(key: string, j: number): number {
   return Number(key[SHARD_ZOOM + j - 1]) ^ (j === 1 ? 4 : 0);
@@ -85,24 +85,24 @@ export function lay(leaves: Map<string, Leaf>, w: Leaf): void {
 /** A cube filled whole, in a share's units (pxl-engine answer.rs `FULL`). */
 const FULL = 1 << 15;
 
-/** A fold's word: its kind low, its share high (overwrite.rs `fold_word`). */
+/** A fold's word: its kind low, its share high (object.rs `fold_word`). */
 function fold_word(kind: number, share: number): number {
   return ((kind & 0xffff) | (share << 16)) >>> 0;
 }
 
-/** Whether a value is drawn as a voxel (overwrite.rs `voxel`). */
+/** Whether a value is drawn as a voxel (object.rs `voxel`). */
 function voxel(val: number): boolean {
   return val === AIR || grounds(val) || objects(val);
 }
 
-/** A leaf's word in its parent's fold (overwrite.rs `share`): a voxel fills
+/** A leaf's word in its parent's fold (object.rs `share`): a voxel fills
  * it whole, anything else none. */
 function share(id: number): number {
   return voxel(id) ? fold_word(id, FULL) : 0;
 }
 
 /** A node's eight children's words folded, the node at `zoom`
- * (overwrite.rs `fold`): the mean of their shares, and the kind most of
+ * (object.rs `fold`): the mean of their shares, and the kind most of
  * that fill is, a tie to the child met first, corners taken in an order
  * that alternates with the zoom. */
 export function fold(children: readonly number[], zoom: number): number {

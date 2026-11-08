@@ -50,7 +50,7 @@ fn planes_of(cells: &'static mut [u32]) -> Planes {
 /// clip levels the eye's finest two again: per tile, a cell's own palette index
 /// and its height, row by row from its first, and its lines; each brick's
 /// columns, its tops and its ways' spans as its fill keeps them
-/// (`fill_columns`), and its levels (pxl-engine `fill::levels`). Built once a
+/// (`fill_columns`), and its levels (pxl-engine `fill::mips`). Built once a
 /// run for a center and its tiles
 /// (`BUILT`); each hold is its own copy, whatever a test does to it.
 pub(crate) fn hold(center: [f64; 2], held: &[HeldTile]) {
@@ -89,11 +89,11 @@ pub(crate) fn hold(center: [f64; 2], held: &[HeldTile]) {
     fold(clipmap());
 }
 
-/// The brick at `cell` holding cell `g` filled and not yet handed, and the clip
+/// The brick at `cell_zoom` holding cell `g` filled and not yet handed, and the clip
 /// levels folded without it, as a turn's step leaves them before a frame hands it.
-pub(crate) fn unland(cell: Zoom, g: [i32; 2]) {
+pub(crate) fn unland(cell_zoom: Zoom, g: [i32; 2]) {
     let w = clipmap();
-    let b = slot_of(w, cell, clipmap::brick_of(g).0).expect("held");
+    let b = slot_of(w, cell_zoom, clipmap::brick_of(g).0).expect("held");
     (w.slots[b as usize].present, w.slots[b as usize].fill) = (false, Fill::Filled);
     for i in of_entry(b % ENTRIES) {
         show(w, i);
@@ -121,24 +121,26 @@ fn build(center: [f64; 2], held: &[HeldTile]) {
     CLIPMAP.set(fresh());
     let w = clipmap();
     for clip_level in 0..CLIP_LEVELS {
-        let (center_of, cell) = layout(clip_level);
+        let (center_of, cell_zoom) = layout(clip_level);
         if center_of == Center::Destination {
             continue;
         }
-        let first = clipmap::origin(cell, cell_at(cell, center));
+        let first = clipmap::origin(cell_zoom, cell_at(cell_zoom, center));
         w.table.entries[(SLOTS + clip_level) as usize] = Entry::at(first, 1);
         for s in 0..ENTRIES {
             w.table.entries[(clip_level * ENTRIES + s) as usize].brick =
-                entry_brick(cell, first, s);
+                entry_brick(cell_zoom, first, s);
         }
     }
     assign_slots(w, false);
     for b in 0..SLOTS {
-        let Slot { cell, brick, .. } = w.slots[b as usize];
+        let Slot {
+            cell_zoom, brick, ..
+        } = w.slots[b as usize];
         if w.slots[b as usize].is_free() {
             continue;
         }
-        let (t, place) = tile_of(cell, brick);
+        let (t, place) = tile_of(cell_zoom, brick);
         let Some((_, palette_of, heights, separation)) = held.iter().find(|(p, _, _, _)| *p == t)
         else {
             continue;
@@ -154,9 +156,9 @@ fn build(center: [f64; 2], held: &[HeldTile]) {
         );
         let n = brick_lines(t, separation, place, &mut segments, &mut lines);
         let laid = terrain::TileBrick {
-            cell,
+            cell_zoom,
             place,
-            first: terrain::first_cell(t, cell, place),
+            first: terrain::first_cell(t, cell_zoom, place),
             lines: &lines[..n],
             palette_indices: |k: u32| word([u32::from(palette_of[at(k)]); 4]),
             height: |c: [i32; 2]| {
@@ -178,16 +180,16 @@ fn build(center: [f64; 2], held: &[HeldTile]) {
             &mut back,
             &mut scratch,
         );
-        let n = clipmap::LAID_CELLS;
-        for k in 0..clipmap::LAID_WORDS {
-            back[(clipmap::LAID_AT + k) as usize] = (0..n)
+        let n = clipmap::OWN_CELLS;
+        for k in 0..clipmap::OWN_WORDS {
+            back[(clipmap::OWN_AT + k) as usize] = (0..n)
                 .map(|j| u32::from(palette_of[at(n * k + j)]) << (8 * j))
                 .sum();
         }
-        fill::levels(&mut back, &scratch, cell);
+        fill::mips(&mut back, &scratch, cell_zoom);
         // Its ways' tree in the pool, its root word naming it.
-        let [taken, cnt, root] = fill::tree(&back, &scratch, cell, &mut pool, 1);
-        assert_ne!(taken, u32::MAX, "a brick's tree past the pool");
+        let [used, cnt, root] = fill::tree(&back, &scratch, cell_zoom, &mut pool, 1);
+        assert_ne!(used, u32::MAX, "a brick's tree past the pool");
         if cnt != 0 {
             let run = way_pool().take(cnt).expect("a brick's tree past the pool");
             let built = Read(&pool);
@@ -227,17 +229,17 @@ fn fill_columns(
 /// their bricks slotted (`assign_slots`), what was held before kept.
 fn lay(w: &mut Clipmap, eye: [f64; 2], pivot: [f64; 2]) {
     for clip_level in 0..CLIP_LEVELS {
-        let (center_of, cell) = layout(clip_level);
+        let (center_of, cell_zoom) = layout(clip_level);
         let p = match center_of {
             Center::Eye => eye,
             Center::Pivot => pivot,
             Center::Destination => continue,
         };
-        let first = clipmap::origin(cell, cell_at(cell, p));
+        let first = clipmap::origin(cell_zoom, cell_at(cell_zoom, p));
         w.table.entries[(SLOTS + clip_level) as usize] = Entry::at(first, 1);
         for s in 0..ENTRIES {
             w.table.entries[(clip_level * ENTRIES + s) as usize].brick =
-                entry_brick(cell, first, s);
+                entry_brick(cell_zoom, first, s);
         }
     }
     assign_slots(w, false);
@@ -258,12 +260,12 @@ fn land_all(w: &mut Clipmap) {
 
 /// A leaf cell's middle, in units.
 fn leaf(c: [f64; 2]) -> [f64; 2] {
-    c.map(|v| (v + 0.5) * units(LEAF_CELL))
+    c.map(|v| (v + 0.5) * units(LEAF_CELL_ZOOM))
 }
 
-/// The slots holding a brick at `cell`.
-fn held_at(w: &Clipmap, cell: Zoom) -> usize {
-    w.slots.iter().filter(|b| b.cell == cell).count()
+/// The slots holding a brick at `cell_zoom`.
+fn held_at(w: &Clipmap, cell_zoom: Zoom) -> usize {
+    w.slots.iter().filter(|b| b.cell_zoom == cell_zoom).count()
 }
 
 /// The brick clip level `clip_level` wants in entry `s`.
@@ -337,7 +339,7 @@ fn held_tile(t: Quadrant, tile: TerrainTile) {
 
 #[test]
 fn brick_filled_in_parts_reads_as_one_filled_whole() {
-    use pxl_engine::overwrite::{self, Cut};
+    use pxl_engine::object::{self, Cut};
     let _g = sys::serial();
     let w = fill_room();
     let (t, tile, pkt) = hilly_tile();
@@ -346,7 +348,7 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
     let wanted: Vec<u32> = (0..SLOTS)
         .filter(|&b| {
             let held = w.slots[b as usize];
-            !held.is_free() && tile_of(held.cell, held.brick).0 == t
+            !held.is_free() && tile_of(held.cell_zoom, held.brick).0 == t
         })
         .collect();
     assert!(!wanted.is_empty(), "the clip levels want of the tile");
@@ -365,15 +367,15 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
         let held = w.slots[b as usize];
         assert!(held.fill == Fill::Filled, "filled, not yet handed");
         assert!(!held.present, "not present before a frame hands it");
-        let (cell, place) = (held.cell, tile_of(held.cell, held.brick).1);
+        let (cell_zoom, place) = (held.cell_zoom, tile_of(held.cell_zoom, held.brick).1);
         let mut pairs = vec![(0, 0); WAYS_BRICK_SEGMENTS as usize];
         let mut lines = vec![0; LINES_WORDS as usize];
         let n = brick_lines(t, &tile.separation, place, &mut pairs, &mut lines);
         let site = fill::Site {
-            cell,
+            cell_zoom,
             place,
             first: held.brick.map(|v| v << BRICK_SHIFT),
-            shard: Shard::UNKNOWN.at(&ServiceArea, (clipmap::bricks_zoom(cell), held.brick)),
+            shard: Shard::UNKNOWN.at(&ServiceArea, (clipmap::bricks_zoom(cell_zoom), held.brick)),
             ele: &tile.ele,
             lines: &lines[..n],
         };
@@ -386,8 +388,8 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
         let (mut lane, mut spans) = (vec![0; BRICK_WORDS as usize], vec![0; SPANS_WORDS as usize]);
         fill::brick(&mut lane, &mut spans, four, &site);
         let mut build = vec![0; BUILD_WORDS];
-        let [taken, cnt, root] = fill::tree(&lane, &spans, cell, &mut build, 1);
-        assert_ne!(taken, u32::MAX);
+        let [used, cnt, root] = fill::tree(&lane, &spans, cell_zoom, &mut build, 1);
+        assert_ne!(used, u32::MAX);
         let got = cells(b);
         assert_eq!(
             got[..ROOT_AT as usize],
@@ -406,11 +408,11 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
             let [x, y] = clipmap::of_idx(i);
             for z in 20..60 {
                 let at = [x as i32, y as i32, z];
-                let was = tree::cursor(&built, root, cell, cell, at);
-                let now = tree::cursor(pool, laid, cell, cell, at);
+                let was = tree::cursor(&built, root, cell_zoom, cell_zoom, at);
+                let now = tree::cursor(pool, laid, cell_zoom, cell_zoom, at);
                 assert_eq!(
-                    overwrite::val(&built, was, Cut::NONE, cell, at),
-                    overwrite::val(pool, now, Cut::NONE, cell, at),
+                    object::val(&built, was, Cut::NONE, cell_zoom, at),
+                    object::val(pool, now, Cut::NONE, cell_zoom, at),
                     "its tree read as built"
                 );
             }
@@ -528,12 +530,12 @@ fn shared_brick_held_once() {
         "the pivot's clip levels take no slot"
     );
     for pivot in EYE_CLIP_LEVELS..EYE_CLIP_LEVELS + 2 {
-        let cell = layout(pivot).1;
-        let eye = cell - FIRST_CELL;
+        let cell_zoom = layout(pivot).1;
+        let eye = cell_zoom - FIRST_CELL_ZOOM;
         for s in 0..ENTRIES {
             assert_eq!(want(w, pivot, s), want(w, eye, s));
             assert_eq!(
-                slot_of(w, cell, want(w, pivot, s)),
+                slot_of(w, cell_zoom, want(w, pivot, s)),
                 Some(eye * ENTRIES + s),
                 "in the eye's own slot"
             );
@@ -544,7 +546,8 @@ fn shared_brick_held_once() {
         for s in 0..ENTRIES {
             let row = w.table.entries[(pivot * ENTRIES + s) as usize];
             assert!(
-                row.holds(row.brick) && row.slot() == (layout(pivot).1 - FIRST_CELL) * ENTRIES + s,
+                row.holds(row.brick)
+                    && row.slot() == (layout(pivot).1 - FIRST_CELL_ZOOM) * ENTRIES + s,
                 "the pivot's rows name the eye's slots"
             );
         }
@@ -556,18 +559,21 @@ fn left_brick_part() {
     let _g = sys::serial();
     CLIPMAP.set(fresh());
     let w = clipmap();
-    let (eye, pivot) = (LEAF_CELL - FIRST_CELL, EYE_CLIP_LEVELS + 1);
+    let (eye, pivot) = (LEAF_CELL_ZOOM - FIRST_CELL_ZOOM, EYE_CLIP_LEVELS + 1);
     lay(w, leaf(CENTER), leaf(CENTER));
     land_all(w);
     // The eye a brick on at the leaves: its clip level there leaves a column
     // the pivot's still wants, and wants a column the pivot's does not.
     let on = leaf([CENTER[0] + f64::from(BRICK), CENTER[1]]);
     lay(w, on, leaf(CENTER));
-    assert_eq!(held_at(w, LEAF_CELL), (ENTRIES + clipmap::ACROSS) as usize);
+    assert_eq!(
+        held_at(w, LEAF_CELL_ZOOM),
+        (ENTRIES + clipmap::ACROSS) as usize
+    );
     for s in 0..ENTRIES {
         let q = want(w, pivot, s);
         assert!(
-            CpuClipmap.present(LEAF_CELL, q).1,
+            CpuClipmap.present(LEAF_CELL_ZOOM, q).1,
             "the pivot's bricks stay present"
         );
         assert!(w.table.entries[(pivot * ENTRIES + s) as usize].holds(q));
@@ -581,7 +587,7 @@ fn left_brick_part() {
         "the eye's new column alone is absent"
     );
     for &s in &new {
-        let b = slot_of(w, LEAF_CELL, want(w, eye, s)).unwrap();
+        let b = slot_of(w, LEAF_CELL_ZOOM, want(w, eye, s)).unwrap();
         assert!(
             w.slots[b as usize].is_absent() && b != eye * ENTRIES + s,
             "in a free slot, the eye's own still holding the pivot's brick"
@@ -597,7 +603,7 @@ fn left_brick_part() {
         );
     }
     assert_eq!(
-        held_at(w, LEAF_CELL),
+        held_at(w, LEAF_CELL_ZOOM),
         ENTRIES as usize,
         "the column no clip level wants is given up"
     );
@@ -630,10 +636,10 @@ fn handing_shows_everywhere() {
     PLANES.set(planes_of(vec![0; CELLS_WORDS].leak()));
     CLIPMAP.set(fresh());
     let w = clipmap();
-    let (eye, pivot) = (LEAF_CELL - FIRST_CELL, EYE_CLIP_LEVELS + 1);
+    let (eye, pivot) = (LEAF_CELL_ZOOM - FIRST_CELL_ZOOM, EYE_CLIP_LEVELS + 1);
     lay(w, leaf(CENTER), leaf(CENTER));
     let q = want(w, eye, 0);
-    let b = slot_of(w, LEAF_CELL, q).unwrap();
+    let b = slot_of(w, LEAF_CELL_ZOOM, q).unwrap();
     w.slots[b as usize].fill = Fill::Filled;
     for i in of_entry(0) {
         show(w, i);
@@ -661,11 +667,11 @@ fn handing_shows_everywhere() {
         "the eye still wants it"
     );
     assert!(
-        !slot_wants(w, tile_of(LEAF_CELL, q).0, b),
+        !slot_wants(w, tile_of(LEAF_CELL_ZOOM, q).0, b),
         "nor is its tile kept for it"
     );
     lay(w, far, far);
-    assert_eq!(slot_of(w, LEAF_CELL, q), None);
+    assert_eq!(slot_of(w, LEAF_CELL_ZOOM, q), None);
 }
 
 #[test]
@@ -682,9 +688,9 @@ fn heap_wait_rehanded() {
     CLIPMAP.set(fresh());
     let w = clipmap();
     lay(w, leaf(CENTER), leaf(CENTER));
-    let eye = LEAF_CELL - FIRST_CELL;
+    let eye = LEAF_CELL_ZOOM - FIRST_CELL_ZOOM;
     let q = want(w, eye, 0);
-    let b = slot_of(w, LEAF_CELL, q).unwrap();
+    let b = slot_of(w, LEAF_CELL_ZOOM, q).unwrap();
     // As a fill leaves it where the heap refused the pool its chunk.
     (w.slots[b as usize].fill, w.heap) = (Fill::Waiting, Some(Refusal::now()));
     assert!(!wake(w), "no page given back: it waits");
@@ -694,14 +700,14 @@ fn heap_wait_rehanded() {
         "unhanded while it waits"
     );
     assert!(
-        !slot_wants(w, tile_of(LEAF_CELL, q).0, b),
+        !slot_wants(w, tile_of(LEAF_CELL_ZOOM, q).0, b),
         "nor its tile kept for it"
     );
     RELEASES.fetch_add(1, Ordering::Relaxed);
     assert!(wake(w) && w.heap.is_none());
     assign_slots(w, false);
     assert!(
-        w.slots[b as usize].is_absent() && slot_wants(w, tile_of(LEAF_CELL, q).0, b),
+        w.slots[b as usize].is_absent() && slot_wants(w, tile_of(LEAF_CELL_ZOOM, q).0, b),
         "absent, to be handed again"
     );
     set_heap_stat(HeapStat::default);

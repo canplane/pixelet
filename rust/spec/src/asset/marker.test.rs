@@ -18,13 +18,13 @@ fn markers() -> Vec<Octant> {
 fn marker_cell_nests() {
     use crate::space::hierarchy::tree::parent_of;
     for at in markers() {
-        for cell in 10..40 {
-            let (z, c) = marker_cell_of(cell, at);
-            let (zf, cf) = marker_cell_of(cell + 1, at);
+        for cell_zoom in 10..40 {
+            let (z, c) = marker_cell_of(cell_zoom, at);
+            let (zf, cf) = marker_cell_of(cell_zoom + 1, at);
             if zf == at.zoom() && z == at.zoom() {
                 assert_eq!(c, at.at());
             } else {
-                assert_eq!((zf, parent_of(cf)), (z + 1, c), "{at:?} at {cell}");
+                assert_eq!((zf, parent_of(cf)), (z + 1, c), "{at:?} at {cell_zoom}");
             }
         }
     }
@@ -37,12 +37,12 @@ fn marker_cell_nests() {
 fn marker_cell_in_brick() {
     use pxl_engine::clipmap::{bricks_zoom, BRICK_SHIFT};
     for at in markers() {
-        for cell in MARKER_SHOWN_FROM as Zoom..=at.zoom() + BRICK_SHIFT {
-            let (z, c) = marker_cell_of(cell, at);
-            let brick = bricks_zoom(cell);
+        for cell_zoom in MARKER_SHOWN_FROM as Zoom..=at.zoom() + BRICK_SHIFT {
+            let (z, c) = marker_cell_of(cell_zoom, at);
+            let brick = bricks_zoom(cell_zoom);
             let [x, y, _] = ancestor_of(c, z - brick);
             let [ax, ay, _] = ancestor_of(at.at(), at.zoom() - brick);
-            assert_eq!([x, y], [ax, ay], "{at:?} at {cell}");
+            assert_eq!([x, y], [ax, ay], "{at:?} at {cell_zoom}");
         }
     }
 }

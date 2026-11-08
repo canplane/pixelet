@@ -15,14 +15,14 @@ use crate::answer::{
 use crate::area::Shard;
 use crate::clipmap::{Bricks, Lookup};
 use crate::ground::{self, VOID};
-use crate::overwrite::{self, Columns, Cut, AIR, CELL, OBJECT_ROOT, SPLIT};
+use crate::object::{self, Columns, Cut, AIR, CELL, ROOT, SPLIT};
 use crate::way;
 use crate::way::tree;
-use crate::{Zoom, LEAF_CELL, SHARD_ZOOM, UNIT_ZOOM};
+use crate::{Zoom, LEAF_CELL_ZOOM, SHARD_ZOOM, UNIT_ZOOM};
 
 /// What a node is handed by the node over it, each source's own, so a
 /// descent asks each node's sources once:
-/// what is placed (`overwrite::NodeSlot`, its cursor in the
+/// what is placed (`object::NodeSlot`, its cursor in the
 /// objects' tree), what is known of the service area at its shard
 /// (`area::Shard`), where the clip levels held the ground's cells of a node
 /// over it (`clipmap::Lookup`, `clipmap::step`), and the ways' cursor in the
@@ -30,10 +30,10 @@ use crate::{Zoom, LEAF_CELL, SHARD_ZOOM, UNIT_ZOOM};
 /// alike. The caves are none of it: a cube's are its own (`Content::hollow`).
 #[derive(Clone, Copy)]
 pub struct Inheritance {
-    pub object: overwrite::NodeSlot,
+    pub object: object::NodeSlot,
     pub shard: Shard,
     pub ground: Lookup,
-    pub ways: overwrite::NodeSlot,
+    pub ways: object::NodeSlot,
 }
 
 /// An `Inheritance`'s words, as a GPU holds one in storage (`Inheritance::words`).
@@ -54,10 +54,10 @@ impl Inheritance {
     /// `words`'s `Inheritance`.
     pub const fn of_words(w: [u32; INHERITANCE_WORDS as usize]) -> Inheritance {
         Inheritance {
-            object: overwrite::NodeSlot::of_word(w[0]),
+            object: object::NodeSlot::of_word(w[0]),
             shard: Shard::of_word(w[1]),
             ground: Lookup::of_word(w[2]),
-            ways: overwrite::NodeSlot::of_word(w[3]),
+            ways: object::NodeSlot::of_word(w[3]),
         }
     }
 
@@ -66,22 +66,22 @@ impl Inheritance {
     /// placed off `columns`.
     pub fn of(columns: &impl Columns, (zoom, c): (Zoom, [i32; 3])) -> Inheritance {
         Inheritance {
-            object: overwrite::cursor(columns, OBJECT_ROOT, zoom, c),
+            object: object::cursor(columns, ROOT, zoom, c),
             shard: Shard::UNKNOWN,
             ground: Lookup::NONE,
-            ways: overwrite::NodeSlot::NOTHING,
+            ways: object::NodeSlot::NOTHING,
         }
     }
 
     /// `of` with nothing placed, any node's: the node as the world unplaced
     /// holds it, the ground's alone, which a content's decor generates on;
     /// nothing placed stays
-    /// nothing down a descent (`overwrite::child`).
+    /// nothing down a descent (`object::child`).
     pub const UNPLACED: Inheritance = Inheritance {
-        object: overwrite::NodeSlot::NOTHING,
+        object: object::NodeSlot::NOTHING,
         shard: Shard::UNKNOWN,
         ground: Lookup::NONE,
-        ways: overwrite::NodeSlot::NOTHING,
+        ways: object::NodeSlot::NOTHING,
     };
 
     /// What its child `c` at `zoom` is handed: each source stepped a zoom
@@ -93,17 +93,17 @@ impl Inheritance {
         (zoom, c): (Zoom, [i32; 3]),
     ) -> Inheritance {
         Inheritance {
-            object: overwrite::child(columns, self.object, zoom, overwrite::path(zoom, c)),
+            object: object::child(columns, self.object, zoom, object::path(zoom, c)),
             shard: self.shard,
             ground: self.ground,
-            ways: overwrite::child(pool, self.ways, zoom, c),
+            ways: object::child(pool, self.ways, zoom, c),
         }
     }
 }
 
 /// The first zoom whose nodes are the ways' tree's own (`way::tree::cursor`): the tree
 /// counts its nodes along z by a leaf's Z shifted down, and the world counts one node
-/// through the height at the shards' zoom and coarser (`overwrite::z_start`), so a
+/// through the height at the shards' zoom and coarser (`object::z_start`), so a
 /// node there is no node of the tree, and a cursor stepped from one to its children
 /// names another node than theirs. Its cursor is nothing there, and found at the
 /// first zoom past them, where the tree's nodes are the world's and every cursor
@@ -119,15 +119,15 @@ const WAYS_FROM: Zoom = SHARD_ZOOM + 1;
 /// another, as the cells' place itself is found again (`clipmap::step`), or
 /// where the node is the first the tree's nodes are the world's at
 /// (`WAYS_FROM`), nothing coarser. A
-/// preview's `carve` and `hide` (`overwrite::Cut`) are read with what is
+/// preview's `carve` and `hide` (`object::Cut`) are read with what is
 /// placed.
 ///
 /// It is a cell where `near` is its zoom or coarser, or past the ground's
-/// cells where nothing placed or carved is finer in it (`overwrite::whole`):
+/// cells where nothing placed or carved is finer in it (`object::whole`):
 /// the world holds nothing finer than the node there. Its asset is what is
 /// placed in it where that fills it whole, air included, else the ground's
 /// asset with what the ways and what is placed write over it (their tree's
-/// leaf or fold there, `overwrite::value`, a bore's air the ground's void,
+/// leaf or fold there, `object::value`, a bore's air the ground's void,
 /// `way::tree::read`), one value whichever source holds it, keeping the
 /// eighths of its cube they fill together over it (`answer::cover`,
 /// `answer::eighths`, `answer::FILL_SHIFT`), air where that is none;
@@ -135,10 +135,10 @@ const WAYS_FROM: Zoom = SHARD_ZOOM + 1;
 /// which nothing drawn reads. Its second word is the four palette indices the ground's
 /// asset is drawn by (`ground::Cell::four`, `ground::word`), none for any
 /// other. Coarser, a split where any layer may fill under it at a zoom asked,
-/// each by its own bound — what is placed (`overwrite::over`), the ground's
+/// each by its own bound — what is placed (`object::over`), the ground's
 /// (`ground::slab`), the ways' (`way::slab`), each meeting the node
 /// (`ground::meets`) — its asset words the box in its own steps they lie in,
-/// every axis alike (`answer::box_word`, `overwrite::object_box`,
+/// every axis alike (`answer::box_word`, `object::object_box`,
 /// `ground::box_along_z`); else air, a cell of air its size, its value void;
 /// where the ground is not held, the lack. Whether a cell is the zoom asked's
 /// or coarser air is the asker's: its zoom against the finest asked (`near`),
@@ -160,8 +160,8 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
     at.shard = at.shard.at(held, (zoom, [c[0], c[1]]));
     let (put, shard) = (at.object, at.shard);
     let (place, trail) = (&mut at.ground, &mut at.ways);
-    let is_cell = zoom >= near || zoom >= LEAF_CELL && overwrite::whole(put, carve, zoom, c);
-    let over = overwrite::over(
+    let is_cell = zoom >= near || zoom >= LEAF_CELL_ZOOM && object::whole(put, carve, zoom, c);
+    let over = object::over(
         columns,
         put,
         carve,
@@ -177,7 +177,7 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
     // takes it.
     let laid = if over.says == CELL {
         let four = if fills(over.asset) {
-            overwrite::palette_indices(columns, put, hide, zoom, c, over.asset)
+            object::palette_indices(columns, put, hide, zoom, c, over.asset)
         } else {
             [0; 4]
         };
@@ -199,7 +199,7 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
     }
     // Where what is placed splits the node, the box it may fill.
     let (placed, splits) = if over.says == SPLIT {
-        (overwrite::object_box(columns, put, zoom), true)
+        (object::object_box(columns, put, zoom), true)
     } else {
         (BOX_NONE, false)
     };
@@ -219,12 +219,12 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
                 c,
             )
         } else {
-            overwrite::NodeSlot::NOTHING
+            object::NodeSlot::NOTHING
         };
     }
     // The ways where the cell's column was read: their leaf or fold over it.
     let way = if is_cell && i.kind == Kind::Cell && place.here() {
-        overwrite::val(pool, *trail, Cut::NONE, zoom, c)
+        object::val(pool, *trail, Cut::NONE, zoom, c)
     } else {
         VOID
     };
@@ -264,7 +264,7 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
         if way != VOID {
             // A way's palette index four times where one wrote it, whatever its value.
             let w = tree::read(way);
-            let (f, theirs) = cover(fill, w, overwrite::fill_share(pool, *trail));
+            let (f, theirs) = cover(fill, w, object::fill_share(pool, *trail));
             if theirs {
                 (val, four) = (w, ground::word([w; 4]));
             }
@@ -302,7 +302,7 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
     // Coarser, what is placed splits it where it may fill, and the ways
     // what the ground leaves air where they may; a split's box is every
     // source's own joined, each in the node's steps: what is placed
-    // (`overwrite::object_box`), the ground's (`ground::slab`, all of it where
+    // (`object::object_box`), the ground's (`ground::slab`, all of it where
     // it lacks) and the ways' (`way::slab`), the last two along z.
     let ways = way::slab(bound, [ground::coarsest(zoom, far), near]);
     let fill = ground::meets(ways, (zoom, c[2]), near);
@@ -346,7 +346,7 @@ const PLACED_LEVELS: usize = (UNIT_ZOOM - PLACED_FIRST) as usize;
 
 /// What is placed at the unit cells of a box, one leaf at a time
 /// (`PlacedCursor::next`), each with its cell and its stored word, as the
-/// objects' tree holds it (`overwrite`): asked of the query. A cursor rather
+/// objects' tree holds it (`object`): asked of the query. A cursor rather
 /// than a callback, so a GPU, which takes no closure over a binding's slice,
 /// walks it alike.
 #[derive(Clone, Copy)]
@@ -357,7 +357,7 @@ pub struct PlacedCursor {
     first: [i32; 3],
     /// The nodes gone into, a level each, the child each is at, and the
     /// level at; none gone into at 0.
-    nodes: [overwrite::NodeSlot; PLACED_LEVELS + 1],
+    nodes: [object::NodeSlot; PLACED_LEVELS + 1],
     idx: [[i32; 3]; PLACED_LEVELS + 1],
     next: [u32; PLACED_LEVELS + 1],
     depth: usize,
@@ -370,7 +370,7 @@ pub fn placed_in(lo: [i32; 3], hi: [i32; 3]) -> PlacedCursor {
         lo,
         hi,
         first: [lo[0] >> s, lo[1] >> s, lo[2] >> s],
-        nodes: [overwrite::NodeSlot::NOTHING; PLACED_LEVELS + 1],
+        nodes: [object::NodeSlot::NOTHING; PLACED_LEVELS + 1],
         idx: [[0; 3]; PLACED_LEVELS + 1],
         next: [0; PLACED_LEVELS + 1],
         depth: 0,
@@ -398,7 +398,7 @@ impl PlacedCursor {
                         self.first[2] += 1;
                     }
                 }
-                let node = overwrite::cursor(columns, OBJECT_ROOT, PLACED_FIRST, n);
+                let node = object::cursor(columns, ROOT, PLACED_FIRST, n);
                 if node.holds() {
                     (self.nodes[0], self.idx[0], self.next[1]) = (node, n, 0);
                     self.depth = 1;
@@ -426,9 +426,9 @@ impl PlacedCursor {
                 && c[2] << t <= self.hi[2]
                 && (c[2] + 1) << t > self.lo[2];
             let h = if meets {
-                overwrite::child(columns, self.nodes[d - 1], z, c)
+                object::child(columns, self.nodes[d - 1], z, c)
             } else {
-                overwrite::NodeSlot::NOTHING
+                object::NodeSlot::NOTHING
             };
             if h.holds() && h.is_folded() && d < PLACED_LEVELS {
                 (self.nodes[d], self.idx[d], self.next[d + 1]) = (h, c, 0);

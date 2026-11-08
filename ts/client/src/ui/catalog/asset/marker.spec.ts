@@ -6,7 +6,7 @@
 // puts up at a place (id.json). A pin's cell is the camera grid's at its
 // scale, as a place's icon is, its own apart from the places' since a
 // pin is drawn as its own design (pxl-spec asset/marker.rs
-// `marker_cell`). Per id where the kind comes to hold more than one shape.
+// `marker_cell_zoom`). Per id where the kind comes to hold more than one shape.
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 

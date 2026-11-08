@@ -71,7 +71,7 @@ pub const UNIFORM_ALIGN_MAX: u32 = 256;
 
 /// An image file as its asker hands it: its name, the asker's own and the
 /// same for one file wherever it is handed, and its bytes, handed until its
-/// texture lands (`take_landed`) and empty after, while the texture is the
+/// texture lands (`take_complete`) and empty after, while the texture is the
 /// taker's (`Gpu::image`).
 pub type Image = (u32, &'static [u8]);
 
@@ -86,7 +86,7 @@ const READS_AT: usize = DEVICE_AT + device::WORDS;
 /// the one before it to be taken.
 pub const READS: usize = 3;
 const READ_WORDS: usize = 2 + 2 * 2 * SPANS;
-const HEAD: usize = READS_AT + READS * READ_WORDS;
+const HEADER: usize = READS_AT + READS * READ_WORDS;
 
 /// Read `k`'s fence in the head; its result and its ticks follow it.
 const fn read_at(k: usize) -> usize {
@@ -304,7 +304,7 @@ impl<'a> TrackedRenderPass<'a> {
 /// The depth a pass drawn through a gate draws into, the world's surfaces'
 /// and the light's map's: a 32-bit float, and a stencil, which marks the
 /// tiles a frame draws again, so a pass skips the rest (`Stencil`).
-pub const GATED_DEPTH: Format = Format::depth32float_stencil8;
+pub const MASKED_DEPTH: Format = Format::depth32float_stencil8;
 
 /// The world's color as its passes leave it, toned and linear, blended
 /// there, gathered over frames (gpu/resolve.rs) and encoded onto the canvas
@@ -316,7 +316,7 @@ pub const WORLD_COLOR: Format = Format::rgba16float;
 /// canvas and the picture the world's surface keeps (gpu/finish.rs).
 pub const TARGETS: usize = 2;
 
-/// What a pipeline does with the stencil beside its depth (`GATED_DEPTH`),
+/// What a pipeline does with the stencil beside its depth (`MASKED_DEPTH`),
 /// which holds in each tile the number of the gated frame that last claimed
 /// it, as a light tile's word names the cast that read it: nothing; passes
 /// only where it holds the pass's reference, this frame's number, as every
@@ -327,8 +327,8 @@ pub const TARGETS: usize = 2;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Stencil {
     Unused,
-    Gated,
-    Gate,
+    Masked,
+    Mask,
 }
 
 /// How an attachment starts: cleared, kept, or (depth) read and not written.
@@ -631,11 +631,11 @@ struct State {
     /// The read the last frame submitted took in, where it took one: its
     /// figures are then that read's, and else the read before it, not
     /// measured again.
-    gpu_landed: Option<usize>,
+    stamps_complete: Option<usize>,
     /// The images on their way into textures (`Gpu::image`).
-    images: Vec<Arriving>,
-    /// The images taken since `take_landed` last ran, on this device.
-    landed: Vec<u32>,
+    images: Vec<ImageCopy>,
+    /// The images taken since `take_complete` last ran, on this device.
+    complete: Vec<u32>,
     /// The devices gone so far: what was handed to the GPU under another
     /// count is on none there is.
     generation: u32,
@@ -660,11 +660,11 @@ struct State {
 /// An image file copied into its texture: the file's bytes kept until the
 /// texture's fence says it is there, or refused. Each asks once, its
 /// ticket the first of its word's sequence (`IMAGE_TICKET`).
-struct Arriving {
+struct ImageCopy {
     image: u32,
     texture: Id,
     fence: Box<[u32; 2]>,
-    /// Whether its landing was told (`images_landed`).
+    /// Whether its landing was told (`images_complete`).
     told: bool,
 }
 
@@ -680,7 +680,7 @@ fn state() -> &'static mut State {
     STATE.get(|| None).as_mut().or_bug(Errno::ENODEV)
 }
 
-fn head(k: usize) -> &'static mut u32 {
+fn header(k: usize) -> &'static mut u32 {
     let at = state().at as usize + k * WORD;
     // SAFETY: a word of the stream's head, the core's and the runtime's alone.
     unsafe { &mut *mem::at::<u32>(at) }
@@ -713,7 +713,7 @@ pub unsafe fn install(at: u32, bytes: u32) -> u32 {
     // bytes are an empty one of, aligned as the range is.
     let (stream, encoder) = unsafe {
         (
-            Stream::new(mem::core(), at as usize, words, HEAD),
+            Stream::new(mem::core(), at as usize, words, HEADER),
             &mut *mem::at::<Encoder<OBJECTS>>(at as usize + bytes as usize - ENCODER_BYTES),
         )
     };
@@ -731,7 +731,7 @@ pub(crate) fn install_apart(device: Device) {
     // SAFETY: leaked, so it lives as long as the process, and nothing else names it.
     let stream = unsafe {
         let mem = mem::Memory::new(region.as_mut_ptr().expose_provenance(), WORDS * WORD);
-        Stream::new(mem, 0, WORDS, HEAD)
+        Stream::new(mem, 0, WORDS, HEADER)
     };
     // SAFETY: all-zero bytes are an encoder that has made nothing (xpute-gpu encode).
     let encoder = unsafe { Box::<Encoder<OBJECTS>>::new_zeroed().assume_init() };
@@ -767,9 +767,9 @@ impl State {
             stamps_asked: None,
             gpu_ms: [0.0; SPANS],
             gpu_busy_ms: 0.0,
-            gpu_landed: None,
+            stamps_complete: None,
             images: Vec::new(),
-            landed: Vec::new(),
+            complete: Vec::new(),
             generation: 0,
             frees: Vec::new(),
             device_pending: false,
@@ -827,9 +827,9 @@ pub fn device() -> Option<Device> {
     let s = STATE.get(|| None).as_mut()?;
     if s.device.is_none()
         && s.device_out
-        && load_acquire(head(DEVICE_AT + device::STATUS_AT)) == STATUS::READY
+        && load_acquire(header(DEVICE_AT + device::STATUS_AT)) == STATUS::READY
     {
-        let word = |k: usize| *head(DEVICE_AT + k);
+        let word = |k: usize| *header(DEVICE_AT + k);
         let limit = |name: &str| {
             word(
                 LIMIT_NAME
@@ -890,7 +890,7 @@ pub fn take_device_lost() -> bool {
     let Some(s) = STATE.get(|| None).as_mut() else {
         return false;
     };
-    let lost = load_acquire(head(DEVICE_AT + device::STATUS_AT)) == STATUS::LOST;
+    let lost = load_acquire(header(DEVICE_AT + device::STATUS_AT)) == STATUS::LOST;
     !core::mem::replace(&mut s.lost, lost) && lost
 }
 
@@ -919,7 +919,7 @@ fn take_stamps(s: &mut State) -> Option<usize> {
     let period_ms = f64::from(s.device.map_or(1.0, |d| d.period_ns)) / 1e6;
     let ticks = read_at(r) + 2;
     let tick =
-        |k: usize| u64::from(*head(ticks + 2 * k)) | u64::from(*head(ticks + 2 * k + 1)) << 32;
+        |k: usize| u64::from(*header(ticks + 2 * k)) | u64::from(*header(ticks + 2 * k + 1)) << 32;
     let mut ran = [(0u64, 0u64); SPANS];
     for (k, r) in ran.iter_mut().enumerate() {
         let (b, e) = (tick(2 * k), tick(2 * k + 1));
@@ -981,7 +981,7 @@ pub fn on_device_lost() {
         unsafe { core::ptr::write_bytes(core::ptr::from_mut(s.encoder), 0, 1) };
         (s.device_out, s.device, s.stamps) = (false, None, None);
         s.images.clear();
-        s.landed.clear();
+        s.complete.clear();
         s.generation = s.generation.wrapping_add(1);
         s.frees.clear();
         s.device_pending = false;
@@ -1020,21 +1020,21 @@ pub fn in_flight<T>(vals: &[T]) -> bool {
 /// Each image whose texture was taken since this last ran, on the device
 /// there is: its asker may let its file go, and hands it again only once
 /// the device is lost.
-pub fn take_landed(mut landed: impl FnMut(u32)) {
+pub fn take_complete(mut complete: impl FnMut(u32)) {
     if let Some(s) = STATE.get(|| None).as_mut() {
-        s.landed.drain(..).for_each(&mut landed);
+        s.complete.drain(..).for_each(&mut complete);
     }
 }
 
 /// Whether an image handed to the device landed since this last ran
 /// (`Gpu::image`): its fence's store woke the turn, and a frame is wanted
 /// to take it.
-pub fn images_landed() -> bool {
+pub fn images_complete() -> bool {
     STATE.get(|| None).as_mut().is_some_and(|s| {
         s.images.iter_mut().fold(false, |any, a| {
-            let landed = !a.told && signaled(&a.fence[0], IMAGE_TICKET);
-            a.told |= landed;
-            any | landed
+            let complete = !a.told && signaled(&a.fence[0], IMAGE_TICKET);
+            a.told |= complete;
+            any | complete
         })
     })
 }
@@ -1211,11 +1211,11 @@ fn load_op(l: Load) -> LoadOp {
 fn stencil_face(stencil: Stencil) -> encode::StencilFaceState {
     match stencil {
         Stencil::Unused => encode::STENCIL_UNUSED,
-        Stencil::Gated => encode::StencilFaceState {
+        Stencil::Masked => encode::StencilFaceState {
             compare: CompareFunction::equal,
             ..encode::STENCIL_UNUSED
         },
-        Stencil::Gate => encode::StencilFaceState {
+        Stencil::Mask => encode::StencilFaceState {
             pass: StencilOperation::replace,
             ..encode::STENCIL_UNUSED
         },
@@ -1429,7 +1429,7 @@ impl Gpu {
         (depth, stencil): (Format, Stencil),
         (fence, ticket): (&u32, u32),
     ) -> Id {
-        let mut at = record::HEAD as usize;
+        let mut at = record::HEADER as usize;
         let mut next = || {
             at += 1;
             words[at - 1]
@@ -1490,7 +1490,7 @@ impl Gpu {
                 layout: Some(layout),
                 vertex: encode::VertexState {
                     module,
-                    entry: VERTEX_ENTRY[words[record::HEAD as usize - 1] as usize],
+                    entry: VERTEX_ENTRY[words[record::HEADER as usize - 1] as usize],
                     buffers: &buffers,
                 },
                 primitive: encode::PrimitiveState {
@@ -1661,7 +1661,7 @@ impl Gpu {
     /// file whose size no header gives (pxl-spec `asset::image_size`),
     /// which the core does not hand, for one the runtime could not decode,
     /// and for the empty file of one already taken on this device.
-    /// The file's bytes are its asker's until it is taken (`take_landed`);
+    /// The file's bytes are its asker's until it is taken (`take_complete`);
     /// the runtime copies them out as it runs the turn.
     pub fn image(&self, image: u32, file: &'static [u8]) -> Option<Id> {
         let s = self.s();
@@ -1670,7 +1670,7 @@ impl Gpu {
             if !signaled(&fence[0], IMAGE_TICKET) || fence[1] != RESULT::OK {
                 return None;
             }
-            s.landed.push(image);
+            s.complete.push(image);
             return Some(s.images.swap_remove(k).texture);
         }
         let (width, height) = asset::image_size(file)?;
@@ -1681,7 +1681,7 @@ impl Gpu {
         let texture = self.texture(width, height, 1, Format::rgba8unorm_srgb, 1, usage);
         let fence = Box::new([0; 2]);
         self.copy_image(texture, file, &fence, IMAGE_TICKET);
-        self.s().images.push(Arriving {
+        self.s().images.push(ImageCopy {
             image,
             texture,
             fence,
@@ -2021,7 +2021,7 @@ impl Gpu {
     /// on their way back in.
     pub fn submit_frame(&self, encoder: Id, written: u64) -> Option<usize> {
         let s = self.s();
-        s.gpu_landed = take_stamps(s);
+        s.stamps_complete = take_stamps(s);
         let free = (0..READS).find(|&r| s.stamps_out[r] == 0);
         let buffers = s.splits.submitted(encoder);
         let (Some((set, resolve, mapped)), Some(r), true) = (s.stamps, free, written != 0) else {
@@ -2124,8 +2124,8 @@ impl Gpu {
 
     /// The read the frame just submitted took in, where it took one: its
     /// figures were measured with it.
-    pub fn gpu_landed(&self) -> Option<usize> {
-        self.s().gpu_landed
+    pub fn stamps_complete(&self) -> Option<usize> {
+        self.s().stamps_complete
     }
 
     /// `size` bytes of `from` from `at` into `to` from `to_at`, on `encoder`.

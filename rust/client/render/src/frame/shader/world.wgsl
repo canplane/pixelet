@@ -9,11 +9,11 @@
 //
 // What a node hands down is `vec4<u32>`, `Inheritance::words`: what is placed, its
 // shard, where its ground's cells were held, its ways' cursor. A cut is `vec4<i32>` as
-// the eye holds one, its index then its zoom (`overwrite::Cut`, `NO_CUT` for none).
+// the eye holds one, its index then its zoom (`object::Cut`, `NO_CUT` for none).
 
 @group(0) @binding(2) var<storage, read> ground: array<u32>;
 @group(0) @binding(5) var<storage, read> shards: array<vec4<u32>>;
-@group(0) @binding(6) var<storage, read> overwrites: array<u32>;
+@group(0) @binding(6) var<storage, read> objects: array<u32>;
 @group(0) @binding(7) var<storage, read> pool: array<u32>;
 
 // ---- value.rs, answer.rs ----
@@ -33,8 +33,8 @@ fn cover(under_fill: u32, kind: u32, over: u32) -> Cover {
   if (fills(kind)) {
     return Cover(min(under_fill + over, FULL), over >= under_fill);
   }
-  let taken = (over / (FULL / EIGHTHS)) * (FULL / EIGHTHS);
-  return Cover(select(under_fill - taken, 0u, taken > under_fill), false);
+  let over_eighths = (over / (FULL / EIGHTHS)) * (FULL / EIGHTHS);
+  return Cover(select(under_fill - over_eighths, 0u, over_eighths > under_fill), false);
 }
 
 /// `v` four times, a cell's word's four palette indices (`ground::word`).
@@ -42,7 +42,7 @@ fn four_of(v: u32) -> u32 {
   return v | (v << 8u) | (v << 16u) | (v << 24u);
 }
 
-// ---- overwrite.rs: a tree of two columns, what is placed or the ways ----
+// ---- object.rs: a tree of two columns, what is placed or the ways ----
 
 const PLACED = 0u;
 const WAYS = 1u;
@@ -57,21 +57,21 @@ fn first_child(tree: u32, slot: u32) -> u32 {
   if (tree == WAYS) {
     return pool[first_child_at(slot)];
   }
-  return overwrites[slot];
+  return objects[slot];
 }
 
 fn tree_data(tree: u32, slot: u32) -> u32 {
   if (tree == WAYS) {
     return pool[first_child_at(slot) + 8u];
   }
-  return overwrites[arrayLength(&overwrites) / 2u + slot];
+  return objects[arrayLength(&objects) / 2u + slot];
 }
 
 fn is_folded(s: u32) -> bool {
   return s != SLOT_NOTHING && (s & SLOT_FOLDED) != 0u;
 }
 
-/// `overwrite::of`.
+/// `object::of`.
 fn slot_at(tree: u32, slot: u32, zoom: u32) -> u32 {
   if (first_child(tree, slot) != 0u) {
     return (slot << SLOT_SHIFT) | SLOT_FOLDED | zoom;
@@ -90,7 +90,7 @@ fn z_start(zoom: u32) -> i32 {
   return select(i32(1u << ((zoom - SHARD_ZOOM - 1u) & 31u)), 0i, zoom <= SHARD_ZOOM);
 }
 
-/// `overwrite::path`.
+/// `object::path`.
 fn path(zoom: u32, at: vec3<i32>) -> vec3<i32> {
   return vec3<i32>(at.x & i32((1u << zoom) - 1u), at.y + y_start(zoom), at.z + z_start(zoom));
 }
@@ -99,7 +99,7 @@ fn child_idx(at: vec3<i32>) -> u32 {
   return u32((at.x & 1i) | ((at.y & 1i) << 1u) | ((at.z & 1i) << 2u));
 }
 
-/// `overwrite::child`.
+/// `object::child`.
 fn tree_child(tree: u32, parent: u32, zoom: u32, at: vec3<i32>) -> u32 {
   if (!is_folded(parent)) {
     return parent;
@@ -107,7 +107,7 @@ fn tree_child(tree: u32, parent: u32, zoom: u32, at: vec3<i32>) -> u32 {
   return slot_at(tree, (first_child(tree, parent >> SLOT_SHIFT) & ~BRANCH) + child_idx(at), zoom);
 }
 
-/// `overwrite::down`.
+/// `object::down`.
 fn tree_down(tree: u32, slot: u32, top: u32, zoom: u32, at: vec3<i32>) -> u32 {
   var s = slot_at(tree, slot, top);
   var z = top;
@@ -118,7 +118,7 @@ fn tree_down(tree: u32, slot: u32, top: u32, zoom: u32, at: vec3<i32>) -> u32 {
   return s;
 }
 
-/// `overwrite::holds`.
+/// `object::holds`.
 fn cut_holds(cut: vec4<i32>, zoom: u32, at: vec3<i32>) -> bool {
   let cz = u32(cut.w);
   if (cz > zoom) {
@@ -127,7 +127,7 @@ fn cut_holds(cut: vec4<i32>, zoom: u32, at: vec3<i32>) -> bool {
   return all(path(cz, at >> vec3<u32>(zoom - cz)) == path(cz, cut.xyz));
 }
 
-/// `overwrite::val`.
+/// `object::val`.
 fn tree_val(tree: u32, s: u32, hide: vec4<i32>, zoom: u32, at: vec3<i32>) -> u32 {
   if (s == SLOT_NOTHING) {
     return VALUE_VOID;
@@ -144,7 +144,7 @@ fn tree_val(tree: u32, s: u32, hide: vec4<i32>, zoom: u32, at: vec3<i32>) -> u32
   return select(VALUE_VOID, v, voxel(v));
 }
 
-/// `overwrite::fill_share` of the node holding slot `s` of `tree`, what is placed or the ways.
+/// `object::fill_share` of the node holding slot `s` of `tree`, what is placed or the ways.
 fn fill_share(tree: u32, s: u32) -> u32 {
   if (is_folded(s)) {
     return tree_data(tree, s >> SLOT_SHIFT) >> 16u;
@@ -152,7 +152,7 @@ fn fill_share(tree: u32, s: u32) -> u32 {
   return FULL;
 }
 
-/// `overwrite::palette_indices`, as the word `world::node` keeps of them: none where
+/// `object::palette_indices`, as the word `world::node` keeps of them: none where
 /// one is past a byte.
 fn placed_four(s: u32, hide: vec4<i32>, zoom: u32, at: vec3<i32>, v: u32) -> u32 {
   if (!is_folded(s)) {
@@ -179,8 +179,8 @@ fn placed_four(s: u32, hide: vec4<i32>, zoom: u32, at: vec3<i32>, v: u32) -> u32
 }
 
 /// `way::tree::cursor`.
-fn way_cursor(root: u32, cell: u32, zoom: u32, at: vec3<i32>) -> u32 {
-  let top = cell - BRICK_SHIFT;
+fn way_cursor(root: u32, cell_zoom: u32, zoom: u32, at: vec3<i32>) -> u32 {
+  let top = cell_zoom - BRICK_SHIFT;
   if (root == 0u || zoom < top) {
     return SLOT_NOTHING;
   }
@@ -212,13 +212,13 @@ fn is_past(shard: u32) -> bool {
 }
 
 /// `clipmap::bound_over`: its `all` is left unread.
-fn bound_over(place: u32, coarsest_cell: u32, finest: u32, zoom: u32, c: vec2<i32>) -> NodeBound {
+fn bound_over(place: u32, coarsest: u32, finest: u32, zoom: u32, c: vec2<i32>) -> NodeBound {
   let top = held_to(finest);
-  let bottom = held_to(coarsest_cell);
+  let bottom = held_to(coarsest);
   var b = BOUNDS_EMPTY;
   var found = place;
   var z = top;
-  while (z >= FIRST_CELL) {
+  while (z >= FIRST_CELL_ZOOM) {
     let got = bounded(found, z, zoom, c);
     if (z == top) {
       found = got.place;
@@ -232,7 +232,7 @@ fn bound_over(place: u32, coarsest_cell: u32, finest: u32, zoom: u32, c: vec2<i3
     }
     z = got.clip - 1u;
   }
-  return NodeBound(BOUNDS_OPEN, FIRST_CELL, true, true, found);
+  return NodeBound(BOUNDS_OPEN, FIRST_CELL_ZOOM, true, true, found);
 }
 
 /// `ground::Cell`, its fold a word.
@@ -256,7 +256,7 @@ fn ground_column(shard: u32, place: u32, zoom: u32, b: vec2<i32>) -> Cell {
     let base = brick_at(slot);
     fold = palette_word(slot * BRICK_CELLS + i);
     column = ground[base + COLUMNS_AT + i];
-    own = (ground[base + LAID_AT + i / LAID_CELLS] >> (8u * (i % LAID_CELLS))) & 0xffu;
+    own = (ground[base + OWN_AT + i / OWN_CELLS] >> (8u * (i % OWN_CELLS))) & 0xffu;
   }
   let t = top_of(zoom, column_top(column));
   return Cell(select(own, VALUE_UNKNOWN, is_wall(shard, zoom, b)), t.cells, t.part, fold);
@@ -265,14 +265,14 @@ fn ground_column(shard: u32, place: u32, zoom: u32, b: vec2<i32>) -> Cell {
 // ---- ground.rs ----
 
 /// `strata::by_depth`.
-fn by_depth(cell: u32, palette_idx: u32, t: i32, z: i32) -> u32 {
+fn by_depth(cell_zoom: u32, palette_idx: u32, t: i32, z: i32) -> u32 {
   if (z >= t) {
     return VALUE_VOID;
   }
-  if (cell < LEAF_CELL || palette_idx == VALUE_UNKNOWN) {
+  if (cell_zoom < LEAF_CELL_ZOOM || palette_idx == VALUE_UNKNOWN) {
     return palette_idx;
   }
-  let s = leaf_cells(cell);
+  let s = leaf_cells(cell_zoom);
   var filler = STRATA_SOIL;
   var sandstone = 0i;
   if (palette_idx == STRATA_SAND || palette_idx == STRATA_BEACH) {
@@ -292,19 +292,19 @@ fn by_depth(cell: u32, palette_idx: u32, t: i32, z: i32) -> u32 {
   if (z >= filled - sandstone * s) {
     return STRATA_SANDSTONE;
   }
-  return select(VALUE_UNKNOWN, STRATA_STONE, z >= rock(cell, face_height(cell, t)));
+  return select(VALUE_UNKNOWN, STRATA_STONE, z >= rock(cell_zoom, face_height(cell_zoom, t)));
 }
 
 /// `ground::rock`: the bedrock's top under a face, `strata::bedrock`.
-fn rock(cell: u32, face: i32) -> i32 {
-  return top_of(cell, min(face, SEA_LEVEL) - STRATA_BEDROCK_DEPTH).cells;
+fn rock(cell_zoom: u32, face: i32) -> i32 {
+  return top_of(cell_zoom, min(face, SEA_LEVEL) - STRATA_BEDROCK_DEPTH).cells;
 }
 
 /// `Cell::opens`.
-fn opens(col: Cell, cell: u32, z: i32) -> bool {
-  let face = face_height(cell, col.top);
-  let under = top_of(cell, face).cells - leaf_cells(cell) - i32(col.part < FULL);
-  return col.palette_idx != VALUE_UNKNOWN && z < under && z >= rock(cell, face);
+fn opens(col: Cell, cell_zoom: u32, z: i32) -> bool {
+  let face = face_height(cell_zoom, col.top);
+  let under = top_of(cell_zoom, face).cells - leaf_cells(cell_zoom) - i32(col.part < FULL);
+  return col.palette_idx != VALUE_UNKNOWN && z < under && z >= rock(cell_zoom, face);
 }
 
 /// `ground::node` of a cell: its kind and asset, the column read (`Cell`), where it was held.
@@ -500,7 +500,7 @@ fn tunnels_down(zoom: u32, c: vec3<i32>, k: u32, tunnels: u32, on: u32, want: u3
   }
   let class_zoom = CAVE_ROOT + k;
   let child = zoom + 1u;
-  let room = select(1u << (2u * ((class_zoom - child) & 15u)), 0u, child > class_zoom);
+  let cap = select(1u << (2u * ((class_zoom - child) & 15u)), 0u, child > class_zoom);
   var n = tunnels;
   let h = node_seed(CAVE_TAG_SPLIT ^ k, zoom, c);
   var keep = 0xffu & ~on;
@@ -508,7 +508,7 @@ fn tunnels_down(zoom: u32, c: vec3<i32>, k: u32, tunnels: u32, on: u32, want: u3
     let upper = select(select(0xf0u, 0xccu, axis == 1u), 0xaau, axis == 0u);
     let weight = 0x4000u + ((h >> (8u * axis)) & 0xffu) * 0x80u;
     let w = (weight << 16u) | (rotl(h, 11u * axis + 5u) & 0xffffu);
-    let lo = halve(n, countOneBits(keep & ~upper) * room, countOneBits(keep & upper) * room, w);
+    let lo = halve(n, countOneBits(keep & ~upper) * cap, countOneBits(keep & upper) * cap, w);
     let up = ((want >> axis) & 1u) == 1u;
     n = select(lo, n - lo, up);
     keep &= select(~upper, upper, up);
@@ -516,9 +516,9 @@ fn tunnels_down(zoom: u32, c: vec3<i32>, k: u32, tunnels: u32, on: u32, want: u3
   return n;
 }
 
-/// What a node holds as its readers read it (`cave::Holds`): its piece's blocks and sides,
+/// What a node holds as its readers read it (`cave::CaveNode`): its piece's blocks and sides,
 /// and the tunnels of each class not yet started in it, the first four then the last.
-struct Holds {
+struct CaveNode {
   blocks: u32,
   side_in: u32,
   side_out: u32,
@@ -527,7 +527,7 @@ struct Holds {
 }
 
 /// `cave::holds`.
-fn cave_holds(zoom: u32, c: vec3<i32>) -> Holds {
+fn cave_holds(zoom: u32, c: vec3<i32>) -> CaveNode {
   var enter = vec3<i32>(0i);
   var leave = vec3<i32>(0i);
   var side_in = 6u;
@@ -554,7 +554,7 @@ fn cave_holds(zoom: u32, c: vec3<i32>) -> Holds {
     }
     let none = tunnels.x + tunnels.y + tunnels.z + tunnels.w + last == 0u;
     if (z == zoom || (blocks == 0u && none)) {
-      return Holds(blocks, side_in, side_out, tunnels, last);
+      return CaveNode(blocks, side_in, side_out, tunnels, last);
     }
     let i = child_idx(c >> vec3<u32>(zoom - (z + 1u)));
     var on = 0u;
@@ -576,7 +576,7 @@ fn cave_holds(zoom: u32, c: vec3<i32>) -> Holds {
     last = tunnels_down(z, here, 4u, last, on, i);
     z += 1u;
   }
-  return Holds(blocks, side_in, side_out, tunnels, last);
+  return CaveNode(blocks, side_in, side_out, tunnels, last);
 }
 
 /// `cave::side_mid`.
@@ -665,9 +665,9 @@ fn cave_blocks(zoom: u32, c: vec3<i32>) -> u32 {
 fn hollow(node_zoom: u32, node: vec3<i32>) -> u32 {
   var zoom = node_zoom;
   var c = node;
-  if (zoom > LEAF_CELL) {
-    c = c >> vec3<u32>(zoom - LEAF_CELL);
-    zoom = LEAF_CELL;
+  if (zoom > LEAF_CELL_ZOOM) {
+    c = c >> vec3<u32>(zoom - LEAF_CELL_ZOOM);
+    zoom = LEAF_CELL_ZOOM;
   }
   var n = ROOT_BLOCKS;
   if (zoom <= CAVE_ROOT) {
@@ -676,7 +676,7 @@ fn hollow(node_zoom: u32, node: vec3<i32>) -> u32 {
     n = cave_blocks(zoom, c);
   }
   // A block is 8 leaves; the node holds 2^(3(LEAF − zoom)) leaves.
-  let shift = 3i + i32(FULL_BITS) - 3i * i32(LEAF_CELL - zoom);
+  let shift = 3i + i32(FULL_BITS) - 3i * i32(LEAF_CELL_ZOOM - zoom);
   if (shift >= 0i) {
     return min(n << u32(shift), FULL);
   }
@@ -744,7 +744,7 @@ fn world_cell(above: vec4<u32>, shard: u32, zoom: u32, c: vec3<i32>, carve: vec4
   if (fills(val)) {
     let share = select(FULL, g.part, c.z == g.top - 1i);
     fill = cover(share, VALUE_AIR, g.asset.y).fill;
-    four = select(g.fold, four_of(val), zoom >= LEAF_CELL || val != g.palette_idx);
+    four = select(g.fold, four_of(val), zoom >= LEAF_CELL_ZOOM || val != g.palette_idx);
   }
   if (g.kind == KIND_CELL && lookup_here(g.place)) {
     let way = tree_val(WAYS, trail, NO_CUT, zoom, c);

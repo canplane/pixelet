@@ -1,17 +1,17 @@
-// pxl-render/record_stops.light.wgsl
+// pxl-render/record_hits.light.wgsl
 
-// The light as its holes' stops take it (record_stops.wgsl), as its samples' do
-// (sample_box.light.wgsl): its stops past its pool, `ray::STOPS_A_FRAME` at most
+// The light as its holes' stops take it (record_hits.wgsl), as its samples' do
+// (sample_box.light.wgsl): its stops past its pool, `ray::HITS_A_FRAME` at most
 // (`light::hits_at`); a stop's node from where its slot's ray starts, whole where it is coarser
 // than its slot's band (`record::light_whole`); and no faces' asks, as its slots read no face's
 // word.
 
 fn hits_at() -> u32 {
-  return head_word(LIGHT_HEAD_HITS);
+  return header_word(LIGHT_HEADER_HITS);
 }
 
-fn hits_room() -> u32 {
-  return STOPS_A_FRAME;
+fn hits_cap() -> u32 {
+  return HITS_A_FRAME;
 }
 
 /// The texel of hit `r`'s slot.

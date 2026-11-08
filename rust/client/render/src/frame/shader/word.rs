@@ -260,12 +260,12 @@ uniform! {
         /// (gpu/atmosphere.rs `prepare`): how far under the level the
         /// horizon dips from the eye's radius they were drawn at, in
         /// radians, and the near and far ends of the air's depth law there,
-        /// in km (atmos_medium.wgsl `laid`); and 1 where the light reaches
+        /// in km (atmos_medium.wgsl `view_layout`); and 1 where the light reaches
         /// the air by half a display level, its view and air drawn and read
         /// (`reaches`). The sun's, then the moon's.
-        SUN_LAID: Vec3 = 52,
+        SUN_LAYOUT: Vec3 = 52,
         SUN_REACHES: F32 = 55,
-        MOON_LAID: Vec3 = 56,
+        MOON_LAYOUT: Vec3 = 56,
         MOON_REACHES: F32 = 59,
     }
 }
@@ -354,7 +354,7 @@ pub const AO_NOISE_SIDE: u32 = 128;
 /// pixels a side, its word the number of the frame it last changed in
 /// (`changed_at`), as a light tile's names a cast, the GPU's; its age the
 /// frames since (`age`); claimed while its history has not run through the
-/// jitter's `JITTERS` frames (`CLAIMED_FOR`) (gpu/resolve.rs;
+/// jitter's `JITTERS` frames (`DAMAGE_FRAMES`) (gpu/resolve.rs;
 /// doc/minutes/20261029-the-screen-keeps-its-tiles-as-the-light-does.md).
 pub mod screen {
     /// A tile's drawn pixels a side.
@@ -364,32 +364,32 @@ pub mod screen {
     /// The frames the jitter's sequence covers a pixel in.
     pub const JITTERS: u32 = 8;
 
-    /// The frames a tile stays claimed once changed (`claimed_for`): the frame
+    /// The frames a tile stays claimed once changed (`damage_frames`): the frame
     /// it changed in, its color held to its pixels, then `JITTERS - 1` still
     /// frames, the first taking half of what stands and each after it its even
     /// share (screen_resolve.wgsl), each frame at its own place of the jitter's
     /// sequence.
-    pub const CLAIMED_FOR: u32 = JITTERS;
+    pub const DAMAGE_FRAMES: u32 = JITTERS;
 
     /// The words of the uniform a pass draws the tiles by: the tiles across and
-    /// down, the frames a tile stays claimed once changed (`claimed_for`, all of
+    /// down, the frames a tile stays claimed once changed (`damage_frames`, all of
     /// them where every one is drawn), this frame's number; the target's pixels
     /// across and down, how far a quad is grown past its tile, and a tile's
     /// side, f32 bits.
     pub const TILES_WORDS: usize = 8;
 
     /// The frames since a tile last changed, by its word `changed_at`, in the
-    /// frame numbered `now`. With `claimed`, the one rule a tile is claimed by:
-    /// build.rs writes it as the passes' `tiles_age` and `tiles_claimed`
+    /// frame numbered `now`. With `in_damage`, the one rule a tile is claimed by:
+    /// build.rs writes it as the passes' `tiles_age` and `tiles_in_damage`
     /// (tile_word.wgsl).
     pub const fn age(now: u32, changed_at: u32) -> u32 {
         now.wrapping_sub(changed_at)
     }
 
     /// Whether a tile `age` frames old is claimed, where a tile stays claimed
-    /// `claimed_for` frames once changed.
-    pub const fn claimed(age: u32, claimed_for: u32) -> bool {
-        age < claimed_for
+    /// `damage_frames` frames once changed.
+    pub const fn in_damage(age: u32, damage_frames: u32) -> bool {
+        age < damage_frames
     }
 }
 

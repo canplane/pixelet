@@ -13,7 +13,7 @@ use xpute_core::mem::heap::HeapStat;
 use xpute_core::sched::tick::TickReport;
 
 use crate::domain::layer::Base;
-use crate::domain::scene::stage::Drawn;
+use crate::domain::scene::stage::FrameReport;
 use crate::door;
 use crate::perf::frame::{DeviceSample, FrameSample, GpuSample, RaySample};
 use crate::perf::record::{
@@ -60,9 +60,9 @@ static RENDERER: Global<RendererFrame> = Global::new();
 /// The renderer's answer for this turn's frame (domain/scene/stage.rs
 /// `stage_render`), its figures zero where it drew none, and the reads of
 /// earlier frames, landed now.
-pub fn set_renderer_frame(drawn: &Drawn) {
-    let (kind, scale) = (drawn.kind, drawn.scale);
-    let Some(stat) = drawn.stat else {
+pub fn set_renderer_frame(report: &FrameReport) {
+    let (kind, scale) = (report.kind, report.scale);
+    let Some(stat) = report.stat else {
         RENDERER.set(RendererFrame {
             kind,
             gpu: GpuSample {
@@ -147,7 +147,7 @@ pub fn perf_frame(t: FrameTurn) {
     // Taken whether or not recording, so a recording starts from now.
     let heap = boot::heap_stat();
     let held = held_now(&heap);
-    let terrain_landed = f64::from(TerrainTile::tile_cache().take_landed());
+    let terrain_landed = f64::from(TerrainTile::tile_cache().take_loads());
     let renderer = core::mem::take(RENDERER.get(RendererFrame::default));
     if !perf_recording() {
         return;

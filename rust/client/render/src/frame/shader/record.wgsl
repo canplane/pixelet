@@ -50,7 +50,7 @@ fn node_of_idx(o: vec3<i32>, zoom: u32, c: vec3<i32>) -> Node {
 }
 
 /// The node of slot `slot`'s entry as a walk from the origin `o` holds it.
-fn entry_kept(slot: u32, o: vec3<i32>) -> Node {
+fn entry_node(slot: u32, o: vec3<i32>) -> Node {
   let n = entry_at(slot) + W_NODE;
   let c = vec3<i32>(i32(node_cache_word(n + 1u)), i32(node_cache_word(n + 2u)), i32(node_cache_word(n + 3u)));
   return node_of_idx(o, node_cache_word(n), c);

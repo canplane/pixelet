@@ -20,15 +20,15 @@ fn eighths(fill: u32) -> u32 {
 
 // ---- area.rs ----
 
-/// `area::is_wall`, off the shard the node `(cell, b)` knows.
-fn is_wall(shard: u32, cell: u32, b: vec2<i32>) -> bool {
+/// `area::is_wall`, off the shard the node `(cell_zoom, b)` knows.
+fn is_wall(shard: u32, cell_zoom: u32, b: vec2<i32>) -> bool {
   let served = shard >> SHARD_SERVED_SHIFT;
-  if (cell < LEAF_CELL) {
+  if (cell_zoom < LEAF_CELL_ZOOM) {
     return false;
   }
-  let leaf = b >> vec2<u32>(cell - LEAF_CELL);
-  let own = b >> vec2<u32>(cell - SHARD_ZOOM);
-  let shift = LEAF_CELL - SHARD_ZOOM;
+  let leaf = b >> vec2<u32>(cell_zoom - LEAF_CELL_ZOOM);
+  let own = b >> vec2<u32>(cell_zoom - SHARD_ZOOM);
+  let shift = LEAF_CELL_ZOOM - SHARD_ZOOM;
   // The shards of the leaf cells about it: two a side at most.
   let lo = ((leaf - 1i) >> vec2<u32>(shift)) - own;
   let hi = ((leaf + 1i) >> vec2<u32>(shift)) - own;
@@ -76,11 +76,11 @@ struct Top {
 }
 
 /// `ground::top` of `h` leaf cells.
-fn top_of(cell: u32, h: i32) -> Top {
-  if (cell >= LEAF_CELL) {
-    return Top(h << (cell - LEAF_CELL), FULL);
+fn top_of(cell_zoom: u32, h: i32) -> Top {
+  if (cell_zoom >= LEAF_CELL_ZOOM) {
+    return Top(h << (cell_zoom - LEAF_CELL_ZOOM), FULL);
   }
-  let n = LEAF_CELL - cell;
+  let n = LEAF_CELL_ZOOM - cell_zoom;
   let cells = h >> n;
   let rest = u32(h) & ((1u << n) - 1u);
   let part = select(rest >> ((n - FULL_BITS) & 31u), rest << ((FULL_BITS - n) & 31u), n <= FULL_BITS);
@@ -92,13 +92,13 @@ fn top_of(cell: u32, h: i32) -> Top {
 
 /// `ground::face_height`: past the leaves the leaf cell top `t`'s cell lies in, rounded down
 /// under sea level as over it; under them the cells scaled.
-fn face_height(cell: u32, t: i32) -> i32 {
-  if (cell >= LEAF_CELL) {
-    return t >> (cell - LEAF_CELL);
+fn face_height(cell_zoom: u32, t: i32) -> i32 {
+  if (cell_zoom >= LEAF_CELL_ZOOM) {
+    return t >> (cell_zoom - LEAF_CELL_ZOOM);
   }
-  return t << (LEAF_CELL - cell);
+  return t << (LEAF_CELL_ZOOM - cell_zoom);
 }
 
-fn leaf_cells(cell: u32) -> i32 {
-  return select(1i, 1i << ((cell - LEAF_CELL) & 31u), cell >= LEAF_CELL);
+fn leaf_cells(cell_zoom: u32) -> i32 {
+  return select(1i, 1i << ((cell_zoom - LEAF_CELL_ZOOM) & 31u), cell_zoom >= LEAF_CELL_ZOOM);
 }

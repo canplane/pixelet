@@ -35,12 +35,12 @@ fn rotl(v: u32, s: u32) -> u32 {
 }
 
 /// `share::halve`.
-fn halve(n: u32, room_0: u32, room_1: u32, w: u32) -> u32 {
+fn halve(n: u32, cap_0: u32, cap_1: u32, w: u32) -> u32 {
   let scaled = n * (w >> 16u);
   let part = (scaled >> 16u) + u32((scaled & 0xffffu) > (w & 0xffffu));
-  let least = select(0u, n - room_1, n > room_1);
+  let least = select(0u, n - cap_1, n > cap_1);
   if (part < least) {
     return least;
   }
-  return min(part, room_0);
+  return min(part, cap_0);
 }

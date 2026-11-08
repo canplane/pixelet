@@ -166,20 +166,20 @@ impl Raster {
         i: usize,
     ) -> Result<Arc<RasterTile>, postgres::Error> {
         let slot = {
-            let mut held = self.cache.lock().expect("raster");
-            held.tick += 1;
-            let tick = held.tick;
-            if !held.slots.contains_key(&i) && held.slots.len() >= CACHE_CAP {
-                let oldest = held
+            let mut cache = self.cache.lock().expect("raster");
+            cache.tick += 1;
+            let tick = cache.tick;
+            if !cache.slots.contains_key(&i) && cache.slots.len() >= CACHE_CAP {
+                let oldest = cache
                     .slots
                     .iter()
                     .min_by_key(|(_, (t, _))| *t)
                     .map(|(&k, _)| k);
                 if let Some(k) = oldest {
-                    held.slots.remove(&k);
+                    cache.slots.remove(&k);
                 }
             }
-            let entry = held
+            let entry = cache
                 .slots
                 .entry(i)
                 .or_insert_with(|| (tick, Arc::new(Mutex::new(None))));

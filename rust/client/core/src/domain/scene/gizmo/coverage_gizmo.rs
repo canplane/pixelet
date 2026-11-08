@@ -11,8 +11,8 @@
 use fnv::{FnvHashMap, FnvHashSet};
 
 use pxl_engine::area;
-use pxl_engine::clipmap::{self, Entry, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL};
-use pxl_engine::LEAF_CELL;
+use pxl_engine::clipmap::{self, Entry, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL_ZOOM};
+use pxl_engine::LEAF_CELL_ZOOM;
 use pxl_render::gpu::draw::DrawList;
 use pxl_render::look::color::linear_rgb;
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -204,9 +204,10 @@ fn rect((zoom, [x, y]): Node2) -> (f64, f64, f64) {
 /// the floor's, or a tile and its brick not yet filled.
 fn outline(o: &Observation, top: Zoom) -> Outline {
     let held: [Option<[Entry; ENTRIES as usize]>; EYE_CLIP_LEVELS as usize] =
-        core::array::from_fn(|w| eye_entries(clipmap::eye_cell(w as u32)));
-    let present = |cell: Zoom, q: [i32; 2]| {
-        held[(cell - FIRST_CELL) as usize].is_some_and(|s| s[clipmap::entry(q) as usize].holds(q))
+        core::array::from_fn(|w| eye_entries(clipmap::eye_cell_zoom(w as u32)));
+    let present = |cell_zoom: Zoom, q: [i32; 2]| {
+        held[(cell_zoom - FIRST_CELL_ZOOM) as usize]
+            .is_some_and(|s| s[clipmap::entry(q) as usize].holds(q))
     };
     let over = (o.eye[2] - o.ground).max(0.0);
     let near = |(x0, y0, side): (f64, f64, f64)| {
@@ -228,25 +229,25 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
     let floor_only = |p: Quadrant| p.zoom <= top && !lined.contains(&p);
     let mut out = Outline::default();
     let mut read: FnvHashSet<Node2> = FnvHashSet::default();
-    for cell in (FIRST_CELL..=LEAF_CELL).rev() {
-        if GROUND.tile_zoom(cell) < top as i32 {
+    for cell_zoom in (FIRST_CELL_ZOOM..=LEAF_CELL_ZOOM).rev() {
+        if GROUND.tile_zoom(cell_zoom) < top as i32 {
             continue;
         }
-        let Some(entries) = held[(cell - FIRST_CELL) as usize] else {
+        let Some(entries) = held[(cell_zoom - FIRST_CELL_ZOOM) as usize] else {
             continue;
         };
-        let pz = clipmap::bricks_zoom(cell);
+        let pz = clipmap::bricks_zoom(cell_zoom);
         for entry in entries {
             let p = entry.brick;
-            let tile = tile_of(cell, p).0;
+            let tile = tile_of(cell_zoom, p).0;
             // The brick drawn in its place: its own, or the finest coarser one present.
-            let drawn = (FIRST_CELL..=cell)
+            let drawn = (FIRST_CELL_ZOOM..=cell_zoom)
                 .rev()
-                .map(|c| (c, [p[0] >> (cell - c), p[1] >> (cell - c)]))
+                .map(|c| (c, [p[0] >> (cell_zoom - c), p[1] >> (cell_zoom - c)]))
                 .find(|&(c, at)| present(c, at));
             let r2 = near(rect((pz, p)));
             if r2 > o.demand_dist * o.demand_dist
-                || cell_zoom_at(r2).clamp(FIRST_CELL, LEAF_CELL) < cell
+                || cell_zoom_at(r2).clamp(FIRST_CELL_ZOOM, LEAF_CELL_ZOOM) < cell_zoom
             {
                 continue;
             }
@@ -258,7 +259,7 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
                 Some((c, at)) => {
                     out.tiles.push(tile);
                     out.shards.push(area::shard_over(pz, p));
-                    match c < cell && floor_only(tile_of(c, at).0) {
+                    match c < cell_zoom && floor_only(tile_of(c, at).0) {
                         true => Mark::DrawnFromFloor,
                         false => Mark::Drawn,
                     }

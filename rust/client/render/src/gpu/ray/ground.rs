@@ -29,7 +29,7 @@ pub struct GroundBricks<'a> {
 /// `in_flight` before it writes them again.
 pub struct BrickWrite<'a> {
     pub slot: u32,
-    pub cell: Zoom,
+    pub cell_zoom: Zoom,
     pub brick: [i32; 2],
     pub words: &'a [u32],
     pub palette_indices: &'a [u32],
@@ -71,7 +71,7 @@ pub(super) struct GroundBuffers {
     child_groups: u32,
     /// The bricks the frame handed, `clipmap::FRAME_BRICKS` at most: each its
     /// cells' zoom and the brick.
-    pub(super) handed: List<(Zoom, [i32; 2]), { FRAME_BRICKS as usize }>,
+    pub(super) inheritance: List<(Zoom, [i32; 2]), { FRAME_BRICKS as usize }>,
 }
 
 impl GroundBuffers {
@@ -143,14 +143,15 @@ impl RaysPass {
                 palette_indices: g.buf(PALETTE_BYTES as u32, storage),
                 pool: pool_buf(g, child_groups),
                 child_groups,
-                handed: List::new(),
+                inheritance: List::new(),
             }
         });
         gb.grow(g, ground.pool);
-        gb.handed.clear();
+        gb.inheritance.clear();
         (ground.upload)(&mut |q| {
             let records = 2 + q.tree.len();
-            if gb.handed.len() == FRAME_BRICKS as usize || !room(records * write_buffer_bytes(&[]))
+            if gb.inheritance.len() == FRAME_BRICKS as usize
+                || !room(records * write_buffer_bytes(&[]))
             {
                 return false;
             }
@@ -163,7 +164,7 @@ impl RaysPass {
             for &(first, words) in q.tree {
                 g.upload_buf(gb.pool, pool_bytes(first), bytes(words));
             }
-            gb.handed.push((q.cell, q.brick));
+            gb.inheritance.push((q.cell_zoom, q.brick));
             true
         });
     }

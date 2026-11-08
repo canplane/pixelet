@@ -16,10 +16,10 @@ export function Glyph({
   ...icon
 }: IconProps & { struck?: boolean }) {
   const [color, opacity] = opaque(icon.color);
-  const drawn = { ...icon, color };
+  const props = { ...icon, color };
   return (
     <View style={{ width: icon.size, height: icon.size, opacity }}>
-      <Icon {...drawn} />
+      <Icon {...props} />
       {struck && (
         <Svg
           style={StyleSheet.absoluteFill}

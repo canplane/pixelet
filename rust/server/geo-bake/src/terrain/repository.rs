@@ -42,7 +42,7 @@ const _: () = assert!(
 
 /// A tile's bbox grown by `HALF_WIDEST_U`, the area its rows are read from; what
 /// is baked is still the tile's own cells.
-pub(crate) fn drawn_from([min, max]: BBox3857) -> BBox3857 {
+pub(crate) fn read_bbox([min, max]: BBox3857) -> BBox3857 {
     let r = merc_from_u(HALF_WIDEST_U);
     [
         [min[0] - r, min[1] - r, min[2]],
@@ -170,7 +170,7 @@ impl TerrainRepository {
         client: &mut Client,
         tile: [i32; 2],
     ) -> Result<TileSource, postgres::Error> {
-        let [[minx, miny, _], [maxx, maxy, _]] = drawn_from(get_tile_bbox(LEAF_ZOOM, tile));
+        let [[minx, miny, _], [maxx, maxy, _]] = read_bbox(get_tile_bbox(LEAF_ZOOM, tile));
         let bbox: [&(dyn ToSql + Sync); 4] = [&minx, &miny, &maxx, &maxy];
         let wkb = |row: &postgres::Row| -> Box<[u8]> { row.get::<_, &[u8]>("geom_wkb").into() };
         Ok(TileSource {

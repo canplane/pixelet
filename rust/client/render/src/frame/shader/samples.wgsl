@@ -10,12 +10,12 @@ fn sample_of(item: u32) -> vec2<u32> {
   return vec2<u32>(item & 0xffffu, item >> 16u);
 }
 
-/// The items listed (listed.wgsl).
+/// The items listed (item_list.wgsl).
 fn item_count() -> u32 {
-  return samples_listed();
+  return sample_cnt();
 }
 
-/// The item at place `k` of the list (listed.wgsl).
+/// The item at place `k` of the list (item_list.wgsl).
 fn item_at(k: u32) -> u32 {
   let s = sample_queued(k);
   return s.x | (s.y << 16u);
@@ -56,6 +56,6 @@ fn parked_start(item: u32) -> Start {
   return parked_from(beams[at + SAMPLE_PARKED_T], corner, beams[at + SAMPLE_PARKED_STATE]);
 }
 
-fn finish(item: u32, aim: Aim, w: Walked) {
+fn finish(item: u32, aim: Aim, w: WalkEnd) {
   sample_put(sample_word(sample_of(item)), w);
 }

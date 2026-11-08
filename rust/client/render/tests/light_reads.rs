@@ -9,7 +9,7 @@ mod gpu;
 
 use pxl_content::generation::{TALLEST, WIDEST};
 use pxl_engine::light::{self, Light};
-use pxl_engine::{eye, param, ray, Zoom, LEAF_CELL};
+use pxl_engine::{eye, param, ray, Zoom, LEAF_CELL_ZOOM};
 use pxl_render::frame::shader::record::{src, SHADER_LIGHT_PROPAGATE, SHADER_LIGHT_SLIDE};
 use pxl_render::frame::shader::word::SHADOW_SIZE;
 use pxl_render::frame::shader::word::SQUARE_SIDE;
@@ -20,7 +20,7 @@ use gpu::{mix, Gpu, LightBox, Tally};
 const SIZE: u32 = SHADOW_SIZE;
 const N: u32 = light::tiles(SIZE);
 /// The eye's zooms, which every band is held to.
-const RANGE: [Zoom; 2] = [8, LEAF_CELL + 3];
+const RANGE: [Zoom; 2] = [8, LEAF_CELL_ZOOM + 3];
 
 /// A light box along `dir` about the eye, `side` units a texel, its corner at `corner` and
 /// its receivers reading within `reach_ndc` of its half-width.
@@ -48,18 +48,18 @@ fn eye_words(l: &Light) -> Vec<u32> {
 
 /// The head of cast `current` in `epoch`, the box's corner the cast before's `was` and its
 /// eye's zooms `range_was`.
-fn head_words(current: u32, epoch: u32, was: [i32; 2], range_was: [Zoom; 2]) -> Vec<u32> {
-    let mut head = vec![0u32; light::HEAD_WORDS];
-    head[light::HEAD_CAST] = current;
-    head[light::HEAD_EPOCH] = epoch;
-    for (k, v) in light::head_layout(SIZE) {
-        head[k] = v;
+fn header_words(current: u32, epoch: u32, was: [i32; 2], last_range: [Zoom; 2]) -> Vec<u32> {
+    let mut header = vec![0u32; light::HEADER_WORDS];
+    header[light::HEADER_CAST] = current;
+    header[light::HEADER_EPOCH] = epoch;
+    for (k, v) in light::header_layout(SIZE) {
+        header[k] = v;
     }
-    head[light::HEAD_CORNER_WAS] = was[0] as u32;
-    head[light::HEAD_CORNER_WAS + 1] = was[1] as u32;
-    head[light::HEAD_RANGE_WAS] = range_was[0];
-    head[light::HEAD_RANGE_WAS + 1] = range_was[1];
-    head
+    header[light::HEADER_LAST_CORNER] = was[0] as u32;
+    header[light::HEADER_LAST_CORNER + 1] = was[1] as u32;
+    header[light::HEADER_LAST_RANGE] = last_range[0];
+    header[light::HEADER_LAST_RANGE + 1] = last_range[1];
+    header
 }
 
 fn run(
@@ -70,7 +70,7 @@ fn run(
     was: [i32; 2],
     range_was: [Zoom; 2],
 ) -> Vec<u32> {
-    run_with(gpu, p, l, list, head_words(40, 37, was, range_was))
+    run_with(gpu, p, l, list, header_words(40, 37, was, range_was))
 }
 
 fn run_with(
@@ -78,16 +78,16 @@ fn run_with(
     p: &wgpu::ComputePipeline,
     l: &Light,
     list: &[u32],
-    head: Vec<u32>,
+    header: Vec<u32>,
 ) -> Vec<u32> {
     let eye = gpu.buffer(&eye_words(l), wgpu::BufferUsages::UNIFORM);
-    let head = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
+    let header = gpu.buffer(&header, wgpu::BufferUsages::UNIFORM);
     let list = gpu.buffer(list, wgpu::BufferUsages::STORAGE);
     gpu.dispatch(
         p,
         &[
             (0, eye.as_entire_binding()),
-            (11, head.as_entire_binding()),
+            (11, header.as_entire_binding()),
             (12, list.as_entire_binding()),
         ],
         [N.div_ceil(SQUARE_SIDE), N.div_ceil(SQUARE_SIDE), 1],
@@ -235,7 +235,7 @@ fn hand_slide_forgets_what_a_world_change_reaches() {
             "the world's width, read by the leaf's band alone",
             [0.3, 0.2, -0.93],
             &[[-1.0e30, 10.0, 1.0e30, 74.0]],
-            [LEAF_CELL, LEAF_CELL],
+            [LEAF_CELL_ZOOM, LEAF_CELL_ZOOM],
         ),
     ];
     for (n, (name, dir, columns, bands)) in changes.into_iter().enumerate() {
@@ -243,15 +243,15 @@ fn hand_slide_forgets_what_a_world_change_reaches() {
         let list: Vec<u32> = (0..light::list_words(SIZE))
             .map(|k| mix(k, n as u32) | 1)
             .collect();
-        let mut head = head_words(40, 37, corner, RANGE);
+        let mut header = header_words(40, 37, corner, RANGE);
         let at = 4 * light::COLUMNS_AT;
-        head[at] = columns.len() as u32;
+        header[at] = columns.len() as u32;
         for (k, c) in columns.iter().enumerate() {
             let w = at + 4 * (1 + 2 * k);
-            head[w..w + 4].copy_from_slice(&c.map(f32::to_bits));
-            head[w + 4..w + 6].copy_from_slice(&bands);
+            header[w..w + 4].copy_from_slice(&c.map(f32::to_bits));
+            header[w + 4..w + 6].copy_from_slice(&bands);
         }
-        let have = run_with(&gpu, &p, &l, &list, head);
+        let have = run_with(&gpu, &p, &l, &list, header);
         let reads = light::reads_at(SIZE);
         let (mut want, mut got) = (Vec::new(), Vec::new());
         let (mut case_kept, mut case_off) = (0, 0);
@@ -295,16 +295,16 @@ fn texel_at(l: &Light, v: [f32; 3]) -> [f32; 2] {
 }
 
 /// The propagation by hand (frame/shader/light_propagate.wgsl), a thread a stood tile
-/// (`light::LISTED_STOOD`), against this test's reading of its rule: a tile is read where it
+/// (`light::LIST_RECEIVERS`), against this test's reading of its rule: a tile is read where it
 /// lies within the disk a receiver reads grown by `light::TILE_READ_PAD` and within the taps
 /// (`light::READ_TILES`) of a step up the way up decor's tallest from a stood tile; each read
-/// tile listed once (`light::LISTED_READ`), the lay opened to as many (`light::ARGS_LAY`). The
+/// tile listed once (`light::LIST_READS`), the lay opened to as many (`light::ARGS_LAY`). The
 /// stood tiles propagated in two casts, as a cast adds to what the casts before stood on and
 /// propagated (`light::kept_at`): the second takes only the tiles past the count kept, and the
-/// reads the two list are those all of them read. Then (`light_claim_cs`) each tile read claimed
+/// reads the two list are those all of them read. Then (`light_damage_cs`) each tile read claimed
 /// where its word names a cast before the reads' epoch, the later of the host's and the one a
 /// slide unrun began (`light::reads_epoch`): its word the cast's, and listed
-/// (`light::LISTED_CLAIMED`). A step by a tile's edge may read either tile. Every texel a placed
+/// (`light::LIST_DAMAGE`). A step by a tile's edge may read either tile. Every texel a placed
 /// decor's pixel reads lies in a tile read, the decor stood on its footprint alone
 /// (`Light::corner_tiles`). Skipped where no adapter answers.
 #[test]
@@ -314,7 +314,7 @@ fn hand_propagation_reads_what_stands() {
         return;
     };
     let p = gpu.pipeline(src(SHADER_LIGHT_PROPAGATE), "light_propagate_cs");
-    let claim = gpu.pipeline(src(SHADER_LIGHT_PROPAGATE), "light_claim_cs");
+    let claim = gpu.pipeline(src(SHADER_LIGHT_PROPAGATE), "light_damage_cs");
     let mut tally = Tally::default();
     let (current, epoch) = (40u32, 30u32);
     for (case, dir, reads_from) in [
@@ -407,7 +407,7 @@ fn hand_propagation_reads_what_stands() {
         }
         // The list: the stood tiles listed, the reads some cast's each, the slide's words.
         let mut list: Vec<u32> = (0..light::buffer_words(SIZE)).map(|k| mix(k, 3)).collect();
-        let stood_at = light::listed_at(SIZE, light::LISTED_STOOD) as usize;
+        let stood_at = light::list_cnt_at(SIZE, light::LIST_RECEIVERS) as usize;
         list[stood_at] = stood.len() as u32;
         for (e, t) in stood.iter().enumerate() {
             list[stood_at + 1 + e] = (t[1] as u32) << 16 | t[0] as u32;
@@ -422,16 +422,16 @@ fn hand_propagation_reads_what_stands() {
         let mut args = vec![0u32; light::args_words(SIZE) as usize];
         args[light::ARGS_LAY as usize] = light::LAY_VERTICES;
         // The stood tiles' first half propagated by a cast before, which stood the world's
-        // receivers afresh (`light::HEAD_WORLD`); none of them yet.
-        let kept = light::kept_at(SIZE) as usize;
+        // receivers afresh (`light::HEADER_WORLD`); none of them yet.
+        let kept = light::carry_at(SIZE) as usize;
         let half = stood.len() / 2;
         list[stood_at] = half as u32;
-        list[kept + light::STOOD_CNT as usize] = 0;
-        let mut head = head_words(current, epoch, [1304, -896], RANGE);
-        head[light::HEAD_SLIDE_OWED] = 0;
-        head[light::HEAD_WORLD] = current - 3;
+        list[kept + light::RECEIVER_TILES_CNT as usize] = 0;
+        let mut header = header_words(current, epoch, [1304, -896], RANGE);
+        header[light::HEADER_SLIDE_CAST] = 0;
+        header[light::HEADER_WORLD] = current - 3;
         let eye = gpu.buffer(&eye_words(&l), wgpu::BufferUsages::UNIFORM);
-        let head = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
+        let header = gpu.buffer(&header, wgpu::BufferUsages::UNIFORM);
         let list_buf = gpu.buffer(&list, wgpu::BufferUsages::STORAGE);
         let args_buf = gpu.buffer(&args, wgpu::BufferUsages::STORAGE);
         let per = ray::MISS_LANES * ray::MISS_ACROSS;
@@ -440,7 +440,7 @@ fn hand_propagation_reads_what_stands() {
                 p,
                 &[
                     (0, eye.as_entire_binding()),
-                    (11, head.as_entire_binding()),
+                    (11, header.as_entire_binding()),
                     (12, list.as_entire_binding()),
                     (21, args_buf.as_entire_binding()),
                 ],
@@ -453,23 +453,23 @@ fn hand_propagation_reads_what_stands() {
         // reads kept with their count (the args, as the host copies the count back in).
         let mut now = gpu.read(&list_buf);
         now[stood_at] = stood.len() as u32;
-        now[kept + light::STOOD_CNT as usize] = half as u32;
+        now[kept + light::RECEIVER_TILES_CNT as usize] = half as u32;
         let list_buf = gpu.buffer(&now, wgpu::BufferUsages::STORAGE);
         propagation(&list_buf, &p, rows(stood.len()));
         propagation(
             &list_buf,
             &claim,
-            [(N * N).div_ceil(light::LISTED_LANES), 1, 1],
+            [(N * N).div_ceil(light::LIST_LANES), 1, 1],
         );
         let out = gpu.read(&list_buf);
         let out_args = gpu.read(&args_buf);
-        let read_cnt = out_args[(light::ARGS_COUNTS + light::LISTED_READ) as usize] as usize;
-        let at = light::listed_at(SIZE, light::LISTED_READ) as usize;
-        let listed: Vec<[i32; 2]> = out[at + 1..at + 1 + read_cnt]
+        let read_cnt = out_args[(light::ARGS_COUNTS + light::LIST_READS) as usize] as usize;
+        let at = light::list_cnt_at(SIZE, light::LIST_READS) as usize;
+        let list_of: Vec<[i32; 2]> = out[at + 1..at + 1 + read_cnt]
             .iter()
             .map(|&w| [(w & 0xffff) as i32, (w >> 16) as i32])
             .collect();
-        let got: std::collections::BTreeSet<[i32; 2]> = listed.iter().copied().collect();
+        let got: std::collections::BTreeSet<[i32; 2]> = list_of.iter().copied().collect();
         // What a decor's pixel reads: anywhere on its model, from the tenth of a unit a pine
         // sinks under its base to the tallest, a texel off along its normal, a tap and the
         // neighbor it filters in each way (pxl-render shadow.wgsl `shadow_visibility`).
@@ -506,7 +506,7 @@ fn hand_propagation_reads_what_stands() {
             &format!("{case}: the tiles read, each once, the lay's instances as many"),
             &[read_cnt as u32, read_cnt as u32],
             &[got.len() as u32, lay],
-            |k| ["listed once", "the lay's instances"][k].into(),
+            |k| ["list_of once", "the lay's instances"][k].into(),
         );
         tally.compare(
             &format!("{case}: the tiles read, none missing, none past"),
@@ -530,9 +530,9 @@ fn hand_propagation_reads_what_stands() {
             format!("tile {} {}", k as u32 % N, k as u32 / N)
         });
         tally.compare(
-            &format!("{case}: the claimed listed"),
+            &format!("{case}: the claimed list_of"),
             &[claimed],
-            &[out_args[(light::ARGS_COUNTS + light::LISTED_CLAIMED) as usize]],
+            &[out_args[(light::ARGS_COUNTS + light::LIST_DAMAGE) as usize]],
             |_| "the claimed list's count".into(),
         );
         assert!(

@@ -184,7 +184,7 @@ impl Gpu {
         size: u32,
     ) {
         let mut words = self.read(list);
-        list_every(&mut words, size, light::LISTED_CORNERS, 1);
+        list_every(&mut words, size, light::LIST_CORNERS, 1);
         self.queue.write_buffer(list, 0, bytes(&words));
         self.corners(true, world, table);
     }
@@ -294,9 +294,9 @@ impl Gpu {
         asked: Option<&wgpu::Buffer>,
     ) {
         // The light's walks read its head; no lattice's asks do, nor the eye's walks.
-        let head: &[u32] = if light { &[11] } else { &[] };
-        let walk = [&[0, 8, 9, 10][..], head].concat();
-        let last = [&[0, 1, 2, 4, 5, 6, 7, 8, 9][..], head].concat();
+        let header: &[u32] = if light { &[11] } else { &[] };
+        let walk = [&[0, 8, 9, 10][..], header].concat();
+        let last = [&[0, 1, 2, 4, 5, 6, 7, 8, 9][..], header].concat();
         let keep = [&walk[..], &[0, 1, 2, 4, 5, 6, 7, 9, 10], &last[..]];
         self.run(ids, keep, all, table, asked, None);
     }
@@ -352,10 +352,10 @@ impl Gpu {
         for _ in 0..FRAMES_TO_ASK {
             // Each run a frame of its own: its asks none and the last walk's first taken, as the
             // host and the asks set them each frame it casts.
-            let none = [0u32; (node_cache::ASKED + 1 - node_cache::LAST_TAKEN) as usize];
+            let none = [0u32; (node_cache::ASKED + 1 - node_cache::LAST_NEXT) as usize];
             for t in [Some(table), asked].into_iter().flatten() {
                 self.queue
-                    .write_buffer(t, word(node_cache::LAST_TAKEN), bytes(&none));
+                    .write_buffer(t, word(node_cache::LAST_NEXT), bytes(&none));
             }
             self.queue.write_buffer(&queue, 0, bytes(&ray::QUEUE_EMPTY));
             self.dispatch(&walk, &walk_binds, groups);
@@ -384,12 +384,12 @@ impl Gpu {
 /// the workgroups a pass takes it over whose entries are `per` items a side
 /// (light_list.wgsl `light_item`).
 pub fn list_every(words: &mut [u32], size: u32, which: u32, per: u32) -> [u32; 2] {
-    let across = if which == light::LISTED_CORNERS {
+    let across = if which == light::LIST_CORNERS {
         light::beam_across(size)
     } else {
         light::tiles(size)
     };
-    let at = light::listed_at(size, which) as usize;
+    let at = light::list_cnt_at(size, which) as usize;
     words[at] = across * across;
     for k in 0..across * across {
         words[at + 1 + k as usize] = ((k / across) << 16) | (k % across);
@@ -397,7 +397,7 @@ pub fn list_every(words: &mut [u32], size: u32, which: u32, per: u32) -> [u32; 2
     let threads = across * across * per * per;
     [
         light::LIST_ACROSS,
-        threads.div_ceil(light::LIST_ACROSS * light::LISTED_LANES),
+        threads.div_ceil(light::LIST_ACROSS * light::LIST_LANES),
     ]
 }
 

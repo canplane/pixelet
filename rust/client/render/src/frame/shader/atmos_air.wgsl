@@ -24,10 +24,10 @@ fn air_held_at(k: u32, c: vec2f, slice: f32) -> vec3f {
 // light `k`, off that light's half of the volume: laid as its sky view is,
 // so read at the direction's place about the light (atmos_sky.wgsl
 // `table_unit`), and at the slice its depth law puts `d`
-// (atmos_medium.wgsl `laid`, `air_slice`).
+// (atmos_medium.wgsl `view_layout`, `air_slice`).
 fn air_held_of(k: u32, dir: vec3f, d: f32) -> vec3f {
   let n = f32(AIR_FROXELS);
-  return air_held_at(k, table_unit(dir, k) * (n - 1.0), air_slice(d, laid(k).yz));
+  return air_held_at(k, table_unit(dir, k) * (n - 1.0), air_slice(d, view_layout(k).yz));
 }
 
 // The air `d` units from the eye along `dir` (Hillaire 2020's

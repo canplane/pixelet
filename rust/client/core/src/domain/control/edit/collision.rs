@@ -58,7 +58,11 @@ pub fn is_placement_blocked(asset: Asset, zoom: Zoom, corner: &Q3) -> bool {
     let (world, room) = (World::now(), asset.room(zoom, corner));
     let taken = !world.editable(&room) || world.placed_occupying(&room, |_| true).is_some();
     let under = Aabb {
-        min: [room.min[0], room.min[1], room.min[2] - units(GROUND.cell())],
+        min: [
+            room.min[0],
+            room.min[1],
+            room.min[2] - units(GROUND.leaf_cell_zoom()),
+        ],
         max: [room.max[0], room.max[1], room.min[2]],
     };
     let refuses = |e: &Entry| {
@@ -70,7 +74,7 @@ pub fn is_placement_blocked(asset: Asset, zoom: Zoom, corner: &Q3) -> bool {
 /// The center of the cell a hover anchor (a min corner) points at: where a
 /// tap recenters, which is where the ghost box is drawn.
 pub fn anchor_center(anchor: &Q3) -> Q3 {
-    let half = q3::from_real(units(GROUND.cell()) / 2.0);
+    let half = q3::from_real(units(GROUND.leaf_cell_zoom()) / 2.0);
     world::at(
         i64::from(anchor[0]) + half,
         i64::from(anchor[1]) + half,

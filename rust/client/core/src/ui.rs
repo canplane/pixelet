@@ -25,7 +25,7 @@ use crate::domain::layer::object::repository;
 use crate::domain::query::World;
 use crate::domain::scene::character::companion::companion_ready;
 use crate::domain::scene::character::surface::character_surface_rows;
-use crate::domain::scene::stage::is_screen_drawn;
+use crate::domain::scene::stage::screen_shows_world;
 use crate::domain::view::frame::pose;
 use crate::domain::view::frame::screen::units_per_px_at;
 use crate::domain::view::setting::store::{are_settings_loaded, settings_store, SettingKey};
@@ -122,7 +122,7 @@ fn snapshot_inputs() -> SnapshotInputs {
     // Shown once a frame went to the screen over a view whose tiles all
     // show, if coarser: a finer tile asked for as the eye moves is not
     // the area loading, and would flash its toast each time.
-    let status = match (pose::eye(), is_screen_drawn()) {
+    let status = match (pose::eye(), screen_shows_world()) {
         (None, _) => GroundStatus::Idle,
         (Some(_), true) if TerrainTile::tile_cache().is_shown() => GroundStatus::Success,
         _ => GroundStatus::Loading,
@@ -187,7 +187,7 @@ pub struct SnapshotMemo {
 impl SnapshotMemo {
     /// What the snapshot is made of now, where it moved since it was last
     /// sent; taken as sent.
-    pub fn take_moved(&mut self) -> Option<SnapshotInputs> {
+    pub fn take_changed(&mut self) -> Option<SnapshotInputs> {
         let (now, text) = (snapshot_inputs(), write::marker_draft().unwrap_or_default());
         if self.last_inputs == Some(now) && self.text == text {
             return None;
@@ -200,7 +200,7 @@ impl SnapshotMemo {
 
     /// The view now, where its azimuth or its scale moved since it was last
     /// sent; taken as sent.
-    pub fn take_view_moved(&mut self) -> Option<UiView> {
+    pub fn take_view_changed(&mut self) -> Option<UiView> {
         let now = (
             camera_state().intent.azimuth,
             m_per_px(units_per_px_at(dist()), controller::pivot()),

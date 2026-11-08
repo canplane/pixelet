@@ -13,7 +13,7 @@
 /// Where its asks lie and how many (`raster::ARGS_ASKS`, `raster::ARGS_INSTANCES`).
 @group(0) @binding(16) var<storage, read> args: array<u32>;
 
-/// The node over node `c` of `zoom` at `z`, `z` no finer (`overwrite::ancestor_at`).
+/// The node over node `c` of `zoom` at `z`, `z` no finer (`object::ancestor_at`).
 fn over(c: vec3<i32>, zoom: u32, z: u32) -> vec3<i32> {
   let steps = zoom - z;
   let p = path(zoom, c);
@@ -33,7 +33,7 @@ fn shared_zoom(a: vec3<i32>, za: u32, c: vec3<i32>, zoom: u32) -> vec2<u32> {
 
 /// What was handed the node at `z` of the beam ray's line at word `line` (pxl-engine
 /// `beam::LINE_INHERITANCE`, `beam::LINE_STEP`).
-fn line_handed(line: u32, z: u32) -> vec4<u32> {
+fn line_inheritance(line: u32, z: u32) -> vec4<u32> {
   let k = line + LINE_INHERITANCE + LINE_STEP * z;
   return vec4<u32>(beams[k], beams[k + 1u], beams[k + 2u], beams[k + 3u]);
 }
@@ -54,17 +54,17 @@ fn node_idx(k: u32) -> vec4<i32> {
 /// deeper (`descent`).
 struct Descent {
   up: vec2<u32>,
-  grand_handed: vec4<u32>,
-  parent_handed: vec4<u32>,
+  grand_inheritance: vec4<u32>,
+  parent_inheritance: vec4<u32>,
 }
 
-/// The hit `c` at `zoom`'s descent from `low`, handed `low_handed` there, each node under handed
+/// The hit `c` at `zoom`'s descent from `low`, handed `low_inheritance` there, each node under handed
 /// down by its parent, worked out once for every cell beside it (`hides`).
-fn descent(c: vec3<i32>, zoom: u32, low: u32, low_handed: vec4<u32>) -> Descent {
+fn descent(c: vec3<i32>, zoom: u32, low: u32, low_inheritance: vec4<u32>) -> Descent {
   var up = vec2<u32>(low);
-  var grand = low_handed;
-  var parent = low_handed;
-  var at = low_handed;
+  var grand = low_inheritance;
+  var parent = low_inheritance;
+  var at = low_inheritance;
   var z = low + 1u;
   for (var i = 0u; i < 33u && z < zoom; i += 1u) {
     at = world_child(at, z, over(c, zoom, z));
@@ -83,17 +83,17 @@ fn descent(c: vec3<i32>, zoom: u32, low: u32, low_handed: vec4<u32>) -> Descent 
 
 /// Whether the cell `n` at `zoom` beside the hit hides its cube whole (`answer::whole`), as
 /// the world answers it at that zoom, asked off the line down to the hit `c`: over `low` the
-/// beam ray's line at word `line`, from there the hit's own descent, handed `low_handed` at
-/// `low` and `grand_handed`, `parent_handed` at `up` (`descent`; `support::sub_line`,
+/// beam ray's line at word `line`, from there the hit's own descent, handed `low_inheritance` at
+/// `low` and `grand_inheritance`, `parent_inheritance` at `up` (`descent`; `support::sub_line`,
 /// `JoinedLine`). From the deepest node of that line holding it, each node under handed down by
 /// its parent; from its own root where none does (`support::asset`).
 fn hides(
   line: u32,
   low: u32,
-  low_handed: vec4<u32>,
+  low_inheritance: vec4<u32>,
   up: vec2<u32>,
-  grand_handed: vec4<u32>,
-  parent_handed: vec4<u32>,
+  grand_inheritance: vec4<u32>,
+  parent_inheritance: vec4<u32>,
   c: vec3<i32>,
   zoom: u32,
   n: vec3<i32>,
@@ -104,16 +104,16 @@ fn hides(
   if (meet.y != 0u) {
     if (meet.x < low) {
       z = meet.x;
-      at = line_handed(line, z);
+      at = line_inheritance(line, z);
     } else if (meet.x >= up.y) {
       z = up.y;
-      at = parent_handed;
+      at = parent_inheritance;
     } else if (meet.x >= up.x) {
       z = up.x;
-      at = grand_handed;
+      at = grand_inheritance;
     } else {
       z = low;
-      at = low_handed;
+      at = low_inheritance;
     }
   }
   for (var i = 0u; i < 33u && z < zoom; i += 1u) {
@@ -141,10 +141,10 @@ fn face_word(
   face: u32,
   line: u32,
   low: u32,
-  low_handed: vec4<u32>,
+  low_inheritance: vec4<u32>,
   up: vec2<u32>,
-  grand_handed: vec4<u32>,
-  parent_handed: vec4<u32>,
+  grand_inheritance: vec4<u32>,
+  parent_inheritance: vec4<u32>,
   c: vec3<i32>,
   zoom: u32,
 ) -> u32 {
@@ -172,7 +172,7 @@ fn face_word(
     // does (`face::beside`).
     if (open) {
       let beside = vec3<i32>(wrap_idx(zoom, c.x + d.x), c.y + d.y, c.z + d.z);
-      if (hides(line, low, low_handed, up, grand_handed, parent_handed, c, zoom, beside) != (field == 1u)) {
+      if (hides(line, low, low_inheritance, up, grand_inheritance, parent_inheritance, c, zoom, beside) != (field == 1u)) {
         w |= 1u << i;
       }
     }
@@ -183,11 +183,11 @@ fn face_word(
 @compute @workgroup_size(RASTER_FACES_LANES)
 fn face_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   // The asks of the holes' stops hold a place for each stop, of the samples one for
-  // each sample (`beam::Grid::stop_asks_at`, `asks_at`).
+  // each sample (`beam::Grid::hit_asks_at`, `asks_at`).
   let asks = args[RASTER_ARGS_ASKS];
   let samples = eye_word(GRID + GRID_SAMPLES) * eye_word(GRID + GRID_SAMPLES + 1u);
-  let room = select(samples, STOPS_A_FRAME, asks == eye_word(GRID + GRID_STOP_ASKS_AT));
-  if (id.x >= in_room(args[RASTER_ARGS_INSTANCES], room)) {
+  let cap = select(samples, HITS_A_FRAME, asks == eye_word(GRID + GRID_HIT_ASKS_AT));
+  if (id.x >= in_cap(args[RASTER_ARGS_INSTANCES], cap)) {
     return;
   }
   let a = asks + id.x * ASK_WORDS;
@@ -212,13 +212,13 @@ fn face_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   // where none is (`support::sub_line`).
   let meet = shared_zoom(held.xyz, u32(held.w), c, zoom);
   var low = 0u;
-  var low_handed = world_root(0u, over(c, zoom, 0u));
+  var low_inheritance = world_root(0u, over(c, zoom, 0u));
   if (meet.y != 0u) {
     low = meet.x;
-    low_handed = line_handed(line, low);
+    low_inheritance = line_inheritance(line, low);
   }
-  let d = descent(c, zoom, low, low_handed);
-  let word = face_word(beams[a + ASK_FACE], line, low, low_handed, d.up, d.grand_handed, d.parent_handed, c, zoom);
+  let d = descent(c, zoom, low, low_inheritance);
+  let word = face_word(beams[a + ASK_FACE], line, low, low_inheritance, d.up, d.grand_inheritance, d.parent_inheritance, c, zoom);
   // A drawable entry's face's word into the node cache (pxl-engine `record::TO_RECORD`), a
   // hit's beside it.
   if ((to & RECORD_TO) != 0u) {

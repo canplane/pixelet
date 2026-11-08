@@ -44,13 +44,13 @@ fn node_answer(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32
         other = w;
         continue;
       }
-      var handed = vec4<u32>(0u);
+      var inheritance = vec4<u32>(0u);
       if (hands) {
         let at = w + W_INHERITANCE;
-        handed = vec4<u32>(node_cache[at], node_cache[at + 1u], node_cache[at + 2u], node_cache[at + 3u]);
+        inheritance = vec4<u32>(node_cache[at], node_cache[at + 1u], node_cache[at + 2u], node_cache[at + 3u]);
       }
       let asset = vec2<u32>(node_cache[w + W_ASSET], node_cache[w + W_ASSET + 1u]);
-      return Answer(node_cache[w + W_KIND] & KIND_MASK, asset, handed);
+      return Answer(node_cache[w + W_KIND] & KIND_MASK, asset, inheritance);
     }
     // A split beside the service area's end is left: the wall under it lies in no box, which a
     // walk that took one goes past (`area::is_wall`).

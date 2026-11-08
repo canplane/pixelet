@@ -4,7 +4,7 @@
 // for the holes): over the rays the walks over the node cache left parked, from the state each
 // was parked in, asking the world where no slot keeps a node. The lanes as the walks before
 // (queue_walk.wgsl), off a word of the node cache's head the asks before it set back
-// (`node_cache::LAST_TAKEN`). Every ray ends here: one that may ask no more, a lack at the
+// (`node_cache::LAST_NEXT`). Every ray ends here: one that may ask no more, a lack at the
 // deepest node held.
 
 /// The next number off the node cache's counter at `word`, and the count it holds.
@@ -19,11 +19,11 @@ fn held(word: u32) -> u32 {
 /// The next stop's number (queue.wgsl `keep_hit`), on from the walks over the node cache's
 /// (`node_cache::HITS_CNT`), and the dispatch over them raised to `rows`
 /// (`node_cache::HITS_ARGS`).
-fn stop_number() -> u32 {
+fn hit_number() -> u32 {
   return atomicAdd(&node_cache[HITS_CNT], 1u);
 }
 
-fn stop_rows(rows: u32) {
+fn hit_rows(rows: u32) {
   atomicMax(&node_cache[HITS_ARGS], rows);
 }
 

@@ -15,15 +15,15 @@
 
 use pxl_engine::area::{Area, Shard};
 use pxl_engine::clipmap::{
-    self, Bricks, Entry, Presence, BRICK, BRICK_CELLS, BRICK_LEVELS, BRICK_SHIFT, BRICK_WORDS,
-    CLIP_LEVELS, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL, LINES_WORDS, ROOT_AT, SLOTS, SPANS_ACROSS,
-    SPANS_WORDS, WAYS_BRICK_SEGMENTS,
+    self, Bricks, Entry, Presence, BRICK, BRICK_CELLS, BRICK_MIPS, BRICK_SHIFT, BRICK_WORDS,
+    CLIP_LEVELS, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL_ZOOM, LINES_WORDS, ROOT_AT, SLOTS,
+    SPANS_ACROSS, SPANS_WORDS, WAYS_BRICK_SEGMENTS,
 };
 use pxl_engine::fill;
 use pxl_engine::ground::word;
 use pxl_engine::way::tree;
 use pxl_engine::wrap_idx;
-use pxl_engine::LEAF_CELL;
+use pxl_engine::LEAF_CELL_ZOOM;
 use pxl_render::gpu::api;
 use pxl_render::gpu::ray::{BrickWrite, TerrainWrite};
 use pxl_spec::bake::tile::terrain::{
@@ -40,7 +40,7 @@ use xpute_kit::status::errno::Errno;
 use crate::domain::layer::terrain::fixed::{
     cells_off, fill_off, palette_off, BUILD_WORDS, CELLS_ARR_BYTES, PALETTE_ARR_BYTES, RANGE,
 };
-use crate::domain::layer::terrain::pool::{way_pool, Run, Unlaid, WayPool};
+use crate::domain::layer::terrain::pool::{way_pool, PoolRefusal, Run, WayPool};
 use crate::domain::layer::terrain::tile;
 use crate::domain::layer::Base;
 use crate::sys::io::room::Refusal;
@@ -68,9 +68,9 @@ const _: () = assert!(
 /// destination's is its line's.
 const fn layout(w: u32) -> (Center, Zoom) {
     match w {
-        w if w < EYE_CLIP_LEVELS => (Center::Eye, clipmap::eye_cell(w)),
-        w if w < EYE_CLIP_LEVELS + 2 => (Center::Pivot, LEAF_CELL - 1 + (w - EYE_CLIP_LEVELS)),
-        _ => (Center::Destination, LEAF_CELL),
+        w if w < EYE_CLIP_LEVELS => (Center::Eye, clipmap::eye_cell_zoom(w)),
+        w if w < EYE_CLIP_LEVELS + 2 => (Center::Pivot, LEAF_CELL_ZOOM - 1 + (w - EYE_CLIP_LEVELS)),
+        _ => (Center::Destination, LEAF_CELL_ZOOM),
     }
 }
 
@@ -78,7 +78,7 @@ const fn layout(w: u32) -> (Center, Zoom) {
 /// (`first_of`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct ClipLevel {
-    cell: Zoom,
+    cell_zoom: Zoom,
 }
 
 /// Where a brick of the ground is held: its array of cells in `.fixed.terrain`
@@ -96,7 +96,7 @@ struct ClipLevel {
 struct Slot {
     /// Its brick's cells' zoom, 0 where it holds none (`is_free`), no
     /// clip level's.
-    cell: Zoom,
+    cell_zoom: Zoom,
     brick: [i32; 2],
     present: bool,
     fill: Fill,
@@ -122,17 +122,17 @@ enum Fill {
     /// level's, as for any brick absent.
     Refused,
     /// Its child groups refused the pool's room by the heap
-    /// (`pool::Unlaid::Heap`): not absent, as `Refused`, until the heap
+    /// (`pool::PoolRefusal::Heap`): not absent, as `Refused`, until the heap
     /// gives a page back (`Clipmap::heap`), when it is absent again and
     /// filled again (`step`).
     Waiting,
 }
 
-const _: () = assert!(FIRST_CELL > 0, "a free slot's zoom is no clip level's");
+const _: () = assert!(FIRST_CELL_ZOOM > 0, "a free slot's zoom is no clip level's");
 
 impl Slot {
     const FREE: Slot = Slot {
-        cell: 0,
+        cell_zoom: 0,
         brick: [i32::MIN; 2],
         present: false,
         fill: Fill::Idle,
@@ -140,12 +140,12 @@ impl Slot {
     };
 
     fn is_free(&self) -> bool {
-        self.cell == 0
+        self.cell_zoom == 0
     }
 
-    /// Whether it holds brick `q` at `cell`, present or not.
-    fn holds(&self, cell: Zoom, q: [i32; 2]) -> bool {
-        self.cell == cell && self.brick == q
+    /// Whether it holds brick `q` at `cell_zoom`, present or not.
+    fn holds(&self, cell_zoom: Zoom, q: [i32; 2]) -> bool {
+        self.cell_zoom == cell_zoom && self.brick == q
     }
 
     /// Wanted, nothing of its tile held for it: holding a brick, neither
@@ -198,7 +198,7 @@ struct Clipmap {
     due: List<u32, { SLOTS as usize }>,
     due_stale: bool,
     /// The brick being filled, whose fill goes on over the turns it takes.
-    filling: Option<Filling>,
+    filling: Option<BrickFill>,
     /// The heap as it was when it first refused a brick's child groups the
     /// pool's room, while one waits on it (`Fill::Waiting`).
     heap: Option<Refusal>,
@@ -220,7 +220,7 @@ fn first_of(w: &Clipmap, clip_level: u32) -> Option<[i32; 2]> {
 fn fresh() -> Clipmap {
     Clipmap {
         clip_levels: core::array::from_fn(|w| ClipLevel {
-            cell: layout(w as u32).1,
+            cell_zoom: layout(w as u32).1,
         }),
         table: Table {
             entries: [Entry::absent([i32::MIN; 2]); (SLOTS + CLIP_LEVELS) as usize],
@@ -239,30 +239,30 @@ fn fresh() -> Clipmap {
     }
 }
 
-/// The cell at `cell` a point `p`, in units, lies in, X wrapped.
-fn cell_at(cell: Zoom, p: [f64; 2]) -> [i32; 2] {
-    let side = units(cell);
+/// The cell at `cell_zoom` a point `p`, in units, lies in, X wrapped.
+fn cell_at(cell_zoom: Zoom, p: [f64; 2]) -> [i32; 2] {
+    let side = units(cell_zoom);
     [
-        wrap_idx(cell, (p[0] / side).floor() as i32),
+        wrap_idx(cell_zoom, (p[0] / side).floor() as i32),
         (p[1] / side).floor() as i32,
     ]
 }
 
 /// The brick clip level `first` holds in entry `s`.
-fn entry_brick(cell: Zoom, first: [i32; 2], s: u32) -> [i32; 2] {
+fn entry_brick(cell_zoom: Zoom, first: [i32; 2], s: u32) -> [i32; 2] {
     let m = (clipmap::ACROSS - 1) as i32;
     let at = |o: i32, k: i32| o + ((k - (o & m)) & m);
     let q = [
         at(first[0], (s % clipmap::ACROSS) as i32),
         at(first[1], (s / clipmap::ACROSS) as i32),
     ];
-    [wrap_idx(cell - BRICK_SHIFT, q[0]), q[1]]
+    [wrap_idx(cell_zoom - BRICK_SHIFT, q[0]), q[1]]
 }
 
-/// The tile brick `q` at `cell` lies in, and where in it, in bricks.
-pub(crate) fn tile_of(cell: Zoom, q: [i32; 2]) -> (Quadrant, [u32; 2]) {
+/// The tile brick `q` at `cell_zoom` lies in, and where in it, in bricks.
+pub(crate) fn tile_of(cell_zoom: Zoom, q: [i32; 2]) -> (Quadrant, [u32; 2]) {
     let per = (GROUND.tile_cells() >> BRICK_SHIFT) as i32;
-    let zoom = cell - GROUND.tile_cell_shamt();
+    let zoom = cell_zoom - GROUND.tile_cell_shamt();
     let t = Quadrant::new(zoom, [q[0].div_euclid(per), q[1].div_euclid(per)]);
     (
         t,
@@ -305,13 +305,13 @@ fn planes() -> &'static mut Planes {
 /// folded once after all of them: no read of a bound (`CpuClipmap`) comes
 /// between a write and its fold, so none finds one of other bricks than its
 /// read of the cells does. Read through the clip levels it is handed
-/// (`Holding`), which its writer holds while it runs.
+/// (`ClipRead`), which its writer holds while it runs.
 fn fold(w: &mut Clipmap) {
-    for l in 1..=clipmap::JOINED_LEVELS {
+    for l in 1..=clipmap::JOINED_MIPS {
         let blocks = (clipmap::ACROSS >> l) * (clipmap::ACROSS >> l);
         for clip_level in 0..EYE_CLIP_LEVELS {
             for b in 0..blocks {
-                let e = clipmap::fold(&Holding(w), FIRST_CELL + clip_level, l, b);
+                let e = clipmap::fold(&ClipRead(w), FIRST_CELL_ZOOM + clip_level, l, b);
                 let at = clip_level * clipmap::JOINED_ENTRIES + clipmap::joined_idx(l, [0, 0]) + b;
                 w.table.joined[at as usize] = e;
             }
@@ -326,7 +326,7 @@ pub(in crate::domain) fn pool() -> &'static WayPool {
 }
 
 /// The child groups the pool spans, which the GPU's copy of it holds.
-pub fn pool_room() -> u32 {
+pub fn pool_top() -> u32 {
     way_pool().top()
 }
 
@@ -368,14 +368,15 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     let terrain = TerrainTile::tile_cache();
     let lost = core::mem::replace(&mut w.on, on) != on;
     // Per clip level, whether its zoom moved, and whether it moved at all.
-    let (mut moved, mut changed) = ([false; CLIP_LEVELS as usize], [lost; CLIP_LEVELS as usize]);
+    let (mut zoom_changed, mut changed) =
+        ([false; CLIP_LEVELS as usize], [lost; CLIP_LEVELS as usize]);
     let released = wake(w);
     let mut stale =
         lost || released || core::mem::take(&mut w.filled) || terrain.revision() != w.read;
     for clip_level in 0..CLIP_LEVELS {
         let (center, laid) = layout(clip_level);
         let p = at[center as usize];
-        let cell = match (center, p) {
+        let cell_zoom = match (center, p) {
             // Where its line says the ground: open sea's leaf is the tile over it.
             (Center::Destination, Some(p)) => {
                 let leaf = Quadrant::new(LEAF_ZOOM, cell_at(LEAF_ZOOM, p));
@@ -383,26 +384,30 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
             }
             _ => laid,
         };
-        let first = p.map(|p| clipmap::origin(cell, cell_at(cell, p)));
+        let first = p.map(|p| clipmap::origin(cell_zoom, cell_at(cell_zoom, p)));
         let was = (
-            core::mem::replace(&mut w.clip_levels[clip_level as usize], ClipLevel { cell }).cell,
+            core::mem::replace(
+                &mut w.clip_levels[clip_level as usize],
+                ClipLevel { cell_zoom },
+            )
+            .cell_zoom,
             first_of(w, clip_level),
         );
         w.table.entries[(SLOTS + clip_level) as usize] = match first {
             Some(f) => Entry::at(f, 1),
             None => Entry::absent([i32::MIN; 2]),
         };
-        moved[clip_level as usize] = was.0 != cell;
-        changed[clip_level as usize] |= was != (cell, first);
-        stale |= was != (cell, first);
+        zoom_changed[clip_level as usize] = was.0 != cell_zoom;
+        changed[clip_level as usize] |= was != (cell_zoom, first);
+        stale |= was != (cell_zoom, first);
     }
     if !stale {
         return false;
     }
     // A clip level that did not move wants its bricks where they are.
     for clip_level in 0..CLIP_LEVELS {
-        let (cell, first) = (
-            w.clip_levels[clip_level as usize].cell,
+        let (cell_zoom, first) = (
+            w.clip_levels[clip_level as usize].cell_zoom,
             first_of(w, clip_level),
         );
         let Some(f) = first.filter(|_| changed[clip_level as usize]) else {
@@ -410,10 +415,10 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
         };
         for s in 0..ENTRIES {
             let entry = &mut w.table.entries[(clip_level * ENTRIES + s) as usize];
-            let want = entry_brick(cell, f, s);
-            if moved[clip_level as usize] || lost || entry.brick != want {
+            let want = entry_brick(cell_zoom, f, s);
+            if zoom_changed[clip_level as usize] || lost || entry.brick != want {
                 entry.brick = want;
-                terrain.moved_at(tile_of(cell, want).0);
+                terrain.changed_at(tile_of(cell_zoom, want).0);
             }
         }
     }
@@ -430,7 +435,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     for b in 0..SLOTS {
         let held = w.slots[b as usize];
         if held.is_absent() {
-            let t = tile_of(held.cell, held.brick).0;
+            let t = tile_of(held.cell_zoom, held.brick).0;
             if room > 0 && !terrain.is_again_held(t) {
                 terrain.again(t);
                 room -= u32::from(terrain.is_again_held(t));
@@ -445,13 +450,13 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     }
     let was = core::mem::take(&mut w.pinned);
     for clip_level in EYE_CLIP_LEVELS..CLIP_LEVELS {
-        let cell = w.clip_levels[clip_level as usize].cell;
+        let cell_zoom = w.clip_levels[clip_level as usize].cell_zoom;
         if first_of(w, clip_level).is_none() {
             continue;
         }
         for s in 0..ENTRIES {
             let t = tile_of(
-                cell,
+                cell_zoom,
                 w.table.entries[(clip_level * ENTRIES + s) as usize].brick,
             )
             .0;
@@ -492,7 +497,7 @@ fn assign_slots(w: &mut Clipmap, lost: bool) {
         }
         let s = clipmap::entry(held.brick);
         let wants = |clip_level: u32| {
-            w.clip_levels[clip_level as usize].cell == held.cell
+            w.clip_levels[clip_level as usize].cell_zoom == held.cell_zoom
                 && first_of(w, clip_level).is_some()
                 && w.table.entries[(clip_level * ENTRIES + s) as usize].brick == held.brick
         };
@@ -504,7 +509,7 @@ fn assign_slots(w: &mut Clipmap, lost: bool) {
         }
     }
     for clip_level in 0..CLIP_LEVELS {
-        let cell = w.clip_levels[clip_level as usize].cell;
+        let cell_zoom = w.clip_levels[clip_level as usize].cell_zoom;
         if first_of(w, clip_level).is_none() {
             continue;
         }
@@ -513,7 +518,7 @@ fn assign_slots(w: &mut Clipmap, lost: bool) {
                 clip_level * ENTRIES + s,
                 w.table.entries[(clip_level * ENTRIES + s) as usize].brick,
             );
-            if slot_of(w, cell, q).is_some() {
+            if slot_of(w, cell_zoom, q).is_some() {
                 continue;
             }
             let free = |b: &u32| w.slots[*b as usize].is_free();
@@ -521,7 +526,7 @@ fn assign_slots(w: &mut Clipmap, lost: bool) {
             // No more bricks want an entry than it has slots.
             let b = b.or_bug(Errno::ENOTRECOVERABLE);
             w.slots[b as usize] = Slot {
-                cell,
+                cell_zoom,
                 brick: q,
                 ..Slot::FREE
             };
@@ -533,9 +538,9 @@ fn assign_slots(w: &mut Clipmap, lost: bool) {
     fold(w);
 }
 
-/// The slot holding brick `q` at `cell`, present or not.
-fn slot_of(w: &Clipmap, cell: Zoom, q: [i32; 2]) -> Option<u32> {
-    of_entry(clipmap::entry(q)).find(|&b| w.slots[b as usize].holds(cell, q))
+/// The slot holding brick `q` at `cell_zoom`, present or not.
+fn slot_of(w: &Clipmap, cell_zoom: Zoom, q: [i32; 2]) -> Option<u32> {
+    of_entry(clipmap::entry(q)).find(|&b| w.slots[b as usize].holds(cell_zoom, q))
 }
 
 /// Entry `i`'s row of the table: its brick, and the slot it is present in
@@ -544,7 +549,7 @@ fn slot_of(w: &Clipmap, cell: Zoom, q: [i32; 2]) -> Option<u32> {
 fn show(w: &mut Clipmap, i: u32) {
     let (clip_level, brick) = (i / ENTRIES, w.table.entries[i as usize].brick);
     let held = first_of(w, clip_level)
-        .and_then(|_| slot_of(w, w.clip_levels[clip_level as usize].cell, brick));
+        .and_then(|_| slot_of(w, w.clip_levels[clip_level as usize].cell_zoom, brick));
     w.table.entries[i as usize] = match held {
         Some(b) if w.slots[b as usize].present => Entry::at(brick, b as i32 + 1),
         _ => Entry::absent(brick),
@@ -568,7 +573,7 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
         let pieces = way_pool().pieces(held.tree);
         let taken = write(BrickWrite {
             slot: b,
-            cell: held.cell,
+            cell_zoom: held.cell_zoom,
             brick: held.brick,
             words: cells(b),
             palette_indices: palette(b),
@@ -579,7 +584,7 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
             break;
         }
         (w.slots[b as usize].present, w.slots[b as usize].fill) = (true, Fill::Idle);
-        TerrainTile::tile_cache().moved_at(tile_of(held.cell, held.brick).0);
+        TerrainTile::tile_cache().changed_at(tile_of(held.cell_zoom, held.brick).0);
         for i in of_entry(b % ENTRIES) {
             show(w, i);
         }
@@ -602,8 +607,8 @@ fn due(w: &mut Clipmap) {
     let mut listed = [false; SLOTS as usize];
     w.due.clear();
     for clip_level in 0..CLIP_LEVELS {
-        let (cell, Some(first)) = (
-            w.clip_levels[clip_level as usize].cell,
+        let (cell_zoom, Some(first)) = (
+            w.clip_levels[clip_level as usize].cell_zoom,
             first_of(w, clip_level),
         ) else {
             continue;
@@ -611,13 +616,13 @@ fn due(w: &mut Clipmap) {
         let mut near = List::<(i64, u32), { ENTRIES as usize }>::new();
         for i in clip_level * ENTRIES..(clip_level + 1) * ENTRIES {
             let q = w.table.entries[i as usize].brick;
-            let Some(b) = slot_of(w, cell, q) else {
+            let Some(b) = slot_of(w, cell_zoom, q) else {
                 continue;
             };
             let held = w.slots[b as usize];
-            let ready = held.fill == Fill::Cut || held.is_absent() && void(tile_of(cell, q).0);
+            let ready = held.fill == Fill::Cut || held.is_absent() && void(tile_of(cell_zoom, q).0);
             if ready && !core::mem::replace(&mut listed[b as usize], true) {
-                near.push((far(cell, first, q), b));
+                near.push((far(cell_zoom, first, q), b));
             }
         }
         near.sort_unstable();
@@ -628,14 +633,14 @@ fn due(w: &mut Clipmap) {
     w.due.reverse();
 }
 
-/// How far brick `q` at `cell` lies from the center of the clip level whose
+/// How far brick `q` at `cell_zoom` lies from the center of the clip level whose
 /// first brick is `first`, squared, in cells, X the short way round: the
 /// center as the clip level places it, the middle of the brick's worth of
 /// cells its first holds it over (`clipmap::origin`).
-fn far(cell: Zoom, first: [i32; 2], q: [i32; 2]) -> i64 {
+fn far(cell_zoom: Zoom, first: [i32; 2], q: [i32; 2]) -> i64 {
     let mid = |v: i32| i64::from(v) * i64::from(BRICK) + i64::from(BRICK / 2);
     let center = |v: i32| mid(v) + i64::from(clipmap::RADIUS);
-    let round = 1i64 << cell;
+    let round = 1i64 << cell_zoom;
     let dx = (mid(q[0]) - center(first[0])).rem_euclid(round);
     let dx = dx.min(round - dx);
     let dy = mid(q[1]) - center(first[1]);
@@ -649,13 +654,14 @@ pub fn pinned_tiles() -> &'static [Quadrant] {
     &clipmap().pinned
 }
 
-/// The eye's clip level at `cell`'s entries as it holds them, each brick
+/// The eye's clip level at `cell_zoom`'s entries as it holds them, each brick
 /// present or still wanted (`Entry`); none while its center is not. A debug
 /// reader's (domain/scene/gizmo/coverage_gizmo.rs): a copy, moving nothing.
-pub fn eye_entries(cell: Zoom) -> Option<[Entry; ENTRIES as usize]> {
+pub fn eye_entries(cell_zoom: Zoom) -> Option<[Entry; ENTRIES as usize]> {
     let (w, clip_level) = (
         clipmap(),
-        cell.checked_sub(FIRST_CELL)
+        cell_zoom
+            .checked_sub(FIRST_CELL_ZOOM)
             .filter(|&w| w < EYE_CLIP_LEVELS)?,
     );
     first_of(w, clip_level)?;
@@ -723,8 +729,8 @@ fn fill_scratch() -> &'static mut FillScratch {
 fn slot_wants(w: &Clipmap, tile: Quadrant, b: u32) -> bool {
     let held = w.slots[b as usize];
     held.is_absent()
-        && held.cell == GROUND.cell_zoom(tile.zoom)
-        && tile_of(held.cell, held.brick).0 == tile
+        && held.cell_zoom == GROUND.cell_zoom(tile.zoom)
+        && tile_of(held.cell_zoom, held.brick).0 == tile
 }
 
 /// Each brick of `tile` a clip level wants, absent, its four palette indices cut
@@ -760,7 +766,7 @@ pub fn cut(tile: Quadrant, pkt: &[u8]) {
             continue;
         }
         let held = w.slots[b as usize];
-        cut_into(b, tile_of(held.cell, held.brick).1, &four);
+        cut_into(b, tile_of(held.cell_zoom, held.brick).1, &four);
         w.slots[b as usize].fill = Fill::Cut;
     }
     w.due_stale = true;
@@ -784,9 +790,9 @@ fn cut_into(b: u32, place: [u32; 2], four: &impl Fn(usize) -> u32) {
 /// its tree's child groups held and its root as built (`fill::tree`); and what
 /// comes next.
 #[derive(Clone, Copy)]
-struct Filling {
+struct BrickFill {
     slot: u32,
-    cell: Zoom,
+    cell_zoom: Zoom,
     brick: [i32; 2],
     place: [u32; 2],
     shard: Shard,
@@ -801,7 +807,7 @@ struct Filling {
 enum Stage {
     Columns,
     Spans(u32),
-    Levels,
+    Mips,
     Tree,
     Lay,
 }
@@ -852,13 +858,13 @@ fn fill_stage(w: &mut Clipmap) -> Fills {
         return begin(w);
     };
     let (b, held) = (filling.slot, w.slots[filling.slot as usize]);
-    if !held.holds(filling.cell, filling.brick) || held.fill != Fill::Cut {
+    if !held.holds(filling.cell_zoom, filling.brick) || held.fill != Fill::Cut {
         w.filling = None;
         return Fills::Ran;
     }
     let f = fill_scratch();
     let site = fill::Site {
-        cell: filling.cell,
+        cell_zoom: filling.cell_zoom,
         place: filling.place,
         first: filling.brick.map(|v| v << BRICK_SHIFT),
         shard: filling.shard,
@@ -877,16 +883,16 @@ fn fill_stage(w: &mut Clipmap) -> Fills {
             }
             match row + 1 < SPANS_ACROSS {
                 true => Stage::Spans(row + 1),
-                false => Stage::Levels,
+                false => Stage::Mips,
             }
         }
-        Stage::Levels => {
-            fill::levels(cells_mut(b), f.spans, filling.cell);
+        Stage::Mips => {
+            fill::mips(cells_mut(b), f.spans, filling.cell_zoom);
             Stage::Tree
         }
         Stage::Tree => {
-            let [taken, cnt, root] = fill::tree(cells(b), f.spans, filling.cell, f.build, 1);
-            if taken == u32::MAX {
+            let [used, cnt, root] = fill::tree(cells(b), f.spans, filling.cell_zoom, f.build, 1);
+            if used == u32::MAX {
                 return end(w, b, Fill::Refused);
             }
             filling.built = [cnt, root];
@@ -913,7 +919,7 @@ fn begin(w: &mut Clipmap) -> Fills {
         if held.is_free() || held.fill != Fill::Cut && !held.is_absent() {
             continue;
         }
-        let (t, place) = tile_of(held.cell, held.brick);
+        let (t, place) = tile_of(held.cell_zoom, held.brick);
         let Some(tile) = terrain.get(t) else {
             w.slots[b as usize].fill = Fill::Idle;
             w.filled = true;
@@ -933,12 +939,15 @@ fn begin(w: &mut Clipmap) -> Fills {
             f.ele.copy_from_slice(&tile.ele);
         }
         let lines = brick_lines(t, &tile.separation, place, f.pairs, f.lines);
-        w.filling = Some(Filling {
+        w.filling = Some(BrickFill {
             slot: b,
-            cell: held.cell,
+            cell_zoom: held.cell_zoom,
             brick: held.brick,
             place,
-            shard: Shard::UNKNOWN.at(&ServiceArea, (clipmap::bricks_zoom(held.cell), held.brick)),
+            shard: Shard::UNKNOWN.at(
+                &ServiceArea,
+                (clipmap::bricks_zoom(held.cell_zoom), held.brick),
+            ),
             lines,
             built: [0; 2],
             stage: Stage::Columns,
@@ -951,7 +960,7 @@ fn begin(w: &mut Clipmap) -> Fills {
 /// A brick's tree laid in the pool as a run of its own, its root word naming it,
 /// and its fill over: refused past the pool's cap, waiting where the heap
 /// refuses it room; held for a later turn while the runtime holds the run.
-fn lay(w: &mut Clipmap, filling: Filling, f: &mut FillScratch) -> Fills {
+fn lay(w: &mut Clipmap, filling: BrickFill, f: &mut FillScratch) -> Fills {
     let (b, [cnt, root]) = (filling.slot, filling.built);
     if cnt == 0 {
         cells_mut(b)[ROOT_AT as usize] = 0;
@@ -960,8 +969,8 @@ fn lay(w: &mut Clipmap, filling: Filling, f: &mut FillScratch) -> Fills {
     let pool = way_pool();
     let run = match pool.take(cnt) {
         Ok(run) => run,
-        Err(Unlaid::Cap) => return end(w, b, Fill::Refused),
-        Err(Unlaid::Heap) => {
+        Err(PoolRefusal::Cap) => return end(w, b, Fill::Refused),
+        Err(PoolRefusal::Heap) => {
             w.heap.get_or_insert_with(Refusal::now);
             return end(w, b, Fill::Waiting);
         }
@@ -1003,49 +1012,49 @@ impl Area for CpuClipmap {
 
 /// The clip levels as a caller holds them, read as `CpuClipmap` reads the
 /// core's (`fold`, which runs while its writer holds them).
-struct Holding<'a>(&'a Clipmap);
+struct ClipRead<'a>(&'a Clipmap);
 
-impl Presence for Holding<'_> {
+impl Presence for ClipRead<'_> {
     /// Present: handed to the GPU, in the slot holding it, whichever clip
     /// levels want it.
-    fn present(&self, cell: Zoom, q: [i32; 2]) -> (u32, bool) {
+    fn present(&self, cell_zoom: Zoom, q: [i32; 2]) -> (u32, bool) {
         let w = self.0;
-        let held = slot_of(w, cell, q).filter(|&b| w.slots[b as usize].present);
+        let held = slot_of(w, cell_zoom, q).filter(|&b| w.slots[b as usize].present);
         (held.unwrap_or(0), held.is_some())
     }
 }
 
-impl Bricks for Holding<'_> {
-    fn brick(&self, cell: Zoom, entry: u32) -> ([i32; 2], bool) {
-        self.0.table.entries[((cell - FIRST_CELL) * ENTRIES + entry) as usize].brick()
+impl Bricks for ClipRead<'_> {
+    fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool) {
+        self.0.table.entries[((cell_zoom - FIRST_CELL_ZOOM) * ENTRIES + entry) as usize].brick()
     }
 
     /// The CPU reads a cell's own palette index alone, as laid: its four are it four
     /// times.
-    fn palette_word(&self, cell: Zoom, b: u32, i: u32) -> u32 {
-        word([self.laid(cell, b, i); 4])
+    fn palette_word(&self, cell_zoom: Zoom, b: u32, i: u32) -> u32 {
+        word([self.own(cell_zoom, b, i); 4])
     }
 
     /// As this side folded it over its bricks (`fold`).
-    fn joined(&self, cell: Zoom, e: u32) -> [u32; clipmap::JOINED_WORDS as usize] {
-        self.0.table.joined[((cell - FIRST_CELL) * clipmap::JOINED_ENTRIES + e) as usize]
+    fn joined(&self, cell_zoom: Zoom, e: u32) -> [u32; clipmap::JOINED_WORDS as usize] {
+        self.0.table.joined[((cell_zoom - FIRST_CELL_ZOOM) * clipmap::JOINED_ENTRIES + e) as usize]
     }
 
-    fn origin(&self, cell: Zoom) -> ([i32; 2], bool) {
-        let first = first_of(self.0, cell - FIRST_CELL);
+    fn origin(&self, cell_zoom: Zoom) -> ([i32; 2], bool) {
+        let first = first_of(self.0, cell_zoom - FIRST_CELL_ZOOM);
         (first.unwrap_or([0; 2]), first.is_some())
     }
 
-    fn laid(&self, _: Zoom, b: u32, i: u32) -> u32 {
-        fill::laid_of(cells(b), 0, i)
+    fn own(&self, _: Zoom, b: u32, i: u32) -> u32 {
+        fill::own_of(cells(b), 0, i)
     }
 
     fn column(&self, _: Zoom, b: u32, i: u32) -> u32 {
         fill::column_of(cells(b), 0, i)
     }
 
-    fn bound_level(&self, _: Zoom, b: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
-        fill::level_of(cells(b), 0, j, at)
+    fn bound_mip(&self, _: Zoom, b: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
+        fill::mip_of(cells(b), 0, j, at)
     }
 
     fn root(&self, _: Zoom, b: u32) -> u32 {
@@ -1053,41 +1062,41 @@ impl Bricks for Holding<'_> {
     }
 }
 
-/// The core's clip levels as they are held (`Holding`).
+/// The core's clip levels as they are held (`ClipRead`).
 impl Presence for CpuClipmap {
-    fn present(&self, cell: Zoom, q: [i32; 2]) -> (u32, bool) {
-        Holding(clipmap()).present(cell, q)
+    fn present(&self, cell_zoom: Zoom, q: [i32; 2]) -> (u32, bool) {
+        ClipRead(clipmap()).present(cell_zoom, q)
     }
 }
 
 impl Bricks for CpuClipmap {
-    fn brick(&self, cell: Zoom, entry: u32) -> ([i32; 2], bool) {
-        Holding(clipmap()).brick(cell, entry)
+    fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool) {
+        ClipRead(clipmap()).brick(cell_zoom, entry)
     }
-    fn palette_word(&self, cell: Zoom, b: u32, i: u32) -> u32 {
-        Holding(clipmap()).palette_word(cell, b, i)
+    fn palette_word(&self, cell_zoom: Zoom, b: u32, i: u32) -> u32 {
+        ClipRead(clipmap()).palette_word(cell_zoom, b, i)
     }
-    fn joined(&self, cell: Zoom, e: u32) -> [u32; clipmap::JOINED_WORDS as usize] {
-        Holding(clipmap()).joined(cell, e)
+    fn joined(&self, cell_zoom: Zoom, e: u32) -> [u32; clipmap::JOINED_WORDS as usize] {
+        ClipRead(clipmap()).joined(cell_zoom, e)
     }
-    fn origin(&self, cell: Zoom) -> ([i32; 2], bool) {
-        Holding(clipmap()).origin(cell)
+    fn origin(&self, cell_zoom: Zoom) -> ([i32; 2], bool) {
+        ClipRead(clipmap()).origin(cell_zoom)
     }
-    fn laid(&self, cell: Zoom, b: u32, i: u32) -> u32 {
-        Holding(clipmap()).laid(cell, b, i)
+    fn own(&self, cell_zoom: Zoom, b: u32, i: u32) -> u32 {
+        ClipRead(clipmap()).own(cell_zoom, b, i)
     }
-    fn column(&self, cell: Zoom, b: u32, i: u32) -> u32 {
-        Holding(clipmap()).column(cell, b, i)
+    fn column(&self, cell_zoom: Zoom, b: u32, i: u32) -> u32 {
+        ClipRead(clipmap()).column(cell_zoom, b, i)
     }
-    fn bound_level(&self, cell: Zoom, b: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
-        Holding(clipmap()).bound_level(cell, b, j, at)
+    fn bound_mip(&self, cell_zoom: Zoom, b: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
+        ClipRead(clipmap()).bound_mip(cell_zoom, b, j, at)
     }
-    fn root(&self, cell: Zoom, b: u32) -> u32 {
-        Holding(clipmap()).root(cell, b)
+    fn root(&self, cell_zoom: Zoom, b: u32) -> u32 {
+        ClipRead(clipmap()).root(cell_zoom, b)
     }
 }
 
-const _: () = assert!(BRICK_LEVELS <= BRICK_SHIFT);
+const _: () = assert!(BRICK_MIPS <= BRICK_SHIFT);
 
 #[cfg(test)]
 #[path = "clipmap.test.rs"]

@@ -10,8 +10,8 @@
 
 use pxl_content::generation::{self, drawn, row_of};
 use pxl_content::scatter;
-use pxl_engine::overwrite;
-use pxl_engine::LEAF_CELL;
+use pxl_engine::object;
+use pxl_engine::LEAF_CELL_ZOOM;
 use pxl_render::gpu::api;
 use pxl_render::gpu::draw::Position;
 use pxl_render::gpu::generator::DecorFrame;
@@ -30,7 +30,7 @@ use crate::domain::scene::decor::param;
 use crate::domain::view::setting::store::settings_store;
 use crate::sys::io::loader::catalog;
 use pxl_content::decor;
-use pxl_engine::clipmap::FIRST_CELL;
+use pxl_engine::clipmap::FIRST_CELL_ZOOM;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::layer::lattice;
@@ -79,12 +79,14 @@ fn shown() -> [u32; DECORS.len()] {
 fn shown_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {
     core::array::from_fn(|k| {
         let (d, extent) = (&DECORS[k], extent(&DECORS[k]));
-        (FIRST_CELL..=LEAF_CELL)
-            .filter(|&cell| {
-                let stands = scatter::any_stands_at(d.row, cell);
-                stands && is_decor_shown(extent, cell)
+        (FIRST_CELL_ZOOM..=LEAF_CELL_ZOOM)
+            .filter(|&cell_zoom| {
+                let stands = scatter::any_stands_at(d.row, cell_zoom);
+                stands && is_decor_shown(extent, cell_zoom)
             })
-            .fold(0, |bits, cell| bits | 1 << (cell - FIRST_CELL))
+            .fold(0, |bits, cell_zoom| {
+                bits | 1 << (cell_zoom - FIRST_CELL_ZOOM)
+            })
     })
 }
 
@@ -99,7 +101,7 @@ struct Frame {
     placed: Vec<[u32; generation::RECORD_WORDS as usize]>,
     /// The boxes the objects were written in at the last take, in leaf
     /// cells, and how many the next frame hands (`note_edited`, `frame`).
-    edits: [[i32; 4]; overwrite::EDITS as usize],
+    edits: [[i32; 4]; object::EDITS as usize],
     edited: usize,
     /// The unit the eye stands in, the lanes' anchor, as a draw's Q3
     /// (pxl-render gpu/draw.rs `Position`).
@@ -142,7 +144,7 @@ fn hand_over() -> &'static mut Frame {
         walk_zoom: UNIT_ZOOM,
         drawing: [0; drawn::DRAWING_WORDS as usize],
         placed: Vec::new(),
-        edits: [[0; 4]; overwrite::EDITS as usize],
+        edits: [[0; 4]; object::EDITS as usize],
         edited: 0,
         anchor: [0; 3],
         seen: None,
@@ -153,7 +155,7 @@ fn hand_over() -> &'static mut Frame {
 /// A leaf cell's X as the world names it (pxl-engine `wrap_idx`), the
 /// GPU's generated records' among them, as a word.
 fn wrap(x: i32) -> u32 {
-    pxl_engine::wrap_idx(LEAF_CELL, x) as u32
+    pxl_engine::wrap_idx(LEAF_CELL_ZOOM, x) as u32
 }
 
 /// This frame's hand-over for an eye at `eye`: placed decor out to where the
@@ -255,8 +257,8 @@ fn walk_zoom() -> Zoom {
 /// Whether an edit's columns, `[x0, y0, x1, y1)` in leaf cells, X on its own
 /// lap, meet `around`'s on any lap.
 fn meets(e: &[i32; 4], around: &Aabb) -> bool {
-    let leaf = units(LEAF_CELL);
-    let lap = 1i64 << LEAF_CELL;
+    let leaf = units(LEAF_CELL_ZOOM);
+    let lap = 1i64 << LEAF_CELL_ZOOM;
     let (lo, hi) = (
         |v: f64| libm::floor(v / leaf) as i64,
         |v: f64| libm::ceil(v / leaf) as i64,
@@ -299,11 +301,11 @@ fn drawing(p: &mut [u32; drawn::DRAWING_WORDS as usize], seen: Key) {
 /// Where the objects were written, as the turn's change took them
 /// (domain/query/changes.rs), held for the next frame to hand: each region's
 /// columns in leaf cells, `[x0, y0, x1, y1)`, X on its own lap; past
-/// `overwrite::EDITS`, the rest joined into the last, so every write is met,
+/// `object::EDITS`, the rest joined into the last, so every write is met,
 /// however many turns pass before a frame takes them.
 pub fn note_edited(regions: &[Aabb]) {
     let h = hand_over();
-    let leaf = units(LEAF_CELL);
+    let leaf = units(LEAF_CELL_ZOOM);
     for r in regions {
         let b = [
             libm::floor(r.min[0] / leaf),

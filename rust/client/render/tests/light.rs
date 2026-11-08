@@ -26,7 +26,7 @@ use pxl_engine::answer::Kind;
 use pxl_engine::beam;
 use pxl_engine::cast::{self, Detail, End, Hit, Node, Ray, Spacing, Trace, Until};
 use pxl_engine::light::{self, Light};
-use pxl_engine::overwrite::Cut;
+use pxl_engine::object::Cut;
 use pxl_engine::{eye, node_cache, param, raster, ray, record, Zoom};
 use pxl_render::frame::shader::record::{src, SHADER_LIGHT, SHADER_LIGHT_MARK, SHADER_RECORD_DRAW};
 use pxl_render::frame::shader::word::SQUARE_SIDE;
@@ -76,7 +76,7 @@ struct SlotCase {
     range: [Zoom; 2],
     /// Where the cast is within its epoch, one tile in so many claimed; none where it begins
     /// it, every tile read claimed.
-    listed: Option<u32>,
+    list_of: Option<u32>,
 }
 
 /// The node, the asset and the axis of the sample at word `k`.
@@ -117,7 +117,7 @@ fn hand_light_cs_answers_as_the_rust() {
                 [1300, -900],
             ),
             range: [8, FINEST],
-            listed: None,
+            list_of: None,
         },
         SlotCase {
             name: "reaching about the ground, the sky between",
@@ -130,7 +130,7 @@ fn hand_light_cs_answers_as_the_rust() {
                 [-77, 4093],
             ),
             range: [8, FINEST],
-            listed: None,
+            list_of: None,
         },
         SlotCase {
             name: "short of the ground, the sky about every band's edge",
@@ -143,7 +143,7 @@ fn hand_light_cs_answers_as_the_rust() {
                 [1300, -900],
             ),
             range: [8, FINEST],
-            listed: None,
+            list_of: None,
         },
         SlotCase {
             name: "tiles claimed within the epoch",
@@ -156,7 +156,7 @@ fn hand_light_cs_answers_as_the_rust() {
                 [1296, -904],
             ),
             range: [10, FINEST],
-            listed: Some(3),
+            list_of: Some(3),
         },
     ];
     for c in &cases {
@@ -178,7 +178,7 @@ fn hand_light_cs_answers_as_the_rust() {
             [1300, -900],
         ),
         range: [8, FINEST],
-        listed: Some(2),
+        list_of: Some(2),
     };
     run_slots(&gpu, &pipe, zero.world(), &c, &mut tally, &mut kinds);
     kinds.hold(&[
@@ -347,7 +347,7 @@ fn run_slots(
     for j in 0..tiles {
         for i in 0..tiles {
             let t = j * tiles + i;
-            let (claimed, word) = match c.listed {
+            let (claimed, word) = match c.list_of {
                 Some(every) => {
                     let claimed = (i + 2 * j).is_multiple_of(every) || i == 0 || j == tiles - 1;
                     (claimed, if claimed { CAST } else { CAST - 1 })
@@ -364,15 +364,15 @@ fn run_slots(
         }
     }
     entries.reverse();
-    let at = light::listed_at(SIZE, light::LISTED_CLAIMED) as usize;
+    let at = light::list_cnt_at(SIZE, light::LIST_DAMAGE) as usize;
     list[at] = entries.len() as u32;
     list[at + 1..at + 1 + entries.len()].copy_from_slice(&entries);
-    let room = light::listed_room(SIZE, light::LISTED_CLAIMED) as usize;
+    let cap = light::list_cap(SIZE, light::LIST_DAMAGE) as usize;
     let unlisted = (0..tiles * tiles)
         .map(|k| ((k / tiles) << 16) | (k % tiles))
         .find(|e| !entries.contains(e))
         .expect("a tile not claimed");
-    list[at + 1 + entries.len()..at + 1 + room].fill(unlisted);
+    list[at + 1 + entries.len()..at + 1 + cap].fill(unlisted);
     // Read, so a thread that took the room past the list would cast it.
     let u = (unlisted >> 16) * tiles + (unlisted & 0xffff);
     list[reads_at + u as usize] = CAST;
@@ -394,13 +394,13 @@ fn run_slots(
     eye_words[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&l.words());
     eye_words[eye::RANGE] = c.range[0];
     eye_words[eye::RANGE + 1] = c.range[1];
-    let mut head = vec![0u32; light::HEAD_WORDS];
-    head[light::HEAD_CAST] = CAST;
-    head[light::HEAD_EPOCH] = if c.listed.is_some() { CAST - 3 } else { CAST };
-    for (k, v) in light::head_layout(SIZE) {
-        head[k] = v;
+    let mut header = vec![0u32; light::HEADER_WORDS];
+    header[light::HEADER_CAST] = CAST;
+    header[light::HEADER_EPOCH] = if c.list_of.is_some() { CAST - 3 } else { CAST };
+    for (k, v) in light::header_layout(SIZE) {
+        header[k] = v;
     }
-    head[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
+    header[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
         .copy_from_slice(&starts.words());
     let map0: Vec<u32> = (0..SIZE * SIZE)
         .map(|k| noise(k ^ 0xabc) | 1 << 31)
@@ -504,7 +504,7 @@ fn run_slots(
         );
         let (vis_v, map_v) = (array_view(&vis_t), array_view(&map_t));
         let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
-        let head_buf = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
+        let header_buf = gpu.buffer(&header, wgpu::BufferUsages::UNIFORM);
         let list_buf = gpu.buffer(&list, wgpu::BufferUsages::STORAGE);
         let misses_buf = gpu.buffer(&ray::MISS_ARGS_EMPTY, wgpu::BufferUsages::STORAGE);
         let rec_buf = gpu.buffer(&rec, wgpu::BufferUsages::STORAGE);
@@ -514,7 +514,7 @@ fn run_slots(
                 (0, eye_buf.as_entire_binding()),
                 (8, list_buf.as_entire_binding()),
                 (10, wgpu::BindingResource::TextureView(&map_v)),
-                (11, head_buf.as_entire_binding()),
+                (11, header_buf.as_entire_binding()),
                 (15, wgpu::BindingResource::TextureView(&vis_v)),
                 (17, misses_buf.as_entire_binding()),
                 (9, rec_buf.as_entire_binding()),
@@ -603,10 +603,10 @@ fn run_slots(
     // The listed slots as a set, each once.
     let listed_alike = had.len() == had_set.len() && had_set == walked;
     tally.compare(
-        &format!("{name}: the slots listed, as a set"),
+        &format!("{name}: the slots list_of, as a set"),
         &[u32::from(true)],
         &[u32::from(listed_alike)],
-        |_| format!("{} listed, {} to walk", had.len(), walked.len()),
+        |_| format!("{} list_of, {} to walk", had.len(), walked.len()),
     );
     let walked_n = walked.len() as u32;
     eprintln!(
@@ -726,15 +726,15 @@ fn within_by(d: f32, reach: f32) -> (bool, bool) {
     (d <= reach - edge, d <= reach + edge)
 }
 
-/// The receivers' passes by hand (light_mark.wgsl, light_stood.wgsl) stand on the tiles
+/// The receivers' passes by hand (light_mark.wgsl, light_receiver_tiles.wgsl) stand on the tiles
 /// pxl-engine's one rule gives (`Light::box_tiles`, the footprint where the head asks it), each
-/// listed once (`light::LISTED_STOOD`), the count in the stood list's args
-/// (`light::STOOD_CNT`), over the real world of tests/real_world: the pixels the eye walked
+/// listed once (`light::LIST_RECEIVERS`), the count in the stood list's args
+/// (`light::RECEIVER_TILES_CNT`), over the real world of tests/real_world: the pixels the eye walked
 /// apart, off their walked bits past the grid's words (`light_mark_walked_cs`, `ray::hole_bit`),
 /// each hit a box of one point; and every box the eye's draw writes, a held voxel in
 /// view each, its planes as `cast::asset_box` lays them, stood as it is written, where the head
 /// says the world's receivers stand (record_draw.wgsl `record_draw_cs`,
-/// `light::HEAD_STANDS_WORLD`). The cast's first stood tile opens the slide
+/// `light::HEADER_WORLD_RECEIVERS`). The cast's first stood tile opens the slide
 /// and begins the reads' epoch anew where a slide went unrun (`light::READS_FROM`); none
 /// stood, none listed and the slide shut, as past the reach. A tile a point lies within `EDGE`
 /// of, or a point by the reach, may be stood on or not. Skipped where no adapter answers.
@@ -1096,14 +1096,14 @@ fn run_marks(
     kinds.count("tiles stood on", want.must.len() as u64);
     kinds.add("casts that stood nothing", want.may.is_empty());
 
-    let mut head = vec![0u32; light::HEAD_WORDS];
-    head[light::HEAD_CAST] = CAST;
-    head[light::HEAD_WORLD] = CAST;
-    head[light::HEAD_FOOTPRINT] = u32::from(c.footprint);
-    head[light::HEAD_SLIDE_OWED] = CAST - 2;
-    head[light::HEAD_STANDS_WORLD] = 1;
-    for (k, v) in light::head_layout(SIZE) {
-        head[k] = v;
+    let mut header = vec![0u32; light::HEADER_WORDS];
+    header[light::HEADER_CAST] = CAST;
+    header[light::HEADER_WORLD] = CAST;
+    header[light::HEADER_FOOTPRINT] = u32::from(c.footprint);
+    header[light::HEADER_SLIDE_CAST] = CAST - 2;
+    header[light::HEADER_WORLD_RECEIVERS] = 1;
+    for (k, v) in light::header_layout(SIZE) {
+        header[k] = v;
     }
     // The list noise but the slide's words: the slide last ran before the last cast that owed
     // one. The marks some other cast's, none the world's this one's.
@@ -1113,7 +1113,7 @@ fn run_marks(
     let slide = light::slide_at(SIZE) as usize;
     list[slide + light::SLIDE_RAN as usize] = CAST - 3;
     list[slide + light::READS_FROM as usize] = 0;
-    let marks_at = (light::ARGS_WORDS + light::listed_marks_at(SIZE, light::LISTED_STOOD)) as usize;
+    let marks_at = (light::ARGS_WORDS + light::list_marks_at(SIZE, light::LIST_RECEIVERS)) as usize;
     let mut args: Vec<u32> = (0..light::args_words(SIZE)).map(noise).collect();
     for t in 0..(n * n) as usize {
         args[marks_at + t] = match noise(t as u32) % 3 {
@@ -1122,7 +1122,7 @@ fn run_marks(
             _ => CAST - 1,
         };
     }
-    let mut stood = vec![0u32; light::STOOD_WORDS as usize];
+    let mut stood = vec![0u32; light::RECEIVER_TILES_WORDS as usize];
     stood[..ray::LEFT_EMPTY.len()].copy_from_slice(&ray::LEFT_EMPTY);
 
     let rays = texture(
@@ -1135,20 +1135,20 @@ fn run_marks(
     );
     let view = array_view(&rays);
     let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
-    let head_buf = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
+    let header_buf = gpu.buffer(&header, wgpu::BufferUsages::UNIFORM);
     let list_buf = gpu.buffer(&list, wgpu::BufferUsages::STORAGE);
     let args_buf = gpu.buffer(&args, wgpu::BufferUsages::STORAGE);
-    let stood_buf = gpu.buffer(&stood, wgpu::BufferUsages::STORAGE);
+    let receiver_tiles_buf = gpu.buffer(&stood, wgpu::BufferUsages::STORAGE);
     let beams_buf = gpu.buffer(&beams, wgpu::BufferUsages::STORAGE);
     let raster_buf = gpu.buffer(&raster_args, wgpu::BufferUsages::STORAGE);
     let boxes_buf = gpu.buffer(&boxes, wgpu::BufferUsages::STORAGE);
     let record_buf = gpu.buffer(&rec, wgpu::BufferUsages::STORAGE);
     let mut binds: Vec<(u32, wgpu::BindingResource)> = vec![
         (0, eye_buf.as_entire_binding()),
-        (11, head_buf.as_entire_binding()),
+        (11, header_buf.as_entire_binding()),
         (12, list_buf.as_entire_binding()),
         (21, args_buf.as_entire_binding()),
-        (22, stood_buf.as_entire_binding()),
+        (22, receiver_tiles_buf.as_entire_binding()),
     ];
     let (pipe, groups) = match by {
         Marks::Walked => {
@@ -1168,14 +1168,14 @@ fn run_marks(
     };
     gpu.dispatch(pipe, &binds, groups);
     let out = gpu.read(&list_buf);
-    let out_stood = gpu.read(&stood_buf);
-    let cnt = out_stood[light::STOOD_CNT as usize] as usize;
-    let at = light::listed_at(SIZE, light::LISTED_STOOD) as usize;
-    let listed: Vec<[i32; 2]> = out[at + 1..at + 1 + cnt.min((n * n) as usize)]
+    let out_receiver_tiles = gpu.read(&receiver_tiles_buf);
+    let cnt = out_receiver_tiles[light::RECEIVER_TILES_CNT as usize] as usize;
+    let at = light::list_cnt_at(SIZE, light::LIST_RECEIVERS) as usize;
+    let list_of: Vec<[i32; 2]> = out[at + 1..at + 1 + cnt.min((n * n) as usize)]
         .iter()
         .map(|&w| [(w & 0xffff) as i32, (w >> 16) as i32])
         .collect();
-    let got: BTreeSet<[i32; 2]> = listed.iter().copied().collect();
+    let got: BTreeSet<[i32; 2]> = list_of.iter().copied().collect();
     let name = c.name;
     let case = |what: &str| {
         format!(
@@ -1185,10 +1185,10 @@ fn run_marks(
     };
     // Each tile listed once, every one it must stand on listed, none it may not.
     tally.compare(
-        &case("each listed once"),
-        &[listed.len() as u32],
+        &case("each list_of once"),
+        &[list_of.len() as u32],
         &[got.len() as u32],
-        |_| "listed".into(),
+        |_| "list_of".into(),
     );
     let must: Vec<[i32; 2]> = want.must.iter().copied().collect();
     tally.compare(
@@ -1214,7 +1214,7 @@ fn run_marks(
         &case("the slide opened, the reads' epoch begun anew"),
         &[if any { n_slide } else { 0 }, if any { CAST } else { 0 }],
         &[
-            out_stood[light::STOOD_SLIDE as usize],
+            out_receiver_tiles[light::RECEIVER_TILES_SLIDE as usize],
             out[slide + light::READS_FROM as usize],
         ],
         |k| ["the slide's workgroups across", "the reads' epoch"][k].into(),
@@ -1243,11 +1243,11 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     let p = gpu.pipeline(&module, "probe_cs");
     let mut eye_words = vec![0u32; eye::WORDS];
     eye_words[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&l.words());
-    let mut head = vec![0u32; light::HEAD_WORDS];
-    head[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
+    let mut header = vec![0u32; light::HEADER_WORDS];
+    header[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
         .copy_from_slice(&starts.words());
     let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
-    let head_buf = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
+    let header_buf = gpu.buffer(&header, wgpu::BufferUsages::UNIFORM);
     let out = gpu.buffer(
         &vec![0u32; 3 * (SIZE * SIZE) as usize],
         wgpu::BufferUsages::STORAGE,
@@ -1256,7 +1256,7 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         &p,
         &[
             (0, eye_buf.as_entire_binding()),
-            (11, head_buf.as_entire_binding()),
+            (11, header_buf.as_entire_binding()),
             (40, out.as_entire_binding()),
         ],
         [SIZE / 16, SIZE / 16, 1],
@@ -1292,7 +1292,7 @@ fn every_pass_bands_a_tile_alike() {
 
 @compute @workgroup_size(8, 8, 1)
 fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  let across = head_word(LIGHT_HEAD_SIZE) / LIGHT_TILE + 2u * PROBE_LEAD;
+  let across = header_word(LIGHT_HEADER_SIZE) / LIGHT_TILE + 2u * PROBE_LEAD;
   if (id.x >= across || id.y >= across) {
     return;
   }
@@ -1358,10 +1358,10 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         eye_words[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&l.words());
         eye_words[eye::RANGE] = range[0];
         eye_words[eye::RANGE + 1] = range[1];
-        let mut head = vec![0u32; light::HEAD_WORDS];
-        head[light::HEAD_SIZE] = size;
+        let mut header = vec![0u32; light::HEADER_WORDS];
+        header[light::HEADER_SIZE] = size;
         let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
-        let head_buf = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
+        let header_buf = gpu.buffer(&header, wgpu::BufferUsages::UNIFORM);
         let across = light::tiles(size) + 2 * LEAD;
         let want: Vec<u32> = (0..across * across)
             .map(|k| {
@@ -1380,7 +1380,7 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
                     p,
                     &[
                         (0, eye_buf.as_entire_binding()),
-                        (11, head_buf.as_entire_binding()),
+                        (11, header_buf.as_entire_binding()),
                         (40, out.as_entire_binding()),
                     ],
                     [across.div_ceil(8), across.div_ceil(8), 1],

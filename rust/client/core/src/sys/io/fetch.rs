@@ -18,7 +18,7 @@ use xpute_kit::status::errno::Errno;
 
 use crate::sys::io::body;
 use crate::sys::io::demand::{Phases, Stream, TaskPhaseName};
-use crate::sys::io::failure::{Ended, Failure};
+use crate::sys::io::failure::{Exit, Failure};
 use crate::sys::io::file::{self, Opened, Owner, Path};
 use crate::sys::io::param::MAX_CREDITS;
 use crate::sys::io::request::{attempt_of, settle};
@@ -29,7 +29,7 @@ struct Arrival {
     key: u64,
     /// Its body, none where the source has no object, or how it ended
     /// without one.
-    got: Result<Option<Block>, Ended>,
+    got: Result<Option<Block>, Exit>,
     /// The read that fills the body, the runtime's until its head has passed
     /// it.
     read: Option<Pos>,
@@ -88,16 +88,16 @@ pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
     let mut read = None;
     let got = match opened {
         Opened::Absent => Ok(None),
-        Opened::Failed { .. } => Err(Ended::Failed(Failure::from(opened))),
+        Opened::Failed { .. } => Err(Exit::Failed(Failure::from(opened))),
         // Only an absence says there is none: an empty file is no object.
         Opened::Bytes(0) => {
             file::close(fd);
-            Err(Ended::Failed(Failure::from(Errno::EBADMSG)))
+            Err(Exit::Failed(Failure::from(Errno::EBADMSG)))
         }
         // Longer than its kind's packet can be.
         Opened::Bytes(n) if stream.and_then(Stream::max_body).is_some_and(|max| n > max) => {
             file::close(fd);
-            Err(Ended::Failed(Failure::from(Errno::EFBIG)))
+            Err(Exit::Failed(Failure::from(Errno::EFBIG)))
         }
         Opened::Bytes(n) => {
             let got = match body::take(stream, n) {
@@ -113,7 +113,7 @@ pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
                     });
                     Ok(Some(block))
                 }
-                Err(refused) => Err(Ended::Refused(refused)),
+                Err(refused) => Err(Exit::Refused(refused)),
             };
             file::close(fd);
             got

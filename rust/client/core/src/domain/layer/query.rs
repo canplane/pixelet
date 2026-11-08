@@ -29,17 +29,17 @@ pub(in crate::domain) trait Query {
     type Cursor: Copy;
 
     /// `node`'s cursor asked alone: the layer's descent folded to it.
-    fn cursor<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Self::Cursor;
+    fn cursor<const D: usize>(&self, node: Node<D>, cell_zoom: Zoom) -> Self::Cursor;
 
     /// A child's cursor from its parent's; `node` is the child.
     fn child<const D: usize>(
         &self,
         parent: &Self::Cursor,
         node: Node<D>,
-        cell: Zoom,
+        cell_zoom: Zoom,
     ) -> Self::Cursor;
 
-    /// Where anything stands in the node, as its cells at `cell` are read,
+    /// Where anything stands in the node, as its cells at `cell_zoom` are read,
     /// off its cursor: a box holding what may show there, what is stored
     /// down to where everything about it is solid and nothing past that is
     /// seen; none where nothing does. What is not known is the
@@ -49,11 +49,11 @@ pub(in crate::domain) trait Query {
         &self,
         at: &Self::Cursor,
         node: Node<D>,
-        cell: Zoom,
+        cell_zoom: Zoom,
     ) -> Answer<Option<Aabb>>;
 
     #[cfg(test)]
-    fn bounds<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Answer<Option<Aabb>> {
-        self.bound(&self.cursor(node, cell), node, cell)
+    fn bounds<const D: usize>(&self, node: Node<D>, cell_zoom: Zoom) -> Answer<Option<Aabb>> {
+        self.bound(&self.cursor(node, cell_zoom), node, cell_zoom)
     }
 }

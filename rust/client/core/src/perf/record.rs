@@ -24,13 +24,13 @@ use crate::perf::task::TaskRow;
 /// display or a heavy minute fills a column early, which drops its oldest and
 /// sets `truncated`.
 const WINDOW_MS: f64 = LIMIT::WINDOW_MS as f64;
-const TASK_LIMIT: usize = 2_048;
-const FRAME_LIMIT: usize = 4_096;
+const TASK_CAP: usize = 2_048;
+const FRAME_CAP: usize = 4_096;
 const WORST_CAP: usize = 12;
-pub const PERCENTILES_LIMIT: usize = if FRAME_LIMIT > TASK_LIMIT {
-    FRAME_LIMIT
+pub const PERCENTILES_CAP: usize = if FRAME_CAP > TASK_CAP {
+    FRAME_CAP
 } else {
-    TASK_LIMIT
+    TASK_CAP
 };
 
 /// Advances `head` past records older than `cutoff`; returns how many to drop
@@ -71,10 +71,10 @@ pub(super) fn drop_front<T: Copy>(ring: &mut [T], len: &mut usize, n: usize) {
 /// The columns, in order: tasks, frames, the worst frames and the read's
 /// scratch (read.rs).
 const COLUMNS: [u32; 4] = [
-    (TASK_LIMIT * size_of::<TaskRow>()) as u32,
-    (FRAME_LIMIT * size_of::<FrameSample>()) as u32,
+    (TASK_CAP * size_of::<TaskRow>()) as u32,
+    (FRAME_CAP * size_of::<FrameSample>()) as u32,
     (WORST_CAP * size_of::<WorstFrame>()) as u32,
-    (PERCENTILES_LIMIT * size_of::<f64>()) as u32,
+    (PERCENTILES_CAP * size_of::<f64>()) as u32,
 ];
 
 /// What the heap holds of the profiler while its setting is on, in the
@@ -174,10 +174,10 @@ pub fn perf_recording_start() -> bool {
     let l = perf();
     if l.task_ring.is_empty() {
         let (Some(tasks), Some(frames), Some(worst), Some(scratch)) = (
-            heap_column(TASK_LIMIT),
-            heap_column(FRAME_LIMIT),
+            heap_column(TASK_CAP),
+            heap_column(FRAME_CAP),
             heap_column(WORST_CAP),
-            heap_column(PERCENTILES_LIMIT),
+            heap_column(PERCENTILES_CAP),
         ) else {
             return false;
         };

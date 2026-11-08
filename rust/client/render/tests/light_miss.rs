@@ -16,11 +16,11 @@ use gpu::{array_view, read_texture, texture, Gpu};
 
 use pxl_engine::answer;
 use pxl_engine::cast::{self, Detail, End, Ray, Until};
-use pxl_engine::clipmap::{self, Entry, ENTRIES, FIRST_CELL};
+use pxl_engine::clipmap::{self, Entry, ENTRIES, FIRST_CELL_ZOOM};
 use pxl_engine::light::{self, Light, Starts};
-use pxl_engine::node_cache::{self, MOVED_WORDS};
-use pxl_engine::overwrite::Cut;
-use pxl_engine::{beam, eye, overwrite, ray, value, Zoom, FRAC_W, LEAF_CELL};
+use pxl_engine::node_cache::{self, CHANGED_WORDS};
+use pxl_engine::object::Cut;
+use pxl_engine::{beam, eye, object, ray, value, Zoom, FRAC_W, LEAF_CELL_ZOOM};
 use pxl_render::frame::shader::record::{src, SHADER_FORGET, SHADER_LIGHT_CELL};
 use pxl_render::frame::shader::word::ROW_LANES;
 
@@ -147,14 +147,14 @@ fn cases(b: &Built) -> Vec<Case> {
     let way = |lines: [u32; 2]| {
         let of_way = |p: [i32; 3]| {
             let c = [real_world::wrap(p[0]), p[1], p[2]];
-            let zooms = [LEAF_CELL, LEAF_CELL];
+            let zooms = [LEAF_CELL_ZOOM, LEAF_CELL_ZOOM];
             value::transports(answer::val(
-                truth(b.world(), none, LEAF_CELL, c, zooms).0.asset[0],
+                truth(b.world(), none, LEAF_CELL_ZOOM, c, zooms).0.asset[0],
             ))
         };
         b.way_points
             .iter()
-            .filter(|p| p.0 == LEAF_CELL && lines.contains(&p.1) && p.2[0] > 0)
+            .filter(|p| p.0 == LEAF_CELL_ZOOM && lines.contains(&p.1) && p.2[0] > 0)
             .flat_map(|p| (-16..4).map(|d| [p.2[0], p.2[1], p.2[2] + d]))
             .find(|&p| of_way(p))
             .expect("a way the world answers")
@@ -230,7 +230,7 @@ fn cases(b: &Built) -> Vec<Case> {
             side: 0.25,
             back: 10.0,
             t_max: 120.0,
-            range: [LEAF_CELL, FINEST],
+            range: [LEAF_CELL_ZOOM, FINEST],
             corner: [8, 16],
             cuts: [
                 Cut {
@@ -256,7 +256,7 @@ fn cases(b: &Built) -> Vec<Case> {
             side: 0.5,
             back: 10.0,
             t_max: 200.0,
-            range: [LEAF_CELL, FINEST],
+            range: [LEAF_CELL_ZOOM, FINEST],
             corner: [-16, 32],
             cuts: none,
             least: &[
@@ -274,7 +274,7 @@ fn cases(b: &Built) -> Vec<Case> {
             side: 0.5,
             back: 10.0,
             t_max: 200.0,
-            range: [LEAF_CELL - 2, FINEST],
+            range: [LEAF_CELL_ZOOM - 2, FINEST],
             corner: [0, 0],
             cuts: none,
             least: &[
@@ -345,7 +345,7 @@ fn cases(b: &Built) -> Vec<Case> {
             side: 0.5,
             back: 0.0,
             t_max: 200.0,
-            range: [LEAF_CELL - 2, FINEST],
+            range: [LEAF_CELL_ZOOM - 2, FINEST],
             corner: [8, 8],
             cuts: none,
             least: &[
@@ -443,7 +443,7 @@ fn hand_light_holes_answer_as_cast_walk() {
         ground: gpu.buffer(&built.ground, store),
         palette: gpu.buffer(&built.palette, store),
         shards: gpu.buffer(&flat_u(&built.shards), store),
-        placed: gpu.buffer(&built.overwrites, store),
+        placed: gpu.buffer(&built.objects, store),
         pool: gpu.buffer(&built.pool, store),
     };
 
@@ -466,7 +466,7 @@ fn hand_light_holes_answer_as_cast_walk() {
         ground: gpu.buffer(&west.ground, store),
         palette: gpu.buffer(&west.palette, store),
         shards: gpu.buffer(&flat_u(&west.shards), store),
-        placed: gpu.buffer(&west.overwrites, store),
+        placed: gpu.buffer(&west.objects, store),
         pool: gpu.buffer(&west.pool, store),
     };
     let over = |g: [i32; 2], up: i32| q8([g[0], g[1], west.top_at(g) + up]);
@@ -498,7 +498,7 @@ fn hand_light_holes_answer_as_cast_walk() {
         ground: gpu.buffer(&zero.ground, store),
         palette: gpu.buffer(&zero.palette, store),
         shards: gpu.buffer(&flat_u(&zero.shards), store),
-        placed: gpu.buffer(&zero.overwrites, store),
+        placed: gpu.buffer(&zero.objects, store),
         pool: gpu.buffer(&zero.pool, store),
     };
     let case = Case {
@@ -529,7 +529,7 @@ const CAST: u32 = 7;
 
 /// The beam's lines and each cell's start laid in `list` as the cast lays them (beam.light.wgsl,
 /// light_cell.wgsl), every tile read, its beam over a table of its own.
-fn lay_cells(gpu: &Gpu, b: &WorldBufs, [eye, head]: [&wgpu::Buffer; 2], list: &mut [u32]) {
+fn lay_cells(gpu: &Gpu, b: &WorldBufs, [eye, header]: [&wgpu::Buffer; 2], list: &mut [u32]) {
     let tiles = light::tiles(SIZE) as usize;
     let reads = light::reads_at(SIZE) as usize;
     list[reads..reads + tiles * tiles].fill(CAST);
@@ -549,7 +549,7 @@ fn lay_cells(gpu: &Gpu, b: &WorldBufs, [eye, head]: [&wgpu::Buffer; 2], list: &m
             (7, b.pool.as_entire_binding()),
             (8, buf.as_entire_binding()),
             (9, table.as_entire_binding()),
-            (11, head.as_entire_binding()),
+            (11, header.as_entire_binding()),
         ],
         &buf,
         &table,
@@ -561,7 +561,7 @@ fn lay_cells(gpu: &Gpu, b: &WorldBufs, [eye, head]: [&wgpu::Buffer; 2], list: &m
         &[
             (0, eye.as_entire_binding()),
             (8, buf.as_entire_binding()),
-            (11, head.as_entire_binding()),
+            (11, header.as_entire_binding()),
         ],
         [cells.div_ceil(side), cells.div_ceil(side), 1],
     );
@@ -576,8 +576,8 @@ fn lay_cells(gpu: &Gpu, b: &WorldBufs, [eye, head]: [&wgpu::Buffer; 2], list: &m
 struct Edited<'a> {
     b: &'a WorldBufs,
     w: World<'a>,
-    moved: [u32; MOVED_WORDS as usize],
-    moved_bricks: [[i32; 4]; clipmap::EYE_CLIP_LEVELS as usize],
+    changed: [u32; CHANGED_WORDS as usize],
+    changed_bricks: [[i32; 4]; clipmap::EYE_CLIP_LEVELS as usize],
     forget: &'a wgpu::ComputePipeline,
 }
 
@@ -602,16 +602,16 @@ fn run_case(
         eye_words[at + 2] = cut.at[2] as u32;
         eye_words[at + 3] = cut.zoom;
     }
-    let mut head = vec![0u32; light::HEAD_WORDS];
-    head[light::HEAD_CAST] = CAST;
-    head[light::HEAD_EPOCH] = CAST;
-    for (k, v) in light::head_layout(SIZE) {
-        head[k] = v;
+    let mut header = vec![0u32; light::HEADER_WORDS];
+    header[light::HEADER_CAST] = CAST;
+    header[light::HEADER_EPOCH] = CAST;
+    for (k, v) in light::header_layout(SIZE) {
+        header[k] = v;
     }
-    head[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
+    header[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
         .copy_from_slice(&starts.words());
     let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
-    let head_buf = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
+    let header_buf = gpu.buffer(&header, wgpu::BufferUsages::UNIFORM);
 
     // The slots listed, the box's rows wrapped, in the holes' list the queue takes.
     let n = SIZE * SIZE;
@@ -622,7 +622,7 @@ fn run_case(
         .filter(|&k| walked[k as usize])
         .map(|k| (k % SIZE) | ((k / SIZE) << 16))
         .collect();
-    let mut list = listed(&slots);
+    let mut list = list_of(&slots);
 
     let mut table0 = vec![0u32; node_cache::WORDS as usize];
     table0[node_cache::FRAME as usize] = FRAME;
@@ -660,7 +660,7 @@ fn run_case(
     }
 
     // Each cell's start, off the beam the cast walks first, which every slot's walk resumes from.
-    lay_cells(gpu, b, [&eye_buf, &head_buf], &mut list);
+    lay_cells(gpu, b, [&eye_buf, &header_buf], &mut list);
 
     // The queue, over the same table.
     let map = map_of(gpu);
@@ -670,7 +670,7 @@ fn run_case(
     holes(
         gpu,
         b,
-        [&eye_buf, &head_buf, &table_buf, &list_buf],
+        [&eye_buf, &header_buf, &table_buf, &list_buf],
         &view,
         &walked,
     );
@@ -707,11 +707,11 @@ fn run_case(
     let mut next = table_hand.clone();
     next[node_cache::FRAME as usize] = FRAME + 1;
     if let Some(e) = edited {
-        next[node_cache::FORGETS as usize] = node_cache::FORGETS_MOVED;
-        let m = node_cache::MOVED_AT as usize;
-        next[m..m + MOVED_WORDS as usize].copy_from_slice(&e.moved);
-        for (k, b) in e.moved_bricks.iter().enumerate() {
-            let at = node_cache::MOVED_BRICKS_AT as usize + 4 * k;
+        next[node_cache::FORGETS as usize] = node_cache::FORGETS_CHANGED;
+        let m = node_cache::CHANGED_AT as usize;
+        next[m..m + CHANGED_WORDS as usize].copy_from_slice(&e.changed);
+        for (k, b) in e.changed_bricks.iter().enumerate() {
+            let at = node_cache::CHANGED_BRICKS_AT as usize + 4 * k;
             next[at..at + 4].copy_from_slice(&b.map(|v| v as u32));
         }
     }
@@ -742,15 +742,15 @@ fn run_case(
     }
     let b = edited.map_or(b, |e| e.b);
     let w = edited.map_or(w, |e| e.w);
-    let mut list = listed(&slots);
-    lay_cells(gpu, b, [&eye_buf, &head_buf], &mut list);
+    let mut list = list_of(&slots);
+    lay_cells(gpu, b, [&eye_buf, &header_buf], &mut list);
     let list2 = gpu.buffer(&list, store_of());
     let map2 = map_of(gpu);
     let view2 = array_view(&map2);
     holes(
         gpu,
         b,
-        [&eye_buf, &head_buf, &next_buf, &list2],
+        [&eye_buf, &header_buf, &next_buf, &list2],
         &view2,
         &walked,
     );
@@ -844,7 +844,7 @@ fn map_of(gpu: &Gpu) -> wgpu::Texture {
 
 /// The light's list with `slots` listed in its holes' list (`light::holes_at`), its pool and
 /// its stops past them (`light::buffer_words`).
-fn listed(slots: &[u32]) -> Vec<u32> {
+fn list_of(slots: &[u32]) -> Vec<u32> {
     let mut list = vec![0u32; light::buffer_words(SIZE) as usize];
     let at = light::holes_at(SIZE) as usize;
     list[at] = slots.len() as u32;
@@ -858,7 +858,7 @@ fn listed(slots: &[u32]) -> Vec<u32> {
 fn holes(
     gpu: &Gpu,
     b: &WorldBufs,
-    [eye, head, table, list]: [&wgpu::Buffer; 4],
+    [eye, header, table, list]: [&wgpu::Buffer; 4],
     view: &wgpu::TextureView,
     walked: &[bool],
 ) {
@@ -873,23 +873,23 @@ fn holes(
         (7, b.pool.as_entire_binding()),
         (8, list.as_entire_binding()),
         (9, table.as_entire_binding()),
-        (11, head.as_entire_binding()),
+        (11, header.as_entire_binding()),
     ];
     let pool = light::list_words(SIZE) + ray::POOL_CNT;
     gpu.holes(&binds, table, (list, pool));
-    let stops = gpu.read(table)[node_cache::HITS_CNT as usize].min(ray::STOPS_A_FRAME);
+    let hits = gpu.read(table)[node_cache::HITS_CNT as usize].min(ray::HITS_A_FRAME);
     let words = gpu.read(list);
     let at = light::hits_at(SIZE) as usize;
     let mut kept = std::collections::BTreeSet::new();
     let mut strays = 0u32;
-    for r in 0..stops as usize {
+    for r in 0..hits as usize {
         let px = words[at + r * beam::HIT_WORDS as usize + beam::HIT_PX as usize];
         let k = ((px >> 16) * SIZE + (px & 0xffff)) as usize;
         if k >= walked.len() || !walked[k] || !kept.insert(k) {
             strays += 1;
         }
     }
-    assert_eq!(strays, 0, "stops of slots not walked, or twice, of {stops}");
+    assert_eq!(strays, 0, "hits of slots not walked, or twice, of {hits}");
 }
 
 /// The node cache never answers the world as it was: a frame's walks keep what a world whose
@@ -900,9 +900,9 @@ fn holes(
 fn an_edited_brick_is_never_answered_as_it_was() {
     handed_between_frames(
         EYE,
-        LEAF_CELL,
+        LEAF_CELL_ZOOM,
         [90, 90],
-        "about the eye, its leaf bricks handed between the frames",
+        "about the eye, its leaf bricks inheritance between the frames",
     );
 }
 
@@ -911,9 +911,9 @@ fn an_edited_brick_is_never_answered_as_it_was() {
 fn an_edited_coarse_brick_is_never_answered_as_it_was() {
     handed_between_frames(
         EYE,
-        LEAF_CELL - 1,
+        LEAF_CELL_ZOOM - 1,
         [90, 90],
-        "about the eye, a coarser level's bricks handed between the frames",
+        "about the eye, a coarser level's bricks inheritance between the frames",
     );
 }
 
@@ -923,16 +923,16 @@ fn an_edited_coarse_brick_is_never_answered_as_it_was() {
 fn an_edited_brick_over_the_seam_is_never_answered_as_it_was() {
     handed_between_frames(
         EYE_SEAM,
-        LEAF_CELL,
+        LEAF_CELL_ZOOM,
         [4, 90],
-        "on the seam, the leaf bricks either side of it handed between the frames",
+        "on the seam, the leaf bricks either side of it inheritance between the frames",
     );
 }
 
-/// A frame's walks about `by` leaf cells from `eye` over a world whose clip level at `cell`
+/// A frame's walks about `by` leaf cells from `eye` over a world whose clip level at `cell_zoom`
 /// lacks its bricks, every brick of that level then handed, and the next frame's, after the app
 /// forgets by the entries that moved, answering as the world that holds them.
-fn handed_between_frames(eye: [i32; 2], cell: Zoom, by: [i32; 2], name: &'static str) {
+fn handed_between_frames(eye: [i32; 2], cell_zoom: Zoom, by: [i32; 2], name: &'static str) {
     let Some(gpu) = Gpu::new() else {
         eprintln!("no adapter: skipped");
         return;
@@ -940,7 +940,7 @@ fn handed_between_frames(eye: [i32; 2], cell: Zoom, by: [i32; 2], name: &'static
     let built = real_world::build(eye);
     // Before: the clip level's entries wanted and not yet filled, folded again.
     let mut was = built.clipmap.clone();
-    let level = ((cell - FIRST_CELL) * ENTRIES) as usize;
+    let level = ((cell_zoom - FIRST_CELL_ZOOM) * ENTRIES) as usize;
     let rows = level..level + ENTRIES as usize;
     if eye == EYE_SEAM {
         let x = |west: bool| {
@@ -965,22 +965,22 @@ fn handed_between_frames(eye: [i32; 2], cell: Zoom, by: [i32; 2], name: &'static
     );
     let now = &built.clipmap;
     // The host's rule (gpu/ray/cast.rs): an eye's entry moved where its brick did.
-    let mut moved = [0u32; MOVED_WORDS as usize];
-    let mut moved_bricks = [node_cache::NO_BRICKS; clipmap::EYE_CLIP_LEVELS as usize];
+    let mut changed = [0u32; CHANGED_WORDS as usize];
+    let mut changed_bricks = [node_cache::NO_BRICKS; clipmap::EYE_CLIP_LEVELS as usize];
     for k in 0..(clipmap::EYE_CLIP_LEVELS * ENTRIES) as usize {
-        if Entry::of(now[k]).moved_from(Entry::of(was[k])) {
-            moved[k / 32] |= 1 << (k % 32);
+        if Entry::of(now[k]).changed_from(Entry::of(was[k])) {
+            changed[k / 32] |= 1 << (k % 32);
         }
-        if Entry::of(now[k]).held_moved_from(Entry::of(was[k])) {
+        if Entry::of(now[k]).held_changed_from(Entry::of(was[k])) {
             for q in [Entry::of(now[k]).brick, Entry::of(was[k]).brick] {
                 if q != [i32::MIN; 2] {
-                    let level = &mut moved_bricks[k / ENTRIES as usize];
+                    let level = &mut changed_bricks[k / ENTRIES as usize];
                     *level = node_cache::bricks_joined(*level, [q[0], q[1], q[0], q[1]]);
                 }
             }
         }
     }
-    assert!(moved.iter().any(|&m| m != 0), "no entry moved");
+    assert!(changed.iter().any(|&m| m != 0), "no entry changed");
 
     let store = wgpu::BufferUsages::STORAGE;
     let bufs = |rows: &[[i32; 4]]| WorldBufs {
@@ -998,7 +998,7 @@ fn handed_between_frames(eye: [i32; 2], cell: Zoom, by: [i32; 2], name: &'static
             &built.shards.iter().flatten().copied().collect::<Vec<u32>>(),
             store,
         ),
-        placed: gpu.buffer(&built.overwrites, store),
+        placed: gpu.buffer(&built.objects, store),
         pool: gpu.buffer(&built.pool, store),
     };
     let (before, after) = (bufs(&was), bufs(now));
@@ -1019,8 +1019,8 @@ fn handed_between_frames(eye: [i32; 2], cell: Zoom, by: [i32; 2], name: &'static
     let edited = Edited {
         b: &after,
         w: built.world(),
-        moved,
-        moved_bricks,
+        changed,
+        changed_bricks,
         forget: &forget,
     };
     let mut failed = Vec::new();
@@ -1052,16 +1052,16 @@ fn fresh_map(gpu: &Gpu, b: &WorldBufs, case: &Case, cuts: [Cut; 2]) -> (Vec<bool
         eye_words[at + 2] = cut.at[2] as u32;
         eye_words[at + 3] = cut.zoom;
     }
-    let mut head = vec![0u32; light::HEAD_WORDS];
-    head[light::HEAD_CAST] = CAST;
-    head[light::HEAD_EPOCH] = CAST;
-    for (k, v) in light::head_layout(SIZE) {
-        head[k] = v;
+    let mut header = vec![0u32; light::HEADER_WORDS];
+    header[light::HEADER_CAST] = CAST;
+    header[light::HEADER_EPOCH] = CAST;
+    for (k, v) in light::header_layout(SIZE) {
+        header[k] = v;
     }
-    head[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
+    header[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
         .copy_from_slice(&starts.words());
     let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
-    let head_buf = gpu.buffer(&head, wgpu::BufferUsages::UNIFORM);
+    let header_buf = gpu.buffer(&header, wgpu::BufferUsages::UNIFORM);
     let n = SIZE * SIZE;
     let walked: Vec<bool> = (0..n)
         .map(|k| k < n - NOT_LISTED && !k.is_multiple_of(SKIPPED_EVERY))
@@ -1070,8 +1070,8 @@ fn fresh_map(gpu: &Gpu, b: &WorldBufs, case: &Case, cuts: [Cut; 2]) -> (Vec<bool
         .filter(|&k| walked[k as usize])
         .map(|k| (k % SIZE) | ((k / SIZE) << 16))
         .collect();
-    let mut list = listed(&slots);
-    lay_cells(gpu, b, [&eye_buf, &head_buf], &mut list);
+    let mut list = list_of(&slots);
+    lay_cells(gpu, b, [&eye_buf, &header_buf], &mut list);
     let mut table = vec![0u32; node_cache::WORDS as usize];
     table[node_cache::FRAME as usize] = FRAME;
     let map = map_of(gpu);
@@ -1081,7 +1081,7 @@ fn fresh_map(gpu: &Gpu, b: &WorldBufs, case: &Case, cuts: [Cut; 2]) -> (Vec<bool
     holes(
         gpu,
         b,
-        [&eye_buf, &head_buf, &table_buf, &list_buf],
+        [&eye_buf, &header_buf, &table_buf, &list_buf],
         &view,
         &walked,
     );
@@ -1116,7 +1116,7 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
             &built.shards.iter().flatten().copied().collect::<Vec<u32>>(),
             store,
         ),
-        placed: gpu.buffer(&built.overwrites, store),
+        placed: gpu.buffer(&built.objects, store),
         pool: gpu.buffer(&built.pool, store),
     };
     let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
@@ -1127,7 +1127,7 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
     // filled before, folded again; their columns as the host takes them (gpu/ray/cast.rs).
     let g = [EYE[0] + 90, EYE[1] + 90];
     let bricks_case = Case {
-        name: "bricks of the leaf clip level handed",
+        name: "bricks of the leaf clip level inheritance",
         origin: over(g, 40),
         dir: [0.3, 0.2, -0.93],
         side: 1.0,
@@ -1138,7 +1138,7 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
         cuts: [Cut::NONE; 2],
         least: &[],
     };
-    let leaf = ((LEAF_CELL - FIRST_CELL) * ENTRIES) as usize;
+    let leaf = ((LEAF_CELL_ZOOM - FIRST_CELL_ZOOM) * ENTRIES) as usize;
     let s = clipmap::BRICK_SHIFT;
     let mut was = now.clone();
     let mut brick_columns = Vec::new();
@@ -1151,7 +1151,7 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
         row[2..].fill(0);
         light::brick_columns(
             bricks_case.origin,
-            LEAF_CELL,
+            LEAF_CELL_ZOOM,
             q,
             |_| false,
             |c| brick_columns.push(c),
@@ -1169,18 +1169,18 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
     // A brick over the leaf's handed: a band finer reads it only where the leaf's are not
     // present.
     let over_case = Case {
-        name: "a brick over the leaf's handed",
+        name: "a brick over the leaf's inheritance",
         ..bricks_case
     };
-    let row_of = |cell: Zoom, q: [i32; 2]| {
-        ((cell - FIRST_CELL) * ENTRIES) as usize + clipmap::entry(q) as usize
+    let row_of = |cell_zoom: Zoom, q: [i32; 2]| {
+        ((cell_zoom - FIRST_CELL_ZOOM) * ENTRIES) as usize + clipmap::entry(q) as usize
     };
-    let (coarser, q) = (FIRST_CELL..LEAF_CELL)
+    let (coarser, q) = (FIRST_CELL_ZOOM..LEAF_CELL_ZOOM)
         .rev()
-        .map(|cell| (cell, g.map(|v| v >> (s + LEAF_CELL - cell))))
-        .find(|&(cell, q)| Entry::of(now[row_of(cell, q)]).holds(q))
+        .map(|cell_zoom| (cell_zoom, g.map(|v| v >> (s + LEAF_CELL_ZOOM - cell_zoom))))
+        .find(|&(cell_zoom, q)| Entry::of(now[row_of(cell_zoom, q)]).holds(q))
         .expect("a clip level over the leaf's holds a brick");
-    eprintln!("the brick over the leaf's at {coarser}, the leaf's at {LEAF_CELL}");
+    eprintln!("the brick over the leaf's at {coarser}, the leaf's at {LEAF_CELL_ZOOM}");
     let mut was_over = now.clone();
     was_over[row_of(coarser, q)][2..].fill(0);
     let mut over_columns = Vec::new();
@@ -1218,15 +1218,15 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
         side: 0.25,
         back: 10.0,
         t_max: 120.0,
-        range: [LEAF_CELL, FINEST],
+        range: [LEAF_CELL_ZOOM, FINEST],
         corner: [8, 16],
         cuts: [Cut::NONE; 2],
         least: &[],
     };
-    let b = overwrite::cut_box(cut.zoom, cut.at);
+    let b = object::cut_rect(cut.zoom, cut.at);
     let cut_columns = vec![light::Column::every_band(light::column_of(
         cut_case.origin,
-        LEAF_CELL,
+        LEAF_CELL_ZOOM,
         [b[0], b[1]],
         [b[2], b[3]],
     ))];
@@ -1272,7 +1272,7 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
         let (walked, got0) = fresh_map(&gpu, b0, case, c0);
         let (_, got1) = fresh_map(&gpu, b1, case, c1);
         let (mut q0, mut q1) = (Asking { w: w0, cuts: c0 }, Asking { w: w1, cuts: c1 });
-        let (mut kept, mut reached, mut moved, mut differ, mut walks_differ) =
+        let (mut kept, mut reached, mut changed, mut differ, mut walks_differ) =
             (0u32, 0u32, 0u32, 0u32, 0u32);
         for k in 0..(SIZE * SIZE) as usize {
             if !walked[k] {
@@ -1295,7 +1295,7 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
                 .any(|&c| s.reaches(SIZE, case.range, tile, c))
             {
                 reached += 1;
-                moved += u32::from(want0 != want1);
+                changed += u32::from(want0 != want1);
                 continue;
             }
             kept += 1;
@@ -1305,18 +1305,18 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
             }
         }
         eprintln!(
-            "{}: {kept} slots kept, {reached} reached, {moved} of them moved; kept but moved: {walks_differ} walked, {differ} cast",
+            "{}: {kept} slots kept, {reached} reached, {changed} of them changed; kept but changed: {walks_differ} walked, {differ} cast",
             case.name
         );
         if walks_differ != 0 || differ != 0 {
             failed.push(format!(
-                "{}: slots of tiles kept moved, {walks_differ} by the engine's walk, {differ} by the GPU's",
+                "{}: slots of tiles kept changed, {walks_differ} by the engine's walk, {differ} by the GPU's",
                 case.name
             ));
         }
-        if kept < 1000 || moved < 100 {
+        if kept < 1000 || changed < 100 {
             failed.push(format!(
-                "{}: too few to say: {kept} kept, {moved} moved",
+                "{}: too few to say: {kept} kept, {changed} changed",
                 case.name
             ));
         }

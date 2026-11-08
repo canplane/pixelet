@@ -4,7 +4,7 @@
 //! tile that says its ground exactly, and named by that tile and its index
 //! there, which reads it again while the tile is held.
 
-use pxl_spec::bake::tile::place::{PlaceTile, Placed};
+use pxl_spec::bake::tile::place::{PlaceTile, TilePlace};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 use super::world::World;
@@ -18,7 +18,7 @@ impl World<'static> {
     pub fn places_in(
         self,
         tiles: impl IntoIterator<Item = Quadrant>,
-        visit: &mut dyn FnMut(Quadrant, u32, Placed<'static>),
+        visit: &mut dyn FnMut(Quadrant, u32, TilePlace<'static>),
     ) {
         let held: &'static _ = PlaceTile::tile_cache();
         let mut lines = Lines::default();

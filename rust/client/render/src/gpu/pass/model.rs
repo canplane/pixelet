@@ -171,7 +171,7 @@ impl DrawUniforms {
 
     /// One write: a later write to the same buffer before the submit would stand
     /// for every draw. Grows to the next power of two, eight at least. Written
-    /// only where the lists the draws are made from `moved`, or it grew: else
+    /// only where the lists the draws are made from `changed`, or it grew: else
     /// the buffer holds these bytes already.
     pub fn write<T>(
         &mut self,
@@ -179,14 +179,14 @@ impl DrawUniforms {
         layout: Layout,
         cnt: u32,
         draws: impl Iterator<Item = T>,
-        moved: bool,
+        changed: bool,
         mut put: impl FnMut(&mut [u8], T),
     ) {
         if cnt == 0 {
             return;
         }
         let need = self.stride * cnt.next_power_of_two().max(8);
-        if !moved && need <= self.cap {
+        if !changed && need <= self.cap {
             return;
         }
         if need > self.cap {

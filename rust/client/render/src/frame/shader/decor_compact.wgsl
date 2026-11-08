@@ -12,7 +12,7 @@
 /// way round the world (`wrap_idx`).
 fn from_anchor(i: u32, axis: u32) -> f32 {
   let d = i32(records[i + 1u + axis]) - i32(drawing[DRAWN_ANCHOR + axis]);
-  return f32(select(d, wrap_idx(LEAF_CELL, d), axis == 0u));
+  return f32(select(d, wrap_idx(LEAF_CELL_ZOOM, d), axis == 0u));
 }
 
 /// `decor_compact_cs` for the record at word `i`.

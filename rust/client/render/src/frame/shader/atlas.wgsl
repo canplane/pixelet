@@ -39,7 +39,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Verte
   return o;
 }
 
-fn round_box(p: vec2f, half: vec2f, r: f32) -> f32 {
+fn round_rect(p: vec2f, half: vec2f, r: f32) -> f32 {
   let q = abs(p) - half + vec2f(r);
   return length(max(q, vec2f(0.0))) + min(max(q.x, q.y), 0.0) - r;
 }
@@ -69,13 +69,13 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   var edge = 1.0;
   switch s.kind.x {
     case ATLAS_FILL: {
-      d = round_box(i.at - center, half, s.p.x);
+      d = round_rect(i.at - center, half, s.p.x);
       edge = max(s.p.y, 1.0);
       let down = (i.at.y - s.rect.y) / max(s.rect.w - s.rect.y, 1.0);
       rgb = rgb * (1.0 + s.q.x * (1.0 - 2.0 * down));
     }
     case ATLAS_STROKE: {
-      d = abs(round_box(i.at - center, half, s.p.x)) - s.p.y * 0.5;
+      d = abs(round_rect(i.at - center, half, s.p.x)) - s.p.y * 0.5;
     }
     case ATLAS_TRIANGLE: {
       d = triangle(i.at, s.p.xy, s.p.zw, s.q.xy);

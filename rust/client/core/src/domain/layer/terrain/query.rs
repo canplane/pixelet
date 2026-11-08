@@ -37,7 +37,7 @@ pub(in crate::domain) trait TerrainQuery {
     /// anything: a reader asks that first, the descent of its shard
     /// (pxl-engine `area::Shard`). `place` is where a node over it found its
     /// cells, or `Lookup::NONE`, and becomes where its own are (pxl-engine
-    /// `clipmap::step`). Its cells are read at `cell` as the GPU reads them
+    /// `clipmap::step`). Its cells are read at `cell_zoom` as the GPU reads them
     /// (pxl-engine `clipmap::bound_over`); `line` names the tile and says
     /// whether the clip level read is its ground's own.
     fn relief(
@@ -56,22 +56,27 @@ pub(in crate::domain) trait TerrainQuery {
     /// lack.
     fn column(&self, line: &Line, place: Lookup, node: Node<2>) -> Answer<Cell>;
 
-    /// The line `node`'s cells at `cell` are read on, stepped from where
+    /// The line `node`'s cells at `cell_zoom` are read on, stepped from where
     /// `lines` last walked: a tile under one it holds from that one's line, a
     /// coarser one its own as an ancestor read it, so nodes beside or under
     /// each other share their lines down to where they part, and pay a
     /// look-up a zoom only past it.
-    fn walk_line(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Line;
+    fn walk_line(&self, lines: &mut Lines, node: Node<2>, cell_zoom: Zoom) -> Line;
 
-    /// The line `node`'s cells at `cell` are read on, off `over`, the line its
+    /// The line `node`'s cells at `cell_zoom` are read on, off `over`, the line its
     /// parent column's were: that line where it is the same tile's, stepped
     /// from it where it is the tile's parent's (`step`), else walked from the
     /// top, as `seek` steps.
-    fn line_under(&self, over: Option<&Line>, node: Node<2>, cell: Zoom) -> Line;
+    fn line_under(&self, over: Option<&Line>, node: Node<2>, cell_zoom: Zoom) -> Line;
 
     /// `bound`, its line walked (`walk_line`): a walk in key order pays one
     /// look-up a node.
-    fn bound_walked(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Answer<Option<Aabb>>;
+    fn bound_walked(
+        &self,
+        lines: &mut Lines,
+        node: Node<2>,
+        cell_zoom: Zoom,
+    ) -> Answer<Option<Aabb>>;
 }
 
 impl TerrainQuery for TileCache<TerrainTile> {
@@ -91,12 +96,12 @@ impl TerrainQuery for TileCache<TerrainTile> {
         answer_at(line, f.from(), f.here(), cell)
     }
 
-    fn walk_line(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Line {
-        self.seek(lines, bound_tile(node, cell))
+    fn walk_line(&self, lines: &mut Lines, node: Node<2>, cell_zoom: Zoom) -> Line {
+        self.seek(lines, bound_tile(node, cell_zoom))
     }
 
-    fn line_under(&self, over: Option<&Line>, node: Node<2>, cell: Zoom) -> Line {
-        let tile = bound_tile(node, cell);
+    fn line_under(&self, over: Option<&Line>, node: Node<2>, cell_zoom: Zoom) -> Line {
+        let tile = bound_tile(node, cell_zoom);
         match over {
             Some(o) if o.tile == tile => *o,
             Some(o) if tile.zoom > TOP_ZOOM && o.tile == tile.parent() => self.step(o, tile),
@@ -104,8 +109,13 @@ impl TerrainQuery for TileCache<TerrainTile> {
         }
     }
 
-    fn bound_walked(&self, lines: &mut Lines, node: Node<2>, cell: Zoom) -> Answer<Option<Aabb>> {
-        self.bound(&self.walk_line(lines, node, cell), node, cell)
+    fn bound_walked(
+        &self,
+        lines: &mut Lines,
+        node: Node<2>,
+        cell_zoom: Zoom,
+    ) -> Answer<Option<Aabb>> {
+        self.bound(&self.walk_line(lines, node, cell_zoom), node, cell_zoom)
     }
 }
 
@@ -123,8 +133,8 @@ impl TileCache<TerrainTile> {
 /// The tile a node's bound is read from: its cells' tile, within the
 /// pyramid's zooms, or where the node is wider than one, its own, the
 /// finest one tile holding it.
-fn bound_tile<const D: usize>((zoom, at): Node<D>, cell: Zoom) -> Quadrant {
-    let read = GROUND.read_zoom(cell).min(zoom);
+fn bound_tile<const D: usize>((zoom, at): Node<D>, cell_zoom: Zoom) -> Quadrant {
+    let read = GROUND.read_zoom(cell_zoom).min(zoom);
     Quadrant::new(read, ancestor_of([at[0], at[1]], zoom - read))
 }
 
@@ -141,15 +151,15 @@ fn answer_at<T>(line: &Line, from: Zoom, here: bool, v: T) -> Answer<T> {
 impl Query for TileCache<TerrainTile> {
     type Cursor = Line;
 
-    fn cursor<const D: usize>(&self, node: Node<D>, cell: Zoom) -> Line {
-        self.line(bound_tile(node, cell))
+    fn cursor<const D: usize>(&self, node: Node<D>, cell_zoom: Zoom) -> Line {
+        self.line(bound_tile(node, cell_zoom))
     }
 
     /// The tile a child reads is its parent's or one under it, stepped down
     /// from the parent's line a zoom at a time (`down`); a coarser one, whose
     /// line no child holds, is walked from the top.
-    fn child<const D: usize>(&self, parent: &Line, node: Node<D>, cell: Zoom) -> Line {
-        let tile = bound_tile(node, cell);
+    fn child<const D: usize>(&self, parent: &Line, node: Node<D>, cell_zoom: Zoom) -> Line {
+        let tile = bound_tile(node, cell_zoom);
         let mut over = tile;
         while over.zoom > parent.tile.zoom {
             over = over.parent();
@@ -161,7 +171,7 @@ impl Query for TileCache<TerrainTile> {
     }
 
     /// From the clip levels' relief over the node's own cells (`relief`), the
-    /// ground's and the ways' joined, down to a cell at `cell` under its
+    /// ground's and the ways' joined, down to a cell at `cell_zoom` under its
     /// lowest, within the node. A node past the service area, no palette index in
     /// it, holds nothing: known before any of its ground arrives, a shard or
     /// finer, as every reader knows it (pxl-engine `area::Shard`); a
@@ -170,7 +180,7 @@ impl Query for TileCache<TerrainTile> {
         &self,
         line: &Line,
         (zoom, at): Node<D>,
-        cell: Zoom,
+        cell_zoom: Zoom,
     ) -> Answer<Option<Aabb>> {
         let node = (zoom, [at[0], at[1]]);
         if Shard::UNKNOWN.at(&source::ServiceArea, node).past() {
@@ -178,11 +188,12 @@ impl Query for TileCache<TerrainTile> {
         }
         let whole = region((zoom, at));
         let mut place = Lookup::NONE;
-        self.relief(line, &mut place, node, [cell, cell])
+        self.relief(line, &mut place, node, [cell_zoom, cell_zoom])
             .map(|[ground, ways]| {
                 let [lo, hi] = [ground[0].min(ways[0]), ground[1].max(ways[1])];
-                let lo = (f64::from(lo) * units(GROUND.cell()) - units(cell)).max(whole.min[2]);
-                let hi = (f64::from(hi) * units(GROUND.cell())).min(whole.max[2]);
+                let lo = (f64::from(lo) * units(GROUND.leaf_cell_zoom()) - units(cell_zoom))
+                    .max(whole.min[2]);
+                let hi = (f64::from(hi) * units(GROUND.leaf_cell_zoom())).min(whole.max[2]);
                 (lo <= hi).then(|| Aabb {
                     min: [whole.min[0], whole.min[1], lo],
                     max: [whole.max[0], whole.max[1], hi],

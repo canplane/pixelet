@@ -3,7 +3,7 @@
 //! The marker kind's pins someone put up, as the object store holds them,
 //! drawn as scene markers: each its text
 //! on a pill at its own cell, or where more than one stands in a pin's cell
-//! (`marker_cell`), their count at the cell's middle on a pin's pill in its
+//! (`marker_cell_zoom`), their count at the cell's middle on a pin's pill in its
 //! colors turned over, the pins' own rule (`asset/marker.json`); the draft
 //! wherever it is. A pin is read with the brick it
 //! stands in and shown at the camera grid's cell where it stands, its own

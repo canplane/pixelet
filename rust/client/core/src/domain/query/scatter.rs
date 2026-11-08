@@ -8,7 +8,7 @@
 //! and the cells about it (`World::column_surface`); only an edit in its box, asked
 //! of the world as edited, takes it away (pxl-content `generation::placement`).
 
-use pxl_content::generation::{self, DecorQuery, Generated};
+use pxl_content::generation::{self, DecorQuery, Prop};
 use pxl_engine::support::ColumnSurface;
 use pxl_engine::world::PlacedCursor;
 use pxl_engine::FRAC_W;
@@ -58,8 +58,12 @@ impl DecorQuery for DecorWorld<'_, '_> {
 
     /// None where the world lacked a tile on the way: decor generates on what
     /// is held as its tiles say.
-    fn column_surface(&mut self, cell: Zoom, g: [i32; 2]) -> (ColumnSurface<At>, (i32, f32), bool) {
-        let (answer, f) = self.ground.column_surface(cell, g);
+    fn column_surface(
+        &mut self,
+        cell_zoom: Zoom,
+        g: [i32; 2],
+    ) -> (ColumnSurface<At>, (i32, f32), bool) {
+        let (answer, f) = self.ground.column_surface(cell_zoom, g);
         match answer {
             Answer::Exact(Some(top)) => (f, top, true),
             _ => (f, (0, 0.0), false),
@@ -69,7 +73,7 @@ impl DecorQuery for DecorWorld<'_, '_> {
     /// The leaves', which the CPU generates at alone (`generated_at`), its
     /// world answering each cell off its own tiles.
     fn finest(&mut self, _: Zoom, _: [i32; 2]) -> Zoom {
-        GROUND.cell()
+        GROUND.leaf_cell_zoom()
     }
 
     /// Void where the world holds nothing there; as edited, an edit where it
@@ -101,13 +105,13 @@ pub(super) fn generated_at(
 ) -> Option<(Instance, bool)> {
     let candidate = scatter_at(decor.row, cell)?;
     let (g, has_footing, generates) =
-        generation::placement(asked, decor.row, GROUND.cell(), &candidate, boxed);
+        generation::placement(asked, decor.row, GROUND.leaf_cell_zoom(), &candidate, boxed);
     has_footing.then(|| (instance(decor, &g), generates))
 }
 
 /// Decor standing as `g`, as an instance: its box's min corner a leaf
-/// cell's, a unit, its base sunk under it as the GPU draws it (`Generated::sink`).
-pub(super) fn instance(decor: &Decor, g: &Generated) -> Instance {
+/// cell's, a unit, its base sunk under it as the GPU draws it (`Prop::sink`).
+pub(super) fn instance(decor: &Decor, g: &Prop) -> Instance {
     let [x, y, z] = g.at;
     let base = f64::from(z) - f64::from(g.sink) / f64::from(1u32 << FRAC_W);
     let (at, meta) = decor.stand([f64::from(x), f64::from(y), base], g.variant, g.turn, 1.0);

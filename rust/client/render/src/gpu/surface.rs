@@ -11,7 +11,7 @@ use xpute_kit::math::scalar::round;
 use crate::api_spec::surface_role;
 use crate::frame::shader::floor;
 use crate::frame::shader::word::screen::TILE;
-use pxl_engine::{ray, WORKGROUPS_MOST};
+use pxl_engine::{ray, WORKGROUPS_CAP};
 
 /// Slot 0 is never a surface.
 pub const SURFACES: usize = 9;
@@ -23,7 +23,7 @@ pub const SETTLE_TURNS: u32 = 4;
 /// The most pixels the world is drawn at each way, the floor's texture side: every size the
 /// render size's rule allows (`drawn_fits`) lies within it, and the screen's claimed tiles, a
 /// word a tile (ray/cast.rs `CAST_TILES_START`), fit the floor there.
-pub const DRAWN_MOST: [u32; 2] = [floor::MAX_TEXTURE_DIMENSION_2D; 2];
+pub const DRAWN_CAP: [u32; 2] = [floor::MAX_TEXTURE_DIMENSION_2D; 2];
 
 /// The most pixels the world is drawn at in all: the eye's holes (`ray::holes_words`), a word and a
 /// bit a pixel, within 27/64 of the floor's binding, the camera grid's words beside them in the
@@ -31,13 +31,13 @@ pub const DRAWN_MOST: [u32; 2] = [floor::MAX_TEXTURE_DIMENSION_2D; 2];
 pub const DRAWN_AREA: u32 =
     ((floor::MAX_STORAGE_BUFFER_BINDING_SIZE * 27 / 256) as u32 - ray::POOL_WORDS - 1) / 33 * 32;
 
-/// Whether the world drawn at `size` pixels is one every device draws (`render_px`): no side past `DRAWN_MOST`, no more than `DRAWN_AREA` in all, and its screen tiles,
+/// Whether the world drawn at `size` pixels is one every device draws (`render_px`): no side past `DRAWN_CAP`, no more than `DRAWN_AREA` in all, and its screen tiles,
 /// a workgroup each across the pixels' cast's dispatch (cast.wgsl `cast_cs`), within the
 /// floor's workgroups a side.
 pub const fn drawn_fits(size: [u32; 2]) -> bool {
-    size[0] <= DRAWN_MOST[0]
-        && size[1] <= DRAWN_MOST[1]
-        && size[0].div_ceil(TILE) * size[1].div_ceil(TILE) <= WORKGROUPS_MOST
+    size[0] <= DRAWN_CAP[0]
+        && size[1] <= DRAWN_CAP[1]
+        && size[0].div_ceil(TILE) * size[1].div_ceil(TILE) <= WORKGROUPS_CAP
         && size[0] * size[1] <= DRAWN_AREA
 }
 
@@ -61,7 +61,7 @@ pub struct Surface {
     pub wanted_sizes: ((u32, u32), (u32, u32)),
     pub waited_turns: u32,
     /// The frame's depth, the world's and over it what moves on its own
-    /// (gpu/renderer.rs, stage 2), with a stencil (`GATED_DEPTH`):
+    /// (gpu/renderer.rs, stage 2), with a stencil (`MASKED_DEPTH`):
     /// `depth_view` as a pass draws into it,
     /// `depth_only_view` as a binding reads it.
     pub depth: u32,
@@ -138,19 +138,19 @@ impl Surface {
     pub fn render_px(&self) -> (u32, u32) {
         let (w, h) = (self.px_w.max(1) as f64, self.px_h.max(1) as f64);
         let dpr = if self.dpr > 0.0 { self.dpr } else { 1.0 };
-        let most = f64::from(DRAWN_MOST[0].min(DRAWN_MOST[1]));
-        let mut k = (self.ratio / dpr).min(most / w.max(h));
+        let cap = f64::from(DRAWN_CAP[0].min(DRAWN_CAP[1]));
+        let mut k = (self.ratio / dpr).min(cap / w.max(h));
         loop {
-            let size = [w, h].map(|v| round(v * k).clamp(1.0, most) as u32);
+            let size = [w, h].map(|v| round(v * k).clamp(1.0, cap) as u32);
             if drawn_fits(size) {
                 return (size[0], size[1]);
             }
             // The pixels or the tiles past their most: the share a side brought down by the root
             // of the tighter, and a step more, so each turn takes some off.
             let tiles = [0, 1].map(|a| f64::from(size[a].div_ceil(TILE)));
-            let limit = f64::from(WORKGROUPS_MOST) / (tiles[0] * tiles[1]);
+            let tile_share = f64::from(WORKGROUPS_CAP) / (tiles[0] * tiles[1]);
             let area = f64::from(DRAWN_AREA) / (f64::from(size[0]) * f64::from(size[1]));
-            k *= libm::sqrt(limit.min(area)) * (1.0 - 1.0 / most);
+            k *= libm::sqrt(tile_share.min(area)) * (1.0 - 1.0 / cap);
         }
     }
 }

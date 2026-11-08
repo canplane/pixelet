@@ -28,7 +28,7 @@ struct Resolve {
 // jitter moved there since, and the frame takes its even share of the
 // sequence counted from the frame it changed in, the first still frame half:
 // that frame and `TILE_JITTERS - 1` still frames (pxl-engine
-// `screen::CLAIMED_FOR`).
+// `screen::DAMAGE_FRAMES`).
 
 // How far, in the spread of the pixels about it, what the frames before
 // left may lie from their mean.

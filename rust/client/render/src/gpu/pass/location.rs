@@ -180,14 +180,14 @@ impl LocationPass {
     }
 
     /// Each draw's uniform in a slot of its own, written once before the
-    /// pass where the lists it is made from `moved`; and every upload group
+    /// pass where the lists it is made from `changed`; and every upload group
     /// the zones will bind, so drawing makes nothing that outlives its frame.
     pub fn prepare(
         &mut self,
         g: &Gpu,
         draws: &Draws,
         uniforms: &[f32],
-        moved: bool,
+        changed: bool,
         uploads: &mut Uploads,
     ) {
         let c = self.color;
@@ -203,7 +203,7 @@ impl LocationPass {
             self.zone.layouts[1],
             zones.clone().count() as u32,
             zones.clone(),
-            moved,
+            changed,
             put,
         );
         for d in zones {

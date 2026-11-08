@@ -199,7 +199,7 @@ fn missing_reference_refused() {
             ],
         ),
         (
-            "a root listed twice",
+            "a root list_of twice",
             &[(r#""nodes":[0]"#, r#""nodes":[0,0]"#)],
         ),
         (

@@ -9,7 +9,7 @@ use crate::sys::io::loader::{load_image, load_of};
 use pxl_content::generation;
 use pxl_spec::asset::decor::{Decor, DECORS};
 
-/// One a variant at most, each its draw group (pxl-content scatter.rs
+/// One a variant at most, each its draw group (pxl-content generation.rs
 /// `GROUPS`): two variants naming one model reach one (`model_of`).
 pub const MODELS_MAX: usize = generation::GROUPS as usize;
 

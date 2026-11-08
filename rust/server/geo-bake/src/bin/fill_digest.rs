@@ -24,11 +24,11 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use fnv::FnvHasher;
-use pxl_engine::overwrite::{self, Columns, NodeSlot};
+use pxl_engine::object::{self, Columns, NodeSlot};
 use pxl_engine::way::tree::{self, Read};
 use pxl_engine::{clipmap, fill};
 use pxl_geo_bake::pyramid::{Base, TileSet};
-use pxl_spec::bake::tile::terrain::{self, FilledBrick, TerrainTile};
+use pxl_spec::bake::tile::terrain::{self, BrickWords, TerrainTile};
 use pxl_spec::directory;
 use pxl_spec::space::coord::zoom::Zoom;
 
@@ -116,7 +116,7 @@ fn key(root: &Path, set: &Path) -> Result<String, String> {
 fn walk(
     l: &impl Columns,
     slot: NodeSlot,
-    (zoom, cell): (Zoom, Zoom),
+    (zoom, cell_zoom): (Zoom, Zoom),
     at: [i32; 3],
     h: &mut FnvHasher,
 ) {
@@ -127,7 +127,7 @@ fn walk(
     }
     h.write_u32(1 + u32::from(slot.is_folded()));
     h.write_u32(l.data(slot.slot()));
-    if slot.is_folded() && zoom < cell {
+    if slot.is_folded() && zoom < cell_zoom {
         for k in 0..8 {
             let c = [
                 2 * at[0] + (k & 1),
@@ -136,8 +136,8 @@ fn walk(
             ];
             walk(
                 l,
-                overwrite::child(l, slot, zoom + 1, c),
-                (zoom + 1, cell),
+                object::child(l, slot, zoom + 1, c),
+                (zoom + 1, cell_zoom),
                 c,
                 h,
             );
@@ -148,19 +148,19 @@ fn walk(
 /// A brick's line: its levels' words, the child groups its build took and
 /// holds, and its tree under each of its own nodes along z its ways meet
 /// and two past either end.
-fn line(name: &str, k: u32, b: &FilledBrick<'_>) -> String {
+fn line(name: &str, k: u32, b: &BrickWords<'_>) -> String {
     let at = clipmap::BOUNDS_AT as usize;
     let mut levels = FnvHasher::default();
     for w in &b.column[at..at + clipmap::BOUND_WORDS as usize] {
         levels.write_u32(*w);
     }
-    let (z0, nodes) = fill::root_span(b.column, 0, b.cell);
-    let top = b.cell - clipmap::BRICK_SHIFT;
+    let (z0, nodes) = fill::root_span(b.column, 0, b.cell_zoom);
+    let top = b.cell_zoom - clipmap::BRICK_SHIFT;
     let (l, mut sub) = (Read(b.pool), FnvHasher::default());
     if nodes > 0 {
         for z in z0 - 2..z0 + nodes as i32 + 2 {
-            let slot = tree::cursor(&l, b.root, b.cell, top, [0, 0, z]);
-            walk(&l, slot, (top, b.cell), [0, 0, z], &mut sub);
+            let slot = tree::cursor(&l, b.root, b.cell_zoom, top, [0, 0, z]);
+            walk(&l, slot, (top, b.cell_zoom), [0, 0, z], &mut sub);
         }
     }
     format!(

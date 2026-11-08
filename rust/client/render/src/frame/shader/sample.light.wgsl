@@ -4,7 +4,7 @@
 // `LIGHT_SAMPLE` slots, taken off what the cast casts, each ray at its tile's band.
 
 fn sample_lattice() -> vec2<u32> {
-  return vec2<u32>(head_word(LIGHT_HEAD_SAMPLES_ACROSS));
+  return vec2<u32>(header_word(LIGHT_HEADER_SAMPLES_ACROSS));
 }
 
 /// The sample the thread at `id` takes: one of the tiles listed as fed, `NONE` past them
@@ -15,10 +15,10 @@ fn sample_item(id: vec2<u32>) -> vec2<u32> {
 
 /// The samples a run takes: those of the tiles listed as fed, a sample's place its tile's
 /// place's samples in order (light_list.wgsl `light_item_at`).
-fn samples_listed() -> u32 {
+fn sample_cnt() -> u32 {
   let per = (LIGHT_TILE / LIGHT_SAMPLE) * (LIGHT_TILE / LIGHT_SAMPLE);
   let n = light_tiles();
-  return in_room(beams[listed_at(LIGHT_LISTED_FED)], n * n) * per;
+  return in_cap(beams[list_cnt_at(LIGHT_LIST_SOURCES)], n * n) * per;
 }
 
 fn sample_queued(k: u32) -> vec2<u32> {

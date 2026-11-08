@@ -1,4 +1,4 @@
-//! `decor_gate_cs` by hand (frame/shader/decor_gate.wgsl) answers as the rule it states: of each
+//! `decor_cull_cs` by hand (frame/shader/decor_cull.wgsl) answers as the rule it states: of each
 //! region's instances, a frame through the gate lists exactly those whose ball (decor_ball.wgsl)
 //! meets the claimed tiles' box as the frame sees it, at the region's own place, and the
 //! region's args with their count, through the screen's gate, its view a perspective, and the
@@ -14,7 +14,7 @@ use gpu::Gpu;
 use pxl_content::generation::{self, drawn};
 use pxl_engine::light;
 use pxl_render::frame::shader::record::{
-    compute, src, COMPUTE_DECOR_GATE, COMPUTE_DECOR_GATE_ARGS,
+    compute, src, COMPUTE_DECOR_CULL, COMPUTE_DECOR_CULL_ARGS,
 };
 use pxl_render::frame::shader::word::frame::EYE;
 use pxl_render::frame::shader::word::FRAME_FLOATS;
@@ -46,7 +46,7 @@ const LIGHT: Target = Target {
 fn device() -> Option<Gpu> {
     let gpu = Gpu::new();
     if gpu.is_none() {
-        eprintln!("no adapter: decor_gate skipped");
+        eprintln!("no adapter: decor_cull skipped");
     }
     gpu
 }
@@ -146,13 +146,13 @@ fn inside(t: &Target, m: &M4, c: [f64; 3], r: f64) -> f64 {
 }
 
 #[test]
-fn a_gated_frame_lists_the_instances_that_meet_its_box() {
+fn a_masked_frame_lists_the_instances_that_meet_its_rect() {
     let Some(gpu) = device() else { return };
     lists_what_meets(&gpu, &SCREEN, &perspective([0.0, -120.0, 60.0], 1.0));
 }
 
 #[test]
-fn a_gated_light_map_lists_the_instances_that_meet_its_box() {
+fn a_masked_light_map_lists_the_instances_that_meet_its_rect() {
     let Some(gpu) = device() else { return };
     lists_what_meets(&gpu, &LIGHT, &orthographic([60.0, -90.0, 200.0], 128.0));
 }
@@ -238,8 +238,8 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
     let uniforms_buf = gpu.buffer(&uniforms, storage);
     let args_buf = gpu.buffer(&args, storage);
     let instances_buf = gpu.buffer(&instances, storage);
-    let gated = gpu.buffer(&vec![u32::MAX; instances.len()], storage);
-    let gated_args = gpu.buffer(&vec![u32::MAX; args.len()], storage);
+    let masked = gpu.buffer(&vec![u32::MAX; instances.len()], storage);
+    let culled_args = gpu.buffer(&vec![u32::MAX; args.len()], storage);
     let box_buf = gpu.buffer(&t.claimed, storage);
     let regions_buf = gpu.buffer(&region_words, storage);
     let tiles_buf = gpu.buffer(&tiles, wgpu::BufferUsages::UNIFORM);
@@ -247,8 +247,8 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
         (0, frame_buf.as_entire_binding()),
         (1, uniforms_buf.as_entire_binding()),
         (3, instances_buf.as_entire_binding()),
-        (4, gated.as_entire_binding()),
-        (5, gated_args.as_entire_binding()),
+        (4, masked.as_entire_binding()),
+        (5, culled_args.as_entire_binding()),
         (6, box_buf.as_entire_binding()),
         (7, regions_buf.as_entire_binding()),
         (31, tiles_buf.as_entire_binding()),
@@ -258,23 +258,23 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
         gpu.pipeline(src(shader), entry)
     };
     gpu.dispatch(
-        &pipeline(COMPUTE_DECOR_GATE_ARGS),
+        &pipeline(COMPUTE_DECOR_CULL_ARGS),
         &[
             (2, args_buf.as_entire_binding()),
-            (5, gated_args.as_entire_binding()),
+            (5, culled_args.as_entire_binding()),
         ],
         [drawn::REGIONS.div_ceil(64), 1, 1],
     );
     gpu.dispatch(
-        &pipeline(COMPUTE_DECOR_GATE),
+        &pipeline(COMPUTE_DECOR_CULL),
         &binds,
         [CAP.div_ceil(64), 1, 1],
     );
-    let got_args = gpu.read(&gated_args);
-    let got = gpu.read(&gated);
+    let got_args = gpu.read(&culled_args);
+    let got = gpu.read(&masked);
 
     let radius = f64::from(generation::TALLEST + generation::WIDEST);
-    let (mut listed, mut left, mut near, mut wrong) = (0, 0, 0, Vec::new());
+    let (mut list_of, mut left, mut near, mut wrong) = (0, 0, 0, Vec::new());
     let mut first = 0u32;
     for (r, &count) in counts.iter().enumerate() {
         let a = r * drawn::ARGS_WORDS as usize;
@@ -292,7 +292,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
         let have: BTreeSet<u32> = got[at..at + n as usize].iter().copied().collect();
         if have.len() != n as usize {
             wrong.push(format!(
-                "region {r}: {n} listed, {} of them apart",
+                "region {r}: {n} list_of, {} of them apart",
                 have.len()
             ));
         }
@@ -311,19 +311,19 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
             let wants = d > 0.0;
             if wants != have.contains(&slot) {
                 wrong.push(format!(
-                    "region {r} slot {slot}: listed {}, {d:+} from the box",
+                    "region {r} slot {slot}: list_of {}, {d:+} from the box",
                     !wants
                 ));
             }
-            listed += u32::from(wants);
+            list_of += u32::from(wants);
             left += u32::from(!wants);
         }
         first += count;
     }
-    eprintln!("{total} instances: {listed} meet the box, {left} past it, {near} within a hair");
+    eprintln!("{total} instances: {list_of} meet the box, {left} past it, {near} within a hair");
     assert!(
-        listed > 0 && left > 0,
-        "the case lists all or none: {listed} {left}"
+        list_of > 0 && left > 0,
+        "the case lists all or none: {list_of} {left}"
     );
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }

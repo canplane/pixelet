@@ -48,9 +48,9 @@ pub const ARGS_CNT: u32 = 8;
 pub const ARGS_WORDS: u32 = 9;
 pub const ASKED_AT: u32 = crate::STORAGE_ALIGN_WORDS;
 /// The faces' asks the holes' stops open past the samples' (`record`), laid as theirs.
-pub const STOP_ASKED_AT: u32 = 2 * crate::STORAGE_ALIGN_WORDS;
+pub const HIT_ASKED_AT: u32 = 2 * crate::STORAGE_ALIGN_WORDS;
 /// The args' words, the draw's and both faces' asks'.
-pub const WORDS: u32 = STOP_ASKED_AT + ARGS_WORDS;
+pub const WORDS: u32 = HIT_ASKED_AT + ARGS_WORDS;
 pub const FACES_LANES: u32 = 64;
 pub const EYED: u32 = 1 << 29;
 pub const STALE: u32 = 1 << 30;
@@ -68,9 +68,9 @@ pub const fn draw_word(voxel: u32, lacks: bool, eyed: bool, fresh: bool) -> u32 
 }
 const _: () = assert!(
     ARGS_WORDS <= ASKED_AT
-        && ASKED_AT + ARGS_WORDS <= STOP_ASKED_AT
+        && ASKED_AT + ARGS_WORDS <= HIT_ASKED_AT
         && (ASKED_AT * 4).is_multiple_of(256)
-        && (STOP_ASKED_AT * 4).is_multiple_of(256)
+        && (HIT_ASKED_AT * 4).is_multiple_of(256)
 );
 
 /// A voxel's faces drawn, a bit a side, six: each face some ray entered it through

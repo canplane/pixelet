@@ -180,15 +180,15 @@ impl<'a> Finish<'a> {
         }
     }
 
-    /// The tiles' uniform: every tile, or those changed fewer than `claimed_for` frames
+    /// The tiles' uniform: every tile, or those changed fewer than `damage_frames` frames
     /// before frame 9.
-    fn claim(&self, claimed_for: u32) {
+    fn claim(&self, damage_frames: u32) {
         let across = WORLD.map(|v| v.div_ceil(SIDE));
         let grow = WORLD[0] as f32 / CANVAS[0] as f32;
         let words = [
             across[0],
             across[1],
-            claimed_for,
+            damage_frames,
             9,
             (WORLD[0] as f32).to_bits(),
             (WORLD[1] as f32).to_bits(),

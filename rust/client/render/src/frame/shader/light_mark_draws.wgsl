@@ -2,7 +2,7 @@
 
 // The drawn receivers of the shadow map, each the eye sees standing by the world's one rule
 // (light_mark.wgsl, `Light::box_tiles`): what the host draws that reads the map, the box each
-// stands within as its draw is recorded, a workgroup each (`light::STANDS_AT`); then
+// stands within as its draw is recorded, a workgroup each (`light::RECEIVER_BOXES_AT`); then
 // the decor generated, a thread a slot of its instances (gpu/generator.rs), as many as
 // are placed, where each stands, as decor_compact.wgsl lays it, the workgroups as many as the
 // cast's one thread opens in a buffer of their own, which this pass reads its count from and
@@ -11,7 +11,7 @@
 // meets the view (`eye::sees`); a host's box stands, as every receiver's does (`box_tiles`), and
 // a decor within the reach by that box stands on its footprint (`Light::corner_tiles`), the
 // propagation's way up holding what it lifts over it (light_propagate.wgsl `up`). The host's
-// are those gpu/draw.rs `DrawList` records, no more than `light::STANDS`. Run after decor is
+// are those gpu/draw.rs `DrawList` records, no more than `light::RECEIVER_BOXES`. Run after decor is
 // placed and the world's receivers stood, before the propagation.
 
 /// The decor compacted this frame as its draws read it (decor_compact.wgsl
@@ -45,7 +45,7 @@ fn instance_anchor(axis: u32, o: i32) -> f32 {
   let a = i32(drawing_at(DRAWN_ANCHOR + axis));
   // The anchor and the eye in unit cells, which wrap round the world on X.
   let d = a - (o >> FRAC_W);
-  return f32(select(d, wrap_idx(LEAF_CELL, d), axis == 0u)) - f32(o & ((1i << FRAC_W) - 1i)) * (1.0 / f32(1u << FRAC_W));
+  return f32(select(d, wrap_idx(LEAF_CELL_ZOOM, d), axis == 0u)) - f32(o & ((1i << FRAC_W) - 1i)) * (1.0 / f32(1u << FRAC_W));
 }
 
 /// Where placed slot `k` stands, its base middle as drawn, units from the eye at Q3
@@ -80,18 +80,18 @@ fn light_mark_draws_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_i
   // past them a placed decor a thread.
   var first = 0u;
   var lanes = 1u;
-  if (group.x < LIGHT_STANDS) {
-    if (group.x >= u32(head[LIGHT_STANDS_AT].x)) {
+  if (group.x < LIGHT_RECEIVER_BOXES) {
+    if (group.x >= u32(header[LIGHT_RECEIVER_BOXES_AT].x)) {
       return;
     }
-    lo = bitcast<vec3<f32>>(head[LIGHT_STANDS_AT + 1u + 2u * group.x].xyz);
-    hi = bitcast<vec3<f32>>(head[LIGHT_STANDS_AT + 2u + 2u * group.x].xyz);
+    lo = bitcast<vec3<f32>>(header[LIGHT_RECEIVER_BOXES_AT + 1u + 2u * group.x].xyz);
+    hi = bitcast<vec3<f32>>(header[LIGHT_RECEIVER_BOXES_AT + 2u + 2u * group.x].xyz);
     foot_lo = lo;
     foot_hi = hi;
     first = lane;
     lanes = ROW_LANES;
   } else {
-    let k = (group.x - LIGHT_STANDS) * ROW_LANES + lane;
+    let k = (group.x - LIGHT_RECEIVER_BOXES) * ROW_LANES + lane;
     if (k >= instance_cnt()) {
       return;
     }

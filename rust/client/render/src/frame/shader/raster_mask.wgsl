@@ -1,4 +1,4 @@
-// pxl-render/frame/shader/raster_gate.wgsl
+// pxl-render/frame/shader/raster_mask.wgsl
 
 // The gate the samples' raster is drawn through in a frame not drawn whole
 // (gpu/ray/raster.rs `draw`), its depth cleared to the nearest: each claimed

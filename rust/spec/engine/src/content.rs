@@ -21,11 +21,11 @@ pub trait Content {
     /// `FULL` is a cave all through.
     fn hollow(node: (Zoom, [i32; 3])) -> u32;
 
-    /// What the ground is in cell `z` of a column of `cell` whose palette
+    /// What the ground is in cell `z` of a column of `cell_zoom` whose palette
     /// index is `palette_idx` and whose top is `top` cells: by depth under
     /// its top, `value::VOID` over it, `value::UNKNOWN` under its bedrock and
     /// for the wall all through.
-    fn by_depth(cell: Zoom, palette_idx: u32, top: i32, z: i32) -> u32;
+    fn by_depth(cell_zoom: Zoom, palette_idx: u32, top: i32, z: i32) -> u32;
 
     /// The bedrock's top under a face at `face` leaf cells, in leaf cells:
     /// the lowest a cube may reach there.

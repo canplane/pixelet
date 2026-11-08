@@ -15,17 +15,17 @@
 
 use pxl_engine::answer::FULL;
 use pxl_engine::seed::node_seed;
-use pxl_engine::{Zoom, LEAF_CELL};
+use pxl_engine::{Zoom, LEAF_CELL_ZOOM};
 
 use crate::param::cave::{BLOCKS_A_TUNNEL, NUDGE, ROOT_TUNNELS};
 use crate::share::halve;
 
 /// The root cube, 256 units: every one holds `ROOT_TUNNELS`.
-pub const ROOT: Zoom = LEAF_CELL - 8;
+pub const ROOT: Zoom = LEAF_CELL_ZOOM - 8;
 /// The pipe cell, 8 units, a tunnel's step.
-pub const PIPE: Zoom = LEAF_CELL - 3;
+pub const PIPE: Zoom = LEAF_CELL_ZOOM - 3;
 /// A block, 2 units, what a pipe cell hollows a whole of.
-pub const BLOCK: Zoom = LEAF_CELL - 1;
+pub const BLOCK: Zoom = LEAF_CELL_ZOOM - 1;
 /// The classes' zooms: a tunnel of class `k` starts in a node there.
 /// The classes a tunnel is of, by the size of the node it starts in.
 const CLASSES: usize = 5;
@@ -72,7 +72,7 @@ const NONE: Piece = Piece {
 /// What a node holds: its piece of a tunnel (none: no blocks) and the
 /// tunnels of each class not yet started in it.
 #[derive(Clone, Copy, Debug)]
-struct Holds {
+struct CaveNode {
     piece: Piece,
     tunnels: [u32; CLASSES],
 }
@@ -80,7 +80,7 @@ struct Holds {
 /// Tunnels of class `k` a node at `zoom` with no piece may be handed: one at
 /// the class's own zoom, four children's a step coarser (a node starting its
 /// own takes at most four).
-const fn room(k: usize, zoom: Zoom) -> u32 {
+const fn cap(k: usize, zoom: Zoom) -> u32 {
     if zoom > CLASS[k] {
         0
     } else {
@@ -317,7 +317,7 @@ fn hand_down(node: (Zoom, [i32; 3]), p: Piece, want: u32) -> (Piece, u32) {
 /// The node's tunnels not yet started handed to its children no piece
 /// passes, child `want`'s: each class halved across, then along, then up
 /// (`halve`), by a hash's weight alike each side, each half's room what its
-/// children can start (`room`).
+/// children can start (`cap`).
 fn tunnels_down(
     node: (Zoom, [i32; 3]),
     tunnels: [u32; CLASSES],
@@ -328,7 +328,7 @@ fn tunnels_down(
     let mut out = [0u32; CLASSES];
     let mut k = 0;
     while k < CLASSES {
-        let r = room(k, child);
+        let r = cap(k, child);
         let mut n = tunnels[k];
         let h = if n > 0 {
             node_seed(SPLIT ^ k as u32, node)
@@ -345,14 +345,14 @@ fn tunnels_down(
                 1 => 0xcc,
                 _ => 0xf0,
             };
-            let rooms = [
+            let caps = [
                 (keep & !upper).count_ones() * r,
                 (keep & upper).count_ones() * r,
             ];
             let u = (h >> (8 * side)) & 0xff;
             let weight = 0x4000 + u * 0x80;
             let w = weight << 16 | (h.rotate_left(11 * side + 5) & 0xffff);
-            let lo = halve(n, rooms, w);
+            let lo = halve(n, caps, w);
             let up = want >> side & 1 == 1;
             n = if up { n - lo } else { lo };
             keep &= if up { upper } else { !upper };
@@ -365,10 +365,10 @@ fn tunnels_down(
 }
 
 /// What the node holds, from its root down.
-fn holds(node: (Zoom, [i32; 3])) -> Holds {
+fn holds(node: (Zoom, [i32; 3])) -> CaveNode {
     let (zoom, c) = node;
     let at = |z: Zoom| [c[0] >> (zoom - z), c[1] >> (zoom - z), c[2] >> (zoom - z)];
-    let mut h = Holds {
+    let mut h = CaveNode {
         piece: NONE,
         tunnels: ROOT_TUNNELS,
     };
@@ -395,7 +395,7 @@ fn holds(node: (Zoom, [i32; 3])) -> Holds {
         } else {
             hand_down(here, h.piece, i)
         };
-        h = Holds {
+        h = CaveNode {
             piece,
             tunnels: tunnels_down(here, h.tunnels, on, i),
         };
@@ -530,9 +530,9 @@ fn blocks(node: (Zoom, [i32; 3])) -> u32 {
 pub fn hollow(node: (Zoom, [i32; 3])) -> u32 {
     let (zoom, c) = node;
     // Finer than a leaf, its leaf's.
-    let (zoom, c) = if zoom > LEAF_CELL {
-        let t = zoom - LEAF_CELL;
-        (LEAF_CELL, [c[0] >> t, c[1] >> t, c[2] >> t])
+    let (zoom, c) = if zoom > LEAF_CELL_ZOOM {
+        let t = zoom - LEAF_CELL_ZOOM;
+        (LEAF_CELL_ZOOM, [c[0] >> t, c[1] >> t, c[2] >> t])
     } else {
         (zoom, c)
     };
@@ -543,7 +543,7 @@ pub fn hollow(node: (Zoom, [i32; 3])) -> u32 {
         (zoom, blocks((zoom, c)))
     };
     // A block is 8 leaves; FULL is 2^15; the node holds 2^(3(LEAF − zoom)) leaves.
-    let shift = 3 + 15 - 3 * (LEAF_CELL - zoom) as i32;
+    let shift = 3 + 15 - 3 * (LEAF_CELL_ZOOM - zoom) as i32;
     if shift >= 0 {
         let v = n << shift;
         if v > FULL {

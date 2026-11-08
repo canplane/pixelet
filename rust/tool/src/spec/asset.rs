@@ -145,7 +145,7 @@ pub fn ground_colors() -> Result<std::collections::BTreeMap<String, u32>, String
 
 pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
     let spec = read(COLOR_JSON)?;
-    let head: Vec<String> = [
+    let header: Vec<String> = [
         "//",
         "// GENERATED from spec/spec/asset/color.json",
         "//",
@@ -160,7 +160,7 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
     .to_vec();
 
     let mut ts = vec!["// @pxl/client/ui/catalog/asset/color.spec.ts".to_string()];
-    ts.extend(head.iter().cloned());
+    ts.extend(header.iter().cloned());
     ts.extend([
         String::new(),
         "/** Each cube's color as `#rrggbb`, by its number. */".to_string(),
@@ -181,7 +181,7 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
 
     let types = read(CUBE_JSON)?;
     let mut rs = vec!["// pxl-spec/asset/color.spec.rs".to_string()];
-    rs.extend(head);
+    rs.extend(header);
     rs.push(String::new());
     rs.extend(casing_note());
     rs.extend(["", "use super::cube;", "use super::Swatch;"].map(String::from));
@@ -329,7 +329,7 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
         }
     }
 
-    let head: Vec<String> = [
+    let header: Vec<String> = [
         "//",
         "// GENERATED from spec/spec/asset/cube.json",
         "//",
@@ -355,7 +355,7 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
 
     // TS
     let mut ts = vec!["// @pxl/client/ui/catalog/asset/cube.spec.ts".to_string()];
-    ts.extend(head.iter().cloned());
+    ts.extend(header.iter().cloned());
     // Every placeable cube under its heading: the ground's palette entries, and the colors past a ground byte.
     let cube_sections: Vec<(&str, &Entry)> = with_sections(&ground)
         .chain(with_sections(&object).filter(|(_, e)| is_color(e)))
@@ -469,7 +469,7 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
         .find(|e| e.name == "air")
         .ok_or(format!("{CUBE_JSON}: no object.air"))?;
     let mut voxel = vec!["// @pxl/client/abi/voxel.spec.ts".to_string()];
-    voxel.extend(head.iter().cloned());
+    voxel.extend(header.iter().cloned());
     voxel.push(String::new());
     if let Some(doc) = &air.doc {
         voxel.extend(ts_doc(doc, ""));
@@ -495,7 +495,7 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
 
     // Rust
     let mut rs = vec!["// pxl-content/cube.spec.rs".to_string()];
-    rs.extend(head);
+    rs.extend(header);
     rs.push(String::new());
     rs.extend(casing_note());
     rs.extend(
@@ -727,7 +727,7 @@ fn runs(vals: impl Iterator<Item = u32>) -> Vec<String> {
 pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
     let spec = read(DECOR_JSON)?;
     let doc = spec.lines_at("$doc").unwrap_or_default();
-    let head: Vec<String> = [
+    let header: Vec<String> = [
         "//",
         "// GENERATED from spec/spec/asset/decor.json",
         "//",
@@ -756,7 +756,7 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
     let (portable, table) = decor_table(&spec, &ground_palette()?)?;
 
     let mut ts = vec!["// @pxl/client/ui/catalog/asset/decor.spec.ts".to_string()];
-    ts.extend(head.iter().cloned());
+    ts.extend(header.iter().cloned());
     ts.extend(doc.iter().map(|l| format!("// {l}")));
     let mut constants = vec![
         "// @pxl/client/ui/catalog/asset/decor/decor.spec.ts".to_string(),
@@ -805,7 +805,7 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
     ts.push("};".to_string());
 
     let mut rs = vec!["// pxl-spec/asset/decor.spec.rs".to_string()];
-    rs.extend(head.iter().cloned());
+    rs.extend(header.iter().cloned());
     rs.extend(doc.iter().map(|l| format!("// {l}")));
     rs.push("//".into());
     rs.extend(casing_note());
@@ -824,7 +824,7 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
     rs.extend(["}", "", ""].map(String::from));
     rs.extend(table);
     let mut row = vec!["// pxl-content/decor.spec.rs".to_string()];
-    row.extend(head);
+    row.extend(header);
     row.extend(
         [
             "// The decors as the GPU reads them too: how the ground generates each one, the",

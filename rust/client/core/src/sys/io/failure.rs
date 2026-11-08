@@ -14,7 +14,7 @@ use crate::sys::io::room::Refusal;
 /// One value, so a run that ended well carries no failure and a failed one
 /// always does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Ended {
+pub enum Exit {
     Ok,
     Aborted,
     Failed(Failure),
@@ -33,21 +33,21 @@ pub struct Failure {
     pub at: Option<&'static Location<'static>>,
 }
 
-impl Ended {
+impl Exit {
     pub fn outcome(&self) -> Outcome {
         match self {
-            Ended::Ok => Outcome::ok,
-            Ended::Aborted => Outcome::aborted,
-            Ended::Failed(_) | Ended::Refused(_) => Outcome::err,
+            Exit::Ok => Outcome::ok,
+            Exit::Aborted => Outcome::aborted,
+            Exit::Failed(_) | Exit::Refused(_) => Outcome::err,
         }
     }
 }
 
-impl From<Result<(), Failure>> for Ended {
-    fn from(result: Result<(), Failure>) -> Ended {
+impl From<Result<(), Failure>> for Exit {
+    fn from(result: Result<(), Failure>) -> Exit {
         match result {
-            Ok(()) => Ended::Ok,
-            Err(fail) => Ended::Failed(fail),
+            Ok(()) => Exit::Ok,
+            Err(fail) => Exit::Failed(fail),
         }
     }
 }

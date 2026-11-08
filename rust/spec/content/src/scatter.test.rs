@@ -4,7 +4,7 @@ extern crate std;
 
 use super::*;
 use pxl_engine::answer::{eighths, FULL};
-use pxl_engine::clipmap::FIRST_CELL;
+use pxl_engine::clipmap::FIRST_CELL_ZOOM;
 use std::vec::Vec;
 
 /// A decor's cells hold one at its chance: over a square of leaf cells, the
@@ -60,10 +60,10 @@ fn standing_ones_never_meet() {
 fn stands_finer() {
     for decor in &DECORS {
         for v in 0..decor.variants {
-            assert!(stands_at(decor, v, LEAF_CELL));
-            for cell in FIRST_CELL..LEAF_CELL {
-                if stands_at(decor, v, cell) {
-                    assert!(stands_at(decor, v, cell + 1), "{v} at z{cell}");
+            assert!(stands_at(decor, v, LEAF_CELL_ZOOM));
+            for cell_zoom in FIRST_CELL_ZOOM..LEAF_CELL_ZOOM {
+                if stands_at(decor, v, cell_zoom) {
+                    assert!(stands_at(decor, v, cell_zoom + 1), "{v} at z{cell_zoom}");
                 }
             }
         }
@@ -75,7 +75,7 @@ fn stands_finer() {
 #[test]
 fn counts_hand_down_whole() {
     for (k, root) in ROOTS.iter().enumerate() {
-        for z in *root..LEAF_CELL {
+        for z in *root..LEAF_CELL_ZOOM {
             for b in [[0, 0], [5, -3], [-77, 1234], [4000, 9]] {
                 let parent = count(k, z, b);
                 let mut children = 0;
@@ -83,11 +83,14 @@ fn counts_hand_down_whole() {
                     children += count(k, z + 1, [2 * b[0] + (q & 1), 2 * b[1] + (q >> 1)]);
                 }
                 assert!(children <= parent, "{k} at z{z} {b:?}");
-                assert!(parent <= 1 << (2 * (LEAF_CELL - z)), "{k} at z{z} {b:?}");
+                assert!(
+                    parent <= 1 << (2 * (LEAF_CELL_ZOOM - z)),
+                    "{k} at z{z} {b:?}"
+                );
             }
         }
         for c in [[0, 0], [3, 3]] {
-            assert!(count(k, LEAF_CELL, c) <= 1);
+            assert!(count(k, LEAF_CELL_ZOOM, c) <= 1);
         }
     }
 }
@@ -101,13 +104,13 @@ fn stands_as_a_cube_keeps() {
     for d in &DECORS {
         for v in 0..d.variants {
             let [x, y, z] = d.sizes[v as usize];
-            for cell in FIRST_CELL..=LEAF_CELL {
-                let steps = 3 * (UNIT_ZOOM - cell.min(UNIT_ZOOM));
+            for cell_zoom in FIRST_CELL_ZOOM..=LEAF_CELL_ZOOM {
+                let steps = 3 * (UNIT_ZOOM - cell_zoom.min(UNIT_ZOOM));
                 let fill = (u64::from(x * y * z) * u64::from(FULL)) >> steps;
                 assert_eq!(
-                    stands_at(d, v, cell),
-                    cell >= LEAF_CELL || eighths(fill.min(u64::from(FULL)) as u32) >= 1,
-                    "{} {v} z{cell}",
+                    stands_at(d, v, cell_zoom),
+                    cell_zoom >= LEAF_CELL_ZOOM || eighths(fill.min(u64::from(FULL)) as u32) >= 1,
+                    "{} {v} z{cell_zoom}",
                     d.val
                 );
             }
@@ -115,7 +118,7 @@ fn stands_as_a_cube_keeps() {
     }
     let tree = &DECORS[0];
     assert_eq!(tree.sizes[0], [1, 1, 3]);
-    assert!(stands_at(tree, 0, LEAF_CELL - 1) && !stands_at(tree, 0, LEAF_CELL - 2));
+    assert!(stands_at(tree, 0, LEAF_CELL_ZOOM - 1) && !stands_at(tree, 0, LEAF_CELL_ZOOM - 2));
 }
 
 /// A leaf cell's count comes up as often at each of its four places under
@@ -126,7 +129,7 @@ fn counts_land_on_every_quarter() {
     for k in 0..DECORS.len() {
         for y in 0..256 {
             for x in 0..256 {
-                if count(k, LEAF_CELL, [x, y]) > 0 {
+                if count(k, LEAF_CELL_ZOOM, [x, y]) > 0 {
                     by[(x & 1 | (y & 1) << 1) as usize] += 1;
                 }
             }

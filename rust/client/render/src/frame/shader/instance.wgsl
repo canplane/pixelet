@@ -20,7 +20,7 @@ fn draw_translation() -> vec3f {
 @group(3) @binding(0) var<storage, read> instances: array<u32>;
 // The n-th instance a draw draws is the one the n-th word from its list's first
 // (`instance_idx`) names: the instances' own list, or in a frame through the gate the list of
-// those that meet its claimed tiles (decor_gate.wgsl).
+// those that meet its claimed tiles (decor_cull.wgsl).
 @group(3) @binding(1) var<storage, read> order: array<u32>;
 
 // Instance `i`'s word in lane `k`.

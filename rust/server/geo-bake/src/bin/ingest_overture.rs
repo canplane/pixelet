@@ -434,10 +434,10 @@ fn download<'a>(
         .flatten()
     {
         let other = entry.file_name().to_string_lossy().to_string();
-        let listed = out
+        let known = out
             .iter()
             .any(|(p, _)| p.file_name().is_some_and(|n| n.to_string_lossy() == other));
-        if !listed && (other == ty.overture || other.starts_with(&format!("{}.", ty.overture))) {
+        if !known && (other == ty.overture || other.starts_with(&format!("{}.", ty.overture))) {
             let path = entry.path();
             std::fs::remove_dir_all(&path)
                 .or_else(|_| std::fs::remove_file(&path))
@@ -716,7 +716,7 @@ fn add(
             &[],
         )
         .map_err(db)? as i64;
-    let gone = format!(
+    let delete = format!(
         "DELETE FROM {} WHERE release <> $1 AND geom && ST_MakeEnvelope($2, $3, $4, $5, 3857)
            AND ST_XMin(geom) >= $2 AND ST_YMin(geom) >= $3 AND ST_XMin(geom) < $4 AND ST_YMin(geom) < $5",
         ty.table
@@ -726,7 +726,7 @@ fn add(
     for s in shards {
         let [left, bottom, right, top] = s.own;
         let older = tx
-            .execute(&gone, &[&release, &left, &bottom, &right, &top])
+            .execute(&delete, &[&release, &left, &bottom, &right, &top])
             .map_err(db)?;
         let held: i64 = tx.query_one(&staged, &[&s.name]).map_err(db)?.get(0);
         if held == 0 && older > 0 {

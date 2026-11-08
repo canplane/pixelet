@@ -10,8 +10,8 @@
 /// a host's box, and past them the placed decor's where any is placed.
 @compute @workgroup_size(1)
 fn light_mark_draws_open_cs() {
-  let stands = min(u32(head[LIGHT_STANDS_AT].x), LIGHT_STANDS);
+  let stands = min(u32(header[LIGHT_RECEIVER_BOXES_AT].x), LIGHT_RECEIVER_BOXES);
   let placed = instance_cnt();
-  let groups = select(stands, LIGHT_STANDS + workgroups(placed, instance_cap(), ROW_LANES), placed != 0u);
-  draws = array<u32, 3>(min(groups, WORKGROUPS_MOST), 1u, 1u);
+  let groups = select(stands, LIGHT_RECEIVER_BOXES + workgroups(placed, instance_cap(), ROW_LANES), placed != 0u);
+  draws = array<u32, 3>(min(groups, WORKGROUPS_CAP), 1u, 1u);
 }

@@ -5,24 +5,24 @@
 // (`Light::tile_of`), how far from the eye one receives and the tiles a box of them stands
 // on (`Light::reach`, `Light::box_tiles`), and what a slide keeps (`Light::keeps`).
 
-/// The map's side (`light::HEAD_SIZE`).
+/// The map's side (`light::HEADER_SIZE`).
 fn light_size() -> u32 {
-  return head_word(LIGHT_HEAD_SIZE);
+  return header_word(LIGHT_HEADER_SIZE);
 }
 
-/// The cast's number (`light::HEAD_CAST`).
+/// The cast's number (`light::HEADER_CAST`).
 fn cast_number() -> u32 {
-  return head_word(LIGHT_HEAD_CAST);
+  return header_word(LIGHT_HEADER_CAST);
 }
 
-/// The number of the cast that began its epoch (`light::HEAD_EPOCH`).
+/// The number of the cast that began its epoch (`light::HEADER_EPOCH`).
 fn light_epoch() -> u32 {
-  return head_word(LIGHT_HEAD_EPOCH);
+  return header_word(LIGHT_HEADER_EPOCH);
 }
 
-/// Whether the cast's marks take each pixel's footprint (`light::HEAD_FOOTPRINT`).
+/// Whether the cast's marks take each pixel's footprint (`light::HEADER_FOOTPRINT`).
 fn footprint() -> bool {
-  return head_word(LIGHT_HEAD_FOOTPRINT) != 0u;
+  return header_word(LIGHT_HEADER_FOOTPRINT) != 0u;
 }
 
 /// Where a point `v` units from the eye lies on the box, in texels across and down
@@ -42,14 +42,14 @@ fn tile_of(v: vec3<f32>) -> vec2<i32> {
 
 /// Whether box tile `tile` keeps what a cast left in it where the box slid to its
 /// corner from `was` and the eye's zooms moved from the cast before's (`Light::keeps`,
-/// `light::HEAD_RANGE_WAS`).
+/// `light::HEADER_LAST_RANGE`).
 fn keeps_tile(tile: vec2<u32>, was: vec2<i32>) -> bool {
   let n = i32(light_tiles());
   let here = vec2<i32>(tile);
   let held = here + (light_corner() - was) / i32(LIGHT_TILE);
-  let range_was = vec2<u32>(head_word(LIGHT_HEAD_RANGE_WAS), head_word(LIGHT_HEAD_RANGE_WAS + 1u));
+  let last_range = vec2<u32>(header_word(LIGHT_HEADER_LAST_RANGE), header_word(LIGHT_HEADER_LAST_RANGE + 1u));
   return all(held >= vec2<i32>(0)) && all(held < vec2<i32>(n))
-    && tile_band_in(held, range_was) == tile_band(here);
+    && tile_band_in(held, last_range) == tile_band(here);
 }
 
 /// How far from the eye a surface receives the map, in units (`Light::reach`): the effects'

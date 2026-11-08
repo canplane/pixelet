@@ -10,7 +10,7 @@
 //! way/tree.rs `POOL_CHILD_GROUPS`).
 
 use pxl_engine::clipmap::SLOTS;
-use pxl_engine::overwrite::Columns;
+use pxl_engine::object::Columns;
 use pxl_engine::way::tree::{self, Pool, BRICK_CHILD_GROUPS, CHILD_GROUP_WORDS};
 use pxl_render::gpu::api;
 use xpute_core::global::Global;
@@ -61,7 +61,7 @@ static POOL: Global<WayPool> = Global::new();
 /// which asking again never changes; or the heap refused a chunk, which a
 /// page given back may (sys/io/room.rs `Refusal`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Unlaid {
+pub enum PoolRefusal {
     Cap,
     Heap,
 }
@@ -74,7 +74,7 @@ pub fn way_pool() -> &'static mut WayPool {
 impl WayPool {
     /// A run of `n` child groups: the lowest free that holds them, else past
     /// every other, the chunks they reach grown first.
-    pub fn take(&mut self, n: u32) -> Result<Run, Unlaid> {
+    pub fn take(&mut self, n: u32) -> Result<Run, PoolRefusal> {
         if let Some(k) = self.free.iter().position(|r| r[1] >= n) {
             let [first, cnt] = self.free[k];
             if cnt == n {
@@ -139,9 +139,9 @@ impl WayPool {
 
     /// The chunks grown to hold child group `child_group`; refused where it lies past
     /// the cap or the heap refuses, the chunks grown so far kept.
-    fn grow_to(&mut self, child_group: u32) -> Result<(), Unlaid> {
+    fn grow_to(&mut self, child_group: u32) -> Result<(), PoolRefusal> {
         if child_group >= tree::POOL_CHILD_GROUPS {
-            return Err(Unlaid::Cap);
+            return Err(PoolRefusal::Cap);
         }
         let need = (child_group / CHUNK_CHILD_GROUPS + 1) as usize;
         if need > self.chunks.len()
@@ -150,12 +150,12 @@ impl WayPool {
                 .try_reserve_exact(need - self.chunks.len())
                 .is_err()
         {
-            return Err(Unlaid::Heap);
+            return Err(PoolRefusal::Heap);
         }
         while self.chunks.len() < need {
             let mut chunk = Vec::new();
             if chunk.try_reserve_exact(CHUNK_WORDS).is_err() {
-                return Err(Unlaid::Heap);
+                return Err(PoolRefusal::Heap);
             }
             chunk.resize(CHUNK_WORDS, 0);
             self.chunks.push(chunk.into_boxed_slice());
