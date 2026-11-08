@@ -1736,3 +1736,46 @@ At 719 MHz main's p50 is 6.1 times better than the deployed build's and its p95 
 deployed build's p95 has read 437.6 to 1282.1 ms over its runs, on 60–92 timed frames, so 11-07's
 1.2 times at 550 MHz and this 5.7 times are one pair each; no pair at 550 MHz was taken again.
 Against the deployed build's best run, 437.6 ms, main's p95 is 1.7 to 2 times better.
+
+### The eye's stale voxels and the turns without a frame, 11-08
+
+`9c4560ef05` made three changes at once. The eye drew no stale voxel, so a pixel only a stale
+box covered was a hole walked in its frame. A turn whose frame the GPU could not take still
+took in what arrived, started fetches and filled bricks. And a frame began in the turn before
+the GPU was expected to finish the last. Each was run on the S23 against `71b51d722a`, both
+sides with the drive's camera passing through the ground (`453a5434d8`), standing on the
+ridge; 60 s drives, fresh loads by turns, each begun once the AP had cooled to 36 °C. Data are
+under `cache/s23/stale-9c4560ef05/` and `cache/s23/stale-dcff657a80/`.
+
+| run | clock, MHz | frames a second | GPU p50 / p95 | tasks p50 | `light_hit` p95 |
+| --- | --- | --- | --- | --- | --- |
+| base-1 | 615–719 | 8.7 | 64.0 / 282.7 | 3.1 | 105.1 |
+| change-1 | 348–680 | 7.0 | 71.2 / 321.0 | 46.2 | 117.2 |
+| change-2 | 348–719 | 6.7 | 72.4 / 361.4 | 45.1 | 140.0 |
+| base-2 | 550–719 | 8.7 | 65.2 / 289.1 | 3.1 | 108.6 |
+| base-3 | 550–719 | 8.9 | 66.1 / 291.4 | 3.1 | 110.4 |
+| change-3 | 401–719 | 6.8 | 75.5 / 361.3 | 45.8 | 136.2 |
+
+The change lost on every measure. Its frame interval sat at exactly 100 ms at the median in all
+three runs, against 52 to 65 ms, and its tasks took 46 ms a turn against 3. Each of its runs
+ended at 348 to 401 MHz, thermal level 5 or 6, against 550 to 680 MHz, level 1 to 3. The
+Mac's gate passed it, GPU p50 21.63 to 22.15 ms and frames 804 to 779. The code showed why. A
+turn without a frame spent the turn's whole deadline on admits and fills, not the content's
+share, so the phone ran hotter and its GPU slower. The frame's start was timed by the GPU's
+expected time, which the S23's spread (p95 four times p50) put wrong: one frame ran at a time,
+every frame's read landed, and `auto` read the load as high and held the turns at 100 ms.
+Both were reverted (`dcff657a80`), and the stale voxels were measured alone:
+
+| run | clock, MHz | frames a second | GPU p50 / p95 | tasks p50 | `light_hit` p95 |
+| --- | --- | --- | --- | --- | --- |
+| base-1 | 719 | 10.8 | 55.7 / 242.2 | 3.2 | 91.0 |
+| change-1 | 680–719 | 9.5 | 59.3 / 269.3 | 3.1 | 98.2 |
+| change-2 | 615–719 | 8.6 | 65.9 / 290.8 | 3.1 | 108.9 |
+| base-2 | 615–719 | 9.0 | 64.8 / 278.5 | 3.1 | 106.4 |
+| base-3 | 615–719 | 8.6 | 66.9 / 288.3 | 3.2 | 107.6 |
+| change-3 | 550–719 | 8.9 | 68.3 / 292.0 | 3.1 | 112.9 |
+
+base-1 began at 31.8 °C and held 719 MHz throughout; the rest began at 36 °C. At a like clock
+the two sides are alike: `raster_box` p95 2.9 to 3.4 ms and `hole` 8.1 to 9.2 ms on both. The
+stale voxels are kept out of the eye's draw, which a lack's answer from the deepest node held
+(`edd74fc899`) leaves no pixel needing.
