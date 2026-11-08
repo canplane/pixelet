@@ -6,10 +6,10 @@
 
 // ---- asker, export ----
 
-/** Two numbers, answered with their sum and ASK's. */
+/** Carries two numbers. The core answers with their sum plus the number ASK answers. */
 export const SUM = 0x1001;
 
 // ---- asker, import ----
 
-/** A number the runtime answers, which the core adds. */
+/** Asks the runtime for a number, which the core adds to the sum. */
 export const ASK = 0x1002;

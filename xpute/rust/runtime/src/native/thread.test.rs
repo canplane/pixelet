@@ -2,9 +2,9 @@
 
 use super::*;
 
-/// A core that stops ends its thread and not the process, outside the panic hook: the
-/// call it stopped in and every later one come back with none, and the hook is free for
-/// the process's next panic.
+/// A core that stops ends its own thread, not the process, and does so outside
+/// the panic hook. The call it stopped in and every later call return `None`,
+/// and the hook is left free for the process's next panic.
 #[test]
 fn a_stop_ends_the_core_alone() {
     let vcpu = Vcpu {

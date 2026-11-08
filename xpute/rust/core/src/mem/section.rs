@@ -1,14 +1,14 @@
 // xpute-core/mem/section.rs
 
-//! Ranges laid end to end in linear memory, as a linker script places
+//! Ranges laid end to end in a linear memory, as a linker script places
 //! sections at `ALIGN(n)` boundaries. The memory never grows, so a view over
 //! it stays valid for the module's life.
 
-/// What every range begins on and the buddy's smallest block: a 32-bit
-/// machine's page with no MMU, as a core is.
+/// The unit every range begins on, and the heap buddy's smallest block: the
+/// page of a 32-bit machine with no MMU, which is what a core is.
 pub const PAGE_BYTES: u32 = 4096;
 
-// The buddy's leaf is its log2.
+// The buddy takes its smallest block as a log2.
 const _: () = assert!(PAGE_BYTES.is_power_of_two());
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -22,8 +22,9 @@ impl Section {
         self.off + self.bytes
     }
 
-    /// The one way into a section, so nothing written through it lands in a
-    /// neighbor. None past its end.
+    /// The only way into a section, so that nothing written through it lands
+    /// in a neighbor. It answers none for bytes that would run past the
+    /// section's end.
     pub const fn at(&self, off: u32, bytes: u32) -> Option<u32> {
         match off.checked_add(bytes) {
             Some(past) if past <= self.bytes => Some(self.off + off),
@@ -31,10 +32,10 @@ impl Section {
         }
     }
 
-    /// The `n`th of ranges of `bytes` each, laid end to end inside the
-    /// section on `unit`.
+    /// The `n`th of the ranges whose sizes are `bytes`, laid end to end
+    /// inside the section, each aligned to `unit`. The ranges must all fit.
     pub const fn nth(&self, bytes: &[u32], unit: u32, n: usize) -> Section {
-        // Const, so a bare panic rather than a bug report.
+        // A const fn cannot report a bug, so it panics bare.
         if span_of(bytes, unit) > self.bytes {
             panic!()
         }
@@ -54,7 +55,8 @@ pub const fn page_up(n: u32) -> u32 {
     align_up(n, PAGE_BYTES)
 }
 
-/// Includes the last one's rounding.
+/// The span of ranges laid end to end, each aligned to `unit`. It includes
+/// the last range's rounding, so it is where whatever follows begins.
 pub const fn span_of(bytes: &[u32], unit: u32) -> u32 {
     let (mut span, mut i) = (0, 0);
     while i < bytes.len() {

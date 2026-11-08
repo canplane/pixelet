@@ -11,8 +11,9 @@ use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::sys;
 use crate::sys::io::request;
 
-/// The top's rows for the writes of each case, as the store folds them and
-/// as the source folds them (ts/client/src/sys/fs/object_tree.ts).
+/// The golden top rows for each case's writes. The store's fold and the
+/// source's fold (ts/client/src/sys/fs/object_tree.ts) must both produce
+/// them.
 const GOLDEN: &str = include_str!("../../../../../../spec/golden/object/top.tsv");
 
 /// A leaf at `zoom`, `x` shards east of the first.
@@ -26,7 +27,8 @@ fn leaf(x: i32, at: [i32; 3]) -> u128 {
     leaf_at(OBJECT_COARSEST, x, at)
 }
 
-/// The store and the files read emptied, and a scheduler to want them of.
+/// Empties the store and the repository's state, and opens a request
+/// scheduler for `want` to declare files to.
 fn fresh() {
     object().clear();
     *state() = State::default();
@@ -55,7 +57,7 @@ fn written() -> [Write; 4] {
             id: 3,
             ext: None,
         },
-        // Under sea level, the shard's other half of its height.
+        // Below sea level, in the lower half of the shard's height.
         Write {
             at: leaf(0, [5, 8, -3]),
             id: 4,
@@ -83,7 +85,7 @@ fn shard_file(shard: Quadrant) -> Vec<u8> {
     encode_writes(format::OBJECT, &own).unwrap()
 }
 
-/// The top holding `rows`, `<shard, z, fold>`.
+/// A top file holding `rows`, each `<shard, fold>`.
 fn top_file(rows: &[(u64, u32)]) -> Vec<u8> {
     let shard: Vec<String> = rows.iter().map(|r| Quadrant::of_id(r.0).key()).collect();
     let shard: Vec<&str> = shard.iter().map(String::as_str).collect();
@@ -104,8 +106,8 @@ fn top_file(rows: &[(u64, u32)]) -> Vec<u8> {
     [&[format::OBJECT_TOP][..], &pkt].concat()
 }
 
-/// The top's rows the store's folds make of the shards `writes` lie in, by
-/// shard and Z.
+/// The top's rows that the store's folds make of the shards `writes` lie
+/// in, in shard order.
 fn top_of(writes: &[Write]) -> Vec<(u64, u32)> {
     let mut shards: Vec<Quadrant> = writes.iter().map(|w| shard_of(w.at)).collect();
     shards.sort_unstable();
@@ -141,7 +143,7 @@ fn shard_file_round_trip() {
     assert_eq!(held(), own);
 }
 
-/// Another format, or another shard's file, is refused whole.
+/// A file of another format, or another shard's file, is refused whole.
 #[test]
 fn foreign_file_refused() {
     let shard = shard_of(leaf(0, [5, 7, 2]));
@@ -153,8 +155,8 @@ fn foreign_file_refused() {
     assert!(decode_top(&file).is_err());
 }
 
-/// An edit batch reads back as the writes in the order made, erases among
-/// them.
+/// An edit batch reads back as its writes in the order they were made,
+/// erases included.
 #[test]
 fn edit_batch_round_trip() {
     let mut writes = written().to_vec();
@@ -177,8 +179,9 @@ fn edit_batch_round_trip() {
     assert_eq!(rows(&read), rows(&writes));
 }
 
-/// Before the top, only the top is wanted and no edit stands anywhere; no
-/// top is no shard holding any, each read empty without asking.
+/// Before the top is read, only the top is wanted and no edit is allowed
+/// anywhere. An absent top means no shard holds anything, so every shard is
+/// taken as empty without asking.
 #[test]
 fn absent_top_reads_every_shard() {
     let _g = sys::serial();
@@ -194,9 +197,9 @@ fn absent_top_reads_every_shard() {
     assert!(state().wants.is_empty());
 }
 
-/// The top's folds stand where their shards are not read, and give way to
-/// the shard's leaves once it is; a shard it lists is wanted, one it does
-/// not is read empty.
+/// The top's folds stand in for the shards not read yet and give way to a
+/// shard's leaves once it is read. A shard the top lists is wanted; one it
+/// does not list is taken as empty.
 #[test]
 fn top_folds_until_shard_read() {
     let _g = sys::serial();
@@ -220,8 +223,8 @@ fn top_folds_until_shard_read() {
     assert_eq!(held().len(), 3);
 }
 
-/// A file that does not decode is refused: named, not wanted, and wanted
-/// again as new once the client empties it.
+/// A file that does not decode is refused: it is named to the client, not
+/// wanted, and wanted again as new once the client empties it.
 #[test]
 fn refused_file_named() {
     let _g = sys::serial();
@@ -253,8 +256,8 @@ fn save_sends_one_batch() {
     assert!(state().unsent.is_empty());
 }
 
-/// The top's rows the store folds each case's writes to, applied in order
-/// from empty, are the record's, which the source's fold is held to too.
+/// Applied in order to an empty store, each case's writes fold to the golden
+/// top rows, the same rows the source's fold is tested against.
 #[test]
 fn top_golden() {
     let _g = sys::serial();

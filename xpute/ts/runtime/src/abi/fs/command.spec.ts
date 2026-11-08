@@ -6,22 +6,25 @@
 
 // ---- fs, export ----
 
-/** The file at `path` below `root` changed under the core, as what backs it says: what the
- * core read of it is stale, and a read opens it again. */
+/** The file at `path` below `root` changed under the core, as reported by what backs the
+ * root. What the core has read of the file is stale, and to read it again the core opens
+ * it again. */
 export const FS_CHANGED = 0x0305;
 
 // ---- fs, import ----
 
-/** The file at `path` below `root` opened as `fd`, the frame's tag too. Completed with
- * the file's size, or -errno: ENOENT where there is no such file, ECANCELED where FS_CLOSE
- * came first, ENODEV where the machine has no file device. */
+/** Opens the file at `path` below `root` as descriptor `fd`, which is also the frame's tag.
+ * The runtime completes it with the file's size, or with -errno: ENOENT when there is no
+ * such file, ECANCELED when FS_CLOSE came first, and ENODEV when the machine has no file
+ * device. */
 export const FS_OPENAT = 0x0301;
-/** The opened file's first `len` bytes copied to `at` in the core's memory. */
+/** Copies the first `len` bytes of the opened file to `at` in the core's memory. */
 export const FS_READ = 0x0302;
-/** The `len` bytes at `at` added to what the file opened for writing holds. The runtime
- * reads them at FS_CLOSE, and the core keeps them unchanged until FS_CLOSE is completed. */
+/** Appends the `len` bytes at `at` to what the file, opened for writing, will hold. The
+ * runtime reads the bytes at FS_CLOSE, so the core keeps them unchanged until FS_CLOSE is
+ * completed. */
 export const FS_WRITE = 0x0303;
-/** The descriptor ended, the frame's tag too. A file opened for writing is replaced by
- * what was written; an open not yet completed is completed first, with ECANCELED. Completed
- * with 0, or -errno where the file could not be replaced. */
+/** Ends the descriptor, which is also the frame's tag. A file opened for writing is replaced
+ * by what was written to it. An open not yet completed is completed first, with ECANCELED.
+ * The close is completed with 0, or with -errno when the file could not be replaced. */
 export const FS_CLOSE = 0x0304;

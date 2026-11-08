@@ -1,7 +1,8 @@
 // cpp/xpute/kit/status/error.hpp
 
-// An error is its errno, its class and where it was made. A broken invariant
-// is fatal (bug.hpp); a fault from outside is returned as a Result.
+// An error is its errno, its class and the place in the source where it was
+// made. A broken invariant is fatal and goes through bug.hpp; a fault from
+// outside the program is returned as a `Result`.
 
 #pragma once
 
@@ -45,7 +46,8 @@ template <class T> class [[nodiscard]] Result {
     bool ok() const noexcept { return val_.has_value(); }
     explicit operator bool() const noexcept { return ok(); }
 
-    // Asking where there is none is a bug.
+    // Asking a failed result for its value is the caller's bug, and is not
+    // checked.
     T &value() noexcept { return *val_; }
     const T &value() const noexcept { return *val_; }
     T *operator->() noexcept { return &*val_; }

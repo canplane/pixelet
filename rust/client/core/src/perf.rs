@@ -1,11 +1,13 @@
 // pxl-core/perf.rs
 
-//! A read-only instrument for the schedulers. It stands beside the core's
-//! order and reads anything, and production reaches it only where it records: what each frame and each
-//! task cost, in rings laid out by spec/client/core/perf/perf.json,
-//! which the client reads in place (ts/client/src/port/perf.ts) and the
-//! UI prints as a report, beside the place's own long frames
-//! (ts/client/src/bracket.tsx `longFrame`), or exports as a Chrome trace.
+//! The profiler, a read-only instrument for the schedulers. It stands outside
+//! the core's layer order and may read any part of the core, and the rest of
+//! the core reaches it only to record. It records what each frame and each
+//! task cost, in rings laid out by spec/client/core/perf/perf.json. The
+//! client reads the rings in place (ts/client/src/port/perf.ts). The UI
+//! prints them as a report, beside the long frames the platform itself
+//! reports (ts/client/src/service/long-frame.ts), or exports them as a
+//! Chrome trace.
 
 pub mod frame;
 pub mod read;

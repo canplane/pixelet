@@ -1,8 +1,9 @@
 // @pxl/client/ui/component/motion/dim.ts
 
 /**
- * A surface's presence (1 to 0), told to the surface rather than applied as a
- * parent opacity: UIKit renders glass wrongly under any alpha below one.
+ * How present a surface is, from 1 (fully shown) to 0 (gone). A parent tells
+ * its surfaces the dim rather than applying it as its own opacity, because
+ * UIKit renders glass wrongly under any alpha below one.
  */
 
 import { createContext, useContext, useEffect, useRef } from "react";
@@ -15,11 +16,13 @@ export const Dim = createContext<f64>(1);
 
 interface Dimmed {
   level: f64;
-  /** A Motion's props for it. */
+  /** The props that move a Motion to `level`. */
   motion: { from?: Pose; to: Pose; transition: Transition };
 }
 
-/** A change of dim moves as the dim does; anything else as the surface's own fade. */
+/** A surface's level is its own fade times the dim around it. A change of the
+ * dim moves with the dim's transition, and any other change with the
+ * surface's own. */
 export function useDim(
   fade: f64,
   transition: Transition,

@@ -1,7 +1,7 @@
 // pxl-core/door/life.rs
 
-//! The core's life as its runtime tells it (xpute's SYS commands): a runtime attached,
-//! the core about to be frozen, and woken.
+//! Applies the life events the runtime sends as xpute's SYS commands: a
+//! runtime attached, the core about to be frozen, and the core woken.
 
 use super::{on_runtime_attached, State};
 use crate::domain::control::sensor::device_orientation;
@@ -15,17 +15,19 @@ pub(super) fn apply(s: &mut State, life: Life) -> Outcome {
     match life {
         Life::Attach => {
             on_runtime_attached(s);
-            // The settings' slot, read from a turn on: what waits on the
-            // settings, the profiler and the snapshot's, starts once they
-            // are in (turn.rs). The objects are read a shard at a time as
-            // the view asks for them (domain/layer/object/repository.rs).
+            // The settings' slot is opened here and read by the turns that
+            // follow. What waits on the settings, the profiler and the
+            // snapshot, starts once they are in (turn.rs). The objects are
+            // not read here: they are read a shard at a time as the view asks
+            // for them (domain/layer/object/repository.rs).
             settings_open();
-            // The UI holds the core's state from its first render on.
+            // The UI must hold the core's state from its first render on.
             edge::request_world_tick();
             s.snapshot_due = true;
         }
-        // The last sure moment to save: the objects written, and the
-        // position no longer watched while nothing shows it.
+        // Suspend is the last moment a save is sure to happen. The objects
+        // are written, and the position is no longer watched while nothing
+        // shows it.
         Life::Suspend => {
             geolocation::geolocation_visibility(false);
             repository::save();

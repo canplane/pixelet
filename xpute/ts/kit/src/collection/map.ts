@@ -1,9 +1,11 @@
 // @xpute/kit/collection/map.ts
 
 /**
- * A dense key array with an open-addressing index into it (linear probing,
- * backward-shift deletion). A position is the value: callers keep per-entry
- * data in their own lanes and move it when `remove_at` moves an entry.
+ * An index from keys to dense positions. The keys sit in an array with no
+ * holes, and an open-addressing table, with linear probing and backward-shift
+ * deletion, finds a key's position. The map stores no values: a caller keeps
+ * each entry's data in arrays of its own at the entry's position, and moves
+ * that data when `remove_at` moves an entry.
  */
 
 import type { i32, i64, numeric, u32, u64 } from "../abi/word.ts";
@@ -15,14 +17,18 @@ type KeyLane = I64Array | U32Array;
 export interface KeyTraits<K extends numeric> {
   readonly ctor: BigInt64ArrayConstructor | Uint32ArrayConstructor;
   norm(key: K): K;
-  /** A 32-bit mix whose high bits are well spread; the table takes a slot
-   * from the top bits. */
+  /**
+   * A 32-bit hash whose high bits are well spread, because the table takes a
+   * key's home slot from the top bits.
+   */
   hash(key: K): u32;
 }
 
-/** 64-bit keys, compared as signed: a key past 2^63 — an unsigned packed
- * word — folds with asIntN on the way in, so the same number always finds
- * the same entry. `key_at` returns the folded form. */
+/**
+ * 64-bit keys, compared as signed. A key at or above 2^63, such as an unsigned
+ * packed word, is folded into the signed range on the way in, so the same 64
+ * bits always find the same entry. `key_at` returns the folded form.
+ */
 export const I64_KEYS: KeyTraits<i64> = {
   ctor: BigInt64Array,
   norm: (k) => BigInt.asIntN(64, k),
@@ -38,9 +44,12 @@ export const U32_KEYS: KeyTraits<u32> = {
 
 export class IndexedMap<K extends numeric> {
   private _keys: KeyLane;
-  /** Per slot, position + 1; 0 is an empty slot. */
+  /** Each slot holds a position plus one; 0 marks an empty slot. */
   private _table: U32Array;
-  /** 32 − log2(table size): a hash's top bits pick the home slot. */
+  /**
+   * 32 − log2(table size), so that a hash shifted right by it leaves the top
+   * bits, which pick a key's home slot.
+   */
   private _shift: u32;
   private _mask: u32;
   private _size: u32 = 0;
@@ -88,9 +97,10 @@ export class IndexedMap<K extends numeric> {
   }
 
   /**
-   * Removes the entry at `pos` by moving the last entry into it. Returns the
-   * position that entry came from — move your own lanes from there to `pos` —
-   * or `pos` itself when the removed entry was the last.
+   * Removes the entry at `pos` by moving the last entry into its place.
+   * Returns the position the moved entry came from, so that the caller moves
+   * its own data from there to `pos`; when the removed entry was the last,
+   * that is `pos` itself.
    */
   remove_at(pos: u32): u32 {
     this._unplace(this._slot_of(this._keys[pos] as K));
@@ -109,8 +119,11 @@ export class IndexedMap<K extends numeric> {
     this._size = 0;
   }
 
-  /** Every position once, in an order fixed by `seed`: a stride from a start, not a uniform
-   * shuffle. Mutating during the walk is undefined. */
+  /**
+   * Yields every position once, in an order fixed by `seed`. The order is a
+   * stride from a start, not a uniform shuffle. The map must not change
+   * during the walk.
+   */
   *positions_seeded(seed: u64): IterableIterator<u32> {
     const n = this._size;
     if (n === 0) return;
@@ -143,8 +156,11 @@ export class IndexedMap<K extends numeric> {
     return s;
   }
 
-  /** Backward-shift deletion: pull later entries of the probe run into the
-   * hole unless their own home lies cyclically between the hole and them. */
+  /**
+   * Backward-shift deletion. Each later entry of the probe run moves back
+   * into the hole, unless its own home slot lies cyclically between the hole
+   * and the entry.
+   */
   private _unplace(hole: u32): void {
     let i = hole;
     let j = hole;

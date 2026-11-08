@@ -1,9 +1,8 @@
 // pxl-spec/space/coord/zoom.rs
 
-//! Every size is a zoom: X goes once round the world in 2^24 units, so a thing
-//! the world over 2^z wide is at zoom z. A cell's, a square's and a tile's
-//! size are each named by this one number; a bigger zoom is finer, and one
-//! zoom finer is half as wide.
+//! Every size is a zoom: X goes once around the world in 2^24 units, so a thing as wide as
+//! the world divided by 2^z is at zoom z. A cell's, a square's and a tile's size are each
+//! named by this one number; a bigger zoom is finer, and one zoom finer is half as wide.
 
 use super::aabb::Aabb;
 use super::q3::{FRAC_W, Q3};
@@ -13,14 +12,13 @@ use xpute_kit::math::scalar::round;
 
 pub use pxl_engine::Zoom;
 
-/// A unit's: 1u is a z24 cell's side.
+/// The zoom of a unit: 1u is a z24 cell's side.
 pub use pxl_engine::UNIT_ZOOM;
 
-/// The coarsest cube: a tile here is as wide as the world is tall, so the
-/// pyramid is alike on every axis from here finer, and 3D begins. A tile of
-/// it with the world's whole height over it is a **shard**, the unit the world's data
-/// is ingested, baked and kept in; what is ingested of one is it and its
-/// apron.
+/// The coarsest cube: a tile at this zoom is as wide as the world is tall, so the pyramid is
+/// alike on every axis from here on finer, and 3D begins. A tile at this zoom with the
+/// world's whole height over it is a **shard**, the unit in which the world's data is
+/// ingested, baked and kept; what is ingested of one is the shard and its apron.
 pub use pxl_engine::SHARD_ZOOM;
 
 /// Where Z takes its first digit: the cubes under a shard, eight of them, the
@@ -30,13 +28,13 @@ pub const CUBE_ZOOM: Zoom = SHARD_ZOOM + 1;
 /// The finest a point resolves: a fraction's step.
 pub use pxl_engine::FINEST_ZOOM;
 
-/// log2 of `z`'s side in units: negative where finer than a unit. `space/`'s
-/// alone: the lattice is shifted here and nowhere else.
+/// log2 of `zoom`'s side in units, negative where finer than a unit. Only `space/` uses it,
+/// so the lattice is shifted here and nowhere else.
 pub(in crate::space) const fn shamt(zoom: Zoom) -> i32 {
     UNIT_ZOOM as i32 - zoom as i32
 }
 
-/// `z`'s side in units.
+/// `zoom`'s side in units.
 pub const fn units(zoom: Zoom) -> f64 {
     let s = shamt(zoom);
     if s >= 0 {
@@ -87,8 +85,8 @@ pub fn idx_of(zoom: Zoom, at: &Q3) -> [i32; 3] {
     ]
 }
 
-/// Whether axis `axis` has a digit at `zoom`, so a node there stands for part of
-/// it, not the world's whole of it. X goes round.
+/// Whether axis `axis` has a digit at `zoom`, so that a node there stands for part of it, not
+/// for the world's whole extent of it. X wraps around.
 pub const fn has_digit(axis: usize, zoom: Zoom) -> bool {
     axis == 0 || zoom > UNIT_ZOOM - world::EXTENT[axis]
 }

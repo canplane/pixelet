@@ -1,16 +1,17 @@
 // xpute-gpu/runtime.rs
 
-//! The runtime's end of a core's GPU calls on a native device, the counterpart
-//! of ts/gpu/src/runtime.ts: runs a stream's records (spec/gpu/api.json) on a
-//! wgpu device, each object at its handle's slot. It knows nothing of what
-//! the core draws.
+//! The runtime's end of a core's GPU calls on a native device, as
+//! ts/gpu/src/runtime.ts is on the web. It runs a stream's records
+//! (spec/gpu/api.json) on a wgpu device, and keeps each object the core made
+//! at its handle's slot. It knows nothing of what the core draws.
 //!
-//! What finishes after a turn, a read back, the queue's work done or an
-//! async pipeline, which wgpu makes at once, lands at a later turn's `poll`:
-//! the core finds its ticket at the fence a turn or more later (spec
-//! RESULT), as on the web, and nothing here waits.
+//! A request that finishes after its turn, such as a read back, the queue's
+//! work done or an async pipeline, is answered at a later turn's `poll`. That
+//! holds for an async pipeline too, which wgpu makes at once. So the core
+//! finds its ticket at the fence a turn or more later, as on the web (spec
+//! RESULT), and the runtime never waits for an answer.
 //!
-//! Beside a core linked into its own process, `native` holds the runtime and
+//! `native` holds the runtime for a core linked into its own process, and
 //! exports it under xpute's names (`native_abi!`).
 
 mod admit;
@@ -48,20 +49,22 @@ pub use open::{open, Ask, OpenError, Opened};
 #[cfg(test)]
 use admit::FrameGuard;
 
-/// The program's numbers and choices, which the runtime runs by.
+/// What the runtime runs by: the program's numbers (`Numbers`) and the
+/// platform's choices (`native::config`).
 #[derive(Clone, Copy)]
 pub struct Config {
-    /// The format SURFACE_PREFERRED names and DEVICE tells the core, as the
-    /// web's `getPreferredCanvasFormat`.
+    /// The format that SURFACE_PREFERRED stands for and the device's block
+    /// tells the core, as `getPreferredCanvasFormat` gives it on the web.
     pub preferred_format: wgpu::TextureFormat,
     pub configure_at: ConfigureAt,
-    /// The frames admitted and unfinished at once (`GpuRuntime::admit_frame`), and
-    /// each surface's `desired_maximum_frame_latency`; at least one. A
-    /// surface keeps one texture more, so taking one never blocks.
+    /// How many frames may be admitted and unfinished at once
+    /// (`GpuRuntime::admit_frame`); at least one. It is also each surface's
+    /// `desired_maximum_frame_latency`. A surface keeps one texture more than
+    /// that, so taking a texture for an admitted frame never blocks.
     pub frame_latency: u32,
-    /// The staging belt's chunk: as large as a frame's writes, a larger
-    /// write staged across several. The belt holds one more chunk than the
-    /// frame latency.
+    /// The size of one chunk of the staging belt, chosen as large as a
+    /// frame's writes; a larger write is staged across several chunks. The
+    /// belt holds one chunk more than the frame latency.
     pub upload_chunk_bytes: u64,
     pub present_mode: wgpu::PresentMode,
 }
@@ -72,39 +75,44 @@ pub struct GpuRuntime {
     queue: wgpu::Queue,
     names: Names,
     objects: Vec<Option<Object>>,
-    /// At the number the program binds each by.
+    /// Indexed by surface number: the slot of the handle the program binds
+    /// the surface by.
     surfaces: Vec<Surface>,
     preferred_format: wgpu::TextureFormat,
     configure_at: ConfigureAt,
-    /// Where the core asked the device's block written.
+    /// The address where the core asked for the device's block.
     block: Option<u32>,
-    /// Set from wgpu's thread; taken at `poll`.
+    /// Set by wgpu's device-lost callback, on whatever thread wgpu calls it,
+    /// and taken at `poll`.
     gone: Arc<AtomicBool>,
     pending: Vec<Pending>,
     decoder: Decoder,
     decoding: VecDeque<Decoding>,
-    /// A record's words, copied out so the record may write the memory.
+    /// A record's words, copied out of the core's memory so that running the
+    /// record may write that memory.
     scratch: Vec<u32>,
     command_bufs: Vec<wgpu::CommandBuffer>,
-    /// This turn's frame was admitted, so it is counted once presented.
+    /// This turn's frame was admitted, so `present` counts it unfinished.
     admitted: bool,
-    /// This runtime's own count, so another runtime's frames, or a gone device's,
-    /// hold back none of its own.
+    /// The frames this runtime admitted that the queue has not yet finished.
+    /// Each runtime keeps its own count, so no other runtime's frames hold
+    /// back its own.
     unfinished_cnt: Arc<AtomicU32>,
     frame_latency: u32,
     present_mode: wgpu::PresentMode,
-    /// Every buffer write goes through the belt into `uploads`, submitted
-    /// ahead of what follows: `Queue::write_buffer` makes a Metal buffer a write.
+    /// Every buffer write is staged through the belt and copied by
+    /// `uploads`, which is submitted ahead of what follows.
+    /// `Queue::write_buffer` would make a new Metal buffer for each write.
     belt: Belt,
     uploads: Option<wgpu::CommandEncoder>,
 }
 
 impl GpuRuntime {
-    /// `wake` asks for a turn, from any thread (beside a native core, its
-    /// kick): whoever learns of a completion asks for the turn whose `poll`
-    /// writes it.
-    /// A device lost (`Unknown`, not `Destroyed`, which is its owner's doing)
-    /// is told the core at the next turn's edge.
+    /// `wake` asks for a turn and may be called from any thread; beside a
+    /// native core it is the core's kick. Whatever learns of a completion
+    /// calls it, so that the next turn's `poll` writes the answer. A device
+    /// the system loses (`Unknown`) is told the core before the next turn. A
+    /// device lost as `Destroyed` was its owner's doing, and is not told.
     pub fn new(
         adapter: wgpu::Adapter,
         device: wgpu::Device,
@@ -151,8 +159,8 @@ impl GpuRuntime {
     }
 
     /// The device the stream runs on, for the program's own calls on the
-    /// thread that runs the stream: an error scope pushed there holds what
-    /// the records run after it raise.
+    /// thread that runs the stream. An error scope the program pushes there
+    /// catches the errors of the records run after it.
     pub fn device(&self) -> &wgpu::Device {
         &self.device
     }
@@ -166,9 +174,10 @@ impl GpuRuntime {
         }
     }
 
-    /// What the device has answered since, written into `memory`: run on the
-    /// thread that runs the stream, before a turn reads its words. A loss
-    /// ends everything else.
+    /// Writes into `memory` what the device has answered since the last
+    /// poll. Call it on the thread that runs the stream, before each turn
+    /// reads its words. After a loss it writes only the block's LOST STATUS:
+    /// every object and pending request goes with the device.
     pub fn poll(&mut self, memory: &mut Memory<'_>) {
         if self.gone.swap(false, Ordering::AcqRel) {
             self.on_lost(memory);

@@ -33,8 +33,8 @@ fn state_holds_what_was_set() {
 
 #[test]
 fn state_never_holds_a_group_with_offsets() {
-    // Its offsets move per draw (decor's `uniform_at`): set once, it is set
-    // at every draw after.
+    // A group's dynamic offsets change from draw to draw (decor's `uniform_at`), so a group
+    // set with offsets is set again at every draw.
     let mut s = DrawState::default();
     s.set_bind_group(1, 5, &[256]);
     assert!(!s.is_bind_group_set(1, 5, &[256]));

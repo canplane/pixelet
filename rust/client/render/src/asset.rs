@@ -1,5 +1,5 @@
 // pxl-render/asset.rs
 
-//! Shipped assets read into device form: glTF models.
+//! Reads the shipped assets, glTF models, into the form the device draws.
 
 pub mod gltf;

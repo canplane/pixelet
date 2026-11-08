@@ -1,12 +1,13 @@
 // pxl-core/domain/control/input.rs
 
-//! The pointer's gestures and the movement keys: pan, rotate,
-//! pinch/twist/tilt and wheel, what each asks of the camera, and a pan's by
-//! hand, which ends a destination and the following; what the pointer is
-//! over, its hover and its tap, is pxl-core pointer.rs's. Store writes are
-//! coalesced to once a frame (`camera_input_step`).
-//! What the pointer holds comes with each event; when it changes under a
-//! still pointer, the UI resends the move to re-resolve hover.
+//! The pointer's gestures and the movement keys, and what each asks of the
+//! camera: pan, rotate, pinch with its twist and tilt, and the wheel. A pan
+//! by hand ends a pending destination, and a pointer down ends following
+//! the device. What the pointer is over, its hover and its tap, belongs to
+//! pxl-core pointer.rs. Events only gather what they ask, and the camera is
+//! written once a frame (`camera_input_step`). What the pointer holds comes
+//! with each event. When that changes under a still pointer, the UI sends
+//! the move again so that the hover is resolved again.
 
 use std::collections::BTreeMap;
 
@@ -59,10 +60,12 @@ struct Input {
     pointer_y: f64,
     last_x: f64,
     last_y: f64,
-    // Total displacement from pointerdown, not per-event deltas, decides tap vs drag.
+    // A tap is told from a drag by the total displacement since the pointer
+    // went down, not by the moves between events.
     tap_start_x: f64,
     tap_start_y: f64,
-    /// A mouse over the canvas and not dragging, whose hover a new holding redoes.
+    /// A mouse is over the canvas and not dragging. Its hover is picked
+    /// again when what the pointer holds changes (`camera_rehover`).
     hovering: bool,
     hover_pending: bool,
 
@@ -71,18 +74,20 @@ struct Input {
     pending_pan_dy: f64,
     pending_view_x: f64,
     pending_view_y: f64,
-    // Summed before one exp(), which is exact.
+    // The wheel's deltas are summed before a single exp(). That gives the
+    // same zoom as one exp() per delta, since the exponents add.
     pending_wheel_delta_y: Option<f64>,
 
     // ---- movement keys ----
-    /// The held keys' screen direction, unit length or zero.
+    /// The screen direction of the held keys, of unit length, or zero when
+    /// none is held.
     keys: [f64; 2],
-    /// When the keys last panned, in ms.
+    /// The time the keys last panned, in ms.
     keys_at: f64,
 
     // ---- rotate-drag ----
     rotate_turn: Option<Anchor>,
-    /// A tilt is the drag's vertical travel from this anchor.
+    /// The tilt follows the drag's vertical travel since this anchor.
     rotate_tilt: Anchor,
     rotate_drag_start_x: f64,
     rotate_drag_start_y: f64,
@@ -92,7 +97,8 @@ struct Input {
     active_pointers: BTreeMap<i32, PointerPos>,
     pinch_start_dist: f64,
     pinch_tilt: Anchor,
-    /// Anchored once the fingers are far enough apart to read the angle.
+    /// Set once the fingers are far enough apart for their angle to be read
+    /// (`MIN_TWIST_DIST_PX`).
     pinch_twist: Option<Anchor>,
 }
 
@@ -141,8 +147,8 @@ fn update_pointer(s: &mut Input, view_x: f64, view_y: f64) {
     s.pointer_y = -(view_y / height) * 2.0 + 1.0;
 }
 
-/// A pan puts the pivot by hand, so a pending destination is canceled;
-/// tracked, nothing pans.
+/// Runs a pan the hand makes. A pan by hand cancels a pending destination.
+/// While the camera is tracked, nothing pans.
 fn by_hand(pan: impl FnOnce()) {
     if active() != Active::Tracked {
         cancel_destination();
@@ -154,9 +160,10 @@ fn do_pan(dx: f64, dy: f64) {
     by_hand(|| controller::pan(dx, dy));
 }
 
-/// Azimuth follows the pointer's angle about screen center (arcball), tilt a
-/// fixed rate from the drag's start. The drag locks to whichever axis
-/// dominates past AXIS_LOCK_THRESHOLD_PX.
+/// The azimuth follows the pointer's angle about the screen's center, as an
+/// arcball does. The tilt moves at a fixed rate with the drag's travel from
+/// its start. The drag locks to whichever axis dominates once it passes
+/// `AXIS_LOCK_THRESHOLD_PX`.
 fn do_rotate(s: &mut Input, view_x: f64, view_y: f64) {
     if s.rotate_axis_lock == RotateAxisLock::None {
         let total_dx = view_x - s.rotate_drag_start_x;
@@ -186,7 +193,8 @@ fn do_rotate(s: &mut Input, view_x: f64, view_y: f64) {
     let [width, height] = size();
     let dx = view_x - width / 2.0;
     let dyc = view_y - height / 2.0;
-    // atan2 is unstable near the screen center: drop the anchor and re-anchor later.
+    // The angle is unstable near the screen's center, so the anchor is
+    // dropped there and set again once the pointer moves away.
     if libm::hypot(dx, dyc) < MIN_ROTATE_RADIUS_PX {
         s.rotate_turn = None;
         return;
@@ -208,7 +216,8 @@ fn pointer_pair(s: &Input) -> Option<(PointerPos, PointerPos)> {
     Some((*it.next()?, *it.next()?))
 }
 
-/// On the second finger down, and again when a third lifts, so the gesture never jumps.
+/// Runs when the second finger goes down, and again when a third finger
+/// lifts, so the gesture never jumps.
 fn begin_pinch(s: &mut Input) {
     let Some((p0, p1)) = pointer_pair(s) else {
         return;
@@ -234,7 +243,8 @@ fn update_pinch(s: &mut Input) {
     controller::pinch(dist);
 
     let intent = camera_state().intent;
-    // An unmoved control is not asked, so a zoom-only pinch writes no tilt.
+    // A control that did not move is not asked, so a pinch that only zooms
+    // writes no tilt.
     let polar = s.pinch_tilt.ask(midpoint_y, linear(tilt_gain()));
     let polar = (!settings_store().tilt_lock && polar != intent.polar).then_some(polar);
     let angle = libm::atan2(p1.y - p0.y, p1.x - p0.x);
@@ -310,7 +320,8 @@ pub fn camera_pointer_down(
     s.tap_start_x = view_x;
     s.tap_start_y = view_y;
     if s.drag_mode == DragMode::Rotate {
-        // Anchored by do_rotate: the down position may be within MIN_ROTATE_RADIUS_PX.
+        // `do_rotate` sets the turn's anchor, because the down position may
+        // lie within `MIN_ROTATE_RADIUS_PX` of the center.
         s.rotate_turn = None;
         s.rotate_axis_lock = RotateAxisLock::None;
         s.rotate_drag_start_x = view_x;
@@ -368,12 +379,14 @@ pub fn camera_pointer_move(pointer_type: PointerType, pointer_id: i32, view_x: f
     s.drag_pending = true;
 }
 
-/// Where a still pointer let go, the tap's `ndc`.
+/// The tap's position in normalized device coordinates, if the pointer was
+/// panning and stayed still until it let go.
 fn tap_if_still(s: &Input, mode: DragMode) -> Option<[f64; 2]> {
     (!s.did_drag && mode == DragMode::Pan).then_some([s.pointer_x, s.pointer_y])
 }
 
-/// A pointer went up or was canceled; where it tapped, if it was a tap.
+/// A pointer went up or was canceled. Returns where it tapped, if it was a
+/// tap.
 pub fn camera_pointer_up(pointer_type: PointerType, pointer_id: i32) -> Option<[f64; 2]> {
     let s = input();
     if pointer_type == PointerType::Touch {
@@ -388,7 +401,7 @@ pub fn camera_pointer_up(pointer_type: PointerType, pointer_id: i32) -> Option<[
                 }
             }
             1 => {
-                // Already mid-gesture, so the lift is no tap.
+                // The gesture is already under way, so this lift is not a tap.
                 let remaining = *s
                     .active_pointers
                     .values()
@@ -408,8 +421,9 @@ pub fn camera_pointer_up(pointer_type: PointerType, pointer_id: i32) -> Option<[
     }
     let mode = s.drag_mode;
     s.drag_mode = DragMode::None;
-    // A pan moves nothing once the pointer is up, so the characters would not see
-    // the release until something else asked for a turn.
+    // Nothing moves once the pointer is up, so without this tick the
+    // characters would not see the release until something else asked for
+    // a turn.
     request_world_tick();
     tap_if_still(s, mode)
 }
@@ -418,7 +432,8 @@ pub fn camera_pointer_out() {
     input().hovering = false;
 }
 
-/// What the pointer holds changed: a hovering pointer picks again where it stands.
+/// Called when what the pointer holds changes. A hovering pointer picks
+/// again where it stands.
 pub fn camera_rehover() {
     let s = input();
     if s.hovering {
@@ -426,12 +441,13 @@ pub fn camera_rehover() {
     }
 }
 
-/// In CSS pixels.
+/// A wheel turn of `delta_y` CSS pixels.
 pub fn camera_wheel(delta_y: f64) {
     *input().pending_wheel_delta_y.get_or_insert(0.0) += delta_y;
 }
 
-/// Each axis -1, 0 or 1, x to the right and y down.
+/// The held movement keys. Each axis is -1, 0 or 1, with x to the right and
+/// y down.
 pub fn camera_keys(x: i32, y: i32) {
     let s = input();
     let len = libm::hypot(x as f64, y as f64);
@@ -447,14 +463,16 @@ pub fn camera_keys(x: i32, y: i32) {
     request_world_tick();
 }
 
-/// What the pointer and the keys asked of the camera since the last step.
+/// Writes into the camera what the pointer and the keys asked since the
+/// last step. It runs once a frame.
 pub fn camera_input_step() {
     let s = input();
     if s.keys != [0.0; 2] {
         let at = now();
         let share = KEY_PAN_PER_S * (at - s.keys_at) / 1000.0;
         s.keys_at = at;
-        // A key moves the view the way it points, the screen's down being the way's up.
+        // A key moves the view the way it points. The keys' y runs down the
+        // screen and the pan's runs up it, so y changes sign.
         let way = [s.keys[0] * share, -s.keys[1] * share];
         by_hand(|| controller::pan_across(way[0], way[1]));
         request_world_tick();
@@ -478,10 +496,11 @@ pub fn camera_input_step() {
     }
 }
 
-/// Where the pointer is to be picked again, the camera standing where the
-/// tick leaves it: where it moved over the screen, or where it hovers still
-/// and the view `moved` under it (a wheel's zoom, a glide, the keys). What
-/// it is over is pxl-core pointer.rs's to decide.
+/// Where the pointer is to be picked again, after the tick has placed the
+/// camera. It is picked again when it moved over the screen, or when it
+/// hovers still and the view `moved` under it (a wheel's zoom, a glide, the
+/// keys). None while a drag is under way. pxl-core pointer.rs decides what
+/// the pointer is over.
 pub fn rehover_at(moved: bool) -> Option<[f64; 2]> {
     let s = input();
     let asked = core::mem::take(&mut s.hover_pending) || moved && s.hovering;
@@ -492,17 +511,20 @@ pub fn pinching() -> bool {
     input().drag_mode == DragMode::Pinch
 }
 
-/// The orbit's distance is moving: pinched, or settling after a wheel or a pinch.
+/// Whether the orbit's distance is moving: it is being pinched, or it is
+/// settling after a wheel or a pinch.
 pub fn zooming() -> bool {
     active() == Active::Orbit && (pinching() || orbit::zoom_settling())
 }
 
-/// A pointer holds the camera: a pan, a rotate or a pinch is under way.
+/// Whether a pointer holds the camera: a pan, a rotate or a pinch is under
+/// way.
 pub fn dragging() -> bool {
     input().drag_mode != DragMode::None
 }
 
-/// Movement keys are held: the view is being walked, not dragged.
+/// Whether movement keys are held, so the view is walked rather than
+/// dragged.
 pub fn steering() -> bool {
     input().keys != [0.0; 2]
 }

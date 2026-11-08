@@ -1,15 +1,16 @@
 // pxl-render/sample_box.eye.wgsl
 
-// The eye as its samples' stops take it (sample_box.wgsl): whether a sample stopped on its node
-// whole, and where their faces' asks lie.
+// What sample_box.wgsl reads of the eye: whether a sample stopped on its node whole, and where
+// the faces' asks its samples open lie.
 
-/// Whether sample `s` stopped on `k` whole, coarser than the eye asks it from where the ray
-/// starts (`record::stopped_whole`).
+/// Whether sample `s` stopped on `k` whole, that is, on a node coarser than the zoom the eye
+/// asks there from where the sample's ray starts (pxl-engine `record::stopped_whole`).
 fn sample_whole(s: vec2<u32>, k: Node) -> bool {
   return stopped_whole(k, sample_aim(s).origin);
 }
 
-/// The samples' faces' asks (`beam::Grid::asks_at`), a sample's room each.
+/// Where the samples' faces' asks lie (pxl-engine `beam::Grid::asks_at`), with room for one ask
+/// a sample.
 fn sample_asks() -> Asks {
   let n = sample_lattice();
   return Asks(RASTER_ASKED_AT, eye_word(GRID + GRID_ASKS_AT), n.x * n.y);

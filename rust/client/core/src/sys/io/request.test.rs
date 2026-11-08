@@ -1,6 +1,7 @@
 // pxl-core/sys/io/request.test.rs
 //
-// What the requests keep, under the policy and a clock the test sets.
+// Tests of what the request scheduler keeps, under the real policy and a
+// clock the test sets.
 
 use super::*;
 use core::cell::Cell;
@@ -22,8 +23,9 @@ fn at(t: f64) {
     clock::set(|| NOW.get());
 }
 
-/// Room for every test's wants in each stream, and two credits; the requests
-/// the caller's while it holds what this returns.
+/// Opens the scheduler with room for every test's wants in each stream, and
+/// two credits. The caller has the scheduler to itself while it holds the
+/// guard this returns.
 fn begin() -> MutexGuard<'static, ()> {
     let serial = sys::serial();
     at(0.0);
@@ -36,12 +38,12 @@ fn seen(near: f64) -> Order {
     Order { seen: true, near }
 }
 
-/// A class worse than any seen want.
+/// An order that ranks after every seen want, however near.
 fn unseen(near: f64) -> Order {
     Order { seen: false, near }
 }
 
-/// One terrain want, 1, declared and started: its key.
+/// Declares and starts one terrain want, id 1, and returns its key.
 fn one_out() -> (MutexGuard<'static, ()>, u64) {
     let serial = begin();
     declare(Stream::terrain, &[(1, seen(0.0))]);
@@ -51,7 +53,8 @@ fn one_out() -> (MutexGuard<'static, ()>, u64) {
     (serial, starts[0])
 }
 
-/// The keys started and stopped since last taken, every event taken.
+/// Takes every pending event, and returns the keys started and the keys
+/// stopped.
 fn taken() -> (Vec<u64>, Vec<u64>) {
     let (mut starts, mut stops) = (Vec::new(), Vec::new());
     while let Some(event) = take_event() {
@@ -64,7 +67,8 @@ fn taken() -> (Vec<u64>, Vec<u64>) {
     (starts, stops)
 }
 
-/// `stream`'s wants waiting for a credit and out on one.
+/// How many of `stream`'s wants wait for a credit, and how many are out on
+/// one.
 fn counts(stream: Stream) -> (usize, usize) {
     let s = sched();
     let waiting = s.wants[stream as usize]
@@ -126,7 +130,7 @@ fn answer_asked_once() {
 fn failure_backs_off() {
     let (_serial, key) = one_out();
     failed(key, Errno::ENETUNREACH);
-    // A failure is not a withdrawal.
+    // A failure does not withdraw the want.
     for t in 0..5 {
         at(until() * f64::from(t) / 5.0);
         declare(Stream::terrain, &[(1, seen(0.0))]);
@@ -195,7 +199,7 @@ fn heap_refusal_waits_release() {
 fn early_release_not_rewaited() {
     let (_serial, key) = one_out();
     set_counted_heap();
-    // Refused, then room given back before the refusal is settled.
+    // The heap refuses, then gives room back before the refusal is settled.
     let refused = Refusal::now();
     heap_release();
     at(0.0);
@@ -282,8 +286,8 @@ fn cur_demand_said() {
     );
     at(0.0);
     pump();
-    // What the camera left is stopped the turn it leaves, and its credits
-    // start what is wanted now in the same turn.
+    // What the camera left is stopped in the turn it leaves, and the freed
+    // credits start what is wanted now in the same turn.
     let (starts, stops) = taken();
     assert_eq!(stops.len(), 2, "every obsolete attempt is told to stop");
     assert_eq!(starts.len(), 1, "and the current want starts at once");

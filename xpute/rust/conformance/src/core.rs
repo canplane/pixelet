@@ -1,10 +1,11 @@
 // xpute-conformance/core.rs
 
-//! The Rust conformance core, exporting the C++ core's two calls so one
-//! runtime drives both; `boot` takes a layout's seed, lays the front there and
-//! writes its header, as a runtime does for a machine, and answers the header's
-//! offset. Natively the runtime hands it a region, a clock and its call; as
-//! wasm it imports all three, its range starts past the linker's data, and its
+//! The Rust conformance core. It exports the same two calls as the C++
+//! conformance core, so that one runtime drives both. `boot` takes a seed,
+//! lays out the parts of the front by it, writes the front's header as a
+//! runtime does for a machine, and answers the header's offset. Natively,
+//! the runtime hands the core a region, a clock and its call. As wasm, the
+//! core imports all three, its range starts past the linker's data, and its
 //! turn is the module's `run`.
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -31,8 +32,8 @@ const fn page_up(bytes: u32) -> u32 {
     bytes.div_ceil(PAGE_BYTES) * PAGE_BYTES
 }
 
-// What the core shares with its runtime, each on pages of its own, in the order
-// a layout draws (`layout`).
+// The parts the core shares with its runtime, each on pages of its own, which
+// `layout` places in an order the seed draws.
 const HEAD: usize = 0;
 const SQ_DESC: usize = 1;
 const CQ_DESC: usize = 2;
@@ -50,8 +51,9 @@ const PART_BYTES: [u32; PARTS] = [
     spec::STREAM_WORDS * 4,
 ];
 
-/// The most a layout spans: the page it starts past, every part, and the most
-/// pages before each. The core's own state follows, where no layout moves it.
+/// The most any layout spans: the first page, which it starts past, every
+/// part, and the most gap pages before each part. The core's own state lies
+/// here, past every layout, so that no layout moves it.
 const STATE_AT: u32 = {
     let mut end = PAGE_BYTES + PARTS as u32 * spec::GAP_PAGES * PAGE_BYTES;
     let mut p = 0;
@@ -62,7 +64,8 @@ const STATE_AT: u32 = {
     end
 };
 
-/// Only as wasm; a native build allocates from the process.
+/// Where the heap begins, which only the wasm build uses; a native build
+/// allocates from the process.
 const HEAP_AT: u32 = page_up(STATE_AT + core::mem::size_of::<Core>() as u32);
 
 const _: () = assert!(
@@ -104,7 +107,8 @@ struct State {
     word: u32,
 }
 
-/// What CALL calls: a number and an offset.
+/// The import CALL makes: a number, and the offset of the word the runtime
+/// writes in answer.
 struct Inc {
     n: u32,
     at: u32,
@@ -119,9 +123,10 @@ impl Import for Inc {
     }
 }
 
-/// Where each part lies under `seed`, from the range's start: the parts in the
-/// order the seed draws, each past the pages it draws to leave before it. The
-/// first page is left out (the contract's rule 1).
+/// Where each part lies under `seed`, counted from the range's start. The
+/// seed draws the order of the parts and, for each part, how many pages to
+/// leave before it. The first page is never used, since offset 0 names
+/// nothing (ARCHITECTURE.md, the contract's rule 1).
 fn layout(seed: u32) -> [u32; PARTS] {
     let mut rng = SplitMix32::new(seed);
     let mut order: [usize; PARTS] = core::array::from_fn(|p| p);
@@ -138,11 +143,12 @@ fn layout(seed: u32) -> [u32; PARTS] {
     at
 }
 
-/// Every offset written is the memory's, so `range` is added to each.
+/// Every offset the core writes is counted from the memory's start, so
+/// `range`, where the core's range starts, is added to each.
 ///
 /// # Safety
-/// The range is `spec::MEM_BYTES` inside the memory, which outlives the
-/// core, and nothing else writes it while a call runs.
+/// The range must be `spec::MEM_BYTES` long and inside the memory, which
+/// outlives the core, and nothing else may write it while a call runs.
 unsafe fn boot(mem: Memory, range: u32, now: Now, seed: u32) -> u32 {
     let at = layout(seed).map(|off| range + off);
     // SAFETY: the caller's memory; the ranges are the layout's.
@@ -171,7 +177,8 @@ unsafe fn boot(mem: Memory, range: u32, now: Now, seed: u32) -> u32 {
         )
     };
     let door = Door::new(sq, cq, spec::MOST_RAISE);
-    // The stream lies where a GPU stream would: the runtime runs it after every turn.
+    // The stream lies where a GPU stream would, so the runtime runs it after
+    // every turn.
     let front = Head {
         sq_cap: spec::SQ_CAP,
         cq_cap: spec::CQ_CAP,
@@ -200,7 +207,7 @@ unsafe fn boot(mem: Memory, range: u32, now: Now, seed: u32) -> u32 {
 }
 
 /// # Safety
-/// `boot` laid a core out there.
+/// `boot` must have laid out a core at `range` in `mem`.
 unsafe fn turn(mem: Memory, range: u32) -> f64 {
     // SAFETY: the state boot made, which nothing else holds while a turn runs.
     let Core { door, state } = unsafe { &mut *mem.at::<Core>((range + STATE_AT) as usize) };
@@ -212,8 +219,9 @@ unsafe fn turn(mem: Memory, range: u32) -> f64 {
             Ok(Some(0))
         }
         Submission::Program(cmd, pkt) => apply(mem, door, state, cmd, &pkt),
-        // It keeps nothing across its life, reads no file again, and draws
-        // nothing: a surface opened is answered 0, none.
+        // The conformance core keeps nothing across its life, reads no file
+        // again, and draws nothing, so it answers 0 to every other
+        // submission, and a surface it is lent gets the handle 0, none.
         _ => Ok(Some(0)),
     });
     state.stream.publish();
@@ -221,8 +229,8 @@ unsafe fn turn(mem: Memory, range: u32) -> f64 {
 }
 
 /// # Safety
-/// `mem` is `spec::MEM_BYTES`, 8-aligned, outlives the core, and nothing
-/// else writes it while a call runs.
+/// `mem` must be `spec::MEM_BYTES` long, 8-aligned and outlive the core, and
+/// nothing else may write it while a call runs.
 #[cfg(not(target_arch = "wasm32"))]
 #[no_mangle]
 pub unsafe extern "C" fn xpute_conformance_boot(
@@ -238,7 +246,8 @@ pub unsafe extern "C" fn xpute_conformance_boot(
 }
 
 /// # Safety
-/// `mem` is a memory `xpute_conformance_boot` laid a core out over.
+/// `mem` must be a memory over which `xpute_conformance_boot` laid out a
+/// core.
 #[cfg(not(target_arch = "wasm32"))]
 #[no_mangle]
 pub unsafe extern "C" fn xpute_conformance_run(mem: *mut u8, _deadline_ms: f64) -> f64 {
@@ -246,7 +255,7 @@ pub unsafe extern "C" fn xpute_conformance_run(mem: *mut u8, _deadline_ms: f64) 
     unsafe { turn(given(mem), 0) }
 }
 
-/// The memory a native runtime hands over, `spec::MEM_BYTES` from `mem`.
+/// The memory a native runtime hands over: `spec::MEM_BYTES` from `mem`.
 #[cfg(not(target_arch = "wasm32"))]
 fn given(mem: *mut u8) -> Memory {
     // SAFETY: the runtime hands over `spec::MEM_BYTES` from `mem`, kept for the core's life.
@@ -259,7 +268,8 @@ mod wasm {
     use xpute_core::entry::BootInfo;
     use xpute_core::wasm::Config;
 
-    // The heap is the range's last part, from `HEAP_AT` to the memory's end.
+    // The heap is the last part of the range, from `HEAP_AT` to the memory's
+    // end.
     xpute_core::wasm_abi!(
         Config {
             heap_at: |data_end| range_at(data_end) + HEAP_AT,
@@ -273,7 +283,7 @@ mod wasm {
         xpute_core::wasm::now()
     }
 
-    /// The range starts past where the linker stopped.
+    /// The range starts past where the linker's data ends.
     fn range_at(data_end: u32) -> u32 {
         page_up(data_end)
     }
@@ -281,7 +291,8 @@ mod wasm {
     #[no_mangle]
     extern "C" fn xpute_conformance_boot(seed: u32) -> u32 {
         let range = range_at(xpute_core::wasm::data_end());
-        // A runtime that sized the memory for another core.
+        // A range past the memory's end means a runtime sized the memory for
+        // another core.
         xpute_kit::ensure!(
             range as u64 + spec::MEM_BYTES as u64 <= xpute_core::wasm::given(),
             ENOMEM,

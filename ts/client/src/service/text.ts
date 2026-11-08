@@ -32,7 +32,8 @@ export function width(weight: u32, px: f32, text: string): f32 {
   return ctx.measureText(text).width;
 }
 
-/** `rgba` is 0xRRGGBBAA; `out` is RGBA, top row first, not premultiplied. */
+/** `rgba` is 0xRRGGBBAA. `out` receives RGBA pixels, top row first, with
+ * alpha not premultiplied. */
 export function raster(
   weight: u32,
   px: f32,

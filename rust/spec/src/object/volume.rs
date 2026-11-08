@@ -1,8 +1,8 @@
 // pxl-spec/object/volume.rs
 
-//! The objects' sparse tree folded as it is written (pxl-core
-//! domain/layer/object/store.rs), each branch its eight by the overwrites' one
-//! rule (pxl-engine `object::fold`).
+//! The objects' sparse tree, folded as it is written (pxl-core
+//! domain/layer/object/store.rs), each branch holding its eight children folded by the
+//! overwrites' one rule (pxl-engine `object::fold`).
 
 use crate::space::coord::zoom::Zoom;
 use crate::space::hierarchy::sparse_tree::{Slot, SparseTree};

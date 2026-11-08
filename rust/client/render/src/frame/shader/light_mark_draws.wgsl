@@ -1,18 +1,19 @@
 // pxl-render/light_mark_draws.wgsl
 
-// The drawn receivers of the shadow map, each the eye sees standing by the world's one rule
-// (light_mark.wgsl, `Light::box_tiles`): what the host draws that reads the map, the box each
-// stands within as its draw is recorded, a workgroup each (`light::RECEIVER_BOXES_AT`); then
-// the decor generated, a thread a slot of its instances (gpu/generator.rs), as many as
-// are placed, where each stands, as decor_compact.wgsl lays it, the workgroups as many as the
-// cast's one thread opens in a buffer of their own, which this pass reads its count from and
-// does not bind (light_mark_draws_open.wgsl, `light::DRAWS_DISPATCH_WORDS`). Seen where a
-// ball about its box, a placed decor's about its middle as wide as decor is tall and wide,
-// meets the view (`eye::sees`); a host's box stands, as every receiver's does (`box_tiles`), and
-// a decor within the reach by that box stands on its footprint (`Light::corner_tiles`), the
-// propagation's way up holding what it lifts over it (light_propagate.wgsl `up`). The host's
-// are those gpu/draw.rs `DrawList` records, no more than `light::RECEIVER_BOXES`. Run after decor is
-// placed and the world's receivers stood, before the propagation.
+// Stands the drawn receivers of the shadow map that the eye sees, by the world's one rule
+// (light_mark.wgsl, `Light::box_tiles`). The host's receivers come first, one workgroup for
+// each: what the host draws that reads the map, standing within the box its draw recorded
+// (`light::RECEIVER_BOXES_AT`). They are the draws gpu/draw.rs `DrawList` records, at most
+// `light::RECEIVER_BOXES`. The decor generated comes after (gpu/generator.rs), one thread for
+// each slot of its instances that is placed, standing where decor_compact.wgsl lays it. The
+// cast's one thread opens the workgroups in a buffer of their own, which this pass reads its
+// count from and does not bind (light_mark_draws_open.wgsl, `light::DRAWS_DISPATCH_WORDS`). A
+// receiver is seen where a ball about its box meets the view (`eye::sees`). A placed decor's
+// ball lies about its middle and is as wide as decor is tall and wide. A host's box stands as
+// every receiver's does (`box_tiles`). A decor whose ball's box lies within the reach stands
+// on its footprint (`Light::corner_tiles`), and the propagation's way up holds what the decor
+// lifts above it (light_propagate.wgsl `up`). The pass runs after decor is placed and the
+// world's receivers stood, and before the propagation.
 
 /// The decor compacted this frame as its draws read it (decor_compact.wgsl
 /// `decor_compact_cs`): its drawing words, its regions and its instances.
@@ -28,28 +29,29 @@ fn instance_at(i: u32) -> u32 {
   return select(0u, instances[i], i < arrayLength(&instances));
 }
 
-/// The slots the instances hold.
+/// How many slots the instances hold.
 fn instance_cap() -> u32 {
   return arrayLength(&instances) / (DRAWN_COLUMNS + 1u);
 }
 
-/// How many are placed: the last region's end, no more than the slots
+/// How many slots are placed: the end of the last region, held to the slots there are
 /// (decor_compact.wgsl lays the regions).
 fn instance_cnt() -> u32 {
   let last = 2u * REGIONS - 1u;
   return min(select(0u, regions[last], last < arrayLength(&regions)), instance_cap());
 }
 
-/// The anchor on `axis` from a Q3 `o`, in units (pxl-content `generation::drawn::ANCHOR`).
+/// How far the decor's anchor lies on `axis` from the Q3 position `o`, in units (pxl-content
+/// `generation::drawn::ANCHOR`).
 fn instance_anchor(axis: u32, o: i32) -> f32 {
   let a = i32(drawing_at(DRAWN_ANCHOR + axis));
-  // The anchor and the eye in unit cells, which wrap round the world on X.
+  // How far the anchor lies from the eye in whole unit cells, which wrap round the world on X.
   let d = a - (o >> FRAC_W);
   return f32(select(d, wrap_idx(LEAF_CELL_ZOOM, d), axis == 0u)) - f32(o & ((1i << FRAC_W) - 1i)) * (1.0 / f32(1u << FRAC_W));
 }
 
-/// Where placed slot `k` stands, its base middle as drawn, units from the eye at Q3
-/// `o`, as decor_place.wgsl places it.
+/// Where placed slot `k` stands, as decor_place.wgsl places it: the middle of its base as
+/// drawn, in units from the eye at the Q3 position `o`.
 fn instance_pos(k: u32, o: vec3<i32>) -> vec3<f32> {
   let cap = instance_cap();
   return vec3<f32>(
@@ -59,8 +61,8 @@ fn instance_pos(k: u32, o: vec3<i32>) -> vec3<f32> {
   );
 }
 
-/// Whether a ball of `radius` at `v` units from the eye meets its view (`eye::sees`), its
-/// sides' slopes the host's (`Grid::slope`).
+/// Whether a ball of `radius` at `v` units from the eye meets the eye's view (`eye::sees`). The
+/// slopes of the view's sides are the ones the host worked out (`Grid::slope`).
 fn sees(v: vec3<f32>, radius: f32) -> bool {
   let f = dot(v, eye_v3(FORWARD));
   let tan_xy = vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u));
@@ -76,8 +78,8 @@ fn light_mark_draws_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_i
   var hi: vec3<f32>;
   var foot_lo: vec3<f32>;
   var foot_hi: vec3<f32>;
-  // A host's box a workgroup, its tiles among the lanes, as one may stand over the whole map;
-  // past them a placed decor a thread.
+  // A host's box takes a workgroup and shares its tiles among the lanes, as one box may stand
+  // over the whole map. Past the host's boxes, a placed decor takes a thread.
   var first = 0u;
   var lanes = 1u;
   if (group.x < LIGHT_RECEIVER_BOXES) {
@@ -104,7 +106,6 @@ fn light_mark_draws_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_i
     foot_lo = base - half;
     foot_hi = base + half;
   }
-  // Seen where the ball about the box meets the view.
   if (!sees(0.5 * (lo + hi), 0.5 * length(hi - lo))) {
     return;
   }

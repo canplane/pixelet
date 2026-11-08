@@ -1,9 +1,10 @@
 // @pxl/client/ui/component/motion/motion.tsx
 
 /**
- * A view moved by Web Animations on the compositor. The committed style is
- * always the given pose, so a cancel leaves the view where it was told to be;
- * a mid-flight pose starts from the computed style.
+ * A view on a page, moved by the Web Animations API, which runs on the
+ * compositor. The view's style is always the pose it was given last, so a
+ * canceled animation leaves the view where it was told to be. A pose given
+ * while an animation runs starts from the view's computed style.
  */
 
 import { useLayoutEffect, useRef } from "react";
@@ -68,7 +69,8 @@ export function Motion({
     if (stood.current === null || replaying) {
       start = from ? keyframe(resolve(from)) : null;
     } else if (running.current !== null) {
-      // Read before the cancel: while running, the animation is what the element computes to.
+      // The computed style is read before the cancel, because only while the
+      // animation runs does the element compute to where it is in flight.
       const computed = getComputedStyle(el);
       start = { opacity: computed.opacity, transform: computed.transform };
     } else {
@@ -95,8 +97,9 @@ export function Motion({
     );
   }, [...CHANNELS.map((c) => target[c]), replay]);
 
-  // Under StrictMode a view put back must arrive again from `from`; kept as
-  // it was, it would read its canceled start as the end and play nothing.
+  // Under StrictMode, React takes a view down and puts it back. The view put
+  // back must arrive from `from` again: with its old state kept, it would take
+  // its canceled start for its end and play nothing.
   useLayoutEffect(
     () => () => {
       running.current?.cancel();

@@ -1,24 +1,26 @@
 // pxl-render/light_slide.wgsl
 
-// The tiles of the box an earlier cast of the epoch cast, where the box slid since, a
-// `TILE`-aligned corner at a time (gpu/shadow.rs `aim`), the eye's zooms moved
-// (`light::HEADER_LAST_RANGE`), or the world under it changed: a
-// thread a tile, after the host moved the reads with the box, each tile's word the word of
-// the tile that held its world texels under the corner before (`light::HEADER_LAST_CORNER`;
-// gpu/ray/cast.rs `prepare`). A tile the box slid onto, one the slide or the zooms moved into
-// another band (`Light::keeps`), and one whose rays may meet a cell of its band over a column of the world
-// that changed (`Light::reaches`, `light::COLUMNS_AT`), is set to none, so the propagation
-// takes it, read, as read anew (light_propagate.wgsl); the rest hold what their cast left.
-// Each writes its own word alone, and the first the cast's number as the last the slide ran in
-// (`light::SLIDE_RAN`). Run where the box slid, the zooms moved or the world changed and a
-// receiver stands
-// (`light::RECEIVER_TILES_SLIDE`), after the receivers stood, before the propagation.
+// Drops what an earlier cast of the epoch left in a tile of the box where the box slid since,
+// a `TILE`-aligned corner at a time (gpu/shadow.rs `aim`), where the eye's zooms moved
+// (`light::HEADER_LAST_RANGE`), or where the world under the tile changed. It runs one thread
+// for each tile, after the host moved the reads with the box, so each tile's word is the word
+// of the tile that held its world texels under the corner before (`light::HEADER_LAST_CORNER`;
+// gpu/ray/cast.rs `prepare`). A tile's read is set to none where the box slid onto the tile,
+// where the slide or the zooms moved it into another band (`Light::keeps`), or where its rays
+// may meet a cell of its band over a column of the world that changed (`Light::reaches`,
+// `light::COLUMNS_AT`). The propagation then claims such a tile anew if a receiver reads it
+// (light_propagate.wgsl). The other tiles hold what their cast left. Each thread writes only
+// its own tile's word, and the first thread also writes the cast's number as the last cast the
+// slide ran in (`light::SLIDE_RAN`). The slide runs where the box slid, the zooms moved or the
+// world changed, and a receiver stands (`light::RECEIVER_TILES_SLIDE`). It runs after the
+// receivers stood, and before the propagation.
 
-/// Whether box tile `tile`'s rays, at its band, may meet a cell over the world's column `c`,
-/// `[x0, y0, x1, y1]` units from the eye (`Light::reaches`), where its band is among `bands`,
-/// the first and the last that read the change: the column grown by a cell of the band and a
-/// texel, against the hexagon the tile's texels sweep along the light seen from above, on X, Y
-/// and across each of its three edges.
+/// Whether the rays of box tile `tile`, asking at its band, may meet a cell over the world's
+/// column `c`, `[x0, y0, x1, y1]` in units from the eye (`Light::reaches`). Only a band from
+/// the first to the last of `bands` reads the change. Seen from above, the tile's rays sweep a
+/// hexagon as its texels move along the light. The column, grown by a cell of the band and a
+/// texel, misses that hexagon where one of five axes parts them: X, Y, and the axis across each
+/// of the hexagon's three edges.
 fn reaches(tile: vec2<u32>, c: vec4<f32>, bands: vec2<u32>) -> bool {
   let band = tile_band(vec2<i32>(tile));
   if (band < bands.x || band > bands.y) {
@@ -45,8 +47,8 @@ fn reaches(tile: vec2<u32>, c: vec4<f32>, bands: vec2<u32>) -> bool {
     || parts(vec2<f32>(-e2.y, e2.x), at, half, e0, e1, e2));
 }
 
-/// Whether axis `n` parts the column `half` wide each way, `at` from the hexagon's middle,
-/// from the hexagon of edges `e0`, `e1` and `e2`.
+/// Whether axis `n` parts the column from the hexagon whose edges are `e0`, `e1` and `e2`. The
+/// column is `half` wide each way, and its middle lies `at` from the hexagon's middle.
 fn parts(n: vec2<f32>, at: vec2<f32>, half: vec2<f32>, e0: vec2<f32>, e1: vec2<f32>, e2: vec2<f32>) -> bool {
   let swept = abs(dot(e0, n)) + abs(dot(e1, n)) + abs(dot(e2, n));
   let column = abs(half.x * n.x) + abs(half.y * n.y);

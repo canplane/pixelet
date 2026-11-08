@@ -1,8 +1,8 @@
 // pxl-core/domain/control/edit/pick.test.rs
 
-// A carve writes a cell-sized AIR leaf, so its corner must be the cell's,
-// not the size tier's; the store is saved, so a wrong bite outlives the
-// session.
+// A carve writes an AIR leaf the size of a cell, so its corner must be the
+// cell's, not the size tier's. The store is saved, so a carve in the wrong
+// place outlives the session.
 
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
 use pxl_spec::space::coord::q3::{FRAC_W, Q3};
@@ -11,7 +11,8 @@ use pxl_spec::space::layer::lattice::GROUND;
 
 use super::*;
 
-/// HitKind at a point off every tier boundary.
+/// A ground hit on the unit box at (3, 5, 2), at a point off every tier's
+/// boundary.
 fn struck(normal: V3, point: V3) -> Hit {
     Hit {
         t: 1.0,

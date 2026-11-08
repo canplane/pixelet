@@ -59,18 +59,22 @@ import type { NodeView } from "./view.ts";
 const DESC_REG: [u32, NodeType] = [NONE, SpecialType.NIL];
 
 export interface TreeEncoderOptions {
-  /** The first buffer's size; it doubles where the tree overflows it. */
+  /** The size of the first buffer tried; it doubles each time the packet does
+   * not fit. */
   init_cap: u32;
-  max_cap?: u32; // hard packet size limit
+  /** The largest packet allowed; MAX_PKT_SZ when none is given. */
+  max_cap?: u32;
 }
 
 /**
- * A tree walked onto `PacketWriter`, the one writer of the layout, as the C++
- * encoder does (cpp kit wire/xtp/view.hpp `encode`): into a fixed buffer,
- * walked again on one twice as large where it overflowed, up to the cap.
+ * Encodes a tree by walking it onto `PacketWriter`, as the C++ `encode`
+ * (cpp/xpute/kit/wire/xtp/view.hpp) does. The first buffer has `init_cap`
+ * bytes; each time the packet overflows it, the tree is walked again into one
+ * twice as large, up to `max_cap`.
  */
 export class TreeEncoder {
-  /** EINVAL for a cap outside a packet's sizes, EOVERFLOW for a tree past the cap. */
+  /** A `max_cap` below HDR_SZ or above MAX_PKT_SZ is EINVAL; a packet larger
+   * than `max_cap` is EOVERFLOW. */
   encode(view: NodeView, opts: TreeEncoderOptions): U8Array {
     const { init_cap, max_cap = MAX_PKT_SZ } = opts;
     if (max_cap < HDR_SZ || max_cap > MAX_PKT_SZ) {
@@ -98,7 +102,6 @@ export class TreeEncoder {
 
 export const encoder = new TreeEncoder();
 
-/** A node written as the entry the writer is at. */
 function walk(w: PacketWriter, node: Node): void {
   if (NODE_IS_NIL(node)) {
     w.nil();
@@ -187,14 +190,15 @@ function seq_into(w: PacketWriter, node: SequenceNode): void {
   }
 }
 
-/** Where a packet is written in place: a writer begun over the room for a
- * root branch of `cnt` children. */
+/** Memory that holds a packet written in place. `writer(cnt)` returns a
+ * writer begun on it, for a root branch of `cnt` children. */
 export interface PacketRoom {
   writer(cnt: u32): PacketWriter;
 }
 
-/** The table a writer's entries go in: a branch's, or the root's, a branch of
- * one whose entry is the header. */
+/** The child table the writer's next entries go in. The root is treated as a
+ * branch of one child whose entry is the header's root word: `root` marks it,
+ * and its entry sets the root's type instead of writing a descriptor. */
 interface Table {
   base: u32;
   cnt: u32;
@@ -205,28 +209,30 @@ interface Table {
 const word_up = (n: number): number => Math.ceil(n / WORD_SZ) * WORD_SZ;
 
 /**
- * Writes a packet in place, into bytes the caller holds, with no tree built
- * first: the one writer of the layout, which `TreeEncoder` walks its tree onto
- * (rust/kit/src/wire/xtp/encode.rs `PacketWriter`, cpp kit wire/xtp/encode.hpp).
- * A branch declares its child count up front; a child that does not fit makes
- * `finish` refuse, and a miscount throws. One writer serves every packet its
- * room hands out, begun again for each.
+ * Writes a packet in place, into bytes the caller holds, without building a
+ * tree first. It is the one writer of the layout: `TreeEncoder` walks its tree
+ * onto it, so both give the same bytes. A node that does not fit does not
+ * fail its call: the writer goes on counting entries, and `finish` refuses the
+ * packet (EOVERFLOW). One writer object is reused: its room begins it again
+ * for each packet.
  */
 export class PacketWriter {
   private bytes: U8Array = new Uint8Array(0);
   private view: DataView = new DataView(new ArrayBuffer(0));
-  /** Where the packet begins in `bytes`, and the bytes it may take. */
+  /** Where the packet begins in `bytes`. */
   start: u32 = 0;
+  /** The most bytes the packet may take. */
   private cap: u32 = 0;
   private table: Table = { base: 0, cnt: 1, written: 0, root: true };
   private root_type: NodeType = SpecialType.NIL;
-  /** The packet's end so far, from `start`. */
+  /** The packet's end so far, counted from `start`. */
   private lim: u32 = HDR_SZ;
-  /** The first reason only. */
+  /** The first error met; later ones are not kept. */
   private err: i32 | null = null;
 
-  /** A packet of one root, any node. `bytes` and `view` see the same memory
-   * from the same offset; `cap` is at most MAX_PKT_SZ. */
+  /** Begins a packet whose root is any one node, at `start` in `bytes`.
+   * `bytes` and `view` must see the same memory from the same offset. The
+   * packet may take `cap` bytes, up to MAX_PKT_SZ. */
   root(bytes: U8Array, view: DataView, start: u32, cap: u32): this {
     this.bytes = bytes;
     this.view = view;
@@ -241,7 +247,8 @@ export class PacketWriter {
     return this;
   }
 
-  /** A packet whose root is a branch of `cnt`, its children written next. */
+  /** Begins a packet whose root is a branch of `cnt` children, which the
+   * calls that follow write. */
   begin(bytes: U8Array, view: DataView, start: u32, cap: u32, cnt: u32): this {
     this.root(bytes, view, start, cap);
     const at = this.branch_open(cnt);
@@ -255,7 +262,9 @@ export class PacketWriter {
     return -1;
   }
 
-  /** Where `bytes` aligned to `unit` begin, zeroed from the end so far; -1 past the room. */
+  /** Takes `bytes` at the next multiple of `unit`, zeroing them and the
+   * padding before them. Returns where they begin, or -1 when they do not
+   * fit. */
   private reserve(unit: AlignUnit, bytes: number): number {
     if (this.err !== null) return -1;
     const base: u32 = ALIGN(this.lim, unit);
@@ -292,7 +301,8 @@ export class PacketWriter {
     return this.entry(at, type);
   }
 
-  /** A sequence's length word and `bytes` of payload after it, filled by `fill` at the payload's place in `bytes`. */
+  /** Writes a sequence: its len slot, then `bytes` of payload, padded to a
+   * word. `fill` gets the payload's offset in `bytes` and writes it. */
   private seq(
     type: SequenceType,
     len: u32,
@@ -399,7 +409,8 @@ export class PacketWriter {
     );
   }
 
-  /** An array of `type`, its elements as they lie in `a`, little-endian. */
+  /** `a`'s bytes are copied as they lie, so the host must be little-endian,
+   * as the wire is. */
   array(type: SequenceType, a: TypedArray | BigTypedArray | null): this {
     if (a === null) return this.entry(-1, type);
     return this.seq(type, a.length, a.byteLength, (payload) =>
@@ -410,7 +421,8 @@ export class PacketWriter {
     );
   }
 
-  /** One byte a bit, packed low bit first. */
+  /** `bits` holds one byte for each bit, nonzero for set. They are packed
+   * eight to a byte, the first in the lowest bit. */
   bitset(bits: U8Array | null): this {
     if (bits === null) return this.entry(-1, SequenceType.BITSET);
     return this.seq(
@@ -425,7 +437,8 @@ export class PacketWriter {
     );
   }
 
-  /** UTF-8 as `TextEncoder` writes it, a NUL after it that its length leaves out. */
+  /** The string's UTF-8 as `TextEncoder` writes it, in which a lone surrogate
+   * becomes U+FFFD. */
   str(s: string | null): this {
     if (s === null || this.err !== null) {
       return this.entry(-1, SequenceType.STR);
@@ -450,7 +463,6 @@ export class PacketWriter {
     return this.entry(base, SequenceType.STR);
   }
 
-  /** `len` + 1 offsets into the UTF-8 after them. */
   strs(items: string[] | null): this {
     if (items === null) return this.entry(-1, SequenceType.STRS);
     const utf8 = items.map((s) => encoding.te.encode(s));
@@ -477,7 +489,9 @@ export class PacketWriter {
     return at;
   }
 
-  /** A branch ends on a word, so what follows it starts where the encoder starts it. */
+  /** A branch's extent ends on a word boundary, so a node after it starts on
+   * the next word even when it needs less alignment. Every language pads the
+   * same way, which keeps their bytes equal. */
   private branch_close(at: number): number {
     if (at < 0 || this.err !== null) return at;
     const end: u32 = ALIGN(this.lim, WORD_SZ);
@@ -487,9 +501,10 @@ export class PacketWriter {
     return at;
   }
 
-  /** The root branch's children as another writer wrote them: `pkt` is that
-   * packet whole, begun with the same count, and as nothing in a packet says
-   * where it lies, its bytes are this packet's. Only right after `begin`. */
+  /** Fills the root branch with the children another writer wrote. `pkt` is
+   * that writer's whole packet, begun with the same count. Its offsets are
+   * relative, so its bytes are valid here as they are. Call it only right
+   * after `begin`. */
   copy(pkt: U8Array): this {
     const f = this.table;
     if (f.root || f.written !== 0) throw new InvariantError(Errno.EINVAL);
@@ -503,10 +518,13 @@ export class PacketWriter {
     return this;
   }
 
-  /** Writing a different number of children than `cnt` throws. */
+  /** Writing a number of children other than `cnt` is a bug and throws
+   * InvariantError. */
   branch(cnt: u32, fill: (w: this) => void): this {
     const at = this.branch_open(cnt);
-    // A branch that did not fit still counts its children, against a base nothing is written at.
+    // When the branch did not fit, its children are still counted, so that a
+    // miscount is caught; the packet is spoiled, and nothing is written at the
+    // stand-in base.
     const outer = this.table;
     this.table = { base: at < 0 ? HDR_SZ : at, cnt, written: 0, root: false };
     fill(this);
@@ -521,7 +539,9 @@ export class PacketWriter {
     return this.entry(-1, SpecialType.BRANCH);
   }
 
-  /** Its root's payload copied, placed as its root's type places it. */
+  /** Copies the root of the encoded packet `pkt` in as this entry, aligned as
+   * its root's type requires. A malformed `pkt` makes `finish` refuse the
+   * packet (EBADMSG). */
   graft(pkt: U8Array): this {
     let payload_sz: u32, type: NodeType;
     try {
@@ -555,11 +575,13 @@ export class PacketWriter {
     return this.entry(at, type);
   }
 
-  /** The length, header included and to the word; throws why it was refused. */
+  /** Writes the header and returns the packet's length, header included and
+   * padded to a word, or throws the first error that spoiled the packet. */
   finish_or_throw(): u32 {
     const f = this.table;
     if (f.written !== f.cnt) throw new InvariantError(Errno.ENOTRECOVERABLE);
-    // The root branch `begin` opened, closed as `branch` closes one.
+    // The root branch that `begin` opened is closed here, padded as `branch`
+    // pads one.
     if (!f.root) this.branch_close(f.base);
     if (this.err !== null) throw new MarshalError(this.err);
     const end: u32 = ALIGN(this.lim, WORD_SZ);
@@ -575,7 +597,8 @@ export class PacketWriter {
     return end;
   }
 
-  /** The packet's length, or -1 when a child did not fit: for a room that fits a packet or not. */
+  /** `finish_or_throw`'s length, or -1 when the packet was refused, for a
+   * caller that only needs to know whether the packet fit. */
   finish(): number {
     try {
       return this.finish_or_throw();

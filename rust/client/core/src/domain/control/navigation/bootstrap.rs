@@ -15,12 +15,14 @@ use crate::domain::control::support::unknown_z;
 use xpute_core::global::Global;
 
 fn fallback_seed() -> Q3 {
-    // A place, not a height: it stands on the surface.
+    // The fallback names a place, not a height, so the pivot stands on the
+    // surface there.
     unknown_z(&epsg4326::project(&FALLBACK_G4326))
 }
 
-/// Within a cell: the pivot comes back through the camera's floats, not
-/// to the bit.
+/// Whether `a` and `b` lie within a cell of each other across the ground.
+/// The pivot comes back through the camera's floats, so it does not match to
+/// the bit.
 fn is_at(a: &Q3, b: &Q3) -> bool {
     let cell = 1i64 << FRAC_W;
     (i64::from(a[0]) - i64::from(b[0])).abs() < cell
@@ -41,8 +43,9 @@ pub fn map_bootstrap_step() {
         return;
     }
     b.last = Some((device_coord, location_status));
-    // The fallback only once GPS has given up (Error) and the camera was never
-    // placed; a later dropout leaves the camera where it was.
+    // The fallback is used only once the location has given up (Error) and
+    // the camera was never placed. A later dropout leaves the camera where it
+    // was.
     let fallback = fallback_seed();
     let at = pivot();
     let seed = match device_coord {
@@ -50,8 +53,9 @@ pub fn map_bootstrap_step() {
         None if at.is_none() && location_status == SensorStatus::Error => fallback,
         None => return,
     };
-    // A real fix landing after the fallback takes over; a place asked for
-    // and not yet put, a search's or a marker's, is not replaced.
+    // A real fix that lands after the fallback takes over from it. A place
+    // asked for and not yet put, such as a search's or a marker's, is not
+    // replaced.
     if at.is_none_or(|c| is_at(&c, &fallback)) && pending().is_none_or(|p| is_at(&p, &fallback)) {
         go_to_ground(seed, Motion::Snap);
     }

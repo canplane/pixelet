@@ -1,17 +1,17 @@
 // pxl-content/cave.rs
 
-//! gpu-portable: the caves, worms of tunnel decided from the top down, so a
-//! node's share of cave is its own before anything under it is asked and a
-//! coarse cell holds exactly what its leaves do.
+//! gpu-portable: the caves, worms of tunnel decided from the top down, so that a node's share
+//! of cave is its own before anything under it is asked, and a coarse cell holds exactly what
+//! its leaves do.
 //!
-//! A root cube (`ROOT`) holds the same tunnels as every other, so every node
-//! coarser is the same share. A tunnel starts in a node of its class's size
-//! (`CLASS`) and runs between two of its pipe cells (`PIPE`); a node hands
-//! its piece of a tunnel to the children it passes, a walk over at most four
-//! of them, crossing each face where a hash says, its blocks split by how
-//! far each child's part runs (`share::halve`); the tunnels not yet
-//! started go to the children no piece passes, by hashed weights. A pipe cell's piece hollows the blocks nearest its line, as many
-//! as it holds. Irregular by the seed alone (`node_seed`).
+//! Every root cube (`ROOT`) holds the same tunnels, so every coarser node holds the same
+//! share. A tunnel starts in a node of its class's size (`CLASS`) and runs between two of the
+//! node's pipe cells (`PIPE`). A node hands its piece of a tunnel down to the children it
+//! passes, a walk over at most four of them, crossing each face where a hash says, with its
+//! blocks split by how far each child's part runs (`share::halve`). The tunnels not yet
+//! started go to the children no piece passes, by hashed weights. A pipe cell's piece hollows
+//! the blocks nearest its line, as many as it holds. Only the seed makes it irregular
+//! (`node_seed`).
 
 use pxl_engine::answer::FULL;
 use pxl_engine::seed::node_seed;
@@ -20,17 +20,17 @@ use pxl_engine::{Zoom, LEAF_CELL_ZOOM};
 use crate::param::cave::{BLOCKS_A_TUNNEL, NUDGE, ROOT_TUNNELS};
 use crate::share::halve;
 
-/// The root cube, 256 units: every one holds `ROOT_TUNNELS`.
+/// The root cube, 256 units; every root holds `ROOT_TUNNELS`.
 pub const ROOT: Zoom = LEAF_CELL_ZOOM - 8;
 /// The pipe cell, 8 units, a tunnel's step.
 pub const PIPE: Zoom = LEAF_CELL_ZOOM - 3;
-/// A block, 2 units, what a pipe cell hollows a whole of.
+/// A block, 2 units, the whole unit a pipe cell hollows.
 pub const BLOCK: Zoom = LEAF_CELL_ZOOM - 1;
-/// The classes' zooms: a tunnel of class `k` starts in a node there.
-/// The classes a tunnel is of, by the size of the node it starts in.
+/// The classes a tunnel may be of, by the size of the node it starts in: a tunnel of class
+/// `k` starts in a node at zoom `CLASS[k]`.
 const CLASSES: usize = 5;
 const CLASS: [Zoom; CLASSES] = [ROOT, ROOT + 1, ROOT + 2, ROOT + 3, ROOT + 4];
-/// A root's blocks: its tunnels', every root alike.
+/// The blocks a root's tunnels hollow, the same in every root.
 pub const ROOT_BLOCKS: u32 = {
     let mut n = 0;
     let mut k = 0;
@@ -50,8 +50,8 @@ pub const CROSS: u32 = 0xca7e_5003;
 pub const SPLIT: u32 = 0xca7e_5004;
 pub const BLOCKS: u32 = 0xca7e_5006;
 
-/// A tunnel's part in a node, in pipe cells: where it comes in and goes
-/// out, the sides it crosses there (6 none, at its ends), and its blocks.
+/// A tunnel's part in a node, in pipe cells: where it comes in and goes out, the sides it
+/// crosses there (6 for none, at the tunnel's ends), and its blocks.
 #[derive(Clone, Copy, Debug)]
 struct Piece {
     e: [i32; 3],
@@ -77,9 +77,9 @@ struct CaveNode {
     tunnels: [u32; CLASSES],
 }
 
-/// Tunnels of class `k` a node at `zoom` with no piece may be handed: one at
-/// the class's own zoom, four children's a step coarser (a node starting its
-/// own takes at most four).
+/// The tunnels of class `k` that a node at `zoom` with no piece may be handed: one at the
+/// class's own zoom, and four children's worth a zoom coarser, since a node starting its own
+/// takes at most four.
 const fn cap(k: usize, zoom: Zoom) -> u32 {
     if zoom > CLASS[k] {
         0
@@ -110,17 +110,16 @@ fn child_of(o: [i32; 3], half: i32, p: [i32; 3]) -> u32 {
         | ((p[2] >= o[2] + half) as u32) << 2
 }
 
-/// A tunnel started in the node: from a cell by hash in a corner quarter of
-/// the node across, at any height, to one in the far quarter the other way, a
-/// little up or down: so it crosses the node and its blocks fit the pipe cells it passes
-/// (at least its side and one, `BLOCKS_A_TUNNEL`).
+/// A tunnel started in the node: from a cell picked by hash in a corner quarter of the node,
+/// at any height, to one in the far quarter the other way, a little up or down. So it crosses
+/// the node, and its blocks fit the pipe cells it passes, of which there are at least the
+/// node's side plus one (`BLOCKS_A_TUNNEL`).
 fn spawn(node: (Zoom, [i32; 3]), k: usize) -> Piece {
     let (o, s) = bounds(node);
     let h = node_seed(SPAWN, node);
     let g = node_seed(SPAWN ^ 1, node);
     if s < 4 {
-        // Two pipe cells a side: from a cell by hash to the far corner, up or
-        // down too.
+        // Two pipe cells a side: from a cell picked by hash to the far corner, up or down as well.
         let e = [
             o[0] + (h & 1) as i32,
             o[1] + (h >> 1 & 1) as i32,
@@ -171,9 +170,9 @@ fn spawn(node: (Zoom, [i32; 3]), k: usize) -> Piece {
     }
 }
 
-/// The walk from child `u` to child `v` over at most four: its length, and
-/// its `i`-th child (`walk_at`). Their differing sides in an order by hash,
-/// or, where one side differs, a step aside and back by hash.
+/// The walk from child `u` to child `v` over at most four children: its length, and its
+/// `i`-th child (`walk_at`). It crosses the sides in which they differ in an order picked by
+/// hash, or, where only one side differs, takes a step aside and back, picked by hash.
 fn walk_len(u: u32, v: u32, h: u32) -> u32 {
     let d = u ^ v;
     if d != 0 && d.count_ones() == 1 && h & 1 == 1 {
@@ -215,10 +214,10 @@ fn walk_at(u: u32, v: u32, h: u32, i: u32) -> u32 {
     cur
 }
 
-/// The node's piece handed to its children, child `want`'s part of it, and
-/// the children the walk passes, a bit each: the walk's parts cross each face
-/// near the way on toward its end, moved by hash; their blocks split by how
-/// far each runs, none past a pipe cell's each (`halve`).
+/// The node's piece handed down to its children: child `want`'s part of it, and the children
+/// the walk passes, one bit each. The walk's parts cross each face near the way on toward its
+/// end, moved by hash, and its blocks are split by how far each part runs, none past a pipe
+/// cell's room each (`halve`).
 fn hand_down(node: (Zoom, [i32; 3]), p: Piece, want: u32) -> (Piece, u32) {
     let (o, s) = bounds(node);
     let half = s / 2;
@@ -286,9 +285,8 @@ fn hand_down(node: (Zoom, [i32; 3]), p: Piece, want: u32) -> (Piece, u32) {
         }
         i += 1;
     }
-    // Its blocks along the walk, a part at a time: each its share of what
-    // is left by its cells of the cells left, within its pipe cells' room
-    // and the rest's (`halve`).
+    // Its blocks along the walk, a part at a time: each part takes its share of what is left, by
+    // its cells over the cells left, within its pipe cells' room and the rest's (`halve`).
     let mut rest = 0u32;
     let mut i = 0;
     while i < n {
@@ -314,10 +312,9 @@ fn hand_down(node: (Zoom, [i32; 3]), p: Piece, want: u32) -> (Piece, u32) {
     (mine, on)
 }
 
-/// The node's tunnels not yet started handed to its children no piece
-/// passes, child `want`'s: each class halved across, then along, then up
-/// (`halve`), by a hash's weight alike each side, each half's room what its
-/// children can start (`cap`).
+/// The node's tunnels not yet started, handed to the children no piece passes: child
+/// `want`'s share. Each class is halved across, then along, then up (`halve`), by a hash's
+/// weight alike on each side, each half's room being what its children can start (`cap`).
 fn tunnels_down(
     node: (Zoom, [i32; 3]),
     tunnels: [u32; CLASSES],
@@ -335,8 +332,8 @@ fn tunnels_down(
         } else {
             0
         };
-        // The children still in play and free of a piece, a bit each,
-        // narrowed a side at a time; a half's room its children's in play.
+        // The children still in play and free of a piece, one bit each, narrowed a side at a time;
+        // a half's room is that of its children in play.
         let mut keep = 0xffu32 & !on;
         let mut side = 0;
         while side < 3 && n > 0 {
@@ -403,11 +400,11 @@ fn holds(node: (Zoom, [i32; 3])) -> CaveNode {
     }
 }
 
-/// How far block `b`'s middle lies from the piece's line, from the middle
-/// of the side it comes in by to the middle of the side it goes out by, in
-/// eighths of a unit, its square times the line's (`l`, so no division),
-/// nudged by a draw off the cell's hash `h` so no wall runs smooth: the
-/// lower, the sooner the block is hollowed.
+/// How far block `b`'s middle lies from the piece's line, which runs from the middle of the
+/// side it comes in by to the middle of the side it goes out by, in eighths of a unit. It is
+/// given as the squared distance times the line's squared length (`l`), so no division is
+/// needed, and nudged by a draw from the cell's hash `h` so that no wall runs smooth. The
+/// lower the key, the sooner the block is hollowed.
 fn key(a: [i32; 3], ab: [i32; 3], l: i32, h: u32, b: u32) -> i32 {
     let ap = [
         (b & 3) as i32 * 16 + 8 - a[0],
@@ -416,7 +413,7 @@ fn key(a: [i32; 3], ab: [i32; 3], l: i32, h: u32, b: u32) -> i32 {
     ];
     let pp = ap[0] * ap[0] + ap[1] * ap[1] + ap[2] * ap[2];
     let t = ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2];
-    // |ap|²·l less t² along it, its ends' own distances past them.
+    // |ap|²·l less t² along the line; past its ends, the distance to the end.
     let d = if l == 0 || t <= 0 {
         pp * if l == 0 { 1 } else { l }
     } else if t >= l {
@@ -449,10 +446,10 @@ fn block_hollow(h: u32, p: &Piece, b: u32) -> bool {
     hollow_from(h, p, [b, 0, 0], 0) == 1
 }
 
-/// How many of a pipe cell's blocks `side` a side from block `lo`, `side`
-/// 1 or 2 (`t` 0 or 1), are hollow (`block_hollow`), the cell's hash `h`: each
-/// block's key read once, every block of the cell's ranked against them all
-/// at once, and done once each is ranked past the piece's blocks.
+/// How many of a pipe cell's blocks, in the cube `side` a side from block `lo` (`side` 1 or
+/// 2, `t` 0 or 1), are hollow (`block_hollow`), where the cell's hash is `h`. Each block's key
+/// is read once, every block of the cell is ranked against them all at once, and the count
+/// stops once each is ranked past the piece's blocks.
 fn hollow_from(h: u32, p: &Piece, lo: [u32; 3], t: u32) -> u32 {
     let n = 1u32 << (3 * t);
     if p.blocks >= CELL_BLOCKS {
@@ -511,7 +508,8 @@ fn blocks(node: (Zoom, [i32; 3])) -> u32 {
     if p.blocks == 0 {
         return 0;
     }
-    // The node's blocks, `1 << t` a side: below the block zoom one, else 2.
+    // The node's blocks, `1 << t` a side: one at the block zoom or finer, and 2 a side
+    // otherwise.
     let (t, lo) = if zoom >= BLOCK {
         let t = zoom - BLOCK;
         (0, [(c[0] >> t) & 3, (c[1] >> t) & 3, (c[2] >> t) & 3])
@@ -523,9 +521,9 @@ fn blocks(node: (Zoom, [i32; 3])) -> u32 {
     hollow_from(h, &p, lo.map(|v| v as u32), t)
 }
 
-/// The share of the cube `c` at `zoom` the caves take, in `answer::FULL`'s
-/// units: its blocks of caves over its volume, a root's at any coarser.
-/// One body however many ask it (the ground asks it of a cell and of a node).
+/// The share of the cube `c` at `zoom` that the caves take, in `answer::FULL`'s units: its
+/// blocks of caves over its volume, or a root's at any coarser zoom. It is kept as one body
+/// (`inline(never)`) however many places ask it: the ground asks it of a cell and of a node.
 #[inline(never)]
 pub fn hollow(node: (Zoom, [i32; 3])) -> u32 {
     let (zoom, c) = node;

@@ -1,8 +1,8 @@
 // @pxl/client/port/core.ts
 
-/** The core as the client reaches it once started: its commands, bound to
- * the UI's link (`ui`), and the profiler's reads (`perf`), made where the
- * core's memory is. Set once, before anything reaches them. */
+/** The core as the client reaches it once it has started: its commands,
+ * bound to the UI's link (`ui`), and the profiler's reads (`perf`), which run
+ * where the core's memory is. They are set once, before anything uses them. */
 
 import type { Link } from "@xpute/runtime";
 import { ui_exports, type UiExports } from "@/abi/cmd.spec.ts";

@@ -1,12 +1,15 @@
 // pxl-core/domain/query/surface.rs
 
-//! The ground's surface: a cell's top and the asset its face is, read off
-//! the clip levels by the one reading of a column the GPU reads too
-//! (pxl-engine `clipmap::ground`), the wall where it is the wall. The
-//! ground's alone, so a part of the support (`support.rs`), where a walker
-//! starts looking for what it stands on, and read inside the query only:
-//! what a cell holds, a cave, a way, a bridge or what is placed included,
-//! is the world's answer (`World::asset_of`), never the ground's.
+//! The ground's surface: a cell's top and the asset of its face, read off
+//! the clip levels by the same reading of a column the GPU uses (pxl-engine
+//! `clipmap::ground`). Where the column is the wall at the service area's
+//! edge (pxl-engine `area::is_wall`), the face is the wall's.
+//!
+//! The surface is the ground's alone. The support (`support.rs`) uses it as
+//! the place a walker starts looking for what it stands on, and nothing
+//! outside the query reads it. What a cell holds, including a cave, a way, a
+//! bridge or what is placed, is the world's answer (`World::asset_of`),
+//! never the ground's.
 
 use pxl_engine::area::Shard;
 use pxl_engine::clipmap::Lookup;
@@ -19,7 +22,7 @@ use crate::domain::layer::terrain::TerrainQuery as _;
 use crate::domain::layer::{Answer, Query};
 use pxl_spec::asset::cube::sentinel;
 
-/// The ground's top in a cell, in units, and the asset its face is.
+/// The ground's top in a cell, in units, and the asset of its face.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct Surface {
     pub top: f64,
@@ -27,9 +30,8 @@ pub(super) struct Surface {
 }
 
 impl World<'_> {
-    /// The surface of the cell `c` of `cell_zoom`: its ground's top, in units,
-    /// and its face; past the service area the Earth's, at sea level; none
-    /// where it has no ground.
+    /// The surface of the cell `c` at `cell_zoom`. Past the service area it
+    /// is the Earth's, at sea level. None where the cell has no ground.
     pub(super) fn surface_of(&self, cell_zoom: Zoom, c: [i32; 2]) -> Answer<Option<Surface>> {
         let shard = Shard::UNKNOWN.at(&CpuClipmap, (cell_zoom, c));
         if shard.past() {

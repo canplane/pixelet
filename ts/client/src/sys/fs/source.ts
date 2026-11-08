@@ -1,11 +1,12 @@
 // @pxl/client/sys/fs/source.ts
 
 /**
- * The tile source's declaration (the bucket's, which script/publish.py writes,
- * or a dev tile server's), asked until it answers and read once. The core is
- * handed its own part, the top zoom, the formats and the shards
- * (SOURCE_DECLARE), and observes nothing before; the versions stay here, for the
- * bakes' objects (tile.ts) and the settings.
+ * The tile source's declaration, which the bucket serves (script/publish.py
+ * writes it) or a dev tile server answers. It is asked for until it answers,
+ * and read once. The core is handed its own part of it, the top zoom, the
+ * formats and the shards (SOURCE_DECLARE), and observes nothing before that.
+ * The versions stay on this side, where the bakes' objects (tile.ts) and the
+ * settings read them.
  */
 
 import { Listeners } from "@xpute/kit/lang/listeners.ts";
@@ -25,8 +26,8 @@ import {
   type Source,
 } from "@/abi/state.ts";
 
-/** What of a declaration this side reads: the top zoom and each kind's
- * format, for the core; each kind's version, and a shard's own. */
+/** The fields of a declaration that this client reads. A shard may declare
+ * its own version of a kind. */
 export interface Declaration {
   top_zoom: number;
   format: Record<BaseLayer, number>;
@@ -34,8 +35,9 @@ export interface Declaration {
   shard: Record<string, { version?: Partial<Record<BaseLayer, string>> }>;
 }
 
-/** A version is one segment of a URL, so a tile's name stays under it (pxl-spec
- * bake/source.rs `is_version`, both held to rust/spec/golden/bake/version.tsv). */
+/** A version must be one segment of a URL, so that a tile's path stays under
+ * its version. The rule is pxl-spec bake/source.rs `is_version`, and both are
+ * tested against rust/spec/golden/bake/version.tsv. */
 function is_version(s: string): boolean {
   return (
     s.length >= 1 &&
@@ -44,11 +46,10 @@ function is_version(s: string): boolean {
   );
 }
 
-/** The declaration's text, where every kind has a version and every version
- * is a URL's segment, the top zoom and each kind's format are u32s, and the
- * shards are named; none where it is not, and the core, never handed it,
- * observes nothing. Which zooms, formats and shard names it follows is the
- * core's to refuse (pxl-core sys/io/source.rs). */
+/** Reads a declaration's text, or returns null when its shape is wrong. Only
+ * the shape is checked here. Whether the core follows the zoom, the formats
+ * and the shard names is the core's to decide, and it refuses what it does not
+ * (pxl-core sys/io/source.rs). */
 export function declaration(text: string): Declaration | null {
   let d: unknown;
   try {
@@ -112,19 +113,19 @@ export function source_state(): Source {
   return state;
 }
 
-/** The declaration handed to the core; none until then. */
+/** The declaration handed to the core, or null before it is handed. */
 export function source_declaration(): Declaration | null {
   return cur_declaration;
 }
 
-/** Each kind's own version as declared; none until then. */
 export function source_versions(): Declaration["version"] | null {
   return cur_declaration?.version ?? null;
 }
 
 export const watch_source = listeners.watch;
 
-/** Settled: true where the source is declared, false where it is refused. */
+/** Resolves with true once the source is declared, or with false once it is
+ * refused. */
 export function settled(): Promise<boolean> {
   return new Promise((done) => {
     const look = () => {
@@ -138,8 +139,9 @@ export function settled(): Promise<boolean> {
   });
 }
 
-/** Where the source stands as the core's worker has it, for a page's UI,
- * which holds no files. */
+/** On a page, the core and the asking for the declaration run in a worker.
+ * The page's thread holds no files, so the UI learns the source's state and
+ * declaration through this (runtime/open.ts). */
 export function mirror_source(
   next: Source,
   declaration: Declaration | null,
@@ -148,10 +150,11 @@ export function mirror_source(
   set(next);
 }
 
-/** The most wait after a refused ask, doubled each time up to the most, and
- * the wait drawn below it (full jitter): clients one outage failed together
- * do not come back together. Offline, nothing is asked until the device
- * says it is online. */
+/** After a failed ask, the next one waits a random time below a bound. The
+ * bound starts at ASK_AGAIN_MS and doubles after each failure, up to
+ * ASK_AGAIN_MOST_MS. The random wait keeps clients that one outage failed
+ * together from asking again together. While the device is offline, nothing
+ * is asked until it says it is online. */
 const ASK_AGAIN_MS = 2_000;
 const ASK_AGAIN_MOST_MS = 60_000;
 
@@ -159,7 +162,8 @@ async function ask_declaration(): Promise<string | null> {
   try {
     const res = await get(TILE_SOURCE_ROUTE);
     if (res.ok) return await res.text();
-    // A refusal's body is not read: let go, not held until collected.
+    // The body of a refusal is not read. Cancelling it lets the connection go
+    // at once, rather than when the response is collected.
     await res.body?.cancel();
     return null;
   } catch (err) {
@@ -170,16 +174,18 @@ async function ask_declaration(): Promise<string | null> {
   }
 }
 
-/** Hands the core its part of the declaration (SOURCE_DECLARE); false where
- * it is more than a command carries or the core refuses it, a format this
- * build does not read among what it refuses. */
+/** Hands the core its part of the declaration (SOURCE_DECLARE). It returns
+ * false when that part is more than one command can carry, or when the core
+ * refuses it. The core refuses, among others, a format this build cannot
+ * read. */
 export type SendSource = (
   top_zoom: number,
   formats: number[],
   shards: string[],
 ) => boolean;
 
-/** Settled once the source is declared or refused (`source_state`). */
+/** Resolves once the source is declared or refused. `source_state` then says
+ * which. */
 export async function declare_source(send: SendSource): Promise<void> {
   let source = await ask_declaration();
   let wait_ms = ASK_AGAIN_MS;
@@ -202,7 +208,8 @@ export async function declare_source(send: SendSource): Promise<void> {
     return;
   }
   const shards = Object.keys(read.shard);
-  // Before SOURCE_DECLARE: a frame in that call opens a tile under it.
+  // This is set before SOURCE_DECLARE is sent, because a frame that runs
+  // inside that call already opens tiles under the declaration.
   cur_declaration = read;
   if (
     !send(

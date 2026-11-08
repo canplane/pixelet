@@ -1,11 +1,12 @@
 // @pxl/client/port/perf.ts
 
 /**
- * The core's profiler, read in place through views over its memory, so
- * reading allocates nothing from the heap it measures, and decoded by the
- * layout perf.json gives (perf.spec.ts). The views hold only until
- * the next turn, so each read copies into plain values; what is made of
- * them and how it is shown is the UI's (ui/debug/perf/).
+ * The core's profiler, read in place through views over the core's memory.
+ * A read allocates nothing in the core's heap, which the profiler measures.
+ * The layout of what is read is perf.json's (perf.spec.ts). A view holds
+ * only until the core's next turn, so each read copies what it needs into
+ * plain values. What is made of those values, and how they are shown, is the
+ * UI's work (ui/debug/perf/).
  */
 
 import type { F64Array } from "@xpute/kit/abi/array.ts";
@@ -42,22 +43,21 @@ import { mem } from "@xpute/runtime";
 import { core, perf } from "@/port/core.ts";
 
 const WORD = 8;
-/** A task's `path` column, its bytes (perf.json `TASK`). */
+/** How many bytes a task's `path` column holds (perf.json `TASK`). */
 const PATH_BYTES = 3 * WORD;
 
-/** A call's answer, the address of its reply in the core's memory; a
- * refusal is -errno, never an address. */
+/** A profiler call answers with the address of its reply in the core's
+ * memory, or with a negative errno when it refuses. A refusal is thrown. */
 function reply_at(at: i32): u32 {
   if (at < 0) throw new FaultError(-at as i32);
   return at >>> 0;
 }
 
-/** A fresh recording window, called at once. */
 export function start(): void {
   core.perf_start();
 }
 
-/** The window frozen, so what is exported holds still. */
+/** Freezes the recording window, so that what is exported holds still. */
 export function stop(): void {
   core.perf_stop();
 }
@@ -67,8 +67,8 @@ const u32s = (at: u32, n: u32) => new Uint32Array(mem, at, n);
 const site = (file: u32, bytes: u32, line: u32) =>
   file === 0 ? null : `${td.decode(new Uint8Array(mem, file, bytes))}:${line}`;
 
-/** The columns that are lists, a word a name. The names are their owners', and
- * shown by the UI. */
+/** The FRAME columns that are lists, one word for each name in the list. The
+ * names come from each list's owner, and the UI shows them. */
 export const LIST_COLUMNS = ["phases", "effects", "gpu_spans"] as const;
 export type ListColumn = (typeof LIST_COLUMNS)[number];
 export type FrameColumn = Exclude<keyof typeof FRAME, "WORDS">;
@@ -80,7 +80,8 @@ export type Frame = { [K in ScalarColumn]: f64 } & {
   gpu_spans: f64[];
 };
 
-/** Each column at its word, and the words it spans: to the next column's, the last to FRAME's end. */
+/** Each FRAME column with its first word and its width in words. A column
+ * runs up to the next one, and the last runs to the end of the record. */
 export const COLUMNS: readonly { name: FrameColumn; at: u32; width: u32 }[] =
   (() => {
     const at = (Object.entries(FRAME) as [FrameColumn | "WORDS", u32][]).filter(
@@ -98,7 +99,6 @@ const LISTS: ReadonlySet<string> = new Set(LIST_COLUMNS);
 export const is_list = (column: FrameColumn): column is ListColumn =>
   LISTS.has(column);
 
-/** The FRAME record at word `o` of `words`. */
 export function frame_at(words: ArrayLike<f64>, o: u32): Frame {
   const f: Record<string, f64 | f64[]> = {};
   for (const { name, at, width } of COLUMNS) {
@@ -120,44 +120,49 @@ export interface FrameSummary {
   n: u32;
   seconds: f64;
   moving: f64;
-  /** The moving frames' intervals summed. */
+  /** The sum of the moving frames' intervals. */
   moving_ms: f64;
   missed: f64;
   overran: f64;
-  /** Intervals whose turns ran past them. */
+  /** How many intervals had a turn that ran past their end. */
   long: f64;
   turns: f64;
-  /** Frames a GPU read timed, which the GPU's figures are over. */
+  /** How many frames a GPU read timed. The GPU's figures are taken over
+   * these frames alone. */
   gpu_read: f64;
   interval: Percentiles;
   busy: Percentiles;
   tick: Percentiles;
-  /** The other parts of `busy`, and what they leave of it, unmeasured. */
+  /** The parts of `busy` besides `tick`. `rest` is what they leave of it,
+   * which no span measured. */
   effects: Percentiles;
   stage: Percentiles;
   tasks: Percentiles;
   perf: Percentiles;
   rest: Percentiles;
-  /** The GPU's time: the time its spans ran, those that overlap counted once. */
+  /** The GPU's busy time: the time its spans ran, with overlapping spans
+   * counted once. */
   gpu_busy: Percentiles;
-  /** The busy time's p50 and p95 of each kind's frames a read timed, and how
-   * many they are. */
+  /** For each frame kind, the p50 and p95 of the GPU's busy time over the
+   * frames of that kind that a read timed, and how many there were. */
   gpu_busy_kinds: { name: string; p50: f64; p95: f64; n: f64 }[];
-  /** Each phase's, each effect's and each span's p95: what is read of them; a
-   * span's over the n frames a read timed that ran it. */
+  /** The p95 of each phase, each effect and each GPU span, which is all that
+   * is read of them. A span's p95 is over the `n` frames that a read timed
+   * and that ran the span. */
   phases: { name: string; p95: f64 }[];
   effects_p95: { name: string; p95: f64 }[];
   gpu_spans: { name: string; p95: f64; n: f64 }[];
-  /** Frames by the renderer's kind, and the turns' last ask by wake. */
+  /** How many frames were of each kind the renderer draws, and how many
+   * turns last asked for each wake. */
   kinds: { name: string; n: f64 }[];
   wakes: { name: string; n: f64 }[];
-  /** The world's pixels of the last frame a read timed. */
+  /** How many of the world's pixels the last frame a read timed drew. */
   gpu_px: f64;
-  /** The ray counts of the window's frames summed, by FRAME's rays columns. */
+  /** The ray counts of the window's frames, summed by FRAME's rays columns. */
   rays: RayCounts;
-  /** The heap's high-water mark, the window's last frame's less its first's. */
+  /** How far the heap's high-water mark rose over the window: the last
+   * frame's mark less the first frame's. */
   heap_used_delta_bytes: f64;
-  /** The window's first frame and its last. */
   first: Frame;
   last: Frame;
 }
@@ -172,7 +177,8 @@ export interface TaskRecord {
   outcome: string;
   fail: u32;
   detail: u32;
-  /** null for the runtime's failures. */
+  /** Where in the core the task failed, as `file:line`, or null for a
+   * failure of the runtime's. */
   at: string | null;
   phases: [string, f64][];
 }
@@ -196,8 +202,8 @@ export interface Step {
   max_ms: f64;
 }
 
-/** A worst frame the core kept, and what changed from the one before it,
- * null where there was none. */
+/** One of the worst frames the core kept, and what changed since the frame
+ * before it. `delta` is null when there was no frame before it. */
 export interface Worst {
   sample: Frame;
   delta: {
@@ -207,19 +213,20 @@ export interface Worst {
   } | null;
 }
 
-/** A section's words by the names its spec gives them (perf.json), AT and
- * WORDS aside. */
+/** A section's words, keyed by the names its spec gives them (perf.json),
+ * without AT and WORDS. */
 export type Section<S> = { [K in Exclude<keyof S, "AT" | "WORDS">]: f64 };
-/** Where the view is as the read finds it (NOW.view). */
+/** Where the view is at the time of the read (NOW.view). */
 export type ViewSection = Section<typeof NOW.view>;
-/** What the frames held at the most or the least since the recording
- * started (STAT.recording). */
+/** The highest or lowest values the frames held since the recording started
+ * (STAT.recording). */
 export type RecordingSection = Section<typeof STAT.recording>;
-/** The window's ray counts by FRAME's rays columns (FRAME_GROUP.rays). */
+/** The window's ray counts, one for each of FRAME's rays columns
+ * (FRAME_GROUP.rays). */
 export type RayCounts = { [K in (typeof FRAME_GROUP.rays)[number]]: f64 };
 
-/** What PERF_STATS sums over its window, section by section: `recording` is since
- * the recording started, as the steps are, by STAT.recording's names. */
+/** What PERF_STATS sums over its window, section by section. `recording` and
+ * `steps` are over the whole recording instead, from when it started. */
 export interface Summary {
   recording_state: { recording: boolean; elapsed_ms: f64; truncated: boolean };
   frames: FrameSummary | null;
@@ -229,7 +236,7 @@ export interface Summary {
   view: ViewSection;
 }
 
-/** The records each ring holds, as RINGS counts them. */
+/** How many records each ring holds, as RINGS counts them. */
 export interface RingCounts {
   frames: u32;
   tasks: u32;
@@ -353,7 +360,8 @@ function section<S extends { AT: u32; WORDS: u32 }>(
   return out as Section<S>;
 }
 
-/** STAT's words over `window_ms` and NOW's, as PERF_STATS lays them out. */
+/** STAT's words over `window_ms`, and NOW's words, in the layout PERF_STATS
+ * replies with. */
 function stats_of(window_ms: f64 | null): { stats: F64Array; now: F64Array } {
   const r = u32s(reply_at(core.perf_stats(window_ms)), STATS.WORDS);
   return {
@@ -362,7 +370,8 @@ function stats_of(window_ms: f64 | null): { stats: F64Array; now: F64Array } {
   };
 }
 
-/** The summary over the last `window_ms`, or the whole recording at null. */
+/** The summary over the last `window_ms`, or over the whole recording when
+ * `window_ms` is null. */
 function perf_summary(window_ms: f64 | null): Summary {
   const { stats: s, now: n } = stats_of(window_ms);
   const R = NOW.recording_state;
@@ -380,13 +389,14 @@ function perf_summary(window_ms: f64 | null): Summary {
   };
 }
 
-/** The view alone, NOW's, read over an empty window, which folds no frame or
- * task. */
+/** Reads NOW's view alone. It asks for an empty window, so that no frame or
+ * task is folded. */
 function perf_view(): ViewSection {
   return section(stats_of(0).now, NOW.view);
 }
 
-/** The rings as they lie, each its address and count, with nothing reduced. */
+/** Each ring's address and record count, as the rings lie in memory, with
+ * nothing reduced. */
 function rings(): { frames: [u32, u32]; tasks: [u32, u32]; worst: [u32, u32] } {
   const r = u32s(reply_at(core.perf_rings()), RINGS.WORDS);
   const ring = (name: (typeof RING_NAMES)[number]): [u32, u32] => {
@@ -408,7 +418,8 @@ function perf_frames(): Frame[] {
   return Array.from({ length: cnt }, (_, i) => frame_at(w, i * FRAME.WORDS));
 }
 
-/** The tasks the ring holds, oldest first: its last `last`, or every one at null. */
+/** The tasks the ring holds, oldest first: the last `last` of them, or all of
+ * them when `last` is null. */
 function perf_tasks(last: u32 | null = null): TaskRecord[] {
   const [ring, held] = rings().tasks;
   const from = last === null ? 0 : Math.max(0, held - last);
@@ -468,7 +479,7 @@ function perf_worst(): Worst[] {
   });
 }
 
-/** What the profiler reads where the core's memory is. */
+/** The reads that must run beside the core's memory. */
 const READERS = {
   summary: perf_summary,
   view: perf_view,
@@ -480,7 +491,7 @@ const READERS = {
 
 export type PerfRead = keyof typeof READERS;
 
-/** A reading, where the core's memory is: beside the UI on a device, in
+/** Runs a read where the core's memory is: beside the UI on a device, and in
  * the core's worker on a page. */
 export function read<K extends PerfRead>(
   what: K,
@@ -489,7 +500,7 @@ export function read<K extends PerfRead>(
   return perf(what, args) as Promise<ReturnType<(typeof READERS)[K]>>;
 }
 
-/** `read`'s answer, read here, beside the core's memory. */
+/** Answers a `read` here, beside the core's memory. */
 export function answer(what: PerfRead, args: unknown[]): unknown {
   return (READERS[what] as (...a: unknown[]) => unknown)(...args);
 }

@@ -48,7 +48,7 @@ export type AskerExports = ReturnType<typeof asker_exports>;
 /** What the program does with each command the core posts on the asker protocol; a
  * call's answer is its return. */
 export interface AskerImports {
-  /** A number the runtime answers, which the core adds. */
+  /** Asks the runtime for a number, which the core adds to the sum. */
   ask(): i32;
 }
 

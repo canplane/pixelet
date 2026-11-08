@@ -1,7 +1,9 @@
 // cpp/xpute/core/abi/handle.hpp
 
-// A handle is `slot | generation << 16`, the far side reading only the slot,
-// so a handle kept past its release names nothing. Slot 0 is never handed out.
+// Generational handles. A handle is `slot | generation << 16`: a slot and
+// that slot's generation, so a handle kept past its release names nothing
+// that takes the slot later. The other side reads only the slot. Slot 0 is
+// never handed out, so 0 is never a handle.
 
 #pragma once
 
@@ -14,7 +16,8 @@
 
 namespace xpute::abi {
 
-// The rest is the generation, hence its 16 bits. The runtime uses the same 16.
+// The low bits of a handle, which hold its slot. The high 16 bits hold the
+// generation. The runtime splits a handle the same way.
 inline constexpr std::uint32_t SLOT_BITS = 16;
 static_assert(SLOT_BITS + std::numeric_limits<std::uint16_t>::digits == 32, "a slot and a generation fill a handle");
 
@@ -22,15 +25,15 @@ constexpr std::uint32_t handle_slot(std::uint32_t handle) noexcept {
     return handle & ((1u << SLOT_BITS) - 1);
 }
 
-// N slots, each holding a `T` while its handle is live; a slot given back is
+// N slots, each holding a `T` while its handle is live. A slot given back is
 // the next one taken. All-zero bytes are an empty table (for a `T` whose zero
-// is its default), so one may lie in memory that starts zeroed, or be emptied
-// by zeroing it, never built and moved.
+// is its default), so a table can lie in memory that starts zeroed, or be
+// emptied by zeroing it, without ever being built and moved.
 template <class T, std::size_t N> class Table {
     static_assert(N >= 2 && N <= (std::size_t{1} << SLOT_BITS), "a slot is 16 bits, and slot 0 is never handed out");
 
   public:
-    // None when every slot is taken.
+    // Answers none when every slot is taken.
     std::optional<std::uint32_t> insert(T val) noexcept {
         std::uint32_t slot;
         if (free_ != 0) {
@@ -42,7 +45,7 @@ template <class T, std::size_t N> class Table {
             return std::nullopt;
         }
         Slot &s = slots_[slot];
-        // Never 0, so no handle is 0.
+        // The generation is never 0, so no handle is 0.
         auto generation = static_cast<std::uint16_t>(s.generation + 1);
         s.generation = generation == 0 ? 1 : generation;
         s.epoch = epoch_ + 1;
@@ -70,12 +73,13 @@ template <class T, std::size_t N> class Table {
         return std::exchange(s.val, T{});
     }
 
-    // From here, what is taken is what `rollback` gives back.
+    // Begins a transaction: the slots taken from here on are the ones
+    // `rollback` gives back.
     void begin() noexcept { epoch_++; }
 
-    // Every handle taken since `begin` and not yet removed, removed and handed
-    // to `gone`: what a transaction that did not commit made, which the other
-    // side never saw.
+    // Removes every handle taken since `begin` and not yet removed, and hands
+    // each to `gone`. These are what a transaction that did not commit made,
+    // which the other side never saw.
     template <class F> void rollback(F &&gone) noexcept {
         for (std::uint32_t slot = 1; slot <= top_; slot++) {
             std::uint32_t handle = handle_of(slot, slots_[slot].generation);
@@ -96,10 +100,12 @@ template <class T, std::size_t N> class Table {
   private:
     struct Slot {
         std::uint16_t generation = 0;
-        // One past the epoch the slot was taken in; 0 while free. 64 bits, so
-        // no count of epochs a program lives through brings a stale one round.
+        // One more than the epoch in which the slot was taken, or 0 while the
+        // slot is free. It has 64 bits so that no program lives through enough
+        // epochs for the count to wrap round to a stale value.
         std::uint64_t epoch = 0;
-        // A free slot's next free slot; 0, never handed out, ends the list.
+        // The next slot in the free list. Slot 0 is never handed out, so 0
+        // ends the list.
         std::uint32_t next = 0;
         T val{};
     };
@@ -109,10 +115,11 @@ template <class T, std::size_t N> class Table {
     }
 
     std::array<Slot, N> slots_{};
-    // Advanced by `begin`: the slots taken since are those made in it.
+    // The current transaction, advanced by `begin`. The slots taken since
+    // then are the ones the transaction made.
     std::uint64_t epoch_ = 0;
     std::uint32_t free_ = 0;
-    // The highest slot handed out; those past it never have been.
+    // The highest slot ever handed out; the slots past it never have been.
     std::uint32_t top_ = 0;
     std::uint32_t cnt_ = 0;
 };

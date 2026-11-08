@@ -1,8 +1,9 @@
-// Value noise over the cloud field's hash, `lattice_hash`, which build.rs
-// writes from pxl-engine cloud.rs, where the cumulus draws its cells from
-// it on the CPU.
+// Value noise over the cloud field's hash, `lattice_hash`. build.rs writes the
+// hash from pxl-content cloud.rs, where the CPU's cumulus draws its cells from
+// it, so the clouds the GPU draws agree with the CPU's.
 
-// Wraps at `mask + 1`, the lattice's cnt across the world, so the noise wraps with the map.
+// The lattice wraps at `mask + 1`, its count of cells across the world, so the
+// noise wraps with the map.
 fn lattice_noise(base: vec2u, p: vec2f, mask: u32, salt: u32) -> f32 {
   let whole = floor(p);
   let f = p - whole;
@@ -15,8 +16,9 @@ fn lattice_noise(base: vec2u, p: vec2f, mask: u32, salt: u32) -> f32 {
   return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
 }
 
-// Octaves finer than half a pixel stand at their mean instead of aliasing, each
-// offset from the last (`NOISE_OCTAVE_OFF`).
+// Sums the octaves of the noise, each offset from the last by
+// `NOISE_OCTAVE_OFF`. An octave whose cell spans less than two pixels adds its
+// mean instead of aliasing.
 fn lattice_fbm(base: vec2u, p: vec2f, cnt: u32, first: u32, salt: u32, footprint: f32) -> f32 {
   let scale = 1u << first;
   var b = base * scale;

@@ -1,12 +1,12 @@
 // @xpute/gpu/runtime.test.ts
 
 /**
- * Holds the web runtime to golden/gpu/programs.tsv where it runs, in a browser
- * on its WebGPU: each program's recorded turns, run as they were written,
- * read back the bytes the record holds, as the native runtime's do
- * (rust/gpu/src/runtime.test.rs). Turn K's ticket is K + 1, and the next turn
- * waits for the runtime to store it at the fence. And a
- * surface's handle holds its slot only while it is the one bound there.
+ * Holds the web runtime to golden/gpu/programs.tsv where it runs: in a
+ * browser, on its WebGPU. Each program's recorded turns, run as they were
+ * written, must read back the bytes the record holds, as the native runtime's
+ * do (rust/gpu/src/runtime.test.rs). Turn K's ticket is K + 1, and the next
+ * turn waits until the runtime has stored it at the fence. The test also holds
+ * that a surface's handle keeps its slot only while it is the one bound there.
  *
  * ts/gpu/script/browser.ts serves it to Chrome, and the page posts its outcome
  * back: "ok", or what failed.
@@ -20,7 +20,8 @@ function check(ok: boolean, msg: string): asserts ok {
   if (!ok) throw new Error(msg);
 }
 
-/** The same values in the same order; where not, the first place they part. */
+/** Checks that `seen` holds the values of `want` in the same order, and
+ * otherwise names the first place they part. */
 function same(
   seen: ArrayLike<unknown>,
   want: ArrayLike<unknown>,
@@ -77,8 +78,9 @@ async function replay(): Promise<void> {
 }
 
 /** An old handle's late unbind lets go no newer surface in its slot, and a
- * context taken from its slot is let go then. Binding reaches neither the
- * device nor a canvas, so both are stand-ins that record what is let go. */
+ * context that loses its slot to a newer handle is let go then. Binding
+ * reaches neither the device nor a canvas, so both are stand-ins that record
+ * what is let go. */
 function guard(): void {
   const released: string[] = [];
   const context = (name: string) =>

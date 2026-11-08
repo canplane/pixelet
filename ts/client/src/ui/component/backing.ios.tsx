@@ -1,10 +1,11 @@
 // @pxl/client/ui/component/backing.ios.tsx
 
 /**
- * A floating control's backing on an iPhone: Liquid Glass where the system
- * has it, else the fill. Presence is never an opacity on the glass: UIKit
- * renders a visual effect wrongly under any alpha below one, or never
- * installs it again. It goes through the glass styles ("clear", "none").
+ * The backing behind a floating control on an iPhone: Liquid Glass where the
+ * system has it, and the plain fill elsewhere. The glass never fades by its
+ * opacity, because UIKit renders a visual effect wrongly under any alpha below
+ * one, or never installs it again. The glass fades by changing its style
+ * instead, through "clear" to "none".
  */
 
 import { requireNativeView } from "expo";
@@ -21,12 +22,15 @@ import type { BackingProps, BackingPlace as Place } from "./backing.tsx";
 import { alpha } from "@/ui/component/theme.ts";
 import { Backing as Fill } from "./backing.tsx";
 
-// Everything the default has, but what this file draws itself.
+// Every export of the default file, except `SYSTEM_BACKING` and `Backing`: an
+// export declared in this file takes the place of a star export with the
+// same name.
 export * from "./backing.tsx";
 
 export const SYSTEM_BACKING = isLiquidGlassAvailable();
 
-/** UIKit blurs by a material, not a radius, so `blur` has no meaning here. */
+/** The system's blur view (modules/platform/ios/Blur.swift). UIKit blurs by a
+ * material, not a radius, so a material's `blur` has no effect here. */
 const Blur: ComponentType<ViewProps> = requireNativeView("PxlPlatform", "Blur");
 
 type Effect = "none" | "clear" | "regular";
@@ -56,8 +60,9 @@ export function Backing(props: BackingProps) {
   const [shown, setShown] = useState<Effect>(
     fadeFrom === undefined ? target : effectAt(fadeFrom, place),
   );
-  // A style set before the first layout is installed without animation, so
-  // it waits for layout and the transition's delay.
+  // UIKit installs a glass style set before the first layout without
+  // animating it, so a change of style waits for the first layout and for
+  // the transition's delay.
   const [laidOut, setLaidOut] = useState(false);
   useEffect(() => {
     if (!laidOut || shown === target) return;
@@ -67,9 +72,10 @@ export function Backing(props: BackingProps) {
     return () => clearTimeout(timer);
   }, [target, laidOut]);
 
-  // A see-through backing is the system blur, not the glass, whose rim ran as
-  // a line across the sheet. The blur and fill are cut to the corners; the
-  // backing is not, which would cut its shadow.
+  // A see-through backing, one with a material, is the system blur rather
+  // than the glass, because the glass's rim draws a line across the sheet.
+  // The blur and the fill are clipped to the corners. The backing itself is
+  // not clipped, because clipping it would cut off its shadow.
   if (material) {
     const { borderRadius } = StyleSheet.flatten(style) ?? {};
     const round = { borderRadius, overflow: "hidden" as const };

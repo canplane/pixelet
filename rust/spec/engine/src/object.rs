@@ -1,44 +1,43 @@
 // pxl-engine/object.rs
 
-//! gpu-portable: what is placed, as a descent asks it — the objects' one
-//! tree (pxl-core domain/layer/object/store.rs), read where it lives: two columns
-//! of a word a slot, `first_child` a branch's child group's first slot with `BRANCH` set or
-//! 0 for a leaf, and `data` a leaf's value and its record's handle, or a
-//! branch's fold, the kind most of its fill is and the share filled. The
-//! root's child group holds the nodes of zoom 0, and a node's slot in its parent's
-//! child group is its index's low bits (`path`). A descent hands each node what its
-//! parent found (`NodeSlot`), so a node is one look-up.
+//! gpu-portable: what is placed, as a descent asks it. It is the objects' one tree (pxl-core
+//! domain/layer/object/store.rs), read where it lives: two columns of one word a slot.
+//! `first_child` holds a branch's child group's first slot with `BRANCH` set, or 0 for a
+//! leaf. `data` holds a leaf's value and its record's handle, or a branch's fold: the kind
+//! that makes up most of its fill, and the share filled. The root's child group holds the
+//! nodes of zoom 0, and a node's slot in its parent's child group is the low bits of its
+//! index (`path`). A descent hands each node what its parent found (`NodeSlot`), so each node
+//! takes one look-up.
 //!
-//! What is placed is the last layer the ground decision lays, so it is asked
-//! first (`over`): where it holds a value, air included, that is the cell's
-//! asset, whatever is under it.
+//! What is placed is the last layer laid over the ground, so it is asked first (`over`):
+//! where it holds a value, air included, that value is the cell's asset, whatever lies under
+//! it.
 
 use crate::value;
 use crate::{Zoom, LEAF_CELL_ZOOM, SHARD_ZOOM};
 
-/// A slot's child pointer when it is a branch, its child group under it.
+/// The bit of a slot's child pointer that marks a branch; the bits under it hold the
+/// branch's child group.
 pub const BRANCH: u32 = 1 << 31;
 
-/// The child group of the root what is placed is under.
+/// The child group of the root that everything placed lies under.
 pub const ROOT: u32 = 0;
 
 use crate::answer;
 use crate::answer::BoxWords;
 use crate::answer::FULL;
 
-/// `FULL`'s bits: a share shifted past them is none.
+/// The bits of `FULL`; a share shifted down past them is none.
 const FULL_BITS: u32 = FULL.trailing_zeros();
 
-/// The edits a frame hands what reads them at most (pxl-core
-/// domain/scene/decor/gpu.rs): each the columns an overwrite wrote, a box
-/// of leaf cells `[x0, y0, x1, y1)`, X on any lap; past them the core
-/// unions the rest into the last.
+/// The most edits a frame hands to what reads them (pxl-core domain/scene/decor/gpu.rs).
+/// Each is the columns an overwrite wrote, as a box of leaf cells `[x0, y0, x1, y1)` with X on
+/// any lap. Past this many, the core joins the rest into the last.
 pub const EDITS: u32 = 8;
-/// The boxes of leaf cells a frame's edits and a preview's cuts changed:
-/// the edits, and a preview's cut and left-out leaf as they were and as they
-/// are; past them the rest is joined into the last (pxl-render gpu/generator.rs
-/// `hold`). What reads those columns asks them again: decor's generation, the
-/// node cache's forgetting.
+/// The boxes of leaf cells that a frame's edits and a preview's cuts changed: the edits, and
+/// a preview's cut and left-out leaf both as they were and as they are. Past this many, the
+/// rest is joined into the last (pxl-render gpu/generator.rs `hold`). Whatever reads those
+/// columns asks them again: decor's generation, and the node cache's forgetting.
 pub const RECTS: u32 = EDITS + 4;
 
 /// The leaf cells a preview's entry at `zoom` and `at` covers, as a box.
@@ -55,11 +54,11 @@ pub const fn cut_rect(zoom: Zoom, at: [i32; 3]) -> [i32; 4] {
 const VOID: u32 = value::VOID;
 pub const AIR: u32 = value::AIR;
 
-/// A slot's data word, the one layout every reader of the tree reads it by:
-/// a leaf's value low and its record's handle high (`leaf_word`), a
-/// branch's fold the kind most of its fill is low and its share of its cube
-/// filled high (`fold_word`). Low, the value or the kind either way
-/// (`low`); high, the handle or the share (`high`).
+/// A slot's data word, in the one layout every reader of the tree reads. A leaf holds its
+/// value in the low half and its record's handle in the high (`leaf_word`). A branch's fold
+/// holds, in the low half, the kind that makes up most of its fill, and in the high, the
+/// share of its cube filled (`fold_word`). So the low half is the value or the kind (`low`),
+/// and the high half the handle or the share (`high`).
 pub const fn leaf_word(val: u32, ext: u32) -> u32 {
     val & 0xffff | ext << 16
 }
@@ -79,14 +78,13 @@ pub const fn high(word: u32) -> u32 {
     word >> 16
 }
 
-/// A cube's eight children folded by volume, the one rule for what a node of
-/// an overwrite's tree holds at a coarser zoom, each child as its fold word
-/// (`kind` low, its share of its cube filled high, `FULL` whole; a leaf of a
-/// voxel fills it whole, one of none fills nothing): the share of the cube
-/// filled, the mean of theirs, and the kind most of that fill is, a tie to
-/// the corner `majority`'s alternates to (pxl-engine `ground::majority`).
-/// The objects' store folds its tree by it as it is written (pxl-core
-/// domain/layer/object/store.rs).
+/// A cube's eight children folded by volume: the one rule for what a node of an overwrite's
+/// tree holds at a coarser zoom. Each child comes as its fold word, with its kind low and the
+/// share of its cube filled high, `FULL` for whole; a leaf of a voxel fills its cube whole,
+/// and a leaf of nothing fills none. The fold's share is the mean of the children's, and its
+/// kind is the kind that makes up most of that fill, a tie going to the corner that
+/// `ground::majority` alternates to. The objects' store folds its tree by this rule as it is
+/// written (pxl-core domain/layer/object/store.rs).
 pub fn fold(children: [u32; 8], zoom: Zoom) -> u32 {
     let (kind, fill) = (low, high);
     // Child `k`, each read at a constant index.
@@ -127,10 +125,10 @@ pub fn fold(children: [u32; 8], zoom: Zoom) -> u32 {
     fold_word(best, sum / 8)
 }
 
-/// A leaf's word in its parent's fold (`fold`): a leaf whose value is a
-/// voxel fills it whole; the empty word, and any other, none. The one rule
-/// whichever side builds a tree, the objects' store (pxl-spec
-/// object/volume.rs) or a brick's ways (`way::tree`).
+/// A leaf's share in its parent's fold (`fold`): a leaf whose value is a voxel fills its cube
+/// whole, and the empty word, or any other, fills none. It is the one rule for whichever side
+/// builds a tree, the objects' store (pxl-spec object/volume.rs) or a brick's ways
+/// (`way::tree`).
 pub fn share(word: u32) -> u32 {
     let id = low(word);
     if word != 0 && voxel(id) {
@@ -140,21 +138,21 @@ pub fn share(word: u32) -> u32 {
     }
 }
 
-/// The tree's two columns, a word a slot.
+/// The tree's two columns, one word a slot.
 pub trait Columns {
     fn first_child(&self, slot: u32) -> u32;
     fn data(&self, slot: u32) -> u32;
 }
 
-/// What a node holds, as a descent hands it down, in one word, since a
-/// descent keeps one a zoom: the slot that answers it, whether that slot is a
-/// branch, its children's fold (`FOLDED`), or a leaf covering the node whole,
-/// and the zoom the slot is at, a leaf's own where it covers finer nodes.
-/// Its value is read off the columns only when asked (`value`).
+/// What a node holds, as a descent hands it down, in one word, because a descent keeps one
+/// for each zoom: the slot that answers it; whether that slot is a branch, which holds its
+/// children's fold (`FOLDED`), or a leaf covering the node whole; and the zoom the slot is at,
+/// which for a leaf covering finer nodes is the leaf's own. Its value is read from the columns
+/// only when asked (`val`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NodeSlot(u32);
 
-/// A held slot's branch bit, over its zoom.
+/// The bit of a held slot that marks a branch, above its zoom.
 pub const FOLDED: u32 = 1 << 5;
 pub const ZOOM_MASK: u32 = FOLDED - 1;
 pub const SLOT_SHIFT: u32 = FOLDED.trailing_zeros() + 1;
@@ -182,7 +180,7 @@ impl NodeSlot {
         self != NodeSlot::NOTHING
     }
 
-    /// Leaves under the node differ: it is their fold.
+    /// Whether the leaves under the node differ, so that the slot holds their fold.
     pub fn is_folded(self) -> bool {
         self.holds() && self.0 & FOLDED != 0
     }
@@ -212,8 +210,8 @@ impl Cut {
     };
 }
 
-/// What Y's index at `zoom` is from the world's south edge: no digit at zoom 0,
-/// the plane's half a node after.
+/// The offset that turns Y's index at `zoom` into a count from the world's south edge: 0 at
+/// zoom 0, and half the plane's nodes at every finer zoom.
 pub const fn y_start(zoom: Zoom) -> i32 {
     if zoom == 0 {
         0
@@ -222,8 +220,9 @@ pub const fn y_start(zoom: Zoom) -> i32 {
     }
 }
 
-/// What Z's index at `zoom` is from the world's floor: no digit to a shard, whose
-/// cube the world's height fills, half the height's nodes under it.
+/// The offset that turns Z's index at `zoom` into a count from the world's floor: 0 down to
+/// a shard's zoom, where one cube spans the world's height, and half the height's nodes at
+/// every finer zoom.
 pub const fn z_start(zoom: Zoom) -> i32 {
     if zoom <= SHARD_ZOOM {
         0
@@ -232,9 +231,9 @@ pub const fn z_start(zoom: Zoom) -> i32 {
     }
 }
 
-/// The node `at` of `zoom` as the tree is cut: X counted from the round's
-/// start, Y and Z from the world's edge, so the world is the one node of zoom 0
-/// and every node is its parent's index doubled, a bit more, on every axis.
+/// The node `at` of `zoom` indexed as the tree is cut: X counted from the start of a lap, Y
+/// and Z from the world's edge. So the world is the one node of zoom 0, and on every axis a
+/// node's index is its parent's doubled, plus one bit.
 pub fn path(zoom: Zoom, at: [i32; 3]) -> [i32; 3] {
     [
         at[0] & (1u32 << zoom).wrapping_sub(1) as i32,
@@ -243,7 +242,7 @@ pub fn path(zoom: Zoom, at: [i32; 3]) -> [i32; 3] {
     ]
 }
 
-/// The node `at` of `zoom`'s child at `slot` (`child_idx`), X in `at`'s frame.
+/// The child at `slot` (`child_idx`) of the node `at` of `zoom`, with X in `at`'s frame.
 pub fn child_at(zoom: Zoom, at: [i32; 3], slot: u32) -> [i32; 3] {
     let p = path(zoom, at);
     [
@@ -253,7 +252,7 @@ pub fn child_at(zoom: Zoom, at: [i32; 3], slot: u32) -> [i32; 3] {
     ]
 }
 
-/// The node `steps` over the node `at` of `zoom`, X in `at`'s frame.
+/// The node `steps` zooms above the node `at` of `zoom`, with X in `at`'s frame.
 pub fn ancestor_at(zoom: Zoom, at: [i32; 3], steps: Zoom) -> [i32; 3] {
     let p = path(zoom, at);
     [
@@ -263,7 +262,8 @@ pub fn ancestor_at(zoom: Zoom, at: [i32; 3], steps: Zoom) -> [i32; 3] {
     ]
 }
 
-/// A child group's slots, a node's children, each `child_idx` past its first.
+/// A child group's slots, one for each of a node's children, child `child_idx` lying that
+/// many slots past the first.
 pub const CHILDREN: u32 = 8;
 
 /// A node's place in its parent's child group, a slot past the group's first: X's low
@@ -272,7 +272,6 @@ fn child_idx(at: [i32; 3]) -> u32 {
     (at[0] & 1 | (at[1] & 1) << 1 | (at[2] & 1) << 2) as u32
 }
 
-/// What slot `slot` holds, at `zoom`.
 fn of(columns: &impl Columns, slot: u32, zoom: Zoom) -> NodeSlot {
     if columns.first_child(slot) != 0 {
         NodeSlot(slot << SLOT_SHIFT | FOLDED | zoom)
@@ -283,10 +282,10 @@ fn of(columns: &impl Columns, slot: u32, zoom: Zoom) -> NodeSlot {
     }
 }
 
-/// What the node `at` of `zoom` holds with nothing over it known: down from
-/// the root whose child group is `root` to its own slot, or to the leaf over it, a
-/// `child` a zoom, the one step every descent of the tree takes. A descent
-/// asks this once, at its root.
+/// What the node `at` of `zoom` holds when nothing over it is known: found by descending from
+/// the root whose child group is `root` to the node's own slot, or to the leaf over it, one
+/// `child` step a zoom, the one step every descent of the tree takes. A descent asks this
+/// once, at its root.
 pub fn cursor(columns: &impl Columns, root: u32, zoom: Zoom, at: [i32; 3]) -> NodeSlot {
     let p = path(zoom, at);
     down(
@@ -298,9 +297,8 @@ pub fn cursor(columns: &impl Columns, root: u32, zoom: Zoom, at: [i32; 3]) -> No
     )
 }
 
-/// What the node `at` of `zoom` holds under the node of `top` over it that
-/// `slot` holds: down from it to its own slot, or to the leaf over it, a
-/// `child` a zoom.
+/// What the node `at` of `zoom` holds, found by descending from the node above it at `top`,
+/// which `slot` holds, to its own slot or to the leaf over it, one `child` step a zoom.
 pub fn down(columns: &impl Columns, slot: u32, top: Zoom, zoom: Zoom, at: [i32; 3]) -> NodeSlot {
     let mut node_slot = of(columns, slot, top);
     let mut z = top;
@@ -312,9 +310,9 @@ pub fn down(columns: &impl Columns, slot: u32, top: Zoom, zoom: Zoom, at: [i32; 
     node_slot
 }
 
-/// What the child `at` of `zoom` of a node holding `parent` holds: a leaf
-/// over the parent covers it too, nothing under nothing; under a fold, its
-/// own slot.
+/// What the child `at` of `zoom` holds, given what its parent holds (`parent`). A leaf over
+/// the parent covers the child too, and nothing stays nothing; under a fold, the child has
+/// its own slot.
 pub fn child(columns: &impl Columns, parent: NodeSlot, zoom: Zoom, at: [i32; 3]) -> NodeSlot {
     if parent.is_folded() {
         of(
@@ -346,12 +344,12 @@ fn holds(cut: Cut, zoom: Zoom, at: [i32; 3]) -> bool {
     a[0] == c[0] && a[1] == c[1] && a[2] == c[2]
 }
 
-/// What the node `at` of `zoom` holding `slot` folds to, as a cell of its zoom
-/// is drawn: the leaf's value, or its fold's kind wherever any of it is
-/// filled, with what of its cube that fills (`fill_share`); `VOID` where nothing
-/// that is a voxel is. How much of the cell is kept is the cell's, of
-/// every layer together (`answer::cover`, `answer::eighths`). `hide`, a
-/// preview's left-out leaf, is left out where it is the leaf itself.
+/// What the node `at` of `zoom` holding `slot` folds to, as a cell of its zoom is drawn: the
+/// leaf's value, or the fold's kind wherever any of it is filled, filling the share of its
+/// cube that `fill_share` gives; `VOID` where nothing there is a voxel. How much of the cell
+/// is kept is decided for the cell, over every layer together (`answer::cover`,
+/// `answer::eighths`). `hide`, a preview's left-out leaf, is left out where it is the leaf
+/// itself.
 pub fn val(columns: &impl Columns, slot: NodeSlot, hide: Cut, zoom: Zoom, at: [i32; 3]) -> u32 {
     let word = if slot.holds() {
         columns.data(slot.slot())
@@ -378,8 +376,8 @@ pub fn val(columns: &impl Columns, slot: NodeSlot, hide: Cut, zoom: Zoom, at: [i
     }
 }
 
-/// The share of its cube what the node holding `slot` folds to fills, in
-/// `FULL`'s units (`value`): a leaf over it whole, a fold its share.
+/// The share of its cube that what the node holding `slot` folds to fills, in `FULL`'s units
+/// (`val`): whole for a leaf over it, and the fold's share for a fold.
 pub fn fill_share(columns: &impl Columns, slot: NodeSlot) -> u32 {
     if slot.is_folded() {
         high(columns.data(slot.slot()))
@@ -388,15 +386,14 @@ pub fn fill_share(columns: &impl Columns, slot: NodeSlot) -> u32 {
     }
 }
 
-/// The four palette indices the node `at` of `zoom` holding `slot`, a cell of value
-/// `v` (`value`), is drawn by, `dx + 2·dy`, as the ground's cell is by the
-/// four its fold took (pxl-engine `ground::Cell::four`): its 2×2 seen
-/// from above one zoom finer, the same for every face as the ground's. A
-/// quarter shows its upper child where that fills by `value`'s rule (a
-/// leaf's voxel, a fold's kind any of it filled; air does not), else its
-/// lower one through it, else the node's own value. A leaf over the node
-/// is its value four times, as a ground leaf's cell is. Each child is read
-/// at its own index under `hide`, as `v` was, so a leaf a preview leaves
+/// The four palette indices, in the order `dx + 2·dy`, that the node `at` of `zoom` holding
+/// `slot`, a cell of value `v` (`val`), is drawn by. They are taken as the ground's cell takes
+/// the four of its fold (pxl-engine `ground::Cell::four`): the node's 2×2 seen from above one
+/// zoom finer, the same for every face, as the ground's are. A quarter shows its upper child
+/// where that child fills by `val`'s rule (a leaf's voxel, or a fold's kind where any of it is
+/// filled; air does not fill), or else its lower child seen through it, or else the node's
+/// own value. A leaf over the node gives its value four times, as a ground leaf's cell does.
+/// Each child is read at its own index under `hide`, as `v` was, so a leaf a preview leaves
 /// out shows in no quarter.
 pub fn palette_indices(
     columns: &impl Columns,
@@ -425,7 +422,8 @@ pub fn palette_indices(
         );
         (c, c != VOID && c != AIR)
     };
-    // Each quarter's upper child, then its lower, a child a step: one ask.
+    // Each quarter's upper child, then its lower one, one child a step, so each child is asked
+    // once.
     let mut four = [v; 4];
     let mut upper = (VOID, false);
     let mut i = 0;
@@ -456,8 +454,8 @@ pub(crate) const SPLIT: u32 = 1;
 /// its cube.
 pub const CELL: u32 = 2;
 
-/// What is placed answers for a node, before any layer under it: what it
-/// says, and as a cell its value and the share of its cube that fills, in
+/// What is placed answers for a node, before any layer under it: what it says (`UNDER`,
+/// `SPLIT` or `CELL`), and as a cell, its value and the share of its cube that fills, in
 /// `FULL`'s units (`fill_share`), whole for a leaf or a cut.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Over {
@@ -466,15 +464,14 @@ pub struct Over {
     pub fill: u32,
 }
 
-/// What is placed answers for the node `at` of `zoom` holding `slot`, asked
-/// down to `near`: as a cell where `near` is its zoom or coarser, the value
-/// it holds or `carve`'s air and what of its cube that fills, else the
-/// layers under it. Coarser, it answers from its own
-/// pyramid as the ground answers from its relief (pxl-engine
-/// `ground::node`): the layers under it where nothing placed in it is a
-/// cell at any zoom asked (`cells_by`), else a split. A preview's cut and
-/// its left-out leaf only make air, so where nothing placed fills, what is
-/// under answers and splits where it fills.
+/// What is placed answers for the node `at` of `zoom` holding `slot`, asked down to `near`.
+/// Where `near` is the node's zoom or coarser, it answers as a cell: the value it holds, or
+/// `carve`'s air, and the share of its cube that fills; or else it leaves the node to the
+/// layers under it. At a coarser node it answers from its own pyramid, as the ground answers
+/// from its relief (pxl-engine `ground::node`): it leaves the node to the layers under it
+/// where nothing placed in it is a cell at any zoom asked (`cells_by`), and splits it
+/// otherwise. A preview's cut and its left-out leaf only make air, so where nothing placed
+/// fills, what lies under answers, and splits where it fills.
 pub fn over(
     columns: &impl Columns,
     slot: NodeSlot,
@@ -514,12 +511,11 @@ pub fn over(
     }
 }
 
-/// Where what is placed under the node holding `slot` may lie, as a box in
-/// the node's steps on every axis (`answer::box_word`): as its tree holds
-/// it, the halves of the node on each axis any of its eight children holds
-/// anything in, or all of it where they are one (not folded). None
-/// (`answer::BOX_NONE`) where nothing is placed. A preview's cut only makes
-/// air, so what is placed under it lies here still.
+/// Where what is placed under the node holding `slot` may lie, as a box in the node's steps
+/// on every axis (`answer::box_word`). As its tree holds it, the box covers, on each axis, the
+/// halves of the node in which any of its eight children holds anything, or the whole node
+/// where the children are one (not folded). It is `answer::BOX_NONE` where nothing is placed.
+/// A preview's cut only makes air, so what is placed under the cut still lies in the box.
 pub fn object_box(columns: &impl Columns, slot: NodeSlot, zoom: Zoom) -> BoxWords {
     use crate::answer::{box_word, BOX_NONE, BOX_STEPS, BOX_WHOLE};
     if !slot.holds() {
@@ -529,9 +525,9 @@ pub fn object_box(columns: &impl Columns, slot: NodeSlot, zoom: Zoom) -> BoxWord
         return BOX_WHOLE;
     }
     let base = columns.first_child(slot.slot()) & !BRANCH;
-    // On each axis, whether any child holding anything lies in its lower
-    // half, and in its upper: child `k`'s half on axis `a` is bit `a` of `k`.
-    // A bit an axis: a GPU's arrays hold no bools.
+    // On each axis, whether any child holding anything lies in the lower half, and whether any
+    // lies in the upper: child `k`'s half on axis `a` is bit `a` of `k`. They are kept as one
+    // bit an axis because a GPU's arrays hold no bools.
     let (mut low, mut high) = (0u32, 0u32);
     let mut k = 0;
     while k < 8 {
@@ -557,18 +553,16 @@ pub fn object_box(columns: &impl Columns, slot: NodeSlot, zoom: Zoom) -> BoxWord
     box_word([first(0), first(1), first(2)], [past(0), past(1), past(2)])
 }
 
-/// Whether anything placed under the node holding `slot` may be a cell at
-/// a zoom `d` under it or coarser (a cell keeps an eighth of its cube or
-/// more, `answer::eighths`): a leaf of a voxel fills every cube under it,
-/// one of none fills none; a fold's share is the mean of its eight's (spec
-/// object/volume.rs `fold`), so the node's filled volume is its share of
-/// its cube, and none of the 8ᵈ cubes `d` under it holds an eighth of its
-/// own unless the share is at least `FULL / 8ᵈ⁺¹`, a coarser cube's eighth
-/// more still. A share is floored at each fold, each floor less than one of
-/// the fold's units and so an eighth of its parent's, so the share left is
-/// short of the filled volume by less than 8/7 of a unit: two units over it
-/// hold it. Where the ground fills the rest of such a cube, its own bound
-/// splits it.
+/// Whether anything placed under the node holding `slot` may be a cell at a zoom `d` under
+/// it or coarser; a cell keeps an eighth of its cube or more (`answer::eighths`). A leaf of a
+/// voxel fills every cube under it, and a leaf of nothing fills none. A fold's share is the
+/// mean of its eight children's (pxl-spec object/volume.rs `fold`), so the node's filled
+/// volume is its share of its cube. None of the 8ᵈ cubes `d` zooms under it holds an eighth
+/// of its own unless the share is at least `FULL / 8ᵈ⁺¹`, and a coarser cube's eighth needs
+/// more still. A share is floored at each fold, each floor losing less than one of the fold's
+/// units, which is an eighth of a unit of its parent's, so the share left falls short of the
+/// filled volume by less than 8/7 of a unit; a margin of two units covers it. Where the ground
+/// fills the rest of such a cube, the ground's own bound splits it.
 fn cells_by(columns: &impl Columns, slot: NodeSlot, d: Zoom) -> bool {
     if !slot.holds() {
         return false;
@@ -582,9 +576,9 @@ fn cells_by(columns: &impl Columns, slot: NodeSlot, d: Zoom) -> bool {
     high(word) + 2 > eighth
 }
 
-/// Whether nothing placed or carved is finer than the node `at` of `zoom`
-/// holding `slot`: none placed under it or one placed covering it whole,
-/// and no preview's cut inside it.
+/// Whether nothing placed or carved is finer than the node `at` of `zoom` holding `slot`:
+/// nothing is placed under it, or one leaf placed covers it whole, and no preview's cut lies
+/// inside it.
 pub fn whole(slot: NodeSlot, carve: Cut, zoom: Zoom, at: [i32; 3]) -> bool {
     let carved = carve.zoom != Zoom::MAX && carve.zoom > zoom && {
         let s = carve.zoom - zoom;
@@ -621,8 +615,8 @@ mod tests {
         }
     }
 
-    /// What is placed answers, on each axis, the halves its children hold
-    /// anything in; a leaf all of it; nothing, none.
+    /// What is placed answers, on each axis, the halves in which its children hold anything; a
+    /// leaf answers the whole node, and nothing answers none.
     #[test]
     fn placed_is_child_halves() {
         let zoom = 10;

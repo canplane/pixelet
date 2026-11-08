@@ -3,16 +3,20 @@
 // GENERATED from spec/abi/sys.json
 
 /**
- * xpute's own protocol on majors NOP and SYS: the core's life as its runtime tells it, its
- * turns, and its end. NOP is the rings' own test. SYS_ATTACH, SYS_SUSPEND and SYS_RESUME
- * are the core's life as its runtime sees it: a runtime (re)attached, the core about to be
- * frozen, and woken; what each means to keep or reset is the core's. SYS_TURN marks a turn
- * the runtime's scheduling policy grants, with the wall clock. SYS_ABORT is the core's end, the
- * broken invariant it reports as it stops, which the runtime hears as a VMM hears a core's
- * exit. Each command is `major << 8 | minor` (kit abi/cmd) and carries an XTP branch whose
- * children are its fields, in order; one with no fields carries no packet. The GPU and the
- * files are devices of their own (gpu.json, fs.json). Majors 0x00 to 0x0F are xpute's
- * (ipc/frame.json); a program numbers its own protocols' commands past them.
+ * xpute's own protocol on majors NOP and SYS. Through it the runtime tells the core about
+ * the core's life and its turns, and the core reports its end. NOP is the rings' own test.
+ * SYS_ATTACH, SYS_SUSPEND and SYS_RESUME tell the core that a runtime attached, for the
+ * first time or again, that the core is about to be frozen, and that it was woken; what
+ * each one means the core keeps or resets is the core's to decide. SYS_TURN marks a turn
+ * that the runtime's scheduling policy grants, and carries the wall clock. SYS_ABORT
+ * reports the broken invariant the core stops on, and the runtime hears it as a VMM hears
+ * its guest exit.
+ *
+ * Each command is `major << 8 | minor` (kit abi/cmd). Its packet is an XTP branch whose
+ * children are the command's fields, in order; a command with no fields carries no packet.
+ * The GPU and the files are devices with protocols of their own (gpu.json, fs.json).
+ * Majors 0x00 to 0x0F are xpute's (ipc/frame.json), and a program numbers the commands of
+ * its own protocols past them.
  */
 
 import type {
@@ -96,7 +100,7 @@ export type SysExports = ReturnType<typeof sys_exports>;
 /** What the program does with each command the core posts on the sys protocol; a
  * call's answer is its return. */
 export interface SysImports {
-  /** The broken invariant the core reports as it stops (xpute-kit status/bug.rs). */
+  /** Reports the broken invariant the core stops on (xpute-kit status/bug.rs). */
   sys_abort(e: SysAbort): void;
 }
 

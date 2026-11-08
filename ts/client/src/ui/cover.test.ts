@@ -61,7 +61,7 @@ test("coverOf - before it ran: failed where it will not, progress while it waits
     [{ gpu: GPU_WAITING }, "progress.gpu"],
     [{ online: false }, "progress.offline"],
     [{ source: SOURCE_FAILING }, "progress.server"],
-    // The source is asked for beside the GPU, no step of its own.
+    // The source is asked for beside the GPU and has no step of its own.
     [{ gpu: GPU_PRESENT }, "progress.shaders"],
   ] as const) {
     expect(of(s)).toEqual({

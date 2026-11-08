@@ -1,8 +1,8 @@
 // pxl-core/domain/scene/gizmo/debug_line.rs
 
-//! Line segments for the dev gizmos, and the faces between them: a face hides
-//! the gizmo lines behind it and draws nothing, so the gizmos occlude one
-//! another and nothing else. A module built without the gizmos holds none.
+//! Line segments for the debug gizmos, and faces among them. A face draws
+//! nothing itself but hides the gizmo lines behind it, so the gizmos occlude
+//! one another and nothing else.
 
 use pxl_render::frame::shader::record;
 use pxl_render::frame::shader::record::PIPELINE_DEBUG;
@@ -10,12 +10,14 @@ use pxl_render::gpu::api::bytes;
 use pxl_render::gpu::draw::{DrawId, DrawList, MirroredBlock, Position};
 use pxl_spec::space::coord::v3::V3;
 
-/// Position relative to the set's origin (3), and linear color and its
-/// opacity (4); two vertices a segment: the renderer's vertex, read in its
-/// words (pxl-render frame/shader/record.rs `DEBUG_VERTEX_BYTES`).
+/// The floats of a line vertex: its position relative to the set's origin
+/// (3), then its linear color and opacity (4). A segment takes two vertices.
+/// The layout is the renderer's (pxl-render frame/shader/record.rs
+/// `DEBUG_VERTEX_BYTES`).
 pub const DEBUG_VERTEX_FLOATS: usize = record::DEBUG_VERTEX_BYTES as usize / 4;
 
-/// Position relative to the set's origin; three vertices a triangle.
+/// The floats of a face vertex: its position relative to the set's origin. A
+/// triangle takes three vertices.
 pub const DEBUG_FACE_FLOATS: usize = 3;
 
 #[derive(Default)]
@@ -28,8 +30,10 @@ pub struct DebugLines {
 }
 
 impl DebugLines {
-    /// `vertices` holds its first `lines` floats as lines, DEBUG_VERTEX_FLOATS a
-    /// vertex, then faces, DEBUG_FACE_FLOATS a vertex, all relative to `origin`.
+    /// Sets what is drawn. The first `lines` floats of `vertices` are line
+    /// vertices, `DEBUG_VERTEX_FLOATS` each, and the rest are face vertices,
+    /// `DEBUG_FACE_FLOATS` each, all relative to `origin`. When the block
+    /// cannot be written, nothing is drawn.
     pub fn set(&mut self, draw: &mut DrawList, origin: V3, vertices: &[f32], lines: usize) {
         let written = self.block.write(draw, bytes(vertices));
         (self.line_cnt, self.face_cnt) = match written {

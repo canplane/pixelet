@@ -43,16 +43,15 @@ pub struct Line {
     pub(crate) clear: u8,
 }
 
-/// Each point's coarsest zoom (pxl-engine `way::coarsest`) on the line
-/// through `points`, its XY in DB coordinates and its height in leaf cells:
-/// its effective area on the line, in leaf cells² — Visvalingam–Whyatt, as
-/// TopoJSON's presimplify and mapshaper weigh a point: the triangle it makes
-/// with the two about it, the least taken out first and those about it
-/// weighed again, a point weighing no less than one taken before it. Its
-/// height is weighed as its place is, so a deck's rise is kept where its
-/// line runs straight. Its ends are held at every zoom where the line ends
-/// there (`ends`), and past the leaves nowhere where only a cut ends it,
-/// since there no other tile's line does.
+/// Each point's coarsest zoom (pxl-engine `way::coarsest`) on the line through `points`,
+/// whose XY are in DB coordinates and whose heights are in leaf cells. It comes from the
+/// point's effective area on the line, in leaf cells², by Visvalingam–Whyatt, as TopoJSON's
+/// presimplify and mapshaper weigh a point: the triangle it makes with the two around it, the
+/// least taken out first and its neighbors weighed again, so a point weighs no less than one
+/// taken out before it. Its height is weighed as its place is, so a deck's rise is kept where
+/// its line runs straight. The line's ends are held at every zoom where the line really ends
+/// there (`ends`), and, where only a cut ends it, at no zoom past the leaves, since no other
+/// tile's line ends there.
 #[expect(
     clippy::absolute_paths,
     reason = "this module's own `way` and `coarsest` take the core's names"

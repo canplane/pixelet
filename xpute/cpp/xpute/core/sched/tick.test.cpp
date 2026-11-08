@@ -1,7 +1,8 @@
 // cpp/xpute/core/sched/tick.test.cpp
 //
-// A step is a plain function, so what a step sees goes in `trace`; and the
-// clock is the test's, so a step costs what it says.
+// A step is a plain function with no captures, so what a step sees is
+// recorded in the global `trace`. The test owns the clock, so a step costs
+// exactly the time it burns.
 
 #include "tick.hpp"
 
@@ -35,7 +36,7 @@ struct Trace {
 
 Trace trace;
 
-// A program's phases, as a world's might number them.
+// Example phases, numbered as a program might number its own.
 namespace phase {
 constexpr Phase interaction = 0;
 constexpr Phase visible = 1;
@@ -46,7 +47,8 @@ constexpr Phase report = 4;
 
 constexpr std::array<std::string_view, 5> PHASES{"interaction", "visible", "content", "cosmetic", "report"};
 
-// What the visible phase holds back for content.
+// The share of the budget the visible phase holds back for the content
+// phase.
 constexpr double CONTENT_SHARE = 0.2;
 constexpr std::array<double, 5> HELD_BACK{0, CONTENT_SHARE, 0, 0, 0};
 
@@ -104,7 +106,7 @@ XPUTE_TEST(tick_held_back_kept_for_later_phases) {
         phase::visible,
         [](TickContext &c) {
             trace.a = c.pass.remaining();
-            // Runs the budget it was shown to the floor.
+            // Spends all of the budget the step was shown.
             c.pass.run(range(1000), [](int) { return burn(0.05), true; });
         },
         0);

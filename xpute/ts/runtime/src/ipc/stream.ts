@@ -1,8 +1,9 @@
 // @xpute/runtime/ipc/stream.ts
 
 /**
- * A turn's calls from core to runtime (rust/core/src/ipc/stream.rs), run after
- * the turn returns, found from the stream's own words (ipc/stream.json).
+ * A stream: a turn's calls from the core to the runtime (xpute-core
+ * ipc/stream.rs), which the runtime runs after the turn returns. The records
+ * are found from the stream's own words (spec/ipc/stream.json).
  */
 
 import type { U32Array } from "@xpute/kit/abi/array.ts";
@@ -11,8 +12,10 @@ import { td } from "@xpute/kit/codec/encoding.ts";
 
 import { END, HEAD } from "./stream.spec.ts";
 
-/** The words are valid only inside `run`, and the stream is the core's
- * again once this returns, a throw from `run` included. */
+/** Runs each record of the stream at `at` through `run`, given its op, the
+ * stream's words, the index of its first word and its count. The words are
+ * valid only inside `run`. Once this returns, even by a throw from `run`, the
+ * stream is handed back to the core. */
 export function each_record(
   mem: ArrayBufferLike,
   at: u32,

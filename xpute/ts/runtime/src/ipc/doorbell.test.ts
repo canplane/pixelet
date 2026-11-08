@@ -78,7 +78,8 @@ test("doorbell - a core that traps throws at no one: it is told, and a call answ
     });
     door.onterminated = () => terminated++;
     const answer = (result: number) => result;
-    // In the call that traps, and in one after it, which rings no more.
+    // The call that traps answers ENOTRECOVERABLE, and so does a call after
+    // it, which rings nothing.
     assert.deepStrictEqual(door.call(1, null, answer), Errno.ENOTRECOVERABLE);
     assert.deepStrictEqual(door.call(1, null, answer), Errno.ENOTRECOVERABLE);
     door.ring(0);

@@ -1,9 +1,11 @@
 // pxl-render/sample_put.wgsl
 
-// A sample's hit as the raster reads it (pxl-engine `beam::SAMPLE_WORDS`).
+// Where a sample's walk ended, written into the words a sample leaves for the record's stops
+// (pxl-engine `beam::SAMPLE_WORDS`), which sample_box.wgsl reads.
 
-/// The ended walk `w` put at word `base` (pxl-engine `beam::SAMPLE_WORDS`): `SAMPLE_NONE` where
-/// it went on to its reach.
+/// Writes the ended walk `w` at word `base`. A walk that went on to its reach (`ends` 3) writes
+/// `SAMPLE_NONE` as its zoom and no asset or axis. A walk that ended in a lack (`ends` 2) sets
+/// the lack word (walk_node.wgsl `WalkEnd`).
 fn sample_put(base: u32, w: WalkEnd) {
   let at = base + SAMPLE_NODE;
   beams[at + NODE_ZOOM] = select(w.zoom, SAMPLE_NONE, w.ends == 3u);

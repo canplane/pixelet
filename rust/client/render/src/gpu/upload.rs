@@ -1,7 +1,7 @@
 // pxl-render/gpu/upload.rs
 
-//! The draw list's uploads on the device by the list's handle, as the
-//! renderer and its passes read them.
+//! The draw list's uploads on the device, found by the list's handle, as the renderer and its
+//! passes read them.
 
 use xpute_core::global::Global;
 use xpute_core::mem;
@@ -18,8 +18,8 @@ const fn slots_of(live: usize) -> usize {
     (2 * live).next_power_of_two()
 }
 
-/// Uploads by the list's handle: open addressing in `.fixed.uploads`. The heap
-/// is the source and the device a copy, so a lost device is restored from the
+/// The uploads, found by the list's handle in an open-addressed table in `.fixed.uploads`.
+/// The heap holds the bytes and the device holds a copy, so a lost device is restored from the
 /// addresses.
 pub struct Uploads {
     handle: &'static mut [u32],
@@ -48,7 +48,7 @@ fn mem(at: u32, n: u32) -> &'static [u8] {
     unsafe { core::slice::from_raw_parts(mem::at::<u8>(at as usize), n as usize) }
 }
 
-/// Handle, address, length, the two counts, buffer, group.
+/// The table's columns: handle, address, length, the vertex and index counts, buffer and group.
 const UPLOAD_COLUMNS: usize = 7;
 
 /// The table's columns for `live` uploads, then the draw list's (gpu/draw.rs `lists_bytes`).
@@ -95,7 +95,7 @@ impl Uploads {
         self.layout = None;
     }
 
-    /// As far as the turn's stream has room.
+    /// Puts the missing uploads back on the device, as far as the turn's stream has room.
     pub(crate) fn restore(&mut self, g: &Gpu) {
         if self.missing == 0 {
             return;
@@ -107,13 +107,14 @@ impl Uploads {
         }
     }
 
-    /// False, the upload still missing, where the turn's stream has no room.
+    /// Puts upload `i` on the device. Returns false, and leaves it missing, when the turn's
+    /// stream has no room.
     fn put(&mut self, g: &Gpu, i: usize) -> bool {
         if !room(write_buffer_bytes(mem(self.at[i], self.len[i] & !3))) {
             return false;
         }
-        // Copied from too, a palette kept as it was drawn (gpu/pass/skinned_mesh.rs
-        // `keep`).
+        // The buffer is also copied from, to keep a palette as it was drawn
+        // (gpu/pass/skinned_mesh.rs `keep`).
         let buf = g.buf(
             buf_size(self.len[i]),
             buffer_usage::VERTEX
@@ -160,7 +161,8 @@ impl Uploads {
         idx_cnt: u32,
     ) {
         self.remove(handle);
-        // The owners' summed bound itself, not the slots' rounded half, so an owner left out of it shows.
+        // The check is against the owners' summed bound itself, not half the rounded slots, so
+        // an owner left out of that bound is caught.
         xpute_kit::ensure!(self.cnt < self.live, ENOTRECOVERABLE, self.live);
         let mut i = home(handle, self.handle.len());
         while self.handle[i] != EMPTY {
@@ -181,8 +183,8 @@ impl Uploads {
         }
     }
 
-    /// Where the turn's stream has no room, the buffer goes and the upload is put
-    /// again whole once there is.
+    /// Writes the changed range of `handle`'s upload. When the turn's stream has no room, the
+    /// buffer is released and the upload is put again whole once there is room.
     pub(crate) fn rewrite(&mut self, g: Option<&Gpu>, handle: u32, at: u32, from: u32, len: u32) {
         let Some(i) = self.find(handle) else { return };
         self.at[i] = at;
@@ -242,7 +244,8 @@ impl Uploads {
         }
     }
 
-    /// For a draw binding it as a vertex buffer: the ghost's boxes are read through it (box.wgsl).
+    /// The bind group over `handle`'s buffer, made the first time it is asked for. The ghost's
+    /// boxes are read through it (box.wgsl).
     pub fn group(&mut self, g: &Gpu, handle: u32) -> Option<u32> {
         let i = self.find(handle).filter(|&i| self.buf[i] != 0)?;
         if self.group[i] == 0 {
@@ -256,15 +259,15 @@ impl Uploads {
         Some(self.group[i])
     }
 
-    /// The buffer `handle`'s bytes are on the device in, and its size in
-    /// bytes, as `get` finds it: what a copy of it takes.
+    /// The buffer that holds `handle`'s bytes on the device, and its size in bytes, which is
+    /// what a copy of it needs.
     pub fn buf_of(&self, handle: u32) -> Option<(u32, u32)> {
         self.find(handle)
             .filter(|&i| self.buf[i] != 0)
             .map(|i| (self.buf[i], buf_size(self.len[i])))
     }
 
-    /// The group `group` made for `handle`, for a draw, which makes none.
+    /// The group that `group` made for `handle`, for a draw, which cannot make one.
     pub fn group_of(&self, handle: u32) -> Option<u32> {
         let i = self.find(handle)?;
         (self.group[i] != 0).then_some(self.group[i])

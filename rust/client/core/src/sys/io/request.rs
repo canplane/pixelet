@@ -1,15 +1,18 @@
 // pxl-core/sys/io/request.rs
 
-//! What each stream wants, replaced whole each turn, and what is out on a
-//! credit. `pump` stops what nobody wants and starts the rest in the policy's
-//! order; what starts, stops and ends waits in `events` for the turn.
+//! The request scheduler, the one authority over which reads are out. Each
+//! stream declares its wants whole every turn, and each read that is out
+//! holds a credit. `pump` stops what nobody wants any more and starts the
+//! rest in the policy's order. What starts, stops and ends waits in `events`
+//! until the turn takes it.
 //!
-//! An answer ends its want; a failure ends only its attempt. An object's
-//! failure holds its want while it is wanted; a body refused room holds its
-//! want until the room is given back; the network's or the server's holds
-//! every start, then lets one probe out until something answers, and the
-//! server's past its last wait gives the reads up. What is out is never
-//! preempted.
+//! An answer ends its want, and a failure ends only its attempt. After an
+//! object fails, its want is held back for as long as it is wanted. A body
+//! refused room holds its want back until room is given back. A failure of
+//! the network or the server holds every start back, and then lets one probe
+//! out at a time until something answers. Past the server's last wait, the
+//! reads are given up. A read that is out is never stopped for one ranked
+//! higher.
 
 use std::collections::VecDeque;
 
@@ -33,7 +36,8 @@ const SLOTS: usize = MAX_CREDITS as usize;
 struct Want {
     id: u64,
     order: Order,
-    /// First wanted, kept across declarations: the wait the profiler reports.
+    /// When the want was first declared. It is kept across declarations, and
+    /// the profiler reports the wait from it.
     enqueue_ms: f64,
     wait: Wait,
 }
@@ -42,7 +46,7 @@ struct Want {
 enum Wait {
     Ready,
     Room(Refusal),
-    /// Its object failed: for as long as it is wanted.
+    /// The object failed, and the want waits for as long as it is wanted.
     Object,
 }
 
@@ -65,7 +69,8 @@ pub struct Attempt {
     pub start_ms: f64,
 }
 
-/// A key is a slot and its generation, valid while its attempt is out.
+/// A credit's slot. A key names a slot and its generation, and it is valid
+/// only while the slot's attempt is out.
 #[derive(Clone, Copy)]
 struct Slot {
     gen: u32,
@@ -73,19 +78,20 @@ struct Slot {
 }
 
 pub enum Event {
-    /// Its key, for its reader to open.
+    /// An attempt started under its key, for its reader to open.
     Start(u64, Stream, u64),
-    /// Its key, for its reader to close.
+    /// An attempt stopped under its key, for its reader to close.
     Stop(u64),
-    /// When, as what, and the timings its run reported.
+    /// An attempt ended: when, how, and the timings its run reported.
     End(Attempt, f64, Exit, Option<Phases>),
 }
 
-/// What holds every start back, gone with the next answer.
+/// The hold on every start after the network or the server failed. The next
+/// answer lifts it.
 #[derive(Clone, Copy)]
 struct Outage {
     failing: Option<Errno>,
-    /// The server's failures, one a wait.
+    /// The server's failures in a row, each of which began a wait.
     failures: u32,
     struck_ms: f64,
     until: f64,
@@ -99,30 +105,34 @@ const NO_OUTAGE: Outage = Outage {
 };
 
 struct Sched {
-    /// By id, as many as `bounds` holds: a layer's its tile cache's slots, as
-    /// it asks only for what it can hold; an asset's a file a slot.
+    /// Each stream's wants, sorted by id, at most its bound in `bounds`. A
+    /// layer's bound is its tile cache's slots, because a layer asks only for
+    /// what it can hold. The assets' bound is the files that may be in flight
+    /// at once (`LOAD_FILES`).
     wants: [Vec<Want>; STREAMS],
     bounds: [usize; STREAMS],
     slots: [Slot; SLOTS],
     credits: u32,
     most_credits: u32,
     events: VecDeque<Event>,
-    /// A declaration's and a pump's scratch, so a turn allocates nothing.
+    /// Scratch for `declare` and `pump`, so that a turn allocates nothing.
     fresh: Vec<Want>,
     ready: Vec<(Rank, Stream, Want)>,
     outage: Outage,
-    /// The server failed past its last wait; only `reset` ends it.
+    /// The server failed after its last wait. Only `reset` clears this.
     given_up: bool,
 }
 
 static SCHED: Global<Sched> = Global::new();
 
 fn sched() -> &'static mut Sched {
-    // Asked before `open` is the roof wired wrong, never a state to wait out.
+    // A call before `open` means the core's boot is wired wrong. It is never
+    // a state to wait out.
     SCHED.get(|| None.or_bug(Errno::ENOTRECOVERABLE))
 }
 
-/// Opened once the core is laid out, with each layer's frames.
+/// Opens the scheduler once the core's memory is laid out. `frames` gives
+/// each layer's bound, the slots of its tile cache.
 pub fn open(frames: impl Fn(Stream) -> u32) {
     let bounds = Stream::ALL.map(|s| match s.row().source {
         Source::Load => LOAD_FILES,
@@ -142,8 +152,10 @@ pub fn open(frames: impl Fn(Stream) -> u32) {
     });
 }
 
-/// `stream`'s wants are `wanted`, by id, a repeated id its last order. An id
-/// kept keeps its time and its wait, so a producer says everything every turn.
+/// Replaces `stream`'s wants with `wanted`, which is sorted by id. Of a
+/// repeated id, the last order counts. An id that stays keeps the time it was
+/// first wanted and its wait, so a producer declares everything it wants
+/// every turn.
 pub fn declare(stream: Stream, wanted: &[(u64, Order)]) {
     let (s, at) = (sched(), now());
     let i = stream as usize;
@@ -178,12 +190,12 @@ pub fn set_credits(credits: u32) {
     s.most_credits = s.most_credits.max(s.credits);
 }
 
-/// One pump a turn, after every producer has spoken, or the first would fill
-/// every slot.
+/// Runs once a turn, after every producer has declared. A pump after only
+/// the first producer would fill every slot with that producer's wants.
 pub fn pump() {
     let (s, at) = (sched(), now());
-    // Abandoned work stops in the turn it is abandoned: after a zoom out and
-    // back in, credits must not sit on the zoom passed through.
+    // Abandoned work stops in the turn it is abandoned. After a zoom out and
+    // back in, the credits must not stay on the zoom passed through.
     for k in 0..SLOTS {
         if s.slots[k]
             .out
@@ -198,14 +210,15 @@ pub fn pump() {
     if at >= s.outage.until {
         start_ready(s, at);
     }
-    // Nothing else need come to end a hold.
+    // A turn is asked for when the hold ends, because nothing else may come
+    // to wake the core then.
     if s.outage.until.is_finite() {
         edge::wake_at(s.outage.until);
     }
 }
 
-/// The best of what is ready on the free credits; a failing server gets one
-/// probe at a time.
+/// Starts the best ranked of the ready wants on the free credits. A failing
+/// server gets one probe at a time.
 fn start_ready(s: &mut Sched, at: f64) {
     let credits = s.credits as usize;
     let out = s.slots.iter().filter(|c| c.out.is_some()).count();
@@ -231,7 +244,8 @@ fn start_ready(s: &mut Sched, at: f64) {
             }
         }
     }
-    // The stream and the id only so two runs of a turn start the same work.
+    // The stream and the id break ties only so that two runs of the same turn
+    // start the same work.
     ready.sort_unstable_by(|a, b| {
         let tie = |r: &(Rank, Stream, Want)| (r.1 as u8, r.2.id);
         a.0.cmp(&b.0).then(tie(a).cmp(&tie(b)))
@@ -254,7 +268,8 @@ fn start_ready(s: &mut Sched, at: f64) {
     s.ready = ready;
 }
 
-/// One at a time, the scheduler let go between: a stop's reader settles here.
+/// The next event. Events are taken one at a time, and the scheduler is not
+/// borrowed between them, so the reader handling one may call back into it.
 pub fn take_event() -> Option<Event> {
     sched().events.pop_front()
 }
@@ -265,7 +280,8 @@ pub fn attempt_of(key: u64) -> Option<(Stream, u64)> {
     Some((a.stream, a.id))
 }
 
-/// `key`'s attempt is over: an answer ends its want, a failure holds it.
+/// Ends `key`'s attempt. An answer ends its want, and a failure holds the
+/// want back.
 pub fn settle(key: u64, exit: Exit, phases: Option<Phases>) {
     let (s, at) = (sched(), now());
     let Some(k) = slot_of(s, key) else { return };
@@ -280,7 +296,7 @@ pub fn settle(key: u64, exit: Exit, phases: Option<Phases>) {
             fault => return hold(s, fault, f, a.start_ms, at),
         },
     };
-    // Each of these is the server's answer.
+    // Each of these exits means the server answered, which lifts the outage.
     s.outage = NO_OUTAGE;
     let Some(i) = find(s, a.stream, a.id) else {
         return;
@@ -294,8 +310,9 @@ pub fn settle(key: u64, exit: Exit, phases: Option<Phases>) {
     }
 }
 
-/// Every start held back. What was already out when the server's failure was
-/// counted fails with it, so an outage is counted once.
+/// Holds every start back after a failure of the network or the server. An
+/// attempt that was already out when a server failure was counted fails with
+/// it, so one outage is counted once.
 fn hold(s: &mut Sched, fault: Fault, f: Failure, started_ms: f64, at: f64) {
     let o = &mut s.outage;
     let seed = derive_seed_u64(o.failures as u64, at.to_bits());
@@ -312,8 +329,9 @@ fn hold(s: &mut Sched, fault: Fault, f: Failure, started_ms: f64, at: f64) {
     }
 }
 
-/// The module is reset under a runtime that will not answer what it was told
-/// to run: its starts and stops go with it, its ends stay the profiler's.
+/// Resets the scheduler when the runtime will not answer what it was asked
+/// to run. The pending starts and stops are dropped, and the ends stay for
+/// the profiler.
 pub fn reset() {
     let s = sched();
     for k in 0..SLOTS {
@@ -327,23 +345,24 @@ pub fn reset() {
     s.events.retain(|e| matches!(e, Event::End(..)));
 }
 
-/// Whether `stream`'s want of `id` waits on its object, which failed.
+/// Whether `stream`'s want of `id` is held back because its object failed.
 pub fn has_object_failed(stream: Stream, id: u64) -> bool {
     let s = sched();
     find(s, stream, id).is_some_and(|i| matches!(s.wants[stream as usize][i].wait, Wait::Object))
 }
 
-/// The body slots a tile asked again may come in: less one for each of the
-/// most credits ever granted, as a body may still be out on each, and one for
-/// each Earth tile the bound holds, whose packet waits for a frame
-/// (sys/io/body.rs).
+/// The body slots that a tile asked for again may arrive in. The count
+/// leaves out one slot for each of the most credits ever granted, because a
+/// body may still be out on each, and one for each Earth tile the Earth's
+/// bound holds, whose packet waits for a frame (sys/io/body.rs).
 pub fn spare_slots() -> u32 {
     let s = sched();
     let earth = s.bounds[Stream::earth as usize] as u32;
     BODY_SLOTS.saturating_sub(s.most_credits.max(1) + earth)
 }
 
-/// Why reads fail, where none has come to an answer since one did.
+/// Why the reads are failing, or None once an answer has come since the last
+/// failure.
 pub fn failing() -> Option<Errno> {
     sched().outage.failing
 }
@@ -375,8 +394,9 @@ fn attempting(s: &Sched, stream: Stream, id: u64) -> bool {
         .any(|a| a.stream == stream && a.id == id)
 }
 
-/// Its key is spent: what the runtime still reports under it, an abort or a
-/// body that raced the stop, is dropped.
+/// Ends the attempt in slot `k` and spends its key. Whatever the runtime
+/// still reports under the key, an abort or a body that raced the stop, is
+/// dropped.
 fn end(s: &mut Sched, k: usize) -> Attempt {
     let slot = &mut s.slots[k];
     slot.gen = slot.gen.wrapping_add(1);

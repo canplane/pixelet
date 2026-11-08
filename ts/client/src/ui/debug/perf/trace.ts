@@ -1,9 +1,10 @@
 // @pxl/client/ui/debug/perf/trace.ts
 
 /**
- * The profiler window as Chrome's Trace Event Format, for ui.perfetto.dev.
- * Built here so the tens of megabytes are never the core heap's, and saved
- * as a file, since the clipboard handles that size badly.
+ * Writes the profiler's window in Chrome's Trace Event Format, which
+ * ui.perfetto.dev opens. The trace is built on the client, so that its tens
+ * of megabytes never take room in the core's heap. It is saved as a file,
+ * because the clipboard handles text of that size badly.
  */
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
@@ -62,7 +63,6 @@ function event(
 const threadName = (tid: u32, name: string) =>
   event("thread_name", "__metadata", "M", 0, null, tid, { name });
 
-/** A frame's columns as the counter track's arguments. */
 function frameArgs(f: Frame): Args {
   const args: Args = {};
   for (const { name } of COLUMNS) {
@@ -73,7 +73,6 @@ function frameArgs(f: Frame): Args {
     const names = LIST_NAMES[name];
     f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixedN(v, 2)));
   }
-  // Vsync wait, compositor, GPU, GC, the UI's glue.
   return args;
 }
 
@@ -82,8 +81,10 @@ async function perfTraceJson(): Promise<string> {
   const longs = longFramesSince(-Infinity);
   const events: TraceEvent[] = [];
 
-  // ---- task spans: a stream's rows, each task on the first that is free
-  // by its enqueue, so tasks that overlap never nest falsely ----
+  // ---- task spans ----
+  // Perfetto draws spans that overlap on one thread as nested. So each stream
+  // has rows, and a task goes on the first of its stream's rows that is free
+  // when the task is enqueued.
   const rows = new Map<string, f64[]>();
   const rowTid = new Map<string, u32>();
   const byEnqueue = [...tasks].sort((a, b) => a.enqueue_ms - b.enqueue_ms);
@@ -100,7 +101,8 @@ async function perfTraceJson(): Promise<string> {
       rowTid.set(row, tid);
       events.push(threadName(tid, `task: ${row}`));
     }
-    // The outcome is the event's category, and the detail is in `fail`'s text.
+    // The task's outcome goes in the event's category, and a failure's detail
+    // in the text of `fail`.
     const args: Args = {
       priority: r.priority,
       queuedMs:
@@ -124,7 +126,8 @@ async function perfTraceJson(): Promise<string> {
         args,
       ),
     );
-    // Its run, from its start, inside it.
+    // A second span, nested in the task's, marks the time after the task
+    // started running.
     if (r.start_ms !== null) {
       events.push(
         event(
@@ -147,8 +150,9 @@ async function perfTraceJson(): Promise<string> {
       events.push(
         event("frame", "frame", "C", ts, null, TID_FRAMES, frameArgs(f)),
       );
-      // The record is taken as the stage ends: the stage, the tick before
-      // it and the effects before that.
+      // A frame's record is taken as its stage ends, at `t`. So the stage
+      // ends at `t`, the tick ends where the stage starts, and the effects
+      // end where the tick starts.
       const span = (name: string, end_ms: f64, ms: f64) =>
         events.push(
           event(name, "frame", "X", ts - us(end_ms + ms), us(ms), TID_FRAMES),
@@ -159,7 +163,7 @@ async function perfTraceJson(): Promise<string> {
     }
   }
 
-  // ---- long animation frames ----
+  // ---- long frames ----
   if (longs.length > 0) {
     events.push(threadName(TID_LONG, "long frames"));
     for (const l of longs) {

@@ -32,8 +32,8 @@ image = { version = "0.25", default-features = false, features = ["jpeg"] }
 webp = "0.3"
 serde = { version = "1", features = ["derive"] }
 # `raw_value`: jsonb keeps numbers as `numeric`, so re-rendering a parsed double
-# changes the stored value. `float_roundtrip`: the default parser misrounded
-# 227 of 10,979 longitudes by an ULP.
+# changes the stored value. `float_roundtrip`: the default parser misrounds about 2% of
+# longitudes by an ULP.
 serde_json = { version = "1", features = ["float_roundtrip", "raw_value"] }
 axum = { version = "0.8", optional = true }
 tokio = { version = "1", features = ["fs", "macros", "net", "rt-multi-thread", "sync", "process", "time"], optional = true }

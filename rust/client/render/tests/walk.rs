@@ -1,7 +1,7 @@
-//! What decides where the walks by hand (frame/shader/walk_node.wgsl) stop, against
-//! pxl-engine: the zoom asked at a distance, whether a split is narrow at a beam's width, on
-//! their edges, and which nodes a slot of the node cache keeps. Skipped where no adapter
-//! answers.
+//! These tests hold the rules that decide where the walks by hand (frame/shader/walk_node.wgsl)
+//! stop to pxl-engine's, on each rule's edges and about them. The rules are the zoom asked at a
+//! distance, whether a split is narrow at a beam's width, and which nodes a slot of the node
+//! cache keeps.
 
 mod gpu;
 
@@ -9,13 +9,13 @@ use pxl_engine::cast::{self, Spacing};
 use pxl_engine::{grid, node_cache};
 use pxl_render::frame::shader::record::{src, SHADER_QUEUE_CORNERS};
 
-/// The probe's words a case: its vector's three, then what the module leaves of it.
+/// The probe's words for one case: the vector's three words, then the four the module writes.
 const PROBE_WORDS: usize = 7;
 
-/// The zoom and the narrowness as the walks work them out (walk_node.wgsl), a thread a case:
-/// the vector's length squared and the zoom asked there, held to no range; and whether a split
-/// `x` wide is narrow where a beam's rays lie `y` apart in angle, at `z` squared from the
-/// origin.
+/// A probe that works out the zoom and the narrowness as the walks do (walk_node.wgsl), one
+/// thread for each case. It writes the vector's length squared and the zoom asked there over
+/// the full range of zooms. It then writes the width of a beam whose rays lie `y` apart in
+/// angle at `z` squared from the origin, and whether a split `x` wide is narrow at that width.
 const PROBE: &str = r"
 @group(0) @binding(40) var<storage, read_write> probe: array<u32>;
 
@@ -35,7 +35,8 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
 }
 ";
 
-/// The probe run over `cases` on the beam rays' walk's module, what it left of each.
+/// Runs the probe over `cases`, appended to the module of the beam rays' walk, and returns the
+/// words it left for each case.
 fn probe(gpu: &gpu::Gpu, cases: &[[f32; 3]]) -> Vec<[u32; PROBE_WORDS]> {
     let source = format!("{}\n{PROBE}", src(SHADER_QUEUE_CORNERS));
     let p = gpu.pipeline(&source, "probe_cs");
@@ -54,7 +55,8 @@ fn probe(gpu: &gpu::Gpu, cases: &[[f32; 3]]) -> Vec<[u32; PROBE_WORDS]> {
     out[1..].as_chunks::<PROBE_WORDS>().0.to_vec()
 }
 
-/// pxl-engine cast.rs `squared`, whose order the walks sum in.
+/// A vector's length squared, summed in the order of pxl-engine's `squared` (cast.rs), which
+/// the walks keep.
 fn squared(v: [f32; 3]) -> f32 {
     v[0] * v[0] + v[1] * v[1] + v[2] * v[2]
 }
@@ -67,22 +69,23 @@ fn next_down(x: f32) -> f32 {
     f32::from_bits(x.to_bits() - 1)
 }
 
-/// How many last places a device's distance squared may lie off the Rust's: a product fused
-/// into the sum (`squared`) is rounded once.
+/// How many last places a device's distance squared may lie off the Rust's. A device may fuse
+/// a product into the sum (`squared`), which skips one rounding.
 const FUSED_ULPS: u32 = 1;
 
-/// The zoom the walks ask on a split distance, `2304 · 4^k` squared, and on the floats either
-/// side of it is `grid::cell_zoom_at`'s, off a vector along an axis, one a little off it and
-/// ones across all three axes. A device's distance squared lies `FUSED_ULPS` off the Rust's at
-/// most, and its zoom is then the one at its own distance: each that took that edge counted.
+/// On a split distance squared, `2304 · 4^k`, and on the floats either side of it, the zoom the
+/// walks ask must be `grid::cell_zoom_at`'s. The vectors lie along an axis, a little off an
+/// axis, and across all three axes. A device's distance squared may lie up to `FUSED_ULPS` off
+/// the Rust's, and its zoom must then be the one at its own distance. The test counts each case
+/// that took the other zoom that way.
 #[test]
 fn hand_zoom_on_a_split_distance() {
     let Some(gpu) = gpu::Gpu::new() else {
         eprintln!("no adapter: skipped");
         return;
     };
-    // Each case's split distance squared, and the vectors whose squares sum by the Rust to it
-    // or to the float either side.
+    // For each split distance, the cases are the vectors whose squares, summed as the Rust sums
+    // them, give the distance squared or the float either side of it.
     let mut cases = Vec::new();
     let mut seed = 0x2545_f491u32;
     let mut rand = || {
@@ -109,13 +112,15 @@ fn hand_zoom_on_a_split_distance() {
         put([0.0, d, 0.0]);
         put([0.0, 0.0, d]);
         put([-d, 0.0, 0.0]);
-        // A square an ulp of the distance's: the float over it.
+        // A second component whose square is one ulp of the distance squared, so the sum is the
+        // float over it.
         put([d, pow2(k - 6), 0.0]);
         put([0.0, -pow2(k - 6), d]);
-        // The float under it: the next f32 under the distance squares to it.
+        // The float under the distance squared: the next f32 under the distance squares to it.
         put([next_down(d), 0.0, 0.0]);
         put([0.0, 0.0, next_down(d)]);
-        // Across all three axes: each run of floats about the one that sums to it.
+        // Vectors across all three axes, with X stepped over the floats about the value whose
+        // sum comes to the distance squared.
         for _ in 0..24 {
             let (y, z) = (rand() * 0.6, rand() * 0.6);
             let x = (1.0 - y * y - z * z).sqrt();
@@ -132,7 +137,8 @@ fn hand_zoom_on_a_split_distance() {
         let want_r2 = squared(*v);
         let want = grid::cell_zoom_at(want_r2);
         let (got_r2, got) = (f32::from_bits(h[3]), h[4]);
-        // A zoom's edge within a last place of the Rust's distance squared.
+        // The case lies on a zoom's edge when a float either side of the Rust's distance
+        // squared asks another zoom.
         let edge = grid::cell_zoom_at(next_up(want_r2)) != want
             || grid::cell_zoom_at(next_down(want_r2)) != want;
         on[usize::from(edge)] += 1;
@@ -156,16 +162,18 @@ fn hand_zoom_on_a_split_distance() {
     assert!(differ.is_empty(), "first: {:?}", differ.first());
 }
 
-/// A split exactly `NARROW` beam widths wide, `side² = 8 · width²`, is narrow as `cast::narrow`
-/// says, at powers of two of it, the width a spacing at a distance squared
-/// (`Spacing::width`), and at the floats either side of the side.
+/// A split exactly `NARROW` beam widths wide, where `side² = 8 · width²`, must be narrow as
+/// `cast::narrow` says. The cases scale that split by powers of two, take the width from a
+/// spacing at a distance squared (`Spacing::width`), and step the side to the floats either
+/// side.
 #[test]
 fn hand_narrow_on_its_edge() {
     let Some(gpu) = gpu::Gpu::new() else {
         eprintln!("no adapter: skipped");
         return;
     };
-    // `1 / (2√2)`, whose square, rounded, is eight times one's, rounded.
+    // `w` is the f32 nearest `1 / (2√2)`. Its square, rounded and times 8, lands one place over
+    // 1, so a side of 1 lies on the bound.
     let w = f32::from_bits(0x3eb5_04f4);
     assert_eq!(
         8.0 * (w * w),
@@ -176,7 +184,7 @@ fn hand_narrow_on_its_edge() {
     for j in -10i32..=10 {
         let side = pow2(j);
         for m in [-4i32, 0, 3] {
-            // An angle and a distance squared whose width is `w · side`, exactly.
+            // An angle and a distance squared whose width is exactly `w · side`.
             let (angle, d2) = (w * pow2(j - m), pow2(2 * m));
             for s in [next_down(side), side, next_up(side)] {
                 cases.push([s, angle, d2]);
@@ -193,7 +201,8 @@ fn hand_narrow_on_its_edge() {
         .width(libm::sqrtf(v[2]));
         let want = cast::narrow(v[0] * v[0], width * width);
         narrow += u32::from(want);
-        // The bound as `NARROW` squared in f32, a place under 8.
+        // Counts the cases that the bound taken as `NARROW` squared in f32, a place under 8,
+        // would decide otherwise.
         apart_before +=
             u32::from((v[0] * v[0] < cast::NARROW * cast::NARROW * width * width) != want);
         if h[5] != width.to_bits() || (h[6] == 1) != want {
@@ -208,15 +217,17 @@ fn hand_narrow_on_its_edge() {
     assert!(differ.is_empty(), "first: {:?}", differ.first());
 }
 
-/// How many last places a device's beam width may lie off the Rust's, a rule a GPU alone
-/// decides (walk_node.wgsl `spacing_width`): WGSL's square root is `1 / inverseSqrt`'s,
-/// 2.5 places and 2, and the product by the angle rounds once more.
+/// How many last places a device's beam width may lie off the Rust's. Only a GPU walks a beam,
+/// so the GPU alone decides this rule (walk_node.wgsl `spacing_width`). WGSL takes a square
+/// root's accuracy from `1 / inverseSqrt`: the division may be 2.5 places off and the inverse
+/// root 2. The product by the angle rounds once more.
 const WIDTH_ULPS: u32 = 5;
 
-/// The width at a distance squared whose root no float holds exactly is `Spacing::width`'s
-/// within `WIDTH_ULPS`, and a split on `NARROW` of the Rust's width, or a few floats either
-/// side of it, is narrow as `cast::narrow` says of the device's own width: each width off
-/// the Rust's counted, and each split whose narrowness that parted from the Rust's.
+/// At a distance squared whose root no float holds exactly, the device's width must lie within
+/// `WIDTH_ULPS` of `Spacing::width`'s. A split `NARROW` of the Rust's widths wide, or a few
+/// floats either side, must be narrow as `cast::narrow` says of the device's own width. The
+/// test counts each width off the Rust's, and each split whose narrowness that parted from the
+/// Rust's.
 #[test]
 fn hand_width_off_a_square_root() {
     let Some(gpu) = gpu::Gpu::new() else {
@@ -233,7 +244,8 @@ fn hand_width_off_a_square_root() {
     let width_of = |angle: f32, d2: f32| Spacing { angle, across: 0.0 }.width(libm::sqrtf(d2));
     let mut cases = Vec::new();
     for _ in 0..4096 {
-        // A distance 2^-4 to 2^24 units, and the eye's lattice angle or finer.
+        // A distance from 2^-4 to 2^24 units, and an angle as wide as the eye's lattice's or
+        // finer.
         let d2 = libm::exp2(-8.0 + rand() * 56.0) as f32;
         let angle = libm::exp2(-6.0 - rand() * 8.0) as f32;
         let side = cast::NARROW * width_of(angle, d2);
@@ -266,14 +278,14 @@ fn hand_width_off_a_square_root() {
     assert!(differ.is_empty(), "first: {:?}", differ.first());
 }
 
-/// Two to the `k`, exact: the float whose exponent is `k`, for `k` a normal float's.
+/// Two to the `k`, exactly, for a `k` within a normal float's exponents.
 fn pow2(k: i32) -> f32 {
     f32::from_bits(((127 + k) as u32) << 23)
 }
 
-/// Whether a slot keeps a node as the walks ask it and the bucket it is kept in
-/// (walk_node.wgsl `keeps`, `bucket_of`), a thread a case: its zoom and its index, then what
-/// the module leaves.
+/// A probe of whether a slot keeps a node as the walks ask it, and of the bucket it is kept in
+/// (walk_node.wgsl `keeps`, `bucket_of`), one thread for each case. A case's words are the
+/// node's zoom and its index, then the two words the module writes.
 const KEEPS: &str = r"
 @group(0) @binding(40) var<storage, read_write> probe: array<u32>;
 
@@ -289,9 +301,10 @@ fn keeps_cs(@builtin(global_invocation_id) id: vec3<u32>) {
 }
 ";
 
-/// The walks keep a node exactly where pxl-engine's `node_cache::keeps` does, in the bucket its
-/// `node_cache::bucket_of` names: at every zoom to past the finest, on every axis's index about
-/// and across the edges of twice the world's span at that zoom, and on noise.
+/// The walks must keep a node exactly where pxl-engine's `node_cache::keeps` does, in the
+/// bucket `node_cache::bucket_of` names. The cases cover every zoom up to two past the finest.
+/// On each axis they take the indices at and across the edges of twice the world's span at that
+/// zoom, and noise besides.
 #[test]
 fn hand_keeps_as_the_engine() {
     let Some(gpu) = gpu::Gpu::new() else {

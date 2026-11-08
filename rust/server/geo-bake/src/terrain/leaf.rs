@@ -1,7 +1,7 @@
 // pxl-geo-bake/terrain/leaf.rs
 
-//! Which leaves exist and their bytes. A leaf exists where the elevation
-//! source covers it and land touches it, the coastline it is painted by; the offline bake and the dev server
+//! Which leaves exist, and their bytes. A leaf exists where the elevation source covers it
+//! and land touches it, by the coastline it is painted by; the offline bake and the dev server
 //! ask the same question, so both produce the same objects.
 
 use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
@@ -62,8 +62,8 @@ pub fn has_ground(client: &mut Client, tiles: &[[i32; 2]]) -> Result<Vec<bool>, 
     Ok(out)
 }
 
-/// A leaf: its separation solved, its surface painted around its lines, the two
-/// one tile.
+/// Bakes a leaf: its separation solved and its surface painted around its lines, the two
+/// making one tile.
 pub fn bake_leaf(
     r: &mut separation::Reader<impl Store>,
     tile: [i32; 2],

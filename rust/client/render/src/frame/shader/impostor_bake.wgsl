@@ -1,7 +1,9 @@
-// Draws a variant's model once from the side into its atlas layer, coverage
-// as alpha. glTF is Y-up with +Z toward the viewer.
+// Draws a draw group's model once, seen from the side, into its layer of the
+// impostor atlas. The layer is cleared first, so its alpha is 1 where the
+// model covers it and 0 elsewhere. glTF is Y-up, with +Z toward the viewer.
 
-// Center across and up, half side, half depth.
+// The model's fit in its layer: the center across and up, half the side, and
+// half the depth, in the model's units.
 @group(0) @binding(0) var<uniform> fit_words: array<vec4f, 1>;
 @group(1) @binding(0) var skin: texture_2d<f32>;
 @group(1) @binding(1) var skin_sampler: sampler;

@@ -1,10 +1,11 @@
 // @pxl/client/ui/debug/perf/column.ts
 
 /**
- * How the report, panel and trace show a frame's columns, as abi/perf.ts
- * decodes them. A column's unit is its name's suffix (`_ms`, `_bytes`, `_px`,
- * `_name`, as perf.json FRAME says), so a column the core adds needs no
- * word here; only a list column's names are spelled out.
+ * How the report, the panel and the trace show a frame's columns, as
+ * port/perf.ts decodes them. A column's name ends in its unit: `_ms`,
+ * `_bytes`, `_px`, or `_name` for an index into a list of names, as FRAME in
+ * perf.json defines. So a column the core adds needs nothing here. Only the
+ * names of a list column's slots are spelled out.
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
@@ -17,13 +18,12 @@ import { EFFECT_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
 import { fixed } from "@/ui/fixed.ts";
 
-/** The one unit every figure in bytes is shown in: a mebibyte. */
+/** Every figure in bytes is shown in mebibytes. */
 const MIB = 1048576;
 
-/** The core gives a zoom as its number. */
 export const zoomName = (z: number) => (Number.isNaN(z) ? "-" : `z${z}`);
 
-/** Each list column's names, slot by slot. */
+/** The names of each list column's slots, in slot order. */
 export const LIST_NAMES: Record<ListColumn, readonly string[]> = {
   phases: PHASES,
   effects: EFFECT_NAMES,
@@ -39,7 +39,8 @@ export const n1 = (n: number) => fixed(n ?? 0, 1);
 
 const UNIT = /_(ms|bytes|px)$/;
 
-/** A task phase's mean or total: bytes are counted, the rest are ms. */
+/** Shows a task phase's mean or total. The `bytes` phase is a count, and
+ * every other phase is in milliseconds. */
 export const phaseText = ([k, v]: [string, f64]) =>
   `${k.replace(UNIT, "")} ${k === "bytes" ? round(v) : n1(v)}`;
 
@@ -49,7 +50,8 @@ export const pct = (part: number, whole: number) =>
 export const tris = (t: number) =>
   t >= 1000 ? `${round(t / 1000)}k` : String(round(t));
 
-/** The names each `_name` column indexes, every one of FRAME's. */
+/** The names each `_name` column indexes. The type requires a table for
+ * every `_name` column of FRAME. */
 type NameColumn = Extract<FrameColumn, `${string}_name`>;
 const NAME_TABLES: { readonly [K in NameColumn]: readonly string[] } = {
   kind_name: FRAME_KINDS,

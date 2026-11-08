@@ -1,6 +1,9 @@
 // @xpute/kit/collection/heap.test.ts
 
-/** Holds the TypeScript side to golden/collection/heap.tsv, which every language's heaps must match. */
+/**
+ * Holds the TypeScript heaps to golden/collection/heap.tsv, the record every
+ * language's heaps must match.
+ */
 
 import { test } from "vitest";
 import assert from "node:assert/strict";

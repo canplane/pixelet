@@ -1,16 +1,16 @@
-//! Whole frames of the core, run as a device runs them: the core linked as its native
-//! core (lib.rs `core!`, xpute-gpu's `native_core!`), driven through its rings as the
-//! app's UI drives it (ts/client/src/port/), a frame's turn a refresh after the last on
-//! the core's clock however long the machine takes (pace.rs), its world surface drawn
-//! offscreen on a wgpu device. A pass by hand binds its own groups and reads one usage
-//! scope; only the renderer's frames bind what the frame binds, so only they meet what WebGPU
-//! refuses of a whole frame.
+//! Runs whole frames of the core the way a device runs them. The core is linked as its
+//! native core (lib.rs `core!`, xpute-gpu's `native_core!`) and driven through its rings
+//! the way the app's UI drives it (ts/client/src/port/). Each frame's turn comes one
+//! refresh after the last on the core's clock, however long the machine takes (pace.rs),
+//! and the world's surface is drawn offscreen on a wgpu device. A test that encodes a pass
+//! by hand binds its own groups and sees one usage scope. Only the renderer's real frames
+//! bind everything a frame binds, so only they meet what WebGPU refuses of a whole frame.
 //!
-//! The frames fail on any error WebGPU's validation raises, which a scope on the core's
-//! thread holds turn by turn (gpu.rs); on the core's stop, a broken invariant's report
-//! (the encode rule's ENOTRECOVERABLE in pxl-render gpu/api.rs among them) or a trap; on
-//! a view left standing that does not come to rest within `REST_FRAMES` idle turns; and on
-//! any wait that outlasts the harness's own clock (watch.rs).
+//! The run fails on any error WebGPU's validation raises, which a scope on the core's
+//! thread collects turn by turn (gpu.rs). It also fails when the core stops, on a broken
+//! invariant's report (among them the encode rule's ENOTRECOVERABLE in pxl-render
+//! gpu/api.rs) or on a trap; when a view left standing does not come to rest within
+//! `REST_FRAMES` idle turns; and when any wait outlasts the harness's own clock (watch.rs).
 
 mod fs;
 mod gpu;
@@ -32,39 +32,39 @@ use runtime::Runtime;
 use spec::V;
 use xpute_runtime::native::{pause, Core};
 
-/// The display the frames are paced to, 60 Hz.
+/// The refresh interval of the display the frames are paced to, 60 Hz.
 const REFRESH_MS: f64 = 1000.0 / 60.0;
 
-/// What the client allows out at once (ts/client/src/service/origin.ts `credits`).
+/// How many reads the client allows in flight at once (ts/client/src/service/origin.ts
+/// `credits`).
 const CREDITS: f64 = 6.0;
 
 /// The surface's size in pixels, a phone's at a device pixel ratio of 1.
 const SIZE: [f64; 2] = [390.0, 844.0];
 
-/// The surface's size the frames are drawn at last, an 8K display's at a device pixel ratio of
-/// 1.
+/// The surface's size for the last frames, an 8K display's at a device pixel ratio of 1.
 const LARGE: [u32; 2] = [7680, 4320];
 
 /// The wall clock the frames start at: noon at the place, 2026-06-21T03:00Z, so the sun
-/// stands high and the shadows cast.
+/// stands high and casts shadows.
 const NOON_MS: f64 = 1_782_010_800_000.0;
 
 /// Where the camera goes: Seoul.
 const PLACE: [f64; 2] = [126.978, 37.566];
 
-/// Idle turns a view left standing may ask for before it rests: the jitter's sequence over each
-/// pixel (`screen::JITTERS`), each readback landing `FRAME_LATENCY` frames after the frame that
-/// copied it.
+/// How many idle turns a standing view may ask for before it rests: one jitter sequence over
+/// each pixel (`screen::JITTERS`), plus the `FRAME_LATENCY` frames a readback takes to land
+/// after the frame that copied it.
 const REST_FRAMES: u32 = JITTERS + FRAME_LATENCY;
 
-/// Frames the renderer's pipelines are given to be made in before the world is drawn.
+/// How many frames the renderer's pipelines are given to be made before the world is drawn.
 const PIPELINE_FRAMES: u32 = 600;
 
-/// Frames a zoom's ease is given to end in, its step's fifty or so twice over.
+/// How many frames a zoom's ease is given to end, about twice the fifty or so a step takes.
 const EASE_FRAMES: u32 = 120;
 
-/// The shard the place lies in, the one the source serves: found from the top down, each
-/// zoom's tile the one whose square holds it.
+/// The shard the place lies in, which is the one shard the test's source serves. It is found
+/// from the top zoom down, taking at each zoom the tile whose square holds the place.
 fn shard_of([lon, lat]: [f64; 2]) -> Quadrant {
     let q = epsg4326::project(&[lon, lat, 0.0]);
     let [x, y] = [q[0], q[1]].map(|v| q3::to_real(i64::from(v)));
@@ -95,9 +95,9 @@ struct Run {
 }
 
 impl Run {
-    /// A turn granted as the runtime grants one (ts/client/src/port/surface.ts
-    /// `submit_grant`, then @xpute/runtime's SYS_TURN), then held to what the frames must keep: whether the core wants
-    /// the next frame at once.
+    /// Grants a turn the way the runtime does (ts/client/src/port/surface.ts `submit_grant`,
+    /// then @xpute/runtime's SYS_TURN) and checks what every frame must keep. Returns whether
+    /// the core wants the next frame at once.
     fn frame(&mut self, interactive: bool) -> bool {
         pace::frame();
         self.clock_ms += REFRESH_MS;
@@ -139,7 +139,7 @@ impl Run {
         );
     }
 
-    /// A call of the UI's, checked as a frame is.
+    /// Makes one of the UI's calls and checks it as a frame is checked.
     fn call(&mut self, name: &str, values: &[(&str, V)]) -> i32 {
         watch::waiting(format!("frame {}: {name}'s answer", self.frames));
         let r = self.runtime.call(name, values);
@@ -148,15 +148,15 @@ impl Run {
         r
     }
 
-    /// `n` frames, nothing sent.
+    /// Runs `n` frames with no input.
     fn frames(&mut self, n: u32) {
         for _ in 0..n {
             self.frame(false);
         }
     }
 
-    /// Frames until the zoom's ease ends, the last of the camera's as the last input it took:
-    /// the view stands from there.
+    /// Runs frames until the zoom's ease ends. The zoom was the camera's last input, so the
+    /// view stands still from there.
     fn settle(&mut self) {
         let mut eased = 0;
         while self.runtime.shown.zooming {
@@ -170,11 +170,11 @@ impl Run {
         }
     }
 
-    /// Idle turns, nothing sent, the clock at the display's pace: how many until the core
-    /// asks for the next frame at once no more, a readback's landing among what it waits on; it
-    /// asks none at once over a jitter's sequence of turns past the bound after.
-    /// What moves on its own (the characters standing in view) steps on and wakes it at its own
-    /// steps, later than that.
+    /// Runs idle turns with no input, the clock at the display's pace, and returns how many
+    /// passed before the core stopped asking for the next frame at once. A readback's landing
+    /// is among what the core waits on. The core must then ask for no immediate frame through
+    /// a further jitter sequence of turns. What moves on its own, such as the characters
+    /// standing in view, wakes the core at its own steps, which come later than that.
     fn rest(&mut self) -> u32 {
         let mut asked = 0;
         for n in 1..=REST_FRAMES + JITTERS {
@@ -217,8 +217,8 @@ fn main() {
 
 fn frames() {
     let core = pxl_core::core();
-    // Every turn is one this test rings, none the core's own thread runs, on the display's
-    // clock.
+    // The test rings every turn itself, on the display's clock, and the core's own thread
+    // runs none.
     pause();
     pace::install(core);
     let runtime = Runtime::lay(core);
@@ -233,7 +233,8 @@ fn frames() {
         clock_ms: NOON_MS,
         frames: 0,
     };
-    // The boot as runtime/boot.ts orders it: the runtime's attach, what the platform is, the GPU.
+    // The boot in the order runtime/boot.ts gives it: the runtime attaches, the platform is
+    // described, and the GPU is ready.
     run.runtime.send("SYS_ATTACH", &[]);
     run.runtime.send(
         "SENSOR_PLATFORM",
@@ -248,8 +249,9 @@ fn frames() {
         .send("SETTING_DEVELOPMENT", &[("development", V::Bool(true))]);
     run.runtime.send("GPU_READY", &[]);
     run.frame(false);
-    // The tile source as source.ts declares it: the place's shard alone, every tile of it
-    // a page its version leaves out (fs.rs), so the world there is the sea's.
+    // The tile source, declared as port/source.ts declares it, with the place's shard alone.
+    // Every tile of the shard is a page its version leaves out (fs.rs), so the world there is
+    // sea.
     let format = BaseLayer::ALL.map(|l| FORMAT.of(l)).to_vec();
     run.call(
         "SOURCE_DECLARE",
@@ -260,7 +262,8 @@ fn frames() {
         ],
     );
 
-    // The world's surface, as the scene's place opens it (port/surface.ts, port/scene.ts).
+    // The world's surface, opened the way the scene's place opens it (port/surface.ts,
+    // port/scene.ts).
     let surface = run.call("GPU_SURFACE_OPEN", &[]);
     assert!(surface > 0, "no surface was opened");
     let surface = V::Num(f64::from(surface));
@@ -294,17 +297,17 @@ fn frames() {
         run.frame(false);
     }
 
-    // The camera sent to the place, and the cast its view asks for: the jitter's sequence.
+    // The camera goes to the place, and its view asks for one jitter sequence of casts.
     run.call(
         "CAMERA_GOTO",
         &[("lon", V::Num(PLACE[0])), ("lat", V::Num(PLACE[1]))],
     );
     run.frames(JITTERS);
 
-    // Frames held: the view stands, the turns keep coming.
+    // The view stands still while the turns keep coming.
     run.frames(JITTERS);
 
-    // A turn: the secondary button dragged across the view.
+    // A rotation: the secondary button dragged across the view.
     let [cx, cy] = SIZE.map(|s| s / 2.0);
     run.pointer("Down", cx, cy);
     for k in 1..=8 {
@@ -319,7 +322,7 @@ fn frames() {
     run.frame(true);
     run.frames(JITTERS);
 
-    // The shadows on, and the light's cast they ask for.
+    // The shadows go on, which asks for the light's cast.
     run.call(
         "SETTING_SET",
         &[
@@ -329,7 +332,7 @@ fn frames() {
     );
     run.frames(JITTERS);
 
-    // The camera at the end of its ease, then idle turns until the view rests.
+    // The camera finishes its ease, then idle turns run until the view rests.
     run.settle();
     let rested = run.rest();
     eprintln!(
@@ -338,12 +341,13 @@ fn frames() {
         run.frames
     );
 
-    // The surface an 8K display's, the view cast again over it and at rest.
+    // The surface grows to an 8K display's, the view is cast again over it, and it rests.
     resize(&mut run, LARGE.map(f64::from));
     run.frames(JITTERS);
     let rested = run.rest();
-    // Drawn whole, the most the resolution's rule draws it at (pxl-render gpu/surface.rs
-    // `render_px`), and what the eye's holes take there (pxl-engine `ray::holes_words`).
+    // The largest size the resolution rule draws the surface at, at full ratio (pxl-render
+    // gpu/surface.rs `render_px`), and the bytes the eye's holes take there (pxl-engine
+    // `ray::holes_words`).
     let whole = Surface {
         px_w: LARGE[0],
         px_h: LARGE[1],

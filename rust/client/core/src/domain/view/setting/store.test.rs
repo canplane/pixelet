@@ -25,7 +25,7 @@ fn stored_round_trip() {
         .map(|o| o as u32)
         .find(|&o| o != Settings::DEFAULT.get(SettingKey::ao))
         .expect("a second option");
-    // Past 127, so its LEB128 takes two bytes.
+    // The value is past 127, so its LEB128 takes two bytes.
     let person = Settings::DEFAULT.get(SettingKey::person) + 200;
     assert!(
         s.set(SettingKey::tilt_lock, tilt)
@@ -68,7 +68,7 @@ fn unknown_stays_default() {
         storage_of(&[(SettingKey::ao as u32, 99)]),
         storage_of(&[(SettingKey::tilt_lock as u32, 2)]),
         storage_of(&[(unknown, 1)]),
-        // A pair cut short.
+        // A pair cut short after its number, and a number cut short.
         vec![SettingKey::tilt_lock as u8],
         vec![0x80],
     ] {
@@ -94,10 +94,11 @@ fn reads_past_unknown_pair() {
     );
 }
 
-/// A setting schema.json marks `stored` false is the session's: it is not in
-/// what is kept, a change to it alone asks for no write, and one found in
-/// the slot reads as its default. A dev one this build does not offer
-/// takes no change at all (`is_offered`), so only the offered are changed.
+/// A setting that schema.json marks `stored` false lasts for the session
+/// alone. It is left out of what is kept, a change to it alone asks for no
+/// write, and a value found for it in the slot reads as its default. A dev
+/// setting this build does not offer takes no change at all (`is_offered`),
+/// so the test changes only the offered ones.
 #[test]
 fn session_setting_not_stored() {
     let _g = sys::serial();
@@ -142,14 +143,14 @@ fn session_setting_not_stored() {
     );
 }
 
-/// What storage holds of the slot, as the client hands it over.
+/// The slot's file as the client hands it over.
 fn file_of(pairs: &[(u32, u32)]) -> Vec<u8> {
     let mut bytes = vec![format::SETTINGS];
     bytes.extend(storage_of(pairs));
     bytes
 }
 
-/// The slot opened at boot, with nothing waiting and nothing to keep.
+/// Opens the slot as boot does, with no file waiting and nothing to keep.
 fn open_slot() {
     file::on_storage_emptied();
     while file::take_storage().is_some() {}
@@ -157,7 +158,8 @@ fn open_slot() {
     UNSAVED.set(false);
 }
 
-/// One change, then a keep: whether it was held, unwritten.
+/// Makes one change and then a keep, and returns whether the change is
+/// still unwritten.
 fn held_after_a_change() -> bool {
     let tilt = 1 - settings_store().get(SettingKey::tilt_lock);
     assert_eq!(
@@ -169,7 +171,7 @@ fn held_after_a_change() -> bool {
 }
 
 /// The slot is read on the storage root once its file lands, and nothing is
-/// written before; what was read is not written back.
+/// written before that. What was read is not written back.
 #[test]
 fn read_before_write() {
     let _g = sys::serial();
@@ -191,7 +193,8 @@ fn read_before_write() {
     assert!(!settings_load_step(), "read once");
 }
 
-/// An empty slot is the defaults, written from the first change.
+/// An empty slot gives the defaults, and the store is written to it from the
+/// first change.
 #[test]
 fn empty_slot_defaults() {
     let _g = sys::serial();
@@ -202,9 +205,10 @@ fn empty_slot_defaults() {
     assert!(!held_after_a_change());
 }
 
-/// A file too large for any heap, or of another format (the JSON by name the
-/// slot held before), is refused: the defaults, nothing written over it until
-/// the client sets it aside and empties the slot, and then what changed meanwhile.
+/// A file too large for any heap, or of another format such as JSON, is
+/// refused. The store holds the defaults and writes nothing over the file
+/// until the client sets it aside and empties the slot. Then it writes what
+/// changed meanwhile.
 #[test]
 fn bad_slot_refused() {
     let _g = sys::serial();
@@ -234,8 +238,9 @@ fn bad_slot_refused() {
     }
 }
 
-/// One that fails to open otherwise is not the client's to set aside: the
-/// defaults, never written over this session.
+/// A slot that fails to open for another reason is not the client's to set
+/// aside. The store holds the defaults and never writes over the slot this
+/// session.
 #[test]
 fn unreadable_slot_stored() {
     let _g = sys::serial();

@@ -43,7 +43,7 @@ fn decor_at_its_clip_level() {
     assert_eq!(seen, [true, true], "both sides of the leaves are asked");
 }
 
-/// The clip levels holding a brick present at `held` and coarser alone.
+/// Clip levels that hold a brick present only at `held` and coarser.
 struct HeldTo(Zoom);
 
 impl clipmap::Presence for HeldTo {

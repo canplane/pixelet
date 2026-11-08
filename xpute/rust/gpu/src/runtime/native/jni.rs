@@ -1,9 +1,9 @@
 // xpute-gpu/runtime/native/jni.rs
 
 //! The GPU's runtime as an Android app reaches it: the C ABI's calls under the
-//! names JNI looks for, for the Kotlin class `xpute.Gpu`, whose `external`
-//! functions they are (`native_abi!`). A view's `Surface` crosses as the
-//! native window wgpu draws through (`target`), held from its bind until its
+//! names JNI looks for, as the `external` functions of the Kotlin class
+//! `xpute.Gpu` (`native_abi!`). A view's `Surface` crosses as the native
+//! window wgpu draws through (`target`), which is held from its bind until its
 //! unbind.
 
 use std::collections::HashMap;
@@ -16,13 +16,14 @@ use xpute_runtime::jni::ndk::{ANativeWindow, ANativeWindow_fromSurface, ANativeW
 use xpute_runtime::jni::sys::{jint, jobject, JNIEnv};
 
 /// The native window each bound surface draws through, by the core's
-/// handle: acquired when a view's surface is bound and released once it is
-/// not, since the core's surface over it is gone by then.
+/// handle. A window is acquired when a view's surface is bound, and released
+/// once it is unbound, when the core's surface over it is gone.
 static WINDOWS: Mutex<Option<HashMap<u32, usize>>> = Mutex::new(None);
 
-/// `Gpu.surfaceBind`: the core's surface `handle` bound to a view's
-/// `surface` through the native window it is (`bind`, the program's
-/// `xpute_gpu_surface_bind`): 0, `NOT_OPEN`, `NO_SURFACE` or `SLOT_TAKEN`.
+/// `Gpu.surfaceBind`: binds the core's surface `handle` to a view's
+/// `surface`, through the native window the surface is (`bind`, the
+/// program's `xpute_gpu_surface_bind`). Returns 0, `NOT_OPEN`, `NO_SURFACE`
+/// or `SLOT_TAKEN`.
 ///
 /// # Safety
 /// `e` is what JNI called with, and `surface` a live `android.view.Surface`,
@@ -59,8 +60,8 @@ pub unsafe fn bind(
     bound
 }
 
-/// `Gpu.surfaceUnbind`: `handle`'s surface let go (`unbind`, the program's
-/// `xpute_gpu_surface_unbind`), and the window it drew through.
+/// `Gpu.surfaceUnbind`: lets `handle`'s surface go (`unbind`, the program's
+/// `xpute_gpu_surface_unbind`), and releases the window it drew through.
 pub fn unbind(handle: u32, unbind: fn(u32)) {
     unbind(handle);
     let window = WINDOWS

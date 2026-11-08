@@ -1,8 +1,9 @@
 // pxl-render/frame/shader/impostor_place.wgsl
 
-// An impostor's quad placed, turned to the eye about the world's up, each
-// instance read from the decor's instances (instance.wgsl): what the lit pass
-// (impostor.wgsl) and the mark (tile_mark.wgsl) lay alike.
+// Places an impostor's quad, turned about the world's up to face the eye. Each
+// instance is read from the decor's instances (instance.wgsl). The lit pass
+// (impostor.wgsl) and the mark (tile_mark.wgsl) both place the quad here, so
+// the mark covers the pixels the impostor draws.
 
 @group(2) @binding(2) var<uniform> fits: array<vec4f, DECOR_GROUPS>;
 
@@ -11,8 +12,8 @@ struct VertexIn {
   @builtin(vertex_index) k: u32,
 };
 
-// Corner `k` of the quad: its world point, the way it faces and the corner
-// itself.
+// A placement is one corner of the quad: its point in the world, the way the
+// quad faces, and the corner as -1 or 1 across and up.
 struct Placement {
   world: vec3f,
   facing: vec3f,

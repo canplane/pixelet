@@ -1,7 +1,8 @@
 // xpute-core/wasm/link.rs
 
-//! How a core built as one WebAssembly module is linked, for its build
-//! script, which runs on the build machine and so takes this with no config:
+//! How a core built as one WebAssembly module is linked. The core's build
+//! script calls `link`; a build script runs on the build machine, so this
+//! module is compiled for every target:
 //!
 //! ```
 //! // a core's build.rs, in its `main`
@@ -10,29 +11,31 @@
 //!
 //! Cargo applies a `rustc-link-arg` only to the package whose script prints
 //! it, so each core calls `link` itself. Every module core imports its
-//! memory, and puts its stack first, so an overflow runs off address 0 and
-//! traps rather than writing over the data above it. The C++ core links
-//! with the same flags (`cpp/Makefile` `WASM_LINK`).
+//! memory and puts its stack first, so that a stack overflow runs below
+//! address 0 and traps instead of writing over the data above the stack. The
+//! C++ core links with the same flags (`cpp/Makefile` `WASM_LINK`).
 
-/// A WebAssembly page, the unit a memory is declared in: 64 KiB, not the
-/// 4 KiB page a core places its ranges and its heap by
+/// The size of a WebAssembly page, the unit a memory is declared in: 64 KiB.
+/// It is not the 4 KiB page by which a core places its ranges and its heap
 /// (`crate::mem::section::PAGE_BYTES`).
 pub const WASM_PAGE_BYTES: u32 = 1 << 16;
 
-/// A module core's link numbers.
+/// The numbers a module core is linked with.
 pub struct LinkConfig {
-    /// The stack's size (`-z stack-size`), placed first (`--stack-first`).
+    /// The stack's size (`-z stack-size`). The stack is placed first in the
+    /// memory (`--stack-first`).
     pub stack_bytes: u32,
     /// Where the linker's own data begins (`--global-base`), for a core that
-    /// keeps a front of its own below it.
+    /// keeps the front of the memory below its data (`crate::machine`).
     pub global_base: Option<u32>,
-    /// The least memory the module instantiates in (`--initial-memory`), so a
-    /// runtime that hands it less fails at once. Whole pages.
+    /// The least memory the module can be instantiated with
+    /// (`--initial-memory`), so that a runtime handing it less fails at once.
+    /// It must be a whole number of WebAssembly pages.
     pub init_bytes: Option<u32>,
 }
 
-/// Prints `cfg`'s link arguments, and nothing when the target is not
-/// wasm32, where a core is linked as the platform links any library.
+/// Prints `cfg`'s link arguments for Cargo. When the target is not wasm32 it
+/// prints nothing, and the core is linked as the platform links any library.
 pub fn link(cfg: &LinkConfig) {
     if std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() != Ok("wasm32") {
         return;
@@ -42,7 +45,6 @@ pub fn link(cfg: &LinkConfig) {
     }
 }
 
-/// The arguments, in the order the linker is given them.
 fn args(cfg: &LinkConfig) -> Vec<String> {
     let mut args = vec![
         "--import-memory".to_string(),

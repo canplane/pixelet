@@ -1,8 +1,8 @@
 // @pxl/client/ui/store/watch.ts
 
-/** A hook for each watch the layers below hand the UI (`watch_snapshot`, `watch_view`, `watch_gpu`,
- * `watch_online`, `watch_source`): the core's snapshot and its view, the GPU's and the network's state,
- * the source's versions. */
+/** A React hook for each watch that the layers below hand the UI: the core's
+ * snapshot and its view, the GPU's state, whether the device is online, and
+ * the source's state and versions. */
 
 import { useSyncExternalStore } from "react";
 
@@ -20,12 +20,14 @@ import {
 } from "@/port/ui.ts";
 import * as snapshot from "@/port/snapshot.ts";
 
-/** `select` must return a primitive or an existing reference; a fresh object renders forever. */
+/** `select` must return a primitive or a reference that already exists. A new
+ * object on every call makes React render again forever. */
 export function useCore<T>(select: (s: Snapshot) => T): T {
   return useSyncExternalStore(watch_snapshot, () => select(snapshot.current()));
 }
 
-/** The view's azimuth and scale, apart from the snapshot; `select` as `useCore`'s. */
+/** The view's azimuth and scale, which change apart from the snapshot.
+ * `select` keeps the same rule as `useCore`'s. */
 export function useView<T>(select: (v: UiView) => T): T {
   return useSyncExternalStore(watch_view, () =>
     select(snapshot.current_view()),

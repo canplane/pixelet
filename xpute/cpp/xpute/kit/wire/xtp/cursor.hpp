@@ -1,8 +1,9 @@
 // cpp/xpute/kit/wire/xtp/cursor.hpp
 
-// Cursors over a packet; what a read hands back is a view of the packet's
-// bytes, so the packet must outlive it. The packet need not be aligned in
-// memory, but its nodes must be aligned within it.
+// The read side of XTP: cursors over a packet. What a read returns points into
+// the packet's bytes, so the packet must outlive it. The packet need not be
+// aligned in memory, since every number is copied out of it, but each node
+// must be aligned within the packet.
 
 #pragma once
 
@@ -44,7 +45,7 @@ struct Array {
     template <class T> Elements<T> elements() const noexcept { return bytes; }
 };
 
-// Low bit first.
+// A bitset read in place: bit `i` is bit `i % 8` of byte `i / 8`.
 struct Bitset {
     std::span<const std::uint8_t> packed;
     std::uint32_t len;
@@ -124,7 +125,8 @@ class Cursor {
     Result<Strs> get_strs() const noexcept;
     template <class Alloc = std::allocator<std::byte>> Result<DeepValue<Alloc>> get_deep(const Alloc &alloc = Alloc()) const;
 
-    // Not for 64-bit integers, which a double cannot hold exactly.
+    // Any number type a double holds exactly. A 64-bit integer is refused
+    // (EBADMSG), even when its value would fit.
     Result<double> get_number() const noexcept;
 
   private:
@@ -144,7 +146,7 @@ class Cursor {
     Result<Strs> strs() const noexcept;
 
     std::span<const std::uint8_t> pkt_;
-    // 0 for an absent node; no node can start there.
+    // 0 for an absent node, since no node can start inside the header.
     std::uint32_t base_;
     NodeType type_;
     std::uint32_t len_;
@@ -185,7 +187,8 @@ class BranchCursor {
     friend class Cursor;
     explicit BranchCursor(Cursor node) noexcept : node_(node) {}
 
-    // Where child `idx`'s extent ends: the next present sibling's base, or this branch's end.
+    // Where child `idx`'s extent ends: at the next present sibling's start, or
+    // else at this branch's end, where its packet slice ends.
     std::uint32_t end_of(std::uint32_t idx) const noexcept;
 
     Cursor node_;

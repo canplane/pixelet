@@ -16,7 +16,7 @@ import {
 } from "@/abi/state.ts";
 import type { GpuState } from "@xpute/runtime";
 
-/** A place's word for its GPU, as the client keeps it. */
+/** The client's state for each word a place uses for its GPU. */
 export const GPU_STATE: Readonly<Record<GpuState, Gpu>> = {
   present: GPU_PRESENT,
   waiting: GPU_WAITING,
@@ -40,7 +40,7 @@ export function set_gpu(gpu: Gpu): void {
 
 export const watch_gpu = listeners.watch;
 
-/** Settled once a GPU has answered; never where none does. */
+/** Resolves once a GPU is present, and never where none is. */
 export function gpu_present(): Promise<void> {
   return new Promise((resolve) => {
     if (state === GPU_PRESENT) return resolve();

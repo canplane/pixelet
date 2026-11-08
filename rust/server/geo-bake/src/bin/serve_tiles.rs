@@ -1,13 +1,13 @@
 // pxl-geo-bake/bin/serve_tiles.rs
 
-//! Local demand bakes. --cache holds them a kind a directory, across
-//! restarts; a re-ingest or a bake change is a purge by command. The
-//! Earth's picture is baked offline by pxl-tool, so it is served from that
-//! bake (`--out`), under the names the bucket holds, whichever way the rest is.
-//! `--shelf` serves each kind's set (tile/shard.rs), so a bake is looked at
-//! before anything is published. A tile goes out immutable under a version
-//! that names what is served, as the Worker's do: a set's, its manifest's
-//! digest; the oven's, the token its cache holds (`version_of`).
+//! The dev tile server, baking on demand. `--cache` keeps what it bakes, one directory a
+//! kind, across restarts; after a re-ingest or a change to a bake, the cache is purged by
+//! command. The Earth's picture is baked offline (bin/bake_earth.rs), so it is served from
+//! that bake (`--out`), under the names the bucket holds, however the rest is served.
+//! `--shelf` serves each kind's set (tile/shard.rs), so a bake can be looked at before
+//! anything is published. A tile goes out immutable under a version that names what is
+//! served, as the Worker's tiles do: a set's version is its manifest's digest, and the oven's
+//! is the token its cache holds (`version_of`).
 
 use axum::body::Bytes;
 use axum::extract::{Path, State};
@@ -65,8 +65,8 @@ fn bytes_version(bytes: &[u8]) -> String {
     format!("dev-{:016x}", std::hash::Hasher::finish(&h))
 }
 
-/// What a kind is served under now: a set's, its manifest's digest, which
-/// every bake writes again; the oven's, its cache's token.
+/// The version a kind is served under now: for a set, its manifest's digest, which every bake
+/// writes again; for the oven, its cache's token.
 fn version_of(app: &App, layer: BaseLayer) -> Result<String, String> {
     let read = |path: &FsPath| std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()));
     match &app.tile_source {
@@ -92,9 +92,9 @@ fn version_of(app: &App, layer: BaseLayer) -> Result<String, String> {
     }
 }
 
-/// The source's declaration (pxl-geo-bake source.rs) as the server stands
-/// now: a shelf's sets as their manifests say, the oven the coverage in the
-/// formats this code writes; the Earth's picture its bake's.
+/// The source's declaration (pxl-geo-bake source.rs) for the server as it stands: a shelf's
+/// sets as their manifests say; for the oven, the coverage in the formats this code writes;
+/// and for the Earth's picture, its bake's.
 fn declaration(app: &App) -> Result<String, String> {
     let kinds = source::try_kinds(|l| {
         let version = version_of(app, l)?;

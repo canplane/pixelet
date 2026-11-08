@@ -14,11 +14,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A tile's decks: a road bridge's, the least concave line over what it must
-//! meet or clear, in panels along its way (`DECK_PANEL`), and a rail bridge's,
-//! riding a road deck or one level a viaduct with ramps (Arnis's bridges,
-//! highways and railways, without the blocks it places; the solve's rules,
-//! `super`).
+//! A tile's decks. A road bridge's deck is the least concave line over what it must meet or
+//! clear, in panels along its way (`DECK_PANEL`). A rail bridge's deck rides a road deck, or is
+//! one level, a viaduct with ramps. Both follow Arnis's bridges, highways and railways, without
+//! the blocks Arnis places, and the solve's rules (`super`).
 
 use fnv::{FnvHashMap, FnvHashSet};
 use std::collections::BTreeMap;
@@ -68,7 +67,7 @@ fn is_non_vehicular(class: &str) -> bool {
     )
 }
 
-/// Arnis's `effective_layer`: the layer, never below 0; a bridge untagged is 1.
+/// Arnis's `effective_layer`: the layer, never below 0; an untagged bridge is at layer 1.
 fn effective_layer(r: &Stretch) -> i64 {
     r.piece
         .way
@@ -78,12 +77,12 @@ fn effective_layer(r: &Stretch) -> i64 {
         .unwrap_or(i64::from(r.piece.form == Form::Bridge))
 }
 
-// ---- what a deck must clear: ways at grade and waterways, bucketed ----
+// ---- What a deck must clear: ways at grade and waterways, bucketed. ----
 
 struct Obstacle {
     a: [f64; 2],
     b: [f64; 2],
-    /// In cells: what it covers is as the client's way covers (`covers`).
+    /// Its width in cells; it covers what the client's way covers (`covers`).
     width: f32,
     headroom: i32,
     nodes: Vec<End>,
@@ -96,8 +95,8 @@ struct Obstacles {
 }
 
 impl Obstacles {
-    /// Each segment cut to the ring `[origin, far]`, its nodes those in it.
-    /// Nothing to clear: where no deck is solved.
+    /// Each segment cut to the ring `[origin, far]`, with its nodes those in it. `none` has
+    /// nothing to clear, for where no deck is solved.
     fn none() -> Obstacles {
         Obstacles {
             list: Vec::new(),
@@ -159,7 +158,7 @@ impl Obstacles {
             };
         for way in src.ways.values() {
             let row = &way.row;
-            // a bridge, a tunnel or a way indoors is no grade a deck clears (Arnis `grade_obstacle`)
+            // A bridge, a tunnel or a way indoors is no grade a deck clears (Arnis `grade_obstacle`).
             if row.tags.bridge || row.tags.tunnel || row.tags.indoor {
                 continue;
             }
@@ -203,7 +202,7 @@ impl Obstacles {
                 "stream" => STREAM_HEADROOM_M,
                 _ => continue,
             };
-            // as wide as the ground draws it, where Arnis clears its centerline
+            // As wide as the ground draws it, where Arnis clears only its centerline.
             add(
                 &mut out,
                 points,
@@ -249,7 +248,8 @@ fn clip(a: [f64; 2], b: [f64; 2], [lo, hi]: [[f64; 2]; 2]) -> Option<([f64; 2], 
     (t0 <= t1).then(|| (at(t0), at(t1)))
 }
 
-/// False when a deck runs along the segment rather than across it (cos 30°).
+/// Whether a deck crosses the segment: false when it runs along it rather than across it
+/// (within cos 30°).
 fn crosses(heading: [f64; 2], o: &Obstacle) -> bool {
     let s = [o.b[0] - o.a[0], o.b[1] - o.a[1]];
     let norms = libm::hypot(heading[0], heading[1]) * libm::hypot(s[0], s[1]);
@@ -276,9 +276,9 @@ fn dist_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
     libm::hypot(p[0] - a[0] - t * d[0], p[1] - a[1] - t * d[1])
 }
 
-// ---- road bridges (Arnis `BridgeStructureMap::build`) ----
+// ---- Road bridges (Arnis `BridgeStructureMap::build`). ----
 
-/// Decks resolved: by cell, the deck's height and layer.
+/// The resolved decks: for each cell, the deck's height and layer.
 pub(super) type DeckCells = FnvHashMap<(i64, i64), (i32, i64)>;
 
 pub(super) struct Decks {
@@ -309,7 +309,7 @@ fn parallel(a: f64, b: f64) -> bool {
         || (180.0 - diff).abs() <= DUAL_CARRIAGEWAY_HEADING_TOLERANCE_DEG
 }
 
-/// The box about cells.
+/// The box around cells.
 fn cells_box(cells: &[[f64; 2]]) -> [[f64; 2]; 2] {
     let mut b = [[f64::INFINITY; 2], [f64::NEG_INFINITY; 2]];
     for c in cells {
@@ -328,9 +328,9 @@ fn lateral(p: [f64; 2], r: &Stretch) -> f64 {
         .fold(f64::INFINITY, f64::min)
 }
 
-/// Arnis `side_by_side`: parallel decks forming one, across layers only when they touch. Weighed
-/// on the ways whole, as Arnis weighs an OSM way, so two tiles that see both decide alike wherever
-/// their rings cut them.
+/// Arnis's `side_by_side`: parallel decks form one deck, across layers only where they touch.
+/// It is weighed on the ways whole, as Arnis weighs an OSM way, so two tiles that see both
+/// decide alike wherever their rings cut them.
 fn side_by_side(a: &Stretch, b: &Stretch, scale: Scale) -> bool {
     let (Some(ha), Some(hb)) = (heading_of(a), heading_of(b)) else {
         return false;
@@ -339,7 +339,7 @@ fn side_by_side(a: &Stretch, b: &Stretch, scale: Scale) -> bool {
         return false;
     }
     let same = effective_layer(a) == effective_layer(b);
-    // their edges meet where each way's cover ends (pxl-engine `half_width`)
+    // Their edges meet where each way's cover ends (pxl-engine `half_width`).
     let half_width = |r: &Stretch| f64::from(way::half_width((r.width_u / CELL_U) as f32));
     let touching = half_width(a) + half_width(b) + f64::from(scale.c(SIDE_DECK_EDGE_GAP_M));
     let max = if same {
@@ -383,7 +383,8 @@ impl UnionFind {
     }
 }
 
-/// The least concave majorant: clears every requirement without sagging into a gap.
+/// The least concave majorant: a line that clears every requirement without sagging into a
+/// gap.
 fn upper_hull(mut pts: Vec<(f64, f64)>) -> Vec<(f64, f64)> {
     pts.sort_by(|a, b| a.0.total_cmp(&b.0).then(b.1.total_cmp(&a.1)));
     let mut hull: Vec<(f64, f64)> = Vec::with_capacity(pts.len());
@@ -473,16 +474,17 @@ fn ramp_len(total: f64, scale: Scale) -> f64 {
     )
 }
 
-// ---- a deck, leaning on nothing further than a tile ----
+// ---- A deck, leaning on nothing further than a tile. ----
 
-/// A deck is solved in panels of `DECK_PANEL` cells along its way whole, each from what lies about
-/// the panel's middle, and a cell between two middles is the blend of the two; the panels fall where
-/// they fall on the way, wherever a ring cuts it (the module's rules). What the source gives, the
-/// ground, the ways and waters a deck clears, its ends, is weighed within `DECK_WINDOW`. What another
-/// deck sets, the deck it clears and the joint it meets, leans in turn on that deck's own window, so
-/// it is weighed only within `DECK_NEAR`, the cell's own included, and the reach adds up over the
-/// levels stacked (a deck over a deck, a track riding it, a bore opening on it): `DECK_LEVELS` of them
-/// fit in a tile, which every ring holds about what its tile draws.
+/// A deck is solved in panels of `DECK_PANEL` cells along its way whole, each from what lies
+/// around the panel's middle, and a cell between two middles takes the blend of the two. The
+/// panels fall where they fall on the way, wherever a ring cuts it (the module's rules). What
+/// the source gives (the ground, the ways and waters a deck clears, and its ends) is weighed
+/// within `DECK_WINDOW`. What another deck sets (the deck it clears and the joint it meets)
+/// leans in turn on that deck's own window, so it is weighed only within `DECK_NEAR`, the
+/// cell's own included, and the reach adds up over the levels stacked (a deck over a deck, a
+/// track riding it, a bore opening onto it). `DECK_LEVELS` of them fit in a tile, which every
+/// ring holds around what its tile draws.
 const DECK_PANEL: usize = 16;
 const DECK_WINDOW: usize = 384;
 const DECK_NEAR: usize = 16;
@@ -496,7 +498,7 @@ const _: () = assert!(
 struct Needs {
     /// The ground under each cell, and its member.
     grounds: Vec<([f64; 2], i32, usize)>,
-    /// What a cell must clear, that capped so the deck can still come down to every anchor, and
+    /// What a cell must clear, capped so that the deck can still come down to every anchor, and
     /// whether another deck sets it (a deck under it to clear).
     clears: Vec<([f64; 2], i32, f64, bool)>,
     /// An end the deck comes down to: the ground, or a deck it joins (`true`); and its member.
@@ -507,8 +509,8 @@ struct Needs {
     bounds: Vec<[f64; 2]>,
 }
 
-/// A member's way whole: where it starts and its heading, along which its deck is solved, whether
-/// it keeps to that heading, its layer and its length in cells.
+/// A member's way whole: where it starts and its heading, along which its deck is solved;
+/// whether it keeps to that heading; its layer; and its length in cells.
 struct Member {
     origin: [f64; 2],
     dir: [f64; 2],
@@ -517,8 +519,8 @@ struct Member {
     length: f64,
 }
 
-/// A panel's deck: the least concave line over what it must meet, along its member's heading, or
-/// one level where a way about it winds off its own.
+/// A panel's deck: the least concave line over what it must meet, along its member's
+/// heading, or one level where a way around it winds off its own heading.
 enum Panel {
     Hull(Vec<(f64, f64)>),
     Level(i32),
@@ -539,7 +541,7 @@ fn deck_of(r: &Stretch, m: usize, members: &[Member], needs: &Needs, scale: Scal
     let mut panels: FnvHashMap<usize, Panel> = FnvHashMap::default();
     (0..r.cell.len())
         .map(|i| {
-            // its place along the way whole, which no ring moves
+            // Its place along the way whole, which no ring moves.
             let a = r.k0 + i;
             let (k, t) = (a / DECK_PANEL, (a % DECK_PANEL) as f64 / DECK_PANEL as f64);
             let u = along(me, absolute(r.at[i]));
@@ -564,10 +566,11 @@ fn along(me: &Member, p: [f64; 2]) -> f64 {
     (p[0] - me.origin[0]) * me.dir[0] + (p[1] - me.origin[1]) * me.dir[1]
 }
 
-/// Panel `k` of stretch `r`'s deck, from what its group must meet about its middle: as Arnis's structure,
-/// but over the windows (`DECK_WINDOW`, `DECK_NEAR`), not the whole. The ground floors the deck and is
-/// no point of its line, so a deck with one thing to clear in sight holds its height over it rather
-/// than dipping to the ground at the window's edge; where an end is in sight, it comes down to it.
+/// Panel `k` of stretch `r`'s deck, from what its group must meet around its middle: as
+/// Arnis's structure, but over the windows (`DECK_WINDOW`, `DECK_NEAR`), not the whole. The
+/// ground floors the deck and is no point of its line, so a deck with one thing to clear in
+/// sight holds its height over it rather than dipping to the ground at the window's edge;
+/// where an end is in sight, the deck comes down to it.
 fn deck_panel(
     r: &Stretch,
     k: usize,
@@ -579,7 +582,7 @@ fn deck_panel(
     let me = &members[m];
     let c = r.whole.at(((k * DECK_PANEL) as f64).min(r.whole.length()));
     let within = |p: &[f64; 2], d: usize| libm::hypot(p[0] - c[0], p[1] - c[1]) <= d as f64;
-    // what the source gives within the window, what another deck sets within the near
+    // What the source gives counts within the window; what another deck sets, within the near.
     let radius = |set_by_deck: bool| if set_by_deck { DECK_NEAR } else { DECK_WINDOW };
     let grounds: Vec<&([f64; 2], i32, usize)> = needs
         .grounds
@@ -613,7 +616,7 @@ fn deck_panel(
             .filter(|(_, &a)| a)
             .map(|(m, _)| m)
     };
-    // a long flat span rises to its layer
+    // A long flat span rises to its layer.
     let total: f64 = about().map(|m| m.length).sum();
     let flat = needs.bounds.iter().any(|b| within(b, DECK_WINDOW))
         && tmax - tmin < scale.c(FLAT_TERRAIN_DIP_THRESHOLD_M)
@@ -641,7 +644,8 @@ fn deck_panel(
         .chain(plateau)
         .fold(tmax, i32::max);
     let u = |p: [f64; 2]| along(me, p);
-    // a joint holds every deck about it; an end at the ground only its own way's, which ramps down to it
+    // A joint holds every deck around it; an end at the ground holds only its own way's, which
+    // ramps down to it.
     let mut pts: Vec<(f64, f64)> = anchors
         .iter()
         .filter(|a| a.2 || a.3 == m)
@@ -677,12 +681,13 @@ fn deck_panel(
             .map(|f| (u(*f), f64::from(raised))),
     );
     let Some(top) = pts.iter().map(|p| p.1).reduce(f64::max) else {
-        // nothing to meet or clear in sight: the deck stands on its highest ground about it
+        // Nothing to meet or clear in sight: the deck stands on its highest ground around it.
         return Panel::Level(tmax);
     };
-    // where no end of its own way is in sight, the structure goes on past the window, and the deck
-    // holds the highest it meets in sight rather than falling to something low at the window's edge
-    // that a whole structure's line would pass over; an end in sight it comes down to
+    // Where no end of its own way is in sight, the structure goes on past the window, and the
+    // deck holds the highest it meets in sight rather than falling to something low at the
+    // window's edge that a whole structure's line would pass over. It comes down to an end in
+    // sight.
     let uc = u(c);
     let ends: Vec<f64> = anchors
         .iter()
@@ -709,7 +714,7 @@ fn road_decks(
         .filter(|&q| stretches[q].piece.form == Form::Bridge && !stretches[q].rail())
         .collect();
     let mut uf = UnionFind((0..road.len()).collect());
-    // shared ends at one layer, then decks side by side
+    // Shared ends at one layer, then decks side by side.
     let mut by_node: BTreeMap<&End, Vec<usize>> = BTreeMap::new();
     for (i, &q) in road.iter().enumerate() {
         for e in &stretches[q].ends {
@@ -725,8 +730,8 @@ fn road_decks(
             }
         }
     }
-    // two decks whose cells lie further apart than any deck beside another (`side_by_side`'s
-    // farthest) are not weighed
+    // Two decks whose cells lie further apart than any deck beside another (`side_by_side`'s
+    // farthest) are not weighed.
     let boxes: Vec<[[f64; 2]; 2]> = road
         .iter()
         .map(|&q| cells_box(&stretches[q].whole.points))
@@ -784,7 +789,7 @@ fn road_decks(
             }
             group_nodes.extend(seen);
         }
-        // an end the ring cut is none (the module's rules): no anchor, no free end, no ramp
+        // An end the ring cut is none (the module's rules): no anchor, no free end, no ramp.
         let is_boundary =
             |n: &End| !matches!(n, End::Ring(..)) && node_members.get(n).copied().unwrap_or(0) <= 1;
         let joins_other = |n: &End| {
@@ -793,7 +798,7 @@ fn road_decks(
                 .is_some_and(|qs| qs.iter().any(|q| !g.contains(q)))
         };
 
-        // ramps: a way at a free end, raised and no bridge, carries the deck down
+        // Ramps: a way at a free end, raised and not a bridge, carries the deck down.
         let mut ramp_ends: FnvHashSet<&End> = FnvHashSet::default();
         let mut pending: Vec<(PartId, Vec<[f64; 2]>, End, i32)> = Vec::new();
         for &q in g {
@@ -803,7 +808,7 @@ fn road_decks(
                 }
                 for part in src.way_ends.get(e).into_iter().flatten() {
                     let way = &src.ways[part];
-                    // a road's alone, never indoors (Arnis `is_ramp_candidate`)
+                    // Only a road's, never indoors (Arnis `is_ramp_candidate`).
                     let t = way.row.tags;
                     if way.row.subtype != "road"
                         || t.bridge
@@ -818,7 +823,7 @@ fn road_decks(
                         continue;
                     };
                     let cells = cells_along(&line);
-                    // a ramp that leaves the ring is none: its far end is not known
+                    // A ramp that leaves the ring is none, since its far end is not known.
                     if group_nodes.contains(far_end) || !cells.iter().all(|&p| src.inside(p)) {
                         continue;
                     }
@@ -833,7 +838,7 @@ fn road_decks(
         }
         let anchors_end = |n: &End| is_boundary(n) && !ramp_ends.contains(n) && !joins_other(n);
 
-        // what the deck must meet or clear, each where it lies, in the ring's cells
+        // What the deck must meet or clear, each where it lies, in the ring's cells.
         let mut needs = Needs::default();
         for (m, &q) in g.iter().enumerate() {
             let r = &stretches[q];
@@ -853,8 +858,9 @@ fn road_decks(
                 }
             }
         }
-        // a clearance is capped so the deck can still come down to every anchor
-        // an end at the ground caps from wherever it lies; a joint, another deck's, from near (`DECK_NEAR`)
+        // A clearance is capped so that the deck can still come down to every anchor. An end at the
+        // ground caps it from wherever the end lies; a joint, another deck's, only from near
+        // (`DECK_NEAR`).
         let reachable = |p: [f64; 2]| {
             needs
                 .anchors
@@ -877,7 +883,7 @@ fn road_decks(
                     r.cell[(i + 1).min(r.cell.len() - 1)],
                 );
                 for o in obstacles.at(c) {
-                    // a way meeting the structure runs at its level, not under it
+                    // A way meeting the structure runs at its level, not under it.
                     if covers(o, c)
                         && crosses([n[0] - p[0], n[1] - p[1]], o)
                         && !o.nodes.iter().any(|n| group_nodes.contains(n))
@@ -922,7 +928,7 @@ fn road_decks(
                 Member {
                     origin: s,
                     dir,
-                    // whether the way runs along its own heading, judged on the way whole
+                    // Whether the way runs along its own heading, judged on the way whole.
                     follows: d >= 1.0
                         && is_monotonic(
                             &w.points.iter().map(along).collect::<Vec<f64>>(),
@@ -939,7 +945,7 @@ fn road_decks(
             .map(|(m, &q)| deck_of(&stretches[q], m, &members, &needs, scale))
             .collect();
 
-        // an end above the ground ramps down to it inside the member
+        // An end above the ground ramps down to it inside the member.
         for (m, &q) in g.iter().enumerate() {
             let r = &stretches[q];
             let total = ys[m].len();
@@ -951,7 +957,7 @@ fn road_decks(
             } else {
                 total - 1
             };
-            // as long as the way whole asks, not as long as the stretch the ring left
+            // As long as the way whole asks, not as long as the stretch the ring left.
             let len = (ramp_len(members[m].length, scale) as usize).clamp(1, cap);
             if ramp_s {
                 let top = ys[m][len];
@@ -975,7 +981,7 @@ fn road_decks(
             }
         }
 
-        // a ramp runs from the deck's end down to the ground at its far end
+        // A ramp runs from the deck's end down to the ground at its far end.
         for (part, cells, e, ground) in pending {
             let deck_y = g
                 .iter()
@@ -1012,7 +1018,7 @@ fn road_decks(
             ));
         }
 
-        // what the structures after it meet and clear
+        // What the structures after it meet and clear.
         for (m, &q) in g.iter().enumerate() {
             let r = &stretches[q];
             for (e, y) in [(&r.ends[0], ys[m][0]), (&r.ends[1], ys[m][ys[m].len() - 1])] {
@@ -1041,7 +1047,7 @@ fn road_decks(
     }
 }
 
-// ---- rail bridges: on a road deck, or one level a viaduct with ramps at its free ends ----
+// ---- Rail bridges: on a road deck, or one level as a viaduct with ramps at its free ends. ----
 
 fn rail_decks(
     stretches: &[Stretch],
@@ -1059,7 +1065,7 @@ fn rail_decks(
             *ends_cnt.entry(e).or_default() += 1;
         }
     }
-    // what each track cell rides: the nearest road deck of its layer within reach
+    // What each track cell rides: the nearest road deck of its layer within reach.
     let radius = i64::from(scale.c(RAIL_ON_DECK_RADIUS_M));
     let on: Vec<Vec<Option<i32>>> = rail
         .iter()
@@ -1086,7 +1092,7 @@ fn rail_decks(
                 .collect()
         })
         .collect();
-    // joined through every rail bridge, a carried one included, as Arnis's `rail_uf`
+    // Joined through every rail bridge, a carried one included, as Arnis's `rail_uf` joins them.
     let mut uf = UnionFind((0..rail.len()).collect());
     let mut at_end: FnvHashMap<(&End, i64), usize> = FnvHashMap::default();
     for (i, &q) in rail.iter().enumerate() {
@@ -1104,8 +1110,8 @@ fn rail_decks(
         groups.entry(uf.find(i)).or_default().push(i);
     }
     for g in groups.into_values() {
-        // each cell of the group: where it lies, its ground, what it must clear of the source's ways and
-        // of a deck under it, and its layer
+        // Each cell of the group: where it lies, its ground, what it must clear of the source's ways
+        // and of a deck under it, and its layer.
         let mut cells: Vec<([f64; 2], i32, i32, i32, i64)> = Vec::new();
         for &i in &g {
             let r = &stretches[rail[i]];
@@ -1136,9 +1142,9 @@ fn rail_decks(
         let within =
             |c: [f64; 2], p: [f64; 2], d: usize| libm::hypot(p[0] - c[0], p[1] - c[1]) <= d as f64;
         let near = |c: [f64; 2], p: [f64; 2]| within(c, p, DECK_WINDOW);
-        // a flat span lifts clear, a level more a layer; a valley span sits on its banks: over the
-        // group's cells about the panel's middle, as a road deck's (`DECK_PANEL`), a deck under it
-        // cleared only near
+        // A flat span lifts clear, one level more a layer; a valley span sits on its banks. Both are
+        // judged over the group's cells around the panel's middle, as a road deck's are
+        // (`DECK_PANEL`), with a deck under it cleared only near.
         let level_at = |c: [f64; 2]| {
             let (mut tmax, mut tmin, mut floor, mut layer) = (i32::MIN, i32::MAX, i32::MIN, 0);
             for &(p, ground, f, over, l) in cells.iter().filter(|x| near(c, x.0)) {
@@ -1171,7 +1177,7 @@ fn rail_decks(
             let r = &stretches[rail[i]];
             let total = r.cell.len();
             let last = total - 1;
-            // the deck it rides, a gap in it taken from the cell before or after
+            // The deck it rides, a gap in it taken from the cell before or after.
             let mut rode = on[i].clone();
             for j in 1..total {
                 if rode[j].is_none() {
@@ -1183,8 +1189,8 @@ fn rail_decks(
                     rode[j] = rode[j + 1];
                 }
             }
-            // a track along a road deck rides it where nearly all of it does within a window of the
-            // panel's middle, and is one level a viaduct elsewhere
+            // A track along a road deck rides it where nearly all of the track does within a window of
+            // the panel's middle, and is one level, a viaduct, elsewhere.
             let panel = |k: usize| {
                 let c = r.whole.at(((k * DECK_PANEL) as f64).min(r.whole.length()));
                 let mine: Vec<bool> = (0..total)
@@ -1222,8 +1228,8 @@ fn rail_decks(
                     }) as i32
                 })
                 .collect();
-            // each way ramps from its free ends where it is a viaduct, no steeper than a cell a cell
-            // (Arnis `generate_rail_bridge`); an end the ring cut is none, and the viaduct carries on there
+            // Each way ramps from its free ends where it is a viaduct, no steeper than a cell a cell
+            // (Arnis `generate_rail_bridge`); an end the ring cut is none, and the viaduct carries on there.
             let internal = [
                 ends_cnt[&r.ends[0]] > 1 || r.clipped[0] || riding[0],
                 ends_cnt[&r.ends[1]] > 1 || r.clipped[1] || riding[last],
@@ -1236,7 +1242,7 @@ fn rail_decks(
             if !internal[1] {
                 needed = needed.max((deck[last] - ge).max(0) as usize);
             }
-            // as long as the way whole asks, not as long as the stretch the ring left
+            // As long as the way whole asks, not as long as the stretch the ring left.
             let ramp = ((r.whole.length() * RAIL_BRIDGE_RAMP_FRACTION) as usize)
                 .clamp(
                     scale.c(RAIL_BRIDGE_RAMP_M[0]) as usize,
@@ -1269,8 +1275,9 @@ fn rail_decks(
     out
 }
 
-/// The decks of the stretches in scope, road bridges lower first and rail bridges over them, as lines,
-/// what a deck must clear read from the ring `ring`; and what a bore opening on one needs of them.
+/// The decks of the stretches in scope, road bridges lower first and rail bridges over them,
+/// as lines, with what a deck must clear read from the ring `ring`; and what a bore opening
+/// onto one needs of them.
 pub(super) fn decks(
     src: &Ring,
     stretches: &[Stretch],
@@ -1278,7 +1285,7 @@ pub(super) fn decks(
     scale: Scale,
     lines: &mut Vec<(Line, WayRange)>,
 ) -> Decks {
-    // what a deck must clear, only where there is a deck
+    // What a deck must clear, read only where there is a deck.
     let obstacles = if stretches.iter().any(|r| r.piece.form == Form::Bridge) {
         Obstacles::of(src, ring, scale)
     } else {

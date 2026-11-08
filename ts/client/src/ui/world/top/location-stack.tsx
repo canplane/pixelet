@@ -14,7 +14,7 @@ import { chrome, color } from "@/ui/component/theme.ts";
 import { useCore } from "@/ui/store/watch.ts";
 import * as camera from "@/port/camera.ts";
 
-/** MKUserTrackingButton's glyphs. */
+/** The glyphs follow MapKit's MKUserTrackingButton. */
 const PRESS: Record<Tracking, { glyph: GlyphName; label: string }> = {
   [Tracking.Recenter]: {
     glyph: "location",
@@ -57,7 +57,7 @@ export function LocationStack() {
             status === SensorStatus.Loading ? (
               <Spinner size={chrome.glyph} color={LABEL.primary} />
             ) : (
-              // One turn as following starts.
+              // The glyph turns once as following starts.
               <Motion
                 to={{ rotate: 0 }}
                 from={{ rotate: -90 }}

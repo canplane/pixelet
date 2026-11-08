@@ -1,23 +1,25 @@
 {
   "$doc": [
-    "The core the contract's traces drive (spec/conformance/door.tsv): the",
-    "few commands every language's conformance core implements, and the numbers a trace",
-    "is written against. It computes nothing, and asks for no turn when nothing waits; what",
-    "it does inside is each core's own, and what the runtime sees of it is what the traces",
-    "hold it to.",
+    "The conformance core, which the contract's traces drive (spec/conformance/door.tsv):",
+    "the few commands that every language's conformance core implements, and the numbers a",
+    "trace is written against. The core computes nothing, and asks for no turn when nothing",
+    "waits. How it works inside is each core's own; the traces hold only what the runtime",
+    "sees of it.",
     "",
-    "A trace names no production number. These are the fixture's, chosen so that a trace",
-    "can make a turn's output outgrow its room without knowing how a core reserves it."
+    "A trace names no number a production core uses. These numbers are the fixture's own,",
+    "chosen so that a trace can make a turn's output outgrow its room without knowing how a",
+    "core reserves that room."
   ],
 
   "MEM_BYTES": {
     "$val": 262144,
     "$type": "u32",
     "$doc": [
-      "The room a core's shared range asks for: the front's header, both rings, the stream",
-      "and the gaps LAYOUTS draws between them, then its own state and heap. Where the range",
-      "begins, and so where the header is, the core's boot answers (the contract's rule 0);",
-      "what else a memory holds — a module's stack and data — is the build's, and no number here."
+      "The size of the range the core shares with its runtime. The range holds the front's",
+      "header, both rings, the stream and the gaps LAYOUTS draws between them, then the core's",
+      "own state and heap. The core's boot answers where the range begins, and so where the",
+      "header is (the contract's rule 0). The rest of the memory, a module's stack and data,",
+      "is the build's, and no number here sizes it."
     ]
   },
 
@@ -25,13 +27,13 @@
     "$val": 8,
     "$type": "u32",
     "$doc": [
-      "The layouts a runtime runs every trace against, one for each seed below this. The core's",
-      "boot takes the seed and draws from it (kit's SplitMix32) the order of what it shares",
-      "with its runtime, the header among them, and the pages left before each, every core by",
-      "the same draw; so nothing it shares lies where it lay under another seed, and only a",
-      "runtime that finds it all through the header passes every layout (the contract's rule 0).",
-      "The fixture lays its front and writes its header itself, as a runtime does for a machine,",
-      "since no machine fixes where its parts lie."
+      "How many layouts a runtime runs every trace against: one for each seed below this",
+      "number. From the seed, the core's boot draws with kit's SplitMix32 the order of the",
+      "parts it shares with its runtime, the header among them, and how many pages to leave",
+      "before each part. Every core draws the same way. No shared part lies where it lay under",
+      "another seed, so only a runtime that finds every part through the header passes every",
+      "layout (the contract's rule 0). No machine fixes where these parts lie, so the fixture",
+      "lays its front and writes its header itself, as a runtime does for a machine."
     ]
   },
 
@@ -44,93 +46,119 @@
   "SQ_CAP": {
     "$val": 16,
     "$type": "u32",
-    "$doc": ["Frames the submission ring holds."]
+    "$doc": ["How many frames the submission ring holds."]
   },
 
   "CQ_CAP": {
     "$val": 128,
     "$type": "u32",
     "$doc": [
-      "Frames the completion ring holds: fewer than eight commands raising MOST_RAISE",
-      "frames each leave, so a trace that sends those makes a turn's output outgrow it."
+      "How many frames the completion ring holds. It is less than what eight commands leave",
+      "when each raises MOST_RAISE frames, so a trace that sends eight of them makes a turn's",
+      "output outgrow the ring."
     ]
   },
 
   "SLOT_BYTES": {
     "$val": 256,
     "$type": "u32",
-    "$doc": ["A ring slot's payload: a packet of one number fits."]
+    "$doc": ["The size of one ring slot in bytes, enough for a packet of one number."]
   },
 
   "STREAM_WORDS": {
     "$val": 256,
     "$type": "u32",
     "$doc": [
-      "The stream's range, its END word first. The header's GPU_AT names it: the runtime runs",
-      "it after every turn, as it runs a GPU stream."
+      "The length in words of the stream's range, its END word first. The header's GPU_AT word",
+      "points at the stream, so the runtime runs it after every turn as it runs a GPU stream."
     ]
   },
 
   "STACK_BYTES": {
     "$val": 1048576,
     "$type": "u32",
-    "$doc": ["The stack a module core is linked with, first in its memory (rust/conformance/build.rs, cpp/Makefile)."]
+    "$doc": [
+      "The size of the stack a module core is linked with, which comes first in its memory",
+      "(rust/conformance/build.rs, cpp/Makefile)."
+    ]
   },
 
   "HEAP_BYTES": {
     "$val": 65536,
     "$type": "u32",
     "$doc": [
-      "The core's heap, in its own range, since the memory a runtime hands a module never grows",
-      "and a core takes nothing it was not given."
+      "The size of the core's heap, which lies in a range of its own. The memory a runtime hands",
+      "a module never grows, and a core takes no memory it was not given."
     ]
   },
 
   "HANDLES": {
     "$val": 16,
     "$type": "u32",
-    "$doc": ["Slots in the core's handle table, slot 0 never handed out."]
+    "$doc": ["How many slots the core's handle table has; slot 0 is never handed out."]
   },
 
   "MOST_RAISE": {
     "$val": 32,
     "$type": "u32",
-    "$doc": ["The most frames one RAISE asks for; more is refused with EINVAL."]
+    "$doc": ["The most frames one RAISE may ask for; a RAISE that asks for more is refused with EINVAL."]
   },
 
   "cmd": {
     "$type": "u32",
     "$doc": [
-      "The core's own commands, `major << 8 | minor`, past xpute's majors (ipc/frame.json). A",
-      "packet, where one is taken, is a branch whose first child is a number."
+      "The conformance core's own commands, numbered `major << 8 | minor` past xpute's majors",
+      "(ipc/frame.json). Where a command takes a packet, the packet is a branch whose first",
+      "child is a number."
     ],
-    "OK": { "$val": 4097, "$doc": ["Succeeds; replies 0."] },
+    "OK": { "$val": 4097, "$doc": ["Succeeds and replies 0."] },
     "FAIL": { "$val": 4098, "$doc": ["Fails with EINVAL."] },
-    "RAISE": { "$val": 4099, "$doc": ["Raises the packet's number of NOTEs, tagged 0 up, then replies with that number."] },
-    "RECORD": { "$val": 4100, "$doc": ["Writes one record to the stream, its op the packet's number and no words; replies 0."] },
+    "RAISE": { "$val": 4099, "$doc": [
+   "Raises as many NOTEs as the packet's number, tagged from 0 upward, then replies with",
+   "that number."
+ ] },
+    "RECORD": { "$val": 4100, "$doc": [
+   "Writes one record to the stream, with the packet's number as its op and no words, and",
+   "replies 0."
+ ] },
     "ISSUE": { "$val": 4101, "$doc": ["Takes a handle from the core's table and replies with it."] },
     "RELEASE": { "$val": 4102, "$doc": ["Gives back the packet's handle; fails with EBADF for one that is not live."] },
-    "USE": { "$val": 4103, "$doc": ["Replies 0 for a live handle; fails with EBADF for any other, 0 among them."] },
+    "USE": { "$val": 4103, "$doc": ["Replies 0 for a live handle, and fails with EBADF for any other handle, 0 included."] },
     "MARK": { "$val": 4104, "$doc": ["Reads the runtime's clock and keeps the reading; replies 0."] },
     "SINCE": { "$val": 4105, "$doc": ["Reads the runtime's clock and replies with the whole milliseconds since the last MARK."] },
     "OPEN": {
       "$val": 4106,
-      "$doc": ["Opens a file for the packet's number, its owner, and replies with the descriptor, its FS_OPENAT posted for the file device, which no trace's runtime takes; the open's completion, a trace's `complete`, raises OPENED for that owner while the descriptor is open."]
+      "$doc": [
+        "Opens a file on behalf of an owner, the packet's number, and replies with the",
+        "descriptor. The open's FS_OPENAT is posted for the file device, which no trace's runtime",
+        "takes. When a trace completes the open (`complete`), the core raises OPENED for that",
+        "owner if the descriptor is still open."
+      ]
     },
-    "CLOSE": { "$val": 4107, "$doc": ["Closes the packet's descriptor, its open completed or not; fails with EBADF for one not open."] },
+    "CLOSE": { "$val": 4107, "$doc": [
+   "Closes the packet's descriptor, whether or not its open has completed; fails with EBADF",
+   "for a descriptor that is not open."
+ ] },
     "CALL": {
       "$val": 4108,
-      "$doc": ["Zeroes a word of its own, calls INC with the packet's number and the word's offset, and replies with the word as it then reads it; fails with the errno the runtime refused INC with."]
+      "$doc": [
+        "Zeroes a word of its own, calls INC with the packet's number and the word's offset, and",
+        "replies with the word as it reads after the call. Where the runtime refuses INC, CALL",
+        "fails with the same errno."
+      ]
     },
     "INC": {
       "$val": 4109,
       "$doc": [
-        "What CALL calls: a branch of a number and an offset. The runtime writes the number plus",
-        "one at the offset and answers 0 before the call returns; a number of 0 it refuses with",
-        "EINVAL, writing nothing."
+        "The call that CALL makes; its packet is a branch of a number and an offset. The runtime",
+        "writes the number plus one at the offset and answers 0 before the call returns. It",
+        "refuses a number of 0 with EINVAL and writes nothing."
       ]
     },
-    "NOTE": { "$val": 4353, "$doc": ["What RAISE raises."] },
-    "OPENED": { "$val": 4354, "$doc": ["An open completed: tagged with its owner, its result the runtime's."] }
+    "NOTE": { "$val": 4353, "$doc": ["The import that RAISE raises."] },
+    "OPENED": { "$val": 4354, "$doc": [
+   "An open has completed. The frame is tagged with the open's owner, and its result is",
+   "what the runtime completed the open with."
+ ] }
   }
 }

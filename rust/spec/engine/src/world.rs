@@ -1,11 +1,10 @@
 // pxl-engine/world.rs
 
-//! gpu-portable: the world's one query, what is in a node at its zoom, the
-//! layers read in the order each is written over the one before: what is
-//! placed over all, then the separation, the ways, over the ground and its
-//! caves. Asked by every reader of the world, the GPU's cast and the CPU's
-//! alike: each source answers from its own level of detail, and what it holds
-//! stays behind it.
+//! gpu-portable: the world's one query, which says what is in a node at its zoom. It reads
+//! the layers in the order each is written over the one before: what is placed over all,
+//! then the separation and the ways, over the ground and its caves. Every reader of the world
+//! asks it, the GPU's cast and the CPU's alike. Each source answers from its own level of
+//! detail, and what a source holds stays behind it.
 
 use crate::answer;
 use crate::answer::{
@@ -20,14 +19,13 @@ use crate::way;
 use crate::way::tree;
 use crate::{Zoom, LEAF_CELL_ZOOM, SHARD_ZOOM, UNIT_ZOOM};
 
-/// What a node is handed by the node over it, each source's own, so a
-/// descent asks each node's sources once:
-/// what is placed (`object::NodeSlot`, its cursor in the
-/// objects' tree), what is known of the service area at its shard
-/// (`area::Shard`), where the clip levels held the ground's cells of a node
-/// over it (`clipmap::Lookup`, `clipmap::step`), and the ways' cursor in the
-/// tree of the brick `ground` names (`way::tree`). The CPU's and a GPU's
-/// alike. The caves are none of it: a cube's are its own (`Content::hollow`).
+/// What a node is handed by the node over it, each source's own part, so that a descent asks
+/// each node's sources once. It holds what is placed (`object::NodeSlot`, a cursor in the
+/// objects' tree), what is known of the service area at the node's shard (`area::Shard`),
+/// where the clip levels held the ground's cells of a node above it (`clipmap::Lookup`,
+/// `clipmap::step`), and the ways' cursor in the tree of the brick `ground` names
+/// (`way::tree`). The CPU and the GPU hand down the same. The caves are not part of it: a
+/// cube's caves are its own (`Content::hollow`).
 #[derive(Clone, Copy)]
 pub struct Inheritance {
     pub object: object::NodeSlot,
@@ -40,8 +38,6 @@ pub struct Inheritance {
 pub(crate) const INHERITANCE_WORDS: u32 = 4;
 
 impl Inheritance {
-    /// Its words: what is placed, its shard, where its ground's
-    /// cells were held, its ways' cursor.
     pub const fn words(&self) -> [u32; INHERITANCE_WORDS as usize] {
         [
             self.object.word(),
@@ -51,7 +47,6 @@ impl Inheritance {
         ]
     }
 
-    /// `words`'s `Inheritance`.
     pub const fn of_words(w: [u32; INHERITANCE_WORDS as usize]) -> Inheritance {
         Inheritance {
             object: object::NodeSlot::of_word(w[0]),
@@ -61,9 +56,8 @@ impl Inheritance {
         }
     }
 
-    /// The node `c` at `zoom` with nothing handed down, a descent's root
-    /// among them: each source found down its line from the top, what is
-    /// placed off `columns`.
+    /// The inheritance of the node `c` at `zoom` with nothing handed down, as for a descent's
+    /// root: each source is found down its line from the top, what is placed from `columns`.
     pub fn of(columns: &impl Columns, (zoom, c): (Zoom, [i32; 3])) -> Inheritance {
         Inheritance {
             object: object::cursor(columns, ROOT, zoom, c),
@@ -73,9 +67,8 @@ impl Inheritance {
         }
     }
 
-    /// `of` with nothing placed, any node's: the node as the world unplaced
-    /// holds it, the ground's alone, which a content's decor generates on;
-    /// nothing placed stays
+    /// `of` with nothing placed, for any node: the node as the world holds it with nothing
+    /// placed, the ground's alone, on which a content's decor generates. Nothing placed stays
     /// nothing down a descent (`object::child`).
     pub const UNPLACED: Inheritance = Inheritance {
         object: object::NodeSlot::NOTHING,
@@ -84,8 +77,8 @@ impl Inheritance {
         ways: object::NodeSlot::NOTHING,
     };
 
-    /// What its child `c` at `zoom` is handed: each source stepped a zoom
-    /// down, what is placed off `columns` and the ways off `pool`.
+    /// What its child `c` at `zoom` is handed: each source stepped one zoom down, what is placed
+    /// in `columns` and the ways in `pool`.
     pub fn child(
         &self,
         columns: &impl Columns,
@@ -101,48 +94,45 @@ impl Inheritance {
     }
 }
 
-/// The first zoom whose nodes are the ways' tree's own (`way::tree::cursor`): the tree
-/// counts its nodes along z by a leaf's Z shifted down, and the world counts one node
-/// through the height at the shards' zoom and coarser (`object::z_start`), so a
-/// node there is no node of the tree, and a cursor stepped from one to its children
-/// names another node than theirs. Its cursor is nothing there, and found at the
-/// first zoom past them, where the tree's nodes are the world's and every cursor
-/// stepped from it is the one found for the node from the top.
+/// The first zoom whose nodes are the ways' tree's own nodes (`way::tree::cursor`). The tree
+/// counts its nodes along z by a leaf's Z shifted down, while the world counts one node
+/// through the whole height at the shards' zoom and coarser (`object::z_start`). A node there
+/// is no node of the tree, and a cursor stepped from it to its children would name other nodes
+/// than theirs. So the ways' cursor is nothing at those zooms and is found afresh at the first
+/// zoom past them, where the tree's nodes are the world's and every cursor stepped from it
+/// matches the one found for the node from the top.
 const WAYS_FROM: Zoom = SHARD_ZOOM + 1;
 
-/// What is in the node `c` at `zoom`, asked from `far` to `near`, `at` what
-/// the node over it handed it (`Inheritance`): its shard is found first, before any
-/// layer answers, so a stop's shard is its own whichever layer stops it;
-/// where the ground's cells of a node over it were held becomes its own
-/// (`ground::node`), and the ways' cursor is stepped from its parent's where
-/// that names the same brick, found from that brick's root where it names
-/// another, as the cells' place itself is found again (`clipmap::step`), or
-/// where the node is the first the tree's nodes are the world's at
-/// (`WAYS_FROM`), nothing coarser. A
-/// preview's `carve` and `hide` (`object::Cut`) are read with what is
-/// placed.
+/// What is in the node `c` at `zoom`, asked from `far` to `near`, given what the node above
+/// handed it (`at`). Its shard is found first, before any layer answers, so a stop's shard is
+/// its own whichever layer stops it. Where the ground's cells of a node above were held
+/// becomes the node's own (`ground::node`). The ways' cursor is stepped from its parent's
+/// where that names the same brick. It is found again from the brick's root where the brick
+/// differs, as the cells' place is found again (`clipmap::step`), and where the node is at
+/// `WAYS_FROM`, the first zoom at which the tree's nodes are the world's; coarser, it is
+/// nothing. A preview's `carve` and `hide` (`object::Cut`) are read with what is placed.
 ///
-/// It is a cell where `near` is its zoom or coarser, or past the ground's
-/// cells where nothing placed or carved is finer in it (`object::whole`):
-/// the world holds nothing finer than the node there. Its asset is what is
-/// placed in it where that fills it whole, air included, else the ground's
-/// asset with what the ways and what is placed write over it (their tree's
-/// leaf or fold there, `object::value`, a bore's air the ground's void,
-/// `way::tree::read`), one value whichever source holds it, keeping the
-/// eighths of its cube they fill together over it (`answer::cover`,
-/// `answer::eighths`, `answer::FILL_SHIFT`), air where that is none;
-/// `PLACED_ASSET` over a placed value, the source control tells an edit by,
-/// which nothing drawn reads. Its second word is the four palette indices the ground's
-/// asset is drawn by (`ground::Cell::four`, `ground::word`), none for any
-/// other. Coarser, a split where any layer may fill under it at a zoom asked,
-/// each by its own bound — what is placed (`object::over`), the ground's
-/// (`ground::slab`), the ways' (`way::slab`), each meeting the node
-/// (`ground::meets`) — its asset words the box in its own steps they lie in,
-/// every axis alike (`answer::box_word`, `object::object_box`,
-/// `ground::box_along_z`); else air, a cell of air its size, its value void;
-/// where the ground is not held, the lack. Whether a cell is the zoom asked's
-/// or coarser air is the asker's: its zoom against the finest asked (`near`),
-/// past the ground's cells, where nothing finer is, a cell either way.
+/// The node is a cell where `near` is its zoom or coarser, or where it lies past the ground's
+/// cells and nothing placed or carved in it is finer (`object::whole`): the world holds
+/// nothing finer than the node there. A cell's asset is what is placed in it where that fills
+/// it whole, air included. Otherwise it is the ground's asset with what the ways and what is
+/// placed write over it (their tree's leaf or fold there, `object::val`, with a bore's air as
+/// the ground's void, `way::tree::read`): one value whichever source holds it. The cell keeps
+/// the eighths of its cube that they fill together (`answer::cover`, `answer::eighths`,
+/// `answer::FILL_SHIFT`), and is air where that is none. `PLACED_ASSET` is set over a placed
+/// value; control tells an edit by it, and nothing drawn reads it. The second word holds the
+/// four palette indices the ground's asset is drawn by (`ground::Cell::four`,
+/// `ground::word`), and is zero for any other asset.
+///
+/// A coarser node is a split where any layer may fill under it at a zoom asked, each layer
+/// judged by its own bound: what is placed (`object::over`), the ground's (`ground::slab`) and
+/// the ways' (`way::slab`), each tested against the node (`ground::meets`). A split's asset
+/// words are the box, in the node's own steps and alike on every axis, in which those layers
+/// lie (`answer::box_word`, `object::object_box`, `ground::box_along_z`). Otherwise the node
+/// is air, a cell of air its size with the value void, and where the ground is not held it is
+/// the lack. Whether a cell is at the zoom asked or is coarser air is for the asker to tell,
+/// by its zoom against the finest asked (`near`); past the ground's cells, where nothing finer
+/// exists, it is a cell either way.
 #[expect(
     clippy::too_many_arguments,
     reason = "the world's four stores, where the node is, and the zooms and cuts it is asked at, each its own"
@@ -170,11 +160,10 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
         c,
         if is_cell { zoom } else { near },
     );
-    // Where what is placed is a cell, its asset and the four palette indices a
-    // filling one is drawn by, a byte each (`ground::word`): only the ground's
-    // palette indices, a placed cube of a palette index, fit; one past a byte,
-    // an object's, is drawn by its value. Read once, where either use below
-    // takes it.
+    // Where what is placed is a cell: its asset, and the four palette indices a filling one is
+    // drawn by, a byte each (`ground::word`). Only the ground's palette indices, as in a placed
+    // cube of a palette index, fit in a byte; an object's value lies past a byte and is drawn by
+    // its value. It is read once, here, for both uses below.
     let laid = if over.says == CELL {
         let four = if fills(over.asset) {
             object::palette_indices(columns, put, hide, zoom, c, over.asset)
@@ -189,8 +178,7 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
     } else {
         [0; 2]
     };
-    // Filling its cube whole, what is placed is the cell's asset, whatever is
-    // under it.
+    // Where what is placed fills its cube whole, it is the cell's asset, whatever lies under it.
     if over.says == CELL && over.fill == FULL {
         return In {
             kind: Kind::Cell,
@@ -222,15 +210,15 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
             object::NodeSlot::NOTHING
         };
     }
-    // The ways where the cell's column was read: their leaf or fold over it.
+    // The ways' leaf or fold over the cell, where the cell's column was read.
     let way = if is_cell && i.kind == Kind::Cell && place.here() {
         object::val(pool, *trail, Cut::NONE, zoom, c)
     } else {
         VOID
     };
     if is_cell {
-        // Where the ground is not held, the lack, unless what is placed
-        // keeps an asset there alone.
+        // Where the ground is not held, the cell is the lack, unless what is placed keeps an asset
+        // there alone.
         let lacks = In {
             kind: i.kind,
             asset: i.asset,
@@ -238,18 +226,17 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
         if i.kind == Kind::Lacks && over.says != CELL {
             return lacks;
         }
-        // The ground's asset, the share of its cube it fills and its four
-        // palette indices; then what each layer writes over it, the ways and what is
-        // placed, its share kept with the ground's (`answer::cover`): the
-        // cell keeps the eighths of its cube all of them fill
-        // (`answer::eighths`), its palette index the kind most of that is.
+        // Start from the ground's asset, the share of its cube it fills and its four palette
+        // indices. Then each layer that writes over it, the ways and then what is placed, adds its
+        // share to the ground's (`answer::cover`). The cell keeps the eighths of its cube that all of
+        // them fill (`answer::eighths`), and its palette index is the kind that makes up most of that.
         let mut val = if i.kind == Kind::Cell {
             i.asset[0]
         } else {
             VOID
         };
-        // The ground's share, less what its caves take (the ground's answer's
-        // second word, `ground::node`).
+        // The ground's share, less what its caves take (the second word of the ground's answer,
+        // `ground::node`).
         let mut fill = if fills(val) {
             let (f, _) = cover(cell.cover(c[2]), AIR, i.asset[1]);
             f
@@ -262,7 +249,7 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
             0
         };
         if way != VOID {
-            // A way's palette index four times where one wrote it, whatever its value.
+            // Where a way wrote the cell, its palette index four times, whatever its value.
             let w = tree::read(way);
             let (f, theirs) = cover(fill, w, object::fill_share(pool, *trail));
             if theirs {
@@ -282,7 +269,7 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
             return lacks;
         }
         let asset = if filled == 0 {
-            // Nothing kept: air, what is placed's where it is air.
+            // Nothing is kept: the cell is air, and placed air where what is placed is air.
             [
                 if over.says == CELL && over.asset == AIR {
                     PLACED_ASSET | AIR
@@ -299,11 +286,10 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
             asset,
         };
     }
-    // Coarser, what is placed splits it where it may fill, and the ways
-    // what the ground leaves air where they may; a split's box is every
-    // source's own joined, each in the node's steps: what is placed
-    // (`object::object_box`), the ground's (`ground::slab`, all of it where
-    // it lacks) and the ways' (`way::slab`), the last two along z.
+    // Coarser: what is placed splits the node where it may fill, and the ways split what the
+    // ground leaves air where they may fill. A split's box joins every source's own box, each in
+    // the node's steps: what is placed (`object::object_box`), the ground's (`ground::slab`, all
+    // of the node where the ground lacks) and the ways' (`way::slab`), the last two along z.
     let ways = way::slab(bound, [ground::coarsest(zoom, far), near]);
     let fill = ground::meets(ways, (zoom, c[2]), near);
     let kind = if splits || i.kind == Kind::Cell && fill {
@@ -326,7 +312,7 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
         box_join(own, ground::box_along_z(ways, (zoom, c[2]))),
         placed,
     );
-    // Every source saying nothing lies in it is air its size.
+    // Where every source says nothing lies in it, the node is air its size.
     if box_none(joined) {
         return In {
             kind: Kind::Cell,
@@ -339,31 +325,30 @@ pub fn node<H: ground::Resident, W: Bricks, L: Columns, P: Columns>(
     }
 }
 
-/// The zoom a box's placed leaves are first asked at: 8 unit cells a side,
-/// so a box with nothing placed near it is told so in a few palette indices.
+/// The zoom at which a box's placed leaves are first asked: nodes 8 unit cells a side, so a
+/// box with nothing placed near it is told so after a few nodes.
 pub const PLACED_FIRST: Zoom = UNIT_ZOOM - 3;
 const PLACED_LEVELS: usize = (UNIT_ZOOM - PLACED_FIRST) as usize;
 
-/// What is placed at the unit cells of a box, one leaf at a time
-/// (`PlacedCursor::next`), each with its cell and its stored word, as the
-/// objects' tree holds it (`object`): asked of the query. A cursor rather
-/// than a callback, so a GPU, which takes no closure over a binding's slice,
-/// walks it alike.
+/// What is placed at the unit cells of a box, one leaf at a time (`PlacedCursor::next`), each
+/// with its cell and its stored word as the objects' tree holds it (`object`). It is asked of
+/// the query. It is a cursor rather than a callback so that a GPU, which takes no closure over
+/// a binding's slice, walks it the same way.
 #[derive(Clone, Copy)]
 pub struct PlacedCursor {
     lo: [i32; 3],
     hi: [i32; 3],
     /// The node at `PLACED_FIRST` asked next.
     first: [i32; 3],
-    /// The nodes gone into, a level each, the child each is at, and the
-    /// level at; none gone into at 0.
+    /// The nodes gone into, one a level, with the child each is at and the current level
+    /// (`depth`); at depth 0 none is gone into.
     nodes: [object::NodeSlot; PLACED_LEVELS + 1],
     idx: [[i32; 3]; PLACED_LEVELS + 1],
     next: [u32; PLACED_LEVELS + 1],
     depth: usize,
 }
 
-/// The placed leaves at the unit cells of `[lo, hi]`, both ends held.
+/// The placed leaves at the unit cells of `[lo, hi]`, both ends included.
 pub fn placed_in(lo: [i32; 3], hi: [i32; 3]) -> PlacedCursor {
     let s = UNIT_ZOOM - PLACED_FIRST;
     PlacedCursor {
@@ -378,9 +363,9 @@ pub fn placed_in(lo: [i32; 3], hi: [i32; 3]) -> PlacedCursor {
 }
 
 impl PlacedCursor {
-    /// The next leaf placed at a unit cell of the box, its cell and its
-    /// word (`Columns::data`); false past the last. One descent of the tree's
-    /// branches meeting the box, each child stepped once from its parent.
+    /// The next leaf placed at a unit cell of the box, with its cell and its word
+    /// (`Columns::data`), or false past the last. The cursor makes one descent of the tree's
+    /// branches that meet the box, stepping each child once from its parent.
     pub fn next(&mut self, columns: &impl Columns) -> ([i32; 3], u32, bool) {
         let s = UNIT_ZOOM - PLACED_FIRST;
         loop {

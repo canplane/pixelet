@@ -1,9 +1,10 @@
 // pxl-core/domain/layer/upload.rs
 
-//! What of a layer's tiles goes to the GPU off the packet it came in: per
-//! slot, the packet the GPU does not hold yet, kept until the turn's stream
-//! takes it and freed then, and the device it went to; a slot taken again
-//! replaces it. A packet is freed unkept past the layer's bound (`keep`).
+//! The packets a layer's tiles arrived in, kept until the GPU copies the
+//! tiles from them. For each slot it holds the packet the GPU does not have
+//! yet, or the device the packet went to. A packet is freed once the turn's
+//! stream takes it, and a slot that takes a new tile replaces its packet.
+//! Past the layer's bound, a packet is freed without being kept (`keep`).
 
 use xpute_core::mem::heap::Block;
 
@@ -20,15 +21,16 @@ enum Upload {
 /// What became of a packet offered to the turn's stream.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Uptake {
-    /// Taken: freed.
+    /// The stream took the packet, which is then freed.
     Taken,
-    /// The stream ran out: it waits, and nothing more is offered this turn.
+    /// The stream has no room left. The packet waits, and nothing more is
+    /// offered this turn.
     Full,
 }
 
 pub struct Uploads {
     slots: Vec<Upload>,
-    /// The slots `Waiting`.
+    /// The number of slots in `Waiting`.
     waiting: u32,
 }
 
@@ -40,9 +42,10 @@ impl Uploads {
         }
     }
 
-    /// The packet a tile came in, kept for the slot `slot` took it into
-    /// while fewer than `most` are kept besides; freed where no slot took
-    /// it or `most` are, the slot then holding nothing to send.
+    /// Keeps the packet a tile arrived in for slot `slot`, which took the
+    /// tile, while fewer than `most` other packets are kept. Where no slot
+    /// took the tile, or `most` packets are kept already, the packet is freed
+    /// and the slot has nothing to send.
     pub fn keep(&mut self, slot: Option<u32>, block: Block, most: u32) {
         let Some(slot) = slot else {
             return release(Some(block));
@@ -59,7 +62,8 @@ impl Uploads {
         *slot = Upload::Waiting(block);
     }
 
-    /// The device slot `slot`'s tile was sent to, once it was.
+    /// The device generation slot `slot`'s tile was sent to, or none until it
+    /// is sent.
     pub fn sent_on(&self, slot: u32) -> Option<u32> {
         match self.slots[slot as usize] {
             Upload::Sent(on) => Some(on),
@@ -67,8 +71,9 @@ impl Uploads {
         }
     }
 
-    /// Each waiting packet to `send` with its slot, freed once taken by the
-    /// device `on`, until the stream runs out.
+    /// Offers each waiting packet and its slot to `send` for the device of
+    /// generation `on`, until the stream runs out. A packet the stream takes
+    /// is freed.
     pub fn send(&mut self, on: u32, send: &mut dyn FnMut(u32, &[u8]) -> Uptake) {
         for slot in 0..self.slots.len() {
             let Upload::Waiting(block) = self.slots[slot] else {

@@ -1,19 +1,21 @@
 // xpute-core/machine.rs
 
-//! The machine a program declares (its machine.json, written as `MACHINE` by
-//! xpute-tool): the memory it is given, its stack, its rings and whether it
-//! takes the GPU device. The front of the memory follows from it, the same on
-//! every platform and on both ends:
+//! The machine a program declares: the memory it is given, its stack, its
+//! rings, and whether it takes the GPU device. The program writes it in its
+//! machine.json, from which xpute-tool generates `MACHINE`. The front of the
+//! memory, the region both ends share, follows from the machine and is laid
+//! out the same on every platform and on both ends:
 //!
 //! ```text
 //! 0 ─ stack ─ header page ─ SQ ─ CQ ─ SQ slots ─ CQ slots ─ GPU stream ─ GLOBAL_BASE
 //! ```
 //!
-//! The runtime lays it before the first turn: the header (ipc/head.rs) and each
-//! ring's own header. Past `global_base` a module's linker places its data,
-//! and past where the data ends the program's fixed ranges and then the heap.
-//! The first turn holds what the runtime laid to the machine and opens the rings
-//! (`boot`), before the program's entry.
+//! The runtime writes the front before the first turn: the header
+//! (ipc/head.rs) and each ring's own header. Past `global_base` a module's
+//! linker places its data; past the end of the data come the program's fixed
+//! ranges, and then the heap. Before the program's entry runs, the first
+//! turn checks what the runtime wrote against the machine and opens the
+//! rings (`boot`).
 
 use core::panic::Location;
 
@@ -26,38 +28,38 @@ use crate::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use crate::mem::section::{page_up, PAGE_BYTES};
 use crate::wasm::LinkConfig;
 
-/// The GPU device: a stream the core writes its GPU calls into and the runtime
-/// runs once it is published (xpute-gpu), which says its own head
-/// (ipc/stream.rs).
+/// The GPU device: a stream the core writes its GPU calls into, which the
+/// runtime runs once it is published (xpute-gpu). The stream carries its own
+/// head (ipc/stream.rs).
 #[derive(Clone, Copy)]
 pub struct Gpu {
     pub bytes: u32,
     /// WebGPU's power preference.
     pub power: &'static str,
-    /// WebGPU's feature names the device must have, and those it takes where
-    /// the adapter has them.
+    /// WebGPU feature names: those the device must have, and those it takes
+    /// where the adapter has them.
     pub required: &'static [&'static str],
     pub optional: &'static [&'static str],
 }
 
 #[derive(Clone, Copy)]
 pub struct Machine {
-    /// The sizes a runtime may give, any one of them; the module is linked
-    /// against the smallest, and the heap is checked against it.
+    /// The memory sizes a runtime may give, any one of them. The module is
+    /// linked against the smallest, and the heap is checked against it.
     pub mem_bytes: &'static [u32],
-    /// What a reservation is counted in.
+    /// The unit a reservation is counted in.
     pub region_bytes: u32,
-    /// The heap the smallest size must leave past the front, the data and
-    /// the fixed ranges.
+    /// The heap the smallest memory size must leave past the front, the data
+    /// and the fixed ranges.
     pub min_heap_bytes: u32,
-    /// A module's stack, first in the memory.
+    /// The stack of a module core, placed first in the memory.
     pub stack_bytes: u32,
-    /// A native core's thread's stack, outside the memory.
+    /// The stack of a native core's thread, which lies outside the memory.
     pub thread_stack_bytes: u32,
     pub slot_bytes: u32,
     pub sq_cap: u32,
     pub cq_cap: u32,
-    /// What one turn posts besides its replies (`Door::new`).
+    /// How many frames one turn may post besides its replies (`Door::new`).
     pub turn_posts: u32,
     /// Whether the core asks for the file device (abi/fs.json).
     pub fs: bool,
@@ -65,7 +67,7 @@ pub struct Machine {
 }
 
 impl Machine {
-    /// Where the front's header is: the page past the stack.
+    /// The front's header lies in the page past the stack.
     pub const fn head_at(&self) -> u32 {
         page_up(self.stack_bytes)
     }
@@ -86,7 +88,7 @@ impl Machine {
         self.sq_slots_at() + slots_bytes(self.sq_cap, self.slot_bytes)
     }
 
-    /// Where the GPU stream is, past the slots; 0 without the GPU device.
+    /// The GPU stream lies past the slots; this is 0 without the GPU device.
     pub const fn gpu_at(&self) -> u32 {
         match self.gpu {
             Some(_) => self.cq_slots_at() + slots_bytes(self.cq_cap, self.slot_bytes),
@@ -94,7 +96,7 @@ impl Machine {
         }
     }
 
-    /// What the front's header says for this machine.
+    /// The header the runtime writes in the front for this machine.
     pub const fn head(&self) -> Head {
         Head {
             sq_cap: self.sq_cap,
@@ -106,8 +108,8 @@ impl Machine {
         }
     }
 
-    /// The front's end, where a module's linker may begin its data
-    /// (`--global-base`) and a native core's own ranges begin.
+    /// The end of the front: a module's linker may begin its data here
+    /// (`--global-base`), and a native core's own ranges begin here.
     pub const fn global_base(&self) -> u32 {
         let end = self.cq_slots_at() + slots_bytes(self.cq_cap, self.slot_bytes);
         page_up(match self.gpu {
@@ -128,17 +130,15 @@ impl Machine {
         least
     }
 
-    /// Where the program's fixed ranges begin: the page past the data.
     pub const fn fixed_at(&self, data_end: u32) -> u32 {
         page_up(data_end)
     }
 
-    /// Where the heap begins: past the fixed ranges.
     pub const fn heap_at(&self, data_end: u32, fixed_bytes: u32) -> u32 {
         self.fixed_at(data_end) + page_up(fixed_bytes)
     }
 
-    /// A module's link numbers.
+    /// The numbers a module core of this machine is linked with.
     pub const fn link(&self) -> LinkConfig {
         LinkConfig {
             stack_bytes: self.stack_bytes,
@@ -147,12 +147,13 @@ impl Machine {
         }
     }
 
-    /// Fails to compile, used in a const, where the declaration cannot run:
-    /// a ring's capacity not a power of two, a turn's posts past what the
-    /// completion ring holds besides a full submission ring's replies, a
-    /// size not a whole number of regions, or the smallest size short of the
-    /// front, `fixed_bytes` and the heap. The linker's data is counted from
-    /// the front's end (`global_base`), as a native core's is.
+    /// Called in a const, it fails the build for a machine that cannot run:
+    /// a ring's capacity that is not a power of two; more posts in a turn
+    /// than the completion ring holds besides a full submission ring's
+    /// replies; a memory size that is not a whole number of regions; or a
+    /// smallest memory size too small for the front, `fixed_bytes` and the
+    /// heap. The linker's data is counted from the end of the front
+    /// (`global_base`), as a native core's ranges are.
     pub const fn check(&self, fixed_bytes: u32) {
         assert!(self.sq_cap.is_power_of_two() && self.cq_cap.is_power_of_two());
         assert!(self.sq_cap + self.turn_posts < self.cq_cap);
@@ -172,11 +173,12 @@ impl Machine {
 
 static DOOR: Global<Option<Door>> = Global::new();
 
-/// The front the runtime laid held to `m`, once, on the first turn: its header
-/// and each ring's, then the rings opened where they lie. Where a word is not
-/// the machine's, the core stops with ENOEXEC, the word's place and what it
-/// holds, its report posted alone on a completion ring laid where the machine
-/// puts it, the one place both ends know without the runtime's words.
+/// Checks the front the runtime wrote against `m`, once, on the first turn:
+/// the front's header and each ring's header. It then opens the rings where
+/// they lie. Where a word differs from the machine's, the core stops with
+/// ENOEXEC, the word's place and what it holds. That report is posted alone
+/// on a completion ring laid afresh where the machine puts it, the one place
+/// both ends know without trusting the runtime's words.
 pub fn boot(m: &Machine) {
     let mem = crate::mem::core();
     let (sq_slots, cq_slots) = (m.sq_slots_at(), m.cq_slots_at());
@@ -206,7 +208,7 @@ pub fn boot(m: &Machine) {
     }
 }
 
-/// The door `boot` laid; asking before it is a bug.
+/// The door `boot` opened. Asking for it before `boot` is a bug.
 pub fn door() -> &'static Door {
     use xpute_kit::status::bug::OrBug;
     DOOR.get(|| None)
@@ -214,25 +216,24 @@ pub fn door() -> &'static Door {
         .or_bug(xpute_kit::status::errno::Errno::ENOTRECOVERABLE)
 }
 
-/// Whether `boot` has run.
 pub fn booted() -> bool {
     DOOR.get(|| None).is_some()
 }
 
-/// A core of `machine` (its `MACHINE`), its fixed ranges `fixed_bytes` long,
-/// whose turns `entry` runs (`entry::Entry`) once the first has opened the
-/// front the runtime laid (`boot`), in the form its target takes. As a
-/// WebAssembly module it is `wasm_abi!` over the machine: the heap past the
-/// fixed ranges and the stack it was linked with. Anywhere else it is
-/// xpute-runtime's `native_core!`, so a program's crate depends on xpute-runtime
-/// for every target but wasm32.
+/// Defines a core of `machine` (its `MACHINE`) in the form its target takes.
+/// Its fixed ranges are `fixed_bytes` long, and `entry` runs its turns
+/// (`entry::Entry`) once the first turn has opened the front the runtime
+/// wrote (`boot`). As a WebAssembly module the core is `wasm_abi!` over the
+/// machine, with the heap past the fixed ranges and the stack it was linked
+/// with. On any other target it is xpute-runtime's `native_core!`, so a
+/// program's crate depends on xpute-runtime for every target but wasm32.
 ///
 /// Given `gpu`, the numbers its native GPU runtime runs by (xpute-gpu
-/// `Numbers`), the machine takes the GPU device, and off WebAssembly it is
-/// xpute-gpu's `native_core!` instead: the GPU's runtime a device beside the
-/// core, polled before each turn and rung as the core publishes its stream
-/// (`Form::publish`), and its admission handed the entry
-/// (`Form::admit_frame`); as a WebAssembly module, its admission is the
+/// `Numbers`), the machine takes the GPU device. Off WebAssembly the core is
+/// then xpute-gpu's `native_core!` instead: the GPU's runtime is a device
+/// beside the core, polled before each turn and rung as the core publishes
+/// its stream (`Form::publish`), and its admission is handed to the entry
+/// (`Form::admit_frame`). As a WebAssembly module, its admission is the
 /// page's (xpute-gpu `admit::page`) at the numbers' frame latency. The
 /// program's crate then depends on xpute-gpu, with its `runtime` feature for
 /// every target but wasm32.

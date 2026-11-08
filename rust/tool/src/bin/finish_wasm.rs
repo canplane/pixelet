@@ -35,7 +35,8 @@ fn put(mut n: u32, out: &mut Vec<u8>) {
     }
 }
 
-/// embassy and critical-section export their `#[no_mangle]` symbols; only `keep` stays.
+/// Removes every export but those named in `keep`: embassy and critical-section export their
+/// `#[no_mangle]` symbols, which the module must not expose.
 fn exported_only(bytes: &[u8], keep: &[String]) -> Result<Vec<u8>, String> {
     let mut out = bytes.get(..8).ok_or("not a wasm module")?.to_vec();
     let mut at = 8;

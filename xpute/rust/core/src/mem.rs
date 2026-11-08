@@ -1,9 +1,10 @@
 // xpute-core/mem.rs
 
 //! Every address a core names is an offset from a memory's base, never a
-//! pointer, so it means the same on every runtime and fits a `u32`. A part laid
-//! over a region takes the `Memory` it lies in; a program reading its own data
-//! goes through `core`, whose base is 0 on wasm32 and in a native test.
+//! pointer, so that it means the same on every runtime and fits in a `u32`.
+//! A part laid over a region of memory is given the `Memory` it lies in. A
+//! program reaches its own data through `core`, whose base is 0 on wasm32
+//! and in a native test.
 
 pub mod heap;
 pub mod range;
@@ -23,8 +24,9 @@ pub struct Memory {
 
 impl Memory {
     /// # Safety
-    /// `base..base + bytes` is memory both ends may read and write, and stays
-    /// where it is for as long as the `Memory` or a part laid over it lives.
+    /// `base..base + bytes` must be memory both ends may read and write, and
+    /// must stay where it is for as long as the `Memory`, or a part laid over
+    /// it, lives.
     pub const unsafe fn new(base: usize, bytes: usize) -> Memory {
         Memory { base, bytes }
     }
@@ -33,14 +35,15 @@ impl Memory {
         self.base
     }
 
-    /// Made from the address with the provenance `off_of` exposed, never by
-    /// `ptr::add` on the wasm base (address 0), which is UB.
+    /// The pointer is made from the address, with the provenance `off_of`
+    /// exposed, and never by `ptr::add` on the wasm base: adding to the null
+    /// pointer at address 0 is undefined behaviour.
     pub fn at<T>(self, off: usize) -> *mut T {
         core::ptr::with_exposed_provenance_mut(self.base + off)
     }
 
-    /// By copy: an offset from the other end carries no alignment a compiler
-    /// may assume. A word past the memory's end is a bug.
+    /// Reads the word by copy, since an offset from the other end carries no
+    /// alignment a compiler may assume. A word past the memory's end is a bug.
     #[track_caller]
     pub fn word(self, off: usize) -> u32 {
         self.within(off, 4);
@@ -62,8 +65,8 @@ impl Memory {
             .or_bug(Errno::EFAULT);
     }
 
-    /// A pointer outside the memory is a bug; on a native build that includes
-    /// statics and read-only data.
+    /// A pointer outside the memory is a bug. On a native build, statics and
+    /// read-only data lie outside the memory.
     #[track_caller]
     pub fn off_of<T>(self, p: *const T) -> usize {
         p.expose_provenance()
@@ -72,8 +75,9 @@ impl Memory {
             .or_bug(Errno::EFAULT)
     }
 
-    /// An empty slice's pointer is only its alignment, possibly outside the
-    /// region, so it names 0. Pass a slice the runtime writes into as `&mut`.
+    /// An empty slice's pointer is only its alignment and may lie outside the
+    /// region, so an empty slice names 0. A slice the runtime writes into
+    /// must be passed as `&mut`.
     #[track_caller]
     pub fn off_of_slice<T>(self, s: *const [T]) -> usize {
         if s.is_empty() {
@@ -87,10 +91,11 @@ impl Memory {
 #[cfg(not(target_arch = "wasm32"))]
 static CORE: Global<Memory> = Global::new();
 
-/// Once, before anything is allocated, on the core's thread (a `Global`).
+/// Sets the core memory. Call it once, on the core's thread (it is a
+/// `Global`), before anything is allocated.
 ///
 /// # Safety
-/// As `Memory::new`'s, for the core's whole life.
+/// As for `Memory::new`, for the core's whole life.
 #[cfg(not(target_arch = "wasm32"))]
 pub unsafe fn set(addr: usize, bytes: usize) {
     assert!(

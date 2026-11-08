@@ -1,7 +1,8 @@
 // @pxl/client/port/input.ts
 
-/** Input as the core's commands, from the place's words (`POINTER_PHASE`,
- * `POINTER_KIND`), and the world's view opened and closed. */
+/** Input sent as the core's commands, translated from the place's words
+ * (`POINTER_PHASE`, `POINTER_KIND`), and the opening and closing of the
+ * world's view. */
 
 import type { f64, i32 } from "@xpute/kit/abi/word.ts";
 import { PointerPhase, PointerType } from "@/abi/cmd.spec.ts";
@@ -12,7 +13,7 @@ import {
 import * as sensor from "@/service/sensor.ts";
 import { core, ui } from "@/port/core.ts";
 
-/** The next turn made interactive, as an input asks. */
+/** Asks that the next turn run as an interactive one, as any input does. */
 export function interactive(): void {
   ui.input();
 }
@@ -39,7 +40,8 @@ export function keys(x: i32, y: i32): void {
   core.input_move(x, y);
 }
 
-/** The world's view opened: turns run while it is open. */
+/** Opens the world's view and returns what closes it. Turns run, and the
+ * sensors are followed, only while the view is open. */
 export function open(): () => void {
   ui.resume();
   const unfollow = sensor.follow();
@@ -49,7 +51,7 @@ export function open(): () => void {
   };
 }
 
-/** A turn asked for now, as a moved box needs one. */
+/** Asks for a turn now, as a box that moved needs one. */
 export function frame(): void {
   ui.wake();
 }

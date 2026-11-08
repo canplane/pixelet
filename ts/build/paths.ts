@@ -1,18 +1,20 @@
 // @pxl/build/paths.ts
 
 /**
- * The aliases tsconfig.json's `paths` give the tree's own directories, and
- * the workspace packages' sources, read for what has no tsconfig resolver of
- * its own: Metro. Vite and vitest read the same paths themselves
- * (`resolve.tsconfigPaths`) and resolve the packages as Node does. Plain
- * TypeScript over `node:` modules, which Node loads (package.json `engines`).
+ * The aliases that tsconfig.json's `paths` give the tree's own directories,
+ * and the sources of the workspace packages, read for the one tool with no
+ * tsconfig resolver of its own: Metro. Vite and vitest read the same paths
+ * themselves (`resolve.tsconfigPaths`) and resolve the packages as Node does.
+ * This file is plain TypeScript over `node:` modules, so that Node loads it
+ * directly (package.json `engines`).
  */
 
 import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as path from "node:path";
 
-/** JSONC as JSON: comments and trailing commas out, strings untouched. */
+/** Parses JSONC. Comments and trailing commas are dropped, and strings are
+ * left untouched. */
 function jsonc(text: string): unknown {
   let out = "";
   for (let i = 0; i < text.length; i++) {
@@ -37,10 +39,11 @@ function jsonc(text: string): unknown {
   return JSON.parse(out);
 }
 
-/** The TypeScript workspace's root, the directory over this one. */
+/** The TypeScript workspace's root, the directory above this one. */
 export const WORKSPACE: string = path.dirname(import.meta.dirname!);
 
-/** The repository's root, which holds the workspace (ts/) beside rust/ and xpute/. */
+/** The repository's root, which holds the workspace (ts/) beside rust/ and
+ * xpute/. */
 export const REPO: string = path.dirname(WORKSPACE);
 
 type Config = { compilerOptions?: { paths?: Record<string, string[]> } };
@@ -63,11 +66,12 @@ const PREFIXES: [string, string][] = Object.entries(
 
 const MODULES = `${path.sep}node_modules${path.sep}`;
 
-/** Where `spec`, imported from the file `from`, names a file of the tree:
- * through an alias, the path past its prefix; through a workspace package
- * (xpute's, `workspace:*`), the source file its package.json `exports` maps it
- * to, as Node resolves it, the package's own name from inside it included.
- * None for a relative specifier, an installed package, or an import from one. */
+/** The file of the tree that `spec`, imported from the file `from`, names.
+ * Through an alias, it is the path past the alias's prefix. Through a
+ * workspace package (xpute's, `workspace:*`), it is the source file that the
+ * package.json `exports` maps it to, as Node resolves it, including a
+ * package's import of its own name. It is null for a relative specifier, for
+ * an installed package, and for an import made from an installed package. */
 export function treeFile(from: string, spec: string): string | null {
   const hit = PREFIXES.find(([prefix]) => spec.startsWith(prefix));
   if (hit) return hit[1] + spec.slice(hit[0].length);

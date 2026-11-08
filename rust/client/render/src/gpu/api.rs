@@ -1,15 +1,15 @@
 // pxl-render/gpu/api.rs
 
-//! The WebGPU calls the renderer makes, written through xpute's encoder
-//! (xpute-gpu encode) into one stream in the core's memory, which the runtime
-//! runs after the turn: the page's on WebGPU, the device app's on wgpu
-//! (xpute-gpu runtime), the same records either way. What is pixelet's stays
-//! here: the pipeline records expanded into descriptors, a pass's shape and
-//! the spans' timing.
+//! The WebGPU calls the renderer makes. They are written through xpute's encoder (xpute-gpu
+//! `encode`) into one stream in the core's memory, and the runtime runs the stream after the
+//! turn. The page's runtime runs it on WebGPU and the device app's on wgpu (xpute-gpu
+//! `runtime`), from the same records. What is pixelet's own stays here: the pipeline records
+//! expanded into descriptors, the shape of a pass, and the timing of the GPU spans a frame is
+//! timed in (gpu/span.spec.rs).
 //!
-//! The stream's head holds what the runtime writes for the core: the device's
-//! block (limits, features, timestamp period, preferred surface format,
-//! status) and the spans' times.
+//! The stream's head holds what the runtime writes back for the core: the device's block (its
+//! limits, features, timestamp period, preferred surface format and status) and the spans'
+//! times.
 
 use xpute_core::abi::handle::handle_slot;
 use xpute_core::global::Global;
@@ -29,13 +29,9 @@ use xpute_gpu::spec::{BUFFER_USAGE, COLOR_WRITE, STATUS, TEXTURE_USAGE};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-/// A fence or the device's STATUS as the runtime last stored it.
 pub use xpute_gpu::encode::load_acquire;
-/// Whether a completion's fence holds the ticket it was asked with
-/// (xpute spec RESULT).
 pub use xpute_gpu::encode::signaled;
 pub use xpute_gpu::enums::TextureFormat as Format;
-/// What a read back or an image says beside its fence.
 pub use xpute_gpu::spec::RESULT;
 
 use crate::api_spec::{record, stream};
@@ -58,53 +54,53 @@ pub mod texture_usage {
     };
 }
 
-/// The objects the renderer may hold at once.
+/// The most objects the renderer holds at once: the size of the encoder's handle table.
 pub const OBJECTS: usize = 1 << 15;
 
 use crate::frame::shader::record::GROUP_ENTRIES;
 
 const SPANS: usize = GPU_SPAN_NAMES;
 
-/// WebGPU's default minUniformBufferOffsetAlignment: an adapter's limit is a
-/// power of two no larger, so a larger one is no device's.
+/// WebGPU's default `minUniformBufferOffsetAlignment`. Every adapter's limit is a power of two
+/// no larger than this, so a larger value comes from no real device and is refused (`device`).
 pub const UNIFORM_ALIGN_MAX: u32 = 256;
 
-/// An image file as its asker hands it: its name, the asker's own and the
-/// same for one file wherever it is handed, and its bytes, handed until its
-/// texture lands (`take_complete`) and empty after, while the texture is the
-/// taker's (`Gpu::image`).
+/// An image file as its asker hands it: a name and the file's bytes. The asker chooses the
+/// name and gives one file the same name wherever it hands it. The asker hands the bytes until
+/// the texture lands (`take_complete`) and an empty slice after that, while the texture
+/// belongs to whoever took it (`Gpu::image`).
 pub type Image = (u32, &'static [u8]);
 
-/// The head's words past the stream's own: the device's block, then the
-/// spans' reads, `READS` of them, each its fence and result, then the
-/// begin and end ticks of the frame it timed, two words a tick (`read_at`). The stream says the
-/// head's length itself, so the runtime reads none of this.
+/// The head's words that follow the stream's own. The device's block comes first. Then come
+/// `READS` reads of the spans, each a fence, a result, and the begin and end ticks of every
+/// span of the frame it timed, two words a tick (`read_at`). The stream records the head's
+/// length itself, so the runtime does not read this layout.
 const DEVICE_AT: usize = Stream::OWN_WORDS;
 const READS_AT: usize = DEVICE_AT + device::WORDS;
-/// The spans' reads on their way at once, each its own mapped buffer: a
-/// frame's read lands a frame or two after it, so with three none waits on
-/// the one before it to be taken.
+/// How many reads of the spans may be out at once, each into its own mapped buffer. A frame's
+/// read lands a frame or two after the frame, so with three no new read waits for an earlier
+/// one to be taken.
 pub const READS: usize = 3;
 const READ_WORDS: usize = 2 + 2 * 2 * SPANS;
 const HEADER: usize = READS_AT + READS * READ_WORDS;
 
-/// Read `k`'s fence in the head; its result and its ticks follow it.
+/// The head word that holds read `k`'s fence. The read's result and ticks follow it.
 const fn read_at(k: usize) -> usize {
     READS_AT + k * READ_WORDS
 }
 
-/// What the device is, once its block is in.
+/// The device as its block describes it, once the runtime has written the block.
 #[derive(Clone, Copy)]
 pub struct Device {
     pub align: u32,
     pub timestamps: bool,
-    /// What a surface shows best, and so what the canvas's pipelines target.
+    /// The format the device's surfaces show best. The canvas's pipelines target it.
     pub canvas: Format,
     period_ns: f32,
 }
 
-/// A span's pair of timestamp queries: the first pass writes the begin, every
-/// pass the end, so the last one's stands. A span with no passes reads 0.
+/// A span's pair of timestamp queries. The span's first pass writes the begin and every pass
+/// writes the end, so the last pass's end stands. A span with no passes reads 0.
 #[derive(Clone, Copy)]
 pub struct TimestampWrites {
     set: Id,
@@ -146,8 +142,7 @@ impl TimestampWrites {
     }
 }
 
-/// `texture`'s first mip at `origin` (x, y, layer), every aspect: the place a
-/// copy reads or writes.
+/// The place in `texture` that a copy reads or writes: `origin` (x, y, layer) in its first mip.
 pub fn place(texture: Id, origin: [u32; 3]) -> encode::TexelCopyTexture {
     encode::TexelCopyTexture {
         texture,
@@ -157,8 +152,8 @@ pub fn place(texture: Id, origin: [u32; 3]) -> encode::TexelCopyTexture {
     }
 }
 
-/// An encoder being recorded and the frame's spans: a pass is handed this
-/// and writes its own span's.
+/// An encoder being recorded, with the timestamp writes of the frame's spans. Each pass is
+/// handed this and writes the timestamps of its own span.
 pub struct RenderContext<'a> {
     pub g: &'a Gpu,
     pub encoder: Id,
@@ -175,8 +170,9 @@ impl<'a> RenderContext<'a> {
     }
 }
 
-/// What a render pass holds. A group set with offsets is held as none: its
-/// offsets move per draw.
+/// What a render pass has set: its pipeline, bind groups, vertex lanes and index buffer. A
+/// group set with dynamic offsets is held as unset, because its offsets change from draw to
+/// draw.
 #[derive(Default)]
 pub struct DrawState {
     pipeline: Id,
@@ -219,9 +215,9 @@ impl DrawState {
     }
 }
 
-/// A render pass handed from draw to draw, which sets no pipeline, bind
-/// group, vertex lane or index buffer its `DrawState` says it holds. Every
-/// call on the pass goes through it, so what it holds is what the pass has.
+/// A render pass handed from draw to draw. It skips setting a pipeline, bind group, vertex lane
+/// or index buffer that its `DrawState` says the pass already has. Every call on the pass goes
+/// through it, so what the state holds is what the pass has.
 pub struct TrackedRenderPass<'a> {
     g: &'a Gpu,
     pass: Id,
@@ -267,12 +263,12 @@ impl<'a> TrackedRenderPass<'a> {
         }
     }
 
-    /// What the pass draws held to `[x, y, width, height]` of its targets.
+    /// Limits what the pass draws to `rect`, `[x, y, width, height]` in its targets' pixels.
     pub fn set_scissor(&self, rect: [u32; 4]) {
         self.g.set_scissor(self.pass, rect);
     }
 
-    /// The stencil's reference its draws test and write (`Stencil`).
+    /// Sets the stencil reference that the pass's draws test against and write (`Stencil`).
     pub fn set_stencil_reference(&self, reference: u32) {
         call::set_stencil_reference(&mut self.g.s().stream, self.pass, reference);
     }
@@ -301,29 +297,29 @@ impl<'a> TrackedRenderPass<'a> {
     }
 }
 
-/// The depth a pass drawn through a gate draws into, the world's surfaces'
-/// and the light's map's: a 32-bit float, and a stencil, which marks the
-/// tiles a frame draws again, so a pass skips the rest (`Stencil`).
+/// The depth format of the targets a pass can draw into through a gate: the world surfaces'
+/// depth and the light map's. A frame that is not drawn whole is drawn through a gate, which
+/// marks the tiles the frame claims. The format is a 32-bit float with a stencil, and the
+/// stencil holds those marks, so the passes after the gate skip the other tiles (`Stencil`).
 pub const MASKED_DEPTH: Format = Format::depth32float_stencil8;
 
-/// The world's color as its passes leave it, toned and linear, blended
-/// there, gathered over frames (gpu/resolve.rs) and encoded onto the canvas
-/// once (gpu/finish.rs): a float, so the finish's dither falls between
-/// levels the canvas has and none the color had.
+/// The format of the world's color as its passes leave it: toned, linear, and blended in place.
+/// The color is gathered over frames (gpu/resolve.rs) and encoded onto the canvas once
+/// (gpu/finish.rs). It is a float, so the color has no levels of its own, and the finish's
+/// dither works only between the levels the canvas has.
 pub const WORLD_COLOR: Format = Format::rgba16float;
 
-/// The most color targets a pipeline draws into: the finish's two, the
-/// canvas and the picture the world's surface keeps (gpu/finish.rs).
+/// The most color targets a pipeline draws into. The finish draws into two: the canvas and the
+/// picture that the world's surface keeps (gpu/finish.rs).
 pub const TARGETS: usize = 2;
 
-/// What a pipeline does with the stencil beside its depth (`MASKED_DEPTH`),
-/// which holds in each tile the number of the gated frame that last claimed
-/// it, as a light tile's word names the cast that read it: nothing; passes
-/// only where it holds the pass's reference, this frame's number, as every
-/// draw of the world's pass does; or writes the reference there, as the gate
-/// does (gpu/renderer.rs `frame`). A pass clears it to 0, its reference 0,
-/// unless it keeps it (`PassDesc::load_stencil`), so a pass with no gate passes
-/// everywhere.
+/// What a pipeline does with the stencil beside its depth (`MASKED_DEPTH`). In each tile, the
+/// stencil holds the number of the gated frame that last claimed the tile. `Unused` leaves the
+/// stencil alone. `Masked` passes only where the stencil holds the pass's reference, which is
+/// this frame's number; every draw of the world's pass is masked. `Mask` writes the reference,
+/// as the gate does (gpu/renderer.rs `frame`). A pass clears the stencil to 0 unless it keeps
+/// it (`PassDesc::load_stencil`), and WebGPU starts every pass with a reference of 0, so a pass
+/// with no gate passes everywhere.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Stencil {
     Unused,
@@ -331,7 +327,7 @@ pub enum Stencil {
     Mask,
 }
 
-/// How an attachment starts: cleared, kept, or (depth) read and not written.
+/// How a pass starts an attachment: cleared, loaded, or, for a depth, loaded and read only.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Load {
     Clear,
@@ -339,11 +335,11 @@ pub enum Load {
     ReadOnly,
 }
 
-/// A pass's targets: color cleared to transparent, or to what `color_clear`
-/// gives, or loaded, and a second color started as the first
-/// (`second_color`), depth cleared to `depth_clear`, loaded or read only, and
-/// its stencil, where it has one, cleared to 0 or loaded (`load_stencil`); 0
-/// for one absent.
+/// A render pass's targets and how each starts. The color is cleared to transparent, cleared
+/// to what `color_clear` gives, or loaded. A second color (`second_color`) starts as the first
+/// does. The depth is cleared to `depth_clear`, loaded, or read only. The depth's stencil,
+/// where it has one, is cleared to 0 or loaded (`load_stencil`). A target's handle is 0 where
+/// the pass has none.
 pub struct PassDesc {
     color: Id,
     second: Id,
@@ -357,8 +353,8 @@ pub struct PassDesc {
 }
 
 impl PassDesc {
-    /// Its stencil loaded as the last pass left it, the numbers of the gated
-    /// frames that claimed each tile (`Stencil`).
+    /// Loads the stencil as the last pass left it, holding the number of the gated frame that
+    /// last claimed each tile (`Stencil`).
     pub fn load_stencil(self) -> PassDesc {
         PassDesc {
             stencil_load: Load::Load,
@@ -366,7 +362,7 @@ impl PassDesc {
         }
     }
 
-    /// Its color cleared to `rgba`, linear.
+    /// Clears the color to `rgba`, given in linear values.
     pub fn color_clear(self, rgba: [f32; 4]) -> PassDesc {
         PassDesc {
             color_clear: rgba,
@@ -374,8 +370,8 @@ impl PassDesc {
         }
     }
 
-    /// `view` its second color target, at location 1, started as its first:
-    /// a pipeline of two targets draws into it (`Pipelines::build_targets`).
+    /// Adds `view` as the second color target, at location 1, started as the first is. A
+    /// pipeline built with two targets draws into it (`Pipelines::build_targets`).
     pub fn second_color(self, view: Id) -> PassDesc {
         PassDesc {
             second: view,
@@ -405,9 +401,10 @@ pub fn pass_desc(
     }
 }
 
-/// A bind group layout, and the group it was made of: its (binding, stages, kind) words, as a
-/// pipeline record holds them (frame/shader/record.rs), or a compute group. Made by
-/// `Gpu::layout` alone, so a bind group over it is checked against the group itself.
+/// A bind group layout, with the group words it was made from: a (binding, stages, kind)
+/// triple per binding, as a pipeline record holds them (frame/shader/record.rs) or as a
+/// compute group gives them. Only `Gpu::layout` makes one, so every bind group over it can be
+/// checked against those words.
 #[derive(Clone, Copy, Default)]
 pub struct Layout {
     id: Id,
@@ -415,7 +412,6 @@ pub struct Layout {
 }
 
 impl Layout {
-    /// Whether the group has `binding`.
     pub fn binds(&self, binding: u32) -> bool {
         self.group
             .as_chunks::<3>()
@@ -424,7 +420,8 @@ impl Layout {
             .any(|w| w[0] == binding)
     }
 
-    /// The buffers of `entries` bound as writable storage, each at its binding.
+    /// The buffers among `entries` that the group binds as writable storage, each with its
+    /// binding.
     fn writable<'e>(&self, entries: &'e [Entry]) -> impl Iterator<Item = (u32, Id)> + 'e {
         let words = self.group.as_chunks::<3>().0;
         entries.iter().filter_map(move |e| match e.resource {
@@ -439,8 +436,9 @@ impl Layout {
         })
     }
 
-    /// `entries` the group's bindings each once, each a resource its kind takes (a buffer for
-    /// a buffer's kind, a sampler for a sampler's, a view for the rest); a bug otherwise.
+    /// Checks that `entries` name each of the group's bindings once, each with a resource of
+    /// the binding's kind: a buffer for a buffer kind, a sampler for a sampler kind, and a view
+    /// for the rest. Anything else is a bug.
     #[track_caller]
     fn holds(&self, entries: &[Entry]) {
         let words = self.group.as_chunks::<3>().0;
@@ -475,10 +473,8 @@ impl Layout {
     }
 }
 
-/// A bind group's entry, as xpute's encoder takes it.
 pub use xpute_gpu::encode::BindGroupEntry as Entry;
 
-/// A buffer's entry, whole.
 pub const fn buf_entry(binding: u32, buf: Id) -> Entry {
     Entry {
         binding,
@@ -490,7 +486,6 @@ pub const fn buf_entry(binding: u32, buf: Id) -> Entry {
     }
 }
 
-/// `size` bytes of a buffer from `offset`.
 pub const fn buf_range_entry(binding: u32, buf: Id, off: u32, size: u32) -> Entry {
     Entry {
         binding,
@@ -516,9 +511,9 @@ pub const fn sampler_entry(binding: u32, sampler: Id) -> Entry {
     }
 }
 
-/// Whether two entries bind one resource at one binding: a resource's handle
-/// is generational (xpute_core abi/handle.rs), so one let go and made again
-/// is another handle, never the one it had.
+/// Whether two entries bind the same resource at the same binding. Comparing handles is
+/// enough: a handle is generational (xpute_core abi/handle.rs), so a resource let go and made
+/// again gets a new handle, never its old one.
 fn same_entry(a: &Entry, b: &Entry) -> bool {
     use encode::Resource::{Buffer, Sampler, View};
     a.binding == b.binding
@@ -540,12 +535,12 @@ fn same_entry(a: &Entry, b: &Entry) -> bool {
         }
 }
 
-/// A bind group kept across frames over the resources its entries name, and
-/// made again over another where one of them is made again (`same_entry`):
-/// its owner sets it before the frame's commands (`frame_begin`), each frame
-/// it draws, as a frame lets go in it each object it makes; and lets it go
-/// with itself. The group it replaces names a resource already let go,
-/// destroyed by the runtime, and is let go then.
+/// A bind group kept across frames over the resources its entries name. It is made again when
+/// one of those resources is made again (`same_entry`). Its owner sets it in each frame it
+/// draws, before the frame's commands begin (`frame_begin`), because a frame lets go within
+/// itself of every object it makes. The owner lets the group go when the owner itself goes.
+/// The group that a new one replaces names a resource that was let go and that the runtime
+/// has destroyed, and the old group is let go at that point.
 #[derive(Default)]
 pub struct Group {
     layout: Id,
@@ -554,8 +549,8 @@ pub struct Group {
 }
 
 impl Group {
-    /// The group over `layout` and `entries`, the one kept where it was made
-    /// over both, else one made now in its place.
+    /// The group over `layout` and `entries`: the kept one where it was made over both, and
+    /// otherwise a new one made in its place.
     #[track_caller]
     pub fn set(&mut self, g: &Gpu, layout: Layout, entries: &[Entry]) -> Id {
         let kept = self.id != 0
@@ -576,7 +571,7 @@ impl Group {
         self.id
     }
 
-    /// The group as last set; 0 before.
+    /// The group as last set, or 0 before the first set.
     pub fn id(&self) -> Id {
         self.id
     }
@@ -598,73 +593,74 @@ pub const fn word_bytes(words: usize) -> u32 {
 
 struct State {
     stream: Stream,
-    /// At the range's end, past the stream: never built or moved, as all-zero
-    /// bytes are an encoder that has made nothing (xpute-gpu encode).
+    /// The encoder lies at the range's end, past the stream. It is never built or moved:
+    /// all-zero bytes are an encoder that has made nothing (xpute-gpu encode).
     encoder: &'static mut Encoder<OBJECTS>,
     /// Where the stream's words begin in the core's memory.
     at: u32,
-    /// Inside a frame's transaction, where a record that does not fit drops
-    /// the frame rather than being a bug.
+    /// Whether a frame's transaction is open. Inside one, a record that does not fit drops the
+    /// frame; outside one, it is a bug.
     in_frame: bool,
-    /// The device's block asked for; read once it is READY.
+    /// Whether the device's block has been asked for. It is read once its status is READY.
     device_out: bool,
     device: Option<Device>,
-    /// The spans' query set, its resolve buffer and the buffers it is copied
-    /// into and mapped back through, a read's each; which spans each read
-    /// timed, and the order it was asked in, 0 where none is out, so the
-    /// reads are taken in as they were asked; and their times from the last
-    /// read in, in ms.
+    /// The spans' query set, the buffer it resolves into, and one buffer per read that the
+    /// resolved ticks are copied into and mapped back through.
     stamps: Option<(Id, Id, [Id; READS])>,
+    /// For each read, the spans it timed, one bit a span.
     stamps_written: [u64; READS],
+    /// For each read, the order in which it was asked, or 0 where it is not out. The reads are
+    /// taken in that order.
     stamps_out: [u32; READS],
     stamps_asked_cnt: u32,
-    /// The read this frame asked: its mapping's ticket is written as it is
-    /// encoded, so a frame dropped whole takes it back (`frame_commit`), or
-    /// it would never land.
+    /// The read this frame asked for. Its mapping's ticket is written as the frame is encoded,
+    /// so a frame dropped whole must take the read back (`frame_commit`), or the read would
+    /// stay out and never land.
     stamps_asked: Option<usize>,
+    /// Each span's own time from the last read taken in, in ms.
     gpu_ms: [f64; SPANS],
-    /// The time the last read's spans ran, ms, those that overlap counted
-    /// once: the frame's GPU time, as the spans' sum is not where its passes
-    /// overlap; a span whose ticks a pass left unwritten (a pass with no work
-    /// may be dropped) adds its own length, not the time since.
+    /// The time the last read's spans ran, in ms, with overlapping spans counted once. This is
+    /// the frame's GPU time; the spans' sum is not, where passes overlap. A pass with no work
+    /// may be dropped and leave its begin tick unwritten; its span is then counted from the
+    /// latest end before it, so it adds its own length and not the time since an older tick.
     gpu_busy_ms: f64,
-    /// The read the last frame submitted took in, where it took one: its
-    /// figures are then that read's, and else the read before it, not
+    /// The read that the last submitted frame took in, if it took one. When it did, the span
+    /// times are that read's; when it did not, they are still the earlier read's, not
     /// measured again.
     stamps_complete: Option<usize>,
     /// The images on their way into textures (`Gpu::image`).
     images: Vec<ImageCopy>,
-    /// The images taken since `take_complete` last ran, on this device.
+    /// The images whose textures were taken on this device since `take_complete` last ran.
     complete: Vec<u32>,
-    /// The devices gone so far: what was handed to the GPU under another
-    /// count is on none there is.
+    /// How many devices have been lost so far. Whatever was handed to the GPU under an earlier
+    /// count is on no device that exists now.
     generation: u32,
-    /// The objects let go while the runtime held the stream, destroyed once it
-    /// hands it back (`writable`).
+    /// The objects let go while the runtime held the stream. They are destroyed once it hands
+    /// the stream back (`writable`).
     frees: Vec<Id>,
-    /// A device answered while the runtime held the stream: its block is asked
-    /// once it hands it back.
+    /// Whether a device answered while the runtime held the stream. Its block is then asked
+    /// for once the runtime hands the stream back.
     device_pending: bool,
-    /// The device's block said LOST when last read: the runtime alone writes
-    /// the block, so a loss is taken once by this, not by clearing it.
+    /// Whether the device's block said LOST when last read. Only the runtime writes the block,
+    /// so a loss is reported once by comparing against this flag, not by clearing the block.
     lost: bool,
-    /// The ranges each WRITE_BUFFER_AT names, address and bytes: those
-    /// recorded since the last publish, and those of the hand-off the runtime
-    /// holds until it gives the stream back (`in_flight`).
+    /// The memory ranges that WRITE_BUFFER_AT records name, as address and length. `ranges`
+    /// holds those recorded since the last publish. `ranges_out` holds those of the hand-off
+    /// the runtime holds until it gives the stream back (`in_flight`).
     ranges: Vec<(usize, usize)>,
     ranges_out: Vec<(usize, usize)>,
     /// Where each encoder is cut into command buffers (gpu/split.rs).
     splits: Splits,
 }
 
-/// An image file copied into its texture: the file's bytes kept until the
-/// texture's fence says it is there, or refused. Each asks once, its
-/// ticket the first of its word's sequence (`IMAGE_TICKET`).
+/// An image file being copied into its texture. The asker keeps the file's bytes until the
+/// texture's fence says the copy landed or was refused. Each copy is asked once, so its ticket
+/// is the first of its fence's sequence (`IMAGE_TICKET`).
 struct ImageCopy {
     image: u32,
     texture: Id,
     fence: Box<[u32; 2]>,
-    /// Whether its landing was told (`images_complete`).
+    /// Whether `images_complete` has reported its landing.
     told: bool,
 }
 
@@ -686,22 +682,22 @@ fn header(k: usize) -> &'static mut u32 {
     unsafe { &mut *mem::at::<u32>(at) }
 }
 
-/// Read `r`'s fence and result, the runtime's to write.
+/// Read `r`'s fence and result, which only the runtime writes.
 fn read_fence(r: usize) -> &'static [u32; 2] {
     let at = state().at as usize + read_at(r) * WORD;
     // SAFETY: two words of the stream's head, which the core only reads.
     unsafe { &*mem::at::<[u32; 2]>(at) }
 }
 
-/// The encoder's bytes at the range's end, a word-multiple of 8.
+/// The bytes the encoder takes at the end of the installed range.
 const ENCODER_BYTES: usize = size_of::<Encoder<OBJECTS>>().next_multiple_of(8);
 const _: () =
     assert!(align_of::<Encoder<OBJECTS>>() <= 8 && ENCODER_BYTES < stream::RESERVE as usize);
 
 /// # Safety
-/// `at` must address `bytes`, zeroed, that nothing else writes, 8-aligned,
-/// for as long as the module runs: the stream, then the encoder's handle
-/// table at its end.
+/// `at` must address `bytes` zeroed bytes, 8-aligned, that nothing else writes for as long as
+/// the module runs. The stream takes the start of the range and the encoder's handle table
+/// takes its end.
 pub unsafe fn install(at: u32, bytes: u32) -> u32 {
     xpute_kit::ensure!(
         bytes as usize > ENCODER_BYTES + stream::RESERVE as usize,
@@ -721,9 +717,9 @@ pub unsafe fn install(at: u32, bytes: u32) -> u32 {
     at
 }
 
-/// The calls' state over a stream in a region of its own, apart from the core's memory, its
-/// encoder beside it, and `device` as though its block were in: what a test makes the renderer
-/// on, no runtime running the stream.
+/// Installs the calls' state for a test: a stream in a region of its own, apart from the core's
+/// memory, with its encoder beside it, and `device` as though its block had been written. No
+/// runtime runs this stream.
 #[cfg(test)]
 pub(crate) fn install_apart(device: Device) {
     const WORDS: usize = 1 << 25;
@@ -740,7 +736,7 @@ pub(crate) fn install_apart(device: Device) {
     STATE.set(Some(s));
 }
 
-/// A device made up, as `install_apart` takes it.
+/// A made-up device for `install_apart`.
 #[cfg(test)]
 pub(crate) fn test_device() -> Device {
     Device {
@@ -781,27 +777,26 @@ impl State {
     }
 }
 
-/// Where the stream lies in the core's memory, once installed: what a runtime
-/// runs after each turn.
+/// Where the stream lies in the core's memory once it is installed. The runtime runs the
+/// stream there after each turn.
 pub fn stream_at() -> Option<u32> {
     STATE.get(|| None).as_ref().map(|s| s.at)
 }
 
-/// The renderer's calls, once the device has told what it is, on a turn
-/// the stream is the core's to write (`stream_free`).
+/// The renderer's calls, once the device's block is in and while the stream is the core's to
+/// write (`stream_free`).
 pub fn gpu() -> Option<&'static Gpu> {
     device().filter(|_| stream_free()).map(|_| &GPU)
 }
 
-/// Whether the runtime has handed the stream back since the core last
-/// published it (xpute_core ipc/stream.rs R3): until then the core
-/// records nothing, and a frame is held.
+/// Whether the runtime has handed the stream back since the core last published it
+/// (xpute_core ipc/stream.rs R3). Until it has, the core records nothing and the frame waits.
 pub fn stream_free() -> bool {
     STATE.get(|| None).as_mut().is_none_or(writable)
 }
 
-/// `stream_free`, and once it is, what waited for it recorded: the device's
-/// block asked and the objects let go meanwhile destroyed.
+/// `stream_free`, and once the stream is free, records what waited for it: it asks for the
+/// device's block and destroys the objects let go meanwhile.
 fn writable(s: &mut State) -> bool {
     if !s.stream.is_free() {
         return false;
@@ -821,8 +816,9 @@ fn writable(s: &mut State) -> bool {
     true
 }
 
-/// The device as its block says, once the runtime has written it: asked for on
-/// the first call after a device answers (`on_device_answered`).
+/// The device as its block describes it, once the runtime has written the block. The block
+/// is asked for when a device answers (`on_device_answered`), and the first call after its
+/// status turns READY reads it.
 pub fn device() -> Option<Device> {
     let s = STATE.get(|| None).as_mut()?;
     if s.device.is_none()
@@ -864,8 +860,8 @@ pub fn device() -> Option<Device> {
     s.device
 }
 
-/// A device answered: its block is asked for, once the stream is the
-/// core's to write, and read once the runtime has written it.
+/// Asks for the block of a device that answered, as soon as the stream is the core's to
+/// write. `device` reads the block once the runtime has written it.
 pub fn on_device_answered() {
     let s = state();
     if writable(s) {
@@ -883,8 +879,8 @@ fn ask_device(s: &mut State) {
     s.device_out = true;
 }
 
-/// Whether the device went since this was last asked, as its runtime says in
-/// the device's block (xpute STATUS.LOST); taken once, the block left as
+/// Whether the device was lost since this was last asked, as the runtime reports in the
+/// device's block (xpute STATUS.LOST). Each loss is reported once, and the block is left as
 /// the runtime wrote it.
 pub fn take_device_lost() -> bool {
     let Some(s) = STATE.get(|| None).as_mut() else {
@@ -894,15 +890,16 @@ pub fn take_device_lost() -> bool {
     !core::mem::replace(&mut s.lost, lost) && lost
 }
 
-/// The devices gone so far (`on_device_lost`): whoever hands the GPU anything
-/// says under which, and what went under another is not there.
+/// How many devices have been lost so far (`on_device_lost`). Whoever hands the GPU anything
+/// notes the count it was handed under; what was handed under another count is gone.
 pub fn device_generation() -> u32 {
     STATE.get(|| None).as_ref().map_or(0, |s| s.generation)
 }
 
-/// The ticks of the read asked first of those out, where its word says they
-/// landed: each span's own ms, and the read let go for another frame to
-/// ask; which read landed. One a frame is taken, as one a frame is asked.
+/// Takes in the ticks of the earliest-asked read that is out, if its fence says they landed.
+/// It sets each span's own time and the busy time, frees the read for another frame to ask,
+/// and returns which read it took. A read that was refused is freed and measures nothing. One
+/// read is taken a frame, as one is asked a frame.
 fn take_stamps(s: &mut State) -> Option<usize> {
     let r = (0..READS)
         .filter(|&r| s.stamps_out[r] != 0)
@@ -927,11 +924,11 @@ fn take_stamps(s: &mut State) -> Option<usize> {
             *r = (b, e);
         }
     }
-    // A span's own time is its end less the later of its begin and the
-    // latest end before it: a render pass's begin is stamped before the
-    // passes it waits on have finished (a tiled GPU starts its vertex work
-    // early), while its end and a compute pass's begin are not, so the end
-    // before it bounds what it took of their time.
+    // A span's own time is its end less the later of its begin and the latest end before it.
+    // A tiled GPU starts a render pass's vertex work early, so the pass's begin is stamped
+    // before the passes it waits on have finished. A render pass's end and a compute pass's
+    // begin are stamped in order, so counting from the latest earlier end leaves out the time
+    // that belongs to the passes before it.
     let ends = ran;
     for (k, r) in ran.iter_mut().enumerate() {
         let (b, e) = *r;
@@ -944,8 +941,6 @@ fn take_stamps(s: &mut State) -> Option<usize> {
         r.0 = before.map_or(b, |p| p.clamp(b, e));
         s.gpu_ms[k] = (r.1 - r.0) as f64 * period_ms;
     }
-    // The spans' own times by their starts, each run of overlapping ones
-    // counted once.
     let mut cnt = 0;
     for k in 0..SPANS {
         if ran[k].1 != 0 {
@@ -974,7 +969,7 @@ fn take_stamps(s: &mut State) -> Option<usize> {
     Some(r)
 }
 
-/// The device went, and every object on it: the handles start over.
+/// The device was lost with every object on it, so the handles start over.
 pub fn on_device_lost() {
     if let Some(s) = STATE.get(|| None).as_mut() {
         // SAFETY: the encoder's own bytes; zeroed, it has made nothing.
@@ -989,8 +984,8 @@ pub fn on_device_lost() {
     }
 }
 
-/// The turn's records handed to the runtime, and with them the ranges they
-/// name (`in_flight`).
+/// Hands the turn's records to the runtime, and with them the ranges they name
+/// (`in_flight`).
 pub fn gpu_publish() {
     if let Some(s) = STATE.get(|| None).as_mut() {
         if s.stream.is_free() {
@@ -1001,10 +996,10 @@ pub fn gpu_publish() {
     }
 }
 
-/// Whether the runtime holds memory of `vals`: a WRITE_BUFFER_AT names it, of
-/// the records not yet published or of the hand-off the runtime has not given
-/// back (xpute_core ipc/stream.rs R3). Their writer leaves them as they
-/// are, and where they are, until neither does.
+/// Whether `vals` overlaps memory that a WRITE_BUFFER_AT record names, among the records not
+/// yet published or in the hand-off the runtime has not given back (xpute_core ipc/stream.rs
+/// R3). While it does, the runtime is still to read that memory, so the values' writer leaves
+/// them unchanged and in place.
 pub fn in_flight<T>(vals: &[T]) -> bool {
     let Some(s) = STATE.get(|| None).as_mut() else {
         return false;
@@ -1017,8 +1012,8 @@ pub fn in_flight<T>(vals: &[T]) -> bool {
     meets(&s.ranges) || (!s.stream.is_free() && meets(&s.ranges_out))
 }
 
-/// Each image whose texture was taken since this last ran, on the device
-/// there is: its asker may let its file go, and hands it again only once
+/// Calls `complete` with each image whose texture was taken on the current device since this
+/// last ran. The image's asker may then let its file go, and hands the file again only after
 /// the device is lost.
 pub fn take_complete(mut complete: impl FnMut(u32)) {
     if let Some(s) = STATE.get(|| None).as_mut() {
@@ -1026,9 +1021,8 @@ pub fn take_complete(mut complete: impl FnMut(u32)) {
     }
 }
 
-/// Whether an image handed to the device landed since this last ran
-/// (`Gpu::image`): its fence's store woke the turn, and a frame is wanted
-/// to take it.
+/// Whether an image handed to the device (`Gpu::image`) landed since this last ran. Its
+/// fence's store woke the turn, and a frame must run to take the texture.
 pub fn images_complete() -> bool {
     STATE.get(|| None).as_mut().is_some_and(|s| {
         s.images.iter_mut().fold(false, |any, a| {
@@ -1039,8 +1033,8 @@ pub fn images_complete() -> bool {
     })
 }
 
-/// A frame's records are one: past the range they are dropped whole, with
-/// the objects they made.
+/// Opens a frame's transaction. The frame's records stand or fall together: if they do not
+/// fit the stream, they are dropped whole, with the objects they made.
 pub fn frame_begin() {
     let s = state();
     s.encoder.begin(&mut s.stream);
@@ -1048,8 +1042,9 @@ pub fn frame_begin() {
     s.stamps_asked = None;
 }
 
-/// False where the frame did not fit and nothing of it was recorded: the
-/// read it asked, never mapped, is freed for the next frame to ask.
+/// Closes the frame's transaction. False where the frame did not fit and nothing of it was
+/// recorded; the read the frame asked for was then never mapped, so it is freed for the next
+/// frame to ask.
 pub fn frame_commit() -> bool {
     let s = state();
     s.in_frame = false;
@@ -1061,18 +1056,18 @@ pub fn frame_commit() -> bool {
 }
 
 use pxl_spec::asset;
-/// The bytes a write of `bytes` takes of the stream, as its writer measures
-/// it: what a caller sums over the writes it makes together and asks `room`.
+/// The stream bytes a write takes, as its writer measures them. A caller sums them over the
+/// writes it makes together and asks `room` before making them.
 pub use xpute_gpu::encode::call::{write_buffer_bytes, write_texture_bytes};
 
-/// What a shader module of `code` takes of the stream (`Gpu::shader`), as
-/// its writer measures it: what its maker asks `room` before it.
+/// The stream bytes a shader module of `code` takes (`Gpu::shader`). Its maker asks `room`
+/// for them before making it.
 pub fn shader_bytes(code: &str) -> usize {
     Encoder::<OBJECTS>::shader_module_bytes(code)
 }
 
-/// Whether records of `bytes` (`write_buffer_bytes`, `write_texture_bytes`,
-/// `shader_bytes`) fit the stream, leaving `stream::RESERVE` for what cannot
+/// Whether records of `bytes` in all (`write_buffer_bytes`, `write_texture_bytes`,
+/// `shader_bytes`) fit the stream while leaving `stream::RESERVE` for records that cannot
 /// wait.
 pub fn room(bytes: usize) -> bool {
     STATE
@@ -1081,8 +1076,9 @@ pub fn room(bytes: usize) -> bool {
         .is_some_and(|s| s.stream.fits(bytes, stream::RESERVE as usize))
 }
 
-/// An object's handle, or 0 where the frame it was made in no longer fits
-/// (and is dropped with it); a full table is a bug.
+/// An object's handle. Inside a frame, the encoder makes none where the frame no longer fits,
+/// and the handle is 0: the object is dropped with the frame. Outside a frame, making none is
+/// a bug.
 fn handle_of(id: Option<Id>) -> Id {
     match id {
         Some(id) => id,
@@ -1093,7 +1089,8 @@ fn handle_of(id: Option<Id>) -> Id {
     }
 }
 
-/// Lets an object go: the runtime destroys it, and its handle is free. 0 is nothing.
+/// Lets an object go. The runtime destroys it, and its handle is free to name another. An `id`
+/// of 0 names nothing.
 pub fn release(id: Id) {
     if id != 0 {
         if let Some(s) = STATE.get(|| None).as_mut() {
@@ -1107,7 +1104,6 @@ pub fn release(id: Id) {
     }
 }
 
-/// A record's vertex format code as WebGPU's.
 pub fn vertex_format(code: u32) -> VertexFormat {
     match code {
         record::F32X2 => VertexFormat::float32x2,
@@ -1206,8 +1202,6 @@ fn load_op(l: Load) -> LoadOp {
     }
 }
 
-/// A face's stencil state as `stencil` asks: a draw passing where the
-/// stencil holds the reference, the gate writing it.
 fn stencil_face(stencil: Stencil) -> encode::StencilFaceState {
     match stencil {
         Stencil::Unused => encode::STENCIL_UNUSED,
@@ -1227,9 +1221,9 @@ impl Gpu {
         state()
     }
 
-    /// A buffer of `size` bytes, one every device makes and, as storage,
-    /// binds (frame/shader/floor.rs `fits`): a size past that is a bug the
-    /// structure let through, not a device to fall short on.
+    /// A buffer of `size` bytes. The size must be one that every device makes and, for a
+    /// storage buffer, binds (frame/shader/floor.rs `fits`). A larger size is a bug in the
+    /// structure that asked for it, not a device falling short.
     #[track_caller]
     pub fn buf(&self, size: u32, usage: u32) -> Id {
         xpute_kit::ensure!(
@@ -1277,7 +1271,6 @@ impl Gpu {
         ))
     }
 
-    /// A volume `size` texels on a side each way: no mips, no layers.
     pub fn volume(&self, size: [u32; 3], format: Format, usage: u32) -> Id {
         let s = self.s();
         handle_of(s.encoder.texture(
@@ -1294,7 +1287,7 @@ impl Gpu {
         ))
     }
 
-    /// A volume's view, whole (`volume`).
+    /// The whole view of a texture that `volume` made.
     pub fn volume_view(&self, texture: Id) -> Id {
         let s = self.s();
         handle_of(s.encoder.view(
@@ -1311,7 +1304,7 @@ impl Gpu {
         ))
     }
 
-    /// `array` for a view of the texture's layers as one array.
+    /// With `array`, the view sees the texture's layers as one array.
     pub fn view(
         &self,
         texture: Id,
@@ -1340,8 +1333,8 @@ impl Gpu {
         ))
     }
 
-    /// The depth alone of a depth target that carries a stencil, as a
-    /// binding reads it: WebGPU binds no view of both aspects.
+    /// A view of only the depth of a depth target that carries a stencil, for a binding to
+    /// read. WebGPU binds no view of both aspects.
     pub fn depth_only_view(&self, texture: Id) -> Id {
         let s = self.s();
         handle_of(s.encoder.view(
@@ -1357,7 +1350,6 @@ impl Gpu {
         ))
     }
 
-    /// Both directions addressed alike; `compare` for a comparison sampler.
     pub fn sampler(
         &self,
         mag: FilterMode,
@@ -1387,7 +1379,8 @@ impl Gpu {
         handle_of(s.encoder.shader_module(&mut s.stream, code))
     }
 
-    /// A group's layout from its (binding, stages, kind) words, as a pipeline record holds them.
+    /// A group's layout from its words, a (binding, stages, kind) triple per binding, as a
+    /// pipeline record holds them.
     pub fn layout(&self, group: &'static [u32]) -> Layout {
         let words = group.as_chunks::<3>().0;
         xpute_kit::ensure!(words.len() <= GROUP_ENTRIES, ENOSPC, words.len());
@@ -1413,13 +1406,13 @@ impl Gpu {
         handle_of(s.encoder.pipeline_layout(&mut s.stream, &ids))
     }
 
-    /// A render pipeline from its record (frame/shader/record.rs) over the
-    /// group layouts, drawing into `targets` colors of `format`, at locations
-    /// from 0, and `depth`, `stencil` the stencil beside it: into the depth
-    /// alone where `format` is depth32's, its fragment writing no color (the
-    /// shadow map, gpu/shadow.rs). Made by WebGPU's async call: the runtime
-    /// stores `ticket` at the fence once it is made, and nothing names it
-    /// before (gpu/pipeline.rs `Pipelines::made`).
+    /// A render pipeline from its record (frame/shader/record.rs) over the group layouts. It
+    /// draws into `targets` color targets of `format`, at locations from 0, and into a depth
+    /// of `depth`, with `stencil` saying what it does with the stencil beside the depth. Where
+    /// `format` is `depth32float`, it draws into the depth alone and its fragment writes no
+    /// color, as the shadow map's does (gpu/shadow.rs). WebGPU makes it asynchronously: the
+    /// runtime stores `ticket` at `fence` once the pipeline is made, and nothing names the
+    /// pipeline before then (gpu/pipeline.rs `Pipelines::made`).
     pub fn pipeline(
         &self,
         words: &[u32],
@@ -1539,8 +1532,8 @@ impl Gpu {
         p
     }
 
-    /// The module's compute entry `entry`, over `layouts`, its fence as
-    /// `pipeline`'s.
+    /// A compute pipeline of `module`'s entry `entry` over `layouts`. It is made
+    /// asynchronously, and its fence and ticket work as `pipeline`'s do.
     pub fn compute_pipeline(
         &self,
         module: Id,
@@ -1564,8 +1557,8 @@ impl Gpu {
         p
     }
 
-    /// A bind group over `layout`, `entries` its group's bindings each once, each a resource
-    /// its kind takes: any other is a bug (`Layout::holds`).
+    /// A bind group over `layout`. `entries` must name each of the group's bindings once, each
+    /// with a resource of the binding's kind; anything else is a bug (`Layout::holds`).
     #[track_caller]
     pub fn bind_group(&self, layout: Layout, entries: &[Entry]) -> Id {
         layout.holds(entries);
@@ -1575,10 +1568,11 @@ impl Gpu {
         group
     }
 
-    /// The bind group over `layout` that `table` says (frame/shader/group.rs): each binding it
-    /// names on the frame's buffer `buf` gives, and those of `rest` the layout binds past
-    /// them. `rest` binds no buffer of the frame's, which only the table names; `buf` answers
-    /// 0 for one its caller does not hold.
+    /// The bind group over `layout` that `table` describes (frame/shader/group.rs). Each
+    /// binding the table names is bound to its range of the frame's buffer that `buf` gives.
+    /// The entries of `rest` that the layout binds and the table does not name follow. Only the
+    /// table binds the frame's buffers, so an entry of `rest` that binds one is a bug. `buf`
+    /// answers 0 for a buffer its caller does not hold.
     #[track_caller]
     pub fn frame_group(
         &self,
@@ -1614,21 +1608,19 @@ impl Gpu {
         self.bind_group(layout, &entries)
     }
 
-    /// The format the device's surfaces show best, which the canvas's pipelines target.
     pub fn canvas(&self) -> Format {
         self.s().device.or_bug(Errno::ENODEV).canvas
     }
 
-    /// `bytes` copied into the stream: any range, however soon its owner
-    /// rewrites it.
+    /// Copies `bytes` into the stream, so their owner may rewrite them at once.
     pub fn write_buf(&self, id: Id, off: u32, bytes: &[u8]) {
         call::write_buffer(&mut self.s().stream, id, off, bytes);
     }
 
-    /// `bytes` read where they lie when the runtime runs the turn, one record
-    /// however large: the runtime's from the turn's publish until it hands the
-    /// stream back (xpute_core ipc/stream.rs R3), their owner asking `in_flight`
-    /// before it writes them again.
+    /// Writes `bytes` into buffer `id` in one record however large. The runtime reads the
+    /// bytes where they lie when it runs the turn. They are the runtime's from the turn's
+    /// publish until it hands the stream back (xpute_core ipc/stream.rs R3), so their owner
+    /// asks `in_flight` before it writes them again.
     pub fn upload_buf(&self, id: Id, off: u32, bytes: &[u8]) {
         let s = self.s();
         if call::write_buffer_at(&mut s.stream, id, off, bytes) {
@@ -1636,7 +1628,7 @@ impl Gpu {
         }
     }
 
-    /// One layer's first mip, whole, four bytes a texel.
+    /// Writes the whole first mip of `layer`, four bytes a texel.
     pub fn write_texture(&self, id: Id, layer: u32, width: u32, height: u32, bytes: &[u8]) {
         call::write_texture(
             &mut self.s().stream,
@@ -1647,22 +1639,21 @@ impl Gpu {
         );
     }
 
-    /// The image file at `file` (PNG, JPEG, WebP) decoded into `texture`,
-    /// `ticket` landing at its fence `fence` once it is there or refused.
+    /// Decodes the image file `file` (PNG, JPEG or WebP) into `texture`. The runtime stores
+    /// `ticket` at `fence` once the image is there or was refused.
     pub fn copy_image(&self, texture: Id, file: &[u8], fence: &[u32; 2], ticket: u32) {
         let to = place(texture, [0, 0, 0]);
         call::copy_external_image(&mut self.s().stream, &to, false, false, file, fence, ticket);
     }
 
-    /// The texture the image file `file`, named `image` by whoever hands it,
-    /// is copied into, taken once it has landed: each image is copied in
-    /// once, on this device, for the one that takes it. None while it
-    /// lands, the first ask handing it to the device; none for good for a
-    /// file whose size no header gives (pxl-spec `asset::image_size`),
-    /// which the core does not hand, for one the runtime could not decode,
-    /// and for the empty file of one already taken on this device.
-    /// The file's bytes are its asker's until it is taken (`take_complete`);
-    /// the runtime copies them out as it runs the turn.
+    /// The texture that the image file `file` is copied into, which its asker names `image`.
+    /// Each image is copied once on this device, and the texture goes to whoever takes it once
+    /// it has landed. The first ask hands the file to the device, and the answer is None while
+    /// the image lands. The answer stays None for good for a file whose header gives no size
+    /// (pxl-spec `asset::image_size`), which is never handed to the device; for a file the
+    /// runtime could not decode; and for the empty file of an image already taken on this
+    /// device. The asker keeps the file's bytes until the texture is taken (`take_complete`),
+    /// because the runtime copies them out only as it runs the turn.
     pub fn image(&self, image: u32, file: &'static [u8]) -> Option<Id> {
         let s = self.s();
         if let Some(k) = s.images.iter().position(|a| a.image == image) {
@@ -1690,8 +1681,8 @@ impl Gpu {
         None
     }
 
-    /// `id` named in the device's messages by the source line that made it,
-    /// `kind` before it: the buffer, encoder or pass a validation error names.
+    /// Labels `id` with `kind` and the source line that made it, so that a validation error
+    /// names a buffer, encoder or pass by where it was made.
     fn label(&self, id: Id, kind: &str, at: &core::panic::Location) {
         let mut name = Label::default();
         let file = at.file().rsplit('/').next().unwrap_or(at.file());
@@ -1700,8 +1691,8 @@ impl Gpu {
         call::label(&mut s.stream, id, name.text());
     }
 
-    /// An encoder, cut into command buffers as its passes read args
-    /// (gpu/split.rs) and submitted as them.
+    /// A command encoder. It is cut into several command buffers where its passes read args
+    /// written earlier in it (gpu/split.rs), and it is submitted as those command buffers.
     #[track_caller]
     pub fn encoder(&self) -> Id {
         let s = self.s();
@@ -1711,7 +1702,7 @@ impl Gpu {
         encoder
     }
 
-    /// `encoder` recorded into a new command buffer from here (gpu/split.rs).
+    /// Makes `encoder` record into a new command buffer from here on (gpu/split.rs).
     #[track_caller]
     fn split(&self, encoder: Id) {
         let s = self.s();
@@ -1720,20 +1711,20 @@ impl Gpu {
         self.label(next, "encoder split", core::panic::Location::caller());
     }
 
-    /// The pass an indirect call on `pass` reading `buf` is recorded in: a
-    /// compute pass is ended and begun again in a new command buffer where
-    /// `buf` was written in its own (`Splits::cuts`), its pipeline and
-    /// groups set again and its span's end moved to it; a render pass began
-    /// apart (`Splits::draws_apart`), so its own draws alone could have
-    /// written it, a bug.
+    /// The pass in which an indirect call on `pass` that reads `buf` is recorded. Where `buf`
+    /// was written in the pass's own command buffer (`Splits::cuts`), a compute pass is ended
+    /// and begun again in a new command buffer, with its pipeline and groups set again and its
+    /// span's end moved to the new part. A render pass already begins in a command buffer of
+    /// its own where args were written before it (`Splits::draws_apart`), so only its own draws
+    /// could have written `buf`, which is a bug.
     #[track_caller]
     fn indirect(&self, pass: Id, buf: Id) -> Id {
         let s = self.s();
-        // A call reads its count from a buffer it does not write: one bound writable in a
-        // group set for it, or, in a render pass, in any group set in the pass, is refused at
-        // the call's line, naming the group (its index, or a render pass's group's handle) and
-        // the binding, then the line that made the buffer and the buffer, each pair a word's
-        // halves.
+        // An indirect call must not write the buffer it reads its count from. A buffer bound
+        // writable in a group set for the call, or in a render pass in any group set in the
+        // pass, is refused at the call's line. The bug's first word names the group (its
+        // index, or in a render pass its handle) and the binding; its second names the line
+        // that made the buffer and the buffer. Each pair is a word's high and low halves.
         if let Some((idx, binding)) = s.splits.binds_writable(pass, buf) {
             xpute_kit::bug!(
                 ENOTRECOVERABLE,
@@ -1775,7 +1766,6 @@ impl Gpu {
         at
     }
 
-    /// `size` texels of `src` into `dst`, as WebGPU's `copyTextureToTexture`.
     pub fn copy_texture(
         &self,
         encoder: Id,
@@ -1838,7 +1828,7 @@ impl Gpu {
         pass
     }
 
-    /// Timed in `stamp`'s span where the frame is timed.
+    /// A compute pass, timed in `stamp`'s span where the frame is timed.
     #[track_caller]
     pub fn compute_pass(&self, encoder: Id, stamp: Option<encode::TimestampWrites>) -> Id {
         let s = self.s();
@@ -1858,9 +1848,9 @@ impl Gpu {
         s.splits.ran(pass);
     }
 
-    /// Workgroups as `buffer` holds them from `offset`, across, up and deep:
-    /// a count only the GPU knows, written in a command buffer before this
-    /// one (gpu/split.rs).
+    /// Dispatches the workgroups that `buf` holds at `off`, as counts across, up and deep.
+    /// Only the GPU knows the counts, and they are written in a command buffer before the one
+    /// this call is recorded in (gpu/split.rs).
     #[track_caller]
     pub fn dispatch_indirect(&self, pass: Id, buf: Id, off: u32) {
         let at = self.indirect(pass, buf);
@@ -1873,8 +1863,8 @@ impl Gpu {
     pub fn set_pipeline(&self, pass: Id, pipeline: Id) {
         let s = self.s();
         // A render pass that declares what it draws draws nothing else (frame/shader/sequence.rs
-        // `Step::in_pass`): another pipeline is refused at the call's line, naming its record
-        // and the pass.
+        // `Step::in_pass`). Any other pipeline is refused at the call's line, and the bug names
+        // the pipeline's record and the pass.
         if let Some(record) = s.splits.undeclared(pass, pipeline) {
             xpute_kit::bug!(ENOTRECOVERABLE, u64::from(record), u64::from(pass));
         }
@@ -1882,18 +1872,19 @@ impl Gpu {
         s.splits.piped(pass, pipeline);
     }
 
-    /// Render pass `pass` held to draw `pipelines` alone, by their records' numbers, as the
-    /// frame's declarations name them (frame/shader/sequence.rs `Step::in_pass`).
+    /// Holds render pass `pass` to drawing only `pipelines`, given by their records' numbers as
+    /// the frame's declarations name them (frame/shader/sequence.rs `Step::in_pass`).
     pub fn declare_pass(&self, pass: Id, pipelines: &'static [u32]) {
         self.s().splits.declared(pass, pipelines);
     }
 
-    /// Render pipeline `pipeline` made of record `record`, which a declared pass is held to.
+    /// Notes that render pipeline `pipeline` was made from record `record`, so that a pass
+    /// that declares what it draws can check the pipeline.
     pub fn recorded(&self, pipeline: Id, record: u32) {
         self.s().splits.recorded(pipeline, record);
     }
 
-    /// What the pass draws held to `[x, y, width, height]` of its targets.
+    /// Limits what `pass` draws to `rect`, `[x, y, width, height]` in its targets' pixels.
     pub fn set_scissor(&self, pass: Id, rect: [u32; 4]) {
         call::set_scissor(&mut self.s().stream, pass, rect);
     }
@@ -1901,9 +1892,9 @@ impl Gpu {
     #[track_caller]
     pub fn set_bind_group(&self, pass: Id, idx: u32, group: Id, offsets: &[u32]) {
         let s = self.s();
-        // A render pass is one usage scope whole: a group binding writable what one of its
-        // indirect draws read its count from is refused, as the draw would be after it
-        // (`indirect`), named alike.
+        // A whole render pass is one usage scope. A group that binds writable a buffer from
+        // which one of the pass's indirect draws read its count is refused, as the draw is
+        // when the group comes first (`indirect`), and the bug names them the same way.
         if let Some((buf, binding)) = s.splits.binds_read(pass, group) {
             xpute_kit::bug!(
                 ENOTRECOVERABLE,
@@ -2012,13 +2003,12 @@ impl Gpu {
         }
     }
 
-    /// The frame's encoder, its command buffers submitted each alone and in
-    /// order, the last with its spans resolved, copied out and mapped back
-    /// through a read none is out on, where it wrote any, submitted. The
-    /// read asked first of those out is taken in first, where it landed, and
-    /// may be asked again: its ticket is the order it was asked in, which
-    /// its fence holds once it lands. Which read this frame's spans are
-    /// on their way back in.
+    /// Submits the frame's encoder as its command buffers, each alone and in order. Where the
+    /// frame is timed, wrote any span, and a read is free, the last command buffer also
+    /// resolves the spans and copies them into that read's buffer, which is then mapped back.
+    /// Before that, the earliest-asked read that is out is taken in if it landed, and it may
+    /// then be asked again. A read's ticket is the order it was asked in, and its fence holds
+    /// the ticket once it lands. Returns the read this frame's spans come back in.
     pub fn submit_frame(&self, encoder: Id, written: u64) -> Option<usize> {
         let s = self.s();
         s.stamps_complete = take_stamps(s);
@@ -2054,7 +2044,7 @@ impl Gpu {
         Some(r)
     }
 
-    /// Configured in the format the device prefers, opaque.
+    /// Configures `surface` in the format the device prefers, opaque.
     pub fn configure(&self, surface: u32) {
         call::configure(
             &mut self.s().stream,
@@ -2075,8 +2065,8 @@ impl Gpu {
         handle_of(s.encoder.current(&mut s.stream, handle_slot(surface)))
     }
 
-    /// The spans' query set, two queries a span, the buffer they resolve into
-    /// and those mapped back, a read's each.
+    /// Makes the spans' query set, two queries a span, with the buffer they resolve into and
+    /// one mapped buffer per read. Returns the query set.
     pub fn spans(&self) -> Id {
         let s = self.s();
         let set = handle_of(s.encoder.query_set(
@@ -2106,8 +2096,7 @@ impl Gpu {
         set
     }
 
-    /// The objects made and not let go, by the op that made them (xpute-gpu
-    /// encode `Gpu::objects`).
+    /// How many objects are made and not yet let go, counted by the op that made each.
     pub fn objects(&self) -> &'static [u32; OBJECT_OPS] {
         self.s().encoder.objects()
     }
@@ -2117,19 +2106,18 @@ impl Gpu {
         self.s().gpu_ms[span as usize]
     }
 
-    /// The time the last read's spans ran, ms, those that overlap counted once.
+    /// The time the last read's spans ran, in ms, with overlapping spans counted once.
     pub fn gpu_busy_ms(&self) -> f64 {
         self.s().gpu_busy_ms
     }
 
-    /// The read the frame just submitted took in, where it took one: its
-    /// figures were measured with it.
+    /// The read that the frame just submitted took in, if it took one. The span times were
+    /// measured from that read.
     pub fn stamps_complete(&self) -> Option<usize> {
         self.s().stamps_complete
     }
 
-    /// `size` bytes of `from` from `at` into `to` from `to_at`, on `encoder`.
-    /// `size` bytes of buffer `id` from `at` set to zero, in the encoder's order.
+    /// Zeroes `size` bytes of buffer `id` from `at`, in order among `encoder`'s commands.
     pub fn clear_buf(&self, encoder: Id, id: Id, at: u32, size: u32) {
         let s = self.s();
         call::clear_buffer(&mut s.stream, s.splits.at(encoder), id, at, Some(size));
@@ -2148,11 +2136,11 @@ impl Gpu {
         s.splits.copied(encoder, to);
     }
 
-    /// `length` bytes of `id`, a buffer made `MAP_READ | COPY_DST` and copied
-    /// into on an encoder submitted before, mapped back from `offset` into
-    /// the core's memory at `address`; `fence`, the mapping's own fence
-    /// and result, holds `ticket` once they are in or refused, a turn or
-    /// more later, and only then may `id` be mapped again (xpute MAP_ASYNC).
+    /// Maps `length` bytes of buffer `id` from `off` back into the core's memory at `addr`.
+    /// `id` must be made `MAP_READ | COPY_DST` and copied into on an encoder submitted before.
+    /// `fence` is the mapping's own fence and result. It holds `ticket` once the bytes are in
+    /// or the mapping was refused, a turn or more later, and only then may `id` be mapped
+    /// again (xpute MAP_ASYNC).
     pub fn map_read(
         &self,
         id: Id,
@@ -2175,7 +2163,7 @@ impl Gpu {
 #[path = "api.test.rs"]
 mod test;
 
-/// A label's text, cut at its room.
+/// A label's text. Text past its room is cut off, not refused.
 struct Label {
     bytes: [u8; 64],
     len: usize,

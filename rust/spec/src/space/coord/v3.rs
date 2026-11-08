@@ -30,7 +30,7 @@ pub fn cross(v: &V3, w: &V3) -> V3 {
         v[0] * w[1] - v[1] * w[0],
     ]
 }
-/// A zero vector stays zero.
+/// The unit vector along `v`; a zero vector stays zero.
 pub fn norm(v: &V3) -> V3 {
     let len = match len(v) {
         0.0 => 1.0,

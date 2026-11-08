@@ -31,7 +31,8 @@ import { useCore } from "@/ui/store/watch.ts";
 import { touchOutset } from "@/ui/component/touch.ts";
 import * as setting from "@/port/setting.ts";
 
-// The chip one sees is 32; a press lands on 44, a box laid out around it.
+// A chip is drawn 32 high, and a press lands on a 44-high box laid out around
+// it.
 const CHIP_HEIGHT = 32;
 const SURFACE_SIZE = 96;
 const CHIP_GAP_X = 8;
@@ -58,7 +59,7 @@ function Chip({
       style={CHIP_TARGET}
     >
       <View style={[styles.chip, active && styles.chipOn]}>
-        {/* Sized to the label's heavier weight, so a pick never rewraps the row. */}
+        {/* A hidden copy in the heavier weight sizes the chip, so a pick never rewraps the row. */}
         <Text
           aria-hidden
           maxFontSizeMultiplier={textScale.chrome}
@@ -83,7 +84,7 @@ function Chip({
   );
 }
 
-/** The one picked, drawn beside the chips that pick it. */
+/** A picker: the picked character, drawn beside the chips that pick it. */
 function PickerCard({
   label,
   selected,
@@ -111,7 +112,8 @@ interface PersonPickerProps {
   onSelect: (character: Character) => void;
 }
 
-/** It shows the equipped character; browsing genders changes nothing until a character is picked. */
+/** Shows the equipped character. Switching between genders changes nothing
+ * until a character is picked. */
 function PersonPicker(props: PersonPickerProps) {
   const { gender, onGenderChange, selected, onSelect } = props;
   const { t } = useTranslation();
@@ -169,12 +171,14 @@ function PetPicker(props: PetPickerProps) {
   );
 }
 
-/** Picks take effect at once and the sheet stays open, for comparing characters. */
+/** A pick takes effect at once and the sheet stays open, so that characters
+ * can be compared. */
 export function CharacterPicker() {
   const person = personAt(useCore((s) => s.settings[SETTING.person.key] ?? -1));
   const pet = petAt(useCore((s) => s.settings[SETTING.pet.key] ?? -1));
 
-  // Opens on the selection's gender, so a pick does not look reset on reopen.
+  // The picker opens on the selected person's gender, so that a pick does not
+  // look reset when the sheet opens again.
   const [gender, setGender] = useState<Gender>(genderOf(person));
 
   return (

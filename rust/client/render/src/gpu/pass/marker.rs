@@ -1,10 +1,11 @@
 // pxl-render/gpu/pass/marker.rs
 
-//! Markers in two passes after the world, as billboards: their regions,
-//! each as its marker's number, into a target of their own, then the markers whose
-//! number is the one at their anchor, with the world's depth attached
-//! read-only (marker.wgsl). The atlas is premultiplied so its mips
-//! filter without a dark fringe.
+//! The markers, drawn after the world as billboards in two passes
+//! (marker.wgsl). The first pass draws each marker's region into a target of
+//! its own, as the marker's number. The second draws a marker only where the
+//! number at its anchor is its own, with the world's depth attached read
+//! only. The markers' sprites are painted into an atlas, premultiplied so its
+//! mips filter without a dark fringe.
 
 use crate::frame::shader::record::PIPELINE_MARKER;
 use crate::frame::shader::record::PIPELINE_MARKER_REGION;
@@ -88,7 +89,8 @@ fn pill(p: &mut DisplayList, text: &str, fill: u32, ink: u32, logical_w: f32) {
     anchor_dot(p, logical_w);
 }
 
-/// The uncovered corners read as a pixel-art rounded corner.
+/// Fills a rect as two overlapping rects, each inset by `notch` along one
+/// axis. The corners they leave uncovered read as a pixel-art rounded corner.
 fn notched_rect(p: &mut DisplayList, x: f32, y: f32, w: f32, h: f32, notch: f32, fill: u32) {
     p.rect(x + notch, y, (w - notch * 2.0).max(0.0), h, fill);
     p.rect(x, y + notch, w, (h - notch * 2.0).max(0.0), fill);
@@ -130,8 +132,9 @@ fn bubble(p: &mut DisplayList, lines: &[String], box_w: f32) {
     }
 }
 
-/// A set's upload, bound twice: its regions read the world's depth, its
-/// markers the regions.
+/// A marker set's upload, bound in two groups. The regions' group binds it
+/// with the world's depth, and the markers' group binds it with the regions'
+/// numbers. The other fields name what the groups were made over.
 #[derive(Clone, Copy, Default)]
 struct Set {
     group: u32,
@@ -144,7 +147,8 @@ struct Set {
 pub struct MarkerPass {
     pipeline: Pipeline,
     region_pipeline: Pipeline,
-    /// The regions' numbers and their depth, the canvas's size.
+    /// The target the regions draw their markers' numbers into, and its depth
+    /// target (`regions`), both at the canvas's size.
     numbers: u32,
     numbers_view: u32,
     regions: u32,
@@ -159,7 +163,7 @@ pub struct MarkerPass {
     generation: u32,
     sets: [Set; SETS],
     dirty: SlotSet,
-    /// A set's uniform a slot (marker.wgsl `marker_words`).
+    /// One uniform slot a set, as marker.wgsl reads `marker_words`.
     uniforms: DrawUniforms,
     frame_group: u32,
     pub view: [f32; 16],
@@ -204,8 +208,10 @@ impl MarkerPass {
         }
     }
 
-    /// A sprite whose text is not drawn yet is left for a later frame.
-    /// Whether the atlas changed: made again, or a sprite drawn on it.
+    /// Paints the sprites that changed into the atlas, and says whether the
+    /// atlas changed: made again, or painted on. A sprite that cannot be
+    /// painted yet is left for a later frame: its text is not drawn yet, or
+    /// its pixels do not fit this turn's stream.
     pub fn sync_atlas(&mut self, g: &Gpu, mips: &MipPass, atlas: &mut Atlas, text: TextOf) -> bool {
         let flush = atlas.flush(self.generation, &mut self.dirty);
         self.generation = flush.generation;
@@ -239,8 +245,9 @@ impl MarkerPass {
         if self.dirty.is_empty() || self.atlas == 0 {
             return flush.whole;
         }
-        // Only the slots whose text the driver has drawn: one still on its way
-        // waits for its landing, with no encoder made for it.
+        // Only the slots whose text the driver has drawn are painted. A slot
+        // whose text is still on its way waits for it to land, and no encoder
+        // is made for it.
         let mut ready = Vec::new();
         for slot in self.dirty.iter() {
             let Some(paint) = atlas.slot_paint(slot) else {
@@ -296,7 +303,8 @@ impl MarkerPass {
             }
         }
         g.submit(encoder);
-        // After the submit: a texture let go before it would be gone from the commands that read it.
+        // What the painter made is released only after the submit. A texture
+        // released before it would be gone from the commands that read it.
         for id in made {
             release(id);
         }
@@ -306,8 +314,9 @@ impl MarkerPass {
         flush.whole || drawn
     }
 
-    /// The regions' depth at the canvas's size, and each set's groups and
-    /// uniform, made here so drawing makes nothing that outlives its frame.
+    /// Makes the regions' targets at the canvas's size, and each set's groups
+    /// and uniform, so that drawing makes none: a group made inside a frame
+    /// that is dropped would be gone.
     pub fn prepare(
         &mut self,
         g: &Gpu,
@@ -368,8 +377,9 @@ impl MarkerPass {
                 (set.upload, set.depth, set.numbers) = (upload, depth, self.numbers_view);
             }
         }
-        // A set's uniform a slot, written each frame, as the eye moves them
-        // all; numbered on from the sets before, so no two markers share one.
+        // Each set's uniform has a slot and is written every frame, because the
+        // eye's view moves every set. A set numbers its markers on from the
+        // sets before it (`marker::BEFORE`), so no two markers share a number.
         let placed = || {
             draws
                 .of(PIPELINE_MARKER)
@@ -397,7 +407,7 @@ impl MarkerPass {
         );
     }
 
-    /// Its draws into `stats`, a quad a marker.
+    /// Adds the pass's draws to `stats`, two triangles a marker.
     pub fn count(&self, draws: &Draws, stats: &mut DrawStats) {
         draws.count(PIPELINE_MARKER, stats, |d| 2 * d[1]);
     }
@@ -427,7 +437,8 @@ impl MarkerPass {
         let Some(slots) = self.uniforms.slots() else {
             return;
         };
-        // Cleared to no number, and reversed depth to the far plane.
+        // The numbers are cleared to 0, which is no marker, and the reversed
+        // depth to 0, the far plane.
         let pass = g.pass(
             encoder,
             &pass_desc(

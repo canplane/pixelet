@@ -1,11 +1,12 @@
 // xpute-core/sched/tick.rs
 
-//! A core's cooperative scheduler: one tick a turn, its phases in the order
-//! the program numbers them, against one budget, the runtime's deadline counted from
-//! the rising edge. While a phase runs, the share of the budget its policy
-//! holds back for the phases after it is not its to take, so they are not
-//! starved while it keeps busy. What the phases are, and what each holds back,
-//! are the program's. A step keeps its own state.
+//! A core's cooperative scheduler, which runs one tick a turn. A tick runs
+//! the program's phases in the order the program numbers them, and all of
+//! them share one budget: the runtime's deadline, counted from the rising
+//! edge. While a phase runs, the share of the budget its policy holds back
+//! for the later phases is not its to spend, so a busy phase cannot starve
+//! them. The program decides what the phases are and what each holds back.
+//! Each step keeps its own state.
 
 use super::pass::Pass;
 use crate::clock::now;
@@ -15,19 +16,20 @@ use xpute_kit::status::errno::Errno;
 /// A phase, by its place in the program's order.
 pub type Phase = u8;
 
-/// The most phases a tick runs.
+/// A tick runs at most this many phases.
 pub const PHASES_MAX: usize = 8;
 
-/// Steps unregistered from inside one step.
+/// The most steps one step may unregister while it runs.
 const OFFS_MAX: usize = 8;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TickPolicy {
-    /// The hard ceiling over what is left, so steps that report no work
-    /// cannot walk the whole list.
+    /// A hard limit this far past the remaining budget, so steps that report
+    /// no work cannot run through the whole list (`Pass::hard_slack_ms`).
     pub hard_slack_ms: f64,
-    /// The program's phases, in the order they run: each the share of the
-    /// budget held back from it for the phases after it, 0 for none.
+    /// One entry for each of the program's phases, in the order they run.
+    /// Each is the fraction of the budget its phase must leave for the
+    /// phases after it; 0 leaves none.
     pub held_back: &'static [f64],
 }
 
@@ -41,7 +43,9 @@ pub struct TickContext {
 }
 
 impl TickContext {
-    /// The core is rung only when something asked for a turn.
+    /// Marks the tick as wanting another turn (`TickReport::invalidated`).
+    /// The core is rung only when something asks for a turn, so a step that
+    /// animates calls this on every tick.
     pub fn invalidate(&mut self) {
         self.invalidated = true;
     }
@@ -55,7 +59,8 @@ impl TickContext {
 
 pub type TickStep = fn(&mut TickContext);
 
-/// Cumulative until reset; registrations sharing a phase and name share a row.
+/// A step's time, summed until `step_stats_reset`. Registrations with the
+/// same phase and name add into one row.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StepStat {
     pub phase: Phase,
@@ -116,7 +121,7 @@ impl<const N: usize> Tick<N> {
             registry: [None; N],
             len: 0,
             next_id: 1,
-            // Past `stats_len` a row is room, not a step.
+            // The rows past `stats_len` are free room, not steps.
             stats: [StepStat::new(0, 0); N],
             stats_len: 0,
             step_timing: false,
@@ -124,7 +129,8 @@ impl<const N: usize> Tick<N> {
         }
     }
 
-    /// `name` is the caller's number the step's time is reported under.
+    /// `name` is a number of the caller's choosing, under which the step's
+    /// time is reported (`StepStat`).
     pub fn on_tick(&mut self, phase: Phase, step: TickStep, name: u32) -> u32 {
         xpute_kit::ensure!(self.len < N, ENOSPC, N);
         xpute_kit::ensure!(
@@ -144,7 +150,8 @@ impl<const N: usize> Tick<N> {
         id
     }
 
-    /// Inside a tick, a step asks its context instead.
+    /// For use outside a tick. A step inside a tick unregisters through its
+    /// context (`TickContext::off_tick`).
     pub fn off_tick(&mut self, id: u32) {
         self.remove(id);
     }
@@ -173,7 +180,8 @@ impl<const N: usize> Tick<N> {
         Some(at)
     }
 
-    /// A full table drops the time.
+    /// When the table has no free row, the time of a step not yet in it is
+    /// dropped.
     fn record(&mut self, phase: Phase, name: u32, ms: f64) {
         let at = match (0..self.stats_len)
             .find(|&k| self.stats[k].phase == phase && self.stats[k].name == name)
@@ -194,8 +202,8 @@ impl<const N: usize> Tick<N> {
 
     fn run_phase(&mut self, phase: Phase, ctx: &mut TickContext) {
         let start = now();
-        // Index loop rather than an iterator: a step may unregister itself or a
-        // sibling, and a snapshot would run something that just asked not to be.
+        // An index, not an iterator: a step may unregister itself or another
+        // step, and a snapshot would still run a step just unregistered.
         let mut i = 0;
         while i < self.len {
             let r = self.registry[i].or_bug(Errno::ENOTRECOVERABLE);

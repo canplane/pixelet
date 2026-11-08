@@ -352,7 +352,7 @@ export function encode_sensor_orient(
 
 /** Command.SENSOR_ERR's packet, written in place into `to`.
  *
- * @param code Geolocation's; orientation gives none today. */
+ * @param code Geolocation's; orientation gives none. */
 export function encode_sensor_err(
   to: PacketRoom,
   sensor: Sensor,

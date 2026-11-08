@@ -1,46 +1,48 @@
-// The eye's exposure, in stops, for the lights as the words say them
-// (atmos_light.wgsl `eye_stops`), and beside it the table's white, which the
-// passes after it read here (atmos_eye.wgsl): the first texel. A compute
-// pass, a texel a thread, so its span is its own time: a render pass's begin
-// is stamped before the passes it waits on have finished
-// (gpu/atmosphere.rs `exposure`). Where its
-// ground's slope is to be measured again, measured with it (`ground`). The
-// next two, the sun's and the moon's, each how far its light reaches the air
-// at this exposure and how fast that moves with its height (`reach`).
-// Whatever it measures goes to the views' words (atmos_skyview.wgsl
-// `slopes`).
+// Finds the eye's exposure for the lights as the words give them. The first
+// thread writes the first texel: the exposure in stops (atmos_light.wgsl
+// `eye_stops`) and, beside it, the table's white, which every pass after this
+// one reads there (atmos_eye.wgsl). When the ground's slope is to be measured
+// again, the first thread measures it too (`ground`). The next two threads are
+// the sun's and the moon's. Each measures how far its light reaches the air at
+// this exposure, and how fast that changes with the light's height (`reach`).
+// Everything measured goes into the views' words (atmos_skyview.wgsl
+// `slopes`). This is a compute pass, a texel a thread, so its timestamps span
+// its own work: a render pass's begin is stamped before the passes it waits on
+// have finished (gpu/atmosphere.rs `exposure`).
 
-// 1 where the ground's slope is measured with this drawing
+// `own.y` is 1 when this drawing measures the ground's slope again
 // (gpu/atmosphere.rs `prepare`).
 @group(0) @binding(14) var<uniform> own: vec4f;
 @group(0) @binding(1) var exposure_out: texture_storage_2d<rgba16float, write>;
-// The views' words, plain here: each word this pass writes is one thread's alone, the
-// ground's the first's and a light's its own, and read once the pass is done
+// The views' words, plain rather than atomic here: each word this pass writes
+// belongs to one thread alone, the ground's to the first and a light's to that
+// light's thread, and the words are read only once the pass is done
 // (gpu/atmosphere.rs `slopes`).
 @group(0) @binding(20) var<storage, read_write> slopes: array<u32, SLOPE_WORDS>;
 
-// How far the radius moves over one row of the transmittance table, which
-// the land's light is read through, from radius `r`: the larger side.
+// How far the radius moves over one row of the transmittance table from
+// radius `r`, taking the larger of the two sides. The land's light is read
+// through that table.
 fn radius_step(r: f32) -> f32 {
   let uv = transmittance_uv(r, 1.0);
   let texel = vec2f(0.0, 1.0 / TRANSMITTANCE_SIZE.y);
   return max(abs(transmittance_r_mu(uv + texel).x - r), abs(transmittance_r_mu(uv - texel).x - r));
 }
 
-// The land's lit face under the eye as shown, the land at radius `r`, and
-// the eye's exposure off it.
+// The land's lit face under the eye as shown, with the land at radius `r` and
+// the eye exposed for that land.
 fn land_shown(r: f32, s: Lights) -> vec3f {
   let up = frame_up();
   return surface_light_in(up, up, vec2f(1.0), 1.0, light_unexposed_in(r, up, s, true), s) * exp2(eye_stops_at(r, s));
 }
 
-// The exposure's slope in the ground's height under the eye, as the lights'
-// views take theirs (atmos_skyview.wgsl `slopes`): the most display levels
-// per km of it that the land's lit face moves at any albedo an octave apart
-// down to 1/256, its exposure moving with it, over one row of the
-// transmittance table where the land stands, which is its sample. Moving
-// over it counts as a level at least, so the step a reader takes off it is
-// never past its sample.
+// Measures the exposure's slope in the height of the ground under the eye, as
+// the lights' views measure theirs (atmos_skyview.wgsl `slopes`). The slope is
+// the most display levels per km that the land's lit face moves, at albedos
+// an octave apart from 1 down to 1/256, with the exposure moving along. It is
+// taken over one row of the transmittance table where the land stands, which
+// is its sample. A move over the sample counts as one level at least, so the
+// step a reader takes from the slope never passes the sample.
 fn ground() {
   let s = lights_now();
   let r = land_radius();
@@ -58,13 +60,13 @@ fn ground() {
   }
 }
 
-// How far light `k` reaches the air, its height `mu` and the eye's stops
-// `stops`: the most display levels its sky shows along its own vertical,
-// toward its azimuth, where the sky about a light is brightest, in
-// `ATMOS_REACH_ROWS` of its view's rows as laid (atmos_medium.wgsl `view_layout`).
-// What the air scatters before a point is no more than the sky along the
-// same ray, so a light whose sky shows under half a level leaves its air
-// under it too.
+// How far light `k` at height `mu` reaches the air, with the eye at `stops`:
+// the most display levels its sky shows along the light's own vertical,
+// toward its azimuth, where the sky about a light is brightest. It reads
+// `ATMOS_REACH_ROWS` of the rows of the light's view as laid
+// (atmos_medium.wgsl `view_layout`). What the air scatters before a point is
+// no more than the sky along the same ray, so a light whose sky shows under
+// half a level leaves its air under half a level too.
 fn shows(k: u32, mu: f32, stops: f32) -> f32 {
   let r = camera_r();
   let shown_by = atmos_white() * light_gain(k) * exp2(stops);
@@ -77,13 +79,13 @@ fn shows(k: u32, mu: f32, stops: f32) -> f32 {
   return most_shown;
 }
 
-// How far light `k` reaches the air now, and its slope in the light's height,
-// as the views take theirs (atmos_skyview.wgsl `slopes`): the levels moved
-// as the light rises by its sample, one step of the transmittance table's
-// own sampling where it stands, the eye's stops moving with it; moving over
-// it counts as a level at least. A light out of reach comes into it no
-// sooner than its step to `REACH` off that slope (gpu/atmosphere.rs
-// `LightMemo::step`).
+// Measures how far light `k` reaches the air now, and the slope of that reach
+// in the light's height, as the views measure theirs (atmos_skyview.wgsl
+// `slopes`). The slope is the levels moved as the light rises by its sample,
+// one step of the transmittance table's own sampling where the light stands,
+// with the eye's stops moving along. A move over the sample counts as one
+// level at least. A light out of reach comes into reach no sooner than the
+// step to `REACH` that this slope gives (gpu/atmosphere.rs `LightMemo::step`).
 fn reach(k: u32) {
   let now = lights_now();
   let mu = dot(light_dir(k), frame_up());

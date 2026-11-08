@@ -1,9 +1,10 @@
 // @pxl/client/deploy.ts
 
 /**
- * Deployment values that ship as data. `__IS_DEV__` and friends stay bare
- * globals at call sites, written in as values by the app's build
- * (ts/client/babel.config.ts), so the branch visibly drops from the bundle.
+ * Deployment values that ship as data. `__IS_DEV__` and the other build
+ * constants stay bare globals where they are used: the app's build writes
+ * them in as values (ts/client/babel.config.ts), so a branch on one visibly
+ * drops from the bundle.
  */
 
 import {
@@ -12,16 +13,19 @@ import {
   time as buildTime,
 } from "virtual:pxl-build";
 
-/** Shown in settings: a phone has no URL bar to tell which build is on screen. */
+/** Shown in the settings, because a phone has no URL bar to tell which build
+ * is on screen. */
 export const APP_ENV: string = __APP_ENV__;
 
-/** ISO-8601 UTC; on a dev server, the page load. */
+/** When the build was stamped, in ISO-8601 UTC. On a dev server, it is when
+ * the dev server started. */
 export const BUILD_TIME: string = buildTime;
 
-/** `<hash>[-dirty]`. */
+/** git's short hash of the source, with `-dirty` when the tree had changes. */
 export const BUILD_ID: string = buildId;
 
-/** `#<n>`, or `#<n>-<id>` for a build after it that CI did not number. */
+/** `#<n>` for a build CI numbered. A build CI did not number is `#<n>-<id>`,
+ * after the last number the deployment served. */
 export const BUILD_NUMBER: string = buildNumber;
 
 export const DEV_SOURCE: string = __DEV_SOURCE__;

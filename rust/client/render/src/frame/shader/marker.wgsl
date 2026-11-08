@@ -1,33 +1,36 @@
 // pxl-render/frame/shader/marker.wgsl
 
-// Markers drawn after the world as billboards, each standing in it as an
-// upright twin of its quad, in two passes over the same instances. A marker
-// keeps a region about itself, clear and centered on what it draws, and asks
-// at one point, its anchor, whether it is seen: marker_region.wgsl draws every
-// region whose anchor the world leaves seen, each as its marker's number, the
-// nearest winning a pixel; marker_sprite.wgsl draws a marker only where the number
-// at its anchor is its own. So one is seen whole or not at all, and two seen
-// may still overlap.
+// Markers are drawn after the world as billboards, in two passes over the same
+// instances. Each marker stands in the world as an upright twin of its quad,
+// which gives the marker its depth. A marker keeps a region about itself, clear
+// and centered on what it draws, and asks at one point, its anchor, whether it
+// is seen. marker_region.wgsl draws every region whose anchor the world leaves
+// seen, each as its marker's number, and the nearest region wins a pixel.
+// marker_sprite.wgsl draws a marker only where the number at its anchor is its
+// own. So a marker is seen whole or not at all, and two markers seen may still
+// overlap.
 
-// A twin stands this far toward the eye, so a marker is not lost in the
-// surface it stands on.
+// A twin stands this far toward the eye, a unit and one and a half camera grid
+// cells at its depth, so a marker is not lost in the surface it stands on.
 const DEPTH_BIAS_U: f32 = 1.0;
 const DEPTH_BIAS_CELLS: f32 = 1.5;
 
-// Read field by field from vec4 words, never as a struct: a struct here lost
-// Safari's WebGPU its GPU process. view, proj, px_per_unit, then the number before the
-// set's first marker.
+// The uniform is read field by field from vec4 words and is never declared as a
+// struct. Declared as a struct here, it makes Safari's WebGPU lose its GPU
+// process. It holds the view, the projection, `px_per_unit`, and the number
+// before the set's first marker.
 @group(1) @binding(0) var<uniform> marker_words: array<vec4f, MARKER_VEC4S>;
 
-// Each marker's words: its stand's Q3, then its floats (word.rs `MARKER_INSTANCE_WORDS`).
+// Each marker's words: the Q3 position it stands at, then its floats (word.rs
+// `MARKER_INSTANCE_WORDS`).
 @group(2) @binding(0) var<storage, read> instances: array<u32>;
 
-// Word `w` of instance `k`'s, a float.
+// Word `w` of the instance whose words start at `k`, read as a float.
 fn instance_f32(k: u32, w: u32) -> f32 {
   return bitcast<f32>(instances[k + w]);
 }
 
-// A marker's number, never 0, which is no region.
+// A marker's number. It is never 0, which stands for no region.
 fn marker_number(ii: u32) -> u32 {
   return u32(marker_before()) + ii + 1u;
 }
@@ -44,11 +47,12 @@ struct Placement {
   push: f32,
 };
 
-// Corner `vi` of instance `ii`'s quad, as wide as its sprite or its region.
+// Corner `vi` of the quad of instance `ii`, as wide as its region where
+// `region`, else as wide as its sprite.
 fn placed(vi: u32, ii: u32, region: bool) -> Placement {
   let k = ii * MARKER_INSTANCE_WORDS;
-  // On Q3, as the draws are (gpu/draw.rs `Position`): taken against the
-  // eye's, the short way round X.
+  // The marker stands on Q3, as the draws do (gpu/draw.rs `Position`), and is
+  // taken against the eye's Q3 the short way round X.
   let stands = vec3i(bitcast<i32>(instances[k]), bitcast<i32>(instances[k + 1u]), bitcast<i32>(instances[k + 2u]));
   let anchor = from_eye(stands, vec3f(0.0));
   let sprite_w = instance_f32(k, 3u);
@@ -72,8 +76,8 @@ fn placed(vi: u32, ii: u32, region: bool) -> Placement {
 
   let world_up_view = normalize((marker_view() * vec4f(0.0, 0.0, 1.0, 0.0)).xyz);
   let push = DEPTH_BIAS_U + max(0.0, -center_view.z) * GRID_CELL * DEPTH_BIAS_CELLS;
-  // What hangs under the anchor lies on the level ground through it, where the
-  // eye sees it.
+  // The part of the quad that hangs under the anchor lies on the level ground
+  // through the anchor, where the eye sees it.
   let over = drop + corner.y;
   var twin = anchor_view + vec3f(corner.x, 0.0, 0.0) + world_up_view * max(over, 0.0);
   let shown = center_view + vec3f(corner, 0.0);
@@ -86,7 +90,8 @@ fn placed(vi: u32, ii: u32, region: bool) -> Placement {
   return Placement(clip, clamp(upright.z / upright.w, 0.0, 1.0), across, q, anchor_view, push);
 }
 
-// The pixel of a target `dims` large the anchor falls in; x < 0 off the screen.
+// The pixel of a target `dims` large that the anchor falls in. Its x is below 0
+// where the anchor is off the screen.
 fn anchor_px(p: Placement, dims: vec2u) -> vec2i {
   let at = marker_proj() * vec4f(p.anchor_view, 1.0);
   if (at.w <= 0.0) {

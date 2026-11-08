@@ -1,42 +1,41 @@
 // pxl-engine/value.rs
 
-//! gpu-portable: the value space every layer stores and the engine reads by:
-//! a ground cell a byte, an object's value a u16 whose byte range is the
-//! ground's and whose range past it is what only an object can be, and
-//! decor's past the cube kind (pxl-spec id.json). The engine states its
-//! sentinels and the slots each class of value takes; a content lays its
-//! palette into them, every value where it is.
+//! gpu-portable: the value space that every layer stores and the engine reads. A ground cell
+//! is a byte. An object's value is a u16: its byte range is the ground's, and the range past
+//! a byte holds what only an object can be. Decor values lie past the cube kind (pxl-spec
+//! id.json). The engine fixes the sentinels and the range each class of value takes; a
+//! content lays its palette into those ranges.
 
 /// Nothing painted: the ground before a bake writes it, and an object cell
 /// no leaf holds.
 pub const VOID: u32 = 0x00;
 
-/// Where the world holds no more: the floor under the ground and the wall
-/// just inside the service area, and a byte no bake wrote, so memory filled
-/// with 0xFF reads as it; nothing is placed on or taken from it.
+/// Where the world holds no more: the floor under the ground, the wall just inside the
+/// service area, and any byte no bake wrote, so that memory filled with 0xFF reads as
+/// unknown. Nothing is placed on it or taken from it.
 pub const UNKNOWN: u32 = 0xff;
 
-/// Explicit air, what only an object holds: it retains its leaf and erases
-/// the layers under it, past a byte, where no ground cell lies.
+/// Explicit air, which only an object holds. It keeps its leaf in the tree and erases the
+/// layers under it. It lies past a byte, where no ground value can be.
 pub const AIR: u32 = 0x100;
 
 /// The ground's palette entries, first and last: every byte but the
 /// sentinels.
 pub const GROUNDS: [u32; 2] = [0x01, 0xfe];
 
-/// The ways' entries among the ground's, first and last: decor faces along
-/// them and no pier stands on them.
+/// The ways' entries among the ground's, first and last. Decor faces along a way, and no
+/// pier stands on one.
 pub const TRANSPORTS: [u32; 2] = [37, 55];
 
-/// What a pier is drawn as: a ground's entry, no way's.
+/// The entry a pier is drawn as: a ground entry that is not a way's.
 pub const PIER: u32 = 35;
 
 /// The colors only an object takes, first and last: past air, within the
 /// cube kind (pxl-spec id.json `SHAPE_BITS`).
 pub const OBJECTS: [u32; 2] = [0x101, 0x3ff];
 
-/// Whether a value read into a word, as a GPU has it with no byte, is a
-/// ground's palette entry (`GROUNDS`).
+/// Whether a value read into a word is a ground palette entry (`GROUNDS`). A GPU has no byte
+/// type, so every value is tested as a word.
 pub const fn grounds(val: u32) -> bool {
     val >= GROUNDS[0] && val <= GROUNDS[1]
 }

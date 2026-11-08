@@ -1,4 +1,5 @@
-// The triangle each of the AO's passes draws over its whole target.
+// Every pass of the occlusion draws this one triangle, which covers its whole
+// target.
 
 struct VertexOut {
   @builtin(position) clip: vec4f,

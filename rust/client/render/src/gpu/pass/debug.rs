@@ -1,6 +1,7 @@
 // pxl-render/gpu/pass/debug.rs
 
-//! The dev gizmos, over the finished world in passes of their own.
+//! The dev gizmos. They are drawn onto the canvas after the world is
+//! finished, in passes of their own.
 
 use crate::frame::shader::record::PIPELINE_DEBUG;
 use crate::frame::shader::record::{
@@ -14,10 +15,11 @@ use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::upload::Uploads;
 
-/// Their faces go into the canvas's depth, cleared once what is drawn over
-/// the world is done with it, and their lines are drawn against those faces alone, so a gizmo
-/// hides gizmos and nothing of the world hides one. Each set takes its own
-/// position, a draw's uniform a set.
+/// The gizmos draw their faces into the world's depth at the canvas's size,
+/// cleared once everything drawn over the world is done with it. Their lines
+/// are tested against those faces alone, so nothing of the world hides a
+/// gizmo. Each set of lines and faces has its own position, in a draw
+/// uniform of its own.
 pub struct DebugPass {
     pipeline: Pipeline,
     faces: Pipeline,
@@ -52,14 +54,16 @@ impl DebugPass {
         );
     }
 
-    /// Its draws into `stats`, two triangles a segment, and the faces'.
+    /// Adds the pass's draws to `stats`: two triangles a line segment, and the
+    /// faces' triangles.
     pub fn count(&self, draws: &Draws, stats: &mut DrawStats) {
         draws.count(PIPELINE_DEBUG, stats, |d| d[1] + d[2] / 3);
     }
 
-    /// `depth` is the world's, which nothing reads after this in the frame;
-    /// whether it was drawn into, so the next frame carries it whole
-    /// (gpu/finish.rs).
+    /// Draws the gizmos onto `canvas` and says whether it drew into `depth`.
+    /// `depth` is the world's depth at the canvas's size, which nothing reads
+    /// after this pass in the frame. When it was drawn into, the next frame
+    /// finishes it whole again (gpu/finish.rs).
     pub fn draw(
         &self,
         ctx: &mut RenderContext,
@@ -78,7 +82,8 @@ impl DebugPass {
             return false;
         }
         let slots = held.as_ref();
-        // Each set held: its uniform's slot, its line and its face vertices.
+        // Each set with lines whose vertices are on the device, as (slot,
+        // record, vertex buffer, line vertices, face vertices, slots).
         let sets = || {
             draws.of(PIPELINE_DEBUG).enumerate().filter_map(|(k, d)| {
                 let slots = slots?;
@@ -86,7 +91,8 @@ impl DebugPass {
                 (d[1] > 0).then_some((k, d, buf, d[1], d[2], slots))
             })
         };
-        // With no faces the lines' pass clears the depth itself.
+        // When no set has faces, the faces' pass is skipped and the lines'
+        // pass clears the depth itself.
         let faced = sets().any(|s| s.4 > 0);
         if faced {
             let pass = g.pass(
@@ -109,9 +115,10 @@ impl DebugPass {
             }
             g.end(pass);
         }
-        // A set's faces hide only its own lines: the faced sets' lines over
-        // their faces' depth, then the rest over none, so the pivot's frame
-        // is whole under the coverage laid on the ground.
+        // Faces hide only the lines of the sets that have faces. Those lines
+        // are drawn over the faces' depth; then the depth is cleared and the
+        // other sets' lines are drawn over none. The pivot's frame has no
+        // faces, so it stays whole under the coverage laid on the ground.
         let depth_load = if faced { Load::Load } else { Load::Clear };
         let mut pass = g.pass(
             encoder,
@@ -131,7 +138,9 @@ impl DebugPass {
                 let (group, off) = slots.at(k as u32);
                 g.set_bind_group(pass, 1, group, &[off]);
                 g.set_vertex_buf(pass, 0, buf, 0, lines * DEBUG_VERTEX_BYTES);
-                // A segment an instance: its two vertices, read as one.
+                // Each segment is one instance, and its two vertices are read
+                // as one stride (record.rs `DEBUG_BUFFERS`). Six vertices make
+                // the quad that draws it.
                 g.draw(pass, 6, lines / 2, 0, 0);
             }
         }

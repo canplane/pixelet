@@ -7,8 +7,9 @@ use crate::look::color::linear;
 
 #[test]
 fn moon_map_width() {
-    // download_moon writes the map; the sky binds and reads it at
-    // `MOON_TEXELS` a side, so a map cut anew at another size must move it.
+    // download_moon writes the map, and the sky binds and reads it at
+    // `MOON_TEXELS` a side. A map cut again at another size must change
+    // `MOON_TEXELS` with it.
     let png = std::fs::read(Path::new(env!("PXL_REPO")).join("asset/content/sky/moon.png"))
         .expect("the moon's map (make download-moon)");
     let side = |at: usize| u32::from_be_bytes(png[at..at + 4].try_into().unwrap());
@@ -21,9 +22,10 @@ fn moon_map_width() {
 
 #[test]
 fn moon_map_scale() {
-    // download_moon's mean, over the shipped map: its gray in linear light,
-    // each texel weighed by the disc's area it covers, which the 8-bit map
-    // holds to within a few ten-thousandths of the raw one it was cut from.
+    // The mean download_moon prints, taken here over the shipped map: its
+    // gray in linear light, each texel weighed by the area of the disc it
+    // covers. The 8-bit map's mean lies within a few ten-thousandths of the
+    // mean of the raw map it was cut from.
     let path = Path::new(env!("PXL_REPO")).join("asset/content/sky/moon.png");
     let map = image::open(&path)
         .expect("the moon's map (make download-moon)")

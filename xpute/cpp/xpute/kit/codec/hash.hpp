@@ -1,6 +1,7 @@
 // cpp/xpute/kit/codec/hash.hpp
 
-// FNV-1a, 64 bits, the same word every language and the spec generator compute.
+// 64-bit FNV-1a. Every language and the spec generator compute the same hash
+// of the same bytes.
 
 #pragma once
 

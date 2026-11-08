@@ -12,8 +12,9 @@ const FIRST_PERSON = MODE.options.first_person;
 const ORBIT = MODE.options.orbit;
 const PLACE = SETTING.place.key;
 
-/** The camera's mode and the places, a circle each: the one changes how the
- * world is seen, the other what it shows. */
+/** The camera's mode and the places each get a round button of their own,
+ * not one group: the mode changes how the world is seen, and the places
+ * change what it shows. */
 export function ViewButtons() {
   const { t } = useTranslation();
   const first = useCore((s) => s.settings[MODE.key]) === FIRST_PERSON;

@@ -1,6 +1,6 @@
 // pxl-core/domain/layer/tile_cache.test.rs
 //
-// What a tile cache says shows, against a count made afresh.
+// Tests of the tile cache's count of the tiles that show.
 
 use super::*;
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -9,9 +9,9 @@ fn asks(tiles: &[Quadrant]) -> FnvHashMap<Quadrant, ()> {
     tiles.iter().map(|&p| (p, ())).collect()
 }
 
-/// `is_shown` and `shown_share` are of the asks and what is held as they
-/// stand: after every change to either, what they say equals a count made
-/// afresh.
+/// After every change to the asks or to what is held, `is_shown` and
+/// `shown_share` agree with a fresh `count_shown`, so their memo never goes
+/// stale.
 #[test]
 fn shown_as_counted_afresh() {
     let mut c = TileCache::<TerrainTile>::default();

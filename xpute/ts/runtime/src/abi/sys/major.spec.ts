@@ -2,7 +2,7 @@
 //
 // GENERATED from spec/abi/sys.json
 
-// What a command is about.
+// A command's major, the high byte of its number, by which the runtime routes the frame.
 
 export const NOP = 0x00;
 export const SYS = 0x01;

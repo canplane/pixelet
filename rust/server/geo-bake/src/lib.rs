@@ -1,8 +1,9 @@
 // pxl-geo-bake/lib.rs
 
-//! Turns Overture and the elevation raster into the static tiles the bucket
-//! serves. `separation` solves heights, `terrain` bakes tiles, `places` fetches per
-//! tile, `divisions` makes the divisions' leaves, `tile` walks a coverage.
+//! Turns Overture and the elevation raster into the static tiles the bucket serves.
+//! `separation` solves the heights of bridges and tunnels, `terrain` bakes the terrain tiles,
+//! `place` reads the places for each tile, `division` makes the divisions' leaves, and `tile`
+//! walks a coverage.
 
 pub mod cli;
 pub mod coverage;

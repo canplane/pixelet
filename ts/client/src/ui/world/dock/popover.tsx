@@ -1,6 +1,10 @@
 // @pxl/client/ui/world/dock/popover.tsx
 
-/** A swatch's sizes above the card: a press shows their seed, and held, it grows into them. */
+/**
+ * The sizes of a cube, shown above the dock's card. A press on a cube's swatch
+ * shows a small dot above it, the seed. Held, the seed opens into the sizes,
+ * one mark for each scale, and the finger picks one by lifting over it.
+ */
 
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -18,41 +22,48 @@ import { OBJECT_SCALES } from "@/ui/world/object.spec.ts";
 import { DOCK_HEIGHT } from "./card.tsx";
 import { type SizeGesture, STRIP } from "./strip.tsx";
 
-/** Above the card, where the sizes and their seed stand. */
+/** How far above the card the seed and the sizes stand. */
 const POPOVER_LIFT_PX = 6;
 const POPOVER_GAP_PX = 8;
 const POPOVER_PAD_Y = 8;
 const POPOVER_WIDTH = chrome.target + 12;
 const POPOVER_PITCH = chrome.target + POPOVER_GAP_PX;
 
-/** A dot whose area halves per scale step, so the finest stays visible: 28, 20, 14, 10. */
+/** The diameter of the coarsest scale's mark. Each step finer halves the
+ * mark's area rather than its width, so that the finest mark stays visible:
+ * 28, 20, 14 and 10 pixels. */
 const MARK_COARSEST = 28;
 function sizeMark(scaleSteps: i32): f64 {
   return round(MARK_COARSEST * Math.SQRT2 ** scaleSteps);
 }
 
-/** Finest first, so the coarsest stands nearest the swatch. */
+/** The scales from top to bottom. The finest comes first, so that the
+ * coarsest stands nearest the swatch. */
 const SCALES: readonly i32[] = Array.from(
   { length: OBJECT_SCALES },
   (_, i) => i + 1 - OBJECT_SCALES,
 );
 
-/** The seed of the sizes, at their foot. */
+/** The seed's diameter in pixels. */
 const SEED = 10;
 
-/** How long a key's flash leaves the seed or the sizes up, long enough to read the one held. */
+/** How long a key's flash keeps the seed or the sizes up: long enough to read
+ * which size is held. */
 const FLASH_MS = 900;
 
-/** In the bar's frame, whose top is the card's; `bar` is where the bar is on the page. */
+/** `centerX` is the swatch's center, measured from the bar's left edge. `bar`
+ * is the bar's top-left corner in the window, and the bar's top is the
+ * card's. */
 export interface Popover {
   centerX: f64;
   bar: [f64, f64];
   highlighted: i32 | null;
-  /** The sizes open; else their seed. */
+  /** Whether the sizes are open. Otherwise only the seed shows. */
   open: boolean;
 }
 
-/** `x` and `y` on the page. */
+/** The scale whose mark lies under `x` and `y`, which are in the window's
+ * coordinates, as the responder gives them. */
 function scaleAt(at: Popover, x: f64, y: f64): i32 | null {
   if (Math.abs(x - at.bar[0] - at.centerX) > POPOVER_WIDTH / 2) return null;
   const top =
@@ -68,13 +79,14 @@ function scaleAt(at: Popover, x: f64, y: f64): i32 | null {
   return SCALES[row];
 }
 
-/** Where the popover stands, and what a swatch's gesture does to it; `bar` is the dock's, whose place it is measured from. */
+/** `bar` is the dock's bar. The popover's place is measured from it. */
 export function usePopover(bar: React.RefObject<View | null>): {
   popover: Popover | null;
   gesture: Omit<SizeGesture, "press">;
 } {
   const [popover, setPopover] = useState<Popover | null>(null);
-  // A release can come before the swatch's place is measured.
+  // Measuring the swatch takes a moment, and the finger can lift before the
+  // measurement arrives. A measurement that arrives after the lift is dropped.
   const pressing = useRef(false);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -130,7 +142,8 @@ export function usePopover(bar: React.RefObject<View | null>): {
   return { popover, gesture };
 }
 
-/** The seed or the sizes over the swatch. Drawn from the bar, not the swatch, whose scrolling strip would clip it. */
+/** The seed or the sizes over the swatch. The bar draws them rather than the
+ * swatch, because the swatch's strip scrolls and would clip them. */
 export function SizePopover({ popover }: { popover: Popover }) {
   return (
     <View
@@ -154,7 +167,6 @@ export function SizePopover({ popover }: { popover: Popover }) {
   );
 }
 
-/** The sizes open, a mark a scale. */
 function SizeMarks({ highlighted }: { highlighted: i32 | null }) {
   const { t } = useTranslation();
   const scale = useScale();
@@ -205,7 +217,8 @@ const styles = StyleSheet.create({
     width: POPOVER_WIDTH,
     zIndex: 10,
   },
-  // Takes the pointer whole, so the world under it draws no hover.
+  // The open sizes take every pointer event, so that the world under them
+  // shows no hover.
   popoverTakes: { pointerEvents: "box-only" },
   seed: {
     alignSelf: "center",

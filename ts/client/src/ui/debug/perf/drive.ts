@@ -1,13 +1,15 @@
 // @pxl/client/ui/debug/perf/drive.ts
 
 /**
- * The one measurement (`pxl.perf.drive`), the worst the renderer meets and
- * taken the same way each time: the display's pixels fixed, the shadows and
- * the profiler on, the sky at 07:00; the camera zoomed to its farthest and
- * tilted to just over the horizon through the canvas's own input; then, for
- * the whole window, turned a full circle every `TURN_S` while the wheel sweeps
- * the zoom in and out, both by the time; and the window's report. Two runs alike are two windows
- * alike, so a change is read off their reports.
+ * The one standard measurement (`pxl.perf.drive`). It puts the renderer
+ * through the worst case it meets, the same way every time. The display's
+ * pixels are fixed, the shadows and the profiler are on, and the sky is at
+ * 07:00. Through the canvas's own input, the camera is zoomed to its farthest
+ * and tilted to just over the horizon. Then, for the whole window, the view
+ * turns a full circle every `TURN_S` seconds while the wheel sweeps the zoom
+ * in and out, both paced by the clock. The result is the window's report.
+ * Two runs of one build give two matching windows, so a change shows as the
+ * difference between their reports.
  */
 
 import { SETTING } from "@/ui/setting/schema.ts";
@@ -16,17 +18,21 @@ import { perfReportRead } from "./view.ts";
 import * as perf from "@/port/perf.ts";
 import * as setting from "@/port/setting.ts";
 
-/** An input a step, about a frame at 60 Hz. */
+/** One input is sent each step, about one frame at 60 Hz. */
 const STEP_MS = 16;
-/** The wheel's step, and the steps that take the zoom from one end to the other. */
+/** `WHEEL` is one wheel step's `deltaY`, and `RUN` is the number of steps
+ * that take the zoom from one end to the other. */
 const WHEEL = 100;
 const RUN = 60;
-/** The drag up that tilts the default view to just over the horizon, a share of the canvas's height. */
+/** How far the drag up goes that tilts the default view to just over the
+ * horizon, as a share of the canvas's height. */
 const TILT_SHARE = 0.06;
-/** The circle the pointer turns the view on, its radius in CSS pixels and a turn's seconds. */
+/** The pointer turns the view by moving round a circle. `RADIUS` is the
+ * circle's radius in CSS pixels, and `TURN_S` the seconds one turn takes. */
 const RADIUS = 250;
 const TURN_S = 4;
-/** The settings' and the framing's time to land before the window starts. */
+/** The time the settings and the framing are given to take effect before
+ * the window starts. */
 const SETTLE_MS = 2000;
 
 const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
@@ -86,8 +92,9 @@ export async function perfDrive(seconds = 60): Promise<string> {
   const start = -Math.PI / 2;
   pointer("pointerdown", on(start), 2);
   const t0 = performance.now();
-  // The sweep's steps in from the farthest, by the time: a frame late sends what it owes, so
-  // a faster build and a slower one pass the same zooms at the same seconds.
+  // The sweep's place, in steps in from the farthest zoom, is computed from
+  // the clock. A late frame sends every step it owes, so a fast build and a
+  // slow one pass the same zooms at the same seconds.
   const leg = RUN * STEP_MS;
   let swept = 0;
   const step = setInterval(() => {

@@ -1,10 +1,12 @@
 // @pxl/client/ui/debug/perf.tsx
 
 /**
- * The profiler panel: the profiler's recording controls, exports and
- * gauge, and its own settings (section `perf`) under the buttons. Shown by the `perf`
- * setting in any build; the core records from boot while it is on. A development page reads the same from
- * the console (ui/debug/console.ts).
+ * The profiler panel. Its buttons start, stop and export the profiler's
+ * recording window, its checkboxes are the settings of section `perf`, and
+ * its gauge shows what the window holds. The panel is shown while the `perf`
+ * setting is on, in any build, and while that setting is on the core records
+ * from the moment it boots. A development page reads the same exports from
+ * the console (console.ts).
  */
 
 import { CheckSquareIcon, SquareIcon } from "phosphor-react-native";
@@ -71,7 +73,8 @@ const TINT: Record<Tint, TintLook> = {
   },
 };
 
-/** The hint shows under the buttons on hover or hold, since a device has no tooltip. */
+/** A button whose hint shows under the buttons while it is hovered or held.
+ * A device has no tooltip, so the hint stands in for one. */
 function PanelButton({
   label,
   hint,
@@ -132,15 +135,16 @@ function PanelButton({
 
 const SAID_MS = 2500;
 
-/** A setting the panel holds (section `perf`). */
+/** One of the panel's own settings: a setting of section `perf`. */
 type Own = {
   [K in SettingName]: (typeof SETTING)[K]["section"] extends "perf" ? K : never;
 }[SettingName];
 
-/** Each a checkbox under the buttons, set while the window is stopped: one
- * that changed mid-window would leave the window's frames counted apart. A
- * dev one is absent from a production build (`settingsIn`), and its box
- * with it. */
+/** Each own setting is a checkbox under the buttons. It can change only while
+ * the window is stopped, because a change in the middle of a window would
+ * leave the window's frames counted in two ways. A setting that exists only
+ * in development is missing from a production build (`settingsIn`), and so
+ * is its box. */
 const OWN: Record<Own, { label: string; note: string }> = {
   ray_counts: { label: "Ray counts", note: "into the report; slows the casts" },
 };
@@ -186,7 +190,8 @@ export function PerfPanel() {
   const show = useCore((s) => s.settings[SETTING.perf.key] === 1);
   const [hint, setHint] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
-  // Read while shown, folded or not: the title carries the fps.
+  // The gauge is read while the panel is shown, open or closed, because the
+  // title shows the frame rate.
   const g = usePerfGauge(show);
 
   useEffect(() => {
@@ -197,16 +202,17 @@ export function PerfPanel() {
 
   useEffect(() => {
     if (!show) return;
-    // Cleared before the observers are installed: they replay what the page
-    // buffered since load, so a panel on from boot has the boot's frames.
+    // The ring is cleared before the observers are installed. The observers
+    // replay the long frames the page has buffered since it loaded, so a
+    // panel that is on from boot shows the boot's long frames.
     longFramesClear();
     installLongFrameObservers();
   }, [show]);
 
   if (!show) return null;
   const recording = g?.rec.recording === true;
-  // The rate frames are drawn at over the last second, idle where recording
-  // saw none move in it.
+  // The title's note is the rate at which frames were drawn over the last
+  // second. It reads "idle" when a recording saw no frame move in that second.
   const r = g?.recent ?? null;
   const rate = r === null ? null : movingFps(r);
   const note =
@@ -224,7 +230,9 @@ export function PerfPanel() {
       }
     >
       <View style={styles.buttons}>
-        {/* Both, not a toggle: a window opened at boot would read "Stop" until first stopped. */}
+        {/* Start and Stop are two buttons rather than one toggle. A toggle would
+            offer only "Stop" for a window that opened at boot, until the
+            window was first stopped. */}
         <PanelButton
           onHint={setHint}
           label={recording ? "Restart" : "Start"}
@@ -260,7 +268,8 @@ export function PerfPanel() {
       {(settingsIn("perf") as Own[]).map((name) => (
         <OwnCheck key={name} name={name} disabled={recording} />
       ))}
-      {/* Under the buttons: a two-line hint above them moved the hovered button away. */}
+      {/* The hint shows under the buttons. Above them, a hint that wraps to two
+          lines would push the hovered button out from under the pointer. */}
       {(said ?? hint) !== null && (
         <Text style={[gauge.text, styles.hint]}>{said ?? hint}</Text>
       )}

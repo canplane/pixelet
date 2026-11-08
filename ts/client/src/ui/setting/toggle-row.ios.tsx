@@ -1,9 +1,9 @@
 // @pxl/client/ui/setting/toggle-row.ios.tsx
 
 /**
- * A settings row on an iPhone: the switch alone takes the touch. UIKit's
- * switch, not SwiftUI's Toggle, which inside a sheet missed about two quick
- * taps in five.
+ * A settings row on an iPhone, where the switch alone takes the touch. It is
+ * UIKit's switch rather than SwiftUI's Toggle, which inside a sheet misses
+ * about two quick taps in five.
  */
 
 import { Switch, View } from "react-native";
@@ -11,7 +11,8 @@ import { Switch, View } from "react-native";
 import { color } from "@/ui/component/theme.ts";
 import type { ToggleRowProps } from "./toggle-row.tsx";
 
-// Everything the default has, but what this file draws itself.
+// The default file's other exports, beside the ToggleRow this file draws
+// itself.
 export * from "./toggle-row.tsx";
 
 export function ToggleRow({

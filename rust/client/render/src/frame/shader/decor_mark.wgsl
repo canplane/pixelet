@@ -1,16 +1,17 @@
 // pxl-render/decor_mark.wgsl
 
-// The eye's entries whose decor generates again this frame, a thread an entry, each decor shown
-// at its clip level listed: whole where every entry does or its records were not generated
-// for its brick, its head then laid anew and each decor's count none yet; else in part, from
-// the list's end, where a box of the frame's reaches what its brick reads
-// (pxl-content `generation::LIST_AT`, `part_at`).
+// Lists the eye's entries whose decor generates again this frame, one thread an entry, with a
+// pair for each decor shown at the entry's clip level. An entry is listed whole when every entry
+// generates again or its records were not generated for its brick; its header is then laid anew
+// and each decor's count set to none. Otherwise it is listed in part, from the list's end, when
+// a box of the frame's reaches what its brick reads (pxl-content `generation::LIST_AT`,
+// `part_at`).
 
 @group(0) @binding(9) var<storage, read_write> records: array<u32>;
-/// What the pass lists (pxl-content `generation::THIN_ARGS`): the words before the boxes
-/// atomic, the counts its threads add to among them; the boxes and the pairs plain. The
-/// boxes are the host's, only read here; a pair is written by the one thread whose add took
-/// its place, and read by the passes after.
+/// What the pass lists (pxl-content `generation::THIN_ARGS`). The words before the boxes are
+/// atomic, as the counts the threads add to lie among them. The boxes and the pairs are plain:
+/// the host writes the boxes and this pass only reads them, and each pair is written by the one
+/// thread whose add took its place and read by the passes after.
 struct List {
   header: array<atomic<u32>, RECTS_AT>,
   words: array<u32>,
@@ -50,8 +51,8 @@ fn decor_mark_cs(@builtin(global_invocation_id) id: vec3<u32>) {
       return;
     }
   }
-  // The pairs listed whole and in part together take no more places than the list holds,
-  // so the two never meet.
+  // The pairs listed whole fill the list from its start, and those listed in part from its
+  // end. Together they take no more places than the list holds, so the two never meet.
   let cap = LIST_WORDS - LIST_AT;
   for (var j = 0u; j < DECORS; j += 1u) {
     if (((shown[j] >> (cell_zoom - FIRST_CELL_ZOOM)) & 1u) != 0u) {

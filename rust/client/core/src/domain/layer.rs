@@ -1,7 +1,7 @@
 // pxl-core/domain/layer.rs
 
-//! What is in the world, in layers. A layer owns its store and knows
-//! nothing of its neighbors.
+//! The world's contents, in layers. Each layer owns its store and knows
+//! nothing of the other layers.
 
 mod answer;
 use pxl_spec::bake::tile::Occupancy;
@@ -29,55 +29,59 @@ use crate::sys::io::source;
 pub use answer::Answer;
 pub(in crate::domain) use query::Query;
 
-/// What a layer asks for of the view.
+/// Which tiles a layer asks for.
 #[derive(Clone, Copy)]
 pub enum AskScope {
-    /// The floor alone.
+    /// The floor alone (tile_cache/floor.rs).
     Floor,
-    /// A line alone, the division layer's pivot's (`division::line`).
+    /// One line alone: the tiles over the division layer's pivot
+    /// (`division::line`).
     Line,
-    /// The floor, a destination's line and the view's misses with theirs.
+    /// The floor, a destination's line, and the view's misses with the lines
+    /// over them.
     View,
 }
 
 pub trait Base: Clone + 'static {
     const STREAM: Stream;
 
-    /// Which of its children are tiles of their own, as the bake wrote it.
+    /// Which of the tile's children have tiles of their own, as the bake
+    /// wrote them.
     fn occupancy(&self) -> Occupancy;
 
-    /// Its tiles' cells, which say what of the grid a tile at each zoom draws.
+    /// How the layer's tiles lie on the camera grid, which says what part of
+    /// the grid a tile at each zoom draws.
     const LATTICE: Lattice;
 
-    /// The zoom its tiles are made at, as the bake's `Base::LEAF`.
+    /// The zoom the layer's tiles are made at. It matches the bake's
+    /// `Base::LEAF`.
     const LEAF: Zoom = LEAF_ZOOM;
 
-    /// The coarsest zoom its tiles are read at (pxl-spec lattice.rs `coarsest`), which
-    /// the bake folds up to and no further.
+    /// The coarsest zoom the layer's tiles are read at (pxl-spec lattice.rs
+    /// `coarsest`). The bake folds tiles up to this zoom and no further.
     const COARSEST: Zoom = coarsest(Self::LATTICE);
 
-    /// What it asks of the view; its tile cache is sized so.
+    /// Which tiles the layer asks for. Its tile cache is sized from this.
     const ASK_SCOPE: AskScope = AskScope::View;
 
-    /// The coarsest zoom the layer's own source supplies whole, where one
-    /// differs from the ground's declared top (sys/io/source.rs `top`). Its floor is
-    /// then that zoom's whole reach about the eye: it is drawn past where
-    /// the ground stops.
+    /// The coarsest zoom the layer's own source supplies whole, for a layer
+    /// whose source differs from the ground's declared top (sys/io/source.rs
+    /// `top`). The layer's floor is then the whole reach of that zoom around
+    /// the eye, so the layer is drawn past where the ground stops.
     const TOP: Option<Zoom> = None;
 
-    /// The coarsest zoom it is asked for and drawn at: its own source's
-    /// (`TOP`) or else the ground's declared one, never coarser than the
-    /// coarsest it is read at (`COARSEST`); none until the source is
-    /// declared.
+    /// The coarsest zoom the layer is asked for and drawn at: its own `TOP`,
+    /// or else the ground's declared top, but never coarser than `COARSEST`.
+    /// None while the layer has no `TOP` and the source is not declared yet.
     fn top() -> Option<Zoom> {
         Self::TOP.or(source::top()).map(|t| t.max(Self::COARSEST))
     }
 
-    /// The most tiles a reader that takes no coarser answer pins apart from
-    /// the view and a destination's line (pxl-core domain/view/demand.rs `step`).
+    /// The most tiles held hard for a reader that cannot take a coarser
+    /// answer, beyond the view and a destination's line (domain/view/demand.rs
+    /// `step`).
     const PIN_CAP: u32 = 0;
 
-    /// Its records, which it alone holds.
     fn tile_cache() -> &'static mut TileCache<Self>;
 
     fn receive(
@@ -87,14 +91,16 @@ pub trait Base: Clone + 'static {
         phases: &mut Phases,
     ) -> Result<Self, Failure>;
 
-    /// The packet a tile came in, once the slot `record` took the tile or
-    /// none did: freed, or kept where the GPU takes the tile off it
-    /// (`upload::Uploads`).
+    /// Disposes of the packet a tile arrived in, once slot `record` took the
+    /// tile or no slot did. The default frees it; a layer whose GPU copies
+    /// the tile from its packet keeps the packet instead (`upload::Uploads`).
     fn keep(_record: Option<u32>, block: Block) {
         fetch::release(Some(block));
     }
 
-    /// A tile with nothing in it, which answers an absent tile at the top.
+    /// The tile with nothing in it, which stands for an absent tile at the
+    /// layer's top. None for a layer whose absent tiles are answered by the
+    /// tile over them.
     fn empty() -> Option<Self> {
         None
     }

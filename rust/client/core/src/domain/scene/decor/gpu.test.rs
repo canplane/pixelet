@@ -6,8 +6,9 @@ use crate::domain::view::frame::pose::view_resize;
 use crate::sys;
 use pxl_spec::space::camera::grid::CELL;
 
-/// Decor's tiers are angles: the model's and the impostor's edges are their
-/// shares of the view's cell (`CELL`), whatever the clip level's height.
+/// The edges between decor's tiers are angles. The model's edge and the
+/// impostor's edge stay fixed shares of the view's cell (`CELL`) whatever the
+/// screen's height.
 #[test]
 fn decor_edges_cell_shares() {
     let _g = sys::serial();
@@ -21,13 +22,14 @@ fn decor_edges_cell_shares() {
 }
 
 /// A kind is generated at the leaves' clip level and at each coarser one where
-/// a variant stands as itself (`scatter::stands_at`): its clip levels run from
-/// the leaves' up, unbroken, never at one whose cell its largest box keeps no
-/// eighth of, as a folded cube of it would keep none.
+/// a variant stands as itself (`scatter::stands_at`). Its clip levels run
+/// unbroken from the leaves' upward. None of them has cells of which the
+/// kind's largest box fills less than an eighth, since a folded cube of that
+/// box would keep nothing there.
 #[test]
 fn decor_clip_levels_by_size() {
     let leaf = 1 << (LEAF_CELL_ZOOM - FIRST_CELL_ZOOM);
-    // From a tuft to a ship, as it shows.
+    // Extents from a tuft of grass to a ship.
     for extent in [0.5, 2.0, 8.0, 40.0, 400.0] {
         for (k, &bits) in shown_by(|_| extent).iter().enumerate() {
             let (d, at) = (&DECORS[k], |cell_zoom: Zoom| {

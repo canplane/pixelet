@@ -1,7 +1,8 @@
 // @xpute/kit/wire/scalar.ts
 
-// Little-endian scalar I/O on a byte stream, with no bounds checks: the caller
-// owns them, and an out-of-range access throws DataView's RangeError.
+// Little-endian numbers read from and written to a byte stream, each call
+// moving its offset on. Nothing here checks bounds: the caller does, and an
+// access out of range throws DataView's RangeError.
 
 import type {
   f32,
@@ -140,8 +141,9 @@ export const getu128 = (s: Stream): [u64, u64] => {
 export const pack96 = (lo: u32, mid: u32, hi: u32): bigint =>
   (U64(BigInt(hi)) << 64n) | (U64(BigInt(mid)) << 32n) | U64(BigInt(lo));
 
-// Each limb is masked while still a bigint: Number() of a value past 2^53
-// rounds away the low bits before U32 could truncate them.
+// Each 32-bit part is masked while it is still a bigint. Number() of a value
+// past 2^53 rounds away its low bits, which a later truncation to 32 bits
+// would need.
 export const unpack96 = (x: bigint): [u32, u32, u32] => [
   Number(x & 0xffffffffn),
   Number((x >> 32n) & 0xffffffffn),

@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 
 import type { SafeArea } from "./types.ts";
 
-/** `env(safe-area-inset-*)` is only given to a style, so it is read back off an element. */
+/** `env(safe-area-inset-*)` can only be read through a style, so it is set on
+ * a hidden element and read back. */
 function measure(): SafeArea {
   const probe = document.createElement("div");
   probe.style.cssText =
@@ -22,7 +23,8 @@ function measure(): SafeArea {
 
 export function useSafeArea(): SafeArea {
   const [area, setArea] = useState(measure);
-  // After layout, as the window's size is read (viewport.ts); a rotation moves the insets.
+  // The insets are read after layout, as the window's size is (viewport.ts),
+  // and again on each resize, because a rotation moves them.
   useEffect(() => {
     const observer = new ResizeObserver(() => setArea(measure()));
     observer.observe(document.documentElement);

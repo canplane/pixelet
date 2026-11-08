@@ -1,11 +1,12 @@
 // xpute-example/lib.rs
 
-//! The smallest core, read beside the runtime that drives it
+//! The smallest core, meant to be read beside the runtime that drives it
 //! (ts/example/sum.test.ts). Its machine (machine.json) declares its memory
-//! and its rings, which the runtime lays out as the machine places them; its one
-//! protocol (asker.json) has the runtime send SUM and the core call ASK, and
-//! both ends' code is generated from it. It answers SUM with the sum of its two numbers and
-//! the runtime's answer to ASK, answered before the call returns.
+//! and its rings, which the runtime lays out where the machine places them.
+//! Its one protocol (asker.json) has the runtime send SUM and the core call
+//! ASK, and the code of both ends is generated from it. The core answers SUM
+//! with the sum of its two numbers and the runtime's answer to ASK, which
+//! the runtime gives before the call returns.
 
 #![cfg(target_arch = "wasm32")]
 
@@ -31,7 +32,8 @@ impl asker::Exports for Example {
     }
 }
 
-/// A turn: its own commands answered, xpute's taken as they come.
+/// A turn: the core answers its own commands, and answers each of xpute's
+/// with 0.
 fn entry(_deadline_ms: f64, _boot: fn() -> BootInfo) -> f64 {
     xpute_core::machine::door().turn(|s| match s {
         Submission::Program(cmd, pkt) => asker::apply(&mut Example, cmd, &pkt),

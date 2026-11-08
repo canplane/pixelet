@@ -5,7 +5,7 @@ use core::cell::Cell;
 use super::*;
 use crate::clock;
 
-// A clock the test moves, per thread.
+// Each test thread has its own clock, which the test moves.
 thread_local! {
     static CLOCK_MS: Cell<f64> = const { Cell::new(0.0) };
 }
@@ -18,7 +18,8 @@ fn burn(ms: f64) {
     CLOCK_MS.with(|c| c.set(c.get() + ms));
 }
 
-/// `budget_ms` left from now, and `hard_budget_ms` never waived.
+/// A pass with `budget_ms` left from now, and a hard limit at
+/// `hard_budget_ms` from now, or none.
 fn pass(budget_ms: f64, hard_budget_ms: Option<f64>) -> Pass {
     clock::set(clock);
     CLOCK_MS.with(|c| c.set(0.0));
@@ -126,7 +127,8 @@ fn hard_budget_bounds_no_ops() {
     );
     assert_eq!(stats.ran, 0);
     assert!(stats.stopped_early);
-    // Only the ceiling stops it: four at 3 ms reach 12.
+    // No step reports work, so only the hard limit stops the pass: four steps
+    // of 3 ms reach it at 12 ms.
     assert_eq!(seen.len(), 4);
 }
 

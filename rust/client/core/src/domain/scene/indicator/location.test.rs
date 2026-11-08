@@ -5,8 +5,9 @@ use crate::sys;
 use pxl_spec::space::coord::q3;
 use xpute_core::clock;
 
-/// The zone laid by asking the ground for every box and again for each of
-/// its four sides, what `lay_zone` must lay the same bytes as.
+/// The zone laid the plain way, asking the ground again for every box and for
+/// each of its four sides. `lay_zone` must lay the same bytes while asking
+/// each cell once.
 fn laid_asking_each(center_pos: V3, mut ground: impl FnMut(&Q3) -> Option<f64>) -> Vec<f32> {
     let mut instances = Vec::new();
     let cell = units(GROUND.leaf_cell_zoom());
@@ -41,8 +42,8 @@ fn laid_asking_each(center_pos: V3, mut ground: impl FnMut(&Q3) -> Option<f64>) 
     instances
 }
 
-/// A rough ground over the cell a point is in: steps up and down, a fraction
-/// of a cell high, and a column here and there not known.
+/// A rough ground, level over each cell. It steps up and down by fractions of
+/// a cell, and here and there a column is unknown.
 fn rough(at: &Q3) -> Option<f64> {
     let cell = units(GROUND.leaf_cell_zoom());
     let [x, y] = [0, 1].map(|k| (q3::to_real(i64::from(at[k])) / cell).floor() as i64);
@@ -106,13 +107,14 @@ fn beacon_holds_on_stall() {
         }),
         ..Default::default()
     };
-    // The eye at the zone's center: seen, and the bob spans the cell there.
+    // The eye stands at the zone's center, so the zone is seen and the bob
+    // spans a camera cell there.
     location.tick(&Frame {
         delta_s: 0.05,
         ..Frame::default()
     });
-    // A minute passes, a hidden tab; the turn's step is capped as turn.rs
-    // caps it (`MAX_STEP_S`).
+    // A minute passes, as in a hidden tab. The frame's step is capped as
+    // turn.rs caps it (`MAX_STEP_S`), so the bob must not leap.
     clock::set(|| 60_000.0);
     location.tick(&Frame {
         delta_s: 0.1,

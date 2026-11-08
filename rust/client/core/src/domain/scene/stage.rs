@@ -1,8 +1,8 @@
 // pxl-core/domain/scene/stage.rs
 
-//! The core's side of a drawn frame: everything the renderer is handed, the
-//! view and the settings among it, since it reads nothing of the core on
-//! its own.
+//! The core's side of a drawn frame. The renderer reads nothing of the core
+//! on its own, so everything it needs, the view and the settings among it, is
+//! handed to it here.
 
 use crate::domain::scene::frame::Frame;
 use crate::sys::sched::tick::TickContext;
@@ -32,17 +32,20 @@ use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::load::Load;
 use crate::sys::sched::edge::request_world_tick;
 
-/// The device the last frame went to the screen on (`device_generation`).
+/// The device generation under which the last frame reached the screen
+/// (`api::device_generation`, the count of devices lost so far).
 static SCREEN_DEVICE: Global<Option<u32>> = Global::new();
 
-/// Whether the screen holds a frame of the world: one drawn on the device
-/// there is, as a device that went took what it drew.
+/// Whether the screen holds a frame of the world. It does only when the last
+/// frame was drawn on the current device, because a lost device takes what
+/// it drew with it.
 pub fn screen_shows_world() -> bool {
     *SCREEN_DEVICE.get(|| None) == Some(api::device_generation())
 }
 
-/// Blue Marble's July of 2004: one picture of the Earth at every hour and
-/// season; the earth layer's, under its version.
+/// NASA's Blue Marble for July 2004, one picture of the Earth that serves
+/// every hour and season. It is opened below the earth bake's root, so it is
+/// under that bake's version.
 const EARTH: Load = Load::Sphere;
 
 use crate::domain::layer::terrain::clipmap;
@@ -73,29 +76,33 @@ const _: () = assert!(
     "a GPU layer for each frame the earth layer holds"
 );
 
-/// What the renderer made of the turn's frame, and the scale the world was
-/// drawn at, read before a read can move the next: the top's to record (perf/report.rs `set_renderer_frame`).
+/// What the renderer made of the turn's frame, for the profiler to record
+/// (perf/report.rs `set_renderer_frame`). `scale` is the scale the world was
+/// drawn at, read before the resolution's judge can change it for the next
+/// frame.
 pub struct FrameReport {
     pub kind: FrameKind,
     pub stat: Option<FrameStat>,
     pub scale: f64,
-    /// The interval the drawn resolution's judge asks the turns paced at
-    /// (`resolution::load`), none where it asks no change.
+    /// The interval at which the drawn resolution's judge asks the turns to
+    /// be paced (`resolution::load`). None when it asks for no change.
     pub interval_ms: Option<f64>,
 }
 
-/// `pace` is the frame as the turn paced it, which the world's drawn
-/// resolution is judged by (domain/scene/resolution.rs `load`), and
-/// `edits` the pointer's preview as the turn hands it, which the rays cut by.
+/// `pace` is how the turn paced this frame, and the drawn resolution is
+/// judged by it (domain/scene/resolution.rs `load`). `edits` is the pointer's
+/// preview, by which the GPU's rays cut the world.
 pub fn stage_render(pace: Pace, edits: &RenderEdits) -> FrameReport {
     let v = view();
     let settings = settings_store();
-    // The GPU gets the eye's frame, where the draws' points are.
+    // The matrices are relative to the eye, as the draws' positions are, so
+    // no large eye position cancels in f32.
     let (view_proj, rot) = v.eye_frame();
     let lists = draw_list().take();
     let stands = lists.stands;
     let models = model::models();
-    // Each decor variant at its draw group (pxl-content generation.rs `first_group`).
+    // Each decor variant takes the slot of its draw group (pxl-content
+    // generation.rs `first_group`).
     let mut decor = [(0u32, None, [0.0f32; 3]); DECOR_GROUPS];
     for d in &decor::DECORS {
         for (v, variant) in d.variants.iter().enumerate() {
@@ -131,14 +138,14 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> FrameReport {
     let o = observation::observation();
     let eye = o.as_ref().and_then(|o| cast::eye(o, edits));
     let mut terrain_upload = clipmap::upload;
-    // Whether what the scene animates stepped.
     let animated = animation::take();
     let out = render_frame(FrameInput {
         view: rot,
         proj: v.proj,
         view_proj,
         eye: v.at().eye,
-        // The markers are drawn at the size the core lays them out at.
+        // The renderer sizes the markers with the pixels a unit the core lays
+        // them out with.
         px_per_unit: screen::px_per_unit(),
         edge_strength: if settings.edge_shade {
             param::EDGE_STRENGTH
@@ -150,7 +157,8 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> FrameReport {
         } else {
             0.0
         },
-        // The screen's occlusion takes the corners' too, which it reads softer.
+        // Screen occlusion also takes the corners' occlusion, and reads it
+        // softer.
         corner_ao: if matches!(settings.ao, AoMode::corner | AoMode::screen) {
             param::AO_STRENGTH
         } else {
@@ -190,16 +198,18 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> FrameReport {
         }),
         text: marker::text_raster,
         atlas: atlas(),
-        // The draws are the profiler's, which records only while its setting is on.
+        // Only the profiler reads the draw count, and it records only while
+        // its setting is on.
         counted: settings.perf,
         animated,
     });
     if out.redraw {
         request_world_tick();
     }
-    // An image whose texture the frame took needs its file no more.
+    // An image the frame has taken into a texture needs its file no more.
     api::take_complete(loader::on_image_complete);
-    // The scale the world was drawn at, before a read can move the next.
+    // The scale is read before `resolution::load`, which may change it for
+    // the next frame.
     let scale = resolution::drawn_scale();
     let interval_ms = resolution::load(pace, out.stat.and_then(|stat| stat.gpu));
     if out.stat.is_some() {
@@ -213,10 +223,10 @@ pub fn stage_render(pace: Pace, edits: &RenderEdits) -> FrameReport {
     }
 }
 
-/// The scene's turn, as the turn hands it what control decided (pxl-core
-/// turn.rs `scene_tick`): `pivot` and `heading` the camera's, for the world
-/// gizmo, `edits` the pointer's preview, for decor, and `draft` the marker
-/// tool's, for the markers.
+/// The scene's part of a turn (turn.rs `scene_tick`), handed what control
+/// decided. `pivot` and `heading` are the camera's and place the world gizmo.
+/// `edits` is the pointer's preview, and decor leaves out what it hides. `draft` is the
+/// marker tool's draft, which the markers show.
 pub fn scene_step(
     ctx: &mut TickContext,
     pivot: Option<q3::Q3>,
@@ -237,8 +247,8 @@ pub fn scene_step(
         delta_s: ctx.delta,
     };
 
-    // The world gizmo, laid before the frame's list begins, so its lines and the
-    // origin they are drawn about are the same turn's.
+    // The world gizmo is laid before the scene adds its draws, so its lines
+    // and the origin they are drawn about come from the same turn.
     let show = settings_store().world_gizmo;
     frame_gizmo_step(show, pivot, heading);
     coverage_gizmo_step(show);

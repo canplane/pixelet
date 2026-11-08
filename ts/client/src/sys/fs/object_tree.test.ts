@@ -13,7 +13,7 @@ import {
   type TopRow,
 } from "./object_tree.ts";
 
-/** The record the core's store is held to too (pxl-core
+/** The core's store is tested against the same record (pxl-core
  * domain/layer/object/repository.test.rs `top_golden`). */
 const GOLDEN = new URL(
   "../../../../../rust/spec/golden/object/top.tsv",
@@ -58,8 +58,9 @@ test("top_of - each case's writes fold to the store's rows", () => {
 });
 
 test("lay - a write splits the leaf over it and takes what is under it", () => {
-  // A leaf at the first zoom past shard 0, then its first child of the next
-  // zoom written: seven children of its value and the one written.
+  // A leaf at the first zoom past shard 0, then a write to its first child at
+  // the next zoom. The leaf splits into seven children that keep its value,
+  // beside the one written.
   const leaves = new Map<string, Leaf>();
   const coarse = "000000000";
   lay(leaves, { key: coarse, id: 7, text: null });

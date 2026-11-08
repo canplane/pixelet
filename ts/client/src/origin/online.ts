@@ -2,7 +2,8 @@
 
 import { Listeners } from "@xpute/kit/lang/listeners.ts";
 
-/** Whether the device says it is online: the client's to know, as the GPU is, and the core's only as a read's failure. */
+/** Whether the device says it is online. Like the GPU's state, this is the
+ * client's to know. The core learns of it only as a read that fails. */
 let state = true;
 const listeners = new Listeners();
 
@@ -17,7 +18,8 @@ export function set_online(online: boolean): void {
 
 export const watch_online = listeners.watch;
 
-/** Resolved once the device says it is online: at once if it does, else on its word, with no timer. */
+/** Resolves once the device says it is online: at once if it already does,
+ * or else when it says so, with no timer. */
 export function when_online(): Promise<void> {
   if (state) return Promise.resolve();
   return new Promise((resolve) => {

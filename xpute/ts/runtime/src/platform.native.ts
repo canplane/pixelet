@@ -1,17 +1,18 @@
 // @xpute/runtime/platform.native.ts
 
 /**
- * A native app's core: linked into the app and reached through xpute's
- * native module (@xpute/native), which gives its memory, and run on its own
- * thread (`Core.thread`). A page takes platform.ts.
+ * Opens a native app's core. The core is linked into the app and reached
+ * through xpute's native module (@xpute/native), which gives its memory, and
+ * it runs on its own thread (`Core.thread`). A page takes platform.ts
+ * instead.
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { XPUTE } from "@xpute/native";
 import type { Core, Machine, ModuleSource } from "./runtime.ts";
 
-/** A turn answers NaN once the core has terminated (xpute-runtime native
- * `run`), which is thrown here as a page's module throws its trap. */
+/** Once the core has terminated, a turn answers NaN (xpute-runtime native
+ * `run`). That is thrown here, as a page's module throws its trap. */
 export function open(
   _machine: Machine,
   _source: ModuleSource | undefined,
@@ -34,8 +35,9 @@ export function open(
           const [wake_ms, turn_ms] = XPUTE.turns();
           heard(wake_ms, turn_ms);
         });
-        // The core outlives a JavaScript reload, and tells nothing more until
-        // what it told before the reload is asked for.
+        // The core outlives a JavaScript reload, and it tells nothing more
+        // until the news it told before the reload has been read, so it is
+        // read here.
         XPUTE.turns();
       },
     },

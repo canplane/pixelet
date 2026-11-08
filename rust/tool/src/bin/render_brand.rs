@@ -83,7 +83,7 @@ fn trim(img: &RgbaImage, threshold: u8) -> RgbaImage {
     imageops::crop_imm(img, x0, y0, x1 - x0 + 1, y1 - y0 + 1).to_image()
 }
 
-/// One rounding: centering twice lands a pixel off.
+/// The symbol centered in one rounding, since centering it twice lands a pixel off.
 fn symbol_icon(symbol: &RgbaImage, size: u32, pad: f64) -> RgbaImage {
     let inner = size as f64 * (1.0 - pad);
     let scale = (inner / symbol.width() as f64).min(inner / symbol.height() as f64);

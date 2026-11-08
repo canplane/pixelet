@@ -1,5 +1,5 @@
-// The beacon lit as a character is (shade.wgsl), a metal that glows its color,
-// placed as location_beacon_place.wgsl lays it.
+// Draws the beacon as a metal that glows in its color, lit as a character is
+// (shade.wgsl). location_beacon_place.wgsl places it.
 
 @vertex
 fn vs(@location(0) pos: vec3f, @location(1) normal: vec3f, @builtin(instance_index) instance: u32) -> VertexOut {

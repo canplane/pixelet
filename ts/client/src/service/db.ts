@@ -1,6 +1,8 @@
 // @pxl/client/service/db.ts
 
-/** IndexedDB, one store of files by key; a refused database (sandboxed frame, private window) keeps nothing, never throws. */
+/** The page's database: IndexedDB, with one store of files by key. Where the
+ * browser refuses a database, as in a sandboxed frame or a private window,
+ * it keeps nothing and never throws. */
 
 import type { Tx } from "./types.ts";
 
@@ -17,7 +19,8 @@ function open(): Promise<IDBDatabase | null> {
       const req = globalThis.indexedDB.open("pxl", 1);
       req.onupgradeneeded = () => req.result.createObjectStore(STORE);
       req.onsuccess = () => {
-        // The browser lost the connection, as Safari does in the background.
+        // The browser closed the connection, as Safari does in the
+        // background, so the database is opened again.
         req.result.onclose = () => (db = open());
         resolve(req.result);
       };
@@ -46,7 +49,9 @@ export async function transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
     t.oncomplete = () => resolve();
     t.onabort = () => reject(t.error);
   });
-  // `fn`'s own rejection is the one thrown, and its abort this one's.
+  // When `fn` rejects, its own rejection is the one thrown. The abort that
+  // follows rejects `committed` too, and this catch keeps that second
+  // rejection from going unhandled.
   committed.catch(() => {});
   try {
     const out = await fn({
@@ -66,7 +71,7 @@ export async function transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
     try {
       t.abort();
     } catch {
-      // Already over.
+      // The transaction has already finished, so there is nothing to abort.
     }
     throw err;
   }

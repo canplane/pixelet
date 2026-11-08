@@ -95,10 +95,9 @@ fn counts_hand_down_whole() {
     }
 }
 
-/// A decor stands where its box keeps an eighth of the clip level's cell, as a
-/// folded cube of that box is drawn (`answer::eighths`): every variant of
-/// every decor; a tree a unit wide and three high a zoom over the leaves',
-/// none two over.
+/// A decor stands where its box keeps an eighth of the clip level's cell, as a folded cube of
+/// that box is drawn (`answer::eighths`). This holds for every variant of every decor; a tree
+/// a unit wide and three high stands one zoom coarser than the leaves', and not two.
 #[test]
 fn stands_as_a_cube_keeps() {
     for d in &DECORS {

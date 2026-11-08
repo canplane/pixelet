@@ -1,10 +1,10 @@
 // pxl-render/gpu/ray.rs
 
-//! The eye's rays, each drawn at its own pixel where it met a face, painted
-//! by paint.wgsl's `paint` (pxl-engine ray.rs), from the world surface's
-//! `rays` the GPU's cast leaves (`Cast`): the ground it
-//! casts over (ray/ground.rs) and the cast (ray/cast.rs), its samples'
-//! stops handed to the rasterizer (ray/raster.rs).
+//! The eye's rays on the GPU. The cast (ray/cast.rs) leaves one ray at each
+//! drawn pixel of the world surface's `rays`, over the terrain bricks the
+//! core hands (ray/ground.rs). The screen pass here draws each ray at its
+//! own pixel, painted from the face it entered by paint.wgsl's `paint`. A
+//! ray's words are laid out in pxl-engine ray.rs.
 
 mod cast;
 mod count;
@@ -25,31 +25,32 @@ pub use count::{count_at, RayCounts, CAST, LANES_AT, RAYS, RAY_COUNTS};
 use ground::GroundBuffers;
 pub use ground::{BrickWrite, GroundBricks, TerrainUpload, TerrainWrite};
 
-/// Whether a frame of `kind` casts the pixels' rays, whole or off the
-/// samples that stand: the rays, their depth and where they met the world
-/// are laid again.
+/// Whether a frame of `kind` writes the pixels' rays again. A `cast` frame
+/// casts them whole; a `px` frame casts them again over the samples the
+/// last cast left.
 fn casts_px(kind: FrameKind) -> bool {
     kind == FrameKind::cast || kind == FrameKind::px
 }
 
 pub struct RaysPass {
     pipeline: Pipeline,
-    /// Its group 0 over the lit pass's entries and what it binds besides
-    /// (`bindings`, the surface's rays, the cast's eye, and the tiles' words and
-    /// uniform): made again exactly when one of them is another.
+    /// The screen pass's bind group 0, over the lit entries and the ids in
+    /// `bindings`: the world surface's rays, the cast's eye buffer, and the
+    /// claimed tiles' words and uniform.
     group: u32,
     bindings: [u32; 4],
-    /// The surface's rays and the cast's eye as last handed; the tiles the
-    /// pixels' cast casts and its screen pass draws, a quad each
-    /// (screen_tiles.wgsl), the claimed (`Resolve::tiles`): their words and
-    /// uniform, and how many tiles there are.
     rays_eye: [u32; 2],
+    /// The claimed tiles' words and uniform (`Resolve::tiles`), and the
+    /// number of tiles on the screen. The pixels' cast casts the claimed
+    /// tiles alone, and the screen pass draws a quad for every tile, an
+    /// unclaimed one collapsed (screen_tiles.wgsl).
     tiles: ((u32, u32), u32),
-    /// The lit pass's entries it paints by (`Renderer::lit_entries`); none
-    /// until the renderer hands them.
+    /// The entries a cell's face is painted by (`Renderer::lit_entries`).
+    /// It is empty until the renderer first hands them.
     lit: Vec<Entry>,
     looks: u32,
-    /// The ground's buffers, made the first turn it is handed a brick (`hand`).
+    /// The terrain's bricks on the GPU, made the first time `hand` runs. No
+    /// ray is cast before then.
     ground: Option<GroundBuffers>,
     cast: Option<CastBuffers>,
 }
@@ -76,29 +77,28 @@ impl RaysPass {
         }
     }
 
-    /// Whether this frame casts the pixels' rays (`casts_px`).
     pub fn casts_px(&self) -> bool {
         casts_px(self.kind())
     }
 
-    /// The lit pass's entries, handed again whenever one of its objects is
-    /// made again or let go: the group over the last is let go with it, and
-    /// made again over them when the cast next prepares (`regroup`).
+    /// The renderer hands the lit entries again whenever an object they name
+    /// is made again or released. The group over the old entries names that
+    /// object, so it is released at once; `prepare` makes it again.
     pub fn set_lit(&mut self, entries: Vec<Entry>) {
         self.lit = entries;
         release(self.group);
         (self.group, self.bindings) = (0, [0; 4]);
     }
 
-    /// The tiles this frame casts and draws, `cnt` of them, handed before
-    /// it prepares, which makes its groups again where they are others.
+    /// The renderer hands the frame's tiles before `prepare`, which binds
+    /// them.
     pub fn set_tiles(&mut self, tiles: (u32, u32), cnt: u32) {
         self.tiles = (tiles, cnt);
     }
 
-    /// The group over the surface's rays and the cast's eye (`rays`) and
-    /// the tiles, made again where one is another or the lit pass's entries
-    /// were handed; none before all are.
+    /// Makes the screen pass's group again when the rays, the eye buffer or
+    /// the tiles changed, or when `set_lit` released it. No group is made
+    /// until the lit entries and every buffer exist.
     fn regroup(&mut self, g: &Gpu, [rays, eye]: [u32; 2]) {
         self.rays_eye = [rays, eye];
         let ((changed_at, tiles), _) = self.tiles;

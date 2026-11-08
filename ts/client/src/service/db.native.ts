@@ -1,6 +1,7 @@
 // @pxl/client/service/db.native.ts
 
-/** SQLite, one table of files by key, in the app's own files. */
+/** A device's database: SQLite, with one table of files by key, in the app's
+ * own files. */
 
 import type { Tx } from "./types.ts";
 import { openDatabaseAsync } from "expo-sqlite";
@@ -12,7 +13,9 @@ const db = openDatabaseAsync("pxl.db").then(async (d) => {
   return d;
 });
 
-/** The last transaction asked, settled: SQLite's takes every query made while it is open. */
+/** The last transaction asked for, settled. Transactions run one after
+ * another, because a SQLite transaction takes in every query made while it
+ * is open, even one meant for another transaction. */
 let last: Promise<unknown> = db.catch(() => {});
 
 export function transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {

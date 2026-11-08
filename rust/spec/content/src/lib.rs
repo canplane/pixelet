@@ -1,13 +1,12 @@
 // pxl-content/lib.rs
 
-//! gpu-portable: pixelet's content, the rules the CPU runs and the GPU's WGSL
-//! is written to, as the engine's are (pxl-engine): the rules the engine
-//! asks of it (pxl-engine `content::Content`), answered by `Pixelet`: its
-//! caves (`cave`), its strata (`strata`) and its decor's bounds; its palette
-//! (`cube`, `decor`), laid into the engine's value space; the decor the
-//! ground holds and how it is generated (`scatter`, `generation`); and the
-//! clouds' field (`cloud`). pxl-spec, the core and the renderer name
-//! `Pixelet` where they hand the engine its content.
+//! gpu-portable: pixelet's content, the rules the CPU runs and the GPU's WGSL is written to,
+//! as the engine's are (pxl-engine). `Pixelet` answers the rules the engine asks of a content
+//! (pxl-engine `content::Content`) with its caves (`cave`) and its strata (`strata`). The
+//! crate also holds the palette (`cube`, `decor`), laid into the engine's value space; the
+//! decor the ground holds and how it is generated (`scatter`, `generation`); and the clouds'
+//! field (`cloud`). pxl-spec, the core and the renderer name `Pixelet` where they hand the
+//! engine its content.
 
 #![no_std]
 
@@ -45,10 +44,10 @@ impl Content for Pixelet {
     }
 }
 
-// Pixelet's palette laid into the engine's value space (pxl-engine
-// value.rs): its sentinels the engine's, every ground entry in the ground's
-// slots, the ways' exactly in the ways', a pier drawn as a building, the
-// object's colors in theirs, and decor past them all.
+// Pixelet's palette laid into the engine's value space (pxl-engine value.rs): the sentinels
+// are the engine's, every ground entry lies in the ground's range and the ways' exactly in
+// the ways', a pier is drawn as a building, the object's colors lie in their range, and
+// decor lies past them all.
 const _: () = {
     use crate::cube::{object, sentinel, Ground, Object};
     use crate::decor::DECORS;

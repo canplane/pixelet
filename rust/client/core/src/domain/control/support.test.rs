@@ -12,9 +12,9 @@ fn height(at: &Q3) -> f64 {
     q3::to_real(i64::from(at[2]))
 }
 
-/// A pivot standing on the ground follows the floor under it as the world
-/// there changes: down where what it stood on is dug away, up onto what is
-/// placed where it stands.
+/// A pivot standing on the ground follows the floor under it when the world
+/// there changes. It drops when what it stood on is dug away, and it rises
+/// onto what is placed where it stands.
 #[test]
 fn the_pivot_follows_its_floor() {
     let _g = serial();

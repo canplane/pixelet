@@ -1,8 +1,8 @@
 // pxl-render/gpu/star.rs
 
-//! The Yale Bright Star Catalog (Hoffleit and Warren 1991, CDS V/50), drawn
-//! after the sky as one instanced strip. Nothing is drawn in daylight.
-//! The catalog's stars are the whole night sky.
+//! Draws the Yale Bright Star Catalog (Hoffleit and Warren 1991, CDS V/50) after the sky, as
+//! one instanced strip. Nothing is drawn in daylight. The catalog's stars are the whole night
+//! sky.
 
 use pxl_spec::asset::star::{self, RECORD_BYTES};
 use pxl_spec::space::coord::mat4::Mat4;
@@ -28,8 +28,8 @@ pub struct StarPass {
 }
 
 impl StarPass {
-    /// `air`, the air's entries (gpu/atmosphere.rs `entries`): a star is
-    /// dimmed by the air above the eye as its table holds it.
+    /// `air` holds the air's entries (gpu/atmosphere.rs `entries`), so a star is dimmed by the
+    /// air above the eye as the air's table holds it.
     pub fn new(
         g: &Gpu,
         pipelines: &mut Pipelines,
@@ -52,7 +52,7 @@ impl StarPass {
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
         g.write_buf(catalog, 0, bytes(&stars));
-        // The air's entries its layout binds.
+        // Only the air's entries that the layout binds go into the group.
         let layout = pipeline.layouts[0];
         let mut frame = vec![buf_entry(0, frame_buf)];
         frame.extend(air.iter().filter(|e| layout.binds(e.binding)));
@@ -70,13 +70,13 @@ impl StarPass {
         }
     }
 
-    /// The words they are drawn by, as `prepare` wrote them.
+    /// The words the stars are drawn by, as `prepare` wrote them.
     pub fn words(&self) -> &[f32] {
         &self.words
     }
 
-    /// Nothing is laid out past the intensity while the stars are faded out.
-    /// `density`, the drawn pixels a CSS pixel spans (`Surface::px_per_css`).
+    /// Lays out the stars' words. While the stars are faded out, only the intensity is
+    /// written. `density` is the drawn pixels a CSS pixel spans (`Surface::px_per_css`).
     pub fn prepare(&mut self, view_proj: &Mat4, env: &[f32], density: f64) {
         let u = &mut self.words;
         u[INTENSITY] = env[ENV_SKY];
@@ -90,7 +90,8 @@ impl StarPass {
         u[DENSITY] = density as f32;
     }
 
-    /// `words` written, where the frame's read found them moved.
+    /// Writes `words` to the device. The frame calls it only when its read found them
+    /// changed.
     pub fn write(&self, g: &Gpu) {
         g.write_buf(self.uniform, 0, bytes(&self.words));
     }
@@ -106,8 +107,8 @@ impl StarPass {
     }
 }
 
-/// A record's star (pxl-spec asset/star.rs `star`, the bake's one layout)
-/// as the sky draws it: its direction, its flux, its color.
+/// A catalog record's star as the sky draws it: its direction, its flux and its color. The
+/// record's layout is the bake's, read by pxl-spec asset/star.rs `star`.
 fn star_floats(packed: &[u8; RECORD_BYTES]) -> [f32; STAR_RECORD_FLOATS] {
     let s = star::star(packed);
     let (ra, dec) = (s.ra.to_radians(), s.dec.to_radians());
@@ -125,14 +126,16 @@ fn star_floats(packed: &[u8; RECORD_BYTES]) -> [f32; STAR_RECORD_FLOATS] {
     ]
 }
 
-/// Up to a constant the color divides out.
+/// Planck's law at `lambda` nm and `t` K, up to a constant factor, which dividing one color by
+/// another cancels.
 fn planck(lambda: f64, t: f64) -> f64 {
     let l = lambda * 1e-9;
     1.0 / ((l * l) * (l * l) * l * (libm::exp(1.4388e-2 / (l * t)) - 1.0))
 }
 
-/// Ballesteros 2012 B−V to temperature, relative to 6,500 K white, taken
-/// half-way to white: night cone response leaves a star only a tint.
+/// A star's color from its B−V index: its temperature by Ballesteros 2012, relative to 6,500 K
+/// white, then taken half-way to white, as the eye's response at night leaves a star only a
+/// tint.
 fn star_color(bv: f64) -> [f64; 3] {
     let t = 4600.0 * (1.0 / (0.92 * bv + 1.7) + 1.0 / (0.92 * bv + 0.62));
     let c = [610.0, 550.0, 465.0].map(|lambda| planck(lambda, t) / planck(lambda, 6500.0));

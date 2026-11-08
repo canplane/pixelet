@@ -8,7 +8,8 @@ import type { GlyphName, IconProps } from "./icon.tsx";
 
 export type { GlyphName, IconProps };
 
-/** A name that is not an SF Symbol fails to type-check here. */
+/** Passing each name through here makes a glyph name that is not an SF Symbol
+ * fail to type-check. */
 const symbol = (glyph: GlyphName): SymbolViewProps["name"] => glyph;
 
 export function Icon({ glyph, size, color, weight = "regular" }: IconProps) {

@@ -36,7 +36,7 @@ impl<'w> Words<'w> {
     pub(super) fn opt(&mut self) -> Option<u32> {
         Some(self.u()).filter(|&v| v != NONE)
     }
-    /// A count, then the bytes, padded to words.
+    /// A count, then the bytes padded to whole words.
     pub(super) fn bytes(&mut self) -> &'w [u8] {
         let n = self.u() as usize;
         let words = &self.w[self.at..self.at + n.div_ceil(4)];

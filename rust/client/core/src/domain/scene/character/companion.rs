@@ -1,15 +1,16 @@
 // pxl-core/domain/scene/character/companion.rs
 
-//! The companion: the person and the pet the player chose, which it keeps,
-//! and how each walks to the pivot. When the pivot comes
-//! to rest each makes a fixed-duration catch-up walk there; in follow mode,
-//! where the pivot is a ~1 Hz GPS stream that never rests, or steered by
-//! the keys, each instead glides at the world-scroll rate so the two cancel
-//! and it holds at screen center. Neither is anchored to the other: the pet
-//! walks to its own place beside the person's. While the eye is the pivot
-//! neither is placed, and each is placed again at its target once the eye
-//! leaves it. Each is drawn clear of the wall beside it (`clear_of_walls`).
-//! Assets: Kenney's "Mini Characters" and "Cube Pets", CC0.
+//! The companion: the person and the pet the player chose, and how each walks
+//! to the pivot. When the pivot comes to rest, each makes a catch-up walk of
+//! fixed duration to it. When the pivot never rests, because the map follows
+//! a GPS stream of about one fix a second or the keys steer it, each instead
+//! glides at the world's scroll rate; the two motions cancel, and the
+//! character holds at the screen's center. Neither is anchored to the other:
+//! the pet walks to its own place beside the person's. While the eye is the
+//! pivot neither is placed, and each is placed again at its target once the
+//! eye leaves it. Each is drawn clear of the wall beside it
+//! (`clear_of_walls`). The models are Kenney's "Mini Characters" and "Cube
+//! Pets", CC0.
 
 use crate::domain::param;
 use crate::domain::query::changes::Memo;
@@ -41,19 +42,22 @@ use pxl_spec::space::layer::lattice::GROUND;
 use xpute_core::clock;
 use xpute_core::global::Global;
 
-// The world scroll's own rate: the two cancel, holding the character at
-// screen center, so this is the only position smoothing while following.
+// The world's scroll rate. A character that glides at it cancels the scroll
+// and holds at the screen's center, so this is the only smoothing of its
+// position while following.
 const FOLLOW_LERP_K: f64 = param::POS_DAMP;
 
-// +PI turns a model whose forward is -Y into the screen, back to the camera.
+// A turn of PI faces a model whose forward is -Y into the screen, with its
+// back to the camera.
 const FOLLOW_FACING: f64 = core::f64::consts::PI;
 
-/// Turned against the azimuth, which is the screen's up laid on the ground.
+/// The heading that turns a character's back to the camera. The azimuth is
+/// the screen's up laid on the ground.
 fn back_to_camera(azimuth: f64) -> f64 {
     FOLLOW_FACING - azimuth
 }
 
-/// Radians, 0 = +x.
+/// The heading from `from` to `to`, in radians, where 0 points along +x.
 pub fn heading_to(from: [f64; 2], to: [f64; 2]) -> f64 {
     libm::atan2(to[1] - from[1], to[0] - from[0])
 }
@@ -67,9 +71,9 @@ pub struct WalkPlan {
 }
 
 impl WalkPlan {
-    /// Where it is at `now`, and its heading, none once arrived. It takes
-    /// `duration` whatever the distance, so the person and the pet catch up
-    /// on the same beat after a pan of 1 unit or 1000.
+    /// Where the walk is at `now`, and its heading, which is None once it has
+    /// arrived. A walk takes `duration` whatever the distance, so the person
+    /// and the pet catch up on the same beat after a pan of 1 unit or of 1000.
     pub fn at(&self, now: f64) -> ([f64; 2], Option<f64>) {
         let frac = if self.duration > 0.0 {
             ((now - self.start_time) / self.duration).clamp(0.0, 1.0)
@@ -84,7 +88,7 @@ impl WalkPlan {
     }
 }
 
-/// Settles when the target stops changing, whatever moved it.
+/// A target settles once it has not changed for a delay, whatever moved it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SettleTracker {
     pub last_seen: [f64; 2],
@@ -101,7 +105,8 @@ impl SettleTracker {
         }
     }
 
-    /// Whether it settled just now.
+    /// Notes `target` at `now`, and returns whether the target settled on
+    /// this call, having stood still for `delay`.
     pub fn update(&mut self, target: [f64; 2], now: f64, delay: f64) -> bool {
         if target != self.last_seen {
             (self.last_seen, self.last_change_time) = (target, now);
@@ -114,37 +119,39 @@ impl SettleTracker {
     }
 }
 
-/// What the companion's walk reads of the camera each turn, in the world's
-/// doubles.
+/// What the companion's walk reads of the camera each turn, in world
+/// coordinates as f64.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Camera {
-    /// Where its pivot is going.
+    /// Where the camera's pivot is going.
     pub pivot: [f64; 2],
-    /// The top of the floor the pivot is drawn on; none while nothing is
-    /// known there, when the person and the pet hold where they are.
+    /// The top of the floor the pivot is drawn on. It is None while nothing
+    /// is known there, and then the person and the pet hold where they are.
     pub floor: Option<f64>,
     /// The camera's heading, which the person and the pet turn their backs to.
     pub azimuth: f64,
-    /// Whether the camera is being dragged, whose release ends a catch-up.
+    /// Whether the camera is being dragged. The release fixes where a
+    /// catch-up walks to.
     pub dragging: bool,
-    /// Whether the keys steer it, and whether the map follows the device.
+    /// Whether the keys steer the camera.
     pub steered: bool,
+    /// Whether the map follows the device.
     pub following: bool,
-    /// The eye, which decides whether it walks or the world is a map, and
-    /// what it is drawn standing on.
+    /// The eye. It decides whether the world is walked or read as a map
+    /// (`walks`), and what a character is drawn standing on.
     pub eye: Q3,
 }
 
 #[derive(Default)]
 struct Companion {
-    /// Its person and its pet, by their group's number, each once it has
-    /// landed.
+    /// The person and the pet, indexed by their group's number, each once it
+    /// has loaded.
     characters: [Option<Character>; Group::ALL.len()],
-    /// The floor the pivot is drawn on, of the pivot (`pivot_floor`).
+    /// The floor the pivot is drawn on, kept by the pivot (`pivot_floor`).
     pivot_floor: Memo<Q3, Option<f64>>,
-    /// The pet's floor beside the person, walked to from the person's: of
-    /// the pivot and its floor, the pet's target and whether the eye sees a
-    /// walk there (`walks`).
+    /// The pet's floor beside the person, found by walking there from the
+    /// person's floor. It is kept by the pivot and its floor, the pet's
+    /// target, and whether the eye sees a walk there (`walks`).
     pet_floor: Memo<([f64; 2], f64, [f64; 2], bool), f64>,
 }
 
@@ -154,22 +161,23 @@ fn companion() -> &'static mut Companion {
     COMPANION.get(Companion::default)
 }
 
-/// The floor the pivot `goal` is drawn on: `ask`'s of the world, kept while
-/// the pivot stands and no change touched what it read (`Memo`), as the
-/// companion's own floors are.
+/// The floor the pivot `goal` is drawn on, as `ask` finds it in the world.
+/// The answer is kept while the pivot stands and no change touches what it
+/// read (`Memo`), as the companion's own floors are.
 pub fn pivot_floor(goal: Q3, ask: impl FnOnce(World<'_>) -> Option<f64>) -> Option<f64> {
     let c = companion();
     c.pivot_floor.forget_touched();
     c.pivot_floor.of(World::now(), goal, ask)
 }
 
-/// The companion's person and pet, each the row its setting names, a
-/// character of another row let go for it; each walked to the pivot, or
-/// none placed while the eye is the pivot (`camera` none).
+/// Steps the person and the pet. Each is the row its setting names, and a
+/// character of another row is let go for it. Each walks to the pivot, and
+/// neither is placed while the eye is the pivot (`camera` is None).
 pub fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
     let s = companion();
     s.pet_floor.forget_touched();
-    // Looked at each frame turn, a pivot not asked of this one too.
+    // A memo must see every change once, so the pivot's floor checks for
+    // touched columns on every frame turn, also on one that does not ask it.
     s.pivot_floor.forget_touched();
     let settings = settings_store();
     for (slot, (group, number)) in s
@@ -196,8 +204,8 @@ pub fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
         }
         return;
     };
-    // While nothing is known under the pivot each holds where it is, and
-    // the rest of it steps on.
+    // While nothing is known under the pivot, each character holds where it
+    // is, and the rest of its step goes on.
     let hold = |c: &Character| c.walk.stands_z.map(|z| (c.walk.at, z));
     if let Some(person) = person {
         if let Some((target, z)) = camera
@@ -210,7 +218,8 @@ pub fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
     }
     let Some(pet) = pet else { return };
     let target = [camera.pivot[0] + PET_OFF[0], camera.pivot[1] + PET_OFF[1]];
-    // Its own floor beside the person, walked to from the person.
+    // The pet finds its own floor beside the person by walking there from
+    // the person.
     let reached = |(beside, _): &([f64; 2], f64)| {
         libm::hypot(beside[0] - target[0], beside[1] - target[1]) <= WALK_EPS
     };
@@ -239,16 +248,18 @@ pub fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
 }
 
 impl Character {
-    /// Walked toward `target`, standing at `arrive_z` there, and stood where
-    /// its walk ends, playing its walk clip while it walks; a walk begun
-    /// afresh where it stood nowhere.
+    /// Walks the character toward `target`, where it will stand at
+    /// `arrive_z`, places it where the walk ends, and plays its walk clip
+    /// while it walks. A character that had no place starts a fresh walk at
+    /// `target`.
     fn step(&mut self, ctx: &TickContext, target: [f64; 2], arrive_z: f64, camera: &Camera) {
         if self.transform.is_none() {
             self.walk = Walk::new(target);
         }
         let half = BODY_SHARE * self.height_u();
         let (at, rot, walking) = self.walk.step(ctx, target, arrive_z, half, camera);
-        // Its model as registered, the character's height tall.
+        // Scale 1 draws the model as registered, which is the character's
+        // height.
         self.transform = Some(Transform {
             at,
             rot,
@@ -259,29 +270,28 @@ impl Character {
     }
 }
 
-/// Where a walk is drawn, kept by where it stands, its floor there and the
+/// Where a walk is drawn, kept by where it stands, its floor there, and the
 /// zoom the eye draws it at.
 type FloorMemo = Memo<([f64; 2], f64, Zoom), ([f64; 2], f64)>;
 
-/// A character's walk: where it is, its heading, its plan and the floor it
-/// stands on.
 pub struct Walk {
     at: [f64; 2],
     heading: f64,
     was_following: bool,
     walk_plan: Option<WalkPlan>,
-    /// Its falling edge, a gesture's end, fixes the destination.
+    /// Whether the camera was dragged at the last step. Its falling edge, the
+    /// end of a gesture, fixes the destination.
     was_dragging: bool,
     settle: SettleTracker,
     init_facing_done: bool,
     follow_walk_until: f64,
     stands_z: Option<f64>,
-    /// Where it is drawn and on what floor (`drawn_at`).
+    /// Where the character is drawn and on what floor (`drawn_at`).
     drawn: FloorMemo,
 }
 
 impl Walk {
-    /// At `target`, standing nowhere yet.
+    /// A walk at `target` that stands on no floor yet.
     pub fn new(target: [f64; 2]) -> Walk {
         Walk {
             at: target,
@@ -297,11 +307,11 @@ impl Walk {
         }
     }
 
-    /// Toward `target`, standing at `arrive_z` there: where it is drawn, a
-    /// body `half` wide each way, its turn about Z and whether it walks.
-    /// `follows`: the target is followed
-    /// as it moves, by a fix or by the keys, rather than walked to once it
-    /// settles; a steered one faces its way.
+    /// Steps the walk toward `target`, where it will stand at `arrive_z`. It
+    /// returns where a body `half` wide on each side is drawn, its turn about
+    /// Z, and whether it walks. While the map follows a fix or the keys steer
+    /// (`follows`), the target is followed as it moves rather than walked to
+    /// once it settles, and a steered character faces the way it goes.
     fn step(
         &mut self,
         ctx: &TickContext,
@@ -311,8 +321,9 @@ impl Walk {
         camera: &Camera,
     ) -> ([f64; 3], f32, bool) {
         let (follows, steered) = (camera.following || camera.steered, camera.steered);
-        // Wall seconds: the tick's elapsed is clamped per delta, which stretches
-        // these spans across a gap where the world did not tick.
+        // Wall-clock seconds. The tick's elapsed time is clamped each delta,
+        // which would stretch these spans across a gap in which the world did
+        // not tick.
         let now = clock::now() / 1000.0;
         let dragging = camera.dragging;
         let released = self.was_dragging && !dragging;
@@ -320,8 +331,9 @@ impl Walk {
         let (mut at, is_walking);
 
         if follows {
-            // From where it stands, as the camera eases from where it is: a key moves
-            // the target a step ahead at once, and a jump there started it off apart.
+            // The character eases from where it stands, as the camera eases
+            // from where it is: a key moves the target a step ahead at once,
+            // and a jump starts the two far apart.
             let a = smoothing_factor(FOLLOW_LERP_K, ctx.delta);
             at = std::array::from_fn(|k| self.at[k] + (target[k] - self.at[k]) * a);
             if !steered {
@@ -335,8 +347,8 @@ impl Walk {
             is_walking = now < self.follow_walk_until;
             self.walk_plan = None;
         } else {
-            // Rebase the tracker, or the delta accumulated while following reads as one
-            // giant dash.
+            // The tracker starts anew, or the distance covered while following
+            // would read as one long dash.
             if self.was_following {
                 self.settle = SettleTracker::new(target, now);
                 self.walk_plan = None;
@@ -345,9 +357,10 @@ impl Walk {
             if self.settle.last_seen != self.settle.settled_at {
                 wake_at((self.settle.last_change_time + SETTLE_DELAY_S) * 1000.0);
             }
-            // A release fixes the destination at once: a pan begun inside the settle
-            // delay holds the target moving, so waiting would plan nothing. The settle
-            // tracker covers every other way the pivot moves.
+            // A release fixes the destination at once. A pan begun within the
+            // settle delay keeps the target moving, so waiting for it to settle
+            // would plan nothing. The settle tracker covers every other way the
+            // pivot moves.
             let dst = if released {
                 self.settle = SettleTracker::new(target, now);
                 Some(target)
@@ -383,7 +396,8 @@ impl Walk {
             at = step;
             is_walking = heading.is_some();
 
-            // The character's Y-up to Z-up turn maps the model's forward to +Y, hence +PI/2.
+            // The turn from the model's Y-up to the world's Z-up maps the
+            // model's forward to +Y, so a heading takes PI/2 more.
             if let Some(heading) = heading {
                 self.heading = heading + core::f64::consts::PI / 2.0;
             } else if !self.init_facing_done {
@@ -395,15 +409,16 @@ impl Walk {
         self.was_following = follows;
         self.was_dragging = dragging;
 
-        // Following there is no end to wait for, so a wall its way meets puts it
-        // at its target at once.
+        // While following there is no end to wait for, so a wall in the
+        // character's way puts it at its target at once.
         let arrived = gap(target, at) <= WALK_EPS;
         let moved = at != self.at;
         let stands = self.stands_z.get_or_insert(arrive_z);
         if arrived {
             *stands = arrive_z;
         } else if moved {
-            // Where the leaf under it, or a map's `to`, is not held, it goes on at its height.
+            // Where the leaf under the character, or `to` on a map, is not
+            // loaded, the character goes on at its height.
             if let Some((to, z)) = walk_to(World::now(), self.at, *stands, at, camera) {
                 (at, *stands) = if follows && gap(to, at) > WALK_EPS {
                     (target, arrive_z)
@@ -422,9 +437,10 @@ impl Walk {
     }
 }
 
-/// `world`'s step-slide from `from`, its floor at `stands`, toward `to`:
-/// where it ends and its floor there, short of a leaf on the way not held;
-/// none where the leaf under `from`, or a map's `to`, is not held.
+/// Slides a step through `world` from `from`, standing on a floor at
+/// `stands`, toward `to`. It returns where the slide ends and the floor
+/// there; the slide stops short of a leaf on the way that is not loaded. None
+/// when the leaf under `from`, or `to` on a map, is not loaded.
 fn walk_to(
     world: World<'_>,
     from: [f64; 2],
@@ -437,11 +453,11 @@ fn walk_to(
     Some(([at[0], at[1]], under(at[2])))
 }
 
-/// Where a body `half` wide each way is drawn for `at`, and the floor `stands`
-/// as the eye's rays draw it there: the world asked at the zoom the camera grid
-/// takes there from the eye, kept in `asked` while none of it moves. A coarser
-/// answer is taken where that zoom is not held, as a ray draws the ground it
-/// has.
+/// Where a body `half` wide on each side is drawn for `at`, on the floor the
+/// eye's rays draw there in place of `stands`. The world is asked at the zoom
+/// the camera grid takes at that distance from the eye, and the answer is
+/// kept in `asked` while none of its inputs moves. Where that zoom is not
+/// loaded a coarser answer is taken, as a ray draws whatever ground it has.
 fn drawn_at(
     asked: &mut FloorMemo,
     at: [f64; 2],
@@ -469,9 +485,10 @@ fn drawn_at(
     [x, y, floor]
 }
 
-/// `at` moved off each wall a body `half` wide each way would stand in, the
-/// cells `cell` wide: a wall is the near side of a cell that `rises` over the
-/// floor, so what stands beside a step is drawn beside it, not through it.
+/// Moves `at` off each wall that a body `half` wide on each side would stand
+/// in, on cells `cell` wide. A wall is the near side of a cell that `rises`
+/// over the floor, so a character beside a step is drawn beside it, not
+/// through it.
 pub(crate) fn clear_of_walls(
     at: [f64; 2],
     half: f64,
@@ -492,10 +509,10 @@ pub(crate) fn clear_of_walls(
     clear
 }
 
-/// Where the person's line hangs, over its head, while the person shows it,
-/// seen from `eye`: while the walk stands it, and where the camera grid's
-/// cell at its feet is one a marker shows at (`marker_shows`), so a line
-/// reads where the markers about it do.
+/// Where the person's line hangs over its head, seen from `eye`. A line
+/// hangs only while the walk places the person, and only where the camera
+/// grid's cell at its feet is one a marker shows at (`marker_shows`), so the
+/// line reads where the markers about it do.
 pub fn line_hangs(eye: V3) -> Option<Q3> {
     let person = companion().characters[Group::person as usize].as_ref()?;
     let feet = person.transform?.at;
@@ -507,8 +524,9 @@ pub fn line_hangs(eye: V3) -> Option<Q3> {
     marker_shows(cell_zoom_at(eye, feet)).then(|| world_to_canonical(&over))
 }
 
-/// (model, image handle) for the world's skinned pass: the image as the
-/// loader has it now, which a lost device takes back until it lands again.
+/// Each character's model and skin image for the world's skinned pass. The
+/// image is as the loader has it now: a lost device takes it back until it
+/// loads again.
 pub fn companion_skins() -> impl Iterator<Item = (u32, Image)> {
     let c: &'static _ = companion();
     c.characters
@@ -517,14 +535,15 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, Image)> {
         .filter_map(|c| Some((c.model, c.skin()?)))
 }
 
-/// Whether the person, then the pet, has landed, for the loading toast.
+/// Whether the person, and whether the pet, has loaded, for the loading
+/// toast.
 pub fn companion_ready() -> [bool; 2] {
     companion().characters.each_ref().map(Option::is_some)
 }
 
-/// Each of its characters advanced; whether one a view can see moved
-/// (`Character::tick`), a surface showing the person, the pet or both
-/// (`on_surface`, by their group's number).
+/// Advances each character and returns whether a frame must be asked for
+/// (`Character::tick`). `on_surface`, indexed by group number, says whether a
+/// surface shows the person and whether one shows the pet.
 pub fn companion_animate(
     draw: &mut DrawList,
     models: &Models,
@@ -540,15 +559,14 @@ pub fn companion_animate(
     moved
 }
 
-/// Each of its characters into the world's list (`Character::draw`).
 pub fn companion_draw(draw: &mut DrawList, models: &Models) {
     for c in companion().characters.iter().flatten() {
         c.draw(draw, models);
     }
 }
 
-/// Its character of `group` as a character surface draws it, and its skin, the image
-/// as the loader has it now; none while either is not in.
+/// The draw of the character of `group` for a character surface, and its
+/// skin as the loader has it now. None while either has not loaded.
 pub fn companion_surface_draw(group: Group) -> Option<(Draw, Image)> {
     let c = companion().characters[group as usize].as_ref()?;
     Some((c.surface_draw(models())?, c.skin()?))

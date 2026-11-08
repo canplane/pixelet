@@ -1,8 +1,7 @@
 // pxl-core/sys/boot.rs
 
-//! What the core was booted with, kept from its first turn (door.rs
-//! `boot`): what its runtime's form handed it, its GPU runtime's admission
-//! among it.
+//! What the runtime hands the core on its first turn (door.rs `boot`), kept
+//! for the core's life. A reader before the first turn gets a default.
 
 use xpute_core::entry::BootInfo;
 use xpute_core::global::Global;
@@ -16,16 +15,17 @@ pub fn set(boot: BootInfo) {
     BOOT.set(Some(boot));
 }
 
-/// The heap's reading, as the runtime's form hands it; none counted before
-/// the first turn.
+/// The heap's counters, read through the function the runtime handed at
+/// boot. Before the first turn every counter is zero.
 pub fn heap_stat() -> HeapStat {
     BOOT.get(|| None)
         .map_or_else(HeapStat::default, |b| (b.heap_stat)())
 }
 
-/// Whether the GPU's runtime takes a frame now (xpute_gpu::admit), as its
-/// runtime's form hands it (`Form::admit_frame`); every frame where it hands
-/// none, or before the first turn.
+/// The test of whether the GPU runtime can take a frame now without blocking
+/// (xpute_gpu::admit), as the runtime's form provides it
+/// (`Form::admit_frame`). Where the form provides none, and before the first
+/// turn, every frame is admitted.
 pub fn admit_frame() -> Admit {
     BOOT.get(|| None)
         .and_then(|b| b.form.admit_frame)

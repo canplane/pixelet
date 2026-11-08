@@ -7,23 +7,25 @@ import { PLATFORM } from "./pxl-platform.ts";
 /** A device's app has no origin of its own: it reads from the site's. */
 export const remote: boolean = true;
 
-/** The reads Expo's fetch runs at once. On Android its OkHttp client runs at most
- * five calls a host, a sixth waiting in OkHttp's own queue (`Dispatcher`
- * `maxRequestsPerHost`, which React Native's OkHttpClientProvider leaves at its
- * default). On iOS URLSession caps connections, not requests, and the origin
- * speaks HTTP/2, one connection carrying every read, so nothing caps it below
- * the six the core's body slots are sized by (pxl-core sys/io/param.rs
+/** How many reads Expo's fetch runs at once. On Android, its OkHttp client
+ * runs at most five calls to a host, and a sixth waits in OkHttp's own queue
+ * (`Dispatcher` `maxRequestsPerHost`, which React Native's
+ * OkHttpClientProvider leaves at its default). On iOS, URLSession caps
+ * connections rather than requests, and the origin speaks HTTP/2, so one
+ * connection carries every read. Nothing there caps the reads below the six
+ * that the core's body slots are sized for (pxl-core sys/io/param.rs
  * `BODY_SLOTS`). */
 export const credits = Platform.OS === "android" ? 5 : 6;
 
-/** What the bake stores its objects as, asked for so they come as stored. */
+/** The encoding the bake stores its objects in. It is asked for, so that the
+ * objects arrive as stored. */
 const ZSTD = "zstd";
 
-/** Rejects with a TypeError on a transport failure, as the page's fetch
- * does; Expo's FetchError covers both a failure and a stop. A body sent zstd
- * is decoded natively off this thread (PlatformModule `unpack`), as a browser
- * decodes its own, so no reader sees an encoding; a failed decode is a
- * transport failure. */
+/** Rejects with a TypeError on a transport failure, as the page's fetch does,
+ * where Expo's FetchError stands for both a failure and a stop. A body sent
+ * zstd is decoded natively, off this thread (PlatformModule `unpack`), as a
+ * browser decodes its own, so no reader ever sees an encoding. A failed decode
+ * is a transport failure. */
 export async function get(
   url: string,
   signal?: AbortSignal,

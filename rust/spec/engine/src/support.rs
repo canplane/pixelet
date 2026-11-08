@@ -1,15 +1,14 @@
 // pxl-engine/support.rs
 
-//! gpu-portable: where something stands, asked of the world's one query
-//! (pxl-core domain/query/support.rs, a walker's support): a column's
-//! column surface, the first cell a ray down it from the world's top cannot see
-//! through at a cell zoom, its top as drawn (`column_surface`); and the query's
-//! cursor (ARCHITECTURE.md "The query, the only seam"): a descent's line
-//! (`Line`), a column_surface's or one straight down to a node (`line`), and a
-//! asset about it asked from the deepest node of that line holding it and
-//! stepped down by what each parent hands its child (`asset`). The CPU's and
-//! a GPU's alike, each over its own reading of
-//! the world (`cast::Query`).
+//! gpu-portable: where something stands, asked of the world's one query (pxl-core
+//! domain/query/support.rs, a walker's support). A column's surface is the first cell that a
+//! ray down the column from the world's top cannot see through at a given cell zoom, with its
+//! top as drawn (`column_surface`). The module also holds the query's cursor
+//! (ARCHITECTURE.md, "The query, the only seam"): a descent's line (`Line`), either a column
+//! surface's or one straight down to a node (`line`), and an asset near that node, asked from
+//! the deepest node of the line that holds it and stepped down by what each parent hands its
+//! child (`asset`). The CPU and a GPU run it alike, each over its own reading of the world
+//! (`cast::Query`).
 
 use crate::cast::{self, Detail, End, Keep, Node, Query, Ray, Trace, Until, DEPTH};
 use crate::object::ancestor_at;
@@ -25,10 +24,9 @@ pub struct Line<A> {
     stack: [A; DEPTH],
 }
 
-/// A column's surface: its top as drawn at its cell zoom (`cast::top`),
-/// how the ray down ended — met (`End::Hit`), nothing it cannot see
-/// through (`Miss`) or a node not held (`Lacks`) — and the line it
-/// descended.
+/// A column's surface: its top as drawn at its cell zoom (`cast::top`), how the ray down it
+/// ended (it met a cell, `End::Hit`; it met nothing it cannot see through, `Miss`; or it met
+/// a node not held, `Lacks`), and the line it descended.
 #[derive(Clone, Copy)]
 pub struct ColumnSurface<A> {
     pub top: (i32, f32),
@@ -38,9 +36,8 @@ pub struct ColumnSurface<A> {
 }
 
 impl<A: Copy> Line<A> {
-    /// The line a walk from `origin` left where it ended at `node`
-    /// (`cast::Keep`): what was handed it, `live`, and what was handed each
-    /// node over it, by zoom.
+    /// The line a walk from `origin` leaves where it ends at `node` (`cast::Keep`): what was
+    /// handed the node (`live`), and what was handed each node over it, by zoom.
     pub fn of_walk(origin: [i32; 3], node: &Node, live: A, stack: &[A; DEPTH]) -> Line<A> {
         Line {
             at: node.idx(origin),
@@ -58,9 +55,9 @@ impl<A: Copy> Keep<A> for ColumnSurface<A> {
 }
 
 /// The column surface down column `g` at `cell_zoom`: the first cell that fills on the
-/// world's one ray straight down the column's middle, at the cells of `cell_zoom`
-/// alone, from the top of the world (`HEIGHT_BITS`), whichever layer holds
-/// it; its line kept for the assets asked about it (`asset`).
+/// world's one ray straight down the column's middle from the top of the world
+/// (`HEIGHT_BITS`), at the cells of `cell_zoom` alone, whichever layer holds it. Its line is
+/// kept so that the assets around it can be asked (`asset`).
 pub fn column_surface<Q: Query>(q: &mut Q, cell_zoom: Zoom, g: [i32; 2]) -> ColumnSurface<Q::At> {
     let (o, ray, detail) = down(cell_zoom, g);
     let at = Node::ROOT.idx(o);
@@ -76,7 +73,7 @@ pub fn column_surface<Q: Query>(q: &mut Q, cell_zoom: Zoom, g: [i32; 2]) -> Colu
         },
         origin: o,
     };
-    // From the root just asked: `walk_from_root` would ask it again.
+    // Walk from the root just asked; `walk_from_root` would ask it again.
     let met = cast::walk(
         q,
         o,
@@ -110,25 +107,23 @@ fn down(cell_zoom: Zoom, g: [i32; 2]) -> ([i32; 3], Ray, Detail) {
     )
 }
 
-/// The node over node `c` of `zoom` at `z`, `z` no finer.
+/// The node at `z` over node `c` of `zoom`, where `z` is no finer than `zoom`.
 fn over(c: [i32; 3], zoom: Zoom, z: Zoom) -> [i32; 3] {
     ancestor_at(zoom, c, zoom - z)
 }
 
-/// Whether two nodes are one, by their words.
 fn same(a: [i32; 3], b: [i32; 3]) -> bool {
     a[0] == b[0] && a[1] == b[1] && a[2] == b[2]
 }
 
-/// A line as a reader of the assets about its node reads it (`asset`), in
-/// place: its node, by its index at its zoom, and what was handed it and
-/// each node over it, by zoom. A descent's own (`Line`), or one a reader
-/// holds elsewhere, read where it lies (`JoinedLine`; a beam ray's in the beam
-/// rays' words, pxl-render resume.wgsl).
+/// A line as a reader of the assets around its node reads it (`asset`), where it lies: its
+/// node, by its index at its zoom, and what was handed it and each node over it, by zoom. It
+/// may be a descent's own (`Line`) or one a reader holds elsewhere (`JoinedLine`; a beam ray's
+/// line in the beam rays' words, pxl-render resume.wgsl).
 pub trait Ancestors<A: Copy> {
     fn at(&self) -> [i32; 3];
     fn zoom(&self) -> Zoom;
-    /// What was handed its node over its own at `z`, its own at its zoom.
+    /// What was handed the line's node at `z` over its own, or its own node at its own zoom.
     fn ancestor(&self, z: Zoom) -> A;
 }
 
@@ -150,23 +145,23 @@ impl<A: Copy> Ancestors<A> for Line<A> {
     }
 }
 
-/// A line down to a node off another (`joined`): its own descent from `low`,
-/// the zoom of the deepest node of the other over it, down.
+/// A line down to a node, descended from another line (`joined`): only its own descent, from
+/// `low` down, where `low` is the zoom of the deepest node of the other line over it.
 pub struct SubLine<A> {
     low: Zoom,
     line: Line<A>,
 }
 
-/// A line down to a node read with the line it was descended off
-/// (`SubLine::joined`): over `low`, the other's, read where it lies; from `low`
-/// down, its own descent's: two references and no array of its own.
+/// A line down to a node, read together with the line it was descended from
+/// (`SubLine::joined`). Above `low` it reads the other line where it lies, and from `low`
+/// down its own descent, so it holds two references and no array of its own.
 pub struct JoinedLine<'a, L, A> {
     base: &'a L,
     sub: &'a SubLine<A>,
 }
 
 impl<A: Copy> SubLine<A> {
-    /// It read with `base`, the line it was descended off.
+    /// The sub-line read together with `base`, the line it was descended from.
     pub fn joined<'a, L: Ancestors<A>>(&'a self, base: &'a L) -> JoinedLine<'a, L, A> {
         JoinedLine { base, sub: self }
     }
@@ -190,9 +185,9 @@ impl<A: Copy, L: Ancestors<A>> Ancestors<A> for JoinedLine<'_, L, A> {
     }
 }
 
-/// The deepest zoom at which the line `l` and node `c` of `zoom` share a
-/// node, no finer than either, and whether they share one at all: none
-/// where they lie in two roots.
+/// The deepest zoom at which the line `l` and the node `c` of `zoom` share a node, no finer
+/// than either, and whether they share one at all; they share none where they lie under two
+/// roots.
 fn shared_zoom<A: Copy>(l: &impl Ancestors<A>, zoom: Zoom, c: [i32; 3]) -> (Zoom, bool) {
     let (line, lz) = (l.at(), l.zoom());
     let mut z = if zoom < lz { zoom } else { lz };
@@ -202,9 +197,9 @@ fn shared_zoom<A: Copy>(l: &impl Ancestors<A>, zoom: Zoom, c: [i32; 3]) -> (Zoom
     (z, same(over(line, lz, z), over(c, zoom, z)))
 }
 
-/// Down to node `c` of `zoom` from its node at `z`, handed `at`, each node
-/// handed down by its parent (`Query::child`): what was handed `c`, and
-/// each node from `z` down to it, by zoom, in `stack`.
+/// Descends to node `c` of `zoom` from its node at `z`, which was handed `at`, each node
+/// handed down by its parent (`Query::child`). It returns what was handed `c` and leaves what
+/// was handed each node from `z` down to it in `stack`, by zoom.
 fn descend<Q: Query>(
     q: &mut Q,
     mut at: Q::At,
@@ -221,9 +216,8 @@ fn descend<Q: Query>(
     at
 }
 
-/// The line straight down to node `c` of `zoom` from its root, each node
-/// handed down by its parent: where a reader of the assets about a node
-/// asks them from (`asset`).
+/// The line straight down to node `c` of `zoom` from its root, each node handed down by its
+/// parent: the line from which a reader of the assets around a node asks them (`asset`).
 pub fn line<Q: Query>(q: &mut Q, zoom: Zoom, c: [i32; 3]) -> Line<Q::At> {
     let root = q.root(over(c, zoom, 0));
     let mut stack = [root; DEPTH];
@@ -236,11 +230,11 @@ pub fn line<Q: Query>(q: &mut Q, zoom: Zoom, c: [i32; 3]) -> Line<Q::At> {
     }
 }
 
-/// The line down to node `c` of `zoom` off the line `base`, its own part
-/// (`SubLine`, read with `base` by `SubLine::joined`): from the deepest node of
-/// `base` over it, each node under it handed down by its parent; from its
-/// own root where no node of `base` is over it. What `line` asks from the
-/// top, asked from where `base` already holds it.
+/// The line down to node `c` of `zoom` from the line `base`, as its own part only (`SubLine`,
+/// read with `base` by `SubLine::joined`). It descends from the deepest node of `base` over
+/// `c`, each node under that handed down by its parent, or from `c`'s own root where no node
+/// of `base` is over it. It is `line`, asked from where `base` already holds the answer
+/// instead of from the top.
 pub fn sub_line<Q: Query>(
     q: &mut Q,
     base: &impl Ancestors<Q::At>,
@@ -266,11 +260,10 @@ pub fn sub_line<Q: Query>(
     }
 }
 
-/// What is in the cell `c` of `zoom` about the line `l`, as the world's
-/// one query answers it at that zoom (`Query::node`'s first word): asked
-/// from the deepest node of the line holding it, each node under that
-/// handed down by its parent (`Query::child`), and from its own root where
-/// no node of the line holds it.
+/// What is in the cell `c` of `zoom` near the line `l`, as the world's one query answers it
+/// at that zoom (the first word of `Query::node`). It is asked from the deepest node of the
+/// line that holds the cell, each node under that handed down by its parent (`Query::child`),
+/// or from the cell's own root where no node of the line holds it.
 pub fn asset<Q: Query>(q: &mut Q, l: &impl Ancestors<Q::At>, zoom: Zoom, c: [i32; 3]) -> u32 {
     let (mut z, held) = shared_zoom(l, zoom, c);
     let mut at = if held {
@@ -293,10 +286,9 @@ mod tests {
     use crate::content::Sample;
     use crate::{SHARD_ZOOM, UNIT_ZOOM};
 
-    /// Ground of stone up to `height` unit cells, two over the cells west of
-    /// x = 4, none over the rest; air over it. Each node's `At` is the node
-    /// it was handed for, checked where it is asked, so an asset asked off
-    /// a node not over it is caught.
+    /// Ground of stone up to `height` unit cells: two over the cells west of x = 4, none over
+    /// the rest, with air above. Each node's `At` is the node it was handed for, checked where it
+    /// is asked, so an asset asked from a node not over it is caught.
     struct Step;
 
     fn height(x: i32) -> i32 {
@@ -353,9 +345,8 @@ mod tests {
         }
     }
 
-    /// The column surface stands on the step's top, and every asset about it,
-    /// asked off its line, is what the world holds there; one in another
-    /// root is asked from that root.
+    /// The column surface stands on the step's top, and every asset around it, asked from its
+    /// line, is what the world holds there; an asset under another root is asked from that root.
     #[test]
     fn footing_asset_is_worlds() {
         let f = column_surface(&mut Step, UNIT_ZOOM, [6, 3]);
@@ -374,9 +365,8 @@ mod tests {
         assert_eq!(asset(&mut Step, &f.line, UNIT_ZOOM, far), STONE[0]);
     }
 
-    /// The line a column surface keeps answers as the line straight down to
-    /// its top cell, its column's at its zoom: what a reader that did not walk
-    /// the column asks its assets off.
+    /// The line a column surface keeps answers as the line straight down to its top cell does,
+    /// which is the line a reader that did not walk the column asks the assets from.
     #[test]
     fn column_surface_line_is_its_top_cells() {
         for g in [[6, 3], [2, 3], [3, 0], [9, 5]] {
@@ -415,7 +405,7 @@ mod tests {
             _: [Zoom; 2],
             _: f32,
         ) -> In<[u32; 2]> {
-            // A node a shard or coarser spans the world's height, its Z index none.
+            // A node of a shard's size or coarser spans the world's height, so its Z index says nothing.
             if zoom < UNIT_ZOOM {
                 return if zoom > SHARD_ZOOM && node[2] << (UNIT_ZOOM - zoom) > self.top {
                     In {
@@ -441,10 +431,11 @@ mod tests {
         }
     }
 
-    /// The walk down a column, in floats, stands on the very cell and share the ground holds
-    /// (`cast::top`), decor's footing on the CPU as a GPU reads it in integers (pxl-render
-    /// decor_pose.wgsl `surface`): from the world's ceiling to its floor, every plane a whole
-    /// number of Q3 steps under 2^24 from the ray's start, every fill share.
+    /// The walk down a column, in floats, stands on exactly the cell and share the ground holds
+    /// (`cast::top`). This is decor's footing on the CPU, as a GPU reads it in integers
+    /// (pxl-render decor_pose.wgsl `surface`). It holds from the world's ceiling to its floor,
+    /// where every plane lies a whole number of Q3 steps under 2^24 from the ray's start, and for
+    /// every fill share.
     #[test]
     fn column_surface_is_exact_to_the_worlds_edges() {
         let half = 1i32 << (HEIGHT_BITS - 1);
@@ -485,9 +476,9 @@ mod tests {
         }
     }
 
-    /// The assets about a walk's stop, asked off the line it keeps there, are
-    /// the world's, whether it walked from the root or resumed under another
-    /// ray's line and climbed over where it resumed.
+    /// The assets around a walk's stop, asked from the line it keeps there, are the world's,
+    /// whether the walk started from the root or resumed under another ray's line and climbed
+    /// above where it resumed.
     #[test]
     fn walk_keeps_line() {
         let s = FINEST_ZOOM - UNIT_ZOOM;
@@ -548,8 +539,8 @@ mod tests {
         }
     }
 
-    /// A line straight down to a node holds the assets about it as the
-    /// world does, its own among them.
+    /// A line straight down to a node holds the assets around it as the world does, its own
+    /// among them.
     #[test]
     fn line_asset_is_worlds() {
         let at = [3, 2, 1];

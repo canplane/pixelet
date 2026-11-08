@@ -1,22 +1,25 @@
 // @pxl/client/service/types.ts
 
 /**
- * The shapes the client's services share: each service is a file a platform
- * has of its own beside it (x.ts the page's, x.native.ts the device's), and
- * what both give and take is named here.
+ * The shapes the client's services share. Each service is a pair of files,
+ * x.ts for the page and x.native.ts for a device, and what both give and take
+ * is named here. A place, in these names, is where the client runs: the page
+ * or a device.
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
 
-/** A transaction on the place's database: files of bytes by key, null none. */
+/** A transaction on the place's database, which keeps files of bytes by key.
+ * null stands for no file. */
 export interface Tx {
   get(key: string): Promise<U8Array | null>;
   put(key: string, bytes: U8Array | null): Promise<void>;
 }
 
-/** What a place needs to open the core: the bytes of its memory, one of
- * those its machine allows. A place that links the core in needs none. */
+/** What a place needs to open the core: the size of its memory in bytes,
+ * which must be one its machine allows. A place that links the core in needs
+ * no config. */
 export interface Config {
   bytes: u32;
 }
@@ -24,7 +27,8 @@ export interface Config {
 export interface SafeArea {
   top: number;
   bottom: number;
-  /** The part of `bottom` that takes a touch: Android's navigation buttons, never a gesture area. */
+  /** The part of `bottom` that takes a touch, such as Android's navigation
+   * buttons. A gesture area is never counted. */
   tappable: number;
 }
 
@@ -34,7 +38,8 @@ export interface Viewport {
   dpr: f64;
 }
 
-/** A position fix, by the names the page's API and a device's both give it. */
+/** A position fix, with the field names that the page's API and a device's
+ * both use. */
 export interface Fix {
   longitude: f64;
   latitude: f64;
@@ -44,7 +49,8 @@ export interface Fix {
   heading: f64 | null;
 }
 
-/** What the sensors hear, in the platform's words: handed in once, at boot. */
+/** Receives what the sensors hear, in the platform's terms. It is handed in
+ * once, at boot. */
 export interface SensorListener {
   position(
     lon: f64,
@@ -77,24 +83,28 @@ export interface GeolocationSensor {
 /** The place's compass, heard between a start and a stop. */
 export interface OrientationSensor {
   has: boolean;
-  /** Whether a prompt raised inside a gesture gates it, as iOS Safari's does. */
+  /** Whether a permission prompt, which must be raised inside a gesture,
+   * gates it, as iOS Safari's does. */
   gated: boolean;
-  /** Whether silence is how its loss shows: a browser's says nothing when it
-   * stops hearing, and a device's says its failure. */
+  /** Whether its loss shows only as silence. A browser's compass says nothing
+   * when it stops hearing, while a device's reports its failure. */
   silence: boolean;
-  /** Whether it is granted, asked where a prompt gates it. */
+  /** Resolves whether it is granted, asking first where a prompt gates it. */
   permit(): Promise<boolean>;
   start(): void;
   stop(): void;
 }
 
-/** A surface the core draws into, by the handle it gave; 0 is none. */
+/** The surfaces the core draws into, by the handles it gives them. Handle 0
+ * is no surface. */
 export interface SurfaceDriver {
-  /** The core's handle for a new surface, 0 where it has none left. */
+  /** Asks the core for a new surface's handle, which is 0 when the core has
+   * none left. */
   open(): Promise<u32>;
   size(handle: u32, width: u32, height: u32, dpr: f64): void;
   close(handle: u32): void;
-  /** A page's canvas lent to the GPU under `handle`, and let go. */
+  /** Lends a page's canvas to the GPU under `handle`, until `unbind` takes it
+   * back. */
   bind(handle: u32, canvas: HTMLCanvasElement): void;
   unbind(handle: u32): void;
 }
@@ -102,12 +112,13 @@ export interface SurfaceDriver {
 export type PointerPhase = "down" | "move" | "up" | "cancel" | "out";
 export type PointerKind = "mouse" | "touch" | "pen";
 
-/** What the place's input says, in its words. */
+/** Hands the core what the place's input says, in the place's terms. */
 export interface InputDriver {
-  /** The world opened; the returned call closes it. */
+  /** Called when the world's surface opens. The function it returns is
+   * called when the surface closes. */
   open(): () => void;
-  /** A pointer, `x` and `y` in CSS pixels from the canvas's top left, as its
-   * layout box is laid out (transforms aside). */
+  /** A pointer event. `x` and `y` are in CSS pixels from the top left of the
+   * canvas's layout box, without its transforms. */
   pointer(
     phase: PointerPhase,
     kind: PointerKind,
@@ -117,12 +128,13 @@ export interface InputDriver {
     y: f64,
   ): void;
   wheel(delta_y: f64): void;
-  /** Whether the key was taken, so the page's default is prevented. */
+  /** Returns whether the core took the key, in which case the page's default
+   * action is prevented. */
   keyDown(code: string, at: { inField: boolean }): boolean;
   keyUp(code: string): void;
   releaseKeys(): void;
   releasePointers(): void;
-  /** A turn, for a box that moved without the core's asking. */
+  /** Asks for a turn, for when a box moved without the core asking. */
   requestFrame(): void;
 }
 
@@ -138,10 +150,12 @@ export interface CharacterSurfaceProps {
   openKey: string;
 }
 
-/** The entry a place hears a long frame by: a long animation frame, or a long task. */
+/** The performance entry that reports a long frame: a long animation frame
+ * (`loaf`) or a long task. */
 export type LongFrameSource = "loaf" | "longtask";
 
-/** A long frame of the place's own, on `performance.now()`'s clock, which the core's frames are on too. */
+/** A long frame of the place's own. Its times are on the clock of
+ * `performance.now()`, which the core's frames use too. */
 export interface LongFrame {
   source: LongFrameSource;
   t: f64;
@@ -151,7 +165,9 @@ export interface LongFrame {
   renderMs: f64;
 }
 
-/** The CSS variable a page's `useVisualViewport` keeps on its root, every frame: how far the
- * visual viewport's bottom stands above the layout viewport's, the keyboard's height, in px. Set by
- * the page (service/viewport.ts) and read by the UI's CSS (ui/component/above-keyboard.tsx); the device sets none. */
+/** The CSS variable that a page's `useVisualViewport` keeps on its root on
+ * every frame. It holds how far the visual viewport's bottom stands above the
+ * layout viewport's, which is the keyboard's height, in px. The page sets it
+ * (service/viewport.ts) and the UI's CSS reads it
+ * (ui/component/above-keyboard.tsx). A device never sets it. */
 export const VISUAL_VIEWPORT_BOTTOM = "--vv-bottom";

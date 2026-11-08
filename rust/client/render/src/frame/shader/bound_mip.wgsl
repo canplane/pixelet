@@ -1,10 +1,12 @@
 // pxl-render/bound_mip.wgsl
 
-// A brick's levels as they lie in its words, each level where world_word.wgsl's `bound_mip_at`
-// says it begins (pxl-engine clipmap.rs `bound_mip_at`), its entries in clip.wgsl's cell order;
-// the bounds an entry holds are world_rule.wgsl's. It reads no binding.
+// Where a brick's levels of bounds lie in its words. Each level begins where `bound_mip_at`
+// says (world_word.wgsl, from pxl-engine clipmap.rs `bound_mip_at`), and its entries follow
+// clip.wgsl's cell order. world_rule.wgsl defines the bounds an entry holds. The part reads no
+// binding.
 
-/// The first word of entry `at` of level `j` of the brick at `base` (`fill::mip_of`).
+/// The first word of the entry at `at` in level `j` of the brick at `base` (pxl-engine
+/// `fill::mip_of`).
 fn mip_entry(base: u32, j: u32, at: vec2<u32>) -> u32 {
   return base + BOUNDS_AT + BOUND_ENTRY_WORDS * (bound_mip_at(j) + cell_id(at));
 }

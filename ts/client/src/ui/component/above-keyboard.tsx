@@ -9,10 +9,12 @@ import { VISUAL_VIEWPORT_BOTTOM } from "@/service/types.ts";
 import { useSafeArea } from "@/service/safe-area.ts";
 
 /**
- * A bottom layer standing `inset` above the keyboard via the page's
- * `VISUAL_VIEWPORT_BOTTOM` (service/viewport.ts), a CSS variable since it follows every frame. iOS
- * streams viewport events or sends one final value, so `bottom` gets a short
- * ease.
+ * A bottom layer on a page that stands `inset` above the keyboard. Where the
+ * keyboard's top is comes from the CSS variable `VISUAL_VIEWPORT_BOTTOM`,
+ * which service/viewport.ts sets. It is a CSS variable rather than React
+ * state because it changes on every frame. iOS either streams viewport events
+ * or sends only the final value, so `bottom` eases briefly to smooth the
+ * jump in the second case.
  */
 export function AboveKeyboard({
   inset,

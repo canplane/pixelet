@@ -1,10 +1,12 @@
 // pxl-core/domain/layer/answer.rs
 
-//! What a query answers: a value, exact or coarser with the tile it lacked.
+//! A layer query's answer: a value read from the exact tile, or from a
+//! coarser one together with the tile that was lacking.
 
 use pxl_spec::space::layer::quadrant::Quadrant;
 
-/// A coarser answer carries the tile it lacked, so none passes for exact.
+/// A coarser answer, and no answer, both carry the tile that was lacking, so
+/// a coarser answer can never pass for an exact one.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Answer<T> {
     Exact(T),

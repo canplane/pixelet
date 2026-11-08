@@ -77,7 +77,8 @@ interface SettingRowProps {
   label: string;
   description: string;
   active: boolean;
-  /** The new value, not a flip, which would depend on the current value having arrived. */
+  /** Takes the new value rather than a flip, because a flip would depend on
+   * the current value having already arrived from the core. */
   onChange: (active: boolean) => void;
   cost?: SettingCost;
   dev?: boolean;
@@ -147,7 +148,8 @@ interface SettingChoiceRowProps {
   dev?: boolean;
 }
 
-/** The check slot keeps its width when empty, so selecting does not rewrap. */
+/** The check's slot keeps its width when empty, so that selecting a row does
+ * not rewrap its text. */
 export function SettingChoiceRow(props: SettingChoiceRowProps) {
   const { label, description, selected, onSelect, cost, dev } = props;
   return (
@@ -177,7 +179,7 @@ export function SettingChoiceRow(props: SettingChoiceRowProps) {
   );
 }
 
-/** Choice rows standing out of any group, flush with the section's text. */
+/** Choice rows that stand outside any group, flush with the section's text. */
 export function SettingChoices({ children }: { children: ReactNode }) {
   return <View style={styles.bleed}>{children}</View>;
 }
@@ -270,7 +272,8 @@ const styles = StyleSheet.create({
     padding: 4,
     paddingTop: 12,
   },
-  // The border's own line, so the legend centers on it at any text size.
+  // A box exactly as tall as the border and laid on it, so that the legend
+  // centers on the border at any text size.
   legendLine: {
     position: "absolute",
     top: -GROUP_BORDER,

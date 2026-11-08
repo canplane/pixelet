@@ -1,7 +1,7 @@
 // pxl-core/domain/query.test.rs
 //
-// The query's laws over a leaf tile's four children folded into their
-// parent as the bake folds them, and objects written into a store.
+// The query's laws, checked over a leaf tile's four children folded into
+// their parent as the bake folds them, and over objects written into a store.
 
 use pxl_spec::asset::cube::{self, ground, sentinel};
 use pxl_spec::asset::AssetId;
@@ -41,8 +41,9 @@ fn top() -> Quadrant {
     Quadrant::new(LEAF_ZOOM - 1, [40, -20])
 }
 
-/// A leaf as a client holds it: its lines, and its cells, each its own palette index
-/// and its height, as its clip levels hold them once a GPU drew them.
+/// A leaf as a client holds it: its tile with its lines, and each cell's
+/// palette index and height as the clip levels hold them once a GPU drew
+/// them.
 #[derive(Clone)]
 struct Leaf {
     tile: TerrainTile,
@@ -50,11 +51,11 @@ struct Leaf {
     heights: Vec<i16>,
 }
 
-/// The tiles held, and over each its line up to the coarsest zoom the
-/// source supplies whole, as the floor holds it all around the eye
-/// (`domain/layer/tile_cache/floor.rs`): a tile's coarser pictures here are the
-/// same ground, each marking its children held; their cells held in the
-/// clip levels about `centre`, in units.
+/// A tile cache holding `held` and, over each tile, its line up to the
+/// coarsest zoom the source supplies whole, as the floor holds it all around
+/// the eye (`domain/layer/tile_cache/floor.rs`). Here a tile's coarser
+/// pictures are the same ground, each marking its children held. Their cells
+/// are held in the clip levels around `center`, in units.
 fn resident(center: [f64; 2], held: &[(Quadrant, Leaf)]) -> TileCache<TerrainTile> {
     use pxl_spec::bake::tile::Occupancy;
     let mut tile_cache = TileCache::default();
@@ -93,16 +94,17 @@ fn resident(center: [f64; 2], held: &[(Quadrant, Leaf)]) -> TileCache<TerrainTil
                 .unwrap();
         }
     }
-    // Asked for, as the floor asks for what it holds: a tile held but not
-    // asked is cache, which answers nothing.
+    // Every tile is asked for, as the floor asks for what it holds. A tile
+    // held but not asked for is only cache, which answers nothing.
     let asks: fnv::FnvHashMap<Quadrant, ()> = admitted.iter().map(|&q| (q, ())).collect();
     tile_cache.ask(&asks);
-    // Their cells as a GPU would hand them back, at once.
+    // Their cells are handed back at once, as a GPU would hand them back.
     test::hold(center, &cells);
     tile_cache
 }
 
-/// A leaf as a client holds it once its cells are back: each cell's height and palette index given.
+/// A leaf as a client holds it once its cells are back, with each cell's
+/// height and palette index given.
 fn drawn(heights: Vec<i16>, ground: Ground, separation: Separation) -> Leaf {
     Leaf {
         tile: TerrainTile::of(
@@ -238,8 +240,8 @@ fn deck_over_void_met() {
     assert_eq!(hit.point[2], 10.0, "{hit:?}");
 }
 
-/// A ray in the frame that runs on round the world meets, past the
-/// antimeridian, the ground and the objects stored under the world's name for them.
+/// A ray whose frame runs on past the antimeridian meets the ground and the
+/// objects there, which are stored under the world's canonical positions.
 #[test]
 fn ray_across_antimeridian() {
     let _g = serial();
@@ -346,12 +348,13 @@ fn ray_from_above_meets_ground() {
     assert_eq!([hit.point[2], hit.t], [top, high - top], "{hit:?}");
 }
 
-/// A dig is met as the cells asked fold it, nothing finer: at the leaves' cells
-/// a cell dug in part keeps the eighths left, a box of their volume about the
-/// cell's center whose top a ray meets (`answer::side`), and a cell dug whole
-/// is air, the ground under it met. A walker reads the cell as its columns at
-/// the finest zoom placed in it, and stands on what is left as it is held:
-/// on the half cubes over a dug lower half.
+/// A dig is met as the cells asked fold it, and nothing finer. At the
+/// leaves' cells, a cell dug in part keeps the eighths left as one box of
+/// their volume about the cell's center, whose top a ray meets
+/// (`answer::side`). A cell dug whole is air, and the ground under it is
+/// met. A walker reads the cell as columns at the finest zoom placed in it
+/// and stands on what is left as it is held, such as the half cubes over a
+/// dug lower half.
 #[test]
 fn dig_met_as_folded() {
     use crate::domain::layer::object::store::AIR;
@@ -387,7 +390,8 @@ fn dig_met_as_folded() {
             .exact()
             .flatten()
             .unwrap();
-        // The top as `cast::top` gives it, a share of the cell in f32.
+        // The top is checked as `cast::top` gives it: a share of the cell,
+        // in f32.
         assert!(
             (hit.cube.max[2] - top).abs() < 1e-6,
             "{n} of 8 dug: {hit:?}"
@@ -400,9 +404,9 @@ fn dig_met_as_folded() {
     }
 }
 
-/// What is held is met as finely as it is held: a half cube on the ground,
-/// finer than the leaves' cells, is met whole by a pick, which asks it as it
-/// is placed.
+/// What is held is met as finely as it is held. A half cube on the ground,
+/// finer than the leaves' cells, is met whole by a pick, which asks at the
+/// zoom the cube is placed at.
 #[test]
 fn half_cube_met() {
     let _g = serial();
@@ -437,7 +441,7 @@ fn walker_stands_any_tier() {
     for zoom in OBJECT_COARSEST..=OBJECT_FINEST {
         let (cell, side) = (units(GROUND.leaf_cell_zoom()), units(zoom));
         let mut store = Store::default();
-        // In the cell's far corner, off its middle.
+        // The cube sits in the cell's far corner, away from its middle.
         write(
             &mut store,
             [x + cell - side, y + cell - side, 5.0],
@@ -475,9 +479,9 @@ fn stack_gap_floored() {
 }
 
 /// A cell coarser than what is placed in it is read as the cast draws it
-/// there, one column whatever is placed finer: from over it or from in the
-/// box it is drawn as, its floor is that box's top (`cast::top`), as a ray
-/// at that zoom meets it.
+/// there: one column, whatever is placed finer. From over it or from inside
+/// the box it is drawn as, its floor is that box's top (`cast::top`), where
+/// a ray at that zoom meets it.
 #[test]
 fn coarse_cell_floored_as_drawn() {
     let _g = serial();
@@ -505,16 +509,17 @@ fn coarse_cell_floored_as_drawn() {
     }
 }
 
-/// Quake III's step-slide, a column at a time: blocked, the walker climbs the
-/// blocker as far as its own column is open over its head, then settles; with
-/// a ceiling first it stops there, and an axis that is blocked is slid along.
+/// Quake III's step-slide, a column at a time. When blocked, the walker
+/// climbs the blocker as far as its own column is open over its head, then
+/// settles. When a ceiling comes first it stops there, and a blocked axis is
+/// slid along.
 #[test]
 fn walker_climbs_or_slides() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
     let red = cube::Object::red as AssetId;
-    // A wall three cubes high in the column east of the walker's.
+    // A wall three cubes high stands in the column east of the walker's.
     for z in [5.0, 6.0, 7.0] {
         write(&mut store, [x + 1.0, y, z], OBJECT_COARSEST, red);
     }
@@ -530,7 +535,8 @@ fn walker_climbs_or_slides() {
             "climbed onto the wall"
         );
     }
-    // A roof over the walker two cells up: the climb meets it first.
+    // A roof two cells over the walker stops the climb before it tops the
+    // wall.
     write(&mut store, [x, y, 7.0], OBJECT_COARSEST, red);
     let access = World::new(&tile_cache, &store);
     let to = access.step_slide(&from, &east, &from, true, true).unwrap();
@@ -556,16 +562,15 @@ fn walker_climbs_or_slides() {
     assert_eq!((q3::to_real(i64::from(to[1])), floor(to)), (y + 1.5, 5.0));
 }
 
-/// A height picks the floor nearest it: the ground under a deck, or the deck,
-/// whichever its height is closer to; a solid with no clear cell over it is
-/// no floor.
+/// A height picks the floor nearest it: the ground under a deck or the deck,
+/// whichever is closer. A solid with no clear cell over it is no floor.
 #[test]
 fn height_nearest_floor() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let mut store = Store::default();
     let red = cube::Object::red as AssetId;
-    // A deck a cube thick, its top at 10, with the ground at 5 under it.
+    // A deck a cube thick has its top at 10, with the ground at 5 under it.
     write(&mut store, [x, y, 9.0], OBJECT_COARSEST, red);
     let access = World::new(&tile_cache, &store);
     let near = |z: f64| access.support_nearest(&world::point(x + 0.5, y + 0.5, z));
@@ -575,7 +580,7 @@ fn height_nearest_floor() {
         "the ground under the deck"
     );
     assert_eq!(near(12.0), Answer::Exact(Some(10.0)), "the deck");
-    // A cube right under the deck's: its top has no clear cell over it.
+    // A cube right under the deck's cube has no clear cell over its top.
     write(&mut store, [x, y, 8.0], OBJECT_COARSEST, red);
     let access = World::new(&tile_cache, &store);
     assert_eq!(
@@ -584,8 +589,8 @@ fn height_nearest_floor() {
     );
 }
 
-/// A reading reports the columns its queries read: a support its own
-/// cell's, a walk every cell it passes, joined.
+/// A reading reports the columns its queries read, joined: a support reads
+/// its own cell, and a walk reads every cell it passes.
 #[test]
 fn reading_reports_columns() {
     let _g = serial();
@@ -626,7 +631,7 @@ fn box_placed_matches_store() {
     for (k, &c) in corners.iter().enumerate() {
         write(&mut store, c, unit, 100 + k as u32);
     }
-    // The first three, the box their cells span; the last two past it.
+    // The box spans the first three's cells; the last two lie past it.
     let cell = |c: V3| idx_of(unit, &world::point(c[0], c[1], c[2]));
     let (a, b, c) = (cell(corners[0]), cell(corners[1]), cell(corners[2]));
     let lo = [a[0].min(c[0]), a[1].min(b[1]), c[2].min(a[2])];
@@ -657,13 +662,13 @@ fn box_placed_matches_store() {
     assert_eq!(asked, held);
 }
 
-/// A brick handed after the clip levels were folded without it is read
-/// with what it holds once a frame has handed it, which folds them
-/// (domain/layer/terrain/clipmap.rs `upload`): a spike
-/// a cell wide in it, over ground at five and taller than a node over the
-/// brick, is met where a walker's ray down it met it while the brick was
-/// held from the start, and no cell of the brick stands outside the bound
-/// read over it at any zoom over a brick.
+/// A brick handed after the clip levels were folded without it is read with
+/// what it holds once a frame has handed it, since the hand folds them again
+/// (domain/layer/terrain/clipmap.rs `upload`). A spike a cell wide in the
+/// brick, over ground at five and taller than a node over the brick, is met
+/// where a walker's ray down it met it when the brick was held from the
+/// start. No cell of the brick stands outside the bound read over it at any
+/// zoom coarser than a brick.
 #[test]
 fn late_brick_spike() {
     use crate::domain::layer::terrain::clipmap::test::{hand, unland};
@@ -684,7 +689,7 @@ fn late_brick_spike() {
     let (x0, y0, _) = leaf.rect();
     let tile_cache = resident([x0 + 300.0, y0 + 200.0], &[(leaf, spiked)]);
     let store = Store::default();
-    // The spike's column in the eye's leaves' clip level.
+    // Find the spike's column in the clip level of the eye's leaves.
     let (first, _) = CpuClipmap.origin(LEAF_CELL_ZOOM);
     let top = |g: [i32; 2]| {
         cells::column_top(cells::cell(&CpuClipmap, Lookup::NONE, LEAF_CELL_ZOOM, g).1)
@@ -738,10 +743,11 @@ fn late_brick_spike() {
     assert_eq!(outside, 0, "cells outside the bound over them");
 }
 
-/// The device that went took every brick it held: the turn that sees it
-/// gives up their cells (domain/layer/terrain/clipmap.rs `assign_slots`, as `step`
-/// runs it) and folds the clip levels over none, so no node over a brick of
-/// the eye's leaves keeps a bound of cells gone.
+/// A lost device takes every brick it held with it. The turn that sees the
+/// loss gives up their cells (domain/layer/terrain/clipmap.rs
+/// `assign_slots`, as `step` runs it) and folds the clip levels over none,
+/// so no node over a brick of the eye's leaves keeps a bound of cells that
+/// are gone.
 #[test]
 fn device_loss_drops_bounds() {
     use crate::domain::layer::terrain::clipmap::{test::lose, CpuClipmap};
@@ -772,9 +778,9 @@ fn device_loss_drops_bounds() {
     assert_eq!(over(), [UNBOUNDED; 2], "over cells gone");
 }
 
-/// What the ground generates stands where it was generated whatever is put
-/// over it or in place of the cell under it, air or a cube: it generates on
-/// the world unplaced (pxl-content `generation::placement`).
+/// What the ground generates stands where it was generated, whatever is put
+/// over it or in place of the cell under it, air or a cube, since it
+/// generates on the world unplaced (pxl-content `generation::placement`).
 #[test]
 fn generated_decor_stays() {
     use crate::domain::layer::object::store::AIR;
@@ -805,9 +811,9 @@ fn generated_decor_stays() {
     }
 }
 
-/// Only an edit in its own box takes what the ground generates away, air or a
-/// cube; one under it or over it leaves it generated (pxl-engine
-/// `generation::DecorQuery::asset`, edited).
+/// Only an edit in its own box, air or a cube, takes what the ground
+/// generates away. An edit under it or over it leaves it generated
+/// (pxl-engine `generation::DecorQuery::asset`, edited).
 #[test]
 fn generated_decor_edit_removes() {
     use crate::domain::layer::object::store::AIR;
@@ -828,7 +834,7 @@ fn generated_decor_edit_removes() {
         scatter::generated_at(&mut scatter::DecorWorld::new(&world), decor, [cx, cy], true)
             .map(|(_, generates)| generates)
     };
-    // One that generates on bare ground, its box whole.
+    // Pick a decor that generates on bare ground with its box whole.
     let (decor, [cx, cy, cz]) = world
         .generated_over(&space)
         .iter()
@@ -851,8 +857,9 @@ fn generated_decor_edit_removes() {
     }
 }
 
-/// The service area of the shards at `SHARD_ZOOM` in its column and east
-/// of it, every row: their nines as a declaration lays them (`area::nine`).
+/// A service area of the shards at `SHARD_ZOOM` in column `.0` and east of
+/// it, in every row, with their nines laid as a declaration lays them
+/// (`area::nine`).
 struct EastOf(i32);
 
 impl Area for EastOf {
@@ -861,7 +868,7 @@ impl Area for EastOf {
     }
     fn nine(&self, key: u32) -> u32 {
         use pxl_engine::SHARD_ZOOM;
-        // `area::shard_key` undone: X's and Y's bits interleaved from the top.
+        // This undoes `area::shard_key`, which interleaves X's and Y's bits.
         let mut c = [0i32; 2];
         for b in 0..SHARD_ZOOM {
             c[0] |= ((key >> (2 * b) & 1) as i32) << b;
@@ -871,15 +878,15 @@ impl Area for EastOf {
     }
 }
 
-/// The service area's edge is the wall's columns, a leaf cell thick: a
-/// leaf cell one in from the wall is the area's and editable, the wall's
-/// column and a cell past it neither (`World::within`, `World::editable`).
+/// The service area's edge is the wall's columns, a leaf cell thick. A leaf
+/// cell one in from the wall is the area's and editable; the wall's column
+/// and a cell past it are neither (`World::within`, `World::editable`).
 #[test]
 fn area_edge_leaf_cell_thick() {
     use pxl_engine::SHARD_ZOOM;
     let _g = serial();
     let s = LEAF_ZOOM - SHARD_ZOOM;
-    // A served shard's westmost leaf, the shard west of it unserved.
+    // The westmost leaf of a served shard whose west neighbor is not served.
     let leaf = Quadrant::new(LEAF_ZOOM, [5 << s, 3 << s]);
     let area = EastOf(5);
     let flat = drawn(
@@ -894,8 +901,8 @@ fn area_edge_leaf_cell_thick() {
     let store = Store::default();
     let world = World::new(&tile_cache, &store);
     let cell = units(GROUND.leaf_cell_zoom());
-    // The leaf cell `i` east of the leaf's west edge: whether it is the
-    // area's, and a cube of it on the ground editable.
+    // For the leaf cell `i` cells east of the leaf's west edge: whether it
+    // is the area's, and whether a cube of it on the ground is editable.
     let column = |i: f64| {
         let (x, y) = (x0 + i * cell, y0 + 10.0 * cell);
         let space = Aabb {
@@ -912,8 +919,8 @@ fn area_edge_leaf_cell_thick() {
     assert_eq!(column(-1.0), (false, false), "past the wall");
 }
 
-/// A decor of another version's catalog, read from a saved file, is unknown: no
-/// instance, and the core does not stop.
+/// A decor from another version's catalog, read from a saved file, is
+/// unknown: it has no instance, and the core does not stop.
 #[test]
 fn stored_decor_past_the_catalog_is_unknown() {
     use crate::domain::layer::object::asset::Asset;
@@ -932,7 +939,8 @@ fn stored_decor_past_the_catalog_is_unknown() {
     assert!(decor_instance(&entry).is_none());
 }
 
-/// The share of the bar the ground gives: of the tiles asked for, those that show.
+/// The area's progress the UI shows while the ground loads is the share of
+/// the tiles asked for that show.
 #[test]
 fn shown_share_of_what_is_asked() {
     let _g = serial();

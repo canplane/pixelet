@@ -1,6 +1,6 @@
-// The sky's light on an up-facing face at radius `r`, a light at cosine `mu_s`
-// over it, per unit of that light (atmos_irradiance.wgsl); in alpha the sky's
-// mean luminance seen from there.
+// Reads the sky's light on an up-facing face at radius `r`, under a light at
+// cosine `mu_s` over it, per unit of that light (atmos_irradiance.wgsl). Alpha
+// holds the sky's mean luminance as seen from there.
 
 @group(0) @binding(18) var irradiance_lut: texture_2d<f32>;
 

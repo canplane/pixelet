@@ -1,7 +1,8 @@
 // pxl-render/palette.wgsl
 
-// A world's cells' four palette indices, read as the Rust's `PaletteWords` reads them: a
-// pass that draws by them binds them.
+// The four palette indices of each cell of the bricks the clip levels hold, one word for each
+// cell (pxl-engine `clipmap::Bricks::palette_word`, `ground::palette_indices`). A pass that
+// draws by them binds them.
 
 @group(0) @binding(4) var<storage, read> palette_indices: array<u32>;
 

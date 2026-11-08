@@ -1,9 +1,10 @@
 // xpute-core/mem/heap.rs
 
-//! The core's heap, its blocks named by offset: a slab of size classes over
-//! a buddy of pages within the core's `Bounds`, the slab borrowing and
-//! returning whole runs so neither level starves while the other has room.
-//! It serves its blocks whatever `#[global_allocator]` is installed.
+//! The core's heap, whose blocks are named by offset. It is a slab of size
+//! classes over a buddy allocator of pages, within the core's `Bounds`. The
+//! slab borrows and returns whole runs of pages, so neither level starves
+//! while the other has room. `alloc` and `free` serve blocks through
+//! whatever `#[global_allocator]` is installed.
 
 use core::marker::PhantomData;
 
@@ -13,24 +14,24 @@ use xpute_kit::alloc::ADDR_BITS;
 
 use crate::mem::{at, off_of};
 
-/// Where a core's heap lies: from `base` to `end`, ascending. A pure
-/// function each: the first block is asked for before anything has laid the
-/// memory out.
+/// Where a core's heap lies: from `base` up to `end`. Each must be a pure
+/// function, since the first block is asked for before anything has laid
+/// out the memory.
 pub trait Bounds {
     fn base() -> usize;
     fn end() -> usize;
 }
 
-/// A page, the buddy's leaf.
+/// The log2 of a page, the buddy's smallest block.
 const PAGE_LOG2: usize = crate::mem::section::PAGE_BYTES.trailing_zeros() as usize;
 
-/// 2 GiB: the largest power of two short of the whole address space. The
-/// tree starts as one leaf and grows only as requests need; `end` says what is
-/// real.
+/// 2 GiB, the largest power of two short of the whole address space. The
+/// tree starts as one leaf and grows only as requests need it; `end` says
+/// how much of the span is real memory.
 const SPAN_LOG2: usize = ADDR_BITS - 1;
 
-/// A bit per possible parent node; the buddy checks the length on the first
-/// request.
+/// One bit for each possible parent node. The buddy checks this length on
+/// the first request.
 const SPLIT_BYTES: usize = (1 << (SPAN_LOG2 - PAGE_LOG2)) / 8;
 
 pub struct Span<B>(PhantomData<B>);
@@ -51,21 +52,24 @@ impl<B: Bounds> Range for Span<B> {
 
 pub type Heap<B> = SlabMalloc<Span<B>>;
 
-/// One reading of a heap, so compared fields are from one moment.
+/// One reading of a heap, so that fields compared with each other come from
+/// the same moment.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct HeapStat {
     pub range: usize,
-    /// A high-water mark, not a holding.
+    /// The most ever live at once, not what is held now.
     pub peak: usize,
     pub live: usize,
     pub run: usize,
     pub slot: usize,
-    /// Past the tree's current root the range is untouched rather than listed,
-    /// so this is not the free space.
+    /// The largest free block the tree lists. The range past the tree's
+    /// current root is untouched rather than listed, so this is not the total
+    /// free space.
     pub largest_free: usize,
-    /// Moves when a page is released, which is when a request of a page or
-    /// more refused before might now be served; a slot returned to a run
-    /// still in use does not move it (`SlabMalloc::releases`).
+    /// Advances each time a page is released, which is when a request of a
+    /// page or more that was refused before might now be served. A slot
+    /// returned to a run still in use does not advance it
+    /// (`SlabMalloc::releases`).
     pub releases: u32,
     pub refusals: u32,
     pub requests: u32,
@@ -88,10 +92,10 @@ pub fn heap_stat<B: Bounds>(a: &Heap<B>) -> HeapStat {
 /// An offset from the base and a size: freeing needs both.
 pub type Block = (usize, u32);
 
-/// The widest lane element, `f64` or `u64`.
+/// The alignment of the widest element a block holds, an `f64` or a `u64`.
 const BLOCK_ALIGN: usize = 8;
 
-/// None when there is no room, and for zero bytes.
+/// Answers none when there is no room, and for zero bytes.
 pub fn alloc(bytes: u32) -> Option<Block> {
     if bytes == 0 {
         return None;
@@ -103,7 +107,7 @@ pub fn alloc(bytes: u32) -> Option<Block> {
 }
 
 /// # Safety
-/// `block` came from `alloc` and has not been given back.
+/// `block` must have come from `alloc` and not yet been given back.
 pub unsafe fn free((off, bytes): Block) {
     // SAFETY: the caller's; `alloc` made this layout for this address.
     unsafe {

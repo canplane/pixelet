@@ -1,22 +1,19 @@
 // pxl-geo-bake/tile/shard.rs
 
-//! A bake's one set, `out/<kind>/`: every zoom of the pyramid, flat under
-//! the tiles' names and never pruned, which `dev:baked` reads. A bake
-//! changes it only through `<set>.stage/`, a shard at a time, as the ingest
-//! keeps its rows. Which shards are baked, and when, is the operator's to
-//! say (`--shard`); a change of source, code or coverage is a purge, the set
+//! A bake's one set, `out/<kind>/`: every zoom of the pyramid, flat under the tiles' names
+//! and never pruned, which `dev:baked` reads. A bake changes it only through `<set>.stage/`, a
+//! shard at a time, as the ingest keeps its rows. Which shards are baked, and when, is the
+//! operator's to say (`--shard`); a change of source, code or coverage is a purge, the set
 //! deleted by hand. Every step can stop and run again:
 //!
-//! - `leaf` stages a shard's leaves, then `<shard>.done`, the shard's leaves
-//!   the set holds and the bake no longer makes;
-//! - `fold` folds again what the whole shards change, reading the set as it
-//!   will be, and stages the parents that changed, then `fold.done`, those
-//!   that folded to none;
-//! - `commit`, only once folded, turns `fold.done` into `commit.done`,
-//!   writing the shards the set will hold into its manifest first, moves
-//!   what is staged into the set and takes away what each `.done` lists,
-//!   each `.done` last. While a commit is begun, a leaf or a fold is
-//!   refused: it would fold from a set half moved.
+//! - `leaf` stages a shard's leaves, then `<shard>.done`, which lists the leaves the set holds
+//!   that the bake does not make any more;
+//! - `fold` folds again what the whole shards change, reading the set as it will be, and
+//!   stages the parents that changed, then `fold.done`, which lists those that folded to none;
+//! - `commit`, only once folded, turns `fold.done` into `commit.done`, writes the shards the
+//!   set will hold into its manifest first, moves what is staged into the set and takes away
+//!   what each `.done` lists, each `.done` last. While a commit is under way, a leaf or a fold
+//!   is refused, because it would fold from a set half moved.
 
 use fnv::FnvHashSet;
 use std::collections::BTreeSet;
@@ -125,7 +122,7 @@ impl Stage {
         ))
     }
 
-    /// The fold's unit let go, so a fold runs again from the set as it is.
+    /// Lets the fold's unit go, so that a fold runs again from the set as it is.
     fn clear_fold(&self, leaf: Zoom) -> Result<(), String> {
         self.remove_done(FOLD)?;
         for p in self
@@ -239,8 +236,8 @@ impl Stage {
                 removed: gone,
             };
             let fits = L::check_pool(&view, workers)?;
-            // Before anything moves: a commit begun is finished, never undone, so
-            // the set will hold these, and a commit cut short leaves them said.
+            // Before anything moves: a commit once begun is finished, never undone, so the set will hold
+            // these, and a commit cut short leaves them recorded.
             if let Some(held) = self.will_hold()? {
                 let path = self.set.root.join(MANIFEST);
                 let mut manifest =
@@ -314,8 +311,8 @@ impl Stage {
         for p in self.read_done(COMMIT)? {
             self.set.remove(p)?;
         }
-        // The set's tiles all moved, its fits are theirs; the stage's beside its
-        // tiles, read into them, go.
+        // With the set's tiles all moved, its fits are theirs; the stage's fits beside its tiles,
+        // already read into them, go.
         let next = self.next_fits();
         if next.exists() {
             fs::rename(&next, self.set.root.join(FITS)).map_err(|e| io(&next, e))?;

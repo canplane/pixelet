@@ -1,9 +1,9 @@
 // pxl-render/frame/shader/screen_write_back.wgsl
 
-// The claimed tiles of the history the resolve wrote this frame copied back
-// into the last, which stays the one read where the frame is not drawn whole
-// (gpu/resolve.rs `draw`): a texel a pixel, as the tiles' quads
-// (screen_tiles.wgsl).
+// Copies the claimed tiles of the history the resolve wrote this frame back into the last
+// history, a texel a pixel over the tiles' quads (screen_tiles.wgsl). In a frame not drawn
+// whole the last history stays the one read, so it must take this frame's tiles
+// (gpu/resolve.rs `draw`).
 
 @group(0) @binding(1) var written: texture_2d<f32>;
 

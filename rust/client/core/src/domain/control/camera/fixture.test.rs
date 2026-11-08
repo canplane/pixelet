@@ -1,6 +1,7 @@
 // pxl-core/domain/control/camera/fixture.test.rs
 //
-// What the camera's tests share: an eye placed by the orbit's controls.
+// What the camera's tests share. `place` stands the orbit at a pivot with
+// its intent and its drawn camera already equal, so nothing eases.
 
 use pxl_spec::space::coord::v3::{self, V3};
 

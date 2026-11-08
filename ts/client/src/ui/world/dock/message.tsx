@@ -1,6 +1,7 @@
 // @pxl/client/ui/world/dock/message.tsx
 
-/** The message's card: a line for the chat, or a marker draft's text, typed and sent. */
+/** The message card. Its field types a chat line and sends it, or, while a
+ * marker is being drafted, writes the marker's text. */
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -22,17 +23,19 @@ import * as edit from "@/port/edit.ts";
 import * as scene from "@/port/scene.ts";
 import * as snapshot from "@/port/snapshot.ts";
 
-/** The field's words and its sending, kept by the dock whether or not its cards are drawn yet. */
+/** The message field's text and its sending. The dock holds this state, so
+ * that it is there whether or not the cards are drawn yet. */
 export function useMessage(mode: DockMode) {
-  // A marker's draft turns the message card to writing it.
+  // While the core holds a marker's draft, the field writes the marker's text
+  // instead of a chat line.
   const drafting = useCore((s) => s.draft !== null);
   const [messageText, setMessageText] = useState("");
   const [markerFits, setMarkerFits] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const inputRef = useRef<TextInput | null>(null);
 
-  // The message mode is typing: the keyboard comes and goes with it, and a
-  // marker's draft lives only inside it.
+  // The keyboard is up exactly while the dock is in message mode. A marker's
+  // draft exists only in message mode, so leaving the mode cancels it.
   useEffect(() => {
     if (mode === DockMode.Message) inputRef.current?.focus();
     else {
@@ -41,8 +44,9 @@ export function useMessage(mode: DockMode) {
     }
   }, [mode]);
 
-  // A draft opens: the message comes up with its text, which from
-  // then on is the field's, sent as typed; done, the field is the chat's again.
+  // When a draft opens, the dock turns to message mode and the field takes the
+  // draft's text. From then on the field owns the text and sends the core each
+  // change. When the draft closes, the field is emptied for the chat.
   useEffect(() => {
     setMessageText(drafting ? (snapshot.current().draft ?? "") : "");
     setMarkerFits(true);
@@ -69,13 +73,14 @@ export function useMessage(mode: DockMode) {
         return;
       }
       edit.marker_commit();
-      // Put up, the palette comes back for the next.
+      // With the marker placed, the dock returns to the palette.
       setDockMode(DockMode.Palette);
     }, FADE.durationMs);
   }
 
   const canSend = messageText.trim() !== "";
-  // A line too long for the core is refused whole, never cut.
+  // The core refuses a line too long for it and never cuts one short, so a
+  // line that does not fit cannot be sent.
   const fits = drafting ? markerFits : scene.chat_fits(messageText.trim());
 
   return {

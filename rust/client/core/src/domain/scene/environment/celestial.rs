@@ -1,7 +1,8 @@
 // pxl-core/domain/scene/environment/celestial.rs
 
-//! Where the sun, the moon and the stars are, by the standard low-precision
-//! formulas: the sun to about 0.01°, the moon to roughly 0.3–1°.
+//! Where the sun, the moon and the stars stand in the local sky, by the
+//! standard low-precision formulas. The sun comes out to about 0.01° and the
+//! moon to roughly 0.3–1°.
 
 const DEG: f64 = core::f64::consts::PI / 180.0;
 
@@ -41,15 +42,16 @@ fn moon_equatorial(d: f64, obliquity: f64) -> (f64, f64) {
     (ra, dec)
 }
 
-/// Degrees, `d` days after J2000.0.
+/// The local sidereal time at longitude `lon`, in degrees, `d` days after
+/// J2000.0.
 fn local_sidereal(d: f64, lon: f64) -> f64 {
     let gmst = norm360(280.460_618_37 + 360.985_647_366_29 * d);
     norm360(gmst + lon)
 }
 
-/// X east, Y north, Z up, at distance 100: right ascension `ra` and
-/// declination `dec`, in degrees, turned by the sky's one rotation
-/// (`equatorial_to_local`).
+/// The direction of right ascension `ra` and declination `dec`, in degrees,
+/// in local axes (X east, Y north, Z up), at length 100. It is turned by the
+/// same rotation as the stars (`equatorial_to_local`).
 fn local_dir(ra: f64, dec: f64, lat: f64, lon: f64, d: f64) -> [f64; 3] {
     let m = equatorial_to_local(d, lat, lon);
     let ((sa, ca), (sd, cd)) = (libm::sincos(ra * DEG), libm::sincos(dec * DEG));
@@ -67,9 +69,10 @@ pub fn sun_pos(d: f64, lat: f64, lon: f64) -> [f64; 3] {
     local_dir(ra, dec, lat, lon, d)
 }
 
-/// Equatorial (X to the vernal equinox, Z to the pole) to local (X east,
-/// Y north, Z up), as rows: the sky's one rotation, the sun's, the moon's
-/// and the nine thousand stars'.
+/// The rotation from equatorial axes (X toward the vernal equinox, Z toward
+/// the pole) to local axes (X east, Y north, Z up), as rows. The sun, the
+/// moon and the nine thousand stars all turn by this one rotation, so they
+/// stay in place against each other.
 pub fn equatorial_to_local(d: f64, lat: f64, lon: f64) -> [[f64; 3]; 3] {
     let (sl, cl) = libm::sincos(local_sidereal(d, lon) * DEG);
     let (sp, cp) = libm::sincos(lat * DEG);

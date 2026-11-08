@@ -40,7 +40,7 @@ fn glb(json: &str, bin: &[u8]) -> Vec<u8> {
     out
 }
 
-/// Three positions, then three u16 indices from byte 36.
+/// The binary chunk of `TRIANGLE`: three positions, then three u16 indices from byte 36.
 fn triangle_bin(idx: [u16; 3]) -> Vec<u8> {
     let mut bin = Vec::new();
     for v in [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0] {
@@ -60,7 +60,7 @@ const TRIANGLE: &str = r#"{"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes
 "bufferViews":[{"buffer":0,"byteOffset":0,"byteLength":36},{"buffer":0,"byteOffset":36,"byteLength":6}],
 "buffers":[{"byteLength":44}]}"#;
 
-/// The triangle with each `from` written as its `to`.
+/// `TRIANGLE` as a GLB, with the first `from` of each edit in its JSON replaced by its `to`.
 fn edited(edits: &[(&str, &str)]) -> Vec<u8> {
     let mut json = TRIANGLE.to_string();
     for (from, to) in edits {
@@ -249,13 +249,15 @@ fn chunk_past_file_refused() {
 
 #[test]
 fn oversize_decode_refused() {
-    // Zeros of no view, a count the file does not hold.
+    // An accessor with no buffer view reads as zeros, so its count costs the file nothing.
+    // A count of a billion must still be refused.
     let zeros = edited(&[(
         r#"{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3"}"#,
         r#"{"componentType":5126,"count":1e9,"type":"VEC3"}"#,
     )]);
     assert_eq!(refused(&zeros), Errno::EFBIG);
-    // One large accessor read again for each of a few primitives.
+    // Sixty-four primitives read the same large accessor. The limit counts what each
+    // primitive decodes, so the model is refused though the accessor is stored once.
     let vertices = 10_000;
     let primitive = r#"{"attributes":{"POSITION":0},"indices":1}"#;
     let mut json = TRIANGLE.to_string();
@@ -298,8 +300,8 @@ fn mesh_counted_per_node() {
 
 #[test]
 fn accessor_looked_up_once() {
-    // A megabyte of extras on the accessor every primitive reads: looked up
-    // again for each, it would be scanned some ten thousand times.
+    // The accessor every primitive reads carries a megabyte of extras. If it were looked up
+    // again for each primitive, the extras would be scanned some ten thousand times.
     let extras = format!(r#","extras":"{}"}}"#, "x".repeat(1 << 20));
     let primitive = r#"{"attributes":{"POSITION":0},"indices":1}"#;
     let many = vec![primitive; 1500].join(",");

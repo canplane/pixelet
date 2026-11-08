@@ -14,7 +14,8 @@ static std::span<const std::uint8_t> bytes_of(std::string_view s) {
     return {reinterpret_cast<const std::uint8_t *>(s.data()), s.size()};
 }
 
-// RFC 4648's vectors, which the URL alphabet shares with the standard one.
+// RFC 4648's test vectors. Their encodings hold no character on which the URL
+// alphabet differs from the standard one.
 XPUTE_TEST(codec_base64url_rfc_vectors) {
     const std::pair<std::string_view, std::string_view> cases[] = {
         {"", ""}, {"f", "Zg"}, {"fo", "Zm8"}, {"foo", "Zm9v"}, {"foob", "Zm9vYg"}, {"fooba", "Zm9vYmE"}, {"foobar", "Zm9vYmFy"},
@@ -53,7 +54,7 @@ XPUTE_TEST(codec_hex) {
     XPUTE_CHECK(!hex_decode("zz", back).ok());
 }
 
-// FNV-1a's published values, which the other languages compute too.
+// FNV-1a's published test values, which the other languages check too.
 XPUTE_TEST(codec_fnv1a64) {
     XPUTE_CHECK_EQ(fnv1a64(""), FNV64_OFF, "the empty string");
     XPUTE_CHECK_EQ(fnv1a64("a"), std::uint64_t{0xaf63dc4c8601ec8cu}, "\"a\"");

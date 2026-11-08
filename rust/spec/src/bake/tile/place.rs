@@ -30,10 +30,9 @@ pub(crate) const PLACE_LAST: Zoom = 19;
 /// An icon's cell: a mark's, which a power of two makes nest.
 const ICON_STEPS: Zoom = MARK_STEPS;
 
-/// A cell an icon wide at its tile's zoom of Carto's, `SPREAD_STEPS` coarser
-/// than the camera grid: which zoom of Carto's a place is drawn at there,
-/// and so which categories show, is the tile zoom of the grid's cell
-/// (`Lattice::tile_zoom_of_grid`), past the leaf too.
+/// A cell an icon wide at its tile's Carto zoom, `SPREAD_STEPS` coarser than the camera grid.
+/// The Carto zoom at which a place is drawn there, and so which categories show, is the tile
+/// zoom of the grid's cell (`Lattice::tile_zoom_of_grid`), past the leaf too.
 pub const PLACE_LATTICE: Lattice =
     Lattice::new(LEAF_ZOOM + ICON_STEPS).scaled(-(SPREAD_STEPS as i32));
 
@@ -58,7 +57,7 @@ pub const PLACE_FIRST: Zoom = {
 // A category shown before a place's cell fits a leaf (peaks, airports) is spaced
 // within its leaf alone: a leaf places every zoom inside itself.
 
-// A place stands at its ground leaf cell, an offset in the tile a half-word a lane.
+// A place stands at its ground leaf cell, an offset in the tile of a half-word on each axis.
 const _: () = assert!(
     GROUND.leaf_cell_zoom() - PLACE_FIRST <= 16,
     "a tile's ground leaf cells no longer fit a half-word a lane"
@@ -100,7 +99,7 @@ pub fn symbol_of(category: u16) -> Option<u16> {
         .checked_sub(1)
 }
 
-/// 0 where the category list has none.
+/// The number of a category by its word; 0 where the category list has none.
 pub fn category_of(category: &str) -> u16 {
     CATEGORIES
         .iter()
@@ -248,8 +247,8 @@ impl PlaceTile {
     }
 }
 
-/// The cell a place keeps at Carto's `zoom`, over the ground leaf cell it
-/// stands in: past the ground's own, that cell.
+/// The cell a place keeps at Carto's `zoom`, above the ground leaf cell it stands in; finer
+/// than the ground's own cell, it is that leaf cell.
 fn place_cell(stands: Cell, zoom: Zoom) -> Cell {
     stands.up(GROUND.leaf_cell_zoom().saturating_sub(zoom + SPACING_STEPS))
 }

@@ -5,7 +5,7 @@ use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 
-/// Shared-secret gate for internal routes; not real auth.
+/// A shared-secret gate for internal routes, not real authentication.
 pub async fn admin_auth(State(token): State<String>, req: Request, next: Next) -> Response {
     if req
         .headers()

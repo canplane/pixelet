@@ -13,16 +13,22 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import { color, textStyle } from "@/ui/component/theme.ts";
 
 const TIP_POINT = 5;
-/** Room for the longest name, centered on the item. */
+/** The width of the box the tip is centered in, over the item. It must hold
+ * the longest name. */
 const TIP_SPAN = 240;
-/** Drawn solid and faded as one layer: faded apart, the point and the pill overlapped in a darker line where a device's pixels rounded them together. */
+/**
+ * The pill and its point are filled solid and faded together as one layer.
+ * Faded apart, they would overlap where a device rounds their pixels together
+ * and show a darker line there.
+ */
 const TIP_FILL = color.black;
 const TIP_OPACITY = 0.72;
 const TIP_PAD_Y = 5;
-/** A pill: ends rounded by half its height. */
 const TIP_RADIUS = (textStyle.notice.lineHeight + 2 * TIP_PAD_Y) / 2;
 
-/** Where an item's name is drawn: the sheet's top layer, over its bar, which a name inside the scroll could not reach. */
+/** Shows and hides the name of a pressed item. The name is drawn in the
+ * sheet's top layer, over its bar: a name drawn inside the scrolling content
+ * could not reach over the bar. */
 interface Naming {
   show: (label: string, item: View) => void;
   hide: () => void;
@@ -63,13 +69,16 @@ function NameTip({ named, sheetHeight }: { named: Named; sheetHeight: f64 }) {
   );
 }
 
-/** The sheet's whole content, with the name of the item pressed in it drawn over it. */
+/** Holds the sheet's whole content and draws the name of the pressed item
+ * over it. */
 export function NameTipLayer({ children }: { children: ReactNode }) {
   const sheet = useRef<View>(null);
   const [sheetHeight, setSheetHeight] = useState(0);
   const [named, setNamed] = useState<Named | null>(null);
-  // In the window, not against the sheet: a device's measureLayout leaves the scroll out.
-  // A press counts, so a measure that answers after its release shows nothing.
+  // The sheet and the item are both measured in the window. On a device,
+  // measureLayout against the sheet leaves out how far the content scrolled.
+  // Each press takes a new number, so a measurement that answers after its
+  // press was released finds a newer number and shows nothing.
   const press = useRef(0);
   const naming = useMemo<Naming>(
     () => ({
@@ -128,7 +137,8 @@ const styles = StyleSheet.create({
     paddingVertical: TIP_PAD_Y,
   },
   tipPoint: {
-    // Into the pill a pixel, so no rounding opens a gap; under one opacity the overlap does not show.
+    // The point overlaps the pill by a pixel, so that no rounding opens a gap
+    // between them. They are faded as one layer, so the overlap does not show.
     marginTop: -1,
     width: 0,
     height: 0,

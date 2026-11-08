@@ -23,7 +23,8 @@ fn near(a: V3, b: V3, tol: f64) -> bool {
     (0..3).all(|k| (a[k] - b[k]).abs() <= tol * a[k].abs().max(1.0))
 }
 
-/// A pose drawn from `rng` about the world's middle, placed: its pivot.
+/// Places the orbit at a random pose near the world's middle and returns
+/// its pivot.
 fn placed(rng: &mut Rng) -> V3 {
     let at = [
         rng.unit() * 2_000.0 - 1_000.0,
@@ -42,7 +43,8 @@ fn third_person() {
     settings_store().camera_mode = CameraMode::orbit;
 }
 
-/// The orbit's distance third person, none first.
+/// The pivot lies the orbit's distance ahead of the eye in third person,
+/// and at the eye in first person.
 #[test]
 fn pivot_along_facing() {
     let _g = serial();
@@ -60,14 +62,14 @@ fn pivot_along_facing() {
     }
 }
 
-/// A change of person moves the camera about the pivot, never the
-/// at; under a tracker it waits until the tracker lets go.
+/// A change of person moves the camera about the pivot and never moves the
+/// pivot. Under a tracker, the change waits until the tracker lets go.
 #[test]
 fn person_change_keeps_pivot() {
     let _g = serial();
     third_person();
-    // A canonical point keeps 256ths of a unit: the first change lands within
-    // one, and every later change keeps it exactly there.
+    // A canonical point holds 256ths of a unit. The first change lands within
+    // two of them, and every later change keeps the pivot exactly there.
     let near = |a: V3, b: V3, tol: f64| (0..3).all(|k| (a[k] - b[k]).abs() <= tol);
     let mut rng = Rng(0xc0de);
     for n in 0..100 {

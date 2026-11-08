@@ -1,16 +1,16 @@
 // @pxl/client/service/core.ts
 
 /** The core's module as a page fetches it (@xpute/runtime `boot`). A cached
- * module would run yesterday's core under today's glue. */
+ * module would run an older core under newer glue. */
 
 import type { ModuleSource } from "@xpute/runtime";
 import type { Config } from "./types.ts";
 import { id } from "virtual:pxl-build";
 import { DEV_BUNDLE } from "./bundle.ts";
 
-/** Served beside the page (the app's public/, where build-wasm.py writes it),
- * asked for under the build's id, so a deployment's page never runs the core
- * of the one before. */
+/** The module is served beside the page, from the app's public/, where
+ * build-wasm.py writes it. It is asked for under the build's id, so that a
+ * deployment's page never runs the previous deployment's core. */
 export function source(cfg: Config): ModuleSource {
   return {
     module: new URL(`/core.wasm?v=${id}`, location.href),

@@ -21,13 +21,14 @@ fn norm_polar(polar: f64) -> f64 {
     facing_domain(polar, 0.0).0
 }
 
-/// What the controls ask; the drawn camera (camera.rs `Camera`) eases toward it.
+/// What the controls ask the camera for. The drawn camera (camera.rs
+/// `Camera`) eases toward it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Intent {
     pub dist: f64,
-    /// Heading about Z in radians, in [-PI, PI].
+    /// Radians about Z from north toward east, in [-PI, PI].
     pub azimuth: f64,
-    /// Angle down from vertical in radians.
+    /// Radians from straight down, in [0, PI].
     pub polar: f64,
 }
 
@@ -53,7 +54,9 @@ impl CameraState {
         }
     }
 
-    /// Before the active controller has its say (controller.rs `set_intent`).
+    /// The intent with `partial` applied and held to the camera's ranges.
+    /// The orbit may still change it before it is committed (controller.rs
+    /// `set_intent`).
     pub fn with_patch(&self, partial: IntentPatch) -> Intent {
         let from = self.intent;
         Intent {
@@ -63,7 +66,8 @@ impl CameraState {
         }
     }
 
-    /// Wakes the damping loop, which runs only when a frame is asked for.
+    /// The camera eases toward its intent only on a frame that was asked
+    /// for, so a changed intent asks for a world tick.
     pub(crate) fn commit_intent(&mut self, next: Intent) {
         if self.intent == next {
             return;

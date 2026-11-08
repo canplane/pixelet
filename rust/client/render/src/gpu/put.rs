@@ -1,6 +1,6 @@
 // pxl-render/gpu/put.rs
 
-//! Words as the device is handed them: a value put at its byte or float.
+//! Writes values, little-endian, into the buffers the device is handed, at a byte or a float.
 
 use pxl_spec::space::coord::mat4::Mat4;
 
@@ -18,9 +18,9 @@ pub(crate) fn put_mat(out: &mut [f32], at: usize, m: &Mat4) {
     }
 }
 
-/// An orthographic box's steps, the world's along each of its first three
-/// axes a unit of its clip space, in `Mat3`'s columns at `at`: row `r` of
-/// `m` over its length squared, each in f32 as a shader reads `m`.
+/// Writes at `at`, as the columns of a `Mat3`, the world step that moves an orthographic box's
+/// clip space by one unit along each of its first three axes: row `r` of `m` divided by its
+/// squared length. Each is computed in f32, as a shader reads `m`.
 pub(crate) fn put_steps(out: &mut [f32], at: usize, m: &Mat4) {
     for r in 0..3 {
         let row = [m[r] as f32, m[4 + r] as f32, m[8 + r] as f32];

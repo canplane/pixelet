@@ -2,17 +2,17 @@
 
 use super::*;
 
-/// The objects' ids are files' numbers, the top's 0 no tile: it is
-/// ranked without a tile read off it.
+/// An object's id is a file's number, and the top's id 0 names no tile, so
+/// the top must rank without a tile read from its id.
 #[test]
 fn object_top_ranked() {
     let r = rank(Stream::object, 0, Order::FIRST);
     assert_eq!((r.class, r.detail), (OBJECT, 0));
 }
 
-/// The pictures start before the catalog's models: the Earth's sphere and a
-/// picture ahead of every model, the Earth's tiles with them; the models still
-/// ahead of places.
+/// The pictures start before the catalog's models. The Earth's sphere, any
+/// other picture and the Earth's tiles all rank ahead of every model, and the
+/// models still rank ahead of places.
 #[test]
 fn pictures_before_models() {
     use crate::sys::io::loader::id_of;

@@ -1,6 +1,7 @@
 // @pxl/client/ui/component/palette.ts
 
-/** iOS's light-mode label and status colors, so the page and an iPhone draw alike. */
+/** iOS's label and status colors as they are in light mode, so that a page
+ * and Android draw as an iPhone does. */
 
 import { alpha, color, SECONDARY, SYSTEM } from "@/ui/component/theme.ts";
 

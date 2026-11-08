@@ -1,8 +1,8 @@
 // @pxl/client/port/surface.ts
 
 /** The surfaces the UI lends the core, on xpute's GPU device
- * (GPU_SURFACE_*), and TURN on the UI's port: the grant each turn the
- * scheduler grants submits before it rings. */
+ * (GPU_SURFACE_*), and TURN on the UI's port: before each turn the scheduler
+ * grants is rung, its grant is submitted here. */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { type FrameGrant, gpu_exports } from "@xpute/runtime";
@@ -10,8 +10,9 @@ import { type SurfaceDriver } from "@/service/types.ts";
 import * as origin from "@/service/origin.ts";
 import { core, ui } from "@/port/core.ts";
 
-/** A surface as the place drives it: 0 opened when the core has none left;
- * `draw`, where given, says what it draws as it opens (scene.ts). */
+/** A surface as the place drives it. Opening answers 0 when the core has no
+ * surface left. `draw`, when given, says what the surface draws as soon as it
+ * opens (scene.ts). */
 export function surface_driver(draw?: (surface: u32) => void): SurfaceDriver {
   return {
     open: async () => {
@@ -27,10 +28,10 @@ export function surface_driver(draw?: (surface: u32) => void): SurfaceDriver {
   };
 }
 
-/** The turn's grant, told the core before each turn the scheduler grants,
- * ahead of the runtime's SYS_TURN, which carries the clock: its pacing,
- * whether it is interactive and the reads allowed out. The scheduler runs only
- * while the world's view is open, so every turn it grants is one the view
+/** Tells the core the grant of a turn the scheduler is about to run: its
+ * pacing, whether it is interactive, and how many reads may go out. It goes
+ * ahead of the runtime's SYS_TURN, which carries the clock. The scheduler runs
+ * only while the world's view is open, so every turn it grants is one the view
  * draws. */
 export function submit_grant(grant: FrameGrant): void {
   core.turn_grant(

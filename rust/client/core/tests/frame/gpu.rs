@@ -1,7 +1,7 @@
-//! The device under the core's frames, as xpute's GPU runtime opens it beside the core: an
-//! error scope held open on the core's thread, where every record runs, so each turn's
-//! submissions are judged by WebGPU's validation; and the device waited out between turns,
-//! so each frame's readback has landed by the next.
+//! The GPU device under the core's frames, opened beside the core as xpute's GPU runtime
+//! opens it. Error scopes stay open on the core's thread, where every recording runs, so
+//! WebGPU's validation judges each turn's submissions. Between turns the harness waits for
+//! the device to finish, so each frame's readback has landed by the next frame.
 
 use std::cell::RefCell;
 use std::time::Duration;
@@ -17,7 +17,7 @@ const FILTERS: [wgpu::ErrorFilter; 2] =
     [wgpu::ErrorFilter::Validation, wgpu::ErrorFilter::Internal];
 
 thread_local! {
-    /// The scopes open on the core's thread, one a filter.
+    /// The scopes open on the core's thread, one for each filter.
     static SCOPES: RefCell<Vec<wgpu::ErrorScopeGuard>> = const { RefCell::new(Vec::new()) };
 }
 
@@ -34,8 +34,8 @@ fn push() {
     });
 }
 
-/// Opens the device as the core's machine asks, its scopes open from here on: none where
-/// no adapter answers.
+/// Opens the device as the core's machine asks, and opens the scopes. Returns None when no
+/// adapter answers.
 pub fn open(core: Core) -> Option<()> {
     if pxl_core::xpute_gpu_open() != 0 {
         return None;
@@ -44,8 +44,9 @@ pub fn open(core: Core) -> Option<()> {
     Some(())
 }
 
-/// The device's work waited out, then what the scopes held since they opened, each scope
-/// opened again at once: an error a line; none where the core has stopped.
+/// Waits for the device's work to finish, then returns the errors the scopes caught since
+/// they opened, one line each, and opens the scopes again at once. Returns no errors when
+/// the core has stopped.
 pub fn take(core: Core) -> Vec<String> {
     let taken = core.run_on(|| {
         device()

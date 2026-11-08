@@ -101,8 +101,8 @@ export function TopOverlays() {
   );
 }
 
-/** One of the strip's modes at a time, inside the dim with the buttons: the
- * scale while zooming, else the address. */
+/** The strip at the top center. It shows the map's scale while zooming and
+ * the address otherwise, and it dims with the buttons beside it. */
 function SearchStrip() {
   const { t } = useTranslation();
   const zooming = useCore((s) => s.zooming);
@@ -144,8 +144,9 @@ function SearchStrip() {
   );
 }
 
-/** A scrim so white reads over a bright world without a blur: flat over
- * SCRIM_WIDTH, then smoothstep fades, since a straight fade's end reads as an edge. */
+/** A dark scrim along the top, so that white chrome reads over a bright world
+ * without a blur. It is flat across `SCRIM_WIDTH` and then fades out along a
+ * smoothstep, because the end of a straight fade reads as an edge. */
 const SCRIM_OPACITY = 0.45;
 const SCRIM_WIDTH = 560;
 const SCRIM_FADE = 240;
@@ -189,11 +190,12 @@ const styles = StyleSheet.create({
     gap: chrome.controlGap,
   },
   fill: { alignSelf: "stretch", flex: 1 },
-  // The whole strip, scale shown or not.
+  // The whole strip takes the press, whether the scale or the address shows.
   strip: { flex: 1, alignItems: "center", justifyContent: "center" },
   place: { maxWidth: "100%" },
   title: { alignItems: "center", gap: haloGap(8) },
-  // Bounded: a page lays a no-wrap row at content width, and the address overran the buttons.
+  // The row is bounded, because a page lays out a row that does not wrap at
+  // its content's width, and a long address would run over the buttons.
   search: {
     flexDirection: "row",
     alignItems: "center",

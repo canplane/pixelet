@@ -1,12 +1,12 @@
 // @pxl/client/sys/fs/tile.ts
 
 /**
- * The bakes' backend: a name the core opens, a tile's quadkey or the Earth's
- * sphere, made the object the source serves (spec/spec/route.json `object`)
- * under the version the declaration gives it, its finest shard's where one
- * names one. Which version a name is under is the client's to say; the name is
- * the core's. tile.fixture.json holds what the core once made of them, and
- * tile.test.ts that this makes the same.
+ * The backend of the bakes' roots. The core opens a name, which is a tile's
+ * quadkey or the Earth's sphere. This reads the object the source serves for
+ * that name (spec/spec/route.json `object`), under the version the
+ * declaration gives it. The name is the core's, and the version is the
+ * client's to choose. tile.fixture.json records the object each name must
+ * map to, and tile.test.ts holds this module to it.
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -20,9 +20,10 @@ import { tile_url } from "@/origin/route.ts";
 import { get } from "@/sys/fs/read.ts";
 import type { Declaration } from "@/sys/fs/source.ts";
 
-/** The version `name` is served under: the finest shard over it, the one its
- * name prefixes, that names one, the last of the finest as declared; else the
- * kind's own. A shard names none of the Earth's (pxl-geo-bake source.rs). */
+/** The version `name` is served under. Among the shards whose quadkey
+ * prefixes `name` and that declare their own version of `kind`, the finest
+ * gives it. Without such a shard, the kind's own version does. No shard
+ * declares a version of the Earth (pxl-geo-bake source.rs). */
 export function version_of(
   d: Declaration,
   kind: BaseLayer,
@@ -41,7 +42,6 @@ export function version_of(
   return finest?.[1] ?? d.version[kind];
 }
 
-/** A bake's object by its name, under the source `declaration`. */
 export function read_object(
   declaration: Declaration,
   bake: u32,

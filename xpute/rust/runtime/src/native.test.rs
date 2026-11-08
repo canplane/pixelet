@@ -1,6 +1,7 @@
 // xpute-runtime/native.test.rs
 
-// A binary of its own: a process boots one core and sets one base.
+// This test is a binary of its own, because a process boots one core and sets
+// one memory base.
 #![cfg(unix)]
 
 use std::sync::OnceLock;
@@ -29,7 +30,7 @@ fn cfg(heap_at: u32) -> Config {
     }
 }
 
-/// A turn that asks for none.
+/// A turn that asks for no next turn.
 fn turn(_: f64) -> f64 {
     -1.0
 }
@@ -134,10 +135,11 @@ fn second_boot_refused() {
 
 #[test]
 fn bad_heap_refused() {
-    // The slab aligns a block by its offset from the heap's first byte.
+    // A heap must begin on a page, because the slab aligns a block by its
+    // offset from the heap's first byte.
     assert!(std::panic::catch_unwind(|| native::boot(&cfg(100), turn)).is_err());
     assert!(std::panic::catch_unwind(|| native::boot(&cfg(MEM_BYTES), turn)).is_err());
-    // Neither took the process's one boot.
+    // Neither refused boot used up the process's one boot.
     let (_, bytes) = core().mem();
     assert_eq!(bytes, MEM_BYTES as usize);
 }
@@ -170,7 +172,7 @@ fn bad_while_idle_refused() {
         std::panic::catch_unwind(move || g.run_on(|| ()).expect("the core has stopped")).is_err()
     });
     assert!(called, "a call inside while_idle would wait for it");
-    // Each refusal left the handoff as it was.
+    // Each refusal left the handoff between the threads as it was.
     assert_eq!(g.run_on(|| 7).expect("the core has stopped"), 7);
     assert_eq!(g.while_idle(|| 8), 8);
 }

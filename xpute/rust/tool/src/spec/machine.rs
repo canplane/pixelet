@@ -1,10 +1,11 @@
 // xpute-tool/spec/machine.rs
 
-//! A program's machine (spec/machine.schema.json): the sockets xpute gives
-//! its core — the memory, the stack, the rings and the GPU device — written
-//! as `MACHINE` for both ends where its `gen` says: the front's places among
-//! it, which the runtime lays and the core holds its header to. Nothing a
-//! protocol carries is in it.
+//! Generates a program's machine (spec/machine.schema.json) as `MACHINE`, for
+//! both ends, into the files its `gen` names. The machine declares what xpute
+//! gives the core: the memory, the stack, the rings, and the file and GPU
+//! devices. `MACHINE` also carries where the front's parts lie, which the
+//! runtime lays out and the core holds its header to. Nothing a protocol
+//! carries is part of the machine.
 
 use std::path::Path;
 
@@ -12,12 +13,12 @@ use serde::Deserialize;
 
 use super::{beside, file, generated, read_as, Output};
 
-/// The page every range of the front begins on (xpute-core mem/section.rs
-/// `PAGE_BYTES`).
+/// The page every range of the front begins on. It must equal xpute-core
+/// mem/section.rs `PAGE_BYTES`.
 const PAGE_BYTES: u32 = 4096;
 
-/// A ring's header and a frame, in words (spec/ipc/ring.json `HEADER_WORDS`,
-/// spec/ipc/frame.json `WORDS`).
+/// The lengths in words of a ring's header and of a frame. They must equal
+/// spec/ipc/ring.json `HEADER_WORDS` and spec/ipc/frame.json `WORDS`.
 const RING_HEADER_WORDS: u32 = 8;
 const FRAME_WORDS: u32 = 4;
 
@@ -25,7 +26,8 @@ const fn page_up(bytes: u32) -> u32 {
     bytes.div_ceil(PAGE_BYTES) * PAGE_BYTES
 }
 
-/// A ring's words (xpute-core ipc/ring.rs `ring_bytes`).
+/// The bytes a ring's header and frames take, as xpute-core ipc/ring.rs
+/// `ring_bytes` computes them.
 const fn ring_bytes(cap: u32) -> u32 {
     (RING_HEADER_WORDS + cap * FRAME_WORDS) * 4
 }
@@ -109,7 +111,8 @@ struct Machine {
     gpu: Option<Gpu>,
 }
 
-/// The file device, asked for by being there.
+/// The file device. A machine asks for it by having an `fs` entry, which
+/// carries nothing else.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Fs {
@@ -117,9 +120,10 @@ struct Fs {
     _doc: Vec<String>,
 }
 
-/// The front's places, as xpute-core machine.rs computes them: the
-/// header's page past the stack, the rings, their slots, and the GPU stream
-/// past them, 0 without a GPU.
+/// Where the front's parts lie, computed as xpute-core machine.rs computes
+/// them: the header's page past the stack, then the rings, their slots, and
+/// the GPU stream past them, which is 0 when the machine has no GPU. The
+/// generated Rust asserts at compile time that both computations agree.
 impl Machine {
     fn head_at(&self) -> u32 {
         page_up(self.stack.module_bytes)
@@ -148,7 +152,7 @@ impl Machine {
         }
     }
 
-    /// Each place by its name on both ends, and its number.
+    /// Each place under the name both ends give it, with its offset.
     fn places(&self) -> [(&'static str, u32); 6] {
         [
             ("head_at", self.head_at()),
@@ -161,8 +165,8 @@ impl Machine {
     }
 }
 
-/// `json`'s machine, from `root`, as Rust and TypeScript where its `gen`
-/// says, each path from `root` as `json` is.
+/// Generates `json`'s machine as Rust and TypeScript into the files its `gen`
+/// names. `json` and the paths of the outputs are relative to `root`.
 pub fn outputs(root: &Path, json: &str) -> Result<Vec<Output>, String> {
     let m: Machine = read_as(&root.join(json).to_string_lossy())?;
     if m.mem.bytes.is_empty() {

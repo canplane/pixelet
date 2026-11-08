@@ -1,8 +1,8 @@
 // @pxl/client/sys/abort.ts
 
-/** The core's last report, its import SYS_ABORT (pxl-core
- * `sys/io/runtime.rs`), logged whole and kept short as a stop code for the UI's
- * panic. */
+/** The core's last report before it stops, which it makes through its import
+ * SYS_ABORT (pxl-core `sys/io/runtime.rs`). The report is logged whole, and
+ * kept short as a stop code for the UI's panic screen. */
 
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import type { Abort } from "@xpute/runtime";
@@ -10,8 +10,10 @@ import { BUILD_NUMBER } from "@/deploy.ts";
 
 let code: string | null = null;
 
-/** The stop code: the errno's name and the file and line, a published build's
- * file a number its paths decode by. None where it stopped without one. */
+/** The stop code gives the errno's name, the file and the line. A published
+ * build names its files by number, so its code also carries the build number,
+ * whose table of paths decodes them. The code is null when the core stopped
+ * without a report. */
 export function stop_code(): string | null {
   return code;
 }

@@ -1,10 +1,10 @@
 // @xpute/gpu/runtime.frames.test.ts
 
-/** The web runtime's frames unfinished, as it tells them in the device's block
- * (spec DEVICE): a turn whose stream took a surface's texture counts one,
- * and the queue's `onSubmittedWorkDone` asked after it takes it off. No
- * GPU: the device, its queue and the canvas are stand-ins, and each
- * `onSubmittedWorkDone` resolves only when the test resolves it. */
+/** The web runtime's unfinished frames, as it tells them in the device's
+ * block (spec DEVICE). A turn whose stream took a surface's texture counts
+ * one, and the queue's `onSubmittedWorkDone`, asked after that turn, takes it
+ * off. No GPU is used: the device, its queue and the canvas are stand-ins,
+ * and each `onSubmittedWorkDone` resolves only when the test resolves it. */
 
 import { afterEach, test, vi } from "vitest";
 import assert from "node:assert/strict";
@@ -14,7 +14,8 @@ import { FEATURE_NAME, LIMIT_NAME } from "./enum.spec.ts";
 import { GpuRuntime } from "./runtime.ts";
 import { OWN_WORDS } from "@xpute/runtime/ipc/stream.spec.ts";
 
-/** The stream at 0, its head the stream's own words; the block past it. */
+/** The stream is at 0, and its head is the stream's own words alone; the
+ * block lies past it. */
 const HEAD = OWN_WORDS;
 const BLOCK_AT = 256;
 const BLOCK_WORDS = LIMIT_NAME.length + Math.ceil(FEATURE_NAME.length / 32) + 4;
@@ -49,7 +50,8 @@ function setup() {
   runtime.bind(SURFACE, {
     getCurrentTexture: () => texture,
   } as unknown as GPUCanvasContext);
-  /** A turn's records, each its op and words, run as the runtime runs one. */
+  /** Runs a turn's records, each given as its op and words, as the runtime
+   * runs a turn. */
   const turn = (...records: number[][]) => {
     let at = HEAD;
     for (const [code, ...args] of records) {
@@ -70,7 +72,7 @@ function setup() {
   };
 }
 
-/** Whatever the queue's promises have resolved, run. */
+/** Lets whatever the queue's promises have resolved run. */
 const settle = () => new Promise((r) => setTimeout(r, 0));
 
 test("a frame drawn is unfinished until the queue's work is done", async () => {

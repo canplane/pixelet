@@ -1,10 +1,11 @@
 // @xpute/kit/math/rng.64.test.ts
 
 /**
- * Holds the TypeScript side to golden/math/rng.64.tsv, which every language's
- * stream must match. Its draws were computed apart from the three, in Python's
- * exact integers masked to 64 bits, whose stream matches rand_xoshiro's
- * SplitMix64 reference vector.
+ * Holds the TypeScript stream to golden/math/rng.64.tsv, the record every
+ * language's stream must match. The record's draws come from none of the
+ * three implementations: they are computed in Python's exact integers masked
+ * to 64 bits, and that stream matches rand_xoshiro's SplitMix64 reference
+ * vector.
  */
 
 import { test } from "vitest";

@@ -1,8 +1,7 @@
 // pxl-render/gpu/mip.rs
 
-//! A texture's mip chain, each level drawn from the one above it
-//! (mip.wgsl): for the texture pack, the cloud sheets' tile, an image and
-//! the marker atlas alike.
+//! Builds a texture's mip chain, drawing each level from the one above it (mip.wgsl). The
+//! texture pack, the cloud sheets' tile, an image and the marker atlas all use it.
 
 use crate::frame::shader::record::PIPELINE_MIP;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};

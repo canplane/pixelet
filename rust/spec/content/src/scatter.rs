@@ -1,16 +1,15 @@
 // pxl-content/scatter.rs
 
-//! gpu-portable: the decor the ground holds, never stored, a tree of hashes: a
-//! column at a decor's root zoom (`ROOTS`) holds as many as one hash draws
-//! about its mean, and each column hands its count down to its four, one hash a
-//! column, to the leaf cells, a unit, which hold one or none (`count`). A leaf
-//! cell's own hash draws its variant and heading (`candidate_at`); one whose
-//! box meets a neighbor's that drew lower gives way to it (`retained`). At a
-//! zoom a decor stands as itself where its box keeps an eighth of that zoom's
-//! cell or more, as a folded cube is drawn, and is none where it keeps none
-//! (`stands_at`), placed or generated alike. Every draw is a u32 (xpute-kit
-//! `SplitMix32`), seeded by the decor's seed and the column (`node_seed`), so
-//! every reader, either side, draws the same.
+//! gpu-portable: the decor the ground holds, never stored, as a tree of hashes. A column at a
+//! decor's root zoom (`ROOTS`) holds as many as one hash draws around its mean, and each
+//! column hands its count down to its four children, one hash a column, down to the leaf
+//! cells, a unit each, which hold one or none (`count`). A leaf cell's own hash draws its
+//! variant and heading (`candidate_at`); one whose box meets the box of a neighbor that drew
+//! lower gives way to it (`retained`). At a zoom, a decor stands as itself where its box keeps
+//! an eighth of that zoom's cell or more, as a folded cube is drawn, and is none where it
+//! keeps none (`stands_at`), placed or generated alike. Every draw is a u32 (xpute-kit
+//! `SplitMix32`), seeded by the decor's seed and the column (`node_seed`), so every reader, on
+//! either side, draws the same.
 
 use pxl_engine::answer::EIGHTHS;
 use pxl_engine::seed::node_seed;
@@ -20,10 +19,9 @@ use xpute_kit::math::rng::SplitMix32;
 use crate::decor::{Decor, DECORS};
 use crate::share;
 
-/// A cell's candidate: the leaf cell it stands at, at every zoom; its first
-/// draw, against the decor's chance and, lower first, the order neighbors
-/// give way in (`before`); and the seed of its own draws after (variant,
-/// heading).
+/// A cell's candidate: the leaf cell it stands at, at every zoom; its first draw, which is
+/// tested against the decor's chance and orders, lower first, which neighbors give way
+/// (`before`); and the seed of its later draws (variant, heading).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Candidate {
     pub cell: [i32; 2],
@@ -39,8 +37,8 @@ impl Candidate {
     };
 }
 
-/// Leaf cell `cell`'s candidate of `decor`, its own draws, and whether the
-/// cell holds one (`count`).
+/// Leaf cell `cell`'s candidate of `decor`, with its own draws, and whether the cell holds
+/// one (`count`).
 pub fn candidate_at(decor: &Decor, cell: [i32; 2]) -> (Candidate, bool) {
     let k = kind_of(decor.val);
     let mut draws = SplitMix32::new(node_seed(SEEDS[k], (LEAF_CELL_ZOOM, cell)));
@@ -54,7 +52,7 @@ pub fn candidate_at(decor: &Decor, cell: [i32; 2]) -> (Candidate, bool) {
     )
 }
 
-/// The first decor's stored value, the rest in the catalog's order after it.
+/// The first decor's stored value; the rest follow in the catalog's order.
 const FIRST_VAL: u32 = DECORS[0].val;
 const _: () = {
     let mut k = 0;
@@ -67,9 +65,9 @@ const _: () = {
     }
 };
 
-/// Each decor's words the hashes read, a small table each, so a GPU's lane
-/// that reads one by a decor's place copies no row of the catalog: its seed
-/// and its chance.
+/// The words of each decor that the hashes read, its seed and its chance, kept in a small
+/// table of their own so that a GPU lane reading one by a decor's place copies no row of the
+/// catalog.
 const SEEDS: [u32; DECORS.len()] = {
     let mut t = [0; DECORS.len()];
     let mut k = 0;
@@ -88,8 +86,8 @@ const CHANCES: [u32; DECORS.len()] = {
     }
     t
 };
-/// Where the decor stored as `val` stands among the catalog's rows, by its
-/// value alone, no row read.
+/// Where the decor stored as `val` stands among the catalog's rows, found from its value
+/// alone, with no row read.
 const fn kind_of(val: u32) -> usize {
     (val - FIRST_VAL) as usize
 }
@@ -99,12 +97,11 @@ const fn kind_of(val: u32) -> usize {
 pub const COUNT: u32 = 0xc047_dec0;
 pub const SPLIT: u32 = 0x5b17_dec0;
 
-/// How many of the `k`-th decor the column `b` at `zoom` holds, a leaf
-/// cell's one or none: its root's column (`ROOTS`) as many as a hash draws
-/// about its mean, the decor's chance a leaf cell under it, rounded at a
-/// uniform draw; then each column's count halved across and along by
-/// weights its hash draws, exactly, none past what its leaf cells hold. None
-/// coarser than the root. Every word read by value.
+/// How many of the `k`-th decor the column `b` at `zoom` holds; a leaf cell holds one or
+/// none. Its root's column (`ROOTS`) holds as many as a hash draws around its mean, the
+/// decor's chance for each leaf cell under it, rounded at a uniform draw. Each column's count
+/// is then halved across and along by weights its hash draws, exactly, with none past what
+/// its leaf cells hold. Coarser than the root, it is none. Every word is read by value.
 pub fn count(k: usize, zoom: Zoom, b: [i32; 2]) -> u32 {
     count_of([SEEDS[k], CHANCES[k], ROOTS[k]], zoom, b)
 }
@@ -115,7 +112,7 @@ pub fn count_of([seed, chance, root]: [u32; 3], zoom: Zoom, b: [i32; 2]) -> u32 
         return 0;
     }
     let at = |z: Zoom| [b[0] >> (zoom - z), b[1] >> (zoom - z)];
-    // The mean in 16.16, the chance's top half a leaf cell.
+    // The mean in 16.16 fixed point: the chance's top half for each leaf cell.
     let mean = (chance >> 16) << (2 * (LEAF_CELL_ZOOM - root));
     let draw = node_seed(seed ^ COUNT, (root, at(root)));
     let mut n = (mean + (draw & 0xffff)) >> 16;
@@ -143,8 +140,8 @@ pub fn before(a: &Candidate, b: &Candidate) -> bool {
             && (a.cell[1] < b.cell[1] || (a.cell[1] == b.cell[1] && a.cell[0] < b.cell[0])))
 }
 
-/// Whether the bricks two candidates claim, `sa` and `sb` cells from their
-/// cells up, share a cell.
+/// Whether the bricks two candidates claim, `sa` and `sb` cells a side counting up from their
+/// cells, share a cell.
 pub fn meet(a: &Candidate, sa: i32, b: &Candidate, sb: i32) -> bool {
     a.cell[0] < b.cell[0] + sb
         && b.cell[0] < a.cell[0] + sa
@@ -177,11 +174,10 @@ pub fn side_of(decor: &Decor, c: &Candidate) -> i32 {
     x.max(y) as i32
 }
 
-/// Whether `c` stands clear of `decor`'s other candidates: none before it
-/// (`before`) claims a brick meeting its own (`side_of`, `meet`), whether or
-/// not that one gives way itself, as Matérn's second thinning keeps one. The
-/// cells asked are those a brick meeting `c`'s may start at, as wide as the
-/// decor's widest.
+/// Whether `c` stands clear of `decor`'s other candidates: no candidate before it (`before`)
+/// claims a brick meeting its own (`side_of`, `meet`), whether or not that one gives way
+/// itself, as Matérn's second thinning keeps one. The cells asked are those at which a brick
+/// meeting `c`'s may start, as wide as the decor's widest.
 pub fn retained(decor: &Decor, c: &Candidate) -> bool {
     let (side, extent) = (side_of(decor, c), decor.widest() as i32 - 1);
     let mut y = c.cell[1] - extent;
@@ -208,20 +204,18 @@ pub fn scatter_at(decor: &Decor, cell: [i32; 2]) -> Option<Candidate> {
     (here && retained(decor, &c)).then_some(c)
 }
 
-/// Whether `variant` of `decor` stands as itself in a clip level at `cell_zoom`, by
-/// its own size, not the clip level's: at the leaves' always, the finest clip
-/// level there is; at a coarser one where its box, in one of the clip level's
-/// cells, keeps an eighth of it or more, floored as a folded cube's share is
-/// (`answer::eighths`), so a decor stands at the zooms a cube of its box is
-/// drawn at (`stands`). Where it keeps none it is none there, and in none
-/// coarser.
+/// Whether `variant` of `decor` stands as itself in a clip level at `cell_zoom`, judged by its
+/// own size, not the clip level's. It always stands at the leaves', the finest clip level
+/// there is. At a coarser one it stands where its box, in one of the clip level's cells, keeps
+/// an eighth of the cell or more, floored as a folded cube's share is (`answer::eighths`), so
+/// a decor stands at the zooms at which a cube of its box is drawn (`stands`). Where it keeps
+/// none, it is none there and at every coarser zoom.
 pub const fn stands_at(decor: &Decor, variant: u32, cell_zoom: Zoom) -> bool {
     stands(decor.sizes[variant as usize], UNIT_ZOOM, cell_zoom)
 }
 
-/// `stands_at` of a box `[x, y, z]` in cells at `own`, by value: the eighths
-/// of a cell at `cell_zoom` its volume fills, floored (`answer::eighths`), one or
-/// more.
+/// `stands_at` for a box `[x, y, z]` in cells at `own`, by value: whether the eighths of a
+/// cell at `cell_zoom` that its volume fills, floored (`answer::eighths`), are one or more.
 const fn stands([x, y, z]: [u32; 3], own: Zoom, cell_zoom: Zoom) -> bool {
     let steps = 3 * (own - if own < cell_zoom { own } else { cell_zoom });
     cell_zoom >= LEAF_CELL_ZOOM || (steps < u32::BITS && (EIGHTHS * x * y * z) >> steps >= 1)
@@ -246,8 +240,8 @@ pub const fn root(decor: &Decor) -> Zoom {
     cell_zoom
 }
 
-/// Each decor's counts' root (`count`, `root`): where a clip level first reads
-/// its columns.
+/// The root of each decor's counts (`count`, `root`): the zoom at which a clip level first
+/// reads its columns.
 pub const ROOTS: [Zoom; DECORS.len()] = {
     let mut roots = [LEAF_CELL_ZOOM; DECORS.len()];
     let mut k = 0;

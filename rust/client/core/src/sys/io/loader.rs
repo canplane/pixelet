@@ -1,18 +1,18 @@
 // pxl-core/sys/io/loader.rs
 
-//! The assets' files, each read at most once: the catalog, the first asked
-//! (`catalog`), the models and the images its slots name, and the Earth's
-//! sphere. An asset is a want in the requests as a tile is, on the same
-//! credits, wanted until it arrives; a slot names no file until the catalog
-//! lands, which its reader takes as one still loading.
+//! The asset files, each read at most once: the catalog, which is asked for
+//! first (`catalog`), the models and images its slots name, and the Earth's
+//! sphere. An asset is a want in the request scheduler just as a tile is, on
+//! the same credits, and it stays wanted until it arrives. A slot names no
+//! file until the catalog lands, and its reader treats it as still loading.
 //!
-//! An open that fails leaves its asset unasked, to be asked again; one the
-//! heap refused room waits as a tile's body does (sys/io/request.rs
-//! `Wait::Room`). Bytes that do not read are final, as asking again brings
-//! the same. A model is its file's bytes, handed once to the scene, which
-//! parses them (`take_gltf`). An image is its file's bytes, handed to the
-//! renderer under the asset's number until its texture lands (pxl-render
-//! `Gpu::image`), and read again where the device is lost.
+//! An open that fails leaves its asset unasked, so that it is asked again.
+//! An open the heap refused room waits as a tile's body does
+//! (sys/io/request.rs `Wait::Room`). Bytes that do not read are final,
+//! because asking again brings the same bytes. A model's bytes are handed
+//! once to the scene, which parses them (`take_gltf`). An image's bytes are
+//! handed to the renderer under the asset's number until its texture lands
+//! (pxl-render `Gpu::image`), and they are read again if the device is lost.
 
 use pxl_spec::asset;
 use pxl_spec::asset::catalog::{Catalog, Slot};
@@ -33,12 +33,13 @@ use crate::sys::sched::edge::{request_world_tick, world_edge};
 
 enum Entry {
     Pending,
-    /// Its bytes in its arrival's task, its credit given back.
+    /// The bytes are with the file's arrival task, and the credit is given
+    /// back.
     InTask,
-    /// Its file's bytes, until its reader takes them in: a model's until the
-    /// scene takes them, an image's until its texture lands.
+    /// The file's bytes, kept until the reader takes them in: a model's until
+    /// the scene takes them, an image's until its texture lands.
     Bytes(Vec<u8>),
-    /// Taken in where its reader keeps it, its bytes gone.
+    /// The reader has taken the file in and keeps it, and the bytes are gone.
     InReader,
     Failed,
 }
@@ -46,12 +47,14 @@ enum Entry {
 const KINDS: usize = LoadKind::ALL.len();
 
 struct Loader {
-    /// By kind, then by number below the asset root, grown to the highest
-    /// asked, none unasked: one file can be wanted as several kinds.
+    /// The entries by kind, then by number below the asset root. A row grows
+    /// to the highest number asked, and an unasked number holds None. One
+    /// file can be wanted as several kinds, so each kind has its own row.
     entries: [Vec<Option<Entry>>; KINDS],
     sphere: [Option<Entry>; KINDS],
     catalog: Option<Catalog>,
-    /// `load_wants`' own, so saying them every turn allocates nothing.
+    /// Scratch for `load_wants`, so that declaring the wants every turn
+    /// allocates nothing.
     wants: Vec<(u64, Order)>,
 }
 
@@ -80,8 +83,8 @@ impl Loader {
     }
 }
 
-/// The catalog the client plugs in (pxl-spec asset/catalog.rs), asked for
-/// when first read; none while it loads.
+/// The catalog the client plugs in (pxl-spec asset/catalog.rs). The first
+/// read asks for it, and it is None while it loads.
 pub fn catalog() -> Option<&'static Catalog> {
     let l = loader();
     l.at(LoadKind::Catalog, Load::File(CATALOG))
@@ -94,8 +97,8 @@ pub fn load_of(slot: Slot) -> Option<Load> {
     catalog().map(|c| Load::File(c.file(slot)))
 }
 
-/// A model's file's bytes, handed over once: none while it loads, and once
-/// taken.
+/// A model's bytes, handed over once. It is None while the file loads and
+/// after the bytes are taken.
 pub fn take_gltf(load: Load) -> Option<Vec<u8>> {
     let entry = loader()
         .at(LoadKind::Gltf, load)
@@ -108,8 +111,9 @@ pub fn take_gltf(load: Load) -> Option<Vec<u8>> {
     Some(bytes)
 }
 
-/// An image as the renderer takes it: the asset's number and its file's
-/// bytes, no bytes once its texture landed; none while it loads.
+/// An image as the renderer takes it: the asset's number and the file's
+/// bytes. The bytes are empty once the texture has landed, and the whole is
+/// None while the file loads.
 pub fn load_image(load: Load) -> Option<(u32, &'static [u8])> {
     match loader()
         .at(LoadKind::Image, load)
@@ -121,7 +125,8 @@ pub fn load_image(load: Load) -> Option<(u32, &'static [u8])> {
     }
 }
 
-/// Kind in the high word, as one file can be wanted as more than one.
+/// A want's id, with the kind in the high word, because one file can be
+/// wanted as more than one kind.
 pub fn id_of(kind: LoadKind, load: Load) -> u64 {
     (kind as u64) << 32 | u64::from(load.id())
 }
@@ -131,9 +136,10 @@ pub fn of_id(id: u64) -> Option<(LoadKind, Load)> {
     Some((kind, Load::of(id as u32)?))
 }
 
-/// What is asked and not yet read, by id, as a stream's wants are said: by
-/// kind, the files by number and the sphere past them, once its source
-/// declares the version it is opened under.
+/// The files asked for and not yet read, by id, in the form a stream
+/// declares its wants. They come by kind, the files by number and the sphere
+/// after them. The sphere is wanted only once its source declares the
+/// version it is opened under.
 pub fn load_wants() -> &'static [(u64, Order)] {
     let l = loader();
     l.wants.clear();
@@ -148,8 +154,8 @@ pub fn load_wants() -> &'static [(u64, Order)] {
     &l.wants
 }
 
-/// A model and an image of one load are one file; which it is read as is
-/// its attempt's id's.
+/// Opens the file of `load`. A model and an image of one load are the same
+/// file, and the attempt's id says which it is read as.
 pub fn open_asset(key: u64, load: Load) {
     let root = match load {
         Load::Sphere => BaseLayer::earth as u32,
@@ -158,8 +164,9 @@ pub fn open_asset(key: u64, load: Load) {
     file::open(root, load.path(), Owner::Load { key });
 }
 
-/// The open answered: the bytes' room taken now, the descriptor closed and
-/// the credit given back, so taking the bytes in holds none of them.
+/// Takes the answer to an asset's open. The room for the bytes is taken now,
+/// the descriptor is closed and the credit is given back, so taking the
+/// bytes in holds neither.
 pub fn on_opened(fd: Fd, key: u64, opened: Opened) {
     let what = attempt_of(key).and_then(|(_, id)| of_id(id));
     let Opened::Bytes(n) = opened else {
@@ -176,7 +183,8 @@ pub fn on_opened(fd: Fd, key: u64, opened: Opened) {
         Ok(reading) => {
             settle(key, Exit::Ok, None);
             *loader().at(kind, load) = Some(Entry::InTask);
-            // The pool holds a task a file in flight (sys/load.rs `LOAD_FILES`).
+            // The task pool has room for one task for each file in flight
+            // (sys/load.rs `LOAD_FILES`), so the spawn cannot fail.
             let spawned = task::spawn(arrival(kind, load, reading), 0);
             xpute_kit::ensure!(spawned, ENOSPC, load.id());
         }
@@ -184,9 +192,9 @@ pub fn on_opened(fd: Fd, key: u64, opened: Opened) {
     }
 }
 
-/// A file read whole, taken in by its own task once the runtime's head has
-/// passed its read: where the turn is spent before the tasks run, each
-/// advances a step a turn, so no arrival waits on another's.
+/// Takes in a file read whole, in a task of its own, once the runtime's head
+/// has passed its read. Where the turn is spent before the tasks run, each
+/// arrival still advances one step a turn, so no arrival waits on another.
 async fn arrival(kind: LoadKind, load: Load, mut reading: Reading) {
     let bytes = loop {
         match file::take_read(reading) {
@@ -199,7 +207,8 @@ async fn arrival(kind: LoadKind, load: Load, mut reading: Reading) {
     let l = loader();
     let entry = match kind {
         LoadKind::Gltf => Entry::Bytes(bytes),
-        // A header sizes it (pxl-spec `asset::image_size`).
+        // An image is kept only where its header gives its size (pxl-spec
+        // `asset::image_size`).
         LoadKind::Image if asset::image_size(&bytes).is_some() => Entry::Bytes(bytes),
         LoadKind::Image => Entry::Failed,
         LoadKind::Catalog => {
@@ -211,12 +220,12 @@ async fn arrival(kind: LoadKind, load: Load, mut reading: Reading) {
         }
     };
     *l.at(kind, load) = Some(entry);
-    // A turn hands it on.
+    // A turn hands the entry on to its reader.
     request_world_tick();
 }
 
-/// The renderer took the texture of the image numbered `image`
-/// (pxl-render `take_complete`): its file goes.
+/// The renderer has made the texture of the image numbered `image`
+/// (pxl-render `take_complete`), so the file's bytes are let go.
 pub fn on_image_complete(image: u32) {
     let Some(load) = Load::of(image) else { return };
     let entry = loader().at(LoadKind::Image, load);
@@ -225,8 +234,9 @@ pub fn on_image_complete(image: u32) {
     }
 }
 
-/// The device went, and every texture an image landed in: each is read
-/// again when next asked for. One still in its bytes is handed again.
+/// The device was lost, and with it every texture an image landed in. Each
+/// such image is read again when it is next asked for. An image whose bytes
+/// are still held is handed to the renderer again.
 pub fn on_images_lost() {
     let l = loader();
     let image = LoadKind::Image as usize;

@@ -12,7 +12,7 @@ use crate::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 use pxl_engine::way::{Stations, INTERVAL_M};
 use pxl_engine::{cells_of_m, LEAF_CELL_ZOOM};
 
-// ---- scatter: pxl-engine's, for the CPU's readers of one cell ----
+// ---- scatter: pxl-content's, for the CPU's readers of one cell ----
 
 pub use pxl_content::scatter::{before, meet, scatter_at, side_of, Candidate};
 
@@ -34,10 +34,9 @@ impl Frame {
         }
     }
 
-    /// Leaf cells a ground meter over the tile, of height as of breadth: the
-    /// scale where its south-west corner lies, one value a tile
-    /// (pxl-engine `cells_of_m`). A leaf tile's is the scale the bake
-    /// makes the ground's heights by, and so a height's meters
+    /// Leaf cells a ground meter over the tile, for height as for breadth: the scale where its
+    /// south-west corner lies, one value a tile (pxl-engine `cells_of_m`). A leaf tile's is the
+    /// scale by which the bake makes the ground's heights, and so a height's meters
     /// (`height_u_per_m`).
     pub fn per_m(self) -> f32 {
         (u_per_m(self.corner[1]) / units(LEAF_CELL_ZOOM)) as f32

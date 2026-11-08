@@ -8,13 +8,14 @@ import { Link, Prose, Section, settingText } from "@/ui/setting/row.tsx";
 import { weight } from "@/ui/component/theme.ts";
 
 /**
- * License notices by the provider each comes from, not run through t().
- * Overture's are as its own Explorer gives them (OvertureMaps/explore-site
- * MapView.jsx, TermsOfUse.jsx): one line and its attribution guide, which
- * carries each source's terms. The land polygons' is their package's own
- * README; GEDTM30's is CC BY's elements; Arnis's is its NOTICE's. GEDTM30's
+ * License notices, grouped by the provider each comes from, and not
+ * translated. Overture's are worded as its own Explorer gives them
+ * (OvertureMaps/explore-site MapView.jsx and TermsOfUse.jsx): one line, and
+ * its attribution guide, which carries each source's terms. The land
+ * polygons' notice is the one in their package's README. GEDTM30's carries
+ * the elements CC BY asks for. Arnis's is the one in its NOTICE. GEDTM30's
  * own inputs (Copernicus DEM, AW3D30) bind GEDTM30's makers, who took them
- * from their licensors, not those who take GEDTM30.
+ * from their licensors, and not those who take GEDTM30.
  */
 export function AttributionSection() {
   const { t } = useTranslation();
@@ -82,7 +83,7 @@ export function AttributionSection() {
   );
 }
 
-/** A provider's name over its notices, apart from the next provider's. */
+/** A provider's name above its notices, set apart from the next provider. */
 function Provider({ name, children }: { name: string; children: ReactNode }) {
   return (
     <View style={styles.provider}>

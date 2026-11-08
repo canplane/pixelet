@@ -1,6 +1,7 @@
 // @pxl/client/ui/drawer/character/picked.tsx
 
-/** The character picked, on its surface: the core draws the companion's character as it is. */
+/** The picked character on a surface of its own, which the core draws as it
+ * draws the companion's character. */
 
 import { useState } from "react";
 import { type StyleProp, StyleSheet, View, type ViewStyle } from "react-native";
@@ -33,7 +34,8 @@ export function PickedCharacter(props: PickedCharacterProps) {
   return (
     <View style={style}>
       {
-        // Hidden until drawn: the canvas still holds the last character's frame.
+        // The surface stays hidden until the core has drawn this character,
+        // because until then its canvas holds the last character's frame.
       }
       <View style={[StyleSheet.absoluteFill, !drawn && styles.hidden]}>
         <CharacterSurface

@@ -1,11 +1,11 @@
 // pxl-core/domain/control/sensor/geolocation.rs
 
 //! The GPS sensor's decisions: when a watch runs and what an error means.
-//! The watch itself is the UI's, and it outlives a momentary error: a
-//! W3C watch ends only on PERMISSION_DENIED or clearWatch, and keeps trying
-//! through POSITION_UNAVAILABLE and TIMEOUT
+//! The UI owns the watch itself, and the watch outlives a momentary error. A
+//! W3C watch ends only on PERMISSION_DENIED or clearWatch, and it keeps
+//! trying through POSITION_UNAVAILABLE and TIMEOUT
 //! (https://www.w3.org/TR/geolocation/#watchposition-method), so nothing is
-//! retried here; a device's module re-arms its own watch where its platform
+//! retried here. A device's module re-arms its own watch where its platform
 //! ends one (ts/client/src/service/sensor.native.ts).
 
 use crate::domain::cmd::GeolocationErrorCode;
@@ -26,9 +26,11 @@ pub enum GeolocationCommand {
 }
 
 struct Geolocation {
-    /// What a return to the foreground resumes.
+    /// Whether the world's surface is open, so a return to the foreground
+    /// starts the watch again.
     open: bool,
-    /// The turn's last; the UI's watch follows it and ignores a repeat.
+    /// The turn's last command. The UI's watch follows it and ignores a
+    /// repeated command.
     command: Option<GeolocationCommand>,
 }
 
@@ -84,15 +86,17 @@ pub fn geolocation_visibility(visible: bool) {
     }
 }
 
-/// A grant from outside the app recovers; otherwise a denial stuck until reload.
+/// A grant from outside the app, such as the device's settings, starts the
+/// watch again. Without it, a denial would stick until the page reloads.
 pub fn on_geolocation_permission_granted() {
     if !device_location_store().is_tracking_location {
         start_watching();
     }
 }
 
-/// `alt` is the ellipsoid's, as GPS gives it; kept over sea level, the
-/// terrain's, by the geoid at the base of the leaf tile it falls in.
+/// A location fix. GPS gives `alt` over the ellipsoid. It is kept over sea
+/// level, the datum the terrain uses, by the geoid's height at the base
+/// corner of the leaf tile the fix falls in.
 pub fn geolocation_fix(lon: f64, lat: f64, alt: Option<f64>, accuracy: f64, course: Option<f64>) {
     let (x0, y0, _) = GROUND
         .cell_of(LEAF_ZOOM, &epsg4326::project(&[lon, lat, 0.0]))
@@ -104,10 +108,11 @@ pub fn geolocation_fix(lon: f64, lat: f64, alt: Option<f64>, accuracy: f64, cour
     device_location_store().set_location([lon, lat], alt, accuracy, course);
 }
 
-/// A momentary error (unavailable, timed out) leaves the watch running, the
-/// pose failed until its next fix; one that ended the watch (a denial, or a
-/// device's watch that could not start) leaves nothing watching, which a
-/// grant or a return to the foreground starts again.
+/// A location error. A momentary error (unavailable, timed out) leaves the
+/// watch running, and the location reads as failed until the next fix. An
+/// error that ended the watch (a denial, or a device's watch that could not
+/// start) leaves nothing watching, and a grant or a return to the foreground
+/// starts the watch again.
 pub fn geolocation_err(code: GeolocationErrorCode) {
     let store = device_location_store();
     store.state = SensorState::failed(match code {

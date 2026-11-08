@@ -1,7 +1,8 @@
 // pxl-core/domain/scene/gizmo.rs
 
-//! The debug views drawn over the world behind the `world_gizmo` setting: the frame's
-//! and the coverage's gizmos, and the lines they are drawn in.
+//! The debug views drawn over the world while the `world_gizmo` setting is
+//! on: the frame gizmo and the coverage gizmo, and the lines both are drawn
+//! in.
 
 pub mod coverage_gizmo;
 pub mod debug_line;

@@ -1,6 +1,8 @@
 // cpp/xpute/kit/collection/deque.hpp
 
-// A ring over a buffer the caller owns; it allocates nothing and never grows.
+// A double-ended queue in a ring over a buffer the caller owns. It allocates
+// nothing and never grows: a push onto a full deque is a bug. `head` and `len`
+// alone say which slots are live.
 
 #pragma once
 
@@ -25,7 +27,6 @@ template <class T> struct Deque {
     const T *front() const noexcept { return len == 0 ? nullptr : &buf[head]; }
     const T *back() const noexcept { return len == 0 ? nullptr : &buf[(head + len - 1) % cap()]; }
 
-    // A full deque is the caller's bug.
     void push_back(T v) noexcept {
         ensure(!is_full(), Errno::enospc, len);
         buf[(head + len) % cap()] = std::move(v);

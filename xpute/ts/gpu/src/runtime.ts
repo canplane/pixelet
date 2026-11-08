@@ -1,11 +1,13 @@
 // @xpute/gpu/runtime.ts
 
 /**
- * The runtime's end of a core's GPU calls: runs a stream's records
- * (spec/gpu/api.json) on a WebGPU device, each object kept at its handle's
- * slot, each enumeration's number turned into WebGPU's string by its place.
- * It is told the core's memory, the device and the surfaces the program
- * binds, and nothing of what the core draws.
+ * The runtime's end of a core's GPU calls on the web, as
+ * rust/gpu/src/runtime.rs is on a native device. It runs a stream's records
+ * (spec/gpu/api.json) on a WebGPU device, and keeps each object the core made
+ * at its handle's slot. An enumeration's number is its place in the spec's
+ * list, which gives WebGPU's string. The runtime is told the core's memory,
+ * the device and the surfaces the program binds, and nothing of what the
+ * core draws.
  */
 
 import type { U32Array } from "@xpute/kit/abi/array.ts";
@@ -64,13 +66,13 @@ type GpuObject =
   | GPURenderPassEncoder
   | GPUComputePassEncoder;
 
-/** A view with its format, which a pass's depth attachment asks of it. */
+/** A view with its format, which a pass's depth attachment needs to know. */
 type View = {
   readonly view: GPUTextureView;
   readonly format: GPUTextureFormat;
 };
 
-/** A texture's place in a copy, its fields refilled record by record. */
+/** A texture's place in a copy, whose fields are refilled record by record. */
 type Place = {
   texture: GPUTexture;
   mipLevel: number;
@@ -87,7 +89,8 @@ function place(): Place {
   };
 }
 
-/** `copyExternalImageToTexture`, which the lib's `GPUQueue` does not list. */
+/** A `GPUQueue` with `copyExternalImageToTexture`, which the lib's type does
+ * not list. */
 type ExternalImageQueue = GPUQueue & {
   copyExternalImageToTexture(
     source: { source: ImageBitmap },
@@ -96,8 +99,9 @@ type ExternalImageQueue = GPUQueue & {
   ): void;
 };
 
-/** A run's words read in order, as the core wrote them: one cursor over
- * the stream, set at each record's first word, so a record makes nothing. */
+/** A record's words, read in order as the core wrote them. One cursor runs
+ * over the whole stream and is set at each record's first word, so reading a
+ * record allocates nothing. */
 class Words {
   private readonly _f: Float32Array;
   at: u32 = 0;
@@ -118,11 +122,11 @@ class Words {
   flag(): boolean {
     return this.u() !== 0;
   }
-  /** Past `n` words, read in place by the caller. */
+  /** Steps past `n` words that the caller reads in place. */
   skip(n: u32): void {
     this.at += n;
   }
-  /** None where the core left it unset. */
+  /** Undefined where the core left the word unset (NONE). */
   opt(): u32 | undefined {
     const v = this.u();
     return v === NONE ? undefined : v;
@@ -139,7 +143,8 @@ class Words {
   }
 }
 
-/** Whether `a`'s generation is behind `b`'s, generations wrapping in their bits. */
+/** Whether handle `a`'s generation is behind `b`'s. Generations wrap in
+ * GENERATION_BITS. */
 function older(a: u32, b: u32): boolean {
   const behind =
     ((a >>> SLOT_BITS) - (b >>> SLOT_BITS)) & ((1 << GENERATION_BITS) - 1);
@@ -148,12 +153,14 @@ function older(a: u32, b: u32): boolean {
 
 export class GpuRuntime {
   private readonly _objects: (GpuObject | undefined)[] = [];
-  /** Each async pipeline still being made, by its handle's slot: its handle,
-   * so a slot let go since, or taken by another, waits for it no more. */
+  /** Each async pipeline still being made: its handle, by its slot. A slot
+   * let go since, or taken by another handle, no longer waits for the
+   * pipeline. */
   private readonly _making = new Map<u32, u32>();
-  /** What a record's call takes, refilled each time rather than made: WebGPU
-   * reads a dictionary only during the call it is given to. Two places, as
-   * a texture-to-texture copy names two. */
+  /** The dictionaries a record's call takes, refilled for each call rather
+   * than made anew, since WebGPU reads a dictionary only during the call it
+   * is given to. There are two places because a texture-to-texture copy
+   * names two. */
   private readonly _places: [Place, Place] = [place(), place()];
   private readonly _buffer_info: GPUTexelCopyBufferInfo = {
     buffer: undefined as unknown as GPUBuffer,
@@ -167,8 +174,9 @@ export class GpuRuntime {
     rowsPerImage: 0,
   };
   private readonly _size: number[] = [0, 0, 0];
-  /** A pass's: its descriptors, its color attachments (as many as one has
-   * had), its depth attachment, its timestamps; a submit's buffers. */
+  /** A pass's dictionaries, refilled the same way: its descriptors, its
+   * color attachments (as many as any pass has had), its depth attachment and
+   * its timestamps; and a submit's command buffers. */
   private readonly _pass: GPURenderPassDescriptor = { colorAttachments: [] };
   private readonly _colors: GPURenderPassColorAttachment[] = [];
   private readonly _depth: GPURenderPassDepthStencilAttachment = {
@@ -179,19 +187,22 @@ export class GpuRuntime {
     querySet: undefined as unknown as GPUQuerySet,
   };
   private readonly _command_bufs: GPUCommandBuffer[] = [];
-  /** At the slot the core names each by, with the core's handle bound there. */
+  /** Each canvas context, at the slot the core names its surface by, with
+   * the handle bound there. */
   private readonly _surfaces = new Map<
     u32,
     { handle: u32; context: GPUCanvasContext }
   >();
-  /** Each slot's newest handle, kept after it is let go: an older one's bind is refused. */
+  /** Each slot's newest handle, kept after it is let go, so that an older
+   * handle's bind is refused. */
   private readonly _seen = new Map<u32, u32>();
-  /** Where the core asked the device's block written, for its frames
-   * unfinished and its status. */
+  /** Where the core asked for the device's block, kept to write its
+   * unfinished frames and its status later. */
   private _block: { address: u32; words: u32 } | undefined;
-  /** The frames drawn whose work the queue has not yet done (spec DEVICE):
-   * a turn's whose stream took a surface's texture, until the queue's
-   * `onSubmittedWorkDone` asked after it resolves. */
+  /** The frames drawn whose work the queue has not yet done (spec DEVICE).
+   * A turn whose stream took a surface's texture draws a frame, which stays
+   * unfinished until the queue's `onSubmittedWorkDone`, asked after the
+   * turn, resolves. */
   private _unfinished_cnt = 0;
   /** This turn's stream has taken a surface's texture. */
   private _drew = false;
@@ -200,8 +211,8 @@ export class GpuRuntime {
   private readonly _memory: () => ArrayBufferLike;
   private readonly _wake: () => void;
 
-  /** `wake` asks the runtime's loop for a turn: a completion written between
-   * turns is read only by a turn. */
+  /** `wake` asks the runtime's loop for a turn. A completion written between
+   * turns is read only by a turn, so each completion calls it. */
   constructor(
     device: GPUDevice,
     memory: () => ArrayBufferLike,
@@ -210,15 +221,17 @@ export class GpuRuntime {
     this._device = device;
     this._memory = memory;
     this._wake = wake;
-    // The core is told of the loss in its block; nothing here destroys the device.
+    // Nothing here destroys the device, so every loss is the browser's. The
+    // core is told of it in its block.
     device.lost.then(() => {
       this._on_lost();
       this._wake();
     });
   }
 
-  /** The canvas's `context` for the core's surface `handle`, named by its
-   * slot in CONFIGURE, RESIZE and CURRENT; refused where a newer handle has
+  /** Binds the canvas's `context` to the core's surface `handle`, which
+   * CONFIGURE, RESIZE and CURRENT name by its slot. A context the slot held
+   * before is unconfigured. False, binding nothing, where a newer handle has
    * bound the slot since. */
   bind(handle: u32, context: GPUCanvasContext): boolean {
     const slot = handle_slot(handle);
@@ -231,8 +244,8 @@ export class GpuRuntime {
     return true;
   }
 
-  /** Lets `handle`'s context go where it is still the one bound under its
-   * slot: an older handle unbinds no newer one. */
+  /** Lets `handle`'s context go, if `handle` is still the one bound in its
+   * slot, and says whether it was. An older handle unbinds no newer one. */
   unbind(handle: u32): boolean {
     const slot = handle_slot(handle);
     const bound = this._surfaces.get(slot);
@@ -242,7 +255,8 @@ export class GpuRuntime {
     return true;
   }
 
-  /** The device went: every object with it, and the core told in its block. */
+  /** Forgets every object of the device that went, and tells the core in its
+   * block. */
   private _on_lost(): void {
     this._objects.length = 0;
     this._making.clear();
@@ -256,9 +270,9 @@ export class GpuRuntime {
     }
   }
 
-  /** Runs the stream at `at` as the turn left it, from past the head it
-   * says; a frame it drew counted unfinished until the queue has done the
-   * work submitted with it. */
+  /** Runs the stream at `at` as the turn left it, and hands it back. A frame
+   * the stream drew counts as unfinished until the queue has done the work
+   * submitted with it. */
   run(at: u32): void {
     let r: Words | undefined;
     this._drew = false;
@@ -274,8 +288,8 @@ export class GpuRuntime {
       .then(() => this._tell_unfinished(this._unfinished_cnt - 1));
   }
 
-  /** The frames unfinished, kept and told the core in its block with
-   * release (spec DEVICE). */
+  /** Keeps the count of unfinished frames, and stores it with release into
+   * the device's block (spec DEVICE). */
   private _tell_unfinished(cnt: number): void {
     this._unfinished_cnt = cnt;
     if (!this._block) return;
@@ -304,11 +318,11 @@ export class GpuRuntime {
     return new Uint8Array(this._memory(), address, size);
   }
 
-  /** An async pipeline's word and ticket, read past the sync op's words
-   * (RENDER_PIPELINE_ASYNC, COMPUTE_PIPELINE_ASYNC): the pipeline kept at
-   * `id` once `made` gives it, where the slot still waits for `id`, and its
-   * word written. One the device refuses is made with the sync call, which
-   * reports its error as the sync op's does. */
+  /** Reads an async pipeline's fence and ticket, which follow the sync op's
+   * words (RENDER_PIPELINE_ASYNC, COMPUTE_PIPELINE_ASYNC). Once `made` gives
+   * the pipeline, it is kept at `id` and its ticket stored, provided the
+   * slot still waits for `id`. A pipeline the device refuses is made again
+   * by the sync call, so its error is reported as the sync op's is. */
   private _make_async<P extends GPURenderPipeline | GPUComputePipeline>(
     id: u32,
     r: Words,
@@ -322,7 +336,8 @@ export class GpuRuntime {
     const waits = () => this._making.get(slot) === id;
     made
       .catch((e: unknown) => {
-        // Named, as the sync call's own error names no pipeline on every device.
+        // Logged with its label, since the sync call's own error does not
+        // name the pipeline on every device.
         console.error(
           `[gpu] pipeline ${label} refused: ${e instanceof Error ? e.message : String(e)}`,
         );
@@ -336,9 +351,10 @@ export class GpuRuntime {
       });
   }
 
-  /** The request asked with `ticket` answered at the fence `word`
-   * (RESULT): `result` into the word after it first, where the request has
-   * one, then the ticket, with release; and a turn asked to read it. */
+  /** Answers the request asked with `ticket` at the fence `word` (spec
+   * RESULT). Where the request has a result, it goes into the word after the
+   * fence first; the ticket is then stored with release, so a core that sees
+   * the ticket sees the result. A turn is then asked for, to read it. */
   private _signal(word: u32, ticket: u32, result?: u32): void {
     const w = new Uint32Array(
       this._memory(),
@@ -350,8 +366,9 @@ export class GpuRuntime {
     this._wake();
   }
 
-  /** A texture's place read into `p`: one of `places` where WebGPU reads
-   * it only during the call, a fresh one where it is kept past it. */
+  /** Reads a texture's place into `p`. `p` is one of `_places` where WebGPU
+   * reads it only during the call, and a fresh one where it is kept past the
+   * call. */
   private _texturePlace(r: Words, p: Place): Place {
     p.texture = this._get<GPUTexture>(r.u());
     p.mipLevel = r.u();
@@ -614,7 +631,8 @@ export class GpuRuntime {
           buffers: Array.from({ length: r.u() }, (): GPUVertexBufferLayout => ({
             arrayStride: r.u(),
             stepMode: VERTEX_STEP_MODE[r.u()],
-            // WebGPU's newer formats are past what the lib's type lists.
+            // WebGPU's newer vertex formats are missing from the lib's type,
+            // hence the cast.
             attributes: Array.from(
               { length: r.u() },
               (): GPUVertexAttribute => ({
@@ -667,7 +685,8 @@ export class GpuRuntime {
               r.u(),
               r.u(),
             ];
-            // As the formats, WebGPU's newer factors are past what a DOM lib's type lists.
+            // WebGPU's newer blend factors are missing from the lib's type
+            // too, hence the cast.
             const factor = (k: u32) => BLEND_FACTOR[k] as GPUBlendFactor;
             const blend =
               cop === NONE
@@ -687,7 +706,8 @@ export class GpuRuntime {
             return { format, blend, writeMask: r.u() };
           },
         );
-        // Named by its entries, which a device's error about it names.
+        // The label is the pipeline's entry points, so a device's error
+        // about the pipeline says which one it is.
         const desc: GPURenderPipelineDescriptor = {
           label:
             module === undefined
@@ -729,7 +749,8 @@ export class GpuRuntime {
         const layout = r.opt();
         const module = this._get<GPUShaderModule>(r.u());
         const entryPoint = r.text();
-        // Named by its entry, which a device's error about it names.
+        // The label is the pipeline's entry point, so a device's error about
+        // the pipeline says which one it is.
         const desc: GPUComputePipelineDescriptor = {
           label: entryPoint,
           layout:
@@ -804,8 +825,9 @@ export class GpuRuntime {
         layout.bytesPerRow = r.u();
         layout.rowsPerImage = r.u();
         const size = this._extent(r);
-        // The bytes where they lie: in the record, a count then them, or at
-        // an address and size in the core's memory; the layout says where.
+        // The bytes are read where they lie: in the record after their count
+        // for WRITE_TEXTURE, or at an address in the core's memory for
+        // WRITE_TEXTURE_AT. The layout's offset says where.
         let data: ArrayBuffer;
         if (code === op.WRITE_TEXTURE) {
           const n = r.u();
@@ -823,12 +845,12 @@ export class GpuRuntime {
       case op.COPY_EXTERNAL_IMAGE: {
         const to = this._texturePlace(r, place());
         const [flipY, premultipliedAlpha] = [r.flag(), r.flag()];
-        // Copied now: the bytes are the core's again once the stream is
-        // handed back (xpute-core ipc/stream.rs R3).
+        // The bytes are copied now, since they are the core's again once the
+        // stream is handed back (xpute-core ipc/stream.rs R3).
         const image = new Blob([this._bytesAt(r.u(), r.u()).slice()]);
         const [word, ticket] = [r.u(), r.u()];
-        // One whose texture went, with the device or by the core, is
-        // answered nothing; one the browser cannot decode, REFUSED.
+        // An image whose texture is gone, with the device or by the core, is
+        // not answered. One the browser cannot decode is answered REFUSED.
         createImageBitmap(image, {
           imageOrientation: flipY ? "flipY" : "from-image",
           premultiplyAlpha: premultipliedAlpha ? "premultiply" : "none",
@@ -949,7 +971,8 @@ export class GpuRuntime {
           sro = r.flag();
         this._pass.depthStencilAttachment = undefined;
         if (depth !== undefined) {
-          // WebGPU refuses ops on an aspect the format lacks, or one read only.
+          // WebGPU refuses load and store ops on an aspect the format lacks,
+          // or on one read only, so those are left unset.
           const { view, format } = this._get<View>(depth);
           const a = this._depth;
           a.view = view;
@@ -1000,7 +1023,8 @@ export class GpuRuntime {
         const index = r.u();
         const group = this._get<GPUBindGroup>(r.u());
         const offsets = r.u();
-        // Hundreds a frame: the offsets are read where they lie, no array made.
+        // A frame sets hundreds of bind groups, so the offsets are read where
+        // they lie and no array is made.
         pass.setBindGroup(index, group, r.w, r.at, offsets);
         r.skip(offsets);
         return;
@@ -1124,8 +1148,9 @@ export class GpuRuntime {
         const address = r.u();
         const word = r.u();
         const ticket = r.u();
-        // Where the device went since (`lost`) it lands nowhere, as the native
-        // runtime's pending reads are dropped; one the device refused, REFUSED.
+        // A read whose buffer is gone since, with the device (`lost`) or by
+        // the core, lands nowhere, as the native runtime drops its pending
+        // reads. A read the device refused is answered REFUSED.
         buffer.mapAsync(GPUMapMode.READ, offset, size).then(
           () => {
             if (this._get<GPUBuffer>(id) !== buffer) return;
@@ -1190,7 +1215,7 @@ export class GpuRuntime {
             out[LIMIT_NAME.length + (k >> 5)] |= 1 << (k & 31);
           }
         });
-        // WebGPU resolves timestamps in nanoseconds.
+        // WebGPU resolves timestamps in nanoseconds, so the period is 1.
         const period = LIMIT_NAME.length + Math.ceil(FEATURE_NAME.length / 32);
         new Float32Array(this._memory(), address, words)[period] = 1;
         out[period + 1] = (TEXTURE_FORMAT as readonly string[]).indexOf(

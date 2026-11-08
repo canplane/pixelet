@@ -1,11 +1,13 @@
 // pxl-render/record_box.wgsl
 
-// A drawable entry's box (pxl-engine raster.rs), as the record's draw tests it against the
-// observer's view (record_draw.wgsl) and the raster draws it off the entry's slot
-// (raster.wgsl): over the node cache as the module binds it, read through `node_cache_word`.
+// The box of a drawable entry (pxl-engine raster.rs). The record's draw tests this box against
+// the observer's view (record_draw.wgsl), and the raster draws it from the entry's slot
+// (raster.wgsl), so both see the same box. The module that includes this part binds the node
+// cache and reads it through `node_cache_word`.
 
-/// Slot `slot`'s entry's box from the origin `o`, the cell its asset keeps inset as it fills
-/// (pxl-engine cast.rs `asset_box`).
+/// The box of the entry in slot `slot`, whose node is `k`, in units from the origin `o`
+/// (pxl-engine cast.rs `asset_box`). Where the entry's asset fills only part of its cube, the
+/// box is inset on each axis to the part it fills.
 fn entry_box(slot: u32, k: Node, o: vec3<i32>) -> Planes {
   let p = kept_planes(k, o);
   let eighths = (node_cache_word(entry_at(slot) + W_ASSET) >> FILL_SHIFT) & (EIGHTHS - 1u);

@@ -1,17 +1,16 @@
 // @pxl/client/sys/fs/object.ts
 
 /**
- * OBJECT's backend: the placed objects' source, for now a loopback over the
- * platform's database (service/db.ts). It serves what the core reads, a shard's
- * file by the shard's quadkey and the top of the tree (file.json
- * `object.TOP`), and takes what it writes, edit batches (`object.EDITS`): it
- * lays each batch's writes over the shards they lie in, keeps them, and
- * rebuilds the top's rows of those shards (object_tree.ts), in one
- * transaction. A shard is kept under a key a shard, named as the shard's tile
- * is, and the top under its own; a shard with none, or a top with no row, has
- * no file. A server answers the same `open` and `commit` in its place
- * (namespace.ts): the core cannot tell which. A batch that is not kept is
- * logged: a commit has no answer to the core.
+ * The backend of the core's OBJECT files, which hold the objects placed in the
+ * world. It keeps them in the platform's database (service/db.ts). The core
+ * reads two kinds of file: a shard, named by its tile's quadkey, and the top
+ * of the tree (`object.TOP` in file.json). The core writes one: a batch of
+ * edits to `object.EDITS`. In one transaction, each batch is laid over the
+ * shards its writes fall in, and the top's rows for those shards are rebuilt
+ * (object_tree.ts). A shard with no leaves has no file, and neither has a top
+ * with no rows. A server can answer the same `open` and `commit` instead
+ * (namespace.ts), and the core cannot tell the two apart. A commit sends no
+ * answer back to the core, so a batch that cannot be kept is only logged.
  */
 
 import type { U32Array, U8Array } from "@xpute/kit/abi/array.ts";
@@ -30,15 +29,15 @@ import {
 import { type Tx } from "@/service/types.ts";
 import * as db from "@/service/db.ts";
 
-/** The tree packet a file of `fmt` holds past its format byte; EBADMSG for
- * one of another format. */
+/** A file is one format byte followed by a tree packet. A file whose format
+ * byte is not `fmt` is refused with EBADMSG. */
 function packet(fmt: number, bytes: U8Array): U8Array {
   if (bytes[0] !== fmt) throw new FileError(Errno.EBADMSG);
-  // A packet starts on a word: its own copy does.
+  // The tree reader needs the packet to start on a word boundary. A view at
+  // offset 1 would not, so the packet is copied.
   return bytes.slice(1);
 }
 
-/** `pkt` after `fmt`, as a file. */
 function as_file(fmt: number, pkt: U8Array): U8Array {
   const out = new Uint8Array(1 + pkt.byteLength);
   out[0] = fmt;
@@ -46,7 +45,8 @@ function as_file(fmt: number, pkt: U8Array): U8Array {
   return out;
 }
 
-/** The writes a file of `fmt` holds (file.json `write`), in order. */
+/** Returns the writes in a file of `fmt` in the order they were written. The
+ * layout is file.json's `write`. */
 export function decode_writes(fmt: number, bytes: U8Array): Leaf[] {
   const [keys, id, rows, texts] = new TreeReader(packet(fmt, bytes))
     .read_branch()
@@ -62,7 +62,6 @@ export function decode_writes(fmt: number, bytes: U8Array): Leaf[] {
   return out;
 }
 
-/** `leaves` as a file of `fmt` (file.json `write`). */
 export function encode_writes(fmt: number, leaves: readonly Leaf[]): U8Array {
   const rows: number[] = [];
   const texts: string[] = [];
@@ -72,7 +71,7 @@ export function encode_writes(fmt: number, leaves: readonly Leaf[]): U8Array {
     texts.push(l.text);
   });
   const tree = new TreeView();
-  // In file.json `write`'s order.
+  // The fields go in the order file.json's `write` lists them.
   tree.branch((b) =>
     b
       .strs(leaves.map((l) => l.key))
@@ -83,7 +82,7 @@ export function encode_writes(fmt: number, leaves: readonly Leaf[]): U8Array {
   return as_file(fmt, new TreeEncoder().encode(tree, { init_cap: 1 << 12 }));
 }
 
-/** The top's rows (file.json `top`). */
+/** Returns the top's rows. The layout is file.json's `top`. */
 export function decode_top(bytes: U8Array): TopRow[] {
   const [shard, fold] = new TreeReader(packet(format.OBJECT_TOP, bytes))
     .read_branch()
@@ -92,10 +91,9 @@ export function decode_top(bytes: U8Array): TopRow[] {
   return shard.map((s, r) => ({ shard: s, fold: fold[r]! }));
 }
 
-/** `rows` as the top (file.json `top`). */
 export function encode_top(rows: readonly TopRow[]): U8Array {
   const tree = new TreeView();
-  // In file.json `top`'s order.
+  // The fields go in the order file.json's `top` lists them.
   tree.branch((b) =>
     b
       .strs(rows.map((r) => r.shard))
@@ -107,17 +105,18 @@ export function encode_top(rows: readonly TopRow[]): U8Array {
   );
 }
 
-/** By shard. */
 function by_shard(a: TopRow, b: TopRow): number {
   return a.shard < b.shard ? -1 : a.shard > b.shard ? 1 : 0;
 }
 
-/** The database as the platform gives it (service/db.ts). */
+/** What the backend needs of the platform's database (service/db.ts). A test
+ * passes its own. */
 export type Db = { transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> };
 
 const DB: Db = db;
 
-/** Moves what `key` holds to `<key>:aside:<ms>`, none of an older one lost. */
+/** Moves the value under `key` to `<key>:aside:<now_ms>`. A value set aside
+ * earlier is never overwritten: a clash takes a numbered suffix. */
 async function move_aside(tx: Tx, key: string, now_ms: number): Promise<void> {
   const bytes = await tx.get(key);
   if (bytes === null) return;
@@ -129,7 +128,8 @@ async function move_aside(tx: Tx, key: string, now_ms: number): Promise<void> {
   await tx.put(key, null);
 }
 
-/** The top's rows as kept; a top of another build set aside, none. */
+/** Reads the kept top's rows. A top that does not decode was written by
+ * another build: it is set aside and read as empty. */
 async function rows_of(tx: Tx): Promise<TopRow[]> {
   const bytes = await tx.get(object.TOP);
   if (bytes === null) return [];
@@ -141,7 +141,8 @@ async function rows_of(tx: Tx): Promise<TopRow[]> {
   }
 }
 
-/** A shard's leaves as kept; a shard of another build set aside, none. */
+/** Reads a kept shard's leaves. A shard that does not decode was written by
+ * another build: it is set aside and read as empty. */
 async function leaves_of(tx: Tx, shard: string): Promise<Leaf[]> {
   const bytes = await tx.get(shard);
   if (bytes === null) return [];
@@ -157,8 +158,6 @@ async function put_top(tx: Tx, rows: readonly TopRow[]): Promise<void> {
   await tx.put(object.TOP, rows.length === 0 ? null : encode_top(rows));
 }
 
-/** `writes`: every shard they reach read, laid over each in order, then each
- * kept with its rows of the top. */
 async function apply_edits(tx: Tx, writes: readonly Leaf[]): Promise<void> {
   const shards = new Map<string, Map<string, Leaf>>();
   for (const w of writes) {
@@ -186,9 +185,9 @@ async function apply_edits(tx: Tx, writes: readonly Leaf[]): Promise<void> {
   await put_top(tx, others);
 }
 
-/** OBJECT's backend over `db`: a file read whole, ENOENT where none is kept,
- * after every batch committed before it; an edit batch applied in the order
- * written; a file the core refused set aside. */
+/** OBJECT's backend over `db`. A read sees every batch committed before it,
+ * because the database runs its transactions one at a time, in the order they
+ * were begun. */
 export function object_backend(db: Db = DB): {
   open(path: string): Promise<U8Array>;
   commit(path: string, bytes: U8Array): void;
@@ -209,8 +208,9 @@ export function object_backend(db: Db = DB): {
         console.error("[object] an edit batch was not kept:", err);
       });
     },
-    /** A file the core refused set aside and emptied; a shard's rows of
-     * the top go with it. False, nothing changed, where the database failed. */
+    /** Sets aside a file the core refused, so that its path reads as empty.
+     * A shard's rows leave the top with it. Resolves false, with nothing
+     * changed, when the database fails. */
     set_aside(path, now_ms) {
       return db
         .transaction(async (tx) => {
@@ -226,6 +226,6 @@ export function object_backend(db: Db = DB): {
   };
 }
 
-/** The one OBJECT is bound to (namespace.ts), and refusals are set aside by
- * (refusal.ts). */
+/** The backend that namespace.ts binds OBJECT to, and that refusal.ts sets
+ * refused files aside through. */
 export const OBJECTS = object_backend();

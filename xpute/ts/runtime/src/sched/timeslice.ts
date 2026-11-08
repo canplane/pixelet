@@ -1,8 +1,8 @@
 // @xpute/runtime/sched/timeslice.ts
 
 /**
- * A scheduling policy (policy.ts) for a runtime with no display to pace to,
- * which shares its thread with the core: a turn asked for runs at the event
+ * A scheduling policy (policy.ts) for a runtime that has no display to pace
+ * to and shares its thread with the core. A turn asked for runs at the event
  * loop's next pass and ends by a deadline one slice away, as SCHED_RR's
  * timeslice ends a turn on a shared CPU.
  */

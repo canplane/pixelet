@@ -2,7 +2,8 @@
 
 //! The location indicator's tuned numbers: its zone's footprint and its beacon.
 
-/// The zone's footprint in world units, whatever the ground's cell.
+/// How far the zone reaches from its center, in world units. It does not
+/// change with the size of the ground's cell.
 pub const ZONE_FOOTPRINT_U: f64 = 4.0;
 
 pub const BEACON_Z_BIAS: f64 = 0.5;

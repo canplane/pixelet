@@ -1,7 +1,9 @@
 // xpute-core/lib.rs
 
-//! The core's side of the runtime, over `xpute-kit`. Using it means running
-//! its way: a turn on a doorbell, a deadline from the frame, I/O asked of the runtime.
+//! The library OS a core is built on, over `xpute-kit`. A core built on it
+//! runs in turns that its runtime starts when a doorbell rings, each turn
+//! with a deadline the runtime gives, and it asks the runtime for all its
+//! I/O.
 
 pub mod abi;
 pub mod call;

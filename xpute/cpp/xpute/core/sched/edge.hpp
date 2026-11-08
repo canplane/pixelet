@@ -1,9 +1,21 @@
 // cpp/xpute/core/sched/edge.hpp
 
-// A core's side of the turn: the deadline it keeps, the tasks parked until
-// the next rising edge, and what the falling edge asks for. A task parks at
-// most once a turn, so the edge holds no more wakers than the core has tasks:
-// its lists grow to the most parked at once and keep that room.
+// The core's side of a turn. A turn begins at its rising edge (`rise`),
+// which sets its deadline, and ends at its falling edge (`fall`), which
+// answers when the core wants the next turn. A task that must wait for a
+// later turn parks here in between.
+//
+// Only `rise` wakes a parked task; a task never wakes itself. An executor
+// that re-reads its queue within one poll would otherwise run a self-woken
+// task again, past the deadline. A task parks at most once a turn, so the
+// edge never holds more wakers than the core has tasks; its lists grow to
+// the most ever parked at once and keep that room.
+//
+// A task parked by `next_turn` asks for the next turn at once. A task parked
+// by `runtime_turn` waits on the runtime and asks for no turn: the runtime
+// starts the next turn itself once it has done what the task waits for,
+// because its read of the completion ring kicks the core. A core on its own
+// thread therefore does not spin while the runtime has not yet read.
 
 #pragma once
 
@@ -33,7 +45,9 @@ class Edge {
         runtime_parked_.clear();
     }
 
-    // Reading clears it.
+    // Answers in how many ms the core wants the next turn: 0 when a task
+    // asked or parked for it, else the time until the earliest `wake_at`,
+    // else NO_WAKE. It clears what it answers, so every turn asks afresh.
     double fall() noexcept {
         bool resched = std::exchange(resched_, false) || !parked_.empty();
         double at = std::exchange(wake_at_, std::numeric_limits<double>::infinity());
@@ -47,24 +61,26 @@ class Edge {
 
     bool spent() const noexcept { return now() >= until_; }
 
-    // The tasks yield no sooner than `at`, whatever the deadline, so what overran
-    // it does not take the tasks' turn too.
+    // Keeps the tasks running until at least `at`, past the deadline if need
+    // be, so that work which overran the deadline does not also take the
+    // tasks' share of the turn.
     void extend_to(double at) noexcept { until_ = std::max(until_, at); }
 
     void ask_next() noexcept { resched_ = true; }
 
-    // The earliest asked wins.
     void wake_at(double at) noexcept { wake_at_ = std::min(wake_at_, at); }
 
     void park(Waker waker) noexcept { parked_.push_back(waker); }
 
-    // Parked until a turn the runtime begins: `fall` asks for none for it.
+    // Parks a task until the runtime begins a turn. `fall` asks for no turn
+    // on its behalf.
     void park_runtime(Waker waker) noexcept { runtime_parked_.push_back(waker); }
 
   private:
     double edge_at_ = 0;
     double deadline_ms_ = 0;
-    // When the tasks yield: the deadline's end, or later (`extend_to`).
+    // The time at which the turn's tasks yield: the deadline's end, or later
+    // where `extend_to` kept the tasks their share after earlier work overran.
     double until_ = 0;
     std::vector<Waker> parked_;
     std::vector<Waker> runtime_parked_;
@@ -95,15 +111,14 @@ struct RuntimeParkAwaiter {
     void await_resume() const noexcept {}
 };
 
-// Parked until the next turn the runtime begins, asking for none: the runtime begins
-// it once it has done what the task waits for, as its read of the completion
-// ring kicks one.
+// Waits for the next turn the runtime begins, without asking for one.
 inline RuntimeParkAwaiter runtime_turn(Edge &edge) noexcept {
     return RuntimeParkAwaiter{edge};
 }
 
-// A wait for something to arrive that asks for no turn meanwhile, so an idle
-// core is left alone. A notice that comes before the wait is kept for it.
+// A wait for a notice that asks for no turn meanwhile, so an idle core is
+// left alone; parking instead would ask for every turn. One task at a time
+// waits on a `Notify`, and a notice that comes before the wait is kept for it.
 class Notify {
   public:
     void notify() noexcept {

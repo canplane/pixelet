@@ -3,8 +3,8 @@
 use super::*;
 use crate::sys;
 
-/// The client's answer to `open_storage` where there is no runtime: `bytes`
-/// read whole, or an open that came to none.
+/// Stands in for the client's answer to `open_storage` where there is no
+/// runtime: the bytes read whole, or an open that brought none.
 pub fn on_storage_answered(answer: Result<&[u8], Opened>) {
     match answer {
         Ok(bytes) => set_read(ReadState::Read(storage_of(bytes.to_vec()))),
@@ -19,7 +19,7 @@ fn read(bytes: &[u8]) -> Option<Vec<u8>> {
     }
 }
 
-/// What the settings keep is read past their format byte.
+/// What the settings keep is read without their format byte.
 #[test]
 fn storage_file_format() {
     let _g = sys::serial();
@@ -47,8 +47,8 @@ fn foreign_format_refused() {
     assert!(!is_storage_refused());
 }
 
-/// A file its backend cannot read as bytes is refused as one of another
-/// format; any other failure leaves it unread, not refused.
+/// A file its backend cannot read as bytes is refused, as a file of another
+/// format is. Any other failure leaves the file unread but not refused.
 #[test]
 fn unreadable_bytes_refused() {
     let _g = sys::serial();
@@ -70,7 +70,8 @@ fn object_path_decimal() {
     assert_eq!(storage_path().as_str(), storage::SETTINGS.to_string());
 }
 
-/// A key's path and back: a shard's quadkey and the top's own name.
+/// A key maps to its path and back: a shard to its quadkey, and the top to
+/// its own name.
 #[test]
 fn path_of_key() {
     let shard = Quadrant::of_key("0123").expect("a tile");

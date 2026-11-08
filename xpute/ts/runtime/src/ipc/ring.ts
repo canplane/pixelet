@@ -1,10 +1,11 @@
 // @xpute/runtime/ipc/ring.ts
 
 /** A ring of frames, laid out by spec/ipc/ring.json. Each end writes one of
- * the positions, the producer TAIL and the consumer HEAD: it reads its own as
- * it stands, stores it with release after the frames it covers, and loads the
- * other's with acquire before them (atomic.ts), so a core on another thread
- * reads what they say. */
+ * the two positions: the producer writes TAIL and the consumer writes HEAD.
+ * An end reads its own position plainly, stores it with release after it is
+ * done with the frames it covers, and loads the other end's with acquire
+ * before it touches those frames (atomic.ts), so that a core on another
+ * thread sees the frames the positions cover. */
 
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -37,12 +38,14 @@ function padded(bytes: u32): u32 {
   return Math.ceil(bytes / WORD_SZ) * WORD_SZ;
 }
 
-/** A power of two, so a position masks to its slot. */
+/** A capacity must be a power of two, so that a position masks to its
+ * slot. */
 function is_pow2(n: u32): boolean {
   return n !== 0 && (n & (n - 1)) === 0;
 }
 
-/** A packet's header plus the payload its second word names. */
+/** The bytes a packet takes: its header plus the payload length its second
+ * word holds, padded. */
 function pkt_bytes(u8: U8Array, at: u32): u32 {
   const word = at + WORD_SZ;
   const payload =
@@ -74,7 +77,8 @@ export class Ring {
     this.slot_base = head[SLOT_BASE];
     this.mask = cap - 1;
     this.words = new Uint32Array(mem, at, ring_bytes(cap) / 4);
-    // Never a SharedArrayBuffer here, and the tree reader takes an ArrayBuffer view.
+    // The memory is never a SharedArrayBuffer here, and the tree reader takes
+    // a view of an ArrayBuffer.
     this.slots = new Uint8Array(
       mem as ArrayBuffer,
       this.slot_base,
@@ -114,7 +118,8 @@ export class Ring {
     return load_acquire(this.words, TAIL);
   }
 
-  /** The frames not yet taken, as their producer counts them. */
+  /** How many frames are not yet taken, counted from the producer's side:
+   * TAIL is read plainly, as only its writer may. */
   get len(): u32 {
     return (this.words[TAIL] - this.head) >>> 0;
   }
@@ -127,8 +132,8 @@ export class Ring {
     return ((pos & this.mask) >>> 0) * this.slot_bytes;
   }
 
-  /** Begins `w` over the tail's slot, a packet of `cnt` children written
-   * in place; false, beginning nothing, when the ring is full. */
+  /** Begins `w` over the tail's slot, for a packet of `cnt` children written
+   * in place. Returns false, and begins nothing, when the ring is full. */
   write(w: PacketWriter, cnt: u32): boolean {
     if (this.len >= this.cap) return false;
     w.begin(
@@ -141,8 +146,9 @@ export class Ring {
     return true;
   }
 
-  /** EAGAIN, writing nothing, when full; EMSGSIZE when the packet a writer wrote
-   * in the tail's slot (`write`) exceeds it: refused, never split. */
+  /** Publishes a frame at the tail. Returns EAGAIN, writing nothing, when the
+   * ring is full, and EMSGSIZE when the packet written in the tail's slot
+   * (`write`) does not fit it; a packet is refused, never split. */
   push(
     tag: u32,
     cmd: u32,
@@ -171,8 +177,8 @@ export class Ring {
     return Errno.OK;
   }
 
-  /** The entry whose words begin at `offset` in the memory, as `peek` gives
-   * one; EBADMSG where no entry begins there. */
+  /** The entry that begins at byte `offset` of the memory, in the form `peek`
+   * returns. Throws EBADMSG where no entry begins there. */
   entry_of(offset: u32): u32 {
     const word = (offset - this.at) / 4;
     if (
@@ -185,7 +191,7 @@ export class Ring {
     return word;
   }
 
-  /** -1 when empty. */
+  /** The entry at the head, or -1 when the ring is empty. */
   peek(): number {
     const head = this.words[HEAD];
     return this.tail === head ? -1 : this.entry_at(head);
@@ -207,7 +213,8 @@ export class Ring {
     return this.words[at + frame.RESULT] | 0;
   }
 
-  /** A view valid until `advance`; EBADMSG when it names bytes outside a slot. */
+  /** The entry's packet, as a view valid until `advance`, or null for none.
+   * Throws EBADMSG when the frame names bytes outside a slot. */
   pkt(at: u32): U8Array | null {
     const pkt_at = this.words[at + frame.PKT];
     if (pkt_at === 0) return null;
@@ -223,7 +230,7 @@ export class Ring {
     return this.slots.subarray(off, off + len);
   }
 
-  /** Past the entry `peek` gave. */
+  /** Moves the head past the entry `peek` gave. */
   advance(): void {
     store_release(this.words, HEAD, (this.words[HEAD] + 1) >>> 0);
   }

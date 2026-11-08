@@ -1,8 +1,8 @@
 // @pxl/client/runtime/open.native.ts
 
 /**
- * A device's core, beside the UI: the runtime on the UI's thread is
- * the UI's link (open.ts is a page's).
+ * A device's core, beside the UI. The runtime runs on the UI's thread and is
+ * itself the UI's link. A page's core is opened by open.ts.
  */
 
 import { start } from "@xpute/runtime";
@@ -18,8 +18,8 @@ import { source_declare } from "@/port/source.ts";
 import * as device from "@/service/device.ts";
 import * as online from "@/service/online.ts";
 
-/** Settled once a GPU has answered and the source is declared, true where
- * it was. */
+/** Resolves once a GPU is present and the source is settled: true when the
+ * source was declared, false when it was refused. */
 export async function open(on: OnOpen): Promise<boolean> {
   set_core(
     await start(

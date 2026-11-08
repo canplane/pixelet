@@ -1,8 +1,8 @@
 // pxl-geo-bake/coverage.rs
 
-//! What the bakes publish — the shards `infra/geo/coverage.json`
-//! names, a tile at `SHARD_ZOOM` each — which are what the ingests take, and the
-//! one door to the DB.
+//! What the bakes publish: the shards `infra/geo/coverage.json` names, each a tile at
+//! `SHARD_ZOOM`, which are also what the ingests take. The module is also the one door to the
+//! DB.
 
 use std::collections::BTreeSet;
 use std::sync::LazyLock;
@@ -300,7 +300,7 @@ pub(crate) fn holdings(
     Ok(serde_json::json!({ "overture": overture, "elevation": ele, "coastline": coastline }))
 }
 
-/// `holdings`, for a set's manifest.
+/// `holdings`, as JSON for a set's manifest.
 pub(crate) fn src_of(reads: &[&[&str]]) -> Result<serde_json::Value, String> {
     let (_, mut client) = Overture::reading(reads, &BTreeSet::new())?;
     holdings(&mut client, reads)

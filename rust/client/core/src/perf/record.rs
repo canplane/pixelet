@@ -1,11 +1,12 @@
 // pxl-core/perf/record.rs
 
-//! Read-only instrument: records where time and work go. Records are laid
-//! out word for word as perf.json says, in columns the UI reads in place,
-//! so reading the profiler allocates nothing in the heap it measures. The
-//! columns are the heap's while the profiler's setting is on, taken whole as
-//! it starts recording and given back as it is turned off (`perf_release`):
-//! its heap figures count them all along, so a frame's deltas do not.
+//! Records where the core's time and work go. Each record is laid out word
+//! for word as perf.json says, in columns the UI reads in place, so reading
+//! the profiler allocates nothing in the heap it measures. The columns live
+//! on the heap while the profiler's setting is on: they are taken whole when
+//! recording starts and given back when the setting is turned off
+//! (`perf_release`). The heap figures include them throughout, so they never
+//! show up in a frame's heap delta.
 
 use core::mem::size_of;
 
@@ -19,10 +20,10 @@ use crate::perf::section::{RecordingSection, RecordingStateSection};
 use crate::perf::spec::LIMIT;
 use crate::perf::task::TaskRow;
 
-/// The rings keep the last minute (perf.json `LIMIT.WINDOW_MS`, the
-/// UI's long frames alike). At 60 Hz that is 3,600 frames; a faster
-/// display or a heavy minute fills a column early, which drops its oldest and
-/// sets `truncated`.
+/// The rings keep the last minute (perf.json `LIMIT.WINDOW_MS`), as the UI's
+/// long frames do. At 60 Hz that is 3,600 frames. A faster display or a busy
+/// minute fills a column early, and the column then drops its oldest records
+/// and sets `truncated`.
 const WINDOW_MS: f64 = LIMIT::WINDOW_MS as f64;
 const TASK_CAP: usize = 2_048;
 const FRAME_CAP: usize = 4_096;
@@ -33,8 +34,9 @@ pub const PERCENTILES_CAP: usize = if FRAME_CAP > TASK_CAP {
     TASK_CAP
 };
 
-/// Advances `head` past records older than `cutoff`; returns how many to drop
-/// now, only once the dropped part is the larger half.
+/// Advances `head` past records older than `cutoff`. Returns how many records
+/// to drop from the front now, which stays 0 until the expired part is at
+/// least half the ring, so records are shifted rarely.
 fn trim<T>(ring: &[T], head: &mut usize, cutoff: f64, t: impl Fn(&T) -> f64) -> usize {
     while *head < ring.len() && t(&ring[*head]) < cutoff {
         *head += 1;
@@ -46,8 +48,9 @@ fn trim<T>(ring: &[T], head: &mut usize, cutoff: f64, t: impl Fn(&T) -> f64) -> 
     }
 }
 
-/// Returns false where a full column dropped its oldest quarter for `rec`: a
-/// shift a quarter of the column apart rather than one a record.
+/// Appends `rec` to the column. A full column first drops its oldest
+/// quarter, so it shifts once a quarter of the column rather than once a
+/// record, and the call then returns false.
 fn land_column<T: Copy>(ring: &mut [T], len: &mut usize, head: &mut usize, rec: T) -> bool {
     let full = *len == ring.len() && *head == 0;
     if *len == ring.len() {
@@ -68,8 +71,8 @@ pub(super) fn drop_front<T: Copy>(ring: &mut [T], len: &mut usize, n: usize) {
     *len -= n;
 }
 
-/// The columns, in order: tasks, frames, the worst frames and the read's
-/// scratch (read.rs).
+/// The byte size of each column, in order: tasks, frames, the worst frames
+/// and the read's scratch (read.rs).
 const COLUMNS: [u32; 4] = [
     (TASK_CAP * size_of::<TaskRow>()) as u32,
     (FRAME_CAP * size_of::<FrameSample>()) as u32,
@@ -77,9 +80,9 @@ const COLUMNS: [u32; 4] = [
     (PERCENTILES_CAP * size_of::<f64>()) as u32,
 ];
 
-/// What the heap holds of the profiler while its setting is on, in the
-/// buddy's blocks: each column a power of two as the heap gives it
-/// (door/layout.rs `HEAP_FLOWS_BYTES`).
+/// The heap the profiler holds while its setting is on. The buddy allocator
+/// gives each column a power-of-two block, so each column counts at its size
+/// rounded up (door/layout.rs `HEAP_FLOWS_BYTES`).
 pub const PERF_BYTES: u64 = {
     let mut sum = 0;
     let mut k = 0;
@@ -90,8 +93,8 @@ pub const PERF_BYTES: u64 = {
     sum
 };
 
-/// A column of `n` records, zeroed, a valid record each; none where the heap
-/// refuses it.
+/// A column of `n` default records, each a valid record. Returns None when
+/// the heap refuses it.
 fn heap_column<T: Copy + Default>(n: usize) -> Option<Box<[T]>> {
     let mut column = Vec::new();
     column.try_reserve_exact(n).ok()?;
@@ -107,26 +110,27 @@ struct Perf {
     task_head: usize,
     frame_head: usize,
     truncated: bool,
-    /// Off until asked, so a client without the profiler on writes nothing.
-    /// Stopping freezes the data for a stable export.
+    /// Off until the UI asks, so a client without the profiler on records
+    /// nothing. Stopping freezes the data so an export is stable.
     recording: bool,
     started_at: f64,
     stopped_at: Option<f64>,
     worst: Box<[WorstFrame]>,
     worst_len: usize,
-    /// What the frames held at the most or the least since the recording
+    /// The largest and smallest values the frames held since the recording
     /// started (`perf_fold_recording`).
     extremes: RecordingSection,
-    /// The read's, where it sorts what it takes percentiles of (read.rs).
+    /// Where the read sorts the values it takes percentiles of (read.rs).
     scratch: Box<[f64]>,
-    /// The interval in progress: the last frame turn's record, which every
-    /// turn after it adds its time to until the next frame turn closes it.
+    /// The interval in progress. It is the last frame turn's record, and
+    /// every turn after it adds its time here until the next frame turn
+    /// closes it.
     open: Option<FrameSample>,
-    /// This turn's frame task's time, which the turn's end takes out of the
-    /// time its tasks ran.
+    /// How long this turn's frame task ran. The turn's end subtracts it from
+    /// the time the turn's tasks ran.
     frame_task_ms: f64,
-    /// Whether this turn served the UI's read of the profiler: what it
-    /// asked as it fell is no wake of the world's.
+    /// Whether this turn served the UI's read of the profiler. Such a turn's
+    /// wake is not the world's, so it is not recorded.
     read_turn: bool,
 }
 
@@ -168,8 +172,9 @@ pub fn perf_recording_state() -> RecordingStateSection {
     }
 }
 
-/// Recording from now, its columns taken from the heap where it holds none
-/// yet: false, nothing recorded, where the heap refuses them.
+/// Starts a recording from now, taking the columns from the heap if they are
+/// not held yet. Returns false, and records nothing, when the heap refuses
+/// them.
 pub fn perf_recording_start() -> bool {
     let l = perf();
     if l.task_ring.is_empty() {
@@ -203,8 +208,8 @@ pub fn perf_recording_stop() {
     l.stopped_at = Some(now());
 }
 
-/// The columns given back to the heap, what they held with them: the
-/// profiler's setting is off, so nothing shows them.
+/// Gives the columns, and what they hold, back to the heap. It runs when the
+/// profiler's setting goes off, after which nothing shows them.
 pub fn perf_release() {
     perf_recording_stop();
     let l = perf();
@@ -228,7 +233,7 @@ pub(crate) fn perf_scratch() -> &'static mut [f64] {
     &mut perf().scratch
 }
 
-/// `row` is made only while recording.
+/// Records a settled task. `row` is built only while recording.
 pub fn perf_record(row: impl FnOnce() -> TaskRow) {
     let l = perf();
     if !l.recording {
@@ -247,10 +252,11 @@ pub fn perf_record(row: impl FnOnce() -> TaskRow) {
     }
 }
 
-/// A frame turn, `s` its record: closes the interval in progress with
-/// `interval_ms`, the runtime's gap that just ended, and `settled`, whether the
-/// runtime settled it, lands it, and opens `s`'s. `frame_task_ms` is how long
-/// the frame task ran, the turn's end's to take out of the tasks' time.
+/// Records a frame turn whose record is `s`. It closes the interval in
+/// progress with `interval_ms`, the runtime's gap that just ended, and
+/// `settled`, whether the runtime settled it. It then lands that interval and
+/// opens `s`'s. `frame_task_ms` is how long the frame task ran, which the
+/// turn's end subtracts from the tasks' time.
 pub fn perf_record_frame(s: FrameSample, interval_ms: f64, settled: bool, frame_task_ms: f64) {
     let l = perf();
     if !l.recording {
@@ -263,7 +269,8 @@ pub fn perf_record_frame(s: FrameSample, interval_ms: f64, settled: bool, frame_
         f.over_ms = over_ms(&f);
         land(l, f);
     }
-    // Landing it is the profiler's too, out of the frame task's time.
+    // Landing the record is profiler time too, so it moves out of the frame
+    // task's time and into `perf_ms`.
     let ms = now() - at;
     l.frame_task_ms += ms;
     if let Some(f) = l.open.as_mut() {
@@ -271,9 +278,10 @@ pub fn perf_record_frame(s: FrameSample, interval_ms: f64, settled: bool, frame_
     }
 }
 
-/// `write` into the record of the frame the renderer numbered `frame`, as
-/// a read of it lands a frame or two after it: the one in progress or one
-/// landed, however late, and a worst frame's that holds it.
+/// Applies `write` to the record of the frame the renderer numbered `frame`.
+/// A read lands a frame or two after its frame, so the record may be the one
+/// in progress or one already landed, however late. A worst frame may hold a
+/// copy of the record too.
 fn at_frame(l: &mut Perf, frame: f64, write: impl Fn(&mut FrameSample)) {
     if frame == 0.0 {
         return;
@@ -286,7 +294,7 @@ fn at_frame(l: &mut Perf, frame: f64, write: impl Fn(&mut FrameSample)) {
     if let Some(f) = l.open.as_mut() {
         of(f);
     }
-    // Back from the newest to the frame it names.
+    // Walk back from the newest record to the frame named.
     for f in l.frame_ring[l.frame_head..l.frame_len].iter_mut().rev() {
         of(f);
         if f.gpu.frame != 0.0 && f.gpu.frame <= frame {
@@ -320,7 +328,7 @@ pub fn perf_record_rays(r: RayRead) {
     at_frame(l, r.frame, |f| f.rays = r.rays);
 }
 
-/// What a frame turn held, `held`, folded into the recording's extremes.
+/// Folds what a frame turn held, `held`, into the recording's extremes.
 pub fn perf_fold_recording(held: &RecordingSection) {
     let l = perf();
     if l.recording {
@@ -332,9 +340,10 @@ pub fn perf_recording_extremes() -> RecordingSection {
     perf().extremes
 }
 
-/// A turn's end, frame turn or not: its time into the interval in progress,
-/// rise to fall, its tasks' part, and what it asked as it fell, unless the
-/// turn served the UI's read of the profiler.
+/// Records the end of any turn, frame turn or not, into the interval in
+/// progress: its time from rise to fall, the part its tasks took, and the
+/// wake it asked as it fell. A turn that served the UI's read of the profiler
+/// leaves the wake unrecorded.
 pub fn perf_record_turn(turn_ms: f64, poll_ms: f64, wake: f64) {
     let l = perf();
     let frame_task_ms = core::mem::take(&mut l.frame_task_ms);
@@ -351,8 +360,9 @@ pub fn perf_record_turn(turn_ms: f64, poll_ms: f64, wake: f64) {
     }
 }
 
-/// The UI's read of the profiler, `ms` long, served this turn: the
-/// profiler's cost to the interval in progress (`perf_ms`).
+/// Records that this turn served the UI's read of the profiler, which took
+/// `ms`. That time is the profiler's cost to the interval in progress
+/// (`perf_ms`).
 pub fn perf_record_read(ms: f64) {
     let l = perf();
     l.read_turn = true;
@@ -361,8 +371,8 @@ pub fn perf_record_read(ms: f64) {
     }
 }
 
-/// A still interval is long on purpose, so only a moving frame is among the
-/// worst.
+/// Lands a closed interval's record. A settled interval is long on purpose,
+/// so only a moving frame can be among the worst.
 fn land(l: &mut Perf, s: FrameSample) {
     let at = l.worst[..l.worst_len].partition_point(|w| w.sample.interval_ms >= s.interval_ms);
     if s.settled == 0.0 && at < l.worst.len() {

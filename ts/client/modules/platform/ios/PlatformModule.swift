@@ -6,10 +6,10 @@ import ExpoUI
 import PxlNative
 import UIKit
 
-/// The device's half of the client's services (ts/client/src/service/, the
-/// .native files), as one module: what the UI asks of the system. The core and the view it
-/// draws into are xpute's module (@xpute/native). An image's decode runs off
-/// the JavaScript thread.
+/// The device's half of the client's services on iOS (the .native files in
+/// ts/client/src/service/), as one module that answers what the UI asks of the
+/// system. The core, and the view it draws into, are in xpute's own module
+/// (@xpute/native).
 public class PlatformModule: Module {
 
   public func definition() -> ModuleDefinition {
@@ -26,9 +26,10 @@ public class PlatformModule: Module {
 
     // ---- the transport (service/origin.native.ts) ----
 
-    /// A body fetched still zstd, decoded off the JavaScript thread on the
-    /// module's queue, into the library's bytes, which JavaScript takes
-    /// without a copy and the library lets go with the buffer.
+    /// Decodes a body that arrived still zstd-compressed. It runs on the
+    /// module's queue, off the JavaScript thread. The bytes are the library's:
+    /// JavaScript takes them without a copy, and the library frees them when
+    /// the buffer goes.
     AsyncFunction("unpack") { (packed: Data) throws -> NativeArrayBuffer in
       var out: UnsafeMutablePointer<UInt8>?
       var count = 0
@@ -41,8 +42,8 @@ public class PlatformModule: Module {
 
     // ---- storage (service/storage.native.ts) ----
     //
-    // UserDefaults, the system's store for an app's small values, as a page's
-    // localStorage is the browser's.
+    // UserDefaults is the system's store for an app's small values, as
+    // localStorage is the browser's for a page.
 
     Function("storageGet") { (key: String) -> String? in
       UserDefaults.standard.string(forKey: key)
@@ -54,8 +55,8 @@ public class PlatformModule: Module {
 
     // ---- the clipboard (service/share.native.ts) ----
     //
-    // The general pasteboard, as a page's navigator.clipboard is the
-    // browser's; React Native's JavaScript has none of its own.
+    // The general pasteboard serves as navigator.clipboard does on a page.
+    // React Native's JavaScript has no clipboard of its own.
 
     Function("clipboardSet") { (text: String) in
       UIPasteboard.general.string = text
@@ -68,9 +69,10 @@ public class PlatformModule: Module {
       textWidth(text, weight, px)
     }
 
-    /// The line starting at `x` with the middle of its em box on the middle
-    /// row, into `out`: `width` by `height` pixels, RGBA, top row first, alpha
-    /// not premultiplied.
+    /// Draws the line into `out`, starting at `x`, with the middle of its em box
+    /// on the middle row. `out` is `width` by `height` pixels of RGBA, top row
+    /// first, with alpha not premultiplied. An `out` too small for that is left
+    /// untouched.
     Function("textRaster") { (weight: Double, px: Double, rgba: UInt32, text: String, x: Double, width: Int, height: Int, out: Uint8Array) in
       guard out.byteLength >= width * height * 4 else { return }
       textRaster(text, weight, px, rgba, x, width, height, out.rawPointer)
@@ -78,15 +80,15 @@ public class PlatformModule: Module {
 
     // ---- the compass (service/sensor.native.ts) ----
 
-    /// Whether the device has a compass at all, which expo-horizon-location only says
-    /// by failing a watch — and a failed watch reads as a compass lost, not
-    /// one never there.
+    /// Whether the device has a compass at all. expo-horizon-location tells that
+    /// only by failing a watch, and a failed watch reads as a compass lost
+    /// rather than one that was never there.
     Function("headingAvailable") { () -> Bool in
       CLLocationManager.headingAvailable()
     }
 
     // ---- the keyboard (ts/client/src/ui/component/above-keyboard.native.tsx, KeyboardDock.swift) ----
-    //
+
     View(KeyboardDock.self) {
       Events("onLift")
       Prop("clearance") { (view: KeyboardDock, clearance: Double) in

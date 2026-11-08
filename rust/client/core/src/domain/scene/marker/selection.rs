@@ -1,7 +1,8 @@
 // pxl-core/domain/scene/marker/selection.rs
 
-//! Visibility of world-anchored markers: in the frustum as a sphere about
-//! the anchor, and with a box on screen, nearest first.
+//! Which world-anchored markers are visible. A marker is visible when a
+//! sphere about its anchor is in the frustum and its box is on the screen.
+//! The visible markers are listed nearest first.
 
 use pxl_spec::space::coord::mat4;
 use pxl_spec::space::coord::v3;
@@ -10,11 +11,13 @@ use crate::domain::scene::marker::candidate::Candidates;
 use crate::domain::view::frame::pose::view;
 use crate::domain::view::frame::screen::{ndc_to_px, size};
 
-/// A fraction of the distance, since the marker holds a constant screen size.
-/// Generous: one marker too many costs a sprite.
+/// The radius of the sphere tested against the frustum, as a fraction of the
+/// distance, since a marker keeps a constant size on the screen. It is
+/// generous, because one marker too many costs only a sprite.
 const ANCHOR_RADIUS: f64 = 0.08;
 
-/// Indices into `candidates`, in the root frame.
+/// Writes into `out` the indices into `candidates` of the visible markers,
+/// nearest first. The candidates are in the root frame.
 pub(super) fn select_visible(candidates: &mut Candidates, out: &mut Vec<u32>) {
     let v = view();
     let eye = v.at().eye;
@@ -22,7 +25,8 @@ pub(super) fn select_visible(candidates: &mut Candidates, out: &mut Vec<u32>) {
 
     let mut n = 0usize;
     for i in 0..candidates.cnt as usize {
-        // Where the rays find it: the world's own point, nothing bent.
+        // The anchor is tested where the rays find it: at the world's own
+        // point, with nothing bent.
         let pos = [
             candidates.local_x[i],
             candidates.local_y[i],
@@ -38,7 +42,8 @@ pub(super) fn select_visible(candidates: &mut Candidates, out: &mut Vec<u32>) {
         n += 1;
     }
 
-    // Nearest first; the tiebreak only stops equal distances swapping frame to frame.
+    // Nearest first. The tiebreak only keeps markers at equal distances from
+    // swapping from frame to frame.
     let at = |i: u32| candidates.d2[i as usize];
     let tiebreak = &candidates.tiebreak;
     candidates.order[..n].sort_by(|&a, &b| {

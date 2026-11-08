@@ -2,9 +2,9 @@
 
 use super::*;
 
-/// The clocks as they stepped before they were one (the sky's and the
-/// clouds' in `EnvironmentDraw::observe`): `at` and what it shows, taken at
-/// `t` where `t` reached the next step from `at` or went back before it.
+/// The reference `StepClock` is held to: a step clock written out plainly.
+/// It takes a new reading at `t` when `t` reached the next step after
+/// the held reading `at`, or went back before it, and shows the held reading.
 fn stepped_as_written(at: &mut Option<f64>, t: f64, next: impl Fn(f64) -> f64) -> (f64, f64) {
     if at.is_none_or(|a| t >= next(a) || t < a) {
         *at = Some(t);
@@ -15,8 +15,9 @@ fn stepped_as_written(at: &mut Option<f64>, t: f64, next: impl Fn(f64) -> f64) -
 
 #[test]
 fn step_clock_steps() {
-    // A wall clock's readings, on and with a step back, and a next step
-    // fixed, growing with the reading, and never.
+    // Wall clock readings that move on and once step back, under three rules
+    // for the next step: a fixed interval, one that grows with the reading,
+    // and none at all.
     let readings = [
         1_000.0, 1_016.7, 1_033.3, 1_050.0, 1_066.6, 1_100.0, 1_040.0, 1_041.0, 1_200.0, 1_200.0,
     ];
@@ -41,6 +42,6 @@ fn step_clock_reports() {
     assert_eq!(clock.at(0.0, |a| a + 1.0), (0.0, 1.0, true));
     assert_eq!(clock.at(0.5, |a| a + 1.0), (0.0, 1.0, false));
     assert_eq!(clock.at(1.25, |a| a + 1.0), (1.25, 2.25, true));
-    // Set back, it steps there at once.
+    // A clock set back steps to the new reading at once.
     assert_eq!(clock.at(0.75, |a| a + 1.0), (0.75, 1.75, true));
 }

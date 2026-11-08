@@ -43,7 +43,8 @@ fn a_node_is_its_children() {
     }
 }
 
-/// Its leaves of caves: a block is 8, a leaf its block's one.
+/// A node's caves counted in leaves: each block counts as 8 leaves, and at the leaf zoom a
+/// leaf counts as its block's one.
 fn blocks_or_leaves(node: (u32, [i32; 3])) -> u32 {
     if node.0 == LEAF_CELL_ZOOM {
         blocks(node)

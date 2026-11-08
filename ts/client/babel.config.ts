@@ -1,9 +1,9 @@
 // @pxl/client/babel.config.ts
 
 /**
- * Expo's preset, and the build's constants written into the code as values,
- * so a branch on one is folded where it is compiled and what only a
- * development build uses is not in a production one at all.
+ * Expo's preset, plus the build's constants written into the code as values.
+ * A branch on a constant is folded where it is compiled, so what only a
+ * development build uses is not in a production build at all.
  */
 
 import process from "node:process";
@@ -15,12 +15,12 @@ import type {
   types as BabelTypes,
 } from "@babel/core";
 
-/** What a plugin is handed of Babel. */
+/** The part of Babel a plugin is handed. */
 type Babel = { types: typeof BabelTypes };
 
 export default (api: ConfigAPI): TransformOptions => {
   const production = process.env.NODE_ENV === "production";
-  // Where a dev server's tiles come from (metro.config.ts `route_target`).
+  // Where a dev server's tiles come from (script/proxy.ts `route_target`).
   const source = process.env.PXL_DEV_SOURCE || "delivery";
   api.cache.using(() => `${process.env.NODE_ENV} ${source}`);
 
@@ -31,7 +31,8 @@ export default (api: ConfigAPI): TransformOptions => {
     __DEV_SOURCE__: source,
   };
 
-  /** Replaces each free name above with its value. */
+  /** Replaces each name in DEFINE with its value, wherever the name is not
+   * bound in its own scope. */
   const define = ({ types: t }: Babel): PluginObj => ({
     visitor: {
       Identifier(p) {
@@ -47,15 +48,16 @@ export default (api: ConfigAPI): TransformOptions => {
     },
   });
 
-  // Expo's own copy of the preset, beside Expo, which is what the app
+  // The preset is Expo's own copy, beside Expo, because Expo is what the app
   // depends on.
   const preset = fileURLToPath(
     new URL("../babel-preset-expo", import.meta.resolve("expo/package.json")),
   );
-  // The defines are this tree's: a package's own sources are left as they
-  // are, where a name of theirs could be one of ours (@expo/ui's `Slot`).
-  // A function and not a RegExp: Metro reads the config with no file for its
-  // cache key, and Babel refuses a RegExp it has nothing to test against.
+  // The defines apply to this tree's sources alone. A package's sources are
+  // left as they are, because a name of theirs could be one of ours (@expo/ui's
+  // `Slot`). `exclude` is a function rather than a RegExp: Metro reads the
+  // config with no file to make its cache key, and Babel refuses a RegExp that
+  // it has nothing to test against.
   return {
     presets: [preset],
     overrides: [

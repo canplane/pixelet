@@ -1,11 +1,14 @@
-// One sprite on the marker atlas: shapes by signed distance, text as the platform's
-// pixels. Stored premultiplied; marker.wgsl divides it out.
+// Paints one sprite of the marker atlas (gpu/atlas.rs): its shapes by their signed
+// distance, and its text as the platform rasterized it. The alpha blend stores the
+// sprite premultiplied, and marker_sprite.wgsl divides the alpha out.
 
-// kind: 0 filled rounded rect, 1 stroked, 2 triangle, 3 text, 4 a text's halo.
-// `p`: radius and a fill's edge width or a stroke's, a triangle's first two
-// points, or text layer and coverage, and a halo's radius. `q`: a triangle's
-// third point, a fill's shade, lighter at its top by as much as darker at
-// its foot, or how far in from its radius a halo fades.
+// One shape of a sprite. `kind.x` names it: a filled rounded rectangle, a stroked one,
+// a triangle, a line of text, or a text's halo (`ATLAS_FILL` to `ATLAS_HALO`). `p`
+// holds a rectangle's corner radius and the width of a fill's edge or of a stroke; a
+// triangle's first two points; or the text's layer and the share of the layer the text
+// covers, with a halo's radius in `p.w`. `q` holds a triangle's third point; a fill's
+// shade, by which its top is lighter and its foot as much darker; or how far in from
+// its radius a halo fades.
 struct Shape {
   rect: vec4f,
   color: vec4f,
@@ -81,8 +84,9 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
       d = triangle(i.at, s.p.xy, s.p.zw, s.q.xy);
     }
     case ATLAS_HALO: {
-      // The glyphs' coverage grown by the radius: the most of it within reach,
-      // each texel weighed by how much of it the disc covers.
+      // The halo grows the glyphs' coverage by its radius. It takes the greatest
+      // coverage within the radius, each texel weighed by how much of it the
+      // disc covers.
       let size = vec2i(s.rect.zw - s.rect.xy);
       let base = vec2i(floor(i.at - s.rect.xy));
       let r = s.p.w;

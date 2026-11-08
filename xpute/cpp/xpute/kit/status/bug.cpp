@@ -24,13 +24,15 @@ void bug(Errno errnum, std::uint64_t a, std::uint64_t b, std::source_location at
 } // namespace xpute
 
 #ifdef __wasm__
-// libc++'s own definition prints to stderr, which on wasm imports WASI's file
-// calls, a second way to the runtime beside the contract.
+// libc++'s own definition prints to stderr. On WebAssembly that imports
+// WASI's file calls, which would give the module a second way to reach the
+// runtime beside the contract, so a failed libc++ check is a bug instead.
 void std::__libcpp_verbose_abort(char const *, ...) noexcept {
     xpute::bug(xpute::Errno::enotrecoverable);
 }
 
-// libc++abi's, which an abstract class's table names, prints the same way.
+// libc++abi's `__cxa_pure_virtual`, which an abstract class's vtable names,
+// prints to stderr in the same way, so it is replaced as well.
 extern "C" void __cxa_pure_virtual() {
     xpute::bug(xpute::Errno::enotrecoverable);
 }

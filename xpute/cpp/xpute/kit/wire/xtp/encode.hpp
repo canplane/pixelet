@@ -1,8 +1,11 @@
 // cpp/xpute/kit/wire/xtp/encode.hpp
 
-// Writes a packet in place into bytes the caller holds, with no tree and no
-// allocation; the bytes match the tree encoder's for the same tree. A string
-// fits where its UTF-8 and the NUL after it do, on every side.
+// Writes a packet in place, into bytes the caller holds, without building a
+// tree and without allocating. It is the one writer of the layout: `encode`
+// (view.hpp) walks its tree onto it, so both give the same bytes. A node that
+// does not fit does not fail its call: the writer goes on counting entries,
+// and `finish` refuses the packet (EOVERFLOW). In every language, a string
+// fits exactly when its UTF-8 and the NUL after it do.
 
 #pragma once
 
@@ -18,12 +21,14 @@ namespace xpute::xtp {
 
 class PacketWriter {
   public:
-    // The buffer's length is the cap, at most MAX_PKT_SZ.
+    // A writer for a packet whose root is any one node. The packet may take
+    // the whole buffer, up to MAX_PKT_SZ bytes.
     explicit PacketWriter(std::span<std::uint8_t> buf) noexcept;
 
     PacketWriter &nil() noexcept { return entry(std::nullopt, type_of(SpecialType::nil)); }
 
-    // None writes a null of that type.
+    // An empty optional writes a typed null, an absent node that keeps its
+    // type.
     PacketWriter &u8(std::optional<std::uint8_t> v) noexcept { return scalar(ScalarType::u8, v); }
     PacketWriter &i8(std::optional<std::int8_t> v) noexcept { return scalar(ScalarType::i8, v); }
     PacketWriter &u16(std::optional<std::uint16_t> v) noexcept { return scalar(ScalarType::u16, v); }
@@ -57,17 +62,17 @@ class PacketWriter {
         return entry(at, type_of(ARRAY_OF<T>));
     }
 
-    // Packed low bit first.
+    // `bits` holds one byte for each bit, nonzero for set. They are packed
+    // eight to a byte, the first in the lowest bit.
     PacketWriter &bitset(std::optional<std::span<const std::uint8_t>> bits) noexcept;
 
-    // Followed by a NUL that the length leaves out.
     PacketWriter &str(std::optional<std::string_view> s) noexcept;
 
-    // len + 1 offsets into the UTF-8 after them.
     PacketWriter &strs(std::optional<std::span<const std::string_view>> items) noexcept;
 
-    // `write` gets the room after the length slot and answers the bytes written,
-    // or none when they did not fit.
+    // Writes a str whose bytes `write` puts into the room after the len slot.
+    // `write` returns how many bytes it wrote, or nothing when they did not
+    // fit, which spoils the packet.
     template <class F> PacketWriter &str_with(F &&write) noexcept {
         std::optional<std::uint32_t> at;
         if (std::optional<std::uint32_t> room = str_room()) {
@@ -78,7 +83,7 @@ class PacketWriter {
         return entry(at, type_of(SequenceType::str));
     }
 
-    // Writing a different number of children than `count` is a bug.
+    // Writing a number of children other than `cnt` is a bug.
     template <class F> PacketWriter &branch(std::uint32_t cnt, F &&fill) noexcept {
         std::optional<std::uint32_t> at = branch_open(cnt);
         Table outer = table_;
@@ -91,14 +96,20 @@ class PacketWriter {
 
     PacketWriter &no_branch() noexcept { return entry(std::nullopt, type_of(SpecialType::branch)); }
 
-    // Its root's payload copied, placed as its root's type places it.
+    // Copies the root of the encoded packet `pkt` in as this entry, aligned as
+    // its root's type requires. A malformed `pkt` makes `finish` refuse the
+    // packet (EBADMSG).
     PacketWriter &graft(std::span<const std::uint8_t> pkt) noexcept;
 
-    // The length, header included and to the word, or why it was refused.
+    // Writes the header and returns the packet's length, header included and
+    // padded to a word, or the first error that spoiled the packet.
     Result<std::uint32_t> finish() noexcept;
 
   private:
-    // The root is a branch of one whose entry is the header.
+    // The child table the writer's next entries go in. The root is treated as
+    // a branch of one child whose entry is the header's root word: `root`
+    // marks it, and its entry sets the root's type instead of writing a
+    // descriptor.
     struct Table {
         std::uint32_t base;
         std::uint32_t cnt;
@@ -137,7 +148,7 @@ class PacketWriter {
     Table table_{.base = 0, .cnt = 1, .written = 0, .root = true};
     NodeType root_type_ = type_of(SpecialType::nil);
     std::uint32_t lim_ = HDR_SZ;
-    // The first reason only.
+    // The first error met; later ones are not kept.
     std::optional<Error> err_;
 };
 

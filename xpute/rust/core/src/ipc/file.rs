@@ -38,7 +38,7 @@ impl Opened {
     }
 }
 
-/// At most `N - 1` open at once; one more is a bug.
+/// At most `N - 1` files are open at once; opening one more is a bug.
 pub struct Files<O: Copy, const N: usize> {
     fds: Table<O, N>,
 }
@@ -65,7 +65,8 @@ impl<O: Copy, const N: usize> Files<O, N> {
         self.fds.remove(fd)
     }
 
-    /// Opened, written and closed in one turn; the completions reach no owner.
+    /// Opens, writes and closes a file in one turn. Its completions reach no
+    /// owner.
     pub fn write_whole(&mut self, door: &Door, root: u32, path: &str, bytes: Vec<u8>, owner: O) {
         let fd = self.fds.insert(owner).or_bug(Errno::ENOSPC);
         door.openat(fd, root, flag::O_WRONLY, path);
@@ -73,9 +74,9 @@ impl<O: Copy, const N: usize> Files<O, N> {
         self.close(door, fd);
     }
 
-    /// The owner of the open `opened` completes, or none where its descriptor
-    /// was closed since; a failed open leaves no descriptor to close, and its
-    /// handle is let go here.
+    /// The owner of the open that `opened` completes, or none when its
+    /// descriptor has been closed since. A failed open leaves no descriptor
+    /// to close, so its handle is let go here.
     pub fn complete_open(&mut self, opened: &FsOpened) -> Option<O> {
         let owner = self.owner(opened.fd).copied()?;
         if opened.res < 0 {
@@ -84,10 +85,10 @@ impl<O: Copy, const N: usize> Files<O, N> {
         Some(owner)
     }
 
-    /// The file an open completed with `bytes`, read whole into the heap and
-    /// closed: its reading, whose bytes `Reading::take` hands over once the
-    /// runtime's head has passed it, or ENOMEM where the heap has no room for
-    /// them, nothing read.
+    /// Reads the whole file, whose open completed with `bytes`, into the heap,
+    /// and closes it. Answers the reading, whose bytes `Reading::take` hands
+    /// over once the runtime's head has passed it, or ENOMEM when the heap has
+    /// no room for them and nothing was read.
     pub fn read_whole(&mut self, door: &Door, fd: Fd, bytes: u32) -> Result<Reading, Errno> {
         let mut buf = Vec::new();
         let room = buf.try_reserve_exact(bytes as usize);

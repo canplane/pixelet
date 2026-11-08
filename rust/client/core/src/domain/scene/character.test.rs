@@ -8,18 +8,19 @@ use crate::sys;
 use pxl_render::gpu::draw::{lists_bytes, set_lists};
 use xpute_core::clock;
 
-/// The wall clock the ticks read, in milliseconds, as its bits.
+/// The wall clock the ticks read, in milliseconds, held as the f64's bits.
 static WALL_MS: AtomicU64 = AtomicU64::new(0);
 
 fn wall_ms() -> f64 {
     f64::from_bits(WALL_MS.load(Ordering::Relaxed))
 }
 
-/// The display's pixels a unit spans a unit from the eye.
+/// How many display pixels one unit spans at one unit from the eye.
 const PX_PER_UNIT: f64 = 1000.0;
 
-/// Two seconds of ticks at 60 Hz, the swaying clip standing alone `dist`
-/// from the eye: for each, whether it asked a frame and whether it stepped.
+/// Ticks a character playing the swaying clip, alone at `dist` from the eye,
+/// for two seconds at 60 Hz. It returns, for each tick, whether the tick
+/// asked for a frame and whether the clip stepped.
 fn idle(dist: f64) -> Vec<(bool, bool)> {
     const LIVE: usize = 16;
     let (at, _) = alloc(lists_bytes(LIVE)).unwrap();
@@ -55,8 +56,8 @@ fn idle(dist: f64) -> Vec<(bool, bool)> {
     ticks
 }
 
-/// The clip's own steps over a loop, from its start, a pixel at `dist`
-/// a step (`Model::next_step`).
+/// The number of steps the clip takes over one loop from its start, where a
+/// step is a pixel's motion at `dist` (`Model::next_step`).
 fn clip_steps(dist: f64) -> usize {
     let m = swaying();
     let far = (dist / PX_PER_UNIT) as f32;
@@ -68,11 +69,11 @@ fn clip_steps(dist: f64) -> usize {
     n
 }
 
-/// Near, the swaying clip goes a pixel within a frame, so it steps every
-/// tick but where it slows to turn back; far, it steps as its clip's steps
-/// fall, a frame late at most, and stands between them. Either way it asks
-/// no frame: the turn is woken for the next step, and only a step notes the
-/// animation that draws it.
+/// Near the eye, the swaying clip moves a pixel within a frame, so it steps
+/// every tick except where it slows to turn back. Far from the eye, it steps
+/// when the clip's own steps fall, at most a frame late, and stands still
+/// between them. Either way it asks for no frame: the turn is woken for the
+/// next step, and only a step notes the animation that draws it.
 #[test]
 fn idle_asks_nothing_between_steps() {
     let _g = sys::serial();
@@ -81,8 +82,8 @@ fn idle_asks_nothing_between_steps() {
         near.iter().all(|&(asks, _)| !asks),
         "a near step asked a frame"
     );
-    // The clip has run a frame for each tick so far, and the sway turns
-    // back every half second from a quarter on.
+    // At tick k the clip has run k + 1 frames, and the sway turns back every
+    // half second, starting at a quarter second.
     let by_turn = |k: usize| (((k + 1) as f64 / 60.0) % 0.5 - 0.25).abs() <= 2.0 / 60.0;
     let held: Vec<usize> = (0..near.len()).filter(|&k| !near[k].1).collect();
     assert!(

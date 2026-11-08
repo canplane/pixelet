@@ -36,7 +36,7 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
     /// at (pxl-spec lattice.rs `coarsest`).
     const COARSEST: Zoom = coarsest(Self::LATTICE);
 
-    /// As tile `at` is published.
+    /// The tile as it is published at `at`.
     fn encode(&self, at: Quadrant) -> Result<Vec<u8>, String>;
 
     /// As tile `at` is stored: its packet, as `encode` makes it, and its fit
@@ -56,10 +56,10 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
     /// Which of its children are tiles, as the tile says.
     fn occupancy(&self) -> Occupancy;
 
-    /// The fits of the set as it will be (`set`, `FITS`), refused where it holds
-    /// what the client's pool cannot: a fact of the whole set, not of a tile, asked
-    /// before a commit moves anything, of each tile's fit (`encode_with_fit`);
-    /// `workers` tiles at once. None for a kind with no fits.
+    /// The fits of the set as it will be (`set`, `FITS`), refused where the set holds what the
+    /// client's pool cannot. It is a fact of the whole set, not of a tile, asked of each tile's fit
+    /// (`encode_with_fit`) before a commit moves anything, `workers` tiles at once. None for a kind
+    /// with no fits.
     fn check_pool(
         _set: &Staged<'_>,
         _workers: usize,
@@ -84,10 +84,10 @@ impl<L: Base> Absent<L> for L {
 /// Inside a set, beside its tiles; no tile is named so.
 pub const MANIFEST: &str = "manifest.json";
 
-/// Inside a set, each of its tiles' fit (`Base::encode_with_fit`), a line a tile,
-/// its name and its fit: so a commit asks what the set will hold of these, never
-/// of the tiles read and made again. Not published. A stage has each staged
-/// tile's beside it, `<name>.fit`. No tile is named so.
+/// Inside a set, each of its tiles' fit (`Base::encode_with_fit`), a line a tile with its name
+/// and its fit, so a commit asks what the set will hold of these, never of the tiles read and
+/// made again. It is not published. A stage has each staged tile's fit beside it,
+/// `<name>.fit`. No tile is named so.
 pub(crate) const FITS: &str = "fits";
 
 pub struct TileSet {
@@ -214,7 +214,8 @@ fn remove_file(path: &Path) -> Result<(), String> {
     }
 }
 
-/// None where it has no child: a parent exists exactly where a child does.
+/// The parent folded from its children; none where it has no child, since a parent exists
+/// exactly where a child does.
 pub(crate) fn fold_parent<'a, L: Base>(
     parent: Quadrant,
     read: impl Fn(Quadrant) -> Option<&'a L>,
@@ -357,8 +358,8 @@ pub(crate) fn coarser_tiles<L: Base>(
     Ok(out)
 }
 
-/// Measured from disk, not the run: a resumed run that skipped everything
-/// would describe an empty set.
+/// Writes the set's manifest, measured from disk, not from the run: a resumed run that
+/// skipped everything would describe an empty set.
 pub fn write_manifest(
     set: &TileSet,
     top: Zoom,

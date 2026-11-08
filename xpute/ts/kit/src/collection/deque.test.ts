@@ -1,6 +1,9 @@
 // @xpute/kit/collection/deque.test.ts
 
-/** Holds the TypeScript side to golden/collection/deque.tsv, which every language's ring must match. */
+/**
+ * Holds the TypeScript deque to golden/collection/deque.tsv, the record every
+ * language's deque must match.
+ */
 
 import { test } from "vitest";
 import assert from "node:assert/strict";

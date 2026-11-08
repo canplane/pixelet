@@ -1,13 +1,11 @@
 // pxl-core/sys/io.rs
 
-//! The core's I/O, below everything that asks for it. `request` is the one
-//! authority over what is out, wanted by `demand`'s streams and ranked by
-//! `policy`; `dispatch` hands what it starts and stops to `fetch` and
-//! `loader`, which read through `file`, a body into the block `body` gives
-//! it, and hand on what arrives. `room` is what a body refused room waits
-//! on, and `failure` how a run ended. `source` is what the tile source
-//! serves, `text` the platform's text, and `runtime` the door to the
-//! runtime. Each `_spec` is generated from the JSON its header names.
+//! The core's I/O, beneath every part that asks for data. `request` is the
+//! one authority over which reads are out: the streams of `demand` say what
+//! is wanted, and `policy` ranks it. `dispatch` hands what `request` starts
+//! and stops to `fetch` or `loader`, which read through `file` into blocks
+//! from `body` and pass on what arrives. Each `_spec` module is generated
+//! from the JSON its header names.
 
 pub mod body;
 pub mod demand;

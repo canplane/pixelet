@@ -1,12 +1,12 @@
 // xpute-runtime/jni.rs
 
-//! A native core as an Android app reaches it: the C ABI's calls under the
-//! names JNI looks for, for the Kotlin class `xpute.Core`, whose `external`
-//! functions they are (`native_core!`). Only JNI's own values cross: a
-//! number, an array of numbers, and the memory as a direct buffer over the
-//! whole of it, which the app hands its JavaScript as it is. JNI's and the
-//! NDK's bindings are re-exported (`sys`, `ndk`), so a program's expansion
-//! and xpute-gpu's name them through this crate.
+//! A native core as an Android app reaches it. `native_core!` exports the C
+//! ABI's calls under the names JNI looks for, as the `external` functions of
+//! the Kotlin class `xpute.Core`, and this module holds what they share. Only
+//! JNI's own values cross: a number, an array of numbers, and the whole
+//! memory as one direct buffer, which the app hands its JavaScript unchanged.
+//! JNI's and the NDK's bindings are re-exported (`sys`, `ndk`), so that a
+//! program's macro expansion and xpute-gpu name them through this crate.
 
 use std::sync::OnceLock;
 
@@ -22,7 +22,7 @@ use xpute_kit::status::errno::Errno;
 
 use crate::native::{answer_with, notify_on, turns as turns_of, Core};
 
-/// JNI's functions, as the environment a call is given holds them.
+/// The table of JNI's functions that the environment of a call holds.
 ///
 /// # Safety
 /// `env` is the environment JNI called with.
@@ -31,9 +31,10 @@ pub unsafe fn env<'e>(env: *mut JNIEnv) -> &'e JNINativeInterface_ {
     unsafe { &**env }
 }
 
-/// The VM, `xpute.Core`'s class held past the call, and its static
-/// `call(I)I` and `onNotify()V`. Taken on a thread Java made, since a
-/// thread the runtime made finds no class of the app's by name.
+/// The VM, a global reference to the class `xpute.Core`, and the IDs of its
+/// static methods `call(I)I` and `onNotify()V`. It is taken on a thread Java
+/// made, because a thread the runtime made cannot find the app's classes by
+/// name.
 struct Class {
     vm: *mut JavaVM,
     class: jclass,
@@ -49,8 +50,8 @@ unsafe impl Sync for Class {}
 
 static CLASS: OnceLock<Class> = OnceLock::new();
 
-/// `xpute.Core`'s class taken from `this`, once, and its methods made what
-/// answers the core's calls (`call`) and is told the core's news
+/// Takes the class `xpute.Core` from `this`, once, and makes its static
+/// methods answer the core's calls (`call`) and hear the core's news
 /// (`notify`).
 ///
 /// # Safety
@@ -92,9 +93,9 @@ pub unsafe fn init(e: *mut JNIEnv, this: jobject) {
     notify_on(Some(notify));
 }
 
-/// `Core.call`, on the thread that answers it, one Java made and so
-/// attached (`answer_with`): ENOSYS on a thread JNI does not know, EIO where
-/// Kotlin threw.
+/// Calls `Core.call` on the thread that answers the core's call
+/// (`answer_with`). Java made that thread, so it is attached to the VM. It
+/// returns ENOSYS on a thread JNI does not know, and EIO when Kotlin threw.
 extern "C" fn call(at: u32) -> i32 {
     let Some(&Class {
         vm, class, call, ..
@@ -121,10 +122,10 @@ extern "C" fn call(at: u32) -> i32 {
     }
 }
 
-/// `Core.onNotify`, from the core's thread (`notify_on`). JNI may be called
-/// only from a thread attached to the VM, so the thread is attached, for good
-/// and as a daemon: it lives as long as the core does, and a daemon keeps no
-/// VM from exiting.
+/// Calls `Core.onNotify` from the core's thread (`notify_on`). JNI may be
+/// called only from a thread attached to the VM, so the core's thread is
+/// attached for good, as a daemon: it lives as long as the core does, and a
+/// daemon thread keeps no VM from exiting.
 extern "C" fn notify() {
     let Some(&Class {
         vm,
@@ -145,7 +146,8 @@ extern "C" fn notify() {
         }
         let j = env(e);
         j.CallStaticVoidMethodA.or_bug(Errno::ENOSYS)(e, class, on_notify, core::ptr::null());
-        // What Kotlin threw has no Java caller here to reach.
+        // An exception Kotlin threw has no Java caller here to reach, so it is
+        // cleared.
         if j.ExceptionCheck.or_bug(Errno::ENOSYS)(e) != 0 {
             j.ExceptionClear.or_bug(Errno::ENOSYS)(e);
         }

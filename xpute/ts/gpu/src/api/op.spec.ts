@@ -35,22 +35,31 @@ export const COMPUTE_PIPELINE = 10 as number;
 /** id, type (QUERY_TYPE), count. */
 export const QUERY_SET = 11 as number;
 
-/** id: any object, made by any op above. */
+/** id, which may name any object an op above made. */
 export const DESTROY = 12 as number;
 
 /** buffer, offset, the bytes. */
 export const WRITE_BUFFER = 13 as number;
 
-/** buffer, offset, address, bytes: the bytes read where they lie in the core's memory as the runtime runs the record, no copy of them made; the core neither rewrites nor frees them from the stream's publish until it loads END as 0 (ipc/stream R3). */
+/** buffer, offset, address, bytes. The runtime reads the bytes where they lie in the core's
+ * memory when it runs the record, and makes no copy of them first. From the stream's
+ * publish until the core loads END as 0, the core neither rewrites nor frees them
+ * (ipc/stream R3). */
 export const WRITE_BUFFER_AT = 14 as number;
 
 /** texture, mip, origin x, y, z, aspect, bytes per row, rows per image, width, height, depth, the bytes. */
 export const WRITE_TEXTURE = 15 as number;
 
-/** as WRITE_TEXTURE, the bytes an address and a count in the core's memory, read as WRITE_BUFFER_AT's are. */
+/** The words of WRITE_TEXTURE, except that the bytes are given as an address and a count in
+ * the core's memory, which the runtime reads as it reads WRITE_BUFFER_AT's. */
 export const WRITE_TEXTURE_AT = 16 as number;
 
-/** texture, mip, origin x, y, z, aspect (TEXTURE_ASPECT), flip y (0 or 1), premultiplied (0 or 1), address, bytes, word, ticket: an encoded image (PNG, JPEG, WebP) the runtime decodes into the texture; the word and the one after it are its fence and result (RESULT): OK once the image is in the texture, REFUSED for one the runtime cannot decode. One whose texture went is answered nothing. */
+/** texture, mip, origin x, y, z, aspect (TEXTURE_ASPECT), flip y (0 or 1), premultiplied (0
+ * or 1), address, bytes, word, ticket. The bytes are an encoded image (PNG, JPEG, WebP),
+ * which the runtime decodes into the texture. The word and the one after it are the
+ * request's fence and result (RESULT): OK once the image is in the texture, or REFUSED
+ * when the runtime cannot decode the image. A request whose texture has been destroyed
+ * gets no answer. */
 export const COPY_EXTERNAL_IMAGE = 17 as number;
 
 /** id. */
@@ -80,7 +89,7 @@ export const RENDER_PASS = 25 as number;
 /** id, encoder; timestamps: query set or NONE, begin index or NONE, end index or NONE. */
 export const COMPUTE_PASS = 26 as number;
 
-/** pass, pipeline: render or compute, as the pass is. */
+/** pass, pipeline; the pipeline is a render or a compute pipeline, as the pass is. */
 export const SET_PIPELINE = 27 as number;
 
 /** pass, index, group, dynamic offsets' count, that many offsets. */
@@ -122,16 +131,22 @@ export const DISPATCH = 39 as number;
 /** pass, buffer, offset. */
 export const DISPATCH_INDIRECT = 40 as number;
 
-/** pass: ended, and let go with the record. */
+/** pass. The record ends the pass and lets go of it, so no DESTROY follows. */
 export const END = 41 as number;
 
-/** encoders' count, that many encoders, each finished and let go with the record. */
+/** encoders' count, that many encoders. The record finishes each encoder and lets go of it,
+ * so no DESTROY follows. */
 export const SUBMIT = 42 as number;
 
-/** buffer, offset, size, address, word, ticket: WebGPU's mapAsync for reading, of a buffer the core made MAP_READ | COPY_DST and copied into on an encoder it submitted before. Once mapped, the range is copied to the address and the buffer unmapped; the word and the one after it are its fence and result (RESULT): OK, or REFUSED where the device refused the mapping and nothing was copied. */
+/** buffer, offset, size, address, word, ticket. WebGPU's mapAsync for reading, on a buffer
+ * the core made with MAP_READ | COPY_DST and copied into on an encoder it submitted
+ * earlier. Once the buffer is mapped, the runtime copies the range to the address and
+ * unmaps the buffer. The word and the one after it are the request's fence and result
+ * (RESULT): OK, or REFUSED when the device refused the mapping and nothing was copied. */
 export const MAP_ASYNC = 43 as number;
 
-/** word, ticket: the word its fence (RESULT) once what was submitted before it is done. */
+/** word, ticket. The word is the request's fence (RESULT), answered once the work submitted
+ * before this record is done. */
 export const QUEUE_DONE = 44 as number;
 
 /** surface, format (TEXTURE_FORMAT, or SURFACE_PREFERRED), usage (TEXTURE_USAGE), alpha mode (CANVAS_ALPHA_MODE). */
@@ -140,17 +155,36 @@ export const CONFIGURE = 45 as number;
 /** surface, width, height. */
 export const RESIZE = 46 as number;
 
-/** id, surface: the surface's texture for this turn, as a view. */
+/** id, surface. The id names a view of the surface's texture for this turn. */
 export const CURRENT = 47 as number;
 
-/** address, words: the runtime writes there the device's limits (LIMIT_NAME, a word each), then its features (FEATURE_NAME, a bit each, in words), then its timestamp period (f32 bits: the nanoseconds a resolved timestamp's unit is, 1 where they are nanoseconds as WebGPU's are), then the surface format it prefers (TEXTURE_FORMAT: what SURFACE_PREFERRED names, as the web's getPreferredCanvasFormat), then the frames unfinished, then STATUS. The frames unfinished are the frames the core has drawn whose work the queue has not yet done, written by the runtime alone: before STATUS as the block is, and stored with release each time the count changes after. The core loads it with acquire once STATUS reads READY, and draws a frame only while it is below its frame latency, the rule both runtimes hold a frame to (xpute-gpu admit). */
+/** address, words. The runtime writes the device block there: the device's limits
+ * (LIMIT_NAME, one word each), then its features (FEATURE_NAME, one bit each, packed in
+ * words), then its timestamp period (f32 bits: how many nanoseconds one unit of a resolved
+ * timestamp is, 1 when the units are nanoseconds as WebGPU's are), then the surface format
+ * it prefers (TEXTURE_FORMAT: the format SURFACE_PREFERRED stands for, as the web's
+ * getPreferredCanvasFormat gives it), then the count of unfinished frames, then STATUS.
+ * The unfinished frames are the frames the core has drawn whose work the queue has not yet
+ * done. Only the runtime writes that count: first before STATUS, as it writes the rest of
+ * the block, and afterwards with release each time the count changes. The core loads the
+ * count with acquire once STATUS reads READY, and draws a frame only while the count is
+ * below its frame latency; both runtimes hold a frame to that rule (xpute-gpu admit). */
 export const DEVICE = 48 as number;
 
-/** RENDER_PIPELINE's words, then word, ticket: WebGPU's createRenderPipelineAsync, the word its fence (RESULT) once the pipeline is made; the core names the pipeline in no other record before. One the device refuses is made as RENDER_PIPELINE makes it, its error reported as that op's, and its word written all the same. A runtime with no async call makes it at once and writes the word by the same path, before the next turn reads it. */
+/** RENDER_PIPELINE's words, then word, ticket. WebGPU's createRenderPipelineAsync; the word
+ * is the request's fence (RESULT), answered once the pipeline is made, and until then the
+ * core names the pipeline in no other record. When the device refuses the pipeline, the
+ * runtime makes it as RENDER_PIPELINE would, reports the error as that op would, and still
+ * writes the word. A runtime with no asynchronous call makes the pipeline at once and
+ * writes the word the same way, before the next turn reads it. */
 export const RENDER_PIPELINE_ASYNC = 49 as number;
 
-/** COMPUTE_PIPELINE's words, then word, ticket: WebGPU's createComputePipelineAsync, its word as RENDER_PIPELINE_ASYNC's. */
+/** COMPUTE_PIPELINE's words, then word, ticket. WebGPU's createComputePipelineAsync, whose
+ * word is answered as RENDER_PIPELINE_ASYNC's is. */
 export const COMPUTE_PIPELINE_ASYNC = 50 as number;
 
-/** id, the label as bytes: the name the runtime's device gives the object in its messages, as WebGPU's label. Any object, encoder or pass a record before made; a runtime that cannot name an object after it is made ignores it. */
+/** id, the label as bytes. The label is the name the device gives the object in its
+ * messages, as WebGPU's label is. The id may name any object, encoder or pass that an
+ * earlier record made. A runtime that cannot name an object after it is made ignores the
+ * record. */
 export const LABEL = 51 as number;

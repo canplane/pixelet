@@ -1,7 +1,7 @@
 // @pxl/client/port/boot.ts
 
-/** Where the client's boot stands, kept for the UI to show; the boot
- * (runtime/boot.ts) moves it on. */
+/** Where the client's boot stands, kept for the UI to show. The boot
+ * (runtime/boot.ts) moves it forward. */
 
 import { Listeners } from "@xpute/kit/lang/listeners.ts";
 import { BOOT_OPENING, type Boot } from "@/abi/state.ts";

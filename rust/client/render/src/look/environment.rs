@@ -1,18 +1,18 @@
 // pxl-render/look/environment.rs
 
-//! The lane the frame, sky and atmosphere uniforms are laid out from: sun and
-//! moon light taken through the air. The light from everywhere else is the
-//! sky's own, which the shaders read from its tables. Directions are
-//! in the map's axes (X east, Y north, Z up), as is the sky.
+//! The environment lane, from which the frame, sky and atmosphere uniforms are laid out: the
+//! sun's and the moon's light as they reach the air. Light from everywhere else is the sky's
+//! own, which the shaders read from its tables. Directions are in the map's axes (X east,
+//! Y north, Z up), as the sky's are.
 
 use pxl_content::param::night;
 use pxl_spec::space::coord::v3::{self, V3};
 
 use crate::look::atmosphere::{moon_phase_light, MOON_LIGHT, NIGHT_COLOR};
 
-/// The sun's direction and a pad (4); the moon's direction and its light
-/// (4); the moon's color and a pad (4), the sun's being white; the stars'
-/// fade and three pads (4); air (4); the stars' frame (12).
+/// The lane's floats, a vec4 each unless said: the sun's direction and a pad; the moon's
+/// direction and its light; the moon's color and a pad, the sun's color being white; the
+/// stars' fade and three pads; the air; and the stars' frame, three vec4s.
 pub const ENV_FLOATS: usize = ENV_STARS + ENV_STAR_FRAME_FLOATS;
 pub const ENV_SUN: usize = 0;
 pub const ENV_MOON: usize = 4;
@@ -22,7 +22,7 @@ pub const ENV_AIR: usize = 16;
 pub const ENV_STARS: usize = 20;
 /// The stars' frame, three columns a vec4 each, their `w` unread.
 pub const ENV_STAR_FRAME_FLOATS: usize = 3 * 4;
-/// Its third column, the celestial pole.
+/// The frame's third column, which is the celestial pole.
 pub const ENV_POLE: usize = ENV_STARS + 2 * 4;
 
 #[derive(Clone, Copy)]
@@ -40,10 +40,10 @@ pub struct Light {
 }
 
 pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
-    // Both lights, summed so the light does not snap where they cross at
-    // dusk, each as it reaches the air, against a sun overhead at sea
-    // level, which the shaders take as white (atmos_lut.wgsl
-    // `table_white`): the sun's is that white, the moon's its color.
+    // Both lights are summed, so the light does not snap where they cross at dusk. Each is
+    // written as it reaches the air, relative to a sun overhead at sea level, which the shaders
+    // take as white (atmos_lut.wgsl `table_white`). The sun's light is that white, and the
+    // moon's is its color.
     let sun_dir = v3::norm(&light.sun);
     let moon_dir = v3::norm(&light.moon);
     // The stars are lost in the day.
@@ -51,7 +51,7 @@ pub fn write_environment(o: &mut [f32; ENV_FLOATS], light: &Light) {
     let night = 1.0 - smoothstep(from, to, sun_dir[2]);
     let elongation = libm::acos(v3::dot(&sun_dir, &moon_dir).clamp(-1.0, 1.0));
     let phase = moon_phase_light(core::f64::consts::PI - elongation);
-    // Wherever the moon is up; by day the sun outshines it.
+    // The moon's light is not faded by day, as the sun outshines it.
     let moon_color: [f64; 3] = core::array::from_fn(|k| NIGHT_COLOR[k] * MOON_LIGHT * phase);
     put3(o, ENV_SUN, f32s(&sun_dir));
     put3(o, ENV_MOON, f32s(&moon_dir));

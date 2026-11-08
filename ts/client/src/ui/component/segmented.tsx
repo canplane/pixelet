@@ -1,6 +1,7 @@
 // @pxl/client/ui/component/segmented.tsx
 
-/** A segmented control, drawn on a page and on Android; an iPhone's is UIKit's (segmented.ios.tsx). */
+/** A segmented control that the app draws itself, on a page and on Android.
+ * An iPhone shows UIKit's (segmented.ios.tsx). */
 
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -37,7 +38,9 @@ export function Segmented<T extends string | number>({
             aria-selected={on}
             style={styles.target}
           >
-            {/* Always mounted, as dock/strip.tsx `ToolButton` is. */}
+            {/* The segment stays mounted and only its color changes. On
+                Android, a view created with its background already set is
+                drawn without its rounded corners. */}
             <View collapsable={false} style={[styles.segment, on && styles.on]}>
               <Text
                 maxFontSizeMultiplier={textScale.chrome}
@@ -62,8 +65,8 @@ const styles = StyleSheet.create({
     borderRadius: PANEL_CONTROL / 2,
     backgroundColor: color.faint,
   },
-  // The segment's radius is the track's minus the inset, so the two are concentric.
   target: { flex: 1, padding: INSET },
+  // The segment's corners are concentric with the track's.
   segment: {
     flex: 1,
     alignItems: "center",

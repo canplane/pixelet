@@ -1,6 +1,6 @@
 // pxl-core/door/apply/setting.rs
 
-//! SETTING: a setting's.
+//! The SETTING major's commands.
 
 use super::State;
 use super::{ask_turn, refuse_unless};
@@ -14,7 +14,8 @@ use xpute_core::ipc::door::Outcome;
 use xpute_kit::status::errno::Errno;
 
 pub(super) fn set(s: &mut State, c: abi::SettingSet) -> Outcome {
-    // A change before the slot is read would be read over.
+    // A change made before the settings' slot is read would be overwritten
+    // by the read, so it is refused until then.
     refuse_unless(are_settings_loaded(), Errno::EAGAIN)?;
     let changed = settings_store().set_setting(c.key, c.value);
     refuse_unless(changed.is_some(), Errno::EINVAL)?;
@@ -24,8 +25,8 @@ pub(super) fn set(s: &mut State, c: abi::SettingSet) -> Outcome {
     ask_turn(s)
 }
 
-/// Whether this is a development build, which the UI says once the core
-/// is attached.
+/// Whether this is a development build. The UI sends this once the core is
+/// attached.
 pub(super) fn development(c: abi::SettingDevelopment) -> Outcome {
     set_development(c.development);
     Ok(Some(0))

@@ -10,13 +10,14 @@
 
 namespace xpute {
 
-// A frame's four words as read, its command word split.
+// A frame's four words as read, with its command word split into the
+// command and its flags.
 struct Frame {
     std::uint32_t tag;
     std::uint32_t cmd;
     std::uint32_t flags;
     std::int32_t result;
-    // 0 for none.
+    // Where the frame's packet lies in the memory, or 0 for no packet.
     std::uint32_t pkt_at;
 
     bool operator==(const Frame &) const = default;

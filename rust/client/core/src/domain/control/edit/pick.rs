@@ -1,8 +1,8 @@
 // pxl-core/domain/control/edit/pick.rs
 
-//! The pointer's pick, asked of the access at terrain's finest zoom, the leaves', which
-//! is what is on the screen about the eye; and what a hit means for a
-//! placement or an erase.
+//! The pointer's pick, and what a hit means for a placement or an erase.
+//! The pick asks the world at terrain's finest zoom, the leaves', because
+//! the leaves are what the screen shows around the eye.
 
 use crate::domain::layer::instance::{Instance, Source};
 use pxl_spec::bake::constant::OBJECT_FINEST;
@@ -15,14 +15,17 @@ use crate::domain::query::{finest, Hit, HitKind, Ray, World};
 use crate::domain::view::frame::coord::world_to_canonical;
 use pxl_spec::space::coord::aabb::Aabb;
 
-/// A product number: what can be edited is a sphere about the observer.
+/// How far from the eye the pointer can pick, in units. It is a product
+/// decision: what can be edited is a sphere about the observer.
 const PICK_DIST_U: f64 = 32.0;
 
-// Above the 1/256-grid round trip's error (±1/512 u), below the gap between
-// any two object tiers (the finest's side).
+// Larger than the error of a round trip through the 1/256 grid (±1/512 u),
+// and smaller than the gap between any two object tiers (the finest tier's
+// side).
 const SAME_EXTENT_EPS: f64 = units(OBJECT_FINEST) / 16.0;
 
-/// The octree only stores a `size` object on these lines.
+/// The octree stores an object of side `size` only on these grid lines. A
+/// value within `SAME_EXTENT_EPS` of a line counts as on it.
 fn grid_ceil(v: f64, size: f64) -> f64 {
     ((v - SAME_EXTENT_EPS) / size).ceil() * size
 }
@@ -31,11 +34,11 @@ fn grid_floor(v: f64, size: f64) -> f64 {
     ((v + SAME_EXTENT_EPS) / size).floor() * size
 }
 
-/// The corner a new `new_size` cube takes flush against what `hit` struck,
-/// one rule per axis by the sign of that axis's normal: n > 0 starts at
-/// grid_ceil(max), n < 0 ends at grid_floor(min), n = 0 takes the
-/// cell the hit point falls in. `precise_box` overrides the hit's box (a
-/// placed cube's entry, as it is stored).
+/// The corner a new cube of `zoom` takes flush against the face `hit`
+/// struck. On the axis of the face's normal, the cube starts just past the
+/// struck box. On the other axes, it takes the cell the hit point falls in.
+/// `precise_box` replaces the hit's box where that is not exact, as for a
+/// placed cube's stored entry.
 pub fn world_adjacent_corner(hit: &Hit, zoom: Zoom, precise_box: Option<&Aabb>) -> Q3 {
     let new_size = units(zoom);
     let Aabb {
@@ -58,8 +61,9 @@ pub fn world_adjacent_corner(hit: &Hit, zoom: Zoom, precise_box: Option<&Aabb>) 
     world_to_canonical(&out)
 }
 
-/// The `size` voxel `hit` struck, for the eraser's terrain dig: as
-/// world_adjacent_corner but staying inside the struck box on the normal axis.
+/// The corner of the cell of `zoom` that `hit` struck, for the eraser's dig
+/// into terrain. It follows `world_adjacent_corner` but stays inside the
+/// struck box on the normal's axis.
 #[expect(
     clippy::needless_range_loop,
     reason = "an axis indexes the hit's normal, its box and the corner at once"
@@ -80,7 +84,8 @@ pub fn world_struck_corner(hit: &Hit, zoom: Zoom) -> Q3 {
     world_to_canonical(&out)
 }
 
-/// The placed object struck: a cube, or a decor someone placed.
+/// The placed object struck: a cube, or a decor someone placed. None for
+/// the ground and for decor the ground generated.
 pub fn resolve_hit_object(hit: &Hit) -> Option<Entry> {
     match hit.kind {
         HitKind::Object(at)
@@ -92,17 +97,18 @@ pub fn resolve_hit_object(hit: &Hit) -> Option<Entry> {
     }
 }
 
-/// In the root frame, from the eye.
-/// Decor is struck where the frame holds it. The world
-/// asked is the stored one (`World::now`), not as the eraser's preview draws
-/// it: what to erase is what is stored.
+/// The first thing the ray from the eye at `origin` along `dir` strikes
+/// within `PICK_DIST_U`, in the root frame. Decor is struck where the frame
+/// holds it. The world asked is the stored one (`World::now`), not the one
+/// the eraser's preview draws, because what is erased is what is stored.
 pub fn ray_pick(origin: V3, dir: V3) -> Option<Hit> {
     let ray = Ray {
         origin,
         dir,
         t_max: PICK_DIST_U,
     };
-    // A coarser tile's answer is a summary, not what is held.
+    // Only an exact answer counts. A coarser tile's answer is a summary, not
+    // what is held.
     World::now()
         .striking_decor()
         .first_hit(&ray, finest())

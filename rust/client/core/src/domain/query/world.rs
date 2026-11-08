@@ -1,7 +1,7 @@
 // pxl-core/domain/query/world.rs
 
-//! The world's answers: the ground's and the placed objects' over it, in one
-//! place. Objects are all resident, so what the world knows is what the
+//! The world's answers: the ground and the placed objects over it, read as
+//! one. The objects are all resident, so what the world knows is what the
 //! ground knows.
 
 use pxl_spec::space::coord::zoom::Zoom;
@@ -20,35 +20,35 @@ use crate::domain::layer::Base as _;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::aabb::Aabb;
 
-/// The world's query: the resident ground and the placed objects, read
-/// as one.
 #[derive(Clone, Copy)]
 pub struct World<'a> {
     pub(super) terrain: &'a TileCache<TerrainTile>,
     pub(super) object: &'a Store,
-    /// Whether decor is struck, as the boxes it claims; else a ray passes
-    /// through decor.
+    /// Whether a ray strikes decor, as the boxes it claims. Otherwise rays
+    /// pass through decor.
     pub(super) decor: bool,
-    /// Whether it is unplaced, nothing placed asked of it: the ground's alone
-    /// (pxl-engine `world::Inheritance::UNPLACED`).
+    /// Whether the world is read unplaced: the ground alone, with nothing
+    /// placed asked of it (pxl-engine `world::Inheritance::UNPLACED`).
     pub(super) unplaced: bool,
-    /// What of what is placed a preview hides, and what it cuts to air.
+    /// What a preview hides of what is placed (`hide`), and what it cuts to
+    /// air (`carve`).
     pub(super) hide: Option<Octant>,
     pub(super) carve: Option<Octant>,
-    /// Where what its queries read is reported, if anywhere.
+    /// Where the queries report what they read, if anywhere.
     pub(super) reading: Option<&'a Footprint>,
 }
 
 impl World<'static> {
-    /// The world as stored: what every mechanic asks, the pick, a walk, the
+    /// The world as stored. Every mechanic asks it: the pick, a walk, the
     /// camera's clearance, an edit's reads and decor's column surface.
     pub fn now() -> World<'static> {
         let object: &'static Store = store::object();
         World::new(TerrainTile::tile_cache(), object)
     }
 
-    /// As `now`, and decor is struck too, where the frame holds it: the
-    /// pointer's pick, which alone asks what a decor thing is.
+    /// This world with decor struck too, where the frame holds it. Only the
+    /// pointer's pick asks for this, since it alone asks what a decor thing
+    /// is.
     pub fn striking_decor(self) -> World<'static> {
         World {
             decor: true,
@@ -70,8 +70,8 @@ impl<'a> World<'a> {
         }
     }
 
-    /// As it is unplaced: nothing placed and no preview's cuts asked of it,
-    /// the ground's alone, which decor generates on (pxl-engine
+    /// This world unplaced: the ground alone, with nothing placed and no
+    /// preview's cuts. Decor is generated on it (pxl-engine
     /// `generation::DecorQuery::column_surface`).
     pub(super) fn ground_only(self) -> World<'a> {
         World {
@@ -82,9 +82,9 @@ impl<'a> World<'a> {
         }
     }
 
-    /// As a preview shows it: `hide` left out, `carve` cut to air, at the
-    /// entry's zoom or finer, where it is drawn as held; coarser, the stored
-    /// fold stands.
+    /// This world as a preview shows it: `hide` left out and `carve` cut to
+    /// air. The cuts apply at the entry's zoom or finer, where the world is
+    /// drawn as held; at coarser zooms the stored fold stands.
     pub fn previewing(self, hide: Option<Octant>, carve: Option<Octant>) -> World<'a> {
         World {
             hide,
@@ -93,7 +93,8 @@ impl<'a> World<'a> {
         }
     }
 
-    /// As it is, the columns its queries read reported into `footprint`.
+    /// This world with the columns its queries read reported into
+    /// `footprint`.
     pub fn reading(self, footprint: &'a Footprint) -> World<'a> {
         World {
             reading: Some(footprint),
@@ -101,7 +102,7 @@ impl<'a> World<'a> {
         }
     }
 
-    /// The cells of `zoom` the box from `a` to `b` lies in, read
+    /// Reports the cells of `zoom` that the box from `a` to `b` lies in
     /// (`reading`).
     pub(super) fn read(&self, a: [f64; 2], b: [f64; 2], zoom: Zoom) {
         if let Some(c) = self.reading {
@@ -109,7 +110,8 @@ impl<'a> World<'a> {
         }
     }
 
-    /// The columns `columns`, read (`reading`): what a cached answer read.
+    /// Reports `columns` as read (`reading`). A kept answer reports what it
+    /// read this way.
     pub(super) fn read_columns(&self, columns: [[f64; 2]; 2]) {
         if let Some(c) = self.reading {
             c.join(columns);
@@ -117,9 +119,10 @@ impl<'a> World<'a> {
     }
 }
 
-/// What a walk over columns carries from one to the next (`World::bounds`):
-/// the ground's lines and the objects' tree, each stepped down from where
-/// the last left off. Good while neither moves.
+/// What a walk over columns carries from one column to the next
+/// (`World::bounds`): the ground's lines and the objects' tree, each stepped
+/// down from where the last column left off. It stays valid only while
+/// neither the ground nor the objects move.
 #[derive(Default)]
 pub struct ColumnWalk {
     ground: Lines,
@@ -127,8 +130,9 @@ pub struct ColumnWalk {
 }
 
 impl World<'_> {
-    /// Where the ground and what is placed stand in the node, as its cells
-    /// at `cell_zoom` are read; each stepped from where `walked` last went.
+    /// The box the ground and what is placed fill in the node, as its cells
+    /// at `cell_zoom` are read. The walk steps on from where `walked` last
+    /// went.
     pub fn bounds(
         &self,
         walked: &mut ColumnWalk,

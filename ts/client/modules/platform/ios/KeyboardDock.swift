@@ -4,36 +4,38 @@ import ExpoModulesCore
 import UIKit
 
 /// A view that stands on the keyboard (ts/client/src/ui/component/above-keyboard.native.tsx).
-/// Its layout is the UI's, where it rests with no keyboard up, `rest` off
-/// the bottom edge (ts/client/src/ui/component/bottom-rest.ts). While a keyboard is up, the
-/// view is lifted to stand `clearance` above it, in the animation the
-/// keyboard's own change runs in — its duration and its curve,
-/// the keyboard's private one among them — so the view and the keys move as
-/// one. Told from here rather than from the JavaScript, which hears of the
+/// The UI's layout places the view where it rests with no keyboard up, `rest`
+/// off the bottom edge (ts/client/src/ui/component/bottom-rest.ts). While a
+/// keyboard is up, the view is lifted to stand `clearance` above it. The lift
+/// runs in the animation of the keyboard's own change, with its duration and
+/// its curve, which can be a private one, so the view and the keys move as one.
+/// The lift is started here rather than from the JavaScript, which hears of the
 /// keyboard a thread hop later and would lay out after the keys had left.
 ///
-/// The moving is a transform, which React Native never sees: it measures a
-/// view where its layout put it, and a press that slid a point on a view
-/// lifted where no measure looks is taken for one that had left it. So the
-/// transform is only ever the part of the lift the layout has not taken yet.
-/// Once the keys have arrived, the lift is said (`onLift`), the UI lays
-/// the view out that much higher and says so (`layoutLift`), and the transform
-/// is none: at rest, the view is where the layout says it is. The view takes
-/// no touch of its own, only what stands on it.
+/// The view moves by a transform, which React Native never sees, because it
+/// measures a view where its layout put it. On a transformed view, a press
+/// whose finger slides by a point is taken for one that has left the view. So
+/// the transform is only ever the part of the lift that the layout has not
+/// taken yet. Once the keys have arrived, the view reports the lift
+/// (`onLift`). The UI then lays the view out that much higher and reports it
+/// back (`layoutLift`), and the transform falls to zero. At rest, the view is
+/// where the layout says it is. The view takes no touch itself; only what
+/// stands on it does.
 class KeyboardDock: ExpoView {
-  /// The gap the UI keeps from the bottom edge and from the keyboard.
-  /// Not `inset`, which React Native reads as a layout style.
+  /// The gap the UI keeps from the bottom edge and from the keyboard. It is not
+  /// named `inset`, because React Native reads that prop as a layout style.
   var clearance: CGFloat = 0
-  /// How far off the bottom edge the UI rests the view; the lift is
-  /// measured from there, so the rule of where it rests is the UI's alone.
+  /// How far off the bottom edge the UI rests the view. The lift is measured
+  /// from there, so that the rule for where the view rests stays the UI's
+  /// alone.
   var rest: CGFloat = 0
-  /// How much of the lift the UI's layout carries.
+  /// How much of the lift the UI's layout has taken.
   var layoutLift: CGFloat = 0 {
     didSet { transform = CGAffineTransform(translationX: 0, y: -(lift - layoutLift)) }
   }
   let onLift = EventDispatcher()
 
-  /// How much of the window the keyboard covers, as it was last told.
+  /// How much of the window the keyboard covers, as last reported.
   private var keyboard: CGFloat = 0
   private var lift: CGFloat { max(0, keyboard + clearance - rest) }
 
@@ -53,7 +55,8 @@ class KeyboardDock: ExpoView {
     UIView.animate(withDuration: duration, delay: 0, options: [UIView.AnimationOptions(rawValue: curve << 16), .beginFromCurrentState]) {
       self.transform = CGAffineTransform(translationX: 0, y: -(target - self.layoutLift))
     } completion: { finished in
-      // A later change that took over says its own lift when it ends.
+      // An animation cut short was taken over by a later change, which reports
+      // its own lift when it ends.
       if finished { self.onLift(["lift": target]) }
     }
   }

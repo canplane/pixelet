@@ -1,10 +1,12 @@
 // pxl-render/gpu/pass/decor.rs
 
-//! Decor as instanced draws of each variant's model; the decor's instances are
-//! the instance buffer, and its index list says which instances show. A variant's
-//! skin is its image's (gpu/pass/model.rs `skin_group`). A listed draw that
-//! changed marks the tiles it covers where it was and where it is
-//! (gpu/pass/mark.rs), its instances the upload it reads.
+//! The decor's model tier. Each decor variant is a draw group with one model
+//! and one skin, and the pass draws a group's model instanced. The decor's
+//! instances are the instance buffer, and its index list says which of them
+//! show. A group's skin is the bind group of its image (gpu/pass/model.rs
+//! `skin_group`). A listed draw that changed marks the tiles it covers where
+//! it was and where it is (gpu/pass/mark.rs). The upload such a draw reads
+//! holds its instances.
 
 use crate::frame::shader::record::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_MARK};
@@ -35,14 +37,16 @@ pub struct DecorPass {
     ghost: Pipeline,
     depth: Pipeline,
     uniforms: DrawUniforms,
-    /// Each group's mesh, 0 for a model not yet registered, and its skin's image.
+    /// Each group's mesh, 0 while its model is not registered, and the image of
+    /// its skin.
     groups: [(u32, Option<Image>); DECOR_GROUPS],
-    /// The marks of the listed draws, opaque, which cast, and blended.
+    /// The marks of the listed opaque draws, which cast shadows.
     pub marks: Marks,
+    /// The marks of the listed ghost draws, which are blended.
     pub ghost_marks: Marks,
 }
 
-/// A mark's uniform, as the draw's (`put_instances`).
+/// Writes a mark's uniform as the draw's own (`put_instances`).
 fn put_mark(buf: &mut [u8], (_, u): &Draw) {
     put_instances(buf, u, 0);
 }
@@ -77,10 +81,10 @@ impl DecorPass {
         }
     }
 
-    /// This frame's marks drawn into `pass`, `frames` their group
-    /// 0 as they are and as they were (tile_mark.wgsl, `Marks::draw`): the
-    /// opaque's alone where `casters`, as the light's map draws them, else
-    /// the blended's too.
+    /// Draws this frame's marks into `pass`. `frames` holds their group 0 as
+    /// they are and as they were (tile_mark.wgsl, `Marks::draw`). Where
+    /// `casters`, as for the light's map, only the opaque draws' marks are
+    /// drawn; otherwise the ghosts' are drawn too.
     pub fn draw_marks(
         &self,
         pass: &mut TrackedRenderPass,
@@ -106,7 +110,7 @@ impl DecorPass {
         }
     }
 
-    /// The uploads the listed draws read, into `out` (`Marks::reads`).
+    /// Pushes onto `out` the uploads the listed draws read (`Marks::reads`).
     pub fn marks_read(&self, draws: &Draws, out: &mut Vec<u32>) {
         self.marks.reads(draws.of(PIPELINE_DECOR), out);
         self.ghost_marks.reads(draws.of(PIPELINE_GHOST_DECOR), out);
@@ -118,8 +122,10 @@ impl DecorPass {
         }
     }
 
-    /// None while its mesh or its skin's image lands; its skin's group made
-    /// here, as a frame prepares (gpu/pass/model.rs `skin_group`).
+    /// The mesh buffer of `group`'s model, its vertex and index counts and its
+    /// skin group, or none while the mesh or the skin's image is landing. It
+    /// makes the skin group where there is none, so it is called only while
+    /// a frame prepares (gpu/pass/model.rs `skin_group`).
     pub(crate) fn model_of(
         &self,
         g: &Gpu,
@@ -131,7 +137,8 @@ impl DecorPass {
         })
     }
 
-    /// As a frame's draws bind it: a skin its prepare made, or none.
+    /// What `model_of` gives, as a frame's draws bind it: it takes the skin
+    /// group a prepare made and makes none.
     fn model_binding(&self, group: u32, uploads: &Uploads) -> Option<(u32, u32, u32, u32)> {
         self.model(group, uploads, |image| skin_made(image.0))
     }
@@ -147,7 +154,7 @@ impl DecorPass {
         Some((buf, vertex_cnt, idx_cnt, skin(image?)?))
     }
 
-    /// 0 while it loads.
+    /// The triangles of `group`'s model, 0 while its mesh is landing.
     fn triangles_of(&self, group: u32, uploads: &Uploads) -> u32 {
         self.groups
             .get(group as usize)
@@ -155,16 +162,18 @@ impl DecorPass {
             .map_or(0, |(_, _, idx_cnt)| idx_cnt / 3)
     }
 
-    /// Its draws into `stats`, its group's model's triangles an instance.
+    /// Adds the pass's draws to `stats`. Each instance counts the triangles of
+    /// its group's model.
     pub fn count(&self, draws: &Draws, uploads: &Uploads, stats: &mut DrawStats) {
         for pipeline in [PIPELINE_DECOR, PIPELINE_GHOST_DECOR] {
             draws.count(pipeline, stats, |d| self.triangles_of(d[1], uploads) * d[2]);
         }
     }
 
-    /// Every skin and upload group the draws will bind is made here, so drawing
-    /// makes nothing that outlives its frame.
-    /// `changed` whether the lists the draws are made from moved.
+    /// Writes the draws' uniforms and makes every skin and upload group the
+    /// draws will bind, so that drawing makes none: a group made inside a
+    /// frame that is dropped would be gone. `changed` says whether the lists
+    /// the draws are made from moved.
     pub fn prepare(
         &mut self,
         g: &Gpu,
@@ -191,8 +200,8 @@ impl DecorPass {
         }
     }
 
-    /// The listed decor, lit or its depth from the sun (`Stage::Depth`),
-    /// `frame` the group 0 the stage reads.
+    /// Draws the listed opaque decor at `stage`: lit, or its depth seen from
+    /// the sun. `frame` is the group 0 the stage reads.
     pub fn draw(
         &mut self,
         pass: &mut TrackedRenderPass,
@@ -229,7 +238,8 @@ impl DecorPass {
         );
     }
 
-    /// The ghost's uniforms follow the opaque ones' (`prepare`).
+    /// The ghosts' uniform slots follow the opaque draws' slots (`prepare`),
+    /// so a ghost's slot is offset by the count of opaque draws.
     fn draw_pipeline(
         &mut self,
         pass: &mut TrackedRenderPass,
@@ -267,8 +277,9 @@ impl DecorPass {
         );
     }
 
-    /// The models the GPU generated, an indirect draw a group whose model is held
-    /// (pxl-content `generation::drawn`, a group's models its region `2·group`).
+    /// Draws the models the GPU generated, one indirect draw for each group
+    /// whose model is on the device. A group's models are in region `2·group`
+    /// of what the GPU generated (pxl-content `generation::drawn`).
     pub fn draw_generated(
         &mut self,
         pass: &mut TrackedRenderPass,

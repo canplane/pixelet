@@ -4,27 +4,31 @@ import * as origin from "@/service/origin.ts";
 import type { BaseLayer } from "@/origin/publication.spec.ts";
 import { SITE_URL, TILE_ROOT } from "./route.spec.ts";
 
-/** `<tile>/<layer>/<version>/<name>`: the object a bake's name is, under
- * the version its source declares serving it (namespace/tile.ts). */
+/** The URL of a bake's object, `<tile root>/<layer>/<version>/<name>`. The
+ * object carries the version the source declares for it (sys/fs/tile.ts). */
 export function tile_url(layer: BaseLayer, object: string): string {
   return `${TILE_ROOT}/${layer}/${object}`;
 }
 
-/** The source's declaration: the bucket's `source`, or a dev tile server's. */
+/** The route of the source's declaration: the bucket's `source` object, or a
+ * dev tile server's answer. */
 export const TILE_SOURCE_ROUTE = `${TILE_ROOT}/source`;
 
-/** A route as the platform reads it: a page's own, a device's on the site. */
+/** A route as the platform reads it. A page reads the route on its own
+ * origin, and a device reads it on the site. */
 export function href(route: string): string {
   return origin.remote ? `${SITE_URL}${route}` : route;
 }
 
-/** A route read from the origin, as the platform fetches (service/origin.ts). */
+/** Fetches a route from the origin, as the platform fetches
+ * (service/origin.ts). */
 export function get(route: string, signal?: AbortSignal): Promise<Response> {
   return origin.get(href(route), signal);
 }
 
-/** The route root and the bucket prefix are the same word on purpose: the
- * URL is the key with a leading slash. Content-addressed, so unversioned. */
+/** An asset's URL is its key with a leading slash, because the route's root
+ * and the bucket's prefix are the same word on purpose. Assets are addressed
+ * by their content, so their URLs carry no version. */
 export function asset_url(key: string): string {
   return `/${key}`;
 }

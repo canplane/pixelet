@@ -1,9 +1,20 @@
 // @pxl/client/abi/state.ts
 
-/** What the client reports beside the core and the UI shows: numbers
- * both read, as a core's uapi headers are, so neither reaches into the other. */
+/** The states the client reports beside the core, which the UI shows. They
+ * are numbers both read, as a kernel's uapi headers are, so that neither side
+ * reaches into the other. */
 
-/** Where the client's boot stands: opening (the core's module fetched and compiled, before any GPU is asked for), starting (the core runs, while a GPU and the source are asked for), loading (a GPU answered, the source declared: the world is made under a cover), started (the app shows), never started, or stopped for good. */
+/**
+ * Where the client's boot stands:
+ * - opening: the core's module is fetched and compiled, before any GPU is
+ *   asked for;
+ * - starting: the core runs, while a GPU and the source are asked for;
+ * - loading: a GPU answered and the source is declared, and the world is
+ *   made under a cover;
+ * - started: the app shows;
+ * - failed: the client never started;
+ * - terminated: the core stopped for good.
+ */
 export const BOOT_OPENING = 0;
 export const BOOT_STARTING = 1;
 export const BOOT_LOADING = 2;
@@ -18,7 +29,17 @@ export type Boot =
   | typeof BOOT_FAILED
   | typeof BOOT_TERMINATED;
 
-/** What the client has of a GPU, which the core, given none, cannot say: asked for the first time, one, none yet while it asks again, none it will ask for again, none again after one it drew with, no WebGPU in this browser, or none in a page that is not a secure context. */
+/**
+ * What the client has of a GPU. The core cannot say this itself, because a
+ * core given no GPU learns nothing of one:
+ * - asking: a GPU is asked for the first time;
+ * - present: there is one;
+ * - waiting: there is none yet, and one is asked for again;
+ * - missing: there is none, and none will be asked for again;
+ * - lost: there is none again, after one the core drew with;
+ * - unsupported: this browser has no WebGPU;
+ * - insecure: the page is not a secure context, so it has no GPU.
+ */
 export const GPU_ASKING = 0;
 export const GPU_PRESENT = 1;
 export const GPU_WAITING = 2;
@@ -35,7 +56,13 @@ export type Gpu =
   | typeof GPU_UNSUPPORTED
   | typeof GPU_INSECURE;
 
-/** Where the world's source declaration stands: asked, failing (refused or unanswered, and asked again), refused for good (one this client cannot read), or declared. */
+/**
+ * Where the world's source declaration stands:
+ * - asking: it is asked for;
+ * - failing: an ask was refused or went unanswered, and it is asked again;
+ * - refused: it is refused for good, as one this client cannot read;
+ * - declared: it is declared.
+ */
 export const SOURCE_ASKING = 0;
 export const SOURCE_FAILING = 1;
 export const SOURCE_REFUSED = 2;

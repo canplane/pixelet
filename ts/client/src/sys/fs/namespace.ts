@@ -1,10 +1,10 @@
 // @pxl/client/sys/fs/namespace.ts
 
 /**
- * The core's namespace: each root it opens a file under (file.json `root`)
- * bound to what fetches or keeps its bytes, a path below it the file's one
- * name. The boot hands it to `@xpute/runtime`'s system calls
- * (runtime/start.ts).
+ * The core's namespace. Each root the core opens files under (file.json
+ * `root`) is bound to the backend that fetches or keeps their bytes, and a
+ * file's path below its root is its one name. The boot hands the namespace to
+ * the system calls of `@xpute/runtime` (runtime/start.ts).
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
@@ -18,8 +18,6 @@ import { source_declaration } from "@/sys/fs/source.ts";
 import { commit_storage, open_storage } from "@/sys/fs/storage.ts";
 import { read_object } from "@/sys/fs/tile.ts";
 
-/** Each bake to its tiles at the edge, ASSET to the shipped assets, STORAGE
- * to the platform's storage, OBJECT to the placed objects' source. */
 export function namespace(): Namespace {
   const bindings: [u32, Binding][] = [
     ...BASE_LAYERS.map((_, bake): [u32, Binding] => [

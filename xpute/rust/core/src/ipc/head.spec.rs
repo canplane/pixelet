@@ -2,12 +2,14 @@
 //
 // GENERATED from spec/ipc/head.json
 //
-// The front's header: the words a runtime writes on the page past a core's stack before its
-// first turn, as io_uring's setup lays its rings, and that the core's boot holds to its
-// machine, stopping with ENOEXEC where one differs (xpute-core machine.rs). Both ends
-// compute every number in it from the same machine, so it names what the runtime laid, not
-// where to look: the rings' sizes and places, and the GPU stream's. The runtime lays each
-// ring's own header too (ring.json), its positions at 0.
+// The header at the front of a core's memory. The front is what the runtime lays out before
+// the core's first turn: this header, the two rings and their slots, and the GPU stream
+// (ARCHITECTURE.md). The header lies on the page past the core's stack. The runtime writes it
+// as io_uring's setup lays its rings, and lays each ring's own header too (ring.json), with
+// its positions at 0. Both ends compute every number in the header from the same machine, so
+// the header records what the runtime laid; it does not tell the core where to look. On its
+// first turn the core holds each word to its machine and stops with ENOEXEC where one
+// differs (xpute-core machine.rs).
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
@@ -19,24 +21,25 @@
     reason = "generated from the spec"
 )]
 
-/// "XPUT" as four bytes read little-endian: what tells a header from memory nothing wrote.
+/// The bytes "XPUT" read as a little-endian word. It tells a laid header from memory that
+/// nothing has written.
 pub const MAGIC: u32 = 1414877272;
 
-/// Where each of the header's words is, from its start.
+/// The index of each header word, counted from the header's start.
 pub mod word {
-    /// Where MAGIC is.
     pub const MAGIC: u32 = 0;
-    /// Frames the submission ring holds.
+    /// How many frames the submission ring holds.
     pub const SQ_CAP: u32 = 1;
-    /// Frames the completion ring holds.
+    /// How many frames the completion ring holds.
     pub const CQ_CAP: u32 = 2;
-    /// A ring slot's payload, the same for both rings.
+    /// The size of one ring slot in bytes, the same for both rings.
     pub const SLOT_BYTES: u32 = 3;
-    /// Where the submission ring's words begin.
+    /// The offset in the memory where the submission ring begins.
     pub const SQ_AT: u32 = 4;
-    /// Where the completion ring's words begin.
+    /// The offset in the memory where the completion ring begins.
     pub const CQ_AT: u32 = 5;
-    /// Where the GPU stream is, which the runtime runs after each turn; 0 where the machine asks for no GPU.
+    /// The offset of the GPU stream, which the runtime runs after each turn; 0 when the machine
+    /// asks for no GPU.
     pub const GPU_AT: u32 = 6;
     pub const KEYS: &[&str] = &[
         "MAGIC",
@@ -49,5 +52,5 @@ pub mod word {
     ];
 }
 
-/// Words the header takes.
+/// The header's length in words.
 pub const WORDS: u32 = 7;

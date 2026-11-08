@@ -1,17 +1,19 @@
-//! The finish as the renderer draws it (gpu/finish.rs): its module as assembled, onto the
-//! canvas alone, a character surface's, and onto the canvas and the picture in one pass, the world's;
-//! and a frame not drawn whole, the picture shown first, then its claimed tiles finished again.
+//! This test draws the finish as the renderer does (gpu/finish.rs), from its shader module as
+//! build.rs assembles it. The world's finish draws the canvas and the picture in one pass, and
+//! both must equal what a character surface's finish draws onto the canvas alone. A frame not
+//! drawn whole shows the picture first and then finishes only its claimed tiles again. Both
+//! targets must still equal what the whole frame drew.
 
 mod gpu;
 
 use gpu::{bytes, read_buffer, Gpu};
 use pxl_render::frame::shader::record::{src, SHADER_SCREEN_FINISH, SHADER_SCREEN_SHOW};
-/// The screen's tiles' side, in the world's pixels.
+/// A screen tile's side, counted in the world's pixels.
 use pxl_render::frame::shader::word::screen::TILE as SIDE;
 use pxl_render::frame::shader::word::{frame, FRAME_FLOATS};
 
-/// The world's pixels and the canvas's: the canvas twice the world, as a share of the
-/// display's pixels draws it.
+/// The sizes of the world and the canvas in pixels. The canvas is twice the world, as when the
+/// renderer draws the world at a share of the display's pixels.
 const WORLD: [u32; 2] = [32, 24];
 const CANVAS: [u32; 2] = [64, 48];
 const CANVAS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8Unorm;
@@ -55,8 +57,8 @@ fn module(gpu: &Gpu, shader: u32) -> wgpu::ShaderModule {
         })
 }
 
-/// The pipeline of `shader` drawing into `targets` canvases, with the screen's depth where
-/// `depth`.
+/// The pipeline of `shader` that draws into `targets` color targets, and into the screen's
+/// depth when `depth` is set.
 fn pipeline(gpu: &Gpu, shader: u32, targets: usize, depth: bool) -> wgpu::RenderPipeline {
     let scope = gpu.device.push_error_scope(wgpu::ErrorFilter::Validation);
     let module = module(gpu, shader);
@@ -102,12 +104,12 @@ fn pipeline(gpu: &Gpu, shader: u32, targets: usize, depth: bool) -> wgpu::Render
 }
 
 impl<'a> Finish<'a> {
-    /// A world of colors that differ texel to texel and a depth cleared to one value.
+    /// Makes a world whose color differs from texel to texel, and a depth cleared to one value.
     fn new(gpu: &'a Gpu) -> Finish<'a> {
         let use_ = wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST;
         let world = texture(gpu, WORLD, wgpu::TextureFormat::Rgba16Float, use_);
-        // Eighths, each a half float exactly: 0x3c00 is 1, and an eighth's exponent is 3
-        // below, as each halving takes one.
+        // `half(n)` encodes n/8 exactly as a half float. The bias puts 1.0 at 0x3c00, and
+        // dividing by 8 lowers the exponent by 3.
         let half = |eighths: u32| -> u16 {
             match eighths {
                 0 => 0,
@@ -166,7 +168,8 @@ impl<'a> Finish<'a> {
         words[frame::SCREEN + 1] = CANVAS[1] as f32;
         words[frame::VIGNETTE] = 0.5;
         let across = WORLD.map(|v| v.div_ceil(SIDE));
-        // Every tile changed in frame 3 but the first, changed in frame 9, the frame's.
+        // Every tile last changed in frame 3, except the first, which changed in frame 9.
+        // Frame 9 is the frame being drawn.
         let mut changed = vec![3u32; (across[0] * across[1]) as usize];
         changed[0] = 9;
         let uniform = wgpu::BufferUsages::UNIFORM;
@@ -180,8 +183,8 @@ impl<'a> Finish<'a> {
         }
     }
 
-    /// The tiles' uniform: every tile, or those changed fewer than `damage_frames` frames
-    /// before frame 9.
+    /// Writes the tiles' uniform for frame 9. The finish then draws the tiles that changed
+    /// fewer than `damage_frames` frames before it, so `u32::MAX` claims every tile.
     fn claim(&self, damage_frames: u32) {
         let across = WORLD.map(|v| v.div_ceil(SIDE));
         let grow = WORLD[0] as f32 / CANVAS[0] as f32;
@@ -198,7 +201,8 @@ impl<'a> Finish<'a> {
         self.gpu.queue.write_buffer(&self.tiles, 0, bytes(&words));
     }
 
-    /// The finish of `p` onto `canvases`, each loaded where `load`, cleared else.
+    /// Draws the finish of `p` onto `canvases`. Each canvas keeps what it holds when `load` is
+    /// set, and is cleared otherwise.
     fn draw(&self, p: &wgpu::RenderPipeline, canvases: &[&wgpu::TextureView], load: bool) {
         let g = &self.gpu.device;
         let group = g.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -245,7 +249,7 @@ impl<'a> Finish<'a> {
         self.gpu.queue.submit([e.finish()]);
     }
 
-    /// `picture` shown whole on `canvas` (screen_show.wgsl).
+    /// Shows `picture` whole on `canvas` (screen_show.wgsl).
     fn show(
         &self,
         p: &wgpu::RenderPipeline,
@@ -296,7 +300,6 @@ fn attachment(view: &wgpu::TextureView, load: bool) -> Option<wgpu::RenderPassCo
     })
 }
 
-/// A canvas the finish draws into and the test reads.
 fn canvas(gpu: &Gpu) -> (wgpu::Texture, wgpu::TextureView) {
     let usage = wgpu::TextureUsages::RENDER_ATTACHMENT
         | wgpu::TextureUsages::TEXTURE_BINDING
@@ -306,7 +309,7 @@ fn canvas(gpu: &Gpu) -> (wgpu::Texture, wgpu::TextureView) {
     (t, v)
 }
 
-/// A canvas's texels, a word each.
+/// Reads back the texels of a canvas, one word for each texel.
 fn read(gpu: &Gpu, t: &wgpu::Texture) -> Vec<u32> {
     let row = CANVAS[0] * 4;
     let out = gpu.buffer(
@@ -332,7 +335,8 @@ fn read(gpu: &Gpu, t: &wgpu::Texture) -> Vec<u32> {
 
 #[test]
 fn the_world_s_canvas_and_picture_are_the_character_surface_s_one_canvas() {
-    // A canvas's row is read whole, as a copy takes rows of 256 bytes.
+    // A copy from a texture to a buffer takes rows in multiples of 256 bytes. `read` copies a
+    // canvas's rows with no padding, so a canvas row must be such a multiple.
     const _: () = assert!((CANVAS[0] * 4).is_multiple_of(256));
     let Some(gpu) = Gpu::new() else {
         eprintln!("skipped: no adapter");
@@ -359,8 +363,9 @@ fn the_world_s_canvas_and_picture_are_the_character_surface_s_one_canvas() {
     );
     assert_eq!(read(&gpu, &picture), alone, "the picture as the canvas");
 
-    // A frame not drawn whole: the picture shown on a new canvas, then the first tile alone,
-    // the one changed this frame, finished into both. Both hold the whole frame's.
+    // A frame not drawn whole shows the picture on a new canvas. It then finishes only the
+    // first tile, the one changed this frame, into the canvas and the picture. Both must still
+    // hold what the whole frame drew.
     let show = pipeline(&gpu, SHADER_SCREEN_SHOW, 1, false);
     let (next, next_view) = canvas(&gpu);
     f.show(&show, &picture_view, &next_view);

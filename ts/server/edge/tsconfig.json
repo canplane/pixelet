@@ -1,5 +1,6 @@
-// The Worker, without the workspace's aliases, as wrangler's bundler resolves
-// it: an alias or a bare specifier it could not be bundled with fails here.
+// The Worker, checked without the workspace's aliases, as wrangler's bundler
+// resolves it. An alias or a bare specifier the bundler could not resolve
+// fails the check here.
 {
   "compilerOptions": {
     "target": "esnext",

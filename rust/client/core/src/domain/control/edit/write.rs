@@ -1,7 +1,8 @@
 // pxl-core/domain/control/edit/write.rs
 
-//! What an edit writes and what it reads to decide: placing, removing and
-//! carving objects, read through the world's query and written to the store.
+//! What an edit writes, and what it reads to decide: placing, removing and
+//! carving objects. It reads through the world's query and writes to the
+//! store.
 
 use crate::domain::control::edit::collision::{is_placement_blocked, placement_reads};
 use crate::domain::control::edit::{hover, tool, Tool};
@@ -32,22 +33,23 @@ use pxl_spec::asset::decor::Decor;
 use pxl_spec::space::hierarchy::morton;
 use pxl_spec::space::layer::octant::Octant;
 
-/// Whether air is written where `at` is: a carve of the ground, or what was
-/// placed there taken back.
+/// Whether AIR is written at `at`: the ground was carved there, or
+/// something placed there was taken back.
 fn is_carved(world: &World, at: &Q3) -> bool {
     world.asset_of(at).val() == Some(PLACED_ASSET | AIR)
 }
 
 // ---- Mutations ----
 
-/// A write of VOID collapses its path back, so a redundant record never sits in a save.
+/// A write of VOID collapses its path in the octree, so a redundant record
+/// never stays in a save.
 fn write_object_val(at: Octant, val: u32) {
     submit(Write::at(at, val));
 }
 
-/// A write is made here at once and, where it changed what is placed, sent
-/// to be kept, where the world takes an edit (`World::editable`); elsewhere
-/// it is refused.
+/// Makes a write at once and, when it changed what is placed, sends it to
+/// be kept (`repository::edit`). A write where the world takes no edit
+/// (`World::editable`) is refused.
 fn submit(write: Write) {
     let (zoom, at) = morton::node_of::<3>(write.at);
     if !World::now().editable(&cube(zoom, at)) {
@@ -56,14 +58,16 @@ fn submit(write: Write) {
     repository::edit(write);
 }
 
-/// Whether a whole-cell pick only undoes a carve: the cell holds an AIR leaf, and
-/// the ground there without it is that cube, its stratum's at that depth.
+/// Whether placing `cube` over a whole cell only undoes a carve. That holds
+/// when the cell holds an AIR leaf and the ground there without the leaf is
+/// that cube, the stratum's cube at that depth.
 fn place_val_is_redundant(world: World, at: &Q3, zoom: Zoom, cube: AssetId) -> bool {
     if zoom > GROUND.leaf_cell_zoom() || !is_carved(&world, at) {
         return false;
     }
     let entry = Octant::holding(zoom, at);
-    // Only the resident finest leaf can say; elsewhere the cube is written as asked.
+    // Only the resident finest leaf can tell what the ground is. Where no
+    // such leaf is resident, the cube is written as asked.
     let ground = world
         .previewing(Some(entry), None)
         .asset_of(&middle(entry))
@@ -71,7 +75,6 @@ fn place_val_is_redundant(world: World, at: &Q3, zoom: Zoom, cube: AssetId) -> b
     ground == Some(cube)
 }
 
-/// The middle of the cube `at` names.
 pub(super) fn middle(at: Octant) -> Q3 {
     let (base, half) = (
         base_of(at.zoom(), at.at()),
@@ -85,19 +88,19 @@ pub(super) fn middle(at: Octant) -> Q3 {
 }
 
 impl Asset {
-    /// What a tap with it held does at `at`, its cube at `zoom`.
+    /// What a tap does at `at` with this asset held, its cube at `zoom`.
     pub fn place(self, at: &Q3, zoom: Zoom) {
         match self {
             Asset::Cube(id) => place_cube(at, zoom, id),
             Asset::Decor(id) => place_decor(at, zoom, id),
-            // A draft opens there, its text the UI's to write.
+            // A draft opens there, and the UI writes its text.
             Asset::Marker => draft_new(at),
             Asset::Unknown => {}
         }
     }
 }
 
-/// A redundant re-paint of a carve writes VOID, as remove() does.
+/// Placing a cube that only undoes a carve writes VOID, as `remove` does.
 fn place_cube(at: &Q3, zoom: Zoom, cube: AssetId) {
     let val = if place_val_is_redundant(World::now(), at, zoom, cube) {
         VOID
@@ -107,8 +110,9 @@ fn place_cube(at: &Q3, zoom: Zoom, cube: AssetId) {
     write_object_val(Octant::holding(zoom, at), val);
 }
 
-/// Placing the decor a scatter stands in a cell an erase emptied writes
-/// VOID, so the scattered instance returns as it was.
+/// Where an erase emptied a cell of the decor the scatter stands there,
+/// placing that decor back writes VOID, so the scattered instance returns as
+/// it was.
 fn place_decor(at: &Q3, zoom: Zoom, id: AssetId) {
     let val = if restores_scattered(at, id).is_some() {
         VOID
@@ -118,26 +122,27 @@ fn place_decor(at: &Q3, zoom: Zoom, id: AssetId) {
     write_object_val(Octant::holding(zoom, at), val);
 }
 
-/// The decor the ground generates that `place_decor` would bring back, for its preview.
+/// The decor the ground generates at `at` that placing `id` would bring
+/// back (`place_decor`). The ghost previews it.
 pub fn restores_scattered(at: &Q3, id: AssetId) -> Option<Instance> {
     is_carved(&World::now(), at).then(|| World::now().generated_instance(Decor::of(id), at))?
 }
 
-/// The marker's draft the tool holds open; the turn hands it to the scene's
-/// markers, and each change here asks the turn that draws it.
+/// The marker draft the tool holds open. The turn hands it to the scene's
+/// markers, and each change to it here asks for the turn that draws it.
 static DRAFT: Global<Option<Draft>> = Global::new();
 
 fn draft_mut() -> &'static mut Option<Draft> {
     DRAFT.get(|| None)
 }
 
-/// The draft, none where none is open.
 pub fn draft() -> Option<&'static Draft> {
     draft_mut().as_ref()
 }
 
-/// A marker tool's tap at `at`, a place free or holding a marker: a draft
-/// opened there, with the marker's own text if one stands there.
+/// Opens a draft at `at` for a marker tool's tap, on a free place or on a
+/// marker. The draft keeps the text of a draft already open there, or else
+/// starts with the text of the marker that stands there.
 pub fn draft_at(at: Octant) {
     let world = World::now();
     let text = match draft().filter(|d| d.at == at) {
@@ -152,27 +157,27 @@ pub fn draft_at(at: Octant) {
     request_world_tick();
 }
 
-/// A marker tool's tap on the free cell whose min corner is `corner`: a new
-/// marker's draft.
+/// Opens a new marker's draft for a marker tool's tap on the free cell whose
+/// min corner is `corner`.
 pub fn draft_new(corner: &Q3) {
     draft_at(Octant::holding(MARKER_ZOOM, corner));
 }
 
-/// The draft dropped.
 pub fn cancel_draft() {
     if draft_mut().take().is_some() {
         request_world_tick();
     }
 }
 
-/// The draft's text, for the UI; none where no draft is open.
+/// The open draft's text, for the UI.
 pub fn marker_draft() -> Option<&'static str> {
     draft().map(|d| d.text.as_str())
 }
 
-/// The draft's text as it is now, written into its own
-/// buffer, so a keystroke allocates only past the longest text it has held. Text past
-/// `MARKER_TEXT_CHARS` is refused whole, and the text before stays.
+/// Sets the open draft's text to `text`, the whole text as it is now. The
+/// text is copied into the draft's own buffer, so a keystroke allocates only
+/// when the text grows past the longest it has held. A text longer than
+/// `MARKER_TEXT_CHARS` is refused whole, and the earlier text stays.
 pub fn set_draft_text(text: &str) -> Result<(), Errno> {
     if text.chars().count() > MARKER_TEXT_CHARS as usize {
         return Err(Errno::EMSGSIZE);
@@ -185,8 +190,8 @@ pub fn set_draft_text(text: &str) -> Result<(), Errno> {
     Ok(())
 }
 
-/// The draft committed with its text, where its place is still free or
-/// still a marker; none is committed without text.
+/// Commits the open draft with its text, if its place is still free or
+/// still holds a marker. A draft without text is not committed.
 pub fn commit_draft() {
     let Some(Draft { at, text }) = draft_mut().take() else {
         return;
@@ -206,16 +211,17 @@ pub fn commit_draft() {
     }
 }
 
-/// An AIR leaf: "nothing here, on purpose". Unlike remove(), it also hides
-/// baked terrain, which has no leaf of its own to delete.
+/// Writes an AIR leaf, which means "nothing here, on purpose". Unlike
+/// `remove`, it also hides baked terrain, which has no leaf of its own to
+/// delete.
 pub fn place_air(at: Octant) {
     write_object_val(at, cube::object::air as u32);
 }
 
-/// The eraser leaves its cell empty: where the ground fills it once the
-/// asset is gone, air is written, so an asset taken out of a hole leaves the
-/// hole. A decor the ground generated whose box it shared comes back, its erase
-/// given back too.
+/// Erases what is placed at `at` and leaves the cell empty. Where the ground
+/// would fill the cell once the asset is gone, AIR is written, so an asset
+/// taken out of a hole leaves the hole. A generated decor that shared the
+/// asset's box comes back, because its erase is undone too.
 pub fn remove(at: Octant) {
     let world = World::now();
     let erased: Vec<[i32; 3]> = world
@@ -224,8 +230,9 @@ pub fn remove(at: Octant) {
         .filter_map(|i| i.generated_in())
         .filter(|&c| is_carved(&World::now(), &base_of(GROUND.leaf_cell_zoom(), c)))
         .collect();
-    // Only the resident finest leaf can say what fills the cube without it, as
-    // `place_val_is_redundant` asks; elsewhere it is emptied as asked.
+    // Only the resident finest leaf can tell what fills the cube without the
+    // asset, as in `place_val_is_redundant`. Where no such leaf is resident,
+    // the cube is emptied with AIR.
     let id = match world
         .previewing(Some(at), None)
         .asset_of(&middle(at))
@@ -245,21 +252,22 @@ pub fn remove(at: Octant) {
     }
 }
 
-/// The edit the pointer would make, decided once a turn: its ghost
-/// shows it, and what it removes the turn hands to what is drawn to leave
-/// out (`edits`).
+/// The edit the pointer would make, decided once a turn. The ghost shows it,
+/// and the turn hands what it removes to the drawing to leave out (`edits`).
 #[derive(Clone, Copy, Default)]
 pub struct Preview {
     pub object: Option<Entry>,
-    /// The cube the edit fills or takes.
+    /// The zoom of the cube the edit fills or takes.
     pub zoom: Zoom,
     pub digging: bool,
-    /// The same check as the commit, so preview and placement cannot disagree.
+    /// The same check the commit makes (`is_placement_blocked`), so the
+    /// preview and the placement cannot disagree.
     pub blocked: bool,
-    /// What `blocked` was asked of: what it places, its zoom with it, the hovered
-    /// corner and the store's revision. Asked again only where one moved or
-    /// a change touched the columns it reads (`placement_reads`,
-    /// `changes::within`), as a step each frame turn sees each change once.
+    /// What `blocked` was computed from: the asset, its zoom, the hovered
+    /// corner and the store's revision. `blocked` is computed again only when
+    /// one of these moved or a change touched the columns the check reads
+    /// (`placement_reads`, `changes::within`). The step runs on every frame
+    /// turn, so it sees each change once.
     blocked_key: Option<(Asset, Zoom, Q3, u32)>,
     pub edits: RenderEdits,
 }
@@ -270,7 +278,8 @@ pub fn preview() -> Preview {
     *PREVIEW.get(Preview::default)
 }
 
-/// Whether what the edit leaves out of what is drawn changed.
+/// Decides the preview for this turn and returns whether what the edit
+/// leaves out of the drawing changed.
 pub fn preview_step() -> bool {
     let hover = hover();
     let ui = tool();
@@ -283,8 +292,9 @@ pub fn preview_step() -> bool {
     let zoom = match (asset, &object) {
         (Some((_, zoom)), _) => zoom,
         (None, Some(o)) => o.zoom,
-        // A terrain carve is a whole cell: the scan emits nothing for a zero
-        // material whatever its sub-cell bytes, so the cell goes whole anyway.
+        // A terrain carve takes a whole cell. The scan emits nothing for a
+        // zero material, whatever its bytes below the cell, so the whole cell
+        // goes anyway.
         (None, None) => GROUND.leaf_cell_zoom(),
     };
     let (blocked, blocked_key) = match (&hovered, asset) {
@@ -304,13 +314,13 @@ pub fn preview_step() -> bool {
         }
         _ => (false, None),
     };
-    // The real object's hide lands a tick or more after the ghost.
+    // The real object is hidden a tick or more after the ghost appears.
     let hidden = object.filter(|_| ui == Tool::Eraser);
     let edits = RenderEdits {
         hide: hidden.map(|o| o.id()),
-        // The never-written AIR entry injected into the drawn build where
-        // the eraser hovers bare terrain: what is one voxel below shows
-        // through the ghost.
+        // Where the eraser hovers bare terrain, an AIR entry that is never
+        // written goes into the drawn build, so what lies one voxel below
+        // shows through the ghost.
         carve: hovered
             .filter(|_| digging)
             .map(|h| Octant::holding(zoom, &h)),

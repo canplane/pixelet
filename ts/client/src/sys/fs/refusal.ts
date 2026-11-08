@@ -1,10 +1,11 @@
 // @pxl/client/sys/fs/refusal.ts
 
 /**
- * The files the core refused (the snapshot's `refused_files`): each set aside
- * once by the backend its root is bound to, a storage file's slot emptied
- * (storage.ts) or a placed objects' file taken from its source
- * (object.ts), and the core told it may read it again (FS_CHANGED).
+ * Follows the files the core refused, which the snapshot lists as
+ * `refused_files`. Each is set aside once by the backend its root is bound to:
+ * a storage file's slot is emptied (storage.ts), or a file of placed objects
+ * is taken out of its source (object.ts). Then the core is told that it may
+ * read the file again (FS_CHANGED).
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
@@ -14,15 +15,15 @@ import { root } from "@/abi/file.spec.ts";
 import { OBJECTS } from "@/sys/fs/object.ts";
 import { STORAGE, set_aside, type Storage } from "@/sys/fs/storage.ts";
 
-/** A file set aside by the backend `root` is bound to, by its path; false,
- * nothing changed, where it did not. */
+/** Sets aside the file at `path` through the backend that `root` is bound
+ * to. It answers false, with nothing changed, when the backend could not. */
 export type SetAside = (
   root: u32,
   path: string,
   now_ms: number,
 ) => boolean | Promise<boolean>;
 
-/** Each root's backend's own set-aside, STORAGE's over `s`. */
+/** Sends each root to its backend's set-aside. STORAGE's acts on `s`. */
 export function set_aside_by_root(s: Storage): SetAside {
   return (r, path, now_ms) => {
     switch (r) {
@@ -36,13 +37,13 @@ export function set_aside_by_root(s: Storage): SetAside {
   };
 }
 
-/** The files set aside and not yet seen read again, as `<root>/<path>`, so
- * a snapshot that still names one before the core hears it sets nothing
- * aside twice. */
+/** The files set aside that the snapshots may still name, as `<root>/<path>`.
+ * A snapshot keeps naming a file until the core hears that it changed, and
+ * this set keeps such a file from being set aside twice. */
 const emptying = new Set<string>();
 
-/** The snapshot's `refused_files`: each file set aside once, and the core told
- * (`emptied`). */
+/** Takes a snapshot's `refused_files`, sets each file aside once, and tells
+ * the core through `emptied`. */
 export function follow_refused_files(
   files: readonly RefusedFile[],
   emptied: (f: RefusedFile) => void,

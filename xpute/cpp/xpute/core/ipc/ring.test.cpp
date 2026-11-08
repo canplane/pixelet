@@ -13,8 +13,8 @@ using namespace xpute;
 
 namespace {
 
-// A ring of `cap` slots of `slot` bytes, its descriptors at 8 and its
-// payloads past them, in a buffer of its own.
+// A ring of `cap` frames with slots of `slot` bytes, in a buffer of its own.
+// The ring's words start at offset 8, and its slots follow them.
 struct Fixture {
     std::vector<std::uint64_t> buf;
     Ring ring;
@@ -28,7 +28,8 @@ Fixture fixture(std::uint32_t cap, std::uint32_t slot) {
     return Fixture{std::move(buf), r};
 }
 
-// A packet of a branch of a u32 and a u64, written by `w`'s caller.
+// Writes into `out` a packet that is one branch of a u32 and a u64, both
+// made from `n`, and answers its length.
 std::optional<std::uint32_t> pair(std::span<std::uint8_t> out, std::uint32_t n) {
     xtp::PacketWriter w(out);
     w.branch(2, [n](xtp::PacketWriter &b) { b.u32(n).u64(std::uint64_t{n} << 40); });
@@ -69,8 +70,8 @@ XPUTE_TEST(ring_in_place_pkt) {
     std::vector<std::uint8_t> want = pkt_of(5);
     XPUTE_CHECK((std::vector<std::uint8_t>(got.begin(), got.end()) == want));
 
-    // The same packet is refused the same way with a frame in the ring and
-    // with none: a slot is a slot.
+    // The same packet is refused the same way whether a frame is in the ring
+    // or not, since every slot has the same size.
     std::string long_text(200, 'x');
     auto too_long = [&](std::span<std::uint8_t> out) -> std::optional<std::uint32_t> {
         xtp::PacketWriter w(out);

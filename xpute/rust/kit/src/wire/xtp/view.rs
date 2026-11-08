@@ -1,6 +1,8 @@
 // xpute-kit/wire/xtp/view.rs
 
-//! The write end: a tree of nodes built before `TreeEncoder` lays it out.
+//! The write side of XTP as a tree: nodes built in memory, which
+//! `TreeEncoder` then lays out as a packet. A `None` value writes a typed
+//! null, an absent node that keeps its type.
 
 #![allow(non_snake_case)]
 
@@ -100,7 +102,7 @@ fn val_to_node<'a>(val: ViewValue<'a>) -> Result<Node<'a>, MarshalError> {
 pub trait NodeView<'a> {
     fn node(&self) -> &Node<'a>;
 
-    /// A tree replaces its root, a branch appends a child.
+    /// On a tree, `write` replaces the root; on a branch, it appends a child.
     fn write(&mut self, node: Node<'a>) -> &mut Self;
 
     fn nil(&mut self) -> &mut Self {
@@ -196,7 +198,8 @@ pub trait NodeView<'a> {
         self.write(node)
     }
 
-    /// `pkt` is an encoded packet; its header is checked at encode.
+    /// `pkt` must be an encoded packet. It is checked when the tree is
+    /// encoded, not here.
     fn graft(&mut self, pkt: &'a [u8]) -> Result<&mut Self, MarshalError> {
         Ok(self.write(Node::Graft(GraftNode { val: pkt })))
     }

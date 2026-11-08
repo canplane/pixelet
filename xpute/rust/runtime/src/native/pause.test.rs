@@ -1,7 +1,7 @@
 // xpute-runtime/native/pause.test.rs
 
-// A binary of its own: a process boots one core, and these tests count its
-// turns.
+// This test is a binary of its own, because a process boots one core and these
+// tests count that core's turns.
 #![cfg(unix)]
 
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
@@ -11,11 +11,12 @@ use xpute_core::mem::section::PAGE_BYTES;
 use xpute_runtime::native::{self, Config};
 
 static TURNS: AtomicU32 = AtomicU32::new(0);
-/// The wake each turn answers, in ms as f64 bits: 0 at first.
+/// The wake each turn answers, in ms, kept as the bits of an f64; 0 at first.
 static WAKE: AtomicU64 = AtomicU64::new(0);
 
-/// A turn that asks to be woken at `WAKE`, at once or in that many ms: it
-/// runs only at the next kick, as a page's runs at its scheduler's moment.
+/// A turn that asks to be woken in `WAKE` ms, where 0 means at once. The next
+/// turn still runs only at the next kick, as a page's turn runs at its
+/// scheduler's moment.
 fn turn(_: f64) -> f64 {
     TURNS.fetch_add(1, Ordering::SeqCst);
     f64::from_bits(WAKE.load(Ordering::SeqCst))

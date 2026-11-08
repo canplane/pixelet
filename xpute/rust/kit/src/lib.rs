@@ -1,8 +1,9 @@
 // xpute-kit/lib.rs
 
-//! The generic kit, `@xpute/kit`'s counterpart: no domain knowledge.
-//! `xpute-core` depends on it, never the reverse. Without its `std`
-//! feature it is `no_std` and holds `math::rng` alone.
+//! The generic code under both of xpute's ends, and the Rust counterpart of
+//! `@xpute/kit`. It knows nothing of any program's domain. `xpute-core`
+//! depends on the kit, and the kit never depends on the core. Without its
+//! `std` feature the crate is `no_std` and holds only `math::rng`.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

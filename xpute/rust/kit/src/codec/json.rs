@@ -1,12 +1,14 @@
 // xpute-kit/codec/json.rs
 
-//! JSON without a heap: a text is checked once against JSON's grammar, then
-//! read in place; nothing is built. `Quote` writes a JSON string.
+//! A JSON reader that allocates nothing. `read_json` checks a text against
+//! JSON's grammar once; the values it hands out are then read in place, and
+//! no tree is built. `Quote` writes a value as a JSON string.
 
 use crate::status::bug::OrBug;
 use crate::status::errno::Errno;
 
-/// The check recurses, and a module's stack is fixed.
+/// The grammar check recurses once for each level of nesting, and a
+/// module's stack has a fixed size, so a deeper text is refused.
 const MAX_DEPTH: u32 = 128;
 
 fn skip_ws(s: &[u8], mut at: usize) -> usize {
@@ -27,8 +29,9 @@ fn skip_string(s: &[u8], mut at: usize) -> Option<usize> {
                 _ => return None,
             },
             b if b < 0x20 => return None,
-            // A byte of a UTF-8 sequence is never a quote or a backslash, so
-            // the text is walked a byte at a time.
+            // Every byte of a multi-byte UTF-8 sequence is above 0x7F and so
+            // is never a quote or a backslash; a string can be walked a byte
+            // at a time.
             _ => at += 1,
         }
     }
@@ -83,8 +86,9 @@ fn skip_val(s: &[u8], at: usize, depth: u32) -> Option<usize> {
     }
 }
 
-/// JSON's grammar, not `f64`'s: `+1`, `.5`, `1.` and `01` are refused, as
-/// the runtime's `JSON.parse` refuses them.
+/// Follows JSON's number grammar, not the one Rust parses an `f64` by:
+/// `+1`, `.5`, `1.` and `01` are refused, as the runtime's `JSON.parse`
+/// refuses them.
 fn skip_number(s: &[u8], mut at: usize) -> Option<usize> {
     let digits = |at: usize| s[at..].iter().take_while(|c| c.is_ascii_digit()).count();
     if s.get(at) == Some(&b'-') {
@@ -182,7 +186,8 @@ impl<'a> JsonValue<'a> {
         }
     }
 
-    /// A key given twice is given twice.
+    /// Every field in the text's order; a key that appears twice is yielded
+    /// twice.
     pub fn fields(&self) -> JsonFields<'a> {
         let open = self.type_of() == JsonType::Object;
         JsonFields {
@@ -191,7 +196,8 @@ impl<'a> JsonValue<'a> {
         }
     }
 
-    /// The last field of that name, as the runtime's parse keeps.
+    /// The last field with that key, which is the one the runtime's
+    /// `JSON.parse` keeps.
     pub fn get(&self, key: &str) -> Option<JsonValue<'a>> {
         self.fields()
             .filter(|(k, _)| k.eq_str(key))
@@ -225,7 +231,8 @@ impl<'a> Iterator for JsonItems<'a> {
             self.at = b.len();
             return None;
         }
-        // The text was checked whole, so a value is where the grammar says.
+        // `read_json` checked the whole text, so a value starts here, and
+        // failing to skip it is a bug.
         let end = skip_val(b, start, 0).or_bug(Errno::ENOTRECOVERABLE);
         self.at = skip_ws(b, end) + 1;
         Some(JsonValue {
@@ -264,7 +271,8 @@ impl<'a> Iterator for JsonFields<'a> {
     }
 }
 
-/// Escapes are decoded as the characters are read.
+/// A JSON string as it stands in the text, without its quotes. Its escapes
+/// are decoded only as its characters are read.
 #[derive(Clone, Copy)]
 pub struct JsonStr<'a> {
     raw: &'a str,
@@ -303,7 +311,8 @@ impl core::fmt::Debug for JsonStr<'_> {
     }
 }
 
-/// A lone surrogate reads as U+FFFD.
+/// The characters of a `JsonStr`, its escapes decoded. A `\u` escape of a
+/// lone surrogate reads as U+FFFD.
 pub struct JsonChars<'a> {
     rest: &'a str,
 }
@@ -354,7 +363,8 @@ impl Iterator for JsonChars<'_> {
     }
 }
 
-/// `JSON.stringify(String(v))`.
+/// Writes a value as `JSON.stringify(String(v))` does: its `Display` text,
+/// quoted and escaped.
 #[derive(Clone, Copy, Debug)]
 pub struct Quote<T>(pub T);
 

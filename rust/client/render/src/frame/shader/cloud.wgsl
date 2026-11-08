@@ -1,11 +1,12 @@
-// The thin cloud layers over the cumulus (pxl-core domain/scene/environment/cloud.rs): altocumulus'
-// small heaps at 4 to 5 km and cirrus' veil at 6 to 12, each one plane at its
-// height over the eye, out to the clouds' reach, laid over the opaque world.
-// They write no depth and the world's decides what stands before them, so a
-// peak over a sheet hides it from below and stands through it from above.
+// Draws the thin cloud layers over the cumulus (pxl-core
+// domain/scene/environment/cloud.rs): altocumulus' small heaps at 4 to 5 km and
+// cirrus' veil at 6 to 12 km. Each layer is one plane at its height over the
+// eye, out to the clouds' reach, laid over the opaque world. The layers write
+// no depth, and the world's depth decides what stands before them, so a peak
+// over a sheet hides it from below and stands through it from above.
 
-// Its words' fields and accessors are frame/shader/word.rs `clouds`'s,
-// which build.rs writes here.
+// The clouds' words. Their fields are frame/shader/word.rs `clouds`'s, and
+// build.rs writes their accessors here.
 @group(0) @binding(1) var<uniform> clouds_words: array<vec4f, CLOUDS_VEC4S>;
 @group(0) @binding(2) var cloud_tile: texture_2d<f32>;
 @group(0) @binding(3) var cloud_tile_sampler: sampler;
@@ -14,7 +15,7 @@ struct Sheet {
   km: f32,
   // How many times finer than the tile its pattern is.
   finer: u32,
-  // How much softer its edges read, as a footprint's multiple.
+  // How much softer its edges read, as a multiple of the footprint.
   softer: f32,
   opacity: f32,
   salt: u32,
@@ -48,7 +49,8 @@ fn sheet_opacity(s: Sheet, world: vec3f, t: f32, footprint: f32, dist: f32) -> f
     return 0.0;
   }
   let p = cloud_lattice(world);
-  // Read a whole number of units off, so each layer has its own clouds.
+  // Each layer reads the tile a whole number of units off, so each has clouds
+  // of its own.
   let field = cloud_opacity_finer(p + vec2f(f32(s.salt % CLOUD_TILE_UNITS)), footprint * s.softer, s.finer);
   return s.opacity * field * weather(p, s.salt) * draw_dist_fade(t, dist);
 }
@@ -59,9 +61,10 @@ struct CloudOut {
   @location(1) @interpolate(flat) sheet: u32,
 };
 
-// Each sheet a square on the flat map at its height over the sea, which the
-// world's ground is laid on too, wide enough to hold every point within the
-// reach of the eye. The farther first, so the nearer is blended over it.
+// Each sheet is a square at its height on the flat map, which the world's
+// ground is laid on too, wide enough to hold every point within the clouds'
+// reach from the eye. The farther sheet is drawn first, so the nearer is
+// blended over it.
 @vertex
 fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> CloudOut {
   let alto = ALTOCUMULUS.km - atmos_camera_alt();
@@ -83,16 +86,18 @@ fn fs(v: CloudOut) -> @location(0) vec4f {
   let to = v.world - frame_camera_pos();
   let dir = normalize(to);
   let t = length(to) * atmos_km_per_u();
-  // The lattice's footprint, before any branch takes a derivative.
+  // The pixel's footprint on the lattice is taken here, before any branch, as
+  // a derivative needs uniform control flow.
   let footprint = max(length(fwidth(cloud_lattice(v.world))), 1e-6);
   let alpha = sheet_opacity(sheet_of(v.sheet), v.world, t, footprint, clouds_draw_dist()) * clouds_shown();
-  // Where none of it stands, nothing more is read.
+  // Where none of the sheet stands, the pixel reads nothing more.
   if (alpha <= HALF_STEP) {
     discard;
   }
-  // The air before it and the lights on it, as every painter reads them
-  // (atmos_air.wgsl `seen_from_eye`, atmos_view.wgsl `light_of`); lit as the cumulus' faces are, the
-  // face turned to the eye, so the layers are one white.
+  // The sheet reads the air before it and the lights on it as every painter
+  // does (atmos_air.wgsl `seen_from_eye`, atmos_view.wgsl `light_of`). It is
+  // lit as the cumulus' faces are, with its face turned to the eye, so all the
+  // layers are one white.
   let seen = seen_from_eye(v.world);
   let up = up_at(v.world);
   let lit = CLOUD_ALBEDO * surface_light(-sign(dot(dir, up)) * up, up, light_of(v.world));

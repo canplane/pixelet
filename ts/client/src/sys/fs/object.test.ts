@@ -18,8 +18,9 @@ import {
 } from "./object.ts";
 import type { Leaf } from "./object_tree.ts";
 
-/** A database over a Map: a transaction's puts land when it resolves, one at
- * a time in the order asked. `refuses`: every transaction rejects. */
+/** A database over a Map. A transaction's puts land when it resolves, and
+ * transactions run one at a time in the order they are asked for, as the
+ * platform's do. With `refuses`, every transaction rejects. */
 function database(refuses = false): Db & { map: Map<string, U8Array> } {
   const map = new Map<string, U8Array>();
   let last: Promise<unknown> = Promise.resolve();
@@ -45,12 +46,12 @@ function database(refuses = false): Db & { map: Map<string, U8Array> } {
   };
 }
 
-/** Shard 0 at `SHARD_ZOOM`. */
+/** The quadkey of shard 0 at `SHARD_ZOOM`. */
 const SHARD = "00000000";
 const { EDITS, TOP } = object;
 
-/** A cube at the first zoom past shard 0, of the palette's third entry; a
- * marker at a finer zoom beside it. */
+/** A cube of the palette's third entry at the first zoom past shard 0, and a
+ * marker beside it at a finer zoom. */
 const CUBE: Leaf = {
   key: "000000000",
   id: 3,

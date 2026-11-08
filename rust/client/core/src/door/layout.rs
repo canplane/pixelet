@@ -1,8 +1,8 @@
 // pxl-core/door/layout.rs
 
-//! The memory's layout past the machine's front (machine.json, xpute-core
-//! machine.rs): `.fixed`, which ranges it holds, each sized by its owner and
-//! handed to it at boot (`install`), and the heap after them.
+//! How memory past the machine's front is laid out (machine.json, xpute-core
+//! machine.rs). `.fixed` comes first and holds ranges that each owner sizes
+//! and receives at boot (`install`). The heap follows.
 
 use crate::domain::layer::division;
 use crate::domain::layer::terrain::fixed;
@@ -24,17 +24,17 @@ use xpute_core::mem::section::span_of;
 use xpute_core::mem::section::{Section, PAGE_BYTES};
 use xpute_kit::status::errno::Errno;
 
-// The renderer draws through the machine's GPU device.
+// The core's machine must take the GPU device, because the renderer draws
+// through it.
 const GPU: Gpu = match MACHINE.gpu {
     Some(g) => g,
     None => panic!("the core's machine takes the GPU device"),
 };
 
-/// The ranges of `.fixed`, in address order: the resident terrain, the
-/// resident divisions' cells and the renderer's upload table. Each is mostly in use whenever
-/// the core runs, or the runtime's reservation; what is held only at times,
-/// or far below its worst most of the time, is the heap's
-/// (`HEAP_FLOWS_BYTES`).
+/// The ranges of `.fixed`, in address order. A range belongs here only when
+/// it is mostly in use whenever the core runs; anything else would waste the
+/// memory the runtime reserves. What is held only at times, or far below its
+/// worst most of the time, goes on the heap (`HEAP_FLOWS_BYTES`).
 #[derive(Clone, Copy)]
 pub(crate) enum Fixed {
     Terrain,
@@ -42,23 +42,25 @@ pub(crate) enum Fixed {
     Uploads,
 }
 
-/// None is let go.
+/// Every model the core can hold at once. No model is ever freed, so this is
+/// the sum of every owner's bound.
 const MODELS_MAX: usize = character::MODELS_MAX + asset::MODELS_MAX + cloud::MODELS_MAX;
 
-/// The ghost's, the location indicator's zone, the two debug line sets' (the
-/// frame gizmo's and the coverage gizmo's, domain/scene/gizmo/) and the
-/// markers'.
+/// The uploads that exist once each: the ghost's, the location indicator's
+/// zone, the two debug line sets (the frame gizmo's and the coverage gizmo's,
+/// domain/scene/gizmo/) and the markers'.
 const SINGLE_UPLOADS: usize = 5;
 
-/// A character's palette, one for each of the companion's: the person and the pet.
+/// One palette upload for each of the companion's characters, the person and
+/// the pet.
 const CHARACTER_UPLOADS: usize = Group::ALL.len();
 
-/// Each owner's bound summed, so the table cannot fill: every bound is a
-/// count the structure fixes (the models the catalogs can name, the clouds'
-/// patches within their reach, the characters, the singles), so overflowing the
-/// renderer's table is a bug, not a load.
-/// The renderer frees a list's uploads before taking its new ones, so it
-/// never holds more.
+/// The sum of every owner's bound, so the renderer's upload table cannot
+/// fill. Each bound is a count the structure fixes (the models the catalogs
+/// can name, the cloud patches within reach, the characters, the singles),
+/// so an overflow of the table is a bug, not load. The renderer frees a
+/// list's uploads before it takes the list's new ones, so it never holds
+/// more than this.
 pub(crate) const MAX_LIVE_UPLOADS: usize =
     MODELS_MAX + cloud::PATCHES_MAX + CHARACTER_UPLOADS + SINGLE_UPLOADS;
 
@@ -70,12 +72,14 @@ const FIXED: [u32; 3] = [
 
 pub const FIXED_BYTES: u32 = span_of(&FIXED, PAGE_BYTES);
 
-// The front, the fixed ranges and the heap a phone is guaranteed fit the
-// smaller size; the linker's data cannot begin before the front ends.
+// The front, the fixed ranges and the heap a phone is guaranteed must fit in
+// the smallest memory size, and the linker's data must not begin before the
+// front ends.
 const _: () = MACHINE.check(FIXED_BYTES);
 
-/// A body its kind's packet at its longest, in the block the buddy gives
-/// it, a power of two; none for a kind whose bodies take slots.
+/// The buddy allocator's block for the longest body of `stream`'s kind, a
+/// power of two. It is 0 for a kind whose bodies go in slots or that has no
+/// longest body.
 const fn body_block(stream: Stream) -> u64 {
     match stream.max_body() {
         Some(_) if stream.row().slotted => 0,
@@ -84,15 +88,20 @@ const fn body_block(stream: Stream) -> u64 {
     }
 }
 
-/// The heap's bounded flows at their worst: terrain's and the Earth's
-/// bodies, kept or on a credit, in the runs `BODY_SLOTS` slots fill
-/// (sys/io/body.rs), and a body on every credit in the buddy's block for the
-/// longest other kind, each freed as it is decoded; the ways' pool
-/// at its most (domain/layer/terrain/pool.rs, pxl-engine way/tree.rs `POOL_CHILD_GROUPS`),
-/// and the profiler's lanes while its setting is on (perf/record.rs), each
-/// in the buddy's blocks, a power of two. Each is refused past its cap, and
-/// waits or stays absent where the heap refuses it. The rest of the heap
-/// is workspace, which asks first.
+/// The heap's bounded flows at their worst, which the heap a phone is
+/// guaranteed must hold:
+/// - the terrain's and the Earth's bodies, kept or on a credit, in the runs
+///   that `BODY_SLOTS` slots fill (sys/io/body.rs);
+/// - one body on every credit, in the buddy's block for the longest other
+///   kind, each freed once it is decoded;
+/// - the ways' pool at its largest (domain/layer/terrain/pool.rs, pxl-engine
+///   way/tree.rs `POOL_CHILD_GROUPS`);
+/// - the profiler's lanes while its setting is on (perf/record.rs).
+///
+/// The pool and the lanes sit in the buddy's power-of-two blocks. Each flow
+/// is refused past its cap, and waits or stays absent when the heap refuses
+/// it. The rest of the heap is workspace, and code that takes it asks the
+/// allocator first.
 const HEAP_FLOWS_BYTES: u64 = {
     use crate::sys::io::body::slots_bytes;
     use crate::sys::io::demand::Stream;
@@ -115,7 +124,8 @@ const _: () = assert!(
     "the heap's bounded flows at their worst do not fit the heap a phone is guaranteed"
 );
 
-/// Asking before boot lays out memory is a bug.
+/// The range `f` of `.fixed`. Asking for it before boot lays out memory is a
+/// bug.
 pub(crate) fn range(f: Fixed) -> Section {
     use xpute_kit::status::bug::OrBug;
     section::fixed()
@@ -123,8 +133,6 @@ pub(crate) fn range(f: Fixed) -> Section {
         .nth(&FIXED, PAGE_BYTES, f as usize)
 }
 
-/// Lays the memory map and hands each range of `.fixed` to its owner, and
-/// the GPU device's stream to the renderer.
 pub(crate) fn install(b: &BootInfo) {
     section::set_fixed(section::lay_out(b.given, b.form.data_end, FIXED_BYTES));
     fixed::RANGE.set(range(Fixed::Terrain));

@@ -1,8 +1,10 @@
 // cpp/xpute/core/sched/pass.hpp
 
-// What is left of a turn's budget, spent on ordered lists of steps (`run`).
-// Neither the budget nor a step cap applies until one step has done work, so
-// one expensive item can never block everything behind it.
+// A turn's remaining budget, spent on ordered lists of steps (`run`). The
+// invariant is forward progress: neither the budget nor a step cap applies
+// until one step has done work. An item that costs more than the whole
+// budget therefore still runs, and cannot stay at the head of its list
+// forever, blocking the items behind it.
 
 #pragma once
 
@@ -16,7 +18,8 @@ namespace xpute {
 
 struct PassStat {
     std::uint32_t ran = 0;
-    // With the steps that did no work, and the one that tripped the stop.
+    // Every step called, counting those that reported no work and the one
+    // that used up the budget.
     std::uint32_t step_cnt = 0;
     double elapsed_ms = 0;
     bool stopped_early = false;
@@ -25,20 +28,23 @@ struct PassStat {
 };
 
 struct Pass {
-    // The rising edge, so what the turn spent before comes off.
+    // The time of the turn's rising edge. The budget counts from it, so the
+    // time the turn spent before this pass comes off what is left.
     double t0 = 0;
     double total_ms = 0;
-    // Held back for the phases after the current one.
+    // The time held back for the phases after the current one.
     double reserve_ms = 0;
-    // Past what is left, never waived: a step can cost time and still report
-    // no work.
+    // A hard limit this far past the remaining budget. Unlike the budget, it
+    // applies before any step has done work, since a step can cost time and
+    // still report none.
     double hard_slack_ms = 0;
 
     Pass(double total, double rise, double slack) noexcept : t0(rise), total_ms(total), hard_slack_ms(slack) {}
 
     double remaining() const noexcept { return std::max(t0 + total_ms - reserve_ms - now(), 0.0); }
 
-    // `step` answers whether it did work; only work counts to `max_steps`.
+    // `step` answers whether it did work. Only steps that did work count
+    // toward `max_steps`.
     template <class Items, class Step> PassStat run(Items &&items, Step &&step, std::optional<std::uint32_t> max_steps = std::nullopt) const {
         double start = now();
         double deadline = start + remaining();
@@ -47,7 +53,8 @@ struct Pass {
         PassStat stat;
         for (auto &&item : items) {
             double at = now();
-            // Before the waiver below, but the first item is always tried.
+            // The hard limit applies even before any step has done work,
+            // though never to the first item.
             if ((stat.step_cnt > 0 && at >= hard_deadline) || (stat.ran > 0 && (stat.ran >= cap || at >= deadline))) {
                 stat.stopped_early = true;
                 break;

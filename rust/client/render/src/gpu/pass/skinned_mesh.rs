@@ -1,10 +1,12 @@
 // pxl-render/gpu/pass/skinned_mesh.rs
 
-//! Characters: each model's mesh upload skinned by each character's joint palette. A
-//! case of the variant picker draws one character in a pass of its own. A character's
-//! vertices read its draw off the list's uniforms at its slot. A character whose
-//! draw changed marks the tiles it covers where it was and where it is
-//! (gpu/pass/mark.rs), its palette the upload it reads.
+//! The characters. A character's model is a mesh upload, skinned by the
+//! character's joint palette, which is an upload of its own. A character's
+//! vertices read its draw off the list's uniforms at its slot. A canvas of the
+//! character picker, a character surface (gpu/pass/character.rs), draws one
+//! character with a skinned pass of its own. A character whose draw changed
+//! marks the tiles it covers where it was and where it is (gpu/pass/mark.rs).
+//! The upload its mark reads is its palette.
 
 use crate::frame::shader::record::PIPELINE_SKINNED;
 use crate::frame::shader::record::{PIPELINE_SKINNED_DEPTH, PIPELINE_SKINNED_MARK};
@@ -19,11 +21,11 @@ use crate::gpu::upload::Uploads;
 pub struct SkinnedPass {
     lit: Pipeline,
     depth: Pipeline,
-    /// The list's uniforms as the lit pass and the depth pass bind them, and
-    /// their buffer (`set_draws`).
+    /// The bind groups through which the lit and the depth pipelines read the
+    /// list's uniforms, and the buffer they are made over (`set_draws`).
     draws: [u32; 2],
     draws_buf: u32,
-    /// Each model's skin image, as the frame hands them.
+    /// The skin image of each model, as the frame hands them (`set_skins`).
     skins: Vec<(u32, Image)>,
     pub marks: Marks,
 }
@@ -51,14 +53,14 @@ impl SkinnedPass {
         }
     }
 
-    /// Group 0's layout of the marks (tile_mark.wgsl).
+    /// The layout of the marks' group 0 (tile_mark.wgsl).
     pub fn mark_layout(&self) -> Layout {
         self.marks.layout()
     }
 
-    /// This frame's marks drawn into `pass`, `frames` their group
-    /// 0 as they are and as they were: the eye's or the light's frame and its
-    /// tiles' (tile_mark.wgsl, `Marks::draw`).
+    /// Draws this frame's marks into `pass`. `frames` holds their group 0 as
+    /// they are and as they were, over the eye's or the light's frame words
+    /// and its tiles (tile_mark.wgsl, `Marks::draw`).
     pub fn draw_marks(&self, pass: &mut TrackedRenderPass, frames: [u32; 2], uploads: &Uploads) {
         self.marks.draw(pass, frames, |pass, d, palette| {
             let Some((mesh, vertex_cnt, idx_cnt)) = uploads.get(d[0]) else {
@@ -73,7 +75,7 @@ impl SkinnedPass {
         });
     }
 
-    /// The uploads `draws` read, into `out` (`Marks::reads`).
+    /// Pushes onto `out` the uploads `draws` read (`Marks::reads`).
     pub fn marks_read<'a>(
         &self,
         draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
@@ -82,7 +84,8 @@ impl SkinnedPass {
         self.marks.reads(draws, out);
     }
 
-    /// Its draws into `stats`, its model's triangles each, 0 while it loads.
+    /// Adds the pass's draws to `stats`. Each counts its model's triangles, or
+    /// 0 while its mesh is landing.
     pub fn count(&self, draws: &Draws, uploads: &Uploads, stats: &mut DrawStats) {
         draws.count(PIPELINE_SKINNED, stats, |d| {
             uploads.get(d[0]).map_or(0, |(_, _, idx_cnt)| idx_cnt / 3)
@@ -101,10 +104,11 @@ impl SkinnedPass {
             .map(|&(_, image)| image)
     }
 
-    /// The list's uniforms, the buffer `buf`, as the lit pass and the depth
-    /// pass bind them in group 1, made again only where the buffer is
-    /// another; before the frame's commands, as a group made in a frame
-    /// dropped would be gone.
+    /// Makes the groups 1 through which the lit and the depth pipelines read
+    /// the list's uniforms, over the buffer `buf`. It makes them again only
+    /// when the buffer is another. The caller calls it before the frame's
+    /// commands, since a group made inside a frame that is dropped would be
+    /// gone.
     pub fn set_draws(&mut self, g: &Gpu, buf: u32) {
         if buf == self.draws_buf {
             return;
@@ -117,9 +121,9 @@ impl SkinnedPass {
         self.draws_buf = buf;
     }
 
-    /// Every palette and skin group the draws will bind is made here, so
-    /// drawing makes nothing that outlives its frame; a skin whose image
-    /// lands later is drawn on a later frame.
+    /// Makes every palette and skin group the draws will bind, so that drawing
+    /// makes none: a group made inside a frame that is dropped would be gone.
+    /// A character whose skin image has not landed is drawn on a later frame.
     pub fn prepare<'a>(
         &mut self,
         g: &Gpu,
@@ -134,11 +138,11 @@ impl SkinnedPass {
         }
     }
 
-    /// Lit, or their depth from the sun (`Stage::Depth`), `frame` the group
-    /// 0 the stage reads: the list's uniforms bound once (`set_draws`), and
-    /// each character drawn as the instance its slot names, which its vertices
-    /// read their draw at (skinned_draw.slot.wgsl), with its own mesh, skin and
-    /// palette.
+    /// Draws the characters at `stage`: lit, or their depth seen from the sun.
+    /// `frame` is the group 0 the stage reads. The list's uniforms are bound
+    /// once (`set_draws`). Each character is drawn as the instance its slot
+    /// names, and its vertices read their draw at that slot
+    /// (skinned_draw.slot.wgsl). Each binds its own mesh, skin and palette.
     pub fn draw<'a>(
         &self,
         pass: &mut TrackedRenderPass,

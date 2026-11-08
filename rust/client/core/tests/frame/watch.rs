@@ -1,6 +1,7 @@
-//! The harness's own clock: what it waits on now, and a thread that ends the process, failed,
-//! saying it, once one wait outlasts `WAIT` or the whole run `RUN`. A hang then fails the run
-//! instead of holding the device, and the GPU's lock with it, for good.
+//! The harness's own clock. It tracks what the harness waits on now, and a thread ends the
+//! process as failed, saying why, once one wait outlasts `WAIT` or the whole run outlasts
+//! `RUN`. A hang then fails the run instead of holding the device, and the GPU's lock with
+//! it, forever.
 
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -11,18 +12,17 @@ const WAIT: Duration = Duration::from_secs(60);
 /// The longest the whole run may take.
 const RUN: Duration = Duration::from_secs(600);
 
-/// How often the clock looks.
+/// How often the clock checks the wait.
 const LOOK: Duration = Duration::from_millis(250);
 
 /// What is waited on, and since when.
 static WAITING: Mutex<Option<(Instant, String)>> = Mutex::new(None);
 
-/// `what` is waited on from now.
+/// Records that the harness waits on `what` from now.
 pub fn waiting(what: String) {
     *WAITING.lock().unwrap_or_else(|e| e.into_inner()) = Some((Instant::now(), what));
 }
 
-/// Starts the clock.
 pub fn start() {
     let began = Instant::now();
     std::thread::spawn(move || loop {

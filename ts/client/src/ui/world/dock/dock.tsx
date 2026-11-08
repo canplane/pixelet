@@ -1,8 +1,9 @@
 // @pxl/client/ui/world/dock/dock.tsx
 
 /**
- * The dock: the message's card and the palette's in one deck, a swipe
- * turning it, and over the palette the sizes a swatch's hold opens.
+ * The dock at the foot of the world screen. It stacks the message card and
+ * the palette card in one deck, which a vertical swipe turns. Over the
+ * palette it shows the sizes that a hold on a swatch opens.
  */
 
 import { useRef, useState } from "react";
@@ -20,8 +21,8 @@ import { DRAG_PX, STRIP, Strip } from "./strip.tsx";
 
 export function Dock() {
   const mode = useDockMode();
-  // A swipe either way switches the mode; swatches open their sizes on a
-  // hold, so the two never compete.
+  // A vertical swipe either way switches the mode. A swatch opens its sizes on
+  // a hold, not a drag, so the swipe and the swatch never compete.
   const swipe = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponderCapture: (_e, s) =>
@@ -38,7 +39,8 @@ export function Dock() {
   const { popover, gesture } = usePopover(bar);
 
   const shownPopover = mode === DockMode.Palette ? popover : null;
-  // Every card is as wide as the palette's tools; whole pixels, where a page's pill cuts its shadow cleanly.
+  // Every card is as wide as the palette's strip. The cards stand on whole
+  // pixels, because only there does a pill on a page cut its shadow cleanly.
   const width = Math.min(stripWidth, barWidth);
   const x = PixelRatio.roundToNearestPixel((barWidth - width) / 2);
 

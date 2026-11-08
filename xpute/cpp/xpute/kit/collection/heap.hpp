@@ -1,7 +1,7 @@
 // cpp/xpute/kit/collection/heap.hpp
 
-// A binary heap over an array the caller owns. Keys must be totally ordered:
-// a NaN key makes the sift walk off the order.
+// A binary heap over a vector the caller owns. Keys must be totally ordered: a
+// key that compares with nothing, as a NaN does, breaks the heap's order.
 
 #pragma once
 
@@ -27,7 +27,8 @@ template <class Vec, bool MIN> class Heap {
 
     const E *top() const noexcept { return a_.empty() ? nullptr : &a_[0]; }
 
-    // Both of the root's subtrees must already hold the heap property.
+    // Sifts the element at `root` down within the first `sz` elements. Both
+    // subtrees of `root` must already be heaps.
     static void heapify(std::span<E> a, std::size_t root, std::size_t sz) noexcept {
         std::size_t i = root;
         E e = a[i];
@@ -49,7 +50,6 @@ template <class Vec, bool MIN> class Heap {
 
     void build() noexcept { build_of(a_); }
 
-    // The new element's place is opened by moving parents down.
     void push(E e) {
         std::size_t i = a_.size();
         a_.push_back(e);
@@ -71,7 +71,8 @@ template <class Vec, bool MIN> class Heap {
         return out;
     }
 
-    // The heap must not be empty.
+    // Replaces the top element and restores the order. The heap must not be
+    // empty.
     void replace_root(E e) noexcept {
         a_[0] = e;
         heapify(a_, 0, a_.size());
@@ -89,7 +90,7 @@ template <class Vec, bool MIN> class Heap {
 template <class Vec> using MinHeap = Heap<Vec, true>;
 template <class Vec> using MaxHeap = Heap<Vec, false>;
 
-// Unstable, in place, O(n log n).
+// Sorts by key, ascending and in place, in O(n log n). The sort is not stable.
 template <class K, class T> void heapsort(std::span<Element<K, T>> a) noexcept {
     using H = Heap<std::span<Element<K, T>>, false>;
     std::size_t n = a.size();

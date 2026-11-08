@@ -1,6 +1,7 @@
 // @xpute/kit/collection/deque.ts
-// A deque over a caller-owned ring buffer. A pop from an empty deque is
-// undefined; a push onto a full one throws ENOSPC.
+// A double-ended queue in a ring over a buffer the caller owns. It never
+// grows: a push onto a full deque is a bug (ENOSPC). A pop from an empty one
+// returns undefined.
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";

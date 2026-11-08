@@ -16,9 +16,9 @@ use xpute_kit::math::scalar::round;
 use crate::separation::Line;
 use crate::terrain::pipeline::overture::policy::segment_type;
 
-/// All of them: a tile whose lines a record's room does not hold is refused
-/// where it is encoded. Each line holds a point where it crosses a tile's
-/// edge (`crossings`).
+/// The tile's separation from all the solved lines: a tile whose lines a record's room does
+/// not hold is refused where it is encoded, not cut here. Each line holds a point where it
+/// crosses a tile's edge (`crossings`).
 pub fn bake_separation(lines: &[Line], tile: [i32; 2]) -> Separation {
     let mut separation = Builder::default();
     // The world's corner, where its grid of leaf cells starts; a point in that
@@ -68,13 +68,12 @@ pub fn bake_separation(lines: &[Line], tile: [i32; 2]) -> Separation {
 /// its surface and the coarsest zoom it is held at.
 type Point = ([f64; 2], f64, u8);
 
-/// The coarsest zoom a point on a tile edge is held at, the edge `m` tiles
-/// of the leaves from the world's: one over the coarsest whose tiles have
-/// it, so every zoom holds where its line crosses each edge of the tiles of
-/// the zoom under it, and a segment a zoom holds lies in one tile of the
-/// zoom under it — whose copy of the line holds every point between its
-/// ends, which is what a fold of its 4×4 children needs (pxl-spec
-/// bake/separation.rs `fold_separation`).
+/// The coarsest zoom at which a point on a tile edge is held, for the edge `m` leaf tiles from
+/// the world's edge: one zoom coarser than the coarsest whose tiles have that edge. So every
+/// zoom holds where its line crosses each edge of the tiles of the zoom under it, and a
+/// segment a zoom holds lies in one tile of the zoom under it, whose copy of the line holds
+/// every point between the segment's ends; that is what a fold of its 4×4 children needs
+/// (pxl-spec bake/separation.rs `fold_separation`).
 fn edge_coarsest(m: i64) -> u8 {
     let first = LEAF_ZOOM.saturating_sub(if m == 0 {
         LEAF_ZOOM

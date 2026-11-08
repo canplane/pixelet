@@ -1,13 +1,14 @@
 // xpute-gpu/encode.rs
 
-//! A core's GPU calls written as a stream's records (`ipc/stream`), in the
-//! words spec/gpu/api.json gives each op. Objects are handles from one table;
-//! a record that does not fit an open transaction is not written, and an
-//! object it would have made is handed back.
+//! The encoder: a core's GPU calls, written as records of a stream
+//! (xpute-core `ipc::stream`) in the words spec/gpu/api.json gives each op.
+//! An object the core makes is named by a handle from one table (`Gpu`). A
+//! record that does not fit an open transaction is not written, and the
+//! handle of the object it would have made is given back.
 //!
-//! Every record is written twice by the same function: once to count its
-//! words, then into the room the stream reserved for them, so nothing is
-//! built on the heap first.
+//! One function gives each record's words, and it runs twice: once to count
+//! the words, then to write them into the room the stream reserved. So no
+//! record is built on the heap first.
 
 use core::sync::atomic::{AtomicU32, Ordering};
 
@@ -24,28 +25,29 @@ use crate::enums::{
 };
 use crate::spec::{op, BindingKind, ResourceKind, NONE, SURFACE_PREFERRED};
 
-/// An object the core made: a handle of the table its encoder holds.
+/// An object the core made, named by a handle from its encoder's table.
 pub type Id = u32;
 
-/// A word a record named for the runtime to answer (a fence, a device
-/// block's STATUS), loaded with acquire: what the runtime wrote before it is
-/// seen (ipc/stream.rs R4).
+/// Loads a word that a record named for the runtime to answer, such as a
+/// fence or the device block's STATUS. The load is an acquire, so whatever the
+/// runtime wrote before it stored the word is seen (xpute-core ipc/stream.rs
+/// R4).
 pub fn load_acquire(word: &u32) -> u32 {
     // SAFETY: a live, aligned word, which the runtime stores into only
     // atomically; nothing here writes through it.
     unsafe { AtomicU32::from_ptr(core::ptr::from_ref(word).cast_mut()) }.load(Ordering::Acquire)
 }
 
-/// Whether the request asked with `ticket` on the fence `fence` is
-/// answered (spec RESULT): the runtime stored that ticket there.
+/// Whether the runtime has answered the request asked with `ticket` on
+/// `fence` (spec RESULT). A late answer to an older request stores another
+/// ticket, so it never counts.
 pub fn signaled(fence: &u32, ticket: u32) -> bool {
     load_acquire(fence) == ticket
 }
 
-/// Where a record's words go: counted, or written.
 trait Sink {
     fn word(&mut self, v: u32);
-    /// A count, then the bytes padded to words.
+    /// Bytes go as their count, then the bytes padded to whole words.
     fn bytes(&mut self, b: &[u8]);
 }
 
@@ -94,8 +96,9 @@ fn flag(v: bool) -> u32 {
     u32::from(v)
 }
 
-/// Writes a record of `op` whose words `put` gives; false where an open
-/// transaction no longer fits it.
+/// Writes a record of `op` with the words `put` gives. False where an open
+/// transaction no longer fits the record; outside a transaction, a record
+/// that does not fit is a bug (`Stream::reserve`).
 fn emit(stream: &mut Stream, op: u32, put: &dyn Fn(&mut dyn Sink)) -> bool {
     let mut count = Count(0);
     put(&mut count);
@@ -108,7 +111,8 @@ fn emit(stream: &mut Stream, op: u32, put: &dyn Fn(&mut dyn Sink)) -> bool {
     true
 }
 
-/// What a record of `op` takes of a stream's room, measured as `emit` writes it.
+/// The room a record takes of a stream, its op and count words included,
+/// counted as `emit` writes it.
 fn record_size(put: &dyn Fn(&mut dyn Sink)) -> usize {
     let mut count = Count(0);
     put(&mut count);
@@ -231,7 +235,7 @@ pub struct StencilFaceState {
     pub pass: StencilOperation,
 }
 
-/// What WebGPU defaults a face to: always, keep, keep, keep.
+/// WebGPU's default for a stencil face.
 pub const STENCIL_UNUSED: StencilFaceState = StencilFaceState {
     compare: CompareFunction::always,
     fail: StencilOperation::keep,
@@ -258,7 +262,7 @@ pub struct MultisampleState {
     pub alpha_to_coverage: bool,
 }
 
-/// One sample, every sample's bit set.
+/// WebGPU's default: one sample, no multisampling.
 pub const MULTISAMPLE_NONE: MultisampleState = MultisampleState {
     count: 1,
     mask: u32::MAX,
@@ -290,7 +294,8 @@ pub struct FragmentState<'a> {
 }
 
 pub struct RenderPipelineDescriptor<'a> {
-    /// None for a layout the device makes from the shaders.
+    /// None asks the device for a layout made from the shaders, WebGPU's
+    /// "auto".
     pub layout: Option<Id>,
     pub vertex: VertexState<'a>,
     pub primitive: PrimitiveState,
@@ -305,7 +310,7 @@ pub struct ComputePipelineDescriptor<'a> {
     pub entry: &'a str,
 }
 
-/// A texture's place a copy reads or writes.
+/// The place in a texture that a copy reads or writes.
 pub struct TexelCopyTexture {
     pub texture: Id,
     pub mip: u32,
@@ -313,7 +318,7 @@ pub struct TexelCopyTexture {
     pub aspect: TextureAspect,
 }
 
-/// A buffer's bytes laid out as texels.
+/// A buffer's bytes, laid out as rows of texels for a copy.
 pub struct TexelCopyBuffer {
     pub buffer: Id,
     pub offset: u32,
@@ -397,7 +402,8 @@ fn stencil_face(s: &mut dyn Sink, f: &StencilFaceState) {
     .for_each(|w| s.word(w));
 }
 
-/// A render pipeline's words but its id (RENDER_PIPELINE).
+/// The words of a RENDER_PIPELINE record after its id, which
+/// RENDER_PIPELINE_ASYNC begins with too.
 fn render_pipeline_words(s: &mut dyn Sink, d: &RenderPipelineDescriptor) {
     s.word(opt(d.layout));
     let v = &d.vertex;
@@ -446,7 +452,8 @@ fn render_pipeline_words(s: &mut dyn Sink, d: &RenderPipelineDescriptor) {
             .for_each(|w| s.word(w));
         }
         None => {
-            // Present either way, so the record's shape is fixed.
+            // The depth-stencil words are present either way, so the
+            // record's shape is fixed.
             s.word(NONE);
             (0..2 + 8 + 5).for_each(|_| s.word(0));
         }
@@ -489,7 +496,8 @@ fn render_pipeline_words(s: &mut dyn Sink, d: &RenderPipelineDescriptor) {
     }
 }
 
-/// A compute pipeline's words but its id (COMPUTE_PIPELINE).
+/// The words of a COMPUTE_PIPELINE record after its id, which
+/// COMPUTE_PIPELINE_ASYNC begins with too.
 fn compute_pipeline_words(s: &mut dyn Sink, d: &ComputePipelineDescriptor) {
     [opt(d.layout), d.module]
         .into_iter()
@@ -497,16 +505,18 @@ fn compute_pipeline_words(s: &mut dyn Sink, d: &ComputePipelineDescriptor) {
     s.bytes(d.entry.as_bytes());
 }
 
-/// The ops below DESTROY make what lasts until it is destroyed, the objects a
-/// program holds; those past it make what a turn lets go (an encoder, a
-/// pass, a surface's current texture).
+/// The ops numbered below DESTROY make objects that last until the core
+/// destroys them. The ops past it make what a turn lets go: an encoder, a
+/// pass, a surface's current texture.
 pub const OBJECT_OPS: usize = op::DESTROY as usize;
 
-/// The calls, over a table of `N` handles, each holding the op that made it
-/// where what it made lasts, 0 otherwise. All-zero bytes have made nothing.
+/// The calls that make objects, over a table of `N` handles. Each handle
+/// holds the op that made its object where the object lasts (`OBJECT_OPS`),
+/// and 0 where a turn lets it go. A `Gpu` whose bytes are all zero holds no
+/// object, as `new` makes it.
 pub struct Gpu<const N: usize> {
     handles: Table<u8, N>,
-    /// The live objects by the op that made them, slot `op`.
+    /// How many live objects each op has made, indexed by the op.
     objects: [u32; OBJECT_OPS],
 }
 
@@ -530,14 +540,14 @@ impl<const N: usize> Gpu<N> {
         }
     }
 
-    /// An object's handle, written by `op` as the record's first word; none
-    /// where the table is full or the record did not fit.
+    /// Makes an object by a record of `op` whose first word is the new
+    /// handle. None where the table is full or the record does not fit.
     fn make(&mut self, stream: &mut Stream, op: u32, put: &dyn Fn(&mut dyn Sink)) -> Option<Id> {
         self.make_as(stream, op, op, put)
     }
 
-    /// As `make`, the object counted as `kind` makes it: an async pipeline
-    /// as its sync op's.
+    /// As `make`, but the object is counted under the op `kind`: an async
+    /// pipeline counts as its sync op's.
     fn make_as(
         &mut self,
         stream: &mut Stream,
@@ -560,7 +570,7 @@ impl<const N: usize> Gpu<N> {
         Some(id)
     }
 
-    /// `id` let go, where it was live.
+    /// Frees the handle `id`, and says whether it was live.
     fn release(&mut self, id: Id) -> bool {
         let made_by = self.handles.remove(id);
         if let Some(op) = made_by {
@@ -636,8 +646,8 @@ impl<const N: usize> Gpu<N> {
         self.make(stream, op::SHADER_MODULE, &|s| s.bytes(wgsl.as_bytes()))
     }
 
-    /// What `shader_module` takes of a stream's room (`Stream::fits`), so a
-    /// caller making several asks before each.
+    /// The room `shader_module` takes of a stream, for `Stream::fits`, so
+    /// that a caller making several modules can ask before each one.
     pub fn shader_module_bytes(wgsl: &str) -> usize {
         record_size(&|s| {
             s.word(0);
@@ -737,9 +747,10 @@ impl<const N: usize> Gpu<N> {
         })
     }
 
-    /// As `render_pipeline`, made where the runtime can without holding its
-    /// thread: the runtime stores `ticket` at the fence `fence` once it is
-    /// made (spec RESULT), and no record names it before.
+    /// As `render_pipeline`, but the runtime makes the pipeline without
+    /// holding its thread, and stores `ticket` at `fence` once it is made
+    /// (spec RESULT). No record may name the pipeline before the core has
+    /// seen that ticket.
     pub fn render_pipeline_async(
         &mut self,
         stream: &mut Stream,
@@ -769,7 +780,8 @@ impl<const N: usize> Gpu<N> {
         })
     }
 
-    /// As `compute_pipeline`, its word as `render_pipeline_async`'s.
+    /// As `compute_pipeline`, with the fence and ticket of
+    /// `render_pipeline_async`.
     pub fn compute_pipeline_async(
         &mut self,
         stream: &mut Stream,
@@ -859,20 +871,22 @@ impl<const N: usize> Gpu<N> {
         })
     }
 
-    /// This turn's texture of `surface`, as a view.
+    /// A view of `surface`'s texture for this turn. Every CURRENT of one
+    /// turn names the same texture.
     pub fn current(&mut self, stream: &mut Stream, surface: u32) -> Option<Id> {
         self.make(stream, op::CURRENT, &|s| s.word(surface))
     }
 
-    /// The records from here to `commit` are one, and so are the objects they
-    /// make: a transaction that does not fit drops both.
+    /// Opens a transaction. The records from here to `commit` are written
+    /// whole or not at all, and so are the objects they make.
     pub fn begin(&mut self, stream: &mut Stream) {
         stream.begin();
         self.handles.begin();
     }
 
-    /// False where the transaction did not fit: the stream is as at `begin`,
-    /// and every handle taken since is free again, as the runtime never saw it.
+    /// Closes the transaction. False where it did not fit: the stream is
+    /// then as it was at `begin`, and every handle taken since is free again,
+    /// since the runtime never saw it.
     pub fn commit(&mut self, stream: &mut Stream) -> bool {
         let fit = stream.commit();
         if !fit {
@@ -882,15 +896,17 @@ impl<const N: usize> Gpu<N> {
         fit
     }
 
-    /// Ends a pass. Its handle is free whether or not the record was written:
-    /// one dropped with its transaction left nothing on the runtime.
+    /// Ends a pass and frees its handle, whether or not the record was
+    /// written: a pass dropped with its transaction left nothing on the
+    /// runtime to end.
     pub fn end(&mut self, stream: &mut Stream, pass: Id) -> bool {
         let sent = emit(stream, op::END, &|s| s.word(pass));
         self.release(pass);
         sent
     }
 
-    /// Each encoder finished, submitted in order and let go, as `end` lets a pass go.
+    /// Submits the encoders in order, and frees their handles as `end`
+    /// frees a pass's.
     pub fn submit(&mut self, stream: &mut Stream, encoders: &[Id]) -> bool {
         let sent = emit(stream, op::SUBMIT, &|s| {
             s.word(encoders.len() as u32);
@@ -912,14 +928,13 @@ impl<const N: usize> Gpu<N> {
         self.handles.live(id)
     }
 
-    /// The live objects by the op that made them (slot `op`, below DESTROY).
     pub fn objects(&self) -> &[u32; OBJECT_OPS] {
         &self.objects
     }
 }
 
-/// The calls that make no object: an op's words straight to the stream,
-/// false where an open transaction no longer fits them.
+/// The calls that make no object. Each writes its record straight to the
+/// stream, and returns false where an open transaction no longer fits it.
 pub mod call {
     use super::*;
 
@@ -938,14 +953,16 @@ pub mod call {
         })
     }
 
-    /// What `write_buffer` takes of a stream's room (`Stream::fits`), so a
-    /// caller writing several asks once.
+    /// The room `write_buffer` takes of a stream, for `Stream::fits`, so
+    /// that a caller can ask once whether several writes fit.
     pub fn write_buffer_bytes(bytes: &[u8]) -> usize {
         record_size(&|s| buffer_write(s, 0, 0, bytes))
     }
 
-    /// The bytes read where they lie in the core's memory when the runtime
-    /// runs the stream, no copy made (ipc/stream.rs R3).
+    /// As `write_buffer`, but the record names the bytes where they lie in
+    /// the core's memory, and the runtime reads them there as it runs the
+    /// stream. The core leaves them unchanged until the stream is handed back
+    /// (xpute-core ipc/stream.rs R3).
     pub fn write_buffer_at(stream: &mut Stream, buffer: Id, offset: u32, bytes: &[u8]) -> bool {
         words(
             stream,
@@ -979,8 +996,8 @@ pub mod call {
         })
     }
 
-    /// As `write_buffer_bytes`: the words are the same whatever the place,
-    /// layout and size.
+    /// As `write_buffer_bytes`. The room depends on the bytes alone, not on
+    /// the place, layout or size.
     pub fn write_texture_bytes(bytes: &[u8]) -> usize {
         let place = TexelCopyTexture {
             texture: 0,
@@ -1009,9 +1026,12 @@ pub mod call {
         })
     }
 
-    /// An encoded image (PNG, JPEG, WebP) where it lies in the core's memory,
-    /// decoded into `to`; `fence` its fence and result (spec RESULT),
-    /// `ticket` landing there once it is in or refused.
+    /// Decodes an encoded image (PNG, JPEG or WebP) from the core's memory
+    /// into `to`. `fence` is the fence and the result word after it (spec
+    /// RESULT): the runtime stores `ticket` there once the image is in the
+    /// texture or refused. The runtime copies the image's bytes as it runs
+    /// the record, so they are the core's again once the stream is handed
+    /// back.
     pub fn copy_external_image(
         stream: &mut Stream,
         to: &TexelCopyTexture,
@@ -1129,7 +1149,7 @@ pub mod call {
         )
     }
 
-    /// A render or a compute pipeline, as the pass is.
+    /// `pipeline` is a render or a compute pipeline, as `pass` is.
     pub fn set_pipeline(stream: &mut Stream, pass: Id, pipeline: Id) -> bool {
         words(stream, op::SET_PIPELINE, &[pass, pipeline])
     }
@@ -1274,8 +1294,9 @@ pub mod call {
         words(stream, op::DISPATCH_INDIRECT, &[pass, buffer, offset])
     }
 
-    /// `id`, any object, encoder or pass made before, named `label` in the
-    /// device's messages.
+    /// Names `id`, any object, encoder or pass made before, as `label` in the
+    /// device's messages. A native runtime ignores it, since wgpu names an
+    /// object only as it makes it.
     pub fn label(stream: &mut Stream, id: Id, label: &str) -> bool {
         emit(stream, op::LABEL, &|s| {
             s.word(id);
@@ -1283,10 +1304,11 @@ pub mod call {
         })
     }
 
-    /// `buffer` (MAP_READ | COPY_DST, copied into by an encoder submitted
-    /// before) read into the core's memory at `into`; `fence` its fence
-    /// and result (spec RESULT), `ticket` landing there once the bytes are
-    /// there and the buffer is unmapped, or the mapping refused.
+    /// Reads `buffer` into the core's memory at `into`. The buffer has
+    /// MAP_READ and COPY_DST usage, and an encoder submitted before copied
+    /// into it. `fence` is the fence and the result word after it (spec
+    /// RESULT): the runtime stores `ticket` there once the bytes are in
+    /// `into` and the buffer is unmapped, or once the mapping is refused.
     pub fn map_async(
         stream: &mut Stream,
         buffer: Id,
@@ -1309,8 +1331,8 @@ pub mod call {
         )
     }
 
-    /// `ticket` at the fence `fence` once what was submitted before is
-    /// done (spec RESULT).
+    /// Asks the runtime to store `ticket` at `fence` once the work submitted
+    /// before is done (spec RESULT).
     pub fn queue_done(stream: &mut Stream, fence: &u32, ticket: u32) -> bool {
         words(
             stream,
@@ -1319,7 +1341,7 @@ pub mod call {
         )
     }
 
-    /// `format` None for the format the runtime's surface prefers.
+    /// `format` None asks for the format the runtime's surface prefers.
     pub fn configure(
         stream: &mut Stream,
         surface: u32,
@@ -1343,9 +1365,10 @@ pub mod call {
         words(stream, op::RESIZE, &[surface, size[0], size[1]])
     }
 
-    /// Where the runtime writes the device's limits, features, frames
-    /// unfinished and status, which the page's admission reads
-    /// (`admit::page`).
+    /// Asks the runtime to write the device's block into `into` (laid out as
+    /// `crate::device` says): its limits, features, unfinished frames and
+    /// status. The page's admission reads the block from then on
+    /// (`admit::page`), so `into` stays in place for good.
     pub fn device(stream: &mut Stream, into: &mut [u32]) -> bool {
         let asked = words(
             stream,

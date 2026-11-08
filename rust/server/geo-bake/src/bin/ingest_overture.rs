@@ -1,30 +1,29 @@
 // pxl-geo-bake/bin/ingest_overture.rs
 
-//! Every Overture type into db-geo, a shard at a time: a table a type, a row
-//! a feature, once, with its properties as the release holds them and its
-//! geometry; the table holds every feature that meets an ingested shard's
-//! apron, and which shards are ingested is the catalog's alone. A shard is a tile at `SHARD_ZOOM`, the coverage's
-//! (`pxl-geo-bake coverage.rs`); what it holds depends on it alone, so shards
-//! ingested one by one are the shards ingested together. The official
-//! `overturemaps` CLI, by its public commands alone, downloads a type's
-//! GeoParquet over the shards to do, a rectangle of them a call, kept in
-//! `raw/` under a name that says its release and its bbox, so a shard added
-//! fetches only itself and the ground between shards is never fetched. The extract is
-//! read once into a staging table, each row with its shard, and the run is
-//! written from it in one transaction, its catalog rows with it, so it is
-//! whole or absent. A run takes the types it is given (`--type`, every one
-//! when none is), each its own table and catalog rows, so one type moves to
-//! a new release while the others stay. It writes the shards it is given into
-//! each table as it is, a feature it holds already taking the release's and
-//! one the release no longer has going; `--whole` makes each table anew from every shard, beside the live one, and
+//! Every Overture type into db-geo, a shard at a time: a table for each type and a row for
+//! each feature, once, with its properties as the release holds them and its geometry. A
+//! table holds every feature that meets an ingested shard's apron, and which shards are
+//! ingested is the catalog's alone to say. A shard is a tile at `SHARD_ZOOM` of the coverage
+//! (`pxl-geo-bake coverage.rs`); what it holds depends on it alone, so shards ingested one by
+//! one equal the shards ingested together.
+//!
+//! The official `overturemaps` CLI, through its public commands alone, downloads a type's
+//! GeoParquet over the shards to do, one rectangle of them a call, kept in `raw/` under a name
+//! that gives its release and its bbox, so an added shard fetches only itself and the ground
+//! between shards is never fetched. The extract is read once into a staging table, each row
+//! with its shard, and the run is written from it in one transaction together with its
+//! catalog rows, so it is whole or absent. A run takes the types it is given (`--type`, every
+//! one when none is), each with its own table and catalog rows, so one type can move to a new
+//! release while the others stay. It writes the shards it is given into each table as it is:
+//! a feature already held takes the release's version, and one the release does not have any
+//! more is removed. `--whole` makes each table anew from every shard, beside the live one, and
 //! swaps it in.
-//! When to run which is the user's to say: the catalog records each shard's
-//! release and when it was ingested, and decides nothing. The release is the
-//! one `source.json` pins. A column a reader
-//! filters on is generated from `properties`.
-//! A division names its parent, which may stand past every shard: the
-//! divisions are taken with their ancestors, each fetched by its id, so a
-//! name's chain never breaks at the coverage's edge.
+//!
+//! When to run which is the user's to say: the catalog records each shard's release and when
+//! it was ingested, and decides nothing. The release is the one `source.json` pins. A column
+//! a reader filters on is generated from `properties`. A division names its parent, which may
+//! lie past every shard, so the divisions are taken with their ancestors, each fetched by its
+//! id, and a name's chain never breaks at the coverage's edge.
 //!
 //!   make ingest-overture ARGS="[--type <type>]… [--shard <name>]… [--whole]"
 
@@ -190,8 +189,8 @@ const TYPES: &[Type] = &[
     },
 ];
 
-/// What runs the official CLI, at the release `tools/Dockerfile` pins, and
-/// what it downloads, the source, kept beside this script.
+/// The script that runs the official CLI at the release `tools/Dockerfile` pins; what it
+/// downloads is kept beside it.
 const TOOLS: &str = "./infra/geo/tools/run";
 const EXTRACTS: &str = "./infra/geo/overture/raw";
 const SRC: &str = "./infra/geo/overture/source.json";
@@ -204,10 +203,10 @@ const SWAP_TRIES: u32 = 12;
 /// The CLI's bbox test is strict, so the shards are asked for this much wider.
 const SLACK_DEG: f64 = 1e-4;
 
-/// id, properties, geometry, shard.
+/// A staged row: id, properties, geometry, shard.
 type Row = (String, String, Vec<u8>, String);
 
-/// The type closed under a parent, and the property naming it.
+/// The type that is closed under a parent, and the property naming the parent.
 const PARENT: (&str, &str) = ("division", "parent_division_id");
 
 /// The shard an ancestor is staged under: none, so the catalog counts it in none.
@@ -366,14 +365,12 @@ fn groups<'a>(shards: &[&'a Shard]) -> Vec<Vec<&'a Shard>> {
     out.into_iter().map(|(_, _, held)| held).collect()
 }
 
-/// A type's extracts, a CLI call a rectangle of shards, called one after
-/// another: every call reads Overture's STAC catalog, which refuses calls made
-/// at once (HTTP 429). Each is named by the release and
-/// the bbox it was asked for, and the CLI's output takes that name only once
-/// the CLI has finished, so an extract under it is current and whole; the
-/// CLI's own state file is its private format, not read. The type's other
-/// files, another release's or bbox's and that state beside them, are
-/// removed.
+/// A type's extracts, one CLI call for each rectangle of shards, made one after another,
+/// because every call reads Overture's STAC catalog, which refuses calls made at once (HTTP
+/// 429). Each extract is named by the release and the bbox it was asked for, and the CLI's
+/// output takes that name only once the CLI has finished, so an extract under it is current
+/// and whole; the CLI's own state file is its private format and is not read. The type's
+/// other files, another release's or bbox's and that state beside them, are removed.
 fn download<'a>(
     ty: &Type,
     groups: &[Vec<&'a Shard>],
@@ -547,7 +544,8 @@ fn ancestors(client: &mut Client, ty: &Type, release: &str, live: bool) -> Resul
         if missing.is_empty() {
             break;
         }
-        // The registry answering another feature than the one asked would ask forever.
+        // The registry answering with another feature than the one asked would make the loop ask
+        // forever.
         if let Some(id) = missing.iter().find(|id| !asked.insert((*id).clone())) {
             return Err(format!("gers {id}: fetched, and still not held"));
         }
@@ -606,10 +604,9 @@ fn feats(ty: &Type, into: &str, release: &str) -> String {
     )
 }
 
-/// The catalog rows of the shards written: a shard's count is the features
-/// meeting it, so their sum over shards exceeds the table's rows.
-/// Each shard's row, what it says read and never decided on: the release
-/// it holds, when it was ingested, and its features. A shard ingested again
+/// The catalog rows of the shards written. A shard's count is the features meeting it, so the
+/// sum over shards exceeds the table's rows. Each shard's row records, and decides nothing by,
+/// the release it holds, when it was ingested, and its features. A shard ingested again
 /// replaces its row.
 fn catalog(
     tx: &mut Transaction,
@@ -694,10 +691,9 @@ fn build_and_swap(
     ))
 }
 
-/// The shards written into the table as it is: a feature held already takes
-/// the release's, and one of an older release whose lower-left corner lies in a
-/// shard, apron apart, is gone from this release and goes, with their catalog
-/// rows, in one transaction.
+/// Writes the shards into the table as it is, with their catalog rows, in one transaction: a
+/// feature already held takes the release's version, and one of an older release whose
+/// lower-left corner lies in a shard, apron aside, is gone from this release and is removed.
 fn add(
     client: &mut Client,
     ty: &Type,

@@ -1,8 +1,11 @@
 // cpp/xpute/kit/collection/arena.hpp
 
-// A pool of constructed slots, bump-allocated and rewound whole. `truncate`
-// destroys nothing, so a slot arrives in whatever state its last user left it.
-// `Alloc` has no default, since a default would be the system's heap.
+// A pool of slots that are constructed once and reused. Slots are handed out
+// in order and taken back by rewinding to an earlier length. `truncate`
+// destroys nothing: a slot handed out again is in whatever state its last user
+// left it, with its buffers still allocated, and the caller must reinitialize
+// it. `Alloc` has no default, because the default would be the system's heap;
+// the caller names the memory it means.
 
 #pragma once
 
@@ -56,20 +59,24 @@ template <class T, class Alloc> class Arena {
         return grow(req);
     }
 
-    // Past the cursor is a broken invariant, not a resize request.
+    // Rewinds to `new_len` slots. A `new_len` above the current length is a
+    // bug, not a way to grow.
     void truncate(std::uint32_t new_len) noexcept {
         ensure(new_len <= len_, Errno::einval, new_len, len_);
         len_ = new_len;
     }
 
-    // Marks here and rewinds to the mark when the guard goes.
+    // Remembers the current length and rewinds to it when the guard is
+    // destroyed.
     ArenaGuard<T, Alloc> scope() noexcept;
 
   private:
     Arena(std::uint32_t max_cap, const Alloc &alloc) : mem_(alloc), max_cap_(max_cap) {}
 
-    // Saturates, so one past u32 is refused at max_cap rather than wrapping under it.
-    // Doubling stops at the cap, so the cap refuses only what does not fit.
+    // A request that saturates, as `reserve` computes it, is refused at
+    // `max_cap` rather than wrapping below it. The capacity doubles but stops
+    // at `max_cap`, so a request is refused only when it does not fit under
+    // `max_cap`.
     Result<void> grow(std::uint32_t req) {
         if (req <= cap_) return {};
         if (req > max_cap_) return marshal_error(Errno::eoverflow);

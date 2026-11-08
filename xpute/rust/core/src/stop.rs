@@ -1,9 +1,10 @@
 // xpute-core/stop.rs
 
-//! How a core stops: a broken invariant (`bug!`) or a panic, posted to the
-//! runtime as the turn's one frame (what `install` is given, the core's
-//! `Door::abort`) and told to the hook of a form whose core shares its process
-//! with the runtime, where a panic would otherwise take the runtime with it.
+//! How a core stops. A broken invariant (`bug!`) or a panic is posted to the
+//! runtime as the turn's only frame, by the reporter `install` is given (the
+//! core's `Door::abort`). Where the core shares its process with the runtime,
+//! the stop is also told to the form's hook, since a panic there would
+//! otherwise take the runtime down with it.
 
 use core::panic::Location;
 
@@ -12,7 +13,7 @@ use xpute_kit::status::errno::Errno;
 
 use crate::global::{off_marked_thread, Global};
 
-/// Numbers only: formatting is the hook's.
+/// A stop holds numbers only; the hook does any formatting.
 pub enum Stop<'a> {
     Bug {
         errnum: Errno,
@@ -21,15 +22,17 @@ pub enum Stop<'a> {
         b: u64,
     },
     Panic(&'a std::panic::PanicHookInfo<'a>),
-    /// The core has stopped, told last, inside the panic hook: the form
-    /// ends its thread outside the hook once the panic has unwound out of
-    /// the turn, or inside it where a panic aborts (xpute-runtime native
-    /// `stopped`); without a form, the process goes with it.
+    /// The core has stopped. This is told last, inside the panic hook. The
+    /// form then ends the core's thread: outside the hook once the panic has
+    /// unwound out of the turn, or inside it where a panic aborts
+    /// (xpute-runtime native `stopped`). Without a form, the process ends
+    /// with the core.
     End,
 }
 
-/// Where a form sharing its process with the core says why, a panic's text not
-/// being in the record's numbers, and keeps the process alive.
+/// The hook through which a form that shares its process with the core says
+/// why the core stopped, and keeps the process alive. The runtime's record
+/// holds numbers only, so a panic's text reaches no one else.
 pub type PanicHook = fn(Stop<'_>);
 
 static REPORT: Global<Option<Report>> = Global::new();
@@ -38,14 +41,16 @@ static PANIC_HOOK: Global<Option<PanicHook>> = Global::new();
 
 static ABORTED: Global<bool> = Global::new();
 
-/// Installs the bug reporter and std's panic hook, once at boot: `report`
-/// publishes the record, `panic_hook` is the form's, none where the runtime
-/// outlives the core (a page). Both are process-wide, and where the core is
-/// linked into a native program the program's other threads fail through
-/// them too: such a panic is not the core's, and is told by the
-/// `PanicHook` where there is one, else by the std hook this one replaced; a
-/// bug there is not reported, and is told as the panic it then is
-/// (`global::off_marked_thread`).
+/// Installs the bug reporter and std's panic hook, once at boot. `report`
+/// publishes the record; `panic_hook` is the form's, and is none where the
+/// runtime outlives the core (a page).
+///
+/// Both hooks are process-wide. Where the core is linked into a native
+/// program, the program's other threads fail through them too
+/// (`global::off_marked_thread`). Such a panic is not the core's: it is told
+/// to the `PanicHook` if there is one, else to the std hook this one
+/// replaced. A bug on such a thread is not reported; it is told as the panic
+/// it then becomes.
 pub fn install(report: Report, panic_hook: Option<PanicHook>) {
     REPORT.set(Some(report));
     PANIC_HOOK.set(panic_hook);
@@ -73,7 +78,7 @@ pub fn install(report: Report, panic_hook: Option<PanicHook>) {
     }));
 }
 
-/// Told to the hook as well as the runtime.
+/// Tells a bug to the form's hook as well as to the runtime.
 fn abort(errnum: Errno, at: &Location<'_>, a: u64, b: u64) {
     ABORTED.set(true);
     say(Stop::Bug { errnum, at, a, b });
@@ -82,8 +87,9 @@ fn abort(errnum: Errno, at: &Location<'_>, a: u64, b: u64) {
     }
 }
 
-/// Past its report a bug panics where it cannot trap, and that panic is its
-/// way out.
+/// Whether a bug has already been reported. After its report, a bug panics
+/// on a target where it cannot trap, and the panic hook must not report that
+/// panic again.
 fn is_aborted() -> bool {
     *ABORTED.get(|| false)
 }

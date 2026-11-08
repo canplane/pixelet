@@ -1,7 +1,10 @@
 // @pxl/client/service/long-frame.ts
 
-/** The place's long frames, by its PerformanceObserver: long animation frames, which Safari, WKWebView and React Native lack, and long tasks,
- * on a device its JavaScript thread's, where its native performance API is (RuntimeScheduler_Modern.cpp `reportLongTasks`). */
+/** The place's long frames, heard through its PerformanceObserver. They are
+ * long animation frames, which Safari, WKWebView and React Native lack, and
+ * long tasks. On a device, the long tasks are the JavaScript thread's, which
+ * React Native's native performance API reports
+ * (RuntimeScheduler_Modern.cpp `reportLongTasks`). */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { LongFrame, LongFrameSource } from "./types.ts";
@@ -18,7 +21,8 @@ const ENTRY: Record<LongFrameSource, string> = {
   longtask: "longtask",
 };
 
-/** What a long task blocks past: the 50 ms the browser and React Native call one long at. */
+/** A long task blocks for its time past 50 ms, the length at which the
+ * browser and React Native call a task long. */
 const LONG_TASK_MS = 50;
 
 const supports = (source: LongFrameSource): boolean =>

@@ -1,9 +1,10 @@
 // cpp/xpute/core/ipc/head.hpp
 
-// The front's header (spec/ipc/head.json): the words a runtime writes on the page
-// past the stack before the first turn, naming the rings and the GPU stream it
-// laid. A core that lays its own front, as the conformance core does,
-// writes it (`write_head`).
+// The header of the memory's front (spec/ipc/head.json). A runtime writes
+// these words in the page past the stack before the first turn, and they say
+// where the rings and the GPU stream it laid out lie. A core that lays out
+// its own front, as the conformance core does, writes the header itself
+// (`write_head`).
 
 #pragma once
 
@@ -15,7 +16,7 @@
 
 namespace xpute {
 
-// What the header says past MAGIC.
+// The header's words after MAGIC.
 struct Head {
     std::uint32_t sq_cap;
     std::uint32_t cq_cap;
@@ -39,7 +40,7 @@ struct Head {
     }
 };
 
-// `h`'s words at `at` in `mem`.
+// Writes `h`'s words at `at` in `mem`.
 inline void write_head(Memory mem, std::uint32_t at, const Head &h) noexcept {
     std::array<std::uint32_t, head::WORDS> w = h.words();
     for (std::uint32_t i = 0; i < head::WORDS; i++) mem.set_word(at + 4 * i, w[i]);

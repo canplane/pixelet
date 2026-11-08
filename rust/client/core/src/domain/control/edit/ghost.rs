@@ -1,11 +1,11 @@
 // pxl-core/domain/control/edit/ghost.rs
 
-//! The ghost the tool held shows under the pointer: the decor a placement
-//! would stand or bring back, the box it would fill or carve, or what the
-//! eraser is over (`Ghost`, an edit not yet made, beside the others in
-//! domain/preview.rs). What it looks like, its color, its
-//! texture and what stands in for a decor not yet loaded, is the scene's
-//! (`domain/scene/indicator/ghost.rs`).
+//! The ghost the held tool shows under the pointer, an edit not yet made
+//! (`Ghost`, defined with the other previews in domain/preview.rs). It is the
+//! decor a placement would stand or bring back, the box it would fill or
+//! carve, or what the eraser is over. The scene decides how the ghost looks:
+//! its color, its texture and what stands in for a decor not yet loaded
+//! (domain/scene/indicator/ghost.rs).
 
 use crate::domain::layer::object::asset::Asset;
 use pxl_spec::asset::AssetId;
@@ -23,8 +23,9 @@ use crate::domain::view::frame::coord;
 use pxl_engine::answer;
 use xpute_core::global::Global;
 
-/// The palette entry of the ground the eraser would carve, of the hovered point:
-/// asked again only where the hover moved or a change touched its column.
+/// The palette entry of the ground the eraser would carve at the hovered
+/// point. It is asked again only when the hover moves or a change touches
+/// its column.
 static CARVE_CUBE: Global<Memo<Q3, Option<AssetId>>> = Global::new();
 
 pub fn ghost() -> Ghost {
@@ -47,10 +48,11 @@ pub fn ghost() -> Ghost {
     };
 
     let carved = CARVE_CUBE.get(|| Memo::NONE);
-    // Looked at each frame turn, a hover not asked of this one too.
+    // This runs on every frame turn, even one whose hover asks nothing of
+    // it, so every change is seen once (`changes::within`).
     carved.forget_touched();
-    // The cell being carved as the world answers it, whichever source fills
-    // it: the ground, a way, a bore's wall.
+    // The cube of the cell being carved, as the world answers it, whichever
+    // source fills the cell: the ground, a way or a bore's wall.
     let carved_style_cube: Option<AssetId> = match (&hovered, digging_terrain) {
         (Some(h), true) => carved.of(World::now(), *h, |w| {
             Asset::of(
@@ -63,26 +65,27 @@ pub fn ghost() -> Ghost {
         _ => None,
     };
 
-    // What it shows: what the tool would place; else, as a placing tool hovers
-    // no object, what the pointer or the eraser is over.
+    // The ghost shows what the tool would place. Otherwise it shows what the
+    // pointer or the eraser is over, since a placing tool never hovers an
+    // object.
     let shown = ui
         .asset()
         .map(|(a, _)| a)
         .or(hovered_object.map(|o| o.asset()));
-    // The pointer shows a decor it is over, and no cube.
+    // The pointer shows a decor it is over, but never a cube.
     let cube = shown
         .and_then(Asset::cube)
         .filter(|_| ui != Tool::Pointer)
         .or(carved_style_cube);
     let decor = shown.and_then(Asset::decor);
     let decor_corner = hovered_object.map_or(hovered, |o| Some(o.corner()));
-    // Placing back an erased scattered decor restores that instance; the ghost
-    // shows it.
+    // Placing an erased scattered decor back restores that same instance, so
+    // the ghost shows it.
     let restored = match (ui.asset(), &hovered) {
         (Some((Asset::Decor(id), _)), Some(h)) => restores_scattered(h, id),
         _ => None,
     };
-    // Where it would stand, and what it would carry.
+    // Where the decor would stand, and the meta it would carry.
     let decor_pick = match (decor, decor_corner, restored) {
         (Some(_), _, Some(d)) => Some((d.at, d.meta)),
         (Some(b), Some(c), None) => {
@@ -118,7 +121,8 @@ pub fn ghost() -> Ghost {
                 erase,
             };
             match (decor, decor_pick) {
-                // Its stand, moved as the hover is into the world's frame.
+                // The decor's stand, moved into the world's frame by the same
+                // offset as the hover.
                 (Some(decor), Some((at, m))) => Ghost::Decor {
                     at: [at[0] - c[0] + x, at[1] - c[1] + y, z],
                     decor,

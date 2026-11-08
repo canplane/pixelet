@@ -108,9 +108,9 @@ fn day_of(days: u64) -> String {
     format!("{y:04}-{mo:02}-{d:02}")
 }
 
-/// A truncated file would otherwise count as finished on resume. The temp
-/// name is per process and write, so two writers of one file cannot rename
-/// each other's half-written bytes.
+/// Writes `bytes` to `path` through a temporary file and a rename, because a truncated file
+/// would otherwise count as finished on resume. The temporary name is per process and write,
+/// so two writers of one file cannot rename each other's half-written bytes.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     static WRITES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let n = WRITES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);

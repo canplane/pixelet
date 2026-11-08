@@ -9,11 +9,12 @@ use pxl_render::gpu::draw::{lists_bytes, set_lists, DrawList, DRAW_PIPELINES};
 use pxl_spec::space::coord::mat4;
 use xpute_core::mem::heap::alloc;
 
-/// A turn whose eye moved and whose world did not sets the same draws with
-/// the same uniforms and the same stands, so it changes none of them
-/// (pxl-render gpu/draw.rs `Change`) and the light's receivers read the same:
-/// the ghost's box, which reads the shadow map and so stands, and the gizmos'
-/// lines, on Q3 and finer, the eye near them and across X's seam from them.
+/// When only the eye moves, every draw keeps its uniforms and its receiver box
+/// (pxl-render gpu/draw.rs `ReceiverBox`), so no draw changes (`Change`) and
+/// the light sees the same receivers. The draws are the ghost's box, which
+/// reads the shadow map and so has a receiver box, and the two gizmos' lines.
+/// Their positions fall both on Q3 steps and between them. The eye moves from
+/// near them to the far side of the seam where X wraps.
 #[test]
 fn an_eye_moved_changes_no_draw() {
     let _g = sys::serial();

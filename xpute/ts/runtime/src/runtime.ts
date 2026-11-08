@@ -1,14 +1,14 @@
 // @xpute/runtime/runtime.ts
 
 /**
- * A runtime mounted on a core its platform opened.
+ * A runtime mounted on a core that its platform opened.
  *
  * - The front is laid before the first turn (ipc/head.ts).
- * - Each turn is rung by the doorbell, which reads what the core left as the
- *   turn ends, a trapped turn's too.
- * - What the core posts is answered by its major: xpute's own below
- *   PROGRAM_MAJOR (the stop report, the file device), the program's from
- *   there; each the UI takes goes to it too.
+ * - The doorbell rings each turn and, as the turn ends, reads what the core
+ *   left, even when the turn trapped.
+ * - What the core posts goes to whatever answers its major: xpute's own
+ *   handlers below PROGRAM_MAJOR (the stop report, the file device), and the
+ *   program's from there up. Each command the UI takes also goes to the UI.
  * - The scheduler runs turns as the policy says (sched/policy.ts).
  */
 
@@ -40,20 +40,23 @@ import type { Grant, SchedulingPolicy } from "@xpute/runtime/sched/policy.ts";
 import { Scheduler } from "@xpute/runtime/sched/scheduler.ts";
 import { open } from "./platform";
 
-/** The core as its platform opened it: its memory, which never moves or
- * grows; `run`, a turn, which returns when it wants the next, in ms; where
- * its calls are answered; and, where it runs on its own thread, that thread.
- * xpute names the entry, as a C runtime names `main`. */
+/** The core as its platform opened it. Its memory never moves or grows.
+ * `run` runs a turn and returns when the core wants the next, in ms; xpute
+ * names this entry, as a C runtime names `main`. A core that runs on its own
+ * thread also gives that thread. */
 export interface Core {
   mem: ArrayBuffer;
   run(deadline_ms: f64): f64;
-  /** `answer` answers each call from here on; ENOSYS until it is set. */
+  /** Makes `answer` answer each call from here on; until then every call
+   * fails with ENOSYS. */
   answer_with(answer: (at: u32) => i32): void;
   /** A native core's thread, which runs while it has work and sleeps until
-   * kicked: `kick` wakes it, a turn given at least `deadline_ms`; `heard`
-   * is told when it wants the next turn (NaN once it stopped) and the
-   * longest turn it ran; `pause` stops its turns, `resume` lets kicks run
-   * them. None for a page's core, which runs only inside `run`. */
+   * kicked. `kick` wakes it for a turn that ends no sooner than
+   * `deadline_ms` after its rise. `listen` registers `heard`, which is told
+   * when the core wants the next turn (NaN once it has stopped) and how long
+   * its longest turn ran. `pause` stops its turns, and `resume` lets kicks
+   * run them again. A page's core has no thread: it runs only inside
+   * `run`. */
   thread?: {
     kick(deadline_ms: f64): void;
     pause(): void;
@@ -68,10 +71,11 @@ export interface GpuAsk {
   features: { required: readonly string[]; optional: readonly string[] };
 }
 
-/** A platform's GPU: it opens a device as the core asks, runs the core's
- * stream as each turn returns, says when a device answers and whether there
- * is one, and draws the canvases it is lent. What `after_turn` throws ends
- * the core. A native GPU binds its views itself and takes no canvas. */
+/** A platform's GPU. `grant` opens a device as the core asks. `after_turn`
+ * runs the core's stream as each turn returns, and whatever it throws ends
+ * the core. `watch` reports when a device answers and whether there is one.
+ * `bind` and `unbind` lend it the canvases it draws and take them back. A
+ * native GPU binds its views itself, so it takes no canvas. */
 export interface Gpu {
   grant(to: GpuGrant): void;
   after_turn(): void;
@@ -86,9 +90,10 @@ export type GpuState =
 /** A page's canvas, or one transferred to the worker its runtime runs in. */
 export type Canvas = HTMLCanvasElement | OffscreenCanvas;
 
-/** The core's memory, where its stream begins, what it asks; `ready` tells
- * the core a device answered (GPU_READY), `wake` asks a turn, `shown` says
- * whether the UI shows the core (`Link.visible`). */
+/** What the GPU is granted: the core's memory, the offset where the core's
+ * stream begins, and what the core asks. `ready` tells the core a device
+ * answered (GPU_READY), `wake` asks for a turn, and `shown` says whether the
+ * UI shows the core (`Link.visible`). */
 export interface GpuGrant {
   mem: ArrayBuffer;
   at: u32;
@@ -98,8 +103,8 @@ export interface GpuGrant {
   shown(): boolean;
 }
 
-/** The core's report as it aborts: the errno it broke, where, and two
- * numbers it gave. */
+/** The report the core gives as it aborts: the errno of the broken
+ * invariant, where in the source it broke, and two numbers the core gave. */
 export interface Abort {
   errnum: number;
   file: string;
@@ -109,7 +114,7 @@ export interface Abort {
   b: bigint;
 }
 
-/** The report a SYS_ABORT carries. */
+/** Reads the report a SYS_ABORT carries. */
 export function read_abort(f: BranchCursor): Abort {
   return abort_of(read_sys_abort(f));
 }
@@ -132,11 +137,12 @@ function log_abort(r: Abort): void {
   );
 }
 
-/** What the core runs with, all the app decides: its module where a page
- * loads one; what backs its files and the GPU it is granted, where its
- * machine asks; what answers its commands; the policy and what goes with
- * each turn; and where an import names its memory, as its protocol's
- * generated `<name>_mem` says. */
+/** Everything the app decides for its core: the module, where a page loads
+ * one; what backs the files and which GPU is granted, where the machine asks
+ * for them; what answers the program's commands (`program`); the scheduling
+ * policy, and what the app submits with each turn it grants (`submit`); and
+ * the memory an import names, as the protocol's generated `<name>_mem`
+ * reads it (`mem_of`). */
 export interface Config<G extends Grant = Grant> {
   core?: ModuleSource;
   fs?: Fs;
@@ -147,9 +153,10 @@ export interface Config<G extends Grant = Grant> {
   mem_of?(cmd: u32, f: BranchCursor | null): [u32, u32] | null;
 }
 
-/** What a UI hears of its core: the imports it takes (`cmds`, SYS_ABORT
- * among them where it shows the stop), with `named` the memory one names
- * and `pkt` its packet; the GPU's state; the stop. */
+/** What a UI hears of its core. `on` is handed each import whose command is
+ * in `cmds` (SYS_ABORT among them, for a UI that shows the stop), with
+ * `named`, the memory the import names, and `pkt`, its packet. `gpu` hears
+ * the GPU's state, and `stop` hears that the core has stopped. */
 export interface Ui {
   cmds: readonly u32[];
   on(
@@ -168,11 +175,13 @@ export const QUIET: Ui = { cmds: [], on() {}, gpu() {}, stop() {} };
 
 /** What a protocol's generated stubs send through. */
 export interface Sender {
-  /** Sent with the next turn. */
+  /** Sends a command with the next turn. */
   send(cmd: u32, encode?: Encode): void;
-  /** Sent with ACKREQ; the core's reply comes with a later turn. */
+  /** Sends a command with ACKREQ. The promise settles with the core's
+   * reply, which comes with a later turn. */
   request(cmd: u32, encode?: Encode | null): Promise<i32>;
-  /** Rung at once until the core answers, turns paused or not. */
+  /** Sends a command and rings the core at once, again and again until it
+   * answers, whether turns are paused or not. */
   call(cmd: u32, encode?: Encode | null): i32;
   call<T>(
     cmd: u32,
@@ -185,18 +194,20 @@ export interface Sender {
 export interface Link extends Sender {
   /** Whether a command's packet fits a slot. */
   fits(encode: Encode): boolean;
-  /** A turn asked for. */
+  /** Asks for a turn. */
   wake(): void;
-  /** An input now, for the policy. */
+  /** Tells the policy that an input came now. */
   input(): void;
-  /** Turns run, while the program is shown. */
+  /** Lets turns run, while the program is shown. */
   resume(): void;
-  /** No turn runs; a call still rings. */
+  /** Stops turns; a call still rings. */
   pause(): void;
-  /** Shown or hidden; each change told the core (SYS_RESUME, SYS_SUSPEND). */
+  /** Says whether the program is shown. Each change is told to the core
+   * (SYS_RESUME, SYS_SUSPEND). */
   visible(visible: boolean): void;
-  /** A canvas lent to the GPU under the core's handle, and let go. Across a
-   * port a canvas is lent once: it crosses for good. */
+  /** `bind` lends a canvas to the GPU under the core's handle, and `unbind`
+   * lets it go. Across a port a canvas is lent once, since it is
+   * transferred for good. */
   bind(handle: u32, canvas: Canvas): void;
   unbind(handle: u32): void;
 }
@@ -210,8 +221,8 @@ export interface Runtime extends Link {
 /** The memory of the core last mounted here. */
 export let mem: ArrayBuffer;
 
-/** The runtime on `core`, its front laid as `m` places it unless laid, the
- * GPU granted where `m` asks for one. */
+/** Mounts the runtime on `core`. The front is laid as `m` places it, unless
+ * it was laid already, and the GPU is granted where `m` asks for one. */
 export function mount<G extends Grant>(
   core: Core,
   m: Front & Pick<Machine, "head_at" | "gpu">,
@@ -345,7 +356,8 @@ export function mount<G extends Grant>(
       if (visible === shown) return;
       shown = visible;
       steer();
-      // At once: hiding is the core's last sure moment to keep what it holds.
+      // A call, rung at once, because hiding is the core's last sure moment
+      // to save what it holds.
       call(visible ? Command.SYS_RESUME : Command.SYS_SUSPEND);
     },
     bind: (handle, c) => canvas().bind(handle, c),
@@ -353,8 +365,8 @@ export function mount<G extends Grant>(
   };
 }
 
-/** A core's machine as its generated `MACHINE` gives it: the memory sizes it
- * allows, where the front's header is and the front, and the devices it asks
+/** A core's machine, as its generated `MACHINE` gives it: the memory sizes
+ * it allows, the front and where its header is, and the devices it asks
  * for. */
 export interface Machine extends Front {
   mem_bytes: readonly u32[];
@@ -364,25 +376,27 @@ export interface Machine extends Front {
   gpu: GpuAsk | null;
 }
 
-/** A page's core: its module, fetched or given as bytes, and the bytes of its
- * memory, a size its machine allows. */
+/** Where a page's core comes from: its module, fetched from a URL or given
+ * as bytes, and the size of its memory in bytes, which its machine must
+ * allow. */
 export interface ModuleSource {
   module: URL | BufferSource;
   bytes: u32;
   init?: RequestInit;
 }
 
-/** An app's core, declared once: its machine, and its config, made where the
- * core runs. */
+/** An app's core, declared once: its machine, and a function that makes its
+ * config where the core runs. */
 export interface Manifest<G extends Grant = Grant> {
   machine: Machine;
   core(): Config<G> | Promise<Config<G>>;
 }
 
-/** The core of `m` opened by this build's platform and the runtime mounted
- * on it, what it tells a UI told `ui`. A machine that asks for files is
- * refused a config without `fs`, and one that does not, one with it; a GPU
- * the machine does not ask for is not granted. */
+/** Opens the core of `m` on this build's platform and mounts the runtime on
+ * it; what the core tells a UI goes to `ui`. It refuses with EINVAL a config
+ * without `fs` for a machine that asks for files, and a config with `fs` for
+ * a machine that does not. A GPU the machine does not ask for is not
+ * granted. */
 export async function boot<G extends Grant>(
   m: Manifest<G>,
   ui: Ui,

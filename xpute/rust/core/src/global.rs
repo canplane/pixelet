@@ -1,12 +1,15 @@
 // xpute-core/global.rs
 
-//! One value for the module's life, made on first use. Handing out `&mut`
-//! from a static is sound only because the core runs on one thread and a
-//! turn never re-enters another. A native runtime marks that thread
-//! (`mark_thread`), and the two readers take "none marked" each the safe way:
-//! a core asking whether it may touch a `Global` (`off_marked_thread`) takes
-//! every thread for its own, and an allocator asking whether a block is the
-//! core's (`on_marked_thread`) takes none, there being no memory before boot.
+//! A value that lives as long as the module and is made on first use.
+//! Handing out `&mut` from a static is sound only because the core runs on
+//! one thread and one turn never runs inside another.
+//!
+//! A native runtime marks the core's thread (`mark_thread`). Until it does,
+//! each question about the mark takes its safe answer. `off_marked_thread`,
+//! which asks whether this thread must keep off a `Global`, answers no on
+//! every thread. `on_marked_thread`, which an allocator asks to learn whether
+//! a block is the core's, answers no as well, since the core has no memory
+//! before boot.
 
 use core::cell::{Cell, UnsafeCell};
 use core::sync::atomic::{AtomicBool, Ordering};
@@ -33,14 +36,16 @@ impl<T> Global<T> {
     }
 }
 
-/// Taken first by a test touching a `Global`, since tests run on several threads.
+/// A test that touches a `Global` takes this lock first: tests run on
+/// several threads, and a `Global` assumes one.
 #[cfg(test)]
 pub fn serial() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// Some thread is marked as the core's.
+/// Whether any thread has been marked as the core's; `ON_MARKED` says
+/// whether it is this one.
 static MARKED: AtomicBool = AtomicBool::new(false);
 
 thread_local! {
@@ -48,7 +53,8 @@ thread_local! {
     static ON_MARKED: Cell<bool> = const { Cell::new(false) };
 }
 
-/// Marks this thread as the core's, once a process, before its first turn.
+/// Marks this thread as the core's. A runtime calls it once per process,
+/// before the core's first turn.
 pub fn mark_thread() {
     let again = MARKED.swap(true, Ordering::AcqRel);
     assert!(
@@ -62,7 +68,8 @@ pub fn on_marked_thread() -> bool {
     ON_MARKED.with(Cell::get)
 }
 
-/// A thread is marked and this is another: where a `Global` must not be touched.
+/// Whether another thread is marked as the core's, so that this one must not
+/// touch a `Global`.
 pub fn off_marked_thread() -> bool {
     MARKED.load(Ordering::Acquire) && !on_marked_thread()
 }

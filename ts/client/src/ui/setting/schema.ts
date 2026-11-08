@@ -1,8 +1,9 @@
 // @pxl/client/ui/setting/schema.ts
 
 /**
- * Every setting as the sheet draws it, keyed by the core's number. Adding
- * one is a schema.json entry plus its strings under `settings.<section>.<name>`.
+ * Every setting the sheet draws, keyed by the core's number. A new setting
+ * takes an entry in schema.json and its strings under
+ * `settings.<section>.<name>`.
  */
 
 import {
@@ -12,8 +13,9 @@ import {
 
 type Spec = typeof EVERY;
 
-/** A constant-folded choice, not a filter, so dev rows are absent from the
- * production artifact rather than hidden. */
+/** The table is chosen by a constant that the build folds, rather than
+ * filtered, so that the dev rows are absent from a production bundle instead
+ * of hidden. */
 export const SETTING = (__IS_DEV__ ? EVERY : PRODUCTION) as Spec;
 
 export type SettingName = keyof Spec;
@@ -22,7 +24,8 @@ export type Setting = Spec[SettingName];
 
 export type SettingSection = Setting["section"];
 
-/** What a setting costs, whole or by option: every `cost` and every option's `costs`, "" a free one. */
+/** The costs a setting can carry, whole or by option: any setting's `cost`,
+ * and any entry of an option's `costs` except "", which marks a free option. */
 export type SettingCost =
   | Extract<Setting, { cost: unknown }>["cost"]
   | Exclude<Extract<Setting, { costs: unknown }>["costs"][number], "">;

@@ -1,20 +1,21 @@
 // pxl-render/item_list.wgsl
 
-// The items of a kind laid as a list (samples.wgsl, corners.wgsl), as the queue's walks take
-// them (queue_walk.wgsl, queue_last.wgsl): each walk the list's next place off its counter.
+// How the queue's walks (queue_walk.wgsl, queue_last.wgsl) take the items of a run that lists
+// them: the samples (samples.wgsl) or the beam rays (corners.wgsl). Each walk takes the next
+// place in the list from a counter of its own.
 
-/// The next item a walk over the node cache takes, the first or the one `again`; `NONE` past the
-/// list.
+/// The next item for a walk over the node cache to take, by the first walk's counter or, where
+/// `again`, by the second walk's. It is `NONE` past the list.
 fn next_item(again: bool) -> u32 {
   return list_item(take(select(QUEUE_NEXT, QUEUE_NEXT_AGAIN, again)));
 }
 
-/// The next item the last walk takes; `NONE` past the list.
+/// The next item for the last walk, the one that asks the world, to take. It is `NONE` past
+/// the list.
 fn next_last() -> u32 {
   return list_item(take(LAST_NEXT));
 }
 
-/// The item at place `k`, `NONE` past the list.
 fn list_item(k: u32) -> u32 {
   if (k >= item_count()) {
     return NONE;

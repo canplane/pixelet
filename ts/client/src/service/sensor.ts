@@ -1,8 +1,8 @@
 // @pxl/client/service/sensor.ts
 
 /**
- * The device's sensors as the browser grants them. iOS gates the compass
- * behind a prompt that must be raised inside the gesture.
+ * The device's sensors as a browser grants them to a page. iOS gates the
+ * compass behind a permission prompt, which must be raised inside a gesture.
  */
 
 import { geo_fix, listener } from "./sensor-listener.ts";
@@ -29,9 +29,10 @@ function orient_gated(): boolean {
 
 let geo_watch: number | null = null;
 
-/** How long the world waits on a location prompt no one answers, then opens at
- * the core's fallback; a later answer moves it. A device's prompt is the
- * system's, and holds the app itself. A product number. */
+/** How long the world waits on a location prompt that no one answers before
+ * it opens at the core's fallback place. An answer that comes later still
+ * moves it. A device needs no such wait, because its prompt is the system's
+ * and holds the app itself. The value is a product choice. */
 const PROMPT_MS = 5000;
 
 function geo_prompt_wait(): void {
@@ -57,9 +58,10 @@ function geo_start(): void {
   geo_watch = navigator.geolocation.watchPosition(
     (pos) => geo_fix(pos.coords),
     (err) => {
-      // A watch keeps trying through POSITION_UNAVAILABLE and TIMEOUT and ends
-      // only on PERMISSION_DENIED (https://www.w3.org/TR/geolocation/#watchposition-method),
-      // so it is left running on any other; the core shows the failure until a fix lands.
+      // A watch keeps trying through POSITION_UNAVAILABLE and TIMEOUT, and ends
+      // only on PERMISSION_DENIED (https://www.w3.org/TR/geolocation/#watchposition-method).
+      // So it is left running on any other error, and the core shows the
+      // failure until a fix lands.
       switch (err.code) {
         case err.PERMISSION_DENIED:
           geo_stop();
@@ -75,8 +77,9 @@ function geo_start(): void {
           listener.positionError("other");
       }
     },
-    // No timeout: one would raise TIMEOUT on a clock while no fix comes
-    // (PositionOptions.timeout, Infinity by default), each a turn for nothing.
+    // No timeout is set (PositionOptions.timeout is Infinity by default). With
+    // one, TIMEOUT would fire on a clock while no fix comes, and each would
+    // cost the core a turn for nothing.
     { enableHighAccuracy: true, maximumAge: 5000 },
   );
   geo_prompt_wait();
@@ -108,7 +111,9 @@ function orient_start(): void {
   );
 }
 
-/** A grant in the browser's site settings reaches the core, since nothing re-asks after a refusal. */
+/** Follows the location permission, so that a grant made later in the
+ * browser's site settings reaches the core. Nothing asks again after a
+ * refusal. */
 export function follow(): () => void {
   let status: PermissionStatus | null = null;
   let stopped = false;
@@ -131,7 +136,7 @@ export function follow(): () => void {
   };
 }
 
-/** The prompt is called before any await, so it stays inside the gesture. */
+/** Raises the prompt before any await, so that it stays inside the gesture. */
 function orient_permit(): Promise<boolean> {
   if (!orient_gated() || orient_event !== null) return Promise.resolve(true);
   const prompt = (DeviceOrientationEvent as IosOrientationEventCtor)

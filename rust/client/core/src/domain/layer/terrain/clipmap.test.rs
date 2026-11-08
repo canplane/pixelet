@@ -1,7 +1,8 @@
 // pxl-core/domain/layer/terrain/clipmap.test.rs
 //
-// The clip levels as a test holds them: about a center, each brick of the
-// tiles given present at once, its cells as a fill leaves them.
+// Tests of the clip levels, and the helpers other tests use to hold clip
+// levels around a center with every brick of the given tiles present at
+// once, its cells as a fill leaves them.
 
 use super::*;
 use crate::domain::layer::terrain::pool::set_way_pool;
@@ -14,12 +15,12 @@ use pxl_engine::way::BRIDGE;
 use pxl_spec::bake::separation::{self, Separation};
 use pxl_spec::bake::tile::terrain::{self, GroundId};
 
-/// A tile as `hold` takes it: a cell's own palette index and its height, row by row
-/// from its first, and its lines.
+/// A tile as `hold` takes it: for each cell, row by row from the first, its
+/// own palette index and its height; then the tile's lines.
 pub(crate) type HeldTile = (Quadrant, Vec<GroundId>, Vec<i16>, Separation);
 
-/// What `hold` leaves held: the bricks' words up to their last that is
-/// not zero, the pool, the entries and the slots.
+/// What `hold` leaves held: the bricks' words up to the last nonzero one,
+/// the pool, the entries and the slots.
 struct Levels {
     cells: Vec<u32>,
     pool: WayPool,
@@ -30,14 +31,14 @@ struct Levels {
 /// What clip levels are built over: a center and the tiles held.
 type Over = ([f64; 2], Vec<HeldTile>);
 
-/// The clip levels built this run, by what they were built over: the same are
-/// built once, and each `hold` after takes a copy.
+/// The clip levels built in this run, keyed by what they were built over.
+/// Each set is built once, and every later `hold` of it takes a copy.
 static BUILT: std::sync::Mutex<Vec<(Over, Levels)>> = std::sync::Mutex::new(Vec::new());
 
 const CELLS_WORDS: usize = (SLOTS * CELLS_ARR_BYTES / 4) as usize;
 const PALETTE_WORDS: usize = (SLOTS * PALETTE_ARR_BYTES / 4) as usize;
 
-/// The planes of a test, its cells `cells`.
+/// A test's own planes, with `cells` as the cells and a zeroed palette.
 fn planes_of(cells: &'static mut [u32]) -> Planes {
     Planes {
         cells,
@@ -45,14 +46,13 @@ fn planes_of(cells: &'static mut [u32]) -> Planes {
     }
 }
 
-/// The eye's and the pivot's clip levels about `centre`, in units, X then Y,
-/// each brick the tiles `held` cover present in its slot, the pivot's
-/// clip levels the eye's finest two again: per tile, a cell's own palette index
-/// and its height, row by row from its first, and its lines; each brick's
-/// columns, its tops and its ways' spans as its fill keeps them
-/// (`fill_columns`), and its levels (pxl-engine `fill::mips`). Built once a
-/// run for a center and its tiles
-/// (`BUILT`); each hold is its own copy, whatever a test does to it.
+/// Holds the eye's and the pivot's clip levels around `center`, in units, X
+/// then Y, with every brick the tiles in `held` cover present in its slot.
+/// The pivot's clip levels repeat the eye's finest two. Each brick holds its
+/// columns, tops and ways' spans as its fill keeps them (`fill_columns`),
+/// and its mip levels (pxl-engine `fill::mips`). The clip levels for a center
+/// and its tiles are built once per run (`BUILT`), and each hold gets its own
+/// copy, whatever a test does to it.
 pub(crate) fn hold(center: [f64; 2], held: &[HeldTile]) {
     let mut built = BUILT.lock().unwrap_or_else(|e| e.into_inner());
     let k = match built
@@ -89,8 +89,9 @@ pub(crate) fn hold(center: [f64; 2], held: &[HeldTile]) {
     fold(clipmap());
 }
 
-/// The brick at `cell_zoom` holding cell `g` filled and not yet handed, and the clip
-/// levels folded without it, as a turn's step leaves them before a frame hands it.
+/// Marks the brick at `cell_zoom` that holds cell `g` as filled and not yet
+/// handed over, and folds the clip levels without it, as a turn's step leaves
+/// them before a frame hands the brick over.
 pub(crate) fn unland(cell_zoom: Zoom, g: [i32; 2]) {
     let w = clipmap();
     let b = slot_of(w, cell_zoom, clipmap::brick_of(g).0).expect("held");
@@ -101,18 +102,20 @@ pub(crate) fn unland(cell_zoom: Zoom, g: [i32; 2]) {
     fold(w);
 }
 
-/// What a frame hands of the bricks filled: every one.
+/// Hands every filled brick over, as a frame with room for all of them does.
 pub(crate) fn hand() {
     upload(&mut |_| true);
 }
 
-/// The device gone, as a turn's step finds it: every brick's cells given
-/// up (`assign_slots`).
+/// Loses the device, as a turn's step finds it lost: the GPU's copy of
+/// every brick is gone, and each present brick must be handed over again
+/// (`assign_slots`).
 pub(crate) fn lose() {
     assign_slots(clipmap(), true);
 }
 
-/// `hold`'s clip levels, built, each tree laid in the pool as a fill lays it.
+/// Builds `hold`'s clip levels, laying each tree into the pool as a fill
+/// lays it.
 fn build(center: [f64; 2], held: &[HeldTile]) {
     PLANES.set(planes_of(vec![0; CELLS_WORDS].leak()));
     set_way_pool(WayPool::default());
@@ -187,7 +190,7 @@ fn build(center: [f64; 2], held: &[HeldTile]) {
                 .sum();
         }
         fill::mips(&mut back, &scratch, cell_zoom);
-        // Its ways' tree in the pool, its root word naming it.
+        // Lay its ways' tree into the pool, named by its root word.
         let [used, cnt, root] = fill::tree(&back, &scratch, cell_zoom, &mut pool, 1);
         assert_ne!(used, u32::MAX, "a brick's tree past the pool");
         if cnt != 0 {
@@ -205,11 +208,11 @@ fn build(center: [f64; 2], held: &[HeldTile]) {
     }
 }
 
-/// A brick's columns as a fill writes them (pxl-engine `fill::columns`,
-/// `fill::spans`), over cells whose tops are given
-/// (`top`) rather than drawn off samples: each column's word, its top, into
-/// `back`; and the spans of its columns and its ring off its lines
-/// (`fill::keep`) into its `scratch`.
+/// Writes a brick's columns as a fill does (pxl-engine `fill::columns`,
+/// `fill::spans`), but over cells whose tops `top` gives instead of
+/// computing them from samples. Each column's word, its top, goes into
+/// `back`, and the spans of its columns and of its ring, from its lines
+/// (`fill::keep`), go into `scratch`.
 fn fill_columns(
     sq: &impl clipmap::Brick,
     top: impl Fn(u32) -> i32,
@@ -224,9 +227,10 @@ fn fill_columns(
     }
 }
 
-/// The eye's clip levels laid out about `eye` and the pivot's about `pivot`, in
-/// units, X then Y, as `step` lays a clip level that moved, no destination's;
-/// their bricks slotted (`assign_slots`), what was held before kept.
+/// Lays out the eye's clip levels around `eye` and the pivot's around
+/// `pivot`, in units, X then Y, as `step` lays out a clip level that moved,
+/// with no destination. Their bricks are given slots (`assign_slots`), and
+/// what was held before is kept.
 fn lay(w: &mut Clipmap, eye: [f64; 2], pivot: [f64; 2]) {
     for clip_level in 0..CLIP_LEVELS {
         let (center_of, cell_zoom) = layout(clip_level);
@@ -245,9 +249,9 @@ fn lay(w: &mut Clipmap, eye: [f64; 2], pivot: [f64; 2]) {
     assign_slots(w, false);
 }
 
-/// Every brick held present, as if each had been handed, its cells all zero
-/// unless a test held its own (`hold`): the clip levels fold over them
-/// wherever they are laid again (`assign_slots`).
+/// Marks every held brick present, as if each had been handed over. Its
+/// cells are all zero unless a test held its own (`hold`). The clip levels
+/// fold over them wherever they are laid out again (`assign_slots`).
 fn land_all(w: &mut Clipmap) {
     PLANES.get(|| planes_of(vec![0; CELLS_WORDS].leak()));
     for b in w.slots.iter_mut().filter(|b| !b.is_free()) {
@@ -278,8 +282,8 @@ const CENTER: [f64; 2] = [37.0 * 4096.0 + 100.0, 11.0 * 4096.0 + 200.0];
 /// The leaf tile `CENTER` lies in.
 const CENTER_TILE: [i32; 2] = [296, 88];
 
-/// The clip levels about `CENTER` with nothing held, and all a fill works in a
-/// test's own.
+/// The clip levels around `CENTER` with nothing held, and everything a fill
+/// works in owned by the test.
 fn fill_room() -> &'static mut Clipmap {
     PLANES.set(planes_of(vec![0; CELLS_WORDS].leak()));
     set_way_pool(WayPool::default());
@@ -297,8 +301,8 @@ fn fill_room() -> &'static mut Clipmap {
     w
 }
 
-/// The tile at `CENTER_TILE`, rolling ground under a bridge across it from west
-/// to east, high enough to stand clear of it, and its packet.
+/// The tile at `CENTER_TILE` and its packet: rolling ground with a bridge
+/// crossing it from west to east, high enough to stand clear of the ground.
 fn hilly_tile() -> (Quadrant, TerrainTile, Vec<u8>) {
     let ele: Vec<i16> = (0..ELE_COLUMN as i32)
         .map(|i| ((i * 37) % 11 + (i / 36) % 5) as i16)
@@ -357,7 +361,7 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
             .all(|&b| w.slots[b as usize].fill == Fill::Cut),
         "each cut in the turn the packet landed"
     );
-    // The packet is gone: what is filled reads the tile and the slots alone.
+    // Drop the packet, so the fill can read only the tile and the slots.
     drop(pkt);
     due(w);
     while !matches!(fill_stage(w), Fills::Done) {}
@@ -561,8 +565,9 @@ fn left_brick_part() {
     let (eye, pivot) = (LEAF_CELL_ZOOM - FIRST_CELL_ZOOM, EYE_CLIP_LEVELS + 1);
     lay(w, leaf(CENTER), leaf(CENTER));
     land_all(w);
-    // The eye a brick on at the leaves: its clip level there leaves a column
-    // the pivot's still wants, and wants a column the pivot's does not.
+    // Move the eye one brick along at the leaves. Its clip level there
+    // leaves a column of bricks the pivot's still wants, and wants a column
+    // the pivot's does not.
     let on = leaf([CENTER[0] + f64::from(BRICK), CENTER[1]]);
     lay(w, on, leaf(CENTER));
     assert_eq!(
@@ -592,7 +597,7 @@ fn left_brick_part() {
             "in a free slot, the eye's own still holding the pivot's brick"
         );
     }
-    // Back where it was, the eye finds the column it left present.
+    // Moved back, the eye finds the column it left still present.
     land_all(w);
     lay(w, leaf(CENTER), leaf(CENTER));
     for s in 0..ENTRIES {
@@ -631,7 +636,8 @@ fn apart_clip_levels_own_slots() {
 #[test]
 fn handing_shows_everywhere() {
     let _g = sys::serial();
-    // The fold after the handing reads the bricks' cells.
+    // The fold after the hand-off reads the bricks' cells, so the test needs
+    // planes of its own.
     PLANES.set(planes_of(vec![0; CELLS_WORDS].leak()));
     CLIPMAP.set(fresh());
     let w = clipmap();
@@ -653,7 +659,8 @@ fn handing_shows_everywhere() {
         let row = w.table.entries[(clip_level * ENTRIES) as usize];
         assert!(row.holds(q) && row.slot() == b);
     }
-    // Refused while a clip level wants it, then given up with the last.
+    // A refused brick stays while a clip level wants it, and is given up
+    // with the last one.
     w.slots[b as usize] = Slot {
         present: false,
         fill: Fill::Refused,
@@ -690,7 +697,7 @@ fn heap_wait_rehanded() {
     let eye = LEAF_CELL_ZOOM - FIRST_CELL_ZOOM;
     let q = want(w, eye, 0);
     let b = slot_of(w, LEAF_CELL_ZOOM, q).unwrap();
-    // As a fill leaves it where the heap refused the pool its chunk.
+    // The state a fill leaves when the heap refused the pool a chunk.
     (w.slots[b as usize].fill, w.heap) = (Fill::Waiting, Some(Refusal::now()));
     assert!(!wake(w), "no page given back: it waits");
     lay(w, leaf(CENTER), leaf(CENTER));

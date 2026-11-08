@@ -1,6 +1,7 @@
 // xpute-core/clock.rs
 
-//! The runtime's clock in milliseconds; zero until installed, as in native tests.
+//! The runtime's clock, in milliseconds. Until a runtime installs one, the
+//! time stays at zero, which native tests run with.
 
 use core::cell::Cell;
 

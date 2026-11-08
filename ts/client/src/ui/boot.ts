@@ -1,7 +1,8 @@
 // @pxl/client/ui/boot.ts
 
-/** Where the client's boot stands, as the UI reads it through the port: the
- * app boots the client (runtime/boot.ts), and the UI only shows what came of it. */
+/** Where the client's boot stands, as the UI reads it through the port. The
+ * app boots the client (runtime/boot.ts), and the UI only shows what came of
+ * it. */
 
 import { useEffect, useSyncExternalStore } from "react";
 
@@ -12,11 +13,11 @@ import { boot_state, stop_code, watch_boot } from "@/port/ui.ts";
 import { useGpu, useCore, useOnline, useSource } from "@/ui/store/watch.ts";
 import type { Standing } from "./cover.ts";
 
-/** All `coverOf` reads, gathered. */
+/** Gathers everything `coverOf` reads. */
 export function useStanding(): Standing {
   const boot = useSyncExternalStore(watch_boot, boot_state);
   const stall = useCore((s) => s.stall);
-  // A developer's console over the core, once it runs.
+  // In development, a console over the core is installed once the core runs.
   useEffect(() => {
     if (__IS_DEV__ && boot === BOOT_LOADING) installConsole();
   }, [boot]);

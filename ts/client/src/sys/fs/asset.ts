@@ -1,10 +1,11 @@
 // @pxl/client/sys/fs/asset.ts
 
 /**
- * ASSET's backend: the core names a file by its load's id, and this reads
- * what that is. `CATALOG` is the catalog, which the client plugs in from
- * its own bundle and which names every other file; any other id is a row
- * of the ingest's table, counted from 1, read by its hash from the origin.
+ * The backend of the core's ASSET root. The core names a file by the id of
+ * its load, in decimal. The id `CATALOG` is the catalog, which names every
+ * other file, and the client ships it in its own bundle. Any other id is a
+ * row of the ingest's table, counted from 1, and is read from the origin by
+ * its hash.
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -17,8 +18,6 @@ import { ASSET_FILES } from "@/origin/ingest.spec.ts";
 import { asset_url } from "@/origin/route.ts";
 import { get } from "@/sys/fs/read.ts";
 
-/** A load's id in decimal, `path`: the catalog's, or a file's row in the
- * ingest's table from 1. */
 export function read_asset(
   path: string,
   signal: AbortSignal,

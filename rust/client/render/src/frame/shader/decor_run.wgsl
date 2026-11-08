@@ -1,9 +1,10 @@
 // pxl-render/decor_run.wgsl
 
-// What a pass over the records reads, a workgroup an entry's or a run of placed decor's
-// (tests/decor.rs `is_held`, `run_of`): the records laid, not the room.
+// What a pass over the records reads, one workgroup an entry's records or a run of placed
+// decor (tests/decor.rs `is_held`, `run_of`). It reads the records laid, not the room for them.
 
-/// `record_at`: record `n`'s first word, the entries' first, then placed decor's.
+/// `record_at`: the first word of record `n`. The entries' records are numbered first, then
+/// placed decor's.
 fn record_at(n: u32) -> u32 {
   if (n < SLOT_RECORDS) {
     return SLOTS_AT + n * RECORD_WORDS;
@@ -11,8 +12,9 @@ fn record_at(n: u32) -> u32 {
   return PLACED_HEADER + PLACED_HEADER_WORDS + (n - SLOT_RECORDS) * RECORD_WORDS;
 }
 
-/// `is_held`: past the entries, placed decor's always; an entry's where the clip levels still
-/// hold the brick they were generated for.
+/// `is_held`: whether workgroup `g`'s records still hold. Placed decor's, past the entries,
+/// always do; an entry's hold while the clip levels still hold the brick they were generated
+/// for.
 fn is_held(g: u32) -> bool {
   if (g >= EYE_ENTRIES) {
     return true;
@@ -38,7 +40,7 @@ fn run_of(g: u32, k: u32) -> vec2<u32> {
   return vec2<u32>(g * BRICK_RECORDS + decor_first_record(j) + past, min(cnt, RUN));
 }
 
-/// `record_of`'s fields of a record's first word.
+/// The fields of a record's first word, as `record_of` reads them.
 fn record_decor(w: u32) -> u32 {
   return w & ((1u << VARIANT_SHIFT) - 1u);
 }

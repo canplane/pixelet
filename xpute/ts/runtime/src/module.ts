@@ -2,10 +2,10 @@
 
 /**
  * A core built as one WebAssembly module, opened over a memory the runtime
- * reserved (mem/reserve.ts). Its imports are xpute's alone, the memory, the
- * clock and the call, and its entry is `run`; what else it exports, a boot
- * call that answers its front's offset among them, is the program's, on
- * `instance`. Compiling is the caller's.
+ * reserved (mem/reserve.ts). The module imports only xpute's three: the
+ * memory, the clock and the call. Its entry is `run`. Anything else it
+ * exports, such as a boot call that answers its front's offset, belongs to
+ * the program and is reached on `instance`. The caller compiles the module.
  */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
@@ -23,14 +23,14 @@ export function open_module(
   memory: WebAssembly.Memory,
   now: () => f64 = () => performance.now(),
 ): ModuleCore {
-  // A call is answered by whatever the runtime mounted on it says.
   let answer = (_at: u32): i32 => Errno.ENOSYS;
   const instance = new WebAssembly.Instance(module, {
     env: { memory, now, call: (at: u32) => answer(at) },
   });
   const run = instance.exports.run as (deadline_ms: f64) => f64;
   return {
-    // The maximum is the initial size, so the buffer is never replaced.
+    // The memory's maximum is its initial size, so it never grows and its
+    // buffer is never replaced.
     mem: memory.buffer as ArrayBuffer,
     run,
     answer_with: (a) => {

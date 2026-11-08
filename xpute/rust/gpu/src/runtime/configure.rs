@@ -1,17 +1,19 @@
 // xpute-gpu/runtime/configure.rs
 
-/// Where a stale surface is configured: configuring one sets its layer's
-/// properties, which some platforms allow on one thread alone.
+/// Where a stale surface is configured. Configuring a surface sets its
+/// layer's properties, which some platforms allow on one thread only.
 #[derive(Clone, Copy)]
 pub enum ConfigureAt {
     /// On the thread that runs the stream.
     Here,
-    /// Wherever `ask` sends it, which then runs `configure_surfaces`.
+    /// Wherever the given function sends the work, which must then run
+    /// `configure_surfaces`.
     Elsewhere(fn()),
-    /// On the main queue, where Core Animation sets a layer's properties:
-    /// `configure` must run `configure_surfaces` while nothing else uses the
-    /// runtime (beside a native core, inside its `while_idle`). Asked twice
-    /// before it runs, it configures nothing twice: only a stale surface is.
+    /// On the main queue, where Core Animation sets a layer's properties.
+    /// The given function must run `configure_surfaces` while nothing else
+    /// uses the runtime; beside a native core, that is inside the core's
+    /// `while_idle`. Asking twice before it runs configures nothing twice,
+    /// since only a stale surface is configured.
     #[cfg(target_vendor = "apple")]
     Main(fn()),
 }
@@ -32,7 +34,8 @@ impl ConfigureAt {
 fn on_main(f: fn()) {
     use core::ffi::c_void;
     unsafe extern "C" {
-        /// What `dispatch_get_main_queue()`, a header's inline, returns.
+        /// The queue `dispatch_get_main_queue()` returns. That function is an
+        /// inline in a header, so Rust cannot call it.
         static _dispatch_main_q: c_void;
         fn dispatch_async_f(
             queue: *const c_void,

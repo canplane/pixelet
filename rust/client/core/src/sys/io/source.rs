@@ -1,12 +1,12 @@
 // pxl-core/sys/io/source.rs
 
-//! The tile source's declaration, made once at boot (`SOURCE_DECLARE`): the
-//! published bake's `source` (script/publish.py), or the dev tile server's
-//! in its shape, of which the client hands over the core's part
-//! (ts/client/src/sys/fs/source.ts): the zoom the floor is held at, the
-//! format each kind is in, and the shards served, so a tile no served shard
-//! is over or under is never asked for. The versions it names are the
-//! client's.
+//! The tile source's declaration, made once at boot (`SOURCE_DECLARE`). The
+//! source is the published bake's `source` (script/publish.py), or the dev
+//! tile server's in the same shape, and the client hands over the core's part
+//! of it (ts/client/src/sys/fs/source.ts): the zoom the floor is held at, the
+//! format each kind is in, and the shards served. A tile that no served shard
+//! is over or under is never asked for. The versions the source names stay
+//! with the client.
 
 use pxl_engine::area::{self, Area};
 use pxl_spec::bake::publication::{BaseLayer, FORMAT};
@@ -18,12 +18,13 @@ use xpute_kit::status::errno::Errno;
 
 struct Source {
     top_zoom: Zoom,
-    /// The area at `SHARD_ZOOM` (pxl-engine `area::Area`): each cell's nine
-    /// by its key (`area::shard_key`), none beside no served one.
+    /// The service area at `SHARD_ZOOM` (pxl-engine `area::Area`). For each
+    /// cell, by its key (`area::shard_key`), it holds the bits of which of the
+    /// nine cells about it are served. A cell beside no served cell holds 0.
     nine: Vec<u16>,
-    /// The pyramid's nodes from zoom 0 to `SHARD_ZOOM`, as `node_of` lays
-    /// them: whether a shard is at or over each (`OVER`), and at or under it
-    /// (`UNDER`).
+    /// The pyramid's nodes from zoom 0 to `SHARD_ZOOM`, placed as `node_of`
+    /// places them. A node holds `OVER` where a served shard is at or over it,
+    /// and `UNDER` where one is at or under it.
     nodes: Vec<u8>,
 }
 
@@ -36,11 +37,12 @@ fn declared_source() -> Option<&'static Source> {
     DECLARED_SOURCE.get(|| None).as_ref()
 }
 
-/// Declared once: what it says holds while the core runs. `format` is each
-/// kind's by its bake's number, `shard` the shards' names in any order.
-/// Refused whole for what the client cannot follow: a zoom out of the
-/// pyramid, a name of no shard or of a node over shards (pxl-spec
-/// bake/source.rs), or a kind with no format or one it does not read.
+/// Declares the source once, and what it says holds while the core runs.
+/// `format` gives each kind's format by its bake's number, and `shard` the
+/// shards' names in any order. The declaration is refused whole where the
+/// core cannot follow it: a zoom outside the pyramid, a name that is no shard
+/// or that names a node over shards (pxl-spec bake/source.rs), or a kind with
+/// no format or with a format the core does not read.
 pub fn declare<'a>(
     top_zoom: u32,
     format: &[u32],
@@ -75,10 +77,11 @@ fn parse<'a>(
     })
 }
 
-/// Each cell a shard covers at `SHARD_ZOOM` served, then each covered cell's
-/// nine, and each beside it, laid once where its key addresses it
-/// (`area::nine`). A row off the world has no key: served, as one key for
-/// all, where any covered cell is off it.
+/// Marks each cell at `SHARD_ZOOM` that a served shard covers, then lays the
+/// nine of each covered cell and of each cell beside it, once, where its key
+/// addresses it (`area::nine`). A row off the world has no key. All such rows
+/// count as one cell, which is served where any covered cell is off the
+/// world.
 fn nines_of(shard: &[Quadrant]) -> Vec<u16> {
     let cells = area::SHARD_CELLS as usize;
     let (mut served, mut off, mut covered) = (vec![false; cells], false, Vec::new());
@@ -115,8 +118,9 @@ fn nines_of(shard: &[Quadrant]) -> Vec<u16> {
     nine
 }
 
-/// A shard is at or under its own node and every node over it, and at or
-/// over its own and every node under it, to `SHARD_ZOOM`.
+/// Marks the nodes for each shard. A shard is at or under its own node and
+/// every node over it, and at or over its own node and every node under it,
+/// down to `SHARD_ZOOM`.
 fn nodes_of(shard: &[Quadrant]) -> Vec<u8> {
     let mut nodes = vec![0u8; ((1usize << (2 * (SHARD_ZOOM + 1))) - 1) / 3];
     for k in shard {
@@ -140,9 +144,10 @@ fn nodes_of(shard: &[Quadrant]) -> Vec<u8> {
     nodes
 }
 
-/// Where the node `(zoom, at)`, no finer than `SHARD_ZOOM`, lies among the
-/// nodes: its zoom's first, then a row of its zoom's south to north
-/// (`quad_rows`) and a column round the world. None past the rows.
+/// The index of the node `(zoom, at)`, no finer than `SHARD_ZOOM`, among the
+/// nodes. The nodes of a zoom follow those of every coarser zoom. Within a
+/// zoom they lie by row from south to north (`quad_rows`), then by column
+/// around the world. A row off the world has no index.
 fn node_of(zoom: Zoom, at: [i32; 2]) -> Option<usize> {
     let n = 1i64 << zoom;
     let row = i64::from(at[1]) + n / 2;
@@ -157,19 +162,20 @@ pub fn top() -> Option<Zoom> {
     declared_source().map(|s| s.top_zoom)
 }
 
-/// Whether a served shard is over or under `p`, of a kind held by shards.
+/// Whether a served shard is over or under `p`. A kind that shards do not
+/// hold is served everywhere.
 pub fn serves(layer: BaseLayer, p: Quadrant) -> bool {
     !is_sharded(layer) || declared_source().is_some_and(|s| s.covers(p))
 }
 
-/// The area's cells' nines by key, as a GPU's area reads them; none before
-/// a source is declared.
+/// The nine of each cell of the area, by key, as a GPU's area reads them.
+/// It is empty before a source is declared.
 pub fn nines() -> &'static [u16] {
     declared_source().map_or(&[], |s| &s.nine)
 }
 
-/// The service area as pxl-engine's rules read it: the declared shards, and
-/// no end before they are declared.
+/// The service area as pxl-engine's rules read it: the declared shards.
+/// Before they are declared, the area has no end.
 pub struct ServiceArea;
 
 impl Area for ServiceArea {
@@ -182,9 +188,10 @@ impl Area for ServiceArea {
 }
 
 impl Source {
-    /// A shard over `p`, or at or under it, read off `p`'s node, or past
-    /// `SHARD_ZOOM` off the one over it there, which every shard over `p` is
-    /// over too.
+    /// Whether a served shard is over `p`, or at or under it. The answer is
+    /// read off `p`'s node. Finer than `SHARD_ZOOM`, it is read off the node
+    /// at `SHARD_ZOOM` over `p`, because every shard over `p` is over that
+    /// node too.
     fn covers(&self, p: Quadrant) -> bool {
         let (z, at) = area::shard_over(p.zoom, p.at);
         node_of(z, at).is_some_and(|n| {

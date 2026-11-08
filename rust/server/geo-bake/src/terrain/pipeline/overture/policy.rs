@@ -340,7 +340,7 @@ pub fn ways(row: &Part, way_ranges: &[WayRange], tile_min: G3857) -> Vec<Feature
     {
         return Vec::new();
     }
-    // the lines' ranges are the segment's; in the part's own
+    // The lines' ranges are along the segment; take them into the part's own span.
     let [a0, b0] = row.span;
     let lined = merged(
         way_ranges
@@ -360,7 +360,7 @@ pub fn ways(row: &Part, way_ranges: &[WayRange], tile_min: G3857) -> Vec<Feature
     let paint = |points: &[G3857], [a, b]: [f64; 2]| {
         let mut f = Feature::line(points, tile_min, palette_idx, rank.clone())?;
         f.width = width_u(&row.subtype, row.class.as_deref(), row.tags.role);
-        // square where the segment is cut, round at its own ends
+        // Square where the segment is cut, round at its own ends.
         f.cut = [a > 0.0 || a0 > 0.0, b < 1.0 || b0 < 1.0];
         Some(f)
     };
@@ -415,8 +415,8 @@ pub(crate) fn bases(row: &BaseRow, tile_min: G3857) -> Vec<Feature> {
         .collect()
 }
 
-/// Later keeps the cell. OpenStreetMap Carto's `z` from `roads_info`
-/// (openstreetmap-carto-flex.lua, CC0); other transport features rank under all.
+/// The order in which ways paint, the later keeping the cell: OpenStreetMap Carto's `z` from
+/// `roads_info` (openstreetmap-carto-flex.lua, CC0); other transport features rank under all.
 fn paint_order(subtype: &str, class: Option<&str>, role: Role) -> i64 {
     let c = class.unwrap_or("");
     if subtype == "rail" {

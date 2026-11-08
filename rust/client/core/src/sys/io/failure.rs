@@ -1,6 +1,6 @@
 // pxl-core/sys/io/failure.rs
 
-//! How a run ended, and why one failed.
+//! How a read's attempt ended, and why a failed one failed.
 
 use core::panic::Location;
 
@@ -11,21 +11,21 @@ pub use crate::sys::io::demand_spec::OutcomeName as Outcome;
 use crate::sys::io::file::Opened;
 use crate::sys::io::room::Refusal;
 
-/// One value, so a run that ended well carries no failure and a failed one
-/// always does.
+/// How an attempt ended, as one value, so an attempt that ended well cannot
+/// carry a failure and a failed one always carries its own.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Exit {
     Ok,
     Aborted,
     Failed(Failure),
-    /// Its body was refused room, by the heap or the body slots: no failure
-    /// of the object's or the server's, and over once what refused it gives
-    /// some back (`Refusal::over`).
+    /// The heap or the body slots refused the body room. Neither the object
+    /// nor the server failed, and the want may start again once what refused
+    /// it gives some room back (`Refusal::over`).
     Refused(Refusal),
 }
 
-/// Why a run failed, as numbers the statistics count by; one the core made
-/// carries its source location.
+/// Why an attempt failed, in the numbers the statistics count by. A failure
+/// the core raised itself carries the source location that raised it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Failure {
     pub errnum: Errno,
@@ -63,7 +63,8 @@ impl From<Errno> for Failure {
     }
 }
 
-/// An open that came to no bytes.
+/// The failure of an open that brought no bytes. An open that brought bytes
+/// is no failure, and taking it for one is a bug.
 impl From<Opened> for Failure {
     #[track_caller]
     fn from(opened: Opened) -> Failure {

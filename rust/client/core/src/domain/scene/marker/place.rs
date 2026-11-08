@@ -1,10 +1,10 @@
 // pxl-core/domain/scene/marker/place.rs
 
-//! The place layer's markers, read from its place tiles: each place a tile
-//! holds as Carto draws it at the zoom of Carto's the view is at where it
-//! stands, the camera grid's cell at its own point, a dot or an icon in its
-//! category's fill, named from its category's label zoom. A place stands at
-//! its ground leaf cell's center on the surface a ray down meets first at
+//! The place layer's markers, read from its place tiles. Each place a tile
+//! holds is drawn as Carto draws it at the Carto zoom that matches the camera
+//! grid's cell at the place's own point: a dot or an icon in its category's
+//! fill, named from its category's label zoom on. A place stands at the
+//! center of its ground leaf cell, on the first surface a ray down meets at
 //! the detail drawn there, and a tap on it goes there.
 
 use pxl_spec::space::layer::quadrant::Quadrant;
@@ -26,9 +26,9 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::{quad_rows, Cell};
 
 /// A place read from a drawn brick: what Carto shows of it, the ground leaf
-/// cell it stands in, the finest camera grid cell its brick draws, which
-/// its tile was read at, and the surface it stood on as last asked, of the
-/// detail it was asked at.
+/// cell it stands in, and the finest camera grid cell its brick draws, which
+/// its tile was read at (`finest`). `top` keeps the surface it stood on when
+/// last asked, with the detail it was asked at.
 pub(super) struct Place {
     pub(super) brick: Brick,
     key: Key,
@@ -40,10 +40,10 @@ pub(super) struct Place {
     top: Option<(Zoom, Option<f64>)>,
 }
 
-/// The places standing in `brick`, read where its cells are tiles' cells
-/// at its finest, each read from the tile that says it exactly: those Carto
-/// shows at the zoom those cells are drawn at, and so at none coarser
-/// either (`point_of`).
+/// Reads the places standing in `brick`, from the tiles whose cells are its
+/// cells at its finest zoom, each from the tile that places it exactly. Only
+/// the places Carto shows at the zoom those cells are drawn at are read
+/// (`point_of`). A place not shown there is shown at no coarser zoom either.
 pub(super) fn read(brick: Brick, found: &mut Vec<Place>) {
     let finest = cell_zoom(brick);
     let zoom = carto_zoom(finest);
@@ -52,7 +52,8 @@ pub(super) fn read(brick: Brick, found: &mut Vec<Place>) {
     }
     let t = PLACE_LATTICE.read_zoom(finest);
     let (z, column) = brick;
-    // The tile over the column, or its tiles under it: `n` a side from the first.
+    // The tile over the column, or the tiles under it: `n` of them along each
+    // side, from the first.
     let ([x0, y0], n) = if t <= z {
         (ancestor_of(column, z - t), 1)
     } else {
@@ -61,7 +62,8 @@ pub(super) fn read(brick: Brick, found: &mut Vec<Place>) {
     let tiles = (y0..y0 + n)
         .filter(|y| quad_rows(t).contains(y))
         .flat_map(|y| (x0..x0 + n).map(move |x| Quadrant::new(t, [x, y])));
-    // The brick as the world names it, once round the world.
+    // The brick's column as the world names it, wrapped once round the
+    // world.
     let named = [wrap_idx(z, column[0]), column[1]];
     World::now().places_in(tiles, &mut |src, place, h| {
         if point_of(h.place.category, h.from, None, zoom).is_none() {
@@ -85,13 +87,14 @@ pub(super) fn read(brick: Brick, found: &mut Vec<Place>) {
     });
 }
 
-/// What `read` read, seen from `eye`, into `out`: each place as
-/// Carto shows it at the zoom the camera grid's cell where it stands is,
-/// no finer than its tile was read at, standing on what is drawn there.
+/// Writes into `out` the places `read` read, seen from `eye`. Each shows as
+/// Carto shows it at the zoom of the camera grid's cell where it stands, no
+/// finer than its tile was read at, and it stands on what is drawn there.
 pub(super) fn show(read: &mut [Place], eye: V3, out: &mut Vec<Instance>) {
     for p in read {
-        // Its cell is the grid's at what it stands on: as last asked, or
-        // first at its brick's finest.
+        // Its cell is the grid's cell at what it stands on. That surface is
+        // the one last asked, or, on the first ask, the one at its brick's
+        // finest detail.
         let first = match p.top {
             Some((_, top)) => top,
             None => top_at(p, GROUND.read_zoom(p.finest)),
@@ -115,9 +118,9 @@ pub(super) fn show(read: &mut [Place], eye: V3, out: &mut Vec<Instance>) {
     }
 }
 
-/// The height a ray down over `p`'s cell first meets what is drawn at
-/// `detail`, kept with the detail it was asked at; none where nothing there
-/// is known.
+/// The height at which a ray down over `p`'s cell first meets what is drawn
+/// at `detail`, or None where nothing there is known. The answer is kept with
+/// the detail it was asked at.
 fn top_at(p: &mut Place, detail: Zoom) -> Option<f64> {
     match p.top {
         Some((at, top)) if at == detail => top,
@@ -129,10 +132,11 @@ fn top_at(p: &mut Place, detail: Zoom) -> Option<f64> {
     }
 }
 
-/// A place of `category`, shown from `from`, as Carto shows it where its
-/// zoom is `zoom`, if it does: as a dot or its icon by its category's
-/// zooms, named `name` from its category's label zoom, its name wrapped
-/// where it is laid out (`Design::spaced`).
+/// A place of `category`, shown from zoom `from` on, as Carto shows it at
+/// `zoom`, or None where Carto does not show it. It shows as a dot or as its
+/// icon by its category's zooms, and it is named `name` from its category's
+/// label zoom on. Its name is wrapped where it is laid out
+/// (`Design::with_spacing`).
 fn point_of(category: u16, from: Zoom, name: Option<&Rc<str>>, zoom: i32) -> Option<Design> {
     let k = usize::from(category.checked_sub(1)?);
     let shows = |z: u8| z != 0 && zoom >= i32::from(z);

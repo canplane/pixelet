@@ -1,6 +1,8 @@
 // pxl-core/domain/control/navigation.rs
 
-//! Following the device, off-center tracking, and the fallback start.
+//! Where the camera goes: to a named place (`destination`), after the
+//! device (`follow_mode`, `off_center`), or to the fallback start when no
+//! location comes (`bootstrap`).
 
 pub mod bootstrap;
 pub mod destination;

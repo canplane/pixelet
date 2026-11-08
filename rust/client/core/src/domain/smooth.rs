@@ -1,18 +1,20 @@
 // pxl-core/domain/smooth.rs
 
-//! One exponential smoothing for everything that eases, the camera's
-//! channels and the characters alike. Within `eps`
-//! it takes the target whole, so it ends rather than asking for frames
-//! forever on a remainder no screen shows.
+//! The one exponential smoothing that everything easing uses, the camera's
+//! channels and the characters alike. Within `eps` of its target a value
+//! takes the target whole, so the easing ends instead of asking for frames
+//! forever over a remainder no screen shows.
 
 use xpute_kit::math::scalar::wrap;
 
-/// `1 - e^(-k·delta)`: the same curve at any frame rate.
+/// The share of the remaining distance covered in `delta` seconds at rate
+/// `k`, `1 - e^(-k·delta)`. It traces the same curve at any frame rate.
 pub fn smoothing_factor(k: f64, delta: f64) -> f64 {
     1.0 - libm::exp(-k * delta)
 }
 
-/// The short way round, in [-π, π).
+/// Eases an angle toward `target` the short way round. The result lies in
+/// [-π, π).
 pub fn smooth_angle(cur: f64, target: f64, k: f64, delta: f64, eps: f64) -> (f64, bool) {
     let pi = core::f64::consts::PI;
     let left = wrap(target - cur, -pi, pi);
@@ -20,8 +22,9 @@ pub fn smooth_angle(cur: f64, target: f64, k: f64, delta: f64, eps: f64) -> (f64
     (wrap(cur + moved, -pi, pi), moving)
 }
 
-/// Every axis by the same share, so the path is straight; done within `eps`
-/// in any direction.
+/// Eases every axis by the same share, so the path is a straight line. It
+/// arrives once the remaining distance, over all axes together, is under
+/// `eps`. The flag it returns says whether the value is still moving.
 pub fn smooth_vec<const N: usize>(
     cur: [f64; N],
     target: [f64; N],

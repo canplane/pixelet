@@ -1,13 +1,14 @@
 // pxl-render/queue_last.wgsl
 
-// A run's last walk (walk.wgsl, ask.wgsl), over the items its kind's module names (queue.wgsl
-// for the holes): over the rays the walks over the node cache left parked, from the state each
-// was parked in, asking the world where no slot keeps a node. The lanes as the walks before
-// (queue_walk.wgsl), off a word of the node cache's head the asks before it set back
-// (`node_cache::LAST_NEXT`). Every ray ends here: one that may ask no more, a lack at the
-// deepest node held.
+// A run's last walk (walk.wgsl, ask.wgsl), over the rays the walks over the node cache left
+// parked, each from the state it was parked in. It asks the world where no slot keeps a node.
+// The part for the run's kind names its items (queue.wgsl for the holes). The lanes take rays
+// as the walks before do (queue_walk.wgsl), from a counter in the node cache's head that the
+// asks before set back to 0 (`node_cache::LAST_NEXT`). Every ray ends here. A ray that may ask
+// no more ends as a lack at the deepest node held.
 
-/// The next number off the node cache's counter at `word`, and the count it holds.
+/// Takes the next number from the node cache's counter at `word`. `held` reads the counter
+/// without taking.
 fn take(word: u32) -> u32 {
   return atomicAdd(&node_cache[word], 1u);
 }
@@ -16,9 +17,9 @@ fn held(word: u32) -> u32 {
   return atomicLoad(&node_cache[word]);
 }
 
-/// The next stop's number (queue.wgsl `keep_hit`), on from the walks over the node cache's
-/// (`node_cache::HITS_CNT`), and the dispatch over them raised to `rows`
-/// (`node_cache::HITS_ARGS`).
+/// Takes the next stop's number (queue.wgsl `keep_hit`), counting on from the stops the walks
+/// over the node cache listed (`node_cache::HITS_CNT`). `hit_rows` raises the dispatch over the
+/// stops to `rows` (`node_cache::HITS_ARGS`).
 fn hit_number() -> u32 {
   return atomicAdd(&node_cache[HITS_CNT], 1u);
 }
@@ -60,6 +61,8 @@ fn queue_last_cs() {
     let aim = item_aim(item);
     let w = walk(aim, Start(t, corner, zoom, roots, parent, top, step), QUEUE_STEPS);
     visits += w.visits;
+    // `ends` is 5 where the walk ran out of its steps, and 4 where it may ask no more
+    // (walk.wgsl `walk`).
     if (w.ends == 5u) {
       t = w.t;
       corner = w.corner;

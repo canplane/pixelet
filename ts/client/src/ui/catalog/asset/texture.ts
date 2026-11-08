@@ -1,8 +1,8 @@
 // @pxl/client/ui/catalog/asset/texture.ts
 
 /**
- * The texture pack: which image a cube wears on top, by bucket key. A cube
- * without one draws as its color.
+ * Which image of the texture pack a cube wears on its top face, named by its
+ * key in the bucket. A cube without one is drawn in its color.
  */
 
 import { ASSET_FILES, PACK } from "@/port/ui.ts";

@@ -7,8 +7,8 @@ use crate::space::layer::lattice::GROUND;
 use crate::space::layer::lattice::{demand_dist, draw_dist};
 use crate::space::layer::quadrant::*;
 
-/// The ground tile a distance folds from, past the pyramid's ends too, as
-/// the rule reads it: squared.
+/// The ground tile zoom a distance folds from, past the pyramid's ends too, read as the rule
+/// reads it, from the squared distance.
 fn zoom_at(r: f64) -> i32 {
     GROUND.tile_zoom_of_grid(cell_zoom_at(r * r))
 }

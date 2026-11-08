@@ -5,13 +5,13 @@ use crate::frame::shader::record::PIPELINES;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::world::{nearest, ROUND};
 
-/// The eye-relative translation the records held before they held a `Position`: the
-/// f64 difference narrowed to f32, what a `Position` from the eye is held to.
+/// The f64 difference from the eye narrowed to f32, which a `Position` taken from the eye is
+/// held to.
 fn translation(at: V3, eye: V3) -> [f32; 3] {
     core::array::from_fn(|k| (at[k] - eye[k]) as f32)
 }
 
-/// A fixed sequence of numbers in [0, 1).
+/// A fixed pseudo-random sequence of numbers in [0, 1).
 struct Noise(u64);
 
 impl Noise {
@@ -41,14 +41,14 @@ fn ulps(a: f32, b: f32) -> u32 {
     key(a).abs_diff(key(b))
 }
 
-/// Units on Q3.
+/// Units rounded down onto Q3.
 fn on_q3(units: f64) -> f64 {
     q3::to_real(from_real(units))
 }
 
 /// The world's X round in units, half each side of 0.
 const HALF_ROUND: f64 = ROUND / 2.0;
-/// The draw distance's 2^17 units (pxl-core control/param.rs `MAX_DIST`).
+/// The draw distance's 2^17 units (pxl-core domain/control/param.rs `MAX_DIST`).
 const DRAW_DIST: f64 = (1 << 17) as f64;
 
 /// An eye on Q3 anywhere over the world and a point `reach` from it.
@@ -62,8 +62,8 @@ fn pair(n: &mut Noise, reach: f64) -> (V3, V3) {
     (eye, at)
 }
 
-/// The remainder lies in [0, 1/256) on either side of 0, and the position
-/// is its Q3 and its remainder, to the remainder's f32.
+/// The remainder lies in [0, 1/256) on either side of 0, and the position is its Q3 plus its
+/// remainder, to the remainder's f32 precision.
 #[test]
 fn split_by_floor() {
     let mut n = Noise(0x9e37_79b9_7f4a_7c15);
@@ -81,10 +81,9 @@ fn split_by_floor() {
     assert_eq!(p.r, [1.0 / 512.0, 0.0, 0.0]);
 }
 
-/// On Q3, a record's position from the eye is today's translation's, bit
-/// for bit: near the eye, out to the draw distance, at negative
-/// coordinates, 100,000 units under the eye, and across X's
-/// seam, where today's needs the copy nearest the eye.
+/// On Q3, a record's position from the eye equals the f64 translation's, bit for bit: near the
+/// eye, out to the draw distance, at negative coordinates, 100,000 units under the eye, and
+/// across X's seam, where the translation is taken to the copy nearest the eye.
 #[test]
 fn on_q3_as_translated() {
     let mut n = Noise(0x2545_f491_4f6c_dd1d);
@@ -120,9 +119,9 @@ fn on_q3_as_translated() {
     );
 }
 
-/// Finer than Q3, a record's position from the eye is within an ulp of
-/// today's translation, or of the remainder's own f32 where a step's
-/// difference cancels against it (`Position`), near and far.
+/// Finer than Q3, a record's position from the eye is within an ulp of the f64 translation,
+/// near and far. Where a step's difference cancels against the remainder, it may be off by the
+/// remainder's own rounding as well (`Position`).
 #[test]
 fn finer_within_an_ulp() {
     let mut n = Noise(0xd1b5_4a32_d192_ed03);
@@ -151,15 +150,15 @@ fn finer_within_an_ulp() {
 /// rounding moves it.
 const R_HALF_ULP: f64 = 1.0 / (1u64 << 33) as f64;
 
-/// A draw set as it was is no change, its i32 words read bit for bit, and its stand is handed
-/// again; a draw that changed is one with what it was, one drawn first one with nothing, and
-/// one no longer set one let go, its slot drawn anew under another name.
+/// A draw set as it was is no change, its i32 words compared bit for bit, and its stand is
+/// handed again. A draw that changed is a change with what it was, and a draw drawn first is a
+/// change with nothing. A draw no longer set is let go, and setting it again draws it anew.
 #[test]
 fn a_draw_set_as_it_was_is_no_change() {
     let _l = test_lists();
     let mut d = DrawList::default();
     let (marker, ghost, debug) = (DrawId::default(), DrawId::default(), DrawId::default());
-    // An i32 whose bits read as a NaN.
+    // A Q3 of -1, whose i32 bits read as a NaN.
     let at = Position::of([q3::to_real(-1), 5.5, 1.0e-3]);
     let box_at = ReceiverBox::of([-1.0, 5.0, 0.0], [1.0, 6.0, 2.0]);
     let turn = |d: &mut DrawList, stand: ReceiverBox, debug_at: Option<f64>| {
@@ -221,8 +220,8 @@ fn a_draw_set_as_it_was_is_no_change() {
     assert!(l.changes[0].was.is_none(), "drawn anew");
 }
 
-/// Each pipeline's draws are drawn in the order the turn set them, a draw set in another
-/// order said so, and a pipeline changed moves the draw into the other's.
+/// Each pipeline's draws are drawn in the order the turn set them, and a turn that set them in
+/// another order says so. A draw whose pipeline changed moves into the other pipeline's draws.
 #[test]
 fn draws_keep_the_order_they_are_set_in() {
     let _l = test_lists();
@@ -291,8 +290,8 @@ fn lit_draws_read_the_map() {
     assert!((0..PIPELINES).any(|p| !reads_shadow_map(p)));
 }
 
-/// A draw that reads the map stands its box; past `light::RECEIVER_BOXES` the boxes are taken into the
-/// last, which holds every one.
+/// A draw that reads the map stands its box. Past `light::RECEIVER_BOXES` boxes, the rest are
+/// taken into the last box, which then holds every one of them.
 #[test]
 fn every_lit_draw_stands_its_box() {
     let mut d = DrawList::default();
@@ -323,8 +322,8 @@ fn every_lit_draw_stands_its_box() {
     }
 }
 
-/// Boxes taken into one across X's seam hold both the short way round, not the round's
-/// width.
+/// Two boxes taken into one across X's seam are held the short way round, not across the
+/// world's whole round.
 #[test]
 fn boxes_held_across_the_seam() {
     let mut s = ReceiverBox([[i32::MAX - 10, 0, 0], [i32::MAX - 5, 4, 4]]);
@@ -338,10 +337,10 @@ fn boxes_held_across_the_seam() {
     assert_eq!(hi, [20.0 / 256.0, 4.0 / 256.0, 8.0 / 256.0]);
 }
 
-/// A cloud's draw at its place on the field's map, moved back by the drift as the shaders
-/// move it (`drifted`, instance.wgsl `draw_translation`), stands from the eye where the place
-/// as the drift leaves it does, within an ulp and the remainder's own rounding, across X's
-/// seam too; one that does not drift is not moved.
+/// A cloud's draw at its place on the field's map, moved back by the drift as the shaders move
+/// it (`drifted`, instance.wgsl `draw_translation`), stands from the eye where the drifted
+/// place does, within an ulp and the remainder's own rounding, across X's seam too. A draw
+/// that does not drift is not moved.
 #[test]
 fn a_drifted_cloud_stands_where_the_drift_leaves_it() {
     let mut n = Noise(0x3c6e_f372_fe94_f82b);
@@ -391,9 +390,9 @@ fn ball_holds_decor_ball() {
     );
 }
 
-/// A box is free of the eye, and what the light's passes read of it holds the box asked,
-/// taken against the eye in f64, and stands off it by no more than a step and an ulp: near
-/// the eye, out to the draw distance, at negative coordinates and across X's seam.
+/// A box is independent of the eye. What the light's passes read of it holds the box asked,
+/// taken against the eye in f64, and lies off it by no more than a step and an ulp: near the
+/// eye, out to the draw distance, at negative coordinates and across X's seam.
 #[test]
 fn a_stand_from_the_eye_holds_its_box() {
     let mut n = Noise(0x6a09_e667_f3bc_c909);
@@ -421,7 +420,7 @@ fn a_stand_from_the_eye_holds_its_box() {
     }
 }
 
-/// A draw that reads the map and gives no box is refused, so none skips standing.
+/// A draw that reads the map and gives no box is refused, so no such draw skips standing.
 #[test]
 #[should_panic]
 fn a_lit_draw_without_its_box_is_refused() {

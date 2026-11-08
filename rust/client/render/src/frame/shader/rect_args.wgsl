@@ -1,9 +1,9 @@
 // pxl-render/frame/shader/rect_args.wgsl
 
-// The draw over the box of the tiles a frame's marks cover (gpu/tiles.rs
-// `Tiles::dispatch_rect_args`), once the marks are made: the indirect args of
-// a quad a tile of the box (screen_tiles.wgsl `rect_clip`), none where the box
-// holds none, and no more than the tiles the target holds.
+// Writes the indirect arguments of the draw over the rectangle of tiles the frame's damage
+// covers, once every pass that marks has made that rectangle (gpu/tiles.rs
+// `Tiles::dispatch_rect_args`). The draw is one quad a tile of the rectangle (screen_tiles.wgsl
+// `rect_clip`): none where the rectangle is empty, and never more than the target's tiles.
 
 @group(0) @binding(0) var<storage, read> new_damage_rect: vec4u;
 @group(0) @binding(1) var<storage, read_write> rect_args: array<u32, 4>;

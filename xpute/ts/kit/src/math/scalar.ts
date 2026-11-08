@@ -4,7 +4,10 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 
 export const EPS = 1e-5 as const;
 
-/** Tolerance is absolute near zero and relative to the larger magnitude past it. */
+/**
+ * Equal within `eps`, by default `EPS`. The tolerance is absolute near zero
+ * and relative to the larger magnitude beyond.
+ */
 export const approx_eq = (a: f64, b: f64, eps: f64 = EPS): boolean => {
   if (a === b) return true;
   const diff = Math.abs(a - b);
@@ -14,20 +17,32 @@ export const approx_eq = (a: f64, b: f64, eps: f64 = EPS): boolean => {
 export const near = (a: f64, b: f64, tol: f64): boolean =>
   Math.abs(a - b) < tol;
 
-/** Toward +∞: `Math.round`, Java's. `-2.5` is `-2`. */
+/**
+ * Rounds as JavaScript's `Math.round` does: half rounds up, so `-2.5`
+ * becomes `-2`.
+ */
 export const round_half_up = (x: f64): f64 => Math.round(x);
 
-/** Away from zero: C's `round`, Rust's. `-2.5` is `-3`. */
+/**
+ * Rounds as C's and Rust's `round` do: half rounds away from zero, so `-2.5`
+ * becomes `-3`.
+ */
 export const round_half_away = (x: f64): f64 =>
   Math.sign(x) * Math.round(Math.abs(x));
 
-/** To even: IEEE 754's, WGSL's, Python's. `2.5` is `2`, `-2.5` is `-2`. */
+/**
+ * Rounds as IEEE 754's default and WGSL's `round` do: half rounds to even, so
+ * `2.5` becomes `2` and `-2.5` becomes `-2`.
+ */
 export const round_half_even = (x: f64): f64 => {
   const r = Math.round(x);
   return Math.abs(x - Math.trunc(x)) === 0.5 && r % 2 !== 0 ? r - 1 : r;
 };
 
-/** Half to even, as WGSL's `round` does, so the CPU and a shader land on one integer. */
+/**
+ * The kit's one rounding, half to even as WGSL's `round`, so the CPU and a
+ * shader land on the same integer. `Math.round` rounds half up instead.
+ */
 export const round = round_half_even;
 
 export const lerp = (a: f64, b: f64, t: f64): f64 => a + (b - a) * t;

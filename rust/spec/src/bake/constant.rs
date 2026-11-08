@@ -18,7 +18,7 @@ pub use pxl_engine::ground::{ele_idx, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
 
 pub use super::object::OBJECT_SCALES;
 
-/// The objects' coarsest, at scale 0, a placed cell, one unit: the scales are the
+/// The objects' coarsest zoom, at scale 0: a placed cell of one unit. The scales are the
 /// objects' own and never the ground's cell.
 pub const OBJECT_COARSEST: Zoom = UNIT_ZOOM;
 

@@ -8,7 +8,7 @@ use xpute_kit::math::rng::SplitMix64;
 
 const GOLDEN: &str = include_str!("../../../golden/bake/terrain.tsv");
 
-/// So a tile's lanes are the same on every run.
+/// A seeded generator, so that a tile's lanes are the same on every run.
 struct Rng(SplitMix64);
 
 impl Rng {

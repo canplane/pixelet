@@ -9,14 +9,15 @@ use super::surface::Frame;
 use super::GpuRuntime;
 use crate::device;
 
-/// A frame admitted and not yet done, counted until the queue's callback
-/// that holds it ends: called once the work is done, or let go uncalled, as
-/// wgpu lets a gone device's callbacks go. Taken off as it drops, so a frame
-/// never stands forever.
+/// A frame admitted and not yet done. It stays counted until the queue's
+/// callback that holds it ends, either called once the work is done or
+/// dropped uncalled, as wgpu drops a lost device's callbacks. The count is
+/// taken off as the guard drops, so no frame stays counted forever.
 pub(super) struct FrameGuard(Arc<AtomicU32>);
 
 impl FrameGuard {
-    /// `count`'s next frame, and the callback the queue is handed for it.
+    /// Counts a frame on `count`, and returns the callback to hand the queue
+    /// for it.
     pub(super) fn count(count: &Arc<AtomicU32>) -> impl FnOnce() + Send + 'static {
         count.fetch_add(1, Ordering::Relaxed);
         let frame = FrameGuard(count.clone());
@@ -31,9 +32,10 @@ impl Drop for FrameGuard {
 }
 
 impl GpuRuntime {
-    /// Whether this turn may draw a frame: while fewer than its frame
-    /// latency are unfinished, so each surface's next texture is free and
-    /// taking it does not block. Asked once a turn, before it draws.
+    /// Whether this turn may draw a frame. It may while fewer frames than the
+    /// frame latency are unfinished, so each surface's next texture is free
+    /// and taking it does not block. Ask once a turn, before drawing:
+    /// `present` counts the frame only where it was admitted.
     pub fn admit_frame(&mut self) -> bool {
         self.admitted = crate::admit::admits(
             self.unfinished_cnt.load(Ordering::Relaxed),
@@ -42,9 +44,9 @@ impl GpuRuntime {
         self.admitted
     }
 
-    /// The frames unfinished, told the core in the device's block (spec
-    /// DEVICE) as a page's runtime tells them: before each turn, once the
-    /// queue's callbacks that end frames have run.
+    /// Writes the unfinished frames into the device's block (spec DEVICE),
+    /// as a page's runtime does. It runs before each turn, after the queue's
+    /// callbacks that end frames have run.
     pub(super) fn tell_unfinished(&self, memory: &mut Memory<'_>) {
         if let Some(address) = self.block {
             memory.store_release(
@@ -54,8 +56,9 @@ impl GpuRuntime {
         }
     }
 
-    /// Each surface's texture this turn drew, shown; an admitted frame
-    /// unfinished until the queue has done the work submitted with it.
+    /// Shows each surface's texture that this turn drew. An admitted frame
+    /// then counts as unfinished until the queue has done the work submitted
+    /// with it.
     pub fn present(&mut self) {
         for s in &mut self.surfaces {
             if let Some(Frame::Surface(frame)) = s.frame.take() {

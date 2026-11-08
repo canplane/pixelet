@@ -1,10 +1,11 @@
 // @xpute/runtime/ipc/ns.ts
 
 /**
- * The roots a program binds, Plan 9's namespace, as the `Fs` it hands `FsServer`
- * (fs.ts): each root the core opens a file under answered by whatever the
- * program keeps there, bound once and sealed. What a path below a root names
- * is the bound side's alone.
+ * The roots a program binds, after Plan 9's namespace, as the `Fs` it hands
+ * `FsServer` (fs.ts). Each root the core opens files under is answered by
+ * whatever the program binds there. The bindings are made once, when the
+ * namespace is built, and never change. What a path below a root names is
+ * for the bound side alone to decide.
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -25,7 +26,7 @@ export class Namespace implements Fs {
     this.bound = new Map(bound);
   }
 
-  /** ENOENT below a root nothing is bound to. */
+  /** Throws ENOENT below a root nothing is bound to. */
   open(
     root: u32,
     path: string,
@@ -36,7 +37,7 @@ export class Namespace implements Fs {
     return bound.open(path, signal);
   }
 
-  /** EROFS below a root that cannot be written. */
+  /** Throws EROFS below a root that cannot be written. */
   commit(root: u32, path: string, bytes: U8Array): void {
     const write = this.bound.get(root)?.commit;
     if (write === undefined) throw new FileError(Errno.EROFS);

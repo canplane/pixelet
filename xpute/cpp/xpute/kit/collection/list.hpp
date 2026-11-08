@@ -1,7 +1,8 @@
 // cpp/xpute/kit/collection/list.hpp
 
-// A list of at most `N`, held inline: it never grows, and a push past `N` is a
-// bug (ENOSPC). Its first `len` slots are live.
+// A list of at most `N` values, held inline. It never grows: a push past `N`
+// is a bug (ENOSPC). Its first `len` slots hold values, and the rest are
+// uninitialized.
 
 #pragma once
 
@@ -21,7 +22,7 @@ template <class T, std::size_t N> class List {
     List(const List &) = delete;
     List &operator=(const List &) = delete;
 
-    // The values move over, and `o` is left empty.
+    // Moving a list moves its values over and leaves `o` empty.
     List(List &&o) noexcept { take(o); }
     List &operator=(List &&o) noexcept {
         if (this != &o) {
@@ -45,7 +46,8 @@ template <class T, std::size_t N> class List {
     std::span<const T> as_slice() const noexcept { return {slot(0), len_}; }
     std::span<T> as_mut_slice() noexcept { return {slot(0), len_}; }
 
-    // A slice's reads, as a Rust list derefs to its slice.
+    // Indexing and iteration reach the live values, as a Rust `List` derefs
+    // to its slice.
     T &operator[](std::size_t at) noexcept { return as_mut_slice()[at]; }
     const T &operator[](std::size_t at) const noexcept { return as_slice()[at]; }
     T *begin() noexcept { return slot(0); }
@@ -53,7 +55,8 @@ template <class T, std::size_t N> class List {
     const T *begin() const noexcept { return slot(0); }
     const T *end() const noexcept { return slot(len_); }
 
-    // The value at `at`, those after it moved down one: the order live.
+    // Takes out the value at `at` and moves every value after it down one
+    // slot, so the order is kept.
     T remove(std::size_t at) noexcept {
         ensure(at < len_, Errno::einval, at);
         T val = std::move(*slot(at));
@@ -63,12 +66,13 @@ template <class T, std::size_t N> class List {
         return val;
     }
 
-    // Those `keep` refuses dropped, the order of the rest live, in one pass.
+    // Destroys every value `keep` refuses and keeps the order of the rest, in
+    // one pass.
     template <class Keep> void retain(Keep &&keep) noexcept {
         std::size_t live = 0;
         for (std::size_t at = 0; at < len_; at++) {
-            // A slot below `at` and past `live` is already empty: refused, or
-            // moved down from.
+            // Every slot from `live` up to `at` is already empty: its value
+            // was either refused and destroyed, or moved down.
             if (keep(std::as_const(*slot(at)))) {
                 if (live != at) move_down(at, live);
                 live++;
@@ -88,7 +92,8 @@ template <class T, std::size_t N> class List {
     T *slot(std::size_t at) noexcept { return reinterpret_cast<T *>(bytes_) + at; }
     const T *slot(std::size_t at) const noexcept { return reinterpret_cast<const T *>(bytes_) + at; }
 
-    // Into the empty slot `to` from the live `from`, which is left empty.
+    // Moves the value in the live slot `from` into the empty slot `to`, and
+    // leaves `from` empty.
     void move_down(std::size_t from, std::size_t to) noexcept {
         std::construct_at(slot(to), std::move(*slot(from)));
         std::destroy_at(slot(from));
@@ -100,8 +105,9 @@ template <class T, std::size_t N> class List {
         o.clear();
     }
 
-    // Uninitialized; a value is built into a slot by `push` and ended by what
-    // takes it out. One byte where `N` is 0, as an array is never empty.
+    // Raw storage: `push` constructs a value in a slot, and whatever takes the
+    // value out destroys it. There is room for one value even when `N` is 0,
+    // because C++ has no empty array.
     alignas(T) std::byte bytes_[std::max<std::size_t>(N, 1) * sizeof(T)];
     std::size_t len_ = 0;
 };

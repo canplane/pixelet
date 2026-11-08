@@ -1,6 +1,7 @@
 // pxl-render/look/color.rs
 
-/// Linear light, which every shader lights and blends in.
+/// The sRGB color `n`, written as 0xRRGGBB, in linear light, which every shader lights and
+/// blends in.
 pub fn linear_rgb(n: u32) -> [f64; 3] {
     [16, 8, 0].map(|shift| linear((n >> shift) as u8))
 }

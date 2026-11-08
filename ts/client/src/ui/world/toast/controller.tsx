@@ -10,8 +10,9 @@ import { GPU_WAITING, type Gpu } from "@/abi/state.ts";
 import { dismissToast, showToast, ToastTone } from "./store.ts";
 import { useGpu, useCore, useOnline } from "@/ui/store/watch.ts";
 
-/** Each report's toast; of one tone, by rank: a cause before what it holds
- * up, the device's before the server's, the world's before a sensor's. */
+/** The reports that can each show a toast. Among toasts of one tone, a lower
+ * number ranks higher: a cause comes before what it holds up, the device's
+ * report before the server's, and the world's before a sensor's. */
 const GPU = 0;
 const NETWORK = 1;
 const SERVER = 2;
@@ -26,7 +27,8 @@ type Report =
   | typeof LOCATION
   | typeof ORIENTATION;
 
-/** The ready word: said once, as the first world and its companion are on screen. */
+/** The ready word is shown once, when the first world and its companion are
+ * on screen. */
 const UNSAID = 0;
 const SAYING = 1;
 const SAID = 2;
@@ -34,18 +36,21 @@ type Greeting = typeof UNSAID | typeof SAYING | typeof SAID;
 
 const READY_MS = 3000;
 
-/** How long the server's toast stays once its cause clears: a server failing
- * one read and answering the next would show and hide it each turn, the
- * stack trading its front card. A product number. */
+/** How long the server's toast stays after its cause clears. Without it, a
+ * server that fails one read and answers the next would show and hide the
+ * toast every turn, and the stack would keep changing its front card. The
+ * value is a product choice. */
 const SERVER_HOLD_MS = 3000;
 
-/** A toast's words, as a locale key. */
+/** A toast, with its words given as a locale key. */
 interface Notice {
   key: string;
   tone: ToastTone;
 }
 
-/** The words, as `t` reads them now: react-i18next's new `t` on a language change re-showed toasts. */
+/** A function that stays the same across renders and reads words with the
+ * current `t`. react-i18next makes a new `t` on a language change, and a new
+ * function would show every toast again. */
 function useWords(): (key: string) => string {
   const { t } = useTranslation();
   const tRef = useRef(t);
@@ -53,7 +58,8 @@ function useWords(): (key: string) => string {
   return useRef((key: string) => tRef.current(key)).current;
 }
 
-/** A state's toast: shown while `notice` is, gone with it, `holdMs` later. */
+/** Shows report `id`'s toast while `notice` is set, and dismisses it `holdMs`
+ * after `notice` clears. */
 function useNotice(id: Report, notice: Notice | null, holdMs = 0): void {
   const words = useWords();
   const key = notice?.key ?? null;
@@ -75,8 +81,9 @@ function useNotice(id: Report, notice: Notice | null, holdMs = 0): void {
 const error = (key: string): Notice => ({ key, tone: ToastTone.Error });
 const loading = (key: string): Notice => ({ key, tone: ToastTone.Loading });
 
-/** A timeout is only the page's, on a prompt no one answered yet (web sensor.ts
- * `PROMPT_MS`), which is no failure to report. */
+/** Only a page times out a location request, when its permission prompt has
+ * gone unanswered for `PROMPT_MS` (service/sensor.ts). That is not a failure,
+ * so it shows no toast. */
 function location(
   status: SensorStatus,
   failure: Message | null,
@@ -88,17 +95,19 @@ function location(
     : null;
 }
 
-/** The GPU's: none answered yet, or the one drawing is lost. */
+/** The GPU's toast shows while the client asks again for a GPU, because none
+ * answered or the one drawing was lost. */
 function gpuError(gpu: Gpu): Notice | null {
   return gpu === GPU_WAITING ? error("toast.gpu_unstable") : null;
 }
 
-/** The server's: the reads that reach it failing. */
 function serverError(stall: Message | null): Notice | null {
   return stall === Message.WorldReadFailing ? error(messageKey(stall)) : null;
 }
 
-/** The world's one toast: none there, or it coming, then its companion, then the ready word once. */
+/** The world has one toast, which goes through its states in order: an area
+ * the world does not cover, the world loading, the companion loading, and the
+ * ready word once. */
 function world(
   outside: boolean,
   shown: boolean,
@@ -113,7 +122,8 @@ function world(
     : null;
 }
 
-/** Each toast is derived from what the core and the client say now; an error is one toast a source. */
+/** Every toast is derived from what the core and the client report now. Each
+ * source of an error has one toast. */
 export function ToastController() {
   const locationStatus = useCore((s) => s.location.status);
   const locationError = useCore((s) => s.location.err);
@@ -140,7 +150,7 @@ export function ToastController() {
   const ready = !outside && shown && !companionLoading;
   useEffect(() => {
     if (ready && greeting === UNSAID) setGreeting(SAYING);
-    // Cut short, it is not said again.
+    // A ready word cut short is not shown again.
     if (!ready && greeting === SAYING) setGreeting(SAID);
   }, [ready, greeting]);
   useEffect(() => {

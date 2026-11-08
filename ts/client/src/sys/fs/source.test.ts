@@ -7,7 +7,8 @@ import * as fs from "node:fs";
 import { BASE_LAYERS } from "@/origin/publication.spec.ts";
 import { declaration } from "./source.ts";
 
-/** The record pxl-spec is held to too (bake/source.test.rs `is_version_golden`). */
+/** pxl-spec is tested against the same record (bake/source.test.rs
+ * `is_version_golden`). */
 const GOLDEN = new URL(
   "../../../../../rust/spec/golden/bake/version.tsv",
   import.meta.url,
@@ -22,7 +23,7 @@ function records(): Map<string, string> {
   return map;
 }
 
-/** A declaration that gives every kind `version`, all else in order. */
+/** A declaration that gives every kind `version` and is valid otherwise. */
 function declaring(version: string): string {
   const each = <T>(v: T) => Object.fromEntries(BASE_LAYERS.map((k) => [k, v]));
   return JSON.stringify({

@@ -1,10 +1,11 @@
 // pxl-render/frame/shader/record.rs
 
-//! Shaders and their pipeline records (vertex buffers, bind groups,
-//! primitive, depth and blend state) as one source the host turns into WebGPU
-//! or wgpu descriptors. build.rs assembles and validates every shader
-//! (part.rs), and reads off it the stages each pipeline's groups are seen
-//! from.
+//! Every pipeline the renderer makes, stated once, which the host turns into WebGPU or wgpu
+//! descriptors: each compute pipeline as its shader and entry point, and each render pipeline
+//! as a record of its vertex buffers, bind groups, primitive, depth and blend state. build.rs
+//! assembles and validates every shader (part.rs) and reads off it which stages read each
+//! binding, so each group entry here is visible to the stages its shaders read it in and to
+//! no other.
 
 pub use crate::frame::shader::part::*;
 
@@ -17,24 +18,26 @@ pub const COMPUTE_GENERATION_ARGS: u32 = 4;
 pub const COMPUTE_GENERATION_COMPACT: u32 = 5;
 pub const COMPUTE_GENERATION_MARK: u32 = 6;
 pub const COMPUTE_ATMOS_FROXEL: u32 = 7;
-/// The eye's beam rays' run's first walk over the node cache alone (`SHADER_QUEUE_CORNERS`).
+/// The first walk over the node cache alone of the eye's beam rays (`SHADER_QUEUE_CORNERS`).
 pub const COMPUTE_QUEUE_CORNERS: u32 = 8;
 pub const COMPUTE_CELL: u32 = 9;
-/// The drawn receivers' workgroups, a thread (`SHADER_LIGHT_MARK_DRAWS`).
+/// One thread writes the workgroup count of the drawn receivers' pass
+/// (`SHADER_LIGHT_MARK_DRAWS`).
 pub const COMPUTE_LIGHT_MARK_DRAWS_OPEN: u32 = 10;
-/// The holes' queue (pxl-engine `ray::QUEUE_LANES`): the asks of the nodes its first and its
-/// second walk over the node cache were parked at, its last walk, which asks the world, and
-/// those two walks.
+/// The holes' queue (pxl-engine `ray::QUEUE_LANES`) runs five compute pipelines: its first and
+/// second walks over the node cache (`COMPUTE_QUEUE`, `COMPUTE_QUEUE_PARKED`), the asks of the
+/// nodes each of those walks was parked at (`COMPUTE_QUEUE_ASK`, `COMPUTE_QUEUE_ASK_PARKED`),
+/// and its last walk, which asks the world (`COMPUTE_QUEUE_LAST`).
 pub const COMPUTE_QUEUE_ASK: u32 = 11;
 pub const COMPUTE_FORGET: u32 = 12;
-/// The eye's samples' run's last walk (`SHADER_QUEUE_LAST_SAMPLES`).
+/// The last walk of the eye's samples (`SHADER_QUEUE_LAST_SAMPLES`).
 pub const COMPUTE_QUEUE_LAST_SAMPLES: u32 = 13;
 pub const COMPUTE_LIGHT: u32 = 14;
 pub const COMPUTE_QUEUE_ASK_PARKED: u32 = 15;
 pub const COMPUTE_SAMPLE_BOX: u32 = 16;
 pub const COMPUTE_FACE: u32 = 17;
-/// The pixels the eye's cast walked apart, stood on off their walked bits (pxl-engine
-/// `ray::hole_bit`; light_mark.wgsl).
+/// Stands as receivers the pixels whose rays the holes' queue walked, found by their walked
+/// bits (pxl-engine `ray::hole_bit`, light_mark.wgsl).
 pub const COMPUTE_LIGHT_MARK_WALKED: u32 = 18;
 pub const COMPUTE_LIGHT_MARK_DRAWS: u32 = 19;
 pub const COMPUTE_LIGHT_PROPAGATE: u32 = 20;
@@ -44,7 +47,7 @@ pub const COMPUTE_SCREEN_MARK: u32 = 23;
 pub const COMPUTE_SCREEN_BOUND: u32 = 24;
 pub const COMPUTE_LIGHT_SLIDE: u32 = 25;
 pub const COMPUTE_QUEUE_LAST: u32 = 26;
-/// What lies about each hole's stop's face put at its pixel off the record
+/// Puts at each hole's pixel what lies about the face its stop entered, read from the record
 /// (`SHADER_RECORD_HITS`).
 pub const COMPUTE_RECORD_FACES: u32 = 27;
 pub const COMPUTE_RECT_ARGS: u32 = 28;
@@ -52,7 +55,7 @@ pub const COMPUTE_QUEUE_LIGHT_CORNERS: u32 = 29;
 pub const COMPUTE_LIGHT_CELL: u32 = 30;
 pub const COMPUTE_QUEUE_LAST_LIGHT_SAMPLES: u32 = 31;
 pub const COMPUTE_LIGHT_SAMPLE_BOX: u32 = 32;
-/// The eye's samples' run's first walk over the node cache alone (`SHADER_QUEUE_SAMPLES`).
+/// The first walk over the node cache alone of the eye's samples (`SHADER_QUEUE_SAMPLES`).
 pub const COMPUTE_QUEUE_SAMPLES: u32 = 33;
 pub const COMPUTE_QUEUE: u32 = 34;
 pub const COMPUTE_QUEUE_LAST_CORNERS: u32 = 35;
@@ -63,28 +66,33 @@ pub const COMPUTE_CAST_TILES: u32 = 39;
 pub const COMPUTE_DAMAGE_RECT: u32 = 40;
 pub const COMPUTE_DECOR_CULL_ARGS: u32 = 41;
 pub const COMPUTE_DECOR_CULL: u32 = 42;
-/// The node cache's drawable entries drawn as the raster's boxes (record_draw.wgsl).
+/// Writes the node cache's drawable entries as the boxes of the eye's raster
+/// (record_draw.wgsl).
 pub const COMPUTE_RECORD_DRAW: u32 = 43;
-/// The missed pixels' hits into the node cache's drawable entries (record_hits.wgsl).
+/// Writes the stops of the eye's holes into the node cache's drawable entries
+/// (record_hits.wgsl).
 pub const COMPUTE_RECORD_HITS: u32 = 44;
-/// The node cache's drawable entries drawn as the light's raster's boxes (record_draw.wgsl).
+/// Writes the node cache's drawable entries as the boxes of the light's raster
+/// (record_draw.wgsl).
 pub const COMPUTE_LIGHT_RECORD_DRAW: u32 = 45;
-/// The light's holes' stops into the node cache's drawable entries (record_hits.wgsl over
-/// record_hits.light.wgsl).
+/// Writes the stops of the light's holes into the node cache's drawable entries
+/// (record_hits.wgsl over record_hits.light.wgsl).
 pub const COMPUTE_LIGHT_RECORD_HITS: u32 = 46;
-/// Each tile the light's cast lists read, claimed where its epoch has not cast it
+/// Claims each tile the light's cast lists as read that has not been cast in its epoch
 /// (light_propagate.wgsl `light_damage_cs`).
 pub const COMPUTE_LIGHT_DAMAGE: u32 = 47;
-/// The samples' runs' second walks over the node cache alone and their asks, the eye's and the
-/// light's (`SHADER_QUEUE_SAMPLES`, `SHADER_QUEUE_ASK_SAMPLES`).
+/// The rest of the samples' runs, the eye's and the light's: the second walk over the node
+/// cache alone, and the asks after each walk (`SHADER_QUEUE_SAMPLES`,
+/// `SHADER_QUEUE_ASK_SAMPLES`).
 pub const COMPUTE_QUEUE_SAMPLES_PARKED: u32 = 48;
 pub const COMPUTE_QUEUE_ASK_SAMPLES: u32 = 49;
 pub const COMPUTE_QUEUE_ASK_SAMPLES_PARKED: u32 = 50;
 pub const COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED: u32 = 51;
 pub const COMPUTE_QUEUE_ASK_LIGHT_SAMPLES: u32 = 52;
 pub const COMPUTE_QUEUE_ASK_LIGHT_SAMPLES_PARKED: u32 = 53;
-/// The beam rays' runs' second walks over the node cache alone and their asks, the eye's and
-/// the light's (`SHADER_QUEUE_CORNERS`, `SHADER_QUEUE_ASK_CORNERS`).
+/// The rest of the beam rays' runs, the eye's and the light's: the second walk over the node
+/// cache alone, and the asks after each walk (`SHADER_QUEUE_CORNERS`,
+/// `SHADER_QUEUE_ASK_CORNERS`).
 pub const COMPUTE_QUEUE_CORNERS_PARKED: u32 = 54;
 pub const COMPUTE_QUEUE_ASK_CORNERS: u32 = 55;
 pub const COMPUTE_QUEUE_ASK_CORNERS_PARKED: u32 = 56;
@@ -167,32 +175,36 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
 
 include!(concat!(env!("OUT_DIR"), "/sources.rs"));
 
-/// The world's one query asked word for word, as tests/world.rs and Tint take it
-/// (world_asked.wgsl), in no shader the page runs.
+/// A shader that runs the world's one query over a list of asks and writes what it tells,
+/// word for word, for tests/world.rs and for Tint (world_asked.wgsl). No shader the page runs
+/// includes it.
 pub const WORLD_ASKED: &str = include_str!(concat!(
     env!("OUT_DIR"),
     "/shader/assembled/world_asked.wgsl"
 ));
 
-/// Each render pipeline by its number: the draw records' first (gpu/draw.rs
-/// `DRAW_PIPELINES`), then those a frame runs on its own.
-/// Box draw: (upload handle, box count, first box, uniform, pipeline).
-/// Decor draw: (upload handle, group, instance count, uniform, pipeline); the
-/// uniform carries the group's first column word, stride and index-list start.
+/// Each render pipeline by its number. The pipelines a draw record names come first
+/// (gpu/draw.rs `DRAW_PIPELINES`), then those a frame runs on its own. The tuples below are
+/// the words of each pipeline's draw record. A box draw is (upload handle, box count, first
+/// box, uniform, pipeline). A decor draw is (upload handle, group, instance count, uniform,
+/// pipeline), and its uniform carries the group's first column word, its stride and the start
+/// of its index list.
 pub const PIPELINE_DECOR: u32 = 0;
-/// Half transparent, at the depth of the faces it lies on, which stand
-/// behind it (screen_ray.wgsl `behind`).
+/// The hover ghost's boxes, half transparent. A box draws at the depth of the faces it lies
+/// on, and those faces stand behind it (screen_ray.wgsl `behind`).
 pub const PIPELINE_GHOST_BOX: u32 = 1;
 pub const PIPELINE_GHOST_DECOR: u32 = 2;
-/// (model handle, joint palette handle, model id, uniform, pipeline).
+/// A character's draw record is (model handle, joint palette handle, model id, uniform,
+/// pipeline).
 pub const PIPELINE_SKINNED: u32 = 3;
-/// Zone: (zone upload handle, instance count, 0, uniform, pipeline). Beacon:
-/// (0, 0, 0, uniform, pipeline).
+/// The location indicator's draw records. The zone's is (zone upload handle, instance count,
+/// 0, uniform, pipeline), and the beacon's is (0, 0, 0, uniform, pipeline).
 pub const PIPELINE_LOCATION_ZONE: u32 = 4;
 pub const PIPELINE_LOCATION_BEACON: u32 = 5;
-/// (upload handle, count, 0, uniform, pipeline).
+/// A marker set's draw record is (upload handle, count, 0, uniform, pipeline).
 pub const PIPELINE_MARKER: u32 = 6;
-/// Line segments: handle, line vertex count, face vertex count.
+/// The debug gizmos' line segments. Their draw record holds the handle, the line vertex count
+/// and the face vertex count.
 pub const PIPELINE_DEBUG: u32 = 7;
 /// Decor drawn as impostors where a variant is too small on screen for its model.
 pub const PIPELINE_IMPOSTOR: u32 = 8;
@@ -213,46 +225,46 @@ pub const PIPELINE_CLOUD_FIELD: u32 = 20;
 pub const PIPELINE_ATLAS: u32 = 21;
 pub const PIPELINE_IMPOSTOR_BAKE: u32 = 22;
 pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 23;
-/// The markers' regions, numbered, into a target of their own (pass/marker.rs).
+/// Draws the markers' regions, each by its number, into a target of their own
+/// (gpu/pass/marker.rs).
 pub const PIPELINE_MARKER_REGION: u32 = 24;
 /// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/pass/debug.rs `DebugPass`).
 pub const PIPELINE_DEBUG_FACE: u32 = 25;
 /// The eye's rays, opaque at their depth (pxl-engine ray.rs).
 pub const PIPELINE_SCREEN_RAY: u32 = 26;
-/// Decor's and the characters' depth from the light, and the world's laid in
-/// before them, into the light's shadow map (gpu/shadow.rs).
+/// The three pipelines of the shadow map's depth (gpu/shadow.rs): the decor's and the
+/// characters' depth from the light, and the world's depth, which is laid in before them.
 pub const PIPELINE_DECOR_DEPTH: u32 = 27;
 pub const PIPELINE_SKINNED_DEPTH: u32 = 28;
 pub const PIPELINE_LIGHT_MAP: u32 = 29;
-/// The samples' boxes, the nearest face a pixel's ray enters kept with its
-/// sample (gpu/ray/raster.rs).
+/// Draws the record's boxes, and keeps at each pixel the voxel whose face the pixel's ray
+/// enters first (gpu/ray/raster.rs).
 pub const PIPELINE_RASTER: u32 = 30;
-/// The world's color onto the canvas, encoded once, and its depth carried to
-/// the canvas's size (gpu/finish.rs).
+/// Encodes the world's color onto the canvas, once, and carries the world's depth up to the
+/// canvas's size (gpu/finish.rs).
 pub const PIPELINE_SCREEN_FINISH: u32 = 31;
 /// The world's color gathered over frames (gpu/resolve.rs).
 pub const PIPELINE_SCREEN_RESOLVE: u32 = 32;
-/// The gate a frame not drawn whole is drawn through: the claimed tiles
-/// cleared, their stencil raised (gpu/renderer.rs `frame`).
+/// The gate a frame not drawn whole is drawn through: it clears the claimed tiles and raises
+/// their stencil (gpu/renderer.rs `frame`).
 pub const PIPELINE_SCREEN_MASK: u32 = 33;
-/// The finished picture kept at the canvas's size shown on the canvas
-/// (gpu/finish.rs).
+/// Shows on the canvas the finished picture kept at the canvas's size (gpu/finish.rs).
 pub const PIPELINE_SCREEN_SHOW: u32 = 34;
-/// The claimed tiles of the history the resolve wrote copied back into the
-/// last (gpu/resolve.rs).
+/// Copies the claimed tiles of the history the resolve wrote this frame back into the history
+/// the frame before wrote (gpu/resolve.rs).
 pub const PIPELINE_SCREEN_WRITE_BACK: u32 = 35;
-/// The gate the samples' raster is drawn through in a frame not drawn whole:
-/// the claimed tiles cleared to the far plane, the rest left at the nearest
-/// (gpu/ray/raster.rs).
+/// The gate the samples' raster is drawn through in a frame not drawn whole. It clears the
+/// claimed tiles to the far plane and leaves the rest at the nearest depth, where no box
+/// passes the depth test (gpu/ray/raster.rs).
 pub const PIPELINE_RASTER_MASK: u32 = 36;
-/// The gate the light's map is drawn through where only the listed
-/// casters that changed moved: the world's depth laid in the claimed tiles,
-/// their stencil raised (gpu/shadow.rs).
+/// The gate the light's map is drawn through when only the listed casters that changed have
+/// moved. It lays the world's depth in the claimed tiles and raises their stencil
+/// (gpu/shadow.rs).
 pub const PIPELINE_LIGHT_MASK: u32 = 37;
-/// A character drawn where it was and where it is, its fragments setting their
-/// screen tiles' words (gpu/pass/skinned_mesh.rs `draw_marks`).
+/// Draws a character where it was and where it is, and each fragment sets its screen tile's
+/// word (gpu/pass/skinned_mesh.rs `draw_marks`).
 pub const PIPELINE_SKINNED_MARK: u32 = 38;
-/// The same of decor, an impostor, the location indicator's zone and its beacon
+/// The same marks for decor, an impostor, the location indicator's zone and its beacon
 /// (gpu/pass/mark.rs `Marks`).
 pub const PIPELINE_DECOR_MARK: u32 = 39;
 pub const PIPELINE_IMPOSTOR_MARK: u32 = 40;
@@ -260,17 +272,19 @@ pub const PIPELINE_LOCATION_ZONE_MARK: u32 = 41;
 pub const PIPELINE_LOCATION_BEACON_MARK: u32 = 42;
 pub const PIPELINES: u32 = 43;
 
-// Record words: shader, has fragment, topology, cull, depth write, depth
-// compare, bias (i32), slope scale (f32 bits), blend, vertex entry; then vertex
-// buffers (count; stride, step, attribute count, (location, offset, format)
-// each); then bind groups (count; entry count, (binding, visibility, kind) each).
+// Record words. A record's header comes first: the shader, whether it has a fragment stage,
+// the topology, the cull, whether it writes depth, the depth compare, the depth bias as an
+// i32, the slope scale as f32 bits, the blend and the vertex entry. The vertex buffers follow:
+// their count, then for each its stride, its step, its attribute count, and a (location,
+// offset, format) for each attribute. The bind groups come last: their count, then for each
+// its entry count and a (binding, visibility, kind) for each entry.
 pub use crate::api_spec::record::*;
-/// A binding's stages are xpute's own bits (SHADER_STAGE), none or some.
+/// A binding's stages are xpute's own bits (SHADER_STAGE), and `NONE` is no stage.
 pub use xpute_gpu::spec::SHADER_STAGE::{COMPUTE, FRAGMENT, VERTEX};
 pub const NONE: u32 = 0;
 
-/// `group` with its uniform at `binding` taken at a dynamic offset: how the
-/// CPU binds it, which the shader does not say.
+/// `group` with its uniform at `binding` bound at a dynamic offset. The CPU decides that, and
+/// the shader cannot say it.
 pub const fn dynamic<const N: usize>(mut group: [u32; N], binding: u32) -> [u32; N] {
     let mut k = 0;
     while k < N {
@@ -282,9 +296,9 @@ pub const fn dynamic<const N: usize>(mut group: [u32; N], binding: u32) -> [u32;
     group
 }
 
-/// Whether every entry of `a` is one of `b`'s: a pipeline over `a` takes a
-/// group laid out as `b`: the same binding, stages and kind, as WebGPU
-/// matches a shader's storage access to its layout entry's exactly.
+/// Whether every entry of `a` is one of `b`'s, with the same binding, stages and kind, so
+/// that a pipeline laid out with `a` takes a group laid out as `b`. The kind must match
+/// exactly, as WebGPU matches a shader's storage access to its layout entry's exactly.
 pub const fn within<const N: usize, const M: usize>(a: [u32; N], b: [u32; M]) -> bool {
     let mut k = 0;
     while k < N {
@@ -356,11 +370,13 @@ const fn blended(shader: u32, cull: u32) -> Header {
     }
 }
 
-/// The shadow map's casters' alike, raster and cast (pxl-engine `param::light::SLOPE_BIAS`).
+/// The slope bias of the shadow map's casters, the same for those the raster draws and for
+/// those the cast finds (pxl-engine `param::light::SLOPE_BIAS`).
 const DEPTH_SLOPE_BIAS: f32 = light::SLOPE_BIAS;
 
-/// Depth alone: plain less-than, no fragment stage, both sides, pushed back
-/// by its slope as a rasterizer's polygon offset.
+/// A depth-only header: a plain less-than test rather than the reversed one, no fragment
+/// stage, both sides drawn, and the depth pushed back by its slope as a rasterizer's polygon
+/// offset pushes it.
 const fn depth_only(shader: u32) -> Header {
     Header {
         shader,
@@ -376,8 +392,8 @@ const fn depth_only(shader: u32) -> Header {
     }
 }
 
-/// A changed draw's mark (tile_mark.wgsl): its vertices as its depth pass
-/// lays them, both sides, its fragments writing no color and testing no
+/// The header of a changed draw's mark (tile_mark.wgsl). Its vertices are laid out as its
+/// depth pass lays them, both sides are drawn, and its fragments write no color and test no
 /// depth.
 const fn mark(shader: u32) -> Header {
     Header {
@@ -397,19 +413,20 @@ const fn screen(shader: u32) -> Header {
     }
 }
 
-/// The air's bindings, numbered alike in every pass that reads them: those every painter and
-/// the sky read (gpu/atmosphere.rs `entries`).
+/// The air's bindings that every painter and the sky read, numbered alike in every pass that
+/// reads them (gpu/atmosphere.rs `entries`).
 const AIR: [[u32; 2]; 6] = [
     [8, UNIFORM],
     [9, TEXTURE],
     [11, SAMPLER],
     [13, TEXTURE],
     [18, TEXTURE],
-    // The air before each point, made of the rest (gpu/atmosphere.rs `froxel`).
+    // The air's volume before each point, which is made from the bindings above
+    // (gpu/atmosphere.rs `froxel`).
     [22, TEXTURE_3D],
 ];
-/// The air the sky alone reads: its views, the sun's and the moon's, and the Earth's picture
-/// and tiles (gpu/atmosphere.rs `sky_entries`).
+/// The air's bindings the sky alone reads: the sky views, the sun's and the moon's, and the
+/// Earth's picture and tiles (gpu/atmosphere.rs `sky_entries`).
 const SKY_AIR: [[u32; 2]; 4] = [
     [10, TEXTURE],
     [15, TEXTURE],
@@ -422,21 +439,22 @@ const MULTISCATTER: [u32; 2] = [12, TEXTURE];
 /// The light's shadow map and its comparing sampler (shadow.wgsl), read where
 /// a lit fragment is shaded.
 const SHADOW: [[u32; 2]; 2] = [[1, DEPTH], [2, SAMPLER_COMPARISON]];
-/// The frame, the shadow and the air a painter reads: the air in the vertex stage, where each
-/// point's lights and veil are worked out; a fragment reads its words and the eye's texel,
-/// whose white it shows by (atmos_eye.wgsl).
+/// The frame, the shadow and the air a painter reads. The vertex stage reads the air, because
+/// each point's lights and veil are worked out there. The fragment stage reads the air's words
+/// and the eye's texel, which holds the white a fragment's color is shown against
+/// (atmos_eye.wgsl).
 const LIT_FRAME: [[u32; 2]; 9] = and([[0, UNIFORM], SHADOW[0], SHADOW[1]], AIR);
-/// The sheets' own words and tiles, and the air as every painter reads it (atmos_air.wgsl
-/// `seen_from_eye`).
+/// The cloud sheets' own words and tiles, and the air as every painter reads it
+/// (atmos_air.wgsl `seen_from_eye`).
 const CLOUD_GROUP: [[u32; 2]; 10] = and(
     [[0, UNIFORM], [1, UNIFORM], [2, TEXTURE], [3, SAMPLER]],
     AIR,
 );
 const SKIN: [[u32; 2]; 2] = [[0, TEXTURE], [1, SAMPLER]];
 
-/// The lit pass's frame, shadow, air and layers, all read where
-/// a pixel is painted; then the rays, the looks and the eye's words: the
-/// most entries any group has (`GROUP_ENTRIES`).
+/// The screen rays' group: the lit pass's frame, shadow, air and layers, all read where a
+/// pixel is painted, then the rays, the looks and the eye's words. No group has more entries
+/// (`GROUP_ENTRIES`).
 const SCREEN_GROUP: [[u32; 2]; 17] = and(
     LIT_FRAME,
     [
@@ -451,9 +469,9 @@ const SCREEN_GROUP: [[u32; 2]; 17] = and(
     ],
 );
 
-/// The most entries a group has, a layout's and a bind group's alike: the
-/// screen's (and renderer.rs's lit entries, which it extends); a group past
-/// it is refused where it is made.
+/// The most entries a group has, a layout's and a bind group's alike. It is the count of the
+/// screen rays' group, which extends the lit entries of renderer.rs. A group with more entries
+/// is refused where it is made.
 pub const GROUP_ENTRIES: usize = SCREEN_GROUP.len();
 /// A vertex buffer: its stride, whether it steps by vertex or instance, and
 /// its attributes, each (location, offset, format).
@@ -484,8 +502,8 @@ const SKINNED_BUFFERS: [VertexBufferLayout; 5] = [
     vertex(16, &[[3, 0, U32X4]]),
     vertex(16, &[[4, 0, F32X4]]),
 ];
-/// A box's words, as the box shader (box.wgsl) takes one and the hover
-/// ghost writes it (mesh/ghost.rs `write_lone_box`): a vec4, then its layer.
+/// The words of a box, as box.wgsl reads one and the hover ghost writes it (mesh/ghost.rs
+/// `write_lone_box`): a vec4, then its layer.
 pub const BOX_WORDS: u32 = 5;
 /// The boxes are a per-instance vertex buffer, so a draw reaches its boxes by
 /// its first instance.
@@ -505,8 +523,9 @@ const LOCATION_ZONE_BUFFERS: [VertexBufferLayout; 2] =
     [vertex(12, &[[0, 0, F32X3]]), vertex(8, &[[1, 0, F32X2]])];
 const LOCATION_BEACON_BUFFERS: [VertexBufferLayout; 2] =
     [vertex(12, &[[0, 0, F32X3]]), vertex(12, &[[1, 0, F32X3]])];
-/// A debug line's vertex, its place and its color, a segment's two read as
-/// one instance; a debug face's vertex, its place.
+/// The bytes of a debug line's vertex, which holds its place and its color, and of a debug
+/// face's vertex, which holds its place alone. A segment's two line vertices are read as one
+/// instance.
 pub const DEBUG_VERTEX_BYTES: u32 = 28;
 pub const DEBUG_FACE_VERTEX_BYTES: u32 = 12;
 const DEBUG_BUFFERS: [VertexBufferLayout; 1] = [VertexBufferLayout {
@@ -521,7 +540,7 @@ const DEBUG_BUFFERS: [VertexBufferLayout; 1] = [VertexBufferLayout {
 const DEBUG_FACE_BUFFERS: [VertexBufferLayout; 1] =
     [vertex(DEBUG_FACE_VERTEX_BYTES, &[[0, 0, F32X3]])];
 
-/// `a` then `b`: a group laid out as another and more.
+/// The entries of `a` followed by those of `b`, for a group laid out as another with more.
 const fn and<const N: usize, const M: usize, const R: usize>(
     a: [[u32; 2]; N],
     b: [[u32; 2]; M],
@@ -541,16 +560,15 @@ const BOX_GROUP: [[u32; 2]; 13] = and(
     LIT_FRAME,
     [[3, STORAGE], [4, TEXTURE_ARRAY], [5, STORAGE], [6, SAMPLER]],
 );
-/// A draw's uniform, at a dynamic offset (gpu/pass/model.rs `DrawUniforms`),
-/// and its upload: one layout each wherever a draw binds them, so a group
-/// one owner makes binds in every pipeline that names them (gpu/generator.rs,
-/// gpu/upload.rs).
+/// A draw's uniform, at a dynamic offset (gpu/pass/model.rs `DrawUniforms`). It and a draw's
+/// upload (`UPLOAD`) each have one layout wherever a draw binds them, so a group one owner
+/// makes binds in every pipeline that names it (gpu/generator.rs, gpu/upload.rs).
 const DRAW: [[u32; 2]; 1] = [[0, UNIFORM_DYNAMIC]];
-/// An upload's words, and the list a draw reads its instances in order by, the words
-/// themselves but in a frame through the gate (instance.wgsl `order`).
+/// An upload's words, and the list that orders a draw's instances. The list is the upload's
+/// words themselves, except in a frame drawn through the gate (instance.wgsl `order`).
 const UPLOAD: [[u32; 2]; 2] = [[0, STORAGE], [1, STORAGE]];
-/// An upload's group as every pipeline binding one lays it out, which the
-/// draw list's uploads are grouped in (gpu/upload.rs `Uploads::group`).
+/// An upload's group as every pipeline that binds one lays it out. The draw list's uploads
+/// are grouped in it (gpu/upload.rs `Uploads::group`).
 pub const UPLOAD_LAYOUT: [u32; 6] = [
     UPLOAD[0][0],
     stages_reading(&UPLOAD, UPLOAD[0][0]),
@@ -561,21 +579,21 @@ pub const UPLOAD_LAYOUT: [u32; 6] = [
 ];
 
 const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAW, &SKIN, &UPLOAD];
-/// A model's depth from the light: the light's frame alone in group 0, where
-/// its place is read; the rest as the lit pass binds them.
+/// The groups of a model's depth from the light: the light's frame alone in group 0, where
+/// the model's place is read, and the rest as the lit pass binds them.
 const DEPTH_GROUPS: [Group; 4] = [FRAME, MODEL_GROUPS[1], MODEL_GROUPS[2], MODEL_GROUPS[3]];
-/// The list's uniforms by slot, read only, which a character's draw and the
-/// beacon's read at the slot their first instance names (skinned_draw.slot.wgsl,
-/// location.slot.wgsl): one group a pass (gpu/pass/skinned_mesh.rs
+/// The draw list's uniforms by slot, read-only. A character's draw and the beacon's read
+/// their uniform at the slot their first instance names (skinned_draw.slot.wgsl,
+/// location.slot.wgsl). Each pass makes one such group (gpu/pass/skinned_mesh.rs
 /// `SkinnedPass::set_draws`, gpu/pass/location.rs `LocationPass::set_draws`).
 const DRAWS: [[u32; 2]; 1] = [[0, STORAGE]];
-/// A character's, lit and its depth from the light, as a model's but its draw
-/// read off the list's uniforms (`DRAWS`).
+/// A character's groups, lit and for its depth from the light: a model's, except that its
+/// draw is read from the list's uniforms (`DRAWS`).
 const SKINNED_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAWS, &SKIN, &UPLOAD];
 const SKINNED_DEPTH_GROUPS: [Group; 4] = [FRAME, &DRAWS, &SKIN, &UPLOAD];
-/// A draw's mark (tile_mark.wgsl): the eye's frame or the light's, the
-/// tiles' words, their uniform and the box of the tiles the frame's marks
-/// cover in group 0; the rest as its depth reads them.
+/// Group 0 of a draw's mark (tile_mark.wgsl): the eye's frame or the light's, the tiles'
+/// words, their uniform, and the box of the tiles the frame's marks cover. The mark's other
+/// groups are those its depth reads.
 const MARK_FRAME: Group = &[
     [0, UNIFORM],
     [30, STORAGE_RW],
@@ -588,9 +606,8 @@ const MARK_GROUPS: [Group; 4] = [
     MODEL_GROUPS[2],
     MODEL_GROUPS[3],
 ];
-/// A marker set's instances, and what its pass reads at an anchor: the
-/// world's depth for the regions, the regions for the sprites. Its uniform is
-/// a draw's (`DRAW`).
+/// A marker set's instances, and what its pass reads at an anchor: the regions for the
+/// sprites, and the world's depth for the regions. Its uniform is a draw's (`DRAW`).
 const MARKER_SPRITES: Group = &[[0, STORAGE], [1, TEXTURE_UNFILTERED]];
 const MARKER_REGIONS: Group = &[[0, STORAGE], [1, DEPTH]];
 const SKY_GROUP: [[u32; 2]; 14] = and(
@@ -606,9 +623,9 @@ const SKY_GROUP: [[u32; 2]; 14] = and(
     AIR,
 );
 
-/// A pipeline's record before its groups' stages: its head, its vertex buffers and
-/// each group's entries (binding, kind), which `record` sees from the
-/// stages that read them.
+/// A pipeline's record before its groups' stages are known: its header, its vertex buffers,
+/// and each group's entries as (binding, kind). `record` adds to each entry the stages that
+/// read it.
 #[derive(Clone, Copy)]
 struct Descriptor {
     header: Header,
@@ -630,15 +647,15 @@ impl Descriptor {
     }
 }
 
-/// Pipeline `id`'s descriptor: every id below `PIPELINES` has one, which the
-/// records, worked out as the crate is built, ask of each.
+/// Pipeline `id`'s descriptor. Every id below `PIPELINES` must have one, since the records,
+/// worked out as the crate is built, ask every id for its own.
 const fn desc_of(id: u32) -> Descriptor {
     match id {
         PIPELINE_DECOR => {
             Descriptor::new(lit(SHADER_DECOR, CULL_NONE), &MODEL_BUFFERS, &MODEL_GROUPS)
         }
-        // What is laid on the world's faces draws at its own depth: the
-        // world's stands behind it (screen_ray.wgsl `behind`).
+        // What is laid on the world's faces draws at its own depth, and the world's faces
+        // stand behind it (screen_ray.wgsl `behind`).
         PIPELINE_GHOST_BOX => {
             Descriptor::new(blended(SHADER_BOX, CULL_BACK), &BOX_BUFFERS, &[&BOX_GROUP])
         }
@@ -647,8 +664,8 @@ const fn desc_of(id: u32) -> Descriptor {
             &MODEL_BUFFERS,
             &MODEL_GROUPS,
         ),
-        // Back faces culled: drawn both sides, a closed body's inner faces fight its
-        // outer ones at a distance and the character shimmers.
+        // Back faces are culled. Drawn from both sides, a closed body's inner faces fight its
+        // outer ones at a distance, and the character shimmers.
         PIPELINE_SKINNED => Descriptor::new(
             lit(SHADER_SKINNED, CULL_BACK),
             &SKINNED_BUFFERS,
@@ -684,7 +701,7 @@ const fn desc_of(id: u32) -> Descriptor {
             &[],
             &[FRAME, &DRAW, MARKER_REGIONS],
         ),
-        // Against the gizmos' own faces, not the world's depth.
+        // The gizmos' lines are tested against the gizmos' own faces, not the world's depth.
         PIPELINE_DEBUG => Descriptor::new(
             Header {
                 blend: ALPHA,
@@ -693,8 +710,8 @@ const fn desc_of(id: u32) -> Descriptor {
             &DEBUG_BUFFERS,
             &[FRAME, &DRAW],
         ),
-        // Pushed back by their slope as a rasterizer's polygon offset is, so
-        // the lines that bound a face stay in front of it.
+        // The faces are pushed back by their slope, as a rasterizer's polygon offset pushes
+        // them, so the lines that bound a face stay in front of it.
         PIPELINE_DEBUG_FACE => Descriptor::new(
             Header {
                 cull: CULL_NONE,
@@ -715,10 +732,10 @@ const fn desc_of(id: u32) -> Descriptor {
             &[],
             &[&SCREEN_GROUP],
         ),
-        // Its half-resolution map brought to each pixel and multiplied into
-        // the world's color, as the tiles' quads: black blended over by the
-        // occlusion's darkening, a draw of the world's pass, its depth not
-        // tested or written.
+        // The occlusion's half-resolution map, brought to each pixel and multiplied into the
+        // world's color, drawn as the claimed tiles' quads. The multiply is black blended over
+        // by the occlusion's darkening, so the apply is a draw of the world's pass that
+        // neither tests nor writes depth.
         PIPELINE_AO_APPLY => Descriptor::new(
             Header {
                 blend: ALPHA,
@@ -742,8 +759,8 @@ const fn desc_of(id: u32) -> Descriptor {
             &SKINNED_BUFFERS,
             &SKINNED_DEPTH_GROUPS,
         ),
-        // Its vertices as the depth pass lays them, its fragments writing
-        // no color and testing no depth: they mark their tiles.
+        // Its vertices are laid out as the depth pass lays them, and its fragments write no
+        // color and test no depth: they only mark their tiles.
         PIPELINE_SKINNED_MARK => {
             Descriptor::new(mark(SHADER_SKINNED_MARK), &SKINNED_BUFFERS, &MARK_GROUPS)
         }
@@ -773,10 +790,10 @@ const fn desc_of(id: u32) -> Descriptor {
             &LOCATION_BEACON_BUFFERS,
             &[MARK_FRAME, &DRAW],
         ),
-        // The texels of the box the world's cast holds in the tiles a receiver reads, a quad a
-        // tile listed read: its clipmap's words, the box's corner, the tiles' reads and the
-        // list of those read, before the casters drawn over it, into the depth alone (gpu/api.rs
-        // `pipeline`), its fragment the depth.
+        // Lays the depth the world's cast holds into the shadow map, in the tiles a receiver
+        // reads, before the casters are drawn over it: one quad a listed tile, into the depth
+        // alone (gpu/api.rs `pipeline`). It binds the clipmap's words, the box's corner, the
+        // tiles' reads and the list of the tiles read, and its fragment writes the depth.
         PIPELINE_LIGHT_MAP => Descriptor::new(
             Header {
                 fragment: true,
@@ -788,8 +805,8 @@ const fn desc_of(id: u32) -> Descriptor {
             &[],
             &[&[[0, TEXTURE_UINT_ARRAY], [1, UNIFORM], [2, STORAGE]]],
         ),
-        // The same in the map's claimed tiles alone, a quad a tile of the
-        // marks' box, raising their stencil (gpu/api.rs `Stencil::Mask`).
+        // The same in the map's claimed tiles alone, one quad a tile of the marks' box, and it
+        // raises their stencil (gpu/api.rs `Stencil::Mask`).
         PIPELINE_LIGHT_MASK => Descriptor::new(
             Header {
                 fragment: true,
@@ -808,10 +825,10 @@ const fn desc_of(id: u32) -> Descriptor {
                 [33, STORAGE],
             ]],
         ),
-        // Every box's faces turned to the eye, the nearest a pixel's ray
-        // enters kept, reversed: its voxel's number into a target of its
-        // own (gpu/ray/raster.rs). The vertex stage draws only the faces
-        // turned to the eye, so none is culled by its winding.
+        // Each box's faces turned to the eye are drawn, and the reversed depth test keeps the
+        // nearest face a pixel's ray enters. The pixel takes that face's voxel number, in a
+        // target of its own (gpu/ray/raster.rs). The vertex stage emits only the faces turned
+        // to the eye, so no face is culled by its winding.
         PIPELINE_RASTER => Descriptor::new(
             Header {
                 depth_write: true,
@@ -822,7 +839,7 @@ const fn desc_of(id: u32) -> Descriptor {
             &[],
             &[&[[1, UNIFORM], [2, STORAGE], [9, STORAGE]]],
         ),
-        // Only where the opaque world left the far plane.
+        // The sky draws only where the opaque world left the far plane.
         PIPELINE_SKY => Descriptor::new(
             Header {
                 depth_compare: GREATER_EQUAL,
@@ -833,8 +850,8 @@ const fn desc_of(id: u32) -> Descriptor {
             &[&SKY_GROUP],
         ),
         PIPELINE_MIP => Descriptor::new(screen(SHADER_MIP), &[], &[&SKIN]),
-        // The world's depth carried to the canvas's size, which what is drawn
-        // over the world is tested against.
+        // It also writes the world's depth at the canvas's size, which what is drawn over the
+        // world is tested against.
         PIPELINE_SCREEN_FINISH => Descriptor::new(
             Header {
                 depth_write: true,
@@ -991,7 +1008,8 @@ const fn desc_of(id: u32) -> Descriptor {
                 &[[0, UNIFORM], [1, STORAGE]],
             ],
         ),
-        // The sheets' planes, against the world's depth: what stands before them hides them.
+        // The cloud sheets' planes are tested against the world's depth, so what stands before
+        // them hides them.
         PIPELINE_CLOUD => Descriptor::new(blended(SHADER_CLOUD, CULL_NONE), &[], &[&CLOUD_GROUP]),
         PIPELINE_CLOUD_FIELD => Descriptor::new(screen(SHADER_CLOUD_FIELD), &[], &[]),
         _ => panic!("a pipeline number with no descriptor"),
@@ -1000,8 +1018,8 @@ const fn desc_of(id: u32) -> Descriptor {
 
 include!(concat!(env!("OUT_DIR"), "/stages.rs"));
 
-/// The stages of shader `shader` that read binding `binding` of its group
-/// `group`, as build.rs read them off it; none where none does.
+/// The stages of shader `shader` that read binding `binding` of its group `group`, as build.rs
+/// read them off it, or `NONE` when no stage does.
 const fn stages_of(shader: u32, group: u32, binding: u32) -> u32 {
     let entries = STAGES[shader as usize];
     let mut k = 0;
@@ -1014,7 +1032,7 @@ const fn stages_of(shader: u32, group: u32, binding: u32) -> u32 {
     NONE
 }
 
-/// Whether two groups are one entry for entry.
+/// Whether two groups hold the same entries in the same order.
 const fn alike(a: Group, b: Group) -> bool {
     if a.len() != b.len() {
         return false;
@@ -1029,9 +1047,9 @@ const fn alike(a: Group, b: Group) -> bool {
     true
 }
 
-/// The stages binding `binding` of `group` is seen from: those that read
-/// it in every shader whose pipeline lays out the same group, wherever, so
-/// the one layout those pipelines share holds for each.
+/// The stages binding `binding` of `group` is visible to: every stage that reads it in any
+/// shader whose pipeline lays out the same group, at any index. Those pipelines share one
+/// layout, so the layout must hold for each of them.
 const fn stages_reading(group: Group, binding: u32) -> u32 {
     let mut stages = NONE;
     let mut id = 0;
@@ -1049,7 +1067,7 @@ const fn stages_reading(group: Group, binding: u32) -> u32 {
     stages
 }
 
-/// A descriptor's record's words (see Record words above).
+/// The number of words in a descriptor's record (see Record words above).
 const fn words(desc: &Descriptor) -> usize {
     let mut n = HEADER as usize + 1 + 1;
     let mut k = 0;
@@ -1076,8 +1094,8 @@ const RECORD_WORDS: usize = {
     most
 };
 
-/// Pipeline `id`'s record and its length, each group entry seen from the
-/// stages that read it (`stages_reading`).
+/// Pipeline `id`'s record and its length, each group entry visible to the stages that read it
+/// (`stages_reading`).
 const fn record(id: u32) -> ([u32; RECORD_WORDS], usize) {
     let mut out = [0; RECORD_WORDS];
     let desc = desc_of(id);
@@ -1143,8 +1161,8 @@ const RECORDS: [([u32; RECORD_WORDS], usize); PIPELINES as usize] = {
 };
 static TABLE: [([u32; RECORD_WORDS], usize); PIPELINES as usize] = RECORDS;
 
-/// Pipeline `id`'s record (see Record words above), each group entry seen
-/// from the stages that read it.
+/// Pipeline `id`'s record (see Record words above), each group entry visible to the stages
+/// that read it.
 pub fn pipeline(id: u32) -> &'static [u32] {
     let (words, n) = &TABLE[id as usize];
     &words[..*n]
@@ -1167,15 +1185,16 @@ pub const fn lays_out_writable(id: u32) -> bool {
     false
 }
 
-/// Whether render pipeline `id`'s shader reads the light's shadow map: whether its parts hold
-/// shadow.wgsl's (`PARTS`), its record's first word its shader. Whatever is drawn by one is a
-/// receiver of the map, and stands (gpu/draw.rs `DrawList`).
+/// Whether render pipeline `id`'s shader reads the light's shadow map, that is, whether its
+/// parts include shadow.wgsl (`PARTS`); a record's first word is its shader. Whatever such a
+/// pipeline draws is a receiver of the map, and stands on the map's tiles (gpu/draw.rs
+/// `DrawList`).
 pub fn reads_shadow_map(id: u32) -> bool {
     PARTS[pipeline(id)[0] as usize].contains(&"shadow")
 }
 
-/// Whether pipeline `id`'s layout binds within what every WebGPU device
-/// binds (`floor::holds`), its groups as its record lays them out.
+/// Whether pipeline `id`'s layout, with its groups as its record lays them out, binds within
+/// what every WebGPU device binds (`floor::holds`).
 const fn is_floored(id: u32) -> bool {
     let (words, _) = &RECORDS[id as usize];
     let mut at = HEADER as usize;
@@ -1202,8 +1221,7 @@ const fn is_floored(id: u32) -> bool {
     floor::holds(stated.split_at(groups).0)
 }
 
-/// Every pipeline's layout within the floor, checked as the crate is built,
-/// over every id.
+/// Holds every pipeline's layout within the floor as the crate is built.
 const _: () = {
     let mut id = 0;
     while id < PIPELINES {
@@ -1215,11 +1233,11 @@ const _: () = {
     }
 };
 
-/// Whether pipeline `id`'s groups lay out exactly what its shader reads: every binding the
-/// entry points it runs read (its vertex entry, `Header::vertex`, and `fs` where it has a
-/// fragment stage) an entry in its group of a kind the binding's declaration takes (build.rs
-/// `layout_kinds`); and every entry read by a pipeline that lays out the same group, as
-/// build.rs `BINDS` holds a compute group.
+/// Whether pipeline `id`'s groups lay out exactly what its shader reads. Every binding read by
+/// the entry points it runs (its vertex entry, `Header::vertex`, and `fs` when it has a
+/// fragment stage) must have an entry in its group, of a kind the binding's declaration takes
+/// (build.rs `layout_kinds`). Every entry must be read by some pipeline that lays out the same
+/// group, as build.rs `BINDS` requires of a compute group.
 const fn lays_out(id: u32) -> bool {
     let desc = desc_of(id);
     let entries = STAGES[desc.header.shader as usize];
@@ -1258,8 +1276,7 @@ const fn lays_out(id: u32) -> bool {
     true
 }
 
-/// Every pipeline's groups against what its shader reads, checked as the crate is built,
-/// over every id.
+/// Holds every pipeline's groups to what its shader reads as the crate is built.
 const _: () = {
     let mut id = 0;
     while id < PIPELINES {

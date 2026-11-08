@@ -102,7 +102,8 @@ pub fn catalog() -> Result<Vec<(String, Vec<String>)>, String> {
     ])
 }
 
-/// One of the object's colors: what past a ground byte it gives out to be placed.
+/// Whether an entry is one of the object's colors, which the catalog gives out to be placed
+/// past a ground byte.
 fn is_color(e: &Entry) -> bool {
     e.val > 256
 }
@@ -255,7 +256,8 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
     let base = spec.get("base").ok_or(format!("{CUBE_JSON}: no base"))?;
     let base_type = base.str_at("type").ok_or("base has no type")?;
 
-    // One value space: the sentinels and the palette entries within a byte, the object's own and decor past it.
+    // One value space: the sentinels and the palette entries within a byte, the object's own
+    // values and decor past it.
     let decor = read(DECOR_JSON)?;
     let decor: Vec<(&str, u32)> = decor
         .get("decors")
@@ -859,10 +861,9 @@ fn ground_palette() -> Result<Vec<(String, u32)>, String> {
     )
 }
 
-/// The decors' table, in the catalog's order, which is the order their
-/// variants are numbered in: in pxl-content every number the GPU reads too
-/// (how the ground generates each one, its palette entries, its boxes), in pxl-spec its
-/// models over that row.
+/// The decors' table, in the catalog's order, which is the order their variants are numbered
+/// in. In pxl-content it holds every number the GPU reads too (how the ground generates each
+/// decor, its palette entries, its boxes); in pxl-spec, each decor's models over that row.
 fn decor_table(
     spec: &Node,
     palette_indices: &[(String, u32)],

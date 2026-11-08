@@ -7,9 +7,10 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Icon, type IconProps } from "@/ui/component/icon.tsx";
 
 /**
- * A color at an opacity is drawn opaque and the glyph faded whole: an SVG
- * applies it per stroke, so crossings showed darker. `struck` crosses it out,
- * so a state never rests on color alone.
+ * A glyph whose color has an alpha is drawn in the opaque color and faded as
+ * a whole. An SVG applies a color's alpha to each stroke, so crossing strokes
+ * would show darker. `struck` draws a line across the glyph, so that a state
+ * never rests on color alone.
  */
 export function Glyph({
   struck = false,
@@ -42,7 +43,8 @@ export function Glyph({
   );
 }
 
-/** The stroke on a 24-unit box: Phosphor's 16 and 24 on its 256. */
+/** The strike's width on the 24-unit box. It matches Phosphor's regular and
+ * bold strokes, which are 16 and 24 units wide on Phosphor's 256-unit box. */
 function stroke(weight: IconProps["weight"] = "regular"): f64 {
   return weight === "regular" ? 1.5 : 2.25;
 }

@@ -84,7 +84,7 @@ pub(crate) fn runs() -> Result<Vec<Run<'static>>, String> {
         .collect()
 }
 
-/// `json`'s run.
+/// The run of the spec at `json`: its first slot and how many it makes.
 pub(crate) fn run_of(json: &str) -> Result<(u16, u16), String> {
     runs()?
         .into_iter()

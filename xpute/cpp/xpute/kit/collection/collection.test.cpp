@@ -45,8 +45,8 @@ XPUTE_TEST(deque_matches_record) {
 using E = Element<double, std::int32_t>;
 
 static std::string show(const E &e) {
-    // The record writes a key as Rust writes an f64 that is an integer: no
-    // decimal point.
+    // The record writes a key as Rust prints an `f64` that holds an integer,
+    // without a decimal point.
     return std::to_string(static_cast<long long>(e.key)) + ":" + std::to_string(e.val);
 }
 
@@ -78,13 +78,14 @@ XPUTE_TEST(heap_matches_record) {
 namespace {
 
 struct Slot {
-    // What a slot owns and keeps across a rewind: a vector's buffer is still
+    // A slot keeps what it owns across a rewind: its vector's buffer is still
     // allocated when the slot is handed out again.
     std::vector<std::uint32_t> items;
     std::uint32_t mark = 0;
 };
 
-// A test is a runtime's program, so its arena may take the system's memory.
+// A test runs as an ordinary program, not inside a core, so its arena may
+// take the system's heap.
 using SlotArena = Arena<Slot, std::allocator<Slot>>;
 
 SlotArena arena(std::uint32_t init_cap, std::uint32_t max_cap) {
@@ -153,7 +154,8 @@ XPUTE_TEST(arena_scope_rewinds) {
 
 namespace {
 
-// Counts the values it ends, so a test sees each live one dropped once.
+// Counts each value it destroys, so a test can see that every live value is
+// destroyed exactly once.
 struct Counted {
     int n;
     int *ended;

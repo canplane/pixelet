@@ -1,9 +1,10 @@
 // pxl-core/domain/scene/gizmo/frame_gizmo.rs
 
-//! The frame gizmo (the `world_gizmo` setting), as debug lines: the pivot and
-//! its cell, and about it a level ring, an upright ring facing the screen and
-//! one through north. The view's forward, its up and north are told apart by
-//! the spec's colors (`gizmo_spec::frame`), which the UI's legend reads.
+//! The frame gizmo, shown with the `world_gizmo` setting and drawn as debug
+//! lines. It marks the pivot and the ground cell under it. Around the pivot
+//! it draws a level ring, an upright ring facing the screen and an upright
+//! ring through north. The view's forward, its up and north are told apart by
+//! the spec's colors (`gizmo_spec::frame`), which the UI's legend reads too.
 
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{self, V3};
@@ -21,14 +22,14 @@ use pxl_render::look::color::linear_rgb;
 use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 use xpute_core::global::Global;
 
-/// Half the cross a point is drawn as.
+/// Half the length of each arm of the cross a point is drawn as.
 const POINT_HALF: f64 = 0.15;
 const RING_RADIUS: f64 = 4.0;
 const RING_SEGMENTS: u32 = 64;
 
-/// Segments as pairs of vertices: position about `about`, then color. Outlines
-/// only, with no faces: a ring is an outline, and a cube's faces would hide the
-/// pivot inside it.
+/// Segments as pairs of vertices, each a position relative to `about` and
+/// then a color. A sketch has no faces: a ring is only an outline, and a
+/// cube's faces would hide the pivot inside it.
 #[derive(PartialEq)]
 struct Sketch {
     about: V3,
@@ -53,7 +54,8 @@ impl Sketch {
         }
     }
 
-    /// Its twelve edges: those between corners one bit of the index apart.
+    /// Draws the cube's twelve edges. A corner's index holds one bit per
+    /// axis, so an edge joins two corners whose indices differ in one bit.
     fn cube(&mut self, base: V3, side: f64) {
         let corner =
             |i: usize| -> V3 { core::array::from_fn(|k| base[k] + ((i >> k) & 1) as f64 * side) };
@@ -66,7 +68,8 @@ impl Sketch {
         }
     }
 
-    /// Of `RING_RADIUS` about `center` in the plane of the unit axes `a` and `b`.
+    /// Draws a ring of `RING_RADIUS` about `center`, in the plane of the unit
+    /// axes `a` and `b`.
     fn ring(&mut self, center: V3, a: V3, b: V3, (rgb, dashed): (u32, bool)) {
         let color = linear_rgb(rgb);
         let at = |i: u32| -> V3 {
@@ -79,7 +82,7 @@ impl Sketch {
     }
 }
 
-/// Into `s`, its lines cleared first.
+/// Sketches the gizmo for `pivot` into `s`, replacing what `s` held.
 fn sketch(s: &mut Sketch, pivot: &Q3, heading: Option<f64>) {
     let at = to_world(pivot);
     s.about = at;
@@ -91,7 +94,8 @@ fn sketch(s: &mut Sketch, pivot: &Q3, heading: Option<f64>) {
     );
     s.cube(cell, units(GROUND.leaf_cell_zoom()));
     s.point(at, linear_rgb(frame::pivot::rgb));
-    // First person the eye is the pivot, and nothing about it is seen.
+    // In first person the eye is at the pivot, so nothing drawn about it
+    // would be seen.
     let Some(azimuth) = heading else { return };
     let (sin, cos) = libm::sincos(azimuth);
     let (east, north, up) = ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]);
@@ -106,12 +110,11 @@ fn sketch(s: &mut Sketch, pivot: &Q3, heading: Option<f64>) {
 }
 
 struct Gizmo {
-    /// What is drawn, and whether it is.
+    /// The sketch now drawn, and whether the gizmo is shown at all.
     drawn: Sketch,
     shown: bool,
-    /// The next sketch, kept so a step allocates nothing.
+    /// The next sketch. It is kept between steps so a step allocates nothing.
     next: Sketch,
-    /// The lines it is drawn in.
     lines: DebugLines,
 }
 
@@ -130,16 +133,16 @@ fn gizmo() -> &'static mut Gizmo {
     })
 }
 
-/// Its lines into the frame's list.
 pub fn frame_gizmo_draw(draw: &mut DrawList) {
     gizmo().lines.draw(draw);
 }
 
-/// `heading` is the camera's azimuth third person, none first person.
-/// Sketched each step and handed on only where the sketch moved, so the
-/// floor under the pivot is drawn where it is as soon as it is known.
-/// Before the frame's list begins (domain/scene/stage.rs), so its lines and the
-/// origin they are drawn about are the same turn's.
+/// `heading` is the camera's azimuth in third person, and None in first
+/// person. The gizmo is sketched every step but handed to the renderer only
+/// when the sketch changed, so the floor under the pivot is drawn in its
+/// place as soon as it is known. It must run before the frame's list begins
+/// (domain/scene/stage.rs), so the lines and the origin they are drawn about
+/// come from the same turn.
 pub fn frame_gizmo_step(show: bool, pivot: Option<Q3>, heading: Option<f64>) {
     let g = gizmo();
     let Some(at) = pivot.filter(|_| show) else {

@@ -1,7 +1,7 @@
 // pxl-core/domain/view/demand.test.rs
 //
-// A layer's demand as an eye moves, turn after turn, against a demand that
-// observes each eye afresh.
+// A layer's demand, kept from turn to turn as an eye moves, is held to a
+// demand that observes each eye afresh.
 
 use super::*;
 use crate::domain::layer::Base;
@@ -11,8 +11,9 @@ use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::{demand_dist, Lattice};
 
-/// A layer the view asks of as it asks of the ground, of its own tile
-/// cache, on a stream no shard serves alone, so every ask stands.
+/// A layer the view asks of as it asks of the ground, with a tile cache of
+/// its own. Its stream is one no shard serves alone, so no ask is answered
+/// as absent and every ask stands.
 #[derive(Clone)]
 struct Probe;
 
@@ -42,8 +43,8 @@ impl ViewLayer for Probe {
     }
 }
 
-/// The view from `eye`, sea level under it, seeing only east of `east`
-/// where one is given.
+/// The observation from `eye` with sea level under it. Where `east` is
+/// given, the view sees only what lies east of it.
 fn at(eye: [f64; 3], east: Option<f64>, top: Zoom) -> Observation {
     Observation {
         eye,
@@ -57,10 +58,10 @@ fn at(eye: [f64; 3], east: Option<f64>, top: Zoom) -> Observation {
     }
 }
 
-/// Turn after turn, an eye that drifts within its tiles, turns, crosses
-/// into new ones, climbs and comes down, with a tile arriving on the way:
-/// the wants a demand declares, their order and its floor are each turn
-/// what a demand observing that eye afresh finds.
+/// An eye drifts within its tiles, turns, crosses into new tiles, climbs and
+/// comes down, and a tile arrives on the way. On every turn, the wants the
+/// kept demand declares, their order and its floor equal what a fresh
+/// demand observing the same eye finds.
 #[test]
 fn turns_ask_what_a_fresh_observation_asks() {
     let _g = serial();
@@ -70,7 +71,8 @@ fn turns_ask_what_a_fresh_observation_asks() {
     let mut eyes = Vec::new();
     for k in 0..40 {
         let k = f64::from(k);
-        // Within a leaf, then across leaves, then across the top's tiles.
+        // The eye steps within a leaf, then across leaves, then across the
+        // top's tiles.
         let step = if k < 10.0 {
             leaf / 64.0
         } else if k < 25.0 {
@@ -111,7 +113,8 @@ fn turns_ask_what_a_fresh_observation_asks() {
             let p = Quadrant::of_id(held.wants[held.wants.len() / 2].0);
             Probe::tile_cache().set(p, Probe);
         }
-        // What moved told, as the turn tells it (turn.rs `changes_step`).
+        // The demand is told what moved, as the turn tells it (turn.rs
+        // `changes_step`).
         Probe::tile_cache().take_changed(&mut changed);
         if !changed.is_empty() {
             held.on_changed();

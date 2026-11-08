@@ -1,10 +1,11 @@
 // pxl-core/domain/query/changes.rs
 
 //! Where the ground's answers moved since the frame turn before: the ground
-//! tiles whose answer moved (their identities, which fix their contents) and
-//! where the objects were written. A reader that stands on what it asked
-//! asks again only where one of them touches the columns it read, which its
-//! queries report (`Columns`), so a change stops at the ground it touches.
+//! tiles whose answer moved, by identity, which fixes their contents, and the
+//! boxes where objects were written. A reader that keeps an answer asks again
+//! only when one of these touches the columns it read, which its queries
+//! report (`Footprint`). A change so reaches only the readers of the ground
+//! it touches.
 
 use super::world::World;
 use crate::domain::layer::object::store;
@@ -29,9 +30,9 @@ fn changes() -> &'static mut Changes {
     CHANGES.get(Changes::default)
 }
 
-/// The frame turn's changes, taken from the ground's tile cache and the
-/// object store in place of the last turn's, each ground tile once, however
-/// many of its bricks or entries moved; true where any moved.
+/// Takes the frame turn's changes from the ground's tile cache and the object
+/// store, replacing the last turn's. Each ground tile appears once, however
+/// many of its bricks or entries moved. True when anything moved.
 pub(crate) fn take() -> bool {
     let c = changes();
     TerrainTile::tile_cache().take_changed(&mut c.ground);
@@ -41,18 +42,20 @@ pub(crate) fn take() -> bool {
     !c.ground.is_empty() || !c.written.is_empty()
 }
 
-/// Where the objects were written, as the last take found them.
+/// The boxes where objects were written, as the last take found them.
 pub fn written_boxes() -> &'static [Aabb] {
     &changes().written
 }
 
-/// Whether a ground change, or one of `layer`'s tiles a reader also reads
-/// whose answer moved, touches the columns over `xy`, its corners in units,
-/// X on any lap. Taken once a frame turn, in its visible phase, after its
-/// arrivals are admitted, and held until the next; what moves between frame
-/// turns waits in the tile cache and the store for the next take. So a
-/// reader asking every frame turn, in its effects or its interaction phase,
-/// sees each change exactly once.
+/// Whether a change touches the columns over `xy`, whose corners are in units
+/// with X on any lap. A change is a moved ground tile, a written object, or
+/// one of `layer`'s tiles that the reader also reads and whose answer moved.
+///
+/// The changes are taken once a frame turn, in its visible phase after its
+/// arrivals are admitted, and held until the next take. What moves between
+/// frame turns waits in the tile cache and the store for that take. So a
+/// reader that asks every frame turn, in its effects or its interaction
+/// phase, sees each change exactly once.
 pub fn within(xy: [[f64; 2]; 2], layer: &[Quadrant]) -> bool {
     let columns = Aabb {
         min: [xy[0][0], xy[0][1], BOUNDS.min[2]],
@@ -69,14 +72,15 @@ pub fn within(xy: [[f64; 2]; 2], layer: &[Quadrant]) -> bool {
     regions.any(|r| nearest_box(&r, about).shares(columns))
 }
 
-/// The columns a reader's queries read, their corners in units, X on the
-/// lap of the first: each ray the cells it passes at the coarsest zoom it
-/// is answered at, each surface and column surface its cell (`World::reading`).
+/// The columns a reader's queries read, as one box with its corners in units
+/// and X on the lap of the first column read. A ray reads the cells it
+/// passes at the coarsest zoom it is answered at; a surface or a column
+/// surface reads its cell (`World::reading`).
 #[derive(Default)]
 pub struct Footprint(Cell<Option<[[f64; 2]; 2]>>);
 
 impl Footprint {
-    /// The cells of `zoom` the box from `a` to `b` lies in, read.
+    /// Adds the cells of `zoom` that the box from `a` to `b` lies in.
     pub(super) fn read(&self, a: [f64; 2], b: [f64; 2], zoom: Zoom) {
         let side = units(zoom);
         let [lo, hi] = [
@@ -89,7 +93,7 @@ impl Footprint {
         ]);
     }
 
-    /// The columns `cells` read too, put on the lap of the first.
+    /// Adds the columns `cells`, moved onto the lap of the first column read.
     pub(super) fn join(&self, cells: [[f64; 2]; 2]) {
         let joined = match self.0.get() {
             None => cells,
@@ -104,17 +108,17 @@ impl Footprint {
         self.0.set(Some(joined));
     }
 
-    /// None where nothing was read.
+    /// The box of the columns read. None when nothing was read.
     pub fn get(&self) -> Option<[[f64; 2]; 2]> {
         self.0.get()
     }
 }
 
-/// What a step asked the world, kept with what it asked it of and the
-/// columns its answer read, as its queries report them (`World::reading`),
-/// their corners in units: asked again only where what it asks of moved,
-/// or a change to the ground or the objects touched those columns (`forget_touched`).
-/// An answer that read nothing is not kept, as nothing says when it goes.
+/// An answer a step got from the world, kept with the key it was asked for
+/// and the columns it read (`World::reading`), their corners in units. It is
+/// asked again only when the key changes, or when a change to the ground or
+/// the objects touched those columns (`forget_touched`). An answer that read
+/// nothing is not kept, since no change would ever tell it to go.
 pub struct Memo<K, A>(Option<(K, [[f64; 2]; 2], A)>);
 
 impl<K, A> Default for Memo<K, A> {
@@ -126,8 +130,8 @@ impl<K, A> Default for Memo<K, A> {
 impl<K: PartialEq, A: Copy> Memo<K, A> {
     pub const NONE: Memo<K, A> = Memo(None);
 
-    /// Let go where a change touched its columns: looked at every frame
-    /// turn, so it sees each change once (`within`).
+    /// Drops the answer when a change touched its columns. It is called every
+    /// frame turn, so it sees each change once (`within`).
     pub fn forget_touched(&mut self) {
         if self
             .0
@@ -138,9 +142,10 @@ impl<K: PartialEq, A: Copy> Memo<K, A> {
         }
     }
 
-    /// The answer to `of`: the one cached, else `ask`'s of `world`, whose
-    /// queries say what it read. What it read is read of `world` too, so an
-    /// answer kept inside another's ask lets that one go with it.
+    /// The answer for `of`: the kept one, or else what `ask` gets from
+    /// `world`, whose queries report what it read. What it read is reported
+    /// to `world` as well, so a memo kept inside another memo's ask lets that
+    /// one go with it.
     pub fn of(&mut self, world: World<'_>, of: K, ask: impl FnOnce(World<'_>) -> A) -> A {
         if let Some((k, columns, a)) = &self.0 {
             if *k == of {

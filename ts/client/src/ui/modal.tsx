@@ -27,7 +27,8 @@ export function modalOpen(): boolean {
 
 export function Modals() {
   const asked = store((s) => s.asked);
-  // Drawn until it has slid away.
+  // A closed modal stays drawn until its panel has slid away and called
+  // `gone`.
   const [shown, setShown] = useState<Modal | null>(null);
   if (asked !== null && asked !== shown) setShown(asked);
   if (shown === null) return null;

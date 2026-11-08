@@ -1,12 +1,12 @@
 // pxl-render/gpu/ray/count.rs
 
-//! What the eye's cast and the light's walked and reused, counted where the
-//! `ray_counts` setting asks (pxl-engine `count`): where each pass
-//! counts cleared each counted frame, gathered into one array after the
-//! frame's dispatches where no mapping of it is out (`copied`), mapped back
-//! (`mapped`), and handed on as it lands with what the CPU knew of the
-//! frame that counted it (`Frame`), by the renderer's number of that frame
-//! (`RayCounts`), as a GPU read is.
+//! Counts what the eye's cast and the light's walked and reused, while the
+//! `ray_counts` setting is on; pxl-engine `count` lays the counts out. A
+//! counted frame clears the counters before its passes run, and gathers what
+//! they counted into one array after them. One readback of the array is out
+//! at a time, and a frame that counts while one is out is not read. The
+//! counts land a frame or two later, named by the renderer's number of the
+//! frame that counted them.
 
 use pxl_engine::{count, node_cache, raster, ray};
 use xpute_core::mem::off_of;
@@ -15,9 +15,10 @@ use crate::gpu::api::{buffer_usage, bytes, signaled, word_bytes, Gpu, RESULT};
 
 const WORDS: usize = count::WORDS as usize;
 
-/// A counted frame's counts, by index, an observer's each (`count_at`):
-/// whether it cast, 1 or 0 (`CAST`), its pixels or slots (`RAYS`), and its
-/// lanes (pxl-engine `count`, from `LANES_AT`).
+/// The counts of each observer, the eye and the light, in `RayCounts::counts`
+/// (`count_at`): whether it cast, 1 or 0; how many rays it has, the eye's
+/// pixels or the light's slots; and, from `LANES_AT`, the lanes pxl-engine
+/// `count` lays out.
 pub const CAST: usize = 0;
 pub const RAYS: usize = 1;
 pub const LANES_AT: usize = 2;
@@ -29,18 +30,18 @@ pub const fn count_at(observer: u32, k: usize) -> usize {
     observer as usize * OBSERVER_COUNTS + k
 }
 
-/// One frame's counts as they land, a frame or two after it: the renderer's
-/// number of it (renderer.rs `FrameStat::frame`) and its counts
-/// (`count_at`).
+/// One frame's counts, which land a frame or two after it. `frame` is the
+/// renderer's number of that frame (renderer.rs `FrameStat::frame`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RayCounts {
     pub frame: f64,
     pub counts: [f64; RAY_COUNTS],
 }
 
-/// What the CPU knew of a counted frame: the renderer's number it will
-/// take (renderer.rs `FrameStat::frame`), and an observer's each, whether it
-/// cast and its pixels or slots.
+/// What the CPU knows of a counted frame as it encodes it, kept until its
+/// counts land: the number the renderer will give the frame (renderer.rs
+/// `FrameStat::frame`), and whether each observer cast and how many rays it
+/// has.
 #[derive(Clone, Copy, Default)]
 pub(super) struct Frame {
     pub number: f64,
@@ -48,19 +49,19 @@ pub(super) struct Frame {
     pub rays: [u32; count::OBSERVERS as usize],
 }
 
-/// Where the passes counted, an observer's each: the walks' in the observed
-/// node cache's head (`node_cache`), the pixels' or slots' in their walk again's
-/// args (`args`), the boxes in the raster's draw (`boxes`).
+/// The buffers the passes count into. Every walk counts in the node cache's
+/// head; the eye's pixels and the light's slots count in their misses' args
+/// (`args`); the boxes each raster draws count in its draw's args (`boxes`).
 pub(super) struct Counts {
     pub node_cache: u32,
     pub args: [u32; count::OBSERVERS as usize],
     pub boxes: [u32; count::OBSERVERS as usize],
 }
 
-/// The array and its readback, one copy out at a time, from the frame that encodes it (`copied`)
-/// to the mapping the next frame asks (`mapped`) and its landing; whether this frame counts
-/// (`on`), what the CPU knew of the frame copied (`copying`), and the counts that landed,
-/// until taken (`take`).
+/// The counts' array on the GPU and its readback. One copy is out at a time: it is `copied`
+/// from the frame that encodes it until the next frame asks to map it, then `mapped` until
+/// the mapping lands. `copying` is what the CPU knew of the frame whose copy is out, and
+/// `ray_counts` holds the counts that landed until they are taken.
 pub(super) struct Counter {
     counts: u32,
     read: u32,
@@ -70,15 +71,15 @@ pub(super) struct Counter {
     copied: bool,
     mapped: bool,
     read_counts: Box<[u32; WORDS]>,
-    /// The mapping's fence and result, the runtime's, and the ticket it
-    /// was last asked with, the core's: one mapping out at a time.
+    /// The runtime writes the mapping's fence and result here. The fence
+    /// holds `ticket`, the number the last mapping was asked with, once that
+    /// mapping lands.
     mapping: Box<[u32; 2]>,
     ticket: u32,
     ray_counts: Option<RayCounts>,
 }
 
 impl Counter {
-    /// Its buffers, made with the cast's: a few words.
     pub(super) fn new(g: &Gpu) -> Counter {
         Counter {
             counts: g.buf(
@@ -101,12 +102,11 @@ impl Counter {
         }
     }
 
-    /// This frame's counting where `on` and an observer casts (`frame`):
-    /// the walks told to count in the node cache's head (`node_cache`) and their
-    /// counts cleared there, after the head is written, and the array
-    /// cleared.
-    /// The head is left as it is where neither this frame nor the one
-    /// before counts.
+    /// Starts this frame's counting, which runs while `on` and an observer
+    /// casts. It tells the walks which observers count and clears their
+    /// counts, both in the node cache's head, so it runs after the frame has
+    /// written that head. Where neither this frame nor the one before
+    /// counts, the head is left as it is.
     pub(super) fn begin(&mut self, g: &Gpu, on: bool, node_cache: u32, frame: Frame) {
         let was = self.on;
         self.on = on && frame.casts.contains(&true);
@@ -114,8 +114,8 @@ impl Counter {
         if !self.on && !was {
             return;
         }
-        // Each observer's walks and pixels count where it casts, a bit each: an eye's pixels
-        // cast again in a frame that casts the light alone count nothing.
+        // A bit for each observer that counts. The eye counts only in a full cast, so the
+        // pixels a `px` frame casts again count nothing.
         let mut header = [0u32; 1 + (count::OBSERVERS * count::WALKS) as usize];
         for (o, &cast) in frame.casts.iter().enumerate() {
             header[0] |= u32::from(self.on && cast) << o;
@@ -131,8 +131,9 @@ impl Counter {
         g.write_buf(self.counts, 0, bytes(&[0u32; WORDS]));
     }
 
-    /// After the frame's dispatches: the counts of each observer that cast gathered into the
-    /// array and copied, where this frame counts and none are out.
+    /// Gathers the counts of each observer that cast into the array and copies it out for
+    /// the readback. It runs after the frame's dispatches, and only where this frame counts
+    /// and no copy is out.
     pub(super) fn copy(&mut self, g: &Gpu, encoder: u32, from: &Counts) {
         if !self.on || self.copied || self.mapped {
             return;
@@ -143,7 +144,6 @@ impl Counter {
             if !self.frame.casts[k] {
                 continue;
             }
-            // Each run where it was counted, into its lanes.
             for (buf, word, lane, words) in [
                 (
                     from.node_cache,
@@ -173,9 +173,9 @@ impl Counter {
         self.copying = self.frame;
     }
 
-    /// The counts copied last frame mapped back, and those that landed
-    /// kept with what the CPU knew of their frame, until taken: after the
-    /// frame that copied them was submitted.
+    /// Keeps the counts whose mapping landed, and asks to map the copy the
+    /// last frame made. It runs once the frame that encoded that copy was
+    /// submitted, as a buffer maps only what a submitted copy wrote into it.
     pub(super) fn back(&mut self, g: &Gpu) {
         let signaled = signaled(&self.mapping[0], self.ticket);
         if self.mapped && signaled {
@@ -215,12 +215,11 @@ impl Counter {
         }
     }
 
-    /// The counts that landed since last taken.
     pub(super) fn take(&mut self) -> Option<RayCounts> {
         self.ray_counts.take()
     }
 
-    /// The frame its copy was encoded in was dropped.
+    /// The frame that encoded the copy was dropped, so no copy is out.
     pub(super) fn on_dropped(&mut self) {
         self.copied = false;
     }

@@ -7,7 +7,8 @@ use crate::programs::{At, Encoder, PROGRAMS};
 
 const GOLDEN: &str = include_str!("../../../spec/golden/gpu/programs.tsv");
 
-/// The only test here that sets the memory's base, so nothing races for it.
+/// The memory's base is global, and this is the only test that sets it, so
+/// no other test races for it.
 #[test]
 fn programs_match_record() {
     let g = Golden::load(GOLDEN);
@@ -63,7 +64,7 @@ fn programs_match_record() {
                     "{}.turn.{turn}",
                     p.name
                 );
-                // Read as a runtime runs it, and handed back.
+                // Handed back, as a runtime hands it back once it has run it.
                 xpute_core::mem::core().set_word(s.at() + Stream::END * WORD, 0);
                 turn += 1;
             },

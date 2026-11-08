@@ -1,6 +1,7 @@
 // xpute-gpu/runtime/run.rs
 
-//! A stream's records run on the device, op by op (spec/gpu/api.json).
+//! Runs a stream's records on the device, op by op, reading each op's words
+//! as spec/gpu/api.json gives them.
 
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
@@ -19,10 +20,10 @@ use crate::enums::{
 };
 use crate::spec::{op, NONE, STATUS, SURFACE_PREFERRED};
 
-/// The stream at `at` handed back to the core, whether or not it was run:
-/// END stored back to 0 with release, once nothing more of its records is
-/// read, and only where the core published a count (xpute-core
-/// ipc/stream.rs R1, R2).
+/// Hands the stream at `at` back to the core, whether or not it was run:
+/// END is stored back to 0 with release, and only where the core published a
+/// count (xpute-core ipc/stream.rs R1, R2). Call it once nothing more of the
+/// records is read.
 pub fn release(memory: &mut Memory<'_>, at: u32) {
     if memory.load_acquire(at) != 0 {
         memory.store_release(at, 0);
@@ -30,10 +31,8 @@ pub fn release(memory: &mut Memory<'_>, at: u32) {
 }
 
 impl GpuRuntime {
-    /// Runs the stream at `at` as the turn left it (xpute-core
-    /// ipc/stream.rs): word 0 the count of record words past the head, END,
-    /// word 1 the head's own count of words, each record its op, its count of
-    /// words, then they. The stream is handed back once run (`release`).
+    /// Runs the stream at `at` as the turn left it, laid out as xpute-core
+    /// ipc/stream.rs says, and hands it back once run (`release`).
     pub fn run(&mut self, memory: &mut Memory<'_>, at: u32) {
         let end = memory.load_acquire(at);
         let head = memory.word(at + 4);
@@ -57,16 +56,17 @@ impl GpuRuntime {
             self.scratch = scratch;
             k += 2 + n;
         }
-        // The turn's writes reach the queue with it, as the web's writeBuffer does.
+        // The turn's staged writes reach the queue with the turn, as the
+        // web's writeBuffer does.
         if self.uploads.is_some() {
             self.submit(core::iter::empty());
         }
         release(memory, at);
     }
 
-    /// The bytes staged through the belt, a chunk's room at a time, and
-    /// copied into the buffer ahead of what follows; nothing for no bytes, as
-    /// WebGPU writes nothing.
+    /// Stages `bytes` through the belt, a chunk's room at a time, and copies
+    /// them into the buffer ahead of what follows. No bytes write nothing, as
+    /// in WebGPU.
     pub(super) fn write(&mut self, id: u32, offset: u64, bytes: &[u8]) {
         let buffer = self.buffer(id).clone();
         let mut at = 0;
@@ -89,12 +89,13 @@ impl GpuRuntime {
     }
 
     /// The belt's room for the next `want` bytes of a write. Where every
-    /// chunk is taken, the writes so far are submitted and the queue waited
-    /// for until one is back: a write record has no refusal, and its bytes
-    /// are the runtime's only while it runs (xpute-core ipc/stream.rs R3), so
-    /// it is staged before the record returns, as a driver's staging ring
-    /// waits for the GPU. None only where the device went, its chunks' mapping
-    /// refused, and the write goes with everything else the loss ends.
+    /// chunk is taken, it submits the writes so far and waits on the queue
+    /// until a chunk is back, as a driver's staging ring waits for the GPU.
+    /// It must wait: a write record has no refusal, and its bytes are the
+    /// runtime's only while the record runs (xpute-core ipc/stream.rs R3), so
+    /// they are staged before the record returns. None only where the device
+    /// is gone and its chunks' mappings were refused; the write is then lost
+    /// with everything else the loss ends.
     fn stage(&mut self, want: u64) -> Option<(wgpu::Buffer, u64, u64)> {
         loop {
             if let Some(room) = self.belt.take(want) {
@@ -116,7 +117,7 @@ impl GpuRuntime {
         }
     }
 
-    /// `then` submitted after the writes made since the last submit.
+    /// Submits `then` after the writes staged since the last submit.
     pub(super) fn submit(&mut self, then: impl IntoIterator<Item = wgpu::CommandBuffer>) {
         let uploads = self.uploads.take().map(|e| {
             self.belt.finish();
@@ -224,7 +225,8 @@ impl GpuRuntime {
                 let aspect = of(&self.names.aspect, r.u(), "aspect");
                 let (base_mip_level, mip_level_count, base_array_layer, array_layer_count) =
                     (r.u(), r.opt(), r.u(), r.opt());
-                // The rest as WebGPU defaults them, whatever fields wgpu adds.
+                // Every other field takes WebGPU's default, whatever fields
+                // wgpu adds.
                 let v = texture.create_view(&wgpu::TextureViewDescriptor {
                     format,
                     dimension,
@@ -443,7 +445,8 @@ impl GpuRuntime {
                 });
                 self.put(id, Object::QuerySet(q));
             }
-            // wgpu names an object only as it makes it.
+            // wgpu names an object only as it makes it, so a later label is
+            // dropped.
             op::LABEL => {
                 r.u();
                 r.text();
@@ -722,7 +725,8 @@ impl GpuRuntime {
             }
             op::QUEUE_DONE => {
                 let (word, ticket) = (r.u(), r.u());
-                // What was written is the queue's work as much as what was submitted.
+                // Staged writes are the queue's work as much as what was
+                // submitted, so they are submitted first.
                 self.submit(core::iter::empty());
                 let state = Arc::new(AtomicU8::new(WAITING));
                 let answered = Arc::clone(&state);
@@ -805,9 +809,10 @@ impl GpuRuntime {
         }
     }
 
-    /// An async pipeline's word and ticket, read past the sync op's words:
-    /// wgpu has no async call, so it is made already, and its word is
-    /// written as a done's, at the next poll, before the next turn reads it.
+    /// Reads an async pipeline's fence and ticket, which follow the sync op's
+    /// words. wgpu has no async call, so the pipeline is made already. Its
+    /// ticket is still stored at the next poll, as a QUEUE_DONE's is, so the
+    /// core finds it no sooner than on the web.
     fn made_at_once(&mut self, r: &mut Words) {
         let (word, ticket) = (r.u(), r.u());
         self.pending.push(Pending {
@@ -996,7 +1001,8 @@ impl GpuRuntime {
             r.u(),
             r.flag(),
         );
-        // WebGPU refuses ops on an aspect the format lacks, or one read only.
+        // WebGPU refuses load and store ops on an aspect the format lacks, or
+        // on one read only, so those are left unset.
         let depth = depth.map(|v| {
             let (view, format) = self.view(v);
             let (view, has_depth, has_stencil) = (
@@ -1055,7 +1061,7 @@ impl GpuRuntime {
     }
 }
 
-/// The most color targets a render pass takes: wgpu-hal's
+/// The most color attachments a render pass takes: wgpu-hal's
 /// `MAX_COLOR_ATTACHMENTS`, the bound wgpu builds its passes to.
 const COLORS: usize = 8;
 
@@ -1080,7 +1086,8 @@ fn slice(b: &wgpu::Buffer, offset: u64, size: Option<u64>) -> wgpu::BufferSlice<
     }
 }
 
-/// A copy's sides with their objects held, so the encoder can be borrowed.
+/// A copy's buffer side, holding its buffer, so that the encoder can be
+/// borrowed while the side is in use. `OwnedTexture` is the texture side.
 struct OwnedBuffer {
     buffer: wgpu::Buffer,
     layout: wgpu::TexelCopyBufferLayout,

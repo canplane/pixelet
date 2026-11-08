@@ -1,11 +1,13 @@
 // pxl-render/gpu/pass/character.rs
 
-//! A character surface: the companion's character in a frame of its
-//! own, over the flat color the UI asks for, drawn at one sample with no
-//! shadow, a blank map bound and no strength to read it by. Its draw is
-//! handed to it whole, held by none of the world's lists, so what the
-//! world's eye sees of the character moves nothing here: its uniform at
-//! slot 0 of a buffer of its own (gpu/draw.rs `scaled_draw`).
+//! A character surface shows the companion's character alone, seen from a
+//! camera of its own, over the flat color the UI asks for. It draws one
+//! sample a pixel and no shadow: a blank shadow map is bound, and the
+//! frame's shadow strength is zero. The caller hands the pass the
+//! character's whole draw, which none of the world's draw lists holds, so
+//! what the world's camera sees of the character changes nothing here. The
+//! draw's record names uniform slot 0 (gpu/draw.rs `scaled_draw`), and the
+//! pass keeps the uniform there in a buffer of its own.
 
 use pxl_spec::space::coord::mat4;
 use pxl_spec::space::coord::v3::V3;
@@ -34,25 +36,31 @@ use crate::look::color::linear_rgb;
 
 pub struct CharacterPass {
     frame_buf: u32,
-    /// Its draw's uniform, the one slot its skinned pass binds.
+    /// The buffer the skinned pass reads its draw uniforms from here. It has
+    /// one slot, which holds the character's.
     draw_buf: u32,
     frames: FrameGroups,
     pub skinned_mesh: SkinnedPass,
     finish: Finish,
-    /// What its picture is made of as last drawn: its frame words, its
-    /// draw, its skin and its surface; it stands, and its surface keeps its
-    /// picture, while they do.
+    /// What the surface's picture was made of when it was last drawn: the
+    /// frame words, the draw, the skin image and the surface. While all of
+    /// them read the same, the pass draws nothing and the surface keeps its
+    /// picture.
     pub(crate) read: Read,
 }
 
 const CHARACTER_EYE: V3 = [0.0, -2.2, 0.9];
 const CHARACTER_TARGET: V3 = [0.0, 0.0, 0.55];
 const CHARACTER_FOV_DEG: f64 = 35.0;
-/// The character surface's near plane: a room of its own, a model a unit tall in it.
+/// The surface's near plane. Its scene holds nothing but the character, a
+/// model about a unit tall, so the plane is set for that scale and not the
+/// world's.
 const CHARACTER_NEAR: f64 = 0.1;
 
-/// What the world's color is cleared to for `bg` (0xRRGGBB, sRGB): linear, as
-/// the finish encodes it back, and whole.
+/// The color the surface's world color is cleared to for `bg`, a 0xRRGGBB
+/// sRGB color. The world color is linear and the finish encodes it back to
+/// sRGB, so the clear is `bg` made linear. Its alpha is 1, so nothing shows
+/// through.
 fn clear_of(bg: u32) -> [f32; 4] {
     let [r, g, b] = linear_rgb(bg).map(|c| c as f32);
     [r, g, b, 1.0]
@@ -87,8 +95,8 @@ impl CharacterPass {
         }
     }
 
-    /// Its finish's groups over `s`, before the frame's commands, `s` made
-    /// at its size.
+    /// Makes the finish's bind groups over `s`. The caller calls it before
+    /// the frame's commands are encoded and after `s` is made at its size.
     pub fn set_groups(&mut self, g: &Gpu, s: &Surface) {
         self.finish.set_groups(g, self.frame_buf, s, None);
     }
@@ -101,9 +109,11 @@ impl CharacterPass {
         self.finish.release();
     }
 
-    /// `draw`, the character's, into `s` over `bg` (0xRRGGBB, sRGB), the
-    /// world's `frame` aimed at the character; nothing where its picture's
-    /// makings stand, `changed` what moved without words.
+    /// Draws the character's `draw` into `s` over `bg`, a 0xRRGGBB sRGB
+    /// color. `frame` holds the world's frame words, which the pass aims at
+    /// the character. It draws nothing while all its picture is made of
+    /// reads the same as last time. `changed` says that something without
+    /// words to read changed, such as a model's upload.
     #[expect(
         clippy::too_many_arguments,
         reason = "each is what its picture is made of, which `read` reads apart to tell whether it stands"
@@ -120,8 +130,8 @@ impl CharacterPass {
     ) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::character);
-        // Its eye stands at the character's Q3, so the character is its
-        // remainder from it.
+        // The frame's eye is set to the character's Q3 (gpu/draw.rs
+        // `Position`), so the character sits at its remainder from the eye.
         let at = Position::in_uniform(uniform);
         let character = at.r.map(f64::from);
         let u = &mut frame;
@@ -155,10 +165,12 @@ impl CharacterPass {
         u[SCREEN + 1] = s.screen.1 as f32;
         u[VIGNETTE] = 0.0;
         u[SHADOW_STRENGTH] = 0.0;
-        // Drawn at one sample a pixel, its frames gathered by none.
+        // No resolve gathers this surface's frames, so it draws one sample a
+        // pixel with no jitter.
         u[JITTER] = 0.0;
         u[JITTER + 1] = 0.0;
-        // A character drifts with no wind.
+        // The cloud field's drift moves nothing here. Zeroed, it keeps a
+        // frame where only the wind moved from reading as changed.
         u[DRIFT_Q..DRIFT_Q + 4].fill(0.0);
         let r = &mut self.read;
         r.begin();
@@ -193,7 +205,8 @@ impl CharacterPass {
             self.frames.frame,
         );
         pass.end();
-        // Encoded onto its canvas at its own frame's words, no vignette.
+        // The finish encodes the color onto the surface's canvas by this
+        // pass's own frame words, whose vignette is zero.
         let view_id = g.cur(s.handle);
         self.finish
             .draw(ctx, GpuSpanName::character, s, s.color_view, view_id, None);

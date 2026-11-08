@@ -8,8 +8,8 @@ import { LABEL } from "@/ui/component/palette.ts";
 import type { Cover } from "./cover.ts";
 import { ProgressBar } from "./progress-bar.tsx";
 
-/** Over the world while it starts: the bar, and under it what it waits on. `of`
- * is the locale key of that line. */
+/** Shown over the world while it starts: the progress bar, and under it a line
+ * that says what the world waits on. `of` is the locale key of that line. */
 function Progress({ of, share }: { of: string; share: number }) {
   const { t } = useTranslation();
   return (
@@ -20,9 +20,10 @@ function Progress({ of, share }: { of: string; share: number }) {
   );
 }
 
-/** In place of the app before it ran, for good: where it cannot run, or what it
- * needed will not come. `of` is the locale key its title and body are under; the
- * detail is the log's. */
+/** Shown for good in place of an app that never ran, because it cannot run
+ * here or because what it needed will not come. `of` is the locale key that
+ * holds the title and the body. The details go to the log, not to this
+ * screen. */
 function Failed({ of }: { of: string }) {
   const { t } = useTranslation();
   return (
@@ -35,8 +36,9 @@ function Failed({ of }: { of: string }) {
   );
 }
 
-/** In place of the app once what ran has ended, as a blue screen says it: the
- * stop code, where there is one, is what a screenshot sent back needs. */
+/** Shown in place of the app once what ran has ended, in the manner of a blue
+ * screen. The stop code, where there is one, is what a screenshot sent back
+ * needs. */
 function Panic({ of, code }: { of: string; code: string | null }) {
   const { t } = useTranslation();
   return (
@@ -57,7 +59,6 @@ function Panic({ of, code }: { of: string; code: string | null }) {
   );
 }
 
-/** What stands over the app, as `coverOf` says. */
 export function Screen({ cover }: { cover: Cover }) {
   switch (cover.kind) {
     case "progress":

@@ -1,10 +1,10 @@
 // @pxl/client/port/text.ts
 
 /**
- * TEXT, the text device's protocol (rust/client/core/text.json): the
- * core's calls TEXT_LAYOUT and TEXT_RASTER, answered from the platform's text
- * before they return, so what they write in the core's memory is in place
- * when the call returns.
+ * TEXT, the text device's protocol (rust/client/core/text.json). The core's
+ * calls TEXT_LAYOUT and TEXT_RASTER are answered from the platform's text
+ * before they return, so what they write into the core's memory is in place
+ * by the time the call returns.
  */
 
 import type { i32 } from "@xpute/kit/abi/word.ts";
@@ -15,21 +15,22 @@ import { LAYOUT_ANSWER, LINE } from "@/abi/runtime.spec.ts";
 import * as font from "@/service/text.ts";
 import { mem } from "@xpute/runtime";
 
-/** The text a call names in the core's memory, held until the call returns. */
+/** The text a call names in the core's memory, which holds it only until the
+ * call returns. */
 function text_of(at: number, len: number): string {
   return td.decode(new Uint8Array(mem, at, len));
 }
 
-/** What no line starts with: closing marks, and in Japanese the small kana and
- * the marks that lean on the character before. */
+/** The characters no line may start with: closing marks and, in Japanese, the
+ * small kana and the marks that lean on the character before them. */
 const NO_LINE_START =
   /[、。，．・：；？！）］｝〕〉》」』】”’…‥ーぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮゝゞヽヾ々,.:;!?)\]}]/;
 
-/** What no line ends with: opening marks. */
+/** The characters no line may end with: opening marks. */
 const NO_LINE_END = /[（［｛〔〈《「『【“‘([{]/;
 
-/** The break at `at` moved back past a mark the rules keep with its neighbor,
- * no further than the line's first character. */
+/** Moves the break at `at` back past any mark that the rules above keep with
+ * its neighbor, but never past the line's first character. */
 function kept_break(text: string, line: number, at: number): number {
   while (
     at - 1 > line &&
@@ -45,9 +46,10 @@ function isSurrogate(unit: number): boolean {
   return unit >= 0xd800 && unit <= 0xdfff;
 }
 
-/** Greedy by words; a word too wide alone (Korean, Japanese or Chinese typed
- * without spaces) breaks between characters. A space stays at the next line's
- * head for the core to trim. */
+/** Where each line ends. Words fill each line greedily. A word too wide for a
+ * line by itself, as Korean, Japanese or Chinese typed without spaces can be,
+ * breaks between characters. A space stays at the head of the next line, for
+ * the core to trim. */
 function line_ends(
   text: string,
   max_width: number,
@@ -88,8 +90,9 @@ function line_ends(
   return ends;
 }
 
-/** TEXT_LAYOUT: the text laid out a line at a time, each line's end and
- * width written at the call's `at`. */
+/** Answers TEXT_LAYOUT. It lays the text out a line at a time, and writes
+ * each line's end and width at the call's `at`. A line's end counts UTF-8
+ * bytes, and its width leaves out the spaces at its ends. */
 export function text_layout(e: TextLayout): i32 {
   const { weight, px, max_width, at, lines, text_at, text_len } = e;
   const text = text_of(text_at, text_len);
@@ -114,7 +117,7 @@ export function text_layout(e: TextLayout): i32 {
   return 0;
 }
 
-/** TEXT_RASTER: one line's pixels written at the call's `at`. */
+/** Answers TEXT_RASTER by writing one line's pixels at the call's `at`. */
 export function text_raster(e: TextRaster): i32 {
   const { weight, px, color, at, width, height, x, text_at, text_len } = e;
   const text = text_of(text_at, text_len);

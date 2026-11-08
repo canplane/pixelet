@@ -12,7 +12,7 @@
       "name": "SUM",
       "val": 4097,
       "$doc": [
-        "Two numbers, answered with their sum and ASK's."
+        "Carries two numbers. The core answers with their sum plus the number ASK answers."
       ],
       "pkt": [
         {
@@ -32,7 +32,7 @@
       "name": "ASK",
       "val": 4098,
       "$doc": [
-        "A number the runtime answers, which the core adds."
+        "Asks the runtime for a number, which the core adds to the sum."
       ],
       "call": true
     }

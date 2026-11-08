@@ -18,14 +18,16 @@ function measure(): WindowSize {
   return { width: root.clientWidth, height: root.clientHeight };
 }
 
-/** The layout viewport's size, and how far the visual viewport is scrolled down it. */
+/** The layout viewport's size, and how far the visual viewport is scrolled
+ * down it. */
 const store = create<{ size: WindowSize; top: number }>()(() => ({
   size: measure(),
   top: 0,
 }));
 
-// Observed after layout: a page zoom's `resize` came before the root's new
-// size, and a sheet stayed centered on the old width.
+// The size is observed after layout. A page zoom's `resize` event comes
+// before the root has its new size, so a sheet would stay centered on the old
+// width.
 new ResizeObserver(() => {
   const next = measure();
   const { size } = store.getState();
@@ -35,9 +37,9 @@ new ResizeObserver(() => {
 }).observe(document.documentElement);
 
 /**
- * The layout viewport, which a keyboard or pinch leaves alone. RN-web's
- * `useWindowDimensions` is the visual viewport, so a sheet sized from it lost
- * the keyboard's height at its top.
+ * The layout viewport's size, which a keyboard or a pinch leaves alone.
+ * React Native for Web's `useWindowDimensions` gives the visual viewport, so a
+ * sheet sized from it would lose the keyboard's height at its top.
  */
 export function useWindowSize(): WindowSize {
   return store((s) => s.size);
@@ -61,9 +63,9 @@ const keyboard = (
 ).virtualKeyboard;
 
 /**
- * Pins the overlays to the visual viewport: the top as `useViewportTop`, the
- * bottom as `VISUAL_VIEWPORT_BOTTOM` (types.ts). iOS Safari ignores
- * `interactive-widget` and pans the visual viewport instead; where the
+ * Pins the overlays to the visual viewport: the top through `useViewportTop`,
+ * and the bottom through `VISUAL_VIEWPORT_BOTTOM` (types.ts). iOS Safari
+ * ignores `interactive-widget` and pans the visual viewport instead. Where the
  * VirtualKeyboard API exists, the keyboard overlays the page and reports its
  * own height.
  */
@@ -81,14 +83,16 @@ export function useVisualViewport(): void {
       frame = 0;
       if (!vv) return;
 
-      // Every frame, as a CSS variable so following it re-renders nothing.
+      // The bottom is set on every frame, as a CSS variable, so that following
+      // it re-renders nothing.
       const bottom = keyboard
         ? keyboard.boundingRect.height
         : Math.max(0, root.clientHeight - (vv.offsetTop + vv.height));
       root.style.setProperty(VISUAL_VIEWPORT_BOTTOM, `${bottom}px`);
 
-      // Top waits until the viewport settles: iOS overshoots while the keyboard
-      // animates, and tracking it live made the top overlays bounce.
+      // The top waits until the viewport settles. iOS overshoots while the
+      // keyboard animates, and following it live would make the top overlays
+      // bounce.
       if (settleTimer !== 0) clearTimeout(settleTimer);
       settleTimer = setTimeout(() => {
         settleTimer = 0;

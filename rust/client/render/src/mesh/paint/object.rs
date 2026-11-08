@@ -1,7 +1,6 @@
 // pxl-render/mesh/paint/object.rs
 
-//! The object store's records as assets: the materials their values are
-//! drawn as, by the catalog.
+//! The materials the object store's values are drawn as, as the catalog defines them.
 
 use pxl_spec::asset::cube;
 use pxl_spec::asset::cube::ALL_CUBES;
@@ -17,11 +16,11 @@ use xpute_kit::status::errno::Errno;
 
 const AIR: u32 = cube::object::air as u32;
 
-/// The one table, fixed by the catalog.
+/// The one painter, built once from the catalog.
 pub static PAINTER: LazyLock<Painter> = LazyLock::new(Painter::new);
 
-/// Every state the catalog names, a cube's look its own; air and decor,
-/// which no cell is drawn as, none.
+/// A look for every state the catalog names. A cube has its own look. Air and decor have
+/// none, as no cell is drawn as them.
 pub struct Painter {
     looks: Vec<Option<([u8; 3], u8)>>,
 }
@@ -53,18 +52,19 @@ impl Painter {
         Painter { looks }
     }
 
-    /// The states the catalog names, every one under it.
+    /// The number of states. Every state the catalog names is below it.
     pub fn states(&self) -> usize {
         self.looks.len()
     }
 
-    /// Its swatch and texture layer; none for air, decor and what is not named.
+    /// The swatch and texture layer of `state`; none for air, decor and a state the catalog
+    /// does not name.
     pub fn look_of(&self, state: u32) -> Option<([u8; 3], u8)> {
         self.looks.get(state as usize).copied().flatten()
     }
 }
 
-/// Its swatch and texture layer: a cube of a look takes its ground's.
+/// The swatch and texture layer of `cube`. A cube of a look takes its ground's.
 pub fn solid_look(cube: AssetId) -> ([u8; 3], u8) {
     (
         rgb255(cube_rgb(cube).or_bug(Errno::ENOTRECOVERABLE)),

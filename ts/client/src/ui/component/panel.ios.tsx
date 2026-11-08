@@ -1,8 +1,8 @@
 // @pxl/client/ui/component/panel.ios.tsx
 
 /**
- * A panel on an iPhone: the system's bottom sheet. `gone` is called after
- * the dismiss animation. Corner radii are the system's.
+ * A panel on an iPhone, drawn as the system's bottom sheet with the system's
+ * corner radii. The sheet calls `gone` once its dismiss animation has ended.
  */
 
 import { useContext } from "react";
@@ -19,7 +19,8 @@ import {
 import { PanelPresence, type PanelProps } from "@/ui/component/panel.tsx";
 import { color } from "@/ui/component/theme.ts";
 
-// Everything the default has, but what this file draws itself.
+// Every export of the default file, except `Panel`: an export declared in this
+// file takes the place of a star export with the same name.
 export * from "./panel.tsx";
 
 export function Panel({ label, onClose, half, children }: PanelProps) {
@@ -41,8 +42,8 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
           ]}
         >
           <RNHostView>
-            {/* Absolute: in flow, a long list took its full height and its
-                            ScrollView could not scroll. */}
+            {/* The content is laid out absolutely. In the flow, a long list
+                takes its full height, and its ScrollView cannot scroll. */}
             <View accessibilityLabel={label} style={StyleSheet.absoluteFill}>
               {children}
             </View>

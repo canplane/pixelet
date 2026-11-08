@@ -1,14 +1,14 @@
 // pxl-render/gpu/read.rs
 
-//! What a stage last read, to tell a frame that reads the same.
+//! What a stage last read, so a frame that reads the same input keeps what the stage made.
 
 use crate::gpu::api::{bytes, room, write_buffer_bytes, Gpu};
 
-/// A stage's whole input as it last read it, byte for byte: what the stage
-/// makes is one function of it, so a frame that reads the same stands on
-/// what it made — the cast's rays and the decor generated over them (stage 1),
-/// the frame (stage 2). Each lane is read with its length, so no two
-/// sets read alike; what changed without words to read is marked so.
+/// A stage's whole input as it last read it, byte for byte. What a stage makes is a function
+/// of its input alone, so a frame that reads the same input keeps what the stage made: the
+/// cast's rays and the decor generated over them (stage 1), and the frame (stage 2). Each lane
+/// is read with its length, so two different sets of lanes never read alike. A change that has
+/// no words to read is marked instead (`mark`).
 #[derive(Default)]
 pub(crate) struct Read {
     bytes: Vec<u8>,
@@ -36,31 +36,32 @@ impl Read {
         changed
     }
 
-    /// Whether `lane`, with its length, moved: what its writer needs to
-    /// write again, and no more.
+    /// Whether `lane`, read with its length, changed. Its writer writes it again only when it
+    /// did.
     pub(crate) fn read<T: Copy>(&mut self, lane: &[T]) -> bool {
         self.take(bytes(&[lane.len() as u32])) | self.take(bytes(lane))
     }
 
-    /// Whether all it read so far read as the last time.
+    /// Whether everything read so far reads as it did the last time.
     pub(crate) fn same(&self) -> bool {
         self.same
     }
 
-    /// What this frame changed of the stage's input that has no words, as
-    /// an image come or a table drawn.
+    /// Marks a change to the stage's input that has no words to read, such as an image that
+    /// arrived or a table that was drawn.
     pub(crate) fn mark(&mut self, changed: bool) {
         self.same &= !changed;
     }
 
-    /// Whether all of it read as the last time.
+    /// Ends the read. Returns whether the whole input read as it did the last time.
     pub(crate) fn end(&mut self) -> bool {
         let same = self.same && self.at == self.bytes.len();
         self.bytes.truncate(self.at);
         same
     }
 
-    /// The rays no longer hold what was read: the next frame casts.
+    /// Drops what was read, for when what the stage made is gone. The next frame reads as
+    /// changed.
     pub(crate) fn forget(&mut self) {
         self.bytes.clear();
     }
@@ -71,15 +72,15 @@ impl Read {
 #[derive(Default)]
 pub(crate) struct SlotMirror {
     held: bool,
-    /// The changed slots, sorted, kept for their room.
+    /// The changed slots, sorted. The vector is kept to reuse its allocation.
     slots: Vec<u32>,
 }
 
 impl SlotMirror {
-    /// `now` written over `buf` from 0: where the buffer holds what was last
-    /// written, only the runs of the `unit`-byte slots `changed` names that
-    /// `now` holds; else, or where those runs do not fit the stream, the
-    /// whole of it, one record however large. Whether anything was written.
+    /// Writes `now` over `buf` from byte 0. When the buffer holds what was last written, only
+    /// the runs of `unit`-byte slots that `changed` names and `now` holds are written.
+    /// Otherwise, or when those runs do not fit the stream, the whole of `now` is written as
+    /// one record however large. Returns whether anything was written.
     pub(crate) fn write(
         &mut self,
         g: &Gpu,
@@ -113,7 +114,7 @@ impl SlotMirror {
         true
     }
 
-    /// The buffer no longer holds what was written: the next write is whole.
+    /// Called when the buffer no longer holds what was written, so the next write is whole.
     pub(crate) fn forget(&mut self) {
         self.held = false;
     }

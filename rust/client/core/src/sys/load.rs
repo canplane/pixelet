@@ -1,9 +1,10 @@
 // pxl-core/sys/load.rs
 
-//! What the core loads, and how many: the catalog, the files it names, each
-//! by its number below the asset root, and the Earth's sphere, each read as
-//! the catalog, a model or an image. sys/io loads them, a task a file in
-//! flight (`LOAD_FILES`).
+//! The files the core loads: the asset catalog, the files the catalog names
+//! by their numbers below the asset root, and the picture of the whole Earth.
+//! Each is read as a catalog, a glTF model or an image. sys/io/loader.rs
+//! loads them with one task for each file in flight, and `LOAD_FILES` bounds
+//! how many are in flight at once.
 
 use pxl_spec::asset::catalog::SLOTS;
 use pxl_spec::bake::publication::TILE_SPHERE;
@@ -17,29 +18,31 @@ pub enum LoadKind {
     Catalog = 2,
 }
 
-/// A file below the asset root by its id, the catalog's (file.json
-/// `CATALOG`) or one it names; or the Earth's picture whole, the earth
-/// layer's, under its version.
+/// A file to load. `File` is a file below the asset root by its id: the
+/// catalog itself (file.json `CATALOG`) or a file the catalog names.
+/// `Sphere` is the picture of the whole Earth, which is opened below the
+/// earth bake's root and so under that bake's version.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Load {
     File(u32),
     Sphere,
 }
 
-/// The sphere's id, past every one below the asset root, which a u16 holds.
+/// The sphere's id. Every file below the asset root has an id that fits in a
+/// u16, so this one is past them all.
 const SPHERE: u32 = 1 << 16;
 
-/// The files that can be in flight at once: a slot's each, wanted as one
-/// kind, the catalog and the sphere.
+/// The most files in flight at once: one for each catalog slot, since a slot
+/// is wanted as one kind only, plus the catalog and the sphere.
 pub const LOAD_FILES: usize = SLOTS + 2;
 
 impl LoadKind {
-    /// By number.
+    /// Every kind, each at the index of its number.
     pub const ALL: [LoadKind; 3] = [LoadKind::Gltf, LoadKind::Image, LoadKind::Catalog];
 }
 
 impl Load {
-    /// Its path below its root.
+    /// The file's path, relative to the root it is opened below.
     pub fn path(self) -> Path {
         match self {
             Load::File(n) => Path::of_id(u64::from(n)),

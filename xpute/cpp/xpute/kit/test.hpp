@@ -1,7 +1,7 @@
 // cpp/xpute/kit/test.hpp
 
-// A minimal test harness: no exceptions to unwind to a framework. A failed
-// check says where and stops the run.
+// A minimal test harness that needs no exceptions. A failed check prints its
+// file and line and aborts the run.
 
 #pragma once
 

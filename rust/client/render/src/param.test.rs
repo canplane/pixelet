@@ -5,8 +5,8 @@ use crate::look::color::linear_rgb;
 
 #[test]
 fn settings_modules_written() {
-    // A module left out of `ALL` would go unwritten into the shaders, and
-    // only a shader that reads one of its settings would say so.
+    // A module left out of `ALL` would not be written into the shaders, and only a shader
+    // that reads one of its settings would notice.
     let modules = include_str!("param.rs").matches("params! {").count();
     assert_eq!(ALL.len(), modules, "a module's settings missing from `ALL`");
     let mut paths: Vec<&str> = ALL.iter().map(|m| m[0].0).collect();
@@ -17,7 +17,7 @@ fn settings_modules_written() {
 
 #[test]
 fn linear_color_is_hex() {
-    // Written to six places, as the shaders read them.
+    // The linear values are written to six decimal places, as the shaders read them.
     for (hex, linear) in [
         (0xff1493, location::beacon::DAY),
         (0x00f2ff, location::beacon::NIGHT),
@@ -33,8 +33,9 @@ fn linear_color_is_hex() {
 
 #[test]
 fn weather_noise_deviation() {
-    // A uniform's 1/√12, and the bilinear smoothstep's weights, ∫(w² + (1 − w)²)
-    // = 26/35 an axis, once over the two axes' deviation.
+    // A uniform value's deviation is 1/√12. The bilinear smoothstep's weights scale the
+    // variance by ∫(w² + (1 − w)²) = 26/35 on each axis, so the deviation over both axes is
+    // scaled by 26/35 once.
     let sigma = 26.0 / 35.0 / 12f64.sqrt();
     assert!(
         (sigma - cloud::weather::SIGMA as f64).abs() < 5e-5,

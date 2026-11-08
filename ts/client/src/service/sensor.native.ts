@@ -1,10 +1,10 @@
 // @pxl/client/service/sensor.native.ts
 
 /**
- * Position and heading through expo-horizon-location, the expo-location fork
- * that reads position without Google Play Services (Horizon OS has none).
- * Each crosses as the page's do, the heading where Safari's
- * `webkitCompassHeading` goes.
+ * Position and heading through expo-horizon-location, the fork of
+ * expo-location that reads position without Google Play Services, which
+ * Horizon OS lacks. Both reach the listener in the same shape as the page's,
+ * with the heading in the place of Safari's `webkitCompassHeading`.
  */
 
 import { AppState } from "react-native";
@@ -16,8 +16,9 @@ import { PLATFORM } from "./pxl-platform.ts";
 
 let granted: boolean | null = null;
 
-/** Only reads an answered permission: asking opens an Android activity,
- * and the resume restarted the sensors, which asked again in a loop. */
+/** Asks for the permission only while it is undetermined, and otherwise only
+ * reads the answer. Asking opens an Android activity, and the app's resume
+ * from it restarts the sensors, so asking every time would loop. */
 async function geo_permit(): Promise<boolean> {
   const now = await Location.getForegroundPermissionsAsync();
   const { status } =
@@ -28,7 +29,8 @@ async function geo_permit(): Promise<boolean> {
   return granted;
 }
 
-/** A grant made in the device's settings reaches the core on return. */
+/** Rechecks the permission whenever the app comes back to the foreground, so
+ * that a grant made in the device's settings reaches the core. */
 export function follow(): () => void {
   const back = AppState.addEventListener("change", (state) => {
     if (state === "active") recheck();
@@ -89,11 +91,12 @@ function geo_start(): void {
         distanceInterval: 0,
       },
       (pos) => geo_fix(pos.coords),
-      // Android's watch never ends on its own (expo's watch callbacks leave
-      // onLocationError empty, and the fused provider keeps the request);
-      // iOS rides out locationUnknown as CoreLocation keeps trying, and ends
-      // the stream on any other failure. An ended watch is said as one: the
-      // core starts it again on a grant or a return to the foreground.
+      // Android's watch never ends on its own: expo's watch callbacks leave
+      // onLocationError empty, and the fused provider keeps the request. iOS
+      // rides out locationUnknown while CoreLocation keeps trying, and ends
+      // the stream on any other failure. An ended watch is reported as a
+      // failure, and the core starts the watch again on a grant or on a
+      // return to the foreground.
       () => geo_fail(watch, "other"),
     );
     watch_keep(watch, subscription);
@@ -153,7 +156,8 @@ export const orient: OrientationSensor = {
   has: PLATFORM.headingAvailable(),
   gated: false,
   silence: false,
-  // The compass is granted with the location, asked as its watch starts.
+  // The compass is granted with the location, which is asked for when the
+  // compass's watch starts.
   permit: () => Promise.resolve(true),
   start: orient_start,
   stop: orient_stop,

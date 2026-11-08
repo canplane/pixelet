@@ -23,7 +23,8 @@ interface CubeSwatchProps {
   style?: StyleProp<ViewStyle>;
 }
 
-/** The cube as the world draws it: its texture while the pack is on, else its color. */
+/** A cube drawn as the world draws it: in its texture while the texture pack
+ * is on, and in its color otherwise. */
 export function CubeSwatch({ cube, size, radius, style }: CubeSwatchProps) {
   const box = {
     width: size,

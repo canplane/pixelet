@@ -1,7 +1,9 @@
 // @xpute/kit/status/errno.test.ts
 
-/** The errno as constants: no two share a number, and each is one strerror
- * names. */
+/**
+ * Checks the errno constants: no two share a number, and `strerror` names
+ * each one.
+ */
 
 import { test } from "vitest";
 import assert from "node:assert/strict";

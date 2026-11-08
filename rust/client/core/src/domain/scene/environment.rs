@@ -1,8 +1,10 @@
 // pxl-core/domain/scene/environment.rs
 
-//! Time of day and the light it gives: where the world is anchored and the
-//! wall clock as inputs; the sun and moon placed, and the light and sky they
-//! give.
+//! The sky over the world. From the place the world is anchored at and the
+//! wall clock's time, it places the sun, the moon and the stars, and it writes
+//! the words the renderer draws the sky and its light from. Those words change
+//! only when the drawn sky would change by a display level, one step of a
+//! displayed color, so a still sky costs no frames between such changes.
 
 pub mod celestial;
 pub mod cloud;
@@ -28,9 +30,10 @@ use celestial::{equatorial_to_local, j2000_days, moon_pos, sun_pos};
 use xpute_core::clock::now;
 use xpute_core::global::Global;
 
-/// Runs before the markers' step: the sky moves with the wall clock and
-/// nothing else asks for a frame while the view is still, so the clock asks
-/// for one when its next step falls (`EnvironmentDraw::observe`).
+/// Observes the sky at the wall clock's time and wakes a turn when the next
+/// step of the sky or of the clouds falls (`EnvironmentDraw::observe`). The
+/// sky moves with the wall clock while nothing else asks for a frame, so
+/// without this wake a still view would never show it move.
 pub fn environment_step() {
     let next_ms = environment().observe(wall_now());
     wake_at(now() + next_ms);
@@ -42,19 +45,19 @@ fn environment() -> &'static mut EnvironmentDraw {
     ENVIRONMENT.get(EnvironmentDraw::default)
 }
 
-/// The sky's transitions advanced (`EnvironmentDraw::tick`); whether one is
-/// in flight.
+/// Advances the sky by one frame (`EnvironmentDraw::tick`). Returns whether
+/// a transition still wants frames.
 pub fn environment_animate(frame: &Frame) -> bool {
     environment().tick(frame)
 }
 
-/// The sun under the horizon, as drawn (`EnvironmentDraw::night`).
+/// Whether the sun, as drawn, is under the horizon (`EnvironmentDraw::night`).
 pub fn night() -> bool {
     environment().night()
 }
 
-/// The environment's words as the last frame wrote them, which the renderer
-/// draws the sky and the light by (pxl-render look/environment.rs).
+/// The environment's words as the last frame wrote them. The renderer draws
+/// the sky and its light from them (pxl-render look/environment.rs).
 pub fn environment_words() -> &'static [f32; ENV_FLOATS] {
     &environment().out
 }
@@ -64,24 +67,25 @@ pub fn environment_drift() -> [f64; 2] {
     environment().drift
 }
 
-/// The eye's height over the sea (`EnvironmentDraw::alt_km`).
+/// The eye's height over the sea, in km, as the last frame saw it.
 pub fn environment_alt_km() -> f64 {
     environment().alt_km
 }
 
-/// The cosine of the sun's and the moon's zenith angles at `days`, seen from
-/// `[lon, lat]`: each one's direction's up, the positions standing at a
-/// distance.
+/// The cosines of the sun's and the moon's zenith angles at `days`, seen from
+/// `[lon, lat]`. Each is the up component of the body's unit direction, so
+/// how far the body stands does not matter.
 fn heights(days: f64, [lon, lat]: [f64; 2]) -> [f64; 2] {
     let mu = |p: [f64; 3]| p[2] / v3::len(&p);
     [mu(sun_pos(days, lat, lon)), mu(moon_pos(days, lat, lon))]
 }
 
-/// The Unix ms the sky is drawn at, `unix_ms` the wall clock's, seen from
-/// longitude `lon` in degrees (the `sky_time` setting): the wall clock's
-/// own, or the hour `time` names in the place's mean solar time today, held
-/// there, so the sun stands where it does at that hour whatever the clock
-/// reads; and whether it is held.
+/// The time, in Unix ms, the sky is drawn at, and whether that time is held.
+/// `unix_ms` is the wall clock's time and `lon` the longitude in degrees.
+/// With the `sky_time` setting at `real`, the sky follows the wall clock.
+/// Otherwise it is held at the hour `time` names, in the place's mean solar
+/// time today, so the sun stands where it does at that hour whatever the
+/// clock reads.
 fn sky_clock(time: SkyTime, unix_ms: f64, lon: f64) -> (f64, bool) {
     const HOUR_MS: f64 = 3_600_000.0;
     let hour = match time {
@@ -98,42 +102,46 @@ fn sky_clock(time: SkyTime, unix_ms: f64, lon: f64) -> (f64, bool) {
     (today + hour * HOUR_MS - ahead, true)
 }
 
-/// Each light's height a display level of the sky moves over, or, out of
-/// reach of the air, the height before it comes into reach (pxl-render
-/// `sky_steps`); 0 before its first slope lands, so every observation steps
-/// until one has.
+/// The step of the sun and of the moon, in the measure of height `heights`
+/// gives (pxl-render `sky_steps`). For a light whose sky is drawn, its step
+/// is how far its height moves before the drawn sky changes by a display
+/// level. For a light out of reach of the air, it is how far its height moves
+/// before the light comes into reach. A step is 0 until the renderer's first
+/// measure of it lands, so until then every observation steps the sky.
 fn steps() -> [f64; 2] {
     sky_steps().map(f64::from)
 }
 
 pub struct EnvironmentDraw {
     started: bool,
-    /// Days since J2000.0 the sky is drawn for, from the runtime's wall clock
-    /// a step at a time (`observe`).
+    /// The days since J2000.0 the sky is drawn for. They follow the sky's
+    /// clock one step at a time (`observe`).
     days: f64,
+    /// Where the sun and the moon are drawn. They ease toward `aimed`.
     sun: [f64; 3],
     moon: [f64; 3],
-    /// Where the sun and moon stand and how the stars turn at the days and
-    /// the anchor the sky is seen at, made where either steps (`aim`).
+    /// Where the sun and the moon stand, and how the stars are turned, at
+    /// `days` seen from `anchor`. Both are computed again whenever either of
+    /// those changes (`aim`).
     aimed: [[f64; 3]; 2],
     star_frame: [[f64; 3]; 3],
-    /// The anchor the sky is observed from, which follows the eye's only
-    /// where the sun or the moon stands a display level higher or lower
-    /// from it (`steps`), where they stood when it last moved, and how far
-    /// they have come since, to one at the end.
+    /// The place the sky is observed from. It follows the eye's anchor only
+    /// once the sun or the moon would stand a step higher or lower from there
+    /// (`steps`), so a pan too small to change the drawn sky moves no word of
+    /// it. When it moves, `from` keeps where the sun and the moon were drawn,
+    /// and `progress` runs from 0 to 1 as they ease from there to `aimed`.
     anchor: [f64; 2],
     from: [[f64; 3]; 2],
     progress: f64,
     stars: f64,
-    /// How far the wind has carried the clouds, X and Y in units, by their
-    /// clock, the wall time since the first observation, held between their
-    /// steps (`observe`).
+    /// How far the wind has carried the clouds, X and Y in units. It is taken
+    /// at the clouds' clock, the wall time since the first observation, which
+    /// holds still between its steps (`observe`).
     drift: [f64; 2],
     /// The eye's height over the sea, in km, as the last frame saw it
     /// (`tick`).
     alt_km: f64,
-    /// Where the sky's hour and the clouds' wall clock last stepped, in
-    /// Unix ms.
+    /// The clocks of the sky and of the clouds, which step in Unix ms.
     sky_at: StepClock,
     clouds_at: StepClock,
     first_ms: Option<f64>,
@@ -164,9 +172,10 @@ impl Default for EnvironmentDraw {
 }
 
 impl EnvironmentDraw {
-    /// The anchor the sky is seen from: the eye's (`anchor`) before the sky
-    /// starts or where the sun or the moon stands a display level higher or
-    /// lower from it, else the one it is seen from.
+    /// The place the sky should be seen from now. Before the sky starts it is
+    /// the eye's anchor. After, it is the eye's anchor once the sun or the
+    /// moon stands a step higher or lower from there than from the current
+    /// place, and the current place otherwise.
     fn sky_anchor(&self) -> [f64; 2] {
         let [lon, lat, _] = anchor();
         let live = [lon, lat];
@@ -185,38 +194,36 @@ impl EnvironmentDraw {
         }
     }
 
-    /// The sun under the horizon, as drawn: past where night begins to fall
-    /// (pxl-content param.rs `night::FALL`).
+    /// Whether the sun, as drawn, is under the horizon, where night begins to
+    /// fall (pxl-content param.rs `night::FALL`).
     pub fn night(&self) -> bool {
         self.started && v3::norm(&self.sun)[2] < f64::from(night::FALL[1])
     }
 
-    /// Unix milliseconds: the sky's days and the clouds' time, each held and
-    /// stepped a quantum at a time, and how many milliseconds on the earlier
-    /// of their next steps falls. A clock steps once its next step's time is
-    /// reached, that time taken where it last stepped: one quantum at the rate
-    /// it moved there. The sky's quantum is its step, the height over which
-    /// the sky as drawn moves one display level (pxl-render `sky_steps`, its
-    /// views' own slopes), or, for a light out of reach of the air, the height
-    /// before it comes into reach, at the rate the sun's or the moon's height
-    /// moves; a light with no step landed yet asks the least, so every
-    /// observation steps until one lands. The clouds' is the wind carrying them the
-    /// seen step at the nearest (`cloud::drift_step_s`). Between steps their
-    /// words stand (`lens::StepClock`); before the sky starts, every
-    /// observation steps them. A clock set back before where a light last
-    /// stepped steps it there at once. The sky's clock is the hour
-    /// the `sky_time` setting shows (`sky_clock`), which a held hour never steps;
-    /// the clouds' is the wall clock's.
+    /// Observes the sky at the wall clock's time `unix_ms`. Returns how many
+    /// milliseconds remain until the earlier of the sky's and the clouds'
+    /// next steps. Each is a clock that holds still and steps a quantum at a
+    /// time (`lens::StepClock`), so their words do not change between steps.
+    /// A quantum is measured where its clock last stepped, at the rate things
+    /// moved there. The sky's quantum is the time the sun or the moon takes
+    /// to move its step (`steps`). The clouds' quantum is the time the wind
+    /// takes to carry them the seen step at the nearest
+    /// (`cloud::drift_step_s`). Before the sky starts, every observation
+    /// steps both clocks. The sky's clock reads the hour the `sky_time`
+    /// setting shows (`sky_clock`), and a held hour never steps it. The
+    /// clouds' clock reads the wall clock.
     pub fn observe(&mut self, unix_ms: f64) -> f64 {
         let first = *self.first_ms.get_or_insert(unix_ms);
         let at = self.sky_anchor();
         let (sky_ms, held) = sky_clock(settings_store().sky_time, unix_ms, at[0]);
         let heights = |days: f64| heights(days, at);
         let step = steps();
-        // As fast as each height moves over the minute from `at`, when it will
-        // have moved a step. A light with no step landed (`unknown`) steps at
-        // every observation and wakes no turn: its measures' landing does
-        // (pxl-render `complete`).
+        // The time at which each light's height will have moved a step, at
+        // the rate it moves over the minute after `at`. A light whose step
+        // has not landed gives `unknown`. The sky's clock passes 0 for it, so
+        // it steps at every observation. The wake passes infinity for it,
+        // because the landing of the renderer's measures wakes a turn of its
+        // own (pxl-render `complete`).
         const MINUTE_MS: f64 = 60_000.0;
         let rate = |at: f64, unknown: f64| {
             let days = j2000_days(at);
@@ -239,7 +246,9 @@ impl EnvironmentDraw {
             self.aim();
         }
         let (clouds, clouds_due, drifted) = self.clouds_at.at(unix_ms, clouds_next);
-        // The clouds drifting step on their own, waking the turn.
+        // A step of the clouds is an animation: the wake this observation
+        // sets brings their next step, so the frame drawn for this one need
+        // ask for no more (`animation`).
         if drifted && self.started {
             animation::note_animation();
         }
@@ -252,23 +261,22 @@ impl EnvironmentDraw {
         sky_in.min(clouds_due - unix_ms).max(0.0)
     }
 
-    /// The sun and moon and the stars' turn at the sky's days and anchor.
     fn aim(&mut self) {
         let [lon, lat] = self.anchor;
         self.aimed = [sun_pos(self.days, lat, lon), moon_pos(self.days, lat, lon)];
         self.star_frame = equatorial_to_local(self.days, lat, lon);
     }
 
-    /// Whether a transition is still in flight and wants frames: the sun
-    /// and moon on their way across a jump of the anchor, the stars fading
-    /// in. The clock's steps are taken as they come (`observe`), a display
-    /// level each, so a still sky's words stand between them.
+    /// Advances the sky by one frame and writes its words. Returns whether a
+    /// transition still wants frames: the sun and the moon easing across a
+    /// jump of the anchor, or the stars fading in. The clock's steps are not
+    /// eased. Each moves the drawn sky by a display level at most, so it is
+    /// taken as it comes (`observe`), and a still sky's words do not change
+    /// between steps.
     pub fn tick(&mut self, frame: &Frame) -> bool {
         if self.first_ms.is_none() {
             return false;
         }
-        // Observed from the anchor the sky follows: a pan that moves neither
-        // light a display level moves no word of the sky.
         let live = self.sky_anchor();
         if !self.started || live != self.anchor {
             if self.started {
@@ -293,7 +301,7 @@ impl EnvironmentDraw {
         (self.sun, self.moon) = (along(self.from[0], sun), along(self.from[1], moon));
         // The stars start dark and fade in, the first frame included.
         self.stars = (self.stars + frame.delta_s * SKY_EASE_RATE).min(1.0);
-        // Height over the sea under the eye, which the camera stands over.
+        // The camera's Z, in units, is its height over the sea.
         let km_per_u = km_per_u();
         self.alt_km = frame.camera[2] * km_per_u;
         // The ground under the eye, as the turn observed it.

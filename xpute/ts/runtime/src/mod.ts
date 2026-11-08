@@ -1,11 +1,12 @@
 // @xpute/runtime
 
 /**
- * What an app takes of the runtime: its core started where the platform runs
- * it (`start`, `serve` in a page's worker) from one manifest, or booted beside
- * it (`boot`); the UI's link to it; what the app decides (its files, its
- * policy, its GPU); and the device stubs it sends with. The runtime's parts
- * are reached by path.
+ * What an app takes from the runtime. From one manifest it starts its core
+ * where the platform runs it (`start`, with `serve` inside a page's worker),
+ * or boots the core beside it (`boot`). It also takes the UI's link to the
+ * core, the types of what the app decides (its files, its policy, its GPU),
+ * and the device stubs it sends with. The runtime's other parts are imported
+ * by path.
  */
 
 export { serve } from "./remote.ts";

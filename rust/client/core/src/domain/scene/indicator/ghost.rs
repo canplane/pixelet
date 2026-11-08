@@ -1,11 +1,12 @@
 // pxl-core/domain/scene/indicator/ghost.rs
 
-//! The ghost, half transparent: a box the box shader unfolds
-//! (pxl-render `mesh::ghost`), or one decor instance drawn by decor's. What it
-//! shows is the tool's (`domain/control/edit/ghost.rs`), handed over as
-//! an instance in the pointer's frame (`Ghost`); how each kind of it is drawn
-//! is decided here: a box's color and texture, and the box that stands in for
-//! a decor until it can be drawn as itself.
+//! The hover ghost, drawn half transparent: either a box, which the box
+//! shader unfolds (pxl-render `mesh::ghost`), or one decor instance, which
+//! decor's shader draws. The tool decides what the ghost shows
+//! (domain/control/edit/ghost.rs) and hands it over as an instance in the
+//! pointer's frame (`Ghost`). This module decides how each kind is drawn: a
+//! box's color and texture, and the box that stands in for a decor until the
+//! decor can be drawn as itself.
 
 use pxl_render::frame::shader::record::BOX_WORDS;
 use pxl_render::frame::shader::record::{PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR};
@@ -46,37 +47,36 @@ enum Shape {
 
 #[derive(Default)]
 pub struct GhostDraw {
-    /// What `block` holds; none where nothing is drawn.
+    /// What `block` holds, or None when nothing is drawn.
     shape: Option<Shape>,
     block: MirroredBlock,
-    /// A box's, as written (write_lone_box).
+    /// The z step `write_lone_box` returned for a box. The box's draw needs
+    /// it.
     z_step: f64,
-    /// A box's min corner, a decor instance's base.
+    /// A box's min corner, or a decor instance's base.
     at: V3,
-    /// Its draw, a box's or a decor's.
     id: DrawId,
 }
 
 static GHOST: Global<GhostDraw> = Global::new();
 
-/// The ghost as drawn.
 fn shown() -> &'static mut GhostDraw {
     GHOST.get(GhostDraw::default)
 }
 
-/// What the tool shows (`GhostDraw::set`); whether what is drawn changed.
+/// Draws what the tool shows (`GhostDraw::set`). Returns whether what is
+/// drawn changed.
 pub fn ghost_set(draw: &mut DrawList, ghost: &Ghost) -> bool {
     shown().set(draw, ghost)
 }
 
-/// The ghost into the frame's list (`GhostDraw::draw`).
 pub fn ghost_draw(draw: &mut DrawList) {
     shown().draw(draw);
 }
 
 impl GhostDraw {
-    /// What the tool shows, drawn as its kind is. Whether what is drawn
-    /// changed.
+    /// Sets the ghost to what the tool shows, drawn as its kind is drawn.
+    /// Returns whether what is drawn changed.
     pub fn set(&mut self, draw: &mut DrawList, ghost: &Ghost) -> bool {
         match *ghost {
             Ghost::None => self.clear(draw),
@@ -99,10 +99,11 @@ impl GhostDraw {
         }
     }
 
-    /// A box at its corner, in the cube of its zoom, painted as its cube paints
-    /// where textures are on, else untextured in its color, or where there
-    /// is no cube in the indicator's (`ERASE` for the eraser's, else
-    /// `ACTION`). Whether what is drawn changed.
+    /// Sets the ghost to a box at its corner, the size of a cube at its zoom.
+    /// With textures on, it is painted as its cube paints. With textures off,
+    /// it is drawn untextured in its cube's color. With no cube, it takes the
+    /// indicator's color: `ERASE` for the eraser and `ACTION` otherwise.
+    /// Returns whether what is drawn changed.
     fn set_box(
         &mut self,
         draw: &mut DrawList,
@@ -141,9 +142,10 @@ impl GhostDraw {
         true
     }
 
-    /// `decor`'s `variant`, its base at `t`'s `at`. Until the variant's model
-    /// and skin both arrive `stand_in`'s box is drawn instead; with none, the
-    /// instance is the world's own and drawn as it is. Whether what is drawn
+    /// Sets the ghost to `variant` of `decor`, with its base at `t.at`. Until
+    /// the variant's model and skin have both arrived, the box `stand_in` is
+    /// drawn instead. Without a stand-in, the instance is one the world
+    /// already holds, and it is drawn as it is. Returns whether what is drawn
     /// changed.
     fn set_decor(
         &mut self,
@@ -171,8 +173,8 @@ impl GhostDraw {
         if self.shape == Some(shape) {
             return moved;
         }
-        // One group of one, with no header: its columns, its flags, and the
-        // index list.
+        // The block is one group of one instance, with no header: its
+        // columns, its flags, and the index list.
         let column = GroupColumns { first: 0, cnt: 1 };
         let mut m = [0u32; GroupColumns::words(1) + 1];
         (m[column.f32_at(3, 0)], m[column.f32_at(4, 0)]) = (rot.to_bits(), scale.to_bits());
@@ -180,28 +182,32 @@ impl GhostDraw {
         true
     }
 
-    /// Whether there was one.
+    /// Removes the ghost. Returns whether there was one.
     pub fn clear(&mut self, draw: &mut DrawList) -> bool {
         self.block.free(draw);
         self.shape.take().is_some()
     }
 
-    /// None where the heap refused, so the next asks again.
+    /// When the heap refuses the write, `shape` is left None, so the next set
+    /// writes again.
     fn write(&mut self, draw: &mut DrawList, shape: Shape, instance: &[u8]) {
         self.shape = self.block.write(draw, instance).then_some(shape);
     }
 
-    /// On Q3, a box's on whole units, a decor's where its stored Q3 is: on any lap of X,
-    /// drawn the short way round from the eye (pxl-render gpu/draw.rs `Position`).
+    /// Lists the ghost's draw at a Q3 position: a box's is taken on whole
+    /// units, and a decor's is its stored Q3 position. Either may lie on any
+    /// lap of X, since the renderer draws it the short way round from the eye
+    /// (pxl-render gpu/draw.rs `Position`).
     pub fn draw(&self, draw: &mut DrawList) {
         let Some(shape) = self.shape else { return };
         match shape {
             Shape::Box { size_bits, .. } => {
                 let whole = on_whole_units(self.at).0;
-                // Written in a cell of its own size (write_lone_box).
+                // `write_lone_box` wrote the box in a cell of its own size.
                 let size = f64::from_bits(size_bits);
-                // It reads the sun's map, so it stands within its cell, its corner off the whole
-                // unit by under one.
+                // The box reads the sun's map, so it declares the box it stands
+                // within: its cell, grown by a unit, since its corner lies less
+                // than a unit off the whole unit.
                 let stand = ReceiverBox::of(whole, whole.map(|v| v + 1.0 + size));
                 draw.draw_in(
                     &self.id,

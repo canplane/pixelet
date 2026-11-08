@@ -2,8 +2,8 @@
 
 import { AppState } from "react-native";
 
-/** The app in front or not, as React Native's AppState says: in the
- * background it may be suspended or ended without another word. */
+/** Whether the app is in front, as React Native's AppState says. In the
+ * background, the app may be suspended or ended without further notice. */
 export function watch(report: (visible: boolean) => void): void {
   AppState.addEventListener("change", (state) => report(state === "active"));
 }

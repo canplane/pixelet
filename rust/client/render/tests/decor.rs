@@ -1,8 +1,8 @@
-//! Decor's passes by hand (frame/shader/decor_pose.wgsl, decor_args.wgsl) answer as the
-//! Rust does: over the real world of tests/real_world, each record a thread leaves as
-//! `generation::placement` stands it through the real walk (`support::column_surface`),
-//! word for word (doc/experiment/20261104-taking-rust-gpu-out/decor). Skipped where no
-//! adapter answers.
+//! Decor's passes by hand (frame/shader/decor_pose.wgsl, decor_args.wgsl) must answer as the
+//! Rust does, over the real world of tests/real_world. Each record a thread leaves must equal,
+//! word for word, the record `generation::placement` stands through the real walk
+//! (`support::column_surface`). The pass reads a column's surface off the column and walks
+//! only a column under ways, so these tests hold that read to the walk, which owns the rule.
 
 mod real_world;
 
@@ -32,7 +32,7 @@ use wgpu::util::DeviceExt;
 
 use real_world::{mix, Built, World};
 
-/// Why the answers fell as they did, a kind of answer each.
+/// How many answers fell into each kind, by the kind's name.
 #[derive(Default)]
 struct Tally(BTreeMap<&'static str, u64>);
 
@@ -47,7 +47,8 @@ impl Tally {
     }
 }
 
-/// The world unplaced as decor's generation walks it, the test's reference.
+/// The world as decor's generation walks it, with nothing placed handed down from the root
+/// (`Inheritance::UNPLACED`). It is the test's reference.
 struct Ground<'w> {
     w: World<'w>,
     cuts: [Cut; 2],
@@ -87,8 +88,8 @@ impl Query for Ground<'_> {
     }
 }
 
-/// The line a cell is asked off (`DecorQuery::asset`): the column surface's, or, as edited,
-/// the cell's root's alone.
+/// The line a cell is asked from (`DecorQuery::asset`). It is the column surface's line, or,
+/// where the ask is edited, the cell's root alone.
 struct AssetLine<'l> {
     line: &'l support::Line<Inheritance>,
     edited: bool,
@@ -120,18 +121,20 @@ impl Ancestors<Inheritance> for AssetLine<'_> {
     }
 }
 
-/// `generation::DecorQuery` over the real world, the test's reference, what it answers tallied.
+/// `generation::DecorQuery` over the real world, the test's reference, which tallies what it
+/// answers.
 struct Generating<'w, 't> {
     w: World<'w>,
     cuts: [Cut; 2],
     tally: &'t mut Tally,
-    /// `next_placed`'s `&self`: whether it was asked, a decor and another thing met, a
-    /// decor left out met; and the last decor met.
+    /// Counts kept through `next_placed`, which takes `&self`: how often it was asked, how many
+    /// decors and how many other things it met, and how many decors left out it met.
+    /// `last_decor` is the last decor it met.
     placed: std::cell::Cell<[u64; 4]>,
     last_decor: std::cell::Cell<[i32; 3]>,
     /// The decors whose boxes took a record.
     claims: Vec<[i32; 3]>,
-    /// Whether the column last asked no clip level holds.
+    /// Whether no clip level holds the column asked last.
     last_lacks: bool,
 }
 
@@ -181,8 +184,8 @@ impl DecorQuery for Generating<'_, '_> {
             self.tally.add("surface: a part of its cube", f.top.1 < 1.0);
             self.tally
                 .add("surface: a wall", col.palette_idx == value::UNKNOWN);
-            // What the hand pass asks of the world: where ways bound the column, its cells
-            // down to the surface; else none.
+            // What the pass by hand asks of the world: where ways bound the column, its cells
+            // down to the surface, and otherwise nothing.
             let (b, _, _) = clip::bound_over(
                 &held,
                 &mut Lookup::NONE.clone(),
@@ -195,7 +198,7 @@ impl DecorQuery for Generating<'_, '_> {
                 self.tally.add("hand: columns walked", true);
                 *self.tally.0.entry("hand: cells walked").or_default() +=
                     (start - f.top.0 + 1) as u64;
-                // The cell it met, as the walk asked it.
+                // The cell the walk met, asked as the walk asked it.
                 let mut ground = Ground {
                     w: self.w,
                     cuts: [Cut::NONE; 2],
@@ -314,7 +317,8 @@ impl DecorQuery for Generating<'_, '_> {
     }
 }
 
-/// What a thread leaves of a record.
+/// What a thread leaves of the record of decor `j` at `leaf`: its first word, the Z of its
+/// box's lowest corner, and its sink.
 fn stand(q: &mut Generating, j: u32, cell_zoom: Zoom, leaf: [i32; 2]) -> (u32, u32, u32) {
     let decor = &DECORS[j as usize];
     let c = scatter::candidate_at(decor, leaf).0;
@@ -371,7 +375,8 @@ fn stand(q: &mut Generating, j: u32, cell_zoom: Zoom, leaf: [i32; 2]) -> (u32, u
     (word, g.at[2] as u32, g.sink)
 }
 
-/// A dispatch's pairs, each an entry, a decor and whether in part, the frame's boxes and cuts.
+/// One dispatch: its pairs, each an entry, a decor and whether it runs in part, and the frame's
+/// boxes and cuts.
 struct Round {
     name: &'static str,
     pairs: Vec<(u32, u32, bool)>,
@@ -379,16 +384,17 @@ struct Round {
     cuts: [Cut; 2],
 }
 
-/// The records a pair holds (`decor_thin_cs`'s), and how many it says it laid.
+/// The leaves of the records a pair holds, as `decor_thin_cs` lays them, and the count the pair
+/// says it laid. A count of 0 stands for the number of leaves.
 #[derive(Default, Clone)]
 struct PairLeaves {
     leaves: Vec<[i32; 2]>,
     cnt: u32,
 }
 
-/// What each pair holds: what `decor_thin_cs` lays, its candidates off the hashes, then more
-/// wherever something asks a case, any leaf whose variant stands at the clip level: a
-/// thread asks only what stands.
+/// What each pair holds. It starts with what `decor_thin_cs` lays, the candidates the hashes
+/// give. Leaves about the places that make a case are added, up to the decor's room: any leaf
+/// whose variant stands at the clip level, as a thread asks only what stands.
 fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), PairLeaves> {
     let mut pairs: BTreeMap<(u32, u32), PairLeaves> = BTreeMap::new();
     let cells = [22u32, 23, 24];
@@ -430,7 +436,7 @@ fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), PairLe
             }
         }
     }
-    // A leaf and those about it, in whichever pair may hold it.
+    // Adds a leaf and the leaves about it to whichever pairs may hold them.
     let mut near = |at: [i32; 2], reach: i32, step: i32| {
         for cell_zoom in cells {
             let k = clip::BRICK_SHIFT + LEAF_CELL_ZOOM - cell_zoom;
@@ -503,13 +509,13 @@ fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), PairLe
     pairs
 }
 
-/// Word `at`'s bytes.
 fn bytes(words: &[u32]) -> &[u8] {
     // SAFETY: every u32's bytes are u8s, in the slice's own lifetime.
     unsafe { std::slice::from_raw_parts(words.as_ptr().cast(), words.len() * 4) }
 }
 
-/// What a dispatch may take, past which its label says which never ended.
+/// How long a dispatch may take. Past it the test fails, and the label names the dispatch that
+/// never ended.
 const DISPATCH_LIMIT: std::time::Duration = std::time::Duration::from_secs(60);
 
 fn read(device: &wgpu::Device, queue: &wgpu::Queue, from: &wgpu::Buffer, label: &str) -> Vec<u32> {
@@ -541,7 +547,7 @@ fn read(device: &wgpu::Device, queue: &wgpu::Queue, from: &wgpu::Buffer, label: 
         .collect()
 }
 
-/// A compute pipeline of `source`, refused where its module is.
+/// A compute pipeline of `entry` in `source`. A module the device refuses fails the test.
 fn pipeline(
     device: &wgpu::Device,
     label: &str,
@@ -564,8 +570,8 @@ fn pipeline(
     })
 }
 
-/// Shader `kind` by hand, as the renderer makes its pipeline: over the group it states
-/// (gpu/generator.rs), not one read off the module.
+/// The pipeline of shader `kind` as the renderer makes it, over the group the renderer states
+/// (gpu/generator.rs) and not one derived from the module.
 fn hand_pipeline(device: &wgpu::Device, kind: u32) -> wgpu::ComputePipeline {
     use pxl_render::api_spec::record::{STORAGE, STORAGE_RW, UNIFORM};
     use pxl_render::frame::shader::group::{
@@ -642,7 +648,7 @@ fn device() -> Option<(wgpu::Device, wgpu::Queue)> {
     )
 }
 
-/// The first word of entry `s`'s `i`-th record of decor `j`.
+/// The first word of the `i`-th record of decor `j` in entry `s`.
 fn word_of(s: u32, j: u32, i: u32) -> usize {
     generation::record_at(generation::entry_record(&DECORS, s, j, i)) as usize
 }
@@ -661,7 +667,8 @@ struct Gpu<'d> {
 }
 
 impl Gpu<'_> {
-    /// `pairs` run over `init`.
+    /// Runs `decor_cs` over the records `init` for the `pairs` pairs `list` names, and returns
+    /// the records.
     fn run(
         &self,
         label: &str,
@@ -723,7 +730,7 @@ impl Gpu<'_> {
     }
 }
 
-/// Whether a box of the round's reaches the leaf (`is_changed`).
+/// Whether one of the round's boxes reaches `leaf`, as decor_rect.wgsl `is_changed` decides.
 fn is_changed(boxes: &[([i32; 4], Zoom)], cell_zoom: Zoom, leaf: [i32; 2]) -> bool {
     let at = [leaf[0], leaf[1], leaf[0] + 1, leaf[1] + 1];
     boxes
@@ -731,7 +738,8 @@ fn is_changed(boxes: &[([i32; 4], Zoom)], cell_zoom: Zoom, leaf: [i32; 2]) -> bo
         .any(|&(b, z)| generation::reaches(b, z, cell_zoom, at))
 }
 
-/// A round's expected words: `want` over `init`, and those a test does not hold a thread to.
+/// What a round expects: the words `want` it must leave, starting from `init`, and the words
+/// `free` that the test does not hold a thread to.
 struct Expected {
     init: Vec<u32>,
     want: Vec<u32>,
@@ -741,8 +749,8 @@ struct Expected {
     claims: Vec<[i32; 3]>,
 }
 
-/// The words a round starts from: each pair's count, and its records as `decor_thin_cs` leaves
-/// a whole pair's or a frame before left a pair's in part.
+/// The words a round starts from: each pair's count, and its records. A whole pair's records
+/// are as `decor_thin_cs` leaves them, and a pair in part holds what a frame before left.
 fn init_of(laid: &BTreeMap<(u32, u32), PairLeaves>, round: &Round) -> Vec<u32> {
     let words = generation::record_at(generation::SLOT_RECORDS) as usize;
     let mut init = vec![0u32; words];
@@ -758,7 +766,8 @@ fn init_of(laid: &BTreeMap<(u32, u32), PairLeaves>, round: &Round) -> Vec<u32> {
         for (i, leaf) in laid[&(s, j)].leaves.iter().enumerate() {
             let r = word_of(s, j, i as u32);
             let h = mix(i as u32 + 7, *leaf);
-            // A whole pair's first words as a frame before left them, which thin keeps.
+            // A whole pair's first word is whatever a frame before left, which thin does not
+            // write. A pair in part holds what a frame before generated, or nothing generated.
             init[r] = if !part {
                 h
             } else if h.is_multiple_of(5) {
@@ -862,7 +871,8 @@ fn expect(built: &Built, laid: &BTreeMap<(u32, u32), PairLeaves>, round: &Round)
     }
 }
 
-/// The list a dispatch reads: its boxes, the pairs whole from its start, in part from its end.
+/// The list a dispatch reads: its boxes, the whole pairs from the list's start, and the pairs
+/// in part from its end.
 fn list_of(round: &Round, pairs: &[(u32, u32, bool)]) -> (Vec<u32>, u32) {
     let mut list = vec![0u32; generation::LIST_WORDS as usize];
     let whole: Vec<_> = pairs.iter().filter(|p| !p.2).collect();
@@ -895,7 +905,8 @@ fn eye_words(cuts: [Cut; 2]) -> Vec<u32> {
     words
 }
 
-/// Each word against what is expected; how many differ, the first few told.
+/// Compares each word with what is expected, prints the first few that differ, and returns how
+/// many differ.
 fn differ(name: &str, by: &str, got: &[u32], e: &Expected) -> u64 {
     let mut skip = vec![false; got.len()];
     for &f in &e.free {
@@ -935,8 +946,9 @@ fn differ(name: &str, by: &str, got: &[u32], e: &Expected) -> u64 {
     n
 }
 
-/// Some leaf bricks' east neighbours held by no clip level, their rows cleared at every zoom: a
-/// box from the west runs onto a column not held. What is about those edges, for records.
+/// Clears, at every zoom, the rows of the bricks east of some leaf bricks, so that no clip
+/// level holds them and a box from the west runs onto a column not held. Returns points by
+/// those edges for records to stand about.
 fn lack_columns(built: &mut Built) -> Vec<[i32; 2]> {
     let mut edges = Vec::new();
     let k = |cell_zoom: Zoom| clip::BRICK_SHIFT + LEAF_CELL_ZOOM - cell_zoom;
@@ -965,10 +977,10 @@ fn lack_columns(built: &mut Built) -> Vec<[i32; 2]> {
     edges
 }
 
-/// Leaf cells round the world, X's lap.
+/// The leaf cells once round the world along X, a lap.
 const LAP: i32 = 1 << LEAF_CELL_ZOOM;
 
-/// A round's cases about a point: cuts and part boxes over the pairs near it.
+/// The pairs that hold leaves and whose bricks lie within `reach` of `p`, each run whole.
 fn pairs_near(
     laid: &BTreeMap<(u32, u32), PairLeaves>,
     built: &Built,
@@ -990,7 +1002,7 @@ fn pairs_near(
         .collect()
 }
 
-/// The rounds of a world: all of it whole; then cuts and boxes about what stood there.
+/// The rounds of a world: all of it whole, then cuts and boxes about what stood there.
 fn rounds(
     built: &Built,
     laid: &BTreeMap<(u32, u32), PairLeaves>,
@@ -1000,7 +1012,8 @@ fn rounds(
     let none = [Cut::NONE; 2];
     let mut out = Vec::new();
     let leaf_of = |n: usize| stood[n % stood.len()];
-    // A cut of the leaves over a record's box and at its base, and a coarser one over it.
+    // Rounds with a carve: a leaf cell cut in a record's box or at its base, or a coarser node
+    // cut over it.
     for n in 0..12 {
         let (_, _, leaf, z) = leaf_of(n * 37 + 3);
         let at = |zoom: Zoom, dz: i32| Cut {
@@ -1023,7 +1036,8 @@ fn rounds(
             cuts: [cut, Cut::NONE],
         });
     }
-    // Hidden: a placed decor still claims; another placed thing does not stand in the way.
+    // Rounds with something placed left out. A placed decor left out still claims its box, and
+    // another placed thing left out does not stand in the way.
     for n in 0..12 {
         let p = if claims.is_empty() {
             built.decors[n * 41 % built.decors.len()]
@@ -1053,7 +1067,7 @@ fn rounds(
             cuts: [Cut::NONE, Cut { zoom, at: c }],
         });
     }
-    // Whole and in part in one dispatch, boxes of every kind.
+    // Rounds with pairs whole and in part in one dispatch, under boxes of every kind.
     for n in 0..8u32 {
         let (_, _, leaf, _) = leaf_of(n as usize * 113 + 11);
         let mut pairs = pairs_near(laid, built, leaf, 300);
@@ -1082,7 +1096,8 @@ fn rounds(
                     )
                 })
                 .collect(),
-            // Laps of X: the box a lap west, and one the whole way round.
+            // Laps of X: case 3 puts the box a lap west, and case 4 makes one the whole way
+            // round.
             3 => vec![(
                 [
                     leaf[0] - (1 << 24) - 2,
@@ -1093,14 +1108,15 @@ fn rounds(
                 generation::EVERY,
             )],
             4 => vec![([0, leaf[1] - 3, 1 << 24, leaf[1] + 3], generation::EVERY)],
-            // A brick filled at a coarser clip level alone: no candidate finer reads it.
+            // A box over a brick filled at clip level 22 alone, which no candidate at a finer
+            // level reads.
             5 => {
                 let k = clip::BRICK_SHIFT + LEAF_CELL_ZOOM - 22;
                 let q = [leaf[0] >> k, leaf[1] >> k];
                 vec![(generation::brick_rect(22, q), 22)]
             }
-            // A lap east, across the seam into the region; and one ending at its west edge a
-            // lap round, and one past it.
+            // Case 6 puts the box a lap east, across the seam into the region. Case 7 puts one
+            // box ending at the region's west edge a lap round, and one reaching a cell past it.
             6 => vec![(
                 [
                     leaf[0] + LAP - 3,
@@ -1164,13 +1180,14 @@ fn world_gpu<'d>(
     }
 }
 
-/// A world as `run_world` asks it: built with `extra` placed, its rows not held cleared, and
-/// what its pairs lay.
+/// A world as `run_world` asks it, built with `extra` placed and with some rows cleared so no
+/// clip level holds them, and what its pairs lay.
 fn world_of(eye: [i32; 2], extra: &[Leaf]) -> (Built, BTreeMap<(u32, u32), PairLeaves>) {
     let mut built = real_world::build_with(eye, 600, extra);
     let edges = lack_columns(&mut built);
     let mut laid = pairs_about(&built, &edges);
-    // A pair that laid past its room, as many as its room read.
+    // One train pair says it laid three past its room. The passes read only as many records as
+    // its room holds.
     if let Some((_, p)) = laid
         .iter_mut()
         .find(|(k, p)| k.1 == 3 && p.leaves.len() as u32 >= DECORS[3].cap() - 8)
@@ -1180,7 +1197,8 @@ fn world_of(eye: [i32; 2], extra: &[Leaf]) -> (Built, BTreeMap<(u32, u32), PairL
     (built, laid)
 }
 
-/// What a round asks, against the Rust: each dispatch `decor_cs`'s, its words compared.
+/// Runs a round through `decor_cs`, a dispatch at a time, and compares the words it leaves
+/// with the Rust's.
 fn run_round(
     gpu: &Gpu,
     built: &Built,
@@ -1210,15 +1228,17 @@ fn run_round(
     (e, hand)
 }
 
-/// A leaf placed, its zoom, its node and its word.
+/// A leaf placed: its zoom, its node and its word.
 type Leaf = (Zoom, [i32; 3], u32);
 
-/// A record that stood: its pair, its leaf, its box's height and its first word.
+/// A record that stood: its pair's entry and decor, its leaf, the Z of its box's lowest
+/// corner, and its first word.
 type StoodRecord = (u32, u32, [i32; 2], i32, u32);
 
-/// What is placed in the boxes of records that stand at the leaves, and the records: a cube
-/// over the base of each of `cubed`; and of each of `folded`, a wide one, a cube a sixty-fourth
-/// of its cell in its first column's top cell, and a cube at its second column's base.
+/// What is placed in the boxes of records that stand at the leaves, and those records. Each
+/// record of `cubed` gets a cube over its base. Each record of `folded` is a wide one, and gets
+/// a cube a sixty-fourth of a cell in its first column's top cell and a cube at its second
+/// column's base.
 fn placed_in_boxes(stood: &[StoodRecord]) -> (Vec<Leaf>, Vec<StoodRecord>, Vec<StoodRecord>) {
     let object = object::leaf_word(value::OBJECTS[0], 0);
     let at_leaves: Vec<StoodRecord> = stood
@@ -1256,8 +1276,8 @@ fn placed_in_boxes(stood: &[StoodRecord]) -> (Vec<Leaf>, Vec<StoodRecord>, Vec<S
     (extra, cubed, folded)
 }
 
-/// The rounds over records something is placed in the boxes of (`placed_in_boxes`): them all
-/// whole; then each of the first six cubed, its cube left out.
+/// The rounds over the records whose boxes hold something placed (`placed_in_boxes`): all of
+/// them whole, then each of the first six of `cubed` with its cube left out.
 fn placed_rounds(cubed: &[StoodRecord], folded: &[StoodRecord]) -> Vec<Round> {
     let pairs = |rs: &[StoodRecord]| -> Vec<(u32, u32, bool)> {
         let mut p: Vec<_> = rs.iter().map(|r| (r.0, r.1, false)).collect();
@@ -1290,9 +1310,10 @@ fn placed_rounds(cubed: &[StoodRecord], folded: &[StoodRecord]) -> Vec<Round> {
     out
 }
 
-/// Records whose boxes something is placed in (`placed_in_boxes`), on a world with it placed:
-/// a cube over the base takes a record, and does not where it is left out; a sixty-fourth of
-/// a cell in a box is no edit, nor a cube at a base, so those records stand.
+/// Runs the records whose boxes hold something placed (`placed_in_boxes`) on a world with it
+/// placed. A cube over a record's base takes the record, and does not once it is left out. A
+/// sixty-fourth of a cell in a box is no edit, and neither is a cube at a base, so those
+/// records stand.
 fn run_placed(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -1373,7 +1394,7 @@ fn run_world(
         (hand, e.claims)
     };
     let (hand, claims) = run(&first, totals);
-    // What stood, for the cuts and boxes about it.
+    // The records that stood, which the later rounds cut and box about.
     let mut stood = Vec::new();
     let mut words = Vec::new();
     for (&(s, j), p) in &laid {
@@ -1395,7 +1416,7 @@ fn run_world(
     words
 }
 
-/// `decor_cs` by hand against `generation::placement`.
+/// `decor_cs` by hand must leave the records `generation::placement` stands.
 #[test]
 fn hand_decor_answers_as_placement() {
     let Some((device, queue)) = device() else {
@@ -1403,8 +1424,8 @@ fn hand_decor_answers_as_placement() {
     };
     let hand = hand_pipeline(&device, SHADER_GENERATION);
     let mut totals = Tally::default();
-    // East of the seam over the service area's south edge; west of it; south of the world's
-    // equator, X and Y negative, all past the area.
+    // Three eyes: east of the seam over the service area's south edge, west of the seam, and
+    // about X = 0 south of the world's equator, where X and Y run negative, all past the area.
     for (eye, label) in [
         (real_world::EYE, "east of the seam"),
         ([(1 << 23) - 300, (40 << 16) + 30], "west of the seam"),
@@ -1419,12 +1440,13 @@ fn hand_decor_answers_as_placement() {
         eprintln!("{v:>12} {k}");
     }
     assert_eq!(totals.0["words differing"], 0);
-    // A box's column is asked from its lowest cell up; on a column no clip level holds that
-    // reads void, on which no decor stands, so it never comes to an edit there.
+    // A box's column is asked from its lowest cell up. On a column no clip level holds, that
+    // cell reads void, and no decor stands on void, so the ask never reaches an edit there.
     assert!(DECORS.iter().all(|d| !d.allows(value::VOID)));
     assert_eq!(totals.0["edit: asked over a column not held"], 0);
-    // A decor stands no coarser than two zooms over the leaves, where the ground's top, the
-    // ways and the caves under a face keep an even share of a cube, so the walk meets no odd one.
+    // A decor stands no coarser than two zooms over the leaves. There the ground's top, the
+    // ways and the caves under a face keep an even share of a cube, so the walk meets no odd
+    // share.
     assert!(DECORS
         .iter()
         .all(|d| scatter::root(d) >= LEAF_CELL_ZOOM - 2));
@@ -1443,7 +1465,8 @@ fn hand_decor_answers_as_placement() {
     assert!(zero.is_empty(), "never reached: {zero:?}");
 }
 
-/// A dispatch over `at`'s buffers, its wait bounded (`read`).
+/// Dispatches `p` over the buffers `at`. The test waits on it, with a bound, when it reads a
+/// buffer back (`read`).
 fn dispatch(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -1473,7 +1496,7 @@ fn dispatch(
     queue.submit([e.finish()]);
 }
 
-/// A buffer of `w`, read and written as a pass does.
+/// A storage buffer holding `w`, which a pass reads and writes and the test reads back.
 fn buffer(device: &wgpu::Device, w: &[u32]) -> wgpu::Buffer {
     device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: None,
@@ -1487,8 +1510,8 @@ fn rows_words() -> &'static [u32] {
     unsafe { std::slice::from_raw_parts(DECORS.as_ptr().cast::<u32>(), size_of_val(&DECORS) / 4) }
 }
 
-/// The candidates of decor `j` in brick `q` at `cell_zoom` that stand clear there, by `scatter`'s
-/// rules: the test's reference for `decor_thin_cs`.
+/// The candidates of decor `j` in brick `q` at `cell_zoom` that stand clear there by
+/// `scatter`'s rules. It is the test's reference for `decor_thin_cs`.
 fn thin_leaves(j: usize, cell_zoom: Zoom, q: [i32; 2]) -> Vec<[i32; 2]> {
     let decor = &DECORS[j];
     let [x0, y0, _, _] = generation::brick_rect(cell_zoom, q);
@@ -1517,9 +1540,10 @@ fn thin_leaves(j: usize, cell_zoom: Zoom, q: [i32; 2]) -> Vec<[i32; 2]> {
     leaves
 }
 
-/// `decor_thin_cs` by hand lays what the hashes hold, each pair's records in no order, however
-/// its threads fall: pairs at every clip level a decor stands at, and one past them, none;
-/// bricks either side of the seam, X and Y negative.
+/// `decor_thin_cs` by hand must lay what the hashes hold, each pair's records in any order,
+/// however its threads fall. The cases cover pairs at every clip level a decor stands at and at
+/// one level past them, where none stand, in bricks either side of the seam and where X and Y
+/// are negative.
 #[test]
 fn hand_thin_lays_as_scatter() {
     let Some((device, queue)) = device() else {
@@ -1597,8 +1621,8 @@ fn hand_thin_lays_as_scatter() {
             }
             pairs_total += chunk.len() as u64;
         }
-        // A pair whose room is near full before thin runs: no record past its room, each pair
-        // alone so any word past it is thin's.
+        // Pairs whose room is two short of full before thin runs. Thin must write no record
+        // past the room. Each pair runs alone, so any word written past it is thin's.
         let full: Vec<(u32, u32)> = pairs
             .iter()
             .copied()
@@ -1639,8 +1663,9 @@ fn hand_thin_lays_as_scatter() {
             assert!(got == before, "{name}, {s} {j}: a word past its room");
             full_caps += 1;
         }
-        // A head naming the brick east of the one its entry's row holds, as no mark of the
-        // frame writes it: thin does not read the row, and lays the head's brick's candidates.
+        // Heads that name the brick east of the one the entry's row holds, which no mark of
+        // the frame writes. Thin must not read the row: it lays the candidates of the head's
+        // brick.
         let stale: Vec<(u32, u32)> = pairs
             .iter()
             .copied()
@@ -1682,8 +1707,9 @@ fn hand_thin_lays_as_scatter() {
     assert!(laid_total > 0 && none_past > 0 && full_caps > 0 && stale_headers > 0);
 }
 
-/// The test's reference for `decor_mark_cs`, over words, one entry after another, by
-/// `generation`'s rules; its list in the order of its entries, a pair's place not its meaning.
+/// The test's reference for `decor_mark_cs`, which marks the words one entry after another by
+/// `generation`'s rules. Its list follows the entries' order, and a pair's place in it carries
+/// no meaning.
 fn mark_rust(clipmap: &[[i32; 4]], records: &mut [u32], list: &mut [u32], shown: &[u32]) {
     let boxes: Vec<([i32; 4], Zoom)> = (0..list[generation::LIST_RECTS as usize])
         .map(|k| {
@@ -1796,7 +1822,7 @@ fn run_of(records: &[u32], g: u32, k: u32) -> (u32, u32) {
     }
 }
 
-/// Each word of a pass's records, a workgroup at a time, as `decor_cnt_cs` and
+/// The first word of each record a pass reads, a workgroup at a time, as `decor_cnt_cs` and
 /// `decor_compact_cs` take them.
 fn each_record(records: &[u32], clipmap: &[[i32; 4]], workgroups: u32) -> Vec<usize> {
     let mut out = Vec::new();
@@ -1830,7 +1856,7 @@ impl Sizing {
         }
         words[eye::RANGE] = self.range[0];
         words[eye::RANGE + 1] = self.range[1];
-        // What `light_mark_draws_cs` reads of it: where it looks, and the light's box.
+        // What `light_mark_draws_cs` reads of the eye: where it looks, and the light's box.
         for (at, v) in [
             (eye::FORWARD, [0.0f32, 1.0, -0.2]),
             (eye::RIGHT, [1.0, 0.0, 0.0]),
@@ -1862,9 +1888,10 @@ impl Sizing {
 const MAP_SIDE: u32 = 4096;
 const CAST_NUMBER: u32 = 7;
 
-/// Records as generation leaves them, placed decor's after: an entry's heads held or stale, each
-/// decor none, a few, its room or past it, each a place in its brick, a variant and a turn, or
-/// nothing generated.
+/// Records as generation leaves them, with placed decor's records after the entries'. An
+/// entry's head is held or stale. Each decor laid none, a few, its room or past it. Each record
+/// holds a place in its brick, a variant and a turn, or nothing generated. Returns the records
+/// and the workgroups a pass over them takes.
 fn records_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32) {
     let need = generation::SLOT_RECORDS + placed.next_power_of_two().max(64);
     let mut records = vec![0u32; generation::record_at(need) as usize];
@@ -1898,7 +1925,7 @@ fn records_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32)
                     b[0] + (h % (b[2] - b[0]) as u32) as i32,
                     b[1] + ((h >> 8) % (b[3] - b[1]) as u32) as i32,
                 ];
-                // Each with the region the frame before gave it, which cnt sizes anew.
+                // Each record keeps the region the frame before gave it, which cnt sizes anew.
                 records[r] = if h.is_multiple_of(8) {
                     generation::UNGENERATED
                 } else {
@@ -1924,7 +1951,8 @@ fn records_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32)
         let v = draw.next() % d.variants;
         records[r] = generation::record_word(j, v, draw.next() & 3, scatter::coarsest_stand(d, v))
             | (draw.next() % (drawn::REGIONS + 1)) << drawn::REGION_SHIFT;
-        // Most about the eye, where they are drawn; one in seven farther, where it is not.
+        // Most lie about the eye, where they are drawn. One in seven lies farther off, where it
+        // is not drawn.
         let reach = if n % 7 == 3 { 900 } else { 40 };
         let at = [
             eye[0] + draw.within(-reach, reach),
@@ -1933,7 +1961,7 @@ fn records_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32)
         records[r + 1] = real_world::wrap(at[0]) as u32;
         records[r + 2] = at[1] as u32;
         records[r + 3] = (built.top_at(at) + draw.within(0, 3)) as u32;
-        // The second beside the first on its row, a few cells along X.
+        // The second lies beside the first on its row, a few cells along X.
         if n == 1 {
             let first = generation::record_at(generation::SLOT_RECORDS) as usize;
             records[r + 1] = real_world::wrap(records[first + 1] as i32 + 3) as u32;
@@ -1947,7 +1975,8 @@ fn records_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32)
     )
 }
 
-/// The drawing words a frame hands, its floors as angles and each group's extent.
+/// The drawing words a frame hands: the model and impostor floors as angles, and each group's
+/// extent.
 fn drawing_words(model: f32, impostor: f32) -> Vec<u32> {
     let mut d = vec![0u32; drawn::DRAWING_WORDS as usize];
     d[drawn::MODEL_ANGLE as usize] = model.to_bits();
@@ -1958,7 +1987,7 @@ fn drawing_words(model: f32, impostor: f32) -> Vec<u32> {
     d
 }
 
-/// The bits of a record's first word under its region: what generation laid.
+/// The bits of a record's first word below its region, which hold what generation laid.
 const UNDER_REGION: u32 = (1 << drawn::REGION_SHIFT) - 1;
 
 /// Each region's count off the records `order` names, as their first words say.
@@ -1973,8 +2002,9 @@ fn regions_of(records: &[u32], order: &[usize]) -> Vec<u32> {
     counted
 }
 
-/// `decor_cnt_cs` by hand, its threads falling any way, `RUNS_OF_CNT` a case: each record
-/// keeps what generation laid under its region, and each region's count is its records'.
+/// `decor_cnt_cs` by hand, however its threads fall, run `RUNS_OF_CNT` times a case. Each
+/// record must keep what generation laid below its region, and each region's count must be the
+/// count of its records.
 #[test]
 fn hand_cnt_counts_its_regions() {
     const RUNS_OF_CNT: u32 = 6;
@@ -2075,7 +2105,8 @@ fn hand_cnt_counts_its_regions() {
     assert!(drawn_total > 0);
 }
 
-/// What `compact_one` writes of the record at word `i`, its lanes' bits, and its region.
+/// The region and the lanes' bits that decor_compact.wgsl `compact_one` writes for the record
+/// at word `i`, or `None` where the record has no region.
 fn lanes_of(drawing: &[u32], records: &[u32], i: usize) -> Option<(u32, [u32; 5])> {
     let w = records[i];
     let region = w >> drawn::REGION_SHIFT;
@@ -2106,9 +2137,10 @@ fn lanes_of(drawing: &[u32], records: &[u32], i: usize) -> Option<(u32, [u32; 5]
     ))
 }
 
-/// `decor_compact_cs` by hand: each region's slots hold its records' lanes, in no order, its
-/// threads falling any way, `RUNS_OF_COMPACT` a case; past the instances' slots, its count goes
-/// on and no slot holds what is not a record's.
+/// `decor_compact_cs` by hand, however its threads fall, run `RUNS_OF_COMPACT` times a case.
+/// Each region's slots must hold its records' lanes, in any order. Where the records outnumber
+/// the instances' slots, each region's count still runs on, and every slot holds a record's
+/// lanes.
 #[test]
 fn hand_compact_lays_as_the_rust() {
     const RUNS_OF_COMPACT: u32 = 6;
@@ -2128,7 +2160,7 @@ fn hand_compact_lays_as_the_rust() {
         let built = real_world::build(at);
         let (mut sized, workgroups) = records_to_size(&built, at, placed);
         let order = each_record(&sized, &built.clipmap, workgroups);
-        // Each record's region as a frame's cnt may leave it.
+        // Each record's region as a frame's cnt may leave it: a region past the last is none.
         for &i in &order {
             if sized[i] != generation::UNGENERATED
                 && sized[i] >> drawn::REGION_SHIFT >= drawn::REGIONS
@@ -2138,7 +2170,7 @@ fn hand_compact_lays_as_the_rust() {
         }
         let clip_flat: Vec<u32> = built.clipmap.iter().flatten().map(|&v| v as u32).collect();
         let (clip_buf, rows) = (buffer(&device, &clip_flat), buffer(&device, rows_words()));
-        // About an anchor a little off the eye, and one across the seam.
+        // Two anchors: one a little off the eye, and one across the seam.
         for anchor_at in [
             [at[0] + 40, at[1] - 7, 12],
             [real_world::wrap(at[0] + (1 << 23)), at[1], -300],
@@ -2148,7 +2180,7 @@ fn hand_compact_lays_as_the_rust() {
                 drawing[drawn::ANCHOR as usize + a] = anchor_at[a] as u32;
             }
             let mut regions = regions_of(&sized, &order);
-            // The regions laid out, as `decor_args_cs` may leave them.
+            // The regions laid out end to end, as `decor_args_cs` may leave them.
             let mut first = 0;
             let mut firsts = vec![0u32; drawn::REGIONS as usize];
             for r in 0..drawn::REGIONS as usize {
@@ -2189,7 +2221,8 @@ fn hand_compact_lays_as_the_rust() {
                         }
                         let got_regions = read(&device, &queue, &regions_buf, "compact's regions");
                         let got = read(&device, &queue, &instances, "compact's instances");
-                        // Each region's next slot past its end, what `Instances::cnt` reads.
+                        // Each region's end word must name its next slot past its end, which
+                        // `Instances::cnt` reads.
                         for r in 0..drawn::REGIONS as usize {
                             assert_eq!(
                                 got_regions[drawn::REGIONS as usize + r],
@@ -2221,7 +2254,8 @@ fn hand_compact_lays_as_the_rust() {
                                 "{name}: past the slots laid"
                             );
                         } else {
-                            // Which records took the slots is the threads'; each is a record's.
+                            // The threads decide which records take the slots, but each slot
+                            // must hold some record's lanes.
                             let mut left = wanted.clone();
                             for h in &have {
                                 let at = left.binary_search(h);
@@ -2239,10 +2273,10 @@ fn hand_compact_lays_as_the_rust() {
     assert!(tally.0["instances laid"] > 0);
 }
 
-/// Where the draws' words disagree with the regions they draw: each region's args draw its count
-/// of its mesh's or an impostor's corners, its uniform's columns start at its first slot, its
-/// counts are `counts`, and no two regions' slots overlap. `firsts` each region's first slot,
-/// `fresh` the uniforms before args added to them.
+/// Where the draws' words disagree with the regions they draw. Each region's args must draw its
+/// count of its mesh's corners or an impostor's. Its uniform's columns must start at its first
+/// slot, its count must be `counts`'s, and no two regions' slots may overlap. `firsts` holds
+/// each region's first slot, and `fresh` holds the uniforms before args added to them.
 fn draws_differ(
     counts: &[u32],
     regions: &[u32],
@@ -2292,8 +2326,8 @@ fn draws_differ(
     out
 }
 
-/// `decor_args_cs` by hand: what the draws read agrees with the regions it lays, over uniforms
-/// fresh as a frame writes.
+/// `decor_args_cs` by hand: what the draws read must agree with the regions it lays, over
+/// uniforms as fresh as a frame writes them.
 #[test]
 fn hand_args_draws_its_regions() {
     let Some((device, queue)) = device() else {
@@ -2310,7 +2344,7 @@ fn hand_args_draws_its_regions() {
         })
     };
     for round in 0..4u32 {
-        // A mesh still loading is 0.
+        // A mesh still loading has 0 corners.
         let meshes: Vec<u32> = (0..groups as u32)
             .map(|g| {
                 if mix(round, [g as i32, 1]).is_multiple_of(3) {
@@ -2328,7 +2362,8 @@ fn hand_args_draws_its_regions() {
                 mix(round, [r as i32, 5]) % 500
             };
         }
-        // Each region's uniform as `Generator::prepare` writes it: the columns' base at its index.
+        // Each region's uniform as `Generator::prepare` writes it, with the columns' base at
+        // `instance::IDX`.
         let u = drawn::UNIFORM_WORDS as usize;
         let mut uniforms = vec![0u32; u * regions_n];
         let base = drawn::COLUMNS * 2048;
@@ -2378,21 +2413,24 @@ fn hand_args_draws_its_regions() {
 #[derive(Clone)]
 struct Frame {
     name: &'static str,
-    /// Whether it marks at all; every entry whole; the boxes; heads a brick left.
+    /// `marking` says whether the frame marks at all, and `every` makes every entry whole.
+    /// `boxes` are the frame's boxes, and `stale` names the entries whose heads a brick left.
     marking: bool,
     every: bool,
     boxes: Vec<([i32; 4], Zoom)>,
     stale: Vec<u32>,
-    /// Which of the world's two placings it reads, the second without the placed decor.
+    /// Which of the world's two placings the frame reads: the first with the placed decor, the
+    /// second without it.
     placed_decor: bool,
     cuts: [Cut; 2],
     sizing: Sizing,
 }
 
-/// A pair's count and, by leaf, its records' first word, height and sink.
+/// A pair's count and, by leaf, each record's first word, Z and sink.
 type PairRecords = (u32, BTreeMap<[i32; 2], [u32; 3]>);
 
-/// Each pair's records by their leaf, in no order: `(entry, decor)` to what it laid.
+/// Each pair's records keyed by their leaf, so their order does not matter: `(entry, decor)`
+/// maps to what the pair laid.
 fn pairs_of(records: &[u32]) -> BTreeMap<(u32, u32), PairRecords> {
     let mut pairs = BTreeMap::new();
     for s in 0..generation::EYE_ENTRIES {
@@ -2461,7 +2499,8 @@ fn list_header(frame: &Frame) -> Vec<u32> {
 }
 
 impl Model {
-    /// The frame through the Rust's passes, a pair's records in `thin_leaves`'s order.
+    /// Runs the frame through the Rust's passes, laying a pair's records in `thin_leaves`'s
+    /// order.
     fn step(
         &mut self,
         world: World,
@@ -2567,9 +2606,10 @@ impl Model {
     }
 }
 
-/// What a frame left, each pair's records against the Rust's, exact under their regions; and
-/// what its draws read agreeing with the records it sized: each region's count its records',
-/// its slots their lanes, the args, uniforms and `Instances::cnt` theirs.
+/// Where what a frame left differs from what it must leave. Each pair's records must match the
+/// Rust's exactly below their regions. What the draws read must agree with the records the
+/// frame sized: each region's count is its records', its slots hold their lanes, and the args,
+/// the uniforms and `Instances::cnt` follow from them.
 fn frame_differs(
     got: &FrameLeft,
     want: &BTreeMap<(u32, u32), PairRecords>,
@@ -2611,7 +2651,8 @@ fn frame_differs(
     let n = drawn::REGIONS as usize;
     let order = each_record(&got.records, clipmap, workgroups);
     let counts = regions_of(&got.records, &order);
-    // Compact leaves each region's next slot: its first is that less its count.
+    // Compact leaves each region's next slot in its end word, so its first slot is that less
+    // its count.
     let firsts: Vec<u32> = (0..n)
         .map(|r| got.regions[n + r].wrapping_sub(got.regions[r]))
         .collect();
@@ -2661,8 +2702,8 @@ struct Chain<'d> {
     device: &'d wgpu::Device,
     queue: &'d wgpu::Queue,
     pipelines: &'d [wgpu::ComputePipeline; 6],
-    /// `light_mark_draws_cs`, generated, a reader beside the draws of what compact lays, and
-    /// the one thread that opens its workgroups (`light_mark_draws_open_cs`).
+    /// `light_mark_draws_cs`, which reads what compact lays beside the draws, and the one
+    /// thread that opens its workgroups (`light_mark_draws_open_cs`).
     mark_draws: &'d wgpu::ComputePipeline,
     mark_draws_open: &'d wgpu::ComputePipeline,
     records: wgpu::Buffer,
@@ -2675,7 +2716,8 @@ struct Chain<'d> {
     workgroups: u32,
 }
 
-/// What a frame's world binds: the clip levels, the ground, the area, what is placed, the ways.
+/// What a frame binds of the world: the clip levels, the ground, the area, what is placed and
+/// the ways, with decor's rows, what the core shows and the meshes.
 struct WorldBuffers<'b> {
     clipmap: &'b wgpu::Buffer,
     ground: &'b wgpu::Buffer,
@@ -2688,8 +2730,8 @@ struct WorldBuffers<'b> {
 }
 
 impl Chain<'_> {
-    /// One frame, as `Generator::dispatch` records it: one compute pass, what marks by the list
-    /// dispatched off it.
+    /// Runs one frame as `Generator::dispatch` records it, in one compute pass. Thin and
+    /// `decor_cs` are dispatched off the list the mark writes.
     fn frame(&self, frame: &Frame, b: &WorldBuffers) -> FrameLeft {
         let (d, q) = (self.device, self.queue);
         let store = wgpu::BufferUsages::STORAGE;
@@ -2835,10 +2877,11 @@ impl Chain<'_> {
             pass.dispatch_workgroups(self.workgroups, 1, 1);
         }
         q.submit([e.finish()]);
-        // The tiles the decor compacted stands on, as the light's mark reads its lanes: the
-        // head laid out for the map's side as the renderer lays it (gpu/ray/cast.rs), the
-        // world's receivers stood in an earlier cast, none of their tiles marked; its
-        // workgroups as its one thread opens them, the placed decor's past the characters'.
+        // The light's mark then lists the tiles the compacted decor stands on, reading its
+        // lanes. The header is laid out for the map's side as the renderer lays it
+        // (gpu/ray/cast.rs). The world's receivers stood in an earlier cast, and none of their
+        // tiles is marked. The mark's workgroups are those its one opening thread sets, with
+        // the placed decor's after the characters'.
         let mut header = vec![0u32; light::HEADER_WORDS];
         header[light::HEADER_CAST] = CAST_NUMBER;
         header[light::HEADER_WORLD] = CAST_NUMBER - 1;
@@ -2865,8 +2908,8 @@ impl Chain<'_> {
             (21, &light_args),
             (22, &stood),
         ];
-        // Their dispatch, a buffer of its own the opening pass writes and theirs does not bind
-        // (`light::DRAWS_DISPATCH_WORDS`).
+        // The mark's dispatch lies in a buffer of its own, which the opening pass writes and
+        // the mark does not bind (`light::DRAWS_DISPATCH_WORDS`).
         let draws = buffer(d, &vec![0u32; light::DRAWS_DISPATCH_WORDS as usize]);
         let open = [binds[1], binds[4], binds[5], (24, &draws)];
         dispatch(d, q, self.mark_draws_open, &open, [1, 1, 1]);
@@ -2905,15 +2948,15 @@ struct FrameLeft {
     args: Vec<u32>,
     uniforms: Vec<u32>,
     instances: Vec<u32>,
-    /// The tiles `light_mark_draws_cs` listed stood on off the instances.
+    /// How many tiles `light_mark_draws_cs` listed as stood on, from the instances.
     stood: u32,
 }
 
-/// Frames through all the passes by hand, their records against the Rust's frame and their
-/// draws against their records:
-/// all whole; the eye moved, no mark; the placed decor gone, what it took coming back, some
-/// bricks gone stale, whole and in part in one dispatch; bricks handed; the decor back; a cut;
-/// a corner left out. `DECOR_RUNS` chains by hand a world, threads falling any way.
+/// Frames through all the passes by hand. Their records must match the Rust's frame, and their
+/// draws must agree with their records. The frames are: all whole; the eye moved, with no mark;
+/// the placed decor gone, so what it took comes back, with some heads stale and pairs whole and
+/// in part in one dispatch; boxes over whole bricks; the decor back; a cut; a corner left out.
+/// `DECOR_RUNS` sets how many chains by hand run over each world, however their threads fall.
 #[test]
 fn hand_frames_answer_as_the_rust() {
     let Some((device, queue)) = device() else {
@@ -2965,7 +3008,7 @@ fn hand_frames_answer_as_the_rust() {
         };
         let clip_flat: Vec<u32> = built.clipmap.iter().flatten().map(|&v| v as u32).collect();
         let shards_flat: Vec<u32> = built.shards.iter().flatten().copied().collect();
-        // What the core shows, a decor's zooms where it stands.
+        // What the core shows: for each decor, a bit for each clip level it stands at.
         let mut shown = [0u32; DECORS.len()];
         for (k, d) in DECORS.iter().enumerate() {
             for cell_zoom in FIRST_CELL_ZOOM..=LEAF_CELL_ZOOM {
@@ -2988,7 +3031,8 @@ fn hand_frames_answer_as_the_rust() {
             make(&shown),
             make(&meshes),
         );
-        // Placed decor, as the core hands it: over a workgroup's runs.
+        // Placed decor as the core hands it, five more than one workgroup's runs, so it spills
+        // into a second workgroup.
         let placed = generation::RUNS + 5;
         let cap = generation::SLOT_RECORDS + placed.next_power_of_two().max(64);
         let workgroups = generation::EYE_ENTRIES + placed.div_ceil(generation::RUNS);
@@ -3009,7 +3053,7 @@ fn hand_frames_answer_as_the_rust() {
             init[r + 2] = p[1] as u32;
             init[r + 3] = p[2] as u32;
         }
-        // The frames, the later ones off what the first's said.
+        // The frames. The later frames take their boxes from what the first reported.
         let origin = [at[0] << 8, at[1] << 8, (built.top_at(at) + 30) << 8];
         let mut drawing = drawing_words(0.02, 0.0002);
         drawing[drawn::ANCHOR as usize] = at[0] as u32;
@@ -3117,7 +3161,7 @@ fn hand_frames_answer_as_the_rust() {
             &mut tally,
             &mut claims,
         );
-        // A cut over what stands, its box asked.
+        // A carve over a placed decor that took a record, with a box over the cut.
         let p = claims[0];
         let cut_rect = object::cut_rect(20, object::ancestor_at(24, p, 4));
         step(
@@ -3157,7 +3201,8 @@ fn hand_frames_answer_as_the_rust() {
             &mut claims,
         );
         eprintln!("{name}: the Rust's frames in {:?}", t0.elapsed());
-        // The chains.
+        // Each chain runs every frame on the device from the same start, and each frame's
+        // words are compared with the Rust's.
         let chain_on = || {
             let usage = wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_SRC
@@ -3252,8 +3297,9 @@ fn hand_frames_answer_as_the_rust() {
     );
 }
 
-/// seed.wgsl `halve` halves as `share::halve`: counts, rooms and weights at random, and a
-/// fraction that meets its draw exactly, which goes to the second half.
+/// seed.wgsl `halve` must halve as `share::halve` does. The cases take counts, rooms and
+/// weights at random, and add fractions that meet their draw exactly, which go to the second
+/// half.
 #[test]
 fn hand_halve_as_the_rust() {
     let Some((device, queue)) = device() else {
@@ -3320,9 +3366,10 @@ fn halve_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     }
 }
 
-/// decor_scatter.wgsl `scatter_count_of` counts as `scatter::count_of`: decors of seeds, chances
-/// and roots other than the catalog's, means of many a root column so the rooms bind, every zoom
-/// from the root to the leaves; and root columns whose draw lands on a count's rounding edge.
+/// decor_scatter.wgsl `scatter_count_of` must count as `scatter::count_of` does. The cases take
+/// decors with seeds, chances and roots other than the catalog's, with means of many to a root
+/// column so the rooms bind, at every zoom from the root to the leaves. They add root columns
+/// whose draw lands on a count's rounding edge.
 #[test]
 fn hand_scatter_count_as_the_rust() {
     let Some((device, queue)) = device() else {
@@ -3330,14 +3377,15 @@ fn hand_scatter_count_as_the_rust() {
     };
     let mut draw = real_world::Draw(0x0dec_0c47);
     let mut asked: Vec<[u32; 6]> = Vec::new();
-    // A chance whose mean a root column holds `per_root` 16.16 counts at most.
+    // A chance at which a root column's mean holds at most `per_root` counts, in 16.16 fixed
+    // point.
     let chance_for = |root: Zoom, per_root: u32| {
         let shift = 2 * (LEAF_CELL_ZOOM - root);
         (per_root >> shift.min(31)).clamp(1, 0xffff) << 16
     };
     for _ in 0..6000 {
         let root = FIRST_CELL_ZOOM + draw.next() % (LEAF_CELL_ZOOM - FIRST_CELL_ZOOM + 1);
-        // From three over the root, where a column holds none, to the leaves.
+        // Zooms from three over the root, where a column holds none, down to the leaves.
         let zoom = (root + draw.next() % (LEAF_CELL_ZOOM - root + 4)).saturating_sub(3);
         let per_root = [1 << 14, 1 << 16, 3 << 17, 1 << 20, 1 << 24][draw.next() as usize % 5];
         let chance = chance_for(root, per_root);
@@ -3347,8 +3395,8 @@ fn hand_scatter_count_as_the_rust() {
         ];
         asked.push([draw.next(), chance, root, zoom, b[0] as u32, b[1] as u32]);
     }
-    // The rounding edge: `mean + (draw & 0xffff)` a whole count with `draw` odd, which an odd
-    // mean alone reaches, a root at the leaves.
+    // The rounding edge: `mean + (draw & 0xffff)` lands on a whole count with `draw` odd. Only
+    // an odd mean reaches it, and only a root at the leaves has one.
     let mut edges = 0;
     for (seed, root, per_root) in [
         (0x7902_530c, 24, 2049),
@@ -3411,7 +3459,8 @@ fn count_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         let want = scatter::count_of([a[0], a[1], a[2]], a[3], b);
         assert_eq!(got[k], want, "{a:?}");
         many += (want > 1) as u32;
-        // A leaf of a root column holding four or more: its rooms bound the count on the way down.
+        // A leaf of a root column that holds four or more, where the rooms bound the count on
+        // the way down.
         if a[3] == LEAF_CELL_ZOOM {
             let t = a[3] - a[2];
             let at_root = scatter::count_of([a[0], a[1], a[2]], a[2], [b[0] >> t, b[1] >> t]);

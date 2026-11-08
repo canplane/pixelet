@@ -1,29 +1,33 @@
 // pxl-core/domain/layer/object/repository.rs
 
-//! Where placed objects are kept and come from, the one way the object
-//! layer's records are read and written: what is asked for arrives and an
-//! edit is sent, each write `<key, id, ext>`. Who keeps them is their
-//! source's, a mock's or a server's (ts/client/src/sys/fs/object.ts),
-//! below OBJECT (file.json `root`); this file reads what it serves and sends
-//! it edits.
+//! The object layer's repository: where placed objects are kept and where
+//! they come from. It is the one way the layer's records are read and
+//! written. What the view asks for arrives here, and each edit leaves from
+//! here, every write as `<key, id, ext>`. The objects are kept by their
+//! source, a mock or a server (ts/client/src/sys/fs/object.ts), below OBJECT
+//! (file.json `root`); this file reads what the source serves and sends it
+//! the edits.
 //!
-//! The source keeps them a shard at a time (pxl-engine `SHARD_ZOOM`), a
-//! file a shard named by the shard's quadkey, as a bake's tile is named by
-//! its own, and the top of their tree (file.json `object.TOP`): what each node
-//! at `SHARD_ZOOM` holding objects folds to. The top is read first, and its
-//! folds are held in the store where their shards are not read
-//! (store.rs `Store::set_fold`), so a view from afar draws from it. A shard
-//! is read as a bake's tile is, through the request scheduler
-//! (sys/io/request.rs) and the fetches' arrival (sys/io/fetch.rs), wanted
-//! where the view asks for it (`want`) and the top lists it, and its leaves
-//! go into the layer's one store (store.rs) in place of its folds; a shard
-//! the top does not list is read as empty without asking. A shard read
-//! stays read.
+//! The source keeps the objects one shard at a time (pxl-spec
+//! `SHARD_ZOOM`), in one file for each shard named by the shard's quadkey,
+//! as a baked tile is named by its own. It also keeps the top of their tree
+//! (file.json `object.TOP`): the fold of each node at `SHARD_ZOOM` that holds
+//! objects. The top is read first, and its folds stand in the store for the
+//! shards not read yet (store.rs `Store::set_fold`), so a view from afar
+//! draws from them.
 //!
-//! The writes the store takes go up as edits, batched (file.json
-//! `object.EDITS`), which the source applies to its shards and its top. A
-//! file that does not decode is refused, named to the client to set aside
-//! (`refused_files`), and read again once it says so (`on_emptied`).
+//! A shard is read as a baked tile is, through the request scheduler
+//! (sys/io/request.rs) and the arrival of fetches (sys/io/fetch.rs). It is
+//! wanted where the view asks for it (`want`) and the top lists it, and its
+//! leaves go into the layer's one store (store.rs) in place of its fold. A
+//! shard the top does not list is taken as empty without asking. Once read,
+//! a shard stays read.
+//!
+//! The writes the store takes go up as edits in batches (file.json
+//! `object.EDITS`), and the source applies them to its shards and its top. A
+//! file that does not decode is refused: it is named to the client to set
+//! aside (`refused_files`), and read again once the client says it did
+//! (`on_emptied`).
 
 use fnv::FnvHashSet;
 use pxl_engine::answer::FULL;
@@ -54,51 +58,54 @@ use crate::sys::io::request::declare;
 use crate::sys::sched::edge::request_world_tick;
 use pxl_spec::object::ext::{class_of, Class};
 
-/// The most files wanted at once: the shards within the ground's demand at
-/// the shard's zoom about the eye (domain/view/demand.rs `object_step`), as
-/// many as a zoom's demand names of the ground's tiles (pxl-spec
-/// layer/demand.rs `demand_tiles`), or the top alone, before any shard.
+/// The most files wanted at once. Before the top is read, only the top is
+/// wanted. After that, the wanted files are the shards within the ground's
+/// demand at the shard zoom around the eye (domain/view/demand.rs
+/// `object_step`), which are no more than one zoom's demand of ground tiles
+/// (pxl-spec layer/demand.rs `demand_tiles`).
 pub const WANTS: u32 = GROUND_DEMAND_TILES;
 
-/// The top among the ids wanted, the rest shards' keys.
+/// The id that names the top among the wanted files; every other wanted id
+/// is a shard's.
 const TOP: u64 = file::TOP_ID;
 
-// What the source reads a shard's zoom as is this one's (file.json `SHARD_ZOOM`).
+// The source and the core must agree on the shard zoom (file.json
+// `SHARD_ZOOM`).
 const _: () = assert!(file_spec::SHARD_ZOOM == SHARD_ZOOM);
 
 #[derive(Default)]
 struct State {
-    /// The shards the top lists, by id; none until it is read.
+    /// The shards the top lists, by id; none until the top is read.
     top_shards: Option<FnvHashSet<u64>>,
-    /// The shards read, by id: their leaves are in the store.
+    /// The shards read, by id. Their leaves are in the store.
     read: FnvHashSet<u64>,
-    /// The files below OBJECT refused, by id, until the client says each
-    /// is empty or its source's own again.
+    /// The refused files below OBJECT, by id. Each stays refused until the
+    /// client says it emptied the file or gave it back to its source.
     refused_files: Vec<u64>,
     /// The writes the store took since the last batch went up, in order.
     unsent: Vec<Write>,
-    /// The files `want` asks for, by id; reused across turns.
+    /// The files `want` asks for, by id; the buffer is reused across turns.
     wants: Vec<(u64, Order)>,
-    /// How many times what `want` reads of it moved: the top or a shard
-    /// read, a file refused or emptied.
+    /// A counter that advances whenever something `want` reads changes: the
+    /// top or a shard is read, or a file is refused or emptied.
     revision: u32,
-    /// The changes the store takes, in order, held while the runtime holds its
-    /// lanes (`change`).
+    /// The changes waiting for the store, in order, held while the runtime
+    /// holds the store's columns (`change`).
     changes: Vec<Change>,
 }
 
-/// A change to the store: a shard's fold held, a shard's leaves in place
-/// of its fold, an edit made here, sent to be kept where it changed what
-/// is placed.
+/// A change to the store: a shard's fold to hold, a shard's leaves to put in
+/// place of its fold, or an edit made on this device, which is also sent to
+/// the source when it changed what is placed.
 enum Change {
     Fold([i32; 2], u32),
     Shard([i32; 2], Vec<Write>),
     Edit(Write),
 }
 
-/// `c` made now, where the runtime holds none of the store's lanes and no
-/// change waits before it; else held for `step`, in order. Only the store's
-/// writers wait.
+/// Makes `c` at once when the runtime holds none of the store's columns
+/// (store.rs `Store::is_in_flight`) and no other change waits. Otherwise it
+/// holds `c` for `step`, in order. Only writers of the store wait.
 fn change(c: Change) {
     let st = state();
     if st.changes.is_empty() && !object().is_in_flight() {
@@ -126,15 +133,15 @@ fn make(c: Change) {
     }
 }
 
-/// An edit made here, where the store takes it (`change`), and sent to be
-/// kept where it changed what is placed.
+/// Applies an edit made on this device to the store (`change`), and sends it
+/// to the source when it changed what is placed.
 pub fn edit(write: Write) {
     change(Change::Edit(write));
 }
 
 impl State {
-    /// Whether the shard `id`'s leaves are all in the store: read, or
-    /// listed by no top read.
+    /// Whether all of shard `id`'s leaves are in the store: the shard was
+    /// read, or the top was read and does not list it.
     fn is_read(&self, id: u64) -> bool {
         self.top_shards
             .as_ref()
@@ -148,16 +155,17 @@ fn state() -> &'static mut State {
     STATE.get(State::default)
 }
 
-/// The shard the leaf `key` names lies in. Every leaf is a shard or finer
-/// (store.rs `Store::write`).
+/// The shard that leaf `key` lies in. Every leaf is at the shard zoom or
+/// finer (store.rs `Store::write`).
 fn shard_of(key: u128) -> Quadrant {
     let (zoom, at) = node_of::<3>(key);
     let (zoom, at) = shard_over(zoom, [at[0], at[1]]);
     Quadrant::new(zoom, at)
 }
 
-/// Whether every shard under `space` was read, so a write there stands
-/// over what its file held (domain/query/limit.rs `editable`).
+/// Whether every shard under `space` was read. Only then is a write there
+/// made over what the shard's file holds (domain/query/limit.rs
+/// `editable`).
 pub fn holds(space: &Aabb) -> bool {
     let side = units(SHARD_ZOOM);
     let span = |k: usize| {
@@ -168,10 +176,12 @@ pub fn holds(space: &Aabb) -> bool {
     span(1).all(|y| span(0).all(|x| st.is_read(Quadrant::new(SHARD_ZOOM, [x, y]).id())))
 }
 
-/// The shards the view asks for (domain/view/demand.rs `object_step`), no
-/// more than `WANTS`, each wanted in its `order`: before the top is read,
-/// the top alone, first; then those it lists not yet read, in place of what was
-/// wanted before. A file refused is not wanted until the client empties it.
+/// Declares the files wanted for `asked`, the shards the view asks for
+/// (domain/view/demand.rs `object_step`), at most `WANTS` of them and each in
+/// its `order`. Before the top is read, only the top is wanted, first. After
+/// that, the wanted files are the asked shards that the top lists and that
+/// are not read yet, and they replace what was wanted before. A refused file
+/// is not wanted until the client empties it.
 pub fn want(asked: impl Iterator<Item = Quadrant>, order: impl Fn(Quadrant) -> Order) {
     let st = state();
     st.wants.clear();
@@ -191,13 +201,13 @@ pub fn want(asked: impl Iterator<Item = Quadrant>, order: impl Fn(Quadrant) -> O
     declare(Stream::object, &st.wants);
 }
 
-/// The files `want` last found, wanted again as they were.
+/// Declares again the files `want` last declared, unchanged.
 pub fn want_again() {
     declare(Stream::object, &state().wants);
 }
 
-/// What `want` reads of the repository as of now: equal where no top or
-/// shard was read and no file refused or emptied between.
+/// The repository's revision for `want`. Two readings are equal only if no
+/// top or shard was read and no file was refused or emptied between them.
 pub fn revision() -> u32 {
     state().revision
 }
@@ -207,8 +217,8 @@ fn changed() {
     st.revision = st.revision.wrapping_add(1);
 }
 
-/// A file below OBJECT arrived, the top's or a shard's, or its absence
-/// (`admit`).
+/// Takes in a file below OBJECT that arrived, the top or a shard, or the
+/// news that it is absent (`admit`).
 pub fn on_arrived(id: u64, block: Option<Block>, phases: &mut Phases) -> Result<(), Failure> {
     let at = now();
     let result = admit(id, block.map(body));
@@ -217,13 +227,13 @@ pub fn on_arrived(id: u64, block: Option<Block>, phases: &mut Phases) -> Result<
     result.map_err(Failure::from)
 }
 
-/// The file `id` below OBJECT, `bytes`, or none: the top's folds held
-/// where their shards are not read, a shard's leaves into the store in
-/// place of its folds. One that does not decode leaves the store as it was
-/// and is refused.
+/// Takes in file `id` below OBJECT with its `bytes`, or none where it is
+/// absent. The top's folds are held for the shards not read yet, and a
+/// shard's leaves go into the store in place of its fold. A file that does
+/// not decode leaves the store as it was and is refused.
 fn admit(id: u64, bytes: Option<&[u8]>) -> Result<(), MarshalError> {
     let result = match bytes {
-        // No top: no shard holds any.
+        // An absent top means that no shard holds any object.
         None if id == TOP => {
             on_top(Vec::new());
             Ok(())
@@ -243,8 +253,6 @@ fn admit(id: u64, bytes: Option<&[u8]>) -> Result<(), MarshalError> {
     result
 }
 
-/// The top read: the shards it lists, and each fold of a shard not read
-/// held in the store.
 fn on_top(rows: Vec<(u64, u32)>) {
     let mut listed = FnvHashSet::default();
     for (shard, word) in rows {
@@ -257,20 +265,19 @@ fn on_top(rows: Vec<(u64, u32)>) {
     changed();
 }
 
-/// The shard `id` read: its folds let go and its leaves written.
 fn on_shard(id: u64, writes: Vec<Write>) {
     change(Change::Shard(Quadrant::of_id(id).at, writes));
     state().read.insert(id);
     changed();
 }
 
-/// The files refused and not yet emptied, by id below OBJECT.
+/// The refused files not yet emptied, by their id below OBJECT.
 pub fn refused_files() -> &'static [u64] {
     &state().refused_files
 }
 
-/// The client set the refused file `id` aside: it is wanted again, as
-/// new. False where it was not refused.
+/// The client set refused file `id` aside, so it is wanted again as a new
+/// file. Returns false where the file was not refused.
 pub fn on_emptied(id: u64) -> bool {
     let st = state();
     let Some(i) = st.refused_files.iter().position(|&n| n == id) else {
@@ -278,19 +285,19 @@ pub fn on_emptied(id: u64) -> bool {
     };
     st.refused_files.remove(i);
     st.revision = st.revision.wrapping_add(1);
-    // Its failed want goes, so the next is a new one.
+    // Drop the failed want, so that the next declaration starts a new one.
     st.wants.retain(|&(n, _)| n != id);
     declare(Stream::object, &st.wants);
     request_world_tick();
     true
 }
 
-// A shard's file and an edit batch: the format byte (file.json `format`),
-// then the rows of writes `<key, id, ext>` as file.json `write` lays them
-// out: a shard's every leaf as the write that made it, a batch's writes in
-// the order made. A file of another format is never read.
+// A shard's file and an edit batch share one layout: the format byte
+// (file.json `format`), then rows of writes `<key, id, ext>` as file.json
+// `write` lays them out. A shard's file holds each of its leaves as the
+// write that made it; a batch holds its writes in the order they were made.
+// A file of any other format is never read.
 
-/// `writes` as a file of `format`.
 fn encode_writes(format: u8, writes: &[Write]) -> Result<Vec<u8>, MarshalError> {
     let (mut keys, mut id) = (Vec::new(), Vec::new());
     let (mut text_rows, mut texts) = (Vec::new(), Vec::new());
@@ -329,17 +336,19 @@ fn encode_writes(format: u8, writes: &[Write]) -> Result<Vec<u8>, MarshalError> 
     Ok(file)
 }
 
-/// The tree packet of a file of `format`, `bytes`; none of another format.
+/// The tree packet inside file `bytes` of `format`. A file of another format
+/// is an error.
 fn packet(format: u8, bytes: &[u8]) -> Result<Vec<u8>, MarshalError> {
     match bytes.split_first() {
-        // A packet starts on a word (`TreeReader`), as an allocation of its own does.
+        // The packet is copied because `TreeReader` needs it to start on a
+        // word, and an allocation of its own does.
         Some((&f, pkt)) if f == format => Ok(pkt.to_vec()),
         _ => Err(MarshalError::new(Errno::EBADMSG)),
     }
 }
 
-/// The writes a file of `format`, `bytes`, holds, each record its leaf's
-/// class's.
+/// The writes that file `bytes` of `format` holds. Each record must be of
+/// its leaf's class.
 fn decode_writes(format: u8, bytes: &[u8]) -> Result<Vec<Write>, MarshalError> {
     let pkt = packet(format, bytes)?;
     let root = TreeReader::new(&pkt)?.read_branch()?;
@@ -357,7 +366,8 @@ fn decode_writes(format: u8, bytes: &[u8]) -> Result<Vec<Write>, MarshalError> {
     let mut ext: Vec<Option<Ext>> = vec![None; id.len()];
     for (r, t) in text_rows.iter().zip(texts.iter()) {
         let r = *r as usize;
-        // A record is its leaf's class's, or the file is not this layout.
+        // A record of a class other than its leaf's means the file is not in
+        // this layout.
         if id.get(r).and_then(|&v| class_of(v)) != Some(Class::marker_text) {
             return Err(MarshalError::new(Errno::EINVAL));
         }
@@ -375,8 +385,8 @@ fn decode_writes(format: u8, bytes: &[u8]) -> Result<Vec<Write>, MarshalError> {
         .collect()
 }
 
-/// The leaves `bytes`, the file of `shard`, holds, whole or none: every one
-/// of its shard, a zoom the store holds and an id a leaf holds.
+/// The leaves in `bytes`, the file of `shard`, all or none. Each leaf must
+/// lie in `shard`, at a zoom the store holds, with an id that fits a leaf.
 fn decode_shard(shard: Quadrant, bytes: &[u8]) -> Result<Vec<Write>, MarshalError> {
     let writes = decode_writes(format::OBJECT, bytes)?;
     let fits = |w: &Write| {
@@ -390,9 +400,9 @@ fn decode_shard(shard: Quadrant, bytes: &[u8]) -> Result<Vec<Write>, MarshalErro
     Ok(writes)
 }
 
-/// The top's rows, `<shard, fold>` as file.json `top` lays them out, whole or
-/// none: each shard's a tile at `SHARD_ZOOM`, its share of its cube filled at
-/// most the whole.
+/// The top's rows `<shard, fold>`, as file.json `top` lays them out, all or
+/// none. Each shard must be a tile at `SHARD_ZOOM`, and the filled share of
+/// its cube that its fold gives must be at most the whole.
 fn decode_top(bytes: &[u8]) -> Result<Vec<(u64, u32)>, MarshalError> {
     let pkt = packet(format::OBJECT_TOP, bytes)?;
     let root = TreeReader::new(&pkt)?.read_branch()?;
@@ -415,14 +425,15 @@ fn decode_top(bytes: &[u8]) -> Result<Vec<(u64, u32)>, MarshalError> {
         .collect()
 }
 
-/// A write the store took, to go up as an edit with the turn's others (`step`).
+/// Queues a write the store took, to go up as an edit with the turn's other
+/// writes (`step`).
 pub fn send(write: Write) {
     state().unsent.push(write);
 }
 
 pub fn step() {
-    // The changes held while the runtime held the store's lanes, all now that
-    // it holds none: nothing hands them between.
+    // Make every change held while the runtime held the store's columns, now
+    // that it holds none. The runtime cannot take them back during the loop.
     if !state().changes.is_empty() && !object().is_in_flight() {
         let mut changes = core::mem::take(&mut state().changes);
         for c in changes.drain(..) {
@@ -433,9 +444,9 @@ pub fn step() {
     save();
 }
 
-/// Sends the writes since the last batch as one edit batch, where the turn
-/// has a write left (sys/io/file.rs `write`); else it goes on the next
-/// turn. A batch that does not encode is not sent.
+/// Sends the writes since the last batch as one edit batch when the turn has
+/// a file write left (sys/io/file.rs `write`); otherwise the batch goes on a
+/// later turn. A batch that does not encode is dropped unsent.
 pub fn save() {
     let st = state();
     if st.unsent.is_empty() {

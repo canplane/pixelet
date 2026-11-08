@@ -1,11 +1,13 @@
 // pxl-core/domain/layer/terrain/fixed.rs
 
-//! `.fixed.terrain`: the room every resident terrain tile and every held
-//! brick lies in, and where a record's bytes are. A plane is one array of
-//! every frame, or of every brick, end to end; planes in order: the
-//! separation's seven and the samples, a tile's; then a brick's cells and
-//! its four palette indices a cell; then the room a fill works in, once. The
-//! bricks' ways' trees are the heap's, grown as they are taken (pool.rs).
+//! The layout of `.fixed.terrain`, the room every resident terrain tile and
+//! every held brick lies in, and where each record's bytes are. The room is
+//! a sequence of planes. A plane is one array with an element for every tile
+//! slot, or for every brick slot, end to end. The planes, in order: a tile's
+//! seven separation columns and its samples; a brick's cells and its palette
+//! of four indices per cell; and, once, the room a fill works in. The trees
+//! of the bricks' ways live on the heap and grow as they are taken
+//! (pool.rs).
 
 use pxl_engine::clipmap::{
     BRICK_CELLS, BRICK_WORDS, LINES_WORDS, SPANS_WORDS, WAYS_BRICK_SEGMENTS,
@@ -20,14 +22,15 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_core::mem::range::arr_bytes;
 use xpute_core::mem::range::OwnedRange;
 
-/// `.fixed.terrain`, handed in at boot.
+/// The `.fixed.terrain` section, which the boot hands in.
 pub static RANGE: OwnedRange = OwnedRange::new();
 
 const TILE_SLOTS: u32 = TileCache::<TerrainTile>::SLOTS;
 
-/// The separation's columns, a plane each in order: line starts, points, tops,
-/// width, kind, form, clear; each its length and its element's bytes, which
-/// pxl-spec `separation::Room` is laid on (domain/layer/terrain/tile.rs `room_of`).
+/// The separation's columns, one plane each, in order: line starts, points,
+/// tops, width, kind, form, clear. Each entry is the column's length and its
+/// element's bytes. pxl-spec `separation::Room` is laid on these columns
+/// (tile.rs `room_of`).
 pub const SEPARATION_COLUMNS: [(usize, usize); 7] = [
     (MAX_LINES + 1, 4),
     (MAX_POINTS, 4),
@@ -44,7 +47,8 @@ const fn separation_column_bytes(k: usize) -> u32 {
     arr_bytes(cnt, size)
 }
 
-/// Where separation column `k`'s plane starts; past the last, where the planes end.
+/// Where separation column `k`'s plane starts; for `k` past the last
+/// column, where the planes end.
 const fn separation_plane(k: usize) -> u32 {
     let mut at = 0;
     let mut j = 0;
@@ -67,32 +71,33 @@ const fn sum(bytes: &[u32]) -> u32 {
 
 pub const SEPARATION_BYTES: u32 = separation_plane(SEPARATION_COLUMNS.len());
 
-/// A tile's padded samples in a record, which a brick's fill reads after its
-/// packet went.
+/// The bytes of a tile's padded samples in a record. The record keeps them
+/// because a brick's fill reads them after the tile's packet is freed.
 const ELE_BYTES: u32 = arr_bytes(ELE_COLUMN, 2);
 const ELE_AT: u32 = SEPARATION_BYTES;
 
-/// One brick's cells whole: its columns, a word a cell (its ground's top),
-/// then its levels, its cells as laid and its ways' tree's root (pxl-engine
-/// `clipmap::BRICK_WORDS`).
+/// The bytes of one brick's cells: its columns, one word per cell holding
+/// the top of its ground, then its levels, its cells as laid, and the root of
+/// its ways' tree (pxl-engine `clipmap::BRICK_WORDS`).
 pub const CELLS_BYTES: u32 = BRICK_WORDS * 4;
 pub const CELLS_ARR_BYTES: u32 = arr_bytes(CELLS_BYTES as usize, 1);
 const CELLS_AT: u32 = ELE_AT + TILE_SLOTS * ELE_BYTES;
 
-/// One brick's four palette indices a cell, a word a cell, cut from its tile's
-/// packet (clipmap.rs `cut`): what its fill lays its own off and the GPU
-/// draws a hit by.
+/// The bytes of one brick's palette: four palette indices per cell, packed
+/// in one word, cut from its tile's packet (clipmap.rs `cut`). The brick's
+/// fill lays its own cells from them, and the GPU colors a hit by them.
 pub const PALETTE_ARR_BYTES: u32 = arr_bytes(BRICK_CELLS as usize, 4);
 const PALETTE_AT: u32 = CELLS_AT + SLOTS * CELLS_ARR_BYTES;
 
-/// The child groups a brick's tree is built in, past child group 0, and a word
-/// each to walk them as they are laid in the pool (clipmap.rs `fill_stage`).
+/// The child groups a brick's tree is built in, beyond child group 0, with
+/// one word each for the walk that lays them into the pool (clipmap.rs
+/// `fill_stage`).
 const BUILD_CHILD_GROUPS: usize = BRICK_CHILD_GROUPS as usize + 1;
 pub const BUILD_WORDS: usize = BUILD_CHILD_GROUPS * CHILD_GROUP_WORDS as usize;
 
-/// The room a fill works in (clipmap.rs `FillScratch`), an array each in order:
-/// a brick's samples, its lines, the pairs `brick_lines` lays them with, its spans, its tree as it is built and
-/// the walk that lays it.
+/// The room a fill works in (clipmap.rs `FillScratch`), one array each, in
+/// order: a brick's samples, its lines, the pairs `brick_lines` lays them
+/// with, its spans, its tree as it is built, and the walk that lays the tree.
 pub const FILL_ARRAY_BYTES: [u32; 6] = [
     ELE_BYTES,
     arr_bytes(LINES_WORDS as usize, 4),
@@ -113,17 +118,18 @@ pub const fn separation_column(record: u32, k: usize) -> (u32, u32) {
     (separation_plane(k) + record * bytes, bytes)
 }
 
-/// Record `record`'s samples.
+/// Where record `record`'s samples start.
 pub const fn ele_off(record: u32) -> u32 {
     ELE_AT + record * ELE_BYTES
 }
 
-/// Slot `slot`'s cells (domain/layer/terrain/clipmap.rs `Slot`), `SLOTS` of them.
+/// Where brick slot `slot`'s cells start (clipmap.rs `Slot`); there are
+/// `SLOTS` brick slots.
 pub const fn cells_off(slot: u32) -> u32 {
     CELLS_AT + slot * CELLS_ARR_BYTES
 }
 
-/// Slot `slot`'s four palette indices a cell.
+/// Where brick slot `slot`'s palette starts.
 pub const fn palette_off(slot: u32) -> u32 {
     PALETTE_AT + slot * PALETTE_ARR_BYTES
 }

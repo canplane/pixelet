@@ -1,4 +1,5 @@
-// glTF's Y-up turned to Z-up, (x, y, z) to (x, -z, y), then the spin about Z.
+// `place_up` turns glTF's Y-up to Z-up, taking (x, y, z) to (x, -z, y), and then
+// spins the result about Z.
 
 fn spin_z(v: vec3f, angle: f32) -> vec3f {
   let c = cos(angle);

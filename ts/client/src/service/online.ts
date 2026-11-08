@@ -1,6 +1,7 @@
 // @pxl/client/service/online.ts
 
-/** The browser's own word: a failed fetch alone cannot tell offline from a server that refuses. */
+/** The browser's own word on whether it is online. A failed fetch alone
+ * cannot tell being offline from a server that refuses. */
 export function watch(report: (online: boolean) => void): void {
   const say = () => report(navigator.onLine);
   say();

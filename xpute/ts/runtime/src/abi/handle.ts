@@ -4,11 +4,13 @@
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 
-/** As the core's (xpute-core abi/handle.rs `SLOT_BITS`), copied: the conformance traces'
- * `slot` relations catch only a value here wider than the core's, never a narrower one. */
+/** A copy of the core's `SLOT_BITS` (xpute-core abi/handle.rs). The conformance
+ * traces' `slot` relations catch a value here that is wider than the core's,
+ * but never a narrower one. */
 export const SLOT_BITS = 16;
-/** The core's generation, a `u16` (xpute-core abi/handle.rs `Slot`), copied likewise; the
- * two fill the handle's word (handle.test.ts). */
+/** The width of the core's generation, a `u16` (xpute-core abi/handle.rs
+ * `Slot`), copied likewise. The two widths together fill the handle's word,
+ * as handle.test.ts checks. */
 export const GENERATION_BITS = 16;
 const SLOT_MASK = (1 << SLOT_BITS) - 1;
 

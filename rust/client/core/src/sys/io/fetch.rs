@@ -1,10 +1,10 @@
 // pxl-core/sys/io/fetch.rs
 
-//! The world's reads: a tile below its bake's root by its quadkey, a shard's
-//! objects and their top below OBJECT (sys/io/file.rs). A body is read into
-//! a block (sys/io/body.rs) and answered, as an absence is, to the layer
-//! that asked, whose it is to say what an absence means, to settle the fetch
-//! and to release the block or keep it.
+//! The world's reads: a tile below its bake's root by its quadkey, and a
+//! shard's objects and the objects' top below OBJECT (sys/io/file.rs). A body
+//! is read into a block (sys/io/body.rs) and answered to the layer that
+//! asked, and so is an absence. The layer decides what an absence means,
+//! settles the fetch, and releases the block or keeps it.
 
 use xpute_core::clock::now;
 use xpute_core::global::Global;
@@ -24,19 +24,20 @@ use crate::sys::io::param::MAX_CREDITS;
 use crate::sys::io::request::{attempt_of, settle};
 use crate::sys::sched::edge::{request_world_tick, world_edge};
 
-/// An open answered, until its body is filled.
+/// An answered open, held until its body is filled.
 struct Arrival {
     key: u64,
-    /// Its body, none where the source has no object, or how it ended
-    /// without one.
+    /// The body, or None where the source has no object; or how the attempt
+    /// ended without a body.
     got: Result<Option<Block>, Exit>,
-    /// The read that fills the body, the runtime's until its head has passed
-    /// it.
+    /// The read that fills the body. The body belongs to the runtime until
+    /// the runtime's head has passed the read.
     read: Option<Pos>,
     net_ms: f64,
 }
 
-/// A body, or the source's absence, until the layer that asked takes it.
+/// A body, or the source's absence, held until the layer that asked takes
+/// it.
 pub struct Response {
     pub key: u64,
     pub stream: Stream,
@@ -48,7 +49,8 @@ pub struct Response {
 
 const CREDITS: usize = MAX_CREDITS as usize;
 
-/// No more of either than fetches are out, each on its credit; oldest first.
+/// The arrivals and the answers, oldest first. Neither list holds more than
+/// the fetches out, because each fetch is on a credit.
 struct Queue {
     arrivals: List<Arrival, CREDITS>,
     answers: List<Response, CREDITS>,
@@ -81,20 +83,21 @@ pub fn start(key: u64, stream: Stream, id: u64) {
     file::open(root, Path::of_quadrant(id), owner);
 }
 
-/// The open answered: a body's block taken and its read posted, the
-/// descriptor closed either way.
+/// Takes the answer to a fetch's open. For a body, a block is taken and its
+/// read is posted. The descriptor is closed either way.
 pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
     let stream = attempt_of(key).map(|(stream, _)| stream);
     let mut read = None;
     let got = match opened {
         Opened::Absent => Ok(None),
         Opened::Failed { .. } => Err(Exit::Failed(Failure::from(opened))),
-        // Only an absence says there is none: an empty file is no object.
+        // Only an absent file means there is no object, so an empty file is
+        // a bad body.
         Opened::Bytes(0) => {
             file::close(fd);
             Err(Exit::Failed(Failure::from(Errno::EBADMSG)))
         }
-        // Longer than its kind's packet can be.
+        // The body is longer than a packet of its kind can be.
         Opened::Bytes(n) if stream.and_then(Stream::max_body).is_some_and(|max| n > max) => {
             file::close(fd);
             Err(Exit::Failed(Failure::from(Errno::EFBIG)))
@@ -129,9 +132,9 @@ pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
     q.notify.notify();
 }
 
-/// Each arrival handed on once its body is filled, oldest first, yielding
-/// where the turn is spent; the layer decodes it (domain/view/demand.rs
-/// `admit_arrived`).
+/// Hands on each arrival once its body is filled, oldest first, and yields
+/// where the turn is spent. The layer decodes what it is handed
+/// (domain/view/demand.rs `admit_arrived`).
 pub async fn fetch_task() {
     loop {
         notified(notify).await;
@@ -146,11 +149,11 @@ pub async fn fetch_task() {
     }
 }
 
-/// A body or an absence answered, and a turn asked to take it; anything
-/// else settled.
+/// Answers a body or an absence to its layer, and asks for a turn to take
+/// it. Any other end settles the attempt here.
 fn arrived(a: Arrival) {
     let key = a.key;
-    // A key the requests do not hold is one a reset forgot.
+    // A key the scheduler does not hold is one a reset dropped.
     let Some((stream, id)) = attempt_of(key) else {
         return release(a.got.ok().flatten());
     };
@@ -174,13 +177,13 @@ fn arrived(a: Arrival) {
     }
 }
 
-/// How many answers to one of `of` wait to be taken.
+/// How many answers to any stream in `of` wait to be taken.
 pub fn answer_cnt(of: &[Stream]) -> usize {
     let answers = &queue().answers;
     answers.iter().filter(|a| of.contains(&a.stream)).count()
 }
 
-/// The oldest answer to one of `of`.
+/// The oldest answer to any stream in `of`.
 pub fn take_answer(of: &[Stream]) -> Option<Response> {
     let answers = &mut queue().answers;
     let at = answers.iter().position(|a| of.contains(&a.stream))?;

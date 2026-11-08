@@ -2,12 +2,11 @@
 
 use std::str::FromStr;
 
-/// Enters the checkout a bake or the tile server works in: the nearest
-/// directory up from where it was started that holds this crate's manifest,
-/// so that `./out`, the sources under `infra/` and `asset/`, and the paths its
-/// arguments give are the checkout's wherever it was started, `rust/` under
-/// cargo among them. Found where it runs, as pxl-tool's `root` is; started
-/// outside a checkout, it stays where it is.
+/// Enters the checkout a bake or the tile server works in: the nearest directory up from
+/// where it was started that holds this crate's manifest, so that `./out`, the sources under
+/// `infra/` and `asset/`, and the paths its arguments give are the checkout's wherever it was
+/// started, `rust/` under cargo among them. It is found where the program runs, as pxl-tool's
+/// `root` is; started outside a checkout, the program stays where it is.
 pub fn enter() -> Result<(), String> {
     let here = std::env::current_dir().map_err(|e| format!("where this runs: {e}"))?;
     let Some(root) = here

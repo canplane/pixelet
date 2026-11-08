@@ -98,7 +98,7 @@ fn no_shadows_no_light() {
     assert!(plan.light.is_none());
 }
 
-/// A view that stops rests within the frames the jitter's sequence takes, whatever came before.
+/// A view that stops stands again by the second frame after it moved, and stays standing.
 #[test]
 fn a_stopped_view_rests() {
     let mut s = stood();

@@ -1,9 +1,10 @@
 // @xpute/runtime/sched/scheduler.test.ts
 
-/** The scheduler as the one that times a core on its own thread, which keeps
- * no timer: every wake the core asks, at once or in `n` ms, is kicked only
- * at a moment the policy gives and admits. The doorbell and the policy are
- * stand-ins that record the kicks and the moments asked. */
+/** Tests the scheduler as the only one that times a core on its own thread,
+ * which keeps no timer: every wake the core asks for, at once or in `n` ms,
+ * is kicked only at a moment the policy gives and admits. The doorbell and
+ * the policy are stand-ins that record the kicks and the moments asked
+ * for. */
 
 import { afterEach, test, vi } from "vitest";
 import assert from "node:assert/strict";
@@ -38,13 +39,14 @@ function setup() {
     policy,
     () => {},
   );
-  /** A turn the thread ran that the scheduler did not kick, a device's, heard
-   * as `Doorbell.turns` hears it: the turn, then its wake. */
+  /** Hears a turn the thread ran that the scheduler did not kick, such as
+   * one a device kicked, as `Doorbell.turns` hears it: first the turn, then
+   * its wake. */
   const heard = (wake_ms: number) => {
     doorbell.on_turn!(1, wake_ms);
     doorbell.on_wake!(wake_ms);
   };
-  /** The policy's next moment, given. */
+  /** Gives the policy's next moment. */
   const moment = () => moments.shift()?.(performance.now());
   return { scheduler, wake: doorbell.on_wake!, heard, kicks, moments, moment };
 }

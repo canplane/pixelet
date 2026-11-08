@@ -1,27 +1,31 @@
 // @pxl/client/ui/component/motion/transition.ts
 
 /**
- * Every move is solved here into a sampled curve, which each platform plays
- * on its compositor. Nothing runs per frame: the core spends the JS
- * thread's frame, so a per-frame curve would stutter while loading.
+ * Every motion is solved here, ahead of time, into a sampled curve, which each
+ * platform plays on its compositor. No code runs per frame: the core spends
+ * the JS thread's frame time, so a curve stepped per frame would stutter while
+ * the world loads.
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 
-/** Samples from 0 to 1 at evenly spaced moments (past 1 where a spring overshoots). */
+/** A motion's progress, sampled at evenly spaced moments over `durationMs`.
+ * The samples run from 0 to 1, and past 1 where a spring overshoots. */
 export interface Transition {
   durationMs: f64;
   samples: readonly f64[];
   delayMs?: f64;
 }
 
-/** Settled once it stays this close to the target, as a share of the move. */
+/** A spring counts as settled once it stays this close to its target, as a
+ * fraction of the whole move. */
 const REST = 0.001;
 const STEP_MS = 1;
 const MAX_MS = 3000;
 const SAMPLES = 64;
 
-/** A spring's constants: m x'' + c x' + k x = k, from rest. */
+/** The constants of a spring that moves from 0 to 1, starting at rest, by
+ * m x'' + c x' + k x = k: `mass` is m, `damping` c and `stiffness` k. */
 interface SpringConstants {
   stiffness: f64;
   damping: f64;
@@ -60,7 +64,8 @@ export function spring(s: SpringConstants): Transition {
   return { durationMs, samples };
 }
 
-/** Bisection is safe: x rises monotonically for every control point CSS allows. */
+/** Finds the curve's y at `x` by bisection on the curve's parameter. Bisection
+ * is safe because x rises monotonically for every control point CSS allows. */
 function bezierAt(
   [x1, y1, x2, y2]: readonly [f64, f64, f64, f64],
   x: f64,
@@ -96,7 +101,8 @@ export function curveAt(t: Transition, p: f64): f64 {
   return t.samples[i] + (t.samples[i + 1] - t.samples[i]) * (at - i);
 }
 
-/** Overdamped, so a target that moves mid-flight does not ring. */
+/** An overdamped spring, so that a target moving mid-flight does not make the
+ * view ring. */
 export const SNAP: Transition = spring({
   stiffness: 500,
   damping: 40,
@@ -109,14 +115,15 @@ export const LEAVE: Transition = ease(150, [0, 0, 0.58, 1]);
 
 export const FADE: Transition = ease(200, [0, 0, 0.58, 1]);
 
-/** Critical damping: leaves at full speed and lands without a bounce. */
+/** A critically damped spring: it leaves at full speed and lands without a
+ * bounce. */
 export const SLIDE: Transition = spring({
   stiffness: 420,
   damping: 41,
   mass: 1,
 });
 
-/** Material's emphasized accelerate. */
+/** Material Design's emphasized accelerate easing. */
 export const SLIDE_AWAY: Transition = ease(200, [0.3, 0, 0.8, 0.15]);
 
 export const DIM: Transition = ease(500, [0.42, 0, 0.58, 1]);

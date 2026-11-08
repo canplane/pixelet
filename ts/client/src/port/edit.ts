@@ -1,29 +1,29 @@
 // @pxl/client/port/edit.ts
 
-/** The edit's commands: the tool and what it takes, and the marker it left
- * waiting. */
+/** The edit's commands: the tool and what it places, and the marker that
+ * waits for its words. */
 
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { Tool } from "@/abi/cmd.spec.ts";
 import { core } from "@/port/core.ts";
 
-/** What the pointer holds, told to the core: 0, or a negative errno it refused with. */
+/** Tells the core what the pointer holds. Resolves to 0, or to a negative
+ * errno when the core refuses it. */
 export function tool(tool: Tool, val: u32, scale_steps: i32): Promise<i32> {
   return core.edit_tool(tool, val, scale_steps);
 }
 
-/** The waiting marker's text as typed, which it is drawn with: 0, or a negative
- * errno where the core refused it whole, the text before staying. */
+/** Gives the waiting marker its text as typed, and the marker is drawn with
+ * it. Resolves to 0, or to a negative errno when the core refuses the text
+ * whole, in which case the text before it stays. */
 export function marker_text(text: string): Promise<i32> {
   return core.edit_marker_text(text);
 }
 
-/** The waiting marker committed with its text. */
 export function marker_commit(): void {
   core.edit_marker_commit();
 }
 
-/** The waiting marker let go. */
 export function marker_cancel(): void {
   core.edit_marker_cancel();
 }

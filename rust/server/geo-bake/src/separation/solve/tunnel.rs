@@ -14,10 +14,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A tile's bores: a road tunnel as deep as its cover asks, reached by its
-//! approach roads sinking into the portal, and a rail tunnel at a fixed depth
-//! under the terrain (Arnis's highways and railways, without the blocks it
-//! places; the solve's rules, `super`).
+//! A tile's bores: a road tunnel as deep as its cover asks, reached by its approach roads
+//! sinking into the portal, and a rail tunnel at a fixed depth under the terrain. Both follow
+//! Arnis's highways and railways, without the blocks Arnis places, and the solve's rules
+//! (`super`).
 
 use fnv::{FnvHashMap, FnvHashSet};
 use std::collections::{BTreeMap, VecDeque};
@@ -36,7 +36,7 @@ use crate::separation::{Line, WayRange};
 use super::bridge::Decks;
 use super::*;
 
-// ---- Arnis's numbers for a bore, in meters, under its names ----
+// ---- Arnis's numbers for a bore, in meters, under its names. ----
 const TUNNEL_CEIL_OFF_M: f64 = 5.0;
 const TUNNEL_COVER_DROP_M: f64 = 7.0;
 const TUNNEL_ROOF_COVER_M: f64 = TUNNEL_CEIL_OFF_M + 1.0;
@@ -45,12 +45,12 @@ const TUNNEL_RAMP_RUN: i32 = 3;
 const TUNNEL_LAYER_DROP_M: f64 = 7.0;
 const TUNNEL_MAX_LAYERS_BELOW: i64 = 8;
 const TUNNEL_APPROACH_WAYS: usize = 8;
-/// Ours, not Arnis's: the steepest a bore longer than a tile rises from the lowest floor near it
-/// (`road_bores`): 2%, which a road tunnel is built within.
+/// Ours, not Arnis's: the steepest a bore longer than a tile rises from the lowest floor near
+/// it (`road_bores`), 2%, within which a road tunnel is built.
 const TUNNEL_FAR_GRADE: f64 = 0.02;
 const RAIL_TUNNEL_DEPTH_M: f64 = 3.0;
 const RAIL_INTERIOR_HEIGHT_M: f64 = 4.0;
-/// A block, as a length: what Arnis adds or takes by one.
+/// A block, as a length: what Arnis adds or takes away by one.
 const BLOCK_M: f64 = 1.0;
 
 /// The level whose approaches run furthest (`approach_run`).
@@ -61,8 +61,8 @@ pub(super) fn approach_run(level: i64, scale: Scale) -> f64 {
     merc_from_u(f64::from(tunnel_drop(level, scale) * TUNNEL_RAMP_RUN) * CELL_U)
 }
 
-/// The bores of the stretches in scope, road tunnels and rail tunnels, as lines; a road tunnel's portal
-/// on a deck opens at it (`decks`).
+/// The bores of the stretches in scope, road tunnels and rail tunnels, as lines; a road
+/// tunnel's portal on a deck opens at the deck (`decks`).
 pub(super) fn bores(
     src: &Ring,
     stretches: &[Stretch],
@@ -73,8 +73,8 @@ pub(super) fn bores(
     let ceiling = (scale.c(TUNNEL_CEIL_OFF_M) - scale.c(BLOCK_M)).clamp(0, 255) as u8;
     for (q, ys, covered) in road_bores(src, stretches, decks, scale, lines) {
         let r = &stretches[q];
-        // a stretch under cover keeps its ceiling, one open to the sky is cut to the surface, and
-        // one a deck's portal holds over the ground is an embankment up to it
+        // A stretch under cover keeps its ceiling, one open to the sky is cut to the surface, and one
+        // that a deck's portal holds over the ground is an embankment up to it.
         let bore: Vec<Bore> = (0..ys.len())
             .map(|i| {
                 if ys[i] > r.terrain[i] {
@@ -98,7 +98,8 @@ pub(super) fn bores(
     for q in (0..stretches.len())
         .filter(|&q| stretches[q].piece.form == Form::Tunnel && stretches[q].rail())
     {
-        // the floor under the interior, under the ceiling, under the cover (Arnis `generate_rail_tunnel_shell`)
+        // The floor lies under the interior, under the ceiling, under the cover (Arnis
+        // `generate_rail_tunnel_shell`).
         let depth = scale.c(RAIL_TUNNEL_DEPTH_M + RAIL_INTERIOR_HEIGHT_M + BLOCK_M);
         let ys: Vec<i32> = stretches[q].terrain.iter().map(|t| t - depth).collect();
         lines.push(line_of(
@@ -116,9 +117,9 @@ fn is_pedestrian(class: &str) -> bool {
     matches!(class, "footway" | "pedestrian" | "steps")
 }
 
-// ---- road tunnels: approaches sink into the portals, the bore as deep as its cover asks ----
+// ---- Road tunnels: approaches sink into the portals, and the bore is as deep as its cover asks. ----
 
-/// `drop` cells under grade at cell `anchor`, easing back over `run` cells a cell.
+/// `drop` cells under grade at cell `anchor`, easing back to grade over `run` cells a cell.
 #[derive(Clone, Copy)]
 struct Claim {
     anchor: i32,
@@ -126,8 +127,9 @@ struct Claim {
     run: i32,
 }
 
-/// How far under its cover a road tunnel at `level` is bored, and so how far its portals' approaches
-/// sink, in cells: Arnis's cover drop, and a layer's drop for each layer below the first.
+/// How far under its cover a road tunnel at `level` is bored, and so how far its portals'
+/// approaches sink, in cells: Arnis's cover drop, and a layer's drop for each layer below the
+/// first.
 fn tunnel_drop(level: i64, scale: Scale) -> i32 {
     scale.c(TUNNEL_COVER_DROP_M)
         + (-(level + 1)).clamp(0, TUNNEL_MAX_LAYERS_BELOW) as i32 * scale.c(TUNNEL_LAYER_DROP_M)
@@ -144,7 +146,7 @@ fn road_bores(
     let tunnels: Vec<usize> = (0..stretches.len())
         .filter(|&q| stretches[q].piece.form == Form::Tunnel && !stretches[q].rail())
         .collect();
-    // a node two tunnels share, or an end the ring cut, stays at depth
+    // A node two tunnels share, or an end the ring cut, stays at depth.
     let mut owner: FnvHashMap<&End, PartId> = FnvHashMap::default();
     let mut shared: FnvHashSet<&End> = FnvHashSet::default();
     for &q in &tunnels {
@@ -165,8 +167,9 @@ fn road_bores(
         |q: usize, e: usize| stretches[q].clipped[e] || shared.contains(&stretches[q].ends[e]);
     let drop_of = |r: &Stretch| tunnel_drop(r.piece.way.tags.level.unwrap_or(0), scale);
 
-    // ---- a portal on a road deck, at its end or along it, opens at the deck's height there, where Arnis
-    // leaves it at the terrain under the deck: the bore ramps down from it, with no approach to sink ----
+    // ---- A portal on a road deck, at the deck's end or along it, opens at the deck's height
+    // there, where Arnis leaves it at the terrain under the deck: the bore ramps down from it, and
+    // no approach sinks. ----
     let mut deck: FnvHashMap<&End, i32> = FnvHashMap::default();
     for &q in &tunnels {
         for e in (0..2).filter(|&e| !internal(q, e)) {
@@ -185,7 +188,7 @@ fn road_bores(
                             stretches[*b].at[*k][1] - p[1],
                         )
                     };
-                    // the stretch of the deck that passes it: a cell of it within a cell of the portal
+                    // The stretch of the deck that passes it: a cell of the deck within a cell of the portal.
                     (0..ys.len())
                         .min_by(|i, j| near(i).total_cmp(&near(j)))
                         .filter(|k| near(k) <= merc_from_u(CELL_U))
@@ -198,7 +201,7 @@ fn road_bores(
         }
     }
 
-    // ---- the approaches: ways at grade from a portal, as far as the drop needs and the road goes on ----
+    // ---- The approaches: ways at grade from a portal, as far as the drop needs and the road goes on. ----
     let portal_nodes: FnvHashSet<&End> = tunnels
         .iter()
         .flat_map(|&q| {
@@ -216,10 +219,10 @@ fn road_bores(
         })
     };
     let step = merc_from_u(CELL_U);
-    // a way's last cell as `cells_along` counts them
+    // A way's last cell, as `cells_along` counts them.
     let last_cell = |part: &PartId| libm::ceil(src.ways[part].line.length() / step).max(1.0) as i32;
-    // a way's cells from the end it is entered at, as far as its ground is held and no further than
-    // `cap`, which is all a descent can use, and whether it stops short of its far end
+    // A way's cells from the end it is entered at, as far as its ground is held and no further
+    // than `cap`, which is all a descent can use, and whether it stops short of its far end.
     let in_ring = |part: &PartId, from_start: bool, cap: i32| {
         let (line, last) = (&src.ways[part].line, last_cell(part));
         let mut n = 0;
@@ -276,7 +279,7 @@ fn road_bores(
                 loop {
                     let w = &src.ways[&part];
                     let at_start = w.row.ends[0] == at;
-                    // past the budget no cell changes the descent: `avail` is as much as it needs
+                    // Past the budget no cell changes the descent: `avail` is as much as it needs.
                     let (len, leaves) = in_ring(&part, at_start, budget - dist + 1);
                     chain.push((part.clone(), at_start, dist, len));
                     taken.insert(part.clone());
@@ -289,7 +292,7 @@ fn road_bores(
                     {
                         break;
                     }
-                    // only where the road goes on: a junction stays at grade
+                    // Only where the road goes on; a junction stays at grade.
                     let next = eligible(&at, &taken, &claims);
                     if next.len() != 1 {
                         break;
@@ -298,7 +301,7 @@ fn road_bores(
                 }
                 branches.push(chain);
             }
-            // every branch takes the same descent, or one ends in a cliff
+            // Every branch takes the same descent, or one ends in a cliff.
             let Some(avail) = branches
                 .iter()
                 .filter_map(|b| b.last().map(|(_, _, d0, len)| d0 + len - 1))
@@ -328,8 +331,8 @@ fn road_bores(
     for (part, cs) in &claims {
         let (w, last) = (&src.ways[part], last_cell(part));
         let along = |k: i32| (f64::from(k) * step).min(w.line.length());
-        // where it descends, within a claim's drop of its anchor, to the cell either side where it is
-        // back at grade; past that it is a way at grade, the ground's to paint
+        // Where it descends, within a claim's drop of its anchor, to the cell on either side where it
+        // is back at grade; past that it is a way at grade, for the ground to paint.
         let mut spans: Vec<[i32; 2]> = cs
             .iter()
             .map(|c| {
@@ -349,7 +352,7 @@ fn road_bores(
             }
         }
         for [a, b] in merged {
-            // each stretch of it whose ground is held, the cells past it not read
+            // Each stretch of it whose ground is held; the cells past it are not read.
             let mut k = a;
             while k <= b {
                 let from = k;
@@ -386,14 +389,14 @@ fn road_bores(
         }
     }
 
-    // ---- each bore (Arnis `generate_highway_tunnel_shell`); the world has no bedrock to stop it ----
+    // ---- Each bore (Arnis `generate_highway_tunnel_shell`); the world has no bedrock to stop it. ----
     let roof = scale.c(TUNNEL_ROOF_COVER_M);
     let mut out = Vec::new();
     for &q in &tunnels {
         let r = &stretches[q];
         let n = r.cell.len();
         let last = n - 1;
-        // the lowest ground over the bore's footprint decides its roof
+        // The lowest ground over the bore's footprint decides its roof.
         let wall = disk(way::footprint((r.width_u / CELL_U) as f32));
         let cover: Vec<i32> = r
             .at
@@ -463,9 +466,9 @@ fn road_bores(
                 .map(|i| grade(i).min(cover[i] - drop_cover))
                 .collect::<Vec<i32>>()
         };
-        // the ground caps the bore, but where a deck's portal holds it over the ground, ramping down from
-        // the deck, and in a short bore no higher than the straight run between the portals, so it meets
-        // the other one
+        // The ground caps the bore, except where a deck's portal holds it over the ground, ramping
+        // down from the deck; and in a short bore it is no higher than the straight run between the
+        // portals, so it meets the other portal.
         let over = |i: usize| {
             [
                 deck_s.map(|d| d - i as i32 / TUNNEL_RAMP_RUN),
@@ -478,7 +481,7 @@ fn road_bores(
                 r.terrain[i].max(if long { held } else { held.min(grade(i)) })
             })
         };
-        // as deep as cover asks, ramping down from whatever the portals reached
+        // As deep as the cover asks, ramping down from whatever the portals reached.
         let mut ys: Vec<i32> = (0..n)
             .map(|i| {
                 let desired = floor[i];
@@ -504,7 +507,8 @@ fn road_bores(
             }
         };
         cap(&mut ys);
-        // one valley, not several, in a short bore: the lowest point of a long one is not a ring's to know
+        // One valley, not several, in a short bore; the lowest point of a long one is not a ring's to
+        // know.
         if let Some(m) = (0..n).filter(|_| !long).min_by_key(|&i| ys[i]) {
             for i in 1..=m {
                 ys[i] = ys[i].min(ys[i - 1]);
@@ -513,7 +517,7 @@ fn road_bores(
                 ys[i] = ys[i].min(ys[i + 1]);
             }
         }
-        // a short gap in the roof closes, so a wiggle of the terrain opens no skylight
+        // A short gap in the roof closes, so a wiggle of the terrain opens no skylight.
         let mut covered: Vec<bool> = (0..n).map(|i| cover[i] - ys[i] >= roof).collect();
         let close = (2 * r.half + 3) as usize;
         let mut deepened = false;
@@ -554,7 +558,8 @@ fn envelope(room: &[i32], grade: f64, w: usize) -> Vec<f64> {
     let n = room.len();
     let mut out = vec![f64::INFINITY; n];
     for reverse in [false, true] {
-        // along the pass, `t` from where it starts: the least of room[j] − grade·t_j over the window, plus grade·t
+        // Along the pass, with `t` counted from where it starts: the least of room[j] − grade·t_j over
+        // the window, plus grade·t.
         let mut window: VecDeque<(usize, f64)> = VecDeque::new();
         for t in 0..n {
             let i = if reverse { n - 1 - t } else { t };

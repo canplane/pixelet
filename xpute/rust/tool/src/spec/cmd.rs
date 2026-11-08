@@ -1,10 +1,12 @@
 // xpute-tool/spec/cmd.rs
 
-//! A protocol over xpute's rings, xpute's own or a program's: its commands,
-//! as a WIT world names them from the core's side, `export` what the core
-//! implements and the runtime calls and `import` what the runtime implements and
-//! the core calls, and the types their packets are made of. The messages' emitters are cmd/ts.rs, cmd/rs.rs and
-//! cmd/cpp.rs; cmd/service.rs writes each end's binding over xpute's ends.
+//! Generates the code for a protocol over xpute's rings, xpute's own or a
+//! program's: its commands and the types their packets are made of. As a WIT
+//! world does, a protocol names its commands from the core's side: an
+//! `export` is a command the core implements and the runtime calls, and an
+//! `import` is one the runtime implements and the core calls. cmd/ts.rs,
+//! cmd/rs.rs and cmd/cpp.rs write the messages in each language, and
+//! cmd/service.rs writes each end's binding onto xpute's runtime and core.
 
 mod cpp;
 mod rs;
@@ -30,8 +32,8 @@ struct Field {
     doc: Option<Vec<String>>,
 }
 
-/// An enum's member; a command is one of `Command`'s, made from its
-/// protocol's entry (`Cmd`).
+/// A member of an enum. Each command becomes a member of the `Command` enum,
+/// made from its protocol's entry (`Cmd`).
 #[derive(Deserialize)]
 struct Member {
     name: String,
@@ -42,7 +44,8 @@ struct Member {
     pkt: Option<Vec<Field>>,
     #[serde(skip)]
     import: Option<Vec<Field>>,
-    /// An `import`'s completion's packet, which the runtime writes and the core reads.
+    /// The packet of an `import`'s completion, which the runtime writes and the
+    /// core reads.
     #[serde(skip)]
     reply: Option<Vec<Field>>,
 }
@@ -85,11 +88,13 @@ struct Record {
     fields: Vec<Field>,
 }
 
-/// A command as its protocol lists it. `call`: the sender waits for the answer
-/// (an `export` the runtime calls, an `import` the runtime answers before it returns).
-/// `ackreq`: an `import` the runtime completes on a later turn, a frame of its tag
-/// flagged RES, its packet `reply`. `mem`: the two fields of an `import`
-/// that name the core's memory, where it is and how long.
+/// A command as its protocol lists it. With `call`, the sender waits for the
+/// answer: the runtime calls an `export` and waits, or answers an `import`
+/// before the core's call returns. With `ackreq`, the command is posted with
+/// ACKREQ and answered later; the runtime completes such an `import` on a
+/// later turn with a frame of the same tag flagged RES, whose packet is
+/// `reply`. `mem` names the two fields of an `import` that give where a
+/// region of the core's memory is and how long it is.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Cmd {
@@ -106,10 +111,10 @@ struct Cmd {
     mem: Option<[String; 2]>,
 }
 
-/// A protocol: the commands the runtime sends the core (`export`) and those the
-/// core posts to the runtime (`import`). `name` is the program's, for the generated
-/// code's names only. The bus reads none of it; a runtime routes a frame by its
-/// command's major.
+/// A protocol: the commands the runtime sends the core (`export`) and those
+/// the core posts to the runtime (`import`). `name` serves only the generated
+/// code's names. Nothing on the rings reads the protocol; a runtime routes a
+/// frame by its command's major alone.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Doc {
@@ -126,7 +131,8 @@ struct Doc {
     enums: Vec<Enum>,
     #[serde(default)]
     records: Vec<Record>,
-    /// Where a program's code goes, from the JSON's own directory.
+    /// Where a program's protocol code goes, relative to the JSON's own
+    /// directory.
     gen: Option<Gen>,
 }
 
@@ -135,14 +141,14 @@ struct Doc {
 pub(crate) struct Gen {
     pub(crate) ts: String,
     pub(crate) rs: String,
-    /// Enums a module under the protocol's own code reads, written apart
-    /// where that module can name them.
+    /// Enums that a module below the protocol's own code reads. They are
+    /// written into a file of their own, where that module can name them.
     pub(crate) enums: Option<Apart>,
 }
 
-/// The enums `names` written into `rs`, from the JSON's own directory, which
-/// the Rust module `path` is; the protocol's Rust names them from there. Its
-/// TypeScript keeps them all.
+/// The enums `names`, written apart into `rs`, a file relative to the JSON's
+/// own directory that is the Rust module `path`. The protocol's Rust names
+/// these enums through that module; its TypeScript still holds all of them.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Apart {
@@ -156,7 +162,6 @@ struct Spec {
     externs: Vec<Extern>,
     enums: Vec<Enum>,
     records: Vec<Record>,
-    /// Each command `Command`'s member named in `export` or `import`.
     protocol: Protocol,
     gen: Option<Gen>,
 }
@@ -172,8 +177,8 @@ struct Protocol {
     mem: Vec<(String, [String; 2])>,
 }
 
-/// `json`'s protocol, its commands made `Command`'s members, each `export` a
-/// packet the core reads and each `import` one it writes.
+/// Reads `json`'s protocol and makes its commands members of `Command`. An
+/// `export` carries a packet the core reads, and an `import` one it writes.
 fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
     let d: Doc = read_as(json)?;
     if d.enums.iter().any(|e| e.name == "Command") {
@@ -328,14 +333,16 @@ fn literal(val: u32, format: &str) -> String {
     }
 }
 
-/// Every command is numbered by a major and a minor that its protocol names. A
-/// table's numbers are each given out once, and no member takes a global's name.
+/// Checks that every command's major and minor are members its protocol
+/// names, that each number in a table is given out once, and that no member
+/// takes the name of a global.
 fn check_numbers(spec: &Spec, json: &str) -> Result<(), String> {
     for e in &spec.enums {
         let all: Vec<&Member> = members(e).collect();
-        // Each member is a top-level `export const` in TypeScript, which a
-        // bundler that hoists it as `var` turns into the module's own `Object`,
-        // undefined when its `Object.defineProperty` runs.
+        // In TypeScript each member is a top-level `export const`. A bundler
+        // that hoists it as a `var` would make a member named Object shadow
+        // the global in its module, and that `Object` is still undefined when
+        // the module's `Object.defineProperty` runs.
         if all.iter().any(|m| m.name == "Object") {
             return Err(format!(
                 "{json}: {}'s member Object hides the global in its TypeScript module",
@@ -396,14 +403,14 @@ struct Target {
     ts_logical: &'static str,
     rs: &'static str,
     rs_logical: &'static str,
-    /// Where the number checks a packet's reader calls are.
+    /// The module that holds the number checks a packet's reader calls.
     number: &'static str,
-    /// For a core that raises the table's imports: the module whose `Import`
-    /// each implements (`xpute_core::ipc::door`).
+    /// For a core that raises the table's imports, the module whose `Import`
+    /// trait each import implements (`xpute_core::ipc::door`).
     import: Option<&'static str>,
     cpp: Option<(&'static str, &'static str)>,
-    /// For xpute's own protocols, where the runtime's TypeScript binding takes
-    /// the runtime's types from inside its own package.
+    /// For xpute's own protocols, the path inside the runtime's own package
+    /// from which its TypeScript binding imports the runtime's types.
     runtime_ts: Option<&'static str>,
 }
 
@@ -443,11 +450,12 @@ const TARGETS: [Target; 3] = [
     },
 ];
 
-/// The first major a program's commands take; those below it are xpute's
-/// own (spec/ipc/frame.json `PROGRAM_MAJOR`).
+/// The first major a program's commands may take; the majors below it are
+/// xpute's own. It must equal spec/ipc/frame.json `PROGRAM_MAJOR`.
 const PROGRAM_MAJOR: u32 = 0x10;
 
-/// Each command's number given once across `specs`, each read from its JSON.
+/// Checks that no two commands across `specs` share a number. Each spec comes
+/// with the JSON it was read from.
 fn check_once(specs: &[(&Spec, &str)]) -> Result<(), String> {
     let mut seen: Vec<(u32, &str, &str)> = Vec::new();
     for (spec, json) in specs {
@@ -464,10 +472,10 @@ fn check_once(specs: &[(&Spec, &str)]) -> Result<(), String> {
     Ok(())
 }
 
-/// A program's protocols, each `json` from `root`, and each one's code where
-/// its `gen` says, each path in the outputs from `root` as its `json` is. A
-/// command under xpute's majors is refused, and so is a number two of them
-/// give.
+/// Generates a program's protocols, each into the files its `gen` names.
+/// Every `json`, and every path in the outputs, is relative to `root`. A
+/// command under xpute's majors is refused, and so is a number that two
+/// protocols both give.
 pub fn protocol_outputs(root: &Path, jsons: &[&str]) -> Result<Vec<Output>, String> {
     let mut specs = Vec::new();
     for json in jsons {
@@ -538,8 +546,8 @@ fn one_protocol(spec: &Spec, json: &str) -> Result<Vec<Output>, String> {
     Ok(out)
 }
 
-/// `imports` after the module's last import, `body` at its end, and the word
-/// types the body spells added to the words' import.
+/// Splices `imports` in after the module's last import and `body` at its end,
+/// and adds the word types that `body` spells to the module's import of them.
 fn splice_ts(text: &str, imports: &[String], body: &[String]) -> String {
     let mut lines: Vec<String> = text.lines().map(str::to_string).collect();
     let body_text = body.join("\n");

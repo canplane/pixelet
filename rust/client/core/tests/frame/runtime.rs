@@ -1,8 +1,9 @@
-//! The runtime's end of the core's rings, as @xpute/runtime's doorbell and the client's port keep
-//! it (xpute/ts/runtime/src/ipc/doorbell.ts, ts/client/src/port/): the front laid before the
-//! first turn, the UI's commands sent and its calls waited for, and what each turn leaves
-//! read dry before the next is rung: the files answered (fs.rs), the stop report kept, and
-//! the snapshot read where the core names it.
+//! The runtime's end of the core's rings, kept the way @xpute/runtime's doorbell and the
+//! client's port keep it (xpute/ts/runtime/src/ipc/doorbell.ts, ts/client/src/port/). It
+//! lays the front before the first turn, sends the UI's commands and waits for its calls'
+//! answers. Everything a turn posts is read before the next turn is rung: the file calls
+//! are answered (fs.rs), the stop report is kept, and the snapshot is read where the core
+//! names it.
 
 use std::collections::BTreeMap;
 
@@ -17,8 +18,8 @@ use xpute_runtime::native::{ring, turns, Core};
 use crate::fs::Files;
 use crate::spec::{self, Protocol, V};
 
-/// What the last snapshot said: how many of the renderer's pipelines are made, a share, and
-/// whether a zoom is still arriving.
+/// What the last snapshot said: the share of the renderer's pipelines made so far, and
+/// whether a zoom is still easing in.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Shown {
     pub renderer_progress: f64,
@@ -47,7 +48,7 @@ fn major_of(cmd: u32) -> u32 {
 }
 
 impl Runtime {
-    /// The front laid on `core`'s memory as its machine places it, before its first turn.
+    /// Lays the front on `core`'s memory where its machine places it, before the first turn.
     pub fn lay(core: Core) -> Runtime {
         let m = MACHINE;
         let (base, bytes) = core.mem();
@@ -91,8 +92,8 @@ impl Runtime {
         }
     }
 
-    /// A frame on the submission ring, its packet what `write` writes, none where it writes
-    /// none; a full ring is a turn's to make room in.
+    /// Pushes a frame on the submission ring with the packet `write` writes, or with no
+    /// packet when it writes none. When the ring is full, a turn is rung to make room.
     fn push(
         &mut self,
         tag: u32,
@@ -114,8 +115,8 @@ impl Runtime {
         }
     }
 
-    /// The command `name`, the UI's or xpute's (abi/sys.json, abi/gpu.json),
-    /// its fields by name, sent with the next turn.
+    /// Sends the command `name`, the UI's or xpute's (abi/sys.json, abi/gpu.json), with its
+    /// fields given by name. The core takes it on the next turn.
     pub fn send(&mut self, name: &str, values: &[(&str, V)]) {
         self.submit(name, values, 0, 0);
     }
@@ -132,7 +133,8 @@ impl Runtime {
         });
     }
 
-    /// The call `name`, the UI's or xpute's, rung with a deadline of 0 until the core answers it: its result.
+    /// Makes the call `name`, the UI's or xpute's, ringing turns with a deadline of 0 until
+    /// the core answers, and returns the result.
     pub fn call(&mut self, name: &str, values: &[(&str, V)]) -> i32 {
         self.next_call = self.next_call.wrapping_add(1).max(1);
         let tag = self.next_call;
@@ -148,17 +150,19 @@ impl Runtime {
         }
     }
 
-    /// A turn of `deadline_ms`, its posts read after: when the core wants the next, none
-    /// where it has stopped.
+    /// Rings a turn with `deadline_ms` and reads its posts after it. Returns when the core
+    /// wants the next turn, or None when the core has stopped.
     pub fn turn(&mut self, deadline_ms: f64) -> Option<f64> {
         let wake = ring(deadline_ms);
-        // What the turns asked is read here, so the next ring's wake is its own.
+        // The wakes the turns asked for are taken here, so the next ring reports only its
+        // own.
         let _ = turns();
         self.drain();
         wake
     }
 
-    /// The completion ring read dry, then the files' completions submitted.
+    /// Reads the completion ring until it is empty, then submits the file calls'
+    /// completions.
     fn drain(&mut self) {
         let mut done = Vec::new();
         while let Some(f) = self.cq.peek() {
@@ -234,7 +238,8 @@ impl Runtime {
             .map_or_else(|| format!("{cmd:#x}"), str::to_string)
     }
 
-    /// What the UI is posted: the snapshot read where it lies, the rest let pass.
+    /// Takes what the core posts to the UI. The snapshot is read where it lies, and every
+    /// other post is ignored.
     fn program(&mut self, cmd: u32, pkt: Option<&[u8]>) {
         if cmd != self.ui.number("UI_SNAPSHOT") {
             return;

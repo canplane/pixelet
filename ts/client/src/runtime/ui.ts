@@ -1,9 +1,10 @@
 // @pxl/client/runtime/ui.ts
 
 /**
- * The UI as the core tells it, the same on every platform: the imports it
- * takes, by a table; the GPU's state; the stop. Once started, the UI's
- * sensors and visibility are told the core.
+ * The UI that the core talks to, the same on every platform. It takes the
+ * core's imports through a table, and hears the GPU's state and the core's
+ * stop. Once the core has started, the UI tells it about the sensors and the
+ * visibility.
  */
 
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
@@ -38,8 +39,8 @@ export interface OnOpen {
 
 type Take = (f: BranchCursor, named: U8Array | null) => void;
 
-/** The UI the core tells. The snapshot is read here alone;
- * `refused` takes what it says of the files to where the files are. */
+/** The UI the core talks to. Only this reads the snapshot, and `refused`
+ * takes the refused files it lists to where the files are kept. */
 export function ui(
   on: OnOpen,
   refused: (files: readonly RefusedFile[]) => void,
@@ -66,7 +67,8 @@ export function ui(
   };
 }
 
-/** The core started: the UI's sensors and visibility told it. */
+/** Called when the core has started. It tells the core about the sensors and
+ * the visibility, and keeps it told from then on. */
 export function started(on: OnOpen): void {
   on.started();
   listen(SENSOR_LISTENER);

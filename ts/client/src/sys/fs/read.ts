@@ -1,9 +1,10 @@
 // @pxl/client/sys/fs/read.ts
 
 /**
- * The bus under the backends' reads (tile.ts, asset.ts): an object
- * fetched from the origin, whole, as a file's open answers. 204 is a page its
- * version leaves out, ENOENT; 404 names nothing, a failure like any other.
+ * The read under the backends that fetch (tile.ts, asset.ts). It fetches an
+ * object whole from the origin and answers as a file's open does. A 204 is a
+ * baked page that its version leaves out, and reads as ENOENT. A 404 means
+ * the key names nothing, which is a failure like any other.
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -12,7 +13,6 @@ import { FileError } from "@xpute/runtime";
 import { online } from "@/origin/online.ts";
 import * as origin from "@/origin/route.ts";
 
-/** The object at `url`, whole. */
 export async function get(url: string, signal: AbortSignal): Promise<U8Array> {
   let res: Response;
   let body: U8Array;
@@ -20,8 +20,9 @@ export async function get(url: string, signal: AbortSignal): Promise<U8Array> {
     res = await origin.get(url, signal);
     body = new Uint8Array(await res.arrayBuffer());
   } catch (err) {
-    // TypeError covers offline, DNS, CORS and refused alike, so only the
-    // browser's own word says offline; the rest is the server's.
+    // fetch throws the same TypeError when offline, on a DNS failure, on CORS
+    // and on a refused connection. Only the browser's online flag tells
+    // offline apart; every other failure is counted as the server's.
     if (!signal.aborted) {
       console.warn(
         `[read] ${url}: ${
@@ -34,7 +35,8 @@ export async function get(url: string, signal: AbortSignal): Promise<U8Array> {
   if (res.status === 204) throw new FileError(Errno.ENOENT);
   if (!res.ok) {
     console.warn(`[read] ${url}: HTTP ${res.status}`);
-    // A key that names nothing is the object's failure; any other, the server's.
+    // A 404 is the object's failure: its key names nothing. Any other status
+    // is the server's failure.
     throw new FileError(
       res.status === 404 ? Errno.ENXIO : Errno.EACCES,
       res.status,

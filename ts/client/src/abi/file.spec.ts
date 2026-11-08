@@ -14,7 +14,7 @@ import * as format from "./file/format.spec.ts";
 
 /** The roots the core opens files below (xpute's OPENAT). Below STORAGE a root is a
  * bake, numbered by its kind (pxl-spec bake/publication.spec.rs). Below every root a path is
- * one name: a tile's quadkey (pxl-spec space/layer/tile.rs), or what the root says. What it
+ * one name: a tile's quadkey (pxl-spec space/layer/quadrant.rs), or what the root says. What it
  * is called and where past that, a tile's version and URL, a storage key, is what the client
  * (ts/client/src/sys/fs/) binds the root to, `@xpute/runtime` carrying the open there. */
 export { root };

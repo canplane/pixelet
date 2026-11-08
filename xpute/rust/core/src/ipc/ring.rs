@@ -1,8 +1,8 @@
 // xpute-core/ipc/ring.rs
 
-//! A ring of frames, laid out by spec/ipc/ring.json. A push fails only
-//! when full (EAGAIN) or when the packet exceeds a slot (EMSGSIZE), never
-//! depending on what was sent before.
+//! A ring of frames, laid out by spec/ipc/ring.json. A push fails only when
+//! the ring is full (EAGAIN) or when the packet exceeds a slot (EMSGSIZE);
+//! whether it fails never depends on what was sent before.
 //!
 //! A ring's two sides may take turns on one thread, as a page's runtime and its
 //! module do, or run at once on two, as a native runtime and a core on its own
@@ -96,8 +96,9 @@ impl Ring {
         unsafe { AtomicU32::from_ptr(self.mem.at::<u32>(self.at + 4 * word as usize)) }
     }
 
-    /// The frame's word `word` from the ring's start: the writer's until the
-    /// producer publishes it, the reader's after.
+    /// The ring's word at index `word` from the ring's start. A frame's words
+    /// are the producer's until it publishes the frame, and the consumer's
+    /// after.
     fn frame_word(&self, word: usize) -> u32 {
         // SAFETY: inside the ring `new` was given, aligned as its start is.
         unsafe { self.mem.at::<u32>(self.at + 4 * word).read() }
@@ -108,8 +109,8 @@ impl Ring {
         unsafe { self.mem.at::<u32>(self.at + 4 * word).write(w) }
     }
 
-    /// The slot at `start` from the slots' base, alone: the other side may
-    /// be reading or writing another slot meanwhile.
+    /// The one slot at `start` from the slots' base, and no more, since the
+    /// other side may be reading or writing another slot meanwhile.
     #[allow(clippy::mut_from_ref)]
     fn slot(&self, start: usize) -> &mut [u8] {
         // SAFETY: a slot of the memory `new` was given, which R2 hands to one
@@ -123,7 +124,7 @@ impl Ring {
     }
 
     /// # Safety
-    /// As `new`.
+    /// As for `new`.
     pub unsafe fn init(mem: Memory, at: usize, cap: u32, slot_base: u32, slot_bytes: u32) -> Ring {
         if !cap.is_power_of_two() {
             xpute_kit::bug!(EINVAL, cap);
@@ -142,10 +143,11 @@ impl Ring {
         }
     }
 
-    /// The first of the fixed words of the ring header at `at` that is not
-    /// what `cap`, `slot_base` and `slot_bytes` say: where it is in the memory
-    /// and what it holds. None where all are. Its positions are not held to
-    /// anything, since a runtime may have pushed before the core looks.
+    /// Finds the first fixed word of the ring header at `at` that differs
+    /// from what `cap`, `slot_base` and `slot_bytes` say, and answers where
+    /// it is in the memory and what it holds, or none when all agree. The
+    /// position words are not checked, since a runtime may have pushed before
+    /// the core looks.
     pub fn header_differs(
         mem: Memory,
         at: usize,
@@ -171,8 +173,8 @@ impl Ring {
     }
 
     /// Whether the consumer has stored its head past the frame published at
-    /// `pos`: what that frame named is the producer's again (R3). The
-    /// producer's to ask.
+    /// `pos`, so that what the frame named is the producer's again (R3). Only
+    /// the producer asks this.
     pub fn is_consumed(&self, pos: u32) -> bool {
         let tail = self.tail();
         tail.wrapping_sub(self.head()) < tail.wrapping_sub(pos)
@@ -186,7 +188,8 @@ impl Ring {
         self.len() == 0
     }
 
-    /// The word, from the ring's start, where the frame at `position` begins.
+    /// The word, counted from the ring's start, where the frame at `pos`
+    /// begins.
     pub fn entry_at(&self, pos: u32) -> u32 {
         HEADER_WORDS + (pos & self.mask) * frame::WORDS
     }
@@ -234,8 +237,9 @@ impl Ring {
         }
     }
 
-    /// `push_in_place`'s frame laid at the tail and not published: where its
-    /// words begin in the memory. The next push takes its place.
+    /// Lays `push_in_place`'s frame at the tail without publishing it, and
+    /// answers where its words begin in the memory. The next push overwrites
+    /// it.
     pub fn stage_in_place(
         &self,
         tag: u32,
@@ -247,8 +251,8 @@ impl Ring {
         Ok(self.at + 4 * at)
     }
 
-    /// The frame at the tail, its packet written by `write`: the word where
-    /// it begins, from the ring's start.
+    /// Lays the frame at the tail, with its packet written by `write`, and
+    /// answers the word where it begins, counted from the ring's start.
     fn lay(
         &self,
         tag: u32,
@@ -277,7 +281,8 @@ impl Ring {
         self.advance_tail();
     }
 
-    /// The frame's words at the tail's entry, unpublished: where they begin.
+    /// Writes the frame's words at the tail's entry, unpublished, and answers
+    /// where they begin.
     fn entry(&self, tag: u32, cmd: u32, flags: u32, result: i32, pkt_at: u32) -> usize {
         let at = self.entry_at(self.tail()) as usize;
         self.set_frame_word(at + frame::TAG as usize, tag);
@@ -287,13 +292,15 @@ impl Ring {
         at
     }
 
-    /// The frame at the tail published, its words and slot written before (R2).
+    /// Publishes the frame at the tail, whose words and slot are already
+    /// written (R2).
     fn advance_tail(&self) {
         self.pos(TAIL)
             .store(self.tail().wrapping_add(1), Ordering::Release);
     }
 
-    /// The head's frame, none when empty. Read it, then `advance`.
+    /// The frame at the head, or none when the ring is empty. A reader reads
+    /// it, then calls `advance`.
     pub fn peek(&self) -> Option<Frame> {
         if self.is_empty() {
             return None;
@@ -309,9 +316,10 @@ impl Ring {
         })
     }
 
-    /// Valid until `advance`; `'static` because the memory's lifetime is
-    /// `new`'s contract, and a reader holds the packet while it acts on the ring.
-    /// EBADMSG when the frame names bytes outside a slot.
+    /// The frame's packet, valid until `advance`. It is `'static` because the
+    /// memory's lifetime is `new`'s contract, and a reader holds the packet
+    /// while it acts on the ring. A frame that names bytes outside a slot
+    /// answers EBADMSG.
     pub fn pkt(&self, f: &Frame) -> Result<Option<&'static [u8]>, MarshalError> {
         if f.pkt_at == 0 {
             return Ok(None);
@@ -323,7 +331,8 @@ impl Ring {
         {
             return Err(bad());
         }
-        // In u64: a length word near 2^32 must read as too long, not wrap on wasm32.
+        // Computed in u64, so that a length word near 2^32 reads as too long
+        // instead of wrapping on wasm32.
         let payload = self
             .mem
             .word(self.slot_base as usize + off + WORD_SZ as usize);
@@ -338,7 +347,7 @@ impl Ring {
         }))
     }
 
-    /// The head's frame, and its slot, let go (R2).
+    /// Lets go of the frame at the head and its slot (R2).
     pub fn advance(&self) {
         if self.is_empty() {
             xpute_kit::bug!(ENOTRECOVERABLE);

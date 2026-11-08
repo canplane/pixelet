@@ -2,9 +2,9 @@
 
 use super::*;
 
-/// A pick's ray from a pose is the composed view's through the same point:
-/// the near plane's point under the inverse of the view and projection,
-/// from the eye.
+/// The ray a pick builds from a pose is the composed view's ray through the
+/// same screen point: from the eye to that point on the near plane under the
+/// inverse view-projection.
 #[test]
 fn pose_ray_matches_view() {
     view_resize(1280.0, 720.0);

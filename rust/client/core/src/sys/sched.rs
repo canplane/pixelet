@@ -1,7 +1,8 @@
 // pxl-core/sys/sched.rs
 
-//! A turn's mechanics: its edge, its phases and what each holds back, and
-//! the wall clock it is told.
+//! How the core spends a turn: the edge that bounds the turn's tasks, the
+//! phases of its tick and the share of the budget each holds back, and the
+//! wall clock time the runtime tells it.
 
 pub mod clock;
 pub mod edge;

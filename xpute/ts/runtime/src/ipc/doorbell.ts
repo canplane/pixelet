@@ -2,18 +2,19 @@
 
 /**
  * The runtime's end of a core's rings. One ring of the doorbell is one turn
- * (sched/scheduler.ts). Everything a turn leaves is read before the next is rung,
- * so a listener must not ring the core while the completion ring is read. A
- * frame's tag is the sender's id (ipc/frame.json): a runtime's call takes the
- * next, which its reply keeps, and what the core raises is handed to the one
- * listener, which tells the commands apart.
+ * (sched/scheduler.ts). Everything a turn leaves is read before the next turn
+ * is rung, so a listener must not ring the core while the completion ring is
+ * being read. A frame's tag is the sender's id (ipc/frame.json): each call the
+ * runtime makes takes the next id, and its reply keeps that id. Everything the
+ * core raises is handed to the one listener, which tells the commands apart.
  *
- * A core on a thread of its own (runtime.ts `Core.thread`) is kicked after
- * each submission and after each read of the completion ring, which may have
- * made the room a turn waits for, and runs on its own; what it posts is read
- * as it says it has (`turns`). A ring is then a turn waited for, a call's. A
- * core that runs only when rung is asked a turn after a read that took
- * frames instead, for what the head passing gave back.
+ * A core on a thread of its own (runtime.ts `Core.thread`) runs by itself. It
+ * is kicked after each submission, and after each read of the completion
+ * ring, since a read may have made the room a turn waits for. What it posts is
+ * read when it says it has posted (`turns`). For such a core, a ring is a turn
+ * waited for, as a call needs. A core that runs only when rung is instead
+ * asked for a turn after any read that took frames, so that it sees the room
+ * that moving the head gave back.
  */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
@@ -35,15 +36,16 @@ import * as frame from "./frame.ts";
 import { Ring } from "./ring.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 
-/** Where a stopped core's packets are written: nowhere, as its sends are dropped. */
+/** Packets for a stopped core are written into this empty buffer, since its
+ * sends are dropped. */
 const NOWHERE = new Uint8Array(0);
 const NOWHERE_VIEW = new DataView(NOWHERE.buffer);
 
-/** What the runtime hears the core send; `f` and `pkt`, the packet read and
- * its bytes, are valid only inside the call. A frame the core calls with is
- * answered with what it returns, 0 for nothing; one it posts with ACKREQ is
- * completed with what it returns, or, for nothing, by its device later
- * (`Doorbell.complete`). */
+/** Hears what the core sends. `f` is the packet as read and `pkt` its bytes;
+ * both are valid only inside the call. A call of the core's is answered with
+ * what this returns, or 0 if it returns nothing. A frame the core posts with
+ * ACKREQ is completed with what this returns; if it returns nothing, its
+ * device completes the frame later (`Doorbell.complete`). */
 export type OnImport = (
   tag: u32,
   cmd: u32,
@@ -58,9 +60,10 @@ export type Encode = (room: PacketRoom) => PacketWriter | null;
 type Run = (deadline_ms: f64) => f64;
 type Kick = (deadline_ms: f64) => void;
 
-/** A packet whose fields are `args` in turn, each lowered as XTP lowers a
- * value (wire/xtp `TreeView.set`), each grafted into a slot of `slot_bytes`;
- * none for no arguments: what a console sends. */
+/** Encodes a packet whose fields are `args`, in order. Each argument is
+ * lowered as XTP lowers a value (wire/xtp `TreeView.set`) and grafted in,
+ * within a slot of `slot_bytes`. With no arguments there is no packet. A
+ * console sends its commands this way. */
 export function encode_args(
   args: NodeValue<NodeView>[],
   slot_bytes: u32,
@@ -86,32 +89,37 @@ export class Doorbell implements PacketRoom {
     u32,
     (result: i32, f: BranchCursor | null) => void
   >();
-  /** A listener runs inside it. */
+  /** Set while the completion ring is being read, and so while a listener
+   * runs. */
   private _reading = false;
-  /** The core is gone: its turn stopped partway, or the runtime could not take
-   * what it posted, and the submission it was applying would end it again on
-   * every ring. */
+  /** The core is gone. Either its turn stopped partway, or the runtime could
+   * not take what it posted; either way the submission it was applying would
+   * end it again on every ring, so it is never rung again. */
   private _terminated = false;
-  /** ENOSYS for a call until the runtime listens. */
+  /** Every call fails with ENOSYS until the runtime listens. */
   private _listener: OnImport = () => Errno.ENOSYS;
-  /** What was sent or completed while the completion ring was read, its
-   * tag, command, flags, result and packet, submitted once it is: a packet
-   * is written in its slot, and room for one takes a turn. */
+  /** What was sent or completed while the completion ring was being read, as
+   * tag, command, flags, result and packet. It is submitted once the read is
+   * done, because a packet is written in its slot, and making room for one
+   * takes a turn. */
   private _later: [u32, u32, u32, i32, Encode | null][] = [];
   on_wake: ((wake_ms: f64) => void) | null = null;
-  /** Told of every turn heard, before what it posted is read and `on_wake`
-   * told the same wake, so what that read asks outlives the turn: what the
-   * core's own thread ran since it was last heard, whoever kicked it
-   * (`turns`), and each turn rung (`ring`): its longest turn and when it
-   * wants the next. */
+  /** Told of every turn heard: how long the longest turn took and when the
+   * core wants the next. It is told before what the turn posted is read and
+   * before `on_wake` hears the same wake, so that whatever that read asks for
+   * outlives the turn. A turn heard is each turn rung (`ring`), or whatever
+   * the core's own thread ran since it was last heard, whoever kicked it
+   * (`turns`). */
   on_turn: ((turn_ms: f64, wake_ms: f64) => void) | null = null;
   /** Told once, as the core stops. */
   onterminated: (() => void) | null = null;
 
   private readonly _run: Run;
-  /** Wakes a core on its own thread, none for one that runs only when rung. */
+  /** Wakes a core on its own thread; null for a core that runs only when
+   * rung. */
   readonly kick: Kick | null;
-  /** Submissions kick nothing: the kick after them does (`batch`). */
+  /** While set, submissions kick nothing, and the kick after them does
+   * (`batch`). */
   private _batching = false;
 
   /** The core is gone, and no turn runs again. */
@@ -132,8 +140,9 @@ export class Doorbell implements PacketRoom {
     this._cq = new Ring(mem, cq_at);
   }
 
-  /** The writer, begun over the next submission's slot for a packet of
-   * `count` children, room made for it first; valid until that submission. */
+  /** The writer, begun over the next submission's slot for a packet of `cnt`
+   * children, after ringing until there is room. It is valid until that
+   * submission. */
   writer(cnt: u32): PacketWriter {
     if (this._reading) throw new InvariantError(Errno.EBUSY);
     while (!this._terminated && !this._sq.write(this._writer, cnt))
@@ -142,18 +151,20 @@ export class Doorbell implements PacketRoom {
     return this._writer;
   }
 
-  /** Whether a command carrying `pkt` can be sent at all; one that cannot is
-   * the caller's input to refuse, at the boundary it came through. */
+  /** Whether a command carrying `pkt` can be sent at all. A command that
+   * cannot is input the caller must refuse, at the boundary it came
+   * through. */
   fits(pkt: PacketWriter): boolean {
     return pkt.finish() >= 0;
   }
 
-  /** What the core sends or calls with is handed to `listener`. */
+  /** Hands `listener` what the core sends or calls with. */
   listen(listener: OnImport): void {
     this._listener = listener;
   }
 
-  /** Tagged 0; while the completion ring is read, once it is. */
+  /** Sends `cmd` tagged 0. While the completion ring is being read, the
+   * send waits until the read is done. */
   send(cmd: u32, encode: Encode | null = null): void {
     if (this._reading) {
       this._later.push([0, cmd, 0, 0, encode]);
@@ -163,12 +174,13 @@ export class Doorbell implements PacketRoom {
     if (errnum !== Errno.OK) throw new InvariantError(errnum);
   }
 
-  /** Posted with ACKREQ, tagged with the next call's id, and answered by the
-   * reply the core posts as it applies it, read with the completion ring:
-   * nothing waits for it here. A core that has stopped answers
-   * ENOTRECOVERABLE, and every request still waiting is answered so as it
-   * stops; a packet past a slot is EMSGSIZE. While the completion ring is
-   * read, it is posted once it is. */
+  /** Posts `cmd` with ACKREQ, tagged with the next call's id. The promise
+   * settles with the reply the core posts as it applies the request, which
+   * is read with the completion ring; nothing blocks here. A core that has
+   * stopped answers ENOTRECOVERABLE, and every request still waiting is
+   * answered so when the core stops. A packet larger than a slot answers
+   * EMSGSIZE. While the completion ring is being read, the request is posted
+   * once the read is done. */
   request(cmd: u32, encode: Encode | null = null): Promise<i32> {
     if (this._terminated) return Promise.resolve(Errno.ENOTRECOVERABLE);
     this._next_call = (this._next_call + 1) >>> 0 || 1;
@@ -187,9 +199,10 @@ export class Doorbell implements PacketRoom {
     });
   }
 
-  /** The core's request tagged `tag`, posted with ACKREQ, completed: a frame
-   * of its tag and command flagged RES, its result `result` and its packet
-   * `encode`'s; while the completion ring is read, once it is. */
+  /** Completes the core's request tagged `tag`, which it posted with ACKREQ,
+   * by submitting a frame of that tag and command, flagged RES, with
+   * `result` and the packet `encode` writes. While the completion ring is
+   * being read, the completion waits until the read is done. */
   complete(
     tag: u32,
     cmd: u32,
@@ -204,9 +217,9 @@ export class Doorbell implements PacketRoom {
     if (errnum !== Errno.OK) throw new InvariantError(errnum);
   }
 
-  /** `cmd` sent and rung, its arguments its packet's fields in turn
-   * (`encode_args`): a command from outside the runtime's own code, a
-   * console's. */
+  /** Sends `cmd` with `args` as its packet's fields, in order
+   * (`encode_args`), and rings at once. It is for a command from outside the
+   * runtime's own code, such as a console's. */
   cmd(cmd: u32, ...args: NodeValue<NodeView>[]): void {
     this.send(cmd, encode_args(args, this._sq.slot_bytes));
     this.ring(0);
@@ -220,7 +233,8 @@ export class Doorbell implements PacketRoom {
     try {
       wake = this._run(deadline_ms);
     } catch (err) {
-      // What it posted before it trapped, its report among it, is read.
+      // What the core posted before it trapped, its stop report among it, is
+      // still read.
       this._terminate("the core trapped", err, true);
       return NO_WAKE;
     }
@@ -228,8 +242,8 @@ export class Doorbell implements PacketRoom {
     try {
       this._read();
     } catch (err) {
-      // A frame the runtime could not take: the core broke the protocol, or
-      // what answers it failed, and nothing after that frame can be read.
+      // The runtime could not take a frame: the core broke the protocol, or
+      // what answers it failed. Nothing after that frame can be read.
       this._terminate(
         "the runtime could not take what the core posted",
         err,
@@ -241,8 +255,9 @@ export class Doorbell implements PacketRoom {
     return wake;
   }
 
-  /** `f`'s submissions kick nothing, so the kick its caller makes after it
-   * gives the turn that applies them its deadline. */
+  /** Runs `f` with its submissions kicking nothing, so that the kick the
+   * caller makes afterwards gives the turn that applies them its
+   * deadline. */
   batch(f: () => void): void {
     const was = this._batching;
     this._batching = true;
@@ -253,9 +268,10 @@ export class Doorbell implements PacketRoom {
     }
   }
 
-  /** The core's own thread has posted or asked since it was last heard:
-   * the completion ring read dry, and what it asked told, or, where it has
-   * stopped (`wake_ms` NaN), what it posted read and its stop told. */
+  /** Called when the core's own thread has posted or asked for a turn since
+   * it was last heard. The completion ring is read dry and what the core
+   * asked is told. If the core has stopped (`wake_ms` is NaN), what it posted
+   * is read and its stop is told. */
   turns(wake_ms: f64, turn_ms: f64): void {
     if (this._terminated) return;
     if (Number.isNaN(wake_ms)) {
@@ -276,9 +292,9 @@ export class Doorbell implements PacketRoom {
     this.on_wake?.(wake_ms);
   }
 
-  /** The core is gone: printed here, once, and told, since a turn's caller is
-   * a timer or an import's handler with nothing to do about it. `read` first reads what
-   * it posted. */
+  /** Ends the core. The cause is printed here, once, and the stop is told,
+   * because whoever rang the turn is a timer or an import's handler that can
+   * do nothing about it. With `read`, what the core posted is read first. */
   private _terminate(why: string, err: unknown, read: boolean): void {
     console.error(`[xpute/doorbell] ${why}:`, err);
     this._terminated = true;
@@ -297,11 +313,13 @@ export class Doorbell implements PacketRoom {
     }
   }
 
-  /** Submitted with ACKREQ, tagged with the next call's id, and rung with a deadline of 0 until the
-   * reply returns; the reply is valid only inside `read`. A core that has
-   * stopped answers ENOTRECOVERABLE, and a packet past a slot EMSGSIZE, with
-   * no reply. Refused while the completion ring is read, since the answer
-   * takes a turn. */
+  /** Submits `cmd` with ACKREQ, tagged with the next call's id, and rings
+   * with a deadline of 0 until the reply returns. The reply is valid only
+   * inside `read`. A core that has stopped answers ENOTRECOVERABLE, and a
+   * packet larger than a slot answers EMSGSIZE; neither comes with a reply.
+   * A core that applied every submission without replying is a protocol
+   * error (EPROTO). A call while the completion ring is being read throws
+   * EBUSY, because the answer takes a turn. */
   call<T>(
     cmd: u32,
     encode: Encode | null,
@@ -309,7 +327,7 @@ export class Doorbell implements PacketRoom {
   ): T {
     if (this._reading) throw new InvariantError(Errno.EBUSY);
     if (this._terminated) return read(Errno.ENOTRECOVERABLE, null);
-    // 0 is a send's.
+    // Tag 0 belongs to sends, so call ids skip it.
     this._next_call = (this._next_call + 1) >>> 0 || 1;
     const tag = this._next_call;
     let out: { val: T } | null = null;
@@ -333,9 +351,10 @@ export class Doorbell implements PacketRoom {
     return (out as { val: T }).val;
   }
 
-  /** The core's call, a frame it laid at `at` in the completion ring and has
-   * not published, answered by the listener before the core goes on. Run
-   * inside the core's turn, so the answer rings nothing. */
+  /** Answers the core's call: a frame the core laid at `at` in the
+   * completion ring without publishing it. The listener answers it before
+   * the core goes on. This runs inside the core's turn, so the answer must
+   * ring nothing. */
   answer(at: u32): i32 {
     const cq = this._cq;
     const e = cq.entry_of(at);
@@ -387,8 +406,9 @@ export class Doorbell implements PacketRoom {
     } finally {
       this._reading = false;
     }
-    // A core task may wait on what the head passing gave back with no turn
-    // asked (xpute-core sched/edge.rs `runtime_turn`).
+    // A task of the core may be waiting for the room this read gave back,
+    // without having asked for a turn (xpute-core sched/edge.rs
+    // `runtime_turn`), so a turn is asked for it.
     if (read > 0) {
       if (this.kick) this.kick(-1);
       else this.on_wake?.(0);
@@ -401,8 +421,9 @@ export class Doorbell implements PacketRoom {
     }
   }
 
-  /** Never from a listener: one could not wait for room, since that takes a
-   * turn. EMSGSIZE where the packet is past a slot. */
+  /** Never called from a listener, which could not wait for room, since
+   * waiting takes a turn. Returns EMSGSIZE for a packet larger than a
+   * slot. */
   private _submit(
     tag: u32,
     cmd: u32,

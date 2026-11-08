@@ -1,21 +1,24 @@
 // pxl-render/light_box.wgsl
 
-// The light's box past what light_aim.wgsl reads of it, as the receivers' passes and the
-// slide take it: the cast's numbers off the head, where a receiver stands
-// (`Light::tile_of`), how far from the eye one receives and the tiles a box of them stands
-// on (`Light::reach`, `Light::box_tiles`), and what a slide keeps (`Light::keeps`).
+// What the receivers' passes and the slide read of the light's box, beyond what
+// light_aim.wgsl reads. A receiver is a surface that reads the shadow map. This part gives the
+// cast's numbers from the head, the tile a receiver stands on (`Light::tile_of`), how far from
+// the eye a surface receives the map and which tiles a box of receivers stands on
+// (`Light::reach`, `Light::box_tiles`), and what a slide keeps (`Light::keeps`).
 
-/// The map's side (`light::HEADER_SIZE`).
+/// The map's side, in texels (`light::HEADER_SIZE`).
 fn light_size() -> u32 {
   return header_word(LIGHT_HEADER_SIZE);
 }
 
-/// The cast's number (`light::HEADER_CAST`).
+/// The cast's number, counted up from one each cast (`light::HEADER_CAST`).
 fn cast_number() -> u32 {
   return header_word(LIGHT_HEADER_CAST);
 }
 
-/// The number of the cast that began its epoch (`light::HEADER_EPOCH`).
+/// The number of the cast that began the epoch, since which the light, the eye's zooms and the
+/// world stayed as they were cast for. What a cast of the epoch left in a tile stands while the
+/// box keeps the tile (`light::HEADER_EPOCH`).
 fn light_epoch() -> u32 {
   return header_word(LIGHT_HEADER_EPOCH);
 }
@@ -25,8 +28,8 @@ fn footprint() -> bool {
   return header_word(LIGHT_HEADER_FOOTPRINT) != 0u;
 }
 
-/// Where a point `v` units from the eye lies on the box, in texels across and down
-/// from texel (0, 0)'s middle (`Light::texel_at`).
+/// Where a point `v` units from the eye lies on the box, in texels across and down from the
+/// middle of texel (0, 0) (`Light::texel_at`).
 fn texel_at(v: vec3<f32>) -> vec2<f32> {
   let d = v - light_v3(0u);
   let across = dot(d, light_v3(LIGHT_ACROSS)) * eye_f32(LIGHT + LIGHT_ACROSS2_INVERSE);
@@ -40,9 +43,10 @@ fn tile_of(v: vec3<f32>) -> vec2<i32> {
   return vec2<i32>(floor((texel_at(v) + vec2<f32>(0.5)) * (1.0 / f32(LIGHT_TILE))));
 }
 
-/// Whether box tile `tile` keeps what a cast left in it where the box slid to its
-/// corner from `was` and the eye's zooms moved from the cast before's (`Light::keeps`,
-/// `light::HEADER_LAST_RANGE`).
+/// Whether box tile `tile` keeps what a cast left in it, after the box slid to its corner from
+/// `was` and the eye's zooms moved from those of the cast before (`Light::keeps`,
+/// `light::HEADER_LAST_RANGE`). It keeps it where the tile lay in the box before as well and
+/// its band did not change.
 fn keeps_tile(tile: vec2<u32>, was: vec2<i32>) -> bool {
   let n = i32(light_tiles());
   let here = vec2<i32>(tile);
@@ -52,8 +56,9 @@ fn keeps_tile(tile: vec2<u32>, was: vec2<i32>) -> bool {
     && tile_band_in(held, last_range) == tile_band(here);
 }
 
-/// How far from the eye a surface receives the map, in units (`Light::reach`): the effects'
-/// share of the box's half-width and a texel past it.
+/// How far from the eye a surface receives the map, in units (`Light::reach`). It is the
+/// effects' share of the box's half-width, and one texel more for the normal offset at which a
+/// receiver reads the map.
 fn light_reach() -> f32 {
   let width = eye_f32(LIGHT + LIGHT_WIDTH);
   return eye_f32(LIGHT + LIGHT_REACH_NDC) * width * (f32(light_size()) * 0.5) + width;
@@ -66,16 +71,19 @@ fn light_within(lo: vec3<f32>, hi: vec3<f32>, reach: f32) -> bool {
   return gap.x * gap.x + gap.y * gap.y + gap.z * gap.z <= reach * reach;
 }
 
-/// The box's tiles a receiver may stand on: whether any, the lowest and the highest.
+/// The box tiles a receiver may stand on: whether there are any, and the lowest and the
+/// highest of them.
 struct BoxTiles {
   got: bool,
   first: vec2<i32>,
   last: vec2<i32>,
 }
 
-/// The tiles a receiver on the box from `lo` to `hi`, units from the eye, stands on
-/// (`Light::box_tiles`): those its eight corners lie on, and `LIGHT_FOOTPRINT_TILES` more
-/// each way where the head asks the footprint (`footprint`); none past the reach or the box.
+/// The tiles that a receiver on the box from `lo` to `hi`, in units from the eye, stands on
+/// (`Light::box_tiles`). They span the tiles its eight corners lie on, which hold every point
+/// of it as the light's rays are parallel, and `LIGHT_FOOTPRINT_TILES` more each way where the
+/// head asks for the footprint (`footprint`). There are none where the box lies past the reach
+/// or past the light's box.
 fn box_tiles(lo: vec3<f32>, hi: vec3<f32>) -> BoxTiles {
   if (!light_within(lo, hi, light_reach())) {
     return BoxTiles(false, vec2<i32>(0), vec2<i32>(0));

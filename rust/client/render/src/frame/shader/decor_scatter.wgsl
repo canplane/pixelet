@@ -1,8 +1,9 @@
 // pxl-render/decor_scatter.wgsl
 
-// The decor the ground holds, off the hashes alone (pxl-content scatter.rs): how many a column
-// holds, a leaf cell's candidate, and whether it stands clear of the decor's others. No world
-// and no state: a thread asks a leaf cell by its name.
+// The decor the ground holds, found from the hashes alone (pxl-content scatter.rs): how many of
+// a decor a column holds, a leaf cell's candidate, and whether it stands clear of the decor's
+// others. It reads no world and keeps no state, so a thread asks of a leaf cell by its name
+// alone.
 
 /// `share::quarter`.
 fn share_quarter(n: u32, cap: u32, across: u32, along: u32, q: u32) -> u32 {
@@ -54,15 +55,16 @@ fn side_of(k: u32, seed: u32) -> i32 {
   return max(size.x, size.y);
 }
 
-/// `scatter::stands_at`, a unit's decor: its box keeps an eighth of a cell at `cell_zoom`.
+/// `scatter::stands_at` for a decor sized in unit cells: whether its box keeps an eighth of a
+/// cell at `cell_zoom` or more. At the leaves' clip level it always stands.
 fn stands_at(k: u32, variant: u32, cell_zoom: u32) -> bool {
   let size = cells(k, variant, 0u);
   let steps = 3u * (UNIT_ZOOM - min(UNIT_ZOOM, cell_zoom));
   return cell_zoom >= LEAF_CELL_ZOOM || (steps < 32u && ((EIGHTHS * u32(size.x * size.y * size.z)) >> steps) >= 1u);
 }
 
-/// `scatter::retained`: no candidate before it (`before`) claims a brick meeting its own
-/// (`meet`), of the cells a brick meeting its may start at.
+/// `scatter::retained`: whether no candidate before it (`before`) claims a brick that meets its
+/// own (`meet`). It asks every cell at which a brick meeting its own may start.
 fn retained(k: u32, leaf: vec2<i32>, first: u32, seed: u32) -> bool {
   let side = side_of(k, seed);
   let extent = decor_widest(k) - 1i;

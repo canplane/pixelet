@@ -13,19 +13,23 @@ import { selectionRing } from "@/ui/catalog/asset/swatch.tsx";
 import { chrome, color, hairline } from "@/ui/component/theme.ts";
 import { NamingContext } from "./name-tip.tsx";
 
-// A press lands on 44 at least: a cell is the press, a target at least, and the item one sees is fitted inside it.
+// A cell is the area a press lands on, and it is at least one touch target
+// (`chrome.target`) wide. The item drawn in it is smaller than the cell.
 const GRID_GAP = 4;
 const LIT_SCALE = 1.05;
 const LIT_INK = 2;
 
-/** Lit, an item reaches no further than halfway into the gap: a cell's `ITEM_SLOPE` plus `ITEM_BASE`. */
+/**
+ * An item is `ITEM_SLOPE * cell + ITEM_BASE` wide. At that size a lit item,
+ * scaled by LIT_SCALE and ringed 1 + LIT_INK pixels wide on each side, reaches
+ * exactly halfway into the gap, so two lit neighbours never touch.
+ */
 const ITEM_SLOPE = 1 / LIT_SCALE;
 const ITEM_BASE = (GRID_GAP - 2 * (1 + LIT_INK)) / LIT_SCALE;
 export function itemOf(cell: f64): f64 {
   return ITEM_SLOPE * cell + ITEM_BASE;
 }
 
-/** How many cells a target wide, with their gaps, fit `width`; one at least. */
 function columnsOf(width: f64): f64 {
   return Math.max(
     1,
@@ -34,9 +38,11 @@ function columnsOf(width: f64): f64 {
 }
 
 /**
- * As many columns as fit a target each, the cells sized so the outer items'
- * edges meet the row's, as the other tabs' content does: the cells overhang by
- * the margin an item keeps inside its cell.
+ * A grid with as many columns as fit when each cell is at least one target
+ * wide. The cells are sized so that the outermost items' edges line up with
+ * the section's edges, as the content of the other tabs does. For that, the
+ * grid reaches past the section on each side by the margin an item keeps
+ * inside its cell.
  */
 export function Grid({
   head,
@@ -67,7 +73,8 @@ export function Grid({
   );
 }
 
-/** Pictures only. A press names it above the finger. */
+/** A cell that shows only a picture. While it is pressed, its name is shown
+ * above the finger (name-tip.tsx). */
 export function Item({
   label,
   active,
@@ -99,7 +106,9 @@ export function Item({
   );
 }
 
-/** An item's outline, and lit, the ring and the scale `ITEM_BASE` leaves room for. */
+/** How an item is marked. An item that is not lit has a hairline outline. The
+ * lit item has the selection ring and the scale that ITEM_BASE leaves room
+ * for. */
 export const mark = StyleSheet.create({
   off: { boxShadow: `0 0 0 1px ${hairline}` },
   on: {

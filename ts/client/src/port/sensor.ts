@@ -1,9 +1,9 @@
 // @pxl/client/port/sensor.ts
 
-/** SENSOR on the UI's port: what the place's sensors heard, in its words
- * (service/types.ts `SensorListener`), sent as the core numbers it; the core's
- * asks that one start or stop, passed to the place's; and the location the
- * search panel's card asks for. */
+/** SENSOR on the UI's port. What the place's sensors heard, in the place's
+ * words (service/types.ts `SensorListener`), is sent in the core's numbers.
+ * The core's asks to start or stop a sensor are passed to the place's
+ * sensors. The search panel's card asks for the location here. */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import {
@@ -21,7 +21,8 @@ export function locate(): void {
   core.sensor_locate();
 }
 
-/** A device reading the device could not give — NaN, an infinity — is sent as none. */
+/** A reading the device could not give, such as NaN or an infinity, is sent
+ * as none. */
 function given(n: number | null): number | null {
   return n !== null && Number.isFinite(n) ? n : null;
 }
@@ -69,7 +70,8 @@ const ANSWER = {
   failed: PermissionAnswer.Failed,
 } as const;
 
-/** What the place's sensors heard, handed to it once at boot. */
+/** Receives what the place's sensors heard. It is handed to the place once,
+ * at boot. */
 export const SENSOR_LISTENER: SensorListener = {
   position: core_pos,
   positionError: (error) => core.sensor_err(Sensor.Geolocation, ERR[error]),
@@ -80,14 +82,14 @@ export const SENSOR_LISTENER: SensorListener = {
     core.sensor_permission(SENSOR[sensor], ANSWER[answer]),
 };
 
-/** The core's SENSOR_START. */
+/** Answers the core's SENSOR_START. */
 export function sensor_start(e: SensorStart): void {
   if (e.sensor === Sensor.Geolocation) {
     sensor.geo.start();
   } else sensor.orient.start();
 }
 
-/** The core's SENSOR_STOP. */
+/** Answers the core's SENSOR_STOP. */
 export function sensor_stop(e: SensorStop): void {
   if (e.sensor === Sensor.Geolocation) {
     sensor.geo.stop();

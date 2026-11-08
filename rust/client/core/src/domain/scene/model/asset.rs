@@ -1,20 +1,22 @@
 // pxl-core/domain/scene/model/asset.rs
 
-//! A glTF file parsed and registered as a model, the one way any model
-//! enters the world. A skinned model's joints are its skins' joints; an
-//! unskinned one animates by nodes, every node a joint with identity inverse
-//! bind (a pet's parts walk this way). A still model (no skin, no clip) has
-//! its node transforms baked into the vertices, since the decor pass reads no
+//! Parsing a glTF file and registering it as a model. This is the only way a
+//! model enters the world.
+//!
+//! A skinned model's joints are its skins' joints. An unskinned model animates
+//! by its nodes: every node is a joint with an identity inverse bind, which is
+//! how a pet's parts walk. A still model, with no skin and no clip, has its
+//! node transforms baked into its vertices, because the decor pass reads no
 //! joint palette and a wheel would otherwise sit at the model's origin.
 //!
 //! A file's bytes, as the loader read them (sys/io/loader.rs `take_gltf`),
-//! are parsed once, whole, as they are taken (pxl-render `parse_gltf`), and
-//! the parse is kept for every registration of the file, the bytes gone. A
-//! registration runs in its own task, and yields between units where the
-//! turn's deadline has passed: a primitive, a run of `STEPS_PER_PAUSE`
-//! vertices, the joints, a clip, and the seal's passes (registry.rs
-//! `Model::seal`). The model joins the registry, and the table here, only
-//! once it is whole.
+//! are parsed once and whole when they are taken (pxl-render `parse_gltf`).
+//! The parse is kept for every registration of the file, and the bytes are
+//! let go. A registration runs in its own task. Once the turn's deadline has
+//! passed, it yields between units of work: a primitive, a run of
+//! `STEPS_PER_PAUSE` vertices, the joints, a clip, and each pass of the seal
+//! (registry.rs `Model::seal`). The model joins the registry, and the table
+//! here, only once it is whole.
 
 use core::future::Future;
 use core::ops::Range;
@@ -47,30 +49,33 @@ const IDENTITY: [f32; 16] = [
     1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
 ];
 
-/// The models that can register at once, each in its own task: one a slot,
-/// the most `model_of` starts.
+/// How many models may register at once, each in its own task: one a catalog
+/// slot, the most `model_of` can start.
 pub const REGISTRATIONS: usize = SLOTS;
 
-/// None while its task runs, then the model as registered, by its number,
-/// or as the heap refused it room.
+/// None while the registration's task runs. Then either the registered
+/// model's number, or the heap's refusal of room.
 type Registration = Option<Result<u32, Refusal>>;
 
-/// Each file, by its number below the asset root, by the height it was
-/// asked at, its bits.
+/// Each registration, keyed by the file's number below the asset root and by
+/// the height it was asked at, as the f64's bits.
 static REGISTRY: Global<Vec<(u32, Option<u64>, Registration)>> = Global::new();
 
-/// The file as parsed, or why its bytes do not parse, for good.
+/// The file as parsed, or why its bytes do not parse. A failed parse is
+/// final.
 type Parse = Result<Rc<Gltf>, MarshalError>;
 
-/// Each file's parse, by its number below the asset root.
+/// Each file's parse, keyed by its number below the asset root.
 static PARSED: Global<Vec<(u32, Parse)>> = Global::new();
 
-/// The file `slot` names registered `height_u` units tall, or at its own
-/// size when None, once, by its model's number: two slots naming one file
-/// reach one. None while it loads or registers, while the heap refuses it
-/// room, and for good where its bytes do not parse: a refusal is a wait, not
-/// a failure, asked again once the heap gives some back. No more than
-/// `REGISTRATIONS` run at once; past them a model waits its turn here.
+/// The number of the model registered from the file `slot` names, `height_u`
+/// units tall, or at its own size when `height_u` is None. A file is
+/// registered once at each height, so two slots that name one file reach one
+/// model. None while the file loads or registers, while the heap refuses it
+/// room, and for good when its bytes do not parse. A refusal is a wait, not a
+/// failure: the registration is tried again once the heap gives room back. No
+/// more than `REGISTRATIONS` run at once, and a model past them waits its
+/// turn here.
 pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<u32> {
     let load = load_of(slot)?;
     let file = load.id();
@@ -98,8 +103,8 @@ pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<u32> {
     None
 }
 
-/// `load`'s file as parsed; none while it loads, and for good where it does
-/// not parse. The first to ask once it is read takes its bytes from the
+/// `load`'s file as parsed. None while it loads, and for good when it does not
+/// parse. The first call after the file is read takes its bytes from the
 /// loader and parses them.
 fn gltf_of(load: Load) -> Option<Rc<Gltf>> {
     let file = load.id();
@@ -112,7 +117,8 @@ fn gltf_of(load: Load) -> Option<Rc<Gltf>> {
     gltf.as_ref().ok().cloned()
 }
 
-/// `bytes` parsed whole, at once: its pause is always ready.
+/// Parses `bytes` whole in one call. The parser's pause is always ready, so
+/// the future completes on its first poll.
 fn parse(bytes: &[u8]) -> Result<Gltf, MarshalError> {
     let mut parsing = pin!(parse_gltf(bytes, &[], || core::future::ready(())));
     match parsing
@@ -124,9 +130,9 @@ fn parse(bytes: &[u8]) -> Result<Gltf, MarshalError> {
     }
 }
 
-/// `slot`'s model as `model_of` registered it at `height_u`, asking
-/// nothing: what a reader that must not load, such as the query, finds;
-/// none while it is not registered.
+/// `slot`'s model as `model_of` registered it at `height_u`, without asking
+/// for anything to load. It serves a reader that must not start a load, such
+/// as the query. None while the model is not registered.
 pub fn registered_model(slot: Slot, height_u: Option<f64>) -> Option<u32> {
     let file = load_of(slot)?.id();
     let key = height_u.map(f64::to_bits);
@@ -137,9 +143,9 @@ pub fn registered_model(slot: Slot, height_u: Option<f64>) -> Option<u32> {
         .and_then(|(_, _, entry)| (*entry)?.ok())
 }
 
-/// The file numbered `file`'s model, `gltf`, registered at `height_u`, its
-/// entry left registering by `model_of` and set once it is whole or
-/// refused. A landing wakes a turn.
+/// Registers `gltf`, the file numbered `file`, at `height_u`. `model_of` left
+/// the file's entry as registering, and this sets it once the model is whole
+/// or refused, then wakes a turn.
 async fn registration(file: u32, height_u: Option<f64>, gltf: Rc<Gltf>) {
     let entry = register_model(&gltf, height_u, || yield_if_spent(world_edge))
         .await
@@ -155,9 +161,10 @@ async fn registration(file: u32, height_u: Option<f64>, gltf: Rc<Gltf>) {
     request_world_tick();
 }
 
-/// A primitive as its model lays it out: from vertex `first` on, by its
-/// node's world transform where the model is still, its joints remapped into
-/// the model's where skinned, else every vertex on its node's joint.
+/// A primitive as its model lays it out. Its vertices start at `first`. In a
+/// still model they are placed by their node's world transform. In a skinned
+/// model their joints are remapped into the model's joints; otherwise every
+/// vertex rides its node's joint (`own_joint`).
 struct Part<'a> {
     prim: &'a GltfPrimitive,
     first: usize,
@@ -167,8 +174,9 @@ struct Part<'a> {
     own_joint: u32,
 }
 
-/// `part`'s vertices `run` written into the block's `words`, columns
-/// `vertex_cnt` apart, their lowest and highest Y as placed folded into `ys`.
+/// Writes the vertices `run` of `part` into the block's `words`, whose
+/// columns are `vertex_cnt` apart, and folds their lowest and highest Y as
+/// placed into `ys`.
 fn lay_out(
     words: &mut [u32],
     vertex_cnt: usize,
@@ -248,9 +256,10 @@ fn lay_out(
     }
 }
 
-/// Its model's number, at its own size when `height_u` is None; None when
-/// it has no mesh or the heap refused. Awaits `pause` first and between
-/// units.
+/// Registers `gltf` as a model `height_u` tall, or at its own size when
+/// `height_u` is None, and returns the model's number. None when the file has
+/// no mesh or the heap refused. It awaits `pause` first and between units of
+/// work.
 async fn register_model<P: Future<Output = ()>>(
     gltf: &Gltf,
     height_u: Option<f64>,
@@ -339,7 +348,8 @@ async fn register_model<P: Future<Output = ()>>(
             let run = from..cnt.min(from + STEPS_PER_PAUSE);
             lay_out(words, vertex_cnt as usize, &part, run, &mut ys);
         }
-        // An index is a word where a vertex is `MODEL_VERTEX_WORDS`.
+        // An index is one word where a vertex is `MODEL_VERTEX_WORDS`, so a
+        // run of this many indices is as much work as a run of vertices.
         let run = STEPS_PER_PAUSE * MODEL_VERTEX_WORDS as usize;
         let idxs_at = vertex_cnt as usize * MODEL_VERTEX_WORDS as usize + i0;
         for (dst, src) in words[idxs_at..idxs_at + prim.idx.len()]

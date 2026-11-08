@@ -1,6 +1,8 @@
 // xpute-gpu/runtime/name.rs
 
-//! Each enumeration's number as wgpu's value, by its WebGPU name.
+//! The wgpu value of each enumeration's number. The spec lists each
+//! enumeration's WebGPU names, which are wgpu's serde names too, so each
+//! number maps to its value by name.
 
 use serde::de::value::{Error as NameError, StrDeserializer};
 use serde::de::{DeserializeOwned, IntoDeserializer};
@@ -13,8 +15,8 @@ use crate::enums::{
 };
 use crate::spec::{BUFFER_USAGE, COLOR_WRITE, SHADER_STAGE, TEXTURE_USAGE};
 
-/// By place in the spec's list, read through wgpu's serde names; none for a
-/// name wgpu gives no value of.
+/// Each enumeration's wgpu values, indexed by place in the spec's list. A
+/// name wgpu has no value for is None.
 pub(super) struct Names {
     pub(super) texture_format: Vec<Option<wgpu::TextureFormat>>,
     pub(super) vertex_format: Vec<Option<wgpu::VertexFormat>>,
@@ -71,8 +73,9 @@ impl Names {
     }
 }
 
-/// A core's word is the union of the flags of the members whose bits it
-/// sets, whatever bits wgpu gives them (its trunk splits them over two words).
+/// A core's usage word stands for the union of the flags whose spec bits it
+/// sets. Each flag is mapped by name rather than by bit, since wgpu's bits
+/// need not be WebGPU's: wgpu's trunk splits them over two words.
 pub(super) const BUFFER_USAGES: [(u32, wgpu::BufferUsages); 10] = [
     (BUFFER_USAGE::MAP_READ, wgpu::BufferUsages::MAP_READ),
     (BUFFER_USAGE::MAP_WRITE, wgpu::BufferUsages::MAP_WRITE),
@@ -116,7 +119,7 @@ pub(super) const COLOR_WRITES: [(u32, wgpu::ColorWrites); 5] = [
     (COLOR_WRITE::ALPHA, wgpu::ColorWrites::ALPHA),
     (COLOR_WRITE::ALL, wgpu::ColorWrites::ALL),
 ];
-// A member the spec gains is one these name, or the build stops here.
+// The build stops here where the spec gains a member these tables leave out.
 const _: () = assert!(
     BUFFER_USAGES.len() == BUFFER_USAGE::KEYS.len()
         && TEXTURE_USAGES.len() == TEXTURE_USAGE::KEYS.len()
@@ -134,8 +137,8 @@ pub(super) fn flags<F: Copy + core::ops::BitOr<Output = F>>(
         .fold(none, |all, (_, f)| all | *f)
 }
 
-/// A name wgpu gives no value of is the core asking for what this device
-/// cannot be: the program's bug, not the runtime's.
+/// A name wgpu has no value for means the core asked for what this device
+/// cannot be. That is the program's bug, not the runtime's.
 pub(super) fn of<T: Copy>(of: &[Option<T>], n: u32, what: &str) -> T {
     of.get(n as usize)
         .copied()

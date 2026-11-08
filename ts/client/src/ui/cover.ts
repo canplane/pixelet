@@ -22,26 +22,29 @@ import {
 } from "@/abi/state.ts";
 import { messageKey } from "@/ui/locale/message-key.ts";
 
-/** Where the app stands, as what may stop it says. */
+/** Where the app stands, as told by each part that can hold it back or stop
+ * it. */
 export interface Standing {
   boot: Boot;
   gpu: Gpu;
   source: Source;
   online: boolean;
-  /** Why the server does not answer the world's reads now. */
+  /** Why the server is not answering the world's reads, or null while it
+   * answers. */
   stall: Message | null;
   stopCode: string | null;
-  /** How much of what the renderer makes is made, 0 to 1. */
+  /** The share of the renderer's pipelines made so far, from 0 to 1. */
   made: number;
-  /** How much of the view's ground shows, 0 to 1. */
+  /** The share of the view's ground that shows, from 0 to 1. */
   area: number;
-  /** The view has a place: the core has heard where, or gave up on the location. */
+  /** Whether the view has a place: the core has heard the location, or has
+   * given up on it. */
   placed: boolean;
 }
 
-/** What stands over the app, `of` the locale key its words are under: progress,
- * while something it waits on may yet come; failed, where it will not; a panic,
- * with the stop code a screenshot sent back needs. */
+/** What covers the app. `of` is the locale key of its words. `progress` shows
+ * while what the app waits on may still come, and `failed` where it will not.
+ * `panic` carries the stop code, which a screenshot sent back needs. */
 export type Cover =
   | { kind: "progress"; of: string; share: number }
   | { kind: "failed"; of: string }
@@ -59,10 +62,12 @@ const panic = (of: string, code: string | null): Cover => ({
   code,
 });
 
-/** The UI itself fell over, which no state of the boot says. */
+/** The cover for a crash of the UI itself, which no state of the boot
+ * reports. */
 export const UI_PANIC = panic("panic.app", "UI_ERROR");
 
-/** What breaks the world once it is made or being made. */
+/** The panic for what breaks the world once it is made, or while it is being
+ * made. */
 function panicOf(s: Standing): Cover | null {
   if (s.gpu === GPU_LOST) return panic("panic.gpu", "GPU_LOST");
   if (s.stall === Message.WorldUnavailable) {
@@ -71,8 +76,8 @@ function panicOf(s: Standing): Cover | null {
   return null;
 }
 
-/** What keeps the app from showing, by what to say first: failed, where it will
- * not come; progress, while it may. */
+/** What keeps the app from showing, in the order it is to be told: a failure,
+ * where the app will not come, before progress, while it may. */
 function blockOf(s: Standing): Cover | null {
   switch (s.gpu) {
     case GPU_MISSING:
@@ -94,18 +99,20 @@ function blockOf(s: Standing): Cover | null {
   return null;
 }
 
-/** What the world being made waits on, once nothing blocks it: the pipelines
- * the renderer makes as soon as a GPU answers, the source asked for beside
- * them; then the view's place and its area. */
+/** What the world waits on while it is made, once nothing blocks it. First
+ * come the pipelines, which the renderer makes as soon as a GPU answers, with
+ * the source asked for beside them. Then come the view's place and its area. */
 function waitOf(s: Standing): Cover {
   if (s.made < 1) return progress(s, "progress.shaders");
   return progress(s, s.placed ? "progress.area" : "progress.location");
 }
 
-/** The one place that says it, step by step: the core opened, a GPU and the
- * source asked for, the world made. Broken once the core ran, a panic.
- * Before the app shows, failed or progress, which holds until the boot shows
- * it (runtime/boot.ts), so neither ever comes over the app. None once it shows. */
+/** The one place that decides what covers the app, through the boot's steps:
+ * the core opened, a GPU and the source asked for, the world made. Once the
+ * core has run, what breaks it is a panic. Before the app shows, the cover is
+ * a failure or progress, and it holds until the boot shows the app
+ * (runtime/boot.ts), so neither ever comes up over the app. Once the app
+ * shows, nothing but a panic covers it. */
 export function coverOf(s: Standing): Cover | null {
   switch (s.boot) {
     case BOOT_TERMINATED:

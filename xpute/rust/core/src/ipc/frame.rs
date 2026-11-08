@@ -9,14 +9,15 @@ pub use spec::*;
 
 const CMD_MASK: u32 = (1 << FLAG_SHIFT) - 1;
 
-/// A frame's four words as read, its command word split.
+/// A frame's four words as read, with its command word split into the
+/// command and its flags.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Frame {
     pub tag: u32,
     pub cmd: u32,
     pub flags: u32,
     pub result: i32,
-    /// 0 for none.
+    /// Where the frame's packet lies in the memory, or 0 for no packet.
     pub pkt_at: u32,
 }
 

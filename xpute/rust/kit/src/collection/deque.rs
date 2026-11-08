@@ -1,7 +1,9 @@
 // xpute-kit/collection/deque.rs
 
-//! A ring over a buffer the caller owns; it never grows. `head` and `len`
-//! alone say which slots are live.
+//! A double-ended queue in a ring over a buffer the caller owns. It never
+//! grows: a push onto a full deque is a bug. `head` and `len` alone say
+//! which slots are live, and `new` takes them, so a caller can keep a
+//! deque's state between borrows of its buffer.
 
 pub struct Deque<'a, T> {
     pub buf: &'a mut [Option<T>],

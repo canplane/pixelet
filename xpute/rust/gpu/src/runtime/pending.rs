@@ -7,19 +7,22 @@ use xpute_runtime::mem::Memory;
 
 use crate::spec::RESULT;
 
-/// A read or a QUEUE_DONE the device answers at a later poll.
+/// A request the device answers at a later poll: a MAP_ASYNC read, a
+/// QUEUE_DONE, or an async pipeline made at once.
 pub(super) struct Pending {
     pub(super) state: Arc<AtomicU8>,
     pub(super) word: u32,
     pub(super) ticket: u32,
-    /// A mapping's buffer, range and address: its fence has a result
-    /// beside it, where a QUEUE_DONE's has none.
+    /// A read's buffer, offset, size and the address it lands at. A read's
+    /// fence has a result word after it; the fence of a request with no read
+    /// has none.
     pub(super) read: Option<(wgpu::Buffer, u64, u64, u32)>,
 }
 
-/// The request asked with `ticket` answered at the fence `word` (spec
-/// RESULT): `result` into the word after it first, where the request has
-/// one, then the ticket, with release.
+/// Answers the request asked with `ticket` at the fence `word` (spec
+/// RESULT). Where the request has a result, it goes into the word after the
+/// fence first; the ticket is then stored with release, so a core that sees
+/// the ticket sees the result.
 pub(super) fn signal(memory: &mut Memory<'_>, word: u32, ticket: u32, result: Option<u32>) {
     if let Some(r) = result {
         memory.set_word(word + 4, r);
@@ -32,7 +35,8 @@ pub(super) const ANSWERED: u8 = 1;
 pub(super) const REFUSED: u8 = 2;
 
 impl Pending {
-    /// Its answer written into `memory`: whether it still waits.
+    /// Writes the answer into `memory` once there is one, and says whether
+    /// the request still waits.
     pub(super) fn poll(&self, memory: &mut Memory<'_>) -> bool {
         let state = self.state.load(Ordering::Acquire);
         if state == WAITING {

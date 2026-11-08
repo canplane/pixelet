@@ -2,12 +2,16 @@
 //
 // GENERATED from spec/gpu/api.json
 //
-// The calls a core makes to a GPU it cannot reach, as records of a stream (ipc/stream):
-// WebGPU's vocabulary, its descriptors written out as words, for any program. A record is
-// an op, a count and the op's words in the order each op's doc gives; bytes go as a count
-// and padded words, as the stream lays them. Objects are the core's handles (abi/handle).
-// An optional field holds NONE where unset. Render and compute sit side by side.
-// A transaction (ipc/stream) that does not commit drops its records and gives back the handles they took, so the runtime never hears of the objects: the encoder's begin and commit open and close both.
+// The calls a core makes to a GPU it cannot reach, written as records of a stream
+// (ipc/stream). The vocabulary is WebGPU's, with its descriptors written out as words, and
+// it serves any program. A record is an op, a count, and the op's words in the order the
+// op's doc lists them. Bytes go as a count followed by padded words, as the stream lays
+// them. Objects are named by the core's handles (abi/handle). An optional field holds NONE
+// when it is unset. Render and compute ops sit side by side.
+//
+// A transaction (ipc/stream) that does not commit drops its records and gives back the
+// handles they took, so the runtime never hears of those objects. The encoder's begin and
+// commit open and close the transaction on both the stream and the handle table.
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
@@ -20,19 +24,20 @@
     reason = "generated from the spec"
 )]
 
-/// An optional field left unset, an index or a handle absent.
+/// The value of an optional field that is unset, such as an absent index or handle.
 pub const NONE: u32 = 4294967295;
 
-/// In CONFIGURE's format: the format the runtime's surface prefers.
+/// A value for CONFIGURE's format word that stands for the format the runtime's surface
+/// prefers.
 pub const SURFACE_PREFERRED: u32 = 255;
 
-/// A bind group layout's entry (BIND_GROUP_LAYOUT).
+/// The length in words of one entry of a bind group layout (BIND_GROUP_LAYOUT).
 pub const BINDING_ENTRY_WORDS: u32 = 6;
 
-/// A bind group's entry (BIND_GROUP).
+/// The length in words of one entry of a bind group (BIND_GROUP).
 pub const RESOURCE_ENTRY_WORDS: u32 = 5;
 
-/// The ops, numbered from 1: 0 ends a stream.
+/// The ops, numbered from 1; an op of 0 ends a stream.
 pub mod op {
     /// id, size, usage (BUFFER_USAGE), mapped at creation (0 or 1).
     pub const BUFFER: u32 = 1;
@@ -56,17 +61,26 @@ pub mod op {
     pub const COMPUTE_PIPELINE: u32 = 10;
     /// id, type (QUERY_TYPE), count.
     pub const QUERY_SET: u32 = 11;
-    /// id: any object, made by any op above.
+    /// id, which may name any object an op above made.
     pub const DESTROY: u32 = 12;
     /// buffer, offset, the bytes.
     pub const WRITE_BUFFER: u32 = 13;
-    /// buffer, offset, address, bytes: the bytes read where they lie in the core's memory as the runtime runs the record, no copy of them made; the core neither rewrites nor frees them from the stream's publish until it loads END as 0 (ipc/stream R3).
+    /// buffer, offset, address, bytes. The runtime reads the bytes where they lie in the core's
+    /// memory when it runs the record, and makes no copy of them first. From the stream's
+    /// publish until the core loads END as 0, the core neither rewrites nor frees them
+    /// (ipc/stream R3).
     pub const WRITE_BUFFER_AT: u32 = 14;
     /// texture, mip, origin x, y, z, aspect, bytes per row, rows per image, width, height, depth, the bytes.
     pub const WRITE_TEXTURE: u32 = 15;
-    /// as WRITE_TEXTURE, the bytes an address and a count in the core's memory, read as WRITE_BUFFER_AT's are.
+    /// The words of WRITE_TEXTURE, except that the bytes are given as an address and a count in
+    /// the core's memory, which the runtime reads as it reads WRITE_BUFFER_AT's.
     pub const WRITE_TEXTURE_AT: u32 = 16;
-    /// texture, mip, origin x, y, z, aspect (TEXTURE_ASPECT), flip y (0 or 1), premultiplied (0 or 1), address, bytes, word, ticket: an encoded image (PNG, JPEG, WebP) the runtime decodes into the texture; the word and the one after it are its fence and result (RESULT): OK once the image is in the texture, REFUSED for one the runtime cannot decode. One whose texture went is answered nothing.
+    /// texture, mip, origin x, y, z, aspect (TEXTURE_ASPECT), flip y (0 or 1), premultiplied (0
+    /// or 1), address, bytes, word, ticket. The bytes are an encoded image (PNG, JPEG, WebP),
+    /// which the runtime decodes into the texture. The word and the one after it are the
+    /// request's fence and result (RESULT): OK once the image is in the texture, or REFUSED
+    /// when the runtime cannot decode the image. A request whose texture has been destroyed
+    /// gets no answer.
     pub const COPY_EXTERNAL_IMAGE: u32 = 17;
     /// id.
     pub const ENCODER: u32 = 18;
@@ -86,7 +100,7 @@ pub mod op {
     pub const RENDER_PASS: u32 = 25;
     /// id, encoder; timestamps: query set or NONE, begin index or NONE, end index or NONE.
     pub const COMPUTE_PASS: u32 = 26;
-    /// pass, pipeline: render or compute, as the pass is.
+    /// pass, pipeline; the pipeline is a render or a compute pipeline, as the pass is.
     pub const SET_PIPELINE: u32 = 27;
     /// pass, index, group, dynamic offsets' count, that many offsets.
     pub const SET_BIND_GROUP: u32 = 28;
@@ -114,27 +128,52 @@ pub mod op {
     pub const DISPATCH: u32 = 39;
     /// pass, buffer, offset.
     pub const DISPATCH_INDIRECT: u32 = 40;
-    /// pass: ended, and let go with the record.
+    /// pass. The record ends the pass and lets go of it, so no DESTROY follows.
     pub const END: u32 = 41;
-    /// encoders' count, that many encoders, each finished and let go with the record.
+    /// encoders' count, that many encoders. The record finishes each encoder and lets go of it,
+    /// so no DESTROY follows.
     pub const SUBMIT: u32 = 42;
-    /// buffer, offset, size, address, word, ticket: WebGPU's mapAsync for reading, of a buffer the core made MAP_READ | COPY_DST and copied into on an encoder it submitted before. Once mapped, the range is copied to the address and the buffer unmapped; the word and the one after it are its fence and result (RESULT): OK, or REFUSED where the device refused the mapping and nothing was copied.
+    /// buffer, offset, size, address, word, ticket. WebGPU's mapAsync for reading, on a buffer
+    /// the core made with MAP_READ | COPY_DST and copied into on an encoder it submitted
+    /// earlier. Once the buffer is mapped, the runtime copies the range to the address and
+    /// unmaps the buffer. The word and the one after it are the request's fence and result
+    /// (RESULT): OK, or REFUSED when the device refused the mapping and nothing was copied.
     pub const MAP_ASYNC: u32 = 43;
-    /// word, ticket: the word its fence (RESULT) once what was submitted before it is done.
+    /// word, ticket. The word is the request's fence (RESULT), answered once the work submitted
+    /// before this record is done.
     pub const QUEUE_DONE: u32 = 44;
     /// surface, format (TEXTURE_FORMAT, or SURFACE_PREFERRED), usage (TEXTURE_USAGE), alpha mode (CANVAS_ALPHA_MODE).
     pub const CONFIGURE: u32 = 45;
     /// surface, width, height.
     pub const RESIZE: u32 = 46;
-    /// id, surface: the surface's texture for this turn, as a view.
+    /// id, surface. The id names a view of the surface's texture for this turn.
     pub const CURRENT: u32 = 47;
-    /// address, words: the runtime writes there the device's limits (LIMIT_NAME, a word each), then its features (FEATURE_NAME, a bit each, in words), then its timestamp period (f32 bits: the nanoseconds a resolved timestamp's unit is, 1 where they are nanoseconds as WebGPU's are), then the surface format it prefers (TEXTURE_FORMAT: what SURFACE_PREFERRED names, as the web's getPreferredCanvasFormat), then the frames unfinished, then STATUS. The frames unfinished are the frames the core has drawn whose work the queue has not yet done, written by the runtime alone: before STATUS as the block is, and stored with release each time the count changes after. The core loads it with acquire once STATUS reads READY, and draws a frame only while it is below its frame latency, the rule both runtimes hold a frame to (xpute-gpu admit).
+    /// address, words. The runtime writes the device block there: the device's limits
+    /// (LIMIT_NAME, one word each), then its features (FEATURE_NAME, one bit each, packed in
+    /// words), then its timestamp period (f32 bits: how many nanoseconds one unit of a resolved
+    /// timestamp is, 1 when the units are nanoseconds as WebGPU's are), then the surface format
+    /// it prefers (TEXTURE_FORMAT: the format SURFACE_PREFERRED stands for, as the web's
+    /// getPreferredCanvasFormat gives it), then the count of unfinished frames, then STATUS.
+    /// The unfinished frames are the frames the core has drawn whose work the queue has not yet
+    /// done. Only the runtime writes that count: first before STATUS, as it writes the rest of
+    /// the block, and afterwards with release each time the count changes. The core loads the
+    /// count with acquire once STATUS reads READY, and draws a frame only while the count is
+    /// below its frame latency; both runtimes hold a frame to that rule (xpute-gpu admit).
     pub const DEVICE: u32 = 48;
-    /// RENDER_PIPELINE's words, then word, ticket: WebGPU's createRenderPipelineAsync, the word its fence (RESULT) once the pipeline is made; the core names the pipeline in no other record before. One the device refuses is made as RENDER_PIPELINE makes it, its error reported as that op's, and its word written all the same. A runtime with no async call makes it at once and writes the word by the same path, before the next turn reads it.
+    /// RENDER_PIPELINE's words, then word, ticket. WebGPU's createRenderPipelineAsync; the word
+    /// is the request's fence (RESULT), answered once the pipeline is made, and until then the
+    /// core names the pipeline in no other record. When the device refuses the pipeline, the
+    /// runtime makes it as RENDER_PIPELINE would, reports the error as that op would, and still
+    /// writes the word. A runtime with no asynchronous call makes the pipeline at once and
+    /// writes the word the same way, before the next turn reads it.
     pub const RENDER_PIPELINE_ASYNC: u32 = 49;
-    /// COMPUTE_PIPELINE's words, then word, ticket: WebGPU's createComputePipelineAsync, its word as RENDER_PIPELINE_ASYNC's.
+    /// COMPUTE_PIPELINE's words, then word, ticket. WebGPU's createComputePipelineAsync, whose
+    /// word is answered as RENDER_PIPELINE_ASYNC's is.
     pub const COMPUTE_PIPELINE_ASYNC: u32 = 50;
-    /// id, the label as bytes: the name the runtime's device gives the object in its messages, as WebGPU's label. Any object, encoder or pass a record before made; a runtime that cannot name an object after it is made ignores it.
+    /// id, the label as bytes. The label is the name the device gives the object in its
+    /// messages, as WebGPU's label is. The id may name any object, encoder or pass that an
+    /// earlier record made. A runtime that cannot name an object after it is made ignores the
+    /// record.
     pub const LABEL: u32 = 51;
     pub const KEYS: &[&str] = &[
         "BUFFER",
@@ -305,14 +344,27 @@ pub mod COLOR_WRITE {
     pub const KEYS: &[&str] = &["RED", "GREEN", "BLUE", "ALPHA", "ALL"];
 }
 
-/// DEVICE's last word: what the runtime knows of the device, written by the runtime alone and stored with release once the block before it is; the core loads it with acquire before it reads the block.
+/// The last word of the DEVICE block: what the runtime knows of the device. Only the
+/// runtime writes it, and it stores it with release after the rest of the block. The core
+/// loads it with acquire before it reads the block.
 pub mod STATUS {
     pub const READY: u32 = 1;
     pub const LOST: u32 = 2;
     pub const KEYS: &[&str] = &["READY", "LOST"];
 }
 
-/// A completion (COPY_EXTERNAL_IMAGE, MAP_ASYNC, QUEUE_DONE, RENDER_PIPELINE_ASYNC, COMPUTE_PIPELINE_ASYNC) names a fence and a ticket. The ticket is the core's alone: a sequence it advances for that word, wrapping, with one request out on the word at a time. The fence is the runtime's alone: once what the request guards is written, the runtime stores there the ticket it finished, with release, after the result in the word after it where the request can fail (COPY_EXTERNAL_IMAGE, MAP_ASYNC). The core loads the fence with acquire and holds the request done where it equals the ticket it asked with, an equality the sequence's wrap keeps, then reads the result and what the request guards. A late answer to a request dropped or superseded carries an older ticket and never equals the current one; a device lost answers none of its requests.
+/// How a completion is answered. A completion (COPY_EXTERNAL_IMAGE, MAP_ASYNC, QUEUE_DONE,
+/// RENDER_PIPELINE_ASYNC, COMPUTE_PIPELINE_ASYNC) names a fence word and a ticket. Only the
+/// core picks tickets: for each fence word it advances a sequence, which wraps, and it
+/// keeps one request out on that word at a time. Only the runtime writes the fence. Once
+/// what the request guards is written, and after the result in the next word where the
+/// request can fail (COPY_EXTERNAL_IMAGE, MAP_ASYNC), the runtime stores the ticket it
+/// finished into the fence with release. The core loads the fence with acquire and holds
+/// the request done when the fence equals the ticket the core asked with, a test for
+/// equality that the sequence's wrap does not break. Only then does the core read the
+/// result and what the request guards. A late answer to a request that was dropped or
+/// superseded carries an older ticket and never equals the current one. A lost device
+/// answers none of its requests.
 pub mod RESULT {
     pub const OK: u32 = 1;
     pub const REFUSED: u32 = 2;

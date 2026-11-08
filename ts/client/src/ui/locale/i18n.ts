@@ -20,7 +20,9 @@ interface Catalog {
   [key: string]: string | Catalog;
 }
 
-/** Deep, since a shallow merge silently drops nested dev-only branches. */
+/** Merges `extra` into `base` at every depth. A shallow merge would let a dev
+ * branch replace the base's branch of the same name and lose the base's keys
+ * under it. */
 function deepMerge(base: Catalog, extra: Catalog): Catalog {
   const out: Catalog = { ...base };
   for (const [key, value] of Object.entries(extra)) {
@@ -33,8 +35,9 @@ function deepMerge(base: Catalog, extra: Catalog): Catalog {
   return out;
 }
 
-/** Dev catalogs only behind a constant at top level: Rolldown does not drop a
- * helper's argument. */
+/** The dev catalogs are merged behind `__IS_DEV__` tested at the top level, so
+ * that a release bundle drops them. Rolldown does not drop an argument passed
+ * to a helper that tests the flag. */
 const catalog = __IS_DEV__
   ? {
       en: deepMerge(en, enDev) as typeof en,
@@ -47,7 +50,7 @@ const catalog = __IS_DEV__
 
 export type Language = keyof typeof catalog;
 
-/** Each language by its own name. */
+/** Each language's name in that language. */
 export const LANGUAGE_NAMES: Record<Language, string> = {
   en: "English",
   ko: "한국어",
@@ -60,19 +63,22 @@ const LANGUAGES = Object.keys(catalog) as Language[];
 
 const LANG_KEY = "pxl:lang";
 
-/** The catalog a system's tag reads: its language, and for Chinese its script,
- * Taiwan's, Hong Kong's and Macau's being Traditional where the tag names none. */
+/** The catalog that a system's language tag reads: the tag's language, and for
+ * Chinese its script too. A Chinese tag that names no script reads
+ * Traditional for Taiwan, Hong Kong and Macau, and Simplified elsewhere. */
 function languageOf(tag: string): string {
   const [language] = tag.split("-");
   if (language !== "zh") return language;
   return /^zh-(Hant|TW|HK|MO)/.test(tag) ? "zh-Hant" : "zh-Hans";
 }
 
-/** The language chosen, else the first supported of the system's preferences, else en. */
+/** The language the person chose; else the first of the system's preferred
+ * languages that has a catalog; else English. */
 const languageDetector: LanguageDetectorModule = {
   type: "languageDetector",
-  // By language alone: i18next takes a later exact match over an earlier
-  // region, so ["en-US", "ko"] read as Korean.
+  // The system's tags are cut to their languages. Given whole tags, i18next
+  // prefers a later exact match to an earlier tag's region, so ["en-US", "ko"]
+  // would read as Korean.
   detect: () => storage.get(LANG_KEY) ?? locale.list().map(languageOf),
   cacheUserLanguage: (lng) => storage.set(LANG_KEY, lng),
 };
@@ -80,8 +86,8 @@ const languageDetector: LanguageDetectorModule = {
 let booted = false;
 
 /**
- * Called by the app before the first render (web main.tsx, native index.ts). Catalogs are
- * bundled, so `t()` is correct from the first render.
+ * The app calls this before its first render (ts/client/index.ts). The
+ * catalogs are bundled, so `t()` gives the right words from the first render.
  */
 export function boot(): void {
   if (booted) return;
@@ -99,7 +105,8 @@ export function boot(): void {
         LANGUAGES.map((lng) => [lng, { translation: catalog[lng] }]),
       ),
       interpolation: {
-        // React already escapes; i18next's would double-escape.
+        // React escapes text itself, so i18next's escaping would escape it
+        // twice.
         escapeValue: false,
       },
       react: {

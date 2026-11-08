@@ -1,7 +1,8 @@
 // cpp/xpute/kit/status/bug.hpp
 
-// A broken invariant, said as an errno, a place and at most two numbers. It is
-// fatal: the installed report runs and the program stops.
+// How a broken invariant stops the program. A bug is an errno, its place in
+// the source and at most two numbers. It is handed to the report that
+// `set_report` installed, and then the program aborts.
 
 #pragma once
 
@@ -16,7 +17,8 @@ namespace xpute {
 
 using Report = void (*)(Errno errnum, const std::source_location &at, std::uint64_t a, std::uint64_t b);
 
-// The first installed stands.
+// Installs the function a bug is reported to. Only the first call takes
+// effect.
 void set_report(Report report) noexcept;
 
 [[noreturn]] void bug(Errno errnum, std::uint64_t a = 0, std::uint64_t b = 0, std::source_location at = std::source_location::current()) noexcept;

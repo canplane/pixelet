@@ -21,8 +21,9 @@ pub(crate) struct Surface {
     pub ground: Ground,
 }
 
-/// The approaches' palette indices laid into its cells (pxl-spec bake/way.rs `lay`),
-/// then its lines those it draws (pxl-spec bake/tile/terrain.rs `drawn`).
+/// The tile from its surface and lines: the approaches' palette indices laid into its cells
+/// (pxl-spec bake/way.rs `lay`), then its lines cut to those it draws (pxl-spec
+/// bake/tile/terrain.rs `drawn`).
 pub(crate) fn assemble(tile: [i32; 2], surface: Surface, lines: Separation) -> TerrainTile {
     let mut palette_indices = surface.ground.cells.into_owned();
     let tile = Quadrant::new(LEAF_ZOOM, tile);
@@ -39,7 +40,8 @@ pub(crate) fn assemble(tile: [i32; 2], surface: Surface, lines: Separation) -> T
     )
 }
 
-/// `drawn`: the ranges of the tile's ways its lines draw.
+/// The tile's surface baked from its source; `drawn` is the ranges of the tile's ways that its
+/// lines draw, which the ground leaves unpainted.
 pub(crate) fn bake_surface(tile_idx: [i32; 2], src: TileSource, drawn: &[WayRange]) -> Surface {
     let tile_min = epsg3857::get_tile_bbox(LEAF_ZOOM, tile_idx)[0];
     let mut feats: Vec<Feature> = Vec::new();

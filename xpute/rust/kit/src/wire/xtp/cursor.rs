@@ -1,6 +1,7 @@
 // xpute-kit/wire/xtp/cursor.rs
 
-//! The read end: lazy cursors over a packet. Nothing is decoded until a `get`.
+//! The read side of XTP: cursors over a packet. Opening a packet checks its
+//! header; a node's bytes are read and checked only when a `get` reaches them.
 
 #![allow(non_snake_case)]
 
@@ -34,7 +35,8 @@ fn ENTRY_OFF(base: u32, idx: u32) -> u32 {
     (base + WORD_SZ) + idx * WORD_SZ
 }
 
-/// `Null` is a physically absent node that keeps its type.
+/// `Null` is an absent node, one with no bytes in the packet, which still has
+/// its type.
 #[derive(Clone, Debug)]
 pub enum Cursor<'a> {
     Node(NodeCursor<'a>),
@@ -128,7 +130,8 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// Only types exact in an f64; 64-bit integers are refused.
+    /// Any number type an f64 holds exactly. A 64-bit integer is refused
+    /// (EBADMSG), even when its value would fit.
     pub fn get_number(&self) -> Result<f64, MarshalError> {
         Ok(match self.get()? {
             NodeValue::U8(v) => v as f64,
@@ -173,7 +176,8 @@ fn deepen(v: ShallowNodeValue<'_>) -> NodeValue<'_> {
     }
 }
 
-/// The packet must start WORD_SZ-aligned.
+/// The packet must start on a WORD_SZ boundary in memory, since arrays are
+/// read in place; `new` refuses one that does not (EBADMSG).
 pub struct TreeReader<'a> {
     pub pkt: &'a [u8],
 
@@ -196,7 +200,8 @@ impl<'a> TreeReader<'a> {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
 
-        // The root's word holds the payload size, not a relative offset.
+        // In the header's root word, the low half is the root's payload size,
+        // not an offset.
         let (payload_sz, type_) = GET_DESC(hdr_view, WORD_SZ)?;
         if payload_sz > pkt.len() as u32 - HDR_SZ {
             return Err(MarshalError::new(Errno::EBADMSG));
@@ -361,7 +366,8 @@ impl<'a> NodeCursor<'a> {
         Ok(u8::from_le_bytes(self.scalar()?) != 0)
     }
 
-    /// Zero-copy; relies on `TreeReader` having checked the packet's alignment.
+    /// Returned in place, without a copy, which is sound because `TreeReader`
+    /// checked the packet's alignment and `CURSOR` the node's.
     fn array<T: Copy>(&self) -> Result<&'a [T], MarshalError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG));
@@ -429,7 +435,8 @@ impl<'a> NodeCursor<'a> {
         let len = GET_LEN(self.pkt, self.base)?;
         let payload_start = self.base + WORD_SZ;
 
-        // A wire length: u64, so a count near 2^32 cannot wrap to a small size.
+        // In u64, so that a count near 2^32 off the wire cannot wrap to a small
+        // size.
         let payload_sz = (len as u64 + 7) >> 3;
         if payload_start > self.pkt.len() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG));
@@ -446,7 +453,8 @@ impl<'a> NodeCursor<'a> {
         Ok(arr)
     }
 
-    // On the wire a STR has a trailing NUL that `len` excludes.
+    // A STR must end with the NUL that `len` does not count, and its bytes
+    // must be UTF-8.
     fn str_ref(&self) -> Result<&'a str, MarshalError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
             return Err(MarshalError::new(Errno::EBADMSG));
@@ -466,8 +474,8 @@ impl<'a> NodeCursor<'a> {
             .map_err(|_| MarshalError::new(Errno::EBADMSG))
     }
 
-    /// `len` + 1 non-decreasing offsets into the UTF-8 after them; every
-    /// string is checked before any is given.
+    /// Every string is checked as UTF-8, and every offset against the next one
+    /// and the end, before any string is returned.
     fn strs(&self) -> Result<Strs<'a>, MarshalError> {
         let bad = || MarshalError::new(Errno::EBADMSG);
         if self.base + WORD_SZ > self.pkt.len() as u32 {
@@ -476,7 +484,8 @@ impl<'a> NodeCursor<'a> {
         let n = GET_LEN(self.pkt, self.base)?;
         let start = (self.base + WORD_SZ) as usize;
         let pkt: &'a [u8] = self.pkt;
-        // In u64: a count a packet cannot hold must read as one, not wrap.
+        // In u64, so that a count too large for any packet reads as too large
+        // instead of wrapping.
         let lane = 4 * (n as u64 + 1);
         if start as u64 + lane > pkt.len() as u64 {
             return Err(bad());
@@ -535,7 +544,8 @@ pub struct BranchCursor<'a> {
     pub cursor: NodeCursor<'a>,
 
     pub len: u32,
-    pub child_start: u32, // first byte where child payloads may begin
+    /// The first byte past the child table, where the first child may start.
+    pub child_start: u32,
 }
 
 impl PartialEq for BranchCursor<'_> {
@@ -583,7 +593,7 @@ impl<'a> BranchCursor<'a> {
         Some(self)
     }
 
-    /// A child branch comes back as its cursor, not recursed into.
+    /// A shallow read: a child branch is returned as its cursor, unread.
     pub fn get(&self) -> Result<ShallowNodeValue<'a>, MarshalError> {
         let mut arr = Vec::with_capacity(self.len as usize);
         for i in 0..self.len {
@@ -609,7 +619,8 @@ impl<'a> BranchCursor<'a> {
         Ok(NodeValue::List(arr))
     }
 
-    /// A zero offset is an absent child, which keeps its type.
+    /// A child with a zero offset is absent and comes back as a `Null` cursor
+    /// of its type. An index past the branch is EFAULT.
     pub fn at(&self, idx: u32) -> Result<Cursor<'a>, MarshalError> {
         if idx >= self.len {
             return Err(MarshalError::new(Errno::EFAULT));
@@ -632,7 +643,8 @@ impl<'a> BranchCursor<'a> {
         CURSOR(&self.cursor.pkt[..end as usize], base, type_)
     }
 
-    /// Where child `idx`'s extent ends: the next present sibling's base, or this branch's end.
+    /// Where child `idx`'s extent ends: at the next present sibling's start, or
+    /// else at this branch's end, where its packet slice ends.
     fn end_of(&self, idx: u32) -> u32 {
         let (pkt, base) = (self.cursor.pkt, self.cursor.base);
         let end = pkt.len() as u32;
@@ -671,7 +683,8 @@ pub fn elements<'b, T: Copy>(a: &'b Array<'_>) -> &'b [T] {
 #[path = "cursor.test.rs"]
 mod test;
 
-/// Validated as UTF-8 when the sequence was read.
+/// The strings of a STRS leaf, read in place. Each was checked as UTF-8 when
+/// the leaf was read.
 #[derive(Clone, Copy, Debug)]
 pub struct Strs<'a> {
     offs: &'a [u8],

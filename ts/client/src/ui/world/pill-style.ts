@@ -1,11 +1,12 @@
 // @pxl/client/ui/world/pill-style.ts
 
-/** What a pill lays out alike on every platform (pill.tsx, pill.ios.tsx). */
+/** The styles a pill shares across platforms (pill.tsx and pill.ios.tsx). */
 
 import { StyleSheet } from "react-native";
 
 export const pillStyles = StyleSheet.create({
-  // From the sheet: an inline `box-none` is drawn as a `none` the content inherits.
+  // `box-none` must come from a style sheet. React Native for Web draws an
+  // inline `box-none` as `none`, which the content then inherits.
   box: { position: "absolute", pointerEvents: "box-none" },
   target: { position: "absolute" },
   content: {

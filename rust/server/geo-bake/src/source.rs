@@ -138,7 +138,7 @@ fn folded(mut keys: BTreeSet<Quadrant>) -> BTreeSet<Quadrant> {
     keys
 }
 
-/// Shards by name: a shard's each, no node over them.
+/// Shards by name, each a shard's, with no node over shards.
 pub fn tiles<'a>(names: impl IntoIterator<Item = &'a str>) -> Result<BTreeSet<Quadrant>, String> {
     names
         .into_iter()

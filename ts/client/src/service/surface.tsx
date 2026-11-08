@@ -1,8 +1,8 @@
 // @pxl/client/service/surface.tsx
 
 /**
- * The canvas the core draws into on the web, and the page's input driver:
- * its box, pointer, wheel, keys and the tab's visibility.
+ * The canvases the core draws into on a page, and the page's input: the
+ * canvas's box, the pointer, the wheel, the keys and the tab's visibility.
  */
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
@@ -18,7 +18,8 @@ import type {
   WorldSurfaceProps,
 } from "./types.ts";
 
-/** A wheel line in CSS pixels: a page's default line height. */
+/** How many CSS pixels one line of a wheel scrolls: a page's default line
+ * height. */
 const LINE_PX = 16;
 
 const FILL = {
@@ -46,9 +47,11 @@ function onRatioChange(then: () => void): () => void {
 }
 
 /**
- * Follows the layout box, not the bounding rect, which includes transforms a
- * sliding drawer passes through. Safari reports no device pixels, so the CSS
- * box times the ratio stands in, and a change of ratio alone is watched for.
+ * Opens a surface on `canvas` and keeps it sized to the canvas's layout box.
+ * The bounding rect is not used, because it includes the transforms that a
+ * sliding drawer passes through. Safari reports no size in device pixels, so
+ * the CSS box times the pixel ratio stands in, and a change of the ratio alone
+ * is watched for.
  */
 function openSurface(
   canvas: HTMLCanvasElement,
@@ -59,7 +62,8 @@ function openSurface(
   let gone = false;
   void surface.open().then((handle) => {
     if (handle === 0) return;
-    // Closed before the core answered: the handle is let go at once.
+    // The surface closed before the core answered, so the handle is let go at
+    // once.
     if (gone) return surface.close(handle);
     close = attach(canvas, surface, handle, opened);
   });
@@ -69,7 +73,8 @@ function openSurface(
   };
 }
 
-/** `handle` bound to the canvas and sized to it; the returned call lets it go. */
+/** Binds `handle` to the canvas and keeps it sized to it. The returned
+ * function lets the handle go. */
 function attach(
   canvas: HTMLCanvasElement,
   surface: SurfaceDriver,
@@ -104,7 +109,7 @@ function attach(
   };
 }
 
-/** A field's own keys, which the UI routes apart. */
+/** Whether a key went to a text field. The UI routes a field's keys apart. */
 function inField(e: KeyboardEvent): boolean {
   const target = e.target;
   return (
@@ -124,8 +129,9 @@ function pointerKind(e: PointerEvent): PointerKind {
 
 function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   const { keyDown, keyUp, releaseKeys, releasePointers } = input;
-  // Where the canvas is drawn on the page, transforms and all: a pointer's
-  // client place is read against it into the layout box's CSS pixels.
+  // Where the canvas is drawn on the page, with its transforms. A pointer's
+  // client position is read against it and scaled into the layout box's CSS
+  // pixels.
   let rect = canvas.getBoundingClientRect();
   const place = () => {
     rect = canvas.getBoundingClientRect();
@@ -163,7 +169,9 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
     place();
     input.requestFrame();
   };
-  // A composed or shortcut key is the IME's or the browser's; Tab switches the dock mid-word too.
+  // A key in a composition belongs to the IME, and a shortcut to the browser,
+  // so neither goes to the core. Tab still goes in a composition, because it
+  // switches the dock even in the middle of a word.
   const onKeyDown = (e: KeyboardEvent) => {
     if (
       e.repeat ||
@@ -176,8 +184,8 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
     if (keyDown(e.code, { inField: inField(e) })) e.preventDefault();
   };
   const onKeyUp = (e: KeyboardEvent) => keyUp(e.code);
-  // What the world held of the keyboard and the pointer is let go as the page
-  // hides; the core hears the hiding from the platform (visibility.ts).
+  // The keys and pointers the world holds are released as the page hides. The
+  // core hears of the hiding itself from the platform (visibility.ts).
   const onVisibility = () => {
     if (document.visibilityState !== "visible") {
       releaseKeys();
@@ -194,7 +202,8 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   globalThis.addEventListener("pointerup", onUp);
   globalThis.addEventListener("pointercancel", onCancel);
   document.addEventListener("visibilitychange", onVisibility);
-  // Captured: react-native-web's TextInput stops a key's propagation before it bubbles here.
+  // Keys are heard in the capture phase, because react-native-web's TextInput
+  // stops a key's propagation before it would bubble up to here.
   globalThis.addEventListener("keydown", onKeyDown, true);
   globalThis.addEventListener("keyup", onKeyUp, true);
   globalThis.addEventListener("blur", releaseKeys);
@@ -242,7 +251,7 @@ export function World({
     };
   }, []);
 
-  // A marker a tap acts on reads as a link does.
+  // Over a marker that a tap acts on, the cursor shows as it does over a link.
   return (
     <canvas
       ref={ref}
@@ -270,6 +279,7 @@ export function CharacterSurface({
     return openSurface(canvas, driver, (handle) => open.current(handle));
   }, [openKey]);
 
-  // A canvas each surface: one crosses to the core's worker once, for good.
+  // Each surface gets a canvas of its own, because a canvas crosses to the
+  // core's worker once and for good.
   return <canvas key={openKey} ref={ref} style={FILL} />;
 }

@@ -11,7 +11,8 @@ import * as Errno from "@xpute/kit/status/errno.spec.ts";
 
 const WASM_PAGE_BYTES: u32 = 1 << 16;
 
-/** The first of `candidates` the device will reserve. */
+/** Reserves the first of `candidates`, each a count of regions, that the
+ * device will grant. Throws ENOMEM when it grants none. */
 export function reserve_mem(
   candidates: readonly u32[],
   region_bytes: u32,
@@ -21,7 +22,7 @@ export function reserve_mem(
     try {
       return new WebAssembly.Memory({ initial: pages, maximum: pages });
     } catch {
-      // too large for this device; try the next
+      // The memory is too large for this device; the next candidate is tried.
     }
   }
   throw new MarshalError(Errno.ENOMEM);

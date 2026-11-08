@@ -52,7 +52,8 @@ type ShallowNodeValue = NodeValue | BranchCursor;
 const WORD_REG: [u32, u32] = [NONE, NONE];
 const DESC_REG: [u32, NodeType] = [NONE, SpecialType.NIL];
 
-// Every reader refuses what is not UTF-8, as Rust's and C++'s do.
+// A STR or STRS that is not UTF-8 is refused (EBADMSG), as the Rust and C++
+// readers refuse it.
 const UTF8 = new TextDecoder("utf-8", { fatal: true });
 const utf8 = (bytes: U8Array): string => {
   try {
@@ -72,7 +73,8 @@ const CURSOR = (pkt: U8Array, base: u32, type: NodeType): NodeCursor => {
 
 const ENTRY_OFF = (base: u32, idx: u32) => base + WORD_SZ + idx * WORD_SZ;
 
-/** Throws on a malformed packet; `pkt` must start WORD_SZ-aligned. */
+/** Throws on a malformed packet. `pkt` must start on a WORD_SZ boundary in
+ * its buffer, since arrays are read in place. */
 export class TreeReader {
   readonly pkt: U8Array;
 
@@ -263,7 +265,8 @@ export abstract class NodeCursor {
     return this.pkt_view.getUint8(this.base) !== 0;
   }
 
-  /** A zero-copy view: a sequence's base is WORD_SZ-aligned, so its payload is aligned for any element size. */
+  /** Returns the array in place, without a copy. The packet and the sequence
+   * both start on a word, so the payload is aligned for any element type. */
   protected _array<T extends AnyTypedArray>(ctor: AnyTypedArrayCtor<T>): T {
     if (this.base + WORD_SZ > this.pkt.byteLength) {
       throw new MarshalError(Errno.EBADMSG);
@@ -326,8 +329,8 @@ export abstract class NodeCursor {
     const len = GET_LEN(this.pkt_view, this.base);
     const payload_start: u32 = this.base + WORD_SZ;
 
-    // In doubles: `>>>` wraps len + 7 past 2^32 to a size of 0, and a
-    // 2^32 - 1 count then passes the bounds check.
+    // Computed in doubles, not with `>>> 3`: for a count of 2^32 - 1, `len + 7`
+    // would wrap past 2^32 to a size of 0 and pass the bounds check.
     const payload_sz: u32 = Math.floor((len + 7) / 8);
     if (payload_start > this.pkt.byteLength) {
       throw new MarshalError(Errno.EBADMSG);
@@ -344,8 +347,8 @@ export abstract class NodeCursor {
     return arr;
   }
 
-  /** A STRS payload: `len` + 1 offsets, each no less than the one before,
-   * into the UTF-8 after them. */
+  /** Every string is checked as UTF-8, and every offset against the next one
+   * and the end, before the strings are returned. */
   protected _strs(): string[] {
     if (this.base + WORD_SZ > this.pkt.byteLength) {
       throw new MarshalError(Errno.EBADMSG);
@@ -368,7 +371,8 @@ export abstract class NodeCursor {
     return out;
   }
 
-  // STR stores UTF-8 bytes with a trailing NUL on wire, while len excludes that terminator.
+  // A STR must end with the NUL that `len` does not count, and its bytes must
+  // be UTF-8.
   protected _str(): string {
     if (this.base + WORD_SZ > this.pkt.byteLength) {
       throw new MarshalError(Errno.EBADMSG);
@@ -437,7 +441,7 @@ export abstract class BranchCursor extends NodeCursor {
     this.child_start = ENTRY_OFF(this.base, len);
   }
 
-  /** Shallow: a branch child reads as its direct-child array, not recursively. */
+  /** A shallow read: a child branch is returned as its cursor, unread. */
   override get<T extends ShallowNodeValue[] = ShallowNodeValue[]>(): T;
   override get<T extends ShallowNodeValue = ShallowNodeValue>(idx: u32): T;
 
@@ -480,7 +484,8 @@ export abstract class BranchCursor extends NodeCursor {
     return CURSOR(this.pkt.subarray(0, end), base, type);
   }
 
-  /** Where child `idx`'s extent ends: the next present sibling's base, or this branch's end. */
+  /** Where child `idx`'s extent ends: at the next present sibling's start, or
+   * else at this branch's end, where its packet slice ends. */
   private end_of(idx: u32): u32 {
     for (let j = idx + 1; j < this.len; j++) {
       const [rel_off] = GET_WORD(

@@ -29,7 +29,8 @@ std::vector<std::uint8_t> bytes(const std::string &hex_text) {
     return out;
 }
 
-// The shortest digits that read back, as JavaScript prints.
+// A number as JavaScript prints one, which is the record's text: the shortest
+// digits that read back as the same double.
 std::string js_number(double x) {
     if (std::isnan(x)) return "NaN";
     char buf[64];
@@ -52,7 +53,8 @@ template <class T> std::string elements(const Array &a) {
     return out;
 }
 
-// As the TypeScript prints it, so the traces compare.
+// A value as the TypeScript test prints it, so that the traces compare with
+// the golden record.
 std::string show(const Value &v) {
     return std::visit(
         [](const auto &x) -> std::string {

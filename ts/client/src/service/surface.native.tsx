@@ -1,9 +1,10 @@
 // @pxl/client/service/surface.native.tsx
 
 /**
- * The core's surface on a device: xpute's native view (@xpute/native
- * `SurfaceView`) drawn by wgpu directly. The view says when its layer is bound, since the
- * layer arrives after mount. The world's view is also the app's input driver.
+ * The core's surfaces on a device: xpute's native view (@xpute/native
+ * `SurfaceView`), which wgpu draws into directly. The view's layer arrives
+ * after the view mounts, so the view reports when its layer is bound. The
+ * world's view also carries the app's input.
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
@@ -49,7 +50,8 @@ function useSurface(
     let gone = false;
     void driver.open().then((opened) => {
       if (opened === 0) return;
-      // Closed before the core answered: the handle is let go at once.
+      // The surface closed before the core answered, so the handle is let go
+      // at once.
       if (gone) return driver.close(opened);
       surface = opened;
       setHandle(surface);
@@ -118,8 +120,8 @@ export function World({ surface: driver, input }: WorldSurfaceProps) {
       onLayout={onLayout}
       onTouchStart={touches("down")}
       onTouchMove={touches("move")}
-      // A lifted finger leaves the surface, as the web's pointerleave says
-      // after its pointerup: nothing stays hovered under it.
+      // A lifted finger also leaves the surface, as a page's pointerleave
+      // follows its pointerup, so that nothing stays hovered under it.
       onTouchEnd={touches("up", "out")}
       onTouchCancel={touches("cancel", "out")}
     />

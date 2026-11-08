@@ -1,17 +1,18 @@
 // pxl-render/decor_cnt.wgsl
 
-// Each record for the eye this frame, a workgroup an entry's or a run of placed decor's, its
-// region written into its first word and counted: nothing where the rays ask another zoom at
-// its distance, held to the clip levels holding its column (`generation::held_at`), than the
-// one its record's clip level draws at (`generation::drawn_at`), or where it is the decor left
-// out; else sized for the screen (`generation::drawn`), a model, an impostor or culled.
+// Picks the region each of the eye's records draws in this frame, writes it into the record's
+// first word, and counts it. A workgroup takes an entry's records or a run of placed decor. A
+// record draws nothing where the rays at its distance ask another zoom, held to the clip levels
+// that hold its column (`generation::held_at`), than the one its record's clip level draws at
+// (`generation::drawn_at`), or where it is the decor left out. Otherwise it is sized for the
+// screen as a model, an impostor, or culled (`generation::drawn`).
 
 @group(0) @binding(9) var<storage, read_write> records: array<u32>;
 @group(0) @binding(13) var<storage, read> drawing: array<u32>;
 @group(0) @binding(14) var<storage, read_write> regions: array<atomic<u32>>;
 
-/// `generation::distance2`: how far decor standing at `at` lies from `origin`, squared, from
-/// its cell's middle at its base, X round the world as the steps wrap.
+/// `generation::distance2`: the squared distance from `origin` to decor standing at `at`,
+/// measured from the middle of its cell's base. X goes round the world as the steps wrap.
 fn distance2(origin: vec3<i32>, at: vec3<i32>) -> f32 {
   let half = 1i << (FRAC_W - 1u);
   let steps = (at << vec3<u32>(FRAC_W)) + vec3<i32>(half, half, 0i) - origin;
@@ -19,7 +20,8 @@ fn distance2(origin: vec3<i32>, at: vec3<i32>) -> f32 {
   return d.x * d.x + d.y * d.y + d.z * d.z;
 }
 
-/// `generation::held_at`: the zoom asked, `ask_zoom`, that the clip levels hold at leaf cell `c`.
+/// `generation::held_at`: the zoom asked, `ask_zoom`, held to what the clip levels hold at
+/// leaf cell `c`.
 fn held_at(ask_zoom: u32, c: vec2<i32>) -> u32 {
   let z = held_to(ask_zoom);
   let s = LEAF_CELL_ZOOM - z;

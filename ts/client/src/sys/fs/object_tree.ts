@@ -1,45 +1,46 @@
 // @pxl/client/sys/fs/object_tree.ts
 
 /**
- * The placed objects' tree as their source keeps it beside the core: a
- * leaf's octkey, its first digits its shard's quadkey, a write laid over a shard's
- * leaves, and what a node at `SHARD_ZOOM` folds to, the top of the tree.
- * The core's store owns the tree (pxl-core
- * domain/layer/object/store.rs); what is here is its rules held a second
- * time, ported, and held to the store by one record both read
- * (rust/spec/golden/object/top.tsv): an octkey's digits (pxl-spec
- * space/hierarchy/morton.rs `name`), a write's reach (pxl-spec
- * space/hierarchy/sparse_tree.rs `set`), and the fold (pxl-engine
- * object.rs `fold`, `share`, `voxel`; answer.rs `FULL`). The values a
- * fold counts as filling are generated (abi/voxel.spec.ts).
+ * The rules of the placed objects' tree that the OBJECT backend (object.ts)
+ * needs: which shard a leaf lies in, how a write is laid over a shard's
+ * leaves, and what a shard folds to in the top of the tree. A leaf is named
+ * by its octkey, and the first `SHARD_ZOOM` digits of an octkey are the
+ * quadkey of its shard.
  *
- * This source is a mock in the place of a server, and no second owner: leave
- * its copy of the rules as a copy.
+ * The core's store owns these rules (pxl-core domain/layer/object/store.rs).
+ * This file is a port of them, held equal to the store by a record that the
+ * tests of both read (rust/spec/golden/object/top.tsv). The rules ported are
+ * an octkey's digits (pxl-spec space/hierarchy/morton.rs `name`), the nodes a
+ * write reaches (pxl-spec space/hierarchy/sparse_tree.rs `set`), and the fold
+ * (pxl-engine object.rs `fold`, `share` and `voxel`, and answer.rs `FULL`).
+ * The values a fold counts as filling are generated (abi/voxel.spec.ts).
+ *
+ * The backend stands in for a server. Its rules are a copy, never a second
+ * owner: they change only to follow the store.
  */
 
 import { SHARD_ZOOM } from "@/abi/file.spec.ts";
 import { AIR, grounds, objects } from "@/abi/voxel.spec.ts";
 
-/** A write `<key, id, ext>` (file.json `write`), and a leaf as the write that
- * made it; a marker's text its one record. */
+/** A write, laid out as file.json's `write`. A leaf is kept as the write that
+ * made it. `text` is a marker's words, the one record a leaf can carry. */
 export interface Leaf {
   key: string;
   id: number;
   text: string | null;
 }
 
-/** A row of the top (file.json `top`): a shard holding objects, by its quadkey,
- * and what it folds to. */
+/** A row of the top, laid out as file.json's `top`. Only a shard that holds
+ * objects has a row, which gives the shard's quadkey and what it folds to. */
 export interface TopRow {
   shard: string;
   fold: number;
 }
 
-/** The value an erase writes, and the empty word (pxl-engine
- * `cube::sentinel::void`). */
+/** The value an erase writes. It is also the word of an empty node
+ * (pxl-engine `value::VOID`). */
 export const VOID = 0;
 
-/** The shard a leaf lies in: its octkey's first digits. */
 export function shard_of(key: string): string {
   return key.slice(0, SHARD_ZOOM);
 }
@@ -49,19 +50,21 @@ function depth(key: string): number {
   return key.length - SHARD_ZOOM;
 }
 
-/** The child a leaf lies under at the `j`th zoom past the shard, from 1: its
- * digit there, Z's bit highest, the order of a node's children (pxl-spec
- * space/hierarchy/tree.rs `slot_of`). The tree counts Z from the world's floor
- * (pxl-engine object.rs `path`), the key's first digit its sign: below sea
- * level is the first half there. */
+/** Which of its node's eight children a leaf lies under, `j` zooms past the
+ * shard, counting from 1. The tree numbers a node's children `x + 2y + 4z`
+ * (pxl-spec space/hierarchy/tree.rs `child_idx`), and the octkey's digit at
+ * that zoom gives the number. At the first zoom past the shard, the digit's
+ * Z bit is the sign of Z, while the tree counts Z up from the world's floor
+ * (pxl-engine object.rs `path`) and puts the half below sea level first. So
+ * that bit is flipped there. */
 function slot(key: string, j: number): number {
   return Number(key[SHARD_ZOOM + j - 1]) ^ (j === 1 ? 4 : 0);
 }
 
-/** `w` laid over `leaves`, a shard's by key, none over another: its node made
- * one leaf of its id, none for VOID, every leaf at it or under it gone, and
- * a leaf over it split along the path to it, each child off the path its
- * value, as the store's tree takes a write. */
+/** Lays the write `w` over `leaves`, the leaves of `w`'s shard by key, as the
+ * store's tree takes a write. The write replaces everything at or under its
+ * node. A leaf above its node is split, so that the rest of that leaf keeps
+ * its value. A write of VOID leaves no leaf. */
 export function lay(leaves: Map<string, Leaf>, w: Leaf): void {
   for (const [k, l] of leaves) {
     if (k.startsWith(w.key)) {
@@ -82,29 +85,33 @@ export function lay(leaves: Map<string, Leaf>, w: Leaf): void {
   if (w.id !== VOID) leaves.set(w.key, w);
 }
 
-/** A cube filled whole, in a share's units (pxl-engine answer.rs `FULL`). */
+/** A share is how much of a cube is filled, and this is a whole cube
+ * (pxl-engine answer.rs `FULL`). */
 const FULL = 1 << 15;
 
-/** A fold's word: its kind low, its share high (object.rs `fold_word`). */
+/** A fold's word holds its kind in the low 16 bits and its share in the high
+ * 16 (pxl-engine object.rs `fold_word`). */
 function fold_word(kind: number, share: number): number {
   return ((kind & 0xffff) | (share << 16)) >>> 0;
 }
 
-/** Whether a value is drawn as a voxel (object.rs `voxel`). */
+/** Whether a value is drawn as a voxel (pxl-engine object.rs `voxel`). */
 function voxel(val: number): boolean {
   return val === AIR || grounds(val) || objects(val);
 }
 
-/** A leaf's word in its parent's fold (object.rs `share`): a voxel fills
- * it whole, anything else none. */
+/** The word a leaf of `id` gives its parent's fold (pxl-engine object.rs
+ * `share`). A voxel fills its cube whole, and any other value fills none of
+ * it. */
 function share(id: number): number {
   return voxel(id) ? fold_word(id, FULL) : 0;
 }
 
-/** A node's eight children's words folded, the node at `zoom`
- * (object.rs `fold`): the mean of their shares, and the kind most of
- * that fill is, a tie to the child met first, corners taken in an order
- * that alternates with the zoom. */
+/** Folds the words of a node's eight children into the word of the node, which
+ * is at `zoom` (pxl-engine object.rs `fold`). The node's share is the mean of
+ * the children's shares. Its kind is the one that makes up most of that fill.
+ * A tie goes to the child met first, and the order the children are met in
+ * reverses at every other zoom. */
 export function fold(children: readonly number[], zoom: number): number {
   const kind = (w: number): number => w & 0xffff;
   const fill = (w: number): number => w >>> 16;
@@ -124,8 +131,8 @@ export function fold(children: readonly number[], zoom: number): number {
   return fold_word(best, Math.floor(sum / 8));
 }
 
-/** The word the node `j` zooms past the shard holding `under` has in the
- * tree: a leaf's share where one is the node, else its children folded. */
+/** The word in the tree of the node that lies `j` zooms past the shard and
+ * holds the leaves `under`. */
 function word(under: readonly Leaf[], j: number): number {
   if (under.length === 1 && depth(under[0]!.key) === j) {
     return share(under[0]!.id);
@@ -138,8 +145,6 @@ function word(under: readonly Leaf[], j: number): number {
   );
 }
 
-/** The top's row of the shard `shard` holding `leaves`, none where it holds
- * none. */
 export function top_of(shard: string, leaves: Iterable<Leaf>): TopRow[] {
   const under = [...leaves];
   return under.length > 0 ? [{ shard, fold: word(under, 0) }] : [];

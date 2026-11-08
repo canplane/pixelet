@@ -1,7 +1,9 @@
 // pxl-core/door/apply/fs.rs
 
-//! The core's files: the tile source declared (SOURCE_DECLARE), and a file
-//! changed under it (xpute's FS_CHANGED): a refused one set aside, read again.
+//! The core's files: the tile source the client declares (SOURCE_DECLARE),
+//! and a file changed under the core (xpute's FS_CHANGED). A changed file is
+//! one the core refused and the client has since set aside, and the core
+//! reads it again.
 
 use super::{or_refuse, refuse_unless};
 use crate::domain::layer::object::repository;
@@ -22,7 +24,6 @@ pub(super) fn declare(c: abi::SourceDeclare<'_>) -> Outcome {
     Ok(Some(0))
 }
 
-/// A file changed under the core (FS_CHANGED).
 pub(in crate::door) fn changed(c: FsChanged<'_>) -> Outcome {
     match c.root {
         root::STORAGE => {
@@ -31,10 +32,10 @@ pub(in crate::door) fn changed(c: FsChanged<'_>) -> Outcome {
                 Errno::EINVAL,
             )?;
             file::on_storage_emptied();
-            // The settings write what they hold from the next keep on.
+            // From the next keep on, the settings write what they hold.
             store::on_settings_emptied();
         }
-        // Read again, as its source holds it now.
+        // The object file is read again, as its source now holds it.
         root::OBJECT => {
             let id = or_refuse(file::id_of_path(c.path), Errno::EINVAL)?;
             refuse_unless(repository::on_emptied(id), Errno::EINVAL)?;

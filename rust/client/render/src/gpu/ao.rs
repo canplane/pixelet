@@ -1,11 +1,13 @@
 // pxl-render/gpu/ao.rs
 
-//! Screen-space occlusion (N8AO), a field over the screen as the light's map is over the
-//! world: found from the world's own depth once the static opaque draws laid it (downsample,
-//! sample, denoise twice, at half resolution), only where what it reads moved, and held;
-//! brought to the pixel and laid over the world's color in the claimed tiles each drawn frame
-//! (`apply`), as the tiles' quads, a draw of the world's pass, which ends about it only where
-//! the map is found again. About 3 bytes a pixel.
+//! Screen-space ambient occlusion, after N8AO. The occlusion is a map over the screen, as the
+//! light's shadow map is over the world. `run` finds it at half resolution from the depth the
+//! static opaque draws laid: it downsamples the depth, samples the occlusion and denoises it
+//! twice. The renderer runs it only in a frame where what it reads changed, and the map is held
+//! across frames. Every drawn frame, `apply` multiplies the map into the world's color in the
+//! claimed tiles, as a draw of the world's pass. The world's pass is ended and begun again
+//! around `run` only in a frame that finds the map again. The images take about 3 bytes a
+//! pixel.
 
 use pxl_spec::space::coord::mat4::{self, Mat4};
 
@@ -24,8 +26,9 @@ use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::put::put_mat;
 use crate::gpu::span_spec::GpuSpanName;
 
-/// N8AO's blue noise, `AO_NOISE_SIDE` a side; its four channels are the
-/// hemisphere spin, the ray push and the two denoise spins.
+/// N8AO's blue noise, `AO_NOISE_SIDE` texels a side, which a pixel reads tiled. Its four
+/// channels hold the spin of the hemisphere's samples, the offset of their distances along
+/// their directions, and the spins of the two denoise passes.
 const NOISE: &[u8] = include_bytes!("../frame/shader/blue-noise.bin");
 
 pub struct ScreenAo {
@@ -42,16 +45,19 @@ pub struct ScreenAo {
     apply: Pipeline,
     width: u32,
     height: u32,
-    /// The world's depth, read only, its view as last bound.
+    /// The view of the world's depth that the groups were last made over. The passes only
+    /// read it.
     depth_view: u32,
     half: u32,
     half_view: u32,
-    /// The denoise's two targets; the map, held across frames, is ping[0].
+    /// The targets of the two denoise passes, which write into each other. `ping[0]` holds
+    /// the map, which is kept across frames.
     ping: [u32; 2],
     ping_view: [u32; 2],
-    /// Downsample, sample, denoise ping[0]->ping[1], denoise back.
+    /// The groups of the four passes in their order: downsample, sample, denoise from
+    /// `ping[0]` into `ping[1]`, and denoise back.
     groups: [u32; 4],
-    /// The apply's, over the map and the screen's tiles (`set_apply_group`).
+    /// The group `apply` draws by, over the map and the screen's tiles (`set_apply_group`).
     apply_group: Group,
 }
 
@@ -117,19 +123,20 @@ impl ScreenAo {
         u[ao::HALF + 1] = (height / AO_DOWNSCALE) as f32;
     }
 
-    /// The words its passes read, as `prepare` wrote them.
+    /// The words the passes read, as `prepare` wrote them.
     pub fn words(&self) -> &[f32] {
         &self.uniform_words
     }
 
-    /// `words` written, where the frame's read found them moved.
+    /// Writes `words` to the device. The frame calls it only when its read found them
+    /// changed.
     pub fn write(&self, g: &Gpu) {
         g.write_buf(self.uniform, 0, bytes(&self.uniform_words));
     }
 
-    /// Its images at half the world's size, its groups over the world's
-    /// depth `depth_view`, read only: true when they were made again, so the
-    /// map holds nothing yet.
+    /// Makes the half-resolution images, and the passes' groups over the world's depth view
+    /// `depth_view`, again when the size or the view is another. Returns true when it made
+    /// them, as the map then holds nothing yet.
     pub fn ensure(&mut self, g: &Gpu, width: u32, height: u32, depth_view: u32) -> bool {
         if self.half != 0
             && self.width == width
@@ -157,8 +164,8 @@ impl ScreenAo {
         let view = view_entry;
         let sampler = sampler_entry(4, self.sampler);
         let run = buf_range_entry(5, self.run, 0, self.stride);
-        // The frame's at 0 where a pass reads the screen's size; the AO's uniform at 6 where it
-        // reads its words.
+        // The frame's words go at binding 0 in the passes that read the screen's size, and the
+        // occlusion's own words at binding 6.
         let uniform = buf_entry(6, self.uniform);
         let group = |layout: Layout, frame: bool, between: &[Entry]| {
             let frame = frame.then(|| buf_entry(0, self.frame_buf));
@@ -244,9 +251,9 @@ impl ScreenAo {
         }
     }
 
-    /// The apply's group over its images and the tiles `tiles` (their words
-    /// and uniform), before the frame's commands, its images made
-    /// (`ensure`).
+    /// Makes the group `apply` draws by, over the half-resolution depth, the map and the
+    /// screen's tiles, of which `tiles` holds the words and the uniform. It is called before
+    /// the frame's commands, once `ensure` has made the images.
     pub fn set_apply_group(&mut self, g: &Gpu, tiles: (u32, u32)) {
         self.apply_group.set(
             g,
@@ -261,12 +268,11 @@ impl ScreenAo {
         );
     }
 
-    /// The map brought to each pixel and multiplied into the world's color,
-    /// a draw of the world's pass `pass` once the static opaque draws laid
-    /// it, in the tiles its group binds (`set_apply_group`) claim of
-    /// `count`, a quad each (ao_apply.wgsl): every drawn frame, as the
-    /// world's color is drawn again there, whether or not the map was found
-    /// again.
+    /// Multiplies the map into the world's color at each pixel, as a draw in the world's pass
+    /// `pass` after the static opaque draws (ao_apply.wgsl). It draws a quad for each of the
+    /// `count` tiles, and the quad of a tile that the group's tiles do not claim collapses.
+    /// Every drawn frame calls it, whether or not the map was found again, as the world's
+    /// color is drawn again in the claimed tiles each frame.
     pub fn apply(&self, pass: &mut TrackedRenderPass, count: u32) {
         pass.set_pipeline(self.apply.id);
         pass.set_bind_group(0, self.apply_group.id(), &[]);

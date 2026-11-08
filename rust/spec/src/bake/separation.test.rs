@@ -6,7 +6,7 @@ use pxl_engine::way;
 use crate::procedural::Frame;
 use crate::space::layer::quadrant;
 
-/// A leaf tile's frame at the origin: a u a cell.
+/// A leaf tile's frame at the origin, with one unit a cell.
 const NOWHERE: Frame = Frame {
     corner: [0.0, 0.0],
     cell: 1.0,
@@ -77,7 +77,7 @@ fn form_from_surface() {
         span,
         pier: [0, 0],
     };
-    // Two cells a meter: a 2 m slab is 4 cells; a bore is clear its line's cells over its surface.
+    // Two cells a meter: a 2 m slab is 4 cells, and a bore is clear its line's cells above its surface.
     let cpm = 2.0;
     assert_eq!(
         on(over(Form::Bridge, 30), 10, cpm),
@@ -87,7 +87,7 @@ fn form_from_surface() {
         on(over(Form::Tunnel, 10), 40, cpm),
         at(Occupy::Under, [10, 13])
     );
-    // a way on the ground moves the ground: filled up to it, cut down to it
+    // A way on the ground moves the ground: it is filled up to the way or cut down to it.
     assert_eq!(
         on(over(Form::Approach, 14), 10, cpm),
         at(Occupy::Over, [10, 14])
@@ -101,7 +101,7 @@ fn form_from_surface() {
         at(Occupy::Under, [10, 14])
     );
     assert_eq!(on(over(Form::Approach, 10), 10, cpm), at(Occupy::Grade, no));
-    // a surface falling 8 cells across a column is solid over all of it, and a bore clear over all of it
+    // A surface falling 8 cells across a column is solid over all of it, and a bore is clear over all of it.
     let steep = Crossing {
         low: 22,
         ..over(Form::Bridge, 30)

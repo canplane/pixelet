@@ -1,15 +1,16 @@
 // pxl-render/frame/shader/skinned_place.wgsl
 
-// A character's vertices placed: four-joint skinning from the palette, then glTF
-// Y-up to Z-up, the heading, and placement; what the lit pass (skinned_mesh.wgsl),
-// the depth from the light and the mark (tile_mark.wgsl) all lay alike.
+// Places a character's vertices: four-joint skinning from the palette, then the turn from
+// glTF's Y-up to Z-up, the heading, and the placement. The lit pass (skinned_mesh.wgsl), the
+// depth from the light and the mark (tile_mark.wgsl) all place a vertex through this part, so
+// they agree.
 
-// Read field by field from vec4 words (word.rs `skinned`, skinned_draw.slot.wgsl or
-// skinned_draw.mark.wgsl), never as a struct: a struct here lost Safari's WebGPU
-// its GPU process.
+// The draw's uniform is read field by field from vec4 words (word.rs `skinned`,
+// skinned_draw.slot.wgsl or skinned_draw.mark.wgsl), never as a struct: Safari's WebGPU lost
+// its GPU process on a struct here.
 fn draw_translation() -> vec3f { return from_eye(skinned_q(), skinned_r()); }
 
-// The palette is read as vec4 columns: a Galaxy S23's Vulkan misread
+// The palette is read as vec4 columns, because the Galaxy S23's Vulkan driver misreads an
 // `array<mat4x4f>` in storage.
 @group(3) @binding(0) var<storage, read> palette: array<vec4f>;
 
@@ -23,7 +24,7 @@ struct VertexIn {
   @location(2) uv: vec2f,
   @location(3) joints: vec4<u32>,
   @location(4) weights: vec4f,
-  // Which draw it is of (`draw_at`).
+  // The draw the vertex belongs to (`draw_at`).
   @builtin(instance_index) instance: u32,
 };
 
@@ -31,7 +32,7 @@ fn skin_of(v: VertexIn) -> mat4x4f {
   return joint(v.joints.x) * v.weights.x + joint(v.joints.y) * v.weights.y + joint(v.joints.z) * v.weights.z + joint(v.joints.w) * v.weights.w;
 }
 
-// One function, so the depth pass places a vertex where the lit pass does.
+// The depth pass and the lit pass both place a vertex here, so they place it alike.
 fn skinned_world(v: VertexIn, m: mat4x4f) -> vec3f {
   let p = (m * vec4f(v.pos, 1.0)).xyz * skinned_scale();
   return place_up(p, skinned_rot()) + draw_translation();

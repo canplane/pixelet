@@ -34,9 +34,9 @@ const PANEL_GAP_PX = 12;
 
 const WORLD = surface_driver(scene.draw_world);
 
-/** The place's input as the world takes it: pointers and keys through the
- * UI's own stores first (`worldPointer`, `keyDown`), the box and the wheel
- * to the core, and a moved box's turn to the scheduler. */
+/** The world's input from the platform. Pointers and keys pass through the
+ * UI's own handling first (`worldPointer` and `keyDown`). The rest goes to
+ * port/input.ts as it comes. */
 const INPUT: InputDriver = {
   open: input.open,
   pointer: (phase, kind, id, button, x, y) =>
@@ -49,7 +49,8 @@ const INPUT: InputDriver = {
   requestFrame: input.frame,
 };
 
-/** Alone, so a marker under the pointer re-renders only the surface. */
+/** A component of its own, so that a change of the marker under the pointer
+ * re-renders only the surface. */
 function World() {
   const overMarker = useCore((s) => s.over_marker);
   return (
@@ -88,12 +89,14 @@ export function WorldView() {
         <Corner />
       </BetweenChrome>
 
-      {/* The world's own pointer puts the keyboard away (`worldPointer`). */}
+      {/* The world puts the keyboard away itself (`worldPointer`), so the
+          shared dismissal leaves its touches alone. */}
       <View {...KEEPS_KEYBOARD} style={StyleSheet.absoluteFill}>
         <World />
       </View>
 
-      {/* Under the chrome: the size popover is meant to cover the toasts. */}
+      {/* The toasts lie under the chrome, so that the size popover covers
+          them. */}
       <AboveKeyboard inset={chrome.inset} lift={DOCK_HEIGHT + TOAST_LIFT_PX}>
         <Toaster />
       </AboveKeyboard>
@@ -112,6 +115,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     pointerEvents: "box-none",
   },
-  // The dock's width chain needs a real ancestor width to grow into.
+  // The dock's bar is as wide as this box, so the box needs a definite width
+  // for the bar to grow into.
   bottom: { width: "100%", minWidth: 0, alignItems: "center" },
 });

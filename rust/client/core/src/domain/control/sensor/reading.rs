@@ -10,11 +10,11 @@ use xpute_core::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DeviceLocation {
-    /// Longitude, latitude.
+    /// Longitude and latitude, in degrees.
     pub coords: [f64; 2],
-    /// Meters over sea level; none where the device gives none.
+    /// Meters above sea level. None where the device gives no altitude.
     pub alt: Option<f64>,
-    /// Meters.
+    /// The fix's accuracy, in meters.
     pub accuracy: f64,
     /// Course over ground, 0-360 degrees.
     pub course: Option<f64>,
@@ -23,11 +23,11 @@ pub struct DeviceLocation {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DeviceOrientation {
-    /// 0-360 compass heading.
+    /// Compass heading, 0-360 degrees.
     pub heading: Option<f64>,
-    /// -180-180 front/back tilt.
+    /// Front-to-back tilt, -180 to 180 degrees.
     pub beta: Option<f64>,
-    /// -90-90 left/right tilt.
+    /// Left-to-right tilt, -90 to 90 degrees.
     pub gamma: Option<f64>,
     pub timestamp: f64,
 }
@@ -56,8 +56,8 @@ fn is_heading_delta_over(a: Option<f64>, b: Option<f64>, eps: f64) -> bool {
     }
 }
 
-/// Where a sensor's reading is, as the snapshot carries it: its status, and
-/// what failed where it failed (`err` is none but at `SensorStatus::Error`).
+/// The state of a sensor as the snapshot carries it: its status, and what
+/// failed when it failed. `err` is None except at `SensorStatus::Error`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SensorState {
     pub status: SensorStatus,
@@ -85,7 +85,8 @@ pub struct DeviceLocationStore {
 }
 
 impl DeviceLocationStore {
-    /// Updates only on a significant change; any fix says the watch delivers.
+    /// Takes a fix. The location changes only on a significant change, but
+    /// any fix marks the sensor Ready, since it shows the watch delivers.
     pub fn set_location(
         &mut self,
         coords: [f64; 2],
@@ -106,13 +107,14 @@ impl DeviceLocationStore {
             return;
         };
 
-        // Accepted under 100 m, or while accuracy improves.
+        // A fix is accepted when its accuracy is within 100 m, or when the
+        // accuracy improves.
         let is_improving = accuracy < prev.accuracy;
         if accuracy > 100.0 && !is_improving {
             return;
         }
 
-        // Dead zone: ~1.1 m horizontally, 0.5 m in altitude.
+        // The dead zone is about 1.1 m horizontally and 0.5 m in altitude.
         let lon_diff = (prev.coords[0] - coords[0]).abs();
         let lat_diff = (prev.coords[1] - coords[1]).abs();
         let is_significant_change =
@@ -122,7 +124,8 @@ impl DeviceLocationStore {
             return;
         }
 
-        // Without movement the metadata still refreshes, so the UI has the freshest signal.
+        // Without movement, the accuracy and course still refresh, so the UI
+        // shows the freshest signal.
         self.location = Some(DeviceLocation {
             coords: if is_significant_change {
                 coords
@@ -155,7 +158,8 @@ pub struct DeviceOrientationStore {
 }
 
 impl DeviceOrientationStore {
-    /// Dead-zone filtered: 1.5° of heading, 2° of tilt.
+    /// Takes an orientation reading, ignoring changes within a dead zone of
+    /// 1.5° of heading and 2° of tilt.
     pub fn set_orient(&mut self, heading: Option<f64>, beta: Option<f64>, gamma: Option<f64>) {
         let timestamp = now();
         let Some(prev) = self.orient else {
@@ -165,7 +169,8 @@ impl DeviceOrientationStore {
                 gamma,
                 timestamp,
             });
-            // Orientation alone counts as usable.
+            // Any first reading makes the sensor Ready, even one without a
+            // heading.
             self.state = SensorState::of(SensorStatus::Ready);
             return;
         };

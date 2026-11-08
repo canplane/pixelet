@@ -1,8 +1,9 @@
 // xpute-runtime/mem.rs
 
 //! The core's memory as any runtime reads and writes it: by the offsets the
-//! core names, each access reaching only its range, never one reference over
-//! the whole, since the runtime's own blocks may lie in it (C++'s `xpute::Memory`).
+//! core names. Each access reaches only its own range and never takes one
+//! reference over the whole memory, because the runtime's own blocks may lie
+//! in it. C++'s `xpute::Memory` is the same part.
 
 use core::marker::PhantomData;
 use core::ptr::NonNull;
@@ -25,8 +26,9 @@ impl<'a> Memory<'a> {
     }
 
     /// # Safety
-    /// The bytes are live while the value is used, and meanwhile nothing else
-    /// holds a reference into a range the core names: the core is between turns.
+    /// The bytes stay live while the value is used. Meanwhile nothing else
+    /// holds a reference into a range the core names, as holds while the core
+    /// is between turns.
     pub unsafe fn from_raw(base: NonNull<u8>, bytes: usize) -> Memory<'a> {
         Memory {
             base,
@@ -39,7 +41,8 @@ impl<'a> Memory<'a> {
         self.bytes
     }
 
-    /// The `n` bytes at `at`; past the memory's end is the core's bug.
+    /// The `n` bytes at `at`. A range past the memory's end is the core's
+    /// bug, and panics.
     fn range(&self, at: usize, n: usize) -> *mut u8 {
         let end = at.checked_add(n).filter(|&end| end <= self.bytes);
         assert!(
@@ -74,9 +77,10 @@ impl<'a> Memory<'a> {
         self.write(at as usize, &v.to_le_bytes());
     }
 
-    /// The word at `at` as an atomic, for a word that hands memory between
-    /// runtime and core, which both sides touch only atomically: a ring's
-    /// position, a stream's END. It must lie on a word.
+    /// The word at `at` as an atomic. It is for a word that hands memory
+    /// between the runtime and the core, such as a ring's position or a
+    /// stream's END, which both sides touch only atomically. The word must be
+    /// aligned.
     fn atomic(&self, at: u32) -> &AtomicU32 {
         let p = self.range(at as usize, 4).cast::<u32>();
         assert!(p.is_aligned(), "[mem] the word at {at} is not on a word");
@@ -85,14 +89,15 @@ impl<'a> Memory<'a> {
         unsafe { AtomicU32::from_ptr(p) }
     }
 
-    /// The handing word at `at`, loaded with acquire: what the other side
-    /// wrote before it stored the word is seen.
+    /// Loads such a handing word with acquire, so that whatever the other
+    /// side wrote before it stored the word is seen.
     pub fn load_acquire(&self, at: u32) -> u32 {
         self.atomic(at).load(Ordering::Acquire)
     }
 
-    /// `v` stored into the handing word at `at` with release: what this side
-    /// wrote or read before is done before the other side sees `v`.
+    /// Stores `v` into such a handing word with release, so that whatever
+    /// this side wrote or read before is done by the time the other side
+    /// sees `v`.
     pub fn store_release(&mut self, at: u32, v: u32) {
         self.atomic(at).store(v, Ordering::Release);
     }

@@ -1,13 +1,15 @@
 // @pxl/client/ui/world/pill.tsx
 
 /**
- * A pill whose place and width move. On a page and on Android it moves by
- * transforms alone: scaling squashes its round ends, and animating width
- * ghosts over the canvas on iOS WebKit. So a fixed circle at its left end and
- * a full-width body sliding out under a clip from the circle's center. The
- * circle lies wholly under the body, since two pieces cut to meet left a
- * hairline; shadows are clipped apart to avoid doubling, which meets cleanly
- * only on whole pixels. An iPhone relays it out and the system animates
+ * A pill whose place and width can move. On a page and on Android it moves by
+ * transforms alone. It does not scale, because scaling squashes its round
+ * ends, and it does not animate its width, because that leaves ghosts over
+ * the canvas in iOS WebKit. So it is drawn as a fixed circle at its left end
+ * and a full-width body that slides out from under a clip at the circle's
+ * center. The circle lies wholly under the body, because two pieces cut to
+ * meet leave a hairline between them. The two pieces' shadows are clipped
+ * apart so that they do not double, and they meet cleanly only on whole
+ * pixels. An iPhone lays the pill out again and lets the system animate it
  * (pill.ios.tsx).
  */
 
@@ -43,7 +45,8 @@ export interface PillProps {
   fadeFrom?: f64;
   fadeTransition?: Transition;
   touch?: GestureResponderHandlers;
-  /** More of `touch`'s outset under it, over a deck's cards peeking out. */
+  /** How much further `touch`'s area reaches below the pill, over the cards of
+   * a deck that peek out under it. */
   touchBelow?: f64;
   children?: ReactNode;
   onContentWidth?: (width: f64) => void;
@@ -109,8 +112,9 @@ export function Pill({
         ]}
       >
         {
-          // Never flattened: as `touch` came and went, Android's Fabric lost the
-          // unflattened box's create and died adding the pill into it.
+          // These views are never flattened. When `touch` comes and goes, the
+          // box turns from flattened to not, and Android's Fabric renderer can
+          // lose the box's creation and crash adding the pill into it.
         }
         <View collapsable={false} style={styles.corner}>
           <View

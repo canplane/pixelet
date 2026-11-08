@@ -1,8 +1,25 @@
 // xpute-kit/wire/xtp/spec.rs
 
-//! XTP's constants and node model.
+//! XTP's layout, its type byte, and the helpers that read and write a
+//! packet's words. A packet is a 16-byte header and one root node, all
+//! little-endian. A len, an offset or a size takes an 8-byte slot, the value
+//! in its low half; the high half is reserved and zero, or holds a type.
+//!
+//! ```text
+//! header  word 0  [MAGIC 32 | reserved 32]
+//!         word 1  [root payload size 32 | type 8 | reserved 24]
+//! branch  [child count 32 | reserved 32], then a descriptor for each child:
+//!         [offset from the branch's start 32 | type 8 | reserved 24]
+//! ```
+//!
+//! A child's offset counts from its branch's start, so a subtree can be copied
+//! into another packet unchanged. An absent node keeps its type, with a size
+//! or an offset of 0. A present child starts past its branch's table, before
+//! the next present sibling, and inside its parent; a reader refuses a packet
+//! that breaks this.
 
-// Stateless helpers are uppercase, as the C header's macros they mirror.
+// The helpers and the type names are spelled as in the TypeScript kit, so one
+// name reads the same on both sides.
 #![allow(non_snake_case, non_camel_case_types, clippy::identity_op)]
 
 use crate::abi::word::{field_get32, field_set32};
@@ -14,15 +31,16 @@ pub struct Array<'a> {
     pub bytes: std::borrow::Cow<'a, [u8]>,
 }
 
-// A leaf type byte:
-// 7 | 6 | 5 | 4 | 3 | 2 1 0
-// L | R | S | C | C |   A
+// A type byte with its top bit set names a leaf:
 //
-// L: leaf bit
-// R: reserved
-// S: sequence bit                (0 = scalar, 1 = sequence)
-// C: class bits                  (00 = u, 01 = i, 10 = f, 11 = non-numeric)
-// A: 3-bit argument field
+//   7 | 6 | 5 | 4 3 | 2 1 0
+//   L | R | S |  C  |   A
+//
+// L is set for a leaf, and R is reserved. S is set for a sequence and clear
+// for a scalar. C is the class: unsigned, signed, float, or non-numeric. A is
+// the argument: for a number, log2 of its width in bytes; for a non-numeric
+// leaf, which one it is (bool or bitset, str, strs). A type byte with the top
+// bit clear is a special type: NIL, BRANCH or GRAFT.
 
 const ARG_W: u8 = 3;
 const CLASS_W: u8 = 2;
@@ -117,26 +135,32 @@ pub enum SequenceType {
     F32_ARRAY = 0x80 | 32 | (16 | 2), // BIT_SEQ | F(2)
     F64_ARRAY = 0x80 | 32 | (16 | 3), // BIT_SEQ | F(3)
 
-    BITSET = 0x80 | 32 | 24,    // BIT_SEQ | R(0)
+    BITSET = 0x80 | 32 | 24, // BIT_SEQ | R(0)
+    /// UTF-8 bytes followed by a NUL, which `len` does not count.
     STR = 0x80 | 32 | (24 | 1), // BIT_SEQ | R(1)
-    /// `len` + 1 u32 offsets into the UTF-8 that follows, so a string costs
-    /// no node.
+    /// Many strings in one leaf, so that a string costs no node of its own:
+    /// `len` + 1 u32 offsets, each no less than the one before, then the UTF-8
+    /// they index. String `i` lies between offsets `i` and `i + 1`.
     STRS = 0x80 | 32 | (24 | 2), // BIT_SEQ | R(2)
 }
 
-/// Types with the leaf bit clear.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum SpecialType {
+    /// The untyped null. An absent node is not NIL: it keeps its own type.
     NIL = 0x00,
     BRANCH = 0x20,
+    /// Never on the wire: a graft is written as its packet's root, under that
+    /// root's type.
     GRAFT = 0x40,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Never {}
 
-/// `T` is a view on the write side, a branch cursor on the read side.
+/// A value as the generic writer takes it and a reader returns it. `Extra` is,
+/// on the write side, a node built beforehand, and on the read side, a child
+/// branch left unread.
 #[derive(Clone, Debug, PartialEq)]
 pub enum NodeValue<'a, T = Never> {
     Extra(T),
@@ -255,14 +279,15 @@ pub fn NODE_IS_GRAFT(node: &Node) -> bool {
     node.type_() == SpecialType::GRAFT as u8
 }
 
-/// Reserved zero on the wire; also the encoder's uninitialized sentinel.
+/// The offset 0, which no node can have, since the header lies there. An
+/// absent node's cursor has it as its base.
 pub const NONE: u32 = 0;
 
 pub const RESERVED: u32 = 0;
 
 pub const LE: bool = true;
 
-pub const MAGIC: u32 = 0x00505458; // "XTP\0" little-endian word
+pub const MAGIC: u32 = 0x00505458; // "XTP\0" read as a little-endian u32
 
 pub const DESC_TYPE_W: u32 = 8;
 pub const DESC_TYPE_SHAMT: u32 = 0;
@@ -282,7 +307,8 @@ pub fn GET_WORD(buf: &[u8], off: u32, out: &mut [u32; 2]) -> [u32; 2] {
     *out
 }
 
-/// A type the wire carries: the untyped null, a branch, or a leaf of a width its class has.
+/// Whether a type byte may appear on the wire: NIL, BRANCH, or a leaf with no
+/// reserved bit set and an argument its class defines. GRAFT may not.
 pub fn TYPE_IS_KNOWN(type_: u8) -> bool {
     if type_ == SpecialType::NIL as u8 || type_ == SpecialType::BRANCH as u8 {
         return true;
@@ -298,7 +324,8 @@ pub fn TYPE_IS_KNOWN(type_: u8) -> bool {
     }
 }
 
-/// A read slot whose high half is reserved, zero on the wire: a len, a size, the magic.
+/// Reads a slot that holds a len, a size or the magic. A high half that is not
+/// zero makes the packet malformed (EBADMSG).
 pub fn GET_LEN(buf: &[u8], off: u32) -> Result<u32, MarshalError> {
     match GET_WORD(buf, off, &mut [0; 2]) {
         [lo, RESERVED] => Ok(lo),
@@ -306,7 +333,9 @@ pub fn GET_LEN(buf: &[u8], off: u32) -> Result<u32, MarshalError> {
     }
 }
 
-/// A read child entry or root word: its offset or size, and a known type with the rest reserved.
+/// Reads a descriptor, a branch's entry for a child or the header's root word:
+/// the offset or size, and the type. A type the wire cannot carry, or a
+/// reserved bit set, makes the packet malformed (EBADMSG).
 pub fn GET_DESC(buf: &[u8], off: u32) -> Result<(u32, NodeType), MarshalError> {
     let [lo, desc] = GET_WORD(buf, off, &mut [0; 2]);
     let type_ = field_get32(desc, DESC_TYPE_SHAMT, DESC_TYPE_MASK) as NodeType;
@@ -320,7 +349,7 @@ pub fn GET_DESC(buf: &[u8], off: u32) -> Result<(u32, NodeType), MarshalError> {
 
 pub type AlignUnit = u32;
 
-/// `unit` is a power of two no larger than WORD_SZ.
+/// `unit` must be a power of two no larger than WORD_SZ, or EINVAL.
 pub fn ALIGN(nbyte: u32, unit: AlignUnit) -> Result<u32, MarshalError> {
     if unit == 0 || (unit & unit.wrapping_sub(1)) != 0 || unit > WORD_SZ {
         return Err(MarshalError::new(Errno::EINVAL));
@@ -333,7 +362,8 @@ pub fn ALIGN(nbyte: u32, unit: AlignUnit) -> Result<u32, MarshalError> {
     Ok((nbyte + mask) & !mask)
 }
 
-/// A BITSET's value is one byte a bit before it is packed.
+/// One element's size. A STRS's element is a u32 offset, and a BITSET's is a
+/// byte, since its bits are given a byte each before they are packed.
 pub fn ELEM_SZ(type_: SequenceType) -> AlignUnit {
     match type_ {
         SequenceType::U8_ARRAY
@@ -350,7 +380,7 @@ pub fn ELEM_SZ(type_: SequenceType) -> AlignUnit {
 }
 
 pub fn ALIGN_SZ(type_: u8) -> Result<AlignUnit, MarshalError> {
-    // A sequence or branch aligns to WORD_SZ so its len word does.
+    // A sequence or a branch starts on a word, so its len slot is aligned.
     if type_ == SpecialType::BRANCH as u8 || TYPE_IS_SEQ(type_) {
         return Ok(WORD_SZ);
     }
@@ -369,7 +399,7 @@ pub fn ALIGN_SZ(type_: u8) -> Result<AlignUnit, MarshalError> {
     })
 }
 
-/// Must stay a multiple of WORD_SZ.
+/// Must stay a multiple of WORD_SZ, since the root starts right after it.
 pub const HDR_SZ: u32 = WORD_SZ * 2;
 
-pub const MAX_PKT_SZ: u32 = 0x7fffffff; // 2GB - 1
+pub const MAX_PKT_SZ: u32 = 0x7fffffff;

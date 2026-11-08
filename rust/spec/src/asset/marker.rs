@@ -1,8 +1,8 @@
 // pxl-spec/asset/marker.rs
 
-//! The marker kind (`spec/spec/asset/marker.json`): drawn flat to the camera
-//! from a design, its one shape the pin someone puts up. Where a marker's
-//! cell is on the camera grid, and from which cell it shows.
+//! The marker kind (`spec/spec/asset/marker.json`), drawn flat to the camera from a design;
+//! its one shape is the pin someone puts up. The module says where a marker's cell is on the
+//! camera grid, and from which cell it shows.
 
 #[path = "marker.spec.rs"]
 mod spec;

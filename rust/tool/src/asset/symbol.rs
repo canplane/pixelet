@@ -1,10 +1,10 @@
 // pxl-tool/asset/symbol.rs
 
-//! Carto's place symbols, each SVG under `asset/raw/place/symbol/` named by the
-//! path Carto gives it (`symbols/…`), which is how the places' theme names
-//! it: for the marker atlas, the masks it tints, each rasterized once to
-//! its coverage, a byte a pixel, in a square of `SYMBOL_PX`, laid end to end
-//! in one file the spec crate includes; for the UI, its outlines.
+//! Carto's place symbols, each SVG under `asset/raw/place/symbol/` named by the path Carto
+//! gives it (`symbols/…`), which is how the places' theme names it. For the marker atlas they
+//! become the masks it tints, each rasterized once to its coverage, a byte a pixel, in a
+//! square of `SYMBOL_PX`, laid end to end in one file the spec crate includes; for the UI,
+//! their outlines.
 
 use resvg::tiny_skia::Pixmap;
 use resvg::tiny_skia::Transform;
@@ -14,15 +14,15 @@ use resvg::usvg::Node;
 use resvg::usvg::Tree;
 use std::path::Path;
 
-/// Carto's symbols, drawn at the atlas's device pixels a pixel.
+/// The side of a symbol's mask in device pixels: Carto's side at the atlas's device pixels a
+/// pixel.
 pub(crate) const SYMBOL_PX: u32 = CARTO_PX * SYMBOL_RATIO;
 
 /// Carto's symbols' side, in pixels.
 const CARTO_PX: u32 = 14;
 
-/// The device pixels a pixel the symbols are rasterized at, written into the
-/// spec, where pxl-spec asset.rs holds it to space/camera/grid.rs
-/// `RATIO_MAX`.
+/// The device pixels a pixel at which the symbols are rasterized, written into the spec,
+/// where pxl-spec asset.rs holds it to space/camera/grid.rs `RATIO_MAX`.
 const SYMBOL_RATIO: u32 = 2;
 
 pub struct Symbol {

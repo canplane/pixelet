@@ -1,15 +1,16 @@
-// A decor draw's instances, as the model tier (decor.wgsl) and the
-// impostors (impostor.wgsl) both read them: the draw's uniform (word.rs
-// `instance`) and the decor's instances, `instances`, a lane a field; the
-// n-th instance drawn is the one the list `order` names.
+// How a decor draw reads its instances, for the model tier (decor.wgsl) and the
+// impostors (impostor.wgsl) alike. The draw has a uniform of its own (word.rs
+// `instance`), and the decor's instances lie in `instances`.
 
-// Read field by field from vec4 words, never as a struct: a struct here lost
-// Safari's WebGPU its GPU process.
+// The uniform is read field by field from vec4 words and is never declared as a
+// struct. Declared as a struct here, it makes Safari's WebGPU lose its GPU
+// process.
 @group(1) @binding(0) var<uniform> instance_words: array<vec4f, DRAW_VEC4S>;
 
-// A cloud's draw holds its place on the cloud field's map, which it is drawn
-// moved back from by how far the wind has carried the field, Q3 from Q3 first,
-// so the difference keeps every step (gpu/draw.rs `Position`).
+// Where the draw stands from the eye. A draw that drifts is a cloud's: it holds
+// its place on the cloud field's map, and it is drawn moved back by how far the
+// wind has carried the field. The Q3 steps are subtracted before the
+// remainders, so the difference keeps every step (gpu/draw.rs `Position`).
 fn draw_translation() -> vec3f {
   let drifts = instance_drifts() != 0.0;
   let back_q = select(vec2i(0), bitcast<vec2i>(frame_drift_q()), drifts);
@@ -18,12 +19,14 @@ fn draw_translation() -> vec3f {
 }
 
 @group(3) @binding(0) var<storage, read> instances: array<u32>;
-// The n-th instance a draw draws is the one the n-th word from its list's first
-// (`instance_idx`) names: the instances' own list, or in a frame through the gate the list of
-// those that meet its claimed tiles (decor_cull.wgsl).
+// The n-th instance a draw draws is the one named by the n-th word from the
+// first of its list (`instance_idx`). The list is the instances' own, or, in a
+// frame drawn through the gate, the list of the instances that meet its claimed
+// tiles (decor_cull.wgsl).
 @group(3) @binding(1) var<storage, read> order: array<u32>;
 
-// Instance `i`'s word in lane `k`.
+// The value of field `k` for instance `i`. Each field is a lane of
+// `instance_stride` words, one word for each instance.
 fn lane(k: u32, i: u32) -> f32 {
   return bitcast<f32>(instances[instance_off() + k * instance_stride() + i]);
 }

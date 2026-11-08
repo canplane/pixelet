@@ -1,6 +1,7 @@
 // @xpute/kit/wire/tlv.test.ts
 
-/** Holds the TypeScript side to golden/wire/tlv.tsv, which every language's TLV must match. */
+/** Holds the TypeScript TLV to spec/golden/wire/tlv.tsv, the record every
+ * language's TLV must match. */
 
 import { test } from "vitest";
 import assert from "node:assert/strict";
@@ -48,8 +49,8 @@ test("tlv computes what the typescript computes", async () => {
   v.each("read", (k) => want.push(v.s(k)));
   assert.deepStrictEqual(read, want);
 
-  // How a sequence stops: the values handed out before it did, then END
-  // read, the input run out at a boundary, or a fault.
+  // Each case gives the values read before the sequence stopped, then how it
+  // stopped: END read, the input run out between two values, or a fault.
   for (let k = 0; v.has(`end.${k}.packet`); k++) {
     const r = new TlvReader(hex_to_bytes(v.s(`end.${k}.packet`)));
     let n = 0;
@@ -63,8 +64,8 @@ test("tlv computes what the typescript computes", async () => {
     assert.deepStrictEqual(`${n}:${stop}`, v.s(`end.${k}.read`), `end.${k}`);
   }
 
-  // A length past what the packet holds: the reader refuses rather than
-  // reading whatever follows.
+  // A length larger than the rest of the packet: the reader refuses it
+  // instead of reading whatever lies after the packet.
   let huge = "ok";
   try {
     new TlvReader(hex_to_bytes(v.s("huge.packet"))).read_all();

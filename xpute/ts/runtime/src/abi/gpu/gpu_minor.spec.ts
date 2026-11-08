@@ -2,8 +2,6 @@
 //
 // GENERATED from spec/abi/gpu.json
 
-// The GPU's state and its surfaces.
-
 export const READY = 0x01;
 export const SURFACE_OPEN = 0x02;
 export const SURFACE_RESIZE = 0x03;

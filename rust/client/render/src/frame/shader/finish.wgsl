@@ -1,11 +1,12 @@
-// Tone, vignette, encode and dither, in that order: nothing grades the
-// picture past the tone curve, so a color is the light it was lit by. Each
-// world pass tones what it lights (`tone`) into the world's color, linear,
-// blended there; the screen's finish encodes it once (`finish`).
+// A color reaches the screen through the tone curve, the vignette, the sRGB
+// encoding and the dither, in that order. Nothing grades the picture past the
+// tone curve, so a color shows only the light it was lit by. Each world pass
+// tones what it lights (`tone`) and blends it into the world's color, which is
+// not yet encoded. The screen's finish encodes that color once (`finish`).
 
 // ACES's reference rendering and sRGB output transforms, as Stephen Hill fit
-// them (BakingLab). One for every pass, so the sky and the ground reach the
-// screen by one curve.
+// them in BakingLab. Every pass tones by this one curve, so the sky and the
+// ground reach the screen alike.
 const ACES_IN: mat3x3f = mat3x3f(
   vec3f(0.59719, 0.07600, 0.02840),
   vec3f(0.35458, 0.90834, 0.13383),
@@ -34,30 +35,29 @@ fn dither(q: vec2f) -> f32 {
   return fract(p.x * p.y);
 }
 
-// A toned color as the canvas encodes it, darkened by `by`, the vignette
-// where it is drawn: sRGB, before the dither.
+// A toned color in the sRGB the canvas takes, darkened by `by`, the vignette
+// where the color is drawn. The dither is added after.
 fn displayed(toned: vec3f, by: f32) -> vec3f {
   return to_srgb(toned * by);
 }
 
-// A linear color as the canvas encodes it (`displayed`), toned first.
 fn encoded(color: vec3f, by: f32) -> vec3f {
   return displayed(tone(color), by);
 }
 
-// What the canvas writes of a linear color, in its levels (`encoded`), where
-// the vignette leaves it whole.
+// The levels, 0 to 255, that the canvas writes for a linear color where the
+// vignette leaves it whole.
 fn levels(c: vec3f) -> vec3f {
   return encoded(c, 1.0) * 255.0;
 }
 
-// The most of a color's channels.
 fn most(c: vec3f) -> f32 {
   return max(max(c.r, c.g), c.b);
 }
 
-// The toned color the world's passes left at `frag`, encoded, half a step of
-// noise added (screen_finish.wgsl): the screen keeps 8 bits.
+// The toned color the world's passes left at `frag`, encoded for the screen
+// (screen_finish.wgsl). The screen keeps 8 bits a channel, so up to half a
+// level of noise is added to break up the bands.
 fn finish(toned: vec3f, frag: vec2f) -> vec3f {
   return displayed(toned, vignette(frag)) + (dither(frag) - 0.5) / 255.0;
 }

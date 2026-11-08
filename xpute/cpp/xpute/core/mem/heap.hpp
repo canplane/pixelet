@@ -1,9 +1,9 @@
 // cpp/xpute/core/mem/heap.hpp
 
-// Blocks out of the core's heap, named by offsets in its memory
-// (`mem::core`). The allocator is installed by the core (`set_heap`), and
-// `operator new` points at it too, so nothing allocates from memory the core
-// was not given.
+// Blocks from the core's heap, named by their offsets in the core memory
+// (`mem::core`). The core installs the allocator (`set_heap`), and
+// `operator new` uses it too, so nothing allocates from memory the core was
+// not given.
 
 #pragma once
 
@@ -26,7 +26,7 @@ struct Block {
 
 inline constexpr std::size_t BLOCK_ALIGN = 8;
 
-// The same size and alignment are told back on free.
+// `free` is given back the same size and alignment that `alloc` was given.
 struct Allocator {
     void *(*alloc)(std::size_t bytes, std::size_t align) noexcept;
     void (*free)(void *at, std::size_t bytes, std::size_t align) noexcept;
@@ -34,20 +34,23 @@ struct Allocator {
 
 void set_heap(Allocator heap) noexcept;
 
-// One reading of a heap, so compared fields are from one moment.
+// One reading of a heap, so that fields compared with each other come from
+// the same moment.
 struct HeapStat {
     std::size_t range = 0;
-    // A high-water mark, not a holding.
+    // The most ever live at once, not what is held now.
     std::size_t peak = 0;
     std::size_t live = 0;
     std::size_t run = 0;
     std::size_t slot = 0;
-    // Past the tree's current root the range is untouched rather than listed,
-    // so this is not the free space.
+    // The largest free block the tree lists. The range past the tree's
+    // current root is untouched rather than listed, so this is not the total
+    // free space.
     std::size_t largest_free = 0;
-    // Moves when a page is released, which is when a request of a page or
-    // more refused before might now be served; a slot returned to a run still
-    // in use does not move it (`SlabMalloc::releases`).
+    // Advances each time a page is released, which is when a request of a
+    // page or more that was refused before might now be served. A slot
+    // returned to a run still in use does not advance it
+    // (`SlabMalloc::releases`).
     std::uint32_t releases = 0;
     std::uint32_t refusals = 0;
     std::uint32_t requests = 0;
@@ -55,7 +58,8 @@ struct HeapStat {
     bool operator==(const HeapStat &) const = default;
 };
 
-// Reads the slab whose calls the core installed as its heap (`set_heap`).
+// Reads the slab whose functions the core installed as its heap
+// (`set_heap`).
 template <Range R> HeapStat heap_stat(const SlabMalloc<R> &a) noexcept {
     return HeapStat{
         .range = a.range_bytes(),
@@ -72,7 +76,7 @@ template <Range R> HeapStat heap_stat(const SlabMalloc<R> &a) noexcept {
 
 Allocator heap() noexcept;
 
-// None for no room, no allocator, or zero bytes.
+// Answers none when there is no room, no allocator, or zero bytes.
 inline std::optional<Block> alloc(std::uint32_t bytes) noexcept {
     Allocator h = heap();
     if (bytes == 0 || h.alloc == nullptr) return std::nullopt;

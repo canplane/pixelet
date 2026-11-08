@@ -1,15 +1,16 @@
 // pxl-core/domain/scene/environment/cloud.rs
 
-//! The cumulus, the sky kind's (`spec/spec/asset/sky.json` `cumulus`),
-//! drawn as decor is and held as decor is not. It claims no cell, so
-//! nothing is built around it and a tower stands through it; it is no layer
-//! and no clip level's brick holds it. It is laid on the field's own map,
-//! which the wind carries (`pxl-content cloud.rs` `drift`): a patch of
-//! cells there is built once and drawn moved, each instance a model, an
-//! impostor or nothing by its size on the screen (`present_patch`), by the
-//! tiers the GPU draws decor by, one rule (pxl-content generation.rs
-//! `drawn::lod`). A patch is laid in the columns the decor and impostor
-//! shaders read (domain/scene/column.rs).
+//! The cumulus clouds (`spec/spec/asset/sky.json` `cumulus`). They are drawn
+//! the way decor is drawn, but not held the way decor is held. A cloud claims
+//! no cell, so nothing is built around it and a tower stands through it. No
+//! layer and no clip level's brick holds it. The clouds are laid on the cloud
+//! field's own map, which the wind carries (pxl-content cloud.rs `drift`). A
+//! patch of that map's cells is built once and then drawn moved by the
+//! drift. Each cloud in it is drawn as a model, as an impostor or not at all
+//! by its size on the screen (`present_patch`), under the rule the GPU
+//! applies to decor (pxl-content generation.rs `drawn::lod`). A patch is laid
+//! out in the columns the decor and impostor shaders read
+//! (domain/scene/column.rs).
 
 use fnv::FnvHashMap;
 
@@ -48,44 +49,49 @@ use pxl_content::param::cloud;
 use pxl_render::gpu::api::Image;
 use pxl_spec::space::camera::grid;
 
-/// Its models, a cloud each one of them.
+/// The cumulus models. Each model is one whole cloud.
 const VARIANTS: [Slot; cumulus::models.len()] = cumulus::models;
 
 pub const MODELS_MAX: usize = VARIANTS.len();
 
-/// Its draw groups follow the decors' variants, which number the groups
-/// before it (pxl-content generation.rs `GROUPS`).
+/// The clouds' draw groups come right after those of the decor variants,
+/// which take the numbers before them (pxl-content generation.rs `GROUPS`).
 const FIRST_GROUP: usize = generation::GROUPS as usize;
 const _: () = assert!(
     FIRST_GROUP + VARIANTS.len() <= DECOR_GROUPS,
     "a draw group each variant"
 );
 
-/// A cell holds a cloud or none: a unit of the field's lattice, whose hash
-/// says where one is (pxl-content param.rs `cloud::LATTICE_SHAMT`).
+/// A cell of the cloud field is a unit of the field's lattice and holds one
+/// cloud or none. The field's hash says which cells hold one (pxl-content
+/// param.rs `cloud::LATTICE_SHAMT`).
 const CELL_SHAMT: u32 = cloud::LATTICE_SHAMT;
 const CELL: f64 = (1u32 << CELL_SHAMT) as f64;
-/// A patch is built and drawn as one, this many cells a side.
+/// The side of a patch, in cells. A patch is built and drawn as one piece.
 const PATCH_CELLS: u32 = 16;
 const PATCH: f64 = CELL * PATCH_CELLS as f64;
-/// The farthest a patch is built: where the widest cloud is an impostor's worth.
+/// The farthest a patch is built. Beyond it even the widest cloud is too
+/// small for an impostor.
 const DRAW_DIST_MAX: f64 = cull_dist_u(CLOUD_WIDTH[1]);
-/// The most patches the farthest spans, the keys of a side squared: its share of
-/// the renderer's upload table.
+/// The most patches built at once: the number of patch keys along a side of
+/// the reach, squared. It sets the clouds' share of the renderer's upload
+/// table.
 pub const PATCHES_MAX: usize = {
     let side = (2.0 * DRAW_DIST_MAX / PATCH) as usize + 2;
     side * side
 };
 
-/// How far from the eye the thinning starts, in units: where a cell spans
-/// `CLOUD_SPACING_CELLS` of the view's camera cells.
+/// The distance from the eye, in units, at which the clouds begin to thin:
+/// where a cell spans `CLOUD_SPACING_CELLS` camera grid cells.
 const THIN_FROM: f64 = CELL / grid::CELL / CLOUD_SPACING_CELLS;
 
 /// Whether the cloud whose middle lies at `local` about its patch's corner
-/// shows `d2` square units from the eye: its draw under (THIN_FROM / d)²,
-/// asked as a product, so a cloud costs a multiply; the draw keyed by its
-/// middle's bits, by the seed its place and look are drawn by
-/// (`cloud_draw`). Decided as it is drawn, never built.
+/// shows at `d2` square units from the eye. It shows when its random draw is
+/// under (THIN_FROM / d)². The test is written as a product, so it costs a
+/// cloud one multiply. The draw is keyed by the bits of the cloud's middle,
+/// through the seed that also draws its place and look (`cloud_draw`), so a
+/// cloud that shows at some distance shows at every nearer one. It is decided
+/// as the cloud is drawn, never when the patch is built.
 fn shows(local: [f32; 2], d2: f64) -> bool {
     cloud_draw(local.map(|v| v.to_bits() as i32), CLOUD_SALT + 6) * d2 < THIN_FROM * THIN_FROM
 }
@@ -96,7 +102,8 @@ struct Patch {
     handle: u32,
     idx: u32,
     heights: [f32; 2],
-    /// Each variant's draws, its models' and its impostors'.
+    /// For each variant, the draw of its models and the draw of its
+    /// impostors.
     draws: [[DrawId; 2]; VARIANTS.len()],
 }
 
@@ -104,13 +111,14 @@ struct Patch {
 struct Clouds {
     models: [Option<u32>; VARIANTS.len()],
     patches: FnvHashMap<[i64; 2], Patch>,
-    /// Kept so a settled turn asks the heap for nothing.
+    /// The vectors from here on are kept between turns, so a turn where
+    /// nothing changed allocates nothing.
     wanted: Vec<[i64; 2]>,
     gone: Vec<[i64; 2]>,
     columns: [Vec<[f32; 5]>; VARIANTS.len()],
     impostors: Vec<u32>,
-    /// How far from the eye the nearest patch drawn last turn stands; none
-    /// drawn, infinite.
+    /// How far from the eye the nearest cloud drawn last turn stands, or
+    /// infinity when none was drawn.
     seen: f64,
 }
 
@@ -120,7 +128,8 @@ fn clouds() -> &'static mut Clouds {
     CLOUDS.get(Clouds::default)
 }
 
-/// Each variant's draw group: its mesh, 0 while it loads, its skin and its extent.
+/// Each variant's draw group, with its mesh (0 while it loads), its skin and
+/// its extent.
 pub fn cloud_groups() -> impl Iterator<Item = (usize, u32, Option<Image>, [f32; 3])> {
     let models = model::models();
     let skin = load_of(cumulus::skin).and_then(load_image);
@@ -135,7 +144,8 @@ pub fn cloud_groups() -> impl Iterator<Item = (usize, u32, Option<Image>, [f32; 
         })
 }
 
-/// Its model's, as the catalog measures it; none before one is read.
+/// The extent of the model in `slot`, as the catalog measures it, or zero
+/// before the catalog is read.
 fn extent(slot: Slot) -> [f64; 3] {
     catalog().map_or([0.0; 3], |c| c.extent(slot))
 }
@@ -144,23 +154,25 @@ fn widest(slot: Slot) -> f64 {
     extent(slot).into_iter().fold(0.0, f64::max)
 }
 
-/// The layer's height over the datum, in units, as the sky draws it.
+/// The cumulus layer's height over the datum, in units. It is the height at
+/// which the sky draws its cloud layer.
 fn layer_u() -> f64 {
     CUMULUS_KM / km_per_u()
 }
 
-/// How long the wind takes to carry the clouds the seen step at the nearest
-/// drawn (`lens::visible_step_s`), in seconds: so a drawn cloud lags the wind
-/// by up to that, an angle, the same on every screen. Infinite while none
-/// is drawn.
+/// How long, in seconds, the wind takes to carry the clouds the seen step at
+/// the distance of the nearest drawn cloud (`lens::visible_step_s`). The
+/// clouds' clock steps by this, so a drawn cloud lags the wind by at most the
+/// seen step. That step is an angle, so the lag looks the same on every
+/// screen. It is infinite while no cloud is drawn.
 pub fn drift_step_s() -> f64 {
     lens::visible_step_s(clouds().seen, libm::hypot(WIND[0], WIND[1]))
 }
 
-/// How much of the clouds shows, the cumulus and the sheets alike
-/// (`FrameInput::clouds`), the eye as high as the sky last saw it: none where
-/// the setting is off, all of them up to half of `CLOUD_GONE_KM` and none
-/// from it.
+/// How much of the clouds shows, from 0 to 1, for the cumulus and the sheets
+/// alike (`FrameInput::clouds`). It is 0 with the clouds setting off.
+/// Otherwise it is 1 while the eye, at the height the sky last saw it, is
+/// below half of `CLOUD_GONE_KM`, and it fades to 0 at `CLOUD_GONE_KM`.
 pub fn clouds_shown() -> f64 {
     if !settings_store().clouds {
         return 0.0;
@@ -169,8 +181,9 @@ pub fn clouds_shown() -> f64 {
     1.0 - t * t * (3.0 - 2.0 * t)
 }
 
-/// Takes the models as they arrive, keeps the patches the eye can see a cloud
-/// of, and lists them, carried as far as the wind has (`environment_drift`).
+/// Takes the cloud models as they arrive, keeps built the patches in which
+/// the eye could see a cloud, and lists their draws, moved as far as the wind
+/// has carried the field (`environment_drift`).
 pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     let c = clouds();
     c.seen = f64::INFINITY;
@@ -180,7 +193,8 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         }
     }
     let Some(eye) = eye() else { return };
-    // None, nothing is built or drawn, and what is held waits.
+    // With no clouds showing, nothing is built or drawn, and the patches
+    // already built are kept for later.
     let opacity = clouds_shown() as f32;
     if opacity <= 0.0 {
         return;
@@ -188,8 +202,9 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     let off = environment_drift();
     let base = layer_u();
     let largest = CLOUD_WIDTH[1];
-    // As far as the eye draws, a flat layer hiding under no horizon, and no
-    // farther than its largest cloud is an impostor's worth.
+    // Patches are wanted out to the eye's draw distance, since a flat layer
+    // of clouds never sinks under a horizon, but no farther than the largest
+    // cloud stays large enough for an impostor.
     let dist = observation::eye_draw_dist()
         .unwrap_or(0.0)
         .min(DRAW_DIST_MAX);
@@ -269,9 +284,10 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         ) {
             continue;
         }
-        // The nearest cloud the view holds, each as the box it stands in, no
-        // nearer than the near plane, short of which nothing is drawn: from
-        // inside a box the drift is still a cell's at that distance.
+        // `seen` is the distance to the nearest cloud in view, measured to the
+        // box it stands in. It is held no nearer than the near plane, short of
+        // which nothing is drawn, so even from inside a cloud's box the drift
+        // steps by a cell at the near plane rather than by nothing.
         for (local, half) in patch_clouds(b) {
             let at = [corner[0] + local[0], corner[1] + local[1], local[2]];
             if frame.sees_box(
@@ -303,8 +319,8 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
             heights: b.heights,
             draws: &b.draws,
         };
-        // The patch's corner on the field's map, on Q3, which the renderer
-        // moves back by the wind's drift: its draw holds no eye and no drift.
+        // The draw's position holds neither the eye nor the drift, so the
+        // draw stays valid while both move.
         let pos = patch_place(key);
         let groups = VARIANTS.iter().enumerate().map(|(k, &a)| {
             (
@@ -316,29 +332,31 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     }
 }
 
-/// The patch `key`'s corner on the field's map, on Q3, as its draws hold it:
-/// the renderer moves it back by the wind's drift (pxl-render gpu/draw.rs
-/// `DrawList::draw_instances`).
+/// The corner of patch `key` on the field's map, as the Q3 position its draws
+/// hold. The renderer moves it back by the wind's drift when it draws
+/// (pxl-render gpu/draw.rs `DrawList::draw_instances`).
 fn patch_place(key: [i64; 2]) -> Position {
     Position::of([key[0] as f64 * PATCH, key[1] as f64 * PATCH, 0.0])
 }
 
-/// The patch `key`'s corner its draws stand by, on the lap of X nearest
-/// `eye`: where the drift `off` held to a whole cell, the lattice's unit,
-/// leaves it. The corner as drawn lies within a cell short of it, so a stand
-/// grown a cell back from it (`present_patch`) holds the patch drawn at every
-/// drift until the drift crosses into the next cell, and stands still
-/// meanwhile, as long as the wind takes to carry the field a cell.
+/// The corner of patch `key` that its draws' stand is built about
+/// (`patch_stand`), on the lap of X nearest `eye`. It is where the drift
+/// `off`, rounded down to a whole cell of the lattice, leaves the corner. The
+/// corner as drawn lies less than a cell short of it. A stand grown a cell
+/// back from it therefore holds the drawn patch at every drift until the
+/// drift crosses into the next cell. Meanwhile the stand stays still, for as
+/// long as the wind takes to carry the field a cell.
 fn stood_corner(key: [i64; 2], off: [f64; 2], eye: V3) -> [f64; 2] {
     let held = off.map(|v| libm::floor(v / CELL) * CELL);
     let x = key[0] as f64 * PATCH - held[0];
     [nearest(x, eye[0]), key[1] as f64 * PATCH - held[1]]
 }
 
-/// The box a patch's draws stand within, its corner `stood`
-/// (`stood_corner`), its side `side`, its instances between the heights
-/// `[zlo, zhi]`, its models reaching `e` past them: grown a cell back from
-/// the corner, so it holds the patch at every drift the corner holds.
+/// A patch's stand: the box its draws declare they stand within (pxl-render
+/// `ReceiverBox`). The patch's stood corner is `stood` (`stood_corner`), its
+/// side is `side`, its instances lie between the heights `[zlo, zhi]`, and
+/// its models reach `e` past them. The box is grown a cell back from the
+/// corner, so it holds the patch at every drift for which that corner holds.
 fn patch_stand(stood: [f64; 2], side: f64, e: f64, [zlo, zhi]: [f64; 2]) -> ReceiverBox {
     let [x, y] = stood;
     ReceiverBox::of(
@@ -347,18 +365,20 @@ fn patch_stand(stood: [f64; 2], side: f64, e: f64, [zlo, zhi]: [f64; 2]) -> Rece
     )
 }
 
-/// A cloud of a patch, about the patch's corner on the field's map.
+/// A cloud of a patch. `local` is its place relative to the patch's corner on
+/// the field's map.
 struct Cloud {
     variant: usize,
     local: [f64; 2],
-    /// Its middle's height and its width, in units.
+    /// The height of its middle and its width, in units.
     z: f64,
     width: f64,
     spin: f64,
     scale: f64,
 }
 
-/// The patch's clouds: a cell a cloud where the field's hash says one is.
+/// The clouds of patch `key`: one in each cell where the field's hash says
+/// there is one.
 fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
     (0..PATCH_CELLS)
         .flat_map(move |j| (0..PATCH_CELLS).map(move |i| (i, j)))
@@ -369,8 +389,9 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
             ];
             let at = cell.map(|v| v as i32);
             let hash = |salt: u32| cloud_draw(at, salt);
-            // Its patch's count handed down to it (pxl-content cloud.rs
-            // `holds_cloud`), as the decor's and the caves' are.
+            // The patch's mean count of clouds is handed down to its cells
+            // (pxl-content cloud.rs `holds_cloud`), the way the counts of the
+            // decor and the caves are.
             let mean = (CLOUD_SHARE * f64::from(PATCH_CELLS * PATCH_CELLS)) as u32;
             if !holds_cloud(at, mean) {
                 return None;
@@ -397,10 +418,11 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
         })
 }
 
-/// The patch's clouds as `build` laid them, read off its columns: each one's
-/// middle about the patch's corner, its height over the datum, and its half
-/// extent. The field's hash is asked once a patch, where it is built, and
-/// the catalog once a variant.
+/// The patch's clouds as `build` laid them out, read back from its columns:
+/// each one's middle relative to the patch's corner, with its height over the
+/// datum, and its half extent. Reading them back asks nothing of the field's
+/// hash, which is asked once per patch when it is built, and asks the catalog
+/// once per variant.
 fn patch_clouds(b: &Patch) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
     // SAFETY: the patch's bytes, held until it goes, which is after this turn reads them.
     let words: &[u32] =
@@ -421,8 +443,9 @@ fn patch_clouds(b: &Patch) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
         })
 }
 
-/// The patch's clouds on the field's map, as decor's columns about its corner;
-/// none where the heap refused.
+/// Builds the clouds of patch `key` into decor's columns, relative to the
+/// patch's corner on the field's map, and uploads them. Returns None when the
+/// heap refuses the room.
 fn build(
     key: [i64; 2],
     base: f64,
@@ -485,8 +508,9 @@ fn build(
     })
 }
 
-/// A patch of the clouds' columns as `present_patch` reads it: its square's corner
-/// about the eye's lap, its side, and the heights its instances stand between.
+/// A built patch as `present_patch` reads it. `corner` is the corner of its
+/// square on the lap of X nearest the eye, and `heights` are the heights its
+/// instances stand between.
 struct PatchDraw<'a> {
     handle: u32,
     at: u32,
@@ -500,11 +524,12 @@ struct PatchDraw<'a> {
     draws: &'a [[DrawId; 2]],
 }
 
-/// Lists one patch's instances, model, impostor or nothing each, under the
-/// draw groups `groups` names in the patch's order, each with its model's
-/// extent and the least and most scale its instances are drawn at. Under an
-/// `opacity` of one the models are laid over the world blended, and an impostor,
-/// which cannot be, is left out.
+/// Lists the draws of one patch's instances, each drawn as a model, as an
+/// impostor or not at all. `groups` gives a draw group for each of the
+/// patch's variants, in the patch's order, with its model's extent and the
+/// least and most scale its instances are drawn at. Under an `opacity` of
+/// one, the models are blended over the world and the impostors are left
+/// out, because an impostor cannot be blended.
 fn present_patch(
     draw: &mut DrawList,
     b: &PatchDraw,
@@ -537,7 +562,8 @@ fn present_patch(
         core::slice::from_raw_parts_mut(mem::at::<u32>(b.at as usize), b.bytes as usize / 4)
     };
     let (columns_of, list) = words.split_at_mut(b.idx as usize / 4);
-    // A patch all within THIN_FROM shows every cloud, and asks none.
+    // A patch wholly within THIN_FROM shows every cloud, so no cloud's draw
+    // is tested.
     let thin = farthest > THIN_FROM;
     let (mut at, mut changed) = (0usize, false);
     let variants = column::groups(columns_of).zip(groups).zip(b.draws);
@@ -585,9 +611,11 @@ fn present_patch(
         list[at..at + impostors.len()].copy_from_slice(impostors);
         at += impostors.len();
         let idx = b.idx / 4 + first as u32;
-        // Its group's draws read the sun's map, so they stand within the patch's box grown by
-        // as far as the group's models reach at their most scale, in the world, at every
-        // drift the stood corner holds: a cell back from it (`stood_corner`).
+        // The group's draws read the sun's map, so they declare a box to stand
+        // within. It is the patch's box grown by the reach of the group's
+        // models at their most scale, and grown a cell back from the stood
+        // corner, so it holds the draws at every drift that corner holds
+        // (`stood_corner`).
         let stand = patch_stand(b.stood, b.side, extent * most, [zlo, zhi]);
         if models > 0 {
             let pipeline = if opacity < 1.0 {

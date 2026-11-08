@@ -1,8 +1,9 @@
 // pxl-core/domain/view/frame/coord.rs
 
-//! The world in doubles: a double holds the whole lattice with its fraction
-//! exactly, so positions are kept as the world's, X running on past a lap of
-//! it so that it is continuous about the eye.
+//! Positions in the world's doubles. A double holds every lattice point with
+//! its fraction exactly, so the view keeps positions as world coordinates.
+//! X is not wrapped into one lap of the world: it runs on past the seam, so
+//! positions stay continuous around the eye.
 
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::V3;
@@ -12,26 +13,27 @@ use xpute_kit::math::scalar::round;
 
 use crate::domain::view::frame::pose::view;
 
-/// A canonical point in the world's doubles, on the lap nearest `near_x`.
 fn canonical_to_world(p: &Q3, near_x: f64) -> V3 {
     let [x, y, z] = q3::unpack(p);
     [nearest(x, near_x), y, z]
 }
 
-/// A canonical point in the world's doubles, on the lap nearest the eye.
+/// The canonical point `p` in the world's doubles, on the lap of X nearest
+/// the eye.
 pub fn to_world(p: &Q3) -> V3 {
     canonical_to_world(p, view().at().eye[0])
 }
 
-/// Through `project`, the one door into a position: X goes round, Y and Z stop at
-/// the edge.
+/// The canonical point of the lattice cell `w` lies in. It goes through
+/// `world::point`, the only way a position enters the world: X wraps around
+/// the world, and Y and Z are held at its edge.
 pub fn world_to_canonical(w: &V3) -> Q3 {
     world::point(w[0], w[1], w[2])
 }
 
-/// The nearest canonical point to `w`, unlike `world_to_canonical`, which
-/// takes the cell it lies in. A point that went through floats and came back
-/// a hair under would otherwise step down each round trip.
+/// The canonical point nearest `w`. A point that went through floats can come
+/// back a hair under its lattice point, and taking the cell it lies in
+/// (`world_to_canonical`) would move it down one step on each round trip.
 pub fn world_to_canonical_nearest(w: &V3) -> Q3 {
     let one = q3::ONE as f64;
     world_to_canonical(&w.map(|v| round(v * one) / one))

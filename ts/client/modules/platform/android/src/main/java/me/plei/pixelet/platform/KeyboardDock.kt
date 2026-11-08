@@ -11,45 +11,45 @@ import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
 
 /**
- * A view that stands on the keyboard (ts/client/src/ui/component/above-keyboard.native.tsx),
- * KeyboardDock.swift's on Android. Its layout is the UI's, where it rests
- * with no keyboard up, `rest` off the bottom edge (ts/client/src/ui/component/bottom-rest.ts).
- * While a keyboard is up, the view is lifted to stand `clearance` above it.
- * Android says where the keyboard is every frame it moves, so the view is
- * moved on each of them rather than animated towards where the keyboard is
- * going: it keeps to the keys however they move, a finger dragging them down
- * included.
+ * A view that stands on the keyboard (ts/client/src/ui/component/above-keyboard.native.tsx).
+ * It is the Android side of KeyboardDock.swift. The UI's layout places the
+ * view where it rests with no keyboard up, `rest` off the bottom edge
+ * (ts/client/src/ui/component/bottom-rest.ts). While a keyboard is up, the
+ * view is lifted to stand `clearance` above it. Android reports where the
+ * keyboard is on every frame it moves, so the view moves with each report
+ * rather than animating toward where the keyboard will end. It keeps to the
+ * keys however they move, even when a finger drags them down.
  *
- * The moving is a translation, which React Native never sees: it measures a
- * view where its layout put it, and a press that slid a pixel on a view
- * lifted where no measure looks was taken for one that had left it, so the
- * send never sent. So the translation is only ever the part of the lift the
- * layout has not taken yet. Once the keyboard is still, the lift is said
- * (`onLift`), the UI lays the view out that much higher and says so
- * (`layoutLift`), and the translation is none: at rest, the view is where the
- * layout says it is.
+ * The view moves by a translation, which React Native never sees, because it
+ * measures a view where its layout put it. On a translated view, a press
+ * whose finger slides by a pixel is taken for one that has left the view, and
+ * the send button does not send. So the translation is only ever the part of
+ * the lift that the layout has not taken yet. Once the keyboard is still, the
+ * view reports the lift (`onLift`). The UI then lays the view out that much
+ * higher and reports it back (`layoutLift`), and the translation falls to
+ * zero. At rest, the view is where the layout says it is.
  */
 class KeyboardDock(context: Context, appContext: AppContext) : ExpoView(context, appContext) {
   private val onLift by EventDispatcher()
 
-  /** The gap the UI keeps from the bottom edge and from the keyboard, in
-   * pixels. */
+  /** The gap, in pixels, that the UI keeps from the bottom edge and from the
+   * keyboard. */
   var clearance: Int = 0
     set(value) {
       field = value
       relift()
     }
 
-  /** How far off the bottom edge the UI rests the view, in pixels; the
-   * lift is measured from there, so the rule of where it rests is the
-   * UI's alone. */
+  /** How far off the bottom edge the UI rests the view, in pixels. The lift
+   * is measured from there, so that the rule for where the view rests stays
+   * the UI's alone. */
   var rest: Int = 0
     set(value) {
       field = value
       relift()
     }
 
-  /** How much of the lift the UI's layout carries, in pixels. */
+  /** How much of the lift the UI's layout has taken, in pixels. */
   var layoutLift: Int = 0
     set(value) {
       field = value
@@ -59,17 +59,18 @@ class KeyboardDock(context: Context, appContext: AppContext) : ExpoView(context,
   /** The keyboard's height the view was last lifted for, in pixels. */
   private var keyboard = 0
 
-  /** Whether the keyboard is moving, its end not yet the lift to say. */
+  /** Whether the keyboard is moving. The lift is reported only once it
+   * stops. */
   private var moving = false
 
-  /** The lift last said, so a still keyboard is said once. */
+  /** The lift last reported, so that a still keyboard is reported once. */
   private var said = -1
 
   init {
-    // A LinearLayout clips what it holds to its bounds, and this view is only
-    // as tall as what stands on it: a shadow drawn past a pill's body — the
-    // toasts', the dock's — was cut at this view's edge. Neither the page
-    // nor an iPhone's view clips there.
+    // A LinearLayout clips its children to its bounds, and this view is only
+    // as tall as what stands on it. A shadow drawn past a pill's body, such as
+    // a toast's or the dock's, would be cut at this view's edge. Neither the
+    // page nor the iPhone's view clips there.
     clipChildren = false
     clipToPadding = false
     ViewCompat.setWindowInsetsAnimationCallback(
@@ -90,8 +91,8 @@ class KeyboardDock(context: Context, appContext: AppContext) : ExpoView(context,
         }
       },
     )
-    // Where the keyboard is when nothing is animating — it was up when the
-    // view came, or it moved without an animation.
+    // Insets that arrive without an animation: the keyboard was already up
+    // when the view appeared, or it moved without animating.
     ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
       follow(insets)
       insets
@@ -103,8 +104,9 @@ class KeyboardDock(context: Context, appContext: AppContext) : ExpoView(context,
     relift()
   }
 
-  /** Moves the view by what of the lift its layout does not carry, and says
-   * the lift once the keyboard is still. */
+  /** Translates the view by the part of the lift its layout has not taken,
+   * and reports the lift once the keyboard is still. The report is in
+   * density-independent pixels, the unit of React Native's layout. */
   private fun relift() {
     val lift = maxOf(0, keyboard + clearance - rest)
     translationY = -(lift - layoutLift).toFloat()

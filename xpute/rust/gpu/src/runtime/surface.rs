@@ -1,42 +1,45 @@
 // xpute-gpu/runtime/surface.rs
 
-//! The surfaces a core names by number, and the window's surface a program
-//! binds to one.
+//! The surfaces a core names by number, and the window's surface that a
+//! program binds to each.
 
 use xpute_core::abi::handle::{handle_slot, SLOT_BITS};
 
 use super::configure::ConfigureAt;
 use super::GpuRuntime;
 
-/// What the core asked of a surface, which holds whether or not a window's
-/// surface is bound to it.
+/// What the core asked of a surface. It holds whether or not a window's
+/// surface is bound, so a window bound later is configured as asked.
 pub(super) struct Surface {
     /// CONFIGURE's format, usage and whether alpha is premultiplied.
     pub(super) cfg: Option<(wgpu::TextureFormat, wgpu::TextureUsages, bool)>,
-    /// RESIZE's, at least a pixel each way.
+    /// RESIZE's size, at least a pixel each way.
     pub(super) size: [u32; 2],
     bound: Option<Bound>,
-    /// The handle bound here, 0 for none: a slot outlives a handle, so an old
-    /// one let go must not take the one bound since.
+    /// The handle bound here, or 0 for none. A slot outlives its handles, so
+    /// an old handle let go must not release the one bound since.
     pub(super) handle: u32,
-    /// The newest handle bound here, kept after it is let go, so an older
-    /// one's late bind is refused.
+    /// The newest handle bound here, kept after it is let go, so that an
+    /// older handle's late bind is refused.
     newest_handle: u32,
-    /// This turn's texture, the same to every CURRENT of the turn.
+    /// This turn's texture, which every CURRENT of the turn shares.
     pub(super) frame: Option<Frame>,
-    /// Drawn where the window gives none, kept until what is asked changes,
-    /// so a hidden window costs no texture a frame.
+    /// The texture drawn into where the window gives none. It is kept until
+    /// the format, usage or size asked for changes, so a hidden window costs
+    /// no new texture each frame.
     offscreen: Option<wgpu::Texture>,
 }
 
 struct Bound {
     surface: wgpu::Surface<'static>,
-    /// Not configured as asked, so no frame is taken from it until it is.
+    /// Not yet configured as asked, so no texture is taken from it until it
+    /// is.
     stale: bool,
 }
 
-/// The window's texture, shown at the turn's end; or, where it gives none,
-/// one never shown, as WebGPU's getCurrentTexture always gives a texture.
+/// The window's texture, shown at the turn's end; or, where the window gives
+/// none, a texture never shown, since WebGPU's getCurrentTexture always gives
+/// one.
 pub(super) enum Frame {
     Surface(wgpu::SurfaceTexture),
     Offscreen(wgpu::Texture),
@@ -65,15 +68,16 @@ impl Frame {
     }
 }
 
-/// Whether `a`'s generation is behind `b`'s, generations wrapping in 16 bits.
+/// Whether handle `a`'s generation is behind `b`'s. Generations wrap in 16
+/// bits.
 fn older(a: u32, b: u32) -> bool {
     (((a >> SLOT_BITS) as u16).wrapping_sub((b >> SLOT_BITS) as u16) as i16) < 0
 }
 
 impl GpuRuntime {
-    /// The window's surface `s` bound to the core's surface `handle`,
-    /// configured once the core has asked: whether it was, which it is not
-    /// where a newer handle has bound the slot since.
+    /// Binds the window's surface `s` to the core's surface `handle`, and
+    /// configures it once the core has asked for a configuration. False,
+    /// binding nothing, where a newer handle has bound the slot since.
     pub fn bind(&mut self, handle: u32, s: wgpu::Surface<'static>) -> bool {
         let Some(slot) = self.claim(handle) else {
             return false;
@@ -86,8 +90,9 @@ impl GpuRuntime {
         true
     }
 
-    /// Lets `handle`'s surface go, if it is still the one bound under its
-    /// slot, which is then drawn into frames never shown: whether it was.
+    /// Lets `handle`'s surface go, if `handle` is still the one bound in its
+    /// slot, and says whether it was. The core's surface is then drawn into
+    /// textures never shown.
     pub fn unbind(&mut self, handle: u32) -> bool {
         let Some(slot) = self.release(handle) else {
             return false;
@@ -98,7 +103,8 @@ impl GpuRuntime {
         true
     }
 
-    /// The slot, or none where it has seen a newer handle.
+    /// Takes `handle`'s slot for it. None where the slot has seen a newer
+    /// handle.
     pub(super) fn claim(&mut self, handle: u32) -> Option<u32> {
         let slot = handle_slot(handle);
         let s = self.surface(slot);
@@ -110,7 +116,7 @@ impl GpuRuntime {
         Some(slot)
     }
 
-    /// `handle`'s slot, if `handle` is the one bound there, which then holds none.
+    /// Frees `handle`'s slot, if `handle` is the one bound there.
     fn release(&mut self, handle: u32) -> Option<u32> {
         let slot = handle_slot(handle);
         let s = self
@@ -121,8 +127,8 @@ impl GpuRuntime {
         Some(slot)
     }
 
-    /// Every bound surface not configured as asked, configured: run where
-    /// `configure_at` says, while nothing else uses the runtime.
+    /// Configures every bound surface that is not configured as asked. Run it
+    /// where `configure_at` says, while nothing else uses the runtime.
     pub fn configure_surfaces(&mut self) {
         let frame_latency = self.frame_latency;
         for (n, s) in self.surfaces.iter_mut().enumerate() {
@@ -136,9 +142,11 @@ impl GpuRuntime {
                 caps.formats.contains(&format),
                 "[gpu] surface {n} cannot show {format:?} on this adapter"
             );
-            // Shows through where clear, as a premultiplied canvas does; Metal
-            // offers only opaque and post-multiplied. Opaque is opaque or inherit,
-            // whichever the surface offers (Adreno 740's is inherit).
+            // A premultiplied surface shows what lies behind it where it is
+            // clear, as a premultiplied canvas does. Metal offers only opaque
+            // and post-multiplied, so post-multiplied stands in there. An
+            // opaque surface takes opaque or inherit, whichever it offers
+            // (Adreno 740 offers inherit), as `Auto` picks.
             let alpha_mode = if premultiplied {
                 [
                     wgpu::CompositeAlphaMode::PreMultiplied,
@@ -167,8 +175,9 @@ impl GpuRuntime {
     }
 
     /// `surface`'s texture for this turn: the window's where it gives one,
-    /// else one never shown. An outdated surface is configured and asked
-    /// again once; a suboptimal one is shown and configured before the next.
+    /// else one never shown. An outdated surface is configured and asked once
+    /// more. A suboptimal one is used this turn and configured before the
+    /// next.
     pub(super) fn current(&mut self, surface: u32) -> Frame {
         let mut asked = false;
         loop {

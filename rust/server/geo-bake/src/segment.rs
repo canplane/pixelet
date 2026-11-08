@@ -32,7 +32,7 @@ pub(crate) struct Tags {
     pub indoor: bool,
     /// A bridge's or a tunnel's OSM `layer` (`level_rules`), where given.
     pub level: Option<i64>,
-    /// Another way's `layer` of 1 or more: what Arnis lets carry a bridge down.
+    /// Whether the way has a `layer` of 1 or more, which Arnis lets carry a bridge down.
     pub raised: bool,
     pub role: Role,
 }
@@ -128,7 +128,8 @@ impl Part {
         cuts.extend(levels.bounds().chain(subclasses.bounds()));
         cuts.sort_by(f64::total_cmp);
         cuts.dedup();
-        // each run between cuts with what holds over it; a cut no value changes across joins its runs
+        // Each run between cuts, with what holds over it; a cut across which no value changes joins
+        // its runs.
         let mut runs: Vec<([f64; 2], Tags)> = Vec::new();
         for w in cuts.windows(2).filter(|w| w[0] < w[1]) {
             let mid = (w[0] + w[1]) / 2.0;
@@ -164,7 +165,7 @@ impl Part {
             ends: span.map(|at| End::of(&gers_id, whole, at)),
             points,
         };
-        // a part that is its whole segment takes the segment's own points
+        // A part that is its whole segment takes the segment's own points.
         if runs.len() == 1 && runs[0].0 == [0.0, 1.0] {
             drop(line);
             return vec![part(runs[0], g.points)];

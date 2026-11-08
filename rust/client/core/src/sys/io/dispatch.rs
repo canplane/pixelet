@@ -1,9 +1,9 @@
 // pxl-core/sys/io/dispatch.rs
 
-//! What the requests start and stop (sys/io/request.rs `Event`), handed to
-//! its reader: an asset's to `loader`, a tile's, a shard's objects or their
-//! top to `fetch`. A key is the requests' name for an attempt while it is
-//! out.
+//! Hands each attempt that the request scheduler starts or stops
+//! (sys/io/request.rs `Event`) to the reader of its source: an asset to
+//! `loader`; a tile, a shard of objects or the objects' top to `fetch`. A key
+//! names an attempt only while the attempt is out.
 
 use crate::sys::io::demand::{Source, Stream};
 use crate::sys::io::file::{self, Owner};
@@ -20,8 +20,9 @@ pub fn start(key: u64, stream: Stream, id: u64) {
     }
 }
 
-/// Its open closed where it has not answered yet. The requests ended the
-/// attempt as they stopped it: what its reader hears of it since is dropped.
+/// Closes the attempt's open where the runtime has not answered it yet. The
+/// scheduler ended the attempt when it stopped it, so whatever the reader
+/// hears of the attempt afterwards is dropped.
 pub fn stop(key: u64) {
     let of_key =
         |o: &Owner| matches!(*o, Owner::Fetch { key: k, .. } | Owner::Load { key: k } if k == key);

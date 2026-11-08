@@ -1,8 +1,8 @@
 // pxl-render/frame/shader/decor_place.wgsl
 
-// A decor instance's vertices placed, each instance read from the decor's
-// instances (instance.wgsl): what the lit pass (decor.wgsl), the depth
-// passes and the mark (tile_mark.wgsl) all lay alike.
+// Places a decor instance's vertices, reading each instance from the decor's
+// instances (instance.wgsl). The lit pass (decor.wgsl), the depth passes and
+// the mark (tile_mark.wgsl) all place them by it alike.
 
 struct VertexIn {
   @builtin(instance_index) i: u32,
@@ -11,7 +11,9 @@ struct VertexIn {
   @location(2) uv: vec2f,
 };
 
-// One function, so the depth passes place a vertex where the lit pass does.
+// A vertex placed in the world, and its instance's spin. Every pass places a
+// vertex through `placed`, so the depth passes place it where the lit pass
+// does.
 struct Placement {
   world: vec3f,
   spin: f32,

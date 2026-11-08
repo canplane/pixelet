@@ -1,10 +1,12 @@
-//! `decor_cull_cs` by hand (frame/shader/decor_cull.wgsl) answers as the rule it states: of each
-//! region's instances, a frame through the gate lists exactly those whose ball (decor_ball.wgsl)
-//! meets the claimed tiles' box as the frame sees it, at the region's own place, and the
-//! region's args with their count, through the screen's gate, its view a perspective, and the
-//! light map's, its view orthographic. The instances lie about the view, some well inside the
-//! box, some well past it; one within a hair of a plane is not asked either way, as a GPU's f32
-//! rounds there.
+//! These tests dispatch `decor_cull_cs` (frame/shader/decor_cull.wgsl) alone and hold it to the
+//! rule its comment states. A frame through the gate draws only its claimed tiles, the tiles
+//! that changed (gpu/tiles.rs). Of each region's instances, the shader must list exactly those
+//! whose ball (decor_ball.wgsl) meets the box of the claimed tiles as the frame sees it. It must
+//! write that list at the region's own place and set the region's args to the count it listed.
+//! One test runs the screen's gate under a perspective view, and the other runs the light map's
+//! gate under an orthographic view. The instances are scattered about the view, some well
+//! inside the box and some well past it. An instance whose ball lies within a hair of a plane
+//! is judged neither way, because the GPU's f32 rounding decides it there.
 
 mod gpu;
 
@@ -23,8 +25,9 @@ use pxl_render::frame::shader::word::{instance, screen};
 
 const CAP: u32 = 4096;
 
-/// A gate's target: its size in pixels, its tiles' side, and the claimed tiles' box, first and
-/// last across and down.
+/// A target drawn through a gate. `size` is the target in pixels, and `side` is a tile's side
+/// in pixels. `claimed` is the box of claimed tiles: the first tile across and down, then the
+/// last tile across and down.
 struct Target {
     size: [u32; 2],
     side: u32,
@@ -63,7 +66,7 @@ fn mul(a: &M4, b: &M4) -> M4 {
     m
 }
 
-/// A view from `eye` to the origin, Z up, rows as a matrix's.
+/// The view from `eye` toward the origin with Z up, as a matrix indexed by row, then column.
 fn view(eye: [f64; 3]) -> M4 {
     let norm = |v: [f64; 3]| {
         let l = libm::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
@@ -88,7 +91,8 @@ fn view(eye: [f64; 3]) -> M4 {
     ]
 }
 
-/// The screen's view from `eye`, a perspective of `fov_y` radians over its aspect.
+/// The screen's view from `eye`, projected in perspective with a vertical field of `fov_y`
+/// radians at the screen's aspect ratio.
 fn perspective(eye: [f64; 3], fov_y: f64) -> M4 {
     let t = 1.0 / libm::tan(fov_y / 2.0);
     let aspect = f64::from(SCREEN.size[0]) / f64::from(SCREEN.size[1]);
@@ -102,7 +106,8 @@ fn perspective(eye: [f64; 3], fov_y: f64) -> M4 {
     mul(&proj, &view(eye))
 }
 
-/// The light map's view from `eye`, orthographic, `half` units each side of its middle.
+/// The light map's view from `eye`, projected orthographically to `half` units on each side of
+/// the view's middle.
 fn orthographic(eye: [f64; 3], half: f64) -> M4 {
     let (near, far) = (0.0, 1000.0);
     let proj = [
@@ -114,8 +119,10 @@ fn orthographic(eye: [f64; 3], half: f64) -> M4 {
     mul(&proj, &view(eye))
 }
 
-/// How far the ball at `c` of radius `r` lies inside the four planes of the claimed box of
-/// target `t`, the least of them, in the planes' own units: past 0 inside, under it past.
+/// How far the ball at `c` of radius `r` reaches inside the claimed box of target `t` as `m`
+/// sees it, in world units. The box is grown a pixel each way, as the shader grows it for the
+/// jitter. The value is the least over the box's four side planes. It is positive where the
+/// ball meets the box and negative where the ball lies wholly past it.
 fn inside(t: &Target, m: &M4, c: [f64; 3], r: f64) -> f64 {
     let side = f64::from(t.side);
     let size = t.size.map(f64::from);
@@ -157,16 +164,18 @@ fn a_masked_light_map_lists_the_instances_that_meet_its_rect() {
     lists_what_meets(&gpu, &LIGHT, &orthographic([60.0, -90.0, 200.0], 128.0));
 }
 
-/// Gate `t` seen by `m` lists the instances whose ball meets its claimed box.
+/// Checks that the gate of target `t`, seen through `m`, lists exactly the instances whose ball
+/// meets its claimed box.
 fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
     let translation = [3.0f32, -2.0, 0.5];
-    // The eye's Q3 against the anchor's, X across the i32's seam, where the
-    // wrapping difference is the short way round.
+    // The eye's X sits just under `i32::MAX`, so the anchor's X wraps past it. The shader must
+    // take the wrapping difference of the two Q3 positions, which is the short way round.
     let eye_q = [i32::MAX - 100, 5000 * 256, 7 * 256];
     let anchor_q: [i32; 3] =
         std::array::from_fn(|a| eye_q[a].wrapping_add((translation[a] * 256.0) as i32));
-    // The regions' counts, some empty, laid end to end; each slot its own instance, listed in
-    // reverse within the list.
+    // The regions hold different counts of instances, some none, laid end to end in the slots.
+    // Each region's list names its slots in reverse, so the shader must read each slot from the
+    // list.
     let regions = drawn::REGIONS as usize;
     let counts: Vec<u32> = (0..regions as u32)
         .map(|r| match r % 5 {

@@ -1,5 +1,6 @@
-// Hillaire's multiple scattering table: second order marched with an isotropic
-// phase, higher orders as its geometric series 1 / (1 - f).
+// Draws Hillaire's multiple scattering table. The second order is marched with
+// an isotropic phase, and the higher orders follow as its geometric series,
+// 1 / (1 - f).
 
 @fragment
 fn fs(v: TableOut) -> @location(0) vec4f {
@@ -11,7 +12,8 @@ fn fs(v: TableOut) -> @location(0) vec4f {
 
   var second = vec3f(0.0);
   var back = vec3f(0.0);
-  // Equal-area grid: cos(theta) and azimuth evenly spaced.
+  // An equal-area grid of directions: cos(theta) and the azimuth are evenly
+  // spaced.
   for (var a = 0; a < ATMOS_MULTISCATTER_DIRS; a++) {
     for (var b = 0; b < ATMOS_MULTISCATTER_DIRS; b++) {
       let mu = 1.0 - 2.0 * (f32(a) + 0.5) / f32(ATMOS_MULTISCATTER_DIRS);
@@ -27,7 +29,7 @@ fn fs(v: TableOut) -> @location(0) vec4f {
         let pr = length(p);
         let m = medium_at(pr - atmos_bottom_radius());
         let step = exp(-m.extinction * dt);
-        // Analytic integral of a constant source over the step.
+        // The integral of a source held constant over the step, in closed form.
         let fill = (vec3f(1.0) - step) / max(m.extinction, vec3f(1e-7));
         let lit = sun_transmittance(pr, dot(p / pr, sun));
         second += transmittance * m.scattering * INV_4PI * lit * fill;

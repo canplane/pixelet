@@ -5,8 +5,9 @@
 namespace xpute::mem {
 
 namespace {
-// Two words rather than a `Memory`, so they are set before any constructor
-// runs and a static that allocates finds them.
+// Two words rather than a `Memory`, so that they hold their values before
+// any constructor runs, and a static that allocates during start-up finds
+// them.
 std::uintptr_t core_base = 0;
 std::uintptr_t core_bytes = UINTPTR_MAX;
 } // namespace

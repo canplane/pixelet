@@ -1,9 +1,10 @@
 // @pxl/client/ui/world/pill.ios.tsx
 
 /**
- * A pill on a device: one piece of glass relaid at its new place and width,
- * animated by LayoutAnimation, since clipped pieces showed seams through the
- * glass. Content fades on the glass, never over it.
+ * A pill on an iPhone. It is one piece of glass, laid out again at each new
+ * place and width and animated by LayoutAnimation, because clipped pieces
+ * would show seams through the glass. Its content fades on the glass, never
+ * over it.
  */
 
 import { useRef } from "react";
@@ -21,10 +22,11 @@ import { pillStyles } from "./pill-style.ts";
 import type { PillProps } from "./pill.tsx";
 import { touchOutset } from "@/ui/component/touch.ts";
 
-// Everything the default has, but what this file draws itself.
+// This file exports everything pill.tsx does, with its own `Pill` in place of
+// that one.
 export * from "./pill.tsx";
 
-/** Only size and place animate; a view that comes or goes does so at once. */
+/** Only size and place animate. A view that comes or goes does so at once. */
 const MOVE: LayoutAnimationConfig = {
   duration: SNAP.durationMs,
   update: { type: "spring", springDamping: 1 },
@@ -48,7 +50,8 @@ export function Pill({
   children,
   onContentWidth,
 }: PillProps) {
-  // In render: a layout animation applies to the next commit.
+  // This runs during render, because a layout animation applies to the next
+  // commit.
   const last = useRef<[f64, f64] | null>(null);
   if (
     last.current !== null &&
@@ -59,8 +62,8 @@ export function Pill({
 
   const r = height / 2;
   const outset = touch ? touchOutset(height) : 0;
-  // Content stands inside the glass: interactive glass answers only touches
-  // given through what it contains.
+  // The content stands inside the glass, because interactive glass answers
+  // only the touches that reach it through its own content.
   return (
     <View
       {...touch}

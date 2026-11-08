@@ -273,8 +273,8 @@ pub fn object_outputs() -> Result<Vec<Output>, String> {
     ])
 }
 
-// The Rust reads a place's look by its category number: per category, in lists the
-// core indexes, what Carto draws for it, with 0 for a zoom it never shows at.
+// The Rust reads a place's look by its category number: for each category, in lists the
+// core indexes, what Carto draws for it, with 0 for a zoom at which it never shows.
 
 pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
     let (cat_json, theme_json) = (

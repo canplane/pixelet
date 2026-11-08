@@ -1,7 +1,7 @@
 // pxl-core/door/apply/surface.rs
 
-//! A surface the UI lends the GPU (xpute's GPU_SURFACE_OPEN, _RESIZE and
-//! _CLOSE): opened, resized and closed.
+//! The surfaces the UI lends the GPU, opened, resized and closed by xpute's
+//! GPU_SURFACE_OPEN, _RESIZE and _CLOSE.
 
 use super::{or_refuse, refuse_unless};
 use crate::domain::control::sensor;
@@ -14,8 +14,8 @@ use xpute_core::abi::gpu::{GpuSurfaceClose, GpuSurfaceResize};
 use xpute_core::ipc::door::Outcome;
 use xpute_kit::status::errno::Errno;
 
-/// The surface's handle, or 0 where none was opened. It draws nothing until
-/// SCENE_DRAW (scene.rs `draw`).
+/// Returns the new surface's handle, or 0 when none could be opened. The
+/// surface draws nothing until SCENE_DRAW (scene.rs `draw`).
 pub(super) fn open() -> Outcome {
     let handle = surface::surface_open();
     if handle != 0 {
@@ -24,9 +24,10 @@ pub(super) fn open() -> Outcome {
     Ok(Some(handle as i32))
 }
 
-/// The surface `handle` made to draw the world: its sensors watched while it
-/// is open, and its view sized where its box is already known. False where it
-/// is not open.
+/// Makes the surface `handle` draw the world. The sensors are watched while
+/// the world's surface is open, and the view is sized at once when the
+/// surface's box is already known. Returns false when the surface is not
+/// open.
 pub(super) fn draw_world(handle: u32) -> bool {
     let Some(s) = surface::surface(handle) else {
         return false;

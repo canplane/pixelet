@@ -7,8 +7,9 @@ use pxl_spec::space::coord::world::ROUND;
 use pxl_spec::space::coord::zoom::{idx_of, UNIT_ZOOM};
 use xpute_kit::math::rng::SplitMix64;
 
-/// Taken back by its cell, a point the floats leave a hair under itself
-/// would fall a 256th of a unit each trip; on whichever lap it is read.
+/// A point that floats leave a hair under itself would fall a 256th of a
+/// unit on each round trip if it were taken back by the cell it lies in. The
+/// round trip must return the same point on whichever lap it is read.
 #[test]
 fn canonical_round_trip() {
     let one = q3::ONE;
@@ -16,7 +17,8 @@ fn canonical_round_trip() {
     let mut next = |span: i64| (u64::from(rng.next_u32()) % (2 * span as u64 + 1)) as i64 - span;
     let nears = [0.0, 249_856.0, -3.0 * ROUND, 2.5 * ROUND, -(1 << 23) as f64];
     for n in 0..20_000 {
-        // Whole units near and far from the origin, and fractions a hair off a whole unit.
+        // The components are whole units near and far from the origin, and
+        // fractions a hair off a whole unit.
         let fraction = |r: i64| match r % 4 {
             0 => 0,
             1 => 1,
@@ -44,7 +46,9 @@ fn canonical_round_trip() {
     }
 }
 
-/// Either side of the seam, a point a unit past it is a unit from the eye.
+/// X is continuous across the seam where it wraps. Seen from an eye on the
+/// seam, the points one unit to either side are two units apart, and a
+/// position one unit past the seam is the point one unit inside the far side.
 #[test]
 fn x_continuous_at_seam() {
     let east = world::point(ROUND / 2.0 - 1.0, 0.0, 0.0);

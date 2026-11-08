@@ -1,4 +1,5 @@
-// Fullscreen triangle over a table; texel centers at half steps.
+// The triangle every table's pass draws over its whole target. Its texel
+// centers fall at half steps.
 
 struct TableOut {
   @builtin(position) clip: vec4f,

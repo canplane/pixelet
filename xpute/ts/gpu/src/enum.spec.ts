@@ -2,12 +2,13 @@
 //
 // GENERATED from spec/gpu/enum.json
 //
-// WebGPU's own enumerations, each its spec's strings in order: a number is its
-// place in the list, so a runtime hands the string to the device as it is and a core
-// names a member by its generated constant. Nothing here is any one program's; a
-// value WebGPU leaves optional is NONE (api.json) where unset.
+// WebGPU's own enumerations. Each one lists its WebGPU spec's strings in order, and a
+// member's number is its place in that list. A runtime hands the device the string as it
+// is, and a core names a member by its generated constant. Nothing here belongs to any one
+// program. A value that WebGPU leaves optional is NONE (api.json) when it is unset.
 
-/** GPUTextureFormat, the core spec's and its texture-compression features'. */
+/** GPUTextureFormat: the formats of the core WebGPU spec and of its texture-compression
+ * features. */
 export const TEXTURE_FORMAT = [
   "r8unorm",
   "r8snorm",
@@ -274,7 +275,8 @@ export const QUERY_TYPE = ["occlusion", "timestamp"] as const;
 
 export const CANVAS_ALPHA_MODE = ["opaque", "premultiplied"] as const;
 
-/** GPUFeatureName: a device's features are a bit each, by place (DEVICE in api.json). */
+/** GPUFeatureName. The DEVICE record (api.json) reports a device's features as one bit each,
+ * at the member's place. */
 export const FEATURE_NAME = [
   "depth-clip-control",
   "depth32float-stencil8",
@@ -295,7 +297,8 @@ export const FEATURE_NAME = [
   "subgroups",
 ] as const;
 
-/** GPUSupportedLimits' members: a device's limits are a word each, by place (DEVICE in api.json). */
+/** The members of GPUSupportedLimits. The DEVICE record (api.json) reports a device's limits
+ * as one word each, at the member's place. */
 export const LIMIT_NAME = [
   "maxTextureDimension1D",
   "maxTextureDimension2D",

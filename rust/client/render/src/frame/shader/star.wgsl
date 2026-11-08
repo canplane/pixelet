@@ -1,8 +1,8 @@
-// Yale Bright Star Catalog stars as quads at infinity, dimmed by the air.
-// Added untoned to the world's color.
+// The Yale Bright Star Catalog's stars, drawn as quads at infinity and dimmed by the air.
+// Their light is added to the world's color untoned.
 
-// Its words' fields and accessors are frame/shader/word.rs `stars`'s, which
-// build.rs writes here. The viewport and the up are the frame's, the moon
+// The fields and accessors of the stars' words come from frame/shader/word.rs `stars`, which
+// build.rs writes here. The viewport and the up come from the frame's words, and the moon from
 // the air's.
 @group(1) @binding(0) var<uniform> stars_words: array<vec4f, STARS_VEC4S>;
 
@@ -16,11 +16,12 @@ struct StarOut {
   @location(3) halo: f32,
 };
 
-// The flux a star of `SKY_STAR_HALO_MAG` has, by the law the catalog's flux is
-// read off its magnitude by (gpu/star.rs `star_floats`).
+// The flux of a star of magnitude `SKY_STAR_HALO_MAG`, by the law that turns the catalog's
+// magnitudes into flux (gpu/star.rs `star_floats`).
 const HALO_FROM: f32 = pow(10.0, -0.4 * SKY_STAR_HALO_MAG);
 
-// Kasten and Young 1989, finite at the horizon where 1/sin is not.
+// The air mass by Kasten and Young (1989), which stays finite at the horizon where 1/sin does
+// not.
 fn airmass(sin_alt: f32) -> f32 {
   let alt = degrees(asin(clamp(sin_alt, 0.0, 1.0)));
   return 1.0 / (max(sin_alt, 0.0) + 0.50572 * pow(alt + 6.07995, -1.6364));
@@ -35,7 +36,7 @@ fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> StarOut
   var o: StarOut;
   let flux = at.w;
   let height = dot(dir, frame_up());
-  // The air straight up from the eye, from orbit none.
+  // The optical depth of the air straight up from the eye; from orbit there is none.
   let depth = depth_to_top(camera_r(), 1.0);
   let light = color * flux * SKY_STAR_GAIN * exp(-depth * airmass(height)) * stars_intensity();
   var clip = stars_view_proj() * vec4f(dir, 0.0);

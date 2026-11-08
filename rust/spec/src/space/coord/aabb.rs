@@ -21,7 +21,7 @@ impl Aabb {
             .then_some(Aabb { min, max })
     }
 
-    /// Whether the two share room, not only a face.
+    /// Whether the two share volume, not only a face.
     pub fn shares(self, other: Aabb) -> bool {
         (0..3).all(|k| self.min[k] < other.max[k] && other.min[k] < self.max[k])
     }
@@ -41,12 +41,12 @@ impl Aabb {
         std::array::from_fn(|k| (self.min[k] + self.max[k]) / 2.0)
     }
 
-    /// The bounding sphere's, about `center`.
+    /// The bounding sphere's radius, around `center`.
     pub fn radius(self) -> f64 {
         v3::len(&self.extent()) / 2.0
     }
 
-    /// Closed.
+    /// Whether the box holds `p`, its faces included.
     pub fn holds(self, p: V3) -> bool {
         (0..3).all(|k| self.min[k] <= p[k] && p[k] <= self.max[k])
     }

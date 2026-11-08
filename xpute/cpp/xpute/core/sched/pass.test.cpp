@@ -1,6 +1,6 @@
 // cpp/xpute/core/sched/pass.test.cpp
 //
-// A clock the test moves, so a step costs exactly what it says.
+// The test owns the clock, so a step costs exactly the time it burns.
 
 #include "pass.hpp"
 
@@ -24,7 +24,8 @@ void burn(double ms) {
     clock_ms += ms;
 }
 
-// `budget_ms` left from now, and `hard_budget_ms` never waived.
+// A pass with `budget_ms` left from now, and a hard limit at
+// `hard_budget_ms` from now, or none.
 Pass pass(double budget_ms, std::optional<double> hard_budget_ms = std::nullopt) {
     set_clock(test_clock);
     clock_ms = 0;
@@ -72,7 +73,8 @@ XPUTE_TEST(pass_hard_budget_bounds_no_ops) {
     std::vector<int> seen;
     PassStat s = pass(4, 12).run(range(40), [&](int n) { return seen.push_back(n), burn(3), false; });
     XPUTE_CHECK(s.ran == 0 && s.stopped_early);
-    // Nothing reports work, so only the ceiling stops it, at the fifth.
+    // No step reports work, so only the hard limit stops the pass: four steps
+    // of 3 ms reach it at 12 ms, and the fifth is refused.
     XPUTE_CHECK(seen.size() == 4);
 }
 

@@ -1,6 +1,8 @@
 // cpp/xpute/core/ipc/ring.hpp
 
-// A ring of frames, laid out by spec/ipc/ring.json.
+// A ring of frames, laid out by spec/ipc/ring.json. A push fails only when
+// the ring is full (EAGAIN) or when the packet exceeds a slot (EMSGSIZE);
+// whether it fails never depends on what was sent before.
 //
 // A ring's two sides may take turns on one thread, as a page's runtime and its
 // module do, or run at once on two, as a native runtime and a core on its own
@@ -61,22 +63,24 @@ class Ring {
     bool empty() const noexcept { return len() == 0; }
 
     // Whether the consumer has stored its head past the frame published at
-    // `pos`: what that frame named is the producer's again (R3). The
-    // producer's to ask.
+    // `pos`, so that what the frame named is the producer's again (R3). Only
+    // the producer asks this.
     bool is_consumed(std::uint32_t pos) const noexcept {
         std::uint32_t t = tail();
         return t - head() < t - pos;
     }
 
-    // The word, from the ring's start, where the frame at `position` begins.
+    // The word, counted from the ring's start, where the frame at `pos`
+    // begins.
     std::uint32_t entry_at(std::uint32_t pos) const noexcept { return ring::HEADER_WORDS + (pos & (cap_ - 1)) * frame::WORDS; }
 
-    // EAGAIN when full, EMSGSIZE when larger than a slot.
+    // Answers EAGAIN when the ring is full, and EMSGSIZE when the packet is
+    // larger than a slot.
     Errno push(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result,
                std::optional<std::span<const std::uint8_t>> pkt = std::nullopt) const noexcept;
 
-    // `write` gets the whole slot payload and answers the length, or none if it
-    // did not fit (EMSGSIZE).
+    // `write` is given the whole slot payload and answers the packet's
+    // length, or none when it did not fit (EMSGSIZE).
     template <class Write> Errno push_in_place(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result, Write &&write) const noexcept {
         if (len() >= cap()) return Errno::eagain;
         std::uint32_t slot = slot_at(tail());
@@ -87,9 +91,9 @@ class Ring {
         return Errno::ok;
     }
 
-    // `push_in_place`'s frame laid at the tail and not published: where its
-    // words begin in the memory; EAGAIN where the ring is full, EMSGSIZE where
-    // the packet did not fit. The next push takes its place.
+    // Lays `push_in_place`'s frame at the tail without publishing it, and
+    // answers where its words begin in the memory: EAGAIN when the ring is
+    // full, EMSGSIZE when the packet did not fit. The next push overwrites it.
     template <class Write> Result<std::uint32_t> stage_in_place(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, Write &&write) const noexcept {
         if (len() >= cap()) return make_error(ErrorClass::fault, Errno::eagain);
         std::uint32_t slot = slot_at(tail());
@@ -100,10 +104,12 @@ class Ring {
     }
 
 
-    // The head's frame, none when empty. Read it, then `advance`.
+    // The frame at the head, or none when the ring is empty. A reader reads
+    // it, then calls `advance`.
     std::optional<Frame> peek() const noexcept;
 
-    // Valid until `advance`. EBADMSG when the frame names bytes outside a slot.
+    // The frame's packet, valid until `advance`. A frame that names bytes
+    // outside a slot answers EBADMSG.
     Result<std::span<const std::uint8_t>> pkt(const Frame &f) const noexcept;
 
     void advance() const noexcept;
@@ -117,12 +123,14 @@ class Ring {
     std::uint32_t slot_at(std::uint32_t pos) const noexcept;
     void pad(std::uint32_t slot, std::uint32_t n) const noexcept;
     void publish(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result, std::uint32_t pkt_at) const noexcept;
-    // The frame's words at the tail's entry, unpublished: where they begin in the memory.
+    // Writes the frame's words at the tail's entry, unpublished, and answers
+    // where they begin in the memory.
     std::uint32_t entry(std::uint32_t tag, std::uint32_t cmd, std::uint32_t flags, std::int32_t result, std::uint32_t pkt_at) const noexcept;
 
     Memory mem_;
     std::uint32_t at_;
-    // Read once, when the ring is made: the runtime's later writes to them are not the ring's.
+    // Read once, when the ring is made, so that the runtime's later writes to
+    // these header words do not change the ring.
     std::uint32_t cap_;
     std::uint32_t slot_bytes_;
     std::uint32_t slot_base_;

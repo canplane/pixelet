@@ -267,7 +267,7 @@ pub enum SettingKey {
     world_gizmo = 15,
     person = 17,
     pet = 18,
-    /// How the eye's cast and the sun's shadow map are cast — the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn — counted on the GPU and written into the profiler's ray lanes of the frame that counted them (rust/spec/engine/src/tally.rs, rust/client/render/src/gpu/ray/tally.rs). The counting's atomics run in the cast's spans, so time them with it off.
+    /// Counts what the eye's cast and the sun's shadow map do: the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn. The GPU counts them and writes them into the profiler's ray lanes of the frame that counted them (rust/spec/engine/src/count.rs, rust/client/render/src/gpu/ray/count.rs). The counting's atomics run inside the cast's spans, so time the cast with this off.
     ray_counts = 20,
     /// The hour the sky is drawn at; SKY_TIMES says each.
     sky_time = 21,

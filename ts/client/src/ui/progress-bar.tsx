@@ -11,8 +11,9 @@ import { color } from "@/ui/component/theme.ts";
 const WIDTH_PX = 160;
 const HEIGHT_PX = 4;
 
-/** `share`, 0 to 1: a bar filled that much. The fill slides in from the left
- * inside a track that clips it, so it eases between shares on the compositor. */
+/** A bar filled to `share`, from 0 to 1. The fill is as wide as the track and
+ * slides in from the left inside it, clipped by it, so that the fill eases
+ * between shares by a transform on the compositor. */
 export function ProgressBar({ share }: { share: f64 }) {
   return (
     <View

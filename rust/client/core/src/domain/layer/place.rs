@@ -1,8 +1,9 @@
 // pxl-core/domain/layer/place.rs
 
-//! Places as a layer of the pyramid: what OpenStreetMap Carto would draw of
-//! a tile at its zoom, read where the camera grid's cell is a cell of the
-//! tile, an icon wide, and drawn as Carto draws it (`domain/scene/marker/place.rs`).
+//! The place layer: for each tile, the places OpenStreetMap Carto would draw
+//! at the tile's zoom. A tile is read where one camera grid cell is one cell
+//! of the tile, which is an icon wide, and its places are drawn as Carto
+//! draws them (domain/scene/marker/place.rs).
 
 use pxl_spec::bake::tile::place::{self, PlaceTile, PLACE_LATTICE};
 use pxl_spec::space::layer::lattice::Lattice;
@@ -29,7 +30,8 @@ impl Base for PlaceTile {
         PLACE.get(TileCache::default)
     }
 
-    /// Small, so held on the heap; the record is only a count slot.
+    /// A place tile is small, so it is decoded onto the heap, and its slot
+    /// only counts it against the cache's capacity.
     fn receive(
         _tile: Quadrant,
         _record: u32,
@@ -44,8 +46,9 @@ impl Base for PlaceTile {
     }
 }
 
-/// Carto's zoom a grid cell at `cell_zoom` is drawn at: the tile zoom whose cell,
-/// an icon wide, it is, past the leaf too.
+/// The Carto zoom that a grid cell at `cell_zoom` is drawn at: the tile zoom
+/// whose cell, an icon wide, is that grid cell. It holds past the leaf zoom
+/// too.
 pub fn carto_zoom(cell_zoom: Zoom) -> i32 {
     PLACE_LATTICE.tile_zoom_of_grid(cell_zoom)
 }

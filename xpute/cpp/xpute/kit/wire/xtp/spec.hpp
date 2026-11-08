@@ -1,14 +1,26 @@
 // cpp/xpute/kit/wire/xtp/spec.hpp
 
-// XTP, the Xpute Tree Packet: a relocatable packet of one tree; the golden records hold every
-// language's encoding to the same bytes.
+// XTP, the Xpute Tree Packet: a tree of values in one buffer, read in place.
+// This header holds its layout, its type byte, and the helpers that read and
+// write a packet's words. The format is described in
+// ts/kit/src/wire/xtp/README.md, and the golden records under
+// spec/golden/wire/xtp/ hold the C++, Rust and TypeScript sides to the same
+// bytes.
 //
-//   word0  [MAGIC 32 | reserved 32]
-//   word1  [root payload bytes 32 | type 8 | reserved 24]
+// A packet is a 16-byte header and one root node, all little-endian. A len,
+// an offset or a size takes an 8-byte slot, the value in its low half; the
+// high half is reserved and zero, or holds a type.
 //
-// A branch is an 8-byte child count, then one word per child (offset in the
-// low half, type in the next byte). An absent node keeps its type with a size
-// or offset of 0.
+//   header  word 0  [MAGIC 32 | reserved 32]
+//           word 1  [root payload size 32 | type 8 | reserved 24]
+//   branch  [child count 32 | reserved 32], then a descriptor for each child:
+//           [offset from the branch's start 32 | type 8 | reserved 24]
+//
+// A child's offset counts from its branch's start, so a subtree can be copied
+// into another packet unchanged. An absent node keeps its type, with a size or
+// an offset of 0. A present child starts past its branch's table, before the
+// next present sibling, and inside its parent; a reader refuses a packet that
+// breaks this.
 
 #pragma once
 
@@ -26,13 +38,16 @@ namespace xpute::xtp {
 
 using NodeType = std::uint8_t;
 
-// A leaf's type byte, when its top bit is set:
+// A type byte with its top bit set names a leaf:
 //
 //   7 | 6 | 5 | 4 3 | 2 1 0
 //   L | R | S |  C  |   A
 //
-// L leaf, R reserved, S sequence (else scalar), C class (unsigned, signed,
-// float, neither), A its argument: log2 of a number's width in bytes.
+// L is set for a leaf, and R is reserved. S is set for a sequence and clear
+// for a scalar. C is the class: unsigned, signed, float, or non-numeric. A is
+// the argument: for a number, log2 of its width in bytes; for a non-numeric
+// leaf, which one it is (bool or bitset, str, strs). A type byte with the top
+// bit clear is a special type: nil, branch or graft.
 inline constexpr NodeType BIT_LEAF = 0x80;
 inline constexpr NodeType BIT_SEQ = 0x20;
 inline constexpr NodeType CLASS_MASK = 0x18;
@@ -78,12 +93,16 @@ enum class SequenceType : NodeType {
     f32_array = BIT_SEQ | float_type(2),
     f64_array = BIT_SEQ | float_type(3),
     bitset = BIT_SEQ | nonnum_type(0),
+    // UTF-8 bytes followed by a NUL, which `len` does not count.
     str = BIT_SEQ | nonnum_type(1),
-    // len + 1 offsets into the UTF-8 after them.
+    // Many strings in one leaf, so that a string costs no node of its own:
+    // `len` + 1 u32 offsets, each no less than the one before, then the UTF-8
+    // they index. String `i` lies between offsets `i` and `i + 1`.
     strs = BIT_SEQ | nonnum_type(2),
 };
 
 enum class SpecialType : NodeType {
+    // The untyped null. An absent node is not nil: it keeps its own type.
     nil = 0x00,
     branch = 0x20,
     // Never on the wire: a graft is written as its packet's root, under that
@@ -136,7 +155,7 @@ template <class T> inline constexpr SequenceType ARRAY_OF = [] {
     }
 }();
 
-// "XTP\0" read little-endian.
+// "XTP\0" read as a little-endian u32.
 inline constexpr std::uint32_t MAGIC = 0x00505458u;
 inline constexpr std::uint32_t WORD_SZ = 8;
 inline constexpr std::uint32_t HDR_SZ = 2 * WORD_SZ;
@@ -158,7 +177,6 @@ template <class T> void store(std::uint8_t *p, T x) noexcept {
     std::memcpy(p, raw.data(), sizeof(T));
 }
 
-// Low half first.
 inline void set_word(std::span<std::uint8_t> buf, std::uint32_t off, std::uint32_t lo, std::uint32_t hi) noexcept {
     store(buf.data() + off, lo);
     store(buf.data() + off + 4, hi);
@@ -167,7 +185,8 @@ inline std::array<std::uint32_t, 2> get_word(std::span<const std::uint8_t> buf, 
     return {load<std::uint32_t>(buf.data() + off), load<std::uint32_t>(buf.data() + off + 4)};
 }
 
-// A type the wire carries: the untyped null, a branch, or a leaf of a width its class has.
+// Whether a type byte may appear on the wire: nil, branch, or a leaf with no
+// reserved bit set and an argument its class defines. A graft may not.
 constexpr bool type_is_known(NodeType t) noexcept {
     if (t == type_of(SpecialType::nil) || t == type_of(SpecialType::branch)) return true;
     if (!type_is_leaf(t) || (t & ~(BIT_LEAF | BIT_SEQ | CLASS_MASK | ARG_MASK)) != 0) return false;
@@ -179,14 +198,17 @@ constexpr bool type_is_known(NodeType t) noexcept {
     }
 }
 
-// A read slot whose high half is reserved, zero on the wire: a len, a size, the magic.
+// Reads a slot that holds a len, a size or the magic. A high half that is not
+// zero makes the packet malformed (EBADMSG).
 inline Result<std::uint32_t> get_len(std::span<const std::uint8_t> buf, std::uint32_t off) noexcept {
     auto [lo, hi] = get_word(buf, off);
     if (hi != RESERVED) return marshal_error(Errno::ebadmsg);
     return lo;
 }
 
-// A read child entry or root word: its offset or size, and a known type with the rest reserved.
+// Reads a descriptor, a branch's entry for a child or the header's root word:
+// the offset or size, and the type. A type the wire cannot carry, or a
+// reserved bit set, makes the packet malformed (EBADMSG).
 struct Desc {
     std::uint32_t off;
     NodeType type;
@@ -198,7 +220,7 @@ inline Result<Desc> get_desc(std::span<const std::uint8_t> buf, std::uint32_t of
     return Desc{lo, type};
 }
 
-// `unit` is a power of two no wider than a word.
+// `unit` must be a power of two no larger than WORD_SZ, or EINVAL.
 inline Result<std::uint32_t> align(std::uint32_t nbyte, std::uint32_t unit) noexcept {
     if (unit == 0 || (unit & (unit - 1)) != 0 || unit > WORD_SZ) return marshal_error(Errno::einval);
     std::uint32_t mask = unit - 1;
@@ -206,7 +228,7 @@ inline Result<std::uint32_t> align(std::uint32_t nbyte, std::uint32_t unit) noex
     return (nbyte + mask) & ~mask;
 }
 
-// A sequence or a branch starts on a word so its leading slot is one.
+// A sequence or a branch starts on a word, so its len slot is aligned.
 inline Result<std::uint32_t> align_sz(NodeType t) noexcept {
     if (t == type_of(SpecialType::branch) || type_is_seq(t)) return WORD_SZ;
     switch (static_cast<ScalarType>(t)) {
@@ -229,7 +251,8 @@ inline Result<std::uint32_t> align_sz(NodeType t) noexcept {
     return marshal_error(Errno::ebadmsg);
 }
 
-// A string sequence's element is its offsets' word.
+// One element's size. A strs's element is a u32 offset, and a bitset's is a
+// byte, since its bits are given a byte each before they are packed.
 constexpr std::uint32_t elem_sz(SequenceType t) noexcept {
     if (t == SequenceType::strs) return 4;
     return type_is_nonnum(type_of(t)) ? 1 : 1u << type_arg_of(type_of(t));

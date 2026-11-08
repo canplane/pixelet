@@ -1,11 +1,13 @@
 // pxl-render/frame/shader/floor.rs
 
-//! What every WebGPU device binds, the platform's floor: each limit's
-//! default (WebGPU, "Limits", https://www.w3.org/TR/webgpu/#limit-default),
-//! which a device past it is no target for, so no pipeline layout binds more
-//! (`holds`), and no buffer is larger than one binds (`fits`). Counted as the
-//! device counts them at a pipeline layout: per stage, over every group, of
-//! what each group's layout makes visible to it.
+//! The floor: the default of each WebGPU limit (WebGPU, "Limits",
+//! https://www.w3.org/TR/webgpu/#limit-default). Every WebGPU device
+//! supports at least these values, so the renderer stays within them: no
+//! pipeline layout binds more than they allow (`holds`), and no buffer is
+//! larger than they allow (`fits`). A device counts a layout's
+//! bindings per stage, over all its groups, and in each group counts only
+//! the bindings the group's layout makes visible to that stage; `holds`
+//! counts them the same way.
 
 use xpute_gpu::spec::SHADER_STAGE::{COMPUTE, FRAGMENT, VERTEX};
 
@@ -29,17 +31,18 @@ pub const MAX_BUFFER_SIZE: u64 = 268_435_456;
 pub const MAX_TEXTURE_DIMENSION_2D: u32 = 8192;
 pub const MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP: u32 = 256;
 
-/// Whether a buffer of `bytes` is one every device makes, and, where
-/// `storage`, binds whole as storage: each is bound whole, as no binding
-/// here takes a range of a storage buffer.
+/// Whether every device can make a buffer of `bytes` and, when `storage` is
+/// set, bind it as a storage buffer. The storage limit is checked against
+/// the whole buffer, since no binding takes a range of a storage buffer.
 pub const fn fits(bytes: u64, storage: bool) -> bool {
     bytes <= MAX_BUFFER_SIZE && (!storage || bytes <= MAX_STORAGE_BUFFER_BINDING_SIZE)
 }
 
-/// Whether a pipeline layout of `groups`, each a group's (binding, stages,
-/// kind) words as record.rs and build.rs `compute` state them, binds within
-/// the floor: its groups, each group's bindings, and per stage each kind of
-/// binding over all of them.
+/// Whether a pipeline layout binds within the floor: its number of groups,
+/// the binding numbers in each group, the bindings of each kind per stage
+/// over all groups, and its dynamic uniform buffers. Each entry of `groups`
+/// is one group's bindings as triples of words (binding, visible stages,
+/// kind), laid out as a pipeline's record lays them out (record.rs).
 pub const fn holds(groups: &[&[u32]]) -> bool {
     if groups.len() > BIND_GROUPS {
         return false;
@@ -48,8 +51,8 @@ pub const fn holds(groups: &[&[u32]]) -> bool {
     let mut dynamic = 0;
     let mut s = 0;
     while s < stages.len() {
-        // Storage buffers, uniform buffers, storage textures, sampled
-        // textures, samplers.
+        // One count for each class of binding: storage buffers, uniform
+        // buffers, storage textures, sampled textures and samplers.
         let mut cnt = [0u32; 5];
         let mut g = 0;
         while g < groups.len() {
@@ -63,8 +66,8 @@ pub const fn holds(groups: &[&[u32]]) -> bool {
                 if s == 0 && kind == UNIFORM_DYNAMIC {
                     dynamic += 1;
                 }
-                // A kind not named here is one the floor cannot cnt: no
-                // layout holding it holds.
+                // A kind not listed here has no limit to be counted
+                // against, so a layout that holds one fails.
                 let class = match kind {
                     STORAGE | STORAGE_RW => 0,
                     UNIFORM | UNIFORM_DYNAMIC => 1,

@@ -1,6 +1,9 @@
 // @xpute/kit/lang/listeners.ts
 
-/** Functions to call when something changes. `watch` adds one and returns how to remove it. */
+/**
+ * Functions to call when something changes. `watch` adds one and returns a
+ * function that removes it.
+ */
 export class Listeners {
   private readonly _listeners = new Set<() => void>();
 

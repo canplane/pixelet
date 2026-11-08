@@ -368,8 +368,8 @@ impl RasterTile {
 
     fn read(b: &[u8], px: usize) -> Option<RasterTile> {
         let le = *b.first()? == 1;
-        // endian 1, version 2, bands 2, scale, origin and skew as f64, srid 4,
-        // width 2, height 2, then the band's pixel type and nodata.
+        // The header, in bytes: endian 1, version 2, bands 2, scale, origin and skew as f64, srid 4,
+        // width 2, height 2; then the band's pixel type and nodata.
         let band = *b.get(61)?;
         const PT_32BF: u8 = 10;
         const IS_OFFLINE: u8 = 0x80;

@@ -1,13 +1,13 @@
 // pxl-core/domain/scene/marker/design.rs
 
-//! What a marker paints, each its own design on the one atlas: text on a
-//! pill, a place as Carto draws it, a line said in a bubble. A design is what
-//! is painted and nothing of who shows it, so two that paint alike are one:
-//! measured, given its slot and painted once, and shown only once painted
-//! (`ready`). Which text and colors a source paints are its own
-//! (`place.rs`, `pin.rs` and `line.rs`). Its text is the platform's
-//! (sys/io/text.rs), laid out in a marker's font and drawn at the atlas's
-//! scale (`text_raster`).
+//! What a marker paints, each as its own design on the one atlas: text on a
+//! pill, a place as Carto draws it, or a line said in a bubble. A design
+//! describes only what is painted, never who shows it, so two markers that
+//! paint alike share one design. A design is measured, given its slot and
+//! painted once, and it is shown only once painted (`ready`). Each source
+//! chooses the text and colors it paints (`place.rs`, `pin.rs` and
+//! `line.rs`). The platform lays out and draws the text (sys/io/text.rs), in
+//! a marker's font and at the atlas's scale (`text_raster`).
 
 use std::rc::Rc;
 
@@ -26,20 +26,21 @@ use xpute_core::global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-/// `text` in `font` broken into lines no wider than `max_width` (0 for one
-/// line), each with its width; none where it could not be laid out this turn.
+/// `text` in `font`, broken into lines no wider than `max_width` (0 for one
+/// line), each with its width. None when the platform could not lay it out
+/// this turn.
 fn lines(font: Font, max_width: f64, text: &str) -> Option<Vec<(&str, f64)>> {
     text_lines(font.weight, f64::from(font.px), max_width, text)
 }
 
-/// One line of `text`'s width in `font`.
+/// The width of `text` set on one line in `font`.
 fn width(font: Font, text: &str) -> Option<f64> {
     lines(font, 0.0, text).map(|lines| lines.iter().map(|&(_, w)| w).sum())
 }
 
-/// One line of `text` in `font` and `color`, 0xRRGGBBAA, as the atlas paints
-/// it: drawn at its scale into the line's box (`raster_box`). None where it
-/// could not be drawn this turn; a later turn asks again.
+/// One line of `text` in `font` and `color` (0xRRGGBBAA), as the atlas
+/// paints it: drawn at the atlas's scale into the line's box (`raster_box`).
+/// None when it could not be drawn this turn, and a later turn asks again.
 pub fn text_raster(font: Font, color: u32, text: &str) -> Option<Raster<'static>> {
     let advance = width(font, text)? as f32;
     let (size, origin) = raster_box(font, advance);
@@ -63,11 +64,11 @@ pub fn text_raster(font: Font, color: u32, text: &str) -> Option<Raster<'static>
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(super) enum Design {
-    /// Text on a pill in its `fill`, in its `ink`.
+    /// Text in `ink` on a pill in `fill`.
     Pill { text: Rc<str>, fill: u32, ink: u32 },
-    /// A place as Carto draws it: its symbol (`icon`), or a dot, in its
-    /// category's `fill`, and under it its name, where it is named, in its
-    /// category's text color, its `ink`, wrapped at `wrap` pixels
+    /// A place as Carto draws it: its symbol when `icon` is set, or else a
+    /// dot, in its category's `fill`. Under it stands its name, when it has
+    /// one, in its category's text color `ink`, wrapped at `wrap` pixels
     /// (`with_spacing`).
     Point {
         name: Option<Rc<str>>,
@@ -82,10 +83,11 @@ pub(super) enum Design {
 }
 
 impl Design {
-    /// As it is laid out where a place keeps `spacing` pixels to itself
-    /// (`arrangement.rs` `SPACING_PX`), and the width of the region it keeps
-    /// (`set.rs`): a place's name wrapped to it, and its region it; any
-    /// other's region its own width (0, which the candidates widen to it).
+    /// The design as laid out where a place keeps `spacing` pixels to itself
+    /// (`arrangement.rs` `SPACING_PX`), with the width of the region it keeps
+    /// (`set.rs`). A place's name is wrapped at `spacing`, and its region is
+    /// `spacing` wide. Any other design keeps a region of its own width,
+    /// given here as 0, which the candidates widen to that width.
     pub(super) fn with_spacing(mut self, spacing: f64) -> (Design, f64) {
         match &mut self {
             Design::Point { name, wrap, .. } => {
@@ -99,12 +101,12 @@ impl Design {
     }
 }
 
-/// A sprite: a design as the atlas holds it, its size, laid out once, and
-/// its slot, none until it is asked for (`slot`).
+/// A design as the atlas holds it: its size, laid out once, and its slot,
+/// which is `NO_SLOT` until one is asked for (`slot`).
 struct Sprite {
     size: [f64; 3],
-    /// Its text as it was laid out when sized: the client's layouts are a
-    /// cache it may let go.
+    /// Its text as it was laid out when it was sized. The client's layouts
+    /// are a cache the client may drop, so the lines are kept here.
     lines: Vec<String>,
     slot: i32,
 }
@@ -113,9 +115,9 @@ fn sprites() -> &'static mut FnvHashMap<Design, Sprite> {
     SPRITES.get(FnvHashMap::default)
 }
 
-/// Lets go of every design but `designs`, those no marker shown or waiting
-/// uses, their slots freed; whether any slot was, so a design the atlas had
-/// no room for may have it now.
+/// Drops every design not in `designs`, which holds those a marker shown or
+/// waiting uses, and frees the dropped designs' slots. Returns whether any
+/// slot was freed, since a design the atlas had no room for may fit now.
 pub(super) fn retain(designs: &FnvHashSet<Design>) -> bool {
     let mut dropped = false;
     sprites().retain(|design, b| {
@@ -128,26 +130,27 @@ pub(super) fn retain(designs: &FnvHashSet<Design>) -> bool {
         }
         false
     });
-    // The moment the atlas's live set shrinks, so the moment it may stop being
-    // as large as the densest view made it.
+    // The atlas's live set has just shrunk, so this is when the atlas may
+    // stop being as large as the densest view made it.
     if dropped {
         atlas().compact();
     }
     dropped
 }
 
-/// Whether it becomes ready (`ready`) with nothing else moving: its text
-/// asked of the client, answered by a later turn, or its slot given and
-/// painted at render. One the atlas has no room for becomes ready only once
-/// a slot is let go (`retain`), so it asks no turn of its own.
+/// Whether the design will become ready (`ready`) with nothing else
+/// changing. Either its text has been asked of the client and a later turn
+/// brings the answer, or its slot is given and the render will paint it. A
+/// design the atlas has no room for becomes ready only once a slot is freed
+/// (`retain`), so it asks for no turn of its own.
 pub(super) fn coming(design: &Design) -> bool {
     sprites()
         .get(design)
         .is_none_or(|b| b.slot != NO_SLOT && !atlas().is_painted(b.slot as u32))
 }
 
-/// Its width, height and where it stands down from its top; none where its
-/// text could not be laid out this turn.
+/// The design's width, its height, and how far down from its top it stands.
+/// None when its text could not be laid out this turn.
 pub(super) fn size(design: &Design) -> Option<[f64; 3]> {
     if let Some(b) = sprites().get(design) {
         return Some(b.size);
@@ -198,7 +201,8 @@ pub(super) fn ready(design: &Design) -> bool {
             .is_some_and(|b| b.slot != NO_SLOT && atlas().is_painted(b.slot as u32))
 }
 
-/// Its design was measured first.
+/// The design's slot on the atlas, asked for on first use. The design must
+/// have been measured (`size`) first.
 pub(super) fn slot(design: &Design) -> i32 {
     let b = sprites().get_mut(design).or_bug(Errno::ENOTRECOVERABLE);
     if b.slot == NO_SLOT {

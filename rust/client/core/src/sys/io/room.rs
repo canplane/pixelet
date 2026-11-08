@@ -1,11 +1,13 @@
 // pxl-core/sys/io/room.rs
 
-//! A request refused room, by the heap or by the body slots (sys/io/body.rs),
-//! as what refused it counted its releases then: it waits until that gives
-//! some back, not on the other. A slot given back gives the heap nothing
-//! until its run is empty, which the heap's count then shows, and the heap's
-//! pages give no slot; a body refused a run of slots waits on both, as a
-//! slot given back in a run held serves it too.
+//! A refusal of room, by the heap or by the body slots (sys/io/body.rs). It
+//! records how many times what refused it had given room back, and it is
+//! over once that count moves. A refused request waits only on what refused
+//! it, never on the other. A slot given back returns nothing to the heap
+//! until its whole run is empty, and only then does the heap's count move;
+//! memory the heap gets back frees no slot. A body refused a new run of slots
+//! waits on both counts, because a slot given back in a run already held
+//! serves it too.
 
 use crate::sys::boot::heap_stat;
 use crate::sys::io::body;
@@ -31,22 +33,24 @@ impl Room {
 }
 
 impl Refusal {
-    /// By the heap.
+    /// A refusal by the heap.
     pub fn now() -> Refusal {
         Refusal(Room::Heap, Room::Heap.release_cnt())
     }
 
-    /// By the body slots, every one out.
+    /// A refusal by the body slots, when every slot is out.
     pub fn bodies() -> Refusal {
         Refusal(Room::Bodies, Room::Bodies.release_cnt())
     }
 
-    /// By the heap, for a run of body slots, every run held full.
+    /// A refusal by the heap of a new run of body slots, when every run held
+    /// is full.
     pub fn run() -> Refusal {
         Refusal(Room::Run, Room::Run.release_cnt())
     }
 
-    /// Room has been given back since, so asking again may be served.
+    /// Whether room has been given back since the refusal, so that asking
+    /// again may be served.
     pub fn over(self) -> bool {
         self.0.release_cnt() != self.1
     }

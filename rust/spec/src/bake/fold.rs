@@ -1,13 +1,11 @@
 // pxl-spec/bake/fold.rs
 
-//! One zoom coarser: a parent tile from the tiles under it. A cell holds the
-//! four palette indices under it, each child cell's own (pxl-engine `ground::own`,
-//! their majority, as Earth Engine's `MODE` pyramiding, so a feature
-//! narrower than half a cell rounds away at the zoom that reads it).
-//! Elevation is the box average of the samples, which preserves a column's
-//! volume; a parent's surface is its own bicubic of its own samples. The
-//! mean is the surface drawn at the parent's zoom, no bound on those under
-//! it.
+//! One zoom coarser: a parent tile from the tiles under it. A cell holds the four palette
+//! indices under it, each child cell's own (pxl-engine `ground::own`, their majority, as
+//! Earth Engine's `MODE` pyramiding takes it, so a feature narrower than half a cell rounds
+//! away at the zoom that reads it). Elevation is the box average of the samples, which keeps a
+//! column's volume; a parent's surface is its own bicubic of its own samples. The mean is the
+//! surface drawn at the parent's zoom, not a bound on the surfaces under it.
 
 use crate::space::layer::lattice::Cells;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};

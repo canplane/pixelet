@@ -1,13 +1,14 @@
 // @pxl/client/ui/world/keyboard.ts
 
 /**
- * The keys the UI answers, each sent to whatever owns what it does: the
- * movement keys' direction to the core; a digit, a tool, a size, the dock's
- * mode and the drawer to the UI's own stores. A key has no place on the screen to
- * route it as a pointer's has, so this is that routing: a sheet in front takes
- * every key but Escape, which closes it, and a field takes every key but Tab
- * and Escape, which leaves the message for the palette, as Tab does.
- * Keys are named by `code`, the key's place, so any layout works the same.
+ * The keys the UI answers, and where each one goes. The movement keys send a
+ * direction to the core. A digit, a tool's letter, a size key, Tab and the
+ * drawer's key go to the UI's own stores. A key has no place on the screen
+ * that decides what receives it, as a pointer has, so this file decides. A
+ * sheet in front takes every key except Escape, which closes it. A text field
+ * takes every key except Tab and Escape, and both of those leave the message
+ * for the palette. Keys are named by `code`, the key's physical place, so that
+ * every keyboard layout works the same.
  */
 
 import type { i32 } from "@xpute/kit/abi/word.ts";
@@ -36,19 +37,22 @@ const MOVE: Record<string, [i32, i32]> = {
   KeyD: [1, 0],
 };
 
-/** Digit1 on, the hotbar's slots in order. */
+/** Digit1 and the digits after it pick the hotbar's slots in order. */
 const SLOT = /^Digit([1-9])$/;
 
-/** Figma's and Photoshop's letters for the move tool and the eraser. */
+/** The letters follow Figma and Photoshop: V for the move tool and E for the
+ * eraser. */
 const TOOL: Record<string, Tool> = {
   KeyV: Tool.Pointer,
   KeyE: Tool.Eraser,
 };
 
-/** A game's inventory key, and Figma's for its resources (Shift+I); Escape closes it as any sheet. */
+/** I opens the drawer, as it opens a game's inventory and, with Shift,
+ * Figma's resources. Escape closes the drawer as it closes any sheet. */
 const DRAWER = "KeyI";
 
-/** Photoshop's brush size: `]` a coarser block, `[` a finer. */
+/** The brackets size the block as they size Photoshop's brush: `]` makes it
+ * coarser and `[` finer. */
 const SIZE: Record<string, i32> = { BracketRight: 1, BracketLeft: -1 };
 
 const held = new Set<string>();
@@ -71,7 +75,8 @@ function pickSlot(slot: number): void {
   if (kindOf(id) === KIND.cube) flashSwatch(id, false);
 }
 
-/** Whether the key is one the UI answers, so a driver can leave the rest alone. */
+/** Returns whether the UI answers the key, so that the caller can leave every
+ * other key to its default. */
 export function keyDown(
   code: string,
   { inField }: { inField: boolean },
@@ -120,7 +125,8 @@ export function keyUp(code: string): void {
   if (held.delete(code)) sendMove();
 }
 
-/** Focus went elsewhere: no key up will come for what is held. */
+/** Releases every held key. The caller calls it when focus leaves, because no
+ * key up will come for the keys held then. */
 export function releaseKeys(): void {
   held.clear();
   sendMove();

@@ -26,10 +26,11 @@ pub const fn cell_zoom_of(web_zoom: i32) -> Zoom {
     (web_zoom + 8) as Zoom
 }
 
-/// EPSG:3857 spans 2πR once round.
+/// The plane's units in a Mercator meter: EPSG:3857 spans 2πR once around the world.
 pub(crate) const U_PER_MERC: f64 = ROUND / (TAU * EARTH_RADIUS_M);
 
-/// sec φ = cosh(y / R). One value for a whole tile is its base's.
+/// The Mercator scale factor at `y_u`: sec φ = cosh(y / R). A whole tile takes the value at
+/// its base.
 pub(crate) fn scale_factor(y_u: f64) -> f64 {
     libm::cosh(y_u * TAU / ROUND)
 }

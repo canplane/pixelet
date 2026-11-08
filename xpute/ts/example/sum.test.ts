@@ -1,12 +1,13 @@
 // @xpute/example/sum.test.ts
 
 /**
- * The smallest runtime, beside the smallest core (rust/example): booted as the
- * core's machine declares (machine.spec.ts), its module read from disk and
- * opened over a memory of the one size the machine allows, a policy for a
- * runtime with no display, and its one protocol (asker.spec.ts) as the
- * program's handler, which answers the core's call; then one command sent
- * and its reply read. Build the core first (`make build`).
+ * The smallest runtime, beside the smallest core (rust/example). It boots the
+ * core as the core's machine declares (machine.spec.ts): the module is read
+ * from disk and opened over a memory of the one size the machine allows, with
+ * a policy for a runtime that has no display. The core's one protocol
+ * (asker.spec.ts) gives the program's handler, which answers the core's call.
+ * The test then sends one command and reads its reply. Build the core first
+ * (`make build`).
  */
 
 import { test } from "vitest";
@@ -20,7 +21,8 @@ import { asker_imports, asker_exports } from "./asker.spec.ts";
 import { MACHINE } from "./machine.spec.ts";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
-/** A relative CARGO_TARGET_DIR is cargo's, which the root's tasks run from rust/. */
+/** A relative CARGO_TARGET_DIR is relative to rust/, where the root's tasks
+ * run cargo. */
 const CARGO_TARGET = resolve(
   join(ROOT, "rust"),
   process.env.CARGO_TARGET_DIR ?? "target",

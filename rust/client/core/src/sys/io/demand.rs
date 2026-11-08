@@ -1,8 +1,9 @@
 // pxl-core/sys/io/demand.rs
 
-//! What a request is for: its stream (demand.json `STREAM_NAMES`), each as
-//! one row says, and its want's order in the view; and the timings its run
-//! reports.
+//! What a request is for: the stream it belongs to (demand.json
+//! `STREAM_NAMES`), which one row of a table describes (`Stream::row`), and
+//! the order of its want in the view. The timings a run reports are here
+//! too.
 
 use core::cmp::Ordering;
 
@@ -14,10 +15,11 @@ pub use crate::sys::io::demand_spec::StreamName as Stream;
 pub use crate::sys::io::demand_spec::TaskPhaseName;
 use crate::sys::io::file_spec::root;
 
-/// What a stream's wants are: a file of the catalog's by its id, which the
-/// loader opens below ASSET (sys/io/loader.rs); a bake's tile by its
-/// quadrant, below its kind's root; or a shard's objects or their top, which
-/// no bake makes, below OBJECT.
+/// Where a stream's wants come from. A `Load` want is an asset file by its
+/// id, which the loader opens (sys/io/loader.rs). A `Bake` want is a bake's
+/// tile by its quadrant, below the root of the bake's kind. An `Objects` want
+/// is a shard's objects or the objects' top, which no bake makes, below
+/// OBJECT.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Source {
     Load,
@@ -25,35 +27,37 @@ pub enum Source {
     Objects,
 }
 
-/// Where a stream's wants stand in the order a view builds up, as the
-/// policy ranks them (sys/io/policy.rs).
+/// Where a stream's wants stand in the order a view builds up. The policy
+/// ranks the classes (sys/io/policy.rs).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Class {
-    /// The ground's shells, seen then unseen, the finer first.
+    /// The ground: seen then unseen, finer tiles first.
     Ground,
-    /// What stands on the ground, a shell's after the shell's ground.
+    /// What stands on the ground. Each shell of it ranks after the ground of
+    /// the same shell.
     OnGround,
-    /// With the pictures, seen then unseen, the finer first.
+    /// Ranks with the pictures: seen then unseen, finer tiles first.
     Picture,
-    /// After the models, seen then unseen, the finer first.
+    /// Ranks after the models: seen then unseen, finer tiles first.
     Place,
-    /// A file of the catalog's: a picture's with the pictures, a model's
+    /// A file of the catalog. A picture ranks with the pictures, and a model
     /// after them.
     File,
-    /// After everything, as it comes.
+    /// Ranks after everything else, with no order among its wants.
     Aside,
 }
 
 #[derive(Clone, Copy)]
 pub struct Row {
     pub source: Source,
-    /// Whether its bodies take one of the body slots (sys/io/body.rs).
+    /// Whether each of the stream's bodies takes a body slot
+    /// (sys/io/body.rs).
     pub slotted: bool,
     pub class: Class,
 }
 
-/// Seen before unseen, then nearer first: every layer's work is taken in
-/// this order, and evicted in reverse.
+/// A want's order in the view: seen before unseen, then nearer first. Every
+/// layer takes its work in this order and evicts it in reverse.
 #[derive(Clone, Copy, Debug)]
 pub struct Order {
     pub seen: bool,
@@ -62,8 +66,8 @@ pub struct Order {
 
 pub const PHASES_MAX: usize = demand_spec::TASK_PHASES_MAX as usize;
 
-/// The timings a run reports, each by the name its run gives it; one past
-/// `PHASES_MAX` is left out.
+/// The timings a run reports, each under the name the run gives it. A timing
+/// past `PHASES_MAX` is dropped.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Phases {
     items: [(TaskPhaseName, f64); PHASES_MAX],
@@ -95,8 +99,9 @@ impl Stream {
         }
     }
 
-    /// The root its wants' files are opened below (file.json `root`), a
-    /// want's id the path; none for a load, which the loader opens.
+    /// The root that the stream's files are opened below (file.json `root`),
+    /// with a want's id as the path. A load has none, because the loader
+    /// chooses its root.
     pub const fn root(self) -> Option<u32> {
         match self.row().source {
             Source::Bake(layer) => Some(layer as u32),
@@ -105,9 +110,9 @@ impl Stream {
         }
     }
 
-    /// The most bytes a body of its takes, its kind's packet at its longest
-    /// (pxl-spec `bake::tile::max_pkt_bytes`); none for a load or a shard's
-    /// objects, which the heap alone bounds.
+    /// The most bytes one of the stream's bodies takes: the longest packet of
+    /// its kind (pxl-spec `bake::tile::max_pkt_bytes`). A load and a shard's
+    /// objects have none, because only the heap bounds them.
     pub const fn max_body(self) -> Option<u32> {
         match self.bake() {
             Some(layer) => Some(tile::max_pkt_bytes(layer) as u32),

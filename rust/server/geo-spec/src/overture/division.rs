@@ -21,12 +21,11 @@ pub fn radius_at(y: f64) -> f64 {
     merc_from_u(NEAREST_RADIUS_M * u_per_m(u_from_merc(y)))
 }
 
-/// The division each of a batch of points is in: `$1`/`$2` are EPSG:3857
-/// meters and `$3` [`radius_at`] them, `idx` counts the points from 1. It is
-/// the deepest division an area of contains the point, or, nearer, a child
-/// of it with no area, the nearest within reach; where no area contains the
-/// point, the nearest division within reach. Many localities have a point
-/// and no area. `approx` marks a division found by nearness.
+/// The division each of a batch of points is in: `$1`/`$2` are EPSG:3857 meters, `$3` is
+/// [`radius_at`] of them, and `idx` counts the points from 1. It is the deepest division one
+/// of whose areas contains the point, or, where nearer, a child of it with no area, the
+/// nearest within reach; where no area contains the point, the nearest division within reach.
+/// Many localities have a point and no area. `approx` marks a division found by nearness.
 pub const FINEST_SQL: &str = "
 SELECT p.idx, COALESCE(c.id, a.id, n.id) AS division_id, a.id IS NULL OR c.id IS NOT NULL AS approx
 FROM unnest($1::float8[], $2::float8[], $3::float8[]) WITH ORDINALITY AS p(x, y, radius, idx)
@@ -62,7 +61,7 @@ WHERE d.gers_id IN (
 #[derive(Clone, Debug)]
 pub struct Division {
     pub gers_id: String,
-    /// None for a subtype newer than this tree, which no name reads.
+    /// None for a subtype this tree does not know, which no name reads.
     pub subtype: Option<Subtype>,
     pub name: String,
     pub parent: Option<String>,

@@ -1,6 +1,7 @@
 // pxl-core/perf/frame.rs
 
-//! A frame's record, and the worst ones kept.
+//! The record of one frame as the profiler's rings lay it out (perf.json
+//! FRAME), and the record of one of the worst frames (WORST).
 
 use core::mem::{offset_of, size_of};
 
@@ -17,31 +18,32 @@ use pxl_render::gpu::span_spec::GPU_SPAN_NAMES;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GpuSample {
-    /// This frame's own read, written back as it lands a frame or two later
-    /// (record.rs `perf_record_gpu`): where `read` is 1, its spans, the
-    /// time they ran, those that overlap counted once (`busy_ms`), the
-    /// frame's GPU time, which the spans' sum overstates where passes
-    /// overlap, and `px` the world's pixels the frame drew, what the spans
-    /// were measured over; where it is 0, nothing measured this frame and
-    /// all are 0.
+    /// This frame's GPU timings. They land a frame or two later and are
+    /// written back into this record (record.rs `perf_record_gpu`). `read`
+    /// is 1 when the frame was measured, and otherwise 0 with every field 0.
+    /// `busy_ms` is the frame's GPU time, with overlapping spans counted
+    /// once; the sum of `spans` overstates it where passes overlap. `px` is
+    /// the number of world pixels the frame drew, which the spans were
+    /// measured over.
     pub read: f64,
     pub spans: [f64; GPU_SPANS],
     pub busy_ms: f64,
     pub px: f64,
-    /// The share of the display's pixels, each way, the world was drawn at
-    /// (pxl-core domain/scene/resolution.rs).
+    /// The fraction of the display's resolution, along each axis, at which
+    /// the world was drawn (domain/scene/resolution.rs).
     pub scale: f64,
-    /// The frame's draws and their triangles, every pipeline a draw names
-    /// (pxl-render renderer.rs `FrameStat::draws`, summed).
+    /// The frame's draws and their triangles, summed over every pipeline
+    /// (pxl-render renderer.rs `FrameStat::draws`).
     pub draws: f64,
     pub triangles: f64,
-    /// The renderer's number of this frame (pxl-render renderer.rs
-    /// `FrameStat::frame`), which a read names as it lands; 0 where it drew
-    /// none.
+    /// The renderer's number for this frame (pxl-render renderer.rs
+    /// `FrameStat::frame`). A GPU read names this number when it lands, so
+    /// the read finds its frame. It is 0 when the renderer drew no frame.
     pub frame: f64,
-    /// Why the light's map cast, a bit each in LIGHT_MOVED's order, 0 where
-    /// it did not; and the boxes decor's slots were marked by to generate
-    /// again (pxl-render renderer.rs `FrameStat`).
+    /// Why the light's map was cast, one bit per reason in LIGHT_MOVED's
+    /// order, and 0 when it was not cast. `decor_boxes` counts the boxes that
+    /// marked decor's slots to be generated again (pxl-render renderer.rs
+    /// `FrameStat`).
     pub light_moved: f64,
     pub decor_boxes: f64,
 }
@@ -52,9 +54,9 @@ impl Default for GpuSample {
     }
 }
 
-/// The renderer's upload table, its uploads and their bytes, and its
-/// texture layers' bytes: each as counted (pxl-render gpu/renderer.rs
-/// `FrameStat`).
+/// The renderer's upload table: how many uploads it holds, their bytes, and
+/// the bytes of its texture layers, as the renderer counts them (pxl-render
+/// gpu/renderer.rs `FrameStat`).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct DeviceSample {
@@ -63,47 +65,51 @@ pub struct DeviceSample {
     pub pack_bytes: f64,
 }
 
-/// One frame turn and the interval it opened (perf.json FRAME): every
-/// figure of one turn, landed when the next frame turn closes the interval.
+/// One frame turn and the interval it opened (perf.json FRAME). The record
+/// lands when the next frame turn closes the interval.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FrameSample {
     pub t: f64,
     /// The runtime's interval from this frame to the next, which the turns in
-    /// it filled: not the world's step, which stops at MAX_STEP_S.
+    /// it filled. It is not the world's step, which is capped at MAX_STEP_S.
     pub interval_ms: f64,
-    /// The display's refresh, and the interval the runtime paced this frame at,
-    /// a whole number of refreshes, as the runtime granted them (@xpute/runtime
-    /// sched/frame_pacing.ts `FrameGrant`).
+    /// The display's refresh interval, and the interval the runtime paced
+    /// this frame at, a whole number of refreshes, as the runtime granted
+    /// them (@xpute/runtime sched/frame_pacing.ts `FrameGrant`).
     pub refresh_ms: f64,
     pub paced_ms: f64,
-    /// 1 where the runtime settled the interval, not interactive, as it says
-    /// with the frame that closes it: written once, as the interval lands.
+    /// 1 when the runtime ran the interval settled rather than interactive.
+    /// The runtime says so with the frame that closes the interval, so this
+    /// is written once, when the interval lands.
     pub settled: f64,
-    /// Every turn the interval held, the frame's and those without a runtime
-    /// frame, and their time, rise to fall each.
+    /// How many turns the interval held, the frame's and those without a
+    /// runtime frame, and their total time (`busy_ms`), each turn measured
+    /// from its rise to its fall.
     pub turns: f64,
     pub busy_ms: f64,
-    /// What the interval's turns ran past it (`over_ms`).
+    /// How far the interval's turns ran past its end (`over_ms`).
     pub over_ms: f64,
     pub budget_ms: f64,
-    /// The parts of `busy_ms`: what is left of it is unmeasured.
+    /// The measured parts of `busy_ms`. The rest of it is unmeasured
+    /// (`unmeasured_ms`).
     pub effects_ms: f64,
     pub tick_ms: f64,
     pub phases: [f64; PHASES],
     pub stage_ms: f64,
     pub tasks_ms: f64,
-    /// What the profiler cost the interval: its own record of the frame and
-    /// the UI's reads of it.
+    /// What the profiler itself cost the interval: recording the frame, and
+    /// the UI's reads of the records.
     pub perf_ms: f64,
-    /// Each effect's time in the frame turn, in EFFECT_NAMES' order.
+    /// The time of each effect in the frame turn, indexed by `EffectName`.
     pub effects: [f64; EFFECTS],
-    /// The renderer's FRAME_KINDS and the edge's WAKES, by index.
+    /// The frame's kind, an index into the renderer's FRAME_KINDS, and the
+    /// wake the turn asked for, an index into the edge's WAKES.
     pub kind: f64,
     pub wake: f64,
     pub gpu: GpuSample,
-    /// The ray counts of this frame, written back as they land
-    /// (record.rs `perf_record_rays`).
+    /// This frame's ray counts, written back when they land (record.rs
+    /// `perf_record_rays`).
     pub rays: RaySample,
     /// The terrain tiles the tile cache took in during the frame turn.
     pub terrain_landed: f64,
@@ -112,12 +118,13 @@ pub struct FrameSample {
     pub heap_used_bytes: f64,
 }
 
-/// The `ray_counts` setting's counts of one frame, as the renderer hands
-/// them (pxl-render gpu/ray/count.rs `RayCounts`), in perf.json FRAME's
-/// `rays` group's order: whether the eye cast in full, its pixels and its
-/// lanes; whether the light's map cast, its slots and its lanes
-/// (pxl-engine `count`). What an observer reused, walked and took the sky
-/// for is what it cast again, of its pixels or slots.
+/// One frame's ray counts, which the renderer gathers while the `ray_counts`
+/// setting is on (pxl-render gpu/ray/count.rs `RayCounts`). The fields
+/// follow the order of perf.json FRAME's `rays` group. For the eye they say
+/// whether it cast in full, how many pixels it cast, and its lane counts.
+/// For the light's map they say whether it cast, how many slots it cast,
+/// and its lane counts (pxl-engine `count`). The reused, walked and sky
+/// lanes divide up what an observer cast again of its pixels or slots.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RaySample {
@@ -144,7 +151,7 @@ pub struct RaySample {
 }
 
 impl RaySample {
-    /// The renderer's counts (`RAY_COUNTS`), in their order.
+    /// Reads the renderer's counts, laid out in `RAY_COUNTS` order.
     pub fn of(c: [f64; ray::RAY_COUNTS]) -> RaySample {
         let at = |o: u32, k: usize| c[ray::count_at(o, k)];
         let lane = |o: u32, l: u32| at(o, ray::LANES_AT + l as usize);
@@ -173,7 +180,6 @@ impl RaySample {
         }
     }
 
-    /// `o`'s counts added to these, lane by lane.
     pub fn add(&mut self, o: &RaySample) {
         let (to, from) = (as_words_mut(self), as_words(o));
         for (t, f) in to.iter_mut().zip(from) {
@@ -195,8 +201,8 @@ pub struct WorstFrame {
 }
 
 impl WorstFrame {
-    /// `s`, and what changed from `prev`, the frame before it, where there
-    /// was one.
+    /// The worst frame `s`, with what changed since `prev`, the frame before
+    /// it, when there was one.
     pub fn of(s: FrameSample, prev: Option<&FrameSample>) -> WorstFrame {
         let Some(p) = prev else {
             return WorstFrame {
@@ -229,7 +235,8 @@ words!(FrameSample, FRAME::WORDS,
     heap_used_bytes => FRAME::heap_used_bytes,
 );
 
-// The `rays` group's columns, each where FRAME lays it, from the group's first.
+// The `rays` group's columns, each at its offset in FRAME counted from the
+// group's first column.
 words!(RaySample, FRAME_GROUP::rays,
     eye_cast => 0, eye_rays => FRAME::eye_rays - FRAME::eye_cast,
     eye_beam => FRAME::eye_beam - FRAME::eye_cast, eye_sample => FRAME::eye_sample - FRAME::eye_cast,
@@ -251,32 +258,37 @@ words!(WorstFrame, WORST::WORDS,
 pub const GPU_SPANS: usize = GPU_SPAN_NAMES;
 pub const EFFECTS: usize = spec::EFFECT_NAMES;
 
-/// A frame that dropped a vsync while moving: its interval ran past the
-/// paced one by half a refresh or more, so it landed a refresh late at least.
-/// Half a refresh is the jitter the runtime's pacing allows a frame, skipping
-/// one nearer the last turn than the paced interval less that (xpute runtime
-/// sched/scheduler.ts `turn`).
+/// Whether a frame dropped a vsync while moving. Its interval ran past the
+/// paced one by more than half a refresh, so it landed at least a refresh
+/// late. Half a refresh is the jitter the runtime's pacing allows: the
+/// runtime skips a frame that comes sooner after the last turn than the
+/// paced interval less half a refresh (xpute runtime sched/scheduler.ts
+/// `turn`).
 pub fn is_missed(f: &FrameSample) -> bool {
     f.settled == 0.0 && f.interval_ms > f.paced_ms + f.refresh_ms / 2.0
 }
 
-/// Past even the hard ceiling: one step too big for the forward-progress waiver.
+/// Whether the tick ran past even the hard ceiling, the budget plus
+/// `HARD_SLACK_MS`. A step that big is too big for the waiver that lets a
+/// step overrun the budget so the tick keeps making progress.
 pub fn overran(f: &FrameSample) -> bool {
     f.tick_ms > f.budget_ms + param::HARD_SLACK_MS
 }
 
-/// What the interval's turns ran past it.
+/// How far the interval's turns ran past the interval's end, in
+/// milliseconds.
 pub fn over_ms(f: &FrameSample) -> f64 {
     (f.busy_ms - f.interval_ms).max(0.0)
 }
 
-/// What the interval's turns spent outside every part measured of them: the
-/// door's commands, its pump and the turns' own rise and fall.
+/// The time the interval's turns spent outside every measured part: the
+/// door's commands, its pump, and each turn's own rise and fall.
 pub fn unmeasured_ms(f: &FrameSample) -> f64 {
     (f.busy_ms - f.effects_ms - f.tick_ms - f.stage_ms - f.tasks_ms - f.perf_ms).max(0.0)
 }
 
-/// The interval's turns ran past it: a long frame, and `over_ms` by how much.
+/// Whether the frame is long: its interval's turns ran past the interval's
+/// end. `over_ms` says by how much.
 pub fn long(f: &FrameSample) -> bool {
     f.over_ms > 0.0
 }

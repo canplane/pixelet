@@ -1,13 +1,14 @@
 // pxl-core/domain/scene/decor/param.rs
 
-//! Decor's tiers: by how much a kind covers, a model, an impostor or culled.
+//! The tiers decor is drawn in. By how much of a camera grid cell it spans, a
+//! decor is drawn as a model, as an impostor, or not at all.
 
-/// A decor kind is drawn as a model while it spans at least this share of a
-/// camera grid cell, an impostor below it: set by eye at one cell, moved to
-/// two by the user's decision of 2026-11-06, so a model is drawn down to
-/// about 22 px.
+/// A decor is drawn as a model while it spans at least this many camera grid
+/// cells, and as an impostor below that. At two cells a model is drawn down
+/// to about 22 px.
 pub const DECOR_MODEL_CELLS: f64 = 2.0;
 
-/// Under this share of a camera grid cell a decor kind's impostor is not drawn:
-/// set by eye, below it an instance is pixel noise.
+/// A decor's impostor is not drawn when it spans less than this share of a
+/// camera grid cell, because an instance that small reads as pixel noise. The
+/// value was chosen by eye.
 pub const DECOR_IMPOSTOR_CELLS: f64 = 0.25;

@@ -67,9 +67,8 @@ impl Form {
     }
 }
 
-/// A resident record's room for lines and their points: the most a tile of
-/// the format-12 set holds; a tile past either fails its bake
-/// (`Separation::fits`).
+/// A resident record's room for lines and their points: the most a tile of the format-12 set
+/// holds. A tile past either fails its bake (`Separation::fits`).
 pub const MAX_LINES: usize = 438;
 pub const MAX_POINTS: usize = 4193;
 
@@ -88,9 +87,9 @@ pub struct Separation {
     pub kind: Cow<'static, [u8]>,    // transport type: the source's class, the slab's material
     pub form: Cow<'static, [u8]>,    // `Form`: the source's flags
     pub clear: Cow<'static, [u8]>,   // a bore's clear space over its surface, in leaf cells: solved
-    /// The coarsest zoom each point is held at (pxl-engine `way::coarsest`):
-    /// what a fold keeps of a line, the bake's alone — no client path folds,
-    /// so a client's record holds none (`Columns::into_room`).
+    /// The coarsest zoom at which each point is held (pxl-engine `way::coarsest`): what a fold
+    /// keeps of a line. Only the bake reads it, since no client path folds, so a client's record
+    /// holds none (`Columns::into_room`).
     pub coarsest: Cow<'static, [u8]>,
 }
 
@@ -149,11 +148,11 @@ impl Separation {
         (0..self.len()).map(|d| self.line(d))
     }
 
-    /// Each segment that may be over a column of a grid, by the point it
-    /// starts at, with the column: column (i, j) the brick of side `step`
-    /// about `origin + (i + ½, j + ½) · step` in the tile's cells, a segment
-    /// over it where the column's center is within its way's half width of its
-    /// box. Row by row, each segment's in turn, in the points' order.
+    /// Each segment that may be over a column of a grid, by the point it starts at, with the
+    /// column. Column (i, j) is the brick of side `step` around `origin + (i + ½, j + ½) · step`
+    /// in the tile's cells, and a segment is over it where the column's center lies within its
+    /// way's half width of the segment's box. The columns come row by row, each column's segments
+    /// in the points' order.
     pub(crate) fn segments_over(
         &self,
         origin: [f64; 2],
@@ -189,9 +188,9 @@ impl Separation {
         Segment::of(self.segment_words(p, p > self.starts[d] as usize))
     }
 
-    /// The segment that starts at point `p` in its words (pxl-engine
-    /// way.rs `Segment::words`), and whether the one stored before it is its
-    /// line's one before it: a line ends square at its first and last.
+    /// The segment that starts at point `p`, in its words (pxl-engine way.rs `Segment::words`),
+    /// with whether the one stored before it is its line's one before it; a line ends square at
+    /// its first and last.
     pub(crate) fn segment_words(&self, p: usize, continues: bool) -> [u32; way::SEGMENT_WORDS] {
         let d = self.starts.partition_point(|&s| s as usize <= p) - 1;
         let (first, last) = (
@@ -206,9 +205,9 @@ impl Separation {
         )
     }
 
-    /// Every line over each column of a grid of the tile's cells from
-    /// `origin` (`segments_over`), each segment its own crossing, piers at
-    /// the stations of the tile at `frame`.
+    /// Every line over each column of a grid of the tile's cells from `origin`
+    /// (`segments_over`), each segment its own crossing, with piers at the stations of the tile at
+    /// `frame`.
     pub(crate) fn crossing_grid(
         &self,
         frame: Frame,
@@ -228,10 +227,9 @@ impl Separation {
         });
     }
 
-    /// Each segment of a line that can rise or sink, by its line and its
-    /// place in it, with every brick of a tile of `side` cells cut `across`
-    /// a side, row by row, that its footprint reaches: the one sweep a
-    /// clip level's brick's entries and its lines both read.
+    /// Each segment of a line that can rise or sink, by its line and its place in it, with every
+    /// brick that its footprint reaches, of a tile of `side` cells cut `across` bricks a side, row
+    /// by row. A clip level's brick's entries and its lines both read this one sweep.
     pub fn reaches(
         &self,
         side: f64,
@@ -332,26 +330,22 @@ pub fn runs_within(points: &[[f64; 2]], margin: f64) -> Vec<[usize; 2]> {
     runs
 }
 
-/// Lines at `zoom`, one coarser, off the 4×4 tiles about its children
-/// (pxl-spec space/layer/quadrant.rs `neighborhood`, a missing one none), each
-/// segment once: every point is the child's halved and rounded (`round`,
-/// half to even), a function of that point alone, so the copies tiles hold
-/// of one line fold to the same segments and are taken as one. A line whose
-/// width vanishes at the parent's cells (pxl-engine `way::vanishes`) is
-/// none there, and a segment whose ends fold to one point is none. The
-/// segments rejoin where a copy held one after another and the second starts
-/// where the first ends, surface and all, so a line runs on through its
-/// copies' cuts; then of each line only the points held at `zoom`
-/// (from its `way::coarsest` on) stay, each by its own column, so what a parent holds is a
-/// function of the world's lines alone, not of which tiles held them. A line
-/// holds a point where it crosses each edge of the tiles of the zoom under
-/// one it is held at (geo-bake terrain/pipeline/separation.rs), so a
-/// segment the parent holds lies in one child's tile, whose copy holds every
-/// point under it: the 4×4 hold whole every segment the parent keeps. Each
-/// line is kept where it runs within its footprint of the parent
-/// (`runs_within`), so the ring a tile's lines guarantee holds at every
-/// zoom. A record holding more than a tile's room is refused where it is
-/// encoded, never cut here.
+/// Lines at `zoom`, one coarser, from the 4×4 tiles around its children (pxl-spec
+/// space/layer/quadrant.rs `neighborhood`; a missing one counts as none), each segment once.
+/// Every point is the child's halved and rounded (`round`, half to even), a function of that
+/// point alone, so the copies of one line that tiles hold fold to the same segments and are
+/// taken as one. A line whose width vanishes at the parent's cells (pxl-engine
+/// `way::vanishes`) is none there, and so is a segment whose ends fold to one point. The
+/// segments rejoin where a copy held one after another and the second starts where the first
+/// ends, surface and all, so a line runs on through the cuts between its copies. Then, of each
+/// line, only the points held at `zoom` (from its `way::coarsest` on) stay, each by its own
+/// column, so what a parent holds depends on the world's lines alone, not on which tiles held
+/// them. A line holds a point where it crosses each edge of the tiles of the zoom under one it
+/// is held at (pxl-geo-bake terrain/pipeline/separation.rs), so a segment the parent holds
+/// lies in one child's tile, whose copy holds every point under it; the 4×4 tiles hold every
+/// segment the parent keeps whole. Each line is kept where it runs within its footprint of the
+/// parent (`runs_within`), so the ring a tile's lines guarantee holds at every zoom. A record
+/// holding more than a tile's room is refused where it is encoded, never cut here.
 pub fn fold_separation(around: [Option<&Separation>; 16], zoom: Zoom) -> Separation {
     let tile = TILE_CELLS as i32 * POINT_SCALE as i32;
     let mut folded = Fold::default();
@@ -409,7 +403,8 @@ struct FoldSegment {
     clear: u8,
 }
 
-/// No segment is known to come after (or before) one; more than one is.
+/// Marks that no single segment is known to come after (or before) one: none, or more than
+/// one.
 const NO_SEGMENT: usize = usize::MAX;
 const SEGMENTS: usize = usize::MAX - 1;
 
@@ -432,7 +427,7 @@ impl Fold {
         })
     }
 
-    /// `s` after `p` in a copy, of one line where both have the same line.
+    /// Records that `s` comes after `p` in a copy, where both are of the same line.
     fn join(&mut self, p: usize, s: usize) {
         let same = |a: FoldSegment, b: FoldSegment| {
             (a.width, a.kind, a.form, a.clear) == (b.width, b.kind, b.form, b.clear)
@@ -456,9 +451,9 @@ impl Fold {
         self.next[p] == s && self.prev[s] == p
     }
 
-    /// The segments as lines, each from one no other is joined before, in
-    /// the order they were met, a ring of them, joined all round, from the
-    /// first of it met; of each, the points held at `zoom`.
+    /// The segments as lines, each starting from a segment no other is joined before, in the
+    /// order they were met; a ring of them, joined all around, starts from its first segment met.
+    /// Of each line, only the points held at `zoom` are kept.
     fn lines(&self, zoom: Zoom) -> Separation {
         let mut out = Builder::default();
         let mut taken = vec![false; self.segments.len()];
@@ -559,7 +554,7 @@ impl Builder {
     }
 }
 
-/// starts, points (flattened), tops, width, kind, form, clear, coarsest.
+/// The packet's lanes: starts, points (flattened), tops, width, kind, form, clear, coarsest.
 pub(crate) type Packet = (
     Vec<u32>,
     Vec<i16>,

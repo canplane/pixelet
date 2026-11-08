@@ -1,24 +1,30 @@
-//! `face_cs` and `cast_cs` by hand (frame/shader/face.wgsl, cast.wgsl) answer as the Rust over
-//! the real world of tests/real_world, off the samples the eye's passes leave there (beam,
-//! cell, sample, the record).
+//! Checks that the hand-written shaders `face_cs` (frame/shader/face.wgsl) and `cast_cs`
+//! (cast.wgsl) answer as pxl-engine's Rust does, over the real world of tests/real_world. Both
+//! run on what the eye's earlier passes leave there: the beam rays, the cells' starts, the
+//! samples and the record.
 //!
-//! `face_cs`: each of the record's asks answered with the bits `face::word` gives, every cell beside the
-//! hit asked off the line down to it as `support::sub_line` and `support::asset` ask it.
+//! `face_cs` must answer each of the record's asks with the bits `face::word` gives. Each cell
+//! beside the hit is asked along the line down to the hit, as `support::sub_line` and
+//! `support::asset` ask it.
 //!
-//! `cast_cs`: each pixel it draws holds the words `cast::entry` takes off the visible voxel
-//! of the record the test lays at it, or the sky where the four samples about it (`Grid::sample_before`)
-//! went on; a cell past the eye's reach is not entered. A pixel it leaves, or marks missed,
-//! is the walk's to answer (tests/sample.rs). The device's own tangents, way and reciprocal of
-//! each pixel are read off a probe appended to the module (`probe_cs`), which calls what
-//! `cast_cs` calls: its tangents and way are held near `px_tan`'s and `cast::through`'s
-//! (`RAY_OFF`), its reciprocal near `Ray::inverse` (`INV_ULPS`); and the Rust's entry is taken
-//! along that ray and that reciprocal (`cast::entry_with`), as the device divides as it will.
-//! A plane's t is held within a few ulps, more along a small component of the way, and a pixel
-//! its rounding takes across an edge between the planes of two axes goes either way, one in a
-//! thousand of a run's at most.
+//! `cast_cs` must give each pixel it draws the words `cast::entry` takes off the visible voxel
+//! that the test lays at that pixel. Where the pixel takes no voxel and all four samples about
+//! it (`Grid::sample_before`) went on without a stop, it must give the sky. It must not enter a
+//! cell past the eye's reach. A pixel it leaves, or marks as a hole, is the walk's to answer,
+//! and tests/sample.rs checks the walk.
 //!
-//! Each kind the test says something of counted, and too few of one fails. Skipped where no
-//! adapter answers.
+//! The Rust is asked along the ray the device took. A probe appended to the module
+//! (`probe_cs`) calls what `cast_cs` calls and reads the device's tangents, direction and
+//! reciprocal for each pixel. The tangents and the direction must lie within `RAY_OFF` of
+//! `px_tan`'s and `cast::through`'s, and the reciprocal within `INV_ULPS` of `Ray::inverse`'s.
+//! The Rust's entry is then taken along that ray and that reciprocal (`cast::entry_with`), so
+//! that it divides as the device does. A plane's t must lie within a few ulps of the Rust's,
+//! and within more along a small component of the direction. A pixel whose rounding moves it
+//! across an edge between the planes of two axes may go either way, but no more than one in a
+//! thousand of a run's pixels.
+//!
+//! The test counts each kind of case it checks and fails when it meets too few of one. It is
+//! skipped where no adapter answers.
 
 mod gpu;
 mod real_world;
@@ -43,29 +49,32 @@ use pxl_render::frame::shader::word::{screen, SQUARE_SIDE};
 
 use real_world::{q8, Asking, Built, WorldBufs, FINEST};
 
-/// East of X = 0 by the seam, and by X = 0, where X's roots part.
+/// The leaf cells the worlds are built about. `EYE` lies 300 cells west of X's seam, and
+/// `EYE_ZERO` lies by X = 0, where one root ends and the next begins in X.
 const EYE: [i32; 2] = [(1 << 23) - 300, (40 << 16) + 30];
 const EYE_ZERO: [i32; 2] = [150, (40 << 16) + 30];
-/// On X's seam, where the world goes round.
+/// This one lies on X's seam, where the world goes round.
 const EYE_SEAM: [i32; 2] = [(1 << 23) - 8, (40 << 16) + 30];
 const FRAME: u32 = 9;
 const WORKGROUP: u32 = beam::SAMPLE_SIDE;
-/// The ulps a device's division may put a plane's t off the Rust's, past what its way's own
-/// rounding takes (`slack`).
+/// How many ulps the device's division may put a plane's t off the Rust's, on top of what
+/// the rounding of the ray's direction allows (`slack`).
 const T_ULPS: u32 = 4;
-/// The ulps the device's reciprocal of a pixel's way may lie off the Rust's correctly rounded
-/// one: WGSL's bound on a division, 2.5 ulps, taken up to a whole ulp. Metal measured 1 here.
+/// How many ulps the device's reciprocal of a pixel's direction may lie off the Rust's
+/// correctly rounded one. WGSL bounds a division within 2.5 ulps, and this rounds that up to
+/// whole ulps. On Metal the reciprocal lies within 1 ulp.
 const INV_ULPS: u32 = 3;
-/// How far the device's tangents and way of a pixel may lie off `px_tan`'s and
-/// `cast::through`'s, on a component of at most 1: the division of a tangent, and the square
-/// root, the sum and the division of the way, each within WGSL's 2.5 ulps of 1, summed and
-/// taken up. Metal measured 1.5.
+/// How far the device's tangents and direction of a pixel may lie off `px_tan`'s and
+/// `cast::through`'s, on a component of at most 1. A tangent takes one division, and the
+/// direction a square root, a sum and a division. WGSL bounds each within 2.5 ulps of 1, and
+/// this sums those bounds and rounds up. On Metal the offset is 1.5 ulps of 1.
 const RAY_OFF: f32 = 8.0 * f32::EPSILON;
-/// The words the probe leaves a pixel: its tangents, its ray's way and inverse.
+/// The words the probe leaves for each pixel: two tangents, the three components of the
+/// direction, and the three of its reciprocal.
 const PROBE_WORDS: u32 = 8;
 
-/// The pixel's ray as the module works it out, a thread a pixel, by the functions `cast_cs`
-/// calls: the Rust is asked along the ray the device took.
+/// Works out each pixel's ray on the device, one thread a pixel, with the functions `cast_cs`
+/// calls, so that the Rust can be asked along the ray the device took.
 const PROBE: &str = r"
 @group(0) @binding(40) var<storage, read_write> probe: array<u32>;
 
@@ -88,7 +97,7 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
 }
 ";
 
-/// An eye over the built world: where it stands and looks, and the zooms it asks.
+/// An eye over a built world: where it stands, where it looks, and the zooms it asks.
 struct EyeCase {
     name: &'static str,
     origin: [i32; 3],
@@ -99,8 +108,7 @@ struct EyeCase {
     cuts: [Cut; 2],
 }
 
-/// What the eye's passes leave: its words and grid, the beam rays' words with the samples'
-/// boxes' asks answered, the node cache, and the boxes' count.
+/// What the eye's passes leave for the pixels.
 struct Cast {
     eye: Vec<u32>,
     grid: Grid,
@@ -108,17 +116,18 @@ struct Cast {
     axes: [[f32; 3]; 3],
     far: f32,
     cuts: [Cut; 2],
-    /// The beam rays' words as the faces' pass takes them, and after it.
+    /// The beam rays' words before the faces' pass (`asked`) and after it (`beams`).
     asked: Vec<u32>,
     beams: Vec<u32>,
+    /// The node cache's words. The samples' stops set its drawable entries, and the faces'
+    /// pass leaves the words of their faces in them (pxl-engine `record`).
     table: Vec<u32>,
-    /// The faces' asks laid, and the drawable entries the samples' stops set and the faces' pass
-    /// left its faces' words in (pxl-engine `record`).
+    /// How many faces' asks the samples laid.
     asks: u32,
 }
 
 fn device() -> Option<Gpu> {
-    // A hand shader's loop may hang the device's wait: the run gives up.
+    // A loop in a hand-written shader can hang the wait on the device, so the run ends itself.
     std::thread::spawn(|| {
         std::thread::sleep(std::time::Duration::from_secs(600));
         eprintln!("gave up after 10 minutes");
@@ -167,7 +176,8 @@ fn world_binds<'a>(
     ]
 }
 
-/// The eye's words at `c`, as eye.rs `Eye` gives them, and its axes.
+/// The eye's words for `c`, laid out as pxl-engine eye.rs places them, with its grid and its
+/// axes.
 fn eye_of(c: &EyeCase) -> (Vec<u32>, Grid, [[f32; 3]; 3]) {
     let forward = unit(c.look);
     let right = unit(cross(forward, [0.0, 0.0, 1.0]));
@@ -195,9 +205,9 @@ fn eye_of(c: &EyeCase) -> (Vec<u32>, Grid, [[f32; 3]; 3]) {
     (words, grid, [forward, right, up])
 }
 
-/// The eye's passes before the pixels, as a frame that casts runs them: the beam rays, the
-/// cells' starts, the samples, their record and their asks, then the record's faces asked by
-/// `face_cs`.
+/// Runs the eye's passes that come before the pixels, in the order a frame that casts runs
+/// them: the beam rays, the cells' starts, the samples with their record and their asks, and
+/// then `face_cs` over the record's asks.
 fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline) -> Cast {
     let (eye, grid, axes) = eye_of(c);
     let eye_buf = gpu.buffer(&eye, wgpu::BufferUsages::UNIFORM);
@@ -220,7 +230,8 @@ fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline
     );
     gpu.samples(false, &world_binds(b, &eye_buf, &beams, &table), &table);
     let samples = grid.samples[0] * grid.samples[1];
-    // The draw's args, then the faces' asks' (`raster::ASKED_AT`).
+    // The buffer holds the draw's arguments first, and the arguments of the faces' asks at
+    // `raster::ASKED_AT`.
     let asked_at = raster::ASKED_AT as usize;
     let mut laid = vec![0u32; asked_at + raster::ARGS_WORDS as usize];
     laid[raster::ARGS_VERTICES as usize] = raster::VERTICES;
@@ -228,7 +239,7 @@ fn cast_of(gpu: &Gpu, b: &WorldBufs, c: &EyeCase, face_p: &wgpu::ComputePipeline
     laid[asked_at + raster::ARGS_FACES as usize + 2] = 1;
     laid[asked_at + raster::ARGS_ASKS as usize] = grid.asks_at;
     let rect_args = gpu.buffer(&laid, store());
-    // The samples' stops into the entries their walks kept.
+    // Each stopped sample is recorded in the node cache entry that its walk kept.
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_SAMPLE_BOX), "sample_box_cs"),
         &[
@@ -307,8 +318,8 @@ fn face_binds<'a>(
     ]
 }
 
-/// Each drawable entry's slot of the node cache's words `table` (pxl-engine `record`), by its
-/// node's zoom and index, the first of its bucket where two hold one.
+/// Maps each drawable entry of the node cache `table` (pxl-engine `record`) to its slot, keyed
+/// by its node's zoom and index. Where two slots hold one node, the map keeps the first.
 fn drawable_at(table: &[u32]) -> std::collections::BTreeMap<(u32, [i32; 3]), u32> {
     let mut at = std::collections::BTreeMap::new();
     for slot in (0..node_cache::ENTRIES).rev() {
@@ -326,7 +337,6 @@ fn drawable_at(table: &[u32]) -> std::collections::BTreeMap<(u32, [i32; 3]), u32
     at
 }
 
-/// The node at word `k` of the beam rays' words.
 fn node_at(beams: &[u32], k: u32) -> Node {
     let k = k as usize;
     let w = |a: u32| beams[k + a as usize];
@@ -337,8 +347,8 @@ fn node_at(beams: &[u32], k: u32) -> Node {
     }
 }
 
-/// A beam ray's line as a reader of the assets about a hit asks off it: its node, and what
-/// was handed each node over it.
+/// A beam ray's line, as `support::asset` reads it to ask about the cells around a hit: the
+/// line's node, and the inheritance handed to each node above it.
 struct BeamLine<'a> {
     beams: &'a [u32],
     line: u32,
@@ -378,11 +388,12 @@ impl Ancestors<Inheritance> for BeamLine<'_> {
     }
 }
 
-/// The ask at word `a` as the Rust asks it (`Want`), its node the drawable entry's in the
-/// node cache's words `table` where it is an entry's.
+/// Answers the ask at word `a` of the beam rays' words as the Rust answers it. Where the ask
+/// is a drawable entry's, its node is read from that entry in the node cache `table`.
 fn face_want(q: &mut Asking, beams: &[u32], table: &[u32], origin: [i32; 3], a: u32) -> Want {
     let w = |k: u32| beams[(a + k) as usize];
-    // A drawable entry's ask names its entry (`record::TO_RECORD`), a hit's its node.
+    // A drawable entry's ask names its entry in the node cache (`record::TO_RECORD`). A hit's
+    // ask names its node in the beam rays' words.
     let hit = if w(beam::ASK_TO) & record::TO_RECORD != 0 {
         entry_node(table, w(beam::ASK_NODE) as usize, origin)
     } else {
@@ -396,7 +407,8 @@ fn face_want(q: &mut Asking, beams: &[u32], table: &[u32], origin: [i32; 3], a: 
     let bits = face::word(face_of, |d| {
         answer::whole(support::asset(q, &line, zoom, face::beside(zoom, c, d)))
     });
-    // The same asked with the carve and the hide each other's.
+    // The same ask with the carve and the hide swapped. Where that changes the bits, the case
+    // shows that the shader reads the two cuts apart.
     let cuts = q.cuts;
     q.cuts = [cuts[1], cuts[0]];
     let swapped = face::word(face_of, |d| {
@@ -409,15 +421,16 @@ fn face_want(q: &mut Asking, beams: &[u32], table: &[u32], origin: [i32; 3], a: 
     }
 }
 
-/// An ask's bits as the Rust asks them, and whether the carve and the hide swapped change
-/// them.
+/// An ask's bits as the Rust answers them, and whether swapping the carve and the hide
+/// changes them.
 struct Want {
     bits: u32,
     cut: bool,
 }
 
-/// The eyes both tests stand on: over the ground, a lattice of two over the seam, cut and
-/// hid on what is placed, by a way, out to the horizon, and down into a hole carved.
+/// The eyes the tests stand at in the world about `EYE`. Each looks at another case: the
+/// ground, the seam, what is placed with both cuts on it, a way, the horizon, and a hole
+/// carved in the ground.
 fn eyes(built: &Built) -> Vec<EyeCase> {
     let none = [Cut::NONE; 2];
     let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
@@ -434,7 +447,8 @@ fn eyes(built: &Built) -> Vec<EyeCase> {
         .find(|p| p.0 == LEAF_CELL_ZOOM && [0, 3].contains(&p.1) && p.2[0] > 0)
         .expect("a way")
         .2;
-    // A cube of the ground carved under an eye looking down into it, the leaf beside hid.
+    // A cube of the ground is carved under an eye that looks down into it, and the leaf
+    // beside it is hidden.
     let hole = [(leaf_c[0] >> 1) + 6, (leaf_c[1] >> 1) + 6];
     let carved = ancestor_at(
         LEAF_CELL_ZOOM,
@@ -521,8 +535,9 @@ fn eyes(built: &Built) -> Vec<EyeCase> {
     ]
 }
 
-/// The worlds the eyes stand in, and the eyes: by the seam, one high over X = 0 and the
-/// mountain west of it, its rays ending in either root, and one down on X's seam.
+/// The worlds and the eyes in each. The world about `EYE` holds the eyes of `eyes`. The world
+/// about `EYE_ZERO` holds one eye high over X = 0 and the mountain west of it, whose rays end
+/// in either root. The world about `EYE_SEAM` holds one eye looking down on X's seam.
 fn worlds() -> Vec<(Built, Vec<EyeCase>)> {
     let built = real_world::build(EYE);
     let cases = eyes(&built);
@@ -572,7 +587,7 @@ fn hand_faces_answer_as_face_word() {
         };
         let g = &cast.grid;
 
-        // Each box's ask answered where it says, as the Rust answers it.
+        // Each box's ask must be answered at the word it names, with the bits the Rust gives.
         let (mut want, mut have) = (Vec::new(), Vec::new());
         for i in 0..cast.asks {
             let a = g.ask_at(i);
@@ -614,8 +629,8 @@ fn hand_faces_answer_as_face_word() {
     assert!(short.is_empty(), "{}", short.join("\n"));
 }
 
-/// A screen the pixels are cast on: its pixels, the eye's jitter, the share of the samples'
-/// reach the eye now has, and one tile in so many not claimed.
+/// A screen the pixels are cast on. `reach` is the share of the samples' reach that the eye
+/// keeps when it casts. One tile in `unclaimed_in` is left unclaimed, and none where it is 0.
 struct Screen {
     size: [u32; 2],
     jitter: [f32; 2],
@@ -623,14 +638,13 @@ struct Screen {
     unclaimed_in: u32,
 }
 
-/// The tangents of pixel `p`'s ray, as `cast_cs` takes them (grid.wgsl `px_tan`).
+/// The tangents of pixel `p`'s ray, as `cast_cs` works them out (grid.wgsl `px_tan`).
 fn px_tan(s: &Screen, tan: [f32; 2], p: [u32; 2]) -> [f32; 2] {
     let ndc_x = (p[0] as f32 + 0.5 + s.jitter[0]) / s.size[0] as f32 * 2.0 - 1.0;
     let ndc_y = 1.0 - (p[1] as f32 + 0.5 + s.jitter[1]) / s.size[1] as f32 * 2.0;
     [ndc_x * tan[0], ndc_y * tan[1]]
 }
 
-/// What the probe left of each pixel: its tangents and its ray.
 struct Probed {
     px: [f32; 2],
     dir: [f32; 3],
@@ -690,7 +704,8 @@ fn hand_pixels_answer_as_cast_entry() {
             reach: 1.0,
             unclaimed_in: 3,
         },
-        // The eye's reach cut since its samples were cast: a cell past it is not entered.
+        // The eye's reach is cut after its samples were cast, and `cast_cs` must not enter a
+        // cell past the new reach.
         Screen {
             size: [199, 121],
             jitter: [-0.5, 0.125],
@@ -735,7 +750,7 @@ fn hand_pixels_answer_as_cast_entry() {
         let rays_view = array_view(&rays);
         let probed = probe(&gpu, &probe_p, &eye_buf, &rays_view, s.size);
 
-        // The device's ray against the Rust's for the same pixel.
+        // Measures how far the device's ray lies off the Rust's for each pixel.
         let before: Vec<[u32; 2]> = probed.iter().map(|at| g.sample_before(at.px)).collect();
         for (p, at) in probed.iter().enumerate() {
             let px = [p as u32 % wd, p as u32 / wd];
@@ -748,10 +763,10 @@ fn hand_pixels_answer_as_cast_entry() {
             inv_off = inv_off.max(off);
         }
 
-        // The visible voxel the raster would leave: mostly that of one of the four samples
-        // about the pixel, some none, some a lack, some a sample's far off.
+        // Lays at each pixel a visible voxel as the raster could leave it. Most pixels take the
+        // voxel of one of the four samples about them. Some take none, some a lack, and some
+        // the voxel of a sample far off.
         let n = g.samples[0];
-        // Each drawable entry's slot by its node.
         let voxel_at = drawable_at(&cast.table);
         let voxel_of = |i: u32| -> Option<u32> {
             let k = g.sample_at([i % n, i / n]);
@@ -795,7 +810,8 @@ fn hand_pixels_answer_as_cast_entry() {
         );
         let vis_view = array_view(&vis);
 
-        // The tiles: one in so many not claimed this frame.
+        // A tile is claimed when it changed within the last `screen::DAMAGE_FRAMES` frames. One
+        // tile in `unclaimed_in` last changed just outside that window.
         let now = 77u32;
         let tiles = [wd.div_ceil(screen::TILE), ht.div_ceil(screen::TILE)];
         let changed: Vec<u32> = (0..tiles[0] * tiles[1])
@@ -832,7 +848,7 @@ fn hand_pixels_answer_as_cast_entry() {
 
         let table_buf = gpu.buffer(&cast.table, store());
         let marks = gpu.buffer(&ray::MISS_ARGS_EMPTY, store());
-        // Room past the grid's words for this screen's holes.
+        // The beam rays' buffer needs room past the grid's words for this screen's holes.
         let mut padded = cast.beams.clone();
         padded.resize((g.walked_at() + ray::holes_words(s.size)) as usize, 0);
         let beams = gpu.buffer(&padded, store());
@@ -850,8 +866,9 @@ fn hand_pixels_answer_as_cast_entry() {
             [list_of, per_tile, per_tile],
         );
 
-        // The Rust, along the device's ray, at each pixel the device drew: a pixel the visible
-        // voxel answers, or the sky. A hole's words stand until the queue ends its ray.
+        // Each pixel the device drew must hold what the Rust gives along the device's ray: the
+        // visible voxel's words, or the sky. A hole's words must stand until the queue ends
+        // its ray, so a hole the device drew fails.
         let got = read_texture(&gpu.device, &gpu.queue, &rays);
         let (mut want, mut have) = (Vec::new(), Vec::new());
         let mut drawn_cnt = 0u32;
@@ -872,8 +889,9 @@ fn hand_pixels_answer_as_cast_entry() {
                 let asset = [w(node_cache::W_ASSET), w(node_cache::W_ASSET + 1)];
                 let state = cast.table[node_cache::state_at(slot) as usize];
                 let faces = record::asked_faces(state);
-                // The entry along the device's reciprocal, its plane's t a few ulps off as the
-                // device divides; a pixel at an edge as the device rounds it.
+                // The entry is taken along the device's reciprocal. Its plane's t may still lie
+                // a few ulps off, as the device divides, and a pixel at an edge may go either
+                // way, as the device rounds it.
                 let e = cast::entry_with(cast.origin, &r, at.inv, &node, asset[0]);
                 let lacks = v & raster::LACK != 0;
                 let takes = !lacks && e.enters && raster::accepts(faces, ray::face(at.dir, e.axis));
@@ -971,11 +989,12 @@ fn hand_pixels_answer_as_cast_entry() {
     );
 }
 
-/// A pixel whose visible voxel is stale from the eye that now casts (`record::fresh`) is a
-/// hole: `cast_cs` sets its walked bit and lists it for the holes' queue, once (`ray::holes_at`),
-/// and does not take the stale voxel as the pixel's answer. The record is the one an eye's
-/// samples wrote; the eye that casts asks every node finer than any it holds, so every entry is
-/// stale from it, as a coarse voxel recorded from far is once the eye comes near.
+/// A pixel whose visible voxel is stale for the eye that casts (`record::fresh`) must be a
+/// hole. `cast_cs` sets its walked bit, lists it once for the holes' queue (`ray::holes_at`),
+/// and does not take the stale voxel as the pixel's answer. The record is the one the eye's
+/// samples wrote. The eye that casts asks for nodes finer than any the record holds, so every
+/// entry is stale for it, as a coarse voxel recorded from far becomes stale once the eye comes
+/// near.
 #[test]
 fn hand_stale_voxel_is_a_hole() {
     let Some(gpu) = device() else { return };
@@ -1007,7 +1026,7 @@ fn hand_stale_voxel_is_a_hole() {
             );
             let rays_view = array_view(&rays);
 
-            // Each pixel's visible voxel: the drawable entry of the sample at or before it.
+            // Each pixel's visible voxel is the drawable entry of the sample at or before it.
             let voxel_at = drawable_at(&cast.table);
             let n = g.samples[0];
             let mut rays_of = Vec::with_capacity(texels);
@@ -1049,7 +1068,7 @@ fn hand_stale_voxel_is_a_hole() {
             );
             let vis_view = array_view(&vis);
 
-            // Every tile claimed this frame.
+            // Every tile is claimed this frame.
             let now = 77u32;
             let tiles = [wd.div_ceil(screen::TILE), ht.div_ceil(screen::TILE)];
             let changed = vec![now; (tiles[0] * tiles[1]) as usize];
@@ -1077,7 +1096,7 @@ fn hand_stale_voxel_is_a_hole() {
             let list_of = gpu.read(&list)[0];
             let table_buf = gpu.buffer(&cast.table, store());
             let marks = gpu.buffer(&ray::MISS_ARGS_EMPTY, store());
-            // Room past the grid's words for this screen's holes.
+            // The beam rays' buffer needs room past the grid's words for this screen's holes.
             let mut padded = cast.beams.clone();
             let walked_at = g.walked_at() as usize;
             padded.resize(walked_at + ray::holes_words([wd, ht]) as usize, 0);

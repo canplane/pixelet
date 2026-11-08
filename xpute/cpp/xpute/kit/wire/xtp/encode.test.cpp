@@ -94,8 +94,9 @@ XPUTE_TEST(xtp_overflow_spoils_pkt) {
     XPUTE_CHECK_EQ(encode([&bad](PacketWriter &w) { w.graft(bad); }), std::string("errno:-74"), "a graft of what is no packet");
 }
 
-// A branch ends on a word, so a byte after it lies where the tree encoder
-// lays it rather than right after the branch's last child.
+// A branch's extent ends on a word boundary, so a byte after it starts on the
+// next word, where the other languages put it, and not right after the
+// branch's last child.
 XPUTE_TEST(xtp_node_after_branch_aligned) {
     std::vector<std::uint8_t> pkt = bytes(encode([](PacketWriter &w) {
         w.branch(2, [](PacketWriter &b) {
@@ -107,7 +108,9 @@ XPUTE_TEST(xtp_node_after_branch_aligned) {
     XPUTE_CHECK(root.ok());
     Result<Cursor> after = root->at(1);
     XPUTE_CHECK(after.ok() && after->get_number().value() == 2);
-    // The inner branch at 16 + 24, its table one word, its byte at 56; the
-    // next byte on the word after it.
+    // The outer branch starts at 16, and its count and two entries take 24
+    // bytes, so the inner branch starts at 40. The inner count and one entry
+    // end at 56, where the inner byte goes. The outer branch's second byte then
+    // starts on the next word, 64, not at 57.
     XPUTE_CHECK_EQ(std::get<0>(get_word(pkt, HDR_SZ + WORD_SZ * 2)) + root->base(), 64u, "the byte's place");
 }

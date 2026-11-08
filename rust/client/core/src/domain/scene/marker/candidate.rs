@@ -1,28 +1,33 @@
 // pxl-core/domain/scene/marker/candidate.rs
 
-//! One frame's marker candidates, as lanes.
+//! One frame's marker candidates, kept as parallel arrays with one lane per
+//! candidate.
 
 #[derive(Clone, Debug, Default)]
 pub(super) struct Candidates {
     pub cnt: u32,
 
-    /// Relative to the local world frame's origin.
+    /// The anchor, relative to the origin of the local world frame.
     pub local_x: Vec<f64>,
     pub local_y: Vec<f64>,
     pub local_z: Vec<f64>,
 
-    /// CSS pixels.
+    /// The marker's size, in CSS pixels.
     pub w_px: Vec<f32>,
     pub h_px: Vec<f32>,
-    /// The width of the region it keeps (`set.rs`), at least its own.
+    /// The width of the region the marker keeps (`set.rs`), at least its own
+    /// width.
     pub region_px: Vec<f32>,
-    /// Canvas-space Y of the anchor, CSS pixels.
+    /// How far below the sprite's top the anchor lies, in CSS pixels.
     pub anchor_px: Vec<f32>,
-    /// Only keeps two at equal distance from swapping between frames.
+    /// Used only to keep two candidates at equal distance from swapping
+    /// between frames.
     pub tiebreak: Vec<f64>,
 
-    // Filled by the selector, kept here so the pass has one allocation site.
-    /// Squared: only the order is used.
+    // The selector fills the fields below. They live here so the pass
+    // allocates in one place.
+    /// The squared distance from the eye. Only its order is used, so no root
+    /// is taken.
     pub d2: Vec<f64>,
     /// Its region in viewport pixels: left, top, right, bottom.
     pub screen: Vec<[f64; 4]>,

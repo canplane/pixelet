@@ -9,12 +9,12 @@ path = "src/lib.rs"
 doctest = false
 
 [dependencies]
-# The engine it fills, and the decor's draws.
+# The engine whose content this is, and the hash the decor draws from.
 pxl-engine.workspace = true
 xpute-kit.workspace = true
 
 [dev-dependencies]
-# What a test reads a scatter's spread off.
+# A test measures a scatter's spread with it.
 libm.workspace = true
 
 [lints]

@@ -16,8 +16,9 @@ import {
 } from "@/ui/component/theme.ts";
 
 /**
- * Coordinates stand in where the pivot is in no place (sea, or not yet
- * arrived), and "Locating…" where there is no pivot yet.
+ * The name of the place under the pivot. Where the pivot is in no place, at
+ * sea or before the place has arrived, its coordinates stand in. Before there
+ * is a pivot, "Locating…" does.
  */
 export function CurrentAddress() {
   const { t } = useTranslation();

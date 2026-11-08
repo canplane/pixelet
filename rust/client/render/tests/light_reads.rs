@@ -1,9 +1,15 @@
-//! The light's slide by hand (frame/shader/light_slide.wgsl) against pxl-engine's light:
-//! `light_slide_cs` sets a tile's read to none wherever the box slid it off or into another
-//! band (`Light::keeps` false), so no cast reads a depth cast for another place. A tile it may
-//! keep it may also set to none. And it sets to none every tile whose rays may meet a column of
-//! the world that changed (`Light::reaches`), the box not slid; and names the cast as the last
-//! its slide ran in (`light::SLIDE_RAN`). Skipped where no adapter answers.
+//! Checks the light's hand-written slide (frame/shader/light_slide.wgsl) and propagation
+//! (light_propagate.wgsl) against pxl-engine's light. Between them they decide which tiles of
+//! the shadow map a cast reads and which it casts anew.
+//!
+//! `light_slide_cs` must set a tile's read word to none wherever the box slid the tile off the
+//! box or into another band (`Light::keeps` is false), so that no cast reads a depth cast for
+//! another place. A tile set to none is only cast anew, so the slide may also set to none a
+//! tile it could keep. With the box standing, the slide must set to none every tile whose rays
+//! may meet a column of the world that changed (`Light::reaches`). Its first thread must name
+//! the cast as the last one the slide ran in (`light::SLIDE_RAN`).
+//!
+//! The tests are skipped where no adapter answers.
 
 mod gpu;
 
@@ -16,14 +22,15 @@ use pxl_render::frame::shader::word::SQUARE_SIDE;
 
 use gpu::{mix, Gpu, LightBox, Tally};
 
-/// The shipped map's side, and its tiles a side.
+/// The side of the shadow map as shipped, in texels, and the number of tiles along it.
 const SIZE: u32 = SHADOW_SIZE;
 const N: u32 = light::tiles(SIZE);
-/// The eye's zooms, which every band is held to.
+/// The eye's zooms. Every tile's band lies within them.
 const RANGE: [Zoom; 2] = [8, LEAF_CELL_ZOOM + 3];
 
-/// A light box along `dir` about the eye, `side` units a texel, its corner at `corner` and
-/// its receivers reading within `reach_ndc` of its half-width.
+/// A light box about the eye that looks along `dir`, with `side` units a texel and its texel
+/// (0, 0) at the world texel `corner`. Its receivers read the map within `reach_ndc` of the
+/// box's half-width.
 fn box_of(dir: [f32; 3], side: f32, reach_ndc: f32, corner: [i32; 2]) -> Light {
     let b = LightBox {
         size: SIZE,
@@ -46,8 +53,8 @@ fn eye_words(l: &Light) -> Vec<u32> {
     w
 }
 
-/// The head of cast `current` in `epoch`, the box's corner the cast before's `was` and its
-/// eye's zooms `range_was`.
+/// The light's head for cast `current` in `epoch`. `was` is the box's corner in the cast
+/// before, and `last_range` holds the eye's zooms that cast was cast under.
 fn header_words(current: u32, epoch: u32, was: [i32; 2], last_range: [Zoom; 2]) -> Vec<u32> {
     let mut header = vec![0u32; light::HEADER_WORDS];
     header[light::HEADER_CAST] = current;
@@ -95,8 +102,8 @@ fn run_with(
     gpu.read(&list)
 }
 
-/// A slide: its name, where the box's corner was and where it is, and the eye's zooms the cast
-/// before was cast under.
+/// A slide's case: its name, the box's corner in the cast before and in this one, and the
+/// eye's zooms the cast before was cast under.
 type Slide = (&'static str, [i32; 2], [i32; 2], [Zoom; 2]);
 
 #[test]
@@ -109,7 +116,6 @@ fn hand_slide_forgets_what_moved() {
     let t = light::TILE as i32;
     let mut tally = Tally::default();
     let (mut kept, mut off, mut banded) = (0u32, 0u32, 0u32);
-    // Where the corner was, and where it is; the eye's zooms the cast before was cast under.
     let step = [RANGE[0] - 1, RANGE[1] - 1];
     let slides: [Slide; 9] = [
         ("a tile across", [1304, -896], [1304 + t, -896], RANGE),
@@ -148,7 +154,8 @@ fn hand_slide_forgets_what_moved() {
             .map(|k| mix(k, n as u32) | 1)
             .collect();
         let have = run(&gpu, &p, &l, &list, was, range_was);
-        // The slide's first thread names the cast the slide last ran in (`light::SLIDE_RAN`).
+        // The slide's first thread must write this cast's number as the last cast the slide ran
+        // in (`light::SLIDE_RAN`).
         let ran = (light::slide_at(SIZE) + light::SLIDE_RAN) as usize;
         tally.compare(
             &format!("{name}: the slide ran"),
@@ -190,7 +197,8 @@ fn hand_slide_forgets_what_moved() {
     tally.end("slides");
 }
 
-/// A world's change: its name, the light's direction, and its columns.
+/// A change to the world: its name, the light's direction, the columns it changed, and the
+/// first and last bands that read them.
 type Change = (&'static str, [f32; 3], &'static [[f32; 4]], [Zoom; 2]);
 
 #[test]
@@ -203,8 +211,9 @@ fn hand_slide_forgets_what_a_world_change_reaches() {
     let mut tally = Tally::default();
     let (mut kept, mut off, mut extra) = (0u32, 0u32, 0u32);
     let corner = [1304, -896];
-    // Columns from the eye, in units: a brick's, an edit's a few cells wide, one far off the
-    // box, the world's whole width, and that width read by one band alone.
+    // The columns are in units from the eye: a brick's, two edits a few cells wide, one far
+    // off the box, a strip across the world's whole width, and the same strip read by the
+    // leaf's band alone.
     const EVERY: [Zoom; 2] = [0, Zoom::MAX];
     let changes: [Change; 5] = [
         (
@@ -283,8 +292,8 @@ fn hand_slide_forgets_what_a_world_change_reaches() {
     tally.end("world changes");
 }
 
-/// Where a point `v` units from the eye lies on the box, in texels from texel (0, 0)'s middle,
-/// as light_box.wgsl `texel_at` reads it.
+/// Where the point `v`, in units from the eye, lies on the box, in texels from the middle of
+/// texel (0, 0), as light_box.wgsl `texel_at` reads it.
 fn texel_at(l: &Light, v: [f32; 3]) -> [f32; 2] {
     let d = [0, 1, 2].map(|k| v[k] - l.first[k]);
     let dot = |a: [f32; 3]| d[0] * a[0] + d[1] * a[1] + d[2] * a[2];
@@ -294,19 +303,25 @@ fn texel_at(l: &Light, v: [f32; 3]) -> [f32; 2] {
     ]
 }
 
-/// The propagation by hand (frame/shader/light_propagate.wgsl), a thread a stood tile
-/// (`light::LIST_RECEIVERS`), against this test's reading of its rule: a tile is read where it
-/// lies within the disk a receiver reads grown by `light::TILE_READ_PAD` and within the taps
-/// (`light::READ_TILES`) of a step up the way up decor's tallest from a stood tile; each read
-/// tile listed once (`light::LIST_READS`), the lay opened to as many (`light::ARGS_LAY`). The
-/// stood tiles propagated in two casts, as a cast adds to what the casts before stood on and
-/// propagated (`light::kept_at`): the second takes only the tiles past the count kept, and the
-/// reads the two list are those all of them read. Then (`light_damage_cs`) each tile read claimed
-/// where its word names a cast before the reads' epoch, the later of the host's and the one a
-/// slide unrun began (`light::reads_epoch`): its word the cast's, and listed
-/// (`light::LIST_DAMAGE`). A step by a tile's edge may read either tile. Every texel a placed
-/// decor's pixel reads lies in a tile read, the decor stood on its footprint alone
-/// (`Light::corner_tiles`). Skipped where no adapter answers.
+/// Checks the hand-written propagation (frame/shader/light_propagate.wgsl), which runs a thread
+/// for each tile a receiver stands on (`light::LIST_RECEIVERS`), against this test's reading of
+/// its rule. A tile is read when it lies within the disk a receiver reads, grown by
+/// `light::TILE_READ_PAD`, and within the taps (`light::READ_TILES`) of some step on the way up
+/// from a stood tile to the height of the tallest decor. Each tile read must be listed once
+/// (`light::LIST_READS`), and the map's lay must be opened to as many instances
+/// (`light::ARGS_LAY`). A step that lies by a tile's edge may read either tile.
+///
+/// The stood tiles are propagated over two casts, as a cast adds to what the casts before it
+/// stood on and propagated (`light::carry_at`). The second cast takes only the tiles past the
+/// count kept, and the two must together list the tiles that all the stood tiles read.
+///
+/// Then `light_damage_cs` must claim each tile read whose word names a cast before the reads'
+/// epoch: it writes the cast's number in the tile's word and lists the tile
+/// (`light::LIST_DAMAGE`). The reads' epoch is the later of the host's epoch and the one that a
+/// slide which did not run began (`light::reads_epoch`).
+///
+/// Every texel that a placed decor's pixel reads must lie in a tile read, though the decor
+/// stands only on the tiles of its footprint (`Light::corner_tiles`).
 #[test]
 fn hand_propagation_reads_what_stands() {
     let Some(gpu) = Gpu::new() else {
@@ -323,7 +338,7 @@ fn hand_propagation_reads_what_stands() {
     ] {
         let l = box_of(dir, 0.0625, 0.75, [1304, -896]);
         let half = N as i32 / 2;
-        // Some tiles stood on about the box's middle, each once.
+        // Some tiles about the box's middle that receivers stand on, each once.
         let mut stood: std::collections::BTreeSet<[i32; 2]> = (0..300u32)
             .map(|k| {
                 let r = mix(k, 7);
@@ -333,7 +348,8 @@ fn hand_propagation_reads_what_stands() {
                 ]
             })
             .collect();
-        // Placed decor, each stood on its footprint, its base anywhere on a tile.
+        // Each placed decor stands on the tiles of its footprint, its base anywhere within a
+        // tile.
         let wide = WIDEST as f32 / 2.0;
         let bases: Vec<[f32; 3]> = (0..64u32)
             .map(|k| [11, 13, 17].map(|s| (mix(k, s) % 4001) as f32 / 100.0 - 20.0))
@@ -350,8 +366,9 @@ fn hand_propagation_reads_what_stands() {
             }
         }
         let stood: Vec<[i32; 2]> = stood.into_iter().collect();
-        // The way up, its steps and each step's tiles, either side where a step lies by an
-        // edge.
+        // The way up from a stood tile to the tallest decor's height, in steps of at most a
+        // tile. A step names its tile, or both tiles where it lies by an edge, and only a step
+        // with one tile must be read.
         let low = texel_at(&l, [0.0; 3]);
         let top = texel_at(&l, [0.0, 0.0, TALLEST as f32]);
         let way = [0, 1].map(|k| (top[k] - low[k]) / light::TILE as f32);
@@ -405,7 +422,8 @@ fn hand_propagation_reads_what_stands() {
                 }
             }
         }
-        // The list: the stood tiles listed, the reads some cast's each, the slide's words.
+        // The list's buffer holds the stood tiles, a read word naming some cast for each tile,
+        // and the slide's words.
         let mut list: Vec<u32> = (0..light::buffer_words(SIZE)).map(|k| mix(k, 3)).collect();
         let stood_at = light::list_cnt_at(SIZE, light::LIST_RECEIVERS) as usize;
         list[stood_at] = stood.len() as u32;
@@ -421,8 +439,8 @@ fn hand_propagation_reads_what_stands() {
         list[slide + light::READS_FROM as usize] = reads_from;
         let mut args = vec![0u32; light::args_words(SIZE) as usize];
         args[light::ARGS_LAY as usize] = light::LAY_VERTICES;
-        // The stood tiles' first half propagated by a cast before, which stood the world's
-        // receivers afresh (`light::HEADER_WORLD`); none of them yet.
+        // A cast before this one stood the world's receivers afresh (`light::HEADER_WORLD`) and
+        // propagates the first half of the stood tiles, none of them propagated before it.
         let kept = light::carry_at(SIZE) as usize;
         let half = stood.len() / 2;
         list[stood_at] = half as u32;
@@ -449,8 +467,8 @@ fn hand_propagation_reads_what_stands() {
         };
         let rows = |cnt: usize| [ray::MISS_ACROSS, (cnt as u32).div_ceil(per), 1];
         propagation(&list_buf, &p, rows(half));
-        // Then this cast: the rest stood on, the first half's count kept as propagated, the
-        // reads kept with their count (the args, as the host copies the count back in).
+        // Then this cast stands on the rest. The first half's count is kept as propagated, and
+        // the reads stay with their count in the args, as the host copies the count back in.
         let mut now = gpu.read(&list_buf);
         now[stood_at] = stood.len() as u32;
         now[kept + light::RECEIVER_TILES_CNT as usize] = half as u32;
@@ -470,9 +488,10 @@ fn hand_propagation_reads_what_stands() {
             .map(|&w| [(w & 0xffff) as i32, (w >> 16) as i32])
             .collect();
         let got: std::collections::BTreeSet<[i32; 2]> = list_of.iter().copied().collect();
-        // What a decor's pixel reads: anywhere on its model, from the tenth of a unit a pine
-        // sinks under its base to the tallest, a texel off along its normal, a tap and the
-        // neighbor it filters in each way (pxl-render shadow.wgsl `shadow_visibility`).
+        // A decor's pixel may lie anywhere on its model, from a tenth of a unit under its base,
+        // where a pine sinks, up to the tallest decor's height. It reads a texel off along its
+        // normal, then a tap and the neighbor it filters in each way (pxl-render shadow.wgsl
+        // `shadow_visibility`).
         let (reach, tile) = (param::light::SPREAD + 2.0, light::TILE as f32);
         let mut unread = Vec::new();
         for (n, b) in bases.iter().enumerate() {
@@ -514,8 +533,8 @@ fn hand_propagation_reads_what_stands() {
             &[missing.len() as u32, extra.len() as u32],
             |k| [format!("missing {missing:?}"), format!("past {extra:?}")][k].clone(),
         );
-        // Each tile's read word: the cast's where it is read and named a cast before the reads'
-        // epoch, as it was elsewhere.
+        // A tile read whose word named a cast before the reads' epoch must now hold this cast's
+        // number. Every other tile keeps its word.
         let (mut want, mut have) = (Vec::new(), Vec::new());
         for j in 0..N as i32 {
             for i in 0..N as i32 {

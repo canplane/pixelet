@@ -1,9 +1,9 @@
 // pxl-render/gpu/pack.rs
 
-//! The texture pack as one 2D array texture with its mip chain (`mip.rs`),
-//! and the table mapping a layer's top, side and bottom to array slots. A slot is a distinct
-//! tile: a face with no tile of its own shares the top's slot, and a layer the
-//! pack ships nothing for takes none and reads as the box's color.
+//! The texture pack as one 2D array texture with its mip chain (`mip.rs`), and the table that
+//! maps a layer's top, side and bottom to slots of the array. Each slot is a distinct tile. A
+//! face with no tile of its own shares the top's slot, and a layer the pack ships nothing for
+//! takes no slot and reads as the box's color.
 
 use crate::frame::shader::word::{IMAGE_BOTTOM, IMAGE_SIDE, IMAGE_TOP, NO_SLOT, SLOT_BITS};
 use pxl_spec::asset::ingest::{CubeFace, PACK};
@@ -39,10 +39,10 @@ fn layout() -> (Vec<TileOrigin>, Vec<u32>) {
     let mut slots: Vec<TileOrigin> = Vec::new();
     let table = palette()
         .map(|cube| {
-            // An asset wears what the pack ships for it: a side or a bottom of its
-            // own where it has one, its top's image on every face where it has
-            // not, as a cube_all. The dirt under a face is its own asset, the
-            // stratum under it (pxl-engine ground.rs `Cell::asset`), never a side.
+            // An asset wears what the pack ships for it: its own side or bottom where it has
+            // one, and otherwise its top's image on every face, as a `cube_all` model does. The
+            // dirt under a face is an asset of its own, the stratum below (pxl-engine ground.rs
+            // `Cell::asset`), and never a side's image.
             let top = shipped_texture_tile(cube, CubeFace::Top);
             let side = shipped_texture_tile(cube, CubeFace::Side).or(top);
             let bottom = shipped_texture_tile(cube, CubeFace::Bottom).or(top);
@@ -109,7 +109,6 @@ impl Pack {
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
         g.write_buf(table, 0, bytes(&blank));
-        // A chain is under four thirds of its first level.
         let bytes = (0..levels)
             .map(|level| (LAYER_TEX_SIZE >> level).pow(2) * 4 * slots)
             .sum();
@@ -125,7 +124,8 @@ impl Pack {
         }
     }
 
-    /// Whether the pack came this frame.
+    /// Copies the pack's tiles into their slots, builds their mips and writes the table, the
+    /// first time the pack arrives. Returns whether it arrived this frame.
     pub fn step(&mut self, g: &Gpu, mips: &MipPass, pack: Option<Image>) -> bool {
         if self.loaded {
             return false;

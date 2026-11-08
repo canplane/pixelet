@@ -1,4 +1,5 @@
-// WebGPU has no generateMipmap: one linear sample at each 2x2's center, a pass a level.
+// WebGPU has no generateMipmap, so each level is drawn in a pass of its own. A pixel takes one
+// linear sample at the middle of the 2×2 texels above it, which averages them.
 
 @group(0) @binding(0) var above: texture_2d<f32>;
 @group(0) @binding(1) var above_sampler: sampler;

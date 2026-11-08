@@ -2,6 +2,6 @@
 //
 // GENERATED from spec/abi/fs.json
 
-// What a command is about.
+// A command's major, the high byte of its number, by which the runtime routes the frame.
 
 export const FS = 0x03;

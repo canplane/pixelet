@@ -1,13 +1,13 @@
 // pxl-tool/bin/check_rules.rs
 
-//! Holds the tree to what a reader cannot see and the code must keep: no raw
-//! pointer casts in offset crates, each rounding half to even where clippy
-//! does not see it, no CommonJS file, the layers' order, where nothing names
-//! what is above it, across a crate's folders and the client's, and inside
-//! the core's heads', pxl-render's,
-//! the camera's and the view's, the profiler named by the top alone, no renderer under the
-//! core's sys/, the layers read by the query alone, the screen's pixels read
-//! only at the screen, and no Rust file outside a crate's module tree. A rule Rust alone keeps is clippy's
+//! Holds the tree to what the code must keep but a reader cannot see. It refuses raw pointer
+//! casts in the crates that address memory by offset; any rounding other than half to even
+//! where clippy does not see it; any CommonJS file; and any name, in the layers' orders, of
+//! what stands above the naming file: across a crate's folders and the client's, and inside
+//! the core's heads, pxl-render's, the camera's and the view's. It also holds that only the
+//! top names the profiler, that no renderer stands under the core's sys/, that only the query
+//! reads the layers, that only the screen reads the screen's pixels, and that no Rust file
+//! lies outside a crate's module tree. A rule Rust alone can keep is clippy's
 //! (rust/clippy.toml, xpute/rust/clippy.toml).
 //!
 //!   cargo check-rules            (in rust/; make check-rules from the root)
@@ -17,8 +17,8 @@ use std::process::{Command, ExitCode};
 use pxl_tool::root;
 use regex::Regex;
 
-/// The crates that address the core memory by offset, where an offset becomes
-/// a pointer only through `xpute_core::mem::at` or `Memory::at`.
+/// The crates that address the core's memory by offset, in which an offset becomes a pointer
+/// only through `xpute_core::mem::at` or `Memory::at`.
 const OFF_CRATES: [&str; 4] = [
     "xpute/rust/core/src/",
     "xpute/rust/runtime/src/",
@@ -26,12 +26,11 @@ const OFF_CRATES: [&str; 4] = [
     "rust/client/render/src/",
 ];
 
-/// One rounding: half to even (xpute ARCHITECTURE.md, `math/scalar`). A call
-/// that rounds otherwise, in TypeScript, WGSL or C++, or a floor of a half
-/// added in any of them or in Rust, is refused in pixelet's code and xpute's;
-/// Rust's calls are clippy's (`disallowed-methods`). xpute's scalar keeps its
-/// named variants, round_half_up and round_half_away, as options a library
-/// offers.
+/// One rounding, half to even (xpute ARCHITECTURE.md, `math/scalar`). A call that rounds
+/// otherwise, in TypeScript, WGSL or C++, or a floor of a half added in any of them or in
+/// Rust, is refused in pixelet's code and xpute's; Rust's rounding calls are clippy's to
+/// refuse (`disallowed-methods`). xpute's scalar keeps its named variants, round_half_up and
+/// round_half_away, as options a library offers.
 const ROUNDING_ROOTS: [&str; 3] = ["rust/", "ts/", "xpute/"];
 const ROUNDING_VARIANT_FILES: [&str; 4] = [
     "xpute/ts/kit/src/math/scalar.ts",
@@ -46,20 +45,19 @@ const NOT_EVEN: [&str; 4] = [
     r"\.toFixed\(",
     r"\.toPrecision\(",
 ];
-/// A half added inside a floor's own parentheses, or before `.floor()`: no
-/// call clippy can name, so Rust's are refused here too.
+/// A half added inside a floor's own parentheses, or before `.floor()`. Clippy can name no
+/// such call, so Rust's are refused here too.
 const HALF_FLOORED: [&str; 2] = [
     r"\bfloor\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\+\s*0\.5\s*\)",
     r"\([^()]*\+\s*0\.5\s*\)\.floor\(\)",
 ];
 
-/// One order of dependency over a folder's modules: a module names only
-/// what is at or below it, and neither head the other; a module beside the
-/// order names anything, and only the order's top names it. `root` is where
-/// the folder's files are, `path` what a Rust file names its modules by, a
-/// `domain::` step past it passed over (a TypeScript file names a module by
-/// its file: `imported`); a name past `path` no module holds is the
-/// folder's root's own, which stands at `own`, or, where none, is not read.
+/// One order of dependency over a folder's modules: a module names only what is at or below
+/// it, and neither head names the other; a module beside the order names anything, and only
+/// the order's top names it. `root` is where the folder's files are, and `path` is what a
+/// Rust file names its modules by, a `domain::` step past it being passed over (a TypeScript
+/// file names a module by its file: `imported`). A name past `path` that no module holds is
+/// the folder's root's own, which stands at `own`, or, where `own` is none, is not read.
 struct Order {
     root: &'static str,
     path: &'static str,
@@ -69,15 +67,14 @@ struct Order {
     own: Option<u8>,
 }
 
-/// The core's order (ARCHITECTURE.md, "The core is one order of
-/// dependency"): a module names only what is at or below it, and neither
-/// head the other. The top wires everything, the UI's protocol among it;
-/// the protocol's enums the domain reads, and an edit not yet made, which
-/// the top hands from control to the scene, stand where both heads may name
-/// them. The machine it asks of its runtime and the device transport's
-/// decoder, which the device's app calls, are the bottom, naming none of the
-/// core. The profiler, reading anything, stands beside it, in no step of
-/// it, and only the top, which records into it, names it.
+/// The core's order (ARCHITECTURE.md, "The core is one order of dependency"): a module names
+/// only what is at or below it, and neither head names the other. The top wires everything,
+/// the UI's protocol among it. The protocol's enums, which the domain reads, and an edit not
+/// yet made, which the top hands from control to the scene, stand where both heads may name
+/// them. The machine the core asks of its runtime, and the device transport's decoder, which
+/// the device's app calls, are the bottom and name none of the core. The profiler reads
+/// anything and stands beside the order, in none of its steps, and only the top, which
+/// records into it, names it.
 const CORE: &str = "rust/client/core/src/";
 const CORE_ORDER: [(&str, u8); 16] = [
     ("turn", 7),
@@ -113,10 +110,10 @@ const CONTROL_ORDER: [(&str, u8); 7] = [
     ("param", 0),
 ];
 
-/// The camera's own order (domain/control/camera.rs): the camera itself,
-/// the folder's root, under everything, beside a gesture's anchor; what the
-/// controls ask over them; the orbit and the first-person camera, and the
-/// tests' fixture that places them; and over them which controller moves it.
+/// The camera's own order (domain/control/camera.rs). At the bottom are the camera itself,
+/// the folder's root, and beside it a gesture's anchor; above them, what the controls ask;
+/// then the orbit and the first-person camera, with the tests' fixture that places them; and
+/// above them, which controller moves the camera.
 const CAMERA_ORDER: [(&str, u8); 6] = [
     ("controller", 3),
     ("orbit", 2),
@@ -195,9 +192,8 @@ const ENGINE_ORDER: [(&str, u8); 25] = [
     ("face", 3),
 ];
 
-/// pxl-content's order: its parameters, its palette and the one rule a
-/// count is handed down by, its rules and fields, then the decor's generation
-/// over its scatter.
+/// pxl-content's order: its parameters, then its palette and the one rule by which a count
+/// is handed down, then its rules and fields, then the decor's generation over its scatter.
 const CONTENT: &str = "rust/spec/content/src/";
 const CONTENT_ORDER: [(&str, u8); 9] = [
     ("param", 0),
@@ -318,8 +314,8 @@ const CLIENT_HEADS: [&str; 2] = ["ui", "runtime"];
 /// Where TypeScript's aliases are (`paths`), every reader's.
 const TSCONFIG: &str = "ts/tsconfig.json";
 
-/// Every order held. A folder whose root holds only its modules gives its
-/// root's own a level over all of them, so no part reaches back to it.
+/// Every order held. A folder whose root holds only its modules gives the root's own items a
+/// level above all of them, so no part reaches back to it.
 const ORDERS: [Order; 13] = [
     Order {
         root: CORE,
@@ -730,16 +726,10 @@ fn sys_refused(text: &str) -> Vec<usize> {
         .collect()
 }
 
-/// The tree's files, a path a line from `root`: git's, tracked and not
-/// ignored, where `root` is a checkout's own top; else, as in an export
-/// laid out under a checkout's ignored target,
-/// every file under it but the builds' and the packages', which git there
-/// would list none of. Outside any checkout, an error.
-/// Each tracked `.rs` that no crate reaches: none of its own crate's roots
-/// (`lib.rs`, `main.rs`, `build.rs`, a file under `src/bin/`, `tests/`,
-/// `benches/` or `examples/`), and no `mod`, `#[path]` or `include!` in a
-/// file, nor a manifest's `path`, names it. Such a file compiles in nothing,
-/// so nothing checks it.
+/// Each tracked `.rs` file that no crate reaches: it is none of its own crate's roots
+/// (`lib.rs`, `main.rs`, `build.rs`, a file under `src/bin/`, `tests/`, `benches/` or
+/// `examples/`), and no `mod`, `#[path]` or `include!` in a file, nor a manifest's `path`,
+/// names it. Such a file compiles in nothing, so nothing checks it.
 fn unlinked(files: &[&str], read: &dyn Fn(&str) -> Option<String>) -> Vec<String> {
     use std::collections::BTreeSet;
     use std::path::{Component, Path, PathBuf};
@@ -810,6 +800,10 @@ fn unlinked(files: &[&str], read: &dyn Fn(&str) -> Option<String>) -> Vec<String
         .collect()
 }
 
+/// The tree's files, one path a line from `root`: git's files, tracked and not ignored, where
+/// `root` is a checkout's own top; otherwise, as in an export laid out under a checkout's
+/// ignored target, every file under it except the builds' and the packages', of which git
+/// there would list none. Outside any checkout, an error.
 fn list_files(root: &std::path::Path) -> Result<String, String> {
     let top = Command::new("git")
         .args(["rev-parse", "--show-toplevel"])

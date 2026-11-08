@@ -30,7 +30,8 @@ fn facing_tilt_domain() {
     }
 }
 
-/// Spherical coordinates' own degeneracy: the turn is still a rotation there.
+/// At the poles, spherical coordinates are degenerate: every azimuth looks
+/// the same way. The facing must still turn by a proper rotation there.
 #[test]
 fn pole_headings_agree() {
     let pi = core::f64::consts::PI;

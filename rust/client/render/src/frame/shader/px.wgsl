@@ -1,10 +1,11 @@
 // pxl-render/frame/shader/px.wgsl
 
-// A drawn pixel's tangents across and up at `at`, its middle or a fragment's
-// pos, of the `size` drawn, row 0 at the top, the screen's half-angle
-// tangents `tan`: grid.wgsl `px_tan`'s mirror, the one form the
-// screen pass's rays (screen_ray.wgsl `aim`) and the raster's (raster.wgsl
-// `raster_tan`) are aimed by, so a pixel's ray is the cast's.
+// The tangents across and up of a drawn pixel's ray at `at`, which is the
+// pixel's middle or a fragment's position. The target is `size` pixels with
+// row 0 at the top, and `tan` holds the screen's half-angle tangents. This
+// mirrors grid.wgsl `px_tan`. The screen pass's rays (screen_ray.wgsl `aim`)
+// and the raster's (raster.wgsl `raster_tan`) are aimed by it alone, so a
+// pixel's ray is the one the cast walked.
 fn px_tan(at: vec2f, size: vec2f, tan: vec2f) -> vec2f {
   let ndc = vec2f(at.x / size.x * 2.0 - 1.0, 1.0 - at.y / size.y * 2.0);
   return ndc * tan;

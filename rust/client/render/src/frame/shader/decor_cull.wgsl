@@ -1,12 +1,12 @@
 // pxl-render/frame/shader/decor_cull.wgsl
 
-// What a frame through the gate draws of decor generated (gpu/generator.rs
-// `Generator::mask`): of each region's instances, those whose ball (decor_ball.wgsl) meets the
-// box of the claimed tiles (damage_rect.wgsl) as the frame sees it, listed at the region's
-// own place in a list beside the instances (`masked`), with the region's args, their count
-// the instances listed. The draws read the list in place of the instances' own
-// (instance.wgsl `order`); a pixel past the claimed tiles keeps the last frame's, so an
-// instance whose ball meets none of them draws none of it.
+// Picks what a frame through the gate draws of the decor generated (gpu/generator.rs
+// `Generator::mask`). Of each region's instances, it lists those whose ball (decor_ball.wgsl)
+// meets the box of the claimed tiles (damage_rect.wgsl) as the frame sees it. They are listed
+// at the region's own place in a list beside the instances (`masked`), and the region's args
+// count the instances listed. The draws read this list in place of the instances' own
+// (instance.wgsl `order`). A pixel past the claimed tiles keeps the last frame's color, so an
+// instance whose ball meets none of them has nothing to draw.
 
 @group(0) @binding(1) var<storage, read> uniforms: array<u32>;
 @group(0) @binding(2) var<storage, read> args: array<u32>;
@@ -14,18 +14,19 @@
 @group(0) @binding(4) var<storage, read_write> masked: array<u32>;
 @group(0) @binding(5) var<storage, read_write> culled_args: array<atomic<u32>>;
 @group(0) @binding(6) var<storage, read> damage_rect: array<u32, 4>;
-/// Each region's count, then its end: its first slot as the args pass laid it
-/// (decor_args.wgsl), past its last once compacted (decor_compact.wgsl).
+/// Each region's count, then its end. The end holds the region's first slot as the args pass
+/// laid it (decor_args.wgsl), and the slot past its last once compacted (decor_compact.wgsl).
 @group(0) @binding(7) var<storage, read> regions: array<u32>;
 @group(0) @binding(31) var<uniform> tiles: Tiles;
 
-/// Region `r`'s draw words: the lanes' base and stride, its list's first word.
+/// Word `k` of region `r`'s draw uniform, which holds the lanes' base and stride and the first
+/// word of the region's list.
 fn region_word(r: u32, k: u32) -> u32 {
   return uniforms[r * UNIFORM_WORDS + k];
 }
 
-/// Each region's args as generated, none of its instances listed yet: a thread a region,
-/// before `decor_cull_cs`.
+/// Copies each region's args as generated, with none of its instances listed yet, one thread a
+/// region, before `decor_cull_cs` runs.
 @compute @workgroup_size(64, 1, 1)
 fn decor_cull_args_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x >= REGIONS) {
@@ -42,11 +43,12 @@ fn inside(p: vec4<f32>, c: vec3<f32>, r: f32) -> bool {
   return dot(p.xyz, c) + p.w >= -r * length(p.xyz);
 }
 
-/// A thread a place of the instances' lists, laid region after region.
+/// Lists each instance whose ball meets the claimed tiles, one thread a place of the
+/// instances' lists, which lie region after region.
 @compute @workgroup_size(64, 1, 1)
 fn decor_cull_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  // The regions' ends, as the compaction leaves them (decor_compact.wgsl): the region whose
-  // list holds the place is the first that ends past it.
+  // The regions' ends lie as the compaction leaves them (decor_compact.wgsl), so the region
+  // whose list holds the place is the first that ends past it.
   let last = REGIONS - 1u;
   if (id.x >= regions[REGIONS + last]) {
     return;
@@ -70,9 +72,9 @@ fn decor_cull_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let slot = instances[at];
   let off = region_word(region, 3u);
   let stride = region_word(region, 4u);
-  // The anchor's Q3 against the eye's, as the draw places it (instance.wgsl
-  // `draw_translation`): decor's anchor is on Q3, so this is the f64
-  // difference narrowed once, and the gate decides on what is drawn.
+  // The anchor is placed against the eye in Q3, as the draw places it (instance.wgsl
+  // `draw_translation`). Decor's anchor lies on Q3, so this is the f64 difference narrowed
+  // once, and the gate decides on the positions that are drawn.
   var v = from_eye(
     vec3<i32>(bitcast<i32>(region_word(region, 0u)), bitcast<i32>(region_word(region, 1u)), bitcast<i32>(region_word(region, 2u))),
     vec3<f32>(bitcast<f32>(region_word(region, 8u)), bitcast<f32>(region_word(region, 9u)), bitcast<f32>(region_word(region, 10u))),
@@ -80,8 +82,8 @@ fn decor_cull_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   for (var k = 0u; k < 3u; k += 1u) {
     v[k] += bitcast<f32>(instances[off + k * stride + slot]);
   }
-  // The claimed tiles' pixels, grown a pixel each way for the jitter a draw is moved by
-  // (frame.wgsl `jittered`), as clip space's planes through the eye.
+  // The claimed tiles' pixels, grown a pixel each way for the jitter that moves a draw
+  // (frame.wgsl `jittered`), taken as planes of clip space through the eye.
   let side = tiles.size.w;
   let size = tiles.size.xy;
   let lo = vec2<f32>(f32(b[0]), f32(b[1])) * side - vec2<f32>(1.0);

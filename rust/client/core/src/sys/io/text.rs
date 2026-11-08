@@ -1,10 +1,12 @@
 // pxl-core/sys/io/text.rs
 
-//! Text laid out and drawn by the platform: calls of its text device
-//! (text.json TEXT_LAYOUT, TEXT_RASTER), each answered before it returns, at
-//! its `at` (runtime.json `LAYOUT_ANSWER`, `LINE`). A world frame keeps only
-//! the answers the frame before read. A native test has no runtime: a text
-//! is one line of a fixed width a character, and is never drawn.
+//! Text that the platform lays out and draws, through calls to its text
+//! device (text.json TEXT_LAYOUT, TEXT_RASTER). The platform answers each
+//! call before the call returns, and writes the answer at the call's `at`
+//! (runtime.json `LAYOUT_ANSWER`, `LINE`). Each world frame keeps only the
+//! answers that the frame before it read. A native test has no runtime, so a
+//! text there is one line of a fixed width for each character, and it is
+//! never drawn.
 
 use std::collections::hash_map::Entry;
 
@@ -17,13 +19,15 @@ use crate::sys::io::runtime_spec::{LAYOUT_ANSWER, LINE};
 use crate::sys::io::text_spec::text::{text_layout, text_raster};
 use crate::sys::io::text_spec::{TextLayout, TextRaster};
 
-/// (weight, px bits, max width bits, 0 for one line; text).
+/// A layout's key: the weight, the bits of `px`, the bits of the max width
+/// (0 for one line), and the text.
 type LayoutKey = (u32, u64, u64, String);
-/// (weight, px bits, color, width, height, x bits, text).
+/// A raster's key: the weight, the bits of `px`, the color, the width, the
+/// height, the bits of `x`, and the text.
 type RasterKey = (u32, u64, u32, u32, u32, u64, String);
 
 struct Answer<T> {
-    /// Since the last rise.
+    /// Whether the answer was read since the last frame's rise.
     read: bool,
     at: T,
 }
@@ -40,9 +44,9 @@ fn text() -> &'static mut Text {
     TEXT.get(Text::default)
 }
 
-/// `text_in` broken into lines no wider than `max_width` (0 for one line),
-/// each with its width; none where the platform could not lay it out this
-/// turn, for a later turn to ask again.
+/// `text_in` broken into lines no wider than `max_width`, each with its
+/// width; a `max_width` of 0 gives one line. It is None where the platform
+/// could not lay the text out this turn, and a later turn asks again.
 pub fn text_lines(weight: u32, px: f64, max_width: f64, text_in: &str) -> Option<Vec<(&str, f64)>> {
     let key = (
         weight,
@@ -56,7 +60,8 @@ pub fn text_lines(weight: u32, px: f64, max_width: f64, text_in: &str) -> Option
             if door().is_none() {
                 return Some(unlaid(text_in));
             }
-            // No more lines than characters, and one for an empty text.
+            // A text breaks into no more lines than it has characters, and an
+            // empty text into one.
             let lines = text_in.chars().count().max(1) as u32;
             let mut at = vec![0u32; (LAYOUT_ANSWER::WORDS + LINE::WORDS * lines) as usize]
                 .into_boxed_slice();
@@ -76,8 +81,9 @@ pub fn text_lines(weight: u32, px: f64, max_width: f64, text_in: &str) -> Option
         }
     };
     answer.read = true;
-    // The client's answer is checked at the door it comes back through: a
-    // line ending inside a character or out of order is no layout.
+    // The client's answer is checked here, where it comes back in. A line
+    // that ends inside a character or out of order makes the answer no
+    // layout.
     let pairs = answer.at[LAYOUT_ANSWER::WORDS as usize..]
         .as_chunks::<{ LINE::WORDS as usize }>()
         .0;
@@ -99,16 +105,16 @@ pub fn text_lines(weight: u32, px: f64, max_width: f64, text_in: &str) -> Option
     Some(lines)
 }
 
-/// One line at a width guessed from its characters, where the client does
-/// not lay it out.
+/// One line at a width guessed from its characters, for where the client
+/// does not lay the text out.
 fn unlaid(text_in: &str) -> Vec<(&str, f64)> {
     vec![(text_in, text_in.chars().count() as f64 * 7.0)]
 }
 
-/// One line of `text_in` drawn into `size` pixels from `x`, RGBA, the top
-/// row first; `color` is 0xRRGGBBAA. The pixels stay until the next frame's
-/// rise at the earliest. None where the platform could not draw it this
-/// turn, for a later turn to ask again.
+/// One line of `text_in` drawn from `x` into `size` pixels of RGBA, top row
+/// first. `color` is 0xRRGGBBAA. The pixels stay at least until the next
+/// frame's rise. It is None where the platform could not draw the text this
+/// turn, and a later turn asks again.
 pub fn text_pixels(
     weight: u32,
     px: f64,
@@ -155,15 +161,16 @@ pub fn text_pixels(
     Some(unsafe { core::slice::from_raw_parts(answer.at.as_ptr(), answer.at.len()) })
 }
 
-/// A frame rises: what the frame before did not read goes.
+/// Called as a frame rises. The answers that the frame before did not read
+/// are dropped.
 pub fn text_rise() {
     let t = text();
     t.layouts.retain(|_, a| core::mem::take(&mut a.read));
     t.rasters.retain(|_, a| core::mem::take(&mut a.read));
 }
 
-/// The runtime that was asked is gone: an answer it never ran would read as
-/// empty forever.
+/// Drops every answer once the runtime that was asked is gone. An answer the
+/// runtime never wrote would otherwise read as empty forever.
 pub fn text_forget() {
     let t = text();
     t.layouts.clear();

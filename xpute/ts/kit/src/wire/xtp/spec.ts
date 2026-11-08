@@ -1,15 +1,20 @@
 // @xpute/kit/wire/xtp/spec.ts
 
-// Relocatable tree packet: a 16-byte header and one root subtree, with children
-// addressed by offsets relative to their branch, so a packet can be grafted
-// anywhere unchanged. Little-endian; every len/off/size field is an 8-byte slot
-// of which only the low 32 bits are used.
+// XTP's layout, its type byte, and the helpers that read and write a packet's
+// words. A packet is a 16-byte header and one root node, all little-endian. A
+// len, an offset or a size takes an 8-byte slot, the value in its low half;
+// the high half is reserved and zero, or holds a type.
 //
-// Header: word0 = [magic 32 | reserved 32], word1 = [root_payload_sz 32 | type 8 | reserved 24].
-// Branch: [len slot | child table], each entry [child_rel_off 32 | type 8 | reserved 24].
-// A typed null keeps its type: root_payload_sz == 0 at the root, child_rel_off == 0
-// in a branch. A nonzero child_rel_off lands past the table and before the next
-// present sibling, inside its parent's extent, or the packet is malformed.
+//   header  word 0  [MAGIC 32 | reserved 32]
+//           word 1  [root payload size 32 | type 8 | reserved 24]
+//   branch  [child count 32 | reserved 32], then a descriptor for each child:
+//           [offset from the branch's start 32 | type 8 | reserved 24]
+//
+// A child's offset counts from its branch's start, so a subtree can be copied
+// into another packet unchanged. An absent node keeps its type, with a size or
+// an offset of 0. A present child starts past its branch's table, before the
+// next present sibling, and inside its parent; a reader refuses a packet that
+// breaks this.
 
 import type { numeric, primitive, u32, u8 } from "@xpute/kit/abi/word.ts";
 import { FIELD_GET, FIELD_SET } from "@xpute/kit/abi/word.ts";
@@ -24,16 +29,24 @@ import * as ScalarType from "./scalar_type.ts";
 import * as SequenceType from "./sequence_type.ts";
 import * as SpecialType from "./special_type.ts";
 
-// Leaf type byte: bit 7 leaf, bit 5 sequence, bits 3..4 class (u, i, f,
-// non-numeric), bits 0..2 argument (log2 width for numbers).
+// A type byte with its top bit set names a leaf:
+//
+//   7 | 6 | 5 | 4 3 | 2 1 0
+//   L | R | S |  C  |   A
+//
+// L is set for a leaf, and R is reserved. S is set for a sequence and clear
+// for a scalar. C is the class: unsigned, signed, float, or non-numeric. A is
+// the argument: for a number, log2 of its width in bytes; for a non-numeric
+// leaf, which one it is (bool or bitset, str, strs). A type byte with the top
+// bit clear is a special type: NIL, BRANCH or GRAFT.
 
 const ARG_W = 3;
 const CLASS_W = 2;
 
 const ARG_SHAMT: u8 = 0;
-const CLASS_SHAMT: u8 = ARG_SHAMT + ARG_W; // bits 3..4
-const SEQ_SHAMT: u8 = CLASS_SHAMT + CLASS_W; // bit 5
-const LEAF_SHAMT: u8 = 7; // bit 7
+const CLASS_SHAMT: u8 = ARG_SHAMT + ARG_W;
+const SEQ_SHAMT: u8 = CLASS_SHAMT + CLASS_W;
+const LEAF_SHAMT: u8 = 7;
 
 export const ARG_MASK: u8 = ((1 << ARG_W) - 1) as u8;
 const CLASS_MASK: u8 = (((1 << CLASS_W) - 1) << CLASS_SHAMT) as u8;
@@ -72,15 +85,14 @@ export const R = (x: u32): u8 => (BIT_LEAF | (CLASS_R | (x & ARG_MASK))) as u8;
 export type NodeType = u8;
 
 export type LeafType = u8;
-/** One of ScalarType's. */
+// Each of ScalarType, SequenceType and SpecialType is both a namespace of type
+// bytes and, as a type, the union of their literal types.
 type ScalarType = (typeof ScalarType)[keyof typeof ScalarType];
 export { ScalarType };
 
-/** One of SequenceType's. */
 type SequenceType = (typeof SequenceType)[keyof typeof SequenceType];
 export { SequenceType };
 
-/** One of SpecialType's. */
 type SpecialType = (typeof SpecialType)[keyof typeof SpecialType];
 export { SpecialType };
 
@@ -110,7 +122,9 @@ export interface BranchNode {
   val: Node[] | null;
 }
 
-// A previously encoded packet spliced in; it must lay out as the inline subtree would.
+// A packet encoded earlier, spliced in as a subtree: the encoder copies its
+// root's payload and type in place of this node, so a GRAFT is never on the
+// wire as itself.
 export interface GraftNode {
   readonly type: typeof SpecialType.GRAFT;
 
@@ -147,7 +161,7 @@ export const RESERVED = 0 as const;
 
 export const LE = true as const;
 
-export const MAGIC = 0x00505458 as const; // "XTP\0" little-endian word
+export const MAGIC = 0x00505458 as const; // "XTP\0" read as a little-endian u32
 
 export const DESC_TYPE_W: u32 = 8;
 export const DESC_TYPE_SHAMT: u32 = 0;
@@ -174,7 +188,8 @@ export const GET_WORD = (
   return out;
 };
 
-/** A type the wire carries: the untyped null, a branch, or a leaf of a width its class has. */
+/** Whether a type byte may appear on the wire: NIL, BRANCH, or a leaf with no
+ * reserved bit set and an argument its class defines. GRAFT may not. */
 export const TYPE_IS_KNOWN = (type: u8): boolean => {
   if (type === SpecialType.NIL || type === SpecialType.BRANCH) return true;
   if (
@@ -193,7 +208,8 @@ export const TYPE_IS_KNOWN = (type: u8): boolean => {
   }
 };
 
-/** A read slot whose high half is reserved, zero on the wire: a len, a size, the magic. */
+/** Reads a slot that holds a len, a size or the magic. A high half that is
+ * not zero makes the packet malformed (EBADMSG). */
 export const GET_LEN = (buf_view: DataView, off: u32): u32 => {
   if (buf_view.getUint32(off + 4, LE) !== RESERVED) {
     throw new MarshalError(Errno.EBADMSG);
@@ -201,7 +217,9 @@ export const GET_LEN = (buf_view: DataView, off: u32): u32 => {
   return buf_view.getUint32(off, LE);
 };
 
-/** A read child entry or root word: its offset or size, and a known type with the rest reserved. */
+/** Reads a descriptor, a branch's entry for a child or the header's root
+ * word: the offset or size, and the type. A type the wire cannot carry, or a
+ * reserved bit set, makes the packet malformed (EBADMSG). */
 export const GET_DESC = (
   buf_view: DataView,
   off: u32,
@@ -227,7 +245,8 @@ export const ALIGN = (nbyte: u32, unit: AlignUnit): u32 => {
   }
 
   const mask = unit - 1;
-  // `&` works in int32: past 2^31 the aligned size came out negative.
+  // `&` yields a signed 32-bit number, so `>>> 0` makes a size of 2^31 or
+  // more positive again.
   if (nbyte > 0xffffffff - mask) throw new MarshalError(Errno.EOVERFLOW);
   return ((nbyte + mask) & ~mask) >>> 0;
 };
@@ -261,6 +280,7 @@ export const ALIGN_SZ = (type: u8): AlignUnit => {
   }
 };
 
-export const HDR_SZ: u32 = WORD_SZ * 2; // must stay a multiple of WORD_SZ
+/** Must stay a multiple of WORD_SZ, since the root starts right after it. */
+export const HDR_SZ: u32 = WORD_SZ * 2;
 
 export const MAX_PKT_SZ = 0x7fffffff;

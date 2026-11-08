@@ -1,11 +1,14 @@
 // xpute-core/abi/handle.rs
 
-//! Generational handles: a slot and its generation, so a handle kept past its
-//! release names nothing that takes the slot after. 0 is never a handle.
+//! Generational handles. A handle is a slot and that slot's generation, so a
+//! handle kept past its release names nothing that takes the slot later.
+//! The other side reads only the slot. 0 is never a handle.
 
 use core::mem::MaybeUninit;
 
-/// The rest is the generation, hence its `u16`. The runtime uses the same 16.
+/// The low bits of a handle, which hold its slot. The high 16 bits hold the
+/// generation, which is therefore a `u16`. The runtime splits a handle the
+/// same way.
 pub const SLOT_BITS: u32 = 16;
 const _: () = assert!(
     SLOT_BITS + u16::BITS == u32::BITS,
@@ -23,25 +26,28 @@ fn handle_of(slot: u32, generation: u16) -> u32 {
 
 struct Slot<T> {
     generation: u16,
-    /// One past the epoch the slot was taken in; 0 while free. A `u64`, so
-    /// no count of epochs a program lives through brings a stale one round.
+    /// One more than the epoch in which the slot was taken, or 0 while the
+    /// slot is free. It is a `u64` so that no program lives through enough
+    /// epochs for the count to wrap round to a stale value.
     taken_epoch: u64,
-    /// A free slot's next free slot; 0, never handed out, ends the list.
+    /// The next slot in the free list. Slot 0 is never handed out, so 0 ends
+    /// the list.
     next: u32,
     /// Initialized while `taken_epoch` is not 0.
     val: MaybeUninit<T>,
 }
 
-/// N slots, each holding a `T` while its handle is live; a slot given back is
-/// the next one taken. All-zero bytes are an empty table, so one may lie in
-/// memory that starts zeroed, or be emptied by zeroing it, never built and
-/// moved.
+/// N slots, each holding a `T` while its handle is live. A slot given back is
+/// the next one taken. All-zero bytes are an empty table, so a table can lie
+/// in memory that starts zeroed, or be emptied by zeroing it, without ever
+/// being built and moved.
 pub struct Table<T: Copy, const N: usize> {
     slot: [Slot<T>; N],
-    /// Advanced by `begin`: the slots taken since are those made in it.
+    /// The current transaction, advanced by `begin`. The slots taken since
+    /// then are the ones the transaction made.
     epoch: u64,
     free: u32,
-    /// The highest slot handed out; those past it never have been.
+    /// The highest slot ever handed out; the slots past it never have been.
     top: u32,
     cnt: u32,
 }
@@ -76,7 +82,7 @@ impl<T: Copy, const N: usize> Table<T, N> {
         }
     }
 
-    /// None when every slot is taken.
+    /// Answers none when every slot is taken.
     pub fn insert(&mut self, val: T) -> Option<u32> {
         let slot = if self.free != 0 {
             let slot = self.free;
@@ -89,7 +95,7 @@ impl<T: Copy, const N: usize> Table<T, N> {
             return None;
         };
         let s = &mut self.slot[slot as usize];
-        // Never 0, so no handle is 0.
+        // The generation is never 0, so no handle is 0.
         s.generation = s.generation.wrapping_add(1).max(1);
         s.taken_epoch = self.epoch + 1;
         s.val = MaybeUninit::new(val);
@@ -134,14 +140,15 @@ impl<T: Copy, const N: usize> Table<T, N> {
         Some(val)
     }
 
-    /// From here, what is taken is what `rollback` gives back.
+    /// Begins a transaction: the slots taken from here on are the ones
+    /// `rollback` gives back.
     pub fn begin(&mut self) {
         self.epoch += 1;
     }
 
-    /// Every handle taken since `begin` and not yet removed, removed and
-    /// handed to `gone`: what a transaction that did not commit made, which
-    /// the other side never saw.
+    /// Removes every handle taken since `begin` and not yet removed, and
+    /// hands each to `gone`. These are what a transaction that did not commit
+    /// made, which the other side never saw.
     pub fn rollback(&mut self, mut gone: impl FnMut(u32, T)) {
         for slot in 1..=self.top {
             let s = &self.slot[slot as usize];

@@ -472,9 +472,9 @@ pub enum Command {
     /// A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
     /// (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
     /// first of a run is taken to be where the camera already is, so nothing moves as
-    /// it begins; the camera follows the tracker from there until POSE_END.
-    /// Nothing sends it yet: it is where an immersive mode's head pose (a Quest's, a Vision Pro's) would drive
-    /// the camera, sent by the device app.
+    /// it begins; the camera follows the tracker from there until POSE_END. No client
+    /// sends it: it is the way in by which an immersive mode's head pose (a Quest's, a
+    /// Vision Pro's) drives the camera, sent by the device app.
     INPUT_XR_POSE = 0x1109,
     /// The tracker let the camera go: back to the controller it had.
     INPUT_XR_POSE_END = 0x110a,
@@ -819,7 +819,7 @@ impl SensorOrient {
 #[derive(Clone, Copy, Debug)]
 pub struct SensorErr {
     pub sensor: Sensor,
-    /// Geolocation's; orientation gives none today.
+    /// Geolocation's; orientation gives none.
     pub code: Option<GeolocationErrorCode>,
 }
 

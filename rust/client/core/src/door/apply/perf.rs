@@ -1,6 +1,6 @@
 // pxl-core/door/apply/perf.rs
 
-//! PERF: the profiler's.
+//! The PERF major's commands, which drive the profiler.
 
 use super::State;
 use super::{ask_turn, refuse_unless};
@@ -29,19 +29,20 @@ pub(super) fn stop(s: &mut State) -> Outcome {
     ask_turn(s)
 }
 
-/// The address of the statistics' words. Memory is at most 1 GiB, so an
-/// address fits an i32.
+/// Returns the address of the statistics' words. The core's memory is at
+/// most 1 GiB, so an address fits in an i32.
 pub(super) fn stats(c: abi::PerfStats) -> Outcome {
     Ok(Some(read_timed(|| stats_words(c.window_ms)) as i32))
 }
 
-/// The address of the rings' words, which fits an i32 as the statistics' does.
+/// Returns the address of the rings' words, which fits in an i32 for the
+/// same reason.
 pub(super) fn rings() -> Outcome {
     Ok(Some(read_timed(perf_rings) as i32))
 }
 
-/// A read of the profiler, its time the profiler's cost to the interval
-/// (perf/record.rs `perf_record_read`).
+/// Runs a read of the profiler and records its time as the profiler's own
+/// cost to the interval (perf/record.rs `perf_record_read`).
 fn read_timed(read: impl FnOnce() -> u32) -> u32 {
     let at = now();
     let addr = read();
@@ -50,11 +51,13 @@ fn read_timed(read: impl FnOnce() -> u32) -> u32 {
 }
 
 /// The address of STATS's words (perf.json): the statistics over
-/// `window_ms`, and what holds now. Read in place, not posted: `Door::post`
-/// asserts on a full completion ring. Valid until the next turn.
+/// `window_ms` and the current values. The client reads them in place rather
+/// than as a post, because `Door::post` asserts on a full completion ring.
+/// The words stay valid until the next turn.
 fn stats_words(window_ms: Option<f64>) -> u32 {
     use crate::perf::spec::STATS;
-    // On the heap, not a static: a native build's statics are outside the core memory, where the client reads them.
+    // The words live on the heap, not in a static, because a native build's
+    // statics lie outside the core's memory, which is all the client reads.
     static WORDS: Global<Box<[u32; STATS::WORDS as usize]>> = Global::new();
     let stats = read::perf_stats(window_ms);
     let now = read::perf_now();
@@ -66,11 +69,12 @@ fn stats_words(window_ms: Option<f64>) -> u32 {
     off_of(w.as_ptr()) as u32
 }
 
-/// The address of RINGS's words: the three rings as they lie.
+/// The address of RINGS's words, which point at the three rings where they
+/// lie.
 fn perf_rings() -> u32 {
     use crate::perf::record::{perf_frames, perf_tasks, perf_worst};
     use crate::perf::spec::{RING, RINGS, RING_NAMES};
-    // On the heap, as STATS's words are (`stats_words`).
+    // On the heap for the same reason as STATS's words (`stats_words`).
     static WORDS: Global<Box<[u32; RINGS::WORDS as usize]>> = Global::new();
     let (frames, tasks, worst) = (perf_frames(), perf_tasks(), perf_worst());
     let w = WORDS.get(|| Box::new([0; RINGS::WORDS as usize]));

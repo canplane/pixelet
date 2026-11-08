@@ -5,14 +5,18 @@ import { StyleSheet } from "react-native";
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { chrome } from "@/ui/component/theme.ts";
 
-/** Whether a layer takes touches, from a sheet: RN-web draws an inline `box-none` as `none`, which every control under it inherits. */
+/** Whether a layer takes touches. These styles must come from a style sheet,
+ * not inline: react-native-web draws an inline `box-none` as `none`, which
+ * every control under the layer then inherits. */
 export const touches = StyleSheet.create({
   pass: { pointerEvents: "box-none" },
   block: { pointerEvents: "none" },
 });
 
-/** What a control seen `size` high is grown by on each side so a press lands on `chrome.target`:
- * a box laid out around it, not `hitSlop`, which react-native-web does not honor. */
+/** How far a control drawn `size` high grows on each side, so that the area a
+ * press lands on is `chrome.target` high. The caller lays a box out around
+ * the control rather than using `hitSlop`, which react-native-web does not
+ * honor. */
 export function touchOutset(size: f64): f64 {
   return Math.max(0, (chrome.target - size) / 2);
 }

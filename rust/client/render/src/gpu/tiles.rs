@@ -1,29 +1,23 @@
 // pxl-render/gpu/tiles.rs
 
-//! Tiles a frame not drawn whole draws again by, the screen's and the light's
-//! map's alike (word.rs `screen`): `side` pixels a side, each a word, the
-//! number of the frame it last changed in (`changed_at`), the GPU's, as a
-//! light tile's word names the cast that read it. The CPU hands each frame
-//! at most one mark (`damage_of`), the clouds' sheets on the screen, and a pass
-//! sets the words of the tiles it covers, a thread a tile, one mark of every
-//! tile where the frame is drawn whole (screen_mark.wgsl), before anything
-//! reads them; the draws that changed set theirs drawn (gpu/pass/mark.rs),
-//! each tile once. A tile is claimed while it
-//! changed fewer than `damage_frames` frames ago, each by its role: the screen
-//! until its history has gathered the jitter's sequence, the map the frame
-//! it changed alone; every one where the frame is drawn whole. What draws
-//! them reads the words and the uniform (`Tiles`, screen_tiles.wgsl): a quad
-//! a tile of every one, or, where a tile is claimed the frame it changed
-//! alone, of the box the frame's marks cover, its count the GPU's
-//! (`rect_args`). A target drawn through its gate numbers its stencil here
-//! (`mask`).
+//! The tiles by which a frame that is not drawn whole draws again only what changed, on the
+//! screen and on the light's map alike (word.rs `screen`). A tile is `side` pixels a side. Its
+//! word, which the GPU holds, is the number of the frame it last changed in. Each frame, a
+//! pass sets the words of the tiles that the one mark the CPU hands covers (`damage`), before
+//! anything reads them, and the draws that changed set the words of the tiles they cover
+//! (gpu/pass/mark.rs). A tile is claimed while it changed fewer than `damage_frames` frames
+//! ago, and every tile is claimed in a frame drawn whole. The screen keeps a tile claimed until
+//! its history has gathered the jitter's whole sequence; the map claims a tile only in the
+//! frame it changed. A pass that draws the tiles reads the words and the uniform
+//! (screen_tiles.wgsl) and draws only the claimed ones. A target drawn through its gate takes
+//! the number its gate writes into the stencil from here (`mask`).
 
 use crate::frame::shader::group::{
     DAMAGE_RECT_GROUP, LIGHT_RECT_ARGS, LIGHT_RECT_BINDS, RECT_ARGS_GROUP, SCREEN_MARK_GROUP,
 };
 
 use crate::frame::shader::record::{COMPUTE_DAMAGE_RECT, COMPUTE_RECT_ARGS, COMPUTE_SCREEN_MARK};
-/// The screen's tiles' pixels a side (word.rs `screen::TILE`).
+/// The side of a screen tile, in pixels.
 pub use crate::frame::shader::word::screen::TILE as SIDE;
 use crate::frame::shader::word::screen::{self, TILES_WORDS};
 use crate::gpu::api::{
@@ -32,17 +26,18 @@ use crate::gpu::api::{
 use crate::gpu::pipeline::{Pipeline, Pipelines};
 use crate::gpu::span_spec::GpuSpanName;
 
-/// The pixels a mark is grown by each way on the screen: the resolve's
-/// pixels beside it and a face's growth (pxl-engine param.rs
-/// `raster::GROWTH`), with room.
+/// How many pixels a mark on the screen is grown by each way. The margin covers the pixels
+/// beside the mark that the resolve reads and a face's growth (pxl-engine param.rs
+/// `raster::GROWTH`), with room to spare.
 pub const DAMAGE_MARGIN: f32 = 4.0;
 
-/// What a draw that changed marks: pixels, `[x, y, width, height]`, whose
-/// tiles a frame through the gate claims (`Tiles::damage`).
+/// A mark: the pixels `[x, y, width, height]` that a change covers. A frame drawn through the
+/// gate claims the tiles they lie in (`Tiles::damage`).
 pub type Damage = [u32; 4];
 
-/// The mark under clip `[x0, y0, x1, y1]`, Y up, of a target `width` by
-/// `height`, grown by `margin` pixels; none where it holds nothing.
+/// The mark of the clip-space box `[x0, y0, x1, y1]`, Y up, on a target `width` by `height`
+/// pixels, grown by `margin` pixels each way and cut to the target. It is none where the box
+/// covers no pixel.
 pub fn damage_of(
     [x0, y0, x1, y1]: [f32; 4],
     width: u32,
@@ -69,64 +64,66 @@ pub fn damage_of(
     })
 }
 
-/// The claimed tiles' box before its pass: none, its first past its last.
+/// The box of claimed tiles as it is set before its pass runs: an empty box, whose first tile
+/// lies past its last.
 const NO_DAMAGE_RECT: [u32; 4] = [u32::MAX, u32::MAX, 0, 0];
 
-/// The numbers a frame through the gate writes into its claimed tiles'
-/// stencil, 1 on, the stencil's eight bits but 0, which a frame drawn whole
-/// leaves: one coming round clears it first, so no tile holds this frame's
-/// number but those it claims (gpu/api.rs `Stencil`).
+/// How many numbers a frame drawn through the gate can write into its claimed tiles'
+/// stencil: 1 to 255, every value of the stencil's eight bits but 0, which a frame drawn whole
+/// leaves. When the numbers come round to 1, the frame clears the stencil first, so no tile
+/// holds this frame's number but those it claims (gpu/api.rs `Stencil`).
 const MASK_NUMBERS: u32 = 255;
 
 pub struct Tiles {
-    /// A tile's pixels a side, and the frames a tile stays claimed once it
-    /// changed, in a frame through the gate.
+    /// A tile's side in pixels, and how many frames a tile stays claimed once it changed, in a
+    /// frame drawn through the gate.
     side: u32,
     damage_frames: u32,
-    /// The span their marks' passes are timed in (`dispatch_damage`,
-    /// `dispatch_rect_args`): the screen's or the light's.
+    /// The span the marks' passes are timed in (`dispatch_damage`, `dispatch_rect_args`):
+    /// the screen's or the light's.
     span: GpuSpanName,
-    /// The uniform the frame draws them by, the claimed alone or every one
-    /// (`damage`).
+    /// The uniform by which a frame draws the tiles. It claims the claimed tiles alone or
+    /// every tile (`damage`).
     uniform: u32,
-    /// Each tile's word, a row after another, the GPU's; the target's
-    /// pixels across and down; this frame's number.
+    /// Each tile's word, row after row, which the GPU holds; the target's size in pixels
+    /// across and down; and this frame's number.
     changed_at: u32,
     size: [u32; 2],
     now: u32,
-    /// The last frame a mark was handed or drawn in that asks the frames of its claim: one
-    /// not made by what the scene animates alone, every tile where it was drawn whole
-    /// (`asking`).
+    /// The number of the last frame whose mark asks for the frames of its claim (`asking`).
+    /// A mark asks unless the scene's animation alone made it, and a frame drawn whole marks
+    /// every tile and asks.
     asked_at: u32,
-    /// The marks' pass; its uniform, the mark's tiles and its head; and the
-    /// tiles this frame's mark sets, 0 where it sets none.
+    /// The pass that sets the handed mark into the words, and its uniform, which holds the
+    /// mark's tiles and a head. `damage_cnt` is how many tiles this frame's mark sets, 0
+    /// where it sets none.
     damage_pipeline: Pipeline,
     damage_uniform: u32,
     damage_cnt: u32,
-    /// The marks' pass's group over its uniform and the words, set with the
-    /// words (`size`).
+    /// The group of that pass, over its uniform and the words. `size` sets it when it makes
+    /// the words.
     damage_group: Group,
-    /// The tiles the frame's marks cover, from the first to past the last,
-    /// four words the GPU's: the one handed, widened by the draws that mark
-    /// (tile_mark.wgsl), which bind it whatever reads it.
+    /// The box of tiles the frame's marks cover, from the first tile to past the last, in four
+    /// words the GPU holds. It starts as the handed mark, and the draws that mark widen it
+    /// (tile_mark.wgsl). The draws that mark bind it whether or not anything reads it.
     new_damage_rect: u32,
-    /// The indirect args of a quad a tile of `new_damage_rect`, set from it on the
-    /// GPU once the marks are made, by a pass over its group (`rect_args`);
-    /// made where a tile is claimed the frame it changed alone, so the box
-    /// holds every tile claimed.
+    /// The indirect args that draw a quad for each tile of `new_damage_rect`, with the pass
+    /// and the group that set them from the box on the GPU once the marks are made. They exist
+    /// only where a tile is claimed in the frame it changed alone, as only then does the box
+    /// hold every claimed tile.
     rect_args: Option<(u32, Pipeline, u32)>,
-    /// The number the last frame through the gate wrote into the claimed
-    /// tiles' stencil, 0 where the target was drawn whole (`mask`).
+    /// The number the last frame drawn through the gate wrote into the claimed tiles'
+    /// stencil, or 0 where the target was drawn whole (`mask`).
     mask_number: u32,
-    /// The box of the tiles claimed, from the first across and down to the last, four words
-    /// the GPU's, and the pass that sets it (`dispatch_damage_rect`).
+    /// The box of the claimed tiles, from the first across and down to the last, in four
+    /// words the GPU holds, and the pass that sets it (`dispatch_damage_rect`).
     damage_rect: u32,
     damage_rect_pipeline: Pipeline,
 }
 
 impl Tiles {
-    /// Tiles `side` pixels a side, claimed for `damage_frames` frames once
-    /// changed, their marks timed in `span`.
+    /// Makes tiles `side` pixels a side, which stay claimed for `damage_frames` frames once
+    /// they changed, with their marks' passes timed in `span`.
     pub fn new(
         g: &Gpu,
         pipelines: &mut Pipelines,
@@ -203,9 +200,9 @@ impl Tiles {
         }
     }
 
-    /// The tiles of a target `size` pixels across and down, their words made
-    /// anew where the target was another size, a frame that moves every
-    /// one; before anything this frame binds them (`this_frame`).
+    /// Sizes the tiles for a target `size` pixels across and down, before anything this frame
+    /// binds the words (`this_frame`). Where the size changed, it makes the words anew and
+    /// keeps nothing of them, as a frame that resizes the target changes every tile.
     pub fn size(&mut self, g: &Gpu, size: [u32; 2]) {
         if size == self.size {
             return;
@@ -222,17 +219,15 @@ impl Tiles {
             .set(g, self.damage_pipeline.layouts[0], &entries);
     }
 
-    /// The mark this frame hands, the frame numbered anew: where it is
-    /// drawn through the gate (`masked`), the tiles `damage` covers
-    /// (`damage_of`); else none where nothing it draws moved (`quiet`), one of
-    /// every tile where anything did. A mark through the gate in a turn the
-    /// scene's animation stepped (`animated`) is that animation's, and asks no
-    /// frame of its claim (`asking`). The tiles the frame draws: the claimed alone where it is gated,
-    /// else every one. Set on the GPU, before anything reads them, by
-    /// `dispatch_damage`; but a whole frame's stamp where a tile is claimed
-    /// the frame it changed alone (`damage_frames` 1, the map's): that frame
-    /// claims every tile by its uniform, and a later one through the gate
-    /// only those set in it, so no frame reads the stamp.
+    /// Numbers a new frame and hands its mark. A frame drawn through the gate (`masked`) marks
+    /// the tiles `damage` covers (`damage_of`). Any other frame marks every tile, or none where
+    /// nothing it draws moved (`quiet`). A gated mark in a turn where the scene's animation
+    /// stepped (`animated`) is the animation's own, and it asks for no frame of its claim
+    /// (`asking`). The uniform claims the claimed tiles alone in a gated frame, and every tile
+    /// in any other. `dispatch_damage` later sets the mark into the words on the GPU. Where a
+    /// tile is claimed only in the frame it changed (`damage_frames` 1, the map's), a frame
+    /// that is not gated sets nothing: it claims every tile by its uniform, and a later gated
+    /// frame claims only the tiles set in that frame, so no frame would read what it set.
     pub fn damage(
         &mut self,
         g: &Gpu,
@@ -266,8 +261,9 @@ impl Tiles {
             g.write_buf(self.damage_uniform, 0, bytes(&words));
         }
         if self.rect_args.is_some() {
-            // The one handed, which the draws that mark widen; none an i32's
-            // greatest, as the propagation reads it (screen_propagate.wgsl).
+            // The box starts as the handed mark, and the draws that mark widen it. An empty box
+            // starts at the greatest i32, as the propagation reads the box as signed
+            // (screen_propagate.wgsl).
             let none = i32::MAX as u32;
             let new_damage_rect = tiles.unwrap_or([none, none, 0, 0]);
             g.write_buf(self.new_damage_rect, 0, bytes(&new_damage_rect));
@@ -277,9 +273,9 @@ impl Tiles {
         g.write_buf(self.uniform, 0, bytes(&words));
     }
 
-    /// The damage `damage` handed set into the tiles' words, a thread a tile of
-    /// its tiles, before anything reads them, timed in the tiles' span; none
-    /// where it handed none.
+    /// Sets the mark `damage` handed into the tiles' words, a thread a tile (screen_mark.wgsl),
+    /// timed in the tiles' span. It runs before anything reads the words, and does nothing
+    /// where the mark sets no tile.
     pub fn dispatch_damage(&self, ctx: &mut RenderContext) {
         if self.damage_cnt == 0 {
             return;
@@ -292,8 +288,9 @@ impl Tiles {
         g.end(pass);
     }
 
-    /// The box of the tiles this frame claims, once its marks are made, set by a thread a tile
-    /// (damage_rect.wgsl): four words the GPU's, timed with the marks.
+    /// Sets the box of the tiles this frame claims, a thread a tile (damage_rect.wgsl), once the
+    /// frame's marks are made, and returns its buffer of four words. It is timed in the marks'
+    /// span.
     pub fn dispatch_damage_rect(&self, ctx: &mut RenderContext) -> u32 {
         let g = ctx.g;
         g.write_buf(self.damage_rect, 0, bytes(&NO_DAMAGE_RECT));
@@ -315,34 +312,34 @@ impl Tiles {
         self.damage_rect
     }
 
-    /// The span the marks' passes are timed in, and what reads the marks beside them.
+    /// The span the marks' passes are timed in. A pass that reads the marks beside them, such
+    /// as the decor's mask, is timed in it too.
     pub fn span(&self) -> GpuSpanName {
         self.span
     }
 
-    /// The words and the uniform as this frame draws them, the claimed alone
-    /// or every one (`damage`).
+    /// The words and the uniform by which this frame draws the tiles: the claimed tiles alone,
+    /// or every tile (`damage`).
     pub fn this_frame(&self) -> (u32, u32) {
         (self.changed_at, self.uniform)
     }
 
-    /// The words alone, as a pass drawing the tiles by a uniform of its own
-    /// binds (`words`).
+    /// The words alone, for a pass that draws the tiles by a uniform of its own (`words`).
     pub fn changed_at(&self) -> u32 {
         self.changed_at
     }
 
-    /// The tiles this frame's marks cover, from the first across and down to
-    /// past the last, four words on the GPU: the one handed, widened by the
-    /// draws that mark (tile_mark.wgsl), none changed off them; kept where a
-    /// tile is claimed the frame it changed alone (`rect_args`).
+    /// The box of tiles this frame's marks cover, from the first across and down to past the
+    /// last, in four words on the GPU. It starts as the handed mark and the draws that mark
+    /// widen it (tile_mark.wgsl), so no tile outside it changed this frame. It is kept only
+    /// where a tile is claimed in the frame it changed alone (`rect_args`).
     pub fn new_damage_rect(&self) -> u32 {
         self.new_damage_rect
     }
 
-    /// The marks' box's args set from it on the GPU, after every pass that
-    /// marks this frame and before a draw reads them, timed in the tiles'
-    /// span (rect_args.wgsl); none where the tiles keep no box.
+    /// Sets the indirect args of the marks' box from the box, on the GPU (rect_args.wgsl). It
+    /// runs after every pass that marks this frame and before a draw reads the args, timed in
+    /// the tiles' span. It does nothing where the tiles keep no box.
     pub fn dispatch_rect_args(&self, ctx: &mut RenderContext) {
         let Some((_, pipeline, group)) = &self.rect_args else {
             return;
@@ -355,20 +352,20 @@ impl Tiles {
         g.end(pass);
     }
 
-    /// The indirect args of a quad a tile of the marks' box
-    /// (screen_tiles.wgsl `rect_clip`), as `dispatch_rect_args` set them: the
-    /// claimed tiles alone drawn, where a tile is claimed the frame it
-    /// changed alone, as the map's is; none where it is claimed longer.
+    /// The indirect args that draw a quad for each tile of the marks' box (screen_tiles.wgsl
+    /// `rect_clip`), as `dispatch_rect_args` set them. They draw the claimed tiles alone where
+    /// a tile is claimed only in the frame it changed, as the map's is. They are none where a
+    /// tile stays claimed longer.
     pub fn rect_args(&self) -> Option<u32> {
         self.rect_args.as_ref().map(|b| b.0)
     }
 
-    /// The pass `desc` drawing the target these tiles cover, through its
-    /// gate where `gating`, and the number its gate writes into the claimed
-    /// tiles' stencil: 1 on, coming round after `MASK_NUMBERS`, the stencil
-    /// kept from the last frame through the gate but where the numbers come
-    /// round, cleared then; none where the target is drawn whole, which
-    /// clears it.
+    /// Prepares the pass `desc` that draws the target these tiles cover, through its gate
+    /// where `gating`. It returns the pass and the number the gate writes into the claimed
+    /// tiles' stencil, which counts from 1 and comes round after `MASK_NUMBERS`. The pass
+    /// keeps the stencil the last gated frame left, except when the numbers come round, and
+    /// then it clears the stencil. The number is none where the target is drawn whole, which
+    /// clears the stencil.
     pub fn mask(&mut self, desc: PassDesc, gating: bool) -> (PassDesc, Option<u32>) {
         let number = gating.then(|| self.mask_number % MASK_NUMBERS + 1);
         self.mask_number = number.unwrap_or(0);
@@ -380,8 +377,8 @@ impl Tiles {
         (desc, number)
     }
 
-    /// The frame was dropped: the stencil holds what the last frame drawn
-    /// left, so the next through the gate clears it.
+    /// Called when the frame was dropped. The stencil holds what the last drawn frame left, so
+    /// the next gated frame clears it.
     pub fn on_dropped(&mut self) {
         self.mask_number = MASK_NUMBERS;
     }
@@ -391,10 +388,9 @@ impl Tiles {
         self.size.map(|v| v.div_ceil(self.side))
     }
 
-    /// The uniform's words (word.rs `screen::TILES_WORDS`) for the
-    /// target, a quad grown by `grow` of its pixels, in this frame, a tile
-    /// claimed for `damage_frames` frames once changed,
-    /// and a tile's side, as build.rs's `Tiles` reads them (tile_word.wgsl).
+    /// The uniform's words for this frame, laid out as build.rs's `Tiles` reads them
+    /// (tile_word.wgsl). A quad is grown by `grow` pixels each way past its tile, and a tile
+    /// stays claimed for `damage_frames` frames once it changed.
     pub fn words(&self, grow: f32, damage_frames: u32) -> [u32; TILES_WORDS] {
         let [across, down] = self.squares();
         let mut t = [0u32; TILES_WORDS];
@@ -406,16 +402,14 @@ impl Tiles {
         t
     }
 
-    /// The frames a tile stays claimed once changed, in a frame through the
-    /// gate.
+    /// How many frames a tile stays claimed once it changed, in a frame drawn through the gate.
     pub fn damage_frames(&self) -> u32 {
         self.damage_frames
     }
 
-    /// Whether a tile changed, by a mark that asks the frames of its claim, so lately it has
-    /// frames left of its claim but this one: handed or drawn (`marked_in`), so lately its
-    /// tile is claimed under a claim a frame shorter (`screen::in_damage`). A tile changed by
-    /// what the scene animates alone asks none.
+    /// Whether a mark that asks for the frames of its claim changed a tile so lately that the
+    /// tile stays claimed in a frame after this one. The mark may be handed (`damage`) or
+    /// drawn (`marked_in`). A mark made by the scene's animation alone asks for none.
     pub fn asking(&self) -> bool {
         screen::in_damage(
             screen::age(self.now, self.asked_at),
@@ -428,11 +422,11 @@ impl Tiles {
         self.now
     }
 
-    /// A mark a pass beside set in the frame numbered `at`, the draws that
-    /// changed drawn and the propagation their frame's (gpu/pass/mark.rs,
-    /// gpu/propagate.rs): the tiles gather from it as from one handed, where it
-    /// is later than the last, and ask its frames unless the scene's animation
-    /// made it (`animated`).
+    /// Takes note of a mark that another pass set in the frame numbered `at`: the marks of the
+    /// draws that changed (gpu/pass/mark.rs), or the propagation's in their frame
+    /// (gpu/propagate.rs). Unless the scene's animation made it (`animated`), the mark asks for
+    /// the frames of its claim as a handed mark does, where it is later than the last that
+    /// asked.
     pub fn marked_in(&mut self, at: u32, animated: bool) {
         if !animated && screen::age(self.now, at) < screen::age(self.now, self.asked_at) {
             self.asked_at = at;

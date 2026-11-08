@@ -1,10 +1,12 @@
 // pxl-core/domain/control.rs
 
-//! What the user does to the world and the view, in one order, each part
-//! naming only those below it: the pointer's picks and edits (`edit`) and
-//! its gestures and the keys (`input`); navigation, going to a place and
-//! following the device; the camera; and under them the device's sensors
-//! and where the pivot stands (`support`).
+//! What the user does to the world and the view. The parts are layered, and
+//! a part names only the parts below it (pxl-tool check_rules.rs
+//! `CONTROL_ORDER` holds the order). At the top are the pointer's picks and
+//! edits (`edit`) and its gestures and the keys (`input`). Below them is
+//! navigation, which goes to a place or follows the device. Below that is
+//! the camera. At the bottom are the device's sensors (`sensor`) and where
+//! the camera's pivot stands (`support`).
 
 pub mod camera;
 pub mod edit;

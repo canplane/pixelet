@@ -26,8 +26,8 @@ pub enum Outcome {
     Skipped,
 }
 
-/// A band to a worker at a time: a band shares its worker's `W` (a leaf row's
-/// neighbors), a lone item balances.
+/// Hands a band of items to a worker at a time: a band shares its worker's `W` (a leaf row's
+/// neighbors), and single items balance the load.
 pub fn over<T: Copy + Sync, W>(
     tag: &str,
     bands: &[&[T]],

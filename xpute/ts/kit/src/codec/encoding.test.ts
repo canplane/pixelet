@@ -1,6 +1,6 @@
 // @xpute/kit/codec/encoding.test.ts
 
-/** The wire tests read records through this hex. */
+/** The wire tests read their golden records through this hex codec. */
 
 import { test } from "vitest";
 import assert from "node:assert/strict";
@@ -32,7 +32,8 @@ test("hex round trips, pads a byte under 0x10, and reads no half a pair", () => 
   );
   assert.deepStrictEqual(bytes_to_hex(bytes()), "");
   assert.deepStrictEqual(hex_to_bytes("").length, 0);
-  // Either case reads, and what comes back is the one the encoder writes.
+  // Either case is read, and encoding the bytes again gives the lower case
+  // the encoder writes.
   assert.deepStrictEqual(
     Array.from(hex_to_bytes("AbCdEf")),
     [0xab, 0xcd, 0xef],
@@ -41,7 +42,7 @@ test("hex round trips, pads a byte under 0x10, and reads no half a pair", () => 
 });
 
 test("hex refuses what it cannot read whole rather than taking what it can", () => {
-  // `parseInt` would read "1g" as 1 and "zz" as NaN.
+  // A decoder built on `parseInt` alone would read "1g" as 1 and "zz" as NaN.
   assert.throws(() => hex_to_bytes("0"), MarshalError);
   assert.throws(() => hex_to_bytes("abc"), MarshalError);
   assert.throws(() => hex_to_bytes("1g"), MarshalError);
@@ -62,8 +63,8 @@ test("base64url round trips and carries no padding or plus or slash", () => {
       `${n} bytes did not round trip`,
     );
   }
-  // The three characters base64url exists to avoid, none of which a URL or a
-  // bucket key may carry.
+  // Base64url exists to avoid these three characters, which a URL or a
+  // bucket key cannot carry as they are.
   assert.deepStrictEqual(is_b64url("a+b"), false);
   assert.deepStrictEqual(is_b64url("a/b"), false);
   assert.deepStrictEqual(is_b64url("ab=="), false);

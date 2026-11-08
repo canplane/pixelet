@@ -1,9 +1,8 @@
 // pxl-spec/space/layer/quadrant.rs
 
-//! The pyramid: tiles of a tile grid, from the leaves up to the top, a
-//! tile's zoom its size's, so 2^z of them stand around the world. Cell
-//! placement, tile membership, folding order and cell centers are decided
-//! here only; a layer owns what a cell carries and how it folds.
+//! The pyramid: tiles of a tile grid from the leaves up to the top, a tile's zoom given by its
+//! size, so 2^z of them stand around the world. Cell placement, tile membership, folding order
+//! and cell centers are decided here only; a layer owns what a cell carries and how it folds.
 
 use core::fmt;
 
@@ -31,7 +30,7 @@ const _: () = assert!(
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Quadrant {
-    /// Its size's.
+    /// Its zoom, which is its size.
     pub zoom: Zoom,
     /// Its index at its zoom.
     pub at: [i32; 2],
@@ -94,7 +93,7 @@ impl Quadrant {
         child_idx(self.at)
     }
 
-    /// In `child_idx`'s order.
+    /// Its four children, in `child_idx`'s order.
     pub fn children(self) -> [Quadrant; 4] {
         std::array::from_fn(|slot| Quadrant::new(self.zoom + 1, child_of(self.at, slot)))
     }
@@ -195,7 +194,7 @@ impl Cell {
         self.zoom - self.shamt() as Zoom
     }
 
-    /// Its own.
+    /// Its own zoom.
     pub fn zoom(self) -> Zoom {
         self.zoom
     }

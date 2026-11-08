@@ -1,16 +1,17 @@
 // pxl-render/decor_thin.wgsl
 
-// The candidates of a pair `decor_mark_cs` listed whole, a clip level cell of its brick a
-// thread: each leaf cell under it is read off the decor's hashes, and one that stands at the
-// entry's clip level and stands clear (`scatter::retained`) is laid as the decor's next
-// record, its cell for `decor_cs`; none past the decor's room. Its brick is its head's, which
-// mark wrote off the clipmap's row this frame; the row is not read again, so a head that names
-// another brick lays that brick's candidates. What it reads is the decor's hash alone.
+// Lays the candidates of each pair that `decor_mark_cs` listed whole, one thread a clip level
+// cell of the pair's brick. Each leaf cell under that cell is read from the decor's hashes. A
+// candidate that stands at the entry's clip level and stands clear (`scatter::retained`) is
+// laid as the decor's next record, which holds its cell for `decor_cs`, and none is laid past
+// the decor's room. The brick is the one the entry's header names, which the mark wrote from
+// the clipmap's row this frame. The row is not read again, so a header that names another brick
+// lays that brick's candidates. The pass reads no world, only the decor's hashes.
 
-/// Decor's records (pxl-content `generation::SLOTS_AT`): the entries' heads atomic, each
-/// decor's count among them, which this pass's threads add to; then the records plain. A
-/// record's words are written by the one thread whose add to its decor's count took it, and
-/// read by the passes after.
+/// Decor's records (pxl-content `generation::SLOTS_AT`). The entries' headers are atomic, as
+/// each decor's count, which this pass's threads add to, lies among them. The records after
+/// them are plain: a record's words are written by the one thread whose add to its decor's
+/// count took it, and read by the passes after.
 struct Records {
   headers: array<atomic<u32>, SLOTS_AT>,
   words: array<u32>,

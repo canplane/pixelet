@@ -73,7 +73,7 @@ impl Numbering {
     }
 }
 
-/// None where no cell is in a division.
+/// The divisions leaf of `tile`; none where no cell is in a division.
 pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>, String> {
     let db = |e: postgres::Error| e.to_string();
     let [min, max] = get_tile_bbox(DIVISION_LEAF, tile);
@@ -88,7 +88,7 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
         ]
     };
 
-    // ---- the deepest area over each cell; ids numbered as they are met ----
+    // ---- The deepest area over each cell, with ids numbered as they are met. ----
     let mut ids = Numbering::default();
     let env: [&(dyn ToSql + Sync); 4] = [&min[0], &min[1], &max[0], &max[1]];
     let mut areas: Vec<(i32, String, Vec<u8>)> = client
@@ -103,7 +103,8 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
             )
         })
         .collect();
-    // shallow first, so the deepest paints last; at one depth the lesser id last, so it wins
+    // Shallow first, so the deepest paints last; at one depth the lesser id goes last, so it
+    // wins.
     areas.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| b.1.cmp(&a.1)));
     let mut cells = vec![NONE; n * n];
     for (_, id, wkb) in &areas {
@@ -122,7 +123,7 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
         }
     }
 
-    // ---- under the areas, the nearest point of a child, within the reach ----
+    // ---- Under the areas, the nearest point of a child, within the reach. ----
     let margin = merc_from_u(BAKE_READ_DIST);
     let ring: [&(dyn ToSql + Sync); 4] = [
         &(min[0] - margin),
@@ -172,7 +173,7 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
         return Ok(None);
     }
 
-    // ---- each division a cell names, with its parents ----
+    // ---- Each division a cell names, with its parents. ----
     let rows = client.query(RECORDS_SQL, &[&ids.list]).map_err(db)?;
     let mut records: FnvHashMap<String, (Division, Option<String>)> = FnvHashMap::default();
     for r in &rows {
@@ -196,7 +197,7 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
         };
         records.insert(id, (division, r.get("parent")));
     }
-    // the divisions in id order, so a tile is the same whatever order its rows came in
+    // The divisions in id order, so a tile is the same whatever order its rows came in.
     let mut order: Vec<&String> = records.keys().collect();
     order.sort();
     let at: FnvHashMap<&String, u32> = order

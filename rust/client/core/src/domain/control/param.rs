@@ -1,6 +1,7 @@
 // pxl-core/domain/control/param.rs
 
-//! The camera's defaults, gestures and smoothing.
+//! The tuned numbers of the camera: its defaults and limits, how it settles,
+//! and how gestures and keys move it.
 
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::zoom::units;
@@ -9,79 +10,95 @@ use pxl_spec::space::layer::quadrant;
 
 // ---- the camera ----
 
-/// The orbit eye's least height over its floor: one cell, so the eye is never
-/// in the cell its floor tops.
+/// The least height, in units, of the orbit eye over the floor under it. It
+/// is one cell, so the eye never sits in the cell that rests on the floor.
 pub const EYE_CLEARANCE_U: f64 = 1.0;
 
 pub const DEFAULT_DIST: f64 = 16.0;
 pub const DEFAULT_AZIMUTH: f64 = 0.0;
-/// From straight down (0) toward horizontal (PI / 2): 60°, the eye 30° above
-/// the ground plane.
+/// 60° from straight down, which puts the eye 30° above the ground plane.
 pub const DEFAULT_POLAR: f64 = core::f64::consts::FRAC_PI_3;
-/// How many of its end cell's sides a dolly's limit stands from the pivot,
-/// both ends alike: 4/3 of the way into the band the grid draws that cell
-/// over, a side `s` from 48·s to 96·s (pxl-spec space/camera/grid.rs
-/// `split_dist`).
+/// The distance from the pivot to either end of the dolly, counted in sides
+/// of the camera grid cell drawn there. The grid draws a cell of side `s`
+/// from 48·s to 96·s away (pxl-spec space/camera/grid.rs `split_dist`), and
+/// 64·s lies a third of the way into that band.
 pub const DOLLY_END_CELLS: f64 = 64.0;
 const _: () = assert!(
     DOLLY_END_CELLS >= grid::CELLS_A_RAD / 2.0 && DOLLY_END_CELLS < grid::CELLS_A_RAD,
     "a dolly's limit lies in the band its end cell is drawn over"
 );
-/// The orbit's nearest, in units from the pivot, about 3.8 m at Seoul's
-/// latitude: `DOLLY_END_CELLS` of the 2^-5 cell the grid asks there.
+/// The orbit's nearest distance from the pivot, in units. It is
+/// `DOLLY_END_CELLS` sides of the 2^-5 cell the grid asks for there, about
+/// 3.8 m at Seoul's latitude.
 pub const MIN_DIST: f64 = 2.0;
-/// How far out the orbit's nearest counts (orbit/collision.rs `nearest`).
+/// How far from the pivot the eye counts as at the nearest, where it may
+/// pass through what is there (orbit/collision.rs, the Nearest rule).
 pub const NEAREST_DIST: f64 = 1.25 * MIN_DIST;
-/// The orbit's farthest: `DOLLY_END_CELLS` of the coarsest cell any zoom
-/// holds, the pyramid's top's, so looking straight down the grid never asks
-/// a coarser cell than a zoom draws.
+/// The orbit's farthest distance: `DOLLY_END_CELLS` sides of the coarsest
+/// cell any zoom holds, the cell of the pyramid's top. Looking straight down
+/// from there, the grid never asks for a cell coarser than a zoom draws.
 pub const MAX_DIST: f64 = DOLLY_END_CELLS * units(GROUND.cell_zoom(quadrant::TOP_ZOOM));
 
-// ---- the camera's settling and the ground it keeps to ----
+// ---- how the camera settles and keeps out of the ground ----
 
-/// The first-person eye's and its facing's settling, each sub-pixel at any distance.
+/// How close the first-person eye and facing come to their targets before
+/// they stop easing. Each gap is smaller than a pixel at any distance.
 pub const FIRST_PERSON_EYE_EPS: f64 = 0.001;
 pub const FIRST_PERSON_FACING_EPS: f64 = 0.0001;
-/// The orbit's pivot, distance, polar and azimuth settling, each sub-pixel
-/// at any distance the view is looked across.
+/// How close the orbit's pivot, distance, polar angle and azimuth come to
+/// their targets before they stop easing. Each gap is smaller than a pixel
+/// at any distance the view is seen across.
 pub const ORBIT_PIVOT_EPS: f64 = 0.001;
 pub const ORBIT_DIST_EPS: f64 = 0.001;
 pub const ORBIT_POLAR_EPS: f64 = 0.0001;
 pub const ORBIT_AZIMUTH_EPS: f64 = 0.0001;
-/// Testing only where a step lands lets the camera tunnel, since the orbit's
-/// step damps through everything between.
+/// The most samples a collision test takes along one step of the orbit
+/// (orbit/collision.rs `way_hit`). Testing only where a step lands would let
+/// the camera tunnel, because the easing carries it through everything in
+/// between.
 pub const COLLISION_STEP_SAMPLES: u32 = 16;
-/// Steepening moves the eye and so the ground under it; two passes settle it,
-/// the remainder being smaller than a cell.
+/// How many times a climb steepens the pitch (orbit/collision.rs
+/// `steepened`). Steepening moves the eye, so the ground under the eye
+/// changes too. Two passes leave less than a cell to go.
 pub const CLIMB_PASSES: u32 = 2;
 
 // ---- input ----
 
-/// Stated against the screen, to match azimuth's 1:1 arcball.
+/// The share of the screen's height a drag crosses to tilt the camera by π.
+/// It is stated against the screen to match the azimuth's arcball, which
+/// turns one to one with the hand.
 pub const TILT_SWEEP_FRACTION: f64 = 0.5;
 pub const DOLLY_GAIN: f64 = 0.0022;
-/// atan2 swings wildly near the screen center; below this, azimuth freezes.
+/// Within this radius of the screen's center, a rotate drag does not turn
+/// the azimuth, because the hand's angle about the center (atan2) swings
+/// wildly there.
 pub const MIN_ROTATE_RADIUS_PX: f64 = 24.0;
 pub const MIN_TWIST_DIST_PX: f64 = 24.0;
-/// Past this displacement the dominant axis locks for the gesture, or an
-/// off-center vertical drag spins once tilt saturates. Smaller than
-/// MIN_ROTATE_RADIUS_PX: it only needs to tell vertical from horizontal.
+/// Once a rotate drag moves this far, its dominant axis locks for the rest
+/// of the gesture. Without the lock, an off-center vertical drag would start
+/// to spin the camera once the tilt reaches its limit. It is smaller than
+/// `MIN_ROTATE_RADIUS_PX`, because it only has to tell vertical from
+/// horizontal.
 pub const AXIS_LOCK_THRESHOLD_PX: f64 = 12.0;
-/// Real pointers jitter a pixel or two on a still click.
+/// How far a pointer may move and still count as a tap. Real pointers
+/// jitter a pixel or two on a still click.
 pub const TAP_DRAG_THRESHOLD_PX: f64 = 4.0;
-/// A held movement key pans this share of the distance to the pivot a
-/// second (`controller::pan_across`): a product number, a 16:9 width at the
-/// pivot crossed in about 3.4 s at any distance and any pitch, the view's
-/// height in about 2 looking straight down.
+/// The share of the distance to the pivot that a held movement key pans
+/// each second (`controller::pan_across`). It is a product decision. At any
+/// distance and pitch, the pan crosses the width of a 16:9 view at the
+/// pivot in about 3.4 s. Looking straight down, it crosses the view's height
+/// in about 2 s.
 pub const KEY_PAN_PER_S: f64 = 0.520_833_333_333_333_4;
 
 // ---- smoothing ----
 
 pub const ROT_DAMP: f64 = 10.0;
 pub const CAM_DAMP: f64 = 10.0;
-/// Faster than the controls ease: late to rise is the eye briefly inside a hill.
+/// The rate a climb's pitch rises at. It is faster than the controls ease,
+/// because a late rise leaves the eye briefly inside a hill.
 pub const CLIMB_RISE_DAMP: f64 = 20.0;
-/// Slower than the controls ease, so passing over a ridge does not bob the view.
+/// The rate a climb's pitch relaxes at. It is slower than the controls
+/// ease, so passing over a ridge does not bob the view.
 pub const CLIMB_RELAX_DAMP: f64 = 5.0;
 const _: () = assert!(
     CLIMB_RISE_DAMP > CAM_DAMP && CLIMB_RELAX_DAMP < CAM_DAMP,

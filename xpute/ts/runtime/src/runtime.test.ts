@@ -1,8 +1,8 @@
 // @xpute/runtime/runtime.test.ts
 
-/** What `mount` puts together from its config alone: the front laid before
- * any turn, the core's commands handed by their major, the stop, and the
- * turns paused and resumed. */
+/** Tests what `mount` puts together from its config alone: the front laid
+ * before any turn, the core's commands handed out by their major, the stop,
+ * and the turns paused and resumed. */
 
 import { test } from "vitest";
 import assert from "node:assert/strict";
@@ -33,14 +33,14 @@ const FRONT: Front = {
   cq_slots_at: SLOTS_AT + slots_bytes(CAP, SLOT),
   gpu_at: STREAM_AT,
 };
-/** A command of the program's, and one of xpute's own, the core posts
- * each turn. */
+/** Two commands the core posts each turn: one of the program's, and one of
+ * xpute's own. */
 const PROGRAM_IMPORT = (frame.PROGRAM_MAJOR << 8) | 9;
 const OWN_IMPORT = 0x0109;
 
-/** A core that opens the rings its runtime laid, then each turn answers what
- * was sent it, 0, and posts PROGRAM_IMPORT and OWN_IMPORT; `trap` makes a turn
- * throw. */
+/** A core that opens the rings its runtime laid. Each turn it replies 0 to
+ * every submission and posts PROGRAM_IMPORT and OWN_IMPORT. When `trap`
+ * says so, the turn throws instead. */
 function core(trap: () => boolean = () => false): Core & { turns: number[] } {
   const mem = new ArrayBuffer(FRONT.cq_slots_at + slots_bytes(CAP, SLOT));
   let sq: Ring | null = null;

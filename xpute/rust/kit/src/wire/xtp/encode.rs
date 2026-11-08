@@ -12,16 +12,17 @@ use super::spec::{
 use super::view::NodeView;
 
 pub struct TreeEncoderOptions {
-    /// The first buffer's size; it doubles where the tree overflows it.
+    /// The size of the first buffer tried; it doubles each time the packet
+    /// does not fit.
     pub init_cap: u32,
-    /// A hard limit on the packet's size.
+    /// The largest packet allowed; MAX_PKT_SZ when none is given.
     pub max_cap: Option<u32>,
 }
 
-/// A tree walked onto `PacketWriter`, the one writer of the layout, as the
-/// C++ encoder does (cpp kit wire/xtp/view.hpp `encode`): into a fixed
-/// buffer, walked again on one twice as large where it overflowed, up to the
-/// cap. Trusts the view layer for a node's shape.
+/// Encodes a tree by walking it onto `PacketWriter`, as the C++ `encode`
+/// (cpp/xpute/kit/wire/xtp/view.hpp) does. The first buffer has `init_cap`
+/// bytes; each time the packet overflows it, the tree is walked again into
+/// one twice as large, up to `max_cap`.
 #[derive(Default)]
 pub struct TreeEncoder;
 
@@ -30,8 +31,8 @@ impl TreeEncoder {
         TreeEncoder
     }
 
-    /// EINVAL for a cap outside a packet's sizes, EOVERFLOW for a tree past
-    /// the cap.
+    /// A `max_cap` below HDR_SZ or above MAX_PKT_SZ is EINVAL; a packet larger
+    /// than `max_cap` is EOVERFLOW.
     pub fn encode<'a, V: NodeView<'a>>(
         &mut self,
         view: &V,
@@ -64,8 +65,8 @@ pub fn encoder() -> TreeEncoder {
     TreeEncoder::new()
 }
 
-/// A node written as the entry the writer is at; a value its type does not
-/// name refuses the packet.
+/// A node whose value does not match its type, such as a STR that holds an
+/// array, makes `finish` refuse the packet.
 fn walk(w: &mut PacketWriter<'_>, node: &Node) {
     match node {
         Node::Nil(_) => {
@@ -161,8 +162,9 @@ const fn align(n: u32, unit: u32) -> u32 {
     (n + unit - 1) & !(unit - 1)
 }
 
-/// The table a writer's entries go in: a branch's, or the root's, a branch
-/// of one whose entry is the header.
+/// The child table the writer's next entries go in. The root is treated as a
+/// branch of one child whose entry is the header's root word: `root` marks it,
+/// and its entry sets the root's type instead of writing a descriptor.
 #[derive(Clone, Copy)]
 struct Table {
     base: u32,
@@ -171,23 +173,23 @@ struct Table {
     root: bool,
 }
 
-/// Writes a packet in place into bytes the caller holds, with no tree and no
-/// allocation: the one writer of the layout, which `TreeEncoder` walks its
-/// tree onto (cpp kit wire/xtp/encode.hpp). A branch declares its child
-/// count up front; a child that does not fit makes `finish` refuse, and a
-/// miscount panics.
+/// Writes a packet in place, into bytes the caller holds, without building a
+/// tree and without allocating. It is the one writer of the layout:
+/// `TreeEncoder` walks its tree onto it, so both give the same bytes. A node
+/// that does not fit does not fail its call: the writer goes on counting
+/// entries, and `finish` refuses the packet (EOVERFLOW).
 pub struct PacketWriter<'a> {
     buf: &'a mut [u8],
     table: Table,
     root_type: u8,
     lim: u32,
-    /// The first reason only.
+    /// The first error met; later ones are not kept.
     err: Option<Errno>,
 }
 
 impl<'a> PacketWriter<'a> {
-    /// A packet of one root, any node; the buffer's length is the cap, at
-    /// most MAX_PKT_SZ.
+    /// A writer for a packet whose root is any one node. The packet may take
+    /// the whole buffer, up to MAX_PKT_SZ bytes.
     pub fn root(buf: &'a mut [u8]) -> PacketWriter<'a> {
         let cap = buf.len().min(MAX_PKT_SZ as usize);
         let mut w = PacketWriter {
@@ -211,7 +213,8 @@ impl<'a> PacketWriter<'a> {
         w
     }
 
-    /// A packet whose root is a branch of `count`, its children written next.
+    /// A writer for a packet whose root is a branch of `cnt` children, which
+    /// the calls that follow write.
     pub fn new(buf: &'a mut [u8], cnt: u32) -> PacketWriter<'a> {
         let mut w = PacketWriter::root(buf);
         let at = w.branch_open(cnt);
@@ -236,8 +239,8 @@ impl<'a> PacketWriter<'a> {
         None
     }
 
-    /// In u64, as the C++ writer sizes: a count past what a u32 holds is too
-    /// large, never wrapped small.
+    /// `bytes` is a u64, as in the C++ writer, so that a size past what a u32
+    /// holds reads as too large instead of wrapping to a small one.
     fn reserve(&mut self, unit: u32, bytes: u64) -> Option<u32> {
         if self.err.is_some() {
             return None;
@@ -277,7 +280,8 @@ impl<'a> PacketWriter<'a> {
         self.entry(at, type_ as u8)
     }
 
-    /// A sequence's length word and `bytes` of payload after it, filled by `fill`.
+    /// Writes a sequence: its len slot, then `bytes` of payload that `fill`
+    /// writes, padded to a word.
     fn seq(
         &mut self,
         type_: SequenceType,
@@ -346,7 +350,6 @@ impl<'a> PacketWriter<'a> {
         self.scalar(ScalarType::BOOL, v.map(|b| [b as u8]))
     }
 
-    /// Followed by a NUL that the length leaves out.
     pub fn str(&mut self, s: Option<&str>) -> &mut Self {
         let Some(s) = s else {
             return self.entry(None, SequenceType::STR as u8);
@@ -358,7 +361,6 @@ impl<'a> PacketWriter<'a> {
         })
     }
 
-    /// `len` + 1 offsets into the UTF-8 after them.
     pub fn strs<S: AsRef<str>>(&mut self, items: Option<&[S]>) -> &mut Self {
         match items {
             Some(items) => match u32::try_from(strs_sz(items)) {
@@ -399,9 +401,9 @@ impl<'a> PacketWriter<'a> {
         })
     }
 
-    /// A string written into the room after its length's word, `write`
-    /// answering how many bytes it wrote, or none where they did not fit.
-    /// Followed by a NUL that the length leaves out.
+    /// Writes a STR whose bytes `write` puts into the room after the len slot.
+    /// `write` returns how many bytes it wrote, or `None` when they did not
+    /// fit, which spoils the packet.
     fn str_with(&mut self, write: impl FnOnce(&mut [u8]) -> Option<usize>) -> &mut Self {
         let base = align(self.lim, WORD_SZ) as usize;
         let payload = base + WORD_SZ as usize;
@@ -423,8 +425,9 @@ impl<'a> PacketWriter<'a> {
         self.entry(Some(base as u32), SequenceType::STR as u8)
     }
 
-    /// An array of `type_` from its elements' bytes, little-endian; bytes
-    /// that are not whole elements refuse the packet.
+    /// Writes an array of `type_` from its elements' little-endian bytes. A
+    /// length that is not a whole number of elements makes `finish` refuse
+    /// the packet.
     fn array_bytes(&mut self, type_: SequenceType, a: Option<&[u8]>) -> &mut Self {
         let Some(a) = a else {
             return self.entry(None, type_ as u8);
@@ -441,7 +444,6 @@ impl<'a> PacketWriter<'a> {
         }
     }
 
-    /// An array of its elements' type.
     pub fn array<T: ArrayElem>(&mut self, a: Option<&[T]>) -> &mut Self {
         self.array_bytes(T::TYPE, a.map(bytes_of))
     }
@@ -498,7 +500,8 @@ impl<'a> PacketWriter<'a> {
         self.array_with(SequenceType::U64_ARRAY, len, |i| val(i).to_le_bytes())
     }
 
-    /// One byte a bit, packed low bit first.
+    /// `bits` holds one byte for each bit, nonzero for set. They are packed
+    /// eight to a byte, the first in the lowest bit.
     pub fn bitset(&mut self, bits: Option<&[u8]>) -> &mut Self {
         match bits {
             Some(bits) => self.seq(
@@ -525,8 +528,9 @@ impl<'a> PacketWriter<'a> {
         at
     }
 
-    /// A branch ends on a word, so what follows it starts where the encoder
-    /// starts it.
+    /// A branch's extent ends on a word boundary, so a node after it starts on
+    /// the next word even when it needs less alignment. Every language pads
+    /// the same way, which keeps their bytes equal.
     fn branch_close(&mut self, at: Option<u32>) -> Option<u32> {
         if at.is_none() || self.err.is_some() {
             return at;
@@ -540,11 +544,12 @@ impl<'a> PacketWriter<'a> {
         at
     }
 
-    /// Writing a different number of children than `count` is a bug.
+    /// Writing a number of children other than `cnt` is a bug and panics.
     pub fn branch(&mut self, cnt: u32, fill: impl FnOnce(&mut Self)) -> &mut Self {
         let at = self.branch_open(cnt);
-        // A branch that did not fit still counts its children, against a base
-        // nothing is written at.
+        // When the branch did not fit, its children are still counted, so that
+        // a miscount is caught; the packet is spoiled, and nothing is written
+        // at the stand-in base.
         let outer = core::mem::replace(
             &mut self.table,
             Table {
@@ -570,7 +575,9 @@ impl<'a> PacketWriter<'a> {
         self.entry(None, SpecialType::BRANCH as u8)
     }
 
-    /// Its root's payload copied, placed as its root's type places it.
+    /// Copies the root of the encoded packet `pkt` in as this entry, aligned as
+    /// its root's type requires. A malformed `pkt` makes `finish` refuse the
+    /// packet (EBADMSG).
     pub fn graft(&mut self, pkt: &[u8]) -> &mut Self {
         let desc = (pkt.len() >= HDR_SZ as usize)
             .then(|| {
@@ -600,11 +607,13 @@ impl<'a> PacketWriter<'a> {
         self.entry(at, type_)
     }
 
-    /// The length, header included and to the word, or why it was refused.
+    /// Writes the header and returns the packet's length, header included and
+    /// padded to a word, or the first error that spoiled the packet.
     pub fn finish(mut self) -> Result<u32, MarshalError> {
         let f = self.table;
         crate::ensure!(f.written == f.cnt, ENOTRECOVERABLE, f.cnt, f.written);
-        // The root branch `new` opened, closed as `branch` closes one.
+        // The root branch that `new` opened is closed here, padded as `branch`
+        // pads one.
         if !f.root {
             self.branch_close(Some(f.base));
         }
@@ -621,8 +630,8 @@ impl<'a> PacketWriter<'a> {
         Ok(end)
     }
 
-    /// `finish`'s length, or none when the packet was refused: for a room
-    /// that fits a packet or not.
+    /// `finish`'s length, or `None` when the packet was refused, for a caller
+    /// that only needs to know whether the packet fit.
     pub fn fit_len(self) -> Option<u32> {
         self.finish().ok()
     }

@@ -1,14 +1,16 @@
 // pxl-render/cast.wgsl
 
-// Each drawn pixel's ray off the visible voxel the raster kept at it, a fresh voxel of a
-// drawable entry of the node cache (pxl-engine `raster`, `record::fresh`; gpu/ray/raster.rs),
-// or the sky, a thread a pixel of the tiles claimed (cast_tiles.wgsl), as light.wgsl takes a
-// slot's (visible.wgsl), with what lies about its face, the voxel's. Any other pixel, a hole,
-// takes no walk here: it is listed for the queue, which ends its ray this frame (queue.wgsl),
-// and its walked bit set, a workgroup's square of pixels writing its words whole (walked.wgsl).
+// Finds each drawn pixel's ray without a walk, one thread a pixel of the tiles claimed
+// (cast_tiles.wgsl). A pixel takes its ray from the visible voxel the raster kept at it, when
+// that is a fresh voxel of a drawable entry of the node cache (pxl-engine `raster`,
+// `record::fresh`; gpu/ray/raster.rs), as light.wgsl takes a slot's (visible.wgsl). The ray then
+// carries what lies about the voxel's face. Otherwise the pixel may see the sky. Any other pixel
+// is a hole and takes no walk here: it is listed for the queue, which ends its ray this frame
+// (queue.wgsl), and its walked bit is set. A workgroup's square of pixels writes its walked words
+// whole (walked.wgsl).
 
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
-/// The beam rays' words, the holes' bits past the grid's (walked.wgsl).
+/// The beam rays' words, with the holes' bits past the grid's words (walked.wgsl).
 @group(0) @binding(8) var<storage, read_write> beams: array<u32>;
 @group(0) @binding(9) var<storage, read_write> node_cache: array<u32>;
 
@@ -16,13 +18,13 @@ fn node_cache_word(k: u32) -> u32 {
   return node_cache[k];
 }
 
-/// Each drawn pixel's visible voxel (gpu/ray/raster.rs): its number (`raster::id_of`), 0
-/// where it kept none, read as an array of one layer.
+/// Each drawn pixel's visible voxel (gpu/ray/raster.rs), as its number (`raster::id_of`), or 0
+/// where the raster kept none. It is read as an array of one layer.
 @group(0) @binding(13) var visibility: texture_2d_array<u32>;
 /// The holes' count and the counts' lanes (visible.wgsl `MissArgs`).
 @group(0) @binding(14) var<storage, read_write> args: MissArgs;
-/// The tiles claimed, this pass's dispatch ahead of them: cast_tiles.wgsl's `CastTiles`, its
-/// layout read without the atomics a read-only binding cannot hold.
+/// The tiles claimed, after this pass's dispatch words: cast_tiles.wgsl's `CastTiles`, its layout
+/// read without the atomics, which a read-only binding cannot hold.
 struct CastTiles {
   count: u32,
   sides: array<u32, 2>,
@@ -38,18 +40,19 @@ fn sample_before(at: vec2<f32>) -> vec2<u32> {
   return vec2<u32>(max(floor(v * SAMPLE_SPACING_INVERSE), vec2<f32>(0.0))) + vec2<u32>(NEAR_SAMPLES);
 }
 
-/// The ray's words at pixel `p`.
+/// Writes the ray's words at pixel `p`.
 fn write_ray(p: vec2<u32>, w: vec4<u32>) {
   for (var i = 0u; i < 4u; i += 1u) {
     textureStore(rays, p, i, vec4<u32>(w[i], 0u, 0u, 0u));
   }
 }
 
-/// The workgroup's square's walked bits (`ray::SQUARE_WORDS`), as its pixels mark them.
+/// The walked bits of the workgroup's square of pixels (`ray::SQUARE_WORDS`), as its pixels mark
+/// them.
 var<workgroup> marked: array<atomic<u32>, SQUARE_WORDS>;
 
-/// Pixel `p`'s ray, of a target `size`, off its visible voxel or the sky; whether it is a hole,
-/// none where it lies past the target.
+/// Writes the ray of pixel `p` in a target of `size`, from its visible voxel or the sky. Returns
+/// whether the pixel is a hole; a pixel past the target is not.
 fn cast_px(p: vec2<u32>, size: vec2<u32>) -> bool {
   if (p.x >= size.x || p.y >= size.y) {
     return false;
@@ -59,9 +62,9 @@ fn cast_px(p: vec2<u32>, size: vec2<u32>) -> bool {
   let aim = eye_aim(px);
   let on = ((node_cache[COUNT_ON] >> COUNT_EYE) & 1u) != 0u;
   if (visible != 0u && (visible & VISIBLE_LACK) == 0u) {
-    // The voxel's entry, drawn and so kept from any claim while its box is drawn
-    // (`record::drawn`). A slot forgotten since the boxes were drawn draws none: the pixel
-    // walks.
+    // The voxel's entry was drawn, so no claim takes its slot while its box is drawn
+    // (`record::drawn`). A slot forgotten since the boxes were drawn has no faces set to draw,
+    // and the pixel walks.
     let slot = visible - 1u;
     let e = entry_at(slot);
     let state = node_cache_word(state_at(slot));
@@ -71,7 +74,8 @@ fn cast_px(p: vec2<u32>, size: vec2<u32>) -> bool {
       let faces = (state & RECORD_ASKED) >> RECORD_ASKED_SHIFT;
       let entry = visible_cell(aim, k.zoom, k.corner, k.roots - origin_roots(aim.origin), fill, faces);
       if (entry.enters && kept_fresh(k, (state & RECORD_WHOLE) != 0u, vec3<i32>(aim.origin))) {
-        // Its words, with what lies about its face, the voxel's (`word`, `ray::first_word`).
+        // The ray's words, with what lies about its face taken from the voxel's (`word`,
+        // `ray::first_word`).
         let face = 2u * entry.axis + select(0u, 1u, ray_dir(aim.dir)[entry.axis] > 0.0);
         add_cnt(on, COUNT_REUSED);
         write_ray(p, vec4<u32>(
@@ -84,8 +88,8 @@ fn cast_px(p: vec2<u32>, size: vec2<u32>) -> bool {
       }
     }
   }
-  // No fresh voxel: the sky where none of the four samples about it met anything (`sky`), as a
-  // thing thinner than their spacing goes unseen.
+  // With no fresh voxel, the pixel sees the sky when none of the four samples about it met
+  // anything (`sky`). A thing thinner than the samples' spacing goes unseen.
   let s = sample_before(px);
   if (went_on(sample_word(s)) && went_on(sample_word(s + vec2<u32>(1u, 0u))) && went_on(sample_word(s + vec2<u32>(0u, 1u))) && went_on(sample_word(s + vec2<u32>(1u)))) {
     add_cnt(on, COUNT_SKY);
@@ -108,7 +112,7 @@ fn cast_cs(@builtin(workgroup_id) w: vec3<u32>, @builtin(local_invocation_id) l:
     list_hole(eye_holes_at(size), p);
   }
   workgroupBarrier();
-  // The square's words whole, a thread a word.
+  // The square's walked words are written whole, a thread a word.
   let k = l.y * CAST_SIDE + l.x;
   if (k < SQUARE_WORDS && corner.x < size.x && corner.y < size.y) {
     beams[walked_at() + hole_bit(corner, size).x + k] = atomicLoad(&marked[k]);

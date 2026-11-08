@@ -1,15 +1,18 @@
-// Shared by the AO passes and its apply: N8AO 1.10.1 (CC0) ported to WGSL and
-// reversed depth, at its "performance" settings with four hemisphere samples.
-// Everything is in view space.
+// What every pass of the occlusion and its apply share. The occlusion is N8AO
+// 1.10.1 (CC0), ported to WGSL and to reversed depth, at its "performance"
+// settings with four hemisphere samples. Every position here is in view space.
 
-// Read field by field from vec4 words, never as a struct: a struct here lost
-// Safari's WebGPU its GPU process. The screen's size and the fog are the frame's.
+// The occlusion's words, read field by field from vec4s and never as a struct:
+// a uniform struct crashed the GPU process of Safari's WebGPU. The screen's
+// size and the fog are read from the frame's words.
 @group(0) @binding(6) var<uniform> ao_words: array<vec4f, AO_VEC4S>;
 
-// The blue-noise texture's side less one; a pixel reads it tiled.
+// The blue noise's side less one. A pixel reads the noise tiled, its
+// coordinates masked by it.
 const AO_NOISE_MASK: i32 = i32(AO_NOISE_SIDE) - 1;
 
-// Reversed depth `d`; `uv` y down.
+// The view-space position at reversed depth `d` and screen coordinates `uv`,
+// whose y points down.
 fn view_pos(d: f32, uv: vec2f) -> vec3f {
   let p = ao_inv_proj() * vec4f(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, d, 1.0);
   return p.xyz / p.w;

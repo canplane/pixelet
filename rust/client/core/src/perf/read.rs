@@ -1,8 +1,9 @@
 // pxl-core/perf/read.rs
 
-//! What PERF_STATS reads: the profiler window reduced into perf.json's
-//! STAT, and what holds as it reads into its NOW, each read in place by the
-//! panel and the report. Sections go only through `put`.
+//! What PERF_STATS reads. The profiler's window is reduced into perf.json's
+//! STAT, and the state at the moment of the read into its NOW. The panel and
+//! the report read both in place. A section is written only through `put`
+//! (perf/word.rs).
 
 use crate::domain::control::camera;
 use crate::domain::control::camera::controller;
@@ -40,7 +41,8 @@ const REASONS: usize = LIMIT::REASONS as usize;
 const STEP_SLOTS: usize = LIMIT::STEP_SLOTS as usize;
 
 struct Read {
-    /// On the heap, not a static: a native build's statics are outside the core memory, where the client reads them.
+    /// The words live on the heap, not in a static, because a native build's
+    /// statics lie outside the core's memory, which is all the client reads.
     stats: Box<[f64; STATS_WORDS]>,
     now: Box<[f64; NOW_WORDS]>,
 }
@@ -54,7 +56,8 @@ fn read() -> &'static mut Read {
     })
 }
 
-/// `vals`' percentiles (perf.json PERCENTILES), and how many they are.
+/// The percentiles of `vals` (perf.json PERCENTILES) and how many values
+/// they cover. Only as many values as `scratch` holds are taken.
 fn percentiles_n(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> (Percentiles, usize) {
     let mut n = 0;
     for v in vals.take(scratch.len()) {
@@ -77,8 +80,9 @@ fn percentiles(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> Percenti
     percentiles_n(scratch, vals).0
 }
 
-/// The nearest rank of `q` in `sorted`: the value at ceil(q × n) − 1, the
-/// least with no more than that share of the n above it; 0 for none.
+/// The nearest-rank percentile `q` of `sorted`: the value at index
+/// ceil(q × n) − 1, the smallest value with at most a share `1 − q` of the
+/// values above it. It is 0 for an empty slice.
 fn rank(sorted: &[f64], q: f64) -> f64 {
     let n = sorted.len();
     if n == 0 {
@@ -88,7 +92,8 @@ fn rank(sorted: &[f64], q: f64) -> f64 {
     sorted[at]
 }
 
-/// The window's statistics; no window is the whole recording.
+/// The statistics over the last `window_ms`, or over the whole recording
+/// when no window is given.
 pub fn perf_stats(window_ms: Option<f64>) -> &'static [f64] {
     let (out, scratch) = (&mut read().stats[..], perf_scratch());
     out.fill(0.0);
@@ -108,7 +113,7 @@ pub fn perf_stats(window_ms: Option<f64>) -> &'static [f64] {
     out
 }
 
-/// What holds as it reads, the window aside.
+/// The state at the moment of the read, apart from any window.
 pub fn perf_now() -> &'static [f64] {
     let out = &mut read().now[..];
     out.fill(0.0);
@@ -125,8 +130,8 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FramesSection {
     let seconds = ((last.t - first.t) / 1000.0).max(1e-3);
     let moving = || frames.iter().filter(|f| f.settled == 0.0);
     let cnt = |of: &dyn Fn(&FrameSample) -> bool| frames.iter().filter(|f| of(f)).count() as f64;
-    // A span the frame did not run reads 0 and is left out.
-    // The GPU's figures over the frames a read timed, each read once.
+    // The GPU's figures cover only the frames a read timed, each counted
+    // once. A span the frame did not run reads 0 and is left out.
     let read = || frames.iter().filter(|f| f.gpu.read != 0.0);
     let spans: [(f64, f64); GPU_SPANS] = core::array::from_fn(|k| {
         let ran = read().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0);
@@ -265,8 +270,8 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRow]) -> TasksSection {
 fn view() -> ViewSection {
     use crate::domain::control::edit::{self, collision};
     let pointed = edit::pointer_ndc();
-    // What the pointer meets, exactly, at the zooms the eye asks, whatever
-    // the tool could strike there, and the zoom the rays draw it at.
+    // What the pointer's ray meets exactly, at the zooms the eye asks for,
+    // whatever the tool could strike there, and the zoom the rays draw it at.
     let met = pointed.and_then(|[x, y]| {
         let (mut origin, mut dir) = ([0.0; 3], [0.0; 3]);
         let pose = pose::view();
@@ -287,7 +292,7 @@ fn view() -> ViewSection {
         ))
     });
     let (hover, cell_zoom) = (met.map(|m| m.0), met.map(|m| m.1));
-    // What the tool held strikes there, as the hover picks it.
+    // What the held tool strikes there, picked the way the hover picks it.
     let picked = pointed.and_then(|[x, y]| edit::pick_at(x, y));
     let hit_kind = picked.as_ref().map_or(f64::NAN, |p| {
         f64::from(match p.hit.kind {

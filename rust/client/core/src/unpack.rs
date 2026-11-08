@@ -1,17 +1,21 @@
 // pxl-core/unpack.rs
 
-//! A body the app's fetch hands over still zstd, decoded before anything
-//! reads it: the device asks for zstd, as the bake stores its objects, and
-//! undoes it in its transport (ts/client/src/service/origin.native.ts), as a
-//! browser undoes it in its own. Any frame RFC 8878 allows decodes, a
-//! stored object's or one the edge made on the fly, which need not say its
-//! size: so the decoded bytes are the library's, handed out and let go by
-//! the caller. Called from the module's queue, never the JavaScript thread
-//! or the core's: it touches only the caller's bytes and its own, so it
-//! takes no handoff (xpute-runtime native `Core::run`). An Android app reaches
-//! it through Kotlin's `PxlNative` (`Java_me_plei_pixelet_platform_PxlNative_unpack`),
-//! an iPhone's Swift through the C ABI (include/pxl_native.h). A page has
-//! none: its browser undoes zstd itself.
+//! Decodes the zstd bodies a device's fetch receives. A device asks the
+//! server for zstd, the encoding the bake stores objects in, and its
+//! transport (ts/client/src/service/origin.native.ts) decodes each body here
+//! before anything reads it. A page has no such decoder, because the browser
+//! decodes zstd itself.
+//!
+//! Any frame RFC 8878 allows decodes, whether a stored object's or one the
+//! edge compressed on the fly. Such a frame need not state its decoded size,
+//! so the library allocates the decoded bytes and the caller frees them.
+//!
+//! The decoder runs on the native module's queue, never on the JavaScript
+//! thread or the core's. It touches only the caller's bytes and its own, so
+//! it needs no handoff to the core (xpute-runtime native `Core::run`). An
+//! Android app calls it through Kotlin's `PxlNative`
+//! (`Java_me_plei_pixelet_platform_PxlNative_unpack`), and an iPhone app
+//! through the C ABI (include/pxl_native.h).
 
 #[cfg(target_os = "android")]
 use xpute_kit::status::bug::OrBug;
@@ -21,22 +25,25 @@ use xpute_kit::status::errno::Errno;
 use xpute_runtime::jni;
 use zstd::stream;
 
-/// Every frame of `body` decoded, its skippable frames passed over; none
-/// where one does not decode, or ends before its frame does.
+/// Decodes every frame of `body`, skipping skippable frames. Returns None
+/// when a frame does not decode or the body ends inside a frame.
 pub(crate) fn decode(body: &[u8]) -> Option<Vec<u8>> {
-    // libzstd reads no frame as one cut short; no frame is nothing.
+    // libzstd reads an empty body as a frame cut short, but a body with no
+    // frames decodes to nothing.
     if body.is_empty() {
         return Some(Vec::new());
     }
     stream::decode_all(body).ok()
 }
 
-/// Decodes the zstd body of `len` bytes at `src`: 0, with the bytes at
-/// `*out`, `*out_len` long, which are the library's until
-/// `pxl_unpacked_free`; -1 where it does not decode, nothing handed out.
+/// Decodes the zstd body of `len` bytes at `src`. On success it returns 0,
+/// writes the decoded bytes' address to `*out` and their length to
+/// `*out_len`, and the library owns those bytes until `pxl_unpacked_free`.
+/// When the body does not decode it returns -1 and writes nothing.
 ///
 /// # Safety
-/// `src` points at `len` readable bytes, `out` and `out_len` at writable words.
+/// `src` must point at `len` readable bytes, and `out` and `out_len` at
+/// writable words.
 #[no_mangle]
 unsafe extern "C" fn pxl_unpack(
     src: *const u8,
@@ -54,20 +61,23 @@ unsafe extern "C" fn pxl_unpack(
     0
 }
 
-/// Lets go the bytes `pxl_unpack` handed out.
+/// Frees the bytes `pxl_unpack` handed out.
 ///
 /// # Safety
-/// `out` and `len` are what one `pxl_unpack` wrote, let go once.
+/// `out` and `len` must be what one `pxl_unpack` call wrote, and those bytes
+/// are freed only once.
 #[no_mangle]
 unsafe extern "C" fn pxl_unpacked_free(out: *mut u8, len: usize) {
     // SAFETY: the boxed slice `pxl_unpack` made, as it made it.
     drop(unsafe { Box::from_raw(core::ptr::slice_from_raw_parts_mut(out, len)) });
 }
 
-/// `f` over the bytes of `packed`, a Java byte array, let go unwritten after.
+/// Runs `f` over the bytes of `packed`, a Java byte array, then releases the
+/// array without copying anything back to it.
 ///
 /// # Safety
-/// `e` is the environment JNI called with, `packed` a live byte array.
+/// `e` must be the environment JNI called with, and `packed` a live byte
+/// array.
 #[cfg(target_os = "android")]
 unsafe fn with_bytes<R>(
     e: *mut jni::sys::JNIEnv,
@@ -94,9 +104,10 @@ unsafe fn with_bytes<R>(
     r
 }
 
-/// Kotlin's `PxlNative.unpack`: a zstd body decoded into a direct buffer Java
-/// owns, the decoded bytes copied once into it; null where it does not
-/// decode (`decode`).
+/// Kotlin's `PxlNative.unpack`. It decodes a zstd body and copies the decoded
+/// bytes once into a direct buffer that Java owns. It returns null when the
+/// body does not decode, when it is too large for a Java buffer, or when Java
+/// cannot allocate the buffer.
 ///
 /// # Safety
 /// Called by JNI.

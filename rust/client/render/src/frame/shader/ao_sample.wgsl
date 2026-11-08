@@ -1,13 +1,16 @@
-// Half-resolution AO over the normal's hemisphere. Out: occlusion (1 for none)
-// and the packed normal for the denoise and the apply, found here from the
-// full-resolution depth at the pixel the downsample kept, so the half depth
-// every tap reads is one float a texel.
+// Samples the occlusion at half resolution over the hemisphere about each
+// texel's normal. It writes the occlusion, 1 where nothing occludes, and the
+// normal packed into the other three channels for the denoise and the apply.
+// The normal is found here from the full-resolution depth at the pixel the
+// downsample kept, so the half-resolution depth that every tap reads holds
+// one float a texel.
 
 @group(0) @binding(1) var half_depth: texture_2d<f32>;
 @group(0) @binding(2) var blue_noise: texture_2d<f32>;
 @group(0) @binding(3) var scene_depth: texture_depth_2d;
 
-// N8AO's generateHemisphereSamples(4).
+// The hemisphere's sample directions, as N8AO's `generateHemisphereSamples(4)`
+// gives them.
 const HEMISPHERE = array<vec3f, AO_SAMPLES>(
   vec3f(0.353553, 0.000000, 0.935414),
   vec3f(-0.451544, 0.413652, 0.790569),
@@ -23,8 +26,9 @@ fn scene_at(p: vec2i) -> f32 {
   return textureLoad(scene_depth, clamp(p, vec2i(0), vec2i(frame_viewport()) - 1), 0);
 }
 
-// From the neighbor with the smaller second difference on each axis, so an
-// edge pixel takes its own surface's side (N8AO's computeNormal).
+// The view-space normal at pixel `p` of depth `c0`. On each axis it takes the
+// slope toward the side whose second difference is smaller, so a pixel at an
+// edge takes the slope of its own surface (N8AO's `computeNormal`).
 fn view_normal(p: vec2i, c0: f32) -> vec3f {
   let res = frame_viewport();
   let uv = (vec2f(p) + 0.5) / res;
@@ -48,8 +52,9 @@ fn view_normal(p: vec2i, c0: f32) -> vec3f {
   return normalize(cross(dpdy, dpdx));
 }
 
-// The pixel of half texel `hp`'s 2×2 whose depth the downsample kept, the
-// first in its order to hold `depth`.
+// The pixel, of the 2×2 under half texel `hp`, whose depth the downsample
+// kept: the first in order whose depth is `depth`. When none of the first
+// three is, it is the fourth.
 fn full_px(hp: vec2i, depth: f32) -> vec2i {
   let fp = hp * i32(AO_DOWNSCALE);
   for (var k = 0; k < 3; k++) {
@@ -105,7 +110,9 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
         let dist_sample = view_dist(sample_depth);
         let dist_world = view_dist(ndc.z);
         let range_check = smoothstep(0.0, 1.0, falloff / abs(dist_sample - dist_world));
-        // The pixel center is half a texel past its corner, so a difference under one is itself.
+        // `i.clip.xy` lies half a texel past the corner `texel` names, so a
+        // squared distance under one means the sample fell in this texel
+        // itself, which does not occlude it.
         let diff = i.clip.xy - texel;
         occluded += range_check * f32(dist_sample != dist_world) * f32(sample_depth != depth)
           * step(dist_sample, dist_world) * step(1.0, dot(diff, diff));

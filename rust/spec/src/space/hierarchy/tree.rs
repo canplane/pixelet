@@ -26,7 +26,7 @@ pub fn region<const D: usize>((zoom, at): Node<D>) -> Aabb {
     b
 }
 
-/// A floor on the signed axes.
+/// The parent's index: each axis halved, floored on the signed axes.
 pub(crate) fn parent_of<const D: usize>(at: [i32; D]) -> [i32; D] {
     at.map(|v| v.div_euclid(2))
 }
@@ -57,7 +57,8 @@ pub(crate) fn off_in<const D: usize>(at: [i32; D], steps: u32) -> [i32; D] {
     at.map(|v| v & ((1 << steps) - 1))
 }
 
-/// Every slot 0: `ancestor_of`'s inverse.
+/// The descendant `steps` down that takes slot 0 at every step: the inverse of
+/// `ancestor_of`.
 pub fn first_descendant_of<const D: usize>(at: [i32; D], steps: u32) -> [i32; D] {
     at.map(|v| v << steps)
 }

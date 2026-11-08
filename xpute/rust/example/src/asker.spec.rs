@@ -29,11 +29,11 @@ use xpute_kit::wire::xtp::{PacketWriter, TreeReader};
 #[repr(u32)]
 pub enum Command {
     // ---- asker, export ----
-    /// Two numbers, answered with their sum and ASK's.
+    /// Carries two numbers. The core answers with their sum plus the number ASK answers.
     SUM = 0x1001,
 
     // ---- asker, import ----
-    /// A number the runtime answers, which the core adds.
+    /// Asks the runtime for a number, which the core adds to the sum.
     ASK = 0x1002,
 }
 

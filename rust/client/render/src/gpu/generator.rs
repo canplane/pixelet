@@ -1,17 +1,15 @@
 // pxl-render/gpu/generator.rs
 
-//! The decor the GPU generates and draws (pxl-content `scatter`): what the
-//! ground generates in the eye's clip levels over the cast's world
-//! (`decor_cs`), placed decor handed as records beside it — a candidate
-//! generated again only where what it reads changed (`decor_mark_cs`,
-//! `Generation`), its record standing otherwise, and a brick thinned again only
-//! where it is another; then each frame each record taken where the rays ask
-//! the leaf cell's zoom or finer and sized for the screen, counted a draw
-//! region (`decor_cnt_cs`), the regions laid out with their indirect args
-//! (`decor_args_cs`), and each record drawn compacted into the decor's
-//! instances in the layout the decor and impostor shaders read
-//! (`decor_compact_cs`). The CPU hands what only it knows and never reads what
-//! is generated.
+//! The decor the GPU generates and draws (pxl-content `scatter`). The GPU generates the decor
+//! the ground holds in the eye's clip levels over the cast's world (`decor_cs`), and the CPU
+//! hands placed decor beside it as records. A candidate is generated again only where what it
+//! reads changed (`decor_mark_cs`, `Generation`), and its record stands otherwise. A brick's
+//! candidates are thinned again only where the brick is another. Then the count pass sizes for
+//! the screen each record the rays ask for and counts it into a draw region (`decor_cnt_cs`),
+//! the args pass lays the regions out with their indirect args (`decor_args_cs`), and the
+//! compact pass writes each drawn record into the decor's instances, in the layout the decor
+//! and impostor shaders read (`decor_compact_cs`). These three run again only where what they
+//! read moved. The CPU hands what only it knows and never reads back what is generated.
 
 use crate::frame::shader::access;
 use crate::frame::shader::sequence;
@@ -43,45 +41,45 @@ use crate::gpu::tiles::Tiles;
 
 /// What the CPU hands the GPU's decor this frame.
 pub struct DecorFrame<'a> {
-    /// Per kind, the clip level zooms it is generated at, a bit each over the
-    /// first clip level's (`decor_cs`).
+    /// For each kind of decor, the clip level zooms it is generated at, a bit for each zoom
+    /// counted from the first clip level's (`decor_cs`).
     pub zooms: &'a [u32],
-    /// pxl-content `generation::drawn`'s drawing words, `DRAWING_WORDS` of them.
+    /// The drawing words, `drawn::DRAWING_WORDS` of them, laid out as pxl-content
+    /// `generation::drawn` says.
     pub drawing: &'a [u32],
-    /// Placed decor, a record each as `decor_cs` writes one: its kind,
-    /// variant and turn, then its box's min corner in leaf cells, its base
-    /// sunk under it by none, as it stands where it is placed; handed where
-    /// they lie, their writer asking `held` (gpu/api.rs) before it writes
-    /// them again.
+    /// Placed decor, a record each in the layout `decor_cs` writes: its kind, variant and
+    /// turn, then its box's min corner in leaf cells, and a sink of none, as it stands where
+    /// it is placed. The records are uploaded from where they lie, so their writer asks
+    /// `in_flight` (gpu/api.rs) before it writes them again.
     pub placed_records: &'a [[u32; generation::RECORD_WORDS as usize]],
-    /// The anchor the lanes are about, the unit the eye stands in, as a
-    /// draw's Q3 (gpu/draw.rs `Position`): where the decor's instances are
-    /// drawn, against the frame's eye (word.rs `frame::EYE`).
+    /// The unit the eye stands in, as a draw's Q3 (gpu/draw.rs `Position`). The instances'
+    /// positions are about it, and from it they are drawn against the frame's eye (word.rs
+    /// `frame::EYE`).
     pub anchor: Q3,
-    /// What overwrites wrote since the last frame, `object::EDITS` boxes
-    /// of leaf cells at most (pxl-content `generation::meets`): the slots
-    /// whose decor they reach generate again.
+    /// The boxes of leaf cells the overwrites wrote since the last frame, `object::EDITS` at
+    /// most (pxl-content `generation::meets`). The slots whose decor they reach generate
+    /// again.
     pub edits: &'a [[i32; 4]],
 }
 
-/// What decor's generation reads besides the frame's decor, none of it the
-/// eye's place: the clip levels' table, a preview's cuts, and the bricks filled
-/// this frame. A slot generates whole where its brick is another; else it
-/// generates again only the records a box reaches, each by what its own
-/// candidate reads (`generation::reaches`): an edit, a cut as it was or is, or a
-/// brick filled at its clip level's zoom or finer. The overwrites' every write
-/// names its box (the frame's `edits`), and the service area's index is made
-/// once, before any brick is held, so neither generates a slot by itself. A
-/// brick filled reaches its own clip level's zoom and every coarser one: a
-/// coarser clip level's decor faces as the leaf cells vote, each read off the
-/// finest clip level holding it (pxl-content `generation::asks`).
+/// What decor's generation reads besides the frame's decor: the clip levels' table, a
+/// preview's cuts, and the bricks filled this frame. None of it is the eye's place. A slot is
+/// an entry of the clip levels' table with the brick it holds. A slot generates whole where its
+/// brick is another. Otherwise it generates again only the records that a box reaches by what
+/// the record's own candidate reads (`generation::reaches`): an edit, a cut as it was or as it
+/// is, or a brick filled at the slot's clip level zoom or finer. Neither the overwrites nor the
+/// service area's index make a slot generate by themselves: every write of the overwrites
+/// names its box (the frame's `edits`), and the index is made once, before any brick is held.
+/// A brick filled reaches its own clip level's zoom and every coarser one, as a coarser clip
+/// level's decor faces the way the leaf cells vote, each cell read from the finest clip level
+/// that holds it (pxl-content `generation::asks`).
 pub struct Generation<'a> {
     pub clipmap: &'a [i32],
     pub cuts: &'a [u32; eye::CUTS],
-    /// The bricks handed this frame, each its cells' zoom and the brick.
+    /// The bricks handed this frame, each as its cells' zoom and the brick's place.
     pub fresh: &'a [(Zoom, [i32; 2])],
-    /// The eye as the cast's (pxl-engine `eye`), of which the count pass
-    /// reads its place and the zooms it asks (`ORIGIN`, `RANGE`).
+    /// The eye's words as the cast holds them (pxl-engine `eye`). The count pass reads the
+    /// eye's place and the zooms it asks from them (`ORIGIN`, `RANGE`).
     pub eye: &'a [u32; eye::WORDS],
 }
 
@@ -93,8 +91,8 @@ pub struct Generator {
     args_pipeline: Pipeline,
     compact: Pipeline,
     groups: [u32; 6],
-    /// What `decor_mark_cs` reads and lists for `decor_cs`'s dispatch
-    /// (`generation::LIST_AT`).
+    /// What `decor_mark_cs` reads and the list it writes, by which `decor_thin_cs` and
+    /// `decor_cs` are dispatched, laid out as pxl-content `generation::THIN_ARGS` says.
     list: u32,
     zooms: u32,
     drawing: u32,
@@ -102,62 +100,64 @@ pub struct Generator {
     meshes: u32,
     regions: u32,
     args: u32,
-    /// Each region's draw uniform (`drawn::UNIFORM_WORDS` apart), as the
-    /// decor and impostor shaders read one, its index set by the args pass.
+    /// Each region's draw uniform, `drawn::UNIFORM_WORDS` apart, as the decor and impostor
+    /// shaders read one. The args pass sets each uniform's index.
     uniforms: u32,
-    /// The records, laid by slot (`generation::record_at`); then the decor's
-    /// instances, `drawn::COLUMNS` lanes and the index list, `cap` slots each.
+    /// The records, laid out by slot (`generation::record_at`). `instances` holds the decor's
+    /// instances: `drawn::COLUMNS` lanes and the index list, each `cap` words long.
     records: u32,
     instances: u32,
-    /// The draws' bind groups over the uniforms, a region's at a dynamic
-    /// offset, and over the instances, in the layouts the decor and impostor
-    /// draws share (record.rs `DRAW`, `UPLOAD`): made with their buffers.
+    /// The draws' groups, in the layouts the decor and impostor draws share (record.rs
+    /// `DRAW`, `UPLOAD`): one over the uniforms, with a region's at a dynamic offset, and one
+    /// over the instances. Each is made with its buffers.
     draw_layouts: [Layout; 2],
     uniform_group: u32,
     instances_group: u32,
-    /// What a frame through a gate draws in their place (`mask`), each gate's its own
-    /// (`Mask`), and the passes that make it.
+    /// What a frame drawn through a gate draws in place of the instances (`mask`), one for
+    /// each gate (`Mask`), and the passes that make it.
     culled: [Culled; 2],
     cull_args: Pipeline,
     mask: Pipeline,
     cap: u32,
-    /// The placed decor's records, as last handed.
+    /// How many placed decor records were last handed.
     placed_cnt: u32,
-    /// The world its groups bind: grouped again exactly when it is another.
+    /// The world the groups bind. The groups are made again exactly when the world handed is
+    /// another.
     bindings: World,
     on: bool,
-    /// The kinds' zooms as last written, a constant of the table the core
-    /// hands once; the clip levels' table, the cuts and the placed decor as
-    /// last handed; and whether this frame marks slots to generate.
+    /// The kinds' zooms as last written, which stay constant once the core has handed its
+    /// table; the clip levels' table, the cuts and the placed decor as last handed; and
+    /// whether this frame marks slots to generate.
     zooms_read: Read,
     clipmap: Read,
     cuts: [u32; eye::CUTS],
     placed: Read,
     marking: bool,
-    /// The boxes the slots they meet generate again in, held until a frame
-    /// that marks by them is drawn: one dropped, or handed and never drawn,
-    /// hands them again, as generating a slot twice generates it the same.
-    /// Past `object::RECTS`, the rest joined into the last.
+    /// The boxes whose slots generate again, held until a frame that marks by them is drawn.
+    /// A frame that is dropped, or handed and never drawn, hands them again; a slot
+    /// generated twice generates the same. Past `object::RECTS` boxes, the rest are joined
+    /// into the last.
     pending_rects: [[i32; 4]; object::RECTS as usize],
     holding: usize,
-    /// How many of `pending_rects` this frame marks by, and how many boxes it marks
-    /// by in all, the bricks handed with them (`marked_rects`).
+    /// How many of `pending_rects` this frame marks by, and how many boxes it marks by in
+    /// all, counting the bricks handed (`marked_rects`).
     marked: usize,
     rects: u32,
-    /// Whether the slots' records were not kept, decor having been off: the
-    /// next frame drawn with decor generates every slot.
+    /// Whether the slots' records may not hold what the slots generate, as after decor was
+    /// off or the kinds' zooms changed. The next frame drawn with decor then generates every
+    /// slot.
     stale: bool,
-    /// What the count, args and compact passes read past the records, as they
-    /// last ran: the eye's place and zooms, the drawing words, the meshes,
-    /// the anchor and the records' capacity; and whether this frame runs them,
-    /// which it does where that moved or the records did.
+    /// What the count, args and compact passes read besides the records, as they last ran:
+    /// the eye's place and zooms, the drawing words, the meshes, the anchor and the records'
+    /// capacity. `counting` says whether this frame runs them, which it does where any of
+    /// that or the records moved.
     count_read: Read,
     counting: bool,
 }
 
-/// The world `decor_cs` asks: the cast's eye, clip level, the tiles' frames,
-/// the service area's index, the overwrites and the ways' pool, as the cast
-/// asks it.
+/// The buffers of the world `decor_cs` asks, as the cast binds them: the cast's eye, the clip
+/// levels' table, the bricks' words, the service area's index, the overwrites, and the ways'
+/// pool.
 pub type World = [u32; 6];
 
 impl Generator {
@@ -236,10 +236,10 @@ impl Generator {
         }
     }
 
-    /// The frame's decor handed over and what its generation reads (`generation`);
-    /// `meshes` each group's index count, none while its model loads.
-    /// Grouped again where `world` is not the one its groups bind or the
-    /// records' capacity grew, so a frame without a cast misses no change.
+    /// Takes the frame's decor `f` and what its generation reads (`generation`). `meshes`
+    /// holds each group's index count, 0 while its model loads. The groups are made again
+    /// where `world` is not the one they bind or the records' capacity grew, so a frame
+    /// without a cast misses no change.
     pub fn prepare(
         &mut self,
         g: &Gpu,
@@ -253,7 +253,8 @@ impl Generator {
             generation::SLOT_RECORDS + (f.placed_records.len() as u32).next_power_of_two().max(64);
         let grew = need > self.cap;
         if grew {
-            // The slots' records carried over: the placed tail is laid anew.
+            // The slots' records are copied into the new buffer. The placed records after them
+            // are written anew.
             let (records, instances) = (self.records, self.instances);
             self.records = g.buf(
                 word_bytes(generation::record_at(need) as usize),
@@ -304,14 +305,13 @@ impl Generator {
         s.begin();
         s.read(f.zooms);
         if !s.end() {
-            // What each slot generated was generated at the zooms it was
-            // shown at: every slot generates again.
+            // Each slot's records were generated at the zooms the kinds were shown at, so every
+            // slot generates again.
             g.write_buf(self.zooms, 0, bytes(f.zooms));
             self.stale = true;
         }
-        // The boxes the slots they meet generate again in: the edits, and each
-        // cut that moved as it was and as it is, held with any a frame not
-        // drawn handed.
+        // The boxes whose slots generate again are held: the edits, and each cut that moved,
+        // both as it was and as it is. They join any box a frame not drawn handed.
         for &b in f.edits {
             hold(&mut self.pending_rects, &mut self.holding, b);
         }
@@ -324,13 +324,14 @@ impl Generator {
         w.read(generation.clipmap);
         let changed = !w.end();
         self.marked = self.holding;
-        // A brick filled at any clip level generates decor there and coarser.
+        // A brick filled at any clip level makes decor generate again at that clip level and
+        // the coarser ones.
         let fresh = !generation.fresh.is_empty();
         self.marking = self.stale || changed || fresh || self.marked != 0;
         self.rects = 0;
         if self.marking {
-            // The boxes held, at every zoom, then each brick handed, at
-            // its clip level's and coarser.
+            // The boxes held come first, each reaching every zoom. Each brick handed follows,
+            // reaching its clip level's zoom and the coarser ones.
             let mut rects = [0u32; (generation::RECT_CAP * generation::RECT_WORDS) as usize];
             let fresh = generation
                 .fresh
@@ -350,10 +351,10 @@ impl Generator {
                 n += 1;
             }
             self.rects = n as u32;
-            // The list's head (pxl-content `generation::THIN_ARGS`): each
-            // pass's workgroups across and up, the pairs listed 0 until
-            // `decor_mark_cs` lists them; whether every entry generates
-            // whole, the boxes, and no pair yet in part.
+            // The list's head (pxl-content `generation::THIN_ARGS`) holds each pass's
+            // workgroups across and up, with the third count, the pairs listed, left 0 for
+            // `decor_mark_cs` to fill. It then says whether every entry generates whole, how
+            // many boxes there are, and that no pair generates in part yet.
             let mut header = [0u32; generation::RECTS_AT as usize];
             let mut put = |at: u32, val: u32| header[at as usize] = val;
             put(
@@ -392,7 +393,7 @@ impl Generator {
                 bytes(&[f.placed_records.len() as u32, 0, 0, 0]),
             );
             if !f.placed_records.is_empty() {
-                // One record however many.
+                // The upload is one stream record however many decor records there are.
                 g.upload_buf(
                     self.records,
                     generation::record_at(generation::SLOT_RECORDS) * 4,
@@ -419,9 +420,10 @@ impl Generator {
         g.write_buf(self.drawing, 0, bytes(f.drawing));
         g.write_buf(self.meshes, 0, bytes(meshes));
         g.write_buf(self.regions, 0, bytes(&[0u32; 2 * drawn::REGIONS as usize]));
-        // Each region's uniform, its index the lanes' base until the args
-        // pass adds its first slot: a model's group drawn about the anchor,
-        // on Q3 and so with no remainder, an impostor's its group's layer too.
+        // Each region's uniform is written here. Its index is the lanes' base until the args
+        // pass adds the region's first instance. A region draws its group about the anchor,
+        // which lies on Q3 and so has no remainder. An impostor's region, an odd one, also
+        // names its group's layer.
         let mut uniforms = [0u32; (drawn::UNIFORM_WORDS * drawn::REGIONS) as usize];
         for r in 0..drawn::REGIONS {
             let u = &mut uniforms[(r * drawn::UNIFORM_WORDS) as usize..][..DRAW_FLOATS];
@@ -434,8 +436,8 @@ impl Generator {
         g.write_buf(self.uniforms, 0, bytes(&uniforms));
     }
 
-    /// The frame's buffer `buf` (frame/shader/group.rs `BUFFERS`) the generator holds, 0 for
-    /// another's.
+    /// The generator's buffer for the frame's buffer `buf` (frame/shader/group.rs `BUFFERS`),
+    /// or 0 for a buffer another part holds.
     fn buf_of(&self, buf: u32) -> u32 {
         match buf {
             GENERATION_LIST => self.list,
@@ -527,8 +529,8 @@ impl Generator {
         self.groups = groups;
     }
 
-    /// No decor this frame: none generated, none drawn, and the next generates
-    /// every slot (`stale`).
+    /// Turns decor off for this frame: nothing is generated or drawn, and the next frame with
+    /// decor generates every slot (`stale`).
     pub fn off(&mut self) {
         self.on = false;
         self.rects = 0;
@@ -536,8 +538,8 @@ impl Generator {
         self.count_read.forget();
     }
 
-    /// The frame was drawn: the boxes it marked by and its every-slot
-    /// generation are done with.
+    /// Called when the frame was drawn. The boxes it marked by, and its generation of every
+    /// slot, are done.
     pub fn on_drawn(&mut self) {
         if self.marking {
             self.pending_rects.copy_within(self.marked..self.holding, 0);
@@ -547,9 +549,9 @@ impl Generator {
         self.marked = 0;
     }
 
-    /// The frame was dropped, nothing of it recorded: what it wrote is
-    /// written again, the slots it marked marked again by the boxes still
-    /// held, the clip level's table and the placed decor read anew.
+    /// Called when the frame was dropped and nothing of it was recorded. What it wrote is
+    /// written again: the slots it marked are marked again by the boxes still held, and the
+    /// clip levels' table and the placed decor are read anew.
     pub fn on_dropped(&mut self) {
         self.marked = 0;
         self.clipmap.forget();
@@ -558,23 +560,23 @@ impl Generator {
         self.count_read.forget();
     }
 
-    /// Whether it marks or counts this frame: its passes run, and the frame
-    /// draws what they leave.
+    /// Whether its passes run this frame, marking or counting. The frame then draws what they
+    /// leave.
     pub fn works(&self) -> bool {
         self.on && self.groups[0] != 0 && (self.marking || self.counting)
     }
 
-    /// A frame's decor handed and never drawn: its edits held for the next.
+    /// Holds, for the next frame, the edits of a frame whose decor was handed and never drawn.
     pub fn carry_edits(&mut self, edits: &[[i32; 4]]) {
         for &b in edits {
             hold(&mut self.pending_rects, &mut self.holding, b);
         }
     }
 
-    /// Within a compute pass over the cast's world, after the cast: the slots
-    /// to generate again marked, their candidates thinned a clip level cell a
-    /// thread and generated a record a thread where any may be, then every
-    /// record counted, laid out and compacted.
+    /// Records the passes in the compute pass `pass` over the cast's world, after the cast.
+    /// Where it marks, it marks the slots to generate again, thins their candidates a clip
+    /// level cell a thread, and generates a record a thread where any may stand. Where it
+    /// counts, it counts every record, lays the regions out and compacts the records.
     pub fn dispatch(&self, g: &Gpu, pass: u32) {
         if !self.on || self.groups[0] == 0 {
             return;
@@ -601,9 +603,9 @@ impl Generator {
         if !self.counting {
             return;
         }
-        // A workgroup a slot, reading the records its decor laid, then
-        // placed decor's, `generation::RUNS` a workgroup (decor_run.wgsl
-        // `run_of`): the records held, not the capacity.
+        // A workgroup reads the records a slot's decor laid, and past the slots each workgroup
+        // reads `generation::RUNS` placed records (decor_run.wgsl `run_of`). The dispatch
+        // covers the records held, not the capacity.
         let records = generation::EYE_ENTRIES + self.placed_cnt.div_ceil(generation::RUNS);
         let passes = [
             (&self.cnt, records),
@@ -617,14 +619,13 @@ impl Generator {
         }
     }
 
-    /// The boxes this frame marks slots by to generate again: the edits and
-    /// cuts held and the bricks handed, `generation::RECT_CAP` at most; 0
-    /// where it marks none.
+    /// How many boxes this frame marks slots by to generate again: the edits and cuts held and
+    /// the bricks handed, `generation::RECT_CAP` at most, or 0 where it marks none.
     pub fn marked_rects(&self) -> u32 {
         self.rects
     }
 
-    /// Whether decor is compacted again this frame, so stands elsewhere.
+    /// Whether decor is compacted again this frame, so its instances may stand elsewhere.
     pub fn counts(&self) -> bool {
         self.on && self.counting
     }
@@ -639,8 +640,8 @@ impl Generator {
         })
     }
 
-    /// What the draws read, while decor is on: the decor's instances, their slots,
-    /// the regions' indirect args, and where they are drawn.
+    /// What the draws read while decor is on: the instances' group, the regions' indirect
+    /// args, the draw uniforms' group, and what a frame draws through each gate.
     pub fn indirect_draw(&self) -> Option<IndirectDraw> {
         (self.on && self.instances != 0).then_some(IndirectDraw {
             instances_group: self.instances_group,
@@ -651,9 +652,10 @@ impl Generator {
         })
     }
 
-    /// The instances a frame draws through `mask`, those whose ball meets the box of the
-    /// claimed tiles of `tiles` (damage_rect.wgsl, decor_cull.wgsl) as the frame's words
-    /// `frame` see it, once the tiles' marks are made: timed with the marks.
+    /// Lists the instances a frame draws through the gate `mask`: those whose bounding ball
+    /// meets the box of the claimed tiles of `tiles`, as the frame's words `frame` see it
+    /// (damage_rect.wgsl, decor_cull.wgsl). It runs once the tiles' marks are made, timed in
+    /// the marks' span.
     pub fn mask(&self, ctx: &mut RenderContext, mask: Mask, frame: u32, tiles: &Tiles) {
         if !(self.on && self.instances != 0) {
             return;
@@ -708,9 +710,9 @@ struct Culled {
     group: u32,
 }
 
-/// The decor compacted as a reader beside the draws reads it
-/// (light_mark_draws.wgsl): its drawing words, its regions and its instances,
-/// and the slots they hold.
+/// The compacted decor as a reader beside the draws reads it (light_mark_draws.wgsl): its
+/// drawing words, its regions, its instances, and how many instances each lane holds
+/// (`cap`).
 #[derive(Clone, Copy)]
 pub struct Instances {
     pub drawing: u32,
@@ -719,8 +721,8 @@ pub struct Instances {
     pub cap: u32,
 }
 
-/// The decor's instances as the draws read them (`Generator::drawn`): their
-/// group, the regions' indirect args and their draw uniforms' group.
+/// The decor's instances as the draws read them (`Generator::indirect_draw`): their group,
+/// the regions' indirect args and the regions' draw uniforms' group.
 #[derive(Clone, Copy)]
 pub struct IndirectDraw {
     pub instances_group: u32,
@@ -756,9 +758,9 @@ impl IndirectDraw {
     }
 }
 
-/// Box `b` held among the `holding` boxes of `pending_rects`, past the room joined
-/// into the last: what decor's generation (`Generator`) and the node cache's
-/// forgetting (ray/cast.rs) are asked over.
+/// Holds box `b` after the `holding` boxes of `pending_rects`. Once `pending_rects` is full,
+/// `b` is joined into the last box. Decor's generation (`Generator`) and the node cache's
+/// forgetting (ray/cast.rs) both hold the boxes they are asked over this way.
 pub(crate) fn hold(pending_rects: &mut [[i32; 4]], holding: &mut usize, b: [i32; 4]) {
     if *holding < pending_rects.len() {
         pending_rects[*holding] = b;
@@ -774,8 +776,8 @@ pub(crate) fn hold(pending_rects: &mut [[i32; 4]], holding: &mut usize, b: [i32;
     }
 }
 
-/// The boxes a preview's cuts changed, `was` against `is`: each cut that
-/// moved as it was and as it is (pxl-engine `object::cut_rect`).
+/// Hands `each` the boxes a preview's cuts changed from `was` to `is`: each cut that moved,
+/// both as it was and as it is (pxl-engine `object::cut_rect`).
 pub(crate) fn cut_rects(
     was: &[u32; eye::CUTS],
     is: &[u32; eye::CUTS],

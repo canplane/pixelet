@@ -5,8 +5,8 @@
 namespace xpute {
 
 namespace {
-// The platform's allocator is never a core's: on wasm it links the libc that
-// prints its failures through WASI.
+// The platform's allocator is never the core's: on wasm, using it would link
+// the libc, which prints its failures through WASI.
 Allocator installed_heap{nullptr, nullptr};
 } // namespace
 

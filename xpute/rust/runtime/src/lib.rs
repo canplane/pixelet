@@ -1,13 +1,15 @@
 // xpute-runtime/lib.rs
 
-//! The runtime's end in Rust, the role `@xpute/runtime` plays in TypeScript, each
-//! holding what its platform needs. `mem` reads a core's memory by offset on
-//! any platform; `native` runtimes a core linked into the runtime's own process
-//! (unix's, mapping its memory through libc), and `jni` exports it to an
-//! Android app's Kotlin. A program that links its core in writes one
-//! xpute-core `core!` over its machine, which expands to `native_core!`
-//! off WebAssembly; beneath it, one that lays out its own memory declares
-//! the allocator and writes one `native_abi!`:
+//! The runtime's side in Rust; `@xpute/runtime` plays the same role in
+//! TypeScript. `mem` reads and writes a core's memory by offset on any
+//! platform. `native` is the runtime for a core linked into the runtime's own
+//! process; it exists only on unix, because it maps the core's memory through
+//! libc. `jni` exports that native core to the Kotlin of an Android app.
+//!
+//! A program that links its core in writes one xpute-core `core!` over its
+//! machine, and outside WebAssembly `core!` expands to `native_core!`. A
+//! program that lays out its own memory instead declares the allocator and
+//! writes one `native_abi!`, as this example does:
 //!
 #![cfg_attr(unix, doc = concat!("```\n", include_str!("../examples/native.rs"), "```"))]
 

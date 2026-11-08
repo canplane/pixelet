@@ -1,16 +1,15 @@
 // pxl-spec/space/hierarchy/sparse_tree.rs
 
-//! A 2^D-ary tree under one node, kept in two flat lanes: `first_child` holds a
-//! slot's child group (`BRANCH`) or nothing, a leaf; `data` a leaf's value,
-//! or a branch's children as its writer folds them. A child group is a node's 2^D
-//! children, named by its first slot; the first child group is the root's. A write splits leaves only on
-//! its path, frees what it replaces, joins a child group of equal leaves into one,
-//! so one picture has one tree, and folds every branch left on its path
-//! again. A freed child group is reused and no other moves, so a subtree comes and
-//! goes without the others' child groups changing place. The child groups a write
-//! changes are listed for a copy of the lanes to take just those
-//! (`take_written`): its path's, its leaf's and what it allocates; a freed
-//! child group is no reader's until it is allocated again.
+//! A 2^D-ary tree under one node, kept in two flat lanes: `first_child` holds a slot's child
+//! group (`BRANCH`), or nothing for a leaf; `data` holds a leaf's value, or a branch's
+//! children as its writer folds them. A child group is a node's 2^D children, named by its
+//! first slot; the first child group is the root's. A write splits leaves only on its path,
+//! frees what it replaces and joins a child group of equal leaves into one, so one picture has
+//! one tree, and it folds every branch left on its path again. A freed child group is reused
+//! and no other moves, so a subtree comes and goes without the other child groups changing
+//! place. The child groups a write changes are listed so that a copy of the lanes can take
+//! just those (`take_written`): its path's, its leaf's and those it allocates. A freed child
+//! group is no reader's until it is allocated again.
 
 use super::tree::{child_idx, children};
 use pxl_engine::object::BRANCH;
@@ -26,12 +25,12 @@ pub struct SparseTree<T: Copy + PartialEq, const D: usize> {
     first_child: Vec<u32>,
     data: Vec<T>,
     free: Vec<u32>,
-    /// The first slots of the child groups written since they were last taken, a
-    /// child group once a write.
+    /// The first slots of the child groups written since they were last taken, each child group
+    /// once a write.
     written_groups: Vec<u32>,
 }
 
-/// The child on the way to `at`, `steps` levels over it.
+/// The child on the way to `at`, from the node `steps` levels above it.
 fn toward<const D: usize>(at: [i32; D], steps: u32) -> usize {
     child_idx(at.map(|v| v >> steps))
 }
@@ -96,9 +95,9 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
         xpute_kit::bug!(EINVAL, depth)
     }
 
-    /// Makes the node `depth` levels under the root holding `at` one leaf of
-    /// `value`, each branch over it its child group `fold` folds, given its depth;
-    /// whether anything changed.
+    /// Makes the node `depth` levels under the root that holds `at` one leaf of `val`, and each
+    /// branch above it what `fold` folds its child group to, given its depth. Returns whether
+    /// anything changed.
     pub fn set(
         &mut self,
         depth: u32,
@@ -133,11 +132,10 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
         true
     }
 
-    /// Makes the node `depth` levels under the root holding `at` a branch
-    /// of `empty` leaves holding `val` as their fold: a node whose leaves
-    /// are not here, folded where they are. Each branch over it its child
-    /// group `fold` folds, given its depth. A write under it folds it from
-    /// what is there.
+    /// Makes the node `depth` levels under the root that holds `at` a branch of `empty` leaves
+    /// holding `val` as their fold: a node whose leaves are not here but folded where they are.
+    /// Each branch above it becomes what `fold` folds its child group to, given its depth. A later
+    /// write under it folds it again from what is there.
     pub fn set_branch(
         &mut self,
         depth: u32,
@@ -195,7 +193,7 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
         }
     }
 
-    /// A child group of leaves of `value`, a freed one first.
+    /// A child group of leaves of `val`, reusing a freed one first.
     fn alloc(&mut self, val: T) -> u32 {
         let child_group = match self.free.pop() {
             Some(b) => b as usize,

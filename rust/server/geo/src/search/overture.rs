@@ -196,7 +196,8 @@ pub(crate) async fn search(
 
     let mut division_results: Vec<SearchResult> = Vec::with_capacity(division_rows.len());
     for r in division_rows {
-        // A subtype newer than this tree has no number, as the division tiles skip it.
+        // A subtype this tree does not know has no number, so the row is skipped, as the division
+        // tiles skip it.
         let Some(subtype) = Subtype::of_word(&r.subtype) else {
             continue;
         };

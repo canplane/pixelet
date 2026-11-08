@@ -1,6 +1,7 @@
 // xpute-runtime/native/alloc.test.rs
 
-// A binary of its own, whose global allocator is the core's.
+// This test is a binary of its own, so that its global allocator can be the
+// core's.
 #![cfg(unix)]
 
 use std::sync::OnceLock;
@@ -37,7 +38,6 @@ fn core() -> Core {
     })
 }
 
-/// Whether `p` lies in the core's heap.
 fn in_heap(p: *const u8) -> bool {
     let (at, bytes) = core().mem();
     let at = at.as_ptr().addr();
@@ -60,11 +60,12 @@ fn block_ownership() {
 #[test]
 fn free_by_addr() {
     let g = core();
-    // The heap's block, let go here, goes back to the heap.
+    // A block from the heap, freed on this thread, goes back to the heap.
     let made = g.run_on(|| vec![1u32; 1000]).expect("the core has stopped");
     assert!(in_heap(made.as_ptr().cast()));
     drop(made);
-    // The system's block, let go on the core's thread, goes back to the system.
+    // A block from the system, freed on the core's thread, goes back to the
+    // system.
     let mine = vec![2u32; 1000];
     g.run_on(move || drop(mine)).expect("the core has stopped");
 }

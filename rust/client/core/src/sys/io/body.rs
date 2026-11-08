@@ -1,22 +1,25 @@
 // pxl-core/sys/io/body.rs
 
-//! The blocks bodies are read into. Terrain's and the Earth's packets run
-//! just past a mebibyte (pxl-spec `bake::tile::max_pkt_bytes`), where the
-//! buddy would give each a block of two; their bodies take slots instead,
-//! their longest packet in pages, carved from a run the heap gives whole and
-//! takes back once its last slot is free: Bonwick's slab for one large
-//! object, its bookkeeping off the run, picked by the stream. A run is
-//! borrowed only when every one held is full, and no more slots are out than
-//! `BODY_SLOTS` (sys/io/param.rs). Every other body is a heap block of its
-//! own, freed as it is decoded.
+//! The blocks that bodies are read into. Terrain and Earth packets run just
+//! past a mebibyte (pxl-spec `bake::tile::max_pkt_bytes`), where the buddy
+//! allocator would give each a block of two. Their bodies take slots
+//! instead. A slot is the longest such packet rounded up to whole pages, cut
+//! from a run that the heap gives whole and takes back once the run's last
+//! slot is free. This is Bonwick's slab allocator for one large object, with
+//! its bookkeeping kept outside the run, and the stream decides whether a
+//! body takes a slot. A new run is taken only when every run held is full,
+//! and no more than `BODY_SLOTS` slots are out at once (sys/io/param.rs).
+//! Every other body is a heap block of its own, freed as it is decoded.
 //!
-//! A terrain body is freed once decoded; an Earth body only by a drawn frame
-//! (domain/layer/earth.rs `earth_upload`), bounded apart by its frames, so a
-//! body on every credit finds a slot and the tile cache fills with no frame
-//! drawn. A body refused waits on what refused it (sys/io/room.rs): every
-//! slot out on one given back, a run the heap could not give on its pages or
-//! a slot given back in a run held. The next slot given back asks a turn, in
-//! which the want is asked again.
+//! A terrain body is freed once it is decoded. An Earth body is freed only
+//! when a drawn frame takes it (domain/layer/earth.rs `earth_upload`). The
+//! Earth's frames bound those bodies apart from the rest, so a body on every
+//! credit still finds a slot and the tile cache fills while no frame is
+//! drawn. A refused body waits on what refused it (sys/io/room.rs). When
+//! every slot was out, it waits for a slot to be given back. When the heap
+//! could not give a run, it waits for the heap to get pages back or for a
+//! slot in a run held to be given back. After a refusal, the next slot given
+//! back asks for a turn, in which the want is asked again.
 
 use xpute_core::global::Global;
 use xpute_core::mem::heap::{alloc, free, Block};
@@ -29,22 +32,24 @@ use crate::sys::sched::edge;
 
 struct Run {
     at: usize,
-    /// A bit a slot out.
+    /// One bit for each slot, set while the slot is out.
     out: u32,
 }
 
 #[derive(Default)]
 struct Slots {
     runs: Vec<Run>,
-    /// Moves with every slot given back (`Refusal::bodies`).
+    /// A count that moves with every slot given back. A refusal by the body
+    /// slots waits on it (`Refusal::bodies`).
     releases: u32,
-    /// The most out at once since the profiler last took it.
+    /// The most slots out at once since the profiler last took the peak.
     peak: u32,
-    /// A body was refused: the next slot given back asks a turn.
+    /// A body was refused, so the next slot given back asks for a turn.
     waited: bool,
 }
 
-/// A slotted stream's longest packet; 0 for one whose bodies take no slot.
+/// The longest packet of a slotted stream, or 0 for a stream whose bodies
+/// take no slot.
 const fn longest(stream: Stream) -> u32 {
     match stream.max_body() {
         Some(max) if stream.row().slotted => max,
@@ -52,7 +57,8 @@ const fn longest(stream: Stream) -> u32 {
     }
 }
 
-/// The longest slotted packet, in whole pages.
+/// The size of a slot: the longest slotted packet, rounded up to whole
+/// pages.
 const SLOT_BYTES: u32 = {
     let (mut most, mut k) = (0, 0);
     while k < Stream::ALL.len() {
@@ -64,7 +70,7 @@ const SLOT_BYTES: u32 = {
     most.div_ceil(PAGE_BYTES) * PAGE_BYTES
 };
 
-/// A run's slots: seven at today's packets.
+/// The slots in a run: seven at the current packet sizes.
 const SLOTS: u32 = BODY_RUN_BYTES / SLOT_BYTES;
 
 const FULL: u32 = u32::MAX >> (u32::BITS - SLOTS);
@@ -101,13 +107,15 @@ impl Slots {
     }
 }
 
-/// The heap `slots` slots out at once take at worst: the runs that hold them.
+/// The most heap that `slots` slots out at once can take: the whole runs that
+/// hold them.
 pub const fn slots_bytes(slots: u32) -> u64 {
     slots.div_ceil(SLOTS) as u64 * BODY_RUN_BYTES as u64
 }
 
-/// A block for a body of `n` bytes, of `stream` where the requests still
-/// hold it: a slot where its stream's bodies take one, else the heap's own.
+/// A block for a body of `n` bytes. `stream` is the body's stream, or None
+/// where the scheduler no longer holds its attempt. The block is a slot where
+/// the stream's bodies take one, and a heap block of its own otherwise.
 pub fn take(stream: Option<Stream>, n: u32) -> Result<Block, Refusal> {
     if !stream.is_some_and(|s| s.row().slotted) || n > SLOT_BYTES {
         return alloc(n).ok_or_else(Refusal::now);
@@ -150,7 +158,7 @@ pub unsafe fn give(block: Block) {
     };
     let run = &mut s.runs[i];
     let off = block.0 - run.at;
-    // A block in a run that is no slot out is given back twice, or was never
+    // A block in a run that is not a slot out was given back twice or never
     // taken.
     xpute_kit::ensure!(
         off < (SLOTS * SLOT_BYTES) as usize && off.is_multiple_of(SLOT_BYTES as usize),
@@ -175,8 +183,8 @@ pub fn releases() -> u32 {
     slot_table().releases
 }
 
-/// The most slots out at once since the last call, the profiler's
-/// (perf/report.rs `perf_frame`): what `BODY_SLOTS` is measured by.
+/// The most slots out at once since the last call. The profiler takes it
+/// (perf/report.rs `perf_frame`), and `BODY_SLOTS` is judged against it.
 pub fn take_peak() -> u32 {
     let s = slot_table();
     let out = s.out();

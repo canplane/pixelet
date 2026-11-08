@@ -1,9 +1,11 @@
 // @pxl/client/ui/component/conform.ts
 
 /**
- * Holds every platform file to the default beside it, which a bundler swaps
- * in by the file's suffix (pill.ios.tsx for pill.tsx on an iPhone) and so no
- * import ever names. Nothing imports this; `tsc` reads it.
+ * Makes `tsc` hold every platform file to the default file beside it. The
+ * bundler swaps a platform file in by its suffix (pill.ios.tsx for pill.tsx on
+ * an iPhone), so no import names it, and without this file nothing would
+ * check that it exports what the default does. Nothing imports this file;
+ * `tsc` alone reads it.
  */
 
 import type * as AboveKeyboard from "./above-keyboard.tsx";

@@ -1,8 +1,8 @@
 // pxl-render/gpu/surface.rs
 
-//! The canvases the core draws into, each at its display's device pixels,
-//! the world inside it at its own (`render_px`). The page scales whatever
-//! buffer exists into the layout box, so a stale one still shows whole.
+//! The canvases the core draws into. Each canvas is sized in its display's device pixels, and
+//! the world inside it is drawn at a size of its own (`render_px`). The page scales whatever
+//! buffer the canvas has into its layout box, so a buffer of a stale size still shows whole.
 
 use xpute_core::abi::handle::{handle_slot, Table as Handles};
 use xpute_core::global::Global;
@@ -13,27 +13,32 @@ use crate::frame::shader::floor;
 use crate::frame::shader::word::screen::TILE;
 use pxl_engine::{ray, WORKGROUPS_CAP};
 
-/// Slot 0 is never a surface.
+/// The surface table's slots. Slot 0 is never handed out, so at most `SURFACES - 1` surfaces
+/// are open at once.
 pub const SURFACES: usize = 9;
 
-/// A box animating in passes through a size a frame, each of which would
-/// otherwise be a new depth and color target.
+/// The turns a new size must hold before the targets are made at it. A box being animated
+/// passes through a new size each frame, and each size would otherwise make new depth and
+/// color targets.
 pub const SETTLE_TURNS: u32 = 4;
 
-/// The most pixels the world is drawn at each way, the floor's texture side: every size the
-/// render size's rule allows (`drawn_fits`) lies within it, and the screen's claimed tiles, a
-/// word a tile (ray/cast.rs `CAST_TILES_START`), fit the floor there.
+/// The most pixels the world is drawn at along each side: the largest texture side of the
+/// floor, the limits every WebGPU device meets (frame/shader/floor.rs). Every size that
+/// `drawn_fits` allows lies within it, and at that size the screen's claimed tiles, a word a
+/// tile (ray/cast.rs `CAST_TILES_START`), still fit the floor.
 pub const DRAWN_CAP: [u32; 2] = [floor::MAX_TEXTURE_DIMENSION_2D; 2];
 
-/// The most pixels the world is drawn at in all: the eye's holes (`ray::holes_words`), a word and a
-/// bit a pixel, within 27/64 of the floor's binding, the camera grid's words beside them in the
-/// beam rays' buffer at the widest field.
+/// The most pixels the world is drawn at in all. The eye's holes (`ray::holes_words`) take a
+/// word and a bit a pixel, and with the eye's pool they fit within 27/64 of the floor's
+/// largest storage binding. The rest of that binding is left for the camera grid's words at
+/// the widest field, which lie beside the holes in the beam rays' buffer.
 pub const DRAWN_AREA: u32 =
     ((floor::MAX_STORAGE_BUFFER_BINDING_SIZE * 27 / 256) as u32 - ray::POOL_WORDS - 1) / 33 * 32;
 
-/// Whether the world drawn at `size` pixels is one every device draws (`render_px`): no side past `DRAWN_CAP`, no more than `DRAWN_AREA` in all, and its screen tiles,
-/// a workgroup each across the pixels' cast's dispatch (cast.wgsl `cast_cs`), within the
-/// floor's workgroups a side.
+/// Whether every device draws the world at `size` pixels (`render_px`). No side may pass
+/// `DRAWN_CAP`, and the area may not pass `DRAWN_AREA`. The pixels' cast (cast.wgsl `cast_cs`)
+/// dispatches a workgroup for each screen tile along one side of its dispatch, so the tiles
+/// may not pass the floor's workgroups a side (`WORKGROUPS_CAP`).
 pub const fn drawn_fits(size: [u32; 2]) -> bool {
     size[0] <= DRAWN_CAP[0]
         && size[1] <= DRAWN_CAP[1]
@@ -49,56 +54,55 @@ pub struct Surface {
     pub px_w: u32,
     pub px_h: u32,
     pub dpr: f64,
-    /// The device pixels per CSS pixel the core has it drawn at (pxl-core
-    /// domain/scene/resolution.rs): the display's, or under load a share of
-    /// them, the finish bringing them up to the canvas's (`render_px`).
+    /// The device pixels per CSS pixel at which the core has the world drawn (pxl-core
+    /// domain/scene/resolution.rs). It is the display's ratio, or a share of it under load,
+    /// and the finish brings the drawn pixels up to the canvas's (`render_px`).
     pub ratio: f64,
     pub configured: bool,
     pub width: u32,
     pub height: u32,
-    /// The world's size and the canvas's last asked, which hold
-    /// `SETTLE_TURNS` before the targets are made at them.
+    /// The world's size and the canvas's size as last asked. They must hold for
+    /// `SETTLE_TURNS` turns before the targets are made at them.
     pub wanted_sizes: ((u32, u32), (u32, u32)),
     pub waited_turns: u32,
-    /// The frame's depth, the world's and over it what moves on its own
-    /// (gpu/renderer.rs, stage 2), with a stencil (`MASKED_DEPTH`):
-    /// `depth_view` as a pass draws into it,
-    /// `depth_only_view` as a binding reads it.
+    /// The frame's depth, with a stencil (`MASKED_DEPTH`). The world draws into it, and then
+    /// what moves on its own draws over the world (gpu/renderer.rs, stage 2). A pass draws
+    /// into it through `depth_view`, and a binding reads it through `depth_only_view`.
     pub depth: u32,
     pub depth_view: u32,
     pub depth_only_view: u32,
-    /// The color its passes draw into (gpu/api.rs `WORLD_COLOR`), made with the depth,
-    /// which the world's gathers over frames (`history`) and the finish
-    /// encodes onto the canvas.
+    /// The color the passes draw into (gpu/api.rs `WORLD_COLOR`), made with the depth. The
+    /// world's color is gathered over frames (`history`), and the finish encodes it onto the
+    /// canvas.
     pub color: u32,
     pub color_view: u32,
-    /// The canvas's size, its device pixels (`screen_px`), and the depth
-    /// at it the finish carries the world's to (gpu/finish.rs), which what
-    /// is drawn over the world is tested against.
+    /// The canvas's size in device pixels (`screen_px`), and a depth at that size. The finish
+    /// carries the world's depth up into it (gpu/finish.rs), and what is drawn over the world
+    /// is tested against it.
     pub screen: (u32, u32),
     pub screen_depth: u32,
     pub screen_depth_view: u32,
-    /// The eye's rays as the cast leaves them, a drawn pixel each, made with
-    /// the depth: `ray::WORDS` layers of `r32uint`, a word of the ray's a
-    /// layer (pxl-engine `ray`).
+    /// The eye's rays as the cast leaves them, one for each drawn pixel, made with the depth.
+    /// The texture has `ray::WORDS` layers of `r32uint`, and each layer holds one word of each
+    /// ray (pxl-engine `ray`).
     pub rays: u32,
     pub rays_view: u32,
-    /// The world's color gathered over frames, two of `WORLD_COLOR` made
-    /// with the depth, the last frame's read as this one's is written, in
-    /// turn (gpu/resolve.rs): the world's alone.
+    /// The world's color gathered over frames: two textures of `WORLD_COLOR`, made with the
+    /// depth. They take turns, the last frame's read while this frame's is written
+    /// (gpu/resolve.rs). Only a world surface has them.
     pub history: [u32; 2],
     pub history_view: [u32; 2],
-    /// The finished picture at the canvas's size, the canvas's format, made
-    /// with the screen's depth: every frame finishes into it in the pass that
-    /// finishes the canvas, a gated frame only its claimed tiles, once it
-    /// has shown it whole on the canvas, whose texture is a new one each
-    /// frame (gpu/finish.rs): the world's alone.
+    /// The finished picture, at the canvas's size and in the canvas's format, made with the
+    /// screen's depth. Every frame finishes into it in the same pass that finishes the canvas.
+    /// The canvas's texture is a new one each frame, so a gated frame first shows the picture
+    /// whole on the canvas and then finishes both only in its claimed tiles (gpu/finish.rs).
+    /// Only a world surface has it.
     pub picture: u32,
     pub picture_view: u32,
 }
 
 impl Surface {
-    /// What it holds on the GPU, every one made again with its size.
+    /// The GPU objects it holds, all of which are made again when its size changes.
     pub fn targets(&self) -> [u32; 15] {
         [
             self.depth_only_view,
@@ -119,8 +123,7 @@ impl Surface {
         ]
     }
 
-    /// The canvas's device pixels: the display's, whatever the world is drawn
-    /// at.
+    /// The canvas's device pixels: the display's, whatever size the world is drawn at.
     pub fn screen_px(&self) -> (u32, u32) {
         (self.px_w.max(1), self.px_h.max(1))
     }
@@ -130,11 +133,10 @@ impl Surface {
         f64::from(self.width) * self.dpr / f64::from(self.px_w.max(1))
     }
 
-    /// The world's pixels: the canvas's at the core's share of them
-    /// (`ratio` over the display's), which the finish brings up to the
-    /// canvas, and no more than every device draws
-    /// (`drawn_fits`), the canvas's shape kept: its share brought down until
-    /// they fit.
+    /// The world's size in pixels: the canvas's pixels at the core's share of them (`ratio`
+    /// over the display's ratio), which the finish brings up to the canvas. Where that size is
+    /// more than every device draws (`drawn_fits`), the share is brought down until it fits,
+    /// and the canvas's shape is kept.
     pub fn render_px(&self) -> (u32, u32) {
         let (w, h) = (self.px_w.max(1) as f64, self.px_h.max(1) as f64);
         let dpr = if self.dpr > 0.0 { self.dpr } else { 1.0 };
@@ -145,8 +147,9 @@ impl Surface {
             if drawn_fits(size) {
                 return (size[0], size[1]);
             }
-            // The pixels or the tiles past their most: the share a side brought down by the root
-            // of the tighter, and a step more, so each turn takes some off.
+            // The pixels or the tiles are past their most. Each side's share is brought down by
+            // the square root of the tighter of the two ratios, and a step more, so that each
+            // pass of the loop takes some off.
             let tiles = [0, 1].map(|a| f64::from(size[a].div_ceil(TILE)));
             let tile_share = f64::from(WORKGROUPS_CAP) / (tiles[0] * tiles[1]);
             let area = f64::from(DRAWN_AREA) / (f64::from(size[0]) * f64::from(size[1]));
@@ -169,8 +172,8 @@ fn table() -> &'static mut Table {
     })
 }
 
-/// A canvas that draws nothing until its role is set (`surface_role`); 0
-/// when every surface is taken.
+/// Opens a canvas, which draws nothing until its role is set (`surface_role`). Returns 0 when
+/// every surface is taken.
 pub fn surface_open() -> u32 {
     let t = table();
     let Some(handle) = t.handles.insert(()) else {

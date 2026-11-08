@@ -1,8 +1,9 @@
 // pxl-render/frame/shader/damage_rect.wgsl
 
-// The box of the screen's tiles claimed this frame, a thread a tile, once the frame's marks
-// are made (gpu/tiles.rs `Tiles::dispatch_damage_rect`): its first tile across and down and
-// its last, none where the first lies past the last, as the box is set before the pass.
+// Finds the box of the screen's tiles claimed this frame, one thread a tile, once the frame's
+// marks are made (gpu/tiles.rs `Tiles::dispatch_damage_rect`). The box holds its first tile
+// across and down, then its last. A box whose first tile lies past its last holds no tile,
+// which is how the box is set before the pass.
 
 @group(0) @binding(0) var<storage, read_write> damage_rect: array<atomic<u32>, 4>;
 @group(0) @binding(30) var<storage, read> changed_at: array<u32>;

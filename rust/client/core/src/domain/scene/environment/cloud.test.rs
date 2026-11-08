@@ -7,8 +7,9 @@ use pxl_content::cloud::drift;
 use pxl_render::gpu::draw::{lists_bytes, set_lists};
 use xpute_core::mem::heap::alloc;
 
-/// The drift's step as it was written before the view held the seen step:
-/// a twelfth of a cell at the nearest drawn, over the wind's speed.
+/// The drift's step written out by hand: a twelfth of a camera grid cell at
+/// the nearest drawn cloud, over the wind's speed. `drift_step_s` must give
+/// the same bits.
 fn drift_step_s_as_written(seen: f64) -> f64 {
     1.0 / 12.0 * lens::cell_there(seen) / libm::hypot(WIND[0], WIND[1])
 }
@@ -28,10 +29,11 @@ fn cloud_steps_unchanged() {
     clouds().seen = was;
 }
 
-/// A still eye under the wind: only time moves, and a patch's draw stands in the list, its
-/// record and uniform as they were, and so does its stand, until the drift crosses into the
-/// next cell, which moves the stand alone; and every stand holds the patch as it is drawn,
-/// moved by the drift (`stood_corner`, `patch_stand`).
+/// With the eye still and only time moving the clouds, a patch's draw stays in
+/// the list unchanged, its record and uniform as they were. Its stand stays
+/// too, until the drift crosses into the next cell, and then only the stand
+/// moves. At every time the stand holds the patch as drawn, moved by the
+/// drift (`stood_corner`, `patch_stand`).
 #[test]
 fn only_time_moving_moves_no_draw() {
     let _g = sys::serial();
@@ -81,7 +83,8 @@ fn only_time_moving_moves_no_draw() {
     };
     let (changes, first) = turn(0.0);
     assert_eq!(changes, 1, "drawn first");
-    // Within a cell of drift: X's wind carries the field a cell in 4096 / 24 seconds.
+    // These times stay within a cell of drift: the wind along X carries the
+    // field a cell in 4096 / 24 seconds.
     for time in [0.29, 1.0, 10.0, 100.0, 170.0] {
         assert_eq!(turn(time), (0, first.clone()), "{time} s");
     }

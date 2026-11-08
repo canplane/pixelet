@@ -1,18 +1,20 @@
 // pxl-render/light_receiver_tiles.wgsl
 
-// The tiles of the box a receiver stands on, as the receivers' passes list them (pxl-engine
-// `light::LIST_RECEIVERS`; light_mark.wgsl, light_mark_draws.wgsl), for the propagation, a
-// thread a tile listed (light_propagate.wgsl). Each tile is listed once while it stands: by
-// the first thread to swap its mark to the number of the cast the world's receivers were last
-// stood afresh in (`light::HEADER_WORLD`), the world's receivers' and the drawn ones' alike, so
-// it stays listed in every cast after it until they are stood afresh again (`light::carry_at`).
-// A mark read first is swapped only where it differs, so a tile many receivers stand on takes
-// one swap a cast that stands it anew. The list's count and the propagation's rows are the
-// stood list's args', raised as list.wgsl `enlist` raises a list walked apart's.
+// How the receivers' passes (light_mark.wgsl, light_mark_draws.wgsl) list the tiles of the box
+// a receiver stands on (pxl-engine `light::LIST_RECEIVERS`). The propagation then takes one
+// thread for each tile listed (light_propagate.wgsl). Each tile is listed once while it
+// stands, by the first thread to swap its mark to the number of the cast in which the world's
+// receivers were last stood afresh (`light::HEADER_WORLD`). The world's receivers and the
+// drawn ones list alike, so a tile stays listed in every cast after it until the receivers are
+// stood afresh again (`light::carry_at`). A mark is read first and swapped only where it
+// differs, so a tile that many receivers stand on takes one swap in a cast that stands it
+// anew. The list's count and the propagation's rows are the stood list's args, raised as
+// list.wgsl `enlist` raises those of a list walked apart.
 
-/// The stood list's args (pxl-engine `light::RECEIVER_TILES_WORDS`): the propagation's dispatch and the
-/// count, as `enlist` names them; then the slide's dispatch, its workgroups across opened by
-/// the cast's first stood tile, down the host's where the cast owes a slide.
+/// The stood list's args (pxl-engine `light::RECEIVER_TILES_WORDS`): the propagation's dispatch
+/// and the count, under the names `enlist` reads them by, then the slide's dispatch. The cast's
+/// first stood tile opens the slide's workgroups across, and the host sets its workgroups down
+/// where the cast owes a slide.
 struct ReceiverArgs {
   list: array<atomic<u32>, 3>,
   cnt: atomic<u32>,
@@ -23,13 +25,13 @@ struct ReceiverArgs {
 /// The light's args as words, whose marks lie past `light::ARGS_WORDS` (`light::args_words`).
 @group(0) @binding(21) var<storage, read_write> light_args: array<atomic<u32>>;
 
-/// The first of the light's args' marks: past the passes' words and the lists' counts.
+/// Where the marks begin among the light's args, past the passes' words and the lists' counts.
 const MARKS_FIRST: u32 = LIGHT_ARGS_PASSES + LIGHT_LISTS;
 
-/// What the cast's first stood tile does, the one thread that lists it: the slide's workgroups
-/// across opened, so a cast that owes a slide runs it once a receiver stands; and the reads'
-/// epoch begun anew where the slide last ran before the last cast that owed one, which stood
-/// none and so ran none (`light::READS_FROM`).
+/// What the one thread that lists the cast's first stood tile does. It opens the slide's
+/// workgroups across, so a cast that owes a slide runs it once a receiver stands. Where the
+/// slide last ran before the last cast that owed one, that cast stood no receiver and so ran no
+/// slide, and the thread begins the reads' epoch anew (`light::READS_FROM`).
 fn receiver_tiles_first() {
   let n = light_tiles();
   atomicStore(&args.slide[0], workgroups(n, n, SQUARE_SIDE));
@@ -39,7 +41,7 @@ fn receiver_tiles_first() {
   }
 }
 
-/// Tile `t` listed stood on, none past the list's room.
+/// Lists tile `t` as stood on. Past the list's room it is not listed.
 fn receiver_tiles_put(t: vec2<i32>) {
   let n = light_tiles();
   let cap = n * n;
@@ -53,8 +55,8 @@ fn receiver_tiles_put(t: vec2<i32>) {
   }
 }
 
-/// Tile `t` stood on by a receiver, listed where none stood on it since the world's receivers
-/// were last stood afresh; none past the box.
+/// Stands a receiver on tile `t`. The tile is listed where no receiver stood on it since the
+/// world's receivers were last stood afresh. A tile past the box is not listed.
 fn stand(t: vec2<i32>) {
   let w = tile_place(t);
   if (w == NO_TILE) {
@@ -67,7 +69,7 @@ fn stand(t: vec2<i32>) {
   }
 }
 
-/// The tiles from `first` to `last` stood on by a receiver, kept to the box.
+/// Stands a receiver on the tiles from `first` to `last`, held to the box.
 fn stand_box(first: vec2<i32>, last: vec2<i32>) {
   let n = i32(light_tiles());
   let lo = max(first, vec2<i32>(0));

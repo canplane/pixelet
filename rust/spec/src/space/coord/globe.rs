@@ -1,8 +1,8 @@
 // pxl-spec/space/coord/globe.rs
 
-//! The planet the air is drawn about: its radius, in kilometers and in the
-//! map's units, a round of which is its circumference. What is drawn is
-//! flat, where the eye's rays find it: nothing is placed on the sphere.
+//! The planet the air is drawn around: its radius in kilometers and in the map's units, in
+//! which one lap of the map is its circumference. What is drawn is flat, where the eye's rays
+//! find it; nothing is placed on the sphere.
 
 use crate::space::coord::adapter::epsg4326;
 use crate::space::coord::world::ROUND;

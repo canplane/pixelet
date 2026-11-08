@@ -1,14 +1,14 @@
 // @pxl/client/sys/fs/storage.ts
 
 /**
- * STORAGE's backend: the core's storage files (file.json `storage`), the
- * settings, in the platform's storage. The core hands and takes a file's
- * bytes; the platform keeps text, so each is kept as its bytes' base64url
- * (`bytes_of`), and text that is none is no file of bytes
- * (EBADMSG), which the core refuses. The core refuses a file not of its
- * slot's format and writes nothing over it; here is decided each slot's key
- * and what becomes of a refused file. Nothing kept is dropped: a refused file
- * is set aside, and read back, before its slot empties.
+ * The backend of the core's STORAGE files (file.json `storage`), which hold
+ * the settings, in the platform's storage. The core hands and takes a file's
+ * bytes, while the platform keeps text, so each file is kept as the base64url
+ * of its bytes. Text that is not base64url reads as EBADMSG, which the core
+ * refuses. The core also refuses a file that is not in its slot's format, and
+ * writes nothing over it. This module decides each slot's key and what becomes
+ * of a refused file. Nothing kept is dropped: a refused file is set aside, and
+ * read back, before its slot is emptied.
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -23,7 +23,8 @@ import { FileError } from "@xpute/runtime";
 import { storage } from "@/abi/file.spec.ts";
 import * as local from "@/service/storage.ts";
 
-/** Storage as the platform gives it (service/storage.ts): a refused write keeps nothing, and does not throw. */
+/** Storage as the platform gives it (service/storage.ts). A write the
+ * platform refuses keeps nothing and does not throw. */
 export interface Storage {
   get(key: string): string | null;
   set(key: string, value: string): void;
@@ -31,13 +32,13 @@ export interface Storage {
 
 export let STORAGE: Storage = local;
 
-/** Storage kept elsewhere: a page's worker keeps a copy of the page's, and
- * writes back to it (runtime/worker.ts). */
+/** Replaces the storage this module keeps files in. A page's worker cannot
+ * reach the page's storage, so the core's worker keeps a copy of it that
+ * writes back to the page (runtime/worker.ts). */
 export function set_storage(s: Storage): void {
   STORAGE = s;
 }
 
-/** The bytes `text` keeps; EBADMSG for text that keeps none. */
 function bytes_of(text: string): U8Array {
   if (!is_b64url(text)) throw new FileError(Errno.EBADMSG);
   try {
@@ -47,13 +48,14 @@ function bytes_of(text: string): U8Array {
   }
 }
 
-/** Each storage file's key, by its path below STORAGE: its slot in decimal. */
+/** The platform's key for each storage file. A file's path below STORAGE is
+ * its slot number in decimal. */
 const KEYS: ReadonlyMap<string, string> = new Map([
   [String(storage.SETTINGS), "pxl:settings"],
 ]);
 
-/** Whether `key` holds a storage file or one set aside: what a page hands its
- * core's worker of its storage (runtime/open.ts). */
+/** Whether `key` holds a storage file or one set aside. These are the keys a
+ * page copies to its core's worker (runtime/open.ts). */
 export function is_kept(key: string): boolean {
   for (const k of KEYS.values()) {
     if (key === k || key.startsWith(`${k}:aside:`)) return true;
@@ -61,9 +63,10 @@ export function is_kept(key: string): boolean {
   return false;
 }
 
-/** Sets what `key` holds aside under `<key>:aside:<ms>` and empties it.
- * False, the key as it was, where the copy did not read back: storage that
- * refuses the write must not see the file emptied. */
+/** Copies what `key` holds to `<key>:aside:<now_ms>`, then empties `key`.
+ * The copy is read back first. When it does not read back, the storage
+ * refused the write, so `key` is left as it was and the answer is false: the
+ * file is never emptied without a copy. */
 function set_aside_key(s: Storage, key: string, now_ms: number): boolean {
   const text = s.get(key);
   if (text !== null && text !== "") {
@@ -78,28 +81,23 @@ function set_aside_key(s: Storage, key: string, now_ms: number): boolean {
   return true;
 }
 
-/** Sets the refused file `path` aside and empties its slot (`set_aside_key`);
- * false for one the core does not keep. */
 export function set_aside(s: Storage, path: string, now_ms: number): boolean {
   const key = KEYS.get(path);
   return key !== undefined && set_aside_key(s, key, now_ms);
 }
 
-/** The key the file `path` is kept under; ENOENT for one the core does not keep. */
 function key_of(path: string): string {
   const key = KEYS.get(path);
   if (key === undefined) throw new FileError(Errno.ENOENT);
   return key;
 }
 
-/** The file `path`, whole; ENOENT where nothing is kept. */
 export function open_storage(path: string, s: Storage = STORAGE): U8Array {
   const text = s.get(key_of(path));
   if (text === null) throw new FileError(Errno.ENOENT);
   return bytes_of(text);
 }
 
-/** What the core wrote to the file `path`, kept whole. */
 export function commit_storage(
   path: string,
   bytes: U8Array,
