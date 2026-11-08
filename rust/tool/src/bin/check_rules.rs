@@ -237,7 +237,7 @@ const SHADER_ORDER: [(&str, u8); 7] = [
 /// the draw lists, the pipelines and the surfaces, under what the passes make with them, over
 /// which the world's rays stand, then the shadow map and the passes over them, the renderer
 /// on top.
-const GPU_ORDER: [(&str, u8); 27] = [
+const GPU_ORDER: [(&str, u8); 28] = [
     ("put", 0),
     ("span_spec", 0),
     ("split", 0),
@@ -262,6 +262,7 @@ const GPU_ORDER: [(&str, u8); 27] = [
     ("ray", 5),
     ("cloud", 6),
     ("shadow", 6),
+    ("sky", 6),
     ("star", 6),
     ("pass", 7),
     ("renderer", 8),

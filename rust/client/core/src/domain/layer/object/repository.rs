@@ -46,7 +46,7 @@ use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderOptions, TreeReader, TreeView};
 
-use super::store::object;
+use super::store::{object, object_mut};
 use crate::domain::layer::object::ext::Ext;
 use crate::domain::layer::object::store::{apply, note_written, Write};
 use crate::sys::io::demand::{Order, Phases, Stream, TaskPhaseName};
@@ -118,9 +118,9 @@ fn change(c: Change) {
 
 fn make(c: Change) {
     match c {
-        Change::Fold(at, word) => note_written(&[object().set_fold(at, word)]),
+        Change::Fold(at, word) => note_written(&[object_mut().set_fold(at, word)]),
         Change::Shard(at, writes) => {
-            if let Some(changed) = object().clear_fold(at) {
+            if let Some(changed) = object_mut().clear_fold(at) {
                 note_written(&[changed]);
             }
             apply(writes);

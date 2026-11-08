@@ -23,6 +23,7 @@ pub mod read;
 pub mod renderer;
 pub mod resolve;
 pub mod shadow;
+pub mod sky;
 #[path = "gpu/span.spec.rs"]
 pub mod span_spec;
 pub mod split;

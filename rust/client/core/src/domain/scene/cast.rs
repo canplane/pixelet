@@ -10,7 +10,7 @@ use pxl_render::gpu::ray::Objects;
 use pxl_spec::space::camera::eye::Observation;
 use xpute_core::global::Global;
 
-use crate::domain::layer::object::store::object;
+use crate::domain::layer::object::store::{object, object_mut};
 use crate::domain::preview::RenderEdits;
 use crate::domain::view::lens;
 use crate::sys::io::source;
@@ -68,18 +68,33 @@ pub fn eye(o: &Observation, edits: &RenderEdits) -> Option<[u32; eye::WORDS]> {
     Some(words)
 }
 
+/// What the GPU was last handed of the placed objects: the store's revision
+/// at that hand, and the child groups written between the hand before it and
+/// it, by their first slots (`objects`).
+struct Handed {
+    since: u32,
+    written: Vec<u32>,
+}
+
+static HANDED: Global<Handed> = Global::new();
+
 /// The placed objects for the GPU (domain/layer/object/store.rs
 /// `gpu_columns`). The tree's lanes are handed where they live. A GPU that
 /// holds the revision last handed copies again only the child groups written
 /// since that revision.
 pub fn objects() -> Objects<'static> {
+    let h = HANDED.get(|| Handed {
+        since: 0,
+        written: Vec::new(),
+    });
+    object_mut().take_written(&mut h.written);
     let l = object().gpu_columns();
     Objects {
         first_child: l.first_child,
         data: l.data,
         cap: l.cap,
         revision: l.revision,
-        since: l.since,
-        written_groups: l.written_groups,
+        since: core::mem::replace(&mut h.since, l.revision),
+        written_groups: &h.written,
     }
 }

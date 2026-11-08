@@ -11,7 +11,6 @@ use pxl_content::generation::GROUPS;
 use pxl_engine::eye;
 use pxl_engine::light::TILE as LIGHT_TILE;
 use pxl_engine::ray;
-use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::globe::MERCATOR_RADIUS_U;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::V3;
@@ -23,10 +22,10 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::api_spec::surface_role;
+use crate::frame::shader::record::PIPELINE_SCREEN_MASK;
 use crate::frame::shader::record::{
     PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_SKINNED,
 };
-use crate::frame::shader::record::{PIPELINE_SCREEN_MASK, PIPELINE_SKY};
 use crate::frame::shader::sequence;
 use crate::frame::shader::word::frame::{
     CAMERA_POS, CORNER_AO, DRIFT_Q, DRIFT_R, EDGE_STRENGTH, EYE, JITTER, LIGHT_STEPS,
@@ -34,9 +33,7 @@ use crate::frame::shader::word::frame::{
     SHADOW_TEXEL, VIEWPORT, VIEW_PROJ, VIGNETTE,
 };
 use crate::frame::shader::word::SHADOW_SIZE;
-use crate::frame::shader::word::{
-    clouds, sky, BOX_VERTICES, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS, SKY_FLOATS,
-};
+use crate::frame::shader::word::{clouds, BOX_VERTICES, DRAW_FLOATS, FRAME_FLOATS, MOON_TEXELS};
 use crate::frame::shelf::Atlas;
 use crate::gpu::ao::ScreenAo;
 use crate::gpu::api;
@@ -71,6 +68,7 @@ use crate::gpu::ray::{Cast, GroundBricks, RayCounts, RaysPass};
 use crate::gpu::read::{Read, SlotMirror};
 use crate::gpu::resolve::Resolve;
 use crate::gpu::shadow::{self, Shadow};
+use crate::gpu::sky::SkyPass;
 use crate::gpu::span_spec::{FrameKind, GpuSpanName, GPU_SPAN_NAMES};
 use crate::gpu::star::StarPass;
 use crate::gpu::surface::{on_surfaces_lost, surface, surfaces, Surface, SETTLE_TURNS, SURFACES};
@@ -78,7 +76,7 @@ use crate::gpu::text::TextOf;
 use crate::gpu::tile::{self, Damage, Tiles};
 use crate::gpu::upload::uploads;
 use crate::look::atmosphere::{BOTTOM_RADIUS_KM, SUN_ANGULAR_RADIUS};
-use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_POLE, ENV_SUN};
+use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_SUN};
 use crate::param::cloud;
 
 const DRAWS_INIT: u32 = 256 * DRAW_FLOATS as u32;
@@ -431,29 +429,6 @@ pub struct FrameStat {
     pub rays: Option<RayCounts>,
 }
 
-/// Puts into `out` at `at` the three columns by which the ray under NDC
-/// (x, y) is `x·col0 + y·col1 + col2`. They are the screen's lens, found from
-/// the view's planes as the cast's eye finds it (pxl-spec `Frustum::lens`):
-/// its right and its up scaled by their tangents, and its forward. Each is
-/// computed in f64 before it is narrowed. The columns are zero where there
-/// is no lens, as without a screen.
-fn put_ray(out: &mut [f32], at: usize, view_proj: &Mat4) {
-    let mut planes = Frustum::default();
-    mat4::frustum_planes(&mut planes.planes, view_proj);
-    let columns = planes.lens().map_or([[0.0; 3]; 3], |l| {
-        [
-            l.right.map(|c| c * l.tan[0]),
-            l.up.map(|c| c * l.tan[1]),
-            l.forward,
-        ]
-    });
-    for (k, column) in columns.iter().enumerate() {
-        for (o, e) in out[at + 4 * k..at + 4 * k + 3].iter_mut().zip(column) {
-            *o = *e as f32;
-        }
-    }
-}
-
 static RENDERER: Global<Option<Renderer>> = Global::new();
 
 /// The renderer's pipelines while their shader modules are made, a few a
@@ -530,10 +505,7 @@ pub struct Renderer {
     pipelines: Pipelines,
     frame_buf: u32,
     frame: Frame,
-    sky_buf: u32,
-    sky: [f32; SKY_FLOATS],
-    sky_pipeline: Pipeline,
-    sky_group: u32,
+    sky: SkyPass,
     ghost: Pipeline,
     draws_buf: u32,
     draws_bytes: u32,
@@ -633,10 +605,6 @@ impl Renderer {
             word_bytes(FRAME_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
-        let sky_buf = g.buf(
-            word_bytes(SKY_FLOATS),
-            buffer_usage::UNIFORM | buffer_usage::COPY_DST,
-        );
         let ao = ScreenAo::new(g, &mut pipelines, device.align, frame_buf);
         let atmosphere = Atmosphere::new(g, &mut pipelines);
         let air = atmosphere.entries();
@@ -644,17 +612,8 @@ impl Renderer {
         let clouds = CloudPass::new(g, &mut pipelines, frame_buf, air);
         let mips = MipPass::new(g, &mut pipelines, Format::rgba8unorm_srgb);
         let pack = Pack::new(g);
-        let sky_pipeline = pipelines.build_world(g, PIPELINE_SKY);
         let moon = ImageMap::new(g, MOON_TEXELS, MOON_TEXELS);
-        let mut sky_entries = vec![
-            buf_entry(0, frame_buf),
-            buf_entry(19, sky_buf),
-            view_entry(2, moon.view),
-            sampler_entry(3, moon.sampler),
-        ];
-        sky_entries.extend(atmosphere.sky_entries());
-        sky_entries.extend(air);
-        let sky_group = g.bind_group(sky_pipeline.layouts[0], &sky_entries);
+        let sky = SkyPass::new(g, &mut pipelines, frame_buf, &moon, &atmosphere);
         let draws_buf = g.buf(
             DRAWS_INIT * 4,
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
@@ -705,10 +664,7 @@ impl Renderer {
             pipelines,
             frame_buf,
             frame: [0.0; FRAME_FLOATS],
-            sky_buf,
-            sky: [0.0; SKY_FLOATS],
-            sky_pipeline,
-            sky_group,
+            sky,
             draws_buf,
             draws_bytes: DRAWS_INIT * 4,
             bind_group: 0,
@@ -868,7 +824,7 @@ impl Renderer {
         self.shadow.put_drift(&u[DRIFT_Q..DRIFT_Q + 4]);
         self.resolve.prepare(&m, eye_world);
         let eye = [0.0; 3];
-        put_ray(&mut self.sky, sky::RAY, &m);
+        self.sky.prepare(&m, env, self.moon.loaded);
         self.clouds.prepare(
             [eye_world[0], eye_world[1]],
             input.drift,
@@ -876,8 +832,6 @@ impl Renderer {
             eye_far * env[ENV_AIR + 1],
         );
         self.stars.prepare(&m, env, world.px_per_css());
-        self.sky[sky::POLE..sky::POLE + 3].copy_from_slice(&env[ENV_POLE..ENV_POLE + 3]);
-        self.sky[sky::MAPPED] = if self.moon.loaded { 1.0 } else { 0.0 };
         for i in 0..3 {
             u[CAMERA_POS + i] = eye[i] as f32;
         }
@@ -1188,8 +1142,8 @@ impl Renderer {
             // written again too.
             self.shadow.write(g);
         }
-        if read.read(&self.sky) {
-            g.write_buf(self.sky_buf, 0, bytes(&self.sky));
+        if read.read(self.sky.words()) {
+            self.sky.write(g);
         }
         if read.read(self.stars.words()) {
             self.stars.write(g);
@@ -1580,9 +1534,7 @@ impl Renderer {
             self.ao.apply(&mut pass, across * down);
         }
         // At the far plane after the opaque world, so only empty pixels run the sky shader.
-        pass.set_pipeline(self.sky_pipeline.id);
-        pass.set_bind_group(0, self.sky_group, &[]);
-        pass.draw(3, 1, 0, 0);
+        self.sky.draw(&mut pass);
         self.stars.draw(&mut pass);
         // The characters, whose clips play, and the clouds the core lists, the
         // cumulus, which the wind carries, are drawn over the world against

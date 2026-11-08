@@ -30,7 +30,7 @@ fn leaf(x: i32, at: [i32; 3]) -> u128 {
 /// Empties the store and the repository's state, and opens a request
 /// scheduler for `want` to declare files to.
 fn fresh() {
-    object().clear();
+    object_mut().clear();
     *state() = State::default();
     request::open(|_| WANTS);
 }

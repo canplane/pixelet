@@ -80,14 +80,18 @@ impl Entry {
 /// The layer's one store of placed objects.
 static OBJECT: Global<Store> = Global::new();
 
-pub fn object() -> &'static mut Store {
+pub fn object() -> &'static Store {
+    object_mut()
+}
+
+pub fn object_mut() -> &'static mut Store {
     OBJECT.get(Store::default)
 }
 
 /// Applies every write (`Store::write`) and notes where the store changed.
 /// Returns whether any write changed it.
 pub(crate) fn apply(writes: impl IntoIterator<Item = Write>) -> bool {
-    let regions = object().write(writes);
+    let regions = object_mut().write(writes);
     if !regions.is_empty() {
         note_written(&regions);
     }
@@ -202,24 +206,15 @@ pub struct Store {
     /// reader holding a copy of the columns, such as the GPU, knows to take
     /// them again.
     revision: u32,
-    /// The child groups the tree wrote between the hand at revision `since`
-    /// and the latest hand (`gpu_columns`), each listed once.
-    written_groups: Vec<u32>,
-    since: u32,
 }
 
 /// The tree's columns as the GPU takes them (`Store::gpu_columns`), in
-/// place. `cap` is the room each column has before it grows. The GPU may
-/// update its copy in part: a copy of the columns at revision `since`, with
-/// the child groups in `written_groups` (named by their first slots) copied
-/// again, equals the columns at `revision`.
+/// place, at `revision`. `cap` is the room each column has before it grows.
 pub struct GpuColumns<'a> {
     pub first_child: &'a [u32],
     pub data: &'a [u32],
     pub cap: usize,
     pub revision: u32,
-    pub since: u32,
-    pub written_groups: &'a [u32],
 }
 
 impl Default for Store {
@@ -228,8 +223,6 @@ impl Default for Store {
             tree: Tree::new(EMPTY.word()),
             ext: Pools::default(),
             revision: 0,
-            written_groups: Vec::new(),
-            since: 0,
         }
     }
 }
@@ -256,21 +249,23 @@ impl Store {
         api::in_flight(self.tree.first_child()) || api::in_flight(self.tree.data())
     }
 
-    /// Hands the tree's columns to the GPU (`GpuColumns`), with the child
-    /// groups written since the last hand and the revision of that hand.
-    pub fn gpu_columns(&mut self) -> GpuColumns<'_> {
-        self.tree.take_written(&mut self.written_groups);
-        self.written_groups.sort_unstable();
-        self.written_groups.dedup();
-        let since = core::mem::replace(&mut self.since, self.revision);
+    /// The tree's columns as the GPU takes them (`GpuColumns`).
+    pub fn gpu_columns(&self) -> GpuColumns<'_> {
         GpuColumns {
             first_child: self.tree.first_child(),
             data: self.tree.data(),
             cap: self.tree.cap(),
             revision: self.revision,
-            since,
-            written_groups: &self.written_groups,
         }
+    }
+
+    /// Moves into `into` the child groups the tree wrote since they were last
+    /// taken, by their first slots, each once. The one who takes them keeps
+    /// what it took (domain/scene/cast.rs `objects`).
+    pub fn take_written(&mut self, into: &mut Vec<u32>) {
+        self.tree.take_written(into);
+        into.sort_unstable();
+        into.dedup();
     }
 
     /// Walks every node that holds anything, from the root down, with indices
