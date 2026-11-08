@@ -81,11 +81,11 @@ export const INPUT_XR_POSE_END = 0x110a;
 export const PERF_START = 0x1901;
 /** The window frozen, so what is exported holds still. */
 export const PERF_STOP = 0x1902;
-/** The profiler's statistics and what it holds now, where they lie: the reply is the address of STATS's words (perf.json), the statistics
+/** The profiler's statistics and what it holds now, where they lie: the reply is the address of STAT_SLOT's words (perf.json), the statistics
  * over the last `window_ms`, the whole recording where it is absent, good until the next turn. A
  * number past the door is finite, so no window is infinite. */
 export const PERF_STATS = 0x1903;
-/** The rings where they lie, nothing reduced: the reply is the address of RINGS's words (perf.json), good until the next turn. */
+/** The rings where they lie, nothing reduced: the reply is the address of RING_SLOT's words (perf.json), good until the next turn. */
 export const PERF_RINGS = 0x1904;
 
 // ---- ui, import ----

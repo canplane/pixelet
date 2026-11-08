@@ -59,7 +59,7 @@ export const movingFps = (f: { moving: f64; moving_ms: f64 }): f64 | null =>
 export const RECENT_MS = 1_000;
 
 export interface Gauge {
-  /** How many frames and tasks the core's rings hold, as the RINGS record
+  /** How many frames and tasks the core's rings hold, as the RING_SLOT record
    * counts them. */
   rec: {
     recording: boolean;

@@ -1,7 +1,7 @@
 // pxl-render/beam.light.wgsl
 
 // The shadow map's beam rays, as the beam rays' walks read them from the light's list
-// (corners.wgsl, light_list.wgsl). A beam ray starts over every `light::BEAM`-th texel, from
+// (corner.wgsl, light_list.wgsl). A beam ray starts over every `light::BEAM`-th texel, from
 // `BEAM_WINDOW` of them before the box's first (pxl-engine `light::corner_at`). A run takes only
 // those listed for the tiles the cast claimed. Each goes along the light from where its texel
 // lies on the near plane, at its tile's band (`Light::band`), and keeps its line in the light's

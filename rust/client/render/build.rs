@@ -930,7 +930,7 @@ fn decor_word() -> String {
 /// `Tiles::words`), and the reading of a tile's word that word.rs's `screen::age` and
 /// `screen::in_damage` define. A tile's age is the number of frames since it changed, and it
 /// wraps. A tile is in damage while its age is below the uniform's `damage_frames`. Every pass
-/// that reads the tiles (screen_tiles.wgsl, screen_propagate.wgsl, cast_tiles.wgsl) uses this
+/// that reads the tiles (screen_tile.wgsl, screen_propagate.wgsl, cast_tile.wgsl) uses this
 /// one rule.
 fn tile_word() -> String {
     // The Rust's rule must be the one the WGSL below spells: the age is a wrapping u32
@@ -1411,7 +1411,7 @@ fn assemble(out: &Path) {
             );
         }
         // Each member of the lists' argument structs must begin at the word pxl-engine lays it
-        // at (visible.wgsl `MissArgs`, light_receiver_tiles.wgsl `ReceiverArgs`).
+        // at (visible.wgsl `MissArgs`, light_receiver_tile.wgsl `ReceiverArgs`).
         {
             use pxl_engine::{light, ray};
             let words: [(&str, &[u32]); 2] = [

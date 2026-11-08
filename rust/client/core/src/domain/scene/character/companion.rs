@@ -13,7 +13,7 @@
 //! Pets", CC0.
 
 use crate::domain::param;
-use crate::domain::query::changes::Memo;
+use crate::domain::query::change::Memo;
 use crate::domain::query::World;
 use crate::domain::query::{cell_zoom_at, over, under, walks};
 use crate::domain::scene::character::param::{

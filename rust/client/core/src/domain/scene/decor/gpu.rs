@@ -244,7 +244,7 @@ fn drawing(p: &mut [u32; drawn::DRAWING_WORDS as usize], seen: Key) {
     }
 }
 
-/// Holds the regions where objects were written (domain/query/changes.rs) for
+/// Holds the regions where objects were written (domain/query/change.rs) for
 /// the next frame to hand. Each is kept as its columns in leaf cells,
 /// `[x0, y0, x1, y1)`, with X on whatever lap it was written on. Past
 /// `object::EDITS` regions, the rest are merged into the last one, so no

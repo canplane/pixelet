@@ -4,7 +4,7 @@
 // its tiles write it. These passes bind it apart from `beams` (light_list.wgsl), read and write
 // each word whole, and touch no word past the buffer. No word of it is atomic, as each has one
 // writer in a pass. A listed tile's place is its own, taken from a count kept atomic apart
-// (light_receiver_tiles.wgsl, light_propagate.wgsl). A tile's read is written by the one
+// (light_receiver_tile.wgsl, light_propagate.wgsl). A tile's read is written by the one
 // thread that took the tile from the list of tiles read. Each of the slide's words is written
 // by one thread (`light::slide_at`).
 

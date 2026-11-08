@@ -1,6 +1,6 @@
 // pxl-render/beam.eye.wgsl
 
-// The eye's beam rays, as the beam rays' walks read them (corners.wgsl, eye_bind.wgsl). A beam
+// The eye's beam rays, as the beam rays' walks read them (corner.wgsl, eye_bind.wgsl). A beam
 // ray goes through each corner of the camera grid (pxl-engine `beam::Grid::corners`), and every
 // corner is walked, one thread a corner. A ray keeps its line in the eye's beam rays' buffer.
 

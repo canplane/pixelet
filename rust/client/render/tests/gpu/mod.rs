@@ -182,7 +182,7 @@ impl Gpu {
         );
     }
 
-    /// Runs the light's beam rays as the cast runs them (corners.wgsl over beam.light.wgsl),
+    /// Runs the light's beam rays as the cast runs them (corner.wgsl over beam.light.wgsl),
     /// over a map `size` texels a side. It first lists every beam ray of the whole map in `list`
     /// (light_list.wgsl `light_item_at`), then runs them through `corners`. `world` binds what
     /// the passes read, with the list at 8, the node cache `table` at 9 and the light's header

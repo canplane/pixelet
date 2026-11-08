@@ -56,7 +56,7 @@ fn read() -> &'static mut Read {
     })
 }
 
-/// The percentiles of `vals` (perf.json PERCENTILES) and how many values
+/// The percentiles of `vals` (perf.json PERCENTILE) and how many values
 /// they cover. Only as many values as `scratch` holds are taken.
 fn percentiles_n(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> (Percentiles, usize) {
     let mut n = 0;

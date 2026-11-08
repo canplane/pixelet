@@ -1,6 +1,6 @@
 // tsc checks and emits nothing; Metro transforms and bundles. Every alias is
 // defined here, and vitest and Metro read the aliases from here
-// (build/paths.ts). This is the page's view of the client; the device's view
+// (build/path.ts). This is the page's view of the client; the device's view
 // is client/tsconfig.native.json.
 {
   "compilerOptions": {

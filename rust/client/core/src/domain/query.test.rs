@@ -596,7 +596,7 @@ fn reading_reports_columns() {
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let store = Store::default();
-    let read = changes::Footprint::default();
+    let read = change::Footprint::default();
     let access = World::new(&tile_cache, &store).reading(&read);
     let cell = units(GROUND.leaf_cell_zoom());
     let at = [x + 0.5 * cell, y + 0.5 * cell];

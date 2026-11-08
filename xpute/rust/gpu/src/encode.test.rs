@@ -5,7 +5,7 @@ use xpute_kit::golden::Golden;
 
 use crate::program::{At, Encoder, PROGRAMS};
 
-const GOLDEN: &str = include_str!("../../../spec/golden/gpu/programs.tsv");
+const GOLDEN: &str = include_str!("../../../spec/golden/gpu/program.tsv");
 
 /// The memory's base is global, and this is the only test that sets it, so
 /// no other test races for it.

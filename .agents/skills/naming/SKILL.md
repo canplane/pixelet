@@ -42,9 +42,9 @@ description: Naming in pixelet — short, plain names read where they stand; whe
 - Snake_case and SCREAMING abbreviate; PascalCase types, camelCase and the
   React UI's own names stay whole (`let cfg: Config`). A TypeScript `private`
   member takes a leading `_` (`private _cap`).
-- Use a plural for a collection, and a unit suffix on a length (`_u` the
-  world's units, `_merc` a meter on the EPSG:3857 plane, `_m` a meter on the
-  ground), on the value where a person sees it (`29.0 m`).
+- Use a unit suffix on a length (`_u` the world's units, `_merc` a meter on
+  the EPSG:3857 plane, `_m` a meter on the ground), on the value where a
+  person sees it (`29.0 m`).
 - Name a symmetric pair's part, one side of a base both share, with the base,
   a dot and its side, as `x.native.ts` marks a variant (`sample.eye.wgsl`,
   `sample.light.wgsl` beside `sample.wgsl`), and a stand-in that replaces a part
@@ -89,8 +89,6 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   the owner given by the prefix (`pxl_core`, `xpute_core`, `Runtime.core`);
   `core.wasm` is pixelet's build of its core.
 - A file, folder or type name is singular (`service/`, `remote.ts`,
-  `component/`), even where its field's habit is plural; only a value that is
-  a collection (`let cmds`), or a name a tool fixes (cargo's `tests/` and
-  `examples/`), is plural.
+  `component/`).
 - Keep WebGPU's words in xpute's `gpu/`, and its `host`, the CPU's side, in a
   renderer's and a shader's words.

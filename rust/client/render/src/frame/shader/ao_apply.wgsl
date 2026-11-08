@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/ao_apply.wgsl
 
 // Multiplies the occlusion into the world's color, drawn as a quad for each of
-// the screen's tiles (screen_tiles.wgsl, gpu/ao.rs `apply`). A pixel takes the
+// the screen's tiles (screen_tile.wgsl, gpu/ao.rs `apply`). A pixel takes the
 // four half-resolution texels whose centers surround its own, each weighed by
 // how near it lies to the plane of the pixel's half texel and by how alike its
 // normal is. The pixel returns black at the alpha by which they darken it, so

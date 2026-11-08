@@ -177,7 +177,7 @@ pub mod WORST {
 }
 
 /// A value's percentiles over n values: p50 and p95 each the nearest rank, the least value at or above which lie no more than that share of the n (sorted, the value at ceil(q × n) − 1), and the most.
-pub mod PERCENTILES {
+pub mod PERCENTILE {
     pub const p50: u32 = 0;
     pub const p95: u32 = 1;
     pub const max: u32 = 2;
@@ -322,7 +322,7 @@ pub mod NOW {
 }
 
 /// What PERF_STATS answers with the address of: u32 words, where STAT and NOW lie in the module's memory and their words.
-pub mod STATS {
+pub mod STAT_SLOT {
     pub const stats_at: u32 = 0;
     pub const stats_words: u32 = 1;
     pub const now_at: u32 = 2;
@@ -340,7 +340,7 @@ pub mod RING {
 pub const RING_NAMES: usize = 3;
 
 /// What PERF_RINGS answers with the address of: u32 words, a RING apiece in RING_NAMES' order.
-pub mod RINGS {
+pub mod RING_SLOT {
     pub const slots: u32 = 0;
     pub const WORDS: u32 = 6;
 }

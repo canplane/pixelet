@@ -27,7 +27,7 @@ import {
 } from "@/ui/component/theme.ts";
 import { SectionTitle } from "@/ui/component/section-title.tsx";
 import { SensorStatus } from "@/abi/cmd.spec.ts";
-import { statusColor } from "@/ui/world/top/sensor-icons.tsx";
+import { statusColor } from "@/ui/world/top/sensor-icon.tsx";
 import { LABEL, STATUS } from "@/ui/component/palette.ts";
 import { AboveKeyboard } from "@/ui/component/above-keyboard.tsx";
 import { SYSTEM_CLEAR } from "@/ui/component/text-field.tsx";

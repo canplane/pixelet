@@ -17,7 +17,7 @@ use pxl_engine::{raster, ray};
 pub const HEADER_BINDING: u32 = 11;
 
 /// The group of the walks over the node cache alone of the lattice's runs, which are the runs
-/// of the samples and of the beam rays (queue_walk.wgsl over samples.wgsl or corners.wgsl): the
+/// of the samples and of the beam rays (queue_walk.wgsl over sample.wgsl or corner.wgsl): the
 /// eye, the beam's words, the node cache and the queue's words.
 pub const LATTICE_WALK_GROUP: [u32; 12] = [
     0, COMPUTE, UNIFORM, 8, COMPUTE, STORAGE_RW, 9, COMPUTE, STORAGE, 10, COMPUTE, STORAGE_RW,
@@ -102,7 +102,7 @@ pub const CAST_GROUP: [u32; 21] = [
     STORAGE,
 ];
 
-/// The group of `cast_tiles_cs` (cast_tiles.wgsl): the list, the tiles' words and the tiles'
+/// The group of `cast_tiles_cs` (cast_tile.wgsl): the list, the tiles' words and the tiles'
 /// uniform.
 pub const CAST_TILES_GROUP: [u32; 9] = [
     0, COMPUTE, STORAGE_RW, 30, COMPUTE, STORAGE, 31, COMPUTE, UNIFORM,
@@ -110,7 +110,7 @@ pub const CAST_TILES_GROUP: [u32; 9] = [
 
 /// The groups of the light's receivers' passes. Each binds the eye, the head and the list.
 /// The walked and the drawn receivers' passes also bind the stood list's args and the light's
-/// args, whose marks they exchange atomically (light_receiver_tiles.wgsl). The walked
+/// args, whose marks they exchange atomically (light_receiver_tile.wgsl). The walked
 /// receivers' pass binds the rays by which the eye's pixels met the world, and the eye's beam
 /// rays' words, which list its walked pixels past the grid's (light_mark.wgsl). The drawn
 /// receivers' pass binds the placed decor instead (light_mark_draws.wgsl). The propagation
@@ -357,7 +357,7 @@ pub const QUEUE_LAST_GROUP: [u32; 33] = [
 ];
 
 /// The group of the lattice's runs' asks (queue_ask.wgsl over a run's module, such as
-/// samples_run.eye.wgsl or samples_run.light.wgsl): `QUEUE_ASK_GROUP` without the head, which
+/// sample_run.eye.wgsl or sample_run.light.wgsl): `QUEUE_ASK_GROUP` without the head, which
 /// no lattice run reads there.
 pub const LATTICE_ASK_GROUP: [u32; 27] = [
     0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 4, COMPUTE, STORAGE, 5, COMPUTE,
@@ -365,8 +365,8 @@ pub const LATTICE_ASK_GROUP: [u32; 27] = [
     STORAGE_RW,
 ];
 
-/// The group of the last walk of the eye's lattice runs (queue_last.wgsl over samples.wgsl or
-/// corners.wgsl): the eye, the world's buffers, the beam's words and the node cache it writes.
+/// The group of the last walk of the eye's lattice runs (queue_last.wgsl over sample.wgsl or
+/// corner.wgsl): the eye, the world's buffers, the beam's words and the node cache it writes.
 pub const LATTICE_LAST_GROUP: [u32; 27] = [
     0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 4, COMPUTE, STORAGE, 5, COMPUTE,
     STORAGE, 6, COMPUTE, STORAGE, 7, COMPUTE, STORAGE, 8, COMPUTE, STORAGE_RW, 9, COMPUTE,

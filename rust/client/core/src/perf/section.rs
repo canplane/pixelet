@@ -6,7 +6,7 @@
 use core::mem::{offset_of, size_of};
 
 use crate::perf::frame::{FrameSample, RaySample, EFFECTS, GPU_SPANS};
-use crate::perf::spec::{FRAME, LIMIT, NOW, PERCENTILES, STAT, STEP_STAT, STREAM_STAT, WAKES};
+use crate::perf::spec::{FRAME, LIMIT, NOW, PERCENTILE, STAT, STEP_STAT, STREAM_STAT, WAKES};
 use crate::perf::word::{words, zeroed, Words};
 use crate::sys::io::demand_spec::{STREAM_NAMES, TASK_PHASE_NAMES};
 use crate::sys::sched::phase_spec::PHASES;
@@ -26,7 +26,7 @@ pub struct Percentiles {
     pub max: f64,
 }
 
-words!(Percentiles, PERCENTILES::WORDS, p50 => PERCENTILES::p50, p95 => PERCENTILES::p95, max => PERCENTILES::max);
+words!(Percentiles, PERCENTILE::WORDS, p50 => PERCENTILE::p50, p95 => PERCENTILE::p95, max => PERCENTILE::max);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

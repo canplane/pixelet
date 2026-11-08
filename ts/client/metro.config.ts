@@ -5,14 +5,14 @@
  * device's own file sits beside a default and is named by React Native's
  * suffixes (pill.ios.tsx beside pill.tsx); the page takes the default. Every
  * alias is tsconfig.json's, and every workspace package resolves to its source
- * (ts/build/paths.ts), so that Metro reads the client exactly as the
+ * (ts/build/path.ts), so that Metro reads the client exactly as the
  * type-check reads it.
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { getDefaultConfig } from "expo/metro-config";
-import { REPO, treeFile, WORKSPACE } from "@pxl/build/paths.ts";
+import { REPO, treeFile, WORKSPACE } from "@pxl/build/path.ts";
 import { CONSOLE_PATH, consoleHandler } from "@pxl/build/console.ts";
 import { stamp } from "@pxl/build/stamp.ts";
 import { forward, type Middleware, route_target } from "./script/proxy.ts";

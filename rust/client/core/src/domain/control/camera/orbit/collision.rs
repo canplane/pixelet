@@ -41,7 +41,7 @@ use crate::domain::control::camera::orbit::{orbit_eye_off, pivot_world};
 use crate::domain::control::camera::state::Intent;
 use crate::domain::control::param::{CLIMB_PASSES, COLLISION_STEP_SAMPLES};
 use crate::domain::control::param::{EYE_CLEARANCE_U, MIN_DIST, NEAREST_DIST};
-use crate::domain::query::changes::Memo;
+use crate::domain::query::change::Memo;
 use crate::domain::query::{finest, Hit, HitKind, Ray, World};
 use crate::domain::setting::store::{settings, OrbitObstacleMode};
 use crate::domain::view::frame::coord::world_to_canonical;
@@ -350,7 +350,7 @@ struct MemoKey {
 }
 
 /// The pitch of the last climb. It is kept while its `MemoKey` stays the
-/// same and no change touches what it read (`changes::Memo`).
+/// same and no change touches what it read (`change::Memo`).
 static CLIMB_PITCH: Global<Memo<MemoKey, f64>> = Global::new();
 
 /// `at` as the climb draws it. At the nearest (`NEAREST_DIST`), it is drawn

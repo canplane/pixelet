@@ -765,7 +765,7 @@ impl Starts {
 /// (pxl-render light.wgsl `light_cs`), dispatched over the whole map.
 pub const TILE: u32 = 8;
 
-/// The light's beam (pxl-render corners.wgsl over beam.light.wgsl, light_cell.wgsl
+/// The light's beam (pxl-render corner.wgsl over beam.light.wgsl, light_cell.wgsl
 /// `light_cell_cs`). A beam ray stands at every `BEAM`-th texel of the box across and down,
 /// and `BEAM_WINDOW` past the box on each side. Each is walked from the world's root along the
 /// light's rays until it meets a cell that fills or lacks, or a split narrower than `2√2`
@@ -870,7 +870,7 @@ pub fn margin(width: f32) -> f32 {
 }
 
 /// The shadow map cast as the eye's rays are, every slot every frame (pxl-engine `raster`).
-/// A sample every `SAMPLE` slots across and down is walked (pxl-render samples.wgsl over
+/// A sample every `SAMPLE` slots across and down is walked (pxl-render sample.wgsl over
 /// sample.light.wgsl); the cells the samples stopped at are written as boxes by the eye's
 /// writer (pxl-render boxes.wgsl `write_box`) and drawn from the light by the eye's raster,
 /// orthographic (pxl-render raster.wgsl), in the box's order (`Light::texel`), each texel
@@ -1085,7 +1085,7 @@ pub const fn list_cnt_at(size: u32, which: u32) -> u32 {
 
 /// Where the beam rays' run parks them, past the lists, as the eye's are past its words
 /// (`beam::Grid::corner_states_at`): one state for each beam ray of the map
-/// (`ray::STATE_WORDS`, pxl-render corners.wgsl), row by row.
+/// (`ray::STATE_WORDS`, pxl-render corner.wgsl), row by row.
 pub const fn corner_states_at(size: u32) -> u32 {
     list_cnt_at(size, LISTS)
 }
@@ -1095,7 +1095,7 @@ pub const fn corner_states_at(size: u32) -> u32 {
 /// light_slide.wgsl). `READS_FROM` is the number of the first cast whose reads hold where a
 /// cast that owed a slide stood no receiver and so ran none. It is set by the one thread that
 /// lists a cast's first stood tile, where the slide last ran before the last cast that owed
-/// one (`HEADER_SLIDE_CAST`; light_receiver_tiles.wgsl `receiver_tiles_first`). The reads'
+/// one (`HEADER_SLIDE_CAST`; light_receiver_tile.wgsl `receiver_tiles_first`). The reads'
 /// epoch is the later of it and `HEADER_EPOCH` (`reads_epoch`).
 pub const fn slide_at(size: u32) -> u32 {
     corner_states_at(size) + beam_across(size) * beam_across(size) * ray::STATE_WORDS
@@ -1134,7 +1134,7 @@ pub const fn buffer_words(size: u32) -> u32 {
     hits_at(size) + ray::HITS_A_FRAME * beam::HIT_WORDS
 }
 
-/// The stood list's arguments, in a buffer of their own (pxl-render light_receiver_tiles.wgsl
+/// The stood list's arguments, in a buffer of their own (pxl-render light_receiver_tile.wgsl
 /// `ReceiverArgs`), laid out as a list walked apart lays its own (`ray::LEFT_EMPTY`;
 /// list.wgsl `enlist`). First come the propagation's dispatch over the stood tiles, one row
 /// for each `MISS_LANES · MISS_ACROSS` listed (`RECEIVER_TILES_LIST`), and their count

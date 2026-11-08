@@ -8,7 +8,7 @@
 //! world onto two targets of one color: the canvas, and the picture kept at the canvas's size
 //! (`Surface::picture`). The canvas's texture is a new one each frame, so a frame not drawn
 //! whole first shows the picture whole on the canvas, then finishes both targets again only in
-//! its claimed tiles (screen_tiles.wgsl).
+//! its claimed tiles (screen_tile.wgsl).
 
 use crate::frame::shader::record::{PIPELINE_SCREEN_FINISH, PIPELINE_SCREEN_SHOW};
 use crate::gpu::api::{

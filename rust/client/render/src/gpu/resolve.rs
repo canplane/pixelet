@@ -12,13 +12,13 @@
 //! the sequence. Where the tile changed this frame, what the frames before left is moved to
 //! where this frame's eye sees it, and held within what this frame's pixels about it hold. A
 //! tile is claimed, and drawn again, until it has run through the sequence (word.rs
-//! `screen::DAMAGE_FRAMES`, screen_tiles.wgsl). Once every tile has, the jitter holds and the
+//! `screen::DAMAGE_FRAMES`, screen_tile.wgsl). Once every tile has, the jitter holds and the
 //! frame stands still.
 //!
 //! The tiles' words live on the GPU, as the light's do (gpu/tile.rs). Each holds the number of
 //! the frame its tile last changed in, which the frame's marks set. The CPU hands the marks, so
 //! it knows whether any tile gathers from what it handed. The resolve and the write-back draw
-//! the claimed tiles alone, a quad each (screen_tiles.wgsl).
+//! the claimed tiles alone, a quad each (screen_tile.wgsl).
 
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::world;

@@ -1,7 +1,7 @@
 // pxl-render/item_list.wgsl
 
 // How the queue's walks (queue_walk.wgsl, queue_last.wgsl) take the items of a run that lists
-// them: the samples (samples.wgsl) or the beam rays (corners.wgsl). Each walk takes the next
+// them: the samples (sample.wgsl) or the beam rays (corner.wgsl). Each walk takes the next
 // place in the list from a counter of its own.
 
 /// The next item for a walk over the node cache to take, by the first walk's counter or, where

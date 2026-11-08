@@ -1,6 +1,6 @@
 // xpute-gpu/program.test.rs
 
-//! The programs whose records spec/golden/gpu/programs.tsv holds, written
+//! The programs whose records spec/golden/gpu/program.tsv holds, written
 //! with the Rust encoder; cpp/xpute/gpu/encode.test.cpp makes the same calls
 //! in C++. Each turn ends through `turn` with a request whose ticket is the
 //! turn's number, counted from 1. The next turn waits until the runtime has

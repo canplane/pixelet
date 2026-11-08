@@ -3,7 +3,7 @@
 /** The place's GPU state, kept for the UI to show. The core hears of
  * the device itself on the GPU's own port (@xpute/gpu). */
 
-import { Listeners } from "@xpute/kit/lang/listeners.ts";
+import { Listeners } from "@xpute/kit/lang/listener.ts";
 import {
   GPU_ASKING,
   GPU_LOST,

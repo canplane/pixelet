@@ -361,7 +361,7 @@ pub const TOUCHES: &[Touch] = {
     }
     /// The stood list is the list of the tiles the receivers stand on. These are the words of
     /// its args that a receivers' pass writes as it lists a tile: its dispatch's x, its count
-    /// and the slide's x (light_receiver_tiles.wgsl `receiver_tiles_put`,
+    /// and the slide's x (light_receiver_tile.wgsl `receiver_tiles_put`,
     /// `receiver_tiles_first`).
     const RECEIVER_TILES: [u32; 2] = [light::RECEIVER_TILES_LIST, light::RECEIVER_TILES_SLIDE + 1];
     /// The args of a raster's draw, and the faces' asks a pass lays out at `at`
@@ -392,7 +392,7 @@ pub const TOUCHES: &[Touch] = {
         },
         // The record's draw counts the drawable entries' boxes into its draw's args, and stands
         // each box's tiles as a receiver of the world's (record_draw.wgsl,
-        // light_receiver_tiles.wgsl `stand_box`).
+        // light_receiver_tile.wgsl `stand_box`).
         Touch {
             compute: COMPUTE_RECORD_DRAW,
             binding: 16,
@@ -434,7 +434,7 @@ pub const TOUCHES: &[Touch] = {
             reads: &[DRAW_ARGS],
         },
         // The receivers' passes mark the tiles they stand on, the world's receivers and the
-        // drawn ones alike (light_receiver_tiles.wgsl `stand`).
+        // drawn ones alike (light_receiver_tile.wgsl `stand`).
         Touch {
             compute: COMPUTE_LIGHT_MARK_WALKED,
             binding: 21,

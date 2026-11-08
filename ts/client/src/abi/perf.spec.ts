@@ -16,12 +16,12 @@ import * as LIMIT from "./perf/limit.spec.ts";
 import * as FRAME from "./perf/frame.spec.ts";
 import * as TASK from "./perf/task.spec.ts";
 import * as WORST from "./perf/worst.spec.ts";
-import * as PERCENTILES from "./perf/percentiles.spec.ts";
+import * as PERCENTILE from "./perf/percentile.spec.ts";
 import * as STREAM_STAT from "./perf/stream_stat.spec.ts";
 import * as STEP_STAT from "./perf/step_stat.spec.ts";
-import * as STATS from "./perf/stats.spec.ts";
+import * as STAT_SLOT from "./perf/stat_slot.spec.ts";
 import * as RING from "./perf/ring.spec.ts";
-import * as RINGS from "./perf/rings.spec.ts";
+import * as RING_SLOT from "./perf/ring_slot.spec.ts";
 
 export const WAKES = ["next", "timer", "none"] as const;
 
@@ -101,7 +101,7 @@ export { TASK };
 export { WORST };
 
 /** A value's percentiles over n values: p50 and p95 each the nearest rank, the least value at or above which lie no more than that share of the n (sorted, the value at ceil(q × n) − 1), and the most. */
-export { PERCENTILES };
+export { PERCENTILE };
 
 /** One stream's tasks in the window, at STAT.tasks.slots + its index × WORDS. Each reason is (fail, detail, n), commonest first; `phase_mean` is NaN for a phase no task reported. */
 export { STREAM_STAT };
@@ -222,7 +222,7 @@ export const NOW = {
 } as const;
 
 /** What PERF_STATS answers with the address of: u32 words, where STAT and NOW lie in the module's memory and their words. */
-export { STATS };
+export { STAT_SLOT };
 
 /** Where one ring lies: its address in the module's memory and its record count. */
 export { RING };
@@ -230,4 +230,4 @@ export { RING };
 export const RING_NAMES = ["frames", "tasks", "worst"] as const;
 
 /** What PERF_RINGS answers with the address of: u32 words, a RING apiece in RING_NAMES' order. */
-export { RINGS };
+export { RING_SLOT };

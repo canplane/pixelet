@@ -327,7 +327,7 @@ impl Raster {
 
     /// Makes the record's draw group (`RECORD_GROUP`) again where what it binds changed: the
     /// eye and the node cache the raster binds, and `light`, the light's head, list, args and
-    /// stood list's args (light_receiver_tiles.wgsl), by which the draw marks the tiles its
+    /// stood list's args (light_receiver_tile.wgsl), by which the draw marks the tiles its
     /// boxes stand on. The cast calls it every frame it prepares, as the light's buffers are
     /// made and released apart from the raster's.
     pub(super) fn record_group(&mut self, g: &Gpu, light: [u32; 4]) {

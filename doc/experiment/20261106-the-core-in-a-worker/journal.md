@@ -41,7 +41,7 @@ takes away:
 
 `probe/`: the page hands its canvas to a worker, which draws it with WebGPU on
 its own animation frames, measures and draws the kernel's text as
-`services/text.ts` does, and answers the page's messages (`probe/run.mjs`).
+`services/text.ts` does, and answers the page's messages (`probe/run.js`).
 
 | | Chrome 156, Mac | Safari 27.0.1, Mac |
 |---|---|---|

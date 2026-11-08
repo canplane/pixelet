@@ -3,8 +3,8 @@
 // How a ray is parked between a run's walks (queue_walk.wgsl, queue_last.wgsl), for every kind
 // of item alike. A parked ray keeps the bits of its distance, its node's corner, and one word
 // that holds its zoom, its roots and the steps it took, under the `PARKED` bit (pxl-engine
-// `ray::STATE_WORDS`). Each kind keeps these words where its own part says (corners.wgsl,
-// samples.wgsl, queue.wgsl).
+// `ray::STATE_WORDS`). Each kind keeps these words where its own part says (corner.wgsl,
+// sample.wgsl, queue.wgsl).
 
 /// The word of a ray parked at a node of `zoom` with `roots`, after `step` steps. The zoom
 /// takes the low bits, then come three bits for each root, then the steps above them, all

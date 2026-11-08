@@ -9,7 +9,7 @@
  * settings read them.
  */
 
-import { Listeners } from "@xpute/kit/lang/listeners.ts";
+import { Listeners } from "@xpute/kit/lang/listener.ts";
 import { get, TILE_SOURCE_ROUTE } from "@/service/origin/route.ts";
 import { online, when_online } from "@/service/origin/online.ts";
 import {

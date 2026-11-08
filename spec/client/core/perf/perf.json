@@ -200,7 +200,7 @@
     "uploads_delta_bytes": 1,
     "heap_used_delta_bytes": 1
   },
-  "PERCENTILES": {
+  "PERCENTILE": {
     "$type": "u32",
     "$packed": true,
     "$doc": [
@@ -256,16 +256,16 @@
       "long": 1,
       "turns": 1,
       "gpu_timed": 1,
-      "interval": "PERCENTILES",
-      "busy": "PERCENTILES",
-      "tick": "PERCENTILES",
-      "effects": "PERCENTILES",
-      "stage": "PERCENTILES",
-      "tasks": "PERCENTILES",
-      "perf": "PERCENTILES",
-      "rest": "PERCENTILES",
+      "interval": "PERCENTILE",
+      "busy": "PERCENTILE",
+      "tick": "PERCENTILE",
+      "effects": "PERCENTILE",
+      "stage": "PERCENTILE",
+      "tasks": "PERCENTILE",
+      "perf": "PERCENTILE",
+      "rest": "PERCENTILE",
       "effects_p95": "EFFECT_NAMES",
-      "gpu_busy": "PERCENTILES",
+      "gpu_busy": "PERCENTILE",
       "gpu_busy_kinds": "3 * FRAME_KINDS",
       "phases_p95": "PHASES",
       "gpu_spans_p95": "GPU_SPAN_NAMES",
@@ -347,7 +347,7 @@
       "blocked": 1
     }
   },
-  "STATS": {
+  "STAT_SLOT": {
     "$type": "u32",
     "$packed": true,
     "$doc": [
@@ -372,8 +372,8 @@
     "tasks",
     "worst"
   ],
-  "$RING_NAMES": "The rings the profiler keeps, each a RING's place in RINGS: the frames, the tasks, and the worst moving frames.",
-  "RINGS": {
+  "$RING_NAMES": "The rings the profiler keeps, each a RING's place in RING_SLOT: the frames, the tasks, and the worst moving frames.",
+  "RING_SLOT": {
     "$type": "u32",
     "$packed": true,
     "$doc": [

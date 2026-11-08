@@ -16,7 +16,7 @@ use crate::domain::control::edit::write::{restores_scattered, Preview};
 use crate::domain::control::edit::Hover;
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::preview::Ghost;
-use crate::domain::query::changes;
+use crate::domain::query::change;
 use crate::domain::query::World;
 
 pub(super) fn hover(zoom: Zoom, pick: &Pick) -> Hover {
@@ -39,7 +39,7 @@ pub(super) fn tap(asset: Asset, zoom: Zoom, hover: &Hover) {
 
 /// `blocked` is asked again only where the item, its zoom, the corner or the
 /// store's revision moved, or a change touched the columns the check reads
-/// (`placement_reads`, `changes::within`), against `was`, the last turn's.
+/// (`placement_reads`, `change::within`), against `was`, the last turn's.
 pub(super) fn preview(asset: Asset, zoom: Zoom, hover: &Hover, was: &Preview) -> Preview {
     let Some(h) = hover.coord else {
         return Preview {
@@ -49,7 +49,7 @@ pub(super) fn preview(asset: Asset, zoom: Zoom, hover: &Hover, was: &Preview) ->
     };
     let blocked_key = Some((asset, zoom, h, World::now().revision()));
     let same =
-        was.blocked_key == blocked_key && !changes::within(placement_reads(asset, zoom, &h), &[]);
+        was.blocked_key == blocked_key && !change::within(placement_reads(asset, zoom, &h), &[]);
     Preview {
         zoom,
         blocked: if same {

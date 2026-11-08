@@ -27,10 +27,10 @@ import {
   NOW,
   RING,
   RING_NAMES,
-  RINGS,
-  PERCENTILES,
+  RING_SLOT,
+  PERCENTILE,
   STAT,
-  STATS,
+  STAT_SLOT,
   STEP_STAT,
   STREAM_STAT,
   TASK,
@@ -236,7 +236,7 @@ export interface Summary {
   view: ViewSection;
 }
 
-/** How many records each ring holds, as RINGS counts them. */
+/** How many records each ring holds, as RING_SLOT counts them. */
 export interface RingCounts {
   frames: u32;
   tasks: u32;
@@ -244,9 +244,9 @@ export interface RingCounts {
 }
 
 const percentiles_at = (s: F64Array, at: u32): Percentiles => ({
-  p50: s[at + PERCENTILES.p50],
-  p95: s[at + PERCENTILES.p95],
-  max: s[at + PERCENTILES.max],
+  p50: s[at + PERCENTILE.p50],
+  p95: s[at + PERCENTILE.p95],
+  max: s[at + PERCENTILE.max],
 });
 
 function frame_summary(s: F64Array): FrameSummary | null {
@@ -363,10 +363,10 @@ function section<S extends { AT: u32; WORDS: u32 }>(
 /** STAT's words over `window_ms`, and NOW's words, in the layout PERF_STATS
  * replies with. */
 function stats_of(window_ms: f64 | null): { stats: F64Array; now: F64Array } {
-  const r = u32s(reply_at(core.perf_stats(window_ms)), STATS.WORDS);
+  const r = u32s(reply_at(core.perf_stats(window_ms)), STAT_SLOT.WORDS);
   return {
-    stats: words(r[STATS.stats_at], r[STATS.stats_words]),
-    now: words(r[STATS.now_at], r[STATS.now_words]),
+    stats: words(r[STAT_SLOT.stats_at], r[STAT_SLOT.stats_words]),
+    now: words(r[STAT_SLOT.now_at], r[STAT_SLOT.now_words]),
   };
 }
 
@@ -398,9 +398,9 @@ function perf_view(): ViewSection {
 /** Each ring's address and record count, as the rings lie in memory, with
  * nothing reduced. */
 function rings(): { frames: [u32, u32]; tasks: [u32, u32]; worst: [u32, u32] } {
-  const r = u32s(reply_at(core.perf_rings()), RINGS.WORDS);
+  const r = u32s(reply_at(core.perf_rings()), RING_SLOT.WORDS);
   const ring = (name: (typeof RING_NAMES)[number]): [u32, u32] => {
-    const at = RINGS.slots + RING_NAMES.indexOf(name) * RING.WORDS;
+    const at = RING_SLOT.slots + RING_NAMES.indexOf(name) * RING.WORDS;
     return [r[at + RING.at], r[at + RING.cnt]];
   };
   return { frames: ring("frames"), tasks: ring("tasks"), worst: ring("worst") };

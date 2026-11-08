@@ -922,7 +922,7 @@ pub const FRAME: Frame = Frame {
 /// reads it. They are: the eye's faces' asks, which the samples' passes lay and the holes'
 /// stops lay at a place of their own (record_put.wgsl `observe`); the stops each observer's two
 /// walks of the holes over the node cache list (queue_walk.wgsl); the stood list, which the
-/// record's draw and both receivers' passes list tiles on (light_receiver_tiles.wgsl
+/// record's draw and both receivers' passes list tiles on (light_receiver_tile.wgsl
 /// `receiver_tiles_put`); the stops' dispatch in the node cache's head, which the last walk
 /// raises; the stood list's marks; the args the decor's culls write; the read list's count, by
 /// which the propagation lists a tile (light_propagate.wgsl `read_tile`); and the frame's asks
@@ -992,7 +992,7 @@ const fn persistent_world_marks(which: u32, owner: &'static str) -> Persistent {
         by: &[],
         invalidation: "a tile's mark is the number of the cast the world's receivers were last \
             stood afresh in, stale under any other: every tile stood on or read is listed again \
-            where they are (light_receiver_tiles.wgsl `stand`, light_propagate.wgsl `read_tile`)",
+            where they are (light_receiver_tile.wgsl `stand`, light_propagate.wgsl `read_tile`)",
     }
 }
 
@@ -1020,7 +1020,7 @@ const PERSISTENT: &[Persistent] = &[
     // The stood list's marks have no single owner step. One rule sets a tile's mark to the
     // cast's number, atomically and alike wherever it runs, and four steps apply it: the
     // record's draw for the eye and for the light, and the walked and the drawn receivers'
-    // marks (light_receiver_tiles.wgsl `stand`, `stand_box`).
+    // marks (light_receiver_tile.wgsl `stand`, `stand_box`).
     Persistent {
         by: &[
             "record_draw",
@@ -1028,7 +1028,7 @@ const PERSISTENT: &[Persistent] = &[
             "light_mark_walked",
             "light_mark_draws",
         ],
-        ..persistent_world_marks(light::LIST_RECEIVERS, "light_receiver_tiles.wgsl `stand`")
+        ..persistent_world_marks(light::LIST_RECEIVERS, "light_receiver_tile.wgsl `stand`")
     },
     persistent_world_marks(light::LIST_READS, "light_propagate"),
     persistent_marks(light::LIST_CORNERS, "light_damage"),

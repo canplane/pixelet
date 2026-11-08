@@ -19,7 +19,7 @@ import { promisify } from "node:util";
 import { defineConfig, type Plugin } from "vite";
 
 import { CONSOLE_PATH, consoleHandler } from "@pxl/build/console.ts";
-import { REPO } from "@pxl/build/paths.ts";
+import { REPO } from "@pxl/build/path.ts";
 
 /** The renderer's modules by name, and the pipelines it makes over them.
  * They are assembled again at each ask: cargo rebuilds the example after a

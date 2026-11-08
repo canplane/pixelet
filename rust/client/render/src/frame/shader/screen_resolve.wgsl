@@ -22,7 +22,7 @@ struct Resolve {
 @group(0) @binding(3) var history: texture_2d<f32>;
 @group(0) @binding(4) var history_sampler: sampler;
 @group(0) @binding(5) var<uniform> resolve: Resolve;
-// A tile's age (screen_tiles.wgsl `tile_age`) decides the blend. At age 0 the tile changed this
+// A tile's age (screen_tile.wgsl `tile_age`) decides the blend. At age 0 the tile changed this
 // frame: what the frames before left is held within this frame's pixels, and this frame takes
 // `resolve.blend.x`. Past 0 only the jitter has moved there since, and each frame takes its
 // even share of the sequence counted from the frame the tile changed in, so the first still

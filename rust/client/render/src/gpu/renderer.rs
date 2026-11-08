@@ -1577,7 +1577,7 @@ impl Renderer {
         let gathered = self.resolve.draw(&mut ctx, world, masked);
         // The finish runs at the canvas's size, in its own span. A frame not
         // drawn whole finishes again only its claimed tiles
-        // (screen_tiles.wgsl), unless the debug pass drew into the screen's
+        // (screen_tile.wgsl), unless the debug pass drew into the screen's
         // depth last frame.
         self.finish.draw(
             &mut ctx,

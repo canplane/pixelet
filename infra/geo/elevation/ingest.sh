@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # The elevation into db-geo, a shard at a time: each shard the coverage
-# needs (`elevation_shards`), its apron of whole blocks included, warped out
+# needs (`elevation_shard`), its apron of whole blocks included, warped out
 # of the remote COG onto the one grid the bake samples, and its blocks put
-# under the names of the tiles they are (`elevation_shards --blocks`). The
+# under the names of the tiles they are (`elevation_shard --blocks`). The
 # tables are filled beside the live ones and swapped in once every shard is
 # whole, so readers never see them emptied; a run stopped partway resumes
 # from the shards its tables beside hold, and refuses ones of another
@@ -44,8 +44,8 @@ if [ "$OTHER" != "0" ]; then
 fi
 
 mkdir -p "$WARPED_DIR"
-BAKE_BIN="${CARGO_TARGET_DIR:-$REPO_ROOT/rust/target}/server/elevation_shards"
-(cd "$REPO_ROOT/rust" && cargo build -q --profile server -p pxl-geo-bake --bin elevation_shards)
+BAKE_BIN="${CARGO_TARGET_DIR:-$REPO_ROOT/rust/target}/server/elevation_shard"
+(cd "$REPO_ROOT/rust" && cargo build -q --profile server -p pxl-geo-bake --bin elevation_shard)
 SHARDS=$("$BAKE_BIN")
 
 # On its own descriptor: psql would read the list as its input.

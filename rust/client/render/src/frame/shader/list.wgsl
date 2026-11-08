@@ -1,7 +1,7 @@
 // pxl-render/list.wgsl
 
 // A list that a pass fills and a later dispatch walks, one thread for each entry. The list's
-// count and the walk's dispatch lie in `args` (light_receiver_tiles.wgsl `ReceiverArgs`), and
+// count and the walk's dispatch lie in `args` (light_receiver_tile.wgsl `ReceiverArgs`), and
 // its entries lie wherever its pass keeps them. The walk runs `MISS_LANES` threads a workgroup
 // and `MISS_ACROSS` workgroups a row, and its dispatch starts with no rows (pxl-engine
 // `ray::LEFT_EMPTY`).

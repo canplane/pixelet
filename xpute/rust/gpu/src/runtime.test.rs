@@ -4,7 +4,7 @@ use xpute_kit::golden::Golden;
 
 use super::*;
 
-const GOLDEN: &str = include_str!("../../../spec/golden/gpu/programs.tsv");
+const GOLDEN: &str = include_str!("../../../spec/golden/gpu/program.tsv");
 
 fn device() -> (wgpu::Adapter, wgpu::Device, wgpu::Queue) {
     let instance =

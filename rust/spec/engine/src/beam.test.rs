@@ -295,7 +295,7 @@ struct Cast {
     resumed: bool,
 }
 
-/// The view cast as the shader casts it (pxl-render corners.wgsl, cell.wgsl, samples.wgsl
+/// The view cast as the shader casts it (pxl-render corner.wgsl, cell.wgsl, sample.wgsl
 /// over sample.eye.wgsl): every corner's beam ray to where it stops, and how far it hands on;
 /// each cell's start, the least of its window's, with that corner's line and whether the cell
 /// resumes, which it does where every beam ray of the window asks as its rays ask; and every

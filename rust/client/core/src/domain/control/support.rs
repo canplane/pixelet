@@ -8,7 +8,7 @@
 //! its Z unknown (`UNKNOWN_Z`) and is drawn on the finest ground known there
 //! until the leaf arrives.
 
-use crate::domain::query::changes::Memo;
+use crate::domain::query::change::Memo;
 use crate::domain::query::{over, under};
 use pxl_spec::space::coord::q3::{self, FRAC_W, Q3};
 use pxl_spec::space::coord::v3::V3;
@@ -59,7 +59,7 @@ pub fn stand_over(at: &Q3, top: f64) -> Q3 {
 }
 
 /// The last answer of `standing`. It is kept until another point is asked
-/// or the world changes in the columns the answer read (`changes::Memo`). A
+/// or the world changes in the columns the answer read (`change::Memo`). A
 /// camera's `to` and a destination ask for the same point on every tick
 /// until a leaf gives its Z, and `resolve_to` asks twice in one tick.
 static STAND_MEMO: Global<Memo<Q3, Answer<Option<Q3>>>> = Global::new();
@@ -70,7 +70,7 @@ fn stand_memo() -> &'static mut Memo<Q3, Answer<Option<Q3>>> {
 
 /// Drops the kept answer of `standing` where a change touched the columns
 /// it read. It runs on every frame turn, so each change is seen exactly once
-/// (`changes::within`).
+/// (`change::within`).
 pub fn support_step() {
     stand_memo().forget_touched();
 }

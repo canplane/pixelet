@@ -22,7 +22,7 @@ use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 
 use crate::domain::layer::tile_cache::floor;
 use crate::domain::layer::Base as _;
-use crate::domain::query::changes;
+use crate::domain::query::change;
 use crate::domain::query::{ColumnWalk, World};
 use crate::domain::view::above_ground::height_at;
 use crate::domain::view::frame::pose::{eye, view};
@@ -52,11 +52,11 @@ static OBSERVATION: Global<Option<Option<Observation>>> = Global::new();
 
 /// Called as a frame turn begins. The kept observation holds the eye's
 /// height over the ground under it, so it is dropped when a change touched
-/// that ground. `changes::within` is asked every frame turn, so each change
+/// that ground. `change::within` is asked every frame turn, so each change
 /// is seen once.
 pub fn turn() {
     let made = OBSERVATION.get(|| None);
-    if made.is_some_and(|o| o.is_some_and(|o| changes::within([[o.eye[0], o.eye[1]]; 2], &[]))) {
+    if made.is_some_and(|o| o.is_some_and(|o| change::within([[o.eye[0], o.eye[1]]; 2], &[]))) {
         *made = None;
     }
 }

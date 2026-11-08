@@ -30,7 +30,7 @@ use xpute_core::global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::domain::query::changes;
+use crate::domain::query::change;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::marker::param::SPACING_PX;
 use crate::domain::scene::model;
@@ -95,7 +95,7 @@ struct Arrangement {
     /// Whether places, ground or objects changed since they were read.
     changed: bool,
     /// The place tiles whose answer changed, besides the ground's changes
-    /// (domain/query/changes.rs). A brick they touch is read again.
+    /// (domain/query/change.rs). A brick they touch is read again.
     changed_places: Vec<Quadrant>,
     /// The bricks this turn would read, with their distance from the eye and
     /// their columns.
@@ -264,7 +264,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     now.places = settings().place;
     let places = now.places;
     // What was read stays for a brick that is still drawn and whose columns
-    // no change touches (domain/query/changes.rs), as long as the places
+    // no change touches (domain/query/change.rs), as long as the places
     // setting did not turn. A brick left or touched drops what was read from
     // it. Only bricks entered or touched are read, nearest the eye first, as
     // many a turn as one pass of the tick's budget reads and at least one.
@@ -284,7 +284,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
         .map(|&s| {
             let r = columns(s);
             before.binary_search(&s).is_ok()
-                && !changes::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], changed_places)
+                && !change::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], changed_places)
         })
         .collect();
     let stands = |s: &Brick| now.bricks.binary_search(s).is_ok_and(|k| stood[k]);

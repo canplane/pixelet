@@ -20,7 +20,7 @@
 //! `World` function answers from the composed world; an answer from one
 //! layer alone (`surface_of`) stays inside the query.
 
-pub mod changes;
+pub mod change;
 pub mod decor;
 mod entry;
 mod limit;

@@ -42,7 +42,7 @@ pub struct RaysPass {
     /// The claimed tiles' words and uniform (`Resolve::tiles`), and the
     /// number of tiles on the screen. The pixels' cast casts the claimed
     /// tiles alone, and the screen pass draws a quad for every tile, an
-    /// unclaimed one collapsed (screen_tiles.wgsl).
+    /// unclaimed one collapsed (screen_tile.wgsl).
     tiles: ((u32, u32), u32),
     /// The entries a cell's face is painted by (`Renderer::lit_entries`).
     /// It is empty until the renderer first hands them.

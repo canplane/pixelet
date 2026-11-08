@@ -1,6 +1,6 @@
 // cpp/xpute/gpu/encode.test.cpp
 
-// Holds the C++ encoder to golden/gpu/programs.tsv. The programs that
+// Holds the C++ encoder to golden/gpu/program.tsv. The programs that
 // rust/gpu/src/program.test.rs writes, making the same calls in C++, must
 // write the words the record holds, turn by turn. Each turn ends with a
 // request whose ticket is the turn's number, counted from 1, and the last
@@ -372,7 +372,7 @@ const Program PROGRAMS[] = {
 } // namespace
 
 XPUTE_TEST(gpu_programs_match_record) {
-    Golden g = Golden::load("spec/golden/gpu/programs.tsv");
+    Golden g = Golden::load("spec/golden/gpu/program.tsv");
     std::vector<std::string> recorded;
     g.each("program", [&](const std::string &k) { recorded.push_back(g.s(k)); });
     XPUTE_CHECK_EQ(recorded.size(), std::size(PROGRAMS), "the programs, as the record lists them");

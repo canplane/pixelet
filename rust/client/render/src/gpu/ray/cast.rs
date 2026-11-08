@@ -332,7 +332,7 @@ pub(super) struct CastBuffers {
     px_group: u32,
     px_bufs: [u32; 7],
     /// Lists the claimed tiles ahead of the pixels' cast, in the same pass, into `cast_tiles`,
-    /// whose words give the pixels' indirect dispatch (cast_tiles.wgsl). `cast_tiles` is made
+    /// whose words give the pixels' indirect dispatch (cast_tile.wgsl). `cast_tiles` is made
     /// again with `px_bufs`.
     cast_tiles_pipeline: Pipeline,
     cast_tiles: u32,
@@ -396,7 +396,7 @@ struct Receiver {
     tiles: [[i32; 2]; 2],
 }
 
-/// The claimed tiles' list as a frame's cast starts it (cast_tiles.wgsl): `cast_cs`'s
+/// The claimed tiles' list as a frame's cast starts it (cast_tile.wgsl): `cast_cs`'s
 /// dispatch with no tile yet and a tile's workgroups across and down, then no tile counted.
 const CAST_TILES_START: [u32; 4] = [0, TILE_CASTS, TILE_CASTS, 0];
 /// How many groups the light's cast has (`light_groups`).
@@ -1034,7 +1034,7 @@ impl RaysPass {
             // every pixel, and added to the marks already made, which hold the other pixels',
             // where they cover the claimed tiles alone. Otherwise they stand where they were
             // last marked. The head also names the last cast before this one that owed a slide
-            // (light_receiver_tiles.wgsl `receiver_tiles_first`).
+            // (light_receiver_tile.wgsl `receiver_tiles_first`).
             let afresh = due.world && !due.adds;
             if afresh {
                 c.light_world_number = c.light_number;
@@ -1522,7 +1522,7 @@ impl RaysPass {
             }
             g.end(pass);
             // The beam rays' run, each ray from the root, in a frame that casts the samples
-            // (corners.wgsl).
+            // (corner.wgsl).
             if kind == FrameKind::cast {
                 let [walk, ask, walk_parked, ask_parked, last] = &c.corners;
                 let pass = walk_run(
@@ -1552,7 +1552,7 @@ impl RaysPass {
                 }
                 let mut group = c.group;
                 if span == GpuSpanName::px {
-                    // The samples' run, each from its cell's start (samples.wgsl).
+                    // The samples' run, each from its cell's start (sample.wgsl).
                     if kind == FrameKind::cast {
                         let [walk, ask, walk_parked, ask_parked, last] = &c.samples;
                         let pass = walk_run(
@@ -1789,7 +1789,7 @@ impl RaysPass {
             // The light's cast, a workgroup a tile (pxl-engine `light::TILE`): the beam rays,
             // the samples, their boxes drawn, the slots taking their visible voxel, and the rest
             // walked off their list as the eye's holes are. First the beam rays' run over the
-            // listed corners, each ray from the root at its tile's band (corners.wgsl over
+            // listed corners, each ray from the root at its tile's band (corner.wgsl over
             // beam.light.wgsl); then the cells' starts, over the light's world group with the
             // light's head.
             let [walk, ask, walk_parked, ask_parked, last] = &c.light_corners;
@@ -1809,7 +1809,7 @@ impl RaysPass {
             g.dispatch_indirect(pass, c.light_args, sequence::LIGHT_CELLS.at());
             g.end(pass);
             // The samples' run over the samples of the tiles they feed, each from its cell's
-            // start (samples.wgsl over sample.light.wgsl).
+            // start (sample.wgsl over sample.light.wgsl).
             let [walk, ask, walk_parked, ask_parked, last] = &c.light_samples;
             let pass = walk_run(
                 ctx,

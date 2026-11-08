@@ -9,7 +9,7 @@
 //! ago, and every tile is claimed in a frame drawn whole. The screen keeps a tile claimed until
 //! its history has gathered the jitter's whole sequence; the map claims a tile only in the
 //! frame it changed. A pass that draws the tiles reads the words and the uniform
-//! (screen_tiles.wgsl) and draws only the claimed ones. A target drawn through its gate takes
+//! (screen_tile.wgsl) and draws only the claimed ones. A target drawn through its gate takes
 //! the number its gate writes into the stencil from here (`mask`).
 
 use crate::frame::shader::group::{
@@ -352,7 +352,7 @@ impl Tiles {
         g.end(pass);
     }
 
-    /// The indirect args that draw a quad for each tile of the marks' box (screen_tiles.wgsl
+    /// The indirect args that draw a quad for each tile of the marks' box (screen_tile.wgsl
     /// `rect_clip`), as `dispatch_rect_args` set them. They draw the claimed tiles alone where
     /// a tile is claimed only in the frame it changed, as the map's is. They are none where a
     /// tile stays claimed longer.

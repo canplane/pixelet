@@ -9,7 +9,7 @@ use pxl_spec::space::hierarchy::tree::Node;
 
 use pxl_spec::space::layer::octant::Octant;
 
-use super::changes::Footprint;
+use super::change::Footprint;
 use crate::domain::layer::object::store;
 use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::domain::layer::object::store::{Store, Walk};

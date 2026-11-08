@@ -17,7 +17,7 @@ import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { REPO } from "@pxl/build/paths.ts";
+import { REPO } from "@pxl/build/path.ts";
 import { create, globals } from "webgpu";
 
 import { entries, make, type Pipeline } from "./pipeline.ts";

@@ -1,6 +1,6 @@
 // @pxl/client/service/origin/online.ts
 
-import { Listeners } from "@xpute/kit/lang/listeners.ts";
+import { Listeners } from "@xpute/kit/lang/listener.ts";
 
 /** Whether the device says it is online. Like the GPU's state, this is the
  * client's to know. The core learns of it only as a read that fails. */

@@ -1,7 +1,7 @@
 // pxl-render/cast.wgsl
 
 // Finds each drawn pixel's ray without a walk, one thread a pixel of the tiles claimed
-// (cast_tiles.wgsl). A pixel takes its ray from the visible voxel the raster kept at it, when
+// (cast_tile.wgsl). A pixel takes its ray from the visible voxel the raster kept at it, when
 // that is a fresh voxel of a drawable entry of the node cache (pxl-engine `raster`,
 // `record::fresh`; gpu/ray/raster.rs), as light.wgsl takes a slot's (visible.wgsl). The ray then
 // carries what lies about the voxel's face. Otherwise the pixel may see the sky. Any other pixel
@@ -23,7 +23,7 @@ fn node_cache_word(k: u32) -> u32 {
 @group(0) @binding(13) var visibility: texture_2d_array<u32>;
 /// The holes' count and the counts' lanes (visible.wgsl `MissArgs`).
 @group(0) @binding(14) var<storage, read_write> args: MissArgs;
-/// The tiles claimed, after this pass's dispatch words: cast_tiles.wgsl's `CastTiles`, its layout
+/// The tiles claimed, after this pass's dispatch words: cast_tile.wgsl's `CastTiles`, its layout
 /// read without the atomics, which a read-only binding cannot hold.
 struct CastTiles {
   count: u32,

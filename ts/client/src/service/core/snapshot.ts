@@ -1,7 +1,7 @@
 // @pxl/client/service/core/snapshot.ts
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
-import { Listeners } from "@xpute/kit/lang/listeners.ts";
+import { Listeners } from "@xpute/kit/lang/listener.ts";
 import { TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
 import {
   GroundStatus,
