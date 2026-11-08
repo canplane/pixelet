@@ -246,7 +246,7 @@
       ]
     },
     {
-      "name": "SETTING_DEVELOPMENT",
+      "name": "SETTING_DEV",
       "val": 5634,
       "$doc": [
         "Whether this is a development build, which offers the settings schema.json marks `dev`.",
@@ -254,7 +254,7 @@
       ],
       "pkt": [
         {
-          "name": "development",
+          "name": "dev",
           "type": "bool"
         }
       ]
@@ -852,7 +852,7 @@
           "val": 1
         },
         {
-          "name": "DEVELOPMENT",
+          "name": "DEV",
           "val": 2
         }
       ]

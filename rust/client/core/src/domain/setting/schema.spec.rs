@@ -11,7 +11,7 @@
 // `options`, one per option in the same order, for when what an option costs
 // differs from its neighbors'; an empty string is no badge. A `dev` setting
 // is in the core's table in every build and offered only under a
-// development one; the UI's production bundle carries SETTING_PRODUCTION,
+// development one; the UI's production bundle carries SETTING_PROD,
 // the table without them, in SETTING's place. A setting whose `stored` is
 // false is the session's alone: the store neither writes it to its kept
 // slot nor reads it from there, so every session starts it at its default.

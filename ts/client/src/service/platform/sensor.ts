@@ -3,7 +3,7 @@
 /** iOS gates the compass behind a permission prompt, which must be raised
  * inside a gesture. */
 
-import { geo_fix, listener } from "./sensor-listener.ts";
+import { coords_fix, geo_fix, listener } from "./sensor-listener.ts";
 import type { GeolocationSensor, OrientationSensor } from "./types.ts";
 
 interface IosOrientationEvent extends DeviceOrientationEvent {
@@ -54,7 +54,7 @@ function geo_stop(): void {
 function geo_start(): void {
   if (geo_watch !== null || !("geolocation" in navigator)) return;
   geo_watch = navigator.geolocation.watchPosition(
-    (pos) => geo_fix(pos.coords),
+    (pos) => geo_fix(coords_fix(pos.coords)),
     (err) => {
       // A watch keeps trying through POSITION_UNAVAILABLE and TIMEOUT, and ends
       // only on PERMISSION_DENIED (https://www.w3.org/TR/geolocation/#watchposition-method).

@@ -38,9 +38,8 @@ export interface Viewport {
   dpr: f64;
 }
 
-/** A position fix, with the field names that the page's API and a device's
- * both use. */
-export interface Fix {
+/** A position as the page's API and a device's both give it. */
+export interface Coords {
   longitude: f64;
   latitude: f64;
   altitude: f64 | null;
@@ -49,11 +48,21 @@ export interface Fix {
   heading: f64 | null;
 }
 
+/** A position fix. */
+export interface Fix {
+  lon: f64;
+  lat: f64;
+  alt: f64 | null;
+  alt_accuracy: f64 | null;
+  accuracy: f64 | null;
+  heading: f64 | null;
+}
+
 export interface SensorListener {
   position(
     lon: f64,
     lat: f64,
-    altitude: f64 | null,
+    alt: f64 | null,
     accuracy: f64 | null,
     course: f64 | null,
   ): void;

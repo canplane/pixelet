@@ -20,17 +20,17 @@ pub use crate::domain::setting::schema_spec::{
 use crate::sys::io::file::{self, StorageRead};
 use xpute_core::global::Global;
 
-static DEVELOPMENT: Global<bool> = Global::new();
+static DEV: Global<bool> = Global::new();
 
 /// Whether this is a development build, as the UI's boot reports it
-/// (`SETTING_DEVELOPMENT`). Only a development build offers the settings
+/// (`SETTING_DEV`). Only a development build offers the settings
 /// schema.json marks `dev`.
-pub fn set_development(development: bool) {
-    DEVELOPMENT.set(development);
+pub fn set_dev(dev: bool) {
+    DEV.set(dev);
 }
 
-fn development() -> bool {
-    *DEVELOPMENT.get(|| false)
+fn dev() -> bool {
+    *DEV.get(|| false)
 }
 
 /// Whether `val` may be set for `key` in this build. A dev-only setting or
@@ -39,7 +39,7 @@ fn development() -> bool {
 /// otherwise stay in force. Loading drops such a value, and `set_setting`
 /// refuses it from the console.
 pub fn is_offered(key: SettingKey, val: u32) -> bool {
-    !(key.dev() || key.dev_option(val)) || (cfg!(feature = "dev") && development())
+    !(key.dev() || key.dev_option(val)) || (cfg!(feature = "dev") && dev())
 }
 
 impl Setting {

@@ -19,16 +19,20 @@ import type {
 type Babel = { types: typeof BabelTypes };
 
 export default (api: ConfigAPI): TransformOptions => {
-  const production = process.env.NODE_ENV === "production";
+  const prod = process.env.NODE_ENV === "production";
   // Where a dev server's tiles come from (script/proxy.ts `route_target`).
   const source = process.env.PXL_TILE_SOURCE || "delivery";
-  api.cache.using(() => `${process.env.NODE_ENV} ${source}`);
+  // Whether this is a build made for measuring, which runs the drive at boot
+  // (ui/layout.tsx).
+  const drive = process.env.PXL_PERF_DRIVE === "1";
+  api.cache.using(() => `${process.env.NODE_ENV} ${source} ${drive}`);
 
   const DEFINE = {
-    __IS_DEV__: !production,
-    __DEV_BUNDLE__: !production,
-    __APP_ENV__: production ? "production" : "development",
+    __IS_DEV__: !prod,
+    __DEV_BUNDLE__: !prod,
+    __APP_ENV__: prod ? "prod" : "dev",
     __DEV_SOURCE__: source,
+    __PERF_DRIVE__: drive,
   };
 
   /** Replaces each name in DEFINE with its value, wherever the name is not

@@ -87,7 +87,7 @@ export function PerfView({ v }: { v: Gauge["view"] }) {
       <Head>Pivot</Head>
       <Row k="coord" v={coord(v.pivot_x, v.pivot_y, v.pivot_z)} />
       <Row k="lat/lon" v={geo(v.pivot_lat, v.pivot_lon)} />
-      <Row k="altitude" v={meters(v.pivot_alt)} />
+      <Row k="alt" v={meters(v.pivot_alt)} />
       <Head>Pointer</Head>
       <Row k="coord" v={coord(v.hover_x, v.hover_y, v.hover_z)} />
       <Row k="drawn at" v={zoomName(v.cell_zoom)} />

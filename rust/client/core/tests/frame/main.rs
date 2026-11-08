@@ -245,8 +245,7 @@ fn frames() {
             ("orient_silence_is_loss", V::Bool(false)),
         ],
     );
-    run.runtime
-        .send("SETTING_DEVELOPMENT", &[("development", V::Bool(true))]);
+    run.runtime.send("SETTING_DEV", &[("dev", V::Bool(true))]);
     run.runtime.send("GPU_READY", &[]);
     run.frame(false);
     // The tile source, declared as service/core/source.ts declares it, with the place's shard

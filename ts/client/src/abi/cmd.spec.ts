@@ -424,12 +424,9 @@ export function encode_sensor_platform(
     .bool(orient_silence_is_loss);
 }
 
-/** Command.SETTING_DEVELOPMENT's packet, written in place into `to`. */
-export function encode_setting_development(
-  to: PacketRoom,
-  development: boolean,
-): PacketWriter {
-  return to.writer(1).bool(development);
+/** Command.SETTING_DEV's packet, written in place into `to`. */
+export function encode_setting_dev(to: PacketRoom, dev: boolean): PacketWriter {
+  return to.writer(1).bool(dev);
 }
 
 /** Command.INPUT_POINTER's packet, written in place into `to`. */
@@ -671,10 +668,8 @@ export function ui_exports(runtime: Sender) {
           orient_silence_is_loss,
         ),
       ),
-    setting_development: (development: boolean): void =>
-      runtime.send(Command.SETTING_DEVELOPMENT, (r) =>
-        encode_setting_development(r, development),
-      ),
+    setting_dev: (dev: boolean): void =>
+      runtime.send(Command.SETTING_DEV, (r) => encode_setting_dev(r, dev)),
     input_pointer: (
       phase: PointerPhase,
       pointer_type: PointerType,

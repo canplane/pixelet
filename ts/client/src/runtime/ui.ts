@@ -69,5 +69,5 @@ export function started(on: OnOpen): void {
   visibility.watch((visible) => link.visible(visible));
   const { geo, orient } = sensor;
   core.sensor_platform(geo.has, orient.has, orient.gated, orient.silence);
-  core.setting_development(__IS_DEV__);
+  core.setting_dev(__IS_DEV__);
 }

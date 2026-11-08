@@ -31,7 +31,7 @@ export const SENSOR_PERMISSION = 0x1206;
 export const SENSOR_PLATFORM = 0x120d;
 /** Whether this is a development build, which offers the settings schema.json marks `dev`.
  * Sent once the core is attached. */
-export const SETTING_DEVELOPMENT = 0x1602;
+export const SETTING_DEV = 0x1602;
 /** A pointer event on the world's canvas, in CSS pixels from the top left of its layout box
  * (transforms aside), as the world surface's size is (GPU_SURFACE_RESIZE). */
 export const INPUT_POINTER = 0x1102;

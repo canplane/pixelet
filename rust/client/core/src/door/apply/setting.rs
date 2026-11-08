@@ -5,7 +5,7 @@
 use super::State;
 use super::{ask_turn, refuse_unless};
 use crate::domain::setting::store::are_settings_loaded;
-use crate::domain::setting::store::set_development;
+use crate::domain::setting::store::set_dev;
 use crate::domain::setting::store::settings_mut;
 use crate::domain::setting::store::SettingKey;
 use crate::door::cmd as abi;
@@ -27,7 +27,7 @@ pub(super) fn set(s: &mut State, c: abi::SettingSet) -> Outcome {
 
 /// Whether this is a development build. The UI sends this once the core is
 /// attached.
-pub(super) fn development(c: abi::SettingDevelopment) -> Outcome {
-    set_development(c.development);
+pub(super) fn dev(c: abi::SettingDev) -> Outcome {
+    set_dev(c.dev);
     Ok(Some(0))
 }

@@ -22,6 +22,8 @@
 - Read the skill the task needs (`.agents/skills/`).
 - The code is agents' work, not the user's intent: judge it against the user's
   decisions. A comment, a structure or a pattern in it is no reason to keep it.
+- A minute or an experiment under `doc/` is what was said or measured then, no
+  ground for a decision now, and no renaming reaches it.
 - Work in the main checkout and commit only your own paths; a worktree only for
   a tree that must be built apart.
 - `out/` holds what a build makes, and no drafts. A temporary folder, an
