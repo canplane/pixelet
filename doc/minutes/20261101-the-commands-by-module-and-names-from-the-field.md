@@ -102,5 +102,3 @@ name, the majors themselves, the words around them (`frame`, `space`, `world`,
 
 - The bundle's other names: the module's assert and panic messages and the
   name tables the shell reads (September's "authored half").
-- `INPUT_RECT`'s removal is checked by type, lint and build, not yet on a page or
-  a device; the tests were not run.

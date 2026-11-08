@@ -81,9 +81,7 @@ Asked by the user; the agents' reading, not a decision.
   - The native start is heavy (Expo, the NDK, JDK 17, Xcode), and the one
     example runs in Node, with no page or app beside it.
   - No guide goes from an empty project to a first guest on screen.
-  - The TypeScript packages ship `.ts`, so a consumer's bundler strips types.
-  - None of today's changes has run on a page or a device.
-- **What it would take, least first**: fix the protocol and the API and call
+  - The TypeScript packages ship `.ts`, so a consumer's bundler strips types.- **What it would take, least first**: fix the protocol and the API and call
   it 0.1; publish, or export a repository to depend on by git; a template of
   one page and one Expo app; a guide that walks it.
 - **The user's word**: it cannot be fixed now, so none of this is started.
@@ -120,5 +118,4 @@ before.
 
 ## Open
 
-- The web and app builds run, now that `small` is merged.
 - Fixing xpute for other programs, when the user takes it up.

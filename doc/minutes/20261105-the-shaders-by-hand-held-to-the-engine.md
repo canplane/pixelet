@@ -87,13 +87,6 @@ GPU, vitest 28, xpute 114, the page with no console error. The originals are on
 
 ## Open
 
-In progress after the merge, in worktrees off main: the ways' divisions to the
-host's reciprocals (way.rs, way.wgsl); render-pass shaders without nested
-structs, `spacing_width` placed by who decides it, list offsets from pxl-engine
-instead of arithmetic; the two test device harnesses as one; check_rules'
-findings (`machine`, `unpack`, xpute's words); a reading of decor's
-`fill_eighths` and the world query's surviving mutants.
-
 **Owed** (verification, carried by whoever runs next):
 
 - **The S23, once plugged in:** first set

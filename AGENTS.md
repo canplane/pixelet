@@ -55,3 +55,14 @@
   the properties it held.
 - A comment is understood on its own, in whole sentences, without reading the
   code under it, and does not say the code again.
+
+## Setup
+
+This file and the skills are vendor-neutral. An assistant's own directory links
+to them once per checkout:
+
+```bash
+mkdir -p .claude
+ln -sfn ../AGENTS.md      .claude/CLAUDE.md
+ln -sfn ../.agents/skills .claude/skills
+```

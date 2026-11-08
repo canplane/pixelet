@@ -1,0 +1,175 @@
+# pxl-render
+
+The renderer turns the core's frame into calls on the GPU. It finds the world
+with rays, draws what the rays found with a raster, and remembers it, so the
+work of a frame follows what changed on the screen. Everything it computes about
+the world is the same rule the CPU computes in pxl-engine, written again in WGSL
+and held to it by tests. This README is how those parts work; why the system is
+shaped this way is in [ARCHITECTURE.md](../../../ARCHITECTURE.md).
+
+## The cast
+
+The cast (`gpu/ray/cast.rs`) runs once a frame over the camera grid's angular
+cells. Beam rays at each cell's corners walk the part of the descent the cell's
+pixels share, and the cell starts where the nearest of them stopped (`cell_cs`).
+Samples, a few to a cell's side, walk on from there, and the node each stops on
+is drawn as a box (`sample_box_cs`). The beam rays and the samples are items of
+one queue (`queue_cs`), walked by the same code as the holes later.
+
+The raster (`gpu/ray/raster.rs`, `raster.wgsl`) draws every box of the record
+into a visibility buffer. A face keeps a pixel only where the pixel's own ray
+enters the box across that face, so the depth test keeps the nearest box the ray
+enters, at the point where it enters, and a fresh voxel wins over a stale one.
+`cast_cs` then reads each pixel: a fresh voxel gives the pixel its ray; a pixel
+no sample's cell met anything in is sky; any other pixel is a hole, listed for
+the queue, and walked to its first hit (`queue_walk.wgsl`, `queue_ask_cs`,
+`queue_last_cs`). A walk that meets a node the GPU does not hold parks, and the
+node is asked for.
+
+A ray leaves four words: the asset with its face, zoom and fill eighths; the
+distance; the palette indices a coarse cell folds; and which edges and corners
+of the face meet the air. The screen pass paints them with the one function
+every lit face uses (`screen_ray.wgsl` `px_ray`, `paint.wgsl`).
+
+## The node cache and the record
+
+What the rays asked of each node is kept between frames in the node cache, a
+table keyed by the node (pxl-engine `node_cache.rs`). An entry is forgotten only
+where what its node read changed: an edit, a cut, or a tile that landed under it
+(`forget_cs`). The entries a ray stopped on are the record, and the raster draws
+every one in view each frame (`record_draw_cs`). A frame whose rays reached
+little still draws everything found before; a still frame over a still world
+draws nothing at all.
+
+## Time: the scale and the rate
+
+Two knobs give the GPU room. The scale draws fewer pixels, and buys back only
+what is done a pixel at a time: the pixels' cast and holes, the visibility
+buffer, the world's passes, the occlusion. The beam rays, cells, samples and
+boxes run on angular cells and do not shrink, and the finish and the markers
+always draw at the display's pixels, so text stays sharp. Each GPU span says
+which kind it is (span.json `per_px`). The rate spaces the turns, a refresh at a
+time, down to 30 Hz (`RATE_MIN_HZ`), and gives every pass more time.
+
+`auto` steers both as congestion control steers a connection. While the GPU's
+time runs over the frame's budget, a knob steps down, the rate first; a knob
+steps up, the scale first, where the step above would fit, one step for each
+settling window. Without timestamps only the scale moves, and a step up is a
+probe whose failure doubles the wait before the next.
+
+## The shadow map
+
+The sun is a second observer. The same passes run for it over the parts each
+observer gives (`beam.eye.wgsl` and `beam.light.wgsl`, `samples_run.eye.wgsl`
+and `samples_run.light.wgsl`), into a map of the world's depth along the light
+in a square box about the eye (`gpu/shadow.rs`). Each texel is fixed in the
+world and held in a slot by its index modulo the map's side, and its ray starts
+at a fixed point, summed in integers (`light_aim.wgsl` `texel_start`).
+
+Each tile of the box asks one zoom, its band (pxl-engine `Light::band`): the
+zoom the eye's rays ask at the point of the tile's column nearest the eye,
+measured from the box's middle. A band depends only on where the tile lies in
+the box. When the eye moves, the box slides a tile at a time; a tile that slid
+on, or into another band, is cast anew and the rest keep what they cast
+(`light_slide_cs`, `Light::keeps`).
+
+The light casts only what a receiver reads. Each voxel the eye sees, each pixel
+it walked, each placed decor and each drawn character marks the tiles it stands
+on within the effects' reach (`record_draw_cs`, `light_mark_walked_cs`,
+`light_mark_draws_cs`). A tile is read if it lies sunward of one stood on,
+within the tallest decor's height (`light_propagate_cs`), and only the tiles
+read anew are cast. Where nothing within the effects' reach is seen, the light
+does no work past the receivers.
+
+Decor and characters move, so they are drawn into the map each frame as depth
+only. A receiver compares nine taps, each moved by its own plane's slope, and
+casters are pushed by the same formula, so no plane shadows itself
+(`shadow.wgsl` `shadow_visibility`).
+
+## The frame
+
+Each turn the core hands a draw list (`gpu/draw.rs`) of what it draws beside the
+world: the cumulus, the characters, the location indicator, an edit's ghost, the
+markers and the debug lines. A draw holds its position as a `Q3` and a remainder
+in `f32`, and the shader takes the wrapping integer difference from the eye
+(`frame.wgsl` `from_eye`). The renderer (`gpu/renderer.rs` `render_frame`) draws
+every open surface:
+
+```text
+ahead       impostor atlases, the atmosphere's tables, the air's volume
+cast        the screen's rays; decor generated; the shadow map
+world pass  generated decor → rays at their depth → generated impostors →
+            the occlusion multiplied in → sky and stars at the far plane →
+            characters, cumulus, impostors → high clouds → indicator, ghosts
+occlusion   N8AO at half resolution, off the depth the world pass laid (ao.rs)
+finish      the world's color encoded onto the canvas once
+over        markers → debug lines → character surfaces
+```
+
+The calls are written through xpute's encoder into one stream (`gpu/api.rs`),
+which the page runs on WebGPU and the device on wgpu. A frame where only the
+draws the core bounds moved is drawn again in the screen's tiles alone
+(`gpu/tile.rs`): what moved marks the tiles it covered and covers, the light's
+change is carried to the screen's tiles that read it (`gpu/propagate.rs`), and a
+tile stays in the damage until its history has gathered the jitter's frames
+(`gpu/resolve.rs`). The CPU decides from what it handed whether a frame is drawn
+whole, through tiles, or not at all, so nothing is read back to decide it.
+
+## Making the renderer
+
+The renderer is made before its first frame, so that making it never holds the
+GPU process's main thread, which every frame the browser presents waits on
+(`gpu/pipeline.rs` `Pipelines`). Shader modules are made a few a turn, within
+`MODULE_BYTES` of the stream; then every pipeline is asked for by WebGPU's async
+call, which compiles off that thread and reports through a ticket's word; and no
+frame is drawn until every word says its pipeline is made. The snapshot carries
+how far it has come (`renderer_progress`), which the UI's bar shows. A pipeline
+asked for once the renderer draws is a bug (`EBUSY`). wgpu has no async call,
+and the device's runtime answers the same op at once.
+
+## The shaders, held to the engine
+
+The shaders are WGSL by hand, assembled from parts (`frame/shader/part.rs`), and
+the layouts and numbers they read are generated from pxl-engine by `build.rs`.
+
+- Every compute pass over the world (the cast, the node cache, the light's and
+  decor's) is held word for word to pxl-engine's Rust by a test over a real
+  world's buffers (`tests/`).
+- Every walk ends at pxl-engine's `cast::STEPS_CAP` steps.
+- A value both sides would divide by or take the root of is rounded once on the
+  CPU and handed in a word, and both sides multiply by it. The eye's ray at each
+  pixel and a beam's width, which only the GPU walks, are worked out on the GPU
+  alone, each in one function (`walk_node.wgsl` `eye_aim`, `spacing_width`).
+- The build validates every shader with naga, and checks each pipeline's groups
+  against the bindings its shaders read, both ways (`build.rs` `BINDS`,
+  `frame/shader/record.rs` `lays_out`); no struct of a shader holds a struct
+  (`build.rs` `held_to_faults`).
+- A test compiles each shader with Tint, the compiler a browser runs, and makes
+  every pipeline the renderer makes (`ts/tool/shader/shader.test.ts`).
+
+The passes over the screen's tiles, the air's, the clouds' and the location
+indicator's are not held to the engine; naga and Tint check them as they check
+every shader.
+
+## The sky, the air and the clouds
+
+The sky is drawn at the far plane, so only pixels no ray met run it
+(`sky.wgsl`); where such a ray falls to the land, it shows flat land shaded from
+the earth layer. The air between the eye and what is drawn is Hillaire's
+aerial-perspective volume (`gpu/atmosphere.rs` `froxel_cs`), read by each drawn
+point at its direction and depth (`atmos_air.wgsl`). Neither the sky view nor
+the volume reads the view's direction, so turning the eye keeps both, and both
+are drawn again only where the light's height or the eye's altitude has moved by
+half the step over which the sky would change by a display level. The exposure
+is measured by its own pass (`exposure_cs`).
+
+The clouds are three layers on one wind (pxl-content `cloud.rs`): the cumulus,
+models drawn like decor, and above them altocumulus and cirrus, planes read
+where a ray meets them (`cloud.wgsl` `sheet_of`).
+
+## Markers
+
+Markers are one instanced quad over one texture packed shelf by shelf, the atlas
+(`frame/shelf.rs`, `marker.wgsl`). A sprite is found by what it paints, so equal
+designs share one place, and it is drawn on the GPU only when what it shows
+changes: its shapes as signed distances, its text as lines the platform drew.

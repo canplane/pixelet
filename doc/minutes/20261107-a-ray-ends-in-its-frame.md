@@ -74,8 +74,6 @@ record replaces it.
 
 ## Built, 11-07
 
-In the main checkout's working tree, uncommitted:
-
 - No visit budget, no ray parked across frames, no owed work and no readback that wakes a
   frame for it. Rays park only between a run's walks and its asks.
 - A ray the pool has no room for, or that may ask no more, ends as a lack where it stands

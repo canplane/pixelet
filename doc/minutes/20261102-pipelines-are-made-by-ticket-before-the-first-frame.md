@@ -113,14 +113,6 @@ A design that breaks one stops for a redesign; it is not patched.
   shows it as a bar while it is short of 1. On 2026-11-03 the user moved the bar
   to the white screen ([what stands over the app](./20261103-what-stands-over-the-app.md)).
 
-## Not run
-
-Nothing with a browser or a GPU ran on the change: `make -C xpute test-gpu`
-(the golden program `pipelines_async` on WebGPU in Chrome and on wgpu), the
-gate (`ts/app/web/script/gate.mjs`), and the first load measured against main
-as above. Whether the GPU process's main thread is freed, how long the first
-frame takes, and whether the bar advances are open until they run.
-
 ## Rejected
 
 - **`a470bdfb88`, reverted by `6c6628bac5`.** Async hidden inside the web GPU

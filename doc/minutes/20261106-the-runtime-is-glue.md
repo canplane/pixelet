@@ -1,7 +1,7 @@
 # The core apart from the UI, the runtime as glue
 
 **2026-11-06** — decided by the user. The direction xpute takes, for any
-program on it. Not built yet.
+program on it.
 
 ## What the user decided
 

@@ -34,7 +34,7 @@ removed with its case: what it did wrong, and why the deployed build had no such
 
 - The deployed build is `e317a3644b`, deployed on 11-04 before rust-gpu was taken out
   (`4399ef1ce5`, 11-05). Its run failed only at the smoke, on `/geo/search`; the client and
-  the servers went out. The `deploy` branch still names it.
+  the servers went out.
 - Main's frame against it on the 4K Mac, before this session's change: the gate failed, GPU
   p95 47.9 to 78.3 ms. On the S23 at 550 MHz the deployed build took 252–324 ms a cast frame,
   main's renderer 92–100 ms.

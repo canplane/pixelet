@@ -216,5 +216,3 @@ source; this asks whether the hot path needs one.
   `split_phis` and inlining every entry, made to pass Adreno's pipeline, raised them.
 - Whether the S23 answers wrong past the cliff: the 0 hits of 14 above.
 - Web against app on the S23, the same WGSL.
-- `doc/tip/shaders-phones-take.md`'s 5.5 MB is stale; the count above is the
-  present one.
