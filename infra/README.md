@@ -1,34 +1,22 @@
 # Infrastructure
 
-Almost everything a player sees is baked ahead and served from a bucket; only
-search and the application need a live server. So production is one Cloudflare
-Worker in front of one small VM:
+Almost everything a player sees is made ahead of time and served as files that
+never change: the tiles, the models, the textures. Only search and the
+application need a live server. So production is small: one Cloudflare Worker in
+front of one virtual machine, and a deploy moves the client and the servers
+together from one commit.
 
-```
+```text
                 ┌─ the app ────────────────────────────▶ its own static assets
-client ─ Worker ┼─ /tile/*, /asset/* ──────────────────▶ R2 bucket
+client ─ Worker ┼─ /tile/*, /asset/* ──────────────────▶ the R2 bucket
                 └─ /geo/*, /api/* ── Caddy on the VM ─┬▶ pxl-geo ── db-geo
                                                       └▶ pxl-api ── db-main
 ```
 
-Locally the same two databases run from one compose file, and a tile server
-stands in for the bucket (`pxl-geo-bake bin/serve_tiles.rs`). It bakes on demand
-by the bakes' own functions, every layer the same way (`demand/pyramid.rs`): a
-leaf when first asked for, and a tile above folded from its sources, no coarser
-than `--folds` zooms over the leaves. What it bakes is kept across restarts
-until a purge. With `--shelf` it serves each kind's baked set as it stands, so a
-bake is seen before it is published. Either way it answers the bucket's
-declaration in the published shape, so the client reads it as it reads the
-bucket. A set's whole checks are the bake's commit's alone
-([ARCHITECTURE.md](../ARCHITECTURE.md#a-set)).
+This file is for the person who runs that: the databases, the VM, Cloudflare,
+CI, and the providers' notices.
 
-| Make target | Tiles                         |
-| ----------- | ----------------------------- |
-| `dev-oven`  | baked on demand               |
-| `dev-shelf` | the last bakes                |
-| `dev`       | from the published deployment |
-
-```
+```text
 infra/
 ├── local/    the two databases for development
 ├── prod/     the VM's stack: compose and Caddy
@@ -43,41 +31,45 @@ infra/
 | **db-main** | 5432:5432      | nothing yet                  | PostgreSQL 16  |
 | **db-geo**  | 5433:5432      | three sources, for the bakes | PostGIS 16-3.4 |
 
-pxl-api owns db-main and probes it at boot, but no route reads it yet; pxl-geo
-reads db-geo through `DB_GEO_URL`. All spatial data is EPSG:3857. Passwords come
-from `infra/local/.env` and `ADMIN_TOKEN` from `rust/server/.env` only, and
-production's are its own (`infra/prod/.env`).
+pxl-api owns db-main and probes it at boot, but no route reads it yet. pxl-geo
+reads db-geo through `DB_GEO_URL`. All spatial data is in EPSG:3857. Locally the
+passwords come from `infra/local/.env` and `ADMIN_TOKEN` from `rust/server/.env`;
+production keeps its own in `infra/prod/.env`.
 
-**Never `down -v` db-geo** (`pixelet-db-geo`): its volume is a multi-gigabyte
-PostGIS dataset, hours of ingest to fill again.
+db-geo's volume is the only copy of hours of ingest, so it is never removed
+with `down -v` ([geo/README.md](./geo/README.md)).
+
+In development a tile server stands in for the bucket (`pxl-geo-bake
+bin/serve_tiles.rs`). It answers the bucket's declaration in the published
+shape, so the client cannot tell the difference.
 
 ## 2. Filling db-geo
 
-[geo/README.md](./geo/README.md) is the sources, the tables and how to run each
-ingest. One rule holds for all of them: **a table is filled beside itself and
-swapped in, never emptied first.** The new one is built as `<table>_next` while
-readers keep the old, then one short transaction, its `lock_timeout` bounded,
-drops the old and renames the new. Nothing is dropped or truncated by hand, and
-a fill needs room for both tables at once.
+[geo/README.md](./geo/README.md) describes the sources, the tables and how to
+run each ingest. One rule holds for all of them: a table is filled beside itself
+and swapped in, never emptied first. The new table is built as `<table>_next`
+while readers keep using the old one; then one short transaction, with a bounded
+`lock_timeout`, drops the old and renames the new. Nothing is dropped or
+truncated by hand, and a fill needs room for both tables at once.
 
 ## 3. Production (Hetzner Cloud)
 
 One CX23 (2 vCPU, 4 GB, 40 GB) runs both servers, both databases and Caddy in
-one compose stack (`prod/`). Caddy is the only published port and sends `/geo/*`
+one compose stack (`prod/`). Caddy is the only published port; it sends `/geo/*`
 to `api` (pxl-geo) and `/api/*` to `app` (pxl-api). Production's db-geo holds
 only what search reads: `overture_places`, `overture_division_areas` and
 `overture_divisions`.
 
 ### Setup, once
 
-1. **VM.**
+1. **The VM.**
    ```sh
    hcloud server create --name pixelet-prod --type cx23 --image ubuntu-24.04 \
      --location fsn1 --ssh-key <your-key-name>
    ```
-2. **Firewall.** 80 and 443 open to Cloudflare's IP ranges alone
+2. **The firewall.** Ports 80 and 443 are open to Cloudflare's IP ranges alone
    (`cloudflare.com/ips-v4`, `-v6`), so the origin cannot be reached around the
-   edge; SSH is key-only.
+   edge. SSH takes keys only.
    ```sh
    hcloud firewall create --name pixelet-prod-fw
    hcloud firewall replace-rules pixelet-prod-fw --rules-file fw_rules.json
@@ -85,31 +77,30 @@ only what search reads: `overture_places`, `overture_division_areas` and
    ```
 3. **Docker.** `curl -fsSL https://get.docker.com | sh`.
 4. **DNS.** An A record for the origin's host (`spec/spec/route.json`
-   `origins`) to the VM, **proxied** through Cloudflare; DNS-only would bypass
-   the edge the firewall relies on.
-5. **The tree.** Cloned whole onto the VM: both servers' Dockerfiles
-   (`rust/server/geo/Dockerfile`, `rust/server/api/Dockerfile`) build from the
-   repository root, since their dependencies are path dependencies across
-   `rust/`.
+   `origins`) points at the VM and is **proxied** through Cloudflare. DNS-only
+   would bypass the edge that the firewall relies on.
+5. **The tree.** The repository is cloned whole onto the VM. Both servers'
+   Dockerfiles (`rust/server/geo/Dockerfile`, `rust/server/api/Dockerfile`)
+   build from the repository root, because their dependencies are path
+   dependencies across `rust/`.
 6. **Up.**
    ```sh
    cd infra/prod
    cp .env.example .env     # fill in, then chmod 600
-   # the disk's bounds: container logs, BuildKit's cache by last use, the
-   # journal by size and a day; a server deploy reinstalls them when changed
+   # bounds on the disk: container logs, BuildKit's cache by last use, and the
+   # journal by size and age; a server deploy reinstalls them when they change
    install -m 644 etc/daemon.json /etc/docker/daemon.json && systemctl restart docker
    install -D -m 644 etc/journald.conf /etc/systemd/journald.conf.d/pixelet.conf && systemctl restart systemd-journald
    docker compose up -d --build
    ```
+   CI deploys as root, which installing those files needs.
 
-   CI's deploy user is root, which installing them needs.
-
-A CI deploy updates the stack after that (§5) with `infra/prod/deploy.sh`, sent
-from a checkout and run on the VM: `git reset --hard` to the commit, install a
-changed `infra/prod/etc/` file and restart what reads it, then in `infra/prod`
-`docker compose up -d --build --force-recreate` and `docker image prune -f`. By
-hand it is the same script, for a commit `deploy` already holds, since the VM
-fetches it from there:
+After setup, every deploy updates the stack with `infra/prod/deploy.sh`, sent
+from a checkout and run on the VM. It resets the tree to the commit, installs any
+changed file under `infra/prod/etc/` and restarts what reads it, then runs
+`docker compose up -d --build --force-recreate` and `docker image prune -f` in
+`infra/prod`. By hand it is the same script, for a commit `deploy` already
+holds, since the VM fetches it from there:
 
 ```sh
 ssh root@$(hcloud server ip pixelet-prod) bash -eu -s -- "$(git rev-parse origin/deploy)" < infra/prod/deploy.sh
@@ -117,13 +108,13 @@ ssh root@$(hcloud server ip pixelet-prod) bash -eu -s -- "$(git rev-parse origin
 
 ### Copying the search tables
 
-A deploy does not carry db-geo: production's three tables change only when they
-are copied over. When the copy changes a table's shape, the server that reads it
-goes out with it, as one step: stop `api` (`docker compose stop api`), restore,
+A deploy does not carry db-geo, so production's three tables change only when
+they are copied over. When a copy changes a table's shape, the server that reads
+it goes out in the same step: stop `api` (`docker compose stop api`), restore,
 then deploy the server.
 
-Dump with the local container's own `pg_dump`, since a newer host one writes a
-format production's Postgres 16 cannot restore:
+Dump with the local container's own `pg_dump`, since a newer one on the host
+writes a format that production's PostgreSQL 16 cannot restore:
 
 ```sh
 set -a; . ./infra/local/.env; set +a
@@ -135,8 +126,8 @@ scp overture.dump root@$(hcloud server ip pixelet-prod):
 ssh root@$(hcloud server ip pixelet-prod)
 ```
 
-Then in the VM's own shell — piped into `ssh`, the first `docker exec -i` would
-swallow the rest:
+Then run the rest in the VM's own shell. Piped into `ssh`, the first
+`docker exec -i` would swallow the commands after it.
 
 ```sh
 sql() { docker exec -i pixelet-db-geo sh -c 'exec "$@" -U "$POSTGRES_USER" -d "$POSTGRES_DB"' sh "$@"; }
@@ -145,8 +136,8 @@ sql() { docker exec -i pixelet-db-geo sh -c 'exec "$@" -U "$POSTGRES_USER" -d "$
 sql psql -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS postgis; CREATE EXTENSION IF NOT EXISTS pg_trgm;'
 # one transaction: a failure leaves the old tables as they were
 sql pg_restore --no-owner --no-privileges --clean --if-exists --single-transaction < ~/overture.dump
-# the planner's statistics and the visibility map, which restore does not write;
-# one worker, since parallel workers outgrow Docker's 64 MB /dev/shm
+# the planner's statistics and the visibility map, which a restore does not
+# write; one worker, since parallel workers outgrow Docker's 64 MB /dev/shm
 sql psql -v ON_ERROR_STOP=1 -c "VACUUM (ANALYZE, PARALLEL 0) overture_places" -c "VACUUM (ANALYZE, PARALLEL 0) overture_division_areas" -c "VACUUM (ANALYZE, PARALLEL 0) overture_divisions"
 rm ~/overture.dump
 ```
@@ -155,8 +146,9 @@ rm ~/overture.dump
 
 ## 4. Cloudflare
 
-Four roots, written once in `spec/spec/route.json` and read from there by
-everything that builds or answers a URL:
+Every URL the client reads falls under one of four roots, written once in
+`spec/spec/route.json` and read from there by everything that builds or answers
+a URL:
 
 | Root      | What it is                                           | Answered by |
 | :-------- | :--------------------------------------------------- | :---------- |
@@ -165,12 +157,12 @@ everything that builds or answers a URL:
 | `/tile/`  | baked tiles, by kind, version and name               | R2          |
 | `/asset/` | models and textures, by path with a hash in the stem | R2          |
 
-**The bucket is private and the Worker is the only way into it**, on the free
-plan, which fails closed at 100k requests a day, so no read can bill. A paid
-Workers plan, the `r2.dev` URL or a custom domain on the bucket breaks that.
-Writes are outside it, and nothing configures a spending cap: a publish is a
-pyramid's worth of Class A operations, so the publish-bucket skill checks the
-month's count before one.
+**The bucket is private, and the Worker is the only way into it.** The Worker
+runs on the free plan, which fails closed at 100k requests a day, so no read can
+cost money. A paid Workers plan, the bucket's `r2.dev` URL or a custom domain on
+the bucket would break that. Writes are outside the bound and no spending cap is
+set: a publish is a whole pyramid of Class A operations, so check the month's
+count before one.
 
 The bucket, `pixelet-bucket`, holds everything the client fetches that is not
 the app itself:
@@ -181,55 +173,52 @@ the app itself:
 | `place/<version>/`      | XTP count tile                                  | name, 7–15               | immutable; a re-bake is a new version                            |
 | `division/<version>/`   | XTP division tile                               | name, 4–12               | immutable; a re-bake is a new version                            |
 | `earth/<version>/`      | packed earth tile; `sphere`, its picture whole  | name, 4                  | immutable; a re-bake is a new version                            |
-| `asset/`                | glb, png, webp — not packed                     | the SHA-256 of its bytes | immutable by construction; unreferenced keys deleted whenever    |
+| `asset/`                | glb, png, webp, not packed                      | the SHA-256 of its bytes | immutable by construction; unreferenced keys deleted at any time |
 | `source`                | the source's declaration, JSON                  | fixed name               | mutable; written by `publish`, `no-cache`, revalidated each boot |
 | `_meta/build-counter`   | the official build count                        | fixed name               | mutable; taken and written by CI's number job, never by hand     |
-| `_meta/build-log.jsonl` | a line a published build                        | fixed name               | appended by CI's `record` (`script/build-log.py`)                |
+| `_meta/build-log.jsonl` | one line for each published build               | fixed name               | appended by CI's `record` (`script/build-log.py`)                |
 | `_meta/paths/<n>.json`  | build `#n`'s source paths, to decode its panics | build number             | written by `make deploy` under a build number; never served      |
 
 A tile's name is its Morton key, so the same name under two kinds is the same
-ground, and one prefix is one region across every kind at every zoom. Every
-object is uploaded `public, max-age=31536000, immutable`, so a new version is a
-new prefix and no cache needs purging.
+ground, and one prefix is one region across every kind and every zoom. Every
+object is uploaded `public, max-age=31536000, immutable`; a new version is a new
+prefix, so no cache ever needs purging.
 
-The Worker claims all four (`wrangler.jsonc` `run_worker_first`): the bucket
-answers `/tile/*`, under its path less the root, and `/asset/*`, under its path;
-`/geo/*` and `/api/*` go to `GEO_ORIGIN` and `API_ORIGIN` unchanged. No path is
-rewritten anywhere. A route outside a root is unreachable in production — the
-app's fallback answers it with `index.html`, which looks like the app loading,
-not like a missing route. Locally `make dev-oven` runs pxl-geo on 3000, the tile
-server on 3001 and pxl-api on 3002, and the dev proxy splits on the same roots.
+The Worker claims all four roots (`wrangler.jsonc` `run_worker_first`). The
+bucket answers `/tile/*` under its path less the root, and `/asset/*` under its
+path; `/geo/*` and `/api/*` go to `GEO_ORIGIN` and `API_ORIGIN` unchanged. No
+path is rewritten anywhere. A route outside the roots cannot be reached in
+production: the app's fallback answers it with `index.html`, which looks like
+the app loading rather than a missing route. The dev proxy splits on the same
+roots.
 
-**Deploying the client** is CI's (§5); by hand it is the script CI runs. Neither
-checks or tests anything, so first `make -j8 check` and `make -j8 test` pass
-over the commit ([the deploy skill](../.agents/skills/deploy/SKILL.md)), and the
-servers it talks to are already deployed (§3), since a new client against an old
-server is the direction that breaks. A hand deploy takes no number and goes out
-unnumbered.
+**Deploying the client** is CI's job (§5); by hand it is the script CI runs.
+Neither checks nor tests anything, so `make -j8 check` and `make -j8 test` must
+pass over the commit first, and the servers it talks to must already be deployed
+(§3), since a new client against an old server is the direction that breaks. A
+deploy by hand takes no build number.
 
 ```sh
 wrangler login           # once a machine
 make -j8 check && make -j8 test
-make deploy              # build, publish
+make deploy              # build and publish
 ./script/smoke.py
 ```
 
-A deploy uploads only changed static assets and leaves the bucket alone:
-uploading tiles and assets is
-[the publish-bucket skill](../.agents/skills/publish-bucket/SKILL.md).
-
-The smoke does not check a tile's or an asset's served bytes; that is the
-skill's "Verify what is served".
+A deploy uploads only the changed static assets and leaves the bucket alone.
+Tiles and assets go into the bucket with `./script/publish.py <kind>` and the
+asset ingest, which upload under new names and then write `source`. The smoke
+does not check the bytes a tile or an asset is served with.
 
 ## 5. CI/CD
 
 `.github/workflows/deploy.yml` runs on a push to `deploy` and on a dispatch,
-never on main: main carries work between machines, compiling or not. A push that
-changes only markdown runs nothing, and a dispatch against any other ref does
-nothing. **Publishing is `git push origin main:deploy`**, forced once main has
-been rewritten, after `make -j8 check` and `make -j8 test` pass here: CI checks
-and tests nothing ([the deploy skill](../.agents/skills/deploy/SKILL.md)). Why
-each job is as it is lives in the workflow's comments.
+never on main. Main carries work between machines, whether or not it compiles.
+A push that changes only markdown runs nothing, and a dispatch against any other
+ref does nothing. **Publishing is `git push origin main:deploy`**, forced once
+main has been rewritten, after `make -j8 check` and `make -j8 test` pass here,
+because CI checks and tests nothing. The reason for each job's shape is in the
+workflow's comments.
 
 | Job             | When                  | What                                                                                                    |
 | :-------------- | :-------------------- | :------------------------------------------------------------------------------------------------------ |
@@ -239,34 +228,32 @@ each job is as it is lives in the workflow's comments.
 | `smoke`         | after both deployed   | `./script/smoke.py`                                                                                     |
 | `record`        | after either deployed | appends the build to the log                                                                            |
 
-A deploy is whole: the client and the servers go out from the one commit, every
-time, so they never run different ones. The servers go first because an old
+A deploy is whole: the client and the servers go out from the same commit every
+time, so they never run different ones. The servers go first, because an old
 client against a new server is safe and the reverse is not.
 
-Every build of `deploy` takes a number from a counter in the bucket, never
-reset; a published one is a line in `_meta/build-log.jsonl` with the subjects of
-the commits it carried, since main's shas do not survive its rewrites.
-`./script/build-log.py` reads it, newest first. A deployment states its own
-number at `/build.json`, which `make dev` caches (`script/build-number.py`) to
-label a build CI did not number after it.
+Every build of `deploy` takes a number from a counter in the bucket, which is
+never reset. A published build is one line in `_meta/build-log.jsonl`, with the
+subjects of the commits it carried, because main's commit ids do not survive
+its rewrites; `./script/build-log.py` reads it, newest first. A deployment
+states its own number at `/build.json`, which `make dev` caches
+(`script/build-number.py`) to label a build that CI did not number.
 
 The secrets are GitHub's alone: `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_ACCOUNT_ID` for wrangler and the counter; `VM_HOST`, `VM_USER` and
-`VM_SSH_KEY`, a deploy-only keypair, for the VM; and `VM_KNOWN_HOSTS`, optional,
-without which the deploy warns and trusts whatever answers.
+`VM_SSH_KEY`, a keypair used only for deploys, for the VM; and `VM_KNOWN_HOSTS`,
+which is optional, and without which the deploy warns and trusts whatever host
+answers.
 
 ## 6. Licensing and attribution
 
 The app shows each provider's notice in its own words
-(`ts/client/src/ui/setting/info/attribution.tsx`). Check the source before
-shortening, rewording or dropping one.
+(`ts/client/src/ui/setting/info/attribution.tsx`). Check the provider's source
+before shortening, rewording or dropping one.
 
 | Provider                    | License                                                          | Notice                                                                                                                                                                                                                                                                          |
 | :-------------------------- | :--------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Overture Maps               | per theme: ODbL, CC BY 4.0, CDLA Permissive 2.0, Apache 2.0, CC0 | As Overture's [Explorer](https://github.com/OvertureMaps/explore-site) gives it: `© OpenStreetMap contributors, Overture Maps Foundation`, `modified`, and a link to the [attribution guide](https://docs.overturemaps.org/attribution/), which names each source per theme.    |
 | OpenStreetMap Land Polygons | [ODbL](https://opendatacommons.org/licenses/odbl/)               | The [package](https://osmdata.openstreetmap.de/data/land-polygons.html)'s own line: `This data is Copyright 2026 OpenStreetMap contributors. It is available under the Open Database License (ODbL).` The year is the data's, and moves with `geo/coastline/source.json`'s pin. |
-| GEDTM30                     | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)        | CC BY's elements, as it gives no line: `Modified GEDTM30 by Yufeng Ho and Tom Hengl (OpenGeoHub), licensed under CC BY 4.0`, linking v1.2's record ([10.5281/zenodo.18887460](https://doi.org/10.5281/zenodo.18887460)).                                                        |
+| GEDTM30                     | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)        | CC BY's elements, since it gives no line: `Modified GEDTM30 by Yufeng Ho and Tom Hengl (OpenGeoHub), licensed under CC BY 4.0`, linking v1.2's record ([10.5281/zenodo.18887460](https://doi.org/10.5281/zenodo.18887460)).                                                    |
 | Arnis                       | [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0)        | Code, not data: the piers are ported from it ([THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)), so the app shows its NOTICE's `Copyright (c) 2022-2026 Louis Erbkamm (louis-e)`, as Apache 2.0 §4(d) asks.                                                                  |
-
-Whether a published version, fetchable tile by tile, needs a notice of its own
-beyond the app's is open (doc/backlog.md).
