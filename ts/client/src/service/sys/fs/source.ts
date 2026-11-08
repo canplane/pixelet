@@ -29,7 +29,7 @@ import {
 /** The fields of a declaration that this client reads. A shard may declare
  * its own version of a kind. */
 export interface Declaration {
-  top_zoom: number;
+  min_zoom: number;
   format: Record<BaseLayer, number>;
   version: Record<BaseLayer, string>;
   shard: Record<string, { version?: Partial<Record<BaseLayer, string>> }>;
@@ -76,7 +76,7 @@ export function declaration(text: string): Declaration | null {
     return null;
   const whole = (n: unknown) =>
     typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 0xffffffff;
-  if (!("top_zoom" in d) || !whole(d.top_zoom)) return null;
+  if (!("min_zoom" in d) || !whole(d.min_zoom)) return null;
   if (
     !("format" in d) ||
     typeof d.format !== "object" ||
@@ -213,7 +213,7 @@ export async function declare_source(send: SendSource): Promise<void> {
   cur_declaration = read;
   if (
     !send(
-      read.top_zoom,
+      read.min_zoom,
       BASE_LAYERS.map((kind) => read.format[kind]),
       shards,
     )

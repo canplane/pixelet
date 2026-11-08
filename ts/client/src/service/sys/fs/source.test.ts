@@ -27,7 +27,7 @@ function records(): Map<string, string> {
 function declaring(version: string): string {
   const each = <T>(v: T) => Object.fromEntries(BASE_LAYERS.map((k) => [k, v]));
   return JSON.stringify({
-    top_zoom: 0,
+    min_zoom: 0,
     format: each(0),
     version: each(version),
     shard: {},

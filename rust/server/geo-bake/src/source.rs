@@ -113,7 +113,7 @@ pub fn declaration(min_zoom: Zoom, kinds: &Kinds, overrides: &Overrides) -> Resu
         shard.insert(t.key(), json!({ "version": version }));
     }
     Ok(
-        json!({ "top_zoom": min_zoom, "shard": shard, "format": named(&|k| json!(k.format)), "version": named(&|k| json!(k.version)) }),
+        json!({ "min_zoom": min_zoom, "shard": shard, "format": named(&|k| json!(k.format)), "version": named(&|k| json!(k.version)) }),
     )
 }
 

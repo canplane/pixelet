@@ -52,8 +52,8 @@ test("declaration - one this client cannot read is not handed over", () => {
     { ...whole, shard: { "0103300": { version: { place: "" } } } },
     { ...whole, shard: [] as unknown },
     unsharded,
-    { ...whole, top_zoom: 2 ** 32 + 4 },
-    { ...whole, top_zoom: 4.5 },
+    { ...whole, min_zoom: 2 ** 32 + 4 },
+    { ...whole, min_zoom: 4.5 },
     { ...whole, format: { ...whole.format, terrain: -1 } },
   ])
     assert.deepStrictEqual(
