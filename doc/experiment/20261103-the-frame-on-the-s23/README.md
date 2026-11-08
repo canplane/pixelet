@@ -875,7 +875,7 @@ correlation of 0.96. By pass, at no node left and a left node's cost: `beam` 4.1
 of left rays above, which the first reads had left as a reading.
 
 The floor of 32 ms is high because `ray_counts` costs. Every span of each frame, in one sitting,
-mean ms (`report/s23-frames-all-spans*.json`):
+mean ms (`report/s23-frame-all-spans*.json`):
 
 | | Frames | Busy | `world` | `beam` | `px` | `face` | `finish` | `sraster` | `generate` | `resolve` | `miss` | `sample_hit` | `sample` |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
