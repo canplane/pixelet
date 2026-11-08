@@ -160,7 +160,8 @@ fn keep_hit(r: u32, w: WalkEnd, face: u32, id: vec2<u32>) -> u32 {
 /// the light gets its depth. A pixel of the eye gets its ray's words, and what lies around the
 /// face it stopped on: a box's for a cell short of its cube (pxl-engine `face::BOX`), and for a
 /// whole cell the word the record puts there once its stop is in (record_hits.wgsl
-/// `record_faces_cs`). A pixel whose ray ended as a lack keeps its words.
+/// `record_faces_cs`). A ray that ended as a lack shows the deepest node held (`shows`), and
+/// its stop stays a lack, so the next frame asks for what it lacked.
 fn finish(hole: u32, aim: Aim, w: WalkEnd) {
   let stops = w.ends == 1u || w.ends == 2u;
   var r = NONE;
@@ -172,11 +173,12 @@ fn finish(hole: u32, aim: Aim, w: WalkEnd) {
     beams[park_at(hole) + 4u] = 0u;
   }
   let face = face_of(aim, w);
+  let shown = shows(aim, w);
   if (light_run()) {
     if (r != NONE) {
       _ = keep_hit(r, w, face | select(0u, HIT_LACKS, w.ends == 2u), at);
     }
-    textureStore(rays, at, 0u, vec4<u32>(walked_word(w), 0u, 0u, 0u));
+    textureStore(rays, at, 0u, vec4<u32>(walked_word(shown), 0u, 0u, 0u));
     return;
   }
   var faces = 0u;
@@ -185,13 +187,12 @@ fn finish(hole: u32, aim: Aim, w: WalkEnd) {
   if (r != NONE) {
     faces = keep_hit(r, w, face | select(0u, HIT_LACKS, w.ends == 2u), at);
   }
-  if (w.ends == 1u && hit_fill(w) != 0u) {
+  // A lack's stop takes no word from the record, so what its pixel shows waits for none.
+  if (w.ends == 2u) {
+    faces = 0u;
+  }
+  if (shown.ends == 1u && hit_fill(shown) != 0u) {
     faces = FACE_BOX;
   }
-  // A lack is a node not held yet, which says nothing of what is there, so its pixel keeps the
-  // words it last showed rather than taking the sky's.
-  if (w.ends == 2u) {
-    return;
-  }
-  write_ray(at, ray_word(w, face, faces));
+  write_ray(at, ray_word(shown, face, faces));
 }

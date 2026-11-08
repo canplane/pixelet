@@ -57,6 +57,9 @@ pub fn bytes(words: &[u32]) -> &[u8] {
 pub struct Gpu {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
+    /// Whether the next run starts with its frame's asks spent, so a ray goes only as deep as
+    /// the node cache holds.
+    pub asks_spent: std::cell::Cell<bool>,
 }
 
 impl Gpu {
@@ -70,7 +73,11 @@ impl Gpu {
             ..Default::default()
         }))
         .unwrap();
-        Some(Gpu { device, queue })
+        Some(Gpu {
+            device,
+            queue,
+            asks_spent: std::cell::Cell::new(false),
+        })
     }
 
     /// Waits until every submission is done, and fails the test past `WAIT`.
@@ -362,7 +369,10 @@ impl Gpu {
         for _ in 0..FRAMES_TO_ASK {
             // Each run is a frame of its own. The count of asks and the last walk's next ray
             // start at zero, as the host and the asks set them each frame the cast runs.
-            let none = [0u32; (node_cache::ASKED + 1 - node_cache::LAST_NEXT) as usize];
+            let mut none = [0u32; (node_cache::ASKED + 1 - node_cache::LAST_NEXT) as usize];
+            if self.asks_spent.get() {
+                none[(node_cache::ASKED - node_cache::LAST_NEXT) as usize] = ray::ASKS_A_FRAME;
+            }
             for t in [Some(table), asked].into_iter().flatten() {
                 self.queue
                     .write_buffer(t, word(node_cache::LAST_NEXT), bytes(&none));
@@ -381,7 +391,7 @@ impl Gpu {
             }
             self.dispatch(&last, &last_binds, groups);
             let done = self.read(asked.unwrap_or(table));
-            if done[node_cache::ASKED as usize] <= ray::ASKS_A_FRAME {
+            if self.asks_spent.get() || done[node_cache::ASKED as usize] <= ray::ASKS_A_FRAME {
                 return;
             }
         }

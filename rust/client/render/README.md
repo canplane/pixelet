@@ -25,7 +25,8 @@ no sample's cell met anything in is sky; any other pixel is a hole, listed for
 the queue, and walked to its first hit (`queue_walk.wgsl`, `queue_ask_cs`,
 `queue_last_cs`). A walk that meets a node the GPU does not hold parks, and the
 node is asked for; one that may ask no more in its frame ends there as a lack,
-and its pixel keeps what it last showed rather than the sky.
+and shows the deepest node held: the node it stands at as a cell of its own
+zoom, or the nearest over it that the world holds.
 
 A ray leaves four words: the asset with its face, zoom and fill eighths; the
 distance; the palette indices a coarse cell folds; and which edges and corners

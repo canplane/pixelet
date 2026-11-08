@@ -1,0 +1,299 @@
+diff --git a/rust/client/render/tests/light_miss.rs b/rust/client/render/tests/light_miss.rs
+index 4b6ef3af9b..47b6603149 100644
+--- a/rust/client/render/tests/light_miss.rs
++++ b/rust/client/render/tests/light_miss.rs
+@@ -15,7 +15,8 @@ use std::collections::BTreeMap;
+ use gpu::{array_view, read_texture, texture, Gpu};
+ 
+ use pxl_engine::answer;
+-use pxl_engine::cast::{self, Detail, End, Ray, Until};
++use pxl_engine::cast::{self, Detail, End, Query, Ray, Until};
++use pxl_engine::list::{self, Sweep};
+ use pxl_engine::clipmap::{self, Entry, ENTRIES, FIRST_CELL};
+ use pxl_engine::light::{self, Light, Starts};
+ use pxl_engine::node_cache::{self, MOVED_WORDS};
+@@ -1323,3 +1324,164 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
+     }
+     assert!(failed.is_empty(), "{}", failed.join("\n"));
+ }
++
++/// The query asked, each node counted.
++struct Counting<'a> {
++    q: Asking<'a>,
++    asked: u64,
++}
++
++impl Query for Counting<'_> {
++    type At = <Asking<'static> as Query>::At;
++    fn root(&mut self, node: [i32; 3]) -> Self::At {
++        self.q.root(node)
++    }
++    fn child(&mut self, at: &Self::At, zoom: Zoom, node: [i32; 3]) -> Self::At {
++        self.q.child(at, zoom, node)
++    }
++    fn node(
++        &mut self,
++        at: &mut Self::At,
++        zoom: Zoom,
++        node: [i32; 3],
++        zooms: [Zoom; 2],
++        t0: f32,
++    ) -> answer::In<[u32; 2]> {
++        self.asked += 1;
++        self.q.node(at, zoom, node, zooms, t0)
++    }
++}
++
++/// Every texel of a tile takes, of the boxes its band's cells are listed as, the one its ray
++/// enters first, its depth the one its walk leaves (pxl-engine `list::cells`); and what a list
++/// holds and asks against what the tile's walks ask.
++#[test]
++fn a_tile_listed_answers_as_its_rays() {
++    let built = real_world::build(EYE);
++    let t = light::TILE;
++    let mut failed = Vec::new();
++    for c in cases(&built) {
++        let (s, starts) = box_of(&c);
++        let mut q = Counting {
++            q: Asking {
++                w: built.world(),
++                cuts: c.cuts,
++            },
++            asked: 0,
++        };
++        let (mut texels, mut differ, mut listed, mut list_asked, mut walk_asked) =
++            (0u64, 0u64, 0u64, 0u64, 0u64);
++        let mut shown = 0;
++        for ty in 0..SIZE / t {
++            for tx in 0..SIZE / t {
++                let band = s.band(SIZE, c.range, [tx as i32, ty as i32]);
++                let (o, _) = light::ray(&s, &starts, [tx * t, ty * t]);
++                let reach = (t - 1) as f32;
++                let sweep = Sweep {
++                    first: [0.0; 3],
++                    edges: [
++                        s.across.map(|v| v * reach),
++                        s.down.map(|v| v * reach),
++                        s.dir.map(|v| v * s.t_max),
++                    ],
++                    margin: 4.0 / (1 << FRAC_W) as f32,
++                };
++                let mut cells = Vec::new();
++                q.asked = 0;
++                list::cells(&mut q, o, &sweep, band, &mut |n, i| cells.push((n, i)));
++                list_asked += q.asked;
++                listed += cells.len() as u64;
++                q.asked = 0;
++                for j in 0..t {
++                    for i in 0..t {
++                        let p = [tx * t + i, ty * t + j];
++                        let (op, ray) = light::ray(&s, &starts, p);
++                        let d = Detail {
++                            range: [band, band],
++                            spacing: s.spacing(),
++                        };
++                        let walk = cast::first(&mut q, op, &ray, d, Until::Opaque);
++                        let mut best: Option<(f32, u32, answer::In<[u32; 2]>, cast::Node)> = None;
++                        for &(n, a) in &cells {
++                            let np = n.moved(o, op);
++                            let (lo, hi) = cast::asset_box(op, &np, answer::AIR[0]);
++                            let inside = (0..3).all(|k| lo[k] <= 0.0 && 0.0 < hi[k]);
++                            if inside && a.kind == answer::Kind::Cell {
++                                continue;
++                            }
++                            let (te, axis, enters) = cast::entry(op, &ray, &np, a.asset[0]);
++                            if enters && best.is_none_or(|b| te < b.0) {
++                                best = Some((te, axis, a, np));
++                            }
++                        }
++                        let listed_met = match best {
++                            Some((te, axis, a, np)) => cast::Trace {
++                                ends: if a.kind == answer::Kind::Lacks {
++                                    End::Lacks
++                                } else {
++                                    End::Hit
++                                },
++                                hit: cast::Hit {
++                                    t: te,
++                                    axis,
++                                    node: np,
++                                    at: (),
++                                    asset: a.asset,
++                                },
++                            },
++                            None => cast::Trace {
++                                ends: End::Miss,
++                                hit: cast::Hit {
++                                    t: ray.t_max,
++                                    axis: 0,
++                                    node: np_none(op),
++                                    at: (),
++                                    asset: answer::AIR,
++                                },
++                            },
++                        };
++                        let (w0, w1) = (
++                            light::word(light::depth(&s, &walk)),
++                            light::word(light::depth(&s, &listed_met)),
++                        );
++                        texels += 1;
++                        if w0 != w1 {
++                            differ += 1;
++                            if shown < 4 {
++                                shown += 1;
++                                eprintln!(
++                                    "  {} texel {p:?} band {band}: walk {:?} t {} {:?}, listed {:?} t {} {:?}",
++                                    c.name,
++                                    walk.ends,
++                                    walk.hit.t,
++                                    walk.hit.node,
++                                    listed_met.ends,
++                                    listed_met.hit.t,
++                                    listed_met.hit.node
++                                );
++                            }
++                        }
++                    }
++                }
++                walk_asked += q.asked;
++            }
++        }
++        let tiles = u64::from((SIZE / t) * (SIZE / t));
++        eprintln!(
++            "LIST {:40} tiles {tiles}: cells a tile {:.1}, asked a tile {:.1} listing, {:.1} walking; {differ} of {texels} texels differ",
++            c.name,
++            listed as f64 / tiles as f64,
++            list_asked as f64 / tiles as f64,
++            walk_asked as f64 / tiles as f64
++        );
++        if differ != 0 {
++            failed.push(format!("{}: {differ} of {texels} texels differ", c.name));
++        }
++    }
++    assert!(failed.is_empty(), "{}", failed.join("\n"));
++}
++
++/// A node no walk reached, for a miss's hit, which no depth reads.
++fn np_none(_: [i32; 3]) -> cast::Node {
++    cast::Node::ROOT
++}
+diff --git a/rust/spec/engine/src/cast.rs b/rust/spec/engine/src/cast.rs
+index 9b1e74ce9e..4607a43e2a 100644
+--- a/rust/spec/engine/src/cast.rs
++++ b/rust/spec/engine/src/cast.rs
+@@ -396,7 +396,7 @@ fn units(p: u32, og: u32, roots: i32) -> f32 {
+ 
+ /// A node's side at zoom `z` less one, on the finest grid: the bits under
+ /// its corner's, 2^32 − 1 at a root, whose side no u32 holds.
+-fn under(z: Zoom) -> u32 {
++pub(crate) fn under(z: Zoom) -> u32 {
+     if z >= FINEST_ZOOM {
+         0
+     } else {
+@@ -436,7 +436,7 @@ fn planes(d: f32, inv: f32, lo: f32, hi: f32, (t, t_max): (f32, f32)) -> (f32, f
+ /// A node's planes, in units from the origin at `og` on the finest grid, each
+ /// a corner's (`units`): the far plane is the next node's corner, in the next
+ /// root where the corner goes past its own.
+-fn bounds(n: &Node, og: [u32; 3]) -> ([f32; 3], [f32; 3]) {
++pub(crate) fn bounds(n: &Node, og: [u32; 3]) -> ([f32; 3], [f32; 3]) {
+     let u = under(n.zoom);
+     let far = |c: u32, og: u32, roots: i32| {
+         let last = c.wrapping_add(u);
+@@ -455,6 +455,44 @@ fn bounds(n: &Node, og: [u32; 3]) -> ([f32; 3], [f32; 3]) {
+     (lo, hi)
+ }
+ 
++/// The box a split `n`'s content lies in, in its steps (`answer::box_of` of its asset's
++/// words), in units from the origin at `og`: each step on the grid's own planes (`units`),
++/// as a node's are, the far one the node's own, `hi`. A step's width a whole count of the
++/// finest grid's over a node `BOX_STEPS` or more of them wide; finer, rounded out, as
++/// `e · side` fits a u32 there.
++pub(crate) fn content_bounds(
++    n: &Node,
++    og: [u32; 3],
++    hi: [f32; 3],
++    asset: [u32; 2],
++) -> ([f32; 3], [f32; 3]) {
++    let u = under(n.zoom);
++    let (first, past) = box_of(asset);
++    let step = |a: usize, e: u32, out: u32| {
++        if e >= BOX_STEPS {
++            return hi[a];
++        }
++        let at = if u >= BOX_STEPS - 1 {
++            e * ((u >> BOX_BITS) + 1)
++        } else {
++            (e * (u + 1) + out) >> BOX_BITS
++        };
++        units(n.corner[a].wrapping_add(at), og[a], n.roots[a])
++    };
++    (
++        [
++            step(0, first[0], 0),
++            step(1, first[1], 0),
++            step(2, first[2], 0),
++        ],
++        [
++            step(0, past[0], BOX_STEPS - 1),
++            step(1, past[1], BOX_STEPS - 1),
++            step(2, past[2], BOX_STEPS - 1),
++        ],
++    )
++}
++
+ /// The ray's t at each axis's near and far planes of a node (`planes`),
+ /// from `t`.
+ fn spans(
+@@ -896,37 +934,12 @@ pub fn walk_at_most<Q: Query>(
+             // steps its content lies in (`answer::box_of`), grown by `w`
+             // on every side. Nothing a ray meets is passed for being thin.
+             let meets_box = |w: f32| {
+-                let (first, past) = box_of(i.asset);
+-                // Step `e` of the box on axis `a`, on the grid's own planes
+-                // (`units`), as a node's own are: the far one the node's.
+-                let step = |a: usize, e: u32, out: u32| {
+-                    if e >= BOX_STEPS {
+-                        return hi[a];
+-                    }
+-                    // A step's width a whole count of the finest grid's
+-                    // over a node `BOX_STEPS` or more of them wide; finer,
+-                    // rounded out (`out` the step less one to round up), as
+-                    // `e · side` fits a u32 there.
+-                    let at = if u >= BOX_STEPS - 1 {
+-                        e * ((u >> BOX_BITS) + 1)
+-                    } else {
+-                        (e * (u + 1) + out) >> BOX_BITS
+-                    };
+-                    units(n.corner[a].wrapping_add(at), og[a], n.roots[a])
+-                };
++                let (blo, bhi) = content_bounds(&n, og, hi, i.asset);
+                 let (bx, by, bz) = spans(
+                     ray,
+                     (
+-                        [
+-                            step(0, first[0], 0) - w,
+-                            step(1, first[1], 0) - w,
+-                            step(2, first[2], 0) - w,
+-                        ],
+-                        [
+-                            step(0, past[0], BOX_STEPS - 1) + w,
+-                            step(1, past[1], BOX_STEPS - 1) + w,
+-                            step(2, past[2], BOX_STEPS - 1) + w,
+-                        ],
++                        [blo[0] - w, blo[1] - w, blo[2] - w],
++                        [bhi[0] + w, bhi[1] + w, bhi[2] + w],
+                     ),
+                     t0,
+                 );
+diff --git a/rust/spec/engine/src/lib.rs b/rust/spec/engine/src/lib.rs
+index ba15d42175..191cfa9329 100644
+--- a/rust/spec/engine/src/lib.rs
++++ b/rust/spec/engine/src/lib.rs
+@@ -30,6 +30,7 @@ pub mod grid;
+ pub mod ground;
+ pub mod lattice;
+ pub mod light;
++pub mod list;
+ pub mod node_cache;
+ pub mod overwrite;
+ pub mod param;

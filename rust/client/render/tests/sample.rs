@@ -1455,7 +1455,7 @@ fn hand_missed_pixels_answer_as_cast_walk() {
     let mut failed = Vec::new();
     for c in &eyes {
         for s in &screens {
-            holes_answer(&gpu, &b, w, (c, s), &mut kinds, &mut failed);
+            holes_answer(&gpu, &b, w, (c, s), false, &mut kinds, &mut failed);
         }
     }
     met_each(&kinds, &["hit", "past its reach"], &mut failed);
@@ -1470,6 +1470,7 @@ fn holes_answer(
     b: &WorldBufs,
     w: World,
     (c, s): (&EyeCase, &Screen),
+    spent: bool,
     kinds: &mut Kinds,
     failed: &mut Vec<String>,
 ) -> u32 {
@@ -1526,8 +1527,14 @@ fn holes_answer(
     binds.push((3, wgpu::BindingResource::TextureView(&view)));
     binds.push((11, header.as_entire_binding()));
     let pool = walked as u32 + ray::pool_at(s.size) + ray::POOL_CNT;
+    gpu.asks_spent.set(spent);
     gpu.holes(&binds, &table_buf, (&beams, pool));
+    gpu.asks_spent.set(false);
     let out = read_texture(&gpu.device, &gpu.queue, &rays);
+    if spent {
+        lacks_answer(w, &obs, s, origin, &marked, &out, kinds, failed);
+        return gpu.read(&table_buf)[node_cache::HITS_CNT as usize];
+    }
 
     let (same, differ, stepped) = marked_answers(w, &obs, s, origin, &marked, &out, &name, kinds);
     // A pixel the cast did not mark must keep its words.
@@ -1549,6 +1556,62 @@ fn holes_answer(
         ));
     }
     gpu.read(&table_buf)[node_cache::HITS_CNT as usize]
+}
+
+/// Checks the `marked` pixels' words where the frame could ask nothing more of the world, so
+/// that a ray goes only as deep as the node cache holds. A pixel that shows anything must show
+/// what the world answers of the node at that zoom where its ray stands, asked as a cell of
+/// its own zoom, which is the deepest node held (queue_last.wgsl `shows`).
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the world, the observer, its screen and origin, the pixels, their words and what to tell"
+)]
+fn lacks_answer(
+    w: World,
+    obs: &Observed,
+    s: &Screen,
+    origin: [i32; 3],
+    marked: &[u32],
+    out: &[u32],
+    kinds: &mut Kinds,
+    failed: &mut Vec<String>,
+) {
+    let [wd, ht] = s.size;
+    let texels = (wd * ht) as usize;
+    let mut wrong = 0;
+    for &p in marked {
+        let (r, d) = px_aim(obs, s, [p % wd, p / wd]);
+        let got = |l: u32| out[l as usize * texels + p as usize];
+        if got(0) == 0 {
+            kinds.add("shows nothing", true);
+            continue;
+        }
+        let zoom = got(0) >> ray::ZOOM_SHIFT & ((1 << ray::ZOOM_BITS) - 1);
+        // A step past where the ray stands, so that the point lies in the node it entered.
+        let t = f32::from_bits(got(1)) + 2.0 / (1 << FRAC_W) as f32;
+        let (point, roots) = cast::point_at(origin, &r, t);
+        let keep = if zoom == 0 { 0 } else { !0u32 << (32 - zoom) };
+        let node = Node {
+            corner: point.map(|c| c & keep),
+            zoom,
+            roots,
+        };
+        let (a, _) = truth(w, obs.cuts, zoom, node.idx(origin), [zoom, zoom]);
+        let shown = a.kind == Kind::Cell
+            && (0..6).any(|face| got(0) == ray::first_word(a.asset[0], face, zoom))
+            && got(2) == a.asset[1];
+        if !shown {
+            wrong += 1;
+        }
+        let met = walk_from(w, obs.cuts, origin, &r, d);
+        kinds.add(
+            "a coarser cell than the walk's",
+            met.ends == End::Hit && zoom < met.hit.node.zoom,
+        );
+    }
+    if wrong != 0 {
+        failed.push(format!("{wrong} pixels show what no node holds"));
+    }
 }
 
 /// Compares each of the `marked` pixels' words in the rays `out` with the walk from the root
@@ -1679,7 +1742,7 @@ fn hand_missed_pixels_at_an_edge_answer_as_cast_walk() {
     let mut kinds = Kinds::new();
     let mut failed = Vec::new();
     for c in &cases {
-        holes_answer(&gpu, &b, w, (c, &s), &mut kinds, &mut failed);
+        holes_answer(&gpu, &b, w, (c, &s), false, &mut kinds, &mut failed);
     }
     met_each(
         &kinds,
@@ -1719,7 +1782,7 @@ fn eye_rays_past_a_frames_hits_answer_as_cast_walk() {
     };
     let mut kinds = Kinds::new();
     let mut failed = Vec::new();
-    let hits = holes_answer(&gpu, &b, w, (&c, &s), &mut kinds, &mut failed);
+    let hits = holes_answer(&gpu, &b, w, (&c, &s), false, &mut kinds, &mut failed);
     if hits <= ray::HITS_A_FRAME {
         failed.push(format!(
             "{}: {hits} hits, not past {}",
@@ -1727,6 +1790,43 @@ fn eye_rays_past_a_frames_hits_answer_as_cast_walk() {
             ray::HITS_A_FRAME
         ));
     }
+    assert!(failed.is_empty(), "{}", failed.join("\n"));
+}
+
+/// With the frame's asks spent, a ray goes only as deep as the node cache holds, and a pixel
+/// shows the deepest node held, not nothing.
+#[test]
+fn hand_a_lack_shows_the_deepest_node_held() {
+    let Some(gpu) = Gpu::new() else {
+        eprintln!("no adapter: skipped");
+        return;
+    };
+    let built = real_world::build(EYE);
+    let b = world_bufs(&gpu, &built);
+    let w = built.world();
+    let c = EyeCase {
+        name: "the eye, over the ground, its asks spent",
+        origin: q8([
+            EYE[0] + 90,
+            EYE[1] + 90,
+            built.top_at([EYE[0] + 90, EYE[1] + 90]) + 30,
+        ]),
+        look: [0.5, 0.4, -0.77],
+        tan: [0.3, 0.2],
+        far: 600.0,
+        range: [8, FINEST],
+        cuts: [Cut::NONE; 2],
+    };
+    let s = Screen {
+        name: "every pixel marked and listed",
+        size: [131, 77],
+        jitter: [0.25, -0.375],
+        marked_in: 1,
+    };
+    let mut kinds = Kinds::new();
+    let mut failed = Vec::new();
+    holes_answer(&gpu, &b, w, (&c, &s), true, &mut kinds, &mut failed);
+    met_each(&kinds, &["a coarser cell than the walk's"], &mut failed);
     assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 

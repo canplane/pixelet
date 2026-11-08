@@ -267,31 +267,32 @@ fn run() -> Result<(), String> {
     let mut limits = Limits::default();
     let mut port: u16 = 3001;
     let mut host = "127.0.0.1".to_string();
-    let mut asset_dir = PathBuf::from("./out/asset");
+    let mut asset_dir = None;
     let mut workers: usize = 4;
     let mut cache = PathBuf::from("./out/oven");
     // Zooms folded over the leaves: a cold tile at the top bakes 4^folds leaves.
     let mut folds: Zoom = 2;
     let mut shelf: Option<PathBuf> = None;
-    let mut out = PathBuf::from("./out");
 
     let mut flags = Flags::of(argv);
     while let Some(flag) = flags.arg() {
         match flag.as_str() {
             "--port" => port = flags.parse()?,
             "--host" => host = flags.val()?,
-            "--asset" => asset_dir = PathBuf::from(flags.val()?),
+            "--asset" => asset_dir = Some(PathBuf::from(flags.val()?)),
             "--queue" => limits.queued = flags.parse()?,
             "--job-seconds" => limits.seconds = flags.parse()?,
             "--workers" => workers = flags.parse()?,
             "--cache" => cache = PathBuf::from(flags.val()?),
             "--folds" => folds = flags.parse()?,
             "--shelf" => shelf = Some(PathBuf::from(flags.val()?)),
-            "--out" => out = PathBuf::from(flags.val()?),
             other => return Err(format!("unknown flag: {other}")),
         }
     }
 
+    // The folder the bakes write to: everything the server reads from it follows `--shelf`.
+    let out = shelf.clone().unwrap_or_else(|| PathBuf::from("./out"));
+    let asset_dir = asset_dir.unwrap_or_else(|| out.join("asset"));
     let (tile_source, min_zoom) = match shelf {
         Some(dir) => (TileSource::Shelf(dir), MIN_ZOOM),
         None => {

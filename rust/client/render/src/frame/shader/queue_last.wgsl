@@ -7,6 +7,43 @@
 // asks before set back to 0 (`node_cache::LAST_NEXT`). Every ray ends here. A ray that may ask
 // no more ends as a lack at the deepest node held.
 
+/// What the ray that ended as `w` shows (queue.wgsl `finish`): what it met, or, where it ended
+/// as a lack, the deepest node held, since what a frame defers is detail, never its answer.
+/// The world is asked for the node the ray stands at as a cell of its own zoom, and where it
+/// does not hold that, for each node over it in turn. The ray stops where it stood. The frame's
+/// asks (`may_ask`) do not bound this, as a ray asks it only once, as it ends. A cell of
+/// nothing, or nothing held at any zoom, shows nothing.
+fn shows(aim: Aim, w: WalkEnd) -> WalkEnd {
+  if (w.ends != 2u) {
+    return w;
+  }
+  let r0 = root_of(aim.origin);
+  var zoom = w.zoom;
+  var corner = w.corner;
+  var parent = w.parent;
+  var top = w.top;
+  loop {
+    let c = idx_of(corner, zoom, w.roots, r0);
+    let a = world_answer(parent, top, zoom, c, zoom | (zoom << ZOOM_BITS), NONE);
+    if (a.kind == KIND_CELL) {
+      let v = a.asset.x & VAL_MASK;
+      if (v == VALUE_VOID || v == VALUE_AIR) {
+        return w;
+      }
+      return WalkEnd(1u, zoom, corner, w.roots, a.asset, w.axis, w.t, w.visits, w.parent, w.top, w.step);
+    }
+    if (a.kind != KIND_LACKS || zoom == 0u) {
+      break;
+    }
+    // What is over a node is found from the top (`world_root`), as nothing holds what it inherits.
+    zoom -= 1u;
+    corner &= vec3<u32>(~under(zoom));
+    parent = vec4<u32>(0u);
+    top = true;
+  }
+  return w;
+}
+
 /// Takes the next number from the node cache's counter at `word`. `held` reads the counter
 /// without taking.
 fn take(word: u32) -> u32 {

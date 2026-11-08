@@ -38,6 +38,14 @@ same place (38.1193, 128.4656), driven over the DevTools protocol (`tools/walk/r
 shell scripts in [`tools/walk/`](tools/walk/) serve each commit's page from `ts/app/web`,
 the page's tree of the time, in worktrees of their own; the scratchpad and the cargo target
 they name were those of the session that ran them (`572d46ae`), and both are gone.
+
+**Where these runs stood.** A rename on 10-29 (`98ed13185d`) stored the leaf tile's corner
+in place of the GPS fix, until 11-08 (`bb12471c6e`). So every run in this journal, and every
+`compare-perf`, asked for the ridge at 38.1193, 128.4656 and stood about 300 m away, at
+38.11727, 128.46313. The numbers below are that corner's. A build driven from the corner
+and from the ridge are not the same measurement: on 11-08, on the Mac, main took 9.3 ms of
+tasks a turn and about 1,200 tile reads from the ridge, and 0.1 ms and about 760 from the
+corner.
 [`reports/`](reports/) holds each window's whole report, and `tools/walk/show4.py` prints
 them. The scenes were these:
 
