@@ -11,7 +11,7 @@ use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 use xpute_core::mem::heap::Block;
 
 use crate::sys::io::demand::{PhaseList, Stream};
-use crate::sys::io::failure::Failure;
+use crate::sys::io::failure::Exit;
 use tile_cache::TileCache;
 
 pub mod division;
@@ -20,7 +20,10 @@ pub mod floor;
 pub mod instance;
 pub mod object;
 pub mod place;
-mod query;
+// The query's files stand beside the layers', and it is a child here so that a
+// layer's reads, visible within this module alone, are its and no one else's.
+#[path = "query.rs"]
+pub mod query;
 pub mod terrain;
 pub mod tile_cache;
 pub mod upload;
@@ -28,7 +31,6 @@ pub mod upload;
 use crate::sys::io::fetch;
 use crate::sys::io::source;
 pub use answer::Answer;
-pub(in crate::domain) use query::Query;
 
 #[derive(Clone, Copy)]
 pub enum AskScope {
@@ -87,12 +89,12 @@ pub trait Base: Clone + 'static {
 
     fn tile_cache() -> &'static mut TileCache<Self>;
 
-    fn receive(
-        tile: Quadrant,
-        slot: u32,
-        pkt: &[u8],
-        phases: &mut PhaseList,
-    ) -> Result<Self, Failure>;
+    fn receive(tile: Quadrant, slot: u32, pkt: &[u8], phases: &mut PhaseList)
+        -> Result<Self, Exit>;
+
+    /// The tile that held slot `slot` has left it: what the layer holds of it apart from its
+    /// body goes with it (the default holds nothing apart).
+    fn gone(_slot: u32) {}
 
     /// Disposes of the packet a tile arrived in, once slot `slot` took the
     /// tile or no slot did. The default frees it; a layer whose GPU copies

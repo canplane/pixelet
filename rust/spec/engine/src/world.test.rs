@@ -6,10 +6,10 @@ use super::*;
 use crate::area::{self, Area, Shard};
 use crate::cast::{End, Query};
 use crate::clipmap::{
-    self, bound_over, column_top, entry, fold, join, joined_idx, mip_idx, of_idx, Entry, Presence,
-    ACROSS, BOUNDS_AT, BOUND_ENTRY_WORDS, BRICK, BRICK_CELLS, BRICK_MIPS, BRICK_SHIFT, BRICK_WORDS,
-    CLIP_LEVELS, CLIP_SIZE, COLUMNS_AT, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL_ZOOM, JOINED_ENTRIES,
-    JOINED_MIPS, JOINED_WORDS, ORIGIN_AT, OWN_AT, OWN_CELLS,
+    self, bound_over, column_top, entry, fold, join, joined_idx, mip_idx, of_idx, Entry, Pool,
+    Presence, ACROSS, BOUNDS_AT, BOUND_ENTRY_WORDS, BRICK, BRICK_CELLS, BRICK_MIPS, BRICK_SHIFT,
+    BRICK_WORDS, CLIP_LEVELS, CLIP_SIZE, COLUMNS_AT, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL_ZOOM,
+    JOINED_ENTRIES, JOINED_MIPS, JOINED_WORDS, ORIGIN_AT, OWN_AT, OWN_CELLS,
 };
 use crate::content::Sample;
 use crate::fill::{column_of, mip_of, own_of, put, root_of, LoneBrick};
@@ -113,6 +113,12 @@ impl ground::Resident for Clipmap<'_> {
 /// Nothing placed and no ways.
 struct Nothing;
 
+impl Pool for Nothing {
+    fn word(&self, _: u32) -> u32 {
+        0
+    }
+}
+
 impl Table for Nothing {
     fn first_child(&self, _: u32) -> u32 {
         0
@@ -133,7 +139,7 @@ impl Query for Asking<'_> {
         Inheritance::of(&Nothing, (0, node))
     }
     fn child(&mut self, at: &Inheritance, zoom: Zoom, node: [i32; 3]) -> Inheritance {
-        at.child(&Nothing, &Nothing, (zoom, node))
+        at.child(&Nothing, (zoom, node))
     }
     fn node(
         &mut self,
@@ -554,7 +560,7 @@ fn answers_take_no_zooms(w: Clipmap<'_>) -> [u32; 3] {
                             break;
                         }
                         let child = object::ancestor_at(zoom, c, zoom - z - 1);
-                        at = at.child(&Nothing, &Nothing, (z + 1, child));
+                        at = at.child(&Nothing, (z + 1, child));
                     }
                     if !reached {
                         continue;

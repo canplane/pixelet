@@ -9,8 +9,8 @@
 //!
 //! Each branch's slot holds its children folded into one word (pxl-spec
 //! object/volume.rs `fold`), and every write folds again up its path, so a
-//! node at any zoom can be read through the layer's query (`Query::cursor`,
-//! `Query::child`).
+//! node at any zoom can be read through a descent's cursor (`Store::cursor`,
+//! `Store::child`).
 //!
 //! A leaf that carries a record is never joined with its siblings, since its
 //! handle is its own, and it is never split: a placement takes an empty
@@ -37,7 +37,6 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::domain::layer::object::ext::{Ext, Pool, NONE};
-use crate::domain::layer::{Answer, Query};
 use crate::sys::sched::edge::request_world_tick;
 use pxl_engine::object::{self, path, NodeSlot};
 use pxl_render::gpu::api;
@@ -107,7 +106,7 @@ pub(super) fn note_written(regions: &[Aabb]) {
 }
 
 /// Moves into `out` the regions written since the turn last took them.
-pub fn take_written(out: &mut Vec<Aabb>) {
+pub(in crate::domain::layer) fn take_written(out: &mut Vec<Aabb>) {
     out.clear();
     core::mem::swap(out, WRITTEN.get(Vec::new));
 }
@@ -118,7 +117,7 @@ const _: () = assert!(VOID == 0);
 
 /// What a leaf of the tree holds: its catalog value and its record's handle.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Leaf {
+pub(in crate::domain::layer) struct Leaf {
     pub id: u16,
     pub ext: u16,
 }
@@ -149,7 +148,7 @@ const fn depth(zoom: Zoom) -> u32 {
 
 /// The tree's columns as pxl-engine `object` reads them, so that the CPU
 /// walks the tree exactly as the GPU does.
-pub struct Table<'a>(&'a Tree);
+pub(in crate::domain::layer) struct Table<'a>(&'a Tree);
 
 impl object::Table for Table<'_> {
     fn first_child(&self, slot: u32) -> u32 {
@@ -165,7 +164,7 @@ impl object::Table for Table<'_> {
 /// child index at each zoom (`child_idx`) from the root down, so of two
 /// nodes where neither is under the other, the one entered first has the
 /// smaller key.
-pub(crate) fn tree_key(zoom: Zoom, at: [i32; 3]) -> u128 {
+pub(in crate::domain::layer) fn tree_key(zoom: Zoom, at: [i32; 3]) -> u128 {
     let p = path(zoom, at);
     let mut key = 0u128;
     for l in 0..=zoom {
@@ -295,7 +294,7 @@ impl Store {
     }
 
     #[cfg(test)]
-    pub fn each(&self, visit: &mut dyn FnMut(&Entry)) {
+    pub(in crate::domain::layer) fn each(&self, visit: &mut dyn FnMut(&Entry)) {
         self.descend(f64::NAN, &mut |zoom, at, _, leaf| {
             if let Some(v) = leaf {
                 visit(&Entry::of(zoom, at, v));
@@ -444,7 +443,7 @@ impl Store {
     /// The word shard `at` holds in the tree, the fold of its leaves; none
     /// where nothing is under it.
     #[cfg(test)]
-    pub(crate) fn word_at(&self, [x, y]: [i32; 2]) -> Option<u32> {
+    pub(in crate::domain::layer) fn word_at(&self, [x, y]: [i32; 2]) -> Option<u32> {
         let at = [x, y, 0];
         let slot = self.cursor((SHARD_ZOOM, at), SHARD_ZOOM);
         (slot.holds() && slot.zoom() == SHARD_ZOOM).then(|| self.tree.data()[slot.slot() as usize])
@@ -478,9 +477,9 @@ fn about(b: &Aabb) -> f64 {
 }
 
 /// The leaves of one node, as the query reads them. What the node holds
-/// folded is read through the cursor instead (`Query::cursor`).
+/// folded is read through the cursor instead (`Store::cursor`).
 #[derive(Clone, Copy)]
-pub struct NodeView<'a> {
+pub(in crate::domain::layer) struct NodeView<'a> {
     store: &'a Store,
     node: Node<3>,
 }
@@ -501,50 +500,6 @@ impl NodeView<'_> {
     }
 }
 
-impl Query for Store {
-    /// The slot that holds a cube, handed down from its parent (pxl-engine
-    /// `object`). A node over the ground's two axes, a column, carries no
-    /// slot of its own; it is read by walking under it (`column`).
-    type Cursor = NodeSlot;
-
-    fn cursor<const D: usize>(&self, (zoom, at): Node<D>, _: Zoom) -> NodeSlot {
-        match D {
-            3 => object::cursor(&self.columns(), object::ROOT, zoom, [at[0], at[1], at[2]]),
-            _ => NodeSlot::branch(0, zoom),
-        }
-    }
-
-    fn child<const D: usize>(&self, parent: &NodeSlot, (zoom, at): Node<D>, _: Zoom) -> NodeSlot {
-        match D {
-            3 => object::child(
-                &self.columns(),
-                *parent,
-                zoom,
-                path(zoom, [at[0], at[1], at[2]]),
-            ),
-            _ => *parent,
-        }
-    }
-
-    /// Every answer is exact, since the whole store is resident. The bound
-    /// joins the cubes of the node's own zoom that hold anything: a cube is
-    /// bounded by itself, whole where it holds anything, and a column by the
-    /// cubes in it that hold anything (`column`). No reader tells positions
-    /// apart finer than the node (domain/view/observation.rs `bricks`,
-    /// `order_of_tile`).
-    fn bound<const D: usize>(
-        &self,
-        slot: &NodeSlot,
-        node: Node<D>,
-        _: Zoom,
-    ) -> Answer<Option<Aabb>> {
-        Answer::Exact(match D {
-            3 => slot.holds().then(|| region(node)),
-            _ => self.column(&mut Walk::default(), (node.0, [node.1[0], node.1[1]])),
-        })
-    }
-}
-
 /// What a walk over columns carries from one column to the next
 /// (`Store::column`). For each zoom it stepped through, `at` holds the
 /// column it stood in there, where that zoom's run of `slots` ends, and the
@@ -553,7 +508,7 @@ impl Query for Store {
 /// their slots. A walk to a nearby column steps down only from where the two
 /// columns part. It stays valid only while the store is unchanged.
 #[derive(Default)]
-pub struct Walk {
+pub(in crate::domain::layer) struct Walk {
     at: Vec<Step>,
     slots: Vec<([i32; 3], NodeSlot)>,
 }
@@ -572,55 +527,51 @@ impl Walk {
     }
 }
 
-/// The store's reads beyond `Query`. As with `Query`, only the world's query
-/// (domain/query.rs) reads it.
-pub(in crate::domain) trait ObjectQuery {
-    fn columns(&self) -> Table<'_>;
-
-    /// Calls `visit` on every leaf whose cube meets `query`, with X in
-    /// `query`'s frame.
-    fn entries_in(&self, query: &Aabb, visit: &mut dyn FnMut(&Entry));
-
-    /// `entries_in`, starting from the nodes in `from` instead of the root.
-    /// Each node comes with the slot a descent found for it
-    /// (`object::NodeSlot`). No node may be under another, and `query` must
-    /// lie within them. Each is walked from its slot, so when `from` is in
-    /// the tree's own order (`tree_key`), the leaves found and their order
-    /// equal those of a walk from the root.
-    fn entries_under(
+/// What only the world's query (domain/query.rs) reads of the store: the
+/// cursor a descent carries to a node, the leaves over a box and at a node,
+/// and a column. Every answer is exact, since the whole store is resident.
+impl Store {
+    /// The cursor of `node` asked alone, the slot that holds a cube, handed
+    /// down from its parent (pxl-engine `object`). It equals what a descent
+    /// from the top would carry to `node`. A node over the ground's two axes,
+    /// a column, carries no slot of its own; it is read by walking under it
+    /// (`column`).
+    pub(in crate::domain::layer) fn cursor<const D: usize>(
         &self,
-        from: &[(Node<3>, NodeSlot)],
-        query: &Aabb,
-        visit: &mut dyn FnMut(&Entry),
-    );
+        (zoom, at): Node<D>,
+        _: Zoom,
+    ) -> NodeSlot {
+        match D {
+            3 => object::cursor(&self.columns(), object::ROOT, zoom, [at[0], at[1], at[2]]),
+            _ => NodeSlot::branch(0, zoom),
+        }
+    }
 
-    /// The leaf placed at exactly node `at` of `zoom`, if any, read from the
-    /// cursor a descent holds there (`Query::cursor`, `Query::child`).
-    fn entry_at(&self, zoom: Zoom, at: [i32; 3], slot: NodeSlot) -> Option<Entry>;
+    /// A child's cursor from its parent's; `node` is the child.
+    pub(in crate::domain::layer) fn child<const D: usize>(
+        &self,
+        parent: &NodeSlot,
+        (zoom, at): Node<D>,
+        _: Zoom,
+    ) -> NodeSlot {
+        match D {
+            3 => object::child(
+                &self.columns(),
+                *parent,
+                zoom,
+                path(zoom, [at[0], at[1], at[2]]),
+            ),
+            _ => *parent,
+        }
+    }
 
-    /// What a leaf carries beyond its id, if anything.
-    fn ext(&self, e: &Entry) -> Option<&Ext>;
-
-    /// A marker's text as it was placed; none for anything else.
-    fn text(&self, e: &Entry) -> Option<&str>;
-
-    /// The box of column `node` over the ground's two axes, with X in the
-    /// asker's frame, cut along z to what is placed in it: the cubes of its
-    /// zoom that hold anything and the leaves over them. None where nothing
-    /// is placed in it. The walk steps down from where `walk` last went, one
-    /// zoom at a time, through the branches in this column alone.
-    fn column(&self, walk: &mut Walk, node: Node<2>) -> Option<Aabb>;
-
-    /// What is placed in `node`, read in place; the whole store is resident.
-    fn read(&self, node: Node<3>) -> NodeView<'_>;
-}
-
-impl ObjectQuery for Store {
-    fn columns(&self) -> Table<'_> {
+    pub(in crate::domain::layer) fn columns(&self) -> Table<'_> {
         Table(&self.tree)
     }
 
-    fn entries_in(&self, query: &Aabb, visit: &mut dyn FnMut(&Entry)) {
+    /// Calls `visit` on every leaf whose cube meets `query`, with X in
+    /// `query`'s frame.
+    pub(in crate::domain::layer) fn entries_in(&self, query: &Aabb, visit: &mut dyn FnMut(&Entry)) {
         self.descend(about(query), &mut |zoom, at, whole, leaf| {
             if whole.meet(*query).is_none() {
                 return false;
@@ -632,7 +583,13 @@ impl ObjectQuery for Store {
         });
     }
 
-    fn entries_under(
+    /// `entries_in`, starting from the nodes in `from` instead of the root.
+    /// Each node comes with the slot a descent found for it
+    /// (`object::NodeSlot`). No node may be under another, and `query` must
+    /// lie within them. Each is walked from its slot, so when `from` is in
+    /// the tree's own order (`tree_key`), the leaves found and their order
+    /// equal those of a walk from the root.
+    pub(in crate::domain::layer) fn entries_under(
         &self,
         from: &[(Node<3>, NodeSlot)],
         query: &Aabb,
@@ -657,22 +614,40 @@ impl ObjectQuery for Store {
         }
     }
 
-    fn entry_at(&self, zoom: Zoom, at: [i32; 3], slot: NodeSlot) -> Option<Entry> {
+    /// The leaf placed at exactly node `at` of `zoom`, if any, read from the
+    /// cursor a descent holds there (`Store::cursor`, `Store::child`).
+    pub(in crate::domain::layer) fn entry_at(
+        &self,
+        zoom: Zoom,
+        at: [i32; 3],
+        slot: NodeSlot,
+    ) -> Option<Entry> {
         (slot.holds() && !slot.is_folded() && slot.zoom() == zoom)
             .then(|| Entry::of(zoom, at, Leaf::of(self.tree.data()[slot.slot() as usize])))
     }
 
-    fn ext(&self, e: &Entry) -> Option<&Ext> {
+    /// What a leaf carries beyond its id, if anything.
+    pub(in crate::domain::layer) fn ext(&self, e: &Entry) -> Option<&Ext> {
         self.ext.get(class_of(e.state)?, e.ext)
     }
 
-    fn text(&self, e: &Entry) -> Option<&str> {
+    /// A marker's text as it was placed; none for anything else.
+    pub(in crate::domain::layer) fn text(&self, e: &Entry) -> Option<&str> {
         match self.ext(e)? {
             Ext::MarkerText(t) => Some(t),
         }
     }
 
-    fn column(&self, walk: &mut Walk, (zoom, xy): Node<2>) -> Option<Aabb> {
+    /// The box of column `node` over the ground's two axes, with X in the
+    /// asker's frame, cut along z to what is placed in it: the cubes of its
+    /// zoom that hold anything and the leaves over them. None where nothing
+    /// is placed in it. The walk steps down from where `walk` last went, one
+    /// zoom at a time, through the branches in this column alone.
+    pub(in crate::domain::layer) fn column(
+        &self,
+        walk: &mut Walk,
+        (zoom, xy): Node<2>,
+    ) -> Option<Aabb> {
         let p = path(zoom, [xy[0], xy[1], 0]);
         let column = |k: usize| [p[0] >> (zoom as usize - k), p[1] >> (zoom as usize - k)];
         let shared = walk
@@ -739,7 +714,9 @@ impl ObjectQuery for Store {
         };
         placed.meet(whole)
     }
-    fn read(&self, node: Node<3>) -> NodeView<'_> {
+
+    /// What is placed in `node`, read in place; the whole store is resident.
+    pub(in crate::domain::layer) fn read(&self, node: Node<3>) -> NodeView<'_> {
         NodeView { store: self, node }
     }
 }

@@ -29,5 +29,5 @@ fn parked_word(zoom: u32, roots: vec3<i32>, step: u32) -> u32 {
 /// handed it are not parked.
 fn parked_from(t: u32, corner: vec3<u32>, p: u32) -> Start {
   let r = vec3<i32>(vec3<u32>(p >> 6u, p >> 9u, p >> 12u) & vec3<u32>(7u)) - vec3<i32>(3);
-  return Start(bitcast<f32>(t), corner, p & 63u, r, vec4<u32>(0u), true, (p & ~PARKED) >> 15u);
+  return Start(bitcast<f32>(t), corner, p & 63u, r, vec3<u32>(0u), true, (p & ~PARKED) >> 15u);
 }

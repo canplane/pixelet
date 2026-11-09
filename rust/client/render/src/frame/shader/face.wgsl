@@ -39,9 +39,9 @@ fn shared_zoom(a: vec3<i32>, za: u32, c: vec3<i32>, zoom: u32) -> vec2<u32> {
 
 /// What was handed to the node at zoom `z` on the beam ray's line that starts at word `line`
 /// (pxl-engine `beam::LINE_INHERITANCE`, `beam::LINE_STEP`).
-fn line_inheritance(line: u32, z: u32) -> vec4<u32> {
+fn line_inheritance(line: u32, z: u32) -> vec3<u32> {
   let k = line + LINE_INHERITANCE + LINE_STEP * z;
-  return vec4<u32>(beams[k], beams[k + 1u], beams[k + 2u], beams[k + 3u]);
+  return vec3<u32>(beams[k], beams[k + 1u], beams[k + 2u]);
 }
 
 /// The node held at word `k`, laid out as a line and a sample each hold one
@@ -61,14 +61,14 @@ fn node_idx(k: u32) -> vec4<i32> {
 /// no higher than one of them, the descent's first node stands in for it (`descent`).
 struct Descent {
   up: vec2<u32>,
-  grand_inheritance: vec4<u32>,
-  parent_inheritance: vec4<u32>,
+  grand_inheritance: vec3<u32>,
+  parent_inheritance: vec3<u32>,
 }
 
 /// The descent of the hit `c` at `zoom` from zoom `low`, where it was handed
 /// `low_inheritance`, each node under that handed down by its parent. It is worked out once for
 /// the hit, and every cell beside the hit reads it (`hides`).
-fn descent(c: vec3<i32>, zoom: u32, low: u32, low_inheritance: vec4<u32>) -> Descent {
+fn descent(c: vec3<i32>, zoom: u32, low: u32, low_inheritance: vec3<u32>) -> Descent {
   var up = vec2<u32>(low);
   var grand = low_inheritance;
   var parent = low_inheritance;
@@ -100,10 +100,10 @@ fn descent(c: vec3<i32>, zoom: u32, low: u32, low_inheritance: vec4<u32>) -> Des
 fn hides(
   line: u32,
   low: u32,
-  low_inheritance: vec4<u32>,
+  low_inheritance: vec3<u32>,
   up: vec2<u32>,
-  grand_inheritance: vec4<u32>,
-  parent_inheritance: vec4<u32>,
+  grand_inheritance: vec3<u32>,
+  parent_inheritance: vec3<u32>,
   c: vec3<i32>,
   zoom: u32,
   n: vec3<i32>,
@@ -150,10 +150,10 @@ fn face_word(
   face: u32,
   line: u32,
   low: u32,
-  low_inheritance: vec4<u32>,
+  low_inheritance: vec3<u32>,
   up: vec2<u32>,
-  grand_inheritance: vec4<u32>,
-  parent_inheritance: vec4<u32>,
+  grand_inheritance: vec3<u32>,
+  parent_inheritance: vec3<u32>,
   c: vec3<i32>,
   zoom: u32,
 ) -> u32 {

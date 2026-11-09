@@ -63,56 +63,53 @@ pub struct TerrainTile {
     pub occupancy: Occupancy, // Which children are tiles; a child that is not one is never asked for.
 }
 
-/// How many entries of the brick at `place` (in bricks) a tile's ways make: one for each
-/// segment and each bin its footprint reaches (`Separation::reaches`).
-pub fn entry_cnt(separation: &Separation, place: [u32; 2]) -> usize {
-    let bins = clipmap::BRICK >> WAYS_SHIFT;
-    let mut cnt = 0;
-    separation.reaches(f64::from(TILE_CELLS), WAYS_ACROSS, |k, _, _, _| {
-        let k = k as u32;
-        cnt += usize::from([k % WAYS_ACROSS / bins, k / WAYS_ACROSS / bins] == place);
+/// Gathers into `pairs`, walking the tile's ways once (`Separation::reaches`), each of the
+/// brick at `place`'s entries (a bin and the point its segment starts at), and returns how many
+/// segments they reach, as `brick_lines` lays them; none where the heap refuses `pairs` the room,
+/// which is left as far as it got.
+pub fn brick_pairs(
+    separation: &Separation,
+    place: [u32; 2],
+    pairs: &mut Vec<(u32, u32)>,
+) -> Option<u32> {
+    use pxl_engine::clipmap::BRICK;
+    let bins = BRICK >> WAYS_SHIFT;
+    let mut room = true;
+    // Each bin of the brick a segment's footprint reaches, and the point it starts at.
+    separation.reaches(f64::from(TILE_CELLS), WAYS_ACROSS, |k, d, _, s| {
+        let [x, y] = [k as u32 % WAYS_ACROSS, k as u32 / WAYS_ACROSS];
+        if room && [x / bins, y / bins] == place {
+            room = pairs.try_reserve(1).is_ok();
+            if room {
+                pairs.push((
+                    (y % bins) * bins + x % bins,
+                    separation.starts[d] + s as u32,
+                ));
+            }
+        }
     });
-    cnt
+    if !room {
+        return None;
+    }
+    // The segments, each once in their points' order.
+    pairs.sort_unstable_by_key(|&(b, p)| (p, b));
+    Some(pairs.chunk_by(|a, b| a.1 == b.1).count() as u32)
 }
 
-/// Lays the lines of the clip level's brick at `place` (in bricks) of `tile` into `out`, as its
-/// fill asks them (pxl-engine clipmap.rs `LINES_*`): the tile's header, each bin's first entry,
-/// the entries, and the segments the bins reach, each once, in their lines' order. `pairs` holds
-/// each entry while they are worked out. It returns the words laid, none where `pairs` holds
-/// fewer than its entries or `out` fewer than its words.
+/// Lays the lines of the clip level's brick at `place` (in bricks) of `tile` into `out`, exactly
+/// `clipmap::lines_words` of `pairs.len()` entries and the segments they reach long
+/// (`brick_pairs`), as its fill asks them (pxl-engine clipmap.rs `LINES_*`): the tile's header,
+/// each bin's first entry, the entries, and the segments the bins reach, each once, in their
+/// lines' order.
 pub fn brick_lines(
     tile: Quadrant,
     separation: &Separation,
-    place: [u32; 2],
     pairs: &mut [(u32, u32)],
     out: &mut [u32],
-) -> Option<usize> {
-    use pxl_engine::clipmap::{lines_words, BRICK, LINES_BINS_AT, LINES_ENTRIES_AT, WAYS_BINS};
+) {
+    use pxl_engine::clipmap::{LINES_BINS_AT, LINES_ENTRIES_AT, WAYS_BINS};
     use pxl_engine::way::{header, HEADER_WORDS, SEGMENT_WORDS};
-    let cnt = entry_cnt(separation, place);
-    if cnt > pairs.len() {
-        return None;
-    }
-    let pairs = &mut pairs[..cnt];
-    let bins = BRICK >> WAYS_SHIFT;
-    // Each bin of the brick a segment's footprint reaches, and the point it starts at.
-    let mut at = 0;
-    separation.reaches(f64::from(TILE_CELLS), WAYS_ACROSS, |k, d, _, s| {
-        let [x, y] = [k as u32 % WAYS_ACROSS, k as u32 / WAYS_ACROSS];
-        if [x / bins, y / bins] == place {
-            pairs[at] = (
-                (y % bins) * bins + x % bins,
-                separation.starts[d] + s as u32,
-            );
-            at += 1;
-        }
-    });
-    // The segments, each once in their points' order, each entry then its
-    // segment's place among them.
-    pairs.sort_unstable_by_key(|&(b, p)| (p, b));
-    let segments = pairs.chunk_by(|a, b| a.1 == b.1).count() as u32;
-    let words = lines_words(cnt as u32, segments) as usize;
-    let out = out.get_mut(..words)?;
+    let cnt = pairs.len();
     let frame = Frame::of(tile);
     out[..HEADER_WORDS as usize].copy_from_slice(&header(frame.per_m(), &frame.stations()));
     let (mut n, mut last) = (0, None);
@@ -139,7 +136,6 @@ pub fn brick_lines(
     for (k, e) in pairs.iter().enumerate() {
         out[LINES_ENTRIES_AT as usize + k] = e.1;
     }
-    Some(words)
 }
 
 /// A clip level's brick as its fill reads it (pxl-engine `clipmap::Brick`): its cells' zoom,
@@ -171,7 +167,7 @@ impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> Brick for TileBrick<'_, L, H> {
         Shard::INSIDE
     }
     fn line(&self, k: u32) -> u32 {
-        self.lines[k as usize]
+        self.lines.get(k as usize).copied().unwrap_or(0)
     }
     fn own(&self, i: u32) -> u32 {
         ground::own((self.palette_idxs)(i), self.cell_zoom)
@@ -258,15 +254,17 @@ pub fn drawn(tile: Quadrant, terrain: TerrainTile) -> TerrainTile {
         };
         let seen = span(1).any(|qy| {
             span(0).any(|qx| {
-                let cnt = entry_cnt(&one, [qx, qy]);
-                pairs.resize(cnt, (0, 0));
-                words.resize(lines_words(cnt as u32, cnt as u32) as usize, 0);
-                let n = brick_lines(tile, &one, [qx, qy], &mut pairs, &mut words)
-                    .expect("sized by its entries");
-                let sq = laid(tile, &terrain.cells, &terrain.ele, [qx, qy], &words[..n]);
+                pairs.clear();
+                let segments =
+                    brick_pairs(&one, [qx, qy], &mut pairs).expect("a bake's heap does not refuse");
+                let cnt = pairs.len();
+                words.clear();
+                words.resize(lines_words(cnt as u32, segments) as usize, 0);
+                brick_lines(tile, &one, &mut pairs, &mut words);
+                let sq = laid(tile, &terrain.cells, &terrain.ele, [qx, qy], &words);
                 let ring = -1..=BRICK as i32;
                 ring.clone()
-                    .any(|y| ring.clone().any(|x| way::column(&sq, [x, y]).0.n > 0))
+                    .any(|y| ring.clone().any(|x| way::column(&sq, [x, y]).n > 0))
             })
         });
         if seen {
@@ -400,14 +398,15 @@ pub fn palette_cells(pkt: &[u8]) -> Result<&[GroundId], MarshalError> {
     Ok(read_tile(pkt)?.cells)
 }
 
-/// Decode a tile straight into its resident room in `.fixed.terrain`: its
-/// lines and, into `ele`, its padded samples; its cells go to its clip levels
-/// (`palette_cells`). Refused where its lines are past `room`.
-pub fn decode_into(
+/// Decode a tile straight into its resident room: into `ele`, its padded samples, in
+/// `.fixed.terrain`; its lines into a run of words taken by `run` (pxl-core
+/// domain/layer/terrain/tile.rs), which is not asked for a tile with no line. Its cells go to
+/// its clip levels (`palette_cells`).
+pub fn decode_into<E: From<MarshalError>>(
     pkt: &[u8],
-    room: separation::Room,
     ele: &'static mut [i16],
-) -> Result<TerrainTile, MarshalError> {
+    run: impl FnOnce(usize) -> Result<&'static mut [u32], E>,
+) -> Result<TerrainTile, E> {
     let Table {
         ele: samples,
         occupancy,
@@ -415,9 +414,13 @@ pub fn decode_into(
         ..
     } = read_tile(pkt)?;
     ele.copy_from_slice(samples);
+    let separation = match separation.words() {
+        0 => Separation::default(),
+        words => separation.into_run(run(words)?),
+    };
     Ok(TerrainTile {
         cells: Cow::Borrowed(&[]),
-        separation: separation.into_room(room)?,
+        separation,
         ele: Cow::Borrowed(ele),
         occupancy,
     })

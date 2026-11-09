@@ -5,7 +5,6 @@ use xpute_kit::golden::Golden;
 use super::*;
 use crate::bake::tile::earth;
 use xpute_kit::math::rng::SplitMix64;
-use xpute_kit::status::errno::Errno;
 
 const GOLDEN: &str = include_str!(concat!(env!("PXL_REPO"), "/spec/golden/bake/terrain.tsv"));
 
@@ -57,19 +56,9 @@ fn tile(seed: u64) -> TerrainTile {
     )
 }
 
-const ROOM_LINES: usize = 438;
-const ROOM_POINTS: usize = 4193;
-
-fn room() -> separation::Room {
-    separation::Room {
-        starts: vec![0; ROOM_LINES + 1].leak(),
-        points: vec![[0; 2]; ROOM_POINTS].leak(),
-        tops: vec![0; ROOM_POINTS].leak(),
-        widths: vec![0; ROOM_LINES].leak(),
-        kinds: vec![0; ROOM_LINES].leak(),
-        forms: vec![0; ROOM_LINES].leak(),
-        clears: vec![0; ROOM_LINES].leak(),
-    }
+/// A run of the words a decode asks for, as a client's store takes one.
+fn run(words: usize) -> Result<&'static mut [u32], MarshalError> {
+    Ok(vec![0; words].leak())
 }
 
 /// A tile round-trips, in hand and into a record's room.
@@ -84,7 +73,7 @@ fn formats_round_trip() {
     );
     // On the CPU its lines, but for what only a bake reads: a fold's
     // coarsest zooms and a grid sweep's boxes.
-    let resident = decode_into(&terrain, room(), vec![0; ELE_COLUMN].leak()).unwrap();
+    let resident = decode_into(&terrain, vec![0; ELE_COLUMN].leak(), run).unwrap();
     let want = Separation {
         first_zooms: Default::default(),
         ..tile.separation.clone()
@@ -101,27 +90,23 @@ fn earth_pkt_size() {
     assert_eq!(earth.len(), earth::PKT_BYTES);
 }
 
-/// A tile whose lines are past a client's room is refused, not cut.
+/// A tile with no line takes no run of the client's store.
 #[test]
-fn lines_past_the_room_refused() {
-    let tile = tile(7);
-    let long = Separation {
-        starts: (0..=ROOM_LINES as u32 + 1).collect::<Vec<_>>().into(),
-        points: vec![[0; 2]; ROOM_LINES + 1].into(),
-        tops: vec![0; ROOM_LINES + 1].into(),
-        widths: vec![1; ROOM_LINES + 1].into(),
-        kinds: vec![0; ROOM_LINES + 1].into(),
-        forms: vec![0; ROOM_LINES + 1].into(),
-        clears: vec![0; ROOM_LINES + 1].into(),
-        first_zooms: vec![0; ROOM_LINES + 1].into(),
-    };
-    let long = encode(&TerrainTile {
-        separation: long,
-        ..tile
+fn no_line_takes_no_run() {
+    let pkt = encode(&TerrainTile {
+        separation: Separation::default(),
+        ..tile(7)
     })
     .unwrap();
-    let err = decode_into(&long, room(), vec![0; ELE_COLUMN].leak()).unwrap_err();
-    assert_eq!(err.errnum, Errno::EFBIG);
+    let resident = decode_into(
+        &pkt,
+        vec![0; ELE_COLUMN].leak(),
+        |_: usize| -> Result<&'static mut [u32], MarshalError> {
+            panic!("no line asks for no run")
+        },
+    )
+    .unwrap();
+    assert_eq!(resident.separation, Separation::default());
 }
 
 #[test]
@@ -129,8 +114,7 @@ fn non_tile_pkt_refused() {
     let v = Golden::load(GOLDEN);
     let small = hex::decode(v.s("old_format_tile")).unwrap();
     assert!(decode(&small).is_err());
-    let room = room();
-    assert!(decode_into(&small, room, vec![0; ELE_COLUMN].leak()).is_err());
+    assert!(decode_into(&small, vec![0; ELE_COLUMN].leak(), run).is_err());
 }
 
 /// Every valid occupancy byte round-trips.

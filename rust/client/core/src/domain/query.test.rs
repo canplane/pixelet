@@ -22,7 +22,6 @@ use crate::domain::layer::object::store::Store;
 use crate::domain::layer::tile_cache::TileCache;
 use pxl_spec::space::coord::zoom::{idx_of, units, Zoom};
 
-use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::domain::layer::object::store::Write;
 use crate::domain::layer::terrain::clipmap::test;
 use crate::sys::serial;

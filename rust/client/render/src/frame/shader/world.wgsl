@@ -7,15 +7,13 @@
 // and nothing held across a loop beyond what is read after it. It works in integers alone: a
 // height a word holds is exact through `ground::top`'s floats, so `top_of` is its integer form.
 //
-// What a node hands down is a `vec4<u32>` laid out as pxl-engine `Inheritance::words`: what is
-// placed, the node's shard, where its ground's cells were held, and its ways' cursor. A cut is
-// a `vec4<i32>` as the eye holds one, its index then its zoom (pxl-engine `object::Cut`;
-// `NO_CUT` is none).
+// What a node hands down is a `vec3<u32>` laid out as pxl-engine `Inheritance::words`: what is
+// placed, the node's shard, and where its ground's cells were held. A cut is a `vec4<i32>` as
+// the eye holds one, its index then its zoom (pxl-engine `object::Cut`; `NO_CUT` is none).
 
 @group(0) @binding(2) var<storage, read> ground: array<u32>;
 @group(0) @binding(5) var<storage, read> shards: array<vec4<u32>>;
 @group(0) @binding(6) var<storage, read> objects: array<u32>;
-@group(0) @binding(7) var<storage, read> pool: array<u32>;
 
 // Values and fills, as pxl-engine value.rs and answer.rs state them.
 
@@ -44,30 +42,13 @@ fn four_of(v: u32) -> u32 {
   return v | (v << 8u) | (v << 16u) | (v << 24u);
 }
 
-// A tree of either of two columns, what is placed or the ways, read as pxl-engine object.rs
-// reads it.
+// The tree of what is placed, read as pxl-engine object.rs reads it.
 
-const PLACED = 0u;
-const WAYS = 1u;
-
-/// The word of slot `slot`'s child pointer in the ways' pool (pxl-engine way_tree.rs
-/// `first_child_at`). The pool lays out whole child groups, each with its eight child pointers
-/// followed by its eight data words.
-fn first_child_at(slot: u32) -> u32 {
-  return 2u * slot - slot % 8u;
-}
-
-fn first_child(tree: u32, slot: u32) -> u32 {
-  if (tree == WAYS) {
-    return pool[first_child_at(slot)];
-  }
+fn first_child(slot: u32) -> u32 {
   return objects[slot];
 }
 
-fn tree_data(tree: u32, slot: u32) -> u32 {
-  if (tree == WAYS) {
-    return pool[first_child_at(slot) + 8u];
-  }
+fn tree_data(slot: u32) -> u32 {
   return objects[arrayLength(&objects) / 2u + slot];
 }
 
@@ -76,11 +57,11 @@ fn is_folded(s: u32) -> bool {
 }
 
 /// The twin of pxl-engine `object::of`.
-fn slot_at(tree: u32, slot: u32, zoom: u32) -> u32 {
-  if (first_child(tree, slot) != 0u) {
+fn slot_at(slot: u32, zoom: u32) -> u32 {
+  if (first_child(slot) != 0u) {
     return (slot << SLOT_SHIFT) | SLOT_FOLDED | zoom;
   }
-  if (tree_data(tree, slot) == VAL_VOID) {
+  if (tree_data(slot) == VAL_VOID) {
     return SLOT_NOTHING;
   }
   return (slot << SLOT_SHIFT) | zoom;
@@ -104,20 +85,20 @@ fn child_idx(at: vec3<i32>) -> u32 {
 }
 
 /// The twin of pxl-engine `object::child`.
-fn tree_child(tree: u32, parent: u32, zoom: u32, at: vec3<i32>) -> u32 {
+fn tree_child(parent: u32, zoom: u32, at: vec3<i32>) -> u32 {
   if (!is_folded(parent)) {
     return parent;
   }
-  return slot_at(tree, (first_child(tree, parent >> SLOT_SHIFT) & ~BRANCH) + child_idx(at), zoom);
+  return slot_at((first_child(parent >> SLOT_SHIFT) & ~BRANCH) + child_idx(at), zoom);
 }
 
 /// The twin of pxl-engine `object::down`.
-fn tree_down(tree: u32, slot: u32, top: u32, zoom: u32, at: vec3<i32>) -> u32 {
-  var s = slot_at(tree, slot, top);
+fn tree_down(slot: u32, top: u32, zoom: u32, at: vec3<i32>) -> u32 {
+  var s = slot_at(slot, top);
   var z = top;
   while (z < zoom && is_folded(s)) {
     z += 1u;
-    s = tree_child(tree, s, z, at >> vec3<u32>(zoom - z));
+    s = tree_child(s, z, at >> vec3<u32>(zoom - z));
   }
   return s;
 }
@@ -132,11 +113,11 @@ fn cut_holds(cut: vec4<i32>, zoom: u32, at: vec3<i32>) -> bool {
 }
 
 /// The twin of pxl-engine `object::val`.
-fn tree_val(tree: u32, s: u32, hide: vec4<i32>, zoom: u32, at: vec3<i32>) -> u32 {
+fn tree_val(s: u32, hide: vec4<i32>, zoom: u32, at: vec3<i32>) -> u32 {
   if (s == SLOT_NOTHING) {
     return VAL_VOID;
   }
-  let word = tree_data(tree, s >> SLOT_SHIFT);
+  let word = tree_data(s >> SLOT_SHIFT);
   let v = word & 0xffffu;
   if (is_folded(s)) {
     if ((word >> 16u) == 0u) {
@@ -148,11 +129,10 @@ fn tree_val(tree: u32, s: u32, hide: vec4<i32>, zoom: u32, at: vec3<i32>) -> u32
   return select(VAL_VOID, v, voxel(v));
 }
 
-/// The twin of pxl-engine `object::fill_share`, for the node that holds slot `s` of `tree`,
-/// what is placed or the ways.
-fn fill_share(tree: u32, s: u32) -> u32 {
+/// The twin of pxl-engine `object::fill_share`, for the node that holds slot `s`.
+fn fill_share(s: u32) -> u32 {
   if (is_folded(s)) {
-    return tree_data(tree, s >> SLOT_SHIFT) >> 16u;
+    return tree_data(s >> SLOT_SHIFT) >> 16u;
   }
   return FULL;
 }
@@ -163,15 +143,15 @@ fn placed_four(s: u32, hide: vec4<i32>, zoom: u32, at: vec3<i32>, v: u32) -> u32
   if (!is_folded(s)) {
     return select(0u, four_of(v), v < 256u);
   }
-  let base = first_child(PLACED, s >> SLOT_SHIFT) & ~BRANCH;
+  let base = first_child(s >> SLOT_SHIFT) & ~BRANCH;
   var word = 0u;
   for (var q = 0u; q < 4u; q += 1u) {
     let xy = vec2<i32>(2i * at.x + i32(q & 1u), 2i * at.y + i32(q >> 1u));
     // Each quarter takes its upper child where that fills, else its lower child seen through
     // it, else the node's own value.
-    var c = tree_val(PLACED, slot_at(PLACED, base + q + 4u, zoom + 1u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z + 1i));
+    var c = tree_val(slot_at(base + q + 4u, zoom + 1u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z + 1i));
     if (!fills(c)) {
-      c = tree_val(PLACED, slot_at(PLACED, base + q, zoom + 1u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z));
+      c = tree_val(slot_at(base + q, zoom + 1u), hide, zoom + 1u, vec3<i32>(xy, 2i * at.z));
       if (!fills(c)) {
         c = v;
       }
@@ -182,19 +162,6 @@ fn placed_four(s: u32, hide: vec4<i32>, zoom: u32, at: vec3<i32>, v: u32) -> u32
     word |= c << (8u * q);
   }
   return word;
-}
-
-/// The twin of pxl-engine `way_tree::cursor`.
-fn way_cursor(root: u32, cell_zoom: u32, zoom: u32, at: vec3<i32>) -> u32 {
-  let top = cell_zoom - BRICK_SHIFT;
-  if (root == 0u || zoom < top) {
-    return SLOT_NOTHING;
-  }
-  let k = (at.z >> (zoom - top)) - (i32(root) >> ROOT_ID_BITS);
-  if (k < 0i || k >= i32(ROOT_NODES)) {
-    return SLOT_NOTHING;
-  }
-  return tree_down(WAYS, CHILDREN * (root & (POOL_CHILD_GROUPS - 1u)) + u32(k), top, zoom, at);
 }
 
 // The service area and the clip levels, as pxl-engine area.rs and clipmap.rs read them.
@@ -325,11 +292,12 @@ struct GroundCell {
   part: u32,
   fold: u32,
   place: u32,
+  ways: vec2<i32>,
 }
 
 /// The answer for a cell where no column was read (pxl-engine `Cell::NONE`).
 fn ground_none(kind: u32, asset: vec2<u32>, place: u32) -> GroundCell {
-  return GroundCell(kind, asset, VAL_VOID, 0i, FULL, 0u, place);
+  return GroundCell(kind, asset, VAL_VOID, 0i, FULL, 0u, place, vec2<i32>(EMPTY_LO, EMPTY_HI));
 }
 
 /// The twin of pxl-engine `ground::node` where the node is asked as a cell (`is_cell`).
@@ -354,7 +322,7 @@ fn ground_cell(shard: u32, place: u32, zoom: u32, c: vec3<i32>) -> GroundCell {
   if (asset != VAL_VOID && opens(col, zoom, c.z)) {
     cave = hollow(zoom, c);
   }
-  return GroundCell(KIND_CELL, vec2<u32>(asset, cave), col.palette_idx, col.top, col.part, col.fold, r.place);
+  return GroundCell(KIND_CELL, vec2<u32>(asset, cave), col.palette_idx, col.top, col.part, col.fold, r.place, r.b.zw);
 }
 
 // The caves, as pxl-content cave.rs carves them.
@@ -702,37 +670,21 @@ fn hollow(node_zoom: u32, node: vec3<i32>) -> u32 {
 
 /// What a node is handed where nothing was handed down to it (pxl-engine `Inheritance::of`):
 /// what is placed is found down its line from the top.
-fn world_root(zoom: u32, c: vec3<i32>) -> vec4<u32> {
+fn world_root(zoom: u32, c: vec3<i32>) -> vec3<u32> {
   let p = path(zoom, c);
   let slot = OBJECT_ROOT + child_idx(p >> vec3<u32>(zoom));
-  return vec4<u32>(tree_down(PLACED, slot, 0u, zoom, p), SHARD_UNKNOWN, LOOKUP_NONE, SLOT_NOTHING);
-}
-
-/// The ways' cursor of a node whose ground's cells were found at `place`. It is the parent's
-/// cursor, `trail`, where `place` names the same brick as the parent's `before`. It is found
-/// from the brick's root where `place` names another brick, or where the node lies at the first
-/// zoom at which the tree's nodes are the world's (pxl-engine world.rs `WAYS_FROM`). A coarser
-/// node has none.
-fn ways_at(place: u32, before: u32, trail: u32, zoom: u32, c: vec3<i32>) -> u32 {
-  let enters = zoom == SHARD_ZOOM + 1u && lookup_here(place);
-  if (((place ^ before) & LOOKUP_AT) == 0u && !enters) {
-    return trail;
-  }
-  if (!lookup_here(place) || zoom <= SHARD_ZOOM) {
-    return SLOT_NOTHING;
-  }
-  return way_cursor(ground[brick_at(lookup_slot(place)) + ROOT_AT], lookup_from(place), zoom, c);
+  return vec3<u32>(tree_down(slot, 0u, zoom, p), SHARD_UNKNOWN, LOOKUP_NONE);
 }
 
 /// The twin of pxl-engine `world::node` for a cell. What is placed answers alone where it
 /// fills its whole cube, and is otherwise laid over the ground's asset and the ways.
-fn world_cell(above: vec4<u32>, shard: u32, zoom: u32, c: vec3<i32>, carve: vec4<i32>, hide: vec4<i32>) -> Answer {
+fn world_cell(above: vec3<u32>, shard: u32, zoom: u32, c: vec3<i32>, carve: vec4<i32>, hide: vec4<i32>) -> Answer {
   let put = above.x;
   var over = VAL_AIR;
   var over_fill = FULL;
   if (!cut_holds(carve, zoom, c)) {
-    over = tree_val(PLACED, put, hide, zoom, c);
-    over_fill = fill_share(PLACED, put);
+    over = tree_val(put, hide, zoom, c);
+    over_fill = fill_share(put);
   }
   var over_four = 0u;
   if (over != VAL_VOID) {
@@ -740,12 +692,11 @@ fn world_cell(above: vec4<u32>, shard: u32, zoom: u32, c: vec3<i32>, carve: vec4
       over_four = placed_four(put, hide, zoom, c, over);
     }
     if (over_fill == FULL) {
-      return Answer(KIND_CELL, vec2<u32>(PLACED_ASSET | over, over_four), vec4<u32>(put, shard, above.z, above.w));
+      return Answer(KIND_CELL, vec2<u32>(PLACED_ASSET | over, over_four), vec3<u32>(put, shard, above.z));
     }
   }
   let g = ground_cell(shard, above.z, zoom, c);
-  let trail = ways_at(g.place, above.z, above.w, zoom, c);
-  let at = vec4<u32>(put, shard, g.place, trail);
+  let at = vec3<u32>(put, shard, g.place);
   if (g.kind == KIND_LACKS && over == VAL_VOID) {
     return Answer(g.kind, g.asset, at);
   }
@@ -763,9 +714,9 @@ fn world_cell(above: vec4<u32>, shard: u32, zoom: u32, c: vec3<i32>, carve: vec4
     four = select(g.fold, four_of(val), zoom >= LEAF_CELL_ZOOM || val != g.palette_idx);
   }
   if (g.kind == KIND_CELL && lookup_here(g.place)) {
-    let way = tree_val(WAYS, trail, NO_CUT, zoom, c);
-    if (way != VAL_VOID) {
-      let got = cover(fill, way, fill_share(WAYS, trail));
+    let way = way_at_cell(g.place, g.ways, zoom, c);
+    if (way != WAY_NOTHING) {
+      let got = cover(fill, way, FULL);
       if (got.theirs) {
         val = way;
         four = four_of(way);

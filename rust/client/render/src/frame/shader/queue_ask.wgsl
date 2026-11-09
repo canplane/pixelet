@@ -19,7 +19,7 @@
 /// the slot's key is put back as it was. The rays parked at the node are then walked on by the
 /// walk that asks (queue_last.wgsl). The ask is counted in the run's lane (`asked_at`), unless
 /// that lane is `NONE`.
-fn ask_once(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32) {
+fn ask_once(parent: vec3<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32) {
   if (!keeps(zoom, c)) {
     return;
   }
@@ -57,12 +57,7 @@ fn queue_ask(parked: bool, id: u32) {
       i32(atomicLoad(&queue[at + 2u])),
       i32(atomicLoad(&queue[at + 3u])),
     );
-    let parent = vec4<u32>(
-      atomicLoad(&queue[at + 6u]),
-      atomicLoad(&queue[at + 7u]),
-      atomicLoad(&queue[at + 8u]),
-      atomicLoad(&queue[at + 9u]),
-    );
+    let parent = vec3<u32>(atomicLoad(&queue[at + 6u]), atomicLoad(&queue[at + 7u]), atomicLoad(&queue[at + 8u]));
     ask_once(parent, atomicLoad(&queue[at + 5u]) != 0u, atomicLoad(&queue[at]), c, atomicLoad(&queue[at + 4u]));
   }
 }

@@ -388,12 +388,7 @@ impl Lineage<Inheritance> for BeamLine<'_> {
 
     fn ancestor(&self, z: Zoom) -> Inheritance {
         let k = (self.line + beam::LINE_INHERITANCE + beam::LINE_STEP * z) as usize;
-        Inheritance::of_words([
-            self.beams[k],
-            self.beams[k + 1],
-            self.beams[k + 2],
-            self.beams[k + 3],
-        ])
+        Inheritance::of_words([self.beams[k], self.beams[k + 1], self.beams[k + 2]])
     }
 }
 

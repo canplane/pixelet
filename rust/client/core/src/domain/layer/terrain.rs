@@ -7,5 +7,3 @@ pub mod fixed;
 pub mod pool;
 mod query;
 pub mod tile;
-
-pub(in crate::domain) use query::TerrainQuery;

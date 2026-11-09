@@ -1,29 +1,31 @@
 // pxl-core/domain/layer/terrain/tile.rs
 
 //! Terrain tiles as a layer of the pyramid. A tile's slot is a room in
-//! `.fixed.terrain` for the parts read of the tile as a whole, its
-//! separation lines and its elevation samples, which are decoded into it
-//! straight from the packet. A tile's cells belong to the clip levels
+//! `.fixed.terrain` for the part read of the tile as a whole, its elevation
+//! samples, which are decoded into it straight from the packet; its
+//! separation lines, sized by the tile, lie in a block of their own on the
+//! heap, counted against the ways' pool's cap and freed with the tile
+//! (pool.rs), and a tile with no line takes none.
+//! A tile's cells belong to the clip levels
 //! (clipmap.rs): they cut what they want of them from the packet in the turn
 //! it lands, and the packet is then freed. A tile the bake left without an
 //! object is drawn from the tile over it, whose cells there are open water;
 //! at the source's top, such a tile is void.
 
-use crate::domain::layer::tile_cache::TileCache;
-use pxl_spec::bake::separation;
 use pxl_spec::bake::tile::terrain::{decode_into, TerrainTile, ELE_COLUMN};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_core::mem;
 use xpute_core::mem::heap::Block;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::sys::io::failure::Failure;
+use crate::sys::io::failure::Exit;
+use crate::sys::io::room::Refusal;
 
 use crate::domain::layer::terrain::clipmap;
-use crate::domain::layer::terrain::fixed::RANGE;
-use crate::domain::layer::terrain::fixed::{ele_off, separation_column, SEPARATION_COLUMNS};
+use crate::domain::layer::terrain::fixed::{ele_off, RANGE};
+use crate::domain::layer::terrain::pool::{way_pool, PoolRefusal};
+use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::Base;
 use crate::sys::io::demand::{PhaseList, Stream, TaskPhaseName};
 use crate::sys::io::fetch;
@@ -34,6 +36,32 @@ use xpute_core::global::Global;
 use xpute_core::mem::range::arr;
 
 static TERRAIN: Global<TileCache<TerrainTile>> = Global::new();
+
+/// Each tile slot's block of its separation, given back with its tile (`gone`). A tile with no
+/// line takes none.
+static BLOCKS: Global<[Option<Box<[u32]>>; TILE_SLOTS]> = Global::new();
+
+const TILE_SLOTS: usize = TileCache::<TerrainTile>::SLOTS as usize;
+
+fn blocks() -> &'static mut [Option<Box<[u32]>>; TILE_SLOTS] {
+    BLOCKS.get(|| core::array::from_fn(|_| None))
+}
+
+/// Takes a block of `words` words for tile slot `slot`'s separation. A refusal a give-back or a
+/// page can change waits as a want for room does (sys/io/request.rs `Wait::Room`).
+fn take_block(slot: u32, words: usize) -> Result<&'static mut [u32], Exit> {
+    match way_pool().take_tile(words as u32) {
+        Ok(block) => {
+            let held = &mut blocks()[slot as usize];
+            *held = Some(block);
+            let words = held.as_deref_mut().or_bug(Errno::ENOTRECOVERABLE);
+            // SAFETY: the block is this tile's alone until it is given back with it (`gone`).
+            Ok(unsafe { &mut *core::ptr::from_mut(words) })
+        }
+        Err(PoolRefusal::Cap) => Err(Exit::Refused(Refusal::ways())),
+        Err(PoolRefusal::Heap) => Err(Exit::Refused(Refusal::now())),
+    }
+}
 
 impl Base for TerrainTile {
     const STREAM: Stream = Stream::terrain;
@@ -56,12 +84,22 @@ impl Base for TerrainTile {
         slot: u32,
         pkt: &[u8],
         phases: &mut PhaseList,
-    ) -> Result<TerrainTile, Failure> {
+    ) -> Result<TerrainTile, Exit> {
         let t0 = now();
-        // SAFETY: the slot is this tile's, and nothing reads it until the tile is set.
-        let terrain = decode_into(pkt, unsafe { room_of(slot) }, unsafe { ele_of(slot) })?;
+        // SAFETY: the slot is this tile's, and nothing reads it until the tile is set. The slot's
+        // old tile, if any, gave its block back when it was removed (`gone`), before this ran.
+        let terrain = decode_into(pkt, unsafe { ele_of(slot) }, |words| {
+            take_block(slot, words)
+        })?;
         phases.push(TaskPhaseName::decode_ms, now() - t0);
         Ok(terrain)
+    }
+
+    /// Gives back the block of the tile leaving slot `slot`, if it held one.
+    fn gone(slot: u32) {
+        if let Some(block) = blocks()[slot as usize].take() {
+            way_pool().give_tile(block);
+        }
     }
 
     /// Lets the clip levels cut what they want from the packet, then frees
@@ -90,47 +128,9 @@ pub fn again_room() -> u32 {
 }
 
 /// # Safety
-/// As `room_of`'s.
+/// The slot's samples must belong to the tile given them, and to no other
+/// tile, from now until another tile takes the slot.
 unsafe fn ele_of(slot: u32) -> &'static mut [i16] {
     // SAFETY: as this function's, and the plane is plain numbers.
     unsafe { arr(RANGE.get(), ele_off(slot), ELE_COLUMN) }
-}
-
-/// # Safety
-/// The slot's columns must belong to the tile given them, and to no other
-/// tile, from now until another tile takes the slot.
-unsafe fn room_of(slot: u32) -> separation::Room {
-    /// Column `K` of the slot, as long as the layout makes it, with
-    /// elements of the room's own type, which must be as wide as the layout
-    /// counts them.
-    ///
-    /// # Safety
-    /// As `room_of`'s.
-    unsafe fn column<T, const K: usize>(slot: u32) -> &'static mut [T] {
-        const {
-            assert!(
-                SEPARATION_COLUMNS[K].1 == size_of::<T>(),
-                "a column's element as wide as the layout counts it"
-            );
-        };
-        let (at, bytes) = separation_column(slot, K);
-        // The layout keeps every column inside the range, so a column past
-        // its end is a bug.
-        let at = RANGE.get().at(at, bytes).or_bug(Errno::ENOTRECOVERABLE) as usize;
-        // SAFETY: the column is core memory at its own size, never freed, and
-        // the caller's contract makes it this tile's alone.
-        unsafe { core::slice::from_raw_parts_mut(mem::at::<T>(at), SEPARATION_COLUMNS[K].0) }
-    }
-    // SAFETY: as this function's.
-    unsafe {
-        separation::Room {
-            starts: column::<_, 0>(slot),
-            points: column::<_, 1>(slot),
-            tops: column::<_, 2>(slot),
-            widths: column::<_, 3>(slot),
-            kinds: column::<_, 4>(slot),
-            forms: column::<_, 5>(slot),
-            clears: column::<_, 6>(slot),
-        }
-    }
 }

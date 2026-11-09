@@ -99,8 +99,8 @@ const fn body_block(stream: Stream) -> u64 {
 ///   block for the longest other kind, or a terrain body too long for its slot
 ///   (sys/io/body.rs `take`) in one no longer, each freed once it is decoded
 ///   or passed;
-/// - the ways' pool at its largest (domain/layer/terrain/pool.rs, pxl-engine
-///   way_tree.rs `POOL_CHILD_GROUPS`);
+/// - the ways' pool at its cap, which holds each brick's kept spans and counts each resident
+///   tile's separation (domain/layer/terrain/pool.rs, pxl-engine clipmap.rs `WAYS_POOL_WORDS`);
 /// - the profiler's lanes while its setting is on (perf/record.rs).
 ///
 /// The pool and the lanes sit in the buddy's power-of-two blocks. Each flow is

@@ -170,8 +170,11 @@ precision is always spent where the eye is.
 ### The query, the only seam
 
 Everything that looks at the world asks it the same question, and the **query**
-is the only place that knows how a layer stores its answer
-(`pxl-core domain/layer/query.rs` `Query`). The **world** composes the layers
+is the only place that knows how a layer stores its answer. Its files stand
+beside the layers' (`pxl-core domain/query.rs`), and in the module tree it is a
+child of theirs (`domain/layer.rs`): what a layer stores its answers in is
+visible within the layers alone, the query among them, and the compiler refuses
+any other reader. The **world** composes the layers
 into one answer for drawing and for control alike (`pxl-engine world.rs`
 `node`), each written over the one below:
 
@@ -247,7 +250,7 @@ cell moves:
 
 A tile is cut into its bricks as it lands, and the bricks are filled on the CPU
 over the following turns, a part at a time within the turn's share, with a
-min-max pyramid over their heights and their bridges and tunnels as a tree. All
+min-max pyramid over their heights and their bridges and tunnels as spans. All
 of it is uploaded, so the CPU's question and the GPU's ray meet the same bridge.
 Where a level holds no brick, the coarser level's ground is read, and drawn, in
 its place.
@@ -419,8 +422,8 @@ noticing:
 - The ground is stored as 2.5D, but nothing behaves as 2.5D: every reader asks
   the 3D query, so caves, bores and placed objects are seen alike.
 - Only the query reads a layer. Everything else asks the world, and the
-  check-rules tool refuses a layer read anywhere else
-  (`rust/tool/src/bin/rule.rs` `LAYER_READERS`).
+  compiler refuses a layer's read anywhere else: the reads are visible within
+  `domain/layer` alone, and the query is its child.
 - The UI computes no coordinate and no tile, and reaches the core only through
   the generated commands and the snapshot.
 - Nothing under `xpute/` knows pixelet: no tile, no world, no pixelet name.
@@ -452,7 +455,7 @@ up, and the folders are that order. The check-rules tool holds it.
   sys/                   what all of it stands on
     io/          reads and their scheduler
     sched/       a turn's edge and its phases
-    mem/         the memory's sections
+    section      the memory's sections
     boot · load  bringing it up and what it loads
 
   beside: perf/, the profiler, which reads anything and decides nothing

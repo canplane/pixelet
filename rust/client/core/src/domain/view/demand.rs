@@ -100,7 +100,7 @@ pub struct Layer {
     pub slot_cnt: u32,
     /// Called when a want's file arrives, with the want's id and the file, or
     /// with None when the source has nothing for it.
-    on_arrival: fn(u64, Option<Block>, &mut PhaseList) -> Result<(), Failure>,
+    on_arrival: fn(u64, Option<Block>, &mut PhaseList) -> Result<(), Exit>,
 }
 
 const fn layer<L: ViewLayer>() -> Layer {
@@ -277,8 +277,8 @@ impl<L: ViewLayer> Demand<L> {
     pub fn admit(
         &mut self,
         p: Quadrant,
-        receive: impl FnOnce(u32) -> Result<L, Failure>,
-    ) -> Result<(), Failure> {
+        receive: impl FnOnce(u32) -> Result<L, Exit>,
+    ) -> Result<(), Exit> {
         // When the cache must evict, the tile last in view order goes, and of
         // two equally late, the greater.
         let o = self.observation.as_ref();
@@ -664,7 +664,7 @@ pub fn admit_arrived(pass: &Pass) {
                 Some(l) => (l.on_arrival)(id, block, &mut phases),
                 None => {
                     release(block);
-                    Err(Errno::ENOTRECOVERABLE.into())
+                    Err(Failure::from(Errno::ENOTRECOVERABLE).into())
                 }
             };
             settle(key, Exit::from(result), Some(phases));
@@ -683,7 +683,7 @@ fn on_arrived<L: ViewLayer>(
     id: u64,
     block: Option<Block>,
     phases: &mut PhaseList,
-) -> Result<(), Failure> {
+) -> Result<(), Exit> {
     let p = Quadrant::of_id(id);
     let Some(b) = block else {
         L::demand().absent(p);

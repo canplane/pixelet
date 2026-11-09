@@ -43,12 +43,22 @@ impl Exit {
     }
 }
 
-impl From<Result<(), Failure>> for Exit {
-    fn from(result: Result<(), Failure>) -> Exit {
-        match result {
-            Ok(()) => Exit::Ok,
-            Err(fail) => Exit::Failed(fail),
-        }
+impl From<Result<(), Exit>> for Exit {
+    fn from(result: Result<(), Exit>) -> Exit {
+        result.err().unwrap_or(Exit::Ok)
+    }
+}
+
+impl From<Failure> for Exit {
+    fn from(fail: Failure) -> Exit {
+        Exit::Failed(fail)
+    }
+}
+
+impl From<MarshalError> for Exit {
+    #[track_caller]
+    fn from(err: MarshalError) -> Exit {
+        Exit::Failed(Failure::from(err))
     }
 }
 

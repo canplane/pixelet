@@ -24,7 +24,7 @@ use xpute_core::mem::range::OwnedRange;
 use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::{PhaseList, Stream};
-use crate::sys::io::failure::Failure;
+use crate::sys::io::failure::Exit;
 
 static DIVISION: Global<TileCache<DivisionTile>> = Global::new();
 
@@ -58,7 +58,7 @@ impl Base for DivisionTile {
         slot: u32,
         pkt: &[u8],
         _phases: &mut PhaseList,
-    ) -> Result<DivisionTile, Failure> {
+    ) -> Result<DivisionTile, Exit> {
         // SAFETY: the slot is this tile's, and nothing reads it until the tile is set.
         let room = unsafe { range::arr::<u32>(RANGE.get(), slot * ROOM_BYTES, CELLS) };
         Ok(division::decode_into(pkt, room)?)

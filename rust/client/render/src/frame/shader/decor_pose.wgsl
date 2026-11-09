@@ -124,7 +124,7 @@ fn placed_child(parent: u32, zoom: u32, c: vec3<i32>, lo: vec3<i32>, hi: vec3<i3
   if (any(c < (lo >> t)) || any(c > (hi >> t))) {
     return SLOT_NOTHING;
   }
-  return tree_child(PLACED, parent, zoom, c);
+  return tree_child(parent, zoom, c);
 }
 
 /// Whether unit cell `c`, whose slot is `s`, holds a placed decor whose box, posed as placed
@@ -133,7 +133,7 @@ fn leaf_overlaps(s: u32, c: vec3<i32>, at: vec3<i32>, size: vec3<i32>) -> bool {
   if (s == SLOT_NOTHING || is_folded(s) || (s & SLOT_ZOOM_MASK) != UNIT_ZOOM) {
     return false;
   }
-  let k = (tree_data(PLACED, s >> SLOT_SHIFT) & 0xffffu) - FIRST_VAL;
+  let k = (tree_data(s >> SLOT_SHIFT) & 0xffffu) - FIRST_VAL;
   if (k >= DECORS) {
     return false;
   }
@@ -275,14 +275,14 @@ fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         carve = eye_cut(CARVE);
         hide = eye_cut(HIDE);
         put = world_root(zoom, c).x;
-        if (!cut_holds(carve, zoom, c) && tree_val(PLACED, put, hide, zoom, c) == VAL_VOID) {
+        if (!cut_holds(carve, zoom, c) && tree_val(put, hide, zoom, c) == VAL_VOID) {
           edited = false;
           ask += 1i;
           continue;
         }
       }
     }
-    let v = world_cell(vec4<u32>(put, SHARD_UNKNOWN, LOOKUP_NONE, SLOT_NOTHING), shard_at(SHARD_UNKNOWN, ask_zoom, c.xy), ask_zoom, c, carve, hide).asset.x;
+    let v = world_cell(vec3<u32>(put, SHARD_UNKNOWN, LOOKUP_NONE), shard_at(SHARD_UNKNOWN, ask_zoom, c.xy), ask_zoom, c, carve, hide).asset.x;
     if (stage == STAGE_WALK) {
       if (fills(v)) {
         // The eighths of its cube that the cell keeps, with 0 for all eight, which

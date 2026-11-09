@@ -273,11 +273,11 @@ impl<L: Base> TileCache<L> {
     }
 
     /// The slot a held tile is in; none for an empty one.
-    pub fn slot(&self, p: Quadrant) -> Option<u32> {
+    pub(in crate::domain::layer) fn slot(&self, p: Quadrant) -> Option<u32> {
         self.readable(p)?.slot
     }
 
-    pub fn get(&self, p: Quadrant) -> Option<&L> {
+    pub(in crate::domain::layer) fn get(&self, p: Quadrant) -> Option<&L> {
         self.readable(p).map(|h| &h.body)
     }
 
@@ -304,7 +304,7 @@ impl<L: Base> TileCache<L> {
 
     /// `child`'s line from its parent's line. It reads only `child`'s own
     /// entry, so a descent costs one lookup per zoom and never walks back up.
-    pub fn step(&self, parent: &Line, child: Quadrant) -> Line {
+    pub(in crate::domain::layer) fn step(&self, parent: &Line, child: Quadrant) -> Line {
         let e = self.entry(child);
         let resident = e.filter(|e| e.asked).and_then(|e| e.resident.as_ref());
         let absent = e.is_some_and(|e| e.answered)
@@ -341,14 +341,14 @@ impl<L: Base> TileCache<L> {
 
     /// The finest resident tile on `p`'s line, which answers `p` when `p` is
     /// a miss.
-    pub fn finest_resident(&self, p: Quadrant) -> Option<Quadrant> {
+    pub(in crate::domain::layer) fn finest_resident(&self, p: Quadrant) -> Option<Quadrant> {
         self.line(p).finest_resident
     }
 
     /// The resident tile that gives `p`'s ground exactly, or none where `p`
     /// is a miss. A resident tile over `p` that does not give its ground only
     /// draws `p` coarser.
-    pub fn src(&self, p: Quadrant) -> Option<Quadrant> {
+    pub(in crate::domain::layer) fn src(&self, p: Quadrant) -> Option<Quadrant> {
         self.line(p).src
     }
 
@@ -567,6 +567,7 @@ impl<L: Base> TileCache<L> {
             .and_then(|h| h.slot)
         {
             self.in_slot[was as usize] = None;
+            L::gone(was);
         }
         if let Some(f) = slot {
             self.in_slot[f as usize] = Some(p);
@@ -631,6 +632,7 @@ impl<L: Base> TileCache<L> {
         }
         if let Some(f) = resident.slot {
             self.in_slot[f as usize] = None;
+            L::gone(f);
         }
         self.changed.push(p);
         self.revision = self.revision.wrapping_add(1);

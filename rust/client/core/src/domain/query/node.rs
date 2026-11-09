@@ -11,9 +11,9 @@
 //!
 //! - the ground: its column off the clip levels, as the GPU reads it, or the
 //!   wall at the service area's edge where the column is that wall. The ways
-//!   are read off the tree of their brick, whose child groups lie in the pool
+//!   are read off the spans their brick's fill kept, which lie in the pool
 //!   and are read as the GPU reads them (pxl-engine `clipmap::ground`,
-//!   `way_tree`);
+//!   `clipmap::way_at`);
 //! - the caves: the noises at the cell's center (pxl-content `cave::hollow`);
 //! - what is placed: the objects' pyramid record at that zoom, folded by
 //!   majority (domain/layer/object/store.rs, through the store's query).
@@ -60,9 +60,7 @@ use pxl_spec::space::layer::octant::Octant;
 use pxl_spec::space::layer::quadrant::{Quadrant, MIN_ZOOM};
 
 use super::world::World;
-use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::domain::layer::terrain::clipmap::{pool, CpuClipmap};
-use crate::domain::layer::terrain::TerrainQuery as _;
 use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::Answer;
 use crate::sys::io::source;
@@ -141,7 +139,7 @@ impl World<'_> {
         let node = (zoom + 1, child_at(zoom, c, k as u32));
         At {
             node,
-            inheritance: at.inheritance.child(&self.object.columns(), pool(), node),
+            inheritance: at.inheritance.child(&self.object.columns(), node),
         }
     }
 

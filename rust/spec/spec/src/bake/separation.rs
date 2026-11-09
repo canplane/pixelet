@@ -7,7 +7,6 @@
 
 use std::borrow::Cow;
 
-use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::shape::Shape;
 
@@ -80,7 +79,7 @@ pub struct Separation {
     pub clears: Cow<'static, [u8]>, // A bore's clear space over its surface, in leaf cells, as the solve set it.
     /// The coarsest zoom at which each point is held (pxl-engine `way::coarsest`): what a fold
     /// keeps of a line. Only the bake reads it, since no client path folds, so a client's room
-    /// holds none (`Table::into_room`).
+    /// holds none (`Table::into_run`).
     pub first_zooms: Cow<'static, [u8]>,
 }
 
@@ -620,19 +619,29 @@ impl<'a> Table<'a> {
         }
     }
 
-    /// Into a client's slot: every column but `first_zooms`, which only a fold reads; a client
-    /// reads a brick's lines whole (bake/tile/terrain.rs `brick_lines`). Refused, as a packet
-    /// too long for its kind is, where `room` holds fewer than the tile's lines or points.
-    pub fn into_room(&self, room: Room) -> Result<Separation, MarshalError> {
-        if self.starts.len() > room.starts.len() || self.points.len() > room.points.len() {
-            return Err(MarshalError::new(Errno::EFBIG));
+    /// The words the columns a client keeps of this table take in a run (`into_run`): none
+    /// where it has no line.
+    pub fn words(&self) -> usize {
+        match self.widths.len() {
+            0 => 0,
+            n => run_words(n, self.points.len()),
         }
+    }
+
+    /// Into a client's run of `words` (`words`), the columns one after the other: every column
+    /// but `first_zooms`, which only a fold reads; a client reads a brick's lines whole
+    /// (bake/tile/terrain.rs `brick_lines`).
+    pub fn into_run(&self, run: &'static mut [u32]) -> Separation {
+        if self.widths.is_empty() {
+            return Separation::default();
+        }
+        let room = Room::of(run, self.widths.len(), self.points.len());
         fn put<T: Copy>(dst: &'static mut [T], src: &[T]) -> &'static [T] {
             let dst = &mut dst[..src.len()];
             dst.copy_from_slice(src);
             dst
         }
-        Ok(Separation {
+        Separation {
             starts: put(room.starts, self.starts).into(),
             points: put(room.points, self.points).into(),
             tops: put(room.tops, self.tops).into(),
@@ -641,19 +650,55 @@ impl<'a> Table<'a> {
             kinds: put(room.kinds, self.kinds).into(),
             forms: put(room.forms, self.forms).into(),
             clears: put(room.clears, self.clears).into(),
-        })
+        }
     }
 }
 
-/// A client's slot's room for lines, a column each (pxl-core domain/layer/terrain/fixed.rs).
-pub struct Room {
-    pub starts: &'static mut [u32],
-    pub points: &'static mut [[i16; 2]],
-    pub tops: &'static mut [i16],
-    pub widths: &'static mut [u8],
-    pub kinds: &'static mut [u8],
-    pub forms: &'static mut [u8],
-    pub clears: &'static mut [u8],
+/// The words a client's columns of `lines` lines and `points` points take, each column whole
+/// words and in order (`Room::of`).
+fn run_words(lines: usize, points: usize) -> usize {
+    (lines + 1) + points + points.div_ceil(2) + 4 * lines.div_ceil(4)
+}
+
+/// A client's columns in a run of words, one column after the other: line starts, points, tops,
+/// widths, kinds, forms, clears (pxl-core domain/layer/terrain/tile.rs).
+struct Room {
+    starts: &'static mut [u32],
+    points: &'static mut [[i16; 2]],
+    tops: &'static mut [i16],
+    widths: &'static mut [u8],
+    kinds: &'static mut [u8],
+    forms: &'static mut [u8],
+    clears: &'static mut [u8],
+}
+
+impl Room {
+    fn of(run: &'static mut [u32], lines: usize, points: usize) -> Room {
+        assert_eq!(
+            run.len(),
+            run_words(lines, points),
+            "a run sized by its table"
+        );
+        let (starts, run) = run.split_at_mut(lines + 1);
+        let (at, run) = run.split_at_mut(points);
+        let (tops, run) = run.split_at_mut(points.div_ceil(2));
+        let (widths, run) = run.split_at_mut(lines.div_ceil(4));
+        let (kinds, run) = run.split_at_mut(lines.div_ceil(4));
+        let (forms, clears) = run.split_at_mut(lines.div_ceil(4));
+        // SAFETY: `u32` holds `[i16; 2]`, `i16` and `u8` in size and alignment, and every bit
+        // pattern is one of each; each view keeps within its own sub-run.
+        unsafe {
+            Room {
+                starts,
+                points: core::slice::from_raw_parts_mut(at.as_mut_ptr().cast(), points),
+                tops: core::slice::from_raw_parts_mut(tops.as_mut_ptr().cast(), points),
+                widths: core::slice::from_raw_parts_mut(widths.as_mut_ptr().cast(), lines),
+                kinds: core::slice::from_raw_parts_mut(kinds.as_mut_ptr().cast(), lines),
+                forms: core::slice::from_raw_parts_mut(forms.as_mut_ptr().cast(), lines),
+                clears: core::slice::from_raw_parts_mut(clears.as_mut_ptr().cast(), lines),
+            }
+        }
+    }
 }
 
 #[cfg(test)]

@@ -2,19 +2,20 @@
 
 //! gpu-portable: the ways off the ground, as a cell asks them: a bridge's deck and its piers,
 //! a tunnel's bore and the way's ground around it, and an approach's embankment or cutting.
-//! It is one rule for a brick's fill, which keeps each column's spans once and builds the
-//! brick's ways' tree from them; the descent, on the CPU and on the GPU, reads that tree. The
-//! lines themselves are solved offline (pxl-spec bake/separation.rs).
+//! It is one rule: a brick's fill makes each column's spans once, on the CPU, and keeps them; the
+//! query, on the CPU and on the GPU, reads a cell off those spans (`way_cell`, pxl-engine
+//! clipmap.rs `way_at`, pxl-render way.wgsl). The lines themselves are solved offline (pxl-spec
+//! bake/separation.rs).
 //!
 //! A cell is asked of the lines over its column, each visit of a line being its own crossing:
 //! the run of the line's segments, one after another, that lie over the column. A column's
 //! visits make its spans once (`column`), and what a cell of the column holds is read from
 //! them (`at`). Ground beside the air the spans leave takes that way's palette index, read
-//! from the spans of the columns beside it as the fill builds the tree (`way_cell`), so a
-//! reader reads only a cell's own column. Whatever is under half a cell in any dimension at a
-//! zoom is absent at that zoom, as the fold drops a line under half a cell wide: a slab or a
-//! bore fills a cell where it holds half the cell's height or more, and a pier, one leaf cell
-//! across, stands only in columns no more than two leaf cells wide.
+//! from the spans of the columns beside it (`way_cell`), so a brick's fill and a reader read
+//! its ring alike. Whatever is under half a cell in any dimension at a zoom is absent at that
+//! zoom, as the bake drops a line under half a cell wide: a slab or a bore fills a cell where
+//! it holds half the cell's height or more, and a pier, one leaf cell across, stands only in
+//! columns no more than two leaf cells wide.
 //!
 //! The code uses index loops and no `Option` (a missing crossing is `Crossing::NONE`), and
 //! words for tags. Where a column is crossed, its road's tops and its pier (`on_way`,
@@ -256,8 +257,8 @@ pub const INTERVAL_M: [f32; 2] = [BEAM_PILLAR_INTERVAL_M, WIDE_BEAM_PIER_INTERVA
 
 /// What a brick's lines open with (pxl-engine clipmap.rs `LINES_*`): its tile's leaf cells a
 /// ground meter (pxl-spec `Frame::per_m`), as a float's bits, then its stations
-/// (`StationGrid`), a word each: the narrow beam's step and then the wide's, the phase
-/// `phase[w][axis]` at `HEADER_PHASE + 2w + axis`, and the leaf cells a cell.
+/// (`StationGrid`), a word each: the narrow beam's step and then the wide's, the phase `phase[w][axis]` at
+/// `HEADER_PHASE + 2w + axis`, and the leaf cells a cell.
 pub const HEADER_PER_M: usize = 0;
 pub const HEADER_STEP: usize = 1;
 pub const HEADER_PHASE: usize = 3;
@@ -747,8 +748,8 @@ fn writes<C: ColumnGrid>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32
     (w, next)
 }
 
-/// The most spans a column keeps of those its visits make (`column`); a column past it keeps
-/// the first ones, in the order its visits come (`SpanList::push`).
+/// The most spans a column keeps (`column`): one past it is no column a brick holds, and the
+/// brick is refused for it and reads the coarser clip level (`SpanList::past`).
 pub const SPANS: usize = 10;
 
 /// A column's spans, in leaf cells, in the order its visits come, `n` of them: each a deck's
@@ -756,14 +757,16 @@ pub const SPANS: usize = 10;
 /// cutting's air (`AIR_OF` over its way's palette index). With them, its face cell
 /// (`ground::face_cell`), under which a bore's air beside the column lines it (`way_cell`); it
 /// is `i32::MIN` where the area's edge walls the column or the column is past the area, where
-/// nothing lines it. The column's cells are read from these, so its visits are found once: a
-/// brick's fill keeps them (pxl-engine fill.rs `spans`, read through `SpanTable`).
+/// nothing lines it. `past` says a visit made more spans than `SPANS`, so these are not all the
+/// column's. The column's cells are read from these, so its visits are found once: a brick's
+/// fill keeps them (pxl-engine fill.rs `spans`, read through `SpanTable`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SpanList {
     pub run: [[i32; 2]; SPANS],
     pub val: [u32; SPANS],
     pub n: u32,
     pub face: i32,
+    pub past: bool,
 }
 
 impl SpanList {
@@ -772,29 +775,29 @@ impl SpanList {
         val: [0; SPANS],
         n: 0,
         face: i32::MIN,
+        past: false,
     };
 
-    /// Span `v` over `run`, where there is room; false where there is none.
-    fn push(&mut self, run: [i32; 2], v: u32) -> bool {
-        if self.n as usize >= SPANS {
-            return false;
+    /// Span `v` over `run`, where there is room; a span past `SPANS` marks the list `past`.
+    fn push(&mut self, run: [i32; 2], v: u32) {
+        if (self.n as usize) < SPANS {
+            self.run[self.n as usize] = run;
+            self.val[self.n as usize] = v;
+            self.n += 1;
+        } else {
+            self.past = true;
         }
-        self.run[self.n as usize] = run;
-        self.val[self.n as usize] = v;
-        self.n += 1;
-        true
     }
 }
 
 /// Column `c`'s spans: what each visit of a line writes there that fills a cell at the grid's
-/// zoom (`fills_any`), since `at` reads no other; its face cell; and whether they all fit
-/// `SPANS`. A column of the bedrock, past the area or walled by its edge
-/// (`ColumnGrid::is_walled`), has no spans and no face, because bedrock wins over a way as it
-/// does over the ground's face.
-pub fn column<C: ColumnGrid>(cols: &C, c: [i32; 2]) -> (SpanList, bool) {
-    let (mut spans, mut fits) = (SpanList::NONE, true);
+/// zoom (`fills_any`), since `at` reads no other, and its face cell.
+/// A column of the bedrock, past the area or walled by its edge (`ColumnGrid::is_walled`), has
+/// no spans and no face, because bedrock wins over a way as it does over the ground's face.
+pub fn column<C: ColumnGrid>(cols: &C, c: [i32; 2]) -> SpanList {
+    let mut spans = SpanList::NONE;
     if cols.palette_idx(c) == ground::UNKNOWN || cols.is_walled(c) {
-        return (spans, fits);
+        return spans;
     }
     // The column's face and the tile's scale, read once for all its visits.
     let cell_zoom = cols.cell_zoom();
@@ -805,18 +808,18 @@ pub fn column<C: ColumnGrid>(cols: &C, c: [i32; 2]) -> (SpanList, bool) {
         let (w, next) = writes(cols, c, k, ground);
         k = next;
         if w.val != NOTHING && fills_any(cell_zoom, w.run) {
-            fits &= spans.push(w.run, w.val);
+            spans.push(w.run, w.val);
         }
         if w.val != NOTHING && fills_any(cell_zoom, w.pier) {
-            fits &= spans.push(w.pier, PIER);
+            spans.push(w.pier, PIER);
         }
     }
-    (spans, fits)
+    spans
 }
 
-/// The spans of a brick's columns and of the ring around it, as its fill keeps them
-/// (pxl-engine fill.rs `spans`), read in place: column `c`'s face cell and how many spans it
-/// has (`SpanList`), and its `j`-th span with its value.
+/// The spans of a brick's columns and of the ring around it, read in place as its fill keeps
+/// them (pxl-engine fill.rs `spans`, clipmap.rs `KeptSpans`): column `c`'s face cell and how many
+/// spans it has (`SpanList`), and its `j`-th span with its value.
 pub trait SpanTable {
     fn header(&self, c: [i32; 2]) -> (i32, u32);
     fn span(&self, c: [i32; 2], j: u32) -> ([i32; 2], u32);
@@ -851,8 +854,7 @@ fn at(k: &impl SpanTable, c: [i32; 2], n: u32, cell_zoom: Zoom, z: i32) -> u32 {
 
 /// The offset of the `k`-th of a cell and the six around it, the cell's own first: then the
 /// row under it, the column before it, the cell under it, the cell over it, the column after
-/// it and the row over it. This is the order of the grid's cells, in which a tree's leaves
-/// read them.
+/// it and the row over it. This is the order of the grid's cells.
 fn near(k: u32) -> [i32; 3] {
     // Its axis (y, x, then z) and its side.
     let (i, s) = if k < 4 {
@@ -1046,6 +1048,20 @@ mod tests {
     /// `lined_hull` is the hull of the cells `way_cell` writes, a cell at a time, with a bore's
     /// air held to the top. It is tried for every way a slab, a pier or air can lie over another,
     /// beside it, or over and under it, at zooms from the leaves to three coarser.
+    /// A column past `SPANS` says so, and a brick that holds it is refused rather than drawn
+    /// with spans dropped (pxl-core `Fill::Refused`).
+    #[test]
+    fn past_spans_says_so() {
+        let mut s = SpanList::NONE;
+        for k in 0..SPANS as i32 {
+            s.push([k, k + 1], 1);
+        }
+        assert!(!s.past);
+        s.push([20, 21], 1);
+        assert!(s.past);
+        assert_eq!(s.n as usize, SPANS, "the first ones kept, the list marked");
+    }
+
     #[test]
     fn bound_is_hull() {
         let mut seed = 0x2545_f491_u32;

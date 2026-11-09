@@ -20,7 +20,7 @@ use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::upload::{UploadTable, Uptake};
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::{PhaseList, Stream};
-use crate::sys::io::failure::Failure;
+use crate::sys::io::failure::Exit;
 use crate::sys::io::param::{BODY_SLOTS, MAX_CREDITS};
 use pxl_spec::space::coord::zoom::Zoom;
 
@@ -51,7 +51,7 @@ impl Base for EarthTile {
         _slot: u32,
         pkt: &[u8],
         _phases: &mut PhaseList,
-    ) -> Result<EarthTile, Failure> {
+    ) -> Result<EarthTile, Exit> {
         earth::decode(pkt)?;
         Ok(EarthTile)
     }

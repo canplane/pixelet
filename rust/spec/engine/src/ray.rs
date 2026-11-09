@@ -196,7 +196,7 @@ pub const fn queue_records_at(queue: u32) -> u32 {
 /// An ask's record: the node's zoom, the three words of its index, the zooms it is asked at
 /// (the far zoom, then the near one `ZOOM_BITS` above it), whether it is asked from the top,
 /// and what was handed to its parent.
-pub const QUEUE_RECORD_WORDS: u32 = 10;
+pub const QUEUE_RECORD_WORDS: u32 = 9;
 /// The most nodes one walk lists for the asks after it. A ray parked at a node listed past
 /// it is asked by the last walk instead.
 pub const QUEUE_RECORDS_CAP: u32 = 1 << 17;

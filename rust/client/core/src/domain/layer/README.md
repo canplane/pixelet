@@ -3,19 +3,23 @@
 A layer is where the world's stored data lives in the core, and the only place
 that knows how it is stored. Everything above asks the world's query (`query/`),
 and the query asks the terrain and the objects; no other code reads either
-directly. A layer never decides what to fetch either: the view says what an
-observation needs, and a layer holds what it is asked for.
+directly, and the compiler holds that: the query is a child of this module
+(`layer.rs`, though its files stand beside the layers), and a layer's reads are
+visible within `layer` alone. A layer never decides what to fetch either: the
+view says what an observation needs, and a layer holds what it is asked for.
 
 ## The contract
 
 A layer is a payload and a one-zoom fold: a tile at zoom z is folded from the
 tiles at z + 1 under it, by the layer's own rule (`layer.rs` `Base`; the object
-store has its own). Every layer answers the same question of a node at a zoom
-the asker states (`query.rs` `Query`):
+store has its own). The terrain and the object store each answer the query of a
+node at a zoom the asker states, by their own methods (`terrain/query.rs`,
+`object/store.rs`), and no other layer answers it:
 
 - its **bound**: the node is empty, or lies inside a conservative box;
 - its **answer**, which says what it lacked: exact, coarser along with the tile
-  it needed, or nothing along with that tile (`answer.rs` `Answer`);
+  it needed, or nothing along with that tile (`answer.rs` `Answer`); the store
+  is always resident, so it answers exactly;
 - a **cursor** that carries a descent from a node to its children, so each step
   is answered from its parent and never again from the top.
 
@@ -99,9 +103,13 @@ so the level follows its center a brick at a time and no held cell moves. A
 brick at a zoom is held once, however many levels want it. A tile's palette is
 cut into its bricks as it lands, and the bricks are filled after the frame, a
 part at a time within the turn's share for tasks (`fill_share`): their cells, a
-min-max mipmap over them, and their ways as a tree in one pool all bricks share.
-All of it is uploaded, so the CPU's query (`CpuClipmap`) and the GPU's cast meet
-the same bridge. A brick whose ways the pool cannot hold stays absent while a
-level wants it, and where a brick is absent a reader reads the coarser level's.
+min-max mipmap over them, and their ways as spans, a run in one pool all bricks
+share (`terrain/pool.rs`), 64 MiB and no more. All of it is uploaded, so the CPU's
+query (`CpuClipmap`) and the GPU's cast meet the same bridge. A tile's lines stay
+vectors, a heap block counted against the same cap. A brick whose spans the pool
+cannot hold reads the coarser level's meanwhile, and its fill is tried again once
+the pool gives a run back; a tile refused for its lines reads the tile over it and
+is asked again the same way. A brick with a column past `way::SPANS` stays
+refused while a level wants it.
 Nothing of a tile is kept for a brick still to come: a brick that enters asks
 for its tile again, and the browser's cache answers.

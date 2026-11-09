@@ -12,39 +12,31 @@ use crate::answer::{
     PLACED_ASSET,
 };
 use crate::area::Shard;
-use crate::clipmap::{BrickSource, Lookup};
+use crate::clipmap::{self, BrickSource, Lookup, Pool};
 use crate::ground::{self, VOID};
 use crate::object::{self, Cut, Table, AIR, CELL, ROOT, SPLIT};
 use crate::way;
-use crate::way_tree;
-use crate::{Zoom, LEAF_CELL_ZOOM, SHARD_ZOOM, UNIT_ZOOM};
+use crate::{Zoom, LEAF_CELL_ZOOM, UNIT_ZOOM};
 
 /// What a node is handed by the node over it, each source's own part, so that a descent asks
 /// each node's sources once. It holds what is placed (`object::NodeSlot`, a cursor in the
 /// objects' tree), what is known of the service area at the node's shard (`area::Shard`),
-/// where the clip levels held the ground's cells of a node above it (`clipmap::Lookup`,
-/// `clipmap::step`), and the ways' cursor in the tree of the brick `ground` names
-/// (`way_tree`). The CPU and the GPU hand down the same. The caves are not part of it: a
+/// and where the clip levels held the ground's cells of a node above it (`clipmap::Lookup`,
+/// `clipmap::step`). The CPU and the GPU hand down the same. The caves are not part of it: a
 /// cube's caves are its own (`Content::hollow`).
 #[derive(Clone, Copy)]
 pub struct Inheritance {
     pub object: object::NodeSlot,
     pub shard: Shard,
     pub ground: Lookup,
-    pub ways: object::NodeSlot,
 }
 
 /// An `Inheritance`'s words, as a GPU holds one in storage (`Inheritance::words`).
-pub(crate) const INHERITANCE_WORDS: u32 = 4;
+pub(crate) const INHERITANCE_WORDS: u32 = 3;
 
 impl Inheritance {
     pub const fn words(&self) -> [u32; INHERITANCE_WORDS as usize] {
-        [
-            self.object.word(),
-            self.shard.word(),
-            self.ground.word(),
-            self.ways.word(),
-        ]
+        [self.object.word(), self.shard.word(), self.ground.word()]
     }
 
     pub const fn of_words(w: [u32; INHERITANCE_WORDS as usize]) -> Inheritance {
@@ -52,7 +44,6 @@ impl Inheritance {
             object: object::NodeSlot::of_word(w[0]),
             shard: Shard::of_word(w[1]),
             ground: Lookup::of_word(w[2]),
-            ways: object::NodeSlot::of_word(w[3]),
         }
     }
 
@@ -63,7 +54,6 @@ impl Inheritance {
             object: object::cursor(columns, ROOT, zoom, c),
             shard: Shard::UNKNOWN,
             ground: Lookup::NONE,
-            ways: object::NodeSlot::NOTHING,
         }
     }
 
@@ -74,50 +64,32 @@ impl Inheritance {
         object: object::NodeSlot::NOTHING,
         shard: Shard::UNKNOWN,
         ground: Lookup::NONE,
-        ways: object::NodeSlot::NOTHING,
     };
 
     /// What its child `c` at `zoom` is handed: each source stepped one zoom down, what is placed
-    /// in `columns` and the ways in `pool`.
-    pub fn child(
-        &self,
-        columns: &impl Table,
-        pool: &impl Table,
-        (zoom, c): (Zoom, [i32; 3]),
-    ) -> Inheritance {
+    /// in `columns`.
+    pub fn child(&self, columns: &impl Table, (zoom, c): (Zoom, [i32; 3])) -> Inheritance {
         Inheritance {
             object: object::child(columns, self.object, zoom, object::path(zoom, c)),
             shard: self.shard,
             ground: self.ground,
-            ways: object::child(pool, self.ways, zoom, c),
         }
     }
 }
 
-/// The first zoom whose nodes are the ways' tree's own nodes (`way_tree::cursor`). The tree
-/// counts its nodes along z by a leaf's Z shifted down, while the world counts one node
-/// through the whole height at the shards' zoom and coarser (`object::z_start`). A node there
-/// is no node of the tree, and a cursor stepped from it to its children would name other nodes
-/// than theirs. So the ways' cursor is nothing at those zooms and is found afresh at the first
-/// zoom past them, where the tree's nodes are the world's and every cursor stepped from it
-/// matches the one found for the node from the top.
-const WAYS_FROM: Zoom = SHARD_ZOOM + 1;
-
 /// What is in the node `c` at `zoom`, asked from `far` to `near`, given what the node above
 /// handed it (`at`). Its shard is found first, before any layer answers, so a stop's shard is
 /// its own whichever layer stops it. Where the ground's cells of a node above were held
-/// becomes the node's own (`ground::node`). The ways' cursor is stepped from its parent's
-/// where that names the same brick. It is found again from the brick's root where the brick
-/// differs, as the cells' place is found again (`clipmap::step`), and where the node is at
-/// `WAYS_FROM`, the first zoom at which the tree's nodes are the world's; coarser, it is
-/// nothing. A preview's `carve` and `hide` (`object::Cut`) are read with what is placed.
+/// becomes the node's own (`ground::node`). A preview's `carve` and `hide` (`object::Cut`) are
+/// read with what is placed.
 ///
 /// The node is a cell where `near` is its zoom or coarser, or where it lies past the ground's
 /// cells and nothing placed or carved in it is finer (`object::whole`): the world holds
 /// nothing finer than the node there. A cell's asset is what is placed in it where that fills
-/// it whole, air included. Otherwise it is the ground's asset with what the ways and what is
-/// placed write over it (their tree's leaf or fold there, `object::val`, with a bore's air as
-/// the ground's void, `way_tree::read`): one value whichever source holds it. The cell keeps
+/// it whole, air included. Otherwise it is the ground's asset with what the ways write over it
+/// (the rule over the spans the brick's fill kept, `clipmap::way_at`, with a bore's air as the
+/// ground's void) and what is placed (its leaf or fold there, `object::val`): one value
+/// whichever source holds it. The cell keeps
 /// the eighths of its cube that they fill together (`answer::cover`, `answer::eighths`,
 /// `answer::FILL_SHIFT`), and is air where that is none. `PLACED_ASSET` is set over a placed
 /// value; control tells an edit by it, and nothing drawn reads it. The second word holds the
@@ -137,7 +109,7 @@ const WAYS_FROM: Zoom = SHARD_ZOOM + 1;
     clippy::too_many_arguments,
     reason = "the world's four stores, where the node is, and the zooms and cuts it is asked at, each its own"
 )]
-pub fn node<H: ground::Resident, W: BrickSource, L: Table, P: Table>(
+pub fn node<H: ground::Resident, W: BrickSource, L: Table, P: Pool + ?Sized>(
     resident: &mut H,
     bricks: &W,
     columns: &L,
@@ -149,7 +121,7 @@ pub fn node<H: ground::Resident, W: BrickSource, L: Table, P: Table>(
 ) -> In<[u32; 2]> {
     at.shard = at.shard.at(resident, (zoom, [c[0], c[1]]));
     let (put, shard) = (at.object, at.shard);
-    let (place, trail) = (&mut at.ground, &mut at.ways);
+    let place = &mut at.ground;
     let is_cell = zoom >= near || zoom >= LEAF_CELL_ZOOM && object::whole(put, carve, zoom, c);
     let over = object::over(
         columns,
@@ -191,30 +163,12 @@ pub fn node<H: ground::Resident, W: BrickSource, L: Table, P: Table>(
     } else {
         (BOX_NONE, false)
     };
-    let before = *place;
     let (i, cell, bound) = ground::node(resident, shard, place, (zoom, c), [far, near], is_cell);
-    if place.from() != before.from()
-        || place.slot() != before.slot()
-        || place.here() != before.here()
-        || place.here() && zoom == WAYS_FROM
-    {
-        *trail = if place.here() && zoom >= WAYS_FROM {
-            way_tree::cursor(
-                pool,
-                bricks.root(place.from(), place.slot()),
-                place.from(),
-                zoom,
-                c,
-            )
-        } else {
-            object::NodeSlot::NOTHING
-        };
-    }
-    // The ways' leaf or fold over the cell, where the cell's column was read.
+    // The ways' cell over the ground's, where the cell's column was read.
     let way = if is_cell && i.kind == Kind::Cell && place.here() {
-        object::val(pool, *trail, Cut::NONE, zoom, c)
+        clipmap::way_at(bricks, pool, *place, bound, (zoom, c))
     } else {
-        VOID
+        way::NOTHING
     };
     if is_cell {
         // Where the ground is not held, the cell is the lack, unless what is placed keeps an asset
@@ -248,12 +202,11 @@ pub fn node<H: ground::Resident, W: BrickSource, L: Table, P: Table>(
         } else {
             0
         };
-        if way != VOID {
+        if way != way::NOTHING {
             // Where a way wrote the cell, its palette index four times, whatever its value.
-            let w = way_tree::read(way);
-            let (f, theirs) = cover(fill, w, object::fill_share(pool, *trail));
+            let (f, theirs) = cover(fill, way, FULL);
             if theirs {
-                (val, four) = (w, ground::word([w; 4]));
+                (val, four) = (way, ground::word([way; 4]));
             }
             fill = f;
         }

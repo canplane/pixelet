@@ -14,23 +14,39 @@
 //! any zoom.
 //!
 //! The query is the only reader of a layer (ARCHITECTURE.md, "The query, the
-//! only seam"). The layers' reads (`Query`, `TerrainQuery`, `ObjectQuery`,
-//! `CpuClipmap`, the ways' pool) are named only here and in the layers, and
-//! none is re-exported (pxl-tool rule.rs `LAYER_READERS`). A public
-//! `World` function answers from the composed world; an answer from one
-//! layer alone (`surface_of`) stays inside the query.
+//! only seam"). It is a child of `layer` in the module tree, its files beside
+//! the layers' (domain/layer.rs), and callers name it `crate::domain::query`.
+//! The layers' reads (the terrain's and the store's own methods, `CpuClipmap`,
+//! the ways' pool) are visible within `layer` alone, so the compiler refuses
+//! them anywhere else, and none is re-exported. A public `World` function
+//! answers from the composed world; an answer from one layer alone
+//! (`surface_of`) stays inside the query.
 
+// layer.rs names this file by `#[path]`, so it resolves its children as a
+// mod-rs file does: each is named from here.
+#[path = "query/change.rs"]
 pub mod change;
+#[path = "query/decor.rs"]
 pub mod decor;
+#[path = "query/decor_box.rs"]
 pub mod decor_box;
+#[path = "query/entry.rs"]
 mod entry;
+#[path = "query/limit.rs"]
 mod limit;
+#[path = "query/node.rs"]
 mod node;
+#[path = "query/place.rs"]
 mod place;
+#[path = "query/ray.rs"]
 mod ray;
+#[path = "query/scatter.rs"]
 mod scatter;
+#[path = "query/support.rs"]
 mod support;
+#[path = "query/surface.rs"]
 mod surface;
+#[path = "query/world.rs"]
 mod world;
 
 pub use ray::{at_zoom, by_dist, cell_zoom_at, finest, zoom_range, Hit, HitKind, Ray};

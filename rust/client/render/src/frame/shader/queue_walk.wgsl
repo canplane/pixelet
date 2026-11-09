@@ -59,10 +59,10 @@ fn list_ask(aim: Aim, w: WalkEnd, parked: bool) {
     return;
   }
   var top = true;
-  var inheritance = vec4<u32>(0u);
+  var inheritance = vec3<u32>(0u);
   if (w.zoom != 0u) {
     let pc = w.corner & vec3<u32>(~under(w.zoom - 1u));
-    let p = node_answer(vec4<u32>(0u), true, w.zoom - 1u, idx_of(pc, w.zoom - 1u, w.roots, r0), node_zooms(aim, pc, w.zoom - 1u, w.roots), true);
+    let p = node_answer(vec3<u32>(0u), true, w.zoom - 1u, idx_of(pc, w.zoom - 1u, w.roots, r0), node_zooms(aim, pc, w.zoom - 1u, w.roots), true);
     top = p.kind == KIND_LEFT;
     inheritance = p.inheritance;
   }
@@ -76,7 +76,6 @@ fn list_ask(aim: Aim, w: WalkEnd, parked: bool) {
   atomicStore(&queue[at + 6u], inheritance.x);
   atomicStore(&queue[at + 7u], inheritance.y);
   atomicStore(&queue[at + 8u], inheritance.z);
-  atomicStore(&queue[at + 9u], inheritance.w);
 }
 
 /// Where item `item`, whose ray is `aim`, starts in the first walk, or goes on from in the
@@ -105,7 +104,7 @@ fn queue_walk(parked: bool) {
     var roots = s.roots;
     var step = s.step;
     loop {
-      let w = walk(aim, Start(t, corner, zoom, roots, vec4<u32>(0u), true, step), QUEUE_STEPS);
+      let w = walk(aim, Start(t, corner, zoom, roots, vec3<u32>(0u), true, step), QUEUE_STEPS);
       // `ends` is 5 where the walk ran out of its steps, and 4 where it met a node no slot keeps
       // (walk.wgsl `walk`).
       if (w.ends == 5u) {

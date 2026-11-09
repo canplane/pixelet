@@ -10,7 +10,6 @@ use super::decor::DecorRay;
 use super::node::{coarsest, At};
 use super::world::World;
 use crate::domain::layer::instance::Instance;
-use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::{Answer, Base};
 use pxl_engine::answer::{self, In, Kind};

@@ -9,7 +9,7 @@
 struct Answer {
   kind: u32,
   asset: vec2<u32>,
-  inheritance: vec4<u32>,
+  inheritance: vec3<u32>,
 }
 
 /// A split's asset words `w` hold its box, the steps its content may lie in (pxl-engine

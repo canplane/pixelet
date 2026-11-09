@@ -41,11 +41,11 @@ fn object_box(s: u32, zoom: u32) -> vec2<u32> {
   if (!is_folded(s)) {
     return BOX_WHOLE;
   }
-  let base = first_child(PLACED, s >> SLOT_SHIFT) & ~BRANCH;
+  let base = first_child(s >> SLOT_SHIFT) & ~BRANCH;
   var low = 0u;
   var high = 0u;
   for (var k = 0u; k < 8u; k += 1u) {
-    if (slot_at(PLACED, base + k, zoom + 1u) != SLOT_NOTHING) {
+    if (slot_at(base + k, zoom + 1u) != SLOT_NOTHING) {
       low |= ~k & 7u;
       high |= k;
     }
@@ -64,7 +64,7 @@ fn cells_by(s: u32, d: u32) -> bool {
   if (s == SLOT_NOTHING) {
     return false;
   }
-  let word = tree_data(PLACED, s >> SLOT_SHIFT);
+  let word = tree_data(s >> SLOT_SHIFT);
   if (!is_folded(s)) {
     return voxel(word & 0xffffu);
   }
@@ -191,14 +191,14 @@ fn ground_split(shard: u32, place: u32, zoom: u32, c: vec3<i32>, far: u32, near:
 
 /// What a node hands its child `c` at `zoom`, given what the node was handed, `above`
 /// (pxl-engine `Inheritance::child`).
-fn world_child(above: vec4<u32>, zoom: u32, c: vec3<i32>) -> vec4<u32> {
-  return vec4<u32>(tree_child(PLACED, above.x, zoom, path(zoom, c)), above.y, above.z, tree_child(WAYS, above.w, zoom, c));
+fn world_child(above: vec3<u32>, zoom: u32, c: vec3<i32>) -> vec3<u32> {
+  return vec3<u32>(tree_child(above.x, zoom, path(zoom, c)), above.y, above.z);
 }
 
 /// The twin of pxl-engine `world::node` for a node coarser than asked. What is placed splits
 /// the node where it may fill it, and the ways split what the ground leaves air where they may.
 /// A split's box is every source's own box joined.
-fn world_split(above: vec4<u32>, shard: u32, zoom: u32, c: vec3<i32>, far: u32, near: u32) -> Answer {
+fn world_split(above: vec3<u32>, shard: u32, zoom: u32, c: vec3<i32>, far: u32, near: u32) -> Answer {
   let put = above.x;
   let splits = cells_by(put, near - zoom);
   var placed = BOX_NONE;
@@ -206,7 +206,7 @@ fn world_split(above: vec4<u32>, shard: u32, zoom: u32, c: vec3<i32>, far: u32, 
     placed = object_box(put, zoom);
   }
   let g = ground_split(shard, above.z, zoom, c, far, near);
-  let at = vec4<u32>(put, shard, g.place, ways_at(g.place, above.z, above.w, zoom, c));
+  let at = vec3<u32>(put, shard, g.place);
   let ways = way_slab(g.ways, coarsest(zoom, far), near);
   if (!splits && g.kind != KIND_SPLIT && !(g.kind == KIND_CELL && meets(ways, zoom, c.z, near))) {
     return Answer(g.kind, g.asset, at);
@@ -226,7 +226,7 @@ fn world_split(above: vec4<u32>, shard: u32, zoom: u32, c: vec3<i32>, far: u32, 
 
 /// What is in the node `c` at `zoom`, asked at the zooms from `far` to `near`, where `above` is
 /// what the node over it handed it (pxl-engine `world::node`).
-fn world_node(above: vec4<u32>, zoom: u32, c: vec3<i32>, far: u32, near: u32, carve: vec4<i32>, hide: vec4<i32>) -> Answer {
+fn world_node(above: vec3<u32>, zoom: u32, c: vec3<i32>, far: u32, near: u32, carve: vec4<i32>, hide: vec4<i32>) -> Answer {
   let shard = shard_at(above.y, zoom, c.xy);
   if (zoom >= near || (zoom >= LEAF_CELL_ZOOM && whole(above.x, carve, zoom, c))) {
     return world_cell(above, shard, zoom, c, carve, hide);
