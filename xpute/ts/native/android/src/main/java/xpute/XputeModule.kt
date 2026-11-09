@@ -30,7 +30,7 @@ class XputeModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("Xpute")
 
-    /** Fires when the core has posted or asked for a turn, when a call waits
+    /** Fires when a turn has ended, when a call waits
      * for `answer`, or when the core has stopped. It is sent from the core's
      * thread, and Expo carries the event to the JavaScript thread. */
     Events("onNotify")
@@ -56,9 +56,9 @@ class XputeModule : Module() {
 
     Function("run") { deadlineMs: Double -> Core.run(deadlineMs) }
 
-    Function("kick") { deadlineMs: Double, atMs: Double -> Core.kick(deadlineMs, atMs) }
+    Function("wake") { Core.wake() }
 
-    Function("nextFrame") { afterMs: Double -> Core.nextFrame(afterMs) }
+    Function("input") { Core.input() }
 
     Function("pause") { Core.pause() }
 
@@ -66,7 +66,7 @@ class XputeModule : Module() {
 
     Function("answer") { Core.answer() }
 
-    Function("turns") { Core.turns().toList() }
+    Function("heard") { Core.heard() }
 
     // @xpute/runtime's answer, called on the JavaScript thread, which is the
     // app's thread here.

@@ -1,10 +1,8 @@
 // @xpute/runtime/sched/scheduler.test.ts
 
-/** Tests the scheduler as the only one that times a core on its own thread,
- * which keeps no timer: every wake the core asks for, at once or in `n` ms,
- * is kicked only at a moment the policy gives and admits. The doorbell and
- * the policy are stand-ins that record the kicks and the moments asked
- * for. */
+/** Every wake the core asks for, at once or in `n` ms, is rung only at a
+ * moment the policy gives and admits. The doorbell and the policy are
+ * stand-ins that record the rings and the moments asked for. */
 
 import { afterEach, test, vi } from "vitest";
 import assert from "node:assert/strict";
@@ -25,7 +23,7 @@ function setup() {
     terminated: false,
     on_wake: null as ((wake_ms: number) => void) | null,
     on_turn: null as ((turn_ms: number, wake_ms: number) => void) | null,
-    kick: (deadline_ms: number) => kicks.push(deadline_ms),
+    ring: (deadline_ms: number) => (kicks.push(deadline_ms), -1),
   };
   const policy: SchedulingPolicy = {
     next: (consider) => moments.push(consider),

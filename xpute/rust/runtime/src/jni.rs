@@ -20,7 +20,7 @@ use sys::{
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::native::{answer_with, notify_on, turns as turns_of, Core};
+use crate::native::{answer_with, notify_on, Core};
 
 /// This is the table of JNI's functions that the environment of a call holds.
 ///
@@ -150,25 +150,6 @@ extern "C" fn notify() {
         if j.ExceptionCheck.or_bug(Errno::ENOSYS)(e) != 0 {
             j.ExceptionClear.or_bug(Errno::ENOSYS)(e);
         }
-    }
-}
-
-/// This is `Core.turns`: the wake and the longest turn since it was last asked
-/// (`native::turns`), as a `double[]` of two.
-///
-/// # Safety
-/// `e` is the environment JNI called with.
-pub unsafe fn turns(e: *mut JNIEnv) -> jobject {
-    let (wake, turn_ms) = turns_of();
-    // SAFETY: the environment JNI called this with; an array of two made
-    // here and filled with two.
-    unsafe {
-        let j = env(e);
-        let out = j.NewDoubleArray.or_bug(Errno::ENOSYS)(e, 2);
-        if !out.is_null() {
-            j.SetDoubleArrayRegion.or_bug(Errno::ENOSYS)(e, out, 0, 2, [wake, turn_ms].as_ptr());
-        }
-        out
     }
 }
 

@@ -9,10 +9,11 @@
  * (script/core-build.py).
  *
  * The core's memory is one ArrayBuffer over the region the core took, with
- * no copy. The core runs on its own thread while it has work (xpute-runtime
- * native/thread.rs). The JavaScript thread kicks it, waits on it only for a
- * turn it rings (`run`), and answers its calls, either inside `run` or when
- * it is told that a call waits (`onNotify`, `answer`).
+ * no copy. The core runs on its own thread, which begins its turns at the
+ * display's frames (xpute-runtime native/thread.rs). The JavaScript thread asks
+ * for turns (`wake`), waits on it only for a turn it rings (`run`), and answers
+ * its calls, either inside `run` or when it is told that a call waits
+ * (`onNotify`, `answer`).
  */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
@@ -21,9 +22,8 @@ import type { ComponentType } from "react";
 import type { NativeSyntheticEvent, ViewProps } from "react-native";
 
 interface Xpute {
-  /** `onNotify` fires when the core has posted or asked for a turn since
-   * `turns` was last called, when a call waits for `answer`, or when the core
-   * has stopped. */
+  /** `onNotify` fires when a turn has ended since `heard` was last called,
+   * when a call waits for `answer`, or when the core has stopped. */
   addListener(event: "onNotify", listener: () => void): { remove(): void };
   mem(): ArrayBuffer;
   /** Loads the word at byte `at` of the memory with acquire. */
@@ -35,23 +35,19 @@ interface Xpute {
    * wants the next turn, in ms, or NaN once the core has terminated. It
    * returns early if no turn may begin until the completion ring is read. */
   run(deadlineMs: f64): f64;
-  /** Asks for a turn and returns without waiting. The next turn begins at
-   * `atMs`, at once if that has passed, and ends no sooner than `deadlineMs`
-   * after its rise. */
-  kick(deadlineMs: f64, atMs: f64): void;
-  /** The time of the first display frame after both now and `afterMs`. */
-  nextFrame(afterMs: f64): f64;
-  /** From now on only a turn `run` rings may begin, and a kick waits for
-   * `resume`. */
+  /** Asks for a turn at the next display frame. */
+  wake(): void;
+  /** Says that an input came now, so the turns are interactive for a while. */
+  input(): void;
+  /** From now on only a turn `run` rings may begin. */
   pause(): void;
-  /** Turns begin again as kicks ask. */
+  /** Turns begin again at the display's frames. */
   resume(): void;
   /** Answers here the call that waits, if one does. */
   answer(): void;
-  /** This reports what the turns since the last call asked: when the core wants
-   * the next turn, in ms (0 for at once, -1 for never, NaN once the core has
-   * stopped), then how long the longest of those turns took, in ms. */
-  turns(): [f64, f64];
+  /** Says the news of `onNotify` was heard, so that the next is told, and
+   * answers whether the core has stopped. */
+  heard(): boolean;
   /** Makes `answer` answer the core's calls from here on. */
   callOn(answer: (at: u32) => i32): void;
   /** This says whether a GPU device opened. What the device is, the core reads

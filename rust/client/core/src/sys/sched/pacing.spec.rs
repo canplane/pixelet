@@ -4,7 +4,7 @@
 //
 // The numbers of the scheduling policy pixelet boots xpute's runtime with on a page or a
 // device (@xpute/runtime sched/frame_pacing.ts): turns paced to the display, each given
-// what its frames leave. The client's runtime injects them (ts/client/src/runtime/start.ts),
+// what its frames leave. A page's runtime is given them (ts/client/src/runtime/start.ts), a device's by the core,
 // and the core reads the margin to size its tasks past a full frame
 // (pxl-core sys/sched/edge.rs).
 

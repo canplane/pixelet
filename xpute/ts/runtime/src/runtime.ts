@@ -49,17 +49,18 @@ export interface Core {
   /** Makes `answer` answer each call from here on; until then every call
    * fails with ENOSYS. */
   answer_with(answer: (at: u32) => i32): void;
-  /** This is a native core's thread, which runs while it has work and sleeps
-   * until kicked. `kick` wakes it for a turn that ends no sooner than
-   * `deadline_ms` after its rise. `listen` registers `heard`, which is told
-   * when the core wants the next turn (NaN once it has stopped) and how long
-   * its longest turn ran. `pause` stops its turns, and `resume` lets kicks run
-   * them again. A page's core has no thread: it runs only inside `run`. */
+  /** This is a native core's thread, which begins its own turns at the
+   * display's frames and sleeps otherwise. `wake` asks for a turn at the next
+   * frame, and `input` says an input came now. `listen` registers `heard`,
+   * which is told when the core has posted or stopped, and whether it has
+   * stopped. `pause` stops its turns, and `resume` lets them run again. A
+   * page's core has no thread: it runs only inside `run`. */
   thread?: {
-    kick(deadline_ms: f64): void;
+    wake(): void;
+    input(): void;
     pause(): void;
     resume(): void;
-    listen(heard: (wake_ms: f64, turn_ms: f64) => void): void;
+    listen(heard: (stopped: boolean) => void): void;
   };
 }
 
@@ -147,6 +148,7 @@ export interface Config<G extends Grant = Grant> {
   fs?: Fs;
   gpu?: Gpu;
   program?: OnImport;
+  /** A core on its own thread paces itself and takes neither of these. */
   policy: SchedulingPolicy<G>;
   submit(grant: G, delta_s: f64): void;
   mem_of?(cmd: u32, f: BranchCursor | null): [u32, u32] | null;
@@ -258,14 +260,21 @@ export function mount<G extends Grant>(
       gpu?.after_turn();
       return wake;
     },
-    thread ? (deadline_ms) => thread.kick(deadline_ms) : null,
   );
-  const scheduler = new Scheduler(doorbell, policy, (grant, delta_s) => {
-    cfg.submit(grant, delta_s);
-    doorbell.send(Command.SYS_TURN, encode_args([Date.now()]));
-  });
-  thread?.listen((wake_ms, turn_ms) => doorbell.turns(wake_ms, turn_ms));
-  thread?.pause();
+  const scheduler =
+    thread ??
+    new Scheduler(doorbell, policy, (grant, delta_s) => {
+      cfg.submit(grant, delta_s);
+      doorbell.send(Command.SYS_TURN, encode_args([Date.now()]));
+    });
+  if (thread) {
+    // A read of the completion ring gives back room a task may wait for.
+    doorbell.on_wake = (wake_ms) => {
+      if (wake_ms === 0) thread.wake();
+    };
+    thread.listen((stopped) => doorbell.turns(stopped));
+    thread.pause();
+  }
 
   const kick = <T>(v: T): T => (scheduler.wake(), v);
   const send = (cmd: u32, ...args: Arg[]) =>
@@ -329,13 +338,8 @@ export function mount<G extends Grant>(
   }
 
   function steer(): void {
-    if (resumed && shown) {
-      thread?.resume();
-      scheduler.resume();
-    } else {
-      scheduler.pause();
-      thread?.pause();
-    }
+    if (resumed && shown) scheduler.resume();
+    else scheduler.pause();
   }
   function canvas(): Required<Pick<Gpu, "bind" | "unbind">> {
     if (!gpu?.bind || !gpu.unbind) throw new InvariantError(Errno.ENOTSUP);
@@ -357,7 +361,7 @@ export function mount<G extends Grant>(
     },
     kick: () => scheduler.wake(),
     wake: () => scheduler.wake(),
-    input: () => policy.input?.(performance.now()),
+    input: () => (thread ? thread.input() : policy.input?.(performance.now())),
     resume: () => ((resumed = true), steer()),
     pause: () => ((resumed = false), steer()),
     visible(visible) {

@@ -385,12 +385,7 @@ export type UiSend = {
   /** @param code Geolocation's; orientation gives none. */
   [Command.SENSOR_ERR]: [sensor: Sensor, code: GeolocationErrorCode | null];
   /** @param refresh_ms The display's refresh, as the runtime measures it from the animation frames it is handed, and the interval it paces turns at, a whole number of refreshes (the pacing the client boots it with, @xpute/runtime sched/frame_pacing.ts `FrameGrant`): the frame's budget. */
-  [Command.TURN_GRANT]: [
-    refresh_ms: f64,
-    paced_ms: f64,
-    interactive: boolean,
-    credits: u32,
-  ];
+  [Command.TURN_GRANT]: [refresh_ms: f64, paced_ms: f64, interactive: boolean];
   [Command.SENSOR_PERMISSION]: [sensor: Sensor, answer: PermissionAnswer];
   /** @param orient_permission iOS 13+'s gate: requestPermission exists and must run inside a gesture.
    * @param orient_silence_is_loss A browser's compass talks while the device is still and cannot say it stopped, so silence is the only sign of loss; a device's speaks only when the heading turns and reports a failure itself (SENSOR_ERR). */
@@ -480,7 +475,8 @@ export interface UiImports {
   [Command.UI_VIEW](e: UiView): void;
   /** The least interval the core asks between its turns: its load's word on the rate, which
    * the next TURN_GRANT's `paced_ms` answers, a whole number of refreshes (the pacing the
-   * client boots the runtime with, @xpute/runtime sched/frame_pacing.ts `pace`). */
+   * client boots the runtime with, @xpute/runtime sched/frame_pacing.ts `pace`). A core on
+   * its own thread sets it there and posts nothing (xpute-core sched/frame.rs). */
   [Command.TURN_PACE](e: TurnPace): void;
 }
 

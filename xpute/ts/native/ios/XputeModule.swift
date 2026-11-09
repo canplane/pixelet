@@ -5,8 +5,8 @@ import ExpoModulesCore
 import Foundation
 import QuartzCore
 
-/// This tells the core's thread each display frame (`xpute_vsync`). A
-/// display link calls it on the main thread.
+/// This tells the core's thread each display frame (`xpute_vsync`), which
+/// begins the turns. A display link calls it on the main thread.
 final class DisplayFrames: NSObject {
   private var link: CADisplayLink?
 
@@ -45,8 +45,8 @@ public class XputeModule: Module {
   public func definition() -> ModuleDefinition {
     Name("Xpute")
 
-    /// Fires when the core has posted or asked for a turn, when a call
-    /// waits for `answer`, or when the core has stopped.
+    /// Fires when a turn has ended, when a call waits for `answer`, or when
+    /// the core has stopped.
     Events("onNotify")
 
     OnCreate {
@@ -95,12 +95,12 @@ public class XputeModule: Module {
       xpute_run(deadlineMs)
     }
 
-    Function("kick") { (deadlineMs: Double, atMs: Double) in
-      xpute_kick(deadlineMs, atMs)
+    Function("wake") {
+      xpute_wake()
     }
 
-    Function("nextFrame") { (afterMs: Double) -> Double in
-      xpute_next_frame(afterMs)
+    Function("input") {
+      xpute_input()
     }
 
     Function("pause") {
@@ -115,10 +115,8 @@ public class XputeModule: Module {
       xpute_answer()
     }
 
-    Function("turns") { () -> [Double] in
-      var turnMs: Double = 0
-      let wake = xpute_turns(&turnMs)
-      return [wake, turnMs]
+    Function("heard") { () -> Bool in
+      xpute_heard()
     }
 
     /// The answer is kept past the call, so a copy of the value is stored.

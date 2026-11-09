@@ -5,7 +5,7 @@
 
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import type { i32 } from "@xpute/kit/abi/word.ts";
-import { FramePacing, next_frame } from "@xpute/runtime";
+import { FramePacing } from "@xpute/runtime";
 import { type Config, type FrameGrant, type Manifest } from "@xpute/runtime";
 import { Command, read, ui_mem } from "@/abi/cmd.spec.ts";
 import * as text from "@/abi/text.spec.ts";
@@ -45,15 +45,12 @@ export function config(handheld: boolean): Config<FrameGrant> {
   // A handheld device gets the smaller memory, because JavaScriptCore counts
   // the whole reservation as the page's memory.
   const sizes = MACHINE.mem_bytes;
-  const pacing = new FramePacing(
-    {
-      pace_hz: PACE_HZ,
-      margin_share: MARGIN_SHARE,
-      batch_frames: BATCH_FRAMES,
-      settle_ms: SETTLE_MS,
-    },
-    next_frame,
-  );
+  const pacing = new FramePacing({
+    pace_hz: PACE_HZ,
+    margin_share: MARGIN_SHARE,
+    batch_frames: BATCH_FRAMES,
+    settle_ms: SETTLE_MS,
+  });
   const asked = calls(pacing);
   return {
     core: source({

@@ -82,21 +82,15 @@ export class FramePacing implements SchedulingPolicy<FrameGrant> {
   /** This is the least interval the program asked between turns, and 0 for
    * none. */
   private _asked_ms: f64 = 0;
-  private readonly next_frame: (run: (now: f64) => void) => void;
 
-  /** `next_frame` hands over the display's next animation frame. */
-  constructor(
-    cfg: FramePacingConfig,
-    next_frame: (run: (now: f64) => void) => void,
-  ) {
+  constructor(cfg: FramePacingConfig) {
     this.cfg = cfg;
     this.max_ms = 1000 / cfg.pace_hz;
     this._refresh_ms = this.max_ms;
-    this.next_frame = next_frame;
   }
 
   next(consider: (now: f64) => void): void {
-    this.next_frame(consider);
+    requestAnimationFrame(consider);
   }
 
   /** After an input at `now`, the turns are interactive for `settle_ms`. */

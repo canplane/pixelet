@@ -14,9 +14,9 @@ export const SENSOR_ORIENT = 0x1205;
  * or cut off; the compass's, where the platform says so (SYS_BOOT's
  * orient_silence_is_loss). */
 export const SENSOR_ERR = 0x120b;
-/** What the runtime's frame pacing grants the turn it rings next, and the network's
- * credits, sent before its SYS_TURN (@xpute/runtime), which carries the clock: the
- * frame's budget, whether it follows an input, and the fetches its tick may start. */
+/** What the runtime's frame pacing grants the turn it rings next, sent before its
+ * SYS_TURN (@xpute/runtime), which carries the clock: the frame's budget and whether
+ * it follows an input. */
 export const TURN_GRANT = 0x1d01;
 /** What the tile source declares of itself, once the client has it: the tile root's
  * `source`, the published one out of the bucket or the dev tile server's, read by the
@@ -99,5 +99,6 @@ export const UI_SNAPSHOT = 0x1b01;
 export const UI_VIEW = 0x1b02;
 /** The least interval the core asks between its turns: its load's word on the rate, which
  * the next TURN_GRANT's `paced_ms` answers, a whole number of refreshes (the pacing the
- * client boots the runtime with, @xpute/runtime sched/frame_pacing.ts `pace`). */
+ * client boots the runtime with, @xpute/runtime sched/frame_pacing.ts `pace`). A core on
+ * its own thread sets it there and posts nothing (xpute-core sched/frame.rs). */
 export const TURN_PACE = 0x1d02;

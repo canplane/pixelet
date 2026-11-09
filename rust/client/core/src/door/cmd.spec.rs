@@ -399,9 +399,9 @@ pub enum Command {
     /// or cut off; the compass's, where the platform says so (SYS_BOOT's
     /// orient_silence_is_loss).
     SENSOR_ERR = 0x120b,
-    /// What the runtime's frame pacing grants the turn it rings next, and the network's
-    /// credits, sent before its SYS_TURN (@xpute/runtime), which carries the clock: the
-    /// frame's budget, whether it follows an input, and the fetches its tick may start.
+    /// What the runtime's frame pacing grants the turn it rings next, sent before its
+    /// SYS_TURN (@xpute/runtime), which carries the clock: the frame's budget and whether
+    /// it follows an input.
     TURN_GRANT = 0x1d01,
     /// What the tile source declares of itself, once the client has it: the tile root's
     /// `source`, the published one out of the bucket or the dev tile server's, read by the
@@ -483,7 +483,8 @@ pub enum Command {
     UI_VIEW = 0x1b02,
     /// The least interval the core asks between its turns: its load's word on the rate, which
     /// the next TURN_GRANT's `paced_ms` answers, a whole number of refreshes (the pacing the
-    /// client boots the runtime with, @xpute/runtime sched/frame_pacing.ts `pace`).
+    /// client boots the runtime with, @xpute/runtime sched/frame_pacing.ts `pace`). A core on
+    /// its own thread sets it there and posts nothing (xpute-core sched/frame.rs).
     TURN_PACE = 0x1d02,
 }
 
@@ -828,7 +829,6 @@ pub struct TurnGrant {
     pub refresh_ms: f64,
     pub paced_ms: f64,
     pub interactive: bool,
-    pub credits: u32,
 }
 
 impl TurnGrant {
@@ -838,7 +838,6 @@ impl TurnGrant {
             refresh_ms: finite(f.at(0)?.get_number()?)?,
             paced_ms: finite(f.at(1)?.get_number()?)?,
             interactive: f.at(2)?.get_bool()?,
-            credits: integer::<u32>(f.at(3)?.get_number()?)?,
         })
     }
 }

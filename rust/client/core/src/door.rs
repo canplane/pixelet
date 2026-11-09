@@ -49,6 +49,7 @@ use xpute_core::ipc::door::{DoorStat, Pos, Submission};
 use xpute_core::machine::{self, door};
 use xpute_core::mem::off_of_slice;
 use xpute_core::mem::section::PAGE_BYTES;
+use xpute_core::sched::frame;
 use xpute_core::sched::task;
 use xpute_core::stop;
 
@@ -191,6 +192,9 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
         Submission::Program(number, pkt) => cmd::ui::apply(s, number, &pkt),
         _ => Ok(None),
     });
+    if let Some(f) = frame::take() {
+        apply::turn::frame(f);
+    }
     let drained = now();
     if deadline_ms > 0.0 || world_frame_waiting() {
         task::poll();

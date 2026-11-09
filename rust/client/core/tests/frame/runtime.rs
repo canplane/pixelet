@@ -13,7 +13,7 @@ use xpute_core::ipc::head;
 use xpute_core::ipc::ring::Ring;
 use xpute_core::mem::Memory;
 use xpute_kit::status::errno::Errno;
-use xpute_runtime::native::{ring, turns, Core};
+use xpute_runtime::native::{ring, Core};
 
 use crate::fs::Fs;
 use crate::spec::{self, Protocol, V};
@@ -154,9 +154,6 @@ impl Runtime {
     /// wants the next turn, or None when the core has stopped.
     pub fn turn(&mut self, deadline_ms: f64) -> Option<f64> {
         let wake = ring(deadline_ms);
-        // The wakes the turns asked for are taken here, so the next ring reports only its
-        // own.
-        let _ = turns();
         self.drain();
         wake
     }

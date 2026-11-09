@@ -2,14 +2,14 @@
 
 // This is the C ABI of a core linked into its runtime's own process, as
 // xpute-runtime's `native_core!` and `native_abi!` export it, for an app in C,
-// Objective-C or Swift. The core runs on its own thread while it has work and
-// sleeps until it is kicked. The app kicks it at the moment the app's policy
-// picks for the wake the core asked for (`xpute_turns`; xpute-runtime
-// native/thread.rs). The app's thread waits on the core only for a turn it
-// rings, and it answers the core's calls.
+// Objective-C or Swift. The core runs on its own thread, which begins a wanted
+// turn at a display frame (`xpute_vsync`; xpute-runtime native/thread.rs). The
+// app's thread waits on the core only for a turn it rings, and it answers the
+// core's calls.
 
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 // Rings a turn that ends no sooner than deadline_ms after its rise, and waits
@@ -21,26 +21,23 @@
 // core has stopped: its thread is gone, and no later turn runs.
 double xpute_run(double deadline_ms);
 
-// Asks for a turn at once, after the app has written the submission ring, and
-// returns without waiting. The next turn ends no sooner than deadline_ms after
-// its rise, and begins at at_ms on xpute's clock, at once if that has passed.
-// From now on, the calling thread answers the core's calls.
-void xpute_kick(double deadline_ms, double at_ms);
+// Asks for a turn at the next display frame, after the app has written the
+// submission ring or read the completion ring.
+void xpute_wake(void);
+
+// Says that an input came now, so the turns are interactive for a while.
+void xpute_input(void);
 
 // The platform's display link calls this at each display frame, age_ms after
-// that frame's time.
+// that frame's time. A frame begins a turn when one is wanted and the pacing
+// admits it.
 void xpute_vsync(double age_ms);
 
-// The time on xpute's clock of the first display frame after both now and
-// after_ms.
-double xpute_next_frame(double after_ms);
-
-// From now on, only a turn `xpute_run` rings may begin, and a kick waits for
-// `xpute_resume`. An app calls this while it is hidden.
+// From now on, only a turn `xpute_run` rings may begin. An app calls this
+// while it is hidden.
 void xpute_pause(void);
 
-// Turns begin again as kicks ask, and a kick that came while paused takes
-// effect at once.
+// Turns begin again at the display's frames.
 void xpute_resume(void);
 
 // Returns the first byte of the core's memory, and writes its size through
@@ -62,19 +59,16 @@ void xpute_store(uint32_t at, uint32_t word);
 void xpute_call_on(int32_t (*answer)(uint32_t at));
 
 // Makes `f` be called from the core's thread with news; null sets none. The
-// news is that the core has posted or asked for a turn since the app last
-// called `xpute_turns`, that a call waits for `xpute_answer`, or that the core
+// news is that a turn has ended since the app last
+// called `xpute_heard`, that a call waits for `xpute_answer`, or that the core
 // has stopped. `f` must not call into the core: it hands the news to the app's
-// thread, which then calls `xpute_answer` and `xpute_turns` and reads the
+// thread, which then calls `xpute_answer` and `xpute_heard` and reads the
 // completion ring.
 void xpute_notify_on(void (*f)(void));
 
 // Answers, on this thread, the call that waits for its answer, if one does.
 void xpute_answer(void);
 
-// Reports what the turns since the last call asked. Returns when the core
-// wants the next turn, in ms: 0 for at once, -1 for never, NaN once the core
-// has stopped. Writes how long the longest of those turns took, in ms, through
-// `turn_ms`, which may be null. The core's thread keeps no timer: the app kicks
-// at the moment its policy picks for the returned wake.
-double xpute_turns(double *turn_ms);
+// Says the news of `xpute_notify_on` was heard, so that the next is told, and
+// returns whether the core has stopped.
+bool xpute_heard(void);

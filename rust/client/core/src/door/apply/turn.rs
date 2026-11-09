@@ -1,8 +1,10 @@
 // pxl-core/door/apply/turn.rs
 
-//! A turn is granted in two steps. The client first submits what the
-//! runtime's frame pacing grants and the network's credits (TURN_GRANT).
-//! Then xpute's SYS_TURN rings the granted turn and gives the clock.
+//! On a page a turn is granted in two steps. The client first submits what
+//! the runtime's frame pacing grants (TURN_GRANT). Then xpute's SYS_TURN rings
+//! the granted turn and gives the clock. On a device the core's own thread
+//! begins the turn at a display frame and hands it the same numbers
+//! (`xpute_core::sched::frame`).
 
 use super::refuse_unless;
 use crate::door::cmd as abi;
@@ -12,6 +14,7 @@ use crate::turn::TurnGrant;
 use xpute_core::abi::sys::SysTurn;
 use xpute_core::global::Global;
 use xpute_core::ipc::door::Outcome;
+use xpute_core::sched::frame::Frame;
 use xpute_kit::status::errno::Errno;
 
 /// The grant for the next turn rung, which that turn's SYS_TURN takes.
@@ -30,21 +33,29 @@ pub(in crate::door) fn turn(c: SysTurn) -> Outcome {
     let Some(g) = GRANT.get(|| None).take() else {
         return refuse_unless(false, Errno::EINVAL).map(|()| None);
     };
+    begin(c.unix_ms, g.refresh_ms, g.paced_ms, g.interactive);
+    Ok(Some(0))
+}
+
+/// The display frame this turn was begun at, on a core with its own thread.
+pub(in crate::door) fn frame(f: Frame) {
+    begin(f.unix_ms, f.refresh_ms, f.paced_ms, f.interactive);
+}
+
+fn begin(unix_ms: f64, refresh_ms: f64, paced_ms: f64, interactive: bool) {
     // The step is how far the wall clock moved since the last frame, in
     // seconds. It is 0 on the first frame and when the clock was set back.
     let last = clock::wall_now();
     let delta = if last > 0.0 {
-        ((c.unix_ms - last) / 1000.0).max(0.0)
+        ((unix_ms - last) / 1000.0).max(0.0)
     } else {
         0.0
     };
     turn::on_world_frame_asked(TurnGrant {
         delta,
-        refresh_ms: g.refresh_ms,
-        paced_ms: g.paced_ms,
-        interactive: g.interactive,
-        credits: g.credits,
+        refresh_ms,
+        paced_ms,
+        interactive,
     });
-    clock::set_wall_now(c.unix_ms);
-    Ok(Some(0))
+    clock::set_wall_now(unix_ms);
 }

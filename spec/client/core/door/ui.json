@@ -127,9 +127,9 @@
       "name": "TURN_GRANT",
       "val": 7425,
       "$doc": [
-        "What the runtime's frame pacing grants the turn it rings next, and the network's",
-        "credits, sent before its SYS_TURN (@xpute/runtime), which carries the clock: the",
-        "frame's budget, whether it follows an input, and the fetches its tick may start."
+        "What the runtime's frame pacing grants the turn it rings next, sent before its",
+        "SYS_TURN (@xpute/runtime), which carries the clock: the frame's budget and whether",
+        "it follows an input."
       ],
       "pkt": [
         {
@@ -148,10 +148,6 @@
         {
           "name": "interactive",
           "type": "bool"
-        },
-        {
-          "name": "credits",
-          "type": "u32"
         }
       ]
     },
@@ -671,7 +667,8 @@
       "$doc": [
         "The least interval the core asks between its turns: its load's word on the rate, which",
         "the next TURN_GRANT's `paced_ms` answers, a whole number of refreshes (the pacing the",
-        "client boots the runtime with, @xpute/runtime sched/frame_pacing.ts `pace`)."
+        "client boots the runtime with, @xpute/runtime sched/frame_pacing.ts `pace`). A core on",
+        "its own thread sets it there and posts nothing (xpute-core sched/frame.rs)."
       ],
       "pkt": [
         {

@@ -35,10 +35,6 @@ use xpute_runtime::native::pause;
 /// The refresh interval of the display the frames are paced to, 60 Hz.
 const REFRESH_MS: f64 = 1000.0 / 60.0;
 
-/// How many reads the client allows in flight at once (ts/client/src/service/platform/origin.ts
-/// `credits`).
-const CREDITS: f64 = 6.0;
-
 /// The surface's size in pixels, a phone's at a device pixel ratio of 1.
 const SIZE: [f64; 2] = [390.0, 844.0];
 
@@ -108,7 +104,6 @@ impl Run {
                 ("refresh_ms", V::Num(REFRESH_MS)),
                 ("paced_ms", V::Num(REFRESH_MS)),
                 ("interactive", V::Bool(interactive)),
-                ("credits", V::Num(CREDITS)),
             ],
         );
         self.runtime

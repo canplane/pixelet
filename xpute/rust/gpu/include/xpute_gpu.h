@@ -3,7 +3,7 @@
 // This is the C ABI of the GPU's runtime, for a core linked into its runtime's
 // own process (xpute.h); xpute-gpu's `native_abi!` exports it. Each call runs
 // on the core's thread while the caller waits. The runtime runs the core's
-// stream as the core publishes it, and kicks the core when a request it
+// stream as the core publishes it, and asks for a turn when a request it
 // holds completes.
 
 #pragma once

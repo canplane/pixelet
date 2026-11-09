@@ -158,15 +158,8 @@ test("doorbell - a turn rung is heard before its wake", () => {
   const mem = new ArrayBuffer(slots_at + 2 * slots_bytes(CAP, SLOT));
   Ring.init(mem, sq_at, CAP, slots_at, SLOT);
   Ring.init(mem, cq_at, CAP, slots_at + slots_bytes(CAP, SLOT), SLOT);
-  // This core runs on its own thread, and its rung turn asks for the next in
-  // 20 ms.
-  const door = new Doorbell(
-    mem,
-    sq_at,
-    cq_at,
-    () => 20,
-    () => {},
-  );
+  // This core's rung turn asks for the next in 20 ms.
+  const door = new Doorbell(mem, sq_at, cq_at, () => 20);
   const heard: string[] = [];
   door.on_turn = (_turn_ms, wake_ms) => heard.push(`turn ${wake_ms}`);
   door.on_wake = (wake_ms) => heard.push(`wake ${wake_ms}`);

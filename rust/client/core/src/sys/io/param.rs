@@ -12,8 +12,18 @@ pub const RETRY_BASE_MS: f64 = 1_000.0;
 pub const RETRY_CAP_MS: f64 = 30_000.0;
 pub const RETRY_ATTEMPTS: u32 = 6;
 
-/// The most reads out at once, however many credits the runtime grants.
+/// The most reads out at once, however many credits are granted.
 pub const MAX_CREDITS: u32 = 16;
+
+/// How many reads a frame grants: what the platform's fetch runs at once. A
+/// browser opens six connections to a host over HTTP/1.1, and a fetch past them
+/// waits in the browser's pool, which knows nothing of what the core wants
+/// first. On Android, Expo's OkHttp client runs at most five calls to a host
+/// (`Dispatcher` `maxRequestsPerHost`, which React Native's OkHttpClientProvider
+/// leaves at its default). On iOS, the origin speaks HTTP/2 over one
+/// connection, so nothing caps the reads below the six the body slots are sized
+/// for (`BODY_SLOTS`).
+pub const CREDITS: u32 = if cfg!(target_os = "android") { 5 } else { 6 };
 
 /// The most files `write` writes in one turn (sys/io/file.rs). Each such file
 /// is one batch of the objects' edits (domain/layer/object/repository.rs). A
@@ -26,8 +36,7 @@ pub const WRITES_A_TURN: u32 = 8;
 /// until it is decoded; an Earth body holds it until its texels are taken.
 /// The number is sized for an eye that moves, not for the worst case.
 ///
-/// A frame grants at most six credits (the client's
-/// `bracket.origin.credits`: six on a page and on iOS, five on Android), and
+/// A frame grants at most six credits (`CREDITS`), and
 /// at most four Earth bodies wait for their texels. A clip level spans one
 /// tile's cells on a side (pxl-engine `clipmap::CLIP_SIZE`), so it wants at
 /// most four tiles, and a moving eye refills a few clip levels at once: four

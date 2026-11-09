@@ -3,9 +3,8 @@
 //! This is the runtime for a core linked into the runtime's own process. It
 //! reserves the core's memory (`reserve`) and runs the core on a thread of its
 //! own, the only thread on which the core's `Global`s are sound. That thread
-//! acts as a vCPU (`thread`): it runs while the core has work and sleeps until
-//! it is kicked, and the program kicks it at the moment the program's policy
-//! picks for the wake the core asked for. Each call the core makes is handed to
+//! acts as a vCPU (`thread`): it runs a turn at a display frame when one is
+//! wanted, and sleeps otherwise. Each call the core makes is handed to
 //! the thread that answers it (`answer_with`, `notify_on`), and the blocks the
 //! core allocates lie in its memory (`Alloc`).
 //!
@@ -14,6 +13,7 @@
 //! of the program's (`native_abi!`).
 
 mod alloc;
+mod pacing;
 mod reserve;
 mod say;
 mod thread;
@@ -27,8 +27,8 @@ use xpute_core::mem::section::PAGE_BYTES;
 pub use alloc::Alloc;
 pub use say::{say, stop_hook};
 pub use thread::{
-    answer, answer_with, kick, next_frame, notify_on, pause, resume, ring, turns, vsync, wake,
-    Answer, Notify, Vcpu,
+    answer, answer_with, heard, input, notify_on, pace, pause, resume, ring, vsync, wake, Answer,
+    Notify, Vcpu,
 };
 pub use xpute_core::entry::{run, BootInfo, Entry, Form};
 pub use xpute_core::machine::Machine;
@@ -252,11 +252,6 @@ macro_rules! native_abi {
                 $crate::native::ring(deadline_ms).unwrap_or(f64::NAN)
             }
 
-            pub fn kick(deadline_ms: f64, at_ms: f64) {
-                core();
-                $crate::native::kick(deadline_ms, at_ms);
-            }
-
             pub fn mem(bytes: Option<&mut u32>) -> *mut u8 {
                 let (at, n) = core().mem();
                 if let Some(bytes) = bytes {
@@ -274,18 +269,18 @@ macro_rules! native_abi {
         }
 
         #[no_mangle]
-        pub extern "C" fn xpute_kick(deadline_ms: f64, at_ms: f64) {
-            xpute_native::kick(deadline_ms, at_ms)
+        pub extern "C" fn xpute_wake() {
+            $crate::native::wake()
+        }
+
+        #[no_mangle]
+        pub extern "C" fn xpute_input() {
+            $crate::native::input()
         }
 
         #[no_mangle]
         pub extern "C" fn xpute_vsync(age_ms: f64) {
             $crate::native::vsync(age_ms)
-        }
-
-        #[no_mangle]
-        pub extern "C" fn xpute_next_frame(after_ms: f64) -> f64 {
-            $crate::native::next_frame(after_ms)
         }
 
         #[no_mangle]
@@ -323,16 +318,9 @@ macro_rules! native_abi {
             $crate::native::answer();
         }
 
-        /// # Safety
-        /// `turn_ms` is null or points at an `f64` the caller owns.
         #[no_mangle]
-        pub unsafe extern "C" fn xpute_turns(turn_ms: *mut f64) -> f64 {
-            let (wake, ms) = $crate::native::turns();
-            // SAFETY: the caller's word, or none.
-            if let Some(out) = unsafe { turn_ms.as_mut() } {
-                *out = ms;
-            }
-            wake
+        pub extern "C" fn xpute_heard() -> bool {
+            $crate::native::heard()
         }
 
         /// # Safety
@@ -362,9 +350,8 @@ macro_rules! native_abi {
 ///
 /// On Android it also exports the C ABI to JNI, as the `external` functions of
 /// the Kotlin class `xpute.Core` (`jni`): `run(deadlineMs: Double): Double`,
-/// `kick(deadlineMs: Double)`, `pause()`, `resume()`, `answer()`,
-/// `turns(): DoubleArray` (the wake, then the longest turn),
-/// `mem(): ByteBuffer`, `load(at: Double): Double` and
+/// `wake()`, `input()`, `vsync(ageMs: Double)`, `pause()`, `resume()`,
+/// `answer()`, `heard(): Boolean`, `mem(): ByteBuffer`, `load(at: Double): Double` and
 /// `store(at: Double, word: Double)`. It calls back the class's static
 /// `call(at: Int): Int` for each of the core's calls, and its static
 /// `onNotify()` for each piece of news `xpute_notify_on` describes.
@@ -406,6 +393,7 @@ macro_rules! native_core {
                     stop_hook: Some($crate::native::stop_hook),
                     admit_frame: xpute_native_core::DEVICE.admit_frame,
                     publish: Some(xpute_native_core::publish),
+                    pace: Some($crate::native::pace),
                 },
             },
             xpute_native_core::xpute_turn
@@ -425,19 +413,22 @@ macro_rules! native_core {
             xpute_run(deadline_ms)
         }
 
-        /// # Safety
-        /// Only JNI calls this, with the environment and object of its call.
         #[cfg(target_os = "android")]
         #[no_mangle]
-        unsafe extern "system" fn Java_xpute_Core_kick(
-            env: *mut $crate::jni::sys::JNIEnv,
-            this: $crate::jni::sys::jobject,
-            deadline_ms: $crate::jni::sys::jdouble,
-            at_ms: $crate::jni::sys::jdouble,
+        extern "system" fn Java_xpute_Core_wake(
+            _env: *mut $crate::jni::sys::JNIEnv,
+            _this: $crate::jni::sys::jobject,
         ) {
-            // SAFETY: the environment and object JNI called with.
-            unsafe { $crate::jni::init(env, this) };
-            xpute_kick(deadline_ms, at_ms);
+            xpute_wake();
+        }
+
+        #[cfg(target_os = "android")]
+        #[no_mangle]
+        extern "system" fn Java_xpute_Core_input(
+            _env: *mut $crate::jni::sys::JNIEnv,
+            _this: $crate::jni::sys::jobject,
+        ) {
+            xpute_input();
         }
 
         #[cfg(target_os = "android")]
@@ -448,16 +439,6 @@ macro_rules! native_core {
             age_ms: $crate::jni::sys::jdouble,
         ) {
             xpute_vsync(age_ms);
-        }
-
-        #[cfg(target_os = "android")]
-        #[no_mangle]
-        extern "system" fn Java_xpute_Core_nextFrame(
-            _env: *mut $crate::jni::sys::JNIEnv,
-            _this: $crate::jni::sys::jobject,
-            after_ms: $crate::jni::sys::jdouble,
-        ) -> $crate::jni::sys::jdouble {
-            xpute_next_frame(after_ms)
         }
 
         /// # Safety
@@ -499,12 +480,13 @@ macro_rules! native_core {
         /// Only JNI calls this, with the environment and object of its call.
         #[cfg(target_os = "android")]
         #[no_mangle]
-        unsafe extern "system" fn Java_xpute_Core_turns(
+        unsafe extern "system" fn Java_xpute_Core_heard(
             env: *mut $crate::jni::sys::JNIEnv,
-            _this: $crate::jni::sys::jobject,
-        ) -> $crate::jni::sys::jobject {
-            // SAFETY: the environment JNI called with.
-            unsafe { $crate::jni::turns(env) }
+            this: $crate::jni::sys::jobject,
+        ) -> $crate::jni::sys::jboolean {
+            // SAFETY: the environment and object JNI called with.
+            unsafe { $crate::jni::init(env, this) };
+            $crate::jni::sys::jboolean::from(xpute_heard())
         }
 
         /// # Safety

@@ -1,7 +1,6 @@
 // @pxl/client/service/core/turn.ts
 
 import type { FrameGrant } from "@xpute/runtime";
-import * as origin from "@/service/platform/origin.ts";
 import { Command } from "@/abi/cmd.spec.ts";
 import { core } from "@/service/core/core.ts";
 
@@ -14,6 +13,5 @@ export function submit_grant(grant: FrameGrant): void {
     grant.refresh_ms,
     grant.paced_ms,
     grant.interactive,
-    origin.credits,
   );
 }
