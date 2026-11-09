@@ -32,11 +32,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 impl TileCache<TerrainTile> {
     /// The cursor of `node` asked alone, the line its cells at `cell_zoom` are
     /// read on. It equals what a descent from the top would carry to `node`.
-    pub(in crate::domain::layer) fn cursor<const D: usize>(
-        &self,
-        node: Node<D>,
-        cell_zoom: Zoom,
-    ) -> Line {
+    pub(in crate::domain::layer) fn cursor(&self, node: Node<2>, cell_zoom: Zoom) -> Line {
         self.line(bound_tile(node, cell_zoom))
     }
 
@@ -45,8 +41,8 @@ impl TileCache<TerrainTile> {
     /// nothing shows. The box covers what is stored down to the depth where
     /// everything around it is solid, since nothing past that depth is seen.
     /// What is not known is carried by the `Answer`, not by the box, so a
-    /// bound has no third state. A node with fewer than three axes stands for
-    /// the whole column over the axes it lacks.
+    /// bound has no third state. The node stands for the whole column over
+    /// it.
     ///
     /// The bound joins the clip levels' relief of the ground and of the ways
     /// over the node's own cells (`relief`), reaches one cell at `cell_zoom`
@@ -55,17 +51,16 @@ impl TileCache<TerrainTile> {
     /// finer, that is known before any of its ground arrives, the same way
     /// every reader knows it (pxl-spec `area::Shard`). A coarser node may
     /// straddle the area's edge, so it is read.
-    pub(in crate::domain::layer) fn bound<const D: usize>(
+    pub(in crate::domain::layer) fn bound(
         &self,
         line: &Line,
-        (zoom, at): Node<D>,
+        node: Node<2>,
         cell_zoom: Zoom,
     ) -> Answer<Option<Aabb>> {
-        let node = (zoom, [at[0], at[1]]);
         if Shard::UNKNOWN.at(&source::ServiceArea, node).past() {
             return Answer::Exact(None);
         }
-        let whole = region((zoom, at));
+        let whole = region(node);
         let mut place = Lookup::NONE;
         self.relief(line, &mut place, node, [cell_zoom, cell_zoom])
             .map(|[ground, ways]| {
@@ -154,9 +149,9 @@ impl TileCache<TerrainTile> {
 /// The tile a node's bound is read from: the tile its cells at `cell_zoom`
 /// are read from, within the pyramid's zooms, or, where the node is wider
 /// than that tile, the finest tile that holds the whole node.
-fn bound_tile<const D: usize>((zoom, at): Node<D>, cell_zoom: Zoom) -> Quadrant {
+fn bound_tile((zoom, at): Node<2>, cell_zoom: Zoom) -> Quadrant {
     let read = GROUND.read_zoom(cell_zoom).min(zoom);
-    Quadrant::new(read, ancestor_of([at[0], at[1]], zoom - read))
+    Quadrant::new(read, ancestor_of(at, zoom - read))
 }
 
 /// The answer for `v`, read from the clip level at zoom `from`; `here` is

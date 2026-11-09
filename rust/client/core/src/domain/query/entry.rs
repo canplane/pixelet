@@ -18,9 +18,9 @@ use pxl_spec::space::layer::octant::Octant;
 impl World {
     /// What is placed at exactly `at`, air left out.
     pub fn entry_at(&self, at: Octant) -> Option<Entry> {
+        let node = (at.zoom(), at.at());
         self.object
-            .read((at.zoom(), at.at()))
-            .entry()
+            .entry_at(node.0, node.1, self.object.cursor(node))
             .filter(|e| !is_air(e.state))
     }
 

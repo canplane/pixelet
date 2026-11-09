@@ -88,8 +88,8 @@ fn touched(xy: [[f64; 2]; 2], layer: &[Quadrant], counted: impl Fn(&Quadrant) ->
 
 /// The columns the queries read, as one box with its corners in units and X
 /// on the lap of the first column read. A ray reads the cells it passes at
-/// the coarsest zoom it is answered at; a cell, a surface or a column surface
-/// reads its cell. Those queries report here, and a memo's ask takes what it
+/// the coarsest zoom it is answered at; a cell or a column surface reads its
+/// cell. Those queries report here, and a memo's ask takes what it
 /// read from here (`Memo::of`).
 #[derive(Clone, Copy, Default)]
 struct Footprint(Option<[[f64; 2]; 2]>);

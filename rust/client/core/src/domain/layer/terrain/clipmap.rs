@@ -304,7 +304,7 @@ fn brick_quad(cell_zoom: Zoom, q: [i32; 2]) -> Quadrant {
 }
 
 /// The tile brick `q` at `cell_zoom` lies in, and where in it, in bricks.
-pub(in crate::domain) fn tile_of(cell_zoom: Zoom, q: [i32; 2]) -> (Quadrant, [u32; 2]) {
+fn tile_of(cell_zoom: Zoom, q: [i32; 2]) -> (Quadrant, [u32; 2]) {
     let per = (GROUND.tile_cells() >> BRICK_SHIFT) as i32;
     let zoom = cell_zoom - GROUND.tile_cell_shamt();
     let t = Quadrant::new(zoom, [q[0].div_euclid(per), q[1].div_euclid(per)]);
@@ -737,24 +737,53 @@ fn eye_level(w: &Clipmap, cell_zoom: Zoom) -> Option<u32> {
     Some(clip_level)
 }
 
-/// The bricks the eye's clip level at `cell_zoom` holds or wants, or none
-/// while its center is not laid out. It says what the layer holds for a debug
-/// reader (domain/scene/gizmo/coverage.rs) and changes nothing.
-pub(in crate::domain) fn eye_bricks(cell_zoom: Zoom) -> Option<[[i32; 2]; ENTRIES as usize]> {
-    let w = clipmap();
-    let clip_level = eye_level(w, cell_zoom)?;
-    Some(core::array::from_fn(|s| {
-        w.table.entries[(clip_level * ENTRIES) as usize + s].brick
-    }))
+/// A brick the eye's clip level holds or wants, and what is drawn in its place
+/// (`eye_bricks`).
+pub(in crate::domain) struct EyeBrick {
+    pub at: [i32; 2],
+    pub tile: Quadrant,
+    pub drawn: Drawn,
 }
 
-/// Whether brick `q` is present in the eye's clip level at `cell_zoom`, for
-/// the same reader; false while its center is not laid out.
-pub(in crate::domain) fn brick_present(cell_zoom: Zoom, q: [i32; 2]) -> bool {
-    let w = clipmap();
-    eye_level(w, cell_zoom).is_some_and(|clip_level| {
-        w.table.entries[(clip_level * ENTRIES + clipmap::entry(q)) as usize].holds(q)
-    })
+/// What is drawn in a brick's place.
+pub(in crate::domain) enum Drawn {
+    /// The cells of `cell_zoom` that answer there, and the tile they lie in.
+    Cells { cell_zoom: Zoom, tile: Quadrant },
+    /// No cells are held there. `finest` is the finest tile held over the
+    /// brick's.
+    Nothing { finest: Option<Quadrant> },
+}
+
+/// The bricks the eye's clip level at `cell_zoom` holds or wants, or none
+/// while its center is not laid out, each with the finest of the eye's clip
+/// levels that has it present in the table the GPU reads. It says what the
+/// layer holds for a debug reader (domain/scene/gizmo/coverage.rs) and changes
+/// nothing.
+pub(in crate::domain) fn eye_bricks(cell_zoom: Zoom) -> Option<[EyeBrick; ENTRIES as usize]> {
+    let w = &*clipmap();
+    let clip_level = eye_level(w, cell_zoom)?;
+    let present = |c: Zoom, q: [i32; 2]| {
+        eye_level(w, c)
+            .is_some_and(|l| w.table.entries[(l * ENTRIES + clipmap::entry(q)) as usize].holds(q))
+    };
+    Some(core::array::from_fn(|s| {
+        let at = w.table.entries[(clip_level * ENTRIES) as usize + s].brick;
+        let tile = tile_of(cell_zoom, at).0;
+        let drawn = match (FIRST_CELL_ZOOM..=cell_zoom)
+            .rev()
+            .map(|c| (c, at.map(|v| v >> (cell_zoom - c))))
+            .find(|&(c, q)| present(c, q))
+        {
+            Some((c, q)) => Drawn::Cells {
+                cell_zoom: c,
+                tile: tile_of(c, q).0,
+            },
+            None => Drawn::Nothing {
+                finest: TerrainTile::tile_cache().line(tile).finest_resident,
+            },
+        };
+        EyeBrick { at, tile, drawn }
+    }))
 }
 
 /// The clip levels' table as the GPU's cast reads it (pxl-render clip.wgsl

@@ -14,6 +14,10 @@ use pxl_engine::object::{self, Cut};
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use xpute_kit::math::rng::SplitMix64;
 
+fn entry(store: &Store, zoom: Zoom, at: [i32; 3]) -> Option<Entry> {
+    store.entry_at(zoom, at, store.cursor((zoom, at)))
+}
+
 fn id_of(zoom: Zoom, at: [i32; 3]) -> u128 {
     key_of::<3>(zoom, at)
 }
@@ -32,7 +36,7 @@ fn write_undo_round_trip() {
         let finest = at.map(|v| v << (OBJECT_FINEST - OBJECT_COARSEST));
         assert!(
             {
-                let slot = store.cursor((OBJECT_FINEST, finest), OBJECT_FINEST);
+                let slot = store.cursor((OBJECT_FINEST, finest));
                 slot.holds()
                     && !slot.is_folded()
                     && object::val(&store.columns(), slot, Cut::NONE, OBJECT_FINEST, finest) == 3
@@ -40,9 +44,8 @@ fn write_undo_round_trip() {
             "a cell leaf covers its steps"
         );
         let mut met = Vec::new();
-        store
-            .read((OBJECT_COARSEST, at))
-            .entries(&mut |e| met.push(*e));
+        let slot = store.cursor((OBJECT_COARSEST, at));
+        store.each_in(OBJECT_COARSEST, at, slot, &mut |e| met.push(*e));
         assert_eq!(
             met,
             vec![Entry {
@@ -117,7 +120,7 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Content, [i32; 2]) {
     for z in -4..8 {
         for y in corner[1]..corner[1] + per {
             for x in corner[0]..corner[0] + per {
-                let slot = store.cursor((target, [x, y, z]), target);
+                let slot = store.cursor((target, [x, y, z]));
                 let v = object::val(&store.columns(), slot, Cut::NONE, target, [x, y, z]);
                 let eighths = eighths(object::fill_share(&store.columns(), slot));
                 if v != VOID && eighths > 0 {
@@ -201,8 +204,7 @@ fn axis_turn() {
         cube_at(&mut stores[1], turn(at), state);
         cube_at(&mut stores[2], turn(turn(at)), state);
     }
-    let bound =
-        |store: &Store, node: Node<3>| store.cursor(node, node.0).holds().then(|| region(node));
+    let bound = |store: &Store, node: Node<3>| store.cursor(node).holds().then(|| region(node));
     for _ in 0..500 {
         let (zoom, at) = some_node(&mut rng, 200.0);
         let given = bound(&stores[0], (zoom, at));
@@ -284,21 +286,21 @@ fn leaf_words_freed_on_erase() {
         id: MARKER,
         ext: marker_text("cafe"),
     }]);
-    let e = store.read((zoom, at)).entry().expect("placed");
+    let e = entry(&store, zoom, at).expect("placed");
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("cafe".into())));
     store.write([Write {
         at: id_of(zoom, at),
         id: VOID,
         ext: None,
     }]);
-    assert!(store.read((zoom, at)).entry().is_none());
+    assert!(entry(&store, zoom, at).is_none());
     // The freed slot is the next one taken, so no record outlived its leaf.
     store.write([Write {
         at: id_of(zoom, at),
         id: MARKER,
         ext: marker_text("bar"),
     }]);
-    let e = store.read((zoom, at)).entry().expect("placed again");
+    let e = entry(&store, zoom, at).expect("placed again");
     assert_eq!(e.ext, 1);
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("bar".into())));
 }
@@ -319,7 +321,7 @@ fn marker_text_change_cube() {
     // The old record's slot is reused, so the leaf's word stays the same,
     // and the cube must still count as changed.
     assert_eq!(put(&mut store, "bar").len(), 1);
-    let e = store.read((zoom, at)).entry().expect("placed");
+    let e = entry(&store, zoom, at).expect("placed");
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("bar".into())));
 }
 
@@ -364,7 +366,8 @@ fn whole_shard_meets_leaves() {
         0,
     ];
     let mut met = 0;
-    store.read((SHARD_ZOOM, shard)).entries(&mut |_| met += 1);
+    let slot = store.cursor((SHARD_ZOOM, shard));
+    store.each_in(SHARD_ZOOM, shard, slot, &mut |_| met += 1);
     assert_eq!(met, 1);
-    assert!(store.cursor::<3>((SHARD_ZOOM, shard), SHARD_ZOOM).holds());
+    assert!(slot.holds());
 }

@@ -127,7 +127,7 @@ pub(super) struct Walker<'w> {
     world: &'w World,
     ask: Ask,
     /// Of what the ground generates, the decors the asker sees, one bit a
-    /// kind in `DECORS`' order. Any other is air to it.
+    /// decor in `DECORS`' order. Any other is air to it.
     decors: u32,
     /// An eye's ray. What it starts inside is not met, and a decor is its
     /// whole box, so a decor whose box the ray does not enter is air to it.
@@ -175,6 +175,19 @@ impl Keep<At> for KeepDescent<'_> {
     }
 }
 
+impl Walker<'_> {
+    /// `v`, what the walk met or none, as what the walk held says: exact where
+    /// it lacked nothing, nothing with the first tile lacked where it met
+    /// nothing and no node answered, and otherwise coarser with that tile.
+    fn answer<T>(&self, v: Option<T>) -> Answer<Option<T>> {
+        match (v, self.lack, self.answered) {
+            (v, None, _) => Answer::Exact(v),
+            (None, Some(l), false) => Answer::Nothing(l),
+            (v, Some(l), _) => Answer::Coarser(v, l),
+        }
+    }
+}
+
 impl Query for Walker<'_> {
     type At = At;
 
@@ -192,7 +205,7 @@ impl Query for Walker<'_> {
 
     /// The world's answer (`ask`), keeping the first tile lacked. A node that
     /// nothing under fills is air of its size. A decor the asker does not
-    /// see, of a kind it does not (`decors`) or whose box it does not enter
+    /// see, one it leaves out (`decors`) or whose box it does not enter
     /// (`eye`), is air to it.
     fn node(
         &mut self,
@@ -219,7 +232,7 @@ impl Query for Walker<'_> {
         self.answered = true;
         let Some(k) = DECORS
             .iter()
-            .position(|d| u32::from(d.val()) == answer::val(answer.asset[0]))
+            .position(|d| d.id == answer::val(answer.asset[0]))
             .filter(|_| answer.kind == Kind::Cell)
         else {
             return answer;
@@ -314,12 +327,7 @@ impl World {
         };
         *path = walker.path;
         let hit = (trace.end == End::Hit).then(|| self.hit(ray, q, until, trace.hit));
-        match (hit, walker.lack, walker.answered) {
-            (h, None, _) => Answer::Exact(h),
-            (Some(h), Some(l), _) => Answer::Coarser(Some(h), l),
-            (None, Some(l), true) => Answer::Coarser(None, l),
-            (None, Some(l), false) => Answer::Nothing(l),
-        }
+        walker.answer(hit)
     }
 
     /// The column surface down column `g` at `cell_zoom` (pxl-engine
@@ -338,14 +346,7 @@ impl World {
         let middle = g.map(|v| (f64::from(v) + 0.5) * side);
         change::report_read(middle, middle, cell_zoom);
         let f = support::column_surface(&mut walker, cell_zoom, g);
-        let met = (f.end == End::Hit).then_some(f.top);
-        let answer = match (met, walker.lack, walker.answered) {
-            (m, None, _) => Answer::Exact(m),
-            (Some(m), Some(l), _) => Answer::Coarser(Some(m), l),
-            (None, Some(l), true) => Answer::Coarser(None, l),
-            (None, Some(l), false) => Answer::Nothing(l),
-        };
-        (answer, f)
+        (walker.answer((f.end == End::Hit).then_some(f.top)), f)
     }
 
     /// What is in the cell `c` at `zoom`, asked off the line `l`
