@@ -36,6 +36,6 @@ fn placed(v: VertexIn) -> Placement {
 }
 
 @vertex
-fn vs_depth(v: VertexIn) -> @builtin(position) vec4f {
+fn vs_place(v: VertexIn) -> @builtin(position) vec4f {
   return jittered(frame_view_proj() * vec4f(placed(v).world, 1.0));
 }

@@ -39,7 +39,7 @@ fn skinned_world(v: VertexIn, m: mat4x4f) -> vec3f {
 }
 
 @vertex
-fn vs_depth(v: VertexIn) -> @builtin(position) vec4f {
+fn vs_place(v: VertexIn) -> @builtin(position) vec4f {
   draw_at(v.instance);
   return jittered(frame_view_proj() * vec4f(skinned_world(v, skin_of(v)), 1.0));
 }

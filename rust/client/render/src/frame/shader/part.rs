@@ -19,7 +19,7 @@
 
 /// The names a shader's vertex entry points take. A pipeline names its vertex entry by its
 /// index here (record.rs `Header`), and build.rs reads which of them reads each binding.
-pub const VERTEX_ENTRY: [&str; 2] = ["vs", "vs_depth"];
+pub const VERTEX_ENTRY: [&str; 2] = ["vs", "vs_place"];
 /// The name of a shader's fragment entry point, which every pipeline with a fragment stage
 /// runs (record.rs `Header`).
 pub const FRAGMENT_ENTRY: &str = "fs";

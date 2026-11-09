@@ -13,7 +13,7 @@ pub mod asset;
 pub mod frame;
 pub mod gpu;
 pub mod look;
-pub mod mesh;
+pub mod paint;
 pub mod param;
 pub mod pass;
 pub mod ray;

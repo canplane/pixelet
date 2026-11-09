@@ -95,7 +95,7 @@ pub mod record {
     pub const ALPHA: u32 = 1;
     pub const ADD: u32 = 2;
     pub const VS: u32 = 0;
-    pub const VS_DEPTH: u32 = 1;
+    pub const VS_PLACE: u32 = 1;
     pub const PER_VERTEX: u32 = 0;
     pub const PER_INSTANCE: u32 = 1;
     pub const U32: u32 = 5;

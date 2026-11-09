@@ -14,7 +14,7 @@
 // face's edges and corners (`RAY_FACES`). A pixel is painted from its own words alone.
 @group(0) @binding(3) var rays: texture_2d_array<u32>;
 // Each value's look, indexed by the value whichever source holds it: its swatch and texture
-// layer, then the color it reads as from afar, in linear light (mesh/paint/ground.rs
+// layer, then the color it reads as from afar, in linear light (paint/ground.rs
 // `look_words`).
 @group(0) @binding(20) var<storage, read> looks: array<vec4u>;
 // The eye the rays were cast from (pxl-engine `eye`). It holds the eye's position in Q3 steps

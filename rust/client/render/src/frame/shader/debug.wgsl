@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/debug.wgsl
 
 // Draws the debug gizmos as segments, which only the gizmos' own faces hide.
-// The faces draw only their depth (`vs_depth`). A line primitive is one pixel
+// The faces draw only their depth (`vs_place`). A line primitive is one pixel
 // wide on every device, so each segment is drawn as a quad its width across on
 // the screen.
 
@@ -40,7 +40,7 @@ fn vs(@builtin(vertex_index) vi: u32, @location(0) a: vec3f, @location(1) color:
 }
 
 @vertex
-fn vs_depth(@location(0) p: vec3f) -> @builtin(position) vec4f {
+fn vs_place(@location(0) p: vec3f) -> @builtin(position) vec4f {
   return frame_view_proj() * vec4f(p + draw_translation(), 1.0);
 }
 

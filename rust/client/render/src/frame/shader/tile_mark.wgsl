@@ -3,8 +3,8 @@
 // Marks the tiles a changed draw covers, from the draw's own fragments (pass/mark.rs
 // `MarkPass`). The draw is drawn where it was and where it is, each time with the frame's words
 // it was or is drawn with (group 0's `frame_words`), its jitter among them, so its fragments
-// are the pixels it covered then and covers now. Its vertices are placed as its depth pass
-// places them. Each fragment sets its tile's word to this frame's number, as a mark the host
+// are the pixels it covered then and covers now. Its vertices are placed by its `vs_place`.
+// Each fragment sets its tile's word to this frame's number, as a mark the host
 // hands sets it (screen_mark.wgsl). The one fragment whose exchange set the word widens the
 // rectangle of tiles the frame's marks cover to hold the tile, so each tile is marked once,
 // however many of its fragments are in flight. The pass writes no color, and the target's depth

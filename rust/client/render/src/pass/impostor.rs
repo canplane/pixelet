@@ -124,7 +124,7 @@ impl ImpostorPass {
                 pipelines,
                 (PIPELINE_IMPOSTOR_MARK, PIPELINE_IMPOSTOR),
                 align,
-                (|d| d[0], put_whole, |_| true),
+                (|d| d[0], put_whole),
             ),
         }
     }

@@ -14,7 +14,7 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{buffer_usage, bytes, place, release, texture_usage, Format, Gpu, Image};
 use crate::gpu::mip::{mip_levels, MipPass};
-use crate::mesh::paint::palette::{LAYERS, SENTINELS};
+use crate::paint::palette::{LAYERS, SENTINELS};
 
 pub const LAYER_TEX_SIZE: u32 = PACK.cell;
 

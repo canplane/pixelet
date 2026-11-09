@@ -238,7 +238,7 @@ const CONTENT_ORDER: [(&str, u8); 7] = [
 ];
 
 /// pxl-render's order: what names no device, the look, the parameters and the words of the
-/// protocol, under a frame's data, which the hover ghost's mesh and the paints stand on, under
+/// protocol, under a frame's data, which the paints stand on, under
 /// the device, the rays over it, what is drawn over them, and the renderer on top.
 const RENDER: &str = "rust/client/render/src/";
 const RENDER_ORDER: [(&str, u8); 10] = [
@@ -247,7 +247,7 @@ const RENDER_ORDER: [(&str, u8); 10] = [
     ("api_spec", 0),
     ("asset", 0),
     ("frame", 1),
-    ("mesh", 2),
+    ("paint", 2),
     ("gpu", 3),
     ("ray", 4),
     ("pass", 5),

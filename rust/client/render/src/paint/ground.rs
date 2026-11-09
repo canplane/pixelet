@@ -1,4 +1,4 @@
-// pxl-render/mesh/paint/ground.rs
+// pxl-render/paint/ground.rs
 
 //! How an asset that fills a cell is drawn, by its value alone: its swatch and texture layer
 //! as the catalog's painter gives them (object.rs). A ground look and a placed cube of that
@@ -9,8 +9,8 @@ use pxl_spec::asset::cube::sentinel;
 
 use crate::frame::shader::word::NO_LAYER;
 use crate::look::color::linear;
-use crate::mesh::paint::object::PAINTER;
-use crate::mesh::paint::palette::{layer_mean, rgb255, sentinel_layer};
+use crate::paint::object::PAINTER;
+use crate::paint::palette::{layer_mean, rgb255, sentinel_layer};
 
 /// The number of values a ground's byte can take. Every value below it is one of them.
 const BYTES: usize = u8::MAX as usize + 1;

@@ -48,7 +48,7 @@ impl SkinnedPass {
                 pipelines,
                 (PIPELINE_SKINNED_MARK, PIPELINE_SKINNED),
                 align,
-                (|d| d[1], put_whole, |_| true),
+                (|d| d[1], put_whole),
             ),
         }
     }

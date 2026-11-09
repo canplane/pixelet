@@ -64,14 +64,14 @@ impl DecorPass {
                 pipelines,
                 (PIPELINE_DECOR_MARK, PIPELINE_DECOR),
                 align,
-                (|d| d[0], put_whole, |_| true),
+                (|d| d[0], put_whole),
             ),
             ghost_mark: MarkPass::new(
                 g,
                 pipelines,
                 (PIPELINE_DECOR_MARK, PIPELINE_GHOST_DECOR),
                 align,
-                (|d| d[0], put_whole, |_| true),
+                (|d| d[0], put_whole),
             ),
         }
     }

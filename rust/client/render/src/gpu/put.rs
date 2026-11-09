@@ -1,12 +1,8 @@
 // pxl-render/gpu/put.rs
 
-//! Writes values, little-endian, into the buffers the device is handed, at a byte or a float.
+//! Writes matrices into the words of the buffers the device is handed.
 
 use pxl_spec::space::coord::mat4::Mat4;
-
-pub fn put_f32(buf: &mut [u8], at: usize, v: f32) {
-    buf[at..at + 4].copy_from_slice(&v.to_le_bytes());
-}
 
 pub(crate) fn put_mat(out: &mut [f32], at: usize, m: &Mat4) {
     for (i, v) in m.iter().enumerate() {

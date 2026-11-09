@@ -1,4 +1,4 @@
-// pxl-render/mesh/paint/object.rs
+// pxl-render/paint/object.rs
 
 //! The materials the object store's values are drawn as, as the catalog defines them.
 
@@ -7,8 +7,8 @@ use pxl_spec::asset::decor::DECORS;
 use pxl_spec::asset::AssetId;
 use pxl_spec::value::AIR;
 
-use crate::mesh::paint::palette::layer_idx;
-use crate::mesh::paint::palette::rgb255;
+use crate::paint::palette::layer_idx;
+use crate::paint::palette::rgb255;
 use std::sync::LazyLock;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
