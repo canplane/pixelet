@@ -108,7 +108,7 @@
     "ALPHA": 1,
     "ADD": 2,
     "VS": 0,
-    "VS_DEPTH": 1,
+    "VS_PLACE": 1,
     "PER_VERTEX": 0,
     "PER_INSTANCE": 1,
     "U32": 5,

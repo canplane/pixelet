@@ -27,6 +27,6 @@ fn zone_clip(v: VertexIn) -> vec4f {
 }
 
 @vertex
-fn vs_depth(v: VertexIn) -> @builtin(position) vec4f {
+fn vs_place(v: VertexIn) -> @builtin(position) vec4f {
   return zone_clip(v);
 }

@@ -7,15 +7,12 @@
 
 use crate::frame::shader::record::{PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE};
 use crate::frame::shader::record::{PIPELINE_LOCATION_BEACON_MARK, PIPELINE_LOCATION_ZONE_MARK};
-use crate::frame::shader::word::{location, BOX_VERTICES};
+use crate::frame::shader::word::BOX_VERTICES;
 use crate::gpu::api::{buf_entry, buffer_usage, bytes, release, Gpu, TrackedRenderPass};
 use crate::gpu::draw::{uniform_of, DRAW_WORDS};
 use crate::gpu::draw::{DrawStat, DrawTable};
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
-use crate::gpu::put::put_f32;
 use crate::gpu::upload::{buf_size, UploadTable};
-use crate::look::color::indicator;
-use crate::look::color::linear_rgb;
 use crate::param::location::beacon;
 use crate::pass::mark::{put_whole, MarkPass};
 use crate::pass::model::{put_uniform, UniformBuffer, DRAW_BYTES};
@@ -96,8 +93,6 @@ pub struct LocationPass {
     box_idx: u32,
     oct_pos: u32,
     oct_normal: u32,
-    /// The UI's action color, in linear light.
-    color: [f32; 3],
     pub zone_mark: MarkPass,
     pub beacon_mark: MarkPass,
 }
@@ -108,18 +103,12 @@ fn put(g: &Gpu, data: &[u8], usage: u32) -> u32 {
     id
 }
 
-/// The zones that are drawn. A zone of no boxes is not.
-fn zones<'a>(draws: &DrawTable<'a>) -> impl Iterator<Item = &'a [u32; DRAW_WORDS]> + Clone + 'a {
-    draws.of(PIPELINE_LOCATION_ZONE).filter(|d| d[1] > 0)
-}
-
 impl LocationPass {
     pub fn new(g: &Gpu, pipelines: &mut PipelineCache, frame_buf: u32, align: u32) -> LocationPass {
         let zone = pipelines.build_world(g, PIPELINE_LOCATION_ZONE);
         let beacon = pipelines.build_world(g, PIPELINE_LOCATION_BEACON);
         let (box_p, box_uv, box_i) = box_lanes();
         let (oct_p, oct_n) = octahedron_lanes();
-        let [r, gr, b] = linear_rgb(indicator::ACTION);
         LocationPass {
             frame_group: g.bind_group(zone.layouts[0], &[buf_entry(0, frame_buf)]),
             zone_uniforms: UniformBuffer::new(DRAW_BYTES, align),
@@ -132,20 +121,19 @@ impl LocationPass {
             box_idx: put(g, bytes(&box_i), buffer_usage::INDEX),
             oct_pos: put(g, bytes(&oct_p), buffer_usage::VERTEX),
             oct_normal: put(g, bytes(&oct_n), buffer_usage::VERTEX),
-            color: [r as f32, gr as f32, b as f32],
             zone_mark: MarkPass::new(
                 g,
                 pipelines,
                 (PIPELINE_LOCATION_ZONE_MARK, PIPELINE_LOCATION_ZONE),
                 align,
-                (|d| d[0], put_whole, |d| d[1] > 0),
+                (|d| d[0], put_whole),
             ),
             beacon_mark: MarkPass::new(
                 g,
                 pipelines,
                 (PIPELINE_LOCATION_BEACON_MARK, PIPELINE_LOCATION_BEACON),
                 align,
-                (|_| 0, put_whole, |_| true),
+                (|_| 0, put_whole),
             ),
         }
     }
@@ -170,7 +158,7 @@ impl LocationPass {
     /// Pushes onto `out` the uploads the zones read (`MarkPass::reads`). A
     /// beacon reads none.
     pub fn marks_read(&self, draws: &DrawTable, out: &mut Vec<u32>) {
-        self.zone_mark.reads(zones(draws), out);
+        self.zone_mark.reads(draws.of(PIPELINE_LOCATION_ZONE), out);
         self.beacon_mark
             .reads(draws.of(PIPELINE_LOCATION_BEACON), out);
     }
@@ -182,7 +170,7 @@ impl LocationPass {
         draws.count(PIPELINE_LOCATION_BEACON, stat, |_| BEACON_VERTICES / 3);
     }
 
-    /// Writes each zone's uniform, with the action color, into a slot of its
+    /// Writes each zone's uniform into a slot of its
     /// own once before the pass, when the lists it is made from `changed`. It
     /// also makes every upload group the zones will bind, so that drawing
     /// makes none: a group made inside a frame that is dropped would be gone.
@@ -194,14 +182,10 @@ impl LocationPass {
         changed: bool,
         uploads: &mut UploadTable,
     ) {
-        let c = self.color;
         let put = |buf: &mut [u8], d: &[u32; DRAW_WORDS]| {
             put_uniform(buf, uniform_of(uniforms, d));
-            for (k, v) in c.into_iter().enumerate() {
-                put_f32(buf, 4 * (location::COLOR + k), v);
-            }
         };
-        let zones = zones(draws);
+        let zones = draws.of(PIPELINE_LOCATION_ZONE);
         self.zone_uniforms.write(
             g,
             self.zone.layouts[1],
@@ -259,7 +243,7 @@ impl LocationPass {
         let Some(slots) = self.zone_uniforms.slots() else {
             return;
         };
-        if zones(draws).next().is_none() {
+        if draws.of(PIPELINE_LOCATION_ZONE).next().is_none() {
             return;
         }
         pass.set_pipeline(self.zone.id);
@@ -267,7 +251,7 @@ impl LocationPass {
         pass.set_vertex_buf(0, self.box_pos, 0, 0);
         pass.set_vertex_buf(1, self.box_uv, 0, 0);
         pass.set_idx_buf(self.box_idx, 0, 0);
-        for (k, d) in zones(draws).enumerate() {
+        for (k, d) in draws.of(PIPELINE_LOCATION_ZONE).enumerate() {
             let Some(upload) = uploads.group_of(d[0]) else {
                 continue;
             };

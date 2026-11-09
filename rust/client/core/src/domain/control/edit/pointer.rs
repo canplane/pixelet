@@ -8,8 +8,7 @@
 
 use crate::domain::control::camera::controller::Motion;
 use crate::domain::control::edit::collision::anchor_center;
-use crate::domain::control::edit::ghost::{at_corner, decor_of, prop};
-use crate::domain::control::edit::write::Preview;
+use crate::domain::control::edit::ghost::{at_corner, decor_of, ghost_of};
 use crate::domain::control::edit::Hover;
 use crate::domain::control::navigation::destination;
 use crate::domain::control::support::stand;
@@ -22,21 +21,13 @@ pub(super) fn tap(hover: &Hover) {
     destination::go_to(stand(&anchor_center(&approach)), Motion::Smooth);
 }
 
-pub(super) fn preview(hover: &Hover) -> Preview {
-    let (object, zoom) = hover.object();
-    Preview {
-        object,
-        zoom,
-        ..Preview::default()
-    }
-}
-
-pub(super) fn ghost(hover: &Hover, p: &Preview) -> Ghost {
-    if let Some(g) = hover.prop().and_then(prop) {
+pub(super) fn ghost(hover: &Hover) -> Ghost {
+    if let Some(g) = hover.decor().and_then(ghost_of) {
         return g;
     }
     let Some(h) = hover.coord else {
         return Ghost::None;
     };
-    at_corner(h, p.zoom, None, false, p.object.as_ref().and_then(decor_of))
+    let (object, zoom) = hover.object();
+    at_corner(h, zoom, None, false, object.as_ref().and_then(decor_of))
 }

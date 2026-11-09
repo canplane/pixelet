@@ -10,7 +10,6 @@ use pxl_spec::space::layer::lattice::GROUND;
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::layer::object::store::Entry;
-use crate::domain::query::decor;
 use crate::domain::query::World;
 use crate::domain::view::frame::coord;
 
@@ -29,21 +28,6 @@ impl Asset {
             None => cell,
         }
     }
-}
-
-/// The columns over which `is_placement_blocked` reads the world, in units,
-/// as the lowest corner and then the highest, each X then Y. They cover the
-/// room, padded on every side by the farthest a placed decor reaches past
-/// its cell (`World::placed_occupying`) and by the room's own width again,
-/// since `World::editable` judges the room by the nodes around it.
-pub fn placement_reads(asset: Asset, zoom: Zoom, corner: &Q3) -> [[f64; 2]; 2] {
-    let room = asset.room(zoom, corner);
-    let width = (room.max[0] - room.min[0]).max(room.max[1] - room.min[1]);
-    let pad = decor::box_extent() + width;
-    [
-        [room.min[0] - pad, room.min[1] - pad],
-        [room.max[0] + pad, room.max[1] + pad],
-    ]
 }
 
 /// Whether something of `kind` may stand on an instance of `under`. A kind

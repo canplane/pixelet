@@ -24,7 +24,7 @@ use xpute_kit::status::errno::Errno;
 
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::repository;
-use crate::domain::layer::object::store::{Entry, Write};
+use crate::domain::layer::object::store::Write;
 use crate::domain::query::World;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::space::hierarchy::morton;
@@ -241,38 +241,18 @@ pub fn remove(at: Octant) {
     }
 }
 
-/// The edit the tool held would make, decided once a turn by the tool. The
-/// ghost shows it, and the turn hands what it removes to the drawing to leave
-/// out (`edit`).
-#[derive(Clone, Copy, Default)]
-pub struct Preview {
-    /// The placed object pointed at, as stored.
-    pub object: Option<Entry>,
-    /// The zoom of the cube the edit fills or takes.
-    pub zoom: Zoom,
-    /// The same check the commit makes (`is_placement_blocked`), so the
-    /// preview and the placement cannot disagree.
-    pub blocked: bool,
-    /// What `blocked` was asked of: the asset, its zoom, the hovered corner
-    /// and the store's revision (item.rs `preview`). The step runs on every
-    /// frame turn, so it sees each change once.
-    pub(super) blocked_key: Option<(Asset, Zoom, Q3, u32)>,
-    pub edit: RenderEdit,
+static RENDER_EDIT: Global<RenderEdit> = Global::new();
+
+/// What the tool held leaves out of the world as drawn, as this turn decided.
+pub fn render_edit() -> RenderEdit {
+    *RENDER_EDIT.get(RenderEdit::default)
 }
 
-static PREVIEW: Global<Preview> = Global::new();
-
-pub fn preview() -> Preview {
-    *PREVIEW.get(Preview::default)
-}
-
-/// Decides the preview for this turn and returns whether what the edit
-/// leaves out of the drawing changed.
-pub fn preview_step() -> bool {
-    let was = preview();
-    let now = tool().preview(&hover(), &was);
-    *PREVIEW.get(Preview::default) = now;
-    was.edit != now.edit
+/// Decides what the tool held leaves out of the drawing this turn and returns
+/// whether it changed.
+pub fn render_edit_step() -> bool {
+    let now = tool().render_edit(&hover());
+    core::mem::replace(RENDER_EDIT.get(RenderEdit::default), now) != now
 }
 
 #[cfg(test)]

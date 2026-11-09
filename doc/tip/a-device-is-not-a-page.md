@@ -42,7 +42,7 @@ the page's.
   MiB (femtovg#367, gfx-rs/wgpu#10506), and a frame of many passes reached the
   iPhone's memory limit at boot. On Vulkan each pool, reset without
   `RELEASE_RESOURCES` and reused, keeps the memory of its heaviest frame
-  (gfx-rs/wgpu#5738, an Adreno at 2.1 GB). `xpute/rust/vendor/wgpu-core` records a
+  (gfx-rs/wgpu#5738, an Adreno at 2.1 GB). The fork of wgpu (`canplane/fork.wgpu`) records a
   pass, encodes its barriers, then replays it into the encoder's open buffer, so an
   encoder is one hal command buffer on every backend: the prototype attached to
   #5738, whose recorder extends borrows that wgpu-core's trackers keep alive. The

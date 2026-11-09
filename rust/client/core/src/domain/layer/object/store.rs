@@ -246,12 +246,6 @@ pub(super) type Tree = SparseTree<u32, 3>;
 type Enter<'a> = dyn FnMut(Zoom, [i32; 3], &Aabb, Option<Leaf>) -> bool + 'a;
 
 impl Store {
-    /// The store's revision, which every write that changes the store
-    /// advances.
-    pub fn revision(&self) -> u32 {
-        self.revision
-    }
-
     /// Whether the runtime holds the tree's columns, which the renderer lends
     /// it in place for the GPU to read (pxl-render gpu/api.rs `in_flight`).
     /// Nothing may write the tree until the runtime gives them back

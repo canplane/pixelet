@@ -56,16 +56,11 @@ fn zone_cells_once() {
     let cell = units(GROUND.leaf_cell_zoom());
     for center in [[0.0, 0.0, 3.0], [10.0, -7.0, 5.0], [-123.0, 456.0, -2.0]] {
         let center = center.map(|v| v * cell);
-        let (mut asked, mut rise, mut instances) = (0, Vec::new(), Vec::new());
-        lay_zone(
-            center,
-            |at| {
-                asked += 1;
-                rough(at)
-            },
-            &mut rise,
-            &mut instances,
-        );
+        let mut asked = 0;
+        let instances = lay_zone(center, |at| {
+            asked += 1;
+            rough(at)
+        });
         let before = laid_asking_each(center, rough);
         assert_eq!(
             instances.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
@@ -96,10 +91,8 @@ fn beacon_holds_on_stall() {
     let mut location = LocationIndicator {
         zone: Some(Zone {
             center: [0.0; 3],
-            target: [0.0; 2],
+            beacon_to: [0.0; 2],
             beacon_at: None,
-            night: false,
-            time: 0.0,
             run: 0.0,
             clock: StepClock::default(),
             visible: false,
@@ -121,6 +114,6 @@ fn beacon_holds_on_stall() {
         ..Frame::default()
     });
     clock::set(|| 0.0);
-    let time = location.zone.as_ref().map_or(f64::NAN, |z| z.time);
+    let time = location.zone.as_ref().map_or(f64::NAN, |z| z.clock.time());
     assert!(time > 0.0 && time < 0.2, "the bob leapt to {time} s");
 }

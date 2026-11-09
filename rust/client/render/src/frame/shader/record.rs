@@ -370,12 +370,12 @@ const fn depth_only(shader: u32) -> Header {
         depth_bias: 0,
         depth_bias_slope: f(DEPTH_SLOPE_BIAS),
         blend: OPAQUE,
-        vertex: VS_DEPTH,
+        vertex: VS_PLACE,
     }
 }
 
-/// The header of a changed draw's mark (tile_mark.wgsl). Its vertices are laid out as its
-/// depth pass lays them, both sides are drawn, and its fragments write no color and test no
+/// The header of a changed draw's mark (tile_mark.wgsl). Its vertices are laid out by its
+/// `vs_place`, both sides are drawn, and its fragments write no color and test no
 /// depth.
 const fn mark(shader: u32) -> Header {
     Header {

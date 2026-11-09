@@ -9,8 +9,8 @@
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::octant::Octant;
 
-use crate::domain::control::edit::ghost::{at_corner, carved_cube, decor_of, prop};
-use crate::domain::control::edit::write::{place_air, remove, Preview};
+use crate::domain::control::edit::ghost::{at_corner, carved_cube, decor_of, ghost_of};
+use crate::domain::control::edit::write::{place_air, remove};
 use crate::domain::control::edit::Hover;
 use crate::domain::preview::{Ghost, RenderEdit};
 
@@ -31,37 +31,32 @@ pub(super) fn tap(hover: &Hover) {
     }
 }
 
-pub(super) fn preview(hover: &Hover) -> Preview {
+pub(super) fn render_edit(hover: &Hover) -> RenderEdit {
     let (object, zoom) = hover.object();
-    let prop = hover.prop();
-    let edit = RenderEdit {
+    let generated = hover.decor();
+    RenderEdit {
         hide: object.map(|o| o.id()),
         // Over bare terrain, an AIR entry that is never written goes into the
         // drawn build, so what lies one voxel below shows through the ghost.
         carve: hover
             .coord
-            .filter(|_| object.is_none() && prop.is_none())
+            .filter(|_| object.is_none() && generated.is_none())
             .map(|h| Octant::holding(zoom, &h)),
-        scattered_cell: prop.and_then(|s| s.generated_in()),
-    };
-    Preview {
-        object,
-        zoom,
-        edit,
-        ..Preview::default()
+        scattered_cell: generated.and_then(|s| s.generated_in()),
     }
 }
 
-pub(super) fn ghost(hover: &Hover, p: &Preview) -> Ghost {
-    if let Some(g) = hover.prop().and_then(prop) {
+pub(super) fn ghost(hover: &Hover) -> Ghost {
+    if let Some(g) = hover.decor().and_then(ghost_of) {
         return g;
     }
     let Some(h) = hover.coord else {
         return Ghost::None;
     };
-    let cube = match p.object {
+    let (object, zoom) = hover.object();
+    let cube = match object {
         Some(o) => o.asset().cube(),
         None => carved_cube(h),
     };
-    at_corner(h, p.zoom, cube, true, p.object.as_ref().and_then(decor_of))
+    at_corner(h, zoom, cube, true, object.as_ref().and_then(decor_of))
 }

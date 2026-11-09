@@ -455,7 +455,7 @@ fn walk_to(world: World, from: &Q3, [x, y]: [f64; 2]) -> Q3 {
 /// the camera grid takes at that distance from the eye, and the answer is
 /// kept in `memo` while none of its inputs moves. Where that zoom is not
 /// loaded a coarser answer is taken, as a ray draws whatever ground it has.
-fn drawn_at(
+pub(crate) fn drawn_at(
     memo: &mut FloorMemo,
     at: [f64; 2],
     floor: f64,
@@ -476,7 +476,10 @@ fn drawn_at(
         };
         let drawn = floor_at(at).unwrap_or(floor);
         let rises = |p| floor_at(p).is_some_and(|top| top > drawn);
-        (clear_of_walls(at, half, units(zoom), rises), drawn)
+        (
+            clear_of_walls(at, half, units(GROUND.cell_zoom(zoom)), rises),
+            drawn,
+        )
     });
     [x, y, drawn]
 }

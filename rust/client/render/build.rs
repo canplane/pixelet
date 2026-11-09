@@ -26,6 +26,12 @@ use pxl_spec::space::layer::lattice::EFFECT_REACH;
 use pxl_spec::way::{AIR_OF, NOTHING, SPANS};
 use std::path::Path;
 
+#[path = "src/look/color.rs"]
+#[expect(
+    dead_code,
+    reason = "the build reads part of what the crate shares with it"
+)]
+mod color;
 #[path = "src/frame/shader/debug_look.spec.rs"]
 mod debug_look;
 #[path = "src/param.rs"]
@@ -1070,6 +1076,10 @@ fn words() -> String {
         vec4s("AO", AO_FLOATS),
         vec4s("MARKER", MARKER_FLOATS),
         vec4s("STAR_RECORD", STAR_RECORD_FLOATS),
+        {
+            let [r, g, b] = color::linear_rgb(color::indicator::ACTION).map(|v| v as f32);
+            format!("const LOCATION_ZONE_COLOR: vec3f = vec3f({r:?}, {g:?}, {b:?});\n")
+        },
         format!("const MARKER_INSTANCE_WORDS: u32 = {MARKER_INSTANCE_WORDS}u;\nconst LOCATION_ZONE_INSTANCE_FLOATS: u32 = {LOCATION_ZONE_INSTANCE_FLOATS}u;\n"),
         format!("const AO_DOWNSCALE: u32 = {AO_DOWNSCALE}u;\nconst AO_NOISE_SIDE: u32 = {AO_NOISE_SIDE}u;\nconst DECOR_GROUPS: u32 = {DECOR_GROUPS}u;\n"),
         // The side of a square of the depth bound, and the squares on a side of a screen tile;

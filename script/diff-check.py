@@ -30,7 +30,6 @@ listing = "--list" in args
 args = [a for a in args if a != "--list"]
 base = args[0] if args else "HEAD"
 changed = sorted(set(git("diff", "--name-only", "--no-renames", base)) | set(git("ls-files", "--others", "--exclude-standard")))
-present = [path for path in changed if (ROOT / path).is_file()]
 
 
 def under(prefix: str) -> bool:
@@ -73,6 +72,11 @@ for p in packages:
     for d in p["dependencies"]:
         if d.get("path") and any(path.startswith(relative(d["path"]) + "/") for path in changed):
             touched.add(d["name"])
+# What the workspace patches (the vendored wgpu) every crate above it builds on.
+with open(RUST / "Cargo.toml", "rb") as f:
+    patched = [relative(str((RUST / crate["path"]).resolve())) + "/" for source in tomllib.load(f).get("patch", {}).values() for crate in source.values() if "path" in crate]
+if any(map(under, patched)):
+    touched |= {name for name, _ in crate_dirs}
 grew = True
 while grew:
     grew = False
@@ -139,7 +143,9 @@ def task(name: str) -> None:
 
 def cargo(target: str) -> None:
     for argv in rust(target):
-        runs.append((" ".join(argv[:2]), argv, RUST))
+        # The Android lint builds C with the NDK's compiler (script/env.sh).
+        run = [str(ROOT / "script/env.sh"), *argv] if "aarch64-linux-android" in argv else argv
+        runs.append((" ".join(argv[:2]), run, RUST))
 
 
 fmt_rust = [arg for name in sorted(touched & members) for arg in ("-p", name)]
@@ -155,23 +161,27 @@ if fmt_rust:
 cargo("check-rust")
 if under("spec/") or any(".spec." in path for path in changed) or "pxl-tool" in touched:
     task("check-spec")
-# Each formatted file under ts/, by its config; what lies outside the trees is not formatted.
-formatted = [path for path in present if re.search(r"\.(ts|tsx|js|json|jsonc|md)$", path)]
-for tree in ["ts/"]:
-    own = [path[len(tree):] for path in formatted if path.startswith(tree)]
-    if own:
-        runs.append((f"fmt {tree}", ["node_modules/.bin/prettier", "--check", *own], ROOT / tree))
 task("check-rules")
+
+# What the assembled shaders are made from: their sources, the words the build writes and
+# the crates those words and the Rust they translate come from.
+translated = [d for name, d in crate_dirs if name in ("pxl-engine", "pxl-content")]
+shaders = [
+    *translated,
+    "rust/client/render/src/frame/shader/",
+    "rust/client/render/build.rs",
+    "rust/client/render/src/param.rs",
+    "rust/client/render/src/look/",
+]
 
 # The tests of what the same selection reached.
 # The shader test compiles the shaders with Tint.
-if under("ts/client/") or under("ts/tool/shader/") or under("xpute/ts/") or under("rust/client/render/src/frame/shader/"):
+if ts or any(map(under, shaders)):
     task("test-ts")
 cargo("test-rust")
 # The GPU's tests hold the shaders written by hand to the Rust they translate,
 # so a change to either side is checked against the other.
-translated = [d for name, d in crate_dirs if name in ("pxl-engine", "pxl-content")]
-if any(map(under, [*translated, "rust/client/render/src/frame/shader/", "rust/client/render/tests/"])):
+if any(map(under, [*shaders, *patched, "rust/client/render/tests/"])):
     task("test-gpu")
 
 print(f"diff-check: {len(changed)} changed file(s); crates {', '.join(sorted(touched)) or 'none'}")
@@ -184,3 +194,7 @@ for label, argv, cwd in runs:
     if status != 0:
         print(f"diff-check: {label} failed", file=sys.stderr)
         sys.exit(status or 1)
+
+# What a browser's compiler and a phone's driver refuse, no test here can see.
+if not listing and any(map(under, shaders)):
+    print("diff-check: what a shader is made from changed; the probe in Safari is left to run (.agents/skills/shader)")

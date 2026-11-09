@@ -86,13 +86,6 @@ pub(super) struct At {
 }
 
 impl World {
-    /// The object store's revision, which every write moves
-    /// (domain/layer/object/store.rs). Equal revisions mean the same things
-    /// are placed.
-    pub fn revision(&self) -> u32 {
-        self.object.revision()
-    }
-
     /// What is in the cell `node` at its own zoom, which is `coarsest` or
     /// finer, for an asker with nothing handed down (`asset_at`), the decor
     /// standing in it included. X is on the asker's lap.

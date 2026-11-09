@@ -39,9 +39,15 @@ lto = true
 codegen-units = 1
 panic = "abort"
 
-# One hal command buffer per encoder rather than per pass, on every backend
-# (gfx-rs/wgpu#5738: vendor/wgpu-core/src/command, vendor/wgpu-hal/src/dynamic/record.rs),
-# and the iOS Simulator's Metal capabilities (vendor/wgpu-hal/src/metal/adapter.rs).
+# wgpu with one hal command buffer per encoder on every backend, and the iOS
+# Simulator's Metal capabilities: what the fork changes is xpute/rust/gpu/README.md's.
 [patch.crates-io]
-wgpu-core = { path = "vendor/wgpu-core" }
-wgpu-hal = { path = "vendor/wgpu-hal" }
+naga = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
+naga-types = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
+wgpu = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
+wgpu-core = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
+wgpu-core-deps-apple = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
+wgpu-core-deps-windows-linux-android = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
+wgpu-hal = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
+wgpu-naga-bridge = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
+wgpu-types = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }

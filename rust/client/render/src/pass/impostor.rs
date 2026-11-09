@@ -60,9 +60,9 @@ pub struct ImpostorPass {
 /// It leaves a little room around the model, so a filtered edge reads
 /// nothing past it.
 fn fit_of(extent: Extent) -> [f32; 4] {
-    let [x, y, z] = extent;
-    let half = 0.5 * x.max(y) * 1.05;
-    [0.0, 0.5 * y, half.max(1e-3), (0.5 * z * 1.05).max(1e-3)]
+    let [across, deep, up] = extent;
+    let half = 0.5 * across.max(up) * 1.05;
+    [0.0, 0.5 * up, half.max(1e-3), (0.5 * deep * 1.05).max(1e-3)]
 }
 
 impl ImpostorPass {
@@ -124,7 +124,7 @@ impl ImpostorPass {
                 pipelines,
                 (PIPELINE_IMPOSTOR_MARK, PIPELINE_IMPOSTOR),
                 align,
-                (|d| d[0], put_whole, |_| true),
+                (|d| d[0], put_whole),
             ),
         }
     }

@@ -241,7 +241,8 @@ pub fn put_uniform(buf: &mut [u8], u: &[f32]) {
     buf[..DRAW_BYTES as usize].copy_from_slice(bytes(u));
 }
 
-/// A model's extent along glTF's axes: across (X), up (Y) and deep (Z).
+/// A model's extent as the catalog measures it: across (glTF's X), deep (glTF's Z) and up
+/// (glTF's Y).
 pub type Extent = [f32; 3];
 
 pub struct ModelDraw {

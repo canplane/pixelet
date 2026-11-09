@@ -7,7 +7,7 @@ use crate::frame::shader::record::{
 };
 use crate::frame::shader::word::{draw, ghost_box, instance};
 use crate::gpu::draw::{drifted, test_lists, Draw, DrawId, DrawList, ReceiverBox};
-use crate::pass::mark::{marked, Shown, UploadOf};
+use crate::pass::mark::{marked, UploadOf};
 
 /// The only test here that installs the calls' state. The lists' tests read
 /// that state, so this test takes their lock (`test_lists`) and never runs
@@ -70,15 +70,15 @@ struct Turn {
 }
 
 /// The passes that mark, as pass/*.rs make their `MarkPass`: each one's
-/// pipeline, the upload a draw reads, and which of its draws are drawn.
-fn passes() -> Vec<(u32, UploadOf, Shown)> {
+/// pipeline and the upload a draw reads.
+fn passes() -> Vec<(u32, UploadOf)> {
     vec![
-        (PIPELINE_SKINNED, |d| d[1], |_| true),
-        (PIPELINE_DECOR, |d| d[0], |_| true),
-        (PIPELINE_GHOST_DECOR, |d| d[0], |_| true),
-        (PIPELINE_IMPOSTOR, |d| d[0], |_| true),
-        (PIPELINE_LOCATION_ZONE, |d| d[0], |d| d[1] > 0),
-        (PIPELINE_LOCATION_BEACON, |_| 0, |_| true),
+        (PIPELINE_SKINNED, |d| d[1]),
+        (PIPELINE_DECOR, |d| d[0]),
+        (PIPELINE_GHOST_DECOR, |d| d[0]),
+        (PIPELINE_IMPOSTOR, |d| d[0]),
+        (PIPELINE_LOCATION_ZONE, |d| d[0]),
+        (PIPELINE_LOCATION_BEACON, |_| 0),
     ]
 }
 
@@ -148,12 +148,12 @@ fn damage_of((d, u): &Draw, now: bool) -> Damage {
 fn rebuilt_marks(was: &Rebuilt, now: &Rebuilt, touched: &[u32]) -> Vec<Damage> {
     let alike = |a: &Draw, b: &Draw| damage_of(a, true) == damage_of(b, true);
     let mut out = Vec::new();
-    for (pipeline, read, shown) in passes() {
+    for (pipeline, read) in passes() {
         let of = |r: &Rebuilt| -> Vec<Draw> {
             r.records
                 .iter()
                 .zip(&r.uniforms)
-                .filter(|(d, _)| d[4] == pipeline && shown(d))
+                .filter(|(d, _)| d[4] == pipeline)
                 .map(|(d, u)| {
                     let mut u = *u;
                     drifted(&mut u, r.drift);
@@ -340,8 +340,8 @@ fn kept_draws_answer_as_the_rebuilt_lists_did() {
             drift: [now.drift, was.drift],
         };
         let mut kept: Vec<Damage> = Vec::new();
-        for (pipeline, read, shown) in passes() {
-            marked(pipeline, (read, shown), &m, |d, is| {
+        for (pipeline, read) in passes() {
+            marked(pipeline, read, &m, |d, is| {
                 kept.push(damage_of(&d, is));
             });
         }

@@ -106,7 +106,7 @@ fn companion_camera() -> Option<Camera> {
 fn edit_tick(_: &mut TickContext) {
     // A changed preview changes the world as drawn, both where the old
     // preview was and where the new one is.
-    if write::preview_step() {
+    if write::render_edit_step() {
         request_world_tick();
     }
 }
@@ -160,7 +160,7 @@ fn scene_tick(ctx: &mut TickContext) {
         ctx,
         controller::pivot(),
         third_person.then(camera::azimuth),
-        &write::preview().edit,
+        &write::render_edit(),
         write::draft(),
     );
 }
@@ -384,7 +384,7 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
             gap_ms: delta * 1000.0,
             moving: interactive,
         },
-        &write::preview().edit,
+        &write::render_edit(),
     );
     set_renderer_frame(&frame);
     if let Some(interval_ms) = frame.interval_ms {

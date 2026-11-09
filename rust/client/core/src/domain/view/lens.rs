@@ -64,6 +64,12 @@ impl StepClock {
         self.0 = Some(t);
         (t, next(t), true)
     }
+
+    /// What the clock shows: its source's reading at its last step, or 0
+    /// before its first.
+    pub fn time(self) -> f64 {
+        self.0.unwrap_or(0.0)
+    }
 }
 
 /// The angle about the eye, in radians, below which a decor is drawn as an

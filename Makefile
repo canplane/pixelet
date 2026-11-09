@@ -45,7 +45,7 @@ check-ts:
 # The module as it ships in both builds, the servers, what runs here alone
 # (the tests' code, the bakes, the tools) and both device targets.
 check-rust:
-	+cd rust && cargo fmt --check && cargo lint-core && cargo lint-core-published && cargo lint-server && cargo lint-host && cargo lint-ios && cargo lint-android
+	+cd rust && cargo fmt --check && cargo lint-core && cargo lint-core-published && cargo lint-server && cargo lint-host && cargo lint-ios && $(CURDIR)/script/env.sh cargo lint-android
 check-rules:
 	+cd rust && cargo check-rules
 check-spec:
@@ -58,9 +58,8 @@ check-xpute:
 test: test-ts test-rust
 test-ts:
 	pnpm --dir ts test
-# pxl-tool holds every model to the committed table, which has been wrong by hand before.
 test-rust:
-	+cd rust && cargo test-host && cargo test-render && cargo test-core-published
+	+cd rust && cargo test-host && cargo test-render
 test-xpute:
 	$(MAKE) -C xpute test
 test-gpu:

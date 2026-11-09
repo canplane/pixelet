@@ -30,5 +30,5 @@ fn fs(i: VertexOut) -> @location(0) vec4f {
   let right = aastep(1.0 - bw, i.uv.x) * i.borders.z;
   let left = (1.0 - aastep(bw, i.uv.x)) * i.borders.w;
   let border = max(max(top, bottom), max(left, right));
-  return vec4f(tone(location_color()), mix(LOCATION_ZONE_FILL_OPACITY, 1.0, border));
+  return vec4f(tone(LOCATION_ZONE_COLOR), mix(LOCATION_ZONE_FILL_OPACITY, 1.0, border));
 }

@@ -13,7 +13,7 @@ use pxl_render::frame::shader::word::NO_LAYER;
 use pxl_render::gpu::api::bytes;
 use pxl_render::gpu::draw::{DrawId, DrawList, MirroredBlock, Position, ReceiverBox};
 use pxl_render::look::color::indicator;
-use pxl_render::mesh::paint::object::PAINTER;
+use pxl_render::paint::object::PAINTER;
 use pxl_spec::asset::cube::cube_rgb;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::space::coord::v3::V3;
@@ -23,7 +23,6 @@ use crate::domain::preview::{Ghost, GhostBox};
 use crate::domain::scene::column::GroupRange;
 use crate::domain::scene::decor::asset::{decor_model, decor_skin};
 use crate::domain::scene::indicator::param::GHOST_OPACITY;
-use crate::domain::scene::transform::Transform;
 use crate::domain::setting::store::settings;
 use xpute_core::global::Global;
 
@@ -37,7 +36,6 @@ enum Shape {
     Decor {
         group: u32,
         rot_bits: u32,
-        scale_bits: u32,
     },
 }
 
@@ -80,14 +78,7 @@ impl GhostDraw {
                 variant,
                 rot,
                 stand_in,
-            } => {
-                let t = Transform {
-                    at,
-                    rot: rot as f32,
-                    scale: 1.0,
-                };
-                self.set_decor(draw, decor, variant, t, stand_in)
-            }
+            } => self.set_decor(draw, decor, variant, at, rot as f32, stand_in),
             Ghost::Box(b) => self.set_box(draw, b),
         }
     }
@@ -123,16 +114,16 @@ impl GhostDraw {
             rgb,
             layer,
         };
-        let moved = core::mem::replace(&mut self.at, at) != at;
+        let changed = core::mem::replace(&mut self.at, at) != at;
         if self.shape == Some(shape) {
-            return moved;
+            return changed;
         }
         self.block.free(draw);
         self.shape = Some(shape);
         true
     }
 
-    /// Sets the ghost to `variant` of `decor`, with its base at `t.at`. Until
+    /// Sets the ghost to `variant` of `decor`, with its base at `at`. Until
     /// the variant's model and skin have both arrived, the box `stand_in` is
     /// drawn instead. Without a stand-in, the instance is one the world
     /// already holds, and it is drawn as it is. Returns whether what is drawn
@@ -142,10 +133,10 @@ impl GhostDraw {
         draw: &mut DrawList,
         decor: &Decor,
         variant: u32,
-        t: Transform,
+        at: V3,
+        rot: f32,
         stand_in: Option<GhostBox>,
     ) -> bool {
-        let Transform { at, rot, scale } = t;
         let ready = || {
             decor_model(decor, variant as usize).is_some()
                 && decor_skin(decor, variant as usize).is_some()
@@ -157,17 +148,16 @@ impl GhostDraw {
         let shape = Shape::Decor {
             group,
             rot_bits: rot.to_bits(),
-            scale_bits: scale.to_bits(),
         };
-        let moved = core::mem::replace(&mut self.at, at) != at;
+        let changed = core::mem::replace(&mut self.at, at) != at;
         if self.shape == Some(shape) {
-            return moved;
+            return changed;
         }
         // The block is one group of one instance, with no header: its
         // columns, its flags, and the index list.
         let column = GroupRange { first: 0, cnt: 1 };
         let mut m = [0u32; GroupRange::words(1) + 1];
-        (m[column.f32_at(3, 0)], m[column.f32_at(4, 0)]) = (rot.to_bits(), scale.to_bits());
+        (m[column.f32_at(3, 0)], m[column.f32_at(4, 0)]) = (rot.to_bits(), 1.0f32.to_bits());
         self.write(draw, shape, bytes(&m));
         true
     }

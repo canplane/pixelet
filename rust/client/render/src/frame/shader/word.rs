@@ -122,13 +122,12 @@ uniform! {
 
 uniform! {
     /// The location indicator's uniform (location.wgsl, location.slot.wgsl,
-    /// pass/location.rs): the beacon's spin about Z, the zone's color,
-    /// and whether the beacon takes its night look.
+    /// gpu/draw.rs `draw_beacon`): the beacon's spin about Z and whether it takes its
+    /// night look.
     location {
         Q: Vec3i = super::draw::Q,
         SPIN: F32 = 3,
-        COLOR: Vec3 = 4,
-        NIGHT: F32 = 7,
+        NIGHT: F32 = 4,
         R: Vec3 = super::draw::R,
     }
 }
