@@ -22,7 +22,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
  * view it draws into, are in xpute's own module (@xpute/native).
  */
 class PlatformModule : Module() {
-  private val files = FileFetch()
+  private val files by lazy { FileFetch(context) }
 
   private val context: Context
     get() = appContext.reactContext ?: throw CodedException("the app has no context")
