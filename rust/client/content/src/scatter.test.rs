@@ -136,3 +136,13 @@ fn counts_land_on_every_quarter() {
         assert!(n * 8 > all, "{by:?}");
     }
 }
+
+/// A brick at a decor's root holds no more than the room laid for it.
+#[test]
+fn a_brick_holds_at_most_its_room() {
+    for (k, decor) in ROWS.iter().enumerate() {
+        for t in -5000..5000 {
+            assert!(cnt(k, ROOTS[k], [t * 7, t * 13]) <= most(decor));
+        }
+    }
+}

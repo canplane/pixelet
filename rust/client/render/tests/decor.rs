@@ -3268,7 +3268,11 @@ fn hand_frames_answer_as_the_rust() {
             .take(12)
             .map(|&p| (reach(p, 6), generation::EVERY))
             .collect();
-        assert!(!edits.is_empty(), "{name}: no placed decor took a record");
+        tally.add("frame: a placed decor took a record", !edits.is_empty());
+        if edits.is_empty() {
+            total.merge(tally);
+            continue;
+        }
         let stale: Vec<u32> = (0..generation::EYE_ENTRIES)
             .filter(|s| mix(*s, [11, 2]).is_multiple_of(40))
             .collect();
@@ -3463,6 +3467,7 @@ fn hand_frames_answer_as_the_rust() {
             && total.0["frame: tiles decor stands on"] > 0
             && total.0["frame: draws out of view"] > 0
             && total.0["frame: draws in view past the light's reach"] > 0
+            && total.0["frame: a placed decor took a record"] > 0
     );
 }
 

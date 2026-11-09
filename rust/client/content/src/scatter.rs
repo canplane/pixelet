@@ -139,18 +139,23 @@ pub fn cnt_of([seed, chance, root]: [u32; 3], zoom: Zoom, b: [i32; 2]) -> u32 {
     let mut n = (mean(chance, root) + (draw & 0xffff)) >> 16;
     let mut z = root;
     while z < zoom && n > 0 {
-        // Halved across, then along, by weights its own hash draws, none
-        // past what its leaf cells hold (`halve::quarter`), the one rule the
-        // caves and the cumulus hand theirs down by.
+        // Halved across, then along, none past what its leaf cells hold
+        // (`halve::quarter`), the one rule the caves and the cumulus hand
+        // theirs down by: evenly within the brick, each half's odd one going
+        // by a draw of its own, and by the hash's weights past it.
         let mut draws = SplitMix32::new(node_seed(seed ^ SPLIT, (z, at(z))));
         let c = at(z + 1);
         let quarter = (c[0] & 1 | (c[1] & 1) << 1) as usize;
         let cap = 1u32 << (2 * (LEAF_CELL_ZOOM - z - 1));
         let cap = if cap > 0xffff { 0xffff } else { cap };
-        let weights = [draws.next_u32(), draws.next_u32()].map(|w| match z < root + BRICK_SHIFT {
-            true => even(w),
-            false => w,
-        });
+        let [across, along, other] = [draws.next_u32(), draws.next_u32(), draws.next_u32()];
+        let weights = match z < root + BRICK_SHIFT {
+            true => [
+                even(across),
+                even(if quarter & 1 == 0 { along } else { other }),
+            ],
+            false => [across, along],
+        };
         n = halve::quarter(n, cap, weights, quarter as u32);
         z += 1;
     }
