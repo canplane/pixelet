@@ -175,6 +175,20 @@ or a wrong records offset. A tag only changes keys no test reads, and a misplace
 empty records, after which the last walk asks the world itself. `build.rs` checks the
 queue-to-tag map at compile time.
 
+## The iPhone's app beside its Safari
+
+iPhone 13 mini, Release with the drive, one run each, temperature not read. The page came
+through a `cloudflared` tunnel, for WebGPU's secure context, on `9de89bbf0e`. The app's
+figures are those of the patch's table, before the `queue_ask` merge.
+
+| | app | Safari |
+| --- | --- | --- |
+| Frames drawn in 20 s | 366 | 281 |
+| GPU p50 / p95, ms | 50.7 / 92.0 | 50.5 / 93.1 |
+
+The Mac's Safari did not run: its session timed out. The reports of the `queue_ask` runs
+and of this one are under `report/`.
+
 ## The device's runtime beside the page
 
 **2026-11-10.** The device's runtime off the JavaScript thread (`b7cd54d228`,
