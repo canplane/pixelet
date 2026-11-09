@@ -9,7 +9,6 @@ use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::world::nearest;
-use xpute_kit::math::scalar::round;
 
 use crate::domain::view::frame::pose::view;
 
@@ -29,14 +28,6 @@ pub fn to_world(p: &Q3) -> V3 {
 /// the world, and Y and Z are held at its edge.
 pub fn world_to_canonical(w: &V3) -> Q3 {
     world::point(w[0], w[1], w[2])
-}
-
-/// The canonical point nearest `w`. A point that went through floats can come
-/// back a hair under its lattice point, and taking the cell it lies in
-/// (`world_to_canonical`) would move it down one step on each round trip.
-pub fn world_to_canonical_nearest(w: &V3) -> Q3 {
-    let one = q3::ONE as f64;
-    world_to_canonical(&w.map(|v| round(v * one) / one))
 }
 
 #[cfg(test)]

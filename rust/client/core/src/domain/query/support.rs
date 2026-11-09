@@ -15,7 +15,7 @@
 //! filled short of its cube stands to the top of the box it is drawn as
 //! (pxl-engine `cast::top`).
 
-use pxl_spec::space::coord::q3::{self, Q3};
+use pxl_spec::space::coord::q3::{self, FRAC_W, Q3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::world::{BOUNDS, ROUND};
 use pxl_spec::space::coord::zoom::{units, Zoom};
@@ -41,6 +41,31 @@ pub fn over(top: f64) -> f64 {
 /// The floor under a walker's center at `z`, the inverse of `over`.
 pub fn under(z: f64) -> f64 {
     z - units(GROUND.leaf_cell_zoom()) / 2.0
+}
+
+/// The Z, in Q3 steps, that marks a point whose height is not known. It is
+/// the bottom of the world (`world::BOUNDS`), below any ground.
+const UNKNOWN_Z: i64 = (BOUNDS.min[2] as i64) << FRAC_W;
+
+fn with_z(at: &Q3, z: i64) -> Q3 {
+    world::at(i64::from(at[0]), i64::from(at[1]), z)
+}
+
+pub fn unknown(at: &Q3) -> Q3 {
+    with_z(at, UNKNOWN_Z)
+}
+
+pub fn is_unknown(at: &Q3) -> bool {
+    i64::from(at[2]) == UNKNOWN_Z
+}
+
+/// The top of the floor under a standing point `at`.
+pub fn floor_of(at: &Q3) -> f64 {
+    under(q3::to_real(i64::from(at[2])))
+}
+
+pub fn on_floor(at: &Q3, top: f64) -> Q3 {
+    with_z(at, q3::from_real(over(top)))
 }
 
 /// Whether a walker at `at`, seen from `eye`, walks. It does where the
@@ -329,16 +354,14 @@ impl<'a> World<'a> {
     }
 
     /// Where a walker standing at the center `from` ends when it goes toward
-    /// `to`, one leaf cell at a time. `from` is a center whose height is
-    /// known.
+    /// `to`, one leaf cell at a time. A `from` whose height is not known
+    /// stands on the surface.
     ///
     /// The rule follows Quake III's PM_StepSlideMove (id Software,
     /// code/game/bg_slidemove.c), which steps up and slides a blocked axis
     /// along the wall as PM_ClipVelocity clips the velocity. Here the step up
     /// has no height limit but the ceiling's: it gives up where its own
-    /// cell's ceiling stops the climb. With `falls` the walker settles on the
-    /// floor; without it, it keeps its height wherever nothing lifts it, as
-    /// the orbit's eye does.
+    /// cell's ceiling stops the climb, and the walker settles on the floor.
     ///
     /// Where the camera grid, seen from `eye`, draws `from` coarser than the
     /// ground's own cells, this is a map, not a walk: the walker goes to `to`
@@ -352,17 +375,24 @@ impl<'a> World<'a> {
     /// Earth, which holds nothing above sea level.
     ///
     /// The walk stops at the edge of a leaf on the way that is not held, and
-    /// keeps what it walked up to there. None where the leaf under `from`, or
-    /// a map's `to`, is not held; the caller then goes on with the height
-    /// unknown.
-    pub fn step_slide(
-        &self,
-        from: &Q3,
-        to: &Q3,
-        eye: &Q3,
-        falls: bool,
-        walled: bool,
-    ) -> Option<Q3> {
+    /// keeps what it walked up to there. Where the leaf under `from`, or a
+    /// map's `to`, is not held, it ends at `to` with its height not known.
+    pub fn step_slide(&self, from: &Q3, to: &Q3, eye: &Q3, walled: bool) -> Q3 {
+        let stood = match is_unknown(from) {
+            true => self
+                .surface_support(from)
+                .exact()
+                .flatten()
+                .map(|top| on_floor(from, top)),
+            false => Some(*from),
+        };
+        stood
+            .and_then(|from| self.slide(&from, to, eye, walled))
+            .unwrap_or_else(|| unknown(to))
+    }
+
+    /// `step_slide` from a height known, None where it has no height to end at.
+    fn slide(&self, from: &Q3, to: &Q3, eye: &Q3, walled: bool) -> Option<Q3> {
         let [sx, sy, sz] =
             [i64::from(from[0]), i64::from(from[1]), i64::from(from[2])].map(q3::to_real);
         let mut floor = under(sz);
@@ -379,14 +409,7 @@ impl<'a> World<'a> {
             if walled && !self.within(&at) && self.within(from) {
                 return Some(*from);
             }
-            let stands = if falls {
-                self.surface_support(&at).exact()?.unwrap_or(floor)
-            } else {
-                self.floor_under(&at, LEAF_ZOOM)
-                    .exact()?
-                    .filter(|&z| z > floor)
-                    .unwrap_or(floor)
-            };
+            let stands = self.surface_support(&at).exact()?.unwrap_or(floor);
             return Some(gather(tx, ty, stands));
         }
         // The short way round the world, across the antimeridian too.
@@ -442,7 +465,7 @@ impl<'a> World<'a> {
             // A point short of the edge by less than a position's fraction,
             // so the cell it ends in is this one.
             let short = edge(k) - way[k].signum() * s * 1e-6;
-            match self.step(center(at), floor, center(into), (falls, walled), &mut lines) {
+            match self.step(center(at), floor, center(into), walled, &mut lines) {
                 Some(Some(top)) => (at, floor) = (into, top),
                 // Blocked: the walker slides, this axis staying in its cell
                 // while the other goes on.
@@ -460,7 +483,7 @@ impl<'a> World<'a> {
     /// One step from the leaf cell at `from` into the one at `to`, with the
     /// feet at `floor`. The walker climbs over what fills the cell it enters,
     /// as long as nothing over `floor` in the cell it leaves stops a walker a
-    /// cell tall there, and then drops onto the floor if it `falls`.
+    /// cell tall there, and then drops onto the floor.
     ///
     /// Returns the floor it ends on. The inner None means the ceiling of the
     /// cell it leaves stopped it; the outer None means `to` or the cell it
@@ -472,7 +495,7 @@ impl<'a> World<'a> {
         from: [f64; 2],
         floor: f64,
         to: [f64; 2],
-        (falls, walled): (bool, bool),
+        walled: bool,
         lines: &mut Path,
     ) -> Option<Option<f64>> {
         // For what is `walled` and within the service area, the area's edge
@@ -485,7 +508,7 @@ impl<'a> World<'a> {
         }
         let cell = units(GROUND.leaf_cell_zoom());
         let mut c = SplitCell::new(self, to, LEAF_ZOOM, *lines);
-        let mut z = c.lift(floor);
+        let z = c.lift(floor);
         let moved = if z > floor {
             let mut left = SplitCell::new(self, from, LEAF_ZOOM, c.lines);
             let stopped = left.above(floor, z + cell).is_some();
@@ -493,10 +516,7 @@ impl<'a> World<'a> {
             left.answer(()).exact()?;
             (!stopped).then_some(z)
         } else {
-            if falls {
-                z = c.below(z).unwrap_or(z);
-            }
-            Some(z)
+            Some(c.below(z).unwrap_or(z))
         };
         *lines = c.lines;
         c.answer(moved).exact()

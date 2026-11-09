@@ -17,9 +17,9 @@ use crate::domain::control::camera::orbit::orbit;
 use crate::domain::control::camera::state::{camera_state, camera_state_mut, Intent, IntentPatch};
 use crate::domain::control::camera::{camera, eye_world, facing_rot};
 use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_DIST};
-use crate::domain::control::support::{is_unknown, pan_to, unknown_z};
+use crate::domain::control::support::pan_to;
 use crate::domain::setting::store::{settings, CameraMode};
-use crate::domain::view::frame::coord::{world_to_canonical, world_to_canonical_nearest};
+use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::frame::pose::ObserverPose;
 use crate::domain::view::frame::screen::units_per_px_at;
 use crate::sys::sched::edge::request_world_tick;
@@ -253,7 +253,7 @@ fn switch() -> bool {
 }
 
 /// Switches to the controller `want` and returns whether it switched. The
-/// new controller's camera is put at the current pivot at once, so nothing
+/// new controller's camera is put at the pivot's `to` at once, so nothing
 /// eases away. While a tracker holds the pose, the switch waits until the
 /// tracker lets go.
 fn take_mode(want: CameraMode) -> bool {
@@ -261,18 +261,7 @@ fn take_mode(want: CameraMode) -> bool {
     if c.base == want || c.tracker.is_some() {
         return false;
     }
-    // The pivot is taken to the nearest canonical point. Any other rounding
-    // would walk the character away over a few switches back and forth. A
-    // height not yet known stays unknown.
-    let unknown = pivot_to().is_some_and(|t| is_unknown(&t));
-    let at = pivot_world().map(|local| {
-        let c = world_to_canonical_nearest(&local);
-        if unknown {
-            unknown_z(&c)
-        } else {
-            c
-        }
-    });
+    let at = pivot_to();
     c.base = want;
     let cam = camera();
     if want == CameraMode::orbit {

@@ -15,7 +15,7 @@
 use crate::domain::param;
 use crate::domain::query::change::Memo;
 use crate::domain::query::World;
-use crate::domain::query::{cell_zoom_at, over, under, walks};
+use crate::domain::query::{cell_zoom_at, floor_of, is_unknown, over, walks};
 use crate::domain::scene::character::param::{
     BODY_SHARE, CATCHUP_DURATION_S, CLIP_FADE_S, FOLLOW_WALK_LINGER_S, HEAD_CLEARANCE_U, PET_OFF,
     SETTLE_DELAY_S, WALK_EPS,
@@ -204,9 +204,9 @@ pub fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
         }
         return;
     };
-    // While nothing is known under the pivot, each character holds where it
-    // is, and the rest of its step goes on.
-    let hold = |c: &Character| c.walk.stands_z.map(|z| (c.walk.at, z));
+    // While nothing is known under the pivot, each character with a height
+    // holds where it is, and the rest of its step goes on.
+    let hold = |c: &Character| c.walk.floor(World::now()).map(|z| (c.walk.at, z));
     if let Some(person) = person {
         if let Some((target, z)) = camera
             .floor
@@ -220,22 +220,17 @@ pub fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
     let target = [camera.pivot[0] + PET_OFF[0], camera.pivot[1] + PET_OFF[1]];
     // The pet finds its own floor beside the person by walking there from
     // the person.
-    let reached = |(beside, _): &([f64; 2], f64)| {
-        libm::hypot(beside[0] - target[0], beside[1] - target[1]) <= WALK_EPS
-    };
-    let from = |floor: f64| world_to_canonical(&[camera.pivot[0], camera.pivot[1], over(floor)]);
+    let reached = |[x, y, _]: [f64; 3]| libm::hypot(x - target[0], y - target[1]) <= WALK_EPS;
     let pet_floor = &mut s.pet_floor;
     let mut walked = |floor: f64| {
-        let of = (
-            camera.pivot,
-            floor,
-            target,
-            walks(&from(floor), &camera.eye),
-        );
+        let from = center(camera.pivot, floor);
+        let of = (camera.pivot, floor, target, walks(&from, &camera.eye));
         pet_floor.of(World::now(), of, |world| {
-            walk_to(world, camera.pivot, floor, target, &camera)
-                .filter(reached)
-                .map_or(floor, |(_, z)| z)
+            let end = walk_to(world, &from, target, &camera);
+            match reached(to_world(&end)) && !is_unknown(&end) {
+                true => floor_of(&end),
+                false => floor,
+            }
         })
     };
     if let Some((target, z)) = camera
@@ -249,15 +244,15 @@ pub fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
 
 impl Character {
     /// Walks the character toward `target`, where it will stand at
-    /// `arrive_z`, places it where the walk ends, and plays its walk clip
+    /// `arrive_floor`, places it where the walk ends, and plays its walk clip
     /// while it walks. A character that had no place starts a fresh walk at
     /// `target`.
-    fn step(&mut self, ctx: &TickContext, target: [f64; 2], arrive_z: f64, camera: &Camera) {
+    fn step(&mut self, ctx: &TickContext, target: [f64; 2], arrive_floor: f64, camera: &Camera) {
         if self.transform.is_none() {
             self.walk = Walk::new(target);
         }
         let half = BODY_SHARE * self.height_u();
-        let (at, rot, walking) = self.walk.step(ctx, target, arrive_z, half, camera);
+        let (at, rot, walking) = self.walk.step(ctx, target, arrive_floor, half, camera);
         // Scale 1 draws the model as registered, which is the character's
         // height.
         self.transform = Some(Transform {
@@ -285,7 +280,9 @@ pub struct Walk {
     settle: SettleTracker,
     init_facing_done: bool,
     follow_walk_until: f64,
-    stands_z: Option<f64>,
+    /// Where it stands, its height unknown as the pivot's can be. None until
+    /// it first has a place.
+    stands: Option<Q3>,
     /// Where the character is drawn and on what floor (`drawn_at`).
     drawn: FloorMemo,
 }
@@ -302,12 +299,22 @@ impl Walk {
             settle: SettleTracker::new(target, 0.0),
             init_facing_done: false,
             follow_walk_until: 0.0,
-            stands_z: None,
+            stands: None,
             drawn: Memo::NONE,
         }
     }
 
-    /// Steps the walk toward `target`, where it will stand at `arrive_z`. It
+    /// The floor it is drawn on: its own, or where its height is not known,
+    /// that of the finest ground known there, as the pivot's is.
+    fn floor(&self, world: World<'_>) -> Option<f64> {
+        let at = self.stands?;
+        match is_unknown(&at) {
+            true => world.surface_support(&at).val().flatten(),
+            false => Some(floor_of(&at)),
+        }
+    }
+
+    /// Steps the walk toward `target`, where it will stand at `arrive_floor`. It
     /// returns where a body `half` wide on each side is drawn, its turn about
     /// Z, and whether it walks. While the map follows a fix or the keys steer
     /// (`follows`), the target is followed as it moves rather than walked to
@@ -316,7 +323,7 @@ impl Walk {
         &mut self,
         ctx: &TickContext,
         target: [f64; 2],
-        arrive_z: f64,
+        arrive_floor: f64,
         half: f64,
         camera: &Camera,
     ) -> ([f64; 3], f32, bool) {
@@ -413,76 +420,66 @@ impl Walk {
         // character's way puts it at its target at once.
         let arrived = gap(target, at) <= WALK_EPS;
         let moved = at != self.at;
-        let stands = self.stands_z.get_or_insert(arrive_z);
+        let stands = self.stands.get_or_insert(center(self.at, arrive_floor));
         if arrived {
-            *stands = arrive_z;
+            *stands = center(at, arrive_floor);
         } else if moved {
-            // Where the leaf under the character, or `to` on a map, is not
-            // loaded, the character goes on at its height.
-            if let Some((to, z)) = walk_to(World::now(), self.at, *stands, at, camera) {
-                (at, *stands) = if follows && gap(to, at) > WALK_EPS {
-                    (target, arrive_z)
-                } else {
-                    (to, z)
-                };
-            }
+            let end = walk_to(World::now(), stands, at, camera);
+            let [x, y, _] = to_world(&end);
+            (at, *stands) = if follows && gap([x, y], at) > WALK_EPS {
+                (target, center(target, arrive_floor))
+            } else {
+                ([x, y], end)
+            };
         }
         self.at = at;
-        let stands = *stands;
+        let floor = self.floor(World::now()).unwrap_or(arrive_floor);
         (
-            drawn_at(&mut self.drawn, at, stands, half, camera),
+            drawn_at(&mut self.drawn, at, floor, half, camera),
             self.heading as f32,
             is_walking,
         )
     }
 }
 
-/// Slides a step through `world` from `from`, standing on a floor at
-/// `stands`, toward `to`. It returns where the slide ends and the floor
-/// there; the slide stops short of a leaf on the way that is not loaded. None
-/// when the leaf under `from`, or `to` on a map, is not loaded.
-fn walk_to(
-    world: World<'_>,
-    from: [f64; 2],
-    stands: f64,
-    to: [f64; 2],
-    camera: &Camera,
-) -> Option<([f64; 2], f64)> {
-    let [a, b] = [from, to].map(|[x, y]| world_to_canonical(&[x, y, over(stands)]));
-    let at = to_world(&world.step_slide(&a, &b, &camera.eye, true, true)?);
-    Some(([at[0], at[1]], under(at[2])))
+/// A walker's center at `at` on a floor whose top is `floor`.
+fn center([x, y]: [f64; 2], floor: f64) -> Q3 {
+    world_to_canonical(&[x, y, over(floor)])
+}
+
+/// Slides a step through `world` from `from` toward `to` (`World::step_slide`).
+fn walk_to(world: World<'_>, from: &Q3, [x, y]: [f64; 2], camera: &Camera) -> Q3 {
+    world.step_slide(from, &world_to_canonical(&[x, y, 0.0]), &camera.eye, true)
 }
 
 /// Where a body `half` wide on each side is drawn for `at`, on the floor the
-/// eye's rays draw there in place of `stands`. The world is asked at the zoom
+/// eye's rays draw there in place of `floor`. The world is asked at the zoom
 /// the camera grid takes at that distance from the eye, and the answer is
 /// kept in `asked` while none of its inputs moves. Where that zoom is not
 /// loaded a coarser answer is taken, as a ray draws whatever ground it has.
 fn drawn_at(
     asked: &mut FloorMemo,
     at: [f64; 2],
-    stands: f64,
+    floor: f64,
     half: f64,
     camera: &Camera,
 ) -> [f64; 3] {
-    let center = [at[0], at[1], over(stands)];
+    let pos = [at[0], at[1], over(floor)];
     let eye = to_world(&camera.eye);
-    let r2 = (0..3)
-        .map(|k| (center[k] - eye[k]) * (center[k] - eye[k]))
-        .sum();
+    let r2 = (0..3).map(|k| (pos[k] - eye[k]) * (pos[k] - eye[k])).sum();
     let zoom = GROUND.z_at(r2);
-    let ([x, y], floor) = asked.of(World::now(), (at, stands, zoom), |world| {
+    let ([x, y], drawn) = asked.of(World::now(), (at, floor, zoom), |world| {
         let floor_at = |[x, y]: [f64; 2]| {
             world
-                .floor_under(&world_to_canonical(&[x, y, center[2]]), zoom)
+                .floor_under(&world_to_canonical(&[x, y, pos[2]]), zoom)
                 .val()
                 .flatten()
         };
-        let floor = floor_at(at).unwrap_or(stands);
-        let rises = |p| floor_at(p).is_some_and(|top| top > floor);
-        (clear_of_walls(at, half, units(zoom), rises), floor)
+        let drawn = floor_at(at).unwrap_or(floor);
+        let rises = |p| floor_at(p).is_some_and(|top| top > drawn);
+        (clear_of_walls(at, half, units(zoom), rises), drawn)
     });
-    [x, y, floor]
+    [x, y, drawn]
 }
 
 /// Moves `at` off each wall that a body `half` wide on each side would stand

@@ -6,7 +6,7 @@ use pxl_spec::space::coord::world;
 
 use crate::domain::control::camera::controller;
 use crate::domain::control::sensor::reading::device_location_store;
-use crate::domain::control::support::unknown_z;
+use crate::domain::query::unknown;
 use xpute_core::global::Global;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -24,7 +24,7 @@ fn device_coord() -> Option<Q3> {
         if l.alt.is_some() {
             at
         } else {
-            unknown_z(&at)
+            unknown(&at)
         }
     })
 }

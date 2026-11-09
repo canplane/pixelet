@@ -16,7 +16,8 @@ use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::{put_pivot, Motion};
 use crate::domain::control::camera::state::IntentPatch;
 use crate::domain::control::navigation::follow_mode;
-use crate::domain::control::support::{exact, is_unknown, nearest, unknown_z};
+use crate::domain::control::support::{exact, nearest};
+use crate::domain::query::{is_unknown, unknown};
 use crate::sys::sched::edge;
 use xpute_core::global::Global;
 
@@ -83,7 +84,7 @@ pub fn dst_step() {
 /// exactly.
 pub(crate) fn go_on_ground(to: Q3, motion: Motion) {
     follow_mode::set_following(false);
-    go_to_ground(unknown_z(&to), motion);
+    go_to_ground(unknown(&to), motion);
 }
 
 pub fn go_to_place(to: Q3) {
