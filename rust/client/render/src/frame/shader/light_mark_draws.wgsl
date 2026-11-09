@@ -30,7 +30,7 @@ fn instance_at(i: u32) -> u32 {
 }
 
 fn instance_cap() -> u32 {
-  return arrayLength(&instances) / (DRAWN_COLUMNS + 1u);
+  return arrayLength(&instances) / (DRAWING_COLUMNS + 1u);
 }
 
 /// How many slots are placed: the end of the last region, held to the slots there are
@@ -41,9 +41,9 @@ fn instance_cnt() -> u32 {
 }
 
 /// How far the decor's anchor lies on `axis` from the Q3 position `o`, in units (pxl-content
-/// `generation::drawn::ANCHOR`).
+/// `generation::drawing::ANCHOR`).
 fn instance_anchor(axis: u32, o: i32) -> f32 {
-  let a = i32(drawing_at(DRAWN_ANCHOR + axis));
+  let a = i32(drawing_at(DRAWING_ANCHOR + axis));
   // How far the anchor lies from the eye in whole unit cells, which wrap round the world on X.
   let d = a - (o >> FRAC_W);
   return f32(select(d, wrap_idx(LEAF_CELL_ZOOM, d), axis == 0u)) - f32(o & ((1i << FRAC_W) - 1i)) * (1.0 / f32(1u << FRAC_W));

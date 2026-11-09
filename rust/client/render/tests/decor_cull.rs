@@ -13,7 +13,7 @@ mod gpu;
 use std::collections::BTreeSet;
 
 use gpu::Gpu;
-use pxl_content::generation::{self, drawn};
+use pxl_content::generation::{self, drawing};
 use pxl_engine::light;
 use pxl_render::frame::shader::record::{
     compute, src, COMPUTE_DECOR_CULL, COMPUTE_DECOR_CULL_ARGS,
@@ -176,7 +176,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
     // The regions hold different counts of instances, some none, laid end to end in the slots.
     // Each region's list names its slots in reverse, so the shader must read each slot from the
     // list.
-    let regions = drawn::REGIONS as usize;
+    let regions = drawing::REGIONS as usize;
     let cnts: Vec<u32> = (0..regions as u32)
         .map(|r| match r % 5 {
             0 => 0,
@@ -188,7 +188,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
         .collect();
     let total: u32 = cnts.iter().sum();
     assert!(total <= CAP, "the regions hold {total}, past the slots");
-    let columns = drawn::COLUMNS;
+    let columns = drawing::COLUMNS;
     let mut instances = vec![0u32; ((columns + 1) * CAP) as usize];
     let mut noise = 0x9e37_79b9u32;
     let mut next = || {
@@ -211,8 +211,8 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
     }
     let list = (columns * CAP) as usize;
     let mut region_words = vec![0u32; 2 * regions];
-    let mut uniforms = vec![0u32; drawn::UNIFORM_WORDS as usize * regions];
-    let mut args = vec![0u32; drawn::ARGS_WORDS as usize * regions];
+    let mut uniforms = vec![0u32; drawing::UNIFORM_WORDS as usize * regions];
+    let mut args = vec![0u32; drawing::ARGS_WORDS as usize * regions];
     let mut first = 0u32;
     for r in 0..regions {
         let n = cnts[r];
@@ -221,11 +221,11 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
         }
         region_words[r] = n;
         region_words[regions + r] = first + n;
-        let u = r * drawn::UNIFORM_WORDS as usize;
+        let u = r * drawing::UNIFORM_WORDS as usize;
         uniforms[u..u + 3].copy_from_slice(&anchor_q.map(|v| v as u32));
         uniforms[u + 4] = CAP;
         uniforms[u + instance::IDX] = columns * CAP + first;
-        let a = r * drawn::ARGS_WORDS as usize;
+        let a = r * drawing::ARGS_WORDS as usize;
         args[a..a + 5].copy_from_slice(&[36, n, 7, 3, 0]);
         first += n;
     }
@@ -272,7 +272,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
             (2, args_buf.as_entire_binding()),
             (5, culled_args.as_entire_binding()),
         ],
-        [drawn::REGIONS.div_ceil(64), 1, 1],
+        [drawing::REGIONS.div_ceil(64), 1, 1],
     );
     gpu.dispatch(
         &pipeline(COMPUTE_DECOR_CULL),
@@ -286,7 +286,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
     let (mut met, mut left, mut near, mut wrong) = (0, 0, 0, Vec::new());
     let mut first = 0u32;
     for (r, &cnt) in cnts.iter().enumerate() {
-        let a = r * drawn::ARGS_WORDS as usize;
+        let a = r * drawing::ARGS_WORDS as usize;
         for w in [0, 2, 3, 4] {
             if got_args[a + w] != args[a + w] {
                 wrong.push(format!(

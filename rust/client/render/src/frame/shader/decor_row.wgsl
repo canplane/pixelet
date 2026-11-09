@@ -22,8 +22,8 @@ fn mul_hi(a: u32, b: u32) -> u32 {
   return (a >> 16u) * (b >> 16u) + (cross.x >> 16u) + (cross.y >> 16u) + (carry >> 16u);
 }
 
-/// `Decor::cells`: `variant`'s box, turned `turn` quarter turns.
-fn cells(k: u32, variant: u32, turn: u32) -> vec3<i32> {
+/// `Decor::size`: `variant`'s box, turned `turn` quarter turns.
+fn decor_size(k: u32, variant: u32, turn: u32) -> vec3<i32> {
   let at = ROW_SIZES + 3u * variant;
   let x = i32(row_word(k, at));
   let y = i32(row_word(k, at + 1u));

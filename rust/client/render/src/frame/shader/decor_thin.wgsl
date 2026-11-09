@@ -3,7 +3,7 @@
 // Lays the candidates of each pair that `decor_mark_cs` listed whole, one thread a clip level
 // cell of the pair's brick. Each leaf cell under that cell is read from the decor's hashes. A
 // candidate that stands at the entry's clip level and stands clear (`scatter::retained`) is
-// laid as the decor's next record, which holds its cell for `decor_cs`. The brick is the one the entry's header names, which the mark wrote from
+// laid as the decor's next record, which holds its cell for `decor_pose_cs`. The brick is the one the entry's header names, which the mark wrote from
 // the clipmap's row this frame. The row is not read again, so a header that names another brick
 // lays that brick's candidates. The pass reads no world, only the decor's hashes.
 

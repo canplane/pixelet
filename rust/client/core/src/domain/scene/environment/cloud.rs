@@ -8,14 +8,14 @@
 //! patch of that map's cells is built once and then drawn moved by the
 //! drift. Each cloud in it is drawn as a model, as an impostor or not at all
 //! by its size on the screen (`present_patch`), under the rule the GPU
-//! applies to decor (pxl-content generation.rs `drawn::lod`). A patch is laid
+//! applies to decor (pxl-content generation.rs `drawing::lod`). A patch is laid
 //! out in the columns the decor and impostor shaders read
 //! (domain/scene/column.rs).
 
 use fnv::FnvHashMap;
 
 use pxl_content::cloud::{cloud_draw, holds_cloud};
-use pxl_content::generation::drawn;
+use pxl_content::generation::drawing;
 use pxl_content::param::cloud::{CUMULUS_KM, WIND};
 use pxl_render::frame::shader::record::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::frame::shader::word::DECOR_GROUPS;
@@ -228,11 +228,11 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         for x in span(0) {
             let d = near([x, y]).max(1e-3);
             if d <= dist
-                && drawn::lod(
+                && drawing::lod(
                     (largest / d) as f32,
                     decor_model_angle() as f32,
                     decor_impostor_angle() as f32,
-                ) != drawn::CULLED
+                ) != drawing::CULLED
             {
                 c.demand.push([x, y]);
             }
@@ -539,7 +539,7 @@ fn present_patch(
     impostors: &mut Vec<u32>,
 ) {
     let (model, impostor) = (decor_model_angle() as f32, decor_impostor_angle() as f32);
-    let lod = |across: f64| drawn::lod(across as f32, model, impostor);
+    let lod = |across: f64| drawing::lod(across as f32, model, impostor);
     let [x0, y0] = b.corner;
     let [zlo, zhi] = b.alts.map(f64::from);
     let gap = |lo: f64, hi: f64, v: f64| (lo - v).max(v - hi).max(0.0);
@@ -573,8 +573,8 @@ fn present_patch(
         };
         let first = at;
         impostors.clear();
-        let culled = lod(extent * most / nearest) == drawn::CULLED;
-        let modeled = lod(extent * least / farthest) == drawn::MODEL;
+        let culled = lod(extent * most / nearest) == drawing::CULLED;
+        let modeled = lod(extent * least / farthest) == drawing::MODEL;
         for i in 0..if culled { 0 } else { cnt as usize } {
             if (columns_of[column.flags()..][i / 4] >> ((i % 4) * 8)) & 1 != 0 {
                 continue;
@@ -597,11 +597,11 @@ fn present_patch(
             }
             let d = libm::sqrt(d2).max(1e-3);
             let t = lod(extent * f(4) / d);
-            if t == drawn::MODEL {
+            if t == drawing::MODEL {
                 changed |= list[at] != i as u32;
                 list[at] = i as u32;
                 at += 1;
-            } else if t == drawn::IMPOSTOR && opacity >= 1.0 {
+            } else if t == drawing::IMPOSTOR && opacity >= 1.0 {
                 impostors.push(i as u32);
             }
         }

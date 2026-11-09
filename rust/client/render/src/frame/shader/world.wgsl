@@ -343,7 +343,7 @@ struct Piece {
 fn spawn(zoom: u32, c: vec3<i32>, k: u32) -> Piece {
   let o = c << vec3<u32>(CAVE_PIPE - zoom);
   let s = 1i << (CAVE_PIPE - zoom);
-  let h = node_seed(CAVE_TAG_SPAWN, zoom, c);
+  let h = node_seed(CAVE_SPAWN_TAG, zoom, c);
   let g = seed_mix(h, 1u);
   if (s < 4i) {
     let bits = vec3<i32>(i32(h & 1u), i32((h >> 1u) & 1u), i32((h >> 2u) & 1u));
@@ -375,7 +375,7 @@ fn is_aside(d: u32, h: u32) -> bool {
 }
 
 /// The `i`-th child of the walk from child `u` to child `v` (pxl-content `cave::walk_at`).
-fn tunnel_at(u: u32, v: u32, h: u32, i: u32) -> u32 {
+fn walk_at(u: u32, v: u32, h: u32, i: u32) -> u32 {
   let d = u ^ v;
   if (is_aside(d, h)) {
     let b = select(((d << 2u) | (d >> 1u)) & 7u, ((d << 1u) | (d >> 2u)) & 7u, ((h >> 1u) & 1u) == 0u);
@@ -410,7 +410,7 @@ fn hand_down(zoom: u32, c: vec3<i32>, enter: vec3<i32>, leave: vec3<i32>, side_i
   let mid = (c << vec3<u32>(CAVE_PIPE - zoom)) + (1i << (CAVE_PIPE - zoom)) / 2i;
   let u = u32(enter.x >= mid.x) | (u32(enter.y >= mid.y) << 1u) | (u32(enter.z >= mid.z) << 2u);
   let v = u32(leave.x >= mid.x) | (u32(leave.y >= mid.y) << 1u) | (u32(leave.z >= mid.z) << 2u);
-  let wh = node_seed(CAVE_TAG_WALK, zoom, c);
+  let wh = node_seed(CAVE_WALK_TAG, zoom, c);
   let d = u ^ v;
   let n = select(countOneBits(d) + 1u, 4u, is_aside(d, wh));
   var on = 0u;
@@ -423,7 +423,7 @@ fn hand_down(zoom: u32, c: vec3<i32>, enter: vec3<i32>, leave: vec3<i32>, side_i
   var cur = enter;
   var side = side_in;
   for (var i = 0u; i < n; i += 1u) {
-    let k = tunnel_at(u, v, wh, i);
+    let k = walk_at(u, v, wh, i);
     on |= 1u << k;
     let part_enter = cur;
     let part_in = side;
@@ -432,10 +432,10 @@ fn hand_down(zoom: u32, c: vec3<i32>, enter: vec3<i32>, leave: vec3<i32>, side_i
     if (i + 1u < n) {
       let half = (1i << (CAVE_PIPE - zoom)) / 2i;
       let co = (c << vec3<u32>(CAVE_PIPE - zoom)) + half * vec3<i32>(i32(k & 1u), i32((k >> 1u) & 1u), i32(k >> 2u));
-      let next = tunnel_at(u, v, wh, i + 1u);
+      let next = walk_at(u, v, wh, i + 1u);
       let axis = countTrailingZeros(k ^ next);
       let up = ((next >> axis) & 1u) == 1u;
-      let h = seed_mix(node_seed(CAVE_TAG_CROSS, zoom, c), i);
+      let h = seed_mix(node_seed(CAVE_CROSS_TAG, zoom, c), i);
       let rand = vec3<i32>(vec3<u32>(h, h >> 10u, h >> 20u) & vec3<u32>(0x3ffu));
       let was = (cur + leave) / 2i + (rand * (half / 2i + 1i)) / 1024i - half / 4i;
       part_leave = clamp(was, co, co + half - 1i);
@@ -481,7 +481,7 @@ fn tunnels_down(zoom: u32, c: vec3<i32>, k: u32, tunnels: u32, on: u32, want: u3
   let child = zoom + 1u;
   let cap = select(1u << (2u * ((class_zoom - child) & 15u)), 0u, child > class_zoom);
   var n = tunnels;
-  let h = seed_mix(node_seed(CAVE_TAG_SPLIT, zoom, c), k);
+  let h = seed_mix(node_seed(CAVE_SPLIT_TAG, zoom, c), k);
   var keep = 0xffu & ~on;
   for (var axis = 0u; axis < 3u && n > 0u; axis += 1u) {
     let upper = select(select(0xf0u, 0xccu, axis == 1u), 0xaau, axis == 0u);
@@ -558,8 +558,8 @@ fn cave_holds(zoom: u32, c: vec3<i32>) -> CaveNode {
   return CaveNode(blocks, side_in, side_out, tunnels, last);
 }
 
-/// The port of pxl-content `cave::side_mid`.
-fn side_mid(side: u32) -> vec3<i32> {
+/// The port of pxl-content `cave::side_middle`.
+fn side_middle(side: u32) -> vec3<i32> {
   var p = vec3<i32>(32i);
   if (side < 6u) {
     p[side / 2u] = select(0i, 64i, (side & 1u) == 1u);
@@ -591,8 +591,8 @@ fn hollow_from(h: u32, blocks: u32, side_in: u32, side_out: u32, lo: vec3<u32>, 
   if (blocks >= CELL_BLOCKS) {
     return n;
   }
-  let a = side_mid(side_in);
-  let ab = side_mid(side_out) - a;
+  let a = side_middle(side_in);
+  let ab = side_middle(side_out) - a;
   let l = dot(ab, ab);
   // Lanes 0 to 3 hold the lower layer's blocks, x first and then y, and lanes 4 to 7 hold the
   // upper layer's.
@@ -629,7 +629,7 @@ fn cave_blocks(zoom: u32, c: vec3<i32>) -> u32 {
   if (p.blocks == 0u) {
     return 0u;
   }
-  let h = node_seed(CAVE_TAG_BLOCKS, CAVE_PIPE, c >> vec3<u32>(zoom - CAVE_PIPE));
+  let h = node_seed(CAVE_BLOCKS_TAG, CAVE_PIPE, c >> vec3<u32>(zoom - CAVE_PIPE));
   if (zoom >= CAVE_BLOCK) {
     let lo = vec3<u32>(c >> vec3<u32>(zoom - CAVE_BLOCK)) & vec3<u32>(3u);
     return hollow_from(h, p.blocks, p.side_in, p.side_out, lo, 0u);

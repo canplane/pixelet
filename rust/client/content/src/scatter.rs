@@ -47,8 +47,8 @@ pub fn candidate_at(k: usize, cell: [i32; 2]) -> (Candidate, bool) {
 
 /// The tags of a column's count and of its split among its four, beside a
 /// decor's seed (`node_seed`).
-pub const CNT: u32 = 0xc047_dec0;
-pub const SPLIT: u32 = 0x5b17_dec0;
+pub const CNT_TAG: u32 = 0xc047_dec0;
+pub const SPLIT_TAG: u32 = 0x5b17_dec0;
 
 /// How many of the `k`-th decor the column `b` at `zoom` holds; a leaf cell holds one or
 /// none. Its root's column (`ROOTS`) holds as many as a hash draws around its mean, the
@@ -85,14 +85,14 @@ pub fn cnt_of([seed, chance, root]: [u32; 3], zoom: Zoom, b: [i32; 2]) -> u32 {
         return 0;
     }
     let at = |z: Zoom| [b[0] >> (zoom - z), b[1] >> (zoom - z)];
-    let draw = node_seed(seed ^ CNT, (root, at(root)));
+    let draw = node_seed(seed ^ CNT_TAG, (root, at(root)));
     let mut n = (mean(chance, root) + (draw & 0xffff)) >> 16;
     let mut z = root;
     while z < zoom && n > 0 {
         // Halved across, then along, none past what its leaf cells hold
         // (`halve::quarter`), the one rule the caves and the cumulus hand
         // theirs down by, each half along by a weight of its own.
-        let mut draws = SplitMix32::new(node_seed(seed ^ SPLIT, (z, at(z))));
+        let mut draws = SplitMix32::new(node_seed(seed ^ SPLIT_TAG, (z, at(z))));
         let c = at(z + 1);
         let quarter = (c[0] & 1 | (c[1] & 1) << 1) as usize;
         let cap = 1u32 << (2 * (LEAF_CELL_ZOOM - z - 1));

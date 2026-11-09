@@ -575,7 +575,10 @@ impl RayPass {
             light_slide,
             light_groups: [0; LIGHT_GROUPS],
             light_bufs: [0; 13],
-            light_none: buf(word_bytes(2 * generation::drawn::REGIONS as usize), storage),
+            light_none: buf(
+                word_bytes(2 * generation::drawing::REGIONS as usize),
+                storage,
+            ),
             light_number: 0,
             light_epoch: 0,
             light_ready: false,

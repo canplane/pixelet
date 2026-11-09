@@ -81,7 +81,7 @@ impl decor::Decor {
     /// The sides of `variant`'s box turned `turn`, in units.
     fn sides(&self, variant: u32, turn: u32) -> [f64; 3] {
         self.row
-            .cells(variant, turn)
+            .size(variant, turn)
             .map(|n| f64::from(n) * units(UNIT_ZOOM))
     }
 
@@ -159,7 +159,7 @@ impl decor::Row {
 
     /// `variant`'s box's sides in cells, turned `turn` quarter turns: an odd
     /// one swaps x and y, the box keeping its min corner.
-    pub const fn cells(&self, variant: u32, turn: u32) -> [u32; 3] {
+    pub const fn size(&self, variant: u32, turn: u32) -> [u32; 3] {
         let [x, y, z] = self.sizes[variant as usize];
         if turn.is_multiple_of(2) {
             [x, y, z]

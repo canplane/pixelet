@@ -1,7 +1,7 @@
 // pxl-render/gpu/generator.rs
 
 //! The decor the GPU generates and draws (pxl-content `scatter`). The GPU generates the decor
-//! the ground holds in the eye's clip levels over the cast's world (`decor_cs`), and the CPU
+//! the ground holds in the eye's clip levels over the cast's world (`decor_pose_cs`), and the CPU
 //! hands placed decor beside it as records. A candidate is generated again only where what it
 //! reads changed (`decor_mark_cs`, `Generation`), and its record stands otherwise. A brick's
 //! candidates are thinned again only where the brick is another. Then the count pass sizes for
@@ -13,7 +13,7 @@
 
 use crate::frame::shader::access;
 use crate::frame::shader::sequence;
-use pxl_content::generation::{self, drawn, GROUPS};
+use pxl_content::generation::{self, drawing, GROUPS};
 use pxl_engine::{eye, object};
 use pxl_spec::asset::decor::ROWS;
 use pxl_spec::brick;
@@ -44,12 +44,12 @@ use crate::gpu::tile::TileGrid;
 /// What the CPU hands the GPU's decor this frame.
 pub struct DecorFrame<'a> {
     /// For each decor, the clip level zooms it is generated at, a bit for each zoom
-    /// counted from the first clip level's (`decor_cs`).
+    /// counted from the first clip level's (`decor_pose_cs`).
     pub zooms: &'a [u32],
-    /// The drawing words, `drawn::DRAWING_WORDS` of them, laid out as pxl-content
-    /// `generation::drawn` says.
+    /// The drawing words, `drawing::WORDS` of them, laid out as pxl-content
+    /// `generation::drawing` says.
     pub drawing: &'a [u32],
-    /// Placed decor, a record each in the layout `decor_cs` writes: its decor, variant and
+    /// Placed decor, a record each in the layout `decor_pose_cs` writes: its decor, variant and
     /// turn, then its box's min corner in leaf cells, and a sink of none, as it stands where
     /// it is placed. The records are uploaded from where they lie, so their writer asks
     /// `in_flight` (gpu/api.rs) before it writes them again.
@@ -94,7 +94,7 @@ pub struct Generator {
     compact: Pipeline,
     groups: [u32; 6],
     /// What `decor_mark_cs` reads and the list it writes, by which `decor_thin_cs` and
-    /// `decor_cs` are dispatched, laid out as pxl-content `generation::THIN_ARGS` says.
+    /// `decor_pose_cs` are dispatched, laid out as pxl-content `generation::THIN_ARGS` says.
     list: u32,
     zooms: u32,
     drawing: u32,
@@ -102,11 +102,11 @@ pub struct Generator {
     meshes: u32,
     regions: u32,
     args: u32,
-    /// Each region's draw uniform, `drawn::UNIFORM_WORDS` apart, as the decor and impostor
+    /// Each region's draw uniform, `drawing::UNIFORM_WORDS` apart, as the decor and impostor
     /// shaders read one. The args pass sets each uniform's index.
     uniforms: u32,
     /// The records, laid out by slot (`generation::record_at`). `instances` holds the decor's
-    /// instances: `drawn::COLUMNS` lanes and the index list, each `cap` words long.
+    /// instances: `drawing::COLUMNS` lanes and the index list, each `cap` words long.
     records: u32,
     instances: u32,
     /// The draws' groups, in the layouts the decor and impostor draws share (record.rs
@@ -136,7 +136,7 @@ pub struct Generator {
     placed: Read,
     marking: bool,
     /// The boxes whose slots generate again, held until a frame that marks by them is drawn.
-    /// A frame that is dropped, or handed and never drawn, hands them again; a slot
+    /// A frame that is dropped, or handed and never drawing, hands them again; a slot
     /// generated twice generates the same. Past `object::RECTS` boxes, the rest are joined
     /// into the last.
     pending_rects: [[i32; 4]; object::RECTS as usize],
@@ -157,7 +157,7 @@ pub struct Generator {
     counting: bool,
 }
 
-/// The buffers of the world `decor_cs` asks, as the cast binds them: the cast's eye, the clip
+/// The buffers of the world `decor_pose_cs` asks, as the cast binds them: the cast's eye, the clip
 /// levels' table, the bricks' words, the service area's index, the overwrites, and the ways'
 /// pool.
 pub type World = [u32; 6];
@@ -177,7 +177,7 @@ impl Generator {
         let decor_pipeline = pipelines.build_world(g, PIPELINE_DECOR);
         let draw_layouts = [decor_pipeline.layouts[1], decor_pipeline.layouts[3]];
         let uniforms = buf(
-            word_bytes((drawn::UNIFORM_WORDS * drawn::REGIONS) as usize),
+            word_bytes((drawing::UNIFORM_WORDS * drawing::REGIONS) as usize),
             storage | buffer_usage::UNIFORM,
         );
         Generator {
@@ -193,12 +193,12 @@ impl Generator {
                 storage | buffer_usage::INDIRECT,
             ),
             zooms: buf(word_bytes(ROWS.len()), storage),
-            drawing: buf(word_bytes(drawn::DRAWING_WORDS as usize), storage),
+            drawing: buf(word_bytes(drawing::WORDS as usize), storage),
             rows,
             meshes: buf(word_bytes(GROUPS as usize), storage),
-            regions: buf(word_bytes(2 * drawn::REGIONS as usize), storage),
+            regions: buf(word_bytes(2 * drawing::REGIONS as usize), storage),
             args: buf(
-                word_bytes((drawn::ARGS_WORDS * drawn::REGIONS) as usize),
+                word_bytes((drawing::ARGS_WORDS * drawing::REGIONS) as usize),
                 storage | buffer_usage::INDIRECT,
             ),
             uniforms,
@@ -213,7 +213,7 @@ impl Generator {
             culled: [Mask::Screen, Mask::Light].map(|_| Culled {
                 list: 0,
                 args: buf(
-                    word_bytes((drawn::ARGS_WORDS * drawn::REGIONS) as usize),
+                    word_bytes((drawing::ARGS_WORDS * drawing::REGIONS) as usize),
                     storage | buffer_usage::INDIRECT,
                 ),
                 group: 0,
@@ -264,7 +264,7 @@ impl Generator {
                 buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
             );
             self.instances = g.buf(
-                word_bytes(((drawn::COLUMNS + 1) * need) as usize),
+                word_bytes(((drawing::COLUMNS + 1) * need) as usize),
                 buffer_usage::STORAGE,
             );
             if records != 0 {
@@ -288,7 +288,7 @@ impl Generator {
                 release(culled.group);
                 release(culled.list);
                 culled.list = g.buf(
-                    word_bytes(((drawn::COLUMNS + 1) * need) as usize),
+                    word_bytes(((drawing::COLUMNS + 1) * need) as usize),
                     buffer_usage::STORAGE,
                 );
                 culled.group = g.bind_group(
@@ -422,19 +422,23 @@ impl Generator {
         }
         g.write_buf(self.drawing, 0, bytes(f.drawing));
         g.write_buf(self.meshes, 0, bytes(meshes));
-        g.write_buf(self.regions, 0, bytes(&[0u32; 2 * drawn::REGIONS as usize]));
+        g.write_buf(
+            self.regions,
+            0,
+            bytes(&[0u32; 2 * drawing::REGIONS as usize]),
+        );
         // Each region's uniform is written here. Its index is the lanes' base until the args
         // pass adds the region's first instance. A region draws its group about the anchor,
         // which lies on Q3 and so has no remainder. An impostor's region, an odd one, also
         // names its group's layer.
-        let mut uniforms = [0u32; (drawn::UNIFORM_WORDS * drawn::REGIONS) as usize];
-        for r in 0..drawn::REGIONS {
-            let u = &mut uniforms[(r * drawn::UNIFORM_WORDS) as usize..][..DRAW_FLOATS];
+        let mut uniforms = [0u32; (drawing::UNIFORM_WORDS * drawing::REGIONS) as usize];
+        for r in 0..drawing::REGIONS {
+            let u = &mut uniforms[(r * drawing::UNIFORM_WORDS) as usize..][..DRAW_FLOATS];
             u[instance::Q..instance::Q + 3].copy_from_slice(&f.anchor.map(|v| v as u32));
             u[instance::STRIDE] = self.cap;
             u[instance::OPACITY] = 1.0f32.to_bits();
             u[instance::LAYER] = if r % 2 == 1 { r / 2 } else { 0 };
-            u[instance::IDX] = drawn::COLUMNS * self.cap;
+            u[instance::IDX] = drawing::COLUMNS * self.cap;
         }
         g.write_buf(self.uniforms, 0, bytes(&uniforms));
     }
@@ -532,7 +536,7 @@ impl Generator {
         self.groups = groups;
     }
 
-    /// Turns decor off for this frame: nothing is generated or drawn, and the next frame with
+    /// Turns decor off for this frame: nothing is generated or drawing, and the next frame with
     /// decor generates every slot (`stale`).
     pub fn off(&mut self) {
         self.on = false;
@@ -687,7 +691,7 @@ impl Generator {
         let pass = g.compute_pass(ctx.encoder, ctx.stamp(tiles.span()).pass());
         g.set_bind_group(pass, 0, group, &[]);
         g.set_pipeline(pass, self.cull_arg.id);
-        g.dispatch(pass, drawn::REGIONS.div_ceil(64), 1, 1);
+        g.dispatch(pass, drawing::REGIONS.div_ceil(64), 1, 1);
         g.set_pipeline(pass, self.cull.id);
         g.dispatch(pass, self.cap.div_ceil(64), 1, 1);
         g.end(pass);
@@ -752,12 +756,12 @@ impl IndirectDraw {
 
     /// Where region `region`'s indirect args lie, in bytes.
     pub fn args_at(&self, region: u32) -> u32 {
-        drawn::ARGS_WORDS * 4 * region
+        drawing::ARGS_WORDS * 4 * region
     }
 
     /// Where region `region`'s draw uniform lies, a dynamic offset in bytes.
     pub fn uniform_at(&self, region: u32) -> u32 {
-        drawn::UNIFORM_WORDS * 4 * region
+        drawing::UNIFORM_WORDS * 4 * region
     }
 }
 

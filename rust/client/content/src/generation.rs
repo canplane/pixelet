@@ -47,7 +47,7 @@ pub const BRICK_RECORD_CAP: u32 = {
     sum
 };
 
-/// The most records any one decor holds in a brick (`cap`), over which `decor_cs` is
+/// The most records any one decor holds in a brick (`cap`), over which `decor_pose_cs` is
 /// dispatched.
 pub const DECOR_RECORD_CAP: u32 = {
     let (mut most, mut k) = (0, 0);
@@ -78,9 +78,9 @@ const _: () = assert!(
 );
 
 /// A record at which no decor stands: its candidate is removed by the thinning or generates
-/// nothing where it is, so it is drawn as nothing (its region is `drawn::NONE`).
+/// nothing where it is, so it is drawn as nothing (its region is `drawing::NONE`).
 pub const UNGENERATED: u32 = u32::MAX;
-const _: () = assert!(UNGENERATED >> drawn::REGION_SHIFT == drawn::NONE);
+const _: () = assert!(UNGENERATED >> drawing::REGION_SHIFT == drawing::NONE);
 const _: () = assert!(
     FINEST_ZOOM < (1 << ZOOM_BITS) - 1,
     "no record's first word is `UNGENERATED`: its zoom's bits are never all set"
@@ -157,7 +157,7 @@ pub const RECT_WORDS: u32 = 5;
 pub const EVERY: u32 = 0;
 const _: () = assert!(FIRST_CELL_ZOOM > EVERY);
 
-/// What `decor_mark_cs` reads and lists, and what `decor_thin_cs` and `decor_cs` are
+/// What `decor_mark_cs` reads and lists, and what `decor_thin_cs` and `decor_pose_cs` are
 /// dispatched by, in words. First, for each of the two, its workgroups across and up and the
 /// entry-decor pairs listed, within the list's room (`THIN_ARGS`, `GENERATE_ARGS`); then the
 /// pairs it counted as it listed them (`THIN_CNT`, `GENERATE_CNT`). Then come whether every
@@ -165,8 +165,8 @@ const _: () = assert!(FIRST_CELL_ZOOM > EVERY);
 /// (`LIST_RECTS`), how many pairs generate again in part (`LIST_PARTS`), and a pad; then the
 /// boxes, `RECT_WORDS` each. Last is the list, each an entry with its decor above it
 /// (`<< 16`), in no order: the pairs generated whole are listed from its start, which
-/// `decor_thin_cs` thins and `decor_cs` generates; the pairs generated in part from its end
-/// (`part_at`), which `decor_cs` alone generates, its records where a box reaches them
+/// `decor_thin_cs` thins and `decor_pose_cs` generates; the pairs generated in part from its end
+/// (`part_at`), which `decor_pose_cs` alone generates, its records where a box reaches them
 /// (`reaches`).
 pub const THIN_ARGS: u32 = 0;
 pub const THIN_CNT: u32 = 3;
@@ -256,7 +256,7 @@ pub fn meets(reads: [i32; 4], b: [i32; 4]) -> bool {
 
 /// A record's first word: its decor and variant, a byte each, its turn in quarters, and the
 /// clip level zoom it was generated at, or for placed decor the coarsest it stands at
-/// (`scatter::coarsest_stand`); above them, once sized, its region (`drawn::REGION_SHIFT`).
+/// (`scatter::coarsest_stand`); above them, once sized, its region (`drawing::REGION_SHIFT`).
 pub const fn record_word(decor: u32, variant: u32, turn: u32, cell_zoom: Zoom) -> u32 {
     decor | variant << VARIANT_SHIFT | turn << TURN_SHIFT | cell_zoom << CELL_ZOOM_SHIFT
 }
@@ -293,9 +293,9 @@ pub const GROUPS: u32 = {
 /// How the GPU draws what it generates. Each record is sized for the screen as a model or an
 /// impostor, into its group's region: models at `2·group` and impostors just past it. The
 /// regions lie end to end in the decor's instances, in the layout the decor and impostor
-/// shaders read (columns x, y, z, spin and scale, `drawn::COLUMNS` a slot, then the index
+/// shaders read (columns x, y, z, spin and scale, `drawing::COLUMNS` a slot, then the index
 /// list), and each region's draw is a set of indirect arguments.
-pub mod drawn {
+pub mod drawing {
     use super::GROUPS;
 
     pub const REGIONS: u32 = 2 * GROUPS;
@@ -328,7 +328,7 @@ pub mod drawn {
     pub const ANCHOR: u32 = 4;
     pub const HIDE: u32 = 8;
     pub const EXTENTS: u32 = 12;
-    pub const DRAWING_WORDS: u32 = EXTENTS + GROUPS;
+    pub const WORDS: u32 = EXTENTS + GROUPS;
 
     /// The least distance, in units, at which a thing's span around the eye is taken
     /// (decor_cnt.wgsl `cnt_one`).
@@ -494,7 +494,7 @@ fn asks<Q: DecorQuery>(
     if !boxed {
         return (prop, true);
     }
-    let [w, d, h] = decor.cells(prop.variant, prop.turn).map(|v| v as i32);
+    let [w, d, h] = decor.size(prop.variant, prop.turn).map(|v| v as i32);
     let top = ((base + 1) * (1 << s) + h - 1) >> s;
     for y in foot[1]..=(y0 + d - 1) >> s {
         for x in foot[0]..=(x0 + w - 1) >> s {
@@ -519,7 +519,7 @@ fn asks<Q: DecorQuery>(
 /// How far decor standing at `at` (leaf cells) lies from `origin` (Q3 steps), in units,
 /// squared: from its cell's middle at its base, with X wrapping around the world as the steps
 /// do.
-pub fn distance2(origin: [i32; 3], at: [i32; 3]) -> f32 {
+pub fn dist2(origin: [i32; 3], at: [i32; 3]) -> f32 {
     let half = 1 << (FRAC_W - 1);
     let step = |v: i32, o: i32, mid: i32| {
         (v.wrapping_shl(FRAC_W).wrapping_add(mid).wrapping_sub(o)) as f32 / (1 << FRAC_W) as f32
@@ -533,7 +533,7 @@ pub fn distance2(origin: [i32; 3], at: [i32; 3]) -> f32 {
 }
 
 /// Whether decor is drawn where the rays ask zoom `at` (`Detail::at` at its distance,
-/// `distance2`), given its record's zoom `cell_zoom` (`record_of`). One generated at a coarser
+/// `dist2`), given its record's zoom `cell_zoom` (`record_of`). One generated at a coarser
 /// clip level is drawn where `at` is that clip level's zoom, so each distance draws one clip
 /// level's decor; one generated at the leaves' is drawn where `at` is the leaf cell's zoom or
 /// finer; and one `placed` is drawn where `at` is the coarsest zoom it stands at or finer, so
@@ -629,7 +629,7 @@ pub(crate) fn overlaps_placed(q: &impl DecorQuery, at: [i32; 3], cells: [i32; 3]
         }
         if let Some(decor) = Decor::find(word & 0xffff) {
             let (variant, turn) = placed_pose(decor.row, c);
-            let [w, e, v] = decor.row.cells(variant, turn);
+            let [w, e, v] = decor.row.size(variant, turn);
             let (w, e, v) = (w as i32, e as i32, v as i32);
             if c[0] < at[0] + cells[0]
                 && at[0] < c[0] + w

@@ -6,7 +6,7 @@
 // alone.
 
 /// This is the port of pxl-content `halve::quarter`.
-fn share_quarter(n: u32, cap: u32, across: u32, along: u32, q: u32) -> u32 {
+fn quarter(n: u32, cap: u32, across: u32, along: u32, q: u32) -> u32 {
   let a = halve(n, 2u * cap, 2u * cap, across);
   let half = select(n - a, a, (q & 1u) == 0u);
   let b = halve(half, cap, cap, along);
@@ -37,7 +37,7 @@ fn scatter_cnt_of(seed: u32, chance: u32, root: u32, zoom: u32, b: vec2<i32>) ->
     let c = vec2<u32>(b >> vec2<u32>(zoom - z - 1u)) & vec2<u32>(1u);
     let cap = min(1u << (2u * (LEAF_CELL_ZOOM - z - 1u)), 0xffffu);
     let along = select(draw(h, 1u), draw(h, 2u), c.x == 1u);
-    n = share_quarter(n, cap, near_half(draw(h, 0u)), near_half(along), c.x | (c.y << 1u));
+    n = quarter(n, cap, near_half(draw(h, 0u)), near_half(along), c.x | (c.y << 1u));
     z += 1u;
   }
   return n;
@@ -57,14 +57,14 @@ fn variant_of(k: u32, seed: u32) -> u32 {
 
 /// This is the port of pxl-content `scatter::side_of`.
 fn side_of(k: u32, seed: u32) -> i32 {
-  let size = cells(k, variant_of(k, seed), 0u);
+  let size = decor_size(k, variant_of(k, seed), 0u);
   return max(size.x, size.y);
 }
 
 /// `scatter::stands_at` for a decor sized in unit cells: whether its box keeps an eighth of a
 /// cell at `cell_zoom` or more. At the leaves' clip level it always stands.
 fn stands_at(k: u32, variant: u32, cell_zoom: u32) -> bool {
-  let size = cells(k, variant, 0u);
+  let size = decor_size(k, variant, 0u);
   let steps = 3u * (UNIT_ZOOM - min(UNIT_ZOOM, cell_zoom));
   return cell_zoom >= LEAF_CELL_ZOOM || (steps < 32u && ((EIGHTHS * u32(size.x * size.y * size.z)) >> steps) >= 1u);
 }

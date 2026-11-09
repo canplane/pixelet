@@ -9,7 +9,7 @@
 //! where objects were written since the last frame, because the ground's
 //! generated decor may have changed there.
 
-use pxl_content::generation::{self, drawn};
+use pxl_content::generation::{self, drawing};
 use pxl_content::scatter;
 use pxl_engine::object;
 use pxl_render::gpu::api;
@@ -41,7 +41,7 @@ struct Frame {
     /// because the decor setting is not among the inputs `last_key` compares.
     zooms: [u32; DECORS.len()],
     walk_zoom: Zoom,
-    drawing: [u32; drawn::DRAWING_WORDS as usize],
+    drawing: [u32; drawing::WORDS as usize],
     records: Vec<[u32; generation::RECORD_WORDS as usize]>,
     /// The column boxes, in leaf cells, where objects were written since a
     /// frame last took them (`note_edited`). The first `edited` of them are
@@ -88,7 +88,7 @@ fn hand_over() -> &'static mut Frame {
     HAND_OVER.get(|| Frame {
         zooms: [0; DECORS.len()],
         walk_zoom: UNIT_ZOOM,
-        drawing: [0; drawn::DRAWING_WORDS as usize],
+        drawing: [0; drawing::WORDS as usize],
         records: Vec::new(),
         edits: [[0; 4]; object::EDITS as usize],
         edited: 0,
@@ -221,24 +221,24 @@ fn meets(e: &[i32; 4], around: &Aabb) -> bool {
         .any(|s| i64::from(e[0]) + s < b[2] && b[0] < i64::from(e[2]) + s)
 }
 
-fn drawing(p: &mut [u32; drawn::DRAWING_WORDS as usize], key: Key) {
+fn drawing(p: &mut [u32; drawing::WORDS as usize], key: Key) {
     let anchor = key.anchor;
     p.fill(0);
-    p[drawn::MODEL_ANGLE as usize] = (decor_model_angle() as f32).to_bits();
-    p[drawn::IMPOSTOR_ANGLE as usize] = (decor_impostor_angle() as f32).to_bits();
-    let at = drawn::ANCHOR as usize;
+    p[drawing::MODEL_ANGLE as usize] = (decor_model_angle() as f32).to_bits();
+    p[drawing::IMPOSTOR_ANGLE as usize] = (decor_impostor_angle() as f32).to_bits();
+    let at = drawing::ANCHOR as usize;
     p[at] = wrap(anchor[0] as i32);
     p[at + 1] = anchor[1] as i32 as u32;
     p[at + 2] = anchor[2] as i32 as u32;
     if let Some([x, y, z]) = key.scattered_cell {
-        let at = drawn::HIDE as usize;
+        let at = drawing::HIDE as usize;
         p[at..at + 4].copy_from_slice(&[wrap(x), y as u32, z as u32, 1]);
     }
     let extents = DECORS
         .iter()
         .flat_map(|d| d.variants.iter().map(|v| v.extent(catalog()) as f32));
     for (k, e) in extents.enumerate() {
-        p[drawn::EXTENTS as usize + k] = e.to_bits();
+        p[drawing::EXTENTS as usize + k] = e.to_bits();
     }
 }
 
