@@ -5,7 +5,7 @@
 // others. It reads no world and keeps no state, so a thread asks of a leaf cell by its name
 // alone.
 
-/// This is the twin of pxl-content `halve::quarter`.
+/// This is the port of pxl-content `halve::quarter`.
 fn share_quarter(n: u32, cap: u32, across: u32, along: u32, q: u32) -> u32 {
   let a = halve(n, 2u * cap, 2u * cap, across);
   let half = select(n - a, a, (q & 1u) == 0u);
@@ -48,12 +48,12 @@ fn candidate_draws(k: u32, leaf: vec2<i32>) -> vec2<u32> {
   return vec2<u32>(draw(h, 0u), draw(h, 1u));
 }
 
-/// This is the twin of pxl-content `scatter::variant`.
+/// This is the port of pxl-content `scatter::variant`.
 fn variant_of(k: u32, seed: u32) -> u32 {
   return mul_hi(draw(seed, 0u), row_word(k, ROW_VARIANTS));
 }
 
-/// This is the twin of pxl-content `scatter::side_of`.
+/// This is the port of pxl-content `scatter::side_of`.
 fn side_of(k: u32, seed: u32) -> i32 {
   let size = cells(k, variant_of(k, seed), 0u);
   return max(size.x, size.y);

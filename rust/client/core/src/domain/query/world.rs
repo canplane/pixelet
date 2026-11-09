@@ -29,7 +29,7 @@ impl World {
         }
     }
 
-    /// The base: this world with nothing placed in it.
+    /// The base: the world with nothing placed in it.
     pub fn base() -> World {
         World {
             object: store::empty(),

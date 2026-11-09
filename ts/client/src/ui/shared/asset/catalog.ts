@@ -9,7 +9,7 @@ import {
   type CubeSection,
 } from "./cube.spec.ts";
 import { decor, DECOR_LABEL, DECORS } from "./decor.spec.ts";
-import { KIND, IDX_BITS } from "./id.spec.ts";
+import { IDX_BITS, KIND } from "./id.spec.ts";
 
 /** An asset's number: its kind shifted left by IDX_BITS, with its shape in
  * the low bits. */

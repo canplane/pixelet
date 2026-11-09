@@ -284,9 +284,9 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
             ));
         }
     }
-    // An id is its kind over its shape (id.json).
+    // An id is its kind over its index (id.json).
     let id = read(ID_JSON)?;
-    let shape_bits = id
+    let idx_bits = id
         .get("IDX_BITS")
         .map(Node::val)
         .and_then(Node::num)
@@ -300,7 +300,7 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
     };
     let (cube_kind, decor_kind) = (kind("cube")?, kind("decor")?);
     for (name, val) in &decor {
-        if *val > u32::from(u16::MAX) || val >> shape_bits != decor_kind {
+        if *val > u32::from(u16::MAX) || val >> idx_bits != decor_kind {
             return Err(format!(
                 "{DECOR_JSON}: {name} is {val}, not of the decor kind within a u16"
             ));
@@ -315,7 +315,7 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
         }
     }
     for e in cube_entries(&object) {
-        if e.val <= 255 || e.val >> shape_bits != cube_kind {
+        if e.val <= 255 || e.val >> idx_bits != cube_kind {
             return Err(format!(
                 "{CUBE_JSON}: object.{} is {}, not past a byte of the cube kind",
                 e.name, e.val

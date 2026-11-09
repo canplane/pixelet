@@ -339,7 +339,7 @@ pub const fn keeps(zoom: Zoom, c: [i32; 3]) -> bool {
     near(c[0], zoom) && near(c[1], zoom) && near(c[2], zoom)
 }
 
-/// The twin of pxl-render walk_node.wgsl `mix_hash`.
+/// The port of pxl-render walk_node.wgsl `mix_hash`.
 const fn mix_hash(h: u32, v: u32) -> u32 {
     (h ^ v).wrapping_mul(0x9E37_79B1).rotate_left(15)
 }
