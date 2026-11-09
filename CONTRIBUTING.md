@@ -89,6 +89,7 @@ make bake-terrain ARGS="--shard 01033210 --step fold --step commit"
 catalog the sky draws and the geoid table that GPS heights are corrected by.
 `make ingest-overture` fills the local geographic database, and
 [infra/geo/README.md](./infra/geo/README.md) describes each source's ingest.
+
 After a re-ingest or a change to a bake, empty what it made by hand
 (`rm -rf tmp/oven`, or `out/<kind>*` to bake one kind from nothing).
 
