@@ -16,23 +16,27 @@ from contextlib import closing
 # The longest a run may take, its install included.
 CAP_S = 240
 PIECE = re.compile(r"PXLPERF (\d+)/(\d+) (.*)")
+# The most lines read from a page at once.
+BATCH = 30
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # A page's size: 4K, at Chrome's two device pixels a side.
 SIZE = {"width": 1920, "height": 1080}
 
 
 def polled(ev):
-    """The lines a page has said, as it says them. A page between documents
-    answers nothing."""
+    """The lines a page has said, as it says them, `BATCH` to an answer, as one
+    answer of a whole result does not come back from a phone's Chrome. A page
+    between documents answers nothing."""
     seen = 0
     while True:
-        time.sleep(1)
         try:
-            said = ev(f"(globalThis.said ?? []).slice({seen})")
+            said = ev(f"(globalThis.said ?? []).slice({seen}, {seen + BATCH})")
         except RuntimeError:
-            continue
+            said = []
         yield from said
         seen += len(said)
+        if len(said) < BATCH:
+            time.sleep(1)
 
 
 def stream(cmd):

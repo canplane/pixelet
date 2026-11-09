@@ -609,8 +609,9 @@ impl<L: Base> TileCache<L> {
             .count() as u32
     }
 
-    /// Reports `p` as changed when something read over it changed outside
-    /// the cache, such as a clipmap brick, as its arriving would be reported.
+    /// Reports node `p` as changed when something read over it changed
+    /// outside the cache, such as a clipmap brick, which is a node finer than
+    /// a tile, as a tile's arriving would be reported.
     pub fn changed_at(&mut self, p: Quadrant) {
         self.changed.push(p);
     }

@@ -273,6 +273,11 @@ fn entry_brick(cell_zoom: Zoom, first: [i32; 2], s: u32) -> [i32; 2] {
     [wrap_idx(cell_zoom - BRICK_SHIFT, q[0]), q[1]]
 }
 
+/// Brick `q` at `cell_zoom` as a node of the plane.
+fn brick_quad(cell_zoom: Zoom, q: [i32; 2]) -> Quadrant {
+    Quadrant::new(cell_zoom - BRICK_SHIFT, q)
+}
+
 /// The tile brick `q` at `cell_zoom` lies in, and where in it, in bricks.
 pub(crate) fn tile_of(cell_zoom: Zoom, q: [i32; 2]) -> (Quadrant, [u32; 2]) {
     let per = (GROUND.tile_cells() >> BRICK_SHIFT) as i32;
@@ -448,7 +453,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
             let want = entry_brick(cell_zoom, f, s);
             if zoom_changed[clip_level as usize] || lost || entry.brick != want {
                 entry.brick = want;
-                terrain.changed_at(tile_of(cell_zoom, want).0);
+                terrain.changed_at(brick_quad(cell_zoom, want));
             }
         }
     }
@@ -615,7 +620,7 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
             break;
         }
         (w.slots[b as usize].present, w.slots[b as usize].fill) = (true, Fill::Idle);
-        TerrainTile::tile_cache().changed_at(tile_of(slot.cell_zoom, slot.brick).0);
+        TerrainTile::tile_cache().changed_at(brick_quad(slot.cell_zoom, slot.brick));
         for i in of_entry(b % ENTRIES) {
             show(w, i);
         }
