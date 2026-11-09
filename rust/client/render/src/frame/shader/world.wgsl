@@ -344,7 +344,7 @@ fn spawn(zoom: u32, c: vec3<i32>, k: u32) -> Piece {
   let o = c << vec3<u32>(CAVE_PIPE - zoom);
   let s = 1i << (CAVE_PIPE - zoom);
   let h = node_seed(CAVE_TAG_SPAWN, zoom, c);
-  let g = node_seed(CAVE_TAG_SPAWN ^ 1u, zoom, c);
+  let g = seed_mix(h, 1u);
   if (s < 4i) {
     let bits = vec3<i32>(i32(h & 1u), i32((h >> 1u) & 1u), i32((h >> 2u) & 1u));
     return Piece(o + bits, o + 1i - bits, 6u, 6u, tunnel_blocks(k), 0u);
@@ -435,7 +435,7 @@ fn hand_down(zoom: u32, c: vec3<i32>, enter: vec3<i32>, leave: vec3<i32>, side_i
       let next = tunnel_at(u, v, wh, i + 1u);
       let axis = countTrailingZeros(k ^ next);
       let up = ((next >> axis) & 1u) == 1u;
-      let h = node_seed(CAVE_TAG_CROSS ^ i, zoom, c);
+      let h = seed_mix(node_seed(CAVE_TAG_CROSS, zoom, c), i);
       let rand = vec3<i32>(vec3<u32>(h, h >> 10u, h >> 20u) & vec3<u32>(0x3ffu));
       let was = (cur + leave) / 2i + (rand * (half / 2i + 1i)) / 1024i - half / 4i;
       part_leave = clamp(was, co, co + half - 1i);
@@ -481,7 +481,7 @@ fn tunnels_down(zoom: u32, c: vec3<i32>, k: u32, tunnels: u32, on: u32, want: u3
   let child = zoom + 1u;
   let cap = select(1u << (2u * ((class_zoom - child) & 15u)), 0u, child > class_zoom);
   var n = tunnels;
-  let h = node_seed(CAVE_TAG_SPLIT ^ k, zoom, c);
+  let h = seed_mix(node_seed(CAVE_TAG_SPLIT, zoom, c), k);
   var keep = 0xffu & ~on;
   for (var axis = 0u; axis < 3u && n > 0u; axis += 1u) {
     let upper = select(select(0xf0u, 0xccu, axis == 1u), 0xaau, axis == 0u);
@@ -580,11 +580,7 @@ fn cave_key(a: vec3<i32>, ab: vec3<i32>, l: i32, h: u32, b: u32) -> i32 {
   } else if (t >= l) {
     d = (pp - 2i * t + l) * l;
   }
-  var n = h ^ (b * 0x9e3779b9u);
-  n ^= n >> 15u;
-  n *= 0x2c1b3c6du;
-  n ^= n >> 12u;
-  return d + i32(n % CAVE_NUDGE) * one;
+  return d + i32(seed_mix(h, b) % CAVE_NUDGE) * one;
 }
 
 /// How many of a pipe cell's blocks in the cube `1 << t` blocks a side from block `lo` are

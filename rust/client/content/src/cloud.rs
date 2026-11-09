@@ -1,14 +1,15 @@
 // pxl-content/cloud.rs
 
 //! wgsl-port: the cloud field that the cumulus and the sheets share: the lattice it lies
-//! on, the wind that carries it and the hash its cells draw from. The sheets sum the hash's
-//! noise on the GPU (pxl-render frame/shader/noise.wgsl), whose `lattice_hash` pxl-render
-//! build.rs writes from `HASH_IN`, `HASH_ROUNDS`, `HASH_LAST` and `HASH_SHARE_BITS`. The
+//! on, the wind that carries it and the hash the sheets' noise sums over on the GPU
+//! (pxl-render frame/shader/noise.wgsl), whose `lattice_hash` pxl-render build.rs writes
+//! from `HASH_IN`, `HASH_ROUNDS`, `HASH_LAST` and `HASH_SHARE_BITS`. The
 //! cumulus is handed down and drawn by `node_seed`, as the decor and the caves are
 //! (`holds_cloud`, `cloud_draw`).
 
 use pxl_engine::seed::node_seed;
 use pxl_spec::space::coord::zoom::{Zoom, UNIT_ZOOM};
+use xpute_kit::math::rng::derive_seed_u32;
 
 use crate::halve;
 use crate::param::cloud::LATTICE_SHAMT;
@@ -31,22 +32,8 @@ pub const HASH_ROUNDS: [[u32; 2]; 2] = [[16, 0x7feb_352d], [15, 0x846c_a68b]];
 /// The shift of the last xor, after the rounds.
 pub const HASH_LAST: u32 = 16;
 /// The top bits kept as the share: an f32's whole significand, so the share
-/// is exact on either side.
+/// is exact.
 pub const HASH_SHARE_BITS: u32 = 24;
-
-/// Cell `[x, y]`'s hash under `salt`, in [0, 1).
-pub fn lattice_hash([x, y]: [u32; 2], salt: u32) -> f32 {
-    let mut h =
-        x.wrapping_mul(HASH_IN[0]) ^ y.wrapping_mul(HASH_IN[1]) ^ salt.wrapping_mul(HASH_IN[2]);
-    let mut k = 0;
-    while k < HASH_ROUNDS.len() {
-        h ^= h >> HASH_ROUNDS[k][0];
-        h = h.wrapping_mul(HASH_ROUNDS[k][1]);
-        k += 1;
-    }
-    h ^= h >> HASH_LAST;
-    (h >> (32 - HASH_SHARE_BITS)) as f32 / (1u32 << HASH_SHARE_BITS) as f32
-}
 
 /// The lattice's zoom: a cell of the field is a node of this zoom across.
 const CELL_ZOOM: Zoom = UNIT_ZOOM - LATTICE_SHAMT;
@@ -59,7 +46,7 @@ const CUMULUS_SPLIT: u32 = 0xc10d_0002;
 /// Cell `cell`'s draw under `salt`, in [0, 1), from which a cumulus there takes its place,
 /// size, turn and variant, by the one seed the decor draws theirs by (`node_seed`).
 pub fn cloud_draw(cell: [i32; 2], salt: u32) -> f64 {
-    f64::from(node_seed(CUMULUS ^ salt, (CELL_ZOOM, cell))) / 4_294_967_296.0
+    f64::from(derive_seed_u32(node_seed(CUMULUS, (CELL_ZOOM, cell)), salt)) / 4_294_967_296.0
 }
 
 /// Whether the field's cell `cell` holds a cumulus. Its patch holds `mean` of its 256 cells,

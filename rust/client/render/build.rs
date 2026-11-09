@@ -190,9 +190,7 @@ fn main() {
     );
     std::fs::write(out.join("light_word.wgsl"), light).expect("the light word's shader");
     std::fs::write(out.join("tile_word.wgsl"), tile_word()).expect("the tile word's shader");
-    // The hash is the one the CPU's cumulus uses (pxl-content cloud.rs `lattice_hash`), written
-    // from the same multipliers, rounds and output bits, so the clouds the GPU draws agree with
-    // the CPU's.
+    // The sheets' noise hash, from pxl-content cloud.rs's multipliers, rounds and output bits.
     use pxl_content::cloud::{HASH_IN, HASH_LAST, HASH_ROUNDS, HASH_SHARE_BITS};
     use pxl_content::param::cloud::LATTICE_SHAMT;
     let [hx, hy, hs] = HASH_IN;

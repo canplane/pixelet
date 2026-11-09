@@ -334,11 +334,15 @@ fn ray_from_above_meets_ground() {
 /// dug lower half.
 #[test]
 fn dig_met_as_folded() {
+    use pxl_content::cave::hollow;
     use pxl_engine::answer::side;
     use pxl_spec::share::EIGHTHS;
     use pxl_spec::value::AIR;
     let _g = serial();
     let [x, y] = flat_at_five();
+    // A column with no cave under the dig, so the ground under it is met.
+    let clear = |x: f64| hollow((LEAF_CELL_ZOOM, [x, y, 3.0].map(|v| libm::floor(v) as i32))) == 0;
+    let x = (0..).map(|i| x + f64::from(i)).find(|&x| clear(x)).unwrap();
     let half = units(OBJECT_COARSEST + 1);
     let dug = |n: usize| {
         let mut store = Store::default();

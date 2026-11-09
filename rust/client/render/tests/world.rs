@@ -1067,7 +1067,7 @@ fn hand_world_answers_as_the_rust() {
         ("cell, placed", 22888),
         ("cell, placed air", 15209),
         ("cell, placed, the first ground's", 9),
-        ("cell, placed, the first object's", 3),
+        ("cell, placed, the first object's", 1),
         ("cell, sandstone", 56),
         ("cell, soil", 351),
         ("cell, some of it cave", 1602),
