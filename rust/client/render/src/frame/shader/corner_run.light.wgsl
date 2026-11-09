@@ -12,6 +12,11 @@ fn queue_records_at() -> u32 {
   return LIGHT_CORNERS_RECORDS_AT;
 }
 
+/// Where the run lists the items it parked (pxl-engine `light::parked_items_at`).
+fn parked_items_at() -> u32 {
+  return header_word(LIGHT_HEADER_PARKED_ITEMS);
+}
+
 fn visits_at() -> u32 {
   return LIGHT_BEAM_CNT;
 }

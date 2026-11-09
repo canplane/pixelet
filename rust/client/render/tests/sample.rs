@@ -290,14 +290,19 @@ fn eye_of(c: &EyeCase, moved: [i32; 3]) -> Observed {
 }
 
 /// Runs the eye's beam passes over `observed`: the beam rays' run, then the cells' starts.
-fn eye_beams(gpu: &Gpu, b: &WorldBuffer, observed: &Observed, table: &wgpu::Buffer) -> Vec<u32> {
+fn eye_beams(
+    gpu: &Gpu,
+    b: &WorldBuffer,
+    observed: &Observed,
+    node_cache: &wgpu::Buffer,
+) -> Vec<u32> {
     let RaySource::Eye { grid, .. } = &observed.source else {
         unreachable!()
     };
     let eye = gpu.buf(&observed.eye, wgpu::BufferUsages::UNIFORM);
     let header = gpu.buf(&observed.header, wgpu::BufferUsages::UNIFORM);
     let beams = gpu.buf(&observed.words, store_of());
-    gpu.corners(false, &world_binds(b, &eye, &beams, table), table);
+    gpu.corners(false, &world_binds(b, &eye, &beams, node_cache), node_cache);
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_CELL), "cell_cs"),
         &[(0, eye.as_entire_binding()), (8, beams.as_entire_binding())],
@@ -315,7 +320,7 @@ fn world_binds<'a>(
     b: &'a WorldBuffer,
     eye: &'a wgpu::Buffer,
     beams: &'a wgpu::Buffer,
-    table: &'a wgpu::Buffer,
+    node_cache: &'a wgpu::Buffer,
 ) -> Vec<(u32, wgpu::BindingResource<'a>)> {
     vec![
         (0, eye.as_entire_binding()),
@@ -326,7 +331,7 @@ fn world_binds<'a>(
         (6, b.placed.as_entire_binding()),
         (7, b.pool.as_entire_binding()),
         (8, beams.as_entire_binding()),
-        (9, table.as_entire_binding()),
+        (9, node_cache.as_entire_binding()),
     ]
 }
 
@@ -398,7 +403,7 @@ fn light_beams(
     gpu: &Gpu,
     b: &WorldBuffer,
     observed: &mut Observed,
-    table: &wgpu::Buffer,
+    node_cache: &wgpu::Buffer,
     one_in: Option<u32>,
 ) -> Vec<u32> {
     let RaySource::Light { size, .. } = observed.source else {
@@ -420,9 +425,9 @@ fn light_beams(
         light::TILE / param::light::SAMPLE,
     );
     let beams = gpu.buf(&list, store_of());
-    let mut world = world_binds(b, &eye, &beams, table);
+    let mut world = world_binds(b, &eye, &beams, node_cache);
     world.push((11, header.as_entire_binding()));
-    gpu.light_beam(&world, &beams, table, size);
+    gpu.light_beam(&world, &beams, node_cache, size);
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_LIGHT_CELL), "light_cell_cs"),
         &[
@@ -507,10 +512,10 @@ fn light_beams(
     words
 }
 
-/// Runs one frame's samples over the node cache `table0`. Each sample's stop must be the stop
+/// Runs one frame's samples over the node cache `node_cache0`. Each sample's stop must be the stop
 /// the walk from the root gives its ray, and no sample may be written that no thread takes.
-/// Where `asked` is given, the run's last walk, which asks the world, runs over it, while the
-/// walks over the node cache alone and their asks read `table0`. Returns the node cache the
+/// Where `last_cache` is given, the run's last walk, which asks the world, runs over it, while the
+/// walks over the node cache alone and their asks read `node_cache0`. Returns the node cache the
 /// passes left.
 #[expect(
     clippy::too_many_arguments,
@@ -522,8 +527,8 @@ fn run_frame(
     w: World,
     observed: &Observed,
     words: &[u32],
-    table0: &[u32],
-    asked: Option<&[u32]>,
+    node_cache0: &[u32],
+    last_cache: Option<&[u32]>,
     what: &str,
     kind_cnt: &mut KindCount,
     failed: &mut Vec<String>,
@@ -541,14 +546,14 @@ fn run_frame(
         }
     }
     let beams = gpu.buf(&laid, store_of());
-    let table = gpu.buf(table0, store_of());
-    let asked = asked.map(|t| gpu.buf(t, store_of()));
-    let mut binds = world_binds(b, &eye_buf, &beams, &table);
+    let node_cache = gpu.buf(node_cache0, store_of());
+    let last_cache = last_cache.map(|t| gpu.buf(t, store_of()));
+    let mut binds = world_binds(b, &eye_buf, &beams, &node_cache);
     if observed.apart {
         binds.push((11, header_buf.as_entire_binding()));
     }
-    gpu.samples_asked(observed.apart, &binds, &table, asked.as_ref());
-    let table = asked.unwrap_or(table);
+    gpu.samples_last_cache(observed.apart, &binds, &node_cache, last_cache.as_ref());
+    let node_cache = last_cache.unwrap_or(node_cache);
     let out = gpu.read(&beams);
 
     // A needed sample's stop must be what its ray's walk answers. A sample not needed must
@@ -677,7 +682,7 @@ fn run_frame(
     if axis_over > 256 {
         fail(format!("too many an axis over: {axis_over}"));
     }
-    gpu.read(&table)
+    gpu.read(&node_cache)
 }
 
 /// Runs an observer's two frames. The second observer stands a step moved, and its frame runs
@@ -696,9 +701,9 @@ fn two_frames(
     kind_cnt: &mut KindCount,
     failed: &mut Vec<String>,
 ) {
-    let table_buf = gpu.buf(&frame_table(), store_of());
-    let words = lines(first, &table_buf);
-    let after_beam = gpu.read(&table_buf);
+    let node_cache_buf = gpu.buf(&frame_node_cache(), store_of());
+    let words = lines(first, &node_cache_buf);
+    let after_beam = gpu.read(&node_cache_buf);
     let mut table1 = run_frame(
         gpu,
         b,
@@ -712,9 +717,9 @@ fn two_frames(
         failed,
     );
     table1[node_cache::FRAME as usize] = FRAME + 1;
-    let table_buf = gpu.buf(&table1, store_of());
-    let words1 = lines(next, &table_buf);
-    let after_beam1 = gpu.read(&table_buf);
+    let node_cache_buf = gpu.buf(&table1, store_of());
+    let words1 = lines(next, &node_cache_buf);
+    let after_beam1 = gpu.read(&node_cache_buf);
     run_frame(
         gpu,
         b,
@@ -909,7 +914,7 @@ fn hand_eye_samples_answer_as_cast_walk() {
             w,
             &mut first,
             &mut next,
-            &mut |o, table| eye_beams(&gpu, &b, o, table),
+            &mut |o, node_cache| eye_beams(&gpu, &b, o, node_cache),
             &mut kind_cnt,
             &mut failed,
         );
@@ -935,7 +940,7 @@ fn hand_eye_samples_answer_as_cast_walk() {
         west.world(),
         &mut first,
         &mut next,
-        &mut |o, table| eye_beams(&gpu, &bw, o, table),
+        &mut |o, node_cache| eye_beams(&gpu, &bw, o, node_cache),
         &mut kind_cnt,
         &mut failed,
     );
@@ -957,7 +962,7 @@ fn hand_eye_samples_answer_as_cast_walk() {
         west.world(),
         &mut first,
         &mut next,
-        &mut |o, table| eye_beams(&gpu, &bw, o, table),
+        &mut |o, node_cache| eye_beams(&gpu, &bw, o, node_cache),
         &mut kind_cnt,
         &mut failed,
     );
@@ -983,7 +988,7 @@ fn hand_eye_samples_answer_as_cast_walk() {
         zero.world(),
         &mut first,
         &mut next,
-        &mut |o, table| eye_beams(&gpu, &bz, o, table),
+        &mut |o, node_cache| eye_beams(&gpu, &bz, o, node_cache),
         &mut kind_cnt,
         &mut failed,
     );
@@ -1026,10 +1031,10 @@ fn entry_of_two_writes_answers_nothing() {
     };
     let (mut kind_cnt, mut failed) = (KindCount::new(), Vec::new());
     let observed = eye_of(&c, [0; 3]);
-    let empty = frame_table();
-    let table = gpu.buf(&empty, store_of());
-    let words = eye_beams(&gpu, &b, &observed, &table);
-    let first = gpu.read(&table);
+    let empty = frame_node_cache();
+    let node_cache = gpu.buf(&empty, store_of());
+    let words = eye_beams(&gpu, &b, &observed, &node_cache);
+    let first = gpu.read(&node_cache);
     let mut torn = run_frame(
         &gpu,
         &b,
@@ -1055,9 +1060,9 @@ fn entry_of_two_writes_answers_nothing() {
     assert!(changed > 1000, "{changed} entries kept to change");
     let mut next_empty = empty;
     next_empty[node_cache::FRAME as usize] = FRAME + 1;
-    let table = gpu.buf(&next_empty, store_of());
-    let words = eye_beams(&gpu, &b, &observed, &table);
-    let next_first = gpu.read(&table);
+    let node_cache = gpu.buf(&next_empty, store_of());
+    let words = eye_beams(&gpu, &b, &observed, &node_cache);
+    let next_first = gpu.read(&node_cache);
     run_frame(
         &gpu,
         &b,
@@ -1234,7 +1239,7 @@ fn hand_light_samples_answer_as_cast_walk() {
             w,
             &mut first,
             &mut next,
-            &mut |o, table| light_beams(&gpu, &b, o, table, c.one_in),
+            &mut |o, node_cache| light_beams(&gpu, &b, o, node_cache, c.one_in),
             &mut kind_cnt,
             &mut failed,
         );
@@ -1268,7 +1273,7 @@ fn hand_light_samples_answer_as_cast_walk() {
         west.world(),
         &mut first,
         &mut next,
-        &mut |o, table| light_beams(&gpu, &bw, o, table, c.one_in),
+        &mut |o, node_cache| light_beams(&gpu, &bw, o, node_cache, c.one_in),
         &mut kind_cnt,
         &mut failed,
     );
@@ -1302,7 +1307,7 @@ fn hand_light_samples_answer_as_cast_walk() {
         zero.world(),
         &mut first,
         &mut next,
-        &mut |o, table| light_beams(&gpu, &bz, o, table, c.one_in),
+        &mut |o, node_cache| light_beams(&gpu, &bz, o, node_cache, c.one_in),
         &mut kind_cnt,
         &mut failed,
     );
@@ -1325,7 +1330,7 @@ fn hand_light_samples_answer_as_cast_walk() {
         zero.world(),
         &mut first,
         &mut next,
-        &mut |o, table| light_beams(&gpu, &bz, o, table, c.one_in),
+        &mut |o, node_cache| light_beams(&gpu, &bz, o, node_cache, c.one_in),
         &mut kind_cnt,
         &mut failed,
     );
@@ -1482,10 +1487,10 @@ fn holes_answer(
     for k in 0..2 {
         observed.eye[eye::JITTER + k] = s.jitter[k].to_bits();
     }
-    let mut table0 = vec![0u32; node_cache::WORDS as usize];
-    table0[node_cache::FRAME as usize] = FRAME;
-    let table_buf = gpu.buf(&table0, store_of());
-    let mut words = eye_beams(gpu, b, &observed, &table_buf);
+    let mut node_cache0 = vec![0u32; node_cache::WORDS as usize];
+    node_cache0[node_cache::FRAME as usize] = FRAME;
+    let node_cache_buf = gpu.buf(&node_cache0, store_of());
+    let mut words = eye_beams(gpu, b, &observed, &node_cache_buf);
     let RaySource::Eye { origin, grid, .. } = &observed.source else {
         unreachable!()
     };
@@ -1526,17 +1531,16 @@ fn holes_answer(
         wgpu::BufferUsages::UNIFORM,
     );
     let beams = gpu.buf(&words, store_of());
-    let mut binds = world_binds(b, &eye_buf, &beams, &table_buf);
+    let mut binds = world_binds(b, &eye_buf, &beams, &node_cache_buf);
     binds.push((3, wgpu::BindingResource::TextureView(&view)));
     binds.push((11, header.as_entire_binding()));
-    let pool = walked as u32 + ray::pool_at(s.size) + ray::POOL_CNT;
     gpu.asks_spent.set(spent);
-    gpu.holes(&binds, &table_buf, (&beams, pool));
+    gpu.holes(&binds, &node_cache_buf);
     gpu.asks_spent.set(false);
     let out = read_texture(&gpu.device, &gpu.queue, &rays);
     if spent {
         lacks_answer(w, &observed, s, origin, &marked, &out, kind_cnt, failed);
-        return gpu.read(&table_buf)[node_cache::HITS_CNT as usize];
+        return gpu.read(&node_cache_buf)[node_cache::HITS_CNT as usize];
     }
 
     let (same, differ, stepped) =
@@ -1559,7 +1563,7 @@ fn holes_answer(
             "{name}: {differ} pixels differ, {lacks} past the pool"
         ));
     }
-    gpu.read(&table_buf)[node_cache::HITS_CNT as usize]
+    gpu.read(&node_cache_buf)[node_cache::HITS_CNT as usize]
 }
 
 /// Checks the `marked` pixels' words where the frame could ask nothing more of the world, so
@@ -1841,7 +1845,7 @@ fn hand_a_lack_shows_the_deepest_node_held() {
 /// The word the boxes' buffer is laid with. A word the draw does not write keeps it.
 const UNWRITTEN: u32 = 0x5eed_0b0c;
 
-/// Runs the samples over the node cache `table` and returns the words they leave. Each
+/// Runs the samples over `node_cache` and returns the words they leave. Each
 /// sample's words are first laid as a cast before left them in `prior`, or with `UNTOUCHED`
 /// where `prior` is `None`.
 fn stopped(
@@ -1850,7 +1854,7 @@ fn stopped(
     observed: &Observed,
     words: &[u32],
     prior: Option<&[u32]>,
-    table: &[u32],
+    node_cache: &[u32],
 ) -> Vec<u32> {
     let eye_buf = gpu.buf(&observed.eye, wgpu::BufferUsages::UNIFORM);
     let header_buf = gpu.buf(&observed.header, wgpu::BufferUsages::UNIFORM);
@@ -1866,12 +1870,12 @@ fn stopped(
         }
     }
     let beams = gpu.buf(&laid, store_of());
-    let table = gpu.buf(table, store_of());
-    let mut binds = world_binds(b, &eye_buf, &beams, &table);
+    let node_cache = gpu.buf(node_cache, store_of());
+    let mut binds = world_binds(b, &eye_buf, &beams, &node_cache);
     if observed.apart {
         binds.push((11, header_buf.as_entire_binding()));
     }
-    gpu.samples(observed.apart, &binds, &table);
+    gpu.samples(observed.apart, &binds, &node_cache);
     gpu.read(&beams)
 }
 
@@ -2046,7 +2050,7 @@ fn light_record_case(
     failed: &mut Vec<String>,
 ) {
     let name = &observed.name;
-    let mut laid = frame_table();
+    let mut laid = frame_node_cache();
     laid[node_cache::FRAME as usize] = frame;
     // The slot of each stopped sample's node, kept as the walk that stopped it keeps it, and
     // the state its samples set.
@@ -2106,20 +2110,20 @@ fn light_record_case(
     let eye_buf = gpu.buf(&observed.eye, wgpu::BufferUsages::UNIFORM);
     let header_buf = gpu.buf(&observed.header, wgpu::BufferUsages::UNIFORM);
     let beams = gpu.buf(words, store_of());
-    let table = gpu.buf(&laid, store_of());
+    let node_cache = gpu.buf(&laid, store_of());
     let args = gpu.buf(&args, store_of());
     gpu.dispatch(
         pass,
         &[
             (0, eye_buf.as_entire_binding()),
             (8, beams.as_entire_binding()),
-            (9, table.as_entire_binding()),
+            (9, node_cache.as_entire_binding()),
             (11, header_buf.as_entire_binding()),
             (16, args.as_entire_binding()),
         ],
         [groups[0], groups[1], 1],
     );
-    let got = gpu.read(&table);
+    let got = gpu.read(&node_cache);
     let mut differ = 0u64;
     for (&slot, &state) in &want {
         let alike = got[node_cache::state_at(slot) as usize] == state
@@ -2176,7 +2180,7 @@ fn light_raster_drawn(
     args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
     let args = gpu.buf(&args, store_of());
     let draws = gpu.buf(&vec![0u32; record::LIGHT_DRAWS as usize], store_of());
-    let table = gpu.buf(cache, store_of());
+    let node_cache = gpu.buf(cache, store_of());
     let eye_buf = gpu.buf(&observed.eye, wgpu::BufferUsages::UNIFORM);
     let header_buf = gpu.buf(&observed.header, wgpu::BufferUsages::UNIFORM);
     let draw = gpu.pipeline(src(SHADER_RECORD_DRAW), "light_record_draw_cs");
@@ -2184,7 +2188,7 @@ fn light_raster_drawn(
         &draw,
         &[
             (0, eye_buf.as_entire_binding()),
-            (9, table.as_entire_binding()),
+            (9, node_cache.as_entire_binding()),
             (11, header_buf.as_entire_binding()),
             (14, draws.as_entire_binding()),
             (16, args.as_entire_binding()),
@@ -2192,7 +2196,7 @@ fn light_raster_drawn(
         [node_cache::ENTRIES / record::DRAW_LANES, 1, 1],
     );
     let cnt = gpu.read(&args)[raster::ARGS_INSTANCES as usize].min(record::LIGHT_DRAWS);
-    let cache = gpu.read(&table);
+    let cache = gpu.read(&node_cache);
     // The light's view, as the renderer lays it.
     let length = |a: [f32; 3]| (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]).sqrt();
     let unit = |a: [f32; 3]| {
@@ -2334,7 +2338,7 @@ fn record_case(
     laid_args[asked + raster::ARGS_FACES as usize + 1] = 1;
     laid_args[asked + raster::ARGS_FACES as usize + 2] = 1;
     laid_args[asked + raster::ARGS_ASKS as usize] = grid.asks_at;
-    let mut rec = was.map_or_else(frame_table, <[u32]>::to_vec);
+    let mut rec = was.map_or_else(frame_node_cache, <[u32]>::to_vec);
     rec[node_cache::FRAME as usize] = frame;
     // Each node a taken sample stopped on is kept, as the walk that stopped it keeps it.
     for s in observed.taken() {
@@ -2813,7 +2817,7 @@ fn coarser(observed: &Observed, words: &mut [u32]) -> u64 {
 }
 
 /// The node cache a frame's beam passes start over: empty but for the frame's number.
-fn frame_table() -> Vec<u32> {
+fn frame_node_cache() -> Vec<u32> {
     let mut t = vec![0u32; node_cache::WORDS as usize];
     t[node_cache::FRAME as usize] = FRAME;
     t
@@ -2915,10 +2919,10 @@ fn hand_eye_record_answers_as_raster() {
     // With `coarse`, some samples' nodes are taken a zoom coarser (`coarser`).
     let mut run = |b: &WorldBuffer, c: &EyeCase, coarse: bool, kind_cnt: &mut KindCount| {
         let mut observed = eye_of(c, [0; 3]);
-        let table = gpu.buf(&frame_table(), store_of());
-        let lines = eye_beams(&gpu, b, &observed, &table);
-        let table = gpu.read(&table);
-        let mut words = stopped(&gpu, b, &observed, &lines, None, &table);
+        let node_cache = gpu.buf(&frame_node_cache(), store_of());
+        let lines = eye_beams(&gpu, b, &observed, &node_cache);
+        let node_cache = gpu.read(&node_cache);
+        let mut words = stopped(&gpu, b, &observed, &lines, None, &node_cache);
         let RaySource::Eye { origin, grid, .. } = &observed.source else {
             unreachable!()
         };
@@ -3079,10 +3083,10 @@ fn hand_eye_stale_box_about_the_eye_undrawn() {
         over([EYE[0] + 90, EYE[1] + 90], 60),
     );
     let observed = eye_of(&far_eye, [0; 3]);
-    let table = gpu.buf(&frame_table(), store_of());
-    let lines = eye_beams(&gpu, &b, &observed, &table);
-    let table = gpu.read(&table);
-    let words = stopped(&gpu, &b, &observed, &lines, None, &table);
+    let node_cache = gpu.buf(&frame_node_cache(), store_of());
+    let lines = eye_beams(&gpu, &b, &observed, &node_cache);
+    let node_cache = gpu.read(&node_cache);
+    let words = stopped(&gpu, &b, &observed, &lines, None, &node_cache);
     let RaySource::Eye { origin, grid, .. } = &observed.source else {
         unreachable!()
     };
@@ -3265,20 +3269,20 @@ fn hand_light_record_answers_as_raster() {
     let mut failed = Vec::new();
     let mut run = |b: &WorldBuffer, c: &LightCase, kind_cnt: &mut KindCount| {
         let mut observed = light_of(c, [0, 0]);
-        let table = gpu.buf(&frame_table(), store_of());
-        let lines = light_beams(&gpu, b, &mut observed, &table, c.one_in);
-        let table = gpu.read(&table);
+        let node_cache = gpu.buf(&frame_node_cache(), store_of());
+        let lines = light_beams(&gpu, b, &mut observed, &node_cache, c.one_in);
+        let node_cache = gpu.read(&node_cache);
         // Where the cast lists its tiles, each sample is first laid as the whole cast of the
         // same box left it, and a sample not taken must keep what it held.
         let prior = c.one_in.map(|_| {
             let whole = LightCase { one_in: None, ..*c };
             let mut o = light_of(&whole, [0, 0]);
-            let t = gpu.buf(&frame_table(), store_of());
+            let t = gpu.buf(&frame_node_cache(), store_of());
             let lines = light_beams(&gpu, b, &mut o, &t, None);
             let t = gpu.read(&t);
             stopped(&gpu, b, &o, &lines, None, &t)
         });
-        let words = stopped(&gpu, b, &observed, &lines, prior.as_deref(), &table);
+        let words = stopped(&gpu, b, &observed, &lines, prior.as_deref(), &node_cache);
         // The record pass dispatches over the rows the list's entries open, as the sample pass
         // does.
         let groups = observed.groups;
@@ -3404,11 +3408,11 @@ fn hand_beam_rays_answer_as_cast_walk() {
                 cast::walk_from_root(&mut q, *origin, &ray, detail, Until::Beam, &mut ())
             })
             .collect();
-        let table = gpu.buf(&frame_table(), store_of());
-        let first = eye_beams(&gpu, &b, &observed, &table);
+        let node_cache = gpu.buf(&frame_node_cache(), store_of());
+        let first = eye_beams(&gpu, &b, &observed, &node_cache);
         // Every other entry finer than `DROP_ZOOM` is dropped, so the next frame's walk over the
         // node cache leaves its rays part of the way down.
-        let mut cache = gpu.read(&table);
+        let mut cache = gpu.read(&node_cache);
         cache[node_cache::FRAME as usize] = FRAME + 1;
         for e in (0..node_cache::ENTRIES).step_by(2) {
             let w = node_cache::entry_at(e) as usize;
@@ -3416,8 +3420,8 @@ fn hand_beam_rays_answer_as_cast_walk() {
                 cache[node_cache::key_at(e) as usize] = 0;
             }
         }
-        let table = gpu.buf(&cache, store_of());
-        let next = eye_beams(&gpu, &b, &observed, &table);
+        let node_cache = gpu.buf(&cache, store_of());
+        let next = eye_beams(&gpu, &b, &observed, &node_cache);
         for (what, words) in [("first frame", &first), ("next frame", &next)] {
             let mut differ = 0u32;
             let mut first_differ = None;
@@ -3509,9 +3513,9 @@ fn hand_light_beam_rays_answer_as_cast_walk() {
     let mut failed = Vec::new();
     for c in &cases {
         let mut observed = light_of(c, [0, 0]);
-        let table = gpu.buf(&frame_table(), store_of());
-        let first = light_beams(&gpu, &b, &mut observed, &table, None);
-        let mut cache = gpu.read(&table);
+        let node_cache = gpu.buf(&frame_node_cache(), store_of());
+        let first = light_beams(&gpu, &b, &mut observed, &node_cache, None);
+        let mut cache = gpu.read(&node_cache);
         cache[node_cache::FRAME as usize] = FRAME + 1;
         for e in (0..node_cache::ENTRIES).step_by(2) {
             let at = node_cache::entry_at(e) as usize;
@@ -3519,8 +3523,8 @@ fn hand_light_beam_rays_answer_as_cast_walk() {
                 cache[node_cache::key_at(e) as usize] = 0;
             }
         }
-        let table = gpu.buf(&cache, store_of());
-        let next = light_beams(&gpu, &b, &mut observed, &table, None);
+        let node_cache = gpu.buf(&cache, store_of());
+        let next = light_beams(&gpu, &b, &mut observed, &node_cache, None);
         let RaySource::Light {
             light: l,
             range,
@@ -3612,9 +3616,9 @@ fn hand_samples_over_other_zooms_answer_as_cast_walk() {
     let mut kind_cnt = KindCount::new();
     let mut failed = Vec::new();
     let coarse = eye_of(&case([8, 16]), [0; 3]);
-    let table = gpu.buf(&frame_table(), store_of());
-    let words = eye_beams(&gpu, &b, &coarse, &table);
-    let after_beam = gpu.read(&table);
+    let node_cache = gpu.buf(&frame_node_cache(), store_of());
+    let words = eye_beams(&gpu, &b, &coarse, &node_cache);
+    let after_beam = gpu.read(&node_cache);
     let mut cache = run_frame(
         &gpu,
         &b,
@@ -3635,9 +3639,9 @@ fn hand_samples_over_other_zooms_answer_as_cast_walk() {
         }
     }
     let fine = eye_of(&case([8, FINEST]), [0; 3]);
-    let table = gpu.buf(&cache, store_of());
-    let words = eye_beams(&gpu, &b, &fine, &table);
-    let after_beam = gpu.read(&table);
+    let node_cache = gpu.buf(&cache, store_of());
+    let words = eye_beams(&gpu, &b, &fine, &node_cache);
+    let after_beam = gpu.read(&node_cache);
     run_frame(
         &gpu,
         &b,

@@ -28,12 +28,12 @@ fn ask_once(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32) {
     return;
   }
   let tag = walk_tag();
-  let got = claim_slot(first, zoom, c, zooms, tag);
-  if (got.x == NONE) {
+  let claimed = claim_slot(first, zoom, c, zooms, tag);
+  if (claimed.x == NONE) {
     return;
   }
   if (!may_ask()) {
-    atomicStore(&node_cache[key_at(got.x)], got.y);
+    atomicStore(&node_cache[key_at(claimed.x)], claimed.y);
     return;
   }
   // The node is kept at the zooms its answer is kept at (ask.wgsl `key_zooms`). Where it is a
@@ -41,15 +41,15 @@ fn ask_once(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32) {
   let a = world_answer(parent, top, zoom, c, zooms, asked_at());
   let kz = key_zooms(zoom, zooms, a);
   if (kz != zooms && holds_cell(first, zoom, c, kz != CELL_FAR)) {
-    atomicStore(&node_cache[key_at(got.x)], got.y);
+    atomicStore(&node_cache[key_at(claimed.x)], claimed.y);
     return;
   }
-  fill(got.x, zoom, c, kz, tag, a);
+  fill(claimed.x, zoom, c, kz, tag, a);
 }
 
-/// Asks once for each node that the first walk listed, or the second where `again`.
-fn queue_ask(again: bool, id: u32) {
-  let n = in_cap(atomicLoad(&queue[select(QUEUE_ASKS, QUEUE_ASKS_AGAIN, again)]), QUEUE_RECORDS_CAP);
+/// Asks once for each node that the first walk listed, or the `parked`.
+fn queue_ask(parked: bool, id: u32) {
+  let n = in_cap(atomicLoad(&queue[select(QUEUE_ASKS, QUEUE_ASKS_PARKED, parked)]), QUEUE_RECORDS_CAP);
   for (var k = id; k < n; k += QUEUE_GROUPS * QUEUE_LANES) {
     let at = queue_records_at() + k * QUEUE_RECORD_WORDS;
     let c = vec3<i32>(
@@ -72,12 +72,13 @@ fn queue_ask_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   queue_ask(false, id.x);
 }
 
-/// Asks for the second walk's nodes. It also sets back the counter of the last walk's rays, as
-/// that walk runs next (queue_last.wgsl).
+/// Asks for the second walk's nodes. It also sets the counter and the count of the last walk's
+/// rays, as that walk runs next and binds no queue (queue_last.wgsl).
 @compute @workgroup_size(QUEUE_LANES)
 fn queue_ask_parked_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x == 0u) {
     atomicStore(&node_cache[LAST_NEXT], 0u);
+    atomicStore(&node_cache[LAST_CNT], atomicLoad(&queue[QUEUE_PARKED]));
   }
   queue_ask(true, id.x);
 }

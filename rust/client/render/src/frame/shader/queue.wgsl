@@ -7,11 +7,11 @@
 // chooses the pixel or slot, the ray and the words written.
 //
 // A ray parked between the run's walks lies in its observer's pool with its pixel or slot
-// (`ray::PARK_WORDS`), and its item is then its place in the pool, marked by `SLOT`. A ray
+// (`ray::PARK_WORDS`), and its item is then its place in the pool, marked by `POOLED`. A ray
 // that finds the pool full ends where it stands.
 
 /// The bit that marks an item as a parked ray, with its place in the pool in the bits under it.
-const SLOT = 0x80000000u;
+const POOLED = 0x80000000u;
 
 /// A hole's pixel or slot, from a word that holds its column in the low half and its row in
 /// the high half.
@@ -31,15 +31,15 @@ fn pool_at() -> u32 {
 }
 
 fn park_at(item: u32) -> u32 {
-  return pool_at() + POOL_STATES + (item & ~SLOT) * PARK_WORDS;
+  return pool_at() + (item & ~POOLED) * PARK_WORDS;
 }
 
 /// A hole's pixel or slot. A parked ray's is read from its place in the pool.
-fn hole_px(hole: u32) -> vec2<u32> {
-  if ((hole & SLOT) != 0u) {
-    return hole_at(beams[park_at(hole) + PARK_PX]);
+fn hole_px(item: u32) -> vec2<u32> {
+  if ((item & POOLED) != 0u) {
+    return hole_at(beams[park_at(item) + PARK_HOLE]);
   }
-  return hole_at(hole);
+  return hole_at(item);
 }
 
 /// Where the observer's stops lie (hit.wgsl): the eye's past the beam rays' words
@@ -61,27 +61,32 @@ fn holes_at() -> u32 {
 }
 
 /// The next item for a walk over the node cache to take, or `NONE` where it takes no more. The
-/// first walk takes the observer's holes, and the second, where `again`, takes the rays the
-/// first parked.
-fn next_item(again: bool) -> u32 {
-  if (again) {
-    let k = take(QUEUE_NEXT_AGAIN);
-    return select(NONE, SLOT | k, k < min(load(QUEUE_PARKED), POOL_CAP));
+/// first walk takes the observer's holes, and the `parked` takes the rays the first parked.
+fn next_item(parked: bool) -> u32 {
+  if (parked) {
+    return parked_item(take_below(QUEUE_NEXT_PARKED, min(load(QUEUE_PARKED), POOL_CAP)));
   }
-  let k = take(QUEUE_NEXT);
   let at = holes_at();
-  return select(NONE, beams[at + 1u + k], k < beams[at]);
+  let k = take_below(QUEUE_NEXT, beams[at]);
+  if (k == NONE) {
+    return NONE;
+  }
+  return beams[at + 1u + k];
+}
+
+/// Place `k` in the pool as an item, or `NONE`.
+fn parked_item(k: u32) -> u32 {
+  return select(POOLED | k, NONE, k == NONE);
 }
 
 /// The next parked ray for the last walk to take from the pool, or `NONE` past the rays
 /// parked.
 fn next_last() -> u32 {
-  let k = take(LAST_NEXT);
-  return select(NONE, SLOT | k, k < min(beams[pool_at() + POOL_CNT], POOL_CAP));
+  return parked_item(take_below(LAST_NEXT, min(load(LAST_CNT), POOL_CAP)));
 }
 
-fn item_aim(hole: u32) -> Aim {
-  let at = hole_px(hole);
+fn item_aim(item: u32) -> Aim {
+  let at = hole_px(item);
   if (light_run()) {
     return light_aim(slot_texel(at));
   }
@@ -89,8 +94,8 @@ fn item_aim(hole: u32) -> Aim {
 }
 
 /// Where a hole's ray starts afresh: at the start of its cell.
-fn item_start(hole: u32, aim: Aim) -> Start {
-  let at = hole_px(hole);
+fn item_start(item: u32, aim: Aim) -> Start {
+  let at = hole_px(item);
   if (light_run()) {
     return light_resumed(aim, slot_texel(at));
   }
@@ -101,17 +106,17 @@ fn item_start(hole: u32, aim: Aim) -> Start {
 /// `step` steps (parked.wgsl). A ray already parked keeps its place in the pool. A hole not yet
 /// parked takes the next place and stores its pixel or slot there. It returns false where the
 /// pool is full.
-fn park(hole: u32, t: f32, corner: vec3<u32>, zoom: u32, roots: vec3<i32>, step: u32) -> bool {
-  var item = hole;
-  if ((hole & SLOT) == 0u) {
+fn park(item: u32, t: f32, corner: vec3<u32>, zoom: u32, roots: vec3<i32>, step: u32) -> bool {
+  var pooled = item;
+  if ((item & POOLED) == 0u) {
     let k = take(QUEUE_PARKED);
     if (k >= POOL_CAP) {
       return false;
     }
-    item = SLOT | k;
-    beams[park_at(item) + PARK_PX] = hole;
+    pooled = POOLED | k;
+    beams[park_at(pooled) + PARK_HOLE] = item;
   }
-  let at = park_at(item);
+  let at = park_at(pooled);
   beams[at] = bitcast<u32>(t);
   beams[at + 1u] = corner.x;
   beams[at + 2u] = corner.y;
@@ -120,12 +125,12 @@ fn park(hole: u32, t: f32, corner: vec3<u32>, zoom: u32, roots: vec3<i32>, step:
   return true;
 }
 
-fn parked(hole: u32) -> bool {
-  return (beams[park_at(hole) + 4u] & PARKED) != 0u;
+fn parked(item: u32) -> bool {
+  return (beams[park_at(item) + 4u] & PARKED) != 0u;
 }
 
-fn parked_start(hole: u32) -> Start {
-  let at = park_at(hole);
+fn parked_start(item: u32) -> Start {
+  let at = park_at(item);
   return parked_from(beams[at], vec3<u32>(beams[at + 1u], beams[at + 2u], beams[at + 3u]), beams[at + 4u]);
 }
 
@@ -151,22 +156,22 @@ fn keep_hit(r: u32, w: WalkEnd, face: u32, id: vec2<u32>) -> u32 {
   return HIT_WAITS | r;
 }
 
-/// Ends the walk `w` of hole `hole`. Its stop, whatever it stopped on, is listed for its
+/// Ends the walk `w` of hole `item`. Its stop, whatever it stopped on, is listed for its
 /// observer's record (`keep_hit`, record_hits.wgsl), the eye's and the light's alike. A slot of
 /// the light gets its depth. A pixel of the eye gets its ray's words, and what lies around the
 /// face it stopped on: a box's for a cell short of its cube (pxl-engine `face::BOX`), and for a
 /// whole cell the word the record puts there once its stop is in (record_hits.wgsl
 /// `record_faces_cs`). A ray that ended as a lack shows the deepest node held (`shows`), and
 /// its stop stays a lack, so the next frame asks for what it lacked.
-fn finish(hole: u32, aim: Aim, w: WalkEnd) {
+fn finish(item: u32, aim: Aim, w: WalkEnd) {
   let stops = w.ends == 1u || w.ends == 2u;
   var r = NONE;
   if (stops) {
     r = hit_in_cap();
   }
-  let at = hole_px(hole);
-  if ((hole & SLOT) != 0u) {
-    beams[park_at(hole) + 4u] = 0u;
+  let at = hole_px(item);
+  if ((item & POOLED) != 0u) {
+    beams[park_at(item) + 4u] = 0u;
   }
   let face = face_of(aim, w);
   let shown = shows(aim, w);

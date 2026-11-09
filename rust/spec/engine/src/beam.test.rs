@@ -30,6 +30,15 @@ const VIEWS: [[f32; 2]; 3] = [
     [0.5, 0.5 * 19.5 / 9.0],
 ];
 
+#[test]
+fn parked_items_fit_the_asks() {
+    for tan in VIEWS {
+        let g = Grid::of(tan);
+        let asks = g.samples[0] * g.samples[1] * ASK_WORDS;
+        assert!(g.corners[0] * g.corners[1] <= asks && g.samples[0] * g.samples[1] <= asks);
+    }
+}
+
 /// What a stand-in node is handed: itself, as its zoom and its world index, so a walk resumed
 /// from a line can be checked to hand each node its own.
 type At = (Zoom, [i32; 3]);

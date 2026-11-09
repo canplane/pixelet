@@ -367,8 +367,6 @@ pub const TOUCHES: &[Touch] = {
         [at, raster::ARGS_WORDS]
     }
     const QUEUE_HITS: [u32; 2] = [ray::QUEUE_HITS, 4];
-    /// The count of the rays a run's walks parked (queue.wgsl `park`).
-    const QUEUE_PARKED: [u32; 2] = [ray::QUEUE_PARKED, 1];
     /// The count of the frame's asks so far, in the node cache's head.
     const ASKED: [u32; 2] = [node_cache::ASKED, 1];
     &[
@@ -511,19 +509,19 @@ pub const TOUCHES: &[Touch] = {
             reads: &[[node_cache::HITS_ARGS, 4], ASKED],
         },
         // In the holes' queue's words, the walks over the node cache raise the stops' count and
-        // dispatch, and the count of the rays they parked (queue_walk.wgsl). The holes' asks
+        // dispatch (queue_walk.wgsl). The holes' asks
         // add to the frame's asks in the node cache's head (queue_ask.wgsl).
         Touch {
             compute: COMPUTE_QUEUE,
             binding: 10,
-            writes: &[QUEUE_HITS, QUEUE_PARKED],
-            reads: &[QUEUE_HITS, QUEUE_PARKED],
+            writes: &[QUEUE_HITS],
+            reads: &[QUEUE_HITS],
         },
         Touch {
             compute: COMPUTE_QUEUE_PARKED,
             binding: 10,
             writes: &[QUEUE_HITS],
-            reads: &[QUEUE_HITS, QUEUE_PARKED],
+            reads: &[QUEUE_HITS],
         },
         Touch {
             compute: COMPUTE_QUEUE_ASK,

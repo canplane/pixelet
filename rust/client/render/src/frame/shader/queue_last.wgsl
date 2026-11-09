@@ -3,8 +3,8 @@
 // A run's last walk (walk.wgsl, ask.wgsl), over the rays the walks over the node cache left
 // parked, each from the state it was parked in. It asks the world where no slot keeps a node.
 // The part for the run's kind names its items (queue.wgsl for the holes). The lanes take rays
-// as the walks before do (queue_walk.wgsl), from a counter in the node cache's head that the
-// asks before set back to 0 (`node_cache::LAST_NEXT`). Every ray ends here. A ray that may ask
+// as the walks before do (queue_walk.wgsl), from a counter and a count in the node cache's head
+// that the asks before set (`node_cache::LAST_NEXT`, `LAST_CNT`). Every ray ends here. A ray that may ask
 // no more ends as a lack at the deepest node held.
 
 /// What the ray that ended as `w` shows (queue.wgsl `finish`): what it met, or, where it ended

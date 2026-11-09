@@ -6,6 +6,16 @@
 // `ray::STATE_WORDS`). Each kind keeps these words where its own part says (corner.wgsl,
 // sample.wgsl, queue.wgsl).
 
+/// The next number below `n` from the counter at `word`, or `NONE` where none is left. A lane
+/// past the end reads the counter and does not write it.
+fn take_below(word: u32, n: u32) -> u32 {
+  if (load(word) >= n) {
+    return NONE;
+  }
+  let k = take(word);
+  return select(NONE, k, k < n);
+}
+
 /// The word of a ray parked at a node of `zoom` with `roots`, after `step` steps. The zoom
 /// takes the low bits, then come three bits for each root, then the steps above them, all
 /// under the `PARKED` bit.

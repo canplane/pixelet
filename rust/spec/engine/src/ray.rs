@@ -100,17 +100,13 @@ pub const fn holes_at(size: [u32; 2]) -> u32 {
 /// ends as a lack where it stands.
 pub const POOL_CAP: u32 = 1 << 18;
 
-/// A parked ray as a pool keeps it: its state (`STATE_WORDS`), then its pixel (`PARK_PX`),
+/// A parked ray as a pool keeps it: its state (`STATE_WORDS`), then its hole (`PARK_HOLE`),
 /// with the row in the high bits and the column in the low.
-pub const PARK_PX: u32 = STATE_WORDS;
+pub const PARK_HOLE: u32 = STATE_WORDS;
 pub const PARK_WORDS: u32 = STATE_WORDS + 1;
 
-/// A pool: how many rays its run parked in it (`POOL_CNT`), copied from the queue's words
-/// (`QUEUE_PARKED`) once the run's walks over the node cache are done, then room for
-/// `POOL_CAP` parked rays from `POOL_STATES`.
-pub const POOL_CNT: u32 = 0;
-pub const POOL_STATES: u32 = 1;
-pub const POOL_WORDS: u32 = POOL_STATES + POOL_CAP * PARK_WORDS;
+/// A pool: room for `POOL_CAP` parked rays.
+pub const POOL_WORDS: u32 = POOL_CAP * PARK_WORDS;
 
 /// Where the eye's pool lies, counted from the walked bits' first word.
 pub const fn pool_at(size: [u32; 2]) -> u32 {
@@ -158,14 +154,14 @@ pub const HITS_A_FRAME: u32 = 1 << 18;
 /// walk that listed it.
 ///
 /// A head holds the next hole the first walk takes (`QUEUE_NEXT`) and the next the second
-/// takes (`QUEUE_NEXT_AGAIN`); the nodes each walk was parked at, listed for the asks
-/// (`QUEUE_ASKS`, `QUEUE_ASKS_AGAIN`); the stops the two walks listed, laid out as
-/// `node_cache::HITS_ARGS` (`QUEUE_HITS`); and the rays its walks parked in the pool
-/// (`QUEUE_PARKED`, `POOL_CNT`). Each run starts from `QUEUE_EMPTY`.
+/// takes (`QUEUE_NEXT_PARKED`); the nodes each walk was parked at, listed for the asks
+/// (`QUEUE_ASKS`, `QUEUE_ASKS_PARKED`); the stops the two walks listed, laid out as
+/// `node_cache::HITS_ARGS` (`QUEUE_HITS`); and the rays its walks parked (`QUEUE_PARKED`). Each
+/// run starts from `QUEUE_EMPTY`.
 pub const QUEUE_NEXT: u32 = 0;
-pub const QUEUE_NEXT_AGAIN: u32 = 1;
+pub const QUEUE_NEXT_PARKED: u32 = 1;
 pub const QUEUE_ASKS: u32 = 2;
-pub const QUEUE_ASKS_AGAIN: u32 = 3;
+pub const QUEUE_ASKS_PARKED: u32 = 3;
 pub const QUEUE_HITS: u32 = 4;
 pub const QUEUE_PARKED: u32 = 8;
 pub const QUEUE_HEADER_WORDS: u32 = 9;

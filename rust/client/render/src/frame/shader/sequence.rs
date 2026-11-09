@@ -432,21 +432,6 @@ pub const EYE_HOLES_CNT: Step = Step::copy(
     at(MARKS, ray::MISS_ARGS_CNT, 1),
     NO_RANGE,
 );
-/// Copies the count of the rays each observer's holes' walks over the node cache parked into
-/// its pool, where the last walk reads it (gpu/ray/cast.rs `walk_run`, pxl-engine
-/// `ray::POOL_CNT`).
-pub const EYE_POOL_CNT: Step = Step::copy(
-    "eye_pool_cnt",
-    IN_EYE_HOLES,
-    header(ray::QUEUE_EYE_HOLES, ray::QUEUE_PARKED, 1),
-    NO_RANGE,
-);
-pub const LIGHT_POOL_CNT: Step = Step::copy(
-    "light_pool_cnt",
-    IN_LIGHT_HOLES,
-    header(ray::QUEUE_LIGHT_HOLES, ray::QUEUE_PARKED, 1),
-    NO_RANGE,
-);
 pub const RECEIVER_TILES_KEEP: Step = Step::copy(
     "receiver_tiles_keep",
     IN_LIGHT,
@@ -738,7 +723,6 @@ pub const FRAME: Frame = Frame {
             &[&WALK_ASK_BINDS],
         ),
         HITS,
-        EYE_POOL_CNT,
         Step::dispatch(
             "queue_last",
             IN_EYE_HOLES,
@@ -895,7 +879,6 @@ pub const FRAME: Frame = Frame {
             &[&LIGHT_WALK_ASK_BINDS],
         ),
         LIGHT_HITS,
-        LIGHT_POOL_CNT,
         Step::dispatch(
             "light_queue_last",
             IN_LIGHT_HOLES,

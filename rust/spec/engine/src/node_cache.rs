@@ -33,7 +33,7 @@
 //! the node's zoom and index, which tell it from another node in the same slot (pxl-render
 //! forget.wgsl reads its column). What draws the entry lies apart (`STATES_AT`,
 //! `RECORDS_AT`): it is none until a ray stops on the node, is written by the stops, the
-//! draws and the faces' pass, and is cleared wherever the slot is written. It lies apart
+//! draws and the faces' pass, and its state is cleared wherever the slot is written. It lies apart
 //! because a walk reads a bucket's keys from one cache line and an entry's words from
 //! another, and a pass over every slot reads only the words it asks.
 //!
@@ -119,12 +119,13 @@ pub(crate) const CNT_WORDS: u32 = count::OBSERVERS * count::WALKS;
 /// them and do not write them.
 pub const HITS_ARGS: u32 = CNT_AT + CNT_WORDS;
 pub const HITS_CNT: u32 = HITS_ARGS + 3;
-/// The next ray the last walk of the holes' queue takes (pxl-render queue_last.wgsl), each
-/// observer's in turn. The asks that run before it set it back to 0 (queue_ask.wgsl).
+/// The next parked ray a run's last walk takes (pxl-render queue_last.wgsl), and the rays that
+/// run's walks parked. The asks that run before the walk set them (queue_ask.wgsl).
 pub const LAST_NEXT: u32 = HITS_CNT + 1;
+pub const LAST_CNT: u32 = LAST_NEXT + 1;
 /// The nodes the frame has asked of the world so far, all runs together
 /// (`ray::ASKS_A_FRAME`). The host sets it to none each frame a run runs.
-pub const ASKED: u32 = LAST_NEXT + 1;
+pub const ASKED: u32 = LAST_CNT + 1;
 pub const HEADER_WORDS: u32 = ASKED + 1;
 /// The frame in which the eye's draw last ran, written by that draw (pxl-render
 /// record_draw.wgsl `record_draw_cs`). Until the draw runs again, the boxes the raster draws

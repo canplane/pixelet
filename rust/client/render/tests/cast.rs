@@ -119,7 +119,7 @@ struct Cast {
     beams: Vec<u32>,
     /// The node cache's words. The samples' stops set its drawable entries, and the faces'
     /// pass leaves the words of their faces in them (pxl-engine `record`).
-    table: Vec<u32>,
+    node_cache: Vec<u32>,
     /// How many faces' asks the samples laid.
     asks: u32,
 }
@@ -159,7 +159,7 @@ fn world_binds<'a>(
     b: &'a WorldBuffer,
     eye: &'a wgpu::Buffer,
     beams: &'a wgpu::Buffer,
-    table: &'a wgpu::Buffer,
+    node_cache: &'a wgpu::Buffer,
 ) -> Vec<(u32, wgpu::BindingResource<'a>)> {
     vec![
         (0, eye.as_entire_binding()),
@@ -170,7 +170,7 @@ fn world_binds<'a>(
         (6, b.placed.as_entire_binding()),
         (7, b.pool.as_entire_binding()),
         (8, beams.as_entire_binding()),
-        (9, table.as_entire_binding()),
+        (9, node_cache.as_entire_binding()),
     ]
 }
 
@@ -209,11 +209,15 @@ fn eye_of(c: &EyeCase) -> (Vec<u32>, Grid, [[f32; 3]; 3]) {
 fn cast_of(gpu: &Gpu, b: &WorldBuffer, c: &EyeCase, face_p: &wgpu::ComputePipeline) -> Cast {
     let (eye, grid, axes) = eye_of(c);
     let eye_buf = gpu.buf(&eye, wgpu::BufferUsages::UNIFORM);
-    let mut table0 = vec![0u32; node_cache::WORDS as usize];
-    table0[node_cache::FRAME as usize] = FRAME;
-    let table = gpu.buf(&table0, store());
+    let mut node_cache0 = vec![0u32; node_cache::WORDS as usize];
+    node_cache0[node_cache::FRAME as usize] = FRAME;
+    let node_cache = gpu.buf(&node_cache0, store());
     let beams = gpu.buf(&vec![0u32; grid.size() as usize], store());
-    gpu.corners(false, &world_binds(b, &eye_buf, &beams, &table), &table);
+    gpu.corners(
+        false,
+        &world_binds(b, &eye_buf, &beams, &node_cache),
+        &node_cache,
+    );
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_CELL), "cell_cs"),
         &[
@@ -226,7 +230,11 @@ fn cast_of(gpu: &Gpu, b: &WorldBuffer, c: &EyeCase, face_p: &wgpu::ComputePipeli
             1,
         ],
     );
-    gpu.samples(false, &world_binds(b, &eye_buf, &beams, &table), &table);
+    gpu.samples(
+        false,
+        &world_binds(b, &eye_buf, &beams, &node_cache),
+        &node_cache,
+    );
     let samples = grid.samples[0] * grid.samples[1];
     // The buffer holds the draw's arguments first, and the arguments of the faces' asks at
     // `raster::ASKED_AT`.
@@ -243,7 +251,7 @@ fn cast_of(gpu: &Gpu, b: &WorldBuffer, c: &EyeCase, face_p: &wgpu::ComputePipeli
         &[
             (0, eye_buf.as_entire_binding()),
             (8, beams.as_entire_binding()),
-            (9, table.as_entire_binding()),
+            (9, node_cache.as_entire_binding()),
             (16, rect_args.as_entire_binding()),
         ],
         [
@@ -270,7 +278,7 @@ fn cast_of(gpu: &Gpu, b: &WorldBuffer, c: &EyeCase, face_p: &wgpu::ComputePipeli
     );
 
     let mut binds = face_binds(b, &eye_buf, &beams, &rect_args, raster::ASKED_AT);
-    binds.push((9, table.as_entire_binding()));
+    binds.push((9, node_cache.as_entire_binding()));
     gpu.dispatch(
         face_p,
         &binds,
@@ -285,7 +293,7 @@ fn cast_of(gpu: &Gpu, b: &WorldBuffer, c: &EyeCase, face_p: &wgpu::ComputePipeli
         cuts: c.cuts,
         asked,
         beams: gpu.read(&beams),
-        table: gpu.read(&table),
+        node_cache: gpu.read(&node_cache),
         asks: laid[asked_at + raster::ARGS_INSTANCES as usize],
     }
 }
@@ -316,20 +324,23 @@ fn face_binds<'a>(
     ]
 }
 
-/// Maps each drawable entry of the node cache `table` (pxl-engine `record`) to its slot, keyed
+/// Maps each drawable entry of `node_cache` (pxl-engine `record`) to its slot, keyed
 /// by its node's zoom and index. Where two slots hold one node, the map keeps the first.
-fn drawable_at(table: &[u32]) -> std::collections::BTreeMap<(u32, [i32; 3]), u32> {
+fn drawable_at(node_cache: &[u32]) -> std::collections::BTreeMap<(u32, [i32; 3]), u32> {
     let mut at = std::collections::BTreeMap::new();
     for slot in (0..node_cache::ENTRIES).rev() {
         let e = node_cache::entry_at(slot) as usize;
-        let kind = table[e + node_cache::W_KIND as usize] & node_cache::KIND_MASK;
-        let state = table[node_cache::state_at(slot) as usize];
-        if holds_node(table, slot)
+        let kind = node_cache[e + node_cache::W_KIND as usize] & node_cache::KIND_MASK;
+        let state = node_cache[node_cache::state_at(slot) as usize];
+        if holds_node(node_cache, slot)
             && kind != Kind::Split as u32
             && state & (record::FACES | record::ASKED) != 0
         {
             let w = e + node_cache::W_NODE as usize;
-            at.insert((table[w], [1, 2, 3].map(|a| table[w + a] as i32)), slot);
+            at.insert(
+                (node_cache[w], [1, 2, 3].map(|a| node_cache[w + a] as i32)),
+                slot,
+            );
         }
     }
     at
@@ -387,13 +398,13 @@ impl Lineage<Inheritance> for BeamLine<'_> {
 }
 
 /// Answers the ask at word `a` of the beam rays' words as the Rust answers it. Where the ask
-/// is a drawable entry's, its node is read from that entry in the node cache `table`.
-fn face_want(q: &mut Asking, beams: &[u32], table: &[u32], origin: [i32; 3], a: u32) -> Want {
+/// is a drawable entry's, its node is read from that entry in `node_cache`.
+fn face_want(q: &mut Asking, beams: &[u32], node_cache: &[u32], origin: [i32; 3], a: u32) -> Want {
     let w = |k: u32| beams[(a + k) as usize];
     // A drawable entry's ask names its entry in the node cache (`record::TO_RECORD`). A hit's
     // ask names its node in the beam rays' words.
     let hit = if w(beam::ASK_TO) & record::TO_RECORD != 0 {
-        entry_node(table, w(beam::ASK_NODE) as usize, origin)
+        entry_node(node_cache, w(beam::ASK_NODE) as usize, origin)
     } else {
         node_at(beams, w(beam::ASK_NODE))
     };
@@ -593,11 +604,12 @@ fn hand_faces_answer_as_face_word() {
             if to == beam::ASK_NONE {
                 continue;
             }
-            let Want { bits, cut } = face_want(&mut q, &cast.asked, &cast.table, cast.origin, a);
+            let Want { bits, cut } =
+                face_want(&mut q, &cast.asked, &cast.node_cache, cast.origin, a);
             kind_cnt.add("asked, the cuts swapped answer otherwise", cut);
             want.push(bits);
             have.push(if to & record::TO_RECORD != 0 {
-                cast.table[(to & !record::TO_RECORD) as usize]
+                cast.node_cache[(to & !record::TO_RECORD) as usize]
             } else {
                 cast.beams[to as usize]
             });
@@ -765,7 +777,7 @@ fn hand_pixels_answer_as_cast_entry() {
         // voxel of one of the four samples about them. Some take none, some a lack, and some
         // the voxel of a sample far off.
         let n = g.samples[0];
-        let voxel_at = drawable_at(&cast.table);
+        let voxel_at = drawable_at(&cast.node_cache);
         let voxel_of = |i: u32| -> Option<u32> {
             let k = g.sample_at([i % n, i / n]);
             let node = node_at(&cast.beams, k + beam::SAMPLE_NODE);
@@ -847,7 +859,7 @@ fn hand_pixels_answer_as_cast_entry() {
         );
         let tile_cnt = gpu.read(&list)[0];
 
-        let table_buf = gpu.buf(&cast.table, store());
+        let node_cache_buf = gpu.buf(&cast.node_cache, store());
         let marks = gpu.buf(&ray::MISS_ARGS_EMPTY, store());
         // The beam rays' buffer needs room past the grid's words for this screen's holes.
         let mut padded = cast.beams.clone();
@@ -859,7 +871,7 @@ fn hand_pixels_answer_as_cast_entry() {
                 (0, eye_buf.as_entire_binding()),
                 (3, wgpu::BindingResource::TextureView(&rays_view)),
                 (8, beams.as_entire_binding()),
-                (9, table_buf.as_entire_binding()),
+                (9, node_cache_buf.as_entire_binding()),
                 (13, wgpu::BindingResource::TextureView(&vis_view)),
                 (14, marks.as_entire_binding()),
                 (30, list.as_entire_binding()),
@@ -885,10 +897,10 @@ fn hand_pixels_answer_as_cast_entry() {
             if v != 0 {
                 let slot = raster::voxel_of(v);
                 let e = node_cache::entry_at(slot) as usize;
-                let w = |a: u32| cast.table[e + a as usize];
-                let node = entry_node(&cast.table, e, cast.origin);
+                let w = |a: u32| cast.node_cache[e + a as usize];
+                let node = entry_node(&cast.node_cache, e, cast.origin);
                 let asset = [w(node_cache::W_ASSET), w(node_cache::W_ASSET + 1)];
-                let state = cast.table[node_cache::state_at(slot) as usize];
+                let state = cast.node_cache[node_cache::state_at(slot) as usize];
                 let faces = record::asked_faces(state);
                 // The entry is taken along the device's reciprocal. Its plane's t may still lie
                 // a few ulps off, as the device divides, and a pixel at an edge may go either
@@ -919,7 +931,7 @@ fn hand_pixels_answer_as_cast_entry() {
                         ray::first_word(asset[0], face, node.zoom),
                         t.to_bits(),
                         asset[1],
-                        cast.table[node_cache::face_at(slot, face) as usize],
+                        cast.node_cache[node_cache::face_at(slot, face) as usize],
                     ]);
                     kind_cnt.add(
                         "enters its sample, short of its cube",

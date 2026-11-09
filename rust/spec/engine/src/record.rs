@@ -54,8 +54,8 @@
 //!    forgets everything, it clears every slot. Otherwise it clears, answer and all, a slot
 //!    whose node its rule forgets (`forgets`, `over_rect`, `reads_written`). Where a node
 //!    across a face from a drawable entry is forgotten that way, it clears what draws the
-//!    entry, its faces and their words, because those words read the cells beside the face;
-//!    the entry's answer stays.
+//!    entry, its faces, because their words read the cells beside the face; the entry's answer
+//!    stays.
 //! 2. The walks (pxl-render ask.wgsl `fill`) write an entry's answer and clear what draws it.
 //! 3. The stops (pxl-render record_put.wgsl `observe_hit`) are the one way in for every ray:
 //!    first the samples' (sample_box.wgsl), then, after their walk, the hits of the pixels
@@ -63,8 +63,10 @@
 //!    node, the face the ray entered it through, its answer, and the line its face's word is
 //!    asked from. It finds its node's entry as above and sets the face it entered. An observer
 //!    that reads faces' words, which is the eye, asks a face's word the first time it enters
-//!    the face (`ASKED`); face.wgsl writes the word into `node_cache::R_FACES`. A stop on a
-//!    node no slot keeps sets nothing, and its pixel walks again.
+//!    the face (`ASKED`). That stop settles the word, and it is read only under its bit: none
+//!    for a lack or past the asks' room, `face::BOX` for a cell short of its cube, and
+//!    otherwise what face.wgsl writes into `node_cache::R_FACES`. A stop on a node no slot
+//!    keeps sets nothing, and its pixel walks again.
 //! 4. The draws (record_draw.wgsl `record_draw_cs`, `light_record_draw_cs`) read every slot,
 //!    write a box for each drawable entry and mark the entry drawn (`node_cache::R_DRAWN`).
 //!    The eye's draw also records the frame it ran in (`node_cache::DRAWN`). The raster draws

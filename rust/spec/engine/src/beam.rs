@@ -59,6 +59,9 @@ pub struct Grid {
     /// they opened (`hit_asks_at`), `ray::HITS_A_FRAME` of each.
     cells_at: u32,
     samples_at: u32,
+    /// The boxes' asks (`ask_at`). Until the samples' boxes lay them, the beam rays' and the
+    /// samples' runs list here the items they park, one word each (pxl-render item_list.wgsl).
+    /// One run's list is done with before the next begins.
     pub asks_at: u32,
     pub(crate) hits_at: u32,
     pub hit_asks_at: u32,

@@ -34,6 +34,9 @@ fn item_start(item: u32, aim: Aim) -> Start {
 /// fails.
 fn park(item: u32, t: f32, corner: vec3<u32>, zoom: u32, roots: vec3<i32>, step: u32) -> bool {
   let at = sample_word(sample_of(item));
+  if (beams[at + SAMPLE_NODE + NODE_ZOOM] != SAMPLE_PARKED) {
+    list_parked(item);
+  }
   beams[at + SAMPLE_NODE + NODE_ZOOM] = SAMPLE_PARKED;
   beams[at + SAMPLE_PARKED_T] = bitcast<u32>(t);
   beams[at + SAMPLE_NODE + NODE_CORNER] = corner.x;

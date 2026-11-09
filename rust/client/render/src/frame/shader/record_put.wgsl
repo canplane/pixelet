@@ -74,13 +74,13 @@ fn node_at(k: u32, origin: vec3<i32>) -> Node {
 
 /// Sets, in the entry of slot `slot`, the bit of the side that stop `p` entered it through
 /// (pxl-engine `raster::faces`). An observer that reads faces' words, which is the eye, also
-/// sets the side's asked bit (`record::ASKED`). The first time a side is asked, its word is
-/// settled. A lack's side takes no word. A cell that fills only part of its cube is a box apart
-/// from everything around it, so its side takes `FACE_BOX` at once (pxl-engine `face::BOX`).
-/// Any other side is asked of the faces' pass from the stop's line, by an ask laid among
-/// `asks` whose target is the entry's word (`record::TO_RECORD`). An observer that reads no
-/// words, which is the light, sets only the side, and writes a box's word the first time it
-/// sets the side.
+/// sets the side's asked bit (`record::ASKED`). A word is read only under that bit, and the one
+/// stop that sets the bit settles the word. A lack's side takes none. A cell that fills only
+/// part of its cube is a box apart from everything around it, so its side takes `FACE_BOX` at
+/// once (pxl-engine `face::BOX`). Any other side takes none until the faces' pass answers an ask
+/// laid among `asks` from the stop's line, whose target is the entry's word
+/// (`record::TO_RECORD`). Past the asks' room it keeps none. An observer that reads no words,
+/// which is the light, sets only the side.
 fn observe(p: Hit, slot: u32, asks: AskList) {
   let bit = 1u << p.face;
   let asked = bit << RECORD_ASKED_SHIFT;
@@ -91,29 +91,24 @@ fn observe(p: Hit, slot: u32, asks: AskList) {
     return;
   }
   let was = atomicOr(&node_cache[state], mark);
-  let first_asked = reads && (was & asked) == 0u;
-  if (p.lacks) {
+  if (!reads || (was & asked) != 0u) {
     return;
   }
-  if (((p.asset.x >> FILL_SHIFT) & (EIGHTHS - 1u)) != 0u) {
-    if ((was & bit) == 0u || first_asked) {
-      atomicStore(&node_cache[face_at(slot, p.face)], FACE_BOX);
-    }
+  let box = !p.lacks && ((p.asset.x >> FILL_SHIFT) & (EIGHTHS - 1u)) != 0u;
+  atomicStore(&node_cache[face_at(slot, p.face)], select(0u, FACE_BOX, box));
+  if (p.lacks || box) {
     return;
   }
-  if (!first_asked) {
+  let idx = args_add(asks.args + RASTER_ARGS_CNT, 1u);
+  if (idx >= asks.cap) {
     return;
   }
-  let place = args_add(asks.args + RASTER_ARGS_CNT, 1u);
-  if (place >= asks.cap) {
-    return;
-  }
-  args_most(asks.args + RASTER_ARGS_INSTANCES, in_cap(place + 1u, asks.cap));
+  args_most(asks.args + RASTER_ARGS_INSTANCES, in_cap(idx + 1u, asks.cap));
   // The ask that opens a workgroup of the faces' pass raises the pass's workgroup count.
-  if (place % RASTER_FACES_LANES == 0u) {
-    args_most(asks.args + RASTER_ARGS_FACES, workgroups(place + 1u, asks.cap, RASTER_FACES_LANES));
+  if (idx % RASTER_FACES_LANES == 0u) {
+    args_most(asks.args + RASTER_ARGS_FACES, workgroups(idx + 1u, asks.cap, RASTER_FACES_LANES));
   }
-  let a = asks.at + place * ASK_WORDS;
+  let a = asks.at + idx * ASK_WORDS;
   beams[a + ASK_NODE] = entry_at(slot);
   beams[a + ASK_FACE] = p.face;
   beams[a + ASK_LINE] = p.line;

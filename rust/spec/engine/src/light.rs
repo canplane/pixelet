@@ -557,8 +557,10 @@ pub const HEADER_MARKS: usize = HEADER_CELLS + 9;
 pub const HEADER_LISTS: usize = HEADER_MARKS + LISTS as usize;
 /// Where the beam rays' run parks them (`corner_states_at`).
 pub const HEADER_CORNER_STATES: usize = HEADER_LISTS + LISTS as usize;
+/// Where a beam rays' or a samples' run lists the items it parked (`parked_items_at`).
+pub const HEADER_PARKED_ITEMS: usize = HEADER_CORNER_STATES + 1;
 /// The slide's two words (`slide_at`).
-pub const HEADER_SLIDE: usize = HEADER_CORNER_STATES + 1;
+pub const HEADER_SLIDE: usize = HEADER_PARKED_ITEMS + 1;
 /// Past the words the map's side lays out, two words the host sets each cast: the number of
 /// the cast in which the world's receivers were last stood, which is this cast's where it
 /// stands them again (`LIST_RECEIVERS`; pxl-render light_mark.wgsl); and the number of the
@@ -581,7 +583,7 @@ pub const HEADER_HITS: usize = HEADER_POOL + 1;
 pub const HEADER_LAST_RANGE: usize = HEADER_HITS + 1;
 const HEADER_LAYOUT_VEC4S: usize = 10;
 /// The words `header_layout` lays out.
-const HEADER_LAYOUT_WORDS: usize = 15 + 2 * LISTS as usize;
+const HEADER_LAYOUT_WORDS: usize = 16 + 2 * LISTS as usize;
 /// The world's columns that changed since the cast before, where they did and the epoch goes
 /// on (`Column`, `Light::reaches`): their count in the first word of a vec4, then two vec4s
 /// each, holding its four floats and its first and last band, up to `COLUMNS`.
@@ -607,6 +609,7 @@ pub const fn header_layout(size: u32) -> [(usize, u32); HEADER_LAYOUT_WORDS] {
         (HEADER_CARRY, carry_at(size)),
         (HEADER_BEAM_ACROSS, beam_across(size)),
         (HEADER_CORNER_STATES, corner_states_at(size)),
+        (HEADER_PARKED_ITEMS, parked_items_at(size)),
         (HEADER_SLIDE, slide_at(size)),
         (HEADER_POOL, list_words(size)),
         (HEADER_HITS, hits_at(size)),
@@ -1091,7 +1094,26 @@ pub const fn corner_states_at(size: u32) -> u32 {
     list_cnt_at(size, LISTS)
 }
 
-/// Past the beam rays' states, two words kept from cast to cast. `SLIDE_RAN` is the number of
+/// Past the beam rays' states, the items a run parked, one word each (pxl-render
+/// item_list.wgsl). One run's list is done with before the next begins, so the list holds as
+/// many as the longer run.
+pub const fn parked_items_at(size: u32) -> u32 {
+    corner_states_at(size) + beam_across(size) * beam_across(size) * ray::STATE_WORDS
+}
+
+const fn parked_items_cap(size: u32) -> u32 {
+    let (corners, samples) = (
+        beam_across(size) * beam_across(size),
+        (size / SAMPLE) * (size / SAMPLE),
+    );
+    if corners > samples {
+        corners
+    } else {
+        samples
+    }
+}
+
+/// Past the parked items, two words kept from cast to cast. `SLIDE_RAN` is the number of
 /// the last cast in which the slide ran, set by the slide's first thread (pxl-render
 /// light_slide.wgsl). `READS_FROM` is the number of the first cast whose reads hold where a
 /// cast that owed a slide stood no receiver and so ran none. It is set by the one thread that
@@ -1099,7 +1121,7 @@ pub const fn corner_states_at(size: u32) -> u32 {
 /// one (`HEADER_SLIDE_CAST`; light_receiver_tile.wgsl `receiver_tiles_first`). The reads'
 /// epoch is the later of it and `HEADER_EPOCH` (`reads_epoch`).
 pub const fn slide_at(size: u32) -> u32 {
-    corner_states_at(size) + beam_across(size) * beam_across(size) * ray::STATE_WORDS
+    parked_items_at(size) + parked_items_cap(size)
 }
 pub const SLIDE_RAN: u32 = 0;
 pub const READS_FROM: u32 = 1;
@@ -1117,7 +1139,7 @@ pub const CARRY_READ: u32 = RECEIVER_TILES_CARRY;
 pub const CARRY_WORDS: u32 = CARRY_READ + 1;
 
 /// The list buffer's words: the beam's, the samples, the holes, the reads, their squares, the
-/// lists, the samples left, the beam rays left, the slide's two words and what the world's
+/// lists, the samples left, the beam rays left, the parked items, the slide's two words and what the world's
 /// receivers left, with the pool past them (`ray::POOL_WORDS`).
 pub const fn list_words(size: u32) -> u32 {
     carry_at(size) + CARRY_WORDS

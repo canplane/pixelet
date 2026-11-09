@@ -1537,7 +1537,7 @@ impl RayPass {
                         groups: c.corners_groups,
                         queue: c.queues,
                         node_cache: c.node_cache,
-                        hole_copy: None,
+                        hits: None,
                     },
                 );
                 g.end(pass);
@@ -1567,7 +1567,7 @@ impl RayPass {
                                 groups: c.samples_groups,
                                 queue: c.queues,
                                 node_cache: c.node_cache,
-                                hole_copy: None,
+                                hits: None,
                             },
                         );
                         g.end(pass);
@@ -1639,14 +1639,7 @@ impl RayPass {
                     groups: c.queue_groups,
                     queue: c.queues,
                     node_cache: c.node_cache,
-                    hole_copy: Some(HoleCopy {
-                        hit_step: &sequence::HITS,
-                        pool: (
-                            c.beams,
-                            c.grid.walked_at() + ray::pool_at(c.size) + ray::POOL_CNT,
-                            &sequence::EYE_POOL_CNT,
-                        ),
-                    }),
+                    hits: Some(&sequence::HITS),
                 },
             );
             g.end(pass);
@@ -1805,7 +1798,7 @@ impl RayPass {
                     groups: [c.light_groups[10], c.light_groups[11], c.light_groups[16]],
                     queue: c.queues,
                     node_cache: c.node_cache,
-                    hole_copy: None,
+                    hits: None,
                 },
             );
             g.set_bind_group(pass, 0, c.light_groups[1], &[]);
@@ -1823,7 +1816,7 @@ impl RayPass {
                     groups: [c.light_groups[9], c.light_groups[14], c.light_groups[15]],
                     queue: c.queues,
                     node_cache: c.node_cache,
-                    hole_copy: None,
+                    hits: None,
                 },
             );
             g.end(pass);
@@ -1862,14 +1855,7 @@ impl RayPass {
                     groups: [c.light_groups[8], c.light_groups[12], c.light_groups[3]],
                     queue: c.queues,
                     node_cache: c.node_cache,
-                    hole_copy: Some(HoleCopy {
-                        hit_step: &sequence::LIGHT_HITS,
-                        pool: (
-                            c.light_list,
-                            light::list_words(SHADOW_SIZE) + ray::POOL_CNT,
-                            &sequence::LIGHT_POOL_CNT,
-                        ),
-                    }),
+                    hits: Some(&sequence::LIGHT_HITS),
                 },
             );
             g.end(pass);
@@ -2219,28 +2205,21 @@ fn queue_groups(
 /// A run of the queue's passes (pxl-engine `ray::QUEUE_LANES`): the pipelines of its first
 /// walk, its asks, its second walk, their asks and its last walk; its groups
 /// (`queue_groups`); the queues' buffer, which holds its head; the node cache, whose head takes
-/// its stops' count; and, for a holes' run, what is copied before the last walk (`HoleCopy`).
+/// its stops' count; and, for a holes' run, the step by which that count is copied before the
+/// last walk (`sequence::HITS`).
 struct Run<'a> {
     pipelines: [&'a Pipeline; 5],
     groups: [u32; 3],
     queue: u32,
     node_cache: u32,
-    hole_copy: Option<HoleCopy<'a>>,
-}
-
-/// What a holes' run copies before its last walk: the step that copies its stops' count into
-/// the node cache's head (`sequence::HITS`), and the buffer, word and step by which its pool's
-/// count is copied (`sequence::EYE_POOL_CNT`, pxl-engine `ray::POOL_CNT`).
-struct HoleCopy<'a> {
-    hit_step: &'a Step,
-    pool: (u32, u32, &'a Step),
+    hits: Option<&'a Step>,
 }
 
 /// Encodes a run's passes, each a fixed dispatch over what the one before wrote. The two walks
 /// over the node cache alone, each followed by the asks of the nodes it parked rays at, are
 /// timed in `spans[0]`. A holes' run then copies its stops' count and dispatch into the node
-/// cache's head and its parked rays' count into its pool. The last walk runs in a pass timed
-/// in `spans[1]`, which is returned open for what follows it.
+/// cache's head. The last walk runs in a pass timed in `spans[1]`, which is returned open for
+/// what follows it.
 fn walk_run(ctx: &mut RenderContext, spans: [GpuSpanName; 2], r: &Run) -> Id {
     let (g, encoder) = (ctx.g, ctx.encoder);
     let [walk, ask, walk_parked, ask_parked, last] = r.pipelines;
@@ -2257,22 +2236,12 @@ fn walk_run(ctx: &mut RenderContext, spans: [GpuSpanName; 2], r: &Run) -> Id {
         g.dispatch(pass, ray::QUEUE_GROUPS, 1, 1);
     }
     g.end(pass);
-    if let Some(HoleCopy {
-        hit_step,
-        pool: (buf, at, parked),
-    }) = r.hole_copy
-    {
+    if let Some(hits) = r.hits {
         g.copy_buf(
             encoder,
-            (r.queue, hit_step.from_at()),
-            (r.node_cache, hit_step.to_at()),
+            (r.queue, hits.from_at()),
+            (r.node_cache, hits.to_at()),
             word_bytes(4),
-        );
-        g.copy_buf(
-            encoder,
-            (r.queue, parked.from_at()),
-            (buf, word_bytes(at as usize)),
-            word_bytes(1),
         );
     }
     let pass = g.compute_pass(encoder, ctx.stamp(spans[1]).pass());

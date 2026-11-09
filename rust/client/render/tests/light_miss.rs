@@ -544,9 +544,9 @@ fn lay_cells(gpu: &Gpu, b: &WorldBuffer, [eye, header]: [&wgpu::Buffer; 2], list
     let tiles = light::tiles(SIZE) as usize;
     let reads = light::reads_at(SIZE) as usize;
     list[reads..reads + tiles * tiles].fill(CAST);
-    let mut table = vec![0u32; node_cache::WORDS as usize];
-    table[node_cache::FRAME as usize] = FRAME;
-    let table = gpu.buf(&table, store_of());
+    let mut node_cache = vec![0u32; node_cache::WORDS as usize];
+    node_cache[node_cache::FRAME as usize] = FRAME;
+    let node_cache = gpu.buf(&node_cache, store_of());
     let buf = gpu.buf(list, store_of());
     let side = beam::SAMPLE_SIDE;
     gpu.light_beam(
@@ -559,11 +559,11 @@ fn lay_cells(gpu: &Gpu, b: &WorldBuffer, [eye, header]: [&wgpu::Buffer; 2], list
             (6, b.placed.as_entire_binding()),
             (7, b.pool.as_entire_binding()),
             (8, buf.as_entire_binding()),
-            (9, table.as_entire_binding()),
+            (9, node_cache.as_entire_binding()),
             (11, header.as_entire_binding()),
         ],
         &buf,
-        &table,
+        &node_cache,
         SIZE,
     );
     let cells = light::cells_across(SIZE);
@@ -636,8 +636,8 @@ fn run_case(
         .collect();
     let mut list = list_of(&slots);
 
-    let mut table0 = vec![0u32; node_cache::WORDS as usize];
-    table0[node_cache::FRAME as usize] = FRAME;
+    let mut node_cache0 = vec![0u32; node_cache::WORDS as usize];
+    node_cache0[node_cache::FRAME as usize] = FRAME;
     // The Rust's words, walked a slot at a time, every node asked of the world.
     let mut want = vec![u32::MAX; n as usize];
     let mut kinds: BTreeMap<&'static str, u32> = BTreeMap::new();
@@ -677,17 +677,17 @@ fn run_case(
     // The queue runs over a node cache that holds nothing yet.
     let map = map_of(gpu);
     let view = array_view(&map);
-    let table_buf = gpu.buf(&table0, store_of());
+    let node_cache_buf = gpu.buf(&node_cache0, store_of());
     let list_buf = gpu.buf(&list, store_of());
     holes(
         gpu,
         b,
-        [&eye_buf, &header_buf, &table_buf, &list_buf],
+        [&eye_buf, &header_buf, &node_cache_buf, &list_buf],
         &view,
         &walked,
     );
     let got = read_texture(&gpu.device, &gpu.queue, &map);
-    let table_hand = gpu.read(&table_buf);
+    let node_cache_hand = gpu.read(&node_cache_buf);
 
     // Each listed slot's word must lie within `WITHIN` of the Rust's, or one axis's push back
     // off it (`an_axis_over`). A slot not listed must stay 0.
@@ -717,7 +717,7 @@ fn run_case(
     }
 
     // The next frame runs the queue again, over the node cache the first frame left.
-    let mut next = table_hand.clone();
+    let mut next = node_cache_hand.clone();
     next[node_cache::FRAME as usize] = FRAME + 1;
     if let Some(e) = edited {
         next[node_cache::FORGETS as usize] = node_cache::FORGETS_CHANGED;
@@ -873,7 +873,7 @@ fn list_of(slots: &[u32]) -> Vec<u32> {
 fn holes(
     gpu: &Gpu,
     b: &WorldBuffer,
-    [eye, header, table, list]: [&wgpu::Buffer; 4],
+    [eye, header, node_cache, list]: [&wgpu::Buffer; 4],
     view: &wgpu::TextureView,
     walked: &[bool],
 ) {
@@ -887,12 +887,11 @@ fn holes(
         (6, b.placed.as_entire_binding()),
         (7, b.pool.as_entire_binding()),
         (8, list.as_entire_binding()),
-        (9, table.as_entire_binding()),
+        (9, node_cache.as_entire_binding()),
         (11, header.as_entire_binding()),
     ];
-    let pool = light::list_words(SIZE) + ray::POOL_CNT;
-    gpu.holes(&binds, table, (list, pool));
-    let hits = gpu.read(table)[node_cache::HITS_CNT as usize].min(ray::HITS_A_FRAME);
+    gpu.holes(&binds, node_cache);
+    let hits = gpu.read(node_cache)[node_cache::HITS_CNT as usize].min(ray::HITS_A_FRAME);
     let words = gpu.read(list);
     let at = light::hits_at(SIZE) as usize;
     let mut seen = std::collections::BTreeSet::new();
@@ -1090,16 +1089,16 @@ fn fresh_map(gpu: &Gpu, b: &WorldBuffer, case: &Case, cuts: [Cut; 2]) -> (Vec<bo
         .collect();
     let mut list = list_of(&slots);
     lay_cells(gpu, b, [&eye_buf, &header_buf], &mut list);
-    let mut table = vec![0u32; node_cache::WORDS as usize];
-    table[node_cache::FRAME as usize] = FRAME;
+    let mut node_cache = vec![0u32; node_cache::WORDS as usize];
+    node_cache[node_cache::FRAME as usize] = FRAME;
     let map = map_of(gpu);
     let view = array_view(&map);
-    let table_buf = gpu.buf(&table, store_of());
+    let node_cache_buf = gpu.buf(&node_cache, store_of());
     let list_buf = gpu.buf(&list, store_of());
     holes(
         gpu,
         b,
-        [&eye_buf, &header_buf, &table_buf, &list_buf],
+        [&eye_buf, &header_buf, &node_cache_buf, &list_buf],
         &view,
         &walked,
     );
