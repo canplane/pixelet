@@ -255,6 +255,17 @@ pub const fn root(decor: &Row) -> Zoom {
     }) - BRICK_SHIFT
 }
 
+/// The coarsest clip level zoom any decor stands at (`first_cell_zoom`).
+pub const COARSEST_STAND: Zoom = {
+    let (mut coarsest, mut k) = (LEAF_CELL_ZOOM, 0);
+    while k < ROWS.len() {
+        let z = first_cell_zoom(&ROWS[k]);
+        coarsest = if z < coarsest { z } else { coarsest };
+        k += 1;
+    }
+    coarsest
+};
+
 /// The root of each decor's counts (`cnt`, `root`).
 pub const ROOTS: [Zoom; ROWS.len()] = {
     let mut roots = [LEAF_CELL_ZOOM; ROWS.len()];

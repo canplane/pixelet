@@ -7,6 +7,7 @@
 //! asked for, and the order a tile is read in.
 
 use crate::sys::io::demand::Order;
+use pxl_content::scatter::COARSEST_STAND;
 use pxl_spec::space::layer::lattice::{demand_dist, draw_dist, Lattice, GROUND};
 use xpute_core::global::Global;
 
@@ -149,11 +150,21 @@ pub fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
 /// source's `min_zoom` this is the floor's ring (layer/floor.rs `ring`).
 /// At a finer zoom it is the outer edge of the zoom's band (pxl-spec
 /// layer/demand.rs `band`), and None when that band lies past the far edge.
+/// A decor at a clip level is judged on the finest cells held under it
+/// (pxl-content `DecorQuery::finest`), so the ground's zooms finer than the
+/// coarsest a decor stands at are asked as far as their clip level holds them.
 pub fn demand_radius(o: &Observation, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option<f64> {
     if zoom == top {
         return floor::ring(o);
     }
-    band(o, lattice, top, zoom).map(|(_, to)| to)
+    let under_decor = lattice == GROUND && GROUND.grid_zoom(zoom) > COARSEST_STAND;
+    band(o, lattice, top, zoom).map(|(_, to)| {
+        if under_decor {
+            demand_dist(lattice, zoom)
+        } else {
+            to
+        }
+    })
 }
 
 /// What the view asks a layer for: at each zoom finer than the source's top,
