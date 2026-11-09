@@ -8,10 +8,6 @@ pub fn put_f32(buf: &mut [u8], at: usize, v: f32) {
     buf[at..at + 4].copy_from_slice(&v.to_le_bytes());
 }
 
-pub fn put_u32(buf: &mut [u8], at: usize, v: u32) {
-    buf[at..at + 4].copy_from_slice(&v.to_le_bytes());
-}
-
 pub(crate) fn put_mat(out: &mut [f32], at: usize, m: &Mat4) {
     for (i, v) in m.iter().enumerate() {
         out[at + i] = *v as f32;

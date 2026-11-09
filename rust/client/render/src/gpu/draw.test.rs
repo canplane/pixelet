@@ -163,18 +163,7 @@ fn a_draw_set_as_it_was_is_no_change() {
     let box_at = ReceiverBox::of([-1.0, 5.0, 0.0], [1.0, 6.0, 2.0]);
     let turn = |d: &mut DrawList, stand: ReceiverBox, debug_at: Option<f64>| {
         d.draw_as(&marker, PIPELINE_MARKER, 3, 2, 0, at, None);
-        d.draw_in(
-            &ghost,
-            PIPELINE_GHOST_BOX,
-            4,
-            1,
-            0,
-            at,
-            0.5,
-            1.0,
-            0.25,
-            Some(stand),
-        );
+        d.draw_box(&ghost, at, 0.5, 1.0, 0x00ffffff, 0, Some(stand));
         if let Some(x) = debug_at {
             d.draw_as(&debug, PIPELINE_DEBUG, 5, 1, 0, Position::of([x; 3]), None);
         }

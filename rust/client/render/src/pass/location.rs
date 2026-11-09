@@ -18,7 +18,7 @@ use crate::look::color::indicator;
 use crate::look::color::linear_rgb;
 use crate::param::location::beacon;
 use crate::pass::mark::{put_whole, MarkPass};
-use crate::pass::model::{UniformBuffer, DRAW_BYTES};
+use crate::pass::model::{put_uniform, UniformBuffer, DRAW_BYTES};
 
 /// The octahedron's vertices: three for each of its eight faces.
 const BEACON_VERTICES: u32 = 24;
@@ -196,7 +196,7 @@ impl LocationPass {
     ) {
         let c = self.color;
         let put = |buf: &mut [u8], d: &[u32; DRAW_WORDS]| {
-            buf[..DRAW_BYTES as usize].copy_from_slice(bytes(uniform_of(uniforms, d)));
+            put_uniform(buf, uniform_of(uniforms, d));
             for (k, v) in c.into_iter().enumerate() {
                 put_f32(buf, 4 * (location::COLOR + k), v);
             }

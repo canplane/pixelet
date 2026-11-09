@@ -21,12 +21,12 @@
 
 use crate::frame::shader::record::UPLOAD_LAYOUT;
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, release, Format, Gpu, Layout, Stencil, TrackedRenderPass,
+    buf_entry, buffer_usage, release, Format, Gpu, Layout, Stencil, TrackedRenderPass,
 };
 use crate::gpu::draw::{drifted, drifts, Change, Draw, DrawTable, Position, DRAW_WORDS};
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::upload::UploadTable;
-use crate::pass::model::{UniformBuffer, DRAW_BYTES};
+use crate::pass::model::{put_uniform, UniformBuffer, DRAW_BYTES};
 
 /// Gives the handle of the upload a draw reads, 0 for none.
 pub(crate) type UploadOf = fn(&[u32; DRAW_WORDS]) -> u32;
@@ -53,7 +53,7 @@ pub struct DamageInput<'a> {
 /// Writes a mark's uniform as the draw's own, whole, as its lit pass reads
 /// it.
 pub(crate) fn put_whole(buf: &mut [u8], (_, u): &Draw) {
-    buf[..DRAW_BYTES as usize].copy_from_slice(bytes(u));
+    put_uniform(buf, u);
 }
 
 /// The draw as a frame draws it at the wind's drift `drift`. The drift is

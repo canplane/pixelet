@@ -17,8 +17,7 @@ const DEPTH_BIAS_CELLS: f32 = 1.5;
 
 // The uniform is read field by field from vec4 words and is never declared as a
 // struct. Declared as a struct here, it makes Safari's WebGPU lose its GPU
-// process. It holds the view, the projection, `px_per_unit`, and the number
-// before the set's first marker.
+// process. It holds the view, the projection and `px_per_unit`.
 @group(1) @binding(0) var<uniform> marker_words: array<vec4f, MARKER_VEC4S>;
 
 // Each marker's words: the Q3 position it stands at, then its floats (word.rs
@@ -31,7 +30,7 @@ fn instance_f32(k: u32, w: u32) -> f32 {
 
 // A marker's number. It is never 0, which stands for no region.
 fn marker_number(ii: u32) -> u32 {
-  return u32(marker_before()) + ii + 1u;
+  return ii + 1u;
 }
 
 struct Placement {

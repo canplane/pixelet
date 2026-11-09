@@ -164,13 +164,13 @@ pub const WORLD_ASKED: &str = include_str!(concat!(
 
 /// Each render pipeline by its number. The pipelines a draw record names come first
 /// (gpu/draw.rs `DRAW_PIPELINES`), then those a frame runs on its own. The tuples below are
-/// the words of each pipeline's draw record. A box draw is (upload handle, box count, first
-/// box, uniform, pipeline). A decor draw is (upload handle, group, instance count, uniform,
-/// pipeline), and its uniform carries the group's first column word, its stride and the start
-/// of its index list.
+/// the words of each pipeline's draw record. A box draw is (0, 1, 0, uniform, pipeline): one
+/// box and no upload, all it says being in its uniform. A decor draw is (upload handle, group,
+/// instance count, uniform, pipeline), and its uniform carries the group's first column word,
+/// its stride and the start of its index list.
 pub const PIPELINE_DECOR: u32 = 0;
-/// The hover ghost's boxes, half transparent. A box draws at the depth of the faces it lies
-/// on, and those faces stand behind it (screen_ray.wgsl `behind`).
+/// The hover ghost's box, half transparent. It draws at the depth of the faces it lies on,
+/// and those faces stand behind it (screen_ray.wgsl `behind`).
 pub const PIPELINE_GHOST_BOX: u32 = 1;
 pub const PIPELINE_GHOST_DECOR: u32 = 2;
 /// A character's draw record is (model handle, joint palette handle, model id, uniform,
@@ -484,23 +484,6 @@ const SKINNED_BUFS: [VertexBufferLayout; 5] = [
     vertex(16, &[[3, 0, U32X4]]),
     vertex(16, &[[4, 0, F32X4]]),
 ];
-/// The words of a box, as box.wgsl reads one and the hover ghost writes it (mesh/ghost.rs
-/// `write_lone_box`): a vec4, then its layer.
-pub const BOX_WORDS: u32 = 5;
-/// The boxes are a per-instance vertex buffer, so a draw reaches its boxes by
-/// its first instance.
-const BOX_BUFS: [VertexBufferLayout; 2] = [
-    VertexBufferLayout {
-        stride: BOX_WORDS * 4,
-        step: PER_INSTANCE,
-        attributes: &[[0, 0, U32X4]],
-    },
-    VertexBufferLayout {
-        stride: BOX_WORDS * 4,
-        step: PER_INSTANCE,
-        attributes: &[[1, 16, U32]],
-    },
-];
 const LOCATION_ZONE_BUFS: [VertexBufferLayout; 2] =
     [vertex(12, &[[0, 0, F32X3]]), vertex(8, &[[1, 0, F32X2]])];
 const LOCATION_BEACON_BUFS: [VertexBufferLayout; 2] =
@@ -636,9 +619,7 @@ const fn desc_of(id: u32) -> Descriptor {
         PIPELINE_DECOR => Descriptor::new(lit(SHADER_DECOR, CULL_NONE), &MODEL_BUFS, &MODEL_GROUPS),
         // What is laid on the world's faces draws at its own depth, and the world's faces
         // stand behind it (screen_ray.wgsl `behind`).
-        PIPELINE_GHOST_BOX => {
-            Descriptor::new(blended(SHADER_BOX, CULL_BACK), &BOX_BUFS, &[&BOX_GROUP])
-        }
+        PIPELINE_GHOST_BOX => Descriptor::new(blended(SHADER_BOX, CULL_BACK), &[], &[&BOX_GROUP]),
         PIPELINE_GHOST_DECOR => {
             Descriptor::new(blended(SHADER_DECOR, CULL_NONE), &MODEL_BUFS, &MODEL_GROUPS)
         }

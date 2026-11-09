@@ -310,9 +310,6 @@ pub struct Atmosphere {
     plan: Plan,
     sun_mu: f32,
     moon_mu: f32,
-    /// The words as the uniform last took them, so the uniform is written only when they
-    /// change.
-    read: Read,
     /// The words the exposure texel was last drawn from (`EXPOSURE_READS`).
     exposure_read: Read,
     /// This month's picture of the Earth, zero until its image has come (`ImageMap::step`).
@@ -461,7 +458,6 @@ impl Atmosphere {
             ticket: 0,
             mapped: false,
             plan: Plan::default(),
-            read: Read::default(),
             exposure_read: Read::default(),
             sun_mu: 1.0,
             moon_mu: 1.0,
@@ -622,9 +618,9 @@ impl Atmosphere {
         &self.words
     }
 
-    /// Lays out the words from the environment `env` and the rays' far end `far`, plans what
-    /// this frame draws, and writes the uniform where the words changed. Every light's and
-    /// ray's mu is measured up the world's z, which is straight up where the eye stands.
+    /// Lays out the words from the environment `env` and the rays' far end `far` and plans
+    /// what this frame draws. Every light's and ray's mu is measured up the world's z,
+    /// which is straight up where the eye stands.
     pub fn prepare(&mut self, g: &Gpu, env: &[f32], far: f32) {
         let (sun, moon) = (
             &env[environment::SUN..environment::SUN + 3],
@@ -642,12 +638,12 @@ impl Atmosphere {
         self.words[DRAWN] = far;
         (self.sun_mu, self.moon_mu) = (sun[2], moon[2]);
         self.plan(g);
-        let r = &mut self.read;
-        r.begin();
-        r.read(&self.words);
-        if !r.end() {
-            g.write_buf(self.uniform, 0, bytes(&self.words));
-        }
+    }
+
+    /// Writes `words` to the device. The frame calls it only when its read found them
+    /// changed.
+    pub fn write(&self, g: &Gpu) {
+        g.write_buf(self.uniform, 0, bytes(&self.words));
     }
 
     /// Decides what this frame draws of the tables and what each drawing measures. It runs

@@ -16,13 +16,13 @@ use crate::gpu::draw::DrawStat;
 
 use crate::frame::shader::sequence;
 use crate::gpu::api::{Format, Gpu, Image, Stencil, TrackedRenderPass};
-use crate::gpu::draw::{Draw, DrawTable};
+use crate::gpu::draw::DrawTable;
 use crate::gpu::generator::IndirectDraw;
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::upload::UploadTable;
-use crate::pass::mark::MarkPass;
+use crate::pass::mark::{put_whole, MarkPass};
 use crate::pass::model::{
-    bind_mesh, draw_model, draw_models, put_instances, skin_group, skin_made, Extent, ModelDraw,
+    bind_mesh, draw_model, draw_models, put_uniform, skin_group, skin_made, Extent, ModelDraw,
     Stage, UniformBuffer, DRAW_BYTES,
 };
 use pxl_content::generation;
@@ -46,11 +46,6 @@ pub struct DecorPass {
     pub ghost_mark: MarkPass,
 }
 
-/// Writes a mark's uniform as the draw's own (`put_instances`).
-fn put_mark(buf: &mut [u8], (_, u): &Draw) {
-    put_instances(buf, u, 0);
-}
-
 impl DecorPass {
     pub fn new(g: &Gpu, pipelines: &mut PipelineCache, align: u32) -> DecorPass {
         DecorPass {
@@ -69,14 +64,14 @@ impl DecorPass {
                 pipelines,
                 (PIPELINE_DECOR_MARK, PIPELINE_DECOR),
                 align,
-                (|d| d[0], put_mark, |_| true),
+                (|d| d[0], put_whole, |_| true),
             ),
             ghost_mark: MarkPass::new(
                 g,
                 pipelines,
                 (PIPELINE_DECOR_MARK, PIPELINE_GHOST_DECOR),
                 align,
-                (|d| d[0], put_mark, |_| true),
+                (|d| d[0], put_whole, |_| true),
             ),
         }
     }
@@ -191,7 +186,7 @@ impl DecorPass {
             opaque.clone().chain(ghost.clone()),
             changed,
             |buf, d| {
-                put_instances(buf, uniform_of(uniforms, d), 0);
+                put_uniform(buf, uniform_of(uniforms, d));
             },
         );
         for d in opaque.chain(ghost) {

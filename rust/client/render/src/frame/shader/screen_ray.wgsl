@@ -2,7 +2,7 @@
 
 // Draws the eye's rays, one a drawn pixel (pxl-engine `ray`); screen_shade.wgsl is the
 // fragment stage. Each pixel shows the face its ray entered, painted by paint.wgsl `paint` as
-// the ghost's boxes are, and a pixel whose ray met nothing is left to the sky. What lies across
+// the ghost's box is, and a pixel whose ray met nothing is left to the sky. What lies across
 // each edge and corner of the face (the air, the next cell of a flat run, or a cell rising in
 // front of it) is the world's own answer, asked once where the cast stopped (pxl-engine
 // `face`) and handed in the pixel's own ray words. A line is drawn along an edge that meets the
