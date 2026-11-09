@@ -256,9 +256,8 @@ Where a level holds no brick, the coarser level's ground is read, and drawn, in
 its place.
 
 A tile owns what is its own, and what it owns goes when it goes: its lines are
-vectors on the heap under a cap the build derives from what a phone guarantees
-(`door/layout.rs` `LINES_CAP_BYTES`), and an Earth tile holds its packet until the
-GPU has its texels. A tile past its cap is drawn from the tile over it.
+vectors on the heap, and an Earth tile holds its packet until the GPU has its
+texels.
 
 Every bound in the view has an owner: the camera grid bounds what is drawn,
 demand bounds what is fetched, the slots bound what is held, and a turn's time

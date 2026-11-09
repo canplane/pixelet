@@ -2,7 +2,6 @@
 
 //! A baked terrain tile and its wire: `[samples, ground, occupancy, separation]`.
 
-use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::shape;
 use xpute_kit::wire::xtp::MAX_PKT_SZ;
@@ -402,13 +401,12 @@ pub fn palette_cells(pkt: &[u8]) -> Result<&[GroundId], MarshalError> {
 }
 
 /// Decodes a tile as a client holds it: its padded samples straight into `ele`, in
-/// `.fixed.terrain`, and its lines onto the heap, owned by the tile. Lines that would take more
-/// of the heap than `lines_cap` bytes are the object's fault, refused as `EFBIG`; a heap that
-/// refuses them answers for itself. Its cells go to its clip levels (`palette_cells`).
+/// `.fixed.terrain`, and its lines onto the heap, owned by the tile, as large as the bake's limit
+/// on a tile's bytes lets them be (`MAX_PKT_BYTES`); a heap that refuses them answers for
+/// itself. Its cells go to its clip levels (`palette_cells`).
 pub fn decode_into<E: From<MarshalError> + From<TryReserveError>>(
     pkt: &[u8],
     ele: &'static mut [i16],
-    lines_cap: usize,
 ) -> Result<TerrainTile, E> {
     let Table {
         ele: samples,
@@ -416,9 +414,6 @@ pub fn decode_into<E: From<MarshalError> + From<TryReserveError>>(
         separation,
         ..
     } = read_tile(pkt)?;
-    if separation.client_bytes() > lines_cap {
-        return Err(MarshalError::new(Errno::EFBIG).into());
-    }
     let separation = separation.to_client()?;
     ele.copy_from_slice(samples);
     Ok(TerrainTile {

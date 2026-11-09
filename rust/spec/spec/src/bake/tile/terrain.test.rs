@@ -59,9 +59,6 @@ fn tile(seed: u64) -> TerrainTile {
 /// How a client takes a decode's refusals, the object's or the heap's.
 type Refused = Box<dyn std::error::Error>;
 
-/// A cap no tile here comes near.
-const LINES_CAP: usize = 1 << 30;
-
 /// A tile round-trips, in hand and into a record's room.
 #[test]
 fn formats_round_trip() {
@@ -74,7 +71,7 @@ fn formats_round_trip() {
     );
     // On the CPU its lines, but for what only a bake reads: a fold's
     // coarsest zooms and a grid sweep's boxes.
-    let resident = decode_into::<Refused>(&terrain, vec![0; ELE_COLUMN].leak(), LINES_CAP).unwrap();
+    let resident = decode_into::<Refused>(&terrain, vec![0; ELE_COLUMN].leak()).unwrap();
     let want = Separation {
         first_zooms: Default::default(),
         ..tile.separation.clone()
@@ -91,33 +88,12 @@ fn earth_pkt_size() {
     assert_eq!(earth.len(), earth::PKT_BYTES);
 }
 
-/// A tile with no line holds its one start and nothing else, and lines past the cap are the
-/// object's failure.
-#[test]
-fn lines_past_cap_refused() {
-    const ONE_START: usize = size_of::<u32>();
-    let none = encode(&TerrainTile {
-        separation: Separation::default(),
-        ..tile(7)
-    })
-    .unwrap();
-    let resident = decode_into::<Refused>(&none, vec![0; ELE_COLUMN].leak(), ONE_START).unwrap();
-    assert_eq!(resident.separation, Separation::default());
-    let pkt = encode(&tile(7)).unwrap();
-    let err = decode_into::<Refused>(&pkt, vec![0; ELE_COLUMN].leak(), ONE_START).unwrap_err();
-    assert_eq!(
-        err.downcast::<MarshalError>().unwrap().errnum,
-        Errno::EFBIG,
-        "the lines' cap is refused as EFBIG"
-    );
-}
-
 #[test]
 fn non_tile_pkt_refused() {
     let v = Golden::load(GOLDEN);
     let small = hex::decode(v.s("old_format_tile")).unwrap();
     assert!(decode(&small).is_err());
-    assert!(decode_into::<Refused>(&small, vec![0; ELE_COLUMN].leak(), LINES_CAP).is_err());
+    assert!(decode_into::<Refused>(&small, vec![0; ELE_COLUMN].leak()).is_err());
 }
 
 /// Every valid occupancy byte round-trips.

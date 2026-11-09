@@ -3,8 +3,8 @@
 //! Terrain tiles as a layer of the pyramid. A tile's slot is a room in
 //! `.fixed.terrain` for the part read of the tile as a whole, its elevation
 //! samples, decoded into it straight from the packet; its separation lines,
-//! sized by the tile, are vectors of its own on the heap and go with it,
-//! under one cap (`LINES_CAP`). A tile's cells belong to the clip levels
+//! sized by the tile, are vectors of its own on the heap and go with it.
+//! A tile's cells belong to the clip levels
 //! (clipmap.rs): they cut what they want of them from the packet in the turn
 //! it lands, and the packet is then dropped. A tile the bake left without an
 //! object is drawn from the tile over it, whose cells there are open water;
@@ -29,10 +29,6 @@ use xpute_core::mem::range::arr;
 
 static TERRAIN: Global<TileCache<TerrainTile>> = Global::new();
 
-/// The most heap a tile's lines take, each column in its block, which the
-/// boot hands in (door/layout.rs `LINES_CAP_BYTES`).
-pub static LINES_CAP: Global<u32> = Global::new();
-
 impl Base for TerrainTile {
     const STREAM: Stream = Stream::terrain;
     const LATTICE: Lattice = GROUND;
@@ -50,8 +46,7 @@ impl Base for TerrainTile {
     /// Decodes the packet into the slot in one pass, so no tile-sized copy
     /// stands between arrival and drawing, and has the clip levels cut what
     /// they want from it before it is dropped. No terrain packet is kept
-    /// past its turn. Lines past the cap fail with the object's fault, and a
-    /// heap that refuses them waits on the heap.
+    /// past its turn. A heap that refuses its lines waits on the heap.
     fn receive(
         tile: Quadrant,
         slot: u32,
@@ -59,9 +54,8 @@ impl Base for TerrainTile {
         phases: &mut PhaseList,
     ) -> Result<TerrainTile, Exit> {
         let t0 = now();
-        let cap = *LINES_CAP.get(|| xpute_kit::bug!(ENOTRECOVERABLE));
         // SAFETY: the slot is this tile's, and nothing reads it until the tile is set.
-        let decoded = decode_into::<Exit>(&pkt, unsafe { ele_of(slot) }, cap as usize)?;
+        let decoded = decode_into::<Exit>(&pkt, unsafe { ele_of(slot) })?;
         phases.push(TaskPhaseName::decode_ms, now() - t0);
         clipmap::cut(tile, &pkt);
         Ok(decoded)

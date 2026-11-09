@@ -103,8 +103,7 @@ farther and unseen.
 
 A read can fail in three ways, and each holds back something different. When
 the object itself is wrong, asking again brings the same bytes, so its want is
-held for as long as it is wanted; a terrain tile whose lines take more of the heap
-than the build gave them (door/layout.rs `LINES_CAP_BYTES`) is wrong in this way. When the heap or the slots refused the body
+held for as long as it is wanted. When the heap or the slots refused the body
 room, the want waits until what refused it gives room back, and only that
 (`io/room.rs`). When the network or the server failed, every start is held:
 one probe goes out at a time, after a wait drawn at random below its cap, so

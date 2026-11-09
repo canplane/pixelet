@@ -619,24 +619,6 @@ impl<'a> Table<'a> {
         }
     }
 
-    /// The heap a client's columns take (`to_client`), each a block of its bytes rounded up to a
-    /// power of two, as the heap gives one: what a tile's lines are capped by.
-    pub(crate) fn client_bytes(&self) -> usize {
-        [
-            size_of_val(self.starts),
-            size_of_val(self.points),
-            size_of_val(self.tops),
-            size_of_val(self.widths),
-            size_of_val(self.kinds),
-            size_of_val(self.forms),
-            size_of_val(self.clears),
-        ]
-        .iter()
-        .filter(|&&n| n > 0)
-        .map(|n| n.next_power_of_two())
-        .sum()
-    }
-
     /// A client's own columns, on the heap and refused without a panic: every column but
     /// `first_zooms`, which only a fold reads; a client reads a brick's lines whole
     /// (bake/tile/terrain.rs `brick_lines`).

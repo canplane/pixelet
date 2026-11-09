@@ -113,12 +113,10 @@ part at a time within the turn's share for tasks (`fill_share`): their cells, a
 min-max mipmap over them, and their ways as spans, a run in one pool all bricks
 share (`terrain/pool.rs`), 64 MiB and no more, what the GPU reads and nothing else.
 All of it is uploaded, so the CPU's query (`CpuClipmap`) and the GPU's cast meet the
-same bridge. A tile's lines are vectors of its own on the heap and go with it, each
-tile's under one cap, the room the heap's other flows leave over the terrain tile
-slots (door/layout.rs `LINES_CAP_BYTES`). A brick whose spans the pool cannot hold
+same bridge. A tile's lines are vectors of its own on the heap and go with it,
+bounded as the tile is, by the slots and the bake's limit on a tile's bytes. A brick whose spans the pool cannot hold
 reads the coarser level's meanwhile, and its fill is tried again once the pool gives
-a run back; a tile past its cap is the object's failure, as a tile that does not
-decode is, and reads the tile over it; a heap that refuses a tile waits on the heap.
+a run back; a heap that refuses a tile waits on the heap.
 A brick with a column past `way::SPANS` stays refused while a level wants it.
 Nothing of a tile is kept for a brick still to come: a brick that enters asks
 for its tile again, and the browser's cache answers.
