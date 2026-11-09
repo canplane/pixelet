@@ -354,7 +354,8 @@ string to the device as it is, and a call's words follow the descriptor WebGPU
 takes, with nothing defaulted on the program's behalf. The core writes the calls
 through the **encoder**, which names each object by a handle from one table. The
 **GPU runtime** runs them, on WebGPU in a page and on wgpu in a native app, and
-whatever a run throws ends the core, as a trap does.
+whatever a run throws ends the core, as a trap does. The wgpu is patched, for what
+`xpute/rust/vendor/README.md` says.
 
 Some calls finish on a later turn: an image copied in, a buffer read back, the
 queue's work done, or a pipeline made by WebGPU's asynchronous call. Each such
