@@ -22,4 +22,4 @@ export const phase_n = 19 as number;
 
 export const phase_mean = 20 as number;
 
-export const WORDS = 24 as number;
+export const WORDS = 23 as number;

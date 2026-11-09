@@ -6,7 +6,7 @@
 
 // A split's box, as pxl-engine answer.rs packs it.
 
-/// The twin of pxl-engine `answer::box_word`.
+/// The port of pxl-engine `answer::box_word`.
 fn box_word(lo: vec3<u32>, hi: vec3<u32>) -> vec2<u32> {
   let l = min(lo, vec3<u32>(BOX_STEPS - 1u));
   let h = select(min(hi, vec3<u32>(BOX_STEPS)), l + 1u, hi <= l) - 1u;
@@ -20,7 +20,7 @@ fn box_none(b: vec2<u32>) -> bool {
   return all(b == BOX_NONE);
 }
 
-/// The twin of pxl-engine `answer::box_join`.
+/// The port of pxl-engine `answer::box_join`.
 fn box_join(a: vec2<u32>, b: vec2<u32>) -> vec2<u32> {
   if (box_none(a)) {
     return b;
@@ -33,7 +33,7 @@ fn box_join(a: vec2<u32>, b: vec2<u32>) -> vec2<u32> {
 
 // What is placed, as pxl-engine object.rs reads it.
 
-/// The twin of pxl-engine `object::object_box`, for what is placed under a split.
+/// The port of pxl-engine `object::object_box`, for what is placed under a split.
 fn object_box(s: u32, zoom: u32) -> vec2<u32> {
   if (s == SLOT_NOTHING) {
     return BOX_NONE;
@@ -59,7 +59,7 @@ fn object_box(s: u32, zoom: u32) -> vec2<u32> {
   return box_word(select(vec3<u32>(half), vec3<u32>(0u), lows != vec3<u32>(0u)), select(vec3<u32>(half), vec3<u32>(BOX_STEPS), highs != vec3<u32>(0u)));
 }
 
-/// The twin of pxl-engine `object::cells_by`.
+/// The port of pxl-engine `object::cells_by`.
 fn cells_by(s: u32, d: u32) -> bool {
   if (s == SLOT_NOTHING) {
     return false;
@@ -72,7 +72,7 @@ fn cells_by(s: u32, d: u32) -> bool {
   return (word >> 16u) + 2u > select(0u, FULL >> (shift & 31u), shift <= FULL_BITS);
 }
 
-/// The twin of pxl-engine `object::whole`.
+/// The port of pxl-engine `object::whole`.
 fn whole(s: u32, carve: vec4<i32>, zoom: u32, at: vec3<i32>) -> bool {
   if (is_folded(s)) {
     return false;
@@ -101,7 +101,7 @@ fn slab_over(zoom: u32, relief_hi: i32, far: u32, near: u32) -> i32 {
   return over;
 }
 
-/// The twin of pxl-engine `ground::meets`.
+/// The port of pxl-engine `ground::meets`.
 fn meets(span: vec2<i32>, zoom: u32, z: i32, near: u32) -> bool {
   let e = max(near, LEAF_CELL_ZOOM) - LEAF_CELL_ZOOM;
   let s = LEAF_CELL_ZOOM + e - zoom;
@@ -117,7 +117,7 @@ fn z_step(v: i32, z: i32, shift: u32) -> i32 {
   return scaled - (z << BOX_BITS);
 }
 
-/// The twin of pxl-engine `ground::box_along_z`.
+/// The port of pxl-engine `ground::box_along_z`.
 fn box_along_z(span: vec2<i32>, zoom: u32, z_at: i32) -> vec2<u32> {
   if (span.x >= span.y) {
     return BOX_NONE;
@@ -137,7 +137,7 @@ fn box_along_z(span: vec2<i32>, zoom: u32, z_at: i32) -> vec2<u32> {
   return box_word(vec3<u32>(0u, 0u, lo), vec3<u32>(BOX_STEPS, BOX_STEPS, hi));
 }
 
-/// The twin of pxl-engine `way::slab`.
+/// The port of pxl-engine `way::slab`.
 fn way_slab(bound: vec2<i32>, first: u32, near: u32) -> vec2<i32> {
   if (bound.x >= bound.y) {
     return vec2<i32>(EMPTY_LO, EMPTY_HI);
@@ -164,7 +164,7 @@ struct GroundSplit {
   place: u32,
 }
 
-/// The twin of pxl-engine `ground::node` where the node is not asked as a cell (`is_cell`).
+/// The port of pxl-engine `ground::node` where the node is not asked as a cell (`is_cell`).
 fn ground_split(shard: u32, place: u32, zoom: u32, c: vec3<i32>, far: u32, near: u32) -> GroundSplit {
   let none = vec2<i32>(EMPTY_LO, EMPTY_HI);
   if (is_past(shard)) {
@@ -195,7 +195,7 @@ fn world_child(above: vec3<u32>, zoom: u32, c: vec3<i32>) -> vec3<u32> {
   return vec3<u32>(tree_child(above.x, zoom, path(zoom, c)), above.y, above.z);
 }
 
-/// The twin of pxl-engine `world::node` for a node coarser than asked. What is placed splits
+/// The port of pxl-engine `world::node` for a node coarser than asked. What is placed splits
 /// the node where it may fill it, and the ways split what the ground leaves air where they may.
 /// A split's box is every source's own box joined.
 fn world_split(above: vec3<u32>, shard: u32, zoom: u32, c: vec3<i32>, far: u32, near: u32) -> Answer {

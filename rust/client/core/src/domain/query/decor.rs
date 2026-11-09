@@ -2,310 +2,70 @@
 
 //! Decor as the world answers it: what the ground generates, evaluated cell
 //! by cell as the frame generates it (`generated_at`) from the ground's cells
-//! around the cell, and what objects place. Either kind is struck as the box
-//! it claims.
-//!
-//! A ray strikes decor as its ground walk passes, only where the frame draws
-//! decor as held and only at the leaf cells: a fold strikes none of it. The
-//! walk follows the detail rule. The box test is `decor_box.rs`,
-//! and the catalog is spec/spec/asset/decor.json. The scene draws the decor's
-//! models as they arrive (domain/scene/decor/asset.rs).
+//! around the cell, and what objects place. Whatever fills a cell is an asset,
+//! so a leaf cell the layers leave void is the decor whose box claims it
+//! (`World::with_decor`), and each asker decides by what the asset is. A
+//! decor stands in the leaf cells alone: a fold holds none of it. The catalog
+//! is spec/spec/asset/decor.json. The scene draws the decor's models as they
+//! arrive (domain/scene/decor/asset.rs).
 
-use pxl_spec::space::layer::lattice::{draw_dist, Grid, GROUND};
-
-use crate::domain::layer::object::asset::Asset;
+use pxl_content::generation::{CLAIM_EXTENT, TALLEST};
+use pxl_content::scatter::{cnt, ROOTS};
+use pxl_engine::answer::{In, Kind, BOX_WHOLE, PLACED_ASSET};
+use pxl_engine::ground::Extent;
+use pxl_engine::object;
 use pxl_spec::asset::decor::{Decor, DECORS};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::zoom::{cube, idx_of, units, Zoom, LEAF_ZOOM, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{idx_of, units, Zoom, UNIT_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
+use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::value::VOID;
+use xpute_core::global::Global;
 
+use super::change;
+use super::node::At;
 use super::ray::Ray;
 use super::scatter::{generated_at, DecorWorld};
 use super::world::World;
 use crate::domain::layer::instance::Instance;
+use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::meta::decor_instance;
-use crate::domain::layer::object::store::tree_key;
-use crate::domain::layer::object::store::Entry;
-use crate::domain::layer::tile_cache::Line;
-use crate::domain::query::decor_box::{box_extent, intersect};
-use pxl_engine::cast;
-use pxl_engine::clipmap::Lookup;
-use pxl_engine::object::{self, NodeSlot};
-use pxl_spec::space::layer::area;
-use pxl_spec::space::layer::area::Shard;
+use pxl_spec::space::coord::world::nearest_box;
 
-/// One ray's decor tests, carried along its ground walk.
-pub(super) struct DecorRay {
-    /// Of what the ground generates, the decors the frame generates at the
-    /// leaves' clip level, one bit a kind in `DECORS`' order.
-    decors: u32,
-    /// How far any decor reaches from where it stands: in units here, and in
-    /// whole leaf cells in `around`.
-    pub(super) box_extent: f64,
-    around: i32,
-    /// How far along the ray decor is drawn as held.
-    pub(super) draw_dist: f64,
-    /// The cell met last, whose neighbors are struck already.
-    last: Option<[i32; 2]>,
-    /// The nearest decor struck: how far along the ray, the decor, and the
-    /// axis the ray entered its box across (`intersect`).
-    pub(super) best: Option<(f64, Instance, usize)>,
-    /// What is placed around the nodes the walk went through (`Around`).
-    pub(super) about: Around,
-    /// The finest zoom whose nodes are as wide as the extent. A finer node is
-    /// looked around at this zoom (`about_zoom`).
-    extent_zoom: Zoom,
-    /// `band` is where placed decor may stand along z for this ray: the
-    /// ray's heights over the span where decor is held, widened by the
-    /// extent. `box_zoom` is the finest zoom whose nodes are wider than the
-    /// box searched around a leaf cell, which is as tall as the band and as
-    /// wide as the extent; that box then lies strictly within the 27 nodes
-    /// around the cell (`intersect_near`). Both belong to the ray and are the
-    /// same at every cell.
-    band: [f64; 2],
-    box_zoom: Zoom,
+/// The farthest any decor's box in decor.json reaches from its min corner,
+/// however it turns. It is computed once.
+pub fn box_extent() -> f64 {
+    static EXTENT: Global<f64> = Global::new();
+    *EXTENT.get(|| DECORS.iter().map(|d| d.box_extent()).fold(0.0, f64::max))
 }
 
-impl DecorRay {
-    /// The decor tests of a ray that sees decor as the frame draws it:
-    /// everything placed and, of what the ground generates, `decors`.
-    /// None where the leaves' tiles are not drawn.
-    pub(super) fn new(ray: &Ray, decors: u32) -> Option<DecorRay> {
-        // Decor is struck out to where the view draws the leaves' tiles.
-        let dist = match GROUND.z_at(0.0) {
-            LEAF_ZOOM => draw_dist(GROUND, LEAF_ZOOM).min(ray.t_max),
-            _ => return None,
-        };
-        let extent = box_extent();
-        let around = extent.ceil() as i32;
-        let (za, zb) = (ray.at(0.0)[2], ray.at(dist)[2]);
-        let band = [za.min(zb) - extent, za.max(zb) + extent];
-        Some(DecorRay {
-            decors,
-            box_extent: extent,
-            around,
-            draw_dist: dist,
-            last: None,
-            best: None,
-            about: Around::new(),
-            extent_zoom: finest(|side| side >= extent),
-            band,
-            box_zoom: finest(|side| side > f64::from(around + 1).max(band[1] - band[0])),
-        })
-    }
-
-    pub(super) fn about_zoom(&self, zoom: Zoom) -> Zoom {
-        zoom.min(self.extent_zoom)
-    }
-}
-
-/// The finest zoom, no finer than the walk goes, whose nodes' side `fits`;
-/// 0 where none does. Sides grow as zooms coarsen, so a node finer than this
-/// zoom is looked at here, and a node at it or coarser at its own zoom.
-fn finest(fits: impl Fn(f64) -> bool) -> Zoom {
-    let mut z = cast::DEPTH as Zoom - 1;
-    while z > 0 && !fits(units(z)) {
+/// The finest zoom whose nodes are as wide as the farthest a placed decor's
+/// corner lies from a cell its box claims, on any axis: the corner lies in
+/// that node of the cell, or in the node before it on each axis.
+const CLAIM_ZOOM: Zoom = {
+    let reach = if CLAIM_EXTENT[0] > CLAIM_EXTENT[2] {
+        CLAIM_EXTENT[0]
+    } else {
+        CLAIM_EXTENT[2]
+    };
+    let mut z = UNIT_ZOOM;
+    while (1 << (UNIT_ZOOM - z)) < reach {
         z -= 1;
     }
     z
-}
+};
 
-/// What is placed in the 27 nodes around the node a striking walk is at, for
-/// each zoom it went through, held as the objects' tree's cursors there
-/// (pxl-engine `object::NodeSlot`). A node's neighbors are children of its
-/// parent's neighbors (Samet 1989, neighbor finding), and a walk enters a
-/// node through its parent, so each zoom's 27 are stepped from the zoom
-/// above's in 27 `child` reads.
-pub(super) struct Around {
-    at: [[i32; 3]; cast::DEPTH],
-    slots: [[NodeSlot; 27]; cast::DEPTH],
-    /// The 3 × 3 columns around the node at each zoom, as the ground's
-    /// relief reads them (`read_columns`).
-    columns_at: [[i32; 2]; cast::DEPTH],
-    columns: [[Option<Column>; 9]; cast::DEPTH],
-}
-
-/// A column around a striking walk's node, at the node's zoom, as its relief
-/// read it: the ground's line its cells are read on, where those cells were
-/// found, and the highest top its relief reaches, None where the relief is
-/// lacking.
-#[derive(Clone, Copy)]
-struct Column {
-    line: Line,
-    lookup: Lookup,
-    hi: Option<i32>,
-}
-
-impl Around {
-    pub(super) fn new() -> Around {
-        Around {
-            at: [[i32::MIN; 3]; cast::DEPTH],
-            slots: [[NodeSlot::NOTHING; 27]; cast::DEPTH],
-            columns_at: [[i32::MIN; 2]; cast::DEPTH],
-            columns: [[None; 9]; cast::DEPTH],
-        }
-    }
-
-    /// Records that the walk entered the node `(zoom, c)` and finds the
-    /// cursors of its 27. They are stepped from its parent's where those are
-    /// the ones held, or else each found down from the roots.
-    pub(super) fn visit(&mut self, lanes: &impl object::Table, (zoom, c): Node<3>) {
-        let z = zoom as usize;
-        if self.at[z] == c {
-            return;
-        }
-        let p = c.map(|v| v >> 1);
-        let stepped = zoom > 0 && self.at[z - 1] == p;
-        for k in 0..27 {
-            let n = [
-                c[0] + (k % 3) as i32 - 1,
-                c[1] + (k / 3 % 3) as i32 - 1,
-                c[2] + (k / 9) as i32 - 1,
-            ];
-            self.slots[z][k] = if stepped {
-                let q = [
-                    (n[0] >> 1) - p[0] + 1,
-                    (n[1] >> 1) - p[1] + 1,
-                    (n[2] >> 1) - p[2] + 1,
-                ];
-                object::child(
-                    lanes,
-                    self.slots[z - 1][(q[0] + 3 * q[1] + 9 * q[2]) as usize],
-                    zoom,
-                    object::path(zoom, n),
-                )
-            } else {
-                // Y and Z lie under the world's one root alone; X wraps
-                // around it.
-                let inside =
-                    (-1..=0).contains(&(n[1] >> zoom)) && (-1..=0).contains(&(n[2] >> zoom));
-                if inside {
-                    object::cursor(lanes, object::ROOT, zoom, n)
-                } else {
-                    NodeSlot::NOTHING
-                }
-            };
-        }
-        self.at[z] = c;
-    }
-
-    /// Reads the 3 × 3 columns around `(zoom, c)` at its tile's cells. Each
-    /// column's line steps from its parent column's (`line_under`), its
-    /// cells are found from where its parent column's were (pxl-engine
-    /// `clipmap::step`), and its relief's highest top is read once for every
-    /// node under it. Each zoom's columns step from the zoom above's
-    /// (`Around`).
-    pub(super) fn read_columns(&mut self, world: &World, (zoom, c): (Zoom, [i32; 2])) {
-        let z = zoom as usize;
-        if self.columns_at[z] == c {
-            return;
-        }
-        let p = [c[0] >> 1, c[1] >> 1];
-        let stepped = zoom > 0 && self.columns_at[z - 1] == p;
-        let cell_zoom = GROUND.grid_zoom(zoom.min(LEAF_ZOOM));
-        for k in 0..9 {
-            let n = [c[0] + (k % 3) as i32 - 1, c[1] + (k / 3) as i32 - 1];
-            let parent = if stepped {
-                self.columns[z - 1]
-                    [((n[0] >> 1) - p[0] + 1 + 3 * ((n[1] >> 1) - p[1] + 1)) as usize]
-            } else {
-                None
-            };
-            let line =
-                world
-                    .terrain
-                    .line_under(parent.as_ref().map(|o| &o.line), (zoom, n), cell_zoom);
-            let mut found = parent.map_or(Lookup::NONE, |o| o.lookup);
-            let hi = world
-                .terrain
-                .relief(&line, &mut found, (zoom, n), [cell_zoom, cell_zoom])
-                .val()
-                .map(|[[_, hi], _]| hi);
-            self.columns[z][k] = Some(Column {
-                line,
-                lookup: found,
-                hi,
-            });
-        }
-        self.columns_at[z] = c;
-    }
-
-    /// The highest top the relief reaches in each of the 3 × 3 columns
-    /// around `(zoom, a)`, None where it is lacking. The walk read them on
-    /// entering `a` (`read_columns`), which must be the last node it entered
-    /// at `zoom`.
-    fn reliefs(&self, (zoom, a): (Zoom, [i32; 2])) -> [Option<i32>; 9] {
-        let z = zoom as usize;
-        debug_assert!(
-            self.columns_at[z] == a,
-            "the walk entered the node it reads about"
-        );
-        self.columns[z].map(|c| c.and_then(|c| c.hi))
-    }
-
-    /// The nodes the objects' tree holds around `a`, at `zoom` or above it,
-    /// each with what is held there, and how many there are. Each node
-    /// appears once (a leaf above several of the 27 is one node), in the
-    /// tree's order (`tree_key`). These are the nodes a walk from the roots,
-    /// pruned to a box within them, enters first (`Store::entries_under`).
-    /// None where the walk did not go through `a`.
-    fn under(&self, (zoom, a): Node<3>) -> Option<([(Node<3>, NodeSlot); 27], usize)> {
-        let z = zoom as usize;
-        if self.at[z] != a {
-            return None;
-        }
-        let (mut out, mut n) = ([((0, [0; 3]), NodeSlot::NOTHING); 27], 0);
-        for (k, &slot) in self.slots[z].iter().enumerate() {
-            if !slot.holds() {
-                continue;
-            }
-            let c = [
-                a[0] + (k % 3) as i32 - 1,
-                a[1] + (k / 3 % 3) as i32 - 1,
-                a[2] + (k / 9) as i32 - 1,
-            ];
-            let h = slot.zoom();
-            let node = (h, object::ancestor_at(zoom, c, zoom - h));
-            if !out[..n].iter().any(|&(o, _)| o == node) {
-                out[n] = (node, slot);
-                n += 1;
-            }
-        }
-        out[..n].sort_unstable_by_key(|&((h, c), _)| tree_key(h, c));
-        Some((out, n))
-    }
-
-    /// Whether anything, air included, is placed in the 27 nodes around `a`,
-    /// at `zoom` or above it. The walk must have gone through `a` (`visit`),
-    /// and `a` must be the last node it entered at `zoom`.
-    fn holds(&self, (zoom, a): Node<3>) -> bool {
-        let z = zoom as usize;
-        debug_assert!(self.at[z] == a, "the walk entered the node it reads about");
-        self.slots[z].iter().any(|h| h.holds())
-    }
-}
-
-impl<'a> World<'a> {
-    /// Hands what the ground generates on the leaf `cell`, decor by decor, to
-    /// `each` until `each` returns true, and returns whether it did. Only the
-    /// decors whose bits are set in `decors` are asked. Each instance stands on
-    /// its column's surface in the base (`World::column_surface`). With `boxed`,
-    /// `each` is also told whether the decor generates there as the frame draws
-    /// it (`generated_at`); without `boxed` that is true. Nothing is handed
-    /// where the world does not hold the column.
-    fn generated_in(
-        &self,
-        cell: [i32; 2],
-        boxed: bool,
-        decors: u32,
-        mut each: impl FnMut(&Decor, Instance, bool) -> bool,
-    ) -> bool {
-        DECORS.iter().enumerate().any(|(k, decor)| {
-            decors >> k & 1 == 1
-                && generated_at(&mut DecorWorld::new(self), decor, cell, boxed)
-                    .is_some_and(|(i, generates)| each(decor, i, generates))
-        })
+impl World {
+    /// Hands what the ground's scatter stands on the leaf `cell`, decor by
+    /// decor, to `each` until `each` returns true. Each instance stands on
+    /// its column's surface in the base (`World::column_surface`). Nothing is
+    /// handed where the world does not hold the column.
+    fn generated_in(&self, cell: [i32; 2], mut each: impl FnMut(&Decor, Instance) -> bool) {
+        DECORS.iter().any(|decor| {
+            generated_at(&mut DecorWorld::new(self), decor, cell, false)
+                .is_some_and(|(i, _)| each(decor, i))
+        });
     }
 
     /// Every decor the ground's scatter generates on the leaves whose box
@@ -319,7 +79,7 @@ impl<'a> World<'a> {
         let mut out = Vec::new();
         for y in cells(1) {
             for x in cells(0) {
-                self.generated_in([x, y], false, u32::MAX, |_, i, _| {
+                self.generated_in([x, y], |_, i| {
                     if claim(&i).is_some_and(|c| c.shares(*space)) {
                         out.push(i);
                     }
@@ -336,114 +96,187 @@ impl<'a> World<'a> {
     pub fn generated_instance(&self, decor: &Decor, at: &Q3) -> Option<Instance> {
         let [x, y, z] = idx_of(GROUND.leaf_cell_zoom(), at);
         let mut met = None;
-        self.generated_in([x, y], false, u32::MAX, |d, i, _| {
-            met = Some(i)
-                .filter(|i| d.val() == decor.val() && i.generated_in().is_some_and(|c| c[2] == z));
+        self.generated_in([x, y], |d, i| {
+            met =
+                Some(i).filter(|i| d.id == decor.id && i.generated_in().is_some_and(|c| c[2] == z));
             met.is_some()
         });
         met
     }
 
-    /// Strikes the decor standing near the leaf cell the walk is in. Only
-    /// decor not near the cell met before is tested, since a walk only moves
-    /// on.
-    pub(super) fn intersect_near(&self, s: &mut DecorRay, ray: &Ray, (zoom, at): Node<3>) {
-        let cell = [at[0], at[1]];
-        let (r, last) = (s.around, s.last.replace(cell));
-        let near = |a: [i32; 2], b: [i32; 2]| (a[0] - b[0]).abs() <= r && (a[1] - b[1]).abs() <= r;
-        // Placed decor can meet the ray only within the band: the ray's
-        // heights over the held span, widened by the extent.
-        let [z0, z1] = s.band;
-        let fresh = |xy: [i32; 2]| !last.is_some_and(|l| near(xy, l));
-        for y in cell[1] - r..=cell[1] + r {
-            for x in cell[0] - r..=cell[0] + r {
-                if fresh([x, y]) {
-                    self.generated_near(s, ray, [x, y]);
-                }
-            }
+    /// `i`, what the layers answer of `at`'s node asked down to `near`
+    /// (`World::layer_node`), with the decor standing in it. `relief` is the
+    /// ground's bound the layers read over the node. Where `near` is coarser
+    /// than a leaf cell, no decor stands. A cell at the leaves' zoom or finer
+    /// that the layers leave void is the decor whose box claims it, if any
+    /// (`decor_at`), and carries `PLACED_ASSET` where it is placed. A node a
+    /// decor may reach into (`may_reach`, or at those zooms a decor claiming
+    /// its cell) is split whole, as a decor stands apart from the box of what
+    /// the layers split on.
+    pub(super) fn with_decor(
+        &self,
+        at: &At,
+        near: Zoom,
+        relief: Option<Extent>,
+        i: In<[u32; 2]>,
+    ) -> In<[u32; 2]> {
+        let zoom = at.node.0;
+        let leaf = GROUND.leaf_cell_zoom();
+        let void = i.kind == Kind::Cell && i.asset[0] == VOID;
+        if near < leaf || !(void || i.kind == Kind::Split) {
+            return i;
         }
-        // What is placed around the cell is found in one walk of the objects'
-        // tree over all the cells. Each entry is met once, in the cell its
-        // box's corner is in.
-        let space = Aabb {
-            min: [(cell[0] - r) as f64, (cell[1] - r) as f64, z0],
-            max: [(cell[0] + r + 1) as f64, (cell[1] + r + 1) as f64, z1],
+        let split = In {
+            kind: Kind::Split,
+            asset: BOX_WHOLE,
         };
-        // The search starts from the nodes around the cell at the finest zoom
-        // wider than the box, whose 27 the walk stepped down to (`Around`).
-        // The cell lies in the middle node and the ray's height there lies
-        // within the band, so the box lies strictly within the 27 and touches
-        // nothing past them.
-        let wide = zoom.min(s.box_zoom);
-        let from = s.about.under((wide, at.map(|v| v >> (zoom - wide))));
-        let mut visit = |e: &Entry| {
-            let c = e.cube().min;
-            let own = [c[0].floor() as i32, c[1].floor() as i32];
-            if let Some(i) = decor_instance(e).filter(|_| space.holds(c) && fresh(own)) {
-                meet(s, ray, i);
-            }
-        };
-        match from {
-            Some((from, n)) => self.object.entries_under(&from[..n], &space, &mut visit),
-            None => self.object.entries_in(&space, &mut visit),
+        if zoom < leaf {
+            return if self.may_reach(at.node, relief) {
+                split
+            } else {
+                i
+            };
+        }
+        match self.decor_over(at.node) {
+            Some(d) if void => In {
+                kind: Kind::Cell,
+                asset: [
+                    d.id | if d.generated_in().is_none() {
+                        PLACED_ASSET
+                    } else {
+                        0
+                    },
+                    0,
+                ],
+            },
+            Some(_) => split,
+            None => i,
         }
     }
 
-    /// Whether decor that `s` strikes may reach into the node `(zoom, c)`,
-    /// where no cell under it fills; X is on the asker's lap. Decor stands on
-    /// the ground or on something placed, and reaches no farther than its
-    /// extent from there. So a node is out of reach when, around it and as
-    /// wide as the extent, the clip levels' relief holds no top above the
-    /// node's bottom less the extent, and the objects' pyramid holds no
-    /// record. Past the service area there is no ground, as `shard`, what the
-    /// descent established at the node, says. A node whose ground is not held
-    /// may be reached.
+    /// Whether a decor's box may reach into the node `(zoom, c)`, coarser
+    /// than a leaf cell; X is on the asker's lap.
     ///
-    /// The answer is read off what the walk holds around the node's ancestor
-    /// at the zoom it is looked around at (`DecorRay::about_zoom`, `Around`),
-    /// which is the last node the walk entered there. The walk enters every
-    /// node through its parent, so an ancestor comes before its children and
-    /// no later along the ray, and lies under the held span as they do. The
-    /// walk entered no other node at that zoom since, because a node it comes
-    /// back to is as fine or finer.
-    pub(super) fn may_intersect(&self, s: &DecorRay, (zoom, c): Node<3>, shard: Shard) -> bool {
-        let z = s.about_zoom(zoom);
+    /// What the ground generates stands on the columns its box covers, each
+    /// filled under its base. So one that reaches into the node stands on the
+    /// node's own columns: its cells lie no higher than a cell over the
+    /// highest the ground and the ways reach under the node (`relief`, in
+    /// leaf cells) and as tall again as the tallest decor. Its corner is a
+    /// cell holding a candidate, at most its decor's widest less one before
+    /// the node, so a decor whose counts there are none is out of reach
+    /// (pxl-content `scatter::cnt`, read from its root down, `ROOTS`).
+    ///
+    /// What is placed stands anywhere, so it is found by where it is held:
+    /// a decor's corner lies at most `CLAIM_EXTENT` before a cell its box
+    /// claims, so in the node at `CLAIM_ZOOM` or the node's own zoom over the
+    /// node, or the node before that on each axis. Air placed there counts as
+    /// held, which only makes a ray split more.
+    fn may_reach(&self, (zoom, c): Node<3>, relief: Option<Extent>) -> bool {
+        let bottom = i64::from(c[2]) << (GROUND.leaf_cell_zoom() - zoom);
+        let grows = relief
+            .is_some_and(|[ground, ways]| bottom <= i64::from(ground[1].max(ways[1]) + TALLEST))
+            && (0..DECORS.len()).any(|k| may_stand(k, (zoom, [c[0], c[1]])));
+        let z = zoom.min(CLAIM_ZOOM);
         let a = c.map(|v| v >> (zoom - z));
-        let low = cube(zoom, c).min[2] - s.box_extent;
-        let leaf = units(GROUND.leaf_cell_zoom());
-        let node = (zoom, [c[0], c[1]]);
-        let read = s.about.reliefs((z, [a[0], a[1]]));
-        let ground = (-1..=1).any(|dy| {
-            (-1..=1).any(|dx| {
-                // Past the area no ground stands.
-                if z >= SHARD_ZOOM
-                    && shard.past_leaf(node, area::tile_at(z, [a[0] + dx, a[1] + dy]))
-                {
-                    return false;
-                }
-                read[(dx + 1 + 3 * (dy + 1)) as usize].is_none_or(|hi| f64::from(hi) * leaf > low)
+        let lanes = self.object.columns();
+        grows
+            || (0..8).any(|k: i32| {
+                let n = [a[0] - (k & 1), a[1] - (k >> 1 & 1), a[2] - (k >> 2 & 1)];
+                // Y and Z lie under the world's one root alone; X wraps
+                // around it.
+                (-1..=0).contains(&(n[1] >> z))
+                    && (-1..=0).contains(&(n[2] >> z))
+                    && object::cursor(&lanes, object::ROOT, z, n).holds()
             })
-        });
-        ground || s.about.holds((z, a))
     }
 
-    fn generated_near(&self, s: &mut DecorRay, ray: &Ray, cell: [i32; 2]) {
-        self.generated_in(cell, true, s.decors, |_, i, generates| {
-            if generates {
-                meet(s, ray, i);
-            }
-            false
-        });
+    /// The decor whose box claims the leaf cell over the node `(zoom, c)`,
+    /// which is a leaf cell or finer (`decor_at`).
+    pub(super) fn decor_over(&self, (zoom, c): Node<3>) -> Option<Instance> {
+        self.decor_at(c.map(|v| v >> (zoom - GROUND.leaf_cell_zoom())))
     }
+
+    /// Whether `ray` enters the box of the decor claiming the node `(zoom,
+    /// c)`, a leaf cell or finer.
+    pub(super) fn ray_enters_decor(&self, ray: &Ray, node: Node<3>) -> bool {
+        self.decor_over(node)
+            .and_then(|i| nearest_box(&cell_box(&i)?, ray.origin[0]).enters(ray.origin, ray.dir))
+            .is_some()
+    }
+
+    /// The decor whose box claims the leaf cell `cell`, placed or generated;
+    /// X is on the asker's lap. The ground generates no decor whose box
+    /// meets a placed one's, and no two whose boxes meet, so at most one
+    /// claims it.
+    fn decor_at(&self, cell: [i32; 3]) -> Option<Instance> {
+        let middle = cell.map(|v| f64::from(v) + 0.5);
+        let claims = |i: &Instance| cell_box(i).is_some_and(|b| b.holds(middle));
+        let near = Aabb {
+            min: std::array::from_fn(|k| f64::from(cell[k] - CLAIM_EXTENT[k])),
+            max: cell.map(|v| f64::from(v + 1)),
+        };
+        let mut met = None;
+        self.object.entries_in(&near, &mut |e| {
+            if met.is_none() {
+                met = decor_instance(e).filter(claims);
+            }
+        });
+        // A count a little coarser tells most decors apart at once, so a
+        // decor's corners are asked one by one only under a count that holds
+        // one.
+        let over = (GROUND.leaf_cell_zoom() - 2, [cell[0] >> 2, cell[1] >> 2]);
+        met.or_else(|| {
+            DECORS.iter().enumerate().find_map(|(k, d)| {
+                let w = d.row.widest() as i32;
+                may_stand(k, over).then_some(())?;
+                (0..w * w).find_map(|n| {
+                    let corner = [cell[0] - n % w, cell[1] - n / w];
+                    generated_at(&mut DecorWorld::new(self), d, corner, true)
+                        .filter(|(i, generates)| *generates && claims(i))
+                        .map(|(i, _)| i)
+                })
+            })
+        })
+    }
+}
+
+/// Reports as read the columns a decor claiming the node's leaf cell may
+/// stand on, for an asker that keeps what the cell answers.
+pub(super) fn report_claims((zoom, c): Node<3>) {
+    if let Some(s) = zoom.checked_sub(GROUND.leaf_cell_zoom()) {
+        let [x, y] = [c[0] >> s, c[1] >> s].map(f64::from);
+        change::report_read(
+            [
+                x - f64::from(CLAIM_EXTENT[0]),
+                y - f64::from(CLAIM_EXTENT[1]),
+            ],
+            [x, y],
+            GROUND.leaf_cell_zoom(),
+        );
+    }
+}
+
+/// Whether the `k`-th decor's counts hold anything over the columns at
+/// `zoom` where a box as wide as its widest may stand and reach the column
+/// `c`. A zoom coarser than its counts' root does not tell (pxl-content
+/// `scatter::cnt`, `ROOTS`).
+fn may_stand(k: usize, (zoom, c): (Zoom, [i32; 2])) -> bool {
+    let s = GROUND.leaf_cell_zoom() - zoom;
+    let back = (DECORS[k].row.widest() as i32 - 1 + (1 << s) - 1) >> s;
+    zoom < ROOTS[k]
+        || (c[1] - back..=c[1]).any(|y| (c[0] - back..=c[0]).any(|x| cnt(k, zoom, [x, y]) > 0))
 }
 
 pub(super) fn claim(i: &Instance) -> Option<Aabb> {
-    Some(Asset::of(u32::from(i.id)).decor()?.claim(i.at, &i.meta))
+    Some(Asset::of(i.id).decor()?.claim(i.at, &i.meta))
 }
 
-fn meet(s: &mut DecorRay, ray: &Ray, i: Instance) {
-    if let Some((t, axis)) = intersect(&i, ray.origin, ray.dir, s.best.map_or(s.draw_dist, |b| b.0))
-    {
-        s.best = Some((t, i, axis));
-    }
+/// The box `i` claims as cells (decor.json), every cell of it the decor's:
+/// `claim` raised to the cell it stands in, where a generated one's base sinks
+/// into the cell under it as its model is drawn on a top kept short of its
+/// cube.
+pub(super) fn cell_box(i: &Instance) -> Option<Aabb> {
+    let c = claim(i)?;
+    let rise = i.generated_in().map_or(0.0, |g| f64::from(g[2]) - c.min[2]);
+    Some(c.moved([0.0, 0.0, rise]))
 }

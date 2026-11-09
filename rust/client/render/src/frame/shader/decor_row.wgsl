@@ -14,7 +14,7 @@ fn draw(seed: u32, n: u32) -> u32 {
   return seed_mix(seed + n * SEED_SALT, 0u);
 }
 
-/// This is the twin of pxl-content `scatter::mul_hi`.
+/// This is the port of pxl-content `scatter::mul_hi`.
 fn mul_hi(a: u32, b: u32) -> u32 {
   let low = (a & 0xffffu) * (b & 0xffffu);
   let cross = vec2<u32>((a >> 16u) * (b & 0xffffu), (a & 0xffffu) * (b >> 16u));
@@ -31,7 +31,7 @@ fn cells(k: u32, variant: u32, turn: u32) -> vec3<i32> {
   return select(vec3<i32>(y, x, z), vec3<i32>(x, y, z), (turn & 1u) == 0u);
 }
 
-/// This is the twin of pxl-content `Decor::allows`.
+/// This is the port of pxl-content `Decor::allows`.
 fn allows(k: u32, v: u32) -> bool {
   return v < 256u && ((row_word(k, ROW_ON + (v >> 5u)) >> (v & 31u)) & 1u) == 1u;
 }

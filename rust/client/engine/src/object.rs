@@ -1,6 +1,6 @@
 // pxl-engine/object.rs
 
-//! wgsl-twin: what is placed, as a descent asks it. It is the objects' one tree (pxl-core
+//! wgsl-port: what is placed, as a descent asks it. It is the objects' one tree (pxl-core
 //! domain/layer/object/store.rs), read where it lives: two columns of one word a slot.
 //! `first_child` holds a branch's child group's first slot with `BRANCH` set, or 0 for a
 //! leaf. `data` holds a leaf's value and its record's handle, or a branch's fold: the kind
@@ -50,9 +50,6 @@ pub const fn cut_rect(zoom: Zoom, at: [i32; 3]) -> [i32; 4] {
         [at[0] >> s, at[1] >> s, (at[0] >> s) + 1, (at[1] >> s) + 1]
     }
 }
-
-const VOID: u32 = value::VOID;
-pub const AIR: u32 = value::AIR;
 
 /// A slot's data word, in the one layout every reader of the tree reads. A leaf holds its
 /// value in the low half and its record's handle in the high (`leaf_word`). A branch's fold
@@ -274,7 +271,7 @@ fn child_idx(at: [i32; 3]) -> u32 {
 fn of(columns: &impl Table, slot: u32, zoom: Zoom) -> NodeSlot {
     if columns.first_child(slot) != 0 {
         NodeSlot(slot << SLOT_SHIFT | FOLDED | zoom)
-    } else if columns.data(slot) == VOID {
+    } else if columns.data(slot) == value::VOID {
         NodeSlot::NOTHING
     } else {
         NodeSlot(slot << SLOT_SHIFT | zoom)
@@ -327,7 +324,7 @@ pub fn child(columns: &impl Table, parent: NodeSlot, zoom: Zoom, at: [i32; 3]) -
 /// Whether a value is drawn as a voxel, a placeable cube or air, rather than
 /// an instance or nothing.
 pub const fn voxel(val: u32) -> bool {
-    val == AIR || value::grounds(val) || value::objects(val)
+    val == value::AIR || value::grounds(val) || value::objects(val)
 }
 
 /// Whether `cut` is at `zoom` or coarser and its cube holds the node `at`.
@@ -353,25 +350,25 @@ pub fn val(columns: &impl Table, slot: NodeSlot, hide: Cut, zoom: Zoom, at: [i32
     let word = if slot.holds() {
         columns.data(slot.slot())
     } else {
-        VOID
+        value::VOID
     };
     let v = if !slot.holds() {
-        VOID
+        value::VOID
     } else if !slot.is_folded() {
         if hide.zoom == slot.zoom() && holds(hide, zoom, at) {
-            VOID
+            value::VOID
         } else {
             low(word)
         }
     } else if high(word) > 0 {
         low(word)
     } else {
-        VOID
+        value::VOID
     };
     if voxel(v) {
         v
     } else {
-        VOID
+        value::VOID
     }
 }
 
@@ -419,12 +416,12 @@ pub fn palette_idxs(
             zoom + 1,
             child,
         );
-        (c, c != VOID && c != AIR)
+        (c, c != value::VOID && c != value::AIR)
     };
     // Each quarter's upper child, then its lower one, one child a step, so each child is asked
     // once.
     let mut four = [v; 4];
-    let mut upper = (VOID, false);
+    let mut upper = (value::VOID, false);
     let mut i = 0;
     while i < 2 * 4 {
         let j = i / 2;
@@ -488,17 +485,17 @@ pub fn over(
         };
         return Over {
             answer,
-            asset: VOID,
+            asset: value::VOID,
             fill: 0,
         };
     }
     let carved = holds(carve, zoom, at);
     let v = if carved {
-        AIR
+        value::AIR
     } else {
         val(columns, slot, hide, zoom, at)
     };
-    let answer = if v == VOID { UNDER } else { CELL };
+    let answer = if v == value::VOID { UNDER } else { CELL };
     Over {
         answer,
         asset: v,
@@ -609,7 +606,7 @@ mod tests {
             if slot >= 8 && self.0.contains(&(slot - 8)) {
                 1
             } else {
-                VOID
+                value::VOID
             }
         }
     }

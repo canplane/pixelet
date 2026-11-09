@@ -1,6 +1,6 @@
 // pxl-content/generation.rs
 
-//! wgsl-twin: the decor the ground holds (`scatter`), generated on the world as either
+//! wgsl-port: the decor the ground holds (`scatter`), generated on the world as either
 //! side holds it: where a candidate stands, which way it faces and whether its column surface
 //! holds it (`placement`, over `DecorQuery`); what placed decor claims (`overlaps_placed`);
 //! and how the GPU lays out, lists and draws what it generates in a clip level's bricks.
@@ -23,7 +23,7 @@ use xpute_kit::math::rng::SplitMix32;
 
 use crate::param::scatter::ALIGN_NEIGHBOR_RADIUS;
 use crate::scatter::{brick_cap, stands_at, variant_of, Candidate};
-use pxl_spec::asset::decor::{Orientation, Row, ROWS};
+use pxl_spec::asset::decor::{Decor, Orientation, Row, ROWS};
 
 /// The lanes of a decor pass's workgroup.
 pub const LANES: u32 = 64;
@@ -38,7 +38,7 @@ pub const RUN: u32 = 16;
 
 /// The most decor one brick generates, all decors together: each decor's capacity
 /// (`cap`), laid in the catalog's order.
-pub const BRICK_RECORDS: u32 = {
+pub const BRICK_RECORD_CAP: u32 = {
     let (mut sum, mut k) = (0, 0);
     while k < ROWS.len() {
         sum += cap(&ROWS[k]);
@@ -49,7 +49,7 @@ pub const BRICK_RECORDS: u32 = {
 
 /// The most records any one decor holds in a brick (`cap`), over which `decor_cs` is
 /// dispatched.
-pub const KIND_RECORDS: u32 = {
+pub const DECOR_RECORD_CAP: u32 = {
     let (mut most, mut k) = (0, 0);
     while k < ROWS.len() {
         let cap = cap(&ROWS[k]);
@@ -87,7 +87,7 @@ const _: () = assert!(
 );
 
 /// The GPU's decor in one buffer of words: a head for each eye entry, then each entry's
-/// `BRICK_RECORDS` records, then placed decor's head and its records. An entry's records are
+/// `BRICK_RECORD_CAP` records, then placed decor's head and its records. An entry's records are
 /// each decor's in turn, as many as it retained (`entry_record`); a decor generated again lays
 /// its own anew. A head holds the brick the records were generated for, X and Y, and 1 once
 /// they were, so that an entry whose brick the clip levels do not hold there any more is
@@ -97,13 +97,13 @@ pub const CNT_AT: u32 = 3;
 pub const HEADER_WORDS: u32 = CNT_AT + ROWS.len() as u32;
 pub const SLOTS_AT: u32 = EYE_ENTRIES * HEADER_WORDS;
 /// The records all the entries hold, which come before placed decor's.
-pub const SLOT_RECORDS: u32 = EYE_ENTRIES * BRICK_RECORDS;
+pub const SLOT_RECORDS: u32 = EYE_ENTRIES * BRICK_RECORD_CAP;
 pub const PLACED_HEADER: u32 = SLOTS_AT + SLOT_RECORDS * RECORD_WORDS;
 pub const PLACED_HEADER_WORDS: u32 = 4;
 
 /// The runs of records a decor pass's workgroup reads (decor_run.wgsl `run_of`): for an
 /// entry, `RUN` records each; for placed decor, one record each.
-pub const RUNS: u32 = BRICK_RECORDS / RUN;
+pub const RUNS: u32 = BRICK_RECORD_CAP / RUN;
 
 /// Entry `s`'s head.
 pub const fn header_at(s: u32) -> u32 {
@@ -129,7 +129,7 @@ pub fn first_record(rows: &[Row], k: u32) -> u32 {
 /// Entry `s`'s `i`-th record of `rows`' decor `k`, as a record number
 /// (`record_at`).
 pub fn entry_record(rows: &[Row], s: u32, k: u32, i: u32) -> u32 {
-    s * BRICK_RECORDS + first_record(rows, k) + i
+    s * BRICK_RECORD_CAP + first_record(rows, k) + i
 }
 
 /// Record `n`'s first word, numbering the entries' records first, entry by entry, then
@@ -356,14 +356,11 @@ pub mod drawn {
 }
 
 /// What generating decor asks of the world, as either side holds it: of the base, the
-/// ground's alone, its columns' surfaces and the assets around them; of the world as edited, whether an edit holds a cell and what is placed in a
-/// box; and the catalog's rows, where it reads them.
+/// ground's alone, its columns' surfaces and the assets around them; of the world as edited,
+/// whether an edit holds a cell and what is placed in a box.
 pub trait DecorQuery {
     /// A column surface as this side keeps it, from which its assets are asked.
     type ColumnSurface: Copy;
-    /// The catalog's rows (pxl-spec `decor::ROWS`), as this side holds them: a GPU
-    /// reads them from a buffer.
-    fn rows(&self) -> &[Row];
     /// The column surface down column `g` at `cell_zoom` of the base, with what is
     /// placed left out: the query's support (`support::column_surface`) as this side asks it, and
     /// its top (`cast::top`); false where nothing fills there or the world lacks the column.
@@ -662,7 +659,7 @@ pub fn drawn_at(at: Zoom, cell_zoom: Zoom, placed: bool) -> bool {
 /// present, as a ray reads it (`clipmap::step`), or the first where none does. Where a finer
 /// clip level holds no brick, because the bake left an empty page out (open sea), a coarser
 /// clip level's ground is drawn there, and its decor with it.
-pub fn ray_zoom(w: &impl clipmap::Presence, at: Zoom, c: [i32; 2]) -> Zoom {
+pub fn ray_zoom(w: &impl clipmap::BrickSource, at: Zoom, c: [i32; 2]) -> Zoom {
     let z = clipmap::clip_zoom(at);
     let s = LEAF_CELL_ZOOM - z;
     let g = [wrap_idx(z, c[0] >> s), c[1] >> s];
@@ -684,18 +681,6 @@ pub fn placed_pose(decor: &Row, corner: [i32; 3]) -> (u32, u32) {
     let mut draws = SplitMix32::new(node_seed(PLACED_TAG, (UNIT_ZOOM, corner)));
     let variant = variant_of(decor, &mut draws);
     (variant, draws.next_u32() >> (u32::BITS - TURN_BITS))
-}
-
-/// The row of `rows` a stored value names; false for one not decor.
-pub fn row_of(rows: &[Row], val: u32) -> (u32, bool) {
-    let mut k = 0;
-    while k < rows.len() {
-        if rows[k].val == val {
-            return (k as u32, true);
-        }
-        k += 1;
-    }
-    (0, false)
 }
 
 /// How far before a box's min corner, in unit cells, a placed decor's corner may lie with
@@ -745,11 +730,9 @@ pub(crate) fn overlaps_placed(q: &impl DecorQuery, at: [i32; 3], cells: [i32; 3]
         if !more {
             return false;
         }
-        let (k, decor) = row_of(q.rows(), word & 0xffff);
-        if decor {
-            let row = &q.rows()[k as usize];
-            let (variant, turn) = placed_pose(row, c);
-            let [w, e, v] = row.cells(variant, turn);
+        if let Some(decor) = Decor::find(word & 0xffff) {
+            let (variant, turn) = placed_pose(decor.row, c);
+            let [w, e, v] = decor.row.cells(variant, turn);
             let (w, e, v) = (w as i32, e as i32, v as i32);
             if c[0] < at[0] + cells[0]
                 && at[0] < c[0] + w

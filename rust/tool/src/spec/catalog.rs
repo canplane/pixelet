@@ -1,12 +1,10 @@
 // pxl-tool/spec/catalog.rs
 
-//! The catalog: every file reference the asset specs make, a slot each,
-//! numbered in this order. First the cube kind's pack,
-//! then each decor variant's model and skin, then each `file` leaf of
-//! character.json and of sky.json in its document order. The Rust names each
-//! slot; the catalog fills them with the file each names, by its number below
-//! the asset root, and its extent (pxl-spec asset/catalog.rs reads the
-//! layout). The runtime serves it, as hex in TypeScript.
+//! The catalog: every `file` leaf of the asset specs, a slot each, numbered in
+//! document order, spec by spec in `SPECS`' order. The Rust names each slot;
+//! the catalog fills them with the file each names, by its number below the
+//! asset root, and its extent (pxl-spec asset/catalog.rs reads the layout).
+//! The runtime serves it, as hex in TypeScript.
 
 use xpute_tool::spec::data::Run;
 
@@ -22,41 +20,19 @@ pub(crate) const DECOR_JSON: &str = "spec/spec/asset/decor.json";
 const CHARACTER_JSON: &str = "spec/spec/asset/character.json";
 const SKY_JSON: &str = "spec/spec/asset/sky.json";
 
-/// Every slot's path, each spec's run of them in the kinds' order.
+/// The specs whose `file` leaves are slots, in the order they are numbered.
+const SPECS: [&str; 4] = [CUBE_JSON, DECOR_JSON, CHARACTER_JSON, SKY_JSON];
+
+/// Every slot's path, each spec's run of them in `SPECS`' order.
 fn paths() -> Result<Vec<(&'static str, Vec<String>)>, String> {
-    let pack = read(CUBE_JSON)?
-        .get("pack")
-        .map(Node::val)
-        .and_then(Node::str)
-        .map(str::to_string)
-        .ok_or(format!("{CUBE_JSON}: no pack"))?;
-    let mut decor = Vec::new();
-    for (name, d) in read(DECOR_JSON)?
-        .get("decors")
-        .ok_or(format!("{DECOR_JSON}: no decors"))?
-        .entries()
-    {
-        for v in d
-            .get("variants")
-            .and_then(Node::arr)
-            .ok_or(format!("{DECOR_JSON}: {name}.variants"))?
-        {
-            for field in ["model", "skin"] {
-                decor.push(
-                    v.str_at(field)
-                        .ok_or(format!("{DECOR_JSON}: {name}'s variant has no {field}"))?
-                        .to_string(),
-                );
-            }
-        }
-    }
-    let mut out = vec![(CUBE_JSON, vec![pack]), (DECOR_JSON, decor)];
-    for json in [CHARACTER_JSON, SKY_JSON] {
-        let mut paths = Vec::new();
-        leaves(&read(json)?, None, &mut paths);
-        out.push((json, paths));
-    }
-    Ok(out)
+    SPECS
+        .into_iter()
+        .map(|json| {
+            let mut paths = Vec::new();
+            leaves(&read(json)?, None, &mut paths);
+            Ok((json, paths))
+        })
+        .collect()
 }
 
 /// The `file` leaves under `n`, in document order, as data.rs renders them.
@@ -93,8 +69,13 @@ pub(crate) fn run_of(json: &str) -> Result<(u16, u16), String> {
         .ok_or(format!("{json}: no run of the catalog's"))
 }
 
+/// Every slot's path, the slot its place.
+pub(crate) fn slots() -> Result<Vec<String>, String> {
+    Ok(paths()?.into_iter().flat_map(|(_, p)| p).collect())
+}
+
 pub fn outputs() -> Result<Vec<Output>, String> {
-    let slots: Vec<String> = paths()?.into_iter().flat_map(|(_, p)| p).collect();
+    let slots = slots()?;
     let files = files()?;
     let mut bytes = (slots.len() as u32).to_le_bytes().to_vec();
     let mut extents = Vec::with_capacity(slots.len() * 24);
@@ -136,7 +117,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         format!("pub const SLOTS: usize = {};", slots.len()),
         String::new(),
         "/// The cube kind's texture pack (cube.json `pack`).".to_string(),
-        "pub const pack: Slot = Slot(0);".to_string(),
+        format!("pub const pack: Slot = Slot({});", run_of(CUBE_JSON)?.0),
     ])
     .collect::<Vec<_>>();
     Ok(vec![

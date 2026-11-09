@@ -21,7 +21,7 @@ fn eighths(fill: u32) -> u32 {
 
 // The service area's wall, as pxl-spec area.rs states it.
 
-/// The twin of pxl-spec `area::is_wall`, read from `shard`, the shard of the node
+/// The port of pxl-spec `area::is_wall`, read from `shard`, the shard of the node
 /// `(cell_zoom, b)`.
 fn is_wall(shard: u32, cell_zoom: u32, b: vec2<i32>) -> bool {
   let served = shard >> SHARD_SERVED_SHIFT;
@@ -82,7 +82,7 @@ struct Top {
   part: u32,
 }
 
-/// The twin of pxl-spec `ground::top` for a height of `h` leaf cells: the top cell, and the
+/// The port of pxl-spec `ground::top` for a height of `h` leaf cells: the top cell, and the
 /// share of it filled in `FULL`'s units. Coarser than the leaves, the top is the cell the
 /// height ends in where it fills an eighth of that cell or more, and otherwise the whole cell
 /// under it.
@@ -100,7 +100,7 @@ fn top_of(cell_zoom: u32, h: i32) -> Top {
   return Top(cells + 1i, part);
 }
 
-/// The twin of pxl-spec `ground::face_height`: the face of a top `t` cells high, in leaf
+/// The port of pxl-spec `ground::face_height`: the face of a top `t` cells high, in leaf
 /// cells. Finer than the leaves, it is the leaf cell the top's cell lies in, rounded down under
 /// sea level as over it. Coarser, it is the cells scaled.
 fn face_height(cell_zoom: u32, t: i32) -> i32 {

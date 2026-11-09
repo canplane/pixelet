@@ -1,6 +1,6 @@
 // pxl-spec/space/layer/area.rs
 
-//! wgsl-twin: where the world's data ends, and the ground's own rule at that edge
+//! wgsl-port: where the world's data ends, and the ground's own rule at that edge
 //! (pxl-content strata.rs). The service area is the set of shards a source serves. Past it lies
 //! the Earth's ground, as the content gives it (pxl-engine `Content::earth`). Inside it, a leaf
 //! column beside a column past the area is the wall (`is_wall`): bedrock up to the column's own

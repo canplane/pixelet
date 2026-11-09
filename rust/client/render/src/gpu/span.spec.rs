@@ -159,28 +159,26 @@ impl LightChanged {
     }
 }
 
-pub const FRAME_KINDS: usize = 10;
+pub const FRAME_KINDS: usize = 9;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum FrameKind {
     none = 0,
     unready = 1,
-    stream_busy = 2,
-    dropped = 3,
-    plain = 4,
-    still = 5,
-    cast = 6,
-    unchanged = 7,
-    px = 8,
-    masked = 9,
+    dropped = 2,
+    plain = 3,
+    still = 4,
+    cast = 5,
+    unchanged = 6,
+    px = 7,
+    masked = 8,
 }
 
 impl FrameKind {
     /// Every member, in the JSON's own order.
-    pub const ALL: [FrameKind; 10] = [
+    pub const ALL: [FrameKind; 9] = [
         FrameKind::none,
         FrameKind::unready,
-        FrameKind::stream_busy,
         FrameKind::dropped,
         FrameKind::plain,
         FrameKind::still,

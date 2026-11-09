@@ -3,18 +3,27 @@
 use super::*;
 use crate::util::{pack, Level};
 use pxl_spec::bake::publication::BaseLayer;
-use pxl_spec::bake::tile::place::PLACE_LATTICE;
+use pxl_spec::bake::tile::{Occupancy, Tile};
 use pxl_spec::directory;
-use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 
-/// A count, summed up the pyramid, read as `PLACE` says: places' lattice or the ground's.
+/// A count, summed up the pyramid, read as `PLACE` says: as a place tile or a terrain tile.
 #[derive(Clone, PartialEq)]
 struct Count<const PLACE: bool>(u32);
 
-impl<const PLACE: bool> Base for Count<PLACE> {
-    const LAYER: BaseLayer = BaseLayer::place;
-    const LATTICE: Lattice = if PLACE { PLACE_LATTICE } else { GROUND };
+impl<const PLACE: bool> Tile for Count<PLACE> {
+    const LAYER: BaseLayer = if PLACE {
+        BaseLayer::place
+    } else {
+        BaseLayer::terrain
+    };
 
+    fn occupancy(&self) -> Occupancy {
+        Occupancy::of_slots([true; 4])
+    }
+}
+
+impl<const PLACE: bool> Base for Count<PLACE> {
     fn encode(&self, _: Quadrant) -> Result<Vec<u8>, String> {
         Ok(self.0.to_le_bytes().to_vec())
     }
@@ -33,10 +42,6 @@ impl<const PLACE: bool> Base for Count<PLACE> {
                 .map(|c| c.0)
                 .sum(),
         ))
-    }
-
-    fn occupancy(&self) -> Occupancy {
-        Occupancy::of_slots([true; 4])
     }
 }
 
@@ -91,10 +96,15 @@ fn fold_to_coarsest() {
 #[derive(Clone, PartialEq)]
 struct Unencodable(u32);
 
-impl Base for Unencodable {
+impl Tile for Unencodable {
     const LAYER: BaseLayer = BaseLayer::place;
-    const LATTICE: Lattice = PLACE_LATTICE;
 
+    fn occupancy(&self) -> Occupancy {
+        Occupancy::of_slots([true; 4])
+    }
+}
+
+impl Base for Unencodable {
     fn encode(&self, at: Quadrant) -> Result<Vec<u8>, String> {
         Err(format!("tile {} size 9 > 1", at.key()))
     }
@@ -113,10 +123,6 @@ impl Base for Unencodable {
                 .map(|c| c.0)
                 .sum(),
         ))
-    }
-
-    fn occupancy(&self) -> Occupancy {
-        Occupancy::of_slots([true; 4])
     }
 }
 

@@ -211,6 +211,18 @@ judges what it struck by the zoom the eye's rays draw there
 (`domain/control/edit/pick.rs` `Pick`, `by_dist`), since an edit takes only
 whole cells and a folded cell is a summary.
 
+Decor is part of that answer on the CPU alone, since the GPU draws it as models
+and its rays never ask for it. A leaf cell the layers leave void is the decor
+whose box claims it, grown or placed (`pxl-core domain/query/decor.rs`), and
+each asker decides by what the asset is: a body is not stopped by a decor
+(`pxl-spec asset/id.rs` `blocks_body`), while what an eye sees and the pointer
+strikes include one. Nothing is searched for along a ray, so a ray over a forest
+must still pass the sky whole. A node is split for decor only where one can
+reach it. What the ground grows stands on the columns its box covers, so it lies
+within a decor's height of the node's own ground, and only where the counts of
+trees say one may stand; what is placed is found in the objects' tree around the
+node.
+
 ### Honest answers, bounded holding
 
 An answer always says what it lacked: it is exact, or coarser along with the

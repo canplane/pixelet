@@ -12,8 +12,8 @@
 use crate::answer;
 use crate::clipmap;
 use crate::clipmap::{
-    column_top, BrickSource, Presence, BOUNDS_AT, BOUND_ENTRY_WORDS, COLUMNS_AT, OWN_AT, OWN_CELLS,
-    ROOT_AT, RUN_BITS_AT, RUN_OFFS_AT, RUN_RANK_AT, SPANS_ACROSS, SPANS_AT, SPANS_COLUMNS,
+    column_top, BrickSource, BOUNDS_AT, BOUND_ENTRY_WORDS, COLUMNS_AT, OWN_AT, OWN_CELLS, ROOT_AT,
+    RUN_BITS_AT, RUN_OFFS_AT, RUN_RANK_AT, SPANS_ACROSS, SPANS_AT, SPANS_COLUMNS,
     SPANS_COLUMN_WORDS,
 };
 use crate::{at, ground, way};
@@ -63,13 +63,10 @@ pub struct LoneBrick<'a> {
     pub base: u32,
 }
 
-impl Presence for LoneBrick<'_> {
+impl BrickSource for LoneBrick<'_> {
     fn present(&self, _: u32, _: [i32; 2]) -> (u32, bool) {
         (0, true)
     }
-}
-
-impl BrickSource for LoneBrick<'_> {
     /// A brick on its own belongs to no clip level.
     fn brick(&self, _: u32, _: u32) -> ([i32; 2], bool) {
         ([0; 2], false)

@@ -23,16 +23,17 @@
 use pxl_spec::space::coord::zoom::{
     base_of, cube, units, y_start, z_start, Zoom, CUBE_ZOOM, SHARD_ZOOM,
 };
+use pxl_spec::value;
 use xpute_core::global::Global;
 
 use crate::domain::layer::object::asset::Asset;
-use pxl_spec::asset::{cube, AssetId};
+use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::world::{node_near, wrap_cell};
 use pxl_spec::space::hierarchy::morton::node_of;
-use pxl_spec::space::hierarchy::tree::{child_idx, region, Node};
+use pxl_spec::space::hierarchy::tree::{region, Node};
 use pxl_spec::space::layer::octant::Octant;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -152,10 +153,6 @@ pub fn objects() -> ObjectTable<'static> {
     }
 }
 
-pub const VOID: AssetId = cube::sentinel::void as u32;
-pub const AIR: AssetId = cube::object::air as u32;
-const _: () = assert!(VOID == 0);
-
 /// What a leaf of the tree holds: its catalog value and its record's handle.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(in crate::domain::layer) struct Leaf {
@@ -164,7 +161,7 @@ pub(in crate::domain::layer) struct Leaf {
 }
 
 pub(super) const EMPTY: Leaf = Leaf {
-    id: VOID as u16,
+    id: value::VOID as u16,
     ext: NONE,
 };
 
@@ -198,20 +195,6 @@ impl object::Table for Table<'_> {
     fn data(&self, slot: u32) -> u32 {
         self.0.data()[slot as usize]
     }
-}
-
-/// The position of node `at` of `zoom` in the tree's own order, the order in
-/// which a walk from the root enters nodes (`descend`). The key is the node's
-/// child index at each zoom (`child_idx`) from the root down, so of two
-/// nodes where neither is under the other, the one entered first has the
-/// smaller key.
-pub(in crate::domain::layer) fn tree_key(zoom: Zoom, at: [i32; 3]) -> u128 {
-    let p = path(zoom, at);
-    let mut key = 0u128;
-    for l in 0..=zoom {
-        key = key << 3 | child_idx(p.map(|v| v >> (zoom - l))) as u128;
-    }
-    key << (3 * (OBJECT_FINEST - zoom))
 }
 
 /// One leaf written, as `<key, id, ext>`: its node's key, its catalog value
@@ -289,7 +272,7 @@ impl Store {
     /// in the frame around X = `about`. It goes under a node only where
     /// `enter` says so.
     fn descend(&self, about: f64, enter: &mut Enter) {
-        self.walk(self.cursor((0, [0; 3]), 0), 0, [0; 3], about, enter);
+        self.walk(self.cursor((0, [0; 3])), 0, [0; 3], about, enter);
     }
 
     /// `descend` from node `at` of `zoom`, whose slot is `slot`, taking the
@@ -306,7 +289,7 @@ impl Store {
         for k in 0..8 {
             let child = wrap_cell(zoom + 1, object::child_at(zoom, at, k));
             self.walk(
-                self.child(&slot, (zoom + 1, child), zoom + 1),
+                self.child(&slot, (zoom + 1, child)),
                 zoom + 1,
                 child,
                 about,
@@ -400,7 +383,7 @@ impl Store {
     /// record is never split, and finding one stops the core.
     fn release(&mut self, zoom: Zoom, at: [i32; 3]) {
         let mut freed = Vec::new();
-        let slot = self.cursor((zoom, at), zoom);
+        let slot = self.cursor((zoom, at));
         if slot.holds() && !slot.is_folded() {
             let z = slot.zoom();
             xpute_kit::ensure!(
@@ -443,7 +426,7 @@ impl Store {
     /// Returns the shard's cube when it changed.
     pub(crate) fn clear_fold(&mut self, [x, y]: [i32; 2]) -> Option<Aabb> {
         let at = [x, y, 0];
-        let slot = self.cursor((SHARD_ZOOM, at), SHARD_ZOOM);
+        let slot = self.cursor((SHARD_ZOOM, at));
         if !slot.is_folded() || slot.zoom() != SHARD_ZOOM {
             return None;
         }
@@ -467,7 +450,7 @@ impl Store {
     #[cfg(test)]
     pub(in crate::domain::layer) fn word_at(&self, [x, y]: [i32; 2]) -> Option<u32> {
         let at = [x, y, 0];
-        let slot = self.cursor((SHARD_ZOOM, at), SHARD_ZOOM);
+        let slot = self.cursor((SHARD_ZOOM, at));
         (slot.holds() && slot.zoom() == SHARD_ZOOM).then(|| self.tree.data()[slot.slot() as usize])
     }
 
@@ -496,30 +479,6 @@ impl Entry {
 
 fn about(b: &Aabb) -> f64 {
     (b.min[0] + b.max[0]) / 2.0
-}
-
-/// The leaves of one node, as the query reads them. What the node holds
-/// folded is read through the cursor instead (`Store::cursor`).
-#[derive(Clone, Copy)]
-pub(in crate::domain::layer) struct NodeView<'a> {
-    store: &'a Store,
-    node: Node<3>,
-}
-
-impl NodeView<'_> {
-    #[cfg(test)]
-    /// Every leaf inside the node, or the one over it.
-    pub fn entries(&self, visit: &mut dyn FnMut(&Entry)) {
-        let (zoom, at) = self.node;
-        self.store
-            .each_in(zoom, at, self.store.cursor(self.node, zoom), visit);
-    }
-
-    pub fn entry(&self) -> Option<Entry> {
-        let (zoom, at) = self.node;
-        self.store
-            .entry_at(zoom, at, self.store.cursor(self.node, zoom))
-    }
 }
 
 /// What a walk over columns carries from one column to the next
@@ -555,36 +514,18 @@ impl Walk {
 impl Store {
     /// The cursor of `node` asked alone, the slot that holds a cube, handed
     /// down from its parent (pxl-engine `object`). It equals what a descent
-    /// from the top would carry to `node`. A node over the ground's two axes,
-    /// a column, carries no slot of its own; it is read by walking under it
-    /// (`column`).
-    pub(in crate::domain::layer) fn cursor<const D: usize>(
-        &self,
-        (zoom, at): Node<D>,
-        _: Zoom,
-    ) -> NodeSlot {
-        match D {
-            3 => object::cursor(&self.columns(), object::ROOT, zoom, [at[0], at[1], at[2]]),
-            _ => NodeSlot::branch(0, zoom),
-        }
+    /// from the top would carry to `node`.
+    pub(in crate::domain::layer) fn cursor(&self, (zoom, at): Node<3>) -> NodeSlot {
+        object::cursor(&self.columns(), object::ROOT, zoom, at)
     }
 
     /// A child's cursor from its parent's; `node` is the child.
-    pub(in crate::domain::layer) fn child<const D: usize>(
+    pub(in crate::domain::layer) fn child(
         &self,
         parent: &NodeSlot,
-        (zoom, at): Node<D>,
-        _: Zoom,
+        (zoom, at): Node<3>,
     ) -> NodeSlot {
-        match D {
-            3 => object::child(
-                &self.columns(),
-                *parent,
-                zoom,
-                path(zoom, [at[0], at[1], at[2]]),
-            ),
-            _ => *parent,
-        }
+        object::child(&self.columns(), *parent, zoom, path(zoom, at))
     }
 
     pub(in crate::domain::layer) fn columns(&self) -> Table<'_> {
@@ -603,37 +544,6 @@ impl Store {
             }
             true
         });
-    }
-
-    /// `entries_in`, starting from the nodes in `from` instead of the root.
-    /// Each node comes with the slot a descent found for it
-    /// (`object::NodeSlot`). No node may be under another, and `query` must
-    /// lie within them. Each is walked from its slot, so when `from` is in
-    /// the tree's own order (`tree_key`), the leaves found and their order
-    /// equal those of a walk from the root.
-    pub(in crate::domain::layer) fn entries_under(
-        &self,
-        from: &[(Node<3>, NodeSlot)],
-        query: &Aabb,
-        visit: &mut dyn FnMut(&Entry),
-    ) {
-        let about = about(query);
-        for &((zoom, at), slot) in from {
-            if !slot.holds() {
-                continue;
-            }
-            let z = slot.zoom();
-            let at = wrap_cell(z, object::ancestor_at(zoom, at, zoom - z));
-            self.walk(slot, z, at, about, &mut |zoom, at, whole, leaf| {
-                if whole.meet(*query).is_none() {
-                    return false;
-                }
-                if let Some(v) = leaf {
-                    visit(&Entry::of(zoom, at, v));
-                }
-                true
-            });
-        }
     }
 
     /// The leaf placed at exactly node `at` of `zoom`, if any, read from the
@@ -701,7 +611,7 @@ impl Store {
             };
             match k.checked_sub(1) {
                 None => {
-                    visit(&mut walk.slots, [0; 3], self.cursor((0, [0; 3]), 0));
+                    visit(&mut walk.slots, [0; 3], self.cursor((0, [0; 3])));
                 }
                 Some(o) => {
                     for i in walk.start(o)..walk.at[o].end {
@@ -709,11 +619,7 @@ impl Store {
                         let z = 2 * (at[2] + z_start(k as Zoom - 1)) - z_start(k as Zoom);
                         let y = c[1] - y_start(k as Zoom);
                         for child in [z, z + 1].map(|z| [c[0], y, z]) {
-                            visit(
-                                &mut walk.slots,
-                                child,
-                                self.child(&h, (k as Zoom, child), k as Zoom),
-                            );
+                            visit(&mut walk.slots, child, self.child(&h, (k as Zoom, child)));
                         }
                     }
                 }
@@ -734,11 +640,6 @@ impl Store {
             max: [whole.max[0], whole.max[1], z[1]],
         };
         placed.meet(whole)
-    }
-
-    /// What is placed in `node`, read in place; the whole store is resident.
-    pub(in crate::domain::layer) fn read(&self, node: Node<3>) -> NodeView<'_> {
-        NodeView { store: self, node }
     }
 }
 

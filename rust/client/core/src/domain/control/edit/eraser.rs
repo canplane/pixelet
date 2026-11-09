@@ -11,19 +11,23 @@ use pxl_spec::space::layer::octant::Octant;
 
 use crate::domain::control::edit::ghost::{at_corner, carved_cube, decor_of, prop};
 use crate::domain::control::edit::write::{place_air, remove, Preview};
-use crate::domain::control::edit::{Hover, Target};
+use crate::domain::control::edit::Hover;
 use crate::domain::preview::{Ghost, RenderEdit};
 
 pub(super) fn tap(hover: &Hover) {
     let Some(h) = hover.coord else {
         return;
     };
-    match hover.target {
-        Some(Target::Object(at)) => remove(at),
-        Some(Target::Prop(cell, _)) => place_air(Octant::new(GROUND.leaf_cell_zoom(), cell)),
-        // Terrain has no entry to delete, so the eraser writes AIR over it
-        // rather than VOID. It writes a whole leaf cell, never the size tier.
-        None => place_air(Octant::holding(GROUND.leaf_cell_zoom(), &h)),
+    // Where nothing was struck it takes a whole leaf cell of the ground,
+    // never the size tier.
+    let at = hover
+        .target
+        .map_or(Octant::holding(GROUND.leaf_cell_zoom(), &h), |t| t.at);
+    // Only what is placed has an entry to take. Over what the base holds,
+    // AIR hides it, and a marker sharing a generated decor's cell goes with it.
+    match hover.object().0 {
+        Some(_) => remove(at),
+        None => place_air(at),
     }
 }
 

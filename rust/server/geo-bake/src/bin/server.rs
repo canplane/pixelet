@@ -21,7 +21,7 @@ use pxl_geo_bake::cli::Argv;
 use pxl_geo_bake::coverage::Coverage;
 use pxl_geo_bake::oven::{
     job::{self, Limit},
-    Failure, Kind, Server,
+    Failure, Server,
 };
 use pxl_geo_bake::pyramid;
 use pxl_geo_bake::source::{self, OverrideMap};
@@ -159,22 +159,21 @@ async fn tile(
     };
     // Only what is served now is answered, so nothing is kept under a version that named other
     // bytes.
-    let layer = BaseLayer::ALL.into_iter().find(|l| l.name() == kind);
-    if layer.is_none_or(|l| version_of(&app, l).ok().as_deref() != Some(version)) {
+    let Some(layer) = BaseLayer::ALL.into_iter().find(|l| l.name() == kind) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    if version_of(&app, layer).ok().as_deref() != Some(version) {
         return StatusCode::NOT_FOUND.into_response();
     }
     let name = name.to_string();
-    if kind == EARTH {
+    if !is_sharded(layer) {
         return earth(&app, &name).await;
     }
-    let Some(kind) = Kind::parse(&kind) else {
-        return StatusCode::NOT_FOUND.into_response();
-    };
     let oven = match &app.tile_source {
         TileSource::Oven(oven) => oven,
-        TileSource::Shelf(dir) => return from_shelf(dir, kind, &name).await,
+        TileSource::Shelf(dir) => return from_shelf(dir, layer, &name).await,
     };
-    match oven.get(kind, &name).await {
+    match oven.get(layer, &name).await {
         Ok(Some(bytes)) => tile_response(bytes),
         Ok(None) => StatusCode::NO_CONTENT.into_response(),
         Err(Failure::BadName) => (StatusCode::BAD_REQUEST, "bad tile name").into_response(),
@@ -189,7 +188,7 @@ async fn tile(
     }
 }
 
-async fn from_shelf(dir: &std::path::Path, kind: Kind, name: &str) -> Response {
+async fn from_shelf(dir: &std::path::Path, kind: BaseLayer, name: &str) -> Response {
     // Only a tile's name reaches the disk; a set's tiles lie flat under them.
     if Quadrant::of_key(name).is_none() {
         return StatusCode::NOT_FOUND.into_response();

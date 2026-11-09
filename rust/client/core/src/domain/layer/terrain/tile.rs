@@ -11,7 +11,6 @@
 //! at the source's top, such a tile is void.
 
 use pxl_spec::bake::tile::terrain::{decode_into, TerrainTile, ELE_COLUMN};
-use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::domain::layer::terrain::clipmap;
@@ -22,7 +21,6 @@ use crate::sys::io::body::Packet;
 use crate::sys::io::demand::{PhaseList, Stream, TaskPhaseName};
 use crate::sys::io::failure::Exit;
 use crate::sys::io::request;
-use pxl_spec::bake::tile::Occupancy;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
 use xpute_core::mem::range::arr;
@@ -30,14 +28,8 @@ use xpute_core::mem::range::arr;
 static TERRAIN: Global<TileCache<TerrainTile>> = Global::new();
 
 impl Base for TerrainTile {
-    const STREAM: Stream = Stream::terrain;
-    const LATTICE: Lattice = GROUND;
     /// The tiles of the clip levels around the pivot and a destination.
     const PIN_CAP: u32 = clipmap::PINNED_TILES;
-
-    fn occupancy(&self) -> Occupancy {
-        self.occupancy
-    }
 
     fn tile_cache() -> &'static mut TileCache<TerrainTile> {
         TERRAIN.get(TileCache::default)

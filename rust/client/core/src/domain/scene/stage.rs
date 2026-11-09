@@ -66,7 +66,7 @@ use crate::domain::view::frame::screen;
 use crate::domain::view::observation;
 use crate::sys::io::loader;
 use pxl_render::gpu::api;
-use pxl_spec::asset::catalog::pack;
+use pxl_spec::asset::catalog::{model_extent, pack};
 use pxl_spec::asset::decor;
 use pxl_spec::asset::sky::moon;
 
@@ -104,9 +104,7 @@ pub fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
     let mut decor = [(0u32, None, [0.0f32; 3]); DECOR_GROUPS];
     for d in &decor::DECORS {
         for (v, variant) in d.variants.iter().enumerate() {
-            let extent = catalog()
-                .map_or([0.0; 3], |c| c.extent(variant.model))
-                .map(|e| e as f32);
+            let extent = model_extent(catalog(), variant.model).map(|e| e as f32);
             let mesh = decor_model(d, v)
                 .and_then(|m| models.mesh(m))
                 .map_or(0, |m| m.handle);

@@ -1,6 +1,6 @@
 // pxl-content/strata.rs
 
-//! wgsl-twin: the ground's strata by depth under a column's face, after Minecraft Beta's
+//! wgsl-port: the ground's strata by depth under a column's face, after Minecraft Beta's
 //! `replaceBlocksForBiome`: the face's look on top, a filler of soil, sand or water,
 //! sandstone under sand, and stone under all, down to the bedrock. It also says how high a
 //! cube may reach above the face, and what the Earth's ground is past the service area.
@@ -16,9 +16,10 @@
 //! by the rule the wall is laid by (pxl-core domain/query/limit.rs `within`, `editable`).
 
 use pxl_engine::ground::rock;
-use pxl_spec::ground::{face_height, leaf_cells, UNKNOWN, VOID};
+use pxl_spec::ground::{face_height, leaf_cells, UNKNOWN};
 use pxl_spec::space::coord::world::SEA_LEVEL;
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
+use pxl_spec::value::VOID;
 
 use crate::param::strata::{BEDROCK_DEPTH, FILLER_DEPTH, HEADROOM, SANDSTONE_DEPTH};
 use crate::Pixelet;

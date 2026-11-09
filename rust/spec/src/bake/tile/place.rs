@@ -13,7 +13,8 @@ use fnv::FnvHashSet;
 
 use crate::asset::marker::MARK_STEPS;
 use crate::bake::place_theme::{CATEGORIES, DOT_ZOOM, ICON_ZOOM, SYMBOL};
-use crate::bake::tile::{occupancy_of, Occupancy, StringTable};
+use crate::bake::publication::BaseLayer;
+use crate::bake::tile::{occupancy_of, Occupancy, StringTable, Tile};
 use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::{Zoom, LEAF_ZOOM};
 use crate::space::layer::quadrant::Quadrant;
@@ -110,6 +111,14 @@ pub struct SourcePlace<'a> {
     pub name: &'a str,
     pub kind: u16,
     pub id: &'a str,
+}
+
+impl Tile for PlaceTile {
+    const LAYER: BaseLayer = BaseLayer::place;
+
+    fn occupancy(&self) -> Occupancy {
+        self.occupancy
+    }
 }
 
 /// One place of a tile, read from its columns: what a source gave, the zoom

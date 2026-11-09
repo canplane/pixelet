@@ -12,9 +12,7 @@ import { read_asset } from "@/service/sys/fs/asset.ts";
 import { OBJECTS } from "@/service/sys/fs/object.ts";
 import { source_decl } from "@/service/sys/fs/source.ts";
 import { commit_storage, open_storage } from "@/service/sys/fs/storage.ts";
-import { fetcher_of } from "@/service/sys/fs/read.ts";
-import { object_url, read_object } from "@/service/sys/fs/tile.ts";
-import { native_fetch } from "@/service/platform/file.ts";
+import { read_object } from "@/service/sys/fs/tile.ts";
 
 export function namespace(): Namespace {
   const bindings: [u32, Binding][] = [
@@ -22,7 +20,6 @@ export function namespace(): Namespace {
       bake,
       {
         open: (name, signal) => read_object(source_decl()!, bake, name, signal),
-        url: (name) => object_url(source_decl()!, bake, name),
       },
     ]),
     [root.ASSET, { open: read_asset }],
@@ -41,5 +38,5 @@ export function namespace(): Namespace {
       },
     ],
   ];
-  return new Namespace(bindings, native_fetch && fetcher_of(native_fetch));
+  return new Namespace(bindings);
 }

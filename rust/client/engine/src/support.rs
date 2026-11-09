@@ -1,6 +1,6 @@
 // pxl-engine/support.rs
 
-//! wgsl-twin: where something stands, asked of the world's one query (pxl-core
+//! wgsl-port: where something stands, asked of the world's one query (pxl-core
 //! domain/query/support.rs, a walker's support). A column's surface is the first cell that a
 //! ray down the column from the world's top cannot see through at a given cell zoom, with its
 //! top as drawn (`column_surface`). The module also holds the query's cursor
@@ -153,7 +153,7 @@ pub fn asset<Q: Query>(q: &mut Q, l: &Line<Q::At>, zoom: Zoom, c: [i32; 3]) -> u
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::answer::{fill_word, In, Kind, AIR, BOX_WHOLE};
+    use crate::answer::{fill_word, In, Kind, BOX_WHOLE, EMPTY};
     use crate::content::Sample;
     use pxl_spec::share::EIGHTHS;
     use pxl_spec::space::coord::zoom::{SHARD_ZOOM, UNIT_ZOOM};
@@ -202,7 +202,7 @@ mod tests {
                 } else {
                     In {
                         kind: Kind::Cell,
-                        asset: AIR,
+                        asset: EMPTY,
                     }
                 };
             }
@@ -211,7 +211,7 @@ mod tests {
                 asset: if node[2] < height(node[0]) {
                     STONE
                 } else {
-                    AIR
+                    EMPTY
                 },
             }
         }
@@ -227,7 +227,7 @@ mod tests {
         for x in 2..10 {
             for y in 0..7 {
                 for z in -2..4 {
-                    let want = if z < height(x) { STONE[0] } else { AIR[0] };
+                    let want = if z < height(x) { STONE[0] } else { EMPTY[0] };
                     let c = [x, y, z];
                     assert_eq!(asset(&mut Step, &f.line, UNIT_ZOOM, c), want, "{c:?}");
                 }
@@ -282,7 +282,7 @@ mod tests {
                 return if zoom > SHARD_ZOOM && node[2] << (UNIT_ZOOM - zoom) > self.top {
                     In {
                         kind: Kind::Cell,
-                        asset: AIR,
+                        asset: EMPTY,
                     }
                 } else {
                     In {
@@ -297,7 +297,7 @@ mod tests {
                 asset: match node[2].cmp(&self.top) {
                     core::cmp::Ordering::Less => STONE,
                     core::cmp::Ordering::Equal => top,
-                    core::cmp::Ordering::Greater => AIR,
+                    core::cmp::Ordering::Greater => EMPTY,
                 },
             }
         }
@@ -406,7 +406,7 @@ mod tests {
         for x in 1..6 {
             for y in 0..5 {
                 for z in -1..4 {
-                    let want = if z < height(x) { STONE[0] } else { AIR[0] };
+                    let want = if z < height(x) { STONE[0] } else { EMPTY[0] };
                     let c = [x, y, z];
                     assert_eq!(asset(&mut Step, &l, UNIT_ZOOM, c), want, "{c:?}");
                 }

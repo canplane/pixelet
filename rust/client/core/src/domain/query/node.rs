@@ -45,22 +45,25 @@
 //! A source that does not hold the node answers that it lacks it, never air
 //! and never that nothing fills.
 
+use crate::domain::layer::Base as _;
 use pxl_content::Pixelet;
 use pxl_engine::answer::{In, Kind};
 use pxl_engine::clipmap::{self, Lookup};
 use pxl_engine::ground::{self, Cell};
 use pxl_engine::object::{child_at, Cut};
 use pxl_engine::world;
-use pxl_spec::ground::VOID;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::zoom::{units, Zoom, MIN_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::area::{Area, Shard};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::Quadrant;
+use pxl_spec::value::VOID;
 
 use super::change;
+use super::decor::report_claims;
 use super::world::World;
-use crate::domain::layer::terrain::clipmap::CpuClipmap;
+use crate::domain::layer::terrain::clipmap::clip_read;
 use crate::domain::layer::terrain::pool::way_pool;
 use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::Answer;
@@ -81,7 +84,12 @@ pub(super) struct At {
     pub(super) inheritance: world::Inheritance,
 }
 
-impl World<'_> {
+/// What a reader asks of the world at a node: its answer with the decor
+/// standing in it (`World::node`), or, under decor's generation, what the
+/// layers compose under the decor (`World::layer_node`).
+pub(super) type NodeFn = fn(&World, &mut At, [Zoom; 2], &mut Path) -> Answer<In<[u32; 2]>>;
+
+impl World {
     /// The object store's revision, which every write moves
     /// (domain/layer/object/store.rs). Equal revisions mean the same things
     /// are placed.
@@ -90,10 +98,11 @@ impl World<'_> {
     }
 
     /// What is in the cell `node` at its own zoom, which is `coarsest` or
-    /// finer, for an asker with nothing handed down (`asset_at`). X is on the
-    /// asker's lap.
+    /// finer, for an asker with nothing handed down (`asset_at`), the decor
+    /// standing in it included. X is on the asker's lap.
     pub fn asset(&self, node: Node<3>) -> Answer<u32> {
-        self.asset_at(&mut self.start(node), &mut Path::default())
+        report_claims(node);
+        self.asset_at(World::node, node)
     }
 
     /// `node` with nothing handed down, as a descent's root is. Each source
@@ -105,18 +114,24 @@ impl World<'_> {
         }
     }
 
-    /// What is in `at`'s cell at its own zoom, which is `coarsest` or finer:
-    /// what fills it (`node`, asked at that zoom), or void where it is air or
-    /// void. `path` are the ground's lines the asker read, and the cell's
-    /// line steps on from them (`node`). The cell's column is reported as
-    /// read (`change::report_read`).
-    pub(super) fn asset_at(&self, at: &mut At, path: &mut Path) -> Answer<u32> {
-        let (zoom, c) = at.node;
+    /// What is in the cell `node` at its own zoom, which is `coarsest` or
+    /// finer, for an asker with nothing handed down: what `ask` answers fills
+    /// it, asked at that zoom, or void where it is air or void. Each source
+    /// finds what it needs down the node's line from the top. The cell's
+    /// column is reported as read (`change::report_read`).
+    pub(super) fn asset_at(&self, node_fn: NodeFn, node: Node<3>) -> Answer<u32> {
+        let (zoom, c) = node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
         let side = units(zoom);
         let middle = [c[0], c[1]].map(|v| (f64::from(v) + 0.5) * side);
         change::report_read(middle, middle, zoom);
-        self.node(at, [zoom, zoom], path).map(|i| {
+        node_fn(
+            self,
+            &mut self.start(node),
+            [zoom, zoom],
+            &mut Path::default(),
+        )
+        .map(|i| {
             if i.kind == Kind::Cell {
                 i.asset[0]
             } else {
@@ -137,10 +152,38 @@ impl World<'_> {
     }
 
     /// What is in `at`'s node, asked over `zooms`, the zooms from far to
-    /// near that a reader asks within it. This is the world's one query
-    /// (pxl-engine `world::node`). The ground is read as the GPU reads it,
-    /// off the clip levels (`CpuClipmap`), down the node's line through the
-    /// tile cache (`GroundRead`).
+    /// near that a reader asks within it: this is the world's one query. What
+    /// the layers compose (`layer_node`), with the decor standing in it
+    /// (`with_decor`), which only the CPU answers. So a tree the ground grew
+    /// and a tree someone planted are one thing to whatever asks, each asker
+    /// deciding by what the asset is (pxl-spec `id::solid`).
+    pub(super) fn node(
+        &self,
+        at: &mut At,
+        zooms: [Zoom; 2],
+        path: &mut Path,
+    ) -> Answer<In<[u32; 2]>> {
+        let (answer, relief) = self.layers(at, zooms, path);
+        answer.map(|i| self.with_decor(at, zooms[1], relief, i))
+    }
+
+    /// What the layers compose in `at`'s node (`layers`), under the decor
+    /// standing in it: what decor's own generation stands on and asks
+    /// (domain/query/scatter.rs).
+    pub(super) fn layer_node(
+        &self,
+        at: &mut At,
+        zooms: [Zoom; 2],
+        path: &mut Path,
+    ) -> Answer<In<[u32; 2]>> {
+        self.layers(at, zooms, path).0
+    }
+
+    /// What the layers answer of `at`'s node, asked over `zooms` (pxl-engine
+    /// `world::node`), and the ground's bound they read over it, none where
+    /// no bound was read. The ground is read as the GPU reads it, off the
+    /// clip levels (`clip_read`), down the node's line through the tile cache
+    /// (`GroundRead`).
     ///
     /// The answer (pxl-engine `answer`) is one of three: a split, with its
     /// box in its own steps; the asset of a cell at the zoom asked, void for
@@ -149,17 +192,17 @@ impl World<'_> {
     /// The four palette indices a cell is drawn by are left to the GPU.
     /// `path` are the ground's lines the asking walk read, and the node's
     /// line steps on from them (`walk_line`).
-    pub(super) fn node(
+    fn layers(
         &self,
         at: &mut At,
         zooms: [Zoom; 2],
         path: &mut Path,
-    ) -> Answer<In<[u32; 2]>> {
+    ) -> (Answer<In<[u32; 2]>>, Option<ground::Extent>) {
         let lanes = self.object.columns();
-        let mut reading = GroundRead::new(self, path);
+        let mut reading = GroundRead::new(path);
         let i = world::node(
             &mut reading,
-            &CpuClipmap,
+            &clip_read(),
             &lanes,
             way_pool(),
             &mut at.inheritance,
@@ -167,28 +210,29 @@ impl World<'_> {
             zooms,
             [Cut::NONE; 2],
         );
-        reading.answer(i.kind != Kind::Lacks, || i)
+        (reading.answer(i.kind != Kind::Lacks, || i), reading.relief)
     }
 }
 
 /// The ground as a node's reading holds it (pxl-engine `ground::Resident`):
 /// the world's tile cache down the node's line, the lines its walk read, and
 /// the first tile the reading found missing (`missing`) or held only through
-/// a coarser tile standing in for it (`coarser`).
-struct GroundRead<'r, 'a> {
-    world: &'r World<'a>,
+/// a coarser tile standing in for it (`coarser`), and the bound it read over
+/// the node (`relief`).
+struct GroundRead<'r> {
     path: &'r mut Path,
     missing: Option<Quadrant>,
     coarser: Option<Quadrant>,
+    relief: Option<ground::Extent>,
 }
 
-impl<'r, 'a> GroundRead<'r, 'a> {
-    fn new(world: &'r World<'a>, path: &'r mut Path) -> GroundRead<'r, 'a> {
+impl<'r> GroundRead<'r> {
+    fn new(path: &'r mut Path) -> GroundRead<'r> {
         GroundRead {
-            world,
             path,
             missing: None,
             coarser: None,
+            relief: None,
         }
     }
 
@@ -219,7 +263,7 @@ impl<'r, 'a> GroundRead<'r, 'a> {
     }
 }
 
-impl Area for GroundRead<'_, '_> {
+impl Area for GroundRead<'_> {
     fn ends(&self) -> bool {
         source::ServiceArea.ends()
     }
@@ -228,7 +272,7 @@ impl Area for GroundRead<'_, '_> {
     }
 }
 
-impl ground::Resident for GroundRead<'_, '_> {
+impl ground::Resident for GroundRead<'_> {
     type Content = Pixelet;
     /// The bound over the node of its cells at the zooms `cells`, off the
     /// clip levels, stepped from `place` (pxl-engine
@@ -241,24 +285,19 @@ impl ground::Resident for GroundRead<'_, '_> {
         cells: [Zoom; 2],
         (zoom, c): (Zoom, [i32; 3]),
     ) -> (ground::Extent, bool) {
-        let line = self
-            .world
-            .terrain
-            .walk_line(self.path, (zoom, [c[0], c[1]]), cells[1]);
-        match self.take(
-            self.world
-                .terrain
-                .relief(&line, place, (zoom, [c[0], c[1]]), cells),
-        ) {
-            Some(r) => (r, true),
-            None => ([ground::EMPTY; 2], false),
-        }
+        let line = TerrainTile::tile_cache().walk_line(self.path, (zoom, [c[0], c[1]]), cells[1]);
+        self.relief =
+            self.take(TerrainTile::tile_cache().relief(&line, place, (zoom, [c[0], c[1]]), cells));
+        (
+            self.relief.unwrap_or([ground::EMPTY; 2]),
+            self.relief.is_some(),
+        )
     }
 
     /// The cell's column off the clip levels as the GPU reads it (pxl-engine
     /// `clipmap::ground`), or the wall where the column is the wall. The
     /// lookup steps on from where the node's relief found its cells.
     fn cell(&mut self, shard: Shard, place: Lookup, zoom: Zoom, c: [i32; 3]) -> Cell {
-        clipmap::ground(&CpuClipmap, shard, place, zoom, [c[0], c[1]]).0
+        clipmap::ground(&clip_read(), shard, place, zoom, [c[0], c[1]]).0
     }
 }

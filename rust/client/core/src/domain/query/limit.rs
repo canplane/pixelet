@@ -8,7 +8,9 @@
 //! camera is not a walker and asks none of them (query/support.rs
 //! `step_slide`). The UI is told whether the pivot is past the area (`past`).
 
+use crate::domain::layer::Base as _;
 use pxl_content::strata::{bedrock, ceiling};
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::world::{point, wrap_idx};
 use pxl_spec::space::coord::zoom::{units, LEAF_ZOOM};
@@ -22,7 +24,7 @@ use crate::sys::io::source;
 use pxl_engine::clipmap::Lookup;
 use pxl_spec::space::coord::q3::{self, Q3};
 
-impl World<'_> {
+impl World {
     /// Whether the leaf column under `at` lies in the service area and is
     /// not the wall at its edge (pxl-spec `area::is_wall`). The answer is
     /// known before any of the column's ground arrives: it comes from the
@@ -81,10 +83,13 @@ impl World<'_> {
         nodes(1).all(|y| {
             nodes(0).all(|x| {
                 let node = (zoom, [wrap_idx(zoom, x), y]);
-                let (line, mut place) = (self.terrain.cursor(node, cell_zoom), Lookup::NONE);
+                let (line, mut place) = (
+                    TerrainTile::tile_cache().cursor(node, cell_zoom),
+                    Lookup::NONE,
+                );
                 // `lo` and `hi` are the ground's lowest and highest faces in
                 // the node, in leaf cells.
-                self.terrain
+                TerrainTile::tile_cache()
                     .relief(&line, &mut place, node, [cell_zoom, cell_zoom])
                     .exact()
                     .is_some_and(|[[lo, hi], _]| {

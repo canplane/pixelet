@@ -15,7 +15,8 @@ use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::shape;
 
 use crate::bake::malformed;
-use crate::bake::tile::{occupancy_of, Occupancy, StringTable};
+use crate::bake::publication::BaseLayer;
+use crate::bake::tile::{occupancy_of, Occupancy, StringTable, Tile};
 use crate::division::Subtype;
 use crate::ground::majority;
 use crate::space::coord::adapter::epsg3857::cell_zoom_of;
@@ -75,6 +76,14 @@ pub struct DivisionTile {
     prominences: Vec<u8>,
     areas: Vec<bool>,
     pub occupancy: Occupancy,
+}
+
+impl Tile for DivisionTile {
+    const LAYER: BaseLayer = BaseLayer::division;
+
+    fn occupancy(&self) -> Occupancy {
+        self.occupancy
+    }
 }
 
 impl Division<'_> {

@@ -156,7 +156,7 @@ fn mix_hash(h: u32, v: u32) -> u32 {
   return (m << 15u) | (m >> 17u);
 }
 
-/// The hash of the node `c` at `zoom`, the twin of pxl-engine `node_cache::node_hash`
+/// The hash of the node `c` at `zoom`, the port of pxl-engine `node_cache::node_hash`
 /// (tests/walk.rs `hand_keeps_as_the_engine`).
 fn node_hash(zoom: u32, c: vec3<i32>) -> u32 {
   var h = zoom * 0x85EBCA77u;

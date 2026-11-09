@@ -4,7 +4,7 @@
 //! time, so a coarse request cannot fan out into a tree of tasks.
 
 use super::job::{self, Job, Runner};
-use super::{Dataset, Failure, Kind};
+use super::{Dataset, Failure};
 use crate::pyramid::{fold_parent, Absent, Base, TileSet};
 use crate::util::{pack, Level};
 use fnv::FnvHashMap;
@@ -19,7 +19,6 @@ use tokio::time;
 pub(super) async fn resolve(
     data: Arc<Dataset>,
     runner: Arc<Runner>,
-    kind: Kind,
     name: &str,
     top: Zoom,
 ) -> Result<Option<String>, Failure> {
@@ -27,17 +26,16 @@ pub(super) async fn resolve(
     if p.zoom < top {
         return Err(Failure::Unavailable);
     }
-    if p.zoom > kind.leaf() {
+    if p.zoom > data.row.tile_row.leaf {
         return Ok(None);
     }
-    bake_missing(data, runner, kind, p, true).await?;
+    bake_missing(data, runner, p, true).await?;
     Ok(Some(p.key()))
 }
 
 fn bake_missing(
     data: Arc<Dataset>,
     runner: Arc<Runner>,
-    kind: Kind,
     p: Quadrant,
     asked: bool,
 ) -> Pin<Box<dyn Future<Output = Result<(), Failure>> + Send>> {
@@ -48,18 +46,18 @@ fn bake_missing(
                 if !d.coverage.meets(p.zoom, p.at) {
                     return d.cache.publish(&p.key(), None).map_err(Failure::from);
                 }
-                if p.zoom < kind.leaf() {
-                    for below in (d.sources)(p) {
+                if p.zoom < d.row.tile_row.leaf {
+                    for below in (d.row.sources)(p) {
                         time::timeout_at(
                             lease.deadline,
-                            bake_missing(d.clone(), runner.clone(), kind, below, false),
+                            bake_missing(d.clone(), runner.clone(), below, false),
                         )
                         .await
                         .map_err(|_| Failure::Limited("oven dependency deadline"))??;
                     }
                 }
                 let job = Job {
-                    kind,
+                    kind: d.row.kind as u32,
                     id: p.id(),
                     cache: d.cache.root.clone(),
                 };

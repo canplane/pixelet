@@ -46,9 +46,33 @@ fn decor_at_its_clip_level() {
 /// Clip levels that hold a brick present only at its zoom and coarser.
 struct PresentTo(Zoom);
 
-impl clipmap::Presence for PresentTo {
+impl clipmap::BrickSource for PresentTo {
     fn present(&self, cell_zoom: Zoom, _: [i32; 2]) -> (u32, bool) {
         (0, cell_zoom <= self.0)
+    }
+    fn brick(&self, _: Zoom, _: u32) -> ([i32; 2], bool) {
+        unreachable!("step reads only what is present")
+    }
+    fn palette_word(&self, _: Zoom, _: u32, _: u32) -> u32 {
+        unreachable!("step reads only what is present")
+    }
+    fn column(&self, _: Zoom, _: u32, _: u32) -> u32 {
+        unreachable!("step reads only what is present")
+    }
+    fn bound_mip(&self, _: Zoom, _: u32, _: u32, _: [u32; 2]) -> [i32; 2] {
+        unreachable!("step reads only what is present")
+    }
+    fn own(&self, _: Zoom, _: u32, _: u32) -> u32 {
+        unreachable!("step reads only what is present")
+    }
+    fn joined(&self, _: Zoom, _: u32) -> [u32; clipmap::JOINED_WORDS as usize] {
+        unreachable!("step reads only what is present")
+    }
+    fn origin(&self, _: Zoom) -> ([i32; 2], bool) {
+        unreachable!("step reads only what is present")
+    }
+    fn root(&self, _: Zoom, _: u32) -> u32 {
+        unreachable!("step reads only what is present")
     }
 }
 

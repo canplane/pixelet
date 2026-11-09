@@ -336,10 +336,11 @@ pub fn take_new_frame() -> bool {
 async fn frame_task() {
     loop {
         notified(frames).await;
-        // A frame the GPU cannot take without blocking (xpute_gpu::admit) does
-        // not run. Its grant waits for the next turn, so the renderer is never
-        // handed a frame it would have to put off.
-        if api::device().is_some() && !boot::admit_frame()() {
+        // A frame the GPU cannot take without blocking (xpute_gpu::admit), or
+        // whose stream the runtime still holds (xpute_core ipc/stream.rs R3),
+        // does not run. Its grant waits for the next turn, so the renderer is
+        // never handed a frame it would have to put off.
+        if !api::stream_free() || (api::device().is_some() && !boot::admit_frame()()) {
             request_world_tick();
             continue;
         }

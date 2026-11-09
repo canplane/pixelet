@@ -4,13 +4,12 @@
 //! nothing of the other layers.
 
 mod answer;
-use pxl_spec::bake::tile::Occupancy;
-use pxl_spec::space::coord::zoom::{Zoom, LEAF_ZOOM};
-use pxl_spec::space::layer::lattice::{coarsest, Lattice};
+use pxl_spec::bake::tile::Tile;
+use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::sys::io::body::Packet;
-use crate::sys::io::demand::{PhaseList, Stream};
+use crate::sys::io::demand::PhaseList;
 use crate::sys::io::failure::Exit;
 use tile_cache::TileCache;
 
@@ -42,25 +41,7 @@ pub enum AskScope {
     View,
 }
 
-pub trait Base: Sized + 'static {
-    const STREAM: Stream;
-
-    /// Which of the tile's children have tiles of their own, as the bake
-    /// wrote them.
-    fn occupancy(&self) -> Occupancy;
-
-    /// How the layer's tiles lie on the camera grid, which says what part of
-    /// the grid a tile at each zoom draws.
-    const LATTICE: Lattice;
-
-    /// The zoom the layer's tiles are made at. It matches the bake's
-    /// `Base::LEAF`.
-    const LEAF: Zoom = LEAF_ZOOM;
-
-    /// The coarsest zoom the layer's tiles are read at (pxl-spec lattice.rs
-    /// `coarsest`). The bake folds tiles up to this zoom and no further.
-    const COARSEST: Zoom = coarsest(Self::LATTICE);
-
+pub trait Base: Tile + Sized + 'static {
     /// Which tiles the layer asks for. Its tile cache is sized from this.
     const ASK_SCOPE: AskScope = AskScope::View;
 

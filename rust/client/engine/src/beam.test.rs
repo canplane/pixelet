@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::answer::{
-    box_join, box_word, fill_eighths, fill_word, In, Kind, AIR, BOX_NONE, BOX_STEPS,
+    box_join, box_word, fill_eighths, fill_word, In, Kind, BOX_NONE, BOX_STEPS, EMPTY,
 };
 use crate::cast::{Detail, End, Node, Query, Ray, Spacing, Trace, Until, DEPTH};
 use crate::content::Sample;
@@ -132,7 +132,7 @@ impl Query for Stand {
             } else if hi[2] <= top(lo[0] + side / 2.0, lo[1] + side / 2.0) {
                 Sample::GROUND
             } else {
-                AIR[0]
+                EMPTY[0]
             };
             return In {
                 kind: Kind::Cell,
@@ -161,7 +161,7 @@ impl Query for Stand {
         if b == BOX_NONE {
             In {
                 kind: Kind::Cell,
-                asset: AIR,
+                asset: EMPTY,
             }
         } else {
             In {
@@ -286,7 +286,7 @@ impl Hit {
             return Hit {
                 end: End::Miss,
                 node: Node::ROOT,
-                asset: AIR,
+                asset: EMPTY,
                 axis: 0,
             };
         }

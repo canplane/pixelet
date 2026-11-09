@@ -741,12 +741,8 @@ impl crate::Queue for Queue {
                     fence_sync.1.notify_all();
                 });
 
-                let bufs: Vec<&Counted> = command_buffers
-                    .iter()
-                    .filter_map(|c| c.raw.as_ref())
-                    .collect();
-                let raw = match bufs.last() {
-                    Some(&(raw, _)) => raw.clone(),
+                let raw = match command_buffers.last() {
+                    Some(&cmd_buf) => cmd_buf.raw.clone(),
                     None => {
                         // We do not bother adjusting `command_buffer_created_not_submitted`
                         // because we immediately commit this buffer.
@@ -779,32 +775,22 @@ impl crate::Queue for Queue {
                 }
 
                 // only return an extra one if it's extra
-                match bufs.last() {
+                match command_buffers.last() {
                     Some(_) => None,
                     None => Some(raw),
                 }
             };
 
-            // A Metal command buffer that several segments share is committed
-            // where it last appears, so that every segment placed before any
-            // of them runs first.
-            let bufs: Vec<&Counted> = command_buffers
-                .iter()
-                .filter_map(|c| c.raw.as_ref())
-                .collect();
-            for (k, (raw, counted)) in bufs.iter().enumerate() {
-                let at = Retained::as_ptr(raw);
-                if bufs[k + 1..].iter().any(|(r, _)| Retained::as_ptr(r) == at) {
-                    continue;
-                }
-                raw.commit();
-                if counted.swap(false, atomic::Ordering::AcqRel) {
-                    let previous = self
-                        .shared
-                        .command_buffer_created_not_submitted
-                        .fetch_sub(1, atomic::Ordering::AcqRel);
-                    debug_assert!(previous > 0);
-                }
+            for cmd_buffer in command_buffers {
+                cmd_buffer.raw.commit();
+                // One command buffer per `end_encoding` call moves from the
+                // "created but not yet submitted" bucket into the submitted
+                // set, so update the counter.
+                let previous = self
+                    .shared
+                    .command_buffer_created_not_submitted
+                    .fetch_sub(1, atomic::Ordering::AcqRel);
+                debug_assert!(previous > 0);
             }
 
             if let Some(raw) = extra_command_buffer {
@@ -1364,23 +1350,10 @@ struct CommandState {
 
 // Any state in this struct that may be dirty after an abandoned encoding must
 // be reset in `discard_encoding` for possible encoder reuse.
-/// A Metal command buffer and whether it still counts as created and not
-/// submitted. Several segments of one encoder share it (`CommandEncoder::chain`).
-type Counted = (Retained<ProtocolObject<dyn MTLCommandBuffer>>, Arc<atomic::AtomicBool>);
-
 pub struct CommandEncoder {
     shared: Arc<AdapterShared>,
     queue_shared: Arc<QueueShared>,
     raw_cmd_buf: Option<Retained<ProtocolObject<dyn MTLCommandBuffer>>>,
-    raw_count: Option<Arc<atomic::AtomicBool>>,
-    /// patched: the Metal command buffer that this encoder's segments share
-    /// (passes and the commands between them), so that a pass costs no Metal
-    /// command buffer of its own. A segment wgpu-core places before ones
-    /// recorded earlier (`detached`) gets its own, made only if it encodes
-    /// anything.
-    chain: Option<Counted>,
-    detached: bool,
-    label: Option<String>,
     state: CommandState,
     temp: Temp,
     counters: Arc<wgt::HalCounters>,
@@ -1399,8 +1372,7 @@ unsafe impl Sync for CommandEncoder {}
 
 #[derive(Debug)]
 pub struct CommandBuffer {
-    /// None for a segment that encoded nothing.
-    raw: Option<Counted>,
+    raw: Retained<ProtocolObject<dyn MTLCommandBuffer>>,
     queue_shared: Arc<QueueShared>,
 }
 

@@ -10,18 +10,17 @@
 //! joint palette and a wheel would otherwise sit at the model's origin.
 //!
 //! A file's bytes, as the loader read them (sys/io/loader.rs `take_gltf`),
-//! are parsed once and whole when they are taken (pxl-render `parse_gltf`).
-//! The parse is kept for every registration of the file, and the bytes are
-//! let go. A registration runs in its own task. Once the turn's deadline has
-//! passed, it yields between units of work: a primitive, a run of
+//! are parsed once, in a task of their own (pxl-render `parse_gltf`), which
+//! yields between its units once the turn's deadline has passed. The parse is
+//! kept for every registration of the file, and the bytes are let go. A
+//! registration runs in its own task too, and yields the same way, between a
+//! primitive, a run of
 //! `STEPS_PER_PAUSE` vertices, the joints, a clip, and each pass of the seal
 //! (registry.rs `Model::seal`). The model joins the registry, and the table
 //! here, only once it is whole.
 
 use core::future::Future;
 use core::ops::Range;
-use core::pin::pin;
-use core::task::{Context, Poll, Waker};
 use std::rc::Rc;
 
 use fnv::FnvHashMap;
@@ -41,16 +40,14 @@ use crate::sys::io::room::Refusal;
 use crate::sys::load::Load;
 use crate::sys::sched::edge::{request_world_tick, world_edge};
 use pxl_spec::asset::catalog::{Slot, SLOTS};
-use xpute_kit::status::bug::OrBug;
-use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
 const IDENTITY: [f32; 16] = [
     1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
 ];
 
-/// How many models may register at once, each in its own task: one a catalog
-/// slot, the most `model_of` can start.
+/// How many models may parse or register at once, each in its own task: one a
+/// catalog slot, the most `model_of` can start.
 pub const REGISTRATIONS: usize = SLOTS;
 
 /// None while the registration's task runs. Then either the registered
@@ -61,17 +58,27 @@ type Registration = Option<Result<u32, Refusal>>;
 /// the height it was asked at, as the f64's bits.
 static REGISTRY: Global<Vec<(u32, Option<u64>, Registration)>> = Global::new();
 
-/// The file as parsed, or why its bytes do not parse. A failed parse is
-/// final.
-type Parse = Result<Rc<Gltf>, MarshalError>;
+/// None while its task runs. Then the file as parsed, or why its bytes do not
+/// parse. A failed parse is final.
+type Parse = Option<Result<Rc<Gltf>, MarshalError>>;
 
 /// Each file's parse, keyed by its number below the asset root.
 static PARSED: Global<Vec<(u32, Parse)>> = Global::new();
 
+/// The tasks running, the registrations and the parses.
+fn running() -> usize {
+    let registering = REGISTRY
+        .get(Vec::new)
+        .iter()
+        .filter(|(_, _, r)| r.is_none());
+    let parsing = PARSED.get(Vec::new).iter().filter(|(_, p)| p.is_none());
+    registering.count() + parsing.count()
+}
+
 /// The number of the model registered from the file `slot` names, `height_u`
 /// units tall, or at its own size when `height_u` is None. A file is
 /// registered once at each height, so two slots that name one file reach one
-/// model. None while the file loads or registers, while the heap refuses it
+/// model. None while the file loads, parses or registers, while the heap refuses it
 /// room, and for good when its bytes do not parse. A refusal is a wait, not a
 /// failure: the registration is tried again once the heap gives room back. No
 /// more than `REGISTRATIONS` run at once, and a model past them waits its
@@ -91,9 +98,10 @@ pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<u32> {
         _ => {}
     }
     let gltf = gltf_of(load)?;
-    if registered.iter().filter(|(_, _, r)| r.is_none()).count() >= REGISTRATIONS {
+    if running() >= REGISTRATIONS {
         return None;
     }
+    let registered = REGISTRY.get(Vec::new);
     match at {
         Some(at) => registered[at].2 = None,
         None => registered.push((file, key, None)),
@@ -103,31 +111,35 @@ pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<u32> {
     None
 }
 
-/// `load`'s file as parsed. None while it loads, and for good when it does not
-/// parse. The first call after the file is read takes its bytes from the
-/// loader and parses them.
+/// `load`'s file as parsed. None while it loads or parses, and for good when
+/// it does not parse. The first call after the file is read takes its bytes
+/// from the loader into a parse of their own (`parse`).
 fn gltf_of(load: Load) -> Option<Rc<Gltf>> {
     let file = load.id();
-    let parsed = PARSED.get(Vec::new);
-    if !parsed.iter().any(|(a, _)| *a == file) {
-        let bytes = take_gltf(load)?;
-        parsed.push((file, parse(&bytes).map(Rc::new)));
+    match PARSED.get(Vec::new).iter().find(|(a, _)| *a == file) {
+        Some((_, Some(Ok(gltf)))) => return Some(gltf.clone()),
+        Some(_) => return None,
+        None => {}
     }
-    let (_, gltf) = parsed.iter().find(|(a, _)| *a == file)?;
-    gltf.as_ref().ok().cloned()
+    if running() >= REGISTRATIONS {
+        return None;
+    }
+    let bytes = take_gltf(load)?;
+    PARSED.get(Vec::new).push((file, None));
+    let spawned = task::spawn(parse(file, bytes), 0);
+    xpute_kit::ensure!(spawned, ENOSPC, file);
+    None
 }
 
-/// Parses `bytes` whole in one call. The parser's pause is always ready, so
-/// the future completes on its first poll.
-fn parse(bytes: &[u8]) -> Result<Gltf, MarshalError> {
-    let mut parsing = pin!(parse_gltf(bytes, &[], || core::future::ready(())));
-    match parsing
-        .as_mut()
-        .poll(&mut Context::from_waker(Waker::noop()))
-    {
-        Poll::Ready(parsed) => parsed,
-        Poll::Pending => None.or_bug(Errno::ENOTRECOVERABLE),
+/// The file numbered `file` parsed off `bytes`, which go once it is. `gltf_of`
+/// left its entry as parsing, and this sets it once it is parsed or refused,
+/// then wakes a turn.
+async fn parse(file: u32, bytes: Vec<u8>) {
+    let parsed = parse_gltf(&bytes, &[], || yield_if_spent(world_edge)).await;
+    if let Some((_, entry)) = PARSED.get(Vec::new).iter_mut().find(|(a, _)| *a == file) {
+        *entry = Some(parsed.map(Rc::new));
     }
+    request_world_tick();
 }
 
 /// `slot`'s model as `model_of` registered it at `height_u`, without asking

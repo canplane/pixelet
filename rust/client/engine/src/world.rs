@@ -1,6 +1,6 @@
 // pxl-engine/world.rs
 
-//! wgsl-twin: the world's one query, which says what is in a node at its zoom. It reads
+//! wgsl-port: the world's one query, which says what is in a node at its zoom. It reads
 //! the layers in the order each is written over the one before: what is placed over all,
 //! then the separation and the ways, over the ground and its caves. Every reader of the world
 //! asks it, the GPU's cast and the CPU's alike. Each source answers from its own level of
@@ -12,12 +12,14 @@ use crate::answer::{
 };
 use crate::clipmap::{self, BrickSource, Lookup, Pool};
 use crate::ground;
-use crate::object::{self, Cut, Table, AIR, CELL, ROOT, SPLIT};
+use crate::object::{self, Cut, Table, CELL, ROOT, SPLIT};
 use crate::way;
-use pxl_spec::ground::{word, VOID};
+use pxl_spec::ground::word;
 use pxl_spec::share::{eighths, FULL};
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, UNIT_ZOOM};
 use pxl_spec::space::layer::area::Shard;
+use pxl_spec::value::AIR;
+use pxl_spec::value::VOID;
 use pxl_spec::way::NOTHING;
 
 /// What a node is handed by the node over it, each source's own part, so that a descent asks
@@ -263,7 +265,7 @@ pub fn node<H: ground::Resident, W: BrickSource, L: Table, P: Pool + ?Sized>(
     if box_none(joined) {
         return In {
             kind: Kind::Cell,
-            asset: answer::AIR,
+            asset: answer::EMPTY,
         };
     }
     In {

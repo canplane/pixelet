@@ -43,13 +43,13 @@ use crate::gpu::tile::TileGrid;
 
 /// What the CPU hands the GPU's decor this frame.
 pub struct DecorFrame<'a> {
-    /// For each kind of decor, the clip level zooms it is generated at, a bit for each zoom
+    /// For each decor, the clip level zooms it is generated at, a bit for each zoom
     /// counted from the first clip level's (`decor_cs`).
     pub zooms: &'a [u32],
     /// The drawing words, `drawn::DRAWING_WORDS` of them, laid out as pxl-content
     /// `generation::drawn` says.
     pub drawing: &'a [u32],
-    /// Placed decor, a record each in the layout `decor_cs` writes: its kind, variant and
+    /// Placed decor, a record each in the layout `decor_cs` writes: its decor, variant and
     /// turn, then its box's min corner in leaf cells, and a sink of none, as it stands where
     /// it is placed. The records are uploaded from where they lie, so their writer asks
     /// `in_flight` (gpu/api.rs) before it writes them again.
@@ -127,7 +127,7 @@ pub struct Generator {
     /// another.
     bindings: World,
     on: bool,
-    /// The kinds' zooms as last written, which stay constant once the core has handed its
+    /// The decors' zooms as last written, which stay constant once the core has handed its
     /// table; the clip levels' table, the cuts and the placed decor as last handed; and
     /// whether this frame marks slots to generate.
     zooms_read: Read,
@@ -146,7 +146,7 @@ pub struct Generator {
     marked: usize,
     rects: u32,
     /// Whether the slots' records may not hold what the slots generate, as after decor was
-    /// off or the kinds' zooms changed. The next frame drawn with decor then generates every
+    /// off or the decors' zooms changed. The next frame drawn with decor then generates every
     /// slot.
     stale: bool,
     /// What the count, args and compact passes read besides the records, as they last ran:
@@ -308,7 +308,7 @@ impl Generator {
         s.begin();
         s.read(f.zooms);
         if !s.end() {
-            // Each slot's records were generated at the zooms the kinds were shown at, so every
+            // Each slot's records were generated at the zooms the decors were shown at, so every
             // slot generates again.
             g.write_buf(self.zooms, 0, bytes(f.zooms));
             self.stale = true;
@@ -367,7 +367,7 @@ impl Generator {
             put(generation::THIN_ARGS + 1, 1);
             put(
                 generation::GENERATE_ARGS,
-                generation::KIND_RECORDS.div_ceil(generation::LANES),
+                generation::DECOR_RECORD_CAP.div_ceil(generation::LANES),
             );
             put(generation::GENERATE_ARGS + 1, 1);
             put(generation::LIST_EVERY, u32::from(self.stale));

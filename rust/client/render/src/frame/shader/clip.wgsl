@@ -20,12 +20,12 @@ fn gather(v: u32) -> u32 {
   return (g | (g >> 8u)) & 0x0000ffffu;
 }
 
-/// This is the twin of pxl-spec `brick::idx_of`.
+/// This is the port of pxl-spec `brick::idx_of`.
 fn cell_id(at: vec2<u32>) -> u32 {
   return spread(at.x) | (spread(at.y) << 1u);
 }
 
-/// This is the twin of pxl-spec `brick::of_idx`.
+/// This is the port of pxl-spec `brick::of_idx`.
 fn id_cell(i: u32) -> vec2<u32> {
   return vec2<u32>(gather(i), gather(i >> 1u));
 }
@@ -41,12 +41,12 @@ fn entry_row(cell_zoom: u32, e: u32) -> u32 {
   return (cell_zoom - FIRST_CELL_ZOOM) * CLIP_ENTRIES + e;
 }
 
-/// This is the twin of pxl-engine `clipmap::key_word`.
+/// This is the port of pxl-engine `clipmap::key_word`.
 fn key_word(v: i32) -> u32 {
   return u32(v) ^ 0x80000000u;
 }
 
-/// This is the twin of pxl-engine `clipmap::joined_idx`.
+/// This is the port of pxl-engine `clipmap::joined_idx`.
 fn joined_idx(l: u32, at: vec2<u32>) -> u32 {
   let under = ACROSS >> (l - 1u);
   return (ACROSS * ACROSS - under * under) / 3u + cell_id(at);
@@ -87,7 +87,7 @@ fn lookup_here(l: u32) -> bool {
   return (l & (1u << LOOKUP_SLOT_BITS)) != 0u;
 }
 
-/// This is the twin of pxl-engine `clipmap::cell_at`.
+/// This is the port of pxl-engine `clipmap::cell_at`.
 fn cell_at(zoom: u32, clip: u32, c: vec2<i32>) -> vec2<i32> {
   let s = zoom - clip;
   return vec2<i32>(wrap_idx(clip, c.x >> s), c.y >> s);
@@ -159,7 +159,7 @@ fn level_bounds(place: u32, cell_zoom: u32, g: vec2<i32>, l: u32) -> NodeBound {
   return NodeBound(b, cell_zoom, true, all(d >= vec2<i32>(0i)) && all(d + side <= vec2<i32>(across)), place);
 }
 
-/// This is the twin of pxl-engine `clipmap::bounded`.
+/// This is the port of pxl-engine `clipmap::bounded`.
 fn bounded(place: u32, cell_zoom: u32, zoom: u32, c: vec2<i32>) -> NodeBound {
   // The node's first cell at `cell_zoom`, or the cell that holds the node when the node is
   // finer (`idx_at`).

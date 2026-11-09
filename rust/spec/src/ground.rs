@@ -1,6 +1,6 @@
 // pxl-spec/ground.rs
 
-//! wgsl-twin: the ground's cells as a tile holds them and the rules a column reads them by,
+//! wgsl-port: the ground's cells as a tile holds them and the rules a column reads them by,
 //! which the bake and the client both run: a cell's height from the elevation samples
 //! (`height`), its four palette indices and its own (`own`), and its top and face in cells of a
 //! zoom (`top`, `face_height`). The ground's column as a descent asks it is pxl-engine's
@@ -18,8 +18,6 @@ use crate::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, UNIT_ZOOM};
 use crate::space::layer::lattice::TILE_CELLS;
 use crate::value;
 
-/// The value space's void and unknown as the words a palette index is read into.
-pub const VOID: u32 = value::VOID;
 pub const UNKNOWN: u32 = value::UNKNOWN;
 
 /// The inner elevation samples across one leaf tile. A leaf tile is about twice as many

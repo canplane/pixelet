@@ -6,15 +6,13 @@
 
 use super::*;
 use crate::domain::layer::object::store::Store;
-use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::query::over;
-use crate::domain::query::test::{flat_at_five, write};
+use crate::domain::query::test::{flat_at_five, placed, write};
 use crate::sys::serial;
 use pxl_content::cave::hollow;
 use pxl_spec::asset::cube::{self};
 use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::OBJECT_COARSEST;
-use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::share::FULL;
 use pxl_spec::space::coord::zoom::LEAF_CELL_ZOOM;
 
@@ -44,21 +42,21 @@ fn cube_at(store: &mut Store, at: V3) {
 
 /// The ground at five, a roof whose underside is `roof` above the ground
 /// when `roof` is given, and the pivot standing on the ground under it.
-fn roofed(roof: Option<f64>) -> (TileCache<TerrainTile>, Store, V3) {
-    let (tile_cache, [x, y]) = flat_at_five();
+fn roofed(roof: Option<f64>) -> (Store, V3) {
+    let [x, y] = flat_at_five();
     let mut store = Store::default();
     if let Some(roof) = roof {
         cube_at(&mut store, [x, y, 5.0 + roof]);
     }
-    (tile_cache, store, [x + 0.5, y + 0.5, over(5.0)])
+    (store, [x + 0.5, y + 0.5, over(5.0)])
 }
 
 /// Zooms from 16 to `to` at the pitch `polar` and returns the distance the
 /// eye dives to, if it dives.
 fn dive_to(roof: Option<f64>, to: f64, polar: f64) -> Option<f64> {
     let _g = serial();
-    let (tile_cache, store, pivot) = roofed(roof);
-    let world = World::new(&tile_cache, &store);
+    let (store, pivot) = roofed(roof);
+    let world = placed(store);
     let access = Ground::of(&world);
     let to = pose(pivot, to, polar);
     dive(&to, &pose(pivot, 16.0, polar), &access).map(|p| p.dist)
@@ -68,8 +66,8 @@ fn dive_to(roof: Option<f64>, to: f64, polar: f64) -> Option<f64> {
 /// distance it reaches.
 fn climbed_to(roof: Option<f64>, from: f64, to: f64) -> f64 {
     let _g = serial();
-    let (tile_cache, store, pivot) = roofed(roof);
-    let world = World::new(&tile_cache, &store);
+    let (store, pivot) = roofed(roof);
+    let world = placed(store);
     let access = Ground::of(&world);
     climb_step(&pose(pivot, to, 0.0), &pose(pivot, from, 0.0), &access).dist
 }
@@ -120,8 +118,8 @@ fn zoom_out_does_not_go_through() {
     assert_eq!(climbed_to(Some(3.0), 16.0, 20.0), 20.0);
     assert_eq!(climbed_to(None, MIN_DIST, 10.0), 10.0);
     let _g = serial();
-    let (tile_cache, store, pivot) = tunnel(3.0, 2);
-    let world = World::new(&tile_cache, &store);
+    let (store, pivot) = tunnel(3.0, 2);
+    let world = placed(store);
     let access = Ground::of(&world);
     let to = climb_step(&pose(pivot, 3.8, 0.0), &pose(pivot, 16.0, 0.0), &access);
     assert_eq!(to.dist, 8.0 - over(5.0) - NEAR);
@@ -148,9 +146,9 @@ fn climb_or_dive_or_stop() {
         }
     };
 
-    let (tile_cache, mut store, pivot) = roofed(None);
+    let (mut store, pivot) = roofed(None);
     wall(&mut store, pivot, 6.0);
-    let world = World::new(&tile_cache, &store);
+    let world = placed(store);
     let access = Ground::of(&world);
     let to = east(pivot, 3.2);
     assert!(climb_pose(to, &access).polar < to.polar);
@@ -162,9 +160,9 @@ fn climb_or_dive_or_stop() {
     };
     assert_eq!(climb_step(&tilted(3.2), &tilted(2.6), &access), tilted(3.2));
 
-    let (tile_cache, mut store, pivot) = tunnel(2.0, 1);
+    let (mut store, pivot) = tunnel(2.0, 1);
     wall(&mut store, pivot, 7.0);
-    let world = World::new(&tile_cache, &store);
+    let world = placed(store);
     let access = Ground::of(&world);
     let to = east(pivot, 3.2);
     let stopped = climb_step(&to, &east(pivot, 2.4), &access).dist;
@@ -172,9 +170,9 @@ fn climb_or_dive_or_stop() {
     // Where the climb clears the slab's corner, it climbs. Where the slab is
     // too thick, a zoom in dives through the wall.
     assert_eq!(climb_step(&to, &east(pivot, 4.2), &access), to);
-    let (tile_cache, mut store, pivot) = tunnel(2.0, 2);
+    let (mut store, pivot) = tunnel(2.0, 2);
     wall(&mut store, pivot, 7.0);
-    let world = World::new(&tile_cache, &store);
+    let world = placed(store);
     let access = Ground::of(&world);
     let to = east(pivot, 3.2);
     let dived = climb_step(&to, &east(pivot, 4.2), &access).dist;
@@ -186,8 +184,8 @@ fn climb_or_dive_or_stop() {
 #[test]
 fn open_ground_keeps_a_cell() {
     let _g = serial();
-    let (tile_cache, store, pivot) = roofed(None);
-    let world = World::new(&tile_cache, &store);
+    let (store, pivot) = roofed(None);
+    let world = placed(store);
     let access = Ground::of(&world);
     let level = core::f64::consts::FRAC_PI_2;
     assert_eq!(
@@ -229,7 +227,7 @@ fn open_ground_keeps_a_cell() {
 #[test]
 fn nearest_turns_through() {
     let _g = serial();
-    let (tile_cache, mut store, pivot) = roofed(None);
+    let (mut store, pivot) = roofed(None);
     for dx in [-2.5, -1.5, 1.5, 2.5] {
         for dy in [-2.5, -1.5, -0.5, 0.5, 1.5] {
             for z in [5.0, 6.0, 7.0] {
@@ -237,7 +235,7 @@ fn nearest_turns_through() {
             }
         }
     }
-    let world = World::new(&tile_cache, &store);
+    let world = placed(store);
     let access = Ground::of(&world);
     for polar in [0.4, 1.0, core::f64::consts::FRAC_PI_2] {
         for azimuth in [-core::f64::consts::FRAC_PI_2, core::f64::consts::FRAC_PI_2] {
@@ -283,8 +281,8 @@ fn nearest_turns_through() {
 #[test]
 fn the_nearest_under_the_level_is_no_trap() {
     let _g = serial();
-    let (tile_cache, store, pivot) = roofed(None);
-    let world = World::new(&tile_cache, &store);
+    let (store, pivot) = roofed(None);
+    let world = placed(store);
     let access = Ground::of(&world);
     let at = ViewPose {
         polar: core::f64::consts::FRAC_PI_2 + 0.4,
@@ -312,11 +310,11 @@ fn the_nearest_under_the_level_is_no_trap() {
 #[test]
 fn stop_goes_straight() {
     let _g = serial();
-    let (tile_cache, mut store, pivot) = roofed(None);
+    let (mut store, pivot) = roofed(None);
     for dy in -3..=3 {
         cube_at(&mut store, [pivot[0] + 3.0, pivot[1] + f64::from(dy), 5.0]);
     }
-    let world = World::new(&tile_cache, &store);
+    let world = placed(store);
     let access = Ground::of(&world);
     let dist_at = |from: f64, to: f64| {
         way_hit(&east(pivot, from), &east(pivot, to), |at| *at, &access)
@@ -330,8 +328,8 @@ fn stop_goes_straight() {
 /// The ground at five and a tunnel's roof over the pivot. The roof is a slab
 /// seven cells across and `thick` cells thick, with its underside `roof`
 /// above the ground.
-fn tunnel(roof: f64, thick: u32) -> (TileCache<TerrainTile>, Store, V3) {
-    let (tile_cache, [x, y]) = flat_at_five();
+fn tunnel(roof: f64, thick: u32) -> (Store, V3) {
+    let [x, y] = flat_at_five();
     let mut store = Store::default();
     for dz in 0..thick {
         for dx in -3..=3 {
@@ -345,7 +343,7 @@ fn tunnel(roof: f64, thick: u32) -> (TileCache<TerrainTile>, Store, V3) {
             }
         }
     }
-    (tile_cache, store, [x + 0.5, y + 0.5, over(5.0)])
+    (store, [x + 0.5, y + 0.5, over(5.0)])
 }
 
 /// In the roof's lowest cell, where the eye may stand, the climb asks for no
@@ -353,8 +351,8 @@ fn tunnel(roof: f64, thick: u32) -> (TileCache<TerrainTile>, Store, V3) {
 #[test]
 fn climb_stands_in_roof_cell() {
     let _g = serial();
-    let (tile_cache, store, pivot) = tunnel(2.0, 1);
-    let world = World::new(&tile_cache, &store);
+    let (store, pivot) = tunnel(2.0, 1);
+    let world = placed(store);
     let access = Ground::of(&world);
     let climbed = climb_pose(pose(pivot, MIN_DIST, 0.3), &access);
     assert_eq!(climbed.polar, 0.3);
@@ -365,8 +363,8 @@ fn climb_stands_in_roof_cell() {
 #[test]
 fn climb_fails_under_roof() {
     let _g = serial();
-    let (tile_cache, store, pivot) = tunnel(3.0, 2);
-    let world = World::new(&tile_cache, &store);
+    let (store, pivot) = tunnel(3.0, 2);
+    let world = placed(store);
     let access = Ground::of(&world);
     // The eye is in the slab's upper cell, between heights 9 and 10.
     let climbed = climb_pose(pose(pivot, 3.8, 0.1), &access);
@@ -379,7 +377,7 @@ fn climb_fails_under_roof() {
 #[test]
 fn climb_clears_block() {
     let _g = serial();
-    let (tile_cache, mut store, pivot) = roofed(None);
+    let (mut store, pivot) = roofed(None);
     // The block surrounds the cell where the eye stands, level with the pivot
     // and 3 east of it.
     for dx in [1.5, 2.5, 3.5] {
@@ -389,7 +387,7 @@ fn climb_clears_block() {
             }
         }
     }
-    let world = World::new(&tile_cache, &store);
+    let world = placed(store);
     let access = Ground::of(&world);
     let at = east(pivot, 3.0);
     let climbed = climb_pose(at, &access);
@@ -403,11 +401,11 @@ fn climb_clears_block() {
 #[test]
 fn climbs_out_of_wall_with_room() {
     let _g = serial();
-    let (tile_cache, mut store, pivot) = roofed(None);
+    let (mut store, pivot) = roofed(None);
     for dy in [-1.5, -0.5, 0.5, 1.5] {
         cube_at(&mut store, [pivot[0] + 3.0, pivot[1] + dy, 5.0]);
     }
-    let world = World::new(&tile_cache, &store);
+    let world = placed(store);
     let access = Ground::of(&world);
     let at = east(pivot, 3.0);
     assert!(in_solid(&at, &access));
@@ -421,13 +419,13 @@ fn climbs_out_of_wall_with_room() {
 #[test]
 fn climb_rises_under_eye() {
     let _g = serial();
-    let (tile_cache, mut store, pivot) = tunnel(3.0, 1);
+    let (mut store, pivot) = tunnel(3.0, 1);
     for dy in [-1.5, -0.5, 0.5, 1.5] {
         for z in [5.0, 6.0, 7.0] {
             cube_at(&mut store, [pivot[0] + 3.0, pivot[1] + dy, z]);
         }
     }
-    let world = World::new(&tile_cache, &store);
+    let world = placed(store);
     let access = Ground::of(&world);
     let at = east(pivot, 3.0);
     assert!(in_solid(&at, &access));
@@ -443,7 +441,7 @@ fn climb_rises_under_eye() {
 #[test]
 fn slope_keeps_pitch_climbed() {
     let _g = serial();
-    let (tile_cache, mut store, pivot) = roofed(None);
+    let (mut store, pivot) = roofed(None);
     // From 20 to 40 cells east, each column is 60 cells high less its
     // distance.
     for dx in 20..=40 {
@@ -452,7 +450,7 @@ fn slope_keeps_pitch_climbed() {
             cube_at(&mut store, at);
         }
     }
-    let world = World::new(&tile_cache, &store);
+    let world = placed(store);
     let access = Ground::of(&world);
     let at = east(pivot, 40.0);
     assert!(in_solid(&at, &access));
@@ -467,11 +465,11 @@ fn slope_keeps_pitch_climbed() {
 #[test]
 fn a_cave_is_not_climbed_out_of() {
     let _g = serial();
-    let (tile_cache, mut store, ground) = roofed(None);
+    let (mut store, ground) = roofed(None);
     for z in (0..10).chain([12]) {
         cube_at(&mut store, [ground[0], ground[1], 5.0 + f64::from(z)]);
     }
-    let world = World::new(&tile_cache, &store);
+    let world = placed(store);
     let access = Ground::of(&world);
     let pivot = [ground[0], ground[1], over(15.0)];
     // A pose whose eye lies under the ground, in a leaf cell the seed's caves
@@ -499,7 +497,7 @@ fn a_cave_is_not_climbed_out_of() {
 #[test]
 fn a_hollow_in_a_hill() {
     let _g = serial();
-    let (tile_cache, mut store, pivot) = roofed(None);
+    let (mut store, pivot) = roofed(None);
     for dx in 8..=40 {
         for dy in -6..=6 {
             for z in (0..12).filter(|z| !((18..=30).contains(&dx) && (3..=7).contains(z))) {
@@ -512,7 +510,7 @@ fn a_hollow_in_a_hill() {
             }
         }
     }
-    let world = World::new(&tile_cache, &store);
+    let world = placed(store);
     let access = Ground::of(&world);
     // A pose east of the pivot, a little above its level.
     let raised = |pivot: V3, dist: f64| ViewPose {
@@ -550,11 +548,11 @@ fn a_hollow_in_a_hill() {
 #[test]
 fn climbs_past_level() {
     let _g = serial();
-    let (tile_cache, mut store, ground) = roofed(None);
+    let (mut store, ground) = roofed(None);
     for z in 0..10 {
         cube_at(&mut store, [ground[0], ground[1], 5.0 + f64::from(z)]);
     }
-    let world = World::new(&tile_cache, &store);
+    let world = placed(store);
     let access = Ground::of(&world);
     let at = pose([ground[0], ground[1], over(15.0)], 18.0, 2.2);
     assert!(in_solid(&at, &access));

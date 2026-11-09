@@ -11,15 +11,17 @@
 //! bridge or what is placed, is the world's answer (`World::asset_of`),
 //! never the ground's.
 
+use crate::domain::layer::Base as _;
 use pxl_engine::clipmap::Lookup;
 use pxl_spec::bake::tile::terrain::GroundId;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::world::SEA_LEVEL;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::area::Shard;
 
 use super::change;
 use super::world::World;
-use crate::domain::layer::terrain::clipmap::CpuClipmap;
+use crate::domain::layer::terrain::clipmap::clip_read;
 use crate::domain::layer::Answer;
 use pxl_spec::asset::cube::sentinel;
 
@@ -30,11 +32,11 @@ pub(super) struct Surface {
     pub asset: GroundId,
 }
 
-impl World<'_> {
+impl World {
     /// The surface of the cell `c` at `cell_zoom`. Past the service area it
     /// is the Earth's, at sea level. None where the cell has no ground.
     pub(super) fn surface_of(&self, cell_zoom: Zoom, c: [i32; 2]) -> Answer<Option<Surface>> {
-        let shard = Shard::UNKNOWN.at(&CpuClipmap, (cell_zoom, c));
+        let shard = Shard::UNKNOWN.at(&clip_read(), (cell_zoom, c));
         if shard.past() {
             return Answer::Exact(Some(Surface {
                 top: f64::from(SEA_LEVEL),
@@ -44,8 +46,8 @@ impl World<'_> {
         let side = units(cell_zoom);
         let middle = c.map(|v| (f64::from(v) + 0.5) * side);
         change::report_read(middle, middle, cell_zoom);
-        let line = self.terrain.cursor((cell_zoom, c), cell_zoom);
-        self.terrain
+        let line = TerrainTile::tile_cache().cursor((cell_zoom, c), cell_zoom);
+        TerrainTile::tile_cache()
             .column(&line, Lookup::NONE, (cell_zoom, c))
             .map(|col| {
                 col.is_grounded().then(|| Surface {

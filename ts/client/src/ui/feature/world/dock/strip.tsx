@@ -11,7 +11,7 @@ import {
   type ViewStyle,
 } from "react-native";
 
-import type { f64, u8 } from "@xpute/kit/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { GlyphName } from "@/ui/shared/component/icon.tsx";
 import { Glyph } from "@/ui/shared/component/glyph.tsx";
 import { Motion } from "@/ui/shared/component/motion/motion.tsx";
@@ -173,14 +173,14 @@ function SwatchButton({
   );
 }
 
-function DecorIconButton({ kind }: { kind: u8 }) {
-  const active = useInHand(kind);
+function DecorIconButton({ id }: { id: AssetId }) {
+  const active = useInHand(id);
 
   return (
     <Pressable
-      onPress={() => selectAsset(kind)}
+      onPress={() => selectAsset(id)}
       accessibilityRole="button"
-      accessibilityLabel={decorLabel(kind)}
+      accessibilityLabel={decorLabel(id)}
       style={styles.slot}
     >
       <Motion to={{ scale: active ? 1.1 : 1 }} transition={SNAP}>
@@ -191,7 +191,7 @@ function DecorIconButton({ kind }: { kind: u8 }) {
           ]}
         >
           <Glyph
-            glyph={decorGlyph(kind)}
+            glyph={decorGlyph(id)}
             size={16}
             color={active ? STRIP.glyphOn : STRIP.glyph}
           />
@@ -210,7 +210,7 @@ function PickButton({
 }) {
   switch (kindOf(id)) {
     case KIND.decor:
-      return <DecorIconButton kind={id} />;
+      return <DecorIconButton id={id} />;
     case KIND.marker:
       return <MarkerButton />;
     default:

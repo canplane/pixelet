@@ -7,13 +7,13 @@
 //! levels that hold bricks are pxl-engine's (clipmap.rs).
 
 use crate::ground;
-use crate::ground::VOID;
 use crate::space::coord::world::wrap_idx;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::area;
 use crate::space::layer::area::Shard;
 use crate::space::layer::lattice;
 use crate::space::layer::lattice::TILE_CELLS;
+use crate::value::VOID;
 use crate::way;
 use crate::way::ColumnGrid;
 use crate::way::Segment;

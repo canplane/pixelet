@@ -7,68 +7,48 @@ mod pyramid;
 mod terrain;
 
 use cache::Cache;
+use pxl_spec::bake::publication::BaseLayer;
+use pxl_spec::bake::tile;
 use pxl_spec::bake::tile::division::DivisionTile;
 use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::pyramid::Base;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::coverage::Coverage;
 use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::layer::lattice::coarsest;
+use pxl_spec::space::layer::quadrant::min_zoom_over;
 use std::sync::Arc;
 
 pub mod job;
 use job::{Limit, Runner};
-use pxl_spec::space::layer::quadrant;
 
-#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum Kind {
-    Terrain,
-    Place,
-    Division,
+/// What the oven does for a kind, one row a kind: the kind, what its tiles
+/// are, the tiles a fold reads and a job's bake.
+struct Row {
+    kind: BaseLayer,
+    tile_row: tile::Row,
+    sources: fn(Quadrant) -> Vec<Quadrant>,
+    execute: fn(Quadrant, &Path, &Path, u64) -> Result<(), String>,
 }
-impl Kind {
-    pub fn parse(name: &str) -> Option<Self> {
-        match name {
-            "terrain" => Some(Self::Terrain),
-            "place" => Some(Self::Place),
-            "division" => Some(Self::Division),
-            _ => None,
-        }
-    }
-    /// The zoom its tiles are made at.
-    fn leaf(self) -> Zoom {
-        match self {
-            Self::Terrain => TerrainTile::LEAF,
-            Self::Place => PlaceTile::LEAF,
-            Self::Division => DivisionTile::LEAF,
-        }
-    }
 
-    /// Its coarsest tile served, which the client reads from too: never
-    /// coarser than the kind is read at.
-    fn min_zoom(self, min_zoom: Zoom) -> Zoom {
-        quadrant::min_zoom_over(self.leaf(), min_zoom).max(self.coarsest())
-    }
-
-    /// The coarsest zoom it is read at (`pyramid::Base::COARSEST`).
-    fn coarsest(self) -> Zoom {
-        match self {
-            Self::Terrain => TerrainTile::COARSEST,
-            Self::Place => PlaceTile::COARSEST,
-            Self::Division => DivisionTile::COARSEST,
-        }
-    }
-
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Terrain => "terrain",
-            Self::Place => "place",
-            Self::Division => "division",
-        }
-    }
+/// None for a kind the oven does not bake, which is the Earth's picture.
+fn row(kind: BaseLayer) -> Option<Row> {
+    let (sources, execute): (fn(Quadrant) -> Vec<Quadrant>, _) = match kind {
+        BaseLayer::terrain => (TerrainTile::sources, terrain::execute as _),
+        BaseLayer::place => (PlaceTile::sources, place::execute as _),
+        BaseLayer::division => (DivisionTile::sources, division::execute as _),
+        BaseLayer::earth => return None,
+    };
+    Some(Row {
+        kind,
+        tile_row: kind.row(),
+        sources,
+        execute,
+    })
 }
 
 #[derive(Clone, Debug)]
@@ -84,26 +64,22 @@ impl From<String> for Failure {
     }
 }
 
-/// A kind's tiles: their cache, the coverage that gates them and the tiles a fold reads.
+/// A kind's tiles: its row, their cache and the coverage that gates them.
 struct Dataset {
+    row: Row,
     cache: Cache,
     coverage: Coverage,
-    sources: fn(Quadrant) -> Vec<Quadrant>,
 }
 impl Dataset {
-    fn open(base: &std::path::Path, kind: Kind, runner: &Runner) -> Result<Self, String> {
+    fn open(base: &Path, row: Row, runner: &Runner) -> Result<Self, String> {
         Ok(Self {
             cache: Cache::new(
-                base.join(kind.name()),
+                base.join(row.kind.name()),
                 runner.admission.clone(),
                 std::time::Duration::from_secs(runner.limit.seconds),
             )?,
             coverage: Coverage::of_source()?,
-            sources: match kind {
-                Kind::Terrain => TerrainTile::sources,
-                Kind::Place => PlaceTile::sources,
-                Kind::Division => DivisionTile::sources,
-            },
+            row,
         })
     }
 }
@@ -111,7 +87,7 @@ impl Dataset {
 pub struct Server {
     _owner: std::fs::File,
     runner: Arc<Runner>,
-    datasets: [Arc<Dataset>; 3],
+    datasets: Vec<Arc<Dataset>>,
     min_zoom: Zoom,
 }
 impl Server {
@@ -123,31 +99,32 @@ impl Server {
     ) -> Result<Self, String> {
         let owner = claim(&base)?;
         let runner = Arc::new(Runner::new(worker_cnt, limit)?);
-        let datasets = [Kind::Terrain, Kind::Place, Kind::Division].map(|k| {
-            let source = base.join(k.name());
-            prune(&source)?;
-            Dataset::open(&source, k, &runner).map(Arc::new)
-        });
-        let [t, p, g] = datasets;
+        // Every kind is pruned and opened before the first failure is told.
+        let datasets: Vec<Result<_, String>> = BaseLayer::ALL
+            .into_iter()
+            .filter_map(row)
+            .map(|row| {
+                let source = base.join(row.kind.name());
+                prune(&source)?;
+                Dataset::open(&source, row, &runner).map(Arc::new)
+            })
+            .collect();
         Ok(Self {
             _owner: owner,
             runner,
-            datasets: [t?, p?, g?],
+            datasets: datasets.into_iter().collect::<Result<_, _>>()?,
             min_zoom,
         })
     }
 
-    pub async fn get(&self, kind: Kind, name: &str) -> Result<Option<Vec<u8>>, Failure> {
-        let data = self.datasets[kind as usize].clone();
+    pub async fn get(&self, kind: BaseLayer, name: &str) -> Result<Option<Vec<u8>>, Failure> {
+        let Some(data) = self.datasets.iter().find(|d| d.row.kind == kind).cloned() else {
+            return Ok(None);
+        };
         let runner = self.runner.clone();
-        let path = pyramid::resolve(
-            data.clone(),
-            runner,
-            kind,
-            name,
-            kind.min_zoom(self.min_zoom),
-        )
-        .await?;
+        let tile_row = &data.row.tile_row;
+        let top = min_zoom_over(tile_row.leaf, self.min_zoom).max(coarsest(tile_row.lattice));
+        let path = pyramid::resolve(data.clone(), runner, name, top).await?;
         let Some(path) = path else { return Ok(None) };
         data.cache.read(&path).await.map_err(Failure::Bake)
     }
@@ -156,7 +133,7 @@ impl Server {
 const LOCK: &str = ".lock";
 
 /// Clears what a killed server left that is not a tile: its jobs' staging.
-fn prune(root: &std::path::Path) -> Result<(), String> {
+fn prune(root: &Path) -> Result<(), String> {
     for entry in std::fs::read_dir(root).into_iter().flatten().flatten() {
         if entry.file_name().to_string_lossy().starts_with(".work-") {
             std::fs::remove_dir_all(entry.path()).map_err(|e| e.to_string())?;
@@ -166,7 +143,7 @@ fn prune(root: &std::path::Path) -> Result<(), String> {
 }
 
 /// The lock keeps a second server from pruning under a running one.
-fn claim(base: &std::path::Path) -> Result<std::fs::File, String> {
+fn claim(base: &Path) -> Result<std::fs::File, String> {
     std::fs::create_dir_all(base).map_err(|e| e.to_string())?;
     let owner = std::fs::File::options()
         .create(true)

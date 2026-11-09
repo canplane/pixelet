@@ -6,8 +6,7 @@
 // which list of asks it runs. Each cell beside the hit is asked from the deepest node it
 // shares with the line down to the hit (`support::asset`). That line follows the beam ray's
 // line that the hit's cell resumed from, as the beam ray left it, down to the deepest node the
-// two share. Below that node, the hit's own descent hands each node down from its parent
-// (`support::sub_line`).
+// two share. Below that node, the hit's own descent hands each node down from its parent.
 
 @group(0) @binding(8) var<storage, read_write> beams: array<u32>;
 /// The node cache. An ask may name a drawable entry's face word as the word it writes
@@ -56,7 +55,7 @@ fn node_idx(k: u32) -> vec4<i32> {
   return vec4<i32>(idx_of(corner, zoom, roots, r0), i32(zoom));
 }
 
-/// The hit's own descent from where it leaves the line (`support::sub_line`). It keeps what was
+/// The hit's own descent from where it leaves the line. It keeps what was
 /// handed to the hit's grandparent and parent, whose zooms are in `up`. Where the descent starts
 /// no higher than one of them, the descent's first node stands in for it (`descent`).
 struct Descent {
@@ -92,7 +91,7 @@ fn descent(c: vec3<i32>, zoom: u32, low: u32, low_inheritance: vec3<u32>) -> Des
 /// Whether the cell `n` at `zoom` beside the hit `c` hides its cube whole (`answer::whole`), as
 /// the world answers it at that zoom. The cell is asked off the line down to the hit. Above
 /// `low`, that line is the beam ray's line at word `line`, and from `low` down it is the hit's
-/// own descent (`descent`; `support::sub_line`, `JoinedLine`). The descent was handed
+/// own descent (`descent`). The descent was handed
 /// `low_inheritance` at `low`, and `grand_inheritance` and `parent_inheritance` at the zooms in
 /// `up`. The ask starts from the deepest node of that line that is over the cell and held here,
 /// and each node under it is handed down by its parent. Where no node of the line is over the
@@ -219,7 +218,7 @@ fn face_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let line = beams[a + ASK_LINE];
   let deepest = node_idx(line + LINE_NODE);
   // The hit's own descent starts at the deepest node of the line over it, or at its root where
-  // no node of the line is over it (`support::sub_line`).
+  // no node of the line is over it (`support::asset`).
   let meet = shared_zoom(deepest.xyz, u32(deepest.w), c, zoom);
   var low = 0u;
   var low_inheritance = world_root(0u, over(c, zoom, 0u));

@@ -57,13 +57,13 @@ pub fn support_step() {
 /// stood on is taken away, and it rises out of what fills its cell
 /// (`World::floor_under`). The pivot and the figures at it then stand on
 /// one floor.
-fn standing(world: World<'_>, at: &Q3) -> Answer<Option<Q3>> {
+fn standing(world: World, at: &Q3) -> Answer<Option<Q3>> {
     if is_unknown(at) || !settings().surface_follow {
         return stand_memo().of(*at, || world.stands(at));
     }
-    let w = world;
     let floor = stand_memo().of(*at, || {
-        w.floor_under(at, LEAF_ZOOM)
+        world
+            .floor_under(at, LEAF_ZOOM)
             .map(|top| top.map(|top| on_floor(at, top)))
     });
     Answer::Exact(Some(floor.exact().flatten().unwrap_or(*at)))
@@ -72,7 +72,7 @@ fn standing(world: World<'_>, at: &Q3) -> Answer<Option<Q3>> {
 /// The top of the floor `at` is drawn on in `world`. For a point whose
 /// height is not known, it is the floor of the finest ground known there.
 /// None where nothing is known there.
-pub fn floor_at(world: World<'_>, at: &Q3) -> Option<f64> {
+pub fn floor_at(world: World, at: &Q3) -> Option<f64> {
     match standing(world, at) {
         Answer::Exact(Some(p)) | Answer::Coarser(Some(p), _) => Some(floor_of(&p)),
         _ => None,

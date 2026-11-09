@@ -8,15 +8,15 @@ use crate::domain::control::edit::collision::is_placement_blocked;
 use crate::domain::control::edit::{hover, tool};
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::ext::Ext;
-use crate::domain::layer::object::size::MARKER_ZOOM;
 use crate::domain::preview::{Draft, RenderEdit};
 use crate::sys::sched::edge::request_world_tick;
-use pxl_engine::answer::PLACED_ASSET;
+use pxl_engine::answer::{self, PLACED_ASSET};
+use pxl_spec::asset::id::solid;
 use pxl_spec::asset::marker::{MARKER, MARKER_TEXT_CHARS};
-use pxl_spec::asset::{cube, AssetId};
+use pxl_spec::asset::AssetId;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
-use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom};
+use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom, UNIT_ZOOM};
 use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_core::global::Global;
@@ -24,11 +24,12 @@ use xpute_kit::status::errno::Errno;
 
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::repository;
-use crate::domain::layer::object::store::{Entry, Write, AIR, VOID};
+use crate::domain::layer::object::store::{Entry, Write};
 use crate::domain::query::World;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::space::hierarchy::morton;
 use pxl_spec::space::layer::octant::Octant;
+use pxl_spec::value::{AIR, VOID};
 
 /// Whether AIR is written at `at`: the ground was carved there, or
 /// something placed there was taken back.
@@ -63,7 +64,7 @@ fn place_val_is_redundant(world: World, at: &Q3, zoom: Zoom, cube: AssetId) -> b
     let entry = Octant::holding(zoom, at);
     // Only the resident finest leaf can tell what the ground is. Where no
     // such leaf is resident, the cube is written as asked.
-    world.base().asset_of(&middle(entry)).exact() == Some(cube)
+    World::base().asset_of(&middle(entry)).exact() == Some(cube)
 }
 
 pub(super) fn middle(at: Octant) -> Q3 {
@@ -150,7 +151,7 @@ pub fn draft_at(at: Octant) {
 /// Opens a new marker's draft for a marker tool's tap on the free cell whose
 /// min corner is `corner`.
 pub fn draft_new(corner: &Q3) {
-    draft_at(Octant::holding(MARKER_ZOOM, corner));
+    draft_at(Octant::holding(UNIT_ZOOM, corner));
 }
 
 pub fn cancel_draft() {
@@ -200,20 +201,20 @@ pub fn commit_draft() {
     }
 }
 
-/// Writes an AIR leaf, which means "nothing here, on purpose". Unlike
-/// `remove`, it also hides baked terrain, which has no leaf of its own to
-/// delete.
+/// Writes an AIR leaf, which means "nothing here, on purpose". It hides what
+/// the base holds there, which has no leaf of its own to delete.
 pub fn place_air(at: Octant) {
-    write_object_val(at, cube::object::air as u32);
+    write_object_val(at, AIR);
 }
 
 /// What erasing the entry at `at` writes: VOID where the base holds nothing
-/// there, and AIR where it would fill the cell. Only the resident finest
-/// leaf can tell, as in `place_val_is_redundant`; where no such leaf is
-/// resident, the cube is emptied with AIR.
-fn erase_val(world: World, at: Octant) -> u32 {
-    match world.base().asset_of(&middle(at)).exact() {
-        Some(VOID) => VOID,
+/// there that blocks a body, and AIR where it would fill the cell, which
+/// would hide a decor the ground grows there. Only the resident finest leaf
+/// can tell, as in `place_val_is_redundant`; where no such leaf is resident,
+/// the cube is emptied with AIR.
+fn erase_val(at: Octant) -> u32 {
+    match World::base().asset_of(&middle(at)).exact() {
+        Some(v) if !solid(answer::val(v)) => VOID,
         _ => AIR,
     }
 }
@@ -232,7 +233,7 @@ pub fn remove(at: Octant) {
         .collect();
     submit(Write {
         at: key_of::<3>(at.zoom(), at.at()),
-        id: erase_val(world, at),
+        id: erase_val(at),
         ext: None,
     });
     for c in erased {

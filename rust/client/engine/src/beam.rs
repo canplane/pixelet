@@ -1,6 +1,6 @@
 // pxl-engine/beam.rs
 
-//! wgsl-twin: the camera grid's beam. A beam ray is cast through each corner of the
+//! wgsl-port: the camera grid's beam. A beam ray is cast through each corner of the
 //! grid's cells and walks the pyramid until it meets a cell that fills or lacks, or a split
 //! narrower than it can share with the rays around it (`cast::narrow`). Each cell starts from
 //! the least distance of the beam rays around it, shortened by a margin (`hand_dist`). The

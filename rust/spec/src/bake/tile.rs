@@ -9,6 +9,8 @@ use xpute_kit::wire::xtp::{HDR_SZ, WORD_SZ};
 
 use crate::bake::malformed;
 use crate::bake::publication::BaseLayer;
+use crate::space::coord::zoom::{Zoom, LEAF_ZOOM};
+use crate::space::layer::lattice::{coarsest, Lattice, GROUND};
 
 pub mod division;
 pub mod earth;
@@ -57,16 +59,51 @@ pub mod pkt {
     }
 }
 
-/// The most bytes a packet of `layer` takes: what a client may hold one
-/// in, and refuses one past. The Earth's follows from its lanes; every other
-/// kind's is a room its bake refuses a tile past.
-pub const fn max_pkt_bytes(layer: BaseLayer) -> usize {
-    match layer {
-        BaseLayer::terrain => terrain::MAX_PKT_BYTES,
-        BaseLayer::place => place::MAX_PKT_BYTES,
-        BaseLayer::division => division::MAX_PKT_BYTES,
-        BaseLayer::earth => earth::PKT_BYTES,
+/// What each kind's tiles are, the one table of them (`BaseLayer::row`).
+pub struct Row {
+    /// How its tiles lie on the camera grid, which says what part of the grid
+    /// a tile at each zoom draws.
+    pub lattice: Lattice,
+    /// The zoom its tiles are made at; every coarser one is folded.
+    pub leaf: Zoom,
+    /// The most bytes a packet of it takes: what a client may hold one in,
+    /// and refuses one past. The Earth's follows from its lanes; every other
+    /// kind's is a room its bake refuses a tile past.
+    pub pkt_cap: usize,
+}
+
+impl BaseLayer {
+    pub const fn row(self) -> Row {
+        let (lattice, leaf, pkt_cap) = match self {
+            BaseLayer::terrain => (GROUND, LEAF_ZOOM, terrain::MAX_PKT_BYTES),
+            BaseLayer::place => (place::PLACE_LATTICE, LEAF_ZOOM, place::MAX_PKT_BYTES),
+            BaseLayer::division => (GROUND, division::DIVISION_LEAF, division::MAX_PKT_BYTES),
+            BaseLayer::earth => (GROUND, earth::EARTH_ZOOM, earth::PKT_BYTES),
+        };
+        Row {
+            lattice,
+            leaf,
+            pkt_cap,
+        }
     }
+}
+
+/// A kind's tile as a type, the client's and the bake's alike: its row, and
+/// what the tile says of its children.
+pub trait Tile {
+    const LAYER: BaseLayer;
+
+    const LATTICE: Lattice = Self::LAYER.row().lattice;
+
+    const LEAF: Zoom = Self::LAYER.row().leaf;
+
+    /// The coarsest zoom the kind's tiles are read at, up to which the bake
+    /// folds them (`lattice::coarsest`).
+    const COARSEST: Zoom = coarsest(Self::LATTICE);
+
+    /// Which of the tile's children have tiles of their own, as the bake
+    /// wrote them.
+    fn occupancy(&self) -> Occupancy;
 }
 
 /// Which of a tile and its four children are tiles of their own, the rest said whole by the

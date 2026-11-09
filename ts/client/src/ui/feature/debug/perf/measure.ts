@@ -62,7 +62,7 @@ export async function measure(): Promise<void> {
     await tell(
       JSON.stringify({
         build: __IS_DEV__ ? "dev" : "release",
-        load: Math.max(0, ...r.longs.map((l) => l.durationMs)),
+        longest: Math.max(0, ...r.longs.map((l) => l.durationMs)),
         gpu: f
           ? [f.gpu_busy.p50, f.gpu_busy.p95, f.n, f.gpu_timed]
           : [null, null, 0, 0],

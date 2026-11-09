@@ -4,10 +4,10 @@ use super::*;
 use crate::cast::{End, Query};
 use crate::clipmap;
 use crate::clipmap::{
-    bound_over, column_top, entry, fold, join, joined_idx, mip_idx, Entry, Pool, Presence, ACROSS,
-    BOUNDS_AT, BOUND_ENTRY_WORDS, BRICK_MIPS, BRICK_WORDS, CLIP_LEVELS, CLIP_SIZE, COLUMNS_AT,
-    ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL_ZOOM, JOINED_ENTRIES, JOINED_MIPS, JOINED_WORDS,
-    ORIGIN_AT, OWN_AT, OWN_CELLS,
+    bound_over, column_top, entry, fold, join, joined_idx, mip_idx, Entry, Pool, ACROSS, BOUNDS_AT,
+    BOUND_ENTRY_WORDS, BRICK_MIPS, BRICK_WORDS, CLIP_LEVELS, CLIP_SIZE, COLUMNS_AT, ENTRIES,
+    EYE_CLIP_LEVELS, FIRST_CELL_ZOOM, JOINED_ENTRIES, JOINED_MIPS, JOINED_WORDS, ORIGIN_AT, OWN_AT,
+    OWN_CELLS,
 };
 use crate::content::Sample;
 use crate::fill::{column_of, mip_of, own_of, put, root_of, LoneBrick};
@@ -51,14 +51,11 @@ struct Clipmap<'a> {
     ground: &'a [u32],
 }
 
-impl Presence for Clipmap<'_> {
+impl BrickSource for Clipmap<'_> {
     fn present(&self, cell_zoom: Zoom, q: [i32; 2]) -> (u32, bool) {
         let row = self.rows[((cell_zoom - FIRST_CELL_ZOOM) * ENTRIES + entry(q)) as usize];
         (row.slot(), row.holds(q))
     }
-}
-
-impl BrickSource for Clipmap<'_> {
     fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool) {
         self.rows[((cell_zoom - FIRST_CELL_ZOOM) * ENTRIES + entry) as usize].brick()
     }
@@ -364,13 +361,10 @@ fn footing_without_bound() {
 /// in every row, each cell's nine bits as a declaration lays them (`area::nine`).
 struct WestOf<'a>(Clipmap<'a>, i32);
 
-impl Presence for WestOf<'_> {
+impl BrickSource for WestOf<'_> {
     fn present(&self, cell_zoom: Zoom, q: [i32; 2]) -> (u32, bool) {
         self.0.present(cell_zoom, q)
     }
-}
-
-impl BrickSource for WestOf<'_> {
     fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool) {
         self.0.brick(cell_zoom, entry)
     }

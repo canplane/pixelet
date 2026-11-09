@@ -1,11 +1,12 @@
 // pxl-core/domain/layer/instance.rs
 
-//! A thing drawn as one instance of its shape, whichever layer it comes
-//! from. Its `id` names its kind and so its shape in the asset catalog, and
-//! `meta` is what its decor carries. The ground generates its own instances;
-//! a placed object's instance comes from its placement.
+//! A thing drawn as one instance of its model, whichever layer it comes from.
+//! Its `id` is its asset's id, and `meta` is what its decor carries. The
+//! ground generates its own instances; a placed object's instance comes from
+//! its placement.
 
 use pxl_spec::asset::decor::DecorMeta;
+use pxl_spec::asset::AssetId;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::cube;
@@ -15,7 +16,7 @@ use pxl_spec::space::layer::octant::Octant;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Instance {
-    pub id: u16,
+    pub id: AssetId,
     /// Where it stands: the middle of its footprint, at the height of its
     /// base.
     pub at: V3,
@@ -43,6 +44,14 @@ impl Instance {
 
     /// The cell it stands in: the leaf cell the ground generated it in, or
     /// the cell of its entry for a placed one.
+    pub fn octant(&self) -> Octant {
+        match self.src {
+            Source::Ground(cell) => Octant::new(GROUND.leaf_cell_zoom(), cell),
+            Source::Object(e) => e,
+        }
+    }
+
+    /// The cube of the cell it stands in.
     pub fn cell(&self) -> Aabb {
         match self.src {
             Source::Ground(cell) => cube(GROUND.leaf_cell_zoom(), cell),

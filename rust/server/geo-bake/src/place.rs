@@ -6,20 +6,13 @@ use crate::coverage::Coverage;
 use crate::pyramid::Base;
 use postgres::Client;
 use pxl_geo_spec::overture::properties::CATEGORY_SQL;
-use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::tile::place::{self, category_of, PlaceTile, SourcePlace};
-use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::{idx_of, LEAF_ZOOM};
-use pxl_spec::space::layer::lattice::Lattice;
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 impl Base for PlaceTile {
-    const LAYER: BaseLayer = BaseLayer::place;
-
-    const LATTICE: Lattice = place::PLACE_LATTICE;
-
     fn encode(&self, at: Quadrant) -> Result<Vec<u8>, String> {
         place::encode(self).map_err(|e| format!("{}: {e}", at.key()))
     }
@@ -31,10 +24,6 @@ impl Base for PlaceTile {
     fn fold_tile<'a>(p: Quadrant, get: impl Fn(Quadrant) -> Option<&'a Self>) -> Option<Self> {
         let [a, b, c, d] = p.children().map(get);
         Some(place::fold(p, [a?, b?, c?, d?]))
-    }
-
-    fn occupancy(&self) -> Occupancy {
-        self.occupancy
     }
 }
 

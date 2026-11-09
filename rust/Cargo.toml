@@ -198,7 +198,7 @@ lto = false
 codegen-units = 256
 incremental = true
 
-# The Metal backend with one command buffer per encoder rather than per pass
-# (xpute/rust/vendor/wgpu-hal/src/metal, `chain`).
+# xpute's vendored wgpu (xpute/rust/Cargo.toml).
 [patch.crates-io]
+wgpu-core = { path = "../xpute/rust/vendor/wgpu-core" }
 wgpu-hal = { path = "../xpute/rust/vendor/wgpu-hal" }

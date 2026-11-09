@@ -1,6 +1,6 @@
 // pxl-content/param.rs
 
-//! wgsl-twin: the values pixelet's content sets, each one literal with its reason beside
+//! wgsl-port: the values pixelet's content sets, each one literal with its reason beside
 //! it, in a module for its subject, as the engine's are (pxl-engine param.rs).
 
 pub mod cloud {

@@ -10,11 +10,11 @@ use pxl_spec::share::{eighths, FULL};
 #[test]
 fn cells_hold_their_chance() {
     let side = 512;
-    for decor in &ROWS {
+    for (k, decor) in ROWS.iter().enumerate() {
         let mut cnt = 0u32;
         for y in 0..side {
             for x in 0..side {
-                cnt += u32::from(candidate_at(decor, [x - 7000, y + 123_000]).1);
+                cnt += u32::from(candidate_at(k, [x - 7000, y + 123_000]).1);
             }
         }
         let n = f64::from(side * side);
@@ -22,8 +22,7 @@ fn cells_hold_their_chance() {
         let spread = 5.0 * libm::sqrt(n * p * (1.0 - p));
         assert!(
             (f64::from(cnt) - n * p).abs() <= spread,
-            "{}: {cnt} of {n}, p {p}",
-            decor.val
+            "decor {k}: {cnt} of {n}, p {p}"
         );
     }
 }
@@ -33,18 +32,18 @@ fn cells_hold_their_chance() {
 /// `scatter_at` over a square, every pair asked.
 #[test]
 fn standing_ones_never_meet() {
-    for decor in &ROWS {
+    for (k, decor) in ROWS.iter().enumerate() {
         let mut standing: Vec<(Candidate, i32)> = Vec::new();
         for y in 0..96 {
             for x in 0..96 {
-                if let Some(c) = scatter_at(decor, [x + 4000, y - 900]) {
+                if let Some(c) = scatter_at(k, [x + 4000, y - 900]) {
                     standing.push((c, side_of(decor, &c)));
                 }
             }
         }
         for (i, (a, sa)) in standing.iter().enumerate() {
             for (b, sb) in &standing[i + 1..] {
-                assert!(!meet(a, *sa, b, *sb), "{}: {a:?} {b:?}", decor.val);
+                assert!(!meet(a, *sa, b, *sb), "decor {k}: {a:?} {b:?}");
             }
         }
     }
@@ -106,8 +105,7 @@ fn stands_as_a_cube_keeps() {
                 assert_eq!(
                     stands_at(d, v, cell_zoom),
                     cell_zoom >= LEAF_CELL_ZOOM || eighths(fill.min(u64::from(FULL)) as u32) >= 1,
-                    "{} {v} z{cell_zoom}",
-                    d.val
+                    "{v} z{cell_zoom}"
                 );
             }
         }

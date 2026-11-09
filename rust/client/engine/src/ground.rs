@@ -1,6 +1,6 @@
 // pxl-engine/ground.rs
 
-//! wgsl-twin: the ground's column at a cell, the one rule by which a node's ground is
+//! wgsl-port: the ground's column at a cell, the one rule by which a node's ground is
 //! answered (`node`) before what overwrites it. A cell's palette index and height come from
 //! the clip level that draws it (`clipmap::ground`), by the ground's rules for a cell (pxl-spec
 //! ground.rs). Its cells go by depth, with a cave's air where a cave may take them, by its
@@ -11,12 +11,13 @@ use crate::answer::{
 };
 use crate::clipmap::Lookup;
 use crate::content::Content;
-use pxl_spec::ground::{cells, face_cell, face_height, UNKNOWN, VOID};
+use pxl_spec::ground::{cells, face_cell, face_height, UNKNOWN};
 use pxl_spec::share::FULL;
 use pxl_spec::space::coord::world::{HEIGHT_BITS, SEA_LEVEL};
 use pxl_spec::space::coord::zoom::{z_start, Zoom, LEAF_CELL_ZOOM, MIN_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::layer::area::{Area, Shard};
 use pxl_spec::value;
+use pxl_spec::value::VOID;
 
 /// What the clip levels bound under a node, each source on its own: the ground's faces,
 /// lowest and highest, and the leaf cells the ways fill, lowest and past the highest

@@ -16,6 +16,7 @@ use pxl_engine::clipmap::FIRST_CELL_ZOOM;
 use pxl_render::gpu::draw::DrawList;
 use pxl_render::look::color::linear_rgb;
 use pxl_spec::bake::tile::terrain::TerrainTile;
+use pxl_spec::bake::tile::Tile as _;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::cell_zoom_at;
 use pxl_spec::space::coord::v3::V3;
@@ -28,7 +29,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_core::global::Global;
 
-use crate::domain::layer::terrain::clipmap::{brick_present, eye_bricks, tile_of};
+use crate::domain::layer::terrain::clipmap::{eye_bricks, BrickCover, EyeBrick};
 use crate::domain::layer::Base as _;
 use crate::domain::query::World;
 use crate::domain::scene::gizmo::debug_line::DebugMesh;
@@ -218,7 +219,6 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
         let (gx, gy) = (gap(x0, o.eye[0]), gap(y0, o.eye[1]));
         gx * gx + gy * gy + height * height
     };
-    let tile_cache = TerrainTile::tile_cache();
     // A tile at the top or coarser that no demand line passes through is held
     // by the floor alone (domain/layer/floor.rs). `lined` collects
     // the top tile of every demand line.
@@ -241,14 +241,7 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
             continue;
         };
         let pz = brick::bricks_zoom(cell_zoom);
-        for p in bricks {
-            let tile = tile_of(cell_zoom, p).0;
-            // The brick drawn in this one's place: its own when present, or
-            // else the finest coarser one present.
-            let drawn = (FIRST_CELL_ZOOM..=cell_zoom)
-                .rev()
-                .map(|c| (c, [p[0] >> (cell_zoom - c), p[1] >> (cell_zoom - c)]))
-                .find(|&(c, at)| brick_present(c, at));
+        for EyeBrick { at: p, tile, cover } in bricks {
             let r2 = near(rect((pz, p)));
             if r2 > o.demand_dist * o.demand_dist
                 || cell_zoom_at(r2 as f32).clamp(FIRST_CELL_ZOOM, LEAF_CELL_ZOOM) < cell_zoom
@@ -259,20 +252,21 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
             if (0..4).all(|c| read.contains(&(pz + 1, [2 * p[0] + (c & 1), 2 * p[1] + (c >> 1)]))) {
                 continue;
             }
-            let mark = match drawn {
-                Some((c, at)) => {
+            let mark = match cover {
+                BrickCover::Cells {
+                    cell_zoom: c,
+                    tile: from,
+                } => {
                     out.tiles.push(tile);
                     out.shards.push(area::shard_over(pz, p));
-                    match c < cell_zoom && floor_only(tile_of(c, at).0) {
+                    match c < cell_zoom && floor_only(from) {
                         true => Mark::DrawnFromFloor,
                         false => Mark::Drawn,
                     }
                 }
-                None => match tile_cache.line(tile).finest_resident {
-                    None => Mark::NoTile,
-                    Some(s) if floor_only(s) => Mark::FloorOnly,
-                    Some(_) => Mark::Unbuilt,
-                },
+                BrickCover::Nothing { finest: None } => Mark::NoTile,
+                BrickCover::Nothing { finest: Some(s) } if floor_only(s) => Mark::FloorOnly,
+                BrickCover::Nothing { finest: Some(_) } => Mark::Unbuilt,
             };
             out.bricks.push(((pz, p), mark));
         }

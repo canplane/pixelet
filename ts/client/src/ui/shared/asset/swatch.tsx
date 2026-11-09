@@ -2,7 +2,7 @@
 
 import { Image, type StyleProp, View, type ViewStyle } from "react-native";
 
-import type { u8 } from "@xpute/kit/abi/word.ts";
+import type { u16 } from "@xpute/kit/abi/word.ts";
 import { decor } from "@/ui/shared/asset/decor.spec.ts";
 import { type Cube, cubeHex } from "@/ui/shared/asset/catalog.ts";
 import { shippedTopTextureKey } from "@/ui/shared/asset/texture.ts";
@@ -57,8 +57,8 @@ const DECOR_GLYPH: Readonly<Record<number, GlyphName>> = {
   [decor.train]: "train.side.front.car",
 };
 
-export function decorGlyph(kind: u8): GlyphName {
-  return DECOR_GLYPH[kind];
+export function decorGlyph(id: u16): GlyphName {
+  return DECOR_GLYPH[id];
 }
 
 export function selectionRing(

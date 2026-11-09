@@ -98,8 +98,8 @@ fn is_decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
     split_dist(cell_zoom) * f64::from(CLIP_MARGIN) <= cull_dist_u(extent_u)
 }
 
-/// The clip level zooms the ground generates each kind at, one bit for each
-/// zoom from `FIRST_CELL_ZOOM`. A kind is generated at the leaves' zoom, and
+/// The clip level zooms the ground generates each decor at, one bit for each
+/// zoom from `FIRST_CELL_ZOOM`. A decor is generated at the leaves' zoom, and
 /// at each coarser zoom where one of its variants stands as itself, by its
 /// own size rather than the clip level's cell (pxl-content
 /// `scatter::stands_at`), and is still large enough for an impostor. Every
@@ -119,8 +119,8 @@ pub fn decor_zooms(on: bool) -> [u32; DECORS.len()] {
     zooms_by(|d| d.extent(catalog()))
 }
 
-/// Of `zooms`, the kinds the frame generates at the leaves' clip level, one
-/// bit a kind in `DECORS`' order.
+/// Of `zooms`, the decors the frame generates at the leaves' clip level, one
+/// bit a decor in `DECORS`' order.
 pub fn leaf_decors(zooms: &[u32; DECORS.len()]) -> u32 {
     let leaves = |z: u32| z >> (LEAF_CELL_ZOOM - FIRST_CELL_ZOOM) & 1;
     zooms
@@ -129,7 +129,7 @@ pub fn leaf_decors(zooms: &[u32; DECORS.len()]) -> u32 {
         .fold(0, |bits, (k, &z)| bits | leaves(z) << k)
 }
 
-/// `decor_zooms` with the decor setting on, with each kind's extent taken
+/// `decor_zooms` with the decor setting on, with each decor's extent taken
 /// from `extent` instead of the catalog.
 fn zooms_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {
     core::array::from_fn(|k| {

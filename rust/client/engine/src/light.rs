@@ -1,6 +1,6 @@
 // pxl-engine/light.rs
 
-//! wgsl-twin: the world's depth seen from the light, one ray for each texel of the light's
+//! wgsl-port: the world's depth seen from the light, one ray for each texel of the light's
 //! shadow map (pxl-render light.wgsl `light_cs`). Each texel's ray starts where the texel lies
 //! on the light box's near plane and runs along the light's rays to the far plane, walked
 //! through the same descent the eye's rays take. Every node is asked at its tile's band: the
@@ -1267,9 +1267,9 @@ mod tests {
     use crate::cast::Hit;
     use crate::cast::Node;
     use crate::content::Sample;
-    use crate::object::AIR;
     use crate::param::light;
     use pxl_spec::share::EIGHTHS;
+    use pxl_spec::value::AIR;
 
     /// Starts as a host lays them for the eye at the Q3 position `eye`, from the light's words
     /// alone: each anchor where its texel lies relative to the eye, rounded.

@@ -697,7 +697,6 @@ fn world_word() -> String {
     use pxl_engine::clipmap as clip;
     use pxl_engine::object::{self, Cut};
     use pxl_engine::seed;
-    use pxl_engine::way;
     use pxl_spec::asset::cube::ground as palette;
     use pxl_spec::space::layer::area;
     use pxl_spec::value;
@@ -747,7 +746,6 @@ fn world_word() -> String {
         ("SPANS_ACROSS", clip::SPANS_ACROSS),
         ("SPANS_CNT", clip::SPANS_CNT),
         ("WAY_NOTHING", NOTHING),
-        ("WAY_AIR", way::AIR),
         ("WAY_AIR_OF", AIR_OF),
         ("WAY_SPANS", SPANS as u32),
         ("LOOKUP_SLOT_BITS", clip::LOOKUP_SLOT_BITS),
@@ -836,6 +834,7 @@ fn decor_word() -> String {
     use pxl_content::scatter;
     use pxl_engine::{cast, world};
     use pxl_spec::asset::decor::{Orientation, Row, DECORS, ROWS};
+    use pxl_spec::asset::id::{Kind, IDX_BITS};
     use pxl_spec::value;
     let row = |at: usize| (at / size_of::<u32>()) as u32;
     let words: &[(&str, u32)] = &[
@@ -844,7 +843,7 @@ fn decor_word() -> String {
         ("HEADER_WORDS", g::HEADER_WORDS),
         ("CNT_AT", g::CNT_AT),
         ("SLOTS_AT", g::SLOTS_AT),
-        ("BRICK_RECORDS", g::BRICK_RECORDS),
+        ("BRICK_RECORD_CAP", g::BRICK_RECORD_CAP),
         ("UNGENERATED", g::UNGENERATED),
         ("TURN_SHIFT", g::TURN_SHIFT),
         ("VARIANT_SHIFT", g::VARIANT_SHIFT),
@@ -887,7 +886,8 @@ fn decor_word() -> String {
         ("CNT_TAG", scatter::CNT),
         ("SPLIT_TAG", scatter::SPLIT),
         ("DECORS", ROWS.len() as u32),
-        ("FIRST_VAL", ROWS[0].val),
+        ("IDX_BITS", IDX_BITS),
+        ("DECOR_KIND", Kind::decor as u32),
         ("ROW_WORDS", row(size_of::<Row>())),
         ("ROW_SEED", row(offset_of!(Row, seed))),
         ("ROW_ORIENT", row(offset_of!(Row, orient))),

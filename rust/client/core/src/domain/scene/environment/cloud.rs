@@ -20,7 +20,7 @@ use pxl_content::param::cloud::{CUMULUS_KM, WIND};
 use pxl_render::frame::shader::record::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::gpu::draw::{DrawId, DrawList, Position, ReceiverBox};
-use pxl_spec::asset::catalog::Slot;
+use pxl_spec::asset::catalog::{model_extent, Slot};
 use pxl_spec::asset::sky::cumulus;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::nearest;
@@ -138,18 +138,19 @@ pub fn cloud_groups() -> impl Iterator<Item = (usize, u32, Option<Image>, [f32; 
         .enumerate()
         .map(move |(k, (m, file))| {
             let mesh = m.and_then(|m| models.mesh(m)).map_or(0, |m| m.handle);
-            (FIRST_GROUP + k, mesh, skin, extent(file).map(|e| e as f32))
+            (
+                FIRST_GROUP + k,
+                mesh,
+                skin,
+                model_extent(catalog(), file).map(|e| e as f32),
+            )
         })
 }
 
-/// The extent of the model in `slot`, as the catalog measures it, or zero
-/// before the catalog is read.
-fn extent(slot: Slot) -> [f64; 3] {
-    catalog().map_or([0.0; 3], |c| c.extent(slot))
-}
-
 fn widest(slot: Slot) -> f64 {
-    extent(slot).into_iter().fold(0.0, f64::max)
+    model_extent(catalog(), slot)
+        .into_iter()
+        .fold(0.0, f64::max)
 }
 
 /// The cumulus layer's height over the datum, in units. It is the height at
@@ -404,7 +405,7 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
             let file = VARIANTS[variant];
             let width = CLOUD_WIDTH[0] + (CLOUD_WIDTH[1] - CLOUD_WIDTH[0]) * hash(CLOUD_SALT + 3);
             let scale = width / widest(file);
-            let height = extent(file)[2] * scale;
+            let height = model_extent(catalog(), file)[2] * scale;
             Some(Cloud {
                 variant,
                 local,
@@ -426,7 +427,7 @@ fn patch_clouds(b: &Patch) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
     let words: &[u32] =
         unsafe { core::slice::from_raw_parts(mem::at::<u32>(b.at as usize), b.bytes as usize / 4) };
     column::groups(words)
-        .zip(VARIANTS.map(|file| (widest(file), extent(file)[2])))
+        .zip(VARIANTS.map(|file| (widest(file), model_extent(catalog(), file)[2])))
         .flat_map(move |((first, n), (wide, tall))| {
             let column = GroupRange {
                 first: first as usize,

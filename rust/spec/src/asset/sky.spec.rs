@@ -21,14 +21,14 @@
 /// Quaternius, CC0.
 pub mod cumulus {
     pub const models: [crate::asset::catalog::Slot; 3] = [
-        crate::asset::catalog::Slot(83),
-        crate::asset::catalog::Slot(84),
-        crate::asset::catalog::Slot(85),
+        crate::asset::catalog::Slot(66),
+        crate::asset::catalog::Slot(67),
+        crate::asset::catalog::Slot(68),
     ];
-    pub const skin: crate::asset::catalog::Slot = crate::asset::catalog::Slot(86);
+    pub const skin: crate::asset::catalog::Slot = crate::asset::catalog::Slot(69);
 }
 
 /// The moon's near side, the picture the sky draws it with (NASA).
 pub mod moon {
-    pub const picture: crate::asset::catalog::Slot = crate::asset::catalog::Slot(87);
+    pub const picture: crate::asset::catalog::Slot = crate::asset::catalog::Slot(70);
 }

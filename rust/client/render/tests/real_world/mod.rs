@@ -11,15 +11,15 @@ use pxl_engine::answer::In;
 use pxl_engine::cast::Query;
 use pxl_engine::clipmap as clip;
 use pxl_engine::clipmap::{
-    BrickSource, Lookup, Presence, ACROSS, BRICK_WORDS, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL_ZOOM,
-    JOINED_AT, JOINED_ENTRIES, JOINED_MIPS, ORIGIN_AT, OWN_AT, OWN_CELLS, ROOT_AT, SPANS_WORDS,
+    BrickSource, Lookup, ACROSS, BRICK_WORDS, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL_ZOOM, JOINED_AT,
+    JOINED_ENTRIES, JOINED_MIPS, ORIGIN_AT, OWN_AT, OWN_CELLS, ROOT_AT, SPANS_WORDS,
 };
 use pxl_engine::fill;
 use pxl_engine::ground::{self, Resident};
 use pxl_engine::object::{self, Table, BRANCH};
 use pxl_engine::world::{self, Inheritance};
 use pxl_spec::asset::cube::ground as palette;
-use pxl_spec::asset::decor::ROWS;
+use pxl_spec::asset::decor::DECORS;
 use pxl_spec::brick;
 use pxl_spec::brick::{BRICK_CELLS, BRICK_SHIFT, LINES_BINS_AT, LINES_ENTRIES_AT};
 use pxl_spec::ground::{ele_idx, word, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN, UNKNOWN};
@@ -207,14 +207,11 @@ impl World<'_> {
     }
 }
 
-impl Presence for World<'_> {
+impl BrickSource for World<'_> {
     fn present(&self, cell_zoom: Zoom, q: [i32; 2]) -> (u32, bool) {
         let row = self.row((cell_zoom - FIRST_CELL_ZOOM) * ENTRIES + clip::entry(q));
         (row.slot(), row.holds(q))
     }
-}
-
-impl BrickSource for World<'_> {
     fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool) {
         self.row((cell_zoom - FIRST_CELL_ZOOM) * ENTRIES + entry)
             .brick()
@@ -482,8 +479,6 @@ impl Placing {
         self.first
     }
 }
-
-pub const FIRST_DECOR_VAL: u32 = ROWS[0].val;
 
 /// The world built, and the places where the tests send their asks.
 pub struct Built {
@@ -892,7 +887,7 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
         placing.put(
             LEAF_CELL_ZOOM,
             at,
-            object::leaf_word(FIRST_DECOR_VAL + k % 4, 7000 + k),
+            object::leaf_word(DECORS[k as usize % DECORS.len()].id, 7000 + k),
         );
         decors.push(at);
     }

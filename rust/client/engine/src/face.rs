@@ -1,6 +1,6 @@
 // pxl-engine/face.rs
 
-//! wgsl-twin: the word that says what lies around a face of a cell, which the cast hands
+//! wgsl-port: the word that says what lies around a face of a cell, which the cast hands
 //! to the screen pass in a ray's own words (`ray::FACES`). Across each of the face's four
 //! edges lies the air, the next cell of a flat run, or a cell rising in front of the face. At
 //! each of its four corners there may be a cell rising there alone. The word is asked of the

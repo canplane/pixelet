@@ -84,13 +84,12 @@ impl GhostDraw {
                 decor,
                 variant,
                 rot,
-                scale,
                 stand_in,
             } => {
                 let t = Transform {
                     at,
                     rot: rot as f32,
-                    scale: scale as f32,
+                    scale: 1.0,
                 };
                 self.set_decor(draw, decor, variant, t, stand_in)
             }

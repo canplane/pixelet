@@ -83,7 +83,7 @@ fn way_near(m: u32) -> vec3<i32> {
 }
 
 /// What the ways write in cell `z` of column `c` of the run (`way::way_cell`): a deck's slab or
-/// its pier first, or else a bore's air (`WAY_AIR`); under its face cell, otherwise, the palette
+/// its pier first, or else a bore's air (`VAL_VOID`); under its face cell, otherwise, the palette
 /// index of a bore's air beside it, the first of `way_near`; so a cave never opens into a way.
 fn way_value(run: u32, cell: u32, c: vec2<i32>, z: i32) -> u32 {
   let own = run_column(run, c);
@@ -92,7 +92,7 @@ fn way_value(run: u32, cell: u32, c: vec2<i32>, z: i32) -> u32 {
   }
   let v = column_at(run, own, cell, z);
   if (v != WAY_NOTHING) {
-    return select(v, WAY_AIR, (v & WAY_AIR_OF) != 0u);
+    return select(v, VAL_VOID, (v & WAY_AIR_OF) != 0u);
   }
   let face = head_face(pool[run + own]);
   if (face == FACE_NONE) {

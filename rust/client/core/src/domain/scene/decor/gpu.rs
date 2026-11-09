@@ -4,18 +4,19 @@
 //! gpu/generator.rs). The GPU generates the decor the ground scatters and
 //! draws it together with the decor users placed. The core hands it only what
 //! the CPU alone knows, and never reads back what the GPU generated. Which
-//! zooms each kind is generated at and the angles that set its lod come from
+//! zooms each decor is generated at and the angles that set its lod come from
 //! the lens (domain/view/lens.rs). Among what the core hands are the boxes
 //! where objects were written since the last frame, because the ground's
 //! generated decor may have changed there.
 
-use pxl_content::generation::{self, drawn, row_of};
+use pxl_content::generation::{self, drawn};
 use pxl_content::scatter;
 use pxl_engine::object;
 use pxl_render::gpu::api;
 use pxl_render::gpu::draw::Position;
 use pxl_render::gpu::generator::DecorFrame;
-use pxl_spec::asset::decor::{self, DECORS};
+use pxl_spec::asset::decor::DECORS;
+use pxl_spec::asset::id;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
@@ -36,7 +37,7 @@ use pxl_spec::space::layer::octant::Octant;
 /// frame where nothing changed allocates nothing, and each part but `zooms`
 /// is rebuilt only when its inputs change.
 struct Frame {
-    /// Each kind's zooms (`decor_zooms`). They are taken again every frame,
+    /// Each decor's zooms (`decor_zooms`). They are taken again every frame,
     /// because the decor setting is not among the inputs `last_key` compares.
     zooms: [u32; DECORS.len()],
     walk_zoom: Zoom,
@@ -155,18 +156,17 @@ pub fn step(eye: V3, edit: &RenderEdit) {
     h.records.clear();
     let records = &mut h.records;
     World::now().placed_in(&around, &mut |e| {
-        let (k, decor) = row_of(&decor::ROWS, e.state);
-        if !decor || hide == Some(e.id()) {
+        let Some(decor) = e.asset().decor().filter(|_| hide != Some(e.id())) else {
             return;
-        }
-        let (variant, turn) = user_decor_pick(&e.corner(), &DECORS[k as usize]);
+        };
+        let (variant, turn) = user_decor_pick(&e.corner(), decor);
         let [x, y, z] = idx_of(UNIT_ZOOM, &e.corner());
         records.push([
             generation::record_word(
-                k,
+                id::idx_of(decor.id),
                 variant,
                 turn,
-                scatter::coarsest_stand(&decor::ROWS[k as usize], variant),
+                scatter::coarsest_stand(decor.row, variant),
             ),
             wrap(x),
             y as u32,
@@ -273,7 +273,7 @@ pub fn note_edited(regions: &[Aabb]) {
     }
 }
 
-/// The hand-over `step` built, with each kind's zooms as they are now
+/// The hand-over `step` built, with each decor's zooms as they are now
 /// (`decor_zooms`). The edits `note_edited` held are handed once and then
 /// cleared.
 pub fn frame() -> DecorFrame<'static> {

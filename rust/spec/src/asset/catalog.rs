@@ -64,6 +64,11 @@ impl Catalog {
     }
 }
 
+/// The extent of the file `slot` names, zero before a catalog is read.
+pub fn model_extent(catalog: Option<&Catalog>, slot: Slot) -> [f64; 3] {
+    catalog.map_or([0.0; 3], |c| c.extent(slot))
+}
+
 #[cfg(test)]
 #[path = "catalog.test.rs"]
 mod test;

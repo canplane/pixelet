@@ -145,36 +145,27 @@ pub(crate) fn clear_hover_coord() {
     state().hover.coord = None;
 }
 
-/// What the pick struck, as a tool reads it.
+/// What the pick struck, as a tool reads it: the cell an edit takes, and the
+/// decor the ground generated there, which has no entry in the store.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Target {
-    /// A placed object.
-    Object(Octant),
-    /// A decor the ground generated, and the leaf cell it stands in. It has
-    /// no entry in the store.
-    Prop([i32; 3], Instance),
+pub struct Target {
+    pub at: Octant,
+    pub decor: Option<Instance>,
 }
 
 impl Hover {
-    pub fn object_at(&self) -> Option<Octant> {
-        match self.target {
-            Some(Target::Object(at)) => Some(at),
-            _ => None,
-        }
-    }
-
     pub fn prop(&self) -> Option<Instance> {
-        match self.target {
-            Some(Target::Prop(_, i)) => Some(i),
-            _ => None,
-        }
+        self.target?.decor
     }
 
     /// The placed object pointed at, as stored, and the zoom of the cube an
     /// edit there takes: the object's, or else a whole leaf cell, as a carve
     /// of the ground takes it.
     fn object(&self) -> (Option<Entry>, Zoom) {
-        let object = self.object_at().and_then(|at| World::now().entry_at(at));
+        let object = self
+            .target
+            .filter(|t| t.decor.is_none())
+            .and_then(|t| World::now().entry_at(t.at));
         let zoom = object.map_or(GROUND.leaf_cell_zoom(), |o| o.zoom);
         (object, zoom)
     }
@@ -196,11 +187,7 @@ fn aim(pick: &Pick) -> Hover {
     let target = pick.target();
     let approach = Some(pick.adjacent_corner(GROUND.leaf_cell_zoom()));
     let (corner, zoom) = match target {
-        Some(Target::Object(at)) => (base_of(at.zoom(), at.at()), at.zoom()),
-        Some(Target::Prop(cell, _)) => (
-            base_of(GROUND.leaf_cell_zoom(), cell),
-            GROUND.leaf_cell_zoom(),
-        ),
+        Some(Target { at, .. }) => (base_of(at.zoom(), at.at()), at.zoom()),
         // The corner is on the leaf cell's grid, not the size tier's, because
         // a carve is written at a leaf cell's size.
         None => (

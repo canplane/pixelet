@@ -1,6 +1,6 @@
 // pxl-engine/content.rs
 
-//! wgsl-twin: the rules the engine asks of the content it draws, as the one trait a
+//! wgsl-port: the rules the engine asks of the content it draws, as the one trait a
 //! content implements: how its caves hollow the ground, its strata, its bedrock, and the
 //! Earth's ground past the service area. A world type carries its content as an associated
 //! type of the trait through which those rules are asked (`ground::Resident`); a function that

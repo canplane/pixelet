@@ -10,11 +10,11 @@
 //! are decoded into it straight from the packet. The tile's divisions, a
 //! handful, live on the heap.
 
-use pxl_spec::bake::tile::division::{self, Division, DivisionTile, CELLS, DIVISION_LEAF};
-use pxl_spec::bake::tile::Occupancy;
+use pxl_spec::bake::tile::division::{self, Division, DivisionTile, CELLS};
+use pxl_spec::bake::tile::Tile;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::zoom::{idx_of, Zoom, LEAF_ZOOM};
-use pxl_spec::space::layer::lattice::{Grid, Lattice, GROUND};
+use pxl_spec::space::coord::zoom::{idx_of, LEAF_ZOOM};
+use pxl_spec::space::layer::lattice::{Grid, GROUND};
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_core::global::Global;
 use xpute_core::mem::range;
@@ -23,7 +23,7 @@ use xpute_core::mem::range::OwnedRange;
 use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::body::Packet;
-use crate::sys::io::demand::{PhaseList, Stream};
+use crate::sys::io::demand::PhaseList;
 use crate::sys::io::failure::Exit;
 
 static DIVISION: Global<TileCache<DivisionTile>> = Global::new();
@@ -40,14 +40,7 @@ const ROOM_BYTES: u32 = range::arr_bytes(CELLS, 4);
 pub const DIVISION_BYTES: u32 = TileCache::<DivisionTile>::SLOTS * ROOM_BYTES;
 
 impl Base for DivisionTile {
-    const STREAM: Stream = Stream::division;
-    const LATTICE: Lattice = GROUND;
     const ASK_SCOPE: AskScope = AskScope::Line;
-    const LEAF: Zoom = DIVISION_LEAF;
-
-    fn occupancy(&self) -> Occupancy {
-        self.occupancy
-    }
 
     fn tile_cache() -> &'static mut TileCache<DivisionTile> {
         DIVISION.get(TileCache::default)

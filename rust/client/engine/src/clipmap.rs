@@ -1,6 +1,6 @@
 // pxl-engine/clipmap.rs
 
-//! wgsl-twin: the ground's cells as they are held, one clipmap level (Tanner 1998) a zoom,
+//! wgsl-port: the ground's cells as they are held, one clipmap level (Tanner 1998) a zoom,
 //! around a center. A ray observes a zoom's cells only within `RADIUS` of those cells from
 //! the eye (pxl-spec space/layer/demand.rs `band`; the top zoom's by its reach), so a clipmap
 //! level `CLIP_SIZE` cells a side around the eye holds every cell it can observe at that
@@ -17,13 +17,14 @@ use crate::ground::Cell;
 use crate::ground::Extent;
 use crate::way;
 use pxl_spec::brick::{bricks_zoom, idx_of, of_idx, BRICK, BRICK_CELLS, BRICK_SHIFT};
-use pxl_spec::ground::{palette_idxs, top, UNKNOWN, VOID};
+use pxl_spec::ground::{palette_idxs, top, UNKNOWN};
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::coord::zoom::{idx_at, Zoom, LEAF_CELL_ZOOM, MIN_ZOOM};
 use pxl_spec::space::layer::area;
 use pxl_spec::space::layer::area::{Area, Shard};
 use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::value::VOID;
 use pxl_spec::way::{NOTHING, SPANS};
 
 /// The bricks a clip level holds a side (`ACROSS`) and in all (`ENTRIES`): enough to hold
@@ -300,18 +301,13 @@ pub const OWN_AT: u32 = BOUNDS_AT + BOUND_WORDS;
 /// handed out, where it has none.
 pub const ROOT_AT: u32 = OWN_AT + OWN_WORDS;
 pub const BRICK_WORDS: u32 = ROOT_AT + 1;
-/// Which bricks the clip levels hold present, which is all `step` reads: the clip levels'
-/// table alone.
-pub trait Presence {
-    /// The slot brick `q` at `cell_zoom` is held present in, which the reads
-    /// of `BrickSource` take (`Entry::slot`); false where no clip level holds it.
-    fn present(&self, cell_zoom: Zoom, q: [i32; 2]) -> (u32, bool);
-}
-
 /// The clip levels as one side, the CPU or the GPU, holds them: for each clip level, a
-/// zoom's cells around its center, which brick each entry holds once it is present
-/// (`Presence`), and the slots their cells are held in.
-pub trait BrickSource: Presence {
+/// zoom's cells around its center, which brick each entry holds once it is present, and the
+/// slots their cells are held in.
+pub trait BrickSource {
+    /// The slot brick `q` at `cell_zoom` is held present in, which its other reads take
+    /// (`Entry::slot`); false where no clip level holds it.
+    fn present(&self, cell_zoom: Zoom, q: [i32; 2]) -> (u32, bool);
     /// The brick the clip level read at `cell_zoom` wants in `entry`, and whether it is present;
     /// the inverse of `present`.
     fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool);
@@ -414,7 +410,12 @@ fn cell_at(zoom: Zoom, from: Zoom, c: [i32; 2]) -> [i32; 2] {
 /// answer stands, one look a zoom of the step. With nothing above, or coarser than `above`'s
 /// clip level, every clip level from `cell_zoom`'s to the first (`FIRST_CELL_ZOOM`) is looked
 /// at, and none holding the cell is a lack.
-pub fn step(w: &impl Presence, above: Lookup, cell_zoom: Zoom, g: [i32; 2]) -> (Lookup, [u32; 2]) {
+pub fn step(
+    w: &impl BrickSource,
+    above: Lookup,
+    cell_zoom: Zoom,
+    g: [i32; 2],
+) -> (Lookup, [u32; 2]) {
     // The zooms `above` leaves unknown, finest first, down to the one it answers, or down to the
     // first clip level where it answers none.
     let known = above != Lookup::NONE && cell_zoom >= above.from();
@@ -604,7 +605,7 @@ impl Entry {
             || self.present != was.present
     }
 
-    /// Whether a query that reads only bricks held present (`Presence`) reads this entry
+    /// Whether a query that reads only bricks held present reads this entry
     /// differently from `was`: it moved (`changed_from`) and is held present on either side. A
     /// brick wanted absent in place of another moves only what reads the fold.
     pub fn present_changed_from(&self, was: Entry) -> bool {

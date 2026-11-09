@@ -1,8 +1,7 @@
 // pxl-core/domain/layer/object/meta.rs
 
-//! What a placed thing carries beyond its value: a decor's variant and
-//! heading. Both are seeded by where the thing is placed, which is its one
-//! stable identity.
+//! A placed decor's variant and heading, seeded by where it is placed, its
+//! one stable identity, so none of it is stored.
 
 use pxl_content::generation::placed_pose;
 use pxl_spec::asset::decor::Decor;
@@ -24,9 +23,9 @@ pub fn user_decor_pick(corner: &Q3, decor: &Decor) -> (u32, u32) {
 pub fn decor_instance(e: &Entry) -> Option<Instance> {
     let decor = e.asset().decor()?;
     let (variant, turn) = user_decor_pick(&e.corner(), decor);
-    let (at, meta) = decor.stand(e.cube().min, variant, turn, 1.0);
+    let (at, meta) = decor.stand(e.cube().min, variant, turn);
     Some(Instance {
-        id: decor.val(),
+        id: decor.id,
         at,
         src: Source::Object(e.id()),
         meta,

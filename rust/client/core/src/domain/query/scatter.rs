@@ -14,7 +14,8 @@ use pxl_content::scatter::scatter_at;
 use pxl_engine::support::ColumnSurface;
 use pxl_engine::world::PlacedCursor;
 use pxl_spec::asset::cube::sentinel;
-use pxl_spec::asset::decor::{self, Decor};
+use pxl_spec::asset::decor::Decor;
+use pxl_spec::asset::id::idx_of;
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -26,34 +27,31 @@ use crate::domain::layer::object::store;
 use crate::domain::layer::Answer;
 
 /// The world as decor's generation asks it on the CPU (pxl-engine
-/// `DecorQuery`): the world's one query, of the base and as edited, and what
-/// is placed (`lanes`).
-pub(super) struct DecorWorld<'a, 'w> {
-    world: &'a World<'w>,
-    base: World<'w>,
+/// `DecorQuery`): what the layers compose under the decor (`World::layer_node`),
+/// of the base and as edited, since a decor is generated from what lies under
+/// it, and what is placed (`lanes`).
+pub(super) struct DecorWorld<'a> {
+    world: &'a World,
+    base: World,
     lanes: store::Table<'a>,
 }
 
-impl<'a, 'w> DecorWorld<'a, 'w> {
-    pub(super) fn new(world: &'a World<'w>) -> DecorWorld<'a, 'w> {
+impl<'a> DecorWorld<'a> {
+    pub(super) fn new(world: &'a World) -> DecorWorld<'a> {
         DecorWorld {
             world,
-            base: world.base(),
+            base: World::base(),
             lanes: world.object.columns(),
         }
     }
 }
 
-/// The world's one query on the CPU. A column's surface comes with its line
-/// (`World::column_surface`), and each cell around the column is asked off
-/// that line (`World::asset_about`), both of the base. A cell's
-/// edit is asked of the world as edited (`World::asset`).
-impl DecorQuery for DecorWorld<'_, '_> {
+/// What the layers compose, as the CPU asks them. A column's surface comes
+/// with its line (`World::column_surface`), and each cell around the column
+/// is asked off that line (`World::asset_about`), both of the base. A cell's
+/// edit is asked of the world as edited (`World::asset_at`).
+impl DecorQuery for DecorWorld<'_> {
     type ColumnSurface = ColumnSurface<At>;
-
-    fn rows(&self) -> &[decor::Row] {
-        &decor::ROWS
-    }
 
     /// The column's surface and its top, with false when the world lacked a
     /// tile on the way. Decor generates only on ground held exactly as its
@@ -82,7 +80,7 @@ impl DecorQuery for DecorWorld<'_, '_> {
     /// shows where one is held, as far as its tiles are held.
     fn asset(&mut self, f: &ColumnSurface<At>, zoom: Zoom, c: [i32; 3], edited: bool) -> u32 {
         let answer = if edited {
-            self.world.asset((zoom, c))
+            self.world.asset_at(World::layer_node, (zoom, c))
         } else {
             self.base.asset_about(&f.line, zoom, c)
         };
@@ -106,7 +104,7 @@ pub(super) fn generated_at(
     cell: [i32; 2],
     boxed: bool,
 ) -> Option<(Instance, bool)> {
-    let candidate = scatter_at(decor.row, cell)?;
+    let candidate = scatter_at(idx_of(decor.id) as usize, cell)?;
     let (prop, has_footing, generates) =
         generation::placement(world, decor.row, GROUND.leaf_cell_zoom(), &candidate, boxed);
     has_footing.then(|| (instance(decor, &prop), generates))
@@ -118,14 +116,9 @@ pub(super) fn generated_at(
 pub(super) fn instance(decor: &Decor, prop: &Prop) -> Instance {
     let [x, y, z] = prop.at;
     let base = f64::from(z) - f64::from(prop.sink) / f64::from(1u32 << FRAC_W);
-    let (at, meta) = decor.stand(
-        [f64::from(x), f64::from(y), base],
-        prop.variant,
-        prop.turn,
-        1.0,
-    );
+    let (at, meta) = decor.stand([f64::from(x), f64::from(y), base], prop.variant, prop.turn);
     Instance {
-        id: decor.val(),
+        id: decor.id,
         at,
         src: Source::Ground([x, y, z]),
         meta,

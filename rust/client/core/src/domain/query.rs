@@ -17,7 +17,7 @@
 //! (ARCHITECTURE.md, "The query, the only seam"). It is a child of `layer` in
 //! the module tree, its files beside the layers' (domain/layer.rs), and
 //! callers name it `crate::domain::query`.
-//! The layers' reads (the terrain's and the store's own methods, `CpuClipmap`,
+//! The layers' reads (the terrain's and the store's own methods, `clip_read`,
 //! the ways' pool) are visible within `layer` alone, so the compiler refuses
 //! them anywhere else, and none is re-exported. A public `World` function
 //! answers from the composed world; an answer from one layer alone
@@ -29,8 +29,6 @@
 pub mod change;
 #[path = "query/decor.rs"]
 pub mod decor;
-#[path = "query/decor_box.rs"]
-pub mod decor_box;
 #[path = "query/entry.rs"]
 mod entry;
 #[path = "query/limit.rs"]

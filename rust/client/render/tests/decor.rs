@@ -10,7 +10,7 @@ use pxl_spec::brick;
 use pxl_spec::share::EIGHTHS;
 use std::collections::{BTreeMap, BTreeSet};
 
-use pxl_content::generation::{self, drawn, DecorQuery, BRICK_RECORDS, RECORD_WORDS};
+use pxl_content::generation::{self, drawn, DecorQuery, BRICK_RECORD_CAP, RECORD_WORDS};
 use pxl_content::{halve, scatter};
 use pxl_engine::answer::{self, In};
 use pxl_engine::cast::Line;
@@ -30,7 +30,7 @@ use pxl_render::frame::shader::record::{
     SHADER_LIGHT_MARK_DRAWS, SHADER_LIGHT_MARK_DRAWS_OPEN,
 };
 use pxl_render::frame::shader::word::{instance, ROW_LANES, SQUARE_SIDE};
-use pxl_spec::asset::decor::{Orientation, Row, DECORS, ROWS};
+use pxl_spec::asset::decor::{Decor, Orientation, DECORS, ROWS};
 use pxl_spec::brick::{BRICK, BRICK_CELLS};
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::world::wrap_idx;
@@ -119,10 +119,6 @@ struct Generating<'w, 't> {
 
 impl DecorQuery for Generating<'_, '_> {
     type ColumnSurface = support::ColumnSurface<Inheritance>;
-
-    fn rows(&self) -> &[Row] {
-        &ROWS
-    }
 
     fn column_surface(
         &mut self,
@@ -281,7 +277,7 @@ impl DecorQuery for Generating<'_, '_> {
         let mut t = self.placed.get();
         t[0] += 1;
         if more {
-            let (_, decor) = generation::row_of(&ROWS, word & 0xffff);
+            let decor = Decor::find(word & 0xffff).is_some();
             t[if decor { 1 } else { 2 }] += 1;
             t[3] += (decor && c == self.cuts[1].at && self.cuts[1].zoom == LEAF_CELL_ZOOM) as u64;
             if decor {
@@ -297,7 +293,7 @@ impl DecorQuery for Generating<'_, '_> {
 /// box's lowest corner, and its sink.
 fn stand(q: &mut Generating, j: u32, cell_zoom: Zoom, leaf: [i32; 2]) -> (u32, u32, u32) {
     let decor = &ROWS[j as usize];
-    let c = scatter::candidate_at(decor, leaf).0;
+    let c = scatter::candidate_at(j as usize, leaf).0;
     let (g, has_footing, generates) = generation::placement(q, decor, cell_zoom, &c, true);
     let word = if generates {
         generation::record_word(j, g.variant, g.turn, cell_zoom)
@@ -397,10 +393,10 @@ fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), LeafLi
                     let side = 1u32 << t;
                     for n in 0..side * side {
                         let leaf = [corner[0] + (n % side) as i32, corner[1] + (n / side) as i32];
-                        let (c, here) = scatter::candidate_at(decor, leaf);
+                        let (c, here) = scatter::candidate_at(j, leaf);
                         if here
                             && scatter::stands_at(decor, scatter::variant(decor, &c), cell_zoom)
-                            && scatter::retained(decor, &c)
+                            && scatter::retained(j, &c)
                         {
                             leaves.push(leaf);
                         }
@@ -427,7 +423,7 @@ fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), LeafLi
                     let row = built.clipmap[s as usize];
                     if row[2] != 0 && [row[0], row[1]] == q {
                         for (j, decor) in ROWS.iter().enumerate() {
-                            let c = scatter::candidate_at(decor, leaf).0;
+                            let c = scatter::candidate_at(j, leaf).0;
                             let stands =
                                 scatter::stands_at(decor, scatter::variant(decor, &c), cell_zoom);
                             if let Some(p) = pairs.get_mut(&(s, j as u32)) {
@@ -663,7 +659,7 @@ impl Gpu<'_> {
         let records = make(init, store);
         let list = make(list, store);
         let eye_buf = make(eye_words, wgpu::BufferUsages::UNIFORM);
-        let x = generation::KIND_RECORDS.div_ceil(generation::LANES);
+        let x = generation::DECOR_RECORD_CAP.div_ceil(generation::LANES);
         let mut e = d.create_command_encoder(&Default::default());
         let bind = |p: &wgpu::ComputePipeline, at: &[(u32, &wgpu::Buffer)]| {
             let entries: Vec<_> = at
@@ -886,7 +882,7 @@ fn differ(name: &str, by: &str, got: &[u32], e: &Expected) -> u64 {
                 } else {
                     let rec = (k as u32 - generation::SLOTS_AT) / RECORD_WORDS;
                     (
-                        rec / BRICK_RECORDS,
+                        rec / BRICK_RECORD_CAP,
                         (k as u32 - generation::SLOTS_AT) % RECORD_WORDS,
                     )
                 };
@@ -1481,10 +1477,10 @@ fn thin_leaves(j: usize, cell_zoom: Zoom, q: [i32; 2]) -> Vec<[i32; 2]> {
         let side = 1u32 << t;
         for n in 0..side * side {
             let leaf = [corner[0] + (n % side) as i32, corner[1] + (n / side) as i32];
-            let (c, here) = scatter::candidate_at(decor, leaf);
+            let (c, here) = scatter::candidate_at(j, leaf);
             if here
                 && scatter::stands_at(decor, scatter::variant(decor, &c), cell_zoom)
-                && scatter::retained(decor, &c)
+                && scatter::retained(j, &c)
             {
                 leaves.push(leaf);
             }
@@ -2437,7 +2433,8 @@ fn list_header(frame: &Frame) -> Vec<u32> {
     let mut list = vec![0u32; generation::LIST_WORDS as usize];
     list[generation::THIN_ARGS as usize] = BRICK_CELLS.div_ceil(generation::LANES);
     list[generation::THIN_ARGS as usize + 1] = 1;
-    list[generation::GENERATE_ARGS as usize] = generation::KIND_RECORDS.div_ceil(generation::LANES);
+    list[generation::GENERATE_ARGS as usize] =
+        generation::DECOR_RECORD_CAP.div_ceil(generation::LANES);
     list[generation::GENERATE_ARGS as usize + 1] = 1;
     list[generation::LIST_EVERY as usize] = frame.every as u32;
     list[generation::LIST_RECTS as usize] = frame.boxes.len() as u32;

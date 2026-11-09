@@ -1,6 +1,6 @@
 // pxl-content/cave.rs
 
-//! wgsl-twin: the caves, worms of tunnel decided from the top down, so that a node's share
+//! wgsl-port: the caves, worms of tunnel decided from the top down, so that a node's share
 //! of cave is its own before anything under it is asked, and a coarse cell holds exactly what
 //! its leaves do.
 //!

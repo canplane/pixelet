@@ -37,7 +37,7 @@ fn run_of(g: u32, k: u32) -> vec2<u32> {
   let past = first - decor_first_record(j);
   let records_cnt = records[cnt_at(g, j)];
   let cnt = select(0u, records_cnt - past, records_cnt > past);
-  return vec2<u32>(g * BRICK_RECORDS + decor_first_record(j) + past, min(cnt, RUN));
+  return vec2<u32>(g * BRICK_RECORD_CAP + decor_first_record(j) + past, min(cnt, RUN));
 }
 
 // The fields of a record's first word, as decor_record.wgsl `record_word` packs them.

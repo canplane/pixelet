@@ -3,6 +3,7 @@
 use super::*;
 use pxl_spec::bake::separation::Separation;
 use pxl_spec::bake::tile::terrain::{ELE_COLUMN, PALETTE_COLUMN};
+use pxl_spec::bake::tile::Occupancy;
 
 /// A tile whose lines hold `points` points, as one line.
 fn tile_of(points: usize) -> TerrainTile {

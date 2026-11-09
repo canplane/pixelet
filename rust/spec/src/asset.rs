@@ -1,11 +1,11 @@
 // pxl-spec/asset.rs
 
-//! The content library: every asset the specs declare (`spec/spec/asset/`), each a
-//! definition of a kind (the cubes and their colors, the decors, the marker, the characters,
-//! the sky), numbered by its id, which is its kind over its shape (`id`). Each file a
-//! definition references is a slot, which the catalog the client plugs in fills (`catalog`).
-//! The texture pack belongs to the cube kind: it says which of its tiles a cube wears on each
-//! face (`ingest`). A cube with no image still draws in its catalog color.
+//! The content library: every asset the specs declare (`spec/spec/asset/`), a cube, a decor
+//! or the marker, numbered by its id, which is its kind over its index (`id`), and the
+//! characters and the sky, which no cell holds. Each file a definition references is a slot,
+//! which the catalog the client plugs in fills (`catalog`). The texture pack belongs to the
+//! cube kind: it says which of its tiles a cube wears on each face (`ingest`). A cube with no
+//! image still draws in its catalog color.
 
 pub mod catalog;
 #[path = "asset/character.spec.rs"]
@@ -29,23 +29,10 @@ pub use id::AssetId;
 
 use crate::space::coord::aabb::Aabb;
 use crate::space::coord::zoom::{units, UNIT_ZOOM};
-use crate::value;
-use catalog::Catalog;
+use catalog::{model_extent, Catalog};
+use id::{idx_of, kind_of, Kind};
 use ingest::{CubeFace, PACK};
 use xpute_kit::status::errno::Errno;
-
-// The decors laid into the value space past the cube kind.
-const _: () = {
-    let mut k = 0;
-    while k < decor::ROWS.len() {
-        let v = decor::ROWS[k].val;
-        assert!(
-            !value::grounds(v) && !value::objects(v) && v != value::AIR,
-            "decor past the cube kind"
-        );
-        k += 1;
-    }
-};
 
 /// A catalog color, packed `0xRRGGBB` by the generator.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,20 +51,13 @@ impl decor::Variant {
     /// one is read. NaN is kept rather than dropped, so a model the ingest could not measure is
     /// never taken for none.
     pub fn extent(&self, catalog: Option<&Catalog>) -> f64 {
-        model_extent(self, catalog).into_iter().fold(0.0, largest)
+        model_extent(catalog, self.model)
+            .into_iter()
+            .fold(0.0, largest)
     }
-}
-
-fn model_extent(v: &decor::Variant, catalog: Option<&Catalog>) -> [f64; 3] {
-    catalog.map_or([0.0; 3], |c| c.extent(v.model))
 }
 
 impl decor::Decor {
-    /// What a placed one is stored as.
-    pub const fn val(&self) -> u16 {
-        self.id as u16
-    }
-
     /// The largest over every variant's model, in units.
     pub fn extent(&self, catalog: Option<&Catalog>) -> f64 {
         self.variants
@@ -106,25 +86,11 @@ impl decor::Decor {
     }
 
     /// `variant` turned `turn` with its box's min corner at `corner`, in units: where it stands,
-    /// which is its base's middle, where its model's origin is put, and what it carries at
-    /// `scale`.
-    pub fn stand(
-        &self,
-        corner: [f64; 3],
-        variant: u32,
-        turn: u32,
-        scale: f64,
-    ) -> ([f64; 3], decor::DecorMeta) {
+    /// which is its base's middle, where its model's origin is put, and what it carries.
+    pub fn stand(&self, corner: [f64; 3], variant: u32, turn: u32) -> ([f64; 3], decor::DecorMeta) {
         let [x, y, _] = self.sides(variant, turn);
         let at = [corner[0] + x / 2.0, corner[1] + y / 2.0, corner[2]];
-        (
-            at,
-            decor::DecorMeta {
-                variant,
-                turn,
-                scale,
-            },
-        )
+        (at, decor::DecorMeta { variant, turn })
     }
 
     /// The box that a decor standing at `at` and carrying `m` claims: every cell in it is the
@@ -141,13 +107,17 @@ impl decor::Decor {
     /// Where its variants are numbered from as draw groups, every variant of every decor
     /// numbered decor by decor in the catalog's order, as the GPU's decor numbers them.
     pub fn first_group(&self) -> u32 {
-        let kind = decor::DECORS.iter().take_while(|d| d.id != self.id).count();
-        decor::ROWS[..kind].iter().map(|r| r.variants).sum()
+        decor::ROWS[..idx_of(self.id) as usize]
+            .iter()
+            .map(|r| r.variants)
+            .sum()
     }
 
     /// The decor an id names, or none for an id the catalog does not give out.
     pub fn find(id: AssetId) -> Option<&'static decor::Decor> {
-        decor::DECORS.iter().find(|d| d.id == id)
+        decor::DECORS
+            .get(idx_of(id) as usize)
+            .filter(|_| kind_of(id) == Some(Kind::decor))
     }
 
     /// The decor of an id known to be one, as a tool holds it.

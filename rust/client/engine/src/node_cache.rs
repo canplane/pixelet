@@ -1,6 +1,6 @@
 // pxl-engine/node_cache.rs
 
-//! wgsl-twin: the node cache as a GPU holds it. It keeps the nodes the rays asked about,
+//! wgsl-port: the node cache as a GPU holds it. It keeps the nodes the rays asked about,
 //! each with the world's one query's answer at the zooms it was asked at and what was handed
 //! it after, so that a node is asked once, not once for every ray. The cache is a table of
 //! slots keyed by the node, its zoom and its index. A key's hash picks a bucket of `BUCKET`
@@ -80,8 +80,8 @@ use crate::count;
 use crate::object::RECTS;
 use crate::world::INHERITANCE_WORDS;
 use crate::ZOOM_BITS;
-use pxl_spec::ground::VOID;
 use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::value::VOID;
 
 /// The head's words. `FRAME` is the frame's number. `FORGETS` says what this frame forgets
 /// (`FORGETS_NONE`, `FORGETS_ALL`, `FORGETS_CHANGED`). From `CHANGED_AT` comes one bit for
@@ -339,7 +339,7 @@ pub const fn keeps(zoom: Zoom, c: [i32; 3]) -> bool {
     near(c[0], zoom) && near(c[1], zoom) && near(c[2], zoom)
 }
 
-/// The twin of pxl-render walk_node.wgsl `mix_hash`.
+/// The port of pxl-render walk_node.wgsl `mix_hash`.
 const fn mix_hash(h: u32, v: u32) -> u32 {
     (h ^ v).wrapping_mul(0x9E37_79B1).rotate_left(15)
 }

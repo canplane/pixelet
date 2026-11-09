@@ -105,6 +105,11 @@ of symmetry.
 - **The glTF parse split into a task.** 61 files, 7.9 MiB in all, the largest
   0.26 MiB, each parsed once and all of them shipped by us. `decor` is 0.1 ms at
   p95 on the S23.
+
+  > Since 2026-11-10, restored on the user's word: a file parses in a task of its
+  > own and yields, as it did before `2bd5ddc08b`. The 0.1 ms was read over the
+  > drive, after the models had loaded. Parsing all 61 takes 124 ms on the Mac
+  > and the largest 4 ms, and whatever landed in a turn parsed in that effect.
 - **The objects' apply moved into the budget** (`apply_held`). A shard is applied
   whole wherever it runs, and server tiles rewrite this.
 - **Extending the objects.** The user's word. Their structure is temporary and

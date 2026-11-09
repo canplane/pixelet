@@ -1,6 +1,6 @@
 // pxl-engine/answer.rs
 
-//! wgsl-twin: the answer the world's one query gives about a node, as every source writes
+//! wgsl-port: the answer the world's one query gives about a node, as every source writes
 //! it and every reader reads it: the node's kind; for a cell, its asset in the one value space
 //! and the share of its cube it keeps; and for a split, the box where anything in it may lie,
 //! in the node's own steps, alike on every axis. The descent, the query and the sources all
@@ -15,7 +15,7 @@ use pxl_spec::value;
 pub enum Kind {
     /// Coarser than asked, and something under it may fill.
     Split,
-    /// A cell. At the zoom asked it holds its asset. Coarser than asked, it is air (`AIR`), a
+    /// A cell. At the zoom asked it holds its asset. Coarser than asked, it is air (`EMPTY`), a
     /// cell of air its whole size, where nothing under it fills at the zooms asked.
     Cell,
     /// Not held, a lack: past it the ray can tell nothing.
@@ -30,7 +30,7 @@ pub struct In<B> {
 }
 
 /// A cell nothing fills: void, no palette indices.
-pub const AIR: [u32; 2] = [value::VOID, 0];
+pub const EMPTY: [u32; 2] = [value::VOID, 0];
 
 /// The low bits of an asset's word that hold its value.
 pub const VAL_BITS: u32 = 16;
@@ -140,9 +140,9 @@ pub(crate) const fn box_of(w: PackedBox) -> ([u32; 3], [u32; 3]) {
 /// Whether an asset lets light through: a ray sees nothing there and passes on, whichever
 /// source holds it. Every ray sees by this (cast.rs `walk`), and it is the one place a value
 /// is said to be transparent: void, on which nothing is painted, and air, which is placed as
-/// nothing. What is placed answers a voxel alone (`object::val`), so no decor or marker is
-/// among them. It is a question of light, not of matter (`fills`): matter that a ray sees
-/// through would answer yes to both.
+/// nothing. A decor the CPU's world answers (pxl-core `World::node`) is not among them: an eye
+/// stops at it, though a body passes it (pxl-spec `id::solid`). It is a question of
+/// light, not of matter (`fills`): matter that a ray sees through would answer yes to both.
 pub fn transparent(val: u32) -> bool {
     let v = self::val(val);
     v == value::VOID || v == value::AIR

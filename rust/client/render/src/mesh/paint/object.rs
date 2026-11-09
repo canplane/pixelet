@@ -4,15 +4,14 @@
 
 use pxl_spec::asset::cube::{cube_rgb, ALL_CUBES};
 use pxl_spec::asset::decor::DECORS;
-use pxl_spec::asset::{cube, AssetId};
+use pxl_spec::asset::AssetId;
+use pxl_spec::value::AIR;
 
 use crate::mesh::paint::palette::layer_idx;
 use crate::mesh::paint::palette::rgb255;
 use std::sync::LazyLock;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
-
-const AIR: u32 = cube::object::air as u32;
 
 /// The one painter, built once from the catalog.
 pub static PAINTER: LazyLock<Painter> = LazyLock::new(Painter::new);

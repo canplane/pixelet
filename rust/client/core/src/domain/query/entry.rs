@@ -12,15 +12,15 @@ use super::decor::claim;
 use super::world::World;
 use crate::domain::layer::object::meta::decor_instance;
 use crate::domain::layer::object::store::Entry;
-use crate::domain::query::decor_box::box_extent;
+use crate::domain::query::decor::box_extent;
 use pxl_spec::space::layer::octant::Octant;
 
-impl<'a> World<'a> {
+impl World {
     /// What is placed at exactly `at`, air left out.
     pub fn entry_at(&self, at: Octant) -> Option<Entry> {
+        let node = (at.zoom(), at.at());
         self.object
-            .read((at.zoom(), at.at()))
-            .entry()
+            .entry_at(node.0, node.1, self.object.cursor(node))
             .filter(|e| !is_air(e.state))
     }
 
@@ -44,7 +44,7 @@ impl<'a> World<'a> {
     }
 
     /// A marker's text as it was put up. None for any other entry.
-    pub fn text(&self, e: &Entry) -> Option<&'a str> {
+    pub fn text(&self, e: &Entry) -> Option<&'static str> {
         self.object.text(e)
     }
 

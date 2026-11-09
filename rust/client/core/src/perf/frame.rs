@@ -258,14 +258,10 @@ words!(WorstFrame, WORST::WORDS,
 pub const GPU_SPANS: usize = GPU_SPAN_NAMES;
 pub const EFFECTS: usize = spec::EFFECT_NAMES;
 
-/// Whether a frame dropped a vsync while moving. Its interval ran past the
-/// paced one by more than half a refresh, so it landed at least a refresh
-/// late. Half a refresh is the jitter the runtime's pacing allows: the
-/// runtime skips a frame that comes sooner after the last turn than the
-/// paced interval less half a refresh (xpute runtime sched/scheduler.ts
-/// `turn`).
+/// Whether a frame missed its slot while moving: its interval ran past the
+/// paced one by more than half of it.
 pub fn is_missed(f: &FrameSample) -> bool {
-    f.settled == 0.0 && f.interval_ms > f.paced_ms + f.refresh_ms / 2.0
+    f.settled == 0.0 && f.interval_ms > f.paced_ms * 1.5
 }
 
 /// Whether the tick ran past even the hard ceiling, the budget plus

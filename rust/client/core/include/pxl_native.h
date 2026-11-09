@@ -6,7 +6,6 @@
 
 #pragma once
 
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -16,11 +15,6 @@
 // until pxl_unpacked_free; -1 where it does not decode.
 int32_t pxl_unpack(const uint8_t *src, size_t len, uint8_t **out, size_t *out_len);
 void pxl_unpacked_free(uint8_t *out, size_t len);
-
-// The body of the file the core opened as fd, fetched off the JavaScript thread;
-// zstd says whether it still needs decoding. Returns false where it does not
-// decode, and the runtime has heard nothing.
-bool pxl_file_body(uint32_t fd, const uint8_t *body, size_t len, bool zstd);
 
 // The system's text, called on the core's own thread: how wide a line of UTF-8
 // runs at a CSS weight and a size, and a line drawn from x into width by height

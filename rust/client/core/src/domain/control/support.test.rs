@@ -1,14 +1,15 @@
 // pxl-core/domain/control/support.test.rs
 
 use super::*;
-use crate::domain::layer::object::store::{Store, AIR};
+use crate::domain::layer::object::store::Store;
 use crate::domain::query::over;
-use crate::domain::query::test::{flat_at_five, write};
+use crate::domain::query::test::{flat_at_five, placed, write};
 use crate::sys::serial;
 use pxl_spec::asset::cube::{self};
 use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::space::coord::{q3, world};
+use pxl_spec::value::AIR;
 
 fn height(at: &Q3) -> f64 {
     q3::to_real(i64::from(at[2]))
@@ -20,20 +21,21 @@ fn height(at: &Q3) -> f64 {
 #[test]
 fn the_pivot_follows_its_floor() {
     let _g = serial();
-    let (tile_cache, ground) = flat_at_five();
+    let ground = flat_at_five();
     let at = world::point(ground[0] + 0.5, ground[1] + 0.5, over(5.0));
-    let on = |store: &Store| {
+    let on = |store: Store| {
         stand_memo().forget_touched();
         *stand_memo() = Memo::NONE;
-        let w = World::new(&tile_cache, store);
+        let w = placed(store);
         standing(w, &at).exact().flatten().unwrap()
     };
     let store = Store::default();
-    assert_eq!(height(&on(&store)), over(5.0));
+    assert_eq!(height(&on(store)), over(5.0));
 
     let mut dug = Store::default();
     write(&mut dug, [ground[0], ground[1], 4.0], OBJECT_COARSEST, AIR);
-    assert!(height(&on(&dug)) < over(5.0), "{}", height(&on(&dug)));
+    let dug = height(&on(dug));
+    assert!(dug < over(5.0), "{dug}");
 
     let mut built = Store::default();
     let red = cube::Object::red as AssetId;
@@ -43,5 +45,5 @@ fn the_pivot_follows_its_floor() {
         OBJECT_COARSEST,
         red,
     );
-    assert_eq!(height(&on(&built)), over(6.0));
+    assert_eq!(height(&on(built)), over(6.0));
 }

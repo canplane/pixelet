@@ -80,8 +80,8 @@ fn xy(at: &Q3) -> [f64; 2] {
 /// ray's tile lines step on from the last ray's (`path`), which were handed
 /// on from the columns these were made beside, since the rays climb the same
 /// tiles over the same tile cache.
-struct SplitCell<'w, 'a> {
-    world: &'w World<'a>,
+struct SplitCell<'w> {
+    world: &'w World,
     corner: [f64; 2],
     side: f64,
     across: u32,
@@ -94,8 +94,8 @@ struct SplitCell<'w, 'a> {
     descent: Option<Descent>,
 }
 
-impl<'w, 'a> SplitCell<'w, 'a> {
-    fn new(world: &'w World<'a>, xy: [f64; 2], zoom: Zoom, path: Path) -> SplitCell<'w, 'a> {
+impl<'w> SplitCell<'w> {
+    fn new(world: &'w World, xy: [f64; 2], zoom: Zoom, path: Path) -> SplitCell<'w> {
         let cell_zoom = GROUND.cell_zoom(zoom);
         let side = units(cell_zoom);
         let corner = xy.map(|v| libm::floor(v / side) * side);
@@ -126,12 +126,7 @@ impl<'w, 'a> SplitCell<'w, 'a> {
 
     /// For each column, the box of the first cell that its ray from the
     /// height `z` to the height `to`, up or down, stops at (`until`).
-    fn rays(
-        &mut self,
-        z: f64,
-        to: f64,
-        until: Until,
-    ) -> impl Iterator<Item = Aabb> + use<'_, 'w, 'a> {
+    fn rays(&mut self, z: f64, to: f64, until: Until) -> impl Iterator<Item = Aabb> + use<'_, 'w> {
         (0..self.across * self.across)
             .filter_map(move |k| self.meet(k, z, to, until).val().flatten())
     }
@@ -145,11 +140,11 @@ impl<'w, 'a> SplitCell<'w, 'a> {
             dir: [0.0, 0.0, if to > z { 1.0 } else { -1.0 }],
             t_max: (to - z).abs(),
         };
-        let (answer, _) = self.world.along(
+        let answer = self.world.along(
             &ray,
             self.detail,
             until,
-            None,
+            u32::MAX,
             &mut self.path,
             &mut self.descent,
         );
@@ -197,15 +192,13 @@ impl<'w, 'a> SplitCell<'w, 'a> {
     fn lift(&mut self, mut z: f64) -> f64 {
         loop {
             let top = (0..self.across * self.across)
-                .map(
-                    |k| match self.meet(k, z, BOUNDS.max[2], Until::Transparent) {
-                        Answer::Exact(None) => BOUNDS.max[2],
-                        Answer::Exact(Some(b)) | Answer::Coarser(Some(b), _) if b.min[2] > z => {
-                            self.top_under(k, b.min[2]).max(z)
-                        }
-                        _ => z,
-                    },
-                )
+                .map(|k| match self.meet(k, z, BOUNDS.max[2], Until::Passable) {
+                    Answer::Exact(None) => BOUNDS.max[2],
+                    Answer::Exact(Some(b)) | Answer::Coarser(Some(b), _) if b.min[2] > z => {
+                        self.top_under(k, b.min[2]).max(z)
+                    }
+                    _ => z,
+                })
                 .fold(z, f64::max);
             if top == z {
                 return z;
@@ -218,7 +211,7 @@ impl<'w, 'a> SplitCell<'w, 'a> {
     /// of the reach. The rays go down from `z`, so they start in the cell
     /// over that solid.
     fn below(&mut self, z: f64) -> Option<f64> {
-        self.rays(z, BOUNDS.min[2], Until::Opaque)
+        self.rays(z, BOUNDS.min[2], Until::Solid)
             .map(|b| b.max[2])
             .filter(|&t| t > BOUNDS.min[2])
             .reduce(f64::max)
@@ -228,7 +221,7 @@ impl<'w, 'a> SplitCell<'w, 'a> {
     /// The rays go up from `z` and start in the cell at `z`, so they never
     /// meet a solid at `z` itself.
     fn above(&mut self, z: f64, to: f64) -> Option<f64> {
-        self.rays(z, to, Until::Opaque)
+        self.rays(z, to, Until::Solid)
             .map(|b| b.min[2])
             .filter(|&b| b < to)
             .reduce(f64::min)
@@ -284,7 +277,7 @@ impl<'w, 'a> SplitCell<'w, 'a> {
     }
 }
 
-impl<'a> World<'a> {
+impl World {
     /// What is in the leaf cell at `at`, as the cast draws it (pxl-engine
     /// `world::node`), or void where nothing is.
     pub fn asset_of(&self, at: &Q3) -> Answer<u32> {

@@ -3,8 +3,7 @@
 use super::*;
 use crate::domain::layer::object::store::Store;
 use crate::domain::query::over;
-use crate::domain::query::test::flat_at_five;
-use crate::domain::query::world::World;
+use crate::domain::query::test::{flat_at_five, placed};
 use crate::sys;
 use pxl_spec::brick;
 use pxl_spec::space::coord::world::point;
@@ -58,18 +57,17 @@ fn what_objects_wrote_drops_an_exact_answer() {
 #[test]
 fn queries_report_the_columns_they_read() {
     let _serial = sys::serial();
-    let (tile_cache, [x, y]) = flat_at_five();
-    let store = Store::default();
-    let world = World::new(&tile_cache, &store);
-    *footprint() = Footprint::default();
+    let [x, y] = flat_at_five();
+    let world = placed(Store::default());
+    *read_rect() = ReadRect::default();
     let cell = units(GROUND.leaf_cell_zoom());
     let at = [x + 0.5 * cell, y + 0.5 * cell];
     let c = at.map(|v| libm::floor(v / cell) * cell);
     world.surface_support(&point(at[0], at[1], 0.0));
-    assert_eq!(footprint().0, Some([c, c.map(|v| v + cell)]));
+    assert_eq!(read_rect().0, Some([c, c.map(|v| v + cell)]));
     let from = point(at[0], at[1], over(5.0));
     world.step_slide(&from, &point(at[0] + 3.0 * cell, at[1], 0.0), true);
-    assert_eq!(footprint().0, Some([c, [c[0] + 4.0 * cell, c[1] + cell]]));
+    assert_eq!(read_rect().0, Some([c, [c[0] + 4.0 * cell, c[1] + cell]]));
 }
 
 /// A memo keeps what a cell's asset answers and asks again when a change
@@ -77,9 +75,8 @@ fn queries_report_the_columns_they_read() {
 #[test]
 fn a_memo_keeps_a_cell_until_its_column_changes() {
     let _serial = sys::serial();
-    let (tile_cache, [x, y]) = flat_at_five();
-    let store = Store::default();
-    let world = World::new(&tile_cache, &store);
+    let [x, y] = flat_at_five();
+    let world = placed(Store::default());
     let mut memo = Memo::<u32, Option<u32>>::NONE;
     let at = point(x + 0.5, y + 0.5, 4.5);
     let asked = memo.of(0, || world.asset_of(&at).val());

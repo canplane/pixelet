@@ -71,23 +71,21 @@ impl OutcomeName {
     }
 }
 
-pub const TASK_PHASE_NAMES: usize = 4;
+pub const TASK_PHASE_NAMES: usize = 3;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum TaskPhaseName {
     net_ms = 0,
     bytes = 1,
     decode_ms = 2,
-    adopt_ms = 3,
 }
 
 impl TaskPhaseName {
     /// Every member, in the JSON's own order.
-    pub const ALL: [TaskPhaseName; 4] = [
+    pub const ALL: [TaskPhaseName; 3] = [
         TaskPhaseName::net_ms,
         TaskPhaseName::bytes,
         TaskPhaseName::decode_ms,
-        TaskPhaseName::adopt_ms,
     ];
 
     /// The member a number names, or none for a number the set does not
