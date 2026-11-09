@@ -101,7 +101,7 @@ fn footprint() -> &'static mut Footprint {
 }
 
 /// Reports the cells of `zoom` that the box from `a` to `b` lies in as read.
-pub(super) fn read(a: [f64; 2], b: [f64; 2], zoom: Zoom) {
+pub(super) fn report_read(a: [f64; 2], b: [f64; 2], zoom: Zoom) {
     let side = units(zoom);
     let [lo, hi] = [
         [0, 1].map(|k| a[k].min(b[k])),

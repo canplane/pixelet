@@ -34,7 +34,7 @@ impl<'a> World<'a> {
     /// The base: this world with nothing placed in it.
     pub fn base(self) -> World<'a> {
         World {
-            object: store::nothing_placed(),
+            object: store::empty(),
             ..self
         }
     }

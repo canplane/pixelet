@@ -122,11 +122,11 @@ const fn mean(chance: u32, root: Zoom) -> u32 {
     (chance >> 16) << (2 * (LEAF_CELL_ZOOM - root))
 }
 
-/// The most of `decor` any brick holds: its count's root (`count_root`) is the brick at the
+/// The most of `decor` any brick holds: its count's root (`root`) is the brick at the
 /// coarsest clip level it stands at, which holds its mean rounded (`cnt`), and a finer
 /// clip level's brick holds a share of that.
-pub const fn most(decor: &Row) -> u32 {
-    (mean(decor.chance, count_root(decor)) + 0xffff) >> 16
+pub const fn brick_cap(decor: &Row) -> u32 {
+    (mean(decor.chance, root(decor)) + 0xffff) >> 16
 }
 
 /// `cnt` of a decor whose seed, chance and root are `seed`, `chance` and `root`.
@@ -262,7 +262,7 @@ pub const fn coarsest_stand(decor: &Row, variant: u32) -> Zoom {
 
 /// The coarsest clip level zoom any variant of `decor` stands at
 /// (`any_stands_at`).
-pub const fn root(decor: &Row) -> Zoom {
+pub const fn first_cell_zoom(decor: &Row) -> Zoom {
     let mut cell_zoom = LEAF_CELL_ZOOM;
     while cell_zoom > 0 && any_stands_at(decor, cell_zoom - 1) {
         cell_zoom -= 1;
@@ -271,9 +271,9 @@ pub const fn root(decor: &Row) -> Zoom {
 }
 
 /// The zoom a decor's counts start at: that of a brick at the coarsest clip level it stands
-/// at (`root`).
-pub const fn count_root(decor: &Row) -> Zoom {
-    let root = root(decor);
+/// at (`first_cell_zoom`).
+pub const fn root(decor: &Row) -> Zoom {
+    let root = first_cell_zoom(decor);
     (if root > FIRST_CELL_ZOOM {
         root
     } else {
@@ -281,12 +281,12 @@ pub const fn count_root(decor: &Row) -> Zoom {
     }) - BRICK_SHIFT
 }
 
-/// The root of each decor's counts (`cnt`, `count_root`).
+/// The root of each decor's counts (`cnt`, `root`).
 pub const ROOTS: [Zoom; ROWS.len()] = {
     let mut roots = [LEAF_CELL_ZOOM; ROWS.len()];
     let mut k = 0;
     while k < ROWS.len() {
-        roots[k] = count_root(&ROWS[k]);
+        roots[k] = root(&ROWS[k]);
         k += 1;
     }
     roots

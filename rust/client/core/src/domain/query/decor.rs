@@ -37,9 +37,9 @@ use pxl_spec::space::layer::area::Shard;
 
 /// One ray's decor tests, carried along its ground walk.
 pub(super) struct DecorRay {
-    /// Of what the ground generates, the kinds the frame generates at the
+    /// Of what the ground generates, the decors the frame generates at the
     /// leaves' clip level, one bit a kind in `DECORS`' order.
-    kinds: u32,
+    decors: u32,
     /// How far any decor reaches from where it stands: in units here, and in
     /// whole leaf cells in `around`.
     pub(super) box_extent: f64,
@@ -69,9 +69,9 @@ pub(super) struct DecorRay {
 
 impl DecorRay {
     /// The decor tests of a ray that sees decor as the frame draws it:
-    /// everything placed and, of what the ground generates, `kinds`.
+    /// everything placed and, of what the ground generates, `decors`.
     /// None where the leaves' tiles are not drawn.
-    pub(super) fn new(ray: &Ray, kinds: u32) -> Option<DecorRay> {
+    pub(super) fn new(ray: &Ray, decors: u32) -> Option<DecorRay> {
         // Decor is struck out to where the view draws the leaves' tiles.
         let dist = match GROUND.z_at(0.0) {
             LEAF_ZOOM => draw_dist(GROUND, LEAF_ZOOM).min(ray.t_max),
@@ -82,7 +82,7 @@ impl DecorRay {
         let (za, zb) = (ray.at(0.0)[2], ray.at(dist)[2]);
         let band = [za.min(zb) - extent, za.max(zb) + extent];
         Some(DecorRay {
-            kinds,
+            decors,
             box_extent: extent,
             around,
             draw_dist: dist,
@@ -289,7 +289,7 @@ impl Around {
 impl<'a> World<'a> {
     /// Hands what the ground generates on the leaf `cell`, decor by decor, to
     /// `each` until `each` returns true, and returns whether it did. Only the
-    /// kinds whose bits are set in `kinds` are asked. Each instance stands on
+    /// decors whose bits are set in `decors` are asked. Each instance stands on
     /// its column's surface in the base (`World::column_surface`). With `boxed`,
     /// `each` is also told whether the decor generates there as the frame draws
     /// it (`generated_at`); without `boxed` that is true. Nothing is handed
@@ -298,11 +298,11 @@ impl<'a> World<'a> {
         &self,
         cell: [i32; 2],
         boxed: bool,
-        kinds: u32,
+        decors: u32,
         mut each: impl FnMut(&Decor, Instance, bool) -> bool,
     ) -> bool {
         DECORS.iter().enumerate().any(|(k, decor)| {
-            kinds >> k & 1 == 1
+            decors >> k & 1 == 1
                 && generated_at(&mut DecorWorld::new(self), decor, cell, boxed)
                     .is_some_and(|(i, generates)| each(decor, i, generates))
         })
@@ -428,7 +428,7 @@ impl<'a> World<'a> {
     }
 
     fn generated_near(&self, s: &mut DecorRay, ray: &Ray, cell: [i32; 2]) {
-        self.generated_in(cell, true, s.kinds, |_, i, generates| {
+        self.generated_in(cell, true, s.decors, |_, i, generates| {
             if generates {
                 meet(s, ray, i);
             }

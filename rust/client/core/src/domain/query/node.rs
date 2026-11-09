@@ -109,13 +109,13 @@ impl World<'_> {
     /// what fills it (`node`, asked at that zoom), or void where it is air or
     /// void. `path` are the ground's lines the asker read, and the cell's
     /// line steps on from them (`node`). The cell's column is reported as
-    /// read (`change::read`).
+    /// read (`change::report_read`).
     pub(super) fn asset_at(&self, at: &mut At, path: &mut Path) -> Answer<u32> {
         let (zoom, c) = at.node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
         let side = units(zoom);
         let middle = [c[0], c[1]].map(|v| (f64::from(v) + 0.5) * side);
-        change::read(middle, middle, zoom);
+        change::report_read(middle, middle, zoom);
         self.node(at, [zoom, zoom], path).map(|i| {
             if i.kind == Kind::Cell {
                 i.asset[0]

@@ -278,15 +278,15 @@ impl<'a> World<'a> {
 
     /// The first thing a viewer sees along `ray`: the first cell, or the
     /// decor struck nearer, as the frame draws it: everything placed and, of
-    /// what the ground generates at the leaves, `kinds` (`lens::leaf_kinds`).
+    /// what the ground generates at the leaves, `decors` (`lens::leaf_decors`).
     /// Decor is struck at the leaf cells the ray passes.
-    pub fn first_seen(&self, ray: &Ray, detail: Detail, kinds: u32) -> Answer<Option<Hit>> {
+    pub fn first_visible(&self, ray: &Ray, detail: Detail, decors: u32) -> Answer<Option<Hit>> {
         let mut path = Path::default();
         let (met, decor_ray) = self.along(
             ray,
             detail,
             Until::Opaque,
-            DecorRay::new(ray, kinds),
+            DecorRay::new(ray, decors),
             &mut path,
             &mut None,
         );
@@ -328,7 +328,7 @@ impl<'a> World<'a> {
         };
         let o = ray.origin;
         let end = ray.at(ray.t_max);
-        change::read([o[0], o[1]], [end[0], end[1]], detail.range[0]);
+        change::report_read([o[0], o[1]], [end[0], end[1]], detail.range[0]);
         let from = cast::Ray::new(ray.dir.map(|v| v as f32), ray.t_max as f32);
         let q = origin(o[0], o[1], o[2]);
         let on = descent
@@ -372,7 +372,7 @@ impl<'a> World<'a> {
         let mut walker = self.walker();
         let side = units(cell_zoom);
         let middle = g.map(|v| (f64::from(v) + 0.5) * side);
-        change::read(middle, middle, cell_zoom);
+        change::report_read(middle, middle, cell_zoom);
         let f = support::column_surface(&mut walker, cell_zoom, g);
         let met = (f.end == End::Hit).then_some(f.top);
         let answer = match (met, walker.lack, walker.answered) {

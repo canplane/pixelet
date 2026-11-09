@@ -22,7 +22,7 @@ use pxl_spec::value;
 use xpute_kit::math::rng::SplitMix32;
 
 use crate::param::scatter::ALIGN_NEIGHBOR_RADIUS;
-use crate::scatter::{most, stands_at, variant_of, Candidate};
+use crate::scatter::{brick_cap, stands_at, variant_of, Candidate};
 use pxl_spec::asset::decor::{Orientation, Row, ROWS};
 
 /// The lanes of a decor pass's workgroup.
@@ -765,9 +765,9 @@ pub(crate) fn overlaps_placed(q: &impl DecorQuery, at: [i32; 3], cells: [i32; 3]
 }
 
 /// Its records' room in a brick, a whole number of runs (`RUN`): the most any brick holds
-/// (`scatter::most`).
+/// (`scatter::brick_cap`).
 pub const fn cap(decor: &Row) -> u32 {
-    most(decor).div_ceil(RUN) * RUN
+    brick_cap(decor).div_ceil(RUN) * RUN
 }
 
 #[cfg(test)]

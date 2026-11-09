@@ -121,7 +121,7 @@ pub fn decor_zooms(on: bool) -> [u32; DECORS.len()] {
 
 /// Of `zooms`, the kinds the frame generates at the leaves' clip level, one
 /// bit a kind in `DECORS`' order.
-pub fn leaf_kinds(zooms: &[u32; DECORS.len()]) -> u32 {
+pub fn leaf_decors(zooms: &[u32; DECORS.len()]) -> u32 {
     let leaves = |z: u32| z >> (LEAF_CELL_ZOOM - FIRST_CELL_ZOOM) & 1;
     zooms
         .iter()

@@ -860,11 +860,11 @@ fn generated_decor_edit_removes() {
     }
 }
 
-/// What the ground generates is struck only for the kinds the frame generates
+/// What the ground generates is struck only for the decors the frame generates
 /// at the leaves' clip level. Where the frame generates none, as with the
 /// decor setting off (domain/view/lens.rs `decor_zooms`), the pointer's ray
 /// goes through where a decor would stand and reaches the ground under it
-/// (`World::first_seen`).
+/// (`World::first_visible`).
 #[test]
 fn generated_decor_struck_where_generated() {
     use pxl_spec::asset::decor::DECORS;
@@ -897,9 +897,9 @@ fn generated_decor_struck_where_generated() {
         dir: [0.0, 0.0, -1.0],
         t_max: 20.0,
     };
-    let met = |kinds: u32| {
+    let met = |decors: u32| {
         world
-            .first_seen(&ray, finest(), kinds)
+            .first_visible(&ray, finest(), decors)
             .exact()
             .flatten()
             .expect("the ground under it")

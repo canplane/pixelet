@@ -43,7 +43,7 @@ impl World<'_> {
         }
         let side = units(cell_zoom);
         let middle = c.map(|v| (f64::from(v) + 0.5) * side);
-        change::read(middle, middle, cell_zoom);
+        change::report_read(middle, middle, cell_zoom);
         let line = self.terrain.cursor((cell_zoom, c), cell_zoom);
         self.terrain
             .column(&line, Lookup::NONE, (cell_zoom, c))

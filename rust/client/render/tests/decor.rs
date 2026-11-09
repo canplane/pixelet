@@ -1400,7 +1400,9 @@ fn hand_decor_answers_as_placement() {
     // A decor stands no coarser than two zooms over the leaves. There the ground's top, the
     // ways and the caves under a face keep an even share of a cube, so the walk meets no odd
     // share.
-    assert!(ROWS.iter().all(|d| scatter::root(d) >= LEAF_CELL_ZOOM - 2));
+    assert!(ROWS
+        .iter()
+        .all(|d| scatter::first_cell_zoom(d) >= LEAF_CELL_ZOOM - 2));
     assert_eq!(tally.0["walk: met an odd part of its cube"], 0);
     let zero: Vec<_> = tally
         .0
