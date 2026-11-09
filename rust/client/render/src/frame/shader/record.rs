@@ -35,7 +35,7 @@ pub const COMPUTE_FORGET: u32 = 12;
 pub const COMPUTE_QUEUE_LAST_SAMPLES: u32 = 13;
 pub const COMPUTE_LIGHT: u32 = 14;
 pub const COMPUTE_QUEUE_ASK_PARKED: u32 = 15;
-pub const COMPUTE_SAMPLE_BOX: u32 = 16;
+pub const COMPUTE_SAMPLE_HIT: u32 = 16;
 pub const COMPUTE_FACE: u32 = 17;
 /// Stands as receivers the pixels whose rays the holes' queue walked, found by their walked
 /// bits (pxl-engine `ray::hole_bit`, light_mark.wgsl).
@@ -55,7 +55,7 @@ pub const COMPUTE_RECT_ARGS: u32 = 28;
 pub const COMPUTE_QUEUE_LIGHT_CORNERS: u32 = 29;
 pub const COMPUTE_LIGHT_CELL: u32 = 30;
 pub const COMPUTE_QUEUE_LAST_LIGHT_SAMPLES: u32 = 31;
-pub const COMPUTE_LIGHT_SAMPLE_BOX: u32 = 32;
+pub const COMPUTE_LIGHT_SAMPLE_HIT: u32 = 32;
 /// The first walk over the node cache alone of the eye's samples (`SHADER_QUEUE_SAMPLES`).
 pub const COMPUTE_QUEUE_SAMPLES: u32 = 33;
 pub const COMPUTE_QUEUE: u32 = 34;
@@ -116,7 +116,7 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_QUEUE_LAST_SAMPLES => (SHADER_QUEUE_LAST_SAMPLES, "queue_last_cs"),
         COMPUTE_LIGHT => (SHADER_LIGHT, "light_cs"),
         COMPUTE_QUEUE_ASK_PARKED => (SHADER_QUEUE_ASK, "queue_ask_parked_cs"),
-        COMPUTE_SAMPLE_BOX => (SHADER_SAMPLE_BOX, "sample_box_cs"),
+        COMPUTE_SAMPLE_HIT => (SHADER_SAMPLE_HIT, "sample_hit_cs"),
         COMPUTE_FACE => (SHADER_FACE, "face_cs"),
         COMPUTE_LIGHT_MARK_WALKED => (SHADER_LIGHT_MARK, "light_mark_walked_cs"),
         COMPUTE_LIGHT_MARK_DRAWS => (SHADER_LIGHT_MARK_DRAWS, "light_mark_draws_cs"),
@@ -135,7 +135,7 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_QUEUE_LIGHT_CORNERS_PARKED => (SHADER_QUEUE_LIGHT_CORNERS, "queue_parked_cs"),
         COMPUTE_LIGHT_CELL => (SHADER_LIGHT_CELL, "light_cell_cs"),
         COMPUTE_QUEUE_LAST_LIGHT_SAMPLES => (SHADER_QUEUE_LAST_LIGHT_SAMPLES, "queue_last_cs"),
-        COMPUTE_LIGHT_SAMPLE_BOX => (SHADER_LIGHT_SAMPLE_BOX, "sample_box_cs"),
+        COMPUTE_LIGHT_SAMPLE_HIT => (SHADER_LIGHT_SAMPLE_HIT, "sample_hit_cs"),
         COMPUTE_QUEUE_SAMPLES => (SHADER_QUEUE_SAMPLES, "queue_cs"),
         COMPUTE_QUEUE_SAMPLES_PARKED => (SHADER_QUEUE_SAMPLES, "queue_parked_cs"),
         COMPUTE_QUEUE => (SHADER_QUEUE, "queue_cs"),

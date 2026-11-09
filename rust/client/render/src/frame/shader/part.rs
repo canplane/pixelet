@@ -102,12 +102,12 @@ pub const SHADER_QUEUE_ASK: u32 = 39;
 /// Brings the occlusion's half-resolution map up to each pixel and multiplies it into the
 /// world's color, drawn as the claimed tiles' quads (ao_apply.wgsl).
 pub const SHADER_AO_APPLY: u32 = 40;
-/// `SHADER_SAMPLE_BOX` writes the eye's samples into the record of voxels as stops (pxl-engine
-/// `record`, sample_box.wgsl). It is a port by hand with two compute entry points.
+/// `SHADER_SAMPLE_HIT` writes the eye's samples into the record of voxels as stops (pxl-engine
+/// `record`, sample_hit.wgsl). It is a port by hand with two compute entry points.
 /// `SHADER_RASTER` draws the record's voxels as boxes, the eye's and the light's, and keeps at
 /// each pixel the voxel whose face its ray enters first (raster.wgsl). The cast reads what
 /// each pixel keeps (`SHADER_CAST`).
-pub const SHADER_SAMPLE_BOX: u32 = 41;
+pub const SHADER_SAMPLE_HIT: u32 = 41;
 pub const SHADER_RASTER: u32 = 42;
 /// Asks the world what lies around each face of the record's voxels, once a face (pxl-engine
 /// `raster::ARGS_FACES`, `record::R_FACES`), and around the face each missed pixel's hit
@@ -174,14 +174,14 @@ pub const SHADER_LOCATION_BEACON_MARK: u32 = 63;
 /// Writes the indirect args of the draw of one quad a tile over the box the frame's marks
 /// cover (rect_args.wgsl). It has one compute entry point.
 pub const SHADER_RECT_ARGS: u32 = 64;
-/// `SHADER_QUEUE_CORNERS`, `SHADER_CELL`, `SHADER_QUEUE_LAST_SAMPLES` and `SHADER_SAMPLE_BOX`
+/// `SHADER_QUEUE_CORNERS`, `SHADER_CELL`, `SHADER_QUEUE_LAST_SAMPLES` and `SHADER_SAMPLE_HIT`
 /// for the light's map: the walks of its beam rays, its cells, the last walk of its samples,
 /// and its samples' stops into the record (beam.light.wgsl, light_cell.wgsl,
-/// sample.light.wgsl, sample_box.light.wgsl).
+/// sample.light.wgsl, sample_hit.light.wgsl).
 pub const SHADER_QUEUE_LIGHT_CORNERS: u32 = 65;
 pub const SHADER_LIGHT_CELL: u32 = 66;
 pub const SHADER_QUEUE_LAST_LIGHT_SAMPLES: u32 = 67;
-pub const SHADER_LIGHT_SAMPLE_BOX: u32 = 68;
+pub const SHADER_LIGHT_SAMPLE_HIT: u32 = 68;
 /// Walks the eye's samples over the node cache alone (queue_walk.wgsl over sample.wgsl and
 /// sample.eye.wgsl). A sample that meets a node no slot keeps is parked.
 /// `SHADER_QUEUE_ASK` then asks the world for that node, and
@@ -598,7 +598,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "ao_view",
         "ao_apply",
     ],
-    // SHADER_SAMPLE_BOX
+    // SHADER_SAMPLE_HIT
     &[
         "walk_word",
         "raster_box",
@@ -610,8 +610,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "sample.eye",
         "record",
         "record_put",
-        "sample_box.eye",
-        "sample_box",
+        "sample_hit.eye",
+        "sample_hit",
     ],
     // SHADER_RASTER
     &[
@@ -840,7 +840,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "item_list",
         "queue_last",
     ],
-    // SHADER_LIGHT_SAMPLE_BOX
+    // SHADER_LIGHT_SAMPLE_HIT
     &[
         "walk_word",
         "raster_box",
@@ -854,8 +854,8 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "sample.light",
         "record",
         "record_put",
-        "sample_box.light",
-        "sample_box",
+        "sample_hit.light",
+        "sample_hit",
     ],
     // SHADER_QUEUE_SAMPLES
     &[

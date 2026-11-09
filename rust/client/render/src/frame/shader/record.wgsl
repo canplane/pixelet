@@ -123,8 +123,8 @@ fn asked_near(p: Aabb) -> u32 {
 }
 
 /// Whether the eye's ray from `o` stopped on `k` whole, that is, on a node coarser than the
-/// zoom it asked there (pxl-engine `record::stopped_whole`).
-fn stopped_whole(k: Node, o: vec3<i32>) -> bool {
+/// zoom it asked there (pxl-engine `record::ray_whole`).
+fn ray_whole(k: Node, o: vec3<i32>) -> bool {
   return k.zoom < asked_near(node_planes(k, o));
 }
 

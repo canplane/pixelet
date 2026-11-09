@@ -39,7 +39,7 @@ use crate::frame::shader::group::{
     LIGHT_MARK_DRAWS_BINDS, LIGHT_MARK_DRAWS_GROUP, LIGHT_MARK_DRAWS_OPEN_BINDS,
     LIGHT_MARK_DRAWS_OPEN_GROUP, LIGHT_MARK_GROUP, LIGHT_MISSES, LIGHT_PROPAGATE_BINDS,
     LIGHT_PROPAGATE_GROUP, LIGHT_RASTER_ARGS, LIGHT_RECEIVER_TILES, LIGHT_SAMPLES_ASK_BINDS,
-    LIGHT_SAMPLES_WALK_BINDS, LIGHT_SAMPLE_BOX_BINDS, LIGHT_SLIDE_BINDS, LIGHT_SLIDE_GROUP,
+    LIGHT_SAMPLES_WALK_BINDS, LIGHT_SAMPLE_HIT_BINDS, LIGHT_SLIDE_BINDS, LIGHT_SLIDE_GROUP,
     LIGHT_SLOTS_BINDS, LIGHT_WALK_ASK_BINDS, LIGHT_WALK_BINDS, LIGHT_WORLD_BINDS, MARKS,
     NODE_CACHE, PIXELS_BINDS, QUEUES, QUEUE_GROUP, QUEUE_LAST_GROUP, SAMPLES_ASK_BINDS,
     SAMPLES_WALK_BINDS, WALK_ASK_BINDS, WALK_BINDS, WORLD_BINDS, WORLD_GROUP,
@@ -1404,7 +1404,7 @@ impl RayPass {
                 [
                     &c.light,
                     &c.cell,
-                    &c.raster.light_sample_box,
+                    &c.raster.light_sample_hit,
                     &c.queue_last,
                     &c.light_mark_walked,
                     &c.light_mark_draw,
@@ -1816,8 +1816,8 @@ impl RayPass {
             let stamp = ctx.stamp(GpuSpanName::light_raster).pass();
             let pass = g.compute_pass(encoder, stamp);
             g.set_bind_group(pass, 0, c.light_groups[2], &[]);
-            g.set_pipeline(pass, c.raster.light_sample_box.id);
-            g.dispatch_indirect(pass, c.light_args, sequence::LIGHT_SAMPLE_BOX.at());
+            g.set_pipeline(pass, c.raster.light_sample_hit.id);
+            g.dispatch_indirect(pass, c.light_args, sequence::LIGHT_SAMPLE_HIT.at());
             g.end(pass);
             c.raster.light_draw(ctx);
             let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::light_slot).pass());
@@ -2021,7 +2021,7 @@ impl RayPass {
 /// and no instance.
 fn light_args() -> [u32; light::ARGS_WORDS as usize] {
     let mut args = [0; light::ARGS_WORDS as usize];
-    for w in [light::ARGS_CELLS, light::ARGS_SAMPLE_BOX, light::ARGS_SLOT] {
+    for w in [light::ARGS_CELLS, light::ARGS_SAMPLE_HIT, light::ARGS_SLOT] {
         args[w as usize..w as usize + 3].copy_from_slice(&[light::LIST_ACROSS, 0, 1]);
     }
     args[light::ARGS_LAY as usize] = light::LAY_VERTICES;
@@ -2083,7 +2083,7 @@ fn light_groups(
     [
         walk,
         world,
-        sample_box,
+        sample_hit,
         queue_last,
         mark,
         mark_draw,
@@ -2150,7 +2150,7 @@ fn light_groups(
     [
         of(walk, &LIGHT_SLOTS_BINDS),
         of(world, &LIGHT_WORLD_BINDS),
-        of(sample_box, &LIGHT_SAMPLE_BOX_BINDS),
+        of(sample_hit, &LIGHT_SAMPLE_HIT_BINDS),
         last,
         of(mark, &LIGHT_MARK_BINDS),
         of(mark_draw, &LIGHT_MARK_DRAWS_BINDS),

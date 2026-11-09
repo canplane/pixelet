@@ -614,7 +614,7 @@ fn walk_word() -> String {
         ("LIGHT_COLUMNS", light::COLUMNS as u32),
         ("LIGHT_REACH_NDC", light::REACH_NDC as u32),
         ("LIGHT_ARGS_CELLS", light::ARGS_CELLS),
-        ("LIGHT_ARGS_SAMPLE_BOX", light::ARGS_SAMPLE_BOX),
+        ("LIGHT_ARGS_SAMPLE_HIT", light::ARGS_SAMPLE_HIT),
         ("LIGHT_ARGS_SLOT", light::ARGS_SLOT),
         ("LIGHT_RECEIVER_TILES_CNT", light::RECEIVER_TILES_CNT),
         ("LIGHT_ARGS_LAY", light::ARGS_LAY),

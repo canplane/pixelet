@@ -1,7 +1,7 @@
 // pxl-render/record_put.wgsl
 
 // Writes a ray's stop into the record (pxl-engine record.rs, the third of its writers). Every
-// stop goes in this way: the samples' (sample_box.wgsl) and the missed pixels' hits
+// stop goes in this way: the samples' (sample_hit.wgsl) and the missed pixels' hits
 // (record_hits.wgsl) each call `observe_hit`. A stop finds its node's entry (record.wgsl
 // `find`), marks the entry whole where it stopped on it whole, and sets the face its ray
 // entered. The first stop to enter a face asks the faces' pass (face.wgsl) for that face's
@@ -23,7 +23,7 @@ fn node_cache_word(k: u32) -> u32 {
 /// What a ray found where it stopped on a node (pxl-engine `record`); the node itself is
 /// passed apart, as a `Node`. `asset` is the node's answer, and `lacks` says the node's data is
 /// not held. `whole` says the node is coarser than the zoom the ray asked there
-/// (`record::stopped_whole`, `record::light_whole`). `face` is the face the ray entered: twice
+/// (`record::ray_whole`, `record::light_whole`). `face` is the face the ray entered: twice
 /// the axis, plus one where the ray runs up the axis. `line` is the first word of the beam
 /// ray's line from which that face's word is asked (`beam::ASK_LINE`).
 struct Hit {

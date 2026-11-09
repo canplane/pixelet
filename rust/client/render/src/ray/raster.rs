@@ -2,7 +2,7 @@
 
 //! The raster that draws the node cache's drawable entries as boxes, so that each drawn pixel
 //! keeps the voxel its ray enters first (pxl-engine `record`, `raster`). After the samples,
-//! each sample's stop sets its face on its node's entry (sample_box.wgsl). Every drawable
+//! each sample's stop sets its face on its node's entry (sample_hit.wgsl). Every drawable
 //! entry in view is then written as a box (record_draw.wgsl) and drawn at the rays' pixels
 //! (raster.wgsl), and the depth test keeps the nearest face a pixel's ray enters. The pixels'
 //! cast reads that voxel (cast.wgsl `cast_cs`). What lies about each new face is asked once a
@@ -23,12 +23,12 @@ use pxl_engine::{beam, eye, light, node_cache, raster, record};
 use crate::frame::shader::group::{
     BEAMS, FACES_BINDS, FACE_GROUP, HEADER_BINDING, HIT_FACES_OF_BINDS, LIGHT_ARGS, LIGHT_LIST,
     LIGHT_RASTER_ARGS, LIGHT_RECEIVER_TILES, LIGHT_RECORD_BINDS, LIGHT_RECORD_HITS_BINDS,
-    LIGHT_RECORD_HITS_GROUP, LIGHT_SAMPLE_BOX_GROUP, NODE_CACHE, RASTER_ARGS, RECORD_BINDS,
-    RECORD_GROUP, RECORD_HITS_GROUP, RECORD_HITS_OF_BINDS, SAMPLE_BOX_BINDS, SAMPLE_BOX_GROUP,
+    LIGHT_RECORD_HITS_GROUP, LIGHT_SAMPLE_HIT_GROUP, NODE_CACHE, RASTER_ARGS, RECORD_BINDS,
+    RECORD_GROUP, RECORD_HITS_GROUP, RECORD_HITS_OF_BINDS, SAMPLE_HIT_BINDS, SAMPLE_HIT_GROUP,
 };
 use crate::frame::shader::record::{
-    COMPUTE_FACE, COMPUTE_LIGHT_RECORD_DRAW, COMPUTE_LIGHT_RECORD_HITS, COMPUTE_LIGHT_SAMPLE_BOX,
-    COMPUTE_RECORD_DRAW, COMPUTE_RECORD_FACES, COMPUTE_RECORD_HITS, COMPUTE_SAMPLE_BOX,
+    COMPUTE_FACE, COMPUTE_LIGHT_RECORD_DRAW, COMPUTE_LIGHT_RECORD_HITS, COMPUTE_LIGHT_SAMPLE_HIT,
+    COMPUTE_RECORD_DRAW, COMPUTE_RECORD_FACES, COMPUTE_RECORD_HITS, COMPUTE_SAMPLE_HIT,
     PIPELINE_RASTER, PIPELINE_RASTER_MASK,
 };
 use crate::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS, SQUARE_SIDE};
@@ -44,8 +44,8 @@ use pxl_engine::param::raster::GROWTH;
 /// pixel's voxel (r32uint), and the depth it is tested by. The visibility buffer is drawn into
 /// as a 2D view and read as an array of one layer (`visibility_array`).
 pub(super) struct Raster {
-    /// Sets each sample's stop on its node's drawable entry (sample_box.wgsl).
-    pub(super) sample_box: Pipeline,
+    /// Sets each sample's stop on its node's drawable entry (sample_hit.wgsl).
+    pub(super) sample_hit: Pipeline,
     /// The passes that write drawable entries as boxes, a thread a slot of the node cache: the
     /// eye's for the entries in view, the light's for those on its box (record_draw.wgsl).
     record_draw_pipeline: Pipeline,
@@ -58,9 +58,9 @@ pub(super) struct Raster {
     /// Writes the light's holes' stops into their drawable entries (record_hits.wgsl over
     /// record_hits.light.wgsl).
     light_record_hit: Pipeline,
-    /// Sets the shadow map's samples' stops, as `sample_box` sets the eye's (sample_box.wgsl over
+    /// Sets the shadow map's samples' stops, as `sample_hit` sets the eye's (sample_hit.wgsl over
     /// sample.light.wgsl). Its group binds the light's head as well.
-    pub(super) light_sample_box: Pipeline,
+    pub(super) light_sample_hit: Pipeline,
     face: Pipeline,
     draw_pipeline: Pipeline,
     /// Draws the gate the boxes pass through in a frame not drawn whole: it sets the claimed
@@ -121,11 +121,11 @@ pub(super) struct LightRaster {
 impl Raster {
     pub(super) fn new(g: &Gpu, pipelines: &mut PipelineCache) -> Raster {
         Raster {
-            sample_box: pipelines.build_compute(g, COMPUTE_SAMPLE_BOX, &SAMPLE_BOX_GROUP),
-            light_sample_box: pipelines.build_compute(
+            sample_hit: pipelines.build_compute(g, COMPUTE_SAMPLE_HIT, &SAMPLE_HIT_GROUP),
+            light_sample_hit: pipelines.build_compute(
                 g,
-                COMPUTE_LIGHT_SAMPLE_BOX,
-                &LIGHT_SAMPLE_BOX_GROUP,
+                COMPUTE_LIGHT_SAMPLE_HIT,
+                &LIGHT_SAMPLE_HIT_GROUP,
             ),
             record_draw_pipeline: pipelines.build_compute(g, COMPUTE_RECORD_DRAW, &RECORD_GROUP),
             light_record_draw: pipelines.build_compute(g, COMPUTE_LIGHT_RECORD_DRAW, &RECORD_GROUP),
@@ -297,11 +297,11 @@ impl Raster {
                 g.frame_group(self.face.layouts[0], table, buf, &world)
             };
             let eye_only = [buf_entry(0, eye)];
-            let stops = [buf_entry(0, eye), view_entry(3, rays)];
+            let hits = [buf_entry(0, eye), view_entry(3, rays)];
             self.groups = [
                 g.frame_group(
-                    self.sample_box.layouts[0],
-                    &SAMPLE_BOX_BINDS,
+                    self.sample_hit.layouts[0],
+                    &SAMPLE_HIT_BINDS,
                     buf,
                     &eye_only,
                 ),
@@ -322,7 +322,7 @@ impl Raster {
                     self.record_hit.layouts[0],
                     &RECORD_HITS_OF_BINDS,
                     buf,
-                    &stops,
+                    &hits,
                 ),
             ];
             self.bindings = bindings;
@@ -407,7 +407,7 @@ impl Raster {
             let [x, y] = grid.samples;
             let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::raster_box).pass());
             g.set_bind_group(pass, 0, self.groups[0], &[]);
-            g.set_pipeline(pass, self.sample_box.id);
+            g.set_pipeline(pass, self.sample_hit.id);
             g.dispatch(pass, x.div_ceil(SQUARE_SIDE), y.div_ceil(SQUARE_SIDE), 1);
             g.end(pass);
         }

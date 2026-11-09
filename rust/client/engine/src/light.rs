@@ -879,7 +879,7 @@ pub fn margin(width: f32) -> f32 {
 /// The shadow map cast as the eye's rays are, every slot every frame (pxl-engine `raster`).
 /// A sample every `SAMPLE` slots across and down is walked (pxl-render sample.wgsl over
 /// sample.light.wgsl); the cells the samples stopped at are written into the record by the
-/// eye's writer (pxl-render sample_box.wgsl `sample_box_cs`) and drawn from the light as boxes
+/// eye's writer (pxl-render sample_hit.wgsl `sample_hit_cs`) and drawn from the light as boxes
 /// by the eye's raster, orthographic (pxl-render raster.wgsl), in the box's order
 /// (`Light::texel`), each texel keeping the nearest box its own ray enters. A slot whose ray enters its visible sample,
 /// tested again with its own ray as the eye's pixels test theirs (`cast::entry`), takes it
@@ -1201,7 +1201,7 @@ pub const fn reads_epoch(epoch: u32, reads_from: u32) -> u32 {
 /// read no count of theirs here: the drawn receivers' dispatch is a buffer of its own
 /// (`DRAWS_DISPATCH_WORDS`).
 pub const ARGS_CELLS: u32 = 0;
-pub const ARGS_SAMPLE_BOX: u32 = 3;
+pub const ARGS_SAMPLE_HIT: u32 = 3;
 pub const ARGS_SLOT: u32 = 6;
 pub const ARGS_LAY: u32 = 9;
 pub const ARGS_PASSES: u32 = 13;

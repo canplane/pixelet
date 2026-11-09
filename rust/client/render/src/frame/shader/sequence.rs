@@ -189,12 +189,12 @@ pub const LIGHT_CELLS: Step = Step::dispatch_off(
     &[&LIGHT_WORLD_BINDS],
     (LIGHT_ARGS, light::ARGS_CELLS),
 );
-pub const LIGHT_SAMPLE_BOX: Step = Step::dispatch_off(
-    "light_sample_box",
+pub const LIGHT_SAMPLE_HIT: Step = Step::dispatch_off(
+    "light_sample_hit",
     IN_LIGHT,
-    COMPUTE_LIGHT_SAMPLE_BOX,
-    &[&LIGHT_SAMPLE_BOX_BINDS],
-    (LIGHT_ARGS, light::ARGS_SAMPLE_BOX),
+    COMPUTE_LIGHT_SAMPLE_HIT,
+    &[&LIGHT_SAMPLE_HIT_BINDS],
+    (LIGHT_ARGS, light::ARGS_SAMPLE_HIT),
 );
 /// The light's raster draw of the record (ray/raster.rs `Raster::light_draw`).
 pub const LIGHT_RASTER: Step = Step::draw_off(
@@ -686,10 +686,10 @@ pub const FRAME: Frame = Frame {
             &[&LATTICE_LAST_BINDS],
         ),
         Step::dispatch(
-            "sample_box",
+            "sample_hit",
             IN_EYE,
-            COMPUTE_SAMPLE_BOX,
-            &[&SAMPLE_BOX_BINDS],
+            COMPUTE_SAMPLE_HIT,
+            &[&SAMPLE_HIT_BINDS],
         ),
         Step::dispatch("record_draw", IN_EYE, COMPUTE_RECORD_DRAW, &[&RECORD_BINDS]),
         RASTER,
@@ -843,7 +843,7 @@ pub const FRAME: Frame = Frame {
             COMPUTE_QUEUE_LAST_LIGHT_SAMPLES,
             &[&LIGHT_LATTICE_LAST_BINDS],
         ),
-        LIGHT_SAMPLE_BOX,
+        LIGHT_SAMPLE_HIT,
         Step::dispatch(
             "light_record_draw",
             IN_LIGHT,

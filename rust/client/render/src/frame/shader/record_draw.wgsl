@@ -113,7 +113,7 @@ fn record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
   let o = vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u)));
   let k = entry_node(id.x, o);
-  let b = entry_box(id.x, k, o);
+  let b = asset_box(id.x, k, o);
   let tan_xy = vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u));
   let near = is_eyed(b.lo, b.hi, tan_xy);
   if (!near && !in_view(b.lo, b.hi)) {
@@ -184,7 +184,7 @@ fn light_record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
   let o = texel_start(light_corner());
   let k = entry_node(id.x, o);
-  let b = entry_box(id.x, k, o);
+  let b = asset_box(id.x, k, o);
   if (!on_box(b.lo, b.hi)) {
     return;
   }

@@ -437,9 +437,9 @@ const _: () = assert!(
     "a cast's compute group lays out other than its shaders read (record.rs `binds`)"
 );
 
-/// The group of an observer's samples' stops (sample_box.wgsl): the eye, the samples' words,
+/// The group of an observer's samples' stops (sample_hit.wgsl): the eye, the samples' words,
 /// the node cache whose drawable entries they set, and the args of the faces' asks.
-pub const SAMPLE_BOX_GROUP: [u32; 12] = [
+pub const SAMPLE_HIT_GROUP: [u32; 12] = [
     0, COMPUTE, UNIFORM, 8, COMPUTE, STORAGE_RW, 9, COMPUTE, STORAGE_RW, 16, COMPUTE, STORAGE_RW,
 ];
 
@@ -520,9 +520,9 @@ pub const LIGHT_RECORD_HITS_GROUP: [u32; 18] = [
     STORAGE_RW,
 ];
 
-/// The group of the light's samples' stops (sample_box.wgsl over sample.light.wgsl): the eye,
+/// The group of the light's samples' stops (sample_hit.wgsl over sample.light.wgsl): the eye,
 /// the samples' words, the node cache, the light's head and its raster's args.
-pub const LIGHT_SAMPLE_BOX_GROUP: [u32; 15] = [
+pub const LIGHT_SAMPLE_HIT_GROUP: [u32; 15] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -541,8 +541,8 @@ pub const LIGHT_SAMPLE_BOX_GROUP: [u32; 15] = [
 ];
 
 const _: () = assert!(
-    floor::holds(&[&SAMPLE_BOX_GROUP])
-        && floor::holds(&[&LIGHT_SAMPLE_BOX_GROUP])
+    floor::holds(&[&SAMPLE_HIT_GROUP])
+        && floor::holds(&[&LIGHT_SAMPLE_HIT_GROUP])
         && floor::holds(&[&RECORD_GROUP])
         && floor::holds(&[&RECORD_HITS_GROUP])
         && floor::holds(&[&LIGHT_RECORD_HITS_GROUP]),
@@ -559,8 +559,8 @@ pub const FACE_GROUP: [u32; 27] = [
 ];
 
 const _: () = assert!(
-    binds(&[COMPUTE_SAMPLE_BOX], &SAMPLE_BOX_GROUP)
-        && binds(&[COMPUTE_LIGHT_SAMPLE_BOX], &LIGHT_SAMPLE_BOX_GROUP)
+    binds(&[COMPUTE_SAMPLE_HIT], &SAMPLE_HIT_GROUP)
+        && binds(&[COMPUTE_LIGHT_SAMPLE_HIT], &LIGHT_SAMPLE_HIT_GROUP)
         && binds(&[COMPUTE_FACE], &FACE_GROUP)
         && binds(
             &[COMPUTE_RECORD_DRAW, COMPUTE_LIGHT_RECORD_DRAW],
@@ -778,8 +778,8 @@ pub const WORLD_BINDS: Group = Group {
     layout: &WORLD_GROUP,
     binds: &[bind(8, BEAMS), bind(9, NODE_CACHE)],
 };
-pub const SAMPLE_BOX_BINDS: Group = Group {
-    layout: &SAMPLE_BOX_GROUP,
+pub const SAMPLE_HIT_BINDS: Group = Group {
+    layout: &SAMPLE_HIT_GROUP,
     binds: &[bind(8, BEAMS), bind(9, NODE_CACHE), bind(16, RASTER_ARGS)],
 };
 pub const RECORD_BINDS: Group = Group {
@@ -945,8 +945,8 @@ pub const LIGHT_LATTICE_LAST_BINDS: Group = Group {
     layout: &LIGHT_LATTICE_LAST_GROUP,
     binds: &[bind(8, LIGHT_LIST), bind(9, NODE_CACHE)],
 };
-pub const LIGHT_SAMPLE_BOX_BINDS: Group = Group {
-    layout: &LIGHT_SAMPLE_BOX_GROUP,
+pub const LIGHT_SAMPLE_HIT_BINDS: Group = Group {
+    layout: &LIGHT_SAMPLE_HIT_GROUP,
     binds: &[
         bind(8, LIGHT_LIST),
         bind(9, NODE_CACHE),

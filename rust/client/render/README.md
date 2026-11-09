@@ -13,7 +13,7 @@ The cast (`ray/cast.rs`) runs once a frame over the camera grid's angular
 cells. Beam rays at each cell's corners walk the part of the descent the cell's
 pixels share, and the cell starts where the nearest of them stopped (`cell_cs`).
 Samples, a few to a cell's side, walk on from there, and the node each stops on
-is drawn as a box (`sample_box_cs`). The beam rays and the samples are items of
+is drawn as a box (`sample_hit_cs`). The beam rays and the samples are items of
 one queue (`queue_cs`), walked by the same code as the holes later.
 
 The raster (`ray/raster.rs`, `raster.wgsl`) draws every box of the record

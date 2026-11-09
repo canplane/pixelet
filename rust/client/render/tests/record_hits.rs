@@ -39,7 +39,7 @@ use pxl_engine::object::Cut;
 use pxl_engine::{eye, face, node_cache, raster, ray, record, WORKGROUPS_CAP};
 use pxl_render::frame::shader::record::{
     compute, src, COMPUTE_FACE, COMPUTE_LIGHT_RECORD_HITS, COMPUTE_RECORD_FACES,
-    COMPUTE_RECORD_HITS, SHADER_CELL, SHADER_LIGHT_CELL, SHADER_SAMPLE_BOX,
+    COMPUTE_RECORD_HITS, SHADER_CELL, SHADER_LIGHT_CELL, SHADER_SAMPLE_HIT,
 };
 use pxl_render::frame::shader::word::SQUARE_SIDE;
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
@@ -291,7 +291,7 @@ fn light_cases(built: &Built) -> Vec<LightCase> {
 
 /// A hit as the record reads it (`beam::HIT_WORDS`). Its node is held as a walk from `origin`
 /// holds it. `face` is the face its ray entered (`ray::face`), and `whole` says the ray stopped
-/// on the node coarser than it asked: for the eye `record::stopped_whole`, for the light
+/// on the node coarser than it asked: for the eye `record::ray_whole`, for the light
 /// `record::light_whole` at its slot's band.
 struct Hit {
     node: Node,
@@ -763,7 +763,7 @@ fn eye_run(gpu: &Gpu, b: &WorldBuffer, (c, s): (&EyeCase, &Screen)) -> Run {
             &node_cache_buf,
         );
         gpu.dispatch(
-            &gpu.pipeline(src(SHADER_SAMPLE_BOX), "sample_box_cs"),
+            &gpu.pipeline(src(SHADER_SAMPLE_HIT), "sample_hit_cs"),
             &[
                 (0, eye_buf.as_entire_binding()),
                 (8, beams.as_entire_binding()),
@@ -853,7 +853,7 @@ fn eye_run(gpu: &Gpu, b: &WorldBuffer, (c, s): (&EyeCase, &Screen)) -> Run {
         &words,
         grid.words()[beam::GRID_HITS_AT],
         cache[node_cache::HITS_CNT as usize],
-        |_, n| (origin, record::stopped_whole(origin, n, range)),
+        |_, n| (origin, record::ray_whole(origin, n, range)),
     );
     lay_otherwise(&mut cache, &hits, true);
     gpu.queue

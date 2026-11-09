@@ -41,7 +41,7 @@ use pxl_engine::support;
 use pxl_engine::world::Inheritance;
 use pxl_engine::{eye, face, node_cache, raster, ray, record};
 use pxl_render::frame::shader::record::{
-    src, SHADER_CAST, SHADER_CAST_TILES, SHADER_CELL, SHADER_FACE, SHADER_SAMPLE_BOX,
+    src, SHADER_CAST, SHADER_CAST_TILES, SHADER_CELL, SHADER_FACE, SHADER_SAMPLE_HIT,
 };
 use pxl_render::frame::shader::word::{screen, SQUARE_SIDE};
 use pxl_spec::share::EIGHTHS;
@@ -247,9 +247,9 @@ fn cast_of(gpu: &Gpu, b: &WorldBuffer, c: &EyeCase, face_p: &wgpu::ComputePipeli
     laid[asked_at + raster::ARGS_FACES as usize + 2] = 1;
     laid[asked_at + raster::ARGS_ASKS as usize] = grid.asks_at;
     let rect_args = gpu.buf(&laid, store());
-    // Each stopped sample is recorded in the node cache entry that its walk kept.
+    // Each hit sample is recorded in the node cache entry that its walk kept.
     gpu.dispatch(
-        &gpu.pipeline(src(SHADER_SAMPLE_BOX), "sample_box_cs"),
+        &gpu.pipeline(src(SHADER_SAMPLE_HIT), "sample_hit_cs"),
         &[
             (0, eye_buf.as_entire_binding()),
             (8, beams.as_entire_binding()),
@@ -264,16 +264,16 @@ fn cast_of(gpu: &Gpu, b: &WorldBuffer, c: &EyeCase, face_p: &wgpu::ComputePipeli
     );
     let asked = gpu.read(&beams);
     let laid = gpu.read(&rect_args);
-    let (mut stopped, mut lacks) = (0, 0);
+    let (mut hit, mut lacks) = (0, 0);
     for j in 0..grid.samples[1] {
         for i in 0..grid.samples[0] {
             let k = grid.sample_at([i, j]) as usize;
-            stopped += u32::from(asked[k + beam::NODE_ZOOM as usize] != beam::SAMPLE_NONE);
+            hit += u32::from(asked[k + beam::NODE_ZOOM as usize] != beam::SAMPLE_NONE);
             lacks += u32::from(asked[k + beam::SAMPLE_LACKS as usize] & beam::SAMPLE_LACK != 0);
         }
     }
     eprintln!(
-        "{}: {} samples, {stopped} stopped, {lacks} lack, {} asks",
+        "{}: {} samples, {hit} hit, {lacks} lack, {} asks",
         c.name,
         samples,
         laid[asked_at + raster::ARGS_INSTANCES as usize],
@@ -758,7 +758,7 @@ fn hand_pixels_answer_as_cast_entry() {
             let node = node_at(&cast.beams, k + beam::SAMPLE_NODE);
             voxel_at.get(&(node.zoom, node.idx(cast.origin))).copied()
         };
-        let stopped: Vec<u32> = (0..n * g.samples[1])
+        let hit: Vec<u32> = (0..n * g.samples[1])
             .filter(|&i| {
                 let k = g.sample_at([i % n, i / n]);
                 cast.beams[(k + beam::SAMPLE_NODE + beam::NODE_ZOOM) as usize] != beam::SAMPLE_NONE
@@ -771,7 +771,7 @@ fn hand_pixels_answer_as_cast_entry() {
                 let at = [s0[0] + (h >> 8) % 2, s0[1] + (h >> 9) % 2];
                 let i = match h % 16 {
                     0 => return 0,
-                    1 if !stopped.is_empty() => stopped[(h as usize >> 12) % stopped.len()],
+                    1 if !hit.is_empty() => hit[(h as usize >> 12) % hit.len()],
                     _ => at[1] * n + at[0],
                 };
                 let k = g.sample_at([i % n, i / n]);

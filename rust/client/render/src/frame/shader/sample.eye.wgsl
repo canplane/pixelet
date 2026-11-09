@@ -8,7 +8,7 @@ fn sample_lattice() -> vec2<u32> {
   return vec2<u32>(eye_word(GRID + GRID_SAMPLES), eye_word(GRID + GRID_SAMPLES + 1u));
 }
 
-/// The sample the thread at `id` takes in a pass over the lattice (sample_box.wgsl): the one
+/// The sample the thread at `id` takes in a pass over the lattice (sample_hit.wgsl): the one
 /// at `id` itself.
 fn sample_item(id: vec2<u32>) -> vec2<u32> {
   return id;

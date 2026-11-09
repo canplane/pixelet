@@ -41,7 +41,7 @@ fn sample_band(s: vec2<u32>) -> u32 {
 }
 
 /// The light's samples have no line to ask faces' words from, because the light's slots read
-/// none (sample_box.light.wgsl `sample_asks`).
+/// none (sample_hit.light.wgsl `sample_asks`).
 fn sample_line(s: vec2<u32>) -> u32 {
   return NONE;
 }

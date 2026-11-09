@@ -4,7 +4,7 @@
 // each drawn pixel keeps the number of the voxel its own ray enters first. pxl-engine raster.rs
 // states the rule: which faces a box draws, the draw word, the reversed depth and the depth of
 // a stale voxel. record_draw.wgsl writes the boxes, one word each, and the box's planes come
-// from its node cache entry (record_box.wgsl `entry_box`). The cast reads the number each pixel
+// from its node cache entry (record_box.wgsl `asset_box`). The cast reads the number each pixel
 // keeps (cast.wgsl `cast_cs`).
 //
 // A box is one instance of three faces, those turned to the eye, two triangles each, wound as
@@ -80,7 +80,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
   let lacks = (o.id & RASTER_LACK) != 0u;
   let slot = (o.id & ~RASTER_LACK) - 1u;
   let origin = raster.origin.xyz;
-  let b = entry_box(slot, entry_node(slot, origin), origin);
+  let b = asset_box(slot, entry_node(slot, origin), origin);
   let lo = b.lo;
   let hi = b.hi;
   o.lo = lo;
