@@ -12,7 +12,7 @@ use std::path::Path;
 use pxl_spec::asset::cube::ground::{forest, grass};
 use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::separation::Separation;
-use pxl_spec::bake::tile::terrain::{self, TerrainTile, ELE_COLUMN, PALETTE_COLUMN};
+use pxl_spec::bake::tile::terrain::{self, TerrainTile, ELE_COLUMN, FOLD_COLUMN};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 use pxl_spec::space::layer::lattice::TILE_CELLS;
@@ -39,12 +39,12 @@ fn terrain(key: &str) -> Option<Vec<u8>> {
     };
     let ele = vec![HEIGHT; ELE_COLUMN];
     let tile = if q.zoom == LEAF_ZOOM {
-        let cells = (0..PALETTE_COLUMN / 4).map(cell).collect::<Vec<_>>();
+        let cells = (0..FOLD_COLUMN / 4).map(cell).collect::<Vec<_>>();
         TerrainTile::leaf(ele, Cow::Owned(cells), Separation::default())
     } else {
         // Each cell repeats its class in all four palette indices, as a fold of one class
         // does.
-        let cells = (0..PALETTE_COLUMN).map(|i| cell(i / 4)).collect::<Vec<_>>();
+        let cells = (0..FOLD_COLUMN).map(|i| cell(i / 4)).collect::<Vec<_>>();
         TerrainTile::of(
             ele,
             Cow::Owned(cells),

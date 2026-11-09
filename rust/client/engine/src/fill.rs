@@ -78,7 +78,7 @@ impl BrickSource for LoneBrick<'_> {
         ([0; 2], false)
     }
     /// Its own palette index four times; what `mip` folds reads no palette index.
-    fn palette_word(&self, _: u32, _: u32, i: u32) -> u32 {
+    fn fold_at(&self, _: u32, _: u32, i: u32) -> u32 {
         word([own_of(self.ground, self.base, i); 4])
     }
     fn column(&self, _: u32, _: u32, i: u32) -> u32 {

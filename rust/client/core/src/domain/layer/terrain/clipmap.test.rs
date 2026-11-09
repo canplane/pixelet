@@ -37,13 +37,13 @@ type Over = ([f64; 2], Vec<TileData>);
 static BUILT: std::sync::Mutex<Vec<(Over, Snapshot)>> = std::sync::Mutex::new(Vec::new());
 
 const CELLS_WORDS: usize = (SLOTS * CELLS_ARR_BYTES / 4) as usize;
-const PALETTE_WORDS: usize = (SLOTS * PALETTE_ARR_BYTES / 4) as usize;
+const FOLDS_WORDS: usize = (SLOTS * FOLDS_ARR_BYTES / 4) as usize;
 
-/// A test's own planes, with `cells` as the cells and a zeroed palette.
+/// A test's own planes, with `cells` as the cells and zeroed folds.
 fn planes_of(cells: &'static mut [u32]) -> BrickMemory {
     BrickMemory {
         cells,
-        palette: vec![0; PALETTE_WORDS].leak(),
+        folds: vec![0; FOLDS_WORDS].leak(),
     }
 }
 
@@ -164,7 +164,7 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
             place,
             first: terrain::first_cell(t, cell_zoom, place),
             lines: &lines,
-            palette_word: |k: u32| word([u32::from(palette_of[at(k)]); 4]),
+            fold_at: |k: u32| word([u32::from(palette_of[at(k)]); 4]),
             ele_at: |c: [i32; 2]| {
                 i32::from(
                     ele[at(brick::idx_of([
@@ -387,7 +387,7 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
             "its run, sized by its spans"
         );
         assert_eq!(got[ROOT_AT as usize], slot.run[0]);
-        assert!((0..BRICK_CELLS).all(|i| palette(b)[i as usize] == four(i)));
+        assert!((0..BRICK_CELLS).all(|i| folds(b)[i as usize] == four(i)));
         ways += u32::from(slot.run[1] != 0);
         filled.push((b, slot.cell_zoom, slot.brick, spans));
     }

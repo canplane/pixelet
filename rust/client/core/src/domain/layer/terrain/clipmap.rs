@@ -6,11 +6,11 @@
 //! editing happen, and a destination being travelled to. A brick at a given
 //! zoom is held once, in one slot, however many clip levels want it (`Slot`).
 //!
-//! A brick is filled here from its tile in two stages. Its palette, four
-//! indices per cell, is cut from the tile's packet in the turn the packet
+//! A brick is filled here from its tile in two stages. Its folds, four
+//! asset ids per cell, are cut from the tile's packet in the turn the packet
 //! lands, and the packet is then freed (`cut`). Later, after the frame and
 //! as far as the turn's share for tasks leaves room (`fill_share`), its cells
-//! are filled from that palette and the tile's samples and lines into
+//! are filled from those folds and the tile's samples and lines into
 //! `.fixed.terrain`, and the spans its cells were filled by into a run of the
 //! ways' pool (pool.rs).
 //! The next frame hands the brick to the GPU, and it is present from then on
@@ -29,7 +29,7 @@ use pxl_render::gpu::api;
 use pxl_render::ray::{BrickWrite, TerrainWrite};
 use pxl_spec::bake::separation::Separation;
 use pxl_spec::bake::tile::terrain::{
-    brick_lines, brick_pairs, palette_cells, TerrainTile, ELE_COLUMN, PALETTE_COLUMN,
+    brick_lines, brick_pairs, palette_cells, TerrainTile, ELE_COLUMN, FOLD_COLUMN,
 };
 use pxl_spec::brick;
 use pxl_spec::brick::{BRICK, BRICK_CELLS, BRICK_SHIFT};
@@ -45,7 +45,7 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::domain::layer::terrain::fixed::{
-    cells_off, fill_off, palette_off, CELLS_ARR_BYTES, PALETTE_ARR_BYTES, RANGE,
+    cells_off, fill_off, folds_off, CELLS_ARR_BYTES, FOLDS_ARR_BYTES, RANGE,
 };
 use crate::domain::layer::terrain::pool::{way_pool, PoolRefusal, Run};
 use crate::domain::layer::terrain::tile;
@@ -130,7 +130,7 @@ struct Slot {
 enum Fill {
     /// No fill is going on or due, and none was refused or is waiting.
     Idle,
-    /// Its palette was cut from its tile's packet (`cut`), so its fill is due
+    /// Its folds were cut from its tile's packet (`cut`), so its fill is due
     /// (`due`).
     Cut,
     /// Its cells are whole here and its spans are in their run. It waits to be
@@ -320,9 +320,9 @@ struct BrickMemory {
     /// Each brick's whole words (`clipmap::BRICK_WORDS`), `CELLS_ARR_BYTES`
     /// apart.
     pub cells: &'static mut [u32],
-    /// Each brick's palette, one word of four palette indices per cell in
-    /// its cells' order, `PALETTE_ARR_BYTES` apart.
-    pub palette: &'static mut [u32],
+    /// Each brick's folds, one word of four asset ids per cell in
+    /// its cells' order, `FOLDS_ARR_BYTES` apart.
+    pub folds: &'static mut [u32],
 }
 
 static PLANES: Global<BrickMemory> = Global::new();
@@ -335,7 +335,7 @@ fn planes() -> &'static mut BrickMemory {
         unsafe {
             BrickMemory {
                 cells: arr(r, cells_off(0), (SLOTS * CELLS_ARR_BYTES / 4) as usize),
-                palette: arr(r, palette_off(0), (SLOTS * PALETTE_ARR_BYTES / 4) as usize),
+                folds: arr(r, folds_off(0), (SLOTS * FOLDS_ARR_BYTES / 4) as usize),
             }
         }
     })
@@ -387,17 +387,17 @@ fn cells_mut(b: u32) -> &'static mut [u32] {
     &mut planes().cells[at..at + BRICK_WORDS as usize]
 }
 
-/// Slot `b`'s palette, four palette indices per cell.
-fn palette(b: u32) -> &'static [u32] {
-    let at = (b * PALETTE_ARR_BYTES / 4) as usize;
-    &planes().palette[at..at + BRICK_CELLS as usize]
+/// Slot `b`'s folds, four asset ids per cell.
+fn folds(b: u32) -> &'static [u32] {
+    let at = (b * FOLDS_ARR_BYTES / 4) as usize;
+    &planes().folds[at..at + BRICK_CELLS as usize]
 }
 
 /// Whether the runtime holds the words slot `b` was last handed from
 /// (pxl-render gpu/api.rs `in_flight`). Nothing may write them until the
 /// runtime gives them back.
 fn in_flight(b: u32) -> bool {
-    api::in_flight(cells(b)) || api::in_flight(palette(b))
+    api::in_flight(cells(b)) || api::in_flight(folds(b))
 }
 
 /// Lays out the turn's clip levels. `at` gives where each center now
@@ -628,7 +628,7 @@ fn show(w: &mut Clipmap, i: u32) {
 }
 
 /// Hands each filled brick to `write`, while it takes them: its words, its
-/// palette and its run of kept spans, in place. A handed brick is present from then on,
+/// folds and its run of kept spans, in place. A handed brick is present from then on,
 /// on the CPU and the GPU alike, and the frame that hands it is the first to
 /// read it. The clip levels are folded over the handed bricks once, after all
 /// of them (`fold`). This runs in a frame's stage, before the frame's cast
@@ -647,7 +647,7 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
             cell_zoom: slot.cell_zoom,
             brick: slot.brick,
             words: cells(b),
-            palette_words: palette(b),
+            folds: folds(b),
             run: &pieces,
         });
         if !fits {
@@ -666,7 +666,7 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
     }
 }
 
-/// Lists the slots to fill, the next one last: those whose palette was cut,
+/// Lists the slots to fill, the next one last: those whose folds were cut,
 /// and those of void tiles, which have no packet to cut. They come in the
 /// order the eye reads them. The eye's clip levels come first, coarsest
 /// first, since a reader of an absent brick reads the coarser clip level
@@ -843,8 +843,8 @@ fn slot_wants(w: &Clipmap, tile: Quadrant, b: u32) -> bool {
         && tile_of(slot.cell_zoom, slot.brick).0 == tile
 }
 
-/// Cuts from `pkt`, the tile's packet, in the turn it landed, the palette of
-/// every absent brick of `tile` that a clip level wants. The palette is all
+/// Cuts from `pkt`, the tile's packet, in the turn it landed, the folds of
+/// every absent brick of `tile` that a clip level wants. The folds are all
 /// that a brick's fill reads of a packet beyond what the tile keeps
 /// (its `separation` and `ele`), so the packet can be
 /// freed afterwards. A brick whose slot the runtime holds is left absent, and
@@ -868,10 +868,10 @@ pub fn cut(tile: Quadrant, pkt: &[u8]) {
         }
         let slot = w.slots[b as usize];
         let place = tile_of(slot.cell_zoom, slot.brick).1;
-        // Each layout a packet may hold the palette in has its own loop, so
+        // Each layout a packet may hold the folds in has its own loop, so
         // the layout is not tested once per cell.
         match cells.len() {
-            PALETTE_COLUMN => cut_into(b, place, &|c: usize| {
+            FOLD_COLUMN => cut_into(b, place, &|c: usize| {
                 u32::from_le_bytes([
                     cells[4 * c],
                     cells[4 * c + 1],
@@ -887,18 +887,18 @@ pub fn cut(tile: Quadrant, pkt: &[u8]) {
     w.due_stale = true;
 }
 
-/// Fills slot `b`'s palette from `four`, which gives the palette word of
+/// Fills slot `b`'s folds from `four`, which gives the fold of
 /// each cell of the tile, for the brick lying at `place` in the tile.
 fn cut_into(b: u32, place: [u32; 2], four: &impl Fn(usize) -> u32) {
-    let at = (b * PALETTE_ARR_BYTES / 4) as usize;
+    let at = (b * FOLDS_ARR_BYTES / 4) as usize;
     let side = GROUND.tile_cells() as usize;
     let (x0, y0) = ((place[0] * BRICK) as usize, (place[1] * BRICK) as usize);
-    let palette = &mut planes().palette[at..at + BRICK_CELLS as usize];
+    let folds = &mut planes().folds[at..at + BRICK_CELLS as usize];
     let across: [u32; BRICK as usize] = core::array::from_fn(|x| brick::idx_of([x as u32, 0]));
     for y in 0..BRICK {
         let (row, down) = ((y0 + y as usize) * side + x0, brick::idx_of([0, y]));
         for (x, &a) in across.iter().enumerate() {
-            palette[(a | down) as usize] = four(row + x);
+            folds[(a | down) as usize] = four(row + x);
         }
     }
 }
@@ -1002,7 +1002,7 @@ fn fill_stage(w: &mut Clipmap) -> Poll {
     };
     filling.stage = match filling.stage {
         Stage::Columns => {
-            let four = palette(b);
+            let four = folds(b);
             fill::columns(cells_mut(b), |i| four[i as usize], &site);
             Stage::Spans(0)
         }
@@ -1027,7 +1027,7 @@ fn fill_stage(w: &mut Clipmap) -> Poll {
 
 /// Begins the next due brick. What a fill reads of its tile, its samples and
 /// its lines, is copied into the room, since the tile may be let go before the
-/// fill ends. A void tile has no packet, so its brick's palette is cut here. A
+/// fill ends. A void tile has no packet, so its brick's folds are cut here. A
 /// brick whose tile was let go becomes absent, and its tile is asked for again.
 fn begin(w: &mut Clipmap) -> Poll {
     let terrain = TerrainTile::tile_cache();
@@ -1189,7 +1189,7 @@ impl BrickSource for ClipRead<'_> {
 
     /// The CPU reads only a cell's own palette index, as laid, so the word
     /// repeats it four times.
-    fn palette_word(&self, cell_zoom: Zoom, b: u32, i: u32) -> u32 {
+    fn fold_at(&self, cell_zoom: Zoom, b: u32, i: u32) -> u32 {
         word([self.own(cell_zoom, b, i); 4])
     }
 

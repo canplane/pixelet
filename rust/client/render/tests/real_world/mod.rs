@@ -177,7 +177,7 @@ pub fn leaf_of(cell_zoom: Zoom, g: i32) -> i32 {
 pub struct World<'a> {
     pub clipmap: &'a [[i32; 4]],
     pub ground: &'a [u32],
-    pub palette: &'a [u32],
+    pub folds: &'a [u32],
     pub shards: &'a [[u32; 4]],
     pub objects: &'a [u32],
     pub pool: &'a [u32],
@@ -223,8 +223,8 @@ impl BrickSource for World<'_> {
     fn origin(&self, cell_zoom: Zoom) -> ([i32; 2], bool) {
         self.row(ORIGIN_AT + cell_zoom - FIRST_CELL_ZOOM).brick()
     }
-    fn palette_word(&self, _: Zoom, slot: u32, i: u32) -> u32 {
-        self.palette[(slot * BRICK_CELLS + i) as usize]
+    fn fold_at(&self, _: Zoom, slot: u32, i: u32) -> u32 {
+        self.folds[(slot * BRICK_CELLS + i) as usize]
     }
     fn column(&self, _: Zoom, slot: u32, i: u32) -> u32 {
         fill::column_of(self.ground, slot * BRICK_WORDS, i)
@@ -484,17 +484,17 @@ impl Placing {
 pub struct Built {
     pub clipmap: Vec<[i32; 4]>,
     pub ground: Vec<u32>,
-    pub palette: Vec<u32>,
+    pub folds: Vec<u32>,
     pub shards: Vec<[u32; 4]>,
     pub objects: Vec<u32>,
     pub pool: Vec<u32>,
     pub way_points: Vec<Point>,
     /// What was placed, each as its zoom and node.
     pub placed: Vec<(Zoom, [i32; 3])>,
-    /// `folds` holds cells that what is placed folds into, and `lone` holds lone leaves of the
+    /// `folded` holds cells that what is placed folds into, and `lone` holds lone leaves of the
     /// finest zoom. `over_bridges` holds points over high bridges, and `groundless` holds cells
     /// partly placed where no clip level holds the ground under them.
-    pub folds: Vec<[i32; 3]>,
+    pub folded: Vec<[i32; 3]>,
     pub lone: Vec<[i32; 3]>,
     pub over_bridges: Vec<[i32; 3]>,
     pub groundless: Vec<[i32; 3]>,
@@ -509,7 +509,7 @@ impl Built {
         World {
             clipmap: &self.clipmap,
             ground: &self.ground,
-            palette: &self.palette,
+            folds: &self.folds,
             shards: &self.shards,
             objects: &self.objects,
             pool: &self.pool,
@@ -535,7 +535,7 @@ impl Built {
 pub fn fold(
     clipmap: &mut [[i32; 4]],
     ground: &[u32],
-    palette: &[u32],
+    folds: &[u32],
     shards: &[[u32; 4]],
     pool: &[u32],
 ) {
@@ -545,7 +545,7 @@ pub fn fold(
                 let w = World {
                     clipmap,
                     ground,
-                    palette,
+                    folds,
                     shards,
                     objects: &[0; 16],
                     pool,
@@ -602,7 +602,7 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
     let rows = (JOINED_AT + EYE_CLIP_LEVELS * JOINED_ENTRIES) as usize;
     let mut clipmap = vec![[0i32; 4]; rows];
     let mut ground_words: Vec<u32> = Vec::new();
-    let mut palette_words: Vec<u32> = Vec::new();
+    let mut folds: Vec<u32> = Vec::new();
     let mut pool = vec![0u32; 1 << 23];
     let mut next_word = 1u32;
     let (mut lane, mut scratch) = (
@@ -633,7 +633,7 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
             let lined = !(h >> 8).is_multiple_of(3);
             let brick = source(eye, cell_zoom, q, lined, &mut way_points);
             lane.fill(0);
-            palette_words.extend_from_slice(&brick.four);
+            folds.extend_from_slice(&brick.four);
             let site = fill::Site {
                 cell_zoom,
                 place: [(q[0] & 7) as u32, (q[1] & 7) as u32],
@@ -683,7 +683,7 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
         let (zero, rest) = ground_words.split_at_mut(treed * words);
         zero[..words].swap_with_slice(&mut rest[..words]);
         let cells = BRICK_CELLS as usize;
-        let (zero, rest) = palette_words.split_at_mut(treed * cells);
+        let (zero, rest) = folds.split_at_mut(treed * cells);
         zero[..cells].swap_with_slice(&mut rest[..cells]);
         for row in &mut clipmap[..ORIGIN_AT as usize] {
             if row[2] == 1 {
@@ -697,14 +697,14 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
         "{present_bricks} bricks held, {absent_bricks} absent, {way_bricks} with ways over {next_word} words"
     );
     let objects_none = vec![0u32; 16];
-    fold(&mut clipmap, &ground_words, &palette_words, &shards, &pool);
+    fold(&mut clipmap, &ground_words, &folds, &shards, &pool);
 
     // The ground's top at leaf column `g`, from whichever clip level holds it.
     let top_at = |g: [i32; 2]| {
         let w = World {
             clipmap: &clipmap,
             ground: &ground_words,
-            palette: &palette_words,
+            folds: &folds,
             shards: &shards,
             objects: &objects_none,
             pool: &pool,
@@ -722,7 +722,7 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
     let mut draw = Draw(0x1234_5679);
     let mut placing = Placing::new();
     let mut placed: Vec<(Zoom, [i32; 3])> = Vec::new();
-    let mut folds: Vec<[i32; 3]> = Vec::new();
+    let mut folded: Vec<[i32; 3]> = Vec::new();
     for i in 0..2400u32 {
         let reach = if i % 4 == 0 { 3000 } else { 240 };
         let g = [
@@ -763,7 +763,7 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
                     let d = [(k & 1) as i32, (k >> 1 & 1) as i32, (k >> 2) as i32];
                     lay((z, [at[0] + d[0], at[1] + d[1], at[2] + d[2]]), word);
                 }
-                folds.push([g[0], g[1], c[2] >> 1]);
+                folded.push([g[0], g[1], c[2] >> 1]);
             }
             // Case 0 places an object's color and case 1 a ground's palette entry, each with
             // its handle over its value.
@@ -899,13 +899,13 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
         decors,
         clipmap,
         ground: ground_words,
-        palette: palette_words,
+        folds,
         shards,
         objects,
         pool,
         way_points,
         placed,
-        folds,
+        folded,
         lone,
         over_bridges,
         groundless,
@@ -990,7 +990,7 @@ pub fn q8(units: [i32; 3]) -> [i32; 3] {
 pub struct WorldBuffer {
     pub clip: wgpu::Buffer,
     pub ground: wgpu::Buffer,
-    pub palette: wgpu::Buffer,
+    pub folds: wgpu::Buffer,
     pub shards: wgpu::Buffer,
     pub placed: wgpu::Buffer,
     pub pool: wgpu::Buffer,

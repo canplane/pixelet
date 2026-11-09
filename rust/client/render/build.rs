@@ -1636,7 +1636,7 @@ fn assemble(out: &Path) {
         "clipmap",
         "seed",
         "clip",
-        "palette",
+        "fold",
         "brick",
         "bound_mip",
         "answer",

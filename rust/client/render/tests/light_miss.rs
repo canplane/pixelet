@@ -453,7 +453,7 @@ fn hand_light_holes_answer_as_cast_walk() {
     let bound = WorldBuffer {
         clip: gpu.buf(&clip_flat, store),
         ground: gpu.buf(&built.ground, store),
-        palette: gpu.buf(&built.palette, store),
+        folds: gpu.buf(&built.folds, store),
         shards: gpu.buf(&flat_u(&built.shards), store),
         placed: gpu.buf(&built.objects, store),
         pool: gpu.buf(&built.pool, store),
@@ -477,7 +477,7 @@ fn hand_light_holes_answer_as_cast_walk() {
             store,
         ),
         ground: gpu.buf(&west.ground, store),
-        palette: gpu.buf(&west.palette, store),
+        folds: gpu.buf(&west.folds, store),
         shards: gpu.buf(&flat_u(&west.shards), store),
         placed: gpu.buf(&west.objects, store),
         pool: gpu.buf(&west.pool, store),
@@ -509,7 +509,7 @@ fn hand_light_holes_answer_as_cast_walk() {
             store,
         ),
         ground: gpu.buf(&zero.ground, store),
-        palette: gpu.buf(&zero.palette, store),
+        folds: gpu.buf(&zero.folds, store),
         shards: gpu.buf(&flat_u(&zero.shards), store),
         placed: gpu.buf(&zero.objects, store),
         pool: gpu.buf(&zero.pool, store),
@@ -558,7 +558,7 @@ fn lay_cells(gpu: &Gpu, b: &WorldBuffer, [eye, header]: [&wgpu::Buffer; 2], list
             (0, eye.as_entire_binding()),
             (1, b.clip.as_entire_binding()),
             (2, b.ground.as_entire_binding()),
-            (4, b.palette.as_entire_binding()),
+            (4, b.folds.as_entire_binding()),
             (5, b.shards.as_entire_binding()),
             (6, b.placed.as_entire_binding()),
             (7, b.pool.as_entire_binding()),
@@ -886,7 +886,7 @@ fn holes(
         (1, b.clip.as_entire_binding()),
         (2, b.ground.as_entire_binding()),
         (3, wgpu::BindingResource::TextureView(view)),
-        (4, b.palette.as_entire_binding()),
+        (4, b.folds.as_entire_binding()),
         (5, b.shards.as_entire_binding()),
         (6, b.placed.as_entire_binding()),
         (7, b.pool.as_entire_binding()),
@@ -979,7 +979,7 @@ fn handed_between_frames(eye: [i32; 2], cell_zoom: Zoom, by: [i32; 2], name: &'s
     real_world::fold(
         &mut was,
         &built.ground,
-        &built.palette,
+        &built.folds,
         &built.shards,
         &built.pool,
     );
@@ -1014,7 +1014,7 @@ fn handed_between_frames(eye: [i32; 2], cell_zoom: Zoom, by: [i32; 2], name: &'s
             store,
         ),
         ground: gpu.buf(&built.ground, store),
-        palette: gpu.buf(&built.palette, store),
+        folds: gpu.buf(&built.folds, store),
         shards: gpu.buf(
             &built.shards.iter().flatten().copied().collect::<Vec<u32>>(),
             store,
@@ -1133,7 +1133,7 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
             store,
         ),
         ground: gpu.buf(&built.ground, store),
-        palette: gpu.buf(&built.palette, store),
+        folds: gpu.buf(&built.folds, store),
         shards: gpu.buf(
             &built.shards.iter().flatten().copied().collect::<Vec<u32>>(),
             store,
@@ -1183,7 +1183,7 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
     real_world::fold(
         &mut was,
         &built.ground,
-        &built.palette,
+        &built.folds,
         &built.shards,
         &built.pool,
     );
@@ -1217,7 +1217,7 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
     real_world::fold(
         &mut was_over,
         &built.ground,
-        &built.palette,
+        &built.folds,
         &built.shards,
         &built.pool,
     );

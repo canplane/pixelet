@@ -109,7 +109,7 @@ leaves and the zoom over them; and a place the camera travels to has one.
 
 A level is a few bricks of cells a side, each held in the entry its place names,
 so the level follows its center a brick at a time and no held cell moves. A
-brick at a zoom is held once, however many levels want it. A tile's palette is
+brick at a zoom is held once, however many levels want it. A tile's folds are
 cut into its bricks as it lands, and the bricks are filled after the frame, a
 part at a time within the turn's share for tasks (`fill_share`): their cells, a
 min-max mipmap over them, and their ways as spans, a run in one pool all bricks

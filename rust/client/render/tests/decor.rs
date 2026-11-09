@@ -451,7 +451,7 @@ fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), LeafLi
             near([p[0], p[1]], 3, 1);
         }
     }
-    for (n, p) in built.folds.iter().enumerate() {
+    for (n, p) in built.folded.iter().enumerate() {
         if every(n, 2) {
             near([p[0], p[1]], 2, 1);
         }

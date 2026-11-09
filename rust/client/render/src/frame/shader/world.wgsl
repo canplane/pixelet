@@ -228,7 +228,7 @@ fn ground_column(shard: u32, place: u32, zoom: u32, b: vec2<i32>) -> Cell {
     let slot = lookup_slot(s.place);
     let i = cell_id(s.at);
     let base = brick_at(slot);
-    fold = palette_word(slot * BRICK_CELLS + i);
+    fold = fold_at(slot * BRICK_CELLS + i);
     column = ground[base + COLUMNS_AT + i];
     own = (ground[base + OWN_AT + i / OWN_CELLS] >> (8u * (i % OWN_CELLS))) & 0xffu;
   }

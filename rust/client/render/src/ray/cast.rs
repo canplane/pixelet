@@ -662,11 +662,11 @@ impl RayPass {
     ) {
         // Without a cast, or before the terrain's buffers are made, there is no world: no ray is
         // cast or drawn, and no decor is generated.
-        let (Some(cast), Some((ground, palette_words, pool))) = (
+        let (Some(cast), Some((ground, folds, pool))) = (
             cast,
             self.ground
                 .as_ref()
-                .map(|gb| (gb.ground, gb.palette_words, gb.pool)),
+                .map(|gb| (gb.ground, gb.folds, gb.pool)),
         ) else {
             if let Some(c) = self.cast.as_mut() {
                 c.generator.off();
@@ -1268,7 +1268,7 @@ impl RayPass {
             c.clipmap,
             ground,
             rays.0,
-            palette_words,
+            folds,
             c.shards,
             c.objects,
             pool,
@@ -1285,15 +1285,7 @@ impl RayPass {
             for group in c.queue_groups {
                 release(group);
             }
-            let world = [
-                eye,
-                clipmap,
-                ground,
-                palette_words,
-                c.shards,
-                c.objects,
-                pool,
-            ];
+            let world = [eye, clipmap, ground, folds, c.shards, c.objects, pool];
             let run = (world, bindings[3], header);
             let queue_groups_of = queue_groups(
                 g,
@@ -1391,7 +1383,7 @@ impl RayPass {
             c.eye,
             c.clipmap,
             ground,
-            palette_words,
+            folds,
             c.shards,
             c.objects,
             pool,
@@ -2112,7 +2104,7 @@ fn light_groups(
     bindings: [u32; 13],
     [header, visibility]: [u32; 2],
 ) -> [u32; LIGHT_GROUPS] {
-    let [eye, clipmap, ground, palette_words, shards, objects, pool, light, rays, drawing, regions, instances, _] =
+    let [eye, clipmap, ground, folds, shards, objects, pool, light, rays, drawing, regions, instances, _] =
         bindings;
     let rest = [
         buf_entry(0, eye),
@@ -2124,7 +2116,7 @@ fn light_groups(
         buf_entry(19, regions),
         buf_entry(20, instances),
     ];
-    let worlds = [eye, clipmap, ground, palette_words, shards, objects, pool];
+    let worlds = [eye, clipmap, ground, folds, shards, objects, pool];
     let run = (worlds, light, header);
     let [queue_walk, ask, last] = queue_groups(
         g,
@@ -2188,13 +2180,13 @@ fn queue_groups(
     buf: impl Fn(u32) -> u32 + Copy,
     (world, out, header): ([u32; 7], u32, u32),
 ) -> [u32; 3] {
-    let [eye, clipmap, ground, palette_words, shards, objects, pool] = world;
+    let [eye, clipmap, ground, folds, shards, objects, pool] = world;
     let rest = [
         buf_entry(0, eye),
         buf_entry(1, clipmap),
         buf_entry(2, ground),
         view_entry(3, out),
-        buf_entry(4, palette_words),
+        buf_entry(4, folds),
         buf_entry(5, shards),
         buf_entry(6, objects),
         buf_entry(7, pool),

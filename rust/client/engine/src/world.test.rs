@@ -59,7 +59,7 @@ impl BrickSource for Clipmap<'_> {
     fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool) {
         self.rows[((cell_zoom - FIRST_CELL_ZOOM) * ENTRIES + entry) as usize].brick()
     }
-    fn palette_word(&self, _: Zoom, _: u32, _: u32) -> u32 {
+    fn fold_at(&self, _: Zoom, _: u32, _: u32) -> u32 {
         word([Sample::GROUND; 4])
     }
     fn column(&self, _: Zoom, slot: u32, i: u32) -> u32 {
@@ -368,8 +368,8 @@ impl BrickSource for WestOf<'_> {
     fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool) {
         self.0.brick(cell_zoom, entry)
     }
-    fn palette_word(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32 {
-        self.0.palette_word(cell_zoom, slot, i)
+    fn fold_at(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32 {
+        self.0.fold_at(cell_zoom, slot, i)
     }
     fn column(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32 {
         self.0.column(cell_zoom, slot, i)

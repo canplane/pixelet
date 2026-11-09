@@ -312,7 +312,7 @@ pub trait BrickSource {
     /// the inverse of `present`.
     fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool);
     /// The four palette indices of cell `i` of the brick in `slot` (`asset_ids`).
-    fn palette_word(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32;
+    fn fold_at(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32;
     /// Column word `i` of the brick in `slot` (`COLUMN_WORDS`), `i` to
     /// `BRICK_CELLS`.
     fn column(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32;
@@ -471,7 +471,7 @@ pub fn cell(
     }
     let (from, slot, i) = (f.from(), f.slot(), idx_of(at));
     (
-        w.palette_word(from, slot, i),
+        w.fold_at(from, slot, i),
         w.column(from, slot, i),
         w.own(from, slot, i),
         f,

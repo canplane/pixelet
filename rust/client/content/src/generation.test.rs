@@ -53,7 +53,7 @@ impl clipmap::BrickSource for PresentTo {
     fn brick(&self, _: Zoom, _: u32) -> ([i32; 2], bool) {
         unreachable!("step reads only what is present")
     }
-    fn palette_word(&self, _: Zoom, _: u32, _: u32) -> u32 {
+    fn fold_at(&self, _: Zoom, _: u32, _: u32) -> u32 {
         unreachable!("step reads only what is present")
     }
     fn column(&self, _: Zoom, _: u32, _: u32) -> u32 {

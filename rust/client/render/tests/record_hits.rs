@@ -77,7 +77,7 @@ fn world_bufs(gpu: &Gpu, built: &Built) -> WorldBuffer {
     WorldBuffer {
         clip: gpu.buf(&clip, store_of()),
         ground: gpu.buf(&built.ground, store_of()),
-        palette: gpu.buf(&built.palette, store_of()),
+        folds: gpu.buf(&built.folds, store_of()),
         shards: gpu.buf(&flat_u(&built.shards), store_of()),
         placed: gpu.buf(&built.objects, store_of()),
         pool: gpu.buf(&built.pool, store_of()),
@@ -94,7 +94,7 @@ fn world_binds<'a>(
         (0, eye.as_entire_binding()),
         (1, b.clip.as_entire_binding()),
         (2, b.ground.as_entire_binding()),
-        (4, b.palette.as_entire_binding()),
+        (4, b.folds.as_entire_binding()),
         (5, b.shards.as_entire_binding()),
         (6, b.placed.as_entire_binding()),
         (7, b.pool.as_entire_binding()),
