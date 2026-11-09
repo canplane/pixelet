@@ -413,15 +413,15 @@ pub const RECEIVER_TILES_BACK: Step = Step::copy(
 /// Copies back the read list's count that the casts since the world's receivers were last
 /// stood afresh left, into the args where this cast adds to it. This cast's propagation goes on
 /// counting from it.
-pub const READ_COUNT_BACK: Step = Step::copy(
-    "read_count_back",
+pub const READ_CNT_BACK: Step = Step::copy(
+    "read_cnt_back",
     IN_LIGHT,
     at(
         LIGHT_LIST,
         light::carry_at(SHADOW_SIZE) + light::CARRY_READ,
         1,
     ),
-    at(LIGHT_ARGS, light::ARGS_COUNTS + light::LIST_READS, 1),
+    at(LIGHT_ARGS, light::ARGS_CNTS + light::LIST_READS, 1),
 );
 /// Copies the eye's holes' count to where the queue reads it, as `LIGHT_HOLES_CNT` does the
 /// light's. Its destination lies in the eye's beam rays' buffer, which is not one of the
@@ -461,18 +461,18 @@ pub const RECEIVER_TILES_KEEP: Step = Step::copy(
         light::RECEIVER_TILES_CARRY,
     ),
 );
-pub const READ_COUNT_KEEP: Step = Step::copy(
-    "read_count_keep",
+pub const READ_CNT_KEEP: Step = Step::copy(
+    "read_cnt_keep",
     IN_LIGHT,
-    at(LIGHT_ARGS, light::ARGS_COUNTS + light::LIST_READS, 1),
+    at(LIGHT_ARGS, light::ARGS_CNTS + light::LIST_READS, 1),
     at(
         LIGHT_LIST,
         light::carry_at(SHADOW_SIZE) + light::CARRY_READ,
         1,
     ),
 );
-pub const RECEIVER_TILES_COUNT: Step = Step::copy(
-    "receiver_tiles_count",
+pub const RECEIVER_TILES_CNT: Step = Step::copy(
+    "receiver_tiles_cnt",
     IN_LIGHT,
     at(LIGHT_RECEIVER_TILES, light::RECEIVER_TILES_CNT, 1),
     at(
@@ -481,30 +481,30 @@ pub const RECEIVER_TILES_COUNT: Step = Step::copy(
         1,
     ),
 );
-pub const CORNERS_COUNT: Step = Step::copy(
-    "corners_count",
+pub const CORNERS_CNT: Step = Step::copy(
+    "corners_cnt",
     IN_LIGHT,
-    at(LIGHT_ARGS, light::ARGS_COUNTS + light::LIST_CORNERS, 1),
+    at(LIGHT_ARGS, light::ARGS_CNTS + light::LIST_CORNERS, 1),
     at(
         LIGHT_LIST,
         light::list_cnt_at(SHADOW_SIZE, light::LIST_CORNERS),
         1,
     ),
 );
-pub const SOURCES_COUNT: Step = Step::copy(
-    "sources_count",
+pub const SOURCES_CNT: Step = Step::copy(
+    "sources_cnt",
     IN_LIGHT,
-    at(LIGHT_ARGS, light::ARGS_COUNTS + light::LIST_SOURCES, 1),
+    at(LIGHT_ARGS, light::ARGS_CNTS + light::LIST_SOURCES, 1),
     at(
         LIGHT_LIST,
         light::list_cnt_at(SHADOW_SIZE, light::LIST_SOURCES),
         1,
     ),
 );
-pub const DAMAGE_COUNT: Step = Step::copy(
-    "damage_count",
+pub const DAMAGE_CNT: Step = Step::copy(
+    "damage_cnt",
     IN_LIGHT,
-    at(LIGHT_ARGS, light::ARGS_COUNTS + light::LIST_DAMAGE, 1),
+    at(LIGHT_ARGS, light::ARGS_CNTS + light::LIST_DAMAGE, 1),
     at(
         LIGHT_LIST,
         light::list_cnt_at(SHADOW_SIZE, light::LIST_DAMAGE),
@@ -525,10 +525,8 @@ pub const OPEN_RASTER_DRAW_ARGS: Step = Step::write(
     "open_raster_draw_args",
     at(RASTER_ARGS, 0, raster::ARGS_WORDS),
 );
-pub const OPEN_NODE_CACHE_COUNTS: Step = Step::write(
-    "open_node_cache_counts",
-    at(NODE_CACHE, node_cache::ASKED, 1),
-);
+pub const OPEN_NODE_CACHE_CNTS: Step =
+    Step::write("open_node_cache_cnts", at(NODE_CACHE, node_cache::ASKED, 1));
 pub const OPEN_NODE_CACHE_FRAME: Step = Step::write(
     "open_node_cache_frame",
     at(NODE_CACHE, node_cache::FRAME, 1),
@@ -566,7 +564,7 @@ pub const LIGHT_READS_IN: Step = Step::copy(
 
 pub const FRAME: Frame = Frame {
     stages: STAGES,
-    buffers: BUFFERS,
+    bufs: BUFS,
     appends: APPENDS,
     seeds: SEEDS,
     bounds: BOUNDS,
@@ -594,7 +592,7 @@ pub const FRAME: Frame = Frame {
         OPEN_LIGHT_RASTER_ARGS,
         OPEN_GENERATION_LIST,
         OPEN_RASTER_DRAW_ARGS,
-        OPEN_NODE_CACHE_COUNTS,
+        OPEN_NODE_CACHE_CNTS,
         OPEN_NODE_CACHE_FRAME,
         OPEN_GENERATION_RECTS,
         // The cull of the decor generated last frame, which is drawn through the screen's
@@ -624,7 +622,7 @@ pub const FRAME: Frame = Frame {
         // list's args and in the read list's count is copied back in before every pass that
         // stands a tile, the eye's record draw among them.
         RECEIVER_TILES_BACK,
-        READ_COUNT_BACK,
+        READ_CNT_BACK,
         // The same cull, for the decor drawn through the light's gate.
         Step::dispatch(
             "decor_cull_args_light",
@@ -784,20 +782,20 @@ pub const FRAME: Frame = Frame {
             &[&LIGHT_MARK_DRAWS_OPEN_BINDS],
         ),
         LIGHT_MARK_DRAWS,
-        RECEIVER_TILES_COUNT,
+        RECEIVER_TILES_CNT,
         LIGHT_SLIDE,
         LIGHT_PROPAGATE,
         RECEIVER_TILES_KEEP,
-        READ_COUNT_KEEP,
+        READ_CNT_KEEP,
         Step::dispatch(
             "light_damage",
             IN_LIGHT,
             COMPUTE_LIGHT_DAMAGE,
             &[&LIGHT_PROPAGATE_BINDS],
         ),
-        CORNERS_COUNT,
-        SOURCES_COUNT,
-        DAMAGE_COUNT,
+        CORNERS_CNT,
+        SOURCES_CNT,
+        DAMAGE_CNT,
         // The run of the light's beam rays (gpu/ray/cast.rs `walk_run`).
         Step::dispatch(
             "light_corners",
@@ -941,7 +939,7 @@ const APPENDS: &[Range] = &[
     receiver_tiles_marks(),
     at(CULLED_SCREEN_ARGS, 0, END),
     at(CULLED_LIGHT_ARGS, 0, END),
-    at(LIGHT_ARGS, light::ARGS_COUNTS + light::LIST_READS, 1),
+    at(LIGHT_ARGS, light::ARGS_CNTS + light::LIST_READS, 1),
     at(NODE_CACHE, node_cache::ASKED, 1),
 ];
 
@@ -951,12 +949,7 @@ const APPENDS: &[Range] = &[
 /// `keep_hit`). `receiver_tiles_back` and `read_count_back` copy back the stood list's args and
 /// the read list's count that the casts since the world's receivers were last stood afresh
 /// left, before this cast's receivers and propagation add to them.
-const SEEDS: &[&str] = &[
-    "hits",
-    "light_hits",
-    "receiver_tiles_back",
-    "read_count_back",
-];
+const SEEDS: &[&str] = &["hits", "light_hits", "receiver_tiles_back", "read_cnt_back"];
 
 /// The counts read as a bound while passes still add to them: the frame's asks. Each ask is
 /// counted one at a time, and the count runs past a reader's bound by none.
@@ -1053,7 +1046,7 @@ const PERSISTENT: &[Persistent] = &[
             light::carry_at(SHADOW_SIZE) + light::CARRY_READ,
             1,
         ),
-        owner: "read_count_keep",
+        owner: "read_cnt_keep",
         by: &[],
         invalidation: "the read list's count the casts since the world's receivers were stood \
             afresh left, stale where they are stood afresh: the host then writes the light's \

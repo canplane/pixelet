@@ -26,7 +26,7 @@ use std::rc::Rc;
 
 use fnv::FnvHashMap;
 
-use pxl_render::asset::gltf::{parse_gltf, scene_nodes, world_matrices, Gltf, GltfPrimitive};
+use pxl_render::asset::gltf::{parse_gltf, scene_nodes, world_mats, Gltf, GltfPrimitive};
 use pxl_render::gpu::draw::MODEL_VERTEX_WORDS;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use xpute_core::global::Global;
@@ -87,7 +87,7 @@ pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<u32> {
     match at.map(|at| &registered[at].2) {
         Some(Some(Ok(model))) => return Some(*model),
         Some(None) => return None,
-        Some(Some(Err(refused))) if !refused.over() => return None,
+        Some(Some(Err(refused))) if !refused.released() => return None,
         _ => {}
     }
     let gltf = gltf_of(load)?;
@@ -267,7 +267,7 @@ async fn register_model<P: Future<Output = ()>>(
 ) -> Option<u32> {
     pause().await;
     let order = scene_nodes(gltf);
-    let worlds = world_matrices(gltf);
+    let worlds = world_mats(gltf);
     let skinned = !gltf.skins.is_empty()
         && order
             .iter()

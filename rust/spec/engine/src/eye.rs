@@ -8,9 +8,11 @@
 use crate::beam;
 use crate::object::Cut;
 
-/// The eye's position in Q3 steps, X, Y and Z, then a word no reader reads, so that the next
-/// field starts a vec4.
+/// The eye's position in Q3 steps, X, Y and Z.
 pub const ORIGIN: usize = 0;
+/// 1 where the frame shows the ray steps view: each ray's third word then holds the steps taken
+/// on its way from the eye, not its palette indices (`ray`).
+pub const STEPS: usize = 3;
 /// The unit forward vector, X, Y and Z, then how far every ray goes (`FAR`), as f32 bits.
 pub const FORWARD: usize = 4;
 pub const FAR: usize = 7;
@@ -60,7 +62,8 @@ pub const GRID: usize = JITTER + JITTER_WORDS;
 pub const GRID_WORDS: usize = beam::GRID_WORDS;
 pub const WORDS: usize = GRID + GRID_WORDS;
 const _: () = assert!(
-    FORWARD == ORIGIN + 4
+    STEPS == ORIGIN + 3
+        && FORWARD == STEPS + 1
         && FAR == FORWARD + 3
         && UP == RIGHT + 4
         && TAN == UP + 4

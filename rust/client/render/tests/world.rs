@@ -90,7 +90,7 @@ fn descend(
     [mut far, mut near]: [Zoom; 2],
     moving: bool,
     cuts: [Cut; 2],
-    asks: &mut AskLog,
+    ask_log: &mut AskLog,
     tally: &mut Tally,
     draw: &mut Draw,
     seen: &mut Lookup,
@@ -152,7 +152,7 @@ fn descend(
                 );
             }
         }
-        asks.push(
+        ask_log.push(
             (OP_NODE, z, c),
             zooms,
             before.words(),
@@ -319,7 +319,7 @@ fn tell(
     t.add(
         "cell, four differ",
         is_cell && {
-            let [a, b, c, d] = ground::palette_indices(got.asset[1]);
+            let [a, b, c, d] = ground::palette_idxs(got.asset[1]);
             a != b || b != c || c != d
         },
     );
@@ -659,7 +659,7 @@ fn hand_world_answers_as_the_rust() {
     }
 
     // Each point gets one descent, its zooms set by how far the point lies from the eye.
-    let mut asks = AskLog::default();
+    let mut ask_log = AskLog::default();
     let mut tally = Tally::default();
     let mut seen = Lookup::NONE;
     let by_its_distance = points.iter().map(|p| {
@@ -763,7 +763,7 @@ fn hand_world_answers_as_the_rust() {
             [far, near],
             moving,
             [carve, hide],
-            &mut asks,
+            &mut ask_log,
             &mut tally,
             &mut draw,
             &mut seen,
@@ -782,7 +782,7 @@ fn hand_world_answers_as_the_rust() {
         let c = [wrap_idx(z, v(g[0])), v(g[1]), v(draw.within(-300, 300))];
         let share = cave::hollow((z, c));
         hollows += (share > 0) as u32;
-        asks.push(
+        ask_log.push(
             (OP_HOLLOW, z, c),
             [0, 0],
             [0; 4],
@@ -813,7 +813,7 @@ fn hand_world_answers_as_the_rust() {
             let d = [b & 3, b >> 2 & 3, b >> 4];
             let at = [4 * c[0] + d[0], 4 * c[1] + d[1], 4 * c[2] + d[2]];
             let z = cave::PIPE + 2;
-            asks.push(
+            ask_log.push(
                 (OP_HOLLOW, z, at),
                 [0, 0],
                 [0; 4],
@@ -827,7 +827,7 @@ fn hand_world_answers_as_the_rust() {
         .0
         .insert("pipe cells of a partial piece, every block", partial);
 
-    let asked_n = asks.asked.len() / ASKED_WORDS;
+    let asked_n = ask_log.asked.len() / ASKED_WORDS;
     eprintln!("{asked_n} asks");
     for (name, n) in &tally.0 {
         eprintln!("  {n:>8}  {name}");
@@ -852,7 +852,7 @@ fn hand_world_answers_as_the_rust() {
 
     // The same asks go to the query by hand, a chunk at a time.
     use wgpu::util::DeviceExt as _;
-    let buffer = |words: &[u32], usage: wgpu::BufferUsages| {
+    let buf = |words: &[u32], usage: wgpu::BufferUsages| {
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             // SAFETY: every u32's bytes are u8s, in the slice's own lifetime.
@@ -864,12 +864,12 @@ fn hand_world_answers_as_the_rust() {
     let clip_flat: Vec<u32> = clipmap.iter().flatten().map(|&v| v as u32).collect();
     let store = wgpu::BufferUsages::STORAGE;
     let (clip_buf, ground_buf, palette_buf, shard_buf, placed_buf, pool_buf) = (
-        buffer(&clip_flat, store),
-        buffer(ground_words, store),
-        buffer(palette_words, store),
-        buffer(&flat(shards), store),
-        buffer(objects, store),
-        buffer(pool, store),
+        buf(&clip_flat, store),
+        buf(ground_words, store),
+        buf(palette_words, store),
+        buf(&flat(shards), store),
+        buf(objects, store),
+        buf(pool, store),
     );
     let source = WORLD_ASKED;
     let module = module_of(&device, "world", source);
@@ -884,14 +884,14 @@ fn hand_world_answers_as_the_rust() {
     const CHUNK: usize = 1 << 14;
     let (mut same, mut differ, mut first) = (0u64, 0u64, None);
     let mut differ_by_op = [0u32; 4];
-    for (n, (a, t)) in asks
+    for (n, (a, t)) in ask_log
         .asked
         .chunks(CHUNK * ASKED_WORDS)
-        .zip(asks.told.chunks(CHUNK * TOLD_WORDS))
+        .zip(ask_log.told.chunks(CHUNK * TOLD_WORDS))
         .enumerate()
     {
-        let asked_buf = buffer(a, store);
-        let told_buf = buffer(&vec![0u32; t.len()], store);
+        let asked_buf = buf(a, store);
+        let told_buf = buf(&vec![0u32; t.len()], store);
         let entries = [
             (1, &clip_buf),
             (2, &ground_buf),

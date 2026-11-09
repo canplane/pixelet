@@ -127,7 +127,7 @@ pub(super) struct Walker<'w, 'a> {
     decor_ray: Option<(&'w Ray, DecorRay)>,
     /// The ground's lines the walk read. Each node's line steps on from them
     /// (`World::node`).
-    lines: Path,
+    path: Path,
 }
 
 impl<'a> Query for Walker<'_, 'a> {
@@ -175,7 +175,7 @@ impl<'a> Query for Walker<'_, 'a> {
                 self.world.intersect_near(s, ray, (zoom, c));
             }
         }
-        let answer = match self.world.node(at, zooms, &mut self.lines) {
+        let answer = match self.world.node(at, zooms, &mut self.path) {
             Answer::Nothing(l) => {
                 self.lack.get_or_insert(l);
                 return In {
@@ -237,9 +237,9 @@ impl<'a> World<'a> {
     /// ray tells nothing. Decor, which fills no cell, is struck at the leaf
     /// cells the ray passes.
     pub fn first_hit(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
-        let mut lines = Path::default();
+        let mut path = Path::default();
         let (met, decor_ray) =
-            self.along(ray, detail, Until::Opaque, self.decor_ray(ray), &mut lines);
+            self.along(ray, detail, Until::Opaque, self.decor_ray(ray), &mut path);
         let decor = decor_ray
             .and_then(|s| s.best)
             .filter(|&(d, ..)| met.val().flatten().is_none_or(|h: Hit| d < h.t));
@@ -255,7 +255,7 @@ impl<'a> World<'a> {
     /// The first cell along `ray` that `until` stops at, at the zoom `detail`
     /// asks where it meets it (pxl-engine `cast::first`). The ray starts at
     /// its origin, which may stand off the world, as an eye over it does
-    /// (pxl-spec `world::origin`). The tiles' lines step on from `lines`, the
+    /// (pxl-spec `world::origin`). The tiles' lines step on from `path`, the
     /// ground's lines that a walk beside this ray read over the same tile
     /// cache, and are left there for the next ray.
     pub(super) fn along(
@@ -264,23 +264,23 @@ impl<'a> World<'a> {
         detail: Detail,
         until: Until,
         decor_ray: Option<DecorRay>,
-        lines: &mut Path,
+        path: &mut Path,
     ) -> (Answer<Option<Hit>>, Option<DecorRay>) {
         let mut walker = Walker {
             world: self,
             lack: None,
             answered: false,
             decor_ray: decor_ray.map(|s| (ray, s)),
-            lines: *lines,
+            path: *path,
         };
         let o = ray.origin;
         let end = ray.at(ray.t_max);
         self.read([o[0], o[1]], [end[0], end[1]], detail.range[0]);
         let from = cast::Ray::new(ray.dir.map(|v| v as f32), ray.t_max as f32);
         let q = origin(o[0], o[1], o[2]);
-        let met = cast::first(&mut walker, q, &from, detail, until);
-        *lines = walker.lines;
-        let hit = (met.ends == End::Hit).then(|| self.hit(ray, q, met.hit));
+        let trace = cast::first(&mut walker, q, &from, detail, until);
+        *path = walker.path;
+        let hit = (trace.end == End::Hit).then(|| self.hit(ray, q, trace.hit));
         let answer = match (hit, walker.lack, walker.answered) {
             (h, None, _) => Answer::Exact(h),
             (Some(h), Some(l), _) => Answer::Coarser(Some(h), l),
@@ -305,7 +305,7 @@ impl<'a> World<'a> {
         let middle = g.map(|v| (f64::from(v) + 0.5) * side);
         self.read(middle, middle, cell_zoom);
         let f = support::column_surface(&mut walker, cell_zoom, g);
-        let met = (f.ends == End::Hit).then_some(f.top);
+        let met = (f.end == End::Hit).then_some(f.top);
         let answer = match (met, walker.lack, walker.answered) {
             (m, None, _) => Answer::Exact(m),
             (Some(m), Some(l), _) => Answer::Coarser(Some(m), l),
@@ -334,7 +334,7 @@ impl<'a> World<'a> {
             lack: None,
             answered: false,
             decor_ray: None,
-            lines: Path::default(),
+            path: Path::default(),
         }
     }
 

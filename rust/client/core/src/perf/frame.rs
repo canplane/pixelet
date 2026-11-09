@@ -110,7 +110,7 @@ pub struct FrameSample {
     pub gpu: GpuSample,
     /// This frame's ray counts, written back when they land (record.rs
     /// `perf_record_rays`).
-    pub rays: RaySample,
+    pub ray_sample: RaySample,
     /// The terrain tiles the tile cache took in during the frame turn.
     pub terrain_loads: f64,
     pub device: DeviceSample,
@@ -118,7 +118,7 @@ pub struct FrameSample {
     pub heap_used_bytes: f64,
 }
 
-/// One frame's ray counts, which the renderer gathers while the `ray_counts`
+/// One frame's ray counts, which the renderer gathers while the `ray_cnts`
 /// setting is on (pxl-render gpu/ray/count.rs `RayCount`). The fields
 /// follow the order of perf.json FRAME's `rays` group. For the eye they say
 /// whether it cast in full, how many pixels it cast, and its lane counts.
@@ -151,9 +151,9 @@ pub struct RaySample {
 }
 
 impl RaySample {
-    /// Reads the renderer's counts, laid out in `RAY_COUNTS` order.
-    pub fn of(c: [f64; ray::RAY_COUNTS]) -> RaySample {
-        let at = |o: u32, k: usize| c[ray::count_at(o, k)];
+    /// Reads the renderer's counts, laid out in `RAY_CNTS` order.
+    pub fn of(c: [f64; ray::RAY_CNTS]) -> RaySample {
+        let at = |o: u32, k: usize| c[ray::cnt_at(o, k)];
         let lane = |o: u32, l: u32| at(o, ray::LANES_AT + l as usize);
         let (eye, light) = (count::EYE, count::LIGHT);
         RaySample {
@@ -229,7 +229,7 @@ words!(FrameSample, FRAME::WORDS,
     gpu.timed => FRAME::gpu_timed, gpu.spans => FRAME::gpu_spans, gpu.busy_ms => FRAME::gpu_busy_ms, gpu.px => FRAME::gpu_px, gpu.scale => FRAME::scale,
     gpu.draws => FRAME::draws, gpu.triangles => FRAME::triangles, gpu.frame => FRAME::gpu_frame,
     gpu.light_changed => FRAME::light_changed, gpu.decor_rects => FRAME::decor_rects,
-    rays => FRAME::eye_cast,
+    ray_sample => FRAME::eye_cast,
     terrain_loads => FRAME::terrain_loads,
     device.uploads => FRAME::uploads, device.uploads_bytes => FRAME::uploads_bytes, device.pack_bytes => FRAME::pack_bytes,
     heap_used_bytes => FRAME::heap_used_bytes,

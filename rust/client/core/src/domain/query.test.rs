@@ -46,7 +46,7 @@ fn top() -> Quadrant {
 #[derive(Clone)]
 struct Leaf {
     tile: TerrainTile,
-    palette_indices: Vec<GroundId>,
+    palette_idxs: Vec<GroundId>,
     heights: Vec<i16>,
 }
 
@@ -64,7 +64,7 @@ fn resident(center: [f64; 2], tiles: &[(Quadrant, Leaf)]) -> TileCache<TerrainTi
         p,
         Leaf {
             tile,
-            palette_indices,
+            palette_idxs,
             heights,
         },
     ) in tiles
@@ -77,7 +77,7 @@ fn resident(center: [f64; 2], tiles: &[(Quadrant, Leaf)]) -> TileCache<TerrainTi
             admitted.push(q);
             cells.push((
                 q,
-                palette_indices.clone(),
+                palette_idxs.clone(),
                 heights.clone(),
                 tile.separation.clone(),
             ));
@@ -113,7 +113,7 @@ fn drawn(heights: Vec<i16>, ground: Ground, separation: Separation) -> Leaf {
             separation,
             Occupancy::LEAF,
         ),
-        palette_indices: ground.cells.into_owned(),
+        palette_idxs: ground.cells.into_owned(),
         heights,
     }
 }
@@ -526,7 +526,7 @@ fn walker_climbs_or_slides() {
     let east = world::point(x + 1.5, y + 0.5, 0.0);
     {
         let access = World::new(&tile_cache, &store);
-        let to = access.step_slide(&from, &east, &from, true, true).unwrap();
+        let to = access.step_slide(&from, &east, true);
         assert_eq!(
             (q3::to_real(i64::from(to[0])), floor(to)),
             (x + 1.5, 8.0),
@@ -537,22 +537,14 @@ fn walker_climbs_or_slides() {
     // wall.
     write(&mut store, [x, y, 7.0], OBJECT_COARSEST, red);
     let access = World::new(&tile_cache, &store);
-    let to = access.step_slide(&from, &east, &from, true, true).unwrap();
+    let to = access.step_slide(&from, &east, true);
     assert!(
         q3::to_real(i64::from(to[0])) < x + 1.0,
         "stopped at the wall"
     );
     assert_eq!(floor(to), 5.0);
     // Going north-east, the east is slid along and the north is walked.
-    let to = access
-        .step_slide(
-            &from,
-            &world::point(x + 1.5, y + 1.5, 0.0),
-            &from,
-            true,
-            true,
-        )
-        .unwrap();
+    let to = access.step_slide(&from, &world::point(x + 1.5, y + 1.5, 0.0), true);
     assert!(
         q3::to_real(i64::from(to[0])) < x + 1.0,
         "slid along the wall"
@@ -602,15 +594,7 @@ fn reading_reports_columns() {
     access.surface_support(&point(at[0], at[1]));
     assert_eq!(read.get(), Some([c, c.map(|v| v + cell)]));
     let from = world::point(at[0], at[1], over(5.0));
-    access
-        .step_slide(
-            &from,
-            &world::point(at[0] + 3.0 * cell, at[1], 0.0),
-            &from,
-            true,
-            true,
-        )
-        .unwrap();
+    access.step_slide(&from, &world::point(at[0] + 3.0 * cell, at[1], 0.0), true);
     assert_eq!(read.get(), Some([c, [c[0] + 4.0 * cell, c[1] + cell]]));
 }
 

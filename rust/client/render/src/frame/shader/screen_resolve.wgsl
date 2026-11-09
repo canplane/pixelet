@@ -74,7 +74,7 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   let at = was.xy / was.w;
   let uv = vec2f(at.x * 0.5 + 0.5, 0.5 - at.y * 0.5);
   let tile = vec2u(p) / tile_side();
-  let age = tile_age(tile.y * tiles.count.x + tile.x);
+  let age = tile_age(tile.y * tiles.cnt.x + tile.x);
   let still = age > 0u;
   var blend = select(resolve.blend.x, 1.0 / f32(min(age - 1u, TILE_JITTERS - 2u) + 2u), still);
   if (!(was.w > 0.0) || any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) {

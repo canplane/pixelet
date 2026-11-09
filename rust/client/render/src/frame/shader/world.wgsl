@@ -21,7 +21,7 @@
 
 fn fills(asset: u32) -> bool {
   let v = asset & VAL_MASK;
-  return v != VALUE_VOID && v != VALUE_AIR;
+  return v != VAL_VOID && v != VAL_AIR;
 }
 
 struct Cover {
@@ -80,7 +80,7 @@ fn slot_at(tree: u32, slot: u32, zoom: u32) -> u32 {
   if (first_child(tree, slot) != 0u) {
     return (slot << SLOT_SHIFT) | SLOT_FOLDED | zoom;
   }
-  if (tree_data(tree, slot) == VALUE_VOID) {
+  if (tree_data(tree, slot) == VAL_VOID) {
     return SLOT_NOTHING;
   }
   return (slot << SLOT_SHIFT) | zoom;
@@ -134,18 +134,18 @@ fn cut_holds(cut: vec4<i32>, zoom: u32, at: vec3<i32>) -> bool {
 /// The twin of pxl-engine `object::val`.
 fn tree_val(tree: u32, s: u32, hide: vec4<i32>, zoom: u32, at: vec3<i32>) -> u32 {
   if (s == SLOT_NOTHING) {
-    return VALUE_VOID;
+    return VAL_VOID;
   }
   let word = tree_data(tree, s >> SLOT_SHIFT);
   let v = word & 0xffffu;
   if (is_folded(s)) {
     if ((word >> 16u) == 0u) {
-      return VALUE_VOID;
+      return VAL_VOID;
     }
   } else if (u32(hide.w) == (s & SLOT_ZOOM_MASK) && cut_holds(hide, zoom, at)) {
-    return VALUE_VOID;
+    return VAL_VOID;
   }
-  return select(VALUE_VOID, v, voxel(v));
+  return select(VAL_VOID, v, voxel(v));
 }
 
 /// The twin of pxl-engine `object::fill_share`, for the node that holds slot `s` of `tree`,
@@ -157,7 +157,7 @@ fn fill_share(tree: u32, s: u32) -> u32 {
   return FULL;
 }
 
-/// The twin of pxl-engine `object::palette_indices`, packed into the word `world::node` keeps
+/// The twin of pxl-engine `object::palette_idxs`, packed into the word `world::node` keeps
 /// of them, which is 0 where any index does not fit in a byte.
 fn placed_four(s: u32, hide: vec4<i32>, zoom: u32, at: vec3<i32>, v: u32) -> u32 {
   if (!is_folded(s)) {
@@ -256,7 +256,7 @@ fn ground_column(shard: u32, place: u32, zoom: u32, b: vec2<i32>) -> Cell {
   let s = step_to(place, clip, cell_at(zoom, clip, b));
   var fold = 0u;
   var column = 0u;
-  var own = VALUE_VOID;
+  var own = VAL_VOID;
   if (lookup_here(s.place)) {
     let slot = lookup_slot(s.place);
     let i = cell_id(s.at);
@@ -266,7 +266,7 @@ fn ground_column(shard: u32, place: u32, zoom: u32, b: vec2<i32>) -> Cell {
     own = (ground[base + OWN_AT + i / OWN_CELLS] >> (8u * (i % OWN_CELLS))) & 0xffu;
   }
   let t = top_of(zoom, column_top(column));
-  return Cell(select(own, VALUE_UNKNOWN, is_wall(shard, zoom, b)), t.cells, t.part, fold);
+  return Cell(select(own, VAL_UNKNOWN, is_wall(shard, zoom, b)), t.cells, t.part, fold);
 }
 
 // The ground's cell, as pxl-engine ground.rs and pxl-content strata.rs answer it.
@@ -274,9 +274,9 @@ fn ground_column(shard: u32, place: u32, zoom: u32, b: vec2<i32>) -> Cell {
 /// The twin of pxl-content `strata::by_depth`.
 fn by_depth(cell_zoom: u32, palette_idx: u32, t: i32, z: i32) -> u32 {
   if (z >= t) {
-    return VALUE_VOID;
+    return VAL_VOID;
   }
-  if (cell_zoom < LEAF_CELL_ZOOM || palette_idx == VALUE_UNKNOWN) {
+  if (cell_zoom < LEAF_CELL_ZOOM || palette_idx == VAL_UNKNOWN) {
     return palette_idx;
   }
   let s = leaf_cells(cell_zoom);
@@ -299,7 +299,7 @@ fn by_depth(cell_zoom: u32, palette_idx: u32, t: i32, z: i32) -> u32 {
   if (z >= filled - sandstone * s) {
     return STRATA_SANDSTONE;
   }
-  return select(VALUE_UNKNOWN, STRATA_STONE, z >= rock(cell_zoom, face_height(cell_zoom, t)));
+  return select(VAL_UNKNOWN, STRATA_STONE, z >= rock(cell_zoom, face_height(cell_zoom, t)));
 }
 
 /// The bedrock's top under a face at `face` (pxl-engine `ground::rock`, pxl-content
@@ -312,7 +312,7 @@ fn rock(cell_zoom: u32, face: i32) -> i32 {
 fn opens(col: Cell, cell_zoom: u32, z: i32) -> bool {
   let face = face_height(cell_zoom, col.top);
   let under = top_of(cell_zoom, face).cells - leaf_cells(cell_zoom) - i32(col.part < FULL);
-  return col.palette_idx != VALUE_UNKNOWN && z < under && z >= rock(cell_zoom, face);
+  return col.palette_idx != VAL_UNKNOWN && z < under && z >= rock(cell_zoom, face);
 }
 
 /// What pxl-engine `ground::node` answers for a cell: its kind and asset, the column read
@@ -329,13 +329,13 @@ struct GroundCell {
 
 /// The answer for a cell where no column was read (pxl-engine `Cell::NONE`).
 fn ground_none(kind: u32, asset: vec2<u32>, place: u32) -> GroundCell {
-  return GroundCell(kind, asset, VALUE_VOID, 0i, FULL, 0u, place);
+  return GroundCell(kind, asset, VAL_VOID, 0i, FULL, 0u, place);
 }
 
 /// The twin of pxl-engine `ground::node` where the node is asked as a cell (`is_cell`).
 fn ground_cell(shard: u32, place: u32, zoom: u32, c: vec3<i32>) -> GroundCell {
   if (is_past(shard)) {
-    let earth = select(VALUE_VOID, VALUE_UNKNOWN, c.z < SEA_LEVEL);
+    let earth = select(VAL_VOID, VAL_UNKNOWN, c.z < SEA_LEVEL);
     return ground_none(KIND_CELL, vec2<u32>(earth, 0u), LOOKUP_NONE);
   }
   if (zoom < MIN_ZOOM) {
@@ -343,15 +343,15 @@ fn ground_cell(shard: u32, place: u32, zoom: u32, c: vec3<i32>) -> GroundCell {
   }
   let r = bound_over(place, zoom, zoom, zoom, c.xy);
   if (!r.here) {
-    return ground_none(KIND_LACKS, vec2<u32>(VALUE_VOID, 0u), r.place);
+    return ground_none(KIND_LACKS, vec2<u32>(VAL_VOID, 0u), r.place);
   }
   let col = ground_column(shard, r.place, zoom, c.xy);
-  var asset = VALUE_VOID;
-  if (col.palette_idx == VALUE_UNKNOWN || grounds(col.palette_idx)) {
+  var asset = VAL_VOID;
+  if (col.palette_idx == VAL_UNKNOWN || grounds(col.palette_idx)) {
     asset = by_depth(zoom, col.palette_idx, col.top, c.z);
   }
   var cave = 0u;
-  if (asset != VALUE_VOID && opens(col, zoom, c.z)) {
+  if (asset != VAL_VOID && opens(col, zoom, c.z)) {
     cave = hollow(zoom, c);
   }
   return GroundCell(KIND_CELL, vec2<u32>(asset, cave), col.palette_idx, col.top, col.part, col.fold, r.place);
@@ -728,14 +728,14 @@ fn ways_at(place: u32, before: u32, trail: u32, zoom: u32, c: vec3<i32>) -> u32 
 /// fills its whole cube, and is otherwise laid over the ground's asset and the ways.
 fn world_cell(above: vec4<u32>, shard: u32, zoom: u32, c: vec3<i32>, carve: vec4<i32>, hide: vec4<i32>) -> Answer {
   let put = above.x;
-  var over = VALUE_AIR;
+  var over = VAL_AIR;
   var over_fill = FULL;
   if (!cut_holds(carve, zoom, c)) {
     over = tree_val(PLACED, put, hide, zoom, c);
     over_fill = fill_share(PLACED, put);
   }
   var over_four = 0u;
-  if (over != VALUE_VOID) {
+  if (over != VAL_VOID) {
     if (fills(over)) {
       over_four = placed_four(put, hide, zoom, c, over);
     }
@@ -746,12 +746,12 @@ fn world_cell(above: vec4<u32>, shard: u32, zoom: u32, c: vec3<i32>, carve: vec4
   let g = ground_cell(shard, above.z, zoom, c);
   let trail = ways_at(g.place, above.z, above.w, zoom, c);
   let at = vec4<u32>(put, shard, g.place, trail);
-  if (g.kind == KIND_LACKS && over == VALUE_VOID) {
+  if (g.kind == KIND_LACKS && over == VAL_VOID) {
     return Answer(g.kind, g.asset, at);
   }
   // The ground's asset, its share less what its caves take, and its four palette indices;
   // then the ways and what is placed are written over it.
-  var val = VALUE_VOID;
+  var val = VAL_VOID;
   if (g.kind == KIND_CELL) {
     val = g.asset.x;
   }
@@ -759,12 +759,12 @@ fn world_cell(above: vec4<u32>, shard: u32, zoom: u32, c: vec3<i32>, carve: vec4
   var four = 0u;
   if (fills(val)) {
     let share = select(FULL, g.part, c.z == g.top - 1i);
-    fill = cover(share, VALUE_AIR, g.asset.y).fill;
+    fill = cover(share, VAL_AIR, g.asset.y).fill;
     four = select(g.fold, four_of(val), zoom >= LEAF_CELL_ZOOM || val != g.palette_idx);
   }
   if (g.kind == KIND_CELL && lookup_here(g.place)) {
     let way = tree_val(WAYS, trail, NO_CUT, zoom, c);
-    if (way != VALUE_VOID) {
+    if (way != VAL_VOID) {
       let got = cover(fill, way, fill_share(WAYS, trail));
       if (got.theirs) {
         val = way;
@@ -773,7 +773,7 @@ fn world_cell(above: vec4<u32>, shard: u32, zoom: u32, c: vec3<i32>, carve: vec4
       fill = got.fill;
     }
   }
-  if (over != VALUE_VOID) {
+  if (over != VAL_VOID) {
     let got = cover(fill, over, over_fill);
     if (got.theirs) {
       val = PLACED_ASSET | over;
@@ -786,7 +786,7 @@ fn world_cell(above: vec4<u32>, shard: u32, zoom: u32, c: vec3<i32>, carve: vec4
     if (g.kind == KIND_LACKS) {
       return Answer(g.kind, g.asset, at);
     }
-    return Answer(KIND_CELL, vec2<u32>(select(VALUE_VOID, PLACED_ASSET | VALUE_AIR, over == VALUE_AIR), 0u), at);
+    return Answer(KIND_CELL, vec2<u32>(select(VAL_VOID, PLACED_ASSET | VAL_AIR, over == VAL_AIR), 0u), at);
   }
   let asset = val | ((filled % EIGHTHS) << FILL_SHIFT);
   return Answer(KIND_CELL, vec2<u32>(asset, four), at);

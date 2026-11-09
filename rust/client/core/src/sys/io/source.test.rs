@@ -34,7 +34,7 @@ fn src_serves_by_shard() {
 }
 
 #[test]
-fn unfollowable_declaration_refused() {
+fn unfollowable_decl_refused() {
     let f = formats();
     // One declaration gives terrain a format past the one this client reads,
     // and another gives the Earth no format.

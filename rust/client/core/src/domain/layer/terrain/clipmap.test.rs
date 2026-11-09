@@ -163,7 +163,7 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
             place,
             first: terrain::first_cell(t, cell_zoom, place),
             lines: &lines[..n],
-            palette_indices: |k: u32| word([u32::from(palette_of[at(k)]); 4]),
+            palette_idxs: |k: u32| word([u32::from(palette_of[at(k)]); 4]),
             height: |c: [i32; 2]| {
                 i32::from(
                     heights[at(clipmap::idx_of([
@@ -305,9 +305,9 @@ fn hilly_tile() -> (Quadrant, TerrainTile, Vec<u8>) {
     let ele: Vec<i16> = (0..ELE_COLUMN as i32)
         .map(|i| ((i * 37) % 11 + (i / 36) % 5) as i16)
         .collect();
-    let mut lines = separation::Builder::default();
+    let mut builder = separation::Builder::default();
     let point = |x: f64| ([x, 180.0], 40, 0);
-    lines.push(
+    builder.push(
         [point(16.0), point(160.0), point(320.0), point(480.0)],
         24,
         TRANSPORTS[0] as u8,
@@ -323,7 +323,7 @@ fn hilly_tile() -> (Quadrant, TerrainTile, Vec<u8>) {
         terrain::Ground {
             cells: cells.into(),
         },
-        lines.finish(),
+        builder.finish(),
     );
     let pkt = terrain::encode(&tile).unwrap();
     (t, tile, pkt)

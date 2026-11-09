@@ -13,9 +13,9 @@ fn queue_records_at() -> u32 {
 }
 
 fn visits_at() -> u32 {
-  return LIGHT_SAMPLE_COUNT;
+  return LIGHT_SAMPLE_CNT;
 }
 
 fn asked_at() -> u32 {
-  return LIGHT_ASKED_COUNT;
+  return LIGHT_ASKED_CNT;
 }

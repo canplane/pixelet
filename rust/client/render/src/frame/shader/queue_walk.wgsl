@@ -79,68 +79,62 @@ fn list_ask(aim: Aim, w: WalkEnd, again: bool) {
   atomicStore(&queue[at + 9u], inheritance.w);
 }
 
-/// Where item `h` starts in the first walk, or goes on from in the second where `again`.
-fn start_of(h: u32, again: bool) -> Start {
+/// Where item `h`, whose ray is `aim`, starts in the first walk, or goes on from in the second
+/// where `again`.
+fn start_of(h: u32, aim: Aim, again: bool) -> Start {
   if (again) {
     return parked_start(h);
   }
-  return item_start(h, item_aim(h));
+  return item_start(h, aim);
 }
 
 /// The lanes of a walk: the first, or the second over what the first parked where `again`.
-/// Each lane holds one ray at a time, and `item` is `NONE` where it holds none. A ray that
-/// finds the pool full ends as a lack where it stands.
+/// Each lane holds one ray at a time. A ray that finds the pool full ends as a lack where it
+/// stands.
 fn queue_walk(again: bool) {
-  var item = NONE;
-  var t = 0.0;
-  var corner = vec3<u32>(0u);
-  var zoom = 0u;
-  var roots = vec3<i32>(0);
-  var step = 0u;
   loop {
+    let item = next_item(again);
     if (item == NONE) {
-      let h = next_item(again);
-      if (h == NONE) {
-        break;
-      }
-      if (again && !parked(h)) {
-        continue;
-      }
-      item = h;
-      let s = start_of(h, again);
-      t = s.t;
-      corner = s.corner;
-      zoom = s.zoom;
-      roots = s.roots;
-      step = s.step;
+      break;
     }
-    let aim = item_aim(item);
-    let w = walk(aim, Start(t, corner, zoom, roots, vec4<u32>(0u), true, step), QUEUE_STEPS);
-    // `ends` is 5 where the walk ran out of its steps, and 4 where it met a node no slot keeps
-    // (walk.wgsl `walk`).
-    if (w.ends == 5u) {
-      t = w.t;
-      corner = w.corner;
-      zoom = w.zoom;
-      roots = w.roots;
-      step = w.step;
+    if (again && !parked(item)) {
       continue;
     }
-    if (w.ends == ENDS_AGAIN) {
-      let s = item_start(item, aim);
-      if (!park(item, s.t, s.corner, s.zoom, s.roots, s.step)) {
-        finish(item, aim, to_lack(w));
+    let aim = item_aim(item);
+    let s = start_of(item, aim, again);
+    var t = s.t;
+    var corner = s.corner;
+    var zoom = s.zoom;
+    var roots = s.roots;
+    var step = s.step;
+    loop {
+      let w = walk(aim, Start(t, corner, zoom, roots, vec4<u32>(0u), true, step), QUEUE_STEPS);
+      // `ends` is 5 where the walk ran out of its steps, and 4 where it met a node no slot keeps
+      // (walk.wgsl `walk`).
+      if (w.ends == 5u) {
+        t = w.t;
+        corner = w.corner;
+        zoom = w.zoom;
+        roots = w.roots;
+        step = w.step;
+        continue;
       }
-    } else if (w.ends == 4u) {
-      if (park(item, w.t, w.corner, w.zoom, w.roots, w.step)) {
-        list_ask(aim, w, again);
+      if (w.ends == ENDS_AGAIN) {
+        let start = item_start(item, aim);
+        if (!park(item, start.t, start.corner, start.zoom, start.roots, start.step)) {
+          finish(item, aim, to_lack(w));
+        }
+      } else if (w.ends == 4u) {
+        if (park(item, w.t, w.corner, w.zoom, w.roots, w.step)) {
+          list_ask(aim, w, again);
+        } else {
+          finish(item, aim, to_lack(w));
+        }
       } else {
-        finish(item, aim, to_lack(w));
+        finish(item, aim, w);
       }
-    } else {
-      finish(item, aim, w);
+      break;
     }
-    item = NONE;
   }
 }
 

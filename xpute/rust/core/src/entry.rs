@@ -31,7 +31,7 @@ use crate::stop::PanicHook;
 #[derive(Clone, Copy)]
 pub struct BootInfo {
     /// The size of the core memory in bytes. The memory never grows.
-    pub given: u32,
+    pub mem_sz: u32,
     pub call: crate::call::Call,
     pub heap_stat: fn() -> HeapStat,
     pub form: Form,
@@ -56,10 +56,10 @@ pub struct Form {
     /// unfinished frames; a page answers from the count its device's block
     /// reports. A core that draws nothing has none.
     pub admit_frame: Option<fn() -> bool>,
-    /// Runs the stream the core has just published, at once and on the
-    /// core's thread; it is called as END is stored (`ipc::stream`,
-    /// xpute-gpu `runtime::native::publish`). A page has none, since its
-    /// runtime runs the stream when the turn returns.
+    /// Hands over the stream the core has just published; it is called as
+    /// END is stored (`ipc::stream`, xpute-gpu `runtime::native::publish`).
+    /// A page has none, since its runtime runs the stream when the turn
+    /// returns.
     pub publish: Option<fn()>,
 }
 

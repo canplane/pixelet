@@ -223,7 +223,8 @@ const FRAME_ORDER: [(&str, u8); 2] = [("shader", 0), ("shelf", 0)];
 /// The shaders' own order (frame/shader.rs): the words, the parts and WebGPU's floor, under the
 /// pipeline records, under the compute groups and what a pass does with them, under the
 /// frame's calls.
-const SHADER_ORDER: [(&str, u8); 7] = [
+const SHADER_ORDER: [(&str, u8); 8] = [
+    ("debug_look", 0),
     ("floor", 0),
     ("part", 0),
     ("word", 0),

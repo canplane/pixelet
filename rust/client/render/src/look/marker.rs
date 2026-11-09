@@ -159,14 +159,14 @@ pub const NOTCH: f32 = 3.0;
 pub const TAIL_W: f32 = 14.0;
 pub const TAIL_H: f32 = 10.0;
 
-/// The height of a bubble's box for `lines` lines, without its tail.
-pub fn bubble_rect_h(lines: usize) -> f32 {
-    lines as f32 * LINE_H + PADDING_Y * 2.0
+/// The height of a bubble's box for `line_cnt` lines, without its tail.
+pub fn bubble_rect_h(line_cnt: usize) -> f32 {
+    line_cnt as f32 * LINE_H + PADDING_Y * 2.0
 }
 
-/// A bubble's sprite for `lines` lines `text_w` wide: its width, its height with the tail, and
+/// A bubble's sprite for `line_cnt` lines `text_w` wide: its width, its height with the tail, and
 /// how far below its top the speaker is, at the tail's tip.
-pub fn bubble_size(text_w: f64, lines: usize) -> [f64; 3] {
-    let h = f64::from(bubble_rect_h(lines) + TAIL_H);
+pub fn bubble_size(text_w: f64, line_cnt: usize) -> [f64; 3] {
+    let h = f64::from(bubble_rect_h(line_cnt) + TAIL_H);
     [text_w.ceil() + f64::from(PADDING_X) * 2.0, h, h]
 }

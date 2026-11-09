@@ -119,7 +119,7 @@ fn hit_of(w: World, l: &Light, range: [Zoom; 2], c: [u32; 2], o: [i32; 3]) -> f3
         cuts: [Cut::NONE; 2],
     };
     let at = q.root(Node::ROOT.idx(o));
-    let met = cast::walk_at_most(
+    let trace = cast::walk_at_most(
         &mut q,
         o,
         &Ray::new(l.dir, l.t_max),
@@ -130,7 +130,7 @@ fn hit_of(w: World, l: &Light, range: [Zoom; 2], c: [u32; 2], o: [i32; 3]) -> f3
         &mut Unkept,
         cast::STEPS_CAP,
     );
-    met.hit.t.max(0.0)
+    trace.hit.t.max(0.0)
 }
 
 fn device() -> Option<Gpu> {
@@ -151,17 +151,17 @@ fn device() -> Option<Gpu> {
 /// The light's list after the beam and `light_cell_cs` run over a cast that claims every tile,
 /// from a node cache no frame has written.
 fn beams_of(gpu: &Gpu, b: &WorldBuffer, eye: &[u32], header: &[u32]) -> Vec<u32> {
-    let eye = gpu.buffer(eye, wgpu::BufferUsages::UNIFORM);
-    let header = gpu.buffer(header, wgpu::BufferUsages::UNIFORM);
+    let eye = gpu.buf(eye, wgpu::BufferUsages::UNIFORM);
+    let header = gpu.buf(header, wgpu::BufferUsages::UNIFORM);
     let mut table = vec![0u32; node_cache::WORDS as usize];
     table[node_cache::FRAME as usize] = FRAME;
-    let table = gpu.buffer(&table, store_of());
+    let table = gpu.buf(&table, store_of());
     let tiles = light::tiles(SIZE);
     let mut list = vec![0u32; light::list_words(SIZE) as usize];
     let reads_at = light::reads_at(SIZE) as usize;
     list[reads_at..reads_at + (tiles * tiles) as usize].fill(CAST);
     let fed = list_every(&mut list, SIZE, light::LIST_SOURCES, 1);
-    let beams = gpu.buffer(&list, store_of());
+    let beams = gpu.buf(&list, store_of());
     gpu.light_beam(
         &[
             (0, eye.as_entire_binding()),
@@ -202,12 +202,12 @@ fn light_cells_start_short_by_the_margin() {
     let flat_u = |rows: &[[u32; 4]]| rows.iter().flatten().copied().collect::<Vec<u32>>();
     let clip: Vec<u32> = built.clipmap.iter().flatten().map(|&v| v as u32).collect();
     let b = WorldBuffer {
-        clip: gpu.buffer(&clip, store),
-        ground: gpu.buffer(&built.ground, store),
-        palette: gpu.buffer(&built.palette, store),
-        shards: gpu.buffer(&flat_u(&built.shards), store),
-        placed: gpu.buffer(&built.objects, store),
-        pool: gpu.buffer(&built.pool, store),
+        clip: gpu.buf(&clip, store),
+        ground: gpu.buf(&built.ground, store),
+        palette: gpu.buf(&built.palette, store),
+        shards: gpu.buf(&flat_u(&built.shards), store),
+        placed: gpu.buf(&built.objects, store),
+        pool: gpu.buf(&built.pool, store),
     };
     let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
     let cases = [

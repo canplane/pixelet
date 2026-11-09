@@ -38,9 +38,9 @@ impl MipPass {
         }
     }
 
-    pub fn build(&self, g: &Gpu, texture: u32, levels: u32, first_layer: u32, layers: u32) {
+    pub fn build(&self, g: &Gpu, texture: u32, levels: u32, first_layer: u32, layer_cnt: u32) {
         let encoder = g.encoder();
-        for layer in first_layer..first_layer + layers {
+        for layer in first_layer..first_layer + layer_cnt {
             for level in 1..levels {
                 let above = g.view(texture, false, level - 1, 1, layer, 1);
                 let target = g.view(texture, false, level, 1, layer, 1);

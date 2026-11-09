@@ -45,7 +45,7 @@ fn probe(gpu: &gpu::Gpu, cases: &[[f32; 3]]) -> Vec<[u32; PROBE_WORDS]> {
         words.extend(v.map(f32::to_bits));
         words.extend([0; PROBE_WORDS - 3]);
     }
-    let buf = gpu.buffer(&words, wgpu::BufferUsages::STORAGE);
+    let buf = gpu.buf(&words, wgpu::BufferUsages::STORAGE);
     gpu.dispatch(
         &p,
         &[(40, buf.as_entire_binding())],
@@ -347,7 +347,7 @@ fn hand_keeps_as_the_engine() {
     for (zoom, c) in &cases {
         words.extend([*zoom, c[0] as u32, c[1] as u32, c[2] as u32, 2, 0]);
     }
-    let buf = gpu.buffer(&words, wgpu::BufferUsages::STORAGE);
+    let buf = gpu.buf(&words, wgpu::BufferUsages::STORAGE);
     gpu.dispatch(
         &p,
         &[(40, buf.as_entire_binding())],

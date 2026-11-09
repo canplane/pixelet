@@ -77,10 +77,11 @@ pub(crate) fn take_stat() -> DoorStat {
 /// The most events a turn posts besides its replies, which the machine
 /// declares as machine.json `turn_posts`. `post_ui` posts, once a turn after
 /// the drain, at most one start or stop for each sensor, then the snapshot
-/// and the view. The file calls post at most `runtime::FILE_FRAMES`, whether
-/// during the drain or later in the turn. One more slot holds a call while it
-/// is laid out and is never published.
-const EVENTS: u32 = Sensor::ALL.len() as u32 + 2 + runtime::FILE_FRAMES + 1;
+/// and the view. A frame posts its pace once (turn.rs `world_frame`). The
+/// file calls post at most `runtime::FILE_FRAMES`, whether during the drain
+/// or later in the turn. One more slot holds a call while it is laid out and
+/// is never published.
+const EVENTS: u32 = Sensor::ALL.len() as u32 + 2 + 1 + runtime::FILE_FRAMES + 1;
 
 const _: () = assert!(
     MACHINE.turn_posts == EVENTS,
@@ -143,7 +144,7 @@ fn boot(b: BootInfo) {
     executor::install();
     layout::install(&b);
     // A layer asks for no more tiles at once than its tile cache has slots.
-    request::open(|c| demand::of_stream(c).map_or(0, |l| l.slots));
+    request::open(|c| demand::of_stream(c).map_or(0, |l| l.slot_cnt));
     turn::boot();
 }
 
@@ -213,6 +214,9 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
         }
     }
     api::gpu_publish();
+    if let Some(at) = request::next_pump_at(now()) {
+        edge::wake_at(at);
+    }
     let fall = edge::world_fall();
     // The next turn comes at once while submissions wait that the completion
     // ring had no room to answer, or while a snapshot is put off.
@@ -221,13 +225,13 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     } else {
         fall
     };
-    let asked = match wake {
+    let kind = match wake {
         0.0 => Wake::next,
         w if w < 0.0 => Wake::none,
         _ => Wake::timer,
     };
     let fell = now();
-    perf_record_turn(fell - rise, polled - drained, f64::from(asked as u8));
+    perf_record_turn(fell - rise, polled - drained, f64::from(kind as u8));
     wake
 }
 

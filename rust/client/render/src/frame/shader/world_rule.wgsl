@@ -11,7 +11,7 @@ fn grounds(v: u32) -> bool {
 }
 
 fn voxel(v: u32) -> bool {
-  return v == VALUE_AIR || grounds(v) || (v >= OBJECTS_FIRST && v <= OBJECTS_LAST);
+  return v == VAL_AIR || grounds(v) || (v >= OBJECTS_FIRST && v <= OBJECTS_LAST);
 }
 
 fn eighths(fill: u32) -> u32 {

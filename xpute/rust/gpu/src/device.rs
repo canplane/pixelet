@@ -7,9 +7,9 @@
 use crate::enums::{FEATURE_NAME, LIMIT_NAME};
 
 /// The features take one bit for each name in FEATURE_NAME.
-pub const FEATURES_AT: usize = LIMIT_NAME.len();
+pub const FEATS_AT: usize = LIMIT_NAME.len();
 /// The timestamp period is in nanoseconds per tick, as f32 bits.
-pub const PERIOD_AT: usize = FEATURES_AT + FEATURE_NAME.len().div_ceil(32);
+pub const PERIOD_AT: usize = FEATS_AT + FEATURE_NAME.len().div_ceil(32);
 /// The surface format the runtime prefers is an index into TEXTURE_FORMAT.
 pub const FORMAT_AT: usize = PERIOD_AT + 1;
 /// This counts the core's frames the GPU has not yet finished, and the runtime

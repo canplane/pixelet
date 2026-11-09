@@ -197,3 +197,8 @@ inherits = "native"
 lto = false
 codegen-units = 256
 incremental = true
+
+# The Metal backend with one command buffer per encoder rather than per pass
+# (xpute/rust/vendor/wgpu-hal/src/metal, `chain`).
+[patch.crates-io]
+wgpu-hal = { path = "../xpute/rust/vendor/wgpu-hal" }

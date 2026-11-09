@@ -54,7 +54,7 @@ impl Wait {
     fn ready(self) -> bool {
         match self {
             Wait::Ready => true,
-            Wait::Room(refused) => refused.over(),
+            Wait::Room(refused) => refused.released(),
             Wait::Object => false,
         }
     }
@@ -92,14 +92,14 @@ pub enum Event {
 struct Outage {
     failing: Option<Errno>,
     /// The server's failures in a row, each of which began a wait.
-    failures: u32,
+    fail_cnt: u32,
     struck_ms: f64,
     until: f64,
 }
 
 const NO_OUTAGE: Outage = Outage {
     failing: None,
-    failures: 0,
+    fail_cnt: 0,
     struck_ms: f64::NEG_INFINITY,
     until: f64::NEG_INFINITY,
 };
@@ -210,11 +210,14 @@ pub fn pump() {
     if at >= s.outage.until {
         start_ready(s, at);
     }
-    // A turn is asked for when the hold ends, because nothing else may come
-    // to wake the core then.
-    if s.outage.until.is_finite() {
-        edge::wake_at(s.outage.until);
-    }
+}
+
+/// When a frame's pump is waited for at `at_ms`, if one is: the end of the
+/// hold on every start. Nothing else may come to wake the core then. It is
+/// asked every turn, since a timer lasts only until the next turn.
+pub fn next_pump_at(at_ms: f64) -> Option<f64> {
+    let until = sched().outage.until;
+    (until > at_ms).then_some(until)
 }
 
 /// Starts the best ranked of the ready wants on the free credits. A failing
@@ -315,18 +318,21 @@ pub fn settle(key: u64, exit: Exit, phases: Option<PhaseList>) {
 /// it, so one outage is counted once.
 fn hold(s: &mut Sched, fault: Fault, f: Failure, started_ms: f64, at: f64) {
     let o = &mut s.outage;
-    let seed = derive_seed_u64(o.failures as u64, at.to_bits());
+    let seed = derive_seed_u64(o.fail_cnt as u64, at.to_bits());
     o.failing = Some(f.errnum);
     if fault == Fault::Network {
         o.until = at + policy::backoff(1, seed).unwrap_or(0.0);
     } else if started_ms > o.struck_ms {
         o.struck_ms = at;
-        o.failures += 1;
-        match policy::backoff(o.failures, seed) {
+        o.fail_cnt += 1;
+        match policy::backoff(o.fail_cnt, seed) {
             Some(wait) => o.until = at + wait,
             None => s.given_up = true,
         }
     }
+    // A frame's pump shows the failure and starts a probe at once where the
+    // hold has already ended or this failure began none.
+    edge::request_world_tick();
 }
 
 /// Resets the scheduler when the runtime will not answer what it was asked

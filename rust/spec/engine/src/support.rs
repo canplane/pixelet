@@ -30,7 +30,7 @@ pub struct Line<A> {
 #[derive(Clone, Copy)]
 pub struct ColumnSurface<A> {
     pub top: (i32, f32),
-    pub ends: End,
+    pub end: End,
     pub line: Line<A>,
     origin: [i32; 3],
 }
@@ -49,8 +49,8 @@ impl<A: Copy> Line<A> {
 }
 
 impl<A: Copy> Keep<A> for ColumnSurface<A> {
-    fn keep(&mut self, met: &Trace<A>, stack: &[A; DEPTH]) {
-        self.line = Line::of_walk(self.origin, &met.hit.node, met.hit.at, stack);
+    fn keep(&mut self, trace: &Trace<A>, stack: &[A; DEPTH]) {
+        self.line = Line::of_walk(self.origin, &trace.hit.node, trace.hit.at, stack);
     }
 }
 
@@ -64,7 +64,7 @@ pub fn column_surface<Q: Query>(q: &mut Q, cell_zoom: Zoom, g: [i32; 2]) -> Colu
     let root = q.root(at);
     let mut f = ColumnSurface {
         top: (0, 0.0),
-        ends: End::Miss,
+        end: End::Miss,
         line: Line {
             at,
             zoom: 0,
@@ -74,7 +74,7 @@ pub fn column_surface<Q: Query>(q: &mut Q, cell_zoom: Zoom, g: [i32; 2]) -> Colu
         origin: o,
     };
     // Walk from the root just asked; `walk_from_root` would ask it again.
-    let met = cast::walk(
+    let trace = cast::walk(
         q,
         o,
         &ray,
@@ -84,8 +84,8 @@ pub fn column_surface<Q: Query>(q: &mut Q, cell_zoom: Zoom, g: [i32; 2]) -> Colu
         &cast::Root(root),
         &mut f,
     );
-    f.ends = met.ends;
-    f.top = cast::top(o, &met.hit.node, met.hit.asset[0]);
+    f.end = trace.end;
+    f.top = cast::top(o, &trace.hit.node, trace.hit.asset[0]);
     f
 }
 
@@ -350,7 +350,7 @@ mod tests {
     #[test]
     fn footing_asset_is_worlds() {
         let f = column_surface(&mut Step, UNIT_ZOOM, [6, 3]);
-        assert_eq!(f.ends, End::Hit);
+        assert_eq!(f.end, End::Hit);
         assert_eq!(f.top.0, -1, "the top of the cell under z = 0");
         for x in 2..10 {
             for y in 0..7 {
@@ -371,7 +371,7 @@ mod tests {
     fn column_surface_line_is_its_top_cells() {
         for g in [[6, 3], [2, 3], [3, 0], [9, 5]] {
             let f = column_surface(&mut Step, UNIT_ZOOM, g);
-            assert_eq!(f.ends, End::Hit, "{g:?}");
+            assert_eq!(f.end, End::Hit, "{g:?}");
             let rebuilt = line(&mut Step, UNIT_ZOOM, [g[0], g[1], f.top.0]);
             for c in [
                 [g[0] + 1, g[1], f.top.0],
@@ -445,7 +445,7 @@ mod tests {
                 let f = column_surface(&mut q, UNIT_ZOOM, [5, 7]);
                 let asset = fill_word(STONE[0], eighths % EIGHTHS);
                 let rise = cast::fill_bounds(([0.0; 3], [1.0; 3]), asset).1[2];
-                assert_eq!(f.ends, End::Hit, "{top} {eighths}");
+                assert_eq!(f.end, End::Hit, "{top} {eighths}");
                 assert_eq!(f.top, (top, rise), "{top} {eighths}");
             }
         }
@@ -457,8 +457,8 @@ mod tests {
     struct LineCollector(Option<Line<At>>, [i32; 3]);
 
     impl Keep<At> for LineCollector {
-        fn keep(&mut self, met: &Trace<At>, stack: &[At; DEPTH]) {
-            self.0 = Some(Line::of_walk(self.1, &met.hit.node, met.hit.at, stack));
+        fn keep(&mut self, trace: &Trace<At>, stack: &[At; DEPTH]) {
+            self.0 = Some(Line::of_walk(self.1, &trace.hit.node, trace.hit.at, stack));
         }
     }
 
@@ -489,8 +489,8 @@ mod tests {
         };
         let beam = Ray::new([-0.45, 0.05, -1.0], 64.0);
         let mut first = LineCollector(None, o);
-        let met = cast::walk_from_root(&mut Step, o, &beam, detail, Until::Opaque, &mut first);
-        assert_eq!(met.ends, End::Hit);
+        let trace = cast::walk_from_root(&mut Step, o, &beam, detail, Until::Opaque, &mut first);
+        assert_eq!(trace.end, End::Hit);
         let first = first.0.unwrap();
         for d in [
             [-0.45, 0.05],
@@ -504,8 +504,8 @@ mod tests {
         ] {
             for share in [0.2, 0.5, 0.9] {
                 let ray = Ray::new([d[0], d[1], -1.0], 64.0);
-                let t = met.hit.t * share;
-                let (h, found) = met.hit.node.over(cast::point_at(o, &ray, t));
+                let t = trace.hit.t * share;
+                let (h, found) = trace.hit.node.over(cast::point_at(o, &ray, t));
                 let h = cast::holding(o, &ray, h, t);
                 let from = if found {
                     (h, cast::Over::over(&Along(&first), h.zoom), t)
@@ -523,7 +523,7 @@ mod tests {
                     &Along(&first),
                     &mut collected,
                 );
-                assert_eq!(resumed.ends, End::Hit, "{d:?} {share}");
+                assert_eq!(resumed.end, End::Hit, "{d:?} {share}");
                 let collected = collected.0.unwrap();
                 let walked = line(&mut Step, collected.zoom, collected.at);
                 for d in 0..6u32 {

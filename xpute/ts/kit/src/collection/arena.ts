@@ -29,8 +29,8 @@ export class Arena<T extends object> {
 
   private _factory: () => T;
 
-  constructor(factory: () => T, opts: ArenaConfig) {
-    const { init_cap: _init_cap, max_cap } = opts;
+  constructor(factory: () => T, cfg: ArenaConfig) {
+    const { init_cap: _init_cap, max_cap } = cfg;
     this.max_cap = max_cap;
     this._cap = 0;
 
@@ -112,9 +112,9 @@ export class Vector<T extends AnyTypedArray> {
 
   readonly ctor: AnyTypedArrayCtor<T>;
 
-  constructor(ctor: AnyTypedArrayCtor<T>, opts: ArenaConfig) {
+  constructor(ctor: AnyTypedArrayCtor<T>, cfg: ArenaConfig) {
     this.ctor = ctor;
-    const { init_cap: _init_cap, max_cap } = opts;
+    const { init_cap: _init_cap, max_cap } = cfg;
     this.max_cap = max_cap;
     this._cap = Math.min(_init_cap, max_cap);
 

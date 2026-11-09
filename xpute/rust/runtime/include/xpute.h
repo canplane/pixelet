@@ -23,9 +23,17 @@ double xpute_run(double deadline_ms);
 
 // Asks for a turn at once, after the app has written the submission ring, and
 // returns without waiting. The next turn ends no sooner than deadline_ms after
-// its rise; a negative deadline_ms sets no deadline. From now on, the calling
-// thread answers the core's calls.
-void xpute_kick(double deadline_ms);
+// its rise, and begins at at_ms on xpute's clock, at once if that has passed.
+// From now on, the calling thread answers the core's calls.
+void xpute_kick(double deadline_ms, double at_ms);
+
+// The platform's display link calls this at each display frame, age_ms after
+// that frame's time.
+void xpute_vsync(double age_ms);
+
+// The time on xpute's clock of the first display frame after both now and
+// after_ms.
+double xpute_next_frame(double after_ms);
 
 // From now on, only a turn `xpute_run` rings may begin, and a kick waits for
 // `xpute_resume`. An app calls this while it is hidden.

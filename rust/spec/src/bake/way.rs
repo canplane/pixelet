@@ -16,14 +16,14 @@ use crate::space::layer::lattice::TILE_CELLS;
 /// crosses takes the way's kind, the highest way's where two cross one. Bedrock and kinds that
 /// do not ground are left as they are, as the ground's face takes no way there; an
 /// embankment's or a cutting's height stays its line's.
-pub fn lay(sep: &Separation, frame: Frame, palette_indices: &mut [GroundId]) {
+pub fn lay(sep: &Separation, frame: Frame, palette_idxs: &mut [GroundId]) {
     let n = i64::from(TILE_CELLS);
     // For each cell, the highest top over it and its kind.
     let mut laid: FnvHashMap<usize, (i32, u8)> = FnvHashMap::default();
     sep.crossing_grid(frame, [0, 0], [n, n], |x, y, _, o| {
         let col = (y * n + x) as usize;
         if o.form != u32::from(Form::Approach.byte())
-            || palette_indices[col] == sentinel::unknown
+            || palette_idxs[col] == sentinel::unknown
             || !Ground::grounds(o.kind)
         {
             return;
@@ -34,6 +34,6 @@ pub fn lay(sep: &Separation, frame: Frame, palette_indices: &mut [GroundId]) {
         }
     });
     for (col, (_, kind)) in laid {
-        palette_indices[col] = kind;
+        palette_idxs[col] = kind;
     }
 }

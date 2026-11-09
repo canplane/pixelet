@@ -11,10 +11,10 @@ fn every_made_pipeline_counts_in_whatever_order_it_is_made() {
     p.pipeline_len = 4;
     p.words[1] = TICKET;
     p.words[3] = TICKET;
-    assert!(!p.made());
+    assert!(!p.poll());
     assert_eq!(p.share(), 0.5);
     p.words[0] = TICKET;
     p.words[2] = TICKET;
-    assert!(p.made());
+    assert!(p.poll());
     assert_eq!(p.share(), 1.0);
 }

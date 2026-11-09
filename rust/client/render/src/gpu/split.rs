@@ -65,7 +65,7 @@ pub struct Split {
 impl Split {
     /// Records a buffer made at source line `line`. It is an args buffer when it was made
     /// `INDIRECT`.
-    pub fn made(&mut self, buf: Id, indirect: bool, line: u32) {
+    pub fn note_buffer(&mut self, buf: Id, indirect: bool, line: u32) {
         self.let_go(buf);
         if indirect {
             self.args.push((buf, line));
@@ -267,10 +267,10 @@ impl Split {
         }
     }
 
-    /// Records that `group` was bound at `idx` of `pass` with `offsets`.
-    pub fn bound(&mut self, pass: Id, idx: u32, group: Id, offsets: &[u32]) {
+    /// Records that `group` was bound at `idx` of `pass` with `offs`.
+    pub fn bound(&mut self, pass: Id, idx: u32, group: Id, offs: &[u32]) {
         if let Some(o) = self.open(pass) {
-            o.groups[idx as usize] = (group, offsets.to_vec());
+            o.groups[idx as usize] = (group, offs.to_vec());
             if !o.compute && !o.drawn_groups.contains(&group) {
                 o.drawn_groups.push(group);
             }

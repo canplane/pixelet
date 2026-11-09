@@ -325,7 +325,7 @@ fn deep_chain_no_recursion() {
     nodes.push(r#"{"mesh":0}"#.to_string());
     let gltf = parse(&edited(&[(r#"{"mesh":0}"#, &nodes.join(","))])).unwrap();
     assert_eq!(scene_nodes(&gltf).len(), depth);
-    assert_eq!(world_matrices(&gltf).len(), depth);
+    assert_eq!(world_mats(&gltf).len(), depth);
 }
 
 #[test]

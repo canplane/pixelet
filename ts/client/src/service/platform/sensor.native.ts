@@ -10,7 +10,7 @@
 import { AppState } from "react-native";
 import * as Location from "expo-horizon-location";
 
-import { geo_fix, listener } from "./sensor-listener.ts";
+import { coords_fix, geo_fix, listener } from "./sensor-listener.ts";
 import type { GeolocationSensor, OrientationSensor } from "./types.ts";
 import { PLATFORM } from "./pxl-platform.ts";
 
@@ -73,10 +73,10 @@ function watch_keep(
 
 let geolocation: Watch | null = null;
 
-function geo_fail(watch: Watch, error: "denied" | "other"): void {
+function geo_fail(watch: Watch, err: "denied" | "other"): void {
   if (geolocation !== watch) return;
   geo_stop();
-  listener.positionError(error);
+  listener.positionError(err);
 }
 
 function geo_start(): void {
@@ -91,7 +91,7 @@ function geo_start(): void {
         timeInterval: 1000,
         distanceInterval: 0,
       },
-      (pos) => geo_fix(pos.coords),
+      (pos) => geo_fix(coords_fix(pos.coords)),
       // Android's watch never ends on its own: expo's watch callbacks leave
       // onLocationError empty, and the fused provider keeps the request. iOS
       // rides out locationUnknown while CoreLocation keeps trying, and ends

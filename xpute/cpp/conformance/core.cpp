@@ -286,7 +286,7 @@ extern "C" std::uint32_t xpute_conformance_boot(std::uint32_t seed) {
     std::uint32_t range = range_at();
     // A range past the memory's end means a runtime sized the memory for
     // another core.
-    ensure(std::uint64_t{range} + MEM_BYTES <= wasm::given(), Errno::enomem, range);
+    ensure(std::uint64_t{range} + MEM_BYTES <= wasm::mem_sz(), Errno::enomem, range);
     set_call(runtime_call);
     return boot(mem::core(), range, runtime_now, seed);
 }
@@ -300,13 +300,13 @@ extern "C" double run(double) {
 // A native runtime hands over MEM_BYTES from `mem`. The core allocates from
 // the process, so nothing reads the process-wide core memory (`mem::core`),
 // which stays unset.
-Memory given(std::uint8_t *mem) noexcept { return Memory(reinterpret_cast<std::uintptr_t>(mem), MEM_BYTES); }
+Memory memory_of(std::uint8_t *mem) noexcept { return Memory(reinterpret_cast<std::uintptr_t>(mem), MEM_BYTES); }
 
 extern "C" std::uint32_t xpute_conformance_boot(std::uint8_t *mem, xpute_conformance_now now, xpute_conformance_call call, std::uint32_t seed) {
     set_call(call);
-    return boot(given(mem), 0, now, seed);
+    return boot(memory_of(mem), 0, now, seed);
 }
 
-extern "C" double xpute_conformance_run(std::uint8_t *mem, double) { return turn(given(mem), 0); }
+extern "C" double xpute_conformance_run(std::uint8_t *mem, double) { return turn(memory_of(mem), 0); }
 
 #endif

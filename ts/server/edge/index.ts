@@ -114,7 +114,7 @@ function serve(
 
 /** The answer for a page its version leaves out: a 204, as the tile servers
  * answer an empty tile. */
-function left(): Response {
+function noContent(): Response {
   return new Response(null, { status: 204 });
 }
 
@@ -202,7 +202,7 @@ export default {
     const page = BAKE_KEY.test(key);
     const missing = () =>
       page
-        ? left()
+        ? noContent()
         : new Response(request.method === "HEAD" ? null : "not found", {
             status: 404,
           });

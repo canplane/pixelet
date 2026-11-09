@@ -70,7 +70,7 @@ pub const WRITE_BY_RUNTIME: u32 = 3;
 
 /// A word count that reaches to the buffer's end.
 pub const END: u32 = u32::MAX;
-pub const NO_BUFFER: u32 = u32::MAX;
+pub const NO_BUF: u32 = u32::MAX;
 
 /// A buffer the frame's calls share, by its name and its role.
 #[derive(Clone, Copy)]
@@ -79,7 +79,7 @@ pub struct Buffer {
     pub role: u32,
 }
 
-/// Words `at` to `at + words` of buffer `buf` (an index into the frame's `buffers`).
+/// Words `at` to `at + words` of buffer `buf` (an index into the frame's `bufs`).
 #[derive(Clone, Copy)]
 pub struct Range {
     pub buf: u32,
@@ -88,7 +88,7 @@ pub struct Range {
 }
 
 pub const NO_RANGE: Range = Range {
-    buf: NO_BUFFER,
+    buf: NO_BUF,
     at: 0,
     words: 0,
 };
@@ -280,7 +280,7 @@ impl Step {
 /// calls share, and the facts it declares about its ranges (see the module's comment).
 pub struct Frame {
     pub stages: &'static [&'static str],
-    pub buffers: &'static [Buffer],
+    pub bufs: &'static [Buffer],
     pub steps: &'static [Step],
     pub appends: &'static [Range],
     pub seeds: &'static [&'static str],
@@ -345,12 +345,12 @@ pub const TOUCHES: &[Touch] = {
     use crate::frame::shader::record::*;
     /// Words of the light's args (pxl-engine `light::ARGS_WORDS`). `opened` is the x of a
     /// pass's dispatch, which the claim raises as it lists (light_enlist.wgsl `opened`).
-    /// `count` is a list's count, and `marks` are a list's marks, which lie past the counts.
+    /// `cnt` is a list's count, and `marks` are a list's marks, which lie past the counts.
     const fn opened(w: u32) -> [u32; 2] {
         [w + 1, 1]
     }
-    const fn count(which: u32) -> [u32; 2] {
-        [light::ARGS_COUNTS + which, 1]
+    const fn cnt(which: u32) -> [u32; 2] {
+        [light::ARGS_CNTS + which, 1]
     }
     const fn marks(which: u32) -> [u32; 2] {
         light_marks(which)
@@ -448,8 +448,8 @@ pub const TOUCHES: &[Touch] = {
         Touch {
             compute: COMPUTE_LIGHT_PROPAGATE,
             binding: 21,
-            writes: &[count(light::LIST_READS), marks(light::LIST_READS)],
-            reads: &[count(light::LIST_READS), marks(light::LIST_READS)],
+            writes: &[cnt(light::LIST_READS), marks(light::LIST_READS)],
+            reads: &[cnt(light::LIST_READS), marks(light::LIST_READS)],
         },
         // The claim claims each tile read that is due to be cast again, lists what feeds it,
         // and opens the passes that cast those. It also sets the lay's tiles to those read
@@ -462,9 +462,9 @@ pub const TOUCHES: &[Touch] = {
                 opened(light::ARGS_CELLS),
                 opened(light::ARGS_SAMPLE_BOX),
                 opened(light::ARGS_SLOT),
-                count(light::LIST_CORNERS),
-                count(light::LIST_SOURCES),
-                count(light::LIST_DAMAGE),
+                cnt(light::LIST_CORNERS),
+                cnt(light::LIST_SOURCES),
+                cnt(light::LIST_DAMAGE),
                 marks(light::LIST_CORNERS),
                 marks(light::LIST_SOURCES),
                 marks(light::LIST_DAMAGE),
@@ -473,10 +473,10 @@ pub const TOUCHES: &[Touch] = {
                 opened(light::ARGS_CELLS),
                 opened(light::ARGS_SAMPLE_BOX),
                 opened(light::ARGS_SLOT),
-                count(light::LIST_READS),
-                count(light::LIST_CORNERS),
-                count(light::LIST_SOURCES),
-                count(light::LIST_DAMAGE),
+                cnt(light::LIST_READS),
+                cnt(light::LIST_CORNERS),
+                cnt(light::LIST_SOURCES),
+                cnt(light::LIST_DAMAGE),
                 marks(light::LIST_CORNERS),
                 marks(light::LIST_SOURCES),
                 marks(light::LIST_DAMAGE),
@@ -683,7 +683,7 @@ const fn end(r: Range) -> u32 {
 }
 
 pub const fn overlap(a: Range, b: Range) -> bool {
-    a.buf != NO_BUFFER
+    a.buf != NO_BUF
         && a.buf == b.buf
         && a.at < end(b)
         && b.at < end(a)
@@ -700,7 +700,7 @@ pub const fn nth(f: &Frame, s: &Step, writing: bool, n: usize) -> Range {
     match s.kind {
         COPY | WRITE_BY_RUNTIME => {
             let r = if writing { s.to } else { s.from };
-            if n == 0 && r.buf != NO_BUFFER {
+            if n == 0 && r.buf != NO_BUF {
                 return r;
             }
             NO_RANGE
@@ -712,7 +712,7 @@ pub const fn nth(f: &Frame, s: &Step, writing: bool, n: usize) -> Range {
             NO_RANGE
         }
         _ => {
-            if !writing && s.indirect.buf != NO_BUFFER {
+            if !writing && s.indirect.buf != NO_BUF {
                 if n == 0 {
                     return s.indirect;
                 }
@@ -740,7 +740,7 @@ pub const fn nth(f: &Frame, s: &Step, writing: bool, n: usize) -> Range {
                                 w += 1;
                             }
                         }
-                        None if f.buffers[bind.buf as usize].role == ARGS => {
+                        None if f.bufs[bind.buf as usize].role == ARGS => {
                             if k == n {
                                 return Range {
                                     buf: bind.buf,
@@ -816,7 +816,7 @@ pub const fn role(f: &Frame, s: &Step, binding: u32) -> u32 {
         while b < binds.len() {
             if binds[b].binding == binding {
                 let buf = binds[b].buf;
-                let role = f.buffers[buf as usize].role;
+                let role = f.bufs[buf as usize].role;
                 if buf == s.indirect.buf {
                     return ARGS_INDIRECT;
                 }
@@ -879,7 +879,7 @@ pub const fn declared(f: &Frame) {
     let mut k = 0;
     while k < f.bounds.len() {
         if !within(f.bounds[k].range, f.appends) {
-            panic!("{}", f.buffers[f.bounds[k].range.buf as usize].name);
+            panic!("{}", f.bufs[f.bounds[k].range.buf as usize].name);
         }
         k += 1;
     }
@@ -907,7 +907,7 @@ pub const fn declared(f: &Frame) {
             let mut b = 0;
             while b < group.binds.len() {
                 if kind_in(group.layout, group.binds[b].binding).is_none()
-                    || group.binds[b].buf as usize >= f.buffers.len()
+                    || group.binds[b].buf as usize >= f.bufs.len()
                 {
                     panic!("{}", s.name);
                 }
@@ -965,7 +965,7 @@ const fn holds(pipelines: &[u32], pipeline: u32) -> bool {
 /// writable storage also counts, at a place past the groups.
 const fn bound_writable(f: &Frame, k: usize) -> Option<usize> {
     let s = &f.steps[k];
-    if s.indirect.buf == NO_BUFFER {
+    if s.indirect.buf == NO_BUF {
         return None;
     }
     let mut g = 0;
@@ -1022,7 +1022,7 @@ const fn table(f: &Frame) -> Table {
         let mut n = 0;
         loop {
             let r = nth(f, &f.steps[k], true, n);
-            if r.buf == NO_BUFFER {
+            if r.buf == NO_BUF {
                 break;
             }
             if n == RANGE_CAP {
@@ -1035,7 +1035,7 @@ const fn table(f: &Frame) -> Table {
         n = 0;
         loop {
             let r = nth(f, &f.steps[k], false, n);
-            if r.buf == NO_BUFFER {
+            if r.buf == NO_BUF {
                 break;
             }
             if n == RANGE_CAP {
@@ -1213,7 +1213,7 @@ pub const fn hazards(f: &Frame) -> ([Hazard; HAZARDS_CAP], usize) {
         rule: 0,
         step: 0,
         other: 0,
-        buf: NO_BUFFER,
+        buf: NO_BUF,
     };
     let t = table(f);
     let mut out = [none; HAZARDS_CAP];
@@ -1277,7 +1277,7 @@ pub const fn with(f: &Frame, found: &Hazard) -> &'static str {
     } else if found.rule == 2 || (found.rule == 3 && found.other != usize::MAX) {
         f.steps[found.other].name
     } else {
-        f.buffers[found.buf as usize].name
+        f.bufs[found.buf as usize].name
     }
 }
 

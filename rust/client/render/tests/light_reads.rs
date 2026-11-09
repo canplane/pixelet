@@ -53,16 +53,11 @@ fn eye_words(l: &Light) -> Vec<u32> {
     w
 }
 
-/// The light's head for cast `current` in `epoch`. `last_corner` is the box's corner in the
+/// The light's head for cast `cur` in `epoch`. `last_corner` is the box's corner in the
 /// cast before, and `last_range` holds the eye's zooms that cast was cast under.
-fn header_words(
-    current: u32,
-    epoch: u32,
-    last_corner: [i32; 2],
-    last_range: [Zoom; 2],
-) -> Vec<u32> {
+fn header_words(cur: u32, epoch: u32, last_corner: [i32; 2], last_range: [Zoom; 2]) -> Vec<u32> {
     let mut header = vec![0u32; light::HEADER_WORDS];
-    header[light::HEADER_CAST] = current;
+    header[light::HEADER_CAST] = cur;
     header[light::HEADER_EPOCH] = epoch;
     for (k, v) in light::header_layout(SIZE) {
         header[k] = v;
@@ -98,9 +93,9 @@ fn run_with(
     list: &[u32],
     header: Vec<u32>,
 ) -> Vec<u32> {
-    let eye = gpu.buffer(&eye_words(l), wgpu::BufferUsages::UNIFORM);
-    let header = gpu.buffer(&header, wgpu::BufferUsages::UNIFORM);
-    let list = gpu.buffer(list, wgpu::BufferUsages::STORAGE);
+    let eye = gpu.buf(&eye_words(l), wgpu::BufferUsages::UNIFORM);
+    let header = gpu.buf(&header, wgpu::BufferUsages::UNIFORM);
+    let list = gpu.buf(list, wgpu::BufferUsages::STORAGE);
     gpu.dispatch(
         p,
         &[
@@ -342,7 +337,7 @@ fn hand_propagation_reads_what_stands() {
     let p = gpu.pipeline(src(SHADER_LIGHT_PROPAGATE), "light_propagate_cs");
     let claim = gpu.pipeline(src(SHADER_LIGHT_PROPAGATE), "light_damage_cs");
     let mut tally = Tally::default();
-    let (current, epoch) = (40u32, 30u32);
+    let (cur, epoch) = (40u32, 30u32);
     for (case, dir, reads_from) in [
         ("the sun high, the host's epoch", [0.3, 0.2, -0.93], 0u32),
         ("the sun low, a slide unrun", [0.8, 0.3, -0.25], 38),
@@ -417,8 +412,8 @@ fn hand_propagation_reads_what_stands() {
         );
         let [first, last] = light::READ_TILES;
         for s in &stood {
-            for (offsets, sure) in &ups {
-                for o in offsets {
+            for (offs, sure) in &ups {
+                for o in offs {
                     for b in first..=last {
                         for a in first..=last {
                             let t = [s[0] + o[0] - a, s[1] + o[1] - b];
@@ -435,7 +430,7 @@ fn hand_propagation_reads_what_stands() {
         }
         // The list's buffer holds the stood tiles, a read word naming some cast for each tile,
         // and the slide's words.
-        let mut list: Vec<u32> = (0..light::buffer_words(SIZE)).map(|k| mix(k, 3)).collect();
+        let mut list: Vec<u32> = (0..light::buf_words(SIZE)).map(|k| mix(k, 3)).collect();
         let stood_at = light::list_cnt_at(SIZE, light::LIST_RECEIVERS) as usize;
         list[stood_at] = stood.len() as u32;
         for (e, t) in stood.iter().enumerate() {
@@ -456,13 +451,13 @@ fn hand_propagation_reads_what_stands() {
         let half = stood.len() / 2;
         list[stood_at] = half as u32;
         list[carry + light::RECEIVER_TILES_CNT as usize] = 0;
-        let mut header = header_words(current, epoch, [1304, -896], RANGE);
+        let mut header = header_words(cur, epoch, [1304, -896], RANGE);
         header[light::HEADER_SLIDE_CAST] = 0;
-        header[light::HEADER_WORLD] = current - 3;
-        let eye = gpu.buffer(&eye_words(&l), wgpu::BufferUsages::UNIFORM);
-        let header = gpu.buffer(&header, wgpu::BufferUsages::UNIFORM);
-        let list_buf = gpu.buffer(&list, wgpu::BufferUsages::STORAGE);
-        let args_buf = gpu.buffer(&args, wgpu::BufferUsages::STORAGE);
+        header[light::HEADER_WORLD] = cur - 3;
+        let eye = gpu.buf(&eye_words(&l), wgpu::BufferUsages::UNIFORM);
+        let header = gpu.buf(&header, wgpu::BufferUsages::UNIFORM);
+        let list_buf = gpu.buf(&list, wgpu::BufferUsages::STORAGE);
+        let args_buf = gpu.buf(&args, wgpu::BufferUsages::STORAGE);
         let per = ray::MISS_LANES * ray::MISS_ACROSS;
         let propagation = |list: &wgpu::Buffer, p: &wgpu::ComputePipeline, groups: [u32; 3]| {
             gpu.dispatch(
@@ -483,7 +478,7 @@ fn hand_propagation_reads_what_stands() {
         let mut now = gpu.read(&list_buf);
         now[stood_at] = stood.len() as u32;
         now[carry + light::RECEIVER_TILES_CNT as usize] = half as u32;
-        let list_buf = gpu.buffer(&now, wgpu::BufferUsages::STORAGE);
+        let list_buf = gpu.buf(&now, wgpu::BufferUsages::STORAGE);
         propagation(&list_buf, &p, rows(stood.len()));
         propagation(
             &list_buf,
@@ -492,7 +487,7 @@ fn hand_propagation_reads_what_stands() {
         );
         let out = gpu.read(&list_buf);
         let out_args = gpu.read(&args_buf);
-        let read_cnt = out_args[(light::ARGS_COUNTS + light::LIST_READS) as usize] as usize;
+        let read_cnt = out_args[(light::ARGS_CNTS + light::LIST_READS) as usize] as usize;
         let at = light::list_cnt_at(SIZE, light::LIST_READS) as usize;
         let entries: Vec<[i32; 2]> = out[at + 1..at + 1 + read_cnt]
             .iter()
@@ -551,7 +546,7 @@ fn hand_propagation_reads_what_stands() {
             for i in 0..N as i32 {
                 let k = (j as u32 * N + i as u32) as usize;
                 let claims = got.contains(&[i, j]) && was[k] < ep;
-                want.push(if claims { current } else { was[k] });
+                want.push(if claims { cur } else { was[k] });
                 have.push(out[reads + k]);
             }
         }
@@ -562,7 +557,7 @@ fn hand_propagation_reads_what_stands() {
         tally.compare(
             &format!("{case}: the claimed listed"),
             &[claimed],
-            &[out_args[(light::ARGS_COUNTS + light::LIST_DAMAGE) as usize]],
+            &[out_args[(light::ARGS_CNTS + light::LIST_DAMAGE) as usize]],
             |_| "the claimed list's count".into(),
         );
         assert!(

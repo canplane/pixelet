@@ -6,7 +6,7 @@ use pxl_spec::space::coord::world;
 
 use crate::domain::control::camera::controller;
 use crate::domain::control::sensor::reading::device_location_store;
-use crate::domain::control::support::unknown_z;
+use crate::domain::query::unknown;
 use xpute_core::global::Global;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -19,12 +19,12 @@ static OFF_CENTER: Global<bool> = Global::new();
 
 fn device_coord() -> Option<Q3> {
     device_location_store().location.map(|l| {
-        let [lon, lat] = l.coords;
+        let [lon, lat] = l.lon_lat;
         let at = epsg4326::project(&[lon, lat, l.alt.unwrap_or(0.0)]);
         if l.alt.is_some() {
             at
         } else {
-            unknown_z(&at)
+            unknown(&at)
         }
     })
 }

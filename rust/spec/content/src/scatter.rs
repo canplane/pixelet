@@ -3,7 +3,7 @@
 //! gpu-portable: the decor the ground holds, never stored, as a tree of hashes. A column at a
 //! decor's root zoom (`ROOTS`) holds as many as one hash draws around its mean, and each
 //! column hands its count down to its four children, one hash a column, down to the leaf
-//! cells, a unit each, which hold one or none (`count`). A leaf cell's own hash draws its
+//! cells, a unit each, which hold one or none (`cnt`). A leaf cell's own hash draws its
 //! variant and heading (`candidate_at`); one whose box meets the box of a neighbor that drew
 //! lower gives way to it (`retained`). At a zoom, a decor stands as itself where its box keeps
 //! an eighth of that zoom's cell or more, as a folded cube is drawn, and is none where it
@@ -38,7 +38,7 @@ impl Candidate {
 }
 
 /// Leaf cell `cell`'s candidate of `decor`, with its own draws, and whether the cell holds
-/// one (`count`).
+/// one (`cnt`).
 pub fn candidate_at(decor: &Decor, cell: [i32; 2]) -> (Candidate, bool) {
     let k = kind_of(decor.val);
     let mut draws = SplitMix32::new(node_seed(SEEDS[k], (LEAF_CELL_ZOOM, cell)));
@@ -48,7 +48,7 @@ pub fn candidate_at(decor: &Decor, cell: [i32; 2]) -> (Candidate, bool) {
             draw: draws.next_u32(),
             seed: draws.next_u32(),
         },
-        count(k, LEAF_CELL_ZOOM, cell) > 0,
+        cnt(k, LEAF_CELL_ZOOM, cell) > 0,
     )
 }
 
@@ -94,7 +94,7 @@ const fn kind_of(val: u32) -> usize {
 
 /// The tags of a column's count and of its split among its four, beside a
 /// decor's seed (`node_seed`).
-pub const COUNT: u32 = 0xc047_dec0;
+pub const CNT: u32 = 0xc047_dec0;
 pub const SPLIT: u32 = 0x5b17_dec0;
 
 /// How many of the `k`-th decor the column `b` at `zoom` holds; a leaf cell holds one or
@@ -102,19 +102,19 @@ pub const SPLIT: u32 = 0x5b17_dec0;
 /// decor's chance for each leaf cell under it, rounded at a uniform draw. Each column's count
 /// is then halved across and along by weights its hash draws, exactly, with none past what
 /// its leaf cells hold. Coarser than the root, it is none. Every word is read by value.
-pub fn count(k: usize, zoom: Zoom, b: [i32; 2]) -> u32 {
-    count_of([SEEDS[k], CHANCES[k], ROOTS[k]], zoom, b)
+pub fn cnt(k: usize, zoom: Zoom, b: [i32; 2]) -> u32 {
+    cnt_of([SEEDS[k], CHANCES[k], ROOTS[k]], zoom, b)
 }
 
-/// `count` of a decor whose seed, chance and root are `seed`, `chance` and `root`.
-pub fn count_of([seed, chance, root]: [u32; 3], zoom: Zoom, b: [i32; 2]) -> u32 {
+/// `cnt` of a decor whose seed, chance and root are `seed`, `chance` and `root`.
+pub fn cnt_of([seed, chance, root]: [u32; 3], zoom: Zoom, b: [i32; 2]) -> u32 {
     if zoom < root {
         return 0;
     }
     let at = |z: Zoom| [b[0] >> (zoom - z), b[1] >> (zoom - z)];
     // The mean in 16.16 fixed point: the chance's top half for each leaf cell.
     let mean = (chance >> 16) << (2 * (LEAF_CELL_ZOOM - root));
-    let draw = node_seed(seed ^ COUNT, (root, at(root)));
+    let draw = node_seed(seed ^ CNT, (root, at(root)));
     let mut n = (mean + (draw & 0xffff)) >> 16;
     let mut z = root;
     while z < zoom && n > 0 {
@@ -240,7 +240,7 @@ pub const fn root(decor: &Decor) -> Zoom {
     cell_zoom
 }
 
-/// The root of each decor's counts (`count`, `root`): the zoom at which a clip level first
+/// The root of each decor's counts (`cnt`, `root`): the zoom at which a clip level first
 /// reads its columns.
 pub const ROOTS: [Zoom; DECORS.len()] = {
     let mut roots = [LEAF_CELL_ZOOM; DECORS.len()];
@@ -257,12 +257,12 @@ const _: () = {
         let shift = 2 * (LEAF_CELL_ZOOM - ROOTS[k]);
         assert!(
             shift < u32::BITS,
-            "a decor's root column's leaf cells, a shift, fit a u32 (`count`)"
+            "a decor's root column's leaf cells, a shift, fit a u32 (`cnt`)"
         );
         let mean = ((CHANCES[k] >> 16) as u64) << shift;
         assert!(
             mean + 0xffff <= u32::MAX as u64,
-            "a decor's mean a root column, in 16.16, fits a u32 (`count`)"
+            "a decor's mean a root column, in 16.16, fits a u32 (`cnt`)"
         );
         k += 1;
     }

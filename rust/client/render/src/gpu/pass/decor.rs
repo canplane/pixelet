@@ -41,9 +41,9 @@ pub struct DecorPass {
     /// its skin.
     groups: [(u32, Option<Image>); DECOR_GROUPS],
     /// The marks of the listed opaque draws, which cast shadows.
-    pub marks: MarkPass,
+    pub mark: MarkPass,
     /// The marks of the listed ghost draws, which are blended.
-    pub ghost_marks: MarkPass,
+    pub ghost_mark: MarkPass,
 }
 
 /// Writes a mark's uniform as the draw's own (`put_instances`).
@@ -64,14 +64,14 @@ impl DecorPass {
             ),
             uniforms: UniformBuffer::new(DRAW_BYTES, align),
             groups: [(0, None); DECOR_GROUPS],
-            marks: MarkPass::new(
+            mark: MarkPass::new(
                 g,
                 pipelines,
                 (PIPELINE_DECOR_MARK, PIPELINE_DECOR),
                 align,
                 (|d| d[0], put_mark, |_| true),
             ),
-            ghost_marks: MarkPass::new(
+            ghost_mark: MarkPass::new(
                 g,
                 pipelines,
                 (PIPELINE_DECOR_MARK, PIPELINE_GHOST_DECOR),
@@ -93,9 +93,9 @@ impl DecorPass {
         casters: bool,
     ) {
         let marks = if casters {
-            &[&self.marks][..]
+            &[&self.mark][..]
         } else {
-            &[&self.marks, &self.ghost_marks][..]
+            &[&self.mark, &self.ghost_mark][..]
         };
         for m in marks {
             m.draw(pass, frames, |pass, d, upload| {
@@ -112,8 +112,8 @@ impl DecorPass {
 
     /// Pushes onto `out` the uploads the listed draws read (`MarkPass::reads`).
     pub fn marks_read(&self, draws: &DrawTable, out: &mut Vec<u32>) {
-        self.marks.reads(draws.of(PIPELINE_DECOR), out);
-        self.ghost_marks.reads(draws.of(PIPELINE_GHOST_DECOR), out);
+        self.mark.reads(draws.of(PIPELINE_DECOR), out);
+        self.ghost_mark.reads(draws.of(PIPELINE_GHOST_DECOR), out);
     }
 
     pub fn set_models(&mut self, groups: &[(u32, Option<Image>, Extent)]) {
@@ -162,11 +162,11 @@ impl DecorPass {
             .map_or(0, |(_, _, idx_cnt)| idx_cnt / 3)
     }
 
-    /// Adds the pass's draws to `stats`. Each instance counts the triangles of
+    /// Adds the pass's draws to `stat`. Each instance counts the triangles of
     /// its group's model.
-    pub fn count(&self, draws: &DrawTable, uploads: &UploadTable, stats: &mut DrawStat) {
+    pub fn count(&self, draws: &DrawTable, uploads: &UploadTable, stat: &mut DrawStat) {
         for pipeline in [PIPELINE_DECOR, PIPELINE_GHOST_DECOR] {
-            draws.count(pipeline, stats, |d| self.triangles_of(d[1], uploads) * d[2]);
+            draws.count(pipeline, stat, |d| self.triangles_of(d[1], uploads) * d[2]);
         }
     }
 
@@ -271,7 +271,7 @@ impl DecorPass {
                 Some(ModelDraw {
                     groups: [skin, upload],
                     mesh: Some((model, vertex_cnt, idx_cnt)),
-                    instances: d[2],
+                    instance_cnt: d[2],
                 })
             },
         );

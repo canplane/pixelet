@@ -270,12 +270,12 @@ impl ScreenAo {
 
     /// Multiplies the map into the world's color at each pixel, as a draw in the world's pass
     /// `pass` after the static opaque draws (ao_apply.wgsl). It draws a quad for each of the
-    /// `count` tiles, and the quad of a tile that the group's tiles do not claim collapses.
+    /// `cnt` tiles, and the quad of a tile that the group's tiles do not claim collapses.
     /// Every drawn frame calls it, whether or not the map was found again, as the world's
     /// color is drawn again in the claimed tiles each frame.
-    pub fn apply(&self, pass: &mut TrackedRenderPass, count: u32) {
+    pub fn apply(&self, pass: &mut TrackedRenderPass, cnt: u32) {
         pass.set_pipeline(self.apply.id);
         pass.set_bind_group(0, self.apply_group.id(), &[]);
-        pass.draw(6, count, 0, 0);
+        pass.draw(6, cnt, 0, 0);
     }
 }

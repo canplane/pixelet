@@ -1027,7 +1027,7 @@ impl Light {
 /// receivers' (pxl-render light_mark.wgsl, light_mark_draws.wgsl), and the tiles a receiver
 /// reads, in which the map is laid (`LIST_READS`; light_propagate.wgsl, gpu/shadow.rs
 /// `Shadow::begin`). Each list holds its count, then its entries; the count is copied in once
-/// propagation is done (`ARGS_COUNTS`).
+/// propagation is done (`ARGS_CNTS`).
 ///
 /// In the arguments' buffer, each list has one word for every place (`list_marks_at`): the
 /// last cast that listed it, so each place is listed once a cast. The stood list's and the
@@ -1131,7 +1131,7 @@ pub const fn hits_at(size: u32) -> u32 {
 }
 
 /// The light's list, its pool and its stops with it: the buffer's words.
-pub const fn buffer_words(size: u32) -> u32 {
+pub const fn buf_words(size: u32) -> u32 {
     hits_at(size) + ray::HITS_A_FRAME * beam::HIT_WORDS
 }
 
@@ -1163,7 +1163,7 @@ pub const fn reads_epoch(epoch: u32, reads_from: u32) -> u32 {
 
 /// The workgroups of the passes that the light's cast takes from what it lists, in a buffer
 /// of their own: three words (x, y, z) for each pass from its `ARGS_*` word, the map's lay's
-/// four (`ARGS_LAY`), a draw's, `ARGS_PASSES` in all, and each list's count (`ARGS_COUNTS`).
+/// four (`ARGS_LAY`), a draw's, `ARGS_PASSES` in all, and each list's count (`ARGS_CNTS`).
 /// A cast starts with none: `LIST_ACROSS` workgroups to a row and no rows, no list holding
 /// anything. A tile claimed as the cast's to cast (pxl-render light_propagate.wgsl) opens the
 /// rows that what it lists takes (`list_cnt_at`); a cast that claims none, as where the
@@ -1185,8 +1185,8 @@ pub const ARGS_PASSES: u32 = 13;
 /// light_mark_draws_open.wgsl) and read by their pass, which writes the lists' marks here
 /// (light_mark_draws.wgsl).
 pub const DRAWS_DISPATCH_WORDS: u32 = 3;
-pub const ARGS_COUNTS: u32 = ARGS_PASSES;
-pub const ARGS_WORDS: u32 = ARGS_COUNTS + LISTS;
+pub const ARGS_CNTS: u32 = ARGS_PASSES;
+pub const ARGS_WORDS: u32 = ARGS_CNTS + LISTS;
 /// The vertices of a tile the map is laid in, two triangles (pxl-render light_map.wgsl).
 pub const LAY_VERTICES: u32 = 6;
 
@@ -1208,11 +1208,11 @@ pub fn ray(s: &Light, starts: &StartGrid, p: [u32; 2]) -> ([i32; 3], Ray) {
 /// share of the box's depth (its t times the reach's reciprocal, `Light::t_max_inverse`),
 /// pushed back as its face's axis says (`Light::bias`); or the far plane, 1, where it stopped
 /// at nothing.
-pub fn depth<A>(s: &Light, met: &Trace<A>) -> f32 {
-    if met.ends != End::Hit {
+pub fn depth<A>(s: &Light, trace: &Trace<A>) -> f32 {
+    if trace.end != End::Hit {
         return 1.0;
     }
-    let d = met.hit.t * s.t_max_inverse() + axis(s.bias, met.hit.axis);
+    let d = trace.hit.t * s.t_max_inverse() + axis(s.bias, trace.hit.axis);
     if d < 1.0 {
         d
     } else {
@@ -1305,10 +1305,10 @@ mod tests {
     }
 
     /// A walk that stopped `t` along its ray on a face across `axis`, or went on.
-    fn met(ends: End, t: f32, axis: u32) -> Trace<()> {
+    fn trace(end: End, t: f32, axis: u32) -> Trace<()> {
         let node = Node::ROOT;
         Trace {
-            ends,
+            end,
             hit: Hit {
                 t,
                 axis,
@@ -1337,9 +1337,9 @@ mod tests {
     #[test]
     fn square_face_no_slope() {
         let s = down();
-        assert_eq!(depth(&s, &met(End::Hit, 2.0, 2)), 0.25);
-        assert_eq!(depth(&s, &met(End::Miss, 8.0, 0)), 1.0);
-        assert_eq!(depth(&s, &met(End::Lacks, 2.0, 2)), 1.0);
+        assert_eq!(depth(&s, &trace(End::Hit, 2.0, 2)), 0.25);
+        assert_eq!(depth(&s, &trace(End::Miss, 8.0, 0)), 1.0);
+        assert_eq!(depth(&s, &trace(End::Lacks, 2.0, 2)), 1.0);
     }
 
     #[test]
@@ -1359,7 +1359,7 @@ mod tests {
             1.0,
         );
         let texel = 4.0 / 2048.0;
-        let d = depth(&s, &met(End::Hit, 2.0, 2));
+        let d = depth(&s, &trace(End::Hit, 2.0, 2));
         assert!(
             (d - (0.25 + light::SLOPE_BIAS * texel / 8.0)).abs() < 1e-6,
             "{d}"
@@ -1558,8 +1558,8 @@ mod tests {
                     tile[1] as u32 * TILE + k / TILE,
                 ];
                 let (o, ray) = ray(s, st, p);
-                let met = cast::first(&mut BumpyGround, o, &ray, detail, cast::Until::Opaque);
-                word(depth(s, &met))
+                let trace = cast::first(&mut BumpyGround, o, &ray, detail, cast::Until::Opaque);
+                word(depth(s, &trace))
             })
             .collect()
     }

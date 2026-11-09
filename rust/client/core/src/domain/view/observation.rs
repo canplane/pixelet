@@ -55,9 +55,9 @@ static OBSERVATION: Global<Option<Option<Observation>>> = Global::new();
 /// change touched that ground. It must run every frame turn, so that
 /// `change::within` sees each change once.
 pub fn turn() {
-    let made = OBSERVATION.get(|| None);
-    if made.is_some_and(|o| o.is_some_and(|o| change::within([[o.eye[0], o.eye[1]]; 2], &[]))) {
-        *made = None;
+    let cached = OBSERVATION.get(|| None);
+    if cached.is_some_and(|o| o.is_some_and(|o| change::within([[o.eye[0], o.eye[1]]; 2], &[]))) {
+        *cached = None;
     }
 }
 
@@ -66,8 +66,8 @@ pub fn turn() {
 /// until the camera stands somewhere and the source declares its top.
 pub fn observation() -> Option<Observation> {
     let (eye, frustum, demand_dist) = (eye(), view().frustum, eye_demand_dist());
-    let made = OBSERVATION.get(|| None);
-    let stands = match *made {
+    let cached = OBSERVATION.get(|| None);
+    let stands = match *cached {
         Some(Some(o)) => {
             Some(o.eye) == eye && o.frustum == Some(frustum) && Some(o.demand_dist) == demand_dist
         }
@@ -75,14 +75,14 @@ pub fn observation() -> Option<Observation> {
         None => false,
     };
     if !stands {
-        *made = Some(eye.zip(demand_dist).map(|(eye, demand_dist)| Observation {
+        *cached = Some(eye.zip(demand_dist).map(|(eye, demand_dist)| Observation {
             eye,
             frustum: Some(frustum),
             demand_dist,
             ground: eye[2] - height_at(eye),
         }));
     }
-    made.flatten()
+    cached.flatten()
 }
 
 /// Cuts the ground around the eye into the bricks of the eye's clip levels
@@ -104,7 +104,7 @@ pub fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
     let (Some(min_zoom), Some(flat)) = (TerrainTile::min_zoom(), floor::ring(o)) else {
         return;
     };
-    let over = (o.eye[2] - o.ground).max(0.0);
+    let height = (o.eye[2] - o.ground).max(0.0);
     let coarsest = GROUND.grid_zoom(min_zoom).max(BRICK_SHIFT);
     let near = |zoom: Zoom, [x, y]: [i32; 2]| {
         let side = units(zoom);
@@ -114,7 +114,7 @@ pub fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
                 gap(x as f64 * side, o.eye[0]),
                 gap(y as f64 * side, o.eye[1]),
             ),
-            over,
+            height,
         )
     };
     let zoom = bricks_zoom(coarsest);
@@ -125,7 +125,7 @@ pub fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
     stack.extend(squares_within(zoom, [o.eye[0], o.eye[1]], flat).map(|xy| (zoom, xy)));
     // The cut goes depth first, so each brick's column walk steps on from
     // the brick walked just before it, which is its neighbor.
-    let (world, mut walked) = (World::now(), ColumnWalk::default());
+    let (world, mut walk) = (World::now(), ColumnWalk::default());
     while let Some((zoom, xy)) = stack.pop() {
         let (cell_zoom, d) = (zoom + BRICK_SHIFT, near(zoom, xy));
         if d > o.demand_dist {
@@ -136,7 +136,7 @@ pub fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
             continue;
         }
         let Some(b) = world
-            .bounds(&mut walked, (zoom, xy), cell_zoom)
+            .bounds(&mut walk, (zoom, xy), cell_zoom)
             .val()
             .flatten()
         else {
@@ -190,16 +190,16 @@ impl ByEye {
 
 /// The order a layer's tile `p` is read in, judged by the box of what stands
 /// in it. That box is the world's bounds over the tile at the grid zoom the
-/// tile's own cells fold into, walked on from where `walked` last stopped.
+/// tile's own cells fold into, walked on from where `walk` last stopped.
 /// Where nothing is known or nothing stands, the tile's whole region is used.
 pub fn order_of_tile(
     o: &Observation,
     lattice: Lattice,
     p: Quadrant,
-    walked: &mut ColumnWalk,
+    walk: &mut ColumnWalk,
 ) -> Order {
-    let stands = World::now().bounds(walked, p.node(), lattice.grid_zoom(p.zoom));
-    order_of(o, &stands.val().flatten().unwrap_or(p.region()))
+    let bounds = World::now().bounds(walk, p.node(), lattice.grid_zoom(p.zoom));
+    order_of(o, &bounds.val().flatten().unwrap_or(p.region()))
 }
 
 /// Where the box `b` stands in the view of `o`: whether it is seen, and how

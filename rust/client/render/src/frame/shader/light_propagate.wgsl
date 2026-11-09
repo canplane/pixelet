@@ -67,7 +67,7 @@ fn read_tile(world: u32, t: vec2<i32>) {
   if (atomicLoad(&args.marks[mark]) == world || atomicExchange(&args.marks[mark], world) == world) {
     return;
   }
-  let e = atomicAdd(&args.counts[LIGHT_LIST_READS], 1u);
+  let e = atomicAdd(&args.cnts[LIGHT_LIST_READS], 1u);
   if (e < n * n) {
     list_put(list_cnt_at(LIGHT_LIST_READS) + 1u + e, (u32(t.y) << 16u) | u32(t.x));
   }
@@ -110,7 +110,7 @@ fn light_propagate_cs(
 @compute @workgroup_size(LIGHT_LIST_LANES, 1, 1)
 fn light_damage_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let n = light_tiles();
-  let read = in_cap(atomicLoad(&args.counts[LIGHT_LIST_READS]), n * n);
+  let read = in_cap(atomicLoad(&args.cnts[LIGHT_LIST_READS]), n * n);
   if (id.x == 0u) {
     atomicStore(&args.passes[LIGHT_ARGS_LAY + 1u], read);
   }
@@ -121,8 +121,8 @@ fn light_damage_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let t = vec2<i32>(i32(w & 0xffffu), i32(w >> 16u));
   let at = reads_at() + u32(t.y) * n + u32(t.x);
   if (list_at(at) < reads_epoch()) {
-    let current = cast_number();
-    list_put(at, current);
-    enlist(current, t);
+    let cur = cast_number();
+    list_put(at, cur);
+    enlist(cur, t);
   }
 }

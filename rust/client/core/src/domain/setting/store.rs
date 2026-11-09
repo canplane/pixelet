@@ -20,26 +20,28 @@ pub use crate::domain::setting::schema_spec::{
 use crate::sys::io::file::{self, StorageRead};
 use xpute_core::global::Global;
 
-static DEVELOPMENT: Global<bool> = Global::new();
+static DEV: Global<bool> = Global::new();
 
 /// Whether this is a development build, as the UI's boot reports it
-/// (`SETTING_DEVELOPMENT`). Only a development build offers the settings
+/// (`SETTING_DEV`). Only a development build offers the settings
 /// schema.json marks `dev`.
-pub fn set_development(development: bool) {
-    DEVELOPMENT.set(development);
+pub fn set_dev(dev: bool) {
+    DEV.set(dev);
 }
 
-fn development() -> bool {
-    *DEVELOPMENT.get(|| false)
+fn dev() -> bool {
+    *DEV.get(|| false)
 }
 
 /// Whether `val` may be set for `key` in this build. A dev-only setting or
-/// option is offered only in a development build. Storage outlives the
-/// build, and a dev value with no row left in the UI to turn it off would
+/// option is offered only in a development build, or in a release compiled
+/// for measuring (`PXL_PERF_DRIVE`), whose drive sets them. Storage outlives
+/// the build, and a dev value with no row left in the UI to turn it off would
 /// otherwise stay in force. Loading drops such a value, and `set_setting`
 /// refuses it from the console.
 pub fn is_offered(key: SettingKey, val: u32) -> bool {
-    !(key.dev() || key.dev_option(val)) || (cfg!(feature = "dev") && development())
+    let compiled = cfg!(feature = "dev") || option_env!("PXL_PERF_DRIVE").is_some();
+    !(key.dev() || key.dev_option(val)) || (compiled && dev())
 }
 
 impl Setting {

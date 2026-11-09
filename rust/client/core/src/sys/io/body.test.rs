@@ -97,10 +97,10 @@ fn slots_cap_and_wake() {
         .map(|_| take(Some(Stream::terrain), longest).unwrap())
         .collect();
     let refused = take(Some(Stream::earth), longest).unwrap_err();
-    assert!(!refused.over(), "every slot out: the body waits");
+    assert!(!refused.released(), "every slot out: the body waits");
     // SAFETY: from `take`, given back once, here and below.
     unsafe { give(out.pop().unwrap()) };
-    assert!(refused.over(), "until one is given back");
+    assert!(refused.released(), "until one is given back");
     for block in out {
         // SAFETY: from `take`, given back once.
         unsafe { give(block) };
@@ -142,10 +142,13 @@ fn slot_refusal_waits_slots() {
         .collect();
     let refused = take(Some(Stream::terrain), longest).unwrap_err();
     heap_release();
-    assert!(!refused.over(), "the heap's pages given back give no slot");
+    assert!(
+        !refused.released(),
+        "the heap's pages given back give no slot"
+    );
     // SAFETY: from `take`, given back once, here and below.
     unsafe { give(out.pop().unwrap()) };
-    assert!(refused.over());
+    assert!(refused.released());
     for block in out {
         // SAFETY: from `take`, given back once.
         unsafe { give(block) };
@@ -157,11 +160,14 @@ fn slot_refusal_waits_slots() {
 fn run_refusal_waits_heap() {
     let _g = sys::serial();
     let refused = Refusal::run();
-    assert!(!refused.over());
+    assert!(!refused.released());
     let block = take(Some(Stream::terrain), 1).unwrap();
     // SAFETY: from `take`, given back once.
     unsafe { give(block) };
-    assert!(refused.over(), "a slot given back in a run held serves it");
+    assert!(
+        refused.released(),
+        "a slot given back in a run held serves it"
+    );
 }
 
 #[test]

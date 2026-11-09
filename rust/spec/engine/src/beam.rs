@@ -328,7 +328,9 @@ pub const NODE_ROOTS: u32 = 4;
 pub const NODE_WORDS: u32 = 7;
 
 /// What a beam ray leaves for the pixels around it, in words: the node it stopped at
-/// (`NODE_WORDS`), then, for every node from the root to it, what was handed that node
+/// (`NODE_WORDS`); the steps its walk took from the root (`LINE_STEPS`), which the ray steps
+/// view counts into every ray that goes on from the line (pxl-render grid.wgsl `beam_steps`);
+/// then, for every node from the root to it, what was handed that node
 /// (`world::Inheritance::words`), `LINE_STEP` words a zoom, with its own at its zoom. A node's
 /// entry in the node cache is found by its key (pxl-render walk_node.wgsl `bucket_of`), so a
 /// line holds no entry. How far the ray hands on (`Grid::hand_dist`) lies apart from its line,
@@ -336,7 +338,8 @@ pub const NODE_WORDS: u32 = 7;
 /// alone. The light's beam rays leave the same, with their origin after it
 /// (`light::LINE_ORIGIN`), and keep how far they hand on apart as well (`light::hand_at`).
 pub const LINE_NODE: u32 = 0;
-pub const LINE_INHERITANCE: u32 = LINE_NODE + NODE_WORDS;
+pub const LINE_STEPS: u32 = LINE_NODE + NODE_WORDS;
+pub const LINE_INHERITANCE: u32 = LINE_STEPS + 1;
 pub const LINE_STEP: u32 = world::INHERITANCE_WORDS;
 pub const LINE_WORDS: u32 = LINE_INHERITANCE + LINE_STEP * cast::DEPTH as u32;
 
@@ -358,18 +361,23 @@ pub const CELL_WORDS: u32 = 3;
 /// where none does. The lattice runs `NEAR` samples past the screen on each side.
 ///
 /// What a sample leaves for the boxes, in words: the node it stopped at (`NODE_WORDS`), with
-/// its zoom `SAMPLE_NONE` where it went on to its reach; the asset there; 1 where that node
-/// lacks, which a pixel entering it before any cell walks itself; and the axis the sample
-/// entered it across, a face its ray reached through air (`raster::faces`). While its ray has
-/// not ended, its zoom is `SAMPLE_PARKED`, and its words hold the state the queue parked it
-/// in (pxl-render sample.wgsl): its distance in the asset's first word (`SAMPLE_PARKED_T`),
-/// its node's corner in the node's words, and the rest in the lack word
-/// (`SAMPLE_PARKED_STATE`).
+/// its zoom `SAMPLE_NONE` where it went on to its reach; the asset there; the lack word, with
+/// `SAMPLE_LACK` set where that node lacks, which a pixel entering it before any cell walks
+/// itself, and above it, from `SAMPLE_STEPS_SHIFT`, the steps its walk took from its cell's
+/// start, which the ray steps view shows at the pixels that take no walk (pxl-render cast.wgsl
+/// `taken_word`);
+/// and the axis the sample entered it across, a face its ray reached through air
+/// (`raster::faces`). While its ray has not ended, its zoom is `SAMPLE_PARKED`, and its
+/// words hold the state the queue parked it in (pxl-render sample.wgsl): its distance in the
+/// asset's first word (`SAMPLE_PARKED_T`), its node's corner in the node's words, and the
+/// rest in the lack word (`SAMPLE_PARKED_STATE`).
 pub const SAMPLE_NODE: u32 = 0;
 pub const SAMPLE_ASSET: u32 = SAMPLE_NODE + NODE_WORDS;
 pub const SAMPLE_LACKS: u32 = SAMPLE_ASSET + 2;
 pub const SAMPLE_AXIS: u32 = SAMPLE_LACKS + 1;
 pub const SAMPLE_WORDS: u32 = SAMPLE_AXIS + 1;
+pub const SAMPLE_LACK: u32 = 1;
+pub const SAMPLE_STEPS_SHIFT: u32 = 1;
 
 pub const SAMPLE_NONE: u32 = u32::MAX;
 pub const SAMPLE_PARKED: u32 = u32::MAX - 1;

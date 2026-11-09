@@ -38,7 +38,7 @@ pub fn data_end() -> u32 {
 }
 
 /// This is the size in bytes of the memory the runtime has given the module.
-pub fn given() -> u64 {
+pub fn mem_sz() -> u64 {
     core::arch::wasm32::memory_size(0) as u64 * u64::from(super::WASM_PAGE_BYTES)
 }
 

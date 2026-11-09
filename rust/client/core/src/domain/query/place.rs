@@ -23,9 +23,9 @@ impl World<'static> {
         visit: &mut dyn FnMut(Quadrant, u32, TilePlace<'static>),
     ) {
         let cache: &'static _ = PlaceTile::tile_cache();
-        let mut lines = Path::default();
+        let mut path = Path::default();
         for tile in tiles {
-            let Some(src) = cache.seek(&mut lines, tile).src else {
+            let Some(src) = cache.seek(&mut path, tile).src else {
                 continue;
             };
             let Some(places) = cache.get(src) else {

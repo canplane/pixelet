@@ -11,13 +11,13 @@ use crate::domain::control::camera::controller::Motion;
 use crate::domain::control::navigation::destination::{go_to_ground, pending};
 use crate::domain::control::navigation::off_center::off_center;
 use crate::domain::control::sensor::reading::device_location_store;
-use crate::domain::control::support::unknown_z;
+use crate::domain::query::unknown;
 use xpute_core::global::Global;
 
 fn fallback_seed() -> Q3 {
     // The fallback names a place, not a height, so the pivot stands on the
     // surface there.
-    unknown_z(&epsg4326::project(&FALLBACK_G4326))
+    unknown(&epsg4326::project(&FALLBACK_G4326))
 }
 
 /// Whether `a` and `b` lie within a cell of each other across the ground.

@@ -131,19 +131,19 @@ pub fn fault(failure: Failure) -> Fault {
     }
 }
 
-/// The wait in ms after the server's `failures`th failure in a row, or None
+/// The wait in ms after the server's `fail_cnt`th failure in a row, or None
 /// once the server is given up. `seed` differs for each failure.
 ///
 /// The wait grows exponentially because the server is shared, so the
 /// retries of every client add up on it. It follows AWS's "full jitter",
 /// drawn uniformly up to the capped exponential, so clients that one outage
 /// failed together do not return together.
-pub fn backoff(failures: u32, seed: u64) -> Option<f64> {
-    if failures > param::RETRY_ATTEMPTS {
+pub fn backoff(fail_cnt: u32, seed: u64) -> Option<f64> {
+    if fail_cnt > param::RETRY_ATTEMPTS {
         return None;
     }
     let ceiling =
-        (param::RETRY_BASE_MS * libm::exp2(f64::from(failures - 1))).min(param::RETRY_CAP_MS);
+        (param::RETRY_BASE_MS * libm::exp2(f64::from(fail_cnt - 1))).min(param::RETRY_CAP_MS);
     Some(ceiling * u32_to_unit(SplitMix64::new(seed).next_u32()))
 }
 

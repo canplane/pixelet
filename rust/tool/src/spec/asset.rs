@@ -68,7 +68,7 @@ pub(crate) fn cube_number(group: &str, name: &str) -> Result<u32, String> {
 pub fn pack_path() -> Result<String, String> {
     let spec = read(CUBE_JSON)?;
     spec.get("pack")
-        .map(Node::value)
+        .map(Node::val)
         .and_then(Node::str)
         .map(str::to_string)
         .ok_or(format!("{CUBE_JSON}: no pack"))
@@ -288,7 +288,7 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
     let id = read(ID_JSON)?;
     let shape_bits = id
         .get("SHAPE_BITS")
-        .map(Node::value)
+        .map(Node::val)
         .and_then(Node::num)
         .ok_or(format!("{ID_JSON}: no SHAPE_BITS"))? as u32;
     let kind = |name: &str| {
@@ -862,7 +862,7 @@ fn ground_palette() -> Result<Vec<(String, u32)>, String> {
 /// decor, its palette entries, its boxes); in pxl-spec, each decor's models over that row.
 fn decor_table(
     spec: &Node,
-    palette_indices: &[(String, u32)],
+    palette_idxs: &[(String, u32)],
 ) -> Result<(Vec<String>, Vec<String>), String> {
     const SLOT: &str = "crate::asset::catalog::Slot";
     let mut slot = run_of(DECOR_JSON)?.0;
@@ -900,7 +900,7 @@ fn decor_table(
         for l in k.get("on").and_then(Node::arr).ok_or(at("on"))? {
             let v = l
                 .str()
-                .and_then(|l| palette_indices.iter().find(|(g, _)| g == l))
+                .and_then(|l| palette_idxs.iter().find(|(g, _)| g == l))
                 .map(|(_, v)| *v)
                 .filter(|v| *v < 256)
                 .ok_or(format!("{}: {l:?} is no ground palette_idx", at("on")))?;
@@ -987,9 +987,9 @@ fn decor_table(
             "    /// Its scatter: changing it reshuffles every one the ground generates.",
             "    pub seed: u32,",
             "    /// The chance a cell of its holds one, over 2^32: a cell's mean",
-            "    /// (pxl-content scatter.rs `count`).",
+            "    /// (pxl-content scatter.rs `cnt`).",
             "    pub chance: u32,",
-            "    pub orientation: Orientation,",
+            "    pub orient: Orientation,",
             "    /// The palette entries it may stand on, a bit each.",
             "    pub on: [u32; 8],",
             "    pub variants: u32,",
@@ -1011,7 +1011,7 @@ fn decor_table(
             format!("        val: {},", r.val),
             format!("        seed: {},", r.seed),
             format!("        chance: {},", r.chance),
-            format!("        orientation: Orientation::{},", r.orient),
+            format!("        orient: Orientation::{},", r.orient),
             format!(
                 "        on: [{}],",
                 r.on.map(|w| format!("{w:#010x}")).join(", ")

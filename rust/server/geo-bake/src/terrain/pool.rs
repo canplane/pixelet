@@ -37,7 +37,10 @@ struct Tally {
 /// The set's ways' trees fit the pool, and the fit of each tile that takes
 /// anything; where they do not, the window that holds the most
 /// at the zoom that needs it, its first brick and its tiles named.
-pub(crate) fn check(set: &Staged<'_>, workers: usize) -> Result<Vec<(Quadrant, String)>, String> {
+pub(crate) fn check(
+    set: &Staged<'_>,
+    worker_cnt: usize,
+) -> Result<Vec<(Quadrant, String)>, String> {
     let tiles: Vec<Quadrant> = set.tiles()?.into_values().flatten().collect();
     let base = match set.base.fits()? {
         Some(fits) => fits,
@@ -45,7 +48,7 @@ pub(crate) fn check(set: &Staged<'_>, workers: usize) -> Result<Vec<(Quadrant, S
         None => return Err("the set holds tiles and no fits: bake it again".into()),
     };
     let base = &base;
-    let chunk = tiles.len().div_ceil(workers.max(1)).max(1);
+    let chunk = tiles.len().div_ceil(worker_cnt.max(1)).max(1);
     let parts: Vec<Result<Tally, String>> = std::thread::scope(|s| {
         let runs: Vec<_> = tiles
             .chunks(chunk)

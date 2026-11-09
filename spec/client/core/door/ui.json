@@ -246,7 +246,7 @@
       ]
     },
     {
-      "name": "SETTING_DEVELOPMENT",
+      "name": "SETTING_DEV",
       "val": 5634,
       "$doc": [
         "Whether this is a development build, which offers the settings schema.json marks `dev`.",
@@ -254,7 +254,7 @@
       ],
       "pkt": [
         {
-          "name": "development",
+          "name": "dev",
           "type": "bool"
         }
       ]
@@ -420,7 +420,7 @@
           "type": "SettingKey"
         },
         {
-          "name": "value",
+          "name": "val",
           "type": "u32",
           "$doc": [
             "A toggle's 0 or 1, a choice's option by its index, or a number."
@@ -852,7 +852,7 @@
           "val": 1
         },
         {
-          "name": "DEVELOPMENT",
+          "name": "DEV",
           "val": 2
         }
       ]

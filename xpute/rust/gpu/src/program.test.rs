@@ -485,7 +485,7 @@ fn sampled_image(gpu: &mut Encoder, s: &mut Stream, at: &At, turn: &mut Turn) {
         .sampler(
             s,
             &SamplerDescriptor {
-                address: [AddressMode::clamp_to_edge; 3],
+                addr: [AddressMode::clamp_to_edge; 3],
                 mag: FilterMode::nearest,
                 min: FilterMode::nearest,
                 mipmap: MipmapFilterMode::nearest,

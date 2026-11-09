@@ -4,5 +4,8 @@
   "type": "module",
   "exports": {
     "./*": "./*"
+  },
+  "dependencies": {
+    "@babel/parser": "7.29.11"
   }
 }

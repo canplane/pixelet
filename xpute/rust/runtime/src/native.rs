@@ -27,8 +27,8 @@ use xpute_core::mem::section::PAGE_BYTES;
 pub use alloc::Alloc;
 pub use say::{say, stop_hook};
 pub use thread::{
-    answer, answer_with, kick, kick_deadline, notify_on, pause, resume, ring, turns, Answer,
-    Notify, Vcpu,
+    answer, answer_with, kick, next_frame, notify_on, pause, resume, ring, turns, vsync, wake,
+    Answer, Notify, Vcpu,
 };
 pub use xpute_core::entry::{run, BootInfo, Entry, Form};
 pub use xpute_core::machine::Machine;
@@ -52,11 +52,10 @@ pub struct Config {
     pub ready: fn() -> bool,
 }
 
-/// A device that runs beside the core on the core's thread, such as the
-/// GPU's runtime. Both functions are handed the core. `poll` runs before
-/// each turn and writes into the memory what the device has completed.
-/// `publish` runs what the core has just published to the device, as the
-/// core rings it (`Form::publish`). `admit_frame` is handed to the core as
+/// A device that runs beside the core, such as the GPU's runtime. Both
+/// functions are handed the core. `poll` runs before each turn and has the
+/// memory told what the device has completed. `publish` takes what the core
+/// has just published to the device, as the core rings it (`Form::publish`). `admit_frame` is handed to the core as
 /// `Form::admit_frame`.
 #[derive(Clone, Copy)]
 pub struct Device {
@@ -176,7 +175,7 @@ impl Core {
 
     pub fn boot_info(self, cfg: &Config) -> BootInfo {
         BootInfo {
-            given: u32::try_from(self.mem().1).expect("the memory is at most 4 GiB"),
+            mem_sz: u32::try_from(self.mem().1).expect("the memory is at most 4 GiB"),
             call: thread::call,
             heap_stat: alloc::stat,
             form: cfg.form,
@@ -186,12 +185,12 @@ impl Core {
 
 /// The system's monotonic clock in milliseconds since boot: the clock a
 /// native app's `performance.now()` counts on, C++'s `steady_clock`, so that the
-/// core's times and the UI's lie on one line. That is `CLOCK_MONOTONIC_RAW` on
-/// Apple's systems, where `Instant` reads another clock, and `CLOCK_MONOTONIC`
+/// core's times and the UI's lie on one line. That is `CLOCK_UPTIME_RAW` on
+/// Apple's systems, which stops while the device sleeps, and `CLOCK_MONOTONIC`
 /// elsewhere.
 pub fn now() -> f64 {
     #[cfg(target_vendor = "apple")]
-    const CLOCK: libc::clockid_t = libc::CLOCK_MONOTONIC_RAW;
+    const CLOCK: libc::clockid_t = libc::CLOCK_UPTIME_RAW;
     #[cfg(not(target_vendor = "apple"))]
     const CLOCK: libc::clockid_t = libc::CLOCK_MONOTONIC;
     let mut t = libc::timespec {
@@ -253,9 +252,9 @@ macro_rules! native_abi {
                 $crate::native::ring(deadline_ms).unwrap_or(f64::NAN)
             }
 
-            pub fn kick(deadline_ms: f64) {
+            pub fn kick(deadline_ms: f64, at_ms: f64) {
                 core();
-                $crate::native::kick_deadline(deadline_ms);
+                $crate::native::kick(deadline_ms, at_ms);
             }
 
             pub fn mem(bytes: Option<&mut u32>) -> *mut u8 {
@@ -275,8 +274,18 @@ macro_rules! native_abi {
         }
 
         #[no_mangle]
-        pub extern "C" fn xpute_kick(deadline_ms: f64) {
-            xpute_native::kick(deadline_ms)
+        pub extern "C" fn xpute_kick(deadline_ms: f64, at_ms: f64) {
+            xpute_native::kick(deadline_ms, at_ms)
+        }
+
+        #[no_mangle]
+        pub extern "C" fn xpute_vsync(age_ms: f64) {
+            $crate::native::vsync(age_ms)
+        }
+
+        #[no_mangle]
+        pub extern "C" fn xpute_next_frame(after_ms: f64) -> f64 {
+            $crate::native::next_frame(after_ms)
         }
 
         #[no_mangle]
@@ -424,10 +433,31 @@ macro_rules! native_core {
             env: *mut $crate::jni::sys::JNIEnv,
             this: $crate::jni::sys::jobject,
             deadline_ms: $crate::jni::sys::jdouble,
+            at_ms: $crate::jni::sys::jdouble,
         ) {
             // SAFETY: the environment and object JNI called with.
             unsafe { $crate::jni::init(env, this) };
-            xpute_kick(deadline_ms);
+            xpute_kick(deadline_ms, at_ms);
+        }
+
+        #[cfg(target_os = "android")]
+        #[no_mangle]
+        extern "system" fn Java_xpute_Core_vsync(
+            _env: *mut $crate::jni::sys::JNIEnv,
+            _this: $crate::jni::sys::jobject,
+            age_ms: $crate::jni::sys::jdouble,
+        ) {
+            xpute_vsync(age_ms);
+        }
+
+        #[cfg(target_os = "android")]
+        #[no_mangle]
+        extern "system" fn Java_xpute_Core_nextFrame(
+            _env: *mut $crate::jni::sys::JNIEnv,
+            _this: $crate::jni::sys::jobject,
+            after_ms: $crate::jni::sys::jdouble,
+        ) -> $crate::jni::sys::jdouble {
+            xpute_next_frame(after_ms)
         }
 
         /// # Safety

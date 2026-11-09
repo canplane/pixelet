@@ -83,12 +83,12 @@ async function probe(
   device.pushErrorScope("validation");
   device.pushErrorScope("internal");
   const module = device.createShaderModule({ label: name, code });
-  const errors = (await module.getCompilationInfo()).messages
+  const errs = (await module.getCompilationInfo()).messages
     .filter((m) => m.type === "error")
     .map((m) => `${m.lineNum}:${m.linePos}: ${m.message}`);
   let internal = await device.popErrorScope();
   let invalid = await device.popErrorScope();
-  if (!say("module", [...errors, internal?.message, invalid?.message], t0)) {
+  if (!say("module", [...errs, internal?.message, invalid?.message], t0)) {
     return false;
   }
   let ok = true;

@@ -177,7 +177,7 @@ fn key_zooms(zoom: u32, zooms: u32, a: Answer) -> u32 {
   if (zoom >= (zooms >> ZOOM_BITS)) {
     return CELL_FAR;
   }
-  if (a.kind == KIND_LACKS || a.asset.x != VALUE_VOID || a.asset.y != 0u) {
+  if (a.kind == KIND_LACKS || a.asset.x != VAL_VOID || a.asset.y != 0u) {
     return CELL_FAR | (1u << ZOOM_BITS);
   }
   return zooms;
@@ -282,14 +282,14 @@ fn claim_slot(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32) -> vec2
     if (node_cache_now(key_at(slot)) != was) {
       continue;
     }
-    let got = atomicExchange(&node_cache[key_at(slot)], CLAIMED);
-    if (got == was) {
+    let old = atomicExchange(&node_cache[key_at(slot)], CLAIMED);
+    if (old == was) {
       atomicStore(&node_cache[key_at(slot)], mine);
       return vec2<u32>(slot, was);
     }
-    if (got != CLAIMED) {
-      put_back(slot, got);
-      if (got == mine) {
+    if (old != CLAIMED) {
+      put_back(slot, old);
+      if (old == mine) {
         return vec2<u32>(NONE, 0u);
       }
     }
@@ -298,11 +298,11 @@ fn claim_slot(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32) -> vec2
 }
 
 /// Writes the node `c` at `zoom` asked at `zooms`, answered `a`, into slot `slot`, which its walk
-/// claimed (`claim`). Every word is written, with nothing set yet to draw it (pxl-engine
-/// `record`), and its key under `tag` is written last.
+/// claimed (`claim`), with nothing set yet to draw it (pxl-engine `record`). The word of its
+/// last draw is left to the stop that first sets it to draw (`observe_hit`). Its key under `tag`
+/// is written last.
 fn fill(slot: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32, a: Answer) {
   atomicStore(&node_cache[state_at(slot)], 0u);
-  atomicStore(&node_cache[drawn_at(slot)], 0u);
   for (var face = 0u; face < 6u; face += 1u) {
     atomicStore(&node_cache[face_at(slot, face)], 0u);
   }
@@ -330,11 +330,11 @@ fn claim_rank(key: u32) -> u32 {
   return select(2u, 1u, is_claim(key));
 }
 
-/// Puts back into slot `slot` the key `got` that a lost claim took there, where it left
+/// Puts back into slot `slot` the key `key` that a lost claim took there, where it left
 /// `CLAIMED`. It keeps the higher-ranked of that key and what it takes back in turn, as a walk
 /// that lost the slot later may have taken a key that the claiming walk wrote in between.
-fn put_back(slot: u32, got: u32) {
-  var v = got;
+fn put_back(slot: u32, key: u32) {
+  var v = key;
   for (var i = 0u; i < 2u; i += 1u) {
     let x = atomicExchange(&node_cache[key_at(slot)], v);
     if (claim_rank(x) <= claim_rank(v)) {
@@ -370,11 +370,11 @@ fn hand_end(line: u32, parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>) ->
 }
 
 /// Whether the observer whose walks count into lane word `at` counts this frame
-/// (`node_cache::COUNT_ON`, `node_cache::lane_at`). Each observer's lanes lie `COUNT_WALKS`
+/// (`node_cache::CNT_ON`, `node_cache::lane_at`). Each observer's lanes lie `CNT_WALKS`
 /// words after the previous observer's, starting from the eye's.
 fn counts(at: u32) -> bool {
-  let observer = (at - EYE_BEAM_COUNT) / COUNT_WALKS;
-  return ((node_cache_word(COUNT_ON) >> observer) & 1u) != 0u;
+  let observer = (at - EYE_BEAM_CNT) / CNT_WALKS;
+  return ((node_cache_word(CNT_ON) >> observer) & 1u) != 0u;
 }
 
 fn count_visits(at: u32, visits: u32) {

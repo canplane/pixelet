@@ -181,7 +181,7 @@ impl Around {
         let cell_zoom = GROUND.grid_zoom(zoom.min(LEAF_ZOOM));
         for k in 0..9 {
             let n = [c[0] + (k % 3) as i32 - 1, c[1] + (k / 3) as i32 - 1];
-            let over = if stepped {
+            let parent = if stepped {
                 self.columns[z - 1]
                     [((n[0] >> 1) - p[0] + 1 + 3 * ((n[1] >> 1) - p[1] + 1)) as usize]
             } else {
@@ -190,8 +190,8 @@ impl Around {
             let line =
                 world
                     .terrain
-                    .line_under(over.as_ref().map(|o| &o.line), (zoom, n), cell_zoom);
-            let mut found = over.map_or(Lookup::NONE, |o| o.lookup);
+                    .line_under(parent.as_ref().map(|o| &o.line), (zoom, n), cell_zoom);
+            let mut found = parent.map_or(Lookup::NONE, |o| o.lookup);
             let hi = world
                 .terrain
                 .relief(&line, &mut found, (zoom, n), [cell_zoom, cell_zoom])

@@ -30,8 +30,8 @@ function setup() {
   vi.stubGlobal("navigator", {
     gpu: { getPreferredCanvasFormat: () => "bgra8unorm" },
   });
-  const memory = new ArrayBuffer(4096);
-  const words = new Uint32Array(memory);
+  const mem = new ArrayBuffer(4096);
+  const words = new Uint32Array(mem);
   const done: (() => void)[] = [];
   const device = {
     lost: new Promise<never>(() => {}),
@@ -44,7 +44,7 @@ function setup() {
   } as unknown as GPUDevice;
   const runtime = new GpuRuntime(
     device,
-    () => memory,
+    () => mem,
     () => {},
   );
   const texture = { createView: () => ({}), format: "bgra8unorm" };

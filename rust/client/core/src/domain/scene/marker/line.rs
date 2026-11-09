@@ -18,25 +18,25 @@ use pxl_spec::space::coord::v3::V3;
 #[derive(Clone, PartialEq)]
 pub(super) struct Bubble {
     line: Option<Design>,
-    hangs: Option<Q3>,
+    pos: Option<Q3>,
 }
 
 /// The line as it is now, seen from `eye`.
 pub(super) fn bubble(eye: V3) -> Bubble {
     Bubble {
         line: shown_line(),
-        hangs: line_hangs(eye),
+        pos: line_hangs(eye),
     }
 }
 
 impl Bubble {
     /// The line's instance, or None while it does not show.
     pub(super) fn instance(&self) -> Option<Instance> {
-        let (design, stands) = (self.line.clone()?, self.hangs?);
+        let (design, pos) = (self.line.clone()?, self.pos?);
         Some(Instance {
             key: Key::Line,
             design,
-            stands,
+            pos,
             tap: None,
         })
     }

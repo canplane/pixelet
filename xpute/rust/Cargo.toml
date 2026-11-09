@@ -38,3 +38,8 @@ opt-level = "z"
 lto = true
 codegen-units = 1
 panic = "abort"
+
+# The Metal backend with one command buffer per encoder rather than per pass
+# (vendor/wgpu-hal/src/metal, `chain`).
+[patch.crates-io]
+wgpu-hal = { path = "vendor/wgpu-hal" }

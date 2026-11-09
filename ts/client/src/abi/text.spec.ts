@@ -45,18 +45,6 @@ export interface TextLayout {
   text_len: u32;
 }
 
-export function read_text_layout(b: BranchCursor): TextLayout {
-  return {
-    weight: b.at(0).get<u32>(),
-    px: b.at(1).get<f64>(),
-    max_width: b.at(2).get<f64>(),
-    at: b.at(3).get<u32>(),
-    lines: b.at(4).get<u32>(),
-    text_at: b.at(5).get<u32>(),
-    text_len: b.at(6).get<u32>(),
-  };
-}
-
 /** Command.TEXT_RASTER's packet. */
 export interface TextRaster {
   weight: u32;
@@ -73,8 +61,18 @@ export interface TextRaster {
   text_len: u32;
 }
 
-export function read_text_raster(b: BranchCursor): TextRaster {
-  return {
+/** Each import's packet, read from its branch, by its number. */
+export const read = {
+  [Command.TEXT_LAYOUT]: (b: BranchCursor): TextLayout => ({
+    weight: b.at(0).get<u32>(),
+    px: b.at(1).get<f64>(),
+    max_width: b.at(2).get<f64>(),
+    at: b.at(3).get<u32>(),
+    lines: b.at(4).get<u32>(),
+    text_at: b.at(5).get<u32>(),
+    text_len: b.at(6).get<u32>(),
+  }),
+  [Command.TEXT_RASTER]: (b: BranchCursor): TextRaster => ({
     weight: b.at(0).get<u32>(),
     px: b.at(1).get<f64>(),
     color: b.at(2).get<u32>(),
@@ -84,8 +82,8 @@ export function read_text_raster(b: BranchCursor): TextRaster {
     x: b.at(6).get<f64>(),
     text_at: b.at(7).get<u32>(),
     text_len: b.at(8).get<u32>(),
-  };
-}
+  }),
+};
 
 /** What the program does with each command the core posts on the text protocol; a
  * call's answer is its return. */
@@ -94,12 +92,12 @@ export interface TextImports {
    * wider than the width where it can be; at `at` in the core's memory, how many lines,
    * then a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most
    * (sys/io/text_answer.json LAYOUT_ANSWER, LINE). A call: answered before it returns. */
-  text_layout(e: TextLayout): i32;
+  [Command.TEXT_LAYOUT](e: TextLayout): i32;
   /** One line drawn in the platform's own family, starting at x with the middle of its em
    * box on the middle row, into `width` by `height` pixels at `at` in the core's memory,
    * RGBA a byte a channel, top row first, alpha not premultiplied. A call: answered before
    * it returns. */
-  text_raster(e: TextRaster): i32;
+  [Command.TEXT_RASTER](e: TextRaster): i32;
 }
 
 /** `h` as the handler a runtime routes the text protocol's commands to, each one read and
@@ -108,9 +106,9 @@ export function text_imports(h: TextImports): OnImport {
   return (_tag, cmd, f) => {
     switch (cmd) {
       case Command.TEXT_LAYOUT:
-        return h.text_layout(read_text_layout(need(f)));
+        return h[Command.TEXT_LAYOUT](read[Command.TEXT_LAYOUT](need(f)));
       case Command.TEXT_RASTER:
-        return h.text_raster(read_text_raster(need(f)));
+        return h[Command.TEXT_RASTER](read[Command.TEXT_RASTER](need(f)));
       default:
         return Errno.ENOSYS;
     }

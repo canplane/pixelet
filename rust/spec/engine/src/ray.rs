@@ -5,12 +5,16 @@
 //! layer of the world surface's rays. The first says what the ray stopped on, through which
 //! face, at which zoom, and the share of its cube the cell keeps (`first_word`). The second is
 //! how far the ray went, as f32 bits. The third holds the four palette indices the ground's
-//! asset is drawn by (`ground::word`), and is zero for any other asset. The fourth says what
-//! lies around the face the ray entered (`face::word`): the world's own answer about the cell,
-//! the same for every pixel of it.
+//! asset is drawn by (`ground::word`), and is zero for any other asset; in the ray steps view
+//! (`eye::STEPS`) it holds the steps taken on the ray's way from the eye instead, whatever the
+//! ray met: its beam ray's and its own walk's, or a sample's where it took no walk (pxl-render
+//! cast.wgsl `taken_word`, queue.wgsl `finish`). The fourth says what lies around the face the
+//! ray entered (`face::word`): the world's own answer about the cell, the same for every pixel
+//! of it.
 //!
 //! A cell is painted from its own words alone, by its value, whichever source holds it.
-//! Where the ray met nothing, every word is zero; a hit's value is never void.
+//! Where the ray met nothing, every word but that view's third is zero; a hit's value is never
+//! void.
 
 use crate::Zoom;
 
@@ -44,11 +48,11 @@ pub const MISS_ACROSS: u32 = 64;
 
 /// What the pixels' cast counts, and the light slots' cast alike (pxl-render visible.wgsl
 /// `MissCount`): first the holes it listed (`MISS_ARGS_CNT`, `list_hole`), then, while the
-/// `ray_counts` setting is on, what its pixels or slots took (`MISS_ARGS_COUNT`: the
+/// `ray_cnts` setting is on, what its pixels or slots took (`MISS_ARGS_CNTS`: the
 /// `count::RAYS` counters from `count::VOXEL`). Each frame starts from `MISS_ARGS_EMPTY`.
 pub const MISS_ARGS_CNT: u32 = 0;
-pub const MISS_ARGS_COUNT: u32 = 1;
-pub const MISS_ARGS_WORDS: usize = (MISS_ARGS_COUNT + count::RAYS) as usize;
+pub const MISS_ARGS_CNTS: u32 = 1;
+pub const MISS_ARGS_WORDS: usize = (MISS_ARGS_CNTS + count::RAYS) as usize;
 pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [0; MISS_ARGS_WORDS];
 
 /// The eye's holes, past the camera grid's words in the beam rays' buffer

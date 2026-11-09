@@ -13,18 +13,18 @@ fn share_quarter(n: u32, cap: u32, across: u32, along: u32, q: u32) -> u32 {
   return select(half - b, b, (q & 2u) == 0u);
 }
 
-/// `scatter::count`: how many of decor `k` the column `b` at `zoom` holds.
-fn scatter_count(k: u32, zoom: u32, b: vec2<i32>) -> u32 {
-  return scatter_count_of(row_word(k, ROW_SEED), row_word(k, ROW_CHANCE), decor_root(k), zoom, b);
+/// `scatter::cnt`: how many of decor `k` the column `b` at `zoom` holds.
+fn scatter_cnt(k: u32, zoom: u32, b: vec2<i32>) -> u32 {
+  return scatter_cnt_of(row_word(k, ROW_SEED), row_word(k, ROW_CHANCE), decor_root(k), zoom, b);
 }
 
-/// `scatter::count_of`: `scatter_count` of a decor of `seed`, `chance` and `root`.
-fn scatter_count_of(seed: u32, chance: u32, root: u32, zoom: u32, b: vec2<i32>) -> u32 {
+/// `scatter::cnt_of`: `scatter_cnt` of a decor of `seed`, `chance` and `root`.
+fn scatter_cnt_of(seed: u32, chance: u32, root: u32, zoom: u32, b: vec2<i32>) -> u32 {
   if (zoom < root) {
     return 0u;
   }
   let mean = (chance >> 16u) << (2u * (LEAF_CELL_ZOOM - root));
-  let first = quad_seed(seed ^ COUNT_TAG, root, b >> vec2<u32>(zoom - root));
+  let first = quad_seed(seed ^ CNT_TAG, root, b >> vec2<u32>(zoom - root));
   var n = (mean + (first & 0xffffu)) >> 16u;
   var z = root;
   while (z < zoom && n > 0u) {
@@ -70,7 +70,7 @@ fn retained(k: u32, leaf: vec2<i32>, first: u32, seed: u32) -> bool {
   let extent = decor_widest(k) - 1i;
   for (var y = leaf.y - extent; y < leaf.y + side; y += 1i) {
     for (var x = leaf.x - extent; x < leaf.x + side; x += 1i) {
-      if ((x != leaf.x || y != leaf.y) && scatter_count(k, LEAF_CELL_ZOOM, vec2<i32>(x, y)) > 0u) {
+      if ((x != leaf.x || y != leaf.y) && scatter_cnt(k, LEAF_CELL_ZOOM, vec2<i32>(x, y)) > 0u) {
         let d = candidate_draws(k, vec2<i32>(x, y));
         let before = d.x < first || (d.x == first && (y < leaf.y || (y == leaf.y && x < leaf.x)));
         if (before) {

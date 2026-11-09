@@ -14,6 +14,7 @@ import * as path from "node:path";
 import { getDefaultConfig } from "expo/metro-config";
 import { REPO, treeFile, WORKSPACE } from "@pxl/build/path.ts";
 import { CONSOLE_PATH, consoleHandler } from "@pxl/build/console.ts";
+import { digest } from "@pxl/build/constant.ts";
 import { stamp } from "@pxl/build/stamp.ts";
 import { forward, type Middleware, route_target } from "./script/proxy.ts";
 
@@ -72,14 +73,21 @@ function ownPlatform(
 
 const base = getDefaultConfig(here);
 
+/** A release build compiles each exported literal into the files that read
+ * it (babel.config.ts), so the transforms it may reuse depend on them. */
+const LITERALS =
+  process.env.NODE_ENV === "production"
+    ? digest([path.join(here, "src"), path.join(REPO, "xpute/ts")])
+    : "";
+
 const resolveRequest: NonNullable<typeof base.resolver.resolveRequest> = (
-  context,
+  ctx,
   name,
   platform,
 ) => {
   if (SINGLETONS.some((s) => name === s || name.startsWith(`${s}/`))) {
-    return context.resolveRequest(
-      { ...context, originModulePath: FROM_APP },
+    return ctx.resolveRequest(
+      { ...ctx, originModulePath: FROM_APP },
       name,
       platform,
     );
@@ -87,20 +95,16 @@ const resolveRequest: NonNullable<typeof base.resolver.resolveRequest> = (
   if (name === "virtual:pxl-build") {
     return { type: "sourceFile", filePath: BUILD_STAMP };
   }
-  const from = context.originModulePath;
+  const from = ctx.originModulePath;
   const file = name.startsWith(".")
     ? path.extname(name) !== ""
       ? path.resolve(path.dirname(from), name)
       : null
     : treeFile(from, name);
   if (file) {
-    return context.resolveRequest(
-      context,
-      ownPlatform(file, platform, from),
-      platform,
-    );
+    return ctx.resolveRequest(ctx, ownPlatform(file, platform, from), platform);
   }
-  return context.resolveRequest(context, name, platform);
+  return ctx.resolveRequest(ctx, name, platform);
 };
 
 const devConsole = consoleHandler(path.join(here, ".dev-console.log"));
@@ -121,6 +125,9 @@ export default {
   // directory. The bundle reads nothing outside these folders.
   watchFolders: [WORKSPACE, path.join(REPO, "xpute/ts")],
   cacheStores: [new Store({ root: CACHE })],
+  // A build made for measuring differs in what its modules compile to
+  // (babel.config.ts), so it shares no transform with any other.
+  cacheVersion: `${base.cacheVersion ?? ""}${process.env.PXL_PERF_DRIVE ?? ""}${LITERALS}`,
   fileMapCacheDirectory: CACHE,
   resolver: { ...base.resolver, resolveRequest },
   server: {

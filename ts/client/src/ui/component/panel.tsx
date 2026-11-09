@@ -50,11 +50,12 @@ export interface PanelProps {
   children: ReactNode;
 }
 
-/** The panel's host tells it whether it is open. The panel calls `gone` once
+/** The panel's host tells it whether it is open. The panel calls `onExited` once
  * it has slid away, and only then does the host stop drawing it. */
-export const PanelPresence = createContext<{ open: boolean; gone: () => void }>(
-  { open: true, gone: () => {} },
-);
+export const PanelPresence = createContext<{
+  open: boolean;
+  onExited: () => void;
+}>({ open: true, onExited: () => {} });
 
 /** The row shows no title: the panel's `label` names the sheet to assistive
  * technology. */
@@ -174,7 +175,7 @@ const TAP_SLOP = 8;
 export function Panel({ label, onClose, half, children }: PanelProps) {
   const window = useWindowSize();
   const { top } = useSafeArea();
-  const { open, gone } = useContext(PanelPresence);
+  const { open, onExited } = useContext(PanelPresence);
   const width = Math.min(window.width, MAX_WIDTH);
   const fullHeight = window.height - top - WHOLE_GAP;
   const halfHeight = window.height / 2;
@@ -267,7 +268,7 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
         from={away}
         to={open ? { translateY: offset } : away}
         transition={drag !== null ? FOLLOW : open ? SLIDE : SLIDE_AWAY}
-        onSettled={open ? () => drag === null && setBodyFull(full) : gone}
+        onSettled={open ? () => drag === null && setBodyFull(full) : onExited}
         style={[
           sheetStyles.sheet,
           {

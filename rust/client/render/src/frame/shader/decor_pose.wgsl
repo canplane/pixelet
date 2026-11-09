@@ -52,10 +52,10 @@ fn surface(zoom: u32, g: vec2<i32>) -> Surface {
     // A column at `zoom` is `1 << (HEIGHT_BITS - s)` cells tall from its floor up, so a walk
     // from a cell in it reaches the floor within that many cells. A longer walk would start
     // outside the world, and it is cut there, as a walk past its end is.
-    let end = max(select(floor, r.b.z >> s, col.palette_idx == VALUE_VOID), z - ((1i << (HEIGHT_BITS - s)) - 1i));
+    let end = max(select(floor, r.b.z >> s, col.palette_idx == VAL_VOID), z - ((1i << (HEIGHT_BITS - s)) - 1i));
     return Surface(SURFACE_WALK, z, 0u, end);
   }
-  if (col.palette_idx == VALUE_VOID) {
+  if (col.palette_idx == VAL_VOID) {
     return Surface(SURFACE_NONE, 0i, 0u, 0i);
   }
   return Surface(SURFACE_MET, col.top - 1i, eighths(col.part), 0i);
@@ -232,7 +232,7 @@ fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
       base = z;
       let seed = draw(quad_seed(row_word(j, ROW_SEED), LEAF_CELL_ZOOM, leaf), 1u);
       variant = mul_hi(draw(seed, 0u), row_word(j, ROW_VARIANTS));
-      if (row_word(j, ROW_ORIENTATION) == ALONG_TRANSPORT) {
+      if (row_word(j, ROW_ORIENT) == ALONG_TRANSPORT) {
         flip = draw(seed, 1u) >> 31u;
         voting = 4i * ALIGN_NEIGHBOR_RADIUS;
       } else {
@@ -275,7 +275,7 @@ fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         carve = eye_cut(CARVE);
         hide = eye_cut(HIDE);
         put = world_root(zoom, c).x;
-        if (!cut_holds(carve, zoom, c) && tree_val(PLACED, put, hide, zoom, c) == VALUE_VOID) {
+        if (!cut_holds(carve, zoom, c) && tree_val(PLACED, put, hide, zoom, c) == VAL_VOID) {
           edited = false;
           ask += 1i;
           continue;
@@ -308,7 +308,7 @@ fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
       // Under the base, the cell must be a palette entry the decor generates on. Over it,
       // the cell must be void and hold no edit.
       let under = c.z == base;
-      if (!(select(v == VALUE_VOID, allows(j, v & VAL_MASK), under))) {
+      if (!(select(v == VAL_VOID, allows(j, v & VAL_MASK), under))) {
         records[r] = UNGENERATED;
         return;
       }

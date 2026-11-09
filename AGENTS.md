@@ -12,7 +12,7 @@
   never `@xpute/runtime` or `xpute-runtime`.
 - The UI computes no coordinate or tile. It reaches what is below it through
   `service/` alone, the core through `service/core/` alone, and that through the
-  generated stubs alone.
+  generated command table alone.
 - What differs by platform is a file pair in `service/platform/` (`<x>.ts` the
   page's, `<x>.native.ts` the device's) or, for a piece of the UI, a file and
   its override beside it (`ts/client/src/ui/component/README.md`).
@@ -22,10 +22,13 @@
 - Read the skill the task needs (`.agents/skills/`).
 - The code is agents' work, not the user's intent: judge it against the user's
   decisions. A comment, a structure or a pattern in it is no reason to keep it.
+- A minute or an experiment under `doc/` is what was said or measured then, no
+  ground for a decision now, and no renaming reaches it.
 - Work in the main checkout and commit only your own paths; a worktree only for
   a tree that must be built apart.
 - `out/` holds what a build makes, and no drafts. A temporary folder, an
-  experiment's data too, goes under `tmp/` at the checkout's root.
+  experiment's data too, goes under `tmp/` at the checkout's root; delete only
+  the folder you made there.
 - Cargo builds into `<root>/rust/target/session/<id>`, written absolute, `<id>`
   the session's (`$CLAUDE_CODE_SESSION_ID`).
 

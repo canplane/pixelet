@@ -17,7 +17,7 @@ use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::{Quadrant, MIN_ZOOM};
 
-use crate::domain::layer::terrain::clipmap::CpuClipmap;
+use crate::domain::layer::terrain::clipmap::{self, CpuClipmap};
 use crate::domain::layer::tile_cache::{Line, Path, TileCache};
 use crate::sys::io::source;
 
@@ -31,9 +31,9 @@ pub(in crate::domain) trait TerrainQuery {
     /// The lowest and highest heights, in leaf cells, of the ground over
     /// column `node`'s own cells, with the ways' heights kept apart
     /// (pxl-engine `ground::Extent`). They are the bounds over the cells of
-    /// `line`'s tile, taken from the finest clip level that holds them, in one
-    /// look-up whatever the node's size. A coarser clip level standing in
-    /// gives the bounds of its own cells, which contain the finer ones, and
+    /// `line`'s tile, taken from the finest clip level of each center that
+    /// holds them (clipmap.rs `bound_over`), whatever the node's size. A
+    /// coarser clip level standing in gives the bounds of its own cells, and
     /// the answer names the tile lacked. Where no clip level holds the cells,
     /// the answer is that lack, never an empty bound.
     ///
@@ -62,28 +62,24 @@ pub(in crate::domain) trait TerrainQuery {
     fn column(&self, line: &Line, place: Lookup, node: Node<2>) -> Answer<Cell>;
 
     /// The line that `node`'s cells at `cell_zoom` are read on, stepped from
-    /// where `lines` last walked. A tile under one that `lines` holds is
+    /// where `path` last walked. A tile under one that `path` holds is
     /// stepped from that tile's line, and a coarser tile reuses the line an
     /// ancestor read. Nodes beside or under each other therefore share their
     /// lines down to where they part, and pay one look-up per zoom only past
     /// that point.
-    fn walk_line(&self, lines: &mut Path, node: Node<2>, cell_zoom: Zoom) -> Line;
+    fn walk_line(&self, path: &mut Path, node: Node<2>, cell_zoom: Zoom) -> Line;
 
     /// The line that `node`'s cells at `cell_zoom` are read on, found from
-    /// `over`, the line its parent column's cells were read on. It is `over`
-    /// itself where both are the same tile's, one step from `over` where
-    /// `over` is the tile's parent's (`step`), and otherwise walked from the
-    /// top as `seek` walks.
-    fn line_under(&self, over: Option<&Line>, node: Node<2>, cell_zoom: Zoom) -> Line;
+    /// `parent`, the line its parent column's cells were read on. It is
+    /// `parent` itself where both are the same tile's, one step from `parent`
+    /// where `parent` is the tile's parent's (`step`), and otherwise walked
+    /// from the top as `seek` walks.
+    fn line_under(&self, parent: Option<&Line>, node: Node<2>, cell_zoom: Zoom) -> Line;
 
     /// `bound`, with the node's line found by `walk_line`. A walk over nodes
     /// in key order pays one look-up per node.
-    fn bound_walked(
-        &self,
-        lines: &mut Path,
-        node: Node<2>,
-        cell_zoom: Zoom,
-    ) -> Answer<Option<Aabb>>;
+    fn bound_walked(&self, path: &mut Path, node: Node<2>, cell_zoom: Zoom)
+        -> Answer<Option<Aabb>>;
 }
 
 impl TerrainQuery for TileCache<TerrainTile> {
@@ -94,7 +90,7 @@ impl TerrainQuery for TileCache<TerrainTile> {
         node: Node<2>,
         zooms: [Zoom; 2],
     ) -> Answer<Extent> {
-        let (r, from, here) = cells::bound_over(&CpuClipmap, place, zooms, node);
+        let (r, from, here) = clipmap::bound_over(place, zooms, node);
         answer_at(line, from, here, r)
     }
 
@@ -103,13 +99,13 @@ impl TerrainQuery for TileCache<TerrainTile> {
         answer_at(line, f.from(), f.here(), cell)
     }
 
-    fn walk_line(&self, lines: &mut Path, node: Node<2>, cell_zoom: Zoom) -> Line {
-        self.seek(lines, bound_tile(node, cell_zoom))
+    fn walk_line(&self, path: &mut Path, node: Node<2>, cell_zoom: Zoom) -> Line {
+        self.seek(path, bound_tile(node, cell_zoom))
     }
 
-    fn line_under(&self, over: Option<&Line>, node: Node<2>, cell_zoom: Zoom) -> Line {
+    fn line_under(&self, parent: Option<&Line>, node: Node<2>, cell_zoom: Zoom) -> Line {
         let tile = bound_tile(node, cell_zoom);
-        match over {
+        match parent {
             Some(o) if o.tile == tile => *o,
             Some(o) if tile.zoom > MIN_ZOOM && o.tile == tile.parent() => self.step(o, tile),
             _ => self.line(tile),
@@ -118,11 +114,11 @@ impl TerrainQuery for TileCache<TerrainTile> {
 
     fn bound_walked(
         &self,
-        lines: &mut Path,
+        path: &mut Path,
         node: Node<2>,
         cell_zoom: Zoom,
     ) -> Answer<Option<Aabb>> {
-        self.bound(&self.walk_line(lines, node, cell_zoom), node, cell_zoom)
+        self.bound(&self.walk_line(path, node, cell_zoom), node, cell_zoom)
     }
 }
 
@@ -169,11 +165,11 @@ impl Query for TileCache<TerrainTile> {
     /// coarser tile, whose line the parent does not hold, walks from the top.
     fn child<const D: usize>(&self, parent: &Line, node: Node<D>, cell_zoom: Zoom) -> Line {
         let tile = bound_tile(node, cell_zoom);
-        let mut over = tile;
-        while over.zoom > parent.tile.zoom {
-            over = over.parent();
+        let mut ancestor = tile;
+        while ancestor.zoom > parent.tile.zoom {
+            ancestor = ancestor.parent();
         }
-        match over == parent.tile {
+        match ancestor == parent.tile {
             true => self.down(parent, tile),
             false => self.line(tile),
         }

@@ -55,7 +55,7 @@ export function Motion({
 
   const [, commit] = useReducer((n: number) => n + 1, 0);
 
-  const stood = useRef<Required<Pose> | null>(null);
+  const rest = useRef<Required<Pose> | null>(null);
   const replays = useReplay(replay);
   const settled = useRef(onSettled);
   settled.current = onSettled;
@@ -63,12 +63,12 @@ export function Motion({
   useEffect(() => {
     const replaying = replays();
 
-    let start: Required<Pose> = stood.current ?? init;
-    if ((replaying || stood.current === null) && from) {
+    let start: Required<Pose> = rest.current ?? init;
+    if ((replaying || rest.current === null) && from) {
       start = resolve(from);
       for (const c of CHANNELS) v[c].setValue(start[c]);
     }
-    stood.current = target;
+    rest.current = target;
 
     const { duration, easing, delay } = timing(transition);
     const moving = CHANNELS.filter((c) => start[c] !== target[c]);
@@ -102,7 +102,7 @@ export function Motion({
   useEffect(
     () => () => {
       for (const c of CHANNELS) v[c].stopAnimation();
-      stood.current = null;
+      rest.current = null;
     },
     [],
   );

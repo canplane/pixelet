@@ -20,9 +20,9 @@ export function keys(): string[] {
   }
 }
 
-export function set(key: string, value: string): void {
+export function set(key: string, val: string): void {
   try {
-    globalThis.localStorage?.setItem(key, value);
+    globalThis.localStorage?.setItem(key, val);
   } catch {
     // The browser refused the write, so the value lasts only this session.
   }

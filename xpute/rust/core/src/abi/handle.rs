@@ -147,15 +147,15 @@ impl<T: Copy, const N: usize> Table<T, N> {
     }
 
     /// Removes every handle taken since `begin` and not yet removed, and
-    /// hands each to `gone`. These are what a transaction that did not commit
+    /// hands each to `release`. These are what a transaction that did not commit
     /// made, which the other side never saw.
-    pub fn rollback(&mut self, mut gone: impl FnMut(u32, T)) {
+    pub fn rollback(&mut self, mut release: impl FnMut(u32, T)) {
         for slot in 1..=self.top {
             let s = &self.slot[slot as usize];
             let handle = handle_of(slot, s.generation);
             if s.taken_epoch == self.epoch + 1 {
                 if let Some(val) = self.remove(handle) {
-                    gone(handle, val);
+                    release(handle, val);
                 }
             }
         }

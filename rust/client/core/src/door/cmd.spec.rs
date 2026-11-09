@@ -172,11 +172,11 @@ impl TurnMinor {
 #[repr(u32)]
 pub enum SettingMinor {
     SET = 0x01,
-    DEVELOPMENT = 0x02,
+    DEV = 0x02,
 }
 
 impl SettingMinor {
-    pub const ALL: [SettingMinor; 2] = [SettingMinor::SET, SettingMinor::DEVELOPMENT];
+    pub const ALL: [SettingMinor; 2] = [SettingMinor::SET, SettingMinor::DEV];
 
     /// The member a number names, or none for a number nobody gave out.
     pub fn of(number: u32) -> Option<SettingMinor> {
@@ -416,7 +416,7 @@ pub enum Command {
     SENSOR_PLATFORM = 0x120d,
     /// Whether this is a development build, which offers the settings schema.json marks `dev`.
     /// Sent once the core is attached.
-    SETTING_DEVELOPMENT = 0x1602,
+    SETTING_DEV = 0x1602,
     /// A pointer event on the world's canvas, in CSS pixels from the top left of its layout box
     /// (transforms aside), as the world surface's size is (GPU_SURFACE_RESIZE).
     INPUT_POINTER = 0x1102,
@@ -496,7 +496,7 @@ impl Command {
         Command::SOURCE_DECLARE,
         Command::SENSOR_PERMISSION,
         Command::SENSOR_PLATFORM,
-        Command::SETTING_DEVELOPMENT,
+        Command::SETTING_DEV,
         Command::INPUT_POINTER,
         Command::EDIT_TOOL,
         Command::EDIT_MARKER_TEXT,
@@ -910,17 +910,17 @@ impl SensorPlatform {
     }
 }
 
-/// Command::SETTING_DEVELOPMENT's packet.
+/// Command::SETTING_DEV's packet.
 #[derive(Clone, Copy, Debug)]
-pub struct SettingDevelopment {
-    pub development: bool,
+pub struct SettingDev {
+    pub dev: bool,
 }
 
-impl SettingDevelopment {
-    pub fn read(pkt: &[u8]) -> Result<SettingDevelopment, MarshalError> {
+impl SettingDev {
+    pub fn read(pkt: &[u8]) -> Result<SettingDev, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SettingDevelopment {
-            development: f.at(0)?.get_bool()?,
+        Ok(SettingDev {
+            dev: f.at(0)?.get_bool()?,
         })
     }
 }
@@ -1057,7 +1057,7 @@ impl SceneDraw {
 pub struct SettingSet {
     pub key: crate::domain::setting::schema_spec::SettingKey,
     /// A toggle's 0 or 1, a choice's option by its index, or a number.
-    pub value: u32,
+    pub val: u32,
 }
 
 impl SettingSet {
@@ -1068,7 +1068,7 @@ impl SettingSet {
                 f.at(0)?.get_number()?,
             )?)
             .ok_or_else(|| unknown())?,
-            value: integer::<u32>(f.at(1)?.get_number()?)?,
+            val: integer::<u32>(f.at(1)?.get_number()?)?,
         })
     }
 }
@@ -1341,7 +1341,7 @@ pub mod ui {
         fn source_declare(&mut self, c: SourceDeclare<'_>) -> Outcome;
         fn sensor_permission(&mut self, c: SensorPermission) -> Outcome;
         fn sensor_platform(&mut self, c: SensorPlatform) -> Outcome;
-        fn setting_development(&mut self, c: SettingDevelopment) -> Outcome;
+        fn setting_dev(&mut self, c: SettingDev) -> Outcome;
         fn input_pointer(&mut self, c: InputPointer) -> Outcome;
         fn edit_tool(&mut self, c: EditTool) -> Outcome;
         fn edit_marker_text(&mut self, c: EditMarkerText<'_>) -> Outcome;
@@ -1388,9 +1388,9 @@ pub mod ui {
             x if x == Command::SENSOR_PLATFORM as u32 => h.sensor_platform(SensorPlatform::read(
                 pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
             )?),
-            x if x == Command::SETTING_DEVELOPMENT as u32 => h.setting_development(
-                SettingDevelopment::read(pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?)?,
-            ),
+            x if x == Command::SETTING_DEV as u32 => h.setting_dev(SettingDev::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
             x if x == Command::INPUT_POINTER as u32 => h.input_pointer(InputPointer::read(
                 pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
             )?),

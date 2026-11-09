@@ -3,11 +3,11 @@
 Every model, texture and skin the client draws with, and what they are made
 from. Data, not code — nothing in the repository imports a file from here.
 
-- `content/` is what ships: the ingest's one input. A catalog names a file by
-  its path under it; the client fetches it from the bucket by the SHA-256 of its
-  bytes, which where it lies does not change.
-- `raw/` is what came in, as it came: what a tool turns into `content/`, and
-  what no ingest reads. What can surely be fetched again is not kept:
+- `content/` is what ships. A catalog names a file by its path under it; the
+  client fetches it from the bucket by the SHA-256 of its bytes, which where it
+  lies does not change.
+- `raw/` is what came in, as it came: what a tool turns into `content/` or into
+  code. What can surely be fetched again is not kept:
   `raw/sky/`, NASA's Moon and CDS's stars, fetched by running the tool that
   reads them. The texture pack's originals are kept, since their URLs may not
   last.
@@ -27,8 +27,7 @@ asset/
 
 ## What to run, and when
 
-Each is a binary of `pxl-tool` (`rust/tool`), run by make, and `make -j8 check`
-clippies and tests every one with the rest.
+Each is a binary of `pxl-tool` (`rust/tool`), run by make.
 
 ### After changing anything under `content/`
 
@@ -40,14 +39,7 @@ It copies every file to `./out/asset/<sha256>.<ext>`, composes the texture tiles
 into one WebP sheet, measures every model's extent out of its glTF, and writes
 the table that names them, `spec/spec/asset/ingest.json`, and draws
 `raw/place/symbol/` into the code that carries the place icons. Then it writes
-what the spec generates from the table:
-
-- `ts/client/src/service/origin/ingest.spec.ts` — the host's table, a key for
-  each file's number
-- `ts/client/src/service/sys/fs/catalog.spec.ts` — the catalog the host plugs
-  in, which file each of the core's slots names
-- `rust/spec/src/asset/ingest.spec.rs` — the pack's layout, which the renderer
-  compiles
+what the spec generates from the table.
 
 **Commit the table and what it generates with the asset change, and upload
 before deploying.** The shipped palette reads that table, and a key it names

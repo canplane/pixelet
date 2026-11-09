@@ -9,7 +9,7 @@
 /// (`light::ARGS_WORDS`). A claim reads and writes all three together.
 struct Dispatch {
   passes: array<atomic<u32>, LIGHT_ARGS_PASSES>,
-  counts: array<atomic<u32>, LIGHT_LISTS>,
+  cnts: array<atomic<u32>, LIGHT_LISTS>,
   marks: array<atomic<u32>>,
 }
 
@@ -28,7 +28,7 @@ fn opened(w: u32, e: u32, cap: u32, across: u32) {
 /// on tile `p + off`, and it feeds `t` where its reach `lo`..`hi` about that tile holds `t`. A
 /// place is listed only where no claim of this cast listed it yet (`light::list_marks_at`),
 /// and the rows of the passes that take it are raised (`opened`).
-fn enlist_in(current: u32, t: vec2<i32>, which: u32, across: i32, lo: vec2<i32>, hi: vec2<i32>, off: vec2<i32>) {
+fn enlist_in(cur: u32, t: vec2<i32>, which: u32, across: i32, lo: vec2<i32>, hi: vec2<i32>, off: vec2<i32>) {
   let marks = list_marks_at(which);
   let at = list_cnt_at(which);
   let cap = list_cap(which);
@@ -37,8 +37,8 @@ fn enlist_in(current: u32, t: vec2<i32>, which: u32, across: i32, lo: vec2<i32>,
   for (var j = first.y; j <= last.y; j += 1i) {
     for (var i = first.x; i <= last.x; i += 1i) {
       if (i >= 0i && j >= 0i && i < across && j < across
-        && atomicExchange(&args.marks[marks + u32(j * across + i)], current) != current) {
-        let e = atomicAdd(&args.counts[which], 1u);
+        && atomicExchange(&args.marks[marks + u32(j * across + i)], cur) != cur) {
+        let e = atomicAdd(&args.cnts[which], 1u);
         if (e >= cap) {
           continue;
         }
@@ -59,13 +59,13 @@ fn enlist_in(current: u32, t: vec2<i32>, which: u32, across: i32, lo: vec2<i32>,
 /// tile's cells and samples feed it and the tiles one either way. A beam ray feeds the cells
 /// whose window of `2 + 2 · BEAM_WINDOW` beam rays holds it, and the beam rays are numbered
 /// from the tile that beam ray 0 lies on (`light_on`).
-fn enlist(current: u32, t: vec2<i32>) {
+fn enlist(cur: u32, t: vec2<i32>) {
   let tiles = i32(light_tiles());
-  enlist_in(current, t, LIGHT_LIST_DAMAGE, tiles, vec2<i32>(0), vec2<i32>(0), vec2<i32>(0));
-  enlist_in(current, t, LIGHT_LIST_SOURCES, tiles, vec2<i32>(-1), vec2<i32>(1), vec2<i32>(0));
+  enlist_in(cur, t, LIGHT_LIST_DAMAGE, tiles, vec2<i32>(0), vec2<i32>(0), vec2<i32>(0));
+  enlist_in(cur, t, LIGHT_LIST_SOURCES, tiles, vec2<i32>(-1), vec2<i32>(1), vec2<i32>(0));
   let w = i32(LIGHT_BEAM_WINDOW);
   enlist_in(
-    current, t, LIGHT_LIST_CORNERS, i32(beam_across()),
+    cur, t, LIGHT_LIST_CORNERS, i32(beam_across()),
     vec2<i32>(-w - 2i), vec2<i32>(w + 1i), light_on(LEVEL_CORNER, vec2<u32>(0u)),
   );
 }

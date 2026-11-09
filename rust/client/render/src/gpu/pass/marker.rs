@@ -212,7 +212,7 @@ impl MarkerPass {
     /// atlas changed: made again, or painted on. A sprite that cannot be
     /// painted yet is left for a later frame: its text is not drawn yet, or
     /// its pixels do not fit this turn's stream.
-    pub fn sync_atlas(&mut self, g: &Gpu, mips: &MipPass, atlas: &mut Atlas, text: TextOf) -> bool {
+    pub fn sync_atlas(&mut self, g: &Gpu, mip: &MipPass, atlas: &mut Atlas, text: TextOf) -> bool {
         let flush = atlas.flush(self.generation, &mut self.dirty);
         self.generation = flush.generation;
         if flush.whole {
@@ -309,7 +309,7 @@ impl MarkerPass {
             release(id);
         }
         if drawn {
-            mips.build(g, self.atlas, self.levels, 0, 1);
+            mip.build(g, self.atlas, self.levels, 0, 1);
         }
         flush.whole || drawn
     }
@@ -407,9 +407,9 @@ impl MarkerPass {
         );
     }
 
-    /// Adds the pass's draws to `stats`, two triangles a marker.
-    pub fn count(&self, draws: &DrawTable, stats: &mut DrawStat) {
-        draws.count(PIPELINE_MARKER, stats, |d| 2 * d[1]);
+    /// Adds the pass's draws to `stat`, two triangles a marker.
+    pub fn count(&self, draws: &DrawTable, stat: &mut DrawStat) {
+        draws.count(PIPELINE_MARKER, stat, |d| 2 * d[1]);
     }
 
     pub fn draw(

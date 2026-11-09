@@ -69,7 +69,7 @@ fn take_events() -> (Vec<u64>, Vec<u64>) {
 
 /// How many of `stream`'s wants wait for a credit, and how many are out on
 /// one.
-fn counts(stream: Stream) -> (usize, usize) {
+fn cnts(stream: Stream) -> (usize, usize) {
     let s = sched();
     let waiting = s.wants[stream as usize]
         .iter()
@@ -119,7 +119,7 @@ fn answer_asked_once() {
     let (starts, stops) = take_events();
     assert!(starts.is_empty(), "an answered want was asked again");
     assert!(stops.is_empty());
-    assert_eq!(counts(Stream::terrain), (0, 0));
+    assert_eq!(cnts(Stream::terrain), (0, 0));
     at(1.0);
     declare(Stream::terrain, &[(1, seen(0.0))]);
     pump();
@@ -140,7 +140,7 @@ fn failure_backs_off() {
             "held back, not re-asked every turn"
         );
     }
-    assert_eq!(counts(Stream::terrain), (1, 0), "wanted, nothing out");
+    assert_eq!(cnts(Stream::terrain), (1, 0), "wanted, nothing out");
     at(until());
     pump();
     assert_eq!(
@@ -255,7 +255,7 @@ fn failing_server_probe() {
     );
     failed(out[1], Errno::EACCES);
     assert_eq!(
-        sched().outage.failures,
+        sched().outage.fail_cnt,
         1,
         "out before the failure, so the same outage"
     );
@@ -265,12 +265,51 @@ fn failing_server_probe() {
         let probe = take_events().0;
         assert_eq!(probe.len(), 1, "one probe after the wait");
         failed(probe[0], Errno::EACCES);
-        assert_eq!(sched().outage.failures, n);
+        assert_eq!(sched().outage.fail_cnt, n);
     }
     assert!(given_up(), "past the last wait");
     at(until() + 1e9);
     pump();
     assert!(take_events().0.is_empty(), "nothing is asked once given up");
+}
+
+#[test]
+fn ended_hold_asks_no_turn() {
+    let (_serial, key) = one_out();
+    failed(key, Errno::ENETUNREACH);
+    declare(Stream::terrain, &[]);
+    pump();
+    assert!(fall() >= 0.0, "the hold's end is asked for");
+    at(until());
+    pump();
+    assert!(fall() < 0.0, "and nothing after it");
+}
+
+/// What a turn's end asks for: the end of the hold, or none.
+fn fall() -> f64 {
+    if let Some(at) = next_pump_at(now()) {
+        edge::wake_at(at);
+    }
+    edge::world_edge().fall()
+}
+
+/// A probe that fails after the turn's pump still brings a pump that asks for
+/// the end of the new hold, and a probe that is out asks for no turn.
+#[test]
+fn failed_probe_keeps_retrying() {
+    let (_serial, key) = one_out();
+    failed(key, Errno::ENETUNREACH);
+    assert_eq!(fall(), 0.0, "a pump is asked for");
+    declare(Stream::terrain, &[(1, seen(0.0))]);
+    pump();
+    assert!(fall() > 0.0, "which asks for the hold's end");
+    at(until());
+    pump();
+    let (starts, _) = take_events();
+    assert_eq!(starts.len(), 1, "the probe");
+    assert!(fall() < 0.0, "out, it asks for no turn");
+    failed(starts[0], Errno::ENETUNREACH);
+    assert_eq!(fall(), 0.0, "and failing, one more pump");
 }
 
 #[test]
@@ -283,7 +322,7 @@ fn outage_counts_once() {
         at(10.0);
         failed(key, Errno::EACCES);
     }
-    assert_eq!(sched().outage.failures, 1, "one outage, one wait");
+    assert_eq!(sched().outage.fail_cnt, 1, "one outage, one wait");
     assert!(!given_up());
 }
 
@@ -298,7 +337,7 @@ fn cur_demand_said() {
     at(0.0);
     declare(Stream::terrain, &[(3, seen(0.0))]);
     assert_eq!(
-        counts(Stream::terrain).0,
+        cnts(Stream::terrain).0,
         1,
         "the new want is representable with both credits spent"
     );
@@ -311,7 +350,7 @@ fn cur_demand_said() {
     assert_eq!(starts.len(), 1, "and the current want starts at once");
     ok(out[0]);
     assert_eq!(
-        counts(Stream::terrain),
+        cnts(Stream::terrain),
         (0, 1),
         "the late report neither frees nor ends anything"
     );
@@ -380,7 +419,7 @@ fn asset_shares_credits() {
         1,
         "one credit, one read — an asset does not go beside the tiles"
     );
-    assert_eq!(counts(Stream::asset), (1, 0), "and it is what is waiting");
+    assert_eq!(cnts(Stream::asset), (1, 0), "and it is what is waiting");
 }
 
 #[test]

@@ -1,7 +1,7 @@
 // @pxl/client/service/core/camera.ts
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import { Tracking } from "@/abi/cmd.spec.ts";
+import { Command, Tracking } from "@/abi/cmd.spec.ts";
 import { core } from "@/service/core/core.ts";
 import * as sensor from "@/service/platform/sensor.ts";
 import { interactive } from "./input.ts";
@@ -14,15 +14,15 @@ export async function tracking(tracking: Tracking): Promise<void> {
     return;
   }
   interactive();
-  core.camera_tracking(tracking);
+  core.send(Command.CAMERA_TRACKING, tracking);
 }
 
 export function north_up(): void {
-  core.camera_north_up();
+  core.send(Command.CAMERA_NORTH_UP);
 }
 
 /** Moves the pivot to a search result, and keeps the rest of the view as it
  * is. */
 export function goto(lon: f64, lat: f64): void {
-  core.camera_goto(lon, lat, null, null, null);
+  core.send(Command.CAMERA_GOTO, lon, lat, null, null, null);
 }

@@ -31,7 +31,7 @@ const MAKE_ROOM = after(SETTLE, SETTLE.durationMs / 2);
 export function Toaster() {
   const entries = useToastEntries();
   const turns = useToastTurns();
-  const { list, gone } = usePresent(entries, (e) => e.id);
+  const { list, onExited } = usePresent(entries, (e) => e.id);
   // The center is rounded to a whole pixel, because half of an odd width is
   // not one.
   const [center, setCenter] = useState(0);
@@ -114,7 +114,7 @@ export function Toaster() {
               replay={fromAbove ? turns : null}
               to={present ? pose.rest : { scale: 0.9 }}
               transition={transition}
-              onSettled={present ? undefined : () => gone(key)}
+              onSettled={present ? undefined : () => onExited(key)}
               style={[
                 styles.card,
                 {

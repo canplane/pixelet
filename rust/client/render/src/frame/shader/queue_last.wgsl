@@ -27,7 +27,7 @@ fn shows(aim: Aim, w: WalkEnd) -> WalkEnd {
     let a = world_answer(parent, top, zoom, c, zoom | (zoom << ZOOM_BITS), NONE);
     if (a.kind == KIND_CELL) {
       let v = a.asset.x & VAL_MASK;
-      if (v == VALUE_VOID || v == VALUE_AIR) {
+      if (v == VAL_VOID || v == VAL_AIR) {
         return w;
       }
       return WalkEnd(1u, zoom, corner, w.roots, a.asset, w.axis, w.t, w.visits, w.parent, w.top, w.step);
@@ -67,55 +67,47 @@ fn hit_rows(rows: u32) {
 
 @compute @workgroup_size(QUEUE_LANES)
 fn queue_last_cs() {
-  var item = NONE;
-  var t = 0.0;
-  var corner = vec3<u32>(0u);
-  var zoom = 0u;
-  var roots = vec3<i32>(0);
-  var step = 0u;
-  // What was handed the node's parent, held from one run of steps to the next.
-  var parent = vec4<u32>(0u);
-  var top = true;
   var visits = 0u;
   loop {
+    let item = next_last();
     if (item == NONE) {
-      let h = next_last();
-      if (h == NONE) {
-        break;
-      }
-      if (!parked(h)) {
-        continue;
-      }
-      item = h;
-      let s = parked_start(h);
-      t = s.t;
-      corner = s.corner;
-      zoom = s.zoom;
-      roots = s.roots;
-      step = s.step;
-      top = true;
+      break;
     }
-    let aim = item_aim(item);
-    let w = walk(aim, Start(t, corner, zoom, roots, parent, top, step), QUEUE_STEPS);
-    visits += w.visits;
-    // `ends` is 5 where the walk ran out of its steps, and 4 where it may ask no more
-    // (walk.wgsl `walk`).
-    if (w.ends == 5u) {
-      t = w.t;
-      corner = w.corner;
-      zoom = w.zoom;
-      roots = w.roots;
-      step = w.step;
-      parent = w.parent;
-      top = w.top;
+    if (!parked(item)) {
       continue;
     }
-    if (w.ends == 4u) {
-      finish(item, aim, to_lack(w));
-    } else {
-      finish(item, aim, w);
+    let aim = item_aim(item);
+    let s = parked_start(item);
+    var t = s.t;
+    var corner = s.corner;
+    var zoom = s.zoom;
+    var roots = s.roots;
+    var step = s.step;
+    // What was handed the node's parent, held from one run of steps to the next.
+    var parent = vec4<u32>(0u);
+    var top = true;
+    loop {
+      let w = walk(aim, Start(t, corner, zoom, roots, parent, top, step), QUEUE_STEPS);
+      visits += w.visits;
+      // `ends` is 5 where the walk ran out of its steps, and 4 where it may ask no more
+      // (walk.wgsl `walk`).
+      if (w.ends == 5u) {
+        t = w.t;
+        corner = w.corner;
+        zoom = w.zoom;
+        roots = w.roots;
+        step = w.step;
+        parent = w.parent;
+        top = w.top;
+        continue;
+      }
+      if (w.ends == 4u) {
+        finish(item, aim, to_lack(w));
+      } else {
+        finish(item, aim, w);
+      }
+      break;
     }
-    item = NONE;
   }
   count_visits(visits_at(), visits);
 }

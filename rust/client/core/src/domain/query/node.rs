@@ -112,12 +112,12 @@ impl World<'_> {
 
     /// What is in `at`'s cell at its own zoom, which is `coarsest` or finer:
     /// what fills it (`node`, asked at that zoom), or void where it is air or
-    /// void. `lines` are the ground's lines the asker read, and the cell's
+    /// void. `path` are the ground's lines the asker read, and the cell's
     /// line steps on from them (`node`).
-    pub(super) fn asset_at(&self, at: &mut At, lines: &mut Path) -> Answer<u32> {
+    pub(super) fn asset_at(&self, at: &mut At, path: &mut Path) -> Answer<u32> {
         let (zoom, _) = at.node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
-        self.node(at, [zoom, zoom], lines).map(|i| {
+        self.node(at, [zoom, zoom], path).map(|i| {
             if i.kind == Kind::Cell {
                 i.asset[0]
             } else {
@@ -145,7 +145,7 @@ impl World<'_> {
         }
     }
 
-    /// What is in `at`'s node, asked over `asked`, the zooms from far to
+    /// What is in `at`'s node, asked over `zooms`, the zooms from far to
     /// near that a reader asks within it. This is the world's one query
     /// (pxl-engine `world::node`). The ground is read as the GPU reads it,
     /// off the clip levels (`CpuClipmap`), down the node's line through the
@@ -154,21 +154,21 @@ impl World<'_> {
     /// The answer (pxl-engine `answer`) is one of three: a split, with its
     /// box in its own steps; the asset of a cell at the zoom asked, void for
     /// air; or, for a node coarser than asked with nothing under it filling,
-    /// air of the node's size, which its zoom against `asked` tells apart.
+    /// air of the node's size, which its zoom against `zooms` tells apart.
     /// The four palette indices a cell is drawn by are left to the GPU.
-    /// `lines` are the ground's lines the asking walk read, and the node's
+    /// `path` are the ground's lines the asking walk read, and the node's
     /// line steps on from them (`walk_line`).
     pub(super) fn node(
         &self,
         at: &mut At,
-        asked: [Zoom; 2],
-        lines: &mut Path,
+        zooms: [Zoom; 2],
+        path: &mut Path,
     ) -> Answer<In<[u32; 2]>> {
         let (lanes, cuts) = (
             self.object.columns(),
             [self.cut(self.carve), self.cut(self.hide)],
         );
-        let mut reading = GroundRead::new(self, lines);
+        let mut reading = GroundRead::new(self, path);
         let i = world::node(
             &mut reading,
             &CpuClipmap,
@@ -176,7 +176,7 @@ impl World<'_> {
             pool(),
             &mut at.inheritance,
             at.node,
-            asked,
+            zooms,
             cuts,
         );
         reading.answer(i.kind != Kind::Lacks, || i)
@@ -189,16 +189,16 @@ impl World<'_> {
 /// a coarser tile standing in for it (`coarser`).
 struct GroundRead<'r, 'a> {
     world: &'r World<'a>,
-    lines: &'r mut Path,
+    path: &'r mut Path,
     missing: Option<Quadrant>,
     coarser: Option<Quadrant>,
 }
 
 impl<'r, 'a> GroundRead<'r, 'a> {
-    fn new(world: &'r World<'a>, lines: &'r mut Path) -> GroundRead<'r, 'a> {
+    fn new(world: &'r World<'a>, path: &'r mut Path) -> GroundRead<'r, 'a> {
         GroundRead {
             world,
-            lines,
+            path,
             missing: None,
             coarser: None,
         }
@@ -256,7 +256,7 @@ impl ground::Resident for GroundRead<'_, '_> {
         let line = self
             .world
             .terrain
-            .walk_line(self.lines, (zoom, [c[0], c[1]]), cells[1]);
+            .walk_line(self.path, (zoom, [c[0], c[1]]), cells[1]);
         match self.take(
             self.world
                 .terrain

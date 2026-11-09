@@ -6,7 +6,7 @@
 
 mod gpu;
 
-use gpu::{bytes, read_buffer, Gpu};
+use gpu::{bytes, read_buf, Gpu};
 use pxl_render::frame::shader::record::{src, SHADER_SCREEN_FINISH, SHADER_SCREEN_SHOW};
 /// A screen tile's side, counted in the world's pixels.
 use pxl_render::frame::shader::word::screen::TILE as SIDE;
@@ -57,9 +57,9 @@ fn module(gpu: &Gpu, shader: u32) -> wgpu::ShaderModule {
         })
 }
 
-/// The pipeline of `shader` that draws into `targets` color targets, and into the screen's
+/// The pipeline of `shader` that draws into `target_cnt` color targets, and into the screen's
 /// depth when `depth` is set.
-fn pipeline(gpu: &Gpu, shader: u32, targets: usize, depth: bool) -> wgpu::RenderPipeline {
+fn pipeline(gpu: &Gpu, shader: u32, target_cnt: usize, depth: bool) -> wgpu::RenderPipeline {
     let scope = gpu.device.push_error_scope(wgpu::ErrorFilter::Validation);
     let module = module(gpu, shader);
     let target = Some(wgpu::ColorTargetState {
@@ -67,7 +67,7 @@ fn pipeline(gpu: &Gpu, shader: u32, targets: usize, depth: bool) -> wgpu::Render
         blend: None,
         write_mask: wgpu::ColorWrites::ALL,
     });
-    let colors = vec![target; targets];
+    let colors = vec![target; target_cnt];
     let p = gpu
         .device
         .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -98,7 +98,7 @@ fn pipeline(gpu: &Gpu, shader: u32, targets: usize, depth: bool) -> wgpu::Render
             cache: None,
         });
     if let Some(e) = pollster::block_on(scope.pop()) {
-        panic!("shader {shader} with {targets} targets refused: {e}");
+        panic!("shader {shader} with {target_cnt} targets refused: {e}");
     }
     p
 }
@@ -177,9 +177,9 @@ impl<'a> Finish<'a> {
             gpu,
             world: world.create_view(&Default::default()),
             depth,
-            frame: gpu.buffer(&words.map(f32::to_bits), uniform),
-            changed_at: gpu.buffer(&changed, wgpu::BufferUsages::STORAGE),
-            tiles: gpu.buffer(&[0; 8], uniform),
+            frame: gpu.buf(&words.map(f32::to_bits), uniform),
+            changed_at: gpu.buf(&changed, wgpu::BufferUsages::STORAGE),
+            tiles: gpu.buf(&[0; 8], uniform),
         }
     }
 
@@ -312,7 +312,7 @@ fn canvas(gpu: &Gpu) -> (wgpu::Texture, wgpu::TextureView) {
 /// Reads back the texels of a canvas, one word for each texel.
 fn read(gpu: &Gpu, t: &wgpu::Texture) -> Vec<u32> {
     let row = CANVAS[0] * 4;
-    let out = gpu.buffer(
+    let out = gpu.buf(
         &vec![0; (CANVAS[0] * CANVAS[1]) as usize],
         wgpu::BufferUsages::empty(),
     );
@@ -330,7 +330,7 @@ fn read(gpu: &Gpu, t: &wgpu::Texture) -> Vec<u32> {
         t.size(),
     );
     gpu.queue.submit([e.finish()]);
-    read_buffer(&gpu.device, &gpu.queue, &out)
+    read_buf(&gpu.device, &gpu.queue, &out)
 }
 
 #[test]

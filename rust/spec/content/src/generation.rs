@@ -536,7 +536,7 @@ fn asks<Q: DecorQuery>(
     let (mut flip, mut voting) = (0, 0);
     let mut draws = SplitMix32::new(seed);
     prop.variant = variant_of(decor, &mut draws);
-    if decor.orientation == Orientation::along_transport {
+    if decor.orient == Orientation::along_transport {
         flip = draws.next_u32() >> 31;
         voting = 4 * ALIGN_NEIGHBOR_RADIUS;
     } else {

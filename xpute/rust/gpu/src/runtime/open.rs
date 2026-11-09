@@ -57,8 +57,6 @@ pub enum OpenError {
     Device(wgpu::RequestDeviceError),
     /// A required feature has a WebGPU name wgpu does not know.
     Feature(&'static str),
-    /// The core it is for has stopped.
-    Terminated,
 }
 
 /// This is a device opened as asked, and the instance a program makes its
@@ -75,9 +73,17 @@ pub struct Opened {
 /// without a display handle, since each surface brings its own
 /// (`SurfaceTargetUnsafe`).
 pub fn open(ask: &Ask) -> Result<Opened, OpenError> {
+    // The core's indirect calls are its own shaders' output, so they are not
+    // validated, which would also put a pass of wgpu's ahead of each pass that
+    // draws indirectly. The labels stay: the Metal backend tells the segments
+    // it must keep apart by them (vendor/wgpu-hal).
+    let defaults = wgpu::InstanceDescriptor::new_without_display_handle();
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: ask.backends,
-        ..wgpu::InstanceDescriptor::new_without_display_handle()
+        flags: defaults.flags
+            - wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL
+            - wgpu::InstanceFlags::DISCARD_HAL_LABELS,
+        ..defaults
     });
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: ask.power_preference,

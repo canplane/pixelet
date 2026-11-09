@@ -62,16 +62,16 @@ pub(super) fn approach_run(level: i64, scale: Scale) -> f64 {
 }
 
 /// The bores of the stretches in scope, road tunnels and rail tunnels, as lines; a road
-/// tunnel's portal on a deck opens at the deck (`decks`).
+/// tunnel's portal on a deck opens at the deck (`plan`).
 pub(super) fn bores(
     src: &Ring,
     stretches: &[Stretch],
-    decks: &DeckPlan,
+    plan: &DeckPlan,
     scale: Scale,
     lines: &mut Vec<(Line, WayRange)>,
 ) {
     let ceiling = (scale.c(TUNNEL_CEIL_OFF_M) - scale.c(BLOCK_M)).clamp(0, 255) as u8;
-    for (q, ys, covered) in road_bores(src, stretches, decks, scale, lines) {
+    for (q, ys, covered) in road_bores(src, stretches, plan, scale, lines) {
         let r = &stretches[q];
         // A stretch under cover keeps its ceiling, one open to the sky is cut to the surface, and one
         // that a deck's portal holds over the ground is an embankment up to it.
@@ -139,11 +139,11 @@ fn tunnel_drop(level: i64, scale: Scale) -> i32 {
 fn road_bores(
     src: &Ring,
     stretches: &[Stretch],
-    decks: &DeckPlan,
+    plan: &DeckPlan,
     scale: Scale,
     lines: &mut Vec<(Line, WayRange)>,
 ) -> Vec<(usize, Vec<i32>, Vec<bool>)> {
-    let ramp_ways = &decks.ramp_ways;
+    let ramp_ways = &plan.ramp_ways;
     let tunnels: Vec<usize> = (0..stretches.len())
         .filter(|&q| stretches[q].piece.form == Form::Tunnel && !stretches[q].rail())
         .collect();
@@ -178,7 +178,7 @@ fn road_bores(
                 &stretches[q].ends[e],
                 stretches[q].at[if e == 0 { 0 } else { stretches[q].at.len() - 1 }],
             );
-            let on = decks
+            let on = plan
                 .ys
                 .iter()
                 .filter(|(b, _)| stretches[*b].nodes.contains(node))

@@ -164,9 +164,9 @@ pub fn node<H: ground::Resident, W: BrickSource, L: Table, P: Table>(
     // drawn by, a byte each (`ground::word`). Only the ground's palette indices, as in a placed
     // cube of a palette index, fit in a byte; an object's value lies past a byte and is drawn by
     // its value. It is read once, here, for both uses below.
-    let laid = if over.says == CELL {
+    let laid = if over.answer == CELL {
         let four = if fills(over.asset) {
-            object::palette_indices(columns, put, hide, zoom, c, over.asset)
+            object::palette_idxs(columns, put, hide, zoom, c, over.asset)
         } else {
             [0; 4]
         };
@@ -179,14 +179,14 @@ pub fn node<H: ground::Resident, W: BrickSource, L: Table, P: Table>(
         [0; 2]
     };
     // Where what is placed fills its cube whole, it is the cell's asset, whatever lies under it.
-    if over.says == CELL && over.fill == FULL {
+    if over.answer == CELL && over.fill == FULL {
         return In {
             kind: Kind::Cell,
             asset: laid,
         };
     }
     // Where what is placed splits the node, the box it may fill.
-    let (placed, splits) = if over.says == SPLIT {
+    let (placed, splits) = if over.answer == SPLIT {
         (object::object_box(columns, put, zoom), true)
     } else {
         (BOX_NONE, false)
@@ -223,7 +223,7 @@ pub fn node<H: ground::Resident, W: BrickSource, L: Table, P: Table>(
             kind: i.kind,
             asset: i.asset,
         };
-        if i.kind == Kind::Lacks && over.says != CELL {
+        if i.kind == Kind::Lacks && over.answer != CELL {
             return lacks;
         }
         // Start from the ground's asset, the share of its cube it fills and its four palette
@@ -257,7 +257,7 @@ pub fn node<H: ground::Resident, W: BrickSource, L: Table, P: Table>(
             }
             fill = f;
         }
-        if over.says == CELL {
+        if over.answer == CELL {
             let (f, theirs) = cover(fill, over.asset, over.fill);
             if theirs {
                 [val, four] = laid;
@@ -271,7 +271,7 @@ pub fn node<H: ground::Resident, W: BrickSource, L: Table, P: Table>(
         let asset = if filled == 0 {
             // Nothing is kept: the cell is air, and placed air where what is placed is air.
             [
-                if over.says == CELL && over.asset == AIR {
+                if over.answer == CELL && over.asset == AIR {
                     PLACED_ASSET | AIR
                 } else {
                     VOID

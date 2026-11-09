@@ -485,14 +485,11 @@ impl Model {
         palette: &'a [f32],
         vertices: Range<usize>,
     ) -> impl Iterator<Item = [f32; 3]> + 'a {
-        let count = self.vertex_cnt as usize;
-        let column = move |k: usize| k * count;
+        let cnt = self.vertex_cnt as usize;
+        let column = move |k: usize| k * cnt;
         // SAFETY: the model's block, written (`seal`): its vertex columns first.
         let w = unsafe {
-            core::slice::from_raw_parts(
-                mem::at::<u32>(self.at),
-                count * MODEL_VERTEX_WORDS as usize,
-            )
+            core::slice::from_raw_parts(mem::at::<u32>(self.at), cnt * MODEL_VERTEX_WORDS as usize)
         };
         vertices.map(move |v| {
             let p = [0, 1, 2].map(|k| f32::from_bits(w[column(0) + v * 3 + k]));
@@ -550,7 +547,7 @@ impl Model {
         );
         let to = at + far;
         let j = reach.partition_point(|&r| r < to);
-        let gone = match j {
+        let end = match j {
             0 => time,
             j if j >= reach.len() => f32::INFINITY,
             j => {
@@ -558,7 +555,7 @@ impl Model {
                 keys[j - 1] + (keys[j] - keys[j - 1]) * w
             }
         };
-        gone.max(time).min(turn)
+        end.max(time).min(turn)
     }
 
     /// Derives a clip's motion, keys, reach and turns from its pose and
@@ -647,7 +644,7 @@ impl Model {
             self.pose(Some((clip as u32, times[k])), &mut local);
             self.palette(&local, &mut global, &mut palette);
             far = far.max(apart(&palette, &first));
-            let mut gone = 0.0f32;
+            let mut step_reach = 0.0f32;
             for from in (0..cnt).step_by(STEPS_PER_PAUSE) {
                 if from > 0 {
                     pause().await;
@@ -655,11 +652,11 @@ impl Model {
                 let run = from..cnt.min(from + STEPS_PER_PAUSE);
                 for (was, q) in drawn[run.clone()].iter_mut().zip(self.skin(&palette, run)) {
                     let d = [0, 1, 2].map(|i| q[i] - was[i]);
-                    gone = gone.max((d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt());
+                    step_reach = step_reach.max((d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt());
                     *was = q;
                 }
             }
-            reach[k] = reach[k - 1] + gone;
+            reach[k] = reach[k - 1] + step_reach;
             for (o, (p, l)) in out.iter_mut().zip(palette.iter().zip(&last)) {
                 *o = p - l;
             }

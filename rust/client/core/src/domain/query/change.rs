@@ -1,8 +1,8 @@
 // pxl-core/domain/query/change.rs
 
 //! Where the ground's answers moved since the frame turn before: the ground
-//! tiles whose answer moved, by identity, which fixes their contents, and the
-//! boxes where objects were written. A reader that keeps an answer asks again
+//! tiles and clipmap bricks whose answer moved, by identity, which fixes their
+//! contents, and the boxes where objects were written. A reader that keeps an answer asks again
 //! only when one of these touches the columns it read, which its queries
 //! report (`Footprint`). A change so reaches only the readers of the ground
 //! it touches.
@@ -31,8 +31,8 @@ fn changes() -> &'static mut ChangeLog {
 }
 
 /// Takes the frame turn's changes from the ground's tile cache and the object
-/// store, replacing the last turn's. Each ground tile appears once, however
-/// many of its bricks or entries moved. True when anything moved.
+/// store, replacing the last turn's. Each ground node appears once, however
+/// many times it moved. True when anything moved.
 pub(crate) fn take() -> bool {
     let c = changes();
     TerrainTile::tile_cache().take_changed(&mut c.ground);

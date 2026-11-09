@@ -48,7 +48,7 @@ inline std::uint32_t stack_high() noexcept {
 }
 
 // This is the size in bytes of the memory the runtime has given the module.
-inline std::uint64_t given() noexcept {
+inline std::uint64_t mem_sz() noexcept {
     return std::uint64_t{__builtin_wasm_memory_size(0)} * WASM_PAGE_BYTES;
 }
 

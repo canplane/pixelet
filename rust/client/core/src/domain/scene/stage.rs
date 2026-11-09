@@ -90,16 +90,16 @@ pub struct FrameReport {
 }
 
 /// `pace` is how the turn paced this frame, and the drawn resolution is
-/// judged by it (domain/scene/resolution.rs `load`). `edits` is the pointer's
+/// judged by it (domain/scene/resolution.rs `load`). `edit` is the pointer's
 /// preview, by which the GPU's rays cut the world.
-pub fn stage_render(pace: Pace, edits: &RenderEdit) -> FrameReport {
+pub fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
     let v = view();
     let settings = settings();
     // The matrices are relative to the eye, as the draws' positions are, so
     // no large eye position cancels in f32.
     let (view_proj, rot) = v.eye_frame();
-    let lists = draw_list().take();
-    let receivers = lists.receivers;
+    let update = draw_list().take();
+    let receivers = update.receivers;
     let models = model::models();
     // Each decor variant takes the slot of its draw group (pxl-content
     // generation.rs `first_group`).
@@ -136,7 +136,9 @@ pub fn stage_render(pace: Pace, edits: &RenderEdit) -> FrameReport {
     let (window, layers) = earth_window(Earth::demand().floor(), on);
     let mut earth_upload = move |write: &mut dyn FnMut(u32, &[u8]) -> bool| earth_upload(write, on);
     let o = observation::observation();
-    let eye = o.as_ref().and_then(|o| cast::eye(o, edits));
+    let eye = o
+        .as_ref()
+        .and_then(|o| cast::eye(o, edit, settings.ray_steps));
     let mut terrain_upload = clipmap::upload;
     let animated = animation::take();
     let out = render_frame(FrameInput {
@@ -167,9 +169,10 @@ pub fn stage_render(pace: Pace, edits: &RenderEdit) -> FrameReport {
         screen_ao: settings.ao == AoMode::screen,
         low_spec: !settings.textures,
         shadows: settings.shadows,
+        camera_gizmo: settings.camera_gizmo,
         clouds: cloud::clouds_shown(),
         drift: environment_drift(),
-        lists,
+        update,
         environment: environment_words(),
         decor: &decor,
         skins: &skins[..skin_cnt],
@@ -177,7 +180,7 @@ pub fn stage_render(pace: Pace, edits: &RenderEdit) -> FrameReport {
         pack: load_of(pack).and_then(load_image),
         moon: load_of(moon::picture).and_then(load_image),
         earth: load_image(EARTH),
-        earth_tiles: EarthLayer {
+        earth_layer: EarthLayer {
             window,
             layers: &layers,
             upload: &mut earth_upload,
@@ -194,7 +197,7 @@ pub fn stage_render(pace: Pace, edits: &RenderEdit) -> FrameReport {
             objects: cast::objects(),
             decor: gpu::frame(),
             receivers,
-            ray_counts: settings.ray_counts,
+            ray_cnts: settings.ray_cnts,
         }),
         text: marker::text_raster,
         atlas: atlas(),
@@ -225,13 +228,13 @@ pub fn stage_render(pace: Pace, edits: &RenderEdit) -> FrameReport {
 
 /// The scene's part of a turn (turn.rs `scene_tick`), handed what control
 /// decided. `pivot` and `heading` are the camera's and place the world gizmo.
-/// `edits` is the pointer's preview, and decor leaves out what it hides. `draft` is the
+/// `edit` is the pointer's preview, and decor leaves out what it hides. `draft` is the
 /// marker tool's draft, which the markers show.
 pub fn scene_step(
     ctx: &mut TickContext,
     pivot: Option<q3::Q3>,
     heading: Option<f64>,
-    edits: &RenderEdit,
+    edit: &RenderEdit,
     draft: Option<&Draft>,
 ) {
     let v = view();
@@ -255,7 +258,7 @@ pub fn scene_step(
     let (list, models) = (draw_list(), model::models());
     let animating = scene::animate(list, models, &frame);
     scene::draw(list, models);
-    gpu::step(frame.eye, edits);
+    gpu::step(frame.eye, edit);
     cloud::step(draw_list(), &frame, &ctx.pass);
     marker::step(ctx, &frame, draft);
     marker::draw(draw_list());

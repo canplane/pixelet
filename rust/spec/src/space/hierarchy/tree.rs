@@ -47,20 +47,20 @@ pub fn child_of<const D: usize>(at: [i32; D], idx: usize) -> [i32; D] {
     std::array::from_fn(|i| 2 * at[i] + ((idx >> i) & 1) as i32)
 }
 
-pub fn ancestor_of<const D: usize>(at: [i32; D], steps: u32) -> [i32; D] {
-    at.map(|v| v >> steps)
+pub fn ancestor_of<const D: usize>(at: [i32; D], step_cnt: u32) -> [i32; D] {
+    at.map(|v| v >> step_cnt)
 }
 
-/// Where `at` lies in its ancestor `steps` up, from that ancestor's first
+/// Where `at` lies in its ancestor `step_cnt` up, from that ancestor's first
 /// descendant.
-pub(crate) fn off_in<const D: usize>(at: [i32; D], steps: u32) -> [i32; D] {
-    at.map(|v| v & ((1 << steps) - 1))
+pub(crate) fn off_in<const D: usize>(at: [i32; D], step_cnt: u32) -> [i32; D] {
+    at.map(|v| v & ((1 << step_cnt) - 1))
 }
 
-/// The descendant `steps` down that takes slot 0 at every step: the inverse of
+/// The descendant `step_cnt` down that takes slot 0 at every step: the inverse of
 /// `ancestor_of`.
-pub fn first_descendant_of<const D: usize>(at: [i32; D], steps: u32) -> [i32; D] {
-    at.map(|v| v << steps)
+pub fn first_descendant_of<const D: usize>(at: [i32; D], step_cnt: u32) -> [i32; D] {
+    at.map(|v| v << step_cnt)
 }
 
 /// Whether two nodes overlap; in one hierarchy they nest or are apart.

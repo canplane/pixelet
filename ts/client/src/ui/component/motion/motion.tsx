@@ -52,7 +52,7 @@ export function Motion({
 }: MotionProps) {
   const node = useRef<View | null>(null);
   const running = useRef<Animation | null>(null);
-  const stood = useRef<Required<Pose> | null>(null);
+  const rest = useRef<Required<Pose> | null>(null);
   const replays = useReplay(replay);
   const settled = useRef(onSettled);
   settled.current = onSettled;
@@ -66,7 +66,7 @@ export function Motion({
     const replaying = replays();
 
     let start: Keyframe | null;
-    if (stood.current === null || replaying) {
+    if (rest.current === null || replaying) {
       start = from ? keyframe(resolve(from)) : null;
     } else if (running.current !== null) {
       // The computed style is read before the cancel, because only while the
@@ -74,12 +74,12 @@ export function Motion({
       const computed = getComputedStyle(el);
       start = { opacity: computed.opacity, transform: computed.transform };
     } else {
-      start = same(stood.current, target) ? null : keyframe(stood.current);
+      start = same(rest.current, target) ? null : keyframe(rest.current);
     }
 
     running.current?.cancel();
     running.current = null;
-    stood.current = target;
+    rest.current = target;
 
     if (start === null) {
       settled.current?.();
@@ -104,7 +104,7 @@ export function Motion({
     () => () => {
       running.current?.cancel();
       running.current = null;
-      stood.current = null;
+      rest.current = null;
     },
     [],
   );

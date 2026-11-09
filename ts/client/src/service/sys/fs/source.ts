@@ -50,7 +50,7 @@ function is_version(s: string): boolean {
  * the shape is checked here. Whether the core follows the zoom, the formats
  * and the shard names is the core's to decide, and it refuses what it does not
  * (pxl-core sys/io/source.rs). */
-export function declaration(text: string): Declaration | null {
+export function decl(text: string): Declaration | null {
   let d: unknown;
   try {
     d = JSON.parse(text);
@@ -101,7 +101,7 @@ export function declaration(text: string): Declaration | null {
 }
 
 let state: Source = SOURCE_ASKING;
-let cur_declaration: Declaration | null = null;
+let cur_decl: Declaration | null = null;
 const listeners = new ListenerSet();
 
 function set(next: Source): void {
@@ -114,12 +114,12 @@ export function source_state(): Source {
 }
 
 /** The declaration handed to the core, or null before it is handed. */
-export function source_declaration(): Declaration | null {
-  return cur_declaration;
+export function source_decl(): Declaration | null {
+  return cur_decl;
 }
 
 export function source_versions(): Declaration["version"] | null {
-  return cur_declaration?.version ?? null;
+  return cur_decl?.version ?? null;
 }
 
 export const watch_source = listeners.watch;
@@ -142,11 +142,8 @@ export function settled(): Promise<boolean> {
 /** On a page, the core and the asking for the declaration run in a worker.
  * The page's thread holds no files, so the UI learns the source's state and
  * declaration through this (runtime/open.ts). */
-export function mirror_source(
-  next: Source,
-  declaration: Declaration | null,
-): void {
-  cur_declaration = declaration;
+export function mirror_source(next: Source, decl: Declaration | null): void {
+  cur_decl = decl;
   set(next);
 }
 
@@ -158,7 +155,7 @@ export function mirror_source(
 const ASK_AGAIN_MS = 2_000;
 const ASK_AGAIN_MOST_MS = 60_000;
 
-async function ask_declaration(): Promise<string | null> {
+async function ask_decl(): Promise<string | null> {
   try {
     const res = await get(TILE_SOURCE_ROUTE);
     if (res.ok) return await res.text();
@@ -187,7 +184,7 @@ export type SendSource = (
 /** Resolves once the source is declared or refused. `source_state` then says
  * which. */
 export async function declare_source(send: SendSource): Promise<void> {
-  let source = await ask_declaration();
+  let source = await ask_decl();
   let wait_ms = ASK_AGAIN_MS;
   while (source === null) {
     if (online()) {
@@ -197,9 +194,9 @@ export async function declare_source(send: SendSource): Promise<void> {
       );
       wait_ms = Math.min(2 * wait_ms, ASK_AGAIN_MOST_MS);
     } else await when_online();
-    source = await ask_declaration();
+    source = await ask_decl();
   }
-  const read = declaration(source);
+  const read = decl(source);
   if (read === null) {
     console.error(
       "[source] the declaration is not one this client reads: a kind unversioned, a version no URL segment, a zoom or format not a u32, or no shards",
@@ -210,7 +207,7 @@ export async function declare_source(send: SendSource): Promise<void> {
   const shards = Object.keys(read.shard);
   // This is set before SOURCE_DECLARE is sent, because a frame that runs
   // inside that call already opens tiles under the declaration.
-  cur_declaration = read;
+  cur_decl = read;
   if (
     !send(
       read.min_zoom,
@@ -221,7 +218,7 @@ export async function declare_source(send: SendSource): Promise<void> {
     console.error(
       `[source] the core took no declaration of formats ${JSON.stringify(read.format)} and ${shards.length} shards`,
     );
-    cur_declaration = null;
+    cur_decl = null;
     set(SOURCE_REFUSED);
     return;
   }

@@ -18,4 +18,8 @@ declare global {
   /** Where the tiles come from: `delivery` for the deployment's, or `oven` or
    * `shelf` for the local servers of the dev tasks named after them. */
   const __DEV_SOURCE__: string;
+
+  /** Whether this is a build made for measuring, which runs the drive at boot
+   * (`PXL_PERF_DRIVE=1`). */
+  const __PERF_DRIVE__: boolean;
 }

@@ -106,7 +106,7 @@ comparing with one; nothing in the pyramid counts in it.
 
 ## The pyramid
 
-A terrain tile is fetched at every zoom from the leaves (`layer/tile.rs`
+A terrain tile is fetched at every zoom from the leaves (`layer/quadrant.rs`
 `LEAF_ZOOM`) to the coarsest its layer is read at (`layer/lattice.rs`
 `coarsest`), each a tile of the same record.
 
@@ -125,9 +125,8 @@ are z + 9, a layer's cells always its tile's zoom plus the layer's own constant
 world). Its key is a 2D Morton key, a digit a zoom (`hierarchy/morton.rs`), so a
 tile's key is a prefix of its children's: a leaf's key shifted down 15 − z, and
 a key alone does not say by how much, so a tile is named by its zoom and a key
-together (`Quadrant`, `layer/tile.rs`); the tile at a zoom over a leaf is
-`Quadrant::over`, and a tile's first leaf, which 512u square it begins at, is
-`first_leaf`.
+together (`Quadrant`, `layer/quadrant.rs`); the tile at a zoom over a leaf is
+`Quadrant::over`.
 
 The distance chooses a cell zoom (`camera/grid.rs` `cell_zoom_at`), and
 terrain's tile zoom is the one whose cells those are (pxl-engine
@@ -146,19 +145,18 @@ tree's own, and follow from what it represents:
 
 |                                                           | axes | resident                                                                              | a node holds                                                    | stored                                                                                                                                       | walked                                                          |
 | --------------------------------------------------------- | ---- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| the pyramid (`layer/tile.rs`)                             | 2    | resident by tile: one can be missing                                                  | a layer's fold of all under it                                  | a record a tile                                                                                                                              | from a point, up to the nearest resident tile                   |
-| a clip level's bound (pxl-engine clipmap.rs `bounded`) | 2    | with its brick, while a clip level about the eye, the pivot or a destination holds it | the lowest and highest drawn under a cell, the ways' included   | made by the GPU from a brick's cells and its ways, a level a zoom to the brick whole, and read back; bricks joined to the clip level's width | a coarse cell passed whole where a ray is above it              |
-| the objects (pxl-core domain/layer/object/store.rs)       | 3    | whole                                                                                 | its leaf's value, or the majority of its eight, read when asked | the leaves alone, one tree a column (`hierarchy/sparse_tree.rs`)                                                                             | down a cube's key range, by a box, or along a ray nearest first |
+| the pyramid (`layer/quadrant.rs`)                         | 2    | resident by tile: one can be missing                                                  | a layer's fold of all under it                                  | a record a tile                                                                                                                              | from a point, up to the nearest resident tile                   |
+| a clip level's bound (pxl-engine clipmap.rs `bounded`) | 2    | with its brick, while a clip level about the eye, the pivot or a destination holds it | the lowest and highest drawn under a cell, the ways' included   | made by the CPU as a brick is filled, a level a zoom to the brick whole, and uploaded; bricks joined to the clip level's width               | a coarse cell passed whole where a ray is above it              |
+| the objects (pxl-core domain/layer/object/store.rs)       | 3    | by shard; where one is not read, the top's fold stands in                             | its leaf's value, or its eight folded, at every write           | the leaves and each branch's fold, one tree (`hierarchy/sparse_tree.rs`)                                                                     | down a cube's key range, by a box, or along a ray nearest first |
 
 The pyramid is a tree across zooms: every tile holds a summary of the ground
 under it — terrain's cells voted and averaged, places summed — so a far view
 draws a coarse zoom as it is, the way a mipmap is read. Placed objects need a
-tree of another kind: they are all resident, mostly empty space, and
-three-dimensional, so what matters is storing them without their empty cells.
-They are kept as their leaves alone, in a **sparse tree** whose branches hold
-nothing but the way down: a node's summary is read from what is under it when
-asked, a write splits only its path, and eight equal leaves are joined into
-their parent.
+tree of another kind: they are mostly empty space, and three-dimensional, so
+what matters is storing them without their empty cells. They are kept in a
+**sparse tree** of their leaves, each branch holding its children's fold: a
+write splits only its path and folds again up it, and eight equal leaves are
+joined into their parent.
 
 The two ways of stopping are one rule. A node stops growing where it already
 says all of the ground under it, and a coarser cell of equal ones is the case
@@ -168,23 +166,9 @@ fold: a tile of places marks a child none when no cell over it holds two places,
 so the tree of places is only as deep as a crowd needs, and terrain marks only a
 child that is the zero tile, its vote being lossy.
 
-They stay two because one is resident by tile and the other is not. Objects keep
-no coarse zoom: their query folds a node's leaves when it is asked. Were objects
-ever resident by tile, their branches would be a layer of the pyramid, and a
-child group of equal leaves joined its occupancy.
-
 A ray crosses the pyramid and the objects in one descent (pxl-engine
 `cast.rs` `first`, which pxl-core domain/query/ray.rs `first_hit` takes on the
 CPU), each node answered from the ground and what is placed together
 (pxl-engine `world.rs` `node`). Where the tile a node needs is missing, the
 answer says so: a coarser tile answers in its place, or, with none held, the ray
 stops there and tells nothing past it.
-
-## What else is here
-
-|                              |                                                                                                                                     |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| [`coord/`](./coord/)         | where and how big: a position (`q3.rs`), sizes as zooms (`zoom.rs`), what a position means (`world.rs`), the adapters, `v3`, `mat4` |
-| [`hierarchy/`](./hierarchy/) | parent and child in any number of axes (`tree.rs`), a node's one key (`morton.rs`), a sparse octree (`sparse_tree.rs`)              |
-| [`camera/`](./camera/)       | the camera grid, its cell zoom a distance is drawn at (`grid.rs`), and the eye (`eye.rs`)                                           |
-| [`layer/`](./layer/)         | a layer's lattice (`lattice.rs`), the pyramid of tiles (`tile.rs`), and what an observation demands of them (`demand.rs`)           |

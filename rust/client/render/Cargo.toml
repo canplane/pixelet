@@ -24,6 +24,9 @@ pxl-content.workspace = true
 xpute-gpu.workspace = true
 
 [build-dependencies]
+# The light a debug view's color decodes to, the same bits on every machine (build.rs
+# `debug_looks`), as the crate's own is.
+libm.workspace = true
 # The zooms the screen's rays are painted by (build.rs `lattice.wgsl`) and the
 # values every shader may name (`words`); the cloud field's hash
 # (`cloud_hash.wgsl`) and where night falls (`words`), pixelet's content; every

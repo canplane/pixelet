@@ -545,31 +545,57 @@ fn one_protocol(spec: &Spec, json: &str) -> Result<Vec<Output>, String> {
     Ok(out)
 }
 
+/// Adds to the module's import from `from` each of `names` the body spells,
+/// making that import where the module has none.
+fn import_spelled(lines: &mut Vec<String>, names: Vec<&str>, from: &str) {
+    if names.is_empty() {
+        return;
+    }
+    let tail = format!(" }} from \"{from}\";");
+    let found = lines
+        .iter()
+        .position(|l| l.starts_with("import type { ") && l.ends_with(&tail));
+    let mut all: Vec<String> = found.map_or(Vec::new(), |i| {
+        lines[i]["import type { ".len()..lines[i].len() - tail.len()]
+            .split(", ")
+            .map(str::to_string)
+            .collect()
+    });
+    for n in names {
+        if !all.iter().any(|a| a == n) {
+            all.push(n.to_string());
+        }
+    }
+    all.sort();
+    let line = format!("import type {{ {}{tail}", all.join(", "));
+    match found {
+        Some(i) => lines[i] = line,
+        None => {
+            let last = lines
+                .iter()
+                .rposition(|l| l.starts_with("import "))
+                .map_or(0, |i| i + 1);
+            lines.insert(last, line);
+        }
+    }
+}
+
 /// Splices `imports` in after the module's last import and `body` at its end,
-/// and adds the word types that `body` spells to the module's import of them.
+/// and adds the word and array types that `body` spells to the module's imports
+/// of them.
 fn splice_ts(text: &str, imports: &[String], body: &[String]) -> String {
     let mut lines: Vec<String> = text.lines().map(str::to_string).collect();
     let body_text = body.join("\n");
-    for l in lines.iter_mut() {
-        if let Some(names) = l
-            .strip_prefix("import type { ")
-            .and_then(|r| r.strip_suffix(" } from \"@xpute/kit/abi/word.ts\";"))
-        {
-            let mut all: Vec<String> = names.split(", ").map(str::to_string).collect();
-            for w in ["f64", "i32", "u32", "u8"] {
-                if (body_text.contains(&format!(": {w}")) || body_text.contains(&format!("<{w}>")))
-                    && !all.iter().any(|a| a == w)
-                {
-                    all.push(w.to_string());
-                }
-            }
-            all.sort();
-            *l = format!(
-                "import type {{ {} }} from \"@xpute/kit/abi/word.ts\";",
-                all.join(", ")
-            );
-        }
-    }
+    let words = ["f64", "i32", "u32", "u8"]
+        .into_iter()
+        .filter(|w| body_text.contains(&format!(": {w}")) || body_text.contains(&format!("<{w}>")))
+        .collect();
+    import_spelled(&mut lines, words, "@xpute/kit/abi/word.ts");
+    let arrays = ["U32Array"]
+        .into_iter()
+        .filter(|a| body_text.contains(a))
+        .collect();
+    import_spelled(&mut lines, arrays, "@xpute/kit/abi/array.ts");
     let last = lines
         .iter()
         .rposition(|l| l.starts_with("import "))

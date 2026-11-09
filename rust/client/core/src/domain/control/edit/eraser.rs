@@ -30,7 +30,7 @@ pub(super) fn tap(hover: &Hover) {
 pub(super) fn preview(hover: &Hover) -> Preview {
     let (object, zoom) = hover.object();
     let prop = hover.prop();
-    let edits = RenderEdit {
+    let edit = RenderEdit {
         hide: object.map(|o| o.id()),
         // Over bare terrain, an AIR entry that is never written goes into the
         // drawn build, so what lies one voxel below shows through the ghost.
@@ -43,7 +43,7 @@ pub(super) fn preview(hover: &Hover) -> Preview {
     Preview {
         object,
         zoom,
-        edits,
+        edit,
         ..Preview::default()
     }
 }

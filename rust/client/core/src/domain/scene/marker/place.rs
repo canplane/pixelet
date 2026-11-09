@@ -108,12 +108,12 @@ pub(super) fn show(read: &mut [Place], eye: V3, out: &mut Vec<Instance>) {
         let Some(top) = top_at(p, GROUND.read_zoom(cell_zoom)) else {
             continue;
         };
-        let stands = p.ground.center(top);
+        let pos = p.ground.center(top);
         out.push(Instance {
             key: p.key,
             design,
-            stands,
-            tap: Some(MarkerHit::To(stands)),
+            pos,
+            tap: Some(MarkerHit::To(pos)),
         });
     }
 }

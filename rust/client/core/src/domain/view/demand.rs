@@ -97,7 +97,7 @@ pub struct Layer {
     pub stream: Stream,
     /// The most tiles the layer asks for at once: a base layer's tile cache
     /// slots, or for the objects the shards around the eye or their top.
-    pub slots: u32,
+    pub slot_cnt: u32,
     /// Called when a want's file arrives, with the want's id and the file, or
     /// with None when the source has nothing for it.
     on_arrival: fn(u64, Option<Block>, &mut PhaseList) -> Result<(), Failure>,
@@ -106,7 +106,7 @@ pub struct Layer {
 const fn layer<L: ViewLayer>() -> Layer {
     Layer {
         stream: L::STREAM,
-        slots: TileCache::<L>::SLOTS,
+        slot_cnt: TileCache::<L>::SLOTS,
         on_arrival: on_arrived::<L>,
     }
 }
@@ -122,7 +122,7 @@ const LAYERS: [Layer; 5] = [
     layer::<DivisionTile>(),
     Layer {
         stream: Stream::object,
-        slots: repository::WANTS,
+        slot_cnt: repository::WANTS,
         on_arrival: repository::on_arrived,
     },
 ];
@@ -206,12 +206,12 @@ pub struct Demand<L: ViewLayer> {
     /// order named, before any was asked for. An observation that names the
     /// same tiles and the same floor asks for what that one asked
     /// (`names_same`).
-    required: Vec<Quadrant>,
+    last_tiles: Vec<Quadrant>,
     floor: Vec<Quadrant>,
     /// The asks an observation found absent. Their absence is written only
     /// once all are found (`observe`). The vector is reused across
     /// observations.
-    gone: Vec<Quadrant>,
+    absent_tiles: Vec<Quadrant>,
     /// Whether what the layer reads moved since it last observed.
     changed: bool,
     /// The room an observation builds the estimator's tiles and its asks in,
@@ -226,7 +226,7 @@ pub struct Demand<L: ViewLayer> {
     /// or a floor tile is judged by itself. Only the asks left unanswered,
     /// the wants, are read, since only their order matters (`policy::rank`),
     /// and the pairs are kept to order the wants again (`reorder`).
-    placed: Vec<(Quadrant, Quadrant)>,
+    ask_tiles: Vec<(Quadrant, Quadrant)>,
     /// The tile cache's revision when `idle` last ran. None while the layer
     /// steps.
     idle_revision: Option<u32>,
@@ -241,15 +241,15 @@ impl<L: ViewLayer> Default for Demand<L> {
             wants: Vec::new(),
             orders: Vec::new(),
             last: None,
-            required: Vec::new(),
+            last_tiles: Vec::new(),
             floor: Vec::new(),
-            gone: Vec::new(),
+            absent_tiles: Vec::new(),
             changed: false,
             asks: FnvHashMap::with_capacity_and_hasher(
                 TileCache::<L>::SLOTS as usize,
                 Default::default(),
             ),
-            placed: Vec::new(),
+            ask_tiles: Vec::new(),
             idle_revision: None,
         }
     }
@@ -283,11 +283,11 @@ impl<L: ViewLayer> Demand<L> {
         // two equally late, the greater.
         let o = self.observation.as_ref();
         let farthest = |tiles: &mut dyn Iterator<Item = Quadrant>| {
-            let mut walked = ColumnWalk::default();
+            let mut walk = ColumnWalk::default();
             tiles.max_by_key(|&t| {
                 (
                     o.map_or(Order::LAST, |o| {
-                        observation::order_of_tile(o, L::LATTICE, t, &mut walked)
+                        observation::order_of_tile(o, L::LATTICE, t, &mut walk)
                     }),
                     t,
                 )
@@ -307,8 +307,8 @@ impl<L: ViewLayer> Demand<L> {
     ) {
         let mut demand = core::mem::take(&mut self.demand);
         let mut asks = core::mem::take(&mut self.asks);
-        let mut placed = core::mem::take(&mut self.placed);
-        placed.clear();
+        let mut ask_tiles = core::mem::take(&mut self.ask_tiles);
+        ask_tiles.clear();
         // An ask in the view starts last in order. Its place, the earliest of
         // the tiles it is asked by, is read later, and only for a want
         // (`reorder`).
@@ -321,19 +321,19 @@ impl<L: ViewLayer> Demand<L> {
                 order: Order::LAST,
             };
             asks.entry(p).and_modify(|b| *b = b.best(a)).or_insert(a);
-            placed.push((p, of));
+            ask_tiles.push((p, of));
         };
-        let mut lines = Path::default();
-        self.required.clear();
+        let mut path = Path::default();
+        self.last_tiles.clear();
         if let Some(o) = o {
             if matches!(L::ASK_SCOPE, AskScope::View) {
                 estimator.requirements(o, &mut |p| demand.push(p));
             }
-            self.required.extend_from_slice(&demand);
+            self.last_tiles.extend_from_slice(&demand);
             demand.sort_unstable_by_key(|p| key_of::<2>(p.zoom, p.at));
             demand.dedup();
             for &p in &demand {
-                let at = L::tile_cache().seek(&mut lines, p).src.unwrap_or(p);
+                let at = L::tile_cache().seek(&mut path, p).src.unwrap_or(p);
                 ask(&mut asks, at, Priority::Demand, p);
                 // An ancestor already asked has its line asked up to the top,
                 // so the walk up stops there.
@@ -405,38 +405,39 @@ impl<L: ViewLayer> Demand<L> {
         demand.clear();
         demand.extend(asks.keys().copied());
         demand.sort_unstable_by_key(|p| p.id());
-        let unanswered = |p: Quadrant, lines: &mut Path| {
+        let unanswered = |p: Quadrant, path: &mut Path| {
             let r = L::tile_cache();
-            !r.resident(p) && (!r.seek(lines, p).settled || r.is_again_held(p))
+            !r.resident(p) && (!r.seek(path, p).settled || r.needs_refetch(p))
         };
         // A tile that no served shard is over or under is answered as absent
         // and never asked for. Every ask is judged against the tile cache as
         // the asks left it, before any absence is written, so which tiles
         // are absent does not depend on the order they are taken in.
         if let Some(layer) = L::STREAM.bake() {
-            let (mut gone, mut lines) = (core::mem::take(&mut self.gone), Path::default());
-            gone.clear();
-            gone.extend(
+            let (mut absent_tiles, mut path) =
+                (core::mem::take(&mut self.absent_tiles), Path::default());
+            absent_tiles.clear();
+            absent_tiles.extend(
                 demand
                     .iter()
                     .copied()
-                    .filter(|&p| unanswered(p, &mut lines) && !source::serves(layer, p)),
+                    .filter(|&p| unanswered(p, &mut path) && !source::serves(layer, p)),
             );
-            for &p in &gone {
+            for &p in &absent_tiles {
                 self.absent(p);
             }
-            self.gone = gone;
+            self.absent_tiles = absent_tiles;
         }
         // The wants are listed by id, the order a stream's wants are declared
         // in (sys/io/request.rs `declare`). A tile's id is its key, so each
         // line read steps on from its neighbor's. They are listed after every
         // absence is written, then placed in the view (`reorder`).
-        placed.sort_unstable_by_key(|&(p, of)| (p.id(), of.id()));
-        let mut lines = Path::default();
+        ask_tiles.sort_unstable_by_key(|&(p, of)| (p.id(), of.id()));
+        let mut path = Path::default();
         self.wants.clear();
         self.orders.clear();
         for &p in &demand {
-            if unanswered(p, &mut lines) {
+            if unanswered(p, &mut path) {
                 let a = asks[&p];
                 self.orders.push(a.order);
                 self.wants.push((p.id(), a.order));
@@ -444,7 +445,7 @@ impl<L: ViewLayer> Demand<L> {
         }
         asks.clear();
         self.asks = asks;
-        self.placed = placed;
+        self.ask_tiles = ask_tiles;
         demand.clear();
         self.demand = demand;
         self.reorder(o);
@@ -456,24 +457,24 @@ impl<L: ViewLayer> Demand<L> {
     /// the wants' order moves.
     fn names_same(&self, o: &Observation, estimator: &ByEye, top: Zoom) -> bool {
         (!matches!(L::ASK_SCOPE, AskScope::View)
-            || names(&self.required, |each| estimator.requirements(o, each)))
+            || names(&self.last_tiles, |each| estimator.requirements(o, each)))
             && (matches!(L::ASK_SCOPE, AskScope::Line)
                 || names(&self.floor, |each| floor::floor(o, top, each)))
     }
 
     /// Places the wants in the view of `o`. A want takes its own order, which
     /// puts a destination's first, or else the earliest place of the tiles
-    /// it is asked by (`placed`). The places are read in one walk down the
+    /// it is asked by (`ask_tiles`). The places are read in one walk down the
     /// pyramid in key order, so each tile's ground steps on from its
     /// neighbor's. The result depends on what is asked and on `o` alone, so a
     /// turn that asks what the last one did only needs this.
     fn reorder(&mut self, o: Option<&Observation>) {
         let mut ground = ColumnWalk::default();
-        let mut placed = self.placed.iter().peekable();
+        let mut ask_tiles = self.ask_tiles.iter().peekable();
         for ((id, order), &base) in self.wants.iter_mut().zip(&self.orders) {
             *order = base;
-            while placed.next_if(|(q, _)| q.id() < *id).is_some() {}
-            while let Some(&(_, of)) = placed.next_if(|(q, _)| q.id() == *id) {
+            while ask_tiles.next_if(|(q, _)| q.id() < *id).is_some() {}
+            while let Some(&(_, of)) = ask_tiles.next_if(|(q, _)| q.id() == *id) {
                 if let Some(o) = o {
                     *order =
                         (*order).min(observation::order_of_tile(o, L::LATTICE, of, &mut ground));
@@ -654,7 +655,7 @@ pub fn admit_arrived(pass: &Pass) {
                 return false;
             };
             // A key the request scheduler no longer holds belongs to a request
-            // a reset forgot.
+            // stopped or reset since it was answered.
             if attempt_of(key).is_none() {
                 release(block);
                 return false;

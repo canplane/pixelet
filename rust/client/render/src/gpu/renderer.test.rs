@@ -441,15 +441,15 @@ fn a_frame_decides_as_its_conditions_did_over_every_read() {
         let bit = |k: u32| b >> k & 1 != 0;
         let r = FrameRead {
             partial: bit(0),
-            stands: bit(1),
+            still: bit(1),
             lists_same: bit(2),
             clouds_damage: bit(3),
             unmasked: bit(4),
             casts_px: bit(5),
             light_casts: bit(6),
         };
-        let quiet = r.stands && r.lists_same && !r.clouds_damage;
-        let masked = r.partial && r.stands && !r.unmasked;
+        let quiet = r.still && r.lists_same && !r.clouds_damage;
+        let masked = r.partial && r.still && !r.unmasked;
         let unchanged = quiet && !r.casts_px && !r.light_casts;
         let d = FramePlan::of(r);
         assert_eq!(
@@ -463,7 +463,7 @@ fn a_frame_decides_as_its_conditions_did_over_every_read() {
         );
         assert!(!d.unchanged || d.quiet, "{r:?}: what is unchanged is quiet");
         assert!(
-            !(d.masked || d.quiet) || r.stands,
+            !(d.masked || d.quiet) || r.still,
             "{r:?}: what is masked or quiet stands"
         );
     }

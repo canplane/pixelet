@@ -218,11 +218,11 @@ pub(crate) async fn search(
     // to the city it is named for while it sits in the next.
     let xs: Vec<f64> = place_rows.iter().map(|r| r.x3857).collect();
     let ys: Vec<f64> = place_rows.iter().map(|r| r.y3857).collect();
-    let place_context = division::name_points(pool, &xs, &ys).await?;
+    let place_ctx = division::name_points(pool, &xs, &ys).await?;
 
     let place_results = place_rows
         .into_iter()
-        .zip(place_context)
+        .zip(place_ctx)
         .map(|(r, context)| SearchResult {
             gers_id: r.gers_id,
             name: r.name,

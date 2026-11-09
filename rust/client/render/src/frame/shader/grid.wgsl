@@ -12,6 +12,12 @@ fn sample_word(s: vec2<u32>) -> u32 {
   return eye_word(GRID + GRID_SAMPLES_AT) + (s.y * eye_word(GRID + GRID_SAMPLES) + s.x) * SAMPLE_WORDS;
 }
 
+/// The steps of the beam ray whose line the rays of cell `c` go on from (`beam::LINE_STEPS`),
+/// which each of those rays counts as its own in the ray steps view (pxl-engine `eye::STEPS`).
+fn beam_steps(c: vec2<u32>) -> u32 {
+  return beams[beams[cell_start(c) + CELL_CORNER] * LINE_WORDS + LINE_STEPS];
+}
+
 /// The tangents across and up of the ray of drawn pixel `p`, in a target of `size` pixels with
 /// row 0 at the top. The ray leaves the pixel's middle moved by the eye's jitter. This is the
 /// one place a drawn pixel's ray is worked out, and every pass that walks or marks one reads it

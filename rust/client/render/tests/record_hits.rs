@@ -75,12 +75,12 @@ fn world_bufs(gpu: &Gpu, built: &Built) -> WorldBuffer {
     let flat_u = |rows: &[[u32; 4]]| rows.iter().flatten().copied().collect::<Vec<u32>>();
     let clip: Vec<u32> = built.clipmap.iter().flatten().map(|&v| v as u32).collect();
     WorldBuffer {
-        clip: gpu.buffer(&clip, store_of()),
-        ground: gpu.buffer(&built.ground, store_of()),
-        palette: gpu.buffer(&built.palette, store_of()),
-        shards: gpu.buffer(&flat_u(&built.shards), store_of()),
-        placed: gpu.buffer(&built.objects, store_of()),
-        pool: gpu.buffer(&built.pool, store_of()),
+        clip: gpu.buf(&clip, store_of()),
+        ground: gpu.buf(&built.ground, store_of()),
+        palette: gpu.buf(&built.palette, store_of()),
+        shards: gpu.buf(&flat_u(&built.shards), store_of()),
+        placed: gpu.buf(&built.objects, store_of()),
+        pool: gpu.buf(&built.pool, store_of()),
     }
 }
 
@@ -475,7 +475,7 @@ fn record_want(
     args: &mut [u32],
     hits: &[Hit],
     reads: bool,
-    kinds: &mut KindCount,
+    kind_cnt: &mut KindCount,
 ) -> BTreeMap<u32, Ask> {
     let frame = cache[node_cache::FRAME as usize];
     let found: Vec<Option<u32>> = hits.iter().map(|h| drawer(cache, h)).collect();
@@ -488,30 +488,30 @@ fn record_want(
     let cap = ray::HITS_A_FRAME;
     let mut asks = BTreeMap::new();
     for (h, slot) in hits.iter().zip(&found) {
-        kinds.add("hits", true);
-        kinds.add("hits, lacks", h.lacks);
-        kinds.add("hits, whole", h.whole);
-        kinds.add(
+        kind_cnt.add("hits", true);
+        kind_cnt.add("hits, lacks", h.lacks);
+        kind_cnt.add("hits, whole", h.whole);
+        kind_cnt.add(
             "hits, short of its cube",
             !h.lacks && answer::fill_eighths(h.asset[0]) < answer::EIGHTHS,
         );
         let Some(slot) = *slot else {
-            kinds.add("hits, no slot keeps the node", true);
+            kind_cnt.add("hits, no slot keeps the node", true);
             continue;
         };
         let held = holders(cache, h);
-        kinds.add("hits, the node held twice", held.len() > 1);
-        kinds.add(
+        kind_cnt.add("hits, the node held twice", held.len() > 1);
+        kind_cnt.add(
             "hits, the node held with another answer",
             entries_of(cache, h).len() > held.len(),
         );
-        kinds.add(
+        kind_cnt.add(
             "hits, the node held twice, the later draws",
             held[0] != slot,
         );
         let state = node_cache::state_at(slot) as usize;
         let drawn = before[&slot] & (record::FACES | record::ASKED) == 0;
-        kinds.add("hits, an entry drawn from now on", drawn);
+        kind_cnt.add("hits, an entry drawn from now on", drawn);
         if drawn {
             cache[node_cache::drawn_at(slot) as usize] = frame;
         }
@@ -522,8 +522,8 @@ fn record_want(
         let asked = bit << record::ASKED_SHIFT;
         let mark = if reads { bit | asked } else { bit };
         let was = cache[state];
-        kinds.add("hits, a face set already", was & mark == mark);
-        kinds.add(
+        kind_cnt.add("hits, a face set already", was & mark == mark);
+        kind_cnt.add(
             "hits, a face entered and not asked",
             reads && was & (bit | asked) == bit,
         );
@@ -575,8 +575,8 @@ fn record_want(
             ask.lines.insert(h.line);
         }
     }
-    kinds.count("asks", asks.len() as u64);
-    kinds.count(
+    kind_cnt.count("asks", asks.len() as u64);
+    kind_cnt.count(
         "asks, from either of two lines",
         asks.values().filter(|a| a.lines.len() > 1).count() as u64,
     );
@@ -594,26 +594,26 @@ fn faces_want(
     size: [u32; 2],
     cache: &[u32],
     (hits, asked): (&[Hit], &BTreeSet<u32>),
-    kinds: &mut KindCount,
+    kind_cnt: &mut KindCount,
 ) {
     let texels = (size[0] * size[1]) as usize;
     for (r, h) in hits.iter().enumerate() {
         let k = ray::FACES as usize * texels + (h.px[1] * size[0] + h.px[0]) as usize;
         let waits = rays[k] == beam::HIT_WAITS | r as u32;
-        kinds.add("hits, their pixel waits", waits);
-        kinds.add("hits, their pixel waits no longer", !waits);
+        kind_cnt.add("hits, their pixel waits", waits);
+        kind_cnt.add("hits, their pixel waits no longer", !waits);
         if !waits {
             continue;
         }
         let Some(slot) = drawer(cache, h) else {
-            kinds.add("pixels, no slot keeps the node", true);
+            kind_cnt.add("pixels, no slot keeps the node", true);
             rays[k] = 0;
             continue;
         };
         let to = node_cache::face_at(slot, h.face);
         rays[k] = cache[to as usize];
-        kinds.add("pixels, the word asked this frame", asked.contains(&to));
-        kinds.add("pixels, the word asked before", !asked.contains(&to));
+        kind_cnt.add("pixels, the word asked this frame", asked.contains(&to));
+        kind_cnt.add("pixels, the word asked before", !asked.contains(&to));
     }
 }
 
@@ -735,12 +735,12 @@ fn eye_run(gpu: &Gpu, b: &WorldBuffer, (c, s): (&EyeCase, &Screen)) -> Run {
     for k in 0..2 {
         eye[eye::JITTER + k] = s.jitter[k].to_bits();
     }
-    let eye_buf = gpu.buffer(&eye, wgpu::BufferUsages::UNIFORM);
+    let eye_buf = gpu.buf(&eye, wgpu::BufferUsages::UNIFORM);
     let mut table = vec![0u32; node_cache::WORDS as usize];
     table[node_cache::FRAME as usize] = FRAME;
-    let table_buf = gpu.buffer(&table, store_of());
-    let args_buf = gpu.buffer(&args_of(&grid), store_of());
-    let beams = gpu.buffer(&vec![0u32; grid.size() as usize], store_of());
+    let table_buf = gpu.buf(&table, store_of());
+    let args_buf = gpu.buf(&args_of(&grid), store_of());
+    let beams = gpu.buf(&vec![0u32; grid.size() as usize], store_of());
     gpu.corners(
         false,
         &world_binds(b, &eye_buf, &beams, &table_buf),
@@ -811,7 +811,7 @@ fn eye_run(gpu: &Gpu, b: &WorldBuffer, (c, s): (&EyeCase, &Screen)) -> Run {
         wgpu::TextureUsages::STORAGE_BINDING,
         &ray_words,
     );
-    let words_buf = gpu.buffer(&words, store_of());
+    let words_buf = gpu.buf(&words, store_of());
     let run = Run {
         name: format!("{}, {}", c.name, s.name),
         reads: true,
@@ -822,7 +822,7 @@ fn eye_run(gpu: &Gpu, b: &WorldBuffer, (c, s): (&EyeCase, &Screen)) -> Run {
         asks_at: grid.hit_asks_at,
         size: s.size,
         // The eye's head is all zero, as the cast binds it (gpu/ray/cast.rs `eye_header`).
-        header_buf: gpu.buffer(
+        header_buf: gpu.buf(
             &vec![0u32; light::HEADER_WORDS],
             wgpu::BufferUsages::UNIFORM,
         ),
@@ -879,8 +879,8 @@ fn lay_cells(gpu: &Gpu, b: &WorldBuffer, [eye, header]: [&wgpu::Buffer; 2], list
     list[reads..reads + tiles * tiles].fill(CAST);
     let mut table = vec![0u32; node_cache::WORDS as usize];
     table[node_cache::FRAME as usize] = FRAME;
-    let table = gpu.buffer(&table, store_of());
-    let buf = gpu.buffer(list, store_of());
+    let table = gpu.buf(&table, store_of());
+    let buf = gpu.buf(list, store_of());
     let mut binds = world_binds(b, eye, &buf, &table);
     binds.push((11, header.as_entire_binding()));
     gpu.light_beam(&binds, &buf, &table, SIZE);
@@ -932,11 +932,11 @@ fn light_run(gpu: &Gpu, b: &WorldBuffer, c: &LightCase) -> Run {
     }
     header[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
         .copy_from_slice(&starts.words());
-    let eye_buf = gpu.buffer(&eye, wgpu::BufferUsages::UNIFORM);
-    let header_buf = gpu.buffer(&header, wgpu::BufferUsages::UNIFORM);
+    let eye_buf = gpu.buf(&eye, wgpu::BufferUsages::UNIFORM);
+    let header_buf = gpu.buf(&header, wgpu::BufferUsages::UNIFORM);
 
     // Every slot of the map is listed, row after row, in the holes' list the queue takes.
-    let mut list = vec![0u32; light::buffer_words(SIZE) as usize];
+    let mut list = vec![0u32; light::buf_words(SIZE) as usize];
     let holes = light::holes_at(SIZE) as usize;
     list[holes] = SIZE * SIZE;
     for k in 0..SIZE * SIZE {
@@ -957,9 +957,9 @@ fn light_run(gpu: &Gpu, b: &WorldBuffer, c: &LightCase) -> Run {
         args: args.clone(),
         asks_at: 0,
         size: [SIZE; 2],
-        words_buf: gpu.buffer(&list, store_of()),
-        table_buf: gpu.buffer(&table, store_of()),
-        args_buf: gpu.buffer(&args, store_of()),
+        words_buf: gpu.buf(&list, store_of()),
+        table_buf: gpu.buf(&table, store_of()),
+        args_buf: gpu.buf(&args, store_of()),
         rays: texture(
             &gpu.device,
             &gpu.queue,
@@ -1017,11 +1017,11 @@ fn record_case(
     p: &wgpu::ComputePipeline,
     run: &Run,
     tally: &mut Tally,
-    kinds: &mut KindCount,
+    kind_cnt: &mut KindCount,
 ) {
     let mut cache = run.cache.clone();
     let mut args = run.args.clone();
-    let asks = record_want(&mut cache, &mut args, &run.hits, run.reads, kinds);
+    let asks = record_want(&mut cache, &mut args, &run.hits, run.reads, kind_cnt);
     gpu.dispatch(
         p,
         &run.record_binds(),
@@ -1088,13 +1088,13 @@ fn hand_eye_hits_answer_as_record() {
     let b = world_bufs(&gpu, &built);
     let p = pipeline(&gpu, COMPUTE_RECORD_HITS);
     let mut tally = Tally::default();
-    let mut kinds = KindCount::new();
+    let mut kind_cnt = KindCount::new();
     for (c, s) in eye_cases(&built) {
         let run = eye_run(&gpu, &b, (&c, &s));
-        record_case(&gpu, &p, &run, &mut tally, &mut kinds);
+        record_case(&gpu, &p, &run, &mut tally, &mut kind_cnt);
     }
     tally.end("the eye's hits");
-    kinds.hold(&[
+    kind_cnt.hold(&[
         "hits",
         "hits, lacks",
         "hits, whole",
@@ -1121,13 +1121,13 @@ fn hand_light_hits_answer_as_record() {
     let b = world_bufs(&gpu, &built);
     let p = pipeline(&gpu, COMPUTE_LIGHT_RECORD_HITS);
     let mut tally = Tally::default();
-    let mut kinds = KindCount::new();
+    let mut kind_cnt = KindCount::new();
     for c in light_cases(&built) {
         let run = light_run(&gpu, &b, &c);
-        record_case(&gpu, &p, &run, &mut tally, &mut kinds);
+        record_case(&gpu, &p, &run, &mut tally, &mut kind_cnt);
     }
     tally.end("the light's hits");
-    kinds.hold(&[
+    kind_cnt.hold(&[
         "hits",
         "hits, whole",
         "hits, short of its cube",
@@ -1152,7 +1152,7 @@ fn hand_hit_faces_answer_as_record() {
     let [hits_p, face_p, faces_p] =
         [COMPUTE_RECORD_HITS, COMPUTE_FACE, COMPUTE_RECORD_FACES].map(|id| pipeline(&gpu, id));
     let mut tally = Tally::default();
-    let mut kinds = KindCount::new();
+    let mut kind_cnt = KindCount::new();
     for (c, s) in eye_cases(&built) {
         let run = eye_run(&gpu, &b, (&c, &s));
         gpu.dispatch(
@@ -1176,7 +1176,13 @@ fn hand_hit_faces_answer_as_record() {
             })
             .collect();
         let mut want = read_texture(&gpu.device, &gpu.queue, &run.rays);
-        faces_want(&mut want, run.size, &cache, (&run.hits, &asked), &mut kinds);
+        faces_want(
+            &mut want,
+            run.size,
+            &cache,
+            (&run.hits, &asked),
+            &mut kind_cnt,
+        );
         let view = array_view(&run.rays);
         gpu.dispatch(
             &faces_p,
@@ -1214,7 +1220,7 @@ fn hand_hit_faces_answer_as_record() {
         );
     }
     tally.end("the hits' faces");
-    kinds.hold(&[
+    kind_cnt.hold(&[
         "hits, their pixel waits",
         "pixels, no slot keeps the node",
         "pixels, the word asked this frame",

@@ -53,13 +53,13 @@ async function replay(): Promise<void> {
   const names: string[] = [];
   g.each("program", (k) => names.push(g.s(k)));
   for (const p of names) {
-    const memory = new ArrayBuffer(region);
-    const bytes = new Uint8Array(memory);
-    const words = new Uint32Array(memory);
+    const mem = new ArrayBuffer(region);
+    const bytes = new Uint8Array(mem);
+    const words = new Uint32Array(mem);
     if (g.has(`${p}.input`)) bytes.set(g.bytes(`${p}.input`), inputAt);
     const runtime = new GpuRuntime(
       device,
-      () => memory,
+      () => mem,
       () => {},
     );
     const turns: string[] = [];

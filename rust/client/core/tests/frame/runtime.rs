@@ -35,7 +35,7 @@ pub struct Runtime {
     pub ui: Protocol,
     xpute: Protocol,
     fs: Protocol,
-    files: Fs,
+    disk: Fs,
     /// The core's stop report, as SYS_ABORT carried it.
     pub abort: Option<String>,
     pub shown: Shown,
@@ -84,7 +84,7 @@ impl Runtime {
             replies: BTreeMap::new(),
             ui: Protocol::load("spec/client/core/door/ui.json"),
             xpute: Protocol::load_each(&["xpute/spec/abi/sys.json", "xpute/spec/abi/gpu.json"]),
-            files: Fs::new(),
+            disk: Fs::new(),
             fs,
             abort: None,
             shown: Shown::default(),
@@ -117,11 +117,11 @@ impl Runtime {
 
     /// Sends the command `name`, the UI's or xpute's (abi/sys.json, abi/gpu.json), with its
     /// fields given by name. The core takes it on the next turn.
-    pub fn send(&mut self, name: &str, values: &[(&str, V)]) {
-        self.submit(name, values, 0, 0);
+    pub fn send(&mut self, name: &str, vals: &[(&str, V)]) {
+        self.submit(name, vals, 0, 0);
     }
 
-    fn submit(&mut self, name: &str, values: &[(&str, V)], tag: u32, flags: u32) {
+    fn submit(&mut self, name: &str, vals: &[(&str, V)], tag: u32, flags: u32) {
         let command = self
             .ui
             .get(name)
@@ -129,16 +129,16 @@ impl Runtime {
             .unwrap_or_else(|| panic!("no command {name}"))
             .clone();
         self.push(tag, command.val, flags, 0, |slot| {
-            spec::write(&command, values, slot)
+            spec::write(&command, vals, slot)
         });
     }
 
     /// Makes the call `name`, the UI's or xpute's, ringing turns with a deadline of 0 until
     /// the core answers, and returns the result.
-    pub fn call(&mut self, name: &str, values: &[(&str, V)]) -> i32 {
+    pub fn call(&mut self, name: &str, vals: &[(&str, V)]) -> i32 {
         self.next_call = self.next_call.wrapping_add(1).max(1);
         let tag = self.next_call;
-        self.submit(name, values, tag, ACKREQ);
+        self.submit(name, vals, tag, ACKREQ);
         loop {
             if let Some(r) = self.replies.remove(&tag) {
                 return r;
@@ -187,12 +187,12 @@ impl Runtime {
                             .and_then(|c| c.get_str_ref())
                             .expect("an open's path");
                         let res = self
-                            .files
+                            .disk
                             .open(field("fd"), field("root"), field("flags"), path);
                         results.push((field("fd"), f.cmd, res));
                     }
                     "FS_READ" => {
-                        let bytes = self.files.read(field("fd"));
+                        let bytes = self.disk.read(field("fd"));
                         let n = bytes.len().min(field("len") as usize);
                         // SAFETY: the bytes the read names, the runtime's in the gap between turns.
                         unsafe {
@@ -203,8 +203,8 @@ impl Runtime {
                             );
                         }
                     }
-                    "FS_WRITE" => self.files.write(field("fd")),
-                    "FS_CLOSE" => results.push((field("fd"), f.cmd, self.files.close(field("fd")))),
+                    "FS_WRITE" => self.disk.write(field("fd")),
+                    "FS_CLOSE" => results.push((field("fd"), f.cmd, self.disk.close(field("fd")))),
                     _ => panic!("the core posted {cmd}"),
                 }
             } else if f.cmd == self.xpute.number("SYS_ABORT") {

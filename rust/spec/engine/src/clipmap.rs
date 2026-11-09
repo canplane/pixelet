@@ -238,10 +238,10 @@ pub trait Presence {
 /// zoom's cells around its center, which brick each entry holds once it is present
 /// (`Presence`), and the slots their cells are held in.
 pub trait BrickSource: Presence {
-    /// The brick the eye's clip level at `cell_zoom` wants in `entry`, and whether it is present;
+    /// The brick the clip level read at `cell_zoom` wants in `entry`, and whether it is present;
     /// the inverse of `present`.
     fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool);
-    /// The four palette indices of cell `i` of the brick in `slot` (`ground::palette_indices`).
+    /// The four palette indices of cell `i` of the brick in `slot` (`ground::palette_idxs`).
     fn palette_word(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32;
     /// Column word `i` of the brick in `slot` (`COLUMN_WORDS`), `i` to
     /// `BRICK_CELLS`.
@@ -253,11 +253,11 @@ pub trait BrickSource: Presence {
     /// Cell `i`'s own palette index as its fill laid it (`OWN_WORDS`,
     /// `own_at`).
     fn own(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32;
-    /// Entry `e` of the levels over the bricks of the eye's clip level at `cell_zoom`
+    /// Entry `e` of the levels over the bricks of the clip level read at `cell_zoom`
     /// (`JOINED_WORDS`, `fold`), as this side folded them over the bricks it holds; the zero
     /// entry, meaning none, where it holds no fold.
     fn joined(&self, cell_zoom: Zoom, e: u32) -> [u32; JOINED_WORDS as usize];
-    /// The first brick of the eye's clip level at `cell_zoom`, from which its blocks of bricks
+    /// The first brick of the clip level read at `cell_zoom`, from which its blocks of bricks
     /// are counted (`fold`), and whether the level is laid out (`ORIGIN_AT`).
     fn origin(&self, cell_zoom: Zoom) -> ([i32; 2], bool);
     /// The root word of the ways' tree of the brick in `slot` (`ROOT_AT`), 0 for none.
@@ -563,7 +563,7 @@ pub fn ground(
         palette_idx,
         top,
         part,
-        fold: ground::palette_indices(word),
+        fold: ground::palette_idxs(word),
     };
     (cell, f)
 }
@@ -707,8 +707,8 @@ const fn key_word(v: i32) -> u32 {
     v as u32 ^ 1 << 31
 }
 
-/// Entry `b` of level `l` over a brick (its Morton index there, `joined_idx`) of the eye's
-/// clip level at `cell_zoom`, folded from the level under it. It is what a ray reads at
+/// Entry `b` of level `l` over a brick (its Morton index there, `joined_idx`) of the clip
+/// level read at `cell_zoom`, folded from the level under it. It is what a ray reads at
 /// `cell_zoom` in the block of `2^l` entries a side at `b`, aligned as the entries are
 /// (`ACROSS` is a multiple of the block's side): the join of its four children's joins, each
 /// read once where the level under it laid it (`BrickSource::joined`; at level 1, a brick's own,
@@ -784,7 +784,7 @@ fn unfold(e: [u32; JOINED_WORDS as usize], q: [i32; 2]) -> Extent {
     }
 }
 
-/// What the eye's clip level at `cell_zoom` holds of a node wider than a brick, whose first
+/// What the clip level read at `cell_zoom` holds of a node wider than a brick, whose first
 /// cell there is `g` and which is `2^l` bricks a side, `l` from 1: one entry, its block's
 /// (`fold`), which is the node's bricks exactly where the node lies in the clip level's
 /// range, and a superset where it crosses the seam; for a node wider than the clip level, the

@@ -9,10 +9,9 @@
 //! until the leaf arrives.
 
 use crate::domain::query::change::Memo;
-use crate::domain::query::{over, under};
-use pxl_spec::space::coord::q3::{self, FRAC_W, Q3};
+use crate::domain::query::{floor_of, is_unknown, on_floor, unknown};
+use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::world::{self, BOUNDS};
 use xpute_core::global::Global;
 
 use crate::domain::layer::Answer;
@@ -21,41 +20,16 @@ use crate::domain::setting::store::settings;
 use crate::domain::view::frame::coord::{to_world, world_to_canonical};
 use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 
-/// The Z, in Q3 steps, that marks a point whose height is not known. It is
-/// the bottom of the world (`world::BOUNDS`), below any ground.
-const UNKNOWN_Z: i64 = (BOUNDS.min[2] as i64) << FRAC_W;
-
-fn with_z(at: &Q3, z: i64) -> Q3 {
-    world::at(i64::from(at[0]), i64::from(at[1]), z)
-}
-
-pub fn unknown_z(at: &Q3) -> Q3 {
-    with_z(at, UNKNOWN_Z)
-}
-
-pub fn is_unknown(at: &Q3) -> bool {
-    i64::from(at[2]) == UNKNOWN_Z
-}
-
 /// Where the pivot stands for the cell center `at`, such as the center of
 /// the cell across the face a tap struck. It stands on the floor under that
 /// cell. Its Z is unknown until a leaf gives that floor.
 pub fn stand(at: &Q3) -> Q3 {
     match World::now().floor_under(at, LEAF_ZOOM) {
-        Answer::Exact(Some(top)) => stand_over(at, top),
+        Answer::Exact(Some(top)) => on_floor(at, top),
         // Nothing stands under the point, so it keeps its height.
         Answer::Exact(None) => *at,
-        Answer::Coarser(..) | Answer::Nothing(_) => unknown_z(at),
+        Answer::Coarser(..) | Answer::Nothing(_) => unknown(at),
     }
-}
-
-/// The top of the floor under a standing point `at`.
-pub fn floor_of(at: &Q3) -> f64 {
-    under(q3::to_real(i64::from(at[2])))
-}
-
-pub fn stand_over(at: &Q3, top: f64) -> Q3 {
-    with_z(at, q3::from_real(over(top)))
 }
 
 /// The last answer of `standing`. It is kept until another point is asked
@@ -84,20 +58,14 @@ pub fn support_step() {
 /// (`World::floor_under`). The pivot and the figures at it then stand on
 /// one floor.
 fn standing(world: World<'_>, at: &Q3) -> Answer<Option<Q3>> {
-    if !is_unknown(at) {
-        if !settings().surface_follow {
-            return Answer::Exact(Some(*at));
-        }
-        let floor = stand_memo().of(world, *at, |w| {
-            w.floor_under(at, LEAF_ZOOM)
-                .map(|top| top.map(|top| stand_over(at, top)))
-        });
-        return Answer::Exact(Some(floor.exact().flatten().unwrap_or(*at)));
+    if is_unknown(at) || !settings().surface_follow {
+        return stand_memo().of(world, *at, |w| w.stands(at));
     }
-    stand_memo().of(world, *at, |w| {
-        w.surface_support(at)
-            .map(|top| top.map(|top| stand_over(at, top)))
-    })
+    let floor = stand_memo().of(world, *at, |w| {
+        w.floor_under(at, LEAF_ZOOM)
+            .map(|top| top.map(|top| on_floor(at, top)))
+    });
+    Answer::Exact(Some(floor.exact().flatten().unwrap_or(*at)))
 }
 
 /// The top of the floor `at` is drawn on in `world`. For a point whose
@@ -129,7 +97,7 @@ pub fn nearest(at: &Q3) -> Option<Q3> {
         .support_nearest(at)
         .exact()
         .flatten()
-        .map(|top| stand_over(at, top))
+        .map(|top| on_floor(at, top))
 }
 
 /// Where `at` stands, once a leaf gives the floor there. A point with an
@@ -138,11 +106,11 @@ pub fn exact(at: &Q3) -> Option<Q3> {
     standing(World::now(), at).exact().flatten()
 }
 
-/// `resolve` for a camera's `to`. Once a leaf gives the Z, the Z is written
-/// into `to`.
+/// `resolve` for a camera's `to`. A Z not yet known is written into `to` once
+/// a leaf gives it, and a known Z is not written over.
 pub fn resolve_to(to: &mut Option<Q3>, cur: V3) -> V3 {
     let Some(at) = *to else { return cur };
-    if let Some(p) = exact(&at) {
+    if let Some(p) = exact(&at).filter(|_| is_unknown(&at)) {
         *to = Some(p);
     }
     resolve(&to.unwrap_or(at), cur)
@@ -150,27 +118,20 @@ pub fn resolve_to(to: &mut Option<Q3>, cur: V3) -> V3 {
 
 /// Where a pan moves the pivot from `from`, by `lx` units across the screen
 /// and `ly` units up it. The pivot slides over the world as a walker steps
-/// (`World::step_slide`). It stops at the edge of a leaf on the way that is
-/// not held. Where the leaf under `from` is not held, or the pan moves as a
-/// map (`World::step_slide`) to a target whose leaf is not held, the pivot
-/// goes on with its Z unknown until a leaf gives it.
-pub fn pan_to(from: &Q3, lx: f64, ly: f64, azimuth: f64, eye: &Q3) -> Q3 {
+/// (`World::step_slide`). Where a leaf on the way is not held, the pivot goes
+/// on with its Z unknown until a leaf gives it.
+pub fn pan_to(from: &Q3, lx: f64, ly: f64, azimuth: f64) -> Q3 {
     let (s, c) = libm::sincos(azimuth);
     let l = to_world(from);
     let way = [lx * c + ly * s, -lx * s + ly * c];
     let to = world_to_canonical(&[l[0] + way[0], l[1] + way[1], l[2]]);
-    if is_unknown(from) {
-        return unknown_z(&to);
-    }
     if !settings().surface_follow {
         return to;
     }
     if way == [0.0, 0.0] {
         return *from;
     }
-    World::now()
-        .step_slide(from, &to, eye, true, false)
-        .unwrap_or_else(|| unknown_z(&to))
+    World::now().step_slide(from, &to, false)
 }
 
 #[cfg(test)]

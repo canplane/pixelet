@@ -43,7 +43,7 @@ pub struct Job {
 pub(crate) struct Runner {
     pub(super) admission: Arc<Semaphore>,
     workers: Arc<WorkerPool>,
-    pub(super) limits: Limit,
+    pub(super) limit: Limit,
 }
 
 /// The worker processes, a free one handed to the oldest job a client waits
@@ -137,21 +137,21 @@ impl Staging {
 }
 
 impl Runner {
-    pub fn new(workers: usize, limits: Limit) -> Result<Self, String> {
-        if workers == 0
-            || limits.seconds == 0
-            || workers
-                .checked_add(limits.queued)
+    pub fn new(worker_cnt: usize, limit: Limit) -> Result<Self, String> {
+        if worker_cnt == 0
+            || limit.seconds == 0
+            || worker_cnt
+                .checked_add(limit.queued)
                 .is_none_or(|n| n > Semaphore::MAX_PERMITS)
         {
             return Err("invalid oven worker, queue or time limit".into());
         }
         Ok(Self {
-            admission: Arc::new(Semaphore::new(workers + limits.queued)),
+            admission: Arc::new(Semaphore::new(worker_cnt + limit.queued)),
             workers: Arc::new(WorkerPool {
-                state: Mutex::new((workers, VecDeque::new())),
+                state: Mutex::new((worker_cnt, VecDeque::new())),
             }),
-            limits,
+            limit,
         })
     }
 
@@ -176,7 +176,7 @@ impl Runner {
             .arg("--oven-job")
             .arg(serde_json::to_string(&job).map_err(|e| e.to_string())?)
             .arg(&out.0)
-            .arg(self.limits.seconds.to_string())
+            .arg(self.limit.seconds.to_string())
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .kill_on_drop(true);

@@ -11,7 +11,7 @@ interface PxlPlatform {
    * (origin.native.ts). */
   unpack(packed: Uint8Array): Promise<ArrayBuffer>;
   storageGet(key: string): string | null;
-  storageSet(key: string, value: string): void;
+  storageSet(key: string, val: string): void;
   clipboardSet(text: string): void;
   textWidth(weight: u32, px: f32, text: string): f32;
   textRaster(

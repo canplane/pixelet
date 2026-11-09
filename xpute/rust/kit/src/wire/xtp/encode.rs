@@ -36,13 +36,13 @@ impl TreeEncoder {
     pub fn encode<'a, V: NodeView<'a>>(
         &mut self,
         view: &V,
-        opts: TreeEncoderConfig,
+        cfg: TreeEncoderConfig,
     ) -> Result<Vec<u8>, MarshalError> {
-        let max_cap = opts.max_cap.unwrap_or(MAX_PKT_SZ);
+        let max_cap = cfg.max_cap.unwrap_or(MAX_PKT_SZ);
         if !(HDR_SZ..=MAX_PKT_SZ).contains(&max_cap) {
             return Err(MarshalError::new(Errno::EINVAL));
         }
-        let mut cap = HDR_SZ.max(opts.init_cap.min(max_cap));
+        let mut cap = HDR_SZ.max(cfg.init_cap.min(max_cap));
         loop {
             let mut buf = vec![0u8; cap as usize];
             let mut w = PacketWriter::root(&mut buf);

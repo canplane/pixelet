@@ -42,7 +42,7 @@ impl Setting<'_> {
     fn default(&self) -> &Node {
         self.spec
             .get("default")
-            .map(Node::value)
+            .map(Node::val)
             .unwrap_or(&Node::Null)
     }
 }
@@ -103,7 +103,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         }
         let vals = n
             .is_wrapper()
-            .then(|| n.value())
+            .then(|| n.val())
             .filter(|v| v.is_obj())
             .ok_or(format!(
                 "{JSON}: {name} is not a table of options by number"
@@ -486,7 +486,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                         .map(|(o, n)| (o, Node::Num(n as f64)))
                         .collect(),
                 ),
-                "default" => v.value().clone(),
+                "default" => v.val().clone(),
                 _ => v.clone(),
             };
             match out.iter_mut().find(|(k, _)| k == f) {
@@ -525,7 +525,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         "/** SETTING without its `dev` entries: what a production bundle carries in its place. */"
             .into(),
         format!(
-            "export const SETTING_PRODUCTION = {} as const;",
+            "export const SETTING_PROD = {} as const;",
             ts_literal(&table(&|s| !s.flag("dev"))?, "f64", "", &[])?
         ),
     ]);

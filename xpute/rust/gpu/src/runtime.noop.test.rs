@@ -117,6 +117,24 @@ fn write_waits_for_chunks() {
     assert!(h.belt.take(4).is_none(), "and no chunk made past them");
 }
 
+/// A buffer written and destroyed in one stream is written first.
+#[test]
+fn write_lands_before_destroy() {
+    let (adapter, device, queue) = device();
+    let mut h = runtime(adapter, &device, queue, 1);
+    let target = device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: 16,
+        usage: wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    h.put(1, Object::Buffer(target));
+    h.write(1, 0, &[7; 16]);
+    h.destroy(1);
+    assert!(h.uploads.is_none(), "the write went to the queue first");
+    h.submit(core::iter::empty());
+}
+
 /// A runtime writes the frames it admitted and has not seen done into the
 /// device's block, in the word before STATUS, as each turn begins. It admits
 /// by the same rule that a page's core applies to that word.
@@ -125,17 +143,17 @@ fn native_tells_unfinished() {
     let (adapter, device, queue) = device();
     let mut h = runtime(adapter, &device, queue, 1);
     let mut bytes = [0u8; 4 * crate::device::WORDS];
-    let mut memory = Memory::of(&mut bytes);
+    let mut mem = Memory::of(&mut bytes);
     let unfinished = 4 * crate::device::UNFINISHED_AT as u32;
     h.block = Some(0);
     assert!(h.admit_frame());
-    h.present();
+    h.count_frame();
     assert!(!h.admit_frame(), "its one frame unfinished");
-    h.tell_unfinished(&mut memory);
-    assert_eq!(memory.load_acquire(unfinished), 1);
-    h.poll(&mut memory);
+    h.tell_unfinished(&mut mem);
+    assert_eq!(mem.load_acquire(unfinished), 1);
+    h.poll(&mut mem);
     assert_eq!(
-        memory.load_acquire(unfinished),
+        mem.load_acquire(unfinished),
         0,
         "the frame done as the device is polled"
     );

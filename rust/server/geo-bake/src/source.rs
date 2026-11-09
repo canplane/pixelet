@@ -49,11 +49,7 @@ pub type OverrideMap = BTreeMap<Quadrant, Vec<(BaseLayer, String)>>;
 /// Refused for anything a client would refuse (pxl-spec bake/source.rs), or
 /// would serve wrongly: a version that is no URL segment, a sharded kind holding no shards
 /// or another holding some, an override on anything but a shard served.
-pub fn declaration(
-    min_zoom: Zoom,
-    kinds: &KindTable,
-    overrides: &OverrideMap,
-) -> Result<Value, String> {
+pub fn decl(min_zoom: Zoom, kinds: &KindTable, overrides: &OverrideMap) -> Result<Value, String> {
     for l in BaseLayer::ALL {
         let k = &kinds[l as usize];
         if k.shard.is_some() != is_sharded(l) {
@@ -191,7 +187,7 @@ pub fn of_set(set: &Path, version: &str) -> Result<Kind, String> {
 /// The published declaration from a record of what the bucket serves:
 /// `kind`, each kind's version and what its manifest says of it, its
 /// `format` and `shard`; `override`, a kind's version for a shard.
-pub fn declaration_of(record: &Value) -> Result<Value, String> {
+pub fn decl_of(record: &Value) -> Result<Value, String> {
     let kind = |l: BaseLayer| -> Result<Kind, String> {
         let k = &record["kind"][l.name()];
         let at = |field: &str| format!("kind.{}.{field}", l.name());
@@ -224,7 +220,7 @@ pub fn declaration_of(record: &Value) -> Result<Value, String> {
         }
         overrides.insert(tile, own);
     }
-    declaration(MIN_ZOOM, &kinds, &overrides)
+    decl(MIN_ZOOM, &kinds, &overrides)
 }
 
 #[cfg(test)]

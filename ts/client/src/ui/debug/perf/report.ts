@@ -37,7 +37,7 @@ const percentiles = (s: Percentile) =>
   `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
 type RayColumn<K = keyof RayCount> = K extends `eye_${infer C}` ? C : never;
 
-/** The counts are the ones the `ray_counts` setting collects, which the core
+/** The counts are the ones the `ray_cnts` setting collects, which the core
  * sums over the window's frames. Each observer, the eye and the light, gets one
  * line when it cast in the window. `beam`, `sample` and `hole_walk` are the
  * nodes that its beam rays, its samples and its holes' walks asked per cast,
@@ -223,14 +223,14 @@ function windowSection(r: PerfReport): string[] {
     )}${last.settled ? " (still)" : ""}   phase p95 ${f.phases
       .map((p) => `${p.name} ${n1(p.p95)}`)
       .join("  ")}`,
-    `  effects ${percentiles(f.effects)} ms   p95 ${
+    `  effects ${percentiles(f.effect)} ms   p95 ${
       f.effects_p95
         .filter((e) => e.p95 > 0)
         .map((e) => `${e.name} ${n1(e.p95)}`)
         .join("  ") || "-"
     }`,
     `  stage   ${percentiles(f.stage)} ms   (the pump and the render)`,
-    `  tasks   ${percentiles(f.tasks)} ms`,
+    `  tasks   ${percentiles(f.task)} ms`,
     `  perf ${percentiles(f.perf)} ms   (its own record and the UI's reads)`,
     `  rest    ${percentiles(
       f.rest,
@@ -247,7 +247,7 @@ function windowSection(r: PerfReport): string[] {
         .join("  ") || "-"
     } ms   (n: the kind's frames a read timed)`,
     `  spans   p95 ${spans || "-"} ms   (n: the frames a read timed that ran each)`,
-    ...raysText(f.rays),
+    ...raysText(f.ray_cnt),
     viewText(r.view, f.gpu_px),
     // Steps are listed one by one, because a cooperative scheduler is only as
     // cooperative as its longest step.

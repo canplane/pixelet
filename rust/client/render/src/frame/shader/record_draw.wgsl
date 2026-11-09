@@ -133,7 +133,7 @@ fn record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   put_draw(place, id.x, kind, select(0u, RASTER_EYED, near));
   if (header_word(LIGHT_HEADER_WORLD_RECEIVERS) != 0u) {
     let t = box_tiles(b.lo, b.hi);
-    if (t.got) {
+    if (t.has_tiles) {
       stand_box(t.first, t.last);
     }
   }

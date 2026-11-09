@@ -177,7 +177,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
     // Each region's list names its slots in reverse, so the shader must read each slot from the
     // list.
     let regions = drawn::REGIONS as usize;
-    let counts: Vec<u32> = (0..regions as u32)
+    let cnts: Vec<u32> = (0..regions as u32)
         .map(|r| match r % 5 {
             0 => 0,
             1 => 37,
@@ -186,7 +186,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
             _ => 64,
         })
         .collect();
-    let total: u32 = counts.iter().sum();
+    let total: u32 = cnts.iter().sum();
     assert!(total <= CAP, "the regions hold {total}, past the slots");
     let columns = drawn::COLUMNS;
     let mut instances = vec![0u32; ((columns + 1) * CAP) as usize];
@@ -215,7 +215,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
     let mut args = vec![0u32; drawn::ARGS_WORDS as usize * regions];
     let mut first = 0u32;
     for r in 0..regions {
-        let n = counts[r];
+        let n = cnts[r];
         for k in 0..n {
             instances[list + (first + k) as usize] = first + n - 1 - k;
         }
@@ -243,15 +243,15 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
     tiles[4..].copy_from_slice(&size.map(f32::to_bits));
 
     let storage = wgpu::BufferUsages::STORAGE;
-    let frame_buf = gpu.buffer(&frame, wgpu::BufferUsages::UNIFORM);
-    let uniforms_buf = gpu.buffer(&uniforms, storage);
-    let args_buf = gpu.buffer(&args, storage);
-    let instances_buf = gpu.buffer(&instances, storage);
-    let culled = gpu.buffer(&vec![u32::MAX; instances.len()], storage);
-    let culled_args = gpu.buffer(&vec![u32::MAX; args.len()], storage);
-    let box_buf = gpu.buffer(&t.claimed, storage);
-    let regions_buf = gpu.buffer(&region_words, storage);
-    let tiles_buf = gpu.buffer(&tiles, wgpu::BufferUsages::UNIFORM);
+    let frame_buf = gpu.buf(&frame, wgpu::BufferUsages::UNIFORM);
+    let uniforms_buf = gpu.buf(&uniforms, storage);
+    let args_buf = gpu.buf(&args, storage);
+    let instances_buf = gpu.buf(&instances, storage);
+    let culled = gpu.buf(&vec![u32::MAX; instances.len()], storage);
+    let culled_args = gpu.buf(&vec![u32::MAX; args.len()], storage);
+    let box_buf = gpu.buf(&t.claimed, storage);
+    let regions_buf = gpu.buf(&region_words, storage);
+    let tiles_buf = gpu.buf(&tiles, wgpu::BufferUsages::UNIFORM);
     let binds = [
         (0, frame_buf.as_entire_binding()),
         (1, uniforms_buf.as_entire_binding()),
@@ -285,7 +285,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
     let radius = f64::from(generation::TALLEST + generation::WIDEST);
     let (mut met, mut left, mut near, mut wrong) = (0, 0, 0, Vec::new());
     let mut first = 0u32;
-    for (r, &count) in counts.iter().enumerate() {
+    for (r, &cnt) in cnts.iter().enumerate() {
         let a = r * drawn::ARGS_WORDS as usize;
         for w in [0, 2, 3, 4] {
             if got_args[a + w] != args[a + w] {
@@ -305,7 +305,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
                 have.len()
             ));
         }
-        for k in 0..count {
+        for k in 0..cnt {
             let slot = first + k;
             let v: [f64; 3] = std::array::from_fn(|a| {
                 f64::from(f32::from_bits(instances[(a as u32 * CAP + slot) as usize]))
@@ -327,7 +327,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
             met += u32::from(wants);
             left += u32::from(!wants);
         }
-        first += count;
+        first += cnt;
     }
     eprintln!("{total} instances: {met} meet the box, {left} past it, {near} within a hair");
     assert!(

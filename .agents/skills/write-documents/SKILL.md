@@ -5,6 +5,8 @@ description: How the documents people read are written and reviewed — README.m
 
 # Writing the documents
 
+For what people read. What an agent reads follows AGENTS.md's Instructions.
+
 ## Each document has one reader
 
 A document answers one question for one reader, and holds nothing else.

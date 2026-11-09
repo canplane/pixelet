@@ -17,15 +17,13 @@ import * as snapshot from "@/service/core/snapshot.ts";
 /** `select` must return a primitive or a reference that already exists. A new
  * object on every call makes React render again forever. */
 export function useCore<T>(select: (s: Snapshot) => T): T {
-  return useSyncExternalStore(watch_snapshot, () => select(snapshot.current()));
+  return useSyncExternalStore(watch_snapshot, () => select(snapshot.cur()));
 }
 
 /** The view's azimuth and scale, which change apart from the snapshot.
  * `select` keeps the same rule as `useCore`'s. */
 export function useView<T>(select: (v: UiView) => T): T {
-  return useSyncExternalStore(watch_view, () =>
-    select(snapshot.current_view()),
-  );
+  return useSyncExternalStore(watch_view, () => select(snapshot.cur_view()));
 }
 
 export function useGpu(): Gpu {

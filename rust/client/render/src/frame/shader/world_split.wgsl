@@ -169,7 +169,7 @@ fn ground_split(shard: u32, place: u32, zoom: u32, c: vec3<i32>, far: u32, near:
   let none = vec2<i32>(EMPTY_LO, EMPTY_HI);
   if (is_past(shard)) {
     if (c.z >= SEA_LEVEL && zoom > SHARD_ZOOM) {
-      return GroundSplit(KIND_CELL, vec2<u32>(VALUE_VOID, 0u), none, LOOKUP_NONE);
+      return GroundSplit(KIND_CELL, vec2<u32>(VAL_VOID, 0u), none, LOOKUP_NONE);
     }
     return GroundSplit(KIND_SPLIT, BOX_WHOLE, none, LOOKUP_NONE);
   }
@@ -184,7 +184,7 @@ fn ground_split(shard: u32, place: u32, zoom: u32, c: vec3<i32>, far: u32, near:
   if (meets(span, zoom, c.z, near)) {
     return GroundSplit(KIND_SPLIT, box_along_z(span, zoom, c.z), r.b.zw, r.place);
   }
-  return GroundSplit(KIND_CELL, vec2<u32>(VALUE_VOID, 0u), r.b.zw, r.place);
+  return GroundSplit(KIND_CELL, vec2<u32>(VAL_VOID, 0u), r.b.zw, r.place);
 }
 
 // The world's query, as pxl-engine world.rs states it.
@@ -219,7 +219,7 @@ fn world_split(above: vec4<u32>, shard: u32, zoom: u32, c: vec3<i32>, far: u32, 
   }
   let joined = box_join(box_join(own, box_along_z(ways, zoom, c.z)), placed);
   if (box_none(joined)) {
-    return Answer(KIND_CELL, vec2<u32>(VALUE_VOID, 0u), at);
+    return Answer(KIND_CELL, vec2<u32>(VAL_VOID, 0u), at);
   }
   return Answer(KIND_SPLIT, joined, at);
 }

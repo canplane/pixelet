@@ -24,7 +24,7 @@ pub struct Pipeline {
     pub id: u32,
     pub layouts: [Layout; BIND_GROUPS],
     pub strides: [u32; VERTEX_BUFFERS],
-    pub lanes: usize,
+    pub lane_cnt: usize,
 }
 
 /// The most distinct group layouts there are: every render pipeline's groups,
@@ -149,11 +149,17 @@ impl PipelineCache {
         self.build_targets(g, id, format, 1)
     }
 
-    /// Pipeline `id` drawing into `targets` colors of `format`, each the fragment's output at
+    /// Pipeline `id` drawing into `target_cnt` colors of `format`, each the fragment's output at
     /// its own location, with a depth32 depth.
-    pub fn build_targets(&mut self, g: &Gpu, id: u32, format: Format, targets: usize) -> Pipeline {
+    pub fn build_targets(
+        &mut self,
+        g: &Gpu,
+        id: u32,
+        format: Format,
+        target_cnt: usize,
+    ) -> Pipeline {
         let depth = (Format::depth32float, Stencil::Unused);
-        self.build_onto(g, id, (format, targets), depth)
+        self.build_onto(g, id, (format, target_cnt), depth)
     }
 
     /// Pipeline `id` drawing into a world surface's color and depth
@@ -198,9 +204,9 @@ impl PipelineCache {
         let module = self.module(words[0]);
         let mut b = Pipeline::default();
         let mut at = HEADER as usize;
-        b.lanes = words[at] as usize;
+        b.lane_cnt = words[at] as usize;
         at += 1;
-        for lane in 0..b.lanes {
+        for lane in 0..b.lane_cnt {
             b.strides[lane] = words[at];
             at += 3 + 3 * words[at + 2] as usize;
         }
@@ -253,7 +259,7 @@ impl PipelineCache {
 
     /// Counts the pipelines whose word says they are made, and returns whether all are
     /// (`is_made`).
-    pub fn made(&mut self) -> bool {
+    pub fn poll(&mut self) -> bool {
         self.made_cnt = self.words[..self.pipeline_len]
             .iter()
             .filter(|w| signaled(w, TICKET))

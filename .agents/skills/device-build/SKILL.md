@@ -13,8 +13,9 @@ Prebuild first: `ts/client/ios/` and `ts/client/android/` come from
 After the app moves or pnpm's links are remade, prebuild again with `--clean` and run `pod install` again.
 
 A **Release** build embeds the JavaScript bundle. A **Debug** build loads it
-from Metro (`make dev-native`) on port 8081; check that the running Metro serves
-your tree.
+from Metro (`make dev-native`) on port 8081. The running Metro serves your tree
+and started after `ts/client/babel.config.ts` last changed, or is restarted with
+`--clear`.
 
 Before a Release, bring the build number up to date:
 
@@ -58,16 +59,26 @@ xcrun devicectl device install app --device <devicectl id> build/derived/Build/P
 xcrun devicectl device process launch --terminate-existing --device <devicectl id> me.plei.pixelet
 ```
 
-For the simulator: `-configuration Debug -destination 'id=<simulator id>'` with
-no signing, then:
+Add `--console` to the launch to stream the app's stdout, where the core's
+last messages go (`[pxl] …`).
+
+### The simulator
+
+Xcode's simulator window is Device Hub, `Contents/Applications/DeviceHub.app`
+in Xcode (`com.apple.dt.Devices`). From `ts/client/ios`, with an id from
+`xcrun simctl list devices available`:
 
 ```bash
+xcrun simctl boot <id> && open -b com.apple.dt.Devices
+xcodebuild -workspace pixelet.xcworkspace -scheme pixelet -configuration Debug \
+  -destination 'id=<id>' -derivedDataPath build/derived -quiet
 xcrun simctl install booted build/derived/Build/Products/Debug-iphonesimulator/pixelet.app
+xcrun simctl privacy booted grant location me.plei.pixelet
+xcrun simctl location booted set 37.2741,127.0437
 xcrun simctl launch booted me.plei.pixelet
 ```
 
-Add `--console` to the launch to stream the app's stdout, where the core's
-last messages go (`[pxl] …`).
+`xcrun simctl io booted screenshot <file>.png` for a look.
 
 ### An Apple Vision Pro
 

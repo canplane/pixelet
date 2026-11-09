@@ -23,14 +23,14 @@ pub struct Arena<T: Default> {
 }
 
 impl<T: Default> Arena<T> {
-    pub fn new(opts: ArenaConfig) -> Result<Arena<T>, MarshalError> {
+    pub fn new(cfg: ArenaConfig) -> Result<Arena<T>, MarshalError> {
         let mut arena = Arena {
             mem: Vec::new(),
-            max_cap: opts.max_cap,
+            max_cap: cfg.max_cap,
             cap_of: 0,
             len_of: 0,
         };
-        arena.grow(opts.init_cap.min(opts.max_cap))?;
+        arena.grow(cfg.init_cap.min(cfg.max_cap))?;
         Ok(arena)
     }
 

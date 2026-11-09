@@ -3,17 +3,14 @@
 /** A new setting takes an entry in schema.json and its strings under
  * `settings.<section>.<name>`. */
 
-import {
-  SETTING as EVERY,
-  SETTING_PRODUCTION as PRODUCTION,
-} from "@/abi/schema.spec.ts";
+import { SETTING as EVERY, SETTING_PROD as PROD } from "@/abi/schema.spec.ts";
 
 type Spec = typeof EVERY;
 
 /** The table is chosen by a constant that the build folds, rather than
  * filtered, so that the dev rows are absent from a production bundle instead
- * of hidden. */
-export const SETTING = (__IS_DEV__ ? EVERY : PRODUCTION) as Spec;
+ * of hidden. A release made for measuring holds the rows the drive sets. */
+export const SETTING = (__IS_DEV__ || __PERF_DRIVE__ ? EVERY : PROD) as Spec;
 
 export type SettingName = keyof Spec;
 

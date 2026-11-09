@@ -158,7 +158,7 @@ impl GpuRuntime {
             } else {
                 wgpu::CompositeAlphaMode::Auto
             };
-            let config = wgpu::SurfaceConfiguration {
+            let cfg = wgpu::SurfaceConfiguration {
                 usage,
                 format,
                 color_space: wgpu::SurfaceColorSpace::Auto,
@@ -169,7 +169,7 @@ impl GpuRuntime {
                 alpha_mode,
                 view_formats: Vec::new(),
             };
-            b.surface.configure(&self.device, &config);
+            b.surface.configure(&self.device, &cfg);
             b.stale = false;
         }
     }

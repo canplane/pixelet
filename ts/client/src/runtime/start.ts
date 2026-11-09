@@ -5,9 +5,9 @@
 
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import type { i32 } from "@xpute/kit/abi/word.ts";
-import { FramePacing } from "@xpute/runtime";
+import { FramePacing, next_frame } from "@xpute/runtime";
 import { type Config, type FrameGrant, type Manifest } from "@xpute/runtime";
-import { Command, read_turn_pace, ui_mem } from "@/abi/cmd.spec.ts";
+import { Command, read, ui_mem } from "@/abi/cmd.spec.ts";
 import * as text from "@/abi/text.spec.ts";
 import { MACHINE } from "@/abi/machine.spec.ts";
 import {
@@ -26,9 +26,18 @@ import { gpu } from "@/service/platform/gpu.ts";
 
 function calls(pacing: FramePacing) {
   return new Map<number, (f: BranchCursor) => i32 | void>([
-    [text.Command.TEXT_LAYOUT, (f) => text_layout(text.read_text_layout(f))],
-    [text.Command.TEXT_RASTER, (f) => text_raster(text.read_text_raster(f))],
-    [Command.TURN_PACE, (f) => pacing.pace(read_turn_pace(f).interval_ms)],
+    [
+      text.Command.TEXT_LAYOUT,
+      (f) => text_layout(text.read[text.Command.TEXT_LAYOUT](f)),
+    ],
+    [
+      text.Command.TEXT_RASTER,
+      (f) => text_raster(text.read[text.Command.TEXT_RASTER](f)),
+    ],
+    [
+      Command.TURN_PACE,
+      (f) => pacing.pace(read[Command.TURN_PACE](f).interval_ms),
+    ],
   ]);
 }
 
@@ -43,7 +52,7 @@ export function config(handheld: boolean): Config<FrameGrant> {
       batch_frames: BATCH_FRAMES,
       settle_ms: SETTLE_MS,
     },
-    (run) => requestAnimationFrame(run),
+    next_frame,
   );
   const asked = calls(pacing);
   return {

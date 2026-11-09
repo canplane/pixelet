@@ -48,7 +48,7 @@ fn light_mark_walked_cs(
     let t = bitcast<f32>(textureLoad(rays, p, 1u).x);
     let at = eye_aim(px_tan(p, size)).dir * t;
     let b = box_tiles(at, at);
-    if (b.got) {
+    if (b.has_tiles) {
       stand_box(b.first, b.last);
     }
   }

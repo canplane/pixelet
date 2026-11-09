@@ -221,11 +221,11 @@ impl Cell {
         units(self.zoom())
     }
 
-    /// The cell `steps` zooms coarser it lies in.
-    pub fn up(self, steps: Zoom) -> Cell {
+    /// The cell `step_cnt` zooms coarser it lies in.
+    pub fn up(self, step_cnt: Zoom) -> Cell {
         Cell {
-            zoom: self.zoom - steps,
-            at: ancestor_of(self.at, steps),
+            zoom: self.zoom - step_cnt,
+            at: ancestor_of(self.at, step_cnt),
             ..self
         }
     }

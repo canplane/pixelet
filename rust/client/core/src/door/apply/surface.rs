@@ -64,7 +64,10 @@ pub(super) fn resize(c: GpuSurfaceResize) -> Outcome {
 pub(super) fn close(c: GpuSurfaceClose) -> Outcome {
     let role = or_refuse(surface::surface(c.surface).map(|s| s.role), Errno::EBADF)?;
     super::super::close_surface(c.surface);
-    if role == surface_role::WORLD {
+    // A surface can close after the one replacing it has opened, so the
+    // sensors stop with the last world's surface.
+    let world_open = surface::surfaces().any(|s| s.role == surface_role::WORLD);
+    if role == surface_role::WORLD && !world_open {
         sensor::sensors_close();
     }
     Ok(Some(0))

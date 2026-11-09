@@ -70,6 +70,9 @@ struct Input {
     hover_pending: bool,
 
     drag_pending: bool,
+    /// The drag that ended with a move `camera_input_step` has not written, so
+    /// that a release before the next frame loses none of it.
+    released: DragMode,
     pending_pan_dx: f64,
     pending_pan_dy: f64,
     pending_view_x: f64,
@@ -114,6 +117,7 @@ fn input() -> &'static mut Input {
         hovering: false,
         hover_pending: false,
         drag_pending: false,
+        released: DragMode::None,
         pending_pan_dx: 0.0,
         pending_pan_dy: 0.0,
         pending_view_x: 0.0,
@@ -382,6 +386,15 @@ fn tap_if_still(s: &Input, mode: DragMode) -> Option<[f64; 2]> {
     (!s.did_drag && mode == DragMode::Pan).then_some([s.pointer_x, s.pointer_y])
 }
 
+/// Ends the drag, keeping what it moved since the last frame for that frame
+/// to write.
+fn end_drag(s: &mut Input) {
+    if s.drag_pending && matches!(s.drag_mode, DragMode::Pan | DragMode::Rotate) {
+        s.released = s.drag_mode;
+    }
+    s.drag_mode = DragMode::None;
+}
+
 /// A pointer went up or was canceled. Returns where it tapped, if it was a
 /// tap.
 pub fn camera_pointer_up(pointer_type: PointerType, pointer_id: i32) -> Option<[f64; 2]> {
@@ -391,7 +404,7 @@ pub fn camera_pointer_up(pointer_type: PointerType, pointer_id: i32) -> Option<[
         match s.active_pointers.len() {
             0 => {
                 let mode = s.drag_mode;
-                s.drag_mode = DragMode::None;
+                end_drag(s);
                 request_world_tick();
                 if mode != DragMode::None {
                     return tap_if_still(s, mode);
@@ -417,7 +430,7 @@ pub fn camera_pointer_up(pointer_type: PointerType, pointer_id: i32) -> Option<[
         return None;
     }
     let mode = s.drag_mode;
-    s.drag_mode = DragMode::None;
+    end_drag(s);
     // Nothing moves once the pointer is up, so without this tick the
     // characters would not see the release until something else asked for
     // a turn.
@@ -476,7 +489,12 @@ pub fn camera_input_step() {
     }
     if s.drag_pending {
         s.drag_pending = false;
-        match s.drag_mode {
+        let mode = match s.drag_mode {
+            DragMode::None => s.released,
+            held => held,
+        };
+        s.released = DragMode::None;
+        match mode {
             DragMode::Pan => do_pan(s.pending_pan_dx, s.pending_pan_dy),
             DragMode::Rotate => {
                 let (x, y) = (s.pending_view_x, s.pending_view_y);

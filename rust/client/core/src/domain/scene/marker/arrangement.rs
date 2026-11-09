@@ -108,7 +108,7 @@ struct Arrangement {
     pending: Vec<(u32, Design)>,
     /// What was drawn last, by its holder's key, and the designs the markers
     /// keep. Both are rebuilt each run.
-    before: FnvHashMap<Key, Design>,
+    last_design: FnvHashMap<Key, Design>,
     keep: FnvHashSet<Design>,
     /// What the marker set holds, and the buffer the next run lays out
     /// into. They are swapped as `sized` and `spare` are.
@@ -157,7 +157,7 @@ pub(super) enum Key {
 pub(super) struct Instance {
     pub(super) key: Key,
     pub(super) design: Design,
-    pub(super) stands: Q3,
+    pub(super) pos: Q3,
     pub(super) tap: Option<MarkerHit>,
 }
 
@@ -270,7 +270,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     // many a turn as one pass of the tick's budget reads and at least one.
     // The rest are not read yet, so a later turn reads them.
     p.changed = false;
-    let before = match &p.found_for {
+    let last_bricks = match &p.found_for {
         Some(f) if f.places == places => f.bricks.as_slice(),
         _ => &[],
     };
@@ -278,16 +278,16 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     let columns = |s: Brick| region(s, [BOUNDS.min[2], BOUNDS.max[2]]);
     // Whether each drawn brick keeps what was read from it, asked once for
     // each brick however many pins and places it holds.
-    let stood: Vec<bool> = now
+    let kept_bricks: Vec<bool> = now
         .bricks
         .iter()
         .map(|&s| {
             let r = columns(s);
-            before.binary_search(&s).is_ok()
+            last_bricks.binary_search(&s).is_ok()
                 && !change::within([[r.min[0], r.min[1]], [r.max[0], r.max[1]]], changed_places)
         })
         .collect();
-    let stands = |s: &Brick| now.bricks.binary_search(s).is_ok_and(|k| stood[k]);
+    let stands = |s: &Brick| now.bricks.binary_search(s).is_ok_and(|k| kept_bricks[k]);
     let (mut pins, mut read_places) =
         (core::mem::take(&mut p.pins), core::mem::take(&mut p.places));
     pins.retain(|s| stands(&s.brick));
@@ -297,7 +297,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     entering.extend(
         now.bricks
             .iter()
-            .zip(&stood)
+            .zip(&kept_bricks)
             .filter(|(_, &st)| !st)
             .map(|(&s, _)| {
                 let r = columns(s);
@@ -350,17 +350,17 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     let spacing = SPACING_PX;
     // What was drawn last, by its holder's key. When what a holder shows
     // changes, the old drawing stays until the new one is ready to show.
-    let before = &mut p.before;
-    before.clear();
-    before.extend(drawn_before.iter().map(|s| (s.key, s.design.clone())));
+    let last_design = &mut p.last_design;
+    last_design.clear();
+    last_design.extend(drawn_before.iter().map(|s| (s.key, s.design.clone())));
     let mut unlaid = false;
     // The line is laid out last, so it wins a tie with another marker (the sort's
     // tiebreak).
     for s in shown.drain(..) {
         let (design, region) = s.design.with_spacing(spacing);
-        let (design, pending) = match before.get(&s.key) {
-            Some(before) if *before != design && !design::ready(&design) => {
-                (before.clone(), Some(design))
+        let (design, pending) = match last_design.get(&s.key) {
+            Some(last) if *last != design && !design::ready(&design) => {
+                (last.clone(), Some(design))
             }
             _ => (design, None),
         };
@@ -369,7 +369,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
             unlaid = true;
             continue;
         };
-        let local = coord::to_world(&s.stands);
+        let local = coord::to_world(&s.pos);
         p.pending
             .extend(pending.map(|pending| (sized.len() as u32, pending)));
         p.candidates.push(
@@ -453,7 +453,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
         let design = &sized[i].design;
         let [w, h, anchor] = design::size(design).or_bug(Errno::ENOTRECOVERABLE);
         instances.extend_from_slice(&set::instance(
-            sized[i].stands,
+            sized[i].pos,
             [w, h],
             design::slot(design) as u32,
             anchor / h,

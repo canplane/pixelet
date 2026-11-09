@@ -309,7 +309,7 @@ impl Node {
         self.get("$val").is_some()
     }
 
-    pub fn value(&self) -> &Node {
+    pub fn val(&self) -> &Node {
         self.get("$val").unwrap_or(self)
     }
 

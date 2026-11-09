@@ -41,7 +41,7 @@ pub(super) struct CastRead {
     pub corner: [i32; 2],
     pub range: [u32; 2],
     /// Whether what decides which tiles the receivers read reads as last time (cast.rs
-    /// `light_receivers`). The host's draws' boxes are taken with their footprints where the
+    /// `light_receiver_read`). The host's draws' boxes are taken with their footprints where the
     /// eye stands (`Schedule::stands`).
     pub receivers_same: bool,
 }
@@ -61,7 +61,7 @@ pub(super) struct Light {
     pub slid: bool,
     /// Whether columns of the world changed within the epoch, so the tiles whose rays may meet
     /// them are cast again.
-    pub reached: bool,
+    pub columns_changed: bool,
     /// The box's corner this cast is cast under, and the corner of the cast before
     /// (`light::HEADER_LAST_CORNER`).
     pub corner: [i32; 2],
@@ -74,7 +74,7 @@ pub(super) struct Light {
     pub world: bool,
     /// Whether those marks are added to the ones already made, as the walked bits cover the
     /// claimed tiles alone. Otherwise the marks start afresh.
-    pub adds: bool,
+    pub additive: bool,
     /// Whether the receivers' marks take each pixel's footprint, which they do while the eye
     /// stands (`light::HEADER_FOOTPRINT`).
     pub footprint: bool,
@@ -224,24 +224,24 @@ impl Schedule {
             let last_range = core::mem::replace(&mut self.range, r.range);
             // The marks are added to those already made where the walked bits cover the
             // claimed tiles alone, which happens only within the epoch and under the same box.
-            let adds = !walked_whole;
-            xpute_kit::ensure!(!adds || (unchanged && !slid), ENOTRECOVERABLE);
+            let additive = !walked_whole;
+            xpute_kit::ensure!(!additive || (unchanged && !slid), ENOTRECOVERABLE);
             let world = core::mem::take(&mut self.world);
             // Marks added for the claimed tiles alone leave the footprint owed to the rest, as
             // marks made while the eye moves do.
             if world {
-                self.footprint_owed = !stands || adds;
+                self.footprint_owed = !stands || additive;
             }
             Light {
                 changed,
                 epoch: !unchanged,
                 slid: unchanged && slid,
-                reached: unchanged && r.world_columns,
+                columns_changed: unchanged && r.world_columns,
                 corner: r.corner,
                 last_corner,
                 last_range,
                 world,
-                adds: world && adds,
+                additive: world && additive,
                 footprint: stands,
             }
         });

@@ -76,7 +76,8 @@ function frameArgs(f: Frame): ArgMap {
   return args;
 }
 
-async function perfTraceJson(): Promise<string> {
+/** The profiler's window as a trace, whole. */
+export async function perfTrace(): Promise<object> {
   const [frames, tasks] = await Promise.all([read("frames"), read("tasks")]);
   const longs = longFramesSince(-Infinity);
   const events: TraceEvent[] = [];
@@ -179,7 +180,7 @@ async function perfTraceJson(): Promise<string> {
     }
   }
 
-  return JSON.stringify({
+  return {
     traceEvents: events,
     displayTimeUnit: "ms",
     metadata: {
@@ -187,11 +188,11 @@ async function perfTraceJson(): Promise<string> {
       build_id: BUILD_ID,
       build_time: BUILD_TIME,
     },
-  });
+  };
 }
 
 export async function perfTraceSave(): Promise<string> {
-  const json = await perfTraceJson();
+  const json = JSON.stringify(await perfTrace());
   const mb = `${fixed(json.length / 1e6, 1)} MB`;
   const name = `perf-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
   try {

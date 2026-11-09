@@ -80,7 +80,7 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
     for record in 0..EARTH_SLOTS {
         if uploads.sent_on(record).is_some_and(|s| s != on) {
             if let Some(p) = Earth::tile_cache().in_slot(record) {
-                Earth::tile_cache().again(p);
+                Earth::tile_cache().refetch(p);
             }
         }
     }

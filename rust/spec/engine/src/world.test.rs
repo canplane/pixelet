@@ -339,8 +339,8 @@ fn footing_without_bound() {
             column_surface(&mut was, CELL_ZOOM, g),
             column_surface(&mut is, CELL_ZOOM, g),
         );
-        assert_eq!((a.top, a.ends), (b.top, b.ends), "{g:?}");
-        hits += (a.ends == End::Hit) as u32;
+        assert_eq!((a.top, a.end), (b.top, b.end), "{g:?}");
+        hits += (a.end == End::Hit) as u32;
         for d in 0..27 {
             let c = [g[0] + d % 3 - 1, g[1] + d / 3 % 3 - 1, a.top.0 + d / 9 - 1];
             assert_eq!(
@@ -502,7 +502,7 @@ fn answers_take_no_zooms(w: Clipmap<'_>) -> [u32; 3] {
         ];
         // Around the ground's top where the column meets it, or else around its height.
         let surface = column_surface(&mut asking, CELL_ZOOM, g);
-        let top = if surface.ends == End::Hit {
+        let top = if surface.end == End::Hit {
             surface.top.0
         } else {
             height(g)

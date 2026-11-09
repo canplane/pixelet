@@ -39,11 +39,11 @@ use pxl_spec::space::layer::quadrant;
 /// is rebuilt only when its inputs change.
 struct Frame {
     /// Each kind's zooms (`decor_zooms`). They are taken again every frame,
-    /// because the decor setting is not among the inputs `seen` compares.
+    /// because the decor setting is not among the inputs `last_key` compares.
     zooms: [u32; DECORS.len()],
     walk_zoom: Zoom,
     drawing: [u32; drawn::DRAWING_WORDS as usize],
-    placed: Vec<[u32; generation::RECORD_WORDS as usize]>,
+    records: Vec<[u32; generation::RECORD_WORDS as usize]>,
     /// The column boxes, in leaf cells, where objects were written since a
     /// frame last took them (`note_edited`). The first `edited` of them are
     /// the ones the next frame hands.
@@ -53,9 +53,9 @@ struct Frame {
     /// gpu/draw.rs `Position`). The GPU draws the decor's lanes about it.
     anchor: Q3,
     /// The inputs `drawing` and `walk_zoom` were last built from.
-    seen: Option<Key>,
+    last_key: Option<Key>,
     /// What the last walk of placed decor was made over.
-    walked: Option<WalkKey>,
+    last_walk: Option<WalkKey>,
 }
 
 /// The inputs the drawing words are built from, compared by value. The
@@ -90,12 +90,12 @@ fn hand_over() -> &'static mut Frame {
         zooms: [0; DECORS.len()],
         walk_zoom: UNIT_ZOOM,
         drawing: [0; drawn::DRAWING_WORDS as usize],
-        placed: Vec::new(),
+        records: Vec::new(),
         edits: [[0; 4]; object::EDITS as usize],
         edited: 0,
         anchor: [0; 3],
-        seen: None,
-        walked: None,
+        last_key: None,
+        last_walk: None,
     })
 }
 
@@ -107,17 +107,17 @@ fn wrap(x: i32) -> u32 {
 
 /// Builds this frame's hand-over for an eye at `eye`. Placed decor is walked
 /// out to the reach `walk_zoom` describes. The placed decor and the ground's
-/// decor that the eraser's preview hides (`edits`) are left out.
-pub fn step(eye: V3, edits: &RenderEdit) {
+/// decor that the eraser's preview hides (`edit`) are left out.
+pub fn step(eye: V3, edit: &RenderEdit) {
     let RenderEdit {
         hide,
         scattered_cell,
         ..
-    } = *edits;
+    } = *edit;
     let h = hand_over();
     let anchor = eye.map(libm::floor);
     h.anchor = Position::of(anchor).q;
-    let seen = Key {
+    let key = Key {
         anchor,
         scattered_cell,
         read: catalog().is_some(),
@@ -129,9 +129,9 @@ pub fn step(eye: V3, edits: &RenderEdit) {
             .entry_at(at)
             .is_some_and(|e| e.asset().decor().is_some())
     });
-    if h.seen != Some(seen) {
-        h.seen = Some(seen);
-        drawing(&mut h.drawing, seen);
+    if h.last_key != Some(key) {
+        h.last_key = Some(key);
+        drawing(&mut h.drawing, key);
         h.walk_zoom = walk_zoom();
     }
     let zoom = h.walk_zoom;
@@ -141,21 +141,21 @@ pub fn step(eye: V3, edits: &RenderEdit) {
         min: [0, 1, 2].map(|k| (cell[k] - 1) as f64 * side),
         max: [0, 1, 2].map(|k| (cell[k] + 2) as f64 * side),
     };
-    let walked = WalkKey { zoom, cell, hide };
+    let walk_key = WalkKey { zoom, cell, hide };
     let met = h.edits[..h.edited].iter().any(|e| meets(e, &around));
-    if h.walked == Some(walked) && !met {
+    if h.last_walk == Some(walk_key) && !met {
         return;
     }
     // The renderer hands the records to the runtime in place, without a copy.
     // While the runtime still holds them they must not change, so the walk
     // waits for a later frame (pxl-render gpu/api.rs `in_flight`).
-    if api::in_flight(&h.placed) {
-        h.walked = None;
+    if api::in_flight(&h.records) {
+        h.last_walk = None;
         return;
     }
-    h.walked = Some(walked);
-    h.placed.clear();
-    let placed = &mut h.placed;
+    h.last_walk = Some(walk_key);
+    h.records.clear();
+    let records = &mut h.records;
     World::now().placed_in(&around, &mut |e| {
         let (k, decor) = row_of(&decor::DECORS, e.state);
         if !decor || hide == Some(e.id()) {
@@ -163,7 +163,7 @@ pub fn step(eye: V3, edits: &RenderEdit) {
         }
         let (variant, turn) = user_decor_pick(&e.corner(), &DECORS[k as usize]);
         let [x, y, z] = idx_of(UNIT_ZOOM, &e.corner());
-        placed.push([
+        records.push([
             generation::record_word(
                 k,
                 variant,
@@ -223,8 +223,8 @@ fn meets(e: &[i32; 4], around: &Aabb) -> bool {
         .any(|s| i64::from(e[0]) + s < b[2] && b[0] < i64::from(e[2]) + s)
 }
 
-fn drawing(p: &mut [u32; drawn::DRAWING_WORDS as usize], seen: Key) {
-    let anchor = seen.anchor;
+fn drawing(p: &mut [u32; drawn::DRAWING_WORDS as usize], key: Key) {
+    let anchor = key.anchor;
     p.fill(0);
     p[drawn::MODEL_ANGLE as usize] = (decor_model_angle() as f32).to_bits();
     p[drawn::IMPOSTOR_ANGLE as usize] = (decor_impostor_angle() as f32).to_bits();
@@ -232,7 +232,7 @@ fn drawing(p: &mut [u32; drawn::DRAWING_WORDS as usize], seen: Key) {
     p[at] = wrap(anchor[0] as i32);
     p[at + 1] = anchor[1] as i32 as u32;
     p[at + 2] = anchor[2] as i32 as u32;
-    if let Some([x, y, z]) = seen.scattered_cell {
+    if let Some([x, y, z]) = key.scattered_cell {
         let at = drawn::HIDE as usize;
         p[at..at + 4].copy_from_slice(&[wrap(x), y as u32, z as u32, 1]);
     }
@@ -285,7 +285,7 @@ pub fn frame() -> DecorFrame<'static> {
     DecorFrame {
         zooms: &h.zooms,
         drawing: &h.drawing,
-        placed_records: &h.placed,
+        placed_records: &h.records,
         anchor: h.anchor,
         edits: &h.edits[..edited],
     }

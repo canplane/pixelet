@@ -6,9 +6,8 @@
  * service/core/raw.ts). `pxl.perf` holds what the profiler panel exports,
  * computed on the client from what the core's profiler holds. `report()` gives
  * the summary of the profiler's window as text, and `read()` gives the same
- * summary as values, which script/compare-perf.py reads. `trace()` saves the
- * window as a trace for ui.perfetto.dev. `drive(seconds)` takes the one
- * standard measurement, driven the same way each time (perf/drive.ts).
+ * summary as values. `trace()` saves the window as a trace for
+ * ui.perfetto.dev. `drive()` takes the one standard measurement, driven the same way each time (perf/drive.ts).
  */
 
 import { perfDrive } from "./perf/drive.ts";

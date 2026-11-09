@@ -30,7 +30,7 @@ import { type Tx } from "@/service/platform/types.ts";
 import * as db from "@/service/platform/db.ts";
 
 /** A file is one format byte followed by a tree packet. */
-function packet(fmt: number, bytes: U8Array): U8Array {
+function pkt(fmt: number, bytes: U8Array): U8Array {
   if (bytes[0] !== fmt) throw new FileError(Errno.EBADMSG);
   // The tree reader needs the packet to start on a word boundary. A view at
   // offset 1 would not, so the packet is copied.
@@ -47,7 +47,7 @@ function as_file(fmt: number, pkt: U8Array): U8Array {
 /** Returns the writes in a file of `fmt` in the order they were written. The
  * layout is file.json's `write`. */
 export function decode_writes(fmt: number, bytes: U8Array): Leaf[] {
-  const [keys, id, rows, texts] = new TreeReader(packet(fmt, bytes))
+  const [keys, id, rows, texts] = new TreeReader(pkt(fmt, bytes))
     .read_branch()
     .get<[string[], U32Array, U32Array, string[]]>();
   if (keys.length !== id.length) throw new FileError(Errno.EINVAL);
@@ -83,7 +83,7 @@ export function encode_writes(fmt: number, leaves: readonly Leaf[]): U8Array {
 
 /** The layout is file.json's `top`. */
 export function decode_top(bytes: U8Array): TopRow[] {
-  const [shard, fold] = new TreeReader(packet(format.OBJECT_TOP, bytes))
+  const [shard, fold] = new TreeReader(pkt(format.OBJECT_TOP, bytes))
     .read_branch()
     .get<[string[], U32Array]>();
   if (shard.length !== fold.length) throw new FileError(Errno.EINVAL);

@@ -695,7 +695,7 @@ impl ObjectQuery for Store {
             let k = walk.at.len();
             let c = column(k);
             let mut leaves = k.checked_sub(1).and_then(|o| walk.at[o].leaves);
-            let mut met = |slots: &mut Vec<([i32; 3], NodeSlot)>, at: [i32; 3], h: NodeSlot| {
+            let mut visit = |slots: &mut Vec<([i32; 3], NodeSlot)>, at: [i32; 3], h: NodeSlot| {
                 if h.is_folded() {
                     slots.push((at, h));
                 } else if h.holds() {
@@ -704,7 +704,7 @@ impl ObjectQuery for Store {
             };
             match k.checked_sub(1) {
                 None => {
-                    met(&mut walk.slots, [0; 3], self.cursor((0, [0; 3]), 0));
+                    visit(&mut walk.slots, [0; 3], self.cursor((0, [0; 3]), 0));
                 }
                 Some(o) => {
                     for i in walk.start(o)..walk.at[o].end {
@@ -713,7 +713,7 @@ impl ObjectQuery for Store {
                             - object::z_start(k as Zoom);
                         let y = c[1] - object::y_start(k as Zoom);
                         for child in [z, z + 1].map(|z| [c[0], y, z]) {
-                            met(
+                            visit(
                                 &mut walk.slots,
                                 child,
                                 self.child(&h, (k as Zoom, child), k as Zoom),

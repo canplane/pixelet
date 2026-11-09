@@ -12,9 +12,9 @@ const PASS: Id = 10;
 
 fn with_args() -> Split {
     let mut s = Split::default();
-    s.made(ARGS, true, 1);
-    s.made(OTHER_ARGS, true, 2);
-    s.made(PLAIN, false, 3);
+    s.note_buffer(ARGS, true, 1);
+    s.note_buffer(OTHER_ARGS, true, 2);
+    s.note_buffer(PLAIN, false, 3);
     s.grouped(WRITES_ARGS, [(16, ARGS), (8, PLAIN)].into_iter());
     s.begun(ENCODER);
     s
@@ -71,7 +71,7 @@ fn a_copy_into_args_writes_them() {
 #[test]
 fn a_handle_made_again_is_what_it_is_now() {
     let mut s = with_args();
-    s.made(ARGS, false, 4);
+    s.note_buffer(ARGS, false, 4);
     assert!(!s.is_args(ARGS));
     s.grouped(WRITES_ARGS, [(8, PLAIN)].into_iter());
     s.opened(PASS, ENCODER, true, None);

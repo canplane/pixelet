@@ -714,7 +714,7 @@ const _: () = assert!(
     "a compute group lays out other than its shader reads (record.rs `binds`)"
 );
 
-/// The buffers, by their place in `BUFFERS`.
+/// The buffers, by their place in `BUFS`.
 pub const MARKS: u32 = 0;
 pub const NODE_CACHE: u32 = 1;
 pub const QUEUES: u32 = 2;
@@ -736,29 +736,29 @@ pub const CULLED_LIGHT_ARGS: u32 = 17;
 pub const BEAMS: u32 = 18;
 
 /// Each buffer by the name of the host's field that holds it, and its role.
-pub const BUFFERS: &[Buffer] = &[
-    buffer("marks", ARGS),
-    buffer("node_cache", STATE),
-    buffer("queues", STATE),
-    buffer("cast_tiles", ARGS),
-    buffer("raster.args", ARGS),
-    buffer("raster.hits", ARGS),
-    buffer("light_args", ARGS),
-    buffer("light_list", LIST),
-    buffer("light_receiver_tiles", ARGS),
-    buffer("light_draws_dispatch", ARGS),
-    buffer("light_misses", ARGS),
-    buffer("raster.light.args", ARGS),
-    buffer("raster.light.hits", ARGS),
-    buffer("light_tiles.rect_args", ARGS),
-    buffer("generator.list", ARGS),
-    buffer("generator.args", ARGS),
-    buffer("generator.culled[Screen].args", ARGS),
-    buffer("generator.culled[Light].args", ARGS),
-    buffer("beams", LIST),
+pub const BUFS: &[Buffer] = &[
+    buf("marks", ARGS),
+    buf("node_cache", STATE),
+    buf("queues", STATE),
+    buf("cast_tiles", ARGS),
+    buf("raster.args", ARGS),
+    buf("raster.hits", ARGS),
+    buf("light_args", ARGS),
+    buf("light_list", LIST),
+    buf("light_receiver_tiles", ARGS),
+    buf("light_draws_dispatch", ARGS),
+    buf("light_misses", ARGS),
+    buf("raster.light.args", ARGS),
+    buf("raster.light.hits", ARGS),
+    buf("light_tiles.rect_args", ARGS),
+    buf("generator.list", ARGS),
+    buf("generator.args", ARGS),
+    buf("generator.culled[Screen].args", ARGS),
+    buf("generator.culled[Light].args", ARGS),
+    buf("beams", LIST),
 ];
 
-pub const fn buffer(name: &'static str, role: u32) -> Buffer {
+pub const fn buf(name: &'static str, role: u32) -> Buffer {
     Buffer { name, role }
 }
 

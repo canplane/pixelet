@@ -70,7 +70,7 @@ pub struct Pack {
     pub table: u32,
     pub sampler: u32,
     pub bytes: u32,
-    slots: u32,
+    slot_cnt: u32,
     levels: u32,
     loaded: bool,
 }
@@ -79,7 +79,7 @@ impl Pack {
     /// Until the pack arrives, every face reads `NO_SLOT`.
     pub fn new(g: &Gpu) -> Pack {
         let (tiles, _) = layout();
-        let slots = tiles.len() as u32;
+        let slot_cnt = tiles.len() as u32;
         let levels = mip_levels(LAYER_TEX_SIZE, LAYER_TEX_SIZE);
         let usage = texture_usage::TEXTURE_BINDING
             | texture_usage::COPY_DST
@@ -87,12 +87,12 @@ impl Pack {
         let tex = g.texture(
             LAYER_TEX_SIZE,
             LAYER_TEX_SIZE,
-            slots,
+            slot_cnt,
             Format::rgba8unorm_srgb,
             levels,
             usage,
         );
-        let view = g.view(tex, true, 0, levels, 0, slots);
+        let view = g.view(tex, true, 0, levels, 0, slot_cnt);
         // The sampler filters anisotropically, at 4x, as the ground is mostly seen at a
         // grazing angle, where an isotropic mip blurs the tile along the view.
         let sampler = g.sampler(
@@ -110,7 +110,7 @@ impl Pack {
         );
         g.write_buf(table, 0, bytes(&blank));
         let bytes = (0..levels)
-            .map(|level| (LAYER_TEX_SIZE >> level).pow(2) * 4 * slots)
+            .map(|level| (LAYER_TEX_SIZE >> level).pow(2) * 4 * slot_cnt)
             .sum();
         Pack {
             tex,
@@ -118,7 +118,7 @@ impl Pack {
             table,
             sampler,
             bytes,
-            slots,
+            slot_cnt,
             levels,
             loaded: false,
         }
@@ -126,7 +126,7 @@ impl Pack {
 
     /// Copies the pack's tiles into their slots, builds their mips and writes the table, the
     /// first time the pack arrives. Returns whether it arrived this frame.
-    pub fn step(&mut self, g: &Gpu, mips: &MipPass, pack: Option<Image>) -> bool {
+    pub fn step(&mut self, g: &Gpu, mip: &MipPass, pack: Option<Image>) -> bool {
         if self.loaded {
             return false;
         }
@@ -145,7 +145,7 @@ impl Pack {
         }
         g.submit(encoder);
         release(texture);
-        mips.build(g, self.tex, self.levels, 0, self.slots);
+        mip.build(g, self.tex, self.levels, 0, self.slot_cnt);
         g.write_buf(self.table, 0, bytes(&table));
         self.loaded = true;
         true

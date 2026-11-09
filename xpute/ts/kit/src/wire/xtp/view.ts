@@ -25,7 +25,7 @@ import {
   U64,
   U8,
 } from "@xpute/kit/abi/word.ts";
-import { fits_i32, fits_i64 } from "@xpute/kit/abi/word.ts";
+import { exact_i32, fits_i64 } from "@xpute/kit/abi/word.ts";
 import type {
   F32Array,
   F64Array,
@@ -157,9 +157,7 @@ function val_to_node(val: NodeValue<NodeView>): Node {
 
   switch (typeof val) {
     case "number":
-      // -0 fits an i32 by value but would read back as 0, so it is an f64.
-      if (fits_i32(val) && !Object.is(val, -0)) return I32_NODE(val);
-      return F64_NODE(val);
+      return exact_i32(val) ? I32_NODE(val) : F64_NODE(val);
     case "bigint":
       if (!fits_i64(val)) throw new MarshalError(Errno.EINVAL);
       return I64_NODE(val);

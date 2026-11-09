@@ -26,7 +26,7 @@ import * as local from "@/service/platform/storage.ts";
 /** A write the platform refuses keeps nothing and does not throw. */
 export interface Storage {
   get(key: string): string | null;
-  set(key: string, value: string): void;
+  set(key: string, val: string): void;
 }
 
 export let STORAGE: Storage = local;

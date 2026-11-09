@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::frame::shader::access::{
-    found, role, Group, ARGS, ARGS_INDIRECT, COPY, DRAW, NO_BUFFER, STATE, WRITE_BY_RUNTIME,
+    found, role, Group, ARGS, ARGS_INDIRECT, COPY, DRAW, NO_BUF, STATE, WRITE_BY_RUNTIME,
 };
 
 /// The sources whose calls take their offsets from a step here.
@@ -99,8 +99,8 @@ fn named(statement: &str) -> Option<&str> {
 
 /// Whether `statement` names one of the frame's buffers by the host's field for it, as in
 /// `.marks,` or `.light_args)`.
-fn names_buffer(statement: &str) -> bool {
-    BUFFERS.iter().any(|b| {
+fn names_buf(statement: &str) -> bool {
+    BUFS.iter().any(|b| {
         let field = b.name.rsplit('.').next().unwrap_or(b.name);
         [",", ")", " "]
             .iter()
@@ -138,7 +138,7 @@ fn the_host_calls_off_the_steps_in_their_order() {
         }
         for call in ["copy_buf(", "write_buf("] {
             for (_, statement) in calls(text, call) {
-                if names_buffer(statement) {
+                if names_buf(statement) {
                     assert!(
                         statement.contains("sequence::")
                             || statement.contains("from_at()")
@@ -171,7 +171,7 @@ fn the_host_calls_off_the_steps_in_their_order() {
         named_anywhere.extend(at.iter().map(|(_, n)| place(n)));
     }
     for (k, step) in FRAME.steps.iter().enumerate() {
-        if step.indirect.buf != NO_BUFFER || step.kind == COPY || step.kind == WRITE_BY_RUNTIME {
+        if step.indirect.buf != NO_BUF || step.kind == COPY || step.kind == WRITE_BY_RUNTIME {
             assert!(
                 named_anywhere.contains(&k),
                 "`{}` is a step no source calls",
@@ -203,7 +203,7 @@ fn an_indirect_call_off_args_its_group_binds_writable_is_found() {
     };
     const SHIPPED: Frame = Frame {
         stages: &["the light's cast"],
-        buffers: &[buffer("light_args", ARGS)],
+        bufs: &[buf("light_args", ARGS)],
         appends: &[],
         seeds: &[],
         bounds: &[],

@@ -34,6 +34,16 @@ distance; the palette indices a coarse cell folds; and which edges and corners
 of the face meet the air. The screen pass paints them with the one function
 every lit face uses (`screen_ray.wgsl` `px_ray`, `paint.wgsl`).
 
+Two debug views read the cast. In the ray steps view (pxl-engine `eye::STEPS`)
+the third word holds, in place of the palette indices, the steps a ray took on
+its way from the eye, which the screen pass paints on a log ramp: its beam ray's
+descent from the root and its own walk from the cell's start for a hole, and for
+a pixel that took a voxel or the sky without a walk, those of the sample before
+it on the grid's lattice (`cast.wgsl` `taken_word`). Under the camera gizmo the screen pass tints each face by the
+solid angle it shows the eye against a grid cell's (`screen_shade.wgsl`
+`cell_share`), and the camera grid is drawn over the canvas
+(`camera_grid.wgsl`).
+
 ## The node cache and the record
 
 What the rays asked of each node is kept between frames in the node cache, a
@@ -45,10 +55,10 @@ events forget every entry at once: what was placed changed by more than the
 stream has room to send, or by revisions the GPU never held, or by a write that
 names no box, and the casts outrunning the frames a key's tag tells apart
 (`gpu/ray/cast.rs`). That is correct, and costs only a cast of everything again.
-The entries a ray stopped on are the record, and the raster draws every one in
-view each frame (`record_draw_cs`). A frame whose rays reached little still
-draws everything found before; a still frame over a still world draws nothing at
-all.
+The entries a ray stopped on are the record, and the raster draws every fresh
+one in view each frame (`record_draw_cs`). A frame whose rays reached little
+still draws everything found before that is still fresh; a still frame over a
+still world draws nothing at all.
 
 ## Time: the scale and the rate
 
@@ -112,7 +122,7 @@ world pass  generated decor → rays at their depth → generated impostors →
             characters, cumulus, impostors → high clouds → indicator, ghosts
 occlusion   N8AO at half resolution, off the depth the world pass laid (ao.rs)
 finish      the world's color encoded onto the canvas once
-over        markers → debug lines → character surfaces
+over        markers → debug lines → camera grid → character surfaces
 ```
 
 The calls are written through xpute's encoder into one stream (`gpu/api.rs`),
@@ -123,6 +133,18 @@ change is carried to the screen's tiles that read it (`gpu/propagate.rs`), and a
 tile stays in the damage until its history has gathered the jitter's frames
 (`gpu/resolve.rs`). The CPU decides from what it handed whether a frame is drawn
 whole, through tiles, or not at all, so nothing is read back to decide it.
+
+## What it holds
+
+The GPU's memory has no sum the renderer keeps to, only a bound on each part.
+The terrain's bricks and palette are fixed at build time, and the ways' pool
+grows to a cap the build checks. What is sized by the screen is capped by the
+area drawn (`gpu/surface.rs`). The objects' tree, placed decor, the models and
+the images grow with what they hold, each buffer checked only against what
+every device can bind (`frame/shader/floor.rs` `fits`). Past that check the core
+stops. A device that runs out of memory first fails on its own terms: no error
+scope is kept, so a buffer it could not make is an error buffer, and a device it
+loses comes back through `on_gpu_lost`, which makes everything again.
 
 ## Making the renderer
 
@@ -165,7 +187,7 @@ every shader.
 The sky is drawn at the far plane, so only pixels no ray met run it
 (`sky.wgsl`); where such a ray falls to the land, it shows flat land shaded from
 the earth layer. The air between the eye and what is drawn is Hillaire's
-aerial-perspective volume (`gpu/atmosphere.rs` `froxel_cs`), read by each drawn
+aerial-perspective volume (`atmos_froxel.wgsl` `froxel_cs`), read by each drawn
 point at its direction and depth (`atmos_air.wgsl`). Neither the sky view nor
 the volume reads the view's direction, so turning the eye keeps both, and both
 are drawn again only where the light's height or the eye's altitude has moved by

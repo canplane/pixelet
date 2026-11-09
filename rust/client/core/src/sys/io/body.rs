@@ -107,10 +107,10 @@ impl SlotTable {
     }
 }
 
-/// The most heap that `slots` slots out at once can take: the whole runs that
+/// The most heap that `slot_cnt` slots out at once can take: the whole runs that
 /// hold them.
-pub const fn slots_bytes(slots: u32) -> u64 {
-    slots.div_ceil(SLOTS) as u64 * BODY_RUN_BYTES as u64
+pub const fn slots_bytes(slot_cnt: u32) -> u64 {
+    slot_cnt.div_ceil(SLOTS) as u64 * BODY_RUN_BYTES as u64
 }
 
 /// A block for a body of `n` bytes. `stream` is the body's stream, or None

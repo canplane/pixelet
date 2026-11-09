@@ -151,13 +151,13 @@ test("object_backend - a refused shard is set aside, its rows of the top with it
 });
 
 test("object_backend - a database that refuses sets nothing aside, and throws at no commit", async () => {
-  const error = console.error;
+  const err = console.error;
   console.error = () => {};
   try {
     const b = object_backend(database(true));
     b.commit(EDITS, encode_writes(format.OBJECT_EDITS, [CUBE]));
     assert.deepStrictEqual(await b.set_aside(SHARD, 7), false);
   } finally {
-    console.error = error;
+    console.error = err;
   }
 });

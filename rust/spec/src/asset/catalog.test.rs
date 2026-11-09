@@ -2,12 +2,12 @@
 
 use super::*;
 
-fn laid(slots: usize) -> Vec<u8> {
-    let mut bytes = (slots as u32).to_le_bytes().to_vec();
-    for s in 0..slots {
+fn laid(slot_cnt: usize) -> Vec<u8> {
+    let mut bytes = (slot_cnt as u32).to_le_bytes().to_vec();
+    for s in 0..slot_cnt {
         bytes.extend((s as u32 + 1).to_le_bytes());
     }
-    for s in 0..slots {
+    for s in 0..slot_cnt {
         for k in 0..3 {
             bytes.extend((s as f64 + k as f64 / 4.0).to_le_bytes());
         }

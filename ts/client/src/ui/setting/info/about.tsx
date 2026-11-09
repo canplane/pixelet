@@ -11,14 +11,8 @@ import { format } from "@/abi/file.spec.ts";
 import { LABEL } from "@/ui/component/palette.ts";
 import { useSourceVersions } from "@/ui/watch.ts";
 
-const ENV_SHORT: Record<string, string> = {
-  development: "dev",
-  staging: "stg",
-};
-
 function envLabel(): string {
-  const env = ENV_SHORT[APP_ENV] ?? APP_ENV;
-  return DEV_SOURCE === "delivery" ? env : `${env}:${DEV_SOURCE}`;
+  return DEV_SOURCE === "delivery" ? APP_ENV : `${APP_ENV}:${DEV_SOURCE}`;
 }
 
 function bakeLines(source: Readonly<Record<string, string>> | null): string[] {
@@ -62,7 +56,7 @@ export function AboutSection() {
         <View>
           <Text style={settingText.faint}>
             {BUILD_NUMBER}
-            {APP_ENV !== "production" && ` (${envLabel()})`}
+            {APP_ENV !== "prod" && ` (${envLabel()})`}
             {` · ${buildLabel()}`}
           </Text>
           {bakeLines(source).map((line) => (

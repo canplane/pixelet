@@ -31,9 +31,9 @@ pub struct Decor {
     /// Its scatter: changing it reshuffles every one the ground generates.
     pub seed: u32,
     /// The chance a cell of its holds one, over 2^32: a cell's mean
-    /// (pxl-content scatter.rs `count`).
+    /// (pxl-content scatter.rs `cnt`).
     pub chance: u32,
-    pub orientation: Orientation,
+    pub orient: Orientation,
     /// The palette entries it may stand on, a bit each.
     pub on: [u32; 8],
     pub variants: u32,
@@ -48,7 +48,7 @@ pub const DECORS: [Decor; 4] = [
         val: 1024,
         seed: 0x7902530c,
         chance: 107374182,
-        orientation: Orientation::random,
+        orient: Orientation::random,
         on: [0x00000902, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
         variants: 9,
         sizes: [[1, 1, 3], [1, 1, 3], [1, 1, 3], [1, 1, 3], [1, 1, 3], [1, 1, 2], [1, 1, 2], [1, 1, 2], [1, 1, 2]],
@@ -58,7 +58,7 @@ pub const DECORS: [Decor; 4] = [
         val: 1025,
         seed: 0xb0a5802d,
         chance: 4294967,
-        orientation: Orientation::random,
+        orient: Orientation::random,
         on: [0x00000000, 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
         variants: 4,
         sizes: [[3, 2, 1], [2, 4, 3], [2, 4, 5], [2, 3, 2], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],
@@ -68,7 +68,7 @@ pub const DECORS: [Decor; 4] = [
         val: 1026,
         seed: 0x0ca63010,
         chance: 12884902,
-        orientation: Orientation::along_transport,
+        orient: Orientation::along_transport,
         on: [0x00000000, 0x0001e800, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
         variants: 5,
         sizes: [[1, 3, 1], [1, 3, 1], [1, 3, 1], [1, 3, 1], [1, 3, 1], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],
@@ -78,7 +78,7 @@ pub const DECORS: [Decor; 4] = [
         val: 1027,
         seed: 0x7ba5802d,
         chance: 6442451,
-        orientation: Orientation::along_transport,
+        orient: Orientation::along_transport,
         on: [0x00000000, 0x007c0000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
         variants: 4,
         sizes: [[1, 3, 2], [1, 3, 2], [1, 3, 2], [1, 3, 2], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],

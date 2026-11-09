@@ -11,7 +11,7 @@ use xpute_core::global::Global;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DeviceLocation {
     /// Longitude and latitude, in degrees.
-    pub coords: [f64; 2],
+    pub lon_lat: [f64; 2],
     /// Meters above sea level. None where the device gives no altitude.
     pub alt: Option<f64>,
     /// The fix's accuracy, in meters.
@@ -89,7 +89,7 @@ impl DeviceLocationStore {
     /// any fix marks the sensor Ready, since it shows the watch delivers.
     pub fn set_location(
         &mut self,
-        coords: [f64; 2],
+        lon_lat: [f64; 2],
         alt: Option<f64>,
         accuracy: f64,
         course: Option<f64>,
@@ -98,7 +98,7 @@ impl DeviceLocationStore {
         self.state = SensorState::of(SensorStatus::Ready);
         let Some(prev) = self.location else {
             self.location = Some(DeviceLocation {
-                coords,
+                lon_lat,
                 alt,
                 accuracy,
                 course,
@@ -115,8 +115,8 @@ impl DeviceLocationStore {
         }
 
         // The dead zone is about 1.1 m horizontally and 0.5 m in altitude.
-        let lon_diff = (prev.coords[0] - coords[0]).abs();
-        let lat_diff = (prev.coords[1] - coords[1]).abs();
+        let lon_diff = (prev.lon_lat[0] - lon_lat[0]).abs();
+        let lat_diff = (prev.lon_lat[1] - lon_lat[1]).abs();
         let is_significant_change =
             lat_diff > 0.00001 || lon_diff > 0.00001 || is_delta_over(prev.alt, alt, 0.5);
 
@@ -127,10 +127,10 @@ impl DeviceLocationStore {
         // Without movement, the accuracy and course still refresh, so the UI
         // shows the freshest signal.
         self.location = Some(DeviceLocation {
-            coords: if is_significant_change {
-                coords
+            lon_lat: if is_significant_change {
+                lon_lat
             } else {
-                prev.coords
+                prev.lon_lat
             },
             alt: if is_significant_change { alt } else { prev.alt },
             accuracy,

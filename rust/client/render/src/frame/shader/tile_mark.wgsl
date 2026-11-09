@@ -11,10 +11,10 @@
 // is attached read-only and not tested, so the mark covers what the draw covers, seen or not.
 
 struct MarkGrid {
-  // Laid out as tile_word.wgsl's `TileGrid`: `count` holds the tiles across and down, the frames a
+  // Laid out as tile_word.wgsl's `TileGrid`: `cnt` holds the tiles across and down, the frames a
   // tile stays claimed and this frame's number, and `size` the target's size, a quad's growth
   // and a tile's side.
-  count: vec4u,
+  cnt: vec4u,
   size: vec4f,
 };
 
@@ -27,8 +27,8 @@ struct MarkGrid {
 @fragment
 fn fs(@builtin(position) clip: vec4f) {
   let t = vec2u(clip.xy) / u32(tile_marks.size.w);
-  let ii = t.y * tile_marks.count.x + t.x;
-  let now = tile_marks.count.w;
+  let ii = t.y * tile_marks.cnt.x + t.x;
+  let now = tile_marks.cnt.w;
   // The word is read first, so a tile already set this frame takes no write.
   if (atomicLoad(&changed_at[ii]) == now || atomicExchange(&changed_at[ii], now) == now) {
     return;

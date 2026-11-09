@@ -65,9 +65,9 @@ pub struct FrameSection {
     pub tick: Percentile,
     /// The other measured parts of `busy`, then `rest`, what they leave of it
     /// unmeasured.
-    pub effects: Percentile,
+    pub effect: Percentile,
     pub stage: Percentile,
-    pub tasks: Percentile,
+    pub task: Percentile,
     pub perf: Percentile,
     pub rest: Percentile,
     /// Each effect's p95, indexed by `EffectName`.
@@ -91,7 +91,7 @@ pub struct FrameSection {
     /// The world's pixel count in the last frame a read timed.
     pub gpu_px: f64,
     /// The ray counts of the window's frames, summed field by field.
-    pub rays: RaySample,
+    pub ray_sample: RaySample,
     /// The window's first frame and its last.
     pub first: FrameSample,
     pub last: FrameSample,
@@ -114,15 +114,15 @@ words!(FrameSection, STAT::frames::WORDS,
     missed => STAT::frames::missed, overran => STAT::frames::overran,
     long => STAT::frames::long, turns => STAT::frames::turns, gpu_timed => STAT::frames::gpu_timed,
     interval => STAT::frames::interval, busy => STAT::frames::busy,
-    tick => STAT::frames::tick, effects => STAT::frames::effects,
-    stage => STAT::frames::stage, tasks => STAT::frames::tasks,
+    tick => STAT::frames::tick, effect => STAT::frames::effect,
+    stage => STAT::frames::stage, task => STAT::frames::task,
     perf => STAT::frames::perf, rest => STAT::frames::rest,
     effects_p95 => STAT::frames::effects_p95, gpu_busy => STAT::frames::gpu_busy,
     gpu_busy_kinds => STAT::frames::gpu_busy_kinds,
     phases_p95 => STAT::frames::phases_p95, gpu_spans_p95 => STAT::frames::gpu_spans_p95,
     gpu_spans_cnt => STAT::frames::gpu_spans_cnt,
     kinds => STAT::frames::kinds, wakes => STAT::frames::wakes,
-    gpu_px => STAT::frames::gpu_px, rays => STAT::frames::rays,
+    gpu_px => STAT::frames::gpu_px, ray_sample => STAT::frames::rays,
     first => STAT::frames::first, last => STAT::frames::last,
 );
 

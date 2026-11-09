@@ -64,6 +64,10 @@ too.
   conflicts (a CRDT or otherwise), who may write.
 - Letting go of shards read, and a network or loopback backend beside the
   device's.
+- The most bytes a shard's file may take, a contract with the source as a baked
+  tile's `max_pkt_bytes` is. The source builds the file, so it decides what
+  happens past that. Until then a shard has no cap (`Stream::max_body`), and it
+  is decoded and applied in one step however large it is.
 - A shard file the kernel refuses is not reported or set aside, as a refused
   settings file is.
 - One fact computed in several places: the shard over a node (the repository,

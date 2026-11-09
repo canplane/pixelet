@@ -79,8 +79,8 @@ impl ui::Exports for State {
     fn sensor_platform(&mut self, c: abi::SensorPlatform) -> Outcome {
         sensor::platform(c)
     }
-    fn setting_development(&mut self, c: abi::SettingDevelopment) -> Outcome {
-        setting::development(c)
+    fn setting_dev(&mut self, c: abi::SettingDev) -> Outcome {
+        setting::dev(c)
     }
     fn sensor_locate(&mut self) -> Outcome {
         sensor::locate(self)

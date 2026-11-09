@@ -218,7 +218,7 @@ impl clipmap::Brick for LaneBrick<'_> {
 }
 
 /// Writes a brick's columns and its cells as laid into `lane`, where `four(i)` gives cell
-/// `i`'s four palette indices (`ground::palette_indices`). Each column gets its ground top
+/// `i`'s four palette indices (`ground::palette_idxs`). Each column gets its ground top
 /// (`ground::height`); a gone cell, whose own palette index is `UNKNOWN` past the area, gets
 /// the Earth's top at sea level. Each cell gets its own palette index (`ground::own` of its
 /// four at the brick's zoom), four to a word (`clipmap::OWN_WORDS`).

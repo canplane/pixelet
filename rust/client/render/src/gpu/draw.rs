@@ -429,14 +429,14 @@ impl<'a> DrawTable<'a> {
             .iter()
     }
 
-    /// Counts `pipeline`'s draws into `stats`, each as many triangles as `triangles` says.
+    /// Counts `pipeline`'s draws into `stat`, each as many triangles as `triangles` says.
     pub fn count(
         &self,
         pipeline: u32,
-        stats: &mut DrawStat,
+        stat: &mut DrawStat,
         triangles: impl Fn(&[u32; DRAW_WORDS]) -> u32,
     ) {
-        let c = &mut stats[stats_slot(pipeline)];
+        let c = &mut stat[stats_slot(pipeline)];
         for d in self.of(pipeline) {
             c[0] += 1.0;
             c[1] += f64::from(triangles(d));

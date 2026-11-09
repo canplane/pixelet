@@ -200,7 +200,7 @@ pub fn take_storage() -> Option<StorageRead> {
                 None
             }
         },
-        ReadState::Refused(refused) if refused.over() => {
+        ReadState::Refused(refused) if refused.released() => {
             open_storage();
             None
         }

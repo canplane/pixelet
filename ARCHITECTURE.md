@@ -71,11 +71,10 @@ the way a texture is drawn from its mipmap, so a view from orbit reads a handful
 of tiles, not the planet.
 
 The **objects** are what people build. They are one sparse octree that keeps
-only the leaves people filled; a branch holds no data, and when someone asks
-what a branch looks like from afar its leaves are folded on the spot. A write
-splits only the path down to its leaf, and eight equal leaves are joined back
-into one, so one picture has exactly one tree. Placing air erases what the
-ground would show.
+only the leaves people filled and, in each branch, its children folded into one
+word. A write splits only the path down to its leaf and folds again up it, and
+eight equal leaves are joined back into one, so one picture has exactly one
+tree. Placing air erases what the ground would show.
 
 ```text
        the core                             the objects' source
@@ -183,7 +182,7 @@ into one answer for drawing and for control alike (`pxl-engine world.rs`
   the grid of the ground, cubes at height ┘
 ```
 
-A ray descends the octree by one function that the CPU and the GPU compile alike
+A ray descends the octree by the same rule on the CPU and the GPU
 (`pxl-engine cast.rs` `first`). A node coarser than the zoom its distance asks
 for is not what is drawn there, so it is asked only whether anything under it
 might fill. If nothing can, the ray passes it whole; what a zoom folds away is
@@ -217,15 +216,17 @@ tile it needed, or nothing along with that tile (`domain/layer/answer.rs`
 none is held, the ray stops and says nothing past it. Nothing is invented.
 
 What the view fetches is **demand**: for each zoom, every tile within that
-zoom's band about the eye. It depends on the eye alone, never on what the rays
-met, and each layer holds what is demanded in its own **tile cache**
+zoom's band about the eye, and the ground under the pivot and under a place the
+camera is sent to. It follows where those stand, never what the rays met, and
+each layer holds what is demanded in its own **tile cache**
 (`domain/layer/tile_cache.rs`), which keeps four promises. Every observation has
 an answer, because the coarsest zoom is always held all round the eye, as the
 **floor**. The tiles held for the floor and for demand are counted at compile
-time and fit the cache's slots with one to spare (`TileCache::SLOTS`), so memory
-has a bound no view can break. A region only ever goes from unresolved to coarse
-to as fine as it is observed, never back. And nothing is prefetched: a view
-converges on its misses alone.
+time and fit the cache's slots (`TileCache::SLOTS`), so no view can ask for more
+tiles than the cache holds. A region only ever goes from unresolved to coarse
+to as fine as it is observed, never back. And nothing is fetched on a guess: a
+view converges on its misses alone, and a camera sent somewhere waits for the
+ground there.
 
 The ground's cells are held in a **clipmap** (Tanner, Migdal and Jones 1998):
 one level per zoom about a center, each a few **bricks** wide and addressed
@@ -296,9 +297,11 @@ solid below its surface.
 What the rays asked of each node is kept between frames in the **node cache**
 (`pxl-engine node_cache.rs`), and forgotten where the data a node read changed,
 or given up for room once it has not been drawn for two frames. The voxels in it
-are the **record**, and the raster draws every one in view each frame, whatever
-that frame's rays reached (`pxl-engine record.rs`). So a voxel found once is
-drawn until its data changes, and rays walk only where something is newly seen.
+are the **record**, and each frame the raster draws every one in view that is
+**fresh**, still the node the eye's ray stops on, whatever that frame's rays
+reached (`pxl-engine record.rs`). So a voxel found once is drawn until its data
+changes or the eye's distance asks another zoom there, and rays walk only where
+something is newly seen.
 A still camera over a still world costs almost nothing, and a frame where
 nothing it reads moved submits no work at all.
 
@@ -344,8 +347,7 @@ A test holds every compute pass over the world to the engine's Rust, word for
 word, over a real world's buffers (`rust/client/render/tests/`). Positions are
 integers on both sides, and any value a rule would divide by or take the root of
 is rounded once on the CPU and handed to the GPU, so the two never round
-differently. The build checks every shader with naga, and a test compiles each
-with Tint, the compiler a browser runs.
+differently.
 
 ### What is not a layer
 
@@ -364,17 +366,18 @@ OS, into one image, and a **runtime** around it plays the virtual machine: it
 gives the core one memory, a GPU, its files and its time, and nothing else
 reaches in. On a page the image is a WebAssembly module and the runtime is
 TypeScript in a worker; on a device it is a library linked into the app and the
-runtime is native. The core cannot tell which, and does not need to, so the same
-world runs everywhere. xpute's own documents describe that machine; this one is
-about what pixelet does on it.
+runtime is that TypeScript with Rust beside it. The core cannot tell which, and
+does not need to, so the same world runs everywhere. xpute's own documents
+describe that machine; this one is about what pixelet does on it.
 
 The core is given its time in **turns**. Each turn is paced to the display and
 arrives as a grant that carries its budget and how many reads it may start
 (`turn.rs` `TurnGrant`). A turn runs one task in one order: the effects of the
-last one, the tick's phases under the budget, then the frame; a frame the GPU
-cannot take yet is not begun. The core's memory is laid out once at boot, in
-sections that nothing grows past (`sys/mem/section.rs`), so a long session has
-the same footprint as a short one.
+last one, the tick's phases under the budget, then the frame, and none of it
+where the GPU cannot take a frame yet. The core's memory is laid out once at
+boot, in sections that nothing grows past (`sys/mem/section.rs`), so a long
+session reserves what a short one does. What fills the heap grows with what was
+read, up to the heap's end.
 
 Reads are asked for, never taken. Each turn every stream of reads declares
 everything it wants now, and one pump starts the best of them on the credits the
@@ -382,13 +385,14 @@ grant gave, ranked by what the view needs first (`sys/io/request.rs` `declare`,
 `pump`; `policy.rs` `rank`). A read nobody wants any more is stopped in the same
 turn, so a zoom the camera only passed through holds no credit. When a read
 fails it keeps its want, and when the network or the server fails, every start
-waits while one probe goes out, after a growing, jittered delay (`policy.rs`
-`backoff`). Meanwhile the view draws what it has, coarser, as it always does.
+waits while one probe goes out, after a jittered delay (`policy.rs` `backoff`).
+Meanwhile the view draws what it has, coarser, as it always does.
 
 The UI sits outside the image. It never computes a coordinate or a tile: it
 sends the core commands and draws the snapshot the core sends back, and its one
-way in is `ts/client/src/service/core/`, through stubs generated from one
-specification, so the two cannot disagree about a field.
+way in is `ts/client/src/service/core/`, through a table of each command's
+fields generated from one specification, so the two cannot disagree about a
+field.
 
 ## Making the data
 
@@ -424,7 +428,7 @@ noticing:
   word for word.
 - A tunable number is never a correctness bound: at its least the view still
   converges, only coarser or later.
-- Nothing is prefetched, and nothing goes from fine back to coarse.
+- Nothing is fetched on a guess, and nothing goes from fine back to coarse.
 - No decision reads the profiler, which sits beside the core and may read
   anything.
 
@@ -440,8 +444,7 @@ up, and the folders are that order. The check-rules tool holds it.
 
     scene/       what this frame draws          ┐ two heads; neither
     control/     moves the eye, asks the query  ┘ names the other
-    setting/     the settings both heads read, with the shared
-                 smoothing (smooth.rs) and parameters (param.rs)
+    setting/     the settings both heads read
     view/        the pose, the lens, demand     ┐
     query/       the only seam                  ├ the trunk
     layer/       the base and the objects       ┘

@@ -10,16 +10,18 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   takes its word from Unix, Linux or Wayland; a device outside them keeps its
   platform's word. The application takes its field's word (graphics, cartography,
   games). A metaphor no field uses is no name.
-- A word on this list is abbreviated; any other stays whole: index `idx`,
-  value `val`, values `vals`, buffer `buf`, source `src`, destination `dst`,
+- In snake_case and SCREAMING, a word on this list is abbreviated and any other
+  stays whole: index `idx`, value `val`, buffer `buf`, source `src`, destination `dst`,
   offset `off`, count `cnt`, current `cur` (not `curr`), position `pos`,
   direction `dir`, directory `dir`, pixel `px`, resolution `res`, distance
   `dist`, address `addr`, capacity `cap`, dimension `dim`, memory `mem`,
   component `comp`, channel `ch`, elevation `ele`, feature `feat`, latitude
   `lat`, longitude `lon`, radian `rad`, degree `deg`, orientation `orient`,
   rotation `rot`, altitude `alt`, error `err`, packet `pkt`, initial `init`,
-  matrix `mat`, configuration `cfg`, descriptor `desc`, context `ctx`. `pkt` is
-  only a wire packet.
+  matrix `mat`, configuration or config `cfg`, descriptor `desc`, context `ctx`,
+  coordinate `coord`, declaration `decl`, definition `def`, sequence `seq`,
+  atmosphere `atmos`. A plural is `vals`, `bufs`, `offs`, `cnts` or `idxs`, and
+  whole otherwise. `pkt` is only a wire packet.
 - Whole, though they look short: `zoom`; `size` in pixelet, GPU texture sizes
   included, and `sz` in xpute (`HDR_SZ`, `WORD_SZ`); `environment`; `source` as
   a source of data; `encode`, `decode`.
@@ -34,8 +36,13 @@ description: Naming in pixelet — short, plain names read where they stand; whe
 - A word may mean different things where each is its field's word (a map's tile,
   a shadow map's tile). A name changes when it is not its field's word or not
   what the thing is, not to keep words apart.
-- Snake_case and SCREAMING abbreviate; PascalCase types, camelCase and the
-  React UI's own names stay whole (`let cfg: Config`).
+- PascalCase types, camelCase and the React UI's own names stay whole (`let
+  cfg: Config`). A name that comes up from the core or xpute keeps its spelling
+  in the UI (`cnt`, `lat`), and a name copied from an outside API keeps that
+  API's (`with_capacity`, `memory_hints`).
+- A file or module is named for its layer: a system one takes its field's short
+  word (`sys`, `io`, `mem`, `abi`), a domain one the whole word (`scene`,
+  `query`, `count`), and this list alone renames neither.
 - Use a unit suffix on a length (`_u` the world's units, `_merc` a meter on
   the EPSG:3857 plane, `_m` a meter on the ground), on the value where a
   person sees it (`29.0 m`).

@@ -117,7 +117,7 @@ fn hand_light_cs_answers_as_the_rust() {
     let built = real_world::build(EYE);
     let over = |b: &Built, g: [i32; 2], up: i32| q8([g[0], g[1], b.top_at(g) + up]);
     let mut tally = Tally::default();
-    let mut kinds = KindCount::default();
+    let mut kind_cnt = KindCount::default();
     let cases = [
         SlotCase {
             name: "about the eye, the epoch begun",
@@ -173,7 +173,7 @@ fn hand_light_cs_answers_as_the_rust() {
         },
     ];
     for c in &cases {
-        run_slots(&gpu, &pipe, built.world(), c, &mut tally, &mut kinds);
+        run_slots(&gpu, &pipe, built.world(), c, &mut tally, &mut kind_cnt);
     }
     let zero = real_world::build(EYE_ZERO);
     let c = SlotCase {
@@ -193,8 +193,8 @@ fn hand_light_cs_answers_as_the_rust() {
         range: [8, FINEST],
         one_in: Some(2),
     };
-    run_slots(&gpu, &pipe, zero.world(), &c, &mut tally, &mut kinds);
-    kinds.hold(&[
+    run_slots(&gpu, &pipe, zero.world(), &c, &mut tally, &mut kind_cnt);
+    kind_cnt.hold(&[
         "slots taken",
         "took",
         "sky",
@@ -217,7 +217,7 @@ fn run_slots(
     w: World,
     c: &SlotCase,
     tally: &mut Tally,
-    kinds: &mut KindCount,
+    kind_cnt: &mut KindCount,
 ) {
     let (l, starts) = c.lit.lay();
     let inv = l.inverse();
@@ -255,34 +255,34 @@ fn run_slots(
                 range: [b, b],
                 spacing: l.spacing(),
             };
-            let met = cast::first(&mut q, o, &r, detail, Until::Opaque);
+            let trace = cast::first(&mut q, o, &r, detail, Until::Opaque);
             let k = light::sample(SIZE, j * n + i) as usize;
             let node = k + beam::SAMPLE_NODE as usize;
             for a in 0..3 {
-                list[node + beam::NODE_CORNER as usize + a] = met.hit.node.corner[a];
-                list[node + beam::NODE_ROOTS as usize + a] = met.hit.node.roots[a] as u32;
+                list[node + beam::NODE_CORNER as usize + a] = trace.hit.node.corner[a];
+                list[node + beam::NODE_ROOTS as usize + a] = trace.hit.node.roots[a] as u32;
             }
-            let gone = met.ends == End::Miss;
+            let gone = trace.end == End::Miss;
             list[node + beam::NODE_ZOOM as usize] = if gone {
                 beam::SAMPLE_NONE
             } else {
-                met.hit.node.zoom
+                trace.hit.node.zoom
             };
-            list[k + beam::SAMPLE_ASSET as usize] = met.hit.asset[0];
-            list[k + beam::SAMPLE_ASSET as usize + 1] = met.hit.asset[1];
-            list[k + beam::SAMPLE_LACKS as usize] = u32::from(met.ends == End::Lacks);
-            list[k + beam::SAMPLE_AXIS as usize] = met.hit.axis;
-            kinds.add("samples gone on", gone);
-            kinds.add("samples stopped", !gone);
+            list[k + beam::SAMPLE_ASSET as usize] = trace.hit.asset[0];
+            list[k + beam::SAMPLE_ASSET as usize + 1] = trace.hit.asset[1];
+            list[k + beam::SAMPLE_LACKS as usize] = u32::from(trace.end == End::Lacks);
+            list[k + beam::SAMPLE_AXIS as usize] = trace.hit.axis;
+            kind_cnt.add("samples gone on", gone);
+            kind_cnt.add("samples stopped", !gone);
             origins[(j * n + i) as usize] = o;
             if !gone {
-                let kind = if met.ends == End::Lacks {
+                let kind = if trace.end == End::Lacks {
                     Kind::Lacks
                 } else {
                     Kind::Cell
                 };
-                let state = raster::faces([ray::face(l.dir, met.hit.axis)])
-                    | if record::light_whole(met.hit.node.zoom, b) {
+                let state = raster::faces([ray::face(l.dir, trace.hit.axis)])
+                    | if record::light_whole(trace.hit.node.zoom, b) {
                         record::WHOLE
                     } else {
                         0
@@ -291,8 +291,8 @@ fn run_slots(
                     &mut rec,
                     j * n + i,
                     o,
-                    &met.hit.node,
-                    (kind, met.hit.asset),
+                    &trace.hit.node,
+                    (kind, trace.hit.asset),
                     state,
                 );
             }
@@ -332,7 +332,7 @@ fn run_slots(
                     let (node, asset, axis) = cell_of(&list, k);
                     let (t, e, enters) = cast::entry(o, &r, &node, asset[0]);
                     if enters && e == axis && best.is_none_or(|b| t < b.0) {
-                        let lacks = list[k + beam::SAMPLE_LACKS as usize] != 0;
+                        let lacks = list[k + beam::SAMPLE_LACKS as usize] & beam::SAMPLE_LACK != 0;
                         best = Some((t, raster::id_of(idx, lacks)));
                     }
                 }
@@ -427,19 +427,19 @@ fn run_slots(
     let mut needed = Vec::new();
     for slot in &threads {
         let Some(slot) = *slot else {
-            kinds.add("past the list", true);
+            kind_cnt.add("past the list", true);
             continue;
         };
         if slot[0] >= SIZE || slot[1] >= SIZE {
             continue;
         }
-        kinds.add("slots taken", true);
+        kind_cnt.add("slots taken", true);
         let p = l.texel(SIZE, slot);
         let tile = (p[1] / light::TILE) * tiles + p[0] / light::TILE;
         if list[reads_at + tile as usize] == CAST {
             needed.push(slot);
         } else {
-            kinds.add("not needed", true);
+            kind_cnt.add("not needed", true);
         }
     }
 
@@ -448,7 +448,7 @@ fn run_slots(
         let k = light::sample(SIZE, (s[1] % n) * n + s[0] % n) + beam::SAMPLE_NODE;
         list[(k + beam::NODE_ZOOM) as usize] == beam::SAMPLE_NONE
     };
-    let answer = |slot: [u32; 2], o: [i32; 3], inv: [f32; 3], kinds: &mut KindCount| {
+    let answer = |slot: [u32; 2], o: [i32; 3], inv: [f32; 3], kind_cnt: &mut KindCount| {
         let band_of = |p: [u32; 2]| {
             let tile = [(p[0] / light::TILE) as i32, (p[1] / light::TILE) as i32];
             l.band(SIZE, c.range, tile)
@@ -469,37 +469,37 @@ fn run_slots(
             // Whether a ray asking the slot's band stops on this node (`record::band_fresh`).
             let alike = record::band_fresh(node.zoom, whole, band);
             if e.enters && e.axis == axis && alike {
-                kinds.add("took", true);
+                kind_cnt.add("took", true);
                 return Answer::Entry(e.t, e.axis);
             }
-            kinds.add(
+            kind_cnt.add(
                 "walked, its visible not entered",
                 !(e.enters && e.axis == axis),
             );
-            kinds.add(
+            kind_cnt.add(
                 "walked, its visible not the stop at its band",
                 e.enters && e.axis == axis && !alike,
             );
         }
-        kinds.add("walked, its visible lacks", visible & raster::LACK != 0);
+        kind_cnt.add("walked, its visible lacks", visible & raster::LACK != 0);
         if visible == 0 {
             let four = light::samples_about(SIZE, slot, p);
             let gone = four.is_some_and(|f| f.iter().all(|&s| gone_on(s)));
             if gone && four.is_some_and(|f| f.iter().all(|&s| sample_band(s) == band)) {
-                kinds.add("sky", true);
+                kind_cnt.add("sky", true);
                 return Answer::Sky;
             }
-            kinds.add("walked, a sample about it another band's", gone);
-            kinds.add("walked, seeing none", true);
+            kind_cnt.add("walked, a sample about it another band's", gone);
+            kind_cnt.add("walked, seeing none", true);
         }
-        kinds.add("walked", true);
+        kind_cnt.add("walked", true);
         Answer::Walk
     };
     let wants: Vec<Answer> = needed
         .iter()
         .map(|&slot| {
             let (o, _) = light::ray(&l, &starts, l.texel(SIZE, slot));
-            answer(slot, o, inv, kinds)
+            answer(slot, o, inv, kind_cnt)
         })
         .collect();
     // Runs the pass over fresh buffers, and reads back the map it leaves and the slots it
@@ -522,11 +522,11 @@ fn run_slots(
             &map0,
         );
         let (vis_v, map_v) = (array_view(&vis_t), array_view(&map_t));
-        let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
-        let header_buf = gpu.buffer(&header, wgpu::BufferUsages::UNIFORM);
-        let list_buf = gpu.buffer(&list, wgpu::BufferUsages::STORAGE);
-        let misses_buf = gpu.buffer(&ray::MISS_ARGS_EMPTY, wgpu::BufferUsages::STORAGE);
-        let rec_buf = gpu.buffer(&rec, wgpu::BufferUsages::STORAGE);
+        let eye_buf = gpu.buf(&eye_words, wgpu::BufferUsages::UNIFORM);
+        let header_buf = gpu.buf(&header, wgpu::BufferUsages::UNIFORM);
+        let list_buf = gpu.buf(&list, wgpu::BufferUsages::STORAGE);
+        let misses_buf = gpu.buf(&ray::MISS_ARGS_EMPTY, wgpu::BufferUsages::STORAGE);
+        let rec_buf = gpu.buf(&rec, wgpu::BufferUsages::STORAGE);
         gpu.dispatch(
             pipe,
             &[
@@ -633,7 +633,7 @@ fn run_slots(
          a depth a product fused into a sum",
         needed.len()
     );
-    kinds.count("slots a depth a product fused into a sum", u64::from(fused));
+    kind_cnt.count("slots a depth a product fused into a sum", u64::from(fused));
 }
 
 /// A slot's answer. `Entry` holds the depth `t` along its ray and the axis it enters its
@@ -652,8 +652,8 @@ enum Answer {
 /// a half. A GPU may round each product or fuse it into the sum after it. Nothing is divided,
 /// so no other rounding enters.
 fn depth_words(l: &Light, t: f32, axis: u32) -> (u32, Vec<u32>) {
-    let met = Trace {
-        ends: End::Hit,
+    let trace = Trace {
+        end: End::Hit,
         hit: Hit {
             t,
             axis,
@@ -662,7 +662,7 @@ fn depth_words(l: &Light, t: f32, axis: u32) -> (u32, Vec<u32>) {
             asset: [0; 2],
         },
     };
-    let want = light::word(light::depth(l, &met));
+    let want = light::word(light::depth(l, &trace));
     let (scale, push) = (l.t_max_inverse(), pxl_engine::axis(l.bias, axis));
     let one = light::DEPTH_ONE as f32;
     let mut all = Vec::new();
@@ -898,13 +898,21 @@ fn hand_light_marks_answer_as_the_rust() {
         },
     ];
     let mut tally = Tally::default();
-    let mut kinds = KindCount::default();
+    let mut kind_cnt = KindCount::default();
     for c in &looks {
         for by in [MarkSource::Walked, MarkSource::Voxels] {
-            run_marks(&gpu, &pipes, built.world(), c, by, &mut tally, &mut kinds);
+            run_marks(
+                &gpu,
+                &pipes,
+                built.world(),
+                c,
+                by,
+                &mut tally,
+                &mut kind_cnt,
+            );
         }
     }
-    kinds.hold(&[
+    kind_cnt.hold(&[
         "pixels met",
         "pixels met nothing",
         "pixels walked apart",
@@ -932,7 +940,7 @@ fn run_marks(
     c: &Look,
     by: MarkSource,
     tally: &mut Tally,
-    kinds: &mut KindCount,
+    kind_cnt: &mut KindCount,
 ) {
     let (l, _) = c.lit.lay();
     let forward = unit(c.look);
@@ -1013,14 +1021,14 @@ fn run_marks(
                     let r = Ray::new(dir, c.far);
                     let m = cast::first(&mut q, c.origin, &r, detail, Until::Opaque);
                     let h = noise(k as u32 ^ 0x4242);
-                    let (first, at) = if m.ends == End::Hit && !h.is_multiple_of(17) {
+                    let (first, at) = if m.end == End::Hit && !h.is_multiple_of(17) {
                         let face = ray::face(r.dir, m.hit.axis);
                         (
                             ray::first_word(m.hit.asset[0], face, m.hit.node.zoom),
                             m.hit.t.to_bits(),
                         )
                     } else {
-                        kinds.add("pixels met nothing", true);
+                        kind_cnt.add("pixels met nothing", true);
                         (0, 0)
                     };
                     words[k] = first;
@@ -1034,8 +1042,8 @@ fn run_marks(
                     }
                     let v = dir.map(|a| a * m.hit.t);
                     let d = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
-                    kinds.add("pixels met", true);
-                    kinds.add("pixels past the reach", d > reach);
+                    kind_cnt.add("pixels met", true);
+                    kind_cnt.add("pixels past the reach", d > reach);
                     let (sure, maybe) = within_by(d, reach);
                     if !maybe {
                         continue;
@@ -1046,7 +1054,7 @@ fn run_marks(
                     }
                 }
             }
-            kinds.count("pixels walked apart", walked.len() as u64);
+            kind_cnt.count("pixels walked apart", walked.len() as u64);
             for &p in &walked {
                 let (w, bit) = ray::hole_bit([p & 0xffff, p >> 16], [wd, ht]);
                 beams[walked_at + w as usize] |= 1 << bit;
@@ -1064,14 +1072,14 @@ fn run_marks(
                     let dir = cast::through(forward, right, up, t[0], t[1]);
                     let r = Ray::new(dir, c.far);
                     let m = cast::first(&mut q, c.origin, &r, detail, Until::Opaque);
-                    if m.ends == End::Miss {
-                        kinds.add("samples gone on", true);
+                    if m.end == End::Miss {
+                        kind_cnt.add("samples gone on", true);
                         continue;
                     }
                     // The face the sample's ray entered is set both as entered and as asked
                     // about by an eye's ray (`record::ASKED`).
                     let face = 1 << m.hit.axis;
-                    let kind = if m.ends == End::Lacks {
+                    let kind = if m.end == End::Lacks {
                         Kind::Lacks
                     } else {
                         Kind::Cell
@@ -1091,11 +1099,11 @@ fn run_marks(
                             state,
                         );
                         slot += 1;
-                        kinds.add("voxels", true);
+                        kind_cnt.add("voxels", true);
                     }
                     // A stale voxel draws no box, so it stands on no tile.
                     let fresh = record::fresh(c.origin, &m.hit.node, whole, range);
-                    kinds.add("voxels, stale", !fresh);
+                    kind_cnt.add("voxels, stale", !fresh);
                     if !fresh {
                         continue;
                     }
@@ -1116,7 +1124,7 @@ fn run_marks(
                         hi.map(|v| v + hair),
                         c.footprint,
                     );
-                    kinds.add("voxels' boxes past the reach", outer.is_none());
+                    kind_cnt.add("voxels' boxes past the reach", outer.is_none());
                     for (range, sure) in [(outer, false), (inner, true)] {
                         if let Some(r) = range {
                             want.put_range(r, sure);
@@ -1129,8 +1137,8 @@ fn run_marks(
     let inside = |t: &[i32; 2]| t[0] >= 0 && t[1] >= 0 && t[0] < n as i32 && t[1] < n as i32;
     want.must.retain(inside);
     want.may.retain(inside);
-    kinds.count("tiles stood on", want.must.len() as u64);
-    kinds.add("casts that stood nothing", want.may.is_empty());
+    kind_cnt.count("tiles stood on", want.must.len() as u64);
+    kind_cnt.add("casts that stood nothing", want.may.is_empty());
 
     let mut header = vec![0u32; light::HEADER_WORDS];
     header[light::HEADER_CAST] = CAST;
@@ -1171,15 +1179,15 @@ fn run_marks(
         &words,
     );
     let view = array_view(&rays);
-    let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
-    let header_buf = gpu.buffer(&header, wgpu::BufferUsages::UNIFORM);
-    let list_buf = gpu.buffer(&list, wgpu::BufferUsages::STORAGE);
-    let args_buf = gpu.buffer(&args, wgpu::BufferUsages::STORAGE);
-    let receiver_tiles_buf = gpu.buffer(&stood, wgpu::BufferUsages::STORAGE);
-    let beams_buf = gpu.buffer(&beams, wgpu::BufferUsages::STORAGE);
-    let raster_buf = gpu.buffer(&raster_args, wgpu::BufferUsages::STORAGE);
-    let boxes_buf = gpu.buffer(&boxes, wgpu::BufferUsages::STORAGE);
-    let record_buf = gpu.buffer(&rec, wgpu::BufferUsages::STORAGE);
+    let eye_buf = gpu.buf(&eye_words, wgpu::BufferUsages::UNIFORM);
+    let header_buf = gpu.buf(&header, wgpu::BufferUsages::UNIFORM);
+    let list_buf = gpu.buf(&list, wgpu::BufferUsages::STORAGE);
+    let args_buf = gpu.buf(&args, wgpu::BufferUsages::STORAGE);
+    let receiver_tiles_buf = gpu.buf(&stood, wgpu::BufferUsages::STORAGE);
+    let beams_buf = gpu.buf(&beams, wgpu::BufferUsages::STORAGE);
+    let raster_buf = gpu.buf(&raster_args, wgpu::BufferUsages::STORAGE);
+    let boxes_buf = gpu.buf(&boxes, wgpu::BufferUsages::STORAGE);
+    let record_buf = gpu.buf(&rec, wgpu::BufferUsages::STORAGE);
     let mut binds: Vec<(u32, wgpu::BindingResource)> = vec![
         (0, eye_buf.as_entire_binding()),
         (11, header_buf.as_entire_binding()),
@@ -1286,9 +1294,9 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     let mut header = vec![0u32; light::HEADER_WORDS];
     header[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
         .copy_from_slice(&starts.words());
-    let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
-    let header_buf = gpu.buffer(&header, wgpu::BufferUsages::UNIFORM);
-    let out = gpu.buffer(
+    let eye_buf = gpu.buf(&eye_words, wgpu::BufferUsages::UNIFORM);
+    let header_buf = gpu.buf(&header, wgpu::BufferUsages::UNIFORM);
+    let out = gpu.buf(
         &vec![0u32; 3 * (SIZE * SIZE) as usize],
         wgpu::BufferUsages::STORAGE,
     );
@@ -1401,8 +1409,8 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         eye_words[eye::RANGE + 1] = range[1];
         let mut header = vec![0u32; light::HEADER_WORDS];
         header[light::HEADER_SIZE] = size;
-        let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
-        let header_buf = gpu.buffer(&header, wgpu::BufferUsages::UNIFORM);
+        let eye_buf = gpu.buf(&eye_words, wgpu::BufferUsages::UNIFORM);
+        let header_buf = gpu.buf(&header, wgpu::BufferUsages::UNIFORM);
         let across = light::tiles(size) + 2 * LEAD;
         let want: Vec<u32> = (0..across * across)
             .map(|k| {
@@ -1416,7 +1424,7 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         let got: Vec<Vec<u32>> = passes
             .iter()
             .map(|(_, p)| {
-                let out = gpu.buffer(&vec![u32::MAX; want.len()], wgpu::BufferUsages::STORAGE);
+                let out = gpu.buf(&vec![u32::MAX; want.len()], wgpu::BufferUsages::STORAGE);
                 gpu.dispatch(
                     p,
                     &[

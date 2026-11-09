@@ -11,7 +11,7 @@
 // `options`, one per option in the same order, for when what an option costs
 // differs from its neighbors'; an empty string is no badge. A `dev` setting
 // is in the core's table in every build and offered only under a
-// development one; the UI's production bundle carries SETTING_PRODUCTION,
+// development one; the UI's production bundle carries SETTING_PROD,
 // the table without them, in SETTING's place. A setting whose `stored` is
 // false is the session's alone: the store neither writes it to its kept
 // slot nor reads it from there, so every session starts it at its default.
@@ -197,6 +197,13 @@ export const SETTING = {
     default: false,
     section: "debug",
   },
+  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell their faces show the eye (rust/client/render/src/frame/shader/camera_grid.wgsl, screen_shade.wgsl `cell_share`), in the looks debug_look.json gives them. */
+  camera_gizmo: {
+    key: 16 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
+  },
   person: {
     key: 17 as number,
     kind: "index",
@@ -209,8 +216,15 @@ export const SETTING = {
     default: 5 as number,
     section: "character",
   },
+  /** Each ray's pixel colored by the steps taken on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the steps of the beam ray its cell starts off (beam::LINE_STEPS) and its own after, or, where it took a voxel or the sky without a walk, those of the sample before it on the camera grid's lattice, counted the same way (beam::SAMPLE_STEPS_SHIFT; rust/client/render/src/frame/shader/cast.wgsl `taken_word`, queue.wgsl `finish`). */
+  ray_steps: {
+    key: 19 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
+  },
   /** Counts what the eye's cast and the sun's shadow map do: the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn. The GPU counts them and writes them into the profiler's ray lanes of the frame that counted them (rust/spec/engine/src/count.rs, rust/client/render/src/gpu/ray/count.rs). The counting's atomics run inside the cast's spans, so time the cast with this off. */
-  ray_counts: {
+  ray_cnts: {
     key: 20 as number,
     kind: "toggle",
     default: false,
@@ -236,7 +250,7 @@ export const SETTING = {
 } as const;
 
 /** SETTING without its `dev` entries: what a production bundle carries in its place. */
-export const SETTING_PRODUCTION = {
+export const SETTING_PROD = {
   /** Ground color from the art pack (a tap of the layer array per
    * fragment) instead of the flat per-instance average. The paint shader's
    * `frame.low_spec` is this, inverted.
@@ -387,6 +401,13 @@ export const SETTING_PRODUCTION = {
     default: false,
     section: "debug",
   },
+  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell their faces show the eye (rust/client/render/src/frame/shader/camera_grid.wgsl, screen_shade.wgsl `cell_share`), in the looks debug_look.json gives them. */
+  camera_gizmo: {
+    key: 16 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
+  },
   person: {
     key: 17 as number,
     kind: "index",
@@ -398,5 +419,12 @@ export const SETTING_PRODUCTION = {
     kind: "index",
     default: 5 as number,
     section: "character",
+  },
+  /** Each ray's pixel colored by the steps taken on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the steps of the beam ray its cell starts off (beam::LINE_STEPS) and its own after, or, where it took a voxel or the sky without a walk, those of the sample before it on the camera grid's lattice, counted the same way (beam::SAMPLE_STEPS_SHIFT; rust/client/render/src/frame/shader/cast.wgsl `taken_word`, queue.wgsl `finish`). */
+  ray_steps: {
+    key: 19 as number,
+    kind: "toggle",
+    default: false,
+    section: "debug",
   },
 } as const;

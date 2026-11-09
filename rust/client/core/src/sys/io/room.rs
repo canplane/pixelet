@@ -51,7 +51,7 @@ impl Refusal {
 
     /// Whether room has been given back since the refusal, so that asking
     /// again may be served.
-    pub fn over(self) -> bool {
+    pub fn released(self) -> bool {
         self.0.release_cnt() != self.1
     }
 }

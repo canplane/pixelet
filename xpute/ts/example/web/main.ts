@@ -6,7 +6,7 @@
  */
 
 import { QUIET, start } from "@xpute/runtime";
-import { Command, encode_sum } from "../asker.spec.ts";
+import { Command } from "../asker.spec.ts";
 import { ANSWER, manifest } from "./core.ts";
 
 const out = document.querySelector("#out")!;
@@ -21,5 +21,5 @@ const link = await start(
     }),
 );
 link.resume();
-const sum = await link.request(Command.SUM, (room) => encode_sum(room, 2, 3));
+const sum = await link.request(Command.SUM, 2, 3);
 say(`2 + 3 + ${ANSWER} = ${sum}`);

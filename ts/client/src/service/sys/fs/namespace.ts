@@ -10,7 +10,7 @@ import { root } from "@/abi/file.spec.ts";
 import { BASE_LAYERS } from "@/service/origin/publication.spec.ts";
 import { read_asset } from "@/service/sys/fs/asset.ts";
 import { OBJECTS } from "@/service/sys/fs/object.ts";
-import { source_declaration } from "@/service/sys/fs/source.ts";
+import { source_decl } from "@/service/sys/fs/source.ts";
 import { commit_storage, open_storage } from "@/service/sys/fs/storage.ts";
 import { read_object } from "@/service/sys/fs/tile.ts";
 
@@ -19,8 +19,7 @@ export function namespace(): Namespace {
     ...BASE_LAYERS.map((_, bake): [u32, Binding] => [
       bake,
       {
-        open: (name, signal) =>
-          read_object(source_declaration()!, bake, name, signal),
+        open: (name, signal) => read_object(source_decl()!, bake, name, signal),
       },
     ]),
     [root.ASSET, { open: read_asset }],

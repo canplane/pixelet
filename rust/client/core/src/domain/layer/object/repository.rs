@@ -78,7 +78,7 @@ struct State {
     /// The shards the top lists, by id; none until the top is read.
     top_shards: Option<FnvHashSet<u64>>,
     /// The shards read, by id. Their leaves are in the store.
-    read: FnvHashSet<u64>,
+    read_shards: FnvHashSet<u64>,
     /// The refused files below OBJECT, by id. Each stays refused until the
     /// client says it emptied the file or gave it back to its source.
     refused_files: Vec<u64>,
@@ -145,7 +145,7 @@ impl State {
     fn is_read(&self, id: u64) -> bool {
         self.top_shards
             .as_ref()
-            .is_some_and(|l| !l.contains(&id) || self.read.contains(&id))
+            .is_some_and(|l| !l.contains(&id) || self.read_shards.contains(&id))
     }
 }
 
@@ -256,7 +256,7 @@ fn on_top(rows: Vec<(u64, u32)>) {
     let mut listed = FnvHashSet::default();
     for (shard, word) in rows {
         listed.insert(shard);
-        if !state().read.contains(&shard) {
+        if !state().read_shards.contains(&shard) {
             change(Change::Fold(Quadrant::of_id(shard).at, word));
         }
     }
@@ -266,7 +266,7 @@ fn on_top(rows: Vec<(u64, u32)>) {
 
 fn on_shard(id: u64, writes: Vec<Write>) {
     change(Change::Shard(Quadrant::of_id(id).at, writes));
-    state().read.insert(id);
+    state().read_shards.insert(id);
     changed();
 }
 
@@ -336,7 +336,7 @@ fn encode_writes(format: u8, writes: &[Write]) -> Result<Vec<u8>, MarshalError> 
 
 /// The tree packet inside file `bytes` of `format`. A file of another format
 /// is an error.
-fn packet(format: u8, bytes: &[u8]) -> Result<Vec<u8>, MarshalError> {
+fn pkt(format: u8, bytes: &[u8]) -> Result<Vec<u8>, MarshalError> {
     match bytes.split_first() {
         // The packet is copied because `TreeReader` needs it to start on a
         // word, and an allocation of its own does.
@@ -348,7 +348,7 @@ fn packet(format: u8, bytes: &[u8]) -> Result<Vec<u8>, MarshalError> {
 /// The writes that file `bytes` of `format` holds. Each record must be of
 /// its leaf's class.
 fn decode_writes(format: u8, bytes: &[u8]) -> Result<Vec<Write>, MarshalError> {
-    let pkt = packet(format, bytes)?;
+    let pkt = pkt(format, bytes)?;
     let root = TreeReader::new(&pkt)?.read_branch()?;
     let (keys, id) = (
         root.at(column::KEY)?.get_strs()?,
@@ -402,7 +402,7 @@ fn decode_shard(shard: Quadrant, bytes: &[u8]) -> Result<Vec<Write>, MarshalErro
 /// none. Each shard must be a tile at `SHARD_ZOOM`, and the filled share of
 /// its cube that its fold gives must be at most the whole.
 fn decode_top(bytes: &[u8]) -> Result<Vec<(u64, u32)>, MarshalError> {
-    let pkt = packet(format::OBJECT_TOP, bytes)?;
+    let pkt = pkt(format::OBJECT_TOP, bytes)?;
     let root = TreeReader::new(&pkt)?.read_branch()?;
     let (shard, fold) = (
         root.at(top::SHARD)?.get_strs()?,

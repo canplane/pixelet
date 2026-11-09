@@ -249,7 +249,7 @@ pub fn remove(at: Octant) {
 
 /// The edit the tool held would make, decided once a turn by the tool. The
 /// ghost shows it, and the turn hands what it removes to the drawing to leave
-/// out (`edits`).
+/// out (`edit`).
 #[derive(Clone, Copy, Default)]
 pub struct Preview {
     /// The placed object pointed at, as stored.
@@ -263,7 +263,7 @@ pub struct Preview {
     /// and the store's revision (item.rs `preview`). The step runs on every
     /// frame turn, so it sees each change once.
     pub(super) blocked_key: Option<(Asset, Zoom, Q3, u32)>,
-    pub edits: RenderEdit,
+    pub edit: RenderEdit,
 }
 
 static PREVIEW: Global<Preview> = Global::new();
@@ -278,7 +278,7 @@ pub fn preview_step() -> bool {
     let was = preview();
     let now = tool().preview(&hover(), &was);
     *PREVIEW.get(Preview::default) = now;
-    was.edits != now.edits
+    was.edit != now.edit
 }
 
 #[cfg(test)]

@@ -119,7 +119,7 @@ struct Perf {
     worst_len: usize,
     /// The largest and smallest values the frames held since the recording
     /// started (`perf_fold_recording`).
-    extremes: RecordingSection,
+    extreme: RecordingSection,
     /// Where the read sorts the values it takes percentiles of (read.rs).
     scratch: Box<[f64]>,
     /// The interval in progress. It is the last frame turn's record, and
@@ -150,7 +150,7 @@ fn perf() -> &'static mut Perf {
         stopped_at: None,
         worst: Box::default(),
         worst_len: 0,
-        extremes: RecordingSection::default(),
+        extreme: RecordingSection::default(),
         scratch: Box::default(),
         open: None,
         frame_task_ms: 0.0,
@@ -191,7 +191,7 @@ pub fn perf_recording_start() -> bool {
     (l.task_len, l.frame_len, l.worst_len) = (0, 0, 0);
     (l.task_head, l.frame_head) = (0, 0);
     l.open = None;
-    l.extremes = RecordingSection::default();
+    l.extreme = RecordingSection::default();
     l.truncated = false;
     l.started_at = now();
     l.stopped_at = None;
@@ -325,19 +325,19 @@ pub fn perf_record_rays(r: RayRead) {
     if !l.recording {
         return;
     }
-    at_frame(l, r.frame, |f| f.rays = r.rays);
+    at_frame(l, r.frame, |f| f.ray_sample = r.sample);
 }
 
 /// Folds what a frame turn held, `section`, into the recording's extremes.
 pub fn perf_fold_recording(section: &RecordingSection) {
     let l = perf();
     if l.recording {
-        l.extremes.fold(section);
+        l.extreme.fold(section);
     }
 }
 
 pub fn perf_recording_extremes() -> RecordingSection {
-    perf().extremes
+    perf().extreme
 }
 
 /// Records the end of any turn, frame turn or not, into the interval in

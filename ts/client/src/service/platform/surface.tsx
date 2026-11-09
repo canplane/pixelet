@@ -24,6 +24,12 @@ const FILL = {
   height: "100%",
 } as const;
 
+/** The canvas's layout box, in CSS pixels; null while there is none. */
+export function surfaceBox(): { width: f64; height: f64 } | null {
+  const canvas = document.querySelector("canvas");
+  return canvas && { width: canvas.clientWidth, height: canvas.clientHeight };
+}
+
 function dpr(): f64 {
   return globalThis.devicePixelRatio || 1;
 }
@@ -54,16 +60,16 @@ function openSurface(
   opened?: (handle: u32) => () => void,
 ): () => void {
   let close = () => {};
-  let gone = false;
+  let closed = false;
   void surface.open().then((handle) => {
     if (handle === 0) return;
     // The surface closed before the core answered, so the handle is let go at
     // once.
-    if (gone) return surface.close(handle);
+    if (closed) return surface.close(handle);
     close = attach(canvas, surface, handle, opened);
   });
   return () => {
-    gone = true;
+    closed = true;
     close();
   };
 }

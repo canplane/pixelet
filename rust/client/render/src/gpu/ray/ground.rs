@@ -32,7 +32,7 @@ pub struct BrickWrite<'a> {
     pub cell_zoom: Zoom,
     pub brick: [i32; 2],
     pub words: &'a [u32],
-    pub palette_indices: &'a [u32],
+    pub palette_idxs: &'a [u32],
     pub tree: &'a [(u32, &'a [u32])],
 }
 
@@ -42,22 +42,22 @@ pub type TerrainWrite<'a> = dyn FnMut(BrickWrite<'_>) -> bool + 'a;
 
 pub type TerrainUpload = dyn for<'w> FnMut(&mut TerrainWrite<'w>);
 
-/// The bytes `child_groups` child groups take in the ways' pool, which is
+/// The bytes `child_group_cnt` child groups take in the ways' pool, which is
 /// also where the next one starts. A child group is eight child pointers then
 /// eight data words (pxl-engine `way::tree`).
-const fn pool_bytes(child_groups: u32) -> u32 {
-    child_groups * way::tree::CHILD_GROUP_WORDS * 4
+const fn pool_bytes(child_group_cnt: u32) -> u32 {
+    child_group_cnt * way::tree::CHILD_GROUP_WORDS * 4
 }
 const _: () = assert!(
     floor::fits(pool_bytes(way::tree::POOL_CHILD_GROUPS) as u64, true),
     "the ways' pool at its most binds past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
-/// A ways' pool with room for `child_groups`. `grow` copies it into the
+/// A ways' pool with room for `child_group_cnt`. `grow` copies it into the
 /// larger pool that replaces it.
-fn pool_buf(g: &Gpu, child_groups: u32) -> u32 {
+fn pool_buf(g: &Gpu, child_group_cnt: u32) -> u32 {
     g.buf(
-        pool_bytes(child_groups),
+        pool_bytes(child_group_cnt),
         buffer_usage::STORAGE | buffer_usage::COPY_SRC | buffer_usage::COPY_DST,
     )
 }
@@ -67,10 +67,10 @@ pub(super) struct GroundBuffer {
     /// Every slot's brick words (`GROUND_BYTES`).
     pub(super) ground: u32,
     /// Every slot's palette indices (`PALETTE_BYTES`).
-    pub(super) palette_indices: u32,
+    pub(super) palette_idxs: u32,
     /// The ways' pool, and the child groups it has room for.
     pub(super) pool: u32,
-    child_groups: u32,
+    child_group_cnt: u32,
     /// The bricks this frame handed, by cells' zoom and place. Decor's
     /// generation reads them as the bricks filled this frame
     /// (gpu/generator.rs `Generation::fresh`).
@@ -78,7 +78,7 @@ pub(super) struct GroundBuffer {
 }
 
 impl GroundBuffer {
-    /// Grows the ways' pool to hold `child_groups`, rounded up to a power of
+    /// Grows the ways' pool to hold `child_group_cnt`, rounded up to a power of
     /// two and never past `way::tree::POOL_CHILD_GROUPS`, which holds any
     /// baked set. The old words are copied to the same offsets, so every child
     /// group a tree names keeps its words. `hand` grows the pool before it
@@ -90,19 +90,24 @@ impl GroundBuffer {
     /// on with a buffer the device holds as an error. The last doubling holds
     /// the old 32 MiB pool beside the new 64 MiB one until the copy is
     /// submitted.
-    fn grow(&mut self, g: &Gpu, child_groups: u32) {
-        let child_groups = child_groups
+    fn grow(&mut self, g: &Gpu, child_group_cnt: u32) {
+        let child_group_cnt = child_group_cnt
             .next_power_of_two()
             .min(way::tree::POOL_CHILD_GROUPS);
-        if child_groups <= self.child_groups {
+        if child_group_cnt <= self.child_group_cnt {
             return;
         }
-        let pool = pool_buf(g, child_groups);
+        let pool = pool_buf(g, child_group_cnt);
         let e = g.encoder();
-        g.copy_buf(e, (self.pool, 0), (pool, 0), pool_bytes(self.child_groups));
+        g.copy_buf(
+            e,
+            (self.pool, 0),
+            (pool, 0),
+            pool_bytes(self.child_group_cnt),
+        );
         g.submit(e);
         release(self.pool);
-        (self.pool, self.child_groups) = (pool, child_groups);
+        (self.pool, self.child_group_cnt) = (pool, child_group_cnt);
     }
 }
 
@@ -137,15 +142,15 @@ impl RayPass {
     pub fn hand(&mut self, g: &Gpu, ground: &mut GroundInput) {
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
         let gb = self.ground.get_or_insert_with(|| {
-            let child_groups = ground
+            let child_group_cnt = ground
                 .pool
                 .next_power_of_two()
                 .min(way::tree::POOL_CHILD_GROUPS);
             GroundBuffer {
                 ground: g.buf(GROUND_BYTES as u32, storage),
-                palette_indices: g.buf(PALETTE_BYTES as u32, storage),
-                pool: pool_buf(g, child_groups),
-                child_groups,
+                palette_idxs: g.buf(PALETTE_BYTES as u32, storage),
+                pool: pool_buf(g, child_group_cnt),
+                child_group_cnt,
                 bricks: List::new(),
             }
         });
@@ -159,9 +164,9 @@ impl RayPass {
             }
             g.upload_buf(gb.ground, q.slot * BRICK_BYTES, bytes(q.words));
             g.upload_buf(
-                gb.palette_indices,
+                gb.palette_idxs,
                 q.slot * PALETTE_BRICK_BYTES,
-                bytes(q.palette_indices),
+                bytes(q.palette_idxs),
             );
             for &(first, words) in q.tree {
                 g.upload_buf(gb.pool, pool_bytes(first), bytes(words));

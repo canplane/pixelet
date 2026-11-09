@@ -8,10 +8,8 @@ want into asks of the runtime, fits every answer into memory that was set aside
 at boot, and spends each turn's time in an order the rest of the core can rely
 on.
 
-Nothing in `sys/` knows what a tile, a building or a camera is. A layer asks
-for the read of a quadkey, and `sys/` never asks what it is for. `sys/` imports
-nothing from the domain, the renderer or the profiler, and `cargo check-rules`
-refuses such an import.
+`sys/` imports nothing from the domain, the renderer or the profiler, and
+`cargo check-rules` refuses such an import.
 
 ## The memory, laid out once
 
@@ -32,8 +30,9 @@ The core's memory is one linear space whose sections never move after boot.
 A range belongs in `.fixed` only when its owner can say at compile time how
 large it will ever be and it is mostly in use whenever the core runs. That is
 true of a few of the core's own formats and of nothing else: a glTF model or a
-PNG has no bound, so the loader reads it into the heap, and what is held only
-at times lives on the heap under a cap of its own.
+PNG has no bound, so the loader reads it into the heap. What is held only at
+times lives on the heap as well, the largest of it under caps that the build
+checks against the heap.
 `door/layout.rs` decides which ranges `.fixed` holds and how large each is, and
 hands each owner its range at boot. The machine names how much heap the core
 must keep, and both the compiler and the boot check that the front and `.fixed`
@@ -43,7 +42,7 @@ The largest bodies, terrain and Earth packets just past a mebibyte, would cost
 the buddy allocator two mebibytes each. They take slots instead: fixed-size
 pieces cut from runs the heap gives whole and takes back whole, a slab
 allocator for one large object (`io/body.rs`). The number of slots out at once
-is bounded, so reads cannot exhaust the heap by arriving together.
+is bounded, so those bodies take no more than their runs however they arrive.
 
 ## A turn
 
@@ -102,9 +101,10 @@ the object itself is wrong, asking again brings the same bytes, so its want is
 held for as long as it is wanted. When the heap or the slots refused the body
 room, the want waits until what refused it gives room back, and only that
 (`io/room.rs`). When the network or the server failed, every start is held:
-one probe goes out at a time, after a wait that grows with each failure and is
-drawn at random below its cap, so clients that failed together do not return
-together. After the last wait the server is given up, and the UI says so.
+one probe goes out at a time, after a wait drawn at random below its cap, so
+clients that failed together do not return together. Each failure of the server
+raises the cap, and after the last wait the server is given up, and the UI says
+so.
 
 None of this makes anything up. While a read is held, the view draws the
 coarser tile it has, or nothing.

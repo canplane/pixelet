@@ -186,7 +186,7 @@ fn snapshot_inputs() -> SnapshotInput {
 /// or view is sent only when it differs from these.
 #[derive(Default)]
 pub struct SnapshotMemo {
-    last_inputs: Option<SnapshotInput>,
+    last_input: Option<SnapshotInput>,
     text: String,
     last_view: Option<(f64, f64)>,
 }
@@ -196,10 +196,10 @@ impl SnapshotMemo {
     /// they were last sent. What it returns counts as sent.
     pub fn take_changed(&mut self) -> Option<SnapshotInput> {
         let (now, text) = (snapshot_inputs(), write::marker_draft().unwrap_or_default());
-        if self.last_inputs == Some(now) && self.text == text {
+        if self.last_input == Some(now) && self.text == text {
             return None;
         }
-        self.last_inputs = Some(now);
+        self.last_input = Some(now);
         self.text.clear();
         self.text.push_str(text);
         Some(now)

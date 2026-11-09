@@ -117,7 +117,7 @@ On the runtime's side, something has to decide when to ring at all. That is the
 edge asked for one, and only at a moment that the **scheduling policy** gives
 and admits, so a core that asks for nothing is rung for nothing. The policy is
 the program's, injected with the program's numbers when the runtime boots. xpute
-ships two: frame pacing for a page, which runs turns on the display's frames, a
+ships two: frame pacing for a display, which runs turns on its frames, a
 whole number of refreshes apart, each ending by the deadline of its frame; and a
 timeslice for a runtime with no display, which runs a turn as soon as it is
 asked for and ends it a fixed slice later.
@@ -151,8 +151,10 @@ because its global state is sound on one thread only. That thread runs while it
 has work and sleeps until it is kicked. The runtime runs on the UI's JavaScript
 thread. It writes the submission ring and kicks the core's thread, and when a
 turn ends, the core's thread tells the runtime, which reads the completion ring
-dry. The core's thread keeps no timer: the same scheduler times its turns,
-kicking it at the moment the policy gives for the wake the core asked for. Four
+dry. The core's thread chooses no moment: the same scheduler times its turns,
+kicking it with the display frame the policy gives for the wake the core asked
+for. The thread waits for that frame itself, so how late the JavaScript thread
+is does not move the turn. Four
 rules hold that loop together: no kick is lost, every wait has someone to answer
 it, a turn begins only when the completion ring has room for everything one turn
 may post, and every turn takes the submission ring first.
@@ -258,11 +260,12 @@ a turn cannot answer late.
 A **protocol** is a JSON file of commands, each an export, which the core
 handles, or an import, which the core sends, as a WIT world names them from the
 core's side. The **generator** writes both ends' code from the machine and the
-protocols: on the runtime a stub for each export and a handler for each import,
-and on the core a function for each import and a trait for the exports. xpute's
-own protocols are generated the same way, so every language's numbers come from
-`spec/`, and the generated files are committed. The generator refuses a
-program's command under 0x10, and a number that two protocols both give.
+protocols: on the runtime the fields each export takes, by its number, and a
+handler for each import, and on the core a function for each import and a trait
+for the exports. xpute's own protocols are generated the same way, so every
+language's numbers come from `spec/`, and the generated files are committed. The
+generator refuses a program's command under 0x10, and a number that two
+protocols both give.
 
 When the core stops on a broken invariant or a panic, it posts its report in the
 CQ's kept slot, after what the turn has already published, and runs no more; a
@@ -338,10 +341,11 @@ by storing their count with release. The runtime runs every record and then
 stores the count back to zero, which hands the stream back to the core. Until
 then the records, and any memory a record names for the runtime to read, are the
 runtime's, and the core neither rewrites nor frees them. On a page the runtime
-runs the stream after the turn returns; on a device the GPU runtime runs it on
-the core's own thread, as the count is stored. Either way the order is the
-acknowledgment: a record may name memory for the runtime to write into, and the
-core reads that memory on a later turn.
+runs the stream after the turn returns; on a device the GPU runtime takes it as
+the count is stored and runs it beside the core. No turn waits on the device:
+while the runtime holds the stream the core records nothing and goes on turning.
+Either way the order is the acknowledgment: a record may name memory for the
+runtime to write into, and the core reads that memory on a later turn.
 
 The calls themselves are WebGPU's, written down once in WebGPU's own vocabulary.
 An enumeration is its specification's strings in order, so a runtime hands the
@@ -557,24 +561,17 @@ The code, in the order its parts depend on each other.
   `wire/xtp` and `wire/tlv`, `status` (the errno table and `bug!`),
   `math/scalar` and `math/rng`, `alloc` (`buddy_tree`, `slab`), and `golden`,
   the records' reader.
-- `rust/core` is the core end: `mem` (`Memory`, `section`, `range`, `heap`),
-  `machine` (`Machine`, `boot`, `core!`), `entry` (`run`, `BootInfo`), `ipc`
-  (`door::Door`, `ring::Ring`, `stream::Stream`, `file::FileTable`), `abi/handle`
-  (`Table`), `sched` (`edge`, `tick`, `pass`, `task`), `call`, `clock`, `stop`
-  and `wasm` (`wasm_abi!`, `link`). `cpp/xpute/core` holds the same parts but
-  the machine and the entry, which a C++ core writes for itself.
-- `rust/gpu` is the GPU's calls, `encode` and `admit`, and behind its `runtime`
-  feature the native GPU runtime (`runtime::GpuRuntime`, `runtime::native`).
-  `cpp/xpute/gpu` is the encoder alone.
-- `rust/runtime` runs a native core: `native` (`native_core!`, `native_abi!`,
-  `Alloc`, and `thread`, where the core's thread and the rules of its loop
-  live), `mem` and `jni`, with the C ABI in `include/xpute.h`.
-- `ts/runtime` (`@xpute/runtime`) is the runtime end: `runtime.ts` (`boot`,
-  `mount`, `Manifest`, `Config`, `Ui`, `Link`), `start.ts` and `remote.ts`
-  (`start`, `serve`, the port), `platform.ts` and `module.ts` (a page's module)
-  beside `platform.native.ts`, `ipc/doorbell.ts` (`Doorbell`), `ipc/head.ts`
-  (`lay`), `ipc/fs.ts` (`FsServer`), `ipc/ns.ts` (`Namespace`), and `sched/`
-  (`Scheduler`, `SchedulingPolicy`, `FramePacing`, `Timeslice`).
+- `rust/core` is the core end: `mem`, `machine`, `entry`, `ipc`, `abi/handle`,
+  `sched`, `call`, `clock`, `stop` and `wasm`. `cpp/xpute/core` holds the same
+  parts but the machine and the entry, which a C++ core writes for itself.
+- `rust/gpu` is the GPU's calls, and behind its `runtime` feature the native GPU
+  runtime. `cpp/xpute/gpu` is the encoder alone.
+- `rust/runtime` runs a native core: `native`, where the core's thread and the
+  rules of its loop live, `mem` and `jni`, with the C ABI in `include/xpute.h`.
+- `ts/runtime` (`@xpute/runtime`) is the runtime end: `runtime.ts`, `start.ts`
+  and `remote.ts` (the port), `platform.ts` and `module.ts` beside
+  `platform.native.ts`, `ipc/` (the doorbell, the header, the file server and
+  the namespace), and `sched/`.
 - `ts/gpu` (`@xpute/gpu`) is the GPU runtime on WebGPU (`GpuRuntime`, `WebGpu`),
   and `NativeGpu`, which opens a device's GPU through the native module.
 - `ts/native` (`@xpute/native`) is the React Native module: the Kotlin and the

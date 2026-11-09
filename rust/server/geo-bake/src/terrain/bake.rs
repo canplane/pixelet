@@ -24,18 +24,18 @@ pub(crate) struct Surface {
 /// The tile from its surface and lines: the approaches' palette indices laid into its cells
 /// (pxl-spec bake/way.rs `lay`), then its lines cut to those it draws (pxl-spec
 /// bake/tile/terrain.rs `drawn`).
-pub(crate) fn assemble(tile: [i32; 2], surface: Surface, lines: Separation) -> TerrainTile {
-    let mut palette_indices = surface.ground.cells.into_owned();
+pub(crate) fn assemble(tile: [i32; 2], surface: Surface, separation: Separation) -> TerrainTile {
+    let mut palette_idxs = surface.ground.cells.into_owned();
     let tile = Quadrant::new(LEAF_ZOOM, tile);
-    lay(&lines, Frame::of(tile), &mut palette_indices);
+    lay(&separation, Frame::of(tile), &mut palette_idxs);
     terrain::drawn(
         tile,
         TerrainTile::leaf(
             surface.ele,
             Ground {
-                cells: palette_indices.into(),
+                cells: palette_idxs.into(),
             },
-            lines,
+            separation,
         ),
     )
 }

@@ -29,7 +29,7 @@ mod module;
 
 pub use link::{link, LinkConfig, WASM_PAGE_BYTES};
 #[cfg(target_arch = "wasm32")]
-pub use module::{call, data_end, given, now, stack_high};
+pub use module::{call, data_end, mem_sz, now, stack_high};
 
 /// xpute cannot assume these of a module core, and the program supplies them.
 pub struct Config {
@@ -55,7 +55,7 @@ pub fn boot_info(
     let high = stack_high();
     xpute_kit::ensure!(high == cfg.stack_bytes, ENOTRECOVERABLE, high);
     crate::entry::BootInfo {
-        given: u32::try_from(given()).unwrap_or(u32::MAX),
+        mem_sz: u32::try_from(mem_sz()).unwrap_or(u32::MAX),
         call,
         heap_stat,
         form: crate::entry::Form {
@@ -88,7 +88,7 @@ macro_rules! wasm_abi {
                     (CFG.heap_at)($crate::wasm::data_end()) as usize
                 }
                 fn end() -> usize {
-                    $crate::wasm::given() as usize
+                    $crate::wasm::mem_sz() as usize
                 }
             }
 
