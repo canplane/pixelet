@@ -34,12 +34,14 @@ fn dev() -> bool {
 }
 
 /// Whether `val` may be set for `key` in this build. A dev-only setting or
-/// option is offered only in a development build. Storage outlives the
-/// build, and a dev value with no row left in the UI to turn it off would
+/// option is offered only in a development build, or in a release compiled
+/// for measuring (`PXL_PERF_DRIVE`), whose drive sets them. Storage outlives
+/// the build, and a dev value with no row left in the UI to turn it off would
 /// otherwise stay in force. Loading drops such a value, and `set_setting`
 /// refuses it from the console.
 pub fn is_offered(key: SettingKey, val: u32) -> bool {
-    !(key.dev() || key.dev_option(val)) || (cfg!(feature = "dev") && dev())
+    let compiled = cfg!(feature = "dev") || option_env!("PXL_PERF_DRIVE").is_some();
+    !(key.dev() || key.dev_option(val)) || (compiled && dev())
 }
 
 impl Setting {

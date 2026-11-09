@@ -1,0 +1,7 @@
+create perfetto table app as select upid from process where name='me.plei.pixelet';
+create perfetto table tr as select min(ts) a, max(ts+dur) b from sched;
+select 'SPAN' k, (b-a)/1e9 sec from tr;
+select 'PRESENT' k, (sl.ts-tr.a)/1000000000 sec, count(*) n from slice sl join thread_track tt on sl.track_id=tt.id join thread t using(utid), tr where t.name='xpute-gpu' and sl.name='QueuePresentKHR' group by sec order by sec;
+select 'INPUT_SLICE' k, t.name thr, sl.name, count(*) n, round(sum(sl.dur)/1e9,2) s, round(max(sl.dur)/1e6,1) max_ms from slice sl join thread_track tt on sl.track_id=tt.id join thread t using(utid) where t.upid in (select upid from app) and (lower(sl.name) like '%input%' or lower(sl.name) like '%touch%' or lower(sl.name) like '%motion%' or lower(sl.name) like '%gesture%' or lower(sl.name) like '%dispatch%event%') group by t.utid, sl.name order by n desc limit 16;
+select 'RUN' k, t.name thr, round(sum(s.dur)/1e9,2) run_s, count(*) n from sched s join thread t using(utid) where t.upid in (select upid from app) and t.name in ('xpute-core','xpute-gpu','mqt_v_js','me.plei.pixelet','RenderThread') group by t.utid order by run_s desc;
+select 'DOFRAME_PER_S' k, (sl.ts-tr.a)/1000000000 sec, count(*) n from slice sl join thread_track tt on sl.track_id=tt.id join thread t using(utid), tr where t.upid in (select upid from app) and t.name='me.plei.pixelet' and sl.name like 'Choreographer#doFrame%' group by sec order by sec limit 30;

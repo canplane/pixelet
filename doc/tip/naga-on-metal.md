@@ -30,7 +30,9 @@ On 2026-10-14, when the GPU first cast a ray a pixel: the generated shaders'
 ([the GPU casts a ray a pixel](../minutes/20261014-the-gpu-casts-a-ray-a-pixel.md),
 "A known break on the device path"). The tree then pinned wgpu's crates to a
 rev holding the fix. On 2026-11-05 the pin came out: wgpu is followed as it is
-released, never forked (the user), and no WGSL here has the shape.
+released, never forked (the user), and no WGSL here has the shape. On
+2026-11-09 the user allowed a patch where the fault is wgpu's
+([a device is not a page](./a-device-is-not-a-page.md)).
 
 ## If a loop of that shape is needed before a release carries the fix
 

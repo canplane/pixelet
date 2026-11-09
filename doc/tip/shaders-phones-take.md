@@ -22,30 +22,27 @@ own Vulkan driver. Each is a different compiler with its own faults.
 - **`atomicCompareExchangeWeak`.** Safari writes Metal for it that does not
   compile, on the iPhone and the Mac alike. Claim with an exchange and put
   back what was not yours (ask.wgsl `claim`); take from a counter with an
-  add and give back with a min where it did not fit (way_tree.wgsl `pop`).
-  Never give back with a subtract while others take: it overlaps what they
+  add and give back with a min where it did not fit. Never give back with a subtract while others take: it overlaps what they
   took.
 - **`i32::MIN` written as a constant, or folded into one.** Safari writes it
   as a bare literal, a C++ `long`, and a `select` of it and an `int` fails:
   on 2026-11-05 `way_tree_cs` and `bound_cs` were refused so, and the page
   stood at its loading. A sentinel or a fold's start takes the end of the
-  range its values come from instead (way_rule.wgsl `FACE_NONE`, the head
-  word's i16 none; way_tree.wgsl `RUN_LOWEST`; ground_height.wgsl's `lo` and
-  `hi`). render build.rs `held_to_faults` refuses a module that holds
-  `i32::MIN`.
+  range its values come from instead. render build.rs `refuse_faults` refuses
+  a module that holds `i32::MIN`.
 - **An atomic in a branch of its own.** naga reads its pointer out of scope;
   ask it of every lane, a no-op where there is nothing to do.
-- **Arrays and structs as values crossing a function**, returned or passed,
-  and **array- or struct-typed locals assigned in a branch** and read after
+- **Arrays, and structs that hold arrays, returned from a function**, and
+  **array- or struct-typed locals assigned in a branch** and read after
   it about loops. Adreno's driver refuses such modules with
   `VK_ERROR_UNKNOWN`; a `vec2`/`vec3`/`vec4` in place of a small array, or
   the value split into its scalars, is taken. naga wrote a Rust `[u32; 2]`
   or a small struct carried through an `if` as exactly such a local. The
   compute passes by hand keep to this: forget's moved mask is read a word at
   a time inside its loop, the missed pixel's ray two functions in place of a
-  nested struct. No struct holds a struct in a render module either. `Tiles`
-  still crosses `tiles_age` and `tiles_claimed` by value (render build.rs),
-  which no check refuses.
+  nested struct. No struct holds a struct in a render module either. A struct
+  of vectors passed as a parameter is none of these and is taken (`TileGrid`
+  into `tiles_age`, render build.rs).
 - **A choice made as the shader runs between two implementations that
   answer in tuples or structs.** The generated `PassObserver` chose the eye
   or the light's map in every method by the pass's head, so every answer came
@@ -71,12 +68,12 @@ Nothing a shader computes is rewritten. render build.rs strips the comments
 and the indentation, appends the words it writes from pxl-engine, assembles
 each module from its parts (frame/shader/part.rs `PARTS`) and validates it
 with naga as WebGPU takes it, every capability off. The rules above are kept
-in the hand WGSL itself, and render build.rs `held_to_faults` refuses in every
+in the hand WGSL itself, and render build.rs `refuse_faults` refuses in every
 assembled module what of them naga's module shows: a struct that holds a
 struct, a struct- or array-typed local, `i32::MIN` and
 `atomicCompareExchangeWeak`. On 2026-11-05 the 86 modules as assembled were
 about 1.0 MB, the largest (`light_beam`) 57 KB, against 5.5 MB generated;
-part.rs `SHADERS` counts 92 now. The S23 has drawn with the shaders by hand
+part.rs `SHADERS` counts 86 now. The S23 has drawn with the shaders by hand
 since 2026-11-05
 ([the frame on the S23](../experiment/20261103-the-frame-on-the-s23/README.md)).
 
@@ -106,9 +103,12 @@ field read alone did not.
 Two tests held this then, parsing every module with naga
 (`what_a_shader_shares_with_the_host_has_no_room_inside_it`,
 `every_block_reads_each_field_from_where_it_lies`); they are not on main.
-Two hand blocks break the rule today, each a `var<uniform>` holding
-`mat4x4f`s (`Resolve` in screen_resolve.wgsl, `Propagate` in
-screen_propagate.wgsl), unchecked on the S23.
+Two hand blocks hold `mat4x4f`s in a `var<uniform>` (`Resolve` in
+screen_resolve.wgsl, `Propagate` in screen_propagate.wgsl). On 2026-11-09 a
+block of that shape, two matrices and a `vec4f`, read every word right on the
+S23 through naga and through Tint
+([the app that did not move](../experiment/20261109-the-app-that-did-not-move/README.md)).
+The fault that was seen is a matrix in a `var<storage>` array.
 
 ## Check
 
@@ -118,5 +118,5 @@ screen_propagate.wgsl), unchecked on the S23.
   `doc/experiment/`.
 - Safari on the Mac stands in for the iPhone.
 - The S23 over USB: `adb forward tcp:9333 localabstract:chrome_devtools_remote`
-  and `adb reverse tcp:5173 tcp:5173`, then the experiment's `tools/cdp.mjs`
+  and `adb reverse tcp:5173 tcp:5173`, then the experiment's `tool/cdp.js`
   compiles a WGSL file there from the Mac.
