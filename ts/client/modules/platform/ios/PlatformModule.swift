@@ -11,6 +11,8 @@ import UIKit
 /// asks of the system. The core, and the view it draws into, are in xpute's own
 /// module (@xpute/native).
 public class PlatformModule: Module {
+  private let files = FileFetch()
+
 
   public func definition() -> ModuleDefinition {
     Name("PxlPlatform")
@@ -35,6 +37,16 @@ public class PlatformModule: Module {
     }
     OnDestroy {
       ViewModifierRegistry.unregister(contentScrollsModifier)
+    }
+
+    // ---- the core's files (service/platform/file.native.ts) ----
+
+    AsyncFunction("fileFetch") { (fd: UInt32, url: URL, promise: Promise) in
+      self.files.fetch(fd, url, promise)
+    }
+
+    Function("fileCancel") { (fd: UInt32) in
+      self.files.cancel(fd)
     }
 
     // ---- the transport (service/platform/origin.native.ts) ----

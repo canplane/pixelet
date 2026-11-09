@@ -116,6 +116,14 @@ export interface SurfaceDriver {
 export type PointerPhase = "down" | "move" | "up" | "cancel" | "out";
 export type PointerKind = "mouse" | "touch" | "pen";
 
+/** A device's fetch of a core's file, which hands the bytes to the runtime and
+ * answers here only with what kept them from it: 0 for nothing, or an HTTP
+ * status. */
+export interface NativeFetch {
+  fetch(fd: u32, url: string): Promise<number>;
+  cancel(fd: u32): void;
+}
+
 export interface InputDriver {
   /** Called when the world's surface opens. The function it returns is
    * called when the surface closes. */
