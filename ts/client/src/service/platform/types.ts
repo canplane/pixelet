@@ -172,5 +172,5 @@ export interface LongFrame {
  * every frame. It holds how far the visual viewport's bottom stands above the
  * layout viewport's, which is the keyboard's height, in px. The page sets it
  * (service/platform/viewport.ts) and the UI's CSS reads it
- * (ui/component/above-keyboard.tsx). A device never sets it. */
+ * (ui/shared/component/above-keyboard.tsx). A device never sets it. */
 export const VISUAL_VIEWPORT_BOTTOM = "--vv-bottom";

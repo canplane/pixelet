@@ -15,18 +15,18 @@ world's eye at 100,000 units under the sea.
 
 ## What the user decided
 
-- **One word for a person or a pet: character.** "actor란 이름은 박멸하고
-  character로 확실히 통일하든가 해." The kind, its catalog, its files and the
-  type are the character's; "에셋적으로는 character라는 말이 좋다". The kind's
+- **One word for a person or a pet: character.** The name `actor` is gone,
+  unified on `character`. The kind, its catalog, its files and the
+  type are the character's, the word the user prefers for assets. The kind's
   number stays 3, so nothing stored changes.
 - **The companion is who goes with the player**, the person and the pet the
-  player chose, kept by name in the messages: "i18n 메시지 상으로는 난
-  companion이라는 말이 좋다". It is the part that keeps them, not a type
+  player chose, kept by name in the messages, the word the user prefers
+  there. It is the part that keeps them, not a type
   around each.
 - **The person is the person.** The drawer's label for it says 사람, Person,
   人物, not 캐릭터.
 - **The picker uses the person and the pet as they are**, no type or scene of
-  its own: "preview에 character랑 pet 그냥 그대로 갖다쓰면 되는데".
+  its own.
 - **Each view sees by its own eye.** Zooming the world out does not empty the
   picker.
 - **Parent over child.** No path where a thing holds itself again

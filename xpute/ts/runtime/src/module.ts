@@ -2,7 +2,7 @@
 
 /**
  * This is a core built as one WebAssembly module, opened over a memory the
- * runtime reserved (mem/reserve.ts). The module imports only xpute's three: the
+ * runtime reserved (reserve.ts). The module imports only xpute's three: the
  * memory, the clock and the call. Its entry is `run`. Anything else it exports,
  * such as a boot call that answers its front's offset, belongs to the program
  * and is reached on `instance`. The caller compiles the module.

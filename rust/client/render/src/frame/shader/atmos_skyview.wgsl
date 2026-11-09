@@ -6,7 +6,7 @@
 
 // `light.x` names the light, 1 for the moon. `light.y` is 1 when this drawing
 // measures the slope in the light's height, and `light.z` is 1 when it
-// measures the slope in the eye's altitude (gpu/atmosphere.rs `prepare`).
+// measures the slope in the eye's altitude (pass/atmosphere.rs `prepare`).
 @group(0) @binding(14) var<uniform> light: vec4f;
 
 // What the views and the exposure measure (frame/shader/word.rs

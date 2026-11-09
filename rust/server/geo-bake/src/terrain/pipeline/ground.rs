@@ -8,7 +8,7 @@ use crate::terrain::CELL_U;
 use pxl_engine::lattice::CELL_CENTER;
 use pxl_engine::way;
 use pxl_spec::asset::cube::ground;
-use pxl_spec::bake::tile::terrain::{Ground, GroundId};
+use pxl_spec::bake::tile::terrain::{GroundCells, GroundId};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 
 use crate::terrain::pipeline::feature::{Feature, Layer, P};
@@ -32,7 +32,7 @@ pub enum Coast {
     Shore(Vec<(Vec<P>, Vec<Vec<P>>)>),
 }
 
-pub fn bake_ground(feats: &[Feature], coast: &Coast) -> Ground {
+pub fn bake_ground(feats: &[Feature], coast: &Coast) -> GroundCells {
     let mut cells = vec![ground::water; TILE_AREA];
     match coast {
         Coast::Sea => {}
@@ -62,9 +62,7 @@ pub fn bake_ground(feats: &[Feature], coast: &Coast) -> Ground {
         }
     }
 
-    Ground {
-        cells: cells.into(),
-    }
+    cells.into()
 }
 
 #[inline]

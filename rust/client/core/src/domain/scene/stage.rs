@@ -7,16 +7,16 @@
 use crate::domain::scene::frame::Frame;
 use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::shader::word::{DECOR_GROUPS, DRAW_FLOATS};
-use pxl_render::gpu::atmosphere::EARTH_LAYERS;
 use pxl_render::gpu::draw::DRAW_WORDS;
-use pxl_render::gpu::ray::{Cast, GroundInput};
-use pxl_render::gpu::renderer::{render_frame, EarthLayer, FrameInput, FrameStat};
 use pxl_render::gpu::span_spec::FrameKind;
 use pxl_render::gpu::surface::SURFACES;
+use pxl_render::pass::atmosphere::EARTH_LAYERS;
+use pxl_render::ray::{Cast, GroundInput};
+use pxl_render::renderer::{render_frame, EarthLayer, FrameInput, FrameStat};
 use pxl_spec::space::coord::v3;
 use xpute_core::global::Global;
 
-use crate::domain::layer::earth::{earth_upload, earth_window, Earth, EARTH_SLOTS};
+use crate::domain::layer::earth::{self, EarthTile, EARTH_SLOTS};
 use crate::domain::scene::character::companion::companion_skins;
 use crate::domain::scene::character::surface::character_surface_rows;
 use crate::domain::scene::decor::asset::{decor_model, decor_skin};
@@ -64,7 +64,7 @@ use crate::domain::view::frame::pose::{sea_under_eye, view};
 use crate::domain::view::frame::screen;
 use crate::domain::view::observation;
 use crate::sys::io::loader;
-use pxl_engine::way::tree;
+use pxl_engine::way_tree;
 use pxl_render::gpu::api;
 use pxl_spec::asset::catalog::pack;
 use pxl_spec::asset::decor;
@@ -133,8 +133,9 @@ pub fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
         surface_cnt += 1;
     }
     let on = api::device_generation();
-    let (window, layers) = earth_window(Earth::demand().floor(), on);
-    let mut earth_upload = move |write: &mut dyn FnMut(u32, &[u8]) -> bool| earth_upload(write, on);
+    let (window, layers) = earth::window(EarthTile::demand().floor(), on);
+    let mut earth_upload =
+        move |write: &mut dyn FnMut(u32, &[u8]) -> bool| earth::upload(write, on);
     let o = observation::observation();
     let eye = o
         .as_ref()
@@ -188,7 +189,7 @@ pub fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
         ground: GroundInput {
             upload: &mut terrain_upload,
             pool: clipmap::pool_top()
-                .max(param::WAYS_POOL_FIRST_BYTES / (4 * tree::CHILD_GROUP_WORDS)),
+                .max(param::WAYS_POOL_FIRST_BYTES / (4 * way_tree::CHILD_GROUP_WORDS)),
         },
         cast: o.as_ref().and(eye).map(|eye| Cast {
             eye,

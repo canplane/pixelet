@@ -12,10 +12,10 @@ them, and each carries its own license where it is published.
 
 Data sources have their own obligations and their own place:
 [infra/README.md](./infra/README.md) §6 records them, and
-`ts/client/src/ui/setting/info/attribution.tsx` is where the ones that must
+`ts/client/src/ui/feature/setting/info/attribution.tsx` is where the ones that must
 reach a user are shown.
 
-## louis-e/arnis — `rust/server/geo-bake/src/separation/solve.rs` and `solve/`, `rust/spec/src/procedural.rs`
+## louis-e/arnis — `rust/server/geo-bake/src/separation/solve.rs` and `solve/`, `rust/spec/spec/src/procedural.rs`
 
 How bridges and tunnels stand is [louis-e/arnis][arnis] at `c96872e`
 (Apache-2.0), its [element processing][processing] for bridges, highways and
@@ -37,7 +37,7 @@ Version 2.0. See the LICENSE file for the full terms.
 
 The license is at <https://www.apache.org/licenses/LICENSE-2.0>, and the client
 shows the notice under Settings, Attribution
-(`ts/client/src/ui/setting/info/attribution.tsx`).
+(`ts/client/src/ui/feature/setting/info/attribution.tsx`).
 
 [arnis]: https://github.com/louis-e/arnis
 [processing]: https://github.com/louis-e/arnis/tree/c96872e0fa21573402d1b731ea87f796e8caa1d2/src/element_processing

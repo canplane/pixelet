@@ -15,7 +15,7 @@ fn runs() -> usize {
 fn bodies_share_run() {
     let _g = sys::serial();
     let before = runs();
-    let longest = longest(Stream::terrain);
+    let bytes = SLOT_BYTES;
     let mut out: Vec<Block> = (0..SLOTS)
         .map(|k| {
             take(
@@ -24,7 +24,7 @@ fn bodies_share_run() {
                 } else {
                     Stream::earth
                 }),
-                longest,
+                bytes,
             )
             .unwrap()
         })
@@ -36,7 +36,7 @@ fn bodies_share_run() {
         at.windows(2).all(|w| w[1] - w[0] >= SLOT_BYTES as usize),
         "no two slots overlap"
     );
-    out.push(take(Some(Stream::terrain), longest).unwrap());
+    out.push(take(Some(Stream::terrain), bytes).unwrap());
     assert_eq!(runs(), before + 2, "and the next borrows another");
 
     for (k, &(at, n)) in out.iter().enumerate() {
@@ -52,7 +52,7 @@ fn bodies_share_run() {
         released.wrapping_add(1),
         "a slot given back is a release"
     );
-    let again = take(Some(Stream::earth), longest).unwrap();
+    let again = take(Some(Stream::earth), bytes).unwrap();
     assert_eq!(
         again.0, freed.0,
         "a slot given back is taken again before a run is borrowed"
@@ -92,11 +92,11 @@ fn other_bodies_own_block() {
 #[test]
 fn slots_cap_and_wake() {
     let _g = sys::serial();
-    let longest = longest(Stream::terrain);
+    let bytes = SLOT_BYTES;
     let mut out: Vec<Block> = (0..BODY_SLOTS)
-        .map(|_| take(Some(Stream::terrain), longest).unwrap())
+        .map(|_| take(Some(Stream::terrain), bytes).unwrap())
         .collect();
-    let refused = take(Some(Stream::earth), longest).unwrap_err();
+    let refused = take(Some(Stream::earth), bytes).unwrap_err();
     assert!(!refused.released(), "every slot out: the body waits");
     // SAFETY: from `take`, given back once, here and below.
     unsafe { give(out.pop().unwrap()) };
@@ -121,14 +121,22 @@ fn slot_peak() {
     unsafe { give(b) };
 }
 
+/// A terrain body longer than a slot is a heap block of its own, in no run.
+#[test]
+fn long_body_own_block() {
+    let _g = sys::serial();
+    let before = runs();
+    let b = take(Some(Stream::terrain), SLOT_BYTES + 1).unwrap();
+    assert_eq!(runs(), before, "no run is taken for it");
+    // SAFETY: from `take`, given back once.
+    unsafe { give(b) };
+}
+
 #[test]
 fn slot_cheaper_than_block() {
-    assert_eq!(SLOTS, 7, "at today's packets, as sys/io/body.rs says");
+    assert_eq!(SLOTS, BODY_RUN_SLOTS, "as sys/io/body.rs says");
     for stream in Stream::ALL.into_iter().filter(|s| s.row().slotted) {
-        assert!(
-            SLOT_BYTES >= longest(stream)
-                && (BODY_RUN_BYTES / SLOTS) < longest(stream).next_power_of_two()
-        );
+        assert!((BODY_RUN_BYTES / SLOTS) < longest(stream).next_power_of_two());
     }
 }
 
@@ -136,11 +144,11 @@ fn slot_cheaper_than_block() {
 fn slot_refusal_waits_slots() {
     let _g = sys::serial();
     set_counted_heap();
-    let longest = longest(Stream::terrain);
+    let bytes = SLOT_BYTES;
     let mut out: Vec<Block> = (0..BODY_SLOTS)
-        .map(|_| take(Some(Stream::terrain), longest).unwrap())
+        .map(|_| take(Some(Stream::terrain), bytes).unwrap())
         .collect();
-    let refused = take(Some(Stream::terrain), longest).unwrap_err();
+    let refused = take(Some(Stream::terrain), bytes).unwrap_err();
     heap_release();
     assert!(
         !refused.released(),
@@ -173,11 +181,11 @@ fn run_refusal_waits_heap() {
 #[test]
 fn slot_return_asks_turn() {
     let _g = sys::serial();
-    let longest = longest(Stream::terrain);
+    let bytes = SLOT_BYTES;
     let mut out: Vec<Block> = (0..BODY_SLOTS)
-        .map(|_| take(Some(Stream::terrain), longest).unwrap())
+        .map(|_| take(Some(Stream::terrain), bytes).unwrap())
         .collect();
-    assert!(take(Some(Stream::terrain), longest).is_err());
+    assert!(take(Some(Stream::terrain), bytes).is_err());
     assert!(slot_table().waited, "refused for want of a slot");
     // SAFETY: from `take`, given back once, here and below.
     unsafe { give(out.pop().unwrap()) };

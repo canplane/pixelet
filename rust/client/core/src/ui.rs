@@ -38,8 +38,8 @@ use crate::sys::io::file::{self, Path};
 use crate::sys::io::file_spec::root;
 use crate::sys::io::request;
 use crate::sys::io::source;
-use pxl_render::gpu::renderer::renderer_progress;
 use pxl_render::gpu::surface::SURFACES;
+use pxl_render::renderer::renderer_progress;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_kit::status::errno::Errno;
@@ -64,7 +64,7 @@ fn division_parts(
     let Some(at) = at else { return };
     each_division(at, |part| {
         each(&DivisionPart {
-            subtype: part.subtype as u8,
+            subtype: part.kind as u8,
             name: &part.name,
             shown: named_to.is_some_and(|z| part.shown_from() <= z),
             area: part.area,

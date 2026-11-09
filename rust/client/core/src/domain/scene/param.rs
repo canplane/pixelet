@@ -79,12 +79,12 @@ pub const CHARACTER_LONG_SIDE_MAX: f64 = 256.0;
 /// The first size of the ways' pool on the GPU: 1 MiB, or 16 Ki child groups.
 /// A brick without ways takes no child group, and a brick with ways takes
 /// child groups starting with one for its own nodes along z (pxl-engine
-/// `way::tree`), so this holds the ways of a sparse view. The pool doubles
-/// whenever the core's pool outgrows it (pxl-render gpu/ray/ground.rs
+/// `way_tree`), so this holds the ways of a sparse view. The pool doubles
+/// whenever the core's pool outgrows it (pxl-render ray/ground.rs
 /// `GroundBuffer::grow`), so a dense view reaches 64 MiB in six doublings.
 pub const WAYS_POOL_FIRST_BYTES: u32 = 1 << 20;
 const _: () = {
-    use pxl_engine::way::tree::{CHILD_GROUP_WORDS, POOL_CHILD_GROUPS};
+    use pxl_engine::way_tree::{CHILD_GROUP_WORDS, POOL_CHILD_GROUPS};
     assert!(
         WAYS_POOL_FIRST_BYTES <= POOL_CHILD_GROUPS * CHILD_GROUP_WORDS * 4
             && WAYS_POOL_FIRST_BYTES >= 2 * CHILD_GROUP_WORDS * 4,

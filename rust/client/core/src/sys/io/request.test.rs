@@ -111,6 +111,20 @@ fn same_set_no_change() {
 }
 
 #[test]
+fn reset_stops_what_is_out() {
+    let (_serial, key) = one_out();
+    declare(Stream::terrain, &[(1, seen(0.0)), (2, seen(1.0))]);
+    pump();
+    reset();
+    let (starts, stops) = take_events();
+    assert!(starts.is_empty(), "a start outlived the reset");
+    assert_eq!(stops.len(), 2);
+    assert!(stops.contains(&key));
+    assert!(attempt_of(key).is_none());
+    assert_eq!(cnts(Stream::terrain), (0, 0));
+}
+
+#[test]
 fn answer_asked_once() {
     let (_serial, key) = one_out();
     ok(key);

@@ -23,7 +23,7 @@ makes sense, and what changes if other people use this.
   usable with no generator, made in the wish to build something like a binary
   JSON. With the ABI now fixed, the user asks what all of it is for.
 - The user expected schemaless, in-place reading to matter in WASM.
-- Coupling XTP to xpute may be the better place for it. The user said "may".
+- Coupling XTP to xpute may be the better place for it. The user said only that it may be.
 
 ## XTP
 

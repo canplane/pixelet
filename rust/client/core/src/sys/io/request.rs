@@ -336,19 +336,20 @@ fn hold(s: &mut Sched, fault: Fault, f: Failure, started_ms: f64, at: f64) {
 }
 
 /// Resets the scheduler when the runtime will not answer what it was asked
-/// to run. The pending starts and stops are dropped, and the ends stay for
-/// the profiler.
+/// to run. What is out stops, as what is no longer wanted does, so an open
+/// that will not be answered lets go of its descriptor. The pending starts
+/// are dropped.
 pub fn reset() {
-    let s = sched();
+    let (s, at) = (sched(), now());
+    s.events.retain(|e| !matches!(e, Event::Start(..)));
     for k in 0..SLOTS {
         if s.slots[k].out.is_some() {
-            end(s, k);
+            stop(s, k, at);
         }
     }
     s.wants.iter_mut().for_each(Vec::clear);
     s.outage = NO_OUTAGE;
     s.given_up = false;
-    s.events.retain(|e| matches!(e, Event::End(..)));
 }
 
 /// Whether `stream`'s want of `id` is held back because its object failed.

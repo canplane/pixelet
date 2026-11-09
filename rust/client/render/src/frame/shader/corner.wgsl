@@ -36,6 +36,9 @@ fn item_start(item: u32, aim: Aim) -> Start {
 fn park(item: u32, t: f32, corner: vec3<u32>, zoom: u32, roots: vec3<i32>, step: u32) -> bool {
   let c = corner_of(item);
   let at = corner_state_at(c);
+  if ((beams[at + 4u] & PARKED) == 0u) {
+    list_parked(item);
+  }
   beams[at] = bitcast<u32>(t);
   beams[at + 1u] = corner.x;
   beams[at + 2u] = corner.y;

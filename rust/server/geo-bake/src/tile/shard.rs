@@ -22,9 +22,7 @@ use std::path::{Path, PathBuf};
 
 use crate::cli::Argv;
 use crate::coverage::{src_of, Coverage, Node};
-use crate::pyramid::{
-    fold, orphan_tiles, write_manifest, Absent, Base, Staged, TileSet, FITS, MANIFEST,
-};
+use crate::pyramid::{fold, orphan_tiles, write_manifest, Absent, Base, Staged, TileSet, MANIFEST};
 use crate::source;
 use crate::util;
 use crate::util::git_sha;
@@ -220,7 +218,7 @@ impl Stage {
     /// Moves what is staged into the set and takes away what each `.done`
     /// lists, each `.done` last; only once folded, else the set would hold
     /// leaves under parents not folded from them.
-    pub fn commit<L: Base>(&self, worker_cnt: usize) -> Result<(), String> {
+    pub fn commit<L: Base>(&self) -> Result<(), String> {
         if !self.done_path(COMMIT).exists() {
             if !self.done_path(FOLD).exists() {
                 return Err(format!(
@@ -228,19 +226,6 @@ impl Stage {
                     self.stage.root.display()
                 ));
             }
-            // The set as it will be, refused before anything moves.
-            let whole = self.whole()?;
-            let tiles: FnvHashSet<Quadrant> = whole.iter().copied().map(shard_tile).collect();
-            let mut removed = self.leaves_removed(&whole)?;
-            removed.extend(self.read_done(FOLD)?);
-            let view = Staged {
-                base: &self.set,
-                stage: &self.stage,
-                leaf: L::LEAF,
-                whole: &tiles,
-                removed,
-            };
-            let fits = L::check_pool(&view, worker_cnt)?;
             // Before anything moves: a commit once begun is finished, never undone, so the set will hold
             // these, and a commit cut short leaves them recorded.
             if let Some(shards) = self.next_shards()? {
@@ -257,17 +242,6 @@ impl Stage {
                         .as_bytes(),
                 )
                 .map_err(|e| io(&path, e))?;
-            }
-            // What the set will keep of its tiles, beside it until they are
-            // all moved (`finish_commit`).
-            if let Some(fits) = fits {
-                let text: String = fits
-                    .iter()
-                    .map(|(p, fit)| format!("{} {fit}\n", p.key()))
-                    .collect();
-                let path = self.next_fits();
-                fs::create_dir_all(&self.set.root).map_err(|e| io(&self.set.root, e))?;
-                util::write_atomic(&path, text.as_bytes()).map_err(|e| io(&path, e))?;
             }
             fs::rename(self.done_path(FOLD), self.done_path(COMMIT))
                 .map_err(|e| io(&self.done_path(FOLD), e))?;
@@ -316,24 +290,7 @@ impl Stage {
         for p in self.read_done(COMMIT)? {
             self.set.remove(p)?;
         }
-        // With the set's tiles all moved, its fits are theirs; the stage's fits beside its tiles,
-        // already read into them, go.
-        let next = self.next_fits();
-        if next.exists() {
-            fs::rename(&next, self.set.root.join(FITS)).map_err(|e| io(&next, e))?;
-        }
-        for entry in fs::read_dir(&self.stage.root).map_err(|e| io(&self.stage.root, e))? {
-            let path = entry.map_err(|e| io(&self.stage.root, e))?.path();
-            if path.extension().is_some_and(|e| e == "fit") {
-                fs::remove_file(&path).map_err(|e| io(&path, e))?;
-            }
-        }
         self.remove_done(COMMIT)
-    }
-
-    /// The set's fits (`FITS`) once a commit begun has moved its tiles.
-    fn next_fits(&self) -> PathBuf {
-        self.set.root.join(format!("{FITS}.next"))
     }
 
     /// The set as a version is uploaded, into `to`, made empty first: every
@@ -458,7 +415,7 @@ impl Run {
             self.stage.fold::<L>(&absent(self)?, self.concurrency)?;
         }
         if self.commit {
-            self.stage.commit::<L>(self.concurrency)?;
+            self.stage.commit::<L>()?;
             let mut fields =
                 serde_json::json!({ "source": src_of(reads)?, "format": FORMAT.of(L::LAYER) });
             // The commit wrote them before it moved anything.

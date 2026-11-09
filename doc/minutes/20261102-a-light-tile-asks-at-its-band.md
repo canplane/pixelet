@@ -23,8 +23,8 @@ are the 07:00 cost.
 
 ## What the user decided
 
-- **No revert; fix it with the history read** ("되돌릴 필요가 있나? 과거를
-  보면서 잡으면 되지 않나?").
+- **No revert; fix it with the history read**, the user asking why a revert was
+  needed when the fix could be found by reading the history.
 - **A tile's zoom is its band**: the camera grid's cell zoom at the tile
   column's nearest point to the eye, its place in the box alone. A slide keeps
   a tile exactly where it stays in the box and its band. Where the sun is low
@@ -38,8 +38,8 @@ are the 07:00 cost.
   handed; memory not to grow much, quality not to drop noticeably); the run
   lists and the two run modes kept.
 - **One reuse rule**: a walk takes another's only where that one asked the same
-  `Detail` (`cast::Detail::alike`), for samples and beam lines alike ("고치라.").
-- **The review's findings fixed before it lands** ("하라.").
+  `Detail` (`cast::Detail::alike`), for samples and beam lines alike, on the user's word.
+- **The review's findings fixed before it lands**, on the user's word.
 
 ## The premise that broke
 

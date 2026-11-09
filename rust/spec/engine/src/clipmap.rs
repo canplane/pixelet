@@ -159,25 +159,25 @@ pub const WAYS_SHIFT: u32 = (TILE_CELLS / WAYS_ACROSS).trailing_zeros();
 pub const WAYS_BINS_ACROSS: u32 = BRICK >> WAYS_SHIFT;
 pub const WAYS_BINS: u32 = WAYS_BINS_ACROSS * WAYS_BINS_ACROSS;
 
-/// The most entries a brick holds of its tile's ways: one for each segment and each bin
-/// (`WAYS_SHIFT`) its footprint reaches. It is the densest brick of the format-12 set; a tile
-/// past it fails its bake (pxl-spec bake/tile/terrain.rs `ways_fit`).
-pub const WAYS_BRICK_SEGMENTS: u32 = 1065;
-
 /// A brick's lines, laid out by the CPU as the brick is filled (pxl-spec bake/tile/terrain.rs
 /// `brick_lines`) so that its fill can keep its columns' spans from them (`fill::spans`).
-/// First comes its tile's header (`way::header`); then one word a bin (`WAYS_BINS`), its first
-/// entry with its count above it; then the entries, two to a word, each one of the brick's
-/// segments, a bin's in order; then the segments the bins reach, in their lines' order,
-/// `way::SEGMENT_WORDS` each. No brick holds more than `WAYS_BRICK_SEGMENTS` of either.
-pub const LINES_ENTRIES_AT: u32 = way::HEADER_WORDS + WAYS_BINS;
-pub const LINES_SEGMENTS_AT: u32 = LINES_ENTRIES_AT + WAYS_BRICK_SEGMENTS.div_ceil(2);
-pub const LINES_WORDS: u32 = LINES_SEGMENTS_AT + WAYS_BRICK_SEGMENTS * way::SEGMENT_WORDS as u32;
+/// First comes its tile's header (`way::header`); then `WAYS_BINS + 1` words, each bin's first
+/// entry and, after the last bin's, how many entries there are; then the entries, a word each,
+/// each one of the brick's segments, a bin's in order; then the segments the bins reach, in
+/// their lines' order, `way::SEGMENT_WORDS` each. No limit bounds how many: the words follow
+/// the brick (`lines_words`).
+pub const LINES_BINS_AT: u32 = way::HEADER_WORDS;
+pub const LINES_ENTRIES_AT: u32 = LINES_BINS_AT + WAYS_BINS + 1;
+
+/// The words of a brick's lines with `entries` entries over `segments` segments.
+pub const fn lines_words(entries: u32, segments: u32) -> u32 {
+    LINES_ENTRIES_AT + entries + segments * way::SEGMENT_WORDS as u32
+}
 
 /// A brick's scratch while it is filled: the spans of its columns and of the ring of columns
 /// around it, which a column's cells read beside its own (pxl-engine fill.rs `spans`). The
 /// ways' bound in its levels and its ways' tree are made from them (fill.rs `mip`,
-/// `way::tree::leaf`), and the scratch is dropped with the fill.
+/// `way_tree::leaf`), and the scratch is dropped with the fill.
 pub const SPANS_AT: u32 = 0;
 /// The columns whose spans a brick's cells read: the brick's and a ring of one around it,
 /// `SPANS_ACROSS` a side, row by row from the ring's first.
@@ -217,12 +217,12 @@ pub(crate) const fn own_at(w: u32, i: u32) -> u32 {
 /// A brick's words, the part that outlives its fill, the same on the CPU and on a GPU, in
 /// order: its columns, its levels, its cells as laid and its ways' tree's root. The clip
 /// levels' bricks are one storage buffer bound whole on a GPU, under WebGPU's floor
-/// (pxl-render gpu/ray/ground.rs `GROUND_BYTES`).
+/// (pxl-render ray/ground.rs `GROUND_BYTES`).
 pub const COLUMNS_AT: u32 = 0;
 pub const BOUNDS_AT: u32 = COLUMNS_AT + COLUMN_WORDS;
 pub const OWN_AT: u32 = BOUNDS_AT + BOUND_WORDS;
 /// Its ways' tree's root word: the child group of its own nodes along z in the pool and the
-/// first one's Z (`way::tree::root_word`); 0, child group 0, which is never handed out, where
+/// first one's Z (`way_tree::root_word`); 0, child group 0, which is never handed out, where
 /// it has none.
 pub const ROOT_AT: u32 = OWN_AT + OWN_WORDS;
 pub const BRICK_WORDS: u32 = ROOT_AT + 1;
@@ -308,17 +308,18 @@ fn bin_of(sq: &impl Brick, c: [i32; 2]) -> (u32, u32) {
         c[1].clamp(0, BRICK as i32 - 1) as u32,
     );
     let b = (y >> WAYS_SHIFT) * WAYS_BINS_ACROSS + (x >> WAYS_SHIFT);
-    let w = sq.line(way::HEADER_WORDS + b);
-    (w & 0xffff, w >> 16)
+    let first = sq.line(LINES_BINS_AT + b);
+    (first, sq.line(LINES_BINS_AT + b + 1) - first)
 }
 
 /// Entry `e` of the brick's lines: the place of a segment among the brick's segments.
 fn entry_of(sq: &impl Brick, e: u32) -> u32 {
-    (sq.line(LINES_ENTRIES_AT + e / 2) >> (16 * (e % 2))) & 0xffff
+    sq.line(LINES_ENTRIES_AT + e)
 }
 
 fn segment_at(sq: &impl Brick, at: u32) -> Segment {
-    let base = LINES_SEGMENTS_AT + at * way::SEGMENT_WORDS as u32;
+    let entries = sq.line(LINES_BINS_AT + WAYS_BINS);
+    let base = LINES_ENTRIES_AT + entries + at * way::SEGMENT_WORDS as u32;
     let mut w = [0; way::SEGMENT_WORDS];
     let mut k = 0;
     while k < w.len() {

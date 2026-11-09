@@ -6,7 +6,7 @@ import android.view.Surface
 
 /**
  * This is the GPU's runtime beside the core (Core.kt), as xpute exports it to
- * JNI (xpute-gpu `native_abi!`, src/runtime/native/jni.rs). These are the same
+ * JNI (xpute-gpu `native_abi!`, src/runtime/jni.rs). These are the same
  * calls that the iOS module's Swift makes through the C ABI (xpute_gpu.h).
  * Each call reaches the runtime on the core's thread while the caller waits,
  * and a completion kicks the core from there.

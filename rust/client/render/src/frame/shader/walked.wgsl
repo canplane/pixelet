@@ -48,8 +48,7 @@ fn eye_holes_at(size: vec2<u32>) -> u32 {
   return walked_at() + walked_words(size);
 }
 
-/// The first word of the eye's pool, which holds the pool's count (pxl-engine `ray::pool_at`,
-/// `ray::POOL_CNT`).
+/// The first word of the eye's pool (pxl-engine `ray::pool_at`).
 fn eye_pool_at(size: vec2<u32>) -> u32 {
   return eye_holes_at(size) + 1u + size.x * size.y;
 }

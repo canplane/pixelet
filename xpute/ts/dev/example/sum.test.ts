@@ -1,0 +1,52 @@
+// @xpute/example/sum.test.ts
+
+/**
+ * The smallest runtime, beside the smallest core (rust/dev/example). It boots the
+ * core as the core's machine declares (machine.spec.ts): the module is read
+ * from disk and opened over a memory of the one size the machine allows, with
+ * a policy for a runtime that has no display. The core's one protocol
+ * (asker.spec.ts) gives the program's handler, which answers the core's call.
+ * The test then sends one command and reads its reply. Build the core first
+ * (`make build`).
+ */
+
+import { test } from "vitest";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { boot, QUIET, Timeslice } from "@xpute/runtime";
+import { asker_imports, type AskerProtocol, Command } from "./asker.spec.ts";
+import { MACHINE } from "./machine.spec.ts";
+
+const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
+/** A relative CARGO_TARGET_DIR is relative to rust/, where the root's tasks
+ * run cargo. */
+const CARGO_TARGET = resolve(
+  join(ROOT, "rust"),
+  process.env.CARGO_TARGET_DIR ?? "target",
+);
+const CORE = join(
+  CARGO_TARGET,
+  "wasm32-unknown-unknown/debug/xpute_example.wasm",
+);
+
+const ANSWER = 100;
+
+test("example - a command answered with what the core asked its runtime", async () => {
+  const runtime = await boot(
+    {
+      machine: MACHINE,
+      core: () => ({
+        core: { module: readFileSync(CORE), bytes: MACHINE.mem_bytes[0] },
+        program: asker_imports({ [Command.ASK]: () => ANSWER }),
+        policy: new Timeslice(4),
+        submit: () => {},
+      }),
+    },
+    QUIET,
+  );
+  const asker: AskerProtocol = runtime;
+  assert.deepStrictEqual(asker.call(Command.SUM, 2, 3), 2 + 3 + ANSWER);
+});

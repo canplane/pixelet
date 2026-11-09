@@ -24,8 +24,6 @@
 //! floor, and the one root, a segment's direction, is rounded once by the CPU and handed to a
 //! GPU in a word (`Segment::dir`).
 
-pub mod tree;
-
 use crate::ground;
 use crate::param::way::BEAM_PILLAR_INTERVAL_M;
 use crate::param::way::DECK_THICKNESS_M;
@@ -749,8 +747,8 @@ fn writes<C: ColumnGrid>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32
     (w, next)
 }
 
-/// The most spans one column's visits make (`column`), which is the most the format-12 set
-/// makes. A tile past it fails its bake (pxl-spec bake/tile/terrain.rs `fill_fit`).
+/// The most spans a column keeps of those its visits make (`column`); a column past it keeps
+/// the first ones, in the order its visits come (`SpanList::push`).
 pub const SPANS: usize = 10;
 
 /// A column's spans, in leaf cells, in the order its visits come, `n` of them: each a deck's

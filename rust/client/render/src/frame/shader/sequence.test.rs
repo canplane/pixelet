@@ -7,17 +7,14 @@ use crate::frame::shader::access::{
 
 /// The sources whose calls take their offsets from a step here.
 const SOURCES: [(&str, &str); 8] = [
-    ("ray/cast.rs", include_str!("../../gpu/ray/cast.rs")),
-    ("ray/count.rs", include_str!("../../gpu/ray/count.rs")),
-    ("ray/raster.rs", include_str!("../../gpu/ray/raster.rs")),
+    ("ray/cast.rs", include_str!("../../ray/cast.rs")),
+    ("ray/count.rs", include_str!("../../ray/count.rs")),
+    ("ray/raster.rs", include_str!("../../ray/raster.rs")),
     ("generator.rs", include_str!("../../gpu/generator.rs")),
-    ("shadow.rs", include_str!("../../gpu/shadow.rs")),
-    ("pass/decor.rs", include_str!("../../gpu/pass/decor.rs")),
-    (
-        "pass/impostor.rs",
-        include_str!("../../gpu/pass/impostor.rs"),
-    ),
-    ("renderer.rs", include_str!("../../gpu/renderer.rs")),
+    ("shadow.rs", include_str!("../../pass/shadow.rs")),
+    ("pass/decor.rs", include_str!("../../pass/decor.rs")),
+    ("pass/impostor.rs", include_str!("../../pass/impostor.rs")),
+    ("renderer.rs", include_str!("../../renderer.rs")),
 ];
 
 /// Every render pass an indirect draw of the frame runs in is declared where the host begins

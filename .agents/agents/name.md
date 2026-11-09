@@ -9,10 +9,10 @@ not why its names were chosen.
 
 - Read only: no edit, `git add`, commit, stash or checkout.
 - Read `.agents/skills/naming/SKILL.md` first; it decides.
-- Read code through the LSP tool where it answers; name the files it does not.
+- Read code with whichever tool is efficient: text search or the LSP tool.
 - Review every identifier the change adds or renames, generated files by their
   source. One loose word spread over many modules matters most: count where it
   stands. A name that is fine stays.
 
 Report findings only, most read first, each with its file, line, what the thing
-is and the name it should take; then the files LSP could not answer.
+is and the name it should take.

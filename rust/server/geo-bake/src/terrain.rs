@@ -4,19 +4,14 @@ pub mod absent;
 pub mod bake;
 pub mod leaf;
 pub mod pipeline;
-pub mod pool;
 pub mod repository;
 pub(crate) mod source;
 
 use crate::pyramid::Base;
-use crate::pyramid::Staged;
-use pxl_engine::clipmap::BRICK;
-use pxl_engine::way::tree::{BRICK_CHILD_GROUPS, ROOT_NODES};
-use pxl_engine::way::SPANS;
 use pxl_spec::bake::fold::fold_terrain;
 use pxl_spec::bake::publication::BaseLayer;
-use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
-use pxl_spec::bake::tile::terrain::{self, Fit, TerrainTile, Unfit};
+use pxl_spec::bake::tile::max_pkt_bytes;
+use pxl_spec::bake::tile::terrain::{self, TerrainTile};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::Lattice;
@@ -31,23 +26,15 @@ impl Base for TerrainTile {
 
     const LATTICE: Lattice = GROUND;
 
+    /// The packet, refused past the limit a client holds one to
+    /// (pxl-spec `max_pkt_bytes`).
     fn encode(&self, at: Quadrant) -> Result<Vec<u8>, String> {
-        self.encode_with_fit(at).map(|(pkt, _)| pkt)
-    }
-
-    /// Refused where a record's room does not hold its lines (pxl-spec `Separation::fits`),
-    /// where a window's brick would hold more of its ways' entries than a client gives one
-    /// (pxl-spec `terrain::ways_fit`), or where it would not fill or build as a client's does
-    /// (`terrain::fill_fit`); what that build takes is its fit (pool.rs `line`).
-    fn encode_with_fit(&self, at: Quadrant) -> Result<(Vec<u8>, Option<String>), String> {
-        self.separation
-            .fits()
-            .map_err(|[lines, points]| format!("its ways hold {lines} lines and {points} points, past MAX_LINES ({MAX_LINES}) or MAX_POINTS ({MAX_POINTS})"))?;
-        terrain::ways_fit(&self.separation, BRICK)
-            .map_err(|([qx, qy], n)| format!("its brick ({qx}, {qy}) holds {n} of the ways' entries, past WAYS_BRICK_SEGMENTS ({})", terrain::WAYS_BRICK_SEGMENTS))?;
-        let fit = terrain::fill_fit(at, self, |_, _| {}).map_err(|(at, why)| unfit(at, why))?;
-        let pkt = terrain::encode(self).map_err(|e| format!("{e:?}"))?;
-        Ok((pkt, (fit != Fit::default()).then(|| pool::line(&fit))))
+        let pkt = terrain::encode(self).map_err(|e| format!("{}: {e:?}", at.key()))?;
+        let cap = max_pkt_bytes(Self::LAYER);
+        if pkt.len() > cap {
+            return Err(format!("tile {} size {} > {cap}", at.key(), pkt.len()));
+        }
+        Ok(pkt)
     }
 
     fn decode(raw: &[u8]) -> Result<Self, String> {
@@ -66,22 +53,8 @@ impl Base for TerrainTile {
     fn occupancy(&self) -> Occupancy {
         self.occupancy
     }
-
-    /// Refused where the set's ways' trees would not fit the client's pool
-    /// wherever the eye is (`pool::check`).
-    fn check_pool(
-        set: &Staged<'_>,
-        worker_cnt: usize,
-    ) -> Result<Option<Vec<(Quadrant, String)>>, String> {
-        pool::check(set, worker_cnt).map(Some)
-    }
 }
 
-/// Why brick `at` of a tile does not fit (`terrain::fill_fit`), as a message.
-fn unfit([qx, qy]: [u32; 2], why: Unfit) -> String {
-    match why {
-        Unfit::Spans(spans) => format!("its brick ({qx}, {qy}) makes a column of {spans} of the ways' spans, past SPANS ({SPANS})"),
-        Unfit::Nodes(nodes) => format!("its brick ({qx}, {qy}) has its ways meet {nodes} of its nodes along z, past ROOT_NODES ({ROOT_NODES})"),
-        Unfit::ChildGroups => format!("its brick ({qx}, {qy}) takes more than BRICK_CHILD_GROUPS ({BRICK_CHILD_GROUPS}) of its ways' tree's child_groups"),
-    }
-}
+#[cfg(test)]
+#[path = "terrain.test.rs"]
+mod test;

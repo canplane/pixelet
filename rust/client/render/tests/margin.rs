@@ -53,7 +53,7 @@ fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
 }
 
 /// The light of case `c` and where its rays start, laid as the renderer lays them
-/// (gpu/shadow.rs `aim`, `Shadow::starts`).
+/// (pass/shadow.rs `aim`, `Shadow::starts`).
 fn box_of(c: &LightCase) -> (Light, StartGrid) {
     let dir = unit(c.dir);
     let a = unit(cross(dir, [0.0, 0.0, 1.0]));
@@ -153,9 +153,9 @@ fn device() -> Option<Gpu> {
 fn beams_of(gpu: &Gpu, b: &WorldBuffer, eye: &[u32], header: &[u32]) -> Vec<u32> {
     let eye = gpu.buf(eye, wgpu::BufferUsages::UNIFORM);
     let header = gpu.buf(header, wgpu::BufferUsages::UNIFORM);
-    let mut table = vec![0u32; node_cache::WORDS as usize];
-    table[node_cache::FRAME as usize] = FRAME;
-    let table = gpu.buf(&table, store_of());
+    let mut node_cache = vec![0u32; node_cache::WORDS as usize];
+    node_cache[node_cache::FRAME as usize] = FRAME;
+    let node_cache = gpu.buf(&node_cache, store_of());
     let tiles = light::tiles(SIZE);
     let mut list = vec![0u32; light::list_words(SIZE) as usize];
     let reads_at = light::reads_at(SIZE) as usize;
@@ -172,11 +172,11 @@ fn beams_of(gpu: &Gpu, b: &WorldBuffer, eye: &[u32], header: &[u32]) -> Vec<u32>
             (6, b.placed.as_entire_binding()),
             (7, b.pool.as_entire_binding()),
             (8, beams.as_entire_binding()),
-            (9, table.as_entire_binding()),
+            (9, node_cache.as_entire_binding()),
             (11, header.as_entire_binding()),
         ],
         &beams,
-        &table,
+        &node_cache,
         SIZE,
     );
     gpu.dispatch(

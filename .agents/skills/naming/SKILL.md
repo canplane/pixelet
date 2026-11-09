@@ -36,6 +36,10 @@ description: Naming in pixelet — short, plain names read where they stand; whe
 - A word may mean different things where each is its field's word (a map's tile,
   a shadow map's tile). A name changes when it is not its field's word or not
   what the thing is, not to keep words apart.
+- The same thing has the same name in every type, whatever its source calls
+  it: a row's class is its `kind`, the coarsest zoom it shows at its
+  `first_zoom`, a grid with a value a cell its `cells`. A column holds many and
+  is plural; the row read from it is singular.
 - PascalCase types, camelCase and the React UI's own names stay whole (`let
   cfg: Config`). A name that comes up from the core or xpute keeps its spelling
   in the UI (`cnt`, `lat`), and a name copied from an outside API keeps that

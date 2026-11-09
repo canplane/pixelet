@@ -5,10 +5,8 @@
 //! column's ground top and its cell as laid (`columns`); the ways' spans, worked out once a
 //! column from its lines into the brick's scratch (`spans`, `clipmap::SPANS_AT`); from them
 //! the brick's levels, level 0 holding each column's own entry (`mip`); and the ways' tree
-//! (`way::tree`). The core runs these a part at a time, as its turns have room (pxl-core
-//! domain/layer/terrain/clipmap.rs `fill_share`), and a bake runs them in order over one brick
-//! (`brick`). Both run this code, so the spans a bake sizes a tile's room by are the ones a
-//! client keeps.
+//! (`way_tree`). The core runs these a part at a time, as its turns have room (pxl-core
+//! domain/layer/terrain/clipmap.rs `fill_share`).
 
 use crate::answer;
 use crate::area::Shard;
@@ -17,7 +15,7 @@ use crate::clipmap::{
     COLUMNS_AT, OWN_AT, OWN_CELLS, ROOT_AT, SPANS_ACROSS, SPANS_AT, SPANS_COLUMNS,
     SPANS_COLUMN_WORDS,
 };
-use crate::{at, ground, way, Zoom};
+use crate::{at, ground, way, way_tree, Zoom};
 
 /// Sets word `i` of `s` to `v`. Like `at`, it is total: a store past the slice does nothing,
 /// so no store aborts.
@@ -51,11 +49,11 @@ pub fn root_of(ground: &[u32], base: u32) -> u32 {
 }
 
 /// The brick's own nodes along z that its ways meet, for the brick at `base` with cells at
-/// `cell_zoom`, read from the whole bound of its levels (`way::tree::span`): the Z of the
+/// `cell_zoom`, read from the whole bound of its levels (`way_tree::span`): the Z of the
 /// first and how many there are, which is what the root of its ways' tree holds.
 pub fn root_span(ground: &[u32], base: u32, cell_zoom: Zoom) -> (i32, u32) {
     let ways = ground::extent_of(mip_of(ground, base, clipmap::BRICK_MIPS, [0, 0]))[1];
-    way::tree::span(ways, cell_zoom)
+    way_tree::span(ways, cell_zoom)
 }
 
 /// A brick being filled, read on its own, as `mip` folds it.
@@ -287,7 +285,7 @@ pub fn keep(sq: &impl clipmap::Brick, scratch: &mut [u32], i: u32) -> u32 {
 /// write in it, from the spans its fill kept (`way::lined_hull`; `ground::Extent`). At a
 /// higher level it is joined over the level under it, which is written first
 /// (`clipmap::join`). A bore's air counts only as far up as the column's top, as the ways
-/// write it: the cells of the brick's ways tree under the top lie in the bound (`way::tree`),
+/// write it: the cells of the brick's ways tree under the top lie in the bound (`way_tree`),
 /// and a node that the bound splits further holds only air or void there. Above the top a
 /// cell is air whatever writes it. A bound reaching up there, past a tunnel's mouth where the
 /// ground falls away under the tunnel's clear height, would split every node above it.
@@ -352,12 +350,12 @@ pub fn brick(lane: &mut [u32], scratch: &mut [u32], four: impl Fn(u32) -> u32, s
 
 /// Builds the ways' tree of the brick filled into `lane`, whose spans are in `scratch`
 /// (`brick`) and whose cells are at `cell_zoom`, into `pool`, a level at a time
-/// (`way::tree`), from the brick's own nodes along z downward. It takes child groups in
+/// (`way_tree`), from the brick's own nodes along z downward. It takes child groups in
 /// order from child group `from`, which is the root's; child group 0 means none. It returns
 /// the child groups it took, those it still holds once folded, and its root word
-/// (`way::tree::root_word`): none taken and 0 where the brick has no ways, and `u32::MAX` for
+/// (`way_tree::root_word`): none taken and 0 where the brick has no ways, and `u32::MAX` for
 /// all three where `pool` has too few groups, the tree takes more than
-/// `way::tree::BRICK_CHILD_GROUPS`, or its ways span more than `way::tree::ROOT_NODES` of its
+/// `way_tree::BRICK_CHILD_GROUPS`, or its ways span more than `way_tree::ROOT_NODES` of its
 /// nodes along z.
 pub fn tree(
     lane: &[u32],
@@ -367,7 +365,7 @@ pub fn tree(
     from: u32,
 ) -> [u32; 3] {
     use crate::object::CHILDREN;
-    use way::tree::{self as t, Column};
+    use way_tree::{self as t, Column};
     let (brick, column_spans) = (
         LoneBrick {
             ground: lane,
@@ -437,11 +435,11 @@ mod tests {
     use super::*;
     use crate::answer;
     use crate::object::{self, Cut};
-    use crate::way::tree::{self, Column, Read};
+    use crate::way_tree::{self, Column, Read};
     use std::{vec, vec::Vec};
 
     /// A brick's tree as `tree` builds it, rooted at the brick, reads back through
-    /// `way::tree::cursor`, at every cell, exactly what `way::way_cell` writes there and nothing
+    /// `way_tree::cursor`, at every cell, exactly what `way::way_cell` writes there and nothing
     /// more. The spans are random, in a patch of columns: slabs, piers and bores over and beside
     /// one another, at the leaves and coarser.
     #[test]
@@ -509,7 +507,7 @@ mod tests {
                 words: &scratch,
                 at: 0,
             };
-            let mut pool = vec![0u32; 16 * (tree::BRICK_CHILD_GROUPS as usize + 1)];
+            let mut pool = vec![0u32; 16 * (way_tree::BRICK_CHILD_GROUPS as usize + 1)];
             let [used, cnt, root] = tree(&lane, &scratch, cell_zoom, &mut pool, 1);
             assert!(used != u32::MAX && cnt <= used, "round {round}: refused");
             let p = Read(&pool);
@@ -520,7 +518,7 @@ mod tests {
             let laid_root = if root == 0 {
                 0
             } else {
-                tree::lay(&p, root, &mut Column(&mut shared), at, &mut order)
+                way_tree::lay(&p, root, &mut Column(&mut shared), at, &mut order)
             };
             let q = Read(&shared);
             let s = 1i32 << (crate::LEAF_CELL_ZOOM - cell_zoom);
@@ -528,12 +526,12 @@ mod tests {
                 let [x, y] = clipmap::of_idx(i);
                 for z in (base_top - 60) / s..(base_top + 60) / s {
                     let at = [x as i32, y as i32, z];
-                    let slot = tree::cursor(&p, root, cell_zoom, cell_zoom, at);
-                    let got = tree::read(object::val(&p, slot, Cut::NONE, cell_zoom, at));
-                    let laid = tree::cursor(&q, laid_root, cell_zoom, cell_zoom, at);
+                    let slot = way_tree::cursor(&p, root, cell_zoom, cell_zoom, at);
+                    let got = way_tree::read(object::val(&p, slot, Cut::NONE, cell_zoom, at));
+                    let laid = way_tree::cursor(&q, laid_root, cell_zoom, cell_zoom, at);
                     assert_eq!(
                         got,
-                        tree::read(object::val(&q, laid, Cut::NONE, cell_zoom, at)),
+                        way_tree::read(object::val(&q, laid, Cut::NONE, cell_zoom, at)),
                         "round {round}: laid as built"
                     );
                     let want = match way::way_cell(&column_spans, [at[0], at[1]], cell_zoom, z) {

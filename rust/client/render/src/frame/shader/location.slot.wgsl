@@ -5,7 +5,7 @@
 // slots lie `DRAW_VEC4S` vec4s apart, as gpu/draw.rs `DrawList::draw_beacon`
 // lays them out: the position's Q3 steps, the spin, the opacity, whether it is
 // night, and the position's remainder. A beacon's draw names its slot as its
-// first instance (gpu/pass/location.rs `draw_beacon`).
+// first instance (pass/location.rs `draw_beacon`).
 @group(1) @binding(0) var<storage, read> draws: array<vec4f>;
 
 var<private> draw_slot: u32;

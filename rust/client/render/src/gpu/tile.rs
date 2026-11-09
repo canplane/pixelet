@@ -5,7 +5,7 @@
 //! word, which the GPU holds, is the number of the frame it last changed in. Each frame, a
 //! pass sets the words of the tiles that the one mark the CPU hands covers (`damage`), before
 //! anything reads them, and the draws that changed set the words of the tiles they cover
-//! (gpu/pass/mark.rs). A tile is claimed while it changed fewer than `damage_frames` frames
+//! (pass/mark.rs). A tile is claimed while it changed fewer than `damage_frames` frames
 //! ago, and every tile is claimed in a frame drawn whole. The screen keeps a tile claimed until
 //! its history has gathered the jitter's whole sequence; the map claims a tile only in the
 //! frame it changed. A pass that draws the tiles reads the words and the uniform
@@ -423,8 +423,8 @@ impl TileGrid {
     }
 
     /// Takes note of a mark that another pass set in the frame numbered `at`: the marks of the
-    /// draws that changed (gpu/pass/mark.rs), or the propagation's in their frame
-    /// (gpu/propagate.rs). Unless the scene's animation made it (`animated`), the mark asks for
+    /// draws that changed (pass/mark.rs), or the propagation's in their frame
+    /// (pass/propagate.rs). Unless the scene's animation made it (`animated`), the mark asks for
     /// the frames of its claim as a handed mark does, where it is later than the last that
     /// asked.
     pub fn marked_in(&mut self, at: u32, animated: bool) {

@@ -39,6 +39,7 @@ pub mod seed;
 pub mod support;
 pub mod value;
 pub mod way;
+pub mod way_tree;
 pub mod world;
 
 /// A zoom; every size is named by one (pxl-spec space/coord/zoom.rs).

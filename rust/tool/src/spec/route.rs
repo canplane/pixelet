@@ -234,7 +234,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     );
     worker.push(String::new());
     Ok(vec![
-        Output::new("rust/spec/src/route.spec.rs", rs.join("\n")),
+        Output::new("rust/spec/spec/src/route.spec.rs", rs.join("\n")),
         Output::new("ts/client/src/service/origin/route.spec.ts", ts.join("\n")),
         Output::new("ts/server/edge/route.spec.ts", worker.join("\n")),
         Output::new(wrangler_path, wrangler),

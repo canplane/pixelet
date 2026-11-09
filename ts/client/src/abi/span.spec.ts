@@ -2,7 +2,7 @@
 //
 // GENERATED from spec/client/render/gpu/span.json
 //
-// What the renderer reports of a frame (pxl-render gpu/renderer.rs): the GPU spans it is timed in,
+// What the renderer reports of a frame (pxl-render renderer.rs): the GPU spans it is timed in,
 // in the order the renderer encodes them, and the kind of frame it made; the profiler records and reports
 // them by these names.
 

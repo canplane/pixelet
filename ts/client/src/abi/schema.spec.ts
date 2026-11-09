@@ -55,7 +55,7 @@ export const SETTING = {
     cost: "med",
   },
   /** The cumulus' models and the altocumulus and cirrus sheets
-   * (rust/client/core/src/domain/scene/environment/cloud.rs, rust/client/render/src/gpu/cloud.rs).
+   * (rust/client/core/src/domain/scene/environment/cloud.rs, rust/client/render/src/pass/cloud.rs).
    * Med as decor is: models in view, and a pass over the screen for the sheets. */
   clouds: {
     key: 2 as number,
@@ -104,7 +104,7 @@ export const SETTING = {
     section: "camera",
     dev: true,
   },
-  /** Only `climb` goes into a tunnel (orbit/collision.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default. */
+  /** Only `climb` goes into a tunnel (camera/collision.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default. */
   orbit_obstacle: {
     key: 7 as number,
     kind: "choice",
@@ -147,7 +147,7 @@ export const SETTING = {
     costs: ["", "low", "high"],
     section: "lighting",
   },
-  /** The shadow map (rust/client/render/src/gpu/shadow.rs): the world cast
+  /** The shadow map (rust/client/render/src/pass/shadow.rs): the world cast
    * once more from the sun, or the moon where the sun is down, as the eye's
    * rays are, none where neither is up; beams and samples on
    * the node cache, the boxes they stop at drawn and a texel's sample
@@ -223,7 +223,7 @@ export const SETTING = {
     default: false,
     section: "debug",
   },
-  /** Counts what the eye's cast and the sun's shadow map do: the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn. The GPU counts them and writes them into the profiler's ray lanes of the frame that counted them (rust/spec/engine/src/count.rs, rust/client/render/src/gpu/ray/count.rs). The counting's atomics run inside the cast's spans, so time the cast with this off. */
+  /** Counts what the eye's cast and the sun's shadow map do: the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn. The GPU counts them and writes them into the profiler's ray lanes of the frame that counted them (rust/spec/engine/src/count.rs, rust/client/render/src/ray/count.rs). The counting's atomics run inside the cast's spans, so time the cast with this off. */
   ray_cnts: {
     key: 20 as number,
     kind: "toggle",
@@ -281,7 +281,7 @@ export const SETTING_PROD = {
     cost: "med",
   },
   /** The cumulus' models and the altocumulus and cirrus sheets
-   * (rust/client/core/src/domain/scene/environment/cloud.rs, rust/client/render/src/gpu/cloud.rs).
+   * (rust/client/core/src/domain/scene/environment/cloud.rs, rust/client/render/src/pass/cloud.rs).
    * Med as decor is: models in view, and a pass over the screen for the sheets. */
   clouds: {
     key: 2 as number,
@@ -351,7 +351,7 @@ export const SETTING_PROD = {
     costs: ["", "low", "high"],
     section: "lighting",
   },
-  /** The shadow map (rust/client/render/src/gpu/shadow.rs): the world cast
+  /** The shadow map (rust/client/render/src/pass/shadow.rs): the world cast
    * once more from the sun, or the moon where the sun is down, as the eye's
    * rays are, none where neither is up; beams and samples on
    * the node cache, the boxes they stop at drawn and a texel's sample

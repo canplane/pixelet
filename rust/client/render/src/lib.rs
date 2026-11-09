@@ -15,3 +15,6 @@ pub mod gpu;
 pub mod look;
 pub mod mesh;
 pub mod param;
+pub mod pass;
+pub mod ray;
+pub mod renderer;

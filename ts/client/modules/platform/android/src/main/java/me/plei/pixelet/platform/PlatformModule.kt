@@ -84,14 +84,14 @@ class PlatformModule : Module() {
      * density-independent pixels. That is the bar of navigation buttons, or
      * nothing under gesture navigation, whose handle takes only a swipe. The
      * UI rests its bottom chrome clear of it
-     * (ts/client/src/ui/component/bottom-rest.ts). */
+     * (ts/client/src/ui/shared/component/bottom-rest.ts). */
     Function("tappableBottom") {
       val view = appContext.currentActivity?.window?.decorView ?: return@Function 0.0
       val insets = ViewCompat.getRootWindowInsets(view) ?: return@Function 0.0
       insets.getInsets(WindowInsetsCompat.Type.tappableElement()).bottom / view.resources.displayMetrics.density.toDouble()
     }
 
-    // ---- the keyboard (ts/client/src/ui/component/above-keyboard.native.tsx, KeyboardDock.kt) ----
+    // ---- the keyboard (ts/client/src/ui/shared/component/above-keyboard.native.tsx, KeyboardDock.kt) ----
 
     View(KeyboardDock::class) {
       Events("onLift")

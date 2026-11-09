@@ -10,7 +10,7 @@ struct TileList {
   // holds.
   count: atomic<u32>,
   // A tile's workgroups across and down, the dispatch's y and z. The frame writes them when it
-  // sets the count to 0 (gpu/ray/cast.rs `CAST_TILES_START`).
+  // sets the count to 0 (ray/cast.rs `CAST_TILES_START`).
   sides: array<u32, 2>,
   // How many tiles the threads have listed, counted as each takes its place.
   cnt: atomic<u32>,

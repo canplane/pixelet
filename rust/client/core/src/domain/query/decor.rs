@@ -7,11 +7,9 @@
 //!
 //! A ray strikes decor as its ground walk passes, only where the frame draws
 //! decor as held and only at the leaf cells: a fold strikes none of it. The
-//! walk follows the detail rule. The box test is the submodule `intersect`,
+//! walk follows the detail rule. The box test is `decor_box.rs`,
 //! and the catalog is spec/spec/asset/decor.json. The scene draws the decor's
 //! models as they arrive (domain/scene/decor/asset.rs).
-
-pub mod intersect;
 
 use pxl_spec::space::layer::lattice::Grid;
 
@@ -34,7 +32,7 @@ use crate::domain::layer::object::store::Entry;
 use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::domain::layer::terrain::TerrainQuery as _;
 use crate::domain::layer::tile_cache::Line;
-use crate::domain::query::decor::intersect::{box_extent, intersect};
+use crate::domain::query::decor_box::{box_extent, intersect};
 use pxl_engine::area::{self, Shard};
 use pxl_engine::cast;
 use pxl_engine::clipmap::Lookup;

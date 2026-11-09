@@ -50,7 +50,7 @@ fn four_of(v: u32) -> u32 {
 const PLACED = 0u;
 const WAYS = 1u;
 
-/// The word of slot `slot`'s child pointer in the ways' pool (pxl-engine way/tree.rs
+/// The word of slot `slot`'s child pointer in the ways' pool (pxl-engine way_tree.rs
 /// `first_child_at`). The pool lays out whole child groups, each with its eight child pointers
 /// followed by its eight data words.
 fn first_child_at(slot: u32) -> u32 {
@@ -184,7 +184,7 @@ fn placed_four(s: u32, hide: vec4<i32>, zoom: u32, at: vec3<i32>, v: u32) -> u32
   return word;
 }
 
-/// The twin of pxl-engine `way::tree::cursor`.
+/// The twin of pxl-engine `way_tree::cursor`.
 fn way_cursor(root: u32, cell_zoom: u32, zoom: u32, at: vec3<i32>) -> u32 {
   let top = cell_zoom - BRICK_SHIFT;
   if (root == 0u || zoom < top) {

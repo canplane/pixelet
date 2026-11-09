@@ -32,8 +32,8 @@ use pxl_spec::space::layer::quadrant::{quad_rows, Cell};
 pub(super) struct Place {
     pub(super) brick: Brick,
     key: Key,
-    category: u16,
-    from: Zoom,
+    kind: u16,
+    first_zoom: Zoom,
     name: Option<Rc<str>>,
     ground: Cell,
     finest: Zoom,
@@ -66,10 +66,10 @@ pub(super) fn read(brick: Brick, found: &mut Vec<Place>) {
     // world.
     let named = [wrap_idx(z, column[0]), column[1]];
     World::now().places_in(tiles, &mut |src, place, h| {
-        if point_of(h.place.category, h.from, None, zoom).is_none() {
+        if point_of(h.kind, h.first_zoom, None, zoom).is_none() {
             return;
         }
-        let ground = stands(src, h.at);
+        let ground = stands(src, h.off);
         let [x, y, _] = idx_of(z, &ground.mid());
         if [x, y] != named {
             return;
@@ -77,9 +77,9 @@ pub(super) fn read(brick: Brick, found: &mut Vec<Place>) {
         found.push(Place {
             brick,
             key: Key::Place(src, place),
-            category: h.place.category,
-            from: h.from,
-            name: (!h.place.name.is_empty()).then(|| h.place.name.into()),
+            kind: h.kind,
+            first_zoom: h.first_zoom,
+            name: (!h.name.is_empty()).then(|| h.name.into()),
             ground,
             finest,
             top: None,
@@ -101,7 +101,7 @@ pub(super) fn show(read: &mut [Place], eye: V3, out: &mut Vec<Instance>) {
         };
         let [x, y, _] = q3::unpack(&p.ground.mid());
         let cell_zoom = cell_zoom_at(eye, [x, y, first.unwrap_or(0.0)]).min(p.finest);
-        let Some(design) = point_of(p.category, p.from, p.name.as_ref(), carto_zoom(cell_zoom))
+        let Some(design) = point_of(p.kind, p.first_zoom, p.name.as_ref(), carto_zoom(cell_zoom))
         else {
             continue;
         };
@@ -132,23 +132,23 @@ fn top_at(p: &mut Place, detail: Zoom) -> Option<f64> {
     }
 }
 
-/// A place of `category`, shown from zoom `from` on, as Carto shows it at
+/// A place of `kind`, shown from zoom `first_zoom` on, as Carto shows it at
 /// `zoom`, or None where Carto does not show it. It shows as a dot or as its
 /// icon by its category's zooms, and it is named `name` from its category's
 /// label zoom on. Its name is wrapped where it is laid out
 /// (`Design::with_spacing`).
-fn point_of(category: u16, from: Zoom, name: Option<&Rc<str>>, zoom: i32) -> Option<Design> {
-    let k = usize::from(category.checked_sub(1)?);
+fn point_of(kind: u16, first_zoom: Zoom, name: Option<&Rc<str>>, zoom: i32) -> Option<Design> {
+    let k = usize::from(kind.checked_sub(1)?);
     let shows = |z: u8| z != 0 && zoom >= i32::from(z);
     let (icon, dot) = (shows(ICON_ZOOM[k]), shows(DOT_ZOOM[k]));
-    if zoom < from as i32 || !(icon || dot) {
+    if zoom < first_zoom as i32 || !(icon || dot) {
         return None;
     }
     Some(Design::Point {
         name: name.filter(|_| shows(LABEL_ZOOM[k])).cloned(),
         wrap: 0,
         icon,
-        symbol: symbol_of(category),
+        symbol: symbol_of(kind),
         fill: FILL[k],
         ink: INK[k],
     })

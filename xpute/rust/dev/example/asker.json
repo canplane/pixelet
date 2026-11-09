@@ -1,0 +1,40 @@
+{
+  "$doc": [
+    "The example's one protocol: the runtime sends SUM, and the core calls ASK as it adds."
+  ],
+  "gen": {
+    "ts": "../../../ts/dev/example/asker.spec.ts",
+    "rs": "src/asker.spec.rs"
+  },
+  "name": "asker",
+  "export": [
+    {
+      "name": "SUM",
+      "val": 4097,
+      "$doc": [
+        "Carries two numbers. The core answers with their sum plus the number ASK answers."
+      ],
+      "pkt": [
+        {
+          "name": "a",
+          "type": "u32"
+        },
+        {
+          "name": "b",
+          "type": "u32"
+        }
+      ],
+      "call": true
+    }
+  ],
+  "import": [
+    {
+      "name": "ASK",
+      "val": 4098,
+      "$doc": [
+        "Asks the runtime for a number, which the core adds to the sum."
+      ],
+      "call": true
+    }
+  ]
+}

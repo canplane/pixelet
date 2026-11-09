@@ -57,7 +57,7 @@ be fused with today's one thread, through the little memory of September.
 - **The host's boot gets a settled developer experience**, and what the April
   checkpoint did, when its code was polished by hand, may be taken as it is
   where it fits.
-- **This design is written** ("해봅시다"). What it proposes is not adopted by
+- **This design is written**, on the user's go-ahead. What it proposes is not adopted by
   being written.
 - **The layers read as Linux's display stack does** (the user, on the two
   commands below): the shell is the compositor and desktop shell, the kernel a

@@ -26,7 +26,7 @@ fn runs_taken_past_each_other_grow_the_pool() {
 fn run_past_cap_refused() {
     let mut m = WayPool::default();
     assert_eq!(
-        m.take(tree::POOL_CHILD_GROUPS),
+        m.take(way_tree::POOL_CHILD_GROUPS),
         Err(PoolRefusal::Cap),
         "past the cap, which no asking again changes"
     );

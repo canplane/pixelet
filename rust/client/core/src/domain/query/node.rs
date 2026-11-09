@@ -13,7 +13,7 @@
 //!   wall at the service area's edge where the column is that wall. The ways
 //!   are read off the tree of their brick, whose child groups lie in the pool
 //!   and are read as the GPU reads them (pxl-engine `clipmap::ground`,
-//!   `way::tree`);
+//!   `way_tree`);
 //! - the caves: the noises at the cell's center (pxl-content `cave::hollow`);
 //! - what is placed: the objects' pyramid record at that zoom, folded by
 //!   majority (domain/layer/object/store.rs, through the store's query).

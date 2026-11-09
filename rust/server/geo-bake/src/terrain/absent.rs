@@ -9,7 +9,7 @@
 use std::borrow::Cow;
 
 use pxl_spec::asset::cube::{ground, sentinel};
-use pxl_spec::bake::tile::terrain::{Ground, TerrainTile, ELE_COLUMN};
+use pxl_spec::bake::tile::terrain::{TerrainTile, ELE_COLUMN};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::space::layer::quadrant::Quadrant;
@@ -27,9 +27,7 @@ pub struct Absence {
 fn uniform(palette_idx: u8) -> TerrainTile {
     let mut t = TerrainTile::leaf(
         vec![0; ELE_COLUMN],
-        Ground {
-            cells: vec![palette_idx; (TILE_CELLS * TILE_CELLS) as usize].into(),
-        },
+        vec![palette_idx; (TILE_CELLS * TILE_CELLS) as usize].into(),
         Default::default(),
     );
     t.occupancy = Occupancy::ZERO;

@@ -6,12 +6,12 @@
 # vocabulary for a core's calls to a device it cannot reach, beside both. A
 # core's form lives in its end's path: `core`'s `wasm` (a module's link
 # arguments, which a build script takes it for, and its entry) and `runtime`'s
-# `native`. `conformance` is the core the contract's traces drive
-# (spec/conformance/).
+# `native`. `dev/` holds what develops them: `conformance`, the core the contract's traces
+# drive (spec/conformance/), the example and the generator.
 
 [workspace]
 resolver = "2"
-members = ["kit", "core", "runtime", "gpu", "conformance", "example", "tool"]
+members = ["kit", "core", "runtime", "gpu", "dev/conformance", "dev/example", "dev/tool"]
 
 [workspace.dependencies]
 # Each of the workspace's own crates is given by its path once, so a crate

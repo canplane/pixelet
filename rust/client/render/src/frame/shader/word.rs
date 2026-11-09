@@ -123,7 +123,7 @@ uniform! {
 
 uniform! {
     /// The location indicator's uniform (location.wgsl, location.slot.wgsl,
-    /// gpu/pass/location.rs): the beacon's spin about Z, the zone's color,
+    /// pass/location.rs): the beacon's spin about Z, the zone's color,
     /// and whether the beacon takes its night look.
     location {
         Q: Vec3i = super::draw::Q,
@@ -162,7 +162,7 @@ uniform! {
         LOW_SPEC: F32 = 28,
         RIM_INTENSITY: F32 = 30,
         CORNER_AO: F32 = 31,
-        /// The light box's projection from the eye's frame (gpu/shadow.rs
+        /// The light box's projection from the eye's frame (pass/shadow.rs
         /// `aim`). `SHADOW_STRENGTH` is how much of the light a shadow takes
         /// away, and it is 0 when no shadow map is drawn. `SHADOW_TEXEL` is
         /// how far a fragment moves along its normal before it reads the map:
@@ -172,7 +172,7 @@ uniform! {
         SHADOW_STRENGTH: F32 = 48,
         SHADOW_TEXEL: F32 = 49,
         /// 1 while the camera gizmo is shown: the camera grid drawn over the canvas
-        /// (gpu/pass/debug.rs) and its tint on the rays' cells (screen_shade.wgsl
+        /// (pass/debug.rs) and its tint on the rays' cells (screen_shade.wgsl
         /// `cell_share`).
         GIZMO: F32 = 51,
         /// The canvas's size in device pixels, where `VIEWPORT` is the size
@@ -199,7 +199,7 @@ uniform! {
         /// the world's color is moved against it (frame.wgsl `jittered`), and
         /// the sky's rays are aimed along it. The frame counts as changed
         /// when a word before this one changes, and a change in this word or
-        /// in those after it does not count (gpu/renderer.rs `frame`).
+        /// in those after it does not count (renderer.rs `frame`).
         JITTER: Vec2 = 72,
         /// How far the wind has carried the cloud field, X and Y in units
         /// (pxl-content cloud.rs `drift`), as a `Position`: its Q3 as an
@@ -208,7 +208,7 @@ uniform! {
         /// `draw_translation`). These words lie after `JITTER`, so a frame in
         /// which only the drift moved does not count as changed. The clouds
         /// mark the tiles they left and the tiles they now cover instead
-        /// (gpu/pass/mark.rs).
+        /// (pass/mark.rs).
         DRIFT_Q: Vec2u = 74,
         DRIFT_R: Vec2 = 76,
     }
@@ -217,7 +217,7 @@ pub const FRAME_FLOATS: usize = floats(frame::FIELDS);
 
 uniform! {
     /// The sky's uniform (sky_word.wgsl). `RAY` gives the ray through each
-    /// point of the screen (gpu/sky.rs `put_ray`), `POLE` is the
+    /// point of the screen (pass/sky.rs `put_ray`), `POLE` is the
     /// celestial pole, and `MAPPED` is 1 once the moon's face has arrived.
     sky {
         RAY: Mat3 = 0,
@@ -228,7 +228,7 @@ uniform! {
 pub const SKY_FLOATS: usize = floats(sky::FIELDS);
 
 uniform! {
-    /// The air's uniform (atmos_medium.wgsl, gpu/atmosphere.rs). Floats 9
+    /// The air's uniform (atmos_medium.wgsl, pass/atmosphere.rs). Floats 9
     /// and 10 are unused.
     atmos {
         RAYLEIGH_SCATTERING: Vec3 = 0,
@@ -283,7 +283,7 @@ uniform! {
         EARTH_WINDOW: Vec4i = 44,
         EARTH_TILES: Vec4u = 48,
         /// How each light's sky view and its share of the air's volume were
-        /// laid out (gpu/atmosphere.rs `prepare`), the sun's and then the
+        /// laid out (pass/atmosphere.rs `prepare`), the sun's and then the
         /// moon's. A layout holds how far the horizon dips below the level,
         /// in radians, seen from the eye's radius the view was drawn at, then
         /// the near and far ends of the air's depth law there, in km
@@ -300,7 +300,7 @@ uniform! {
 pub const ATMOS_FLOATS: usize = floats(atmos::FIELDS);
 
 uniform! {
-    /// The cloud sheets' uniform (cloud.wgsl, gpu/cloud.rs).
+    /// The cloud sheets' uniform (cloud.wgsl, pass/cloud.rs).
     clouds {
         /// How much of the clouds the core shows (pxl-core
         /// domain/scene/environment/cloud.rs `clouds_shown`).
@@ -310,7 +310,7 @@ uniform! {
         /// `CNT` is the lattice's units around the world. `DRIFT` is how
         /// many cells the wind has moved the lattice under the map. `BASE` is
         /// the lattice unit the eye is over, and `FRAC` is how far into that
-        /// unit the eye is (gpu/cloud.rs `field`).
+        /// unit the eye is (pass/cloud.rs `field`).
         CNT: U32 = 2,
         DRIFT: Vec2 = 4,
         BASE: Vec2u = 6,
@@ -320,7 +320,7 @@ uniform! {
 pub const CLOUDS_FLOATS: usize = floats(clouds::FIELDS);
 
 uniform! {
-    /// The stars' uniform (star.wgsl, gpu/star.rs).
+    /// The stars' uniform (star.wgsl, pass/star.rs).
     stars {
         VIEW_PROJ: Mat4 = 0,
         SKY: Mat4 = 16,
@@ -334,7 +334,7 @@ pub const STARS_FLOATS: usize = floats(stars::FIELDS);
 
 uniform! {
     /// The uniform of the screen's ambient occlusion (ao_view.wgsl,
-    /// gpu/ao.rs): the view's projection, its inverse, and the size of the
+    /// pass/ao.rs): the view's projection, its inverse, and the size of the
     /// half-resolution target.
     ao {
         PROJ: Mat4 = 0,
@@ -345,7 +345,7 @@ uniform! {
 pub const AO_FLOATS: usize = floats(ao::FIELDS);
 
 uniform! {
-    /// A marker set's uniform (marker.wgsl, gpu/pass/marker.rs): the view,
+    /// A marker set's uniform (marker.wgsl, pass/marker.rs): the view,
     /// the projection, the pixels a unit covers, and how many markers come
     /// before the set's first. Where each marker stands is in its instance
     /// (`MARKER_INSTANCE_WORDS`).
@@ -365,21 +365,21 @@ pub const MARKER_FLOATS: usize = floats(marker::FIELDS);
 pub const MARKER_INSTANCE_WORDS: u32 = 11;
 pub const LOCATION_ZONE_INSTANCE_FLOATS: u32 = 8;
 
-/// The floats of a star's record (gpu/star.rs, star.wgsl): its direction
+/// The floats of a star's record (pass/star.rs, star.wgsl): its direction
 /// and flux, then its color and one float of padding.
 pub const STAR_RECORD_FLOATS: usize = 8;
 
-/// The words of the raster's view (gpu/ray/raster.rs, raster.wgsl
+/// The words of the raster's view (ray/raster.rs, raster.wgsl
 /// `Raster`). build.rs checks that the WGSL struct has this size.
 pub const RASTER_FLOATS: usize = 28;
 
 /// The factor the occlusion's passes divide the screen's resolution by
-/// (gpu/ao.rs). It must be 2: the downsample keeps one depth of each 2×2
+/// (pass/ao.rs). It must be 2: the downsample keeps one depth of each 2×2
 /// block, and the apply blends the 2×2 block about each pixel
 /// (ao_downsample.wgsl, ao_apply.wgsl).
 pub const AO_DOWNSCALE: u32 = 2;
 
-/// The side in texels of N8AO's blue noise (gpu/ao.rs), which the pixels
+/// The side in texels of N8AO's blue noise (pass/ao.rs), which the pixels
 /// read tiled.
 pub const AO_NOISE_SIDE: u32 = 128;
 
@@ -391,7 +391,7 @@ pub const AO_NOISE_SIDE: u32 = 128;
 /// words live on the GPU, as the light's do, because passes on the GPU mark
 /// the tiles that changed, and words the CPU wrote each frame would undo
 /// those marks. A tile stays claimed until its history has run through the
-/// jitter's `JITTERS` frames (`DAMAGE_FRAMES`, gpu/resolve.rs).
+/// jitter's `JITTERS` frames (`DAMAGE_FRAMES`, pass/resolve.rs).
 pub mod screen {
     /// A tile's side in drawn pixels.
     pub const TILE: u32 = 32;
@@ -435,7 +435,7 @@ pub mod screen {
 
 /// The side in pixels of a square of the depth bound, which holds the least
 /// and the most depth of each square for the propagation to read
-/// (gpu/propagate.rs, screen_bound.wgsl, screen_propagate.wgsl).
+/// (pass/propagate.rs, screen_bound.wgsl, screen_propagate.wgsl).
 pub const BOUND_STEP: u32 = 4;
 /// The squares of the depth bound along a screen tile's side
 /// (`screen::TILE`). Both passes over the bound take a tile as one workgroup
@@ -449,20 +449,20 @@ const _: () = assert!(
 
 /// The side, in cells, of the square of the camera grid that one workgroup of
 /// the pass finding where each cell's rays start covers, one thread a cell
-/// (gpu/ray/cast.rs, cell.wgsl).
+/// (ray/cast.rs, cell.wgsl).
 pub const CELL_SIDE: u32 = 8;
 
-/// The sizes in texels of the air's lookup tables (gpu/atmosphere.rs
+/// The sizes in texels of the air's lookup tables (pass/atmosphere.rs
 /// `SIZES`, atmos_medium.wgsl).
 pub const TRANSMITTANCE_SIZE: (u32, u32) = (256, 64);
 pub const MULTISCATTER_SIZE: (u32, u32) = (32, 32);
 pub const SKY_VIEW_SIZE: (u32, u32) = (192, 108);
 pub const IRRADIANCE_SIZE: (u32, u32) = (64, 16);
 
-/// The side of the light's shadow map in texels (gpu/shadow.rs).
+/// The side of the light's shadow map in texels (pass/shadow.rs).
 pub const SHADOW_SIZE: u32 = 2048;
 
-/// The decor's draw groups, one a decor variant (gpu/pass/decor.rs). Each
+/// The decor's draw groups, one a decor variant (pass/decor.rs). Each
 /// group's impostor takes one layer of the impostor atlas and one fit in
 /// impostor_place.wgsl's `fits`.
 pub const DECOR_GROUPS: usize = 64;
@@ -500,14 +500,14 @@ pub const UNIFORMS: [(&str, &[Field]); 12] = [
     (marker::NAME, marker::FIELDS),
 ];
 
-/// The cloud sheets' tile in lattice units and in texels (gpu/cloud.rs).
+/// The cloud sheets' tile in lattice units and in texels (pass/cloud.rs).
 /// 32 lattice units are about 250 km, further than the layer is drawn, and
 /// the lattice wraps with the tile.
 pub const CLOUD_TILE_UNITS: u32 = 32;
 pub const CLOUD_TILE_TEXELS: u32 = 1024;
 
 /// The bits each Earth tile's layer takes in the air's `EARTH_TILES` words
-/// (gpu/atmosphere.rs).
+/// (pass/atmosphere.rs).
 pub const EARTH_TILE_BITS: u32 = 4;
 
 /// The side in texels of the moon's near side as `make download-moon` cuts it.
@@ -524,7 +524,7 @@ pub const MOON_ALBEDO: f32 = 0.12;
 pub const MOON_MAP_MEAN: f32 = 0.2459;
 
 /// The froxels along each side and along the depth of the air's volume for
-/// each light (gpu/atmosphere.rs `froxel`). The volume is Hillaire 2020's
+/// each light (pass/atmosphere.rs `froxel`). The volume is Hillaire 2020's
 /// aerial perspective at 32³, the size Unreal's SkyAtmosphere uses, and it
 /// is laid out about its light as the light's sky view is.
 pub const AIR_FROXELS: u32 = 32;
@@ -536,7 +536,7 @@ pub const SQUARE_SIDE: u32 = 8;
 /// (light_mark_draws.wgsl, forget.wgsl).
 pub const ROW_LANES: u32 = 64;
 
-/// The words the sky views and the exposure measure into (gpu/atmosphere.rs
+/// The words the sky views and the exposure measure into (pass/atmosphere.rs
 /// `plan`, atmos_skyview.wgsl `slopes`). Each light takes `LIGHT_SLOPES`
 /// words, the sun's first, and the ground's two words follow at
 /// `GROUND_SLOPES`.

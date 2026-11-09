@@ -11,10 +11,10 @@ import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
 
 /**
- * A view that stands on the keyboard (ts/client/src/ui/component/above-keyboard.native.tsx).
+ * A view that stands on the keyboard (ts/client/src/ui/shared/component/above-keyboard.native.tsx).
  * It is the Android side of KeyboardDock.swift. The UI's layout places the
  * view where it rests with no keyboard up, `rest` off the bottom edge
- * (ts/client/src/ui/component/bottom-rest.ts). While a keyboard is up, the
+ * (ts/client/src/ui/shared/component/bottom-rest.ts). While a keyboard is up, the
  * view is lifted to stand `clearance` above it. Android reports where the
  * keyboard is on every frame it moves, so the view moves with each report
  * rather than animating toward where the keyboard will end. It keeps to the

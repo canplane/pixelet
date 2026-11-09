@@ -105,11 +105,14 @@ export class FsServer implements FsImports {
     this._openat(e.fd, e.root, e.flags, e.path);
   }
 
+  /** A read of a file this runtime does not hold is dropped, as a write is.
+   * The runtime a reload replaced left it in the ring. */
   [Command.FS_READ](e: FsRead): void {
-    const bytes = this.files.get(e.fd)?.bytes;
-    if (!bytes) throw new InvariantError(Errno.EBADF);
-    const len = Math.min(e.len, bytes.byteLength);
-    new Uint8Array(this._mem, e.at, len).set(bytes.subarray(0, len));
+    const file = this.files.get(e.fd);
+    if (!file) return;
+    if (!file.bytes) throw new InvariantError(Errno.EBADF);
+    const len = Math.min(e.len, file.bytes.byteLength);
+    new Uint8Array(this._mem, e.at, len).set(file.bytes.subarray(0, len));
   }
 
   /** A write to a file whose open failed is dropped. The core posts the

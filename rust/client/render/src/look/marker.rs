@@ -2,7 +2,7 @@
 
 //! The layout of each marker's design, in logical pixels: its fonts, sizes and colors, and how
 //! far below its top its anchor stands. The marker pass paints by these numbers
-//! (gpu/pass/marker.rs), and the core sizes a marker's sprite by them before it is painted
+//! (pass/marker.rs), and the core sizes a marker's sprite by them before it is painted
 //! (pxl-core domain/scene/marker/design.rs).
 
 use pxl_spec::asset::symbol::{SYMBOL_PX, SYMBOL_RATIO};

@@ -24,7 +24,7 @@ import process from "node:process";
 
 import { stamp } from "@pxl/build/stamp.ts";
 import { SITE_URL } from "@pxl/client/service/origin/route.spec.ts";
-import { GROUND } from "@pxl/client/ui/component/ground.ts";
+import { GROUND } from "@pxl/client/ui/shared/component/ground.ts";
 import { forward, route_target } from "./proxy.ts";
 
 const APP = path.dirname(import.meta.dirname);

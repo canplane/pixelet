@@ -1,9 +1,9 @@
 # The project's Rust, both ends of it, grouped by which end a crate is on:
 # client/ reaches the browser and the device, server/ does not, and spec/ is
 # what both follow.
-# `server` is what geo and api are called together, so pxl-server — what
-# either needs before it can answer anything — is the group's own directory,
-# and the two processes sit inside it.
+# Each of server/ and spec/ is a folder of crates: pxl-server, what geo and api
+# both need before they can answer anything, is server/common, and pxl-spec,
+# the model every crate shares, is spec/spec.
 #
 # The client's core is two crates, pxl-render and pxl-core, and pxl-core is its
 # artifact: one `xpute_core::core!` makes it the WebAssembly module the
@@ -26,12 +26,12 @@
 [workspace]
 resolver = "2"
 members = [
-  "spec",
+  "spec/spec",
   "spec/engine",
   "spec/content",
   "client/render",
   "client/core",
-  "server",
+  "server/common",
   "server/geo-spec",
   "server/geo",
   "server/api",
@@ -60,10 +60,10 @@ xpute-gpu = { path = "../xpute/rust/gpu" }
 xpute-runtime = { path = "../xpute/rust/runtime" }
 pxl-engine = { path = "spec/engine" }
 pxl-content = { path = "spec/content" }
-pxl-spec = { path = "spec" }
+pxl-spec = { path = "spec/spec" }
 pxl-render = { path = "client/render" }
 pxl-core = { path = "client/core", default-features = false }
-pxl-server = { path = "server" }
+pxl-server = { path = "server/common" }
 pxl-geo-spec = { path = "server/geo-spec" }
 
 # The client's crates name the core's memory by offsets from one base

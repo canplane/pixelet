@@ -403,7 +403,7 @@ impl Character {
     /// The character stands where its walk placed it, or at the origin while
     /// it has no place; the surface's eye stands at that point either way.
     /// The model is scaled to one unit tall, as the surface's eye frames it
-    /// (pxl-render gpu/pass/character.rs), and turned by the clock so that
+    /// (pxl-render pass/character.rs), and turned by the clock so that
     /// every side shows. None while the model is not uploaded.
     pub fn surface_draw(&self, models: &ModelTable) -> Option<Draw> {
         let m = models.get(self.model).filter(|m| m.handle() != 0)?;

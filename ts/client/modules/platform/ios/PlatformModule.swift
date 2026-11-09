@@ -87,7 +87,7 @@ public class PlatformModule: Module {
       CLLocationManager.headingAvailable()
     }
 
-    // ---- the keyboard (ts/client/src/ui/component/above-keyboard.native.tsx, KeyboardDock.swift) ----
+    // ---- the keyboard (ts/client/src/ui/shared/component/above-keyboard.native.tsx, KeyboardDock.swift) ----
 
     View(KeyboardDock.self) {
       Events("onLift")
@@ -102,7 +102,7 @@ public class PlatformModule: Module {
       }
     }
 
-    // ---- the segmented control (ts/client/src/ui/component/segmented.ios.tsx, SegmentedControl.swift) ----
+    // ---- the segmented control (ts/client/src/ui/shared/component/segmented.ios.tsx, SegmentedControl.swift) ----
 
     View(SegmentedControl.self) {
       Events("onPick")
@@ -114,7 +114,7 @@ public class PlatformModule: Module {
       }
     }
 
-    // ---- a see-through backing's blur (ts/client/src/ui/component/backing.ios.tsx, Blur.swift) ----
+    // ---- a see-through backing's blur (ts/client/src/ui/shared/component/backing.ios.tsx, Blur.swift) ----
 
     View(Blur.self) {}
   }

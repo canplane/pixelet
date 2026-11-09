@@ -10,8 +10,8 @@ use crate::sys;
 use pxl_engine::fill;
 use pxl_engine::ground::word;
 use pxl_engine::value::TRANSPORTS;
-use pxl_engine::way::tree::Read;
 use pxl_engine::way::BRIDGE;
+use pxl_engine::way_tree::Read;
 use pxl_spec::bake::separation::{self, Separation};
 use pxl_spec::bake::tile::terrain::{self, GroundId};
 
@@ -119,8 +119,8 @@ pub(crate) fn lose() {
 fn build(center: [f64; 2], tiles: &[TileData]) {
     PLANES.set(planes_of(vec![0; CELLS_WORDS].leak()));
     set_way_pool(WayPool::default());
-    let mut pool = vec![0; 16 * (tree::BRICK_CHILD_GROUPS as usize + 1)];
-    let mut order = vec![0; tree::BRICK_CHILD_GROUPS as usize + 1];
+    let mut pool = vec![0; 16 * (way_tree::BRICK_CHILD_GROUPS as usize + 1)];
+    let mut order = vec![0; way_tree::BRICK_CHILD_GROUPS as usize + 1];
     CLIPMAP.set(fresh());
     let w = clipmap();
     for clip_level in 0..CLIP_LEVELS {
@@ -157,7 +157,7 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
             vec![(0, 0); WAYS_BRICK_SEGMENTS as usize],
             vec![0; LINES_WORDS as usize],
         );
-        let n = brick_lines(t, separation, place, &mut segments, &mut lines);
+        let n = brick_lines(t, separation, place, &mut segments, &mut lines).unwrap();
         let laid = terrain::TileBrick {
             cell_zoom,
             place,
@@ -195,7 +195,7 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
         if cnt != 0 {
             let run = way_pool().take(cnt).expect("a brick's tree past the pool");
             let built = Read(&pool);
-            back[ROOT_AT as usize] = tree::lay(&built, root, way_pool(), run[0], &mut order);
+            back[ROOT_AT as usize] = way_tree::lay(&built, root, way_pool(), run[0], &mut order);
             w.slots[b as usize].tree = run;
         }
         let at = (b * CELLS_ARR_BYTES / 4) as usize;
@@ -291,7 +291,7 @@ fn fill_room() -> &'static mut Clipmap {
         pairs: vec![(0, 0); WAYS_BRICK_SEGMENTS as usize].leak(),
         spans: vec![0; SPANS_WORDS as usize].leak(),
         build: vec![0; BUILD_WORDS].leak(),
-        order: vec![0; tree::BRICK_CHILD_GROUPS as usize + 1].leak(),
+        order: vec![0; way_tree::BRICK_CHILD_GROUPS as usize + 1].leak(),
     });
     CLIPMAP.set(fresh());
     let w = clipmap();
@@ -318,13 +318,7 @@ fn hilly_tile() -> (Quadrant, TerrainTile, Vec<u8>) {
         .map(|c| 1 + (c % 7) as GroundId)
         .collect::<Vec<_>>();
     let t = Quadrant::new(LEAF_ZOOM, CENTER_TILE);
-    let tile = TerrainTile::leaf(
-        ele,
-        terrain::Ground {
-            cells: cells.into(),
-        },
-        builder.finish(),
-    );
+    let tile = TerrainTile::leaf(ele, cells.into(), builder.finish());
     let pkt = terrain::encode(&tile).unwrap();
     (t, tile, pkt)
 }
@@ -371,7 +365,7 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
         let (cell_zoom, place) = (slot.cell_zoom, tile_of(slot.cell_zoom, slot.brick).1);
         let mut pairs = vec![(0, 0); WAYS_BRICK_SEGMENTS as usize];
         let mut lines = vec![0; LINES_WORDS as usize];
-        let n = brick_lines(t, &tile.separation, place, &mut pairs, &mut lines);
+        let n = brick_lines(t, &tile.separation, place, &mut pairs, &mut lines).unwrap();
         let site = fill::Site {
             cell_zoom,
             place,
@@ -384,7 +378,7 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
             let [x, y] = clipmap::of_idx(i);
             let c = ((place[1] * BRICK + y) * GROUND.tile_cells() + place[0] * BRICK + x) as usize;
             let at = 4 * c;
-            word([0, 1, 2, 3].map(|k| u32::from(tile.ground.cells[at + k])))
+            word([0, 1, 2, 3].map(|k| u32::from(tile.cells[at + k])))
         };
         let (mut lane, mut spans) = (vec![0; BRICK_WORDS as usize], vec![0; SPANS_WORDS as usize]);
         fill::brick(&mut lane, &mut spans, four, &site);
@@ -409,8 +403,8 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
             let [x, y] = clipmap::of_idx(i);
             for z in 20..60 {
                 let at = [x as i32, y as i32, z];
-                let was = tree::cursor(&built, root, cell_zoom, cell_zoom, at);
-                let now = tree::cursor(pool, laid, cell_zoom, cell_zoom, at);
+                let was = way_tree::cursor(&built, root, cell_zoom, cell_zoom, at);
+                let now = way_tree::cursor(pool, laid, cell_zoom, cell_zoom, at);
                 assert_eq!(
                     object::val(&built, was, Cut::NONE, cell_zoom, at),
                     object::val(pool, now, Cut::NONE, cell_zoom, at),
@@ -440,7 +434,7 @@ fn void_tile_bricks_filled_with_no_packet() {
     *cache = Default::default();
     let asks: fnv::FnvHashMap<Quadrant, ()> = [(t, ())].into_iter().collect();
     cache.ask(&asks);
-    cache.set(t, TerrainTile::void());
+    cache.set(t, TerrainTile::default());
     due(w);
     assert!(!w.due.is_empty(), "a void tile's bricks are due");
     while !matches!(fill_stage(w), Poll::Done) {}

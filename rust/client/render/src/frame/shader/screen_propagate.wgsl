@@ -1,6 +1,6 @@
 // pxl-render/frame/shader/screen_propagate.wgsl
 
-// Propagates the light's changed tiles to the screen (gpu/propagate.rs). It is the light's
+// Propagates the light's changed tiles to the screen (pass/propagate.rs). It is the light's
 // propagation turned round: light_propagate.wgsl `light_propagate_cs` takes the screen's
 // receivers to the light's tiles, and this pass takes the map tiles that changed this frame
 // back to the pixels that read them. Where any texel a pixel's shadow taps read lies in a map

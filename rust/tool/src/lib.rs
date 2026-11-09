@@ -3,17 +3,17 @@
 pub mod asset;
 /// pxl-spec's file, compiled here as well, because the tool depends on no workspace crate
 /// (Cargo.toml says why), so the project's folders are still named in one place.
-#[path = "../../spec/src/directory.rs"]
+#[path = "../../spec/spec/src/directory.rs"]
 pub mod directory;
 pub mod download;
 pub mod fetch;
 /// pxl-spec's file, compiled here as `directory` is, so a model is measured by the same
 /// transforms the client places it by.
-#[path = "../../spec/src/space/coord/mat4.rs"]
+#[path = "../../spec/spec/src/space/coord/mat4.rs"]
 pub mod mat4;
 pub mod spec;
 /// The vectors `mat4` is written in, pxl-spec's file compiled the same way.
-#[path = "../../spec/src/space/coord/v3.rs"]
+#[path = "../../spec/spec/src/space/coord/v3.rs"]
 pub mod v3;
 
 use std::path::{Path, PathBuf};

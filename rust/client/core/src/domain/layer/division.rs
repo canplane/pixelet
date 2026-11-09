@@ -6,7 +6,7 @@
 //! pivot is in. Nothing of this layer is drawn; the names go straight into
 //! the UI snapshot.
 //!
-//! Each tile's record is a room in `.fixed.division`, and the tile's cells
+//! Each tile's slot is a room in `.fixed.division`, and the tile's cells
 //! are decoded into it straight from the packet. The tile's divisions, a
 //! handful, live on the heap.
 
@@ -31,13 +31,13 @@ static DIVISION: Global<TileCache<DivisionTile>> = Global::new();
 /// The `.fixed.division` section, which the boot hands in.
 pub static RANGE: OwnedRange = OwnedRange::new();
 
-/// The bytes of one record: a word for each cell, rounded up to whole cache
+/// The bytes of one slot's room: a word for each cell, rounded up to whole cache
 /// lines.
-const RECORD_BYTES: u32 = range::arr_bytes(CELLS, 4);
+const ROOM_BYTES: u32 = range::arr_bytes(CELLS, 4);
 
-/// The size of `.fixed.division`: one record for each slot of the tile
+/// The size of `.fixed.division`: one room for each slot of the tile
 /// cache, end to end.
-pub const DIVISION_BYTES: u32 = TileCache::<DivisionTile>::SLOTS * RECORD_BYTES;
+pub const DIVISION_BYTES: u32 = TileCache::<DivisionTile>::SLOTS * ROOM_BYTES;
 
 impl Base for DivisionTile {
     const STREAM: Stream = Stream::division;
@@ -55,12 +55,12 @@ impl Base for DivisionTile {
 
     fn receive(
         _tile: Quadrant,
-        record: u32,
+        slot: u32,
         pkt: &[u8],
         _phases: &mut PhaseList,
     ) -> Result<DivisionTile, Failure> {
-        // SAFETY: the record is this tile's, and nothing reads it until the tile is set.
-        let room = unsafe { range::arr::<u32>(RANGE.get(), record * RECORD_BYTES, CELLS) };
+        // SAFETY: the slot is this tile's, and nothing reads it until the tile is set.
+        let room = unsafe { range::arr::<u32>(RANGE.get(), slot * ROOM_BYTES, CELLS) };
         Ok(division::decode_into(pkt, room)?)
     }
 }
@@ -85,7 +85,7 @@ pub fn naming(at: &Q3) -> Option<(Quadrant, u32)> {
 
 /// Calls `each` with the divisions named at a cell from `naming`, from the
 /// broadest to the narrowest.
-pub fn each_division((from, cell): (Quadrant, u32), each: impl FnMut(&Division)) {
+pub fn each_division((from, cell): (Quadrant, u32), each: impl FnMut(Division<'_>)) {
     if let Some(tile) = DivisionTile::tile_cache().get(from) {
         tile.name_at(cell).for_each(each);
     }

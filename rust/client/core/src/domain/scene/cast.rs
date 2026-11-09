@@ -1,12 +1,12 @@
 // pxl-core/domain/scene/cast.rs
 
 //! What the GPU's cast of the eye's rays reads from the core (pxl-render
-//! gpu/ray/cast.rs `Cast`): the eye, the service area's index and the placed
+//! ray/cast.rs `Cast`): the eye, the service area's index and the placed
 //! objects. The terrain's part of the cast, the clipmap's table of bricks, is
 //! written by domain/layer/terrain/clipmap.rs.
 
 use pxl_engine::eye;
-use pxl_render::gpu::ray::ObjectTable;
+use pxl_render::ray::ObjectTable;
 use pxl_spec::space::camera::eye::Observation;
 use xpute_core::global::Global;
 

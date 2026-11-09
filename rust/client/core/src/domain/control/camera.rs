@@ -10,6 +10,7 @@
 //! asks the camera to move lives outside the folder (domain/control/input.rs,
 //! navigation).
 
+pub mod collision;
 pub mod controller;
 pub mod first_person;
 pub mod gesture;

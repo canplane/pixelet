@@ -180,9 +180,6 @@ fn forget_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let state = node_cache[state_at(id.x)];
   if ((state & (RECORD_FACES | RECORD_ASKED)) != 0u && changed_beside(zoom, c)) {
     node_cache[state_at(id.x)] = state & ~(RECORD_FACES | RECORD_ASKED);
-    for (var face = 0u; face < 6u; face += 1u) {
-      node_cache[face_at(id.x, face)] = 0u;
-    }
   }
 }
 

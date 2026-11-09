@@ -46,7 +46,7 @@ wrapping round, and nothing treats it as a special case. Since a position is an
 integer, it is the same bits on the CPU, on the GPU, on a server and in a bake,
 and a block placed in one is in the same place in all of them. Only an adapter
 at the edge knows what a unit is worth on the Earth;
-`rust/spec/src/space/README.md` describes the zooms, the adapters and the keys.
+`rust/spec/spec/src/space/README.md` describes the zooms, the adapters and the keys.
 
 The same zooms cut the plane into **tiles**, the squares that are fetched and
 stored, and cut space into an octree of **nodes**, eight under each, which is
@@ -313,7 +313,7 @@ connection.
 ### The sun is a second eye
 
 Shadows come from a **shadow map**, the depth of the world as the sun sees it in
-a square box about the eye (`gpu/shadow.rs`). The sun is an observer like the
+a square box about the eye (`pass/shadow.rs`). The sun is an observer like the
 eye, by the same rule and the same passes. Each tile of the box asks the world
 at one zoom, its **band**: the zoom the eye's rays would ask at the point of the
 tile's column nearest the eye, measured from the box's middle
@@ -375,7 +375,7 @@ arrives as a grant that carries its budget and how many reads it may start
 (`turn.rs` `TurnGrant`). A turn runs one task in one order: the effects of the
 last one, the tick's phases under the budget, then the frame, and none of it
 where the GPU cannot take a frame yet. The core's memory is laid out once at
-boot, in sections that nothing grows past (`sys/mem/section.rs`), so a long
+boot, in sections that nothing grows past (`sys/section.rs`), so a long
 session reserves what a short one does. What fills the heap grows with what was
 read, up to the heap's end.
 
@@ -462,12 +462,12 @@ The rest of the tree is grouped by language, and within a language by where a
 thing runs:
 
 ```text
-  rust/spec/            pxl-spec, the model every crate shares
+  rust/spec/spec/       pxl-spec, the model every crate shares
   rust/spec/engine/     pxl-engine, what the CPU and the GPU both compute
   rust/spec/content/    pxl-content, the content: decor, caves, clouds
   rust/client/core/     pxl-core, the core
   rust/client/render/   pxl-render, the renderer and its WGSL
-  rust/server/          the servers and the bakes
+  rust/server/          the servers and the bakes, one crate a folder
   ts/client/            the app: the UI, its services and the runtime
   ts/server/edge/       the Cloudflare Worker in front of everything
   spec/                 JSON both languages' code is generated from
@@ -475,5 +475,5 @@ thing runs:
 ```
 
 How a part works in detail is written beside its code:
-`rust/spec/src/space/README.md` for sizes and positions, and a README in each of
+`rust/spec/spec/src/space/README.md` for sizes and positions, and a README in each of
 the renderer, the core's layers, `sys/`, the bake and the client.

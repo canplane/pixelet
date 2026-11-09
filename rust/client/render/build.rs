@@ -274,7 +274,7 @@ fn strip_comments(text: &str) -> String {
 // square over one entry of the list. Each pass that calls it declares its workgroup with a side
 // of its own: light_cell.wgsl with `SAMPLE_SIDE`, the light's sample box (sample.light.wgsl
 // `sample_item`) with `SQUARE_SIDE`, and light.wgsl with its tile. The cast sizes each pass's
-// dispatch by that pass's side (gpu/ray/cast.rs `light_args`), so each side must be SAMPLE_SIDE.
+// dispatch by that pass's side (ray/cast.rs `light_args`), so each side must be SAMPLE_SIDE.
 const _: () = assert!(
     LIGHT_TILE == SAMPLE_SIDE && word::SQUARE_SIDE == SAMPLE_SIDE,
     "light_item reads a workgroup as SAMPLE_SIDE x SAMPLE_SIDE lanes: a light tile and \
@@ -423,6 +423,10 @@ fn walk_word() -> String {
             "LIGHT_HEADER_CORNER_STATES",
             light::HEADER_CORNER_STATES as u32,
         ),
+        (
+            "LIGHT_HEADER_PARKED_ITEMS",
+            light::HEADER_PARKED_ITEMS as u32,
+        ),
         ("LIGHT_HEADER_LAST_RANGE", light::HEADER_LAST_RANGE as u32),
         ("LIGHT_HEADER_MARKS", light::HEADER_MARKS as u32),
         ("LIGHT_HEADER_LISTS", light::HEADER_LISTS as u32),
@@ -508,10 +512,8 @@ fn walk_word() -> String {
         ("MISS_LANES", ray::MISS_LANES),
         ("SQUARE_WORDS", ray::SQUARE_WORDS),
         ("POOL_CAP", ray::POOL_CAP),
-        ("PARK_PX", ray::PARK_PX),
+        ("PARK_HOLE", ray::PARK_HOLE),
         ("PARK_WORDS", ray::PARK_WORDS),
-        ("POOL_CNT", ray::POOL_CNT),
-        ("POOL_STATES", ray::POOL_STATES),
         ("HITS_A_FRAME", ray::HITS_A_FRAME),
         ("HIT_LANES", beam::HIT_LANES),
         ("HIT_WORDS", beam::HIT_WORDS),
@@ -524,9 +526,9 @@ fn walk_word() -> String {
         ("QUEUE_GROUPS", ray::QUEUE_GROUPS),
         ("QUEUE_STEPS", ray::QUEUE_STEPS),
         ("QUEUE_NEXT", ray::QUEUE_NEXT),
-        ("QUEUE_NEXT_AGAIN", ray::QUEUE_NEXT_AGAIN),
+        ("QUEUE_NEXT_PARKED", ray::QUEUE_NEXT_PARKED),
         ("QUEUE_ASKS", ray::QUEUE_ASKS),
-        ("QUEUE_ASKS_AGAIN", ray::QUEUE_ASKS_AGAIN),
+        ("QUEUE_ASKS_PARKED", ray::QUEUE_ASKS_PARKED),
         ("QUEUE_HITS", ray::QUEUE_HITS),
         ("QUEUE_PARKED", ray::QUEUE_PARKED),
         (
@@ -558,6 +560,7 @@ fn walk_word() -> String {
         ("STATE_WORDS", ray::STATE_WORDS),
         ("PARKED", ray::PARKED),
         ("LAST_NEXT", node_cache::LAST_NEXT),
+        ("LAST_CNT", node_cache::LAST_CNT),
         ("ASKED", node_cache::ASKED),
         ("ASKS_A_FRAME", ray::ASKS_A_FRAME),
         ("HIT_ASSET", beam::HIT_ASSET),
@@ -686,7 +689,7 @@ fn world_word() -> String {
     use pxl_content::param::{cave, strata};
     use pxl_engine::clipmap as clip;
     use pxl_engine::object::{self, Cut};
-    use pxl_engine::way::tree;
+    use pxl_engine::way_tree;
     use pxl_engine::{area, seed, value};
     use xpute_kit::math::rng;
     let words: &[(&str, u32)] = &[
@@ -707,9 +710,9 @@ fn world_word() -> String {
         ("SLOT_FOLDED", object::FOLDED),
         ("SLOT_ZOOM_MASK", object::ZOOM_MASK),
         ("SLOT_SHIFT", object::SLOT_SHIFT),
-        ("POOL_CHILD_GROUPS", tree::POOL_CHILD_GROUPS),
-        ("ROOT_ID_BITS", tree::ROOT_ID_BITS),
-        ("ROOT_NODES", tree::ROOT_NODES),
+        ("POOL_CHILD_GROUPS", way_tree::POOL_CHILD_GROUPS),
+        ("ROOT_ID_BITS", way_tree::ROOT_ID_BITS),
+        ("ROOT_NODES", way_tree::ROOT_NODES),
         ("SHARD_KNOWN", area::SHARD_KNOWN),
         ("SHARD_SERVED_SHIFT", area::SHARD_SERVED_SHIFT),
         ("SHARD_OWN", area::OWN),

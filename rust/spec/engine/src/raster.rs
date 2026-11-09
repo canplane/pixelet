@@ -1,7 +1,7 @@
 // pxl-engine/raster.rs
 
 //! gpu-portable: the voxels drawn as boxes, so that the rasterizer leaves at each drawn pixel
-//! the cell that pixel shows (pxl-render raster.wgsl, gpu/ray/raster.rs). The eye's voxels
+//! the cell that pixel shows (pxl-render raster.wgsl, ray/raster.rs). The eye's voxels
 //! and the light's are each kept in a record across frames (`record`), and every held voxel
 //! in view is drawn each frame its observer casts (pxl-render record_draw.wgsl). A box is a
 //! node as its ray stops on it (`cast::asset_box`).

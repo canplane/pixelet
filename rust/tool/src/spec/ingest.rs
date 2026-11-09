@@ -154,7 +154,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             "ts/client/src/service/origin/ingest.spec.ts",
             render_ts(&rows, &pack)?,
         ),
-        Output::new("rust/spec/src/asset/ingest.spec.rs", render_rs(&pack)?),
+        Output::new("rust/spec/spec/src/asset/ingest.spec.rs", render_rs(&pack)?),
     ])
 }
 

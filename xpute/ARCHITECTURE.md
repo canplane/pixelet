@@ -554,7 +554,7 @@ The code, in the order its parts depend on each other.
   stream (`ipc/`), xpute's own commands and the devices' (`abi/`, `gpu/`), the
   errno table (`status/`), the machine's schema, the golden records (`golden/`)
   and the traces (`conformance/`).
-- `rust/tool` is the generator: `xpute-gen` writes a program's machine and
+- `rust/dev/tool` is the generator: `xpute-gen` writes a program's machine and
   protocols into both ends, `cargo spec` checks xpute's own generated files, and
   `cargo spec --write` writes them.
 - `rust/kit`, `ts/kit` and `cpp/xpute/kit` are the kit: `collection`, `codec`,
@@ -577,10 +577,10 @@ The code, in the order its parts depend on each other.
 - `ts/native` (`@xpute/native`) is the React Native module: the Kotlin and the
   Swift over the C ABI and JNI, the `SurfaceView`, and `script/core-build.py`,
   which builds the app's core crate as the app builds.
-- `rust/conformance` and `cpp/conformance` are a core in each language for the
+- `rust/dev/conformance` and `cpp/dev/conformance` are a core in each language for the
   traces, and `ts/runtime/src/conformance.test.ts` is the one runtime that runs
   them.
-- `rust/example` and `ts/example` are the smallest core, the test that drives
+- `rust/dev/example` and `ts/dev/example` are the smallest core, the test that drives
   it, and the page that runs it.
 - `cpp/amalgamation.awk` makes the C++ library's two files, and
   `script/export.py` copies this tree into xpute's own repository.

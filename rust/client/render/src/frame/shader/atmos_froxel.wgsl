@@ -1,6 +1,6 @@
 // pxl-render/frame/shader/atmos_froxel.wgsl
 
-// Draws a light's share of the air's volume (gpu/atmosphere.rs `froxel`), after
+// Draws a light's share of the air's volume (pass/atmosphere.rs `froxel`), after
 // the aerial-perspective volume of Hillaire 2020, "A Scalable and Production
 // Ready Sky and Atmosphere Rendering Technique". The volume is laid about its
 // light as the light's sky view is (atmos_skyview.wgsl): `AIR_FROXELS`

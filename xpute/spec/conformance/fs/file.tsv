@@ -20,7 +20,7 @@
 # An open's completion comes on a later turn, however much later: `later` is how a trace says the
 # transport is slow, and nothing here fixes how many turns pass. Each open and each close is
 # completed once.
-scenarios	open.later open.absent read write write.refused close.opening close.unknown stale.reuse root.walk
+scenarios	open.later open.absent read read.unknown write write.refused close.opening close.unknown stale.reuse root.walk
 
 open.later.step.0	file 7 a/b later
 open.later.step.1	openat 0x10001 7 rd a/b
@@ -44,6 +44,14 @@ read.step.6	turn
 read.step.7	expect read 68656c6c6f
 read.step.8	expect closed 0x10001 0
 read.step.9	expect quiet
+
+# A read of a descriptor this runtime does not hold, as the one a reload replaced left in the ring,
+# is dropped, and its close says so.
+read.unknown.step.0	read 0x10001 5
+read.unknown.step.1	close 0x10001
+read.unknown.step.2	turn
+read.unknown.step.3	expect closed 0x10001 EBADF
+read.unknown.step.4	expect quiet
 
 # Opened to write and closed in one turn: an open to write is completed at once, and the close
 # commits what was written, read where the core keeps it.

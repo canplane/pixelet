@@ -12,8 +12,8 @@ pub mod param;
 
 use pxl_content::cloud::drift;
 use pxl_content::param::night;
-use pxl_render::gpu::renderer::sky_steps;
 use pxl_render::look::environment::{write_environment, Light, FLOATS};
+use pxl_render::renderer::sky_steps;
 use pxl_spec::space::coord::v3;
 
 use crate::domain::scene::animation;

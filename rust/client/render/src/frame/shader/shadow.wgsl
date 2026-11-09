@@ -1,4 +1,4 @@
-// Reads the shadow map (gpu/shadow.rs), which is cast from the moon where the sun is down
+// Reads the shadow map (pass/shadow.rs), which is cast from the moon where the sun is down
 // (`shadow_light`). A receiver takes 3x3 PCF with a texel of normal offset, and each tap is
 // compared at the depth the receiver's own plane has where the tap lies. A receiver the map
 // does not reach is lit. The shadow fades toward the effects' reach as every effect does
@@ -24,7 +24,7 @@ fn light_slope(n: vec3f, texel: f32) -> vec2f {
 }
 
 // The direction the map is cast from: the sun's, or the moon's where the frame says so
-// (gpu/renderer.rs `prepare`).
+// (renderer.rs `prepare`).
 fn shadow_light() -> vec3f {
   return select(atmos_sun_dir(), atmos_moon_dir(), frame_shadow_moon() > 0.0);
 }

@@ -9,14 +9,14 @@ shaped this way is in [ARCHITECTURE.md](../../../ARCHITECTURE.md).
 
 ## The cast
 
-The cast (`gpu/ray/cast.rs`) runs once a frame over the camera grid's angular
+The cast (`ray/cast.rs`) runs once a frame over the camera grid's angular
 cells. Beam rays at each cell's corners walk the part of the descent the cell's
 pixels share, and the cell starts where the nearest of them stopped (`cell_cs`).
 Samples, a few to a cell's side, walk on from there, and the node each stops on
 is drawn as a box (`sample_box_cs`). The beam rays and the samples are items of
 one queue (`queue_cs`), walked by the same code as the holes later.
 
-The raster (`gpu/ray/raster.rs`, `raster.wgsl`) draws every box of the record
+The raster (`ray/raster.rs`, `raster.wgsl`) draws every box of the record
 into a visibility buffer. A face keeps a pixel only where the pixel's own ray
 enters the box across that face, so the depth test keeps the nearest box the ray
 enters, at the point where it enters. The eye draws only fresh voxels; the light
@@ -54,7 +54,7 @@ that has not been drawn for two frames (pxl-engine `record.rs`). A few rare
 events forget every entry at once: what was placed changed by more than the
 stream has room to send, or by revisions the GPU never held, or by a write that
 names no box, and the casts outrunning the frames a key's tag tells apart
-(`gpu/ray/cast.rs`). That is correct, and costs only a cast of everything again.
+(`ray/cast.rs`). That is correct, and costs only a cast of everything again.
 The entries a ray stopped on are the record, and the raster draws every fresh
 one in view each frame (`record_draw_cs`). A frame whose rays reached little
 still draws everything found before that is still fresh; a still frame over a
@@ -81,7 +81,7 @@ probe whose failure doubles the wait before the next.
 The sun is a second observer. The same passes run for it over the parts each
 observer gives (`beam.eye.wgsl` and `beam.light.wgsl`, `sample_run.eye.wgsl`
 and `sample_run.light.wgsl`), into a map of the world's depth along the light
-in a square box about the eye (`gpu/shadow.rs`). Each texel is fixed in the
+in a square box about the eye (`pass/shadow.rs`). Each texel is fixed in the
 world and held in a slot by its index modulo the map's side, and its ray starts
 at a fixed point, summed in integers (`light_aim.wgsl` `texel_start`).
 
@@ -111,7 +111,7 @@ Each turn the core hands a draw list (`gpu/draw.rs`) of what it draws beside the
 world: the cumulus, the characters, the location indicator, an edit's ghost, the
 markers and the debug lines. A draw holds its position as a `Q3` and a remainder
 in `f32`, and the shader takes the wrapping integer difference from the eye
-(`frame.wgsl` `from_eye`). The renderer (`gpu/renderer.rs` `render_frame`) draws
+(`frame.wgsl` `from_eye`). The renderer (`renderer.rs` `render_frame`) draws
 every open surface:
 
 ```text
@@ -129,9 +129,9 @@ The calls are written through xpute's encoder into one stream (`gpu/api.rs`),
 which the page runs on WebGPU and the device on wgpu. A frame where only the
 draws the core bounds moved is drawn again in the screen's tiles alone
 (`gpu/tile.rs`): what moved marks the tiles it covered and covers, the light's
-change is carried to the screen's tiles that read it (`gpu/propagate.rs`), and a
+change is carried to the screen's tiles that read it (`pass/propagate.rs`), and a
 tile stays in the damage until its history has gathered the jitter's frames
-(`gpu/resolve.rs`). The CPU decides from what it handed whether a frame is drawn
+(`pass/resolve.rs`). The CPU decides from what it handed whether a frame is drawn
 whole, through tiles, or not at all, so nothing is read back to decide it.
 
 ## What it holds

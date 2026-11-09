@@ -39,7 +39,7 @@ for each build. The pair that opens the runtime is in `runtime/`: on a page the
 core runs in a worker (`open.ts`), and on a device it runs beside the UI, linked
 into the app (`open.native.ts`). A piece of the UI that the platforms draw
 differently is a file with its override beside it
-(`src/ui/component/README.md`).
+(`src/ui/shared/component/README.md`).
 
 ## The boot
 
@@ -47,7 +47,7 @@ differently is a file with its override beside it
 binds the core's commands to it, and reports where the boot stands as the core
 starts, a GPU answers, the world's source is declared and the first snapshots
 come. The UI only reads that state, through the services, and shows a cover over
-the world until the view is first drawn (`ui/cover/`).
+the world until the view is first drawn (`ui/feature/cover/`).
 
 ## Builds
 

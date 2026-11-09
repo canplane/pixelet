@@ -66,7 +66,7 @@ pub struct Surface {
     pub wanted_sizes: ((u32, u32), (u32, u32)),
     pub waited_turns: u32,
     /// The frame's depth, with a stencil (`MASKED_DEPTH`). The world draws into it, and then
-    /// what moves on its own draws over the world (gpu/renderer.rs, stage 2). A pass draws
+    /// what moves on its own draws over the world (renderer.rs, stage 2). A pass draws
     /// into it through `depth_view`, and a binding reads it through `depth_only_view`.
     pub depth: u32,
     pub depth_view: u32,
@@ -77,7 +77,7 @@ pub struct Surface {
     pub color: u32,
     pub color_view: u32,
     /// The canvas's size in device pixels (`screen_px`), and a depth at that size. The finish
-    /// carries the world's depth up into it (gpu/finish.rs), and what is drawn over the world
+    /// carries the world's depth up into it (pass/finish.rs), and what is drawn over the world
     /// is tested against it.
     pub screen: (u32, u32),
     pub screen_depth: u32,
@@ -89,13 +89,13 @@ pub struct Surface {
     pub rays_view: u32,
     /// The world's color gathered over frames: two textures of `WORLD_COLOR`, made with the
     /// depth. They take turns, the last frame's read while this frame's is written
-    /// (gpu/resolve.rs). Only a world surface has them.
+    /// (pass/resolve.rs). Only a world surface has them.
     pub history: [u32; 2],
     pub history_view: [u32; 2],
     /// The finished picture, at the canvas's size and in the canvas's format, made with the
     /// screen's depth. Every frame finishes into it in the same pass that finishes the canvas.
     /// The canvas's texture is a new one each frame, so a gated frame first shows the picture
-    /// whole on the canvas and then finishes both only in its claimed tiles (gpu/finish.rs).
+    /// whole on the canvas and then finishes both only in its claimed tiles (pass/finish.rs).
     /// Only a world surface has it.
     pub picture: u32,
     pub picture_view: u32,

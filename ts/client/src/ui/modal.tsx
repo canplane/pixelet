@@ -1,32 +1,16 @@
 // @pxl/client/ui/modal.tsx
 
 import { useState } from "react";
-import { create } from "zustand";
 
-import { PanelPresence } from "@/ui/component/panel.tsx";
+import { PanelPresence } from "@/ui/shared/component/panel.tsx";
+import { closeModal, type Modal, useAskedModal } from "@/ui/shared/modal.ts";
 
-import { SettingsModal } from "@/ui/setting/modal.tsx";
-import { DrawerModal } from "@/ui/drawer/modal.tsx";
-import { SearchModal } from "@/ui/search/modal.tsx";
-
-type Modal = "settings" | "drawer" | "search";
-
-const store = create<{ asked: Modal | null }>()(() => ({ asked: null }));
-
-export function openModal(modal: Modal): void {
-  store.setState({ asked: modal });
-}
-
-export function closeModal(): void {
-  store.setState({ asked: null });
-}
-
-export function modalOpen(): boolean {
-  return store.getState().asked !== null;
-}
+import { SettingsModal } from "@/ui/feature/setting/modal.tsx";
+import { DrawerModal } from "@/ui/feature/drawer/modal.tsx";
+import { SearchModal } from "@/ui/feature/search/modal.tsx";
 
 export function ModalHost() {
-  const asked = store((s) => s.asked);
+  const asked = useAskedModal();
   // A closed modal stays drawn until its panel has slid away and called
   // `onExited`.
   const [shown, setShown] = useState<Modal | null>(null);

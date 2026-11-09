@@ -211,7 +211,7 @@ impl<'a> Query for Walker<'_, 'a> {
     }
 }
 
-/// A decor struck at `t`, its box entered across `axis` (`decor::intersect`),
+/// A decor struck at `t`, its box entered across `axis` (`decor_box`),
 /// as the block it is. The hit is the box it claims and that face, as a
 /// cell's hit is, so what is placed on it stands on that box (pxl-spec
 /// asset/id.rs `Kind::stood_on`).

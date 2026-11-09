@@ -43,18 +43,18 @@ fn hit_rows(rows: u32) {
 }
 
 /// Lists for the asks the node at which an item's walk `w` was left, which no slot keeps. It is
-/// listed for the asks after the first walk, or after the second where `again`, and only where
+/// listed for the asks after the first walk, or after the `parked`, and only where
 /// the node cache keeps such a node at all (`keeps`). The record holds the node's zoom, its
 /// index, the zooms asked, and what was handed to its parent. That is read from the slot that
 /// keeps the parent at the zooms the ray asked it at, as the walk went through the parent.
 /// Where no slot keeps the parent, the node is asked from the top.
-fn list_ask(aim: Aim, w: WalkEnd, again: bool) {
+fn list_ask(aim: Aim, w: WalkEnd, parked: bool) {
   let r0 = root_of(aim.origin);
   let c = idx_of(w.corner, w.zoom, w.roots, r0);
   if (!keeps(w.zoom, c)) {
     return;
   }
-  let r = atomicAdd(&queue[select(QUEUE_ASKS, QUEUE_ASKS_AGAIN, again)], 1u);
+  let r = atomicAdd(&queue[select(QUEUE_ASKS, QUEUE_ASKS_PARKED, parked)], 1u);
   if (r >= QUEUE_RECORDS_CAP) {
     return;
   }
@@ -79,29 +79,26 @@ fn list_ask(aim: Aim, w: WalkEnd, again: bool) {
   atomicStore(&queue[at + 9u], inheritance.w);
 }
 
-/// Where item `h`, whose ray is `aim`, starts in the first walk, or goes on from in the second
-/// where `again`.
-fn start_of(h: u32, aim: Aim, again: bool) -> Start {
-  if (again) {
-    return parked_start(h);
+/// Where item `item`, whose ray is `aim`, starts in the first walk, or goes on from in the
+/// `parked`.
+fn start_of(item: u32, aim: Aim, parked: bool) -> Start {
+  if (parked) {
+    return parked_start(item);
   }
-  return item_start(h, aim);
+  return item_start(item, aim);
 }
 
-/// The lanes of a walk: the first, or the second over what the first parked where `again`.
+/// The lanes of a walk: the first, or the `parked` over what the first parked.
 /// Each lane holds one ray at a time. A ray that finds the pool full ends as a lack where it
 /// stands.
-fn queue_walk(again: bool) {
+fn queue_walk(parked: bool) {
   loop {
-    let item = next_item(again);
+    let item = next_item(parked);
     if (item == NONE) {
       break;
     }
-    if (again && !parked(item)) {
-      continue;
-    }
     let aim = item_aim(item);
-    let s = start_of(item, aim, again);
+    let s = start_of(item, aim, parked);
     var t = s.t;
     var corner = s.corner;
     var zoom = s.zoom;
@@ -126,7 +123,7 @@ fn queue_walk(again: bool) {
         }
       } else if (w.ends == 4u) {
         if (park(item, w.t, w.corner, w.zoom, w.roots, w.step)) {
-          list_ask(aim, w, again);
+          list_ask(aim, w, parked);
         } else {
           finish(item, aim, to_lack(w));
         }

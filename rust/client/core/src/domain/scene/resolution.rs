@@ -4,7 +4,7 @@
 //! the display's ratio, except the world, which the `resolution` setting may
 //! scale down. The world's rays are cast at the display's pixels times the
 //! scale on each axis, and the renderer's finish brings them up to the
-//! display's pixels (pxl-render gpu/finish.rs). Render resolution is so kept
+//! display's pixels (pxl-render pass/finish.rs). Render resolution is so kept
 //! apart from display resolution, as Unreal's screen percentage keeps it, for
 //! a screen with more pixels than its GPU can fill.
 //!
@@ -30,8 +30,8 @@ use crate::sys::sched::edge;
 use crate::sys::sched::pacing_spec::{PACE_HZ, RATE_MIN_HZ};
 use pxl_render::api_spec::surface_role;
 use pxl_render::gpu::api;
-use pxl_render::gpu::renderer::GpuRead;
 use pxl_render::gpu::surface::{surfaces, Surface};
+use pxl_render::renderer::GpuRead;
 use xpute_core::global::Global;
 
 /// How the turn paced a frame.
@@ -108,7 +108,7 @@ type Setpoint = (f64, i32);
 ///
 /// Where the device keeps GPU timestamps, a sample is a GPU read that landed,
 /// which not every frame has, timed at the pixels drawn now. It splits into P,
-/// the time of the per-pixel spans (pxl-render gpu/renderer.rs
+/// the time of the per-pixel spans (pxl-render renderer.rs
 /// `GpuRead::px_ms`), and F, the rest of the GPU's busy time. A window in
 /// which no read landed is not judged. A window whose load F + P is over its
 /// budget by more than `RES_BAND` steps down at once. The judge steps up after

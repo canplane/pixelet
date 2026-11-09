@@ -33,7 +33,7 @@ const _: () = assert!(
 /// 3.8 m at Seoul's latitude.
 pub const MIN_DIST: f64 = 2.0;
 /// How far from the pivot the eye counts as at the nearest, where it may
-/// pass through what is there (orbit/collision.rs, the Nearest rule).
+/// pass through what is there (camera/collision.rs, the Nearest rule).
 pub const NEAREST_DIST: f64 = 1.25 * MIN_DIST;
 /// The orbit's farthest distance: `DOLLY_END_CELLS` sides of the coarsest
 /// cell any zoom holds, the cell of the pyramid's top. Looking straight down
@@ -54,11 +54,11 @@ pub const ORBIT_DIST_EPS: f64 = 0.001;
 pub const ORBIT_POLAR_EPS: f64 = 0.0001;
 pub const ORBIT_AZIMUTH_EPS: f64 = 0.0001;
 /// The most samples a collision test takes along one step of the orbit
-/// (orbit/collision.rs `way_hit`). Testing only where a step lands would let
+/// (camera/collision.rs `way_hit`). Testing only where a step lands would let
 /// the camera tunnel, because the easing carries it through everything in
 /// between.
 pub const COLLISION_STEP_SAMPLES: u32 = 16;
-/// How many times a climb steepens the pitch (orbit/collision.rs
+/// How many times a climb steepens the pitch (camera/collision.rs
 /// `steepened`). Steepening moves the eye, so the ground under the eye
 /// changes too. Two passes leave less than a cell to go.
 pub const CLIMB_PASSES: u32 = 2;

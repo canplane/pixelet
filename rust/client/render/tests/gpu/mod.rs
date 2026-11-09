@@ -3,7 +3,7 @@
 //! two. A module comes as build.rs assembles it for the renderer, or from the file a mutant sweep
 //! names. A wait on the device fails the test after `WAIT`, because a shader may loop forever,
 //! and a dispatch the device stops short fails the test too. The runs of the cast here dispatch
-//! their passes in the order the renderer does (gpu/ray/cast.rs `walk_run`).
+//! their passes in the order the renderer does (ray/cast.rs `walk_run`).
 
 #![allow(dead_code, reason = "each test reads its own of it")]
 
@@ -185,35 +185,28 @@ impl Gpu {
     /// Runs the light's beam rays as the cast runs them (corner.wgsl over beam.light.wgsl),
     /// over a map `size` texels a side. It first lists every beam ray of the whole map in `list`
     /// (light_list.wgsl `light_item_at`), then runs them through `corners`. `world` binds what
-    /// the passes read, with the list at 8, the node cache `table` at 9 and the light's header
+    /// the passes read, with the list at 8, `node_cache` at 9 and the light's header
     /// at 11.
     pub fn light_beam(
         &self,
         world: &[(u32, wgpu::BindingResource)],
         list: &wgpu::Buffer,
-        table: &wgpu::Buffer,
+        node_cache: &wgpu::Buffer,
         size: u32,
     ) {
         let mut words = self.read(list);
         list_every(&mut words, size, light::LIST_CORNERS, 1);
         self.queue.write_buffer(list, 0, bytes(&words));
-        self.corners(true, world, table);
+        self.corners(true, world, node_cache);
     }
 
-    /// Runs one observer's holes as the cast runs them (gpu/ray/cast.rs `walk_run`). Two walks
+    /// Runs one observer's holes as the cast runs them (ray/cast.rs `walk_run`). Two walks
     /// read the node cache alone, and an ask follows each. The queue's hits are then copied into
-    /// `table` (`node_cache::HITS_ARGS`), and its count of parked rays into `pool`, a buffer and
-    /// the word that holds the count (pxl-engine `ray::POOL_CNT`), as the cast copies them. The
-    /// last walk runs after. `all` binds what any of the passes reads except the queue's words:
+    /// `node_cache` (`node_cache::HITS_ARGS`), as the cast copies them. The last walk runs after. `all` binds what any of the passes reads except the queue's words:
     /// the eye at 0, the world at 1, 2 and 4 to 7, the rays or the map at 3, the observer's list
     /// at 8, the node cache at 9 and the observer's header at 11. Each pass takes the bindings
     /// its entry reads.
-    pub fn holes(
-        &self,
-        all: &[(u32, wgpu::BindingResource)],
-        table: &wgpu::Buffer,
-        pool: (&wgpu::Buffer, u32),
-    ) {
+    pub fn holes(&self, all: &[(u32, wgpu::BindingResource)], node_cache: &wgpu::Buffer) {
         self.run(
             [
                 COMPUTE_QUEUE,
@@ -228,16 +221,21 @@ impl Gpu {
                 &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11],
             ],
             all,
-            table,
+            node_cache,
             None,
-            Some(pool),
+            true,
         );
     }
 
-    /// Runs an observer's beam rays as the cast runs them (gpu/ray/cast.rs `walk_run`), the
+    /// Runs an observer's beam rays as the cast runs them (ray/cast.rs `walk_run`), the
     /// light's where `light` is set and the eye's otherwise. The passes and bindings follow
     /// `samples`.
-    pub fn corners(&self, light: bool, all: &[(u32, wgpu::BindingResource)], table: &wgpu::Buffer) {
+    pub fn corners(
+        &self,
+        light: bool,
+        all: &[(u32, wgpu::BindingResource)],
+        node_cache: &wgpu::Buffer,
+    ) {
         let ids = if light {
             [
                 COMPUTE_QUEUE_LIGHT_CORNERS,
@@ -255,28 +253,33 @@ impl Gpu {
                 COMPUTE_QUEUE_LAST_CORNERS,
             ]
         };
-        self.lattice(ids, light, all, table, None);
+        self.lattice(ids, light, all, node_cache, None);
     }
 
-    /// Runs an observer's samples as the cast runs them (gpu/ray/cast.rs `walk_run`), the
+    /// Runs an observer's samples as the cast runs them (ray/cast.rs `walk_run`), the
     /// light's where `light` is set and the eye's otherwise. Two walks read the node cache
     /// alone, an ask follows each, and the last walk runs after. `all` binds what any of the
     /// passes reads except the queue's words: the eye at 0, the world at 1, 2 and 4 to 7, the
     /// observer's list at 8, the node cache at 9 and the light's header at 11. Each pass takes
     /// the bindings its entry reads.
-    pub fn samples(&self, light: bool, all: &[(u32, wgpu::BindingResource)], table: &wgpu::Buffer) {
-        self.samples_asked(light, all, table, None);
-    }
-
-    /// `samples`, with the last walk, which asks the world, over the node cache `asked` in place
-    /// of `table` where `asked` is given. The walks before it and their asks read and write
-    /// `table`.
-    pub fn samples_asked(
+    pub fn samples(
         &self,
         light: bool,
         all: &[(u32, wgpu::BindingResource)],
-        table: &wgpu::Buffer,
-        asked: Option<&wgpu::Buffer>,
+        node_cache: &wgpu::Buffer,
+    ) {
+        self.samples_last_cache(light, all, node_cache, None);
+    }
+
+    /// `samples`, with the last walk, which asks the world, over the node cache `last_cache` in place
+    /// of `node_cache` where `last_cache` is given. The walks before it and their asks read and write
+    /// `node_cache`.
+    pub fn samples_last_cache(
+        &self,
+        light: bool,
+        all: &[(u32, wgpu::BindingResource)],
+        node_cache: &wgpu::Buffer,
+        last_cache: Option<&wgpu::Buffer>,
     ) {
         let ids = if light {
             [
@@ -295,18 +298,18 @@ impl Gpu {
                 COMPUTE_QUEUE_LAST_SAMPLES,
             ]
         };
-        self.lattice(ids, light, all, table, asked);
+        self.lattice(ids, light, all, node_cache, last_cache);
     }
 
     /// Runs the passes `ids` of a lattice, the light's where `light` is set and the eye's
-    /// otherwise, over `table` and `asked` as `samples_asked` says.
+    /// otherwise, over `node_cache` and `last_cache` as `samples_last_cache` says.
     fn lattice(
         &self,
         ids: [u32; 5],
         light: bool,
         all: &[(u32, wgpu::BindingResource)],
-        table: &wgpu::Buffer,
-        asked: Option<&wgpu::Buffer>,
+        node_cache: &wgpu::Buffer,
+        last_cache: Option<&wgpu::Buffer>,
     ) {
         // The light's walks read its header at 11. The eye's walks and every lattice's asks do
         // not.
@@ -314,14 +317,13 @@ impl Gpu {
         let walk = [&[0, 8, 9, 10][..], header].concat();
         let last = [&[0, 1, 2, 4, 5, 6, 7, 8, 9][..], header].concat();
         let keep = [&walk[..], &[0, 1, 2, 4, 5, 6, 7, 9, 10], &last[..]];
-        self.run(ids, keep, all, table, asked, None);
+        self.run(ids, keep, all, node_cache, last_cache, false);
     }
 
     /// Runs the passes `ids` over `all` and the queue's words: the walk, its asks, the walk of
     /// the parked rays, their asks, and the last walk. `keep` names the bindings that the walks,
-    /// the asks and the last walk each take. The last walk reads the node cache `asked` where it
-    /// is given. Where `pool` is given, as in the holes' run, the hits and the parked count are
-    /// copied as `holes` says. A run that asks past `ray::ASKS_A_FRAME` ends rays as lacks. It
+    /// the asks and the last walk each take. The last walk reads the node cache `last_cache` where it
+    /// is given. Where `hits` is set, as in the holes' run, the hits are copied as `holes` says. A run that asks past `ray::ASKS_A_FRAME` ends rays as lacks. It
     /// then runs again over the node cache it left, as the frames after it would, until a run
     /// asks no more than a frame's asks. The words that run leaves are what a test reads.
     fn run(
@@ -329,9 +331,9 @@ impl Gpu {
         [walk_id, ask_id, walk_parked_id, ask_parked_id, last_id]: [u32; 5],
         [walk_keep, ask_keep, last_keep]: [&[u32]; 3],
         all: &[(u32, wgpu::BindingResource)],
-        table: &wgpu::Buffer,
-        asked: Option<&wgpu::Buffer>,
-        pool: Option<(&wgpu::Buffer, u32)>,
+        node_cache: &wgpu::Buffer,
+        last_cache: Option<&wgpu::Buffer>,
+        hits: bool,
     ) {
         let queue = self.buf(
             &vec![0u32; ray::QUEUE_WORDS as usize],
@@ -357,10 +359,10 @@ impl Gpu {
         let walk_binds = take(walk_keep);
         let ask_binds = take(ask_keep);
         let mut last_binds = take(last_keep);
-        if let Some(asked) = asked {
+        if let Some(last_cache) = last_cache {
             for (b, resource) in &mut last_binds {
                 if *b == 9 {
-                    *resource = asked.as_entire_binding();
+                    *resource = last_cache.as_entire_binding();
                 }
             }
         }
@@ -373,7 +375,7 @@ impl Gpu {
             if self.asks_spent.get() {
                 none[(node_cache::ASKED - node_cache::LAST_NEXT) as usize] = ray::ASKS_A_FRAME;
             }
-            for t in [Some(table), asked].into_iter().flatten() {
+            for t in [Some(node_cache), last_cache].into_iter().flatten() {
                 self.queue
                     .write_buffer(t, word(node_cache::LAST_NEXT), bytes(&none));
             }
@@ -382,15 +384,22 @@ impl Gpu {
             self.dispatch(&ask, &ask_binds, groups);
             self.dispatch(&walk_parked, &walk_binds, groups);
             self.dispatch(&ask_parked, &ask_binds, groups);
-            if let Some((buf, at)) = pool {
+            if hits {
                 let q = self.read(&queue);
-                let (h, p) = (ray::QUEUE_HITS as usize, ray::QUEUE_PARKED as usize);
+                let h = ray::QUEUE_HITS as usize;
+                self.queue.write_buffer(
+                    node_cache,
+                    word(node_cache::HITS_ARGS),
+                    bytes(&q[h..h + 4]),
+                );
+            }
+            if let Some(last_cache) = last_cache {
+                let cnt = self.read(node_cache)[node_cache::LAST_CNT as usize];
                 self.queue
-                    .write_buffer(table, word(node_cache::HITS_ARGS), bytes(&q[h..h + 4]));
-                self.queue.write_buffer(buf, word(at), bytes(&q[p..p + 1]));
+                    .write_buffer(last_cache, word(node_cache::LAST_CNT), bytes(&[cnt]));
             }
             self.dispatch(&last, &last_binds, groups);
-            let words = self.read(asked.unwrap_or(table));
+            let words = self.read(last_cache.unwrap_or(node_cache));
             if self.asks_spent.get() || words[node_cache::ASKED as usize] <= ray::ASKS_A_FRAME {
                 return;
             }
@@ -638,7 +647,7 @@ impl KindCount {
     }
 }
 
-/// A light's box as the renderer lays it (gpu/shadow.rs `aim`, `Shadow::starts`). The map is
+/// A light's box as the renderer lays it (pass/shadow.rs `aim`, `Shadow::starts`). The map is
 /// `size` texels a side, its middle lies at the Q3 position `origin`, and it looks along `dir`.
 /// A texel is `side` units wide, the near plane lies `back` units back along the light, and the
 /// rays reach `t_max`. `corner` is the world texel index of the box's texel (0, 0), and

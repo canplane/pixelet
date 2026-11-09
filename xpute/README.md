@@ -75,9 +75,9 @@ its life and drive the two devices.
 ## How a program uses it
 
 The smallest program ships in this tree and shows every piece: a core that
-answers one command (`rust/example`), the runtime that drives it in a test
-(`ts/example/sum.test.ts`), and a page that runs it in a worker
-(`ts/example/web`).
+answers one command (`rust/dev/example`), the runtime that drives it in a test
+(`ts/dev/example/sum.test.ts`), and a page that runs it in a worker
+(`ts/dev/example/web`).
 
 ### The machine
 
@@ -258,7 +258,7 @@ bundler or Node's type stripping takes them with no build.
   and the devices' commands, from which every language's numbers are generated.
 - [XTP's README](./ts/kit/src/wire/xtp/README.md) describes the packet format
   that every frame carries.
-- `rust/example` and `ts/example` are the example above, whole.
+- `rust/dev/example` and `ts/dev/example` are the example above, whole.
 
 ## Running it
 

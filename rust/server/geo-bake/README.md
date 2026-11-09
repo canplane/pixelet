@@ -4,9 +4,7 @@ The world the client draws is a set of files made ahead of time. geo-bake makes
 them. Every tile it writes is meant to be a function of two things only: what
 the geo database held and the code that baked it, so that the same inputs give
 the same bytes. That is what lets a published version be cached for good and a
-dev tile server answer as the bucket would. For the bricks a client fills from
-the terrain, `bin/fill_digest.rs` checks it: two checkouts' digests over one set
-show whether a change left what the fill makes as it was.
+dev tile server answer as the bucket would.
 
 ```text
  sources ─ingest─▶ db-geo ─bake─▶ a set ─publish─▶ the bucket ─▶ the Worker
@@ -78,13 +76,12 @@ fold, moves the staged tiles in and removes what is gone. Every step can stop
 and run again. A change of a provider's release, of the code or of the coverage
 means a purge: the set is deleted and every shard baked again.
 
-A set holds only what a client can hold. A terrain tile is refused when it is
-made if one of its bricks would not fill as the client fills it, and the same
-pass records what each brick's tree of ways takes. Whether those trees fit the
-client's pool wherever the eye may be is a fact of the whole set, because a
-clipmap level lies across tiles, so the commit checks it before anything moves
-(`terrain/pool.rs` `check`). At the pool's cap, no brick of a published set is
-ever refused.
+A terrain tile is refused when it is encoded if its packet is longer than a
+client takes one, 2 MiB (`max_pkt_bytes`); the leaf or fold step that made it
+fails and nothing is committed. A tile's ways stay lines the client draws, so a
+change in how they are drawn takes no rebake, and what the client holds of them
+is its own to refuse: the bake knows nothing of the client's octree, pool or
+memory.
 
 ## Publishing a version
 

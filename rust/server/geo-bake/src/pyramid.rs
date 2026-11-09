@@ -36,14 +36,9 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
     /// at (pxl-spec lattice.rs `coarsest`).
     const COARSEST: Zoom = coarsest(Self::LATTICE);
 
-    /// The tile as it is published at `at`.
+    /// The tile as it is published at `at`; an error names the tile.
     fn encode(&self, at: Quadrant) -> Result<Vec<u8>, String>;
 
-    /// As tile `at` is stored: its packet, as `encode` makes it, and its fit
-    /// for `check_pool` (`FITS`), where the kind has one; one pass makes both.
-    fn encode_with_fit(&self, at: Quadrant) -> Result<(Vec<u8>, Option<String>), String> {
-        Ok((self.encode(at)?, None))
-    }
     fn decode(raw: &[u8]) -> Result<Self, String>;
 
     fn sources(p: Quadrant) -> Vec<Quadrant> {
@@ -55,17 +50,6 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
 
     /// Which of its children are tiles, as the tile says.
     fn occupancy(&self) -> Occupancy;
-
-    /// The fits of the set as it will be (`set`, `FITS`), refused where the set holds what the
-    /// client's pool cannot. It is a fact of the whole set, not of a tile, asked of each tile's fit
-    /// (`encode_with_fit`) before a commit moves anything, `worker_cnt` tiles at once. None for a kind
-    /// with no fits.
-    fn check_pool(
-        _set: &Staged<'_>,
-        _worker_cnt: usize,
-    ) -> Result<Option<Vec<(Quadrant, String)>>, String> {
-        Ok(None)
-    }
 }
 
 /// What a tile the set holds no object for is. The pyramid is correct only
@@ -83,12 +67,6 @@ impl<L: Base> Absent<L> for L {
 
 /// Inside a set, beside its tiles; no tile is named so.
 pub const MANIFEST: &str = "manifest.json";
-
-/// Inside a set, each of its tiles' fit (`Base::encode_with_fit`), a line a tile with its name
-/// and its fit, so a commit asks what the set will hold of these, never of the tiles read and
-/// made again. It is not published. A stage has each staged tile's fit beside it,
-/// `<name>.fit`. No tile is named so.
-pub(crate) const FITS: &str = "fits";
 
 pub struct TileSet {
     pub root: PathBuf,
@@ -110,60 +88,8 @@ impl TileSet {
         write_atomic(&path, packed).map_err(|e| format!("{}: {e}", path.display()))
     }
 
-    fn fit_path(&self, p: Quadrant) -> PathBuf {
-        self.root.join(format!("{}.fit", p.key()))
-    }
-
-    /// A tile as `Base::encode_with_fit` made it, and beside it its fit, or none:
-    /// the fit first, so a tile written is never beside another's.
-    pub fn write_with_fit(
-        &self,
-        p: Quadrant,
-        packed: &[u8],
-        fit: Option<&str>,
-    ) -> Result<(), String> {
-        fs::create_dir_all(&self.root).map_err(|e| e.to_string())?;
-        let path = self.fit_path(p);
-        match fit {
-            Some(fit) => write_atomic(&path, fit.as_bytes())
-                .map_err(|e| format!("{}: {e}", path.display()))?,
-            None => remove_file(&path)?,
-        }
-        self.write(p, packed)
-    }
-
-    /// A tile's fit (`write_with_fit`), none where it has none.
-    pub fn fit(&self, p: Quadrant) -> Result<Option<String>, String> {
-        let path = self.fit_path(p);
-        match fs::read_to_string(&path) {
-            Ok(text) => Ok(Some(text)),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(format!("{}: {e}", path.display())),
-        }
-    }
-
-    /// The tile, then its fit: a tile gone first leaves a fit no tile reads.
     pub fn remove(&self, p: Quadrant) -> Result<(), String> {
-        remove_file(&self.path(p))?;
-        remove_file(&self.fit_path(p))
-    }
-
-    /// The set's fits (`FITS`), by tile; none for a set with none.
-    pub(crate) fn fits(&self) -> Result<Option<FnvHashMap<Quadrant, String>>, String> {
-        let path = self.root.join(FITS);
-        let text = match fs::read_to_string(&path) {
-            Ok(text) => text,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(format!("{}: {e}", path.display())),
-        };
-        let mut out = FnvHashMap::default();
-        for line in text.lines() {
-            let (name, fit) = line.split_once(' ').unwrap_or((line, ""));
-            let p = Quadrant::of_key(name)
-                .ok_or_else(|| format!("{}: {name} names no tile", path.display()))?;
-            out.insert(p, fit.to_string());
-        }
-        Ok(Some(out))
+        remove_file(&self.path(p))
     }
 
     pub fn read<L: Base>(&self, p: Quadrant) -> Result<Option<L>, String> {
@@ -266,36 +192,6 @@ impl Staged<'_> {
             .map(Some)
             .map_err(|e| format!("{}: {e}", p.key()))
     }
-
-    /// `p`'s fit in the set as it will be (`Base::encode_with_fit`), as `content`
-    /// reads its tile: the stage's beside a staged tile, none for one gone, else
-    /// the set's (`base`, its `fits`).
-    pub fn fit_of(
-        &self,
-        p: Quadrant,
-        base: &FnvHashMap<Quadrant, String>,
-    ) -> Result<Option<String>, String> {
-        if (p.zoom != self.leaf || self.whole.contains(&p.shard())) && self.stage.path(p).exists() {
-            return self.stage.fit(p);
-        }
-        if self.removed.contains(&p) {
-            return Ok(None);
-        }
-        Ok(base.get(&p).cloned())
-    }
-
-    /// Every tile it may hold, the set's and the stage's, each zoom's
-    /// sorted; one gone or not taken up reads none (`content`).
-    pub fn tiles(&self) -> Result<BTreeMap<Zoom, Vec<Quadrant>>, String> {
-        let mut all = self.base.by_zoom()?;
-        for (zoom, tiles) in self.stage.by_zoom()? {
-            let at = all.entry(zoom).or_default();
-            at.extend(tiles);
-            at.sort_unstable();
-            at.dedup();
-        }
-        Ok(all)
-    }
 }
 
 /// Folds again what `changed` reaches: at each zoom, every parent whose
@@ -319,7 +215,10 @@ pub fn fold<L: Base>(
             .filter(|c| c.zoom == zoom + 1)
             .collect();
         let at = std::time::Instant::now();
-        let (written, removed) = fold_zoom(set, &readers::<L>(&below), absent, worker_cnt)?;
+        let (written, removed, failed) = fold_zoom(set, &readers::<L>(&below), absent, worker_cnt)?;
+        if failed > 0 {
+            return Err(format!("z{zoom}: {failed} tiles failed"));
+        }
         println!(
             "[bake/pyramid] z{zoom}: {} tiles changed in {:.1}s",
             written.len() + removed.len(),
@@ -406,14 +305,15 @@ fn readers<L: Base>(below: &[Quadrant]) -> Vec<Quadrant> {
     out.into_iter().map(|(_, _, p)| p).collect()
 }
 
-/// Folds `targets`, a zoom's parents in rows; returns those staged and those
-/// gone. Each worker keeps only the child rows its current parent row reads.
+/// Folds `targets`, a zoom's parents in rows; returns those staged, those gone and how many
+/// failed, each said as it failed, as a leaf's walk says it (tile/walk.rs). Each worker keeps
+/// only the child rows its current parent row reads.
 fn fold_zoom<L: Base>(
     set: &Staged<'_>,
     targets: &[Quadrant],
     absent: &impl Absent<L>,
     worker_cnt: usize,
-) -> Result<(Vec<Quadrant>, Vec<Quadrant>), String> {
+) -> Result<(Vec<Quadrant>, Vec<Quadrant>, u64), String> {
     let rows: Vec<&[Quadrant]> = targets.chunk_by(|a, b| a.at[1] == b.at[1]).collect();
     let band = rows.len().div_ceil(worker_cnt.max(1)).max(1);
     let bands = std::thread::scope(|scope| {
@@ -426,22 +326,23 @@ fn fold_zoom<L: Base>(
             .map(|h| h.join().expect("a fold worker"))
             .collect::<Result<Vec<_>, _>>()
     })?;
-    Ok(bands
-        .into_iter()
-        .fold((Vec::new(), Vec::new()), |(mut w, mut g), (bw, bg)| {
+    Ok(bands.into_iter().fold(
+        (Vec::new(), Vec::new(), 0),
+        |(mut w, mut g, n), (bw, bg, bn)| {
             w.extend(bw);
             g.extend(bg);
-            (w, g)
-        }))
+            (w, g, n + bn)
+        },
+    ))
 }
 
 fn fold_band<L: Base>(
     set: &Staged<'_>,
     rows: &[&[Quadrant]],
     absent: &impl Absent<L>,
-) -> Result<(Vec<Quadrant>, Vec<Quadrant>), String> {
+) -> Result<(Vec<Quadrant>, Vec<Quadrant>, u64), String> {
     let mut sources: FnvHashMap<Quadrant, Option<L>> = FnvHashMap::default();
-    let (mut written, mut removed) = (Vec::new(), Vec::new());
+    let (mut written, mut removed, mut failed) = (Vec::new(), Vec::new(), 0);
     for row in rows {
         let y = row[0].at[1];
         sources.retain(|p, _| p.at[1] >= 2 * y - 1);
@@ -452,20 +353,24 @@ fn fold_band<L: Base>(
                 }
             }
             let after = fold_parent(parent, |p| sources.get(&p).and_then(Option::as_ref), absent)
-                .map(|t| {
-                    t.encode_with_fit(parent)
-                        .map_err(|e| format!("{}: {e}", parent.key()))
-                })
-                .transpose()?;
-            if set.content(parent)?.as_deref() == after.as_ref().map(|(raw, _)| raw.as_slice()) {
+                .map(|t| t.encode(parent))
+                .transpose();
+            let after = match after {
+                Ok(after) => after,
+                Err(err) => {
+                    eprintln!("[bake/fold/{}] failed: {err}", parent.key());
+                    failed += 1;
+                    continue;
+                }
+            };
+            if set.content(parent)?.as_deref() == after.as_deref() {
                 continue;
             }
             match &after {
-                Some((raw, fit)) => {
-                    set.stage.write_with_fit(
+                Some(raw) => {
+                    set.stage.write(
                         parent,
                         &pack(raw, Level::Stored).map_err(|e| e.to_string())?,
-                        fit.as_deref(),
                     )?;
                     written.push(parent);
                 }
@@ -473,7 +378,7 @@ fn fold_band<L: Base>(
             }
         }
     }
-    Ok((written, removed))
+    Ok((written, removed, failed))
 }
 
 #[cfg(test)]

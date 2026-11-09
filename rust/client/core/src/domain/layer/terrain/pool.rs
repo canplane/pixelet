@@ -1,20 +1,20 @@
 // pxl-core/domain/layer/terrain/pool.rs
 
-//! The ways' pool (pxl-engine `way::tree`). Each brick's tree of ways is a
+//! The ways' pool (pxl-engine `way_tree`). Each brick's tree of ways is a
 //! run of child groups, laid here when the brick's fill ends (clipmap.rs
 //! `fill_stage`) and given back with the brick's slot. A cursor reads the
 //! pool here, and the GPU's pool is a copy: each run is handed over as its
-//! brick is (clipmap.rs `upload`, pxl-render gpu/ray/ground.rs `hand`), with
+//! brick is (clipmap.rs `upload`, pxl-render ray/ground.rs `hand`), with
 //! the words in place, so nothing may write a run the runtime holds
 //! (`in_flight`).
 //!
 //! The pool lives on the heap and grows a chunk at a time as the runs reach
 //! past its end. A child group is sixteen words. The pool never grows past
-//! its cap (pxl-engine way/tree.rs `POOL_CHILD_GROUPS`).
+//! its cap (pxl-engine way_tree.rs `POOL_CHILD_GROUPS`).
 
 use pxl_engine::clipmap::SLOTS;
 use pxl_engine::object::Table;
-use pxl_engine::way::tree::{self, Pool, BRICK_CHILD_GROUPS, CHILD_GROUP_WORDS};
+use pxl_engine::way_tree::{self, Pool, BRICK_CHILD_GROUPS, CHILD_GROUP_WORDS};
 use pxl_render::gpu::api;
 use xpute_core::global::Global;
 use xpute_kit::collection::list::List;
@@ -28,7 +28,7 @@ const CHUNK_WORDS: usize = (CHUNK_CHILD_GROUPS * CHILD_GROUP_WORDS) as usize;
 /// blocks: each chunk rounded up to a power of two, and the list of chunks
 /// likewise (door/layout.rs `HEAP_FLOWS_BYTES`).
 pub const POOL_BYTES: u64 = {
-    let chunks = tree::POOL_CHILD_GROUPS.div_ceil(CHUNK_CHILD_GROUPS) as u64;
+    let chunks = way_tree::POOL_CHILD_GROUPS.div_ceil(CHUNK_CHILD_GROUPS) as u64;
     chunks * (CHUNK_WORDS as u64 * 4).next_power_of_two()
         + (chunks * size_of::<Box<[u32]>>() as u64).next_power_of_two()
 };
@@ -53,7 +53,7 @@ pub struct WayPool {
 
 impl Default for WayPool {
     /// Child group 0 is never handed out, since a root word of 0 stands for
-    /// a brick with no tree (`way::tree::root_word`).
+    /// a brick with no tree (`way_tree::root_word`).
     fn default() -> WayPool {
         WayPool {
             chunks: Vec::new(),
@@ -150,7 +150,7 @@ impl WayPool {
     /// where that lies past the cap or the heap refuses, and the chunks grown
     /// so far are kept.
     fn grow_to(&mut self, child_group: u32) -> Result<(), PoolRefusal> {
-        if child_group >= tree::POOL_CHILD_GROUPS {
+        if child_group >= way_tree::POOL_CHILD_GROUPS {
             return Err(PoolRefusal::Cap);
         }
         let need = (child_group / CHUNK_CHILD_GROUPS + 1) as usize;

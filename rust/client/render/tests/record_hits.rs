@@ -88,7 +88,7 @@ fn world_binds<'a>(
     b: &'a WorldBuffer,
     eye: &'a wgpu::Buffer,
     words: &'a wgpu::Buffer,
-    table: &'a wgpu::Buffer,
+    node_cache: &'a wgpu::Buffer,
 ) -> Vec<(u32, wgpu::BindingResource<'a>)> {
     vec![
         (0, eye.as_entire_binding()),
@@ -99,7 +99,7 @@ fn world_binds<'a>(
         (6, b.placed.as_entire_binding()),
         (7, b.pool.as_entire_binding()),
         (8, words.as_entire_binding()),
-        (9, table.as_entire_binding()),
+        (9, node_cache.as_entire_binding()),
     ]
 }
 
@@ -118,7 +118,7 @@ fn face_binds<'a>(
         (6, b.placed.as_entire_binding()),
         (7, b.pool.as_entire_binding()),
         (8, run.words_buf.as_entire_binding()),
-        (9, run.table_buf.as_entire_binding()),
+        (9, run.node_cache_buf.as_entire_binding()),
         (
             16,
             wgpu::BindingResource::Buffer(wgpu::BufferBinding {
@@ -465,11 +465,11 @@ struct Ask {
 /// an entry with no face set before the pass marks it drawn in the frame's number, so no
 /// eviction takes it before a draw (`record::drawn`). A hit that stopped whole sets
 /// `record::WHOLE`. Each hit sets its face's bit (`record::FACES`) and, where `reads`, its
-/// asked bit (`record::ASKED`). A lack's face takes no word. The first hit to set either bit of
-/// a face of a cell short of its cube writes `face::BOX` as the face's word. Where `reads`,
-/// the first hit to ask any other face opens an ask for it, whose target is the entry's word
-/// (`record::TO_RECORD`), counted in the args at `raster::HIT_ASKED_AT` as a dispatch of
-/// `raster::FACES_LANES` asks a workgroup. Returns the asks by their targets.
+/// asked bit (`record::ASKED`). Where `reads`, the first hit to ask a face settles its word: none
+/// for a lack, `face::BOX` for a cell short of its cube, and otherwise none until an ask it opens
+/// answers, whose target is the entry's word (`record::TO_RECORD`), counted in the args at
+/// `raster::HIT_ASKED_AT` as a dispatch of `raster::FACES_LANES` asks a workgroup. Returns the
+/// asks by their targets.
 fn record_want(
     cache: &mut [u32],
     args: &mut [u32],
@@ -531,26 +531,24 @@ fn record_want(
             continue;
         }
         cache[state] |= mark;
-        if h.lacks {
-            continue;
-        }
-        let to = node_cache::face_at(slot, h.face);
-        if answer::fill_eighths(h.asset[0]) < answer::EIGHTHS {
-            cache[to as usize] = face::BOX;
-            continue;
-        }
         if !reads || was & asked != 0 {
             continue;
         }
-        let place = args[at + raster::ARGS_CNT as usize];
+        let to = node_cache::face_at(slot, h.face);
+        let short = !h.lacks && answer::fill_eighths(h.asset[0]) < answer::EIGHTHS;
+        cache[to as usize] = if short { face::BOX } else { 0 };
+        if h.lacks || short {
+            continue;
+        }
+        let idx = args[at + raster::ARGS_CNT as usize];
         args[at + raster::ARGS_CNT as usize] += 1;
-        if place >= cap {
+        if idx >= cap {
             continue;
         }
         let instances = &mut args[at + raster::ARGS_INSTANCES as usize];
-        *instances = (*instances).max((place + 1).min(cap));
-        if place.is_multiple_of(raster::FACES_LANES) {
-            let groups = (place + 1)
+        *instances = (*instances).max((idx + 1).min(cap));
+        if idx.is_multiple_of(raster::FACES_LANES) {
+            let groups = (idx + 1)
                 .min(cap)
                 .div_ceil(raster::FACES_LANES)
                 .min(WORKGROUPS_CAP);
@@ -658,7 +656,7 @@ struct Run {
     eye_buf: wgpu::Buffer,
     header_buf: wgpu::Buffer,
     words_buf: wgpu::Buffer,
-    table_buf: wgpu::Buffer,
+    node_cache_buf: wgpu::Buffer,
     args_buf: wgpu::Buffer,
     rays: wgpu::Texture,
 }
@@ -670,7 +668,7 @@ impl Run {
         let mut binds = vec![
             (0, self.eye_buf.as_entire_binding()),
             (8, self.words_buf.as_entire_binding()),
-            (9, self.table_buf.as_entire_binding()),
+            (9, self.node_cache_buf.as_entire_binding()),
             (16, self.args_buf.as_entire_binding()),
         ];
         if !self.reads {
@@ -707,7 +705,7 @@ fn eye_of(c: &EyeCase) -> (Vec<u32>, Grid) {
 }
 
 /// The raster's args as the renderer lays them in a frame that casts its samples
-/// (gpu/ray/raster.rs `prepare`): the draw's, then the faces' asks the samples open at
+/// (ray/raster.rs `prepare`): the draw's, then the faces' asks the samples open at
 /// `raster::ASKED_AT` and those the holes' hits open at `raster::HIT_ASKED_AT`, none opened
 /// yet.
 fn args_of(grid: &Grid) -> Vec<u32> {
@@ -726,7 +724,7 @@ fn args_of(grid: &Grid) -> Vec<u32> {
 }
 
 /// Runs the eye's frame of case `c` on screen `s` up to the record of its holes' hits, in the
-/// order the renderer runs it (gpu/ray/cast.rs): the beam rays and the cells' starts; where
+/// order the renderer runs it (ray/cast.rs): the beam rays and the cells' starts; where
 /// `s.samples`, the samples, their hits' record and the faces' pass over their asks; and then
 /// the holes' queue over the pixels the cast marked, as tests/sample.rs marks them. The
 /// entries the hits find are then laid otherwise (`lay_otherwise`).
@@ -736,15 +734,15 @@ fn eye_run(gpu: &Gpu, b: &WorldBuffer, (c, s): (&EyeCase, &Screen)) -> Run {
         eye[eye::JITTER + k] = s.jitter[k].to_bits();
     }
     let eye_buf = gpu.buf(&eye, wgpu::BufferUsages::UNIFORM);
-    let mut table = vec![0u32; node_cache::WORDS as usize];
-    table[node_cache::FRAME as usize] = FRAME;
-    let table_buf = gpu.buf(&table, store_of());
+    let mut node_cache = vec![0u32; node_cache::WORDS as usize];
+    node_cache[node_cache::FRAME as usize] = FRAME;
+    let node_cache_buf = gpu.buf(&node_cache, store_of());
     let args_buf = gpu.buf(&args_of(&grid), store_of());
     let beams = gpu.buf(&vec![0u32; grid.size() as usize], store_of());
     gpu.corners(
         false,
-        &world_binds(b, &eye_buf, &beams, &table_buf),
-        &table_buf,
+        &world_binds(b, &eye_buf, &beams, &node_cache_buf),
+        &node_cache_buf,
     );
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_CELL), "cell_cs"),
@@ -761,15 +759,15 @@ fn eye_run(gpu: &Gpu, b: &WorldBuffer, (c, s): (&EyeCase, &Screen)) -> Run {
     if s.samples {
         gpu.samples(
             false,
-            &world_binds(b, &eye_buf, &beams, &table_buf),
-            &table_buf,
+            &world_binds(b, &eye_buf, &beams, &node_cache_buf),
+            &node_cache_buf,
         );
         gpu.dispatch(
             &gpu.pipeline(src(SHADER_SAMPLE_BOX), "sample_box_cs"),
             &[
                 (0, eye_buf.as_entire_binding()),
                 (8, beams.as_entire_binding()),
-                (9, table_buf.as_entire_binding()),
+                (9, node_cache_buf.as_entire_binding()),
                 (16, args_buf.as_entire_binding()),
             ],
             [
@@ -821,14 +819,14 @@ fn eye_run(gpu: &Gpu, b: &WorldBuffer, (c, s): (&EyeCase, &Screen)) -> Run {
         args: Vec::new(),
         asks_at: grid.hit_asks_at,
         size: s.size,
-        // The eye's head is all zero, as the cast binds it (gpu/ray/cast.rs `eye_header`).
+        // The eye's head is all zero, as the cast binds it (ray/cast.rs `eye_header`).
         header_buf: gpu.buf(
             &vec![0u32; light::HEADER_WORDS],
             wgpu::BufferUsages::UNIFORM,
         ),
         eye_buf,
         words_buf,
-        table_buf,
+        node_cache_buf,
         args_buf,
         rays,
     };
@@ -841,17 +839,16 @@ fn eye_run(gpu: &Gpu, b: &WorldBuffer, (c, s): (&EyeCase, &Screen)) -> Run {
         [laid[(raster::ASKED_AT + raster::ARGS_FACES) as usize], 1, 1],
     );
     let view = array_view(&run.rays);
-    let mut binds = world_binds(b, &run.eye_buf, &run.words_buf, &run.table_buf);
+    let mut binds = world_binds(b, &run.eye_buf, &run.words_buf, &run.node_cache_buf);
     binds.push((3, wgpu::BindingResource::TextureView(&view)));
     binds.push((11, run.header_buf.as_entire_binding()));
-    let pool = walked as u32 + ray::pool_at(s.size) + ray::POOL_CNT;
-    gpu.holes(&binds, &run.table_buf, (&run.words_buf, pool));
+    gpu.holes(&binds, &run.node_cache_buf);
     drop(binds);
 
     let origin = c.origin;
     let range = c.range;
     let words = gpu.read(&run.words_buf);
-    let mut cache = gpu.read(&run.table_buf);
+    let mut cache = gpu.read(&run.node_cache_buf);
     let hits = hits_of(
         &words,
         grid.words()[beam::GRID_HITS_AT],
@@ -860,7 +857,7 @@ fn eye_run(gpu: &Gpu, b: &WorldBuffer, (c, s): (&EyeCase, &Screen)) -> Run {
     );
     lay_otherwise(&mut cache, &hits, true);
     gpu.queue
-        .write_buffer(&run.table_buf, 0, gpu::bytes(&cache));
+        .write_buffer(&run.node_cache_buf, 0, gpu::bytes(&cache));
     Run {
         hits,
         cache,
@@ -877,13 +874,13 @@ fn lay_cells(gpu: &Gpu, b: &WorldBuffer, [eye, header]: [&wgpu::Buffer; 2], list
     let tiles = light::tiles(SIZE) as usize;
     let reads = light::reads_at(SIZE) as usize;
     list[reads..reads + tiles * tiles].fill(CAST);
-    let mut table = vec![0u32; node_cache::WORDS as usize];
-    table[node_cache::FRAME as usize] = FRAME;
-    let table = gpu.buf(&table, store_of());
+    let mut node_cache = vec![0u32; node_cache::WORDS as usize];
+    node_cache[node_cache::FRAME as usize] = FRAME;
+    let node_cache = gpu.buf(&node_cache, store_of());
     let buf = gpu.buf(list, store_of());
-    let mut binds = world_binds(b, eye, &buf, &table);
+    let mut binds = world_binds(b, eye, &buf, &node_cache);
     binds.push((11, header.as_entire_binding()));
-    gpu.light_beam(&binds, &buf, &table, SIZE);
+    gpu.light_beam(&binds, &buf, &node_cache, SIZE);
     let cells = light::cells_across(SIZE);
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_LIGHT_CELL), "light_cell_cs"),
@@ -943,9 +940,9 @@ fn light_run(gpu: &Gpu, b: &WorldBuffer, c: &LightCase) -> Run {
         list[holes + 1 + k as usize] = (k % SIZE) | ((k / SIZE) << 16);
     }
     lay_cells(gpu, b, [&eye_buf, &header_buf], &mut list);
-    let mut table = vec![0u32; node_cache::WORDS as usize];
-    table[node_cache::FRAME as usize] = FRAME;
-    // The light's raster's args, as the renderer lays them (gpu/ray/raster.rs `light_prepare`).
+    let mut node_cache = vec![0u32; node_cache::WORDS as usize];
+    node_cache[node_cache::FRAME as usize] = FRAME;
+    // The light's raster's args, as the renderer lays them (ray/raster.rs `light_prepare`).
     let mut args = vec![0u32; raster::ARGS_WORDS as usize];
     args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
     let run = Run {
@@ -958,7 +955,7 @@ fn light_run(gpu: &Gpu, b: &WorldBuffer, c: &LightCase) -> Run {
         asks_at: 0,
         size: [SIZE; 2],
         words_buf: gpu.buf(&list, store_of()),
-        table_buf: gpu.buf(&table, store_of()),
+        node_cache_buf: gpu.buf(&node_cache, store_of()),
         args_buf: gpu.buf(&args, store_of()),
         rays: texture(
             &gpu.device,
@@ -972,17 +969,16 @@ fn light_run(gpu: &Gpu, b: &WorldBuffer, c: &LightCase) -> Run {
         header_buf,
     };
     let view = array_view(&run.rays);
-    let mut binds = world_binds(b, &run.eye_buf, &run.words_buf, &run.table_buf);
+    let mut binds = world_binds(b, &run.eye_buf, &run.words_buf, &run.node_cache_buf);
     binds.push((3, wgpu::BindingResource::TextureView(&view)));
     binds.push((11, run.header_buf.as_entire_binding()));
-    let pool = light::list_words(SIZE) + ray::POOL_CNT;
-    gpu.holes(&binds, &run.table_buf, (&run.words_buf, pool));
+    gpu.holes(&binds, &run.node_cache_buf);
     drop(binds);
 
     // A hit's node is held from where its slot's ray starts, and the hit is whole where the
     // node is coarser than its slot's band.
     let words = gpu.read(&run.words_buf);
-    let mut cache = gpu.read(&run.table_buf);
+    let mut cache = gpu.read(&run.node_cache_buf);
     let hits = hits_of(
         &words,
         light::hits_at(SIZE),
@@ -999,7 +995,7 @@ fn light_run(gpu: &Gpu, b: &WorldBuffer, c: &LightCase) -> Run {
     );
     lay_otherwise(&mut cache, &hits, false);
     gpu.queue
-        .write_buffer(&run.table_buf, 0, gpu::bytes(&cache));
+        .write_buffer(&run.node_cache_buf, 0, gpu::bytes(&cache));
     Run {
         hits,
         cache,
@@ -1032,7 +1028,7 @@ fn record_case(
     tally.compare(
         &format!("{name}, the node cache"),
         &cache,
-        &gpu.read(&run.table_buf),
+        &gpu.read(&run.node_cache_buf),
         cache_word,
     );
     tally.compare(
@@ -1141,7 +1137,7 @@ fn hand_light_hits_answer_as_record() {
 }
 
 /// Once the eye's hits are recorded and the faces' pass has answered their asks, as the
-/// renderer runs them (gpu/ray/raster.rs `record_hits`), `record_faces_cs` must leave every
+/// renderer runs them (ray/raster.rs `record_hits`), `record_faces_cs` must leave every
 /// word of the rays as `faces_want` says, and no word of the node cache or of the eye's words
 /// changed.
 #[test]
@@ -1167,7 +1163,7 @@ fn hand_hit_faces_answer_as_record() {
             &face_binds(&b, &run, raster::HIT_ASKED_AT),
             [args[at + raster::ARGS_FACES as usize], 1, 1],
         );
-        let cache = gpu.read(&run.table_buf);
+        let cache = gpu.read(&run.node_cache_buf);
         let words = gpu.read(&run.words_buf);
         let asked: BTreeSet<u32> = (0..args[at + raster::ARGS_INSTANCES as usize])
             .map(|place| {
@@ -1190,7 +1186,7 @@ fn hand_hit_faces_answer_as_record() {
                 (0, run.eye_buf.as_entire_binding()),
                 (3, wgpu::BindingResource::TextureView(&view)),
                 (8, run.words_buf.as_entire_binding()),
-                (9, run.table_buf.as_entire_binding()),
+                (9, run.node_cache_buf.as_entire_binding()),
             ],
             [ray::HITS_A_FRAME.div_ceil(beam::HIT_LANES), 1, 1],
         );
@@ -1209,7 +1205,7 @@ fn hand_hit_faces_answer_as_record() {
         tally.compare(
             &format!("{name}, the node cache"),
             &cache,
-            &gpu.read(&run.table_buf),
+            &gpu.read(&run.node_cache_buf),
             cache_word,
         );
         tally.compare(

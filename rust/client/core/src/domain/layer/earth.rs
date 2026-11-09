@@ -27,11 +27,11 @@ use pxl_spec::space::coord::zoom::Zoom;
 /// A held Earth tile. It carries nothing in the core: its texels live in the
 /// GPU layer of its slot.
 #[derive(Clone)]
-pub struct Earth;
+pub struct EarthTile;
 
-static EARTH: Global<TileCache<Earth>> = Global::new();
+static EARTH: Global<TileCache<EarthTile>> = Global::new();
 
-impl Base for Earth {
+impl Base for EarthTile {
     const STREAM: Stream = Stream::earth;
     const LATTICE: Lattice = GROUND;
     const ASK_SCOPE: AskScope = AskScope::Floor;
@@ -42,25 +42,25 @@ impl Base for Earth {
         Occupancy::ZERO
     }
 
-    fn tile_cache() -> &'static mut TileCache<Earth> {
+    fn tile_cache() -> &'static mut TileCache<EarthTile> {
         EARTH.get(TileCache::default)
     }
 
     fn receive(
         _tile: Quadrant,
-        _record: u32,
+        _slot: u32,
         pkt: &[u8],
         _phases: &mut PhaseList,
-    ) -> Result<Earth, Failure> {
+    ) -> Result<EarthTile, Failure> {
         earth::decode(pkt)?;
-        Ok(Earth)
+        Ok(EarthTile)
     }
 
     /// Keeps the packet until the GPU has its texels. Every slot may keep
     /// one, and the request scheduler leaves body slots for them
     /// (sys/io/request.rs `spare_slots`).
-    fn keep(record: Option<u32>, block: Block) {
-        uploads().keep(record, block, EARTH_SLOTS);
+    fn keep(slot: Option<u32>, block: Block) {
+        uploads().keep(slot, block, EARTH_SLOTS);
     }
 }
 
@@ -68,19 +68,19 @@ impl Base for Earth {
 static UPLOADS: Global<UploadTable> = Global::new();
 
 fn uploads() -> &'static mut UploadTable {
-    UPLOADS.get(|| UploadTable::new(TileCache::<Earth>::SLOTS))
+    UPLOADS.get(|| UploadTable::new(TileCache::<EarthTile>::SLOTS))
 }
 
 /// Offers each waiting packet's texels to `write`, for its slot's layer on
 /// the device of generation `on`, until `write` takes no more. A tile whose
 /// texels went to an earlier device is fetched again, since its packet was
 /// freed once sent.
-pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
+pub fn upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
     let uploads = uploads();
-    for record in 0..EARTH_SLOTS {
-        if uploads.sent_on(record).is_some_and(|s| s != on) {
-            if let Some(p) = Earth::tile_cache().in_slot(record) {
-                Earth::tile_cache().refetch(p);
+    for slot in 0..EARTH_SLOTS {
+        if uploads.sent_on(slot).is_some_and(|s| s != on) {
+            if let Some(p) = EarthTile::tile_cache().in_slot(slot) {
+                EarthTile::tile_cache().refetch(p);
             }
         }
     }
@@ -89,7 +89,7 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
     // one packet waits for each slot.
     uploads.send(
         on,
-        &mut |record, pkt| match earth::decode(pkt).map(|texels| write(record, texels)) {
+        &mut |slot, pkt| match earth::decode(pkt).map(|texels| write(slot, texels)) {
             Err(_) | Ok(true) => Uptake::Taken,
             Ok(false) => Uptake::Full,
         },
@@ -101,7 +101,7 @@ pub fn earth_upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
 /// result is the window's south-west tile and, for each tile of the window
 /// row by row, its GPU layer plus one, or zero where the global picture
 /// answers.
-pub fn earth_window(
+pub fn window(
     floor: impl Iterator<Item = Quadrant> + Clone,
     on: u32,
 ) -> ([i32; 2], [u32; GROUND_DEMAND_TILES as usize]) {
@@ -117,20 +117,20 @@ pub fn earth_window(
     let x0 = first + floor.clone().map(|p| east(at(p)[0])).min().unwrap_or(0);
     let y0 = floor.clone().map(|p| at(p)[1]).min().unwrap_or(0);
     for p in floor {
-        let Some(record) = Earth::tile_cache().slot(p) else {
+        let Some(slot) = EarthTile::tile_cache().slot(p) else {
             continue;
         };
-        if uploads().sent_on(record) == Some(on) {
+        if uploads().sent_on(slot) == Some(on) {
             let [x, y] = at(p);
             let (dx, dy) = ((x - x0).rem_euclid(around) as u32, (y - y0) as u32);
-            layers[(dy * GROUND_DEMAND_ACROSS + dx) as usize] = record + 1;
+            layers[(dy * GROUND_DEMAND_ACROSS + dx) as usize] = slot + 1;
         }
     }
     ([x0, y0], layers)
 }
 
 /// The Earth tiles held at once, each in a GPU layer of its own.
-pub const EARTH_SLOTS: u32 = TileCache::<Earth>::SLOTS;
+pub const EARTH_SLOTS: u32 = TileCache::<EarthTile>::SLOTS;
 
 const _: () = assert!(
     BODY_SLOTS > MAX_CREDITS + EARTH_SLOTS,

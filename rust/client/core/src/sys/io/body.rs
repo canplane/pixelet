@@ -1,18 +1,20 @@
 // pxl-core/sys/io/body.rs
 
 //! The blocks that bodies are read into. Terrain and Earth packets run just
-//! past a mebibyte (pxl-spec `bake::tile::max_pkt_bytes`), where the buddy
-//! allocator would give each a block of two. Their bodies take slots
-//! instead. A slot is the longest such packet rounded up to whole pages, cut
-//! from a run that the heap gives whole and takes back once the run's last
-//! slot is free. This is Bonwick's slab allocator for one large object, with
-//! its bookkeeping kept outside the run, and the stream decides whether a
-//! body takes a slot. A new run is taken only when every run held is full,
+//! past a mebibyte, where the buddy allocator would give each a block of two.
+//! Their bodies take slots instead. A slot is an even share of a run in whole
+//! pages, which holds an Earth tile and a terrain tile with the ways it
+//! usually has, cut from a run that the heap gives whole and takes back once
+//! the run's last slot is free. A terrain body longer than a slot, as far as a
+//! packet can be (pxl-spec `bake::tile::max_pkt_bytes`), is a heap block of
+//! its own. This is Bonwick's slab allocator for one large object, with
+//! its bookkeeping kept outside the run, and the stream and the body's length
+//! decide whether it takes a slot. A new run is taken only when every run held is full,
 //! and no more than `BODY_SLOTS` slots are out at once (sys/io/param.rs).
 //! Every other body is a heap block of its own, freed as it is decoded.
 //!
 //! A terrain body is freed once it is decoded. An Earth body is freed only
-//! when a drawn frame takes it (domain/layer/earth.rs `earth_upload`). The
+//! when a drawn frame takes it (domain/layer/earth.rs `upload`). The
 //! Earth's frames bound those bodies apart from the rest, so a body on every
 //! credit still finds a slot and the tile cache fills while no frame is
 //! drawn. A refused body waits on what refused it (sys/io/room.rs). When
@@ -21,12 +23,13 @@
 //! slot in a run held to be given back. After a refusal, the next slot given
 //! back asks for a turn, in which the want is asked again.
 
+use pxl_spec::bake::tile::terrain::{ELE_COLUMN, PALETTE_COLUMN};
 use xpute_core::global::Global;
 use xpute_core::mem::heap::{alloc, free, Block};
 use xpute_core::mem::section::PAGE_BYTES;
 
 use crate::sys::io::demand::Stream;
-use crate::sys::io::param::{BODY_RUN_BYTES, BODY_SLOTS};
+use crate::sys::io::param::{BODY_RUN_BYTES, BODY_RUN_SLOTS, BODY_SLOTS};
 use crate::sys::io::room::Refusal;
 use crate::sys::sched::edge;
 
@@ -57,20 +60,10 @@ const fn longest(stream: Stream) -> u32 {
     }
 }
 
-/// The size of a slot: the longest slotted packet, rounded up to whole
-/// pages.
-const SLOT_BYTES: u32 = {
-    let (mut most, mut k) = (0, 0);
-    while k < Stream::ALL.len() {
-        if longest(Stream::ALL[k]) > most {
-            most = longest(Stream::ALL[k]);
-        }
-        k += 1;
-    }
-    most.div_ceil(PAGE_BYTES) * PAGE_BYTES
-};
+/// The size of a slot: an even share of a run, in whole pages.
+const SLOT_BYTES: u32 = BODY_RUN_BYTES / BODY_RUN_SLOTS / PAGE_BYTES * PAGE_BYTES;
 
-/// The slots in a run: seven at the current packet sizes.
+/// The slots in a run.
 const SLOTS: u32 = BODY_RUN_BYTES / SLOT_BYTES;
 
 const FULL: u32 = u32::MAX >> (u32::BITS - SLOTS);
@@ -84,6 +77,7 @@ const _: () = {
         SLOTS >= 2 && SLOTS <= u32::BITS,
         "a run holds two slots or more, a bit each"
     );
+    assert!(SLOTS == BODY_RUN_SLOTS, "a run holds its slots whole");
     let mut k = 0;
     while k < Stream::ALL.len() {
         let s = Stream::ALL[k];
@@ -93,6 +87,14 @@ const _: () = {
         );
         k += 1;
     }
+    assert!(
+        longest(Stream::earth) <= SLOT_BYTES,
+        "an Earth tile fits a slot"
+    );
+    assert!(
+        (PALETTE_COLUMN + 2 * ELE_COLUMN) as u32 <= SLOT_BYTES,
+        "a terrain tile's columns fit a slot"
+    );
 };
 
 static SLOT_TABLE: Global<SlotTable> = Global::new();
@@ -115,7 +117,8 @@ pub const fn slots_bytes(slot_cnt: u32) -> u64 {
 
 /// A block for a body of `n` bytes. `stream` is the body's stream, or None
 /// where the scheduler no longer holds its attempt. The block is a slot where
-/// the stream's bodies take one, and a heap block of its own otherwise.
+/// the stream's bodies take one and `n` fits it, and a heap block of its own
+/// otherwise.
 pub fn take(stream: Option<Stream>, n: u32) -> Result<Block, Refusal> {
     if !stream.is_some_and(|s| s.row().slotted) || n > SLOT_BYTES {
         return alloc(n).ok_or_else(Refusal::now);

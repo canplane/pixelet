@@ -12,8 +12,7 @@ meant to do and where it is, not why its author thinks it is right.
 - Read only: no edit, `git add`, commit, stash or checkout, no dev server.
   `git diff` and `git show HEAD:<path>` are fine.
 - Review only the scope you were given.
-- Read code through the LSP tool: definitions, references, callers, callees.
-  Where LSP cannot answer, say so.
+- Read code with whichever tool is efficient: text search or the LSP tool.
 - Read AGENTS.md and the skill for the changed code first.
 
 ## What to check

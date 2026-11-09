@@ -5,7 +5,7 @@
 //! on the light box's near plane and runs along the light's rays to the far plane, walked
 //! through the same descent the eye's rays take. Every node is asked at its tile's band: the
 //! zoom the eye's rays ask at the point of the tile's column nearest the eye (`Light::band`).
-//! The ray leaves the depth a raster caster would (pxl-render gpu/shadow.rs, where the decor
+//! The ray leaves the depth a raster caster would (pxl-render pass/shadow.rs, where the decor
 //! and the characters are drawn into the same map).
 //!
 //! The world's depth is a clipmap: the light box's texels lie on a grid fixed in the world
@@ -98,7 +98,7 @@ pub fn slope(n: [f32; 3], across: [f32; 3], down: [f32; 3], deep: [f32; 3]) -> [
 }
 
 impl Light {
-    /// The light from the light box's inverse (pxl-render gpu/shadow.rs `aim`), which maps the
+    /// The light from the light box's inverse (pxl-render pass/shadow.rs `aim`), which maps the
     /// map's NDC to units from the eye by its columns: a texel's NDC `(x, y)` lies at
     /// `w + x·x + y·y` on the near plane, and `z` runs from the near plane to the far. The map is
     /// `size` texels a side, with row 0 at the top, as the lit passes read it. A hit's push is a
@@ -557,8 +557,10 @@ pub const HEADER_MARKS: usize = HEADER_CELLS + 9;
 pub const HEADER_LISTS: usize = HEADER_MARKS + LISTS as usize;
 /// Where the beam rays' run parks them (`corner_states_at`).
 pub const HEADER_CORNER_STATES: usize = HEADER_LISTS + LISTS as usize;
+/// Where a beam rays' or a samples' run lists the items it parked (`parked_items_at`).
+pub const HEADER_PARKED_ITEMS: usize = HEADER_CORNER_STATES + 1;
 /// The slide's two words (`slide_at`).
-pub const HEADER_SLIDE: usize = HEADER_CORNER_STATES + 1;
+pub const HEADER_SLIDE: usize = HEADER_PARKED_ITEMS + 1;
 /// Past the words the map's side lays out, two words the host sets each cast: the number of
 /// the cast in which the world's receivers were last stood, which is this cast's where it
 /// stands them again (`LIST_RECEIVERS`; pxl-render light_mark.wgsl); and the number of the
@@ -581,7 +583,7 @@ pub const HEADER_HITS: usize = HEADER_POOL + 1;
 pub const HEADER_LAST_RANGE: usize = HEADER_HITS + 1;
 const HEADER_LAYOUT_VEC4S: usize = 10;
 /// The words `header_layout` lays out.
-const HEADER_LAYOUT_WORDS: usize = 15 + 2 * LISTS as usize;
+const HEADER_LAYOUT_WORDS: usize = 16 + 2 * LISTS as usize;
 /// The world's columns that changed since the cast before, where they did and the epoch goes
 /// on (`Column`, `Light::reaches`): their count in the first word of a vec4, then two vec4s
 /// each, holding its four floats and its first and last band, up to `COLUMNS`.
@@ -607,6 +609,7 @@ pub const fn header_layout(size: u32) -> [(usize, u32); HEADER_LAYOUT_WORDS] {
         (HEADER_CARRY, carry_at(size)),
         (HEADER_BEAM_ACROSS, beam_across(size)),
         (HEADER_CORNER_STATES, corner_states_at(size)),
+        (HEADER_PARKED_ITEMS, parked_items_at(size)),
         (HEADER_SLIDE, slide_at(size)),
         (HEADER_POOL, list_words(size)),
         (HEADER_HITS, hits_at(size)),
@@ -627,7 +630,7 @@ pub const fn header_layout(size: u32) -> [(usize, u32); HEADER_LAYOUT_WORDS] {
 }
 
 /// Where a texel's ray starts: the same point of the world in every frame cast in one light
-/// frame (pxl-render gpu/shadow.rs `aim`). Starts come from anchors `ANCHOR` texels apart on
+/// frame (pxl-render pass/shadow.rs `aim`). Starts come from anchors `ANCHOR` texels apart on
 /// the world's texel grid, each a start on the near plane worked out once on the host: its Q3
 /// position and what rounding to it left (`frac`), with a texel's step across and down in Q3
 /// steps. A start is the anchor's plus the steps from it, rounded, the same sum each frame
@@ -810,7 +813,7 @@ pub const fn corner_at(c: [u32; 2]) -> [i32; 2] {
 /// neighbor its linear compare filters in lies a texel each way, both along a diagonal. The
 /// distance is measured at the receiver's offset point, so its normal offset adds nothing;
 /// and the fade and `Light::read` both measure from the snapped box's middle, by its one
-/// matrix (pxl-render gpu/shadow.rs `aim`), so the snap adds nothing.
+/// matrix (pxl-render pass/shadow.rs `aim`), so the snap adds nothing.
 pub const READ_PAD: f32 = (SPREAD + FILTER) * SQRT_2;
 const FILTER: f32 = 1.0;
 
@@ -1025,7 +1028,7 @@ impl Light {
 /// (`LIST_SOURCES`), and the tiles claimed, whose slots it casts (`LIST_DAMAGE`). Then come
 /// the tiles a receiver stands on (`LIST_RECEIVERS`), the world's first and then the drawn
 /// receivers' (pxl-render light_mark.wgsl, light_mark_draws.wgsl), and the tiles a receiver
-/// reads, in which the map is laid (`LIST_READS`; light_propagate.wgsl, gpu/shadow.rs
+/// reads, in which the map is laid (`LIST_READS`; light_propagate.wgsl, pass/shadow.rs
 /// `Shadow::begin`). Each list holds its count, then its entries; the count is copied in once
 /// propagation is done (`ARGS_CNTS`).
 ///
@@ -1091,7 +1094,26 @@ pub const fn corner_states_at(size: u32) -> u32 {
     list_cnt_at(size, LISTS)
 }
 
-/// Past the beam rays' states, two words kept from cast to cast. `SLIDE_RAN` is the number of
+/// Past the beam rays' states, the items a run parked, one word each (pxl-render
+/// item_list.wgsl). One run's list is done with before the next begins, so the list holds as
+/// many as the longer run.
+pub const fn parked_items_at(size: u32) -> u32 {
+    corner_states_at(size) + beam_across(size) * beam_across(size) * ray::STATE_WORDS
+}
+
+const fn parked_items_cap(size: u32) -> u32 {
+    let (corners, samples) = (
+        beam_across(size) * beam_across(size),
+        (size / SAMPLE) * (size / SAMPLE),
+    );
+    if corners > samples {
+        corners
+    } else {
+        samples
+    }
+}
+
+/// Past the parked items, two words kept from cast to cast. `SLIDE_RAN` is the number of
 /// the last cast in which the slide ran, set by the slide's first thread (pxl-render
 /// light_slide.wgsl). `READS_FROM` is the number of the first cast whose reads hold where a
 /// cast that owed a slide stood no receiver and so ran none. It is set by the one thread that
@@ -1099,14 +1121,14 @@ pub const fn corner_states_at(size: u32) -> u32 {
 /// one (`HEADER_SLIDE_CAST`; light_receiver_tile.wgsl `receiver_tiles_first`). The reads'
 /// epoch is the later of it and `HEADER_EPOCH` (`reads_epoch`).
 pub const fn slide_at(size: u32) -> u32 {
-    corner_states_at(size) + beam_across(size) * beam_across(size) * ray::STATE_WORDS
+    parked_items_at(size) + parked_items_cap(size)
 }
 pub const SLIDE_RAN: u32 = 0;
 pub const READS_FROM: u32 = 1;
 
 /// Past them, what a cast keeps for the next until the world's receivers are stood afresh
 /// (`HEADER_WORLD`), copied out once its propagation is done and back in as the next cast
-/// begins (pxl-render gpu/ray/cast.rs): the stood list's first `RECEIVER_TILES_CARRY` argument
+/// begins (pxl-render ray/cast.rs): the stood list's first `RECEIVER_TILES_CARRY` argument
 /// words, then the read list's count (`CARRY_READ`). The count kept is the number of stood
 /// tiles the casts before propagated, so a cast propagates only those stood after them
 /// (light_propagate.wgsl); it is none where they are stood afresh.
@@ -1117,7 +1139,7 @@ pub const CARRY_READ: u32 = RECEIVER_TILES_CARRY;
 pub const CARRY_WORDS: u32 = CARRY_READ + 1;
 
 /// The list buffer's words: the beam's, the samples, the holes, the reads, their squares, the
-/// lists, the samples left, the beam rays left, the slide's two words and what the world's
+/// lists, the samples left, the beam rays left, the parked items, the slide's two words and what the world's
 /// receivers left, with the pool past them (`ray::POOL_WORDS`).
 pub const fn list_words(size: u32) -> u32 {
     carry_at(size) + CARRY_WORDS
@@ -1567,7 +1589,7 @@ mod tests {
     /// A tile that a slide of the box keeps (`Light::keeps`) holds, word for word, what a fresh
     /// cast of it at its new place leaves; a tile the slide moved into another band is cast
     /// again, since a fresh cast there leaves other words. The rays' starts are the light frame's,
-    /// worked out once, as the host's anchors are (pxl-render gpu/shadow.rs `starts`).
+    /// worked out once, as the host's anchors are (pxl-render pass/shadow.rs `starts`).
     #[test]
     fn kept_tile_is_fresh_cast() {
         let (size, range) = (64, [UNIT_ZOOM - 3, UNIT_ZOOM]);

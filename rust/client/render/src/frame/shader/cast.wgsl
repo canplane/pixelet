@@ -3,7 +3,7 @@
 // Finds each drawn pixel's ray without a walk, one thread a pixel of the tiles claimed
 // (cast_tile.wgsl). A pixel takes its ray from the visible voxel the raster kept at it, when
 // that is a fresh voxel of a drawable entry of the node cache (pxl-engine `raster`,
-// `record::fresh`; gpu/ray/raster.rs), as light.wgsl takes a slot's (visible.wgsl). The ray then
+// `record::fresh`; ray/raster.rs), as light.wgsl takes a slot's (visible.wgsl). The ray then
 // carries what lies about the voxel's face. Otherwise the pixel may see the sky. Any other pixel
 // is a hole and takes no walk here: it is listed for the queue, which ends its ray this frame
 // (queue.wgsl), and its walked bit is set. A workgroup's square of pixels writes its walked words
@@ -18,7 +18,7 @@ fn node_cache_word(k: u32) -> u32 {
   return node_cache[k];
 }
 
-/// Each drawn pixel's visible voxel (gpu/ray/raster.rs), as its number (`raster::id_of`), or 0
+/// Each drawn pixel's visible voxel (ray/raster.rs), as its number (`raster::id_of`), or 0
 /// where the raster kept none. It is read as an array of one layer.
 @group(0) @binding(13) var visibility: texture_2d_array<u32>;
 @group(0) @binding(14) var<storage, read_write> args: MissCount;

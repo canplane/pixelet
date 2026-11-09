@@ -15,7 +15,7 @@
 // `light_damage_cs` takes one thread for each tile listed as read. It claims each tile that no
 // cast of the reads' epoch claimed (`reads_epoch`): the tile's word names the cast
 // (`light::reads_at`), and what feeds the tile is listed for the passes that cast it
-// (`enlist`). It also opens the map's lay to every tile read (`light::ARGS_LAY`; gpu/shadow.rs
+// (`enlist`). It also opens the map's lay to every tile read (`light::ARGS_LAY`; pass/shadow.rs
 // `Shadow::begin`).
 
 /// Whether box texel `p` lies where a receiver may read the map, in the disk grown by `pad`

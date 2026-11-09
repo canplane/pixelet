@@ -5,7 +5,7 @@
 //! observation asks for, and in what order.
 //!
 //! A tile is asked for by the eye's demand (`ByEye`), by the floor
-//! (tile_cache/floor.rs), by a destination's line, or as an ancestor of a
+//! (layer/floor.rs), by a destination's line, or as an ancestor of a
 //! missing tile. A tile asked for several reasons keeps the strongest
 //! (`Priority`). The pixels drawn do not enter the asks, since the camera grid
 //! is an angle. Where a tile marks a child as no tile (`Base::occupancy`), the
@@ -16,7 +16,7 @@ use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_core::global::Global;
 
-use crate::domain::layer::earth::Earth;
+use crate::domain::layer::earth::EarthTile;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::{Source, Stream};
@@ -32,7 +32,7 @@ use fnv::FnvHashMap;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 
-use crate::domain::layer::tile_cache::floor;
+use crate::domain::layer::floor;
 use crate::domain::layer::tile_cache::{Path, TileCache};
 use crate::domain::query::ColumnWalk;
 use crate::domain::view::observation;
@@ -47,7 +47,7 @@ use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::layer::demand::tiles_within;
 use pxl_spec::space::layer::lattice::GROUND;
 
-/// A layer the view asks tiles of. Its demand is held beside its records.
+/// A layer the view asks tiles of. Its demand is held beside its tile cache.
 pub trait ViewLayer: Base {
     fn demand() -> &'static mut Demand<Self>;
 
@@ -60,7 +60,7 @@ pub trait ViewLayer: Base {
 
 static TERRAIN: Global<Demand<TerrainTile>> = Global::new();
 static PLACE: Global<Demand<PlaceTile>> = Global::new();
-static EARTH: Global<Demand<Earth>> = Global::new();
+static EARTH: Global<Demand<EarthTile>> = Global::new();
 static DIVISION: Global<Demand<DivisionTile>> = Global::new();
 
 impl ViewLayer for TerrainTile {
@@ -81,8 +81,8 @@ impl ViewLayer for DivisionTile {
     }
 }
 
-impl ViewLayer for Earth {
-    fn demand() -> &'static mut Demand<Earth> {
+impl ViewLayer for EarthTile {
+    fn demand() -> &'static mut Demand<EarthTile> {
         EARTH.get(Demand::default)
     }
 
@@ -118,7 +118,7 @@ const fn layer<L: ViewLayer>() -> Layer {
 const LAYERS: [Layer; 5] = [
     layer::<TerrainTile>(),
     layer::<PlaceTile>(),
-    layer::<Earth>(),
+    layer::<EarthTile>(),
     layer::<DivisionTile>(),
     Layer {
         stream: Stream::object,
@@ -690,9 +690,9 @@ fn on_arrived<L: ViewLayer>(
         return Ok(());
     };
     let mut framed = None;
-    let result = L::demand().admit(p, |record| {
-        let tile = L::receive(p, record, body(b), phases)?;
-        framed = Some(record);
+    let result = L::demand().admit(p, |slot| {
+        let tile = L::receive(p, slot, body(b), phases)?;
+        framed = Some(slot);
         Ok(tile)
     });
     L::keep(framed, b);

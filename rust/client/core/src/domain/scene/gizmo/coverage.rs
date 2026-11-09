@@ -225,7 +225,7 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
     };
     let tile_cache = TerrainTile::tile_cache();
     // A tile at the top or coarser that no demand line passes through is held
-    // by the floor alone (domain/layer/tile_cache/floor.rs). `lined` collects
+    // by the floor alone (domain/layer/floor.rs). `lined` collects
     // the top tile of every demand line.
     let mut lined: FnvHashSet<Quadrant> = FnvHashSet::default();
     ByEye {

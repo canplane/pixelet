@@ -7,7 +7,7 @@ use crate::pyramid::Base;
 use postgres::Client;
 use pxl_geo_spec::overture::properties::CATEGORY_SQL;
 use pxl_spec::bake::publication::BaseLayer;
-use pxl_spec::bake::tile::place::{self, category_of, Place, PlaceTile};
+use pxl_spec::bake::tile::place::{self, category_of, PlaceTile, SourcePlace};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::q3::Q3;
@@ -20,8 +20,8 @@ impl Base for PlaceTile {
 
     const LATTICE: Lattice = place::PLACE_LATTICE;
 
-    fn encode(&self, _: Quadrant) -> Result<Vec<u8>, String> {
-        place::encode(self).map_err(|e| e.to_string())
+    fn encode(&self, at: Quadrant) -> Result<Vec<u8>, String> {
+        place::encode(self).map_err(|e| format!("{}: {e}", at.key()))
     }
 
     fn decode(raw: &[u8]) -> Result<Self, String> {
@@ -84,9 +84,9 @@ pub fn leaves(
                     p.iter().map(|(point, name, category, id)| {
                         (
                             *point,
-                            Place {
+                            SourcePlace {
                                 name,
-                                category: *category,
+                                kind: *category,
                                 id,
                             },
                         )

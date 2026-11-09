@@ -44,7 +44,7 @@ spec:
 
 # What xpute builds: the core the contract's traces drive, in Rust and in C++,
 # each a native library and a WebAssembly module; and the example's core, a
-# module (rust/example).
+# module (rust/dev/example).
 build: build-cpp build-rust
 build-cpp:
 	$(MAKE) -C cpp core wasm

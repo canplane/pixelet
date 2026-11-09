@@ -26,7 +26,7 @@ fn shown_as_counted_afresh() {
         assert_eq!(c.shown_share(), share, "{what}");
     };
     let admit = |c: &mut TileCache<TerrainTile>, p: Quadrant| {
-        c.admit(p, |_| None, |_| Ok::<_, ()>(TerrainTile::void()))
+        c.admit(p, |_| None, |_| Ok::<_, ()>(TerrainTile::default()))
             .unwrap();
     };
     check(&c, "nothing asked");
@@ -42,8 +42,25 @@ fn shown_as_counted_afresh() {
     check(&c, "a finer one held");
     c.ask(&asks(&[top, a, b, fine]));
     check(&c, "the top asked again");
-    c.set(fine, TerrainTile::void());
+    c.set(fine, TerrainTile::default());
     check(&c, "the finest set");
     c.ask(&asks(&[]));
     check(&c, "nothing asked again");
+}
+
+/// A tile marked to be fetched once more is reported once, so its layer asks
+/// for it on its next observation.
+#[test]
+fn again_reports_once() {
+    let mut c = TileCache::<TerrainTile>::default();
+    let p = Quadrant::new(LEAF_ZOOM - 2, [40, -20]);
+    c.ask(&asks(&[p]));
+    c.admit(p, |_| None, |_| Ok::<_, ()>(TerrainTile::default()))
+        .unwrap();
+    let mut changed = Vec::new();
+    c.take_changed(&mut changed);
+    c.refetch(p);
+    c.refetch(p);
+    c.take_changed(&mut changed);
+    assert_eq!(changed, [p]);
 }

@@ -1,4 +1,4 @@
-//! This test draws the finish as the renderer does (gpu/finish.rs), from its shader module as
+//! This test draws the finish as the renderer does (pass/finish.rs), from its shader module as
 //! build.rs assembles it. The world's finish draws the canvas and the picture in one pass, and
 //! both must equal what a character surface's finish draws onto the canvas alone. A frame not
 //! drawn whole shows the picture first and then finishes only its claimed tiles again. Both

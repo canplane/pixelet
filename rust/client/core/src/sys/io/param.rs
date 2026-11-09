@@ -44,7 +44,9 @@ pub const WRITES_A_TURN: u32 = 8;
 pub const BODY_SLOTS: u32 = 28;
 
 /// The size of a run, the block of the heap that body slots are cut from. It
-/// is a power of two, so it is exactly one block of the buddy allocator. At
-/// the current packet sizes it holds seven slots, so a slot with its share of
-/// the run costs 1.14 MiB, where a buddy block of its own would cost 2 MiB.
+/// is a power of two, so it is exactly one block of the buddy allocator.
 pub const BODY_RUN_BYTES: u32 = 8 << 20;
+
+/// The slots a run is cut into. A slot with its share of the run costs 1.14
+/// MiB, where a buddy block of its own would cost 2 MiB.
+pub const BODY_RUN_SLOTS: u32 = 7;

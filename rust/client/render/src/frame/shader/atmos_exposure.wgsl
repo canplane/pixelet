@@ -8,16 +8,16 @@
 // Everything measured goes into the views' words (atmos_skyview.wgsl
 // `slopes`). This is a compute pass, a texel a thread, so its timestamps span
 // its own work: a render pass's begin is stamped before the passes it waits on
-// have finished (gpu/atmosphere.rs `exposure`).
+// have finished (pass/atmosphere.rs `exposure`).
 
 // `own.y` is 1 when this drawing measures the ground's slope again
-// (gpu/atmosphere.rs `prepare`).
+// (pass/atmosphere.rs `prepare`).
 @group(0) @binding(14) var<uniform> own: vec4f;
 @group(0) @binding(1) var exposure_out: texture_storage_2d<rgba16float, write>;
 // The views' words, plain rather than atomic here: each word this pass writes
 // belongs to one thread alone, the ground's to the first and a light's to that
 // light's thread, and the words are read only once the pass is done
-// (gpu/atmosphere.rs `slopes`).
+// (pass/atmosphere.rs `slopes`).
 @group(0) @binding(20) var<storage, read_write> slopes: array<u32, SLOPE_WORDS>;
 
 // How far the radius moves over one row of the transmittance table from
@@ -85,7 +85,7 @@ fn shows(k: u32, mu: f32, stops: f32) -> f32 {
 // one step of the transmittance table's own sampling where the light stands,
 // with the eye's stops moving along. A move over the sample counts as one
 // level at least. A light out of reach comes into reach no sooner than the
-// step to `REACH` that this slope gives (gpu/atmosphere.rs `LightMemo::step`).
+// step to `REACH` that this slope gives (pass/atmosphere.rs `LightMemo::step`).
 fn reach(k: u32) {
   let now = lights_now();
   let mu = dot(light_dir(k), frame_up());

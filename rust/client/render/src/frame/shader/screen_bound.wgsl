@@ -1,6 +1,6 @@
 // pxl-render/frame/shader/screen_bound.wgsl
 
-// Sets the depth bound the propagation reads (gpu/propagate.rs, screen_propagate.wgsl): for
+// Sets the depth bound the propagation reads (pass/propagate.rs, screen_propagate.wgsl): for
 // each square of the screen `BOUND_STEP` pixels a side, the least and the most reversed depth
 // the world's pass drew there. The sky, at depth 0, is left out, so a square of sky alone
 // holds 2 and 0, an empty range. The bound stays on the GPU across frames and is set after

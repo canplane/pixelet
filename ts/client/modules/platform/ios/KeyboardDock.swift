@@ -3,9 +3,9 @@
 import ExpoModulesCore
 import UIKit
 
-/// A view that stands on the keyboard (ts/client/src/ui/component/above-keyboard.native.tsx).
+/// A view that stands on the keyboard (ts/client/src/ui/shared/component/above-keyboard.native.tsx).
 /// The UI's layout places the view where it rests with no keyboard up, `rest`
-/// off the bottom edge (ts/client/src/ui/component/bottom-rest.ts). While a
+/// off the bottom edge (ts/client/src/ui/shared/component/bottom-rest.ts). While a
 /// keyboard is up, the view is lifted to stand `clearance` above it. The lift
 /// runs in the animation of the keyboard's own change, with its duration and
 /// its curve, which can be a private one, so the view and the keys move as one.

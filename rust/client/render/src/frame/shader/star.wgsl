@@ -17,7 +17,7 @@ struct StarOut {
 };
 
 // The flux of a star of magnitude `SKY_STAR_HALO_MAG`, by the law that turns the catalog's
-// magnitudes into flux (gpu/star.rs `star_floats`).
+// magnitudes into flux (pass/star.rs `star_floats`).
 const HALO_FROM: f32 = pow(10.0, -0.4 * SKY_STAR_HALO_MAG);
 
 // The air mass by Kasten and Young (1989), which stays finite at the horizon where 1/sin does

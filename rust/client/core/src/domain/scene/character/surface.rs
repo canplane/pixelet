@@ -4,7 +4,7 @@
 //! that shows the companion's person or pet as it is now, the way a world
 //! surface shows the world. A surface draws its character by an eye of its
 //! own, over the color it clears to (`companion_surface_draw`, pxl-render
-//! gpu/pass/character.rs).
+//! pass/character.rs).
 
 use crate::domain::scene::character::companion::companion_surface_draw;
 use crate::domain::scene::character::Group;

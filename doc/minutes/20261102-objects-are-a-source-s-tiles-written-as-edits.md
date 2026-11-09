@@ -21,22 +21,20 @@ too.
   repository (`domain/layer/object/repository.rs`) reads and writes through the
   same interface as the baked tiles; whether a loopback, the device's storage or
   a network is behind the root, the kernel cannot tell. The same API shape
-  everywhere, code merged where the roles are the same: "웬만해선 같은 API
-  형식을 쓰고, 코드를 합치는게 좋아보여. 그렇다고 무작정 다 합치는걸 원하는건
-  아니고."
+  everywhere as a rule, code merged where the roles are the same, and not
+  merged blindly.
 - **A shard a file**, the world's unit (`SHARD_ZOOM`, ARCHITECTURE.md); a shard
   with no objects has no file.
-- **No migration**: the old blob (`pxl:kept:objects`) is neither read nor moved
-  ("NO Migration. 신경쓰지마.").
+- **No migration**: the old blob (`pxl:kept:objects`) is neither read nor moved,
+  on the user's word.
 - **The serve order**: the objects' shards ride the ground's order by shell —
   seen ground, seen objects, unseen ground, unseen objects — then the assets,
   the places and the Earth, the divisions. This continues 2026-09-26's order
   (terrain, the assets decor draws with, the places; placed objects riding the
-  ground), the user leaving the detail to judgment ("순서 적당히 재조정할 거는
-  재조정해").
+  ground), the user leaving the detail to judgment.
 - **The object tree is edited collaboratively, so the line drawn now is the
-  interface collaboration needs, and nothing more** (the user: "일단은 이렇게
-  해두는게 보수적인 최소한의 안정적 선이다?"):
+  interface collaboration needs, and nothing more** (the user's view of it as
+  the conservative, stable minimum for now):
   - writes go up as edits, the repository's `<key, id, ext>` batches, never as
     files;
   - reads come down as files the source keeps: each shard's, and the top of

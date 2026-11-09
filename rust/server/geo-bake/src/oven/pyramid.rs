@@ -89,13 +89,7 @@ pub(super) fn execute<L: Base>(
         fold_parent(p, |q| sources.get(&q), absent)
     };
     let pkt = tile
-        .map(|tile| {
-            pack(
-                &tile.encode(p).map_err(|e| format!("{}: {e}", p.key()))?,
-                Level::Live,
-            )
-            .map_err(|e| e.to_string())
-        })
+        .map(|tile| pack(&tile.encode(p)?, Level::Live).map_err(|e| e.to_string()))
         .transpose()?;
     job::write_pkt(out, pkt.as_deref())
 }

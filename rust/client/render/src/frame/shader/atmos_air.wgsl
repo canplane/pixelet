@@ -1,6 +1,6 @@
 // The air as the frame shows it. The air before each point is read from the
 // air's volume, which the march through its froxels made about each light
-// (atmos_froxel.wgsl, gpu/atmosphere.rs `froxel`). The sky, and the land past
+// (atmos_froxel.wgsl, pass/atmosphere.rs `froxel`). The sky, and the land past
 // the terrain, are seen through the air.
 
 @group(0) @binding(15) var moon_view_lut: texture_2d<f32>;
