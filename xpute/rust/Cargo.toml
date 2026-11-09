@@ -39,7 +39,9 @@ lto = true
 codegen-units = 1
 panic = "abort"
 
-# The Metal backend with one command buffer per encoder rather than per pass
-# (vendor/wgpu-hal/src/metal, `chain`).
+# One hal command buffer per encoder rather than per pass, on every backend
+# (gfx-rs/wgpu#5738: vendor/wgpu-core/src/command, vendor/wgpu-hal/src/dynamic/record.rs),
+# and the iOS Simulator's Metal capabilities (vendor/wgpu-hal/src/metal/adapter.rs).
 [patch.crates-io]
+wgpu-core = { path = "vendor/wgpu-core" }
 wgpu-hal = { path = "vendor/wgpu-hal" }
