@@ -77,7 +77,7 @@ pub fn on_publish(run: Option<fn()>) {
 
 /// A record's words are its op and count, then `args`, then `bytes` as their
 /// count followed by the bytes in words.
-pub const fn record_words(args: usize, bytes: Option<usize>) -> usize {
+pub const fn rec_words(args: usize, bytes: Option<usize>) -> usize {
     2 + args
         + match bytes {
             Some(b) => 1 + b.div_ceil(WORD),
@@ -85,10 +85,10 @@ pub const fn record_words(args: usize, bytes: Option<usize>) -> usize {
         }
 }
 
-/// `record_bytes` is a record's size in bytes, the unit a stream's room is
+/// `rec_bytes` is a record's size in bytes, the unit a stream's room is
 /// counted in.
-pub const fn record_bytes(args: usize, bytes: Option<usize>) -> usize {
-    record_words(args, bytes) * WORD
+pub const fn rec_bytes(args: usize, bytes: Option<usize>) -> usize {
+    rec_words(args, bytes) * WORD
 }
 
 /// A mark says whether a transaction is open, where it began, and whether a
@@ -190,7 +190,7 @@ impl Stream {
         }
     }
 
-    /// `fits` says whether records of `bytes` bytes (`record_bytes`, or
+    /// `fits` says whether records of `bytes` bytes (`rec_bytes`, or
     /// xpute-gpu encode's `call::*_bytes`) fit with `leave` bytes left after
     /// them.
     pub fn fits(&self, bytes: usize, leave: usize) -> bool {
@@ -247,7 +247,7 @@ impl Stream {
 
     #[track_caller]
     pub fn record(&mut self, op: u32, args: &[u32], tail: &[u32], bytes: Option<&[u8]>) {
-        let n = record_words(args.len() + tail.len(), bytes.map(<[u8]>::len)) - 2;
+        let n = rec_words(args.len() + tail.len(), bytes.map(<[u8]>::len)) - 2;
         let Some(w) = self.reserve(op, n) else { return };
         fill(w, args, tail, bytes);
     }

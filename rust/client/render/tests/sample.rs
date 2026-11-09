@@ -2043,7 +2043,7 @@ fn boxes_want(
     clippy::too_many_arguments,
     reason = "the device, the pass, its observer, words, groups, frame, what to tell and what failed"
 )]
-fn light_record_case(
+fn light_rec_case(
     gpu: &Gpu,
     pass: &wgpu::ComputePipeline,
     observed: &Observed,
@@ -2153,7 +2153,7 @@ fn light_record_case(
 }
 
 /// Runs the light's record draw over the node cache `cache` (record_draw.wgsl
-/// `light_record_draw_cs`), then the raster's draw of those boxes from the light onto the map
+/// `light_rec_draw_cs`), then the raster's draw of those boxes from the light onto the map
 /// of `observed`, with the light's view laid as the renderer lays it (ray/raster.rs
 /// `light_prepare`). Every texel that keeps a voxel must keep one whose box
 /// (`cast::asset_box`) the texel's own ray enters within its reach. That ray starts on the near
@@ -2167,7 +2167,7 @@ fn light_raster_drawn(
     failed: &mut Vec<String>,
 ) {
     use pxl_engine::param::raster::GROWTH;
-    use pxl_render::frame::shader::record::SHADER_RECORD_DRAW;
+    use pxl_render::frame::shader::record::SHADER_REC_DRAW;
     use pxl_render::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS};
     let RaySource::Light {
         light: l,
@@ -2187,7 +2187,7 @@ fn light_raster_drawn(
     let node_cache = gpu.buf(cache, store_of());
     let eye_buf = gpu.buf(&observed.eye, wgpu::BufferUsages::UNIFORM);
     let header_buf = gpu.buf(&observed.header, wgpu::BufferUsages::UNIFORM);
-    let draw = gpu.pipeline(src(SHADER_RECORD_DRAW), "light_record_draw_cs");
+    let draw = gpu.pipeline(src(SHADER_REC_DRAW), "light_rec_draw_cs");
     gpu.dispatch(
         &draw,
         &[
@@ -2323,7 +2323,7 @@ fn light_raster_drawn(
     clippy::too_many_arguments,
     reason = "the device, the passes, its observer, words, origin and grid, what stood, what to tell and what failed"
 )]
-fn record_case(
+fn rec_case(
     gpu: &Gpu,
     [pass, draw]: [&wgpu::ComputePipeline; 2],
     observed: &Observed,
@@ -2451,7 +2451,7 @@ fn record_case(
         let key_word = node_cache::key_at(slots[0]) as usize;
         let state_word = node_cache::state_at(slots[0]) as usize;
         let node = node_of(key);
-        let whole = record::stopped_whole(origin, &node, range);
+        let whole = record::ray_whole(origin, &node, range);
         // The state the slot held before, where it already held this entry.
         let state_was = was
             .filter(|r| {
@@ -2828,8 +2828,8 @@ fn frame_node_cache() -> Vec<u32> {
 }
 
 #[test]
-fn hand_eye_record_answers_as_raster() {
-    use pxl_render::frame::shader::record::{SHADER_RECORD_DRAW, SHADER_SAMPLE_BOX};
+fn hand_eye_rec_answers_as_raster() {
+    use pxl_render::frame::shader::record::{SHADER_REC_DRAW, SHADER_SAMPLE_HIT};
     let Some(gpu) = device() else { return };
     let built = real_world::build(EYE);
     let b = world_bufs(&gpu, &built);
@@ -2916,8 +2916,8 @@ fn hand_eye_record_answers_as_raster() {
             [LEAF_CELL_ZOOM, FINEST],
         )
     });
-    let pass = gpu.pipeline(src(SHADER_SAMPLE_BOX), "sample_box_cs");
-    let draw = gpu.pipeline(src(SHADER_RECORD_DRAW), "record_draw_cs");
+    let pass = gpu.pipeline(src(SHADER_SAMPLE_HIT), "sample_hit_cs");
+    let draw = gpu.pipeline(src(SHADER_REC_DRAW), "rec_draw_cs");
     let mut kind_cnt = KindCount::new();
     let mut failed = Vec::new();
     // With `coarse`, some samples' nodes are taken a zoom coarser (`coarser`).
@@ -2938,7 +2938,7 @@ fn hand_eye_record_answers_as_raster() {
         // A frame records into an empty node cache, and the next frame records over what it
         // kept. The next frame must find the same voxels and write none of them again.
         let passes = [&pass, &draw];
-        let first_frame = record_case(
+        let first_frame = rec_case(
             &gpu,
             passes,
             &observed,
@@ -2949,7 +2949,7 @@ fn hand_eye_record_answers_as_raster() {
             &mut failed,
         );
         observed.name += ", the next frame";
-        record_case(
+        rec_case(
             &gpu,
             passes,
             &observed,
@@ -3064,7 +3064,7 @@ fn hand_eye_record_answers_as_raster() {
 /// (`record::fresh`) and its box lies about the eye (`raster::is_eyed`).
 #[test]
 fn hand_eye_stale_box_about_the_eye_undrawn() {
-    use pxl_render::frame::shader::record::{SHADER_RECORD_DRAW, SHADER_SAMPLE_BOX};
+    use pxl_render::frame::shader::record::{SHADER_REC_DRAW, SHADER_SAMPLE_HIT};
     let Some(gpu) = device() else { return };
     let built = real_world::build(EYE);
     let b = world_bufs(&gpu, &built);
@@ -3078,8 +3078,8 @@ fn hand_eye_stale_box_about_the_eye_undrawn() {
         range: [8, FINEST],
         cuts: [Cut::NONE; 2],
     };
-    let pass = gpu.pipeline(src(SHADER_SAMPLE_BOX), "sample_box_cs");
-    let draw = gpu.pipeline(src(SHADER_RECORD_DRAW), "record_draw_cs");
+    let pass = gpu.pipeline(src(SHADER_SAMPLE_HIT), "sample_hit_cs");
+    let draw = gpu.pipeline(src(SHADER_REC_DRAW), "rec_draw_cs");
     let mut kind_cnt = KindCount::new();
     let mut failed = Vec::new();
     let far_eye = case(
@@ -3094,7 +3094,7 @@ fn hand_eye_stale_box_about_the_eye_undrawn() {
     let RaySource::Eye { origin, grid, .. } = &observed.source else {
         unreachable!()
     };
-    let first_frame = record_case(
+    let first_frame = rec_case(
         &gpu,
         [&pass, &draw],
         &observed,
@@ -3206,8 +3206,8 @@ fn hand_eye_stale_box_about_the_eye_undrawn() {
 }
 
 #[test]
-fn hand_light_record_answers_as_raster() {
-    use pxl_render::frame::shader::record::SHADER_LIGHT_SAMPLE_BOX;
+fn hand_light_rec_answers_as_raster() {
+    use pxl_render::frame::shader::record::SHADER_LIGHT_SAMPLE_HIT;
     let Some(gpu) = device() else { return };
     let built = real_world::build(EYE);
     let b = world_bufs(&gpu, &built);
@@ -3268,7 +3268,7 @@ fn hand_light_record_answers_as_raster() {
             ..about
         },
     ];
-    let pass = gpu.pipeline(src(SHADER_LIGHT_SAMPLE_BOX), "sample_box_cs");
+    let pass = gpu.pipeline(src(SHADER_LIGHT_SAMPLE_HIT), "sample_hit_cs");
     let mut kind_cnt = KindCount::new();
     let mut failed = Vec::new();
     let mut run = |b: &WorldBuffer, c: &LightCase, kind_cnt: &mut KindCount| {
@@ -3292,7 +3292,7 @@ fn hand_light_record_answers_as_raster() {
         let groups = observed.groups;
         kind_cnt.add("listed", c.one_in.is_some());
         // The light asks nothing, since its slots read no faces' words.
-        light_record_case(
+        light_rec_case(
             &gpu,
             &pass,
             &observed,

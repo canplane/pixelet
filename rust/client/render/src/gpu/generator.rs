@@ -53,24 +53,24 @@ pub struct DecorFrame<'a> {
     /// turn, then its box's min corner in leaf cells, and a sink of none, as it stands where
     /// it is placed. The records are uploaded from where they lie, so their writer asks
     /// `in_flight` (gpu/api.rs) before it writes them again.
-    pub placed_records: &'a [[u32; generation::RECORD_WORDS as usize]],
+    pub placed_recs: &'a [[u32; generation::REC_WORDS as usize]],
     /// The unit the eye stands in, as a draw's Q3 (gpu/draw.rs `Position`). The instances'
     /// positions are about it, and from it they are drawn against the frame's eye (word.rs
     /// `frame::EYE`).
     pub anchor: Q3,
     /// The boxes of leaf cells the overwrites wrote since the last frame, `object::EDITS` at
-    /// most (pxl-content `generation::meets`). The slots whose decor they reach generate
+    /// most (pxl-content `generation::meets`). The entries whose decor they reach generate
     /// again.
     pub edits: &'a [[i32; 4]],
 }
 
 /// What decor's generation reads besides the frame's decor: the clip levels' table, a
-/// preview's cuts, and the bricks filled this frame. None of it is the eye's place. A slot is
-/// an entry of the clip levels' table with the brick it holds. A slot generates whole where its
+/// preview's cuts, and the bricks filled this frame. None of it is the eye's place. An entry
+/// is a place of the clip levels' table with the brick it holds. An entry generates whole where its
 /// brick is another. Otherwise it generates again only the records that a box reaches by what
 /// the record's own candidate reads (`generation::reaches`): an edit, a cut as it was or as it
-/// is, or a brick filled at the slot's clip level zoom or finer. Neither the overwrites nor the
-/// service area's index make a slot generate by themselves: every write of the overwrites
+/// is, or a brick filled at the entry's clip level zoom or finer. Neither the overwrites nor the
+/// service area's index make an entry generate by themselves: every write of the overwrites
 /// names its box (the frame's `edits`), and the index is made once, before any brick is held.
 /// A brick filled reaches its own clip level's zoom and every coarser one, as a coarser clip
 /// level's decor faces the way the leaf cells vote, each cell read from the finest clip level
@@ -105,9 +105,9 @@ pub struct Generator {
     /// Each region's draw uniform, `drawing::UNIFORM_WORDS` apart, as the decor and impostor
     /// shaders read one. The args pass sets each uniform's index.
     uniforms: u32,
-    /// The records, laid out by slot (`generation::record_at`). `instances` holds the decor's
+    /// The records, laid out by entry (`generation::rec_at`). `instances` holds the decor's
     /// instances: `drawing::COLUMNS` lanes and the index list, each `cap` words long.
-    records: u32,
+    recs: u32,
     instances: u32,
     /// The draws' groups, in the layouts the decor and impostor draws share (record.rs
     /// `DRAW`, `UPLOAD`): one over the uniforms, with a region's at a dynamic offset, and one
@@ -129,14 +129,14 @@ pub struct Generator {
     on: bool,
     /// The decors' zooms as last written, which stay constant once the core has handed its
     /// table; the clip levels' table, the cuts and the placed decor as last handed; and
-    /// whether this frame marks slots to generate.
+    /// whether this frame marks entries to generate.
     zooms_read: Read,
     clipmap: Read,
     cuts: [u32; eye::CUTS],
     placed: Read,
     marking: bool,
-    /// The boxes whose slots generate again, held until a frame that marks by them is drawn.
-    /// A frame that is dropped, or handed and never drawing, hands them again; a slot
+    /// The boxes whose entries generate again, held until a frame that marks by them is drawn.
+    /// A frame that is dropped, or handed and never drawn, hands them again; an entry
     /// generated twice generates the same. Past `object::RECTS` boxes, the rest are joined
     /// into the last.
     pending_rects: [[i32; 4]; object::RECTS as usize],
@@ -145,9 +145,9 @@ pub struct Generator {
     /// all, counting the bricks handed (`marked_rects`).
     marked: usize,
     rects: u32,
-    /// Whether the slots' records may not hold what the slots generate, as after decor was
+    /// Whether the entries' records may not hold what the entries generate, as after decor was
     /// off or the decors' zooms changed. The next frame drawn with decor then generates every
-    /// slot.
+    /// entry.
     stale: bool,
     /// What the count, args and compact passes read besides the records, as they last ran:
     /// the eye's place and zooms, the drawing words, the meshes, the anchor and the records'
@@ -202,7 +202,7 @@ impl Generator {
                 storage | buffer_usage::INDIRECT,
             ),
             uniforms,
-            records: 0,
+            recs: 0,
             instances: 0,
             draw_layouts,
             uniform_group: g.bind_group(
@@ -253,31 +253,31 @@ impl Generator {
     ) {
         self.on = true;
         let need =
-            generation::SLOT_RECORDS + (f.placed_records.len() as u32).next_power_of_two().max(64);
+            generation::ENTRY_RECS + (f.placed_recs.len() as u32).next_power_of_two().max(64);
         let grew = need > self.cap;
         if grew {
-            // The slots' records are copied into the new buffer. The placed records after them
+            // The entries' records are copied into the new buffer. The placed records after them
             // are written anew.
-            let (records, instances) = (self.records, self.instances);
-            self.records = g.buf(
-                word_bytes(generation::record_at(need) as usize),
+            let (recs, instances) = (self.recs, self.instances);
+            self.recs = g.buf(
+                word_bytes(generation::rec_at(need) as usize),
                 buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
             );
             self.instances = g.buf(
                 word_bytes(((drawing::COLUMNS + 1) * need) as usize),
                 buffer_usage::STORAGE,
             );
-            if records != 0 {
+            if recs != 0 {
                 let e = g.encoder();
                 g.copy_buf(
                     e,
-                    (records, 0),
-                    (self.records, 0),
-                    word_bytes(generation::record_at(generation::SLOT_RECORDS) as usize),
+                    (recs, 0),
+                    (self.recs, 0),
+                    word_bytes(generation::rec_at(generation::ENTRY_RECS) as usize),
                 );
                 g.submit(e);
             }
-            release(records);
+            release(recs);
             release(instances);
             release(self.instances_group);
             self.instances_group = g.bind_group(
@@ -308,12 +308,12 @@ impl Generator {
         s.begin();
         s.read(f.zooms);
         if !s.end() {
-            // Each slot's records were generated at the zooms the decors were shown at, so every
-            // slot generates again.
+            // Each entry's records were generated at the zooms the decors were shown at, so every
+            // entry generates again.
             g.write_buf(self.zooms, 0, bytes(f.zooms));
             self.stale = true;
         }
-        // The boxes whose slots generate again are held: the edits, and each cut that moved,
+        // The boxes whose entries generate again are held: the edits, and each cut that moved,
         // both as it was and as it is. They join any box a frame not drawn handed.
         for &b in f.edits {
             hold(&mut self.pending_rects, &mut self.holding, b);
@@ -367,7 +367,7 @@ impl Generator {
             put(generation::THIN_ARGS + 1, 1);
             put(
                 generation::GENERATE_ARGS,
-                generation::DECOR_RECORD_CAP.div_ceil(generation::LANES),
+                generation::DECOR_REC_CAP.div_ceil(generation::LANES),
             );
             put(generation::GENERATE_ARGS + 1, 1);
             put(generation::LIST_EVERY, u32::from(self.stale));
@@ -386,21 +386,21 @@ impl Generator {
         }
         let p = &mut self.placed;
         p.begin();
-        p.read(f.placed_records);
+        p.read(f.placed_recs);
         let placed_changed = !p.end();
-        self.placed_cnt = f.placed_records.len() as u32;
+        self.placed_cnt = f.placed_recs.len() as u32;
         if placed_changed {
             g.write_buf(
-                self.records,
+                self.recs,
                 generation::PLACED_HEADER * 4,
-                bytes(&[f.placed_records.len() as u32, 0, 0, 0]),
+                bytes(&[f.placed_recs.len() as u32, 0, 0, 0]),
             );
-            if !f.placed_records.is_empty() {
+            if !f.placed_recs.is_empty() {
                 // The upload is one stream record however many decor records there are.
                 g.upload_buf(
-                    self.records,
-                    generation::record_at(generation::SLOT_RECORDS) * 4,
-                    bytes(f.placed_records.as_flattened()),
+                    self.recs,
+                    generation::rec_at(generation::ENTRY_RECS) * 4,
+                    bytes(f.placed_recs.as_flattened()),
                 );
             }
         }
@@ -480,12 +480,12 @@ impl Generator {
             framed(
                 &self.mark,
                 &GENERATION_MARK_BINDS,
-                &[(1, clipmap), (9, self.records), (12, self.zooms)],
+                &[(1, clipmap), (9, self.recs), (12, self.zooms)],
             ),
             framed(
                 &self.thin,
                 &GENERATION_THIN_BINDS,
-                &[(9, self.records), (10, self.rows)],
+                &[(9, self.recs), (10, self.rows)],
             ),
             framed(
                 &self.generate,
@@ -497,7 +497,7 @@ impl Generator {
                     (5, shards),
                     (6, objects),
                     (7, pool),
-                    (9, self.records),
+                    (9, self.recs),
                     (10, self.rows),
                 ],
             ),
@@ -506,7 +506,7 @@ impl Generator {
                 &[
                     (0, eye),
                     (1, clipmap),
-                    (9, self.records),
+                    (9, self.recs),
                     (13, self.drawing),
                     (14, self.regions),
                 ],
@@ -525,7 +525,7 @@ impl Generator {
                 &self.compact,
                 &[
                     (1, clipmap),
-                    (9, self.records),
+                    (9, self.recs),
                     (10, self.rows),
                     (13, self.drawing),
                     (14, self.regions),
@@ -536,8 +536,8 @@ impl Generator {
         self.groups = groups;
     }
 
-    /// Turns decor off for this frame: nothing is generated or drawing, and the next frame with
-    /// decor generates every slot (`stale`).
+    /// Turns decor off for this frame: nothing is generated or drawn, and the next frame with
+    /// decor generates every entry (`stale`).
     pub fn off(&mut self) {
         self.on = false;
         self.rects = 0;
@@ -546,7 +546,7 @@ impl Generator {
     }
 
     /// Called when the frame was drawn. The boxes it marked by, and its generation of every
-    /// slot, are done.
+    /// entry, are done.
     pub fn on_drawn(&mut self) {
         if self.marking {
             self.pending_rects.copy_within(self.marked..self.holding, 0);
@@ -557,7 +557,7 @@ impl Generator {
     }
 
     /// Called when the frame was dropped and nothing of it was recorded. What it wrote is
-    /// written again: the slots it marked are marked again by the boxes still held, and the
+    /// written again: the entries it marked are marked again by the boxes still held, and the
     /// clip levels' table and the placed decor are read anew.
     pub fn on_dropped(&mut self) {
         self.marked = 0;
@@ -581,7 +581,7 @@ impl Generator {
     }
 
     /// Records the passes in the compute pass `pass` over the cast's world, after the cast.
-    /// Where it marks, it marks the slots to generate again, thins their candidates a clip
+    /// Where it marks, it marks the entries to generate again, thins their candidates a clip
     /// level cell a thread, and generates a record a thread where any may stand. Where it
     /// counts, it counts every record, lays the regions out and compacts the records.
     pub fn dispatch(&self, g: &Gpu, pass: u32) {
@@ -610,14 +610,14 @@ impl Generator {
         if !self.counting {
             return;
         }
-        // A workgroup reads the records a slot's decor laid, and past the slots each workgroup
+        // A workgroup reads the records an entry's decor laid, and past the entries each workgroup
         // reads `generation::RUNS` placed records (decor_run.wgsl `run_of`). The dispatch
         // covers the records held, not the capacity.
-        let records = generation::EYE_ENTRIES + self.placed_cnt.div_ceil(generation::RUNS);
+        let recs = generation::EYE_ENTRIES + self.placed_cnt.div_ceil(generation::RUNS);
         let passes = [
-            (&self.cnt, records),
+            (&self.cnt, recs),
             (&self.args_pipeline, 1),
-            (&self.compact, records),
+            (&self.compact, recs),
         ];
         for (k, (pipeline, x)) in passes.into_iter().enumerate() {
             g.set_pipeline(pass, pipeline.id);
@@ -626,7 +626,7 @@ impl Generator {
         }
     }
 
-    /// How many boxes this frame marks slots by to generate again: the edits and cuts held and
+    /// How many boxes this frame marks entries by to generate again: the edits and cuts held and
     /// the bricks handed, `generation::RECT_CAP` at most, or 0 where it marks none.
     pub fn marked_rects(&self) -> u32 {
         self.rects

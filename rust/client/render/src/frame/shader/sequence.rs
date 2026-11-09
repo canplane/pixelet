@@ -108,20 +108,20 @@ pub const PX: Step = Step::dispatch_off(
     (CAST_TILES, 0),
 );
 /// The eye's holes' stops into the node cache's drawable entries (ray/raster.rs
-/// `Raster::record_hits`). Their dispatch is first copied out of the node cache's head, because the
+/// `Raster::rec_hits`). Their dispatch is first copied out of the node cache's head, because the
 /// stops bind the node cache writable and a call cannot read its count from a buffer a group
 /// set for it binds writable (access.rs rule 1).
-pub const RECORD_HITS_DISPATCH: Step = Step::copy(
-    "record_hits_dispatch",
+pub const REC_HITS_DISPATCH: Step = Step::copy(
+    "rec_hits_dispatch",
     IN_EYE_HOLES,
     at(NODE_CACHE, node_cache::HITS_ARGS, 3),
     at(RASTER_HITS, 0, 3),
 );
-pub const RECORD_HITS: Step = Step::dispatch_off(
-    "record_hits",
+pub const REC_HITS: Step = Step::dispatch_off(
+    "rec_hits",
     IN_EYE_HOLES,
-    COMPUTE_RECORD_HITS,
-    &[&RECORD_HITS_OF_BINDS],
+    COMPUTE_REC_HITS,
+    &[&REC_HITS_OF_BINDS],
     (RASTER_HITS, 0),
 );
 pub const HIT_FACES: Step = Step::dispatch_off(
@@ -134,8 +134,8 @@ pub const HIT_FACES: Step = Step::dispatch_off(
 pub const HIT_FACES_PUT: Step = Step::dispatch_off(
     "hit_faces_put",
     IN_EYE_HOLES,
-    COMPUTE_RECORD_FACES,
-    &[&RECORD_HITS_OF_BINDS],
+    COMPUTE_REC_FACES,
+    &[&REC_HITS_OF_BINDS],
     (RASTER_HITS, 0),
 );
 /// The thinning and the generation of the decor's slots, each dispatched off the list's args
@@ -189,12 +189,12 @@ pub const LIGHT_CELLS: Step = Step::dispatch_off(
     &[&LIGHT_WORLD_BINDS],
     (LIGHT_ARGS, light::ARGS_CELLS),
 );
-pub const LIGHT_SAMPLE_BOX: Step = Step::dispatch_off(
-    "light_sample_box",
+pub const LIGHT_SAMPLE_HIT: Step = Step::dispatch_off(
+    "light_sample_hit",
     IN_LIGHT,
-    COMPUTE_LIGHT_SAMPLE_BOX,
-    &[&LIGHT_SAMPLE_BOX_BINDS],
-    (LIGHT_ARGS, light::ARGS_SAMPLE_BOX),
+    COMPUTE_LIGHT_SAMPLE_HIT,
+    &[&LIGHT_SAMPLE_HIT_BINDS],
+    (LIGHT_ARGS, light::ARGS_SAMPLE_HIT),
 );
 /// The light's raster draw of the record (ray/raster.rs `Raster::light_draw`).
 pub const LIGHT_RASTER: Step = Step::draw_off(
@@ -213,19 +213,19 @@ pub const LIGHT_SLOTS: Step = Step::dispatch_off(
     (LIGHT_ARGS, light::ARGS_SLOT),
 );
 /// The light's holes' stops into the node cache's drawable entries (ray/raster.rs
-/// `Raster::light_record_hits`). Their dispatch is first copied out of the node cache's head,
+/// `Raster::light_rec_hits`). Their dispatch is first copied out of the node cache's head,
 /// as the eye's is.
-pub const LIGHT_RECORD_HITS_DISPATCH: Step = Step::copy(
-    "light_record_hits_dispatch",
+pub const LIGHT_REC_HITS_DISPATCH: Step = Step::copy(
+    "light_rec_hits_dispatch",
     IN_LIGHT_HOLES,
     at(NODE_CACHE, node_cache::HITS_ARGS, 3),
     at(LIGHT_RASTER_HITS, 0, 3),
 );
-pub const LIGHT_RECORD_HITS: Step = Step::dispatch_off(
-    "light_record_hits",
+pub const LIGHT_REC_HITS: Step = Step::dispatch_off(
+    "light_rec_hits",
     IN_LIGHT_HOLES,
-    COMPUTE_LIGHT_RECORD_HITS,
-    &[&LIGHT_RECORD_HITS_BINDS],
+    COMPUTE_LIGHT_REC_HITS,
+    &[&LIGHT_REC_HITS_BINDS],
     (LIGHT_RASTER_HITS, 0),
 );
 /// The shadow map's pass opens with one of two draws (pass/shadow.rs `Shadow::begin`): its gate
@@ -504,7 +504,7 @@ pub const LIGHT_HOLES_CNT: Step = Step::copy(
 );
 
 /// More of the host's writes. The host sets the raster's draw args to none when the record's
-/// draw runs (ray/raster.rs `record_draw`), writes the node cache's asks and frame when
+/// draw runs (ray/raster.rs `rec_draw`), writes the node cache's asks and frame when
 /// nothing casts, and writes the decor's boxes (gpu/generator.rs `prepare`).
 pub const OPEN_RASTER_DRAW_ARGS: Step = Step::write(
     "open_raster_draw_args",
@@ -556,7 +556,7 @@ pub const FRAME: Frame = Frame {
     persistent: PERSISTENT,
     steps: &[
         // The host's writes as it prepares the frame (ray/cast.rs `RayPass::prepare`,
-        // ray/raster.rs `Raster::prepare`, `light_prepare`, `record_draw`, gpu/generator.rs
+        // ray/raster.rs `Raster::prepare`, `light_prepare`, `rec_draw`, gpu/generator.rs
         // `prepare`).
         OPEN_NODE_CACHE,
         OPEN_MARKS,
@@ -686,12 +686,12 @@ pub const FRAME: Frame = Frame {
             &[&LATTICE_LAST_BINDS],
         ),
         Step::dispatch(
-            "sample_box",
+            "sample_hit",
             IN_EYE,
-            COMPUTE_SAMPLE_BOX,
-            &[&SAMPLE_BOX_BINDS],
+            COMPUTE_SAMPLE_HIT,
+            &[&SAMPLE_HIT_BINDS],
         ),
-        Step::dispatch("record_draw", IN_EYE, COMPUTE_RECORD_DRAW, &[&RECORD_BINDS]),
+        Step::dispatch("rec_draw", IN_EYE, COMPUTE_REC_DRAW, &[&REC_BINDS]),
         RASTER,
         FACE,
         Step::dispatch(
@@ -729,8 +729,8 @@ pub const FRAME: Frame = Frame {
             COMPUTE_QUEUE_LAST,
             &[&LAST_BINDS],
         ),
-        RECORD_HITS_DISPATCH,
-        RECORD_HITS,
+        REC_HITS_DISPATCH,
+        REC_HITS,
         HIT_FACES,
         HIT_FACES_PUT,
         // The decor's generation, after the eye's rays.
@@ -753,10 +753,10 @@ pub const FRAME: Frame = Frame {
         LIGHT_READS_OUT,
         LIGHT_READS_IN,
         Step::dispatch(
-            "record_draw_for_light",
+            "rec_draw_for_light",
             IN_LIGHT,
-            COMPUTE_RECORD_DRAW,
-            &[&RECORD_BINDS],
+            COMPUTE_REC_DRAW,
+            &[&REC_BINDS],
         ),
         LIGHT_MARK_WALKED,
         Step::dispatch(
@@ -843,12 +843,12 @@ pub const FRAME: Frame = Frame {
             COMPUTE_QUEUE_LAST_LIGHT_SAMPLES,
             &[&LIGHT_LATTICE_LAST_BINDS],
         ),
-        LIGHT_SAMPLE_BOX,
+        LIGHT_SAMPLE_HIT,
         Step::dispatch(
-            "light_record_draw",
+            "light_rec_draw",
             IN_LIGHT,
-            COMPUTE_LIGHT_RECORD_DRAW,
-            &[&LIGHT_RECORD_BINDS],
+            COMPUTE_LIGHT_REC_DRAW,
+            &[&LIGHT_REC_BINDS],
         ),
         LIGHT_RASTER,
         LIGHT_SLOTS,
@@ -885,8 +885,8 @@ pub const FRAME: Frame = Frame {
             COMPUTE_QUEUE_LAST,
             &[&LIGHT_LAST_BINDS],
         ),
-        LIGHT_RECORD_HITS_DISPATCH,
-        LIGHT_RECORD_HITS,
+        LIGHT_REC_HITS_DISPATCH,
+        LIGHT_REC_HITS,
         MAP_MASK,
         MAP_LAY,
         DECOR_MAP,
@@ -999,8 +999,8 @@ const PERSISTENT: &[Persistent] = &[
     // marks (light_receiver_tile.wgsl `stand`, `stand_box`).
     Persistent {
         by: &[
-            "record_draw",
-            "record_draw_for_light",
+            "rec_draw",
+            "rec_draw_for_light",
             "light_mark_walked",
             "light_mark_draws",
         ],

@@ -370,16 +370,16 @@ pub const TOUCHES: &[Touch] = {
     /// The count of the frame's asks so far, in the node cache's head.
     const ASKED: [u32; 2] = [node_cache::ASKED, 1];
     &[
-        // The eye's samples' stops lay their faces' asks (sample_box.eye.wgsl); the light's lay
-        // none (sample_box.light.wgsl).
+        // The eye's samples' stops lay their faces' asks (sample_hit.eye.wgsl); the light's lay
+        // none (sample_hit.light.wgsl).
         Touch {
-            compute: COMPUTE_SAMPLE_BOX,
+            compute: COMPUTE_SAMPLE_HIT,
             binding: 16,
             writes: &[asks(raster::ASKED_AT)],
             reads: &[asks(raster::ASKED_AT)],
         },
         Touch {
-            compute: COMPUTE_LIGHT_SAMPLE_BOX,
+            compute: COMPUTE_LIGHT_SAMPLE_HIT,
             binding: 16,
             writes: &[],
             reads: &[],
@@ -388,19 +388,19 @@ pub const TOUCHES: &[Touch] = {
         // each box's tiles as a receiver of the world's (record_draw.wgsl,
         // light_receiver_tile.wgsl `stand_box`).
         Touch {
-            compute: COMPUTE_RECORD_DRAW,
+            compute: COMPUTE_REC_DRAW,
             binding: 16,
             writes: &[DRAW_ARGS],
             reads: &[DRAW_ARGS],
         },
         Touch {
-            compute: COMPUTE_LIGHT_RECORD_DRAW,
+            compute: COMPUTE_LIGHT_REC_DRAW,
             binding: 16,
             writes: &[DRAW_ARGS],
             reads: &[DRAW_ARGS],
         },
         Touch {
-            compute: COMPUTE_RECORD_DRAW,
+            compute: COMPUTE_REC_DRAW,
             binding: 21,
             writes: &[marks(light::LIST_RECEIVERS)],
             reads: &[marks(light::LIST_RECEIVERS)],
@@ -409,13 +409,13 @@ pub const TOUCHES: &[Touch] = {
         // (record_hits.wgsl, record_hits.eye.wgsl); the light's lay none
         // (record_hits.light.wgsl).
         Touch {
-            compute: COMPUTE_RECORD_HITS,
+            compute: COMPUTE_REC_HITS,
             binding: 16,
             writes: &[asks(raster::HIT_ASKED_AT)],
             reads: &[asks(raster::HIT_ASKED_AT)],
         },
         Touch {
-            compute: COMPUTE_LIGHT_RECORD_HITS,
+            compute: COMPUTE_LIGHT_REC_HITS,
             binding: 16,
             writes: &[],
             reads: &[],
@@ -458,7 +458,7 @@ pub const TOUCHES: &[Touch] = {
             writes: &[
                 [light::ARGS_LAY + 1, 1],
                 opened(light::ARGS_CELLS),
-                opened(light::ARGS_SAMPLE_BOX),
+                opened(light::ARGS_SAMPLE_HIT),
                 opened(light::ARGS_SLOT),
                 cnt(light::LIST_CORNERS),
                 cnt(light::LIST_SOURCES),
@@ -469,7 +469,7 @@ pub const TOUCHES: &[Touch] = {
             ],
             reads: &[
                 opened(light::ARGS_CELLS),
-                opened(light::ARGS_SAMPLE_BOX),
+                opened(light::ARGS_SAMPLE_HIT),
                 opened(light::ARGS_SLOT),
                 cnt(light::LIST_READS),
                 cnt(light::LIST_CORNERS),
@@ -495,7 +495,7 @@ pub const TOUCHES: &[Touch] = {
             reads: &[RECEIVER_TILES],
         },
         Touch {
-            compute: COMPUTE_RECORD_DRAW,
+            compute: COMPUTE_REC_DRAW,
             binding: 22,
             writes: &[RECEIVER_TILES],
             reads: &[RECEIVER_TILES],

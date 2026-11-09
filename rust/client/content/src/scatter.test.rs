@@ -14,7 +14,7 @@ fn cells_hold_their_chance() {
         let mut cnt = 0u32;
         for y in 0..side {
             for x in 0..side {
-                cnt += u32::from(candidate_at(k, [x - 7000, y + 123_000]).1);
+                cnt += u32::from(super::cnt(k, LEAF_CELL_ZOOM, [x - 7000, y + 123_000]) > 0);
             }
         }
         let n = f64::from(side * side);

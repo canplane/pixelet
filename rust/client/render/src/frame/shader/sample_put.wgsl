@@ -1,7 +1,7 @@
 // pxl-render/sample_put.wgsl
 
 // Where a sample's walk ended, written into the words a sample leaves for the record's stops
-// (pxl-engine `beam::SAMPLE_WORDS`), which sample_box.wgsl reads.
+// (pxl-engine `beam::SAMPLE_WORDS`), which sample_hit.wgsl reads.
 
 /// Writes the ended walk `w` at word `base`. A walk that went on to its reach (`ends` 3) writes
 /// `SAMPLE_NONE` as its zoom and no asset or axis. A walk that ended in a lack (`ends` 2) sets

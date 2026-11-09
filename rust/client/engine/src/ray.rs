@@ -147,7 +147,7 @@ pub const HITS_A_FRAME: u32 = 1 << 18;
 /// queue_ask.wgsl). First comes a head for each run's queue (`QUEUES`), each
 /// `QUEUE_HEADER_STRIDE` words after the last, from which the run's passes bind their view
 /// (`queue_at`). Then come the asks' records, one region that every queue's view reaches
-/// (`queue_records_at`). One region is enough because the runs of a frame, and the two walks
+/// (`queue_recs_at`). One region is enough because the runs of a frame, and the two walks
 /// of a run, go one after another, and no pass reads a record past the asks that follow the
 /// walk that listed it.
 ///
@@ -187,18 +187,18 @@ pub const fn queue_at(queue: u32) -> u32 {
 
 /// The first word of the asks' records, counted from the first word of queue `queue`'s view:
 /// past every head.
-pub const fn queue_records_at(queue: u32) -> u32 {
+pub const fn queue_recs_at(queue: u32) -> u32 {
     queue_at(QUEUES) - queue_at(queue)
 }
 
 /// An ask's record: the node's zoom, the three words of its index, the zooms it is asked at
 /// (the far zoom, then the near one `ZOOM_BITS` above it), whether it is asked from the top,
 /// and what was handed to its parent.
-pub const QUEUE_RECORD_WORDS: u32 = 9;
+pub const QUEUE_REC_WORDS: u32 = 9;
 /// The most nodes one walk lists for the asks after it. A ray parked at a node listed past
 /// it is asked by the last walk instead.
-pub const QUEUE_RECORDS_CAP: u32 = 1 << 17;
-pub const QUEUE_WORDS: u32 = queue_at(QUEUES) + QUEUE_RECORDS_CAP * QUEUE_RECORD_WORDS;
+pub const QUEUE_RECS_CAP: u32 = 1 << 17;
+pub const QUEUE_WORDS: u32 = queue_at(QUEUES) + QUEUE_RECS_CAP * QUEUE_REC_WORDS;
 pub const QUEUE_EMPTY: [u32; QUEUE_HEADER_WORDS as usize] = [0, 0, 0, 0, 0, 1, 1, 0, 0];
 
 /// A parked ray's state as the queue keeps it, the same for every kind of item (pxl-render

@@ -74,14 +74,14 @@ fn light_cs(
     // this pass reads it (`record::drawn`).
     let slot = (visible & ~VISIBLE_LACK) - 1u;
     let state = node_cache_word(state_at(slot));
-    let faces = state & RECORD_FACES;
+    let faces = state & REC_FACES;
     if ((visible & VISIBLE_LACK) == 0u && entry_kind(slot) != KIND_SPLIT && faces != 0u) {
       let k = entry_node(slot, vec3<i32>(aim.origin));
       let fill = (node_cache_word(entry_at(slot) + W_ASSET) >> FILL_SHIFT) & (EIGHTHS - 1u);
       let entry = visible_cell(aim, k.zoom, k.corner, k.roots - origin_roots(aim.origin), fill, faces);
       // The voxel is taken only where it is the node that a ray asking the slot's band stops on
       // (pxl-engine `Light::band`, `record::band_fresh`).
-      if (entry.enters && band_fresh(k.zoom, (state & RECORD_WHOLE) != 0u, band)) {
+      if (entry.enters && band_fresh(k.zoom, (state & REC_WHOLE) != 0u, band)) {
         add_cnt(on, CNT_VOXEL);
         textureStore(light, at, 0u, vec4<u32>(hit_word(entry.t, entry.axis), 0u, 0u, 0u));
         return;

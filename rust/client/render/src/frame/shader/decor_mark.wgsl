@@ -7,7 +7,7 @@
 // a box of the frame's reaches what its brick reads (pxl-content `generation::LIST_AT`,
 // `part_at`).
 
-@group(0) @binding(9) var<storage, read_write> records: array<u32>;
+@group(0) @binding(9) var<storage, read_write> recs: array<u32>;
 /// What the pass lists (pxl-content `generation::THIN_ARGS`). The words before the boxes are
 /// atomic, as the counts the threads add to lie among them. The boxes and the pairs are plain:
 /// the host writes the boxes and this pass only reads them, and each pair is written by the one
@@ -38,11 +38,11 @@ fn decor_mark_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let whole = list_word(LIST_EVERY) != 0u || !generated_for(s, row.xy);
   if (whole) {
     let h = s * HEADER_WORDS;
-    records[h] = u32(row.x);
-    records[h + 1u] = u32(row.y);
-    records[h + 2u] = 1u;
+    recs[h] = u32(row.x);
+    recs[h + 1u] = u32(row.y);
+    recs[h + 2u] = 1u;
     for (var k = 0u; k < DECORS; k += 1u) {
-      records[cnt_at(s, k)] = 0u;
+      recs[cnt_at(s, k)] = 0u;
     }
   } else {
     let k = BRICK_SHIFT + LEAF_CELL_ZOOM - cell_zoom;

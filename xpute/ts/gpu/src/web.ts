@@ -11,7 +11,7 @@
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import type { Canvas, Gpu, GpuGrant, GpuState } from "@xpute/runtime";
-import { each_record } from "@xpute/runtime/ipc/stream.ts";
+import { each_rec } from "@xpute/runtime/ipc/stream.ts";
 import { GpuRuntime } from "./runtime.ts";
 
 /** This is how long the page waits between asks for a device. Safari gives no
@@ -62,7 +62,7 @@ export class WebGpu implements Gpu {
   after_turn(): void {
     if (!this.granted) return;
     if (this.runtime) this.runtime.run(this.granted.at);
-    else each_record(this.granted.mem, this.granted.at, () => {});
+    else each_rec(this.granted.mem, this.granted.at, () => {});
   }
 
   /** `canvas` is drawn where it is: a page's own canvas, or one the page

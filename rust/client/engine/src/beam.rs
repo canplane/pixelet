@@ -399,7 +399,7 @@ pub const SAMPLE_SIDE: u32 = 8;
 /// `hit_asks_at`), the ask is made by the first stop on the voxel to enter it across that
 /// face's axis. Its node is then the entry in the node cache (`node_cache::entry_at`), its
 /// face is left at that axis among the entry's words (`node_cache::R_FACES`), and the word is
-/// named under `record::TO_RECORD`.
+/// named under `record::TO_REC`.
 pub const ASK_NODE: u32 = 0;
 pub const ASK_FACE: u32 = 1;
 pub const ASK_LINE: u32 = 2;
@@ -415,7 +415,7 @@ pub const ASK_NONE: u32 = u32::MAX;
 /// pixel's cell's rays resumed from, from which its face's word is asked (`ASK_LINE`). A pixel
 /// whose stop's face word is being asked holds `HIT_WAITS` and the stop's number in its last
 /// ray word until the word is put there from the record (`ray::FACES`, record_hits.wgsl
-/// `record_faces_cs`), in the cast's own pass.
+/// `rec_faces_cs`), in the cast's own pass.
 pub const HIT_NODE: u32 = 0;
 pub const HIT_FACE: u32 = NODE_WORDS;
 pub const HIT_PX: u32 = HIT_FACE + 1;

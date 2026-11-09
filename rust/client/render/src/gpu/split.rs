@@ -59,7 +59,7 @@ pub struct Split {
     writes: Vec<(Id, Vec<(u32, Id)>)>,
     chains: Vec<Chain>,
     open: Vec<Open>,
-    records: Vec<(Id, u32)>,
+    recs: Vec<(Id, u32)>,
 }
 
 impl Split {
@@ -99,14 +99,14 @@ impl Split {
     pub fn let_go(&mut self, id: Id) {
         self.args.retain(|&(b, _)| b != id);
         self.writes.retain(|(g, _)| *g != id);
-        self.records.retain(|&(p, _)| p != id);
+        self.recs.retain(|&(p, _)| p != id);
     }
 
     /// Records a render pipeline made from record `record` (frame/shader/record.rs
     /// `pipeline`).
-    pub fn recorded(&mut self, pipeline: Id, record: u32) {
+    pub fn recorded(&mut self, pipeline: Id, rec: u32) {
         self.let_go(pipeline);
-        self.records.push((pipeline, record));
+        self.recs.push((pipeline, rec));
     }
 
     /// Records that render pass `pass` declares it draws `pipelines` alone, by their records'
@@ -124,12 +124,12 @@ impl Split {
         if o.declared.is_empty() {
             return None;
         }
-        let record = self
-            .records
+        let rec = self
+            .recs
             .iter()
             .find(|&&(p, _)| p == pipeline)
             .map_or(u32::MAX, |&(_, r)| r);
-        (!o.declared.contains(&record)).then_some(record)
+        (!o.declared.contains(&rec)).then_some(rec)
     }
 
     /// Records that `encoder` was begun. It records into itself until it is cut.

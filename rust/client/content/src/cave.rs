@@ -5,7 +5,7 @@
 //! its leaves do.
 //!
 //! Every root cube (`ROOT`) holds the same tunnels, so every coarser node holds the same
-//! share. A tunnel starts in a node of its class's size (`CLASS`) and runs between two of the
+//! share. A tunnel starts in a node of its class's size (`ROOT + k`) and runs between two of the
 //! node's pipe cells (`PIPE`). A node hands its piece of a tunnel down to the children it
 //! passes, a walk over at most four of them, crossing each face where a hash says, with its
 //! blocks split by how far each child's part runs (`halve::halve`). The tunnels not yet
@@ -43,7 +43,7 @@ pub const ROOT_BLOCKS: u32 = {
 /// A pipe cell's blocks, 4 a side.
 pub const CELL_BLOCKS: u32 = 1 << (3 * (BLOCK - PIPE));
 /// A piece's side at a tunnel's end, where it crosses none.
-const NO_SIDE: u32 = 6;
+pub const NO_SIDE: u32 = 6;
 
 /// The tags of a node's draws (`node_seed`).
 pub const SPAWN_TAG: u32 = 0xca7e_5001;
@@ -91,11 +91,6 @@ const fn cap(k: usize, zoom: Zoom) -> u32 {
     }
 }
 
-/// The blocks a tunnel of class `k` hollows.
-const fn tunnel_blocks(k: usize) -> u32 {
-    BLOCKS_A_TUNNEL[k]
-}
-
 /// A node's side in pipe cells, and its first cell.
 fn bounds((zoom, c): (Zoom, [i32; 3])) -> ([i32; 3], i32) {
     let s = PIPE - zoom;
@@ -138,7 +133,7 @@ fn spawn(node: (Zoom, [i32; 3]), k: usize) -> Piece {
             leave: x,
             side_in: NO_SIDE,
             side_out: NO_SIDE,
-            blocks: tunnel_blocks(k),
+            blocks: BLOCKS_A_TUNNEL[k],
         };
     }
     let q = s / 4;
@@ -169,8 +164,13 @@ fn spawn(node: (Zoom, [i32; 3]), k: usize) -> Piece {
         leave: x,
         side_in: NO_SIDE,
         side_out: NO_SIDE,
-        blocks: tunnel_blocks(k),
+        blocks: BLOCKS_A_TUNNEL[k],
     }
+}
+
+/// Whether a walk whose ends differ on the sides `d` steps aside and back, by hash.
+fn is_aside(d: u32, h: u32) -> bool {
+    d != 0 && d.count_ones() == 1 && h & 1 == 1
 }
 
 /// The walk from child `u` to child `v` over at most four children: its length, and its
@@ -178,7 +178,7 @@ fn spawn(node: (Zoom, [i32; 3]), k: usize) -> Piece {
 /// hash, or, where only one side differs, takes a step aside and back, picked by hash.
 fn walk_len(u: u32, v: u32, h: u32) -> u32 {
     let d = u ^ v;
-    if d != 0 && d.count_ones() == 1 && h & 1 == 1 {
+    if is_aside(d, h) {
         4
     } else {
         d.count_ones() + 1
@@ -187,7 +187,7 @@ fn walk_len(u: u32, v: u32, h: u32) -> u32 {
 
 fn walk_at(u: u32, v: u32, h: u32, i: u32) -> u32 {
     let d = u ^ v;
-    if d != 0 && d.count_ones() == 1 && h & 1 == 1 {
+    if is_aside(d, h) {
         // Aside by the next side or the one after, by hash, then across, then back.
         let b = if (h >> 1) & 1 == 0 {
             ((d << 1) | (d >> 2)) & 7
@@ -483,7 +483,7 @@ fn blocks(node: (Zoom, [i32; 3])) -> u32 {
         let mut n = h.piece.blocks;
         let mut k = 0;
         while k < CLASSES {
-            n += h.tunnels[k] * tunnel_blocks(k);
+            n += h.tunnels[k] * BLOCKS_A_TUNNEL[k];
             k += 1;
         }
         return n;

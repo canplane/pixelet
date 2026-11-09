@@ -7,16 +7,16 @@
 // the clipmap's row this frame. The row is not read again, so a header that names another brick
 // lays that brick's candidates. The pass reads no world, only the decor's hashes.
 
-/// Decor's records (pxl-content `generation::SLOTS_AT`). The entries' headers are atomic, as
+/// Decor's records (pxl-content `generation::ENTRY_RECS_AT`). The entries' headers are atomic, as
 /// each decor's count, which this pass's threads add to, lies among them. The records after
 /// them are plain: a record's words are written by the one thread whose add to its decor's
 /// count took it, and read by the passes after.
 struct RecordBuffer {
-  headers: array<atomic<u32>, SLOTS_AT>,
+  headers: array<atomic<u32>, ENTRY_RECS_AT>,
   words: array<u32>,
 }
 
-@group(0) @binding(9) var<storage, read_write> records: RecordBuffer;
+@group(0) @binding(9) var<storage, read_write> recs: RecordBuffer;
 @group(0) @binding(11) var<storage, read> list: array<u32>;
 
 @compute @workgroup_size(LANES)
@@ -26,7 +26,7 @@ fn decor_thin_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let j = pair_decor(pair);
   let cell_zoom = FIRST_CELL_ZOOM + brick / CLIP_ENTRIES;
   let header = brick * HEADER_WORDS;
-  let q = vec2<i32>(i32(atomicLoad(&records.headers[header])), i32(atomicLoad(&records.headers[header + 1u])));
+  let q = vec2<i32>(i32(atomicLoad(&recs.headers[header])), i32(atomicLoad(&recs.headers[header + 1u])));
   let s = LEAF_CELL_ZOOM - cell_zoom;
   let corner = (q << vec2<u32>(BRICK_SHIFT + s))
     + vec2<i32>(i32(id.x % BRICK), i32(id.x / BRICK)) * (1i << s);
@@ -41,10 +41,10 @@ fn decor_thin_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     }
     let c = candidate_at(j, leaf);
     if (stands_at(j, variant_of(j, c.seed), cell_zoom) && retained(j, c)) {
-      let k = atomicAdd(&records.headers[cnt_at(brick, j)], 1u);
-      let r = entry_word(brick, j, k) - SLOTS_AT;
-      records.words[r + 1u] = u32(leaf.x);
-      records.words[r + 2u] = u32(leaf.y);
+      let k = atomicAdd(&recs.headers[cnt_at(brick, j)], 1u);
+      let r = entry_word(brick, j, k) - ENTRY_RECS_AT;
+      recs.words[r + 1u] = u32(leaf.x);
+      recs.words[r + 2u] = u32(leaf.y);
     }
   }
 }

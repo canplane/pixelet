@@ -186,9 +186,9 @@ pub fn of_set(set: &Path, version: &str) -> Result<Kind, String> {
 /// The published declaration from a record of what the bucket serves:
 /// `kind`, each kind's version and what its manifest says of it, its
 /// `format` and `shard`; `override`, a kind's version for a shard.
-pub fn decl_of(record: &Value) -> Result<Value, String> {
+pub fn decl_of(rec: &Value) -> Result<Value, String> {
     let kind = |l: BaseLayer| -> Result<Kind, String> {
-        let k = &record["kind"][l.name()];
+        let k = &rec["kind"][l.name()];
         let at = |field: &str| format!("kind.{}.{field}", l.name());
         Ok(Kind {
             format: k["format"].as_u64().ok_or_else(|| at("format"))? as u32,
@@ -201,7 +201,7 @@ pub fn decl_of(record: &Value) -> Result<Value, String> {
     };
     let kinds = try_kinds(kind)?;
     let mut overrides = OverrideMap::new();
-    for (name, versions) in record["override"].as_object().into_iter().flatten() {
+    for (name, versions) in rec["override"].as_object().into_iter().flatten() {
         let tile = key(name).ok_or(format!("override.{name}: no shard's name"))?;
         let mut own = Vec::new();
         for (kind, version) in versions.as_object().into_iter().flatten() {

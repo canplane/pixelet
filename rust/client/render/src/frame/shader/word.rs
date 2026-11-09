@@ -365,7 +365,7 @@ pub const LOCATION_ZONE_INSTANCE_FLOATS: u32 = 8;
 
 /// The floats of a star's record (pass/star.rs, star.wgsl): its direction
 /// and flux, then its color and one float of padding.
-pub const STAR_RECORD_FLOATS: usize = 8;
+pub const STAR_REC_FLOATS: usize = 8;
 
 /// The words of the raster's view (ray/raster.rs, raster.wgsl
 /// `Raster`). build.rs checks that the WGSL struct has this size.
@@ -524,7 +524,7 @@ pub const MOON_MAP_MEAN: f32 = 0.2459;
 pub const AIR_FROXELS: u32 = 32;
 
 /// The side of a square workgroup, with one thread a drawn pixel, a sample
-/// or a tile of the light's box (sample_box.wgsl, light_slide.wgsl).
+/// or a tile of the light's box (sample_hit.wgsl, light_slide.wgsl).
 pub const SQUARE_SIDE: u32 = 8;
 /// The threads of a workgroup over a row, one thread an entry
 /// (light_mark_draws.wgsl, forget.wgsl).

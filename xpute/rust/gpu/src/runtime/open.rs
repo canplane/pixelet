@@ -79,8 +79,7 @@ pub fn open(ask: &Ask) -> Result<Opened, OpenError> {
     let defaults = wgpu::InstanceDescriptor::new_without_display_handle();
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: ask.backends,
-        flags: defaults.flags
-            - wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL,
+        flags: defaults.flags - wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL,
         ..defaults
     });
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {

@@ -1,6 +1,6 @@
-// pxl-render/sample_box.light.wgsl
+// pxl-render/sample_hit.light.wgsl
 
-// What sample_box.wgsl reads of the light: whether a sample stopped on its node whole, and
+// What sample_hit.wgsl reads of the light: whether a sample stopped on its node whole, and
 // where the faces' asks its samples open lie.
 
 /// Whether sample `s` stopped on `k` whole, that is, on a node coarser than its band, the one

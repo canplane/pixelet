@@ -11,7 +11,7 @@ fn row_word(k: u32, at: u32) -> u32 {
 
 /// `SplitMix32`'s `n`-th draw off `seed`.
 fn draw(seed: u32, n: u32) -> u32 {
-  return seed_mix32(seed + n * SEED_SALT, 0u);
+  return seed_mix32(seed + n * SEED_SALT_32, 0u);
 }
 
 /// This is the port of pxl-content `scatter::mul_hi`.
@@ -29,6 +29,11 @@ fn decor_size(k: u32, variant: u32, turn: u32) -> vec3<i32> {
   let y = i32(row_word(k, at + 1u));
   let z = i32(row_word(k, at + 2u));
   return select(vec3<i32>(y, x, z), vec3<i32>(x, y, z), (turn & 1u) == 0u);
+}
+
+/// This is the port of pxl-content `scatter::variant_of`.
+fn variant_of(k: u32, seed: u32) -> u32 {
+  return mul_hi(draw(seed, 0u), row_word(k, ROW_VARIANTS));
 }
 
 /// This is the port of pxl-content `Decor::allows`.

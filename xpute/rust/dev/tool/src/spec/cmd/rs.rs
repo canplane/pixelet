@@ -19,7 +19,7 @@ pub(super) fn rs_borrows(spec: &Spec, fields: &[Field]) -> Result<bool, String> 
     Ok(false)
 }
 
-fn rs_record(spec: &Spec, name: &str, lifetime: &str) -> Result<String, String> {
+fn rs_rec(spec: &Spec, name: &str, lifetime: &str) -> Result<String, String> {
     Ok(if rs_borrows(spec, &spec.record(name).fields)? {
         format!("{name}<{lifetime}>")
     } else {
@@ -126,7 +126,7 @@ fn rs_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
         }
         return Ok(format!(
             "&'a dyn Fn(&mut dyn FnMut(&{}))",
-            rs_record(spec, &f.ty, "'_")?
+            rs_rec(spec, &f.ty, "'_")?
         ));
     }
     // An optional string is borrowed as a `&str`; a required one may be any
@@ -138,7 +138,7 @@ fn rs_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
         Kind::Number => f.ty.clone(),
         Kind::Bool => "bool".to_string(),
         Kind::Str => "&'a dyn Display".to_string(),
-        Kind::Record => rs_record(spec, &f.ty, "'a")?,
+        Kind::Record => rs_rec(spec, &f.ty, "'a")?,
         _ => rs_enum(spec, &f.ty),
     };
     Ok(if f.optional {

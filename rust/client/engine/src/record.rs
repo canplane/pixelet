@@ -4,7 +4,7 @@
 //! is a node cache entry for a node some ray stopped on. The entry holds the World Query's
 //! answer for the node and the faces through which rays entered it, and keeps them across
 //! frames in the entry's own state word (`node_cache::STATES_AT`). The GPU passes that write
-//! and read the record are pxl-render's record*.wgsl, sample_box.wgsl, cast.wgsl, light.wgsl,
+//! and read the record are pxl-render's record*.wgsl, sample_hit.wgsl, cast.wgsl, light.wgsl,
 //! face.wgsl, forget.wgsl and ask.wgsl.
 //!
 //! The rays find and record; only the raster draws. A ray's stop writes the faces where it
@@ -30,11 +30,11 @@
 //! `whole`), so any ray that finds the node so may set the bit, the eye's or the light's.
 //!
 //! **The light** writes and draws the same entries as the eye, with the same code. Its stops
-//! are its samples' (pxl-render sample_box.wgsl over sample.light.wgsl). A light ray asks one
+//! are its samples' (pxl-render sample_hit.wgsl over sample.light.wgsl). A light ray asks one
 //! zoom, its band (`light::Light::band`), and its stop is whole where the node is coarser
 //! than the band (`light_whole`). It sets the faces it enters (`FACES`) but asks none of
-//! their words, because the light's slots read no words (sample_box.light.wgsl). The light's
-//! draw (record_draw.wgsl `light_record_draw_cs`) writes a box for every voxel whose box lies
+//! their words, because the light's slots read no words (sample_hit.light.wgsl). The light's
+//! draw (record_draw.wgsl `light_rec_draw_cs`) writes a box for every voxel whose box lies
 //! on the light's box, in units from where the ray of box texel (0, 0) starts. A voxel is
 //! fresh for the light where a ray asking the band of the tile under the voxel's middle stops
 //! on it (`light_fresh`), and stale otherwise; a stale voxel is drawn behind. A light slot
@@ -58,7 +58,7 @@
 //!    stays.
 //! 2. The walks (pxl-render ask.wgsl `fill`) write an entry's answer and clear what draws it.
 //! 3. The stops (pxl-render record_put.wgsl `observe_hit`) are the one way in for every ray:
-//!    first the samples' (sample_box.wgsl), then, after their walk, the hits of the pixels
+//!    first the samples' (sample_hit.wgsl), then, after their walk, the hits of the pixels
 //!    the samples missed (record_hits.wgsl, `beam::HIT_ASSET`, `HIT_LINE`). A stop carries a
 //!    node, the face the ray entered it through, its answer, and the line its face's word is
 //!    asked from. It finds its node's entry as above and sets the face it entered. An observer
@@ -67,7 +67,7 @@
 //!    for a lack or past the asks' room, `face::BOX` for a cell short of its cube, and
 //!    otherwise what face.wgsl writes into `node_cache::R_FACES`. A stop on a node no slot
 //!    keeps sets nothing, and its pixel walks again.
-//! 4. The draws (record_draw.wgsl `record_draw_cs`, `light_record_draw_cs`) read every slot,
+//! 4. The draws (record_draw.wgsl `rec_draw_cs`, `light_rec_draw_cs`) read every slot,
 //!    write a box for each drawable entry and mark the entry drawn (`node_cache::R_DRAWN`).
 //!    The eye's draw also records the frame it ran in (`node_cache::DRAWN`). The raster draws
 //!    the boxes, and `cast_cs` and light.wgsl read a pixel's slot.
@@ -126,7 +126,7 @@
 use crate::cast::{self, Detail, Node, Spacing};
 use crate::light::{Light, BEAM, TILE};
 use crate::node_cache::{self, ENTRIES};
-use crate::ray::QUEUE_RECORDS_CAP;
+use crate::ray::QUEUE_RECS_CAP;
 use pxl_spec::space::camera::grid;
 
 use crate::WORKGROUPS_CAP;
@@ -148,7 +148,7 @@ const _: () = assert!(
 /// so the cells bound the voxels drawn: the eye's cells at the widest view (`EYE_CELLS_CAP`),
 /// and the light's claimed tiles at one cell a tile (`LIGHT_CELLS_CAP`). Each cell's count is
 /// multiplied by the factors of `CELL_NODES`. The asks keep as many nodes a frame as a walk
-/// lists for them (`ray::QUEUE_RECORDS_CAP`), for the two frames an entry is spared
+/// lists for them (`ray::QUEUE_RECS_CAP`), for the two frames an entry is spared
 /// (`ASKS_KEPT`).
 const _: () = assert!(
     ENTRIES == entries_for(EYE_CELLS_CAP + LIGHT_CELLS_CAP),
@@ -165,7 +165,7 @@ pub const CELL_FRAMES: u32 = 2;
 pub const CELL_NODES: u32 = CELL_OVERLAP * CELL_STALE * CELL_FRAMES;
 
 /// The nodes the asks keep: one frame's worth for each of the two frames an entry is spared.
-pub const ASKS_KEPT: u32 = CELL_FRAMES * QUEUE_RECORDS_CAP;
+pub const ASKS_KEPT: u32 = CELL_FRAMES * QUEUE_RECS_CAP;
 
 /// The eye's camera cells at the widest view (`grid::ASPECT_MOST`) across the vertical field
 /// of view (`grid::HALF_TAN`), at `grid::CELLS_A_RAD` cells a radian, as `beam::Grid::of` lays
@@ -221,9 +221,9 @@ pub const fn asked_faces(state: u32) -> u32 {
 /// it set, the target is a word of the node cache, where face.wgsl leaves the face's word,
 /// not of the beam rays' buffer, and the ask's node is the entry's first word
 /// (`beam::ASK_NODE`, `node_cache::entry_at`).
-pub const TO_RECORD: u32 = 1 << 31;
+pub const TO_REC: u32 = 1 << 31;
 const _: () = assert!(
-    node_cache::WORDS < TO_RECORD,
+    node_cache::WORDS < TO_REC,
     "an ask names any word of the node cache"
 );
 
@@ -287,7 +287,7 @@ pub fn light_fresh(
 /// Whether a ray from the origin `o` that stopped on the node `n` stopped on it whole, that
 /// is, on a node coarser than the zoom it asked there. The query then answered the node as a
 /// cell because nothing finer lies in it, not because of the zoom asked.
-pub fn stopped_whole(o: [i32; 3], n: &Node, range: [Zoom; 2]) -> bool {
+pub fn ray_whole(o: [i32; 3], n: &Node, range: [Zoom; 2]) -> bool {
     n.zoom < near(o, n, range)
 }
 
@@ -406,11 +406,11 @@ mod tests {
             }
             assert!(cnt <= 1, "{o:?}: fresh at {cnt} zooms");
             // The walk stops at the first zoom at or past the zoom asked at the node's nearest point.
-            let stops = (0..=FINEST_ZOOM).find(|&z| {
+            let hit = (0..=FINEST_ZOOM).find(|&z| {
                 let n = node(z, leaf.corner, leaf.roots);
-                !stopped_whole(o, &n, range)
+                !ray_whole(o, &n, range)
             });
-            assert_eq!(first, stops, "{o:?}");
+            assert_eq!(first, hit, "{o:?}");
         }
     }
 
@@ -425,7 +425,7 @@ mod tests {
             [0; 3],
         );
         let range = [0, FINEST_ZOOM];
-        assert!(stopped_whole(o, &n, range));
+        assert!(ray_whole(o, &n, range));
         assert!(!fresh(o, &n, false, range));
         assert!(fresh(o, &n, true, range));
     }
@@ -436,18 +436,18 @@ mod tests {
     /// Once that ray's stop has found the entry, setting `WHOLE` where it stopped whole, the entry
     /// is fresh there.
     #[test]
-    fn band_fresh_is_the_stop_of_every_band() {
-        let stop = |band: Zoom, whole_from: Zoom| band.min(whole_from);
+    fn band_fresh_is_the_hit_of_every_band() {
+        let hit_zoom = |band: Zoom, whole_from: Zoom| band.min(whole_from);
         for whole_from in 0..=FINEST_ZOOM {
             for wrote in 0..=FINEST_ZOOM {
-                let z = stop(wrote, whole_from);
+                let z = hit_zoom(wrote, whole_from);
                 let whole = light_whole(z, wrote);
                 for band in 0..=FINEST_ZOOM {
-                    let stops = stop(band, whole_from) == z;
+                    let hit = hit_zoom(band, whole_from) == z;
                     let at = (whole_from, wrote, band);
-                    assert!(!band_fresh(z, whole, band) || stops, "{at:?}");
-                    let found = whole || stops && light_whole(z, band);
-                    assert_eq!(band_fresh(z, found, band), stops, "{at:?} found");
+                    assert!(!band_fresh(z, whole, band) || hit, "{at:?}");
+                    let found = whole || hit && light_whole(z, band);
+                    assert_eq!(band_fresh(z, found, band), hit, "{at:?} found");
                 }
             }
         }

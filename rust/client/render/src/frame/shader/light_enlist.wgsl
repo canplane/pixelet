@@ -48,7 +48,7 @@ fn enlist_in(cur: u32, t: vec2<i32>, which: u32, across: i32, lo: vec2<i32>, hi:
         } else if (which == LIGHT_LIST_SOURCES) {
           let s = LIGHT_TILE / LIGHT_SAMPLE;
           opened(LIGHT_ARGS_CELLS, e, cap, 1u);
-          opened(LIGHT_ARGS_SAMPLE_BOX, e, cap, s);
+          opened(LIGHT_ARGS_SAMPLE_HIT, e, cap, s);
         }
       }
     }

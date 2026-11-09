@@ -4,12 +4,12 @@
 //! one instanced strip. Nothing is drawn in daylight. The catalog's stars are the whole night
 //! sky.
 
-use pxl_spec::asset::star::{self, RECORD_BYTES};
+use pxl_spec::asset::star::{self, REC_BYTES};
 use pxl_spec::space::coord::mat4::Mat4;
 
 use crate::frame::shader::record::PIPELINE_STAR;
 use crate::frame::shader::word::stars::{DENSITY, INTENSITY, SKY, VIEW_PROJ};
-use crate::frame::shader::word::{STARS_FLOATS, STAR_RECORD_FLOATS};
+use crate::frame::shader::word::{STARS_FLOATS, STAR_REC_FLOATS};
 use crate::gpu::api::{buf_entry, buffer_usage, bytes, word_bytes, Entry, Gpu, TrackedRenderPass};
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::put::put_mat;
@@ -42,7 +42,7 @@ impl StarPass {
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let stars: Vec<f32> = CATALOG
-            .as_chunks::<RECORD_BYTES>()
+            .as_chunks::<REC_BYTES>()
             .0
             .iter()
             .flat_map(star_floats)
@@ -104,13 +104,13 @@ impl StarPass {
         pass.set_pipeline(self.pipeline.id);
         pass.set_bind_group(0, self.frame_group, &[]);
         pass.set_bind_group(1, self.group, &[]);
-        pass.draw(4, (CATALOG.len() / RECORD_BYTES) as u32, 0, 0);
+        pass.draw(4, (CATALOG.len() / REC_BYTES) as u32, 0, 0);
     }
 }
 
 /// A catalog record's star as the sky draws it: its direction, its flux and its color. The
 /// record's layout is the bake's, read by pxl-spec asset/star.rs `star`.
-fn star_floats(packed: &[u8; RECORD_BYTES]) -> [f32; STAR_RECORD_FLOATS] {
+fn star_floats(packed: &[u8; REC_BYTES]) -> [f32; STAR_REC_FLOATS] {
     let s = star::star(packed);
     let (ra, dec) = (s.ra.to_radians(), s.dec.to_radians());
     let flux = libm::pow(10f64, -0.4 * s.vmag);

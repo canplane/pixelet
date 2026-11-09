@@ -574,7 +574,7 @@ pub const HEADER_SLIDE_CAST: usize = HEADER_WORLD + 1;
 /// Whether the world's receivers are stood this frame, 1 or 0. The host writes it every
 /// frame, whether or not the head is a light cast's, so the eye's draw stands the boxes it
 /// draws only where the light's cast stands them (pxl-render record_draw.wgsl
-/// `record_draw_cs`).
+/// `rec_draw_cs`).
 pub const HEADER_WORLD_RECEIVERS: usize = HEADER_SLIDE_CAST + 1;
 /// The pool the holes' rays are parked in between a run's walks (`list_words`), and their stops
 /// (`hits_at`), laid by the map's side.
@@ -879,7 +879,7 @@ pub fn margin(width: f32) -> f32 {
 /// The shadow map cast as the eye's rays are, every slot every frame (pxl-engine `raster`).
 /// A sample every `SAMPLE` slots across and down is walked (pxl-render sample.wgsl over
 /// sample.light.wgsl); the cells the samples stopped at are written into the record by the
-/// eye's writer (pxl-render sample_box.wgsl `sample_box_cs`) and drawn from the light as boxes
+/// eye's writer (pxl-render sample_hit.wgsl `sample_hit_cs`) and drawn from the light as boxes
 /// by the eye's raster, orthographic (pxl-render raster.wgsl), in the box's order
 /// (`Light::texel`), each texel keeping the nearest box its own ray enters. A slot whose ray enters its visible sample,
 /// tested again with its own ray as the eye's pixels test theirs (`cast::entry`), takes it
@@ -970,7 +970,7 @@ impl Light {
     /// `FOOTPRINT_TILES` more each way where `footprint`; none where it lies past the reach
     /// (`reach`, `within`) or past the box. Every receiver stands by this one rule: the box the
     /// eye's draw writes for a voxel in view (`cast::asset_box`; pxl-render record_draw.wgsl
-    /// `record_draw_cs`, which stands it as it writes it), on which every pixel that took that
+    /// `rec_draw_cs`, which stands it as it writes it), on which every pixel that took that
     /// voxel hit (visible.wgsl `visible_cell`); a walked pixel's hit, as a box of one point
     /// (light_mark.wgsl); and the box a host's draw stands within (gpu/draw.rs `ReceiverBox`,
     /// light_mark_draws.wgsl). A placed decor asks the reach of the box its ball stands in and
@@ -1201,7 +1201,7 @@ pub const fn reads_epoch(epoch: u32, reads_from: u32) -> u32 {
 /// read no count of theirs here: the drawn receivers' dispatch is a buffer of its own
 /// (`DRAWS_DISPATCH_WORDS`).
 pub const ARGS_CELLS: u32 = 0;
-pub const ARGS_SAMPLE_BOX: u32 = 3;
+pub const ARGS_SAMPLE_HIT: u32 = 3;
 pub const ARGS_SLOT: u32 = 6;
 pub const ARGS_LAY: u32 = 9;
 pub const ARGS_PASSES: u32 = 13;

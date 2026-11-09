@@ -13,7 +13,7 @@
 use crate::api_spec::stream;
 use crate::frame::shader::floor::{BIND_GROUPS, VERTEX_BUFFERS};
 use crate::frame::shader::record::{
-    compute, pipeline as record_of, src, COMPUTES, HEADER, PIPELINES, SHADERS,
+    compute, pipeline as rec_of, src, COMPUTES, HEADER, PIPELINES, SHADERS,
 };
 use crate::gpu::api::{
     room, shader_bytes, signaled, Format, Gpu, Layout, Stencil, MASKED_DEPTH, WORLD_COLOR,
@@ -200,7 +200,7 @@ impl PipelineCache {
         if let Some(b) = self.existing(key) {
             return b;
         }
-        let words = record_of(id);
+        let words = rec_of(id);
         let module = self.module(words[0]);
         let mut b = Pipeline::default();
         let mut at = HEADER as usize;

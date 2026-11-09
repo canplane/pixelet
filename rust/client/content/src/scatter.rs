@@ -31,18 +31,14 @@ pub struct Candidate {
     pub seed: u32,
 }
 
-/// Leaf cell `cell`'s candidate of the `k`-th decor, with its own draws, and whether the cell
-/// holds one (`cnt`).
-pub fn candidate_at(k: usize, cell: [i32; 2]) -> (Candidate, bool) {
+/// Leaf cell `cell`'s candidate of the `k`-th decor, with its own draws.
+pub fn candidate_at(k: usize, cell: [i32; 2]) -> Candidate {
     let mut draws = SplitMix32::new(node_seed(ROWS[k].seed, (LEAF_CELL_ZOOM, cell)));
-    (
-        Candidate {
-            cell,
-            draw: draws.next_u32(),
-            seed: draws.next_u32(),
-        },
-        cnt(k, LEAF_CELL_ZOOM, cell) > 0,
-    )
+    Candidate {
+        cell,
+        draw: draws.next_u32(),
+        seed: draws.next_u32(),
+    }
 }
 
 /// The tags of a column's count and of its split among its four, beside a
@@ -159,9 +155,9 @@ pub fn retained(k: usize, c: &Candidate) -> bool {
     while y < c.cell[1] + side {
         let mut x = c.cell[0] - extent;
         while x < c.cell[0] + side {
-            if x != c.cell[0] || y != c.cell[1] {
-                let (d, here) = candidate_at(k, [x, y]);
-                if here && before(&d, c) && meet(&d, side_of(decor, d.seed), c, side) {
+            if (x != c.cell[0] || y != c.cell[1]) && cnt(k, LEAF_CELL_ZOOM, [x, y]) > 0 {
+                let d = candidate_at(k, [x, y]);
+                if before(&d, c) && meet(&d, side_of(decor, d.seed), c, side) {
                     return false;
                 }
             }
@@ -175,8 +171,9 @@ pub fn retained(k: usize, c: &Candidate) -> bool {
 /// What stands in leaf cell `cell`: its candidate, where it holds one and it
 /// stands clear (`retained`).
 pub fn scatter_at(k: usize, cell: [i32; 2]) -> Option<Candidate> {
-    let (c, here) = candidate_at(k, cell);
-    (here && retained(k, &c)).then_some(c)
+    (cnt(k, LEAF_CELL_ZOOM, cell) > 0)
+        .then(|| candidate_at(k, cell))
+        .filter(|c| retained(k, c))
 }
 
 /// Whether `variant` of `decor` stands as itself in a clip level at `cell_zoom`, judged by its

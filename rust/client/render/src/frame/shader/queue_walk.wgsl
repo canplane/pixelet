@@ -10,7 +10,7 @@
 // for the asks (queue_ask.wgsl). No thread of the pass writes what it reads of the node cache.
 
 /// The run's queue, bound from its head (pxl-engine `ray::QUEUE_WORDS`, `ray::queue_at`). Past
-/// the heads lie the asks' records, which every queue shares (`queue_records_at`).
+/// the heads lie the asks' records, which every queue shares (`queue_recs_at`).
 @group(0) @binding(10) var<storage, read_write> queue: array<atomic<u32>>;
 
 /// What the ray that ended as `w` shows (queue.wgsl `finish`): what it met. These walks read the
@@ -55,7 +55,7 @@ fn list_ask(aim: Aim, w: WalkEnd, parked: bool) {
     return;
   }
   let r = atomicAdd(&queue[select(QUEUE_ASKS, QUEUE_ASKS_PARKED, parked)], 1u);
-  if (r >= QUEUE_RECORDS_CAP) {
+  if (r >= QUEUE_RECS_CAP) {
     return;
   }
   var top = true;
@@ -66,7 +66,7 @@ fn list_ask(aim: Aim, w: WalkEnd, parked: bool) {
     top = p.kind == KIND_LEFT;
     inheritance = p.inheritance;
   }
-  let at = queue_records_at() + r * QUEUE_RECORD_WORDS;
+  let at = queue_recs_at() + r * QUEUE_REC_WORDS;
   atomicStore(&queue[at], w.zoom);
   atomicStore(&queue[at + 1u], u32(c.x));
   atomicStore(&queue[at + 2u], u32(c.y));

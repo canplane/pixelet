@@ -330,7 +330,7 @@ template <class F> bool emit(Stream &stream, std::uint32_t op, F &&put) noexcept
 
 // This is the room a record takes of a stream, its op and count words
 // included, counted as `emit` writes it.
-template <class F> std::uint64_t record_size(F &&put) noexcept {
+template <class F> std::uint64_t rec_size(F &&put) noexcept {
     Count count;
     put(count);
     return (2 + std::uint64_t{count.n}) * WORD;
@@ -452,7 +452,7 @@ template <std::size_t N> class Gpu {
     // This is the room `shader_module` takes of a stream, for `Stream::fits`,
     // so that a caller making several modules can ask before each one.
     static std::uint64_t shader_module_bytes(std::string_view wgsl) noexcept {
-        return detail::record_size([&](auto &s) {
+        return detail::rec_size([&](auto &s) {
             s.word(0);
             s.bytes(detail::text(wgsl));
         });

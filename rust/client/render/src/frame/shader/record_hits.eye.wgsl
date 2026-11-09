@@ -3,7 +3,7 @@
 // What record_hits.wgsl reads of the eye. The eye's holes' stops lie past the beam rays' words,
 // at most `ray::HITS_A_FRAME` of them (pxl-engine `beam::Grid::hits_at`). A stop's node is held
 // from the eye's origin, and the stop is whole where the node is coarser than the zoom the eye
-// asks there (`record::stopped_whole`). The faces' asks the stops open lie among the grid's
+// asks there (`record::ray_whole`). The faces' asks the stops open lie among the grid's
 // words (`beam::Grid::hit_asks_at`).
 
 fn hits_at() -> u32 {
@@ -19,7 +19,7 @@ fn hit_origin(r: u32) -> vec3<i32> {
 }
 
 fn hit_whole(k: Node, r: u32) -> bool {
-  return stopped_whole(k, eye_origin());
+  return ray_whole(k, eye_origin());
 }
 
 fn hit_asks() -> AskList {

@@ -1,15 +1,15 @@
-// pxl-render/sample_box.wgsl
+// pxl-render/sample_hit.wgsl
 
 // Writes an observer's samples into the record as stops, the eye's and the light's alike, one
 // thread a sample (record_put.wgsl `observe_hit`; pxl-engine record.rs). Each sample that
 // stopped finds its node's entry, which the walk that stopped it kept, and sets the face it
 // entered across. Where its observer reads faces' words, the first sample to enter a face asks
 // that face's word (`sample_asks`). What differs by observer comes from sample.eye.wgsl or
-// sample.light.wgsl, and from sample_box.eye.wgsl or sample_box.light.wgsl.
+// sample.light.wgsl, and from sample_hit.eye.wgsl or sample_hit.light.wgsl.
 
 /// Whether sample `s` stopped on a node: it neither went on to its reach nor is parked,
 /// waiting in the queue (pxl-engine `beam::SAMPLE_PARKED`).
-fn stopped(s: vec2<u32>) -> bool {
+fn hits(s: vec2<u32>) -> bool {
   let zoom = beams[sample_word(s) + SAMPLE_NODE + NODE_ZOOM];
   return zoom != SAMPLE_NONE && zoom != SAMPLE_PARKED;
 }
@@ -39,18 +39,18 @@ fn sample_hit(s: vec2<u32>) -> Hit {
 
 /// The sample the thread at `id` takes, or `NO_ENTRY` where the lattice does not hold it or
 /// it did not stop.
-fn stopped_item(id: vec2<u32>) -> vec2<u32> {
+fn hit_item(id: vec2<u32>) -> vec2<u32> {
   let n = sample_lattice();
   let s = sample_item(id);
-  if (s.x >= n.x || s.y >= n.y || !stopped(s)) {
+  if (s.x >= n.x || s.y >= n.y || !hits(s)) {
     return vec2<u32>(NO_ENTRY);
   }
   return s;
 }
 
 @compute @workgroup_size(SQUARE_SIDE, SQUARE_SIDE, 1)
-fn sample_box_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  let s = stopped_item(id.xy);
+fn sample_hit_cs(@builtin(global_invocation_id) id: vec3<u32>) {
+  let s = hit_item(id.xy);
   if (s.x == NO_ENTRY) {
     return;
   }

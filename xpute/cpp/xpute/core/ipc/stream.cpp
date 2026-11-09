@@ -36,7 +36,7 @@ std::optional<std::uint32_t> Stream::reserve(std::uint32_t op, std::uint32_t n, 
 }
 
 static std::uint32_t byte_words_of(std::optional<std::span<const std::uint8_t>> bytes) noexcept {
-    return static_cast<std::uint32_t>(record_words(0, bytes ? std::optional<std::uint64_t>{bytes->size()} : std::nullopt) - 2);
+    return static_cast<std::uint32_t>(rec_words(0, bytes ? std::optional<std::uint64_t>{bytes->size()} : std::nullopt) - 2);
 }
 
 void Stream::record(std::uint32_t op, std::span<const std::uint32_t> args, std::span<const std::uint32_t> tail,

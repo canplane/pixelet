@@ -328,7 +328,7 @@ fn ground_cell(shard: u32, place: u32, zoom: u32, c: vec3<i32>) -> GroundCell {
 // The caves, as pxl-content cave.rs carves them.
 
 /// A tunnel's part in a node, in pipe cells (pxl-content `cave::Piece`): where it comes in and
-/// goes out, the sides it crosses there, 6 for none at the tunnel's ends, and its blocks. `on`
+/// goes out, the sides it crosses there, `CAVE_NO_SIDE` at the tunnel's ends, and its blocks. `on`
 /// marks the children its walk passes.
 struct Piece {
   enter: vec3<i32>,
@@ -347,7 +347,7 @@ fn spawn(zoom: u32, c: vec3<i32>, k: u32) -> Piece {
   let g = seed_mix32(h, 1u);
   if (s < 4i) {
     let bits = vec3<i32>(i32(h & 1u), i32((h >> 1u) & 1u), i32((h >> 2u) & 1u));
-    return Piece(o + bits, o + 1i - bits, 6u, 6u, tunnel_blocks(k), 0u);
+    return Piece(o + bits, o + 1i - bits, CAVE_NO_SIDE, CAVE_NO_SIDE, tunnel_blocks(k), 0u);
   }
   let q = s / 4i;
   let qu = u32(q);
@@ -366,7 +366,7 @@ fn spawn(zoom: u32, c: vec3<i32>, k: u32) -> Piece {
       select(my - dy, my + dy, my < 2i * q),
       clamp(ez + i32((g >> 16u) % reach) - q / 4i, 0i, s - 1i),
     ),
-    6u, 6u, tunnel_blocks(k), 0u,
+    CAVE_NO_SIDE, CAVE_NO_SIDE, tunnel_blocks(k), 0u,
   );
 }
 
@@ -416,8 +416,8 @@ fn hand_down(zoom: u32, c: vec3<i32>, p: Piece, want: u32) -> Piece {
   var on = 0u;
   var want_enter = vec3<i32>(0i);
   var want_leave = vec3<i32>(0i);
-  var want_in = 6u;
-  var want_out = 6u;
+  var want_in = CAVE_NO_SIDE;
+  var want_out = CAVE_NO_SIDE;
   var at = 8u;
   var cells = vec4<u32>(0u);
   var cur = p.enter;
@@ -509,8 +509,8 @@ struct CaveNode {
 fn cave_holds(zoom: u32, c: vec3<i32>) -> CaveNode {
   var enter = vec3<i32>(0i);
   var leave = vec3<i32>(0i);
-  var side_in = 6u;
-  var side_out = 6u;
+  var side_in = CAVE_NO_SIDE;
+  var side_out = CAVE_NO_SIDE;
   var blocks = 0u;
   var tunnels = TUNNELS_FIRST;
   var last = TUNNELS_LAST;
@@ -561,7 +561,7 @@ fn cave_holds(zoom: u32, c: vec3<i32>) -> CaveNode {
 /// The port of pxl-content `cave::side_middle`.
 fn side_middle(side: u32) -> vec3<i32> {
   var p = vec3<i32>(32i);
-  if (side < 6u) {
+  if (side < CAVE_NO_SIDE) {
     p[side / 2u] = select(0i, 64i, (side & 1u) == 1u);
   }
   return p;

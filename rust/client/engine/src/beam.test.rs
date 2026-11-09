@@ -271,7 +271,7 @@ fn each<T: Send>(n: usize, f: impl Fn(usize) -> T + Sync) -> Vec<T> {
 /// A sample's stop as the sample leaves it for the raster (pxl-render sample_put.wgsl
 /// `sample_put`): how it ended, the node, its asset and the axis it entered across. For a
 /// sample that went on to its reach, only that is kept, because its zoom `SAMPLE_NONE` is all
-/// the raster reads of it (pxl-render sample_box.wgsl `stopped`).
+/// the raster reads of it (pxl-render sample_hit.wgsl `hits`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Hit {
     end: End,

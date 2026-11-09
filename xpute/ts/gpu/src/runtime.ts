@@ -17,7 +17,7 @@ import {
   handle_slot,
   SLOT_BITS,
 } from "@xpute/runtime/abi/handle.ts";
-import { bytes_of, each_record, text_of } from "@xpute/runtime/ipc/stream.ts";
+import { bytes_of, each_rec, text_of } from "@xpute/runtime/ipc/stream.ts";
 
 import { NONE, op, RESULT, STATUS, SURFACE_PREFERRED } from "./api.spec.ts";
 import {
@@ -274,7 +274,7 @@ export class GpuRuntime {
   run(at: u32): void {
     let r: WordCursor | undefined;
     this._drew = false;
-    each_record(this._mem(), at, (code, w, a) => {
+    each_rec(this._mem(), at, (code, w, a) => {
       r ??= new WordCursor(w);
       r.at = a;
       this._record(code, r);

@@ -31,11 +31,11 @@ pub struct Command {
     pub reply: Vec<Field>,
 }
 
-/// A command spec's commands in both directions, its enums' members and its records.
+/// A command spec's commands in both directions, its enums' members and its recs.
 pub struct Protocol {
     commands: BTreeMap<String, Command>,
     enums: BTreeMap<String, BTreeMap<String, u32>>,
-    records: BTreeMap<String, Vec<Field>>,
+    recs: BTreeMap<String, Vec<Field>>,
 }
 
 fn fields(v: &Value) -> Vec<Field> {
@@ -83,19 +83,19 @@ impl Protocol {
                 members,
             );
         }
-        let records = j["records"]
+        let recs = j["records"]
             .as_array()
             .into_iter()
             .flatten()
             .map(|r| {
-                let name = r["name"].as_str().expect("a record's name").to_string();
+                let name = r["name"].as_str().expect("a rec's name").to_string();
                 (name, fields(&r["fields"]))
             })
             .collect();
         Protocol {
             commands,
             enums,
-            records,
+            recs,
         }
     }
 
@@ -107,7 +107,7 @@ impl Protocol {
             let p = Protocol::load(path);
             all.commands.extend(p.commands);
             all.enums.extend(p.enums);
-            all.records.extend(p.records);
+            all.recs.extend(p.recs);
         }
         all
     }
@@ -147,11 +147,11 @@ impl Protocol {
             .unwrap_or_else(|| panic!("{command} has no field {field}"))
     }
 
-    pub fn record_at(&self, record: &str, field: &str) -> u32 {
-        self.records
-            .get(record)
+    pub fn rec_at(&self, rec: &str, field: &str) -> u32 {
+        self.recs
+            .get(rec)
             .and_then(|f| idx(f, field))
-            .unwrap_or_else(|| panic!("{record} has no field {field}"))
+            .unwrap_or_else(|| panic!("{rec} has no field {field}"))
     }
 }
 

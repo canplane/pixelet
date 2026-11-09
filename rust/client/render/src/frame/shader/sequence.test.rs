@@ -185,7 +185,7 @@ fn the_host_calls_off_the_steps_in_their_order() {
 fn a_binding_takes_its_role_from_its_buffer_and_its_call() {
     assert_eq!(role(&FRAME, &PX, 30), ARGS_INDIRECT);
     assert_eq!(role(&FRAME, &FACE, 16), ARGS_INDIRECT);
-    assert_eq!(role(&FRAME, &RECORD_HITS, 9), STATE);
+    assert_eq!(role(&FRAME, &REC_HITS, 9), STATE);
     let corners = FRAME.steps.iter().find(|s| s.name == "corners");
     assert_eq!(corners.map(|s| role(&FRAME, s, 9)), Some(STATE));
 }

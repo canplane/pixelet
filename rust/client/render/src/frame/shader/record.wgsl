@@ -10,7 +10,7 @@
 /// The value that stands for no slot and no place.
 const NO_ENTRY: u32 = 0xffffffffu;
 
-fn record_frame() -> u32 {
+fn rec_frame() -> u32 {
   return node_cache_word(FRAME);
 }
 
@@ -90,7 +90,7 @@ fn find(zoom: u32, c: vec3<i32>, asset: vec2<u32>, lacks: bool) -> u32 {
     if (!lacks && (node_cache_word(e + W_ASSET) != asset.x || node_cache_word(e + W_ASSET + 1u) != asset.y)) {
       continue;
     }
-    if ((node_cache_word(state_at(slot)) & RECORD_FACES) != 0u) {
+    if ((node_cache_word(state_at(slot)) & REC_FACES) != 0u) {
       return slot;
     }
     if (found == NO_ENTRY) {
@@ -123,8 +123,8 @@ fn asked_near(p: Aabb) -> u32 {
 }
 
 /// Whether the eye's ray from `o` stopped on `k` whole, that is, on a node coarser than the
-/// zoom it asked there (pxl-engine `record::stopped_whole`).
-fn stopped_whole(k: Node, o: vec3<i32>) -> bool {
+/// zoom it asked there (pxl-engine `record::ray_whole`).
+fn ray_whole(k: Node, o: vec3<i32>) -> bool {
   return k.zoom < asked_near(node_planes(k, o));
 }
 

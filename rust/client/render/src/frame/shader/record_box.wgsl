@@ -8,7 +8,7 @@
 /// The box of the entry in slot `slot`, whose node is `k`, in units from the origin `o`
 /// (pxl-engine cast.rs `asset_box`). Where the entry's asset fills only part of its cube, the
 /// box is inset on each axis to the part it fills.
-fn entry_box(slot: u32, k: Node, o: vec3<i32>) -> Aabb {
+fn asset_box(slot: u32, k: Node, o: vec3<i32>) -> Aabb {
   let p = node_planes(k, o);
   let eighths = (node_cache_word(entry_at(slot) + W_ASSET) >> FILL_SHIFT) & (EIGHTHS - 1u);
   var lo = p.lo;

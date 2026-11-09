@@ -7,7 +7,7 @@
 // (`generation::drawn_at`), or where it is the decor left out. Otherwise it is sized for the
 // screen as a model, an impostor, or culled (`generation::drawn`).
 
-@group(0) @binding(9) var<storage, read_write> records: array<u32>;
+@group(0) @binding(9) var<storage, read_write> recs: array<u32>;
 @group(0) @binding(13) var<storage, read> drawing: array<u32>;
 @group(0) @binding(14) var<storage, read_write> regions: array<atomic<u32>>;
 
@@ -30,24 +30,24 @@ fn ray_zoom(ask_zoom: u32, c: vec2<i32>) -> u32 {
 }
 
 fn cnt_one(i: u32) {
-  let w = records[i];
+  let w = recs[i];
   if (w == UNGENERATED) {
     return;
   }
-  let corner = vec3<i32>(i32(records[i + 1u]), i32(records[i + 2u]), i32(records[i + 3u]));
+  let corner = vec3<i32>(i32(recs[i + 1u]), i32(recs[i + 2u]), i32(recs[i + 3u]));
   let origin = vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u)));
   let d2 = dist2(origin, corner);
   let placed = i >= PLACED_HEADER + PLACED_HEADER_WORDS;
   let ask_zoom = zoom_at(d2, vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)));
   let zoom = select(ray_zoom(ask_zoom, corner.xy), ask_zoom, placed);
-  let cell_zoom = record_cell_zoom(w);
+  let cell_zoom = rec_cell_zoom(w);
   var drawn_here = zoom == cell_zoom;
   if (placed) {
     drawn_here = zoom >= cell_zoom;
   } else if (cell_zoom >= LEAF_CELL_ZOOM) {
     drawn_here = zoom >= LEAF_CELL_ZOOM;
   }
-  let group = decor_first_group(record_decor(w)) + record_variant(w);
+  let group = decor_first_group(rec_decor(w)) + rec_variant(w);
   let hidden = drawing[DRAWING_HIDE + 3u] != 0u
     && i32(drawing[DRAWING_HIDE]) == corner.x
     && i32(drawing[DRAWING_HIDE + 1u]) == corner.y
@@ -60,7 +60,7 @@ fn cnt_one(i: u32) {
     lod = DRAWING_IMPOSTOR;
   }
   let region = select(2u * group + lod, DRAWING_NONE, hidden || !drawn_here || lod == DRAWING_CULLED);
-  records[i] = (w & ((1u << DRAWING_REGION_SHIFT) - 1u)) | (region << DRAWING_REGION_SHIFT);
+  recs[i] = (w & ((1u << DRAWING_REGION_SHIFT) - 1u)) | (region << DRAWING_REGION_SHIFT);
   if (region != DRAWING_NONE) {
     atomicAdd(&regions[region], 1u);
   }
@@ -68,13 +68,13 @@ fn cnt_one(i: u32) {
 
 @compute @workgroup_size(LANES)
 fn decor_cnt_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_invocation_id) lane: vec3<u32>) {
-  if (!is_valid(group.x)) {
+  if (!holds_recs(group.x)) {
     return;
   }
   for (var k = lane.x; k < RUNS; k += LANES) {
     let run = run_of(group.x, k);
     for (var n = 0u; n < run.y; n += 1u) {
-      cnt_one(record_at(run.x + n));
+      cnt_one(rec_at(run.x + n));
     }
   }
 }

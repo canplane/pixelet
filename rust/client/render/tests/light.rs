@@ -39,7 +39,7 @@ use pxl_engine::cast::{self, Detail, End, Hit, Node, Ray, Spacing, Trace, Until}
 use pxl_engine::light::{self, Light};
 use pxl_engine::object::Cut;
 use pxl_engine::{eye, node_cache, param, raster, ray, record};
-use pxl_render::frame::shader::record::{src, SHADER_LIGHT, SHADER_LIGHT_MARK, SHADER_RECORD_DRAW};
+use pxl_render::frame::shader::record::{src, SHADER_LIGHT, SHADER_LIGHT_MARK, SHADER_REC_DRAW};
 use pxl_render::frame::shader::word::SQUARE_SIDE;
 use pxl_spec::space::coord::zoom::Zoom;
 
@@ -203,11 +203,11 @@ fn hand_light_cs_answers_as_the_rust() {
         "walked, seeing none",
         "walked, its visible lacks",
         "walked, its visible not entered",
-        "walked, its visible not the stop at its band",
+        "walked, its visible not the hit at its band",
         "walked, a sample about it another band's",
         "past the list",
         "samples gone on",
-        "samples stopped",
+        "samples hit",
     ]);
     tally.end("light_cs");
 }
@@ -235,10 +235,10 @@ fn run_slots(
 
     // The list starts as noise, and the samples written into it are walked over the world.
     let mut list: Vec<u32> = (0..light::list_words(SIZE)).map(noise).collect();
-    // The node cache holds a drawable entry for each stopped sample, in the slot of the
+    // The node cache holds a drawable entry for each hit sample, in the slot of the
     // sample's number, as the slots find it by the visible id (pxl-engine `record`). The entry
     // holds its node as seen from where the sample's ray starts, its answer, and a state that
-    // holds the face the sample entered and whether it stopped coarser than its band
+    // holds the face the sample entered and whether it hit coarser than its band
     // (`record::light_whole`).
     let mut rec = vec![0u32; node_cache::WORDS as usize];
     rec[node_cache::FRAME as usize] = CAST;
@@ -274,7 +274,7 @@ fn run_slots(
             list[k + beam::SAMPLE_LACKS as usize] = u32::from(trace.end == End::Lacks);
             list[k + beam::SAMPLE_AXIS as usize] = trace.hit.axis;
             kind_cnt.add("samples gone on", gone);
-            kind_cnt.add("samples stopped", !gone);
+            kind_cnt.add("samples hit", !gone);
             origins[(j * n + i) as usize] = o;
             if !gone {
                 let kind = if trace.end == End::Lacks {
@@ -299,7 +299,7 @@ fn run_slots(
             }
         }
     }
-    let stopped: Vec<u32> = (0..n * n)
+    let hit: Vec<u32> = (0..n * n)
         .filter(|&s| {
             let k = light::sample(SIZE, s) + beam::SAMPLE_NODE + beam::NODE_ZOOM;
             list[k as usize] != beam::SAMPLE_NONE
@@ -308,7 +308,7 @@ fn run_slots(
 
     // Each texel's visible voxel is the one the raster keeps: the nearest voxel of the samples
     // about it whose box its ray enters across the axis the sample entered by. Some texels are
-    // then given none, some the voxel of another sample that stopped, and some a lack.
+    // then given none, some the voxel of another sample that hit, and some a lack.
     let mut vis = vec![0u32; (SIZE * SIZE) as usize];
     for y in 0..SIZE {
         for x in 0..SIZE {
@@ -343,8 +343,8 @@ fn run_slots(
             let mut v = best.map_or(0, |b| b.1);
             match h % 29 {
                 0 | 1 => v = 0,
-                2 | 3 if !stopped.is_empty() => {
-                    v = raster::id_of(stopped[(h >> 8) as usize % stopped.len()], false);
+                2 | 3 if !hit.is_empty() => {
+                    v = raster::id_of(hit[(h >> 8) as usize % hit.len()], false);
                 }
                 4 if v != 0 => v |= raster::LACK,
                 _ => {}
@@ -478,7 +478,7 @@ fn run_slots(
                 !(e.enters && e.axis == axis),
             );
             kind_cnt.add(
-                "walked, its visible not the stop at its band",
+                "walked, its visible not the hit at its band",
                 e.enters && e.axis == axis && !alike,
             );
         }
@@ -753,7 +753,7 @@ fn within_by(d: f32, reach: f32) -> (bool, bool) {
 ///
 /// Two passes stand receivers. `light_mark_walked_cs` stands the pixels the eye walked apart,
 /// which it finds by their walked bits past the grid's words (`ray::hole_bit`), each hit a box
-/// of one point. `record_draw_cs` (record_draw.wgsl) stands every box the eye's draw writes,
+/// of one point. `rec_draw_cs` (record_draw.wgsl) stands every box the eye's draw writes,
 /// one for each fresh held voxel in view, with its planes as `cast::asset_box` lays them. It stands
 /// each box as it writes it, where the head says the world's receivers stand
 /// (`light::HEADER_WORLD_RECEIVERS`).
@@ -770,7 +770,7 @@ fn hand_light_marks_answer_as_the_rust() {
     };
     let pipes = [
         gpu.pipeline(src(SHADER_LIGHT_MARK), "light_mark_walked_cs"),
-        gpu.pipeline(src(SHADER_RECORD_DRAW), "record_draw_cs"),
+        gpu.pipeline(src(SHADER_REC_DRAW), "rec_draw_cs"),
     ];
     let built = real_world::build(EYE);
     let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
@@ -924,7 +924,7 @@ fn hand_light_marks_answer_as_the_rust() {
         "tiles stood on",
         "casts that stood nothing",
     ]);
-    tally.end("light_mark_walked_cs, record_draw_cs");
+    tally.end("light_mark_walked_cs, rec_draw_cs");
 }
 
 /// Which of the receivers' passes stands the tiles (`hand_light_marks_answer_as_the_rust`).
@@ -1062,8 +1062,8 @@ fn run_marks(
             }
         }
         MarkSource::Voxels => {
-            // Each node a sample stopped on becomes one held voxel of the record, as the samples
-            // write it (sample_box.wgsl). The draw writes each voxel in view as a box and stands
+            // Each node a sample hit on becomes one held voxel of the record, as the samples
+            // write it (sample_hit.wgsl). The draw writes each voxel in view as a box and stands
             // it.
             let mut slot = 0u32;
             let mut laid = BTreeSet::new();
@@ -1085,9 +1085,9 @@ fn run_marks(
                     } else {
                         Kind::Cell
                     };
-                    // The entry is whole where its ray stopped on a node coarser than it asked,
+                    // The entry is whole where its ray hit on a node coarser than it asked,
                     // as a stop sets it.
-                    let whole = record::stopped_whole(c.origin, &m.hit.node, range);
+                    let whole = record::ray_whole(c.origin, &m.hit.node, range);
                     let state =
                         face | face << record::ASKED_SHIFT | if whole { record::WHOLE } else { 0 };
                     if laid.insert((m.hit.node.corner, m.hit.node.zoom, m.hit.node.roots)) {
@@ -1188,7 +1188,7 @@ fn run_marks(
     let beams_buf = gpu.buf(&beams, wgpu::BufferUsages::STORAGE);
     let raster_buf = gpu.buf(&raster_args, wgpu::BufferUsages::STORAGE);
     let boxes_buf = gpu.buf(&boxes, wgpu::BufferUsages::STORAGE);
-    let record_buf = gpu.buf(&rec, wgpu::BufferUsages::STORAGE);
+    let rec_buf = gpu.buf(&rec, wgpu::BufferUsages::STORAGE);
     let mut binds: Vec<(u32, wgpu::BindingResource)> = vec![
         (0, eye_buf.as_entire_binding()),
         (11, header_buf.as_entire_binding()),
@@ -1207,7 +1207,7 @@ fn run_marks(
         MarkSource::Voxels => {
             binds.push((14, boxes_buf.as_entire_binding()));
             binds.push((16, raster_buf.as_entire_binding()));
-            binds.push((9, record_buf.as_entire_binding()));
+            binds.push((9, rec_buf.as_entire_binding()));
             let per = record::DRAW_LANES;
             (&pipes[1], [node_cache::ENTRIES / per, 1, 1])
         }

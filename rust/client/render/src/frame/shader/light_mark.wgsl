@@ -6,7 +6,7 @@
 // footprint about them where the head asks for it (`light::HEADER_FOOTPRINT`). Each drawn
 // pixel did one of three things. It took a drawable entry's voxel, whose box the raster drew,
 // and so hit within that box, which the record's draw stands as it writes it (record_draw.wgsl
-// `record_draw_cs`). It met the sky, which receives nothing. Or it was walked apart, and its
+// `rec_draw_cs`). It met the sky, which receives nothing. Or it was walked apart, and its
 // walked bit is set (cast.wgsl `cast_cs`, walked.wgsl). So only the walked pixels' hits stand
 // here, each as a box of one point, one thread for each word of the walked bits
 // (`light_mark_walked_cs`). The walked bits lie past the grid's words among the eye's beam

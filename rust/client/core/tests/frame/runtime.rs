@@ -250,11 +250,11 @@ impl Runtime {
         let s = spec::read(bytes);
         self.shown = Shown {
             renderer_progress: spec::num(
-                s.at(self.ui.record_at("Snapshot", "renderer_progress"))
+                s.at(self.ui.rec_at("Snapshot", "renderer_progress"))
                     .expect("the progress"),
             ),
             zooming: spec::flag(
-                s.at(self.ui.record_at("Snapshot", "zooming"))
+                s.at(self.ui.rec_at("Snapshot", "zooming"))
                     .expect("the zoom"),
             ),
         };

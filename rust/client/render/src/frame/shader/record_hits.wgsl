@@ -5,13 +5,13 @@
 // it stopped on (queue_walk.wgsl and queue_last.wgsl, through queue.wgsl `keep_hit`;
 // pxl-engine `beam::HIT_WORDS`).
 // This pass runs once the queue is done, a thread a stop. Its dispatch reads the stops' count
-// from a copy of the node cache's head (`node_cache::HITS_ARGS`; ray/raster.rs `record_hits`),
+// from a copy of the node cache's head (`node_cache::HITS_ARGS`; ray/raster.rs `rec_hits`),
 // because the pass binds the node cache writable and a dispatch cannot take its arguments from
 // a buffer it writes.
 //
-// `record_hits_cs` finds each stop's entry and sets the face its ray entered (record_put.wgsl
+// `rec_hits_cs` finds each stop's entry and sets the face its ray entered (record_put.wgsl
 // `observe_hit`). The first stop to enter a face asks that face's word, among the hits' asks
-// (`beam::Grid::hit_asks_at`). Once the faces' pass has answered the asks, `record_faces_cs`
+// (`beam::Grid::hit_asks_at`). Once the faces' pass has answered the asks, `rec_faces_cs`
 // puts what lies around each stop's face at the stop's pixel.
 //
 // record_hits.eye.wgsl and record_hits.light.wgsl give what differs by observer: where its
@@ -22,7 +22,7 @@
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
 
 @compute @workgroup_size(HIT_LANES)
-fn record_hits_cs(@builtin(global_invocation_id) id: vec3<u32>) {
+fn rec_hits_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x >= in_cap(node_cache_word(HITS_CNT), hits_cap())) {
     return;
   }
@@ -34,7 +34,7 @@ fn record_hits_cs(@builtin(global_invocation_id) id: vec3<u32>) {
 /// The word put is the entry's word for that face, which the faces' pass answered for this
 /// stop or for an earlier one. It is 0 where no slot keeps the node.
 @compute @workgroup_size(HIT_LANES)
-fn record_faces_cs(@builtin(global_invocation_id) id: vec3<u32>) {
+fn rec_faces_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x >= in_cap(node_cache_word(HITS_CNT), hits_cap())) {
     return;
   }

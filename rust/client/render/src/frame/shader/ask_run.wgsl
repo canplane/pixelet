@@ -17,8 +17,8 @@ fn walk_pass() -> u32 {
 }
 
 /// The first word of the asks' records, counted from the first word of the bound view.
-fn queue_records_at() -> u32 {
-  return arrayLength(&queue) - QUEUE_RECORDS_CAP * QUEUE_RECORD_WORDS;
+fn queue_recs_at() -> u32 {
+  return arrayLength(&queue) - QUEUE_RECS_CAP * QUEUE_REC_WORDS;
 }
 
 fn asked_at() -> u32 {

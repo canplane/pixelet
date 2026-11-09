@@ -5,7 +5,7 @@
 // the entry drawn with the frame's number (`node_cache::R_DRAWN`), which keeps it from eviction
 // (`record::drawn`).
 //
-// The eye's draw (`record_draw_cs`) writes a box for each fresh drawable entry in view, which
+// The eye's draw (`rec_draw_cs`) writes a box for each fresh drawable entry in view, which
 // draws the faces an eye's ray asked about (pxl-engine `record::ASKED`). The draw records the
 // frame it ran in (`node_cache::DRAWN`). Where the light's cast
 // stands the world's receivers this frame (`light::HEADER_WORLD_RECEIVERS`), the draw also
@@ -13,7 +13,7 @@
 // `box_tiles`, light_receiver_tile.wgsl). A pixel that takes the box's voxel has its hit
 // inside the box (visible.wgsl `visible_cell`), so the tiles the box stands on cover the hit.
 //
-// The light's draw (`light_record_draw_cs`) writes a box for each drawable entry that lies on
+// The light's draw (`light_rec_draw_cs`) writes a box for each drawable entry that lies on
 // the light's box, in units from where the ray of box texel (0, 0) starts, as the raster lays
 // the light's boxes. The box draws every face some ray entered (`record::FACES`). An entry
 // whose node is not the one a ray asking its tile's band stops on is stale, and draws behind
@@ -54,7 +54,7 @@ fn box_place(cap: u32) -> u32 {
 /// Marks slot `slot` drawn in this frame, which keeps it from eviction (pxl-engine
 /// `record::drawn`).
 fn mark_drawn(slot: u32) {
-  let frame = record_frame();
+  let frame = rec_frame();
   if (node_cache[drawn_at(slot)] != frame) {
     node_cache[drawn_at(slot)] = frame;
   }
@@ -62,12 +62,12 @@ fn mark_drawn(slot: u32) {
 /// Whether the box `lo`..`hi`, in units from the eye, meets what the eye sees (pxl-engine
 /// `record::in_view`). Some point of it must lie before the eye, its nearest point along
 /// `FORWARD` must be short of the eye's reach, and some point of it must lie inside each of the
-/// screen's sides, widened by `RECORD_VIEW_GROWTH`.
+/// screen's sides, widened by `REC_VIEW_GROWTH`.
 fn in_view(lo: vec3<f32>, hi: vec3<f32>) -> bool {
   let f = eye_v3(FORWARD);
   let r = eye_v3(RIGHT);
   let u = eye_v3(UP);
-  let tan = vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u)) * (1.0 + RECORD_VIEW_GROWTH);
+  let tan = vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u)) * (1.0 + REC_VIEW_GROWTH);
   return reaches(f, lo, hi) > 0.0
     && -reaches(-f, lo, hi) < eye_f32(FAR)
     && reaches(tan.x * f - r, lo, hi) >= 0.0
@@ -92,10 +92,10 @@ fn is_eyed(lo: vec3<f32>, hi: vec3<f32>, tan_xy: vec2<f32>) -> bool {
   return v.x * v.x + v.y * v.y + v.z * v.z < k * k * (1.0 + tan_xy.x * tan_xy.x + tan_xy.y * tan_xy.y);
 }
 
-@compute @workgroup_size(RECORD_DRAW_LANES, 1, 1)
-fn record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
+@compute @workgroup_size(REC_DRAW_LANES, 1, 1)
+fn rec_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x == 0u) {
-    node_cache[NODE_CACHE_DRAWN] = record_frame();
+    node_cache[NODE_CACHE_DRAWN] = rec_frame();
   }
   if (id.x >= ENTRIES) {
     return;
@@ -103,7 +103,7 @@ fn record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let state = node_cache_word(state_at(id.x));
   // The faces an eye's ray entered and asked about (pxl-engine `record::ASKED`). An entry with
   // none does not draw for the eye.
-  let faces = (state & RECORD_ASKED) >> RECORD_ASKED_SHIFT;
+  let faces = (state & REC_ASKED) >> REC_ASKED_SHIFT;
   if (faces == 0u) {
     return;
   }
@@ -113,7 +113,7 @@ fn record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
   let o = vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u)));
   let k = entry_node(id.x, o);
-  let b = entry_box(id.x, k, o);
+  let b = asset_box(id.x, k, o);
   let tan_xy = vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u));
   let near = is_eyed(b.lo, b.hi, tan_xy);
   if (!near && !in_view(b.lo, b.hi)) {
@@ -122,10 +122,10 @@ fn record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   // A stale voxel is no pixel's answer: a pixel only it covers walks as if no box stood there
   // (pxl-engine record.rs, "Fresh or stale"). Left undrawn, it stands no receiver and may be
   // evicted.
-  if (!is_fresh(k, (state & RECORD_WHOLE) != 0u, o)) {
+  if (!is_fresh(k, (state & REC_WHOLE) != 0u, o)) {
     return;
   }
-  let place = box_place(RECORD_EYE_DRAWS);
+  let place = box_place(REC_EYE_DRAWS);
   if (place == NO_ENTRY) {
     return;
   }
@@ -168,13 +168,13 @@ fn on_box(lo: vec3<f32>, hi: vec3<f32>) -> bool {
   return all(last >= vec2<i32>(0)) && all(first < vec2<i32>(n));
 }
 
-@compute @workgroup_size(RECORD_DRAW_LANES, 1, 1)
-fn light_record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
+@compute @workgroup_size(REC_DRAW_LANES, 1, 1)
+fn light_rec_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x >= ENTRIES) {
     return;
   }
   let state = node_cache_word(state_at(id.x));
-  let faces = state & RECORD_FACES;
+  let faces = state & REC_FACES;
   if (faces == 0u) {
     return;
   }
@@ -184,12 +184,12 @@ fn light_record_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
   let o = texel_start(light_corner());
   let k = entry_node(id.x, o);
-  let b = entry_box(id.x, k, o);
+  let b = asset_box(id.x, k, o);
   if (!on_box(b.lo, b.hi)) {
     return;
   }
-  let fresh = band_fresh(k.zoom, (state & RECORD_WHOLE) != 0u, tile_band(box_tile((b.lo + b.hi) * 0.5)));
-  let place = box_place(RECORD_LIGHT_DRAWS);
+  let fresh = band_fresh(k.zoom, (state & REC_WHOLE) != 0u, tile_band(box_tile((b.lo + b.hi) * 0.5)));
+  let place = box_place(REC_LIGHT_DRAWS);
   if (place == NO_ENTRY) {
     return;
   }

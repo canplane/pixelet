@@ -9,9 +9,9 @@ fn walk_pass() -> u32 {
 }
 
 /// The first word of the asks' records, counted from the first word of the run's queue's view
-/// (pxl-engine `ray::queue_records_at`, `ray::QUEUE_LIGHT_SAMPLES`).
-fn queue_records_at() -> u32 {
-  return LIGHT_SAMPLES_RECORDS_AT;
+/// (pxl-engine `ray::queue_recs_at`, `ray::QUEUE_LIGHT_SAMPLES`).
+fn queue_recs_at() -> u32 {
+  return LIGHT_SAMPLES_RECS_AT;
 }
 
 /// Where the run lists the items it parked (pxl-engine `light::parked_items_at`).
