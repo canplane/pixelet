@@ -27,7 +27,7 @@ pub struct SkinnedPass {
     draws_buf: u32,
     /// The skin image of each model, as the frame hands them (`set_skins`).
     skins: Vec<(u32, Image)>,
-    pub marks: MarkPass,
+    pub mark: MarkPass,
 }
 
 impl SkinnedPass {
@@ -43,7 +43,7 @@ impl SkinnedPass {
             draws: [0; 2],
             draws_buf: 0,
             skins: Vec::new(),
-            marks: MarkPass::new(
+            mark: MarkPass::new(
                 g,
                 pipelines,
                 (PIPELINE_SKINNED_MARK, PIPELINE_SKINNED),
@@ -55,7 +55,7 @@ impl SkinnedPass {
 
     /// The layout of the marks' group 0 (tile_mark.wgsl).
     pub fn mark_layout(&self) -> Layout {
-        self.marks.layout()
+        self.mark.layout()
     }
 
     /// Draws this frame's marks into `pass`. `frames` holds their group 0 as
@@ -67,7 +67,7 @@ impl SkinnedPass {
         frames: [u32; 2],
         uploads: &UploadTable,
     ) {
-        self.marks.draw(pass, frames, |pass, d, palette| {
+        self.mark.draw(pass, frames, |pass, d, palette| {
             let Some((mesh, vertex_cnt, idx_cnt)) = uploads.get(d[0]) else {
                 return;
             };
@@ -86,13 +86,13 @@ impl SkinnedPass {
         draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
         out: &mut Vec<u32>,
     ) {
-        self.marks.reads(draws, out);
+        self.mark.reads(draws, out);
     }
 
-    /// Adds the pass's draws to `stats`. Each counts its model's triangles, or
+    /// Adds the pass's draws to `stat`. Each counts its model's triangles, or
     /// 0 while its mesh is landing.
-    pub fn count(&self, draws: &DrawTable, uploads: &UploadTable, stats: &mut DrawStat) {
-        draws.count(PIPELINE_SKINNED, stats, |d| {
+    pub fn count(&self, draws: &DrawTable, uploads: &UploadTable, stat: &mut DrawStat) {
+        draws.count(PIPELINE_SKINNED, stat, |d| {
             uploads.get(d[0]).map_or(0, |(_, _, idx_cnt)| idx_cnt / 3)
         });
     }
@@ -185,6 +185,6 @@ impl SkinnedPass {
         for group in self.draws {
             release(group);
         }
-        self.marks.release();
+        self.mark.release();
     }
 }

@@ -83,8 +83,8 @@ pub unsafe fn set_uploads(at: u32, live: usize) {
     unsafe { draw::set_lists(at as usize + UPLOAD_COLUMNS * slots * 4, live) };
 }
 
-fn home(handle: u32, slots: usize) -> usize {
-    (handle.wrapping_mul(0x9e37_79b1) >> (32 - slots.trailing_zeros())) as usize
+fn home(handle: u32, slot_cnt: usize) -> usize {
+    (handle.wrapping_mul(0x9e37_79b1) >> (32 - slot_cnt.trailing_zeros())) as usize
 }
 
 impl UploadTable {

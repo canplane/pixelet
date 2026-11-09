@@ -241,7 +241,7 @@ pub trait BrickSource: Presence {
     /// The brick the clip level read at `cell_zoom` wants in `entry`, and whether it is present;
     /// the inverse of `present`.
     fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool);
-    /// The four palette indices of cell `i` of the brick in `slot` (`ground::palette_indices`).
+    /// The four palette indices of cell `i` of the brick in `slot` (`ground::palette_idxs`).
     fn palette_word(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32;
     /// Column word `i` of the brick in `slot` (`COLUMN_WORDS`), `i` to
     /// `BRICK_CELLS`.
@@ -563,7 +563,7 @@ pub fn ground(
         palette_idx,
         top,
         part,
-        fold: ground::palette_indices(word),
+        fold: ground::palette_idxs(word),
     };
     (cell, f)
 }

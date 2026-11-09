@@ -12,7 +12,7 @@ import { type Link, serve } from "@xpute/runtime";
 import { MACHINE } from "@/abi/machine.spec.ts";
 import {
   declare_source,
-  source_declaration,
+  source_decl,
   source_state,
   watch_source,
 } from "@/service/sys/fs/source.ts";
@@ -40,7 +40,7 @@ onmessage = ({ data: m }: MessageEvent<ToCore>) => {
       return tell({
         kind: "perf",
         id: m.id,
-        value: answer(m.what as PerfRead, m.args),
+        val: answer(m.what as PerfRead, m.args),
       });
   }
 };
@@ -50,9 +50,9 @@ async function keep(): Promise<boolean> {
   const store = new Map(keys);
   set_storage({
     get: (key) => store.get(key) ?? null,
-    set: (key, value) => {
-      store.set(key, value);
-      tell({ kind: "keep", key, value });
+    set: (key, val) => {
+      store.set(key, val);
+      tell({ kind: "keep", key, val });
     },
   });
   return handheld;
@@ -67,7 +67,7 @@ function up(link: Link): void {
     tell({
       kind: "source",
       state: source_state(),
-      declaration: source_declaration(),
+      decl: source_decl(),
     }),
   );
   void declare_source(source_declare);

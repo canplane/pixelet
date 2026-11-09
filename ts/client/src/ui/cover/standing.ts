@@ -31,7 +31,7 @@ export function useStanding(): Standing {
     online: useOnline(),
     stall,
     stopCode: useSyncExternalStore(watch_boot, stop_code),
-    made: useCore((s) => s.renderer_progress),
+    progress: useCore((s) => s.renderer_progress),
     area: useCore((s) => s.area_progress),
     placed: useCore((s) => s.pivot.status !== GroundStatus.Idle),
   };

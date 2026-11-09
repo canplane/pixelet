@@ -50,12 +50,12 @@ fn runtime(
 #[test]
 fn runtime_paces_frames() {
     let (adapter, device, queue) = device();
-    let (mut busy, mut other) = (
+    let (busy, other) = (
         runtime(&adapter, &device, &queue, 1),
         runtime(&adapter, &device, &queue, 2),
     );
     assert!(busy.admit_frame());
-    busy.present();
+    busy.count_frame();
     assert!(!busy.admit_frame(), "its one frame is unfinished");
     assert!(
         other.admit_frame(),
@@ -84,10 +84,10 @@ fn frame_ends_either_way() {
 #[test]
 fn lost_device_frames_released() {
     let (adapter, device, queue) = device();
-    let mut h = runtime(&adapter, &device, &queue, 1);
+    let h = runtime(&adapter, &device, &queue, 1);
     let count = h.unfinished_cnt.clone();
     assert!(h.admit_frame());
-    h.present();
+    h.count_frame();
     assert_eq!(
         count.load(Ordering::Relaxed),
         1,
@@ -153,11 +153,11 @@ fn records_read_back() {
         ["region", "input.at", "done.at", "readback.at"].map(|k| g.u32(k));
     g.each("program", |name| {
         let p = g.s(name);
-        let mut memory = vec![0u8; region as usize];
+        let mut mem = vec![0u8; region as usize];
         let key = format!("{p}.input");
         if g.has(&key) {
             let input = g.bytes(&key);
-            memory[input_at as usize..input_at as usize + input.len()].copy_from_slice(&input);
+            mem[input_at as usize..input_at as usize + input.len()].copy_from_slice(&input);
         }
         let mut runtime = GpuRuntime::new(
             adapter.clone(),
@@ -168,17 +168,17 @@ fn records_read_back() {
         );
         g.each(&format!("{p}.turn"), |turn| {
             let words = g.bytes(turn);
-            memory[..words.len()].copy_from_slice(&words);
+            mem[..words.len()].copy_from_slice(&words);
             let ticket = turn.rsplit('.').next().unwrap().parse::<u32>().unwrap() + 1;
-            runtime.run(&mut Memory::of(&mut memory), 0);
-            while Memory::of(&mut memory).load_acquire(done) != ticket {
+            runtime.run(&mut Memory::of(&mut mem), 0);
+            while Memory::of(&mut mem).load_acquire(done) != ticket {
                 let _ = device.poll(wgpu::PollType::wait_indefinitely());
-                runtime.poll(&mut Memory::of(&mut memory));
+                runtime.poll(&mut Memory::of(&mut mem));
             }
         });
         let want = g.bytes(&format!("{p}.readback"));
         assert_eq!(
-            &memory[readback as usize..readback as usize + want.len()],
+            &mem[readback as usize..readback as usize + want.len()],
             &want[..],
             "{p}.readback"
         );

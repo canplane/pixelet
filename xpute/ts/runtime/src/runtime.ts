@@ -173,14 +173,14 @@ export const QUIET: Ui = { cmds: [], on() {}, gpu() {}, stop() {} };
 
 /** Each command of a protocol, by its number, and the fields its packet takes
  * in order. */
-export type Fields = Record<u32, Arg[]>;
+export type FieldTable = Record<u32, Arg[]>;
 
 /** A `Link` as a protocol's generated table types it. Each command goes by the
  * one way its specification names, and only a number crosses at run time. */
 export interface Protocol<
-  S extends Fields,
-  R extends Fields,
-  C extends Fields,
+  S extends FieldTable,
+  R extends FieldTable,
+  C extends FieldTable,
 > {
   send<K extends keyof S & u32>(cmd: K, ...args: S[K]): void;
   request<K extends keyof R & u32>(cmd: K, ...args: R[K]): Promise<i32>;
@@ -267,7 +267,7 @@ export function mount<G extends Grant>(
   thread?.listen((wake_ms, turn_ms) => doorbell.turns(wake_ms, turn_ms));
   thread?.pause();
 
-  const kick = <T>(v: T): T => (scheduler.kick(), v);
+  const kick = <T>(v: T): T => (scheduler.wake(), v);
   const send = (cmd: u32, ...args: Arg[]) =>
     kick(doorbell.send(cmd, encode_args(args)));
   function call(cmd: u32, ...args: Arg[]): i32 {
@@ -294,7 +294,7 @@ export function mount<G extends Grant>(
     );
     own.set(fs.Major.FS, fs.fs_imports(files));
   }
-  const taken = new Set(ui.cmds);
+  const ui_cmds = new Set(ui.cmds);
   doorbell.listen((tag, cmd, f, pkt) => {
     const major = frame.major_of(cmd);
     const on = major < frame.PROGRAM_MAJOR ? own.get(major) : cfg.program;
@@ -303,7 +303,7 @@ export function mount<G extends Grant>(
       : major === fs.Major.FS
         ? Errno.ENODEV
         : Errno.ENOSYS;
-    if (taken.has(cmd)) ui.on(tag, cmd, f, named(cmd, f), pkt);
+    if (ui_cmds.has(cmd)) ui.on(tag, cmd, f, named(cmd, f), pkt);
     return res;
   });
   doorbell.onterminated = () => {
@@ -355,7 +355,7 @@ export function mount<G extends Grant>(
       const pkt = encode_args(args)(doorbell);
       return pkt === null || doorbell.fits(pkt);
     },
-    kick: () => scheduler.kick(),
+    kick: () => scheduler.wake(),
     wake: () => scheduler.wake(),
     input: () => policy.input?.(performance.now()),
     resume: () => ((resumed = true), steer()),

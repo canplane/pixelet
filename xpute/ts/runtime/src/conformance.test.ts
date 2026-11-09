@@ -137,8 +137,8 @@ function module(path: string): Opener {
   return {
     open(seed) {
       const pages = MODULE_BYTES >> 16;
-      const memory = new WebAssembly.Memory({ initial: pages, maximum: pages });
-      const core = open_module(compiled, memory, () => clock_ms);
+      const mem = new WebAssembly.Memory({ initial: pages, maximum: pages });
+      const core = open_module(compiled, mem, () => clock_ms);
       const boot = core.instance.exports.xpute_conformance_boot as (
         seed: number,
       ) => number;

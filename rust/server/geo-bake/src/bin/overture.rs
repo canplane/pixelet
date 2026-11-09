@@ -55,7 +55,7 @@ struct Type {
     overture: &'static str,
     table: &'static str,
     columns: &'static [(&'static str, &'static str)],
-    indexes: &'static [&'static str],
+    idxs: &'static [&'static str],
 }
 
 const SUBTYPE: (&str, &str) = (
@@ -81,13 +81,13 @@ const TYPES: &[Type] = &[
         overture: "address",
         table: "overture_addresses",
         columns: &[],
-        indexes: &[],
+        idxs: &[],
     },
     Type {
         overture: "bathymetry",
         table: "overture_base_bathymetry",
         columns: &[SUBTYPE, CLASS],
-        indexes: &[],
+        idxs: &[],
     },
     Type {
         overture: "building",
@@ -98,38 +98,38 @@ const TYPES: &[Type] = &[
             ("height", "DOUBLE PRECISION GENERATED ALWAYS AS ((properties->>'height')::float8) STORED"),
             ("num_floors", "INTEGER GENERATED ALWAYS AS (trunc((properties->>'num_floors')::float8)::int) STORED"),
         ],
-        indexes: &["class"],
+        idxs: &["class"],
     },
     Type {
         overture: "building_part",
         table: "overture_building_parts",
         columns: &[],
-        indexes: &[],
+        idxs: &[],
     },
     Type {
         overture: "division",
         table: "overture_divisions",
         columns: &[SUBTYPE, NAME, NAMES],
-        indexes: &["subtype", "USING GIN (names gin_trgm_ops)"],
+        idxs: &["subtype", "USING GIN (names gin_trgm_ops)"],
     },
     // `division_id` keyed, so a bake tests a division for an area by its id, not by a scan.
     Type {
         overture: "division_area",
         table: "overture_division_areas",
         columns: &[SUBTYPE, NAME],
-        indexes: &["subtype", "((properties->>'division_id'))"],
+        idxs: &["subtype", "((properties->>'division_id'))"],
     },
     Type {
         overture: "division_boundary",
         table: "overture_division_boundaries",
         columns: &[],
-        indexes: &[],
+        idxs: &[],
     },
     Type {
         overture: "place",
         table: "overture_places",
         columns: &[("name", "TEXT NOT NULL GENERATED ALWAYS AS (COALESCE(properties->'names'->>'primary', '')) STORED")],
-        indexes: &[
+        idxs: &[
             "USING GIN (properties)",
             "USING GIN (name gin_trgm_ops)",
             "(name) INCLUDE (gers_id, geom)",
@@ -149,43 +149,43 @@ const TYPES: &[Type] = &[
             ("subclass", "TEXT GENERATED ALWAYS AS (properties->>'subclass') STORED"),
             ("subclass_rules", "JSONB GENERATED ALWAYS AS (NULLIF(properties->'subclass_rules', 'null')) STORED"),
         ],
-        indexes: &["(subtype, class)"],
+        idxs: &["(subtype, class)"],
     },
     Type {
         overture: "connector",
         table: "overture_connectors",
         columns: &[],
-        indexes: &[],
+        idxs: &[],
     },
     Type {
         overture: "infrastructure",
         table: "overture_base_infrastructure",
         columns: &[SUBTYPE, CLASS],
-        indexes: &["class"],
+        idxs: &["class"],
     },
     Type {
         overture: "land",
         table: "overture_base_land",
         columns: &[SUBTYPE, CLASS],
-        indexes: &["class"],
+        idxs: &["class"],
     },
     Type {
         overture: "land_cover",
         table: "overture_base_land_cover",
         columns: &[SUBTYPE],
-        indexes: &[],
+        idxs: &[],
     },
     Type {
         overture: "land_use",
         table: "overture_base_land_use",
         columns: &[SUBTYPE, CLASS],
-        indexes: &["class"],
+        idxs: &["class"],
     },
     Type {
         overture: "water",
         table: "overture_base_water",
         columns: &[SUBTYPE, CLASS],
-        indexes: &["class"],
+        idxs: &["class"],
     },
 ];
 
@@ -287,7 +287,7 @@ fn run() -> Result<(), String> {
                 ));
             }
             client
-                .batch_execute(&format!("{}{}", table(ty, ty.table), indexes(ty, ty.table)))
+                .batch_execute(&format!("{}{}", table(ty, ty.table), idxs(ty, ty.table)))
                 .map_err(|e| e.to_string())?;
         }
         let started = std::time::Instant::now();
@@ -617,7 +617,7 @@ fn catalog(
     release: &str,
     accessed_at: &str,
 ) -> Result<(), postgres::Error> {
-    let counts: FnvHashMap<String, i64> = tx
+    let cnts: FnvHashMap<String, i64> = tx
         .query(
             &format!("SELECT shard, count(*) FROM {} GROUP BY shard", staging(ty)),
             &[],
@@ -626,7 +626,7 @@ fn catalog(
         .map(|r| (r.get(0), r.get(1)))
         .collect();
     for s in shards {
-        let cnt = counts.get(&s.name).copied().unwrap_or(0);
+        let cnt = cnts.get(&s.name).copied().unwrap_or(0);
         tx.execute(
             "INSERT INTO overture_catalog (table_name, shard, version, accessed_at, total_count) VALUES ($1, $2, $3, $4::text::timestamptz, $5)
              ON CONFLICT (shard, table_name) DO UPDATE SET version = EXCLUDED.version, accessed_at = EXCLUDED.accessed_at, total_count = EXCLUDED.total_count",
@@ -657,7 +657,7 @@ fn build_and_swap(
     let rows = client
         .execute(&feats(ty, &next, release), &[])
         .map_err(db)? as i64;
-    client.batch_execute(&indexes(ty, &next)).map_err(db)?;
+    client.batch_execute(&idxs(ty, &next)).map_err(db)?;
     for attempt in 1..=SWAP_TRIES {
         let mut tx = client.transaction().map_err(db)?;
         tx.batch_execute(&format!("SET LOCAL lock_timeout = '{SWAP_WAIT}'"))
@@ -672,7 +672,7 @@ fn build_and_swap(
             r => r.map_err(db)?,
         }
         // A renamed table's indexes keep the names they were built under, the `_next` table's.
-        // They are renamed to the table's, or `indexes` would find none under the table's name
+        // They are renamed to the table's, or `idxs` would find none under the table's name
         // and build a second set, and the next ingest's `_next` table would find its names
         // taken and be left without indexes.
         for name in tx
@@ -1022,9 +1022,9 @@ fn table(ty: &Type, t: &str) -> String {
     sql
 }
 
-fn indexes(ty: &Type, t: &str) -> String {
+fn idxs(ty: &Type, t: &str) -> String {
     let mut sql = format!("CREATE INDEX IF NOT EXISTS {t}_geom ON {t} USING GIST (geom);\n");
-    for (k, idx) in ty.indexes.iter().enumerate() {
+    for (k, idx) in ty.idxs.iter().enumerate() {
         let on = if idx.starts_with("USING") || idx.starts_with('(') {
             idx.to_string()
         } else {

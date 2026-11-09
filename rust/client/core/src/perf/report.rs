@@ -32,7 +32,7 @@ struct RendererFrame {
     gpu: GpuSample,
     device: DeviceSample,
     gpu_read: Option<GpuRead>,
-    rays: Option<RayRead>,
+    ray_read: Option<RayRead>,
 }
 
 /// A frame's ray counts as they land, with the renderer's number for the
@@ -40,7 +40,7 @@ struct RendererFrame {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RayRead {
     pub frame: f64,
-    pub rays: RaySample,
+    pub sample: RaySample,
 }
 
 impl Default for RendererFrame {
@@ -50,7 +50,7 @@ impl Default for RendererFrame {
             gpu: GpuSample::default(),
             device: DeviceSample::default(),
             gpu_read: None,
-            rays: None,
+            ray_read: None,
         }
     }
 }
@@ -74,7 +74,7 @@ pub fn set_renderer_frame(report: &FrameReport) {
         return;
     };
     let [draws, triangles] = stat
-        .draws
+        .draw_stat
         .iter()
         .fold([0.0; 2], |[d, t], c| [d + c[0], t + c[1]]);
     RENDERER.set(RendererFrame {
@@ -94,9 +94,9 @@ pub fn set_renderer_frame(report: &FrameReport) {
             pack_bytes: stat.pack_bytes,
         },
         gpu_read: stat.gpu,
-        rays: stat.rays.map(|r| RayRead {
+        ray_read: stat.ray_cnt.map(|r| RayRead {
             frame: r.frame,
-            rays: RaySample::of(r.counts),
+            sample: RaySample::of(r.cnts),
         }),
     });
 }
@@ -158,7 +158,7 @@ pub fn perf_frame(t: FrameTurn) {
     if let Some(r) = renderer.gpu_read {
         perf_record_gpu(r);
     }
-    if let Some(r) = renderer.rays {
+    if let Some(r) = renderer.ray_read {
         perf_record_rays(r);
     }
     perf_fold_recording(&section);

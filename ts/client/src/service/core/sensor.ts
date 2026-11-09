@@ -11,6 +11,7 @@ import {
 } from "@/abi/cmd.spec.ts";
 import { type SensorListener } from "@/service/platform/types.ts";
 import * as sensor from "@/service/platform/sensor.ts";
+import { geo_fix, MEASURE_PLACE } from "@/service/platform/sensor-listener.ts";
 import { core } from "@/service/core/core.ts";
 
 export function locate(): void {
@@ -19,7 +20,7 @@ export function locate(): void {
 
 /** A reading the device could not give, such as NaN or an infinity, is sent
  * as none. */
-function given(n: number | null): number | null {
+function finite(n: number | null): number | null {
   return n !== null && Number.isFinite(n) ? n : null;
 }
 
@@ -34,9 +35,9 @@ function core_pos(
     Command.SENSOR_POS,
     lon,
     lat,
-    given(alt),
-    given(accuracy),
-    given(course),
+    finite(alt),
+    finite(accuracy),
+    finite(course),
   );
 }
 
@@ -48,10 +49,10 @@ function core_orient(
 ): void {
   core.send(
     Command.SENSOR_ORIENT,
-    given(webkit_compass_heading),
-    given(alpha),
-    given(beta),
-    given(gamma),
+    finite(webkit_compass_heading),
+    finite(alpha),
+    finite(beta),
+    finite(gamma),
   );
 }
 
@@ -76,8 +77,8 @@ const ANSWER = {
 
 export const SENSOR_LISTENER: SensorListener = {
   position: core_pos,
-  positionError: (error) =>
-    core.send(Command.SENSOR_ERR, Sensor.Geolocation, ERR[error]),
+  positionError: (err) =>
+    core.send(Command.SENSOR_ERR, Sensor.Geolocation, ERR[err]),
   orientation: core_orient,
   // The compass gives no code for its failure.
   orientationLost: () =>
@@ -87,6 +88,12 @@ export const SENSOR_LISTENER: SensorListener = {
 };
 
 export function sensor_start(e: SensorStart): void {
+  // A build made for measuring has its place given and starts no sensor, so
+  // that no permission prompt holds it on any platform.
+  if (__PERF_DRIVE__) {
+    if (e.sensor === Sensor.Geolocation) geo_fix(MEASURE_PLACE);
+    return;
+  }
   if (e.sensor === Sensor.Geolocation) {
     sensor.geo.start();
   } else sensor.orient.start();

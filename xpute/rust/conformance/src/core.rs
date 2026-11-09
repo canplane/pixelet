@@ -293,7 +293,7 @@ mod wasm {
         // A range past the memory's end means a runtime sized the memory for
         // another core.
         xpute_kit::ensure!(
-            range as u64 + spec::MEM_BYTES as u64 <= xpute_core::wasm::given(),
+            range as u64 + spec::MEM_BYTES as u64 <= xpute_core::wasm::mem_sz(),
             ENOMEM,
             range
         );

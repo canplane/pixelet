@@ -352,15 +352,15 @@ fn side_by_side(a: &Stretch, b: &Stretch, scale: Scale) -> bool {
     } else {
         (b, a)
     };
-    let offsets: Vec<f64> = [0.0, 0.25, 0.5, 0.75, 1.0]
+    let offs: Vec<f64> = [0.0, 0.25, 0.5, 0.75, 1.0]
         .iter()
         .map(|f| lateral(short.whole.at(f * short.whole.length()), long))
         .collect();
-    let alongside = offsets.iter().filter(|&&d| d <= max).count();
+    let alongside = offs.iter().filter(|&&d| d <= max).count();
     if same {
-        alongside * 2 > offsets.len()
+        alongside * 2 > offs.len()
     } else {
-        alongside == offsets.len() && offsets.iter().sum::<f64>() / offsets.len() as f64 >= 1.5
+        alongside == offs.len() && offs.iter().sum::<f64>() / offs.len() as f64 >= 1.5
     }
 }
 
@@ -536,7 +536,7 @@ impl Panel {
 }
 
 /// Stretch `r`'s deck cell by cell, member `m` of its group (`DECK_PANEL`).
-fn deck_of(r: &Stretch, m: usize, members: &[Member], needs: &Clearance, scale: Scale) -> Vec<i32> {
+fn deck_of(r: &Stretch, m: usize, members: &[Member], need: &Clearance, scale: Scale) -> Vec<i32> {
     let me = &members[m];
     let mut panels: FnvHashMap<usize, Panel> = FnvHashMap::default();
     (0..r.cell.len())
@@ -548,7 +548,7 @@ fn deck_of(r: &Stretch, m: usize, members: &[Member], needs: &Clearance, scale: 
             let mut at = |k: usize| {
                 panels
                     .entry(k)
-                    .or_insert_with(|| deck_panel(r, k, m, members, needs, scale))
+                    .or_insert_with(|| deck_panel(r, k, m, members, need, scale))
                     .at(u)
             };
             let y = if t > 0.0 {
@@ -576,7 +576,7 @@ fn deck_panel(
     k: usize,
     m: usize,
     members: &[Member],
-    needs: &Clearance,
+    need: &Clearance,
     scale: Scale,
 ) -> Panel {
     let me = &members[m];
@@ -584,17 +584,17 @@ fn deck_panel(
     let within = |p: &[f64; 2], d: usize| libm::hypot(p[0] - c[0], p[1] - c[1]) <= d as f64;
     // What the source gives counts within the window; what another deck sets, within the near.
     let radius = |set_by_deck: bool| if set_by_deck { DECK_NEAR } else { DECK_WINDOW };
-    let grounds: Vec<&([f64; 2], i32, usize)> = needs
+    let grounds: Vec<&([f64; 2], i32, usize)> = need
         .grounds
         .iter()
         .filter(|g| within(&g.0, DECK_WINDOW))
         .collect();
-    let anchors: Vec<&([f64; 2], i32, bool, usize)> = needs
+    let anchors: Vec<&([f64; 2], i32, bool, usize)> = need
         .anchors
         .iter()
         .filter(|a| within(&a.0, radius(a.2)))
         .collect();
-    let clears: Vec<&([f64; 2], i32, f64, bool)> = needs
+    let clears: Vec<&([f64; 2], i32, f64, bool)> = need
         .clears
         .iter()
         .filter(|n| within(&n.0, radius(n.3)))
@@ -618,7 +618,7 @@ fn deck_panel(
     };
     // A long flat span rises to its layer.
     let total: f64 = about().map(|m| m.length).sum();
-    let flat = needs.bounds.iter().any(|b| within(b, DECK_WINDOW))
+    let flat = need.bounds.iter().any(|b| within(b, DECK_WINDOW))
         && tmax - tmin < scale.c(FLAT_TERRAIN_DIP_THRESHOLD_M)
         && total >= f64::from(scale.c(SHORT_BRIDGE_LENGTH_M));
     let clearance = if flat {
@@ -674,8 +674,7 @@ fn deck_panel(
         }
     }
     pts.extend(
-        needs
-            .frees
+        need.frees
             .iter()
             .filter(|f| within(f, DECK_WINDOW))
             .map(|f| (u(*f), f64::from(raised))),
@@ -839,22 +838,21 @@ fn road_decks(
         let anchors_end = |n: &End| is_boundary(n) && !ramp_ends.contains(n) && !joins_other(n);
 
         // What the deck must meet or clear, each where it lies, in the ring's cells.
-        let mut needs = Clearance::default();
+        let mut need = Clearance::default();
         for (m, &q) in g.iter().enumerate() {
             let r = &stretches[q];
             let last = r.cell.len() - 1;
             for (e, i) in [(&r.ends[0], 0), (&r.ends[1], last)] {
                 if is_boundary(e) {
-                    needs.bounds.push(absolute(r.at[i]));
+                    need.bounds.push(absolute(r.at[i]));
                 }
                 if anchors_end(e) {
-                    needs
-                        .anchors
+                    need.anchors
                         .push((absolute(r.at[i]), r.terrain[i], false, m));
                 } else if let Some(&y) = joints.get(e) {
-                    needs.anchors.push((absolute(r.at[i]), y, true, m));
+                    need.anchors.push((absolute(r.at[i]), y, true, m));
                 } else if is_boundary(e) {
-                    needs.frees.push(absolute(r.at[i]));
+                    need.frees.push(absolute(r.at[i]));
                 }
             }
         }
@@ -862,8 +860,7 @@ fn road_decks(
         // ground caps it from wherever the end lies; a joint, another deck's, only from near
         // (`DECK_NEAR`).
         let reachable = |p: [f64; 2]| {
-            needs
-                .anchors
+            need.anchors
                 .iter()
                 .map(|&(a, ya, joint, _)| (libm::hypot(p[0] - a[0], p[1] - a[1]), ya, joint))
                 .filter(|&(d, _, joint)| !joint || d <= DECK_NEAR as f64)
@@ -876,7 +873,7 @@ fn road_decks(
             let layer = effective_layer(r);
             for (i, &c) in r.cell.iter().enumerate() {
                 let (at, ground) = (absolute(r.at[i]), r.terrain[i]);
-                needs.grounds.push((at, ground, m));
+                need.grounds.push((at, ground, m));
                 let mut need = ground;
                 let (p, n) = (
                     r.cell[i.saturating_sub(1)],
@@ -902,7 +899,7 @@ fn road_decks(
                 }
             }
         }
-        needs.clears = clears
+        need.clears = clears
             .into_iter()
             .map(|(c, need, ground, stacked)| {
                 (
@@ -942,7 +939,7 @@ fn road_decks(
         let mut ys: Vec<Vec<i32>> = g
             .iter()
             .enumerate()
-            .map(|(m, &q)| deck_of(&stretches[q], m, &members, &needs, scale))
+            .map(|(m, &q)| deck_of(&stretches[q], m, &members, &need, scale))
             .collect();
 
         // An end above the ground ramps down to it inside the member.

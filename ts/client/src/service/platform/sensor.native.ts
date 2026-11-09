@@ -73,10 +73,10 @@ function watch_keep(
 
 let geolocation: Watch | null = null;
 
-function geo_fail(watch: Watch, error: "denied" | "other"): void {
+function geo_fail(watch: Watch, err: "denied" | "other"): void {
   if (geolocation !== watch) return;
   geo_stop();
-  listener.positionError(error);
+  listener.positionError(err);
 }
 
 function geo_start(): void {

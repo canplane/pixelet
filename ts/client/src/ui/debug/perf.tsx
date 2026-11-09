@@ -139,7 +139,7 @@ type Own = {
  * in development is missing from a production build (`settingsIn`), and so
  * is its box. */
 const OWN: Record<Own, { label: string; note: string }> = {
-  ray_counts: { label: "Ray counts", note: "into the report; slows the casts" },
+  ray_cnts: { label: "Ray counts", note: "into the report; slows the casts" },
 };
 
 function OwnCheck({ name, disabled }: { name: Own; disabled: boolean }) {

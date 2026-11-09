@@ -10,7 +10,7 @@
 
 // The uniform `TileGrid` and the rule a tile's word is read by, `tiles_age` and
 // `tiles_in_damage`, come from tile_word.wgsl, which build.rs writes from word.rs `screen`.
-// `count` holds the tiles across and down, the frames a tile stays claimed once it changed
+// `cnt` holds the tiles across and down, the frames a tile stays claimed once it changed
 // (`damage_frames`), and this frame's number. In a frame drawn whole, `damage_frames` is
 // `u32::MAX`, so every tile is claimed. `size` holds the target's pixels across and down, how
 // many pixels a quad is grown each way past its tile, and a tile's side in pixels.
@@ -55,7 +55,7 @@ fn tile_px_clip(px: vec2f) -> vec4f {
 // Corner `vi` of tile `ii`'s quad in clip space, grown past the tile by `size.z` pixels. Every
 // corner of an unclaimed tile lies outside the clip volume, so its quad draws nothing.
 fn tile_clip(vi: u32, ii: u32) -> vec4f {
-  let t = vec2u(ii % tiles.count.x, ii / tiles.count.x);
+  let t = vec2u(ii % tiles.cnt.x, ii / tiles.cnt.x);
   let c = tile_corner(vi);
   let px = min(vec2f((t + c) * tile_side()), tiles.size.xy) + (vec2f(c) * 2.0 - 1.0) * tiles.size.z;
   return select(vec4f(2.0, 2.0, 0.0, 1.0), tile_px_clip(px), tile_in_damage(ii));
@@ -70,5 +70,5 @@ fn rect_clip(vi: u32, ii: u32) -> vec4f {
   let b = new_damage_rect;
   let w = b.z - b.x;
   let t = b.xy + vec2u(ii % w, ii / w);
-  return tile_clip(vi, t.y * tiles.count.x + t.x);
+  return tile_clip(vi, t.y * tiles.cnt.x + t.x);
 }

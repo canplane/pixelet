@@ -53,7 +53,7 @@ pub struct ImpostorPass {
     fit: [[f32; 4]; DECOR_GROUPS],
     baked: [Option<BakeKey>; DECOR_GROUPS],
     wanted: [Option<BakeKey>; DECOR_GROUPS],
-    pub marks: MarkPass,
+    pub mark: MarkPass,
 }
 
 /// Writes a mark's uniform as the draw's own (`put_instances`), with the
@@ -125,7 +125,7 @@ impl ImpostorPass {
             fit: [[0.0; 4]; DECOR_GROUPS],
             baked: [None; DECOR_GROUPS],
             wanted: [None; DECOR_GROUPS],
-            marks: MarkPass::new(
+            mark: MarkPass::new(
                 g,
                 pipelines,
                 (PIPELINE_IMPOSTOR_MARK, PIPELINE_IMPOSTOR),
@@ -139,7 +139,7 @@ impl ImpostorPass {
     /// they are and as they were (tile_mark.wgsl, `MarkPass::draw`). A group
     /// whose layer is not baked yet draws no mark.
     pub fn draw_marks(&self, pass: &mut TrackedRenderPass, frames: [u32; 2]) {
-        self.marks.draw(pass, frames, |pass, d, upload| {
+        self.mark.draw(pass, frames, |pass, d, upload| {
             if self.baked.get(d[1] as usize).copied().flatten().is_none() {
                 return;
             }
@@ -155,12 +155,12 @@ impl ImpostorPass {
         draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
         out: &mut Vec<u32>,
     ) {
-        self.marks.reads(draws, out);
+        self.mark.reads(draws, out);
     }
 
-    /// Adds the pass's draws to `stats`, two triangles an instance.
-    pub fn count(&self, draws: &DrawTable, stats: &mut DrawStat) {
-        draws.count(PIPELINE_IMPOSTOR, stats, |d| 2 * d[2]);
+    /// Adds the pass's draws to `stat`, two triangles an instance.
+    pub fn count(&self, draws: &DrawTable, stat: &mut DrawStat) {
+        draws.count(PIPELINE_IMPOSTOR, stat, |d| 2 * d[2]);
     }
 
     pub fn set_models(&mut self, groups: impl Iterator<Item = (u32, Option<u32>, Extent)>) {
@@ -273,7 +273,7 @@ impl ImpostorPass {
             Some(ModelDraw {
                 groups: [self.group, uploads.group_of(d[0])?],
                 mesh: None,
-                instances: d[2],
+                instance_cnt: d[2],
             })
         });
     }

@@ -71,9 +71,9 @@ impl Base for TerrainTile {
     /// wherever the eye is (`pool::check`).
     fn check_pool(
         set: &Staged<'_>,
-        workers: usize,
+        worker_cnt: usize,
     ) -> Result<Option<Vec<(Quadrant, String)>>, String> {
-        pool::check(set, workers).map(Some)
+        pool::check(set, worker_cnt).map(Some)
     }
 }
 

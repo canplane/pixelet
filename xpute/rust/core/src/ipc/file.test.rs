@@ -23,7 +23,7 @@ fn door() -> (Door, Box<[u8]>) {
 }
 
 #[test]
-fn descriptor_owner() {
+fn desc_owner() {
     let ((door, _buf), mut files) = (door(), FileTable::<_, 8>::new());
     let a = files.open(&door, 7, "a", "first");
     files.close(&door, a);

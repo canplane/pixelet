@@ -143,19 +143,19 @@ impl Protocol {
 
     /// The index of `field` among the children of `command`'s packet.
     pub fn at(&self, command: &str, field: &str) -> u32 {
-        index(&self.command(command).fields, field)
+        idx(&self.command(command).fields, field)
             .unwrap_or_else(|| panic!("{command} has no field {field}"))
     }
 
     pub fn record_at(&self, record: &str, field: &str) -> u32 {
         self.records
             .get(record)
-            .and_then(|f| index(f, field))
+            .and_then(|f| idx(f, field))
             .unwrap_or_else(|| panic!("{record} has no field {field}"))
     }
 }
 
-fn index(fields: &[Field], name: &str) -> Option<u32> {
+fn idx(fields: &[Field], name: &str) -> Option<u32> {
     fields.iter().position(|f| f.name == name).map(|i| i as u32)
 }
 
@@ -168,11 +168,11 @@ pub enum V {
     Strs(Vec<String>),
 }
 
-/// Writes the packet of `command` into `buf`, taking each field from `values` by name and
+/// Writes the packet of `command` into `buf`, taking each field from `vals` by name and
 /// writing an optional field left out as absent. Returns the packet's length, or None for a
 /// command that carries no packet.
-pub fn write(command: &Command, values: &[(&str, V)], buf: &mut [u8]) -> Option<u32> {
-    for (name, _) in values {
+pub fn write(command: &Command, vals: &[(&str, V)], buf: &mut [u8]) -> Option<u32> {
+    for (name, _) in vals {
         assert!(
             command.fields.iter().any(|f| f.name == *name),
             "no field {name} in {:?}",
@@ -184,7 +184,7 @@ pub fn write(command: &Command, values: &[(&str, V)], buf: &mut [u8]) -> Option<
     }
     let mut w = PacketWriter::new(buf, command.fields.len() as u32);
     for f in &command.fields {
-        match values.iter().find(|(n, _)| *n == f.name).map(|(_, v)| v) {
+        match vals.iter().find(|(n, _)| *n == f.name).map(|(_, v)| v) {
             None => {
                 assert!(f.optional, "{} is not optional", f.name);
                 w.nil();

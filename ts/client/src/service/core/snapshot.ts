@@ -48,7 +48,7 @@ export function set_snapshot(bytes: U8Array): void {
 
 export const watch_snapshot = listeners.watch;
 
-export function current(): Snapshot {
+export function cur(): Snapshot {
   return snapshot;
 }
 
@@ -65,6 +65,6 @@ export function view_posted(e: UiView): void {
 
 export const watch_view = view_listeners.watch;
 
-export function current_view(): UiView {
+export function cur_view(): UiView {
   return view;
 }

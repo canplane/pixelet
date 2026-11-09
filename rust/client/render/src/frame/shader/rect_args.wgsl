@@ -14,7 +14,7 @@ fn rect_args_cs() {
   let b = new_damage_rect;
   let n = select(0u, (b.z - b.x) * (b.w - b.y), b.z > b.x && b.w > b.y);
   rect_args[0] = 6u;
-  rect_args[1] = in_cap(n, tiles.count.x * tiles.count.y);
+  rect_args[1] = in_cap(n, tiles.cnt.x * tiles.cnt.y);
   rect_args[2] = 0u;
   rect_args[3] = 0u;
 }

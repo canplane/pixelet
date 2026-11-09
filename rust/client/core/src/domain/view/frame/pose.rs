@@ -36,8 +36,8 @@ pub struct View {
     pub(super) width: f64,
     pub(super) height: f64,
 
-    pub view_matrix: Mat4,
-    pub inv_view_matrix: Mat4,
+    pub view_mat: Mat4,
+    pub inv_view_mat: Mat4,
     pub proj: Mat4,
     pub world_view_proj: Mat4,
     pub inv_world_view_proj: Mat4,
@@ -50,8 +50,8 @@ impl View {
             pose: None,
             width: 1.0,
             height: 1.0,
-            view_matrix: mat4::new(),
-            inv_view_matrix: mat4::new(),
+            view_mat: mat4::new(),
+            inv_view_mat: mat4::new(),
             proj: mat4::new(),
             world_view_proj: mat4::new(),
             inv_world_view_proj: mat4::new(),
@@ -173,9 +173,9 @@ fn compose() {
     let e = at.eye;
     let mut to_eye = mat4::new();
     mat4::translation(&mut to_eye, -e[0], -e[1], -e[2]);
-    mat4::mul(&mut v.view_matrix, &at.rot, &to_eye);
-    let vm = v.view_matrix;
-    mat4::invert(&mut v.inv_view_matrix, &vm);
+    mat4::mul(&mut v.view_mat, &at.rot, &to_eye);
+    let vm = v.view_mat;
+    mat4::invert(&mut v.inv_view_mat, &vm);
     // The projection uses reversed depth with the far plane at infinity, so
     // one near plane keeps depth precise at every height.
     mat4::perspective(&mut v.proj, fov(), v.width / v.height, param::NEAR);

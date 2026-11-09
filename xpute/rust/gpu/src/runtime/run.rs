@@ -6,8 +6,10 @@
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 
+use xpute_core::abi::handle::handle_slot;
 use xpute_runtime::mem::Memory;
 
+use super::make::Make;
 use super::name::{flags, of, BUFFER_USAGES, COLOR_WRITES, SHADER_STAGES, TEXTURE_USAGES};
 use super::object::Object;
 use super::pending::{Pending, ANSWERED, REFUSED, WAITING};
@@ -24,35 +26,45 @@ use crate::spec::{op, NONE, STATUS, SURFACE_PREFERRED};
 /// END is stored back to 0 with release, and only where the core published a
 /// count (xpute-core ipc/stream.rs R1, R2). Call it once nothing more of the
 /// records is read.
-pub fn release(memory: &mut Memory<'_>, at: u32) {
-    if memory.load_acquire(at) != 0 {
-        memory.store_release(at, 0);
+pub fn release(mem: &mut Memory<'_>, at: u32) {
+    if mem.load_acquire(at) != 0 {
+        mem.store_release(at, 0);
     }
 }
 
 impl GpuRuntime {
-    /// Runs the stream at `at` as the turn left it, laid out as xpute-core
-    /// ipc/stream.rs says, and hands it back once run (`release`).
-    pub fn run(&mut self, memory: &mut Memory<'_>, at: u32) {
-        let end = memory.load_acquire(at);
-        let head = memory.word(at + 4);
+    /// Runs the stream at `at` as the turn left it, and hands it back once run
+    /// (`release`). A frame the stream drew counts as unfinished before the
+    /// core can ask to draw another.
+    pub fn run(&mut self, mem: &mut Memory<'_>, at: u32) {
+        self.execute(mem, at);
+        if core::mem::take(&mut self.drew) {
+            self.count_frame();
+        }
+        release(mem, at);
+    }
+
+    /// Runs the records of the stream at `at`, laid out as xpute-core
+    /// ipc/stream.rs says, and keeps the stream.
+    fn execute(&mut self, mem: &mut Memory<'_>, at: u32) {
+        let end = mem.load_acquire(at);
+        let head = mem.word(at + 4);
         let first = at + 4 * head;
         let mut k = 0;
         while k + 2 <= end {
-            let code = memory.word(first + 4 * k);
-            let n = memory.word(first + 4 * (k + 1));
+            let code = mem.word(first + 4 * k);
+            let n = mem.word(first + 4 * (k + 1));
             let mut scratch = core::mem::take(&mut self.scratch);
             scratch.clear();
             let from = (first + 4 * (k + 2)) as usize;
             scratch.extend(
-                memory
-                    .read(from, 4 * n as usize)
+                mem.read(from, 4 * n as usize)
                     .as_chunks::<4>()
                     .0
                     .iter()
                     .map(|w| u32::from_le_bytes(*w)),
             );
-            self.record(memory, code, &mut WordCursor::new(&scratch));
+            self.record(mem, code, &mut WordCursor::new(&scratch));
             self.scratch = scratch;
             k += 2 + n;
         }
@@ -61,7 +73,6 @@ impl GpuRuntime {
         if self.uploads.is_some() {
             self.submit(core::iter::empty());
         }
-        release(memory, at);
     }
 
     /// Stages `bytes` through the belt, a chunk's room at a time, and copies
@@ -114,6 +125,23 @@ impl GpuRuntime {
             {
                 return None;
             }
+        }
+    }
+
+    /// Lets the object at `id` go. The writes staged so far reach the queue
+    /// first, where the web's writeBuffer already is, since a submit refuses a
+    /// copy into what has been destroyed.
+    pub(super) fn destroy(&mut self, id: u32) {
+        self.making.remove(&handle_slot(id));
+        let object = self.take(id);
+        if matches!(object, Some(Object::Buffer(_) | Object::Texture(_))) && self.uploads.is_some()
+        {
+            self.submit(core::iter::empty());
+        }
+        match object {
+            Some(Object::Buffer(b)) => b.destroy(),
+            Some(Object::Texture(t)) => t.destroy(),
+            _ => {}
         }
     }
 
@@ -180,7 +208,7 @@ impl GpuRuntime {
         }
     }
 
-    fn record(&mut self, memory: &mut Memory<'_>, code: u32, r: &mut WordCursor) {
+    fn record(&mut self, mem: &mut Memory<'_>, code: u32, r: &mut WordCursor) {
         match code {
             op::BUFFER => {
                 let id = r.u();
@@ -241,8 +269,7 @@ impl GpuRuntime {
             }
             op::SAMPLER => {
                 let id = r.u();
-                let address =
-                    [r.u(), r.u(), r.u()].map(|a| of(&self.names.address, a, "address mode"));
+                let addr = [r.u(), r.u(), r.u()].map(|a| of(&self.names.addr, a, "addr mode"));
                 let (mag, min) = (
                     of(&self.names.filter, r.u(), "filter"),
                     of(&self.names.filter, r.u(), "filter"),
@@ -253,9 +280,9 @@ impl GpuRuntime {
                 let anisotropy_clamp = r.u() as u16;
                 let s = self.device.create_sampler(&wgpu::SamplerDescriptor {
                     label: None,
-                    address_mode_u: address[0],
-                    address_mode_v: address[1],
-                    address_mode_w: address[2],
+                    address_mode_u: addr[0],
+                    address_mode_v: addr[1],
+                    address_mode_w: addr[2],
                     mag_filter: mag,
                     min_filter: min,
                     mipmap_filter: mip,
@@ -402,34 +429,21 @@ impl GpuRuntime {
                 });
                 self.put(id, Object::BindGroup(g));
             }
-            op::RENDER_PIPELINE => self.render_pipeline(r),
-            op::COMPUTE_PIPELINE | op::COMPUTE_PIPELINE_ASYNC => {
-                let id = r.u();
-                let layout = r.opt();
-                let module = r.u();
-                let entry = r.text();
-                let layout = layout.map(|l| match self.get(l) {
-                    Object::PipelineLayout(l) => l,
-                    _ => panic!("[gpu] {l} is no pipeline layout"),
-                });
-                let p = self
-                    .device
-                    .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                        label: None,
-                        layout,
-                        module: self.shader(module),
-                        entry_point: Some(&entry),
-                        compilation_options: Default::default(),
-                        cache: None,
-                    });
-                self.put(id, Object::ComputePipeline(p));
-                if code == op::COMPUTE_PIPELINE_ASYNC {
-                    self.made_at_once(r);
-                }
+            op::RENDER_PIPELINE => {
+                let (id, make) = self.render_pipeline(r);
+                self.put(id, make());
+            }
+            op::COMPUTE_PIPELINE => {
+                let (id, make) = self.compute_pipeline(r);
+                self.put(id, make());
             }
             op::RENDER_PIPELINE_ASYNC => {
-                self.render_pipeline(r);
-                self.made_at_once(r);
+                let asked = self.render_pipeline(r);
+                self.make_later(asked, r);
+            }
+            op::COMPUTE_PIPELINE_ASYNC => {
+                let asked = self.compute_pipeline(r);
+                self.make_later(asked, r);
             }
             op::QUERY_SET => {
                 let id = r.u();
@@ -453,11 +467,7 @@ impl GpuRuntime {
             }
             op::DESTROY => {
                 let id = r.u();
-                match self.take(id) {
-                    Some(Object::Buffer(b)) => b.destroy(),
-                    Some(Object::Texture(t)) => t.destroy(),
-                    _ => {}
-                }
+                self.destroy(id);
             }
             op::WRITE_BUFFER => {
                 let (id, offset) = (r.u(), u64::from(r.u()));
@@ -465,9 +475,9 @@ impl GpuRuntime {
                 self.write(id, offset, bytes);
             }
             op::WRITE_BUFFER_AT => {
-                let (id, offset, address, size) =
+                let (id, offset, addr, size) =
                     (r.u(), u64::from(r.u()), r.u() as usize, r.u() as usize);
-                self.write(id, offset, memory.read(address, size));
+                self.write(id, offset, mem.read(addr, size));
             }
             op::WRITE_TEXTURE | op::WRITE_TEXTURE_AT => {
                 let place = self.texture_place(r);
@@ -481,18 +491,18 @@ impl GpuRuntime {
                     let bytes = r.bytes();
                     self.queue.write_texture(place.info(), bytes, layout, size);
                 } else {
-                    let (address, n) = (r.u() as usize, r.u() as usize);
+                    let (addr, n) = (r.u() as usize, r.u() as usize);
                     self.queue
-                        .write_texture(place.info(), memory.read(address, n), layout, size);
+                        .write_texture(place.info(), mem.read(addr, n), layout, size);
                 }
             }
             op::COPY_EXTERNAL_IMAGE => {
                 let to = self.texture_place(r);
                 let (flip_y, premultiplied) = (r.flag(), r.flag());
-                let (address, n, word, ticket) = (r.u() as usize, r.u() as usize, r.u(), r.u());
+                let (addr, n, word, ticket) = (r.u() as usize, r.u() as usize, r.u(), r.u());
                 self.copy_external_image(
                     to,
-                    memory.read(address, n),
+                    mem.read(addr, n),
                     flip_y,
                     premultiplied,
                     word,
@@ -697,7 +707,7 @@ impl GpuRuntime {
                 self.command_bufs = finished;
             }
             op::MAP_ASYNC => {
-                let (b, offset, size, address, word, ticket) = (
+                let (b, offset, size, addr, word, ticket) = (
                     r.u(),
                     u64::from(r.u()),
                     u64::from(r.u()),
@@ -720,7 +730,7 @@ impl GpuRuntime {
                     state,
                     word,
                     ticket,
-                    read: Some((buffer, offset, size, address)),
+                    read: Some((buffer, offset, size, addr)),
                 });
             }
             op::QUEUE_DONE => {
@@ -774,18 +784,19 @@ impl GpuRuntime {
                 self.surface(surface).frame = Some(frame);
                 let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
                 self.put(id, Object::View(view, texture.format()));
+                self.drew = true;
             }
             op::DEVICE => {
-                let address = r.u();
+                let addr = r.u();
                 r.u();
-                self.block = Some(address);
+                self.block = Some(addr);
                 let (limits, bits) = super::open::block(&self.device);
                 for (k, w) in limits.into_iter().chain(bits).enumerate() {
-                    memory.set_word(address + 4 * k as u32, w);
+                    mem.set_word(addr + 4 * k as u32, w);
                 }
                 // wgpu resolves timestamps in ticks of this many nanoseconds.
-                memory.set_word(
-                    address + 4 * device::PERIOD_AT as u32,
+                mem.set_word(
+                    addr + 4 * device::PERIOD_AT as u32,
                     self.queue.get_timestamp_period().to_bits(),
                 );
                 let preferred = self
@@ -793,8 +804,8 @@ impl GpuRuntime {
                     .texture_format
                     .iter()
                     .position(|f| *f == Some(self.preferred_format));
-                memory.set_word(
-                    address + 4 * device::FORMAT_AT as u32,
+                mem.set_word(
+                    addr + 4 * device::FORMAT_AT as u32,
                     preferred.unwrap_or_else(|| {
                         panic!(
                             "[gpu] {:?} is no format the spec names",
@@ -802,28 +813,42 @@ impl GpuRuntime {
                         )
                     }) as u32,
                 );
-                self.tell_unfinished(memory);
-                memory.store_release(address + 4 * device::STATUS_AT as u32, STATUS::READY);
+                self.tell_unfinished(mem);
+                mem.store_release(addr + 4 * device::STATUS_AT as u32, STATUS::READY);
             }
             _ => panic!("[gpu] op {code} is no op of spec/gpu/api.json"),
         }
     }
 
-    /// Reads an async pipeline's fence and ticket, which follow the sync op's
-    /// words. wgpu has no async call, so the pipeline is made already. Its
-    /// ticket is still stored at the next poll, as a QUEUE_DONE's is, so the
-    /// core finds it no sooner than on the web.
-    fn made_at_once(&mut self, r: &mut WordCursor) {
-        let (word, ticket) = (r.u(), r.u());
-        self.pending.push(Pending {
-            state: Arc::new(AtomicU8::new(ANSWERED)),
-            word,
-            ticket,
-            read: None,
-        });
+    fn pipeline_layout(&self, layout: Option<u32>) -> Option<wgpu::PipelineLayout> {
+        layout.map(|l| match self.get(l) {
+            Object::PipelineLayout(l) => l.clone(),
+            _ => panic!("[gpu] {l} is no pipeline layout"),
+        })
     }
 
-    fn render_pipeline(&mut self, r: &mut WordCursor) {
+    fn compute_pipeline(&mut self, r: &mut WordCursor) -> (u32, Make) {
+        let id = r.u();
+        let layout = self.pipeline_layout(r.opt());
+        let module = self.shader(r.u()).clone();
+        let entry = r.text().to_string();
+        let device = self.device.clone();
+        let make: Make = Box::new(move || {
+            Object::ComputePipeline(device.create_compute_pipeline(
+                &wgpu::ComputePipelineDescriptor {
+                    label: None,
+                    layout: layout.as_ref(),
+                    module: &module,
+                    entry_point: Some(&entry),
+                    compilation_options: Default::default(),
+                    cache: None,
+                },
+            ))
+        });
+        (id, make)
+    }
+
+    fn render_pipeline(&mut self, r: &mut WordCursor) -> (u32, Make) {
         let id = r.u();
         let layout = r.opt();
         let vertex_module = r.u();
@@ -899,63 +924,66 @@ impl GpuRuntime {
                 })
             })
             .collect();
-        let vertex_buffers: Vec<Option<wgpu::VertexBufferLayout>> = buffers
-            .iter()
-            .map(|b| {
-                Some(wgpu::VertexBufferLayout {
-                    array_stride: b.stride,
-                    step_mode: b.step,
-                    attributes: &b.attributes,
+        let layout = self.pipeline_layout(layout);
+        let vertex_module = self.shader(vertex_module).clone();
+        let fragment_module = fragment_module.map(|m| self.shader(m).clone());
+        let depth_format = depth_format.map(|f| of(&self.names.texture_format, f, "format"));
+        let device = self.device.clone();
+        let make: Make = Box::new(move || {
+            let vertex_buffers: Vec<Option<wgpu::VertexBufferLayout>> = buffers
+                .iter()
+                .map(|b| {
+                    Some(wgpu::VertexBufferLayout {
+                        array_stride: b.stride,
+                        step_mode: b.step,
+                        attributes: &b.attributes,
+                    })
                 })
-            })
-            .collect();
-        let layout = layout.map(|l| match self.get(l) {
-            Object::PipelineLayout(l) => l,
-            _ => panic!("[gpu] {l} is no pipeline layout"),
-        });
-        let p = self
-            .device
-            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: None,
-                layout,
-                vertex: wgpu::VertexState {
-                    module: self.shader(vertex_module),
-                    entry_point: Some(&vertex_entry),
-                    compilation_options: Default::default(),
-                    buffers: &vertex_buffers,
-                },
-                primitive: wgpu::PrimitiveState {
-                    topology,
-                    strip_index_format,
-                    front_face,
-                    cull_mode,
-                    unclipped_depth,
-                    polygon_mode: wgpu::PolygonMode::Fill,
-                    conservative: false,
-                },
-                depth_stencil: depth_format.map(|f| wgpu::DepthStencilState {
-                    format: of(&self.names.texture_format, f, "format"),
-                    depth_write_enabled: Some(depth_write_enabled),
-                    depth_compare: Some(depth_compare),
-                    stencil: wgpu::StencilState {
-                        front,
-                        back,
-                        read_mask,
-                        write_mask,
+                .collect();
+            Object::RenderPipeline(
+                device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: None,
+                    layout: layout.as_ref(),
+                    vertex: wgpu::VertexState {
+                        module: &vertex_module,
+                        entry_point: Some(&vertex_entry),
+                        compilation_options: Default::default(),
+                        buffers: &vertex_buffers,
                     },
-                    bias,
+                    primitive: wgpu::PrimitiveState {
+                        topology,
+                        strip_index_format,
+                        front_face,
+                        cull_mode,
+                        unclipped_depth,
+                        polygon_mode: wgpu::PolygonMode::Fill,
+                        conservative: false,
+                    },
+                    depth_stencil: depth_format.map(|format| wgpu::DepthStencilState {
+                        format,
+                        depth_write_enabled: Some(depth_write_enabled),
+                        depth_compare: Some(depth_compare),
+                        stencil: wgpu::StencilState {
+                            front,
+                            back,
+                            read_mask,
+                            write_mask,
+                        },
+                        bias,
+                    }),
+                    multisample,
+                    fragment: fragment_module.as_ref().map(|module| wgpu::FragmentState {
+                        module,
+                        entry_point: Some(&fragment_entry),
+                        compilation_options: Default::default(),
+                        targets: &targets,
+                    }),
+                    multiview_mask: None,
+                    cache: None,
                 }),
-                multisample,
-                fragment: fragment_module.map(|m| wgpu::FragmentState {
-                    module: self.shader(m),
-                    entry_point: Some(&fragment_entry),
-                    compilation_options: Default::default(),
-                    targets: &targets,
-                }),
-                multiview_mask: None,
-                cache: None,
-            });
-        self.put(id, Object::RenderPipeline(p));
+            )
+        });
+        (id, make)
     }
 
     fn begin_render_pass(&mut self, r: &mut WordCursor) {

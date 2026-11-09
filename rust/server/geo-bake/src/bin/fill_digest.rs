@@ -132,12 +132,12 @@ fn line(name: &str, k: u32, b: &FilledBrick<'_>) -> String {
 }
 
 /// The lines of every brick of the set's tiles with ways, sorted.
-fn lines(set: &TileSet, workers: usize) -> Result<Vec<String>, String> {
+fn lines(set: &TileSet, worker_cnt: usize) -> Result<Vec<String>, String> {
     let tiles: Vec<_> = set.by_zoom()?.into_values().flatten().collect();
     let parts: Vec<Result<Vec<String>, String>> = std::thread::scope(|s| {
-        let runs: Vec<_> = (0..workers)
+        let runs: Vec<_> = (0..worker_cnt)
             .map(|w| {
-                let part: Vec<_> = tiles.iter().skip(w).step_by(workers).copied().collect();
+                let part: Vec<_> = tiles.iter().skip(w).step_by(worker_cnt).copied().collect();
                 s.spawn(move || {
                     let mut out = Vec::new();
                     for p in part {
@@ -167,13 +167,13 @@ fn lines(set: &TileSet, workers: usize) -> Result<Vec<String>, String> {
 
 /// The lines of `set`, made where none of this digest are kept:
 /// their path.
-fn lines_path(set: &Path, workers: usize) -> Result<PathBuf, String> {
+fn lines_path(set: &Path, worker_cnt: usize) -> Result<PathBuf, String> {
     let dir = lines_dir();
     let path = dir.join(key(set)?);
     if path.is_file() {
         return Ok(path);
     }
-    let text = lines(&TileSet::new(set), workers)?.join("\n") + "\n";
+    let text = lines(&TileSet::new(set), worker_cnt)?.join("\n") + "\n";
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let part = path.with_extension(format!("{}.part", std::process::id()));
     std::fs::write(&part, text)
@@ -227,8 +227,8 @@ fn run() -> Result<bool, String> {
         return diff(a, b);
     }
     let set = args.first().map_or(SET, String::as_str);
-    let workers = std::thread::available_parallelism().map_or(4, |n| n.get());
-    println!("{}", lines_path(Path::new(set), workers)?.display());
+    let worker_cnt = std::thread::available_parallelism().map_or(4, |n| n.get());
+    println!("{}", lines_path(Path::new(set), worker_cnt)?.display());
     Ok(true)
 }
 

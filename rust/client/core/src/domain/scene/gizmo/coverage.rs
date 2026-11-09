@@ -127,13 +127,13 @@ struct Coverage {
     /// The vertices laid this step. They are kept between steps so their
     /// buffer is reused.
     next: (Vec<f32>, usize),
-    lines: DebugMesh,
+    mesh: DebugMesh,
 }
 
 static COVERAGE: Global<Coverage> = Global::new();
 
 pub fn coverage_gizmo_draw(draw: &mut DrawList) {
-    COVERAGE.get(Coverage::default).lines.draw(draw);
+    COVERAGE.get(Coverage::default).mesh.draw(draw);
 }
 
 /// Lays the gizmo every step, but hands it to the renderer only when its
@@ -146,7 +146,7 @@ pub fn coverage_gizmo_step(show: bool) {
     let draw = draw_list();
     let (Some(o), Some(top)) = (observation().filter(|_| show), TerrainTile::min_zoom()) else {
         if c.drawn.take().is_some() {
-            c.lines.set(draw, [0.0; 3], &[], 0);
+            c.mesh.set(draw, [0.0; 3], &[], 0);
             request_world_tick();
         }
         return;
@@ -178,7 +178,7 @@ pub fn coverage_gizmo_step(show: bool) {
     c.next.0.clear();
     c.next.1 = lines.lay(&mut c.next.0, about, &World::now());
     if c.drawn != Some(about) || c.next != c.vertices {
-        c.lines.set(draw, about, &c.next.0, c.next.1);
+        c.mesh.set(draw, about, &c.next.0, c.next.1);
         c.drawn = Some(about);
         core::mem::swap(&mut c.next, &mut c.vertices);
         request_world_tick();
@@ -216,12 +216,12 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
         levels[(cell_zoom - FIRST_CELL_ZOOM) as usize]
             .is_some_and(|s| s[clipmap::entry(q) as usize].holds(q))
     };
-    let over = (o.eye[2] - o.ground).max(0.0);
+    let height = (o.eye[2] - o.ground).max(0.0);
     let near = |(x0, y0, side): (f64, f64, f64)| {
         let x0 = world::nearest(x0 + side / 2.0, o.eye[0]) - side / 2.0;
         let gap = |lo: f64, e: f64| (lo - e).max(e - lo - side).max(0.0);
         let (gx, gy) = (gap(x0, o.eye[0]), gap(y0, o.eye[1]));
-        gx * gx + gy * gy + over * over
+        gx * gx + gy * gy + height * height
     };
     let tile_cache = TerrainTile::tile_cache();
     // A tile at the top or coarser that no demand line passes through is held

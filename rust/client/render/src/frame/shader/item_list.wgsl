@@ -17,7 +17,7 @@ fn next_last() -> u32 {
 }
 
 fn list_item(k: u32) -> u32 {
-  if (k >= item_count()) {
+  if (k >= item_cnt()) {
     return NONE;
   }
   return item_at(k);

@@ -494,7 +494,7 @@ impl Door {
 }
 
 /// A command with fields must carry a packet.
-fn packet(pkt: Option<&[u8]>) -> Result<&[u8], MarshalError> {
+fn pkt_of(pkt: Option<&[u8]>) -> Result<&[u8], MarshalError> {
     pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))
 }
 
@@ -518,20 +518,20 @@ fn apply_frame(
         Some(Command::SYS_ATTACH) => handle(Submission::Life(Life::Attach)),
         Some(Command::SYS_SUSPEND) => handle(Submission::Life(Life::Suspend)),
         Some(Command::SYS_RESUME) => handle(Submission::Life(Life::Resume)),
-        Some(Command::SYS_TURN) => handle(Submission::Turn(SysTurn::read(packet(pkt)?)?)),
+        Some(Command::SYS_TURN) => handle(Submission::Turn(SysTurn::read(pkt_of(pkt)?)?)),
         // The core's own report, which the runtime never sends.
         Some(Command::SYS_ABORT) => Ok(None),
         None => match (gpu::Command::of(f.cmd), fs::Command::of(f.cmd)) {
             (Some(gpu::Command::GPU_READY), _) => handle(Submission::GpuReady),
             (Some(gpu::Command::GPU_SURFACE_OPEN), _) => handle(Submission::Surface(Surface::Open)),
             (Some(gpu::Command::GPU_SURFACE_RESIZE), _) => handle(Submission::Surface(
-                Surface::Resize(GpuSurfaceResize::read(packet(pkt)?)?),
+                Surface::Resize(GpuSurfaceResize::read(pkt_of(pkt)?)?),
             )),
             (Some(gpu::Command::GPU_SURFACE_CLOSE), _) => handle(Submission::Surface(
-                Surface::Close(GpuSurfaceClose::read(packet(pkt)?)?),
+                Surface::Close(GpuSurfaceClose::read(pkt_of(pkt)?)?),
             )),
             (_, Some(fs::Command::FS_CHANGED)) => {
-                handle(Submission::Changed(FsChanged::read(packet(pkt)?)?))
+                handle(Submission::Changed(FsChanged::read(pkt_of(pkt)?)?))
             }
             // The core's file calls, which the runtime never sends, and the
             // numbers xpute gives to no command.

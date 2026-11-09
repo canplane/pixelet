@@ -149,7 +149,7 @@ impl Ray {
     /// number the walk compares is NaN, which is what lets `greater` and `lesser` be one
     /// comparison each. The component and its reciprocal are zeroed together, because `planes`
     /// and `past` branch on the one and multiply by the other.
-    pub fn new(direction: [f32; 3], t_max: f32) -> Ray {
+    pub fn new(dir: [f32; 3], t_max: f32) -> Ray {
         let moves = |d: f32| {
             if libm::fabsf(d) < f32::MIN_POSITIVE {
                 0.0
@@ -157,11 +157,7 @@ impl Ray {
                 d
             }
         };
-        let dir = [
-            moves(direction[0]),
-            moves(direction[1]),
-            moves(direction[2]),
-        ];
+        let dir = [moves(dir[0]), moves(dir[1]), moves(dir[2])];
         let inv = |d: f32| if d == 0.0 { 0.0 } else { 1.0 / d };
         Ray {
             dir,
@@ -657,7 +653,7 @@ pub enum End {
 /// What the walk met: how it ended, and where it stopped when it did.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Trace<A> {
-    pub ends: End,
+    pub end: End,
     pub hit: Hit<A>,
 }
 
@@ -773,7 +769,7 @@ pub trait Keep<A: Copy> {
     /// ends.
     const LINE: bool = true;
 
-    fn keep(&mut self, met: &Trace<A>, stack: &[A; DEPTH]);
+    fn keep(&mut self, trace: &Trace<A>, stack: &[A; DEPTH]);
 }
 
 impl<A: Copy> Keep<A> for () {
@@ -821,7 +817,7 @@ pub fn walk<Q: Query>(
     walk_at_most(q, o, ray, detail, until, from, over, keep, STEPS_CAP)
 }
 
-/// `walk` of at most `steps` steps, one node looked at each step, as the walks written by
+/// `walk` of at most `step_cap` steps, one node looked at each step, as the walks written by
 /// hand count theirs. A walk that runs out of steps counts as gone to its reach, `ray.t_max`,
 /// and leaves its line to `keep` where it is, at the node it would look at next.
 #[expect(clippy::too_many_arguments, reason = "`walk`'s, and its bound")]
@@ -834,7 +830,7 @@ pub fn walk_at_most<Q: Query>(
     from: (Node, Q::At, f32),
     over: &impl Over<Q::At>,
     keep: &mut impl Keep<Q::At>,
-    steps: u32,
+    step_cap: u32,
 ) -> Trace<Q::At> {
     let og = grid_of(o);
     // The walk carries only what nothing else it holds gives again: the node and what was handed
@@ -844,7 +840,7 @@ pub fn walk_at_most<Q: Query>(
     let mut stack = [at; DEPTH];
     let mut low = n.zoom;
     let mut step = 0;
-    while step < steps {
+    while step < step_cap {
         step += 1;
         let u = under(n.zoom);
         let (lo, hi) = bounds(&n, og);
@@ -910,7 +906,7 @@ pub fn walk_at_most<Q: Query>(
                 greater(greater(greater(t0, bx.0), by.0), bz.0)
                     < lesser(lesser(lesser(t1, bx.1), by.1), bz.1)
             };
-            let ends = match i.kind {
+            let end = match i.kind {
                 Kind::Lacks => End::Lacks,
                 // A cell keeping less than its cube is the box its share fills (`fill_bounds`): an eye's ray
                 // stops where it enters the box and passes it as air where it misses; a beam ray stops at
@@ -973,7 +969,7 @@ pub fn walk_at_most<Q: Query>(
                     }
                 }
             };
-            if ends != End::Miss {
+            if end != End::Miss {
                 // Where the walk ends, its hit is where the ray enters the node or its asset's box
                 // (`entry_plane`).
                 let (t, axis) = entry_plane(ray, near);
@@ -984,9 +980,9 @@ pub fn walk_at_most<Q: Query>(
                     at,
                     asset: i.asset,
                 };
-                let met = Trace { ends, hit };
-                leave(keep, &met, &mut stack, low, over);
-                return met;
+                let trace = Trace { end, hit };
+                leave(keep, &trace, &mut stack, low, over);
+                return trace;
             }
         }
         // Every way on makes the next node. What it is handed is decided here, its parent's `At`
@@ -1029,12 +1025,12 @@ pub fn walk_at_most<Q: Query>(
                     at,
                     asset: AIR,
                 };
-                let met = Trace {
-                    ends: End::Miss,
+                let trace = Trace {
+                    end: End::Miss,
                     hit,
                 };
-                leave(keep, &met, &mut stack, low, over);
-                return met;
+                leave(keep, &trace, &mut stack, low, over);
+                return trace;
             }
             // ADVANCE: the corner steps on the axis the ray leaves by, at the first far plane it
             // reaches.
@@ -1098,19 +1094,19 @@ pub fn walk_at_most<Q: Query>(
         at,
         asset: AIR,
     };
-    let met = Trace {
-        ends: End::Miss,
+    let trace = Trace {
+        end: End::Miss,
         hit,
     };
-    leave(keep, &met, &mut stack, low, over);
-    met
+    leave(keep, &trace, &mut stack, low, over);
+    trace
 }
 
-/// The walk's line, left to `keep` where it ends at `met`: its stack, under `over`'s above
+/// The walk's line, left to `keep` where it ends at `trace`: its stack, under `over`'s above
 /// where it started at `low`, made whole first where `keep` reads it (`Keep::LINE`).
 fn leave<A: Copy, K: Keep<A>>(
     keep: &mut K,
-    met: &Trace<A>,
+    trace: &Trace<A>,
     stack: &mut [A; DEPTH],
     low: Zoom,
     over: &impl Over<A>,
@@ -1122,7 +1118,7 @@ fn leave<A: Copy, K: Keep<A>>(
             z += 1;
         }
     }
-    keep.keep(met, stack);
+    keep.keep(trace, stack);
 }
 
 #[cfg(test)]
@@ -1289,13 +1285,13 @@ pub(crate) mod tests {
     #[test]
     fn ray_stops_at_entry() {
         // An eighth kept is a box half the side, a quarter in from each face.
-        let met = along(1, 0.5, 0.5);
-        assert_eq!(met.ends, End::Hit);
-        assert!((met.hit.t - 5.25).abs() < 1e-5, "{}", met.hit.t);
-        assert_eq!(met.hit.axis, 0);
+        let trace = along(1, 0.5, 0.5);
+        assert_eq!(trace.end, End::Hit);
+        assert!((trace.hit.t - 5.25).abs() < 1e-5, "{}", trace.hit.t);
+        assert_eq!(trace.hit.axis, 0);
         // Whole, the cube's face.
-        let met = along(EIGHTHS, 0.5, 0.5);
-        assert!((met.hit.t - 5.0).abs() < 1e-5, "{}", met.hit.t);
+        let trace = along(EIGHTHS, 0.5, 0.5);
+        assert!((trace.hit.t - 5.0).abs() < 1e-5, "{}", trace.hit.t);
     }
 
     /// A range that inverts, its least over its most, as the eye's may while it crosses, holds
@@ -1313,11 +1309,11 @@ pub(crate) mod tests {
 
     #[test]
     fn ray_beside_box_passes() {
-        let met = along(1, 0.1, 0.5);
-        assert_eq!(met.ends, End::Miss);
-        let met = along(4, 0.5, 0.05);
-        assert_eq!(met.ends, End::Miss);
+        let trace = along(1, 0.1, 0.5);
+        assert_eq!(trace.end, End::Miss);
+        let trace = along(4, 0.5, 0.05);
+        assert_eq!(trace.end, End::Miss);
         // The whole cube stops it there.
-        assert_eq!(along(EIGHTHS, 0.1, 0.5).ends, End::Hit);
+        assert_eq!(along(EIGHTHS, 0.1, 0.5).end, End::Hit);
     }
 }

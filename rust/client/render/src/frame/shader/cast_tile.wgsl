@@ -25,9 +25,9 @@ struct TileList {
 
 @compute @workgroup_size(CAST_TILES_LANES, 1, 1)
 fn cast_tiles_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  let across = tiles.count.x;
+  let across = tiles.cnt.x;
   // The list holds a place for each tile.
-  let cap = across * tiles.count.y;
+  let cap = across * tiles.cnt.y;
   if (id.x >= cap || !tiles_in_damage(tiles, changed_at[id.x])) {
     return;
   }

@@ -197,11 +197,11 @@ struct Clipmap {
     /// (`device_generation`). A device that is lost took all of them with
     /// it.
     on: u32,
-    /// What the entries were last stepped over: in `read`, the tile cache's
-    /// revision (`TileCache::revision`); in `filled`, whether a brick went
+    /// What the entries were last stepped over: in `revision`, the tile
+    /// cache's (`TileCache::revision`); in `went_absent`, whether a brick went
     /// absent again since, which changes what is asked for again.
-    read: u32,
-    filled: bool,
+    revision: u32,
+    went_absent: bool,
     /// The tiles the clip levels other than the eye's want (`pinned_tiles`).
     pinned: List<Quadrant, { PINNED_TILES as usize }>,
     /// The slots to fill, the next one last (`due`); `due_stale` says the
@@ -241,8 +241,8 @@ fn fresh() -> Clipmap {
         },
         slots: [Slot::FREE; SLOTS as usize],
         on: 0,
-        read: 0,
-        filled: true,
+        revision: 0,
+        went_absent: true,
         pinned: List::new(),
         due: List::new(),
         due_stale: true,
@@ -399,7 +399,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
         ([false; CLIP_LEVELS as usize], [lost; CLIP_LEVELS as usize]);
     let released = wake(w);
     let mut stale =
-        lost || released || core::mem::take(&mut w.filled) || terrain.revision() != w.read;
+        lost || released || core::mem::take(&mut w.went_absent) || terrain.revision() != w.revision;
     for clip_level in 0..CLIP_LEVELS {
         let (center, laid) = layout(clip_level);
         let p = at[center as usize];
@@ -466,14 +466,14 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
         let slot = w.slots[b as usize];
         if slot.is_absent() {
             let t = tile_of(slot.cell_zoom, slot.brick).0;
-            if room > 0 && !terrain.is_again_held(t) {
-                terrain.again(t);
-                room -= u32::from(terrain.is_again_held(t));
+            if room > 0 && !terrain.needs_refetch(t) {
+                terrain.refetch(t);
+                room -= u32::from(terrain.needs_refetch(t));
             }
         }
     }
     w.due_stale = true;
-    w.read = terrain.revision();
+    w.revision = terrain.revision();
     // What the clip levels other than the eye's want changes only when they
     // change.
     if !changed[EYE_CLIP_LEVELS as usize..].contains(&true) {
@@ -503,7 +503,7 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
 /// be filled again, once the heap has given a page back since it refused pool
 /// room. Returns whether it did.
 fn wake(w: &mut Clipmap) -> bool {
-    if !w.heap.is_some_and(|h| h.over()) {
+    if !w.heap.is_some_and(|h| h.released()) {
         return false;
     }
     w.heap = None;
@@ -602,15 +602,15 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
             continue;
         }
         let pieces = way_pool().pieces(slot.tree);
-        let taken = write(BrickWrite {
+        let fits = write(BrickWrite {
             slot: b,
             cell_zoom: slot.cell_zoom,
             brick: slot.brick,
             words: cells(b),
-            palette_indices: palette(b),
+            palette_idxs: palette(b),
             tree: &pieces,
         });
-        if !taken {
+        if !fits {
             request_world_tick();
             break;
         }
@@ -780,7 +780,7 @@ pub fn cut(tile: Quadrant, pkt: &[u8]) {
         return;
     }
     let Ok(cells) = palette_cells(pkt) else {
-        w.filled = true;
+        w.went_absent = true;
         return;
     };
     for b in 0..SLOTS {
@@ -788,7 +788,7 @@ pub fn cut(tile: Quadrant, pkt: &[u8]) {
             continue;
         }
         if in_flight(b) {
-            w.filled = true;
+            w.went_absent = true;
             continue;
         }
         let slot = w.slots[b as usize];
@@ -966,7 +966,7 @@ fn begin(w: &mut Clipmap) -> Poll {
         let (t, place) = tile_of(slot.cell_zoom, slot.brick);
         let Some(tile) = terrain.get(t) else {
             w.slots[b as usize].fill = Fill::Idle;
-            w.filled = true;
+            w.went_absent = true;
             continue;
         };
         let void = terrain.slot(t).is_none();
@@ -1180,8 +1180,8 @@ pub(in crate::domain) fn bound_over(
             continue;
         }
         let mut at = *place;
-        let (theirs, _, held) = clipmap::bound_over(&ClipRead(w, center), &mut at, zooms, node);
-        if held {
+        let (theirs, _, covers) = clipmap::bound_over(&ClipRead(w, center), &mut at, zooms, node);
+        if covers {
             bound = ground::joined(bound, theirs);
         }
     }

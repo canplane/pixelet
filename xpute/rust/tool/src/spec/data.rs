@@ -57,7 +57,7 @@ pub struct DataSpec {
     /// name, for a crate that cannot depend on the crate `rs` lies in, such as
     /// a build script.
     pub rs_also: &'static [(&'static str, &'static str)],
-    pub enums: EnumScope,
+    pub enum_scope: EnumScope,
     /// The C++ header, and its namespace.
     pub cpp: Option<(&'static str, &'static str)>,
     /// For a spec a Makefile reads, this says where its numbers are written as
@@ -76,7 +76,7 @@ impl DataSpec {
         rs: None,
         module: "spec",
         rs_also: &[],
-        enums: EnumScope::None,
+        enum_scope: EnumScope::None,
         cpp: None,
         mk: None,
     };
@@ -177,7 +177,7 @@ const DATA_SPECS: [DataSpec; 8] = [
         json: "spec/gpu/api.json",
         ts: Some("ts/gpu/src/api.spec.ts"),
         rs: Some("rust/gpu/src/api.spec.rs"),
-        enums: EnumScope::Named(&["BINDING_KIND", "RESOURCE_KIND"]),
+        enum_scope: EnumScope::Named(&["BINDING_KIND", "RESOURCE_KIND"]),
         cpp: Some(("cpp/xpute/gpu/api.spec.hpp", "xpute::gpu")),
         ..DataSpec::DEFAULT
     },
@@ -185,7 +185,7 @@ const DATA_SPECS: [DataSpec; 8] = [
         json: "spec/gpu/enum.json",
         ts: Some("ts/gpu/src/enum.spec.ts"),
         rs: Some("rust/gpu/src/enum.spec.rs"),
-        enums: EnumScope::Named(&[
+        enum_scope: EnumScope::Named(&[
             "TEXTURE_FORMAT",
             "VERTEX_FORMAT",
             "PRIMITIVE_TOPOLOGY",
@@ -307,7 +307,7 @@ fn numbers(n: &Node) -> Option<Vec<(&str, &Node)>> {
         && entries.iter().all(|(k, v)| {
             is_ts_ident(k)
                 && !TS_RESERVED.contains(k)
-                && matches!(if v.is_wrapper() { v.value() } else { v }, Node::Num(_))
+                && matches!(if v.is_wrapper() { v.val() } else { v }, Node::Num(_))
         }))
     .then_some(entries)
 }
@@ -406,7 +406,7 @@ fn flagged(a: &[Node]) -> Result<Option<Flagged<'_>>, String> {
 /// written as the number `slots` gives it.
 pub fn ts_literal(n: &Node, ty: &str, indent: &str, slots: &[SlotType]) -> Result<String, String> {
     if n.is_wrapper() {
-        return ts_literal(n.value(), type_of(n, ty), indent, slots);
+        return ts_literal(n.val(), type_of(n, ty), indent, slots);
     }
     Ok(match n {
         Node::Num(v) => format!("{} as number", js_num(*v)),
@@ -468,7 +468,7 @@ pub fn ts_literal(n: &Node, ty: &str, indent: &str, slots: &[SlotType]) -> Resul
 struct Scope<'a> {
     module: String,
     top: Vec<String>,
-    enums: &'a EnumScope,
+    enum_scope: &'a EnumScope,
     rs_names: bool,
     slots: &'a [SlotType<'a>],
     /// The next free slot of each entry of `slots`.
@@ -571,13 +571,13 @@ fn rs_items(
     let doc = if n.is_obj() { n.lines_at("$doc") } else { None };
     let mut lines: Vec<String> = Vec::new();
     if n.is_wrapper() {
-        rs_leaf(name, n.value(), type_of(n, ty), indent, &mut lines, scope)?;
+        rs_leaf(name, n.val(), type_of(n, ty), indent, &mut lines, scope)?;
     } else if !n.is_obj() {
         rs_leaf(name, n, ty, indent, &mut lines, scope)?;
     } else {
         let t = type_of(n, ty);
         let keys: Vec<(&str, &Node)> = n.named().collect();
-        let all = matches!(scope.enums, EnumScope::All);
+        let all = matches!(scope.enum_scope, EnumScope::All);
         let numbers: Vec<Option<f64>> = keys.iter().map(|(_, v)| v.num()).collect();
         let numbered = all
             && !keys.is_empty()
@@ -714,7 +714,7 @@ fn rs_leaf(
 ) -> Result<(), String> {
     if let Node::Arr(a) = v {
         if let Some((names, flags)) = flagged(a)? {
-            if !scope.enums.has(name) || !names.iter().all(|n| is_name(n)) {
+            if !scope.enum_scope.has(name) || !names.iter().all(|n| is_name(n)) {
                 return Err(format!("{name}: its members carry flags, so it is an enum"));
             }
             out.push(rs_names(name, &names, indent, scope));
@@ -751,7 +751,7 @@ fn rs_leaf(
         if strings && ty != "u64" && ty != "rgb" && !slot && enum_path(ty, scope).is_none() {
             let names: Vec<&str> = a.iter().map(|e| e.str().unwrap_or_default()).collect();
             out.push(rs_names(name, &names, indent, scope));
-            if scope.enums.has(name) && a.iter().all(|e| e.str().is_some_and(is_name)) {
+            if scope.enum_scope.has(name) && a.iter().all(|e| e.str().is_some_and(is_name)) {
                 let variants: Vec<(String, String)> = names
                     .iter()
                     .enumerate()
@@ -886,11 +886,11 @@ fn width(v: &Node, above: &[(String, Node)], used: &[(String, Node)]) -> Result<
                 .and_then(|n| n.get(field))
                 .and_then(|f| match f {
                     Node::Arr(a) => Some(a.len() as f64),
-                    _ => f.value().num(),
+                    _ => f.val().num(),
                 }),
             None => named(t).and_then(|n| match n {
                 Node::Arr(a) => Some(a.len() as f64),
-                Node::Obj(_) if n.is_wrapper() => n.value().num(),
+                Node::Obj(_) if n.is_wrapper() => n.val().num(),
                 Node::Obj(o) => words_of(o),
                 _ => n.num(),
             }),
@@ -993,7 +993,7 @@ pub fn outputs_at(root: &Path, specs: &[DataSpec], layout: &Layout) -> Result<Ve
                 format!("# GENERATED from {}", d.json),
             ];
             for (name, n) in spec.named() {
-                if let Some(v) = n.value().num().filter(|v| v.fract() == 0.0 && *v >= 0.0) {
+                if let Some(v) = n.val().num().filter(|v| v.fract() == 0.0 && *v >= 0.0) {
                     mk.push(format!("{prefix}{name} := {v}"));
                 }
             }
@@ -1054,9 +1054,9 @@ fn ts_outputs(
                 }
             }));
         }
-        if n.is_wrapper() && !matches!(n.value(), Node::Arr(_) | Node::Obj(_) | Node::Null) {
+        if n.is_wrapper() && !matches!(n.val(), Node::Arr(_) | Node::Obj(_) | Node::Null) {
             let t = type_of(n, "f64");
-            let annot = (matches!(n.value(), Node::Num(_)) || t == "u64").then_some(t);
+            let annot = (matches!(n.val(), Node::Num(_)) || t == "u64").then_some(t);
             let annot = annot.filter(|a| *a != "u64");
             if let Some(a) = annot {
                 if !words.iter().any(|w| w == a) {
@@ -1090,7 +1090,7 @@ fn ts_outputs(
                 ts_literal(n, "f64", "", layout.slots)?
             ));
             let entries: Vec<(&str, &Node)> = n.named().collect();
-            if matches!(d.enums, EnumScope::All)
+            if matches!(d.enum_scope, EnumScope::All)
                 && !entries.is_empty()
                 && entries
                     .iter()
@@ -1164,7 +1164,7 @@ fn rs_outputs(
         "// A table is generated whole, whether or not this crate calls an entry.".to_string(),
         format!(
             "#![allow(non_upper_case_globals, non_snake_case, clippy::absolute_paths, {}dead_code, reason = \"generated from the spec\")]",
-            if matches!(d.enums, EnumScope::None) {
+            if matches!(d.enum_scope, EnumScope::None) {
                 ""
             } else {
                 "non_camel_case_types, "
@@ -1186,7 +1186,7 @@ fn rs_outputs(
     let scope = Scope {
         module,
         top,
-        enums: &d.enums,
+        enum_scope: &d.enum_scope,
         rs_names: layout.rs_names,
         slots: layout.slots,
         next: runs.iter().map(|(first, _)| Cell::new(*first)).collect(),
@@ -1229,7 +1229,7 @@ fn cpp_file(d: &DataSpec, spec: &Node, cpp_path: &str, namespace: &str) -> Resul
     }
     cpp.extend([String::new(), format!("namespace {namespace} {{")]);
     for (name, n) in spec.named() {
-        cpp_items(name, n, "f64", d.enums.has(name), &mut cpp)?;
+        cpp_items(name, n, "f64", d.enum_scope.has(name), &mut cpp)?;
     }
     cpp.extend([String::new(), format!("}} // namespace {namespace}")]);
     Ok(file(&cpp))
@@ -1259,7 +1259,7 @@ fn cpp_items(
         out.push(format!("}} // namespace {name}"));
         return Ok(());
     }
-    if let Node::Arr(list) = if n.is_wrapper() { n.value() } else { n } {
+    if let Node::Arr(list) = if n.is_wrapper() { n.val() } else { n } {
         let names = list
             .iter()
             .map(|v| {
@@ -1286,7 +1286,7 @@ fn cpp_items(
         return Ok(());
     }
     let (val, t) = if n.is_wrapper() {
-        (n.value(), type_of(n, ty))
+        (n.val(), type_of(n, ty))
     } else {
         (n, ty)
     };

@@ -200,7 +200,7 @@ export class GpuRuntime {
   private readonly _seen = new Map<u32, u32>();
   /** This says where the core asked for the device's block, and is kept to
    * write its unfinished frames and its status later. */
-  private _block: { address: u32; words: u32 } | undefined;
+  private _block: { addr: u32; words: u32 } | undefined;
   /** This counts the frames drawn whose work the queue has not yet done (spec
    * DEVICE). A turn whose stream took a surface's texture draws a frame, which
    * stays unfinished until the queue's `onSubmittedWorkDone`, asked after the
@@ -210,18 +210,14 @@ export class GpuRuntime {
   private _drew = false;
 
   private readonly _device: GPUDevice;
-  private readonly _memory: () => ArrayBufferLike;
+  private readonly _mem: () => ArrayBufferLike;
   private readonly _wake: () => void;
 
   /** `wake` asks the runtime's loop for a turn. A completion written between
    * turns is read only by a turn, so each completion calls it. */
-  constructor(
-    device: GPUDevice,
-    memory: () => ArrayBufferLike,
-    wake: () => void,
-  ) {
+  constructor(device: GPUDevice, mem: () => ArrayBufferLike, wake: () => void) {
     this._device = device;
-    this._memory = memory;
+    this._mem = mem;
     this._wake = wake;
     // Nothing here destroys the device, so every loss is the browser's. The
     // core is told of it in its block.
@@ -264,8 +260,8 @@ export class GpuRuntime {
     this._making.clear();
     if (this._block) {
       const block = new Uint32Array(
-        this._memory(),
-        this._block.address,
+        this._mem(),
+        this._block.addr,
         this._block.words,
       );
       Atomics.store(block, this._block.words - 1, STATUS.LOST);
@@ -278,7 +274,7 @@ export class GpuRuntime {
   run(at: u32): void {
     let r: WordCursor | undefined;
     this._drew = false;
-    each_record(this._memory(), at, (code, w, a) => {
+    each_record(this._mem(), at, (code, w, a) => {
       r ??= new WordCursor(w);
       r.at = a;
       this._record(code, r);
@@ -296,8 +292,8 @@ export class GpuRuntime {
     this._unfinished_cnt = cnt;
     if (!this._block) return;
     const block = new Uint32Array(
-      this._memory(),
-      this._block.address,
+      this._mem(),
+      this._block.addr,
       this._block.words,
     );
     Atomics.store(block, this._block.words - 2, cnt);
@@ -316,19 +312,19 @@ export class GpuRuntime {
     this._making.delete(handle_slot(id));
   }
 
-  private _bytesAt(address: u32, size: u32): Uint8Array {
-    return new Uint8Array(this._memory(), address, size);
+  private _bytesAt(addr: u32, size: u32): Uint8Array {
+    return new Uint8Array(this._mem(), addr, size);
   }
 
   /** Reads an async pipeline's fence and ticket, which follow the sync op's
-   * words (RENDER_PIPELINE_ASYNC, COMPUTE_PIPELINE_ASYNC). Once `made` gives
+   * words (RENDER_PIPELINE_ASYNC, COMPUTE_PIPELINE_ASYNC). Once `pipeline` gives
    * the pipeline, it is kept at `id` and its ticket stored, provided the
    * slot still waits for `id`. A pipeline the device refuses is made again
    * by the sync call, so its error is reported as the sync op's is. */
   private _make_async<P extends GPURenderPipeline | GPUComputePipeline>(
     id: u32,
     r: WordCursor,
-    made: Promise<P>,
+    pipeline: Promise<P>,
     sync: () => P,
     label: string,
   ): void {
@@ -336,7 +332,7 @@ export class GpuRuntime {
     const slot = handle_slot(id);
     this._making.set(slot, id);
     const waits = () => this._making.get(slot) === id;
-    made
+    pipeline
       .catch((e: unknown) => {
         // Logged with its label, since the sync call's own error does not
         // name the pipeline on every device.
@@ -358,11 +354,7 @@ export class GpuRuntime {
    * fence first; the ticket is then stored with release, so a core that sees
    * the ticket sees the result. A turn is then asked for, to read it. */
   private _signal(word: u32, ticket: u32, result?: u32): void {
-    const w = new Uint32Array(
-      this._memory(),
-      word,
-      result === undefined ? 1 : 2,
-    );
+    const w = new Uint32Array(this._mem(), word, result === undefined ? 1 : 2);
     if (result !== undefined) w[1] = result;
     Atomics.store(w, 0, ticket);
     this._wake();
@@ -814,7 +806,7 @@ export class GpuRuntime {
         d.queue.writeBuffer(
           buffer,
           offset,
-          this._memory() as ArrayBuffer,
+          this._mem() as ArrayBuffer,
           r.u(),
           r.u(),
         );
@@ -837,7 +829,7 @@ export class GpuRuntime {
           layout.offset = r.w.byteOffset + 4 * r.at;
           r.skip(Math.ceil(n / 4));
         } else {
-          data = this._memory() as ArrayBuffer;
+          data = this._mem() as ArrayBuffer;
           layout.offset = r.u();
           r.skip(1);
         }
@@ -1147,7 +1139,7 @@ export class GpuRuntime {
         const buffer = this._get<GPUBuffer>(id);
         const offset = r.u();
         const size = r.u();
-        const address = r.u();
+        const addr = r.u();
         const word = r.u();
         const ticket = r.u();
         // A read whose buffer is gone since, with the device (`lost`) or by
@@ -1156,7 +1148,7 @@ export class GpuRuntime {
         buffer.mapAsync(GPUMapMode.READ, offset, size).then(
           () => {
             if (this._get<GPUBuffer>(id) !== buffer) return;
-            this._bytesAt(address, size).set(
+            this._bytesAt(addr, size).set(
               new Uint8Array(buffer.getMappedRange(offset, size)),
             );
             buffer.unmap();
@@ -1206,9 +1198,9 @@ export class GpuRuntime {
         return;
       }
       case op.DEVICE: {
-        const [address, words] = [r.u(), r.u()];
-        this._block = { address, words };
-        const out = new Uint32Array(this._memory(), address, words);
+        const [addr, words] = [r.u(), r.u()];
+        this._block = { addr, words };
+        const out = new Uint32Array(this._mem(), addr, words);
         LIMIT_NAME.forEach(
           (name, k) => (out[k] = Math.min(d.limits[name], 0xffffffff)),
         );
@@ -1219,7 +1211,7 @@ export class GpuRuntime {
         });
         // WebGPU resolves timestamps in nanoseconds, so the period is 1.
         const period = LIMIT_NAME.length + Math.ceil(FEATURE_NAME.length / 32);
-        new Float32Array(this._memory(), address, words)[period] = 1;
+        new Float32Array(this._mem(), addr, words)[period] = 1;
         out[period + 1] = (TEXTURE_FORMAT as readonly string[]).indexOf(
           navigator.gpu.getPreferredCanvasFormat(),
         );

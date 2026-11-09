@@ -17,10 +17,10 @@ pub(super) fn set(s: &mut State, c: abi::SettingSet) -> Outcome {
     // A change made before the settings' slot is read would be overwritten
     // by the read, so it is refused until then.
     refuse_unless(are_settings_loaded(), Errno::EAGAIN)?;
-    let changed = settings_mut().set_setting(c.key, c.value);
+    let changed = settings_mut().set_setting(c.key, c.val);
     refuse_unless(changed.is_some(), Errno::EINVAL)?;
     if changed == Some(true) && c.key == SettingKey::perf {
-        perf_follow(c.value == 1);
+        perf_follow(c.val == 1);
     }
     ask_turn(s)
 }

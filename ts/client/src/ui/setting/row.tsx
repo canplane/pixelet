@@ -118,16 +118,14 @@ export function SettingGroup(props: SettingGroupProps) {
       accessibilityLabel={label}
       style={[styles.group, styles.bleed]}
     >
-      <View style={styles.legendLine}>
-        <View style={styles.legend}>
-          <Text
-            maxFontSizeMultiplier={textScale.chrome}
-            style={styles.legendText}
-          >
-            {label}
-          </Text>
-          <Badges cost={cost} dev={dev} />
-        </View>
+      <View style={styles.legend}>
+        <Text
+          maxFontSizeMultiplier={textScale.chrome}
+          style={styles.legendText}
+        >
+          {label}
+        </Text>
+        <Badges cost={cost} dev={dev} />
       </View>
       {description && (
         <Text style={[settingText.small, styles.groupDescription]}>
@@ -270,17 +268,13 @@ const styles = StyleSheet.create({
     padding: 4,
     paddingTop: 12,
   },
-  // A box exactly as tall as the border and laid on it, so that the legend
-  // centers on the border at any text size.
-  legendLine: {
-    position: "absolute",
-    top: -GROUP_BORDER,
-    left: 8,
-    height: GROUP_BORDER,
-    flexDirection: "row",
-    alignItems: "center",
-  },
+  // Its top on the border's middle and raised by half its own height, so that
+  // it centers on the border at any text size.
   legend: {
+    position: "absolute",
+    top: -GROUP_BORDER / 2,
+    left: 8,
+    transform: [{ translateY: "-50%" }],
     flexDirection: "row",
     alignItems: "center",
     gap: 8,

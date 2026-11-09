@@ -26,7 +26,6 @@ function setup() {
     on_wake: null as ((wake_ms: number) => void) | null,
     on_turn: null as ((turn_ms: number, wake_ms: number) => void) | null,
     kick: (deadline_ms: number) => kicks.push(deadline_ms),
-    batch: (f: () => void) => f(),
   };
   const policy: SchedulingPolicy = {
     next: (consider) => moments.push(consider),
@@ -39,9 +38,8 @@ function setup() {
     policy,
     () => {},
   );
-  /** Hears a turn the thread ran that the scheduler did not kick, such as
-   * one a device kicked, as `Doorbell.turns` hears it: first the turn, then
-   * its wake. */
+  /** Hears what the thread told that the scheduler did not kick, as
+   * `Doorbell.turns` hears it: first the turn, then its wake. */
   const heard = (wake_ms: number) => {
     doorbell.on_turn!(1, wake_ms);
     doorbell.on_wake!(wake_ms);
@@ -82,6 +80,16 @@ test("a thread core's wake at once waits for the policy's moment", () => {
   assert.deepEqual(kicks, [Infinity, Infinity]);
 });
 
+test("what the runtime sends a thread core is granted a turn", () => {
+  const { scheduler, kicks, moments, moment } = setup();
+  scheduler.resume();
+  moment();
+  scheduler.wake();
+  assert.equal(moments.length, 1);
+  moment();
+  assert.deepEqual(kicks, [Infinity, Infinity]);
+});
+
 test("paused, a thread core's timed wake asks nothing", () => {
   vi.useFakeTimers();
   const { scheduler, wake, moments, moment } = setup();
@@ -93,7 +101,7 @@ test("paused, a thread core's timed wake asks nothing", () => {
   assert.equal(moments.length, 0);
 });
 
-test("a device-kicked turn that asks for nothing lets the held timer go", () => {
+test("a turn heard that asks for nothing lets the held timer go", () => {
   vi.useFakeTimers();
   const { scheduler, wake, heard, moments, moment } = setup();
   scheduler.resume();
@@ -104,7 +112,7 @@ test("a device-kicked turn that asks for nothing lets the held timer go", () => 
   assert.equal(moments.length, 0, "no turn for the earlier wake");
 });
 
-test("a device-kicked turn that asks for later is paced at its own wake", () => {
+test("a turn heard that asks for later is paced at its own wake", () => {
   vi.useFakeTimers();
   const { scheduler, wake, heard, moments, moment } = setup();
   scheduler.resume();

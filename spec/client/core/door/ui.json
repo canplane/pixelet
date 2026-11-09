@@ -420,7 +420,7 @@
           "type": "SettingKey"
         },
         {
-          "name": "value",
+          "name": "val",
           "type": "u32",
           "$doc": [
             "A toggle's 0 or 1, a choice's option by its index, or a number."

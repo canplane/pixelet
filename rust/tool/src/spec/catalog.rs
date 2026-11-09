@@ -26,7 +26,7 @@ const SKY_JSON: &str = "spec/spec/asset/sky.json";
 fn paths() -> Result<Vec<(&'static str, Vec<String>)>, String> {
     let pack = read(CUBE_JSON)?
         .get("pack")
-        .map(Node::value)
+        .map(Node::val)
         .and_then(Node::str)
         .map(str::to_string)
         .ok_or(format!("{CUBE_JSON}: no pack"))?;
@@ -63,7 +63,7 @@ fn paths() -> Result<Vec<(&'static str, Vec<String>)>, String> {
 fn leaves(n: &Node, ty: Option<&str>, out: &mut Vec<String>) {
     let ty = n.str_at("$type").or(ty);
     match n {
-        _ if n.is_wrapper() => leaves(n.value(), ty, out),
+        _ if n.is_wrapper() => leaves(n.val(), ty, out),
         Node::Str(s) if ty == Some(FILE) => out.push(s.clone()),
         Node::Arr(a) => a.iter().for_each(|e| leaves(e, ty, out)),
         Node::Obj(_) => n.named().for_each(|(_, v)| leaves(v, ty, out)),

@@ -30,9 +30,9 @@ pub struct SparseTree<T: Copy + PartialEq, const D: usize> {
     written_groups: Vec<u32>,
 }
 
-/// The child on the way to `at`, from the node `steps` levels above it.
-fn toward<const D: usize>(at: [i32; D], steps: u32) -> usize {
-    child_idx(at.map(|v| v >> steps))
+/// The child on the way to `at`, from the node `step_cnt` levels above it.
+fn toward<const D: usize>(at: [i32; D], step_cnt: u32) -> usize {
+    child_idx(at.map(|v| v >> step_cnt))
 }
 
 impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {

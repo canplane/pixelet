@@ -55,7 +55,7 @@ interface Present<T> {
   item: T;
   key: Key;
   /** False while the item is leaving. A leaving item is drawn at its exit
-   * until `gone` drops it. */
+   * until `onExited` drops it. */
   present: boolean;
 }
 
@@ -68,18 +68,18 @@ interface Leaving<T> {
 export function usePresent<T>(
   items: readonly T[],
   keyOf: (item: T) => Key,
-): { list: Present<T>[]; gone: (key: Key) => void } {
+): { list: Present<T>[]; onExited: (key: Key) => void } {
   const [prev, setPrev] = useState(items);
   const [leaving, setLeaving] = useState<Leaving<T>[]>([]);
 
   let current = leaving;
   if (prev !== items) {
-    const asked = new Set(items.map(keyOf));
+    const keys = new Set(items.map(keyOf));
     const leavingKeys = new Set(leaving.map((l) => l.key));
     const left = prev
       .map((item) => ({ item, key: keyOf(item) }))
-      .filter((l) => !asked.has(l.key) && !leavingKeys.has(l.key));
-    current = [...leaving.filter((l) => !asked.has(l.key)), ...left];
+      .filter((l) => !keys.has(l.key) && !leavingKeys.has(l.key));
+    current = [...leaving.filter((l) => !keys.has(l.key)), ...left];
     setLeaving(current);
     setPrev(items);
   }
@@ -89,7 +89,7 @@ export function usePresent<T>(
       ...items.map((item) => ({ item, key: keyOf(item), present: true })),
       ...current.map((l) => ({ ...l, present: false })),
     ],
-    gone: (key) => setLeaving((l) => l.filter((x) => x.key !== key)),
+    onExited: (key) => setLeaving((l) => l.filter((x) => x.key !== key)),
   };
 }
 
@@ -121,7 +121,7 @@ export function Swap({
   nodes.current.set(id, children);
   const [init, setInit] = useState<Key | null>(id);
   if (init !== null && init !== id) setInit(null);
-  const { list, gone } = usePresent(ids, (k) => k);
+  const { list, onExited } = usePresent(ids, (k) => k);
   const leaving = list.some((p) => !p.present);
   return list
     .filter((p) => !p.present || !leaving)
@@ -136,7 +136,7 @@ export function Swap({
             ? undefined
             : () => {
                 nodes.current.delete(key);
-                gone(key);
+                onExited(key);
               }
         }
         style={style}

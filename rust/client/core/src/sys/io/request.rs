@@ -54,7 +54,7 @@ impl Wait {
     fn ready(self) -> bool {
         match self {
             Wait::Ready => true,
-            Wait::Room(refused) => refused.over(),
+            Wait::Room(refused) => refused.released(),
             Wait::Object => false,
         }
     }
@@ -92,14 +92,14 @@ pub enum Event {
 struct Outage {
     failing: Option<Errno>,
     /// The server's failures in a row, each of which began a wait.
-    failures: u32,
+    fail_cnt: u32,
     struck_ms: f64,
     until: f64,
 }
 
 const NO_OUTAGE: Outage = Outage {
     failing: None,
-    failures: 0,
+    fail_cnt: 0,
     struck_ms: f64::NEG_INFINITY,
     until: f64::NEG_INFINITY,
 };
@@ -318,14 +318,14 @@ pub fn settle(key: u64, exit: Exit, phases: Option<PhaseList>) {
 /// it, so one outage is counted once.
 fn hold(s: &mut Sched, fault: Fault, f: Failure, started_ms: f64, at: f64) {
     let o = &mut s.outage;
-    let seed = derive_seed_u64(o.failures as u64, at.to_bits());
+    let seed = derive_seed_u64(o.fail_cnt as u64, at.to_bits());
     o.failing = Some(f.errnum);
     if fault == Fault::Network {
         o.until = at + policy::backoff(1, seed).unwrap_or(0.0);
     } else if started_ms > o.struck_ms {
         o.struck_ms = at;
-        o.failures += 1;
-        match policy::backoff(o.failures, seed) {
+        o.fail_cnt += 1;
+        match policy::backoff(o.fail_cnt, seed) {
             Some(wait) => o.until = at + wait,
             None => s.given_up = true,
         }

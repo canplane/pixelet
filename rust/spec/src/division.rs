@@ -44,8 +44,8 @@ impl Subtype {
     ];
 
     /// None for a number no subtype has.
-    pub fn of(value: u8) -> Option<Subtype> {
-        Subtype::ALL.into_iter().find(|s| *s as u8 == value)
+    pub fn of(val: u8) -> Option<Subtype> {
+        Subtype::ALL.into_iter().find(|s| *s as u8 == val)
     }
 
     /// Overture's word for it.

@@ -18,6 +18,7 @@ mod admit;
 mod belt;
 mod configure;
 mod image;
+mod make;
 mod name;
 #[cfg(unix)]
 pub mod native;
@@ -27,8 +28,9 @@ mod pending;
 mod run;
 mod surface;
 mod word;
+mod worker;
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
@@ -38,6 +40,7 @@ use crate::device;
 use crate::spec::STATUS;
 use belt::Belt;
 use image::{Decoder, Decoding};
+use make::{Maker, Making};
 use name::EnumTable;
 use object::Object;
 use pending::Pending;
@@ -84,17 +87,19 @@ pub struct GpuRuntime {
     block: Option<u32>,
     /// wgpu's device-lost callback sets this, on whatever thread wgpu calls it,
     /// and `poll` takes it.
-    gone: Arc<AtomicBool>,
+    device_lost: Arc<AtomicBool>,
     pending: Vec<Pending>,
     decoder: Decoder,
+    maker: Maker,
+    making: HashMap<u32, Making>,
     decoding: VecDeque<Decoding>,
     /// These are a record's words, copied out of the core's memory so that
     /// running the record may write that memory.
     scratch: Vec<u32>,
     command_bufs: Vec<wgpu::CommandBuffer>,
-    /// This turn's frame was admitted, so `present` counts it unfinished.
-    admitted: bool,
-    /// This counts the frames this runtime admitted that the queue has not yet
+    /// This turn's stream has taken a surface's texture.
+    drew: bool,
+    /// This counts the frames this runtime drew that the queue has not yet
     /// finished. Each runtime keeps its own count, so no other runtime's frames
     /// hold back its own.
     unfinished_cnt: Arc<AtomicU32>,
@@ -109,7 +114,7 @@ pub struct GpuRuntime {
 
 impl GpuRuntime {
     /// `wake` asks for a turn and may be called from any thread; beside a
-    /// native core it is the core's kick. Whatever learns of a completion
+    /// native core it is xpute-runtime's `wake`. Whatever learns of a completion
     /// calls it, so that the next turn's `poll` writes the answer. A device
     /// the system loses (`Unknown`) is told the core before the next turn. A
     /// device lost as `Destroyed` was its owner's doing, and is not told.
@@ -125,8 +130,8 @@ impl GpuRuntime {
             "[gpu] a frame latency of {}",
             cfg.frame_latency
         );
-        let gone = Arc::new(AtomicBool::new(false));
-        let lost = gone.clone();
+        let device_lost = Arc::new(AtomicBool::new(false));
+        let lost = device_lost.clone();
         device.set_device_lost_callback(move |reason, _| {
             if reason == wgpu::DeviceLostReason::Unknown {
                 lost.store(true, Ordering::Release);
@@ -144,13 +149,15 @@ impl GpuRuntime {
             preferred_format: cfg.preferred_format,
             configure_at: cfg.configure_at,
             block: None,
-            gone,
+            device_lost,
             pending: Vec::new(),
             decoder: Decoder::new(wake),
+            maker: make::maker(wake),
+            making: HashMap::new(),
             decoding: VecDeque::new(),
             scratch: Vec::new(),
             command_bufs: Vec::new(),
-            admitted: false,
+            drew: false,
             unfinished_cnt: Arc::new(AtomicU32::new(0)),
             frame_latency: cfg.frame_latency,
             present_mode: cfg.present_mode,
@@ -165,28 +172,37 @@ impl GpuRuntime {
         &self.device
     }
 
-    fn on_lost(&mut self, memory: &mut Memory<'_>) {
+    fn on_lost(&mut self, mem: &mut Memory<'_>) {
         self.objects.clear();
         self.pending.clear();
         self.decoding.clear();
-        if let Some(address) = self.block {
-            memory.store_release(address + 4 * device::STATUS_AT as u32, STATUS::LOST);
+        self.making.clear();
+        if let Some(addr) = self.block {
+            mem.store_release(addr + 4 * device::STATUS_AT as u32, STATUS::LOST);
         }
     }
 
-    /// Writes into `memory` what the device has answered since the last
+    /// Writes into `mem` what the device has answered since the last
     /// poll. Call it on the thread that runs the stream, before each turn
     /// reads its words. After a loss it writes only the block's LOST STATUS:
-    /// every object and pending request goes with the device.
-    pub fn poll(&mut self, memory: &mut Memory<'_>) {
-        if self.gone.swap(false, Ordering::AcqRel) {
-            self.on_lost(memory);
-            return;
+    /// every object and pending request goes with the device. It says whether
+    /// a request was answered, which only a turn reads.
+    pub fn poll(&mut self, mem: &mut Memory<'_>) -> bool {
+        if self.device_lost.swap(false, Ordering::AcqRel) {
+            self.on_lost(mem);
+            return false;
         }
         let _ = self.device.poll(wgpu::PollType::Poll);
-        self.tell_unfinished(memory);
-        self.pending.retain(|p| p.poll(memory));
-        self.land_images(memory);
+        self.tell_unfinished(mem);
+        let waited = self.waiting();
+        self.pending.retain(|p| p.poll(mem));
+        self.land_images(mem);
+        self.land_pipelines(mem);
+        self.waiting() != waited
+    }
+
+    fn waiting(&self) -> usize {
+        self.pending.len() + self.decoding.len() + self.making.len()
     }
 }
 

@@ -58,11 +58,11 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
 
     /// The fits of the set as it will be (`set`, `FITS`), refused where the set holds what the
     /// client's pool cannot. It is a fact of the whole set, not of a tile, asked of each tile's fit
-    /// (`encode_with_fit`) before a commit moves anything, `workers` tiles at once. None for a kind
+    /// (`encode_with_fit`) before a commit moves anything, `worker_cnt` tiles at once. None for a kind
     /// with no fits.
     fn check_pool(
         _set: &Staged<'_>,
-        _workers: usize,
+        _worker_cnt: usize,
     ) -> Result<Option<Vec<(Quadrant, String)>>, String> {
         Ok(None)
     }
@@ -307,7 +307,7 @@ pub fn fold<L: Base>(
     set: &mut Staged<'_>,
     mut changed: FnvHashSet<Quadrant>,
     absent: &impl Absent<L>,
-    workers: usize,
+    worker_cnt: usize,
 ) -> Result<(), String> {
     for zoom in (L::COARSEST..L::LEAF).rev() {
         if changed.is_empty() {
@@ -319,7 +319,7 @@ pub fn fold<L: Base>(
             .filter(|c| c.zoom == zoom + 1)
             .collect();
         let at = std::time::Instant::now();
-        let (written, removed) = fold_zoom(set, &readers::<L>(&below), absent, workers)?;
+        let (written, removed) = fold_zoom(set, &readers::<L>(&below), absent, worker_cnt)?;
         println!(
             "[bake/pyramid] z{zoom}: {} tiles changed in {:.1}s",
             written.len() + removed.len(),
@@ -412,10 +412,10 @@ fn fold_zoom<L: Base>(
     set: &Staged<'_>,
     targets: &[Quadrant],
     absent: &impl Absent<L>,
-    workers: usize,
+    worker_cnt: usize,
 ) -> Result<(Vec<Quadrant>, Vec<Quadrant>), String> {
     let rows: Vec<&[Quadrant]> = targets.chunk_by(|a, b| a.at[1] == b.at[1]).collect();
-    let band = rows.len().div_ceil(workers.max(1)).max(1);
+    let band = rows.len().div_ceil(worker_cnt.max(1)).max(1);
     let bands = std::thread::scope(|scope| {
         let handles: Vec<_> = rows
             .chunks(band)

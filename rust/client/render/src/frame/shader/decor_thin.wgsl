@@ -31,13 +31,13 @@ fn decor_thin_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let s = LEAF_CELL_ZOOM - cell_zoom;
   let corner = (q << vec2<u32>(BRICK_SHIFT + s))
     + vec2<i32>(i32(id.x % BRICK), i32(id.x / BRICK)) * (1i << s);
-  if (scatter_count(j, cell_zoom, corner >> vec2<u32>(s)) == 0u) {
+  if (scatter_cnt(j, cell_zoom, corner >> vec2<u32>(s)) == 0u) {
     return;
   }
   let side = 1u << s;
   for (var n = 0u; n < side * side; n += 1u) {
     let leaf = corner + vec2<i32>(i32(n % side), i32(n / side));
-    if (scatter_count(j, LEAF_CELL_ZOOM, leaf) == 0u) {
+    if (scatter_cnt(j, LEAF_CELL_ZOOM, leaf) == 0u) {
       continue;
     }
     let draws = candidate_draws(j, leaf);

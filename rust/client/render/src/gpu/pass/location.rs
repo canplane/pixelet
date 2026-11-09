@@ -98,8 +98,8 @@ pub struct LocationPass {
     oct_normal: u32,
     /// The UI's action color, in linear light.
     color: [f32; 3],
-    pub zone_marks: MarkPass,
-    pub beacon_marks: MarkPass,
+    pub zone_mark: MarkPass,
+    pub beacon_mark: MarkPass,
 }
 
 fn put(g: &Gpu, data: &[u8], usage: u32) -> u32 {
@@ -133,14 +133,14 @@ impl LocationPass {
             oct_pos: put(g, bytes(&oct_p), buffer_usage::VERTEX),
             oct_normal: put(g, bytes(&oct_n), buffer_usage::VERTEX),
             color: [r as f32, gr as f32, b as f32],
-            zone_marks: MarkPass::new(
+            zone_mark: MarkPass::new(
                 g,
                 pipelines,
                 (PIPELINE_LOCATION_ZONE_MARK, PIPELINE_LOCATION_ZONE),
                 align,
                 (|d| d[0], put_whole, |d| d[1] > 0),
             ),
-            beacon_marks: MarkPass::new(
+            beacon_mark: MarkPass::new(
                 g,
                 pipelines,
                 (PIPELINE_LOCATION_BEACON_MARK, PIPELINE_LOCATION_BEACON),
@@ -153,14 +153,14 @@ impl LocationPass {
     /// Draws this frame's marks into `pass`. `frames` holds their group 0 as
     /// they are and as they were (tile_mark.wgsl, `MarkPass::draw`).
     pub fn draw_marks(&self, pass: &mut TrackedRenderPass, frames: [u32; 2]) {
-        self.zone_marks.draw(pass, frames, |pass, d, upload| {
+        self.zone_mark.draw(pass, frames, |pass, d, upload| {
             pass.set_vertex_buf(0, self.box_pos, 0, 0);
             pass.set_vertex_buf(1, self.box_uv, 0, 0);
             pass.set_idx_buf(self.box_idx, 0, 0);
             pass.set_bind_group(2, upload, &[]);
             pass.draw_indexed(BOX_VERTICES, d[1], 0, 0);
         });
-        self.beacon_marks.draw(pass, frames, |pass, _, _| {
+        self.beacon_mark.draw(pass, frames, |pass, _, _| {
             pass.set_vertex_buf(0, self.oct_pos, 0, 0);
             pass.set_vertex_buf(1, self.oct_normal, 0, 0);
             pass.draw(BEACON_VERTICES, 1, 0, 0);
@@ -170,16 +170,16 @@ impl LocationPass {
     /// Pushes onto `out` the uploads the zones read (`MarkPass::reads`). A
     /// beacon reads none.
     pub fn marks_read(&self, draws: &DrawTable, out: &mut Vec<u32>) {
-        self.zone_marks.reads(zones(draws), out);
-        self.beacon_marks
+        self.zone_mark.reads(zones(draws), out);
+        self.beacon_mark
             .reads(draws.of(PIPELINE_LOCATION_BEACON), out);
     }
 
-    /// Adds the pass's draws to `stats`: a box's triangles for each instance
+    /// Adds the pass's draws to `stat`: a box's triangles for each instance
     /// of a zone, and the octahedron's for each beacon.
-    pub fn count(&self, draws: &DrawTable, stats: &mut DrawStat) {
-        draws.count(PIPELINE_LOCATION_ZONE, stats, |d| BOX_VERTICES / 3 * d[1]);
-        draws.count(PIPELINE_LOCATION_BEACON, stats, |_| BEACON_VERTICES / 3);
+    pub fn count(&self, draws: &DrawTable, stat: &mut DrawStat) {
+        draws.count(PIPELINE_LOCATION_ZONE, stat, |d| BOX_VERTICES / 3 * d[1]);
+        draws.count(PIPELINE_LOCATION_BEACON, stat, |_| BEACON_VERTICES / 3);
     }
 
     /// Writes each zone's uniform, with the action color, into a slot of its

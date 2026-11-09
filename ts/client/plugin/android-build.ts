@@ -21,6 +21,8 @@
  *   in java.lang.System has been called"). Android Studio's sync writes the
  *   daemon's criteria for its own bundled Java 25, and the criteria outrank
  *   `JAVA_HOME`, so this plugin writes them.
+ * - A build's JavaScript is bundled again when `PXL_PERF_DRIVE` changes, so a
+ *   build made for measuring and a normal one share no bundle.
  */
 
 import * as fs from "node:fs";
@@ -44,23 +46,31 @@ const DEBUGGABLE = FLAVORS.flatMap((flavor) => [
 ]);
 const MARK = "// pxl: the flavors' debug builds (plugin/android-build.ts)";
 const DAEMON_JAVA = "17";
+const BUNDLE_INPUT_MARK =
+  "// pxl: the bundle's input (plugin/android-build.ts)";
+const BUNDLE_INPUT = `
+${BUNDLE_INPUT_MARK}
+tasks.matching { it.name.startsWith("createBundle") }.configureEach {
+    inputs.property("PXL_PERF_DRIVE", System.getenv("PXL_PERF_DRIVE") ?: "")
+}
+`;
 
-const plugin: ConfigPlugin = (config) => {
-  config = withGradleProperties(config, (config) => {
-    const items = config.modResults.filter(
+const plugin: ConfigPlugin = (cfg) => {
+  cfg = withGradleProperties(cfg, (cfg) => {
+    const items = cfg.modResults.filter(
       (item) => !(item.type === "property" && item.key in PROPERTIES),
     );
     for (const [key, value] of Object.entries(PROPERTIES)) {
       items.push({ type: "property", key, value });
     }
-    config.modResults = items;
-    return config;
+    cfg.modResults = items;
+    return cfg;
   });
-  config = withDangerousMod(config, [
+  cfg = withDangerousMod(cfg, [
     "android",
-    (config) => {
+    (cfg) => {
       const file = path.join(
-        config.modRequest.platformProjectRoot,
+        cfg.modRequest.platformProjectRoot,
         "gradle",
         "gradle-daemon-jvm.properties",
       );
@@ -68,12 +78,12 @@ const plugin: ConfigPlugin = (config) => {
         file,
         `# plugin/android-build.ts\ntoolchainVersion=${DAEMON_JAVA}\n`,
       );
-      return config;
+      return cfg;
     },
   ]);
-  return withAppBuildGradle(config, (config) => {
-    const gradle = config.modResults.contents;
-    if (gradle.includes(MARK)) return config;
+  return withAppBuildGradle(cfg, (cfg) => {
+    const gradle = cfg.modResults.contents;
+    if (gradle.includes(MARK)) return cfg;
     const at = gradle.search(/^react \{\n/m);
     if (at < 0) {
       throw new Error(
@@ -84,9 +94,9 @@ const plugin: ConfigPlugin = (config) => {
     const line = `    ${MARK}\n    debuggableVariants = ${JSON.stringify(
       DEBUGGABLE,
     )}\n`;
-    config.modResults.contents =
-      gradle.slice(0, end) + line + gradle.slice(end);
-    return config;
+    cfg.modResults.contents =
+      gradle.slice(0, end) + line + gradle.slice(end) + BUNDLE_INPUT;
+    return cfg;
   });
 };
 

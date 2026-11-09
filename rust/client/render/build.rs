@@ -19,6 +19,8 @@ use pxl_engine::WORKGROUPS_CAP;
 use pxl_spec::space::layer::lattice::EFFECT_REACH;
 use std::path::Path;
 
+#[path = "src/frame/shader/debug_look.spec.rs"]
+mod debug_look;
 #[path = "src/param.rs"]
 #[expect(
     dead_code,
@@ -103,11 +105,11 @@ fn main() {
         "fn fill_side(k: u32) -> f32 {{ switch k {{ {sides}default: {{ return 1.0; }} }} }}\n"
     );
     // A coarse cell's ray carries the cell's four palette indices in its third word, packed as
-    // pxl-engine ground.rs `palette_indices` packs them.
+    // pxl-engine ground.rs `palette_idxs` packs them.
     let b = ground::PALETTE_BITS;
     let m = (1u32 << b) - 1;
-    let palette_indices = format!(
-        "fn ray_palette_indices(w: u32) -> vec4u {{ return vec4u(w & {m}u, (w >> {b}u) & {m}u, (w >> {}u) & {m}u, w >> {}u); }}\n",
+    let palette_idxs = format!(
+        "fn ray_palette_idxs(w: u32) -> vec4u {{ return vec4u(w & {m}u, (w >> {b}u) & {m}u, (w >> {}u) & {m}u, w >> {}u); }}\n",
         2 * b,
         3 * b
     );
@@ -118,7 +120,7 @@ fn main() {
         field("fill", FILL_SHIFT, FILL_BITS),
         fill,
         faces,
-        palette_indices,
+        palette_idxs,
     ];
     std::fs::write(out.join("ray.wgsl"), ray.concat()).expect("the ray's shader");
     // The corners of a box's vertices, first as pxl-engine raster.rs `corner` winds them and
@@ -158,8 +160,9 @@ fn main() {
     }
     // Where each of the eye's words lies in the eye uniform the screen pass reads (pxl-engine
     // eye.rs), and how many vec4s the pass binds to reach the last of them.
-    use pxl_engine::eye::{FAR, FORWARD, JITTER, ORIGIN, RIGHT, TAN, UP};
+    use pxl_engine::eye::{FAR, FORWARD, JITTER, ORIGIN, RIGHT, STEPS, TAN, UP};
     let last = (ORIGIN + 2)
+        .max(STEPS)
         .max(FAR)
         .max(FORWARD + 2)
         .max(RIGHT + 2)
@@ -167,7 +170,7 @@ fn main() {
         .max(TAN + 1)
         .max(JITTER + 1);
     let eye = format!(
-        "const EYE_ORIGIN: u32 = {ORIGIN}u;\nconst EYE_FAR: u32 = {FAR}u;\nconst EYE_FORWARD: u32 = {FORWARD}u;\nconst EYE_RIGHT: u32 = {RIGHT}u;\nconst EYE_UP: u32 = {UP}u;\nconst EYE_TAN: u32 = {TAN}u;\nconst EYE_JITTER: u32 = {JITTER}u;\nconst EYE_READ_VEC4S: u32 = {}u;\n",
+        "const EYE_ORIGIN: u32 = {ORIGIN}u;\nconst EYE_STEPS: u32 = {STEPS}u;\nconst EYE_FAR: u32 = {FAR}u;\nconst EYE_FORWARD: u32 = {FORWARD}u;\nconst EYE_RIGHT: u32 = {RIGHT}u;\nconst EYE_UP: u32 = {UP}u;\nconst EYE_TAN: u32 = {TAN}u;\nconst EYE_JITTER: u32 = {JITTER}u;\nconst EYE_READ_VEC4S: u32 = {}u;\n",
         last / 4 + 1
     );
     std::fs::write(out.join("eye.wgsl"), eye).expect("the eye's shader");
@@ -197,9 +200,54 @@ fn main() {
         1u32 << HASH_SHARE_BITS
     );
     std::fs::write(out.join("cloud_hash.wgsl"), cloud).expect("the cloud hash's shader");
+    std::fs::write(out.join("debug_look.wgsl"), debug_looks()).expect("the debug views' looks");
     assemble(&out);
     println!("cargo:rerun-if-changed=src/frame/shader");
     println!("cargo:rerun-if-changed=src/frame/shader/word.rs");
+}
+
+/// The debug views' looks (debug_look.json) as WGSL, each decoded to linear light, as the
+/// world's color and the canvas's blend it before it is encoded once (finish.wgsl), so each
+/// shows as its sRGB; the ramp read straight between its stops.
+fn debug_looks() -> String {
+    use debug_look::{share, steps};
+    // A world's cell spans (1, `SPANS`] of the view's cells where the rays stop on it (pxl-engine
+    // grid.rs `cell_zoom_at`), so its share of a cell squared lies within (1, `SPANS`²]: the
+    // tints' bounds are those.
+    let spans = grid::SPANS;
+    assert!(
+        share::finer::most == 1.0 && share::within::most == spans * spans,
+        "debug_look.json's share bounds are the split's"
+    );
+    let light = |c: u32| {
+        [c >> 16, c >> 8, c].map(|v| {
+            let v = (v & 255) as f32 / 255.0;
+            if v <= 0.04045 {
+                v / 12.92
+            } else {
+                libm::powf((v + 0.055) / 1.055, 2.4)
+            }
+        })
+    };
+    let parts = |v: [f32; 3]| format!("{:?}, {:?}, {:?}", v[0], v[1], v[2]);
+    let vec3 = |v: [f32; 3]| format!("vec3f({})", parts(v));
+    let ramp: Vec<String> = steps::ramp.iter().map(|&c| vec3(light(c))).collect();
+    let last = steps::ramp.len() - 1;
+    format!(
+        "const GRID_COLOR = vec4f({}, {:?});\nconst SHARE_FINER = {};\nconst SHARE_FINER_MOST: f32 = {:?};\nconst SHARE_WITHIN = {};\nconst SHARE_WITHIN_MOST: f32 = {:?};\nconst SHARE_COARSER = {};\nconst STEPS_MOST: f32 = {:?};\nconst STEPS_NONE = {};\nconst STEPS_RAMP = array<vec3f, {}>({});\nfn steps_ramp(x: f32) -> vec3f {{ let f = clamp(x, 0.0, 1.0) * {last}.0; let i = min(u32(f), {}u); return mix(STEPS_RAMP[i], STEPS_RAMP[i + 1u], f - f32(i)); }}\n",
+        parts(light(debug_look::grid::rgb)),
+        debug_look::grid::alpha,
+        vec3(light(share::finer::rgb)),
+        share::finer::most,
+        vec3(light(share::within::rgb)),
+        share::within::most,
+        vec3(light(share::coarser::rgb)),
+        steps::most,
+        vec3(light(steps::none)),
+        ramp.len(),
+        ramp.join(", "),
+        last - 1
+    )
 }
 
 /// `text` without its line comments, its indentation and its blank lines. WGSL has no string
@@ -246,6 +294,7 @@ fn walk_word() -> String {
     let words: &[(&str, u32)] = &[
         ("EYE_VEC4S", eye::WORDS as u32 / 4),
         ("ORIGIN", eye::ORIGIN as u32),
+        ("STEPS", eye::STEPS as u32),
         ("FORWARD", eye::FORWARD as u32),
         ("FAR", eye::FAR as u32),
         ("RIGHT", eye::RIGHT as u32),
@@ -264,6 +313,7 @@ fn walk_word() -> String {
         ("CELL_RESUMES", beam::CELL_RESUMES),
         ("CELL_WORDS", beam::CELL_WORDS),
         ("LINE_NODE", beam::LINE_NODE),
+        ("LINE_STEPS", beam::LINE_STEPS),
         ("LINE_WORDS", beam::LINE_WORDS),
         ("NODE_ZOOM", beam::NODE_ZOOM),
         ("NODE_CORNER", beam::NODE_CORNER),
@@ -275,6 +325,8 @@ fn walk_word() -> String {
         ("SAMPLE_PARKED_STATE", beam::SAMPLE_PARKED_STATE),
         ("SAMPLE_LACKS", beam::SAMPLE_LACKS),
         ("SAMPLE_AXIS", beam::SAMPLE_AXIS),
+        ("SAMPLE_LACK", beam::SAMPLE_LACK),
+        ("SAMPLE_STEPS_SHIFT", beam::SAMPLE_STEPS_SHIFT),
         ("NODE_WORDS", beam::NODE_WORDS),
         ("SAMPLE_WORDS", beam::SAMPLE_WORDS),
         ("SAMPLE_NONE", beam::SAMPLE_NONE),
@@ -298,8 +350,8 @@ fn walk_word() -> String {
         ("KIND_CELL", answer::Kind::Cell as u32),
         ("KIND_LACKS", answer::Kind::Lacks as u32),
         ("VAL_MASK", answer::PLACED_ASSET - 1),
-        ("VALUE_VOID", value::VOID),
-        ("VALUE_AIR", value::AIR),
+        ("VAL_VOID", value::VOID),
+        ("VAL_AIR", value::AIR),
         ("FILL_SHIFT", answer::FILL_SHIFT),
         ("EIGHTHS", answer::EIGHTHS),
         ("BOX_BITS", answer::BOX_BITS),
@@ -317,13 +369,13 @@ fn walk_word() -> String {
         ("LIGHT_HEADER_SIZE", light::HEADER_SIZE as u32),
         ("MISSED_PASS", node_cache::MISSED_PASS),
         (
-            "EYE_MISS_COUNT",
+            "EYE_MISS_CNT",
             node_cache::lane_at(count::EYE, count::HOLE_WALK),
         ),
         ("HITS_ARGS", node_cache::HITS_ARGS),
         ("HITS_CNT", node_cache::HITS_CNT),
         (
-            "LIGHT_ASKED_COUNT",
+            "LIGHT_ASKED_CNT",
             node_cache::lane_at(count::LIGHT, count::ASKS),
         ),
         ("LIGHT_T_MAX", light::W_T_MAX as u32),
@@ -389,26 +441,26 @@ fn walk_word() -> String {
         ("LIGHT_HEADER_COUNTED", light::HEADER_COUNTED as u32),
         ("LIGHT_BEAM_PASS", node_cache::LIGHT_BEAM_PASS),
         (
-            "LIGHT_BEAM_COUNT",
+            "LIGHT_BEAM_CNT",
             node_cache::lane_at(count::LIGHT, count::BEAM),
         ),
         ("VISIBLE_LACK", raster::LACK),
-        ("COUNT_RAYS", count::RAYS),
-        ("COUNT_VOXEL", count::VOXEL),
-        ("COUNT_SKY", count::SKY),
-        ("COUNT_HOLE", count::HOLE),
+        ("CNT_RAYS", count::RAYS),
+        ("CNT_VOXEL", count::VOXEL),
+        ("CNT_SKY", count::SKY),
+        ("CNT_HOLE", count::HOLE),
         ("SAMPLES_PASS", node_cache::SAMPLES_PASS),
         ("LIGHT_SAMPLES_PASS", node_cache::LIGHT_SAMPLES_PASS),
         (
-            "EYE_SAMPLE_COUNT",
+            "EYE_SAMPLE_CNT",
             node_cache::lane_at(count::EYE, count::SAMPLE),
         ),
         (
-            "EYE_ASKED_COUNT",
+            "EYE_ASKED_CNT",
             node_cache::lane_at(count::EYE, count::ASKS),
         ),
         (
-            "LIGHT_SAMPLE_COUNT",
+            "LIGHT_SAMPLE_CNT",
             node_cache::lane_at(count::LIGHT, count::SAMPLE),
         ),
         ("GRID_KEEP", beam::GRID_KEEP as u32),
@@ -432,16 +484,16 @@ fn walk_word() -> String {
         ("STARTS_ANCHORS", light::STARTS_ANCHORS as u32),
         ("STARTS_FRACS", light::STARTS_FRACS as u32),
         (
-            "LIGHT_MISS_COUNT",
+            "LIGHT_MISS_CNT",
             node_cache::lane_at(count::LIGHT, count::HOLE_WALK),
         ),
         ("CARVE", eye::CARVE as u32),
         ("HIDE", eye::HIDE as u32),
         ("FRAME", node_cache::FRAME),
         ("PASSES", node_cache::PASSES),
-        ("COUNT_ON", node_cache::COUNT_ON),
-        ("COUNT_EYE", count::EYE),
-        ("COUNT_WALKS", count::WALKS),
+        ("CNT_ON", node_cache::CNT_ON),
+        ("CNT_EYE", count::EYE),
+        ("CNT_WALKS", count::WALKS),
         ("Y_START", cast::Y_START),
         ("Z_START", cast::Z_START),
         ("SHARD_ZOOM", SHARD_ZOOM),
@@ -519,10 +571,7 @@ fn walk_word() -> String {
         ("RASTER_ASKED_AT", raster::ASKED_AT),
         ("RASTER_HIT_ASKED_AT", raster::HIT_ASKED_AT),
         ("BEAM_PASS", node_cache::BEAM_PASS),
-        (
-            "EYE_BEAM_COUNT",
-            node_cache::lane_at(count::EYE, count::BEAM),
-        ),
+        ("EYE_BEAM_CNT", node_cache::lane_at(count::EYE, count::BEAM)),
         ("RASTER_ARGS_INSTANCES", raster::ARGS_INSTANCES),
         ("RASTER_ARGS_ASKS", raster::ARGS_ASKS),
         ("RASTER_ARGS_CNT", raster::ARGS_CNT),
@@ -643,7 +692,7 @@ fn world_word() -> String {
     let words: &[(&str, u32)] = &[
         ("LEAF_CELL_ZOOM", pxl_engine::LEAF_CELL_ZOOM),
         ("MIN_ZOOM", pxl_engine::MIN_ZOOM),
-        ("VALUE_UNKNOWN", value::UNKNOWN),
+        ("VAL_UNKNOWN", value::UNKNOWN),
         ("GROUNDS_FIRST", value::GROUNDS[0]),
         ("GROUNDS_LAST", value::GROUNDS[1]),
         ("OBJECTS_FIRST", value::OBJECTS[0]),
@@ -814,13 +863,13 @@ fn decor_word() -> String {
         ("PAIR_DECOR_SHIFT", g::PAIR_DECOR_SHIFT),
         ("PLACED_TAG", g::PLACED_TAG),
         ("PLACED_FIRST", world::PLACED_FIRST),
-        ("COUNT_TAG", scatter::COUNT),
+        ("CNT_TAG", scatter::CNT),
         ("SPLIT_TAG", scatter::SPLIT),
         ("DECORS", DECORS.len() as u32),
         ("FIRST_VAL", DECORS[0].val),
         ("ROW_WORDS", row(size_of::<Decor>())),
         ("ROW_SEED", row(offset_of!(Decor, seed))),
-        ("ROW_ORIENTATION", row(offset_of!(Decor, orientation))),
+        ("ROW_ORIENT", row(offset_of!(Decor, orient))),
         ("ROW_ON", row(offset_of!(Decor, on))),
         ("ROW_VARIANTS", row(offset_of!(Decor, variants))),
         ("ROW_SIZES", row(offset_of!(Decor, sizes))),
@@ -934,9 +983,9 @@ fn tile_word() -> String {
     format!(
         concat!(
             "const CAST_TILES_LANES: u32 = {}u;\n",
-            "struct TileGrid {{ count: vec4u, size: vec4f, }};\n",
-            "fn tiles_age(t: TileGrid, changed_at: u32) -> u32 {{ return t.count.w - changed_at; }}\n",
-            "fn tiles_in_damage(t: TileGrid, changed_at: u32) -> bool {{ return tiles_age(t, changed_at) < t.count.z; }}\n",
+            "struct TileGrid {{ cnt: vec4u, size: vec4f, }};\n",
+            "fn tiles_age(t: TileGrid, changed_at: u32) -> u32 {{ return t.cnt.w - changed_at; }}\n",
+            "fn tiles_in_damage(t: TileGrid, changed_at: u32) -> bool {{ return tiles_age(t, changed_at) < t.cnt.z; }}\n",
         ),
         screen::CAST_TILES_LANES
     )
@@ -1403,7 +1452,7 @@ fn assemble(out: &Path) {
         {
             use pxl_engine::{light, ray};
             let words: [(&str, &[u32]); 2] = [
-                ("MissCount", &[ray::MISS_ARGS_CNT, ray::MISS_ARGS_COUNT]),
+                ("MissCount", &[ray::MISS_ARGS_CNT, ray::MISS_ARGS_CNTS]),
                 (
                     "ReceiverDispatch",
                     &[
@@ -1670,12 +1719,12 @@ fn stores_plainly(
         e: naga::Handle<Expression>,
     ) -> Option<(naga::Handle<naga::GlobalVariable>, naga::Handle<naga::Type>)> {
         use naga::TypeInner;
-        let element =
-            |ty: naga::Handle<naga::Type>, index: Option<u32>| match &module.types[ty].inner {
-                TypeInner::Array { base, .. } => Some(*base),
-                TypeInner::Struct { members, .. } => index.map(|i| members[i as usize].ty),
-                _ => None,
-            };
+        let element = |ty: naga::Handle<naga::Type>, idx: Option<u32>| match &module.types[ty].inner
+        {
+            TypeInner::Array { base, .. } => Some(*base),
+            TypeInner::Struct { members, .. } => idx.map(|i| members[i as usize].ty),
+            _ => None,
+        };
         match f.expressions[e] {
             Expression::GlobalVariable(g) => Some((g, module.global_variables[g].ty)),
             Expression::AccessIndex { base, index } => {

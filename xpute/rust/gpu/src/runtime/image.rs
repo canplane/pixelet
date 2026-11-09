@@ -7,13 +7,13 @@
 //! on them on either runtime. Any other format is refused here.
 
 use std::io::Cursor;
-use std::sync::mpsc::{channel, Receiver, Sender};
 
 use xpute_runtime::mem::Memory;
 
 use super::object::Object;
 use super::pending::signal;
 use super::run::OwnedTexture;
+use super::worker::Worker;
 use super::GpuRuntime;
 use crate::spec::RESULT;
 
@@ -32,31 +32,16 @@ pub(super) struct Decoding {
 type Job = (u64, Vec<u8>, bool, bool);
 
 pub(super) struct Decoder {
-    ask: Sender<Job>,
-    answers: Receiver<(u64, Option<Image>)>,
+    worker: Worker<Job, (u64, Option<Image>)>,
     next: u64,
 }
 
 impl Decoder {
-    /// The decoder's thread calls `wake` after each answer, since nothing
-    /// else asks for the poll that lands it.
     pub(super) fn new(wake: fn()) -> Decoder {
-        let (ask, jobs) = channel::<Job>();
-        let (answer, answers) = channel();
-        std::thread::spawn(move || {
-            for (job, bytes, flip_y, premultiplied) in jobs {
-                if answer
-                    .send((job, decode(&bytes, flip_y, premultiplied)))
-                    .is_err()
-                {
-                    return;
-                }
-                wake();
-            }
-        });
         Decoder {
-            ask,
-            answers,
+            worker: Worker::new(wake, |(job, bytes, flip_y, premultiplied): Job| {
+                (job, decode(&bytes, flip_y, premultiplied))
+            }),
             next: 0,
         }
     }
@@ -78,6 +63,7 @@ impl GpuRuntime {
         self.decoder.next += 1;
         let _ = self
             .decoder
+            .worker
             .ask
             .send((job, bytes.to_vec(), flip_y, premultiplied));
         self.decoding.push_back(Decoding {
@@ -93,8 +79,8 @@ impl GpuRuntime {
     /// runtime cannot decode is answered REFUSED, as on the web. An image
     /// whose texture is gone, or which the device's loss forgot, has nowhere
     /// to land and is not answered.
-    pub(super) fn land_images(&mut self, memory: &mut Memory<'_>) {
-        while let Ok((job, image)) = self.decoder.answers.try_recv() {
+    pub(super) fn land_images(&mut self, mem: &mut Memory<'_>) {
+        while let Ok((job, image)) = self.decoder.worker.answers.try_recv() {
             let Some(d) = self.decoding.pop_front_if(|d| d.job == job) else {
                 continue;
             };
@@ -107,7 +93,7 @@ impl GpuRuntime {
                 continue;
             }
             let Some(image) = image else {
-                signal(memory, d.word, d.ticket, Some(RESULT::REFUSED));
+                signal(mem, d.word, d.ticket, Some(RESULT::REFUSED));
                 continue;
             };
             let layout = wgpu::TexelCopyBufferLayout {
@@ -122,7 +108,7 @@ impl GpuRuntime {
             };
             self.queue
                 .write_texture(d.to.info(), &image.rgba, layout, size);
-            signal(memory, d.word, d.ticket, Some(RESULT::OK));
+            signal(mem, d.word, d.ticket, Some(RESULT::OK));
         }
     }
 }

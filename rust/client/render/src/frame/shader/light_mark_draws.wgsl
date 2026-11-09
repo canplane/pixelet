@@ -112,7 +112,7 @@ fn light_mark_draws_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_i
     return;
   }
   let b = corner_tiles(foot_lo, foot_hi);
-  if (!b.got) {
+  if (!b.has_tiles) {
     return;
   }
   let across = u32(b.last.x - b.first.x) + 1u;

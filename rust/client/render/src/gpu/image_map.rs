@@ -46,7 +46,7 @@ impl ImageMap {
 
     /// Copies the image in and builds its mips the first time it arrives. Returns whether it
     /// arrived this frame.
-    pub fn step(&mut self, g: &Gpu, mips: &MipPass, image: Option<Image>) -> bool {
+    pub fn step(&mut self, g: &Gpu, mip: &MipPass, image: Option<Image>) -> bool {
         if self.loaded {
             return false;
         }
@@ -62,7 +62,7 @@ impl ImageMap {
         );
         g.submit(encoder);
         release(face);
-        mips.build(g, self.texture, self.levels, 0, 1);
+        mip.build(g, self.texture, self.levels, 0, 1);
         self.loaded = true;
         true
     }

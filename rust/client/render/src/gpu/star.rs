@@ -14,7 +14,7 @@ use crate::gpu::api::{buf_entry, buffer_usage, bytes, word_bytes, Entry, Gpu, Tr
 use crate::gpu::atmosphere::AIR_ENTRIES;
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::put::put_mat;
-use crate::look::environment::{ENV_SKY, ENV_STARS, ENV_STAR_FRAME_FLOATS};
+use crate::look::environment;
 use crate::param::sky::star::DRAWN_ABOVE;
 
 const CATALOG: &[u8] = include_bytes!("bright_star.bin");
@@ -79,13 +79,14 @@ impl StarPass {
     /// written. `density` is the drawn pixels a CSS pixel spans (`Surface::px_per_css`).
     pub fn prepare(&mut self, view_proj: &Mat4, env: &[f32], density: f64) {
         let u = &mut self.words;
-        u[INTENSITY] = env[ENV_SKY];
+        u[INTENSITY] = env[environment::SKY];
         if u[INTENSITY] <= DRAWN_ABOVE {
             return;
         }
         put_mat(u, VIEW_PROJ, view_proj);
-        u[SKY..SKY + ENV_STAR_FRAME_FLOATS]
-            .copy_from_slice(&env[ENV_STARS..ENV_STARS + ENV_STAR_FRAME_FLOATS]);
+        u[SKY..SKY + environment::STAR_FRAME_FLOATS].copy_from_slice(
+            &env[environment::STARS..environment::STARS + environment::STAR_FRAME_FLOATS],
+        );
         u[SKY + 12..SKY + 16].copy_from_slice(&[0.0, 0.0, 0.0, 1.0]);
         u[DENSITY] = density as f32;
     }

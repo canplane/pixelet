@@ -35,9 +35,9 @@ pub struct UploadTable {
 }
 
 impl UploadTable {
-    pub fn new(slots: u32) -> UploadTable {
+    pub fn new(slot_cnt: u32) -> UploadTable {
         UploadTable {
-            slots: vec![Upload::Empty; slots as usize],
+            slots: vec![Upload::Empty; slot_cnt as usize],
             waiting: 0,
         }
     }

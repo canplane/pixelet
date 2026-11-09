@@ -46,13 +46,15 @@ pub fn shards() -> &'static [[i32; 4]] {
 }
 
 /// The eye's words for the GPU's cast (`lens::gpu_cast`), with the pointer's
-/// preview `edits` added so that the GPU's world answers as the CPU's does
+/// preview `edit` added so that the GPU's world answers as the CPU's does
 /// while previewing (domain/query/world.rs `previewing`). The preview's carve
 /// is cut to air and its hidden object is left out; each is written as X, Y,
-/// Z and the zoom (pxl-engine `eye`). None without a screen.
-pub fn eye(o: &Observation, edits: &RenderEdit) -> Option<[u32; eye::WORDS]> {
+/// Z and the zoom (pxl-engine `eye`). `steps` is the `ray_steps` setting,
+/// written as the ray steps view's word (`eye::STEPS`). None without a screen.
+pub fn eye(o: &Observation, edit: &RenderEdit, steps: bool) -> Option<[u32; eye::WORDS]> {
     let mut words = [0u32; eye::WORDS];
     lens::gpu_cast(o, &mut words)?;
+    words[eye::STEPS] = u32::from(steps);
     let cut = |e: Option<Octant>| {
         e.map_or([0, 0, 0, eye::NO_CUT], |e| {
             [
@@ -63,8 +65,8 @@ pub fn eye(o: &Observation, edits: &RenderEdit) -> Option<[u32; eye::WORDS]> {
             ]
         })
     };
-    words[eye::CARVE..eye::CARVE + eye::CUT_WORDS].copy_from_slice(&cut(edits.carve));
-    words[eye::HIDE..eye::HIDE + eye::CUT_WORDS].copy_from_slice(&cut(edits.hide));
+    words[eye::CARVE..eye::CARVE + eye::CUT_WORDS].copy_from_slice(&cut(edit.carve));
+    words[eye::HIDE..eye::HIDE + eye::CUT_WORDS].copy_from_slice(&cut(edit.hide));
     Some(words)
 }
 

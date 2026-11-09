@@ -77,10 +77,10 @@ fn counts_hand_down_whole() {
     for (k, root) in ROOTS.iter().enumerate() {
         for z in *root..LEAF_CELL_ZOOM {
             for b in [[0, 0], [5, -3], [-77, 1234], [4000, 9]] {
-                let parent = count(k, z, b);
+                let parent = cnt(k, z, b);
                 let mut children = 0;
                 for q in 0..4 {
-                    children += count(k, z + 1, [2 * b[0] + (q & 1), 2 * b[1] + (q >> 1)]);
+                    children += cnt(k, z + 1, [2 * b[0] + (q & 1), 2 * b[1] + (q >> 1)]);
                 }
                 assert!(children <= parent, "{k} at z{z} {b:?}");
                 assert!(
@@ -90,7 +90,7 @@ fn counts_hand_down_whole() {
             }
         }
         for c in [[0, 0], [3, 3]] {
-            assert!(count(k, LEAF_CELL_ZOOM, c) <= 1);
+            assert!(cnt(k, LEAF_CELL_ZOOM, c) <= 1);
         }
     }
 }
@@ -128,7 +128,7 @@ fn counts_land_on_every_quarter() {
     for k in 0..DECORS.len() {
         for y in 0..256 {
             for x in 0..256 {
-                if count(k, LEAF_CELL_ZOOM, [x, y]) > 0 {
+                if cnt(k, LEAF_CELL_ZOOM, [x, y]) > 0 {
                     by[(x & 1 | (y & 1) << 1) as usize] += 1;
                 }
             }

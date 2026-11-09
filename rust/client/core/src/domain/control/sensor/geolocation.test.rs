@@ -13,7 +13,7 @@ fn a_fix_is_kept_where_it_is() {
     let (lon, lat) = (126.9784, 37.5667);
     geolocation_fix(lon, lat, Some(100.0), 5.0, None);
     let got = device_location_store().location.expect("a fix");
-    assert_eq!(got.coords, [lon, lat]);
+    assert_eq!(got.lon_lat, [lon, lat]);
     let alt = got.alt.expect("an altitude");
     let want = 100.0 - epsg4326::geoid_m(lon, lat);
     assert!((alt - want).abs() < 0.05, "{alt} against {want}");

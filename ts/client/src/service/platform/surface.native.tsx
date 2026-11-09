@@ -4,13 +4,14 @@
  * `SurfaceView`), which wgpu draws into directly. The view's layer arrives
  * after the view mounts, so the view reports when its layer is bound. */
 
-import type { u32 } from "@xpute/kit/abi/word.ts";
+import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 import { SurfaceView, type SurfaceViewProps } from "@xpute/native";
 import { useEffect, useRef, useState } from "react";
 import {
   type GestureResponderEvent,
   type LayoutChangeEvent,
+  Dimensions,
   PixelRatio,
   StyleSheet,
 } from "react-native";
@@ -22,6 +23,12 @@ import type {
   Viewport,
   WorldSurfaceProps,
 } from "./types.ts";
+
+/** The surface fills the window. */
+export function surfaceBox(): { width: f64; height: f64 } {
+  const { width, height } = Dimensions.get("window");
+  return { width, height };
+}
 
 function useSurface(
   driver: SurfaceDriver,
@@ -44,18 +51,18 @@ function useSurface(
   useEffect(() => {
     let surface: u32 = 0;
     let close = () => {};
-    let gone = false;
+    let closed = false;
     void driver.open().then((opened) => {
       if (opened === 0) return;
       // The surface closed before the core answered, so the handle is let go
       // at once.
-      if (gone) return driver.close(opened);
+      if (closed) return driver.close(opened);
       surface = opened;
       setHandle(surface);
       if (open.current) close = open.current(surface);
     });
     return () => {
-      gone = true;
+      closed = true;
       close();
       setHandle(0);
       if (surface !== 0) driver.close(surface);

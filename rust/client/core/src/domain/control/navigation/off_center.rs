@@ -19,7 +19,7 @@ static OFF_CENTER: Global<bool> = Global::new();
 
 fn device_coord() -> Option<Q3> {
     device_location_store().location.map(|l| {
-        let [lon, lat] = l.coords;
+        let [lon, lat] = l.lon_lat;
         let at = epsg4326::project(&[lon, lat, l.alt.unwrap_or(0.0)]);
         if l.alt.is_some() {
             at

@@ -16,7 +16,7 @@ static RELEASES: AtomicU32 = AtomicU32::new(0);
 
 pub fn set_heap_stat(heap_stat: fn() -> HeapStat) {
     set(BootInfo {
-        given: 0,
+        mem_sz: 0,
         call: |_| Errno::ENOSYS as i32,
         heap_stat,
         form: Form {

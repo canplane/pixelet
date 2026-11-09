@@ -6,8 +6,8 @@
 //! by hand binds its own groups and sees one usage scope. Only the renderer's real frames
 //! bind everything a frame binds, so only they meet what WebGPU refuses of a whole frame.
 //!
-//! The run fails on any error WebGPU's validation raises, which a scope on the core's
-//! thread collects turn by turn (gpu.rs). It also fails when the core stops, on a broken
+//! The run fails on any error WebGPU's validation raises, which a scope where the stream
+//! runs collects turn by turn (gpu.rs). It also fails when the core stops, on a broken
 //! invariant's report (among them the encode rule's ENOTRECOVERABLE in pxl-render
 //! gpu/api.rs) or on a trap; when a view left standing does not come to rest within
 //! `REST_FRAMES` idle turns; and when any wait outlasts the harness's own clock (watch.rs).
@@ -30,7 +30,7 @@ use pxl_spec::space::coord::q3;
 use pxl_spec::space::layer::quadrant::{quad_rows, Quadrant, MIN_ZOOM};
 use runtime::Runtime;
 use spec::V;
-use xpute_runtime::native::{pause, Core};
+use xpute_runtime::native::pause;
 
 /// The refresh interval of the display the frames are paced to, 60 Hz.
 const REFRESH_MS: f64 = 1000.0 / 60.0;
@@ -57,8 +57,9 @@ const PLACE: [f64; 2] = [126.978, 37.566];
 /// after the frame that copied it.
 const REST_FRAMES: u32 = JITTERS + FRAME_LATENCY;
 
-/// How many frames the renderer's pipelines are given to be made before the world is drawn.
-const PIPELINE_FRAMES: u32 = 600;
+/// How long the renderer's pipelines, compiled apart from the frames, are given to be made before
+/// the world is drawn.
+const PIPELINE_TIME: std::time::Duration = std::time::Duration::from_secs(300);
 
 /// How many frames a zoom's ease is given to end, about twice the fifty or so a step takes.
 const EASE_FRAMES: u32 = 120;
@@ -89,9 +90,8 @@ fn shard_of([lon, lat]: [f64; 2]) -> Quadrant {
 
 struct Run {
     runtime: Runtime,
-    core: Core,
     clock_ms: f64,
-    frames: u32,
+    frame_cnt: u32,
 }
 
 impl Run {
@@ -101,7 +101,7 @@ impl Run {
     fn frame(&mut self, interactive: bool) -> bool {
         pace::frame();
         self.clock_ms += REFRESH_MS;
-        self.frames += 1;
+        self.frame_cnt += 1;
         self.runtime.send(
             "TURN_GRANT",
             &[
@@ -113,20 +113,20 @@ impl Run {
         );
         self.runtime
             .send("SYS_TURN", &[("unix_ms", V::Num(self.clock_ms))]);
-        watch::waiting(format!("frame {}: its turn", self.frames));
+        watch::waiting(format!("frame {}: its turn", self.frame_cnt));
         let wake = self.runtime.turn(REFRESH_MS);
         self.check(wake.is_some());
         wake == Some(0.0)
     }
 
     fn check(&mut self, ran: bool) {
-        let frame = self.frames;
+        let frame = self.frame_cnt;
         watch::waiting(format!("frame {frame}: the device's work"));
-        let errors = gpu::take(self.core);
+        let errs = gpu::take();
         assert!(
-            errors.is_empty(),
+            errs.is_empty(),
             "frame {frame}: the device refused what the frame encoded:\n{}",
-            errors.join("\n")
+            errs.join("\n")
         );
         if let Some(report) = &self.runtime.abort {
             panic!("frame {frame}: the core stopped: {report}");
@@ -140,9 +140,9 @@ impl Run {
     }
 
     /// Makes one of the UI's calls and checks it as a frame is checked.
-    fn call(&mut self, name: &str, values: &[(&str, V)]) -> i32 {
-        watch::waiting(format!("frame {}: {name}'s answer", self.frames));
-        let r = self.runtime.call(name, values);
+    fn call(&mut self, name: &str, vals: &[(&str, V)]) -> i32 {
+        watch::waiting(format!("frame {}: {name}'s answer", self.frame_cnt));
+        let r = self.runtime.call(name, vals);
         self.check(true);
         assert!(r >= 0, "{name} answered {r}");
         r
@@ -164,7 +164,7 @@ impl Run {
             assert!(
                 eased <= EASE_FRAMES,
                 "frame {}: the zoom did not end in {EASE_FRAMES} frames",
-                self.frames
+                self.frame_cnt
             );
             self.frame(false);
         }
@@ -186,14 +186,14 @@ impl Run {
             asked < REST_FRAMES,
             "frame {}: the view did not rest within {REST_FRAMES} idle turns, the last asked \
              {asked} turns in",
-            self.frames
+            self.frame_cnt
         );
         asked + 1
     }
 
     fn pointer(&mut self, phase: &str, x: f64, y: f64) {
         let ui = &self.runtime.ui;
-        let values = [
+        let vals = [
             ("phase", V::Num(ui.member("PointerPhase", phase).into())),
             (
                 "pointer_type",
@@ -205,7 +205,7 @@ impl Run {
             ("x", V::Num(x)),
             ("y", V::Num(y)),
         ];
-        self.runtime.send("INPUT_POINTER", &values);
+        self.runtime.send("INPUT_POINTER", &vals);
         self.frame(true);
     }
 }
@@ -223,15 +223,14 @@ fn frames() {
     pace::install(core);
     let runtime = Runtime::lay(core);
     watch::waiting("the device's opening".to_string());
-    if gpu::open(core).is_none() {
+    if gpu::open().is_none() {
         eprintln!("no adapter answers: the frames are not run");
         return;
     }
     let mut run = Run {
         runtime,
-        core,
         clock_ms: NOON_MS,
-        frames: 0,
+        frame_cnt: 0,
     };
     // The boot in the order runtime/boot.ts gives it: the runtime attaches, the platform is
     // described, and the GPU is ready.
@@ -287,13 +286,15 @@ fn frames() {
         ],
     );
     let mut made = 0;
+    let began = std::time::Instant::now();
     while run.runtime.shown.renderer_progress < 1.0 {
         made += 1;
         assert!(
-            made <= PIPELINE_FRAMES,
-            "the renderer's pipelines were not made in {PIPELINE_FRAMES} frames"
+            began.elapsed() < PIPELINE_TIME,
+            "the renderer's pipelines were not made in {PIPELINE_TIME:?}"
         );
         run.frame(false);
+        std::thread::sleep(std::time::Duration::from_millis(2));
     }
 
     // The camera goes to the place, and its view asks for one jitter sequence of casts.
@@ -326,7 +327,7 @@ fn frames() {
         "SETTING_SET",
         &[
             ("key", V::Num(spec::setting("shadows").into())),
-            ("value", V::Num(1.0)),
+            ("val", V::Num(1.0)),
         ],
     );
     run.frames(JITTERS);
@@ -337,7 +338,7 @@ fn frames() {
     eprintln!(
         "{} frames: the pipelines made in {made}, the view at rest {rested} idle turns after \
          the camera stood",
-        run.frames
+        run.frame_cnt
     );
 
     // The surface grows to an 8K display's, the view is cast again over it, and it rests.

@@ -8,7 +8,7 @@ use crate::sys::io::request::{declare, open, pump, set_credits, take_event, Even
 fn arrival(key: u64) -> Arrival {
     Arrival {
         key,
-        got: Ok(None),
+        body: Ok(None),
         read: None,
         net_ms: 0.0,
     }

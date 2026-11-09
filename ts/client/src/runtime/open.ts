@@ -27,16 +27,16 @@ export async function open(on: OnOpen): Promise<boolean> {
     type: "module",
   });
   const ask = (m: ToCore) => worker.postMessage(m);
-  const reads = new Map<u32, (value: unknown) => void>();
+  const reads = new Map<u32, (val: unknown) => void>();
   let next = 0;
   worker.onmessage = ({ data: m }: MessageEvent<ToUi>) => {
     switch (m.kind) {
       case "source":
-        return mirror_source(m.state, m.declaration);
+        return mirror_source(m.state, m.decl);
       case "keep":
-        return storage.set(m.key, m.value);
+        return storage.set(m.key, m.val);
       case "perf":
-        reads.get(m.id)?.(m.value);
+        reads.get(m.id)?.(m.val);
         return void reads.delete(m.id);
     }
   };

@@ -10,8 +10,8 @@ fn sample_of(item: u32) -> vec2<u32> {
   return vec2<u32>(item & 0xffffu, item >> 16u);
 }
 
-// item_list.wgsl takes the listed items through `item_count` and `item_at`.
-fn item_count() -> u32 {
+// item_list.wgsl takes the listed items through `item_cnt` and `item_at`.
+fn item_cnt() -> u32 {
   return sample_cnt();
 }
 

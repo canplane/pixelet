@@ -47,7 +47,7 @@ struct Propagate {
 // Whether tile `t` of the map changed this frame, as its word says. A map tile is in damage
 // only in the frame it changed (gpu/tile.rs `damage_frames`).
 fn propagate_changed(t: vec2i) -> bool {
-  let n = vec2i(light_tiles.count.xy);
+  let n = vec2i(light_tiles.cnt.xy);
   if (any(t < vec2i(0)) || any(t >= n)) {
     return false;
   }
@@ -76,7 +76,7 @@ fn propagate_texel(c: vec2f, d: f32, size: vec2u) -> vec2f {
 // The map tiles a receiver's taps read around the texels from `lo` to `hi`, as the first and
 // the last tile across and down, held to one tile past the map each way.
 fn propagate_range(lo: vec2f, hi: vec2f) -> vec4i {
-  let n = vec2i(light_tiles.count.xy);
+  let n = vec2i(light_tiles.cnt.xy);
   let side = light_tiles.size.w;
   // The clamp is on integers, so the range stays within a tile past the map whatever floats it
   // came from.
@@ -141,10 +141,10 @@ fn screen_propagate_cs(
   @builtin(local_invocation_index) li: u32,
 ) {
   let tile = wg.xy;
-  if (any(tile >= tiles.count.xy)) {
+  if (any(tile >= tiles.cnt.xy)) {
     return;
   }
-  let ti = tile.y * tiles.count.x + tile.x;
+  let ti = tile.y * tiles.cnt.x + tile.x;
   let size = vec2u(textureDimensions(depth));
   let side = u32(tiles.size.w);
   let at = tile * side + l.xy * BOUND_STEP;
@@ -204,6 +204,6 @@ fn screen_propagate_cs(
     }
   }
   if (hit) {
-    changed_at[ti] = tiles.count.w;
+    changed_at[ti] = tiles.cnt.w;
   }
 }

@@ -38,7 +38,7 @@ fn main() {
             at += 1;
             words[at - 1]
         };
-        let buffers: Vec<String> = (0..next())
+        let bufs: Vec<String> = (0..next())
             .map(|_| {
                 let stride = next();
                 let step = if next() == PER_INSTANCE {
@@ -75,7 +75,7 @@ fn main() {
             r#"{{"module":"{}","vertex":"{}"{fragment},"buffers":[{}],"topology":"{topology}","depth":{}}}"#,
             names[words[0] as usize],
             VERTEX_ENTRY[words[HEADER as usize - 1] as usize],
-            buffers.join(","),
+            bufs.join(","),
             words[5] != NO_DEPTH
         ));
     }

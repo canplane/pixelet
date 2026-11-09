@@ -1,6 +1,6 @@
 // pxl-engine/count.rs
 
-//! gpu-portable: the counters of what a cast did, kept only while the `ray_counts` setting
+//! gpu-portable: the counters of what a cast did, kept only while the `ray_cnts` setting
 //! is on. The eye and the light are cast by the same passes, and each of them has its own
 //! run of `LANES` counters in one array (`at`), which pxl-render gpu/ray/count.rs reads back
 //! and sums.
@@ -8,7 +8,7 @@
 //! No pass has a binding left for the array itself, so each adds its counts to a buffer it
 //! already writes. A walk that writes the node cache adds to the node cache's head
 //! (`node_cache::lane_at`). A pixel, or a light slot, adds to the arguments of the pass that
-//! walks the missed pixels again (`ray::MISS_ARGS_COUNT`), where it already counts itself
+//! walks the missed pixels again (`ray::MISS_ARGS_CNTS`), where it already counts itself
 //! when it lists a hole. The boxes drawn are the raster's instance count
 //! (`raster::ARGS_INSTANCES`). The frame's last copies gather these into the array.
 

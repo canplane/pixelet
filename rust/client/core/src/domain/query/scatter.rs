@@ -103,14 +103,14 @@ impl DecorQuery for DecorWorld<'_, '_> {
 /// decor generates there, its box asked against the same column surface
 /// (pxl-content `generation::placement`); without `boxed` that is true.
 pub(super) fn generated_at(
-    asked: &mut DecorWorld,
+    world: &mut DecorWorld,
     decor: &Decor,
     cell: [i32; 2],
     boxed: bool,
 ) -> Option<(Instance, bool)> {
     let candidate = scatter_at(decor.row, cell)?;
     let (prop, has_footing, generates) =
-        generation::placement(asked, decor.row, GROUND.leaf_cell_zoom(), &candidate, boxed);
+        generation::placement(world, decor.row, GROUND.leaf_cell_zoom(), &candidate, boxed);
     has_footing.then(|| (instance(decor, &prop), generates))
 }
 

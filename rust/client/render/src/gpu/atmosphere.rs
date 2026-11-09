@@ -51,7 +51,7 @@ use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::read::Read;
 use crate::gpu::span_spec::GpuSpanName;
 use crate::look::atmosphere as model;
-use crate::look::environment::{ENV_AIR, ENV_MOON, ENV_MOON_COLOR, ENV_SUN};
+use crate::look::environment;
 use crate::param::atmos::{ALT_SAMPLE, ALT_SAMPLE_LEAST_KM};
 
 /// Hands each waiting earth tile's layer and texels to the writer, until the writer refuses
@@ -199,7 +199,7 @@ const EXPOSURE_READS: [Range<usize>; 3] =
     [0..CAMERA_ALT, MIE_EXTINCTION..DRAWN, NIGHT_SKY..LAND_ALT_KM];
 
 /// Where each light's layout words and its reach flag lie (atmos_medium.wgsl `view_layout`,
-/// `reaches`), the sun's first.
+/// `reach`), the sun's first.
 const LAYOUTS: [usize; 2] = [SUN_LAYOUT, MOON_LAYOUT];
 const REACHES: [usize; 2] = [SUN_REACHES, MOON_REACHES];
 
@@ -246,7 +246,7 @@ struct LightMemo {
     /// Whether the light reaches the air by `REACH`, as the exposure last measured; none
     /// before. While it does not, `to_reach` is how far its height moves before it does, at
     /// the slope its reach last moved at (atmos_exposure.wgsl `reach`).
-    reaches: Option<bool>,
+    reach: Option<bool>,
     to_reach: f32,
     /// Whether its view and air were drawn where they were last held. They were not where the
     /// light moved while it reached the air too little to be drawn.
@@ -258,7 +258,7 @@ impl LightMemo {
     /// In reach, that is its sky's step; out of reach, it is how far the height moves before
     /// the light comes into reach. It is none before either has landed.
     fn step(&self) -> Option<f32> {
-        match self.reaches {
+        match self.reach {
             Some(false) => Some(self.to_reach),
             _ => self.height.step,
         }
@@ -628,16 +628,19 @@ impl Atmosphere {
     /// this frame draws, and writes the uniform where the words changed. Every light's and
     /// ray's height is measured up the world's z, which is straight up where the eye stands.
     pub fn prepare(&mut self, g: &Gpu, env: &[f32], far: f32) {
-        let (sun, moon) = (&env[ENV_SUN..ENV_SUN + 3], &env[ENV_MOON..ENV_MOON + 4]);
-        let alt_km = env[ENV_AIR];
+        let (sun, moon) = (
+            &env[environment::SUN..environment::SUN + 3],
+            &env[environment::MOON..environment::MOON + 4],
+        );
+        let alt_km = env[environment::AIR];
         self.words[SUN_DIR..SUN_DIR + 3].copy_from_slice(sun);
         self.words[MOON_DIR..MOON_DIR + 3].copy_from_slice(&moon[..3]);
         self.words[MOON_LIGHT] = moon[3];
         self.words[MOON_COLOR..MOON_COLOR + 3]
-            .copy_from_slice(&env[ENV_MOON_COLOR..ENV_MOON_COLOR + 3]);
+            .copy_from_slice(&env[environment::MOON_COLOR..environment::MOON_COLOR + 3]);
         self.words[CAMERA_ALT] = alt_km;
-        self.words[KM_PER_U] = env[ENV_AIR + 1];
-        self.words[LAND_ALT_KM] = env[ENV_AIR + 2];
+        self.words[KM_PER_U] = env[environment::AIR + 1];
+        self.words[LAND_ALT_KM] = env[environment::AIR + 2];
         self.words[DRAWN] = far;
         (self.sun_mu, self.moon_mu) = (sun[2], moon[2]);
         self.plan(g);
@@ -654,7 +657,7 @@ impl Atmosphere {
     /// light's view and air are drawn where its height or the eye's altitude has moved half
     /// its step (`TableInput::changed`), or where the light has come to reach the air since
     /// they were last held. They are drawn only while the light reaches the air by `REACH`,
-    /// and a reader reads them only then (atmos_medium.wgsl `reaches`). The exposure is drawn
+    /// and a reader reads them only then (atmos_medium.wgsl `reach`). The exposure is drawn
     /// where the words it reads moved (`EXPOSURE_READS`), where the ground under the eye moved
     /// half its step, where a light's view or air was due, and in the frame that draws the
     /// tables drawn only once. Each time, it measures how far each light reaches. A slope is
@@ -677,10 +680,10 @@ impl Atmosphere {
                 ..l.height
             };
             let changed = height.changed(mu) || l.alt.changed(alt);
-            let reaches = l.reaches.unwrap_or(true);
-            let draw = reaches && (changed || !l.drawn);
+            let reach = l.reach.unwrap_or(true);
+            let draw = reach && (changed || !l.drawn);
             due |= changed;
-            self.words[REACHES[k]] = f32::from(u8::from(reaches));
+            self.words[REACHES[k]] = f32::from(u8::from(reach));
             self.plan.lights[k] = draw;
             if changed || draw {
                 (l.height.at, l.alt.at, l.drawn) = (Some(mu), Some(alt), draw);
@@ -821,7 +824,7 @@ impl Atmosphere {
             }
             if has(Measure::Reach(k)) {
                 let shows = word(base + 3);
-                l.reaches = Some(shows >= REACH);
+                l.reach = Some(shows >= REACH);
                 l.to_reach = (REACH - shows).max(0.0) / word(base + 4);
             }
         }

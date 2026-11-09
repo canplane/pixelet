@@ -13,7 +13,7 @@ pub mod param;
 use pxl_content::cloud::drift;
 use pxl_content::param::night;
 use pxl_render::gpu::renderer::sky_steps;
-use pxl_render::look::environment::{write_environment, Light, ENV_FLOATS};
+use pxl_render::look::environment::{write_environment, Light, FLOATS};
 use pxl_spec::space::coord::v3;
 
 use crate::domain::scene::animation;
@@ -58,7 +58,7 @@ pub fn night() -> bool {
 
 /// The environment's words as the last frame wrote them. The renderer draws
 /// the sky and its light from them (pxl-render look/environment.rs).
-pub fn environment_words() -> &'static [f32; ENV_FLOATS] {
+pub fn environment_words() -> &'static [f32; FLOATS] {
     &environment().out
 }
 
@@ -145,7 +145,7 @@ pub struct EnvironmentDraw {
     sky_at: StepClock,
     clouds_at: StepClock,
     first_ms: Option<f64>,
-    out: [f32; ENV_FLOATS],
+    out: [f32; FLOATS],
 }
 
 impl Default for EnvironmentDraw {
@@ -166,7 +166,7 @@ impl Default for EnvironmentDraw {
             sky_at: StepClock::default(),
             clouds_at: StepClock::default(),
             first_ms: None,
-            out: [0.0; ENV_FLOATS],
+            out: [0.0; FLOATS],
         }
     }
 }

@@ -46,7 +46,7 @@ fn top() -> Quadrant {
 #[derive(Clone)]
 struct Leaf {
     tile: TerrainTile,
-    palette_indices: Vec<GroundId>,
+    palette_idxs: Vec<GroundId>,
     heights: Vec<i16>,
 }
 
@@ -64,7 +64,7 @@ fn resident(center: [f64; 2], tiles: &[(Quadrant, Leaf)]) -> TileCache<TerrainTi
         p,
         Leaf {
             tile,
-            palette_indices,
+            palette_idxs,
             heights,
         },
     ) in tiles
@@ -77,7 +77,7 @@ fn resident(center: [f64; 2], tiles: &[(Quadrant, Leaf)]) -> TileCache<TerrainTi
             admitted.push(q);
             cells.push((
                 q,
-                palette_indices.clone(),
+                palette_idxs.clone(),
                 heights.clone(),
                 tile.separation.clone(),
             ));
@@ -113,7 +113,7 @@ fn drawn(heights: Vec<i16>, ground: Ground, separation: Separation) -> Leaf {
             separation,
             Occupancy::LEAF,
         ),
-        palette_indices: ground.cells.into_owned(),
+        palette_idxs: ground.cells.into_owned(),
         heights,
     }
 }

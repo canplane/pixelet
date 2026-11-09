@@ -252,13 +252,13 @@ pub fn child_at(zoom: Zoom, at: [i32; 3], slot: u32) -> [i32; 3] {
     ]
 }
 
-/// The node `steps` zooms above the node `at` of `zoom`, with X in `at`'s frame.
-pub fn ancestor_at(zoom: Zoom, at: [i32; 3], steps: Zoom) -> [i32; 3] {
+/// The node `step_cnt` zooms above the node `at` of `zoom`, with X in `at`'s frame.
+pub fn ancestor_at(zoom: Zoom, at: [i32; 3], step_cnt: Zoom) -> [i32; 3] {
     let p = path(zoom, at);
     [
-        at[0] >> steps,
-        (p[1] >> steps) - y_start(zoom - steps),
-        (p[2] >> steps) - z_start(zoom - steps),
+        at[0] >> step_cnt,
+        (p[1] >> step_cnt) - y_start(zoom - step_cnt),
+        (p[2] >> step_cnt) - z_start(zoom - step_cnt),
     ]
 }
 
@@ -395,7 +395,7 @@ pub fn fill_share(columns: &impl Table, slot: NodeSlot) -> u32 {
 /// own value. A leaf over the node gives its value four times, as a ground leaf's cell does.
 /// Each child is read at its own index under `hide`, as `v` was, so a leaf a preview leaves
 /// out shows in no quarter.
-pub fn palette_indices(
+pub fn palette_idxs(
     columns: &impl Table,
     slot: NodeSlot,
     hide: Cut,
@@ -459,7 +459,7 @@ pub const CELL: u32 = 2;
 /// `FULL`'s units (`fill_share`), whole for a leaf or a cut.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Over {
-    pub says: u32,
+    pub answer: u32,
     pub asset: u32,
     pub fill: u32,
 }
@@ -482,13 +482,13 @@ pub fn over(
     near: Zoom,
 ) -> Over {
     if zoom < near {
-        let says = if cells_by(columns, slot, near - zoom) {
+        let answer = if cells_by(columns, slot, near - zoom) {
             SPLIT
         } else {
             UNDER
         };
         return Over {
-            says,
+            answer,
             asset: VOID,
             fill: 0,
         };
@@ -499,9 +499,9 @@ pub fn over(
     } else {
         val(columns, slot, hide, zoom, at)
     };
-    let says = if v == VOID { UNDER } else { CELL };
+    let answer = if v == VOID { UNDER } else { CELL };
     Over {
-        says,
+        answer,
         asset: v,
         fill: if carved {
             FULL

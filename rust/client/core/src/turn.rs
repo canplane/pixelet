@@ -158,7 +158,7 @@ fn scene_tick(ctx: &mut TickContext) {
         ctx,
         controller::pivot(),
         third_person.then(camera::azimuth),
-        &write::preview().edits,
+        &write::preview().edit,
         write::draft(),
     );
 }
@@ -383,7 +383,7 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
             gap_ms: delta * 1000.0,
             moving: interactive,
         },
-        &write::preview().edits,
+        &write::preview().edit,
     );
     set_renderer_frame(&frame);
     if let Some(interval_ms) = frame.interval_ms {

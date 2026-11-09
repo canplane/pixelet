@@ -1,12 +1,13 @@
 // pxl-render/gpu/pass/debug.rs
 
-//! The dev gizmos. They are drawn onto the canvas after the world is
-//! finished, in passes of their own.
+//! The debug gizmos. They are drawn onto the canvas after the world is
+//! finished, in passes of their own, and the camera grid over all of them,
+//! off the sky's ray.
 
-use crate::frame::shader::record::PIPELINE_DEBUG;
 use crate::frame::shader::record::{
     DEBUG_FACE_VERTEX_BYTES, DEBUG_VERTEX_BYTES, PIPELINE_DEBUG_FACE,
 };
+use crate::frame::shader::record::{PIPELINE_CAMERA_GRID, PIPELINE_DEBUG};
 use crate::gpu::api::{buf_entry, bytes, pass_desc, Gpu, Load, RenderContext};
 use crate::gpu::draw::uniform_of;
 use crate::gpu::draw::{DrawStat, DrawTable};
@@ -22,21 +23,34 @@ use crate::gpu::upload::UploadTable;
 /// uniform of its own.
 pub struct DebugPass {
     pipeline: Pipeline,
-    faces: Pipeline,
+    face: Pipeline,
     frame_group: u32,
     uniforms: UniformBuffer,
+    grid: Pipeline,
+    grid_group: u32,
 }
 
 impl DebugPass {
-    pub fn new(g: &Gpu, pipelines: &mut PipelineCache, frame_buf: u32, align: u32) -> DebugPass {
+    /// `sky_buf` holds the sky's words, whose ray the camera grid is aimed by.
+    pub fn new(
+        g: &Gpu,
+        pipelines: &mut PipelineCache,
+        frame_buf: u32,
+        sky_buf: u32,
+        align: u32,
+    ) -> DebugPass {
         let pipeline = pipelines.build(g, PIPELINE_DEBUG, g.canvas());
-        let faces = pipelines.build(g, PIPELINE_DEBUG_FACE, g.canvas());
+        let face = pipelines.build(g, PIPELINE_DEBUG_FACE, g.canvas());
         let frame_group = g.bind_group(pipeline.layouts[0], &[buf_entry(0, frame_buf)]);
+        let grid = pipelines.build(g, PIPELINE_CAMERA_GRID, g.canvas());
+        let grid_group = g.bind_group(grid.layouts[0], &[buf_entry(19, sky_buf)]);
         DebugPass {
             pipeline,
-            faces,
+            face,
             frame_group,
             uniforms: UniformBuffer::new(DRAW_BYTES, align),
+            grid,
+            grid_group,
         }
     }
 
@@ -54,16 +68,17 @@ impl DebugPass {
         );
     }
 
-    /// Adds the pass's draws to `stats`: two triangles a line segment, and the
+    /// Adds the pass's draws to `stat`: two triangles a line segment, and the
     /// faces' triangles.
-    pub fn count(&self, draws: &DrawTable, stats: &mut DrawStat) {
-        draws.count(PIPELINE_DEBUG, stats, |d| d[1] + d[2] / 3);
+    pub fn count(&self, draws: &DrawTable, stat: &mut DrawStat) {
+        draws.count(PIPELINE_DEBUG, stat, |d| d[1] + d[2] / 3);
     }
 
-    /// Draws the gizmos onto `canvas` and says whether it drew into `depth`.
-    /// `depth` is the world's depth at the canvas's size, which nothing reads
-    /// after this pass in the frame. When it was drawn into, the next frame
-    /// finishes it whole again (gpu/finish.rs).
+    /// Draws the gizmos onto `canvas`, and the camera grid over them where
+    /// `grid`, and says whether it drew into `depth`. `depth` is the world's
+    /// depth at the canvas's size, which nothing reads after this pass in the
+    /// frame. When it was drawn into, the next frame finishes it whole again
+    /// (gpu/finish.rs).
     pub fn draw(
         &self,
         ctx: &mut RenderContext,
@@ -71,6 +86,7 @@ impl DebugPass {
         depth: u32,
         draws: &DrawTable,
         uploads: &UploadTable,
+        grid: bool,
     ) -> bool {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::debug);
@@ -78,7 +94,7 @@ impl DebugPass {
             .uniforms
             .slots()
             .filter(|_| draws.of(PIPELINE_DEBUG).len() > 0);
-        if uniform_slots.is_none() {
+        if uniform_slots.is_none() && !grid {
             return false;
         }
         let slots = uniform_slots.as_ref();
@@ -99,19 +115,19 @@ impl DebugPass {
                 encoder,
                 &pass_desc(0, Load::Clear, depth, Load::Clear, 0.0, stamp.pass()),
             );
-            g.set_pipeline(pass, self.faces.id);
+            g.set_pipeline(pass, self.face.id);
             g.set_bind_group(pass, 0, self.frame_group, &[]);
-            for (k, _, buf, lines, faces, slots) in sets().filter(|s| s.4 > 0) {
+            for (k, _, buf, line_cnt, face_cnt, slots) in sets().filter(|s| s.4 > 0) {
                 let (group, off) = slots.at(k as u32);
                 g.set_bind_group(pass, 1, group, &[off]);
                 g.set_vertex_buf(
                     pass,
                     0,
                     buf,
-                    lines * DEBUG_VERTEX_BYTES,
-                    faces * DEBUG_FACE_VERTEX_BYTES,
+                    line_cnt * DEBUG_VERTEX_BYTES,
+                    face_cnt * DEBUG_FACE_VERTEX_BYTES,
                 );
-                g.draw(pass, faces, 1, 0, 0);
+                g.draw(pass, face_cnt, 1, 0, 0);
             }
             g.end(pass);
         }
@@ -124,8 +140,8 @@ impl DebugPass {
             encoder,
             &pass_desc(canvas, Load::Load, depth, depth_load, 0.0, stamp.pass()),
         );
-        for faces in [true, false] {
-            if faced && !faces {
+        for has_face in [true, false] {
+            if faced && !has_face {
                 g.end(pass);
                 pass = g.pass(
                     encoder,
@@ -134,15 +150,20 @@ impl DebugPass {
             }
             g.set_pipeline(pass, self.pipeline.id);
             g.set_bind_group(pass, 0, self.frame_group, &[]);
-            for (k, _, buf, lines, _, slots) in sets().filter(|s| (s.4 > 0) == faces) {
+            for (k, _, buf, line_cnt, _, slots) in sets().filter(|s| (s.4 > 0) == has_face) {
                 let (group, off) = slots.at(k as u32);
                 g.set_bind_group(pass, 1, group, &[off]);
-                g.set_vertex_buf(pass, 0, buf, 0, lines * DEBUG_VERTEX_BYTES);
+                g.set_vertex_buf(pass, 0, buf, 0, line_cnt * DEBUG_VERTEX_BYTES);
                 // Each segment is one instance, and its two vertices are read
-                // as one stride (record.rs `DEBUG_BUFFERS`). Six vertices make
+                // as one stride (record.rs `DEBUG_BUFS`). Six vertices make
                 // the quad that draws it.
-                g.draw(pass, 6, lines / 2, 0, 0);
+                g.draw(pass, 6, line_cnt / 2, 0, 0);
             }
+        }
+        if grid {
+            g.set_pipeline(pass, self.grid.id);
+            g.set_bind_group(pass, 0, self.grid_group, &[]);
+            g.draw(pass, 3, 1, 0, 0);
         }
         g.end(pass);
         true

@@ -13,9 +13,9 @@ fn queue_records_at() -> u32 {
 }
 
 fn visits_at() -> u32 {
-  return EYE_BEAM_COUNT;
+  return EYE_BEAM_CNT;
 }
 
 fn asked_at() -> u32 {
-  return EYE_ASKED_COUNT;
+  return EYE_ASKED_CNT;
 }

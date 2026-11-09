@@ -145,10 +145,10 @@ const ENTRIES_PER_PAUSE: usize = 1 << 5;
 
 pub async fn parse_gltf<P: Future<Output = ()>>(
     bytes: &[u8],
-    external_buffers: &[&[u8]],
+    external_bufs: &[&[u8]],
     pause: impl Fn() -> P,
 ) -> Result<Gltf, MarshalError> {
-    let budget = external_buffers
+    let budget = external_bufs
         .iter()
         .fold(bytes.len(), |n, b| n.saturating_add(b.len()))
         .saturating_mul(COMPS_PER_BYTE);
@@ -174,13 +174,13 @@ pub async fn parse_gltf<P: Future<Output = ()>>(
         }
         let text = text.ok_or_else(malformed)?;
         let json = read_json(text).ok_or_else(malformed)?;
-        let mut buffers: Vec<&[u8]> = bin.into_iter().collect();
-        buffers.extend_from_slice(external_buffers);
-        read_document(json, &buffers, &pause, budget).await
+        let mut bufs: Vec<&[u8]> = bin.into_iter().collect();
+        bufs.extend_from_slice(external_bufs);
+        read_document(json, &bufs, &pause, budget).await
     } else {
         let text = core::str::from_utf8(bytes).map_err(|_| malformed())?;
         let json = read_json(text).ok_or_else(malformed)?;
-        read_document(json, external_buffers, &pause, budget).await
+        read_document(json, external_bufs, &pause, budget).await
     }
 }
 
@@ -305,7 +305,7 @@ impl<'a> Sampler<'a> {
 struct Reader<'a, F> {
     accessors: Vec<Accessor<'a>>,
     views: Vec<BufferView<'a>>,
-    buffers: &'a [&'a [u8]],
+    bufs: &'a [&'a [u8]],
     pause: &'a F,
     /// Components the file may still decode.
     budget: Cell<usize>,
@@ -347,7 +347,7 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
             return Ok(out);
         };
         let bv = self.views[bv_idx];
-        let buf = self.buffers[idx_in(bv.buf, self.buffers.len())?];
+        let buf = self.bufs[idx_in(bv.buf, self.bufs.len())?];
         let view_off = size(bv.off, 0)?;
         let view_length = idx_in(bv.length, usize::MAX)?;
         let view = view_off
@@ -448,7 +448,7 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
 
 async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
     json: JsonValue<'_>,
-    buffers: &[&[u8]],
+    bufs: &[&[u8]],
     pause: &F,
     budget: usize,
 ) -> Result<Gltf, MarshalError> {
@@ -476,7 +476,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
     let r = Reader {
         accessors,
         views,
-        buffers,
+        bufs,
         pause,
         budget: Cell::new(budget),
     };
@@ -594,12 +594,12 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
             .collect::<Result<Vec<u32>, _>>()?;
         let inverse_bind = match idx_of(s.get("inverseBindMatrices"), r.accessors.len())? {
             Some(i) => {
-                let matrices = r.f32s(i, "MAT4").await?;
+                let mats = r.f32s(i, "MAT4").await?;
                 // Each joint has its matrix; any past them are unread.
-                if matrices.len() < joints.len() * 16 {
+                if mats.len() < joints.len() * 16 {
                     return Err(malformed());
                 }
-                matrices
+                mats
             }
             None => {
                 r.spend(joints.len() * 16)?;
@@ -737,7 +737,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
 }
 
 /// Every node's world matrix at rest, which is the identity for a node off the scene.
-pub fn world_matrices(gltf: &Gltf) -> Vec<Mat4> {
+pub fn world_mats(gltf: &Gltf) -> Vec<Mat4> {
     let mut out = vec![mat4::new(); gltf.nodes.len()];
     // Parents come first, so a parent's world is in place for its children.
     for i in scene_nodes(gltf) {

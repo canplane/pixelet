@@ -37,7 +37,7 @@ pub use xpute_gpu::spec::RESULT;
 use crate::api_spec::{record, stream};
 use crate::frame::shader::access::{self, END};
 use crate::frame::shader::floor::{self, BIND_GROUPS, VERTEX_BUFFERS};
-use crate::frame::shader::group::BUFFERS;
+use crate::frame::shader::group::BUFS;
 use crate::frame::shader::record::{FRAGMENT_ENTRY, VERTEX_ENTRY};
 use crate::gpu::span_spec::{GpuSpanName, GPU_SPAN_NAMES};
 use crate::gpu::split::Split;
@@ -190,12 +190,12 @@ impl DrawState {
         self.pipeline = pipeline;
     }
 
-    pub fn is_bind_group_set(&self, idx: u32, group: Id, offsets: &[u32]) -> bool {
-        offsets.is_empty() && self.groups[idx as usize] == group
+    pub fn is_bind_group_set(&self, idx: u32, group: Id, offs: &[u32]) -> bool {
+        offs.is_empty() && self.groups[idx as usize] == group
     }
 
-    pub fn set_bind_group(&mut self, idx: u32, group: Id, offsets: &[u32]) {
-        self.groups[idx as usize] = if offsets.is_empty() { group } else { 0 };
+    pub fn set_bind_group(&mut self, idx: u32, group: Id, offs: &[u32]) {
+        self.groups[idx as usize] = if offs.is_empty() { group } else { 0 };
     }
 
     pub fn is_vertex_buf_set(&self, slot: u32, buf: Id, off: u32, size: u32) -> bool {
@@ -240,10 +240,10 @@ impl<'a> TrackedRenderPass<'a> {
         }
     }
 
-    pub fn set_bind_group(&mut self, idx: u32, group: Id, offsets: &[u32]) {
-        if !self.state.is_bind_group_set(idx, group, offsets) {
-            self.g.set_bind_group(self.pass, idx, group, offsets);
-            self.state.set_bind_group(idx, group, offsets);
+    pub fn set_bind_group(&mut self, idx: u32, group: Id, offs: &[u32]) {
+        if !self.state.is_bind_group_set(idx, group, offs) {
+            self.g.set_bind_group(self.pass, idx, group, offs);
+            self.state.set_bind_group(idx, group, offs);
         }
     }
 
@@ -273,14 +273,25 @@ impl<'a> TrackedRenderPass<'a> {
         call::set_stencil_reference(&mut self.g.s().stream, self.pass, reference);
     }
 
-    pub fn draw(&self, vertices: u32, instances: u32, first_vertex: u32, first_instance: u32) {
-        self.g
-            .draw(self.pass, vertices, instances, first_vertex, first_instance);
+    pub fn draw(&self, vertex_cnt: u32, instance_cnt: u32, first_vertex: u32, first_instance: u32) {
+        self.g.draw(
+            self.pass,
+            vertex_cnt,
+            instance_cnt,
+            first_vertex,
+            first_instance,
+        );
     }
 
-    pub fn draw_indexed(&self, indices: u32, instances: u32, first_idx: u32, first_instance: u32) {
+    pub fn draw_indexed(
+        &self,
+        idx_cnt: u32,
+        instance_cnt: u32,
+        first_idx: u32,
+        first_instance: u32,
+    ) {
         self.g
-            .draw_indexed(self.pass, indices, instances, first_idx, first_instance);
+            .draw_indexed(self.pass, idx_cnt, instance_cnt, first_idx, first_instance);
     }
 
     pub fn draw_indirect(&self, buf: Id, off: u32) {
@@ -650,7 +661,7 @@ struct State {
     ranges: Vec<(usize, usize)>,
     ranges_out: Vec<(usize, usize)>,
     /// Where each encoder is cut into command buffers (gpu/split.rs).
-    splits: Split,
+    split: Split,
 }
 
 /// An image file being copied into its texture. The asker keeps the file's bytes until the
@@ -772,7 +783,7 @@ impl State {
             lost: false,
             ranges: Vec::new(),
             ranges_out: Vec::new(),
-            splits: Split::default(),
+            split: Split::default(),
         }
     }
 }
@@ -839,7 +850,7 @@ pub fn device() -> Option<Device> {
                 .iter()
                 .position(|n| *n == name)
                 .or_bug(Errno::ENOENT);
-            word(device::FEATURES_AT + k / 32) >> (k % 32) & 1 != 0
+            word(device::FEATS_AT + k / 32) >> (k % 32) & 1 != 0
         };
         let canvas = *Format::ALL
             .get(word(device::FORMAT_AT) as usize)
@@ -1094,7 +1105,7 @@ fn handle_of(id: Option<Id>) -> Id {
 pub fn release(id: Id) {
     if id != 0 {
         if let Some(s) = STATE.get(|| None).as_mut() {
-            s.splits.let_go(id);
+            s.split.let_go(id);
             if writable(s) {
                 s.encoder.destroy(&mut s.stream, id);
             } else {
@@ -1241,8 +1252,8 @@ impl Gpu {
             },
         ));
         let at = core::panic::Location::caller();
-        s.splits
-            .made(buf, usage & buffer_usage::INDIRECT != 0, at.line());
+        s.split
+            .note_buffer(buf, usage & buffer_usage::INDIRECT != 0, at.line());
         self.label(buf, "buffer", core::panic::Location::caller());
         buf
     }
@@ -1251,17 +1262,17 @@ impl Gpu {
         &self,
         width: u32,
         height: u32,
-        layers: u32,
+        layer_cnt: u32,
         format: Format,
-        mips: u32,
+        mip_cnt: u32,
         usage: u32,
     ) -> Id {
         let s = self.s();
         handle_of(s.encoder.texture(
             &mut s.stream,
             &encode::TextureDescriptor {
-                size: [width, height, layers],
-                mip_levels: mips,
+                size: [width, height, layer_cnt],
+                mip_levels: mip_cnt,
                 samples: 1,
                 dimension: TextureDimension::_2d,
                 format,
@@ -1310,9 +1321,9 @@ impl Gpu {
         texture: Id,
         array: bool,
         base_mip: u32,
-        mips: u32,
+        mip_cnt: u32,
         base_layer: u32,
-        layers: u32,
+        layer_cnt: u32,
     ) -> Id {
         let s = self.s();
         handle_of(s.encoder.view(
@@ -1325,9 +1336,9 @@ impl Gpu {
                     TextureViewDimension::_2d
                 }),
                 base_mip,
-                mips: Some(mips),
+                mips: Some(mip_cnt),
                 base_layer,
-                layers: Some(layers),
+                layers: Some(layer_cnt),
                 ..Default::default()
             },
         ))
@@ -1363,7 +1374,7 @@ impl Gpu {
         handle_of(s.encoder.sampler(
             &mut s.stream,
             &encode::SamplerDescriptor {
-                address: [addr, addr, AddressMode::clamp_to_edge],
+                addr: [addr, addr, AddressMode::clamp_to_edge],
                 mag,
                 min,
                 mipmap,
@@ -1449,7 +1460,7 @@ impl Gpu {
                 (stride, step, attributes)
             })
             .collect();
-        let buffers: Vec<encode::VertexBufferLayout> = lanes
+        let bufs: Vec<encode::VertexBufferLayout> = lanes
             .iter()
             .map(|(stride, step, attributes)| encode::VertexBufferLayout {
                 stride: *stride,
@@ -1484,7 +1495,7 @@ impl Gpu {
                 vertex: encode::VertexState {
                     module,
                     entry: VERTEX_ENTRY[words[record::HEADER as usize - 1] as usize],
-                    buffers: &buffers,
+                    buffers: &bufs,
                 },
                 primitive: encode::PrimitiveState {
                     topology: match words[2] {
@@ -1564,7 +1575,7 @@ impl Gpu {
         layout.holds(entries);
         let s = self.s();
         let group = handle_of(s.encoder.bind_group(&mut s.stream, layout.id, entries));
-        s.splits.grouped(group, layout.writable(entries));
+        s.split.grouped(group, layout.writable(entries));
         group
     }
 
@@ -1600,7 +1611,7 @@ impl Gpu {
             .filter(|e| layout.binds(e.binding) && !named(e.binding))
         {
             if let encode::Resource::Buffer { buffer, .. } = e.resource {
-                let shared = (0..BUFFERS.len() as u32).any(|k| buf(k) == buffer);
+                let shared = (0..BUFS.len() as u32).any(|k| buf(k) == buffer);
                 xpute_kit::ensure!(buffer == 0 || !shared, ENOTRECOVERABLE, e.binding, buffer);
             }
             entries.push(*e);
@@ -1697,7 +1708,7 @@ impl Gpu {
     pub fn encoder(&self) -> Id {
         let s = self.s();
         let encoder = handle_of(s.encoder.encoder(&mut s.stream));
-        s.splits.begun(encoder);
+        s.split.begun(encoder);
         self.label(encoder, "encoder", core::panic::Location::caller());
         encoder
     }
@@ -1707,7 +1718,7 @@ impl Gpu {
     fn split(&self, encoder: Id) {
         let s = self.s();
         let next = handle_of(s.encoder.encoder(&mut s.stream));
-        s.splits.split(encoder, next);
+        s.split.split(encoder, next);
         self.label(next, "encoder split", core::panic::Location::caller());
     }
 
@@ -1725,19 +1736,19 @@ impl Gpu {
         // pass, is refused at the call's line. The bug's first word names the group (its
         // index, or in a render pass its handle) and the binding; its second names the line
         // that made the buffer and the buffer. Each pair is a word's high and low halves.
-        if let Some((idx, binding)) = s.splits.binds_writable(pass, buf) {
+        if let Some((idx, binding)) = s.split.binds_writable(pass, buf) {
             xpute_kit::bug!(
                 ENOTRECOVERABLE,
                 u64::from(idx) << 32 | u64::from(binding),
-                u64::from(s.splits.made_at(buf)) << 32 | u64::from(buf)
+                u64::from(s.split.made_at(buf)) << 32 | u64::from(buf)
             );
         }
-        if !s.splits.cuts(pass, buf) {
-            return s.splits.pass_at(pass);
+        if !s.split.cuts(pass, buf) {
+            return s.split.pass_at(pass);
         }
-        let (encoder, compute) = s.splits.pass_on(pass).or_bug(Errno::ENOTRECOVERABLE);
+        let (encoder, compute) = s.split.pass_on(pass).or_bug(Errno::ENOTRECOVERABLE);
         xpute_kit::ensure!(compute, ENOTRECOVERABLE, pass, buf);
-        let o = s.splits.open(pass).or_bug(Errno::ENOTRECOVERABLE);
+        let o = s.split.open(pass).or_bug(Errno::ENOTRECOVERABLE);
         let (was, end, pipeline) = (o.at, o.end, o.pipeline);
         let groups = o.groups.clone();
         s.encoder.end(&mut s.stream, was);
@@ -1750,19 +1761,19 @@ impl Gpu {
         });
         let at = handle_of(
             s.encoder
-                .compute_pass(&mut s.stream, s.splits.at(encoder), &stamp),
+                .compute_pass(&mut s.stream, s.split.at(encoder), &stamp),
         );
         self.label(at, "compute indirect", core::panic::Location::caller());
         let s = self.s();
         if pipeline != 0 {
             call::set_pipeline(&mut s.stream, at, pipeline);
         }
-        for (idx, (group, offsets)) in groups.iter().enumerate() {
+        for (idx, (group, offs)) in groups.iter().enumerate() {
             if *group != 0 {
-                call::set_bind_group(&mut s.stream, at, idx as u32, *group, offsets);
+                call::set_bind_group(&mut s.stream, at, idx as u32, *group, offs);
             }
         }
-        s.splits.open(pass).or_bug(Errno::ENOTRECOVERABLE).at = at;
+        s.split.open(pass).or_bug(Errno::ENOTRECOVERABLE).at = at;
         at
     }
 
@@ -1774,17 +1785,17 @@ impl Gpu {
         size: [u32; 3],
     ) {
         let s = self.s();
-        let encoder = s.splits.at(encoder);
+        let encoder = s.split.at(encoder);
         call::copy_texture_to_texture(&mut s.stream, encoder, src, dst, size);
     }
 
     #[track_caller]
     pub fn pass(&self, encoder: Id, d: &PassDesc) -> Id {
         let named = encoder;
-        if self.s().splits.draws_apart(named) {
+        if self.s().split.draws_apart(named) {
             self.split(named);
         }
-        let encoder = self.s().splits.at(named);
+        let encoder = self.s().split.at(named);
         let colors = [d.color, d.second].map(|view| encode::ColorAttachment {
             view,
             resolve: None,
@@ -1823,7 +1834,7 @@ impl Gpu {
                 occlusion: None,
             },
         ));
-        s.splits.opened(pass, named, false, None);
+        s.split.opened(pass, named, false, None);
         self.label(pass, "render", core::panic::Location::caller());
         pass
     }
@@ -1835,17 +1846,17 @@ impl Gpu {
         let end = stamp.as_ref().and_then(|t| Some((t.query_set, t.end?)));
         let pass = handle_of(
             s.encoder
-                .compute_pass(&mut s.stream, s.splits.at(encoder), &stamp),
+                .compute_pass(&mut s.stream, s.split.at(encoder), &stamp),
         );
-        s.splits.opened(pass, encoder, true, end);
+        s.split.opened(pass, encoder, true, end);
         self.label(pass, "compute", core::panic::Location::caller());
         pass
     }
 
     pub fn dispatch(&self, pass: Id, x: u32, y: u32, z: u32) {
         let s = self.s();
-        call::dispatch(&mut s.stream, s.splits.pass_at(pass), [x, y, z]);
-        s.splits.ran(pass);
+        call::dispatch(&mut s.stream, s.split.pass_at(pass), [x, y, z]);
+        s.split.ran(pass);
     }
 
     /// Dispatches the workgroups that `buf` holds at `off`, as counts across, up and deep.
@@ -1856,7 +1867,7 @@ impl Gpu {
         let at = self.indirect(pass, buf);
         let s = self.s();
         call::dispatch_indirect(&mut s.stream, at, buf, off);
-        s.splits.ran(pass);
+        s.split.ran(pass);
     }
 
     #[track_caller]
@@ -1865,23 +1876,23 @@ impl Gpu {
         // A render pass that declares what it draws draws nothing else (frame/shader/sequence.rs
         // `Step::in_pass`). Any other pipeline is refused at the call's line, and the bug names
         // the pipeline's record and the pass.
-        if let Some(record) = s.splits.undeclared(pass, pipeline) {
+        if let Some(record) = s.split.undeclared(pass, pipeline) {
             xpute_kit::bug!(ENOTRECOVERABLE, u64::from(record), u64::from(pass));
         }
-        call::set_pipeline(&mut s.stream, s.splits.pass_at(pass), pipeline);
-        s.splits.piped(pass, pipeline);
+        call::set_pipeline(&mut s.stream, s.split.pass_at(pass), pipeline);
+        s.split.piped(pass, pipeline);
     }
 
     /// Holds render pass `pass` to drawing only `pipelines`, given by their records' numbers as
     /// the frame's declarations name them (frame/shader/sequence.rs `Step::in_pass`).
     pub fn declare_pass(&self, pass: Id, pipelines: &'static [u32]) {
-        self.s().splits.declared(pass, pipelines);
+        self.s().split.declared(pass, pipelines);
     }
 
     /// Notes that render pipeline `pipeline` was made from record `record`, so that a pass
     /// that declares what it draws can check the pipeline.
     pub fn recorded(&self, pipeline: Id, record: u32) {
-        self.s().splits.recorded(pipeline, record);
+        self.s().split.recorded(pipeline, record);
     }
 
     /// Limits what `pass` draws to `rect`, `[x, y, width, height]` in its targets' pixels.
@@ -1890,20 +1901,20 @@ impl Gpu {
     }
 
     #[track_caller]
-    pub fn set_bind_group(&self, pass: Id, idx: u32, group: Id, offsets: &[u32]) {
+    pub fn set_bind_group(&self, pass: Id, idx: u32, group: Id, offs: &[u32]) {
         let s = self.s();
         // A whole render pass is one usage scope. A group that binds writable a buffer from
         // which one of the pass's indirect draws read its count is refused, as the draw is
         // when the group comes first (`indirect`), and the bug names them the same way.
-        if let Some((buf, binding)) = s.splits.binds_read(pass, group) {
+        if let Some((buf, binding)) = s.split.binds_read(pass, group) {
             xpute_kit::bug!(
                 ENOTRECOVERABLE,
                 u64::from(group) << 32 | u64::from(binding),
-                u64::from(s.splits.made_at(buf)) << 32 | u64::from(buf)
+                u64::from(s.split.made_at(buf)) << 32 | u64::from(buf)
             );
         }
-        call::set_bind_group(&mut s.stream, s.splits.pass_at(pass), idx, group, offsets);
-        s.splits.bound(pass, idx, group, offsets);
+        call::set_bind_group(&mut s.stream, s.split.pass_at(pass), idx, group, offs);
+        s.split.bound(pass, idx, group, offs);
     }
 
     /// A size of 0 is the rest of the buffer.
@@ -1933,8 +1944,8 @@ impl Gpu {
     pub fn draw(
         &self,
         pass: Id,
-        vertices: u32,
-        instances: u32,
+        vertex_cnt: u32,
+        instance_cnt: u32,
         first_vertex: u32,
         first_instance: u32,
     ) {
@@ -1942,19 +1953,19 @@ impl Gpu {
         call::draw(
             &mut s.stream,
             pass,
-            vertices,
-            instances,
+            vertex_cnt,
+            instance_cnt,
             first_vertex,
             first_instance,
         );
-        s.splits.ran(pass);
+        s.split.ran(pass);
     }
 
     pub fn draw_indexed(
         &self,
         pass: Id,
-        indices: u32,
-        instances: u32,
+        idx_cnt: u32,
+        instance_cnt: u32,
         first_idx: u32,
         first_instance: u32,
     ) {
@@ -1962,13 +1973,13 @@ impl Gpu {
         call::draw_indexed(
             &mut s.stream,
             pass,
-            indices,
-            instances,
+            idx_cnt,
+            instance_cnt,
             first_idx,
             0,
             first_instance,
         );
-        s.splits.ran(pass);
+        s.split.ran(pass);
     }
 
     #[track_caller]
@@ -1976,7 +1987,7 @@ impl Gpu {
         let at = self.indirect(pass, buf);
         let s = self.s();
         call::draw_indirect(&mut s.stream, at, buf, off);
-        s.splits.ran(pass);
+        s.split.ran(pass);
     }
 
     #[track_caller]
@@ -1984,21 +1995,21 @@ impl Gpu {
         let at = self.indirect(pass, buf);
         let s = self.s();
         call::draw_indexed_indirect(&mut s.stream, at, buf, off);
-        s.splits.ran(pass);
+        s.split.ran(pass);
     }
 
     /// Ends the pass and lets its handle go.
     pub fn end(&self, pass: Id) {
         let s = self.s();
-        s.encoder.end(&mut s.stream, s.splits.pass_at(pass));
-        s.splits.closed(pass);
+        s.encoder.end(&mut s.stream, s.split.pass_at(pass));
+        s.split.closed(pass);
     }
 
     /// Submits the encoder's command buffers, each alone and in order, and
     /// lets their handles go.
     pub fn submit(&self, encoder: Id) {
         let s = self.s();
-        for e in s.splits.submitted(encoder) {
+        for e in s.split.submitted(encoder) {
             s.encoder.submit(&mut s.stream, &[e]);
         }
     }
@@ -2013,18 +2024,18 @@ impl Gpu {
         let s = self.s();
         s.stamps_complete = take_stamps(s);
         let free = (0..READS).find(|&r| s.stamps_out[r] == 0);
-        let buffers = s.splits.submitted(encoder);
+        let bufs = s.split.submitted(encoder);
         let (Some((set, resolve, mapped)), Some(r), true) = (s.stamps, free, written != 0) else {
-            for e in buffers {
+            for e in bufs {
                 s.encoder.submit(&mut s.stream, &[e]);
             }
             return None;
         };
         let bytes = 2 * SPANS as u32 * 8;
-        let last = *buffers.last().or_bug(Errno::ENOTRECOVERABLE);
+        let last = *bufs.last().or_bug(Errno::ENOTRECOVERABLE);
         call::resolve_query_set(&mut s.stream, last, set, 0, 2 * SPANS as u32, resolve, 0);
         call::copy_buffer_to_buffer(&mut s.stream, last, (resolve, 0), (mapped[r], 0), bytes);
-        for e in buffers {
+        for e in bufs {
             s.encoder.submit(&mut s.stream, &[e]);
         }
         s.stamps_written[r] = written;
@@ -2120,20 +2131,20 @@ impl Gpu {
     /// Zeroes `size` bytes of buffer `id` from `at`, in order among `encoder`'s commands.
     pub fn clear_buf(&self, encoder: Id, id: Id, at: u32, size: u32) {
         let s = self.s();
-        call::clear_buffer(&mut s.stream, s.splits.at(encoder), id, at, Some(size));
-        s.splits.copied(encoder, id);
+        call::clear_buffer(&mut s.stream, s.split.at(encoder), id, at, Some(size));
+        s.split.copied(encoder, id);
     }
 
     pub fn copy_buf(&self, encoder: Id, (from, at): (Id, u32), (to, to_at): (Id, u32), size: u32) {
         let s = self.s();
         call::copy_buffer_to_buffer(
             &mut s.stream,
-            s.splits.at(encoder),
+            s.split.at(encoder),
             (from, at),
             (to, to_at),
             size,
         );
-        s.splits.copied(encoder, to);
+        s.split.copied(encoder, to);
     }
 
     /// Maps `length` bytes of buffer `id` from `off` back into the core's memory at `addr`.

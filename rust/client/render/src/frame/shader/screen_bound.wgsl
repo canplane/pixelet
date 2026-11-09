@@ -18,7 +18,7 @@ fn screen_bound_cs(
   @builtin(local_invocation_id) l: vec3u,
 ) {
   let tile = wg.xy;
-  if (any(tile >= tiles.count.xy) || !tile_in_damage(tile.y * tiles.count.x + tile.x)) {
+  if (any(tile >= tiles.cnt.xy) || !tile_in_damage(tile.y * tiles.cnt.x + tile.x)) {
     return;
   }
   let size = vec2u(textureDimensions(depth));

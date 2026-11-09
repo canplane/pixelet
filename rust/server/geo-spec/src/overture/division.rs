@@ -88,10 +88,10 @@ impl Division {
 
 /// [`FINEST_SQL`]'s rows by point; `idx` counts from 1.
 pub fn by_point(
-    points: usize,
+    point_cnt: usize,
     rows: impl IntoIterator<Item = (i64, String, bool)>,
 ) -> Vec<Option<(String, bool)>> {
-    let mut out = vec![None; points];
+    let mut out = vec![None; point_cnt];
     for (idx, id, approx) in rows {
         out[(idx - 1) as usize] = Some((id, approx));
     }

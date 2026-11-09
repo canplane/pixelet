@@ -15,7 +15,7 @@ use crate::gpu::api::{
 use crate::gpu::atmosphere::Atmosphere;
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
-use crate::look::environment::ENV_POLE;
+use crate::look::environment;
 
 pub struct SkyPass {
     pipeline: Pipeline,
@@ -55,6 +55,12 @@ impl SkyPass {
         }
     }
 
+    /// The buffer the sky's words are written to, which the camera grid reads too
+    /// (gpu/pass/debug.rs).
+    pub fn uniform(&self) -> u32 {
+        self.uniform
+    }
+
     /// The words the sky is drawn by, as `prepare` wrote them.
     pub fn words(&self) -> &[f32] {
         &self.words
@@ -64,7 +70,8 @@ impl SkyPass {
     /// turns about from `env`, and whether the moon's map has landed.
     pub fn prepare(&mut self, view_proj: &Mat4, env: &[f32], moon_mapped: bool) {
         put_ray(&mut self.words, sky::RAY, view_proj);
-        self.words[sky::POLE..sky::POLE + 3].copy_from_slice(&env[ENV_POLE..ENV_POLE + 3]);
+        self.words[sky::POLE..sky::POLE + 3]
+            .copy_from_slice(&env[environment::POLE..environment::POLE + 3]);
         self.words[sky::MAPPED] = if moon_mapped { 1.0 } else { 0.0 };
     }
 

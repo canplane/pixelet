@@ -175,14 +175,14 @@ pub fn brick_lines(
 
 /// A clip level's brick as its fill reads it (pxl-engine `clipmap::Brick`): its cells' zoom,
 /// its place in its tile and its first cell (`first_cell`), inside the area; its lines as
-/// `brick_lines` lays them; cell `i`'s own palette index from its four (`palette_indices`);
+/// `brick_lines` lays them; cell `i`'s own palette index from its four (`palette_idxs`);
 /// and column `c`'s height, counted from its first cell, its ring included (`height`).
 pub struct TileBrick<'a, L, H> {
     pub cell_zoom: Zoom,
     pub place: [u32; 2],
     pub first: [i32; 2],
     pub lines: &'a [u32],
-    pub palette_indices: L,
+    pub palette_idxs: L,
     pub height: H,
 }
 
@@ -205,7 +205,7 @@ impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> Brick for TileBrick<'_, L, H> {
         self.lines[k as usize]
     }
     fn own(&self, i: u32) -> u32 {
-        ground::own((self.palette_indices)(i), self.cell_zoom)
+        ground::own((self.palette_idxs)(i), self.cell_zoom)
     }
     fn height(&self, c: [i32; 2]) -> i32 {
         (self.height)(c)
@@ -230,10 +230,10 @@ fn laid<'a>(
     place: [u32; 2],
     lines: &'a [u32],
 ) -> TileBrick<'a, impl Fn(u32) -> u32 + 'a, impl Fn([i32; 2]) -> i32 + 'a> {
-    let palette_indices = move |i: u32| {
+    let palette_idxs = move |i: u32| {
         let at = brick_cell(place, i);
         let c = (at[1] * TILE_CELLS + at[0]) as usize;
-        ground::word(four_palette_indices(&ground.cells, c).map(u32::from))
+        ground::word(four_palette_idxs(&ground.cells, c).map(u32::from))
     };
     let height = move |c: [i32; 2]| {
         let at = [0, 1].map(|a| (place[a] * clipmap::BRICK) as i32 + c[a]);
@@ -245,7 +245,7 @@ fn laid<'a>(
         place,
         first: first_cell(tile, cell_zoom, place),
         lines,
-        palette_indices,
+        palette_idxs,
         height,
     }
 }
@@ -274,7 +274,7 @@ pub(crate) fn brick_spans(
     let four = |i: u32| {
         let at = brick_cell(place, i);
         ground::word(
-            four_palette_indices(&terrain.ground.cells, (at[1] * TILE_CELLS + at[0]) as usize)
+            four_palette_idxs(&terrain.ground.cells, (at[1] * TILE_CELLS + at[0]) as usize)
                 .map(u32::from),
         )
     };
@@ -510,7 +510,7 @@ impl TerrainTile {
 
 /// Cell `c`'s four palette indices, however a tile holds them: four a cell
 /// (`PALETTE_COLUMN`), one a cell, each its own four, or one for the whole tile.
-fn four_palette_indices(cells: &[GroundId], c: usize) -> [GroundId; 4] {
+fn four_palette_idxs(cells: &[GroundId], c: usize) -> [GroundId; 4] {
     match cells.len() {
         PALETTE_COLUMN => [
             cells[4 * c],
@@ -523,10 +523,10 @@ fn four_palette_indices(cells: &[GroundId], c: usize) -> [GroundId; 4] {
     }
 }
 
-/// The tile's four palette indices a cell, however it holds them (`four_palette_indices`).
+/// The tile's four palette indices a cell, however it holds them (`four_palette_idxs`).
 fn expand(cells: &[GroundId]) -> Vec<GroundId> {
     (0..GROUND_COLUMN)
-        .flat_map(|c| four_palette_indices(cells, c))
+        .flat_map(|c| four_palette_idxs(cells, c))
         .collect()
 }
 
@@ -538,11 +538,11 @@ pub fn encode(tile: &TerrainTile) -> Result<Vec<u8>, MarshalError> {
         .chunks(4)
         .all(|q| q.iter().all(|&l| l == q[0]))
         .then(|| four.chunks(4).map(|q| q[0]).collect());
-    let palette_indices: &[GroundId] = one.as_deref().unwrap_or(four);
+    let palette_idxs: &[GroundId] = one.as_deref().unwrap_or(four);
     shape::encode::<Packet>(
         (
             &tile.ele,
-            palette_indices,
+            palette_idxs,
             tile.occupancy.bits(),
             tile.separation.pkt(),
         ),

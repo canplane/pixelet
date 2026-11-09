@@ -25,8 +25,7 @@ fn shard_served_when_all_kinds() {
         },
         _ => kind(&all),
     });
-    let shard =
-        &declaration(MIN_ZOOM, &kinds, &OverrideMap::new()).expect("a declaration")["shard"];
+    let shard = &decl(MIN_ZOOM, &kinds, &OverrideMap::new()).expect("a declaration")["shard"];
     let keys: Vec<&str> = shard
         .as_object()
         .expect("a map")
@@ -46,7 +45,7 @@ fn unread_keys_unwritten() {
         shard: shards().filter(|_| l != BaseLayer::earth),
     });
     assert!(
-        declaration(MIN_ZOOM, &kinds, &OverrideMap::new()).is_err(),
+        decl(MIN_ZOOM, &kinds, &OverrideMap::new()).is_err(),
         "a version no segment"
     );
     let earth_sharded = try_kinds(|_| {
@@ -58,7 +57,7 @@ fn unread_keys_unwritten() {
     })
     .expect("a kind each");
     assert!(
-        declaration(MIN_ZOOM, &earth_sharded, &OverrideMap::new()).is_err(),
+        decl(MIN_ZOOM, &earth_sharded, &OverrideMap::new()).is_err(),
         "the Earth's picture held by shards"
     );
 }
@@ -78,7 +77,7 @@ fn override_names_shard() {
         .expect("one");
     let overrides =
         OverrideMap::from([(at, vec![(BaseLayer::place, "v10.2026-10-12.1".to_string())])]);
-    let shard = &declaration(MIN_ZOOM, &kinds, &overrides).expect("a declaration")["shard"];
+    let shard = &decl(MIN_ZOOM, &kinds, &overrides).expect("a declaration")["shard"];
     assert_eq!(shard["0103300"], json!({}));
     assert_eq!(
         shard["01033001"],
@@ -100,6 +99,6 @@ fn partial_shard_override_refused() {
         let at = key(name).expect("a key");
         let overrides =
             OverrideMap::from([(at, vec![(BaseLayer::place, "v10.2026-10-12.1".to_string())])]);
-        assert!(declaration(MIN_ZOOM, &kinds, &overrides).is_err(), "{name}");
+        assert!(decl(MIN_ZOOM, &kinds, &overrides).is_err(), "{name}");
     }
 }

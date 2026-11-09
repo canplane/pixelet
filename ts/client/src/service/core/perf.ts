@@ -134,9 +134,9 @@ export interface FrameSummary {
   tick: Percentile;
   /** The parts of `busy` besides `tick`. `rest` is what they leave of it,
    * which no span measured. */
-  effects: Percentile;
+  effect: Percentile;
   stage: Percentile;
-  tasks: Percentile;
+  task: Percentile;
   perf: Percentile;
   rest: Percentile;
   /** The GPU's busy time: the time its spans ran, with overlapping spans
@@ -159,7 +159,7 @@ export interface FrameSummary {
   gpu_px: f64;
   /** The ray counts of the window's frames, summed for each of FRAME's rays
    * columns. */
-  rays: RayCount;
+  ray_cnt: RayCount;
   /** How far the heap's high-water mark rose over the window: the last
    * frame's mark less the first frame's. */
   heap_used_delta_bytes: f64;
@@ -262,9 +262,9 @@ function frame_summary(s: F64Array): FrameSummary | null {
     interval: percentiles_at(s, a + F.interval),
     busy: percentiles_at(s, a + F.busy),
     tick: percentiles_at(s, a + F.tick),
-    effects: percentiles_at(s, a + F.effects),
+    effect: percentiles_at(s, a + F.effect),
     stage: percentiles_at(s, a + F.stage),
-    tasks: percentiles_at(s, a + F.tasks),
+    task: percentiles_at(s, a + F.task),
     perf: percentiles_at(s, a + F.perf),
     rest: percentiles_at(s, a + F.rest),
     gpu_busy: percentiles_at(s, a + F.gpu_busy),
@@ -287,7 +287,7 @@ function frame_summary(s: F64Array): FrameSummary | null {
     kinds: FRAME_KINDS.map((name, k) => ({ name, n: s[a + F.kinds + k] })),
     wakes: WAKES.map((name, k) => ({ name, n: s[a + F.wakes + k] })),
     gpu_px: s[a + F.gpu_px],
-    rays: Object.fromEntries(
+    ray_cnt: Object.fromEntries(
       FRAME_GROUP.rays.map((name, k) => [name, s[a + F.rays + k]]),
     ) as RayCount,
     heap_used_delta_bytes: last.heap_used_bytes - first.heap_used_bytes,
@@ -400,7 +400,7 @@ function rings(): { frames: [u32, u32]; tasks: [u32, u32]; worst: [u32, u32] } {
   return { frames: ring("frames"), tasks: ring("tasks"), worst: ring("worst") };
 }
 
-function perf_counts(): RingCount {
+function perf_cnts(): RingCount {
   const { frames, tasks, worst } = rings();
   return { frames: frames[1], tasks: tasks[1], worst: worst[1] };
 }
@@ -475,7 +475,7 @@ function perf_worst(): Worst[] {
 const READERS = {
   summary: perf_summary,
   view: perf_view,
-  counts: perf_counts,
+  counts: perf_cnts,
   frames: perf_frames,
   tasks: perf_tasks,
   worst: perf_worst,

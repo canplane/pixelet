@@ -96,7 +96,7 @@ impl Dataset {
             cache: Cache::new(
                 base.join(kind.name()),
                 runner.admission.clone(),
-                std::time::Duration::from_secs(runner.limits.seconds),
+                std::time::Duration::from_secs(runner.limit.seconds),
             )?,
             coverage: Coverage::of_source()?,
             sources: match kind {
@@ -116,13 +116,13 @@ pub struct Server {
 }
 impl Server {
     pub fn open(
-        workers: usize,
+        worker_cnt: usize,
         base: PathBuf,
         min_zoom: Zoom,
-        limits: Limit,
+        limit: Limit,
     ) -> Result<Self, String> {
         let owner = claim(&base)?;
-        let runner = Arc::new(Runner::new(workers, limits)?);
+        let runner = Arc::new(Runner::new(worker_cnt, limit)?);
         let datasets = [Kind::Terrain, Kind::Place, Kind::Division].map(|k| {
             let source = base.join(k.name());
             prune(&source)?;

@@ -47,7 +47,7 @@ pub(super) struct Pin {
     pub(super) brick: Brick,
     at: Octant,
     design: Design,
-    stands: Q3,
+    pos: Q3,
     base: V3,
     grid: Zoom,
     cell: Option<Cell>,
@@ -84,30 +84,30 @@ fn cnt(n: usize) -> Design {
 
 /// One pin's instance. A tap on it goes to the pin's entry, and the tool held
 /// decides what to do with it.
-fn one(at: Octant, design: Design, stands: Q3) -> Instance {
+fn one(at: Octant, design: Design, pos: Q3) -> Instance {
     Instance {
         key: Key::Pin(Holder::One(at)),
         design,
-        stands,
-        tap: Some(MarkerHit::Pin(at, stands)),
+        pos,
+        tap: Some(MarkerHit::Pin(at, pos)),
     }
 }
 
-/// Reads the pins put up over `brick`, whose columns are `columns`. A pin
+/// Reads the pins put up over `brick`, whose columns are `bounds`. A pin
 /// belongs to the brick its base is in, so no pin is read by two bricks.
-pub(super) fn read(brick: Brick, columns: &Aabb, pins: &mut Vec<Pin>) {
+pub(super) fn read(brick: Brick, bounds: &Aabb, pins: &mut Vec<Pin>) {
     let world = World::now();
-    world.placed_in(columns, &mut |e| {
+    world.placed_in(bounds, &mut |e| {
         if e.asset() != Asset::Marker {
             return;
         }
-        let (stands, base) = pin_at(e.id());
-        if (0..3).all(|k| (columns.min[k]..columns.max[k]).contains(&base[k])) {
+        let (pos, base) = pin_at(e.id());
+        if (0..3).all(|k| (bounds.min[k]..bounds.max[k]).contains(&base[k])) {
             pins.push(Pin {
                 brick,
                 at: e.id(),
                 design: pill(world.text(e).unwrap_or_default()),
-                stands,
+                pos,
                 base,
                 grid: 0,
                 cell: None,
@@ -138,7 +138,7 @@ pub(super) fn show(pins: &mut [Pin], eye: V3, draft: Option<&Draft>, out: &mut V
         let Some(first) = left.next() else { continue };
         let n = 1 + left.count();
         if n == 1 {
-            out.push(one(first.at, first.design.clone(), first.stands));
+            out.push(one(first.at, first.design.clone(), first.pos));
             continue;
         }
         // Where the count stands is asked once for each cell it stands for,
@@ -151,7 +151,7 @@ pub(super) fn show(pins: &mut [Pin], eye: V3, draft: Option<&Draft>, out: &mut V
         out.push(Instance {
             key: Key::Pin(Holder::Cell(cell)),
             design: cnt(n),
-            stands: at,
+            pos: at,
             tap: Some(MarkerHit::To(at)),
         });
     }

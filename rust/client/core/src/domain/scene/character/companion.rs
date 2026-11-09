@@ -193,7 +193,7 @@ pub fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
             *slot = Character::of(group, number);
         }
         if let Some(c) = slot {
-            c.walk.drawn.forget_touched();
+            c.walk.floor_memo.forget_touched();
         }
     }
     let [person, pet] = &mut s.characters;
@@ -282,7 +282,7 @@ pub struct Walk {
     /// it first has a place.
     stands: Option<Q3>,
     /// Where the character is drawn and on what floor (`drawn_at`).
-    drawn: FloorMemo,
+    floor_memo: FloorMemo,
 }
 
 impl Walk {
@@ -298,18 +298,18 @@ impl Walk {
             init_facing_done: false,
             follow_walk_until: 0.0,
             stands: None,
-            drawn: Memo::NONE,
+            floor_memo: Memo::NONE,
         }
     }
 
     /// The floor it is drawn on: its own, or where its height is not known,
     /// that of the finest ground known there, as the pivot's is.
     fn floor(&self, world: World<'_>) -> Option<f64> {
-        let at = self.stands?;
-        match is_unknown(&at) {
-            true => world.surface_support(&at).val().flatten(),
-            false => Some(floor_of(&at)),
-        }
+        world
+            .stands(&self.stands?)
+            .val()
+            .flatten()
+            .map(|at| floor_of(&at))
     }
 
     /// Steps the walk toward `target`, where it will stand at `arrive_floor`. It
@@ -433,7 +433,7 @@ impl Walk {
         self.at = at;
         let floor = self.floor(World::now()).unwrap_or(arrive_floor);
         (
-            drawn_at(&mut self.drawn, at, floor, half, camera),
+            drawn_at(&mut self.floor_memo, at, floor, half, camera),
             self.heading as f32,
             is_walking,
         )
@@ -453,10 +453,10 @@ fn walk_to(world: World<'_>, from: &Q3, [x, y]: [f64; 2]) -> Q3 {
 /// Where a body `half` wide on each side is drawn for `at`, on the floor the
 /// eye's rays draw there in place of `floor`. The world is asked at the zoom
 /// the camera grid takes at that distance from the eye, and the answer is
-/// kept in `asked` while none of its inputs moves. Where that zoom is not
+/// kept in `memo` while none of its inputs moves. Where that zoom is not
 /// loaded a coarser answer is taken, as a ray draws whatever ground it has.
 fn drawn_at(
-    asked: &mut FloorMemo,
+    memo: &mut FloorMemo,
     at: [f64; 2],
     floor: f64,
     half: f64,
@@ -466,7 +466,7 @@ fn drawn_at(
     let eye = to_world(&camera.eye);
     let r2 = (0..3).map(|k| (pos[k] - eye[k]) * (pos[k] - eye[k])).sum();
     let zoom = GROUND.z_at(r2);
-    let ([x, y], drawn) = asked.of(World::now(), (at, floor, zoom), |world| {
+    let ([x, y], drawn) = memo.of(World::now(), (at, floor, zoom), |world| {
         let floor_at = |[x, y]: [f64; 2]| {
             world
                 .floor_under(&world_to_canonical(&[x, y, pos[2]]), zoom)

@@ -420,8 +420,8 @@ export type UiSend = {
     group: u32 | null,
     bg: u32 | null,
   ];
-  /** @param value A toggle's 0 or 1, a choice's option by its index, or a number. */
-  [Command.SETTING_SET]: [key: u32, value: u32];
+  /** @param val A toggle's 0 or 1, a choice's option by its index, or a number. */
+  [Command.SETTING_SET]: [key: u32, val: u32];
   [Command.SCENE_CHAT]: [text: string];
   [Command.CAMERA_TRACKING]: [tracking: Tracking];
   [Command.CAMERA_NORTH_UP]: [];

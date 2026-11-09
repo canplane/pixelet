@@ -225,7 +225,7 @@ impl Shadow {
     /// the light's cast is (ray/cast.rs `light_made`). It returns whether they were made or
     /// released, so the lit passes' groups are made again over the map or the blank one
     /// (`entries`).
-    pub fn made(&mut self, g: &Gpu, on: bool) -> bool {
+    pub fn sync(&mut self, g: &Gpu, on: bool) -> bool {
         if on == self.target.is_some() {
             return false;
         }

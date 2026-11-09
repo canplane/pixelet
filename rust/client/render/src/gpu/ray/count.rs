@@ -1,7 +1,7 @@
 // pxl-render/gpu/ray/count.rs
 
 //! Counts what the eye's cast and the light's walked and reused, while the
-//! `ray_counts` setting is on; pxl-engine `count` lays the counts out. A
+//! `ray_cnts` setting is on; pxl-engine `count` lays the counts out. A
 //! counted frame clears the counters before its passes run, and gathers what
 //! they counted into one array after them. One readback of the array is out
 //! at a time, and a frame that counts while one is out is not read. The
@@ -15,19 +15,19 @@ use crate::gpu::api::{buffer_usage, bytes, signaled, word_bytes, Gpu, RESULT};
 
 const WORDS: usize = count::WORDS as usize;
 
-/// The counts of each observer, the eye and the light, in `RayCount::counts`
-/// (`count_at`): whether it cast, 1 or 0; how many rays it has, the eye's
+/// The counts of each observer, the eye and the light, in `RayCount::cnts`
+/// (`cnt_at`): whether it cast, 1 or 0; how many rays it has, the eye's
 /// pixels or the light's slots; and, from `LANES_AT`, the lanes pxl-engine
 /// `count` lays out.
 pub const CAST: usize = 0;
 pub const RAYS: usize = 1;
 pub const LANES_AT: usize = 2;
-const OBSERVER_COUNTS: usize = LANES_AT + count::LANES as usize;
-pub const RAY_COUNTS: usize = count::OBSERVERS as usize * OBSERVER_COUNTS;
+const OBSERVER_CNTS: usize = LANES_AT + count::LANES as usize;
+pub const RAY_CNTS: usize = count::OBSERVERS as usize * OBSERVER_CNTS;
 
 /// Where `observer`'s count `k` is.
-pub const fn count_at(observer: u32, k: usize) -> usize {
-    observer as usize * OBSERVER_COUNTS + k
+pub const fn cnt_at(observer: u32, k: usize) -> usize {
+    observer as usize * OBSERVER_CNTS + k
 }
 
 /// One frame's counts, which land a frame or two after it. `frame` is the
@@ -35,7 +35,7 @@ pub const fn count_at(observer: u32, k: usize) -> usize {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RayCount {
     pub frame: f64,
-    pub counts: [f64; RAY_COUNTS],
+    pub cnts: [f64; RAY_CNTS],
 }
 
 /// What the CPU knows of a counted frame as it encodes it, kept until its
@@ -61,28 +61,28 @@ pub(super) struct CountBuffer {
 /// The counts' array on the GPU and its readback. One copy is out at a time: it is `copied`
 /// from the frame that encodes it until the next frame asks to map it, then `mapped` until
 /// the mapping lands. `copying` is what the CPU knew of the frame whose copy is out, and
-/// `ray_counts` holds the counts that landed until they are taken.
+/// `ray_cnts` holds the counts that landed until they are taken.
 pub(super) struct Counter {
-    counts: u32,
+    cnts: u32,
     read: u32,
     on: bool,
     frame: Frame,
     copying: Frame,
     copied: bool,
     mapped: bool,
-    read_counts: Box<[u32; WORDS]>,
+    read_cnts: Box<[u32; WORDS]>,
     /// The runtime writes the mapping's fence and result here. The fence
     /// holds `ticket`, the number the last mapping was asked with, once that
     /// mapping lands.
     mapping: Box<[u32; 2]>,
     ticket: u32,
-    ray_counts: Option<RayCount>,
+    ray_cnts: Option<RayCount>,
 }
 
 impl Counter {
     pub(super) fn new(g: &Gpu) -> Counter {
         Counter {
-            counts: g.buf(
+            cnts: g.buf(
                 word_bytes(WORDS),
                 buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
             ),
@@ -95,10 +95,10 @@ impl Counter {
             copying: Frame::default(),
             copied: false,
             mapped: false,
-            read_counts: Box::new([0; WORDS]),
+            read_cnts: Box::new([0; WORDS]),
             mapping: Box::new([0; 2]),
             ticket: 0,
-            ray_counts: None,
+            ray_cnts: None,
         }
     }
 
@@ -122,13 +122,13 @@ impl Counter {
         }
         g.write_buf(
             node_cache,
-            word_bytes(node_cache::COUNT_ON as usize),
+            word_bytes(node_cache::CNT_ON as usize),
             bytes(&header),
         );
         if !self.on {
             return;
         }
-        g.write_buf(self.counts, 0, bytes(&[0u32; WORDS]));
+        g.write_buf(self.cnts, 0, bytes(&[0u32; WORDS]));
     }
 
     /// Gathers the counts of each observer that cast into the array and copies it out for
@@ -151,12 +151,7 @@ impl Counter {
                     count::BEAM,
                     count::WALKS,
                 ),
-                (
-                    from.args[k],
-                    ray::MISS_ARGS_COUNT,
-                    count::VOXEL,
-                    count::RAYS,
-                ),
+                (from.args[k], ray::MISS_ARGS_CNTS, count::VOXEL, count::RAYS),
                 (from.boxes[k], raster::ARGS_INSTANCES, count::BOXES, 1),
             ] {
                 let to = word_bytes(count::at(o, lane) as usize);
@@ -164,12 +159,12 @@ impl Counter {
                 g.copy_buf(
                     encoder,
                     (buf, word_bytes(word as usize)),
-                    (self.counts, to),
+                    (self.cnts, to),
                     size,
                 );
             }
         }
-        g.copy_buf(encoder, (self.counts, 0), (self.read, 0), word_bytes(WORDS));
+        g.copy_buf(encoder, (self.cnts, 0), (self.read, 0), word_bytes(WORDS));
         self.copying = self.frame;
     }
 
@@ -181,28 +176,28 @@ impl Counter {
         if self.mapped && signaled {
             self.mapped = false;
             if self.mapping[1] == RESULT::OK {
-                let (l, f) = (&self.read_counts, self.copying);
-                let mut counts = [0.0; RAY_COUNTS];
+                let (l, f) = (&self.read_cnts, self.copying);
+                let mut cnts = [0.0; RAY_CNTS];
                 for o in 0..count::OBSERVERS {
                     if !f.casts[o as usize] {
                         continue;
                     }
-                    counts[count_at(o, CAST)] = 1.0;
-                    counts[count_at(o, RAYS)] = f64::from(f.rays[o as usize]);
+                    cnts[cnt_at(o, CAST)] = 1.0;
+                    cnts[cnt_at(o, RAYS)] = f64::from(f.rays[o as usize]);
                     for lane in 0..count::LANES {
                         let c = f64::from(l[count::at(o, lane) as usize]);
-                        counts[count_at(o, LANES_AT + lane as usize)] = c;
+                        cnts[cnt_at(o, LANES_AT + lane as usize)] = c;
                     }
                 }
-                self.ray_counts = Some(RayCount {
+                self.ray_cnts = Some(RayCount {
                     frame: f.number,
-                    counts,
+                    cnts,
                 });
             }
         }
         if self.copied && !self.mapped && signaled {
             (self.copied, self.mapped) = (false, true);
-            let addr = off_of(self.read_counts.as_ptr()) as u32;
+            let addr = off_of(self.read_cnts.as_ptr()) as u32;
             self.ticket = self.ticket.wrapping_add(1);
             g.map_read(
                 self.read,
@@ -216,7 +211,7 @@ impl Counter {
     }
 
     pub(super) fn take(&mut self) -> Option<RayCount> {
-        self.ray_counts.take()
+        self.ray_cnts.take()
     }
 
     /// The frame that encoded the copy was dropped, so no copy is out.

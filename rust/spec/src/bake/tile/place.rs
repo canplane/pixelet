@@ -249,8 +249,8 @@ impl PlaceTile {
 
 /// The cell a place keeps at Carto's `zoom`, above the ground leaf cell it stands in; finer
 /// than the ground's own cell, it is that leaf cell.
-fn place_cell(stands: Cell, zoom: Zoom) -> Cell {
-    stands.up(GROUND.leaf_cell_zoom().saturating_sub(zoom + SPACING_STEPS))
+fn place_cell(cell: Cell, zoom: Zoom) -> Cell {
+    cell.up(GROUND.leaf_cell_zoom().saturating_sub(zoom + SPACING_STEPS))
 }
 
 /// The ground leaf cell a place a tile holds stands in.

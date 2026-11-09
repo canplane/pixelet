@@ -65,7 +65,7 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
     let has_srid = t & 0x2000_0000 != 0;
     // ISO writes the dimensions as thousands of the type: 1 Z, 2 M, 3 ZM.
     let iso = (t & 0xffff) / 1000;
-    let dims = Dimension {
+    let dim = Dimension {
         z: t & 0x8000_0000 != 0 || iso == 1 || iso == 3,
         m: t & 0x4000_0000 != 0 || iso == 2 || iso == 3,
     };
@@ -76,7 +76,7 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
 
     match base {
         1 => {
-            let p = read_point(r, le, dims)?;
+            let p = read_point(r, le, dim)?;
             Some(vec![WkbGeometry {
                 points: vec![p],
                 holes: Vec::new(),
@@ -84,7 +84,7 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
             }])
         }
         2 => {
-            let pts = read_ring(r, le, dims)?;
+            let pts = read_ring(r, le, dim)?;
             Some(vec![WkbGeometry {
                 points: pts,
                 holes: Vec::new(),
@@ -101,10 +101,10 @@ fn read_any(r: &mut Reader) -> Option<Vec<WkbGeometry>> {
                     is_polygon_src: true,
                 }]);
             }
-            let outer = read_ring(r, le, dims)?;
+            let outer = read_ring(r, le, dim)?;
             let mut holes: Vec<Vec<G3857>> = Vec::new();
             for _ in 1..nr {
-                holes.push(read_ring(r, le, dims)?);
+                holes.push(read_ring(r, le, dim)?);
             }
             Some(vec![WkbGeometry {
                 points: outer,
@@ -133,16 +133,16 @@ struct Dimension {
     m: bool,
 }
 
-fn read_point(r: &mut Reader, le: bool, dims: Dimension) -> Option<G3857> {
+fn read_point(r: &mut Reader, le: bool, dim: Dimension) -> Option<G3857> {
     let (x, y) = (r.f64(le)?, r.f64(le)?);
-    let z = if dims.z { r.f64(le)? } else { 0.0 };
-    if dims.m {
+    let z = if dim.z { r.f64(le)? } else { 0.0 };
+    if dim.m {
         r.skip(8)?;
     }
     Some([x, y, z])
 }
 
-fn read_ring(r: &mut Reader, le: bool, dims: Dimension) -> Option<Vec<G3857>> {
+fn read_ring(r: &mut Reader, le: bool, dim: Dimension) -> Option<Vec<G3857>> {
     let n = r.u32(le)? as usize;
     // An untrusted length must not size an allocation: each point is at least 16 bytes.
     if n.saturating_mul(16) > r.b.len() - r.at.min(r.b.len()) {
@@ -150,7 +150,7 @@ fn read_ring(r: &mut Reader, le: bool, dims: Dimension) -> Option<Vec<G3857>> {
     }
     let mut pts: Vec<G3857> = Vec::with_capacity(n);
     for _ in 0..n {
-        pts.push(read_point(r, le, dims)?);
+        pts.push(read_point(r, le, dim)?);
     }
     Some(pts)
 }

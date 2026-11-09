@@ -148,12 +148,12 @@ fn world_bufs(gpu: &Gpu, built: &Built) -> WorldBuffer {
     let flat_u = |rows: &[[u32; 4]]| rows.iter().flatten().copied().collect::<Vec<u32>>();
     let clip: Vec<u32> = built.clipmap.iter().flatten().map(|&v| v as u32).collect();
     WorldBuffer {
-        clip: gpu.buffer(&clip, store()),
-        ground: gpu.buffer(&built.ground, store()),
-        palette: gpu.buffer(&built.palette, store()),
-        shards: gpu.buffer(&flat_u(&built.shards), store()),
-        placed: gpu.buffer(&built.objects, store()),
-        pool: gpu.buffer(&built.pool, store()),
+        clip: gpu.buf(&clip, store()),
+        ground: gpu.buf(&built.ground, store()),
+        palette: gpu.buf(&built.palette, store()),
+        shards: gpu.buf(&flat_u(&built.shards), store()),
+        placed: gpu.buf(&built.objects, store()),
+        pool: gpu.buf(&built.pool, store()),
     }
 }
 
@@ -210,11 +210,11 @@ fn eye_of(c: &EyeCase) -> (Vec<u32>, Grid, [[f32; 3]; 3]) {
 /// then `face_cs` over the record's asks.
 fn cast_of(gpu: &Gpu, b: &WorldBuffer, c: &EyeCase, face_p: &wgpu::ComputePipeline) -> Cast {
     let (eye, grid, axes) = eye_of(c);
-    let eye_buf = gpu.buffer(&eye, wgpu::BufferUsages::UNIFORM);
+    let eye_buf = gpu.buf(&eye, wgpu::BufferUsages::UNIFORM);
     let mut table0 = vec![0u32; node_cache::WORDS as usize];
     table0[node_cache::FRAME as usize] = FRAME;
-    let table = gpu.buffer(&table0, store());
-    let beams = gpu.buffer(&vec![0u32; grid.size() as usize], store());
+    let table = gpu.buf(&table0, store());
+    let beams = gpu.buf(&vec![0u32; grid.size() as usize], store());
     gpu.corners(false, &world_binds(b, &eye_buf, &beams, &table), &table);
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_CELL), "cell_cs"),
@@ -238,7 +238,7 @@ fn cast_of(gpu: &Gpu, b: &WorldBuffer, c: &EyeCase, face_p: &wgpu::ComputePipeli
     laid[asked_at + raster::ARGS_FACES as usize + 1] = 1;
     laid[asked_at + raster::ARGS_FACES as usize + 2] = 1;
     laid[asked_at + raster::ARGS_ASKS as usize] = grid.asks_at;
-    let rect_args = gpu.buffer(&laid, store());
+    let rect_args = gpu.buf(&laid, store());
     // Each stopped sample is recorded in the node cache entry that its walk kept.
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_SAMPLE_BOX), "sample_box_cs"),
@@ -261,7 +261,7 @@ fn cast_of(gpu: &Gpu, b: &WorldBuffer, c: &EyeCase, face_p: &wgpu::ComputePipeli
         for i in 0..grid.samples[0] {
             let k = grid.sample_at([i, j]) as usize;
             stopped += u32::from(asked[k + beam::NODE_ZOOM as usize] != beam::SAMPLE_NONE);
-            lacks += u32::from(asked[k + beam::SAMPLE_LACKS as usize] != 0);
+            lacks += u32::from(asked[k + beam::SAMPLE_LACKS as usize] & beam::SAMPLE_LACK != 0);
         }
     }
     eprintln!(
@@ -573,7 +573,7 @@ fn hand_faces_answer_as_face_word() {
     let Some(gpu) = device() else { return };
     let face_p = gpu.pipeline(src(SHADER_FACE), "face_cs");
     let mut tally = Tally::default();
-    let mut kinds = KindCount::new();
+    let mut kind_cnt = KindCount::new();
     let worlds = worlds();
     for (built, c) in worlds
         .iter()
@@ -596,18 +596,18 @@ fn hand_faces_answer_as_face_word() {
                 continue;
             }
             let Want { bits, cut } = face_want(&mut q, &cast.asked, &cast.table, cast.origin, a);
-            kinds.add("asked, the cuts swapped answer otherwise", cut);
+            kind_cnt.add("asked, the cuts swapped answer otherwise", cut);
             want.push(bits);
             have.push(if to & record::TO_RECORD != 0 {
                 cast.table[(to & !record::TO_RECORD) as usize]
             } else {
                 cast.beams[to as usize]
             });
-            kinds.add("asked", true);
-            kinds.add("asked, a rise", bits & 0xf != 0);
-            kinds.add("asked, a line", bits >> face::LINE_SHIFT & 0xf != 0);
-            kinds.add("asked, a corner", bits >> face::CORNER_SHIFT != 0);
-            kinds.add("asked, none set", bits == 0);
+            kind_cnt.add("asked", true);
+            kind_cnt.add("asked, a rise", bits & 0xf != 0);
+            kind_cnt.add("asked, a line", bits >> face::LINE_SHIFT & 0xf != 0);
+            kind_cnt.add("asked, a corner", bits >> face::CORNER_SHIFT != 0);
+            kind_cnt.add("asked, none set", bits == 0);
         }
         tally.compare(
             &format!("{}, the record's asks", c.name),
@@ -616,8 +616,8 @@ fn hand_faces_answer_as_face_word() {
             |k| format!("ask {k}"),
         );
     }
-    eprintln!("  KINDS faces {kinds:?}");
-    let short = kinds.short(&[
+    eprintln!("  KINDS faces {kind_cnt:?}");
+    let short = kind_cnt.short(&[
         ("asked", 1000),
         ("asked, a rise", 1),
         ("asked, a line", 1),
@@ -658,7 +658,7 @@ fn probe(
     rays: &wgpu::TextureView,
     size: [u32; 2],
 ) -> Vec<Probed> {
-    let out = gpu.buffer(
+    let out = gpu.buf(
         &vec![0u32; (size[0] * size[1] * PROBE_WORDS) as usize],
         store(),
     );
@@ -714,7 +714,7 @@ fn hand_pixels_answer_as_cast_entry() {
         },
     ];
     let mut tally = Tally::default();
-    let mut kinds = KindCount::new();
+    let mut kind_cnt = KindCount::new();
     let (mut dir_off, mut px_off, mut inv_off) = (0f32, 0f32, 0u32);
     let worlds = worlds();
     let mut runs: Vec<(&Built, &EyeCase, &Screen)> = Vec::new();
@@ -735,7 +735,7 @@ fn hand_pixels_answer_as_cast_entry() {
         eye[eye::JITTER + 1] = s.jitter[1].to_bits();
         let far = cast.far * s.reach;
         eye[eye::FAR] = far.to_bits();
-        let eye_buf = gpu.buffer(&eye, wgpu::BufferUsages::UNIFORM);
+        let eye_buf = gpu.buf(&eye, wgpu::BufferUsages::UNIFORM);
         let ray_words: Vec<u32> = (0..ray::WORDS as usize * texels)
             .map(|k| (k as u32).wrapping_mul(0x2c1b_3c6d) >> 2)
             .collect();
@@ -797,7 +797,10 @@ fn hand_pixels_answer_as_cast_entry() {
                 let Some(v) = voxel_of(i) else {
                     return 0;
                 };
-                raster::id_of(v, w(beam::SAMPLE_LACKS) != 0 || h % 16 == 2)
+                raster::id_of(
+                    v,
+                    w(beam::SAMPLE_LACKS) & beam::SAMPLE_LACK != 0 || h % 16 == 2,
+                )
             })
             .collect();
         let vis = texture(
@@ -825,12 +828,12 @@ fn hand_pixels_answer_as_cast_entry() {
             .collect();
         let mut uniform = [0u32; screen::TILES_WORDS];
         uniform[..4].copy_from_slice(&[tiles[0], tiles[1], screen::DAMAGE_FRAMES, now]);
-        let changed_buf = gpu.buffer(&changed, store());
-        let tiles_buf = gpu.buffer(&uniform, wgpu::BufferUsages::UNIFORM);
+        let changed_buf = gpu.buf(&changed, store());
+        let tiles_buf = gpu.buf(&uniform, wgpu::BufferUsages::UNIFORM);
         let mut list_words = vec![0u32; 4 + (tiles[0] * tiles[1]) as usize];
         let per_tile = screen::TILE / ray::CAST_SIDE;
         list_words[1..3].copy_from_slice(&[per_tile, per_tile]);
-        let list = gpu.buffer(&list_words, store());
+        let list = gpu.buf(&list_words, store());
         gpu.dispatch(
             &cast_tiles_p,
             &[
@@ -846,12 +849,12 @@ fn hand_pixels_answer_as_cast_entry() {
         );
         let tile_cnt = gpu.read(&list)[0];
 
-        let table_buf = gpu.buffer(&cast.table, store());
-        let marks = gpu.buffer(&ray::MISS_ARGS_EMPTY, store());
+        let table_buf = gpu.buf(&cast.table, store());
+        let marks = gpu.buf(&ray::MISS_ARGS_EMPTY, store());
         // The beam rays' buffer needs room past the grid's words for this screen's holes.
         let mut padded = cast.beams.clone();
         padded.resize((g.walked_at() + ray::holes_words(s.size)) as usize, 0);
-        let beams = gpu.buffer(&padded, store());
+        let beams = gpu.buf(&padded, store());
         gpu.dispatch(
             &cast_p,
             &[
@@ -895,8 +898,8 @@ fn hand_pixels_answer_as_cast_entry() {
                 let e = cast::entry_with(cast.origin, &r, at.inv, &node, asset[0]);
                 let lacks = v & raster::LACK != 0;
                 let takes = !lacks && e.enters && raster::accepts(faces, ray::face(at.dir, e.axis));
-                kinds.add("enters its sample", takes);
-                kinds.add(
+                kind_cnt.add("enters its sample", takes);
+                kind_cnt.add(
                     "enters its sample past the eye's reach",
                     !takes && {
                         let r = Ray::new(at.dir, f32::INFINITY);
@@ -920,7 +923,7 @@ fn hand_pixels_answer_as_cast_entry() {
                         asset[1],
                         cast.table[node_cache::face_at(slot, face) as usize],
                     ]);
-                    kinds.add(
+                    kind_cnt.add(
                         "enters its sample, short of its cube",
                         answer::fill_eighths(asset[0]) != answer::EIGHTHS,
                     );
@@ -938,9 +941,9 @@ fn hand_pixels_answer_as_cast_entry() {
                 };
                 if [[0, 0], [1, 0], [0, 1], [1, 1]].into_iter().all(went_on) {
                     said = Some([0; 4]);
-                    kinds.add("sky", true);
+                    kind_cnt.add("sky", true);
                 } else {
-                    kinds.add("a hole", true);
+                    kind_cnt.add("a hole", true);
                 }
             }
             if drew {
@@ -967,10 +970,10 @@ fn hand_pixels_answer_as_cast_entry() {
         }
     }
     eprintln!(
-        "  KINDS pixels {kinds:?}; the ray {dir_off:e} off the Rust's, its tangents {px_off:e}, \
+        "  KINDS pixels {kind_cnt:?}; the ray {dir_off:e} off the Rust's, its tangents {px_off:e}, \
          its reciprocal {inv_off} ulps"
     );
-    let short = kinds.short(&[
+    let short = kind_cnt.short(&[
         ("enters its sample", 1000),
         ("enters its sample, short of its cube", 1),
         ("sky", 100),
@@ -1015,7 +1018,7 @@ fn hand_stale_voxel_is_a_hole() {
             let mut eye = cast.eye.clone();
             eye[eye::RANGE] = asked;
             eye[eye::RANGE + 1] = asked;
-            let eye_buf = gpu.buffer(&eye, wgpu::BufferUsages::UNIFORM);
+            let eye_buf = gpu.buf(&eye, wgpu::BufferUsages::UNIFORM);
             let rays = texture(
                 &gpu.device,
                 &gpu.queue,
@@ -1053,7 +1056,9 @@ fn hand_stale_voxel_is_a_hole() {
                     }
                     let node = node_at(&cast.beams, k + beam::SAMPLE_NODE);
                     match voxel_at.get(&(node.zoom, node.idx(cast.origin))) {
-                        Some(&v) if w(beam::SAMPLE_LACKS) == 0 => raster::id_of(v, false),
+                        Some(&v) if w(beam::SAMPLE_LACKS) & beam::SAMPLE_LACK == 0 => {
+                            raster::id_of(v, false)
+                        }
                         _ => 0,
                     }
                 })
@@ -1074,12 +1079,12 @@ fn hand_stale_voxel_is_a_hole() {
             let changed = vec![now; (tiles[0] * tiles[1]) as usize];
             let mut uniform = [0u32; screen::TILES_WORDS];
             uniform[..4].copy_from_slice(&[tiles[0], tiles[1], screen::DAMAGE_FRAMES, now]);
-            let changed_buf = gpu.buffer(&changed, store());
-            let tiles_buf = gpu.buffer(&uniform, wgpu::BufferUsages::UNIFORM);
+            let changed_buf = gpu.buf(&changed, store());
+            let tiles_buf = gpu.buf(&uniform, wgpu::BufferUsages::UNIFORM);
             let mut list_words = vec![0u32; 4 + (tiles[0] * tiles[1]) as usize];
             let per_tile = screen::TILE / ray::CAST_SIDE;
             list_words[1..3].copy_from_slice(&[per_tile, per_tile]);
-            let list = gpu.buffer(&list_words, store());
+            let list = gpu.buf(&list_words, store());
             gpu.dispatch(
                 &cast_tiles_p,
                 &[
@@ -1094,13 +1099,13 @@ fn hand_stale_voxel_is_a_hole() {
                 ],
             );
             let tile_cnt = gpu.read(&list)[0];
-            let table_buf = gpu.buffer(&cast.table, store());
-            let marks = gpu.buffer(&ray::MISS_ARGS_EMPTY, store());
+            let table_buf = gpu.buf(&cast.table, store());
+            let marks = gpu.buf(&ray::MISS_ARGS_EMPTY, store());
             // The beam rays' buffer needs room past the grid's words for this screen's holes.
             let mut padded = cast.beams.clone();
             let walked_at = g.walked_at() as usize;
             padded.resize(walked_at + ray::holes_words([wd, ht]) as usize, 0);
-            let beams = gpu.buffer(&padded, store());
+            let beams = gpu.buf(&padded, store());
             gpu.dispatch(
                 &cast_p,
                 &[

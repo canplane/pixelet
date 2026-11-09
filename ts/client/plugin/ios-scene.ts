@@ -22,9 +22,9 @@ const WINDOW_START = `#if os(iOS) || os(tvOS)
 #endif
 `;
 
-const plugin: ConfigPlugin = (config) => {
-  config = withInfoPlist(config, (config) => {
-    config.modResults.UIApplicationSceneManifest = {
+const plugin: ConfigPlugin = (cfg) => {
+  cfg = withInfoPlist(cfg, (cfg) => {
+    cfg.modResults.UIApplicationSceneManifest = {
       UIApplicationSupportsMultipleScenes: false,
       UISceneConfigurations: {
         UIWindowSceneSessionRoleApplication: [
@@ -35,11 +35,11 @@ const plugin: ConfigPlugin = (config) => {
         ],
       },
     };
-    return config;
+    return cfg;
   });
-  return withAppDelegate(config, (config) => {
-    const source = config.modResults.contents;
-    if (source.includes("ExpoReactNativeFactoryProvider")) return config;
+  return withAppDelegate(cfg, (cfg) => {
+    const source = cfg.modResults.contents;
+    if (source.includes("ExpoReactNativeFactoryProvider")) return cfg;
     // A template this plugin does not know is refused rather than skipped,
     // because a changed template would launch into an empty screen.
     if (!source.includes(DELEGATE_CLASS) || !source.includes(WINDOW_START)) {
@@ -47,13 +47,13 @@ const plugin: ConfigPlugin = (config) => {
         "ios-scene: AppDelegate.swift is not the template this plugin rewrites",
       );
     }
-    config.modResults.contents = source
+    cfg.modResults.contents = source
       .replace(
         DELEGATE_CLASS,
         "class AppDelegate: ExpoAppDelegate, ExpoReactNativeFactoryProvider {",
       )
       .replace(WINDOW_START, "");
-    return config;
+    return cfg;
   });
 };
 

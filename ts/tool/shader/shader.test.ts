@@ -70,22 +70,22 @@ test("Tint takes every shader", { timeout: 1_200_000 }, async () => {
     const name = file.replace(/\.wgsl$/, "");
     device.pushErrorScope("validation");
     const module = device.createShaderModule({ code });
-    const errors = (await module.getCompilationInfo()).messages.filter(
+    const errs = (await module.getCompilationInfo()).messages.filter(
       (m) => m.type === "error",
     );
     refused.push(
-      ...errors.map((m) => `${file}:${m.lineNum}:${m.linePos}: ${m.message}`),
+      ...errs.map((m) => `${file}:${m.lineNum}:${m.linePos}: ${m.message}`),
     );
     const scoped = await device.popErrorScope();
-    if (scoped && errors.length === 0) {
+    if (scoped && errs.length === 0) {
       refused.push(`${file}: ${scoped.message.split("\n")[0]}`);
     }
     console.log(
-      `${file}: ${errors.length > 0 || scoped ? "refused" : "compiled"}`,
+      `${file}: ${errs.length > 0 || scoped ? "refused" : "compiled"}`,
     );
     // A module that does not compile would fail its pipelines too, so it is
     // reported once and its pipelines are not made.
-    if (errors.length > 0 || scoped) continue;
+    if (errs.length > 0 || scoped) continue;
     for (const p of pipelines.filter((p) => p.module === name)) {
       device.pushErrorScope("validation");
       const said = await make(device, module, code, p).then(

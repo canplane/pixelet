@@ -80,8 +80,8 @@ export interface TreeEncoderConfig {
 export class TreeEncoder {
   /** A `max_cap` below HDR_SZ or above MAX_PKT_SZ is EINVAL; a packet larger
    * than `max_cap` is EOVERFLOW. */
-  encode(view: NodeView, opts: TreeEncoderConfig): U8Array {
-    const { init_cap, max_cap = MAX_PKT_SZ } = opts;
+  encode(view: NodeView, cfg: TreeEncoderConfig): U8Array {
+    const { init_cap, max_cap = MAX_PKT_SZ } = cfg;
     if (max_cap < HDR_SZ || max_cap > MAX_PKT_SZ) {
       throw new MarshalError(Errno.EINVAL);
     }

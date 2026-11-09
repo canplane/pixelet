@@ -39,6 +39,17 @@ fn sample_before(at: vec2<f32>) -> vec2<u32> {
   return vec2<u32>(max(floor(v * SAMPLE_SPACING_INVERSE), vec2<f32>(0.0))) + vec2<u32>(NEAR_SAMPLES);
 }
 
+/// The third word of the ray at the tangents `px` taken without a walk of its own, whose palette
+/// indices are `ground`. In the ray steps view (pxl-engine `eye::STEPS`) it is the steps of the
+/// grid's ray nearest it, the sample before it on the lattice: its beam ray's and its own
+/// (`beam::SAMPLE_STEPS_SHIFT`).
+fn taken_word(px: vec2<f32>, ground: u32) -> u32 {
+  if (eye_word(STEPS) == 0u) {
+    return ground;
+  }
+  return beam_steps(grid_cell(px)) + (beams[sample_word(sample_before(px)) + SAMPLE_LACKS] >> SAMPLE_STEPS_SHIFT);
+}
+
 fn write_ray(p: vec2<u32>, w: vec4<u32>) {
   for (var i = 0u; i < 4u; i += 1u) {
     textureStore(rays, p, i, vec4<u32>(w[i], 0u, 0u, 0u));
@@ -58,7 +69,7 @@ fn cast_px(p: vec2<u32>, size: vec2<u32>) -> bool {
   let visible = textureLoad(visibility, vec2<i32>(p), 0i, 0i).x;
   let px = px_tan(p, size.xy);
   let aim = eye_aim(px);
-  let on = ((node_cache[COUNT_ON] >> COUNT_EYE) & 1u) != 0u;
+  let on = ((node_cache[CNT_ON] >> CNT_EYE) & 1u) != 0u;
   if (visible != 0u && (visible & VISIBLE_LACK) == 0u) {
     // The voxel's entry was drawn, so no claim takes its slot while its box is drawn
     // (`record::drawn`). A slot forgotten since the boxes were drawn has no faces set to draw,
@@ -75,11 +86,11 @@ fn cast_px(p: vec2<u32>, size: vec2<u32>) -> bool {
         // The ray's words, with what lies about its face taken from the voxel's (`word`,
         // `ray::first_word`).
         let face = 2u * entry.axis + select(0u, 1u, ray_dir(aim.dir)[entry.axis] > 0.0);
-        add_cnt(on, COUNT_VOXEL);
+        add_cnt(on, CNT_VOXEL);
         write_ray(p, vec4<u32>(
           (node_cache_word(e + W_ASSET) & VAL_MASK) | (face << RAY_FACE_SHIFT) | (k.zoom << RAY_ZOOM_SHIFT) | (fill << RAY_FILL_SHIFT),
           bitcast<u32>(entry.t),
-          node_cache_word(e + W_ASSET + 1u),
+          taken_word(px, node_cache_word(e + W_ASSET + 1u)),
           node_cache_word(face_at(slot, face)),
         ));
         return false;
@@ -90,11 +101,11 @@ fn cast_px(p: vec2<u32>, size: vec2<u32>) -> bool {
   // anything (`sky`). A thing thinner than the samples' spacing goes unseen.
   let s = sample_before(px);
   if (went_on(sample_word(s)) && went_on(sample_word(s + vec2<u32>(1u, 0u))) && went_on(sample_word(s + vec2<u32>(0u, 1u))) && went_on(sample_word(s + vec2<u32>(1u)))) {
-    add_cnt(on, COUNT_SKY);
-    write_ray(p, vec4<u32>(0u));
+    add_cnt(on, CNT_SKY);
+    write_ray(p, vec4<u32>(0u, 0u, taken_word(px, 0u), 0u));
     return false;
   }
-  add_cnt(on, COUNT_HOLE);
+  add_cnt(on, CNT_HOLE);
   return true;
 }
 

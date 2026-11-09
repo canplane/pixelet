@@ -11,8 +11,8 @@
 
 @compute @workgroup_size(64, 1, 1)
 fn damage_rect_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  let across = tiles.count.x;
-  if (id.x >= across * tiles.count.y || !tiles_in_damage(tiles, changed_at[id.x])) {
+  let across = tiles.cnt.x;
+  if (id.x >= across * tiles.cnt.y || !tiles_in_damage(tiles, changed_at[id.x])) {
     return;
   }
   let t = vec2<u32>(id.x % across, id.x / across);

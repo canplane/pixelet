@@ -151,9 +151,9 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FrameSection {
         interval: percentiles(scratch, moving().map(|f| f.interval_ms)),
         busy: percentiles(scratch, frames.iter().map(|f| f.busy_ms)),
         tick: percentiles(scratch, frames.iter().map(|f| f.tick_ms)),
-        effects: percentiles(scratch, frames.iter().map(|f| f.effects_ms)),
+        effect: percentiles(scratch, frames.iter().map(|f| f.effects_ms)),
         stage: percentiles(scratch, frames.iter().map(|f| f.stage_ms)),
-        tasks: percentiles(scratch, frames.iter().map(|f| f.tasks_ms)),
+        task: percentiles(scratch, frames.iter().map(|f| f.tasks_ms)),
         perf: percentiles(scratch, frames.iter().map(|f| f.perf_ms)),
         rest: percentiles(scratch, frames.iter().map(unmeasured_ms)),
         effects_p95: core::array::from_fn(|k| {
@@ -178,8 +178,8 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FrameSection {
         kinds: core::array::from_fn(|k| cnt(&|f| f.kind == k as f64)),
         wakes: core::array::from_fn(|k| cnt(&|f| f.wake == k as f64)),
         gpu_px: read().next_back().map_or(0.0, |f| f.gpu.px),
-        rays: frames.iter().fold(RaySample::default(), |mut sum, f| {
-            sum.add(&f.rays);
+        ray_sample: frames.iter().fold(RaySample::default(), |mut sum, f| {
+            sum.add(&f.ray_sample);
             sum
         }),
         first: *first,

@@ -116,7 +116,7 @@ pub struct Generator {
     /// What a frame drawn through a gate draws in place of the instances (`cull`), one for
     /// each gate (`Mask`), and the passes that make it.
     culled: [Culled; 2],
-    cull_args: Pipeline,
+    cull_arg: Pipeline,
     cull: Pipeline,
     cap: u32,
     /// How many placed decor records were last handed.
@@ -151,7 +151,7 @@ pub struct Generator {
     /// the eye's place and zooms, the drawing words, the meshes, the anchor and the records'
     /// capacity. `counting` says whether this frame runs them, which it does where any of
     /// that or the records moved.
-    count_read: Read,
+    cnt_read: Read,
     counting: bool,
 }
 
@@ -215,7 +215,7 @@ impl Generator {
                 ),
                 group: 0,
             }),
-            cull_args: pipelines.build_compute(g, COMPUTE_DECOR_CULL_ARGS, &CULL_GROUP),
+            cull_arg: pipelines.build_compute(g, COMPUTE_DECOR_CULL_ARGS, &CULL_GROUP),
             cull: pipelines.build_compute(g, COMPUTE_DECOR_CULL, &CULL_GROUP),
             cap: 0,
             placed_cnt: 0,
@@ -225,7 +225,7 @@ impl Generator {
             clipmap: Read::default(),
             cuts: [0; eye::CUTS],
             placed: Read::default(),
-            count_read: Read::default(),
+            cnt_read: Read::default(),
             counting: false,
             marking: false,
             pending_rects: [[0; 4]; object::RECTS as usize],
@@ -401,7 +401,7 @@ impl Generator {
                 );
             }
         }
-        let c = &mut self.count_read;
+        let c = &mut self.cnt_read;
         c.begin();
         c.read(&generation.eye[eye::ORIGIN..eye::ORIGIN + 3]);
         c.read(&[
@@ -436,7 +436,7 @@ impl Generator {
         g.write_buf(self.uniforms, 0, bytes(&uniforms));
     }
 
-    /// The generator's buffer for the frame's buffer `buf` (frame/shader/group.rs `BUFFERS`),
+    /// The generator's buffer for the frame's buffer `buf` (frame/shader/group.rs `BUFS`),
     /// or 0 for a buffer another part holds.
     fn buf_of(&self, buf: u32) -> u32 {
         match buf {
@@ -535,7 +535,7 @@ impl Generator {
         self.on = false;
         self.rects = 0;
         self.stale = true;
-        self.count_read.forget();
+        self.cnt_read.forget();
     }
 
     /// Called when the frame was drawn. The boxes it marked by, and its generation of every
@@ -557,7 +557,7 @@ impl Generator {
         self.clipmap.forget();
         self.placed.forget();
         self.zooms_read.forget();
-        self.count_read.forget();
+        self.cnt_read.forget();
     }
 
     /// Whether its passes run this frame, marking or counting. The frame then draws what they
@@ -631,7 +631,7 @@ impl Generator {
     }
 
     /// The decor compacted, while decor is on (`DecorBuffer`).
-    pub fn decor_buffer(&self) -> Option<DecorBuffer> {
+    pub fn decor_buf(&self) -> Option<DecorBuffer> {
         (self.on && self.instances != 0).then_some(DecorBuffer {
             drawing: self.drawing,
             regions: self.regions,
@@ -683,7 +683,7 @@ impl Generator {
         );
         let pass = g.compute_pass(ctx.encoder, ctx.stamp(tiles.span()).pass());
         g.set_bind_group(pass, 0, group, &[]);
-        g.set_pipeline(pass, self.cull_args.id);
+        g.set_pipeline(pass, self.cull_arg.id);
         g.dispatch(pass, drawn::REGIONS.div_ceil(64), 1, 1);
         g.set_pipeline(pass, self.cull.id);
         g.dispatch(pass, self.cap.div_ceil(64), 1, 1);

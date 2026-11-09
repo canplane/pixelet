@@ -68,7 +68,7 @@ test("doorbell - a core that traps throws at no one: it is told, and a call answ
   Ring.init(mem, sq_at, CAP, slots_at, SLOT);
   Ring.init(mem, cq_at, CAP, slots_at + slots_bytes(CAP, SLOT), SLOT);
 
-  const error = console.error;
+  const err = console.error;
   console.error = () => {};
   try {
     let runs = 0;
@@ -87,7 +87,7 @@ test("doorbell - a core that traps throws at no one: it is told, and a call answ
     assert.deepStrictEqual(runs, 1);
     assert.deepStrictEqual(terminated, 1);
   } finally {
-    console.error = error;
+    console.error = err;
   }
 });
 
@@ -105,7 +105,7 @@ test("doorbell - a frame the runtime cannot take stops the core, and it is told 
     SLOT,
   );
 
-  const error = console.error;
+  const err = console.error;
   console.error = () => {};
   try {
     let runs = 0;
@@ -124,14 +124,14 @@ test("doorbell - a frame the runtime cannot take stops the core, and it is told 
     assert.deepStrictEqual(runs, 1, "a stopped core is rung no more");
     assert.deepStrictEqual(terminated, 1);
   } finally {
-    console.error = error;
+    console.error = err;
   }
 });
 
 test("doorbell - a call answered in the turn that traps takes its answer once", () => {
   const { mem, sq, cq, sq_at, cq_at } = rings();
 
-  const error = console.error;
+  const err = console.error;
   console.error = () => {};
   try {
     // This core answers the call, then traps in the same turn.
@@ -147,7 +147,7 @@ test("doorbell - a call answered in the turn that traps takes its answer once", 
     assert.deepStrictEqual(answer, 7);
     assert.deepStrictEqual(taken, [7], "the answer is taken once");
   } finally {
-    console.error = error;
+    console.error = err;
   }
 });
 
@@ -227,7 +227,7 @@ test("doorbell - a request is answered by the reply its turn posts, and waits fo
 
 test("doorbell - a request still waiting as the core stops is answered ENOTRECOVERABLE", async () => {
   const { mem, sq_at, cq_at } = rings();
-  const error = console.error;
+  const err = console.error;
   console.error = () => {};
   try {
     const door = new Doorbell(mem, sq_at, cq_at, () => {
@@ -238,6 +238,6 @@ test("doorbell - a request still waiting as the core stops is answered ENOTRECOV
     assert.deepStrictEqual(await answer, Errno.ENOTRECOVERABLE);
     assert.deepStrictEqual(await door.request(1), Errno.ENOTRECOVERABLE);
   } finally {
-    console.error = error;
+    console.error = err;
   }
 });

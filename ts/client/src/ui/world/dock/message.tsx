@@ -43,7 +43,7 @@ export function useMessage(mode: DockMode) {
   // draft's text. From then on the field owns the text and sends the core each
   // change. When the draft closes, the field is emptied for the chat.
   useEffect(() => {
-    setMessageText(drafting ? (snapshot.current().draft ?? "") : "");
+    setMessageText(drafting ? (snapshot.cur().draft ?? "") : "");
     setMarkerFits(true);
     if (drafting) setDockMode(DockMode.Message);
   }, [drafting]);

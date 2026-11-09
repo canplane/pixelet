@@ -42,7 +42,7 @@ export function boot(): void {
       if (boot_state() === BOOT_OPENING) set_boot(BOOT_STARTING);
     },
     snapshot: () => {
-      if (boot_state() === BOOT_LOADING && loaded(snapshot.current()))
+      if (boot_state() === BOOT_LOADING && loaded(snapshot.cur()))
         set_boot(BOOT_STARTED);
     },
     // When the core stops, its turns end with it, whatever the boot's state.

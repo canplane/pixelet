@@ -1057,7 +1057,7 @@ impl SceneDraw {
 pub struct SettingSet {
     pub key: crate::domain::setting::schema_spec::SettingKey,
     /// A toggle's 0 or 1, a choice's option by its index, or a number.
-    pub value: u32,
+    pub val: u32,
 }
 
 impl SettingSet {
@@ -1068,7 +1068,7 @@ impl SettingSet {
                 f.at(0)?.get_number()?,
             )?)
             .ok_or_else(|| unknown())?,
-            value: integer::<u32>(f.at(1)?.get_number()?)?,
+            val: integer::<u32>(f.at(1)?.get_number()?)?,
         })
     }
 }

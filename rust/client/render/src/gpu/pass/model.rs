@@ -254,7 +254,7 @@ pub struct ModelDraw {
     /// The mesh with its vertex and index counts. None draws a strip of four
     /// corners for each instance.
     pub mesh: Option<(u32, u32, u32)>,
-    pub instances: u32,
+    pub instance_cnt: u32,
 }
 
 /// Draws each draw that `resolve` makes a `ModelDraw` of. Draw `k` of
@@ -280,9 +280,9 @@ pub fn draw_models<'a>(
         }
         match m.mesh {
             Some((mesh, vertex_cnt, idx_cnt)) => {
-                draw_model(pass, lit, mesh, vertex_cnt, idx_cnt, m.instances);
+                draw_model(pass, lit, mesh, vertex_cnt, idx_cnt, m.instance_cnt);
             }
-            None => pass.draw(4, m.instances, 0, 0),
+            None => pass.draw(4, m.instance_cnt, 0, 0),
         }
     }
 }
@@ -293,10 +293,10 @@ pub fn draw_model(
     mesh: u32,
     vertex_cnt: u32,
     idx_cnt: u32,
-    instances: u32,
+    instance_cnt: u32,
 ) {
     bind_mesh(pass, lit, mesh, vertex_cnt, idx_cnt);
-    pass.draw_indexed(idx_cnt, instances, 0, 0);
+    pass.draw_indexed(idx_cnt, instance_cnt, 0, 0);
 }
 
 /// Binds a mesh buffer's vertex lanes and its indices. The buffer holds the
@@ -310,7 +310,7 @@ pub fn bind_mesh(
     idx_cnt: u32,
 ) {
     let mut at = 0;
-    for lane in 0..lit.lanes {
+    for lane in 0..lit.lane_cnt {
         let size = vertex_cnt * lit.strides[lane];
         pass.set_vertex_buf(lane as u32, mesh, at, size);
         at += size;

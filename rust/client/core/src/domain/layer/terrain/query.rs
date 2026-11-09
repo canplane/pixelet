@@ -70,11 +70,11 @@ pub(in crate::domain) trait TerrainQuery {
     fn walk_line(&self, path: &mut Path, node: Node<2>, cell_zoom: Zoom) -> Line;
 
     /// The line that `node`'s cells at `cell_zoom` are read on, found from
-    /// `over`, the line its parent column's cells were read on. It is `over`
-    /// itself where both are the same tile's, one step from `over` where
-    /// `over` is the tile's parent's (`step`), and otherwise walked from the
-    /// top as `seek` walks.
-    fn line_under(&self, over: Option<&Line>, node: Node<2>, cell_zoom: Zoom) -> Line;
+    /// `parent`, the line its parent column's cells were read on. It is
+    /// `parent` itself where both are the same tile's, one step from `parent`
+    /// where `parent` is the tile's parent's (`step`), and otherwise walked
+    /// from the top as `seek` walks.
+    fn line_under(&self, parent: Option<&Line>, node: Node<2>, cell_zoom: Zoom) -> Line;
 
     /// `bound`, with the node's line found by `walk_line`. A walk over nodes
     /// in key order pays one look-up per node.
@@ -103,9 +103,9 @@ impl TerrainQuery for TileCache<TerrainTile> {
         self.seek(path, bound_tile(node, cell_zoom))
     }
 
-    fn line_under(&self, over: Option<&Line>, node: Node<2>, cell_zoom: Zoom) -> Line {
+    fn line_under(&self, parent: Option<&Line>, node: Node<2>, cell_zoom: Zoom) -> Line {
         let tile = bound_tile(node, cell_zoom);
-        match over {
+        match parent {
             Some(o) if o.tile == tile => *o,
             Some(o) if tile.zoom > MIN_ZOOM && o.tile == tile.parent() => self.step(o, tile),
             _ => self.line(tile),
@@ -165,11 +165,11 @@ impl Query for TileCache<TerrainTile> {
     /// coarser tile, whose line the parent does not hold, walks from the top.
     fn child<const D: usize>(&self, parent: &Line, node: Node<D>, cell_zoom: Zoom) -> Line {
         let tile = bound_tile(node, cell_zoom);
-        let mut over = tile;
-        while over.zoom > parent.tile.zoom {
-            over = over.parent();
+        let mut ancestor = tile;
+        while ancestor.zoom > parent.tile.zoom {
+            ancestor = ancestor.parent();
         }
-        match over == parent.tile {
+        match ancestor == parent.tile {
             true => self.down(parent, tile),
             false => self.line(tile),
         }

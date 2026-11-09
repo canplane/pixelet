@@ -176,10 +176,10 @@ export class Ring {
     return Errno.OK;
   }
 
-  /** The entry that begins at byte `offset` of the memory, in the form `peek`
+  /** The entry that begins at byte `off` of the memory, in the form `peek`
    * returns. Throws EBADMSG where no entry begins there. */
-  entry_of(offset: u32): u32 {
-    const word = (offset - this.at) / 4;
+  entry_of(off: u32): u32 {
+    const word = (off - this.at) / 4;
     if (
       !Number.isInteger(word) ||
       word < HEADER_WORDS ||

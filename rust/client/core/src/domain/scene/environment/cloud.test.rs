@@ -17,16 +17,16 @@ fn drift_step_s_as_written(seen: f64) -> f64 {
 #[test]
 fn cloud_steps_unchanged() {
     let _g = sys::serial();
-    let was = clouds().seen;
+    let was = clouds().nearest_dist;
     for seen in [0.5, 3.0, 47.25, 1.0e3, 6.4e4, 3.1e6, f64::INFINITY] {
-        clouds().seen = seen;
+        clouds().nearest_dist = seen;
         assert_eq!(
             drift_step_s().to_bits(),
             drift_step_s_as_written(seen).to_bits(),
             "at {seen}"
         );
     }
-    clouds().seen = was;
+    clouds().nearest_dist = was;
 }
 
 /// With the eye still and only time moving the clouds, a patch's draw stays in

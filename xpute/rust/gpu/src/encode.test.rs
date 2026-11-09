@@ -14,8 +14,8 @@ fn programs_match_record() {
     let g = Golden::load(GOLDEN);
     let [region, stream_words, head] =
         ["region", "stream.words", "stream.head"].map(|k| g.u32(k) as usize);
-    let memory: &'static mut [u32] = Vec::leak(vec![0; region / 4]);
-    let base = memory.as_mut_ptr().cast::<u8>();
+    let mem: &'static mut [u32] = Vec::leak(vec![0; region / 4]);
+    let base = mem.as_mut_ptr().cast::<u8>();
     // SAFETY: leaked, so it lives as long as the process.
     unsafe { xpute_core::mem::set(base.expose_provenance(), region) };
     let names: Vec<&str> = PROGRAMS.iter().map(|p| p.name).collect();

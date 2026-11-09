@@ -92,7 +92,7 @@ use crate::{Zoom, ZOOM_BITS};
 /// (`object::RECTS`, `object::cut_rect`; pxl-render gpu/generator.rs). From `WRITTEN_AT` come
 /// the child groups of what is placed written since the last cast, by their first slots: their
 /// count, then at most `WRITTEN_CAP`, past which everything is forgotten (pxl-render
-/// forget.wgsl `reads_written`). Last, `COUNT_ON` and `COUNT_AT` say whether the walks count
+/// forget.wgsl `reads_written`). Last, `CNT_ON` and `CNT_AT` say whether the walks count
 /// what they ask, and hold what they counted.
 pub const FRAME: u32 = 0;
 pub const FORGETS: u32 = 1;
@@ -108,16 +108,16 @@ pub const RECTS_AT: u32 = CHANGED_BRICKS_AT + 4 * EYE_CLIP_LEVELS;
 pub const WRITTEN_AT: u32 = RECTS_AT + 1 + 4 * RECTS;
 pub const WRITTEN_CAP: u32 = 32;
 /// Which observers' walks and pixels count what they ask, one bit an observer (`count::EYE`,
-/// `count::LIGHT`), set while the `ray_counts` setting is on and the observer casts; then the
+/// `count::LIGHT`), set while the `ray_cnts` setting is on and the observer casts; then the
 /// words they count into, each observer's walk counters (`lane_at`).
-pub const COUNT_ON: u32 = WRITTEN_AT + 1 + WRITTEN_CAP;
-pub(crate) const COUNT_AT: u32 = COUNT_ON + 1;
-pub(crate) const COUNT_WORDS: u32 = count::OBSERVERS * count::WALKS;
+pub const CNT_ON: u32 = WRITTEN_AT + 1 + WRITTEN_CAP;
+pub(crate) const CNT_AT: u32 = CNT_ON + 1;
+pub(crate) const CNT_WORDS: u32 = count::OBSERVERS * count::WALKS;
 /// The hits of the missed pixels kept for their faces (`beam::HIT_WORDS`): the dispatch over
 /// them, which the second walks raise, and their count (`HITS_ARGS`, `HITS_CNT`). They are
 /// set each frame the cast runs, with the rest of the head; the passes they dispatch read
 /// them and do not write them.
-pub const HITS_ARGS: u32 = COUNT_AT + COUNT_WORDS;
+pub const HITS_ARGS: u32 = CNT_AT + CNT_WORDS;
 pub const HITS_CNT: u32 = HITS_ARGS + 3;
 /// The next ray the last walk of the holes' queue takes (pxl-render queue_last.wgsl), each
 /// observer's in turn. The asks that run before it set it back to 0 (queue_ask.wgsl).
@@ -134,7 +134,7 @@ pub const DRAWN: u32 = HEADER_WORDS;
 /// Where `observer`'s walks keep counter `lane` (`count::BEAM` to `count::ASKS`) in the
 /// head.
 pub const fn lane_at(observer: u32, lane: u32) -> u32 {
-    COUNT_AT + observer * count::WALKS + lane
+    CNT_AT + observer * count::WALKS + lane
 }
 
 /// A clip level's box of moved bricks where none moved (`CHANGED_BRICKS_AT`).

@@ -23,6 +23,6 @@ export type ToCore =
   | { kind: "perf"; id: u32; what: string; args: unknown[] };
 
 export type ToUi =
-  | { kind: "source"; state: Source; declaration: Declaration | null }
-  | { kind: "keep"; key: string; value: string }
-  | { kind: "perf"; id: u32; value: unknown };
+  | { kind: "source"; state: Source; decl: Declaration | null }
+  | { kind: "keep"; key: string; val: string }
+  | { kind: "perf"; id: u32; val: unknown };

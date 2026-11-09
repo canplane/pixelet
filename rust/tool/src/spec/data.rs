@@ -14,7 +14,7 @@ use super::ingest::files;
 use super::Output;
 use crate::root;
 
-const DATA_SPECS: [DataSpec; 19] = [
+const DATA_SPECS: [DataSpec; 20] = [
     DataSpec {
         json: "spec/spec/space/earth.json",
         rs: Some("rust/spec/src/space/coord/earth.spec.rs"),
@@ -29,7 +29,7 @@ const DATA_SPECS: [DataSpec; 19] = [
         json: "spec/spec/object/ext.json",
         rs: Some("rust/spec/src/object/ext.spec.rs"),
         module: "ext",
-        enums: EnumScope::All,
+        enum_scope: EnumScope::All,
         ..DataSpec::DEFAULT
     },
     DataSpec {
@@ -45,7 +45,7 @@ const DATA_SPECS: [DataSpec; 19] = [
         ts: Some("ts/client/src/ui/asset/id.spec.ts"),
         rs: Some("rust/spec/src/asset/id.spec.rs"),
         module: "id",
-        enums: EnumScope::All,
+        enum_scope: EnumScope::All,
         ..DataSpec::DEFAULT
     },
     DataSpec {
@@ -66,7 +66,7 @@ const DATA_SPECS: [DataSpec; 19] = [
         ts_names: Some(&["groups", "GENDER"]),
         rs: Some("rust/spec/src/asset/character.spec.rs"),
         module: "character",
-        enums: EnumScope::All,
+        enum_scope: EnumScope::All,
         ..DataSpec::DEFAULT
     },
     DataSpec {
@@ -88,6 +88,13 @@ const DATA_SPECS: [DataSpec; 19] = [
         ts_names: Some(&["surface_role", "stream"]),
         rs: Some("rust/client/render/src/api.spec.rs"),
         module: "api_spec",
+        ..DataSpec::DEFAULT
+    },
+    DataSpec {
+        json: "spec/client/render/frame/shader/debug_look.json",
+        ts: Some("ts/client/src/abi/debug_look.spec.ts"),
+        rs: Some("rust/client/render/src/frame/shader/debug_look.spec.rs"),
+        module: "debug_look_spec",
         ..DataSpec::DEFAULT
     },
     DataSpec {
@@ -116,7 +123,7 @@ const DATA_SPECS: [DataSpec; 19] = [
         ts: Some("ts/client/src/abi/demand.spec.ts"),
         rs: Some("rust/client/core/src/sys/io/demand.spec.rs"),
         module: "demand_spec",
-        enums: EnumScope::Named(&["STREAM_NAMES", "OUTCOME_NAMES", "TASK_PHASE_NAMES"]),
+        enum_scope: EnumScope::Named(&["STREAM_NAMES", "OUTCOME_NAMES", "TASK_PHASE_NAMES"]),
         ..DataSpec::DEFAULT
     },
     DataSpec {
@@ -124,14 +131,14 @@ const DATA_SPECS: [DataSpec; 19] = [
         ts: Some("ts/client/src/abi/phase.spec.ts"),
         rs: Some("rust/client/core/src/sys/sched/phase.spec.rs"),
         module: "phase_spec",
-        enums: EnumScope::Named(&["PHASES"]),
+        enum_scope: EnumScope::Named(&["PHASES"]),
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/client/core/turn/step.json",
         ts: Some("ts/client/src/abi/step.spec.ts"),
         rs: Some("rust/client/core/src/turn/step.spec.rs"),
-        enums: EnumScope::Named(&["STEP_NAMES", "EFFECT_NAMES"]),
+        enum_scope: EnumScope::Named(&["STEP_NAMES", "EFFECT_NAMES"]),
         ..DataSpec::DEFAULT
     },
     DataSpec {
@@ -139,7 +146,7 @@ const DATA_SPECS: [DataSpec; 19] = [
         ts: Some("ts/client/src/abi/span.spec.ts"),
         rs: Some("rust/client/render/src/gpu/span.spec.rs"),
         module: "span_spec",
-        enums: EnumScope::Named(&["GPU_SPAN_NAMES", "FRAME_KINDS", "LIGHT_CHANGED"]),
+        enum_scope: EnumScope::Named(&["GPU_SPAN_NAMES", "FRAME_KINDS", "LIGHT_CHANGED"]),
         ..DataSpec::DEFAULT
     },
     DataSpec {
@@ -152,7 +159,7 @@ const DATA_SPECS: [DataSpec; 19] = [
         ],
         ts: Some("ts/client/src/abi/perf.spec.ts"),
         rs: Some("rust/client/core/src/perf/perf.spec.rs"),
-        enums: EnumScope::Named(&["WAKES", "HIT_KINDS"]),
+        enum_scope: EnumScope::Named(&["WAKES", "HIT_KINDS"]),
         ..DataSpec::DEFAULT
     },
 ];

@@ -62,7 +62,7 @@ const hitKindText = (k: number) => {
 /** A coordinate in units, to three decimals: enough for an eighth of a unit,
  * the side of the finest cell (z27). Trailing zeros are dropped. */
 const unit = (u: number) => fixed(u, 3).replace(/\.?0+$/, "");
-const coord = (x: number, y: number, z: number) =>
+const coordinate = (x: number, y: number, z: number) =>
   Number.isNaN(x) ? "-" : `${unit(x)}, ${unit(y)}, ${unit(z)}`;
 
 /**
@@ -78,18 +78,18 @@ export function PerfView({ v }: { v: Gauge["view"] }) {
   return (
     <>
       <Head>Camera</Head>
-      <Row k="coord" v={coord(v.eye_x, v.eye_y, v.eye_z)} />
+      <Row k="coord" v={coordinate(v.eye_x, v.eye_y, v.eye_z)} />
       <Row k="distance" v={`${n1(v.dist)} u`} />
       <Row
         k="polar/azimuth"
         v={`${n1(deg(v.polar))}°/${n1(deg(v.azimuth))}°`}
       />
       <Head>Pivot</Head>
-      <Row k="coord" v={coord(v.pivot_x, v.pivot_y, v.pivot_z)} />
+      <Row k="coord" v={coordinate(v.pivot_x, v.pivot_y, v.pivot_z)} />
       <Row k="lat/lon" v={geo(v.pivot_lat, v.pivot_lon)} />
       <Row k="alt" v={meters(v.pivot_alt)} />
       <Head>Pointer</Head>
-      <Row k="coord" v={coord(v.hover_x, v.hover_y, v.hover_z)} />
+      <Row k="coord" v={coordinate(v.hover_x, v.hover_y, v.hover_z)} />
       <Row k="drawn at" v={zoomName(v.cell_zoom)} />
       <Row
         k="hit"
@@ -110,7 +110,7 @@ export function PerfView({ v }: { v: Gauge["view"] }) {
         }
         warn={folded}
       />
-      <Row k="places at" v={coord(v.place_x, v.place_y, v.place_z)} />
+      <Row k="places at" v={coordinate(v.place_x, v.place_y, v.place_z)} />
       <Row
         k="places at zoom"
         v={

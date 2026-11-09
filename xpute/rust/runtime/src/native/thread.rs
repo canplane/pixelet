@@ -3,18 +3,18 @@
 //! This is the core's own thread, a vCPU that runs a turn (`Vcpu::turn`)
 //! whenever it is kicked and sleeps otherwise.
 //!
-//! A kick may carry a deadline for the next turn, in ms from the turn's
-//! rise; when several kicks come before a turn, the turn takes the latest of
-//! their deadlines. A turn that no kick gave a deadline gets 0, and so only
-//! applies what was submitted, as a page's doorbell does when it rings for a
-//! submission. A caller's work (`run`), such as a device's, runs on this
-//! thread between turns while the caller waits.
+//! A kick carries a deadline for the next turn, in ms from the turn's rise;
+//! when several kicks come before a turn, the turn takes the latest of their
+//! deadlines. It also carries the display frame the turn begins at, so that
+//! how late the runtime's thread is does not move the turn (`vsync`,
+//! `next_frame`). A caller's work (`run`), such as a device's, runs on this thread
+//! between turns while the caller waits.
 //!
-//! The thread keeps no timer. When a turn asks to be woken, at once or in
+//! The thread chooses no moment. When a turn asks to be woken, at once or in
 //! `n` ms, the thread tells the runtime (`turns`, `ring`). The runtime's
 //! scheduler asks its policy for the moment, as a page's scheduler does
-//! (@xpute/runtime sched/scheduler.ts), and kicks then, so that no turn runs
-//! between a display's frames. While paused (`pause`), the thread runs only
+//! (@xpute/runtime sched/scheduler.ts), and kicks with the display frame it
+//! grants, so that no turn runs between a display's frames. While paused (`pause`), the thread runs only
 //! the turns a caller rings, and its kicks wait for `resume`.
 //!
 //! The core's calls are answered on a thread outside the core. A call made
@@ -92,55 +92,64 @@ struct Loop {
     kicked: bool,
     /// The next turn's deadline is the latest any kick has given since the
     /// last turn began.
-    deadline: Option<f64>,
+    deadline: f64,
+    /// A kicked turn begins no sooner than this, on the clock's ms.
+    not_before: f64,
+    /// The last display frame and the interval before it, on the clock's ms;
+    /// the interval is 0 until two have come (`vsync`).
+    vsync_at: f64,
+    vsync_ms: f64,
     /// This is when the last turn asked to be woken, if that is later than
     /// now; the runtime is told it through `wake_of`. A turn that answered 0
     /// sets `TurnStat::resched` instead. The thread does not wait for this moment
     /// itself: the runtime's kick wakes it.
     wake_at: Option<Instant>,
     job: Option<Job>,
-    job_ends: u64,
-    starts: u64,
-    ends: u64,
-    /// `looks` counts the times the thread checked whether a turn may begin;
+    job_end_cnt: u64,
+    start_cnt: u64,
+    end_cnt: u64,
+    /// `look_cnt` counts the times the thread checked whether a turn may begin;
     /// `stall_at` is the count at the last check that found it could not.
-    looks: u64,
+    look_cnt: u64,
     stall_at: u64,
     call: Option<(u32, Asker)>,
     ret: Option<i32>,
     /// This counts the callers waiting in `ring`.
-    ringers: u32,
-    /// This is the turn those callers wait for, counted in `starts`. While
+    ringer_cnt: u32,
+    /// This is the turn those callers wait for, counted in `start_cnt`. While
     /// paused, turns begin only until that one has begun.
     ring_until: u64,
     /// This counts the callers in `while_idle`.
-    idlers: u32,
+    idler_cnt: u32,
     /// This is set while the core's thread runs a turn or a caller's work.
     busy: bool,
     /// Only a turn a caller rings may begin (`pause`, `resume`).
     paused: bool,
-    turns: TurnStat,
+    turn_stat: TurnStat,
     terminated: bool,
 }
 
 static LOOP: Mutex<Loop> = Mutex::new(Loop {
     kicked: false,
-    deadline: None,
+    deadline: 0.0,
+    not_before: 0.0,
+    vsync_at: 0.0,
+    vsync_ms: 0.0,
     wake_at: None,
     job: None,
-    job_ends: 0,
-    starts: 0,
-    ends: 0,
-    looks: 0,
+    job_end_cnt: 0,
+    start_cnt: 0,
+    end_cnt: 0,
+    look_cnt: 0,
     stall_at: 0,
     call: None,
     ret: None,
-    ringers: 0,
+    ringer_cnt: 0,
     ring_until: 0,
-    idlers: 0,
+    idler_cnt: 0,
     busy: false,
     paused: false,
-    turns: TurnStat {
+    turn_stat: TurnStat {
         resched: false,
         turn_ms: 0.0,
         told: false,
@@ -183,7 +192,8 @@ fn answer_of(at: u32) -> i32 {
     answer.map_or(xpute_kit::status::errno::Errno::ENOSYS as i32, |f| f(at))
 }
 
-/// Tells the runtime, from the core's thread, one of three pieces of news:
+/// Tells the runtime, from the core's thread or a device's, one of three
+/// pieces of news:
 /// the core has posted or asked for a turn since the runtime last read
 /// `turns`; a turn's call waits for its answer (`answer`); or the core has
 /// stopped. It must not call into the core; it hands the news to the
@@ -285,12 +295,12 @@ fn serve(vcpu: Vcpu) {
             Next::Job(Job(job)) => {
                 IN_JOB.with(|j| j.set(true));
                 // SAFETY: the caller's closure, which it keeps until it has
-                // seen `job_ends` move.
+                // seen `job_end_cnt` move.
                 unsafe { (*job)() };
                 IN_JOB.with(|j| j.set(false));
                 let mut g = state();
                 g.busy = false;
-                g.job_ends += 1;
+                g.job_end_cnt += 1;
                 RUNTIME_CV.notify_all();
             }
             Next::Turn { deadline_ms } => {
@@ -299,12 +309,12 @@ fn serve(vcpu: Vcpu) {
                 let turn_ms = t0.elapsed().as_secs_f64() * 1000.0;
                 let mut g = state();
                 g.busy = false;
-                g.ends += 1;
+                g.end_cnt += 1;
                 g.wake_at = (wake > 0.0).then(|| Instant::now() + duration_of(wake));
-                g.turns.resched |= wake == 0.0;
-                g.turns.turn_ms = g.turns.turn_ms.max(turn_ms);
+                g.turn_stat.resched |= wake == 0.0;
+                g.turn_stat.turn_ms = g.turn_stat.turn_ms.max(turn_ms);
                 RUNTIME_CV.notify_all();
-                let tell = g.ringers == 0 && !core::mem::replace(&mut g.turns.told, true);
+                let tell = g.ringer_cnt == 0 && !core::mem::replace(&mut g.turn_stat.told, true);
                 drop(g);
                 if tell {
                     notify();
@@ -326,25 +336,33 @@ fn duration_of(ms: f64) -> Duration {
 fn next(vcpu: Vcpu) -> Next {
     let mut g = state();
     loop {
-        let runs = !g.paused || g.starts < g.ring_until;
-        if g.idlers == 0 {
+        let runs = !g.paused || g.start_cnt < g.ring_until;
+        if g.idler_cnt == 0 {
             if let Some(job) = g.job.take() {
                 g.busy = true;
                 return Next::Job(job);
             }
             if runs && g.kicked {
-                g.looks += 1;
+                let wait_ms = g.not_before - super::now();
+                if wait_ms > 0.0 {
+                    g = CORE_CV
+                        .wait_timeout(g, duration_of(wait_ms))
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .0;
+                    continue;
+                }
+                g.look_cnt += 1;
                 g.kicked = false;
                 g.wake_at = None;
                 if (vcpu.ready)() {
-                    let deadline_ms = g.deadline.take().unwrap_or(0.0);
-                    g.starts += 1;
+                    let deadline_ms = core::mem::take(&mut g.deadline);
+                    g.start_cnt += 1;
                     g.busy = true;
                     return Next::Turn { deadline_ms };
                 }
-                g.stall_at = g.looks;
+                g.stall_at = g.look_cnt;
                 RUNTIME_CV.notify_all();
-                if g.ringers == 0 && !core::mem::replace(&mut g.turns.told, true) {
+                if g.ringer_cnt == 0 && !core::mem::replace(&mut g.turn_stat.told, true) {
                     drop(g);
                     notify();
                     g = state();
@@ -356,17 +374,10 @@ fn next(vcpu: Vcpu) -> Next {
     }
 }
 
-/// Asks for a turn at once, from any thread, without waiting. With a
-/// `deadline`, the next turn ends no sooner than that many ms after its rise.
-fn kick_with(deadline: Option<f64>) {
-    kick_locked(&mut state(), deadline);
-}
-
-fn kick_locked(g: &mut Loop, deadline: Option<f64>) {
+fn kick_locked(g: &mut Loop, deadline_ms: f64, at_ms: f64) {
     g.kicked = true;
-    if let Some(q) = deadline {
-        g.deadline = Some(g.deadline.map_or(q, |p| p.max(q)));
-    }
+    g.deadline = g.deadline.max(deadline_ms);
+    g.not_before = at_ms;
     CORE_CV.notify_all();
 }
 
@@ -374,25 +385,63 @@ fn kick_locked(g: &mut Loop, deadline: Option<f64>) {
 /// runtime last read answered 0, and `NO_WAKE` if no turn asked for one.
 fn wake_of(g: &Loop) -> f64 {
     match g.wake_at {
-        _ if g.turns.resched => 0.0,
+        _ if g.turn_stat.resched => 0.0,
         Some(at) => at.saturating_duration_since(Instant::now()).as_secs_f64() * 1000.0,
         None => xpute_core::sched::wake::NO_WAKE,
     }
 }
 
-/// A device's kick, from whichever thread learned of a completion, so that
-/// the next turn reads the completion.
-pub fn kick() {
-    kick_with(None);
+/// A device's wake, from whichever thread learned of a completion. The
+/// runtime is told the core wants a turn, and its scheduler grants one, as a
+/// page's completion asks its scheduler, and that turn reads the completion.
+pub fn wake() {
+    let mut g = state();
+    g.turn_stat.resched = true;
+    let tell = g.ringer_cnt == 0 && !core::mem::replace(&mut g.turn_stat.told, true);
+    drop(g);
+    if tell {
+        notify();
+    }
 }
 
 /// The runtime's kick, after it has written the submission ring. The next
-/// turn ends no sooner than `deadline_ms` after its rise; a negative
-/// `deadline_ms` sets no deadline. From now on this thread answers the
-/// calls of turns.
-pub fn kick_deadline(deadline_ms: f64) {
+/// turn begins at `at_ms` on the clock, at once if that has passed, and ends
+/// no sooner than `deadline_ms` after its rise. From now on this thread
+/// answers the calls of turns.
+pub fn kick(deadline_ms: f64, at_ms: f64) {
     RINGS.with(|r| r.set(true));
-    kick_with((deadline_ms >= 0.0).then_some(deadline_ms));
+    kick_locked(&mut state(), deadline_ms, at_ms);
+}
+
+/// A gap past this between two display frames is the display's having stopped,
+/// not its interval.
+const VSYNC_GAP_MS: f64 = 50.0;
+
+/// The platform's display link calls this at each display frame, `age_ms` after
+/// that frame's time.
+pub fn vsync(age_ms: f64) {
+    let at = super::now() - age_ms;
+    let mut g = state();
+    let gap = at - g.vsync_at;
+    if gap > 0.0 && gap < VSYNC_GAP_MS {
+        g.vsync_ms = gap;
+    }
+    g.vsync_at = at;
+}
+
+/// The time on the clock of the first display frame after both now and
+/// `after_ms`. Until the display's interval is known it is that later time
+/// itself.
+pub fn next_frame(after_ms: f64) -> f64 {
+    let from = super::now().max(after_ms);
+    let g = state();
+    if g.vsync_ms == 0.0 {
+        return from;
+    }
+    // The hundredth of an interval keeps `after_ms`, itself a frame, from
+    // being answered again by a rounding.
+    let frames = ((from - g.vsync_at) / g.vsync_ms + 0.01).floor() + 1.0;
+    g.vsync_at + frames * g.vsync_ms
 }
 
 /// Answers here the call waiting in `LOOP`, if `takes` says this thread is
@@ -442,7 +491,7 @@ pub(super) fn call(at: u32) -> i32 {
     g.call = Some((at, asker));
     g.ret = None;
     RUNTIME_CV.notify_all();
-    let tell = asker == Asker::Turn && g.ringers == 0;
+    let tell = asker == Asker::Turn && g.ringer_cnt == 0;
     if tell {
         drop(g);
         notify();
@@ -470,10 +519,10 @@ pub fn answer() {
 /// longest of those turns took, in ms.
 pub fn turns() -> (f64, f64) {
     let mut g = state();
-    g.turns.told = false;
+    g.turn_stat.told = false;
     let wake = if g.terminated { f64::NAN } else { wake_of(&g) };
-    g.turns.resched = false;
-    (wake, core::mem::take(&mut g.turns.turn_ms))
+    g.turn_stat.resched = false;
+    (wake, core::mem::take(&mut g.turn_stat.turn_ms))
 }
 
 /// Rings a turn that ends no sooner than `deadline_ms` after its rise, and
@@ -488,10 +537,10 @@ pub fn ring(deadline_ms: f64) -> Option<f64> {
         return None;
     }
     RINGS.with(|r| r.set(true));
-    let want = g.starts + 1;
-    let looked = g.looks;
-    kick_locked(&mut g, Some(deadline_ms));
-    g.ringers += 1;
+    let want = g.start_cnt + 1;
+    let looked = g.look_cnt;
+    kick_locked(&mut g, deadline_ms, 0.0);
+    g.ringer_cnt += 1;
     g.ring_until = g.ring_until.max(want);
     let out = loop {
         if g.terminated {
@@ -502,14 +551,14 @@ pub fn ring(deadline_ms: f64) -> Option<f64> {
         if answered {
             continue;
         }
-        if g.ends >= want || g.stall_at > looked {
+        if g.end_cnt >= want || g.stall_at > looked {
             break Some(wake_of(&g));
         }
         g = wait(&RUNTIME_CV, g);
     };
-    g.ringers -= 1;
-    if g.ringers == 0 {
-        g.ring_until = g.starts;
+    g.ringer_cnt -= 1;
+    if g.ringer_cnt == 0 {
+        g.ring_until = g.start_cnt;
     }
     out
 }
@@ -537,7 +586,7 @@ fn terminate() {
     let mut g = state();
     g.terminated = true;
     g.busy = false;
-    g.turns.told = true;
+    g.turn_stat.told = true;
     RUNTIME_CV.notify_all();
     drop(g);
     notify();
@@ -559,7 +608,7 @@ pub(super) fn run<R: Send>(f: impl FnOnce() -> R + Send) -> Option<R> {
     if g.terminated {
         return None;
     }
-    let ends = g.job_ends;
+    let ends = g.job_end_cnt;
     g.job = Some(Job(job));
     CORE_CV.notify_all();
     loop {
@@ -571,7 +620,7 @@ pub(super) fn run<R: Send>(f: impl FnOnce() -> R + Send) -> Option<R> {
         if answered {
             continue;
         }
-        if g.job_ends > ends {
+        if g.job_end_cnt > ends {
             break;
         }
         g = wait(&RUNTIME_CV, g);
@@ -583,7 +632,7 @@ pub(super) fn run<R: Send>(f: impl FnOnce() -> R + Send) -> Option<R> {
 pub(super) fn while_idle<R>(f: impl FnOnce() -> R) -> R {
     let _hold = hold();
     let mut g = state();
-    g.idlers += 1;
+    g.idler_cnt += 1;
     while g.busy {
         g = wait(&RUNTIME_CV, g);
     }
@@ -591,7 +640,7 @@ pub(super) fn while_idle<R>(f: impl FnOnce() -> R) -> R {
     struct Release;
     impl Drop for Release {
         fn drop(&mut self) {
-            state().idlers -= 1;
+            state().idler_cnt -= 1;
             CORE_CV.notify_all();
         }
     }

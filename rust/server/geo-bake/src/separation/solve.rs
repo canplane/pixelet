@@ -305,8 +305,8 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solution
     let mut lines: Vec<(Line, WayRange)> = Vec::new();
 
     // Road bridges are solved lower first, rail bridges over them, and then the tunnels.
-    let decks = bridge::decks(&src, &stretches, [lo, hi], scale, &mut lines);
-    tunnel::bores(&src, &stretches, &decks, scale, &mut lines);
+    let plan = bridge::decks(&src, &stretches, [lo, hi], scale, &mut lines);
+    tunnel::bores(&src, &stretches, &plan, scale, &mut lines);
     let mut out = Solution::default();
     for (line, ranges) in lines.into_iter().filter(|(l, _)| l.points.len() >= 2) {
         out.lines.push(line);

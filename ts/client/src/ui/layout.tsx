@@ -1,12 +1,12 @@
 // @pxl/client/ui/layout.tsx
 
-import { Component, type ReactNode } from "react";
+import { Component, type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { BOOT_LOADING, BOOT_STARTED } from "@/abi/state.ts";
 import { useStanding } from "./cover/standing.ts";
 import { coverOf, UI_PANIC } from "./cover/cover.ts";
-import { Modals } from "./modal.tsx";
+import { ModalHost } from "./modal.tsx";
 import { Screen } from "./cover/screen.tsx";
 import { KeyboardAway } from "@/ui/component/keyboard.tsx";
 import { DockMode, setDockMode } from "@/ui/world/dock/store.ts";
@@ -16,13 +16,19 @@ import { DockMode, setDockMode } from "@/ui/world/dock/store.ts";
 function AppBody({ children }: { children: ReactNode }) {
   const standing = useStanding();
   const cover = coverOf(standing);
+  // A build made for measuring runs the drive once the world has started
+  // (perf/measure.ts); any other build holds no way to.
+  useEffect(() => {
+    if (__PERF_DRIVE__ && standing.boot === BOOT_STARTED)
+      void import("@/ui/debug/perf/measure.ts").then((m) => m.measure());
+  }, [standing.boot]);
   const shows =
     (standing.boot === BOOT_LOADING || standing.boot === BOOT_STARTED) &&
     cover?.kind !== "panic";
   return (
     <KeyboardAway onAway={() => setDockMode(DockMode.Palette)}>
       <View style={styles.page}>{shows && children}</View>
-      {shows && <Modals />}
+      {shows && <ModalHost />}
       {cover !== null && (
         <View style={StyleSheet.absoluteFill}>
           <Screen cover={cover} />

@@ -66,7 +66,7 @@ export interface SensorListener {
     accuracy: f64 | null,
     course: f64 | null,
   ): void;
-  positionError(error: "denied" | "unavailable" | "timeout" | "other"): void;
+  positionError(err: "denied" | "unavailable" | "timeout" | "other"): void;
   orientation(
     compass: f64 | null,
     alpha: f64 | null,

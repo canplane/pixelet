@@ -18,7 +18,7 @@ use pxl_render::frame::shader::word;
 /// (pxl-render frame/shader/word.rs `MARKER_INSTANCE_WORDS`).
 pub(super) const INSTANCE_WORDS: usize = word::MARKER_INSTANCE_WORDS as usize;
 
-/// One instance, anchored at `stands`, `size` logical pixels big, drawn from
+/// One instance, anchored at `pos`, `size` logical pixels big, drawn from
 /// the atlas's `slot`, with its anchor `down` the sprite. `region` is the
 /// width of the region it keeps, as tall as the marker and centered on it. A
 /// marker is hidden whole when a nearer marker's region lies in front of its
@@ -26,7 +26,7 @@ pub(super) const INSTANCE_WORDS: usize = word::MARKER_INSTANCE_WORDS as usize;
 /// against the eye's, as it does a draw's (pxl-render gpu/draw.rs
 /// `Position`), so nothing here reads the eye.
 pub(super) fn instance(
-    stands: Q3,
+    pos: Q3,
     size: [f64; 2],
     slot: u32,
     down: f64,
@@ -45,7 +45,7 @@ pub(super) fn instance(
     ]
     .map(|v| (v as f32).to_bits());
     let mut words = [0; INSTANCE_WORDS];
-    words[..3].copy_from_slice(&stands.map(|v| v as u32));
+    words[..3].copy_from_slice(&pos.map(|v| v as u32));
     words[3..].copy_from_slice(&floats);
     words
 }

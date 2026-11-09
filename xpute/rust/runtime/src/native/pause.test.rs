@@ -54,7 +54,7 @@ fn paused_runs_only_the_rung_turn() {
     settle();
     assert_eq!(turns(), 0, "paused from boot, nothing runs");
 
-    native::kick_deadline(-1.0);
+    native::kick(0.0, 0.0);
     settle();
     assert_eq!(turns(), 0, "a kick waits for resume");
 
@@ -79,13 +79,13 @@ fn paused_runs_only_the_rung_turn() {
         "and the program is told the core wants it at once"
     );
 
-    native::kick_deadline(-1.0);
+    native::kick(0.0, 0.0);
     settle();
     assert_eq!(turns(), 2, "the kick runs it, and nothing after it");
 
     WAKE.store(10.0_f64.to_bits(), Ordering::SeqCst);
     let _ = native::turns();
-    native::kick_deadline(-1.0);
+    native::kick(0.0, 0.0);
     settle();
     let (wake, _) = native::turns();
     assert!(

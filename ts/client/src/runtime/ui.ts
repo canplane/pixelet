@@ -39,7 +39,7 @@ export function ui(
       Command.UI_SNAPSHOT,
       (_f, named) => {
         snapshot.set_snapshot(named!);
-        refused(snapshot.current().refused_files);
+        refused(snapshot.cur().refused_files);
         on.snapshot();
       },
     ],
@@ -70,5 +70,5 @@ export function started(on: OnOpen): void {
     orient.gated,
     orient.silence,
   );
-  core.send(Command.SETTING_DEV, __IS_DEV__);
+  core.send(Command.SETTING_DEV, __IS_DEV__ || __PERF_DRIVE__);
 }

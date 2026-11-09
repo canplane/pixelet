@@ -111,7 +111,7 @@ pub fn joined(a: Extent, b: Extent) -> Extent {
 pub const PALETTE_BITS: u32 = 8;
 
 /// A cell's word's four palette indices, `dx + 2·dy`.
-pub fn palette_indices(word: u32) -> [u32; 4] {
+pub fn palette_idxs(word: u32) -> [u32; 4] {
     let m = (1 << PALETTE_BITS) - 1;
     [
         word & m,
@@ -129,7 +129,7 @@ pub fn word([a, b, c, d]: [u32; 4]) -> u32 {
 /// A cell's own look at `cell_zoom`: the majority of the four it folds, as the
 /// bake folds a tile's (pxl-spec bake/fold.rs `fold_ground`).
 pub fn own(w: u32, cell_zoom: Zoom) -> u32 {
-    majority(palette_indices(w), cell_zoom)
+    majority(palette_idxs(w), cell_zoom)
 }
 
 /// The steps of half a cell that an elevation sample spans, since a cell's center lies on a
@@ -481,7 +481,7 @@ pub fn node<H: Resident>(
 
 /// A cell's ground, as a column reads it: its palette index (`UNKNOWN` for the service
 /// area's wall), its top in cells of its zoom and the share of its top cell it fills (`top`),
-/// and the four palette indices its fold took (`palette_indices`, `dx + 2·dy`).
+/// and the four palette indices its fold took (`palette_idxs`, `dx + 2·dy`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cell {
     pub palette_idx: u32,

@@ -149,7 +149,7 @@ pub fn spire(eye: [i32; 2], cell_zoom: Zoom, x: i32, y: i32) -> i32 {
 }
 
 /// The ground's face at a leaf column as the clip level at `cell_zoom` holds it, in leaf cells.
-pub fn elevation(eye: [i32; 2], cell_zoom: Zoom, x: i32, y: i32) -> i32 {
+pub fn ele(eye: [i32; 2], cell_zoom: Zoom, x: i32, y: i32) -> i32 {
     let (fx, fy) = (x as f32, y as f32);
     let hills = 300.0 * libm::sinf(fx * 1.3e-5) + 120.0 * libm::cosf(fy * 3.1e-5);
     let near = 40.0 * libm::sinf(fx * 0.002) + 30.0 * libm::cosf(fy * 0.0031);
@@ -321,7 +321,7 @@ pub fn source(
             let at = |v: u32, f: i32| {
                 ((f + (v as i32 - ground::ELE_PAD as i32) * step + step / 2) as i64) << s
             };
-            let e = elevation(
+            let e = ele(
                 eye,
                 cell_zoom,
                 at(sx, first[0]) as i32,
@@ -366,7 +366,7 @@ pub fn source(
         let lift = [10, -25, 2, 60, -2][line as usize];
         let top_at = |p: [i32; 2]| {
             let leaf = |v: i32, f: i32| (f + v / 8) << s;
-            (elevation(eye, cell_zoom, leaf(p[0], first[0]), leaf(p[1], first[1])) + lift) as i16
+            (ele(eye, cell_zoom, leaf(p[0], first[0]), leaf(p[1], first[1])) + lift) as i16
         };
         let width = 16 + (h >> 24) % 48;
         let kinds = value::TRANSPORTS[1] - value::TRANSPORTS[0] + 1;

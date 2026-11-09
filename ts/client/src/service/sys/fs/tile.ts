@@ -43,12 +43,12 @@ export function version_of(
 }
 
 export function read_object(
-  declaration: Declaration,
+  decl: Declaration,
   bake: u32,
   name: string,
   signal: AbortSignal,
 ): Promise<U8Array> {
   const kind = BASE_LAYERS[bake];
-  const object = tileObject(version_of(declaration, kind, name), name);
+  const object = tileObject(version_of(decl, kind, name), name);
   return get(tile_url(kind, object), signal);
 }

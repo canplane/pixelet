@@ -36,7 +36,7 @@ mod program {
     /// The core's entry (xpute_core::entry `Entry`). Its block comes from the
     /// core's heap, and it answers -1 to ask for no further turn.
     fn turn(deadline_ms: f64, boot: fn() -> BootInfo) -> f64 {
-        assert_eq!(boot().given, MEM_BYTES);
+        assert_eq!(boot().mem_sz, MEM_BYTES);
         let buf = vec![deadline_ms; 8];
         core::hint::black_box(buf);
         -1.0

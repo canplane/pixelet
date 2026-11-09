@@ -144,7 +144,7 @@ fn boot(b: BootInfo) {
     executor::install();
     layout::install(&b);
     // A layer asks for no more tiles at once than its tile cache has slots.
-    request::open(|c| demand::of_stream(c).map_or(0, |l| l.slots));
+    request::open(|c| demand::of_stream(c).map_or(0, |l| l.slot_cnt));
     turn::boot();
 }
 
@@ -225,13 +225,13 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     } else {
         fall
     };
-    let asked = match wake {
+    let kind = match wake {
         0.0 => Wake::next,
         w if w < 0.0 => Wake::none,
         _ => Wake::timer,
     };
     let fell = now();
-    perf_record_turn(fell - rise, polled - drained, f64::from(asked as u8));
+    perf_record_turn(fell - rise, polled - drained, f64::from(kind as u8));
     wake
 }
 

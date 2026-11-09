@@ -74,7 +74,7 @@ fn light_within(lo: vec3<f32>, hi: vec3<f32>, reach: f32) -> bool {
 /// The box tiles a receiver may stand on: whether there are any, and the lowest and the
 /// highest of them.
 struct TileRange {
-  got: bool,
+  has_tiles: bool,
   first: vec2<i32>,
   last: vec2<i32>,
 }

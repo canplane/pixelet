@@ -39,6 +39,6 @@ pub const fn tiles(lattice: Lattice) -> u32 {
 /// where the sphere of the eye's far edge cuts the ground. None where the eye
 /// is higher than its far edge.
 pub fn ring(o: &Observation) -> Option<f64> {
-    let over = (o.eye[2] - o.ground).max(0.0);
-    (over < o.demand_dist).then(|| (o.demand_dist * o.demand_dist - over * over).sqrt())
+    let height = (o.eye[2] - o.ground).max(0.0);
+    (height < o.demand_dist).then(|| (o.demand_dist * o.demand_dist - height * height).sqrt())
 }

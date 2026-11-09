@@ -85,7 +85,7 @@ impl Gpu {
         wait(&self.device);
     }
 
-    pub fn buffer(&self, words: &[u32], usage: wgpu::BufferUsages) -> wgpu::Buffer {
+    pub fn buf(&self, words: &[u32], usage: wgpu::BufferUsages) -> wgpu::Buffer {
         use wgpu::util::DeviceExt as _;
         self.device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -96,7 +96,7 @@ impl Gpu {
     }
 
     pub fn read(&self, from: &wgpu::Buffer) -> Vec<u32> {
-        read_buffer(&self.device, &self.queue, from)
+        read_buf(&self.device, &self.queue, from)
     }
 
     /// The pipeline of `entry` in `assembled`, or in the mutant's module (`source`). Its group's
@@ -333,7 +333,7 @@ impl Gpu {
         asked: Option<&wgpu::Buffer>,
         pool: Option<(&wgpu::Buffer, u32)>,
     ) {
-        let queue = self.buffer(
+        let queue = self.buf(
             &vec![0u32; ray::QUEUE_WORDS as usize],
             wgpu::BufferUsages::STORAGE,
         );
@@ -501,7 +501,7 @@ pub fn holds_node(cache: &[u32], slot: u32) -> bool {
 }
 
 /// Reads back the words of `from`, which must allow copies from it (`COPY_SRC`).
-pub fn read_buffer(device: &wgpu::Device, queue: &wgpu::Queue, from: &wgpu::Buffer) -> Vec<u32> {
+pub fn read_buf(device: &wgpu::Device, queue: &wgpu::Queue, from: &wgpu::Buffer) -> Vec<u32> {
     let staging = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: from.size(),
@@ -529,7 +529,7 @@ pub fn texture(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     size: [u32; 2],
-    layers: u32,
+    layer_cnt: u32,
     usage: wgpu::TextureUsages,
     words: &[u32],
 ) -> wgpu::Texture {
@@ -538,7 +538,7 @@ pub fn texture(
         size: wgpu::Extent3d {
             width: size[0],
             height: size[1],
-            depth_or_array_layers: layers,
+            depth_or_array_layers: layer_cnt,
         },
         mip_level_count: 1,
         sample_count: 1,
@@ -585,7 +585,7 @@ pub fn read_texture(device: &wgpu::Device, queue: &wgpu::Queue, t: &wgpu::Textur
         t.size(),
     );
     queue.submit([e.finish()]);
-    read_buffer(device, queue, &staging)
+    read_buf(device, queue, &staging)
         .chunks((row / 4) as usize)
         .flat_map(|r| r[..w as usize].to_vec())
         .collect()

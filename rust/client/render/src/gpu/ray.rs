@@ -21,7 +21,7 @@ use crate::gpu::span_spec::FrameKind;
 use crate::mesh::paint::ground::look_words;
 use cast::CastBuffer;
 pub use cast::{Cast, LightRead, ObjectTable};
-pub use count::{count_at, RayCount, CAST, LANES_AT, RAYS, RAY_COUNTS};
+pub use count::{cnt_at, RayCount, CAST, LANES_AT, RAYS, RAY_CNTS};
 use ground::GroundBuffer;
 pub use ground::{BrickWrite, GroundInput, TerrainUpload, TerrainWrite};
 

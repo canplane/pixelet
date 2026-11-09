@@ -51,9 +51,9 @@
 //! A core that finds END not yet 0 writes no records (`is_free`), and the
 //! turn leaves what it would have recorded for a later turn.
 //!
-//! Where the runtime runs the records at once, as a native GPU runtime does
-//! on the core's thread, storing END rings it (`on_publish`). A page's
-//! runtime runs them when the turn returns.
+//! Where the runtime takes the records as they are published, as a native GPU
+//! runtime does, storing END rings it (`on_publish`). A page's runtime runs
+//! them when the turn returns.
 
 #[path = "stream.spec.rs"]
 pub mod spec;

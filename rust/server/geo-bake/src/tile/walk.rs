@@ -31,7 +31,7 @@ pub enum Outcome {
 pub fn over<T: Copy + Sync, W>(
     tag: &str,
     bands: &[&[T]],
-    workers: usize,
+    worker_cnt: usize,
     every: u64,
     show: impl Fn(T) -> String + Sync,
     open: impl Fn() -> Result<W, String> + Sync,
@@ -43,7 +43,7 @@ pub fn over<T: Copy + Sync, W>(
     let refused = Mutex::new(None);
     let started = Instant::now();
     std::thread::scope(|scope| {
-        for _ in 0..workers.max(1) {
+        for _ in 0..worker_cnt.max(1) {
             scope.spawn(|| {
                 let mut w = match open() {
                     Ok(w) => w,

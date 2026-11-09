@@ -29,7 +29,7 @@ struct Arrival {
     key: u64,
     /// The body, or None where the source has no object; or how the attempt
     /// ended without a body.
-    got: Result<Option<Block>, Exit>,
+    body: Result<Option<Block>, Exit>,
     /// The read that fills the body. The body belongs to the runtime until
     /// the runtime's head has passed the read.
     read: Option<Pos>,
@@ -92,7 +92,7 @@ pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
     drop_stopped();
     let stream = attempt_of(key).map(|(stream, _)| stream);
     let mut read = None;
-    let got = match opened {
+    let body = match opened {
         Opened::Absent => Ok(None),
         Opened::Failed { .. } => Err(Exit::Failed(Failure::from(opened))),
         // Only an absent file means there is no object, so an empty file is
@@ -107,7 +107,7 @@ pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
             Err(Exit::Failed(Failure::from(Errno::EFBIG)))
         }
         Opened::Bytes(n) => {
-            let got = match body::take(stream, n) {
+            let body = match body::take(stream, n) {
                 Ok(block) => {
                     // SAFETY: a block just taken, `n` long and no one else's,
                     // held unread by its arrival until the runtime's head has
@@ -123,13 +123,13 @@ pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
                 Err(refused) => Err(Exit::Refused(refused)),
             };
             file::close(fd);
-            got
+            body
         }
     };
     let q = queue();
     q.arrivals.push(Arrival {
         key,
-        got,
+        body,
         read,
         net_ms: now() - at_ms,
     });
@@ -144,7 +144,7 @@ fn drop_stopped() {
     q.arrivals.retain(|a| {
         let stopped = a.is_filled() && attempt_of(a.key).is_none();
         if stopped {
-            release(a.got.ok().flatten());
+            release(a.body.ok().flatten());
         }
         !stopped
     });
@@ -183,11 +183,11 @@ fn arrived(a: Arrival) {
     // A runtime on its own thread may pass a stopped arrival's read after
     // `drop_stopped` looked, so an attempt that has stopped still comes here.
     let Some((stream, id)) = attempt_of(key) else {
-        return release(a.got.ok().flatten());
+        return release(a.body.ok().flatten());
     };
     let mut phases = PhaseList::default();
     phases.push(TaskPhaseName::net_ms, a.net_ms);
-    match a.got {
+    match a.body {
         Ok(block) => {
             if let Some((_, bytes)) = block {
                 phases.push(TaskPhaseName::bytes, f64::from(bytes));

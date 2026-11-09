@@ -39,7 +39,7 @@ pub struct CharacterPass {
     /// The buffer the skinned pass reads its draw uniforms from here. It has
     /// one slot, which holds the character's.
     draw_buf: u32,
-    frames: FrameGroup,
+    frame_group: FrameGroup,
     pub skinned_mesh: SkinnedPass,
     finish: Finish,
     /// What the surface's picture was made of when it was last drawn: the
@@ -88,7 +88,7 @@ impl CharacterPass {
         CharacterPass {
             frame_buf,
             draw_buf,
-            frames: FrameGroup::new(g, layout, frame_buf, shadow.blank_entries(1), air),
+            frame_group: FrameGroup::new(g, layout, frame_buf, shadow.blank_entries(1), air),
             skinned_mesh,
             finish: Finish::new(g, pipelines),
             read: Read::default(),
@@ -102,7 +102,7 @@ impl CharacterPass {
     }
 
     pub fn release(self) {
-        self.frames.release();
+        self.frame_group.release();
         release(self.frame_buf);
         release(self.draw_buf);
         self.skinned_mesh.release();
@@ -202,7 +202,7 @@ impl CharacterPass {
             core::iter::once(record),
             uploads(),
             Stage::Lit,
-            self.frames.frame,
+            self.frame_group.frame,
         );
         pass.end();
         // The finish encodes the color onto the surface's canvas by this

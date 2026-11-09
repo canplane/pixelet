@@ -144,17 +144,17 @@ pub struct ColumnWalk {
 
 impl World<'_> {
     /// The box the ground and what is placed fill in the node, as its cells
-    /// at `cell_zoom` are read. The walk steps on from where `walked` last
+    /// at `cell_zoom` are read. The walk steps on from where `walk` last
     /// went.
     pub fn bounds(
         &self,
-        walked: &mut ColumnWalk,
+        walk: &mut ColumnWalk,
         node: Node<2>,
         cell_zoom: Zoom,
     ) -> Answer<Option<Aabb>> {
-        let object = self.object.column(&mut walked.object, node);
+        let object = self.object.column(&mut walk.object, node);
         self.terrain
-            .bound_walked(&mut walked.ground, node, cell_zoom)
+            .bound_walked(&mut walk.ground, node, cell_zoom)
             .map(|ground| ground.into_iter().chain(object).reduce(Aabb::join))
     }
 }

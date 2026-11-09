@@ -32,7 +32,7 @@ export interface Standing {
   stall: Message | null;
   stopCode: string | null;
   /** The share of the renderer's pipelines made so far, from 0 to 1. */
-  made: number;
+  progress: number;
   /** The share of the view's ground that shows, from 0 to 1. */
   area: number;
   /** Whether the view has a place: the core has heard the location, or has
@@ -51,7 +51,7 @@ export type Cover =
 const progress = (s: Standing, of: string): Cover => ({
   kind: "progress",
   of,
-  share: (s.made + s.area) / 2,
+  share: (s.progress + s.area) / 2,
 });
 const failed = (of: string): Cover => ({ kind: "failed", of });
 const panic = (of: string, code: string | null): Cover => ({
@@ -101,7 +101,7 @@ function blockOf(s: Standing): Cover | null {
  * come the pipelines, which the renderer makes as soon as a GPU answers, with
  * the source asked for beside them. Then come the view's place and its area. */
 function waitOf(s: Standing): Cover {
-  if (s.made < 1) return progress(s, "progress.shaders");
+  if (s.progress < 1) return progress(s, "progress.shaders");
   return progress(s, s.placed ? "progress.area" : "progress.location");
 }
 

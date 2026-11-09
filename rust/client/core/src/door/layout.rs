@@ -136,7 +136,7 @@ pub(crate) fn range(f: Fixed) -> Section {
 }
 
 pub(crate) fn install(b: &BootInfo) {
-    section::set_fixed(section::lay_out(b.given, b.form.data_end, FIXED_BYTES));
+    section::set_fixed(section::lay_out(b.mem_sz, b.form.data_end, FIXED_BYTES));
     fixed::RANGE.set(range(Fixed::Terrain));
     division::RANGE.set(range(Fixed::Division));
     // SAFETY: `.fixed.uploads` and the GPU device's stream, zeroed, each the

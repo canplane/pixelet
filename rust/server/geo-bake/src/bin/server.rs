@@ -98,7 +98,7 @@ fn version_of(app: &App, layer: BaseLayer) -> Result<String, String> {
 /// The source's declaration (pxl-geo-bake source.rs) for the server as it stands: a shelf's
 /// sets as their manifests say; for the oven, the coverage in the formats this code writes;
 /// and for the Earth's picture, its bake's.
-fn declaration(app: &App) -> Result<String, String> {
+fn decl(app: &App) -> Result<String, String> {
     let kinds = source::try_kinds(|l| {
         let version = version_of(app, l)?;
         match &app.tile_source {
@@ -120,7 +120,7 @@ fn declaration(app: &App) -> Result<String, String> {
             }),
         }
     })?;
-    Ok(source::declaration(app.min_zoom, &kinds, &OverrideMap::new())?.to_string())
+    Ok(source::decl(app.min_zoom, &kinds, &OverrideMap::new())?.to_string())
 }
 
 const EARTH: &str = "earth";
@@ -206,7 +206,7 @@ async fn from_shelf(dir: &std::path::Path, kind: Kind, name: &str) -> Response {
 
 /// Made again at each ask, so a set baked again under a running server is a new version.
 async fn src(State(app): State<Arc<App>>) -> Response {
-    match declaration(&app) {
+    match decl(&app) {
         Ok(declared) => (
             [
                 (header::CONTENT_TYPE, "application/json"),
@@ -268,14 +268,14 @@ fn run() -> Result<(), String> {
         let seconds = argv[3].parse().map_err(|_| "invalid job deadline")?;
         return job::execute(job, std::path::Path::new(&argv[2]), seconds);
     }
-    let mut limits = Limit::default();
+    let mut limit = Limit::default();
     let mut port: u16 = 3001;
     let mut host = "127.0.0.1".to_string();
     let mut asset_dir = None;
-    let mut workers: usize = 4;
+    let mut worker_cnt: usize = 4;
     let mut oven = None;
     // Zooms folded over the leaves: a cold tile at the top bakes 4^folds leaves.
-    let mut folds: Zoom = 2;
+    let mut fold_cnt: Zoom = 2;
     let mut shelf: Option<PathBuf> = None;
 
     let mut flags = Argv::of(argv);
@@ -287,10 +287,10 @@ fn run() -> Result<(), String> {
             "--host" => host = flags.val()?,
             "--asset" => asset_dir = Some(PathBuf::from(flags.val()?)),
             "--oven" => oven = Some(PathBuf::from(flags.val()?)),
-            "--oven-queue" => limits.queued = flags.parse()?,
-            "--oven-job-seconds" => limits.seconds = flags.parse()?,
-            "--oven-workers" => workers = flags.parse()?,
-            "--oven-folds" => folds = flags.parse()?,
+            "--oven-queue" => limit.queued = flags.parse()?,
+            "--oven-job-seconds" => limit.seconds = flags.parse()?,
+            "--oven-workers" => worker_cnt = flags.parse()?,
+            "--oven-folds" => fold_cnt = flags.parse()?,
             "--shelf" => shelf = Some(PathBuf::from(flags.val()?)),
             other => return Err(format!("unknown flag: {other}")),
         }
@@ -322,11 +322,11 @@ fn run() -> Result<(), String> {
         Some(dir) => (TileSource::Shelf(dir), MIN_ZOOM),
         None => {
             let min_zoom = LEAF_ZOOM
-                .checked_sub(folds)
+                .checked_sub(fold_cnt)
                 .filter(|&z| z >= MIN_ZOOM)
                 .ok_or("--oven-folds past the pyramid's top")?;
             (
-                TileSource::Oven(Server::open(workers, oven.clone(), min_zoom, limits)?),
+                TileSource::Oven(Server::open(worker_cnt, oven.clone(), min_zoom, limit)?),
                 min_zoom,
             )
         }
@@ -341,7 +341,7 @@ fn run() -> Result<(), String> {
         out,
     });
     // A declaration a client would refuse is refused here, at the start.
-    declaration(&app)?;
+    decl(&app)?;
 
     let router = Router::new()
         .route(&format!("{TILE_ROOT}/source"), get(src))

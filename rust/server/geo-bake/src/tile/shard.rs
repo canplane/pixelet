@@ -176,7 +176,7 @@ impl Stage {
     }
 
     /// Folds again what the whole shards change.
-    pub fn fold<L: Base>(&self, absent: &impl Absent<L>, workers: usize) -> Result<(), String> {
+    pub fn fold<L: Base>(&self, absent: &impl Absent<L>, worker_cnt: usize) -> Result<(), String> {
         self.not_committing()?;
         self.clear_fold(L::LEAF)?;
         let whole = self.whole()?;
@@ -198,7 +198,7 @@ impl Stage {
             whole: &tiles,
             removed: leaves_removed.clone(),
         };
-        fold(&mut staged, changed, absent, workers)?;
+        fold(&mut staged, changed, absent, worker_cnt)?;
         self.write_done(
             FOLD,
             staged
@@ -220,7 +220,7 @@ impl Stage {
     /// Moves what is staged into the set and takes away what each `.done`
     /// lists, each `.done` last; only once folded, else the set would hold
     /// leaves under parents not folded from them.
-    pub fn commit<L: Base>(&self, workers: usize) -> Result<(), String> {
+    pub fn commit<L: Base>(&self, worker_cnt: usize) -> Result<(), String> {
         if !self.done_path(COMMIT).exists() {
             if !self.done_path(FOLD).exists() {
                 return Err(format!(
@@ -240,7 +240,7 @@ impl Stage {
                 whole: &tiles,
                 removed,
             };
-            let fits = L::check_pool(&view, workers)?;
+            let fits = L::check_pool(&view, worker_cnt)?;
             // Before anything moves: a commit once begun is finished, never undone, so the set will hold
             // these, and a commit cut short leaves them recorded.
             if let Some(shards) = self.next_shards()? {

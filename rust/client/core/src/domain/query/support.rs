@@ -288,6 +288,17 @@ impl<'a> World<'a> {
         ))
     }
 
+    /// Where the point `at` stands: on the surface where its height is not
+    /// known (`surface_support`), and otherwise where it is.
+    pub fn stands(&self, at: &Q3) -> Answer<Option<Q3>> {
+        match is_unknown(at) {
+            true => self
+                .surface_support(at)
+                .map(|top| top.map(|top| on_floor(at, top))),
+            false => Answer::Exact(Some(*at)),
+        }
+    }
+
     /// Where a walker stands when it is put on the drawn surface at `at`
     /// whatever its height, as a fix or a search result is. It climbs out of
     /// what fills the surface, or else drops onto the first solid under it.
@@ -363,15 +374,9 @@ impl<'a> World<'a> {
     /// Where a leaf on the way is not held, it ends at `to` with its height
     /// not known.
     pub fn step_slide(&self, from: &Q3, to: &Q3, walled: bool) -> Q3 {
-        let stood = match is_unknown(from) {
-            true => self
-                .surface_support(from)
-                .exact()
-                .flatten()
-                .map(|top| on_floor(from, top)),
-            false => Some(*from),
-        };
-        stood
+        self.stands(from)
+            .exact()
+            .flatten()
             .and_then(|from| self.slide(&from, to, walled))
             .unwrap_or_else(|| unknown(to))
     }
@@ -471,10 +476,10 @@ impl<'a> World<'a> {
         let mut c = SplitCell::new(self, to, LEAF_ZOOM, *path);
         let z = c.lift(floor);
         let moved = if z > floor {
-            let mut left = SplitCell::new(self, from, LEAF_ZOOM, c.path);
-            let stopped = left.above(floor, z + cell).is_some();
-            (*path, c.path) = (left.path, left.path);
-            left.answer(()).exact()?;
+            let mut from_cell = SplitCell::new(self, from, LEAF_ZOOM, c.path);
+            let stopped = from_cell.above(floor, z + cell).is_some();
+            (*path, c.path) = (from_cell.path, from_cell.path);
+            from_cell.answer(()).exact()?;
             (!stopped).then_some(z)
         } else {
             Some(c.below(z).unwrap_or(z))

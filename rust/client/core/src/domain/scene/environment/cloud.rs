@@ -112,13 +112,13 @@ struct CloudLayer {
     patches: FnvHashMap<[i64; 2], Patch>,
     /// The vectors from here on are kept between turns, so a turn where
     /// nothing changed allocates nothing.
-    wanted: Vec<[i64; 2]>,
-    gone: Vec<[i64; 2]>,
+    demand: Vec<[i64; 2]>,
+    stale: Vec<[i64; 2]>,
     columns: [Vec<[f32; 5]>; VARIANTS.len()],
     impostors: Vec<u32>,
     /// How far from the eye the nearest cloud drawn last turn stands, or
     /// infinity when none was drawn.
-    seen: f64,
+    nearest_dist: f64,
 }
 
 static CLOUDS: Global<CloudLayer> = Global::new();
@@ -165,7 +165,7 @@ fn layer_u() -> f64 {
 /// seen step. That step is an angle, so the lag looks the same on every
 /// screen. It is infinite while no cloud is drawn.
 pub fn drift_step_s() -> f64 {
-    lens::visible_step_s(clouds().seen, libm::hypot(WIND[0], WIND[1]))
+    lens::visible_step_s(clouds().nearest_dist, libm::hypot(WIND[0], WIND[1]))
 }
 
 /// How much of the clouds shows, from 0 to 1, for the cumulus and the sheets
@@ -185,7 +185,7 @@ pub fn clouds_shown() -> f64 {
 /// has carried the field (`environment_drift`).
 pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     let c = clouds();
-    c.seen = f64::INFINITY;
+    c.nearest_dist = f64::INFINITY;
     for (slot, file) in c.models.iter_mut().zip(VARIANTS) {
         if slot.is_none() {
             *slot = model_of(file, None);
@@ -223,7 +223,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         let [dx, dy] = [gap(x0, eye[0]), gap(corner[1], eye[1])];
         libm::sqrt(dx * dx + dy * dy + dz * dz)
     };
-    c.wanted.clear();
+    c.demand.clear();
     for y in span(1) {
         for x in span(0) {
             let d = near([x, y]).max(1e-3);
@@ -234,19 +234,19 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
                     decor_impostor_angle() as f32,
                 ) != drawn::CULLED
             {
-                c.wanted.push([x, y]);
+                c.demand.push([x, y]);
             }
         }
     }
-    c.wanted.sort_unstable();
-    c.gone.clear();
-    c.gone.extend(
+    c.demand.sort_unstable();
+    c.stale.clear();
+    c.stale.extend(
         c.patches
             .keys()
             .copied()
-            .filter(|k| c.wanted.binary_search(k).is_err()),
+            .filter(|k| c.demand.binary_search(k).is_err()),
     );
-    for k in c.gone.drain(..) {
+    for k in c.stale.drain(..) {
         if let Some(b) = c.patches.remove(&k) {
             draw.free(b.handle);
             // SAFETY: the patch's, not given back yet; nothing reads it past this turn.
@@ -254,9 +254,9 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         }
     }
     let (patches, columns) = (&mut c.patches, &mut c.columns);
-    c.wanted.retain(|k| !patches.contains_key(k));
+    c.demand.retain(|k| !patches.contains_key(k));
     pass.run(
-        c.wanted.iter().copied(),
+        c.demand.iter().copied(),
         |key| match build(key, base, columns, draw) {
             Some(b) => {
                 patches.insert(key, b);
@@ -283,7 +283,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
         ) {
             continue;
         }
-        // `seen` is the distance to the nearest cloud in view, measured to the
+        // `nearest_dist` is the distance to the nearest cloud in view, measured to the
         // box it stands in. It is held no nearer than the near plane, short of
         // which nothing is drawn, so even from inside a cloud's box the drift
         // steps by a cell at the near plane rather than by nothing.
@@ -302,8 +302,8 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
                         .abs()
                         - half[k]
                 });
-                c.seen = c
-                    .seen
+                c.nearest_dist = c
+                    .nearest_dist
                     .min(v3::len(&gap.map(|g| g.max(0.0))).max(param::NEAR));
             }
         }
@@ -468,7 +468,7 @@ fn build(
             c.scale as f32,
         ]);
     }
-    let instances: usize = columns.iter().map(Vec::len).sum();
+    let instance_cnt: usize = columns.iter().map(Vec::len).sum();
     let header = 1 + columns.len();
     let words = header
         + columns
@@ -476,7 +476,7 @@ fn build(
             .map(|l| GroupRange::words(l.len()))
             .sum::<usize>();
     let idx = (words * 4) as u32;
-    let (at, bytes) = alloc(idx + instances as u32 * 4)?;
+    let (at, bytes) = alloc(idx + instance_cnt as u32 * 4)?;
     // SAFETY: a heap block of the bytes asked for, this patch's until given back.
     let out: &mut [u32] =
         unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(at), bytes as usize / 4) };
@@ -502,7 +502,7 @@ fn build(
         bytes,
         handle,
         idx,
-        heights: if instances == 0 { [0.0; 2] } else { heights },
+        heights: if instance_cnt == 0 { [0.0; 2] } else { heights },
         draws: core::array::from_fn(|_| Default::default()),
     })
 }

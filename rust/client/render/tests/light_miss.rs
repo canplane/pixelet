@@ -447,12 +447,12 @@ fn hand_light_holes_answer_as_cast_walk() {
     let flat_u = |rows: &[[u32; 4]]| rows.iter().flatten().copied().collect::<Vec<u32>>();
     let clip_flat: Vec<u32> = built.clipmap.iter().flatten().map(|&v| v as u32).collect();
     let bound = WorldBuffer {
-        clip: gpu.buffer(&clip_flat, store),
-        ground: gpu.buffer(&built.ground, store),
-        palette: gpu.buffer(&built.palette, store),
-        shards: gpu.buffer(&flat_u(&built.shards), store),
-        placed: gpu.buffer(&built.objects, store),
-        pool: gpu.buffer(&built.pool, store),
+        clip: gpu.buf(&clip_flat, store),
+        ground: gpu.buf(&built.ground, store),
+        palette: gpu.buf(&built.palette, store),
+        shards: gpu.buf(&flat_u(&built.shards), store),
+        placed: gpu.buf(&built.objects, store),
+        pool: gpu.buf(&built.pool, store),
     };
 
     let mut failed = Vec::new();
@@ -463,7 +463,7 @@ fn hand_light_holes_answer_as_cast_walk() {
     // keep, find and read such nodes.
     let west = real_world::build(EYE_WEST);
     let bound_west = WorldBuffer {
-        clip: gpu.buffer(
+        clip: gpu.buf(
             &west
                 .clipmap
                 .iter()
@@ -472,11 +472,11 @@ fn hand_light_holes_answer_as_cast_walk() {
                 .collect::<Vec<u32>>(),
             store,
         ),
-        ground: gpu.buffer(&west.ground, store),
-        palette: gpu.buffer(&west.palette, store),
-        shards: gpu.buffer(&flat_u(&west.shards), store),
-        placed: gpu.buffer(&west.objects, store),
-        pool: gpu.buffer(&west.pool, store),
+        ground: gpu.buf(&west.ground, store),
+        palette: gpu.buf(&west.palette, store),
+        shards: gpu.buf(&flat_u(&west.shards), store),
+        placed: gpu.buf(&west.objects, store),
+        pool: gpu.buf(&west.pool, store),
     };
     let over = |g: [i32; 2], up: i32| q8([g[0], g[1], west.top_at(g) + up]);
     let case = Case {
@@ -495,7 +495,7 @@ fn hand_light_holes_answer_as_cast_walk() {
     // Over X = 0, where one root ends and the next begins in X, rays end in the next root.
     let zero = real_world::build(EYE_ZERO);
     let bound_zero = WorldBuffer {
-        clip: gpu.buffer(
+        clip: gpu.buf(
             &zero
                 .clipmap
                 .iter()
@@ -504,11 +504,11 @@ fn hand_light_holes_answer_as_cast_walk() {
                 .collect::<Vec<u32>>(),
             store,
         ),
-        ground: gpu.buffer(&zero.ground, store),
-        palette: gpu.buffer(&zero.palette, store),
-        shards: gpu.buffer(&flat_u(&zero.shards), store),
-        placed: gpu.buffer(&zero.objects, store),
-        pool: gpu.buffer(&zero.pool, store),
+        ground: gpu.buf(&zero.ground, store),
+        palette: gpu.buf(&zero.palette, store),
+        shards: gpu.buf(&flat_u(&zero.shards), store),
+        placed: gpu.buf(&zero.objects, store),
+        pool: gpu.buf(&zero.pool, store),
     };
     let case = Case {
         name: "over X = 0",
@@ -546,8 +546,8 @@ fn lay_cells(gpu: &Gpu, b: &WorldBuffer, [eye, header]: [&wgpu::Buffer; 2], list
     list[reads..reads + tiles * tiles].fill(CAST);
     let mut table = vec![0u32; node_cache::WORDS as usize];
     table[node_cache::FRAME as usize] = FRAME;
-    let table = gpu.buffer(&table, store_of());
-    let buf = gpu.buffer(list, store_of());
+    let table = gpu.buf(&table, store_of());
+    let buf = gpu.buf(list, store_of());
     let side = beam::SAMPLE_SIDE;
     gpu.light_beam(
         &[
@@ -622,8 +622,8 @@ fn run_case(
     }
     header[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
         .copy_from_slice(&starts.words());
-    let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
-    let header_buf = gpu.buffer(&header, wgpu::BufferUsages::UNIFORM);
+    let eye_buf = gpu.buf(&eye_words, wgpu::BufferUsages::UNIFORM);
+    let header_buf = gpu.buf(&header, wgpu::BufferUsages::UNIFORM);
 
     // The slots are listed row after row of the map, in the holes' list the queue takes.
     let n = SIZE * SIZE;
@@ -652,11 +652,11 @@ fn run_case(
             want[k as usize] = light::word(light::depth(&s, &t));
             let mut add = |name, yes: bool| *kinds.entry(name).or_default() += u32::from(yes);
             add("slots", true);
-            add("hit", t.ends == End::Hit);
-            add("past its reach", t.ends == End::Miss);
-            add("lacks", t.ends == End::Lacks);
+            add("hit", t.end == End::Hit);
+            add("past its reach", t.end == End::Miss);
+            add("lacks", t.end == End::Lacks);
             let a = t.hit.asset[0];
-            let hits = t.ends == End::Hit;
+            let hits = t.end == End::Hit;
             add("hit, placed", hits && answer::is_placed(a));
             add(
                 "hit, short of its cube",
@@ -677,8 +677,8 @@ fn run_case(
     // The queue runs over a node cache that holds nothing yet.
     let map = map_of(gpu);
     let view = array_view(&map);
-    let table_buf = gpu.buffer(&table0, store_of());
-    let list_buf = gpu.buffer(&list, store_of());
+    let table_buf = gpu.buf(&table0, store_of());
+    let list_buf = gpu.buf(&list, store_of());
     holes(
         gpu,
         b,
@@ -728,7 +728,7 @@ fn run_case(
             next[at..at + 4].copy_from_slice(&b.map(|v| v as u32));
         }
     }
-    let next_buf = gpu.buffer(&next, store_of());
+    let next_buf = gpu.buf(&next, store_of());
     if let Some(e) = edited {
         gpu.dispatch(
             e.forget,
@@ -757,7 +757,7 @@ fn run_case(
     let w = edited.map_or(w, |e| e.w);
     let mut list = list_of(&slots);
     lay_cells(gpu, b, [&eye_buf, &header_buf], &mut list);
-    let list2 = gpu.buffer(&list, store_of());
+    let list2 = gpu.buf(&list, store_of());
     let map2 = map_of(gpu);
     let view2 = array_view(&map2);
     holes(
@@ -840,7 +840,7 @@ fn tell_slot(w: World, case: &Case, s: &Light, starts: &StartGrid, k: u32, [got,
     let (z, c) = (t.hit.node.zoom, t.hit.node.idx(o));
     eprintln!(
         "DIFFERS {} slot {k} got {got} want {want} band {:?}: its walk stops {:?} z{z} {c:?} t {} axis {} asset {:#x}",
-        case.name, d.range, t.ends, t.hit.t, t.hit.axis, t.hit.asset[0]
+        case.name, d.range, t.end, t.hit.t, t.hit.axis, t.hit.asset[0]
     );
 }
 
@@ -858,9 +858,9 @@ fn map_of(gpu: &Gpu) -> wgpu::Texture {
 }
 
 /// The light's list with `slots` in its holes' list (`light::holes_at`), and room past it for
-/// its pool and its stops (`light::buffer_words`).
+/// its pool and its stops (`light::buf_words`).
 fn list_of(slots: &[u32]) -> Vec<u32> {
-    let mut list = vec![0u32; light::buffer_words(SIZE) as usize];
+    let mut list = vec![0u32; light::buf_words(SIZE) as usize];
     let at = light::holes_at(SIZE) as usize;
     list[at] = slots.len() as u32;
     list[at + 1..at + 1 + slots.len()].copy_from_slice(slots);
@@ -1002,7 +1002,7 @@ fn handed_between_frames(eye: [i32; 2], cell_zoom: Zoom, by: [i32; 2], name: &'s
 
     let store = wgpu::BufferUsages::STORAGE;
     let bufs = |rows: &[[i32; 4]]| WorldBuffer {
-        clip: gpu.buffer(
+        clip: gpu.buf(
             &rows
                 .iter()
                 .flatten()
@@ -1010,14 +1010,14 @@ fn handed_between_frames(eye: [i32; 2], cell_zoom: Zoom, by: [i32; 2], name: &'s
                 .collect::<Vec<u32>>(),
             store,
         ),
-        ground: gpu.buffer(&built.ground, store),
-        palette: gpu.buffer(&built.palette, store),
-        shards: gpu.buffer(
+        ground: gpu.buf(&built.ground, store),
+        palette: gpu.buf(&built.palette, store),
+        shards: gpu.buf(
             &built.shards.iter().flatten().copied().collect::<Vec<u32>>(),
             store,
         ),
-        placed: gpu.buffer(&built.objects, store),
-        pool: gpu.buffer(&built.pool, store),
+        placed: gpu.buf(&built.objects, store),
+        pool: gpu.buf(&built.pool, store),
     };
     let (before, after) = (bufs(&was), bufs(now));
     let forget = gpu.pipeline(src(SHADER_FORGET), "forget_cs");
@@ -1078,8 +1078,8 @@ fn fresh_map(gpu: &Gpu, b: &WorldBuffer, case: &Case, cuts: [Cut; 2]) -> (Vec<bo
     }
     header[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
         .copy_from_slice(&starts.words());
-    let eye_buf = gpu.buffer(&eye_words, wgpu::BufferUsages::UNIFORM);
-    let header_buf = gpu.buffer(&header, wgpu::BufferUsages::UNIFORM);
+    let eye_buf = gpu.buf(&eye_words, wgpu::BufferUsages::UNIFORM);
+    let header_buf = gpu.buf(&header, wgpu::BufferUsages::UNIFORM);
     let n = SIZE * SIZE;
     let walked: Vec<bool> = (0..n)
         .map(|k| k < n - NOT_LISTED && !k.is_multiple_of(SKIPPED_EVERY))
@@ -1094,8 +1094,8 @@ fn fresh_map(gpu: &Gpu, b: &WorldBuffer, case: &Case, cuts: [Cut; 2]) -> (Vec<bo
     table[node_cache::FRAME as usize] = FRAME;
     let map = map_of(gpu);
     let view = array_view(&map);
-    let table_buf = gpu.buffer(&table, store_of());
-    let list_buf = gpu.buffer(&list, store_of());
+    let table_buf = gpu.buf(&table, store_of());
+    let list_buf = gpu.buf(&list, store_of());
     holes(
         gpu,
         b,
@@ -1121,7 +1121,7 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
     let built = real_world::build(EYE);
     let store = wgpu::BufferUsages::STORAGE;
     let bufs = |rows: &[[i32; 4]]| WorldBuffer {
-        clip: gpu.buffer(
+        clip: gpu.buf(
             &rows
                 .iter()
                 .flatten()
@@ -1129,14 +1129,14 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
                 .collect::<Vec<u32>>(),
             store,
         ),
-        ground: gpu.buffer(&built.ground, store),
-        palette: gpu.buffer(&built.palette, store),
-        shards: gpu.buffer(
+        ground: gpu.buf(&built.ground, store),
+        palette: gpu.buf(&built.palette, store),
+        shards: gpu.buf(
             &built.shards.iter().flatten().copied().collect::<Vec<u32>>(),
             store,
         ),
-        placed: gpu.buffer(&built.objects, store),
-        pool: gpu.buffer(&built.pool, store),
+        placed: gpu.buf(&built.objects, store),
+        pool: gpu.buf(&built.pool, store),
     };
     let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
     let now = &built.clipmap;

@@ -7,8 +7,8 @@ import type { Coords, Fix, SensorListener } from "./types.ts";
 /** Set once at boot, before any sensor starts. */
 export let listener: SensorListener;
 
-export function listen(given: SensorListener): void {
-  listener = given;
+export function listen(to: SensorListener): void {
+  listener = to;
 }
 
 /** CoreLocation reports "no course" and "no accuracy" as a negative number,

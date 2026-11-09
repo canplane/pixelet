@@ -32,7 +32,7 @@ const running: Standing = {
   online: true,
   stall: null,
   stopCode: null,
-  made: 1,
+  progress: 1,
   area: 1,
   placed: true,
 };
@@ -41,9 +41,9 @@ const starting: Standing = {
   boot: BOOT_STARTING,
   source: SOURCE_ASKING,
   gpu: GPU_ASKING,
-  made: 0,
+  progress: 0,
 };
-const loading: Standing = { ...running, boot: BOOT_LOADING, made: 0.5 };
+const loading: Standing = { ...running, boot: BOOT_LOADING, progress: 0.5 };
 
 test("coverOf - before it ran: failed where it will not, progress while it waits", () => {
   const of = (s: Partial<Standing>) => coverOf({ ...starting, ...s });
@@ -84,8 +84,8 @@ test("coverOf - loading, the world under it: what it waits on, then a panic if b
   const of = (s: Partial<Standing>) => coverOf({ ...loading, ...s });
   for (const [s, key] of [
     [{}, "progress.shaders"],
-    [{ made: 1 }, "progress.area"],
-    [{ made: 1, placed: false }, "progress.location"],
+    [{ progress: 1 }, "progress.area"],
+    [{ progress: 1, placed: false }, "progress.location"],
     [{ placed: false }, "progress.shaders"],
     [{ online: false }, "progress.offline"],
     [{ stall: Message.WorldReadFailing }, "progress.server"],
@@ -125,8 +125,8 @@ test("coverOf - once it shows, a panic or nothing", () => {
 });
 
 test("coverOf - the bar's share: half what the renderer makes, half what shows", () => {
-  const share = (made: number, area: number) =>
-    coverOf({ ...loading, made, area, placed: true });
+  const share = (progress: number, area: number) =>
+    coverOf({ ...loading, progress, area, placed: true });
   expect(share(0, 0)).toMatchObject({ share: 0 });
   expect(share(1, 0)).toMatchObject({ share: 0.5 });
   expect(share(1, 0.5)).toMatchObject({ share: 0.75 });

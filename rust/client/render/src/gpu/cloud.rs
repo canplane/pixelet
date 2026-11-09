@@ -127,13 +127,13 @@ impl CloudPass {
         mips.release();
     }
 
-    /// Lays out the clouds' words. `over` is the eye's place on the map, in the world's
+    /// Lays out the clouds' words. `eye` is the eye's place on the map, in the world's
     /// coordinates as doubles. `drift` is how far the wind has carried the field, and `shown`
     /// is how much of the clouds the core shows. No sheet is drawn past `draw_dist_km`.
-    pub fn prepare(&mut self, over: [f64; 2], drift: [f64; 2], shown: f64, draw_dist_km: f32) {
+    pub fn prepare(&mut self, eye: [f64; 2], drift: [f64; 2], shown: f64, draw_dist_km: f32) {
         self.words[SHOWN] = shown as f32;
         self.words[DRAW_DIST] = draw_dist_km;
-        field(&mut self.words, over, drift);
+        field(&mut self.words, eye, drift);
     }
 
     /// Writes `words` to the device. The frame calls it only when its read found them

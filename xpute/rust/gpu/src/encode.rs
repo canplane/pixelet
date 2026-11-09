@@ -151,7 +151,7 @@ pub struct ViewDescriptor {
 }
 
 pub struct SamplerDescriptor {
-    pub address: [AddressMode; 3],
+    pub addr: [AddressMode; 3],
     pub mag: FilterMode,
     pub min: FilterMode,
     pub mipmap: MipmapFilterMode,
@@ -628,9 +628,9 @@ impl<const N: usize> Gpu<N> {
     pub fn sampler(&mut self, stream: &mut Stream, d: &SamplerDescriptor) -> Option<Id> {
         self.make(stream, op::SAMPLER, &|s| {
             [
-                d.address[0] as u32,
-                d.address[1] as u32,
-                d.address[2] as u32,
+                d.addr[0] as u32,
+                d.addr[1] as u32,
+                d.addr[2] as u32,
                 d.mag as u32,
                 d.min as u32,
                 d.mipmap as u32,
@@ -1242,23 +1242,29 @@ pub mod call {
     pub fn draw(
         stream: &mut Stream,
         pass: Id,
-        vertices: u32,
-        instances: u32,
+        vertex_count: u32,
+        instance_count: u32,
         first_vertex: u32,
         first_instance: u32,
     ) -> bool {
         words(
             stream,
             op::DRAW,
-            &[pass, vertices, instances, first_vertex, first_instance],
+            &[
+                pass,
+                vertex_count,
+                instance_count,
+                first_vertex,
+                first_instance,
+            ],
         )
     }
 
     pub fn draw_indexed(
         stream: &mut Stream,
         pass: Id,
-        indices: u32,
-        instances: u32,
+        index_count: u32,
+        instance_count: u32,
         first_index: u32,
         base_vertex: i32,
         first_instance: u32,
@@ -1268,8 +1274,8 @@ pub mod call {
             op::DRAW_INDEXED,
             &[
                 pass,
-                indices,
-                instances,
+                index_count,
+                instance_count,
                 first_index,
                 base_vertex as u32,
                 first_instance,

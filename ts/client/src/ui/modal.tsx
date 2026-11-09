@@ -25,10 +25,10 @@ export function modalOpen(): boolean {
   return store.getState().asked !== null;
 }
 
-export function Modals() {
+export function ModalHost() {
   const asked = store((s) => s.asked);
   // A closed modal stays drawn until its panel has slid away and called
-  // `gone`.
+  // `onExited`.
   const [shown, setShown] = useState<Modal | null>(null);
   if (asked !== null && asked !== shown) setShown(asked);
   if (shown === null) return null;
@@ -36,7 +36,7 @@ export function Modals() {
   const onClose = closeModal;
   return (
     <PanelPresence.Provider
-      value={{ open: asked !== null, gone: () => setShown(null) }}
+      value={{ open: asked !== null, onExited: () => setShown(null) }}
     >
       {shown === "settings" && <SettingsModal onClose={onClose} />}
       {shown === "drawer" && <DrawerModal onClose={onClose} />}

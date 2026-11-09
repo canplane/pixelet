@@ -174,11 +174,11 @@ struct Line {
 }
 
 impl cast::Keep<At> for Line {
-    fn keep(&mut self, met: &Trace<At>, stack: &[At; DEPTH]) {
-        let z = met.hit.node.zoom as usize;
-        self.node = met.hit.node;
+    fn keep(&mut self, trace: &Trace<At>, stack: &[At; DEPTH]) {
+        let z = trace.hit.node.zoom as usize;
+        self.node = trace.hit.node;
         self.at[..z].copy_from_slice(&stack[..z]);
-        self.at[z] = met.hit.at;
+        self.at[z] = trace.hit.at;
     }
 }
 
@@ -260,27 +260,27 @@ fn each<T: Send>(n: usize, f: impl Fn(usize) -> T + Sync) -> Vec<T> {
 /// the raster reads of it (pxl-render sample_box.wgsl `stopped`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Hit {
-    ends: End,
+    end: End,
     node: Node,
     asset: [u32; 2],
     axis: u32,
 }
 
 impl Hit {
-    fn of(met: &Trace<At>) -> Hit {
-        if met.ends == End::Miss {
+    fn of(trace: &Trace<At>) -> Hit {
+        if trace.end == End::Miss {
             return Hit {
-                ends: End::Miss,
+                end: End::Miss,
                 node: Node::ROOT,
                 asset: AIR,
                 axis: 0,
             };
         }
         Hit {
-            ends: met.ends,
-            node: met.hit.node,
-            asset: met.hit.asset,
-            axis: met.hit.axis,
+            end: trace.end,
+            node: trace.hit.node,
+            asset: trace.hit.asset,
+            axis: trace.hit.axis,
         }
     }
 }
@@ -314,8 +314,8 @@ fn cast_view(view: &View) -> Vec<Cast> {
             at: [(0, [0; 3]); DEPTH],
         };
         let ray = view.ray(g.corner(c));
-        let met = cast::walk_from_root(&mut Stand, o, &ray, detail, Until::Beam, &mut line);
-        (line, g.hand_dist(met.hit.t))
+        let trace = cast::walk_from_root(&mut Stand, o, &ray, detail, Until::Beam, &mut line);
+        (line, g.hand_dist(trace.hit.t))
     });
     let idx = |[i, j]: [u32; 2]| j * across + i;
     let cells = each((g.span[0] * g.span[1]) as usize, |k| {
@@ -359,7 +359,7 @@ fn cast_view(view: &View) -> Vec<Cast> {
                 ((root.0, root.1, t), false)
             }
         };
-        let met = cast::walk(
+        let trace = cast::walk(
             &mut Stand,
             o,
             &ray,
@@ -370,7 +370,7 @@ fn cast_view(view: &View) -> Vec<Cast> {
             &mut (),
         );
         Cast {
-            hit: Hit::of(&met),
+            hit: Hit::of(&trace),
             cell,
             t,
             resumed,
@@ -411,10 +411,10 @@ fn sample_hit_is_the_walks_from_the_eye() {
                 a.resumed,
                 a.hit,
             );
-            if f.ends == End::Hit {
+            if f.end == End::Hit {
                 met[fill_eighths(f.asset[0]) as usize] += 1;
             }
-            misses += u32::from(f.ends == End::Miss);
+            misses += u32::from(f.end == End::Miss);
         }
         // The ground and the whole things, the pole and the far block are
         // met, and something gone on past.

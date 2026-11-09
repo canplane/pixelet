@@ -232,12 +232,12 @@ fn global(day: &Plate<'_, 3>, night: &Plate<'_, 1>, out: &Path) -> Result<(), St
     });
     // Lossless: a tile of one color is left out because the global picture reads
     // the same there, which holds only if the picture keeps every byte.
-    let mut config = webp::WebPConfig::new().map_err(|()| "a WebP config")?;
-    config.lossless = 1;
+    let mut cfg = webp::WebPConfig::new().map_err(|()| "a WebP config")?;
+    cfg.lossless = 1;
     // libwebp otherwise rewrites the color under a zero alpha: the unlit Earth.
-    config.exact = 1;
+    cfg.exact = 1;
     let encoded = webp::Encoder::from_rgba(&bytes, GLOBAL.0, GLOBAL.1)
-        .encode_advanced(&config)
+        .encode_advanced(&cfg)
         .map_err(|e| format!("{e:?}"))?;
     let back = webp::Decoder::new(&encoded)
         .decode()

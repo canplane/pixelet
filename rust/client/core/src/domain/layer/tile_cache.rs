@@ -31,12 +31,12 @@ use crate::domain::layer::{AskScope, Base};
 const OBSERVERS: u32 = 1;
 
 /// A held tile. An empty tile takes no slot, since its body holds all of it.
-/// A tile marked `again` is fetched once more and stays readable until the
+/// A tile marked `refetch` is fetched once more and stays readable until the
 /// new copy arrives.
 struct Resident<L> {
     body: L,
     slot: Option<u32>,
-    again: bool,
+    refetch: bool,
 }
 
 struct Entry<L> {
@@ -182,7 +182,7 @@ impl<L: Base> Default for TileCache<L> {
 /// over it up to the layer's top. A child's line is computed from its
 /// parent's line and the child's own entry alone.
 ///
-/// A tile is said when it has no data of its own: the bucket answered that
+/// A tile is absent when it has no data of its own: the bucket answered that
 /// it holds nothing for it, or its parent's occupancy has no child there. A
 /// tile over it then gives its ground.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -191,16 +191,16 @@ pub struct Line {
     /// The finest resident tile on the line, which the tile is drawn from.
     pub finest_resident: Option<Quadrant>,
     /// The resident tile that gives this tile's ground exactly: the tile
-    /// itself, or a tile over it that a said tile defers to.
+    /// itself, or a tile over it that an absent tile defers to.
     pub src: Option<Quadrant>,
-    /// Whether some tile on the line is said.
+    /// Whether some tile on the line is absent.
     pub settled: bool,
-    said: bool,
-    /// The tile that gives this tile's ground if it is said: the nearest
-    /// resident tile over it, reached through said tiles only.
-    over: Option<Quadrant>,
-    /// The `over` of the nearest said tile at or over this one.
-    says: Option<Quadrant>,
+    absent: bool,
+    /// The tile that gives this tile's ground if it is absent: the nearest
+    /// resident tile over it, reached through absent tiles only.
+    fallback: Option<Quadrant>,
+    /// The `fallback` of the nearest absent tile at or over this one.
+    absent_fallback: Option<Quadrant>,
     /// Which children have tiles of their own, when the tile is resident.
     children: Option<Occupancy>,
 }
@@ -232,9 +232,9 @@ impl Line {
         finest_resident: None,
         src: None,
         settled: false,
-        said: false,
-        over: None,
-        says: None,
+        absent: false,
+        fallback: None,
+        absent_fallback: None,
         children: None,
     };
 
@@ -263,10 +263,10 @@ impl<L: Base> TileCache<L> {
         self.entry(p).filter(|e| e.asked)?.resident.as_ref()
     }
 
-    /// Whether `p` is readable and not marked `again`, so that nothing more
+    /// Whether `p` is readable and not marked `refetch`, so that nothing more
     /// will be fetched for it.
     pub fn resident(&self, p: Quadrant) -> bool {
-        self.readable(p).is_some_and(|h| !h.again)
+        self.readable(p).is_some_and(|h| !h.refetch)
     }
 
     fn is_slotted(&self, p: Quadrant) -> bool {
@@ -288,18 +288,18 @@ impl<L: Base> TileCache<L> {
     }
 
     /// `p`'s line, computed down from the finest tile over `p` whose line
-    /// `lines` still holds. Afterwards `lines` holds `p`'s line too.
-    pub fn seek(&self, lines: &mut Path, p: Quadrant) -> Line {
-        let line_at = |q: Quadrant| lines.at[q.zoom as usize].filter(|l| l.tile == q);
+    /// `path` still holds. Afterwards `path` holds `p`'s line too.
+    pub fn seek(&self, path: &mut Path, p: Quadrant) -> Line {
+        let line_at = |q: Quadrant| path.at[q.zoom as usize].filter(|l| l.tile == q);
         let line = match line_at(p) {
             Some(l) => l,
             None if p.zoom > L::COARSEST => {
-                let over = self.seek(lines, p.parent());
-                self.step(&over, p)
+                let parent = self.seek(path, p.parent());
+                self.step(&parent, p)
             }
             None => self.step(&Line::ABOVE, p),
         };
-        lines.at[p.zoom as usize] = Some(line);
+        path.at[p.zoom as usize] = Some(line);
         line
     }
 
@@ -308,14 +308,18 @@ impl<L: Base> TileCache<L> {
     pub fn step(&self, parent: &Line, child: Quadrant) -> Line {
         let e = self.entry(child);
         let resident = e.filter(|e| e.asked).and_then(|e| e.resident.as_ref());
-        let said = e.is_some_and(|e| e.answered)
+        let absent = e.is_some_and(|e| e.answered)
             || parent.children.is_some_and(|o| !o.has_child(child.slot()));
-        let over = match parent.resident() {
+        let fallback = match parent.resident() {
             true => Some(parent.tile),
-            false if parent.said => parent.over,
+            false if parent.absent => parent.fallback,
             false => None,
         };
-        let says = if said { over } else { parent.says };
+        let absent_fallback = if absent {
+            fallback
+        } else {
+            parent.absent_fallback
+        };
         Line {
             tile: child,
             finest_resident: if resident.is_some() {
@@ -326,12 +330,12 @@ impl<L: Base> TileCache<L> {
             src: if resident.is_some() {
                 Some(child)
             } else {
-                says
+                absent_fallback
             },
-            settled: said || parent.settled,
-            said,
-            over,
-            says,
+            settled: absent || parent.settled,
+            absent,
+            fallback,
+            absent_fallback,
             children: resident.map(|h| h.body.occupancy()),
         }
     }
@@ -516,10 +520,10 @@ impl<L: Base> TileCache<L> {
     }
 
     fn count_shown(&self) -> [u32; 2] {
-        let (mut lines, mut cnt) = (Path::default(), [0u32; 2]);
+        let (mut path, mut cnt) = (Path::default(), [0u32; 2]);
         for p in self.asked() {
             cnt[0] += 1;
-            if self.has_answer(p) || self.seek(&mut lines, p).finest_resident.is_some() {
+            if self.has_answer(p) || self.seek(&mut path, p).finest_resident.is_some() {
                 cnt[1] += 1;
             }
         }
@@ -559,7 +563,7 @@ impl<L: Base> TileCache<L> {
             .replace(Resident {
                 body,
                 slot,
-                again: false,
+                refetch: false,
             })
             .and_then(|h| h.slot)
         {
@@ -577,29 +581,31 @@ impl<L: Base> TileCache<L> {
     /// until the new copy arrives. A layer that keeps nothing of a packet
     /// calls this when it needs the packet again. A newly marked tile is
     /// reported as changed, so the layer's next observation asks for it.
-    pub fn again(&mut self, p: Quadrant) {
+    pub fn refetch(&mut self, p: Quadrant) {
         if let Some(h) = self
             .tiles
             .get_mut(&p)
             .and_then(|e| e.resident.as_mut())
             .filter(|h| h.slot.is_some())
         {
-            if !core::mem::replace(&mut h.again, true) {
+            if !core::mem::replace(&mut h.refetch, true) {
                 self.changed.push(p);
             }
         }
     }
 
-    pub fn is_again_held(&self, p: Quadrant) -> bool {
-        self.readable(p).is_some_and(|h| h.again)
+    pub fn needs_refetch(&self, p: Quadrant) -> bool {
+        self.readable(p).is_some_and(|h| h.refetch)
     }
 
-    /// The number of readable tiles marked `again`, whose new copy has not
+    /// The number of readable tiles marked `refetch`, whose new copy has not
     /// come yet, among those `counts` accepts.
     pub fn asked_again(&self, counts: impl Fn(Quadrant) -> bool) -> u32 {
         self.tiles
             .iter()
-            .filter(|(&p, e)| e.asked && e.resident.as_ref().is_some_and(|h| h.again) && counts(p))
+            .filter(|(&p, e)| {
+                e.asked && e.resident.as_ref().is_some_and(|h| h.refetch) && counts(p)
+            })
             .count() as u32
     }
 

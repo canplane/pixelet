@@ -113,7 +113,7 @@ struct Gizmo {
     shown: bool,
     /// The next sketch. It is kept between steps so a step allocates nothing.
     next: Sketch,
-    lines: DebugMesh,
+    mesh: DebugMesh,
 }
 
 static GIZMO: Global<Gizmo> = Global::new();
@@ -127,12 +127,12 @@ fn gizmo() -> &'static mut Gizmo {
         drawn: empty(),
         shown: false,
         next: empty(),
-        lines: DebugMesh::default(),
+        mesh: DebugMesh::default(),
     })
 }
 
 pub fn frame_gizmo_draw(draw: &mut DrawList) {
-    gizmo().lines.draw(draw);
+    gizmo().mesh.draw(draw);
 }
 
 /// `heading` is the camera's azimuth in third person, and None in first
@@ -145,7 +145,7 @@ pub fn frame_gizmo_step(show: bool, pivot: Option<Q3>, heading: Option<f64>) {
     let g = gizmo();
     let Some(at) = pivot.filter(|_| show) else {
         if core::mem::take(&mut g.shown) {
-            g.lines.set(draw_list(), [0.0; 3], &[], 0);
+            g.mesh.set(draw_list(), [0.0; 3], &[], 0);
         }
         return;
     };
@@ -153,7 +153,7 @@ pub fn frame_gizmo_step(show: bool, pivot: Option<Q3>, heading: Option<f64>) {
     if g.shown && g.drawn == g.next {
         return;
     }
-    g.lines
+    g.mesh
         .set(draw_list(), g.next.about, &g.next.lines, g.next.lines.len());
     core::mem::swap(&mut g.drawn, &mut g.next);
     g.shown = true;

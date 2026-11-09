@@ -11,8 +11,7 @@ pub enum ConfigureAt {
     Elsewhere(fn()),
     /// The surface is configured on the main queue, where Core Animation sets a
     /// layer's properties. The given function must run `configure_surfaces`
-    /// while nothing else uses the runtime; beside a native core, that is
-    /// inside the core's `while_idle`. Asking twice before it runs configures
+    /// while nothing else uses the runtime. Asking twice before it runs configures
     /// nothing twice, since only a stale surface is configured.
     #[cfg(target_vendor = "apple")]
     Main(fn()),
