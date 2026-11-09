@@ -4,6 +4,11 @@
 //! FileFetch.kt). Its body, zstd or not, is decoded on the caller's thread and
 //! handed to the runtime's thread, so no JavaScript touches the bytes.
 
+#[cfg(target_os = "android")]
+use xpute_runtime::jni::{
+    self,
+    sys::{jboolean, jbyteArray, jint, jobject, JNIEnv},
+};
 use xpute_runtime::native;
 
 use crate::sys::unpack;
@@ -41,13 +46,13 @@ unsafe extern "C" fn pxl_file_body(fd: u32, body: *const u8, len: usize, zstd: b
 #[cfg(target_os = "android")]
 #[no_mangle]
 unsafe extern "system" fn Java_me_plei_pixelet_platform_PxlNative_fileBody(
-    e: *mut xpute_runtime::jni::sys::JNIEnv,
-    _this: xpute_runtime::jni::sys::jobject,
-    fd: xpute_runtime::jni::sys::jint,
-    body: xpute_runtime::jni::sys::jbyteArray,
-    zstd: xpute_runtime::jni::sys::jboolean,
-) -> xpute_runtime::jni::sys::jboolean {
+    e: *mut JNIEnv,
+    _this: jobject,
+    fd: jint,
+    body: jbyteArray,
+    zstd: jboolean,
+) -> jboolean {
     // SAFETY: the environment and array JNI called with.
-    let body = unsafe { xpute_runtime::jni::bytes(e, body) };
-    xpute_runtime::jni::sys::jboolean::from(file_body(fd as u32, &body, zstd != 0))
+    let body = unsafe { jni::bytes(e, body) };
+    jboolean::from(file_body(fd as u32, &body, zstd != 0))
 }

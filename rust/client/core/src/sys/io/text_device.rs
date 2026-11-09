@@ -319,10 +319,6 @@ mod android {
         }
     }
 
-    #[allow(
-        clippy::too_many_arguments,
-        reason = "the C shape of `SystemText::raster`"
-    )]
     unsafe extern "C" fn raster(
         weight: f64,
         px: f64,
