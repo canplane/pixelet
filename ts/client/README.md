@@ -49,6 +49,17 @@ starts, a GPU answers, the world's source is declared and the first snapshots
 come. The UI only reads that state, through the services, and shows a cover over
 the world until the view is first drawn (`ui/feature/cover/`).
 
+## The app's ABI
+
+xpute carries numbers and does not know what they mean; their meaning is the
+app's, defined here once, in two protocols under `spec/client/core/` from which
+both sides are generated. Each of the app's modules has one end in the core and
+one in the services, named alike.
+
+The core names files only by a root and a name, and the client decides, once at
+boot, what answers each root. So no URL, version or storage key reaches the
+core, and where the world is read from changes without it.
+
 ## Builds
 
 The page is Expo's web build, bundled by Metro into one HTML file over one

@@ -338,12 +338,6 @@ export interface UiView {
   m_per_px: f64;
 }
 
-/** Command.TURN_PACE's packet. */
-export interface TurnPace {
-  /** 0 asks none, and turns go at the display's own rate. */
-  interval_ms: f64;
-}
-
 /** Each import's packet, read from its branch, by its number. */
 export const read = {
   [Command.SENSOR_START]: (b: BranchCursor): SensorStart => ({
@@ -359,9 +353,6 @@ export const read = {
   [Command.UI_VIEW]: (b: BranchCursor): UiView => ({
     azimuth: b.at(0).get<f64>(),
     m_per_px: b.at(1).get<f64>(),
-  }),
-  [Command.TURN_PACE]: (b: BranchCursor): TurnPace => ({
-    interval_ms: b.at(0).get<f64>(),
   }),
 };
 
@@ -384,13 +375,6 @@ export type UiSend = {
   ];
   /** @param code Geolocation's; orientation gives none. */
   [Command.SENSOR_ERR]: [sensor: Sensor, code: GeolocationErrorCode | null];
-  /** @param refresh_ms The display's refresh, as the runtime measures it from the animation frames it is handed, and the interval it paces turns at, a whole number of refreshes (the pacing the client boots it with, @xpute/runtime sched/frame_pacing.ts `FrameGrant`): the frame's budget. */
-  [Command.TURN_GRANT]: [
-    refresh_ms: f64,
-    paced_ms: f64,
-    interactive: boolean,
-    credits: u32,
-  ];
   [Command.SENSOR_PERMISSION]: [sensor: Sensor, answer: PermissionAnswer];
   /** @param orient_permission iOS 13+'s gate: requestPermission exists and must run inside a gesture.
    * @param orient_silence_is_loss A browser's compass talks while the device is still and cannot say it stopped, so silence is the only sign of loss; a device's speaks only when the heading turns and reports a failure itself (SENSOR_ERR). */
@@ -478,10 +462,6 @@ export interface UiImports {
   /** The view's azimuth and scale, when either moved: a frame of its own, so a rotation or a
    * zoom, which moves them every frame, leaves the snapshot as it was. */
   [Command.UI_VIEW](e: UiView): void;
-  /** The least interval the core asks between its turns: its load's word on the rate, which
-   * the next TURN_GRANT's `paced_ms` answers, a whole number of refreshes (the pacing the
-   * client boots the runtime with, @xpute/runtime sched/frame_pacing.ts `pace`). */
-  [Command.TURN_PACE](e: TurnPace): void;
 }
 
 /** `h` as the handler a runtime routes the ui protocol's commands to, each one read and
@@ -497,8 +477,6 @@ export function ui_imports(h: UiImports): OnImport {
         return h[Command.UI_SNAPSHOT](read[Command.UI_SNAPSHOT](need(f)));
       case Command.UI_VIEW:
         return h[Command.UI_VIEW](read[Command.UI_VIEW](need(f)));
-      case Command.TURN_PACE:
-        return h[Command.TURN_PACE](read[Command.TURN_PACE](need(f)));
       default:
         return Errno.ENOSYS;
     }

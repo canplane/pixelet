@@ -11,10 +11,12 @@ use super::world::World;
 use crate::domain::layer::object::store;
 use crate::domain::layer::Base as _;
 use core::cell::Cell;
+use pxl_engine::clipmap;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::world::{nearest, nearest_box, BOUNDS};
 use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_core::global::Global;
 
@@ -57,6 +59,19 @@ pub fn written_boxes() -> &'static [Aabb] {
 /// reader that asks every frame turn, in its effects or its interaction
 /// phase, sees each change exactly once.
 pub fn within(xy: [[f64; 2]; 2], layer: &[Quadrant]) -> bool {
+    touched(xy, layer, |_| true)
+}
+
+/// Whether the ground node `t` is at the zoom of the leaf cells' tile or of
+/// their clip level's brick. A coarser level's brick that shares the tile's
+/// zoom counts too.
+fn at_leaf(t: &Quadrant) -> bool {
+    let cell_zoom = GROUND.leaf_cell_zoom();
+    t.zoom == cell_zoom - GROUND.tile_cell_shamt() || t.zoom == clipmap::bricks_zoom(cell_zoom)
+}
+
+/// `within`, of the ground nodes `counted` picks.
+fn touched(xy: [[f64; 2]; 2], layer: &[Quadrant], counted: impl Fn(&Quadrant) -> bool) -> bool {
     let columns = Aabb {
         min: [xy[0][0], xy[0][1], BOUNDS.min[2]],
         max: [xy[1][0], xy[1][1], BOUNDS.max[2]],
@@ -66,6 +81,7 @@ pub fn within(xy: [[f64; 2]; 2], layer: &[Quadrant]) -> bool {
     let mut regions = c
         .ground
         .iter()
+        .filter(|t| counted(t))
         .chain(layer)
         .map(|t| t.region())
         .chain(c.written.iter().copied());
@@ -142,6 +158,25 @@ impl<K: PartialEq, A: Copy> Memo<K, A> {
         }
     }
 
+    /// `forget_touched`, for an answer of the ground at its leaf. `exact` says
+    /// of the kept answer whether every read of it was exact. A base tile
+    /// never changes, so a coarser tile or brick over the columns of an exact
+    /// answer changes only what is held, and only the leaf's own nodes and
+    /// what objects wrote drop it. An answer not exact goes as in
+    /// `forget_touched`, since a coarser node can be what answered it.
+    pub fn forget_touched_at_leaf(&mut self, exact: impl Fn(&A) -> bool) {
+        if self
+            .0
+            .as_ref()
+            .is_some_and(|(_, columns, a)| match exact(a) {
+                true => touched(*columns, &[], at_leaf),
+                false => within(*columns, &[]),
+            })
+        {
+            self.0 = None;
+        }
+    }
+
     /// The answer for `of`: the kept one, or else what `ask` gets from
     /// `world`, whose queries report what it read. What it read is reported
     /// to `world` as well, so a memo kept inside another memo's ask lets that
@@ -162,3 +197,7 @@ impl<K: PartialEq, A: Copy> Memo<K, A> {
         a
     }
 }
+
+#[cfg(test)]
+#[path = "change.test.rs"]
+mod test;

@@ -5,8 +5,8 @@ import ExpoModulesCore
 import Foundation
 import QuartzCore
 
-/// This tells the core's thread each display frame (`xpute_vsync`). A
-/// display link calls it on the main thread.
+/// This tells the core's thread each display frame (`xpute_vsync`), which
+/// begins the turns. A display link calls it on the main thread.
 final class DisplayFrames: NSObject {
   private var link: CADisplayLink?
 
@@ -45,8 +45,7 @@ public class XputeModule: Module {
   public func definition() -> ModuleDefinition {
     Name("Xpute")
 
-    /// Fires when the core has posted or asked for a turn, when a call
-    /// waits for `answer`, or when the core has stopped.
+    /// Fires when frames wait for `take`, or when a call waits for `answer`.
     Events("onNotify")
 
     OnCreate {
@@ -91,16 +90,12 @@ public class XputeModule: Module {
       xpute_store(UInt32(at), UInt32(word))
     }
 
-    Function("run") { (deadlineMs: Double) -> Double in
-      xpute_run(deadlineMs)
+    Function("wake") {
+      xpute_wake()
     }
 
-    Function("kick") { (deadlineMs: Double, atMs: Double) in
-      xpute_kick(deadlineMs, atMs)
-    }
-
-    Function("nextFrame") { (afterMs: Double) -> Double in
-      xpute_next_frame(afterMs)
+    Function("input") {
+      xpute_input()
     }
 
     Function("pause") {
@@ -115,10 +110,40 @@ public class XputeModule: Module {
       xpute_answer()
     }
 
-    Function("turns") { () -> [Double] in
-      var turnMs: Double = 0
-      let wake = xpute_turns(&turnMs)
-      return [wake, turnMs]
+    Function("attach") { (sqAt: Double, cqAt: Double, fs: Bool) in
+      xpute_attach(UInt32(sqAt), UInt32(cqAt), fs)
+    }
+
+    Function("pace") { (paceHz: Double, marginShare: Double, batchFrames: Double, settleMs: Double) in
+      xpute_pace(paceHz, marginShare, batchFrames, settleMs)
+    }
+
+    Function("post") { (tag: Double, cmd: Double, flags: Double, result: Double, pkt: Uint8Array) in
+      xpute_post(
+        UInt32(tag), UInt32(cmd), UInt32(flags), Int32(result),
+        pkt.rawPointer.assumingMemoryBound(to: UInt8.self), pkt.byteLength)
+    }
+
+    Function("take") { () throws -> NativeArrayBuffer in
+      var bytes = 0
+      let at = xpute_take(&bytes)!
+      return try NativeArrayBuffer.wrap(
+        dataWithoutCopy: UnsafeMutableRawBufferPointer(start: at, count: bytes),
+        cleanup: { xpute_taken_free(at, bytes) })
+    }
+
+    Function("fsOpened") { (fd: Double, result: Double, detail: Double, bytes: Uint8Array) in
+      xpute_fs_opened(
+        UInt32(fd), Int32(result), UInt32(detail),
+        bytes.rawPointer.assumingMemoryBound(to: UInt8.self), bytes.byteLength)
+    }
+
+    Function("fsClosed") { (fd: Double, result: Double) in
+      xpute_fs_closed(UInt32(fd), Int32(result))
+    }
+
+    Function("call") { (cmd: Double, pkt: Uint8Array) -> Double in
+      Double(xpute_call(UInt32(cmd), pkt.rawPointer.assumingMemoryBound(to: UInt8.self), pkt.byteLength))
     }
 
     /// The answer is kept past the call, so a copy of the value is stored.

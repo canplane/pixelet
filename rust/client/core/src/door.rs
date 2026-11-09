@@ -33,6 +33,8 @@ use crate::sys::io::request;
 use crate::sys::io::request::Event;
 use crate::sys::io::runtime;
 use crate::sys::io::text;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::sys::io::text_device;
 use crate::sys::machine::MACHINE;
 use crate::sys::sched::edge;
 use crate::sys::section;
@@ -51,6 +53,8 @@ use xpute_core::mem::off_of_slice;
 use xpute_core::mem::section::PAGE_BYTES;
 use xpute_core::sched::task;
 use xpute_core::stop;
+#[cfg(not(target_arch = "wasm32"))]
+use xpute_runtime::native;
 
 struct State {
     /// The UI snapshot and view last posted. Each is posted again only when
@@ -137,6 +141,11 @@ fn on_runtime_attached(s: &mut State) {
 /// of memory comes last.
 fn boot(b: BootInfo) {
     stop::install(runtime::abort, b.form.stop_hook);
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        text_device::install(b.call);
+        native::named_by(cmd::mem_of);
+    }
     if !machine::booted() {
         machine::boot(&MACHINE);
     }
@@ -177,6 +186,7 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     door().receive(|submission| match submission {
         Submission::Life(l) => life::apply(s, l),
         Submission::Turn(t) => apply::turn::turn(t),
+        Submission::Frame(f) => apply::turn::grant(f),
         Submission::Surface(c) => apply::on_surface(c),
         Submission::Changed(c) => apply::fs::changed(c),
         Submission::GpuReady => {

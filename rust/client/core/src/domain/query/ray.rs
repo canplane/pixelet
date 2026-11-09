@@ -10,12 +10,11 @@ use super::decor::DecorRay;
 use super::node::{coarsest, At};
 use super::world::World;
 use crate::domain::layer::instance::Instance;
-use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::{Answer, Base};
 use pxl_engine::answer::{self, In, Kind};
 pub(super) use pxl_engine::cast::Until;
-use pxl_engine::cast::{self, Detail, End, Query, Spacing};
+use pxl_engine::cast::{self, Detail, End, Keep, Over, Query, Spacing, Trace, DEPTH};
 use pxl_engine::object;
 use pxl_engine::support;
 use pxl_engine::support::{ColumnSurface, Line};
@@ -130,6 +129,42 @@ pub(super) struct Walker<'w, 'a> {
     path: Path,
 }
 
+/// Where a walk from `origin` ended, for the next walk from that origin to go
+/// on from there and not from the top (`World::along`, layer/README.md's
+/// cursor).
+#[derive(Clone, Copy)]
+pub(super) struct Descent {
+    origin: [i32; 3],
+    node: cast::Node,
+    line: Line<At>,
+}
+
+impl Descent {
+    /// The node of the line that holds where `ray` starts, with what was
+    /// handed it, or None where the walk ended past the origin's root.
+    fn start(&self, ray: &cast::Ray) -> Option<(cast::Node, At, f32)> {
+        let (over, found) = self.node.over(cast::point_at(self.origin, ray, 0.0));
+        found.then(|| {
+            let n = cast::holding(self.origin, ray, over, 0.0);
+            (n, self.line.over(n.zoom), 0.0)
+        })
+    }
+}
+
+/// Leaves where a walk from an origin ended.
+struct KeepDescent<'e>(&'e mut Option<Descent>, [i32; 3]);
+
+impl Keep<At> for KeepDescent<'_> {
+    fn keep(&mut self, trace: &Trace<At>, stack: &[At; DEPTH]) {
+        let (origin, node) = (self.1, trace.hit.node);
+        *self.0 = Some(Descent {
+            origin,
+            node,
+            line: Line::of_walk(origin, &node, trace.hit.at, stack),
+        });
+    }
+}
+
 impl<'a> Query for Walker<'_, 'a> {
     type At = At;
 
@@ -238,8 +273,14 @@ impl<'a> World<'a> {
     /// cells the ray passes.
     pub fn first_hit(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
         let mut path = Path::default();
-        let (met, decor_ray) =
-            self.along(ray, detail, Until::Opaque, self.decor_ray(ray), &mut path);
+        let (met, decor_ray) = self.along(
+            ray,
+            detail,
+            Until::Opaque,
+            self.decor_ray(ray),
+            &mut path,
+            &mut None,
+        );
         let decor = decor_ray
             .and_then(|s| s.best)
             .filter(|&(d, ..)| met.val().flatten().is_none_or(|h: Hit| d < h.t));
@@ -257,7 +298,9 @@ impl<'a> World<'a> {
     /// its origin, which may stand off the world, as an eye over it does
     /// (pxl-spec `world::origin`). The tiles' lines step on from `path`, the
     /// ground's lines that a walk beside this ray read over the same tile
-    /// cache, and are left there for the next ray.
+    /// cache, and are left there for the next ray. A walk from the origin
+    /// `descent` names goes on from where that one ended, its asker holding
+    /// what the descent to there lacked, and leaves its own end there.
     pub(super) fn along(
         &self,
         ray: &Ray,
@@ -265,6 +308,7 @@ impl<'a> World<'a> {
         until: Until,
         decor_ray: Option<DecorRay>,
         path: &mut Path,
+        descent: &mut Option<Descent>,
     ) -> (Answer<Option<Hit>>, Option<DecorRay>) {
         let mut walker = Walker {
             world: self,
@@ -278,7 +322,23 @@ impl<'a> World<'a> {
         self.read([o[0], o[1]], [end[0], end[1]], detail.range[0]);
         let from = cast::Ray::new(ray.dir.map(|v| v as f32), ray.t_max as f32);
         let q = origin(o[0], o[1], o[2]);
-        let trace = cast::first(&mut walker, q, &from, detail, until);
+        let on = descent
+            .filter(|e| e.origin == q)
+            .and_then(|e| Some((e.start(&from)?, e.line)));
+        let mut keep = KeepDescent(descent, q);
+        let trace = match on {
+            Some((start, line)) => cast::walk(
+                &mut walker,
+                q,
+                &from,
+                detail,
+                until,
+                start,
+                &line,
+                &mut keep,
+            ),
+            None => cast::walk_from_root(&mut walker, q, &from, detail, until, &mut keep),
+        };
         *path = walker.path;
         let hit = (trace.end == End::Hit).then(|| self.hit(ray, q, trace.hit));
         let answer = match (hit, walker.lack, walker.answered) {

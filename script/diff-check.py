@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-# `make check` and `make test`, narrowed to the working tree's changes: a
-# crate when it or a dependency changed, TypeScript by what imports what. One
-# selection drives both.
+# `make check` and `make test`, narrowed to what changed since `base` (HEAD
+# by default, the working tree's changes; a commit or branch to take what was
+# committed since it too): a crate when it or a dependency changed, TypeScript
+# by its tree. One selection drives both.
 #
-#   ./script/diff-check.py
+#   ./script/diff-check.py [base]
 
 import json
 import re
@@ -22,7 +23,8 @@ def git(*args: str) -> list[str]:
 
 
 # --no-renames: a file moved out of a crate touches the crate it left.
-changed = sorted(set(git("diff", "--name-only", "--no-renames", "HEAD")) | set(git("ls-files", "--others", "--exclude-standard")))
+base = sys.argv[1] if len(sys.argv) > 1 else "HEAD"
+changed = sorted(set(git("diff", "--name-only", "--no-renames", base)) | set(git("ls-files", "--others", "--exclude-standard")))
 present = [path for path in changed if (ROOT / path).is_file()]
 
 

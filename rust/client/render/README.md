@@ -60,6 +60,13 @@ one in view each frame (`record_draw_cs`). A frame whose rays reached little
 still draws everything found before that is still fresh; a still frame over a
 still world draws nothing at all.
 
+## The decor the GPU generates
+
+Decor the ground grows is stored nowhere: the GPU generates it from the same
+clip levels the rays read, and placed decor arrives beside it as records in
+the same layout (`gpu/generator.rs`). Its passes redo only the entries whose
+brick, edits or distance changed, and nothing generated is read back.
+
 ## Time: the scale and the rate
 
 Two knobs give the GPU room. The scale draws fewer pixels, and buys back only
@@ -91,6 +98,12 @@ measured from the box's middle. A band depends only on where the tile lies in
 the box. When the eye moves, the box slides a tile at a time; a tile that slid
 on, or into another band, is cast anew and the rest keep what they cast
 (`light_slide_cs`, `Light::keeps`).
+
+The effects on a drawn surface, its lines, the occlusion of its corners and of
+the screen, the shadows and the rim, all end at one distance from the eye, the
+**effects' reach**, and fade alike before it (pxl-spec `EFFECT_REACH`,
+`effect.wgsl` `effect_share`). It lies where the camera grid's cells a zoom
+coarser than the ground's leaf begin, and the box reaches at least that far.
 
 The light casts only what a receiver reads. Each voxel the eye sees, each pixel
 it walked, each placed decor and each drawn character marks the tiles it stands

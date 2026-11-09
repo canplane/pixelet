@@ -131,6 +131,7 @@ fn open_completion_handed_over() {
         }
         Submission::Life(_)
         | Submission::Turn(_)
+        | Submission::Frame(_)
         | Submission::GpuReady
         | Submission::Surface(_)
         | Submission::Closed(_)
@@ -206,6 +207,7 @@ fn program_command_handed_over() {
         }
         Submission::Life(_)
         | Submission::Turn(_)
+        | Submission::Frame(_)
         | Submission::GpuReady
         | Submission::Surface(_)
         | Submission::Opened(_)

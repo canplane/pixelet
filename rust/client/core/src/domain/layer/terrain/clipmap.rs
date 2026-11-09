@@ -10,11 +10,12 @@
 //! indices per cell, is cut from the tile's packet in the turn the packet
 //! lands, and the packet is then freed (`cut`). Later, after the frame and
 //! as far as the turn's share for tasks leaves room (`fill_share`), its cells
-//! and its ways' tree are built from that palette and the tile's samples and
-//! lines, into `.fixed.terrain` and the ways' pool (pool.rs). The next frame
-//! hands the brick to the GPU, and it is present from then on (`upload`).
-//! Nothing of a tile is kept for a brick still to come: a brick that enters
-//! later asks for its tile again (`TileCache::again`).
+//! are filled from that palette and the tile's samples and lines into
+//! `.fixed.terrain`, and the spans its cells were filled by into a run of the
+//! ways' pool (pool.rs).
+//! The next frame hands the brick to the GPU, and it is present from then on
+//! (`upload`). Nothing of a tile is kept for a brick still to come: a brick
+//! that enters later asks for its tile again (`TileCache::refetch`).
 
 use pxl_engine::area::{Area, Shard};
 use pxl_engine::clipmap::{
@@ -24,32 +25,32 @@ use pxl_engine::clipmap::{
 };
 use pxl_engine::fill;
 use pxl_engine::ground::{self, word, Extent};
-use pxl_engine::way_tree;
 use pxl_engine::wrap_idx;
 use pxl_engine::LEAF_CELL_ZOOM;
 use pxl_render::gpu::api;
 use pxl_render::ray::{BrickWrite, TerrainWrite};
+use pxl_spec::bake::separation::Separation;
 use pxl_spec::bake::tile::terrain::{
-    brick_lines, palette_cells, TerrainTile, ELE_COLUMN, PALETTE_COLUMN,
+    brick_lines, brick_pairs, palette_cells, ELE_COLUMN, PALETTE_COLUMN,
 };
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, MIN_ZOOM};
 use xpute_core::global::Global;
 use xpute_kit::collection::list::List;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::domain::layer::terrain::fixed::{
-    cells_off, fill_off, palette_off, BUILD_WORDS, CELLS_ARR_BYTES, LINES_WORDS, PALETTE_ARR_BYTES,
-    RANGE, WAYS_BRICK_SEGMENTS,
+    cells_off, fill_off, palette_off, CELLS_ARR_BYTES, PALETTE_ARR_BYTES, RANGE,
 };
-use crate::domain::layer::terrain::pool::{way_pool, PoolRefusal, Run, WayPool};
+use crate::domain::layer::terrain::pool::{way_pool, PoolRefusal, Run};
 use crate::domain::layer::terrain::tile;
 use crate::domain::layer::Base;
 use crate::sys::io::room::Refusal;
 use crate::sys::io::source::ServiceArea;
 use crate::sys::sched::edge::{request_world_tick, world_edge};
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_core::mem::range::arr;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -65,6 +66,14 @@ pub const PINNED_TILES: u32 = (CLIP_LEVELS - EYE_CLIP_LEVELS) * 4;
 const _: () = assert!(
     clipmap::CLIP_SIZE <= TILE_CELLS + 1,
     "a clip level spans two tiles a side"
+);
+
+// The coarsest zoom a cell is asked at (domain/query/node.rs `coarsest`) is the coarsest clip
+// level's cells, so a cell is never asked coarser than the brick it reads
+// (pxl-engine `clipmap::way_at`).
+const _: () = assert!(
+    GROUND.grid_zoom(MIN_ZOOM) == FIRST_CELL_ZOOM,
+    "the coarsest zoom asked is the coarsest clip level's"
 );
 
 /// The center of clip level `w` and the zoom of its cells as laid out. A
@@ -107,8 +116,11 @@ struct Slot {
     brick: [i32; 2],
     present: bool,
     fill: Fill,
-    /// Its ways' tree in the pool, given back with the slot.
-    tree: Run,
+    /// Its run of kept spans in the ways' pool, given back with the slot (`assign_slots`).
+    run: Run,
+    /// The words its run wants, while `Fill::Refused` waits for one (`wake`); `NEVER` where no
+    /// room can answer it.
+    want: u32,
 }
 
 /// How far a slot's brick has come in its fill.
@@ -119,18 +131,20 @@ enum Fill {
     /// Its palette was cut from its tile's packet (`cut`), so its fill is due
     /// (`due`).
     Cut,
-    /// Its cells are whole here and its tree is in the pool. It waits to be
+    /// Its cells are whole here and its spans are in their run. It waits to be
     /// handed to the GPU (`upload`) and is not present yet.
     Filled,
-    /// Its ways were refused, because its lines are past the fill's room,
-    /// its tree needs more than a brick's most or the pool is at its cap, and
-    /// asking again changes none of these. The slot does not count as absent, so the brick is not filled
+    /// The ways' pool has no room for its run at its cap (`PoolRefusal::Cap`),
+    /// or a column of it made more spans than a column holds (`want` is
+    /// `NEVER`). The slot does not count as absent, so the brick is not filled
     /// again every turn, and its tile is not asked for again, while a clip
-    /// level wants it (`assign_slots`). A reader reads the coarser clip level
-    /// instead, as for any absent brick.
+    /// level wants it (`assign_slots`); a reader reads the coarser clip level
+    /// instead. Once the pool gives a run back, a brick whose `want` then fits
+    /// is absent again and filled again, once for that give-back (`wake`); a
+    /// brick whose want is `NEVER` stays.
     Refused,
-    /// The heap refused pool room for its child groups
-    /// (`pool::PoolRefusal::Heap`). Like `Refused`, the slot does not count
+    /// The heap refused the pool a chunk, or the fill its lines or their
+    /// `pairs` (`PoolRefusal::Heap`). Like `Refused`, the slot does not count
     /// as absent, until the heap gives a page back (`Clipmap::heap`); the
     /// brick is then absent again and is filled again (`step`).
     Waiting,
@@ -138,13 +152,17 @@ enum Fill {
 
 const _: () = assert!(FIRST_CELL_ZOOM > 0, "a free slot's zoom is no clip level's");
 
+/// What `Slot::want` holds where no give-back can answer the brick (`Fill::Refused`).
+const NEVER: u32 = u32::MAX;
+
 impl Slot {
     const FREE: Slot = Slot {
         cell_zoom: 0,
         brick: [i32::MIN; 2],
         present: false,
         fill: Fill::Idle,
-        tree: [0; 2],
+        run: [0; 2],
+        want: 0,
     };
 
     fn is_free(&self) -> bool {
@@ -211,9 +229,12 @@ struct Clipmap {
     due_stale: bool,
     /// The brick being filled, whose fill goes on over the turns it takes.
     filling: Option<BrickFill>,
-    /// The heap's state when it first refused pool room for a brick's child
-    /// groups, kept while a brick waits on it (`Fill::Waiting`).
+    /// The heap's state when it first refused a brick room, kept while a
+    /// brick waits on it (`Fill::Waiting`).
     heap: Option<Refusal>,
+    /// The pool's state when it first refused a brick's run at its cap, kept
+    /// while a brick waits on it (`Fill::Refused`, `wake`).
+    ways: Option<Refusal>,
 }
 
 static CLIPMAP: Global<Clipmap> = Global::new();
@@ -249,6 +270,7 @@ fn fresh() -> Clipmap {
         due_stale: true,
         filling: None,
         heap: None,
+        ways: None,
     }
 }
 
@@ -280,7 +302,7 @@ fn brick_quad(cell_zoom: Zoom, q: [i32; 2]) -> Quadrant {
 }
 
 /// The tile brick `q` at `cell_zoom` lies in, and where in it, in bricks.
-pub(crate) fn tile_of(cell_zoom: Zoom, q: [i32; 2]) -> (Quadrant, [u32; 2]) {
+pub(in crate::domain) fn tile_of(cell_zoom: Zoom, q: [i32; 2]) -> (Quadrant, [u32; 2]) {
     let per = (GROUND.tile_cells() >> BRICK_SHIFT) as i32;
     let zoom = cell_zoom - GROUND.tile_cell_shamt();
     let t = Quadrant::new(zoom, [q[0].div_euclid(per), q[1].div_euclid(per)]);
@@ -291,9 +313,8 @@ pub(crate) fn tile_of(cell_zoom: Zoom, q: [i32; 2]) -> (Quadrant, [u32; 2]) {
 }
 
 /// Every brick's planes on the CPU, in `.fixed.terrain` (fixed.rs); a test
-/// may set its own. The child groups of the bricks' ways' trees live on the
-/// heap instead (pool.rs).
-pub(crate) struct BrickMemory {
+/// may set its own. The bricks' spans live on the heap instead (pool.rs).
+struct BrickMemory {
     /// Each brick's whole words (`clipmap::BRICK_WORDS`), `CELLS_ARR_BYTES`
     /// apart.
     pub cells: &'static mut [u32],
@@ -302,7 +323,7 @@ pub(crate) struct BrickMemory {
     pub palette: &'static mut [u32],
 }
 
-pub(crate) static PLANES: Global<BrickMemory> = Global::new();
+static PLANES: Global<BrickMemory> = Global::new();
 
 fn planes() -> &'static mut BrickMemory {
     PLANES.get(|| {
@@ -346,14 +367,7 @@ fn fold(w: &mut Clipmap) {
     }
 }
 
-/// The ways' pool, holding the child groups of every held brick's tree. A
-/// cursor reads it here as the GPU's cast reads its copy (pxl-engine
-/// `way_tree`).
-pub(in crate::domain) fn pool() -> &'static WayPool {
-    way_pool()
-}
-
-/// The child groups the pool spans, which the GPU's copy of it holds.
+/// The words the pool spans, which the GPU's copy of it holds.
 pub fn pool_top() -> u32 {
     way_pool().top()
 }
@@ -505,25 +519,43 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     was[..] != w.pinned[..]
 }
 
-/// Makes every brick waiting on the heap (`Fill::Waiting`) absent again, to
-/// be filled again, once the heap has given a page back since it refused pool
-/// room. Returns whether it did.
+/// Makes the bricks that wait on room absent again, to be filled again: those waiting on the
+/// heap (`Fill::Waiting`) once it has given a page back, and those refused at the pool's cap
+/// (`Fill::Refused`) once the pool has given a run back and a run of their `want` would fit,
+/// each once for that give-back, however the bricks then fare. A want of `NEVER`, which no
+/// run answers (`fits`), is not woken and watches no give-back. Returns whether it woke any.
 fn wake(w: &mut Clipmap) -> bool {
-    if !w.heap.is_some_and(|h| h.released()) {
+    let heap = w.heap.is_some_and(|h| h.released());
+    let ways = w.ways.is_some_and(|r| r.released());
+    if !heap && !ways {
         return false;
     }
-    w.heap = None;
-    for slot in w.slots.iter_mut().filter(|b| b.fill == Fill::Waiting) {
-        slot.fill = Fill::Idle;
+    if heap {
+        w.heap = None;
     }
-    true
+    if ways {
+        w.ways = None;
+    }
+    let pool = way_pool();
+    let mut woke = false;
+    for slot in w.slots.iter_mut() {
+        let wakes = (heap && slot.fill == Fill::Waiting)
+            || (ways && slot.fill == Fill::Refused && pool.fits(slot.want));
+        if wakes {
+            slot.fill = Fill::Idle;
+            woke = true;
+        } else if ways && slot.fill == Fill::Refused && slot.want != NEVER {
+            w.ways.get_or_insert_with(Refusal::ways);
+        }
+    }
+    woke
 }
 
 /// Holds each brick a laid-out clip level wants in exactly one slot. Where
 /// the device was lost (`lost`), it took the GPU's copy of every slot's
 /// cells, so each present brick is handed over again. A slot no clip level
-/// wants any more is given up with its tree, which ends a fill going on in
-/// it (`fill_stage`). A wanted brick that no slot holds takes a free slot of
+/// wants any more is given up with its run of kept spans, which ends a fill
+/// going on in it (`fill_stage`). A wanted brick that no slot holds takes a free slot of
 /// its entry, its own clip level's first, and starts absent. Then every
 /// entry's row shows its slot (`show`), and the clip levels are folded over
 /// them (`fold`).
@@ -540,7 +572,7 @@ fn assign_slots(w: &mut Clipmap, lost: bool) {
                 && w.table.entries[(clip_level * ENTRIES + s) as usize].brick == slot.brick
         };
         if !(0..CLIP_LEVELS).any(wants) {
-            way_pool().give(slot.tree);
+            way_pool().give(slot.run);
             w.slots[b] = Slot::FREE;
         } else if lost && slot.present {
             (w.slots[b].present, w.slots[b].fill) = (false, Fill::Filled);
@@ -594,7 +626,7 @@ fn show(w: &mut Clipmap, i: u32) {
 }
 
 /// Hands each filled brick to `write`, while it takes them: its words, its
-/// palette and its tree, in place. A handed brick is present from then on,
+/// palette and its run of kept spans, in place. A handed brick is present from then on,
 /// on the CPU and the GPU alike, and the frame that hands it is the first to
 /// read it. The clip levels are folded over the handed bricks once, after all
 /// of them (`fold`). This runs in a frame's stage, before the frame's cast
@@ -607,14 +639,14 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
         if slot.fill != Fill::Filled {
             continue;
         }
-        let pieces = way_pool().pieces(slot.tree);
+        let pieces = way_pool().pieces(slot.run);
         let fits = write(BrickWrite {
             slot: b,
             cell_zoom: slot.cell_zoom,
             brick: slot.brick,
             words: cells(b),
             palette_idxs: palette(b),
-            tree: &pieces,
+            run: &pieces,
         });
         if !fits {
             request_world_tick();
@@ -693,21 +725,34 @@ pub fn pinned_tiles() -> &'static [Quadrant] {
     &clipmap().pinned
 }
 
-/// A copy of the entries of the eye's clip level at `cell_zoom`, each brick
-/// present or still wanted (`Entry`), or none while its center is not laid
-/// out. It serves a debug reader (domain/scene/gizmo/coverage.rs) and
-/// changes nothing.
-pub fn eye_entries(cell_zoom: Zoom) -> Option<[Entry; ENTRIES as usize]> {
-    let (w, clip_level) = (
-        clipmap(),
-        cell_zoom
-            .checked_sub(FIRST_CELL_ZOOM)
-            .filter(|&w| w < EYE_CLIP_LEVELS)?,
-    );
+/// The eye's clip level at `cell_zoom`, or none while its center is not laid
+/// out.
+fn eye_level(w: &Clipmap, cell_zoom: Zoom) -> Option<u32> {
+    let clip_level = cell_zoom
+        .checked_sub(FIRST_CELL_ZOOM)
+        .filter(|&l| l < EYE_CLIP_LEVELS)?;
     first_of(w, clip_level)?;
+    Some(clip_level)
+}
+
+/// The bricks the eye's clip level at `cell_zoom` holds or wants, or none
+/// while its center is not laid out. It says what the layer holds for a debug
+/// reader (domain/scene/gizmo/coverage.rs) and changes nothing.
+pub(in crate::domain) fn eye_bricks(cell_zoom: Zoom) -> Option<[[i32; 2]; ENTRIES as usize]> {
+    let w = clipmap();
+    let clip_level = eye_level(w, cell_zoom)?;
     Some(core::array::from_fn(|s| {
-        w.table.entries[(clip_level * ENTRIES) as usize + s]
+        w.table.entries[(clip_level * ENTRIES) as usize + s].brick
     }))
+}
+
+/// Whether brick `q` is present in the eye's clip level at `cell_zoom`, for
+/// the same reader; false while its center is not laid out.
+pub(in crate::domain) fn brick_present(cell_zoom: Zoom, q: [i32; 2]) -> bool {
+    let w = clipmap();
+    eye_level(w, cell_zoom).is_some_and(|clip_level| {
+        w.table.entries[(clip_level * ENTRIES + clipmap::entry(q)) as usize].holds(q)
+    })
 }
 
 /// The clip levels' table as the GPU's cast reads it (pxl-render clip.wgsl
@@ -736,16 +781,12 @@ const _: () = assert!(
 );
 
 /// The room a brick's fill works in, arrays in `.fixed.terrain` (fixed.rs
-/// `FILL_ARRAY_BYTES`): a tile's samples, its lines and the pairs they are
-/// laid with, its spans, its tree as it is built, and the walk that lays the
-/// tree into the pool.
+/// `FILL_ARRAY_BYTES`): a tile's samples and its spans; and its lines, laid out for the fill
+/// alone, taken from the heap as it begins and given back when it ends (`begin`, `end`).
 struct FillScratch {
     ele: &'static mut [i16],
-    lines: &'static mut [u32],
-    pairs: &'static mut [(u32, u32)],
     spans: &'static mut [u32],
-    build: &'static mut [u32],
-    order: &'static mut [u32],
+    lines: Vec<u32>,
 }
 
 static FILL: Global<FillScratch> = Global::new();
@@ -757,11 +798,8 @@ fn fill_scratch() -> &'static mut FillScratch {
         unsafe {
             FillScratch {
                 ele: arr(r, fill_off(0), ELE_COLUMN),
-                lines: arr(r, fill_off(1), LINES_WORDS as usize),
-                pairs: arr(r, fill_off(2), WAYS_BRICK_SEGMENTS as usize),
-                spans: arr(r, fill_off(3), SPANS_WORDS as usize),
-                build: arr(r, fill_off(4), BUILD_WORDS),
-                order: arr(r, fill_off(5), way_tree::BRICK_CHILD_GROUPS as usize + 1),
+                spans: arr(r, fill_off(1), SPANS_WORDS as usize),
+                lines: Vec::new(),
             }
         }
     })
@@ -777,7 +815,7 @@ fn slot_wants(w: &Clipmap, tile: Quadrant, b: u32) -> bool {
 /// Cuts from `pkt`, the tile's packet, in the turn it landed, the palette of
 /// every absent brick of `tile` that a clip level wants. The palette is all
 /// that a brick's fill reads of a packet beyond what the tile keeps
-/// (`TerrainTile::separation`, `TerrainTile::ele`), so the packet can be
+/// (its `separation` and `ele`), so the packet can be
 /// freed afterwards. A brick whose slot the runtime holds is left absent, and
 /// its tile is asked for again.
 pub fn cut(tile: Quadrant, pkt: &[u8]) {
@@ -835,9 +873,8 @@ fn cut_into(b: u32, place: [u32; 2], four: &impl Fn(usize) -> u32) {
 }
 
 /// A brick's fill while it goes on: its slot, and the brick it was begun
-/// for with where that lies; how many of the room's line words it uses
-/// (`FillScratch::lines`); the number of its tree's child groups and its
-/// root as built (`fill::tree`); and the stage that comes next.
+/// for with where that lies; whether a column made more spans than it can
+/// keep (`Fill::Refused`); and the stage that comes next.
 #[derive(Clone, Copy)]
 struct BrickFill {
     slot: u32,
@@ -845,8 +882,7 @@ struct BrickFill {
     brick: [i32; 2],
     place: [u32; 2],
     shard: Shard,
-    line_cnt: usize,
-    built: [u32; 2],
+    past: bool,
     stage: Stage,
 }
 
@@ -857,7 +893,6 @@ enum Stage {
     Columns,
     Spans(u32),
     Mips,
-    Tree,
     Lay,
 }
 
@@ -901,6 +936,19 @@ pub fn fill_share() {
     }
 }
 
+/// A brick with no line reads this: no bin holds any segment.
+static NO_LINES: [u32; clipmap::LINES_ENTRIES_AT as usize] =
+    [0; clipmap::LINES_ENTRIES_AT as usize];
+
+/// A brick's lines as its fill reads them, or none (`NO_LINES`).
+fn lines_read(lines: &[u32]) -> &[u32] {
+    if lines.is_empty() {
+        &NO_LINES
+    } else {
+        lines
+    }
+}
+
 /// Runs the next part of the fill going on, or begins the next due brick. A
 /// fill whose slot let its brick go ends.
 fn fill_stage(w: &mut Clipmap) -> Poll {
@@ -910,6 +958,7 @@ fn fill_stage(w: &mut Clipmap) -> Poll {
     let (b, slot) = (filling.slot, w.slots[filling.slot as usize]);
     if !slot.holds(filling.cell_zoom, filling.brick) || slot.fill != Fill::Cut {
         w.filling = None;
+        fill_scratch().lines = Vec::new();
         return Poll::Ran;
     }
     let f = fill_scratch();
@@ -919,7 +968,7 @@ fn fill_stage(w: &mut Clipmap) -> Poll {
         first: filling.brick.map(|v| v << BRICK_SHIFT),
         shard: filling.shard,
         ele: f.ele,
-        lines: &f.lines[..filling.line_cnt],
+        lines: lines_read(&f.lines),
     };
     filling.stage = match filling.stage {
         Stage::Columns => {
@@ -929,7 +978,7 @@ fn fill_stage(w: &mut Clipmap) -> Poll {
         }
         Stage::Spans(row) => {
             for i in row * SPANS_ACROSS..(row + 1) * SPANS_ACROSS {
-                fill::spans(cells(b), &site, f.spans, i);
+                filling.past |= fill::spans(cells(b), &site, f.spans, i);
             }
             match row + 1 < SPANS_ACROSS {
                 true => Stage::Spans(row + 1),
@@ -938,17 +987,9 @@ fn fill_stage(w: &mut Clipmap) -> Poll {
         }
         Stage::Mips => {
             fill::mips(cells_mut(b), f.spans, filling.cell_zoom);
-            Stage::Tree
-        }
-        Stage::Tree => {
-            let [used, cnt, root] = fill::tree(cells(b), f.spans, filling.cell_zoom, f.build, 1);
-            if used == u32::MAX {
-                return end(w, b, Fill::Refused);
-            }
-            filling.built = [cnt, root];
             Stage::Lay
         }
-        Stage::Lay => return lay(w, filling, f),
+        Stage::Lay => return lay(w, b, filling),
     };
     w.filling = Some(filling);
     Poll::Ran
@@ -988,10 +1029,9 @@ fn begin(w: &mut Clipmap) -> Poll {
         } else {
             f.ele.copy_from_slice(&tile.ele);
         }
-        let Some(line_cnt) = brick_lines(t, &tile.separation, place, f.pairs, f.lines) else {
-            w.slots[b as usize].fill = Fill::Refused;
+        if !take_lines(w, b, t, &tile.separation, place) {
             continue;
-        };
+        }
         w.filling = Some(BrickFill {
             slot: b,
             cell_zoom: slot.cell_zoom,
@@ -1001,8 +1041,7 @@ fn begin(w: &mut Clipmap) -> Poll {
                 &ServiceArea,
                 (clipmap::bricks_zoom(slot.cell_zoom), slot.brick),
             ),
-            line_cnt,
-            built: [0; 2],
+            past: false,
             stage: Stage::Columns,
         });
         return Poll::Ran;
@@ -1010,49 +1049,93 @@ fn begin(w: &mut Clipmap) -> Poll {
     Poll::Done
 }
 
-/// Lays a brick's tree into the pool as a run of its own, named by the
-/// brick's root word, and ends the fill. Past the pool's cap the brick is
-/// refused; where the heap refuses room, it waits; and while the runtime
-/// holds the run, the part is held for a later turn.
-fn lay(w: &mut Clipmap, filling: BrickFill, f: &mut FillScratch) -> Poll {
-    let (b, [cnt, root]) = (filling.slot, filling.built);
-    if cnt == 0 {
+/// Lays brick `b`'s lines out for its fill, on the heap and refused without a panic. Its
+/// `pairs` go back when this returns and its lines when the fill ends (`end`); none are taken for
+/// a brick with no line. It says whether the fill may go on, the brick waiting where the heap
+/// refused (`Fill::Waiting`).
+fn take_lines(
+    w: &mut Clipmap,
+    b: u32,
+    t: Quadrant,
+    separation: &Separation,
+    place: [u32; 2],
+) -> bool {
+    let f = fill_scratch();
+    f.lines = Vec::new();
+    let mut pairs = Vec::new();
+    let Some(segments) = brick_pairs(separation, place, &mut pairs) else {
+        return wait_heap(w, b);
+    };
+    if pairs.is_empty() {
+        return true;
+    }
+    let words = clipmap::lines_words(pairs.len() as u32, segments) as usize;
+    let mut lines = Vec::new();
+    if lines.try_reserve_exact(words).is_err() {
+        return wait_heap(w, b);
+    }
+    lines.resize(words, 0);
+    brick_lines(t, separation, &mut pairs, &mut lines);
+    f.lines = lines;
+    true
+}
+
+fn wait_heap(w: &mut Clipmap, b: u32) -> bool {
+    w.heap.get_or_insert_with(Refusal::now);
+    w.slots[b as usize].fill = Fill::Waiting;
+    false
+}
+
+/// Keeps the brick's spans in a run of the ways' pool and ends its fill: a column past
+/// `way::SPANS` refuses it for good; past the pool's cap it is refused until a run is given
+/// back; where the heap refuses it waits. Where a free run would fit and the runtime still
+/// holds it, a later turn lays the brick (`WayPool::take`).
+fn lay(w: &mut Clipmap, b: u32, filling: BrickFill) -> Poll {
+    let f = fill_scratch();
+    if filling.past {
+        w.slots[b as usize].want = NEVER;
+        return end(w, b, Fill::Refused);
+    }
+    let words = fill::spans_run_words(f.spans);
+    if words == 0 {
         cells_mut(b)[ROOT_AT as usize] = 0;
         return end(w, b, Fill::Filled);
     }
     let pool = way_pool();
-    let run = match pool.take(cnt) {
+    let run = match pool.take(words) {
         Ok(run) => run,
-        Err(PoolRefusal::Cap) => return end(w, b, Fill::Refused),
+        Err(PoolRefusal::Cap) if pool.fits(words) => return Poll::Stop,
+        Err(PoolRefusal::Cap) => {
+            w.ways.get_or_insert_with(Refusal::ways);
+            w.slots[b as usize].want = words;
+            return end(w, b, Fill::Refused);
+        }
         Err(PoolRefusal::Heap) => {
             w.heap.get_or_insert_with(Refusal::now);
             return end(w, b, Fill::Waiting);
         }
     };
-    if pool.in_flight(run) {
-        pool.give(run);
-        return Poll::Stop;
-    }
-    let built = way_tree::Read(f.build);
-    cells_mut(b)[ROOT_AT as usize] = way_tree::lay(&built, root, pool, run[0], f.order);
-    w.slots[b as usize].tree = run;
+    fill::lay_spans(f.spans, &mut |k, v| pool.set(run[0] + k, v));
+    cells_mut(b)[ROOT_AT as usize] = run[0];
+    w.slots[b as usize].run = run;
     end(w, b, Fill::Filled)
 }
 
 fn end(w: &mut Clipmap, b: u32, fill: Fill) -> Poll {
     w.slots[b as usize].fill = fill;
     w.filling = None;
+    fill_scratch().lines = Vec::new();
     Poll::Ran
 }
 
 /// The clip levels as the CPU holds them, for the one way pxl-engine reads a
 /// cell on the CPU and the GPU alike (`clipmap::step`,
 /// `clipmap::bound_over`). It gives each brick's columns, mip levels and the
-/// root of its ways' tree, whose child groups are in the pool (`pool`); the
+/// root of its run of kept spans, read from the ways' pool (`pool`); the
 /// mip levels folded here over the eye's bricks (`fold`); and the service
 /// area the clip levels end at (pxl-engine `area::Area`).
 #[derive(Clone, Copy)]
-pub(in crate::domain) struct CpuClipmap;
+pub(in crate::domain::layer) struct CpuClipmap;
 
 impl Area for CpuClipmap {
     fn ends(&self) -> bool {
@@ -1168,7 +1251,7 @@ impl BrickSource for CpuClipmap {
 /// level holds it, so a node wider than a brick, bounded by what is folded
 /// over each center's bricks, is bounded by all of them joined. The zoom and
 /// whether the node is held are the eye's read's.
-pub(in crate::domain) fn bound_over(
+pub(in crate::domain::layer) fn bound_over(
     place: &mut Lookup,
     zooms: [Zoom; 2],
     node: (Zoom, [i32; 2]),
@@ -1201,4 +1284,4 @@ const _: () = assert!(BRICK_MIPS <= BRICK_SHIFT);
 
 #[cfg(test)]
 #[path = "clipmap.test.rs"]
-pub(crate) mod test;
+pub(in crate::domain::layer) mod test;

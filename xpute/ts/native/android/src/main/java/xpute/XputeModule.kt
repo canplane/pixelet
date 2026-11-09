@@ -10,6 +10,8 @@ import expo.modules.kotlin.jni.JavaScriptFunction
 import expo.modules.kotlin.jni.NativeArrayBuffer
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.kotlin.typedarray.Uint8Array
+import java.nio.ByteBuffer
 
 /**
  * This is xpute's native module on Android (src/mod.ts), the same as
@@ -17,6 +19,8 @@ import expo.modules.kotlin.modules.ModuleDefinition
  * GPU runtime (Gpu.kt) and the view its surface draws into (SurfaceView.kt).
  */
 class XputeModule : Module() {
+  private fun bytesOf(a: Uint8Array): ByteArray = ByteArray(a.byteLength).also { a.read(it, 0, a.byteLength) }
+
   private val main = Handler(Looper.getMainLooper())
 
   /** This tells the core's thread each display frame (`Core.vsync`). */
@@ -30,7 +34,7 @@ class XputeModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("Xpute")
 
-    /** Fires when the core has posted or asked for a turn, when a call waits
+    /** Fires when frames wait for `take`, when a call waits
      * for `answer`, or when the core has stopped. It is sent from the core's
      * thread, and Expo carries the event to the JavaScript thread. */
     Events("onNotify")
@@ -54,11 +58,9 @@ class XputeModule : Module() {
 
     Function("store") { at: Double, word: Double -> Core.store(at, word) }
 
-    Function("run") { deadlineMs: Double -> Core.run(deadlineMs) }
+    Function("wake") { Core.wake() }
 
-    Function("kick") { deadlineMs: Double, atMs: Double -> Core.kick(deadlineMs, atMs) }
-
-    Function("nextFrame") { afterMs: Double -> Core.nextFrame(afterMs) }
+    Function("input") { Core.input() }
 
     Function("pause") { Core.pause() }
 
@@ -66,7 +68,28 @@ class XputeModule : Module() {
 
     Function("answer") { Core.answer() }
 
-    Function("turns") { Core.turns().toList() }
+    Function("attach") { sqAt: Double, cqAt: Double, fs: Boolean -> Core.attach(sqAt.toLong().toInt(), cqAt.toLong().toInt(), fs) }
+
+    Function("pace") { paceHz: Double, marginShare: Double, batchFrames: Double, settleMs: Double ->
+      Core.pace(paceHz, marginShare, batchFrames, settleMs)
+    }
+
+    Function("post") { tag: Double, cmd: Double, flags: Double, result: Double, pkt: Uint8Array ->
+      Core.post(tag.toLong().toInt(), cmd.toLong().toInt(), flags.toLong().toInt(), result.toInt(), bytesOf(pkt))
+    }
+
+    Function("take") {
+      val bytes = Core.take()
+      NativeArrayBuffer(ByteBuffer.allocateDirect(bytes.size).put(bytes).also { it.flip() })
+    }
+
+    Function("fsOpened") { fd: Double, result: Double, detail: Double, bytes: Uint8Array ->
+      Core.fsOpened(fd.toLong().toInt(), result.toInt(), detail.toLong().toInt(), bytesOf(bytes))
+    }
+
+    Function("fsClosed") { fd: Double, result: Double -> Core.fsClosed(fd.toLong().toInt(), result.toInt()) }
+
+    Function("call") { cmd: Double, pkt: Uint8Array -> Core.call(cmd.toLong().toInt(), bytesOf(pkt)).toDouble() }
 
     // @xpute/runtime's answer, called on the JavaScript thread, which is the
     // app's thread here.

@@ -18,6 +18,19 @@ public class PlatformModule: Module {
     // ---- @expo/ui modifiers the UI names (SheetContent.swift) ----
 
     OnCreate {
+      pxl_text_on(
+        { weight, px, text, len in
+          autoreleasepool {
+            textWidth(String(decoding: UnsafeBufferPointer(start: text, count: len), as: UTF8.self), weight, px)
+          }
+        },
+        { weight, px, rgba, text, len, x, width, height, out in
+          autoreleasepool {
+            textRaster(
+              String(decoding: UnsafeBufferPointer(start: text, count: len), as: UTF8.self), weight, px, rgba, x,
+              Int(width), Int(height), UnsafeMutableRawPointer(out!))
+          }
+        })
       ViewModifierRegistry.register(contentScrollsModifier) { _, _, _ in ContentScrollsModifier() }
     }
     OnDestroy {
@@ -60,22 +73,6 @@ public class PlatformModule: Module {
 
     Function("clipboardSet") { (text: String) in
       UIPasteboard.general.string = text
-    }
-
-    // ---- text (service/platform/text.native.ts, Text.swift) ----
-
-
-    Function("textWidth") { (weight: Double, px: Double, text: String) -> Double in
-      textWidth(text, weight, px)
-    }
-
-    /// Draws the line into `out`, starting at `x`, with the middle of its em box
-    /// on the middle row. `out` is `width` by `height` pixels of RGBA, top row
-    /// first, with alpha not premultiplied. An `out` too small for that is left
-    /// untouched.
-    Function("textRaster") { (weight: Double, px: Double, rgba: UInt32, text: String, x: Double, width: Int, height: Int, out: Uint8Array) in
-      guard out.byteLength >= width * height * 4 else { return }
-      textRaster(text, weight, px, rgba, x, width, height, out.rawPointer)
     }
 
     // ---- the compass (service/platform/sensor.native.ts) ----

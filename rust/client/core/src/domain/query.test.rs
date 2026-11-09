@@ -22,7 +22,6 @@ use crate::domain::layer::object::store::Store;
 use crate::domain::layer::tile_cache::TileCache;
 use pxl_spec::space::coord::zoom::{idx_of, units, Zoom};
 
-use crate::domain::layer::object::store::ObjectQuery as _;
 use crate::domain::layer::object::store::Write;
 use crate::domain::layer::terrain::clipmap::test;
 use crate::sys::serial;
@@ -455,6 +454,59 @@ fn stack_gap_floored() {
         Answer::Exact(Some(6.0))
     );
     assert_eq!(access.surface_support(&gap), Answer::Exact(Some(6.0)));
+}
+
+/// A ray that goes on from where the last ray from its point ended meets what
+/// a ray from the top meets.
+#[test]
+fn ray_goes_on_from_the_last() {
+    use super::ray::{at_zoom, Until};
+    use crate::domain::layer::tile_cache::Path;
+
+    let _g = serial();
+    let (tile_cache, [x, y]) = flat_at_five();
+    let mut store = Store::default();
+    let red = cube::Object::red as AssetId;
+    for z in [5.0, 7.0] {
+        write(&mut store, [x, y, z], OBJECT_COARSEST, red);
+    }
+    let access = World::new(&tile_cache, &store);
+    let detail = at_zoom(LEAF_ZOOM);
+    let ray = |z: f64, dir: f64| Ray {
+        origin: [x + 0.5, y + 0.5, z],
+        dir: [0.0, 0.0, dir],
+        t_max: 64.0,
+    };
+    for z in [3.5, 5.5, 6.0, 6.5, 7.0, 7.5, 9.5] {
+        let (mut path, mut descent) = (Path::default(), None);
+        access.along(
+            &ray(z, 1.0),
+            detail,
+            Until::Transparent,
+            None,
+            &mut path,
+            &mut descent,
+        );
+        assert!(descent.is_some());
+        let (on, _) = access.along(
+            &ray(z, -1.0),
+            detail,
+            Until::Opaque,
+            None,
+            &mut path,
+            &mut descent,
+        );
+        let (top, _) = access.along(
+            &ray(z, -1.0),
+            detail,
+            Until::Opaque,
+            None,
+            &mut Path::default(),
+            &mut None,
+        );
+        let met = |a: Answer<Option<Hit>>| a.val().flatten().map(|h| (h.t, h.cube));
+        assert_eq!(met(on), met(top), "from {z}");
+    }
 }
 
 /// A cell coarser than what is placed in it is read as the cast draws it

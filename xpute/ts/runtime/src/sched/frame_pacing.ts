@@ -35,7 +35,7 @@
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import type { Grant, SchedulingPolicy } from "./policy.ts";
+import type { Frame, Grant, SchedulingPolicy } from "./policy.ts";
 
 export const FRAME_WINDOW = 64;
 const MAX_FRAME_GAP_MS = 50;
@@ -51,13 +51,7 @@ export interface FramePacingConfig {
   settle_ms: f64;
 }
 
-export interface FrameGrant extends Grant {
-  /** `refresh_ms` is the display's refresh, and `paced_ms` the interval
-   * turns are paced at, which is the refresh times the divisor. */
-  refresh_ms: f64;
-  paced_ms: f64;
-  interactive: boolean;
-}
+export interface FrameGrant extends Grant, Frame {}
 
 export class FramePacing implements SchedulingPolicy<FrameGrant> {
   private readonly gaps = new Float64Array(FRAME_WINDOW);
@@ -76,27 +70,22 @@ export class FramePacing implements SchedulingPolicy<FrameGrant> {
   /** This is when the last turn ran. */
   private last = -Infinity;
 
-  private readonly cfg: FramePacingConfig;
+  /** The program's numbers, which a device's runtime is given as well. */
+  readonly cfg: FramePacingConfig;
   /** This is the interval `pace_hz` paces at. */
   private readonly max_ms: f64;
   /** This is the least interval the program asked between turns, and 0 for
    * none. */
   private _asked_ms: f64 = 0;
-  private readonly next_frame: (run: (now: f64) => void) => void;
 
-  /** `next_frame` hands over the display's next animation frame. */
-  constructor(
-    cfg: FramePacingConfig,
-    next_frame: (run: (now: f64) => void) => void,
-  ) {
+  constructor(cfg: FramePacingConfig) {
     this.cfg = cfg;
     this.max_ms = 1000 / cfg.pace_hz;
     this._refresh_ms = this.max_ms;
-    this.next_frame = next_frame;
   }
 
   next(consider: (now: f64) => void): void {
-    this.next_frame(consider);
+    requestAnimationFrame(consider);
   }
 
   /** After an input at `now`, the turns are interactive for `settle_ms`. */
@@ -120,6 +109,10 @@ export class FramePacing implements SchedulingPolicy<FrameGrant> {
   }
 
   /** Sets the least interval between turns from now on; 0 sets none. */
+  frame(grant: FrameGrant): Frame {
+    return grant;
+  }
+
   pace(interval_ms: f64): void {
     this._asked_ms = interval_ms;
   }

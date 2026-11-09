@@ -3,6 +3,7 @@
 //! How a read's attempt ended, and why a failed one failed.
 
 use core::panic::Location;
+use std::collections::TryReserveError;
 
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
@@ -43,12 +44,30 @@ impl Exit {
     }
 }
 
-impl From<Result<(), Failure>> for Exit {
-    fn from(result: Result<(), Failure>) -> Exit {
-        match result {
-            Ok(()) => Exit::Ok,
-            Err(fail) => Exit::Failed(fail),
-        }
+impl From<Result<(), Exit>> for Exit {
+    fn from(result: Result<(), Exit>) -> Exit {
+        result.err().unwrap_or(Exit::Ok)
+    }
+}
+
+/// The heap refused a tile's columns the room, so the want waits on the heap
+/// (sys/io/room.rs).
+impl From<TryReserveError> for Exit {
+    fn from(_: TryReserveError) -> Exit {
+        Exit::Refused(Refusal::now())
+    }
+}
+
+impl From<Failure> for Exit {
+    fn from(fail: Failure) -> Exit {
+        Exit::Failed(fail)
+    }
+}
+
+impl From<MarshalError> for Exit {
+    #[track_caller]
+    fn from(err: MarshalError) -> Exit {
+        Exit::Failed(Failure::from(err))
     }
 }
 

@@ -170,10 +170,13 @@ precision is always spent where the eye is.
 ### The query, the only seam
 
 Everything that looks at the world asks it the same question, and the **query**
-is the only place that knows how a layer stores its answer
-(`pxl-core domain/layer/query.rs` `Query`). The **world** composes the layers
-into one answer for drawing and for control alike (`pxl-engine world.rs`
-`node`), each written over the one below:
+is the only place that knows how the terrain and the objects, the layers it
+answers from, store their answers. Its files stand beside the layers'
+(`pxl-core domain/query.rs`), and in the module tree it is a child of theirs
+(`domain/layer.rs`): what those two store their answers in is visible within
+the layers alone, the query among them, and the compiler refuses any other
+reader. The **world** composes the layers into one answer for drawing and for
+control alike (`pxl-engine world.rs` `node`), each written over the one below:
 
 ```text
   what is placed, air included            ┐ each is written
@@ -247,10 +250,14 @@ cell moves:
 
 A tile is cut into its bricks as it lands, and the bricks are filled on the CPU
 over the following turns, a part at a time within the turn's share, with a
-min-max pyramid over their heights and their bridges and tunnels as a tree. All
+min-max pyramid over their heights and their bridges and tunnels as spans. All
 of it is uploaded, so the CPU's question and the GPU's ray meet the same bridge.
 Where a level holds no brick, the coarser level's ground is read, and drawn, in
 its place.
+
+A tile owns what is its own, and what it owns goes when it goes: its lines are
+vectors on the heap, and an Earth tile holds its packet until the GPU has its
+texels.
 
 Every bound in the view has an owner: the camera grid bounds what is drawn,
 demand bounds what is fetched, the slots bound what is held, and a turn's time
@@ -371,8 +378,8 @@ does not need to, so the same world runs everywhere. xpute's own documents
 describe that machine; this one is about what pixelet does on it.
 
 The core is given its time in **turns**. Each turn is paced to the display and
-arrives as a grant that carries its budget and how many reads it may start
-(`turn.rs` `TurnGrant`). A turn runs one task in one order: the effects of the
+arrives as a grant that carries its budget, frame pacing's SYS_FRAME before
+xpute's SYS_TURN (`turn.rs` `TurnGrant`). A turn runs one task in one order: the effects of the
 last one, the tick's phases under the budget, then the frame, and none of it
 where the GPU cannot take a frame yet. The core's memory is laid out once at
 boot, in sections that nothing grows past (`sys/section.rs`), so a long
@@ -418,9 +425,10 @@ noticing:
 
 - The ground is stored as 2.5D, but nothing behaves as 2.5D: every reader asks
   the 3D query, so caves, bores and placed objects are seen alike.
-- Only the query reads a layer. Everything else asks the world, and the
-  check-rules tool refuses a layer read anywhere else
-  (`rust/tool/src/bin/rule.rs` `LAYER_READERS`).
+- Only the query reads the terrain and the objects, the layers it answers from.
+  Everything else asks the world, and the compiler refuses their reads anywhere
+  else: they are visible within `domain/layer` alone, and the query is its
+  child.
 - The UI computes no coordinate and no tile, and reaches the core only through
   the generated commands and the snapshot.
 - Nothing under `xpute/` knows pixelet: no tile, no world, no pixelet name.
@@ -431,6 +439,31 @@ noticing:
 - Nothing is fetched on a guess, and nothing goes from fine back to coarse.
 - No decision reads the profiler, which sits beside the core and may read
   anything.
+
+## Prior art
+
+What is pixelet's own is that the eye sets the detail and one query answers
+every observer. The machinery under it is earlier work:
+
+| Precedent | What is taken |
+| --- | --- |
+| Google Earth and the web map's tile pyramid | The pyramid: a tile at one zoom folded from the four under it, so a view from afar reads a handful of tiles |
+| Morton order | Tile and shard names, each a prefix of its children's |
+| Earth Engine's `MODE` pyramiding | The ground's fold: a parent's palette index is the majority of the four under it |
+| Cesium 3D Tiles' `preloadAncestors` | Demand: the tiles on the line over a missing one are asked for, so a coarser answer is held wherever the view looks |
+| Web Mercator (EPSG:3857), WGS 84 | The plane a position follows, one lap of X its whole width, and the Earth's radius |
+| Quake III's `PM_StepSlideMove` ([bg_slidemove.c](https://github.com/id-Software/Quake-III-Arena/blob/master/code/game/bg_slidemove.c)) | The walker: blocked, it steps up and slides along the wall as `PM_ClipVelocity` clips the velocity, with no step height but the ceiling's, and settles on the floor |
+| Amanatides and Woo's voxel traversal | The ray's walk: the next cell along a ray, by the share of the way to each axis's edge |
+| Laine and Karras, _Efficient Sparse Voxel Octrees_ (I3D 2010) | The ray's descent: push, advance and pop down the octree, and a split passed whole where the ray misses its contour, here a box |
+| Laine and Karras's beams; Reshetov et al. | The beam rays: rays at a cell's corners walk the descent its pixels share, and the samples walk on from where the nearest stopped |
+| Tevs, Ihrke and Seidel's maximum mipmaps | The clipmap's min-max pyramid: the lowest and highest under a node, which a ray above it passes whole |
+| The clipmap (Tanner, Migdal and Jones 1998) | The clipmap, and the shadow map's box: a square about a center, each part held at its place modulo the side, so it follows the center and nothing held moves |
+| Burns and Hunt's visibility buffer (JCGT 2013) | The raster: each pixel keeps the number of the nearest box drawn over it and reads the rest off that |
+| Overture's schema | The divisions: a division is one of its subtypes |
+| OpenStreetMap Carto | The ground's palette and paint order, way widths, and the places' icons and zooms |
+| [Arnis](https://github.com/louis-e/arnis) | Bridges and tunnels: the bake's solve for their clearances, ramps, decks and piers, ported |
+| Bruneton; Hillaire (EGSR 2020) | The air: the atmosphere's tables of transmittance and irradiance, multiple scattering, the sky view and the aerial-perspective volume |
+| Unreal's SkyAtmosphere, OPAC, Cornette–Shanks | The Earth's scattering numbers, the haze and the Mie phase |
 
 ## Where things are
 
@@ -452,7 +485,7 @@ up, and the folders are that order. The check-rules tool holds it.
   sys/                   what all of it stands on
     io/          reads and their scheduler
     sched/       a turn's edge and its phases
-    mem/         the memory's sections
+    section      the memory's sections
     boot · load  bringing it up and what it loads
 
   beside: perf/, the profiler, which reads anything and decides nothing

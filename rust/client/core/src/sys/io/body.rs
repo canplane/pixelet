@@ -13,8 +13,10 @@
 //! and no more than `BODY_SLOTS` slots are out at once (sys/io/param.rs).
 //! Every other body is a heap block of its own, freed as it is decoded.
 //!
-//! A terrain body is freed once it is decoded. An Earth body is freed only
-//! when a drawn frame takes it (domain/layer/earth.rs `upload`). The
+//! A body is a `Packet`, owned by what holds it and given back when it is
+//! dropped. A terrain body is dropped once it is decoded and its clip levels
+//! have cut what they want. An Earth body is dropped only when a drawn frame
+//! takes its texels (domain/layer/earth.rs `upload`). The
 //! Earth's frames bound those bodies apart from the rest, so a body on every
 //! credit still finds a slot and the tile cache fills while no frame is
 //! drawn. A refused body waits on what refused it (sys/io/room.rs). When
@@ -25,6 +27,7 @@
 
 use pxl_spec::bake::tile::terrain::{ELE_COLUMN, PALETTE_COLUMN};
 use xpute_core::global::Global;
+use xpute_core::mem;
 use xpute_core::mem::heap::{alloc, free, Block};
 use xpute_core::mem::section::PAGE_BYTES;
 
@@ -115,13 +118,41 @@ pub const fn slots_bytes(slot_cnt: u32) -> u64 {
     slot_cnt.div_ceil(SLOTS) as u64 * BODY_RUN_BYTES as u64
 }
 
+/// A body read into a block: what the fetch fills, what the layer that asked
+/// reads, and what goes back when its holder lets it go.
+pub struct Packet(Block);
+
+impl core::ops::Deref for Packet {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        // SAFETY: the block `take` made for this body alone, `self.0.1` long,
+        // read by its holder only once the runtime has filled it.
+        unsafe { core::slice::from_raw_parts(mem::at::<u8>(self.0 .0), self.0 .1 as usize) }
+    }
+}
+
+impl core::ops::DerefMut for Packet {
+    fn deref_mut(&mut self) -> &mut [u8] {
+        // SAFETY: as `deref`, and its only writer is the fetch that fills it.
+        unsafe { core::slice::from_raw_parts_mut(mem::at::<u8>(self.0 .0), self.0 .1 as usize) }
+    }
+}
+
+impl Drop for Packet {
+    fn drop(&mut self) {
+        // SAFETY: a block `take` made, given back once, here.
+        unsafe { give(self.0) };
+    }
+}
+
 /// A block for a body of `n` bytes. `stream` is the body's stream, or None
 /// where the scheduler no longer holds its attempt. The block is a slot where
 /// the stream's bodies take one and `n` fits it, and a heap block of its own
 /// otherwise.
-pub fn take(stream: Option<Stream>, n: u32) -> Result<Block, Refusal> {
+pub fn take(stream: Option<Stream>, n: u32) -> Result<Packet, Refusal> {
     if !stream.is_some_and(|s| s.row().slotted) || n > SLOT_BYTES {
-        return alloc(n).ok_or_else(Refusal::now);
+        return alloc(n).map(Packet).ok_or_else(Refusal::now);
     }
     let s = slot_table();
     let out = s.out();
@@ -144,12 +175,12 @@ pub fn take(stream: Option<Stream>, n: u32) -> Result<Block, Refusal> {
     let run = &mut s.runs[i];
     let slot = (!run.out).trailing_zeros();
     run.out |= 1 << slot;
-    Ok((run.at + (slot * SLOT_BYTES) as usize, n))
+    Ok(Packet((run.at + (slot * SLOT_BYTES) as usize, n)))
 }
 
 /// # Safety
 /// `block` came from `take` and has not been given back.
-pub unsafe fn give(block: Block) {
+unsafe fn give(block: Block) {
     let s = slot_table();
     let Some(i) = s
         .runs

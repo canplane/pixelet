@@ -14,7 +14,7 @@
 //! A task parked by `next_turn` asks for the next turn at once. A task parked
 //! by `runtime_turn` waits on the runtime and asks for no turn: the runtime
 //! starts the next turn itself once it has done what the task waits for,
-//! because its read of the completion ring kicks the core. A core on its own
+//! because its read of the completion ring asks for a turn. A core on its own
 //! thread therefore does not spin while the runtime has not yet read.
 
 use core::future::{poll_fn, Future};

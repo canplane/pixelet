@@ -11,16 +11,15 @@
 //! deadline passes; at the deadline its tasks yield (`sched::edge`). It then
 //! returns when it wants to be woken: 0 for the earliest moment the runtime's
 //! scheduling policy allows, `n` for `n` ms from now, or `NO_WAKE` for only
-//! when something arrives. A kick wakes it earlier: the runtime kicks it for
-//! each submission, completion and call it sends, and after a read of the
+//! when something arrives. The runtime asks for a turn earlier for each
+//! submission, completion and call it sends, and after a read of the
 //! completion ring that took frames, since that read gave back room a task may
 //! be waiting for.
 //!
 //! A page runs the core on its one thread, in turns its scheduler grants and
 //! cuts off at each turn's deadline (@xpute/runtime `Scheduler`). A native
-//! runtime runs the core on a thread of its own, which sleeps until a kick.
-//! The same scheduler sends that kick at the moment its policy allows for
-//! the wake the core asked for (xpute-runtime native/thread.rs).
+//! runtime runs the core on a thread of its own, which begins a wanted turn at
+//! a display frame (xpute-runtime native/thread.rs).
 
 use crate::mem::heap::HeapStat;
 use crate::stop::PanicHook;

@@ -5,9 +5,8 @@
 //! What they look like — slab, piers, bore, embankment, cutting — the client
 //! makes from the surface and these numbers.
 
-use std::borrow::Cow;
+use std::collections::TryReserveError;
 
-use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::shape::Shape;
 
@@ -71,17 +70,17 @@ impl Form {
 /// A tile's lines, structure-of-arrays: a column a line, then a column a point.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Separation {
-    pub starts: Cow<'static, [u32]>, // Line d holds the points starts[d]..starts[d + 1].
-    pub points: Cow<'static, [[i16; 2]]>, // Each point of the centreline, in 1/POINT_SCALE of a tile cell, as the source gives it.
-    pub tops: Cow<'static, [i16]>, // The road surface at each point, in leaf cells, solved over many tiles.
-    pub widths: Cow<'static, [u8]>, // Each line's width, in 1/POINT_SCALE of a tile cell, as the source gives it.
-    pub kinds: Cow<'static, [u8]>, // Each line's transport type: the source's class, which is the slab's material.
-    pub forms: Cow<'static, [u8]>, // Each line's `Form`, from the source's flags.
-    pub clears: Cow<'static, [u8]>, // A bore's clear space over its surface, in leaf cells, as the solve set it.
+    pub starts: Vec<u32>,      // Line d holds the points starts[d]..starts[d + 1].
+    pub points: Vec<[i16; 2]>, // Each point of the centreline, in 1/POINT_SCALE of a tile cell, as the source gives it.
+    pub tops: Vec<i16>, // The road surface at each point, in leaf cells, solved over many tiles.
+    pub widths: Vec<u8>, // Each line's width, in 1/POINT_SCALE of a tile cell, as the source gives it.
+    pub kinds: Vec<u8>, // Each line's transport type: the source's class, which is the slab's material.
+    pub forms: Vec<u8>, // Each line's `Form`, from the source's flags.
+    pub clears: Vec<u8>, // A bore's clear space over its surface, in leaf cells, as the solve set it.
     /// The coarsest zoom at which each point is held (pxl-engine `way::coarsest`): what a fold
-    /// keeps of a line. Only the bake reads it, since no client path folds, so a client's room
-    /// holds none (`Table::into_room`).
-    pub first_zooms: Cow<'static, [u8]>,
+    /// keeps of a line. Only the bake reads it, since no client path folds, so a client holds
+    /// none (`Table::to_client`).
+    pub first_zooms: Vec<u8>,
 }
 
 impl Default for Separation {
@@ -522,14 +521,14 @@ impl Builder {
     pub fn finish(mut self) -> Separation {
         self.starts.push(self.points.len() as u32);
         Separation {
-            starts: self.starts.into(),
-            points: self.points.into(),
-            tops: self.tops.into(),
-            first_zooms: self.first_zooms.into(),
-            widths: self.widths.into(),
-            kinds: self.kinds.into(),
-            forms: self.forms.into(),
-            clears: self.clears.into(),
+            starts: self.starts,
+            points: self.points,
+            tops: self.tops,
+            first_zooms: self.first_zooms,
+            widths: self.widths,
+            kinds: self.kinds,
+            forms: self.forms,
+            clears: self.clears,
         }
     }
 }
@@ -609,51 +608,38 @@ impl<'a> Table<'a> {
 
     pub(crate) fn to_separation(&self) -> Separation {
         Separation {
-            starts: self.starts.to_vec().into(),
-            points: self.points.to_vec().into(),
-            tops: self.tops.to_vec().into(),
-            first_zooms: self.first_zooms.to_vec().into(),
-            widths: self.widths.to_vec().into(),
-            kinds: self.kinds.to_vec().into(),
-            forms: self.forms.to_vec().into(),
-            clears: self.clears.to_vec().into(),
+            starts: self.starts.to_vec(),
+            points: self.points.to_vec(),
+            tops: self.tops.to_vec(),
+            first_zooms: self.first_zooms.to_vec(),
+            widths: self.widths.to_vec(),
+            kinds: self.kinds.to_vec(),
+            forms: self.forms.to_vec(),
+            clears: self.clears.to_vec(),
         }
     }
 
-    /// Into a client's slot: every column but `first_zooms`, which only a fold reads; a client
-    /// reads a brick's lines whole (bake/tile/terrain.rs `brick_lines`). Refused, as a packet
-    /// too long for its kind is, where `room` holds fewer than the tile's lines or points.
-    pub fn into_room(&self, room: Room) -> Result<Separation, MarshalError> {
-        if self.starts.len() > room.starts.len() || self.points.len() > room.points.len() {
-            return Err(MarshalError::new(Errno::EFBIG));
-        }
-        fn put<T: Copy>(dst: &'static mut [T], src: &[T]) -> &'static [T] {
-            let dst = &mut dst[..src.len()];
-            dst.copy_from_slice(src);
-            dst
+    /// A client's own columns, on the heap and refused without a panic: every column but
+    /// `first_zooms`, which only a fold reads; a client reads a brick's lines whole
+    /// (bake/tile/terrain.rs `brick_lines`).
+    pub(crate) fn to_client(&self) -> Result<Separation, TryReserveError> {
+        fn column<T: Copy>(src: &[T]) -> Result<Vec<T>, TryReserveError> {
+            let mut column = Vec::new();
+            column.try_reserve_exact(src.len())?;
+            column.extend_from_slice(src);
+            Ok(column)
         }
         Ok(Separation {
-            starts: put(room.starts, self.starts).into(),
-            points: put(room.points, self.points).into(),
-            tops: put(room.tops, self.tops).into(),
-            first_zooms: Cow::Borrowed(&[]),
-            widths: put(room.widths, self.widths).into(),
-            kinds: put(room.kinds, self.kinds).into(),
-            forms: put(room.forms, self.forms).into(),
-            clears: put(room.clears, self.clears).into(),
+            starts: column(self.starts)?,
+            points: column(self.points)?,
+            tops: column(self.tops)?,
+            first_zooms: Vec::new(),
+            widths: column(self.widths)?,
+            kinds: column(self.kinds)?,
+            forms: column(self.forms)?,
+            clears: column(self.clears)?,
         })
     }
-}
-
-/// A client's slot's room for lines, a column each (pxl-core domain/layer/terrain/fixed.rs).
-pub struct Room {
-    pub starts: &'static mut [u32],
-    pub points: &'static mut [[i16; 2]],
-    pub tops: &'static mut [i16],
-    pub widths: &'static mut [u8],
-    pub kinds: &'static mut [u8],
-    pub forms: &'static mut [u8],
-    pub clears: &'static mut [u8],
 }
 
 #[cfg(test)]

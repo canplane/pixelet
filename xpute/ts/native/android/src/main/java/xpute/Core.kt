@@ -9,8 +9,9 @@ import java.nio.ByteBuffer
  * JNI (xpute-runtime `native_core!`, src/jni.rs). These are the same calls that
  * the iOS module's Swift makes through the C ABI (xpute.h). The core is the
  * shared library that the module's build makes of the app's core crate
- * (build.gradle). The core runs on its own thread while it has work; the app's
- * thread kicks it, waits on it only for a turn it rings, and answers its calls.
+ * (build.gradle). The core runs on its own thread, which begins its turns at
+ * the display's frames; the app's thread asks for turns, waits on it only for a
+ * turn it rings, and answers its calls.
  * It takes nothing of React Native's; the Expo module (XputeModule.kt) is one
  * host that uses it.
  */
@@ -19,35 +20,44 @@ object Core {
     System.loadLibrary(BuildConfig.CORE)
   }
 
-  /** Rings a turn that ends no sooner than `deadlineMs` after its rise, and
-   * waits for it. Returns when the core wants the next turn, in ms, or NaN
-   * once the core has stopped. The first call boots the core. The turn's
-   * calls come back to this thread meanwhile (`call`). */
-  external fun run(deadlineMs: Double): Double
+  /** Asks for a turn at the next display frame. */
+  external fun wake()
 
-  /** Asks for a turn. The next turn begins at `atMs`, at once if that has
-   * passed, and ends no sooner than `deadlineMs` after its rise. */
-  external fun kick(deadlineMs: Double, atMs: Double)
+  /** Says that an input came now. */
+  external fun input()
 
   /** Tells the core's thread of a display frame, `ageMs` after its time. */
   external fun vsync(ageMs: Double)
 
-  /** The time of the first display frame after both now and `afterMs`. */
-  external fun nextFrame(afterMs: Double): Double
-
-  /** From now on only a turn `run` rings may begin, and a kick waits for
-   * `resume`. */
+  /** From now on only a turn `run` rings may begin. */
   external fun pause()
 
-  /** Turns begin again as kicks ask. */
+  /** Turns begin again at the display's frames. */
   external fun resume()
 
   /** Answers on this thread the call that waits, if one does. */
   external fun answer()
 
-  /** What the turns since the last call asked: the wake, then how long the
-   * longest of them took, in ms. */
-  external fun turns(): DoubleArray
+  /** Starts the runtime's own thread over the rings at the given offsets. */
+  external fun attach(sqAt: Int, cqAt: Int, fs: Boolean)
+
+  /** The program's numbers for frame pacing, given before the turns run. */
+  external fun pace(paceHz: Double, marginShare: Double, batchFrames: Double, settleMs: Double)
+
+  /** Queues a frame for the submission ring. */
+  external fun post(tag: Int, cmd: Int, flags: Int, result: Int, pkt: ByteArray)
+
+  /** Hands over what the UI has not heard (xpute.h `xpute_take`). */
+  external fun take(): ByteArray
+
+  /** Completes the open of `fd`. */
+  external fun fsOpened(fd: Int, result: Int, detail: Int, bytes: ByteArray)
+
+  /** Completes the close of `fd`. */
+  external fun fsClosed(fd: Int, result: Int)
+
+  /** Calls the core and waits for its reply (xpute.h `xpute_call`). */
+  external fun call(cmd: Int, pkt: ByteArray): Int
 
   /** The function that answers the core's call laid at the byte it is given,
    * on the app's thread. */
@@ -64,8 +74,8 @@ object Core {
   @JvmStatic fun call(at: Int): Int = answer?.invoke(at) ?: -38
 
   /** The core's runtime (xpute-runtime src/jni.rs `notify`) calls this from
-   * the core's thread, which it attached to the VM, when the core has posted
-   * or asked for a turn, when a call waits, or when the core has stopped. */
+   * the core's thread, which it attached to the VM, when a turn has ended,
+   * when a call waits, or when the core has stopped. */
   @JvmStatic fun onNotify() {
     notify?.invoke()
   }

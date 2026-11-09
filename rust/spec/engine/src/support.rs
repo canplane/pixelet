@@ -48,6 +48,17 @@ impl<A: Copy> Line<A> {
     }
 }
 
+/// What was handed each node of the line, for a walk that goes on from it (`cast::walk`).
+impl<A: Copy> cast::Over<A> for Line<A> {
+    fn over(&self, zoom: Zoom) -> A {
+        if zoom == self.zoom {
+            self.live
+        } else {
+            self.stack[zoom as usize]
+        }
+    }
+}
+
 impl<A: Copy> Keep<A> for ColumnSurface<A> {
     fn keep(&mut self, trace: &Trace<A>, stack: &[A; DEPTH]) {
         self.line = Line::of_walk(self.origin, &trace.hit.node, trace.hit.at, stack);
@@ -462,20 +473,6 @@ mod tests {
         }
     }
 
-    /// What was handed each node of a collected line, as a beam ray's resumed
-    /// walk reads it (`cast::Over`).
-    struct Along<'a>(&'a Line<At>);
-
-    impl cast::Over<At> for Along<'_> {
-        fn over(&self, zoom: Zoom) -> At {
-            if zoom == self.0.zoom {
-                self.0.live
-            } else {
-                self.0.stack[zoom as usize]
-            }
-        }
-    }
-
     /// The assets around a walk's stop, asked from the line it keeps there, are the world's,
     /// whether the walk started from the root or resumed under another ray's line and climbed
     /// above where it resumed.
@@ -508,7 +505,7 @@ mod tests {
                 let (h, found) = trace.hit.node.over(cast::point_at(o, &ray, t));
                 let h = cast::holding(o, &ray, h, t);
                 let from = if found {
-                    (h, cast::Over::over(&Along(&first), h.zoom), t)
+                    (h, cast::Over::over(&first, h.zoom), t)
                 } else {
                     (Node::ROOT, Step.root(Node::ROOT.idx(o)), t)
                 };
@@ -520,7 +517,7 @@ mod tests {
                     detail,
                     Until::Opaque,
                     from,
-                    &Along(&first),
+                    &first,
                     &mut collected,
                 );
                 assert_eq!(resumed.end, End::Hit, "{d:?} {share}");

@@ -31,6 +31,11 @@
   the folder you made there.
 - Cargo builds into `<root>/rust/target/session/<id>`, written absolute, `<id>`
   the session's (`$CLAUDE_CODE_SESSION_ID`).
+- A change is checked by `./script/diff-check.py [base]`, which runs the checks
+  and tests of what changed since `base` reaches (HEAD, the uncommitted, by
+  default); `make check` and `make test` whole are a deploy's. A
+  check passed is not run again over code that did not change, and a long run
+  shows its progress.
 
 ## Instructions
 

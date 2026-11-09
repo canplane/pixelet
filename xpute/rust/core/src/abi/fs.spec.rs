@@ -172,6 +172,19 @@ impl FsOpenat<'_> {
     }
 }
 
+impl FsOpenat<'_> {
+    /// As the runtime beside the core reads it.
+    pub fn parts(pkt: &[u8]) -> Result<(u32, u32, u32, &str), MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok((
+            integer::<u32>(f.at(0)?.get_number()?)?,
+            integer::<u32>(f.at(1)?.get_number()?)?,
+            integer::<u32>(f.at(2)?.get_number()?)?,
+            f.at(3)?.get_str_ref()?,
+        ))
+    }
+}
+
 impl crate::ipc::door::Import for FsOpenat<'_> {
     const NUMBER: u32 = 769;
     const FIELDS: u32 = 4;
@@ -195,6 +208,18 @@ impl FsRead {
         w.u32(Some(self.fd));
         w.u32(Some(self.at));
         w.u32(Some(self.len));
+    }
+}
+
+impl FsRead {
+    /// As the runtime beside the core reads it.
+    pub fn read(pkt: &[u8]) -> Result<FsRead, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(FsRead {
+            fd: integer::<u32>(f.at(0)?.get_number()?)?,
+            at: integer::<u32>(f.at(1)?.get_number()?)?,
+            len: integer::<u32>(f.at(2)?.get_number()?)?,
+        })
     }
 }
 
@@ -224,6 +249,18 @@ impl FsWrite {
     }
 }
 
+impl FsWrite {
+    /// As the runtime beside the core reads it.
+    pub fn read(pkt: &[u8]) -> Result<FsWrite, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(FsWrite {
+            fd: integer::<u32>(f.at(0)?.get_number()?)?,
+            at: integer::<u32>(f.at(1)?.get_number()?)?,
+            len: integer::<u32>(f.at(2)?.get_number()?)?,
+        })
+    }
+}
+
 impl crate::ipc::door::Import for FsWrite {
     const NUMBER: u32 = 771;
     const FIELDS: u32 = 3;
@@ -243,6 +280,16 @@ impl FsClose {
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.fd));
+    }
+}
+
+impl FsClose {
+    /// As the runtime beside the core reads it.
+    pub fn read(pkt: &[u8]) -> Result<FsClose, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(FsClose {
+            fd: integer::<u32>(f.at(0)?.get_number()?)?,
+        })
     }
 }
 

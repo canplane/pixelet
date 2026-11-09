@@ -124,38 +124,6 @@
       ]
     },
     {
-      "name": "TURN_GRANT",
-      "val": 7425,
-      "$doc": [
-        "What the runtime's frame pacing grants the turn it rings next, and the network's",
-        "credits, sent before its SYS_TURN (@xpute/runtime), which carries the clock: the",
-        "frame's budget, whether it follows an input, and the fetches its tick may start."
-      ],
-      "pkt": [
-        {
-          "name": "refresh_ms",
-          "type": "f64",
-          "$doc": [
-            "The display's refresh, as the runtime measures it from the animation frames it is handed,",
-            "and the interval it paces turns at, a whole number of refreshes (the pacing the client",
-            "boots it with, @xpute/runtime sched/frame_pacing.ts `FrameGrant`): the frame's budget."
-          ]
-        },
-        {
-          "name": "paced_ms",
-          "type": "f64"
-        },
-        {
-          "name": "interactive",
-          "type": "bool"
-        },
-        {
-          "name": "credits",
-          "type": "u32"
-        }
-      ]
-    },
-    {
       "name": "SOURCE_DECLARE",
       "val": 4865,
       "$doc": [
@@ -661,24 +629,6 @@
           "type": "f64",
           "$doc": [
             "The meters a logical pixel spans at the pivot, at the camera's distance; 0 where the camera stands there. The scale bar is the UI's to make of it; which division names show, the core's (`DivisionPart.shown`)."
-          ]
-        }
-      ]
-    },
-    {
-      "name": "TURN_PACE",
-      "val": 7426,
-      "$doc": [
-        "The least interval the core asks between its turns: its load's word on the rate, which",
-        "the next TURN_GRANT's `paced_ms` answers, a whole number of refreshes (the pacing the",
-        "client boots the runtime with, @xpute/runtime sched/frame_pacing.ts `pace`)."
-      ],
-      "pkt": [
-        {
-          "name": "interval_ms",
-          "type": "f64",
-          "$doc": [
-            "0 asks none, and turns go at the display's own rate."
           ]
         }
       ]

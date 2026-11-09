@@ -5,13 +5,12 @@
 // once, its cells as a fill leaves them.
 
 use super::*;
-use crate::domain::layer::terrain::pool::set_way_pool;
+use crate::domain::layer::terrain::pool::{exhaust, set_way_pool, WayPool};
 use crate::sys;
 use pxl_engine::fill;
 use pxl_engine::ground::word;
 use pxl_engine::value::TRANSPORTS;
-use pxl_engine::way::BRIDGE;
-use pxl_engine::way_tree::Read;
+use pxl_engine::way::{way_cell, BRIDGE};
 use pxl_spec::bake::separation::{self, Separation};
 use pxl_spec::bake::tile::terrain::{self, GroundId};
 
@@ -114,13 +113,11 @@ pub(crate) fn lose() {
     assign_slots(clipmap(), true);
 }
 
-/// Builds `hold`'s clip levels, laying each tree into the pool as a fill
-/// lays it.
+/// Builds `hold`'s clip levels, laying each brick's lines into the store as a
+/// fill lays them.
 fn build(center: [f64; 2], tiles: &[TileData]) {
     PLANES.set(planes_of(vec![0; CELLS_WORDS].leak()));
     set_way_pool(WayPool::default());
-    let mut pool = vec![0; 16 * (way_tree::BRICK_CHILD_GROUPS as usize + 1)];
-    let mut order = vec![0; way_tree::BRICK_CHILD_GROUPS as usize + 1];
     CLIPMAP.set(fresh());
     let w = clipmap();
     for clip_level in 0..CLIP_LEVELS {
@@ -153,16 +150,18 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
             let [x, y] = clipmap::of_idx(k);
             ((place[1] * BRICK + y) * side + place[0] * BRICK + x) as usize
         };
-        let (mut segments, mut lines) = (
-            vec![(0, 0); WAYS_BRICK_SEGMENTS as usize],
-            vec![0; LINES_WORDS as usize],
-        );
-        let n = brick_lines(t, separation, place, &mut segments, &mut lines).unwrap();
+        let mut pairs = Vec::new();
+        let segments = brick_pairs(separation, place, &mut pairs).unwrap();
+        let cnt = pairs.len();
+        let mut lines = vec![0; clipmap::lines_words(cnt as u32, segments) as usize];
+        if cnt != 0 {
+            brick_lines(t, separation, &mut pairs, &mut lines);
+        }
         let laid = terrain::TileBrick {
             cell_zoom,
             place,
             first: terrain::first_cell(t, cell_zoom, place),
-            lines: &lines[..n],
+            lines: &lines,
             palette_idxs: |k: u32| word([u32::from(palette_of[at(k)]); 4]),
             height: |c: [i32; 2]| {
                 i32::from(
@@ -190,13 +189,12 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
                 .sum();
         }
         fill::mips(&mut back, &scratch, cell_zoom);
-        let [used, cnt, root] = fill::tree(&back, &scratch, cell_zoom, &mut pool, 1);
-        assert_ne!(used, u32::MAX, "a brick's tree past the pool");
-        if cnt != 0 {
-            let run = way_pool().take(cnt).expect("a brick's tree past the pool");
-            let built = Read(&pool);
-            back[ROOT_AT as usize] = way_tree::lay(&built, root, way_pool(), run[0], &mut order);
-            w.slots[b as usize].tree = run;
+        let words = fill::spans_run_words(&scratch);
+        if words != 0 {
+            let run = way_pool().take(words).expect("a brick's run past the pool");
+            fill::lay_spans(&scratch, &mut |k, v| way_pool().set(run[0] + k, v));
+            back[ROOT_AT as usize] = run[0];
+            w.slots[b as usize].run = run;
         }
         let at = (b * CELLS_ARR_BYTES / 4) as usize;
         planes().cells[at..at + BRICK_WORDS as usize].copy_from_slice(&back);
@@ -287,11 +285,8 @@ fn fill_room() -> &'static mut Clipmap {
     set_way_pool(WayPool::default());
     FILL.set(FillScratch {
         ele: vec![0; ELE_COLUMN].leak(),
-        lines: vec![0; LINES_WORDS as usize].leak(),
-        pairs: vec![(0, 0); WAYS_BRICK_SEGMENTS as usize].leak(),
         spans: vec![0; SPANS_WORDS as usize].leak(),
-        build: vec![0; BUILD_WORDS].leak(),
-        order: vec![0; way_tree::BRICK_CHILD_GROUPS as usize + 1].leak(),
+        lines: Vec::new(),
     });
     CLIPMAP.set(fresh());
     let w = clipmap();
@@ -334,7 +329,6 @@ fn cache_tile(t: Quadrant, tile: TerrainTile) {
 
 #[test]
 fn brick_filled_in_parts_reads_as_one_filled_whole() {
-    use pxl_engine::object::{self, Cut};
     let _g = sys::serial();
     let w = fill_room();
     let (t, tile, pkt) = hilly_tile();
@@ -357,22 +351,24 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
     drop(pkt);
     due(w);
     while !matches!(fill_stage(w), Poll::Done) {}
-    let mut ways = 0;
+    let (mut ways, mut filled) = (0, Vec::new());
     for &b in &wanted {
         let slot = w.slots[b as usize];
         assert!(slot.fill == Fill::Filled, "filled, not yet handed");
         assert!(!slot.present, "not present before a frame hands it");
         let (cell_zoom, place) = (slot.cell_zoom, tile_of(slot.cell_zoom, slot.brick).1);
-        let mut pairs = vec![(0, 0); WAYS_BRICK_SEGMENTS as usize];
-        let mut lines = vec![0; LINES_WORDS as usize];
-        let n = brick_lines(t, &tile.separation, place, &mut pairs, &mut lines).unwrap();
+        let mut pairs = Vec::new();
+        let segments = brick_pairs(&tile.separation, place, &mut pairs).unwrap();
+        let cnt = pairs.len();
+        let mut lines = vec![0; clipmap::lines_words(cnt as u32, segments) as usize];
+        brick_lines(t, &tile.separation, &mut pairs, &mut lines);
         let site = fill::Site {
             cell_zoom,
             place,
             first: slot.brick.map(|v| v << BRICK_SHIFT),
             shard: Shard::UNKNOWN.at(&ServiceArea, (clipmap::bricks_zoom(cell_zoom), slot.brick)),
             ele: &tile.ele,
-            lines: &lines[..n],
+            lines: &lines,
         };
         let four = |i: u32| {
             let [x, y] = clipmap::of_idx(i);
@@ -382,9 +378,6 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
         };
         let (mut lane, mut spans) = (vec![0; BRICK_WORDS as usize], vec![0; SPANS_WORDS as usize]);
         fill::brick(&mut lane, &mut spans, four, &site);
-        let mut build = vec![0; BUILD_WORDS];
-        let [used, cnt, root] = fill::tree(&lane, &spans, cell_zoom, &mut build, 1);
-        assert_ne!(used, u32::MAX);
         let got = cells(b);
         assert_eq!(
             got[..ROOT_AT as usize],
@@ -392,26 +385,14 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
             "its words as a fill at once writes them"
         );
         assert_eq!(
-            slot.tree[1], cnt,
-            "its tree's run, the child groups it holds"
+            slot.run[1],
+            fill::spans_run_words(&spans),
+            "its run, sized by its spans"
         );
+        assert_eq!(got[ROOT_AT as usize], slot.run[0]);
         assert!((0..BRICK_CELLS).all(|i| palette(b)[i as usize] == four(i)));
-        ways += u32::from(cnt != 0);
-        let built = Read(&build);
-        let (pool, laid) = (way_pool(), got[ROOT_AT as usize]);
-        for i in 0..BRICK_CELLS {
-            let [x, y] = clipmap::of_idx(i);
-            for z in 20..60 {
-                let at = [x as i32, y as i32, z];
-                let was = way_tree::cursor(&built, root, cell_zoom, cell_zoom, at);
-                let now = way_tree::cursor(pool, laid, cell_zoom, cell_zoom, at);
-                assert_eq!(
-                    object::val(&built, was, Cut::NONE, cell_zoom, at),
-                    object::val(pool, now, Cut::NONE, cell_zoom, at),
-                    "its tree read as built"
-                );
-            }
-        }
+        ways += u32::from(slot.run[1] != 0);
+        filled.push((b, slot.cell_zoom, slot.brick, spans));
     }
     assert!(ways > 0, "the bridge is some brick's");
     let mut handed = Vec::new();
@@ -423,6 +404,34 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
     handed.sort_unstable();
     assert_eq!(handed, wanted, "each handed once");
     assert!(wanted.iter().all(|&b| w.slots[b as usize].present));
+    // The cells as the query reads them from the brick's lines, its ring's heights included, are
+    // what the rule answers over the spans the fill kept: the tree's leaves, had one been built.
+    for (b, cell_zoom, q, spans) in filled {
+        let column_spans = fill::Scratch {
+            words: &spans,
+            at: 0,
+        };
+        for i in 0..BRICK_CELLS {
+            let [x, y] = clipmap::of_idx(i);
+            let g = [
+                (q[0] << BRICK_SHIFT) + x as i32,
+                (q[1] << BRICK_SHIFT) + y as i32,
+            ];
+            let (place, _) = clipmap::step(&CpuClipmap, Lookup::NONE, cell_zoom, g);
+            assert!(place.here() && place.slot() == b);
+            for z in -64..256 {
+                let got = clipmap::way_at(
+                    &CpuClipmap,
+                    way_pool(),
+                    place,
+                    [i32::MIN / 2, i32::MAX / 2],
+                    (cell_zoom, [g[0], g[1], z]),
+                );
+                let rule = way_cell(&column_spans, [x as i32, y as i32], cell_zoom, z);
+                assert_eq!(got, rule, "cell {x},{y},{z}");
+            }
+        }
+    }
 }
 
 #[test]
@@ -490,11 +499,73 @@ fn brick_let_go_ends_its_fill() {
     assert!(w.slots[b as usize].fill != Fill::Cut, "its slot let it go");
     while !matches!(fill_stage(w), Poll::Done) {}
     assert!(w.filling.is_none(), "and nothing lands in the slot it left");
-    assert_eq!(way_pool().top(), 1, "no tree of it in the pool");
 }
 
+/// A brick with a column past `way::SPANS` is refused and no give-back wakes it.
 #[test]
-fn slot_given_up_gives_its_tree_back() {
+fn column_past_its_spans_refuses_the_brick_for_good() {
+    let _g = sys::serial();
+    let w = fill_room();
+    let (t, tile, pkt) = hilly_tile();
+    cache_tile(t, tile);
+    cut(t, &pkt);
+    due(w);
+    fill_stage(w);
+    let filling = w.filling.as_mut().unwrap();
+    let b = filling.slot;
+    filling.past = true;
+    loop {
+        fill_stage(w);
+        if w.filling.is_none() {
+            break;
+        }
+    }
+    let s = w.slots[b as usize];
+    assert!(s.fill == Fill::Refused && s.run[1] == 0 && s.want == NEVER);
+    let lent = way_pool().take(16).unwrap();
+    way_pool().give(lent);
+    wake(w);
+    assert!(
+        w.slots[b as usize].fill == Fill::Refused,
+        "a give-back changes nothing of it"
+    );
+}
+
+/// A brick is not handed before its run of kept spans has landed.
+#[test]
+fn brick_is_handed_only_after_its_run_landed() {
+    let _g = sys::serial();
+    let w = fill_room();
+    let (t, tile, pkt) = hilly_tile();
+    cache_tile(t, tile);
+    cut(t, &pkt);
+    due(w);
+    let (mut laid, mut pieced) = (false, 0);
+    while !matches!(fill_stage(w), Poll::Done) {
+        if let Some(f) = w.filling {
+            laid |= matches!(f.stage, Stage::Lay);
+            if matches!(f.stage, Stage::Lay) {
+                let mut handed = false;
+                upload(&mut |q| {
+                    handed |= q.slot == f.slot;
+                    pieced += q.run.len();
+                    true
+                });
+                assert!(!handed, "its slot is not offered at its last part");
+            }
+        }
+    }
+    assert!(laid, "a fill goes through laying its run");
+    upload(&mut |q| {
+        pieced += q.run.len();
+        true
+    });
+    assert!(pieced > 0, "handed with its run");
+}
+
+/// A device lost hands each present brick's run over again.
+#[test]
+fn device_loss_rehands_the_run() {
     let _g = sys::serial();
     let w = fill_room();
     let (t, tile, pkt) = hilly_tile();
@@ -502,8 +573,147 @@ fn slot_given_up_gives_its_tree_back() {
     cut(t, &pkt);
     due(w);
     while !matches!(fill_stage(w), Poll::Done) {}
-    let took: u32 = w.slots.iter().map(|s| s.tree[1]).sum();
-    assert!(took > 0, "the bridge's trees");
+    hand();
+    let mut ran: Vec<u32> = (0..SLOTS)
+        .filter(|&b| w.slots[b as usize].present && w.slots[b as usize].run[1] != 0)
+        .collect();
+    ran.sort_unstable();
+    assert!(!ran.is_empty());
+    assign_slots(w, true);
+    let mut again = Vec::new();
+    upload(&mut |q| {
+        if !q.run.is_empty() {
+            again.push(q.slot);
+        }
+        true
+    });
+    again.sort_unstable();
+    assert_eq!(again, ran, "every run handed over again, as it lies");
+}
+
+/// A brick filled after a refusal is forgotten like one that lands late: its row in the table
+/// moves, which the cast reads as a brick that moved (pxl-render ray/cast.rs
+/// `entry(..).present_changed_from`), and the tile cache hears of it (`changed_at`).
+#[test]
+fn brick_filled_after_a_refusal_moves_its_row() {
+    let _g = sys::serial();
+    let w = fill_room();
+    let (t, tile, pkt) = hilly_tile();
+    cache_tile(t, tile);
+    let lent = way_pool().take(1 << 13).expect("a lent run");
+    exhaust(way_pool());
+    cut(t, &pkt);
+    due(w);
+    while !matches!(fill_stage(w), Poll::Done) {}
+    let b = (0..SLOTS)
+        .find(|&b| w.slots[b as usize].fill == Fill::Refused)
+        .expect("a refused brick");
+    let (zoom, q) = (w.slots[b as usize].cell_zoom, w.slots[b as usize].brick);
+    let row = (0..SLOTS)
+        .find(|&i| {
+            let e = w.table.entries[i as usize];
+            e.brick == q && i / ENTRIES == zoom - FIRST_CELL_ZOOM
+        })
+        .expect("the eye's row of it");
+    let was = w.table.entries[row as usize];
+    assert_eq!(was.present, 0, "refused, a reader reads the coarser level");
+    way_pool().give(lent);
+    assert!(wake(w));
+    cut(t, &pkt);
+    due(w);
+    while !matches!(fill_stage(w), Poll::Done) {}
+    let mut changed = Vec::new();
+    TerrainTile::tile_cache().take_changed(&mut changed);
+    upload(&mut |_| true);
+    TerrainTile::tile_cache().take_changed(&mut changed);
+    let now = w.table.entries[row as usize];
+    assert!(
+        now.present != 0 && now.present_changed_from(was),
+        "the row the cast reads moved"
+    );
+    assert!(
+        changed.contains(&brick_quad(zoom, q)),
+        "and the cache heard"
+    );
+}
+
+/// A slot's run reused by another brick follows a change of the row a cached answer read: the
+/// node cache forgets it for the same reason it forgot the tree.
+#[test]
+fn run_reused_only_after_the_row_moved() {
+    let _g = sys::serial();
+    let w = fill_room();
+    let (t, tile, pkt) = hilly_tile();
+    cache_tile(t, tile);
+    cut(t, &pkt);
+    due(w);
+    while !matches!(fill_stage(w), Poll::Done) {}
+    hand();
+    let b = (0..SLOTS)
+        .find(|&b| w.slots[b as usize].run[1] != 0)
+        .expect("a brick with a run");
+    let (zoom, q) = (w.slots[b as usize].cell_zoom, w.slots[b as usize].brick);
+    let row = (0..SLOTS)
+        .find(|&i| w.table.entries[i as usize].holds(q) && i / ENTRIES == zoom - FIRST_CELL_ZOOM)
+        .expect("its row");
+    let was = w.table.entries[row as usize];
+    let far = leaf([CENTER[0] + 100.0 * f64::from(BRICK), CENTER[1]]);
+    lay(w, far, far);
+    assert!(
+        w.table.entries[row as usize].changed_from(was),
+        "the brick left its row, which the cast forgets over"
+    );
+}
+
+/// A brick refused at the pool's cap is filled again once after a give-back, and only then.
+#[test]
+fn brick_past_the_cap_refilled_once_after_a_give_back() {
+    let _g = sys::serial();
+    let w = fill_room();
+    let (t, tile, pkt) = hilly_tile();
+    cache_tile(t, tile);
+    let lent = way_pool().take(1 << 13).expect("a lent run");
+    exhaust(way_pool());
+    cut(t, &pkt);
+    due(w);
+    while !matches!(fill_stage(w), Poll::Done) {}
+    let refused = w.slots.iter().filter(|s| s.fill == Fill::Refused).count();
+    assert!(refused > 0, "the bridge's bricks past the cap");
+    assert!(w.slots.iter().all(|s| s.run[1] == 0), "no run taken");
+    assert!(!wake(w), "no give-back yet");
+    way_pool().give(lent);
+    assert!(wake(w), "the give-back wakes them");
+    assert!(
+        w.slots.iter().filter(|s| s.fill == Fill::Refused).count() == 0,
+        "all absent"
+    );
+    assert!(!wake(w), "once for that give-back");
+    cut(t, &pkt);
+    due(w);
+    while !matches!(fill_stage(w), Poll::Done) {}
+    assert!(
+        w.slots.iter().all(|s| s.fill != Fill::Refused),
+        "filled again from the given run, none refused"
+    );
+    assert!(
+        w.slots
+            .iter()
+            .any(|s| s.fill == Fill::Filled && s.run[1] != 0),
+        "with their lines"
+    );
+}
+
+#[test]
+fn slot_given_up_gives_its_run_back() {
+    let _g = sys::serial();
+    let w = fill_room();
+    let (t, tile, pkt) = hilly_tile();
+    cache_tile(t, tile);
+    cut(t, &pkt);
+    due(w);
+    while !matches!(fill_stage(w), Poll::Done) {}
+    let took: u32 = w.slots.iter().map(|s| s.run[1]).sum();
+    assert!(took > 0, "the bridge's lines");
     let far = leaf([CENTER[0] + 100.0 * f64::from(BRICK), CENTER[1]]);
     lay(w, far, far);
     assert_eq!(

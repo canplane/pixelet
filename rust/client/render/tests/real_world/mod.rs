@@ -1,6 +1,6 @@
 //! A real world's buffers, made on the CPU as the fill and the store lay them, for the tests of
 //! the world's one query by hand and of the walks over it. The world holds clip levels and
-//! their bricks, the service area's index, what is placed and the ways' pool. `Asking` is the
+//! their bricks, the service area's index, what is placed and the ways' store. `Asking` is the
 //! query a walk on the CPU asks of these buffers, and `WorldBuffer` holds the same buffers on the
 //! device.
 
@@ -22,7 +22,6 @@ use pxl_engine::ground::{self, Resident};
 use pxl_engine::lattice::TILE_CELLS;
 use pxl_engine::object::{self, Table, BRANCH};
 use pxl_engine::way::{self, Segment, StationGrid};
-use pxl_engine::way_tree;
 use pxl_engine::world::{self, Inheritance};
 use pxl_engine::{value, wrap_idx, Zoom, FRAC_W, LEAF_CELL_ZOOM, SHARD_ZOOM};
 
@@ -602,7 +601,7 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
     let mut ground_words: Vec<u32> = Vec::new();
     let mut palette_words: Vec<u32> = Vec::new();
     let mut pool = vec![0u32; 1 << 23];
-    let mut next_group = 1u32;
+    let mut next_word = 1u32;
     let (mut lane, mut scratch) = (
         vec![0u32; BRICK_WORDS as usize],
         vec![0u32; SPANS_WORDS as usize],
@@ -641,11 +640,14 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
                 lines: &brick.lines,
             };
             fill::brick(&mut lane, &mut scratch, |i| brick.four[i as usize], &site);
-            let [used, _, root] = fill::tree(&lane, &scratch, cell_zoom, &mut pool, next_group);
-            if used != u32::MAX {
-                next_group += used;
-                lane[ROOT_AT as usize] = root;
-                way_bricks += (root != 0) as u32;
+            // A brick with spans keeps them in a run of the pool, as a fill keeps them.
+            let words = fill::spans_run_words(&scratch);
+            if words != 0 {
+                let run = next_word as usize;
+                fill::lay_spans(&scratch, &mut |k, v| pool[run + k as usize] = v);
+                lane[ROOT_AT as usize] = next_word;
+                next_word += words;
+                way_bricks += 1;
             }
             let slot = present_bricks;
             ground_words.extend_from_slice(&lane);
@@ -665,19 +667,12 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
             }
         }
     }
-    // Slot 0 gets a brick whose ways' tree a node at any brick's Z may read. A place that no
-    // brick holds has slot 0 and must read no slot, so a read of slot 0 there would show.
+    // Slot 0 gets a brick with spans, read by no node except through a place that names slot 0,
+    // so a read of it where a place holds no brick would show.
     let words = BRICK_WORDS as usize;
     let treed = (0..present_bricks as usize)
-        .find(|&s| {
-            let root = ground_words[s * words + ROOT_AT as usize];
-            let (first, z0) = way_tree::root_slot(root);
-            root != 0
-                && [-z0, -1 - z0].iter().any(|&k| {
-                    (0..8).contains(&k) && way_tree::Read(&pool).first_child(first + k as u32) != 0
-                })
-        })
-        .expect("a brick whose tree lies about sea level");
+        .find(|&s| ground_words[s * words + ROOT_AT as usize] != 0)
+        .expect("a brick with spans");
     if treed != 0 {
         let (zero, rest) = ground_words.split_at_mut(treed * words);
         zero[..words].swap_with_slice(&mut rest[..words]);
@@ -693,7 +688,7 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
         }
     }
     eprintln!(
-        "{present_bricks} bricks held, {absent_bricks} absent, {way_bricks} with ways over {next_group} child groups"
+        "{present_bricks} bricks held, {absent_bricks} absent, {way_bricks} with ways over {next_word} words"
     );
     let objects_none = vec![0u32; 16];
     fold(&mut clipmap, &ground_words, &palette_words, &shards, &pool);
@@ -927,7 +922,7 @@ impl Query for Asking<'_> {
     }
 
     fn child(&mut self, at: &Inheritance, zoom: Zoom, node: [i32; 3]) -> Inheritance {
-        at.child(&self.w, &way_tree::Read(self.w.pool), (zoom, node))
+        at.child(&self.w, (zoom, node))
     }
 
     fn node(
@@ -938,13 +933,12 @@ impl Query for Asking<'_> {
         zooms: [Zoom; 2],
         _: f32,
     ) -> In<[u32; 2]> {
-        let pool = way_tree::Read(self.w.pool);
         let mut resident = self.w;
         world::node(
             &mut resident,
             &self.w,
             &self.w,
-            &pool,
+            self.w.pool,
             n,
             (zoom, c),
             zooms,
@@ -961,15 +955,14 @@ pub fn truth(
     zoom: Zoom,
     c: [i32; 3],
     zooms: [Zoom; 2],
-) -> (In<[u32; 2]>, [u32; 4]) {
-    let pool = way_tree::Read(w.pool);
+) -> (In<[u32; 2]>, [u32; 3]) {
     let mut resident = w;
     let mut at = Inheritance::of(&w, (zoom, c));
     let a = world::node(
         &mut resident,
         &w,
         &w,
-        &pool,
+        w.pool,
         &mut at,
         (zoom, c),
         zooms,

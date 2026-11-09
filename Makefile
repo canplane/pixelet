@@ -10,8 +10,9 @@
 # the documents and data outside the trees are not. A script that runs alone
 # is run by its path, not from here (README.md, Commands). GNU Make 3.81 is enough.
 #
-#   make install | -j8 check | test | fmt | lint
+#   make install | -j8 check | test | fmt
 #   make check-ts, make test-rust, ...   one tree's
+#   make check-build | check-xpute | test-xpute | test-gpu   what a deploy adds
 #   make dev | dev-oven | dev-shelf | dev-native | preview | spec | deploy
 #   make bake-terrain ARGS=…, make serve-geo, ...   a binary (TOOLS)
 #
@@ -20,9 +21,8 @@
 
 .PHONY: install install-ts install-xpute \
 	check check-ts check-rust check-rules check-spec check-build check-xpute \
-	test test-ts test-rust test-xpute \
+	test test-ts test-rust test-xpute test-gpu \
 	fmt fmt-ts fmt-rust \
-	lint lint-ts \
 	spec dev dev-oven dev-shelf dev-native preview preview-oven preview-shelf \
 	serve-tile watch-wasm web web-preview \
 	sync-build-number deploy
@@ -34,11 +34,12 @@ install-ts:
 install-xpute:
 	$(MAKE) -C xpute install
 
-# `check` is everything, and with `test` what passes before a push to deploy,
-# since CI checks nothing (.agents/skills/deploy/SKILL.md). `check-build` is
-# the client's bundle as a deploy builds it; the Worker is bundled by the
-# deploy itself, in CI, which is what runs wrangler.
-check: check-ts check-rust check-rules check-spec check-build check-xpute
+# `check` and `test` hold pixelet's code. What a deploy adds before its push,
+# since CI checks nothing (.agents/skills/deploy/SKILL.md): `check-build`, the
+# client's bundle as a deploy builds it (the Worker is bundled by the deploy
+# itself, in CI, which runs wrangler); xpute's own checks and tests, a project
+# of its own; and `test-gpu`, the renderer's passes on this machine's GPU.
+check: check-ts check-rust check-rules check-spec
 check-ts:
 	pnpm --dir ts check
 # The module as it ships in both builds, the servers, what runs here alone
@@ -54,24 +55,22 @@ check-build:
 check-xpute:
 	$(MAKE) -C xpute check
 
-test: test-ts test-rust test-xpute
+test: test-ts test-rust
 test-ts:
 	pnpm --dir ts test
 # pxl-tool holds every model to the committed table, which has been wrong by hand before.
 test-rust:
-	+cd rust && cargo test-host && cargo test-core-published && cargo test-bake-serve
+	+cd rust && cargo test-host && cargo test-render && cargo test-core-published
 test-xpute:
 	$(MAKE) -C xpute test
+test-gpu:
+	+cd rust && cargo test-gpu
 
 fmt: fmt-ts fmt-rust
 fmt-ts:
 	pnpm --dir ts fmt
 fmt-rust:
 	cd rust && cargo fmt
-
-lint: lint-ts
-lint-ts:
-	pnpm --dir ts lint
 
 # The code generated from spec/.
 spec:

@@ -18,7 +18,6 @@ use pxl_engine::clipmap::{self as clip, Lookup, ACROSS, BRICK_SHIFT, FIRST_CELL_
 use pxl_engine::ground;
 use pxl_engine::object::{self, Cut, Table};
 use pxl_engine::way;
-use pxl_engine::way_tree;
 use pxl_engine::world::{self, Inheritance};
 use pxl_engine::{value, wrap_idx, Zoom, LEAF_CELL_ZOOM, SHARD_ZOOM};
 
@@ -26,7 +25,7 @@ use pxl_render::frame::shader::record::WORLD_ASKED;
 use real_world::{level_first, Draw, World, CORNERS, EYE, FINEST, UNLAID};
 
 /// The words of one ask and of the answer told back (world_asked.wgsl `world_asked_cs`).
-const ASKED_WORDS: usize = 20;
+const ASKED_WORDS: usize = 19;
 const TOLD_WORDS: usize = 8;
 const OP_NODE: u32 = 0;
 const OP_HOLLOW: u32 = 3;
@@ -43,7 +42,7 @@ impl AskLog {
         &mut self,
         (op, zoom, c): (u32, Zoom, [i32; 3]),
         zooms: [Zoom; 2],
-        at: [u32; 4],
+        at: [u32; 3],
         cuts: [Cut; 2],
         kind: u32,
         asset: [u32; 2],
@@ -100,7 +99,6 @@ fn descend(
         let a = object::ancestor_at(FINEST, point, FINEST - z);
         [wrap_idx(z, a[0]), a[1], a[2]]
     };
-    let pool = way_tree::Read(w.pool);
     let root = idx(start);
     let mut at = Inheritance::of(&w, (start, root));
     tally.add("root", true);
@@ -109,9 +107,8 @@ fn descend(
     for z in start..=stop {
         let c = idx(z);
         if z > start {
-            at = at.child(&w, &pool, (z, c));
+            at = at.child(&w, (z, c));
             tally.add("child", true);
-            tally.add("child, ways' cursor held", at.ways.holds());
             if moving {
                 match draw.next() % 8 {
                     0..=2 => {
@@ -136,14 +133,14 @@ fn descend(
         }
         let before = at;
         let mut resident = w;
-        let got = world::node(&mut resident, &w, &w, &pool, &mut at, (z, c), zooms, cuts);
+        let got = world::node(&mut resident, &w, &w, w.pool, &mut at, (z, c), zooms, cuts);
         // Only a node handed what its parent gave it is asked again from the top. Another
         // descent's place is no state the node derives itself, so a node handed one, and every
         // node below it, is skipped.
         if z > start && !foreign {
             let mut top = Inheritance::of(&w, (z, c));
             let mut resident = w;
-            let again = world::node(&mut resident, &w, &w, &pool, &mut top, (z, c), zooms, cuts);
+            let again = world::node(&mut resident, &w, &w, w.pool, &mut top, (z, c), zooms, cuts);
             tally.add("asked again from the top", true);
             if again != got {
                 tally.add(OTHERWISE, true);
@@ -164,6 +161,37 @@ fn descend(
         *seen = at.ground;
         tell(w, before, (z, c), zooms, cuts, got, at, tally);
     }
+}
+
+/// What the Rust reads of the ways at the cell `c` at `z` (`clipmap::way_at`), counted in
+/// `t` by what it is; and in `seen` by the column, which records every way kind a cell of it held.
+fn tell_way(w: World, (z, c): (Zoom, [i32; 3]), seen: &mut BTreeMap<[i32; 2], u32>, t: &mut Tally) {
+    let mut place = Lookup::NONE;
+    let (b, _, here) = clip::bound_over(&w, &mut place, [z, z], (z, [c[0], c[1]]));
+    if !here {
+        return;
+    }
+    let v = clip::way_at(&w, w.pool, place, b[1], (z, c));
+    if v == way::NOTHING {
+        return;
+    }
+    let s = 1 << (LEAF_CELL_ZOOM - z);
+    let column = clip::cell(&w, Lookup::NONE, z, [c[0], c[1]]).1;
+    let under = (c[2] + 1) * s <= clip::column_top(column);
+    let kind = if v == way::AIR {
+        1
+    } else if v == value::PIER {
+        2
+    } else if under {
+        3
+    } else {
+        4
+    };
+    t.add("way cell, a bore's air", kind == 1);
+    t.add("way cell, a pier's", kind == 2);
+    t.add("way cell, a bore's lining", kind == 3);
+    t.add("way cell, a slab's or embankment's", kind == 4);
+    *seen.entry([c[0], c[1]]).or_default() |= 1 << kind;
 }
 
 /// The tally's name for a node of a descent that answered otherwise when asked from the top
@@ -330,7 +358,6 @@ fn tell(
         t.add("cell, on the wall", wall);
         t.add("cell, the wall's", wall && v == value::UNKNOWN);
     }
-    t.add("ways' cursor held", at.ways.holds());
     // How much of the cell the caves took, from the ground's own answer.
     if is_cell && z >= FIRST_CELL_ZOOM && !shard.past() {
         let mut resident = w;
@@ -345,12 +372,12 @@ fn tell(
         }
     }
     if cuts != [Cut::NONE; 2] {
-        let (mut resident, mut plain, pool) = (w, before, way_tree::Read(w.pool));
+        let (mut resident, mut plain) = (w, before);
         let without = world::node(
             &mut resident,
             &w,
             &w,
-            &pool,
+            w.pool,
             &mut plain,
             (z, c),
             zooms,
@@ -786,7 +813,7 @@ fn hand_world_answers_as_the_rust() {
         ask_log.push(
             (OP_HOLLOW, z, c),
             [0, 0],
-            [0; 4],
+            [0; 3],
             [Cut::NONE; 2],
             0,
             [share, 0],
@@ -817,7 +844,7 @@ fn hand_world_answers_as_the_rust() {
             ask_log.push(
                 (OP_HOLLOW, z, at),
                 [0, 0],
-                [0; 4],
+                [0; 3],
                 [Cut::NONE; 2],
                 0,
                 [cave::hollow((z, at)), 0],
@@ -827,6 +854,66 @@ fn hand_world_answers_as_the_rust() {
     tally
         .0
         .insert("pipe cells of a partial piece, every block", partial);
+
+    // Every cell of the columns along the ways of a few bricks at the leaves and the zoom over
+    // them, from under a bore's air to over a high deck, each asked of the world alone from
+    // the top as a walk asks a cell, so a pier's station and stacked ways are met.
+    let mut seen = BTreeMap::new();
+    let sweep: Vec<_> = way_points
+        .iter()
+        .filter(|p| {
+            let mut place = Lookup::NONE;
+            let g = [
+                wrap_idx(p.0, p.2[0] >> (LEAF_CELL_ZOOM - p.0)),
+                p.2[1] >> (LEAF_CELL_ZOOM - p.0),
+            ];
+            let (b, _, here) = clip::bound_over(&w, &mut place, [p.0, p.0], (p.0, g));
+            p.0 >= LEAF_CELL_ZOOM - 1 && here && place.from() == p.0 && b[1][0] < b[1][1]
+        })
+        .take(30)
+        .collect();
+    for &&(cell_zoom, _, p) in &sweep {
+        let s = 1 << (LEAF_CELL_ZOOM - cell_zoom);
+        for y in -6..=6 {
+            for x in -40..40 {
+                for k in (-34i32..75).step_by(s as usize) {
+                    let g = [p[0] + x * s, p[1] + y * s];
+                    let c = [
+                        wrap_idx(cell_zoom, g[0] >> (LEAF_CELL_ZOOM - cell_zoom)),
+                        g[1] >> (LEAF_CELL_ZOOM - cell_zoom),
+                        (p[2] + k) >> (LEAF_CELL_ZOOM - cell_zoom),
+                    ];
+                    let mut at = Inheritance::of(&w, (cell_zoom, c));
+                    let before = at;
+                    let mut resident = w;
+                    let zooms = [cell_zoom, cell_zoom];
+                    let got = world::node(
+                        &mut resident,
+                        &w,
+                        &w,
+                        w.pool,
+                        &mut at,
+                        (cell_zoom, c),
+                        zooms,
+                        [Cut::NONE; 2],
+                    );
+                    ask_log.push(
+                        (OP_NODE, cell_zoom, c),
+                        zooms,
+                        before.words(),
+                        [Cut::NONE; 2],
+                        got.kind as u32,
+                        got.asset,
+                    );
+                    tell_way(w, (cell_zoom, c), &mut seen, &mut tally);
+                }
+            }
+        }
+    }
+    let stacked = seen.values().filter(|&&b| b.count_ones() >= 2).count();
+    tally
+        .0
+        .insert("way column, two kinds stacked", stacked as u32);
 
     let asked_n = ask_log.asked.len() / ASKED_WORDS;
     eprintln!("{asked_n} asks");
@@ -963,6 +1050,11 @@ fn hand_world_answers_as_the_rust() {
         ("cell, air", 98194),
         ("cell, all of it cave", 773),
         ("cell, an object's", 7380),
+        ("way cell, a bore's air", 1),
+        ("way cell, a pier's", 1),
+        ("way cell, a bore's lining", 1),
+        ("way cell, a slab's or embankment's", 1),
+        ("way column, two kinds stacked", 1),
         ("cell, coarser than asked, past the leaves", 5599),
         ("cell, four differ", 5351),
         ("cell, kept short of its cube", 3708),
@@ -978,7 +1070,6 @@ fn hand_world_answers_as_the_rust() {
         ("cell, the wall's", 906),
         ("cell, unknown", 10461),
         ("child", 629146),
-        ("child, ways' cursor held", 23870),
         ("handed another descent's place", 7843),
         ("lack", 1226),
         ("past the area", 139883),
@@ -993,7 +1084,6 @@ fn hand_world_answers_as_the_rust() {
         ("wall by a diagonal, north-west", 191),
         ("wall by a diagonal, south-east", 189),
         ("wall by a diagonal, south-west", 194),
-        ("ways' cursor held", 34123),
         ("ways' span rounded to none", 437),
         ("ways' span rounded to none, strictly in the node", 182),
         ("wider than a shard, all under the sea", 113),

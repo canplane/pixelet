@@ -7,3 +7,5 @@ export const ATTACH = 0x02;
 export const SUSPEND = 0x03;
 export const RESUME = 0x04;
 export const TURN = 0x05;
+export const FRAME = 0x06;
+export const PACE = 0x07;

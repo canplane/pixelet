@@ -68,13 +68,14 @@ fn is_claim(key: u32) -> bool {
 /// node. The walk that claimed the slot names its claim right after.
 const CLAIM_READS = 8u;
 
-/// The stamp of an entry that its key keeps at `zooms` (`key_zooms`): a hash of its words,
-/// stored above its kind (pxl-engine `node_cache::KIND_MASK`). Walks read and write the node
-/// cache at once, so a walk takes a slot's entry only when the words it read hash to its stamp.
+/// The stamp of an entry that its key keeps at `zooms` (`key_zooms`) under `tag`: a hash of its
+/// words and that tag, stored above its kind (pxl-engine `node_cache::KIND_MASK`). Walks read
+/// and write the node cache at once, so a walk takes a slot's entry only when the words it read
+/// are the ones its key was written over.
 /// A cell kept by its node alone hashes as `CELL_FAR`, whole or not, as a walk marks it whole
 /// in its key alone (`holds_cell`).
-fn entry_stamp(kind: u32, zooms: u32, asset: vec2<u32>, inheritance: vec4<u32>, zoom: u32, c: vec3<i32>) -> u32 {
-  var h = node_hash(zoom, c);
+fn entry_stamp(kind: u32, tag: u32, zooms: u32, asset: vec2<u32>, inheritance: vec3<u32>, zoom: u32, c: vec3<i32>) -> u32 {
+  var h = mix_hash(node_hash(zoom, c), tag);
   h = mix_hash(h, select(zooms, CELL_FAR, (zooms & ((1u << ZOOM_BITS) - 1u)) == CELL_FAR));
   h = mix_hash(h, kind);
   h = mix_hash(h, asset.x);
@@ -82,7 +83,6 @@ fn entry_stamp(kind: u32, zooms: u32, asset: vec2<u32>, inheritance: vec4<u32>, 
   h = mix_hash(h, inheritance.x);
   h = mix_hash(h, inheritance.y);
   h = mix_hash(h, inheritance.z);
-  h = mix_hash(h, inheritance.w);
   return (h ^ (h >> 16u)) & ~KIND_MASK;
 }
 
@@ -93,7 +93,7 @@ fn entry_stamp(kind: u32, zooms: u32, asset: vec2<u32>, inheritance: vec4<u32>, 
 /// (`world_child`). What it hands its children is the slot's, when a slot kept it. An ask of
 /// the world is counted at word `asked`, unless `asked` is `NONE`. When the pass may ask no
 /// more (`may_ask`), nothing is asked and the walk is left there (`KIND_LEFT`).
-fn ask_node(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, asked: u32) -> Answer {
+fn ask_node(parent: vec3<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, asked: u32) -> Answer {
   var cached = keeps(zoom, c);
   var first = 0u;
   if (cached) {
@@ -108,15 +108,10 @@ fn ask_node(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, a
         // (`entry_stamp`). Nothing else keeps an entry torn this way from answering.
         let w = entry_at(slot);
         let at = w + W_INHERITANCE;
-        let inheritance = vec4<u32>(
-          node_cache_word(at),
-          node_cache_word(at + 1u),
-          node_cache_word(at + 2u),
-          node_cache_word(at + 3u),
-        );
+        let inheritance = vec3<u32>(node_cache_word(at), node_cache_word(at + 1u), node_cache_word(at + 2u));
         let word = node_cache_word(w + W_KIND);
         let asset = vec2<u32>(node_cache_word(w + W_ASSET), node_cache_word(w + W_ASSET + 1u));
-        if ((word & ~KIND_MASK) == entry_stamp(word & KIND_MASK, slot_key >> TAG_BITS, asset, inheritance, zoom, c)) {
+        if ((word & ~KIND_MASK) == entry_stamp(word & KIND_MASK, slot_key & ((1u << TAG_BITS) - 1u), slot_key >> TAG_BITS, asset, inheritance, zoom, c)) {
           return Answer(word & KIND_MASK, asset, inheritance);
         }
         // The words are from two writes. They are left to the walk writing them, and this
@@ -127,7 +122,7 @@ fn ask_node(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, a
     }
   }
   if (!may_ask()) {
-    return Answer(KIND_LEFT, vec2<u32>(0u), vec4<u32>(0u));
+    return Answer(KIND_LEFT, vec2<u32>(0u), vec3<u32>(0u));
   }
   let a = world_answer(parent, top, zoom, c, zooms, asked);
   if (cached) {
@@ -139,11 +134,11 @@ fn ask_node(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, a
 /// Asks the world for the node `c` at `zoom` at `zooms`. What it inherits is found from the top
 /// where `top`, and otherwise from `parent`. The ask is counted at word `asked`, unless `asked`
 /// is `NONE`.
-fn world_answer(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, asked: u32) -> Answer {
+fn world_answer(parent: vec3<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, asked: u32) -> Answer {
   if (asked != NONE && counts(asked)) {
     atomicAdd(&node_cache[asked], 1u);
   }
-  var inheritance: vec4<u32>;
+  var inheritance: vec3<u32>;
   if (top) {
     inheritance = world_root(zoom, c);
   } else {
@@ -304,13 +299,12 @@ fn claim_slot(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32) -> vec2
 fn fill(slot: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32, a: Answer) {
   atomicStore(&node_cache[state_at(slot)], 0u);
   let w = entry_at(slot);
-  atomicStore(&node_cache[w + W_KIND], a.kind | entry_stamp(a.kind, zooms, a.asset, a.inheritance, zoom, c));
+  atomicStore(&node_cache[w + W_KIND], a.kind | entry_stamp(a.kind, tag, zooms, a.asset, a.inheritance, zoom, c));
   atomicStore(&node_cache[w + W_ASSET], a.asset.x);
   atomicStore(&node_cache[w + W_ASSET + 1u], a.asset.y);
   atomicStore(&node_cache[w + W_INHERITANCE], a.inheritance.x);
   atomicStore(&node_cache[w + W_INHERITANCE + 1u], a.inheritance.y);
   atomicStore(&node_cache[w + W_INHERITANCE + 2u], a.inheritance.z);
-  atomicStore(&node_cache[w + W_INHERITANCE + 3u], a.inheritance.w);
   atomicStore(&node_cache[w + W_NODE], zoom);
   atomicStore(&node_cache[w + W_NODE + 1u], u32(c.x));
   atomicStore(&node_cache[w + W_NODE + 2u], u32(c.y));
@@ -344,7 +338,7 @@ fn put_back(slot: u32, key: u32) {
 /// The node `c` at `zoom`, asked at `zooms`, as the walk asks it (walk.wgsl `walk`). It is
 /// `ask_node`, which reads the inherited words whatever `hands` says, with its asks counted
 /// where the pass counts them (`asked_at`).
-fn node_answer(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, hands: bool) -> Answer {
+fn node_answer(parent: vec3<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, hands: bool) -> Answer {
   return ask_node(parent, top, zoom, c, zooms, asked_at());
 }
 
@@ -357,7 +351,7 @@ fn lack_ends() -> u32 {
 /// Finds what the node inherits where a beam ray's walk ended without asking: from its
 /// parent's, `parent`, or from the top where `top`. It writes that into the ray's line at
 /// `line`.
-fn hand_end(line: u32, parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>) -> bool {
+fn hand_end(line: u32, parent: vec3<u32>, top: bool, zoom: u32, c: vec3<i32>) -> bool {
   if (top) {
     line_hand(line, zoom, world_root(zoom, c));
   } else {

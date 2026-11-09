@@ -19,11 +19,11 @@ use xpute_core::global::Global;
 use crate::domain::layer::earth::EarthTile;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::{AskScope, Base};
+use crate::sys::io::body::Packet;
 use crate::sys::io::demand::{Source, Stream};
-use crate::sys::io::fetch::{answer_cnt, body, release, take_answer, Response};
+use crate::sys::io::fetch::{answer_cnt, take_answer, Response};
 use crate::sys::io::request::{attempt_of, settle};
 use pxl_spec::bake::tile::division::DivisionTile;
-use xpute_core::mem::heap::Block;
 use xpute_core::sched::pass::Pass;
 use xpute_kit::status::errno::Errno;
 
@@ -100,7 +100,7 @@ pub struct Layer {
     pub slot_cnt: u32,
     /// Called when a want's file arrives, with the want's id and the file, or
     /// with None when the source has nothing for it.
-    on_arrival: fn(u64, Option<Block>, &mut PhaseList) -> Result<(), Failure>,
+    on_arrival: fn(u64, Option<Packet>, &mut PhaseList) -> Result<(), Exit>,
 }
 
 const fn layer<L: ViewLayer>() -> Layer {
@@ -277,8 +277,8 @@ impl<L: ViewLayer> Demand<L> {
     pub fn admit(
         &mut self,
         p: Quadrant,
-        receive: impl FnOnce(u32) -> Result<L, Failure>,
-    ) -> Result<(), Failure> {
+        receive: impl FnOnce(u32) -> Result<L, Exit>,
+    ) -> Result<(), Exit> {
         // When the cache must evict, the tile last in view order goes, and of
         // two equally late, the greater.
         let o = self.observation.as_ref();
@@ -648,7 +648,7 @@ pub fn admit_arrived(pass: &Pass) {
                 key,
                 stream,
                 id,
-                block,
+                pkt,
                 mut phases,
             }) = take_answer(&OF)
             else {
@@ -657,15 +657,11 @@ pub fn admit_arrived(pass: &Pass) {
             // A key the request scheduler no longer holds belongs to a request
             // stopped or reset since it was answered.
             if attempt_of(key).is_none() {
-                release(block);
                 return false;
             }
             let result = match of_stream(stream) {
-                Some(l) => (l.on_arrival)(id, block, &mut phases),
-                None => {
-                    release(block);
-                    Err(Errno::ENOTRECOVERABLE.into())
-                }
+                Some(l) => (l.on_arrival)(id, pkt, &mut phases),
+                None => Err(Failure::from(Errno::ENOTRECOVERABLE).into()),
             };
             settle(key, Exit::from(result), Some(phases));
             true
@@ -677,26 +673,20 @@ pub fn admit_arrived(pass: &Pass) {
     }
 }
 
-/// Admits the file for the tile `id` names. A `block` of None means the
-/// source has no object for that tile.
+/// Admits the file for the tile `id` names. A `pkt` of None means the source
+/// has no object for that tile. A packet no slot took goes back with the
+/// closure that held it.
 fn on_arrived<L: ViewLayer>(
     id: u64,
-    block: Option<Block>,
+    pkt: Option<Packet>,
     phases: &mut PhaseList,
-) -> Result<(), Failure> {
+) -> Result<(), Exit> {
     let p = Quadrant::of_id(id);
-    let Some(b) = block else {
+    let Some(pkt) = pkt else {
         L::demand().absent(p);
         return Ok(());
     };
-    let mut framed = None;
-    let result = L::demand().admit(p, |slot| {
-        let tile = L::receive(p, slot, body(b), phases)?;
-        framed = Some(slot);
-        Ok(tile)
-    });
-    L::keep(framed, b);
-    result
+    L::demand().admit(p, |slot| L::receive(p, slot, pkt, phases))
 }
 
 #[cfg(test)]

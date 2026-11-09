@@ -228,9 +228,10 @@ pub struct LocationIndicator {
     /// The last height found under the fix, or None until one is found.
     last_known_center_z: Option<f64>,
     /// The center the zone was last grounded at, or None when no height was
-    /// found. It is kept while the fix stays and no change touches the ground
-    /// its grounding read (`Memo`).
-    ground_center: Memo<Key, Option<V3>>,
+    /// found, and whether every height it read was exact. It is kept while
+    /// the fix stays and no change touches the ground its grounding read
+    /// (`Memo`).
+    ground_center: Memo<Key, (Option<V3>, bool)>,
     /// The zone's instances laid this step. They are kept between steps, as
     /// `rise` is, so a step allocates nothing.
     instances: Vec<f32>,
@@ -262,8 +263,8 @@ impl LocationIndicator {
         };
         // The memo is checked every turn, so it sees each change once.
         let mut grounded = core::mem::take(&mut self.ground_center);
-        grounded.forget_touched();
-        let center_pos = grounded.of(World::now(), seen, |w| self.ground(w, draw, seen));
+        grounded.forget_touched_at_leaf(|&(_, exact)| exact);
+        let (center_pos, _) = grounded.of(World::now(), seen, |w| self.ground(w, draw, seen));
         self.ground_center = grounded;
         let Some(center_pos) = center_pos else {
             return self.clear(draw);
@@ -279,15 +280,20 @@ impl LocationIndicator {
     }
 
     /// Grounds the zone at the fix and writes it where it changed. Returns the
-    /// zone's center, or None while the fix has no height yet.
-    fn ground(&mut self, world: World, draw: &mut DrawList, key: Key) -> Option<V3> {
+    /// zone's center, or None while the fix has no height yet, and whether
+    /// every height it read was exact.
+    fn ground(&mut self, world: World, draw: &mut DrawList, key: Key) -> (Option<V3>, bool) {
         let (device, pos) = (key.device, key.pos);
         // The fix names a place but not its height, so the height is the
         // ground's under it, and the last one found stands until a new one is.
-        if let Some(z) = world.surface_support(&device).val().flatten() {
+        let center = world.surface_support(&device);
+        let mut exact = center.exact().is_some();
+        if let Some(z) = center.val().flatten() {
             self.last_known_center_z = Some(z);
         }
-        let center_z = self.last_known_center_z?;
+        let Some(center_z) = self.last_known_center_z else {
+            return (None, exact);
+        };
         let raw = [pos[0], pos[1], center_z];
         let center_pos = v3::floor(&raw, units(GROUND.leaf_cell_zoom()));
 
@@ -297,7 +303,11 @@ impl LocationIndicator {
         );
         lay_zone(
             center_pos,
-            |at| world.surface_support(at).val().flatten(),
+            |at| {
+                let height = world.surface_support(at);
+                exact &= height.exact().is_some();
+                height.val().flatten()
+            },
             &mut rise,
             &mut instances,
         );
@@ -332,7 +342,7 @@ impl LocationIndicator {
             request_world_tick();
         }
         (self.instances, self.rise) = (instances, rise);
-        Some(center_pos)
+        (Some(center_pos), exact)
     }
 
     fn clear(&mut self, draw: &mut DrawList) {

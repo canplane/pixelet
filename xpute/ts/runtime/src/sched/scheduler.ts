@@ -7,21 +7,18 @@
  * admits (policy.ts). A moment the policy does not admit passes the turn on
  * to the next moment.
  *
- * A core on a thread of its own (runtime.ts `Core.thread`) runs its turns as
- * kicks ask and keeps no timer, so this scheduler is its only scheduler, as
- * it is for a page's core. Each wake the core asks for, at once or in `n` ms,
- * as the doorbell hears it (`Doorbell.turns`, `ring`), and each wake the
- * runtime asks for (`wake`), waits for a moment the policy gives and admits.
- * At that moment the turn's grant is submitted and the core is kicked with
- * its deadline. What the runtime sends is such a wake on either core, and
- * the granted turn applies it.
+ * Each wake the core asks for, at once or in `n` ms, as the doorbell hears it
+ * (`Doorbell.ring`), and each wake the runtime asks for (`wake`), waits for a
+ * moment the policy gives and admits. At that moment the turn's grant is
+ * submitted and the core is rung with its deadline. What the runtime sends is
+ * such a wake, and the granted turn applies it.
  *
- * Every turn is heard (`Doorbell.on_turn`): each turn the thread ran, whoever
- * kicked it, and each turn rung. A turn heard drops the timer and every
- * moment asked for an earlier wake: a moment the policy hands back from
- * before the turn runs nothing, and only a turn the runtime still wants is
- * asked for again, so the scheduler never holds a request it no longer means.
- * The policy is told what the thread ran, as the doorbell hears it.
+ * Every turn rung is heard (`Doorbell.on_turn`). A turn heard drops the timer
+ * and every moment asked for an earlier wake: a moment the policy hands back
+ * from before the turn runs nothing, and only a turn the runtime still wants
+ * is asked for again, so the scheduler never holds a request it no longer
+ * means. A device's core has no scheduler here: its thread begins its turns
+ * (xpute-runtime native/thread.rs).
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
@@ -50,8 +47,6 @@ export class Scheduler<G extends Grant = Grant> {
   private _timer_at = Infinity;
   private _last = -1;
   private _running = false;
-  /** This is the last grant a core on its own thread was kicked with. */
-  private _granted: G | null = null;
   private readonly _consider = (now: f64): void => this._turn(now);
 
   private readonly _doorbell: Doorbell;
@@ -69,14 +64,12 @@ export class Scheduler<G extends Grant = Grant> {
     this._policy = policy;
     this._submit = submit;
     doorbell.on_wake = (wake_ms) => this._wake_in(wake_ms);
-    // A turn heard, whoever kicked or rang it, is followed by the wake it asks
-    // for (`Doorbell.turns`, `ring`). So the timer and the moments asked for
-    // an earlier wake are dropped, and only a turn the runtime still wants is
-    // asked for again.
-    doorbell.on_turn = (turn_ms, wake_ms) => {
+    // A turn heard is followed by the wake it asks for (`Doorbell.ring`). So
+    // the timer and the moments asked for an earlier wake are dropped, and only
+    // a turn the runtime still wants is asked for again.
+    doorbell.on_turn = () => {
       this._gen++;
       this._drop_timer();
-      if (this._granted) this._policy.observe(turn_ms, this._granted, wake_ms);
       if (this._runtime_wants) this._ask();
     };
   }
@@ -152,11 +145,6 @@ export class Scheduler<G extends Grant = Grant> {
       this._submit(grant, delta_s);
     } finally {
       this._batching = false;
-    }
-    if (this._doorbell.kick) {
-      this._granted = grant;
-      this._doorbell.kick(left_ms(grant));
-      return;
     }
     const t0 = performance.now();
     const wake_ms = this._doorbell.ring(left_ms(grant));

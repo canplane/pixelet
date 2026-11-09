@@ -47,7 +47,11 @@ measure speed on.
 The page is Expo's web build, bundled by Metro. Beside the dev server, a watcher
 rebuilds the core's WebAssembly module whenever its Rust changes.
 
-A development page leaves two helpers in the browser console. `xpute.cmd` sends
+The make targets set everything a run needs. Point a run at another
+deployment or other ports only by the variables `ts/client/script/proxy.ts`
+reads, and run a server alone by its own target (`make serve-tile`).
+
+A page leaves two helpers in the browser console. `xpute.cmd` sends
 the core any command by its number, and `pxl.perf` is the profiler: `report()`
 summarizes where the frames' time went and `trace()` saves a trace for
 ui.perfetto.dev.
@@ -96,10 +100,13 @@ make -j8 check
 make -j8 test
 ```
 
-`check` runs every check and `test` every test; each also has a target per tree,
-such as `check-ts` or `test-rust`. A change to xpute's GPU encoder or runtime
-also takes `make -C xpute test-gpu`, which needs a GPU and Chrome. `make fmt`
-and `make lint` format and lint.
+`check` and `test` hold pixelet's code; each also has a target per tree, such
+as `check-ts` or `test-rust`. `./script/diff-check.py` runs only the checks and
+tests of what the working tree's changes reach. A deploy adds `check-build`, the
+bundle a deploy builds; xpute's own `check-xpute` and `test-xpute`; and
+`test-gpu`, the renderer's passes on this machine's GPU. A change to xpute's GPU
+encoder or runtime also takes `make -C xpute test-gpu`, which needs a GPU and
+Chrome. `make fmt` formats.
 
 `make check` also lints Android, which needs the NDK's compiler at the app's
 minSdk:

@@ -68,9 +68,8 @@ pub struct TileCache<L: Base> {
     tiles: FnvHashMap<Quadrant, Entry<L>>,
     /// The tile each slot holds. It is the inverse of `Resident::slot`, and
     /// only `put` and `remove` write either side, so the two always agree.
-    /// The readers that start from a slot use this side: the packet a tile
-    /// arrives in (terrain/tile.rs `keep`) and the GPU hand-off, which walks
-    /// the slots (earth.rs `upload`).
+    /// The GPU hand-off starts from a slot and walks this side (earth.rs
+    /// `upload`).
     in_slot: Vec<Option<Quadrant>>,
     free: Vec<u32>,
     /// A buffer kept between calls so that `ask` allocates nothing.
@@ -273,11 +272,11 @@ impl<L: Base> TileCache<L> {
     }
 
     /// The slot a held tile is in; none for an empty one.
-    pub fn slot(&self, p: Quadrant) -> Option<u32> {
+    pub(in crate::domain::layer) fn slot(&self, p: Quadrant) -> Option<u32> {
         self.readable(p)?.slot
     }
 
-    pub fn get(&self, p: Quadrant) -> Option<&L> {
+    pub(in crate::domain::layer) fn get(&self, p: Quadrant) -> Option<&L> {
         self.readable(p).map(|h| &h.body)
     }
 
@@ -304,7 +303,7 @@ impl<L: Base> TileCache<L> {
 
     /// `child`'s line from its parent's line. It reads only `child`'s own
     /// entry, so a descent costs one lookup per zoom and never walks back up.
-    pub fn step(&self, parent: &Line, child: Quadrant) -> Line {
+    pub(in crate::domain::layer) fn step(&self, parent: &Line, child: Quadrant) -> Line {
         let e = self.entry(child);
         let resident = e.filter(|e| e.asked).and_then(|e| e.resident.as_ref());
         let absent = e.is_some_and(|e| e.answered)
@@ -615,9 +614,11 @@ impl<L: Base> TileCache<L> {
         self.changed.push(p);
     }
 
-    /// The tile held in slot `slot`.
-    pub fn in_slot(&self, slot: u32) -> Option<Quadrant> {
-        self.in_slot[slot as usize]
+    /// The tile held in slot `slot` and what it holds.
+    pub(in crate::domain::layer) fn in_slot(&mut self, slot: u32) -> Option<(Quadrant, &mut L)> {
+        let p = self.in_slot[slot as usize]?;
+        let held = self.tiles.get_mut(&p)?.resident.as_mut()?;
+        Some((p, &mut held.body))
     }
 
     /// Returns the slot `p` was in, if any, for the caller to fill or free.

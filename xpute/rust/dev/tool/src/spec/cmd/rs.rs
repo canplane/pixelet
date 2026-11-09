@@ -396,6 +396,44 @@ pub(super) fn emit(spec: &Spec, t: &Target, apart: Option<&Apart>) -> Result<Str
         if let Some(import) = &c.import {
             let doc = [format!("Command::{}'s packet.", c.name)];
             rs_writer(spec, &mut out, &name, Some(&doc), import)?;
+            if !import.is_empty() && !import.iter().any(|f| f.list) {
+                let borrows = rs_borrows(spec, import)?;
+                let lt = if borrows { "<'_>" } else { "" };
+                out.extend([
+                    String::new(),
+                    format!("impl {name}{lt} {{"),
+                    "    /// As the runtime beside the core reads it.".to_string(),
+                ]);
+                if borrows {
+                    let mut types = Vec::new();
+                    for f in import {
+                        types.push(rs_read_type(spec, f)?);
+                    }
+                    // The parts borrow from the packet, so their lifetime is
+                    // the elided one of `pkt`.
+                    out.push(format!(
+                        "    pub fn parts(pkt: &[u8]) -> Result<({},), MarshalError> {{",
+                        types.join(", ").replace("'a ", "")
+                    ));
+                    out.push("        let f = TreeReader::new(pkt)?.read_branch()?;".into());
+                    out.push("        Ok((".into());
+                    for (i, f) in import.iter().enumerate() {
+                        out.push(format!("            {},", rs_read(spec, f, i)?));
+                    }
+                    out.push("        ))".into());
+                } else {
+                    out.push(format!(
+                        "    pub fn read(pkt: &[u8]) -> Result<{name}, MarshalError> {{"
+                    ));
+                    out.push("        let f = TreeReader::new(pkt)?.read_branch()?;".into());
+                    out.push(format!("        Ok({name} {{"));
+                    for (i, f) in import.iter().enumerate() {
+                        out.push(format!("            {}: {},", f.name, rs_read(spec, f, i)?));
+                    }
+                    out.push("        })".into());
+                }
+                out.extend(["    }".to_string(), "}".to_string()]);
+            }
             if let Some(door) = t.import {
                 let lt = if rs_borrows(spec, import)? {
                     "<'_>"
@@ -414,6 +452,31 @@ pub(super) fn emit(spec: &Spec, t: &Target, apart: Option<&Apart>) -> Result<Str
                 ]);
             }
         }
+    }
+    let commands = spec.commands()?;
+    let named: Vec<_> = commands
+        .iter()
+        .filter_map(|c| c.mem.as_ref().map(|m| (c, m)))
+        .collect();
+    if !named.is_empty() {
+        out.extend([
+            String::new(),
+            "/// The core's memory a command names, where it is and how long.".to_string(),
+            "pub fn mem_of(cmd: u32, pkt: &[u8]) -> Option<(u32, u32)> {".to_string(),
+            "    match cmd {".to_string(),
+        ]);
+        for (c, [at, len]) in named {
+            out.push(format!(
+                "        {} => {}::read(pkt).ok().map(|e| (e.{at}, e.{len})),",
+                c.val,
+                pascal(&c.name)
+            ));
+        }
+        out.extend([
+            "        _ => None,".to_string(),
+            "    }".to_string(),
+            "}".to_string(),
+        ]);
     }
     Ok(file(&out))
 }

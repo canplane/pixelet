@@ -1,23 +1,22 @@
 // xpute-runtime/native/thread.rs
 
-//! This is the core's own thread, a vCPU that runs a turn (`Vcpu::turn`)
-//! whenever it is kicked and sleeps otherwise.
+//! This is the core's own thread, a vCPU that runs a turn (`Vcpu::turn`) at
+//! a display frame and sleeps otherwise.
 //!
-//! A kick carries a deadline for the next turn, in ms from the turn's rise;
-//! when several kicks come before a turn, the turn takes the latest of their
-//! deadlines. It also carries the display frame the turn begins at, so that
-//! how late the runtime's thread is does not move the turn (`vsync`,
-//! `next_frame`). A caller's work (`run`), such as a device's, runs on this thread
-//! between turns while the caller waits.
+//! The platform's display link calls `vsync` at each frame. A frame begins a
+//! turn when one is wanted and the pacing admits it (`pacing`): the core asked
+//! for one, at once or for a time now past, or the runtime or a device did
+//! (`wake`). The frame's grant goes onto the submission ring as SYS_FRAME and
+//! SYS_TURN, by the runtime's thread, the ring's one writer (`serve`), which
+//! kicks the turn once they are there (`kick`). While paused, a kick waits for
+//! `resume`. A ring (`ring`)
+//! runs a turn at once, whatever the display. A caller's work (`run`), such as
+//! a device's, runs on this thread between turns while the caller waits.
 //!
-//! The thread chooses no moment. When a turn asks to be woken, at once or in
-//! `n` ms, the thread tells the runtime (`turns`, `ring`). The runtime's
-//! scheduler asks its policy for the moment, as a page's scheduler does
-//! (@xpute/runtime sched/scheduler.ts), and kicks with the display frame it
-//! grants, so that no turn runs between a display's frames. While paused (`pause`), the thread runs only
-//! the turns a caller rings, and its kicks wait for `resume`.
+//! While paused (`pause`), the thread runs only the turns a caller rings.
 //!
-//! The core's calls are answered on a thread outside the core. A call made
+//! The rings are read and written by the runtime's own thread (`serve`), which
+//! hears here when a turn has ended. The core's calls are answered on a thread outside the core. A call made
 //! by a caller's work is handed to that caller. A call made by a turn is
 //! handed to a caller waiting in `ring` if there is one; otherwise the
 //! program is told (`notify_on`) and answers it on its own thread
@@ -26,10 +25,11 @@
 //!
 //! Four rules hold the loop:
 //!
-//! - No kick is lost. A kick sets `kicked` under `LOOP`'s lock and wakes the
-//!   thread. The thread reads `kicked` and its work under that lock before
-//!   it waits, and `Condvar::wait` gives the lock up as it sleeps, so a kick
-//!   either lands before the check or wakes the wait.
+//! - No turn asked for is lost. A ring and a frame set their mark under
+//!   `LOOP`'s lock and wake the thread. The thread reads the marks and its
+//!   work under that lock before it waits, and `Condvar::wait` gives the lock
+//!   up as it sleeps, so a mark either lands before the check or wakes the
+//!   wait.
 //! - Every wait has someone to answer it. The core's thread waits for an
 //!   answer only while a call is in `LOOP`. A caller waiting in `ring`, or
 //!   in `run` on the thread that rings, answers the call there; when none
@@ -39,16 +39,19 @@
 //! - A turn begins only when the core can post all that one turn may post
 //!   (`Vcpu::ready`, the door's room in the completion ring), read under the
 //!   lock. When it cannot, the thread tells a caller in `ring` and the
-//!   runtime, and waits for the kick that follows the runtime's read.
+//!   runtime, and the next frame after the runtime's read tries again.
 //! - Every turn drains the submission ring first, applying what waits there
 //!   before any phase's budget (xpute-core ipc/door.rs `receive`), so a turn
-//!   the core asked for itself also applies what the runtime's kicks sent.
+//!   the core asked for itself also applies what the runtime sent.
 
 use core::cell::Cell;
 use core::panic::AssertUnwindSafe;
 use std::sync::{Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
+pub(super) use super::pacing::Grant;
+pub use super::pacing::Pace;
+use super::pacing::Pacing;
 use xpute_core::global::on_marked_thread;
 
 /// The core's thread calls these as it loops: `turn` runs a turn with a
@@ -77,33 +80,24 @@ enum Asker {
     Turn,
 }
 
-/// The runtime reads this of the turns since it last asked (`turns`).
-struct TurnStat {
-    /// Some turn answered 0: the core wants the next turn at once.
-    resched: bool,
-    /// This is how long the longest turn took, in ms.
-    turn_ms: f64,
-    /// The runtime has been told and has not asked since, so it is not told
-    /// again.
-    told: bool,
-}
-
 struct Loop {
-    kicked: bool,
-    /// The next turn's deadline is the latest any kick has given since the
+    /// A caller rang a turn.
+    rung: bool,
+    /// The next turn's deadline is the latest any ring has given since the
     /// last turn began.
     deadline: f64,
-    /// A kicked turn begins no sooner than this, on the clock's ms.
-    not_before: f64,
-    /// The last display frame and the interval before it, on the clock's ms;
-    /// the interval is 0 until two have come (`vsync`).
-    vsync_at: f64,
-    vsync_ms: f64,
+    pacing: Pacing,
+    /// When the frame a pending turn was granted at wants that turn ended, on
+    /// the clock's ms; none when no frame's turn is pending (`kick`).
+    frame_end: Option<f64>,
+    /// The next frame begins a turn: a turn answered 0, or the runtime or a
+    /// device asked for one.
+    want: bool,
     /// This is when the last turn asked to be woken, if that is later than
-    /// now; the runtime is told it through `wake_of`. A turn that answered 0
-    /// sets `TurnStat::resched` instead. The thread does not wait for this moment
-    /// itself: the runtime's kick wakes it.
+    /// now. The first frame past it begins a turn.
     wake_at: Option<Instant>,
+    /// What the last turn answered.
+    wake_ms: f64,
     job: Option<Job>,
     job_end_cnt: u64,
     start_cnt: u64,
@@ -125,17 +119,17 @@ struct Loop {
     busy: bool,
     /// Only a turn a caller rings may begin (`pause`, `resume`).
     paused: bool,
-    turn_stat: TurnStat,
     terminated: bool,
 }
 
 static LOOP: Mutex<Loop> = Mutex::new(Loop {
-    kicked: false,
+    rung: false,
     deadline: 0.0,
-    not_before: 0.0,
-    vsync_at: 0.0,
-    vsync_ms: 0.0,
+    pacing: Pacing::new(),
+    frame_end: None,
+    want: false,
     wake_at: None,
+    wake_ms: 0.0,
     job: None,
     job_end_cnt: 0,
     start_cnt: 0,
@@ -149,15 +143,10 @@ static LOOP: Mutex<Loop> = Mutex::new(Loop {
     idler_cnt: 0,
     busy: false,
     paused: false,
-    turn_stat: TurnStat {
-        resched: false,
-        turn_ms: 0.0,
-        told: false,
-    },
     terminated: false,
 });
 
-/// The core's thread waits on this for a kick, for work, for an answer, or
+/// The core's thread waits on this for a ring or a frame, for work, for an answer, or
 /// for the last `while_idle` to end.
 static CORE_CV: Condvar = Condvar::new();
 /// Callers wait on this for a turn that ended or stalled, for work done, for
@@ -208,7 +197,7 @@ pub fn notify_on(notify: Option<Notify>) {
     *NOTIFY.lock().unwrap_or_else(PoisonError::into_inner) = notify;
 }
 
-fn notify() {
+pub(super) fn notify() {
     let notify = *NOTIFY.lock().unwrap_or_else(PoisonError::into_inner);
     if let Some(f) = notify {
         f();
@@ -270,7 +259,7 @@ pub(super) fn start(
 
 enum Next {
     Job(Job),
-    Turn { deadline_ms: f64 },
+    Turn { deadline_ms: f64, framed: bool },
 }
 
 /// The core's thread runs turns and callers' work until a panic unwinds out
@@ -303,22 +292,23 @@ fn serve(vcpu: Vcpu) {
                 g.job_end_cnt += 1;
                 RUNTIME_CV.notify_all();
             }
-            Next::Turn { deadline_ms } => {
-                let t0 = Instant::now();
+            Next::Turn {
+                deadline_ms,
+                framed,
+            } => {
                 let wake = (vcpu.turn)(deadline_ms);
-                let turn_ms = t0.elapsed().as_secs_f64() * 1000.0;
                 let mut g = state();
                 g.busy = false;
                 g.end_cnt += 1;
                 g.wake_at = (wake > 0.0).then(|| Instant::now() + duration_of(wake));
-                g.turn_stat.resched |= wake == 0.0;
-                g.turn_stat.turn_ms = g.turn_stat.turn_ms.max(turn_ms);
-                RUNTIME_CV.notify_all();
-                let tell = g.ringer_cnt == 0 && !core::mem::replace(&mut g.turn_stat.told, true);
-                drop(g);
-                if tell {
-                    notify();
+                g.wake_ms = wake;
+                g.want |= wake == 0.0;
+                if framed {
+                    g.pacing.asked_next(wake == 0.0);
                 }
+                RUNTIME_CV.notify_all();
+                drop(g);
+                super::serve::news();
             }
         }
     }
@@ -329,10 +319,9 @@ fn duration_of(ms: f64) -> Duration {
 }
 
 /// Waits for what the thread runs next. A caller's work goes first. A turn
-/// follows once the thread is kicked, if a turn may begin and the thread is
-/// either not paused or rung by a caller. Whether a turn may begin is read
-/// under the lock, so the program's read of the completion ring either lands
-/// before that check or is followed by the kick that wakes the wait below.
+/// follows once a frame or a ring asks for one, if a turn may begin and the
+/// thread is either not paused or rung by a caller. A frame that finds no room
+/// in the completion ring is given up, and the next one tries again.
 fn next(vcpu: Vcpu) -> Next {
     let mut g = state();
     loop {
@@ -342,111 +331,115 @@ fn next(vcpu: Vcpu) -> Next {
                 g.busy = true;
                 return Next::Job(job);
             }
-            if runs && g.kicked {
-                let wait_ms = g.not_before - super::now();
-                if wait_ms > 0.0 {
-                    g = CORE_CV
-                        .wait_timeout(g, duration_of(wait_ms))
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .0;
-                    continue;
-                }
+            if runs && g.rung {
                 g.look_cnt += 1;
-                g.kicked = false;
+                g.rung = false;
                 g.wake_at = None;
                 if (vcpu.ready)() {
-                    let deadline_ms = core::mem::take(&mut g.deadline);
+                    let frame_end = g.frame_end.take();
+                    let left_ms = frame_end.map_or(0.0, |end| end - super::now());
+                    let deadline_ms = core::mem::take(&mut g.deadline).max(left_ms);
                     g.start_cnt += 1;
                     g.busy = true;
-                    return Next::Turn { deadline_ms };
+                    return Next::Turn {
+                        deadline_ms,
+                        framed: frame_end.is_some(),
+                    };
                 }
+                g.frame_end = None;
+                g.want = true;
                 g.stall_at = g.look_cnt;
                 RUNTIME_CV.notify_all();
-                if g.ringer_cnt == 0 && !core::mem::replace(&mut g.turn_stat.told, true) {
-                    drop(g);
-                    notify();
-                    g = state();
-                    continue;
-                }
+                drop(g);
+                super::serve::news();
+                g = state();
+                continue;
             }
         }
         g = wait(&CORE_CV, g);
     }
 }
 
-fn kick_locked(g: &mut Loop, deadline_ms: f64, at_ms: f64) {
-    let already = core::mem::replace(&mut g.kicked, true);
+fn ring_locked(g: &mut Loop, deadline_ms: f64) {
+    g.rung = true;
     g.deadline = g.deadline.max(deadline_ms);
-    // A later kick does not put off a turn already due at an earlier frame.
-    g.not_before = if already {
-        g.not_before.min(at_ms)
-    } else {
-        at_ms
-    };
     CORE_CV.notify_all();
 }
 
-/// When the core wants the next turn, in ms from now: 0 if a turn since the
-/// runtime last read answered 0, and `NO_WAKE` if no turn asked for one.
-fn wake_of(g: &Loop) -> f64 {
-    match g.wake_at {
-        _ if g.turn_stat.resched => 0.0,
-        Some(at) => at.saturating_duration_since(Instant::now()).as_secs_f64() * 1000.0,
-        None => xpute_core::sched::wake::NO_WAKE,
-    }
-}
-
-/// A device's wake, from whichever thread learned of a completion. The
-/// runtime is told the core wants a turn, and its scheduler grants one, as a
-/// page's completion asks its scheduler, and that turn reads the completion.
+/// Asks for a turn at the next frame, from whichever thread learned that the
+/// core has something to take: the runtime after a send or a read of the
+/// completion ring, or a device at a completion.
 pub fn wake() {
+    state().want = true;
+}
+
+/// An input came now, so the turns are interactive for a while (`Pace`).
+pub fn input() {
+    state().pacing.input(super::now());
+}
+
+/// The program's numbers for frame pacing, given as the runtime boots.
+pub fn pace(pace: Pace) {
+    state().pacing.set(pace);
+}
+
+/// The core asked for turns no closer than `interval_ms` (SYS_PACE).
+pub(super) fn ask(interval_ms: f64) {
+    state().pacing.ask(interval_ms);
+}
+
+/// Kicks the turn a frame was granted at, once the runtime's thread has put
+/// its grant on the submission ring; it is to end by `end_at`, on the clock's
+/// ms.
+pub(super) fn kick(end_at: f64) {
     let mut g = state();
-    g.turn_stat.resched = true;
-    let tell = g.ringer_cnt == 0 && !core::mem::replace(&mut g.turn_stat.told, true);
-    drop(g);
-    if tell {
-        notify();
-    }
+    g.rung = true;
+    g.frame_end = Some(g.frame_end.map_or(end_at, |end| end.max(end_at)));
+    CORE_CV.notify_all();
 }
 
-/// The runtime's kick, after it has written the submission ring. The next
-/// turn begins at `at_ms` on the clock, at once if that has passed, and ends
-/// no sooner than `deadline_ms` after its rise. From now on this thread
-/// answers the calls of turns.
-pub fn kick(deadline_ms: f64, at_ms: f64) {
-    RINGS.with(|r| r.set(true));
-    kick_locked(&mut state(), deadline_ms, at_ms);
+/// Kicks a turn to take what the runtime's thread could not fit in the
+/// submission ring.
+pub(super) fn drain() {
+    ring_locked(&mut state(), 0.0);
 }
 
-/// A gap past this between two display frames is the display's having stopped,
-/// not its interval.
-const VSYNC_GAP_MS: f64 = 50.0;
+/// Whether the runtime may put a frame's grant on the ring: turns run.
+pub(super) fn running() -> bool {
+    !state().paused
+}
 
 /// The platform's display link calls this at each display frame, `age_ms` after
 /// that frame's time.
 pub fn vsync(age_ms: f64) {
     let at = super::now() - age_ms;
-    let mut g = state();
-    let gap = at - g.vsync_at;
-    if gap > 0.0 && gap < VSYNC_GAP_MS {
-        g.vsync_ms = gap;
+    // The lock is let go before the grant goes on, since the runtime's thread
+    // takes it to begin the turn.
+    let grant = granted(&mut state(), at);
+    if let Some(grant) = grant {
+        super::serve::frame(grant);
     }
-    g.vsync_at = at;
 }
 
-/// The time on the clock of the first display frame after both now and
-/// `after_ms`. Until the display's interval is known it is that later time
-/// itself.
-pub fn next_frame(after_ms: f64) -> f64 {
-    let from = super::now().max(after_ms);
-    let g = state();
-    if g.vsync_ms == 0.0 {
-        return from;
+/// The grant the frame at `at` begins a turn with, if it begins one. A frame
+/// that comes while a frame's turn is pending gives that turn its later
+/// deadline instead.
+fn granted(g: &mut Loop, at: f64) -> Option<Grant> {
+    g.pacing.frame(at);
+    if g.paused {
+        return None;
     }
-    // The hundredth of an interval keeps `after_ms`, itself a frame, from
-    // being answered again by a rounding.
-    let frames = ((from - g.vsync_at) / g.vsync_ms + 0.01).floor() + 1.0;
-    g.vsync_at + frames * g.vsync_ms
+    let grant = g.pacing.grant(at, super::now());
+    if let Some(end) = g.frame_end.as_mut() {
+        *end = end.max(grant.deadline_at);
+        return None;
+    }
+    let due = g.want || g.wake_at.is_some_and(|w| w <= Instant::now());
+    if !due || !g.pacing.admit(at) {
+        return None;
+    }
+    g.want = false;
+    Some(grant)
 }
 
 /// Answers here the call waiting in `LOOP`, if `takes` says this thread is
@@ -471,16 +464,19 @@ fn answer_here<'a>(
     (g, true)
 }
 
-/// From now on, only a turn a caller rings (`ring`) may begin, and a kick
-/// waits for `resume`. A caller's work still runs.
+/// From now on, only a turn a caller rings (`ring`) may begin. A caller's
+/// work still runs.
 pub fn pause() {
-    state().paused = true;
+    let mut g = state();
+    g.paused = true;
 }
 
-/// Turns begin again as kicks ask, and a kick that came while paused takes
-/// effect at once.
+/// Turns begin again at the display's frames, the next frame beginning one.
 pub fn resume() {
-    state().paused = false;
+    let mut g = state();
+    g.paused = false;
+    g.want = true;
+    // A kick that came before the pause is still pending.
     CORE_CV.notify_all();
 }
 
@@ -518,16 +514,9 @@ pub fn answer() {
     let _ = answer_here(g, |a| a == Asker::Turn);
 }
 
-/// Tells the runtime's thread what the turns since the last call asked:
-/// when the core wants the next turn, in ms (0 if a turn answered 0,
-/// `NO_WAKE` if none asked, NaN once the core has stopped), and how long the
-/// longest of those turns took, in ms.
-pub fn turns() -> (f64, f64) {
-    let mut g = state();
-    g.turn_stat.told = false;
-    let wake = if g.terminated { f64::NAN } else { wake_of(&g) };
-    g.turn_stat.resched = false;
-    (wake, core::mem::take(&mut g.turn_stat.turn_ms))
+/// Whether the core has stopped.
+pub fn terminated() -> bool {
+    state().terminated
 }
 
 /// Rings a turn that ends no sooner than `deadline_ms` after its rise, and
@@ -544,7 +533,7 @@ pub fn ring(deadline_ms: f64) -> Option<f64> {
     RINGS.with(|r| r.set(true));
     let want = g.start_cnt + 1;
     let looked = g.look_cnt;
-    kick_locked(&mut g, deadline_ms, 0.0);
+    ring_locked(&mut g, deadline_ms);
     g.ringer_cnt += 1;
     g.ring_until = g.ring_until.max(want);
     let out = loop {
@@ -556,8 +545,11 @@ pub fn ring(deadline_ms: f64) -> Option<f64> {
         if answered {
             continue;
         }
-        if g.end_cnt >= want || g.stall_at > looked {
-            break Some(wake_of(&g));
+        if g.stall_at > looked {
+            break Some(0.0);
+        }
+        if g.end_cnt >= want {
+            break Some(g.wake_ms);
         }
         g = wait(&RUNTIME_CV, g);
     };
@@ -591,10 +583,9 @@ fn terminate() {
     let mut g = state();
     g.terminated = true;
     g.busy = false;
-    g.turn_stat.told = true;
     RUNTIME_CV.notify_all();
     drop(g);
-    notify();
+    super::serve::news();
 }
 
 pub(super) fn run<R: Send>(f: impl FnOnce() -> R + Send) -> Option<R> {

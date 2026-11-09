@@ -689,7 +689,7 @@ fn world_word() -> String {
     use pxl_content::param::{cave, strata};
     use pxl_engine::clipmap as clip;
     use pxl_engine::object::{self, Cut};
-    use pxl_engine::way_tree;
+    use pxl_engine::way;
     use pxl_engine::{area, seed, value};
     use xpute_kit::math::rng;
     let words: &[(&str, u32)] = &[
@@ -710,9 +710,6 @@ fn world_word() -> String {
         ("SLOT_FOLDED", object::FOLDED),
         ("SLOT_ZOOM_MASK", object::ZOOM_MASK),
         ("SLOT_SHIFT", object::SLOT_SHIFT),
-        ("POOL_CHILD_GROUPS", way_tree::POOL_CHILD_GROUPS),
-        ("ROOT_ID_BITS", way_tree::ROOT_ID_BITS),
-        ("ROOT_NODES", way_tree::ROOT_NODES),
         ("SHARD_KNOWN", area::SHARD_KNOWN),
         ("SHARD_SERVED_SHIFT", area::SHARD_SERVED_SHIFT),
         ("SHARD_OWN", area::OWN),
@@ -734,6 +731,15 @@ fn world_word() -> String {
         ("OWN_AT", clip::OWN_AT),
         ("OWN_CELLS", clip::OWN_CELLS),
         ("ROOT_AT", clip::ROOT_AT),
+        ("RUN_BITS_AT", clip::RUN_BITS_AT),
+        ("RUN_RANK_AT", clip::RUN_RANK_AT),
+        ("RUN_OFFS_AT", clip::RUN_OFFS_AT),
+        ("SPANS_ACROSS", clip::SPANS_ACROSS),
+        ("SPANS_CNT", clip::SPANS_CNT),
+        ("WAY_NOTHING", way::NOTHING),
+        ("WAY_AIR", way::AIR),
+        ("WAY_AIR_OF", way::AIR_OF),
+        ("WAY_SPANS", way::SPANS as u32),
         ("LOOKUP_SLOT_BITS", clip::LOOKUP_SLOT_BITS),
         ("LOOKUP_FROM_SHIFT", clip::LOOKUP_FROM_SHIFT),
         ("LOOKUP_CELL_ZOOM_SHIFT", clip::LOOKUP_CELL_ZOOM_SHIFT),
@@ -764,6 +770,7 @@ fn world_word() -> String {
     let signed: &[(&str, i32)] = &[
         ("SEA_LEVEL", pxl_engine::SEA_LEVEL),
         ("SEA_CELLS", ground::SEA_CELLS),
+        ("FACE_NONE", i16::MIN as i32),
         ("EMPTY_LO", ground::EMPTY[0]),
         ("EMPTY_HI", ground::EMPTY[1]),
         ("UNBOUNDED_LO", ground::UNBOUNDED[0]),
@@ -1625,6 +1632,7 @@ fn assemble(out: &Path) {
         "brick",
         "bound_mip",
         "answer",
+        "way",
         "world",
         "world_split",
         "world_asked",

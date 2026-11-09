@@ -9,7 +9,6 @@ use fnv::FnvHashMap;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
 
 use super::*;
-use crate::domain::layer::Query;
 use pxl_engine::answer;
 use pxl_engine::object::{self, Cut};
 use pxl_spec::bake::constant::OBJECT_COARSEST;
@@ -203,7 +202,8 @@ fn axis_turn() {
         cube_at(&mut stores[1], turn(at), state);
         cube_at(&mut stores[2], turn(turn(at)), state);
     }
-    let bound = |store: &Store, (zoom, at): Node<3>| store.bounds((zoom, at), zoom).val().flatten();
+    let bound =
+        |store: &Store, node: Node<3>| store.cursor(node, node.0).holds().then(|| region(node));
     for _ in 0..500 {
         let (zoom, at) = some_node(&mut rng, 200.0);
         let given = bound(&stores[0], (zoom, at));
@@ -367,9 +367,5 @@ fn whole_shard_meets_leaves() {
     let mut met = 0;
     store.read((SHARD_ZOOM, shard)).entries(&mut |_| met += 1);
     assert_eq!(met, 1);
-    assert!(store
-        .bounds::<3>((SHARD_ZOOM, shard), SHARD_ZOOM)
-        .val()
-        .flatten()
-        .is_some());
+    assert!(store.cursor::<3>((SHARD_ZOOM, shard), SHARD_ZOOM).holds());
 }

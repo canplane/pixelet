@@ -304,15 +304,23 @@ impl Ring {
         if self.is_empty() {
             return None;
         }
-        let at = self.entry_at(self.head()) as usize;
+        Some(self.frame(self.entry_at(self.head()) as usize))
+    }
+
+    /// The frame `stage_in_place` laid at `at`, for what answers a call.
+    pub fn staged(&self, at: usize) -> Frame {
+        self.frame((at - self.at) / 4)
+    }
+
+    fn frame(&self, at: usize) -> Frame {
         let word = self.frame_word(at + frame::CMD as usize);
-        Some(Frame {
+        Frame {
             tag: self.frame_word(at + frame::TAG as usize),
             cmd: cmd_of(word),
             flags: flags_of(word),
             result: self.frame_word(at + frame::RESULT as usize) as i32,
             pkt_at: self.frame_word(at + frame::PKT as usize),
-        })
+        }
     }
 
     /// The frame's packet, valid until `advance`. It is `'static` because the

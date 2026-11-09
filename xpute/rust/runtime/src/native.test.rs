@@ -116,16 +116,6 @@ fn ring_waits_for_a_turn() {
 }
 
 #[test]
-fn a_kick_runs_a_turn() {
-    core();
-    let _ = native::turns();
-    native::kick(0.0, 0.0);
-    assert_eq!(native::ring(0.0), Some(-1.0));
-    let (_, turn_ms) = native::turns();
-    assert!(turn_ms >= 0.0);
-}
-
-#[test]
 fn second_boot_refused() {
     core();
     let again = std::panic::catch_unwind(|| native::boot(&cfg(HEAP_AT), turn));

@@ -9,13 +9,8 @@
  * the core raises is handed to the one listener, which tells the commands
  * apart.
  *
- * A core on a thread of its own (runtime.ts `Core.thread`) runs by itself. It
- * is kicked after each submission, and after each read of the completion
- * ring, since a read may have made the room a turn waits for. What it posts is
- * read when it says it has posted (`turns`). For such a core, a ring is a turn
- * waited for, as a call needs. A core that runs only when rung is instead
- * asked for a turn after any read that took frames, so that it sees the room
- * that moving the head gave back.
+ * A core is asked for a turn after any read that took frames, so that it sees
+ * the room that moving the head gave back.
  */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
@@ -55,7 +50,6 @@ export type OnImport = (
 export type Encode = (room: PacketRoom) => PacketWriter | null;
 
 type Run = (deadline_ms: f64) => f64;
-type Kick = (deadline_ms: f64) => void;
 
 /** Writes a packet whose fields are `args`, in order, in place. With no
  * arguments there is no packet. */
@@ -96,31 +90,19 @@ export class Doorbell implements PacketRoom {
   /** Told of every turn heard: how long the longest turn took and when the
    * core wants the next. It is told before what the turn posted is read and
    * before `on_wake` hears the same wake, so that whatever that read asks for
-   * outlives the turn. A turn heard is each turn rung (`ring`), or whatever
-   * the core's own thread ran since it was last heard, whoever kicked it
-   * (`turns`). */
+   * outlives the turn. */
   on_turn: ((turn_ms: f64, wake_ms: f64) => void) | null = null;
   /** This is told once, as the core stops. */
   onterminated: (() => void) | null = null;
 
   private readonly _run: Run;
-  /** Wakes a core on its own thread; null for a core that runs only when
-   * rung. */
-  readonly kick: Kick | null;
 
   get terminated(): boolean {
     return this._terminated;
   }
 
-  constructor(
-    mem: ArrayBufferLike,
-    sq_at: u32,
-    cq_at: u32,
-    run: Run,
-    kick: Kick | null = null,
-  ) {
+  constructor(mem: ArrayBufferLike, sq_at: u32, cq_at: u32, run: Run) {
     this._run = run;
-    this.kick = kick;
     this._sq = new Ring(mem, sq_at);
     this._cq = new Ring(mem, cq_at);
   }
@@ -239,30 +221,6 @@ export class Doorbell implements PacketRoom {
     return wake;
   }
 
-  /** Called when the core's own thread has posted or asked for a turn since
-   * it was last heard. The completion ring is read dry and what the core
-   * asked is told. If the core has stopped (`wake_ms` is NaN), what it posted
-   * is read and its stop is told. */
-  turns(wake_ms: f64, turn_ms: f64): void {
-    if (this._terminated) return;
-    if (Number.isNaN(wake_ms)) {
-      this._terminate("the core stopped", null, true);
-      return;
-    }
-    this.on_turn?.(turn_ms, wake_ms);
-    try {
-      this._read();
-    } catch (err) {
-      this._terminate(
-        "the runtime could not take what the core posted",
-        err,
-        false,
-      );
-      return;
-    }
-    this.on_wake?.(wake_ms);
-  }
-
   /** Ends the core. The cause is printed here, once, and the stop is told,
    * because whoever rang the turn is a timer or an import's handler that can
    * do nothing about it. With `read`, what the core posted is read first. */
@@ -377,16 +335,17 @@ export class Doorbell implements PacketRoom {
     } finally {
       this._reading = false;
     }
-    // A task of the core may be waiting for the room this read gave back,
-    // without having asked for a turn (xpute-core sched/edge.rs
-    // `runtime_turn`), so a turn is asked for it.
-    if (read > 0) this.on_wake?.(0);
     const later = this._later;
     this._later = [];
     for (const [tag, cmd, flags, result, encode] of later) {
       const errnum = this._submit(tag, cmd, encode, flags, result);
       if (errnum !== Errno.OK) throw new InvariantError(errnum);
     }
+    // A task of the core may be waiting for the room this read gave back,
+    // without having asked for a turn (xpute-core sched/edge.rs
+    // `runtime_turn`), so a turn is asked for it, once all it must take is on
+    // the ring: a core on its own thread may begin that turn at once.
+    if (read > 0 || later.length > 0) this.on_wake?.(0);
   }
 
   /** Never called from a listener, which could not wait for room, since

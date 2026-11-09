@@ -34,17 +34,16 @@ const ENDS_AGAIN = 6u;
 
 /// What was handed the node at `zoom` of the line at word `line` (pxl-engine
 /// `beam::LINE_INHERITANCE`).
-fn line_inheritance(line: u32, zoom: u32) -> vec4<u32> {
+fn line_inheritance(line: u32, zoom: u32) -> vec3<u32> {
   let k = line + LINE_INHERITANCE + LINE_STEP * zoom;
-  return vec4<u32>(beams[k], beams[k + 1u], beams[k + 2u], beams[k + 3u]);
+  return vec3<u32>(beams[k], beams[k + 1u], beams[k + 2u]);
 }
 
-fn line_hand(line: u32, zoom: u32, inheritance: vec4<u32>) {
+fn line_hand(line: u32, zoom: u32, inheritance: vec3<u32>) {
   let k = line + LINE_INHERITANCE + LINE_STEP * zoom;
   beams[k] = inheritance.x;
   beams[k + 1u] = inheritance.y;
   beams[k + 2u] = inheritance.z;
-  beams[k + 3u] = inheritance.w;
 }
 
 /// Walks the ray `aim` from `start` for at most `steps` more steps (pxl-engine
@@ -105,7 +104,7 @@ fn walk(aim: Aim, start: Start, steps: u32) -> WalkEnd {
     let t1 = min(t_max, smallest(s.far));
     var into = false;
     var stops = false;
-    var inheritance = vec4<u32>(0u);
+    var inheritance = vec3<u32>(0u);
     // A node the ray only touches, at a face or an edge, is not entered, and nothing in it is
     // met.
     if (t1 > t0) {

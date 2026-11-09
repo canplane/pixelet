@@ -15,8 +15,10 @@ pub mod control;
 pub mod layer;
 pub mod param;
 pub mod preview;
-pub mod query;
 pub mod scene;
 pub mod setting;
 pub mod smooth;
 pub mod view;
+
+// The query is a child of `layer` (layer.rs); every caller names it here.
+pub use layer::query;

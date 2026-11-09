@@ -25,7 +25,7 @@ use xpute_kit::math::scalar::wrap;
 
 use pxl_spec::space::coord::aabb::Aabb;
 
-use super::ray::{at_zoom, finest, Ray, Until};
+use super::ray::{at_zoom, finest, Descent, Ray, Until};
 use super::world::World;
 use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::*;
@@ -90,6 +90,9 @@ struct SplitCell<'w, 'a> {
     lack: Option<Quadrant>,
     zoom: Zoom,
     path: Path,
+    /// Where the last column's ray ended. A ray from the same point goes on
+    /// from there, and `lack` holds what the descent to there lacked.
+    descent: Option<Descent>,
 }
 
 impl<'w, 'a> SplitCell<'w, 'a> {
@@ -118,6 +121,7 @@ impl<'w, 'a> SplitCell<'w, 'a> {
             lack: None,
             zoom,
             path,
+            descent: None,
         }
     }
 
@@ -142,9 +146,14 @@ impl<'w, 'a> SplitCell<'w, 'a> {
             dir: [0.0, 0.0, if to > z { 1.0 } else { -1.0 }],
             t_max: (to - z).abs(),
         };
-        let (answer, _) = self
-            .world
-            .along(&ray, self.detail, until, None, &mut self.path);
+        let (answer, _) = self.world.along(
+            &ray,
+            self.detail,
+            until,
+            None,
+            &mut self.path,
+            &mut self.descent,
+        );
         if let Some(l) = answer.lack() {
             self.lack.get_or_insert(l);
         }

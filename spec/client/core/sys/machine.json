@@ -30,7 +30,7 @@
       "grown past a phone fails to build; and at boot against where it actually started and",
       "what the device gave.",
       "",
-      "`min_heap_bytes` is 256 MiB. The fixed ranges take 88.18 MiB, the terrain's 78.86 MiB of them.",
+      "`min_heap_bytes` is 256 MiB. The fixed ranges take 83.63 MiB, the terrain's 74.31 MiB of them.",
       "",
       "The caps of the heap's bounded flows, added up, are checked against it at compile time too",
       "(door/layout.rs `HEAP_FLOWS_BYTES`): the runs that `BODY_SLOTS` terrain and Earth",

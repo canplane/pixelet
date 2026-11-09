@@ -19,8 +19,6 @@ use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 
 use super::World;
 use crate::domain::layer::object::repository;
-use crate::domain::layer::terrain::TerrainQuery as _;
-use crate::domain::layer::Query;
 use crate::sys::io::source;
 use pxl_engine::clipmap::Lookup;
 use pxl_spec::space::coord::q3::{self, Q3};

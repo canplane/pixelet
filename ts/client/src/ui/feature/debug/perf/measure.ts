@@ -14,7 +14,7 @@ import * as setting from "@/service/core/setting.ts";
 import { say } from "@/service/platform/say.ts";
 import * as snapshot from "@/service/core/snapshot.ts";
 import { MEASURE_PLACE } from "@/service/platform/sensor-listener.ts";
-import { driveSettings, perfDrive } from "./drive.ts";
+import { DRIVE_SETTINGS, perfDrive } from "./drive.ts";
 import { perfTrace } from "./trace.ts";
 import { perfReportRead } from "./view.ts";
 
@@ -47,7 +47,7 @@ const off = (v: f64 | null, at: f64) =>
 export async function measure(): Promise<void> {
   try {
     await new Promise((done) => setTimeout(done, SETTLE_MS));
-    const before = driveSettings().map(
+    const before = DRIVE_SETTINGS.map(
       ([key]) => [key, snapshot.cur().settings[key]] as const,
     );
     const report = await perfDrive();

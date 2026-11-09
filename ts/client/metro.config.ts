@@ -71,6 +71,11 @@ function ownPlatform(
   return file;
 }
 
+// A release build drops what is imported and not used, as a bundler of ES
+// modules does. Expo reads the switches from the environment.
+process.env.EXPO_UNSTABLE_METRO_OPTIMIZE_GRAPH = "1";
+process.env.EXPO_UNSTABLE_TREE_SHAKING = "1";
+
 const base = getDefaultConfig(here);
 
 /** A release build compiles each exported literal into the files that read

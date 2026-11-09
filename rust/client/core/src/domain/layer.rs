@@ -8,10 +8,10 @@ use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::{coarsest, Lattice};
 use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
-use xpute_core::mem::heap::Block;
 
+use crate::sys::io::body::Packet;
 use crate::sys::io::demand::{PhaseList, Stream};
-use crate::sys::io::failure::Failure;
+use crate::sys::io::failure::Exit;
 use tile_cache::TileCache;
 
 pub mod division;
@@ -20,15 +20,15 @@ pub mod floor;
 pub mod instance;
 pub mod object;
 pub mod place;
-mod query;
+// The query's files stand beside the layers', and it is a child here so that a
+// layer's reads, visible within this module alone, are its and no one else's.
+#[path = "query.rs"]
+pub mod query;
 pub mod terrain;
 pub mod tile_cache;
-pub mod upload;
 
-use crate::sys::io::fetch;
 use crate::sys::io::source;
 pub use answer::Answer;
-pub(in crate::domain) use query::Query;
 
 #[derive(Clone, Copy)]
 pub enum AskScope {
@@ -42,7 +42,7 @@ pub enum AskScope {
     View,
 }
 
-pub trait Base: Clone + 'static {
+pub trait Base: Sized + 'static {
     const STREAM: Stream;
 
     /// Which of the tile's children have tiles of their own, as the bake
@@ -87,19 +87,16 @@ pub trait Base: Clone + 'static {
 
     fn tile_cache() -> &'static mut TileCache<Self>;
 
+    /// Decodes the packet the tile arrived in into its own, slot `slot` being
+    /// the tile's. The tile owns what it decoded and takes the packet, or
+    /// drops it, as its layer decides. An `Exit` of `Refused` waits on what
+    /// refused it (sys/io/room.rs).
     fn receive(
         tile: Quadrant,
         slot: u32,
-        pkt: &[u8],
+        pkt: Packet,
         phases: &mut PhaseList,
-    ) -> Result<Self, Failure>;
-
-    /// Disposes of the packet a tile arrived in, once slot `slot` took the
-    /// tile or no slot did. The default frees it; a layer whose GPU copies
-    /// the tile from its packet keeps the packet instead (`upload::UploadTable`).
-    fn keep(_slot: Option<u32>, block: Block) {
-        fetch::release(Some(block));
-    }
+    ) -> Result<Self, Exit>;
 
     /// The tile with nothing in it, which stands for an absent tile at the
     /// layer's top. None for a layer whose absent tiles are answered by the

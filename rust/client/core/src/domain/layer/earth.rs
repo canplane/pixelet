@@ -2,9 +2,10 @@
 
 //! The Earth's picture as a layer of the pyramid. Only its top zoom is
 //! baked, and only the floor's tiles around the eye are held, so the layer
-//! needs no demand, zoom or schedule of its own. A tile's texels go to the
-//! GPU once and are not kept in the core. Wherever no tile is held, the
-//! global picture answers.
+//! needs no demand, zoom or schedule of its own. A tile holds its packet
+//! until the GPU has its texels, and then the device generation that does,
+//! and nothing in the core after a frame takes them. Wherever no tile is
+//! held, the global picture answers.
 
 use pxl_engine::wrap_idx;
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
@@ -14,20 +15,25 @@ use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_core::global::Global;
-use xpute_core::mem::heap::Block;
 
 use crate::domain::layer::tile_cache::TileCache;
-use crate::domain::layer::upload::{UploadTable, Uptake};
 use crate::domain::layer::{AskScope, Base};
+use crate::sys::io::body::Packet;
 use crate::sys::io::demand::{PhaseList, Stream};
-use crate::sys::io::failure::Failure;
+use crate::sys::io::failure::Exit;
 use crate::sys::io::param::{BODY_SLOTS, MAX_CREDITS};
 use pxl_spec::space::coord::zoom::Zoom;
 
-/// A held Earth tile. It carries nothing in the core: its texels live in the
-/// GPU layer of its slot.
-#[derive(Clone)]
-pub struct EarthTile;
+/// A held Earth tile: its packet until the GPU has its texels, whose words
+/// then live in the GPU layer of its slot.
+pub enum EarthTile {
+    /// The packet the GPU does not have yet. The tile owns the packet and
+    /// lets it go with itself. Every slot may hold one, and the request
+    /// scheduler leaves body slots for them (sys/io/request.rs `spare_slots`).
+    Waiting(Packet),
+    /// Sent to the device of this generation (`device_generation`).
+    Sent(u32),
+}
 
 static EARTH: Global<TileCache<EarthTile>> = Global::new();
 
@@ -49,51 +55,42 @@ impl Base for EarthTile {
     fn receive(
         _tile: Quadrant,
         _slot: u32,
-        pkt: &[u8],
+        pkt: Packet,
         _phases: &mut PhaseList,
-    ) -> Result<EarthTile, Failure> {
-        earth::decode(pkt)?;
-        Ok(EarthTile)
+    ) -> Result<EarthTile, Exit> {
+        earth::decode(&pkt)?;
+        Ok(EarthTile::Waiting(pkt))
     }
-
-    /// Keeps the packet until the GPU has its texels. Every slot may keep
-    /// one, and the request scheduler leaves body slots for them
-    /// (sys/io/request.rs `spare_slots`).
-    fn keep(slot: Option<u32>, block: Block) {
-        uploads().keep(slot, block, EARTH_SLOTS);
-    }
-}
-
-/// The packets whose texels the GPU does not hold yet.
-static UPLOADS: Global<UploadTable> = Global::new();
-
-fn uploads() -> &'static mut UploadTable {
-    UPLOADS.get(|| UploadTable::new(TileCache::<EarthTile>::SLOTS))
 }
 
 /// Offers each waiting packet's texels to `write`, for its slot's layer on
-/// the device of generation `on`, until `write` takes no more. A tile whose
-/// texels went to an earlier device is fetched again, since its packet was
-/// freed once sent.
+/// the device of generation `on`, until `write` takes no more; a packet
+/// written goes back with its tile's change to `Sent`. A tile whose texels
+/// went to an earlier device is fetched again, since its packet is gone.
 pub fn upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
-    let uploads = uploads();
+    let cache = EarthTile::tile_cache();
     for slot in 0..EARTH_SLOTS {
-        if uploads.sent_on(slot).is_some_and(|s| s != on) {
-            if let Some(p) = EarthTile::tile_cache().in_slot(slot) {
-                EarthTile::tile_cache().refetch(p);
-            }
+        let Some((p, tile)) = cache.in_slot(slot) else {
+            continue;
+        };
+        if matches!(tile, EarthTile::Sent(s) if *s != on) {
+            cache.refetch(p);
         }
     }
-    // `receive` decoded each of these packets already, so decoding one again
-    // does not fail. A packet waits until its texels are written, so at most
-    // one packet waits for each slot.
-    uploads.send(
-        on,
-        &mut |slot, pkt| match earth::decode(pkt).map(|texels| write(slot, texels)) {
-            Err(_) | Ok(true) => Uptake::Taken,
-            Ok(false) => Uptake::Full,
-        },
-    );
+    for slot in 0..EARTH_SLOTS {
+        let Some((_, tile)) = cache.in_slot(slot) else {
+            continue;
+        };
+        let EarthTile::Waiting(pkt) = tile else {
+            continue;
+        };
+        // `receive` decoded this packet already, so decoding it again does
+        // not fail.
+        if !earth::decode(pkt).map_or(true, |texels| write(slot, texels)) {
+            return;
+        }
+        *tile = EarthTile::Sent(on);
+    }
 }
 
 /// The tile cache as the GPU of generation `on` reads it, computed on each
@@ -116,11 +113,12 @@ pub fn window(
     let east = |x: i32| wrap_idx(EARTH_ZOOM, x - first);
     let x0 = first + floor.clone().map(|p| east(at(p)[0])).min().unwrap_or(0);
     let y0 = floor.clone().map(|p| at(p)[1]).min().unwrap_or(0);
+    let cache = EarthTile::tile_cache();
     for p in floor {
-        let Some(slot) = EarthTile::tile_cache().slot(p) else {
+        let Some(slot) = cache.slot(p) else {
             continue;
         };
-        if uploads().sent_on(slot) == Some(on) {
+        if matches!(cache.get(p), Some(EarthTile::Sent(s)) if *s == on) {
             let [x, y] = at(p);
             let (dx, dy) = ((x - x0).rem_euclid(around) as u32, (y - y0) as u32);
             layers[(dy * GROUND_DEMAND_ACROSS + dx) as usize] = slot + 1;
@@ -136,3 +134,7 @@ const _: () = assert!(
     BODY_SLOTS > MAX_CREDITS + EARTH_SLOTS,
     "the body slots keep a body on every credit and one more beside the Earth's frames"
 );
+
+#[cfg(test)]
+#[path = "earth.test.rs"]
+mod test;

@@ -48,6 +48,7 @@ pub fn screen_shows_world() -> bool {
 /// under that bake's version.
 const EARTH: Load = Load::Sphere;
 
+use crate::domain::layer::object::store;
 use crate::domain::layer::terrain::clipmap;
 use crate::domain::preview::{Draft, RenderEdit};
 use crate::domain::scene;
@@ -64,7 +65,6 @@ use crate::domain::view::frame::pose::{sea_under_eye, view};
 use crate::domain::view::frame::screen;
 use crate::domain::view::observation;
 use crate::sys::io::loader;
-use pxl_engine::way_tree;
 use pxl_render::gpu::api;
 use pxl_spec::asset::catalog::pack;
 use pxl_spec::asset::decor;
@@ -188,14 +188,13 @@ pub fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
         },
         ground: GroundInput {
             upload: &mut terrain_upload,
-            pool: clipmap::pool_top()
-                .max(param::WAYS_POOL_FIRST_BYTES / (4 * way_tree::CHILD_GROUP_WORDS)),
+            pool: clipmap::pool_top().max(param::WAYS_POOL_FIRST_WORDS),
         },
         cast: o.as_ref().and(eye).map(|eye| Cast {
             eye,
             clipmap: clipmap::table(),
             shards: cast::shards(),
-            objects: cast::objects(),
+            objects: store::objects(),
             decor: gpu::frame(),
             receivers,
             ray_cnts: settings.ray_cnts,

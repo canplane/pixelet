@@ -54,10 +54,10 @@ with its bits counted), and their tests compare word for word.
 
 Only when **two places decide the same thing on their own and must agree**.
 On one machine the CPU does not decide the ground or the ways again: the
-kernel reads back the cells the GPU filled (pxl-kernel
-domain/layer/terrain/clipmap.rs `CpuClipmap`) and keeps the GPU's ways' tree
-as the GPU laid it (mirror.rs), and decides where a walker stands over them
-(domain/query/support.rs). The ground and the ways are exact because two
+core reads the bricks it filled itself (pxl-core
+domain/layer/terrain/clipmap.rs `CpuClipmap`) and evaluates the ways on the
+lines it handed the GPU (pxl-engine `clipmap::way_at`), and decides where a
+walker stands over them (domain/query/support.rs). The ground and the ways are exact because two
 machines must agree: each machine's GPU fills the same brick, and must fill it
 alike; and geo-bake, on the server, computes the same rules. Where two
 machines part, a block stands in one place on one and in another on the other.

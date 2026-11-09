@@ -44,6 +44,11 @@ pieces cut from runs the heap gives whole and takes back whole, a slab
 allocator for one large object (`io/body.rs`). The number of slots out at once
 is bounded, so those bodies take no more than their runs however they arrive.
 
+A body read is one value, a packet (`io/body.rs` `Packet`), and whoever holds it
+owns it: letting it go gives its slot or block back. A layer decodes one and drops
+it, or holds it in its tile until the GPU has what it needs, and no table of
+packets stands beside the tile.
+
 ## A turn
 
 The runtime decides when the core runs. Each turn arrives with a grant that
@@ -81,7 +86,7 @@ stops what nobody wants any more, ranks the rest by the one policy
                                   file ─▶ the runtime's file device
                                               │ completion
                                               ▼
-                               body block ─▶ the layer that asked
+                                   packet ─▶ the layer that asked
 ```
 
 Because the wants are said whole every turn, the scheduler always works from

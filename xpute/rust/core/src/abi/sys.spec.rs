@@ -7,7 +7,8 @@
 //! SYS_ATTACH, SYS_SUSPEND and SYS_RESUME tell the core that a runtime attached, for the
 //! first time or again, that the core is about to be frozen, and that it was woken; what
 //! each one means the core keeps or resets is the core's to decide. SYS_TURN marks a turn
-//! that the runtime's scheduling policy grants, and carries the wall clock. SYS_ABORT
+//! that the runtime's scheduling policy grants, and carries the wall clock; SYS_FRAME and
+//! SYS_PACE carry frame pacing's grant and the core's asked rate. SYS_ABORT
 //! reports the broken invariant the core stops on, and the runtime hears it as a VMM hears
 //! its guest exit.
 //!
@@ -62,15 +63,19 @@ pub enum SysMinor {
     SUSPEND = 0x03,
     RESUME = 0x04,
     TURN = 0x05,
+    FRAME = 0x06,
+    PACE = 0x07,
 }
 
 impl SysMinor {
-    pub const ALL: [SysMinor; 5] = [
+    pub const ALL: [SysMinor; 7] = [
         SysMinor::ABORT,
         SysMinor::ATTACH,
         SysMinor::SUSPEND,
         SysMinor::RESUME,
         SysMinor::TURN,
+        SysMinor::FRAME,
+        SysMinor::PACE,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -99,23 +104,35 @@ pub enum Command {
     SYS_RESUME = 0x0104,
     /// Marks a turn that the scheduling policy grants, as opposed to a turn rung only because a
     /// command arrived. The runtime submits it after what the program submits for that turn,
-    /// and before it rings. It carries the wall clock in Unix milliseconds. Anything else the
-    /// policy has to say about the turn, the program sends in commands of its own.
+    /// and before it rings. It carries the wall clock in Unix milliseconds. What frame pacing
+    /// says of the turn comes before it (SYS_FRAME); anything else the policy has to say, the
+    /// program sends in commands of its own.
     SYS_TURN = 0x0105,
+    /// The display frame frame pacing grants the next SYS_TURN at (@xpute/runtime
+    /// sched/frame_pacing.ts, xpute-runtime native/pacing.rs): the display's refresh, the interval
+    /// turns are paced at, a whole number of refreshes and the frame's budget, and whether the
+    /// turn follows an input. A runtime whose policy paces no display sends none.
+    SYS_FRAME = 0x0106,
 
     // ---- sys, import ----
     /// Reports the broken invariant the core stops on (xpute-kit status/bug.rs).
     SYS_ABORT = 0x0101,
+    /// The least interval the core asks between its turns, 0 for none: its load's word on the
+    /// rate, which the next SYS_FRAME's `paced_ms` answers, a whole number of refreshes. A policy
+    /// that paces no display ignores it.
+    SYS_PACE = 0x0107,
 }
 
 impl Command {
-    pub const ALL: [Command; 6] = [
+    pub const ALL: [Command; 8] = [
         Command::NOP,
         Command::SYS_ATTACH,
         Command::SYS_SUSPEND,
         Command::SYS_RESUME,
         Command::SYS_TURN,
+        Command::SYS_FRAME,
         Command::SYS_ABORT,
+        Command::SYS_PACE,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -154,6 +171,25 @@ impl SysTurn {
     }
 }
 
+/// Command::SYS_FRAME's packet.
+#[derive(Clone, Copy, Debug)]
+pub struct SysFrame {
+    pub refresh_ms: f64,
+    pub paced_ms: f64,
+    pub interactive: bool,
+}
+
+impl SysFrame {
+    pub fn read(pkt: &[u8]) -> Result<SysFrame, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(SysFrame {
+            refresh_ms: finite(f.at(0)?.get_number()?)?,
+            paced_ms: finite(f.at(1)?.get_number()?)?,
+            interactive: f.at(2)?.get_bool()?,
+        })
+    }
+}
+
 /// Command::SYS_ABORT's packet.
 pub struct SysAbort<'a> {
     pub errnum: i32,
@@ -182,10 +218,59 @@ impl SysAbort<'_> {
     }
 }
 
+impl SysAbort<'_> {
+    /// As the runtime beside the core reads it.
+    pub fn parts(pkt: &[u8]) -> Result<(i32, u32, u32, u32, u32, u32, u32, &str), MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok((
+            integer::<i32>(f.at(0)?.get_number()?)?,
+            integer::<u32>(f.at(1)?.get_number()?)?,
+            integer::<u32>(f.at(2)?.get_number()?)?,
+            integer::<u32>(f.at(3)?.get_number()?)?,
+            integer::<u32>(f.at(4)?.get_number()?)?,
+            integer::<u32>(f.at(5)?.get_number()?)?,
+            integer::<u32>(f.at(6)?.get_number()?)?,
+            f.at(7)?.get_str_ref()?,
+        ))
+    }
+}
+
 impl crate::ipc::door::Import for SysAbort<'_> {
     const NUMBER: u32 = 257;
     const FIELDS: u32 = 8;
     fn write(&self, w: &mut PacketWriter) {
         SysAbort::write(self, w);
+    }
+}
+
+/// Command::SYS_PACE's packet.
+pub struct SysPace {
+    pub interval_ms: f64,
+}
+
+impl SysPace {
+    /// The children it is written as.
+    pub const FIELDS: u32 = 1;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.f64(Some(self.interval_ms));
+    }
+}
+
+impl SysPace {
+    /// As the runtime beside the core reads it.
+    pub fn read(pkt: &[u8]) -> Result<SysPace, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(SysPace {
+            interval_ms: finite(f.at(0)?.get_number()?)?,
+        })
+    }
+}
+
+impl crate::ipc::door::Import for SysPace {
+    const NUMBER: u32 = 263;
+    const FIELDS: u32 = 1;
+    fn write(&self, w: &mut PacketWriter) {
+        SysPace::write(self, w);
     }
 }

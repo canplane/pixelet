@@ -37,6 +37,8 @@ import type { ConfigPlugin } from "expo/config-plugins";
 const PROPERTIES = {
   reactNativeArchitectures: "arm64-v8a",
   "android.minSdkVersion": "29",
+  "android.enableMinifyInReleaseBuilds": "true",
+  "android.enableShrinkResourcesInReleaseBuilds": "true",
 };
 
 const FLAVORS = ["mobile", "quest"];
@@ -52,6 +54,12 @@ const BUNDLE_INPUT = `
 ${BUNDLE_INPUT_MARK}
 tasks.matching { it.name.startsWith("createBundle") }.configureEach {
     inputs.property("PXL_PERF_DRIVE", System.getenv("PXL_PERF_DRIVE") ?: "")
+}
+
+// pxl: the libraries' C++ names no directory of this machine
+["\${rootDir.parentFile.parentFile.parentFile}", System.getenv("HOME")].each { dir ->
+    android.defaultConfig.externalNativeBuild.cmake.cFlags("-ffile-prefix-map=\${dir}=")
+    android.defaultConfig.externalNativeBuild.cmake.cppFlags("-ffile-prefix-map=\${dir}=")
 }
 `;
 

@@ -18,8 +18,7 @@ use pxl_spec::space::coord::zoom::{units, Zoom};
 
 use super::world::World;
 use crate::domain::layer::terrain::clipmap::CpuClipmap;
-use crate::domain::layer::terrain::TerrainQuery as _;
-use crate::domain::layer::{Answer, Query};
+use crate::domain::layer::Answer;
 use pxl_spec::asset::cube::sentinel;
 
 /// The ground's top in a cell, in units, and the asset of its face.

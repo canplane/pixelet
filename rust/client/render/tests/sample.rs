@@ -3566,7 +3566,7 @@ fn hand_light_beam_rays_answer_as_cast_walk() {
                 let hand_alike = hands.iter().any(|h| h.to_bits() == got_t.to_bits());
                 let line_alike = got_node == m.hit.node
                     && inheritance.0.iter().enumerate().all(|(z, h)| {
-                        let g = [0, 1, 2, 3]
+                        let g = [0, 1, 2]
                             .map(|i| at(beam::LINE_INHERITANCE + beam::LINE_STEP * z as u32 + i));
                         g == h.words()
                     });

@@ -18,10 +18,10 @@ fn node_cache_word(k: u32) -> u32 {
 /// (walk_node.wgsl `holds_for`): kept at those zooms, or as a cell by its node alone. What it
 /// inherits is read only where `hands`. With no such slot, the answer is `KIND_LEFT`. A slot
 /// that keeps a split at other zooms is gone into when the node is asked finer than itself
-/// (`KIND_BLIND`). It hands on what it inherited of the clip levels only, not of the ways or the
-/// shards, as a moved brick's may be gone (`Inheritance::of`). `parent` and `top` serve the walk
+/// (`KIND_BLIND`). It hands on what it inherited of the clip levels only, not of the shards, as a
+/// moved brick's may be gone (`Inheritance::of`). `parent` and `top` serve the walk
 /// that asks (ask.wgsl) and are not read here.
-fn node_answer(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, hands: bool) -> Answer {
+fn node_answer(parent: vec3<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, hands: bool) -> Answer {
   if (keeps(zoom, c)) {
     let node = vec4<u32>(zoom, u32(c.x), u32(c.y), u32(c.z));
     let first = bucket_of(zoom, c);
@@ -46,10 +46,10 @@ fn node_answer(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32
         other = w;
         continue;
       }
-      var inheritance = vec4<u32>(0u);
+      var inheritance = vec3<u32>(0u);
       if (hands) {
         let at = w + W_INHERITANCE;
-        inheritance = vec4<u32>(node_cache[at], node_cache[at + 1u], node_cache[at + 2u], node_cache[at + 3u]);
+        inheritance = vec3<u32>(node_cache[at], node_cache[at + 1u], node_cache[at + 2u]);
       }
       let asset = vec2<u32>(node_cache[w + W_ASSET], node_cache[w + W_ASSET + 1u]);
       return Answer(node_cache[w + W_KIND] & KIND_MASK, asset, inheritance);
@@ -57,10 +57,10 @@ fn node_answer(parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32
     // A split beside the end of the service area is left to the walk that asks. The wall under
     // it lies in no box, and a walk that took a box would pass through it (`area::is_wall`).
     if (other != NONE && zoom < (zooms >> ZOOM_BITS) && !beside_end(node_cache[other + W_INHERITANCE + 1u])) {
-      return Answer(KIND_BLIND, vec2<u32>(0u), vec4<u32>(node_cache[other + W_INHERITANCE], SHARD_UNKNOWN, LOOKUP_NONE, SLOT_NOTHING));
+      return Answer(KIND_BLIND, vec2<u32>(0u), vec3<u32>(node_cache[other + W_INHERITANCE], SHARD_UNKNOWN, LOOKUP_NONE));
     }
   }
-  return Answer(KIND_LEFT, vec2<u32>(0u), vec4<u32>(0u));
+  return Answer(KIND_LEFT, vec2<u32>(0u), vec3<u32>(0u));
 }
 
 /// Whether a node's shard word `shard` knows of a shard beside the node that lies past the
@@ -78,6 +78,6 @@ fn lack_ends() -> u32 {
 
 /// What the node inherits where a beam ray's walk ended without asking. It cannot be found
 /// without asking the world, so the walk is left there.
-fn hand_end(line: u32, parent: vec4<u32>, top: bool, zoom: u32, c: vec3<i32>) -> bool {
+fn hand_end(line: u32, parent: vec3<u32>, top: bool, zoom: u32, c: vec3<i32>) -> bool {
   return false;
 }

@@ -80,7 +80,7 @@ struct Start {
   corner: vec3<u32>,
   zoom: u32,
   roots: vec3<i32>,
-  parent: vec4<u32>,
+  parent: vec3<u32>,
   top: bool,
   step: u32,
 }
@@ -88,7 +88,7 @@ struct Start {
 /// The start at the node that holds the ray's point at `t`, asked from the top, with no step
 /// taken.
 fn start_at(t: f32, corner: vec3<u32>, zoom: u32, roots: vec3<i32>) -> Start {
-  return Start(t, corner, zoom, roots, vec4<u32>(0u), true, 0u);
+  return Start(t, corner, zoom, roots, vec3<u32>(0u), true, 0u);
 }
 
 fn root_start() -> Start {
@@ -109,7 +109,7 @@ struct WalkEnd {
   axis: u32,
   t: f32,
   visits: u32,
-  parent: vec4<u32>,
+  parent: vec3<u32>,
   top: bool,
   step: u32,
 }

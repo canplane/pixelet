@@ -122,7 +122,7 @@ export function CameraGizmoLegend() {
   return (
     <Accordion name="camera_gizmo" title="Camera Gizmo">
       <Head>Grid</Head>
-      <Row look={grid}>a cell of one solid angle</Row>
+      <Row look={grid}>a cell of the camera grid</Row>
       <Head>Share</Head>
       <Rows looks={share} labels={SHARE} filled />
     </Accordion>

@@ -16,7 +16,7 @@
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { PointerPhase, PointerType } from "@/abi/cmd.spec.ts";
-import { SETTING } from "@/ui/shared/setting.ts";
+import { SETTING } from "@/abi/schema.spec.ts";
 import { perfReportText } from "./report.ts";
 import { perfReportRead } from "./view.ts";
 import * as input from "@/service/core/input.ts";
@@ -47,9 +47,8 @@ const POINTER_ID = 1;
 const BUTTON = 2;
 
 /** What the drive sets, each setting with its value, so a build made for
- * measuring can put them back (perf/measure.ts). A function, because a
- * production bundle's table lacks these rows and this file loads there too. */
-export const driveSettings = (): readonly (readonly [number, number])[] => [
+ * measuring can put them back (perf/measure.ts). */
+export const DRIVE_SETTINGS: readonly (readonly [number, number])[] = [
   [SETTING.res.key, SETTING.res.options.fixed],
   [SETTING.shadows.key, 1],
   [SETTING.perf.key, 1],
@@ -64,7 +63,7 @@ export async function perfDrive(): Promise<string> {
   if (!box) {
     return "no canvas";
   }
-  for (const [key, value] of driveSettings()) setting.set(key, value);
+  for (const [key, value] of DRIVE_SETTINGS) setting.set(key, value);
   const tilt = TILT_SHARE * box.height;
   const [x, y] = [box.width / 2, box.height / 2];
   const pointer = (phase: PointerPhase, at: [f64, f64]) =>

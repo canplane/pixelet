@@ -11,6 +11,7 @@
 //! A brick is present once its cells are drawn; a reader of an absent brick reads the
 //! coarser clipmap level's (`step`).
 
+use crate::answer;
 use crate::area;
 use crate::area::Area;
 use crate::area::Shard;
@@ -152,15 +153,15 @@ pub const BOUND_ENTRY_WORDS: u32 = 2;
 pub const BOUND_WORDS: u32 = BOUND_ENTRY_WORDS * bound_mip_at(BRICK_MIPS + 1);
 
 /// A tile's ways are cut into bins, `WAYS_ACROSS` a side, each `1 << WAYS_SHIFT` cells. A
-/// brick lays its lines out by bin (`LINES_ENTRIES_AT`), and its fill keeps its columns'
-/// spans from them.
+/// brick lays its lines out by bin (`LINES_ENTRIES_AT`), so a column reads only its bin's
+/// segments, and its fill and the world's query make its spans from them.
 pub const WAYS_ACROSS: u32 = 32;
 pub const WAYS_SHIFT: u32 = (TILE_CELLS / WAYS_ACROSS).trailing_zeros();
 pub const WAYS_BINS_ACROSS: u32 = BRICK >> WAYS_SHIFT;
 pub const WAYS_BINS: u32 = WAYS_BINS_ACROSS * WAYS_BINS_ACROSS;
 
-/// A brick's lines, laid out by the CPU as the brick is filled (pxl-spec bake/tile/terrain.rs
-/// `brick_lines`) so that its fill can keep its columns' spans from them (`fill::spans`).
+/// A brick's lines, laid out by the CPU while the brick is filled (pxl-spec bake/tile/terrain.rs
+/// `brick_lines`), from which its fill makes its columns' spans and which it then gives back.
 /// First comes its tile's header (`way::header`); then `WAYS_BINS + 1` words, each bin's first
 /// entry and, after the last bin's, how many entries there are; then the entries, a word each,
 /// each one of the brick's segments, a bin's in order; then the segments the bins reach, in
@@ -174,18 +175,159 @@ pub const fn lines_words(entries: u32, segments: u32) -> u32 {
     LINES_ENTRIES_AT + entries + segments * way::SEGMENT_WORDS as u32
 }
 
+/// The words of the ways' pool, each brick's run of kept spans among them, as one side holds
+/// them: the core's (pxl-core domain/layer/terrain/pool.rs) or a test's. A word past the store
+/// reads as 0.
+pub trait Pool {
+    fn word(&self, k: u32) -> u32;
+}
+
+impl Pool for [u32] {
+    fn word(&self, k: u32) -> u32 {
+        crate::at(self, k)
+    }
+}
+
+/// The most words the ways' pool holds, its budget on the heap (64 MiB) and its GPU copy's.
+/// Its first word is never handed out, so a brick's `ROOT_AT` of 0 names no run.
+pub const WAYS_POOL_WORDS: u32 = 1 << 24;
+
+/// A brick's kept spans, a run of the ways' pool its fill writes (fill.rs `lay_spans`), read in
+/// constant time with plain loads (`KeptSpans`): a bit per column of the brick and its ring
+/// (`SPANS_COLUMNS`, row by row from the ring's first, `SPANS_ACROSS` a row), set where the
+/// column is kept; the columns set before each pair of bitmap words, an `i16` each, two to a
+/// word, so a column's rank is that count and at most two words' bits; then, by rank, the word
+/// its column begins at in the run. A column there is `SPANS_COLUMN_WORDS`' words for its
+/// spans alone: the head word and, for each span, its lowest and past its highest and its
+/// value. A column with no span is kept only where a bore's air beside it may line it (it
+/// needs its face). A brick with no span takes no run.
+pub const RUN_BITS_AT: u32 = 0;
+pub const RUN_BITS_WORDS: u32 = SPANS_COLUMNS.div_ceil(32);
+pub const RUN_RANK_AT: u32 = RUN_BITS_AT + RUN_BITS_WORDS;
+pub const RUN_RANK_WORDS: u32 = RUN_BITS_WORDS.div_ceil(2).div_ceil(2);
+pub const RUN_OFFS_AT: u32 = RUN_RANK_AT + RUN_RANK_WORDS;
+/// The most words a run takes: its index, and a word and a full column for each column.
+pub const RUN_WORDS_MOST: u32 = RUN_OFFS_AT + SPANS_COLUMNS * (1 + SPANS_COLUMN_WORDS);
+
+/// The bits of a head word that hold a column's spans' count (`SPANS_COLUMN_WORDS`).
+pub const SPANS_CNT: u32 = 0xffff;
+
+/// A head word's face cell (`i32::MIN` for none) and spans' count, held to `way::SPANS` so
+/// that a loop over them stays bounded whatever the word.
+pub const fn head_of(w: u32) -> (i32, u32) {
+    let face = w as i32 >> 16;
+    (
+        if face == i16::MIN as i32 {
+            i32::MIN
+        } else {
+            face
+        },
+        if w & SPANS_CNT < way::SPANS as u32 {
+            w & SPANS_CNT
+        } else {
+            way::SPANS as u32
+        },
+    )
+}
+
+/// The spans a brick's run keeps, read as its fill kept them, for the one rule
+/// (`way::way_cell`): a column the run does not keep has no spans and no face.
+struct KeptSpans<'a, P: ?Sized> {
+    pool: &'a P,
+    run: u32,
+}
+
+impl<P: Pool + ?Sized> KeptSpans<'_, P> {
+    /// Where column `c`'s spans begin in the run, or 0 where it is not kept.
+    fn column(&self, c: [i32; 2]) -> u32 {
+        if c[0] < -1 || c[1] < -1 || c[0] > BRICK as i32 || c[1] > BRICK as i32 {
+            return 0;
+        }
+        let i = (c[1] + 1) as u32 * SPANS_ACROSS + (c[0] + 1) as u32;
+        let (w, bit) = (i / 32, i % 32);
+        let word = self.pool.word(self.run + RUN_BITS_AT + w);
+        if word >> bit & 1 == 0 {
+            return 0;
+        }
+        let rank = self.pool.word(self.run + RUN_RANK_AT + w / 4) >> (16 * ((w / 2) & 1));
+        let before = if w & 1 == 1 {
+            self.pool.word(self.run + RUN_BITS_AT + w - 1).count_ones()
+        } else {
+            0
+        };
+        let r = (rank & 0xffff) + before + (word & ((1u32 << bit) - 1)).count_ones();
+        self.pool.word(self.run + RUN_OFFS_AT + r)
+    }
+}
+
+impl<P: Pool + ?Sized> way::SpanTable for KeptSpans<'_, P> {
+    fn header(&self, c: [i32; 2]) -> (i32, u32) {
+        match self.column(c) {
+            0 => (i32::MIN, 0),
+            at => head_of(self.pool.word(self.run + at)),
+        }
+    }
+    fn span(&self, c: [i32; 2], j: u32) -> ([i32; 2], u32) {
+        let w = self.run + self.column(c) + 1 + 2 * j;
+        (
+            answer::bound_of(self.pool.word(w) as i32),
+            self.pool.word(w + 1),
+        )
+    }
+}
+
+/// What the ways write in the node `(zoom, c)`, a cell at or finer than the brick's cells it was
+/// read from, `place` naming that brick's slot (`clipmap::step`); `way::NOTHING` where nothing
+/// writes it. It is the rule over the spans the brick's fill kept (`way::way_cell`), read at the
+/// brick's cell holding the node, what a tree of its cells would have held at its leaf; `ways`,
+/// the column's bound at level 0 (`ground::Extent`, `way::lined_hull`), turns down the cells no
+/// span of it or beside it can write. A node coarser than the cells of the brick it was read from
+/// writes none: a cell is asked no coarser than the coarsest clip level's (pxl-core
+/// `domain/query/node.rs` `coarsest`, pxl-render's `eye::RANGE`, and a descent's `near`, held
+/// to it), so `zoom` is never under the brick's cells it was read from, and the fold over the
+/// cells of a coarser node is asked of nothing.
+pub fn way_at<W: BrickSource, P: Pool + ?Sized>(
+    bricks: &W,
+    pool: &P,
+    place: Lookup,
+    ways: [i32; 2],
+    (zoom, c): (Zoom, [i32; 3]),
+) -> u32 {
+    let from = place.from();
+    if !place.here() || zoom < from {
+        return way::NOTHING;
+    }
+    let shift = zoom - from;
+    let z = c[2] >> shift;
+    let s = 1i32 << (LEAF_CELL_ZOOM - from);
+    if z * s >= ways[1] || (z + 1) * s <= ways[0] {
+        return way::NOTHING;
+    }
+    let run = bricks.root(from, place.slot());
+    if run == 0 {
+        return way::NOTHING;
+    }
+    let (_, at) = brick_of([wrap_idx(from, c[0] >> shift), c[1] >> shift]);
+    way::way_cell(
+        &KeptSpans { pool, run },
+        [at[0] as i32, at[1] as i32],
+        from,
+        z,
+    )
+}
+
 /// A brick's scratch while it is filled: the spans of its columns and of the ring of columns
 /// around it, which a column's cells read beside its own (pxl-engine fill.rs `spans`). The
-/// ways' bound in its levels and its ways' tree are made from them (fill.rs `mip`,
-/// `way_tree::leaf`), and the scratch is dropped with the fill.
+/// ways' bound in its levels (fill.rs `mip`) and its run of kept spans (fill.rs `lay_spans`)
+/// are made from them, and the scratch is dropped with the fill.
 pub const SPANS_AT: u32 = 0;
 /// The columns whose spans a brick's cells read: the brick's and a ring of one around it,
 /// `SPANS_ACROSS` a side, row by row from the ring's first.
 pub const SPANS_ACROSS: u32 = BRICK + 2;
 pub const SPANS_COLUMNS: u32 = SPANS_ACROSS * SPANS_ACROSS;
-/// A column's spans in words (`way::SpanList`). The head word holds the count, with the bit
-/// above it set where the spans did not fit `way::SPANS`, and above that the face cell as an
-/// `i16`, `i16::MIN` for none (fill.rs `header_word`). Then each span holds its lowest and
+/// A column's spans in words (`way::SpanList`). The head word holds the count (`SPANS_CNT`) and,
+/// above it, the face cell as an `i16`, `i16::MIN` for none (fill.rs `header_word`). Then each
+/// span holds its lowest and
 /// past its highest, an `i16` each as the world's z is and held to that range
 /// (`answer::bound_word`), and its value.
 pub const SPANS_COLUMN_WORDS: u32 = 1 + 2 * way::SPANS as u32;
@@ -215,15 +357,14 @@ pub(crate) const fn own_at(w: u32, i: u32) -> u32 {
 }
 
 /// A brick's words, the part that outlives its fill, the same on the CPU and on a GPU, in
-/// order: its columns, its levels, its cells as laid and its ways' tree's root. The clip
-/// levels' bricks are one storage buffer bound whole on a GPU, under WebGPU's floor
+/// order: its columns, its levels, its cells as laid and the first word of its run of kept
+/// spans. The clip levels' bricks are one storage buffer bound whole on a GPU, under WebGPU's floor
 /// (pxl-render ray/ground.rs `GROUND_BYTES`).
 pub const COLUMNS_AT: u32 = 0;
 pub const BOUNDS_AT: u32 = COLUMNS_AT + COLUMN_WORDS;
 pub const OWN_AT: u32 = BOUNDS_AT + BOUND_WORDS;
-/// Its ways' tree's root word: the child group of its own nodes along z in the pool and the
-/// first one's Z (`way_tree::root_word`); 0, child group 0, which is never handed out, where
-/// it has none.
+/// The first word of its run of kept spans in the ways' pool (`RUN_BITS_AT`); 0, a word never
+/// handed out, where it has none.
 pub const ROOT_AT: u32 = OWN_AT + OWN_WORDS;
 pub const BRICK_WORDS: u32 = ROOT_AT + 1;
 /// Which bricks the clip levels hold present, which is all `step` reads: the clip levels'
@@ -260,7 +401,7 @@ pub trait BrickSource: Presence {
     /// The first brick of the clip level read at `cell_zoom`, from which its blocks of bricks
     /// are counted (`fold`), and whether the level is laid out (`ORIGIN_AT`).
     fn origin(&self, cell_zoom: Zoom) -> ([i32; 2], bool);
-    /// The root word of the ways' tree of the brick in `slot` (`ROOT_AT`), 0 for none.
+    /// The first word of the run of kept spans of the brick in `slot` (`ROOT_AT`), 0 for none.
     fn root(&self, cell_zoom: Zoom, slot: u32) -> u32;
 }
 

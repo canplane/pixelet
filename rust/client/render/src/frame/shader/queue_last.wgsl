@@ -38,7 +38,7 @@ fn shows(aim: Aim, w: WalkEnd) -> WalkEnd {
     // What is over a node is found from the top (`world_root`), as nothing holds what it inherits.
     zoom -= 1u;
     corner &= vec3<u32>(~under(zoom));
-    parent = vec4<u32>(0u);
+    parent = vec3<u32>(0u);
     top = true;
   }
   return w;
@@ -84,7 +84,7 @@ fn queue_last_cs() {
     var roots = s.roots;
     var step = s.step;
     // What was handed the node's parent, held from one run of steps to the next.
-    var parent = vec4<u32>(0u);
+    var parent = vec3<u32>(0u);
     var top = true;
     loop {
       let w = walk(aim, Start(t, corner, zoom, roots, parent, top, step), QUEUE_STEPS);

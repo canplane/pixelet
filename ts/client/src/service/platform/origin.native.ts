@@ -1,21 +1,9 @@
 // @pxl/client/service/platform/origin.native.ts
 
-import { Platform } from "react-native";
-
 import { PLATFORM } from "./pxl-platform.ts";
 
 /** A device's app has no origin of its own: it reads from the site's. */
 export const remote: boolean = true;
-
-/** How many reads Expo's fetch runs at once. On Android, its OkHttp client
- * runs at most five calls to a host, and a sixth waits in OkHttp's own queue
- * (`Dispatcher` `maxRequestsPerHost`, which React Native's
- * OkHttpClientProvider leaves at its default). On iOS, URLSession caps
- * connections rather than requests, and the origin speaks HTTP/2, so one
- * connection carries every read. Nothing there caps the reads below the six
- * that the core's body slots are sized for (pxl-core sys/io/param.rs
- * `BODY_SLOTS`). */
-export const credits = Platform.OS === "android" ? 5 : 6;
 
 /** The encoding the bake stores its objects in. It is asked for, so that the
  * objects arrive as stored. */

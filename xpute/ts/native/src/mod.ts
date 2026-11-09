@@ -9,10 +9,10 @@
  * (script/core-build.py).
  *
  * The core's memory is one ArrayBuffer over the region the core took, with
- * no copy. The core runs on its own thread while it has work (xpute-runtime
- * native/thread.rs). The JavaScript thread kicks it, waits on it only for a
- * turn it rings (`run`), and answers its calls, either inside `run` or when
- * it is told that a call waits (`onNotify`, `answer`).
+ * no copy. The core runs on its own thread, which begins its turns at the
+ * display's frames, and the runtime on another (xpute-runtime native/thread.rs,
+ * serve.rs). The JavaScript thread holds the UI, which posts frames and hears a
+ * batch of them when told (`onNotify`, `take`).
  */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
@@ -21,37 +21,39 @@ import type { ComponentType } from "react";
 import type { NativeSyntheticEvent, ViewProps } from "react-native";
 
 interface Xpute {
-  /** `onNotify` fires when the core has posted or asked for a turn since
-   * `turns` was last called, when a call waits for `answer`, or when the core
-   * has stopped. */
+  /** `onNotify` fires when frames wait for `take`, or a call for `answer`. */
   addListener(event: "onNotify", listener: () => void): { remove(): void };
   mem(): ArrayBuffer;
   /** Loads the word at byte `at` of the memory with acquire. */
   load(at: u32): u32;
   /** Stores `word` at byte `at` of the memory with release. */
   store(at: u32, word: u32): void;
-  /** Rings a turn that ends no sooner than `deadlineMs` after its rise, and
-   * waits for it, answering its calls here meanwhile. Returns when the core
-   * wants the next turn, in ms, or NaN once the core has terminated. It
-   * returns early if no turn may begin until the completion ring is read. */
-  run(deadlineMs: f64): f64;
-  /** Asks for a turn and returns without waiting. The next turn begins at
-   * `atMs`, at once if that has passed, and ends no sooner than `deadlineMs`
-   * after its rise. */
-  kick(deadlineMs: f64, atMs: f64): void;
-  /** The time of the first display frame after both now and `afterMs`. */
-  nextFrame(afterMs: f64): f64;
-  /** From now on only a turn `run` rings may begin, and a kick waits for
-   * `resume`. */
+  /** Asks for a turn at the next display frame. */
+  wake(): void;
+  /** Says that an input came now, so the turns are interactive for a while. */
+  input(): void;
+  /** From now on only a turn `run` rings may begin. */
   pause(): void;
-  /** Turns begin again as kicks ask. */
+  /** Turns begin again at the display's frames. */
   resume(): void;
   /** Answers here the call that waits, if one does. */
   answer(): void;
-  /** This reports what the turns since the last call asked: when the core wants
-   * the next turn, in ms (0 for at once, -1 for never, NaN once the core has
-   * stopped), then how long the longest of those turns took, in ms. */
-  turns(): [f64, f64];
+  /** Starts the runtime's own thread over the rings at these offsets; `fs`
+   * says whether the machine asks for the file device. */
+  attach(sqAt: u32, cqAt: u32, fs: boolean): void;
+  /** The program's numbers for frame pacing, given before the turns run. */
+  pace(paceHz: f64, marginShare: f64, batchFrames: f64, settleMs: f64): void;
+  /** Queues a frame for the submission ring. */
+  post(tag: u32, cmd: u32, flags: u32, result: i32, pkt: Uint8Array): void;
+  /** Hands over what the UI has not heard (xpute.h `xpute_take`). */
+  take(): ArrayBuffer;
+  /** Completes the open of `fd`, with its bytes or a negative result. */
+  fsOpened(fd: u32, result: i32, detail: u32, bytes: Uint8Array): void;
+  /** Completes the close of `fd`. */
+  fsClosed(fd: u32, result: i32): void;
+  /** Calls the core: submits `cmd` and rings turns until its reply, which it
+   * returns, answering the turns' calls here meanwhile. */
+  call(cmd: u32, pkt: Uint8Array): i32;
   /** Makes `answer` answer the core's calls from here on. */
   callOn(answer: (at: u32) => i32): void;
   /** This says whether a GPU device opened. What the device is, the core reads

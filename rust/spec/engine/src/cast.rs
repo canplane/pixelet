@@ -604,7 +604,7 @@ fn crossing(d: [f32; 3], t: [f32; 3], last: bool) -> u32 {
 
 /// The world as a descent asks it, each node handed what its parent found
 /// (the `At`). The CPU and a GPU answer it from the same reading of the
-/// ground's clip levels, the caves, the ways' tree and what is placed; only the
+/// ground's clip levels, the caves, the ways' spans and what is placed; only the
 /// CPU's answer strikes decor.
 pub trait Query {
     type At: Copy;

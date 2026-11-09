@@ -3,7 +3,7 @@
 /** The app's own native module (PlatformModule.swift, PlatformModule.kt under
  * modules/platform/), beside xpute's (@xpute/native). */
 
-import type { f32, f64, u32 } from "@xpute/kit/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 import { requireNativeModule } from "expo";
 
 interface PxlPlatform {
@@ -13,17 +13,6 @@ interface PxlPlatform {
   storageGet(key: string): string | null;
   storageSet(key: string, val: string): void;
   clipboardSet(text: string): void;
-  textWidth(weight: u32, px: f32, text: string): f32;
-  textRaster(
-    weight: u32,
-    px: f32,
-    rgba: u32,
-    text: string,
-    x: f32,
-    width: u32,
-    height: u32,
-    out: Uint8Array,
-  ): void;
   headingAvailable(): boolean;
   /** Android only: the part of the bottom inset that takes a touch, which is
    * the navigation buttons, in dp. It is 0 under gesture navigation. */

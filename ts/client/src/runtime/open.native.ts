@@ -1,6 +1,7 @@
 // @pxl/client/runtime/open.native.ts
 
-/** The runtime runs on the UI's thread and is itself the UI's link. */
+/** The runtime runs on its own thread, and the UI reaches it through a link
+ * (@xpute/runtime start.native.ts). */
 
 import { start } from "@xpute/runtime";
 import { follow_refused_files } from "@/service/sys/fs/refusal.ts";

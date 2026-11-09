@@ -19,7 +19,6 @@ use pxl_engine::light::{self, Light};
 use pxl_engine::object::{self, Cut};
 use pxl_engine::seed::node_seed;
 use pxl_engine::support::{self, Lineage};
-use pxl_engine::way_tree;
 use pxl_engine::world::{self, Inheritance, PlacedCursor};
 use pxl_engine::{area, beam, eye, ray, value, wrap_idx, Zoom, FRAC_W, LEAF_CELL_ZOOM};
 use pxl_render::frame::shader::record::{
@@ -62,7 +61,7 @@ impl Query for Ground<'_> {
     }
 
     fn child(&mut self, at: &Inheritance, zoom: Zoom, node: [i32; 3]) -> Inheritance {
-        at.child(&self.w, &way_tree::Read(self.w.pool), (zoom, node))
+        at.child(&self.w, (zoom, node))
     }
 
     fn node(
@@ -74,12 +73,11 @@ impl Query for Ground<'_> {
         _: f32,
     ) -> In<[u32; 2]> {
         let mut resident = self.w;
-        let pool = way_tree::Read(self.w.pool);
         world::node(
             &mut resident,
             &self.w,
             &self.w,
-            &pool,
+            self.w.pool,
             at,
             (zoom, c),
             zooms,

@@ -16,7 +16,7 @@ fn bodies_share_run() {
     let _g = sys::serial();
     let before = runs();
     let bytes = SLOT_BYTES;
-    let mut out: Vec<Block> = (0..SLOTS)
+    let mut out: Vec<Packet> = (0..SLOTS)
         .map(|k| {
             take(
                 Some(if k % 2 == 0 {
@@ -30,7 +30,7 @@ fn bodies_share_run() {
         })
         .collect();
     assert_eq!(runs(), before + 1, "{SLOTS} bodies fill one run");
-    let mut at: Vec<usize> = out.iter().map(|b| b.0).collect();
+    let mut at: Vec<usize> = out.iter().map(|b| b.0 .0).collect();
     at.sort();
     assert!(
         at.windows(2).all(|w| w[1] - w[0] >= SLOT_BYTES as usize),
@@ -39,14 +39,15 @@ fn bodies_share_run() {
     out.push(take(Some(Stream::terrain), bytes).unwrap());
     assert_eq!(runs(), before + 2, "and the next borrows another");
 
-    for (k, &(at, n)) in out.iter().enumerate() {
+    for (k, p) in out.iter().enumerate() {
+        let Packet((at, n)) = *p;
         // SAFETY: `n` bytes of a slot just taken.
         unsafe { core::ptr::write_bytes(mem::at::<u8>(at), k as u8, n as usize) };
     }
     let released = releases();
     let freed = out.remove(1);
-    // SAFETY: from `take`, given back once, here and below.
-    unsafe { give(freed) };
+    let freed_at = freed.0 .0;
+    drop(freed);
     assert_eq!(
         releases(),
         released.wrapping_add(1),
@@ -54,24 +55,19 @@ fn bodies_share_run() {
     );
     let again = take(Some(Stream::earth), bytes).unwrap();
     assert_eq!(
-        again.0, freed.0,
+        again.0 .0, freed_at,
         "a slot given back is taken again before a run is borrowed"
     );
     assert_eq!(runs(), before + 2);
-    for (k, &(at, n)) in out.iter().enumerate().skip(1) {
-        // SAFETY: still out, `n` bytes long.
-        let bytes = unsafe { core::slice::from_raw_parts(mem::at::<u8>(at), n as usize) };
+    for (k, p) in out.iter().enumerate().skip(1) {
         assert!(
-            bytes.iter().all(|&b| b == (k + 1) as u8),
+            p.iter().all(|&b| b == (k + 1) as u8),
             "a body was written over by its neighbors"
         );
     }
 
     out.push(again);
-    for block in out {
-        // SAFETY: from `take`, given back once.
-        unsafe { give(block) };
-    }
+    drop(out);
     assert_eq!(runs(), before, "a run is given back once its last slot is");
 }
 
@@ -83,8 +79,7 @@ fn other_bodies_own_block() {
         let block = take(stream, 4096).unwrap();
         assert_eq!(runs(), before, "{stream:?} takes no slot");
         let released = releases();
-        // SAFETY: from `take`, given back once.
-        unsafe { give(block) };
+        drop(block);
         assert_eq!(releases(), released, "nor counts one given back");
     }
 }
@@ -93,18 +88,14 @@ fn other_bodies_own_block() {
 fn slots_cap_and_wake() {
     let _g = sys::serial();
     let bytes = SLOT_BYTES;
-    let mut out: Vec<Block> = (0..BODY_SLOTS)
+    let mut out: Vec<Packet> = (0..BODY_SLOTS)
         .map(|_| take(Some(Stream::terrain), bytes).unwrap())
         .collect();
-    let refused = take(Some(Stream::earth), bytes).unwrap_err();
+    let refused = take(Some(Stream::earth), bytes).err().unwrap();
     assert!(!refused.released(), "every slot out: the body waits");
-    // SAFETY: from `take`, given back once, here and below.
-    unsafe { give(out.pop().unwrap()) };
+    drop(out.pop());
     assert!(refused.released(), "until one is given back");
-    for block in out {
-        // SAFETY: from `take`, given back once.
-        unsafe { give(block) };
-    }
+    drop(out);
 }
 
 #[test]
@@ -113,12 +104,10 @@ fn slot_peak() {
     take_peak();
     let a = take(Some(Stream::terrain), 1).unwrap();
     let b = take(Some(Stream::earth), 1).unwrap();
-    // SAFETY: from `take`, given back once.
-    unsafe { give(a) };
+    drop(a);
     assert_eq!(take_peak(), 2, "two were out at once");
     assert_eq!(take_peak(), 1, "and from then, the one still out");
-    // SAFETY: from `take`, given back once.
-    unsafe { give(b) };
+    drop(b);
 }
 
 /// A terrain body longer than a slot is a heap block of its own, in no run.
@@ -128,8 +117,7 @@ fn long_body_own_block() {
     let before = runs();
     let b = take(Some(Stream::terrain), SLOT_BYTES + 1).unwrap();
     assert_eq!(runs(), before, "no run is taken for it");
-    // SAFETY: from `take`, given back once.
-    unsafe { give(b) };
+    drop(b);
 }
 
 #[test]
@@ -145,22 +133,18 @@ fn slot_refusal_waits_slots() {
     let _g = sys::serial();
     set_counted_heap();
     let bytes = SLOT_BYTES;
-    let mut out: Vec<Block> = (0..BODY_SLOTS)
+    let mut out: Vec<Packet> = (0..BODY_SLOTS)
         .map(|_| take(Some(Stream::terrain), bytes).unwrap())
         .collect();
-    let refused = take(Some(Stream::terrain), bytes).unwrap_err();
+    let refused = take(Some(Stream::terrain), bytes).err().unwrap();
     heap_release();
     assert!(
         !refused.released(),
         "the heap's pages given back give no slot"
     );
-    // SAFETY: from `take`, given back once, here and below.
-    unsafe { give(out.pop().unwrap()) };
+    drop(out.pop());
     assert!(refused.released());
-    for block in out {
-        // SAFETY: from `take`, given back once.
-        unsafe { give(block) };
-    }
+    drop(out);
     set_heap_stat(HeapStat::default);
 }
 
@@ -170,8 +154,7 @@ fn run_refusal_waits_heap() {
     let refused = Refusal::run();
     assert!(!refused.released());
     let block = take(Some(Stream::terrain), 1).unwrap();
-    // SAFETY: from `take`, given back once.
-    unsafe { give(block) };
+    drop(block);
     assert!(
         refused.released(),
         "a slot given back in a run held serves it"
@@ -182,16 +165,12 @@ fn run_refusal_waits_heap() {
 fn slot_return_asks_turn() {
     let _g = sys::serial();
     let bytes = SLOT_BYTES;
-    let mut out: Vec<Block> = (0..BODY_SLOTS)
+    let mut out: Vec<Packet> = (0..BODY_SLOTS)
         .map(|_| take(Some(Stream::terrain), bytes).unwrap())
         .collect();
     assert!(take(Some(Stream::terrain), bytes).is_err());
     assert!(slot_table().waited, "refused for want of a slot");
-    // SAFETY: from `take`, given back once, here and below.
-    unsafe { give(out.pop().unwrap()) };
+    drop(out.pop());
     assert!(!slot_table().waited, "the slot given back asked the turn");
-    for block in out {
-        // SAFETY: from `take`, given back once.
-        unsafe { give(block) };
-    }
+    drop(out);
 }

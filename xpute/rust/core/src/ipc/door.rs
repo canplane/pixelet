@@ -52,7 +52,7 @@ use xpute_kit::wire::xtp::PacketWriter;
 
 use crate::abi::fs::{self, FsChanged, FsClose, FsOpenat, FsOpenatReply, FsRead, FsWrite};
 use crate::abi::gpu::{self, GpuSurfaceClose, GpuSurfaceResize};
-use crate::abi::sys::{Command, Nop, SysAbort, SysTurn};
+use crate::abi::sys::{Command, Nop, SysAbort, SysFrame, SysTurn};
 use crate::call::answer_of;
 use crate::ipc::frame;
 use crate::ipc::fs::{Fd, FsClosed, FsOpened};
@@ -117,6 +117,8 @@ pub enum Submission<'a> {
     /// The scheduling policy grants a turn (SYS_TURN), which carries the wall
     /// clock.
     Turn(SysTurn),
+    /// Frame pacing's grant for the next turn (SYS_FRAME).
+    Frame(SysFrame),
     /// The GPU the machine asked for has answered (GPU_READY), for the first
     /// time or again after a loss. It tells of the GPU's state, not of the
     /// core's life.
@@ -519,8 +521,9 @@ fn apply_frame(
         Some(Command::SYS_SUSPEND) => handle(Submission::Life(Life::Suspend)),
         Some(Command::SYS_RESUME) => handle(Submission::Life(Life::Resume)),
         Some(Command::SYS_TURN) => handle(Submission::Turn(SysTurn::read(pkt_of(pkt)?)?)),
-        // The core's own report, which the runtime never sends.
-        Some(Command::SYS_ABORT) => Ok(None),
+        Some(Command::SYS_FRAME) => handle(Submission::Frame(SysFrame::read(pkt_of(pkt)?)?)),
+        // The core's own report and rate, which the runtime never sends.
+        Some(Command::SYS_ABORT | Command::SYS_PACE) => Ok(None),
         None => match (gpu::Command::of(f.cmd), fs::Command::of(f.cmd)) {
             (Some(gpu::Command::GPU_READY), _) => handle(Submission::GpuReady),
             (Some(gpu::Command::GPU_SURFACE_OPEN), _) => handle(Submission::Surface(Surface::Open)),

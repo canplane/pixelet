@@ -13,7 +13,6 @@ import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.jni.NativeArrayBuffer
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
-import expo.modules.kotlin.typedarray.Uint8Array
 
 /**
  * The device's half of the client's services on Android (the .native files in
@@ -27,6 +26,8 @@ class PlatformModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("PxlPlatform")
+
+    OnCreate { PxlNative.textOn() }
 
     // ---- the transport (service/platform/origin.native.ts) ----
 
@@ -53,19 +54,6 @@ class PlatformModule : Module() {
     Function("clipboardSet") { text: String ->
       val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
       clipboard.setPrimaryClip(ClipData.newPlainText("pixelet", text))
-    }
-
-    // ---- text (service/platform/text.native.ts, Text.kt) ----
-
-
-    Function("textWidth") { weight: Double, px: Double, text: String -> textWidth(text, weight, px) }
-
-    /** Draws the line into `out`, starting at `x`, with the middle of its em
-     * box on the middle row. `out` is `width` by `height` pixels of RGBA, top
-     * row first, with alpha not premultiplied. An `out` too small for that is
-     * left untouched. */
-    Function("textRaster") { weight: Double, px: Double, rgba: Double, text: String, x: Double, width: Int, height: Int, out: Uint8Array ->
-      if (out.byteLength >= width * height * 4) textRaster(text, weight, px, rgba.toLong(), x, width, height, out)
     }
 
     // ---- the compass (service/platform/sensor.native.ts) ----

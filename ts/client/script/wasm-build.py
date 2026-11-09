@@ -28,6 +28,7 @@ def repo_of(start):
 
 REPO = repo_of(APP)
 RUST = REPO / "rust"
+NUMBER_PATHS = REPO / "xpute/ts/native/script/number-paths.py"
 TARGET = "wasm32-unknown-unknown"
 # Cargo's own rule for its target directory: CARGO_TARGET_DIR, or else the
 # workspace's target/.
@@ -99,6 +100,14 @@ def finish(*args):
     return proc.stdout.strip()
 
 
+def number_paths(module, table):
+    """xpute's own step, which numbers a native core's paths the same way."""
+    proc = subprocess.run([sys.executable, str(NUMBER_PATHS), str(module), str(table), str(RUST)], stdout=subprocess.PIPE, text=True)
+    if proc.returncode != 0:
+        raise Failed(proc.returncode)
+    return int(proc.stdout)
+
+
 def mtime(path):
     return path.stat().st_mtime_ns if path.is_file() else None
 
@@ -141,7 +150,7 @@ def main():
         finish("exports", linked_file, *EXPORTS)
         optimized(linked_file, opt_file)
         numbered = work / "paths.json"
-        paths = int(finish("number", opt_file, numbered)) if PUBLISHED else 0
+        paths = number_paths(opt_file, numbered) if PUBLISHED else 0
         # The module is moved into place last, because a reader keys on it.
         if PUBLISHED:
             os.replace(numbered, PATHS)

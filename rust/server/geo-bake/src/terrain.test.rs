@@ -7,14 +7,14 @@ use pxl_spec::bake::tile::terrain::{ELE_COLUMN, PALETTE_COLUMN};
 /// A tile whose lines hold `points` points, as one line.
 fn tile_of(points: usize) -> TerrainTile {
     let separation = Separation {
-        starts: vec![0, points as u32].into(),
-        points: vec![[0; 2]; points].into(),
-        tops: vec![0; points].into(),
-        widths: vec![1].into(),
-        kinds: vec![0].into(),
-        forms: vec![0].into(),
-        clears: vec![0].into(),
-        first_zooms: vec![0; points].into(),
+        starts: vec![0, points as u32],
+        points: vec![[0; 2]; points],
+        tops: vec![0; points],
+        widths: vec![1],
+        kinds: vec![0],
+        forms: vec![0],
+        clears: vec![0],
+        first_zooms: vec![0; points],
     };
     TerrainTile::of(
         vec![0; ELE_COLUMN],

@@ -10,8 +10,9 @@ use pxl_spec::space::layer::lattice::Lattice;
 
 use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::Base;
+use crate::sys::io::body::Packet;
 use crate::sys::io::demand::{PhaseList, Stream};
-use crate::sys::io::failure::Failure;
+use crate::sys::io::failure::Exit;
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::quadrant::Quadrant;
@@ -35,10 +36,10 @@ impl Base for PlaceTile {
     fn receive(
         _tile: Quadrant,
         _slot: u32,
-        pkt: &[u8],
+        pkt: Packet,
         _phases: &mut PhaseList,
-    ) -> Result<PlaceTile, Failure> {
-        Ok(place::decode(pkt)?)
+    ) -> Result<PlaceTile, Exit> {
+        Ok(place::decode(&pkt)?)
     }
 
     fn empty() -> Option<PlaceTile> {
