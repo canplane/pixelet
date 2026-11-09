@@ -18,9 +18,8 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P2
 
-- **After the ways' move to the heap: the memory's record and the ways' turn
-  budget again; the location indicator's ~10 ms a recompute.** The same
-  minutes.
+- **The location indicator's ~10 ms a recompute, the two rays of each of its
+  heights.** The same minutes.
 - **The light's tail on the S23.** A p95 frame spends 90 to 140 ms in `light_hit`
   and 75 to 100 in `light_sample`, where the median frame is about 60 ms whole
   ([the journal](./experiment/20261103-the-frame-on-the-s23/README.md), "The

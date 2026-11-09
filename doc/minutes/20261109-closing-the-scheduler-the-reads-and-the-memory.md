@@ -25,6 +25,12 @@ without a bound is the objects.
   the objects' apply, the last alone growing with a shard. A CPU ray ends at
   `STEPS_CAP`, 4096 steps. The render passes loop over fixed counts or the turn's
   draw lists, and a frame that no longer fits the GPU's stream is dropped.
+- The ways, read after their move to the heap landed in `70e08a0262`: a brick's fill
+  goes by parts (columns, a row of spans, mips, laying the run), each a fixed count
+  of columns, checked against the turn's share between parts, with at least one
+  part a turn. Reading a tile's lines at a brick's start is bounded by the bake's
+  limit on a tile's bytes. The pool replaced the old one in `HEAP_FLOWS_BYTES`, the
+  sum staying 228.56 MiB, and `door/layout.test.rs` holds the figures to the code.
 - The memory: the front, `.fixed` and the heap's bounded flows have caps the
   build checks. The rest of the heap is workspace and has no sum, by design:
   the user ruled out taking the caps added up as the limit.
@@ -44,6 +50,7 @@ without a bound is the objects.
 | The clipmap reports a change per brick | A coarse tile's report threw away the location indicator's memo every frame ([measured](../experiment/20261109-the-location-recomputed-less.md)) | `ef2298f898` |
 | `script/perf/measure.py` reads the results in batches | The script hung on a large result | `ef2298f898` |
 | The tiles' columns and rows take one set of names, plural columns and singular rows, `XxxTile` and `Xxx` | The user's discipline: tiles may differ in structure, but a field that is the same thing has the same name | `a4620890f8` |
+| The location indicator's answer, when exact at the leaf cells, is dropped only by a ground node that holds those cells and by what objects wrote (`Memo::forget_touched_at_leaf`) | Counted on the S23, a coarser tile or brick over the zone recomputed it in most frames, and such a node cannot move an answer the leaf gave. An answer not exact keeps the old rule, since a coarser node does move that. Frames recomputing fell from 76% to 34% ([measured](../experiment/20261109-the-location-recomputed-less.md)) | not yet committed |
 | The place and division decoders build their rows without `Option`, and `tile_of` returns a tile | `StrList::get` fails only past the list's length, and each decoder has already held every column to one length and, for the divisions, every kind to a known one, so the failure branches could not be taken | not yet committed |
 
 ## A read the replaced runtime left
@@ -111,8 +118,7 @@ of symmetry.
 | What | Why |
 | --- | --- |
 | The frame test's intermittent failure, "the view did not rest within 10 idle turns" | Every other check leans on it. At `443124ecfb` it did not fail: three runs of `cargo test-host`, four under a CPU load of 20 processes, 30 of six copies at once on the GPU, and 91 with 0 to 90 extra frames shifting the clock's phase. The cause is unknown, and it is looked at again when it next fails |
-| The location indicator's ~10 ms a recompute, outside the budget | The largest measured CPU cost left in a turn |
-| After the ways' move to the heap: the memory's record and the ways' turn budget again | The ways' pool is 64 MiB of the flows' sum, and bricks and their fill change |
+| The location indicator's ~10 ms a recompute, outside the budget | The largest measured CPU cost left in a turn. The time is the two rays of each of 58 heights ([measured](../experiment/20261109-the-location-recomputed-less.md)). `SupportWalk` was a guess at this and removed; a change here starts from those two rays |
 
 ## Open
 
