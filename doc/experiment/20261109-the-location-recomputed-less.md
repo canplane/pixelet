@@ -62,3 +62,23 @@ A recompute asks 58 heights. Its time, in ms, at p95 of the frames (base, then c
 The recomputes left are those of an answer not exact at the leaf, where a coarser node
 does move it, and those of the leaf's own tile and brick. The turns' p50 did not fall in
 this one run, and a recompute costs what it did. Kept.
+
+## Then: the second ray goes on from the first
+
+Each height casts two rays from one point, `lift` up and `below` down, and both descended
+from the world's root. `below` now goes on from where `lift` ended (`cast::walk` from the
+line `lift` kept), its answer the same. The tile lines were already handed from one to the
+other, and `below` was no cheaper than `lift` for it, so the time is the descent. The same
+drive and counters, 298 moving frames, AP 38.6 to 46.5 °C, one run, against the run above.
+
+| | before | after |
+| --- | --- | --- |
+| `below` p95, ms | 5.0 | 1.2 |
+| `lift` p95, ms | 4.6 | 5.0 |
+| `location` p95, ms | 10.2 | 6.7 |
+| the interval's turns p50, ms | 13.6 | 11.7 |
+| the interval's turns p95, ms | 22.8 | 18.8 |
+
+Its base started 3.3 °C cooler than this run, and other commits lie between the two builds,
+so the turns' figures are not this change's alone. Kept. `lift` still descends from the root
+for each of the 58 heights.
