@@ -2,8 +2,7 @@
 
 /**
  * Opens a page's core: its module, compiled from its bytes and opened over
- * memory the runtime reserves. A native app's bundler takes
- * platform.native.ts in this file's place.
+ * memory the runtime reserves.
  */
 
 import * as Errno from "@xpute/kit/status/errno.spec.ts";

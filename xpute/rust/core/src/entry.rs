@@ -19,7 +19,7 @@
 //! A page runs the core on its one thread, in turns its scheduler grants and
 //! cuts off at each turn's deadline (@xpute/runtime `Scheduler`). A native
 //! runtime runs the core on a thread of its own, which begins a wanted turn at
-//! a display frame (xpute-runtime native/thread.rs, `sched::frame`).
+//! a display frame (xpute-runtime native/thread.rs).
 
 use crate::mem::heap::HeapStat;
 use crate::stop::PanicHook;
@@ -60,9 +60,6 @@ pub struct Form {
     /// A page has none, since its runtime runs the stream when the turn
     /// returns.
     pub publish: Option<fn()>,
-    /// Sets the pacing of the turns where the core's own thread begins them
-    /// (`sched::frame::pace`). A page has none: its runtime holds the pacing.
-    pub pace: Option<fn(crate::sched::frame::Pace)>,
 }
 
 /// An entry runs one turn that may last `deadline_ms`, and answers in how many
@@ -82,7 +79,6 @@ pub fn run(deadline_ms: f64, boot: fn() -> BootInfo, entry: Entry) -> f64 {
         }
         crate::call::set(b.call);
         crate::ipc::stream::on_publish(b.form.publish);
-        crate::sched::frame::on_pace(b.form.pace);
     }
     entry(deadline_ms, boot)
 }

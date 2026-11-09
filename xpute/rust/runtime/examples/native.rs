@@ -28,7 +28,6 @@ mod program {
                 stop_hook: None,
                 admit_frame: None,
                 publish: None,
-                pace: None,
             },
         },
         turn

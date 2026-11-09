@@ -116,7 +116,7 @@ impl TextLayout {
 }
 
 impl TextLayout {
-    /// As what answers the call beside the core reads it.
+    /// As the runtime beside the core reads it.
     pub fn read(pkt: &[u8]) -> Result<TextLayout, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(TextLayout {
@@ -173,7 +173,7 @@ impl TextRaster {
 }
 
 impl TextRaster {
-    /// As what answers the call beside the core reads it.
+    /// As the runtime beside the core reads it.
     pub fn read(pkt: &[u8]) -> Result<TextRaster, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(TextRaster {

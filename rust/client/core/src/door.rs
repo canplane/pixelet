@@ -51,9 +51,10 @@ use xpute_core::ipc::door::{DoorStat, Pos, Submission};
 use xpute_core::machine::{self, door};
 use xpute_core::mem::off_of_slice;
 use xpute_core::mem::section::PAGE_BYTES;
-use xpute_core::sched::frame;
 use xpute_core::sched::task;
 use xpute_core::stop;
+#[cfg(not(target_arch = "wasm32"))]
+use xpute_runtime::native;
 
 struct State {
     /// The UI snapshot and view last posted. Each is posted again only when
@@ -141,7 +142,10 @@ fn on_runtime_attached(s: &mut State) {
 fn boot(b: BootInfo) {
     stop::install(runtime::abort, b.form.stop_hook);
     #[cfg(not(target_arch = "wasm32"))]
-    text_device::install(b.call);
+    {
+        text_device::install(b.call);
+        native::named_by(cmd::mem_of);
+    }
     if !machine::booted() {
         machine::boot(&MACHINE);
     }
@@ -182,6 +186,7 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     door().receive(|submission| match submission {
         Submission::Life(l) => life::apply(s, l),
         Submission::Turn(t) => apply::turn::turn(t),
+        Submission::Frame(f) => apply::turn::grant(f),
         Submission::Surface(c) => apply::on_surface(c),
         Submission::Changed(c) => apply::fs::changed(c),
         Submission::GpuReady => {
@@ -196,9 +201,6 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
         Submission::Program(number, pkt) => cmd::ui::apply(s, number, &pkt),
         _ => Ok(None),
     });
-    if let Some(f) = frame::take() {
-        apply::turn::frame(f);
-    }
     let drained = now();
     if deadline_ms > 0.0 || world_frame_waiting() {
         task::poll();

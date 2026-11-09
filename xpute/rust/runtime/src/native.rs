@@ -16,6 +16,7 @@ mod alloc;
 mod pacing;
 mod reserve;
 mod say;
+mod serve;
 mod thread;
 
 use core::ptr::NonNull;
@@ -26,9 +27,10 @@ use xpute_core::mem::section::PAGE_BYTES;
 
 pub use alloc::Alloc;
 pub use say::{say, stop_hook};
+pub use serve::{attach, call, fs_closed, fs_opened, named_by, post, take, Named, STOPPED};
 pub use thread::{
-    answer, answer_with, heard, input, notify_on, pace, pause, resume, ring, vsync, wake, Answer,
-    Notify, Vcpu,
+    answer, answer_with, input, notify_on, pace, pause, resume, ring, terminated, vsync, wake,
+    Answer, Notify, Pace, Vcpu,
 };
 pub use xpute_core::entry::{run, BootInfo, Entry, Form};
 pub use xpute_core::machine::Machine;
@@ -319,8 +321,102 @@ macro_rules! native_abi {
         }
 
         #[no_mangle]
-        pub extern "C" fn xpute_heard() -> bool {
-            $crate::native::heard()
+        pub extern "C" fn xpute_attach(sq_at: u32, cq_at: u32, fs: bool) {
+            let (at, bytes) = xpute_native::core().mem();
+            // SAFETY: the core's memory, reserved for the process's life, whose
+            // rings the caller has laid.
+            unsafe { $crate::native::attach(at.as_ptr() as usize, bytes, sq_at, cq_at, fs) };
+        }
+
+        #[no_mangle]
+        pub extern "C" fn xpute_pace(
+            pace_hz: f64,
+            margin_share: f64,
+            batch_frames: f64,
+            settle_ms: f64,
+        ) {
+            $crate::native::pace($crate::native::Pace {
+                pace_hz,
+                margin_share,
+                batch_frames,
+                settle_ms,
+            });
+        }
+
+        /// # Safety
+        /// `pkt` points at `len` readable bytes.
+        #[no_mangle]
+        pub unsafe extern "C" fn xpute_post(
+            tag: u32,
+            cmd: u32,
+            flags: u32,
+            result: i32,
+            pkt: *const u8,
+            len: usize,
+        ) {
+            let pkt = if len == 0 {
+                &[][..]
+            } else {
+                // SAFETY: the caller's bytes.
+                unsafe { core::slice::from_raw_parts(pkt, len) }
+            };
+            $crate::native::post(tag, cmd, flags, result, pkt);
+        }
+
+        /// # Safety
+        /// `len` points at a word the caller owns. The bytes are the caller's
+        /// until `xpute_taken_free`.
+        #[no_mangle]
+        pub unsafe extern "C" fn xpute_take(len: *mut usize) -> *mut u8 {
+            let bytes = Box::into_raw($crate::native::take().into_boxed_slice());
+            // SAFETY: the caller's word.
+            unsafe { *len = bytes.len() };
+            bytes.cast()
+        }
+
+        /// # Safety
+        /// `at` and `len` are what one `xpute_take` gave.
+        #[no_mangle]
+        pub unsafe extern "C" fn xpute_taken_free(at: *mut u8, len: usize) {
+            // SAFETY: the box `xpute_take` let go of.
+            drop(unsafe { Box::from_raw(core::ptr::slice_from_raw_parts_mut(at, len)) });
+        }
+
+        /// # Safety
+        /// `bytes` points at `len` readable bytes.
+        #[no_mangle]
+        pub unsafe extern "C" fn xpute_fs_opened(
+            fd: u32,
+            result: i32,
+            detail: u32,
+            bytes: *const u8,
+            len: usize,
+        ) {
+            let file = if result < 0 || len == 0 {
+                Vec::new()
+            } else {
+                // SAFETY: the caller's bytes.
+                unsafe { core::slice::from_raw_parts(bytes, len) }.to_vec()
+            };
+            $crate::native::fs_opened(fd, result, detail, Some(file));
+        }
+
+        #[no_mangle]
+        pub extern "C" fn xpute_fs_closed(fd: u32, result: i32) {
+            $crate::native::fs_closed(fd, result);
+        }
+
+        /// # Safety
+        /// `pkt` points at `len` readable bytes.
+        #[no_mangle]
+        pub unsafe extern "C" fn xpute_call(cmd: u32, pkt: *const u8, len: usize) -> i32 {
+            let pkt = if len == 0 {
+                &[][..]
+            } else {
+                // SAFETY: the caller's bytes.
+                unsafe { core::slice::from_raw_parts(pkt, len) }
+            };
+            $crate::native::call(cmd, pkt)
         }
 
         /// # Safety
@@ -351,7 +447,11 @@ macro_rules! native_abi {
 /// On Android it also exports the C ABI to JNI, as the `external` functions of
 /// the Kotlin class `xpute.Core` (`jni`): `run(deadlineMs: Double): Double`,
 /// `wake()`, `input()`, `vsync(ageMs: Double)`, `pause()`, `resume()`,
-/// `answer()`, `heard(): Boolean`, `mem(): ByteBuffer`, `load(at: Double): Double` and
+/// `answer()`, `attach(sqAt: Int, cqAt: Int, fs: Boolean)`, `pace(paceHz: Double,
+/// marginShare: Double, batchFrames: Double, settleMs: Double)`, `post(tag: Int, cmd: Int, flags:
+/// Int, result: Int, pkt: ByteArray)`, `take(): ByteArray`, `fsOpened(fd: Int,
+/// result: Int, detail: Int, bytes: ByteArray)`, `fsClosed(fd: Int, result:
+/// Int)`, `call(cmd: Int, pkt: ByteArray): Int`, `mem(): ByteBuffer`, `load(at: Double): Double` and
 /// `store(at: Double, word: Double)`. It calls back the class's static
 /// `call(at: Int): Int` for each of the core's calls, and its static
 /// `onNotify()` for each piece of news `xpute_notify_on` describes.
@@ -393,25 +493,10 @@ macro_rules! native_core {
                     stop_hook: Some($crate::native::stop_hook),
                     admit_frame: xpute_native_core::DEVICE.admit_frame,
                     publish: Some(xpute_native_core::publish),
-                    pace: Some($crate::native::pace),
                 },
             },
             xpute_native_core::xpute_turn
         );
-
-        /// # Safety
-        /// Only JNI calls this, with the environment and object of its call.
-        #[cfg(target_os = "android")]
-        #[no_mangle]
-        unsafe extern "system" fn Java_xpute_Core_run(
-            env: *mut $crate::jni::sys::JNIEnv,
-            this: $crate::jni::sys::jobject,
-            deadline_ms: $crate::jni::sys::jdouble,
-        ) -> $crate::jni::sys::jdouble {
-            // SAFETY: the environment and object JNI called with.
-            unsafe { $crate::jni::init(env, this) };
-            xpute_run(deadline_ms)
-        }
 
         #[cfg(target_os = "android")]
         #[no_mangle]
@@ -480,13 +565,105 @@ macro_rules! native_core {
         /// Only JNI calls this, with the environment and object of its call.
         #[cfg(target_os = "android")]
         #[no_mangle]
-        unsafe extern "system" fn Java_xpute_Core_heard(
+        unsafe extern "system" fn Java_xpute_Core_attach(
             env: *mut $crate::jni::sys::JNIEnv,
             this: $crate::jni::sys::jobject,
-        ) -> $crate::jni::sys::jboolean {
+            sq_at: $crate::jni::sys::jint,
+            cq_at: $crate::jni::sys::jint,
+            fs: $crate::jni::sys::jboolean,
+        ) {
             // SAFETY: the environment and object JNI called with.
             unsafe { $crate::jni::init(env, this) };
-            $crate::jni::sys::jboolean::from(xpute_heard())
+            xpute_attach(sq_at as u32, cq_at as u32, fs != 0);
+        }
+
+        #[cfg(target_os = "android")]
+        #[no_mangle]
+        extern "system" fn Java_xpute_Core_pace(
+            _env: *mut $crate::jni::sys::JNIEnv,
+            _this: $crate::jni::sys::jobject,
+            pace_hz: $crate::jni::sys::jdouble,
+            margin_share: $crate::jni::sys::jdouble,
+            batch_frames: $crate::jni::sys::jdouble,
+            settle_ms: $crate::jni::sys::jdouble,
+        ) {
+            xpute_pace(pace_hz, margin_share, batch_frames, settle_ms);
+        }
+
+        /// # Safety
+        /// Only JNI calls this, with the environment and arguments of its call.
+        #[cfg(target_os = "android")]
+        #[no_mangle]
+        unsafe extern "system" fn Java_xpute_Core_post(
+            env: *mut $crate::jni::sys::JNIEnv,
+            _this: $crate::jni::sys::jobject,
+            tag: $crate::jni::sys::jint,
+            cmd: $crate::jni::sys::jint,
+            flags: $crate::jni::sys::jint,
+            result: $crate::jni::sys::jint,
+            pkt: $crate::jni::sys::jbyteArray,
+        ) {
+            // SAFETY: the environment and array JNI called with.
+            let pkt = unsafe { $crate::jni::bytes(env, pkt) };
+            $crate::native::post(tag as u32, cmd as u32, flags as u32, result, &pkt);
+        }
+
+        /// # Safety
+        /// Only JNI calls this, with the environment of its call.
+        #[cfg(target_os = "android")]
+        #[no_mangle]
+        unsafe extern "system" fn Java_xpute_Core_take(
+            env: *mut $crate::jni::sys::JNIEnv,
+            _this: $crate::jni::sys::jobject,
+        ) -> $crate::jni::sys::jbyteArray {
+            // SAFETY: the environment JNI called with.
+            unsafe { $crate::jni::byte_array(env, &$crate::native::take()) }
+        }
+
+        /// # Safety
+        /// Only JNI calls this, with the environment and arguments of its call.
+        #[cfg(target_os = "android")]
+        #[no_mangle]
+        unsafe extern "system" fn Java_xpute_Core_fsOpened(
+            env: *mut $crate::jni::sys::JNIEnv,
+            _this: $crate::jni::sys::jobject,
+            fd: $crate::jni::sys::jint,
+            result: $crate::jni::sys::jint,
+            detail: $crate::jni::sys::jint,
+            bytes: $crate::jni::sys::jbyteArray,
+        ) {
+            // SAFETY: the environment and array JNI called with.
+            let bytes = unsafe { $crate::jni::bytes(env, bytes) };
+            $crate::native::fs_opened(fd as u32, result, detail as u32, Some(bytes));
+        }
+
+        #[cfg(target_os = "android")]
+        #[no_mangle]
+        extern "system" fn Java_xpute_Core_fsClosed(
+            _env: *mut $crate::jni::sys::JNIEnv,
+            _this: $crate::jni::sys::jobject,
+            fd: $crate::jni::sys::jint,
+            result: $crate::jni::sys::jint,
+        ) {
+            xpute_fs_closed(fd as u32, result);
+        }
+
+        /// # Safety
+        /// Only JNI calls this, with the environment and arguments of its call.
+        #[cfg(target_os = "android")]
+        #[no_mangle]
+        unsafe extern "system" fn Java_xpute_Core_call(
+            env: *mut $crate::jni::sys::JNIEnv,
+            this: $crate::jni::sys::jobject,
+            cmd: $crate::jni::sys::jint,
+            pkt: $crate::jni::sys::jbyteArray,
+        ) -> $crate::jni::sys::jint {
+            // SAFETY: the environment, object and array JNI called with.
+            let pkt = unsafe {
+                $crate::jni::init(env, this);
+                $crate::jni::bytes(env, pkt)
+            };
+            $crate::native::call(cmd as u32, &pkt)
         }
 
         /// # Safety

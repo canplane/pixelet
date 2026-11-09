@@ -9,11 +9,8 @@
  * the core raises is handed to the one listener, which tells the commands
  * apart.
  *
- * A core on a thread of its own (runtime.ts `Core.thread`) begins its own
- * turns. What it posts is read when it says it has posted (`turns`). For such
- * a core, a ring is a turn waited for, as a call needs. Either core is asked
- * for a turn after any read that took frames, so that it sees the room that
- * moving the head gave back.
+ * A core is asked for a turn after any read that took frames, so that it sees
+ * the room that moving the head gave back.
  */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
@@ -222,26 +219,6 @@ export class Doorbell implements PacketRoom {
     }
     this.on_wake?.(wake);
     return wake;
-  }
-
-  /** Called when the core's own thread has posted since it was last heard.
-   * The completion ring is read dry. If the core has stopped, what it posted
-   * is read and its stop is told. */
-  turns(stopped: boolean): void {
-    if (this._terminated) return;
-    if (stopped) {
-      this._terminate("the core stopped", null, true);
-      return;
-    }
-    try {
-      this._read();
-    } catch (err) {
-      this._terminate(
-        "the runtime could not take what the core posted",
-        err,
-        false,
-      );
-    }
   }
 
   /** Ends the core. The cause is printed here, once, and the stop is told,

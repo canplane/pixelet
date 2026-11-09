@@ -10,6 +10,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 // Rings a turn that ends no sooner than deadline_ms after its rise, and waits
@@ -59,16 +60,43 @@ void xpute_store(uint32_t at, uint32_t word);
 void xpute_call_on(int32_t (*answer)(uint32_t at));
 
 // Makes `f` be called from the core's thread with news; null sets none. The
-// news is that a turn has ended since the app last
-// called `xpute_heard`, that a call waits for `xpute_answer`, or that the core
+// news is that frames wait for `xpute_take`, that a call waits for `xpute_answer`, or that the core
 // has stopped. `f` must not call into the core: it hands the news to the app's
-// thread, which then calls `xpute_answer` and `xpute_heard` and reads the
-// completion ring.
+// thread, which then calls `xpute_answer` and `xpute_take`.
 void xpute_notify_on(void (*f)(void));
 
 // Answers, on this thread, the call that waits for its answer, if one does.
 void xpute_answer(void);
 
-// Says the news of `xpute_notify_on` was heard, so that the next is told, and
-// returns whether the core has stopped.
-bool xpute_heard(void);
+// Starts the runtime's own thread over the rings at the given offsets, the
+// app having laid them, and forgets what an earlier attach left. `fs` says
+// whether the machine asks for the file device.
+void xpute_attach(uint32_t sq_at, uint32_t cq_at, bool fs);
+
+// The program's numbers for frame pacing (@xpute/runtime sched/frame_pacing.ts
+// `FramePacingConfig`), given before the turns run.
+void xpute_pace(double pace_hz, double margin_share, double batch_frames, double settle_ms);
+
+// Queues a frame for the submission ring.
+void xpute_post(uint32_t tag, uint32_t cmd, uint32_t flags, int32_t result, const uint8_t *pkt,
+                size_t len);
+
+// Hands over what the app has not heard from the completion ring, a batch of
+// frames: six little-endian u32s (tag, command, flags, result, the packet's
+// length, the named memory's length), then each of those bytes padded to 8.
+// The bytes are the app's until `xpute_taken_free`.
+uint8_t *xpute_take(size_t *len);
+void xpute_taken_free(uint8_t *at, size_t len);
+
+// Completes the open of `fd` with the file's bytes, or with a negative result
+// and the number the store refused with.
+void xpute_fs_opened(uint32_t fd, int32_t result, uint32_t detail, const uint8_t *bytes,
+                     size_t len);
+
+// Completes the close of `fd`, whose written bytes the app was handed.
+void xpute_fs_closed(uint32_t fd, int32_t result);
+
+// Calls the core: submits `cmd` with ACKREQ and rings turns until its reply has
+// been read, answering the turns' calls on this thread meanwhile. Returns the
+// reply's result, or ENOTRECOVERABLE once the core has stopped.
+int32_t xpute_call(uint32_t cmd, const uint8_t *pkt, size_t len);

@@ -91,15 +91,15 @@ struct Run {
 }
 
 impl Run {
-    /// Grants a turn the way the runtime does (ts/client/src/service/core/turn.ts `submit_grant`,
-    /// then @xpute/runtime's SYS_TURN) and checks what every frame must keep. Returns whether
+    /// Grants a turn the way the runtime does (@xpute/runtime's SYS_FRAME, then its
+    /// SYS_TURN) and checks what every frame must keep. Returns whether
     /// the core wants the next frame at once.
     fn frame(&mut self, interactive: bool) -> bool {
         pace::frame();
         self.clock_ms += REFRESH_MS;
         self.frame_cnt += 1;
         self.runtime.send(
-            "TURN_GRANT",
+            "SYS_FRAME",
             &[
                 ("refresh_ms", V::Num(REFRESH_MS)),
                 ("paced_ms", V::Num(REFRESH_MS)),

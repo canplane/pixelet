@@ -85,9 +85,6 @@ impl ui::Exports for State {
     fn sensor_locate(&mut self) -> Outcome {
         sensor::locate(self)
     }
-    fn turn_grant(&mut self, c: abi::TurnGrant) -> Outcome {
-        turn::grant(c)
-    }
     fn source_declare(&mut self, c: abi::SourceDeclare<'_>) -> Outcome {
         source::declare(c)
     }

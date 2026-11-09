@@ -20,8 +20,8 @@
 //! frame's work more time. The scale knob saves only the work done once for
 //! each drawn pixel (span.json `per_px`). The camera grid's cells, the
 //! samples, the light's passes over its map's texels, the finish and the
-//! markers cost the same at every scale. The runtime owns the rate: `TURN_PACE`
-//! asks it for one, each turn's grant reports the rate in force (`paced_ms`),
+//! markers cost the same at every scale. The runtime owns the rate: xpute's `SYS_PACE`
+//! asks it for one, each turn's SYS_FRAME reports the rate in force (`paced_ms`),
 //! and the judge keeps no copy of it.
 
 use crate::domain::scene::param;

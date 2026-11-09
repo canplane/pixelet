@@ -3,7 +3,7 @@
 /** The app's own native module (PlatformModule.swift, PlatformModule.kt under
  * modules/platform/), beside xpute's (@xpute/native). */
 
-import type { f32, f64, u32 } from "@xpute/kit/abi/word.ts";
+import type { f64 } from "@xpute/kit/abi/word.ts";
 import { requireNativeModule } from "expo";
 
 interface PxlPlatform {

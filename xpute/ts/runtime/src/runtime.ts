@@ -41,27 +41,13 @@ import { open } from "./platform";
 
 /** The core as its platform opened it. Its memory never moves or grows.
  * `run` runs a turn and returns when the core wants the next, in ms; xpute
- * names this entry, as a C runtime names `main`. A core that runs on its own
- * thread also gives that thread. */
+ * names this entry, as a C runtime names `main`. */
 export interface Core {
   mem: ArrayBuffer;
   run(deadline_ms: f64): f64;
   /** Makes `answer` answer each call from here on; until then every call
    * fails with ENOSYS. */
   answer_with(answer: (at: u32) => i32): void;
-  /** This is a native core's thread, which begins its own turns at the
-   * display's frames and sleeps otherwise. `wake` asks for a turn at the next
-   * frame, and `input` says an input came now. `listen` registers `heard`,
-   * which is told when the core has posted or stopped, and whether it has
-   * stopped. `pause` stops its turns, and `resume` lets them run again. A
-   * page's core has no thread: it runs only inside `run`. */
-  thread?: {
-    wake(): void;
-    input(): void;
-    pause(): void;
-    resume(): void;
-    listen(heard: (stopped: boolean) => void): void;
-  };
 }
 
 /** This is what a core asks of its GPU (its machine's `gpu`), by WebGPU's
@@ -131,10 +117,14 @@ function abort_of(e: SysAbort): Abort {
   };
 }
 
-function log_abort(r: Abort): void {
-  console.error(
-    `[xpute] stopped: ${strerror(r.errnum)} at ${r.file}:${r.line}:${r.column} (${r.a}, ${r.b})`,
-  );
+/** The core's abort, as it is logged. */
+export function abort_report(e: SysAbort): string {
+  const r = abort_of(e);
+  return `[xpute] stopped: ${strerror(r.errnum)} at ${r.file}:${r.line}:${r.column} (${r.a}, ${r.b})`;
+}
+
+function log_abort(e: SysAbort): void {
+  console.error(abort_report(e));
 }
 
 /** This is everything the app decides for its core: the module, where a page
@@ -148,7 +138,6 @@ export interface Config<G extends Grant = Grant> {
   fs?: Fs;
   gpu?: Gpu;
   program?: OnImport;
-  /** A core on its own thread paces itself and takes neither of these. */
   policy: SchedulingPolicy<G>;
   submit(grant: G, delta_s: f64): void;
   mem_of?(cmd: u32, f: BranchCursor | null): [u32, u32] | null;
@@ -231,6 +220,10 @@ export interface Runtime extends Link {
 /** This is the memory of the core last mounted here. */
 export let mem: ArrayBuffer;
 
+export function bind_mem(m: ArrayBuffer): void {
+  mem = m;
+}
+
 /** Mounts the runtime on `core`. The front is laid as `m` places it, unless
  * it was laid already, and the GPU is granted where `m` asks for one. */
 export function mount<G extends Grant>(
@@ -249,7 +242,6 @@ export function mount<G extends Grant>(
     const s = span(cmd, f);
     return s && new Uint8Array(core.mem, s[0], s[1]);
   };
-  const thread = core.thread;
 
   const doorbell = new Doorbell(
     core.mem,
@@ -261,20 +253,15 @@ export function mount<G extends Grant>(
       return wake;
     },
   );
-  const scheduler =
-    thread ??
-    new Scheduler(doorbell, policy, (grant, delta_s) => {
-      cfg.submit(grant, delta_s);
-      doorbell.send(Command.SYS_TURN, encode_args([Date.now()]));
-    });
-  if (thread) {
-    // A read of the completion ring gives back room a task may wait for.
-    doorbell.on_wake = (wake_ms) => {
-      if (wake_ms === 0) thread.wake();
-    };
-    thread.listen((stopped) => doorbell.turns(stopped));
-    thread.pause();
-  }
+  const scheduler = new Scheduler(doorbell, policy, (grant, delta_s) => {
+    const f = policy.frame?.(grant);
+    if (f) {
+      const args = [f.refresh_ms, f.paced_ms, f.interactive];
+      doorbell.send(Command.SYS_FRAME, encode_args(args));
+    }
+    cfg.submit(grant, delta_s);
+    doorbell.send(Command.SYS_TURN, encode_args([Date.now()]));
+  });
 
   const kick = <T>(v: T): T => (scheduler.wake(), v);
   const send = (cmd: u32, ...args: Arg[]) =>
@@ -293,7 +280,8 @@ export function mount<G extends Grant>(
     [
       Major.SYS,
       sys_imports({
-        [Command.SYS_ABORT]: (e) => log_abort(abort_of(e)),
+        [Command.SYS_ABORT]: log_abort,
+        [Command.SYS_PACE]: (e) => policy.pace?.(e.interval_ms),
       }),
     ],
   ]);
@@ -361,7 +349,7 @@ export function mount<G extends Grant>(
     },
     kick: () => scheduler.wake(),
     wake: () => scheduler.wake(),
-    input: () => (thread ? thread.input() : policy.input?.(performance.now())),
+    input: () => policy.input?.(performance.now()),
     resume: () => ((resumed = true), steer()),
     pause: () => ((resumed = false), steer()),
     visible(visible) {
@@ -405,9 +393,8 @@ export interface Manifest<G extends Grant = Grant> {
 }
 
 /** Opens the core of `m` on this build's platform and mounts the runtime on it;
- * what the core tells a UI goes to `ui`. A page's core takes `now` as its
- * clock, which counts as the UI's `performance.now()` does; a native core keeps
- * xpute-runtime's own (platform.native.ts). It refuses with EINVAL a config
+ * what the core tells a UI goes to `ui`. The core takes `now` as its clock,
+ * which counts as the UI's `performance.now()` does. It refuses with EINVAL a config
  * without `fs` for a machine that asks for files, and a config with `fs` for a
  * machine that does not. A GPU the machine does not ask for is not granted. */
 export async function boot<G extends Grant>(

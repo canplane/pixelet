@@ -399,10 +399,6 @@ pub enum Command {
     /// or cut off; the compass's, where the platform says so (SYS_BOOT's
     /// orient_silence_is_loss).
     SENSOR_ERR = 0x120b,
-    /// What the runtime's frame pacing grants the turn it rings next, sent before its
-    /// SYS_TURN (@xpute/runtime), which carries the clock: the frame's budget and whether
-    /// it follows an input.
-    TURN_GRANT = 0x1d01,
     /// What the tile source declares of itself, once the client has it: the tile root's
     /// `source`, the published one out of the bucket or the dev tile server's, read by the
     /// client (ts/client/src/service/sys/fs/source.ts) and handed over as numbers and names.
@@ -481,19 +477,13 @@ pub enum Command {
     /// The view's azimuth and scale, when either moved: a frame of its own, so a rotation or a
     /// zoom, which moves them every frame, leaves the snapshot as it was.
     UI_VIEW = 0x1b02,
-    /// The least interval the core asks between its turns: its load's word on the rate, which
-    /// the next TURN_GRANT's `paced_ms` answers, a whole number of refreshes (the pacing the
-    /// client boots the runtime with, @xpute/runtime sched/frame_pacing.ts `pace`). A core on
-    /// its own thread sets it there and posts nothing (xpute-core sched/frame.rs).
-    TURN_PACE = 0x1d02,
 }
 
 impl Command {
-    pub const ALL: [Command; 33] = [
+    pub const ALL: [Command; 31] = [
         Command::SENSOR_POS,
         Command::SENSOR_ORIENT,
         Command::SENSOR_ERR,
-        Command::TURN_GRANT,
         Command::SOURCE_DECLARE,
         Command::SENSOR_PERMISSION,
         Command::SENSOR_PLATFORM,
@@ -522,7 +512,6 @@ impl Command {
         Command::SENSOR_STOP,
         Command::UI_SNAPSHOT,
         Command::UI_VIEW,
-        Command::TURN_PACE,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -816,28 +805,6 @@ impl SensorErr {
                 ),
                 None => None,
             },
-        })
-    }
-}
-
-/// Command::TURN_GRANT's packet.
-#[derive(Clone, Copy, Debug)]
-pub struct TurnGrant {
-    /// The display's refresh, as the runtime measures it from the animation frames it is handed,
-    /// and the interval it paces turns at, a whole number of refreshes (the pacing the client
-    /// boots it with, @xpute/runtime sched/frame_pacing.ts `FrameGrant`): the frame's budget.
-    pub refresh_ms: f64,
-    pub paced_ms: f64,
-    pub interactive: bool,
-}
-
-impl TurnGrant {
-    pub fn read(pkt: &[u8]) -> Result<TurnGrant, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(TurnGrant {
-            refresh_ms: finite(f.at(0)?.get_number()?)?,
-            paced_ms: finite(f.at(1)?.get_number()?)?,
-            interactive: f.at(2)?.get_bool()?,
         })
     }
 }
@@ -1197,6 +1164,16 @@ impl SensorStart {
     }
 }
 
+impl SensorStart {
+    /// As the runtime beside the core reads it.
+    pub fn read(pkt: &[u8]) -> Result<SensorStart, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(SensorStart {
+            sensor: Sensor::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
+        })
+    }
+}
+
 impl xpute_core::ipc::door::Import for SensorStart {
     const NUMBER: u32 = 4609;
     const FIELDS: u32 = 1;
@@ -1216,6 +1193,16 @@ impl SensorStop {
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.sensor as u32));
+    }
+}
+
+impl SensorStop {
+    /// As the runtime beside the core reads it.
+    pub fn read(pkt: &[u8]) -> Result<SensorStop, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(SensorStop {
+            sensor: Sensor::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
+        })
     }
 }
 
@@ -1240,6 +1227,17 @@ impl UiSnapshot {
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.at));
         w.u32(Some(self.len));
+    }
+}
+
+impl UiSnapshot {
+    /// As the runtime beside the core reads it.
+    pub fn read(pkt: &[u8]) -> Result<UiSnapshot, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(UiSnapshot {
+            at: integer::<u32>(f.at(0)?.get_number()?)?,
+            len: integer::<u32>(f.at(1)?.get_number()?)?,
+        })
     }
 }
 
@@ -1268,6 +1266,17 @@ impl UiView {
     }
 }
 
+impl UiView {
+    /// As the runtime beside the core reads it.
+    pub fn read(pkt: &[u8]) -> Result<UiView, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(UiView {
+            azimuth: finite(f.at(0)?.get_number()?)?,
+            m_per_px: finite(f.at(1)?.get_number()?)?,
+        })
+    }
+}
+
 impl xpute_core::ipc::door::Import for UiView {
     const NUMBER: u32 = 6914;
     const FIELDS: u32 = 2;
@@ -1276,26 +1285,11 @@ impl xpute_core::ipc::door::Import for UiView {
     }
 }
 
-/// Command::TURN_PACE's packet.
-pub struct TurnPace {
-    /// 0 asks none, and turns go at the display's own rate.
-    pub interval_ms: f64,
-}
-
-impl TurnPace {
-    /// The children it is written as.
-    pub const FIELDS: u32 = 1;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.f64(Some(self.interval_ms));
-    }
-}
-
-impl xpute_core::ipc::door::Import for TurnPace {
-    const NUMBER: u32 = 7426;
-    const FIELDS: u32 = 1;
-    fn write(&self, w: &mut PacketWriter) {
-        TurnPace::write(self, w);
+/// The core's memory a command names, where it is and how long.
+pub fn mem_of(cmd: u32, pkt: &[u8]) -> Option<(u32, u32)> {
+    match cmd {
+        6913 => UiSnapshot::read(pkt).ok().map(|e| (e.at, e.len)),
+        _ => None,
     }
 }
 
@@ -1326,17 +1320,11 @@ pub mod ui {
         machine::door().send(e);
     }
 
-    /// Command::TURN_PACE, posted for the runtime.
-    pub fn turn_pace(e: &TurnPace) {
-        machine::door().send(e);
-    }
-
     /// What the program does with each command the runtime sends.
     pub trait Exports {
         fn sensor_pos(&mut self, c: SensorPos) -> Outcome;
         fn sensor_orient(&mut self, c: SensorOrient) -> Outcome;
         fn sensor_err(&mut self, c: SensorErr) -> Outcome;
-        fn turn_grant(&mut self, c: TurnGrant) -> Outcome;
         fn source_declare(&mut self, c: SourceDeclare<'_>) -> Outcome;
         fn sensor_permission(&mut self, c: SensorPermission) -> Outcome;
         fn sensor_platform(&mut self, c: SensorPlatform) -> Outcome;
@@ -1373,9 +1361,6 @@ pub mod ui {
                 pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
             )?),
             x if x == Command::SENSOR_ERR as u32 => h.sensor_err(SensorErr::read(
-                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
-            )?),
-            x if x == Command::TURN_GRANT as u32 => h.turn_grant(TurnGrant::read(
                 pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
             )?),
             x if x == Command::SOURCE_DECLARE as u32 => h.source_declare(SourceDeclare::read(

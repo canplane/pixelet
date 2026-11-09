@@ -31,7 +31,6 @@ fn core() -> Core {
                     stop_hook: None,
                     admit_frame: None,
                     publish: None,
-                    pace: None,
                 },
             },
             |_| -1.0,

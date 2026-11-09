@@ -153,6 +153,38 @@ extern "C" fn notify() {
     }
 }
 
+/// A Java `byte[]`'s bytes, copied out.
+///
+/// # Safety
+/// `e` is this thread's environment, and `a` a live `byte[]`.
+pub unsafe fn bytes(e: *mut JNIEnv, a: jni_sys::jbyteArray) -> Vec<u8> {
+    // SAFETY: as the caller says; the region is the array's whole length.
+    unsafe {
+        let j = env(e);
+        let n = j.GetArrayLength.or_bug(Errno::ENOSYS)(e, a);
+        let mut out = vec![0u8; n as usize];
+        j.GetByteArrayRegion.or_bug(Errno::ENOSYS)(e, a, 0, n, out.as_mut_ptr().cast());
+        out
+    }
+}
+
+/// `bytes` as a new Java `byte[]`.
+///
+/// # Safety
+/// `e` is this thread's environment.
+pub unsafe fn byte_array(e: *mut JNIEnv, bytes: &[u8]) -> jni_sys::jbyteArray {
+    // SAFETY: as the caller says; the region is the new array's whole length.
+    unsafe {
+        let j = env(e);
+        let n = bytes.len() as jni_sys::jint;
+        let out = j.NewByteArray.or_bug(Errno::ENOSYS)(e, n);
+        if !out.is_null() {
+            j.SetByteArrayRegion.or_bug(Errno::ENOSYS)(e, out, 0, n, bytes.as_ptr().cast());
+        }
+        out
+    }
+}
+
 /// This is `Core.mem`: the memory, as a direct buffer over the whole of it.
 ///
 /// # Safety

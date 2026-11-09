@@ -64,7 +64,6 @@ pub fn boot_info(
             stop_hook: None,
             admit_frame: cfg.admit_frame,
             publish: None,
-            pace: None,
         },
     }
 }

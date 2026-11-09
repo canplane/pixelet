@@ -19,14 +19,13 @@ use crate::domain::control::navigation::bootstrap::map_bootstrap_step;
 use crate::domain::control::navigation::follow_mode::follow_mode_step;
 use crate::domain::control::navigation::off_center::{off_center, off_center_step};
 use crate::domain::control::sensor::device_orientation::orient_watchdog_step;
-use crate::door::cmd;
 use crate::sys::io::param::CREDITS;
 use crate::sys::io::request::{pump, set_credits};
 use crate::sys::io::text::text_rise;
-use crate::sys::sched::pacing_spec::{BATCH_FRAMES, MARGIN_SHARE, PACE_HZ, SETTLE_MS};
 use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use xpute_core::sched::frame::{pace as pace_turns, Pace as TurnPace};
+use xpute_core::abi::sys::SysPace;
+use xpute_core::machine::door;
 
 use crate::domain::control::camera;
 use crate::domain::control::camera::controller;
@@ -191,7 +190,6 @@ fn environment_tick(_: &mut TickContext) {
 /// Runs once, outside any frame. The frame task it spawns sleeps until the
 /// runtime grants the first frame.
 pub fn boot() {
-    pace_turns(PACE);
     tick().on_tick(
         Phase::interaction as u8,
         controller::controller_step,
@@ -303,15 +301,6 @@ pub struct TurnGrant {
     pub interactive: bool,
 }
 
-/// How the turns are paced where the core's own thread begins them.
-const PACE: TurnPace = TurnPace {
-    pace_hz: PACE_HZ,
-    margin_share: MARGIN_SHARE,
-    batch_frames: BATCH_FRAMES,
-    settle_ms: SETTLE_MS,
-    asked_ms: 0.0,
-};
-
 static FRAME: Global<Option<TurnGrant>> = Global::new();
 static FRAMES: Global<Notify> = Global::new();
 static NEW_FRAME: Global<bool> = Global::new();
@@ -398,13 +387,7 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
     );
     set_renderer_frame(&frame);
     if let Some(interval_ms) = frame.interval_ms {
-        let asked = TurnPace {
-            asked_ms: interval_ms,
-            ..PACE
-        };
-        if !pace_turns(asked) {
-            cmd::ui::turn_pace(&cmd::TurnPace { interval_ms });
-        }
+        door().send(&SysPace { interval_ms });
     }
     let end = now();
     perf_frame(FrameTurn {

@@ -378,8 +378,8 @@ does not need to, so the same world runs everywhere. xpute's own documents
 describe that machine; this one is about what pixelet does on it.
 
 The core is given its time in **turns**. Each turn is paced to the display and
-arrives as a grant that carries its budget and how many reads it may start
-(`turn.rs` `TurnGrant`). A turn runs one task in one order: the effects of the
+arrives as a grant that carries its budget, frame pacing's SYS_FRAME before
+xpute's SYS_TURN (`turn.rs` `TurnGrant`). A turn runs one task in one order: the effects of the
 last one, the tick's phases under the budget, then the frame, and none of it
 where the GPU cannot take a frame yet. The core's memory is laid out once at
 boot, in sections that nothing grows past (`sys/section.rs`), so a long

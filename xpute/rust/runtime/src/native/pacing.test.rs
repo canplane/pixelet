@@ -7,7 +7,6 @@ const PACE: Pace = Pace {
     margin_share: 0.1,
     batch_frames: 2.0,
     settle_ms: 150.0,
-    asked_ms: 0.0,
 };
 
 fn at(hz: f64, pace: Pace) -> (Pacing, f64, f64) {
@@ -39,13 +38,8 @@ fn every_frame_at_60_hz() {
 
 #[test]
 fn the_core_asks_a_slower_pace() {
-    let (mut p, t, refresh) = at(
-        60.0,
-        Pace {
-            asked_ms: 33.0,
-            ..PACE
-        },
-    );
+    let (mut p, t, refresh) = at(60.0, PACE);
+    p.ask(33.0);
     assert!(p.admit(t));
     assert!(!p.admit(t + refresh));
     assert!(p.admit(t + 2.0 * refresh));

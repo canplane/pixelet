@@ -17,8 +17,8 @@
  * and every moment asked for an earlier wake: a moment the policy hands back
  * from before the turn runs nothing, and only a turn the runtime still wants
  * is asked for again, so the scheduler never holds a request it no longer
- * means. A core on a thread of its own has no scheduler here: that thread
- * begins its turns (runtime.ts `Core.thread`).
+ * means. A device's core has no scheduler here: its thread begins its turns
+ * (xpute-runtime native/thread.rs).
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";

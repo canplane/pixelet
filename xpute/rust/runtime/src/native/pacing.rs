@@ -4,7 +4,15 @@
 //! refresh as the frames show it, which frames begin a turn, and what each turn
 //! may spend. @xpute/runtime sched/frame_pacing.ts is this policy on a page.
 
-use xpute_core::sched::frame::Pace;
+/// The program's numbers for frame pacing, as a page's runtime is given them
+/// (@xpute/runtime sched/frame_pacing.ts `FramePacingConfig`).
+#[derive(Clone, Copy)]
+pub struct Pace {
+    pub pace_hz: f64,
+    pub margin_share: f64,
+    pub batch_frames: f64,
+    pub settle_ms: f64,
+}
 
 const WINDOW: usize = 64;
 /// A gap past this between two frames is the display's having stopped.
@@ -22,6 +30,8 @@ pub(super) struct Grant {
 
 pub(super) struct Pacing {
     pace: Pace,
+    /// The least interval the core asked between turns (SYS_PACE), 0 for none.
+    asked_ms: f64,
     gaps: [f64; WINDOW],
     gap_at: usize,
     seen: usize,
@@ -40,8 +50,8 @@ impl Pacing {
                 margin_share: 0.0,
                 batch_frames: 1.0,
                 settle_ms: 0.0,
-                asked_ms: 0.0,
             },
+            asked_ms: 0.0,
             gaps: [0.0; WINDOW],
             gap_at: 0,
             seen: 0,
@@ -54,6 +64,10 @@ impl Pacing {
 
     pub fn set(&mut self, pace: Pace) {
         self.pace = pace;
+    }
+
+    pub fn ask(&mut self, interval_ms: f64) {
+        self.asked_ms = interval_ms;
     }
 
     pub fn input(&mut self, now: f64) {
@@ -96,7 +110,7 @@ impl Pacing {
         let spread = refresh_ms / 8.0;
         let divisor = ((1000.0 / self.pace.pace_hz + spread) / refresh_ms)
             .floor()
-            .max(((self.pace.asked_ms - spread) / refresh_ms).ceil())
+            .max(((self.asked_ms - spread) / refresh_ms).ceil())
             .max(1.0);
         divisor * refresh_ms
     }

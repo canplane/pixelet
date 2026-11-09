@@ -1,13 +1,13 @@
 // @pxl/client/runtime/start.ts
 
 /** This is the core as xpute's runtime boots it where the core's memory is: on
- * a device's UI thread or in a page's worker. */
+ * a device's runtime thread or in a page's worker. */
 
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import type { i32 } from "@xpute/kit/abi/word.ts";
 import { FramePacing } from "@xpute/runtime";
 import { type Config, type FrameGrant, type Manifest } from "@xpute/runtime";
-import { Command, read, ui_mem } from "@/abi/cmd.spec.ts";
+import { ui_mem } from "@/abi/cmd.spec.ts";
 import * as text from "@/abi/text.spec.ts";
 import { MACHINE } from "@/abi/machine.spec.ts";
 import {
@@ -17,14 +17,13 @@ import {
   SETTLE_MS,
 } from "@/abi/pacing.spec.ts";
 import { namespace } from "@/service/sys/fs/namespace.ts";
-import { submit_grant } from "@/service/core/turn.ts";
 import { text_layout, text_raster } from "@/service/core/text.ts";
 import { answer, type PerfRead } from "@/service/core/perf.ts";
 import type { Perf } from "@/service/core/core.ts";
 import { source } from "@/service/platform/core.ts";
 import { gpu } from "@/service/platform/gpu.ts";
 
-function calls(pacing: FramePacing) {
+function calls() {
   return new Map<number, (f: BranchCursor) => i32 | void>([
     [
       text.Command.TEXT_LAYOUT,
@@ -33,10 +32,6 @@ function calls(pacing: FramePacing) {
     [
       text.Command.TEXT_RASTER,
       (f) => text_raster(text.read[text.Command.TEXT_RASTER](f)),
-    ],
-    [
-      Command.TURN_PACE,
-      (f) => pacing.pace(read[Command.TURN_PACE](f).interval_ms),
     ],
   ]);
 }
@@ -51,7 +46,7 @@ export function config(handheld: boolean): Config<FrameGrant> {
     batch_frames: BATCH_FRAMES,
     settle_ms: SETTLE_MS,
   });
-  const asked = calls(pacing);
+  const asked = calls();
   return {
     core: source({
       bytes: handheld ? Math.min(...sizes) : Math.max(...sizes),
@@ -59,7 +54,7 @@ export function config(handheld: boolean): Config<FrameGrant> {
     fs: namespace(),
     gpu,
     policy: pacing,
-    submit: submit_grant,
+    submit: () => {},
     program: (_tag, cmd, f) => asked.get(cmd)?.(f!),
     mem_of: ui_mem,
   };

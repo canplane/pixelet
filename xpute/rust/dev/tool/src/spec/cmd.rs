@@ -44,9 +44,9 @@ struct Member {
     pkt: Option<Vec<Field>>,
     #[serde(skip)]
     import: Option<Vec<Field>>,
-    /// An `import` answered before the core's call returns.
+    /// The fields of an `import` that say where the memory it names lies.
     #[serde(skip)]
-    call: bool,
+    mem: Option<[String; 2]>,
     /// This is the packet of an `import`'s completion, which the runtime writes
     /// and the core reads.
     #[serde(skip)]
@@ -221,6 +221,7 @@ fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
             } else {
                 (None, Some(c.pkt.unwrap_or_default()))
             };
+            let mem = c.mem.clone();
             if let Some(m) = c.mem {
                 let has = |n: &str| {
                     import
@@ -246,7 +247,7 @@ fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
                 doc: c.doc,
                 pkt,
                 import,
-                call: c.call,
+                mem,
                 reply: c.reply,
             }));
         }

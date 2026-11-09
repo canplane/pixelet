@@ -150,10 +150,12 @@ On a device, a process holds one core, and the core runs on a thread of its own,
 because its global state is sound on one thread only. That thread sleeps until
 a display frame finds a turn wanted, and the platform's display link tells it of
 each frame, so how late the JavaScript thread is does not move the turn. It paces
-the turns itself, by the same policy a page's scheduler follows, with the numbers
-the core gives it. The runtime runs on the UI's JavaScript thread. It writes the
-submission ring and asks for a turn, and when a turn ends, the core's thread tells
-the runtime, which reads the completion ring dry. Four
+the turns itself, by frame pacing with the program's numbers, the one policy a
+device's runtime runs. The runtime has a thread of its own, in Rust: it writes the
+submission ring and asks for a turn, and when a turn ends, it reads the
+completion ring dry. The UI's JavaScript thread holds no runtime; it reaches the
+runtime as a page's UI reaches its worker, posting frames and taking those it
+hears in a batch, and only what backs the files stays beside it. Four
 rules hold that loop together: no turn asked for is lost, every wait has someone to answer
 it, a turn begins only when the completion ring has room for everything one turn
 may post, and every turn takes the submission ring first.

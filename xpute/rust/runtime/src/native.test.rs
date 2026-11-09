@@ -26,7 +26,6 @@ fn cfg(heap_at: u32) -> Config {
             stop_hook: None,
             admit_frame: None,
             publish: None,
-            pace: None,
         },
     }
 }

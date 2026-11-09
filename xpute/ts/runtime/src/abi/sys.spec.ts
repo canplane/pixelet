@@ -8,7 +8,8 @@
  * SYS_ATTACH, SYS_SUSPEND and SYS_RESUME tell the core that a runtime attached, for the
  * first time or again, that the core is about to be frozen, and that it was woken; what
  * each one means the core keeps or resets is the core's to decide. SYS_TURN marks a turn
- * that the runtime's scheduling policy grants, and carries the wall clock. SYS_ABORT
+ * that the runtime's scheduling policy grants, and carries the wall clock; SYS_FRAME and
+ * SYS_PACE carry frame pacing's grant and the core's asked rate. SYS_ABORT
  * reports the broken invariant the core stops on, and the runtime hears it as a VMM hears
  * its guest exit.
  *
@@ -52,6 +53,11 @@ export interface SysAbort {
   file: string;
 }
 
+/** Command.SYS_PACE's packet. */
+export interface SysPace {
+  interval_ms: f64;
+}
+
 /** Each import's packet, read from its branch, by its number. */
 export const read = {
   [Command.SYS_ABORT]: (b: BranchCursor): SysAbort => ({
@@ -64,6 +70,9 @@ export const read = {
     b_high: b.at(6).get<u32>(),
     file: b.at(7).get<string>(),
   }),
+  [Command.SYS_PACE]: (b: BranchCursor): SysPace => ({
+    interval_ms: b.at(0).get<f64>(),
+  }),
 };
 
 /** What the runtime sends on the sys protocol: each command by its number, and
@@ -73,6 +82,7 @@ export type SysSend = {
   [Command.NOP]: [val: u32];
   [Command.SYS_ATTACH]: [];
   [Command.SYS_TURN]: [unix_ms: f64];
+  [Command.SYS_FRAME]: [refresh_ms: f64, paced_ms: f64, interactive: boolean];
 };
 export type SysRequest = Record<never, never>;
 export type SysCall = {
@@ -88,6 +98,10 @@ export type SysProtocol = Protocol<SysSend, SysRequest, SysCall>;
 export interface SysImports {
   /** Reports the broken invariant the core stops on (xpute-kit status/bug.rs). */
   [Command.SYS_ABORT](e: SysAbort): void;
+  /** The least interval the core asks between its turns, 0 for none: its load's word on the
+   * rate, which the next SYS_FRAME's `paced_ms` answers, a whole number of refreshes. A policy
+   * that paces no display ignores it. */
+  [Command.SYS_PACE](e: SysPace): void;
 }
 
 /** `h` as the handler a runtime routes the sys protocol's commands to, each one read and
@@ -97,6 +111,8 @@ export function sys_imports(h: SysImports): OnImport {
     switch (cmd) {
       case Command.SYS_ABORT:
         return h[Command.SYS_ABORT](read[Command.SYS_ABORT](need(f)));
+      case Command.SYS_PACE:
+        return h[Command.SYS_PACE](read[Command.SYS_PACE](need(f)));
       default:
         return Errno.ENOSYS;
     }

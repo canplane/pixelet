@@ -19,6 +19,15 @@ export interface Grant {
   deadline: f64;
 }
 
+/** What frame pacing says of the display frame a turn is granted at
+ * (SYS_FRAME). `refresh_ms` is the display's refresh, and `paced_ms` the
+ * interval turns are paced at, which is the refresh times the divisor. */
+export interface Frame {
+  refresh_ms: f64;
+  paced_ms: f64;
+  interactive: boolean;
+}
+
 export interface SchedulingPolicy<G extends Grant = Grant> {
   /** Calls `consider` at the next moment a turn might run: an animation
    * frame on a page, the next pass of a loop elsewhere. */
@@ -33,4 +42,10 @@ export interface SchedulingPolicy<G extends Grant = Grant> {
   /** Hears an input at `now`; a policy may treat the turns after it as
    * interactive (frame_pacing.ts). */
   input?(now: f64): void;
+  /** The frame a policy that paces a display grants the turn at, which the
+   * core is told before the turn (SYS_FRAME). */
+  frame?(grant: G): Frame;
+  /** Hears the least interval the core asks between its turns (SYS_PACE), 0
+   * for none. */
+  pace?(interval_ms: f64): void;
 }

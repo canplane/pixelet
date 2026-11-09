@@ -108,11 +108,11 @@ struct Program {
 };
 
 // The door hands the program a change in its life that its runtime tells it
-// of, a turn the scheduling policy grants (SYS_TURN), the GPU's answer, a
+// of, a turn the scheduling policy grants (SYS_TURN) and its frame (SYS_FRAME), the GPU's answer, a
 // surface the UI lends it, an open or a close the runtime has completed, a file
 // changed under it (FS_CHANGED), or a command of the program's own. Nothing
 // answers a completion, so what the program returns for one is dropped.
-using Submission = std::variant<Life, abi::sys::SysTurn, GpuReady, Surface, FsOpened, FsClosed, abi::fs::FsChanged, Program>;
+using Submission = std::variant<Life, abi::sys::SysTurn, abi::sys::SysFrame, GpuReady, Surface, FsOpened, FsClosed, abi::fs::FsChanged, Program>;
 
 // A stat says how full the rings ran since the stat was last taken
 // (`Door::take_stat`). Each figure is the most it reached.
@@ -436,6 +436,7 @@ class Door {
         if (is(S::SYS_SUSPEND)) return handle(Submission{Life::suspend});
         if (is(S::SYS_RESUME)) return handle(Submission{Life::resume});
         if (is(S::SYS_TURN)) return read_then<abi::sys::SysTurn>(pkt, handle, [](auto t) { return t; });
+        if (is(S::SYS_FRAME)) return read_then<abi::sys::SysFrame>(pkt, handle, [](auto t) { return t; });
         if (is(G::GPU_READY)) return handle(Submission{GpuReady{}});
         if (is(G::GPU_SURFACE_OPEN)) return handle(Submission{Surface{SurfaceOpen{}}});
         if (is(G::GPU_SURFACE_RESIZE)) return read_then<abi::gpu::GpuSurfaceResize>(pkt, handle, [](auto c) { return Surface{c}; });
