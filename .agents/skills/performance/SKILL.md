@@ -23,6 +23,8 @@ Make the program faster while keeping every condition the design met.
     that Metro is not on 8081).
   - release: a page's is `PXL_PERF_DRIVE=1 make preview`; a device's is the
     device-build skill's Release build with the variable set.
+
+  When the measuring ends, the device takes a Release built without it.
 - One script a vendor, each one run: `script/perf/<vendor>.py <target> <dir>`.
   `chrome`, `safari`, `android-chrome` and `ios-safari` take a URL,
   `android-app` an APK, `ios-app` an app with `IOS_DEVICE` set to its devicectl
