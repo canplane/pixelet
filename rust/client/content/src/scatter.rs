@@ -2,9 +2,8 @@
 
 //! wgsl-port: the decor the ground holds, never stored, as a tree of hashes. A brick at a
 //! decor's root zoom (`ROOTS`) holds as many as one hash draws around its mean, and each
-//! column hands its count down to its four children, one hash a column: evenly down to a
-//! clip level's cells, then by the hash's weights to the leaf cells, a unit each, which hold
-//! one or none (`cnt`). A leaf cell's own hash draws its
+//! column hands its count down to its four children by weights near a half that one hash a
+//! column draws (`near_half`), to the leaf cells, a unit each, which hold one or none (`cnt`). A leaf cell's own hash draws its
 //! variant and heading (`candidate_at`); one whose box meets the box of a neighbor that drew
 //! lower gives way to it (`retained`). At a zoom, a decor stands as itself where its box keeps
 //! an eighth of that zoom's cell or more, as a folded cube is drawn, and is none where it
@@ -83,17 +82,17 @@ pub const SPLIT: u32 = 0x5b17_dec0;
 /// How many of the `k`-th decor the column `b` at `zoom` holds; a leaf cell holds one or
 /// none. Its root's column (`ROOTS`) holds as many as a hash draws around its mean, the
 /// decor's chance for each leaf cell under it, rounded at a uniform draw. Each column's count
-/// is then halved across and along, exactly, evenly within the brick (`even`) and past that
-/// by weights its hash draws, with none past what its leaf cells hold. Coarser than the root, it is none. Every word is read by value.
+/// is then halved across and along, exactly, by weights its hash draws (`near_half`), with
+/// none past what its leaf cells hold. Coarser than the root, it is none. Every word is read by value.
 pub fn cnt(k: usize, zoom: Zoom, b: [i32; 2]) -> u32 {
     cnt_of([SEEDS[k], CHANCES[k], ROOTS[k]], zoom, b)
 }
 
-/// The weight `w` keeps a brick's count even across its cells: an even half, its odd one
-/// going by `w`'s low bits (`halve`). Random weights over the brick's depth would heap its
-/// decor in a few cells and leave the rest bare.
-const fn even(w: u32) -> u32 {
-    w & 0xffff | 0x8000_0000
+/// A hash's weight held within a sixteenth of a half, its low bits still the draw that rounds
+/// (`halve`). Weights over the whole range would heap a brick's decor in a few cells and leave
+/// the rest bare.
+const fn near_half(w: u32) -> u32 {
+    0x7000_0000 + (w & 0x1fff_ffff)
 }
 
 /// The mean a column at `root` holds, in 16.16 fixed point: the chance's top half for each
@@ -121,21 +120,15 @@ pub fn cnt_of([seed, chance, root]: [u32; 3], zoom: Zoom, b: [i32; 2]) -> u32 {
     while z < zoom && n > 0 {
         // Halved across, then along, none past what its leaf cells hold
         // (`halve::quarter`), the one rule the caves and the cumulus hand
-        // theirs down by: evenly within the brick, each half's odd one going
-        // by a draw of its own, and by the hash's weights past it.
+        // theirs down by, each half along by a weight of its own.
         let mut draws = SplitMix32::new(node_seed(seed ^ SPLIT, (z, at(z))));
         let c = at(z + 1);
         let quarter = (c[0] & 1 | (c[1] & 1) << 1) as usize;
         let cap = 1u32 << (2 * (LEAF_CELL_ZOOM - z - 1));
         let cap = if cap > 0xffff { 0xffff } else { cap };
         let [across, along, other] = [draws.next_u32(), draws.next_u32(), draws.next_u32()];
-        let weights = match z < root + BRICK_SHIFT {
-            true => [
-                even(across),
-                even(if quarter & 1 == 0 { along } else { other }),
-            ],
-            false => [across, along],
-        };
+        let along = if quarter & 1 == 0 { along } else { other };
+        let weights = [near_half(across), near_half(along)];
         n = halve::quarter(n, cap, weights, quarter as u32);
         z += 1;
     }

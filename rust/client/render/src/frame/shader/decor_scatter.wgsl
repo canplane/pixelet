@@ -13,6 +13,11 @@ fn share_quarter(n: u32, cap: u32, across: u32, along: u32, q: u32) -> u32 {
   return select(half - b, b, (q & 2u) == 0u);
 }
 
+/// This is the port of pxl-content `scatter::near_half`.
+fn near_half(w: u32) -> u32 {
+  return 0x70000000u + (w & 0x1fffffffu);
+}
+
 /// `scatter::cnt`: how many of decor `k` the column `b` at `zoom` holds.
 fn scatter_cnt(k: u32, zoom: u32, b: vec2<i32>) -> u32 {
   return scatter_cnt_of(row_word(k, ROW_SEED), row_word(k, ROW_CHANCE), decor_root(k), zoom, b);
@@ -31,11 +36,8 @@ fn scatter_cnt_of(seed: u32, chance: u32, root: u32, zoom: u32, b: vec2<i32>) ->
     let h = quad_seed(seed ^ SPLIT_TAG, z, b >> vec2<u32>(zoom - z));
     let c = vec2<u32>(b >> vec2<u32>(zoom - z - 1u)) & vec2<u32>(1u);
     let cap = min(1u << (2u * (LEAF_CELL_ZOOM - z - 1u)), 0xffffu);
-    let evenly = z < root + BRICK_SHIFT;
-    let kept = select(0xffffffffu, 0xffffu, evenly);
-    let half = select(0u, 0x80000000u, evenly);
-    let along = select(draw(h, 1u), draw(h, 2u), evenly && c.x == 1u);
-    n = share_quarter(n, cap, (draw(h, 0u) & kept) | half, (along & kept) | half, c.x | (c.y << 1u));
+    let along = select(draw(h, 1u), draw(h, 2u), c.x == 1u);
+    n = share_quarter(n, cap, near_half(draw(h, 0u)), near_half(along), c.x | (c.y << 1u));
     z += 1u;
   }
   return n;
