@@ -36,13 +36,17 @@ the page's.
   up where the stream drew, as on the page. An admission flag kept beside it
   can be overwritten by the next turn's question before the stream it belongs
   to has run.
-- **One Metal command buffer a pass.** wgpu-hal 30.0.1 makes one
-  `MTLCommandBuffer` a pass, and the driver holds each until it completes, about
-  2.3 MiB (femtovg#367, gfx-rs/wgpu#10506). A frame of many passes reaches the
-  iPhone's memory limit at boot. `xpute/rust/vendor/wgpu-hal` shares one a
-  command encoder. It tells wgpu's internal segments by their labels, so
-  `InstanceFlags::DISCARD_HAL_LABELS` stays off, and a wgpu upgrade checks those
-  labels. The user allowed a patch where the fault is wgpu's on 2026-11-09.
+- **One command buffer a pass.** wgpu-core 30.0.1 encodes each pass into a hal
+  command buffer of its own, with another before it for the pass's barriers. On
+  Metal the driver holds each `MTLCommandBuffer` until it completes, about 2.3
+  MiB (femtovg#367, gfx-rs/wgpu#10506), and a frame of many passes reached the
+  iPhone's memory limit at boot. On Vulkan each pool, reset without
+  `RELEASE_RESOURCES` and reused, keeps the memory of its heaviest frame
+  (gfx-rs/wgpu#5738, an Adreno at 2.1 GB). `xpute/rust/vendor/wgpu-core` records a
+  pass, encodes its barriers, then replays it into the encoder's open buffer, so an
+  encoder is one hal command buffer on every backend: the prototype attached to
+  #5738, whose recorder extends borrows that wgpu-core's trackers keep alive. The
+  user allowed a patch where the fault is wgpu's on 2026-11-09.
 - **Taking the simulator's word.** It reports the Apple2 family and runs indirect
   calls on the Mac's GPU, which `supportsFamily` cannot say. wgpu decides this
   by `target_abi = "sim"` (gfx-rs/wgpu#10189, carried in the vendored crate),
