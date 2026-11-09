@@ -15,12 +15,6 @@ fn px_start(aim: Aim, id: vec2<u32>, size: vec2<u32>) -> Start {
   return resumed(aim, cell_start(grid_cell(px_tan(id, size))), LINE_WORDS, NONE);
 }
 
-/// The pixel's start as `px_start` gives it, moved on to `t`, where its walk over the node
-/// cache left it (resume.wgsl `resumed_at`).
-fn px_start_at(aim: Aim, id: vec2<u32>, size: vec2<u32>, t: f32) -> Start {
-  return resumed_at(aim, cell_start(grid_cell(px_tan(id, size))), t, LINE_WORDS, NONE);
-}
-
 /// The face that the ray `aim` entered where walk `w` stopped: twice its axis, plus one where
 /// the ray runs up that axis (pxl-engine `ray::FACE_SHIFT`).
 fn face_of(aim: Aim, w: WalkEnd) -> u32 {

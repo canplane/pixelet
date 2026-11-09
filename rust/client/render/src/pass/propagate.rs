@@ -94,14 +94,6 @@ impl Propagate {
         }
     }
 
-    pub fn release(mut self) {
-        for id in [self.uniform, self.bounds] {
-            release(id);
-        }
-        self.group.release();
-        self.bounds_group.release();
-    }
-
     /// Writes this frame's uniform: the eye's view-projection `view_proj` and the light's
     /// `light_view_proj`, both taking units measured from the eye, and the reach of a
     /// receiver's taps, `spread` texels each way on a map `side` texels a side.

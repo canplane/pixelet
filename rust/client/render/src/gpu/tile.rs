@@ -79,8 +79,8 @@ pub struct TileGrid {
     /// frame drawn through the gate.
     side: u32,
     damage_frames: u32,
-    /// The span the marks' passes are timed in (`dispatch_damage`, `dispatch_rect_args`):
-    /// the screen's or the light's.
+    /// The span the marks' passes are timed in: the screen's (`dispatch_damage`) or the
+    /// light's (`dispatch_rect_args`).
     span: GpuSpanName,
     /// The uniform by which a frame draws the tiles. It claims the claimed tiles alone or
     /// every tile (`damage`).
@@ -181,22 +181,6 @@ impl TileGrid {
                 COMPUTE_DAMAGE_RECT,
                 &DAMAGE_RECT_GROUP,
             ),
-        }
-    }
-
-    pub fn release(mut self) {
-        self.damage_group.release();
-        let (args, group) = self.rect_args.map_or((0, 0), |(a, _, g)| (a, g));
-        for id in [
-            self.uniform,
-            self.changed_at,
-            self.damage_uniform,
-            self.new_damage_rect,
-            self.damage_rect,
-            args,
-            group,
-        ] {
-            release(id);
         }
     }
 
