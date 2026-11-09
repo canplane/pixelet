@@ -1,6 +1,6 @@
 // pxl-engine/cast.rs
 
-//! wgsl-twin: the first cell a ray meets, at the zoom its distance asks: one descent for
+//! wgsl-port: the first cell a ray meets, at the zoom its distance asks: one descent for
 //! the CPU and the GPU, over a query each answers in its own way (`Query`). A node coarser
 //! than the zoom its distance asks is asked whether anything under it is not transparent. If
 //! nothing is, the ray goes on past it whole; otherwise the ray descends into the children it

@@ -1,6 +1,6 @@
 // pxl-engine/clipmap.rs
 
-//! wgsl-twin: the ground's cells as they are held, one clipmap level (Tanner 1998) a zoom,
+//! wgsl-port: the ground's cells as they are held, one clipmap level (Tanner 1998) a zoom,
 //! around a center. A ray observes a zoom's cells only within `RADIUS` of those cells from
 //! the eye (pxl-spec space/layer/demand.rs `band`; the top zoom's by its reach), so a clipmap
 //! level `CLIP_SIZE` cells a side around the eye holds every cell it can observe at that

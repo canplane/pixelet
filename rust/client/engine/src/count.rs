@@ -1,6 +1,6 @@
 // pxl-engine/count.rs
 
-//! wgsl-twin: the counters of what a cast did, kept only while the `ray_cnts` setting
+//! wgsl-port: the counters of what a cast did, kept only while the `ray_cnts` setting
 //! is on. The eye and the light are cast by the same passes, and each of them has its own
 //! run of `LANES` counters in one array (`at`), which pxl-render ray/count.rs reads back
 //! and sums.

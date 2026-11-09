@@ -287,10 +287,10 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
     // An id is its kind over its shape (id.json).
     let id = read(ID_JSON)?;
     let shape_bits = id
-        .get("SHAPE_BITS")
+        .get("IDX_BITS")
         .map(Node::val)
         .and_then(Node::num)
-        .ok_or(format!("{ID_JSON}: no SHAPE_BITS"))? as u32;
+        .ok_or(format!("{ID_JSON}: no IDX_BITS"))? as u32;
     let kind = |name: &str| {
         id.get("KIND")
             .and_then(|c| c.get(name))

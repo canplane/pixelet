@@ -1,6 +1,6 @@
 // pxl-engine/raster.rs
 
-//! wgsl-twin: the voxels drawn as boxes, so that the rasterizer leaves at each drawn pixel
+//! wgsl-port: the voxels drawn as boxes, so that the rasterizer leaves at each drawn pixel
 //! the cell that pixel shows (pxl-render raster.wgsl, ray/raster.rs). The eye's voxels
 //! and the light's are each kept in a record across frames (`record`), and every held voxel
 //! in view is drawn each frame its observer casts (pxl-render record_draw.wgsl). A box is a

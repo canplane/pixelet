@@ -1,6 +1,6 @@
 // pxl-engine/support.rs
 
-//! wgsl-twin: where something stands, asked of the world's one query (pxl-core
+//! wgsl-port: where something stands, asked of the world's one query (pxl-core
 //! domain/query/support.rs, a walker's support). A column's surface is the first cell that a
 //! ray down the column from the world's top cannot see through at a given cell zoom, with its
 //! top as drawn (`column_surface`). The module also holds the query's cursor

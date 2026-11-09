@@ -1,6 +1,6 @@
 // pxl-engine/light.rs
 
-//! wgsl-twin: the world's depth seen from the light, one ray for each texel of the light's
+//! wgsl-port: the world's depth seen from the light, one ray for each texel of the light's
 //! shadow map (pxl-render light.wgsl `light_cs`). Each texel's ray starts where the texel lies
 //! on the light box's near plane and runs along the light's rays to the far plane, walked
 //! through the same descent the eye's rays take. Every node is asked at its tile's band: the

@@ -1,6 +1,6 @@
 // pxl-engine/object.rs
 
-//! wgsl-twin: what is placed, as a descent asks it. It is the objects' one tree (pxl-core
+//! wgsl-port: what is placed, as a descent asks it. It is the objects' one tree (pxl-core
 //! domain/layer/object/store.rs), read where it lives: two columns of one word a slot.
 //! `first_child` holds a branch's child group's first slot with `BRANCH` set, or 0 for a
 //! leaf. `data` holds a leaf's value and its record's handle, or a branch's fold: the kind

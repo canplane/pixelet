@@ -1,18 +1,18 @@
 // pxl-spec/asset/id.rs
 
-//! An asset's id: its kind over its shape (`spec/spec/asset/id.json`).
+//! An asset's id: its kind over its index (`spec/spec/asset/id.json`).
 
 #[path = "id.spec.rs"]
 mod spec;
-pub use spec::{Kind, SHAPE_BITS};
+pub use spec::{Kind, IDX_BITS};
 
-/// An asset's id, `kind << SHAPE_BITS | shape`, as the code carries it: a
+/// An asset's id, `kind << IDX_BITS | idx`, as the code carries it: a
 /// u32 whose values a u16 holds. A value past a u16 is refused where it is
 /// read (`kind_of`, the store's write).
 pub type AssetId = u32;
 
-pub(crate) const fn asset_id(kind: Kind, shape: u32) -> AssetId {
-    (kind as u32) << SHAPE_BITS | shape
+pub(crate) const fn asset_id(kind: Kind, idx: u32) -> AssetId {
+    (kind as u32) << IDX_BITS | idx
 }
 
 impl Kind {
@@ -35,5 +35,5 @@ impl Kind {
 pub fn kind_of(id: AssetId) -> Option<Kind> {
     u16::try_from(id)
         .ok()
-        .and_then(|v| Kind::of((v >> SHAPE_BITS) as u8))
+        .and_then(|v| Kind::of((v >> IDX_BITS) as u8))
 }

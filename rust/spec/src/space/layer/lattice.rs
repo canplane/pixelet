@@ -1,6 +1,6 @@
 // pxl-spec/space/layer/lattice.rs
 
-//! wgsl-twin: a layer's lattice. A lattice says how many cells a layer's tile holds on a
+//! wgsl-port: a layer's lattice. A lattice says how many cells a layer's tile holds on a
 //! side, which is the same at every zoom, and how its cells scale against the camera grid's.
 //! The zooms and indices of the layer's cells follow from it, and the CPU and the GPU read
 //! tiles by them alike. Placing a lattice in the world, such as finding a position's cell or a

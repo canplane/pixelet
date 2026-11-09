@@ -2,8 +2,8 @@
 //
 // GENERATED from spec/spec/asset/id.json
 //
-// An asset's id is a u16: its kind over which shape of that kind it is.
-// `id >> SHAPE_BITS` is the kind, the low bits the shape. The kind is what an
+// An asset's id is a u16: its kind over its index within that kind.
+// `id >> IDX_BITS` is the kind, the low bits the index. The kind is what an
 // asset is as a shape: a cube is the cell itself, decor a model with a size of
 // its own, a marker flat to the camera. What stands in a cell of the world's
 // grid is stored as its asset's id (pxl-spec object.rs).
@@ -19,7 +19,7 @@
     reason = "generated from the spec"
 )]
 
-pub const SHAPE_BITS: u32 = 10;
+pub const IDX_BITS: u32 = 10;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]

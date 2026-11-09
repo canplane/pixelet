@@ -1,6 +1,6 @@
 // pxl-engine/eye.rs
 
-//! wgsl-twin: the layout of the eye a cast is made from, as the words the core writes
+//! wgsl-port: the layout of the eye a cast is made from, as the words the core writes
 //! (pxl-core domain/view/lens.rs `gpu_cast` and domain/scene/cast.rs `eye`) and every GPU
 //! reader takes (pxl-render eye_bind.wgsl). Each constant is a word's place in that layout,
 //! and this file is the only place the layout is written.

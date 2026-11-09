@@ -1,6 +1,6 @@
 // pxl-content/strata.rs
 
-//! wgsl-twin: the ground's strata by depth under a column's face, after Minecraft Beta's
+//! wgsl-port: the ground's strata by depth under a column's face, after Minecraft Beta's
 //! `replaceBlocksForBiome`: the face's look on top, a filler of soil, sand or water,
 //! sandstone under sand, and stone under all, down to the bedrock. It also says how high a
 //! cube may reach above the face, and what the Earth's ground is past the service area.

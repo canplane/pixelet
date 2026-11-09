@@ -1,6 +1,6 @@
 // pxl-spec/value.rs
 
-//! wgsl-twin: the value space that every layer stores and the engine reads. A ground cell
+//! wgsl-port: the value space that every layer stores and the engine reads. A ground cell
 //! is a byte. An object's value is a u16: its byte range is the ground's, and the range past
 //! a byte holds what only an object can be. Decor values lie past the cube kind
 //! (`asset/id.json`). This fixes the sentinels and the range each class of value takes; the
@@ -31,7 +31,7 @@ pub const TRANSPORTS: [u32; 2] = [37, 55];
 pub const PIER: u32 = 35;
 
 /// The colors only an object takes, first and last: past air, within the
-/// cube kind (`asset/id.json` `SHAPE_BITS`).
+/// cube kind (`asset/id.json` `IDX_BITS`).
 pub const OBJECTS: [u32; 2] = [0x101, 0x3ff];
 
 /// Whether a value read into a word is a ground palette entry (`GROUNDS`). A GPU has no byte

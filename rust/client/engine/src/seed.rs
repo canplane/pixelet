@@ -1,6 +1,6 @@
 // pxl-engine/seed.rs
 
-//! wgsl-twin: a node's seed, the u32 hash of a node's zoom and cells from which every
+//! wgsl-port: a node's seed, the u32 hash of a node's zoom and cells from which every
 //! random draw over the world's nodes starts: the caves, the ground's decor, and a placed
 //! decor's pose.
 

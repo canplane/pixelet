@@ -1,6 +1,6 @@
 // pxl-content/scatter.rs
 
-//! wgsl-twin: the decor the ground holds, never stored, as a tree of hashes. A brick at a
+//! wgsl-port: the decor the ground holds, never stored, as a tree of hashes. A brick at a
 //! decor's root zoom (`ROOTS`) holds as many as one hash draws around its mean, and each
 //! column hands its count down to its four children, one hash a column: evenly down to a
 //! clip level's cells, then by the hash's weights to the leaf cells, a unit each, which hold

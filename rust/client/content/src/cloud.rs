@@ -1,6 +1,6 @@
 // pxl-content/cloud.rs
 
-//! wgsl-twin: the cloud field that the cumulus and the sheets share: the lattice it lies
+//! wgsl-port: the cloud field that the cumulus and the sheets share: the lattice it lies
 //! on, the wind that carries it and the hash its cells draw from. The sheets sum the hash's
 //! noise on the GPU (pxl-render frame/shader/noise.wgsl), whose `lattice_hash` pxl-render
 //! build.rs writes from `HASH_IN`, `HASH_ROUNDS`, `HASH_LAST` and `HASH_SHARE_BITS`. The

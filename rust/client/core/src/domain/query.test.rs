@@ -981,11 +981,11 @@ fn area_edge_leaf_cell_thick() {
 fn stored_decor_past_the_catalog_is_unknown() {
     use crate::domain::layer::object::asset::Asset;
     use crate::domain::layer::object::meta::decor_instance;
-    use pxl_spec::asset::id::SHAPE_BITS;
+    use pxl_spec::asset::id::IDX_BITS;
     use pxl_spec::space::layer::octant::Octant;
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
-    let past: AssetId = (1 << SHAPE_BITS) | ((1 << SHAPE_BITS) - 1);
+    let past: AssetId = (1 << IDX_BITS) | ((1 << IDX_BITS) - 1);
     let mut store = Store::default();
     write(&mut store, [x, y, 5.0], OBJECT_COARSEST, past);
     let at = Octant::holding(OBJECT_COARSEST, &world::point(x, y, 5.0));

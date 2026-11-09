@@ -9,17 +9,17 @@ import {
   type CubeSection,
 } from "./cube.spec.ts";
 import { decor, DECOR_LABEL, DECORS } from "./decor.spec.ts";
-import { KIND, SHAPE_BITS } from "./id.spec.ts";
+import { KIND, IDX_BITS } from "./id.spec.ts";
 
-/** An asset's number: its kind shifted left by SHAPE_BITS, with its shape in
+/** An asset's number: its kind shifted left by IDX_BITS, with its shape in
  * the low bits. */
 export type AssetId = u16;
 
-/** The marker's kind has no other shape. */
-export const MARKER: AssetId = KIND.marker << SHAPE_BITS;
+/** The marker's kind has no other index. */
+export const MARKER: AssetId = KIND.marker << IDX_BITS;
 
 export function kindOf(id: AssetId): number {
-  return id >> SHAPE_BITS;
+  return id >> IDX_BITS;
 }
 
 /** A cube is a ground palette entry or a placed color, and both are numbered

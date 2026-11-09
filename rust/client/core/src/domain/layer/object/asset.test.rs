@@ -2,7 +2,7 @@
 
 use pxl_spec::asset::cube::{object, sentinel, ALL_CUBES};
 use pxl_spec::asset::decor::DECORS;
-use pxl_spec::asset::id::{Kind, SHAPE_BITS};
+use pxl_spec::asset::id::{Kind, IDX_BITS};
 use pxl_spec::asset::marker::MARKER;
 
 use super::*;
@@ -23,16 +23,16 @@ fn of_the_catalog() {
 /// among them, reads as unknown and does not stop the core.
 #[test]
 fn past_the_catalog() {
-    let shape = |kind: Kind, n: u32| (kind as u32) << SHAPE_BITS | n;
-    let past = (1 << SHAPE_BITS) - 1;
+    let id_of = |kind: Kind, n: u32| (kind as u32) << IDX_BITS | n;
+    let past = (1 << IDX_BITS) - 1;
     for id in [
         sentinel::void as AssetId,
         sentinel::unknown as AssetId,
         object::air as AssetId,
-        shape(Kind::cube, past),
-        shape(Kind::decor, past),
+        id_of(Kind::cube, past),
+        id_of(Kind::decor, past),
         // A kind the layout does not give out.
-        3 << SHAPE_BITS,
+        3 << IDX_BITS,
         u32::MAX,
     ] {
         assert_eq!(Asset::of(id), Asset::Unknown, "{id}");

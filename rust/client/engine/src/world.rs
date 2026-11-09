@@ -1,6 +1,6 @@
 // pxl-engine/world.rs
 
-//! wgsl-twin: the world's one query, which says what is in a node at its zoom. It reads
+//! wgsl-port: the world's one query, which says what is in a node at its zoom. It reads
 //! the layers in the order each is written over the one before: what is placed over all,
 //! then the separation and the ways, over the ground and its caves. Every reader of the world
 //! asks it, the GPU's cast and the CPU's alike. Each source answers from its own level of

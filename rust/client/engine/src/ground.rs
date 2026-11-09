@@ -1,6 +1,6 @@
 // pxl-engine/ground.rs
 
-//! wgsl-twin: the ground's column at a cell, the one rule by which a node's ground is
+//! wgsl-port: the ground's column at a cell, the one rule by which a node's ground is
 //! answered (`node`) before what overwrites it. A cell's palette index and height come from
 //! the clip level that draws it (`clipmap::ground`), by the ground's rules for a cell (pxl-spec
 //! ground.rs). Its cells go by depth, with a cave's air where a cave may take them, by its

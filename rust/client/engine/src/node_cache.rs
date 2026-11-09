@@ -1,6 +1,6 @@
 // pxl-engine/node_cache.rs
 
-//! wgsl-twin: the node cache as a GPU holds it. It keeps the nodes the rays asked about,
+//! wgsl-port: the node cache as a GPU holds it. It keeps the nodes the rays asked about,
 //! each with the world's one query's answer at the zooms it was asked at and what was handed
 //! it after, so that a node is asked once, not once for every ray. The cache is a table of
 //! slots keyed by the node, its zoom and its index. A key's hash picks a bucket of `BUCKET`

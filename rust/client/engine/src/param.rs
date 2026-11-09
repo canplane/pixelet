@@ -1,6 +1,6 @@
 // pxl-engine/param.rs
 
-//! wgsl-twin: the values this crate sets for what the world is and how it is observed and
+//! wgsl-port: the values this crate sets for what the world is and how it is observed and
 //! drawn. Each value is one literal with its reason beside it, in a module for its subject.
 //! What follows from them is computed by name where it is used.
 

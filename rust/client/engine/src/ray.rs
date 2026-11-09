@@ -1,6 +1,6 @@
 // pxl-engine/ray.rs
 
-//! wgsl-twin: a ray's words, as the GPU's cast leaves them at the ray's drawn pixel and the
+//! wgsl-port: a ray's words, as the GPU's cast leaves them at the ray's drawn pixel and the
 //! screen pass reads them there (pxl-render frame/shader/screen_ray.wgsl). Each word is a layer of
 //! the world surface's rays. The first says what the ray stopped on, through which face, at which
 //! zoom, and the share of its cube the cell keeps (`first_word`). The second is how far the ray

@@ -1,6 +1,6 @@
 // pxl-spec/share.rs
 
-//! wgsl-twin: how much of a cell's cube is filled, its share, as every layer keeps it and
+//! wgsl-port: how much of a cell's cube is filled, its share, as every layer keeps it and
 //! every reader reads it. A share is counted in `FULL`'s units and kept in eighths of the
 //! cube, its children.
 

@@ -1,6 +1,6 @@
 // pxl-content/generation.rs
 
-//! wgsl-twin: the decor the ground holds (`scatter`), generated on the world as either
+//! wgsl-port: the decor the ground holds (`scatter`), generated on the world as either
 //! side holds it: where a candidate stands, which way it faces and whether its column surface
 //! holds it (`placement`, over `DecorQuery`); what placed decor claims (`overlaps_placed`);
 //! and how the GPU lays out, lists and draws what it generates in a clip level's bricks.

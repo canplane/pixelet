@@ -1,6 +1,6 @@
 // pxl-spec/space/camera/grid.rs
 
-//! wgsl-twin: the camera grid, the one resolution, which sets how finely the world is
+//! wgsl-port: the camera grid, the one resolution, which sets how finely the world is
 //! observed. A camera cell is a fixed angle about the eye, and a node at a given distance is
 //! drawn at the zoom at which it spans a cell there. The node a cell is drawn with, drawn
 //! whole, spans at least one cell from any direction; one cell of the grid is one thing drawn,

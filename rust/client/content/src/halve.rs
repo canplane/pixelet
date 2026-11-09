@@ -1,6 +1,6 @@
 // pxl-content/halve.rs
 
-//! wgsl-twin: a count handed down a pyramid, the one rule by which the decor, the caves
+//! wgsl-port: a count handed down a pyramid, the one rule by which the decor, the caves
 //! and the cumulus hand theirs down. A node's count is halved along each side in turn, the
 //! first half taking its share by a hash's weight and each half held within its room, so the
 //! halves sum to the count exactly and a reader goes down only the half it asks, one step a

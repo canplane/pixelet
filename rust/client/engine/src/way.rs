@@ -1,6 +1,6 @@
 // pxl-engine/way.rs
 
-//! wgsl-twin: the ways off the ground, as a cell reads them. A brick's fill makes each
+//! wgsl-port: the ways off the ground, as a cell reads them. A brick's fill makes each
 //! column's spans once, on the CPU, and keeps them (pxl-spec way.rs `column`); the query, on
 //! the CPU and on the GPU, reads a cell off those spans (`way_cell`, clipmap.rs `way_at`,
 //! pxl-render way.wgsl). A cell holds what its own spans write there (`at`); ground beside the

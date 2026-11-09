@@ -1,6 +1,6 @@
 // pxl-engine/answer.rs
 
-//! wgsl-twin: the answer the world's one query gives about a node, as every source writes
+//! wgsl-port: the answer the world's one query gives about a node, as every source writes
 //! it and every reader reads it: the node's kind; for a cell, its asset in the one value space
 //! and the share of its cube it keeps; and for a split, the box where anything in it may lie,
 //! in the node's own steps, alike on every axis. The descent, the query and the sources all

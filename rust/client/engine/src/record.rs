@@ -1,6 +1,6 @@
 // pxl-engine/record.rs
 
-//! wgsl-twin: the record of the voxels the observers found, which the raster draws. A voxel
+//! wgsl-port: the record of the voxels the observers found, which the raster draws. A voxel
 //! is a node cache entry for a node some ray stopped on. The entry holds the World Query's
 //! answer for the node and the faces through which rays entered it, and keeps them across
 //! frames in the entry's own state word (`node_cache::STATES_AT`). The GPU passes that write

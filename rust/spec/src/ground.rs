@@ -1,6 +1,6 @@
 // pxl-spec/ground.rs
 
-//! wgsl-twin: the ground's cells as a tile holds them and the rules a column reads them by,
+//! wgsl-port: the ground's cells as a tile holds them and the rules a column reads them by,
 //! which the bake and the client both run: a cell's height from the elevation samples
 //! (`height`), its four palette indices and its own (`own`), and its top and face in cells of a
 //! zoom (`top`, `face_height`). The ground's column as a descent asks it is pxl-engine's
