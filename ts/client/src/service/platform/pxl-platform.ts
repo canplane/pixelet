@@ -13,17 +13,6 @@ interface PxlPlatform {
   storageGet(key: string): string | null;
   storageSet(key: string, val: string): void;
   clipboardSet(text: string): void;
-  textWidth(weight: u32, px: f32, text: string): f32;
-  textRaster(
-    weight: u32,
-    px: f32,
-    rgba: u32,
-    text: string,
-    x: f32,
-    width: u32,
-    height: u32,
-    out: Uint8Array,
-  ): void;
   headingAvailable(): boolean;
   /** Android only: the part of the bottom inset that takes a touch, which is
    * the navigation buttons, in dp. It is 0 under gesture navigation. */

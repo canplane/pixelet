@@ -138,6 +138,8 @@ fn on_runtime_attached(s: &mut State) {
 /// of memory comes last.
 fn boot(b: BootInfo) {
     stop::install(runtime::abort, b.form.stop_hook);
+    #[cfg(not(target_arch = "wasm32"))]
+    crate::sys::io::text_device::install(b.call);
     if !machine::booted() {
         machine::boot(&MACHINE);
     }

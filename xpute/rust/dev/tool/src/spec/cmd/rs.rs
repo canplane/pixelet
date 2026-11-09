@@ -396,6 +396,24 @@ pub(super) fn emit(spec: &Spec, t: &Target, apart: Option<&Apart>) -> Result<Str
         if let Some(import) = &c.import {
             let doc = [format!("Command::{}'s packet.", c.name)];
             rs_writer(spec, &mut out, &name, Some(&doc), import)?;
+            if c.call && !import.is_empty() && !rs_borrows(spec, import)? {
+                out.extend([
+                    String::new(),
+                    format!("impl {name} {{"),
+                    "    /// As what answers the call beside the core reads it.".to_string(),
+                    format!("    pub fn read(pkt: &[u8]) -> Result<{name}, MarshalError> {{"),
+                    "        let f = TreeReader::new(pkt)?.read_branch()?;".to_string(),
+                    format!("        Ok({name} {{"),
+                ]);
+                for (i, f) in import.iter().enumerate() {
+                    out.push(format!("            {}: {},", f.name, rs_read(spec, f, i)?));
+                }
+                out.extend([
+                    "        })".to_string(),
+                    "    }".to_string(),
+                    "}".to_string(),
+                ]);
+            }
             if let Some(door) = t.import {
                 let lt = if rs_borrows(spec, import)? {
                     "<'_>"

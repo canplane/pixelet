@@ -44,6 +44,9 @@ struct Member {
     pkt: Option<Vec<Field>>,
     #[serde(skip)]
     import: Option<Vec<Field>>,
+    /// An `import` answered before the core's call returns.
+    #[serde(skip)]
+    call: bool,
     /// This is the packet of an `import`'s completion, which the runtime writes
     /// and the core reads.
     #[serde(skip)]
@@ -243,6 +246,7 @@ fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
                 doc: c.doc,
                 pkt,
                 import,
+                call: c.call,
                 reply: c.reply,
             }));
         }

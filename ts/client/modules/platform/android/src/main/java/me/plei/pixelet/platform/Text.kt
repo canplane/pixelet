@@ -6,11 +6,11 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Typeface
-import expo.modules.kotlin.typedarray.Uint8Array
+import java.nio.ByteBuffer
 
 // Text in the platform's own font, as the core asks for it
-// (ts/client/src/service/platform/text.native.ts): how wide a line runs, and a
-// line drawn. The font is the system's, which falls back through every script
+// (pxl-core sys/io/text_device.rs), on the core's own thread: how wide a line
+// runs, and a line drawn. The font is the system's, which falls back through every script
 // and draws color emoji as the app's own text does. This file does on Android's
 // text engine what Text.swift does on the iPhone's.
 
@@ -21,7 +21,7 @@ fun textWidth(text: String, weight: Double, px: Double): Double = paint(weight, 
  * starting at `x`, with the middle of its em box on the middle row. `out` is
  * `width` by `height` pixels of RGBA, top row first, with alpha not
  * premultiplied. */
-fun textRaster(text: String, weight: Double, px: Double, rgba: Long, x: Double, width: Int, height: Int, out: Uint8Array) {
+fun textRaster(text: String, weight: Double, px: Double, rgba: Long, x: Double, width: Int, height: Int, out: ByteBuffer) {
   if (width <= 0 || height <= 0) return
   val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
   val paint = paint(weight, px, rgba)
@@ -42,7 +42,7 @@ fun textRaster(text: String, weight: Double, px: Double, rgba: Long, x: Double, 
       bytes[i + c] = minOf(255, (v * 255 + a / 2) / a).toByte()
     }
   }
-  out.write(bytes, 0, bytes.size)
+  out.put(bytes)
 }
 
 /** The system font at a CSS weight (400 is regular, 600 semibold), a size and

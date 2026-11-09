@@ -27,5 +27,7 @@ pub mod source;
 pub mod text;
 #[path = "io/text_answer.spec.rs"]
 pub mod text_answer_spec;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) mod text_device;
 #[path = "io/text.spec.rs"]
 pub mod text_spec;

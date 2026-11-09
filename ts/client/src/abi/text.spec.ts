@@ -5,8 +5,9 @@
 /**
  * The platform's text, a device of the app's ABI beside the UI's protocol
  * (ui.json): what the core calls of it, numbered as ui.json numbers its
- * own, each a call the runtime answers beside the core before it returns
- * (ts/client/src/runtime/start.ts, ts/client/src/service/core/text.ts). Where an answer lies in the
+ * own, each a call answered before it returns: on a page by the runtime
+ * (ts/client/src/service/core/text.ts), on a device on the core's own thread
+ * (pxl-core sys/io/text_device.rs). Where an answer lies in the
  * core's memory is laid out in spec/client/core/sys/io/text_answer.json.
  */
 
