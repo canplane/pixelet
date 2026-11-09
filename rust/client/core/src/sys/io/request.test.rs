@@ -274,6 +274,45 @@ fn failing_server_probe() {
 }
 
 #[test]
+fn ended_hold_asks_no_turn() {
+    let (_serial, key) = one_out();
+    failed(key, Errno::ENETUNREACH);
+    declare(Stream::terrain, &[]);
+    pump();
+    assert!(fall() >= 0.0, "the hold's end is asked for");
+    at(until());
+    pump();
+    assert!(fall() < 0.0, "and nothing after it");
+}
+
+/// What a turn's end asks for: the end of the hold, or none.
+fn fall() -> f64 {
+    if let Some(at) = next_pump_at(now()) {
+        edge::wake_at(at);
+    }
+    edge::world_edge().fall()
+}
+
+/// A probe that fails after the turn's pump still brings a pump that asks for
+/// the end of the new hold, and a probe that is out asks for no turn.
+#[test]
+fn failed_probe_keeps_retrying() {
+    let (_serial, key) = one_out();
+    failed(key, Errno::ENETUNREACH);
+    assert_eq!(fall(), 0.0, "a pump is asked for");
+    declare(Stream::terrain, &[(1, seen(0.0))]);
+    pump();
+    assert!(fall() > 0.0, "which asks for the hold's end");
+    at(until());
+    pump();
+    let (starts, _) = take_events();
+    assert_eq!(starts.len(), 1, "the probe");
+    assert!(fall() < 0.0, "out, it asks for no turn");
+    failed(starts[0], Errno::ENETUNREACH);
+    assert_eq!(fall(), 0.0, "and failing, one more pump");
+}
+
+#[test]
 fn outage_counts_once() {
     let _serial = begin();
     at(0.0);

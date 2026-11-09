@@ -654,7 +654,7 @@ pub fn admit_arrived(pass: &Pass) {
                 return false;
             };
             // A key the request scheduler no longer holds belongs to a request
-            // a reset forgot.
+            // stopped or reset since it was answered.
             if attempt_of(key).is_none() {
                 release(block);
                 return false;

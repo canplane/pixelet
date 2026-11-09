@@ -92,9 +92,9 @@ const fn body_block(stream: Stream) -> u64 {
 /// guaranteed must hold:
 /// - the terrain's and the Earth's bodies, kept or on a credit, in the runs
 ///   that `BODY_SLOTS` slots fill (sys/io/body.rs);
-/// - two baked tile's bodies for every credit, one in each of the fetch queue's
-///   lists (sys/io/fetch.rs `Queue`), in the buddy's block for the longest other
-///   kind, each freed once it is decoded;
+/// - two baked tile's bodies for every credit, one out and one stopped whose
+///   read the runtime has not passed (sys/io/fetch.rs `Queue`), in the buddy's
+///   block for the longest other kind, each freed once it is decoded or passed;
 /// - the ways' pool at its largest (domain/layer/terrain/pool.rs, pxl-engine
 ///   way/tree.rs `POOL_CHILD_GROUPS`);
 /// - the profiler's lanes while its setting is on (perf/record.rs).

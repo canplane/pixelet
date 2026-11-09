@@ -49,10 +49,13 @@ pub struct Response {
 
 const CREDITS: usize = MAX_CREDITS as usize;
 
-/// The arrivals and the answers, oldest first. Neither list holds more than
-/// the fetches out, because each fetch is on a credit.
+/// The arrivals and the answers, oldest first, past `drop_stopped`. A live
+/// arrival or answer is on a credit. A stopped arrival stays until the runtime
+/// has passed its read. The rings are read in order, so an open answered after
+/// a read was posted was posted before it: the arrivals whose reads are not
+/// passed were all out at once, and are no more than the credits.
 struct Queue {
-    arrivals: List<Arrival, CREDITS>,
+    arrivals: List<Arrival, { 2 * CREDITS }>,
     answers: List<Response, CREDITS>,
     notify: Notify,
 }
@@ -86,6 +89,7 @@ pub fn start(key: u64, stream: Stream, id: u64) {
 /// Takes the answer to a fetch's open. For a body, a block is taken and its
 /// read is posted. The descriptor is closed either way.
 pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
+    drop_stopped();
     let stream = attempt_of(key).map(|(stream, _)| stream);
     let mut read = None;
     let got = match opened {
@@ -132,6 +136,27 @@ pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
     q.notify.notify();
 }
 
+/// Gives back the bodies of what the scheduler no longer holds: an answer, and
+/// an arrival once the runtime has passed its read. This asks for no time of
+/// the turn, so it runs whether or not the turn is spent.
+fn drop_stopped() {
+    let q = queue();
+    q.arrivals.retain(|a| {
+        let stopped = a.is_filled() && attempt_of(a.key).is_none();
+        if stopped {
+            release(a.got.ok().flatten());
+        }
+        !stopped
+    });
+    q.answers.retain(|a| {
+        let stopped = attempt_of(a.key).is_none();
+        if stopped {
+            release(a.block);
+        }
+        !stopped
+    });
+}
+
 /// Hands on each arrival once its body is filled, oldest first, and yields
 /// where the turn is spent. The layer decodes what it is handed
 /// (domain/view/demand.rs `admit_arrived`).
@@ -140,9 +165,11 @@ pub async fn fetch_task() {
         notified(notify).await;
         while !queue().arrivals.is_empty() {
             yield_if_spent(world_edge).await;
+            drop_stopped();
             let filled = queue().arrivals.iter().position(Arrival::is_filled);
             match filled {
                 Some(at) => arrived(queue().arrivals.remove(at)),
+                None if queue().arrivals.is_empty() => {}
                 None => runtime_turn(world_edge).await,
             }
         }
@@ -153,7 +180,8 @@ pub async fn fetch_task() {
 /// it. Any other end settles the attempt here.
 fn arrived(a: Arrival) {
     let key = a.key;
-    // A key the scheduler does not hold is one a reset dropped.
+    // A runtime on its own thread may pass a stopped arrival's read after
+    // `drop_stopped` looked, so an attempt that has stopped still comes here.
     let Some((stream, id)) = attempt_of(key) else {
         return release(a.got.ok().flatten());
     };
@@ -202,3 +230,7 @@ pub fn release(block: Option<Block>) {
         unsafe { body::give(block) };
     }
 }
+
+#[cfg(test)]
+#[path = "fetch.test.rs"]
+mod test;

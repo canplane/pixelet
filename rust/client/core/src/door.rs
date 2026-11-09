@@ -214,6 +214,9 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
         }
     }
     api::gpu_publish();
+    if let Some(at) = request::next_pump_at(now()) {
+        edge::wake_at(at);
+    }
     let fall = edge::world_fall();
     // The next turn comes at once while submissions wait that the completion
     // ring had no room to answer, or while a snapshot is put off.

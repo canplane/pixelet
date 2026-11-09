@@ -210,11 +210,14 @@ pub fn pump() {
     if at >= s.outage.until {
         start_ready(s, at);
     }
-    // A turn is asked for when the hold ends, because nothing else may come
-    // to wake the core then.
-    if s.outage.until.is_finite() {
-        edge::wake_at(s.outage.until);
-    }
+}
+
+/// When a frame's pump is waited for at `at_ms`, if one is: the end of the
+/// hold on every start. Nothing else may come to wake the core then. It is
+/// asked every turn, since a timer lasts only until the next turn.
+pub fn next_pump_at(at_ms: f64) -> Option<f64> {
+    let until = sched().outage.until;
+    (until > at_ms).then_some(until)
 }
 
 /// Starts the best ranked of the ready wants on the free credits. A failing
@@ -327,6 +330,9 @@ fn hold(s: &mut Sched, fault: Fault, f: Failure, started_ms: f64, at: f64) {
             None => s.given_up = true,
         }
     }
+    // A frame's pump shows the failure and starts a probe at once where the
+    // hold has already ended or this failure began none.
+    edge::request_world_tick();
 }
 
 /// Resets the scheduler when the runtime will not answer what it was asked

@@ -575,7 +575,8 @@ impl<L: Base> TileCache<L> {
 
     /// Marks held slotted tile `p` to be fetched once more; it stays readable
     /// until the new copy arrives. A layer that keeps nothing of a packet
-    /// calls this when it needs the packet again.
+    /// calls this when it needs the packet again. A newly marked tile is
+    /// reported as changed, so the layer's next observation asks for it.
     pub fn again(&mut self, p: Quadrant) {
         if let Some(h) = self
             .tiles
@@ -583,7 +584,9 @@ impl<L: Base> TileCache<L> {
             .and_then(|e| e.resident.as_mut())
             .filter(|h| h.slot.is_some())
         {
-            h.again = true;
+            if !core::mem::replace(&mut h.again, true) {
+                self.changed.push(p);
+            }
         }
     }
 
