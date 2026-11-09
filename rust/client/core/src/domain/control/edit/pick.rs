@@ -84,7 +84,7 @@ impl Pick {
     /// What was struck, as a tool reads it.
     pub(super) fn target(&self) -> Option<Target> {
         match self.hit.kind {
-            HitKind::Decor(i) => Some(Target {
+            HitKind::Decor(i) if i.generated_in().is_some() => Some(Target {
                 at: i.octant(),
                 decor: Some(i),
             }),

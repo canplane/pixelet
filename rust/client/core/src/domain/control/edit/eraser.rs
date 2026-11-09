@@ -10,7 +10,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::octant::Octant;
 
 use crate::domain::control::edit::ghost::{at_corner, carved_cube, decor_of, prop};
-use crate::domain::control::edit::write::{remove, Preview};
+use crate::domain::control::edit::write::{place_air, remove, Preview};
 use crate::domain::control::edit::Hover;
 use crate::domain::preview::{Ghost, RenderEdit};
 
@@ -18,13 +18,18 @@ pub(super) fn tap(hover: &Hover) {
     let Some(h) = hover.coord else {
         return;
     };
-    // Where nothing was struck it takes a whole leaf cell of the ground,
-    // never the size tier.
-    remove(
-        hover
-            .target
-            .map_or(Octant::holding(GROUND.leaf_cell_zoom(), &h), |t| t.at),
-    );
+    match hover.prop() {
+        // What the ground generated has no entry; a marker sharing its cell
+        // goes with it.
+        Some(i) => place_air(i.octant()),
+        // Where nothing was struck it takes a whole leaf cell of the ground,
+        // never the size tier.
+        None => remove(
+            hover
+                .target
+                .map_or(Octant::holding(GROUND.leaf_cell_zoom(), &h), |t| t.at),
+        ),
+    }
 }
 
 pub(super) fn preview(hover: &Hover) -> Preview {

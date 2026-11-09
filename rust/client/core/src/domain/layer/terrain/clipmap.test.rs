@@ -781,7 +781,7 @@ fn left_brick_part() {
     for s in 0..ENTRIES {
         let q = want(w, pivot, s);
         assert!(
-            clip_read.present(LEAF_CELL_ZOOM, q).1,
+            clip_read().present(LEAF_CELL_ZOOM, q).1,
             "the pivot's bricks stay present"
         );
         assert!(w.table.entries[(pivot * ENTRIES + s) as usize].holds(q));

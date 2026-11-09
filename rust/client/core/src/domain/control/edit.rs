@@ -146,7 +146,7 @@ pub(crate) fn clear_hover_coord() {
 }
 
 /// What the pick struck, as a tool reads it: the cell an edit takes, and the
-/// decor standing there where it is one.
+/// decor the ground generated there, which has no entry in the store.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Target {
     pub at: Octant,
@@ -155,14 +155,17 @@ pub struct Target {
 
 impl Hover {
     pub fn prop(&self) -> Option<Instance> {
-        self.target?.decor.filter(|i| i.generated_in().is_some())
+        self.target?.decor
     }
 
     /// The placed object pointed at, as stored, and the zoom of the cube an
     /// edit there takes: the object's, or else a whole leaf cell, as a carve
     /// of the ground takes it.
     fn object(&self) -> (Option<Entry>, Zoom) {
-        let object = self.target.and_then(|t| World::now().entry_at(t.at));
+        let object = self
+            .target
+            .filter(|t| t.decor.is_none())
+            .and_then(|t| World::now().entry_at(t.at));
         let zoom = object.map_or(GROUND.leaf_cell_zoom(), |o| o.zoom);
         (object, zoom)
     }

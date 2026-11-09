@@ -50,9 +50,11 @@ impl Instance {
         }
     }
 
-    /// `octant`'s cube.
+    /// The cube of the cell it stands in, X on the lap it was found on.
     pub fn cell(&self) -> Aabb {
-        let o = self.octant();
-        cube(o.zoom(), o.at())
+        match self.src {
+            Source::Ground(cell) => cube(GROUND.leaf_cell_zoom(), cell),
+            Source::Object(e) => cube(e.zoom(), e.at()),
+        }
     }
 }

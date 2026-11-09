@@ -356,8 +356,9 @@ pub mod drawn {
 }
 
 /// What generating decor asks of the world, as either side holds it: of the base, the
-/// ground's alone, its columns' surfaces and the assets around them; of the world as edited, whether an edit holds a cell and what is placed in a
-/// box; and the catalog's rows, where it reads them.
+/// ground's alone, its columns' surfaces and the assets around them; of the world as edited,
+/// whether an edit holds a cell and what is placed in a box; and the catalog's rows, where it
+/// reads them.
 pub trait DecorQuery {
     /// A column surface as this side keeps it, from which its assets are asked.
     type ColumnSurface: Copy;
