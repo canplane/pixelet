@@ -67,11 +67,16 @@ of symmetry.
   attempt to check (`loader.rs` `arrival`), so that asset takes zeros, as it would
   a corrupt file, and stays failed until the process restarts. The settings' read
   at boot, caught the same way, would be refused and set aside.
-- **`FileTable::forget` is not put back.** The user had it removed. So
-  `request::reset` ends a read's attempt without closing its descriptor, and a
-  reload with reads out leaves up to the credits' 16 of the core's 19 descriptors
-  taken; a second such reload can then stop the core on `ENOSPC`. Development only,
-  as above.
+- **The descriptors an unanswered open held.** `request::reset` ended each attempt
+  without closing its descriptor, so a reload with opens out left up to the
+  credits' 16 of the core's 19 descriptors taken, and a later reload could stop the
+  core on `ENOSPC`. It is a slot not given back in a fixed table, not fragmentation.
+  On the user's word it is closed: `reset` now stops what is out through the path
+  that stops anything no longer wanted (`request.rs` `stop`, `dispatch::stop`), and
+  keeps a stop already pending. The new runtime answers such a close `EBADF`, which
+  the core ignores. No xpute change was needed, so `FileTable::forget`, which the
+  user had removed, stays out. One descriptor is not covered: the settings' open at
+  boot has no attempt, and is taken once a process.
 
 ## Decided against, and why
 
