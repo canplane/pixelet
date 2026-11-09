@@ -96,10 +96,13 @@ make -j8 check
 make -j8 test
 ```
 
-`check` runs every check and `test` every test; each also has a target per tree,
-such as `check-ts` or `test-rust`. A change to xpute's GPU encoder or runtime
-also takes `make -C xpute test-gpu`, which needs a GPU and Chrome. `make fmt`
-and `make lint` format and lint.
+`check` and `test` hold pixelet's code; each also has a target per tree, such
+as `check-ts` or `test-rust`. `./script/diff-check.py` runs only the checks and
+tests of what the working tree's changes reach. A deploy adds `check-build`, the
+bundle a deploy builds; xpute's own `check-xpute` and `test-xpute`; and
+`test-gpu`, the renderer's passes on this machine's GPU. A change to xpute's GPU
+encoder or runtime also takes `make -C xpute test-gpu`, which needs a GPU and
+Chrome. `make fmt` formats.
 
 `make check` also lints Android, which needs the NDK's compiler at the app's
 minSdk:

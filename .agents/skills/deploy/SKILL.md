@@ -24,7 +24,7 @@ CI runs no checks. Uploading to the bucket is
 Run from a tree whose HEAD is the commit to send, with nothing uncommitted:
 
 ```bash
-make -j8 check && make -j8 test
+make -j8 check check-build check-xpute && make -j8 test test-xpute test-gpu
 ```
 
 If the change touches a GPU call (`xpute/spec/gpu/`, xpute's `gpu` crates and

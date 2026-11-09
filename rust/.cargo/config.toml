@@ -14,9 +14,12 @@ lint-host = ["clippy", "--all-targets", "-p", "pxl-spec", "-p", "pxl-engine", "-
 lint-ios = ["clippy", "--target", "aarch64-apple-ios", "-p", "pxl-core", "--", "-D", "warnings"]
 lint-android = ["clippy", "--target", "aarch64-linux-android", "-p", "pxl-core", "--no-default-features", "--", "-D", "warnings"]
 # pxl-tool holds every model to the committed table, which has been wrong by hand before.
-test-host = ["test", "-p", "pxl-spec", "-p", "pxl-engine", "-p", "pxl-content", "-p", "pxl-render", "-p", "pxl-core", "-p", "pxl-geo-spec", "-p", "pxl-server", "-p", "pxl-geo", "-p", "pxl-geo-bake", "-p", "pxl-api", "-p", "pxl-tool"]
+test-host = ["test", "-p", "pxl-spec", "-p", "pxl-engine", "-p", "pxl-content", "-p", "pxl-core", "-p", "pxl-geo-spec", "-p", "pxl-server", "-p", "pxl-geo", "-p", "pxl-geo-bake", "-p", "pxl-api", "-p", "pxl-tool", "--features", "pxl-geo-bake/serve"]
 test-core-published = ["test", "-p", "pxl-core", "--no-default-features"]
-test-bake-serve = ["test", "-p", "pxl-geo-bake", "--features", "serve"]
+# The renderer's own tests here, and its passes on this machine's GPU, held to
+# pxl-engine word for word (tests/).
+test-render = ["test", "-p", "pxl-render", "--lib"]
+test-gpu = ["test", "-p", "pxl-render", "--test", "*"]
 # The code generated from spec/: `cargo spec` says what is stale, `cargo spec --write` writes it.
 spec = ["run", "-q", "-p", "pxl-tool", "--bin", "spec", "--"]
 # What the tree must keep that no compiler sees (pxl-tool bin/rule.rs).
