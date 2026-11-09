@@ -31,7 +31,7 @@ const EYE: [i32; 2] = [1000 << 10, (1 << 20) + 12_345];
 /// The ground's top at leaf cell `[x, y]`, in leaf cells: hills, and a tower in the far
 /// quarter of every brick of the leaves (`TOWER`), so that a bound that falls short of a
 /// whole brick misses the tower.
-fn height([x, y]: [i32; 2]) -> i32 {
+fn ele_at([x, y]: [i32; 2]) -> i32 {
     let hills = 40.0 + 25.0 * libm::sinf(x as f32 * 0.003) + 20.0 * libm::cosf(y as f32 * 0.004);
     let tower =
         TOWER.contains(&(x & (BRICK as i32 - 1))) && TOWER.contains(&(y & (BRICK as i32 - 1)));
@@ -195,7 +195,7 @@ fn clipmap() -> (Vec<Entry>, Vec<u32>) {
                     mid((q[0] << BRICK_SHIFT) + x as i32),
                     mid((q[1] << BRICK_SHIFT) + y as i32),
                 ];
-                let top = height(leaf);
+                let top = ele_at(leaf);
                 put(&mut ground, base + COLUMNS_AT + i, top as u32 & 0xffff);
                 let w = &mut ground[(base + OWN_AT + i / OWN_CELLS) as usize];
                 *w |= (Sample::GROUND) << (8 * (i % OWN_CELLS));
@@ -429,21 +429,17 @@ fn wall_off_any_brick() {
         clipmap::ground(&w, Shard::UNKNOWN, Lookup::NONE, zoom, b)
     };
     let y = EYE[1];
-    for (x, palette_idx) in [(past - 1, UNKNOWN), (past - 2, Sample::GROUND)] {
+    for (x, asset_id) in [(past - 1, UNKNOWN), (past - 2, Sample::GROUND)] {
         let (cell, f) = read(&rows, LEAF_CELL_ZOOM, [x, y]);
         assert!(f.here() && f.from() < LEAF_CELL_ZOOM, "{x} off a stand-in");
-        assert_eq!(cell.palette_idx, palette_idx, "{x} off a stand-in");
+        assert_eq!(cell.asset_id, asset_id, "{x} off a stand-in");
         let (cell, f) = read(&none, LEAF_CELL_ZOOM, [x, y]);
         assert!(!f.here(), "{x} off none");
-        let none_idx = if palette_idx == UNKNOWN {
-            UNKNOWN
-        } else {
-            VOID
-        };
-        assert_eq!(cell.palette_idx, none_idx, "{x} off none");
+        let none_idx = if asset_id == UNKNOWN { UNKNOWN } else { VOID };
+        assert_eq!(cell.asset_id, none_idx, "{x} off none");
         for d in 0..4 {
             let (cell, _) = read(&rows, LEAF_CELL_ZOOM + 2, [(x << 2) + d, (y << 2) + d]);
-            assert_eq!(cell.palette_idx, palette_idx, "{x}'s quarter {d}");
+            assert_eq!(cell.asset_id, asset_id, "{x}'s quarter {d}");
         }
     }
 }
@@ -501,12 +497,12 @@ fn answers_take_no_zooms(w: Clipmap<'_>) -> [u32; 3] {
             (first[0] << BRICK_SHIFT) + gx,
             (first[1] << BRICK_SHIFT) + gy,
         ];
-        // Around the ground's top where the column meets it, or else around its height.
+        // Around the ground's top where the column meets it, or else around its elevation.
         let surface = column_surface(&mut asking, CELL_ZOOM, g);
         let top = if surface.end == End::Hit {
             surface.top.0
         } else {
-            height(g)
+            ele_at(g)
         };
         for dz in -2..=1 {
             let leaf = [g[0], g[1], top + dz];

@@ -8,7 +8,7 @@ use crate::space::layer::lattice::GROUND;
 // resample and the bake's bicubic, and stored as i16 ground cells.
 const _: () = assert!(
     EXTENT[2] == i16::BITS && GROUND.leaf_cell_zoom() == UNIT_ZOOM,
-    "a height in i16 ground cells is the world's height"
+    "an elevation in i16 ground cells spans the world's height"
 );
 pub use super::object::OBJECT_SCALES;
 

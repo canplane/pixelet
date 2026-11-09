@@ -151,7 +151,7 @@ fn grade_line(
             form: Form::Approach,
             coarsest: super::coarsest(&points, ends),
             points,
-            clear: 0,
+            clearance: 0,
         },
         WayRange {
             gers_id: way.row.gers_id.clone(),
@@ -544,7 +544,13 @@ fn absolute(p: [f64; 2]) -> [f64; 2] {
 
 /// Cells `a..=b` of a stretch as a line of `form` at heights `ys`: the piece's
 /// vertices and where the slope bends, no more.
-fn line_of(r: &Stretch, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8) -> (Line, WayRange) {
+fn line_of(
+    r: &Stretch,
+    ys: &[i32],
+    [a, b]: [usize; 2],
+    form: Form,
+    clearance: u8,
+) -> (Line, WayRange) {
     let step = merc_from_u(CELL_U);
     let along = |k: usize| ((r.k0 + k) as f64 * step).min(r.piece.way.length());
     let mut keep: Vec<(f64, [f64; 2], f64)> = Vec::new();
@@ -590,7 +596,7 @@ fn line_of(r: &Stretch, ys: &[i32], [a, b]: [usize; 2], form: Form, clear: u8) -
                 [!(a == 0 && r.clipped[0]), !(b == last && r.clipped[1])],
             ),
             points,
-            clear,
+            clearance,
         },
         WayRange {
             gers_id: r.piece.way.gers_id.clone(),

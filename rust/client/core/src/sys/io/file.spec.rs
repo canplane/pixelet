@@ -56,7 +56,7 @@ pub mod object {
 pub const SHARD_ZOOM: u32 = 8;
 
 /// The children of the tree packet a shard's file and an edit batch hold after their
-/// format byte, by index: each row a write `<key, id, ext>`, a leaf as the write that made
+/// format byte, by index: each row a write `<key, asset_id, ext>`, a leaf as the write that made
 /// it in a shard's file, in the order made in a batch, where VOID erases (pxl-core
 /// domain/layer/object/store.rs `Write`). A record a class's (pxl-spec object/ext.rs),
 /// its row and its fields as columns.
@@ -64,7 +64,7 @@ pub mod write {
     /// A `strs` column holding each key as an octkey (pxl-spec space/hierarchy/morton.rs `name`, 3D): the shard's quadkey, then a digit 0 to 7 a zoom.
     pub const KEY: u32 = 0;
     /// A `u32[]` column holding each row's catalog value.
-    pub const ID: u32 = 1;
+    pub const ASSET_ID: u32 = 1;
     /// A `u32[]` column holding, for each marker with a text, the row that text is for.
     pub const TEXT_ROW: u32 = 2;
     /// A `strs` column holding those markers' texts.

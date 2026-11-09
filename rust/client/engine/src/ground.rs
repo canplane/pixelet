@@ -1,7 +1,7 @@
 // pxl-engine/ground.rs
 
 //! wgsl-port: the ground's column at a cell, the one rule by which a node's ground is
-//! answered (`node`) before what overwrites it. A cell's palette index and height come from
+//! answered (`node`) before what overwrites it. A cell's palette index and elevation come from
 //! the clip level that draws it (`clipmap::ground`), by the ground's rules for a cell (pxl-spec
 //! ground.rs). Its cells go by depth, with a cave's air where a cave may take them, by its
 //! content's strata and caves (`Resident::Content`).
@@ -11,7 +11,7 @@ use crate::answer::{
 };
 use crate::clipmap::Lookup;
 use crate::content::Content;
-use pxl_spec::ground::{cells, face_cell, face_height, UNKNOWN};
+use pxl_spec::ground::{cells, face_cell, face_ele, UNKNOWN};
 use pxl_spec::share::FULL;
 use pxl_spec::space::coord::world::{HEIGHT_BITS, SEA_LEVEL};
 use pxl_spec::space::coord::zoom::{z_start, Zoom, LEAF_CELL_ZOOM, MIN_ZOOM, SHARD_ZOOM};
@@ -61,7 +61,7 @@ pub fn rock<C: Content>(cell_zoom: Zoom, face: i32) -> i32 {
 ///
 /// What fills the node is the part of it inside the slab (`meets`). The node's bottom and top
 /// are whole cells of every zoom finer than it, an even number of each, and `cells` ends a
-/// height at the cell it fills an eighth of or more (`top`). So a zoom's top is at most the
+/// elevation at the cell it fills an eighth of or more (`top`). So a zoom's top is at most the
 /// bottom exactly when the face lies under an eighth of that zoom's cell over it, and the
 /// finest zoom decides it for all of them. A top kept short of whole still lies in the slab
 /// whole, which only splits more.
@@ -74,7 +74,7 @@ pub fn slab(zoom: Zoom, [_, hi]: [i32; 2], [far, near]: [Zoom; 2]) -> [i32; 2] {
     let mut over = EMPTY[1];
     let mut z = coarsest(zoom, far);
     while z <= near {
-        let top = face_height(z, cells(z, hi as f32));
+        let top = face_ele(z, cells(z, hi as f32));
         over = if top > over { top } else { over };
         z += 1;
     }
@@ -106,8 +106,8 @@ pub fn meets([lo, hi]: [i32; 2], (zoom, z): (Zoom, i32), near: Zoom) -> bool {
     first < hi << e && first + (1 << s) > lo << e
 }
 
-/// A bound over every height a cell holds, the whole range of an i16. It is a relief: the
-/// lowest and highest face heights, both included. It is not a span of what may fill along z,
+/// A bound over every elevation a cell holds, the whole range of an i16. It is a relief: the
+/// lowest and highest face elevations, both included. It is not a span of what may fill along z,
 /// which is half-open (`slab`) and is another fact in another unit.
 pub const UNBOUNDED: [i32; 2] = [i16::MIN as i32, i16::MAX as i32];
 
@@ -123,7 +123,7 @@ pub trait Resident: Area {
     /// The lowest and highest that the ground's cells reach over the node `node`, and the ways'
     /// over them, kept apart (`Extent`), read from the finest held tile over every zoom from
     /// `cells`' coarsest to its finest (`clipmap::bound_over`). Where no brick it reads is held,
-    /// the bounds are no tighter than the heights' whole range (`UNBOUNDED`), which only splits
+    /// the bounds are no tighter than the elevations' whole range (`UNBOUNDED`), which only splits
     /// more; where no tile over the node is held, it returns false. `place` is where the cells
     /// at `cells`' finest zoom of a node over it were found, or `Lookup::NONE`, and becomes where
     /// the node's own are found (`clipmap::step`).
@@ -258,10 +258,10 @@ pub fn node<H: Resident>(
 
 /// A cell's ground, as a column reads it: its palette index (`UNKNOWN` for the service
 /// area's wall), its top in cells of its zoom and the share of its top cell it fills (`top`),
-/// and the four palette indices its fold took (`palette_idxs`, `dx + 2·dy`).
+/// and the four palette indices its fold took (`asset_ids`, `dx + 2·dy`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cell {
-    pub palette_idx: u32,
+    pub asset_id: u32,
     pub top: i32,
     pub part: u32,
     pub fold: [u32; 4],
@@ -270,7 +270,7 @@ pub struct Cell {
 impl Cell {
     /// No ground: void at sea level, as a column no tile is read for.
     pub const NONE: Cell = Cell {
-        palette_idx: VOID,
+        asset_id: VOID,
         top: 0,
         part: FULL,
         fold: [VOID; 4],
@@ -288,7 +288,7 @@ impl Cell {
 
     /// Whether it has ground at all: a palette index the catalog grounds, or the wall.
     pub fn is_grounded(&self) -> bool {
-        self.palette_idx == UNKNOWN || value::grounds(self.palette_idx)
+        self.asset_id == UNKNOWN || value::grounds(self.asset_id)
     }
 
     /// Whether a cave may take cell `z` of the column at `cell_zoom`, by the ground's one rule:
@@ -297,9 +297,9 @@ impl Cell {
     /// of whole is ground, as under a shrunk box, so a cave does not take the cell under it
     /// either.
     pub fn opens<C: Content>(&self, cell_zoom: Zoom, z: i32) -> bool {
-        let face = face_height(cell_zoom, self.top);
+        let face = face_ele(cell_zoom, self.top);
         let under = face_cell(cell_zoom, face) - (self.part < FULL) as i32;
-        self.palette_idx != UNKNOWN && z < under && z >= rock::<C>(cell_zoom, face)
+        self.asset_id != UNKNOWN && z < under && z >= rock::<C>(cell_zoom, face)
     }
 
     /// The four palette indices that asset `g` of the column at `cell_zoom` is drawn by. Where
@@ -308,7 +308,7 @@ impl Cell {
     /// under it or a leaf's cell, they are `g` four times. A way written over the cell gives its
     /// own palette index four times (`world::node`).
     pub fn four(&self, cell_zoom: Zoom, g: u32) -> [u32; 4] {
-        if cell_zoom >= LEAF_CELL_ZOOM || g != self.palette_idx {
+        if cell_zoom >= LEAF_CELL_ZOOM || g != self.asset_id {
             [g; 4]
         } else {
             self.fold
@@ -323,7 +323,7 @@ impl Cell {
         if !self.is_grounded() {
             return VOID;
         }
-        C::by_depth(cell_zoom, self.palette_idx, self.top, z)
+        C::by_depth(cell_zoom, self.asset_id, self.top, z)
     }
 }
 

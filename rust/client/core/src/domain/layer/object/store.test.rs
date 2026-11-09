@@ -29,7 +29,7 @@ fn write_undo_round_trip() {
         assert!(!store
             .write([Write {
                 at: id_of(OBJECT_COARSEST, at),
-                id: 3,
+                asset_id: 3,
                 ext: None
             }])
             .is_empty());
@@ -51,13 +51,13 @@ fn write_undo_round_trip() {
             vec![Entry {
                 zoom: OBJECT_COARSEST,
                 at,
-                state: 3,
+                asset_id: 3,
                 ext: 0
             }]
         );
         store.write([Write {
             at: id_of(OBJECT_COARSEST, at),
-            id: VOID,
+            asset_id: VOID,
             ext: None,
         }]);
         let mut left = 0;
@@ -67,7 +67,7 @@ fn write_undo_round_trip() {
             store
                 .write([Write {
                     at: id_of(OBJECT_COARSEST, at),
-                    id: VOID,
+                    asset_id: VOID,
                     ext: None,
                 }])
                 .is_empty(),
@@ -110,7 +110,7 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Content, [i32; 2]) {
     let base = [64, -64];
     store.write(cells.iter().map(|&(x, y, z, state)| Write {
         at: id_of(OBJECT_COARSEST, [base[0] + x, base[1] + y, z]),
-        id: state,
+        asset_id: state,
         ext: None,
     }));
     let target = GROUND.cell_zoom(zoom);
@@ -283,21 +283,21 @@ fn leaf_words_freed_on_erase() {
     let (zoom, at) = (OBJECT_COARSEST, [5, 7, 2]);
     store.write([Write {
         at: id_of(zoom, at),
-        id: MARKER,
+        asset_id: MARKER,
         ext: marker_text("cafe"),
     }]);
     let e = entry(&store, zoom, at).expect("placed");
     assert_eq!(store.ext(&e), Some(&Ext::MarkerText("cafe".into())));
     store.write([Write {
         at: id_of(zoom, at),
-        id: VOID,
+        asset_id: VOID,
         ext: None,
     }]);
     assert!(entry(&store, zoom, at).is_none());
     // The freed slot is the next one taken, so no record outlived its leaf.
     store.write([Write {
         at: id_of(zoom, at),
-        id: MARKER,
+        asset_id: MARKER,
         ext: marker_text("bar"),
     }]);
     let e = entry(&store, zoom, at).expect("placed again");
@@ -313,7 +313,7 @@ fn marker_text_change_cube() {
     let put = |store: &mut Store, text: &str| {
         store.write([Write {
             at: id_of(zoom, at),
-            id: MARKER,
+            asset_id: MARKER,
             ext: marker_text(text),
         }])
     };
@@ -336,7 +336,7 @@ fn eight_markers_stay() {
                 OBJECT_COARSEST + 1,
                 object::child_at(OBJECT_COARSEST, parent, k),
             ),
-            id: MARKER,
+            asset_id: MARKER,
             ext: marker_text(&format!("m{k}")),
         })
         .collect();
@@ -355,7 +355,7 @@ fn whole_shard_meets_leaves() {
     let at = [5, 7, 2];
     store.write([Write {
         at: id_of(OBJECT_COARSEST, at),
-        id: 3,
+        asset_id: 3,
         ext: None,
     }]);
     // The node of the whole shard, which is the root of the shard's own

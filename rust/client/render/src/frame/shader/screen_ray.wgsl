@@ -106,7 +106,7 @@ fn appearance(c: vec3u) -> Appearance {
   if (ray_zoom(c.x) >= GROUND_CELL_ZOOM) {
     return Appearance(swatch(l), f32(l.y >> 16u));
   }
-  let fold = ray_palette_idxs(c.z);
+  let fold = ray_asset_ids(c.z);
   if (any(fold == vec4u(val))) {
     // The face's own look is read once, and serves each of the four indices that name it.
     var sum = vec3f(0.0);

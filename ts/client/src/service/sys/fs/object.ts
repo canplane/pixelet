@@ -47,11 +47,15 @@ function as_file(fmt: number, pkt: U8Array): U8Array {
 /** Returns the writes in a file of `fmt` in the order they were written. The
  * layout is file.json's `write`. */
 export function decode_writes(fmt: number, bytes: U8Array): Leaf[] {
-  const [keys, id, rows, texts] = new TreeReader(pkt(fmt, bytes))
+  const [keys, asset_ids, rows, texts] = new TreeReader(pkt(fmt, bytes))
     .read_branch()
     .get<[string[], U32Array, U32Array, string[]]>();
-  if (keys.length !== id.length) throw new FileError(Errno.EINVAL);
-  const out: Leaf[] = keys.map((key, r) => ({ key, id: id[r]!, text: null }));
+  if (keys.length !== asset_ids.length) throw new FileError(Errno.EINVAL);
+  const out: Leaf[] = keys.map((key, r) => ({
+    key,
+    asset_id: asset_ids[r]!,
+    text: null,
+  }));
   rows.forEach((r, k) => {
     if (out[r] === undefined || texts[k] === undefined) {
       throw new FileError(Errno.EINVAL);
@@ -74,7 +78,7 @@ export function encode_writes(fmt: number, leaves: readonly Leaf[]): U8Array {
   tree.branch((b) =>
     b
       .strs(leaves.map((l) => l.key))
-      .u32_array(Uint32Array.from(leaves, (l) => l.id))
+      .u32_array(Uint32Array.from(leaves, (l) => l.asset_id))
       .u32_array(Uint32Array.from(rows))
       .strs(texts),
   );

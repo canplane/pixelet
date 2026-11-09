@@ -147,7 +147,7 @@ fn glare_toward(r: f32, dir: vec3f, sun: vec3f, mu: f32, e: f32) -> vec3f {
   return sun_transmittance(r, mu) * atmos_white() * e * psf * (LENS_GLARE_VEIL / LENS_GLARE_HALO_SHARE);
 }
 
-// The disc's center seen at height `mu` from radius `r`, exposed by `e`.
+// The disc's center seen at `mu` from radius `r`, exposed by `e`.
 fn disc_light(r: f32, mu: f32, e: f32) -> vec3f {
   return transmittance_to_top(r, mu) * atmos_white() * e * SKY_SUN_DISC_GAIN;
 }

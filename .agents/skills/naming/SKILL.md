@@ -76,6 +76,9 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | a node's name as a number, its morton code | its `id` | subject, morton |
   | a zoom told by its cells | `cell_zoom` | cell |
   | a level of a brick's min-max pyramid | a `mip` | level |
+  | how high the ground is above sea level, stored or worked out | `ele` | height |
+  | how high a thing in the air is above sea level: a device's, an eye's, a cloud's | `alt` | height |
+  | a thing's size up, how far it stands over a surface, or the Z a bridge or a tunnel runs at | `height` | |
   | a value that differs from the turn before | `changed` | moved |
   | a box on a plane | a `rect` | box |
   | the most a thing holds | its `cap` | room, most, limit |

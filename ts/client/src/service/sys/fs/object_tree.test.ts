@@ -36,7 +36,7 @@ test("top_of - each case's writes fold to the store's rows", () => {
     const writes: Leaf[] = [];
     for (let j = 0; g.has(`case.${cases}.write.${j}`); j++) {
       const [key, id] = g.get(`case.${cases}.write.${j}`)!.split(" ");
-      writes.push({ key: key!, id: Number(id), text: null });
+      writes.push({ key: key!, asset_id: Number(id), text: null });
     }
     const want: TopRow[] = [];
     for (let j = 0; g.has(`case.${cases}.top.${j}`); j++) {
@@ -63,13 +63,13 @@ test("lay - a write splits the leaf over it and takes what is under it", () => {
   // beside the one written.
   const leaves = new Map<string, Leaf>();
   const coarse = "000000000";
-  lay(leaves, { key: coarse, id: 7, text: null });
+  lay(leaves, { key: coarse, asset_id: 7, text: null });
   const fine = "0000000000";
-  lay(leaves, { key: fine, id: 8, text: null });
+  lay(leaves, { key: fine, asset_id: 8, text: null });
   assert.deepStrictEqual(leaves.size, 8);
-  assert.deepStrictEqual(leaves.get(fine)?.id, 8);
+  assert.deepStrictEqual(leaves.get(fine)?.asset_id, 8);
   assert.ok(![...leaves.values()].some((l) => l.key === coarse));
-  lay(leaves, { key: coarse, id: 0, text: null });
+  lay(leaves, { key: coarse, asset_id: 0, text: null });
   assert.deepStrictEqual(leaves.size, 0);
 });
 

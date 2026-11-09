@@ -12,10 +12,10 @@ const NOWHERE: Frame = Frame {
     cell: 1.0,
 };
 
-fn one(points: &[[f64; 2]], tops: &[i16], width_cells: f64) -> Separation {
+fn one(points: &[[f64; 2]], heights: &[i16], width_cells: f64) -> Separation {
     let mut b = Builder::default();
     b.push(
-        points.iter().zip(tops).map(|(&p, &t)| (p, t, 0)),
+        points.iter().zip(heights).map(|(&p, &t)| (p, t, 0)),
         (width_cells * POINT_SCALE) as u8,
         3,
         Form::Bridge,
@@ -65,10 +65,10 @@ fn form_from_surface() {
     let over = |form: Form, top: i32| Crossing {
         low: top,
         top,
-        kind: u32::from(t::primary),
+        asset_id: u32::from(t::primary),
         form: u32::from(form.byte()),
         pier: 0,
-        clear: 3,
+        clearance: 3,
     };
     let no = [0, 0];
     let on = |c: Crossing, ground: i32, cpm: f32| way::occupies(&c, ground, cpm);

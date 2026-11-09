@@ -647,7 +647,7 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
             cell_zoom: slot.cell_zoom,
             brick: slot.brick,
             words: cells(b),
-            palette_idxs: palette(b),
+            palette_words: palette(b),
             run: &pieces,
         });
         if !fits {

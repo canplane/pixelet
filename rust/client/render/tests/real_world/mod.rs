@@ -374,8 +374,8 @@ pub fn source(
         };
         let width = 16 + (h >> 24) % 48;
         let kinds = value::TRANSPORTS[1] - value::TRANSPORTS[0] + 1;
-        let kind = value::TRANSPORTS[0] + (h >> 4) % kinds;
-        let clear = match line {
+        let asset_id = value::TRANSPORTS[0] + (h >> 4) % kinds;
+        let clearance = match line {
             1 => 6,
             4 => (1u32 << s).clamp(6, 250),
             _ => 0,
@@ -386,7 +386,7 @@ pub fn source(
             segments.push(Segment::words(
                 [point(from), point(to)],
                 [top_at(from), top_at(to)],
-                [width as u8, kind as u8, flags, clear as u8],
+                [width as u8, asset_id as u8, flags, clearance as u8],
             ));
         }
         let mid = [first[0] + m[0] / 8, first[1] + m[1] / 8];

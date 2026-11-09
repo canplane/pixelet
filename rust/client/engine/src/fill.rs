@@ -19,7 +19,7 @@ use crate::clipmap::{
 use crate::{at, ground, way};
 use pxl_spec::brick;
 use pxl_spec::brick::{BRICK, BRICK_CELLS};
-use pxl_spec::ground::{height, own, word, UNKNOWN};
+use pxl_spec::ground::{ele_at, own, word, UNKNOWN};
 use pxl_spec::space::coord::world::SEA_LEVEL;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::area::Shard;
@@ -149,11 +149,11 @@ pub struct Site<'a> {
 }
 
 impl Site<'_> {
-    /// The height of cell `[x, y]`, counted from the brick's first cell, ring cells included
-    /// (pxl-spec `ground::height`).
-    fn height(&self, [x, y]: [i32; 2]) -> i32 {
+    /// The elevation of cell `[x, y]`, counted from the brick's first cell, ring cells included
+    /// (pxl-spec `ground::ele_at`).
+    fn ele_at(&self, [x, y]: [i32; 2]) -> i32 {
         let first = self.place.map(|v| (v * BRICK) as i32);
-        height(|i| i32::from(self.ele[i]), [first[0] + x, first[1] + y])
+        ele_at(|i| i32::from(self.ele[i]), [first[0] + x, first[1] + y])
     }
 }
 
@@ -186,7 +186,7 @@ impl brick::Brick for LaneBrick<'_> {
     /// A column of the brick's own is read as `columns` wrote it (`column_top`), not drawn
     /// again. A ring column, which no column word holds, is drawn from the tile's samples as
     /// `columns` draws a cell.
-    fn height(&self, c: [i32; 2]) -> i32 {
+    fn ele_at(&self, c: [i32; 2]) -> i32 {
         let side = BRICK as i32;
         if c[0] >= 0 && c[1] >= 0 && c[0] < side && c[1] < side {
             return column_top(column_of(
@@ -195,13 +195,13 @@ impl brick::Brick for LaneBrick<'_> {
                 brick::idx_of([c[0] as u32, c[1] as u32]),
             ));
         }
-        self.site.height(c)
+        self.site.ele_at(c)
     }
 }
 
 /// Writes a brick's columns and its cells as laid into `lane`, where `four(i)` gives cell `i`'s
-/// four palette indices (pxl-spec `ground::palette_idxs`). Each column gets its ground top
-/// (pxl-spec `ground::height`); a gone cell, whose own palette index is `UNKNOWN` past the area,
+/// four palette indices (pxl-spec `ground::asset_ids`). Each column gets its ground top
+/// (pxl-spec `ground::ele_at`); a gone cell, whose own palette index is `UNKNOWN` past the area,
 /// gets the Earth's top at sea level. Each cell gets its own palette index (pxl-spec `ground::own`
 /// of its four at the brick's zoom), four to a word (`clipmap::OWN_WORDS`).
 pub fn columns(lane: &mut [u32], four: impl Fn(u32) -> u32, site: &Site) {
@@ -212,7 +212,7 @@ pub fn columns(lane: &mut [u32], four: impl Fn(u32) -> u32, site: &Site) {
         let top = if own == UNKNOWN {
             SEA_LEVEL
         } else {
-            site.height([x as i32, y as i32])
+            site.ele_at([x as i32, y as i32])
         };
         put(lane, COLUMNS_AT + i, top as u32 & 0xffff);
         let w = OWN_AT + i / OWN_CELLS;

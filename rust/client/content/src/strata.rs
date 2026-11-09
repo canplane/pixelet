@@ -16,7 +16,7 @@
 //! by the rule the wall is laid by (pxl-core domain/query/limit.rs `within`, `editable`).
 
 use pxl_engine::ground::rock;
-use pxl_spec::ground::{face_height, leaf_cells, UNKNOWN};
+use pxl_spec::ground::{face_ele, leaf_cells, UNKNOWN};
 use pxl_spec::space::coord::world::SEA_LEVEL;
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
 use pxl_spec::value::VOID;
@@ -44,20 +44,20 @@ pub fn ceiling(face: i32) -> i32 {
 }
 
 /// What the ground is in cell `z` of a column at `cell_zoom` whose palette index is
-/// `palette_idx` and whose top is `top` cells: by depth under its top, and void above it. A
+/// `asset_id` and whose top is `top` cells: by depth under its top, and void above it. A
 /// column coarser than the leaves' summarizes the faces under it, so its ground is its face
 /// all through; the wall (`unknown`) is itself all through.
-pub fn by_depth(cell_zoom: Zoom, palette_idx: u32, top: i32, z: i32) -> u32 {
+pub fn by_depth(cell_zoom: Zoom, asset_id: u32, top: i32, z: i32) -> u32 {
     if z >= top {
         return VOID;
     }
-    if cell_zoom < LEAF_CELL_ZOOM || palette_idx == UNKNOWN {
-        return palette_idx;
+    if cell_zoom < LEAF_CELL_ZOOM || asset_id == UNKNOWN {
+        return asset_id;
     }
     let s = leaf_cells(cell_zoom);
     // Water's filler is water, as sand's is sand: under a face it is the
     // same cell.
-    let (filler, sandstone) = match palette_idx {
+    let (filler, sandstone) = match asset_id {
         SAND | BEACH => (SAND, SANDSTONE_DEPTH),
         WATER => (WATER, 0),
         _ => (SOIL, 0),
@@ -65,12 +65,12 @@ pub fn by_depth(cell_zoom: Zoom, palette_idx: u32, top: i32, z: i32) -> u32 {
     let face = top - s;
     let filled = face - FILLER_DEPTH * s;
     if z >= face {
-        palette_idx
+        asset_id
     } else if z >= filled {
         filler
     } else if z >= filled - sandstone * s {
         SANDSTONE
-    } else if z >= rock::<Pixelet>(cell_zoom, face_height(cell_zoom, top)) {
+    } else if z >= rock::<Pixelet>(cell_zoom, face_ele(cell_zoom, top)) {
         STONE
     } else {
         UNKNOWN

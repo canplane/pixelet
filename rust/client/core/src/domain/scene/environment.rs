@@ -67,7 +67,7 @@ pub fn environment_drift() -> [f64; 2] {
     environment().drift
 }
 
-/// The eye's height over the sea, in km, as the last frame saw it.
+/// The eye's altitude over the sea, in km, as the last frame saw it.
 pub fn environment_alt_km() -> f64 {
     environment().alt_km
 }
@@ -75,7 +75,7 @@ pub fn environment_alt_km() -> f64 {
 /// The cosines of the sun's and the moon's zenith angles at `days`, seen from
 /// `[lon, lat]`. Each is the up component of the body's unit direction, so
 /// how far the body stands does not matter.
-fn heights(days: f64, [lon, lat]: [f64; 2]) -> [f64; 2] {
+fn mus(days: f64, [lon, lat]: [f64; 2]) -> [f64; 2] {
     let mu = |p: [f64; 3]| p[2] / v3::len(&p);
     [mu(sun_pos(days, lat, lon)), mu(moon_pos(days, lat, lon))]
 }
@@ -102,10 +102,10 @@ fn sky_clock(time: SkyTime, unix_ms: f64, lon: f64) -> (f64, bool) {
     (today + hour * HOUR_MS - ahead, true)
 }
 
-/// The step of the sun and of the moon, in the measure of height `heights`
+/// The step of the sun and of the moon, in the measure of `mus`
 /// gives (pxl-render `sky_steps`). For a light whose sky is drawn, its step
-/// is how far its height moves before the drawn sky changes by a display
-/// level. For a light out of reach of the air, it is how far its height moves
+/// is how far its mu moves before the drawn sky changes by a display
+/// level. For a light out of reach of the air, it is how far its mu moves
 /// before the light comes into reach. A step is 0 until the renderer's first
 /// measure of it lands, so until then every observation steps the sky.
 fn steps() -> [f64; 2] {
@@ -138,7 +138,7 @@ pub struct EnvironmentDraw {
     /// at the clouds' clock, the wall time since the first observation, which
     /// holds still between its steps (`observe`).
     drift: [f64; 2],
-    /// The eye's height over the sea, in km, as the last frame saw it
+    /// The eye's altitude over the sea, in km, as the last frame saw it
     /// (`tick`).
     alt_km: f64,
     /// The clocks of the sky and of the clouds, which step in Unix ms.
@@ -182,11 +182,7 @@ impl EnvironmentDraw {
         if !self.started {
             return live;
         }
-        let (was, is, step) = (
-            heights(self.days, self.anchor),
-            heights(self.days, live),
-            steps(),
-        );
+        let (was, is, step) = (mus(self.days, self.anchor), mus(self.days, live), steps());
         if (0..2).any(|k| (is[k] - was[k]).abs() >= step[k]) {
             live
         } else {
@@ -216,9 +212,9 @@ impl EnvironmentDraw {
         let first = *self.first_ms.get_or_insert(unix_ms);
         let at = self.sky_anchor();
         let (sky_ms, fixed) = sky_clock(settings().sky_time, unix_ms, at[0]);
-        let heights = |days: f64| heights(days, at);
+        let mus = |days: f64| mus(days, at);
         let step = steps();
-        // The time at which each light's height will have moved a step, at
+        // The time at which each light's mu will have moved a step, at
         // the rate it moves over the minute after `at`. A light whose step
         // has not landed gives `unknown`. The sky's clock passes 0 for it, so
         // it steps at every observation. The wake passes infinity for it,
@@ -227,7 +223,7 @@ impl EnvironmentDraw {
         const MINUTE_MS: f64 = 60_000.0;
         let rate = |at: f64, unknown: f64| {
             let days = j2000_days(at);
-            let (now, then) = (heights(days), heights(days + MINUTE_MS / 86_400_000.0));
+            let (now, then) = (mus(days), mus(days + MINUTE_MS / 86_400_000.0));
             at + (0..2)
                 .map(|k| match step[k] {
                     0.0 => unknown,
@@ -301,7 +297,7 @@ impl EnvironmentDraw {
         (self.sun, self.moon) = (along(self.from[0], sun), along(self.from[1], moon));
         // The stars start dark and fade in, the first frame included.
         self.stars = (self.stars + frame.delta_s * SKY_EASE_RATE).min(1.0);
-        // The camera's Z, in units, is its height over the sea.
+        // The camera's Z, in units, is its altitude over the sea.
         let km_per_u = km_per_u();
         self.alt_km = frame.camera[2] * km_per_u;
         // The ground under the eye, as the turn observed it.

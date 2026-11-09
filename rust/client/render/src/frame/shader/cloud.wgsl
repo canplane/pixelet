@@ -1,6 +1,6 @@
 // Draws the thin cloud layers over the cumulus (pxl-core
 // domain/scene/environment/cloud.rs): altocumulus' small heaps at 4 to 5 km and
-// cirrus' veil at 6 to 12 km. Each layer is one plane at its height over the
+// cirrus' veil at 6 to 12 km. Each layer is one plane at its altitude over the
 // eye, out to the clouds' reach, laid over the opaque world. The layers write
 // no depth, and the world's depth decides what stands before them, so a peak
 // over a sheet hides it from below and stands through it from above.
@@ -61,7 +61,7 @@ struct CloudOut {
   @location(1) @interpolate(flat) sheet: u32,
 };
 
-// Each sheet is a square at its height on the flat map, which the world's
+// Each sheet is a square at its altitude on the flat map, which the world's
 // ground is laid on too, wide enough to hold every point within the clouds'
 // reach from the eye. The farther sheet is drawn first, so the nearer is
 // blended over it.

@@ -15,7 +15,7 @@ use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::{neighborhood, Quadrant};
 
-/// The ground cell's side: what the raster, the separation's lines and a height count in.
+/// The ground cell's side: what the raster, the separation's lines and an elevation count in.
 pub(crate) const CELL_U: f64 = units(GROUND.leaf_cell_zoom());
 
 impl Base for TerrainTile {

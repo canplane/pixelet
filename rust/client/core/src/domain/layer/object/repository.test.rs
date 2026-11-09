@@ -41,7 +41,7 @@ fn leaves() -> Vec<(u128, u32, Option<String>)> {
     object.each(&mut |e| {
         out.push((
             key_of(e.zoom, e.at),
-            e.state,
+            e.asset_id,
             object.text(e).map(str::to_string),
         ));
     });
@@ -53,23 +53,23 @@ fn written() -> [Write; 4] {
     [
         Write {
             at: leaf(0, [5, 7, 2]),
-            id: 3,
+            asset_id: 3,
             ext: None,
         },
         // Below sea level, in the lower half of the shard's height.
         Write {
             at: leaf(0, [5, 8, -3]),
-            id: 4,
+            asset_id: 4,
             ext: None,
         },
         Write {
             at: leaf(0, [6, 9, 1]),
-            id: MARKER,
+            asset_id: MARKER,
             ext: Some(Ext::MarkerText("here".to_string())),
         },
         Write {
             at: leaf(1, [5, 7, 2]),
-            id: 3,
+            asset_id: 3,
             ext: None,
         },
     ]
@@ -161,7 +161,7 @@ fn edit_batch_round_trip() {
     let mut writes = written().to_vec();
     writes.push(Write {
         at: leaf(0, [5, 7, 2]),
-        id: 0,
+        asset_id: 0,
         ext: None,
     });
     let batch = encode_writes(format::OBJECT_EDITS, &writes).unwrap();
@@ -171,7 +171,7 @@ fn edit_batch_round_trip() {
         w.iter()
             .map(|w| {
                 let text = w.ext.as_ref().map(|Ext::MarkerText(t)| t.clone());
-                (w.at, w.id, text)
+                (w.at, w.asset_id, text)
             })
             .collect()
     };
@@ -269,7 +269,7 @@ fn top_golden() {
             let (key, id) = g.s(w).split_once(' ').unwrap();
             writes.push(Write {
                 at: key_of_name::<3>(key).unwrap(),
-                id: id.parse().unwrap(),
+                asset_id: id.parse().unwrap(),
                 ext: None,
             });
         });

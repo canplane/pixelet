@@ -60,8 +60,8 @@ The world is stored as **layers**, and they split on who changes them.
 
 The **base** is baked from the map sources and never changes within a version.
 Its main layer is **terrain**: a ground cell is one byte, an index into
-OpenStreetMap Carto's palette, beside an elevation from which the client works
-out the heights, so heights are never sent. Bridges and tunnels come along as
+OpenStreetMap Carto's palette, beside elevation samples from which the client
+works out each cell's elevation, so those are never sent. Bridges and tunnels come along as
 lines with a top and a width. Beside terrain are the **places** Carto would
 label, the administrative **divisions**, and a picture of the **earth** seen
 from orbit. Every base layer but the earth is a **pyramid**: a tile at one zoom
@@ -262,7 +262,7 @@ cell moves:
 
 A tile is cut into its bricks as it lands, and the bricks are filled on the CPU
 over the following turns, a part at a time within the turn's share, with a
-min-max pyramid over their heights and their bridges and tunnels as spans. All
+min-max pyramid over their elevations and their bridges and tunnels as spans. All
 of it is uploaded, so the CPU's question and the GPU's ray meet the same bridge.
 Where a level holds no brick, the coarser level's ground is read, and drawn, in
 its place.

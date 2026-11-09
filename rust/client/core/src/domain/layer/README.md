@@ -40,7 +40,7 @@ kind's lattice, zooms and packet bound are one row in pxl-spec (`bake/tile.rs`
 
 **Terrain** (`terrain/`) is the ground. A cell is one byte, a palette index into
 OpenStreetMap Carto's palette (`spec/spec/asset/cube.json`), beside an
-elevation; the heights are worked out from the elevation as a brick is filled,
+elevation; each cell's is worked out from those samples as a brick is filled,
 never sent. A tile also holds its separation, the bridges and tunnels as lines
 with a top and a width, and says which of its children are tiles (pxl-spec
 `bake/tile.rs` `Occupancy`), so it can be read as soon as it lands.

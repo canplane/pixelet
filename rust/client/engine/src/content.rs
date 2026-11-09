@@ -22,9 +22,9 @@ pub trait Content {
     fn hollow(node: (Zoom, [i32; 3])) -> u32;
 
     /// What the ground is in cell `z` of a column at `cell_zoom` whose palette index is
-    /// `palette_idx` and whose top is `top` cells. Under the top it goes by depth; above the top
+    /// `asset_id` and whose top is `top` cells. Under the top it goes by depth; above the top
     /// it is `value::VOID`; under the bedrock, and all through the wall, it is `value::UNKNOWN`.
-    fn by_depth(cell_zoom: Zoom, palette_idx: u32, top: i32, z: i32) -> u32;
+    fn by_depth(cell_zoom: Zoom, asset_id: u32, top: i32, z: i32) -> u32;
 
     /// The top of the bedrock under a face `face` leaf cells high, in leaf cells: the lowest a
     /// cube may reach there.
@@ -51,11 +51,11 @@ impl Content for Sample {
     fn hollow(_: (Zoom, [i32; 3])) -> u32 {
         0
     }
-    fn by_depth(_: Zoom, palette_idx: u32, top: i32, z: i32) -> u32 {
+    fn by_depth(_: Zoom, asset_id: u32, top: i32, z: i32) -> u32 {
         if z >= top {
             VOID
         } else {
-            palette_idx
+            asset_id
         }
     }
     fn bedrock(face: i32) -> i32 {

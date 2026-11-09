@@ -269,13 +269,13 @@ pub(crate) const INFRASTRUCTURE: &[(&str, Paint)] = {
 const LINE_ONLY: [&str; 2] = ["weir", "cutline"];
 
 fn infrastructure_paint(class: &str, closed: bool) -> Option<Paint> {
-    let &(_, (palette_idx, layer, feat)) = INFRASTRUCTURE.iter().find(|(c, _)| *c == class)?;
+    let &(_, (asset_id, layer, feat)) = INFRASTRUCTURE.iter().find(|(c, _)| *c == class)?;
     if closed && LINE_ONLY.contains(&class) {
         return None;
     }
     Some((
-        palette_idx,
-        if palette_idx == g::aeroway && !closed {
+        asset_id,
+        if asset_id == g::aeroway && !closed {
             Layer::Aeroway
         } else {
             layer
@@ -315,7 +315,7 @@ pub(crate) fn buildings(row: &BuildingRow, tile_min: G3857) -> Vec<Feature> {
         .as_deref()
         .or(row.subtype.as_deref())
         .unwrap_or("");
-    let palette_idx = if MAJOR_BUILDING_CLASSES.contains(&kind) {
+    let asset_id = if MAJOR_BUILDING_CLASSES.contains(&kind) {
         g::building_major
     } else {
         g::building
@@ -323,7 +323,7 @@ pub(crate) fn buildings(row: &BuildingRow, tile_min: G3857) -> Vec<Feature> {
     let rank = Rank::by_area(Layer::Building, row.way_area, "", &row.gers_id);
     wkb_to_geometries(&row.geom_wkb)
         .iter()
-        .filter_map(|geom| Feature::of(geom, tile_min, palette_idx, rank.clone()))
+        .filter_map(|geom| Feature::of(geom, tile_min, asset_id, rank.clone()))
         .collect()
 }
 
@@ -350,7 +350,7 @@ pub fn ways(row: &Part, way_ranges: &[WayRange], tile_min: G3857) -> Vec<Feature
             .collect(),
         0.0,
     );
-    let palette_idx = segment_type(&row.subtype, row.class.as_deref());
+    let asset_id = segment_type(&row.subtype, row.class.as_deref());
     let rank = Rank::new(
         Layer::Road,
         paint_order(&row.subtype, row.class.as_deref(), row.tags.role),
@@ -358,7 +358,7 @@ pub fn ways(row: &Part, way_ranges: &[WayRange], tile_min: G3857) -> Vec<Feature
         &row.gers_id,
     );
     let paint = |points: &[G3857], [a, b]: [f64; 2]| {
-        let mut f = Feature::line(points, tile_min, palette_idx, rank.clone())?;
+        let mut f = Feature::line(points, tile_min, asset_id, rank.clone())?;
         f.width = width_u(&row.subtype, row.class.as_deref(), row.tags.role);
         // Square where the segment is cut, round at its own ends.
         f.cut = [a > 0.0 || a0 > 0.0, b < 1.0 || b0 < 1.0];
@@ -387,7 +387,7 @@ pub(crate) fn bases(row: &BaseRow, tile_min: G3857) -> Vec<Feature> {
         .iter()
         .filter_map(|geom| {
             let closed = closes(geom);
-            let (palette_idx, layer, feat) = match src {
+            let (asset_id, layer, feat) = match src {
                 "water" => water_paint(subtype, class, closed),
                 "land" => land_paint(class),
                 "infrastructure" => infrastructure_paint(class, closed),
@@ -406,7 +406,7 @@ pub(crate) fn bases(row: &BaseRow, tile_min: G3857) -> Vec<Feature> {
                 }
                 _ => Rank::by_area(layer, row.way_area, feat, &row.gers_id),
             };
-            let mut f = Feature::of(geom, tile_min, palette_idx, rank)?;
+            let mut f = Feature::of(geom, tile_min, asset_id, rank)?;
             if !closed {
                 f.width = line_width(src, class);
             }

@@ -9,7 +9,7 @@
 mod real_world;
 
 use pxl_spec::brick;
-use pxl_spec::ground::palette_idxs;
+use pxl_spec::ground::asset_ids;
 use pxl_spec::share::FULL;
 use pxl_spec::space::coord::world::{wrap_idx, SEA_LEVEL};
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, MIN_ZOOM, SHARD_ZOOM};
@@ -356,7 +356,7 @@ fn tell(
     t.add(
         "cell, four differ",
         is_cell && {
-            let [a, b, c, d] = palette_idxs(got.asset[1]);
+            let [a, b, c, d] = asset_ids(got.asset[1]);
             a != b || b != c || c != d
         },
     );

@@ -29,7 +29,7 @@ use pxl_spec::asset::cube::sentinel;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct Surface {
     pub top: f64,
-    pub asset: GroundId,
+    pub asset_id: GroundId,
 }
 
 impl World {
@@ -40,7 +40,7 @@ impl World {
         if shard.past() {
             return Answer::Exact(Some(Surface {
                 top: f64::from(SEA_LEVEL),
-                asset: sentinel::unknown,
+                asset_id: sentinel::unknown,
             }));
         }
         let side = units(cell_zoom);
@@ -52,7 +52,7 @@ impl World {
             .map(|col| {
                 col.is_grounded().then(|| Surface {
                     top: f64::from(col.top) * units(cell_zoom),
-                    asset: col.palette_idx as GroundId,
+                    asset_id: col.asset_id as GroundId,
                 })
             })
     }

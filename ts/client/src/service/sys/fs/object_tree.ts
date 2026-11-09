@@ -26,7 +26,7 @@ import { AIR, grounds, objects } from "./voxel.spec.ts";
  * made it. `text` is a marker's words, the one record a leaf can carry. */
 export interface Leaf {
   key: string;
-  id: number;
+  asset_id: number;
   text: string | null;
 }
 
@@ -76,13 +76,13 @@ export function lay(leaves: Map<string, Leaf>, w: Leaf): void {
         for (let s = 0; s < 8; s++) {
           const key = `${parent}${s}`;
           if (key !== w.key.slice(0, d)) {
-            leaves.set(key, { key, id: l.id, text: l.text });
+            leaves.set(key, { key, asset_id: l.asset_id, text: l.text });
           }
         }
       }
     }
   }
-  if (w.id !== VOID) leaves.set(w.key, w);
+  if (w.asset_id !== VOID) leaves.set(w.key, w);
 }
 
 /** A share is how much of a cube is filled, and this is a whole cube
@@ -135,7 +135,7 @@ export function fold(children: readonly number[], zoom: number): number {
  * holds the leaves `under`. */
 function word(under: readonly Leaf[], j: number): number {
   if (under.length === 1 && depth(under[0]!.key) === j) {
-    return share(under[0]!.id);
+    return share(under[0]!.asset_id);
   }
   const children: Leaf[][] = Array.from({ length: 8 }, () => []);
   for (const l of under) children[slot(l.key, j + 1)]!.push(l);

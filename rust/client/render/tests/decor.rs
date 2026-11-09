@@ -153,11 +153,11 @@ impl DecorQuery for Generating<'_, '_> {
             );
             self.tally.add(
                 "surface: a way on a void column",
-                col.palette_idx == value::VOID,
+                col.asset_id == value::VOID,
             );
             self.tally.add("surface: a part of its cube", f.top.1 < 1.0);
             self.tally
-                .add("surface: a wall", col.palette_idx == value::UNKNOWN);
+                .add("surface: a wall", col.asset_id == value::UNKNOWN);
             // What the pass by hand asks of the world: where ways bound the column, its cells
             // down to the surface, and otherwise nothing.
             let (b, _, _) = clip::bound_over(
@@ -188,10 +188,8 @@ impl DecorQuery for Generating<'_, '_> {
         }
         if f.end == End::Miss && !shard.past() {
             let col = resident.cell(shard, Lookup::NONE, cell_zoom, [wrapped, g[1], 0]);
-            self.tally.add(
-                "surface: void column, no way",
-                col.palette_idx == value::VOID,
-            );
+            self.tally
+                .add("surface: void column, no way", col.asset_id == value::VOID);
         }
         (f, f.top, met)
     }

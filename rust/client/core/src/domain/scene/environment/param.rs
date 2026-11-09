@@ -21,6 +21,6 @@ pub const CLOUD_SALT: u32 = 0x0c0c;
 /// are the same at every distance, so a cloud seen far off is still there
 /// when the eye comes nearer. The value was chosen by eye.
 pub const CLOUD_SPACING_CELLS: f64 = 16.0;
-/// The eye's height, in km, at which the clouds are gone. They begin to fade
-/// at half this height. It is a product choice, not a physical value.
+/// The eye's altitude, in km, at which the clouds are gone. They begin to fade
+/// at half this altitude. It is a product choice, not a physical value.
 pub const CLOUD_GONE_KM: f64 = 64.0;

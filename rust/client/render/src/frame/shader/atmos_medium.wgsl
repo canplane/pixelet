@@ -76,7 +76,7 @@ fn air_path(r: f32, mu: f32) -> f32 {
 }
 
 // How far under the eye the land it stands over lies, in km: the plane at the
-// height of its ground. Only drawing reads it; the tables keep the radius they
+// elevation of its ground. Only drawing reads it; the tables keep the radius they
 // were baked at.
 fn land_below_km() -> f32 {
   return atmos_camera_alt() - atmos_land_alt_km();
@@ -146,10 +146,10 @@ fn coord_of(x: f32, size: f32) -> f32 {
   return 0.5 / size + x * (1.0 - 1.0 / size);
 }
 
-// How far a light's height moves over one texel of the transmittance table
+// How far a light's mu moves over one texel of the transmittance table
 // from where it stands, taking the larger of the two sides. The light is read
 // through that table.
-fn height_step(r: f32, mu: f32) -> f32 {
+fn mu_step(r: f32, mu: f32) -> f32 {
   let uv = transmittance_uv(r, mu);
   let texel = vec2f(1.0 / TRANSMITTANCE_SIZE.x, 0.0);
   return max(abs(transmittance_r_mu(uv + texel).y - mu), abs(transmittance_r_mu(uv - texel).y - mu));

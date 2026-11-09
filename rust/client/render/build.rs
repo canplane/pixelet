@@ -112,11 +112,11 @@ fn main() {
         "fn fill_side(k: u32) -> f32 {{ switch k {{ {sides}default: {{ return 1.0; }} }} }}\n"
     );
     // A coarse cell's ray carries the cell's four palette indices in its third word, packed as
-    // pxl-spec ground.rs `palette_idxs` packs them.
+    // pxl-spec ground.rs `asset_ids` packs them.
     let b = PALETTE_BITS;
     let m = (1u32 << b) - 1;
-    let palette_idxs = format!(
-        "fn ray_palette_idxs(w: u32) -> vec4u {{ return vec4u(w & {m}u, (w >> {b}u) & {m}u, (w >> {}u) & {m}u, w >> {}u); }}\n",
+    let asset_ids = format!(
+        "fn ray_asset_ids(w: u32) -> vec4u {{ return vec4u(w & {m}u, (w >> {b}u) & {m}u, (w >> {}u) & {m}u, w >> {}u); }}\n",
         2 * b,
         3 * b
     );
@@ -127,7 +127,7 @@ fn main() {
         field("fill", FILL_SHIFT, FILL_BITS),
         fill,
         faces,
-        palette_idxs,
+        asset_ids,
     ];
     std::fs::write(out.join("ray.wgsl"), ray.concat()).expect("the ray's shader");
     // The corners of a box's vertices, first as pxl-engine raster.rs `corner` winds them and

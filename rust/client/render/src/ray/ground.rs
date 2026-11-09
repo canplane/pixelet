@@ -33,7 +33,7 @@ pub struct BrickWrite<'a> {
     pub cell_zoom: Zoom,
     pub brick: [i32; 2],
     pub words: &'a [u32],
-    pub palette_idxs: &'a [u32],
+    pub palette_words: &'a [u32],
     pub run: &'a [(u32, &'a [u32])],
 }
 
@@ -67,7 +67,7 @@ pub(super) struct GroundBuffer {
     /// Every slot's brick words (`GROUND_BYTES`).
     pub(super) ground: u32,
     /// Every slot's palette indices (`PALETTE_BYTES`).
-    pub(super) palette_idxs: u32,
+    pub(super) palette_words: u32,
     /// The ways' pool, and the words it has room for.
     pub(super) pool: u32,
     word_cnt: u32,
@@ -138,7 +138,7 @@ impl RayPass {
             let word_cnt = ground.pool.next_power_of_two().min(WAYS_POOL_WORDS);
             GroundBuffer {
                 ground: g.buf(GROUND_BYTES as u32, storage),
-                palette_idxs: g.buf(PALETTE_BYTES as u32, storage),
+                palette_words: g.buf(PALETTE_BYTES as u32, storage),
                 pool: pool_buf(g, word_cnt),
                 word_cnt,
                 bricks: List::new(),
@@ -154,9 +154,9 @@ impl RayPass {
             }
             g.upload_buf(gb.ground, q.slot * BRICK_BYTES, bytes(q.words));
             g.upload_buf(
-                gb.palette_idxs,
+                gb.palette_words,
                 q.slot * PALETTE_BRICK_BYTES,
-                bytes(q.palette_idxs),
+                bytes(q.palette_words),
             );
             for &(first, words) in q.run {
                 g.upload_buf(gb.pool, pool_bytes(first), bytes(words));

@@ -5,20 +5,20 @@
 // measures its light's slopes (`slopes`).
 
 // `light.x` names the light, 1 for the moon. `light.y` is 1 when this drawing
-// measures the slope in the light's height, and `light.z` is 1 when it
+// measures the slope in the light's mu, and `light.z` is 1 when it
 // measures the slope in the eye's altitude (pass/atmosphere.rs `prepare`).
 @group(0) @binding(14) var<uniform> light: vec4f;
 
 // What the views and the exposure measure (frame/shader/word.rs
 // `SLOPE_WORDS`): `LIGHT_SLOPES` words for each light, the sun's first, then
 // two for the ground, its slope and its sample (atmos_exposure.wgsl). A
-// light's first word is the most display levels per unit of its height that
+// light's first word is the most display levels per unit of its mu that
 // any texel of its sky with the sun's glare over it, the sun's disc, or the
 // land's lit face under the eye moves, with the exposure moving along. The
 // second is the same per km of the eye's altitude, with the land and the
-// exposure standing still. The third is the height's sample, over which the
+// exposure standing still. The third is the mu's sample, over which the
 // first is taken. The fourth is the most levels the light's sky shows, and the
-// fifth their slope in its height (atmos_exposure.wgsl `reach`). Each slope is
+// fifth their slope in its mu (atmos_exposure.wgsl `reach`). Each slope is
 // a local linearization, trusted over its one sample alone: for the light, one
 // step of the transmittance table's own sampling where the light stands; for
 // the eye, `ATMOS_ALT_SAMPLE` of its altitude, and `ATMOS_ALT_SAMPLE_LEAST_KM`
@@ -35,18 +35,18 @@ fn alt_sample() -> f32 {
 }
 
 // The texel's sky along `dir` as shown, exposed by `e`, from the `radiance`
-// drawn for light `k` at height `mu` from radius `r`, with the sun's glare
+// drawn for light `k` at `mu` from radius `r`, with the sun's glare
 // over it.
 fn shown_sky(r: f32, dir: vec3f, mu: f32, k: u32, radiance: vec3f, e: f32) -> vec3f {
   let sun = select(1.0, 0.0, k == 1u);
   return radiance * atmos_white() * light_gain(k) * e + glare_toward(r, dir, view_light(mu), mu, e) * sun;
 }
 
-// Measures the texel's slope in its light's height: how far its sky, the
+// Measures the texel's slope in its light's mu: how far its sky, the
 // sun's disc and the land's lit face under the eye move as the light rises by
 // its sample.
 fn measure_light(r: f32, dir: vec3f, mu: f32, k: u32, radiance: vec3f) {
-  let h = height_step(r, mu);
+  let h = mu_step(r, mu);
   let now = lights_now();
   let moon = k == 1u;
   let raised = lights_raised(now, moon, h);

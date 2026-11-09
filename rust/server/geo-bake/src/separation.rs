@@ -40,7 +40,7 @@ pub struct Line {
     /// The coarsest zoom each point is held at (`coarsest`).
     pub(crate) coarsest: Vec<u8>,
     /// A bore's clear space over its surface, in leaf cells; none for another form.
-    pub(crate) clear: u8,
+    pub(crate) clearance: u8,
 }
 
 /// Each point's coarsest zoom (`way::coarsest`) on the line through `points`,

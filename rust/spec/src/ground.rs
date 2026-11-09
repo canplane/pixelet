@@ -1,15 +1,15 @@
 // pxl-spec/ground.rs
 
 //! wgsl-port: the ground's cells as a tile holds them and the rules a column reads them by,
-//! which the bake and the client both run: a cell's height from the elevation samples
-//! (`height`), its four palette indices and its own (`own`), and its top and face in cells of a
-//! zoom (`top`, `face_height`). The ground's column as a descent asks it is pxl-engine's
+//! which the bake and the client both run: a cell's elevation from the tile's samples
+//! (`ele_at`), its four palette indices and its own (`own`), and its top and face in cells of a
+//! zoom (`top`, `face_ele`). The ground's column as a descent asks it is pxl-engine's
 //! (ground.rs `node`).
 //!
-//! A palette index and a height are stored as a byte and an i16 and read into a word here,
+//! A palette index and an elevation are stored as a byte and an i16 and read into a word here,
 //! since WGSL has no narrower integer.
 //!
-//! A cell's height from the samples (`height`) is exact, in integers, so the CPU and a GPU
+//! A cell's elevation from the samples (`ele_at`) is exact, in integers, so the CPU and a GPU
 //! draw it alike whatever they fuse or reorder.
 
 use crate::share::{eighths, FULL};
@@ -26,7 +26,7 @@ pub const UNKNOWN: u32 = value::UNKNOWN;
 pub const TILE_ELE_SPAN: u32 = 1 << (UNIT_ZOOM - LEAF_ZOOM + 1 - 5);
 
 /// Two samples of padding give the bicubic a 4×4 kernel at every edge texel,
-/// and let the ground height 32 cells past the tile be read without the
+/// and let the ground's elevation 32 cells past the tile be read without the
 /// neighboring tile resident.
 pub const ELE_PAD: u32 = 2;
 pub const ELE_PADDED_SPAN: u32 = TILE_ELE_SPAN + 2 * ELE_PAD;
@@ -36,9 +36,9 @@ pub const fn ele_idx(x: u32, y: u32) -> usize {
     (y * ELE_PADDED_SPAN + x) as usize
 }
 
-/// The height the surface draws at the center of a tile's cell `(x, y)`, in leaf cells, from
+/// The elevation the surface draws at the center of a tile's cell `(x, y)`, in leaf cells, from
 /// its padded elevation samples `ele` (`ele_idx`). It is the one producer of a cell's
-/// height, which the core's fill and the bake both run (fill.rs `columns`): Catmull-Rom over
+/// elevation, which the core's fill and the bake both run (fill.rs `columns`): Catmull-Rom over
 /// the 4 × 4 samples around the center, rounded half to even and held to their range, so a
 /// bound over the surface is the samples' own.
 ///
@@ -47,9 +47,9 @@ pub const fn ele_idx(x: u32, y: u32) -> usize {
 /// `1 << WEIGHT_BITS` (`catmull_rom`), under 2^16 in size. A sample times a weight is under
 /// 2^31. A row's sum, with its weights' sizes summing under 1.23 · 2^16, is under 2^31.3. A
 /// row times a weight, the four summed, is under 2^47.6 and fits an `i64`, whose high word is
-/// the height's floor and whose low word is the fraction to round. Filling a brick costs, for
+/// the elevation's floor and whose low word is the fraction to round. Filling a brick costs, for
 /// each column, 16 products of 32 bits and 4 of 64.
-pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [i32; 2]) -> i32 {
+pub fn ele_at(ele: impl Fn(usize) -> i32, [x, y]: [i32; 2]) -> i32 {
     let (x0, mx) = window(x);
     let (y0, my) = window(y);
     let (wx, wy) = (catmull_rom(mx), catmull_rom(my));
@@ -79,7 +79,7 @@ pub fn height(ele: impl Fn(usize) -> i32, [x, y]: [i32; 2]) -> i32 {
 pub const PALETTE_BITS: u32 = 8;
 
 /// A cell's word's four palette indices, `dx + 2·dy`.
-pub fn palette_idxs(word: u32) -> [u32; 4] {
+pub fn asset_ids(word: u32) -> [u32; 4] {
     let m = (1 << PALETTE_BITS) - 1;
     [
         word & m,
@@ -97,7 +97,7 @@ pub fn word([a, b, c, d]: [u32; 4]) -> u32 {
 /// A cell's own look at `cell_zoom`: the majority of the four it folds, as the
 /// bake folds a tile's (pxl-spec bake/fold.rs `fold_ground`).
 pub fn own(w: u32, cell_zoom: Zoom) -> u32 {
-    majority(palette_idxs(w), cell_zoom)
+    majority(asset_ids(w), cell_zoom)
 }
 
 /// The steps of half a cell that an elevation sample spans, since a cell's center lies on a
@@ -143,7 +143,7 @@ const _: () = assert!(
 );
 const _: () = assert!(
     2 * WEIGHT_BITS == u32::BITS,
-    "a height's sum's high word is its floor"
+    "an elevation's sum's high word is its floor"
 );
 
 /// The value filling more than half of a 2×2 (or 2×2×2) group, `v[dx + 2·dy +
@@ -181,17 +181,17 @@ pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], parent: Zoom) -> T {
     }
 }
 
-/// A height in leaf cells as cells of `cell_zoom` (`top`).
+/// An elevation in leaf cells as cells of `cell_zoom` (`top`).
 pub fn cells(cell_zoom: Zoom, h: f32) -> i32 {
     top(cell_zoom, h).0
 }
 
-/// A height in leaf cells as cells of `cell_zoom`, and the share of the top cell it fills,
-/// in `share::FULL`'s units. Finer than the leaves, the height is shifted and every cell is
-/// whole. Coarser, the height is the mean in cells: its top is the cell it ends in where it
+/// An elevation in leaf cells as cells of `cell_zoom`, and the share of the top cell it fills,
+/// in `share::FULL`'s units. Finer than the leaves, the elevation is shifted and every cell is
+/// whole. Coarser, the elevation is the mean in cells: its top is the cell it ends in where it
 /// fills an eighth of that cell or more (`share::eighths`), keeping the share filled there,
 /// and otherwise the cell under it, whole. So a coarse column's ground is the volume its mean
-/// height fills, as a cell of it is drawn: whole under its top, with its top a box of its
+/// elevation fills, as a cell of it is drawn: whole under its top, with its top a box of its
 /// share's volume.
 pub fn top(cell_zoom: Zoom, h: f32) -> (i32, u32) {
     let d = cell_zoom as i32 - LEAF_CELL_ZOOM as i32;
@@ -216,8 +216,8 @@ pub fn leaf_cells(cell_zoom: Zoom) -> i32 {
 /// The face of a top `top` cells of `cell_zoom` high, in leaf cells, as the grid draws it.
 /// Finer than the leaves, it is the leaf cell the top's cell lies in, rounded down under sea
 /// level as over it, as a cell's index is. Coarser, it is the mean as its cells round it
-/// (pxl-render world_rule.wgsl `face_height`).
-pub fn face_height(cell_zoom: Zoom, top: i32) -> i32 {
+/// (pxl-render world_rule.wgsl `face_ele`).
+pub fn face_ele(cell_zoom: Zoom, top: i32) -> i32 {
     let d = cell_zoom as i32 - LEAF_CELL_ZOOM as i32;
     if d >= 0 {
         top >> d
@@ -266,13 +266,13 @@ mod tests {
     /// rounded down under sea level as over it; under the leaves, the cells
     /// scaled.
     #[test]
-    fn face_height_floors() {
+    fn face_ele_floors() {
         let cell_zoom = LEAF_CELL_ZOOM + 2;
-        assert_eq!(face_height(cell_zoom, 8), 2);
-        assert_eq!(face_height(cell_zoom, 9), 2);
-        assert_eq!(face_height(cell_zoom, -8), -2);
-        assert_eq!(face_height(cell_zoom, -9), -3);
-        assert_eq!(face_height(cell_zoom, -1), -1);
-        assert_eq!(face_height(LEAF_CELL_ZOOM - 3, -5), -40);
+        assert_eq!(face_ele(cell_zoom, 8), 2);
+        assert_eq!(face_ele(cell_zoom, 9), 2);
+        assert_eq!(face_ele(cell_zoom, -8), -2);
+        assert_eq!(face_ele(cell_zoom, -9), -3);
+        assert_eq!(face_ele(cell_zoom, -1), -1);
+        assert_eq!(face_ele(LEAF_CELL_ZOOM - 3, -5), -40);
     }
 }

@@ -1,6 +1,6 @@
 // pxl-geo-bake/elevation.rs
 
-//! A tile's elevation grid, the one definition of ground height for the bake,
+//! A tile's elevation grid, the one definition of ground elevation for the bake,
 //! the client and the separation solve. It reproduces PostGIS's
 //! `ST_Resample(…, 'Bilinear')` (GDAL's warper) value for value; the steps
 //! below name the GDAL/PostGIS function each copies.
@@ -200,7 +200,7 @@ impl Raster {
         Ok(raster_tile)
     }
 
-    /// Leaf `tile`'s padded grid of heights, in leaf cells at its scale
+    /// Leaf `tile`'s padded grid of elevations, in leaf cells at its scale
     /// (pxl-spec `epsg3857::cells_of_m`, `Frame::per_m`).
     pub(crate) fn tile_grid(
         &self,

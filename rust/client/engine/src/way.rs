@@ -30,7 +30,7 @@ pub trait SpanTable {
 /// keeps it, and a slab goes before its pier. Otherwise it is the first air over the cell
 /// (`AIR_OF` over its way's palette index), or else `NOTHING`.
 fn at(k: &impl SpanTable, c: [i32; 2], n: u32, cell_zoom: Zoom, z: i32) -> u32 {
-    let (mut best, mut palette_idx, mut air) = ([i32::MIN, i32::MIN], NOTHING, NOTHING);
+    let (mut best, mut asset_id, mut air) = ([i32::MIN, i32::MIN], NOTHING, NOTHING);
     let mut j = 0;
     while j < n {
         let (run, v) = k.span(c, j);
@@ -40,13 +40,13 @@ fn at(k: &impl SpanTable, c: [i32; 2], n: u32, cell_zoom: Zoom, z: i32) -> u32 {
                     air = v;
                 }
             } else if at_or_after(run, best) {
-                (best, palette_idx) = (run, v);
+                (best, asset_id) = (run, v);
             }
         }
         j += 1;
     }
-    if palette_idx != NOTHING {
-        palette_idx
+    if asset_id != NOTHING {
+        asset_id
     } else {
         air
     }
@@ -214,7 +214,7 @@ fn bare(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pxl_spec::ground::{cells, face_cell, face_height};
+    use pxl_spec::ground::{cells, face_cell, face_ele};
     use pxl_spec::value::PIER;
 
     /// A column: its face cell, its spans and how many it holds.
@@ -262,10 +262,7 @@ mod tests {
             let cell_zoom = LEAF_CELL_ZOOM - next(4);
             let s = 1i32 << (LEAF_CELL_ZOOM - cell_zoom);
             let top = next(120) as i32 - 60;
-            let face = face_cell(
-                cell_zoom,
-                face_height(cell_zoom, cells(cell_zoom, top as f32)),
-            );
+            let face = face_cell(cell_zoom, face_ele(cell_zoom, cells(cell_zoom, top as f32)));
             let mut five = [(0, [([0, 0], 0); 4], 0); 5];
             for (k, col) in five.iter_mut().enumerate() {
                 let n = next(5);

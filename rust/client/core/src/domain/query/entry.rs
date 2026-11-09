@@ -21,14 +21,14 @@ impl World {
         let node = (at.zoom(), at.at());
         self.object
             .entry_at(node.0, node.1, self.object.cursor(node))
-            .filter(|e| !is_air(e.state))
+            .filter(|e| !is_air(e.asset_id))
     }
 
     /// Calls `visit` with everything placed whose cube meets `space`, air
     /// left out, with X on the lap of `space`.
     pub fn placed_in(&self, space: &Aabb, visit: &mut dyn FnMut(&Entry)) {
         self.object.entries_in(space, &mut |e| {
-            if !is_air(e.state) {
+            if !is_air(e.asset_id) {
                 visit(e);
             }
         });
@@ -61,7 +61,7 @@ impl World {
         let mut met = None;
         self.object.entries_in(&around, &mut |e| {
             if met.is_none()
-                && !is_air(e.state)
+                && !is_air(e.asset_id)
                 && which(e)
                 && occupies(e).is_some_and(|room| room.shares(*space))
             {

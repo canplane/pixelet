@@ -158,12 +158,12 @@ mod tests {
     use pxl_spec::share::EIGHTHS;
     use pxl_spec::space::coord::zoom::{SHARD_ZOOM, UNIT_ZOOM};
 
-    /// Ground of stone up to `height` unit cells: two over the cells west of x = 4, none over
+    /// Ground of stone up to `ele_at` unit cells: two over the cells west of x = 4, none over
     /// the rest, with air above. Each node's `At` is the node it was handed for, checked where it
     /// is asked, so an asset asked from a node not over it is caught.
     struct Step;
 
-    fn height(x: i32) -> i32 {
+    fn ele_at(x: i32) -> i32 {
         if x < 4 {
             2
         } else {
@@ -208,7 +208,7 @@ mod tests {
             }
             In {
                 kind: Kind::Cell,
-                asset: if node[2] < height(node[0]) {
+                asset: if node[2] < ele_at(node[0]) {
                     STONE
                 } else {
                     EMPTY
@@ -227,7 +227,7 @@ mod tests {
         for x in 2..10 {
             for y in 0..7 {
                 for z in -2..4 {
-                    let want = if z < height(x) { STONE[0] } else { EMPTY[0] };
+                    let want = if z < ele_at(x) { STONE[0] } else { EMPTY[0] };
                     let c = [x, y, z];
                     assert_eq!(asset(&mut Step, &f.line, UNIT_ZOOM, c), want, "{c:?}");
                 }
@@ -406,7 +406,7 @@ mod tests {
         for x in 1..6 {
             for y in 0..5 {
                 for z in -1..4 {
-                    let want = if z < height(x) { STONE[0] } else { EMPTY[0] };
+                    let want = if z < ele_at(x) { STONE[0] } else { EMPTY[0] };
                     let c = [x, y, z];
                     assert_eq!(asset(&mut Step, &l, UNIT_ZOOM, c), want, "{c:?}");
                 }

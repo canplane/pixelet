@@ -31,7 +31,7 @@ pub fn bake_separation(lines: &[Line], tile: [i32; 2]) -> Separation {
         [0, 1].iter().all(|&k| grid(min[k], k) == origin[k])
     });
     for row in lines {
-        let kind = segment_type(&row.subtype, row.class.as_deref());
+        let asset_id = segment_type(&row.subtype, row.class.as_deref());
         let width = row.width_u / CELL_U;
         let width_code = separation::width_byte(width);
         let world: Vec<Point> = row
@@ -55,9 +55,9 @@ pub fn bake_separation(lines: &[Line], tile: [i32; 2]) -> Separation {
             separation.push(
                 local[a..=b].iter().copied(),
                 width_code,
-                kind,
+                asset_id,
                 row.form,
-                row.clear,
+                row.clearance,
             );
         }
     }

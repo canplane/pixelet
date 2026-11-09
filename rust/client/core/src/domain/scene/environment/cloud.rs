@@ -99,7 +99,7 @@ struct Patch {
     bytes: u32,
     handle: u32,
     idx: u32,
-    heights: [f32; 2],
+    alts: [f32; 2],
     /// For each variant, the draw of its models and the draw of its
     /// impostors.
     draws: [[DrawId; 2]; VARIANTS.len()],
@@ -153,7 +153,7 @@ fn widest(slot: Slot) -> f64 {
         .fold(0.0, f64::max)
 }
 
-/// The cumulus layer's height over the datum, in units. It is the height at
+/// The cumulus layer's altitude over the datum, in units. It is the altitude at
 /// which the sky draws its cloud layer.
 fn layer_u() -> f64 {
     CUMULUS_KM / km_per_u()
@@ -170,7 +170,7 @@ pub fn drift_step_s() -> f64 {
 
 /// How much of the clouds shows, from 0 to 1, for the cumulus and the sheets
 /// alike (`FrameInput::clouds`). It is 0 with the clouds setting off.
-/// Otherwise it is 1 while the eye, at the height the sky last saw it, is
+/// Otherwise it is 1 while the eye, at the altitude the sky last saw it, is
 /// below half of `CLOUD_GONE_KM`, and it fades to 0 at `CLOUD_GONE_KM`.
 pub fn clouds_shown() -> f64 {
     if !settings().clouds {
@@ -271,7 +271,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
             key[0] as f64 * PATCH - off[0],
             key[1] as f64 * PATCH - off[1],
         ];
-        let [zlo, zhi] = b.heights.map(f64::from);
+        let [zlo, zhi] = b.alts.map(f64::from);
         let half = largest / 2.0;
         if !frame.sees_box(
             [corner[0] - half, corner[1] - half, zlo - half],
@@ -315,7 +315,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
             corner: [nearest(corner[0], eye[0]), corner[1]],
             box_corner: box_corner(key, off, eye),
             side: PATCH,
-            heights: b.heights,
+            alts: b.alts,
             draws: &b.draws,
         };
         // The draw's position holds neither the eye nor the drift, so the
@@ -353,7 +353,7 @@ fn box_corner(key: [i64; 2], off: [f64; 2], eye: V3) -> [f64; 2] {
 
 /// A patch's stand: the box its draws declare they stand within (pxl-render
 /// `ReceiverBox`). The patch's stood corner is `corner` (`box_corner`), its
-/// side is `side`, its instances lie between the heights `[zlo, zhi]`, and
+/// side is `side`, its instances lie between the alts `[zlo, zhi]`, and
 /// its models reach `e` past them. The box is grown a cell back from the
 /// corner, so it holds the patch at every drift for which that corner holds.
 fn patch_box(corner: [f64; 2], side: f64, e: f64, [zlo, zhi]: [f64; 2]) -> ReceiverBox {
@@ -369,7 +369,7 @@ fn patch_box(corner: [f64; 2], side: f64, e: f64, [zlo, zhi]: [f64; 2]) -> Recei
 struct Cloud {
     variant: usize,
     local: [f64; 2],
-    /// The height of its middle and its width, in units.
+    /// The altitude of its middle and its width, in units.
     z: f64,
     width: f64,
     spin: f64,
@@ -418,7 +418,7 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
 }
 
 /// The patch's clouds as `build` laid them out, read back from its columns:
-/// each one's middle relative to the patch's corner, with its height over the
+/// each one's middle relative to the patch's corner, with its altitude over the
 /// datum, and its half extent. Reading them back asks nothing of the field's
 /// hash, which is asked once per patch when it is built, and asks the catalog
 /// once per variant.
@@ -454,11 +454,11 @@ fn build(
     for l in columns.iter_mut() {
         l.clear();
     }
-    let mut heights = [f32::INFINITY, f32::NEG_INFINITY];
+    let mut alts = [f32::INFINITY, f32::NEG_INFINITY];
     for c in clouds_of(key, base) {
-        heights = [
-            heights[0].min((c.z - c.width / 2.0) as f32),
-            heights[1].max((c.z + c.width / 2.0) as f32),
+        alts = [
+            alts[0].min((c.z - c.width / 2.0) as f32),
+            alts[1].max((c.z + c.width / 2.0) as f32),
         ];
         columns[c.variant].push([
             c.local[0] as f32,
@@ -502,13 +502,13 @@ fn build(
         bytes,
         handle,
         idx,
-        heights: if instance_cnt == 0 { [0.0; 2] } else { heights },
+        alts: if instance_cnt == 0 { [0.0; 2] } else { alts },
         draws: core::array::from_fn(|_| Default::default()),
     })
 }
 
 /// A built patch as `present_patch` reads it. `corner` is the corner of its
-/// square on the lap of X nearest the eye, and `heights` are the heights its
+/// square on the lap of X nearest the eye, and `alts` are the alts its
 /// instances stand between.
 struct PatchDraw<'a> {
     handle: u32,
@@ -519,7 +519,7 @@ struct PatchDraw<'a> {
     /// The corner its draws stand by (`box_corner`).
     box_corner: [f64; 2],
     side: f64,
-    heights: [f32; 2],
+    alts: [f32; 2],
     draws: &'a [[DrawId; 2]],
 }
 
@@ -541,7 +541,7 @@ fn present_patch(
     let (model, impostor) = (decor_model_angle() as f32, decor_impostor_angle() as f32);
     let lod = |across: f64| drawn::lod(across as f32, model, impostor);
     let [x0, y0] = b.corner;
-    let [zlo, zhi] = b.heights.map(f64::from);
+    let [zlo, zhi] = b.alts.map(f64::from);
     let gap = |lo: f64, hi: f64, v: f64| (lo - v).max(v - hi).max(0.0);
     let far = |lo: f64, hi: f64, v: f64| (v - lo).abs().max((hi - v).abs());
     let nearest = v3::len(&[

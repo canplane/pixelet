@@ -195,7 +195,7 @@ pub fn commit_draft() {
     if stands && !text.is_empty() {
         submit(Write {
             at: key_of::<3>(zoom, cell),
-            id: MARKER,
+            asset_id: MARKER,
             ext: Some(Ext::MarkerText(text)),
         });
     }
@@ -233,7 +233,7 @@ pub fn remove(at: Octant) {
         .collect();
     submit(Write {
         at: key_of::<3>(at.zoom(), at.at()),
-        id: erase_val(at),
+        asset_id: erase_val(at),
         ext: None,
     });
     for c in erased {

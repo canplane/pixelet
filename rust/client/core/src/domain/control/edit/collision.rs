@@ -72,7 +72,7 @@ pub fn is_placement_blocked(asset: Asset, zoom: Zoom, corner: &Q3) -> bool {
         max: [room.max[0], room.max[1], room.min[2]],
     };
     let refuses = |e: &Entry| {
-        kind_of(e.state).is_some_and(|under| asset.kind().is_some_and(|k| !stands_on(k, under)))
+        kind_of(e.asset_id).is_some_and(|under| asset.kind().is_some_and(|k| !stands_on(k, under)))
     };
     blocked || world.placed_occupying(&under, refuses).is_some()
 }
