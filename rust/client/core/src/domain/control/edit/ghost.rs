@@ -46,7 +46,8 @@ pub fn ghost() -> Ghost {
 /// The cube of the leaf cell at `h` that a carve takes, as the world answers
 /// it, whichever source fills the cell: the ground, a way or a bore's wall.
 pub(super) fn carved_cube(h: Q3) -> Option<AssetId> {
-    carved().of(World::now(), h, |w| {
+    let w = World::now();
+    carved().of(h, || {
         Asset::of(
             w.asset_of(&middle(Octant::holding(GROUND.leaf_cell_zoom(), &h)))
                 .val()

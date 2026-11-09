@@ -337,7 +337,7 @@ pub fn climb_polar(pivot: V3, dist: f64, polar: f64, azimuth: f64) -> f64 {
     };
     let last = CLIMB_PITCH.get(|| Memo::NONE);
     last.forget_touched();
-    last.of(World::now(), key, |w| climb_pose(at, &Ground::of(&w)).polar)
+    last.of(key, || climb_pose(at, &Ground::of(&World::now())).polar)
 }
 
 /// What a climb is computed from, compared by value: the pose and where its

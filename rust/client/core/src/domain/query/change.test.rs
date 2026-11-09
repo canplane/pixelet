@@ -4,6 +4,7 @@ use super::*;
 use crate::domain::layer::object::store::Store;
 use crate::domain::query::over;
 use crate::domain::query::test::flat_at_five;
+use crate::domain::query::world::World;
 use crate::sys;
 use pxl_spec::brick;
 use pxl_spec::space::coord::world::point;
@@ -81,7 +82,7 @@ fn a_memo_keeps_a_cell_until_its_column_changes() {
     let world = World::new(&tile_cache, &store);
     let mut memo = Memo::<u32, Option<u32>>::NONE;
     let at = point(x + 0.5, y + 0.5, 4.5);
-    let asked = memo.of(world, 0, |w| w.asset_of(&at).val());
+    let asked = memo.of(0, || world.asset_of(&at).val());
     assert!(asked.is_some());
     assert!(memo.0.is_some(), "a cell's asset read its column");
     changes().ground.clear();

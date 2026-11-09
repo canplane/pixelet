@@ -10,7 +10,7 @@ mod gpu;
 mod real_world;
 
 use gpu::{list_every, margins, Gpu};
-use pxl_engine::cast::{Detail, Keep, Node, Query, Ray, Root, Trace, Until, DEPTH};
+use pxl_engine::cast::{Detail, Keep, Line, Node, Query, Ray, Trace, Until, DEPTH};
 use pxl_engine::light::{self, Light, StartGrid};
 use pxl_engine::object::Cut;
 use pxl_engine::world::Inheritance;
@@ -128,7 +128,7 @@ fn hit_of(w: World, l: &Light, range: [Zoom; 2], c: [u32; 2], o: [i32; 3]) -> f3
         detail,
         Until::Beam,
         (Node::ROOT, at, 0.0),
-        &Root(at),
+        &Line::of_root(Node::ROOT.idx(o), at),
         &mut Unkept,
         cast::STEPS_CAP,
     );

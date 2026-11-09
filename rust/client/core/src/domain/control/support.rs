@@ -59,9 +59,10 @@ pub fn support_step() {
 /// one floor.
 fn standing(world: World<'_>, at: &Q3) -> Answer<Option<Q3>> {
     if is_unknown(at) || !settings().surface_follow {
-        return stand_memo().of(world, *at, |w| w.stands(at));
+        return stand_memo().of(*at, || world.stands(at));
     }
-    let floor = stand_memo().of(world, *at, |w| {
+    let w = world;
+    let floor = stand_memo().of(*at, || {
         w.floor_under(at, LEAF_ZOOM)
             .map(|top| top.map(|top| on_floor(at, top)))
     });

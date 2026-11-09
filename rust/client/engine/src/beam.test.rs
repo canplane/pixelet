@@ -190,9 +190,15 @@ impl cast::Keep<At> for Line {
     }
 }
 
-impl cast::Over<At> for Line {
-    fn over(&self, zoom: Zoom) -> At {
-        self.at[zoom as usize]
+impl Line {
+    /// This line as a walk from `origin` resumes from it.
+    fn whole(&self, origin: [i32; 3]) -> cast::Line<At> {
+        cast::Line::of_walk(
+            origin,
+            &self.node,
+            self.at[self.node.zoom as usize],
+            &self.at,
+        )
     }
 }
 
@@ -362,7 +368,7 @@ fn cast_view(view: &View) -> Vec<Cast> {
             let (h, found) = line.node.over(cast::point_at(o, &ray, t));
             let h = cast::holding(o, &ray, h, t);
             if found {
-                ((h, cast::Over::over(line, h.zoom), t), true)
+                ((h, line.at[h.zoom as usize], t), true)
             } else {
                 ((root.0, root.1, t), false)
             }
@@ -374,7 +380,7 @@ fn cast_view(view: &View) -> Vec<Cast> {
             detail,
             Until::Opaque,
             start,
-            line,
+            &line.whole(o),
             &mut (),
         );
         Cast {

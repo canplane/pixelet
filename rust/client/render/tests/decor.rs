@@ -13,6 +13,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use pxl_content::generation::{self, drawn, DecorQuery, BRICK_RECORDS, RECORD_WORDS};
 use pxl_content::{halve, scatter};
 use pxl_engine::answer::{self, In};
+use pxl_engine::cast::Line;
 use pxl_engine::cast::{Detail, End, Query, Spacing};
 use pxl_engine::clipmap as clip;
 use pxl_engine::clipmap::{Lookup, ENTRIES, FIRST_CELL_ZOOM};
@@ -20,7 +21,7 @@ use pxl_engine::ground::Resident;
 use pxl_engine::light::{self, Light};
 use pxl_engine::object::{self, Cut};
 use pxl_engine::seed::node_seed;
-use pxl_engine::support::{self, Lineage};
+use pxl_engine::support;
 use pxl_engine::world::{self, Inheritance, PlacedCursor};
 use pxl_engine::{beam, eye, ray};
 use pxl_render::frame::shader::record::{
@@ -55,7 +56,7 @@ impl Tally {
     }
 }
 
-/// The world as decor's generation walks it, with nothing placed handed down from the root
+/// The world as decor's generation walks it, with nothing placed handed down from the root.
 /// It is the test's reference.
 struct Ground<'w> {
     w: World<'w>,
@@ -96,39 +97,6 @@ impl Query for Ground<'_> {
             zooms,
             self.cuts,
         )
-    }
-}
-
-/// The line a cell is asked from (`DecorQuery::asset`). It is the column surface's line, or,
-/// where the ask is edited, the cell's root alone.
-struct AssetLine<'l> {
-    line: &'l support::Line<Inheritance>,
-    edited: bool,
-    root: Inheritance,
-    root_at: [i32; 3],
-}
-
-impl Lineage<Inheritance> for AssetLine<'_> {
-    fn at(&self) -> [i32; 3] {
-        if self.edited {
-            self.root_at
-        } else {
-            self.line.at()
-        }
-    }
-    fn zoom(&self) -> Zoom {
-        if self.edited {
-            0
-        } else {
-            self.line.zoom()
-        }
-    }
-    fn ancestor(&self, z: Zoom) -> Inheritance {
-        if self.edited {
-            self.root
-        } else {
-            self.line.ancestor(z)
-        }
     }
 }
 
@@ -256,11 +224,11 @@ impl DecorQuery for Generating<'_, '_> {
         } else {
             ([Cut::NONE; 2], f.line.ancestor(0))
         };
-        let line = AssetLine {
-            line: &f.line,
-            edited,
-            root,
-            root_at,
+        // Where the ask is edited, the cell's root alone; else the column surface's line.
+        let line = if edited {
+            Line::of_root(root_at, root)
+        } else {
+            f.line
         };
         let mut ground = Ground { w: self.w, cuts };
         let v = support::asset(&mut ground, &line, zoom, c);

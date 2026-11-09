@@ -165,7 +165,7 @@ fn companion() -> &'static mut Companion {
 pub fn pivot_floor(goal: Q3, ask: impl FnOnce(World<'_>) -> Option<f64>) -> Option<f64> {
     let c = companion();
     c.pivot_floor.forget_touched();
-    c.pivot_floor.of(World::now(), goal, ask)
+    c.pivot_floor.of(goal, || ask(World::now()))
 }
 
 /// Steps the person and the pet. Each is the row its setting names, and a
@@ -222,7 +222,8 @@ pub fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
     let pet_floor = &mut s.pet_floor;
     let mut walked = |floor: f64| {
         let from = center(camera.pivot, floor);
-        pet_floor.of(World::now(), (camera.pivot, floor, target), |world| {
+        let world = World::now();
+        pet_floor.of((camera.pivot, floor, target), || {
             let end = walk_to(world, &from, target);
             match reached(to_world(&end)) && !is_unknown(&end) {
                 true => floor_of(&end),
@@ -465,7 +466,8 @@ fn drawn_at(
     let eye = to_world(&camera.eye);
     let r2 = (0..3).map(|k| (pos[k] - eye[k]) * (pos[k] - eye[k])).sum();
     let zoom = GROUND.z_at(r2);
-    let ([x, y], drawn) = memo.of(World::now(), (at, floor, zoom), |world| {
+    let world = World::now();
+    let ([x, y], drawn) = memo.of((at, floor, zoom), || {
         let floor_at = |[x, y]: [f64; 2]| {
             world
                 .floor_under(&world_to_canonical(&[x, y, pos[2]]), zoom)

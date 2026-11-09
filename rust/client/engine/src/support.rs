@@ -10,21 +10,11 @@
 //! child (`asset`). The CPU and a GPU run it alike, each over its own reading of the world
 //! (`cast::Query`).
 
-use crate::cast::{self, Detail, End, Keep, Node, Query, Ray, Trace, Until, DEPTH};
+use crate::cast::{self, Detail, End, Keep, Line, Node, Query, Ray, Trace, Until, DEPTH};
 use crate::object::ancestor_at;
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::world::HEIGHT_BITS;
 use pxl_spec::space::coord::zoom::{Zoom, FINEST_ZOOM};
-
-/// A descent's line: the node it ended at, by its index at its zoom, what
-/// was handed it, and what was handed each node over it, by zoom.
-#[derive(Clone, Copy)]
-pub struct Line<A> {
-    at: [i32; 3],
-    zoom: Zoom,
-    live: A,
-    stack: [A; DEPTH],
-}
 
 /// A column's surface: its top as drawn at its cell zoom (`cast::top`), how the ray down it
 /// ended (it met a cell, `End::Hit`; it met nothing it cannot see through, `Miss`; or it met
@@ -35,30 +25,6 @@ pub struct ColumnSurface<A> {
     pub end: End,
     pub line: Line<A>,
     origin: [i32; 3],
-}
-
-impl<A: Copy> Line<A> {
-    /// The line a walk from `origin` leaves where it ends at `node` (`cast::Keep`): what was
-    /// handed the node (`live`), and what was handed each node over it, by zoom.
-    pub fn of_walk(origin: [i32; 3], node: &Node, live: A, stack: &[A; DEPTH]) -> Line<A> {
-        Line {
-            at: node.idx(origin),
-            zoom: node.zoom,
-            live,
-            stack: *stack,
-        }
-    }
-}
-
-/// What was handed each node of the line, for a walk that goes on from it (`cast::walk`).
-impl<A: Copy> cast::Over<A> for Line<A> {
-    fn over(&self, zoom: Zoom) -> A {
-        if zoom == self.zoom {
-            self.live
-        } else {
-            self.stack[zoom as usize]
-        }
-    }
 }
 
 impl<A: Copy> Keep<A> for ColumnSurface<A> {
@@ -75,15 +41,11 @@ pub fn column_surface<Q: Query>(q: &mut Q, cell_zoom: Zoom, g: [i32; 2]) -> Colu
     let (o, ray, detail) = down(cell_zoom, g);
     let at = Node::ROOT.idx(o);
     let root = q.root(at);
+    let start = Line::of_root(at, root);
     let mut f = ColumnSurface {
         top: (0, 0.0),
         end: End::Miss,
-        line: Line {
-            at,
-            zoom: 0,
-            live: root,
-            stack: [root; DEPTH],
-        },
+        line: start,
         origin: o,
     };
     // Walk from the root just asked; `walk_from_root` would ask it again.
@@ -94,7 +56,7 @@ pub fn column_surface<Q: Query>(q: &mut Q, cell_zoom: Zoom, g: [i32; 2]) -> Colu
         detail,
         Until::Opaque,
         (Node::ROOT, root, 0.0),
-        &cast::Root(root),
+        &start,
         &mut f,
     );
     f.end = trace.end;
@@ -129,80 +91,11 @@ fn same(a: [i32; 3], b: [i32; 3]) -> bool {
     a[0] == b[0] && a[1] == b[1] && a[2] == b[2]
 }
 
-/// A line as a reader of the assets around its node reads it (`asset`), where it lies: its
-/// node, by its index at its zoom, and what was handed it and each node over it, by zoom. It
-/// may be a descent's own (`Line`) or one a reader holds elsewhere (`JoinedLine`; a beam ray's
-/// line in the beam rays' words, pxl-render resume.wgsl).
-pub trait Lineage<A: Copy> {
-    fn at(&self) -> [i32; 3];
-    fn zoom(&self) -> Zoom;
-    /// What was handed the line's node at `z` over its own, or its own node at its own zoom.
-    fn ancestor(&self, z: Zoom) -> A;
-}
-
-impl<A: Copy> Lineage<A> for Line<A> {
-    fn at(&self) -> [i32; 3] {
-        self.at
-    }
-
-    fn zoom(&self) -> Zoom {
-        self.zoom
-    }
-
-    fn ancestor(&self, z: Zoom) -> A {
-        if z == self.zoom {
-            self.live
-        } else {
-            self.stack[z as usize]
-        }
-    }
-}
-
-/// A line down to a node, descended from another line (`joined`): only its own descent, from
-/// `low` down, where `low` is the zoom of the deepest node of the other line over it.
-pub struct SubLine<A> {
-    low: Zoom,
-    line: Line<A>,
-}
-
-/// A line down to a node, read together with the line it was descended from
-/// (`SubLine::joined`). Above `low` it reads the other line where it lies, and from `low`
-/// down its own descent, so it holds two references and no array of its own.
-pub struct JoinedLine<'a, L, A> {
-    base: &'a L,
-    sub: &'a SubLine<A>,
-}
-
-impl<A: Copy> SubLine<A> {
-    /// The sub-line read together with `base`, the line it was descended from.
-    pub fn joined<'a, L: Lineage<A>>(&'a self, base: &'a L) -> JoinedLine<'a, L, A> {
-        JoinedLine { base, sub: self }
-    }
-}
-
-impl<A: Copy, L: Lineage<A>> Lineage<A> for JoinedLine<'_, L, A> {
-    fn at(&self) -> [i32; 3] {
-        self.sub.line.at
-    }
-
-    fn zoom(&self) -> Zoom {
-        self.sub.line.zoom
-    }
-
-    fn ancestor(&self, z: Zoom) -> A {
-        if z < self.sub.low {
-            self.base.ancestor(z)
-        } else {
-            self.sub.line.ancestor(z)
-        }
-    }
-}
-
 /// The deepest zoom at which the line `l` and the node `c` of `zoom` share a node, no finer
 /// than either, and whether they share one at all; they share none where they lie under two
 /// roots.
-fn shared_zoom<A: Copy>(l: &impl Lineage<A>, zoom: Zoom, c: [i32; 3]) -> (Zoom, bool) {
-    let (line, lz) = (l.at(), l.zoom());
+fn shared_zoom<A: Copy>(l: &Line<A>, zoom: Zoom, c: [i32; 3]) -> (Zoom, bool) {
+    let (line, lz) = (l.at, l.zoom);
     let mut z = if zoom < lz { zoom } else { lz };
     while z > 0 && !same(over(line, lz, z), over(c, zoom, z)) {
         z -= 1;
@@ -235,49 +128,14 @@ pub fn line<Q: Query>(q: &mut Q, zoom: Zoom, c: [i32; 3]) -> Line<Q::At> {
     let root = q.root(over(c, zoom, 0));
     let mut stack = [root; DEPTH];
     let live = descend(q, root, 0, zoom, c, &mut stack);
-    Line {
-        at: c,
-        zoom,
-        live,
-        stack,
-    }
-}
-
-/// The line down to node `c` of `zoom` from the line `base`, as its own part only (`SubLine`,
-/// read with `base` by `SubLine::joined`). It descends from the deepest node of `base` over
-/// `c`, each node under that handed down by its parent, or from `c`'s own root where no node
-/// of `base` is over it. It is `line`, asked from where `base` already holds the answer
-/// instead of from the top.
-pub fn sub_line<Q: Query>(
-    q: &mut Q,
-    base: &impl Lineage<Q::At>,
-    zoom: Zoom,
-    c: [i32; 3],
-) -> SubLine<Q::At> {
-    let (z, shared) = shared_zoom(base, zoom, c);
-    let (from, low) = if shared {
-        (base.ancestor(z), z)
-    } else {
-        (q.root(over(c, zoom, 0)), 0)
-    };
-    let mut stack = [from; DEPTH];
-    let live = descend(q, from, low, zoom, c, &mut stack);
-    SubLine {
-        low,
-        line: Line {
-            at: c,
-            zoom,
-            live,
-            stack,
-        },
-    }
+    Line::down_to(c, zoom, live, stack)
 }
 
 /// What is in the cell `c` of `zoom` near the line `l`, as the world's one query answers it
 /// at that zoom (the first word of `Query::node`). It is asked from the deepest node of the
 /// line that holds the cell, each node under that handed down by its parent (`Query::child`),
 /// or from the cell's own root where no node of the line holds it.
-pub fn asset<Q: Query>(q: &mut Q, l: &impl Lineage<Q::At>, zoom: Zoom, c: [i32; 3]) -> u32 {
+pub fn asset<Q: Query>(q: &mut Q, l: &Line<Q::At>, zoom: Zoom, c: [i32; 3]) -> u32 {
     let (mut z, shared) = shared_zoom(l, zoom, c);
     let mut at = if shared {
         l.ancestor(z)
@@ -508,7 +366,7 @@ mod tests {
                 let (h, found) = trace.hit.node.over(cast::point_at(o, &ray, t));
                 let h = cast::holding(o, &ray, h, t);
                 let from = if found {
-                    (h, cast::Over::over(&first, h.zoom), t)
+                    (h, first.ancestor(h.zoom), t)
                 } else {
                     (Node::ROOT, Step.root(Node::ROOT.idx(o)), t)
                 };

@@ -7,7 +7,6 @@
 //! report (`Footprint`). A change so reaches only the readers of the ground
 //! it touches.
 
-use super::world::World;
 use crate::domain::layer::object::store;
 use crate::domain::layer::Base as _;
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -90,7 +89,7 @@ fn touched(xy: [[f64; 2]; 2], layer: &[Quadrant], counted: impl Fn(&Quadrant) ->
 /// The columns the queries read, as one box with its corners in units and X
 /// on the lap of the first column read. A ray reads the cells it passes at
 /// the coarsest zoom it is answered at; a cell, a surface or a column surface
-/// reads its cell. Every query reports here, and a memo's ask takes what it
+/// reads its cell. Those queries report here, and a memo's ask takes what it
 /// read from here (`Memo::of`).
 #[derive(Clone, Copy, Default)]
 struct Footprint(Option<[[f64; 2]; 2]>);
@@ -177,11 +176,11 @@ impl<K: PartialEq, A: Copy> Memo<K, A> {
         }
     }
 
-    /// The answer for `of`: the kept one, or else what `ask` gets from
-    /// `world`, with the columns its queries read. What it read is reported
+    /// The answer for `of`: the kept one, or else what `ask` gets, with the
+    /// columns its queries read. What it read is reported
     /// as read here too, so a memo kept inside another memo's ask lets that
     /// one go with it.
-    pub fn of(&mut self, world: World<'_>, of: K, ask: impl FnOnce(World<'_>) -> A) -> A {
+    pub fn of(&mut self, of: K, ask: impl FnOnce() -> A) -> A {
         if let Some((k, columns, a)) = &self.0 {
             if *k == of {
                 join(*columns);
@@ -189,7 +188,7 @@ impl<K: PartialEq, A: Copy> Memo<K, A> {
             }
         }
         let outer = core::mem::take(footprint());
-        let a = ask(world);
+        let a = ask();
         let read = core::mem::replace(footprint(), outer);
         self.0 = read.0.map(|columns| {
             join(columns);

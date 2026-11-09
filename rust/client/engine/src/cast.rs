@@ -741,26 +741,61 @@ pub fn walk_from_root<Q: Query>(
         detail,
         until,
         (Node::ROOT, at, 0.0),
-        &Root(at),
+        &Line::of_root(Node::ROOT.idx(o), at),
         keep,
     )
 }
 
-/// What was handed each node above where a walk starts, by zoom: the line the walk resumes
-/// from, as a beam ray left it (`Keep`). It is read where the walk climbs above its start, and
-/// where the walk ends, for whatever keeps its line.
-pub trait Over<A: Copy> {
-    fn over(&self, zoom: Zoom) -> A;
+/// A descent's line: the node it ended at, by its index at its zoom, what was handed it, and
+/// what was handed each node over it, by zoom. A walk resumes from one (`Keep`), and a reader
+/// of the assets around its node asks from one (`support::asset`).
+#[derive(Clone, Copy)]
+pub struct Line<A> {
+    pub(crate) at: [i32; 3],
+    pub(crate) zoom: Zoom,
+    live: A,
+    stack: [A; DEPTH],
 }
 
-/// What lies above a walk from the roots: nothing. No node is above a root, so it is never
-/// read.
-#[derive(Clone, Copy)]
-pub struct Root<A>(pub A);
+impl<A: Copy> Line<A> {
+    /// The line of a root, its index `at`, which was handed `live`.
+    pub fn of_root(at: [i32; 3], live: A) -> Line<A> {
+        Line {
+            at,
+            zoom: 0,
+            live,
+            stack: [live; DEPTH],
+        }
+    }
 
-impl<A: Copy> Over<A> for Root<A> {
-    fn over(&self, _: Zoom) -> A {
-        self.0
+    /// The line a walk from `origin` leaves where it ends at `node` (`Keep`): what was handed
+    /// the node (`live`), and what was handed each node over it, by zoom.
+    pub fn of_walk(origin: [i32; 3], node: &Node, live: A, stack: &[A; DEPTH]) -> Line<A> {
+        Line {
+            at: node.idx(origin),
+            zoom: node.zoom,
+            live,
+            stack: *stack,
+        }
+    }
+
+    /// The line down to node `at` of `zoom`, what was handed it being `live`.
+    pub(crate) fn down_to(at: [i32; 3], zoom: Zoom, live: A, stack: [A; DEPTH]) -> Line<A> {
+        Line {
+            at,
+            zoom,
+            live,
+            stack,
+        }
+    }
+
+    /// What was handed the line's node at `z` over its own, or its own node at its own zoom.
+    pub fn ancestor(&self, z: Zoom) -> A {
+        if z == self.zoom {
+            self.live
+        } else {
+            self.stack[z as usize]
+        }
     }
 }
 
@@ -816,7 +851,7 @@ pub fn walk<Q: Query>(
     detail: Detail,
     until: Until,
     from: (Node, Q::At, f32),
-    over: &impl Over<Q::At>,
+    over: &Line<Q::At>,
     keep: &mut impl Keep<Q::At>,
 ) -> Trace<Q::At> {
     walk_at_most(q, o, ray, detail, until, from, over, keep, STEPS_CAP)
@@ -833,7 +868,7 @@ pub fn walk_at_most<Q: Query>(
     detail: Detail,
     until: Until,
     from: (Node, Q::At, f32),
-    over: &impl Over<Q::At>,
+    over: &Line<Q::At>,
     keep: &mut impl Keep<Q::At>,
     step_cap: u32,
 ) -> Trace<Q::At> {
@@ -1078,7 +1113,7 @@ pub fn walk_at_most<Q: Query>(
                 let parent = if l > low {
                     stack[(l - 1) as usize]
                 } else {
-                    over.over(l - 1)
+                    over.ancestor(l - 1)
                 };
                 low = low.min(l);
                 (parent, false)
@@ -1114,12 +1149,12 @@ fn leave<A: Copy, K: Keep<A>>(
     trace: &Trace<A>,
     stack: &mut [A; DEPTH],
     low: Zoom,
-    over: &impl Over<A>,
+    over: &Line<A>,
 ) {
     if K::LINE {
         let mut z = 0;
         while z < low {
-            stack[z as usize] = over.over(z);
+            stack[z as usize] = over.ancestor(z);
             z += 1;
         }
     }

@@ -264,7 +264,8 @@ impl LocationIndicator {
         // The memo is checked every turn, so it sees each change once.
         let mut grounded = core::mem::take(&mut self.ground_center);
         grounded.forget_touched_at_leaf(|&(_, exact)| exact);
-        let (center_pos, _) = grounded.of(World::now(), seen, |w| self.ground(w, draw, seen));
+        let w = World::now();
+        let (center_pos, _) = grounded.of(seen, || self.ground(w, draw, seen));
         self.ground_center = grounded;
         let Some(center_pos) = center_pos else {
             return self.clear(draw);

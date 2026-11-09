@@ -15,10 +15,10 @@ use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::{Answer, Base};
 use pxl_engine::answer::{self, In, Kind};
 pub(super) use pxl_engine::cast::Until;
-use pxl_engine::cast::{self, Detail, End, Keep, Over, Query, Spacing, Trace, DEPTH};
+use pxl_engine::cast::{self, Detail, End, Keep, Line, Query, Spacing, Trace, DEPTH};
 use pxl_engine::object;
 use pxl_engine::support;
-use pxl_engine::support::{ColumnSurface, Line};
+use pxl_engine::support::ColumnSurface;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::grid;
@@ -147,7 +147,7 @@ impl Descent {
         let (over, found) = self.node.over(cast::point_at(self.origin, ray, 0.0));
         found.then(|| {
             let n = cast::holding(self.origin, ray, over, 0.0);
-            (n, self.line.over(n.zoom), 0.0)
+            (n, self.line.ancestor(n.zoom), 0.0)
         })
     }
 }
@@ -277,8 +277,9 @@ impl<'a> World<'a> {
     }
 
     /// The first thing a viewer sees along `ray`: the first cell, or the
-    /// decor struck nearer, as the frame draws it: `kinds` are those it generates at the leaves (`lens::leaf_kinds`). Decor
-    /// is struck at the leaf cells the ray passes.
+    /// decor struck nearer, as the frame draws it: everything placed and, of
+    /// what the ground generates at the leaves, `kinds` (`lens::leaf_kinds`).
+    /// Decor is struck at the leaf cells the ray passes.
     pub fn first_seen(&self, ray: &Ray, detail: Detail, kinds: u32) -> Answer<Option<Hit>> {
         let mut path = Path::default();
         let (met, decor_ray) = self.along(
