@@ -1,10 +1,11 @@
 // @pxl/build/constant.ts
 
 /**
- * What a release build writes as values: each `export const` of a literal,
- * read through an import, so that the bundle holds the number and not its
- * name. Metro compiles one file at a time and keeps every export by name, so
- * a use is resolved here, through the import that names it. A file with a
+ * What a release build writes as values: each `export const` that is a
+ * literal or an expression of literals, read through an import, so that the
+ * bundle holds the number and not its name. Metro compiles one file at a time
+ * and keeps every export by name, so a use is resolved here, through the
+ * import that names it. A file with a
  * platform's own variant beside it is not read, since which one a build takes
  * is the resolver's to say.
  */
@@ -29,6 +30,8 @@ interface Module {
 type Statement = ReturnType<typeof parse>["program"]["body"][number];
 type Declaration = Extract<Statement, { type: "VariableDeclaration" }>;
 type Init = Declaration["declarations"][number]["init"];
+type Node = Exclude<Init, null | undefined> | PrivateName;
+type PrivateName = { type: "PrivateName" };
 type Name = { type: "Identifier"; name: string } | { value: string };
 
 const PLATFORMS = ["native", "web", "ios", "android"];
@@ -56,20 +59,76 @@ function has_variant(file: string): boolean {
 
 const name_of = (n: Name): string => ("name" in n ? n.name : n.value);
 
-/** What a variable's initializer is as a literal; null where it is not one. */
-function literal_of(e: Init | undefined): Literal | null {
+type Names = Map<string, Export | undefined>;
+
+const BINARY: Record<string, (a: number, b: number) => number> = {
+  "+": (a, b) => a + b,
+  "-": (a, b) => a - b,
+  "*": (a, b) => a * b,
+  "/": (a, b) => a / b,
+  "%": (a, b) => a % b,
+  "**": (a, b) => a ** b,
+  "<<": (a, b) => a << b,
+  ">>": (a, b) => a >> b,
+  ">>>": (a, b) => a >>> b,
+  "&": (a, b) => a & b,
+  "|": (a, b) => a | b,
+  "^": (a, b) => a ^ b,
+};
+
+const UNARY: Record<string, (a: number) => number> = {
+  "-": (a) => -a,
+  "+": (a) => a,
+  "~": (a) => ~a,
+};
+
+/** A value a literal can write. */
+const finite = (v: number): number | null => (Number.isFinite(v) ? v : null);
+
+/** What an expression evaluates to, where it is made of literals and of names
+ * bound to literals in `names`; null where it is anything else. It is evaluated
+ * as the program would, so a value holds whatever the program's would. */
+function literal_of(e: Init | Node | undefined, names: Names): Literal | null {
   switch (e?.type) {
     case "NumericLiteral":
     case "StringLiteral":
     case "BooleanLiteral":
       return e.value;
-    case "UnaryExpression":
-      return e.operator === "-" && e.argument.type === "NumericLiteral"
-        ? -e.argument.value
+    case "Identifier": {
+      const at = names.get(e.name);
+      return at !== undefined && "val" in at ? at.val : null;
+    }
+    case "MemberExpression": {
+      if (e.computed || e.object.type !== "Identifier") return null;
+      const at = names.get(e.object.name);
+      if (at === undefined || "val" in at) return null;
+      if (e.property.type !== "Identifier") return null;
+      const found = module_of(at.file).exports.get(e.property.name);
+      return found !== undefined && "val" in found ? found.val : null;
+    }
+    case "UnaryExpression": {
+      const a = literal_of(e.argument, names);
+      const f = UNARY[e.operator];
+      return typeof a === "number" && f ? finite(f(a)) : null;
+    }
+    case "BinaryExpression": {
+      const a = literal_of(e.left, names);
+      const b = literal_of(e.right, names);
+      if (
+        typeof a === "string" &&
+        typeof b === "string" &&
+        e.operator === "+"
+      ) {
+        return a + b;
+      }
+      const f = BINARY[e.operator];
+      return typeof a === "number" && typeof b === "number" && f
+        ? finite(f(a, b))
         : null;
+    }
     case "TSAsExpression":
     case "TSSatisfiesExpression":
-      return literal_of(e.expression);
+      return literal_of(e.expression, names);
     default:
       return null;
   }
@@ -85,17 +144,10 @@ function read(file: string, m: Module): void {
   const named = (to: string | null, name: string) =>
     to === null ? undefined : module_of(to).exports.get(name);
 
-  // What each name at the top of the file is bound to.
-  const bound = new Map<string, Export | undefined>();
+  // What each name at the top of the file is bound to: what it imports, then
+  // its constants in the order they are written, each able to read the last.
+  const bound: Names = new Map();
   for (const s of body) {
-    if (s.type === "VariableDeclaration" && s.kind === "const") {
-      for (const d of s.declarations) {
-        const val = literal_of(d.init);
-        if (d.id.type === "Identifier" && val !== null) {
-          bound.set(d.id.name, { val });
-        }
-      }
-    }
     if (s.type !== "ImportDeclaration" || s.importKind === "type") continue;
     const to = near(s.source.value);
     for (const i of s.specifiers) {
@@ -103,6 +155,16 @@ function read(file: string, m: Module): void {
         bound.set(i.local.name, to === null ? undefined : { file: to });
       } else if (i.type === "ImportSpecifier" && i.importKind !== "type") {
         bound.set(i.local.name, named(to, name_of(i.imported)));
+      }
+    }
+  }
+  for (const s of body) {
+    const d = s.type === "ExportNamedDeclaration" ? s.declaration : s;
+    if (d?.type !== "VariableDeclaration" || d.kind !== "const") continue;
+    for (const v of d.declarations) {
+      const val = literal_of(v.init, bound);
+      if (v.id.type === "Identifier" && val !== null) {
+        bound.set(v.id.name, { val });
       }
     }
   }
@@ -117,9 +179,15 @@ function read(file: string, m: Module): void {
     const d = s.declaration;
     if (d?.type === "VariableDeclaration") {
       for (const v of d.declarations) {
-        const val = d.kind === "const" ? literal_of(v.init) : null;
-        if (v.id.type === "Identifier" && val !== null) {
-          exports.set(v.id.name, { val });
+        const at =
+          v.id.type === "Identifier" ? bound.get(v.id.name) : undefined;
+        if (
+          v.id.type === "Identifier" &&
+          d.kind === "const" &&
+          at &&
+          "val" in at
+        ) {
+          exports.set(v.id.name, at);
           literals++;
         } else others++;
       }

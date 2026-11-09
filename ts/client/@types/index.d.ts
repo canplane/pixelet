@@ -22,4 +22,11 @@ declare global {
   /** Whether this is a build made for measuring, which runs the drive at boot
    * (`PXL_PERF_DRIVE=1`). */
   const __PERF_DRIVE__: boolean;
+
+  namespace NodeJS {
+    interface Require {
+      /** The address of a worker's bundle, which Metro builds from `name`. */
+      unstable_resolveWorker(name: string): string;
+    }
+  }
 }

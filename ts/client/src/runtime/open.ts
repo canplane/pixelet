@@ -20,10 +20,9 @@ import * as storage from "@/service/platform/storage.ts";
 /** Resolves once a GPU is present and the source is settled: true when the
  * source was declared, false when it was refused. */
 export async function open(on: OnOpen): Promise<boolean> {
-  // The worker's URL is resolved against the page rather than
-  // `import.meta.url`. Expo's stand-in for `import.meta` comes with `expo`,
-  // and the boot runs before `expo` is imported (index.ts).
-  const worker = new Worker(new URL("./worker.ts", location.href), {
+  // Metro bundles the worker through this call, and through no form of
+  // `new Worker` that tree shaking also compiles (metro.config.ts).
+  const worker = new Worker(require.unstable_resolveWorker("./worker.ts"), {
     type: "module",
   });
   const ask = (m: ToCore) => worker.postMessage(m);

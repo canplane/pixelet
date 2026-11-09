@@ -35,8 +35,8 @@ function deepMerge(base: Catalog, extra: Catalog): Catalog {
 }
 
 /** The dev catalogs are merged behind `__IS_DEV__` tested at the top level, so
- * that a release bundle drops them. Rolldown does not drop an argument passed
- * to a helper that tests the flag. */
+ * that a release bundle drops them. Tree shaking does not drop an argument
+ * passed to a helper that tests the flag. */
 const catalog = __IS_DEV__
   ? {
       en: deepMerge(en, enDev) as typeof en,
