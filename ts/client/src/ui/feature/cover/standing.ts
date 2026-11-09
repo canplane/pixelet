@@ -13,9 +13,9 @@ import type { Standing } from "./cover.ts";
 export function useStanding(): Standing {
   const boot = useSyncExternalStore(watch_boot, boot_state);
   const stall = useCore((s) => s.stall);
-  // In development, a console over the core is installed once the core runs.
+  // A console over the core is installed once the core runs.
   useEffect(() => {
-    if (__IS_DEV__ && boot === BOOT_LOADING) installConsole();
+    if (boot === BOOT_LOADING) installConsole();
   }, [boot]);
   useEffect(() => {
     if (stall === Message.WorldUnavailable) {
