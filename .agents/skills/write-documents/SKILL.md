@@ -39,6 +39,9 @@ against is reference, kept in `spec/` and the generated code's comments.
   may not bring (`ring` as io_uring uses it).
 - **Order by dependency.** A model's vocabulary comes before the machine that
   uses it, and a map of the code comes last.
+- **An `ARCHITECTURE.md` ends, before its map, with what it took from earlier
+  work:** a table, each row its precedent and what is taken, the part named as
+  the document names it, and no row for a name alone. This is not history.
 - **Diagrams** are hand-aligned ASCII under about 78 columns; a diagram's
   branches name what comes out.
 - **Each part is said once.** A paragraph that several documents would repeat

@@ -49,6 +49,20 @@ starts, a GPU answers, the world's source is declared and the first snapshots
 come. The UI only reads that state, through the services, and shows a cover over
 the world until the view is first drawn (`ui/feature/cover/`).
 
+## The app's ABI
+
+What the numbers on xpute's rings mean is defined here, by two protocols under
+`spec/client/core/` (`door/ui.json`, the UI's, and `sys/io/text.json`, the
+platform's text), from which both sides' code is generated. The app's majors
+start at xpute's `PROGRAM_MAJOR`, a major a module, its two ends a pair of
+files named alike: `pxl-core door/apply/<x>.rs` and `service/core/<x>.ts`.
+
+The core opens files by a root and a name, and each root is bound once, at
+boot, to what answers it (`service/sys/fs/namespace.ts`). So the core knows no
+URL, version or storage key; which version of each bake is served is the
+declaration the client reads at boot, and the core is handed only its part
+(`SOURCE_DECLARE`).
+
 ## Builds
 
 The page is Expo's web build, bundled by Metro into one HTML file over one

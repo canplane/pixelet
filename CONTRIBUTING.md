@@ -47,6 +47,10 @@ measure speed on.
 The page is Expo's web build, bundled by Metro. Beside the dev server, a watcher
 rebuilds the core's WebAssembly module whenever its Rust changes.
 
+The make targets set everything a run needs. Point a run at another
+deployment or other ports only by the variables `ts/client/script/proxy.ts`
+reads, and run a server alone by its own target (`make serve-tile`).
+
 A page leaves two helpers in the browser console. `xpute.cmd` sends
 the core any command by its number, and `pxl.perf` is the profiler: `report()`
 summarizes where the frames' time went and `trace()` saves a trace for

@@ -440,6 +440,31 @@ noticing:
 - No decision reads the profiler, which sits beside the core and may read
   anything.
 
+## Prior art
+
+What is pixelet's own is that the eye sets the detail and one query answers
+every observer. The machinery under it is earlier work:
+
+| Precedent | What is taken |
+| --- | --- |
+| Google Earth and the web map's tile pyramid | The pyramid: a tile at one zoom folded from the four under it, so a view from afar reads a handful of tiles |
+| Morton order | Tile and shard names, each a prefix of its children's |
+| Earth Engine's `MODE` pyramiding | The ground's fold: a parent's palette index is the majority of the four under it |
+| Cesium 3D Tiles' `preloadAncestors` | Demand: the tiles on the line over a missing one are asked for, so a coarser answer is held wherever the view looks |
+| Web Mercator (EPSG:3857), WGS 84 | The plane a position follows, one lap of X its whole width, and the Earth's radius |
+| Quake III's `PM_StepSlideMove` ([bg_slidemove.c](https://github.com/id-Software/Quake-III-Arena/blob/master/code/game/bg_slidemove.c)) | The walker: blocked, it steps up and slides along the wall as `PM_ClipVelocity` clips the velocity, with no step height but the ceiling's, and settles on the floor |
+| Amanatides and Woo's voxel traversal | The ray's walk: the next cell along a ray, by the share of the way to each axis's edge |
+| Laine and Karras, _Efficient Sparse Voxel Octrees_ (I3D 2010) | The ray's descent: push, advance and pop down the octree, and a split passed whole where the ray misses its contour, here a box |
+| Laine and Karras's beams; Reshetov et al. | The beam rays: rays at a cell's corners walk the descent its pixels share, and the samples walk on from where the nearest stopped |
+| Tevs, Ihrke and Seidel's maximum mipmaps | The clipmap's min-max pyramid: the lowest and highest under a node, which a ray above it passes whole |
+| The clipmap (Tanner, Migdal and Jones 1998) | The clipmap, and the shadow map's box: a square about a center, each part held at its place modulo the side, so it follows the center and nothing held moves |
+| Burns and Hunt's visibility buffer (JCGT 2013) | The raster: each pixel keeps the number of the nearest box drawn over it and reads the rest off that |
+| Overture's schema | The divisions: a division is one of its subtypes |
+| OpenStreetMap Carto | The ground's palette and paint order, way widths, and the places' icons and zooms |
+| [Arnis](https://github.com/louis-e/arnis) | Bridges and tunnels: the bake's solve for their clearances, ramps, decks and piers, ported |
+| Bruneton; Hillaire (EGSR 2020) | The air: the atmosphere's tables of transmittance and irradiance, multiple scattering, the sky view and the aerial-perspective volume |
+| Unreal's SkyAtmosphere, OPAC, Cornette–Shanks | The Earth's scattering numbers, the haze and the Mie phase |
+
 ## Where things are
 
 The core is one order of dependency: an import may skip a level but never points

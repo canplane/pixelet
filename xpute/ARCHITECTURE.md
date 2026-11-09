@@ -20,10 +20,10 @@ picture and the part of xpute that keeps it, in the order the parts depend on
 each other: the memory the core owns, the turn that gives it time, the channel
 that carries everything else, the two devices that lend the memory, and the
 languages, with the records that hold them to each other. The document ends with
-the boundaries, the invariants every end keeps, and a map of the code. The
-contract's layouts, those of the frame, the rings, the stream, the header and
-each device's commands, are written once in `spec/`, and this document points
-there instead of restating them.
+the boundaries, the invariants every end keeps, what xpute took from earlier
+work, and a map of the code. The contract's layouts, those of the frame, the
+rings, the stream, the header and each device's commands, are written once in
+`spec/`, and this document points there instead of restating them.
 
 ---
 
@@ -544,6 +544,28 @@ the length of a deadline, when to ring, and how it reads what a turn left. The
 two devices' protocols are xpute's, written in `spec/abi/` and `spec/gpu/`, and
 they stand beside these rules: the rules say what the channel carries, and a
 device says what its calls mean.
+
+## Prior art
+
+xpute is a unikernel's shape run on a page: the core, the runtime and its
+devices come from virtualization, the rings from io_uring, the files from
+Plan 9.
+
+| Precedent | What is taken |
+| --- | --- |
+| A unikernel (MirageOS, Unikraft) and its library OS | The core: the program and xpute's core library built into one image, with no userspace under it |
+| A VMM and virtio's devices | The runtime: it implements the devices the core's machine asks for, and nothing else reaches the core |
+| virtio-vsock | The channel: a UI outside the core reaching the program's commands over the rings |
+| A WIT world | A protocol: its commands, each an export or an import, named from the core's side |
+| Android's Frame Pacing library (Swappy) | Frame pacing, the scheduling policy for a display: turns a whole number of refreshes apart |
+| A linker script's output sections | The core's ranges: laid end to end on pages without knowing what they hold |
+| [evanw/buddy-malloc](https://github.com/evanw/buddy-malloc) | `kit`'s buddy allocator of pages, ported line for line |
+| virtio's descriptor table, AF_XDP's UMEM | The rings: frames kept apart from their packets' slots |
+| io_uring | The rings: the SQ and the CQ by its roles, its ordering rules, and the setup laying them before the first turn |
+| ublk | The CQ: a server's own requests posted on the completion side, the answers coming back on the SQ |
+| POSIX and Linux errno | Every result: a negative errno number |
+| IEEE 754's round half to even, as WGSL rounds | The one rounding in every language |
+| Plan 9's file namespace, in POSIX's words | The file device: descriptors the core issues, a root and a path, and a namespace binding each root to what answers below it |
 
 ## Codemap
 
