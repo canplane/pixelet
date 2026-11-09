@@ -12,18 +12,14 @@ use std::time::Duration;
 
 use pxl_engine::answer::Kind;
 use pxl_engine::light::{self, Light, StartGrid};
-use pxl_engine::{cast, node_cache, ray};
+use pxl_engine::{cast, count, node_cache, ray};
 use pxl_render::frame::shader::record::{
-    compute, src, COMPUTE_QUEUE, COMPUTE_QUEUE_ASK, COMPUTE_QUEUE_ASK_CORNERS,
-    COMPUTE_QUEUE_ASK_CORNERS_PARKED, COMPUTE_QUEUE_ASK_LIGHT_CORNERS,
-    COMPUTE_QUEUE_ASK_LIGHT_CORNERS_PARKED, COMPUTE_QUEUE_ASK_LIGHT_SAMPLES,
-    COMPUTE_QUEUE_ASK_LIGHT_SAMPLES_PARKED, COMPUTE_QUEUE_ASK_PARKED, COMPUTE_QUEUE_ASK_SAMPLES,
-    COMPUTE_QUEUE_ASK_SAMPLES_PARKED, COMPUTE_QUEUE_CORNERS, COMPUTE_QUEUE_CORNERS_PARKED,
-    COMPUTE_QUEUE_LAST, COMPUTE_QUEUE_LAST_CORNERS, COMPUTE_QUEUE_LAST_LIGHT_CORNERS,
-    COMPUTE_QUEUE_LAST_LIGHT_SAMPLES, COMPUTE_QUEUE_LAST_SAMPLES, COMPUTE_QUEUE_LIGHT_CORNERS,
-    COMPUTE_QUEUE_LIGHT_CORNERS_PARKED, COMPUTE_QUEUE_LIGHT_SAMPLES,
-    COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED, COMPUTE_QUEUE_PARKED, COMPUTE_QUEUE_SAMPLES,
-    COMPUTE_QUEUE_SAMPLES_PARKED,
+    compute, src, COMPUTE_QUEUE, COMPUTE_QUEUE_ASK, COMPUTE_QUEUE_ASK_PARKED,
+    COMPUTE_QUEUE_CORNERS, COMPUTE_QUEUE_CORNERS_PARKED, COMPUTE_QUEUE_LAST,
+    COMPUTE_QUEUE_LAST_CORNERS, COMPUTE_QUEUE_LAST_LIGHT_CORNERS, COMPUTE_QUEUE_LAST_LIGHT_SAMPLES,
+    COMPUTE_QUEUE_LAST_SAMPLES, COMPUTE_QUEUE_LIGHT_CORNERS, COMPUTE_QUEUE_LIGHT_CORNERS_PARKED,
+    COMPUTE_QUEUE_LIGHT_SAMPLES, COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED, COMPUTE_QUEUE_PARKED,
+    COMPUTE_QUEUE_SAMPLES, COMPUTE_QUEUE_SAMPLES_PARKED,
 };
 use pxl_spec::space::coord::q3::FRAC_W;
 
@@ -207,8 +203,14 @@ impl Gpu {
     /// the eye at 0, the world at 1, 2 and 4 to 7, the rays or the map at 3, the observer's list
     /// at 8, the node cache at 9 and the observer's header at 11. Each pass takes the bindings
     /// its entry reads.
-    pub fn holes(&self, all: &[(u32, wgpu::BindingResource)], node_cache: &wgpu::Buffer) {
+    pub fn holes(
+        &self,
+        queue: u32,
+        all: &[(u32, wgpu::BindingResource)],
+        node_cache: &wgpu::Buffer,
+    ) {
         self.run(
+            queue,
             [
                 COMPUTE_QUEUE,
                 COMPUTE_QUEUE_ASK,
@@ -218,13 +220,12 @@ impl Gpu {
             ],
             [
                 &[0, 3, 8, 9, 10, 11],
-                &[0, 1, 2, 4, 5, 6, 7, 9, 10, 11],
+                &[0, 1, 2, 4, 5, 6, 7, 9, 10],
                 &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11],
             ],
             all,
             node_cache,
             None,
-            true,
         );
     }
 
@@ -240,21 +241,26 @@ impl Gpu {
         let ids = if light {
             [
                 COMPUTE_QUEUE_LIGHT_CORNERS,
-                COMPUTE_QUEUE_ASK_LIGHT_CORNERS,
+                COMPUTE_QUEUE_ASK,
                 COMPUTE_QUEUE_LIGHT_CORNERS_PARKED,
-                COMPUTE_QUEUE_ASK_LIGHT_CORNERS_PARKED,
+                COMPUTE_QUEUE_ASK_PARKED,
                 COMPUTE_QUEUE_LAST_LIGHT_CORNERS,
             ]
         } else {
             [
                 COMPUTE_QUEUE_CORNERS,
-                COMPUTE_QUEUE_ASK_CORNERS,
+                COMPUTE_QUEUE_ASK,
                 COMPUTE_QUEUE_CORNERS_PARKED,
-                COMPUTE_QUEUE_ASK_CORNERS_PARKED,
+                COMPUTE_QUEUE_ASK_PARKED,
                 COMPUTE_QUEUE_LAST_CORNERS,
             ]
         };
-        self.lattice(ids, light, all, node_cache, None);
+        let queue = if light {
+            ray::QUEUE_LIGHT_CORNERS
+        } else {
+            ray::QUEUE_EYE_CORNERS
+        };
+        self.lattice(queue, ids, light, all, node_cache, None);
     }
 
     /// Runs an observer's samples as the cast runs them (ray/cast.rs `walk_run`), the
@@ -285,27 +291,33 @@ impl Gpu {
         let ids = if light {
             [
                 COMPUTE_QUEUE_LIGHT_SAMPLES,
-                COMPUTE_QUEUE_ASK_LIGHT_SAMPLES,
+                COMPUTE_QUEUE_ASK,
                 COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED,
-                COMPUTE_QUEUE_ASK_LIGHT_SAMPLES_PARKED,
+                COMPUTE_QUEUE_ASK_PARKED,
                 COMPUTE_QUEUE_LAST_LIGHT_SAMPLES,
             ]
         } else {
             [
                 COMPUTE_QUEUE_SAMPLES,
-                COMPUTE_QUEUE_ASK_SAMPLES,
+                COMPUTE_QUEUE_ASK,
                 COMPUTE_QUEUE_SAMPLES_PARKED,
-                COMPUTE_QUEUE_ASK_SAMPLES_PARKED,
+                COMPUTE_QUEUE_ASK_PARKED,
                 COMPUTE_QUEUE_LAST_SAMPLES,
             ]
         };
-        self.lattice(ids, light, all, node_cache, last_cache);
+        let queue = if light {
+            ray::QUEUE_LIGHT_SAMPLES
+        } else {
+            ray::QUEUE_EYE_SAMPLES
+        };
+        self.lattice(queue, ids, light, all, node_cache, last_cache);
     }
 
     /// Runs the passes `ids` of a lattice, the light's where `light` is set and the eye's
     /// otherwise, over `node_cache` and `last_cache` as `samples_last_cache` says.
     fn lattice(
         &self,
+        queue: u32,
         ids: [u32; 5],
         light: bool,
         all: &[(u32, wgpu::BindingResource)],
@@ -318,28 +330,30 @@ impl Gpu {
         let walk = [&[0, 8, 9, 10][..], header].concat();
         let last = [&[0, 1, 2, 4, 5, 6, 7, 8, 9][..], header].concat();
         let keep = [&walk[..], &[0, 1, 2, 4, 5, 6, 7, 9, 10], &last[..]];
-        self.run(ids, keep, all, node_cache, last_cache, false);
+        self.run(queue, ids, keep, all, node_cache, last_cache);
     }
 
-    /// Runs the passes `ids` over `all` and the queue's words: the walk, its asks, the walk of
+    /// Runs the passes `ids` over `all` and the view of queue `queue` the cast binds: the walk, its asks, the walk of
     /// the parked rays, their asks, and the last walk. `keep` names the bindings that the walks,
     /// the asks and the last walk each take. The last walk reads the node cache `last_cache` where it
-    /// is given. Where `hits` is set, as in the holes' run, the hits are copied as `holes` says. A run that asks past `ray::ASKS_A_FRAME` ends rays as lacks. It
+    /// is given. In the holes' runs the hits are copied as `holes` says. A run that asks past `ray::ASKS_A_FRAME` ends rays as lacks. It
     /// then runs again over the node cache it left, as the frames after it would, until a run
     /// asks no more than a frame's asks. The words that run leaves are what a test reads.
     fn run(
         &self,
+        queue_no: u32,
         [walk_id, ask_id, walk_parked_id, ask_parked_id, last_id]: [u32; 5],
         [walk_keep, ask_keep, last_keep]: [&[u32]; 3],
         all: &[(u32, wgpu::BindingResource)],
         node_cache: &wgpu::Buffer,
         last_cache: Option<&wgpu::Buffer>,
-        hits: bool,
     ) {
+        let hits = matches!(queue_no, ray::QUEUE_EYE_HOLES | ray::QUEUE_LIGHT_HOLES);
         let queue = self.buf(
             &vec![0u32; ray::QUEUE_WORDS as usize],
             wgpu::BufferUsages::STORAGE,
         );
+        let head = ray::queue_at(queue_no);
         let pipeline = |id| {
             let (shader, entry) = compute(id);
             self.pipeline(src(shader), entry)
@@ -351,7 +365,14 @@ impl Gpu {
                 .cloned()
                 .collect();
             if keep.contains(&10) {
-                binds.push((10, queue.as_entire_binding()));
+                binds.push((
+                    10,
+                    wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &queue,
+                        offset: u64::from(head) * 4,
+                        size: wgpu::BufferSize::new(u64::from(ray::QUEUE_WORDS - head) * 4),
+                    }),
+                ));
             }
             binds
         };
@@ -369,6 +390,17 @@ impl Gpu {
         }
         let groups = [ray::QUEUE_GROUPS, 1, 1];
         let word = |w: u32| u64::from(w) * 4;
+        // The asks are counted in their observer's lane, which the asks' module reads off
+        // the queue it is bound to (ask_run.wgsl). The other observer's stays as it was.
+        let other_asked = (if queue_no >= ray::QUEUE_LIGHT_CORNERS {
+            node_cache::lane_at(count::EYE, count::ASKS)
+        } else {
+            node_cache::lane_at(count::LIGHT, count::ASKS)
+        }) as usize;
+        // Both observers count, as a frame that casts for the eye and the light does.
+        self.queue
+            .write_buffer(node_cache, word(node_cache::CNT_ON), bytes(&[0b11u32]));
+        let before = self.read(node_cache)[other_asked];
         for _ in 0..FRAMES_TO_ASK {
             // Each run is a frame of its own. The count of asks and the last walk's next ray
             // start at zero, as the host and the asks set them each frame the cast runs.
@@ -380,14 +412,15 @@ impl Gpu {
                 self.queue
                     .write_buffer(t, word(node_cache::LAST_NEXT), bytes(&none));
             }
-            self.queue.write_buffer(&queue, 0, bytes(&ray::QUEUE_EMPTY));
+            self.queue
+                .write_buffer(&queue, word(head), bytes(&ray::QUEUE_EMPTY));
             self.dispatch(&walk, &walk_binds, groups);
             self.dispatch(&ask, &ask_binds, groups);
             self.dispatch(&walk_parked, &walk_binds, groups);
             self.dispatch(&ask_parked, &ask_binds, groups);
             if hits {
                 let q = self.read(&queue);
-                let h = ray::QUEUE_HITS as usize;
+                let h = (head + ray::QUEUE_HITS) as usize;
                 self.queue.write_buffer(
                     node_cache,
                     word(node_cache::HITS_ARGS),
@@ -401,6 +434,11 @@ impl Gpu {
             }
             self.dispatch(&last, &last_binds, groups);
             let words = self.read(last_cache.unwrap_or(node_cache));
+            assert_eq!(
+                self.read(node_cache)[other_asked],
+                before,
+                "the asks of queue {queue_no} were counted in the other observer's lane"
+            );
             if self.asks_spent.get() || words[node_cache::ASKED as usize] <= ray::ASKS_A_FRAME {
                 return;
             }

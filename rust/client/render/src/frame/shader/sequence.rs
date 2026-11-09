@@ -632,7 +632,7 @@ pub const FRAME: Frame = Frame {
         Step::dispatch(
             "corners_ask",
             IN_EYE,
-            COMPUTE_QUEUE_ASK_CORNERS,
+            COMPUTE_QUEUE_ASK,
             &[&CORNERS_ASK_BINDS],
         ),
         Step::dispatch(
@@ -644,7 +644,7 @@ pub const FRAME: Frame = Frame {
         Step::dispatch(
             "corners_ask_parked",
             IN_EYE,
-            COMPUTE_QUEUE_ASK_CORNERS_PARKED,
+            COMPUTE_QUEUE_ASK_PARKED,
             &[&CORNERS_ASK_BINDS],
         ),
         Step::dispatch(
@@ -664,7 +664,7 @@ pub const FRAME: Frame = Frame {
         Step::dispatch(
             "samples_ask",
             IN_EYE,
-            COMPUTE_QUEUE_ASK_SAMPLES,
+            COMPUTE_QUEUE_ASK,
             &[&SAMPLES_ASK_BINDS],
         ),
         Step::dispatch(
@@ -676,7 +676,7 @@ pub const FRAME: Frame = Frame {
         Step::dispatch(
             "samples_ask_parked",
             IN_EYE,
-            COMPUTE_QUEUE_ASK_SAMPLES_PARKED,
+            COMPUTE_QUEUE_ASK_PARKED,
             &[&SAMPLES_ASK_BINDS],
         ),
         Step::dispatch(
@@ -790,7 +790,7 @@ pub const FRAME: Frame = Frame {
         Step::dispatch(
             "light_corners_ask",
             IN_LIGHT,
-            COMPUTE_QUEUE_ASK_LIGHT_CORNERS,
+            COMPUTE_QUEUE_ASK,
             &[&LIGHT_CORNERS_ASK_BINDS],
         ),
         Step::dispatch(
@@ -802,7 +802,7 @@ pub const FRAME: Frame = Frame {
         Step::dispatch(
             "light_corners_ask_parked",
             IN_LIGHT,
-            COMPUTE_QUEUE_ASK_LIGHT_CORNERS_PARKED,
+            COMPUTE_QUEUE_ASK_PARKED,
             &[&LIGHT_CORNERS_ASK_BINDS],
         ),
         Step::dispatch(
@@ -822,7 +822,7 @@ pub const FRAME: Frame = Frame {
         Step::dispatch(
             "light_samples_ask",
             IN_LIGHT,
-            COMPUTE_QUEUE_ASK_LIGHT_SAMPLES,
+            COMPUTE_QUEUE_ASK,
             &[&LIGHT_SAMPLES_ASK_BINDS],
         ),
         Step::dispatch(
@@ -834,7 +834,7 @@ pub const FRAME: Frame = Frame {
         Step::dispatch(
             "light_samples_ask_parked",
             IN_LIGHT,
-            COMPUTE_QUEUE_ASK_LIGHT_SAMPLES_PARKED,
+            COMPUTE_QUEUE_ASK_PARKED,
             &[&LIGHT_SAMPLES_ASK_BINDS],
         ),
         Step::dispatch(

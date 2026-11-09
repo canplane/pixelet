@@ -76,7 +76,7 @@ pub const SHADER_GENERATION_MARK: u32 = 30;
 /// (atmos_froxel.wgsl). It has one compute entry point.
 pub const SHADER_ATMOS_FROXEL: u32 = 31;
 /// Walks the eye's beam rays over the node cache alone (queue_walk.wgsl over corner.wgsl and
-/// beam.eye.wgsl). A ray that meets a node no slot keeps is parked. `SHADER_QUEUE_ASK_CORNERS`
+/// beam.eye.wgsl). A ray that meets a node no slot keeps is parked. `SHADER_QUEUE_ASK`
 /// then asks the world for that node, and `SHADER_QUEUE_LAST_CORNERS` ends the ray.
 pub const SHADER_QUEUE_CORNERS: u32 = 32;
 /// Finds where the rays of each cell of the camera grid start, from the beam rays about the
@@ -184,7 +184,7 @@ pub const SHADER_QUEUE_LAST_LIGHT_SAMPLES: u32 = 67;
 pub const SHADER_LIGHT_SAMPLE_BOX: u32 = 68;
 /// Walks the eye's samples over the node cache alone (queue_walk.wgsl over sample.wgsl and
 /// sample.eye.wgsl). A sample that meets a node no slot keeps is parked.
-/// `SHADER_QUEUE_ASK_SAMPLES` then asks the world for that node, and
+/// `SHADER_QUEUE_ASK` then asks the world for that node, and
 /// `SHADER_QUEUE_LAST_SAMPLES` ends the sample's walk.
 pub const SHADER_QUEUE_SAMPLES: u32 = 69;
 /// Walks the holes over the node cache alone (queue_walk.wgsl), the eye's pixels and the
@@ -220,17 +220,9 @@ pub const SHADER_LIGHT_RECORD_HITS: u32 = 79;
 /// module apart from that pass, so the pass, which takes its dispatch from the buffer this one
 /// writes, does not bind that buffer writable.
 pub const SHADER_LIGHT_MARK_DRAWS_OPEN: u32 = 80;
-/// Asks the world, once a node, for each node a walk of the samples was parked at, the eye's
-/// and the light's (queue_ask.wgsl).
-pub const SHADER_QUEUE_ASK_SAMPLES: u32 = 81;
-pub const SHADER_QUEUE_ASK_LIGHT_SAMPLES: u32 = 82;
-/// Asks the world, once a node, for each node a walk of the beam rays was parked at, the eye's
-/// and the light's (queue_ask.wgsl).
-pub const SHADER_QUEUE_ASK_CORNERS: u32 = 83;
-pub const SHADER_QUEUE_ASK_LIGHT_CORNERS: u32 = 84;
 /// The camera grid's cells over the canvas (camera_grid.wgsl).
-pub const SHADER_CAMERA_GRID: u32 = 85;
-pub const SHADERS: u32 = 86;
+pub const SHADER_CAMERA_GRID: u32 = 81;
+pub const SHADERS: u32 = 82;
 
 /// The parts of the air as the frame's shaders read it: its medium, its tables and the sky,
 /// the eye in it, the march through it, its light and the view through it. A shader's own
@@ -594,7 +586,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "world_split",
         "ask",
         "light_aim",
-        "hole_run",
+        "ask_run",
         "queue_ask",
     ],
     // SHADER_AO_APPLY
@@ -1061,94 +1053,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "decor_ball",
         "light_mark_draws",
         "light_mark_draws_open",
-    ],
-    // SHADER_QUEUE_ASK_SAMPLES
-    &[
-        "walk_word",
-        "world_word",
-        "world_rule",
-        "clipmap",
-        "seed",
-        "clip",
-        "fold",
-        "brick",
-        "bound_mip",
-        "eye_bind",
-        "walk_node",
-        "answer",
-        "way",
-        "world",
-        "world_split",
-        "ask",
-        "light_aim",
-        "sample_run.eye",
-        "queue_ask",
-    ],
-    // SHADER_QUEUE_ASK_LIGHT_SAMPLES
-    &[
-        "walk_word",
-        "world_word",
-        "world_rule",
-        "clipmap",
-        "seed",
-        "clip",
-        "fold",
-        "brick",
-        "bound_mip",
-        "eye_bind",
-        "walk_node",
-        "answer",
-        "way",
-        "world",
-        "world_split",
-        "ask",
-        "light_aim",
-        "sample_run.light",
-        "queue_ask",
-    ],
-    // SHADER_QUEUE_ASK_CORNERS
-    &[
-        "walk_word",
-        "world_word",
-        "world_rule",
-        "clipmap",
-        "seed",
-        "clip",
-        "fold",
-        "brick",
-        "bound_mip",
-        "eye_bind",
-        "walk_node",
-        "answer",
-        "way",
-        "world",
-        "world_split",
-        "ask",
-        "light_aim",
-        "corner_run.eye",
-        "queue_ask",
-    ],
-    // SHADER_QUEUE_ASK_LIGHT_CORNERS
-    &[
-        "walk_word",
-        "world_word",
-        "world_rule",
-        "clipmap",
-        "seed",
-        "clip",
-        "fold",
-        "brick",
-        "bound_mip",
-        "eye_bind",
-        "walk_node",
-        "answer",
-        "way",
-        "world",
-        "world_split",
-        "ask",
-        "light_aim",
-        "corner_run.light",
-        "queue_ask",
     ],
     // SHADER_CAMERA_GRID
     &["encode", "sky_word", "debug_look", "camera_grid"],

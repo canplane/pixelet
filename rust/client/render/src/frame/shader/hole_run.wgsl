@@ -6,7 +6,9 @@
 // off the light's head that is bound, which is all zero for the eye (light_aim.wgsl
 // `light_run`).
 
-const WALK_PASS: u32 = MISSED_PASS;
+fn walk_pass() -> u32 {
+  return MISSED_PASS;
+}
 
 /// Where the asks' records lie, counted from the first word of the observer's holes' queue
 /// (pxl-engine `ray::queue_records_at` of `ray::QUEUE_EYE_HOLES` or `ray::QUEUE_LIGHT_HOLES`).

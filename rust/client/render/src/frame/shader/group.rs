@@ -283,41 +283,6 @@ pub const QUEUE_GROUP: [u32; 18] = [
     UNIFORM,
 ];
 
-/// The group of the holes' queue's asks (queue_ask.wgsl): the eye, the world's buffers, the
-/// node cache they write, the queue's words and the observer's head.
-pub const QUEUE_ASK_GROUP: [u32; 30] = [
-    0,
-    COMPUTE,
-    UNIFORM,
-    1,
-    COMPUTE,
-    STORAGE,
-    2,
-    COMPUTE,
-    STORAGE,
-    4,
-    COMPUTE,
-    STORAGE,
-    5,
-    COMPUTE,
-    STORAGE,
-    6,
-    COMPUTE,
-    STORAGE,
-    7,
-    COMPUTE,
-    STORAGE,
-    9,
-    COMPUTE,
-    STORAGE_RW,
-    10,
-    COMPUTE,
-    STORAGE_RW,
-    HEADER_BINDING,
-    COMPUTE,
-    UNIFORM,
-];
-
 /// The group of the holes' queue's last walk (queue_last.wgsl): the eye, the world's buffers,
 /// the rays or the map, the observer's list, the node cache it writes and the observer's head.
 pub const QUEUE_LAST_GROUP: [u32; 33] = [
@@ -356,9 +321,8 @@ pub const QUEUE_LAST_GROUP: [u32; 33] = [
     UNIFORM,
 ];
 
-/// The group of the lattice's runs' asks (queue_ask.wgsl over a run's module, such as
-/// sample_run.eye.wgsl or sample_run.light.wgsl): `QUEUE_ASK_GROUP` without the head, which
-/// no lattice run reads there.
+/// The group of every run's asks (queue_ask.wgsl over ask_run.wgsl): the eye, the world's
+/// buffers, the node cache they write and the queue's words.
 pub const LATTICE_ASK_GROUP: [u32; 27] = [
     0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 4, COMPUTE, STORAGE, 5, COMPUTE,
     STORAGE, 6, COMPUTE, STORAGE, 7, COMPUTE, STORAGE, 9, COMPUTE, STORAGE_RW, 10, COMPUTE,
@@ -412,7 +376,6 @@ const _: () = assert!(
         && floor::holds(&[&QUEUE_GROUP])
         && floor::holds(&[&LATTICE_ASK_GROUP])
         && floor::holds(&[&LIGHT_LATTICE_LAST_GROUP])
-        && floor::holds(&[&QUEUE_ASK_GROUP])
         && floor::holds(&[&QUEUE_LAST_GROUP]),
     "the cast's world's group or the holes' queue's binds past WebGPU's floor"
 );
@@ -443,19 +406,6 @@ const _: () = assert!(
             &LIGHT_LATTICE_WALK_GROUP
         )
         && binds(
-            &[
-                COMPUTE_QUEUE_ASK_SAMPLES,
-                COMPUTE_QUEUE_ASK_SAMPLES_PARKED,
-                COMPUTE_QUEUE_ASK_LIGHT_SAMPLES,
-                COMPUTE_QUEUE_ASK_LIGHT_SAMPLES_PARKED,
-                COMPUTE_QUEUE_ASK_CORNERS,
-                COMPUTE_QUEUE_ASK_CORNERS_PARKED,
-                COMPUTE_QUEUE_ASK_LIGHT_CORNERS,
-                COMPUTE_QUEUE_ASK_LIGHT_CORNERS_PARKED
-            ],
-            &LATTICE_ASK_GROUP
-        )
-        && binds(
             &[COMPUTE_QUEUE_LAST_SAMPLES, COMPUTE_QUEUE_LAST_CORNERS],
             &LATTICE_LAST_GROUP
         )
@@ -469,7 +419,7 @@ const _: () = assert!(
         && binds(&[COMPUTE_QUEUE, COMPUTE_QUEUE_PARKED], &QUEUE_GROUP)
         && binds(
             &[COMPUTE_QUEUE_ASK, COMPUTE_QUEUE_ASK_PARKED],
-            &QUEUE_ASK_GROUP
+            &LATTICE_ASK_GROUP
         )
         && binds(&[COMPUTE_QUEUE_LAST], &QUEUE_LAST_GROUP)
         && binds(&[COMPUTE_LIGHT], &LIGHT_GROUP)
@@ -884,7 +834,7 @@ pub const WALK_BINDS: Group = Group {
     ],
 };
 pub const WALK_ASK_BINDS: Group = Group {
-    layout: &QUEUE_ASK_GROUP,
+    layout: &LATTICE_ASK_GROUP,
     binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_EYE_HOLES)],
 };
 pub const LAST_BINDS: Group = Group {
@@ -1020,7 +970,7 @@ pub const LIGHT_WALK_BINDS: Group = Group {
     ],
 };
 pub const LIGHT_WALK_ASK_BINDS: Group = Group {
-    layout: &QUEUE_ASK_GROUP,
+    layout: &LATTICE_ASK_GROUP,
     binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_LIGHT_HOLES)],
 };
 pub const LIGHT_LAST_BINDS: Group = Group {

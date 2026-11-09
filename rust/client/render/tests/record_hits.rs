@@ -842,7 +842,7 @@ fn eye_run(gpu: &Gpu, b: &WorldBuffer, (c, s): (&EyeCase, &Screen)) -> Run {
     let mut binds = world_binds(b, &run.eye_buf, &run.words_buf, &run.node_cache_buf);
     binds.push((3, wgpu::BindingResource::TextureView(&view)));
     binds.push((11, run.header_buf.as_entire_binding()));
-    gpu.holes(&binds, &run.node_cache_buf);
+    gpu.holes(ray::QUEUE_EYE_HOLES, &binds, &run.node_cache_buf);
     drop(binds);
 
     let origin = c.origin;
@@ -972,7 +972,7 @@ fn light_run(gpu: &Gpu, b: &WorldBuffer, c: &LightCase) -> Run {
     let mut binds = world_binds(b, &run.eye_buf, &run.words_buf, &run.node_cache_buf);
     binds.push((3, wgpu::BindingResource::TextureView(&view)));
     binds.push((11, run.header_buf.as_entire_binding()));
-    gpu.holes(&binds, &run.node_cache_buf);
+    gpu.holes(ray::QUEUE_LIGHT_HOLES, &binds, &run.node_cache_buf);
     drop(binds);
 
     // A hit's node is held from where its slot's ray starts, and the hit is whole where the

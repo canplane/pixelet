@@ -4,7 +4,9 @@
 // queue_ask.wgsl, queue_last.wgsl, corner.wgsl): the tag their walks put in the node cache's
 // keys, where their asks' records lie, and the lanes their visits and asks are counted in.
 
-const WALK_PASS: u32 = LIGHT_BEAM_PASS;
+fn walk_pass() -> u32 {
+  return LIGHT_BEAM_PASS;
+}
 
 /// Where the asks' records lie in the run's view of its queue (pxl-engine
 /// `ray::queue_records_at`, `ray::QUEUE_LIGHT_CORNERS`).

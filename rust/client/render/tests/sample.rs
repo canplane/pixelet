@@ -1539,7 +1539,7 @@ fn holes_answer(
     binds.push((3, wgpu::BindingResource::TextureView(&view)));
     binds.push((11, header.as_entire_binding()));
     gpu.asks_spent.set(spent);
-    gpu.holes(&binds, &node_cache_buf);
+    gpu.holes(ray::QUEUE_EYE_HOLES, &binds, &node_cache_buf);
     gpu.asks_spent.set(false);
     let out = read_texture(&gpu.device, &gpu.queue, &rays);
     if spent {

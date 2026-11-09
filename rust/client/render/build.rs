@@ -285,6 +285,17 @@ const _: () = assert!(
     "light_item reads a workgroup as SAMPLE_SIDE x SAMPLE_SIDE lanes: a light tile and \
      SQUARE_SIDE are each that side"
 );
+// A queue's number is its run's tag, but for the light's holes (ask_run.wgsl `walk_pass`).
+const _: () = {
+    use pxl_engine::{node_cache, ray};
+    assert!(
+        ray::QUEUE_EYE_CORNERS == node_cache::BEAM_PASS
+            && ray::QUEUE_EYE_SAMPLES == node_cache::SAMPLES_PASS
+            && ray::QUEUE_EYE_HOLES == node_cache::MISSED_PASS
+            && ray::QUEUE_LIGHT_CORNERS == node_cache::LIGHT_BEAM_PASS
+            && ray::QUEUE_LIGHT_SAMPLES == node_cache::LIGHT_SAMPLES_PASS
+    );
+};
 
 /// The constants the walks read (walk.wgsl), each written from the pxl-engine layout or rule
 /// that defines it.
@@ -562,6 +573,10 @@ fn walk_word() -> String {
             ray::queue_records_at(ray::QUEUE_LIGHT_HOLES),
         ),
         ("QUEUE_RECORD_WORDS", ray::QUEUE_RECORD_WORDS),
+        ("QUEUE_WORDS", ray::QUEUE_WORDS),
+        ("QUEUE_HEADER_STRIDE", ray::QUEUE_HEADER_STRIDE),
+        ("QUEUE_LIGHT_CORNERS", ray::QUEUE_LIGHT_CORNERS),
+        ("QUEUE_LIGHT_HOLES", ray::QUEUE_LIGHT_HOLES),
         ("QUEUE_RECORDS_CAP", ray::QUEUE_RECORDS_CAP),
         ("STATE_WORDS", ray::STATE_WORDS),
         ("PARKED", ray::PARKED),
