@@ -67,10 +67,54 @@ The patch:
 
 A second iPhone run of the patch read GPU p50 / p95 51.5 / 95.4 ms and 358 frames.
 
+## Looked at afterwards
+
+Investigated by agents, and read against each other by another. Run on the code of
+`2527e972f0`, with `patched` and `baseline` builds of the table above.
+
+**CPU on `xpute-gpu`, ms a frame in the drive.** The S23, from `sched`: baseline 10.19
+and 11.20, patched 8.36 and 8.33. The second baseline run was hot and drew 203
+frames, so its figure does not compare; a fit to the two puts the baseline near 10.2
+at 290 frames, about 18% above the patch. The iPhone, Time Profiler at 1 kHz: baseline
+3.295 and 3.174, patched 3.463 and 3.525, 0.26 ms more. Each is net of what the patch
+took away, per-pass command buffers on the S23 and `chain` on the iPhone, so the
+recorder's own cost is not isolated, and the pre-patch builds may hold another
+session's edits.
+
+**GPU clock on the S23.** Nine runs: the app 675 to 709 MHz, mean 695; Chrome 680 to
+705, mean 697. The spread follows the kernel's thermal cap, 719, 680 and 615 MHz. The
+604 MHz of one earlier run did not come back; its trace is gone.
+
+**`GL mtrack` after the patch, MiB, 40 s after a launch, no touches.** From
+`VK_EXT_device_memory_report`, the allocator's report and `dumpsys`:
+
+| | |
+| --- | --- |
+| Allocator blocks (479.8 of it allocated) | 704.0 |
+| `VkPipeline` | 206.2 |
+| Command buffers | 19.3 |
+| Descriptor pools | 2.2 |
+| Other Vulkan objects | 1.4 |
+| Skia's cache, the Android UI | 78.1 |
+| Not itemized | 11.2 |
+| **`GL mtrack`** | **1,022.3** |
+
+Of the pipelines, 204.0 MiB is one 12,582,912 B block in each of 17 compute pipelines:
+`queue_last_cs`, `queue_ask_cs`, `queue_ask_parked_cs`, `decor_cs` and `face_cs`, the
+entry points of the 12 modules that include `world.wgsl`. They use no `var<private>` or
+`var<workgroup>` data and no function-local arrays. Register spill from the inlined
+world query is a suspicion; Mesa's formula for shader private memory gives the same
+size, for another driver.
+
+**The report.** On a device and a page `n`, `fps`, `kinds`, `interval` and `gpu` are
+the same arithmetic. `refresh` is not (8.3 ms against 16.7 on the same phone), so
+`missed` is judged at about 20.8 and 25 ms. `load` is the session's longest long frame,
+and on a device only the JavaScript thread's.
+
 ## Not measured
 
-The recorder's CPU cost on the GPU's thread, what the rest of `GL mtrack` above the
-allocator's blocks holds after the patch, and the iPhone's temperature.
+What `vkPipeline`'s 12 MiB blocks hold, the iPhone's share of GPU memory, a touch to
+the screen, and the iPhone's temperature.
 
 ## Kept
 
