@@ -15,50 +15,30 @@ use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::octant::Octant;
 
-use crate::domain::control::edit::write::{middle, preview};
+use crate::domain::control::edit::write::middle;
 use crate::domain::control::edit::{hover, tool};
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::layer::object::store::Entry;
 use crate::domain::preview::{Ghost, GhostBox};
-use crate::domain::query::change::Memo;
 use crate::domain::query::World;
 use crate::domain::view::frame::coord;
 use pxl_engine::answer;
-use xpute_core::global::Global;
-
-/// The cube of the ground the eraser would carve at the hovered point. It is
-/// asked again only when the hover moves or a change touches its column.
-static CARVE_CUBE: Global<Memo<Q3, Option<AssetId>>> = Global::new();
-
-fn carved() -> &'static mut Memo<Q3, Option<AssetId>> {
-    CARVE_CUBE.get(|| Memo::NONE)
-}
 
 pub fn ghost() -> Ghost {
-    // This runs on every frame turn, whichever tool is held, so every change
-    // is seen once (`change::within`).
-    carved().forget_touched();
-    tool().ghost(&hover(), &preview())
+    tool().ghost(&hover())
 }
 
 /// The cube of the leaf cell at `h` that a carve takes, as the world answers
 /// it, whichever source fills the cell: the ground, a way or a bore's wall.
 pub(super) fn carved_cube(h: Q3) -> Option<AssetId> {
-    let w = World::now();
-    carved().of(h, || {
-        Asset::of(
-            w.asset_of(&middle(Octant::holding(GROUND.leaf_cell_zoom(), &h)))
-                .val()
-                .map_or(0, answer::val),
-        )
-        .cube()
-    })
+    let leaf = World::now().asset_of(&middle(Octant::holding(GROUND.leaf_cell_zoom(), &h)));
+    Asset::of(leaf.val().map_or(0, answer::val)).cube()
 }
 
 /// A generated decor shown as itself, where it stands.
-pub(super) fn prop(i: Instance) -> Option<Ghost> {
+pub(super) fn ghost_of(i: Instance) -> Option<Ghost> {
     let (m, decor) = (i.meta, Asset::of(i.id).decor()?);
     Some(Ghost::Decor {
         at: i.at,

@@ -19,11 +19,10 @@ use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::domain::control::edit::pick::{pick_at, Pick};
-use crate::domain::control::edit::write::Preview;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::store::Entry;
-use crate::domain::preview::Ghost;
+use crate::domain::preview::{Ghost, RenderEdit};
 use crate::domain::query::World;
 use pxl_spec::space::coord::zoom::{base_of, cube, idx_of, Zoom};
 use pxl_spec::space::layer::octant::Octant;
@@ -65,20 +64,19 @@ impl Tool {
         }
     }
 
-    /// `was` is the last turn's preview.
-    fn preview(self, hover: &Hover, was: &Preview) -> Preview {
+    /// What the tool leaves out of the world as drawn: only the eraser does.
+    fn render_edit(self, hover: &Hover) -> RenderEdit {
         match self {
-            Tool::Pointer => pointer::preview(hover),
-            Tool::Eraser => eraser::preview(hover),
-            Tool::Item { asset, zoom } => item::preview(asset, zoom, hover, was),
+            Tool::Eraser => eraser::render_edit(hover),
+            Tool::Pointer | Tool::Item { .. } => RenderEdit::default(),
         }
     }
 
-    fn ghost(self, hover: &Hover, preview: &Preview) -> Ghost {
+    fn ghost(self, hover: &Hover) -> Ghost {
         match self {
-            Tool::Pointer => pointer::ghost(hover, preview),
-            Tool::Eraser => eraser::ghost(hover, preview),
-            Tool::Item { asset, .. } => item::ghost(asset, hover, preview),
+            Tool::Pointer => pointer::ghost(hover),
+            Tool::Eraser => eraser::ghost(hover),
+            Tool::Item { asset, zoom } => item::ghost(asset, zoom, hover),
         }
     }
 }
@@ -154,7 +152,7 @@ pub struct Target {
 }
 
 impl Hover {
-    pub fn prop(&self) -> Option<Instance> {
+    pub fn decor(&self) -> Option<Instance> {
         self.target?.decor
     }
 
