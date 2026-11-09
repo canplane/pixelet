@@ -37,7 +37,7 @@ with a top and a width, and says which of its children are tiles (pxl-spec
 one icon wide, each with the zoom it shows from. **Divisions** (`division.rs`)
 hold the finest administrative division each cell is in, from `DIVISION_LEAF`
 up. The **earth** (`earth.rs`) is the planet's picture at one zoom only, held
-for the floor's tiles (`earth_window`) and answered by a coarser picture of the
+for the floor's tiles (`earth::window`) and answered by a coarser picture of the
 whole globe where none is held.
 
 ## The objects

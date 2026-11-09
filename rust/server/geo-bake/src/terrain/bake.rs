@@ -3,7 +3,7 @@
 //! One tile's source rows baked into its surface, which with its lines is the tile.
 
 use pxl_spec::bake::separation::Separation;
-use pxl_spec::bake::tile::terrain::{self, Ground, TerrainTile};
+use pxl_spec::bake::tile::terrain::{self, GroundCells, TerrainTile};
 use pxl_spec::bake::way::lay;
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::adapter::epsg3857::{self, G3857};
@@ -18,25 +18,19 @@ use crate::wkb::wkb_to_geometries;
 
 pub(crate) struct Surface {
     pub ele: Vec<i16>,
-    pub ground: Ground,
+    pub cells: GroundCells,
 }
 
 /// The tile from its surface and lines: the approaches' palette indices laid into its cells
 /// (pxl-spec bake/way.rs `lay`), then its lines cut to those it draws (pxl-spec
 /// bake/tile/terrain.rs `drawn`).
 pub(crate) fn assemble(tile: [i32; 2], surface: Surface, separation: Separation) -> TerrainTile {
-    let mut palette_idxs = surface.ground.cells.into_owned();
+    let mut palette_idxs = surface.cells.into_owned();
     let tile = Quadrant::new(LEAF_ZOOM, tile);
     lay(&separation, Frame::of(tile), &mut palette_idxs);
     terrain::drawn(
         tile,
-        TerrainTile::leaf(
-            surface.ele,
-            Ground {
-                cells: palette_idxs.into(),
-            },
-            separation,
-        ),
+        TerrainTile::leaf(surface.ele, palette_idxs.into(), separation),
     )
 }
 
@@ -61,10 +55,10 @@ pub(crate) fn bake_surface(
     );
     feats.extend(src.base_rows.iter().flat_map(|row| bases(row, tile_min)));
 
-    let ground = bake_ground(&feats, &coast_of(&src.coast_rows, tile_min));
+    let cells = bake_ground(&feats, &coast_of(&src.coast_rows, tile_min));
     Surface {
         ele: src.ele,
-        ground,
+        cells,
     }
 }
 

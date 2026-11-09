@@ -19,8 +19,8 @@
 use pxl_engine::area::{Area, Shard};
 use pxl_engine::clipmap::{
     self, BrickSource, Entry, Lookup, Presence, BRICK, BRICK_CELLS, BRICK_MIPS, BRICK_SHIFT,
-    BRICK_WORDS, CLIP_LEVELS, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL_ZOOM, LINES_WORDS, ROOT_AT,
-    SLOTS, SPANS_ACROSS, SPANS_WORDS, WAYS_BRICK_SEGMENTS,
+    BRICK_WORDS, CLIP_LEVELS, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL_ZOOM, ROOT_AT, SLOTS,
+    SPANS_ACROSS, SPANS_WORDS,
 };
 use pxl_engine::fill;
 use pxl_engine::ground::{self, word, Extent};
@@ -41,7 +41,8 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::domain::layer::terrain::fixed::{
-    cells_off, fill_off, palette_off, BUILD_WORDS, CELLS_ARR_BYTES, PALETTE_ARR_BYTES, RANGE,
+    cells_off, fill_off, palette_off, BUILD_WORDS, CELLS_ARR_BYTES, LINES_WORDS, PALETTE_ARR_BYTES,
+    RANGE, WAYS_BRICK_SEGMENTS,
 };
 use crate::domain::layer::terrain::pool::{way_pool, PoolRefusal, Run, WayPool};
 use crate::domain::layer::terrain::tile;
@@ -121,9 +122,9 @@ enum Fill {
     /// Its cells are whole here and its tree is in the pool. It waits to be
     /// handed to the GPU (`upload`) and is not present yet.
     Filled,
-    /// Its ways' tree was refused, because the brick needs more than a
-    /// brick's most or the pool is at its cap, and asking again changes
-    /// neither. The slot does not count as absent, so the brick is not filled
+    /// Its ways were refused, because its lines are past the fill's room,
+    /// its tree needs more than a brick's most or the pool is at its cap, and
+    /// asking again changes none of these. The slot does not count as absent, so the brick is not filled
     /// again every turn, and its tile is not asked for again, while a clip
     /// level wants it (`assign_slots`). A reader reads the coarser clip level
     /// instead, as for any absent brick.
@@ -980,14 +981,17 @@ fn begin(w: &mut Clipmap) -> Poll {
         }
         let f = fill_scratch();
         if void {
-            let cells = &tile.ground.cells;
+            let cells = &tile.cells;
             cut_into(b, place, &|c: usize| word([u32::from(cells[c]); 4]));
             w.slots[b as usize].fill = Fill::Cut;
             f.ele.fill(0);
         } else {
             f.ele.copy_from_slice(&tile.ele);
         }
-        let line_cnt = brick_lines(t, &tile.separation, place, f.pairs, f.lines);
+        let Some(line_cnt) = brick_lines(t, &tile.separation, place, f.pairs, f.lines) else {
+            w.slots[b as usize].fill = Fill::Refused;
+            continue;
+        };
         w.filling = Some(BrickFill {
             slot: b,
             cell_zoom: slot.cell_zoom,

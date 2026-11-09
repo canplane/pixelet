@@ -88,13 +88,17 @@ const fn body_block(stream: Stream) -> u64 {
     }
 }
 
-/// The heap's bounded flows at their worst, which the heap a phone is
-/// guaranteed must hold:
+/// The caps of the heap's bounded flows added up, checked against the heap a
+/// phone is guaranteed. The sum is a budget, not the most live at once: some
+/// of the flows share the credits, and free blocks do not add up to one block.
+/// The flows:
 /// - the terrain's and the Earth's bodies, kept or on a credit, in the runs
 ///   that `BODY_SLOTS` slots fill (sys/io/body.rs);
 /// - two baked tile's bodies for every credit, one out and one stopped whose
 ///   read the runtime has not passed (sys/io/fetch.rs `Queue`), in the buddy's
-///   block for the longest other kind, each freed once it is decoded or passed;
+///   block for the longest other kind, or a terrain body too long for its slot
+///   (sys/io/body.rs `take`) in one no longer, each freed once it is decoded
+///   or passed;
 /// - the ways' pool at its largest (domain/layer/terrain/pool.rs, pxl-engine
 ///   way_tree.rs `POOL_CHILD_GROUPS`);
 /// - the profiler's lanes while its setting is on (perf/record.rs).
@@ -123,7 +127,7 @@ const HEAP_FLOWS_BYTES: u64 = {
 
 const _: () = assert!(
     HEAP_FLOWS_BYTES <= MACHINE.min_heap_bytes as u64,
-    "the heap's bounded flows at their worst do not fit the heap a phone is guaranteed"
+    "the caps of the heap's bounded flows do not fit the heap a phone is guaranteed"
 );
 
 /// The range `f` of `.fixed`. Asking for it before boot lays out memory is a

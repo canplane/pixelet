@@ -15,8 +15,7 @@ use pxl_engine::cast::Query;
 use pxl_engine::clipmap::{
     self as clip, BrickSource, Lookup, Presence, ACROSS, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS,
     ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL_ZOOM, JOINED_AT, JOINED_ENTRIES, JOINED_MIPS,
-    LINES_ENTRIES_AT, LINES_SEGMENTS_AT, LINES_WORDS, ORIGIN_AT, OWN_AT, OWN_CELLS, ROOT_AT,
-    SPANS_WORDS,
+    LINES_BINS_AT, LINES_ENTRIES_AT, ORIGIN_AT, OWN_AT, OWN_CELLS, ROOT_AT, SPANS_WORDS,
 };
 use pxl_engine::fill;
 use pxl_engine::ground::{self, Resident};
@@ -277,7 +276,7 @@ pub fn source(
     let mut source = Source {
         four: vec![0; BRICK_CELLS as usize],
         ele: vec![0; span],
-        lines: vec![0; LINES_WORDS as usize],
+        lines: vec![0; clip::lines_words(0, 0) as usize],
     };
     let s = LEAF_CELL_ZOOM - cell_zoom;
     for i in 0..BRICK_CELLS {
@@ -393,17 +392,24 @@ pub fn source(
             [mid[0] << s, mid[1] << s, top_at(m) as i32],
         ));
     }
+    // Every bin holds every segment.
     let n = segments.len() as u32;
+    let entries = clip::WAYS_BINS * n;
+    let mut lines = vec![0; clip::lines_words(entries, n) as usize];
+    lines[..way::HEADER_WORDS as usize]
+        .copy_from_slice(&source.lines[..way::HEADER_WORDS as usize]);
     for b in 0..clip::WAYS_BINS {
-        source.lines[(way::HEADER_WORDS + b) as usize] = n << 16;
+        lines[(LINES_BINS_AT + b) as usize] = b * n;
     }
-    for e in 0..n {
-        source.lines[(LINES_ENTRIES_AT + e / 2) as usize] |= e << (16 * (e % 2));
+    lines[(LINES_BINS_AT + clip::WAYS_BINS) as usize] = entries;
+    for e in 0..entries {
+        lines[(LINES_ENTRIES_AT + e) as usize] = e % n;
     }
     for (k, w) in segments.iter().enumerate() {
-        let at = LINES_SEGMENTS_AT as usize + k * way::SEGMENT_WORDS;
-        source.lines[at..at + way::SEGMENT_WORDS].copy_from_slice(w);
+        let at = (LINES_ENTRIES_AT + entries) as usize + k * way::SEGMENT_WORDS;
+        lines[at..at + way::SEGMENT_WORDS].copy_from_slice(w);
     }
+    source.lines = lines;
     source
 }
 

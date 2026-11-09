@@ -4,7 +4,7 @@
 //! gives its ground exactly, and is named by that tile and its index there.
 //! The name reads the place again for as long as the tile is held.
 
-use pxl_spec::bake::tile::place::{PlaceTile, TilePlace};
+use pxl_spec::bake::tile::place::{Place, PlaceTile};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 use super::world::World;
@@ -20,7 +20,7 @@ impl World<'static> {
     pub fn places_in(
         self,
         tiles: impl IntoIterator<Item = Quadrant>,
-        visit: &mut dyn FnMut(Quadrant, u32, TilePlace<'static>),
+        visit: &mut dyn FnMut(Quadrant, u32, Place<'static>),
     ) {
         let cache: &'static _ = PlaceTile::tile_cache();
         let mut path = Path::default();
@@ -31,8 +31,8 @@ impl World<'static> {
             let Some(places) = cache.get(src) else {
                 continue;
             };
-            for (place, h) in places.iter() {
-                visit(src, place, h);
+            for (place, h) in places.iter().enumerate() {
+                visit(src, place as u32, h);
             }
         }
     }

@@ -18,6 +18,6 @@ fn absence() -> (Absence, Quadrant, Quadrant) {
 #[test]
 fn absence_sea_or_unknown() {
     let (absence, inside, west) = absence();
-    assert_eq!(absence.at(inside).ground.cells[0], ground::water);
-    assert_eq!(absence.at(west).ground.cells[0], sentinel::unknown);
+    assert_eq!(absence.at(inside).cells[0], ground::water);
+    assert_eq!(absence.at(west).cells[0], sentinel::unknown);
 }

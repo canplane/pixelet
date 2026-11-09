@@ -15,19 +15,38 @@ pub mod earth;
 pub mod place;
 pub mod terrain;
 
+/// Strings end to end in one buffer, read by index.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct StringTable {
+    bytes: String,
+    ends: Vec<u32>,
+}
+
+impl StringTable {
+    fn push(&mut self, s: &str) {
+        self.bytes.push_str(s);
+        self.ends.push(self.bytes.len() as u32);
+    }
+
+    pub fn get(&self, i: u32) -> &str {
+        let Some(&end) = self.ends.get(i as usize) else {
+            return "";
+        };
+        let start = if i == 0 { 0 } else { self.ends[i as usize - 1] };
+        &self.bytes[start as usize..end as usize]
+    }
+}
+
 /// The bytes an XTP packet's parts take (xpute-kit wire/xtp encode.rs
 /// `PacketWriter`), from which a kind bounds its packet by its lanes: the
 /// header; a branch's length word and a word a child; a sequence's length
-/// word and its payload to the word; a scalar, with the padding before what
-/// follows it, a word at most.
+/// word and its payload to the word.
 pub mod pkt {
     use super::{HDR_SZ, WORD_SZ};
 
     const WORD: usize = WORD_SZ as usize;
 
     pub(crate) const HEADER: usize = HDR_SZ as usize;
-
-    pub const SCALAR: usize = WORD;
 
     pub const fn branch(children: usize) -> usize {
         WORD * (1 + children)
@@ -39,8 +58,8 @@ pub mod pkt {
 }
 
 /// The most bytes a packet of `layer` takes: what a client may hold one
-/// in, and refuses one past. Terrain's and the Earth's follow from their
-/// lanes; places' and divisions' are a room their bake refuses a tile past.
+/// in, and refuses one past. The Earth's follows from its lanes; every other
+/// kind's is a room its bake refuses a tile past.
 pub const fn max_pkt_bytes(layer: BaseLayer) -> usize {
     match layer {
         BaseLayer::terrain => terrain::MAX_PKT_BYTES,

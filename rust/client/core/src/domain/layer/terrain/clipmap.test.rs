@@ -157,7 +157,7 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
             vec![(0, 0); WAYS_BRICK_SEGMENTS as usize],
             vec![0; LINES_WORDS as usize],
         );
-        let n = brick_lines(t, separation, place, &mut segments, &mut lines);
+        let n = brick_lines(t, separation, place, &mut segments, &mut lines).unwrap();
         let laid = terrain::TileBrick {
             cell_zoom,
             place,
@@ -318,13 +318,7 @@ fn hilly_tile() -> (Quadrant, TerrainTile, Vec<u8>) {
         .map(|c| 1 + (c % 7) as GroundId)
         .collect::<Vec<_>>();
     let t = Quadrant::new(LEAF_ZOOM, CENTER_TILE);
-    let tile = TerrainTile::leaf(
-        ele,
-        terrain::Ground {
-            cells: cells.into(),
-        },
-        builder.finish(),
-    );
+    let tile = TerrainTile::leaf(ele, cells.into(), builder.finish());
     let pkt = terrain::encode(&tile).unwrap();
     (t, tile, pkt)
 }
@@ -371,7 +365,7 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
         let (cell_zoom, place) = (slot.cell_zoom, tile_of(slot.cell_zoom, slot.brick).1);
         let mut pairs = vec![(0, 0); WAYS_BRICK_SEGMENTS as usize];
         let mut lines = vec![0; LINES_WORDS as usize];
-        let n = brick_lines(t, &tile.separation, place, &mut pairs, &mut lines);
+        let n = brick_lines(t, &tile.separation, place, &mut pairs, &mut lines).unwrap();
         let site = fill::Site {
             cell_zoom,
             place,
@@ -384,7 +378,7 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
             let [x, y] = clipmap::of_idx(i);
             let c = ((place[1] * BRICK + y) * GROUND.tile_cells() + place[0] * BRICK + x) as usize;
             let at = 4 * c;
-            word([0, 1, 2, 3].map(|k| u32::from(tile.ground.cells[at + k])))
+            word([0, 1, 2, 3].map(|k| u32::from(tile.cells[at + k])))
         };
         let (mut lane, mut spans) = (vec![0; BRICK_WORDS as usize], vec![0; SPANS_WORDS as usize]);
         fill::brick(&mut lane, &mut spans, four, &site);
@@ -440,7 +434,7 @@ fn void_tile_bricks_filled_with_no_packet() {
     *cache = Default::default();
     let asks: fnv::FnvHashMap<Quadrant, ()> = [(t, ())].into_iter().collect();
     cache.ask(&asks);
-    cache.set(t, TerrainTile::void());
+    cache.set(t, TerrainTile::default());
     due(w);
     assert!(!w.due.is_empty(), "a void tile's bricks are due");
     while !matches!(fill_stage(w), Poll::Done) {}

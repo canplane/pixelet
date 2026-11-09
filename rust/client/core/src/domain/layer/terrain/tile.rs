@@ -1,6 +1,6 @@
 // pxl-core/domain/layer/terrain/tile.rs
 
-//! Terrain tiles as a layer of the pyramid. A tile's record is a room in
+//! Terrain tiles as a layer of the pyramid. A tile's slot is a room in
 //! `.fixed.terrain` for the parts read of the tile as a whole, its
 //! separation lines and its elevation samples, which are decoded into it
 //! straight from the packet. A tile's cells belong to the clip levels
@@ -49,32 +49,32 @@ impl Base for TerrainTile {
         TERRAIN.get(TileCache::default)
     }
 
-    fn empty() -> Option<TerrainTile> {
-        Some(TerrainTile::void())
-    }
-
-    /// Decodes the packet into the record in one pass, so no tile-sized copy
+    /// Decodes the packet into the slot in one pass, so no tile-sized copy
     /// stands between arrival and drawing.
     fn receive(
         _tile: Quadrant,
-        record: u32,
+        slot: u32,
         pkt: &[u8],
         phases: &mut PhaseList,
     ) -> Result<TerrainTile, Failure> {
         let t0 = now();
-        // SAFETY: the record is this tile's, and nothing reads it until the tile is set.
-        let terrain = decode_into(pkt, unsafe { room_of(record) }, unsafe { ele_of(record) })?;
+        // SAFETY: the slot is this tile's, and nothing reads it until the tile is set.
+        let terrain = decode_into(pkt, unsafe { room_of(slot) }, unsafe { ele_of(slot) })?;
         phases.push(TaskPhaseName::decode_ms, now() - t0);
         Ok(terrain)
     }
 
     /// Lets the clip levels cut what they want from the packet, then frees
     /// it. No terrain packet is kept past its turn.
-    fn keep(record: Option<u32>, block: Block) {
-        if let Some(t) = record.and_then(|r| TerrainTile::tile_cache().in_slot(r)) {
+    fn keep(slot: Option<u32>, block: Block) {
+        if let Some(t) = slot.and_then(|s| TerrainTile::tile_cache().in_slot(s)) {
             clipmap::cut(t, fetch::body(block));
         }
         fetch::release(Some(block));
+    }
+
+    fn empty() -> Option<TerrainTile> {
+        Some(TerrainTile::default())
     }
 }
 
@@ -91,29 +91,29 @@ pub fn again_room() -> u32 {
 
 /// # Safety
 /// As `room_of`'s.
-unsafe fn ele_of(record: u32) -> &'static mut [i16] {
+unsafe fn ele_of(slot: u32) -> &'static mut [i16] {
     // SAFETY: as this function's, and the plane is plain numbers.
-    unsafe { arr(RANGE.get(), ele_off(record), ELE_COLUMN) }
+    unsafe { arr(RANGE.get(), ele_off(slot), ELE_COLUMN) }
 }
 
 /// # Safety
-/// The record's columns must belong to the tile given them, and to no other
-/// tile, from now until another tile takes the record.
-unsafe fn room_of(record: u32) -> separation::Room {
-    /// Column `K` of the record, as long as the layout makes it, with
+/// The slot's columns must belong to the tile given them, and to no other
+/// tile, from now until another tile takes the slot.
+unsafe fn room_of(slot: u32) -> separation::Room {
+    /// Column `K` of the slot, as long as the layout makes it, with
     /// elements of the room's own type, which must be as wide as the layout
     /// counts them.
     ///
     /// # Safety
     /// As `room_of`'s.
-    unsafe fn column<T, const K: usize>(record: u32) -> &'static mut [T] {
+    unsafe fn column<T, const K: usize>(slot: u32) -> &'static mut [T] {
         const {
             assert!(
                 SEPARATION_COLUMNS[K].1 == size_of::<T>(),
                 "a column's element as wide as the layout counts it"
             );
         };
-        let (at, bytes) = separation_column(record, K);
+        let (at, bytes) = separation_column(slot, K);
         // The layout keeps every column inside the range, so a column past
         // its end is a bug.
         let at = RANGE.get().at(at, bytes).or_bug(Errno::ENOTRECOVERABLE) as usize;
@@ -124,13 +124,13 @@ unsafe fn room_of(record: u32) -> separation::Room {
     // SAFETY: as this function's.
     unsafe {
         separation::Room {
-            starts: column::<_, 0>(record),
-            points: column::<_, 1>(record),
-            tops: column::<_, 2>(record),
-            width: column::<_, 3>(record),
-            kind: column::<_, 4>(record),
-            form: column::<_, 5>(record),
-            clear: column::<_, 6>(record),
+            starts: column::<_, 0>(slot),
+            points: column::<_, 1>(slot),
+            tops: column::<_, 2>(slot),
+            widths: column::<_, 3>(slot),
+            kinds: column::<_, 4>(slot),
+            forms: column::<_, 5>(slot),
+            clears: column::<_, 6>(slot),
         }
     }
 }

@@ -7,6 +7,7 @@
 
 use std::borrow::Cow;
 
+use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::shape::Shape;
 
@@ -67,30 +68,20 @@ impl Form {
     }
 }
 
-/// A resident record's room for lines and their points: the most a tile of the format-12 set
-/// holds. A tile past either fails its bake (`Separation::fits`).
-pub const MAX_LINES: usize = 438;
-pub const MAX_POINTS: usize = 4193;
-
-/// Whether a record's room holds `lines` lines of `points` points.
-pub const fn holds(lines: usize, points: usize) -> bool {
-    lines <= MAX_LINES && points <= MAX_POINTS
-}
-
 /// A tile's lines, structure-of-arrays: a column a line, then a column a point.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Separation {
     pub starts: Cow<'static, [u32]>, // Line d holds the points starts[d]..starts[d + 1].
     pub points: Cow<'static, [[i16; 2]]>, // Each point of the centreline, in 1/POINT_SCALE of a tile cell, as the source gives it.
     pub tops: Cow<'static, [i16]>, // The road surface at each point, in leaf cells, solved over many tiles.
-    pub width: Cow<'static, [u8]>, // Each line's width, in 1/POINT_SCALE of a tile cell, as the source gives it.
-    pub kind: Cow<'static, [u8]>, // Each line's transport type: the source's class, which is the slab's material.
-    pub form: Cow<'static, [u8]>, // Each line's `Form`, from the source's flags.
-    pub clear: Cow<'static, [u8]>, // A bore's clear space over its surface, in leaf cells, as the solve set it.
+    pub widths: Cow<'static, [u8]>, // Each line's width, in 1/POINT_SCALE of a tile cell, as the source gives it.
+    pub kinds: Cow<'static, [u8]>, // Each line's transport type: the source's class, which is the slab's material.
+    pub forms: Cow<'static, [u8]>, // Each line's `Form`, from the source's flags.
+    pub clears: Cow<'static, [u8]>, // A bore's clear space over its surface, in leaf cells, as the solve set it.
     /// The coarsest zoom at which each point is held (pxl-engine `way::coarsest`): what a fold
-    /// keeps of a line. Only the bake reads it, since no client path folds, so a client's record
+    /// keeps of a line. Only the bake reads it, since no client path folds, so a client's room
     /// holds none (`Table::into_room`).
-    pub coarsest: Cow<'static, [u8]>,
+    pub first_zooms: Cow<'static, [u8]>,
 }
 
 impl Default for Separation {
@@ -103,7 +94,7 @@ impl Default for Separation {
 pub struct Line<'a> {
     pub points: &'a [[i16; 2]],
     pub tops: &'a [i16],
-    pub coarsest: &'a [u8],
+    pub first_zooms: &'a [u8],
     pub width: u8,
     pub kind: u8,
     pub form: Form,
@@ -111,23 +102,12 @@ pub struct Line<'a> {
 }
 
 impl Separation {
-    /// Refused, with its lines and points, where a record's room does not
-    /// hold it (`holds`).
-    pub fn fits(&self) -> Result<(), [usize; 2]> {
-        let size = [self.len(), self.points.len()];
-        if holds(size[0], size[1]) {
-            Ok(())
-        } else {
-            Err(size)
-        }
-    }
-
     pub fn len(&self) -> usize {
-        self.width.len()
+        self.widths.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.width.is_empty()
+        self.widths.is_empty()
     }
 
     #[inline]
@@ -136,11 +116,11 @@ impl Separation {
         Line {
             points: &self.points[a..b],
             tops: &self.tops[a..b],
-            coarsest: self.coarsest.get(a..b).unwrap_or_default(),
-            width: self.width[d],
-            kind: self.kind[d],
-            form: Form::of(self.form[d]),
-            clear: self.clear[d],
+            first_zooms: self.first_zooms.get(a..b).unwrap_or_default(),
+            width: self.widths[d],
+            kind: self.kinds[d],
+            form: Form::of(self.forms[d]),
+            clear: self.clears[d],
         }
     }
 
@@ -197,11 +177,11 @@ impl Separation {
             p == self.starts[d] as usize,
             p + 2 == self.starts[d + 1] as usize,
         );
-        let flags = way::flags(u32::from(self.form[d]), first, last, continues);
+        let flags = way::flags(u32::from(self.forms[d]), first, last, continues);
         Segment::words(
             [self.points[p], self.points[p + 1]],
             [self.tops[p], self.tops[p + 1]],
-            [self.width[d], self.kind[d], flags, self.clear[d]],
+            [self.widths[d], self.kinds[d], flags, self.clears[d]],
         )
     }
 
@@ -345,7 +325,7 @@ pub fn runs_within(points: &[[f64; 2]], margin: f64) -> Vec<[usize; 2]> {
 /// lies in one child's tile, whose copy holds every point under it; the 4×4 tiles hold every
 /// segment the parent keeps whole. Each line is kept where it runs within its footprint of the
 /// parent (`runs_within`), so the ring a tile's lines guarantee holds at every zoom. A record
-/// holding more than a tile's room is refused where it is encoded, never cut here.
+/// holding more than a tile's packet is refused where it is encoded, never cut here.
 pub fn fold_separation(around: [Option<&Separation>; 16], zoom: Zoom) -> Separation {
     let tile = TILE_CELLS as i32 * POINT_SCALE as i32;
     let mut folded = Fold::default();
@@ -363,7 +343,7 @@ pub fn fold_separation(around: [Option<&Separation>; 16], zoom: Zoom) -> Separat
                         round(f64::from(i32::from(line.points[i][a]) + q[a]) / 2.0) as i32
                     }),
                     line.tops[i],
-                    line.coarsest[i],
+                    line.first_zooms[i],
                 )
             };
             let mut before = None;
@@ -499,11 +479,11 @@ pub struct Builder {
     starts: Vec<u32>,
     points: Vec<[i16; 2]>,
     tops: Vec<i16>,
-    coarsest: Vec<u8>,
-    width: Vec<u8>,
-    kind: Vec<u8>,
-    form: Vec<u8>,
-    clear: Vec<u8>,
+    first_zooms: Vec<u8>,
+    widths: Vec<u8>,
+    kinds: Vec<u8>,
+    forms: Vec<u8>,
+    clears: Vec<u8>,
 }
 
 impl Builder {
@@ -518,25 +498,25 @@ impl Builder {
         clear: u8,
     ) {
         let at = self.points.len();
-        for ([x, y], top, coarsest) in points {
+        for ([x, y], top, first_zoom) in points {
             let q = |v: f64| {
                 round(v * POINT_SCALE).clamp(f64::from(i16::MIN), f64::from(i16::MAX)) as i16
             };
             self.points.push([q(x), q(y)]);
             self.tops.push(top);
-            self.coarsest.push(coarsest);
+            self.first_zooms.push(first_zoom);
         }
         if self.points.len() - at < 2 || width == 0 {
             self.points.truncate(at);
             self.tops.truncate(at);
-            self.coarsest.truncate(at);
+            self.first_zooms.truncate(at);
             return;
         }
         self.starts.push(at as u32);
-        self.width.push(width);
-        self.kind.push(kind);
-        self.form.push(form.byte());
-        self.clear.push(clear);
+        self.widths.push(width);
+        self.kinds.push(kind);
+        self.forms.push(form.byte());
+        self.clears.push(clear);
     }
 
     pub fn finish(mut self) -> Separation {
@@ -545,16 +525,16 @@ impl Builder {
             starts: self.starts.into(),
             points: self.points.into(),
             tops: self.tops.into(),
-            coarsest: self.coarsest.into(),
-            width: self.width.into(),
-            kind: self.kind.into(),
-            form: self.form.into(),
-            clear: self.clear.into(),
+            first_zooms: self.first_zooms.into(),
+            widths: self.widths.into(),
+            kinds: self.kinds.into(),
+            forms: self.forms.into(),
+            clears: self.clears.into(),
         }
     }
 }
 
-/// The packet's lanes: starts, points (flattened), tops, width, kind, form, clear, coarsest.
+/// The packet's lanes: starts, points (flattened), tops, widths, kinds, forms, clears, first_zooms.
 pub(crate) type Packet = (
     Vec<u32>,
     Vec<i16>,
@@ -572,11 +552,11 @@ impl Separation {
             &self.starts,
             self.points.as_flattened(),
             &self.tops,
-            &self.width,
-            &self.kind,
-            &self.form,
-            &self.clear,
-            &self.coarsest,
+            &self.widths,
+            &self.kinds,
+            &self.forms,
+            &self.clears,
+            &self.first_zooms,
         )
     }
 }
@@ -585,43 +565,44 @@ pub struct Table<'a> {
     starts: &'a [u32],
     points: &'a [[i16; 2]],
     tops: &'a [i16],
-    width: &'a [u8],
-    kind: &'a [u8],
-    form: &'a [u8],
-    clear: &'a [u8],
-    coarsest: &'a [u8],
+    widths: &'a [u8],
+    kinds: &'a [u8],
+    forms: &'a [u8],
+    clears: &'a [u8],
+    first_zooms: &'a [u8],
 }
 
 impl<'a> Table<'a> {
-    /// Refused unless the columns are one tile's separation, consistently sized and within a record's room.
+    /// Refused unless the columns are one tile's separation, consistently sized.
     pub fn of(
-        (starts, points, tops, width, kind, form, clear, coarsest): <Packet as Shape>::Read<'a>,
+        (starts, points, tops, widths, kinds, forms, clears, first_zooms): <Packet as Shape>::Read<
+            'a,
+        >,
     ) -> Result<Table<'a>, MarshalError> {
         let (points, []) = points.as_chunks::<2>() else {
             return Err(malformed());
         };
-        let n = width.len();
-        let shaped = kind.len() == n
-            && form.len() == n
-            && clear.len() == n
+        let n = widths.len();
+        let shaped = kinds.len() == n
+            && forms.len() == n
+            && clears.len() == n
             && starts.len() == n + 1
             && tops.len() == points.len()
-            && coarsest.len() == points.len()
-            && holds(n, points.len())
+            && first_zooms.len() == points.len()
             && starts.first() == Some(&0)
             && starts.last() == Some(&(points.len() as u32))
             && starts.windows(2).all(|w| w[0] <= w[1])
-            && form.iter().all(|&f| usize::from(f) < Form::ALL.len());
+            && forms.iter().all(|&f| usize::from(f) < Form::ALL.len());
         shaped
             .then_some(Table {
                 starts,
                 points,
                 tops,
-                width,
-                kind,
-                form,
-                clear,
-                coarsest,
+                widths,
+                kinds,
+                forms,
+                clears,
+                first_zooms,
             })
             .ok_or_else(malformed)
     }
@@ -631,45 +612,48 @@ impl<'a> Table<'a> {
             starts: self.starts.to_vec().into(),
             points: self.points.to_vec().into(),
             tops: self.tops.to_vec().into(),
-            coarsest: self.coarsest.to_vec().into(),
-            width: self.width.to_vec().into(),
-            kind: self.kind.to_vec().into(),
-            form: self.form.to_vec().into(),
-            clear: self.clear.to_vec().into(),
+            first_zooms: self.first_zooms.to_vec().into(),
+            widths: self.widths.to_vec().into(),
+            kinds: self.kinds.to_vec().into(),
+            forms: self.forms.to_vec().into(),
+            clears: self.clears.to_vec().into(),
         }
     }
 
-    /// Into a client's record: every column but `coarsest`, which only a fold
-    /// reads; a client reads a brick's lines whole (bake/tile/terrain.rs
-    /// `brick_lines`).
-    pub fn into_room(&self, room: Room) -> Separation {
+    /// Into a client's slot: every column but `first_zooms`, which only a fold reads; a client
+    /// reads a brick's lines whole (bake/tile/terrain.rs `brick_lines`). Refused, as a packet
+    /// too long for its kind is, where `room` holds fewer than the tile's lines or points.
+    pub fn into_room(&self, room: Room) -> Result<Separation, MarshalError> {
+        if self.starts.len() > room.starts.len() || self.points.len() > room.points.len() {
+            return Err(MarshalError::new(Errno::EFBIG));
+        }
         fn put<T: Copy>(dst: &'static mut [T], src: &[T]) -> &'static [T] {
             let dst = &mut dst[..src.len()];
             dst.copy_from_slice(src);
             dst
         }
-        Separation {
+        Ok(Separation {
             starts: put(room.starts, self.starts).into(),
             points: put(room.points, self.points).into(),
             tops: put(room.tops, self.tops).into(),
-            coarsest: Cow::Borrowed(&[]),
-            width: put(room.width, self.width).into(),
-            kind: put(room.kind, self.kind).into(),
-            form: put(room.form, self.form).into(),
-            clear: put(room.clear, self.clear).into(),
-        }
+            first_zooms: Cow::Borrowed(&[]),
+            widths: put(room.widths, self.widths).into(),
+            kinds: put(room.kinds, self.kinds).into(),
+            forms: put(room.forms, self.forms).into(),
+            clears: put(room.clears, self.clears).into(),
+        })
     }
 }
 
-/// A record's room for lines, each column `MAX_LINES` or `MAX_POINTS` long.
+/// A client's slot's room for lines, a column each (pxl-core domain/layer/terrain/fixed.rs).
 pub struct Room {
     pub starts: &'static mut [u32],
     pub points: &'static mut [[i16; 2]],
     pub tops: &'static mut [i16],
-    pub width: &'static mut [u8],
-    pub kind: &'static mut [u8],
-    pub form: &'static mut [u8],
-    pub clear: &'static mut [u8],
+    pub widths: &'static mut [u8],
+    pub kinds: &'static mut [u8],
+    pub forms: &'static mut [u8],
+    pub clears: &'static mut [u8],
 }
 
 #[cfg(test)]

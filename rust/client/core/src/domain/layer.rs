@@ -89,15 +89,15 @@ pub trait Base: Clone + 'static {
 
     fn receive(
         tile: Quadrant,
-        record: u32,
+        slot: u32,
         pkt: &[u8],
         phases: &mut PhaseList,
     ) -> Result<Self, Failure>;
 
-    /// Disposes of the packet a tile arrived in, once slot `record` took the
+    /// Disposes of the packet a tile arrived in, once slot `slot` took the
     /// tile or no slot did. The default frees it; a layer whose GPU copies
     /// the tile from its packet keeps the packet instead (`upload::UploadTable`).
-    fn keep(_record: Option<u32>, block: Block) {
+    fn keep(_slot: Option<u32>, block: Block) {
         fetch::release(Some(block));
     }
 

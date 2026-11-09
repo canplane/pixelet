@@ -70,7 +70,7 @@ pub struct TileCache<L: Base> {
     /// only `put` and `remove` write either side, so the two always agree.
     /// The readers that start from a slot use this side: the packet a tile
     /// arrives in (terrain/tile.rs `keep`) and the GPU hand-off, which walks
-    /// the slots (earth.rs `earth_upload`).
+    /// the slots (earth.rs `upload`).
     in_slot: Vec<Option<Quadrant>>,
     free: Vec<u32>,
     /// A buffer kept between calls so that `ask` allocates nothing.
@@ -452,16 +452,16 @@ impl<L: Base> TileCache<L> {
         victim: impl FnOnce(&mut dyn Iterator<Item = Quadrant>) -> Option<Quadrant>,
         receive: impl FnOnce(u32) -> Result<L, E>,
     ) -> Result<(), E> {
-        let Some(record) = self.slot_for(p, victim) else {
+        let Some(slot) = self.slot_for(p, victim) else {
             return Ok(());
         };
-        match receive(record) {
+        match receive(slot) {
             Ok(tile) => {
-                self.put(p, tile, Some(record));
+                self.put(p, tile, Some(slot));
                 Ok(())
             }
             Err(e) => {
-                self.free.push(record);
+                self.free.push(slot);
                 Err(e)
             }
         }
@@ -473,8 +473,8 @@ impl<L: Base> TileCache<L> {
         if !self.is_asked(p) {
             return;
         }
-        if let Some(record) = self.remove(p) {
-            self.free.push(record);
+        if let Some(slot) = self.remove(p) {
+            self.free.push(slot);
         }
         self.put(p, tile, None);
     }
@@ -615,9 +615,9 @@ impl<L: Base> TileCache<L> {
         self.changed.push(p);
     }
 
-    /// The tile held in slot `record`; a layer calls a slot its record.
-    pub fn in_slot(&self, record: u32) -> Option<Quadrant> {
-        self.in_slot[record as usize]
+    /// The tile held in slot `slot`.
+    pub fn in_slot(&self, slot: u32) -> Option<Quadrant> {
+        self.in_slot[slot as usize]
     }
 
     /// Returns the slot `p` was in, if any, for the caller to fill or free.

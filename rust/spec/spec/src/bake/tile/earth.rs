@@ -44,8 +44,8 @@ pub fn encode(rgba: &[u8]) -> Result<Vec<u8>, MarshalError> {
 }
 
 /// The tile's texels, read in place.
-pub fn decode(bytes: &[u8]) -> Result<&[u8], MarshalError> {
-    let (rgba,) = shape::get_deep::<Packet>(bytes)?;
+pub fn decode(pkt: &[u8]) -> Result<&[u8], MarshalError> {
+    let (rgba,) = shape::get_deep::<Packet>(pkt)?;
     if rgba.len() != EARTH_BYTES {
         return Err(malformed());
     }

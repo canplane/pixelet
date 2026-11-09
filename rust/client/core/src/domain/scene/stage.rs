@@ -16,7 +16,7 @@ use pxl_render::renderer::{render_frame, EarthLayer, FrameInput, FrameStat};
 use pxl_spec::space::coord::v3;
 use xpute_core::global::Global;
 
-use crate::domain::layer::earth::{earth_upload, earth_window, Earth, EARTH_SLOTS};
+use crate::domain::layer::earth::{self, EarthTile, EARTH_SLOTS};
 use crate::domain::scene::character::companion::companion_skins;
 use crate::domain::scene::character::surface::character_surface_rows;
 use crate::domain::scene::decor::asset::{decor_model, decor_skin};
@@ -133,8 +133,9 @@ pub fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
         surface_cnt += 1;
     }
     let on = api::device_generation();
-    let (window, layers) = earth_window(Earth::demand().floor(), on);
-    let mut earth_upload = move |write: &mut dyn FnMut(u32, &[u8]) -> bool| earth_upload(write, on);
+    let (window, layers) = earth::window(EarthTile::demand().floor(), on);
+    let mut earth_upload =
+        move |write: &mut dyn FnMut(u32, &[u8]) -> bool| earth::upload(write, on);
     let o = observation::observation();
     let eye = o
         .as_ref()

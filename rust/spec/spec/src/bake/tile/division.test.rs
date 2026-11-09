@@ -2,11 +2,11 @@
 
 use super::*;
 
-fn division(subtype: Subtype, prominence: u8) -> Division {
+fn division(kind: Subtype, prominence: u8) -> Division<'static> {
     Division {
-        id: String::new(),
-        subtype,
-        name: String::new(),
+        id: "",
+        kind,
+        name: "",
         parent: NONE,
         prominence,
         area: true,

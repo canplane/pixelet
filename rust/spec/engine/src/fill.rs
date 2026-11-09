@@ -6,9 +6,7 @@
 //! column from its lines into the brick's scratch (`spans`, `clipmap::SPANS_AT`); from them
 //! the brick's levels, level 0 holding each column's own entry (`mip`); and the ways' tree
 //! (`way_tree`). The core runs these a part at a time, as its turns have room (pxl-core
-//! domain/layer/terrain/clipmap.rs `fill_share`), and a bake runs them in order over one brick
-//! (`brick`). Both run this code, so the spans a bake sizes a tile's room by are the ones a
-//! client keeps.
+//! domain/layer/terrain/clipmap.rs `fill_share`).
 
 use crate::answer;
 use crate::area::Shard;

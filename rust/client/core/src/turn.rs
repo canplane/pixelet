@@ -34,7 +34,7 @@ use crate::domain::control::navigation::destination;
 use crate::domain::control::navigation::follow_mode;
 use crate::domain::control::support;
 use crate::domain::layer::division;
-use crate::domain::layer::earth::Earth;
+use crate::domain::layer::earth::EarthTile;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::terrain::clipmap;
 use crate::domain::query::change;
@@ -144,7 +144,7 @@ fn demand_tick(ctx: &mut TickContext) {
         true => PlaceTile::demand().step(None, &[]),
         false => PlaceTile::demand().idle(),
     }
-    Earth::demand().step(None, &[]);
+    EarthTile::demand().step(None, &[]);
     DivisionTile::demand().step(division::line(controller::pivot()), &[]);
     demand::object_step();
 }
@@ -417,7 +417,7 @@ fn changes_step() {
     let shared = change::take();
     gpu::note_edited(change::written_boxes());
     PlaceTile::tile_cache().take_changed(places);
-    Earth::tile_cache().take_changed(earth);
+    EarthTile::tile_cache().take_changed(earth);
     DivisionTile::tile_cache().take_changed(divisions);
     if shared {
         TerrainTile::demand().on_changed();
@@ -427,7 +427,7 @@ fn changes_step() {
         marker::on_changed(places);
     }
     if shared || !earth.is_empty() {
-        Earth::demand().on_changed();
+        EarthTile::demand().on_changed();
     }
     if !divisions.is_empty() {
         DivisionTile::demand().on_changed();

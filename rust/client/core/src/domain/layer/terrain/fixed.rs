@@ -1,7 +1,7 @@
 // pxl-core/domain/layer/terrain/fixed.rs
 
 //! The layout of `.fixed.terrain`, the room every resident terrain tile and
-//! every held brick lies in, and where each record's bytes are. The room is
+//! every held brick lies in, and where each slot's bytes are. The room is
 //! a sequence of planes. A plane is one array with an element for every tile
 //! slot, or for every brick slot, end to end. The planes, in order: a tile's
 //! seven separation columns and its samples; a brick's cells and its palette
@@ -9,11 +9,8 @@
 //! of the bricks' ways live on the heap and grow as they are taken
 //! (pool.rs).
 
-use pxl_engine::clipmap::{
-    BRICK_CELLS, BRICK_WORDS, LINES_WORDS, SPANS_WORDS, WAYS_BRICK_SEGMENTS,
-};
+use pxl_engine::clipmap::{lines_words, BRICK_CELLS, BRICK_WORDS, SPANS_WORDS};
 use pxl_engine::way_tree::{BRICK_CHILD_GROUPS, CHILD_GROUP_WORDS};
-use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
 use pxl_spec::bake::tile::terrain::ELE_COLUMN;
 
 use crate::domain::layer::tile_cache::TileCache;
@@ -26,6 +23,21 @@ use xpute_core::mem::range::OwnedRange;
 pub static RANGE: OwnedRange = OwnedRange::new();
 
 const TILE_SLOTS: u32 = TileCache::<TerrainTile>::SLOTS;
+
+/// The most lines and points a tile's slot holds. A tile past either is refused where it
+/// is decoded (pxl-spec `separation::Table::into_room`), as a body too long for its kind is,
+/// and is read as the tile over it.
+pub const MAX_LINES: usize = 438;
+pub const MAX_POINTS: usize = 4193;
+
+/// The most of its tile's ways' entries a brick's fill holds, and so of its lines' segments
+/// (`LINES_WORDS`). A brick past it is refused where its fill begins (clipmap.rs `begin`) and
+/// reads the coarser clip level.
+pub const WAYS_BRICK_SEGMENTS: u32 = 1065;
+
+/// The words of a brick's lines, as the fill's room holds them (pxl-engine
+/// `clipmap::lines_words`), each entry its own segment at its most.
+pub const LINES_WORDS: u32 = lines_words(WAYS_BRICK_SEGMENTS, WAYS_BRICK_SEGMENTS);
 
 /// The separation's columns, one plane each, in order: line starts, points,
 /// tops, width, kind, form, clear. Each entry is the column's length and its
@@ -70,7 +82,7 @@ const fn sum(bytes: &[u32]) -> u32 {
 
 pub const SEPARATION_BYTES: u32 = separation_plane(SEPARATION_COLUMNS.len());
 
-/// The bytes of a tile's padded samples in a record. The record keeps them
+/// The bytes of a tile's padded samples in a slot. The slot keeps them
 /// because a brick's fill reads them after the tile's packet is freed.
 const ELE_BYTES: u32 = arr_bytes(ELE_COLUMN, 2);
 const ELE_AT: u32 = SEPARATION_BYTES;
@@ -111,14 +123,15 @@ const FILL_AT: u32 = arr_bytes(palette_off(SLOTS) as usize, 1);
 
 pub const TERRAIN_BYTES: u32 = FILL_AT + sum(&FILL_ARRAY_BYTES);
 
-/// Record `record`'s separation column `k`: where it starts, and its bytes.
-pub const fn separation_column(record: u32, k: usize) -> (u32, u32) {
+/// Tile slot `slot`'s separation column `k`: where it starts, and its bytes.
+pub const fn separation_column(slot: u32, k: usize) -> (u32, u32) {
     let bytes = separation_column_bytes(k);
-    (separation_plane(k) + record * bytes, bytes)
+    (separation_plane(k) + slot * bytes, bytes)
 }
 
-pub const fn ele_off(record: u32) -> u32 {
-    ELE_AT + record * ELE_BYTES
+/// Where tile slot `slot`'s samples start.
+pub const fn ele_off(slot: u32) -> u32 {
+    ELE_AT + slot * ELE_BYTES
 }
 
 /// Where brick slot `slot`'s cells start (clipmap.rs `Slot`); there are

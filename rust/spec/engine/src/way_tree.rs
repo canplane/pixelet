@@ -85,11 +85,10 @@ impl Table for Read<'_> {
 }
 
 /// The most child groups, eight slots each, that the pool shared by every brick's tree grows
-/// to. A bake's set fits it wherever the eye is (pxl-spec bake/tile/terrain.rs `pool_needs`),
-/// so a pool this large refuses none. The core's pool grows as bricks take it, up to this
-/// (pxl-core domain/layer/terrain/pool.rs), and the GPU's follows it (pxl-render
-/// ray/ground.rs `GroundBuffer::grow`); a tree past what the pool holds is refused, and
-/// its brick is left absent. Child group 0 is never handed out: its words stay zero, which
+/// to. The core's pool grows as bricks take it, up to this (pxl-core
+/// domain/layer/terrain/pool.rs), and the GPU's follows it (pxl-render ray/ground.rs
+/// `GroundBuffer::grow`); a tree past what the pool holds is refused, and its brick reads the
+/// coarser clip level. Child group 0 is never handed out: its words stay zero, which
 /// reads as nothing (`object::Table`), so a root word of 0 is a brick with no tree, read as
 /// nothing without a child group of its own (`root_word`).
 pub const POOL_CHILD_GROUPS: u32 = 1 << 20;
@@ -119,9 +118,8 @@ const _: () = assert!(
 );
 
 /// The most of a brick's own nodes along z that its root child group holds, one slot each. A
-/// brick is a node `BRICK_SHIFT` zooms above its cells, and its ways' bound meets no more of
-/// them than this. A tile past it fails its bake (pxl-spec bake/tile/terrain.rs `fill_fit`),
-/// its build refused as one `past` its child groups is.
+/// brick is a node `BRICK_SHIFT` zooms above its cells. A brick whose ways' bound meets more of
+/// them is refused as one `past` its child groups is, and reads the coarser clip level.
 pub const ROOT_NODES: u32 = object::CHILDREN;
 
 /// The brick's own nodes along z that its ways' bound `[lo, hi)` (in leaf cells,
@@ -164,11 +162,11 @@ pub fn cursor(
 /// words.
 pub const CHILD_GROUP_WORDS: u32 = 2 * object::CHILDREN;
 
-/// The most child groups one brick's build takes before its fold gives any back, which is
-/// the most the format-12 set takes. A tile past it fails its bake (pxl-geo-bake
-/// terrain/pool.rs), and what a build keeps for a brick, its records and the child groups its
-/// fold gives back, is held to it.
-pub const BRICK_CHILD_GROUPS: u32 = 24_067;
+/// The most child groups one brick's build takes before its fold gives any back: one full
+/// cube of the brick, its root child group and one group for every node above its cells. A
+/// tree past it is refused, and its brick reads the coarser clip level.
+pub const BRICK_CHILD_GROUPS: u32 =
+    1 + (object::CHILDREN.pow(BRICK_SHIFT) - 1) / (object::CHILDREN - 1);
 
 /// No slot: a fold that gives no child group back.
 pub const NONE: u32 = u32::MAX;
@@ -231,8 +229,8 @@ pub fn flag(
 
 /// Whether a level's child groups, one for each flagged candidate, may be taken together:
 /// the pool has `flagged` of its `left` free, and the brick, having taken `used`, stays within
-/// `BRICK_CHILD_GROUPS`. Past either, none is taken: the tree is refused and its brick is left
-/// absent. The bake bounds both a set's and a brick's (pxl-geo-bake terrain/pool.rs).
+/// `BRICK_CHILD_GROUPS`. Past either, none is taken: the tree is refused and its brick reads
+/// the coarser clip level.
 pub fn fits(left: u32, used: u32, flagged: u32) -> bool {
     flagged <= left && !past(used, flagged)
 }

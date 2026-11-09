@@ -13,7 +13,7 @@ use fnv::FnvHashSet;
 
 use crate::asset::marker::MARK_STEPS;
 use crate::bake::place_theme::{CATEGORIES, DOT_ZOOM, ICON_ZOOM, SYMBOL};
-use crate::bake::tile::{occupancy_of, Occupancy};
+use crate::bake::tile::{occupancy_of, Occupancy, StringTable};
 use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{Lattice, GROUND};
@@ -76,14 +76,11 @@ pub(crate) const NAME_CHARS: usize = 32;
 
 /// The zoom a category is first drawn from, as a dot or its icon; none for a category
 /// Carto draws no point for.
-pub const fn first_zoom(category: u16) -> Option<Zoom> {
-    if category == 0 || category as usize > CATEGORIES.len() {
+pub const fn first_zoom(kind: u16) -> Option<Zoom> {
+    if kind == 0 || kind as usize > CATEGORIES.len() {
         return None;
     }
-    let (dot, icon) = (
-        DOT_ZOOM[category as usize - 1],
-        ICON_ZOOM[category as usize - 1],
-    );
+    let (dot, icon) = (DOT_ZOOM[kind as usize - 1], ICON_ZOOM[kind as usize - 1]);
     match (dot, icon) {
         (0, 0) => None,
         (0, z) | (z, 0) => Some(z as Zoom),
@@ -93,9 +90,9 @@ pub const fn first_zoom(category: u16) -> Option<Zoom> {
 
 /// A category's Carto symbol, by its place among the masks
 /// (asset/symbol.spec.rs); none for a category Carto draws no icon for.
-pub fn symbol_of(category: u16) -> Option<u16> {
+pub fn symbol_of(kind: u16) -> Option<u16> {
     SYMBOL
-        .get(usize::from(category.checked_sub(1)?))?
+        .get(usize::from(kind.checked_sub(1)?))?
         .checked_sub(1)
 }
 
@@ -107,52 +104,33 @@ pub fn category_of(category: &str) -> u16 {
         .map_or(0, |i| i as u16 + 1)
 }
 
-/// Strings end to end in one buffer, read by index.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct StringTable {
-    bytes: String,
-    ends: Vec<u32>,
-}
-
-impl StringTable {
-    fn push(&mut self, s: &str) {
-        self.bytes.push_str(s);
-        self.ends.push(self.bytes.len() as u32);
-    }
-
-    pub fn get(&self, i: u32) -> &str {
-        let Some(&end) = self.ends.get(i as usize) else {
-            return "";
-        };
-        let start = if i == 0 { 0 } else { self.ends[i as usize - 1] };
-        &self.bytes[start as usize..end as usize]
-    }
-}
-
 /// A place as a source gives it: its own name — Carto labels a place by its
 /// `name`, never translated — its category and the source's id for it.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Place<'a> {
+pub struct SourcePlace<'a> {
     pub name: &'a str,
-    pub category: u16,
+    pub kind: u16,
     pub id: &'a str,
 }
 
-/// A place a tile holds: what a source gave, the zoom it is shown from, and
-/// the ground leaf cell it stands in, as an offset in the tile.
+/// One place of a tile, read from its columns: what a source gave, the zoom
+/// it is shown from, and the ground leaf cell it stands in, as an offset in
+/// the tile.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct TilePlace<'a> {
-    pub place: Place<'a>,
-    pub from: Zoom,
-    pub at: [u32; 2],
+pub struct Place<'a> {
+    pub name: &'a str,
+    pub kind: u16,
+    pub id: &'a str,
+    pub first_zoom: Zoom,
+    pub off: [u32; 2],
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PlaceTile {
     /// Each place's offset, ascending by row then column.
-    at: Vec<[u16; 2]>,
-    categories: Vec<u16>,
-    from: Vec<u8>,
+    offs: Vec<[u16; 2]>,
+    kinds: Vec<u16>,
+    first_zooms: Vec<u8>,
     names: StringTable,
     ids: StringTable,
     /// The children that are tiles: those holding a place this tile does not.
@@ -160,38 +138,46 @@ pub struct PlaceTile {
 }
 
 impl PlaceTile {
+    /// A tile of these places, in the order given.
+    fn of<'a>(places: impl IntoIterator<Item = Place<'a>>, occupancy: Occupancy) -> PlaceTile {
+        let mut tile = PlaceTile {
+            occupancy,
+            ..PlaceTile::default()
+        };
+        places.into_iter().for_each(|h| tile.push(&h));
+        tile
+    }
+
     pub fn len(&self) -> u32 {
-        self.categories.len() as u32
+        self.kinds.len() as u32
     }
 
     pub fn is_empty(&self) -> bool {
-        self.categories.is_empty()
+        self.kinds.is_empty()
     }
 
-    pub fn get(&self, i: u32) -> TilePlace<'_> {
+    fn get(&self, i: u32) -> Place<'_> {
         let k = i as usize;
-        TilePlace {
-            place: Place {
-                name: self.names.get(i),
-                category: self.categories[k],
-                id: self.ids.get(i),
-            },
-            from: Zoom::from(self.from[k]),
-            at: self.at[k].map(u32::from),
+        Place {
+            name: self.names.get(i),
+            kind: self.kinds[k],
+            id: self.ids.get(i),
+            first_zoom: Zoom::from(self.first_zooms[k]),
+            off: self.offs[k].map(u32::from),
         }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (u32, TilePlace<'_>)> + '_ {
-        (0..self.len()).map(|i| (i, self.get(i)))
+    pub fn iter(&self) -> impl Iterator<Item = Place<'_>> + '_ {
+        (0..self.len()).map(|i| self.get(i))
     }
 
-    fn push(&mut self, h: &TilePlace) {
-        self.at.push(h.at.map(|v| v as u16));
-        self.categories.push(h.place.category);
-        // The record keeps a zoom in a byte.
-        self.from.push(h.from as u8);
-        self.names.push(h.place.name);
-        self.ids.push(h.place.id);
+    fn push(&mut self, h: &Place) {
+        self.offs.push(h.off.map(|v| v as u16));
+        self.kinds.push(h.kind);
+        // The column keeps a zoom in a byte.
+        self.first_zooms.push(h.first_zoom as u8);
+        self.names.push(h.name);
+        self.ids.push(h.id);
     }
 
     /// A leaf from the places standing in it: those of a category Carto draws,
@@ -199,14 +185,14 @@ impl PlaceTile {
     /// an icon wide keeping its first; names cut to `NAME_CHARS`.
     pub fn leaf<'a>(
         tile: Quadrant,
-        places: impl IntoIterator<Item = (Q3, Place<'a>)>,
+        places: impl IntoIterator<Item = (Q3, SourcePlace<'a>)>,
     ) -> PlaceTile {
-        let names: Vec<(Cell, Zoom, String, Place<'a>)> = places
+        let names: Vec<(Cell, Zoom, String, SourcePlace<'a>)> = places
             .into_iter()
             .filter_map(|(point, place)| {
                 Some((
                     GROUND.cell_of(LEAF_ZOOM, &point),
-                    first_zoom(place.category)?,
+                    first_zoom(place.kind)?,
                     cut_name(place.name),
                     place,
                 ))
@@ -221,29 +207,31 @@ impl PlaceTile {
                 names[b].3.name,
             ))
         });
-        let mut from: Vec<Option<Zoom>> = vec![None; names.len()];
+        let mut first_zooms: Vec<Option<Zoom>> = vec![None; names.len()];
         let mut taken = FnvHashSet::default();
         for zoom in PLACE_FIRST..=PLACE_LAST {
             taken.clear();
             for &p in &order {
                 let (cell, shows, ..) = &names[p];
-                if *shows <= zoom && taken.insert(place_cell(*cell, zoom)) && from[p].is_none() {
-                    from[p] = Some(zoom);
+                if *shows <= zoom
+                    && taken.insert(place_cell(*cell, zoom))
+                    && first_zooms[p].is_none()
+                {
+                    first_zooms[p] = Some(zoom);
                 }
             }
         }
         let placed = (0..names.len()).filter_map(|p| {
             let (cell, _, name, place) = &names[p];
-            Some(TilePlace {
-                place: Place {
-                    name: name.as_str(),
-                    ..*place
-                },
-                from: from[p]?,
-                at: cell.in_tile(),
+            Some(Place {
+                name: name.as_str(),
+                kind: place.kind,
+                id: place.id,
+                first_zoom: first_zooms[p]?,
+                off: cell.in_tile(),
             })
         });
-        tile_of(placed, Occupancy::ZERO)
+        PlaceTile::of(by_position(placed), Occupancy::ZERO)
     }
 }
 
@@ -267,30 +255,25 @@ pub fn fold(p: Quadrant, children: [&PlaceTile; 4]) -> PlaceTile {
     let mut has_child = [false; 4];
     for (q, (k, child)) in p.children().into_iter().zip(children).enumerate() {
         let [cx, cy] = k.node().1.map(|v| (v & 1) as u32);
-        has_child[q] = child.occupancy.bits() != 0 || child.iter().any(|(_, h)| h.from > p.zoom);
+        has_child[q] = child.occupancy.bits() != 0 || child.iter().any(|h| h.first_zoom > p.zoom);
         placed.extend(
             child
                 .iter()
-                .filter(|(_, h)| h.from <= p.zoom)
-                .map(|(_, h)| TilePlace {
-                    at: [cx * side + h.at[0], cy * side + h.at[1]],
+                .filter(|h| h.first_zoom <= p.zoom)
+                .map(|h| Place {
+                    off: [cx * side + h.off[0], cy * side + h.off[1]],
                     ..h
                 }),
         );
     }
-    tile_of(placed, Occupancy::of_slots(has_child))
+    PlaceTile::of(by_position(placed), Occupancy::of_slots(has_child))
 }
 
 /// Places ascending by where they stand.
-fn tile_of<'a>(placed: impl IntoIterator<Item = TilePlace<'a>>, occupancy: Occupancy) -> PlaceTile {
-    let mut placed: Vec<TilePlace> = placed.into_iter().collect();
-    placed.sort_by_key(|h| [h.at[1], h.at[0]]);
-    let mut tile = PlaceTile {
-        occupancy,
-        ..PlaceTile::default()
-    };
-    placed.iter().for_each(|h| tile.push(h));
-    tile
+fn by_position<'a>(placed: impl IntoIterator<Item = Place<'a>>) -> Vec<Place<'a>> {
+    let mut placed: Vec<Place> = placed.into_iter().collect();
+    placed.sort_by_key(|h| [h.off[1], h.off[0]]);
+    placed
 }
 
 /// `name` cut to `NAME_CHARS` code points, ending in an ellipsis.
@@ -309,14 +292,14 @@ fn cut_name(name: &str) -> String {
 
 pub fn encode(tile: &PlaceTile) -> Result<Vec<u8>, MarshalError> {
     validate(tile)?;
-    let at: Vec<u16> = tile.at.iter().flatten().copied().collect();
-    let ids: Vec<&str> = (0..tile.len()).map(|i| tile.ids.get(i)).collect();
-    let names: Vec<&str> = (0..tile.len()).map(|i| tile.names.get(i)).collect();
+    let offs: Vec<u16> = tile.offs.iter().flatten().copied().collect();
+    let ids: Vec<&str> = tile.iter().map(|h| h.id).collect();
+    let names: Vec<&str> = tile.iter().map(|h| h.name).collect();
     shape::encode::<Packet>(
         (
-            &at,
-            &tile.categories,
-            &tile.from,
+            &offs,
+            &tile.kinds,
+            &tile.first_zooms,
             &ids,
             &names,
             tile.occupancy.bits(),
@@ -325,29 +308,30 @@ pub fn encode(tile: &PlaceTile) -> Result<Vec<u8>, MarshalError> {
     )
 }
 
-pub fn decode(bytes: &[u8]) -> Result<PlaceTile, MarshalError> {
-    let (at, categories, from, ids, names, occupancy) = shape::get_deep::<Packet>(bytes)?;
+pub fn decode(pkt: &[u8]) -> Result<PlaceTile, MarshalError> {
+    let (offs, kinds, first_zooms, ids, names, occupancy) = shape::get_deep::<Packet>(pkt)?;
     let occupancy = occupancy_of(occupancy)?;
-    let n = categories.len();
-    if at.len() != 2 * n || from.len() != n || ids.len() as usize != n || names.len() as usize != n
+    let n = kinds.len();
+    if offs.len() != 2 * n
+        || first_zooms.len() != n
+        || ids.len() as usize != n
+        || names.len() as usize != n
     {
         return Err(malformed());
     }
-    let mut tile = PlaceTile {
-        occupancy,
-        ..PlaceTile::default()
-    };
-    for i in 0..n {
-        tile.push(&TilePlace {
-            place: Place {
-                name: names.get(i as u32).ok_or_else(malformed)?,
-                category: categories[i],
-                id: ids.get(i as u32).ok_or_else(malformed)?,
-            },
-            from: Zoom::from(from[i]),
-            at: [u32::from(at[2 * i]), u32::from(at[2 * i + 1])],
-        });
-    }
+    let places = (0..n)
+        .map(|i| {
+            Some(Place {
+                name: names.get(i as u32)?,
+                kind: kinds[i],
+                id: ids.get(i as u32)?,
+                first_zoom: Zoom::from(first_zooms[i]),
+                off: [u32::from(offs[2 * i]), u32::from(offs[2 * i + 1])],
+            })
+        })
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(malformed)?;
+    let tile = PlaceTile::of(places, occupancy);
     validate(&tile)?;
     Ok(tile)
 }
@@ -357,13 +341,13 @@ pub fn decode(bytes: &[u8]) -> Result<PlaceTile, MarshalError> {
 /// later than Carto's last zoom; names whole within `NAME_CHARS`.
 fn validate(tile: &PlaceTile) -> Result<(), MarshalError> {
     let ascending = tile
-        .at
+        .offs
         .windows(2)
         .all(|w| [w[0][1], w[0][0]] < [w[1][1], w[1][0]]);
-    let bad = |(_, h): (u32, TilePlace)| {
-        let shows = first_zoom(h.place.category);
-        shows.is_none_or(|z| h.from < z || h.from > PLACE_LAST)
-            || h.place.name.chars().nth(NAME_CHARS).is_some()
+    let bad = |h: Place| {
+        let shows = first_zoom(h.kind);
+        shows.is_none_or(|z| h.first_zoom < z || h.first_zoom > PLACE_LAST)
+            || h.name.chars().nth(NAME_CHARS).is_some()
     };
     if !ascending || tile.iter().any(bad) {
         return Err(malformed());

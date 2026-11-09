@@ -42,8 +42,8 @@ fn way(y: f64, width: f64, palette_idx: GroundId, id: &str) -> Feature {
     }
 }
 
-fn at(g: &Ground, x: i64, y: i64) -> GroundId {
-    g.cells[cell_idx(x, y)]
+fn at(g: &GroundCells, x: i64, y: i64) -> GroundId {
+    g[cell_idx(x, y)]
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn ground_row_order_free() {
         way(70.0, 4.0, ground::residential_road, "south"),
         way(71.0, 4.0, ground::secondary, "north"),
     ];
-    let bake = |fs: &[Feature]| bake_ground(fs, &Coast::Land).cells.into_owned();
+    let bake = |fs: &[Feature]| bake_ground(fs, &Coast::Land).into_owned();
     let forward = bake(&feats);
     feats.reverse();
     assert_eq!(bake(&feats), forward);

@@ -14,18 +14,18 @@ fn point(x: u32, y: u32) -> Q3 {
     first.up(0).inner_at(GROUND, LEAF_ZOOM, [x, y]).mid()
 }
 
-fn called<'a>(name: &'a str, category: &str, id: &'a str) -> Place<'a> {
-    Place {
+fn called<'a>(name: &'a str, category: &str, id: &'a str) -> SourcePlace<'a> {
+    SourcePlace {
         name,
-        category: category_of(category),
+        kind: category_of(category),
         id,
     }
 }
 
 fn shown_at(tile: &PlaceTile, zoom: Zoom) -> Vec<&str> {
     tile.iter()
-        .filter(|(_, h)| h.from <= zoom)
-        .map(|(_, h)| h.place.name)
+        .filter(|h| h.first_zoom <= zoom)
+        .map(|h| h.name)
         .collect()
 }
 

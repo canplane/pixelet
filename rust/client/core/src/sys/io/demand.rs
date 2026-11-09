@@ -50,8 +50,8 @@ pub enum Class {
 #[derive(Clone, Copy)]
 pub struct Row {
     pub source: Source,
-    /// Whether each of the stream's bodies takes a body slot
-    /// (sys/io/body.rs).
+    /// Whether the stream's bodies take a body slot, each no longer than a
+    /// slot (sys/io/body.rs).
     pub slotted: bool,
     pub class: Class,
 }

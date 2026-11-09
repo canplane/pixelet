@@ -5,6 +5,7 @@ use xpute_kit::golden::Golden;
 use super::*;
 use crate::bake::tile::earth;
 use xpute_kit::math::rng::SplitMix64;
+use xpute_kit::status::errno::Errno;
 
 const GOLDEN: &str = include_str!(concat!(env!("PXL_REPO"), "/spec/golden/bake/terrain.tsv"));
 
@@ -50,23 +51,24 @@ fn tile(seed: u64) -> TerrainTile {
         .collect();
     TerrainTile::of(
         ele,
-        Ground {
-            cells: cells.into(),
-        },
+        cells.into(),
         lines(&mut rng),
         Occupancy::of_bits(0b10101).unwrap(),
     )
 }
 
+const ROOM_LINES: usize = 438;
+const ROOM_POINTS: usize = 4193;
+
 fn room() -> separation::Room {
     separation::Room {
-        starts: vec![0; separation::MAX_LINES + 1].leak(),
-        points: vec![[0; 2]; separation::MAX_POINTS].leak(),
-        tops: vec![0; separation::MAX_POINTS].leak(),
-        width: vec![0; separation::MAX_LINES].leak(),
-        kind: vec![0; separation::MAX_LINES].leak(),
-        form: vec![0; separation::MAX_LINES].leak(),
-        clear: vec![0; separation::MAX_LINES].leak(),
+        starts: vec![0; ROOM_LINES + 1].leak(),
+        points: vec![[0; 2]; ROOM_POINTS].leak(),
+        tops: vec![0; ROOM_POINTS].leak(),
+        widths: vec![0; ROOM_LINES].leak(),
+        kinds: vec![0; ROOM_LINES].leak(),
+        forms: vec![0; ROOM_LINES].leak(),
+        clears: vec![0; ROOM_LINES].leak(),
     }
 }
 
@@ -84,7 +86,7 @@ fn formats_round_trip() {
     // coarsest zooms and a grid sweep's boxes.
     let resident = decode_into(&terrain, room(), vec![0; ELE_COLUMN].leak()).unwrap();
     let want = Separation {
-        coarsest: Default::default(),
+        first_zooms: Default::default(),
         ..tile.separation.clone()
     };
     assert_eq!(resident.separation, want, "its lines");
@@ -92,34 +94,34 @@ fn formats_round_trip() {
     assert_eq!(resident.occupancy, tile.occupancy);
 }
 
-/// A tile at every lane's longest is as long as `MAX_PKT_BYTES` says.
+/// An Earth tile is as long as its texels say.
 #[test]
-fn full_tile_pkt_size() {
-    use separation::{MAX_LINES, MAX_POINTS};
-    let starts: Vec<u32> = (0..=MAX_LINES)
-        .map(|d| (d * MAX_POINTS / MAX_LINES) as u32)
-        .collect();
-    let full = Separation {
-        starts: starts.into(),
-        points: vec![[0; 2]; MAX_POINTS].into(),
-        tops: vec![0; MAX_POINTS].into(),
-        width: vec![1; MAX_LINES].into(),
-        kind: vec![0; MAX_LINES].into(),
-        form: vec![0; MAX_LINES].into(),
-        clear: vec![0; MAX_LINES].into(),
-        coarsest: vec![0; MAX_POINTS].into(),
-    };
-    let tile = TerrainTile {
-        separation: full,
-        ..tile(7)
-    };
-    assert_eq!(encode(&tile).unwrap().len(), MAX_PKT_BYTES);
+fn earth_pkt_size() {
     let earth = earth::encode(&vec![0; earth::EARTH_BYTES]).unwrap();
-    assert_eq!(
-        earth.len(),
-        earth::PKT_BYTES,
-        "and an Earth tile is as long as its texels say"
-    );
+    assert_eq!(earth.len(), earth::PKT_BYTES);
+}
+
+/// A tile whose lines are past a client's room is refused, not cut.
+#[test]
+fn lines_past_the_room_refused() {
+    let tile = tile(7);
+    let long = Separation {
+        starts: (0..=ROOM_LINES as u32 + 1).collect::<Vec<_>>().into(),
+        points: vec![[0; 2]; ROOM_LINES + 1].into(),
+        tops: vec![0; ROOM_LINES + 1].into(),
+        widths: vec![1; ROOM_LINES + 1].into(),
+        kinds: vec![0; ROOM_LINES + 1].into(),
+        forms: vec![0; ROOM_LINES + 1].into(),
+        clears: vec![0; ROOM_LINES + 1].into(),
+        first_zooms: vec![0; ROOM_LINES + 1].into(),
+    };
+    let long = encode(&TerrainTile {
+        separation: long,
+        ..tile
+    })
+    .unwrap();
+    let err = decode_into(&long, room(), vec![0; ELE_COLUMN].leak()).unwrap_err();
+    assert_eq!(err.errnum, Errno::EFBIG);
 }
 
 #[test]

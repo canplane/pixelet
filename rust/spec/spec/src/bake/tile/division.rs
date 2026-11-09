@@ -15,7 +15,7 @@ use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::shape;
 
 use crate::bake::malformed;
-use crate::bake::tile::{occupancy_of, Occupancy};
+use crate::bake::tile::{occupancy_of, Occupancy, StringTable};
 use crate::division::Subtype;
 use crate::space::coord::adapter::epsg3857::cell_zoom_of;
 use crate::space::coord::zoom::Zoom;
@@ -36,7 +36,7 @@ pub const NONE: u32 = u32::MAX;
 /// A tile's cells, and so the room a client decodes them into.
 pub const CELLS: usize = (TILE_CELLS * TILE_CELLS) as usize;
 
-/// The cells; the occupancy; per division its id, subtype, parent, prominence
+/// The cells; the occupancy; per division its id, kind, parent, prominence
 /// and whether an area holds it; its name.
 type Packet = (
     Vec<u32>,
@@ -49,12 +49,13 @@ type Packet = (
     Vec<String>,
 );
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Division {
+/// One division of a tile, read from its columns.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Division<'a> {
     /// Overture's id: what tiles compare divisions by.
-    pub id: String,
-    pub subtype: Subtype,
-    pub name: String,
+    pub id: &'a str,
+    pub kind: Subtype,
+    pub name: &'a str,
     /// Its parent's index in the tile, `NONE` for none.
     pub parent: u32,
     /// Overture's `cartography.prominence`, 1 to 100; 0 where it gives none.
@@ -68,17 +69,22 @@ pub struct DivisionTile {
     /// Each cell's division, by `GROUND.cell_idx`; `NONE` in none. The bake owns its cells; a
     /// client's are borrowed from the room it decoded them into.
     pub cells: Cow<'static, [u32]>,
-    pub divisions: Vec<Division>,
+    ids: StringTable,
+    kinds: Vec<Subtype>,
+    names: StringTable,
+    parents: Vec<u32>,
+    prominences: Vec<u8>,
+    areas: Vec<bool>,
     pub occupancy: Occupancy,
 }
 
-impl Division {
+impl Division<'_> {
     /// The zoom its name shows from, as Overture's own tiles place it
     /// (overture-tiles `profiles/Divisions.java`): a web map's zoom by its
-    /// prominence where it has one, else by its subtype, whose pixel is the
+    /// prominence where it has one, else by its kind, whose pixel is the
     /// cell at the zoom returned (`epsg3857::cell_zoom_of`).
     pub fn shown_from(&self) -> Zoom {
-        let web = match (self.prominence, self.subtype) {
+        let web = match (self.prominence, self.kind) {
             (1.., _) => (100u8.saturating_sub(self.prominence) / 5 + 1).min(10),
             (0, Subtype::Country | Subtype::Dependency) => 0,
             (0, Subtype::Region) => 4,
@@ -90,22 +96,71 @@ impl Division {
 }
 
 impl DivisionTile {
+    /// A tile of these cells and divisions.
+    pub fn of<'a>(
+        cells: Cow<'static, [u32]>,
+        divisions: impl IntoIterator<Item = Division<'a>>,
+        occupancy: Occupancy,
+    ) -> DivisionTile {
+        let mut tile = DivisionTile {
+            cells,
+            ids: StringTable::default(),
+            kinds: Vec::new(),
+            names: StringTable::default(),
+            parents: Vec::new(),
+            prominences: Vec::new(),
+            areas: Vec::new(),
+            occupancy,
+        };
+        divisions.into_iter().for_each(|d| tile.push(&d));
+        tile
+    }
+
+    fn push(&mut self, d: &Division) {
+        self.ids.push(d.id);
+        self.kinds.push(d.kind);
+        self.names.push(d.name);
+        self.parents.push(d.parent);
+        self.prominences.push(d.prominence);
+        self.areas.push(d.area);
+    }
+
+    fn len(&self) -> u32 {
+        self.kinds.len() as u32
+    }
+
+    fn get(&self, i: u32) -> Division<'_> {
+        let k = i as usize;
+        Division {
+            id: self.ids.get(i),
+            kind: self.kinds[k],
+            name: self.names.get(i),
+            parent: self.parents[k],
+            prominence: self.prominences[k],
+            area: self.areas[k],
+        }
+    }
+
+    fn iter(&self) -> impl Iterator<Item = Division<'_>> + '_ {
+        (0..self.len()).map(|i| self.get(i))
+    }
+
     /// The cell's division, then each ancestor, narrow to broad.
-    fn up(&self, cell: u32) -> impl Iterator<Item = &Division> {
+    fn up(&self, cell: u32) -> impl Iterator<Item = Division<'_>> {
         let first = self
             .cells
             .get(cell as usize)
             .copied()
             .filter(|&c| c != NONE);
         core::iter::successors(first, |&i| {
-            Some(self.divisions[i as usize].parent).filter(|&p| p != NONE)
+            Some(self.parents[i as usize]).filter(|&p| p != NONE)
         })
-        .map(|i| &self.divisions[i as usize])
+        .map(|i| self.get(i))
     }
 
     /// The cell's division and each ancestor, broad to narrow; none in none.
     /// Walked again for each, so reading a name asks the heap for nothing.
-    pub fn name_at(&self, cell: u32) -> impl Iterator<Item = &Division> {
+    pub fn name_at(&self, cell: u32) -> impl Iterator<Item = Division<'_>> {
         let depth = self.up(cell).count();
         (0..depth).rev().filter_map(move |k| self.up(cell).nth(k))
     }
@@ -114,32 +169,25 @@ impl DivisionTile {
 impl Default for DivisionTile {
     /// A tile in no division, which is what a tile the set holds no object for is.
     fn default() -> DivisionTile {
-        DivisionTile {
-            cells: vec![NONE; CELLS].into(),
-            divisions: Vec::new(),
-            occupancy: Occupancy::ZERO,
-        }
+        DivisionTile::of(vec![NONE; CELLS].into(), [], Occupancy::ZERO)
     }
 }
 
 pub fn encode(tile: &DivisionTile) -> Result<Vec<u8>, MarshalError> {
-    let d = &tile.divisions;
-    let parents: Vec<u32> = d.iter().map(|d| d.parent).collect();
-    check(&tile.cells, &parents)?;
-    let ids: Vec<&str> = d.iter().map(|d| d.id.as_str()).collect();
-    let subtypes: Vec<u8> = d.iter().map(|d| d.subtype as u8).collect();
-    let prominence: Vec<u8> = d.iter().map(|d| d.prominence).collect();
-    let area: Vec<u8> = d.iter().map(|d| d.area as u8).collect();
-    let names: Vec<&str> = d.iter().map(|d| d.name.as_str()).collect();
+    check(&tile.cells, &tile.parents)?;
+    let ids: Vec<&str> = tile.iter().map(|d| d.id).collect();
+    let kinds: Vec<u8> = tile.kinds.iter().map(|&k| k as u8).collect();
+    let areas: Vec<u8> = tile.areas.iter().map(|&a| a as u8).collect();
+    let names: Vec<&str> = tile.iter().map(|d| d.name).collect();
     shape::encode::<Packet>(
         (
             &tile.cells,
             tile.occupancy.bits(),
             &ids,
-            &subtypes,
-            &parents,
-            &prominence,
-            &area,
+            &kinds,
+            &tile.parents,
+            &tile.prominences,
+            &areas,
             &names,
         ),
         MAX_PKT_BYTES as u32,
@@ -175,86 +223,61 @@ fn check(cells: &[u32], parents: &[u32]) -> Result<(), MarshalError> {
 
 /// A tile read where it lies; names are never decoded into strings.
 #[derive(Clone, Copy)]
-struct DivisionTileView<'a> {
+struct Table<'a> {
     cells: &'a [u32],
-    pub occupancy: Occupancy,
+    occupancy: Occupancy,
     ids: StrList<'a>,
-    subtypes: &'a [u8],
+    kinds: &'a [u8],
     parents: &'a [u32],
-    prominence: &'a [u8],
-    area: &'a [u8],
+    prominences: &'a [u8],
+    areas: &'a [u8],
     names: StrList<'a>,
 }
 
-fn open(pkt: &[u8]) -> Result<DivisionTileView<'_>, MarshalError> {
-    let (cells, occupancy, ids, subtypes, parents, prominence, area, names) =
+fn read_tile(pkt: &[u8]) -> Result<Table<'_>, MarshalError> {
+    let (cells, occupancy, ids, kinds, parents, prominences, areas, names) =
         shape::get_deep::<Packet>(pkt)?;
     let occupancy = occupancy_of(occupancy)?;
-    let n = subtypes.len();
+    let n = kinds.len();
     if ids.len() as usize != n
         || parents.len() != n
-        || prominence.len() != n
-        || area.len() != n
+        || prominences.len() != n
+        || areas.len() != n
         || names.len() as usize != n
-        || subtypes.iter().any(|&s| Subtype::of(s).is_none())
+        || kinds.iter().any(|&k| Subtype::of(k).is_none())
     {
         return Err(malformed());
     }
     check(cells, parents)?;
-    Ok(DivisionTileView {
+    Ok(Table {
         cells,
         occupancy,
         ids,
-        subtypes,
+        kinds,
         parents,
-        prominence,
-        area,
+        prominences,
+        areas,
         names,
     })
 }
 
-/// One division as the packet holds it, read while decoding.
-#[derive(Clone, Copy)]
-struct DivisionRef<'a> {
-    subtype: Subtype,
-    name: &'a str,
-    prominence: u8,
-    approx: bool,
-}
-
-impl<'a> DivisionTileView<'a> {
-    fn at(&self, i: u32) -> Option<DivisionRef<'a>> {
-        let k = i as usize;
-        Some(DivisionRef {
-            subtype: Subtype::of(*self.subtypes.get(k)?)?,
-            name: self.names.get(i)?,
-            prominence: self.prominence[k],
-            approx: self.area[k] == 0,
-        })
-    }
-
-    fn id(&self, i: u32) -> Option<&'a str> {
-        self.ids.get(i)
-    }
-}
-
 /// Decodes a tile into a copy, as the bake holds it.
 pub fn decode(pkt: &[u8]) -> Result<DivisionTile, MarshalError> {
-    let v = open(pkt)?;
+    let v = read_tile(pkt)?;
     Ok(DivisionTile {
         cells: v.cells.to_vec().into(),
-        ..of(&v)?
+        ..tile_of(&v)?
     })
 }
 
 /// Decoded straight into its resident room, `CELLS` long: its cells; its
 /// divisions, a handful, on the heap.
 pub fn decode_into(pkt: &[u8], room: &'static mut [u32]) -> Result<DivisionTile, MarshalError> {
-    let v = open(pkt)?;
+    let v = read_tile(pkt)?;
     if room.len() != CELLS {
         return Err(malformed());
     }
-    let tile = of(&v)?;
+    let tile = tile_of(&v)?;
     room.copy_from_slice(v.cells);
     Ok(DivisionTile {
         cells: Cow::Borrowed(room),
@@ -263,26 +286,22 @@ pub fn decode_into(pkt: &[u8], room: &'static mut [u32]) -> Result<DivisionTile,
 }
 
 /// The divisions and the occupancy, the cells left empty.
-fn of(v: &DivisionTileView<'_>) -> Result<DivisionTile, MarshalError> {
-    let divisions = (0..v.subtypes.len())
+fn tile_of(v: &Table<'_>) -> Result<DivisionTile, MarshalError> {
+    let divisions = (0..v.kinds.len())
         .map(|k| {
             let i = k as u32;
-            let d = v.at(i).ok_or_else(malformed)?;
-            Ok(Division {
-                id: v.id(i).ok_or_else(malformed)?.to_string(),
-                subtype: d.subtype,
-                name: d.name.to_string(),
+            Some(Division {
+                id: v.ids.get(i)?,
+                kind: Subtype::of(v.kinds[k])?,
+                name: v.names.get(i)?,
                 parent: v.parents[k],
-                prominence: d.prominence,
-                area: !d.approx,
+                prominence: v.prominences[k],
+                area: v.areas[k] != 0,
             })
         })
-        .collect::<Result<Vec<_>, MarshalError>>()?;
-    Ok(DivisionTile {
-        cells: Cow::Borrowed(&[]),
-        divisions,
-        occupancy: v.occupancy,
-    })
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(malformed)?;
+    Ok(DivisionTile::of(Cow::Borrowed(&[]), divisions, v.occupancy))
 }
 
 /// One zoom coarser, at `zoom`: each cell the majority of the 2×2 under it,
@@ -291,22 +310,21 @@ fn of(v: &DivisionTileView<'_>) -> Result<DivisionTile, MarshalError> {
 pub fn fold(children: [&DivisionTile; 4], zoom: Zoom) -> DivisionTile {
     // Every child's divisions under one numbering, by id.
     let mut all: Vec<Division> = Vec::new();
-    let mut by_id: FnvHashMap<String, u32> = FnvHashMap::default();
+    let mut by_id: FnvHashMap<&str, u32> = FnvHashMap::default();
     let mut local: [Vec<u32>; 4] = Default::default();
     for (q, child) in children.iter().enumerate() {
         local[q] = child
-            .divisions
             .iter()
             .map(|d| {
-                *by_id.entry(d.id.clone()).or_insert_with(|| {
-                    all.push(d.clone());
+                *by_id.entry(d.id).or_insert_with(|| {
+                    all.push(d);
                     (all.len() - 1) as u32
                 })
             })
             .collect();
     }
     for (q, child) in children.iter().enumerate() {
-        for (k, d) in child.divisions.iter().enumerate() {
+        for (k, d) in child.iter().enumerate() {
             let at = local[q][k] as usize;
             all[at].parent = if d.parent == NONE {
                 NONE
@@ -353,7 +371,7 @@ pub fn fold(children: [&DivisionTile; 4], zoom: Zoom) -> DivisionTile {
     let mut divisions = Vec::new();
     for (k, d) in all.iter().enumerate().filter(|&(k, _)| used[k]) {
         renumber[k] = divisions.len() as u32;
-        divisions.push(d.clone());
+        divisions.push(*d);
     }
     for d in &mut divisions {
         d.parent = if d.parent == NONE {
@@ -362,8 +380,8 @@ pub fn fold(children: [&DivisionTile; 4], zoom: Zoom) -> DivisionTile {
             renumber[d.parent as usize]
         };
     }
-    DivisionTile {
-        cells: cells
+    DivisionTile::of(
+        cells
             .into_iter()
             .map(|c| {
                 if c == NONE {
@@ -375,8 +393,8 @@ pub fn fold(children: [&DivisionTile; 4], zoom: Zoom) -> DivisionTile {
             .collect::<Vec<_>>()
             .into(),
         divisions,
-        occupancy: Occupancy::of_slots(has_child),
-    }
+        Occupancy::of_slots(has_child),
+    )
 }
 
 #[cfg(test)]

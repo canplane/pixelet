@@ -21,18 +21,16 @@ fn area_majority_fold() {
 }
 
 /// A leaf whose cell is `f` of it, its own four palette indices.
-fn plane(f: impl Fn(usize, usize) -> u8) -> Ground {
-    Ground {
-        cells: (0..SPAN * SPAN)
-            .flat_map(|i| [f(i % SPAN, i / SPAN); 4])
-            .collect::<Vec<_>>()
-            .into(),
-    }
+fn plane(f: impl Fn(usize, usize) -> u8) -> GroundCells {
+    (0..SPAN * SPAN)
+        .flat_map(|i| [f(i % SPAN, i / SPAN); 4])
+        .collect::<Vec<_>>()
+        .into()
 }
 
 /// Each parent cell's own palette index, as the zoom of the parent reads it.
-fn fold(children: [&Ground; 4], zoom: Zoom) -> Vec<u8> {
-    let four = fold_ground(children, zoom).cells.to_vec();
+fn fold(children: [&GroundCells; 4], zoom: Zoom) -> Vec<u8> {
+    let four = fold_ground(children, zoom).to_vec();
     four.chunks(4)
         .map(|q| {
             own(
@@ -223,9 +221,7 @@ fn zero_tile() -> TerrainTile {
     let cells = vec![ground::water; 4 * SPAN * SPAN];
     TerrainTile::of(
         vec![0; PADDED * PADDED],
-        Ground {
-            cells: cells.into(),
-        },
+        cells.into(),
         Default::default(),
         Occupancy::ZERO,
     )

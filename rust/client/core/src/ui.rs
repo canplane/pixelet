@@ -64,7 +64,7 @@ fn division_parts(
     let Some(at) = at else { return };
     each_division(at, |part| {
         each(&DivisionPart {
-            subtype: part.subtype as u8,
+            subtype: part.kind as u8,
             name: &part.name,
             shown: named_to.is_some_and(|z| part.shown_from() <= z),
             area: part.area,

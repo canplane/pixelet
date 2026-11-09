@@ -14,19 +14,19 @@ use xpute_kit::math::scalar::round;
 
 use super::constant::{ele_idx, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
 use super::separation::fold_separation;
-use super::tile::terrain::{Ground, TerrainTile, ELE_COLUMN};
+use super::tile::terrain::{GroundCells, TerrainTile, ELE_COLUMN};
 use super::tile::Occupancy;
 use crate::space::coord::zoom::Zoom;
 use pxl_engine::ground::own;
 
 /// The four palette indices of each parent cell: the own palette index of each child cell
 /// under it, `dx + 2·dy`, as the zoom under the parent's reads it.
-pub(crate) fn fold_ground(children: [&Ground; 4], zoom: Zoom) -> Ground {
+pub(crate) fn fold_ground(children: [&GroundCells; 4], zoom: Zoom) -> GroundCells {
     let under = GROUND.cell_zoom(zoom) + 1;
     let out = (0..TILE_CELLS * TILE_CELLS)
         .flat_map(|idx| {
             let (q, block) = GROUND.child_cells(idx);
-            let cells = &children[q].cells;
+            let cells = children[q];
             block.map(|i| {
                 own(
                     u32::from_le_bytes(core::array::from_fn(|k| cells[4 * i as usize + k])),
@@ -35,7 +35,7 @@ pub(crate) fn fold_ground(children: [&Ground; 4], zoom: Zoom) -> Ground {
             })
         })
         .collect::<Vec<_>>();
-    Ground { cells: out.into() }
+    out.into()
 }
 
 /// The elevation folded: `around[neighbor_idx(qx, qy)]` is the padded grid of
@@ -90,7 +90,7 @@ pub fn fold_terrain(around: [Option<&TerrainTile>; 16], zoom: Zoom) -> Option<Te
     fold_ele(around.map(|t| t.map(|t| &*t.ele)), &mut ele);
     Some(TerrainTile::of(
         ele,
-        fold_ground(children.map(|t| &t.ground), zoom),
+        fold_ground(children.map(|t| &t.cells), zoom),
         fold_separation(around.map(|t| t.map(|t| &t.separation)), zoom),
         Occupancy::of_children(children.map(|t| t.occupancy)),
     ))

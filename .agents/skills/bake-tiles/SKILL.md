@@ -54,7 +54,11 @@ make bake-terrain ARGS="--step fold --step commit"
 
 ## Verifying
 
-1. **Zero failures** in the leaf step's `failed=`.
+1. **Zero failures** in the leaf step's `failed=`. Each failed tile is printed
+   as it fails (`[bake/<step>/<tile>] failed: …`); a terrain tile past the 2 MiB
+   packet limit reads `tile <key> size <N> > 2097152`. A leaf step ends in
+   `<shard>: N tiles failed` and a fold in `z<zoom>: N tiles failed`; the bake
+   exits non-zero and nothing is committed.
 2. **Terrain: spot-check against the dev tile server, at more than one zoom.**
    Compare the decompressed packets, not the files. Run `make serve-tile`, not
    `dev`:

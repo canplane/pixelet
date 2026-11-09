@@ -34,7 +34,7 @@ impl Base for PlaceTile {
     /// only counts it against the cache's capacity.
     fn receive(
         _tile: Quadrant,
-        _record: u32,
+        _slot: u32,
         pkt: &[u8],
         _phases: &mut PhaseList,
     ) -> Result<PlaceTile, Failure> {

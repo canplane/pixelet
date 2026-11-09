@@ -176,19 +176,19 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
 
     // Last, each division a cell names is read, with its parents.
     let rows = client.query(RECORDS_SQL, &[&ids.list]).map_err(db)?;
-    let mut records: FnvHashMap<String, (Division, Option<String>)> = FnvHashMap::default();
+    let mut records: FnvHashMap<&str, (Division, Option<&str>)> = FnvHashMap::default();
     for r in &rows {
-        let Some(subtype) = r
+        let Some(kind) = r
             .get::<_, Option<&str>>("subtype")
             .and_then(Subtype::of_word)
         else {
             continue;
         };
-        let id: String = r.get("gers_id");
+        let id: &str = r.get("gers_id");
         let division = Division {
-            id: id.clone(),
-            subtype,
-            name: r.get::<_, Option<String>>("name").unwrap_or_default(),
+            id,
+            kind,
+            name: r.get::<_, Option<&str>>("name").unwrap_or_default(),
             parent: NONE,
             prominence: r
                 .get::<_, Option<i32>>("prominence")
@@ -199,9 +199,9 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
         records.insert(id, (division, r.get("parent")));
     }
     // The divisions in id order, so a tile is the same whatever order its rows came in.
-    let mut order: Vec<&String> = records.keys().collect();
+    let mut order: Vec<&str> = records.keys().copied().collect();
     order.sort();
-    let at: FnvHashMap<&String, u32> = order
+    let at: FnvHashMap<&str, u32> = order
         .iter()
         .enumerate()
         .map(|(k, id)| (*id, k as u32))
@@ -211,17 +211,13 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
         .map(|id| {
             let (d, parent) = &records[*id];
             Division {
-                parent: parent
-                    .as_ref()
-                    .and_then(|p| at.get(p))
-                    .copied()
-                    .unwrap_or(NONE),
-                ..d.clone()
+                parent: parent.and_then(|p| at.get(p)).copied().unwrap_or(NONE),
+                ..*d
             }
         })
         .collect();
-    Ok(Some(DivisionTile {
-        cells: cells
+    Ok(Some(DivisionTile::of(
+        cells
             .into_iter()
             .map(|c| {
                 if c == NONE {
@@ -229,15 +225,16 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
                 } else {
                     ids.list
                         .get(c as usize)
-                        .and_then(|id| at.get(id))
+                        .and_then(|id| at.get(id.as_str()))
                         .copied()
                         .unwrap_or(NONE)
                 }
             })
-            .collect(),
+            .collect::<Vec<_>>()
+            .into(),
         divisions,
-        occupancy: Occupancy::ZERO,
-    }))
+        Occupancy::ZERO,
+    )))
 }
 
 impl Base for DivisionTile {
@@ -247,8 +244,8 @@ impl Base for DivisionTile {
 
     const LATTICE: Lattice = GROUND;
 
-    fn encode(&self, _: Quadrant) -> Result<Vec<u8>, String> {
-        division::encode(self).map_err(|e| format!("{e:?}"))
+    fn encode(&self, at: Quadrant) -> Result<Vec<u8>, String> {
+        division::encode(self).map_err(|e| format!("{}: {e:?}", at.key()))
     }
 
     fn decode(raw: &[u8]) -> Result<Self, String> {

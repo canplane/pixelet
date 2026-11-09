@@ -6,7 +6,7 @@
 use pxl_spec::asset::cube::{self, ground, sentinel};
 use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
-use pxl_spec::bake::tile::terrain::Ground;
+use pxl_spec::bake::tile::terrain::GroundCells;
 use pxl_spec::space::layer::lattice::{Grid, GROUND, TILE_CELLS};
 
 use super::*;
@@ -103,17 +103,10 @@ fn resident(center: [f64; 2], tiles: &[(Quadrant, Leaf)]) -> TileCache<TerrainTi
 
 /// A leaf as a client holds it once its cells are back, with each cell's
 /// height and palette index given.
-fn drawn(heights: Vec<i16>, ground: Ground, separation: Separation) -> Leaf {
+fn drawn(heights: Vec<i16>, ground: GroundCells, separation: Separation) -> Leaf {
     Leaf {
-        tile: TerrainTile::of(
-            Vec::new(),
-            Ground {
-                cells: Vec::new().into(),
-            },
-            separation,
-            Occupancy::LEAF,
-        ),
-        palette_idxs: ground.cells.into_owned(),
+        tile: TerrainTile::of(Vec::new(), Vec::new().into(), separation, Occupancy::LEAF),
+        palette_idxs: ground.into_owned(),
         heights,
     }
 }
@@ -145,9 +138,7 @@ fn no_surface_placed_stands() {
     let leaf = top().children()[0];
     let void = drawn(
         vec![0; CELLS],
-        Ground {
-            cells: vec![sentinel::void; SPAN * SPAN].into(),
-        },
+        vec![sentinel::void; SPAN * SPAN].into(),
         Default::default(),
     );
     let (x0, y0, _) = leaf.rect();
@@ -216,9 +207,7 @@ fn deck_over_void_met() {
     );
     let void = drawn(
         vec![0; CELLS],
-        Ground {
-            cells: vec![sentinel::void; SPAN * SPAN].into(),
-        },
+        vec![sentinel::void; SPAN * SPAN].into(),
         separation.finish(),
     );
     let (x0, y0, _) = leaf.rect();
@@ -246,13 +235,7 @@ fn ray_across_antimeridian() {
     let n = 1i32 << LEAF_ZOOM;
     let flat = || {
         let cells = vec![ground::land; SPAN * SPAN];
-        drawn(
-            vec![5; CELLS],
-            Ground {
-                cells: cells.into(),
-            },
-            Default::default(),
-        )
+        drawn(vec![5; CELLS], cells.into(), Default::default())
     };
     let tile = |x: i32| Quadrant::new(LEAF_ZOOM, [x, 0]);
     let seam = world::ROUND / 2.0;
@@ -307,9 +290,7 @@ pub(crate) fn flat_at_five() -> (TileCache<TerrainTile>, [f64; 2]) {
     let leaf = top().children()[0];
     let flat = drawn(
         vec![5; CELLS],
-        Ground {
-            cells: vec![ground::land; SPAN * SPAN].into(),
-        },
+        vec![ground::land; SPAN * SPAN].into(),
         Default::default(),
     );
     let (x0, y0, _) = leaf.rect();
@@ -663,9 +644,7 @@ fn late_brick_spike() {
     heights[200 * SPAN + 300] = 400;
     let spiked = drawn(
         heights,
-        Ground {
-            cells: vec![ground::land; SPAN * SPAN].into(),
-        },
+        vec![ground::land; SPAN * SPAN].into(),
         Default::default(),
     );
     let (x0, y0, _) = leaf.rect();
@@ -935,9 +914,7 @@ fn area_edge_leaf_cell_thick() {
     let area = EastOf(5);
     let flat = drawn(
         vec![5; CELLS],
-        Ground {
-            cells: vec![ground::land; SPAN * SPAN].into(),
-        },
+        vec![ground::land; SPAN * SPAN].into(),
         Default::default(),
     );
     let (x0, y0, _) = leaf.rect();
