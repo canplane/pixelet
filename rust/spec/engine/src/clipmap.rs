@@ -177,7 +177,7 @@ pub const LINES_WORDS: u32 = LINES_SEGMENTS_AT + WAYS_BRICK_SEGMENTS * way::SEGM
 /// A brick's scratch while it is filled: the spans of its columns and of the ring of columns
 /// around it, which a column's cells read beside its own (pxl-engine fill.rs `spans`). The
 /// ways' bound in its levels and its ways' tree are made from them (fill.rs `mip`,
-/// `way::tree::leaf`), and the scratch is dropped with the fill.
+/// `way_tree::leaf`), and the scratch is dropped with the fill.
 pub const SPANS_AT: u32 = 0;
 /// The columns whose spans a brick's cells read: the brick's and a ring of one around it,
 /// `SPANS_ACROSS` a side, row by row from the ring's first.
@@ -217,12 +217,12 @@ pub(crate) const fn own_at(w: u32, i: u32) -> u32 {
 /// A brick's words, the part that outlives its fill, the same on the CPU and on a GPU, in
 /// order: its columns, its levels, its cells as laid and its ways' tree's root. The clip
 /// levels' bricks are one storage buffer bound whole on a GPU, under WebGPU's floor
-/// (pxl-render gpu/ray/ground.rs `GROUND_BYTES`).
+/// (pxl-render ray/ground.rs `GROUND_BYTES`).
 pub const COLUMNS_AT: u32 = 0;
 pub const BOUNDS_AT: u32 = COLUMNS_AT + COLUMN_WORDS;
 pub const OWN_AT: u32 = BOUNDS_AT + BOUND_WORDS;
 /// Its ways' tree's root word: the child group of its own nodes along z in the pool and the
-/// first one's Z (`way::tree::root_word`); 0, child group 0, which is never handed out, where
+/// first one's Z (`way_tree::root_word`); 0, child group 0, which is never handed out, where
 /// it has none.
 pub const ROOT_AT: u32 = OWN_AT + OWN_WORDS;
 pub const BRICK_WORDS: u32 = ROOT_AT + 1;

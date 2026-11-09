@@ -22,6 +22,7 @@
 
 pub mod change;
 pub mod decor;
+pub mod decor_box;
 mod entry;
 mod limit;
 mod node;

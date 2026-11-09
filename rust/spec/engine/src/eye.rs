@@ -42,7 +42,7 @@ pub const NO_CUT: u32 = Cut::NONE.zoom;
 /// of the reach, as a vec4, and of the squared steps across and down (`light::W_INVERSE` to
 /// `light::W_DOWN2_INVERSE`). Last is the width squared over the split distance squared
 /// (`light::W_BAND_SCALE`). The renderer writes these words as it aims the map (pxl-render
-/// gpu/shadow.rs `aim`); the core leaves them zero, and they stay zero where no shadow is
+/// pass/shadow.rs `aim`); the core leaves them zero, and they stay zero where no shadow is
 /// cast.
 pub const LIGHT: usize = HIDE + CUT_WORDS;
 pub const LIGHT_WORDS: usize = 27;
@@ -57,7 +57,7 @@ pub(crate) const JITTER_WORDS: usize = 4;
 /// tangents above when the core writes them. Every thread of the cast, and the renderer's
 /// dispatches and buffers, read it here. It lies past the words a cast is made from, those
 /// before `LIGHT`, because the frames that stand on a cast's samples keep that cast's grid,
-/// while the next cast lays down this one (pxl-render gpu/ray/cast.rs `prepare`).
+/// while the next cast lays down this one (pxl-render ray/cast.rs `prepare`).
 pub const GRID: usize = JITTER + JITTER_WORDS;
 pub const GRID_WORDS: usize = beam::GRID_WORDS;
 pub const WORDS: usize = GRID + GRID_WORDS;

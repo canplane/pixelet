@@ -33,7 +33,7 @@ infra/
 
 pxl-api owns db-main and probes it at boot, but no route reads it yet. pxl-geo
 reads db-geo through `DB_GEO_URL`. All spatial data is in EPSG:3857. Locally the
-passwords come from `infra/local/.env` and `ADMIN_TOKEN` from `rust/server/.env`;
+passwords come from `infra/local/.env` and `ADMIN_TOKEN` from `rust/server/common/.env`;
 production keeps its own in `infra/prod/.env`.
 
 db-geo's volume is the only copy of hours of ingest, so it is never removed
@@ -237,7 +237,7 @@ answers.
 ## 6. Licensing and attribution
 
 The app shows each provider's notice in its own words
-(`ts/client/src/ui/setting/info/attribution.tsx`). Check the provider's source
+(`ts/client/src/ui/feature/setting/info/attribution.tsx`). Check the provider's source
 before shortening, rewording or dropping one.
 
 | Provider                    | License                                                          | Notice                                                                                                                                                                                                                                                                          |

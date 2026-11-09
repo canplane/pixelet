@@ -24,11 +24,11 @@ use pxl_engine::clipmap::{
 };
 use pxl_engine::fill;
 use pxl_engine::ground::{self, word, Extent};
-use pxl_engine::way::tree;
+use pxl_engine::way_tree;
 use pxl_engine::wrap_idx;
 use pxl_engine::LEAF_CELL_ZOOM;
 use pxl_render::gpu::api;
-use pxl_render::gpu::ray::{BrickWrite, TerrainWrite};
+use pxl_render::ray::{BrickWrite, TerrainWrite};
 use pxl_spec::bake::tile::terrain::{
     brick_lines, palette_cells, TerrainTile, ELE_COLUMN, PALETTE_COLUMN,
 };
@@ -86,7 +86,7 @@ struct ClipLevel {
 
 /// Where a brick of the ground is held: its array of cells in
 /// `.fixed.terrain` (`cells`) and its row of the GPU's bricks (pxl-render
-/// gpu/ray/ground.rs `GROUND_BYTES`). A brick at a zoom has one slot, however
+/// ray/ground.rs `GROUND_BYTES`). A brick at a zoom has one slot, however
 /// many clip levels want it.
 ///
 /// Clip levels at one zoom want a given brick in the same entry
@@ -347,7 +347,7 @@ fn fold(w: &mut Clipmap) {
 
 /// The ways' pool, holding the child groups of every held brick's tree. A
 /// cursor reads it here as the GPU's cast reads its copy (pxl-engine
-/// `way::tree`).
+/// `way_tree`).
 pub(in crate::domain) fn pool() -> &'static WayPool {
     way_pool()
 }
@@ -760,7 +760,7 @@ fn fill_scratch() -> &'static mut FillScratch {
                 pairs: arr(r, fill_off(2), WAYS_BRICK_SEGMENTS as usize),
                 spans: arr(r, fill_off(3), SPANS_WORDS as usize),
                 build: arr(r, fill_off(4), BUILD_WORDS),
-                order: arr(r, fill_off(5), tree::BRICK_CHILD_GROUPS as usize + 1),
+                order: arr(r, fill_off(5), way_tree::BRICK_CHILD_GROUPS as usize + 1),
             }
         }
     })
@@ -1029,8 +1029,8 @@ fn lay(w: &mut Clipmap, filling: BrickFill, f: &mut FillScratch) -> Poll {
         pool.give(run);
         return Poll::Stop;
     }
-    let built = tree::Read(f.build);
-    cells_mut(b)[ROOT_AT as usize] = tree::lay(&built, root, pool, run[0], f.order);
+    let built = way_tree::Read(f.build);
+    cells_mut(b)[ROOT_AT as usize] = way_tree::lay(&built, root, pool, run[0], f.order);
     w.slots[b as usize].tree = run;
     end(w, b, Fill::Filled)
 }

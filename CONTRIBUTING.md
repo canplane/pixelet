@@ -30,11 +30,11 @@ client and the core.
 `make dev-oven` runs the whole stack here and bakes each tile the first time it
 is asked for, which is what you want when you change a bake or a server. It
 needs the local databases and an `ADMIN_TOKEN` of your choosing in
-`rust/server/.env`:
+`rust/server/common/.env`:
 
 ```bash
 cp infra/local/.env.example infra/local/.env
-cp rust/server/.env.example rust/server/.env
+cp rust/server/common/.env.example rust/server/common/.env
 docker compose -f infra/local/docker-compose.yml up -d
 make dev-oven
 ```

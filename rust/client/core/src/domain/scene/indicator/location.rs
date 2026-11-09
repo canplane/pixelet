@@ -402,7 +402,7 @@ impl LocationIndicator {
         // drawn at its own position, finer than Q3, over where it is shown.
         // The bob and the slide move only the beacon, since the zone reads no
         // time. When either draw changes, it marks where it was and where it
-        // is (pxl-render gpu/pass/mark.rs).
+        // is (pxl-render pass/mark.rs).
         if p.zone_drawn {
             let cnt = (self.drawn.len() / ZONE_INSTANCE_FLOATS) as u32;
             draw.draw_as(

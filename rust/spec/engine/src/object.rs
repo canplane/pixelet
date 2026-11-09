@@ -128,7 +128,7 @@ pub fn fold(children: [u32; 8], zoom: Zoom) -> u32 {
 /// A leaf's share in its parent's fold (`fold`): a leaf whose value is a voxel fills its cube
 /// whole, and the empty word, or any other, fills none. It is the one rule for whichever side
 /// builds a tree, the objects' store (pxl-spec object/volume.rs) or a brick's ways
-/// (`way::tree`).
+/// (`way_tree`).
 pub fn share(word: u32) -> u32 {
     let id = low(word);
     if word != 0 && voxel(id) {

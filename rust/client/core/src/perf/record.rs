@@ -10,7 +10,7 @@
 
 use core::mem::size_of;
 
-use pxl_render::gpu::renderer::GpuRead;
+use pxl_render::renderer::GpuRead;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
 

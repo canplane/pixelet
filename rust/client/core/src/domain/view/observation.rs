@@ -20,7 +20,7 @@ use pxl_spec::space::layer::demand::{band, squares_within, tiles_within};
 use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 
-use crate::domain::layer::tile_cache::floor;
+use crate::domain::layer::floor;
 use crate::domain::layer::Base as _;
 use crate::domain::query::change;
 use crate::domain::query::{ColumnWalk, World};
@@ -90,7 +90,7 @@ pub fn observation() -> Option<Observation> {
 /// brick to `each` with the lowest and highest height the world holds in it.
 ///
 /// The cut starts from the coarsest bricks within the floor's ring
-/// (tile_cache/floor.rs `ring`) and ends at the demand distance. A brick
+/// (layer/floor.rs `ring`) and ends at the demand distance. A brick
 /// splits into its four while its nearest point is nearer than the split
 /// distance of its cells (pxl-spec space/camera/grid.rs `split_dist`),
 /// measured with the eye's height over the ground. That is the rule a ray's
@@ -148,7 +148,7 @@ pub fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
 }
 
 /// How far from the eye a layer's tiles at `zoom` are asked for. At the
-/// source's `min_zoom` this is the floor's ring (tile_cache/floor.rs `ring`).
+/// source's `min_zoom` this is the floor's ring (layer/floor.rs `ring`).
 /// At a finer zoom it is the outer edge of the zoom's band (pxl-spec
 /// layer/demand.rs `band`), and None when that band lies past the far edge.
 pub fn demand_radius(o: &Observation, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option<f64> {

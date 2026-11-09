@@ -4,7 +4,7 @@ import ExpoModulesCore
 import UIKit
 
 /// The system blur that a see-through backing stands on
-/// (ts/client/src/ui/component/backing.ios.tsx). It is the thinnest of the
+/// (ts/client/src/ui/shared/component/backing.ios.tsx). It is the thinnest of the
 /// system's materials, at full strength from the start. The UI lays its own
 /// fill over it, and a thicker material, such as the chrome iOS draws its own
 /// bars in, hides everything that passes under it. expo-blur's view is not

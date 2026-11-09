@@ -7,19 +7,18 @@
 //! reads the drawn camera.
 //!
 //! Every control is written through one function, `ask`. There the terrain
-//! answers whether a state puts the eye in the ground (orbit/collision.rs
+//! answers whether a state puts the eye in the ground (camera/collision.rs
 //! `allowed_view`), and the obstacle setting decides what follows. With
 //! `through`, the ground is ignored. With `stop`, a control goes as far as
 //! it can. With `climb`, the drawn pitch rises instead (`climb_polar`).
 //! Where the way of a control still hits something, a zoom in goes through
 //! it (`dive`) and any other control stops (`Step`).
 
-pub mod collision;
-
 use pxl_spec::space::coord::q3::Q3;
 
 use pxl_spec::space::coord::v3::{self, V3};
 
+use crate::domain::control::camera::collision::{allowed_view, climb_polar};
 use crate::domain::control::camera::gesture::{spread, Anchor};
 use crate::domain::control::camera::state::{camera_state, camera_state_mut, Intent, IntentPatch};
 use crate::domain::control::camera::{camera, facing_dir, facing_domain, set_eye_world};
@@ -36,7 +35,6 @@ use crate::domain::param::POS_DAMP;
 use crate::domain::setting::store::{settings, OrbitObstacleMode};
 use crate::domain::smooth::{smooth_angle, smooth_vec};
 use crate::domain::view::frame::coord::world_to_canonical;
-use collision::{allowed_view, climb_polar};
 use xpute_core::global::Global;
 use xpute_kit::math::scalar::clamp;
 

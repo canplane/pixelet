@@ -74,7 +74,7 @@ const _: () = assert!(
     "the light's slots' group binds past WebGPU's floor"
 );
 
-/// The group of `cast_cs` (cast.wgsl, gpu/ray/cast.rs `px_group`): the eye, the rays, the
+/// The group of `cast_cs` (cast.wgsl, ray/cast.rs `px_group`): the eye, the rays, the
 /// beam's words, the node cache it lists the marked pixels in and reads the visible voxel's
 /// entry from, the visibility buffer, the words of the pixels to walk again, and the list of
 /// the claimed tiles.
@@ -243,7 +243,7 @@ const _: () = assert!(
 /// The cast's world group, over which `cell_cs`, `light_cell_cs` and `forget_cs` run: the eye,
 /// the beam rays' words that take the cells' starts, the node cache, and the head, by which a
 /// pass that both observers run reads which observer it runs for. The shadow map's passes
-/// bind the group over the light's buffers (gpu/ray/cast.rs `light_groups`).
+/// bind the group over the light's buffers (ray/cast.rs `light_groups`).
 pub const WORLD_GROUP: [u32; 12] = [
     0,
     COMPUTE,
@@ -527,7 +527,7 @@ pub const RECORD_GROUP: [u32; 24] = [
 /// beam rays' words, the node cache that holds their count and whose drawable entries they
 /// set, and the args of the faces' asks. It does not bind the stops' dispatch: that is copied
 /// out of the node cache, so that no pass reads its count from a buffer it binds writable
-/// (gpu/ray/raster.rs `Raster::record_hits`).
+/// (ray/raster.rs `Raster::record_hits`).
 pub const RECORD_HITS_GROUP: [u32; 15] = [
     0,
     COMPUTE,

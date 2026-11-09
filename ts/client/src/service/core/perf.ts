@@ -6,7 +6,7 @@
  * The layout of what is read is perf.json's (perf.spec.ts). A view holds
  * only until the core's next turn, so each read copies what it needs into
  * plain values. What is made of those values, and how they are shown, is the
- * UI's work (ui/debug/perf/).
+ * UI's work (ui/feature/debug/perf/).
  */
 
 import type { F64Array } from "@xpute/kit/abi/array.ts";

@@ -19,7 +19,7 @@ use pxl_engine::light::{self, Light};
 use pxl_engine::object::{self, Cut};
 use pxl_engine::seed::node_seed;
 use pxl_engine::support::{self, Lineage};
-use pxl_engine::way::tree;
+use pxl_engine::way_tree;
 use pxl_engine::world::{self, Inheritance, PlacedCursor};
 use pxl_engine::{area, beam, eye, ray, value, wrap_idx, Zoom, FRAC_W, LEAF_CELL_ZOOM};
 use pxl_render::frame::shader::record::{
@@ -62,7 +62,7 @@ impl Query for Ground<'_> {
     }
 
     fn child(&mut self, at: &Inheritance, zoom: Zoom, node: [i32; 3]) -> Inheritance {
-        at.child(&self.w, &tree::Read(self.w.pool), (zoom, node))
+        at.child(&self.w, &way_tree::Read(self.w.pool), (zoom, node))
     }
 
     fn node(
@@ -74,7 +74,7 @@ impl Query for Ground<'_> {
         _: f32,
     ) -> In<[u32; 2]> {
         let mut resident = self.w;
-        let pool = tree::Read(self.w.pool);
+        let pool = way_tree::Read(self.w.pool);
         world::node(
             &mut resident,
             &self.w,
@@ -2760,7 +2760,7 @@ fn frame_differs(
 }
 
 /// The light's head `light_mark_draws_cs` is run under, laid out for the map's side as the
-/// renderer lays it (gpu/ray/cast.rs). The world's receivers stood in the cast before, no host's
+/// renderer lays it (ray/cast.rs). The world's receivers stood in the cast before, no host's
 /// draw stands within a box, and the marks take no footprint.
 fn mark_header() -> Vec<u32> {
     let mut header = vec![0u32; light::HEADER_WORDS];

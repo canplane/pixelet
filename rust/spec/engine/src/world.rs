@@ -16,7 +16,7 @@ use crate::clipmap::{BrickSource, Lookup};
 use crate::ground::{self, VOID};
 use crate::object::{self, Cut, Table, AIR, CELL, ROOT, SPLIT};
 use crate::way;
-use crate::way::tree;
+use crate::way_tree;
 use crate::{Zoom, LEAF_CELL_ZOOM, SHARD_ZOOM, UNIT_ZOOM};
 
 /// What a node is handed by the node over it, each source's own part, so that a descent asks
@@ -24,7 +24,7 @@ use crate::{Zoom, LEAF_CELL_ZOOM, SHARD_ZOOM, UNIT_ZOOM};
 /// objects' tree), what is known of the service area at the node's shard (`area::Shard`),
 /// where the clip levels held the ground's cells of a node above it (`clipmap::Lookup`,
 /// `clipmap::step`), and the ways' cursor in the tree of the brick `ground` names
-/// (`way::tree`). The CPU and the GPU hand down the same. The caves are not part of it: a
+/// (`way_tree`). The CPU and the GPU hand down the same. The caves are not part of it: a
 /// cube's caves are its own (`Content::hollow`).
 #[derive(Clone, Copy)]
 pub struct Inheritance {
@@ -94,7 +94,7 @@ impl Inheritance {
     }
 }
 
-/// The first zoom whose nodes are the ways' tree's own nodes (`way::tree::cursor`). The tree
+/// The first zoom whose nodes are the ways' tree's own nodes (`way_tree::cursor`). The tree
 /// counts its nodes along z by a leaf's Z shifted down, while the world counts one node
 /// through the whole height at the shards' zoom and coarser (`object::z_start`). A node there
 /// is no node of the tree, and a cursor stepped from it to its children would name other nodes
@@ -117,7 +117,7 @@ const WAYS_FROM: Zoom = SHARD_ZOOM + 1;
 /// nothing finer than the node there. A cell's asset is what is placed in it where that fills
 /// it whole, air included. Otherwise it is the ground's asset with what the ways and what is
 /// placed write over it (their tree's leaf or fold there, `object::val`, with a bore's air as
-/// the ground's void, `way::tree::read`): one value whichever source holds it. The cell keeps
+/// the ground's void, `way_tree::read`): one value whichever source holds it. The cell keeps
 /// the eighths of its cube that they fill together (`answer::cover`, `answer::eighths`,
 /// `answer::FILL_SHIFT`), and is air where that is none. `PLACED_ASSET` is set over a placed
 /// value; control tells an edit by it, and nothing drawn reads it. The second word holds the
@@ -199,7 +199,7 @@ pub fn node<H: ground::Resident, W: BrickSource, L: Table, P: Table>(
         || place.here() && zoom == WAYS_FROM
     {
         *trail = if place.here() && zoom >= WAYS_FROM {
-            tree::cursor(
+            way_tree::cursor(
                 pool,
                 bricks.root(place.from(), place.slot()),
                 place.from(),
@@ -250,7 +250,7 @@ pub fn node<H: ground::Resident, W: BrickSource, L: Table, P: Table>(
         };
         if way != VOID {
             // Where a way wrote the cell, its palette index four times, whatever its value.
-            let w = tree::read(way);
+            let w = way_tree::read(way);
             let (f, theirs) = cover(fill, w, object::fill_share(pool, *trail));
             if theirs {
                 (val, four) = (w, ground::word([w; 4]));

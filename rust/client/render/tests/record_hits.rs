@@ -705,7 +705,7 @@ fn eye_of(c: &EyeCase) -> (Vec<u32>, Grid) {
 }
 
 /// The raster's args as the renderer lays them in a frame that casts its samples
-/// (gpu/ray/raster.rs `prepare`): the draw's, then the faces' asks the samples open at
+/// (ray/raster.rs `prepare`): the draw's, then the faces' asks the samples open at
 /// `raster::ASKED_AT` and those the holes' hits open at `raster::HIT_ASKED_AT`, none opened
 /// yet.
 fn args_of(grid: &Grid) -> Vec<u32> {
@@ -724,7 +724,7 @@ fn args_of(grid: &Grid) -> Vec<u32> {
 }
 
 /// Runs the eye's frame of case `c` on screen `s` up to the record of its holes' hits, in the
-/// order the renderer runs it (gpu/ray/cast.rs): the beam rays and the cells' starts; where
+/// order the renderer runs it (ray/cast.rs): the beam rays and the cells' starts; where
 /// `s.samples`, the samples, their hits' record and the faces' pass over their asks; and then
 /// the holes' queue over the pixels the cast marked, as tests/sample.rs marks them. The
 /// entries the hits find are then laid otherwise (`lay_otherwise`).
@@ -819,7 +819,7 @@ fn eye_run(gpu: &Gpu, b: &WorldBuffer, (c, s): (&EyeCase, &Screen)) -> Run {
         args: Vec::new(),
         asks_at: grid.hit_asks_at,
         size: s.size,
-        // The eye's head is all zero, as the cast binds it (gpu/ray/cast.rs `eye_header`).
+        // The eye's head is all zero, as the cast binds it (ray/cast.rs `eye_header`).
         header_buf: gpu.buf(
             &vec![0u32; light::HEADER_WORDS],
             wgpu::BufferUsages::UNIFORM,
@@ -942,7 +942,7 @@ fn light_run(gpu: &Gpu, b: &WorldBuffer, c: &LightCase) -> Run {
     lay_cells(gpu, b, [&eye_buf, &header_buf], &mut list);
     let mut node_cache = vec![0u32; node_cache::WORDS as usize];
     node_cache[node_cache::FRAME as usize] = FRAME;
-    // The light's raster's args, as the renderer lays them (gpu/ray/raster.rs `light_prepare`).
+    // The light's raster's args, as the renderer lays them (ray/raster.rs `light_prepare`).
     let mut args = vec![0u32; raster::ARGS_WORDS as usize];
     args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
     let run = Run {
@@ -1137,7 +1137,7 @@ fn hand_light_hits_answer_as_record() {
 }
 
 /// Once the eye's hits are recorded and the faces' pass has answered their asks, as the
-/// renderer runs them (gpu/ray/raster.rs `record_hits`), `record_faces_cs` must leave every
+/// renderer runs them (ray/raster.rs `record_hits`), `record_faces_cs` must leave every
 /// word of the rays as `faces_want` says, and no word of the node cache or of the eye's words
 /// changed.
 #[test]

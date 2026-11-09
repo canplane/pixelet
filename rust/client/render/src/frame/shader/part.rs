@@ -93,7 +93,7 @@ pub const SHADER_FORGET: u32 = 35;
 pub const SHADER_QUEUE_LAST_SAMPLES: u32 = 36;
 /// `SHADER_LIGHT` casts the world's depth from the light into its clipmap (pxl-engine
 /// `light`): each slot takes the visible voxel, one tile a workgroup (light.wgsl).
-/// `SHADER_LIGHT_MAP` lays that depth into the shadow map (light_map.wgsl, gpu/shadow.rs).
+/// `SHADER_LIGHT_MAP` lays that depth into the shadow map (light_map.wgsl, pass/shadow.rs).
 /// `SHADER_QUEUE_ASK` asks the world, once a node, for each node a walk of the holes was
 /// parked at (queue_ask.wgsl).
 pub const SHADER_LIGHT: u32 = 37;

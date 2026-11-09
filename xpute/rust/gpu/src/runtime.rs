@@ -18,6 +18,8 @@ mod admit;
 mod belt;
 mod configure;
 mod image;
+#[cfg(target_os = "android")]
+pub mod jni;
 mod make;
 mod name;
 #[cfg(unix)]

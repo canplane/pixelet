@@ -2,7 +2,7 @@
 
 //! gpu-portable: the counters of what a cast did, kept only while the `ray_cnts` setting
 //! is on. The eye and the light are cast by the same passes, and each of them has its own
-//! run of `LANES` counters in one array (`at`), which pxl-render gpu/ray/count.rs reads back
+//! run of `LANES` counters in one array (`at`), which pxl-render ray/count.rs reads back
 //! and sums.
 //!
 //! No pass has a binding left for the array itself, so each adds its counts to a buffer it

@@ -146,7 +146,7 @@ pub fn render_rs(symbols: &[Symbol]) -> String {
 /// The UI's module: each symbol's box and shapes, by its number.
 pub fn render_ts(symbols: &[Symbol]) -> String {
     let mut ts = String::from(
-        "// @pxl/client/ui/search/place-symbol.ts\n//\n// Written by `make ingest-asset` from asset/raw/place/symbol/ — do not edit.\n//\n// Carto's place symbols (openstreetmap-carto `symbols/`, CC0) as outlines,\n// symbol n at `PLACE_SYMBOLS[n - 1]` (place_theme.spec.ts `SYMBOL`): its box,\n// and each shape's path data and whether it fills even-odd.\n\nexport interface PlaceSymbol {\n  box: readonly [number, number];\n  shapes: readonly (readonly [string, boolean])[];\n}\n\nexport const PLACE_SYMBOLS: readonly PlaceSymbol[] = [\n",
+        "// @pxl/client/ui/feature/search/place-symbol.ts\n//\n// Written by `make ingest-asset` from asset/raw/place/symbol/ — do not edit.\n//\n// Carto's place symbols (openstreetmap-carto `symbols/`, CC0) as outlines,\n// symbol n at `PLACE_SYMBOLS[n - 1]` (place_theme.spec.ts `SYMBOL`): its box,\n// and each shape's path data and whether it fills even-odd.\n\nexport interface PlaceSymbol {\n  box: readonly [number, number];\n  shapes: readonly (readonly [string, boolean])[];\n}\n\nexport const PLACE_SYMBOLS: readonly PlaceSymbol[] = [\n",
     );
     for s in symbols {
         let shapes: Vec<String> = s

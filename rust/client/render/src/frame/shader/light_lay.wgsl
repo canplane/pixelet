@@ -9,7 +9,7 @@
 // far plane, and so lit, until it is cast. Its read word (pxl-engine `light::reads_at`) names
 // a cast before the first of the epoch (`light::reads_epoch`).
 
-/// What the lay reads the list by (gpu/shadow.rs `Shadow::begin`). `corner` holds the box's
+/// What the lay reads the list by (pass/shadow.rs `Shadow::begin`). `corner` holds the box's
 /// corner, the host's epoch and where the reads lie. `read` holds where the list of tiles read
 /// lies (`light::LIST_READS`), then the word of the first cast whose reads hold where a slide
 /// went unrun (`light::READS_FROM`).

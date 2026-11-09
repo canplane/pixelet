@@ -14,7 +14,7 @@ export interface SearchPart {
 }
 
 /** The numbers of `kind` and `category` are defined by
- * ui/search/search.spec.ts. */
+ * ui/feature/search/search.spec.ts. */
 export interface SearchAnswer {
   gers_id: string;
   kind: number;

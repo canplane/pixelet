@@ -13,8 +13,8 @@ libm.workspace = true
 xpute-core.workspace = true
 xpute-kit = { workspace = true, features = ["std"] }
 pxl-spec.workspace = true
-# The GPU's decor pass's bounds and the record it writes (gpu/renderer.rs);
-# the cloud field the sheets lie on (gpu/cloud.rs) and where night falls
+# The GPU's decor pass's bounds and the record it writes (renderer.rs);
+# the cloud field the sheets lie on (pass/cloud.rs) and where night falls
 # (look/environment.rs), pixelet's content.
 pxl-engine.workspace = true
 pxl-content.workspace = true
@@ -46,7 +46,7 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 # The passes by hand run on a device against pxl-engine (tests/).
 wgpu = { version = "30", default-features = false, features = ["wgsl", "metal", "vulkan", "naga-ir"] }
 pollster = "1"
-# The worlds the frame schedule reaches, kept as they are explored (gpu/ray/schedule.test.rs).
+# The worlds the frame schedule reaches, kept as they are explored (ray/schedule.test.rs).
 fnv.workspace = true
 
 [lints]

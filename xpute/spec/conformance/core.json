@@ -79,7 +79,7 @@
     "$type": "u32",
     "$doc": [
       "The size of the stack a module core is linked with, which comes first in its memory",
-      "(rust/conformance/build.rs, cpp/Makefile)."
+      "(rust/dev/conformance/build.rs, cpp/Makefile)."
     ]
   },
 

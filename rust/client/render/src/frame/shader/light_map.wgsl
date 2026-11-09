@@ -1,5 +1,5 @@
 // Lays the world's depth from the light into the shadow map, in the tiles a receiver reads,
-// before the decor and the characters are drawn into it (gpu/shadow.rs). Each tile listed as
+// before the decor and the characters are drawn into it (pass/shadow.rs). Each tile listed as
 // read (pxl-engine `light::LIST_READS`) is one instance of a quad, as many as the light's cast
 // opened (`light::ARGS_LAY`), and its fragments take the depth the world's cast left
 // (light_lay.wgsl). The rest of the map is cleared to the far plane, which no receiver reads.

@@ -1,6 +1,6 @@
 // pxl-render/frame/shader/screen_resolve.wgsl
 
-// Gathers the world's color over frames (gpu/resolve.rs). This frame's color, each pixel's ray
+// Gathers the world's color over frames (pass/resolve.rs). This frame's color, each pixel's ray
 // taken off its middle by the frame's jitter (frame.wgsl `jittered`), is blended into what the
 // frames before left where this pixel's middle was in the last frame. That place is found by
 // moving the nearest depth around the pixel into the last frame's view (`reproject`). Where the

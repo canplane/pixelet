@@ -4,7 +4,7 @@
 //! are shared by their words, so a bind group made for one pipeline serves
 //! every one declaring the same group.
 //!
-//! The renderer is made in three steps (gpu/renderer.rs `render_frame`). First every shader
+//! The renderer is made in three steps (renderer.rs `render_frame`). First every shader
 //! module is made, a few a turn (`make_modules`). Then the renderer is made, and each of its
 //! pipelines is made by WebGPU's async call, with the word its ticket lands in kept here. Then
 //! no frame is drawn until every word says its pipeline is made (`made`). A pipeline asked for

@@ -10,7 +10,7 @@ import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { Core, Machine, ModuleSource } from "./runtime.ts";
-import { reserve_mem } from "./mem/reserve.ts";
+import { reserve_mem } from "./reserve.ts";
 import { open_module } from "./module.ts";
 
 /** Hands `run` the display's next animation frame and its time. */

@@ -4,8 +4,8 @@
 //! it belongs to that one turn: what the turn measured of itself, what the
 //! renderer made of its frame, and the terrain tiles it took in.
 
-use pxl_render::gpu::renderer::GpuRead;
 use pxl_render::gpu::span_spec::FrameKind;
+use pxl_render::renderer::GpuRead;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_core::clock::now;
 use xpute_core::global::Global;

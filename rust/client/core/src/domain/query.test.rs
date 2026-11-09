@@ -52,7 +52,7 @@ struct Leaf {
 
 /// A tile cache holding `tiles` and, over each tile, its line up to the
 /// coarsest zoom the source supplies whole, as the floor holds it all around
-/// the eye (`domain/layer/tile_cache/floor.rs`). Here a tile's coarser
+/// the eye (`domain/layer/floor.rs`). Here a tile's coarser
 /// pictures are the same ground, each marking its children held. Their cells
 /// are held in the clip levels around `center`, in units.
 fn resident(center: [f64; 2], tiles: &[(Quadrant, Leaf)]) -> TileCache<TerrainTile> {

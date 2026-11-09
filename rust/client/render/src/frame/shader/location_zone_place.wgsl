@@ -8,7 +8,7 @@
 
 struct VertexIn {
   @builtin(instance_index) i: u32,
-  // Four vertices for each face, the faces in the order gpu/pass/location.rs
+  // Four vertices for each face, the faces in the order pass/location.rs
   // `box_lanes` lays them out.
   @builtin(vertex_index) corner: u32,
   @location(0) pos: vec3f,

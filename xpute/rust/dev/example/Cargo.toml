@@ -1,0 +1,20 @@
+[package]
+name = "xpute-example"
+edition.workspace = true
+version.workspace = true
+# This shows how a core is written, read beside the runtime that drives it
+# (ts/dev/example/sum.test.ts), and it is never published.
+publish = false
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+xpute-kit.workspace = true
+xpute-core.workspace = true
+
+# A build script takes its link flags as a module from this (build.rs,
+# xpute_core::wasm `link`).
+[build-dependencies]
+xpute-core.workspace = true

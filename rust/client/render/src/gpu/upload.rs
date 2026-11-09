@@ -114,7 +114,7 @@ impl UploadTable {
             return false;
         }
         // The buffer is also copied from, so the marks keep each upload they read as the
-        // last frame drew it (gpu/pass/mark.rs `CopyCache::keep`).
+        // last frame drew it (pass/mark.rs `CopyCache::keep`).
         let buf = g.buf(
             buf_size(self.len[i]),
             buffer_usage::VERTEX

@@ -4,7 +4,7 @@ import ExpoUI
 import SwiftUI
 
 /// SwiftUI's `presentationContentInteraction(.scrolls)`, as a modifier the UI
-/// can name (ts/client/src/ui/component/panel.ios.tsx). With it, a drag on a
+/// can name (ts/client/src/ui/shared/component/panel.ios.tsx). With it, a drag on a
 /// sheet's content scrolls the content, and only the sheet's top, its handle
 /// and its header, resizes or dismisses the sheet. @expo/ui has no modifier
 /// for it, so PlatformModule's OnCreate registers this one with @expo/ui's

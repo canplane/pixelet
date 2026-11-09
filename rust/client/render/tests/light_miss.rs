@@ -584,7 +584,7 @@ fn lay_cells(gpu: &Gpu, b: &WorldBuffer, [eye, header]: [&wgpu::Buffer; 2], list
 
 /// The world the next frame casts over, with bricks changed since the first frame, as the app
 /// hands it: its buffers, the words that name the moved entries and the changed bricks
-/// (gpu/ray/cast.rs), and the pass that forgets by them.
+/// (ray/cast.rs), and the pass that forgets by them.
 struct Edited<'a> {
     b: &'a WorldBuffer,
     w: World<'a>,
@@ -981,7 +981,7 @@ fn handed_between_frames(eye: [i32; 2], cell_zoom: Zoom, by: [i32; 2], name: &'s
     );
     let now = &built.clipmap;
     // The host marks an eye's entry as moved where its brick changed, and joins each level's
-    // changed bricks (gpu/ray/cast.rs).
+    // changed bricks (ray/cast.rs).
     let mut changed = [0u32; CHANGED_WORDS as usize];
     let mut changed_bricks = [node_cache::NO_BRICKS; clipmap::EYE_CLIP_LEVELS as usize];
     for k in 0..(clipmap::EYE_CLIP_LEVELS * ENTRIES) as usize {
@@ -1143,7 +1143,7 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
 
     // Two of the leaf clip level's bricks under the box are wanted and not yet filled before
     // the change, and held after it. Their columns are taken as the host takes them
-    // (gpu/ray/cast.rs).
+    // (ray/cast.rs).
     let g = [EYE[0] + 90, EYE[1] + 90];
     let bricks_case = Case {
         name: "bricks of the leaf clip level handed",

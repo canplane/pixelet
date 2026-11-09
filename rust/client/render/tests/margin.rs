@@ -53,7 +53,7 @@ fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
 }
 
 /// The light of case `c` and where its rays start, laid as the renderer lays them
-/// (gpu/shadow.rs `aim`, `Shadow::starts`).
+/// (pass/shadow.rs `aim`, `Shadow::starts`).
 fn box_of(c: &LightCase) -> (Light, StartGrid) {
     let dir = unit(c.dir);
     let a = unit(cross(dir, [0.0, 0.0, 1.0]));

@@ -10,8 +10,8 @@ use crate::sys;
 use pxl_engine::fill;
 use pxl_engine::ground::word;
 use pxl_engine::value::TRANSPORTS;
-use pxl_engine::way::tree::Read;
 use pxl_engine::way::BRIDGE;
+use pxl_engine::way_tree::Read;
 use pxl_spec::bake::separation::{self, Separation};
 use pxl_spec::bake::tile::terrain::{self, GroundId};
 
@@ -119,8 +119,8 @@ pub(crate) fn lose() {
 fn build(center: [f64; 2], tiles: &[TileData]) {
     PLANES.set(planes_of(vec![0; CELLS_WORDS].leak()));
     set_way_pool(WayPool::default());
-    let mut pool = vec![0; 16 * (tree::BRICK_CHILD_GROUPS as usize + 1)];
-    let mut order = vec![0; tree::BRICK_CHILD_GROUPS as usize + 1];
+    let mut pool = vec![0; 16 * (way_tree::BRICK_CHILD_GROUPS as usize + 1)];
+    let mut order = vec![0; way_tree::BRICK_CHILD_GROUPS as usize + 1];
     CLIPMAP.set(fresh());
     let w = clipmap();
     for clip_level in 0..CLIP_LEVELS {
@@ -195,7 +195,7 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
         if cnt != 0 {
             let run = way_pool().take(cnt).expect("a brick's tree past the pool");
             let built = Read(&pool);
-            back[ROOT_AT as usize] = tree::lay(&built, root, way_pool(), run[0], &mut order);
+            back[ROOT_AT as usize] = way_tree::lay(&built, root, way_pool(), run[0], &mut order);
             w.slots[b as usize].tree = run;
         }
         let at = (b * CELLS_ARR_BYTES / 4) as usize;
@@ -291,7 +291,7 @@ fn fill_room() -> &'static mut Clipmap {
         pairs: vec![(0, 0); WAYS_BRICK_SEGMENTS as usize].leak(),
         spans: vec![0; SPANS_WORDS as usize].leak(),
         build: vec![0; BUILD_WORDS].leak(),
-        order: vec![0; tree::BRICK_CHILD_GROUPS as usize + 1].leak(),
+        order: vec![0; way_tree::BRICK_CHILD_GROUPS as usize + 1].leak(),
     });
     CLIPMAP.set(fresh());
     let w = clipmap();
@@ -409,8 +409,8 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
             let [x, y] = clipmap::of_idx(i);
             for z in 20..60 {
                 let at = [x as i32, y as i32, z];
-                let was = tree::cursor(&built, root, cell_zoom, cell_zoom, at);
-                let now = tree::cursor(pool, laid, cell_zoom, cell_zoom, at);
+                let was = way_tree::cursor(&built, root, cell_zoom, cell_zoom, at);
+                let now = way_tree::cursor(pool, laid, cell_zoom, cell_zoom, at);
                 assert_eq!(
                     object::val(&built, was, Cut::NONE, cell_zoom, at),
                     object::val(pool, now, Cut::NONE, cell_zoom, at),

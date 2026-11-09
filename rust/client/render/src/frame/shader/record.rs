@@ -211,7 +211,7 @@ pub const PIPELINE_IMPOSTOR: u32 = 8;
 pub const PIPELINE_SKY: u32 = 9;
 pub const PIPELINE_MIP: u32 = 10;
 /// The occlusion's half-resolution map laid over the world's color in the
-/// claimed tiles (gpu/ao.rs `apply`).
+/// claimed tiles (pass/ao.rs `apply`).
 pub const PIPELINE_AO_APPLY: u32 = 11;
 pub const PIPELINE_AO_DOWNSAMPLE: u32 = 12;
 pub const PIPELINE_AO_SAMPLE: u32 = 13;
@@ -226,52 +226,52 @@ pub const PIPELINE_ATLAS: u32 = 21;
 pub const PIPELINE_IMPOSTOR_BAKE: u32 = 22;
 pub const PIPELINE_ATMOS_IRRADIANCE: u32 = 23;
 /// Draws the markers' regions, each by its number, into a target of their own
-/// (gpu/pass/marker.rs).
+/// (pass/marker.rs).
 pub const PIPELINE_MARKER_REGION: u32 = 24;
-/// The debug gizmos' faces, depth only, into the gizmos' own depth (gpu/pass/debug.rs `DebugPass`).
+/// The debug gizmos' faces, depth only, into the gizmos' own depth (pass/debug.rs `DebugPass`).
 pub const PIPELINE_DEBUG_FACE: u32 = 25;
 /// The eye's rays, opaque at their depth (pxl-engine ray.rs).
 pub const PIPELINE_SCREEN_RAY: u32 = 26;
-/// The three pipelines of the shadow map's depth (gpu/shadow.rs): the decor's and the
+/// The three pipelines of the shadow map's depth (pass/shadow.rs): the decor's and the
 /// characters' depth from the light, and the world's depth, which is laid in before them.
 pub const PIPELINE_DECOR_DEPTH: u32 = 27;
 pub const PIPELINE_SKINNED_DEPTH: u32 = 28;
 pub const PIPELINE_LIGHT_MAP: u32 = 29;
 /// Draws the record's boxes, and keeps at each pixel the voxel whose face the pixel's ray
-/// enters first (gpu/ray/raster.rs).
+/// enters first (ray/raster.rs).
 pub const PIPELINE_RASTER: u32 = 30;
 /// Encodes the world's color onto the canvas, once, and carries the world's depth up to the
-/// canvas's size (gpu/finish.rs).
+/// canvas's size (pass/finish.rs).
 pub const PIPELINE_SCREEN_FINISH: u32 = 31;
-/// The world's color gathered over frames (gpu/resolve.rs).
+/// The world's color gathered over frames (pass/resolve.rs).
 pub const PIPELINE_SCREEN_RESOLVE: u32 = 32;
 /// The gate a frame not drawn whole is drawn through: it clears the claimed tiles and raises
-/// their stencil (gpu/renderer.rs `frame`).
+/// their stencil (renderer.rs `frame`).
 pub const PIPELINE_SCREEN_MASK: u32 = 33;
-/// Shows on the canvas the finished picture kept at the canvas's size (gpu/finish.rs).
+/// Shows on the canvas the finished picture kept at the canvas's size (pass/finish.rs).
 pub const PIPELINE_SCREEN_SHOW: u32 = 34;
 /// Copies the claimed tiles of the history the resolve wrote this frame back into the history
-/// the frame before wrote (gpu/resolve.rs).
+/// the frame before wrote (pass/resolve.rs).
 pub const PIPELINE_SCREEN_WRITE_BACK: u32 = 35;
 /// The gate the samples' raster is drawn through in a frame not drawn whole. It clears the
 /// claimed tiles to the far plane and leaves the rest at the nearest depth, where no box
-/// passes the depth test (gpu/ray/raster.rs).
+/// passes the depth test (ray/raster.rs).
 pub const PIPELINE_RASTER_MASK: u32 = 36;
 /// The gate the light's map is drawn through when only the listed casters that changed have
 /// moved. It lays the world's depth in the claimed tiles and raises their stencil
-/// (gpu/shadow.rs).
+/// (pass/shadow.rs).
 pub const PIPELINE_LIGHT_MASK: u32 = 37;
 /// Draws a character where it was and where it is, and each fragment sets its screen tile's
-/// word (gpu/pass/skinned_mesh.rs `draw_marks`).
+/// word (pass/skinned_mesh.rs `draw_marks`).
 pub const PIPELINE_SKINNED_MARK: u32 = 38;
 /// The same marks for decor, an impostor, the location indicator's zone and its beacon
-/// (gpu/pass/mark.rs `MarkPass`).
+/// (pass/mark.rs `MarkPass`).
 pub const PIPELINE_DECOR_MARK: u32 = 39;
 pub const PIPELINE_IMPOSTOR_MARK: u32 = 40;
 pub const PIPELINE_LOCATION_ZONE_MARK: u32 = 41;
 pub const PIPELINE_LOCATION_BEACON_MARK: u32 = 42;
 /// The camera grid over the canvas, after the debug gizmos' lines, while the frame's gizmo word
-/// is set (gpu/pass/debug.rs).
+/// is set (pass/debug.rs).
 pub const PIPELINE_CAMERA_GRID: u32 = 43;
 pub const PIPELINES: u32 = 44;
 
@@ -417,7 +417,7 @@ const fn screen(shader: u32) -> Header {
 }
 
 /// The air's bindings that every painter and the sky read, numbered alike in every pass that
-/// reads them (gpu/atmosphere.rs `entries`).
+/// reads them (pass/atmosphere.rs `entries`).
 const AIR: [[u32; 2]; 6] = [
     [8, UNIFORM],
     [9, TEXTURE],
@@ -425,11 +425,11 @@ const AIR: [[u32; 2]; 6] = [
     [13, TEXTURE],
     [18, TEXTURE],
     // The air's volume before each point, which is made from the bindings above
-    // (gpu/atmosphere.rs `froxel`).
+    // (pass/atmosphere.rs `froxel`).
     [22, TEXTURE_3D],
 ];
 /// The air's bindings the sky alone reads: the sky views, the sun's and the moon's, and the
-/// Earth's picture and tiles (gpu/atmosphere.rs `sky_entries`).
+/// Earth's picture and tiles (pass/atmosphere.rs `sky_entries`).
 const SKY_AIR: [[u32; 2]; 4] = [
     [10, TEXTURE],
     [15, TEXTURE],
@@ -563,7 +563,7 @@ const BOX_GROUP: [[u32; 2]; 13] = and(
     LIT_FRAME,
     [[3, STORAGE], [4, TEXTURE_ARRAY], [5, STORAGE], [6, SAMPLER]],
 );
-/// A draw's uniform, at a dynamic offset (gpu/pass/model.rs `UniformBuffer`). It and a draw's
+/// A draw's uniform, at a dynamic offset (pass/model.rs `UniformBuffer`). It and a draw's
 /// upload (`UPLOAD`) each have one layout wherever a draw binds them, so a group one owner
 /// makes binds in every pipeline that names it (gpu/generator.rs, gpu/upload.rs).
 const DRAW: [[u32; 2]; 1] = [[0, UNIFORM_DYNAMIC]];
@@ -587,8 +587,8 @@ const MODEL_GROUPS: [Group; 4] = [&LIT_FRAME, &DRAW, &SKIN, &UPLOAD];
 const DEPTH_GROUPS: [Group; 4] = [FRAME, MODEL_GROUPS[1], MODEL_GROUPS[2], MODEL_GROUPS[3]];
 /// The draw list's uniforms by slot, read-only. A character's draw and the beacon's read
 /// their uniform at the slot their first instance names (skinned_draw.slot.wgsl,
-/// location.slot.wgsl). Each pass makes one such group (gpu/pass/skinned_mesh.rs
-/// `SkinnedPass::set_draws`, gpu/pass/location.rs `LocationPass::set_draws`).
+/// location.slot.wgsl). Each pass makes one such group (pass/skinned_mesh.rs
+/// `SkinnedPass::set_draws`, pass/location.rs `LocationPass::set_draws`).
 const DRAWS: [[u32; 2]; 1] = [[0, STORAGE]];
 /// A character's groups, lit and for its depth from the light: a model's, except that its
 /// draw is read from the list's uniforms (`DRAWS`).
@@ -833,7 +833,7 @@ const fn desc_of(id: u32) -> Descriptor {
         ),
         // Each box's faces turned to the eye are drawn, and the reversed depth test keeps the
         // nearest face a pixel's ray enters. The pixel takes that face's voxel number, in a
-        // target of its own (gpu/ray/raster.rs). The vertex stage emits only the faces turned
+        // target of its own (ray/raster.rs). The vertex stage emits only the faces turned
         // to the eye, so no face is culled by its winding.
         PIPELINE_RASTER => Descriptor::new(
             Header {

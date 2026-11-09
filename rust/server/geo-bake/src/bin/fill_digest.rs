@@ -5,7 +5,7 @@
 //! `terrain::fill_fit`), each one line of what a reader reads of it: its
 //! levels' words, the child groups its tree took and holds, and its tree under
 //! each of its own nodes along z as a reader steps down it
-//! (pxl-engine `way::tree::cursor`), each node's holding, folding and
+//! (pxl-engine `way_tree::cursor`), each node's holding, folding and
 //! word, no child group's id. Two checkouts' lines over one set are a proof that
 //! a change left what the fill makes as it was.
 //!
@@ -25,7 +25,7 @@ use std::process::ExitCode;
 
 use fnv::FnvHasher;
 use pxl_engine::object::{self, NodeSlot, Table};
-use pxl_engine::way::tree::{self, Read};
+use pxl_engine::way_tree::{self, Read};
 use pxl_engine::{clipmap, fill};
 use pxl_geo_bake::pyramid::{Base, TileSet};
 use pxl_geo_bake::util::code_digest;
@@ -118,7 +118,7 @@ fn line(name: &str, k: u32, b: &FilledBrick<'_>) -> String {
     let (l, mut sub) = (Read(b.pool), FnvHasher::default());
     if nodes > 0 {
         for z in z0 - 2..z0 + nodes as i32 + 2 {
-            let slot = tree::cursor(&l, b.root, b.cell_zoom, top, [0, 0, z]);
+            let slot = way_tree::cursor(&l, b.root, b.cell_zoom, top, [0, 0, z]);
             walk(&l, slot, (top, b.cell_zoom), [0, 0, z], &mut sub);
         }
     }

@@ -25,7 +25,7 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 - **A query over what is drawn, for an agent to read.** An agent debugging the
   view guesses a pixel's cause from its color in a screenshot. The profiler's
   half is answered: the console's `pxl.perf.report()` gives its window as
-  text (`ts/client/src/ui/debug/console.ts`). What a screen point draws is
+  text (`ts/client/src/ui/feature/debug/console.ts`). What a screen point draws is
   not: the block its ray met, with its face, zoom and distance, and where that
   block was read from, asked of the running page and answered as text. The
   answer is the GPU's, the ray's words read back (`pxl-engine ray.rs`), since

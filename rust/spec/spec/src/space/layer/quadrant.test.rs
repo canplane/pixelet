@@ -1,0 +1,149 @@
+// pxl-spec/space/layer/quadrant.test.rs
+
+use super::*;
+use crate::space::coord::world::{nearest, ROUND};
+use crate::space::coord::zoom::UNIT_ZOOM;
+use crate::space::layer::lattice::Grid;
+use crate::space::layer::lattice::GROUND;
+use crate::space::layer::lattice::*;
+
+/// A cell is found from its own corner, and the cell `up` zooms coarser is the point's cell there.
+#[test]
+fn cell_from_point() {
+    let point = base_of(UNIT_ZOOM, [-1234, 5678, 0]);
+    for zoom in [LEAF_ZOOM, LEAF_ZOOM - 3, LEAF_ZOOM - 7] {
+        let cell = GROUND.cell_of(zoom, &point);
+        assert_eq!(cell.tile_zoom(), zoom);
+        assert_eq!(
+            GROUND.cell_of(zoom, &cell.base()),
+            cell,
+            "a cell is found from its own corner"
+        );
+        assert_eq!(
+            cell.up(2),
+            GROUND.cell_of(zoom - 2, &point),
+            "the cell over it"
+        );
+    }
+}
+
+/// Two lattices with equal cell sizes cut the same ground.
+#[test]
+fn lattice_cell_off() {
+    let coarse = Lattice::new(GROUND.cell_zoom(LEAF_ZOOM) - 2);
+    let point = base_of(UNIT_ZOOM, [-1234, 5678, 0]);
+    for zoom in [LEAF_ZOOM, 13] {
+        let (a, b) = (
+            coarse.cell_of(zoom, &point),
+            GROUND.cell_of(zoom - 2, &point),
+        );
+        assert_eq!(a.side(), b.side());
+        assert_eq!(a.base(), b.base());
+        assert_eq!(a.tile().zoom, b.tile().zoom + 2);
+        assert_eq!(coarse.tile_cells() * 4, GROUND.tile_cells());
+    }
+}
+
+/// `child_cells` inverts `parent_cell` in every lattice.
+#[test]
+fn parent_child_cells() {
+    let p = Quadrant::new(13, [-5, 7]);
+    let around = neighborhood(p);
+    assert!((0..4).all(|q| around[CHILDREN[q]] == p.children()[q]));
+    for lattice in [GROUND, Lattice::new(GROUND.cell_zoom(LEAF_ZOOM) - 4)] {
+        let n = lattice.tile_cells();
+        for q in 0..4 {
+            for (tx, ty) in [(0, 0), (1, 0), (n - 1, n - 1), (n / 2, 3), (7, n - 2)] {
+                let child = lattice.cell_idx(tx, ty);
+                let parent = lattice.parent_cell(q, child);
+                let (slot, cells) = lattice.child_cells(parent);
+                assert_eq!(slot, q, "the cells lie in the child tile the cell does");
+                assert_eq!(
+                    cells,
+                    [cells[0], cells[0] + 1, cells[0] + n, cells[0] + n + 1],
+                    "2×2 cells, row by row"
+                );
+                assert!(
+                    cells.contains(&child),
+                    "{child} folds from the cells at {}",
+                    cells[0]
+                );
+            }
+        }
+    }
+}
+
+/// X goes round the world and Y stops at the Mercator square's edge, and a
+/// stored X stands for an eye at its nearest copy.
+#[test]
+fn point_wrap_x_clamp_y() {
+    use crate::space::coord::world::{self, BOUNDS};
+    let half = ROUND / 2.0;
+    assert_eq!(
+        world::point(half + 3.0, BOUNDS.max[1] + 100.0, 0.0),
+        world::point(-half + 3.0, BOUNDS.max[1], 0.0)
+    );
+    assert_eq!(nearest(-half + 3.0, half - 1.0), half + 3.0);
+    assert_eq!(nearest(half - 1.0, -half + 3.0), -half - 1.0);
+    for zoom in [MIN_ZOOM, LEAF_ZOOM] {
+        let n = 1i32 << zoom;
+        assert_eq!(
+            Quadrant::new(zoom, [n / 2, 0]),
+            Quadrant::new(zoom, [-n / 2, 0])
+        );
+        assert!(!quad_rows(zoom).contains(&(n / 2)));
+    }
+}
+
+/// A Bundang tile, (11569, 3671): rows count from the south and a first
+/// digit is the signs. The bucket's keys are these names.
+const BUNDANG: [i32; 2] = [11569, 3671];
+const BUNDANG_NAME: &str = "010332102130223";
+
+#[test]
+fn known_tile_name() {
+    let leaf = Quadrant::new(LEAF_ZOOM, BUNDANG);
+    assert_eq!(leaf.key(), BUNDANG_NAME);
+    assert_eq!(Quadrant::of_key(BUNDANG_NAME), Some(leaf));
+}
+
+/// One prefix is one region at every zoom, and a name's length is its zoom.
+#[test]
+fn tile_name_prefix() {
+    for zoom in MIN_ZOOM..LEAF_ZOOM {
+        let coarse = Quadrant::over(zoom, BUNDANG).key();
+        assert_eq!(coarse.len(), zoom as usize);
+        assert!(BUNDANG_NAME.starts_with(&coarse), "z{zoom} {coarse}");
+    }
+}
+
+#[test]
+fn tile_name_round_trip() {
+    let n = 1i32 << LEAF_ZOOM;
+    for x in [-n / 2, -12345, -1, 0, 1, 11569, n / 2 - 1] {
+        for y in [-n / 2, -7777, -1, 0, 1, 3671, n / 2 - 1] {
+            for zoom in MIN_ZOOM..=LEAF_ZOOM {
+                let p = Quadrant::over(zoom, [x, y]);
+                assert_eq!(Quadrant::of_key(&p.key()), Some(p), "({x}, {y}) at z{zoom}");
+            }
+        }
+    }
+}
+
+#[test]
+fn bad_tile_name_refused() {
+    assert_eq!(Quadrant::of_key(""), None);
+    assert_eq!(Quadrant::of_key("4"), None, "a digit is a zoom's two bits");
+    assert_eq!(Quadrant::of_key("13211032031200a"), None);
+    assert_eq!(
+        Quadrant::of_key("-1321103203120"),
+        None,
+        "the digits carry the sign"
+    );
+    assert_eq!(
+        Quadrant::of_key(&"0".repeat(LEAF_ZOOM as usize + 1)),
+        None,
+        "nothing is finer than a leaf"
+    );
+    assert_eq!(Quadrant::of_key("0"), None, "coarser than the top");
+}

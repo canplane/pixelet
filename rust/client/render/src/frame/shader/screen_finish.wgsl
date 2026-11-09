@@ -1,6 +1,6 @@
 // pxl-render/frame/shader/screen_finish.wgsl
 
-// Finishes the canvas from the world's color (gpu/finish.rs). The world's passes fill every
+// Finishes the canvas from the world's color (pass/finish.rs). The world's passes fill every
 // pixel and leave their color toned and blended in linear light, and the world's own color is
 // gathered over frames (screen_resolve.wgsl). This pass brings that color from the world's
 // pixels up to the canvas's and encodes it, once (finish.wgsl `finish`). It carries the world's

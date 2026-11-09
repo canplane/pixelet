@@ -15,7 +15,7 @@
   generated command table alone.
 - What differs by platform is a file pair in `service/platform/` (`<x>.ts` the
   page's, `<x>.native.ts` the device's) or, for a piece of the UI, a file and
-  its override beside it (`ts/client/src/ui/component/README.md`).
+  its override beside it (`ts/client/src/ui/shared/component/README.md`).
 
 ## Working
 

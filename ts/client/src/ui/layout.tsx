@@ -4,12 +4,12 @@ import { Component, type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { BOOT_LOADING, BOOT_STARTED } from "@/abi/state.ts";
-import { useStanding } from "./cover/standing.ts";
-import { coverOf, UI_PANIC } from "./cover/cover.ts";
+import { useStanding } from "./feature/cover/standing.ts";
+import { coverOf, UI_PANIC } from "./feature/cover/cover.ts";
 import { ModalHost } from "./modal.tsx";
-import { Screen } from "./cover/screen.tsx";
-import { KeyboardAway } from "@/ui/component/keyboard.tsx";
-import { DockMode, setDockMode } from "@/ui/world/dock/store.ts";
+import { Screen } from "./feature/cover/screen.tsx";
+import { KeyboardAway } from "@/ui/shared/component/keyboard.tsx";
+import { DockMode, setDockMode } from "@/ui/feature/world/dock/store.ts";
 
 /** The world mounts once the core runs, and goes at a panic, because nothing
  * can be drawn or read behind one. */
@@ -20,7 +20,9 @@ function AppBody({ children }: { children: ReactNode }) {
   // (perf/measure.ts); any other build holds no way to.
   useEffect(() => {
     if (__PERF_DRIVE__ && standing.boot === BOOT_STARTED)
-      void import("@/ui/debug/perf/measure.ts").then((m) => m.measure());
+      void import("@/ui/feature/debug/perf/measure.ts").then((m) =>
+        m.measure(),
+      );
   }, [standing.boot]);
   const shows =
     (standing.boot === BOOT_LOADING || standing.boot === BOOT_STARTED) &&

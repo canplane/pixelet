@@ -11,8 +11,8 @@ pub(crate) mod io;
 pub(crate) mod load;
 #[path = "sys/machine.spec.rs"]
 pub mod machine;
-pub mod mem;
 pub(crate) mod sched;
+pub(crate) mod section;
 #[cfg(not(target_arch = "wasm32"))]
 mod unpack;
 

@@ -15,9 +15,6 @@
 //! it. There is one runtime a
 //! process, as there is one core, so its exports carry no program's prefix.
 
-#[cfg(target_os = "android")]
-pub mod jni;
-
 use core::ffi::c_void;
 use core::ptr::NonNull;
 use std::sync::mpsc::{channel, Sender};
@@ -359,12 +356,7 @@ macro_rules! native_abi {
         ) -> ::xpute_runtime::jni::sys::jint {
             // SAFETY: the environment and surface JNI called with.
             unsafe {
-                $crate::runtime::native::jni::bind(
-                    env,
-                    handle as u32,
-                    surface,
-                    xpute_gpu_native::bind,
-                )
+                $crate::runtime::jni::bind(env, handle as u32, surface, xpute_gpu_native::bind)
             }
         }
 
@@ -375,7 +367,7 @@ macro_rules! native_abi {
             _this: ::xpute_runtime::jni::sys::jobject,
             handle: ::xpute_runtime::jni::sys::jint,
         ) {
-            $crate::runtime::native::jni::unbind(handle as u32, xpute_gpu_native::unbind);
+            $crate::runtime::jni::unbind(handle as u32, xpute_gpu_native::unbind);
         }
     };
 }

@@ -17,14 +17,13 @@
 //! plus every tile the demand can name at once, so a view at rest always
 //! converges to exact tiles.
 
-pub mod floor;
-
 use fnv::FnvHashMap;
 use pxl_spec::bake::tile::Occupancy;
 
 use pxl_spec::space::layer::demand::demand_tiles;
 use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 
+use crate::domain::layer::floor;
 use crate::domain::layer::{AskScope, Base};
 
 /// The number of observers whose demand the cache is sized for: the eye alone.
@@ -127,7 +126,7 @@ impl<L: Base> TileCache<L> {
     };
 
     /// The tiles held hard apart from the view's demand: the floor
-    /// (tile_cache/floor.rs), a destination's line, and the tiles a reader
+    /// (layer/floor.rs), a destination's line, and the tiles a reader
     /// that cannot take a coarser answer declares (`Base::PIN_CAP`).
     const PINNED_TILES: u32 = match L::ASK_SCOPE {
         AskScope::Floor => floor::tiles(L::LATTICE),

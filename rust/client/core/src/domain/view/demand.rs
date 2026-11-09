@@ -5,7 +5,7 @@
 //! observation asks for, and in what order.
 //!
 //! A tile is asked for by the eye's demand (`ByEye`), by the floor
-//! (tile_cache/floor.rs), by a destination's line, or as an ancestor of a
+//! (layer/floor.rs), by a destination's line, or as an ancestor of a
 //! missing tile. A tile asked for several reasons keeps the strongest
 //! (`Priority`). The pixels drawn do not enter the asks, since the camera grid
 //! is an angle. Where a tile marks a child as no tile (`Base::occupancy`), the
@@ -32,7 +32,7 @@ use fnv::FnvHashMap;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
 
-use crate::domain::layer::tile_cache::floor;
+use crate::domain::layer::floor;
 use crate::domain::layer::tile_cache::{Path, TileCache};
 use crate::domain::query::ColumnWalk;
 use crate::domain::view::observation;

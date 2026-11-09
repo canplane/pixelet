@@ -71,7 +71,7 @@ met. Each layer holds what is demanded in its own tile cache (`tile_cache.rs`),
 which keeps four promises:
 
 - Every observation has an answer: the coarsest zoom the declaration supplies
-  whole is held all round the eye, the floor (`tile_cache/floor.rs`).
+  whole is held all round the eye, the floor (`layer/floor.rs`).
 - A tile is held hard for the floor or for demand while it is demanded, and as
   cache otherwise; only the hard set is correctness. The slots are counted at
   compile time and asserted to hold everything that can be held hard at once,

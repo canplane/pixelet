@@ -16,6 +16,7 @@ use tile_cache::TileCache;
 
 pub mod division;
 pub mod earth;
+pub mod floor;
 pub mod instance;
 pub mod object;
 pub mod place;
@@ -31,7 +32,7 @@ pub(in crate::domain) use query::Query;
 
 #[derive(Clone, Copy)]
 pub enum AskScope {
-    /// The floor alone (tile_cache/floor.rs).
+    /// The floor alone (layer/floor.rs).
     Floor,
     /// One line alone: the tiles over the division layer's pivot
     /// (`division::line`).

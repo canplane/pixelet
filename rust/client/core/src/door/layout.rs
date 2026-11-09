@@ -15,7 +15,7 @@ use crate::perf::record;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::param;
 use crate::sys::machine::MACHINE;
-use crate::sys::mem::section;
+use crate::sys::section;
 use pxl_render::gpu::api;
 use pxl_render::gpu::upload;
 use xpute_core::entry::BootInfo;
@@ -96,7 +96,7 @@ const fn body_block(stream: Stream) -> u64 {
 ///   read the runtime has not passed (sys/io/fetch.rs `Queue`), in the buddy's
 ///   block for the longest other kind, each freed once it is decoded or passed;
 /// - the ways' pool at its largest (domain/layer/terrain/pool.rs, pxl-engine
-///   way/tree.rs `POOL_CHILD_GROUPS`);
+///   way_tree.rs `POOL_CHILD_GROUPS`);
 /// - the profiler's lanes while its setting is on (perf/record.rs).
 ///
 /// The pool and the lanes sit in the buddy's power-of-two blocks. Each flow is

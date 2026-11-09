@@ -24,8 +24,6 @@
 //! floor, and the one root, a segment's direction, is rounded once by the CPU and handed to a
 //! GPU in a word (`Segment::dir`).
 
-pub mod tree;
-
 use crate::ground;
 use crate::param::way::BEAM_PILLAR_INTERVAL_M;
 use crate::param::way::DECK_THICKNESS_M;

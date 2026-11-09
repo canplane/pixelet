@@ -3,7 +3,7 @@
 //! two. A module comes as build.rs assembles it for the renderer, or from the file a mutant sweep
 //! names. A wait on the device fails the test after `WAIT`, because a shader may loop forever,
 //! and a dispatch the device stops short fails the test too. The runs of the cast here dispatch
-//! their passes in the order the renderer does (gpu/ray/cast.rs `walk_run`).
+//! their passes in the order the renderer does (ray/cast.rs `walk_run`).
 
 #![allow(dead_code, reason = "each test reads its own of it")]
 
@@ -200,7 +200,7 @@ impl Gpu {
         self.corners(true, world, node_cache);
     }
 
-    /// Runs one observer's holes as the cast runs them (gpu/ray/cast.rs `walk_run`). Two walks
+    /// Runs one observer's holes as the cast runs them (ray/cast.rs `walk_run`). Two walks
     /// read the node cache alone, and an ask follows each. The queue's hits are then copied into
     /// `node_cache` (`node_cache::HITS_ARGS`), as the cast copies them. The last walk runs after. `all` binds what any of the passes reads except the queue's words:
     /// the eye at 0, the world at 1, 2 and 4 to 7, the rays or the map at 3, the observer's list
@@ -227,7 +227,7 @@ impl Gpu {
         );
     }
 
-    /// Runs an observer's beam rays as the cast runs them (gpu/ray/cast.rs `walk_run`), the
+    /// Runs an observer's beam rays as the cast runs them (ray/cast.rs `walk_run`), the
     /// light's where `light` is set and the eye's otherwise. The passes and bindings follow
     /// `samples`.
     pub fn corners(
@@ -256,7 +256,7 @@ impl Gpu {
         self.lattice(ids, light, all, node_cache, None);
     }
 
-    /// Runs an observer's samples as the cast runs them (gpu/ray/cast.rs `walk_run`), the
+    /// Runs an observer's samples as the cast runs them (ray/cast.rs `walk_run`), the
     /// light's where `light` is set and the eye's otherwise. Two walks read the node cache
     /// alone, an ask follows each, and the last walk runs after. `all` binds what any of the
     /// passes reads except the queue's words: the eye at 0, the world at 1, 2 and 4 to 7, the
@@ -647,7 +647,7 @@ impl KindCount {
     }
 }
 
-/// A light's box as the renderer lays it (gpu/shadow.rs `aim`, `Shadow::starts`). The map is
+/// A light's box as the renderer lays it (pass/shadow.rs `aim`, `Shadow::starts`). The map is
 /// `size` texels a side, its middle lies at the Q3 position `origin`, and it looks along `dir`.
 /// A texel is `side` units wide, the near plane lies `back` units back along the light, and the
 /// rays reach `t_max`. `corner` is the world texel index of the box's texel (0, 0), and

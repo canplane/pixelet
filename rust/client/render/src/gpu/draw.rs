@@ -147,7 +147,7 @@ impl Position {
 pub const MODEL_VERTEX_WORDS: u32 = 16;
 
 /// Every pipeline a draw record may name, in the order a frame's draw stats count them
-/// (gpu/renderer.rs `FrameStat::draws`). The list draws with these alone.
+/// (renderer.rs `FrameStat::draws`). The list draws with these alone.
 pub const DRAW_PIPELINES: [u32; 9] = [
     PIPELINE_DECOR,
     PIPELINE_GHOST_BOX,
@@ -232,7 +232,7 @@ fn uniform(at: Position, words: &[(usize, f32)]) -> [f32; DRAW_FLOATS] {
 
 /// The draw that `DrawList::draw_scaled` lists, made here for a reader outside any list. Its
 /// record names uniform slot 0, as a reader that binds the uniform alone reads it
-/// (gpu/pass/character.rs).
+/// (pass/character.rs).
 #[expect(
     clippy::too_many_arguments,
     reason = "each argument is a word of the draw record it writes, as WebGPU's draw takes its counts"

@@ -101,7 +101,7 @@ pub mod ao {
     }
 }
 
-/// How finely the air is marched for its tables (gpu/atmosphere.rs). The transmittance,
+/// How finely the air is marched for its tables (pass/atmosphere.rs). The transmittance,
 /// multiple scattering and irradiance are made once a device. Each light's sky view and its
 /// share of the volume are made again when the light's height or the eye's altitude has moved
 /// half its step. The module also holds the altitude a sky view's slope is measured over.
@@ -240,7 +240,7 @@ pub mod noise {
     }
 }
 
-/// The location indicator's look in the world (gpu/pass/location.rs).
+/// The location indicator's look in the world (pass/location.rs).
 pub mod location {
     /// The zone of unit boxes about it (frame/shader/location_zone.wgsl). It is half
     /// transparent, so it reads as an indicator and not as a thing in the world.
@@ -335,7 +335,7 @@ pub mod sky {
             /// The most a star's light is drawn at.
             LIGHT_MAX: f32 = 4.0;
             /// The night sky's intensity at or under which no star is drawn
-            /// (gpu/star.rs `StarPass`).
+            /// (pass/star.rs `StarPass`).
             DRAWN_ABOVE: f32 = 0.001;
         }
     }

@@ -17,7 +17,8 @@ use pxl_engine::area;
 use pxl_engine::clipmap::{self as clip, Lookup, ACROSS, BRICK_SHIFT, FIRST_CELL_ZOOM, ORIGIN_AT};
 use pxl_engine::ground;
 use pxl_engine::object::{self, Cut, Table};
-use pxl_engine::way::{self, tree};
+use pxl_engine::way;
+use pxl_engine::way_tree;
 use pxl_engine::world::{self, Inheritance};
 use pxl_engine::{value, wrap_idx, Zoom, LEAF_CELL_ZOOM, SHARD_ZOOM};
 
@@ -99,7 +100,7 @@ fn descend(
         let a = object::ancestor_at(FINEST, point, FINEST - z);
         [wrap_idx(z, a[0]), a[1], a[2]]
     };
-    let pool = tree::Read(w.pool);
+    let pool = way_tree::Read(w.pool);
     let root = idx(start);
     let mut at = Inheritance::of(&w, (start, root));
     tally.add("root", true);
@@ -344,7 +345,7 @@ fn tell(
         }
     }
     if cuts != [Cut::NONE; 2] {
-        let (mut resident, mut plain, pool) = (w, before, tree::Read(w.pool));
+        let (mut resident, mut plain, pool) = (w, before, way_tree::Read(w.pool));
         let without = world::node(
             &mut resident,
             &w,

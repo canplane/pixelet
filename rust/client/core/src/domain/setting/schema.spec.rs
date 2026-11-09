@@ -97,7 +97,7 @@ impl OrbitObstacleMode {
 ///            (rust/client/render/src/frame/shader/screen_ray.wgsl).
 ///            A few taps of the rays a pixel, behind a uniform.
 ///   screen — N8AO
-///            (rust/client/render/src/gpu/ao.rs): the world's depth drawn
+///            (rust/client/render/src/pass/ao.rs): the world's depth drawn
 ///            once more, the occlusion sampled from it at half resolution,
 ///            denoised, and read by every lit surface. Five passes and 11
 ///            bytes a pixel. The corners' too, the darker of the two where
@@ -219,7 +219,7 @@ pub enum SettingKey {
     /// and this is the one to reach for before any shading term.
     decor = 1,
     /// The cumulus' models and the altocumulus and cirrus sheets
-    /// (rust/client/core/src/domain/scene/environment/cloud.rs, rust/client/render/src/gpu/cloud.rs).
+    /// (rust/client/core/src/domain/scene/environment/cloud.rs, rust/client/render/src/pass/cloud.rs).
     /// Med as decor is: models in view, and a pass over the screen for the sheets.
     clouds = 2,
     /// The places' markers over the world, from the published places tiles.
@@ -234,7 +234,7 @@ pub enum SettingKey {
     camera_mode = 5,
     /// The pivot stands on what supports it and a pan takes the lowest way over what is in it (control/support.rs). Off, a pan keeps the pivot's height and passes through anything; a tap still stands it on the surface it struck.
     surface_follow = 6,
-    /// Only `climb` goes into a tunnel (orbit/collision.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default.
+    /// Only `climb` goes into a tunnel (camera/collision.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default.
     orbit_obstacle = 7,
     /// Darkens cube edges that border open air (rust/client/render/src/frame/shader/paint.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.
@@ -242,7 +242,7 @@ pub enum SettingKey {
     /// A uniform on an already-compiled shader term; not a pass.
     rim_light = 9,
     ao = 10,
-    /// The shadow map (rust/client/render/src/gpu/shadow.rs): the world cast
+    /// The shadow map (rust/client/render/src/pass/shadow.rs): the world cast
     /// once more from the sun, or the moon where the sun is down, as the eye's
     /// rays are, none where neither is up; beams and samples on
     /// the node cache, the boxes they stop at drawn and a texel's sample
@@ -267,7 +267,7 @@ pub enum SettingKey {
     pet = 18,
     /// Each ray's pixel colored by the steps taken on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the steps of the beam ray its cell starts off (beam::LINE_STEPS) and its own after, or, where it took a voxel or the sky without a walk, those of the sample before it on the camera grid's lattice, counted the same way (beam::SAMPLE_STEPS_SHIFT; rust/client/render/src/frame/shader/cast.wgsl `taken_word`, queue.wgsl `finish`).
     ray_steps = 19,
-    /// Counts what the eye's cast and the sun's shadow map do: the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn. The GPU counts them and writes them into the profiler's ray lanes of the frame that counted them (rust/spec/engine/src/count.rs, rust/client/render/src/gpu/ray/count.rs). The counting's atomics run inside the cast's spans, so time the cast with this off.
+    /// Counts what the eye's cast and the sun's shadow map do: the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn. The GPU counts them and writes them into the profiler's ray lanes of the frame that counted them (rust/spec/engine/src/count.rs, rust/client/render/src/ray/count.rs). The counting's atomics run inside the cast's spans, so time the cast with this off.
     ray_cnts = 20,
     sky_time = 21,
 }

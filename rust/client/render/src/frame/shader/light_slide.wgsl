@@ -1,11 +1,11 @@
 // pxl-render/light_slide.wgsl
 
 // Drops what an earlier cast of the epoch left in a tile of the box where the box slid since,
-// a `TILE`-aligned corner at a time (gpu/shadow.rs `aim`), where the eye's zooms moved
+// a `TILE`-aligned corner at a time (pass/shadow.rs `aim`), where the eye's zooms moved
 // (`light::HEADER_LAST_RANGE`), or where the world under the tile changed. It runs one thread
 // for each tile, after the host moved the reads with the box, so each tile's word is the word
 // of the tile that held its world texels under the corner before (`light::HEADER_LAST_CORNER`;
-// gpu/ray/cast.rs `prepare`). A tile's read is set to none where the box slid onto the tile,
+// ray/cast.rs `prepare`). A tile's read is set to none where the box slid onto the tile,
 // where the slide or the zooms moved it into another band (`Light::keeps`), or where its rays
 // may meet a cell of its band over a column of the world that changed (`Light::reaches`,
 // `light::COLUMNS_AT`). The propagation then claims such a tile anew if a receiver reads it

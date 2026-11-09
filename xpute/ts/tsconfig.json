@@ -22,7 +22,7 @@
     "runtime",
     "gpu",
     "native",
-    "example",
+    "dev",
     "script",
     "vitest.config.ts",
     "vitest.setup.ts"

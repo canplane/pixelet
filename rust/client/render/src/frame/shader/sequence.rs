@@ -1,10 +1,10 @@
 // pxl-render/frame/shader/sequence.rs
 
 //! The frame's calls over the buffers that hold indirect counts, in the order the host encodes
-//! them (gpu/renderer.rs `frame`): the light's tiles' marks, then `RayPass::dispatch`, then
+//! them (renderer.rs `frame`): the light's tiles' marks, then `RayPass::dispatch`, then
 //! the shadow map's pass. Each call states its pipeline, the groups set for it and the buffers
-//! they view, and where it reads its count. Every indirect call in gpu/ray/cast.rs,
-//! gpu/ray/raster.rs, gpu/generator.rs and gpu/shadow.rs takes the place of its count from its
+//! they view, and where it reads its count. Every indirect call in ray/cast.rs,
+//! ray/raster.rs, gpu/generator.rs and pass/shadow.rs takes the place of its count from its
 //! step here, and those files name the steps in this order (sequence.test.rs). access.rs
 //! `check` refuses the hazards among the calls as the crate is built, and `KNOWN` names each
 //! hazard the frame holds today.
@@ -61,10 +61,10 @@ const STAGES: &[&str] = &[
 
 /// The render pipelines each render pass with an indirect draw draws. The groups of these
 /// pipelines are all the groups the pass sets. The passes are the eye's raster
-/// (gpu/ray/raster.rs `Raster::draw`), the light's raster (`Raster::light_draw`), the shadow
-/// map's pass (gpu/shadow.rs `Shadow::begin`, then the decor's and the characters' depth in
-/// gpu/renderer.rs `frame`), and the world's lit pass from its gate to the ghosts
-/// (gpu/renderer.rs `frame`).
+/// (ray/raster.rs `Raster::draw`), the light's raster (`Raster::light_draw`), the shadow
+/// map's pass (pass/shadow.rs `Shadow::begin`, then the decor's and the characters' depth in
+/// renderer.rs `frame`), and the world's lit pass from its gate to the ghosts
+/// (renderer.rs `frame`).
 pub const RASTER_PASS: &[u32] = &[PIPELINE_RASTER_MASK, PIPELINE_RASTER];
 pub const LIGHT_RASTER_PASS: &[u32] = &[PIPELINE_RASTER];
 pub const MAP_PASS: &[u32] = &[
@@ -89,8 +89,8 @@ pub const LIT_PASS: &[u32] = &[
     PIPELINE_GHOST_DECOR,
 ];
 
-/// The eye's raster draw of the record and its faces' pass (gpu/ray/raster.rs `Raster::draw`),
-/// then the cast of the pixels in the claimed tiles (gpu/ray/cast.rs `RayPass::dispatch`).
+/// The eye's raster draw of the record and its faces' pass (ray/raster.rs `Raster::draw`),
+/// then the cast of the pixels in the claimed tiles (ray/cast.rs `RayPass::dispatch`).
 pub const RASTER: Step =
     Step::draw_off("raster", IN_EYE, PIPELINE_RASTER, &[], (RASTER_ARGS, 0)).in_pass(RASTER_PASS);
 pub const FACE: Step = Step::dispatch_off(
@@ -107,7 +107,7 @@ pub const PX: Step = Step::dispatch_off(
     &[&PIXELS_BINDS],
     (CAST_TILES, 0),
 );
-/// The eye's holes' stops into the node cache's drawable entries (gpu/ray/raster.rs
+/// The eye's holes' stops into the node cache's drawable entries (ray/raster.rs
 /// `Raster::record_hits`). Their dispatch is first copied out of the node cache's head, because the
 /// stops bind the node cache writable and a call cannot read its count from a buffer a group
 /// set for it binds writable (access.rs rule 1).
@@ -154,7 +154,7 @@ pub const GENERATE: Step = Step::dispatch_off(
     &[&GENERATION_BINDS],
     (GENERATION_LIST, generation::GENERATE_ARGS),
 );
-/// The light's cast (gpu/ray/cast.rs `RayPass::dispatch`).
+/// The light's cast (ray/cast.rs `RayPass::dispatch`).
 pub const LIGHT_MARK_WALKED: Step = Step::dispatch(
     "light_mark_walked",
     IN_LIGHT,
@@ -196,7 +196,7 @@ pub const LIGHT_SAMPLE_BOX: Step = Step::dispatch_off(
     &[&LIGHT_SAMPLE_BOX_BINDS],
     (LIGHT_ARGS, light::ARGS_SAMPLE_BOX),
 );
-/// The light's raster draw of the record (gpu/ray/raster.rs `Raster::light_draw`).
+/// The light's raster draw of the record (ray/raster.rs `Raster::light_draw`).
 pub const LIGHT_RASTER: Step = Step::draw_off(
     "light_raster",
     IN_LIGHT,
@@ -212,7 +212,7 @@ pub const LIGHT_SLOTS: Step = Step::dispatch_off(
     &[&LIGHT_SLOTS_BINDS],
     (LIGHT_ARGS, light::ARGS_SLOT),
 );
-/// The light's holes' stops into the node cache's drawable entries (gpu/ray/raster.rs
+/// The light's holes' stops into the node cache's drawable entries (ray/raster.rs
 /// `Raster::light_record_hits`). Their dispatch is first copied out of the node cache's head,
 /// as the eye's is.
 pub const LIGHT_RECORD_HITS_DISPATCH: Step = Step::copy(
@@ -228,7 +228,7 @@ pub const LIGHT_RECORD_HITS: Step = Step::dispatch_off(
     &[&LIGHT_RECORD_HITS_BINDS],
     (LIGHT_RASTER_HITS, 0),
 );
-/// The shadow map's pass opens with one of two draws (gpu/shadow.rs `Shadow::begin`): its gate
+/// The shadow map's pass opens with one of two draws (pass/shadow.rs `Shadow::begin`): its gate
 /// over the box the marks cover, or the world's depth laid in the tiles the receivers read.
 pub const MAP_MASK: Step = Step::draw_off(
     "map_mask",
@@ -251,8 +251,8 @@ pub const MAP_LAY: Step = Step::draw_off(
 
 /// The draws of the generated decor: as depth into the shadow map, and in the world's lit pass
 /// with the impostors. Each is drawn whole off the generation's args, or through its gate off
-/// the args the gate's cull wrote, and the two run in place of each other (gpu/pass/decor.rs
-/// `draw_generated`, gpu/pass/impostor.rs `draw_generated`).
+/// the args the gate's cull wrote, and the two run in place of each other (pass/decor.rs
+/// `draw_generated`, pass/impostor.rs `draw_generated`).
 pub const DECOR_MAP: Step = Step::draw_regions(
     "decor_map",
     IN_MAP,
@@ -304,7 +304,7 @@ pub const IMPOSTOR_LIT_MASKED: Step = Step::draw_regions(
 .in_pass(LIT_PASS);
 
 /// The count of the stops the holes' walks listed, copied into the node cache's head before
-/// the last walk adds its own, where the stops' passes read it (gpu/ray/cast.rs `walk_run`).
+/// the last walk adds its own, where the stops' passes read it (ray/cast.rs `walk_run`).
 /// One copy is the eye's and one the light's.
 pub const HITS: Step = Step::copy(
     "hits",
@@ -504,7 +504,7 @@ pub const LIGHT_HOLES_CNT: Step = Step::copy(
 );
 
 /// More of the host's writes. The host sets the raster's draw args to none when the record's
-/// draw runs (gpu/ray/raster.rs `record_draw`), writes the node cache's asks and frame when
+/// draw runs (ray/raster.rs `record_draw`), writes the node cache's asks and frame when
 /// nothing casts, and writes the decor's boxes (gpu/generator.rs `prepare`).
 pub const OPEN_RASTER_DRAW_ARGS: Step = Step::write(
     "open_raster_draw_args",
@@ -525,7 +525,7 @@ pub const OPEN_GENERATION_RECTS: Step = Step::write(
     ),
 );
 /// The light's tiles' reads move with the box: they are copied out, then back in where the box
-/// slid them (gpu/ray/cast.rs `RayPass::dispatch`).
+/// slid them (ray/cast.rs `RayPass::dispatch`).
 pub const LIGHT_READS_OUT: Step = Step::copy(
     "light_reads_out",
     IN_LIGHT,
@@ -555,8 +555,8 @@ pub const FRAME: Frame = Frame {
     bounds: BOUNDS,
     persistent: PERSISTENT,
     steps: &[
-        // The host's writes as it prepares the frame (gpu/ray/cast.rs `RayPass::prepare`,
-        // gpu/ray/raster.rs `Raster::prepare`, `light_prepare`, `record_draw`, gpu/generator.rs
+        // The host's writes as it prepares the frame (ray/cast.rs `RayPass::prepare`,
+        // ray/raster.rs `Raster::prepare`, `light_prepare`, `record_draw`, gpu/generator.rs
         // `prepare`).
         OPEN_NODE_CACHE,
         OPEN_MARKS,
@@ -622,7 +622,7 @@ pub const FRAME: Frame = Frame {
             &[&CULL_LIGHT_BINDS],
         ),
         // The eye's cast: its beam rays, their cells, its samples, the draw of its record, and
-        // its pixels. First the run of its beam rays (gpu/ray/cast.rs `walk_run`).
+        // its pixels. First the run of its beam rays (ray/cast.rs `walk_run`).
         Step::dispatch(
             "corners",
             IN_EYE,
@@ -654,7 +654,7 @@ pub const FRAME: Frame = Frame {
             &[&LATTICE_LAST_BINDS],
         ),
         Step::dispatch("cell", IN_EYE, COMPUTE_CELL, &[&WORLD_BINDS]),
-        // The run of the eye's samples (gpu/ray/cast.rs `walk_run`).
+        // The run of the eye's samples (ray/cast.rs `walk_run`).
         Step::dispatch(
             "samples",
             IN_EYE,
@@ -780,7 +780,7 @@ pub const FRAME: Frame = Frame {
         CORNERS_CNT,
         SOURCES_CNT,
         DAMAGE_CNT,
-        // The run of the light's beam rays (gpu/ray/cast.rs `walk_run`).
+        // The run of the light's beam rays (ray/cast.rs `walk_run`).
         Step::dispatch(
             "light_corners",
             IN_LIGHT,
@@ -812,7 +812,7 @@ pub const FRAME: Frame = Frame {
             &[&LIGHT_LATTICE_LAST_BINDS],
         ),
         LIGHT_CELLS,
-        // The run of the light's samples (gpu/ray/cast.rs `walk_run`).
+        // The run of the light's samples (ray/cast.rs `walk_run`).
         Step::dispatch(
             "light_samples",
             IN_LIGHT,
@@ -928,7 +928,7 @@ const APPENDS: &[Range] = &[
 
 /// The copies that open a count before the passes that add to it. `hits` and `light_hits` copy
 /// the stops each observer's holes' walks over the node cache listed into the node cache's
-/// head, before the last walk adds its own (gpu/ray/cast.rs `walk_run`; queue.wgsl
+/// head, before the last walk adds its own (ray/cast.rs `walk_run`; queue.wgsl
 /// `keep_hit`). `receiver_tiles_back` and `read_count_back` copy back the stood list's args and
 /// the read list's count that the casts since the world's receivers were last stood afresh
 /// left, before this cast's receivers and propagation add to them.

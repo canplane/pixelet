@@ -5,7 +5,7 @@
 //! on the light box's near plane and runs along the light's rays to the far plane, walked
 //! through the same descent the eye's rays take. Every node is asked at its tile's band: the
 //! zoom the eye's rays ask at the point of the tile's column nearest the eye (`Light::band`).
-//! The ray leaves the depth a raster caster would (pxl-render gpu/shadow.rs, where the decor
+//! The ray leaves the depth a raster caster would (pxl-render pass/shadow.rs, where the decor
 //! and the characters are drawn into the same map).
 //!
 //! The world's depth is a clipmap: the light box's texels lie on a grid fixed in the world
@@ -98,7 +98,7 @@ pub fn slope(n: [f32; 3], across: [f32; 3], down: [f32; 3], deep: [f32; 3]) -> [
 }
 
 impl Light {
-    /// The light from the light box's inverse (pxl-render gpu/shadow.rs `aim`), which maps the
+    /// The light from the light box's inverse (pxl-render pass/shadow.rs `aim`), which maps the
     /// map's NDC to units from the eye by its columns: a texel's NDC `(x, y)` lies at
     /// `w + x·x + y·y` on the near plane, and `z` runs from the near plane to the far. The map is
     /// `size` texels a side, with row 0 at the top, as the lit passes read it. A hit's push is a
@@ -630,7 +630,7 @@ pub const fn header_layout(size: u32) -> [(usize, u32); HEADER_LAYOUT_WORDS] {
 }
 
 /// Where a texel's ray starts: the same point of the world in every frame cast in one light
-/// frame (pxl-render gpu/shadow.rs `aim`). Starts come from anchors `ANCHOR` texels apart on
+/// frame (pxl-render pass/shadow.rs `aim`). Starts come from anchors `ANCHOR` texels apart on
 /// the world's texel grid, each a start on the near plane worked out once on the host: its Q3
 /// position and what rounding to it left (`frac`), with a texel's step across and down in Q3
 /// steps. A start is the anchor's plus the steps from it, rounded, the same sum each frame
@@ -813,7 +813,7 @@ pub const fn corner_at(c: [u32; 2]) -> [i32; 2] {
 /// neighbor its linear compare filters in lies a texel each way, both along a diagonal. The
 /// distance is measured at the receiver's offset point, so its normal offset adds nothing;
 /// and the fade and `Light::read` both measure from the snapped box's middle, by its one
-/// matrix (pxl-render gpu/shadow.rs `aim`), so the snap adds nothing.
+/// matrix (pxl-render pass/shadow.rs `aim`), so the snap adds nothing.
 pub const READ_PAD: f32 = (SPREAD + FILTER) * SQRT_2;
 const FILTER: f32 = 1.0;
 
@@ -1028,7 +1028,7 @@ impl Light {
 /// (`LIST_SOURCES`), and the tiles claimed, whose slots it casts (`LIST_DAMAGE`). Then come
 /// the tiles a receiver stands on (`LIST_RECEIVERS`), the world's first and then the drawn
 /// receivers' (pxl-render light_mark.wgsl, light_mark_draws.wgsl), and the tiles a receiver
-/// reads, in which the map is laid (`LIST_READS`; light_propagate.wgsl, gpu/shadow.rs
+/// reads, in which the map is laid (`LIST_READS`; light_propagate.wgsl, pass/shadow.rs
 /// `Shadow::begin`). Each list holds its count, then its entries; the count is copied in once
 /// propagation is done (`ARGS_CNTS`).
 ///
@@ -1128,7 +1128,7 @@ pub const READS_FROM: u32 = 1;
 
 /// Past them, what a cast keeps for the next until the world's receivers are stood afresh
 /// (`HEADER_WORLD`), copied out once its propagation is done and back in as the next cast
-/// begins (pxl-render gpu/ray/cast.rs): the stood list's first `RECEIVER_TILES_CARRY` argument
+/// begins (pxl-render ray/cast.rs): the stood list's first `RECEIVER_TILES_CARRY` argument
 /// words, then the read list's count (`CARRY_READ`). The count kept is the number of stood
 /// tiles the casts before propagated, so a cast propagates only those stood after them
 /// (light_propagate.wgsl); it is none where they are stood afresh.
@@ -1589,7 +1589,7 @@ mod tests {
     /// A tile that a slide of the box keeps (`Light::keeps`) holds, word for word, what a fresh
     /// cast of it at its new place leaves; a tile the slide moved into another band is cast
     /// again, since a fresh cast there leaves other words. The rays' starts are the light frame's,
-    /// worked out once, as the host's anchors are (pxl-render gpu/shadow.rs `starts`).
+    /// worked out once, as the host's anchors are (pxl-render pass/shadow.rs `starts`).
     #[test]
     fn kept_tile_is_fresh_cast() {
         let (size, range) = (64, [UNIT_ZOOM - 3, UNIT_ZOOM]);

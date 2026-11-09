@@ -315,20 +315,20 @@ impl<'a> TrackedRenderPass<'a> {
 pub const MASKED_DEPTH: Format = Format::depth32float_stencil8;
 
 /// The format of the world's color as its passes leave it: toned, linear, and blended in place.
-/// The color is gathered over frames (gpu/resolve.rs) and encoded onto the canvas once
-/// (gpu/finish.rs). It is a float, so the color has no levels of its own, and the finish's
+/// The color is gathered over frames (pass/resolve.rs) and encoded onto the canvas once
+/// (pass/finish.rs). It is a float, so the color has no levels of its own, and the finish's
 /// dither works only between the levels the canvas has.
 pub const WORLD_COLOR: Format = Format::rgba16float;
 
 /// The most color targets a pipeline draws into. The finish draws into two: the canvas and the
-/// picture that the world's surface keeps (gpu/finish.rs).
+/// picture that the world's surface keeps (pass/finish.rs).
 pub const TARGETS: usize = 2;
 
 /// What a pipeline does with the stencil beside its depth (`MASKED_DEPTH`). In each tile, the
 /// stencil holds the number of the gated frame that last claimed the tile. `Unused` leaves the
 /// stencil alone. `Masked` passes only where the stencil holds the pass's reference, which is
 /// this frame's number; every draw of the world's pass is masked. `Mask` writes the reference,
-/// as the gate does (gpu/renderer.rs `frame`). A pass clears the stencil to 0 unless it keeps
+/// as the gate does (renderer.rs `frame`). A pass clears the stencil to 0 unless it keeps
 /// it (`PassDesc::load_stencil`), and WebGPU starts every pass with a reference of 0, so a pass
 /// with no gate passes everywhere.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1421,7 +1421,7 @@ impl Gpu {
     /// draws into `targets` color targets of `format`, at locations from 0, and into a depth
     /// of `depth`, with `stencil` saying what it does with the stencil beside the depth. Where
     /// `format` is `depth32float`, it draws into the depth alone and its fragment writes no
-    /// color, as the shadow map's does (gpu/shadow.rs). WebGPU makes it asynchronously: the
+    /// color, as the shadow map's does (pass/shadow.rs). WebGPU makes it asynchronously: the
     /// runtime stores `ticket` at `fence` once the pipeline is made, and nothing names the
     /// pipeline before then (gpu/pipeline.rs `PipelineCache::made`).
     pub fn pipeline(

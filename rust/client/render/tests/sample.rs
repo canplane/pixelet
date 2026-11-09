@@ -1525,7 +1525,7 @@ fn holes_answer(
         ..Default::default()
     });
     let eye_buf = gpu.buf(&observed.eye, wgpu::BufferUsages::UNIFORM);
-    // The eye's head is all zero, as the cast binds it (gpu/ray/cast.rs `eye_header`).
+    // The eye's head is all zero, as the cast binds it (ray/cast.rs `eye_header`).
     let header = gpu.buf(
         &vec![0u32; light::HEADER_WORDS],
         wgpu::BufferUsages::UNIFORM,
@@ -2150,7 +2150,7 @@ fn light_record_case(
 
 /// Runs the light's record draw over the node cache `cache` (record_draw.wgsl
 /// `light_record_draw_cs`), then the raster's draw of those boxes from the light onto the map
-/// of `observed`, with the light's view laid as the renderer lays it (gpu/ray/raster.rs
+/// of `observed`, with the light's view laid as the renderer lays it (ray/raster.rs
 /// `light_prepare`). Every texel that keeps a voxel must keep one whose box
 /// (`cast::asset_box`) the texel's own ray enters within its reach. That ray starts on the near
 /// plane and runs along the light. Where the device's rounding may decide the entry otherwise,

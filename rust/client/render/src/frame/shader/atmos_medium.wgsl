@@ -99,7 +99,7 @@ fn land_radius() -> f32 {
 }
 
 // How light `k`'s sky view and its share of the air's volume were laid
-// (gpu/atmosphere.rs `prepare`), `k` 0 for the sun and 1 for the moon. `x` is
+// (pass/atmosphere.rs `prepare`), `k` 0 for the sun and 1 for the moon. `x` is
 // how far under the level the horizon dips, in radians, seen from the eye's
 // radius they were drawn at. `y` and `z` are the near and far ends of the air's
 // depth law laid there, in km (`air_dist`).
@@ -107,7 +107,7 @@ fn view_layout(k: u32) -> vec3f {
   return select(atmos_sun_layout(), atmos_moon_layout(), k == 1u);
 }
 
-// Whether light `k` reaches the air by half a display level (gpu/atmosphere.rs
+// Whether light `k` reaches the air by half a display level (pass/atmosphere.rs
 // `REACH`). Only then are its view and its air drawn and read.
 fn reaches(k: u32) -> bool {
   return select(atmos_sun_reaches(), atmos_moon_reaches(), k == 1u) > 0.5;

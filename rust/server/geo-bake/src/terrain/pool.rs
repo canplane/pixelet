@@ -1,7 +1,7 @@
 // pxl-geo-bake/terrain/pool.rs
 
 //! Whether a set's ways' trees fit the client's pool wherever the eye is
-//! (pxl-engine `way::tree::POOL_CHILD_GROUPS`): a fact of the set, not of a
+//! (pxl-engine `way_tree::POOL_CHILD_GROUPS`): a fact of the set, not of a
 //! tile, as a window is a fixed grid of bricks about the eye laid at any
 //! brick, across tiles. Each brick's tree is built as a client builds it
 //! (pxl-spec `terrain::fill_fit`), once, as its tile is made, and what it
@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 
 use fnv::FnvHashMap;
 use pxl_engine::clipmap::{ACROSS, BRICK};
-use pxl_engine::way::tree::POOL_CHILD_GROUPS;
+use pxl_engine::way_tree::POOL_CHILD_GROUPS;
 use pxl_spec::bake::tile::terrain::{self, Fit};
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};

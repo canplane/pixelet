@@ -91,7 +91,7 @@
 //! it wrote (pxl-core domain/layer/object/store.rs `Store::write`, `set_fold`, `clear_fold`).
 //! The GPU is handed the cube as the columns of its leaf cells; past the room for them,
 //! columns are joined, never dropped (pxl-core domain/scene/decor/gpu.rs `note_edited`;
-//! gpu/ray/cast.rs `hold`). A write that names no cube, or that rewrites more child groups
+//! ray/cast.rs `hold`). A write that names no cube, or that rewrites more child groups
 //! than there is room for, forgets everything. A cell's answer reads the tree only along the
 //! cell's own path, and a write changes that path only within the cube and above it;
 //! `over_rect` on the cell's column catches both. `reads_written` forgets an entry that was

@@ -12,8 +12,8 @@ use crate::perf::spec::{FRAME, FRAME_GROUP, WORST};
 use crate::perf::word::{as_words, as_words_mut, words, zeroed, AsWords};
 use crate::sys::sched::param;
 use crate::turn::spec;
-use pxl_render::gpu::ray;
 use pxl_render::gpu::span_spec::GPU_SPAN_NAMES;
+use pxl_render::ray;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -56,7 +56,7 @@ impl Default for GpuSample {
 
 /// The renderer's upload table: how many uploads it holds, their bytes, and
 /// the bytes of its texture layers, as the renderer counts them (pxl-render
-/// gpu/renderer.rs `FrameStat`).
+/// renderer.rs `FrameStat`).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct DeviceSample {
@@ -119,7 +119,7 @@ pub struct FrameSample {
 }
 
 /// One frame's ray counts, which the renderer gathers while the `ray_cnts`
-/// setting is on (pxl-render gpu/ray/count.rs `RayCount`). The fields
+/// setting is on (pxl-render ray/count.rs `RayCount`). The fields
 /// follow the order of perf.json FRAME's `rays` group. For the eye they say
 /// whether it cast in full, how many pixels it cast, and its lane counts.
 /// For the light's map they say whether it cast, how many slots it cast,

@@ -22,7 +22,8 @@ use pxl_engine::fill;
 use pxl_engine::ground::{self, Resident};
 use pxl_engine::lattice::TILE_CELLS;
 use pxl_engine::object::{self, Table, BRANCH};
-use pxl_engine::way::{self, tree, Segment, StationGrid};
+use pxl_engine::way::{self, Segment, StationGrid};
+use pxl_engine::way_tree;
 use pxl_engine::world::{self, Inheritance};
 use pxl_engine::{value, wrap_idx, Zoom, FRAC_W, LEAF_CELL_ZOOM, SHARD_ZOOM};
 
@@ -664,10 +665,10 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
     let treed = (0..present_bricks as usize)
         .find(|&s| {
             let root = ground_words[s * words + ROOT_AT as usize];
-            let (first, z0) = tree::root_slot(root);
+            let (first, z0) = way_tree::root_slot(root);
             root != 0
                 && [-z0, -1 - z0].iter().any(|&k| {
-                    (0..8).contains(&k) && tree::Read(&pool).first_child(first + k as u32) != 0
+                    (0..8).contains(&k) && way_tree::Read(&pool).first_child(first + k as u32) != 0
                 })
         })
         .expect("a brick whose tree lies about sea level");
@@ -920,7 +921,7 @@ impl Query for Asking<'_> {
     }
 
     fn child(&mut self, at: &Inheritance, zoom: Zoom, node: [i32; 3]) -> Inheritance {
-        at.child(&self.w, &tree::Read(self.w.pool), (zoom, node))
+        at.child(&self.w, &way_tree::Read(self.w.pool), (zoom, node))
     }
 
     fn node(
@@ -931,7 +932,7 @@ impl Query for Asking<'_> {
         zooms: [Zoom; 2],
         _: f32,
     ) -> In<[u32; 2]> {
-        let pool = tree::Read(self.w.pool);
+        let pool = way_tree::Read(self.w.pool);
         let mut resident = self.w;
         world::node(
             &mut resident,
@@ -955,7 +956,7 @@ pub fn truth(
     c: [i32; 3],
     zooms: [Zoom; 2],
 ) -> (In<[u32; 2]>, [u32; 4]) {
-    let pool = tree::Read(w.pool);
+    let pool = way_tree::Read(w.pool);
     let mut resident = w;
     let mut at = Inheritance::of(&w, (zoom, c));
     let a = world::node(

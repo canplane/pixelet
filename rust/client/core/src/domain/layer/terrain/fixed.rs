@@ -12,7 +12,7 @@
 use pxl_engine::clipmap::{
     BRICK_CELLS, BRICK_WORDS, LINES_WORDS, SPANS_WORDS, WAYS_BRICK_SEGMENTS,
 };
-use pxl_engine::way::tree::{BRICK_CHILD_GROUPS, CHILD_GROUP_WORDS};
+use pxl_engine::way_tree::{BRICK_CHILD_GROUPS, CHILD_GROUP_WORDS};
 use pxl_spec::bake::separation::{MAX_LINES, MAX_POINTS};
 use pxl_spec::bake::tile::terrain::ELE_COLUMN;
 

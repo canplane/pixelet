@@ -50,7 +50,7 @@ export const SLOT_BYTES: u32 = 256 as number;
 export const STREAM_WORDS: u32 = 256 as number;
 
 /** The size of the stack a module core is linked with, which comes first in its memory
- * (rust/conformance/build.rs, cpp/Makefile). */
+ * (rust/dev/conformance/build.rs, cpp/Makefile). */
 export const STACK_BYTES: u32 = 1048576 as number;
 
 /** The size of the core's heap, which lies in a range of its own. The memory a runtime hands

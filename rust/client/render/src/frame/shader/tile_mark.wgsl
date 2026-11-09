@@ -1,6 +1,6 @@
 // pxl-render/frame/shader/tile_mark.wgsl
 
-// Marks the tiles a changed draw covers, from the draw's own fragments (gpu/pass/mark.rs
+// Marks the tiles a changed draw covers, from the draw's own fragments (pass/mark.rs
 // `MarkPass`). The draw is drawn where it was and where it is, each time with the frame's words
 // it was or is drawn with (group 0's `frame_words`), its jitter among them, so its fragments
 // are the pixels it covered then and covers now. Its vertices are placed as its depth pass

@@ -2,7 +2,7 @@
 # for measuring (`PXL_PERF_DRIVE=1`) from nothing and hands `measure` the lines
 # it says; `measure` writes the result into <dir>: values.json, report.txt and
 # trace.json, which ui.perfetto.dev opens. The scenario and the values are the
-# app's (ts/client/src/ui/debug/perf/measure.ts).
+# app's (ts/client/src/ui/feature/debug/perf/measure.ts).
 
 import json
 import os
