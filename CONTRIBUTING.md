@@ -100,9 +100,11 @@ make -j8 test
 ```
 
 `check` and `test` hold pixelet's code; each also has a target per tree, such
-as `check-ts` or `test-rust`. `./script/diff-check.py` runs only the checks and
-tests of what the working tree's changes reach. A deploy adds `check-build`, the
-bundle a deploy builds; xpute's own `check-xpute` and `test-xpute`; and
+as `check-ts` or `test-rust`. `./script/diff-check.py [base]` runs only the
+checks and tests of what changed since `base` reaches (the working tree's
+changes by default), and `--list` names them without running them. A deploy
+adds `check-build`, the bundle a deploy builds; xpute's own `check-xpute` and
+`test-xpute`; and
 `test-gpu`, the renderer's passes on this machine's GPU. A change to xpute's GPU
 encoder or runtime also takes `make -C xpute test-gpu`, which needs a GPU and
 Chrome. `make fmt` formats.

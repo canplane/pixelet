@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 # `make check` and `make test`, narrowed to what changed since `base` (HEAD
 # by default, the working tree's changes; a commit or branch to take what was
-# committed since it too): a crate when it or a dependency changed, TypeScript
-# by its tree. One selection drives both.
+# committed since it too): a crate when it, a file it reads or a dependency
+# changed, TypeScript by its tree. One selection drives both. `--list` prints
+# the selection and runs nothing.
 #
-#   ./script/diff-check.py [base]
+#   ./script/diff-check.py [--list] [base]
 
+import itertools
 import json
 import re
 import subprocess
@@ -23,7 +25,10 @@ def git(*args: str) -> list[str]:
 
 
 # --no-renames: a file moved out of a crate touches the crate it left.
-base = sys.argv[1] if len(sys.argv) > 1 else "HEAD"
+args = sys.argv[1:]
+listing = "--list" in args
+args = [a for a in args if a != "--list"]
+base = args[0] if args else "HEAD"
 changed = sorted(set(git("diff", "--name-only", "--no-renames", base)) | set(git("ls-files", "--others", "--exclude-standard")))
 present = [path for path in changed if (ROOT / path).is_file()]
 
@@ -47,6 +52,22 @@ for path in changed:
     own = next((name for name, d in crate_dirs if path.startswith(d)), None)
     if own:
         touched.add(own)
+    # What under rust/ is no crate's (the lock, the aliases, the workspace) builds them all.
+    elif path.startswith("rust/"):
+        touched |= {name for name, _ in crate_dirs}
+# A crate reads what its sources name: a module by `#[path]`, and a file of the
+# repository by its path from the root (`PXL_REPO`, pxl-tool `root`).
+tops = {path.split("/")[0] for path in git("ls-files")} - {"rust"}
+under_root = "(?:" + "|".join(map(re.escape, sorted(tops))) + ")/"
+named = re.compile(r'(?:"(?:\.\./)*|PXL_REPO"\),\s*"/)(' + under_root + r'[^"\s]*)"')
+module = re.compile(r'#\[path = "([^"]+)"\]')
+for name, d in crate_dirs:
+    for source in (ROOT / d).rglob("*.rs"):
+        text = source.read_text(errors="replace")
+        reads = [m.rstrip("/") for m in named.findall(text)]
+        reads += [relative(str((source.parent / m).resolve())) for m in module.findall(text)]
+        if any(path == r or path.startswith(r + "/") for r in reads for path in changed):
+            touched.add(name)
 # xpute's crates are no member here, but its path dependencies are.
 for p in packages:
     for d in p["dependencies"]:
@@ -67,15 +88,22 @@ with open(RUST / ".cargo/config.toml", "rb") as f:
     aliases: dict[str, list[str]] = tomllib.load(f).get("alias", {})
 
 
-def rust(verb: str) -> list[list[str]]:
-    """The cargo commands of the aliases `verb` begins (`lint-`, `test-`),
-    each spelled out and its packages narrowed to the touched ones; none that
-    names no touched one."""
+def recipe(target: str) -> str:
+    """The Makefile's recipe for `target`."""
+    lines = (ROOT / "Makefile").read_text().split("\n")
+    at = next(k for k, line in enumerate(lines) if line.startswith(target + ":")) + 1
+    return "\n".join(itertools.takewhile(lambda line: line.startswith("\t"), lines[at:]))
+
+
+def rust(target: str) -> list[list[str]]:
+    """The cargo commands of the aliases `target`'s recipe runs, each spelled
+    out and its packages narrowed to the touched ones; none that names no
+    touched one."""
     out = []
-    for name, alias in aliases.items():
-        if not name.startswith(verb):
+    for name in re.findall(r"cargo ([\w-]+)", recipe(target)):
+        if name not in aliases:
             continue
-        args = ["cargo", *alias]
+        args = ["cargo", *aliases[name]]
         kept: list[str] = []
         any_kept = False
         i = 0
@@ -109,25 +137,24 @@ def task(name: str) -> None:
     runs.append((name, ["make", name], ROOT))
 
 
-def cargo(verb: str) -> None:
-    for argv in rust(verb):
+def cargo(target: str) -> None:
+    for argv in rust(target):
         runs.append((" ".join(argv[:2]), argv, RUST))
 
 
 fmt_rust = [arg for name in sorted(touched & members) for arg in ("-p", name)]
 # ts/client imports xpute's TypeScript, and every app and the Worker the client.
-xpute = under("xpute/")
+# What `make check` and `make test` leave to a deploy (the bundle, xpute's own
+# checks and tests, the GPU's) is not selected here either.
 ts = under("ts/") or under("xpute/ts/")
 
 if ts:
     task("check-ts")
 if fmt_rust:
     runs.append(("cargo fmt", ["cargo", "fmt", "--check", *fmt_rust], RUST))
-cargo("lint-")
+cargo("check-rust")
 if under("spec/") or any(".spec." in path for path in changed) or "pxl-tool" in touched:
     task("check-spec")
-if under("ts/client/") or under("ts/server/edge/") or under("xpute/ts/") or "pxl-core" in touched:
-    task("check-build")
 # Each formatted file under ts/, by its config; what lies outside the trees is not formatted.
 formatted = [path for path in present if re.search(r"\.(ts|tsx|js|json|jsonc|md)$", path)]
 for tree in ["ts/"]:
@@ -135,19 +162,18 @@ for tree in ["ts/"]:
     if own:
         runs.append((f"fmt {tree}", ["node_modules/.bin/prettier", "--check", *own], ROOT / tree))
 task("check-rules")
-if xpute:
-    task("check-xpute")
 
 # The tests of what the same selection reached.
 # The shader test compiles the shaders with Tint.
 if under("ts/client/") or under("ts/tool/shader/") or under("xpute/ts/") or under("rust/client/render/src/frame/shader/"):
     task("test-ts")
-if xpute:
-    task("test-xpute")
-cargo("test-")
+cargo("test-rust")
 
 print(f"diff-check: {len(changed)} changed file(s); crates {', '.join(sorted(touched)) or 'none'}")
 for label, argv, cwd in runs:
+    if listing:
+        print("  " + " ".join(argv))
+        continue
     print(f"diff-check: {label}", flush=True)
     status = subprocess.run(argv, cwd=cwd).returncode
     if status != 0:
