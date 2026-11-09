@@ -122,3 +122,33 @@ fn a_body_is_drawn_clear_of_the_wall_beside_it() {
         [5.5, 3.25]
     );
 }
+
+#[test]
+fn a_body_is_held_off_a_wall_by_the_width_of_a_cell() {
+    use crate::domain::layer::object::store::Store;
+    use crate::domain::query::change::Memo;
+    use crate::domain::query::test::{flat_at_five, placed, write};
+    use crate::domain::scene::character::companion::{drawn_at, Camera};
+    use pxl_spec::asset::{cube, AssetId};
+    use pxl_spec::bake::constant::OBJECT_COARSEST;
+    use pxl_spec::space::coord::world;
+    let _g = sys::serial();
+    let [x, y] = flat_at_five();
+    let mut store = Store::default();
+    let wall = cube::Object::red as AssetId;
+    write(&mut store, [x + 1.0, y, 5.0], OBJECT_COARSEST, wall);
+    placed(store);
+    let at = [x + 0.9, y + 0.5];
+    let camera = Camera {
+        pivot: at,
+        floor: Some(5.0),
+        azimuth: 0.0,
+        dragging: false,
+        steered: false,
+        following: false,
+        eye: world::point(at[0], at[1] - 3.0, 8.0),
+    };
+    let mut memo = Memo::NONE;
+    let [drawn_x, drawn_y, _] = drawn_at(&mut memo, at, 5.0, 0.25, &camera);
+    assert_eq!([drawn_x, drawn_y], [x + 0.75, y + 0.5]);
+}
