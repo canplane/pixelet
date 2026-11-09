@@ -487,7 +487,7 @@ fn ray_goes_on_from_the_last() {
         access.along(
             &ray(z, 1.0),
             detail,
-            Until::Clear,
+            Until::Passable,
             u32::MAX,
             &mut path,
             &mut descent,

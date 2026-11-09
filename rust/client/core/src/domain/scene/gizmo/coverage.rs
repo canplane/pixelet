@@ -29,7 +29,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_core::global::Global;
 
-use crate::domain::layer::terrain::clipmap::{eye_bricks, Drawn, EyeBrick};
+use crate::domain::layer::terrain::clipmap::{eye_bricks, BrickCover, EyeBrick};
 use crate::domain::layer::Base as _;
 use crate::domain::query::World;
 use crate::domain::scene::gizmo::debug_line::DebugMesh;
@@ -241,7 +241,7 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
             continue;
         };
         let pz = brick::bricks_zoom(cell_zoom);
-        for EyeBrick { at: p, tile, drawn } in bricks {
+        for EyeBrick { at: p, tile, cover } in bricks {
             let r2 = near(rect((pz, p)));
             if r2 > o.demand_dist * o.demand_dist
                 || cell_zoom_at(r2 as f32).clamp(FIRST_CELL_ZOOM, LEAF_CELL_ZOOM) < cell_zoom
@@ -252,8 +252,8 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
             if (0..4).all(|c| read.contains(&(pz + 1, [2 * p[0] + (c & 1), 2 * p[1] + (c >> 1)]))) {
                 continue;
             }
-            let mark = match drawn {
-                Drawn::Cells {
+            let mark = match cover {
+                BrickCover::Cells {
                     cell_zoom: c,
                     tile: from,
                 } => {
@@ -264,9 +264,9 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
                         false => Mark::Drawn,
                     }
                 }
-                Drawn::Nothing { finest: None } => Mark::NoTile,
-                Drawn::Nothing { finest: Some(s) } if floor_only(s) => Mark::FloorOnly,
-                Drawn::Nothing { finest: Some(_) } => Mark::Unbuilt,
+                BrickCover::Nothing { finest: None } => Mark::NoTile,
+                BrickCover::Nothing { finest: Some(s) } if floor_only(s) => Mark::FloorOnly,
+                BrickCover::Nothing { finest: Some(_) } => Mark::Unbuilt,
             };
             out.bricks.push(((pz, p), mark));
         }

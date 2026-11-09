@@ -105,7 +105,7 @@ impl World {
     }
 
     /// `i`, what the layers answer of `at`'s node asked down to `near`
-    /// (`World::composed`), with the decor standing in it. `relief` is the
+    /// (`World::layer_node`), with the decor standing in it. `relief` is the
     /// ground's bound the layers read over the node. Where `near` is coarser
     /// than a leaf cell, no decor stands. A cell at the leaves' zoom or finer
     /// that the layers leave void is the decor whose box claims it, if any
@@ -175,7 +175,7 @@ impl World {
         let bottom = i64::from(c[2]) << (GROUND.leaf_cell_zoom() - zoom);
         let grows = relief
             .is_some_and(|[ground, ways]| bottom <= i64::from(ground[1].max(ways[1]) + TALLEST))
-            && (0..DECORS.len()).any(|k| counted(k, (zoom, [c[0], c[1]])));
+            && (0..DECORS.len()).any(|k| may_stand(k, (zoom, [c[0], c[1]])));
         let z = zoom.min(CLAIM_ZOOM);
         let a = c.map(|v| v >> (zoom - z));
         let lanes = self.object.columns();
@@ -198,9 +198,9 @@ impl World {
 
     /// Whether `ray` enters the box of the decor claiming the node `(zoom,
     /// c)`, a leaf cell or finer.
-    pub(super) fn entered(&self, ray: &Ray, node: Node<3>) -> bool {
+    pub(super) fn ray_enters_decor(&self, ray: &Ray, node: Node<3>) -> bool {
         self.decor_over(node)
-            .and_then(|i| nearest_box(&cells(&i)?, ray.origin[0]).enters(ray.origin, ray.dir))
+            .and_then(|i| nearest_box(&cell_box(&i)?, ray.origin[0]).enters(ray.origin, ray.dir))
             .is_some()
     }
 
@@ -210,7 +210,7 @@ impl World {
     /// claims it.
     fn decor_at(&self, cell: [i32; 3]) -> Option<Instance> {
         let middle = cell.map(|v| f64::from(v) + 0.5);
-        let claims = |i: &Instance| cells(i).is_some_and(|b| b.holds(middle));
+        let claims = |i: &Instance| cell_box(i).is_some_and(|b| b.holds(middle));
         let near = Aabb {
             min: std::array::from_fn(|k| f64::from(cell[k] - CLAIM_EXTENT[k])),
             max: cell.map(|v| f64::from(v + 1)),
@@ -228,7 +228,7 @@ impl World {
         met.or_else(|| {
             DECORS.iter().enumerate().find_map(|(k, d)| {
                 let w = d.row.widest() as i32;
-                counted(k, over).then_some(())?;
+                may_stand(k, over).then_some(())?;
                 (0..w * w).find_map(|n| {
                     let corner = [cell[0] - n % w, cell[1] - n / w];
                     generated_at(&mut DecorWorld::new(self), d, corner, true)
@@ -260,7 +260,7 @@ pub(super) fn report_claims((zoom, c): Node<3>) {
 /// `zoom` where a box as wide as its widest may stand and reach the column
 /// `c`. A zoom coarser than its counts' root does not tell (pxl-content
 /// `scatter::cnt`, `ROOTS`).
-fn counted(k: usize, (zoom, c): (Zoom, [i32; 2])) -> bool {
+fn may_stand(k: usize, (zoom, c): (Zoom, [i32; 2])) -> bool {
     let s = GROUND.leaf_cell_zoom() - zoom;
     let back = (DECORS[k].row.widest() as i32 - 1 + (1 << s) - 1) >> s;
     zoom < ROOTS[k]
@@ -275,7 +275,7 @@ pub(super) fn claim(i: &Instance) -> Option<Aabb> {
 /// `claim` raised to the cell it stands in, where a generated one's base sinks
 /// into the cell under it as its model is drawn on a top kept short of its
 /// cube.
-pub(super) fn cells(i: &Instance) -> Option<Aabb> {
+pub(super) fn cell_box(i: &Instance) -> Option<Aabb> {
     let c = claim(i)?;
     let rise = i.generated_in().map_or(0.0, |g| f64::from(g[2]) - c.min[2]);
     Some(c.moved([0.0, 0.0, rise]))

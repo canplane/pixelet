@@ -4,7 +4,7 @@
 //! tiles and clipmap bricks whose answer moved, by identity, which fixes their
 //! contents, and the boxes where objects were written. A reader that keeps an answer asks again
 //! only when one of these touches the columns it read, which its queries
-//! report (`Footprint`). A change so reaches only the readers of the ground
+//! report (`ReadRect`). A change so reaches only the readers of the ground
 //! it touches.
 
 use crate::domain::layer::object::store;
@@ -92,12 +92,12 @@ fn touched(xy: [[f64; 2]; 2], layer: &[Quadrant], counted: impl Fn(&Quadrant) ->
 /// cell. Those queries report here, and a memo's ask takes what it
 /// read from here (`Memo::of`).
 #[derive(Clone, Copy, Default)]
-struct Footprint(Option<[[f64; 2]; 2]>);
+struct ReadRect(Option<[[f64; 2]; 2]>);
 
-static FOOTPRINT: Global<Footprint> = Global::new();
+static READ_RECT: Global<ReadRect> = Global::new();
 
-fn footprint() -> &'static mut Footprint {
-    FOOTPRINT.get(Footprint::default)
+fn read_rect() -> &'static mut ReadRect {
+    READ_RECT.get(ReadRect::default)
 }
 
 /// Reports the cells of `zoom` that the box from `a` to `b` lies in as read.
@@ -116,7 +116,7 @@ pub(super) fn report_read(a: [f64; 2], b: [f64; 2], zoom: Zoom) {
 /// Reports the columns `cells` as read, moved onto the lap of the first
 /// column read.
 fn join(cells: [[f64; 2]; 2]) {
-    let f = footprint();
+    let f = read_rect();
     f.0 = Some(match f.0 {
         None => cells,
         Some(c) => {
@@ -130,7 +130,7 @@ fn join(cells: [[f64; 2]; 2]) {
 }
 
 /// An answer a step got from the world, kept with the key it was asked for
-/// and the columns it read (`Footprint`), their corners in units. It is
+/// and the columns it read (`ReadRect`), their corners in units. It is
 /// asked again only when the key changes, or when a change to the ground or
 /// the objects touched those columns (`forget_touched`). An answer that read
 /// nothing is not kept, since no change would ever tell it to go.
@@ -187,9 +187,9 @@ impl<K: PartialEq, A: Copy> Memo<K, A> {
                 return *a;
             }
         }
-        let outer = core::mem::take(footprint());
+        let outer = core::mem::take(read_rect());
         let a = ask();
-        let read = core::mem::replace(footprint(), outer);
+        let read = core::mem::replace(read_rect(), outer);
         self.0 = read.0.map(|columns| {
             join(columns);
             (of, columns, a)

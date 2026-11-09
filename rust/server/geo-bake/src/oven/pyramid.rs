@@ -26,7 +26,7 @@ pub(super) async fn resolve(
     if p.zoom < top {
         return Err(Failure::Unavailable);
     }
-    if p.zoom > data.row.tile.leaf {
+    if p.zoom > data.row.tile_row.leaf {
         return Ok(None);
     }
     bake_missing(data, runner, p, true).await?;
@@ -46,7 +46,7 @@ fn bake_missing(
                 if !d.coverage.meets(p.zoom, p.at) {
                     return d.cache.publish(&p.key(), None).map_err(Failure::from);
                 }
-                if p.zoom < d.row.tile.leaf {
+                if p.zoom < d.row.tile_row.leaf {
                     for below in (d.row.sources)(p) {
                         time::timeout_at(
                             lease.deadline,

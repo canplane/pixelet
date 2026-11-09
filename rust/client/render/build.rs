@@ -843,7 +843,7 @@ fn decor_word() -> String {
         ("HEADER_WORDS", g::HEADER_WORDS),
         ("CNT_AT", g::CNT_AT),
         ("SLOTS_AT", g::SLOTS_AT),
-        ("BRICK_RECORDS", g::BRICK_RECORDS),
+        ("BRICK_RECORD_CAP", g::BRICK_RECORD_CAP),
         ("UNGENERATED", g::UNGENERATED),
         ("TURN_SHIFT", g::TURN_SHIFT),
         ("VARIANT_SHIFT", g::VARIANT_SHIFT),

@@ -23,7 +23,7 @@ use crate::answer::{
     box_of, fill_eighths, side, transparent, val, In, Kind, BOX_BITS, BOX_STEPS, EMPTY,
 };
 use crate::axis;
-use pxl_spec::asset::id::blocks_body;
+use pxl_spec::asset::id::solid;
 use pxl_spec::share::EIGHTHS;
 use pxl_spec::space::camera::grid::cell_zoom_at;
 use pxl_spec::space::coord::q3::FRAC_W;
@@ -124,7 +124,7 @@ const _: () = assert!(
 pub const SQRT_6: f32 = 2.449_489_8;
 
 /// Which cell a ray stops at: the first an eye cannot see through (`answer::transparent`), as
-/// an eye sees (`Opaque`); the first that stops a body (pxl-spec `id::blocks_body`), as a body
+/// an eye sees (`Opaque`); the first that stops a body (pxl-spec `id::solid`), as a body
 /// moves (`Solid`); the first a body passes, where what a body climbs out of ends (`Clear`);
 /// or, for a beam ray of the camera grid, the first an eye cannot see through or the first
 /// split too narrow to hold one of the grid's rays for certain (`narrow`), with the box of
@@ -135,7 +135,7 @@ pub const SQRT_6: f32 = 2.449_489_8;
 #[repr(u32)]
 pub enum Until {
     Opaque,
-    Clear,
+    Passable,
     Beam,
     Solid,
 }
@@ -956,8 +956,8 @@ pub fn walk_at_most<Q: Query>(
             // Whether the cell is one `until` stops at.
             let stops = match until {
                 Until::Opaque | Until::Beam => !transparent(i.asset[0]),
-                Until::Solid => blocks_body(val(i.asset[0])),
-                Until::Clear => !blocks_body(val(i.asset[0])),
+                Until::Solid => solid(val(i.asset[0])),
+                Until::Passable => !solid(val(i.asset[0])),
             };
             let end = match i.kind {
                 Kind::Lacks => End::Lacks,
@@ -983,7 +983,7 @@ pub fn walk_at_most<Q: Query>(
                     }
                 }
                 Kind::Cell
-                    if stops && (!inside || until == Until::Clear || until == Until::Beam) =>
+                    if stops && (!inside || until == Until::Passable || until == Until::Beam) =>
                 {
                     End::Hit
                 }
@@ -1004,12 +1004,12 @@ pub fn walk_at_most<Q: Query>(
                         0.0
                     };
                     let narrow = beam && narrow(side * side, width * width);
-                    let meets =
-                        until != Until::Clear && meets_box(if beam { NARROW * width } else { 0.0 });
+                    let meets = until != Until::Passable
+                        && meets_box(if beam { NARROW * width } else { 0.0 });
                     into = if beam {
                         meets && !narrow
                     } else {
-                        until == Until::Clear || meets
+                        until == Until::Passable || meets
                     };
                     if meets && narrow {
                         End::Hit

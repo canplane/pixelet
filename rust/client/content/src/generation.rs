@@ -38,7 +38,7 @@ pub const RUN: u32 = 16;
 
 /// The most decor one brick generates, all decors together: each decor's capacity
 /// (`cap`), laid in the catalog's order.
-pub const BRICK_RECORDS: u32 = {
+pub const BRICK_RECORD_CAP: u32 = {
     let (mut sum, mut k) = (0, 0);
     while k < ROWS.len() {
         sum += cap(&ROWS[k]);
@@ -49,7 +49,7 @@ pub const BRICK_RECORDS: u32 = {
 
 /// The most records any one decor holds in a brick (`cap`), over which `decor_cs` is
 /// dispatched.
-pub const DECOR_RECORDS: u32 = {
+pub const DECOR_RECORD_CAP: u32 = {
     let (mut most, mut k) = (0, 0);
     while k < ROWS.len() {
         let cap = cap(&ROWS[k]);
@@ -87,7 +87,7 @@ const _: () = assert!(
 );
 
 /// The GPU's decor in one buffer of words: a head for each eye entry, then each entry's
-/// `BRICK_RECORDS` records, then placed decor's head and its records. An entry's records are
+/// `BRICK_RECORD_CAP` records, then placed decor's head and its records. An entry's records are
 /// each decor's in turn, as many as it retained (`entry_record`); a decor generated again lays
 /// its own anew. A head holds the brick the records were generated for, X and Y, and 1 once
 /// they were, so that an entry whose brick the clip levels do not hold there any more is
@@ -97,13 +97,13 @@ pub const CNT_AT: u32 = 3;
 pub const HEADER_WORDS: u32 = CNT_AT + ROWS.len() as u32;
 pub const SLOTS_AT: u32 = EYE_ENTRIES * HEADER_WORDS;
 /// The records all the entries hold, which come before placed decor's.
-pub const SLOT_RECORDS: u32 = EYE_ENTRIES * BRICK_RECORDS;
+pub const SLOT_RECORDS: u32 = EYE_ENTRIES * BRICK_RECORD_CAP;
 pub const PLACED_HEADER: u32 = SLOTS_AT + SLOT_RECORDS * RECORD_WORDS;
 pub const PLACED_HEADER_WORDS: u32 = 4;
 
 /// The runs of records a decor pass's workgroup reads (decor_run.wgsl `run_of`): for an
 /// entry, `RUN` records each; for placed decor, one record each.
-pub const RUNS: u32 = BRICK_RECORDS / RUN;
+pub const RUNS: u32 = BRICK_RECORD_CAP / RUN;
 
 /// Entry `s`'s head.
 pub const fn header_at(s: u32) -> u32 {
@@ -129,7 +129,7 @@ pub fn first_record(rows: &[Row], k: u32) -> u32 {
 /// Entry `s`'s `i`-th record of `rows`' decor `k`, as a record number
 /// (`record_at`).
 pub fn entry_record(rows: &[Row], s: u32, k: u32, i: u32) -> u32 {
-    s * BRICK_RECORDS + first_record(rows, k) + i
+    s * BRICK_RECORD_CAP + first_record(rows, k) + i
 }
 
 /// Record `n`'s first word, numbering the entries' records first, entry by entry, then

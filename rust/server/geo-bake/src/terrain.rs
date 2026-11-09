@@ -23,7 +23,7 @@ impl Base for TerrainTile {
     /// (pxl-spec `BaseLayer::row`).
     fn encode(&self, at: Quadrant) -> Result<Vec<u8>, String> {
         let pkt = terrain::encode(self).map_err(|e| format!("{}: {e:?}", at.key()))?;
-        let cap = Self::LAYER.row().max_pkt_bytes;
+        let cap = Self::LAYER.row().pkt_cap;
         if pkt.len() > cap {
             return Err(format!("tile {} size {} > {cap}", at.key(), pkt.len()));
         }

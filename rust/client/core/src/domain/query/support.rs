@@ -192,7 +192,7 @@ impl<'w> SplitCell<'w> {
     fn lift(&mut self, mut z: f64) -> f64 {
         loop {
             let top = (0..self.across * self.across)
-                .map(|k| match self.meet(k, z, BOUNDS.max[2], Until::Clear) {
+                .map(|k| match self.meet(k, z, BOUNDS.max[2], Until::Passable) {
                     Answer::Exact(None) => BOUNDS.max[2],
                     Answer::Exact(Some(b)) | Answer::Coarser(Some(b), _) if b.min[2] > z => {
                         self.top_under(k, b.min[2]).max(z)

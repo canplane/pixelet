@@ -114,7 +114,7 @@ impl Stream {
     /// have none, because only the heap bounds them.
     pub const fn max_body(self) -> Option<u32> {
         match self.bake() {
-            Some(layer) => Some(layer.row().max_pkt_bytes as u32),
+            Some(layer) => Some(layer.row().pkt_cap as u32),
             None => None,
         }
     }

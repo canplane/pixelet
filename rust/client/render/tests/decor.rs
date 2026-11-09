@@ -10,7 +10,7 @@ use pxl_spec::brick;
 use pxl_spec::share::EIGHTHS;
 use std::collections::{BTreeMap, BTreeSet};
 
-use pxl_content::generation::{self, drawn, DecorQuery, BRICK_RECORDS, RECORD_WORDS};
+use pxl_content::generation::{self, drawn, DecorQuery, BRICK_RECORD_CAP, RECORD_WORDS};
 use pxl_content::{halve, scatter};
 use pxl_engine::answer::{self, In};
 use pxl_engine::cast::Line;
@@ -659,7 +659,7 @@ impl Gpu<'_> {
         let records = make(init, store);
         let list = make(list, store);
         let eye_buf = make(eye_words, wgpu::BufferUsages::UNIFORM);
-        let x = generation::DECOR_RECORDS.div_ceil(generation::LANES);
+        let x = generation::DECOR_RECORD_CAP.div_ceil(generation::LANES);
         let mut e = d.create_command_encoder(&Default::default());
         let bind = |p: &wgpu::ComputePipeline, at: &[(u32, &wgpu::Buffer)]| {
             let entries: Vec<_> = at
@@ -882,7 +882,7 @@ fn differ(name: &str, by: &str, got: &[u32], e: &Expected) -> u64 {
                 } else {
                     let rec = (k as u32 - generation::SLOTS_AT) / RECORD_WORDS;
                     (
-                        rec / BRICK_RECORDS,
+                        rec / BRICK_RECORD_CAP,
                         (k as u32 - generation::SLOTS_AT) % RECORD_WORDS,
                     )
                 };
@@ -2434,7 +2434,7 @@ fn list_header(frame: &Frame) -> Vec<u32> {
     list[generation::THIN_ARGS as usize] = BRICK_CELLS.div_ceil(generation::LANES);
     list[generation::THIN_ARGS as usize + 1] = 1;
     list[generation::GENERATE_ARGS as usize] =
-        generation::DECOR_RECORDS.div_ceil(generation::LANES);
+        generation::DECOR_RECORD_CAP.div_ceil(generation::LANES);
     list[generation::GENERATE_ARGS as usize + 1] = 1;
     list[generation::LIST_EVERY as usize] = frame.every as u32;
     list[generation::LIST_RECTS as usize] = frame.boxes.len() as u32;

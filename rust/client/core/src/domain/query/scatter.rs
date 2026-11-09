@@ -27,7 +27,7 @@ use crate::domain::layer::object::store;
 use crate::domain::layer::Answer;
 
 /// The world as decor's generation asks it on the CPU (pxl-engine
-/// `DecorQuery`): what the layers compose under the decor (`World::composed`),
+/// `DecorQuery`): what the layers compose under the decor (`World::layer_node`),
 /// of the base and as edited, since a decor is generated from what lies under
 /// it, and what is placed (`lanes`).
 pub(super) struct DecorWorld<'a> {
@@ -80,7 +80,7 @@ impl DecorQuery for DecorWorld<'_> {
     /// shows where one is held, as far as its tiles are held.
     fn asset(&mut self, f: &ColumnSurface<At>, zoom: Zoom, c: [i32; 3], edited: bool) -> u32 {
         let answer = if edited {
-            self.world.asset_at(World::composed, (zoom, c))
+            self.world.asset_at(World::layer_node, (zoom, c))
         } else {
             self.base.asset_about(&f.line, zoom, c)
         };

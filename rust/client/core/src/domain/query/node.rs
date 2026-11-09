@@ -86,8 +86,8 @@ pub(super) struct At {
 
 /// What a reader asks of the world at a node: its answer with the decor
 /// standing in it (`World::node`), or, under decor's generation, what the
-/// layers compose under the decor (`World::composed`).
-pub(super) type Ask = fn(&World, &mut At, [Zoom; 2], &mut Path) -> Answer<In<[u32; 2]>>;
+/// layers compose under the decor (`World::layer_node`).
+pub(super) type NodeFn = fn(&World, &mut At, [Zoom; 2], &mut Path) -> Answer<In<[u32; 2]>>;
 
 impl World {
     /// The object store's revision, which every write moves
@@ -119,13 +119,13 @@ impl World {
     /// it, asked at that zoom, or void where it is air or void. Each source
     /// finds what it needs down the node's line from the top. The cell's
     /// column is reported as read (`change::report_read`).
-    pub(super) fn asset_at(&self, ask: Ask, node: Node<3>) -> Answer<u32> {
+    pub(super) fn asset_at(&self, node_fn: NodeFn, node: Node<3>) -> Answer<u32> {
         let (zoom, c) = node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
         let side = units(zoom);
         let middle = [c[0], c[1]].map(|v| (f64::from(v) + 0.5) * side);
         change::report_read(middle, middle, zoom);
-        ask(
+        node_fn(
             self,
             &mut self.start(node),
             [zoom, zoom],
@@ -153,10 +153,10 @@ impl World {
 
     /// What is in `at`'s node, asked over `zooms`, the zooms from far to
     /// near that a reader asks within it: this is the world's one query. What
-    /// the layers compose (`composed`), with the decor standing in it
+    /// the layers compose (`layer_node`), with the decor standing in it
     /// (`with_decor`), which only the CPU answers. So a tree the ground grew
     /// and a tree someone planted are one thing to whatever asks, each asker
-    /// deciding by what the asset is (pxl-spec `id::blocks_body`).
+    /// deciding by what the asset is (pxl-spec `id::solid`).
     pub(super) fn node(
         &self,
         at: &mut At,
@@ -170,7 +170,7 @@ impl World {
     /// What the layers compose in `at`'s node (`layers`), under the decor
     /// standing in it: what decor's own generation stands on and asks
     /// (domain/query/scatter.rs).
-    pub(super) fn composed(
+    pub(super) fn layer_node(
         &self,
         at: &mut At,
         zooms: [Zoom; 2],

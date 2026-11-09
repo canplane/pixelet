@@ -3,13 +3,13 @@
 //! The first cell a ray meets, at the zoom its distance asks. The descent is
 //! pxl-engine's (`cast::first`), the same one the GPU's cast runs. Here the
 //! world answers it from everything it holds, each node handed what its
-//! parent found (`Walker`), the decor standing in a cell among it. What stops
+//! parent found (`CastWorld`), the decor standing in a cell among it. What stops
 //! a ray is the asker's: a body passes a decor and an eye stops at it
 //! (`Until`).
 
 use super::change;
-use super::decor::cells;
-use super::node::{coarsest, Ask, At};
+use super::decor::cell_box;
+use super::node::{coarsest, At, NodeFn};
 use super::world::World;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::tile_cache::Path;
@@ -123,15 +123,15 @@ pub struct Hit {
 
 /// The world as the descent asks it, with what only the CPU carries along
 /// a ray: the first tile lacked, and whether any node was answered.
-pub(super) struct Walker<'w> {
+pub(super) struct CastWorld<'w> {
     world: &'w World,
-    ask: Ask,
+    node_fn: NodeFn,
     /// Of what the ground generates, the decors the asker sees, one bit a
     /// decor in `DECORS`' order. Any other is air to it.
     decors: u32,
     /// An eye's ray. What it starts inside is not met, and a decor is its
     /// whole box, so a decor whose box the ray does not enter is air to it.
-    eye: Option<&'w Ray>,
+    eye_ray: Option<&'w Ray>,
     lack: Option<Quadrant>,
     answered: bool,
     /// The ground's lines the walk read. Each node's line steps on from them
@@ -175,7 +175,7 @@ impl Keep<At> for KeepDescent<'_> {
     }
 }
 
-impl Walker<'_> {
+impl CastWorld<'_> {
     /// `v`, what the walk met or none, as what the walk held says: exact where
     /// it lacked nothing, nothing with the first tile lacked where it met
     /// nothing and no node answered, and otherwise coarser with that tile.
@@ -188,7 +188,7 @@ impl Walker<'_> {
     }
 }
 
-impl Query for Walker<'_> {
+impl Query for CastWorld<'_> {
     type At = At;
 
     fn root(&mut self, node: [i32; 3]) -> At {
@@ -215,7 +215,7 @@ impl Query for Walker<'_> {
         zooms: [Zoom; 2],
         _: f32,
     ) -> In<[u32; 2]> {
-        let answer = match (self.ask)(self.world, at, zooms, &mut self.path) {
+        let answer = match (self.node_fn)(self.world, at, zooms, &mut self.path) {
             Answer::Nothing(l) => {
                 self.lack.get_or_insert(l);
                 return In {
@@ -240,8 +240,8 @@ impl Query for Walker<'_> {
         let unseen = !answer::is_placed(answer.asset[0]) && self.decors >> k & 1 == 0;
         if unseen
             || self
-                .eye
-                .is_some_and(|ray| !self.world.entered(ray, at.node))
+                .eye_ray
+                .is_some_and(|ray| !self.world.ray_enters_decor(ray, at.node))
         {
             return In {
                 kind: Kind::Cell,
@@ -276,7 +276,7 @@ impl World {
     /// asks where it meets it (pxl-engine `cast::first`). The ray starts at
     /// its origin, which may stand off the world, as an eye over it does
     /// (pxl-spec `world::origin`). Of what the ground generates, it sees
-    /// `decors` (`Walker::decors`). The tiles' lines step on from `path`, the
+    /// `decors` (`CastWorld::decors`). The tiles' lines step on from `path`, the
     /// ground's lines that a walk beside this ray read over the same tile
     /// cache, and are left there for the next ray. A walk from the origin
     /// `descent` names goes on from where that one ended, its asker holding
@@ -290,15 +290,15 @@ impl World {
         path: &mut Path,
         descent: &mut Option<Descent>,
     ) -> Answer<Option<Hit>> {
-        let mut walker = Walker {
+        let mut query = CastWorld {
             world: self,
-            ask: if until == Until::Opaque {
+            node_fn: if until == Until::Opaque {
                 World::node
             } else {
-                World::composed
+                World::layer_node
             },
             decors,
-            eye: (until == Until::Opaque).then_some(ray),
+            eye_ray: (until == Until::Opaque).then_some(ray),
             lack: None,
             answered: false,
             path: *path,
@@ -313,21 +313,14 @@ impl World {
             .and_then(|e| Some((e.start(&from)?, e.line)));
         let mut keep = KeepDescent(descent, q);
         let trace = match on {
-            Some((start, line)) => cast::walk(
-                &mut walker,
-                q,
-                &from,
-                detail,
-                until,
-                start,
-                &line,
-                &mut keep,
-            ),
-            None => cast::walk_from_root(&mut walker, q, &from, detail, until, &mut keep),
+            Some((start, line)) => {
+                cast::walk(&mut query, q, &from, detail, until, start, &line, &mut keep)
+            }
+            None => cast::walk_from_root(&mut query, q, &from, detail, until, &mut keep),
         };
-        *path = walker.path;
+        *path = query.path;
         let hit = (trace.end == End::Hit).then(|| self.hit(ray, q, until, trace.hit));
-        walker.answer(hit)
+        query.answer(hit)
     }
 
     /// The column surface down column `g` at `cell_zoom` (pxl-engine
@@ -341,12 +334,12 @@ impl World {
         cell_zoom: Zoom,
         g: [i32; 2],
     ) -> (Answer<Option<(i32, f32)>>, ColumnSurface<At>) {
-        let mut walker = self.walker();
+        let mut query = self.cast_world();
         let side = units(cell_zoom);
         let middle = g.map(|v| (f64::from(v) + 0.5) * side);
         change::report_read(middle, middle, cell_zoom);
-        let f = support::column_surface(&mut walker, cell_zoom, g);
-        (walker.answer((f.end == End::Hit).then_some(f.top)), f)
+        let f = support::column_surface(&mut query, cell_zoom, g);
+        (query.answer((f.end == End::Hit).then_some(f.top)), f)
     }
 
     /// What is in the cell `c` at `zoom`, asked off the line `l`
@@ -354,21 +347,21 @@ impl World {
     /// on the line that holds the cell, never again from the top. Where the
     /// world lacks the cell, the answer is nothing with the missing tile.
     pub(super) fn asset_about(&self, l: &Line<At>, zoom: Zoom, c: [i32; 3]) -> Answer<u32> {
-        let mut walker = self.walker();
-        let val = support::asset(&mut walker, l, zoom, c);
-        match walker.lack {
+        let mut query = self.cast_world();
+        let val = support::asset(&mut query, l, zoom, c);
+        match query.lack {
             None => Answer::Exact(val),
             Some(t) => Answer::Nothing(t),
         }
     }
 
-    /// A walker of what the layers compose under the decor.
-    fn walker(&self) -> Walker<'_> {
-        Walker {
+    /// A query of what the layers compose under the decor.
+    fn cast_world(&self) -> CastWorld<'_> {
+        CastWorld {
             world: self,
-            ask: World::composed,
+            node_fn: World::layer_node,
             decors: u32::MAX,
-            eye: None,
+            eye_ray: None,
             lack: None,
             answered: false,
             path: Path::default(),
@@ -401,7 +394,7 @@ impl World {
         // stops at the cell of a decor it may stand inside.
         if until == Until::Opaque && kind_of(answer::val(s.asset[0])) == Some(id::Kind::decor) {
             let i = self.decor_over((zoom, c)).or_bug(Errno::ENOTRECOVERABLE);
-            let cube = nearest_box(&cells(&i).or_bug(Errno::ENOTRECOVERABLE), ray.origin[0]);
+            let cube = nearest_box(&cell_box(&i).or_bug(Errno::ENOTRECOVERABLE), ray.origin[0]);
             let (t, k) = cube
                 .enters(ray.origin, ray.dir)
                 .unwrap_or((f64::from(s.t), axis));

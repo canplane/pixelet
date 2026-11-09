@@ -69,12 +69,12 @@ pub struct Row {
     /// The most bytes a packet of it takes: what a client may hold one in,
     /// and refuses one past. The Earth's follows from its lanes; every other
     /// kind's is a room its bake refuses a tile past.
-    pub max_pkt_bytes: usize,
+    pub pkt_cap: usize,
 }
 
 impl BaseLayer {
     pub const fn row(self) -> Row {
-        let (lattice, leaf, max_pkt_bytes) = match self {
+        let (lattice, leaf, pkt_cap) = match self {
             BaseLayer::terrain => (GROUND, LEAF_ZOOM, terrain::MAX_PKT_BYTES),
             BaseLayer::place => (place::PLACE_LATTICE, LEAF_ZOOM, place::MAX_PKT_BYTES),
             BaseLayer::division => (GROUND, division::DIVISION_LEAF, division::MAX_PKT_BYTES),
@@ -83,7 +83,7 @@ impl BaseLayer {
         Row {
             lattice,
             leaf,
-            max_pkt_bytes,
+            pkt_cap,
         }
     }
 }

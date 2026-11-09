@@ -367,7 +367,7 @@ impl Generator {
             put(generation::THIN_ARGS + 1, 1);
             put(
                 generation::GENERATE_ARGS,
-                generation::DECOR_RECORDS.div_ceil(generation::LANES),
+                generation::DECOR_RECORD_CAP.div_ceil(generation::LANES),
             );
             put(generation::GENERATE_ARGS + 1, 1);
             put(generation::LIST_EVERY, u32::from(self.stale));

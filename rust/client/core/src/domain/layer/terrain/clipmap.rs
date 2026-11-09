@@ -742,11 +742,11 @@ fn eye_level(w: &Clipmap, cell_zoom: Zoom) -> Option<u32> {
 pub(in crate::domain) struct EyeBrick {
     pub at: [i32; 2],
     pub tile: Quadrant,
-    pub drawn: Drawn,
+    pub cover: BrickCover,
 }
 
 /// What is drawn in a brick's place.
-pub(in crate::domain) enum Drawn {
+pub(in crate::domain) enum BrickCover {
     /// The cells of `cell_zoom` that answer there, and the tile they lie in.
     Cells { cell_zoom: Zoom, tile: Quadrant },
     /// No cells are held there. `finest` is the finest tile held over the
@@ -769,20 +769,20 @@ pub(in crate::domain) fn eye_bricks(cell_zoom: Zoom) -> Option<[EyeBrick; ENTRIE
     Some(core::array::from_fn(|s| {
         let at = w.table.entries[(clip_level * ENTRIES) as usize + s].brick;
         let tile = tile_of(cell_zoom, at).0;
-        let drawn = match (FIRST_CELL_ZOOM..=cell_zoom)
+        let cover = match (FIRST_CELL_ZOOM..=cell_zoom)
             .rev()
             .map(|c| (c, at.map(|v| v >> (cell_zoom - c))))
             .find(|&(c, q)| present(c, q))
         {
-            Some((c, q)) => Drawn::Cells {
+            Some((c, q)) => BrickCover::Cells {
                 cell_zoom: c,
                 tile: tile_of(c, q).0,
             },
-            None => Drawn::Nothing {
+            None => BrickCover::Nothing {
                 finest: TerrainTile::tile_cache().line(tile).finest_resident,
             },
         };
-        EyeBrick { at, tile, drawn }
+        EyeBrick { at, tile, cover }
     }))
 }
 

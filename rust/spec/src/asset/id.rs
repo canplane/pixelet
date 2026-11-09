@@ -40,7 +40,7 @@ impl Kind {
 /// Whether an asset stops a body: a cube does, and so does an id in a cube's
 /// range that the catalog does not give out; void and air, a decor and a
 /// marker do not.
-pub const fn blocks_body(id: AssetId) -> bool {
+pub const fn solid(id: AssetId) -> bool {
     id != value::VOID && id != value::AIR && id >> IDX_BITS == Kind::cube as u32
 }
 
@@ -61,10 +61,10 @@ mod tests {
     #[test]
     fn what_blocks_a_body() {
         for id in [value::VOID, value::AIR, 1 << IDX_BITS, 2 << IDX_BITS] {
-            assert!(!blocks_body(id), "{id}");
+            assert!(!solid(id), "{id}");
         }
         for id in [1, value::UNKNOWN, value::AIR + 1, (1 << IDX_BITS) - 1] {
-            assert!(blocks_body(id), "{id}");
+            assert!(solid(id), "{id}");
         }
     }
 }

@@ -59,15 +59,15 @@ fn queries_report_the_columns_they_read() {
     let _serial = sys::serial();
     let [x, y] = flat_at_five();
     let world = placed(Store::default());
-    *footprint() = Footprint::default();
+    *read_rect() = ReadRect::default();
     let cell = units(GROUND.leaf_cell_zoom());
     let at = [x + 0.5 * cell, y + 0.5 * cell];
     let c = at.map(|v| libm::floor(v / cell) * cell);
     world.surface_support(&point(at[0], at[1], 0.0));
-    assert_eq!(footprint().0, Some([c, c.map(|v| v + cell)]));
+    assert_eq!(read_rect().0, Some([c, c.map(|v| v + cell)]));
     let from = point(at[0], at[1], over(5.0));
     world.step_slide(&from, &point(at[0] + 3.0 * cell, at[1], 0.0), true);
-    assert_eq!(footprint().0, Some([c, [c[0] + 4.0 * cell, c[1] + cell]]));
+    assert_eq!(read_rect().0, Some([c, [c[0] + 4.0 * cell, c[1] + cell]]));
 }
 
 /// A memo keeps what a cell's asset answers and asks again when a change

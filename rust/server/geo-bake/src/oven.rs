@@ -30,7 +30,7 @@ use job::{Limit, Runner};
 /// are, the tiles a fold reads and a job's bake.
 struct Row {
     kind: BaseLayer,
-    tile: tile::Row,
+    tile_row: tile::Row,
     sources: fn(Quadrant) -> Vec<Quadrant>,
     execute: fn(Quadrant, &Path, &Path, u64) -> Result<(), String>,
 }
@@ -45,7 +45,7 @@ fn row(kind: BaseLayer) -> Option<Row> {
     };
     Some(Row {
         kind,
-        tile: kind.row(),
+        tile_row: kind.row(),
         sources,
         execute,
     })
@@ -122,8 +122,8 @@ impl Server {
             return Ok(None);
         };
         let runner = self.runner.clone();
-        let tile = &data.row.tile;
-        let top = min_zoom_over(tile.leaf, self.min_zoom).max(coarsest(tile.lattice));
+        let tile_row = &data.row.tile_row;
+        let top = min_zoom_over(tile_row.leaf, self.min_zoom).max(coarsest(tile_row.lattice));
         let path = pyramid::resolve(data.clone(), runner, name, top).await?;
         let Some(path) = path else { return Ok(None) };
         data.cache.read(&path).await.map_err(Failure::Bake)

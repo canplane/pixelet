@@ -11,7 +11,7 @@ use crate::domain::layer::object::ext::Ext;
 use crate::domain::preview::{Draft, RenderEdit};
 use crate::sys::sched::edge::request_world_tick;
 use pxl_engine::answer::{self, PLACED_ASSET};
-use pxl_spec::asset::id::blocks_body;
+use pxl_spec::asset::id::solid;
 use pxl_spec::asset::marker::{MARKER, MARKER_TEXT_CHARS};
 use pxl_spec::asset::AssetId;
 use pxl_spec::space::coord::q3::{self, Q3};
@@ -214,7 +214,7 @@ pub fn place_air(at: Octant) {
 /// the cube is emptied with AIR.
 fn erase_val(at: Octant) -> u32 {
     match World::base().asset_of(&middle(at)).exact() {
-        Some(v) if !blocks_body(answer::val(v)) => VOID,
+        Some(v) if !solid(answer::val(v)) => VOID,
         _ => AIR,
     }
 }
