@@ -13,11 +13,55 @@ use crate::domain::control::input::{
 };
 use crate::door::cmd as abi;
 use crate::pointer::tap;
+use xpute_core::global::Global;
 use xpute_core::ipc::door::Outcome;
 use xpute_kit::status::errno::Errno;
 
+#[derive(Default)]
+struct Touches {
+    /// The UI is taking typed text (INPUT_TYPING).
+    typing: bool,
+    /// The touches pressed while it was, whose lifts tap nothing.
+    spent: Vec<i32>,
+}
+
+static TOUCHES: Global<Touches> = Global::new();
+
+fn touches() -> &'static mut Touches {
+    TOUCHES.get(Touches::default)
+}
+
+pub(super) fn typing(c: abi::InputTyping) -> Outcome {
+    touches().typing = c.typing;
+    Ok(Some(0))
+}
+
+/// Forgets what an earlier UI said and pressed.
+pub(in crate::door) fn forget_touches() {
+    *touches() = Touches::default();
+}
+
+/// A touch pressed while the UI types is spent: its lift is a cancel.
+fn phase_of(c: &abi::InputPointer) -> abi::PointerPhase {
+    let t = touches();
+    let at = t.spent.iter().position(|&id| id == c.id);
+    match (c.phase, at) {
+        (abi::PointerPhase::Down, None)
+            if t.typing && c.pointer_type == abi::PointerType::Touch =>
+        {
+            t.spent.push(c.id);
+            c.phase
+        }
+        (abi::PointerPhase::Up | abi::PointerPhase::Cancel, Some(at)) => {
+            t.spent.swap_remove(at);
+            abi::PointerPhase::Cancel
+        }
+        _ => c.phase,
+    }
+}
+
 pub(super) fn pointer(c: abi::InputPointer) -> Outcome {
-    match c.phase {
+    match phase_of(&c) {
         abi::PointerPhase::Down => {
             camera_pointer_down(c.pointer_type, c.id, c.button, c.x, c.y);
         }

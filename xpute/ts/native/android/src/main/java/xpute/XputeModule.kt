@@ -102,6 +102,7 @@ class XputeModule : Module() {
     View(SurfaceView::class) {
       Events("onAttach", "onDetach")
       Prop("surface") { view: SurfaceView, surface: Int -> view.surface = surface }
+      Prop("touches") { view: SurfaceView, touches: Boolean -> view.touches = touches }
     }
   }
 }

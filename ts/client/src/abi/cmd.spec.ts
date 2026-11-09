@@ -393,6 +393,7 @@ export type UiSend = {
     x: f64,
     y: f64,
   ];
+  [Command.INPUT_TYPING]: [typing: boolean];
   [Command.EDIT_MARKER_CANCEL]: [];
   [Command.EDIT_MARKER_COMMIT]: [];
   [Command.INPUT_WHEEL]: [delta_y: f64];

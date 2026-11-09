@@ -154,6 +154,11 @@ impl Nop {
             val: integer::<u32>(f.at(0)?.get_number()?)?,
         })
     }
+    pub const FIELDS: u32 = 1;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.u32(Some(self.val));
+    }
 }
 
 /// Command::SYS_TURN's packet.
@@ -168,6 +173,11 @@ impl SysTurn {
         Ok(SysTurn {
             unix_ms: finite(f.at(0)?.get_number()?)?,
         })
+    }
+    pub const FIELDS: u32 = 1;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.f64(Some(self.unix_ms));
     }
 }
 
@@ -187,6 +197,13 @@ impl SysFrame {
             paced_ms: finite(f.at(1)?.get_number()?)?,
             interactive: f.at(2)?.get_bool()?,
         })
+    }
+    pub const FIELDS: u32 = 3;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.f64(Some(self.refresh_ms));
+        w.f64(Some(self.paced_ms));
+        w.bool(Some(self.interactive));
     }
 }
 

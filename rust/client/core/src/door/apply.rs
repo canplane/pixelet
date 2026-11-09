@@ -8,7 +8,7 @@
 mod camera;
 mod edit;
 pub(super) mod fs;
-mod input;
+pub(super) mod input;
 mod perf;
 mod scene;
 mod sensor;
@@ -87,6 +87,9 @@ impl ui::Exports for State {
     }
     fn source_declare(&mut self, c: abi::SourceDeclare<'_>) -> Outcome {
         source::declare(c)
+    }
+    fn input_typing(&mut self, c: abi::InputTyping) -> Outcome {
+        input::typing(c)
     }
     fn input_pointer(&mut self, c: abi::InputPointer) -> Outcome {
         input::pointer(c)

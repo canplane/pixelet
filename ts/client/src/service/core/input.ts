@@ -26,6 +26,10 @@ export function pointer(
   core.send(Command.INPUT_POINTER, phase, pointer_type, id, button, x, y);
 }
 
+export function typing(on: boolean): void {
+  core.send(Command.INPUT_TYPING, on);
+}
+
 export function wheel(delta_y: f64): void {
   interactive();
   core.send(Command.INPUT_WHEEL, delta_y);

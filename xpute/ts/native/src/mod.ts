@@ -72,6 +72,8 @@ export const XPUTE: Xpute = requireNativeModule<Xpute>("Xpute");
  * draws it inside its turns. */
 export interface SurfaceViewProps extends ViewProps {
   surface: u32;
+  /** Whether the view tells the core its touches itself. */
+  touches?: boolean;
   onAttach: (e: NativeSyntheticEvent<{ surface: u32 }>) => void;
   onDetach: () => void;
 }

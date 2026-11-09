@@ -27,6 +27,7 @@ const spent = new Set<i32>();
 const pressed = new Map<i32, PointerType>();
 
 watchDockMode((mode) => {
+  input.typing(mode === DockMode.Message);
   if (mode === DockMode.Message)
     input.pointer(PointerPhase.Out, PointerType.Mouse, 0, 0, 0, 0);
 });
@@ -59,6 +60,15 @@ export function worldPointer(
       break;
   }
   input.pointer(phase, pointerType, id, button, x, y);
+}
+
+/** What the UI makes of a device's touch, which reaches the core without it.
+ * A press puts the keyboard away and ends the typing; the core has already
+ * spent that touch (INPUT_TYPING). */
+export function worldTouched(phase: PointerPhase): void {
+  if (phase !== PointerPhase.Down) return;
+  putKeyboardAway();
+  if (dockMode() === DockMode.Message) setDockMode(DockMode.Palette);
 }
 
 /** Ends every pressed pointer with a cancel. The caller calls it when the page

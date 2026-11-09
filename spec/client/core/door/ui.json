@@ -262,6 +262,19 @@
       ]
     },
     {
+      "name": "INPUT_TYPING",
+      "val": 4363,
+      "$doc": [
+        "Whether the UI is taking typed text. A device's touches reach the core without the UI (pxl-core door/touch.rs), so a touch pressed while this holds is spent on ending the typing: its lift ends the gesture with no tap, and its drag still moves the world."
+      ],
+      "pkt": [
+        {
+          "name": "typing",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "EDIT_TOOL",
       "val": 6657,
       "$doc": [
@@ -728,6 +741,10 @@
         {
           "name": "XR_POSE_END",
           "val": 10
+        },
+        {
+          "name": "TYPING",
+          "val": 11
         }
       ]
     },

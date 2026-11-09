@@ -31,6 +31,8 @@ export const SETTING_DEV = 0x1602;
 /** A pointer event on the world's canvas, in CSS pixels from the top left of its layout box
  * (transforms aside), as the world surface's size is (GPU_SURFACE_RESIZE). */
 export const INPUT_POINTER = 0x1102;
+/** Whether the UI is taking typed text. A device's touches reach the core without the UI (pxl-core door/touch.rs), so a touch pressed while this holds is spent on ending the typing: its lift ends the gesture with no tap, and its drag still moves the world. */
+export const INPUT_TYPING = 0x110b;
 /** The tool and what it takes, the UI's to choose and keep: the core is told, and answers EINVAL for an item the catalog does not give out. It picks again under a hovering pointer. */
 export const EDIT_TOOL = 0x1a01;
 /** The draft's text (Snapshot.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (spec/spec/asset/marker.json) is refused whole, never cut: EMSGSIZE, which the UI shows as what does not fit. */

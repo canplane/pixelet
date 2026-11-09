@@ -9,7 +9,6 @@ import { round } from "@xpute/kit/math/scalar.ts";
 import { SurfaceView, type SurfaceViewProps } from "@xpute/native";
 import { useEffect, useRef, useState } from "react";
 import {
-  type GestureResponderEvent,
   type LayoutChangeEvent,
   Dimensions,
   PixelRatio,
@@ -18,7 +17,6 @@ import {
 
 import type {
   CharacterSurfaceProps,
-  PointerPhase,
   SurfaceDriver,
   Viewport,
   WorldSurfaceProps,
@@ -100,34 +98,13 @@ export function World({ surface: driver, input }: WorldSurfaceProps) {
     input.requestFrame();
   };
 
-  const touches =
-    (...phases: PointerPhase[]) =>
-    (e: GestureResponderEvent) => {
-      for (const t of e.nativeEvent.changedTouches) {
-        for (const phase of phases) {
-          input.pointer(
-            phase,
-            "touch",
-            Number(t.identifier),
-            0,
-            t.locationX,
-            t.locationY,
-          );
-        }
-      }
-    };
-
   return (
     <SurfaceView
       {...props}
       style={StyleSheet.absoluteFill}
       onLayout={onLayout}
-      onTouchStart={touches("down")}
-      onTouchMove={touches("move")}
-      // A lifted finger also leaves the surface, as a page's pointerleave
-      // follows its pointerup, so that nothing stays hovered under it.
-      onTouchEnd={touches("up", "out")}
-      onTouchCancel={touches("cancel", "out")}
+      touches
+      onTouchStart={() => input.touched("down")}
     />
   );
 }
