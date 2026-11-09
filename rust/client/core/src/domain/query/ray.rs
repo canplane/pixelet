@@ -119,8 +119,8 @@ pub struct Hit {
 /// The world as the descent asks it, with what only the CPU carries along
 /// a ray: the decor struck, the first tile lacked, and whether any node was
 /// answered.
-pub(super) struct Walker<'w, 'a> {
-    world: &'w World<'a>,
+pub(super) struct Walker<'w> {
+    world: &'w World,
     lack: Option<Quadrant>,
     answered: bool,
     /// The decor struck along the ray, when the walk strikes decor at all.
@@ -166,7 +166,7 @@ impl Keep<At> for KeepDescent<'_> {
     }
 }
 
-impl<'a> Query for Walker<'_, 'a> {
+impl Query for Walker<'_> {
     type At = At;
 
     fn root(&mut self, node: [i32; 3]) -> At {
@@ -203,7 +203,7 @@ impl<'a> Query for Walker<'_, 'a> {
         if let Some((_, s)) = self.decor_ray.as_mut() {
             s.about.visit(&self.world.object.columns(), at.node);
             if t0 < s.draw_dist && s.about_zoom(zoom) == zoom {
-                s.about.read_columns(self.world, (zoom, [c[0], c[1]]));
+                s.about.read_columns((zoom, [c[0], c[1]]));
             }
         }
         if zoom == GROUND.leaf_cell_zoom() {
@@ -264,7 +264,7 @@ fn decor_hit(ray: &Ray, t: f64, axis: usize, i: Instance) -> Hit {
     }
 }
 
-impl<'a> World<'a> {
+impl World {
     /// The first filled cell `ray` meets within its `t_max`, at the zoom
     /// `detail` asks where it meets it. What the ray starts inside is not met,
     /// so an eye under the ground is not stopped where it stands. A cell met
@@ -397,7 +397,7 @@ impl<'a> World<'a> {
         }
     }
 
-    fn walker(&self) -> Walker<'_, 'a> {
+    fn walker(&self) -> Walker<'_> {
         Walker {
             world: self,
             lack: None,

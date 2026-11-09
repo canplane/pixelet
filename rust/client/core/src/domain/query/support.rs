@@ -80,8 +80,8 @@ fn xy(at: &Q3) -> [f64; 2] {
 /// ray's tile lines step on from the last ray's (`path`), which were handed
 /// on from the columns these were made beside, since the rays climb the same
 /// tiles over the same tile cache.
-struct SplitCell<'w, 'a> {
-    world: &'w World<'a>,
+struct SplitCell<'w> {
+    world: &'w World,
     corner: [f64; 2],
     side: f64,
     across: u32,
@@ -94,8 +94,8 @@ struct SplitCell<'w, 'a> {
     descent: Option<Descent>,
 }
 
-impl<'w, 'a> SplitCell<'w, 'a> {
-    fn new(world: &'w World<'a>, xy: [f64; 2], zoom: Zoom, path: Path) -> SplitCell<'w, 'a> {
+impl<'w> SplitCell<'w> {
+    fn new(world: &'w World, xy: [f64; 2], zoom: Zoom, path: Path) -> SplitCell<'w> {
         let cell_zoom = GROUND.cell_zoom(zoom);
         let side = units(cell_zoom);
         let corner = xy.map(|v| libm::floor(v / side) * side);
@@ -126,12 +126,7 @@ impl<'w, 'a> SplitCell<'w, 'a> {
 
     /// For each column, the box of the first cell that its ray from the
     /// height `z` to the height `to`, up or down, stops at (`until`).
-    fn rays(
-        &mut self,
-        z: f64,
-        to: f64,
-        until: Until,
-    ) -> impl Iterator<Item = Aabb> + use<'_, 'w, 'a> {
+    fn rays(&mut self, z: f64, to: f64, until: Until) -> impl Iterator<Item = Aabb> + use<'_, 'w> {
         (0..self.across * self.across)
             .filter_map(move |k| self.meet(k, z, to, until).val().flatten())
     }
@@ -284,7 +279,7 @@ impl<'w, 'a> SplitCell<'w, 'a> {
     }
 }
 
-impl<'a> World<'a> {
+impl World {
     /// What is in the leaf cell at `at`, as the cast draws it (pxl-engine
     /// `world::node`), or void where nothing is.
     pub fn asset_of(&self, at: &Q3) -> Answer<u32> {

@@ -28,17 +28,17 @@ use crate::domain::layer::Answer;
 /// The world as decor's generation asks it on the CPU (pxl-engine
 /// `DecorQuery`): the world's one query, of the base and as edited, and what
 /// is placed (`lanes`).
-pub(super) struct DecorWorld<'a, 'w> {
-    world: &'a World<'w>,
-    base: World<'w>,
+pub(super) struct DecorWorld<'a> {
+    world: &'a World,
+    base: World,
     lanes: store::Table<'a>,
 }
 
-impl<'a, 'w> DecorWorld<'a, 'w> {
-    pub(super) fn new(world: &'a World<'w>) -> DecorWorld<'a, 'w> {
+impl<'a> DecorWorld<'a> {
+    pub(super) fn new(world: &'a World) -> DecorWorld<'a> {
         DecorWorld {
             world,
-            base: world.base(),
+            base: World::base(),
             lanes: world.object.columns(),
         }
     }
@@ -48,7 +48,7 @@ impl<'a, 'w> DecorWorld<'a, 'w> {
 /// (`World::column_surface`), and each cell around the column is asked off
 /// that line (`World::asset_about`), both of the base. A cell's
 /// edit is asked of the world as edited (`World::asset`).
-impl DecorQuery for DecorWorld<'_, '_> {
+impl DecorQuery for DecorWorld<'_> {
     type ColumnSurface = ColumnSurface<At>;
 
     fn rows(&self) -> &[decor::Row] {

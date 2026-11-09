@@ -9,38 +9,31 @@ use pxl_spec::space::hierarchy::tree::Node;
 
 use crate::domain::layer::object::store;
 use crate::domain::layer::object::store::{Store, Walk};
-use crate::domain::layer::tile_cache::{Path, TileCache};
+use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::Answer;
 use crate::domain::layer::Base as _;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::aabb::Aabb;
 
 #[derive(Clone, Copy)]
-pub struct World<'a> {
-    pub(super) terrain: &'a TileCache<TerrainTile>,
-    pub(super) object: &'a Store,
+pub struct World {
+    pub(super) object: &'static Store,
 }
 
-impl World<'static> {
+impl World {
     /// The world as stored. Every mechanic asks it: the pick, a walk, the
     /// camera's clearance, an edit's reads and decor's column surface.
-    pub fn now() -> World<'static> {
-        let object: &'static Store = store::object();
-        World::new(TerrainTile::tile_cache(), object)
-    }
-}
-
-impl<'a> World<'a> {
-    /// The base: this world with nothing placed in it.
-    pub fn base(self) -> World<'a> {
+    pub fn now() -> World {
         World {
-            object: store::empty(),
-            ..self
+            object: store::object(),
         }
     }
 
-    pub fn new(terrain: &'a TileCache<TerrainTile>, object: &'a Store) -> World<'a> {
-        World { terrain, object }
+    /// The base: this world with nothing placed in it.
+    pub fn base() -> World {
+        World {
+            object: store::empty(),
+        }
     }
 }
 
@@ -54,7 +47,7 @@ pub struct ColumnWalk {
     object: Walk,
 }
 
-impl World<'_> {
+impl World {
     /// The box the ground and what is placed fill in the node, as its cells
     /// at `cell_zoom` are read. The walk steps on from where `walk` last
     /// went.
@@ -65,7 +58,7 @@ impl World<'_> {
         cell_zoom: Zoom,
     ) -> Answer<Option<Aabb>> {
         let object = self.object.column(&mut walk.object, node);
-        self.terrain
+        TerrainTile::tile_cache()
             .bound_walked(&mut walk.ground, node, cell_zoom)
             .map(|ground| ground.into_iter().chain(object).reduce(Aabb::join))
     }

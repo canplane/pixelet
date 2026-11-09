@@ -162,7 +162,7 @@ fn companion() -> &'static mut Companion {
 /// The floor the pivot `goal` is drawn on, as `ask` finds it in the world.
 /// The answer is kept while the pivot stands and no change touches what it
 /// read (`Memo`), as the companion's own floors are.
-pub fn pivot_floor(goal: Q3, ask: impl FnOnce(World<'_>) -> Option<f64>) -> Option<f64> {
+pub fn pivot_floor(goal: Q3, ask: impl FnOnce(World) -> Option<f64>) -> Option<f64> {
     let c = companion();
     c.pivot_floor.forget_touched();
     c.pivot_floor.of(goal, || ask(World::now()))
@@ -304,7 +304,7 @@ impl Walk {
 
     /// The floor it is drawn on: its own, or where its height is not known,
     /// that of the finest ground known there, as the pivot's is.
-    fn floor(&self, world: World<'_>) -> Option<f64> {
+    fn floor(&self, world: World) -> Option<f64> {
         world
             .stands(&self.stands?)
             .val()
@@ -446,7 +446,7 @@ fn center([x, y]: [f64; 2], floor: f64) -> Q3 {
 }
 
 /// Slides a step through `world` from `from` toward `to` (`World::step_slide`).
-fn walk_to(world: World<'_>, from: &Q3, [x, y]: [f64; 2]) -> Q3 {
+fn walk_to(world: World, from: &Q3, [x, y]: [f64; 2]) -> Q3 {
     world.step_slide(from, &world_to_canonical(&[x, y, 0.0]), true)
 }
 

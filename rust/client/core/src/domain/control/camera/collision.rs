@@ -78,12 +78,12 @@ fn ground_under(at: &ViewPose, access: &Ground<'_>) -> Option<f64> {
 /// The world that the poses of one step or one climb read. The poses share
 /// a pivot, and whether the sky is open over it is asked only once.
 struct Ground<'w> {
-    world: &'w World<'w>,
+    world: &'w World,
     open: Cell<Option<(V3, bool)>>,
 }
 
 impl<'w> Ground<'w> {
-    fn of(world: &'w World<'w>) -> Ground<'w> {
+    fn of(world: &'w World) -> Ground<'w> {
         Ground {
             world,
             open: Cell::new(None),

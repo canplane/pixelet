@@ -45,12 +45,14 @@
 //! A source that does not hold the node answers that it lacks it, never air
 //! and never that nothing fills.
 
+use crate::domain::layer::Base as _;
 use pxl_content::Pixelet;
 use pxl_engine::answer::{In, Kind};
 use pxl_engine::clipmap::{self, Lookup};
 use pxl_engine::ground::{self, Cell};
 use pxl_engine::object::{child_at, Cut};
 use pxl_engine::world;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::zoom::{units, Zoom, MIN_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::area::{Area, Shard};
@@ -81,7 +83,7 @@ pub(super) struct At {
     pub(super) inheritance: world::Inheritance,
 }
 
-impl World<'_> {
+impl World {
     /// The object store's revision, which every write moves
     /// (domain/layer/object/store.rs). Equal revisions mean the same things
     /// are placed.
@@ -156,7 +158,7 @@ impl World<'_> {
         path: &mut Path,
     ) -> Answer<In<[u32; 2]>> {
         let lanes = self.object.columns();
-        let mut reading = GroundRead::new(self, path);
+        let mut reading = GroundRead::new(path);
         let i = world::node(
             &mut reading,
             &clip_read(),
@@ -175,17 +177,15 @@ impl World<'_> {
 /// the world's tile cache down the node's line, the lines its walk read, and
 /// the first tile the reading found missing (`missing`) or held only through
 /// a coarser tile standing in for it (`coarser`).
-struct GroundRead<'r, 'a> {
-    world: &'r World<'a>,
+struct GroundRead<'r> {
     path: &'r mut Path,
     missing: Option<Quadrant>,
     coarser: Option<Quadrant>,
 }
 
-impl<'r, 'a> GroundRead<'r, 'a> {
-    fn new(world: &'r World<'a>, path: &'r mut Path) -> GroundRead<'r, 'a> {
+impl<'r> GroundRead<'r> {
+    fn new(path: &'r mut Path) -> GroundRead<'r> {
         GroundRead {
-            world,
             path,
             missing: None,
             coarser: None,
@@ -219,7 +219,7 @@ impl<'r, 'a> GroundRead<'r, 'a> {
     }
 }
 
-impl Area for GroundRead<'_, '_> {
+impl Area for GroundRead<'_> {
     fn ends(&self) -> bool {
         source::ServiceArea.ends()
     }
@@ -228,7 +228,7 @@ impl Area for GroundRead<'_, '_> {
     }
 }
 
-impl ground::Resident for GroundRead<'_, '_> {
+impl ground::Resident for GroundRead<'_> {
     type Content = Pixelet;
     /// The bound over the node of its cells at the zooms `cells`, off the
     /// clip levels, stepped from `place` (pxl-engine
@@ -241,15 +241,9 @@ impl ground::Resident for GroundRead<'_, '_> {
         cells: [Zoom; 2],
         (zoom, c): (Zoom, [i32; 3]),
     ) -> (ground::Extent, bool) {
-        let line = self
-            .world
-            .terrain
-            .walk_line(self.path, (zoom, [c[0], c[1]]), cells[1]);
-        match self.take(
-            self.world
-                .terrain
-                .relief(&line, place, (zoom, [c[0], c[1]]), cells),
-        ) {
+        let line = TerrainTile::tile_cache().walk_line(self.path, (zoom, [c[0], c[1]]), cells[1]);
+        match self.take(TerrainTile::tile_cache().relief(&line, place, (zoom, [c[0], c[1]]), cells))
+        {
             Some(r) => (r, true),
             None => ([ground::EMPTY; 2], false),
         }

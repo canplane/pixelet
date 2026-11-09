@@ -11,6 +11,8 @@
 //! and the catalog is spec/spec/asset/decor.json. The scene draws the decor's
 //! models as they arrive (domain/scene/decor/asset.rs).
 
+use crate::domain::layer::Base as _;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::layer::lattice::{draw_dist, Grid, GROUND};
 
 use crate::domain::layer::object::asset::Asset;
@@ -196,7 +198,7 @@ impl Around {
     /// `clipmap::step`), and its relief's highest top is read once for every
     /// node under it. Each zoom's columns step from the zoom above's
     /// (`Around`).
-    pub(super) fn read_columns(&mut self, world: &World, (zoom, c): (Zoom, [i32; 2])) {
+    pub(super) fn read_columns(&mut self, (zoom, c): (Zoom, [i32; 2])) {
         let z = zoom as usize;
         if self.columns_at[z] == c {
             return;
@@ -212,13 +214,13 @@ impl Around {
             } else {
                 None
             };
-            let line =
-                world
-                    .terrain
-                    .line_under(parent.as_ref().map(|o| &o.line), (zoom, n), cell_zoom);
+            let line = TerrainTile::tile_cache().line_under(
+                parent.as_ref().map(|o| &o.line),
+                (zoom, n),
+                cell_zoom,
+            );
             let mut found = parent.map_or(Lookup::NONE, |o| o.lookup);
-            let hi = world
-                .terrain
+            let hi = TerrainTile::tile_cache()
                 .relief(&line, &mut found, (zoom, n), [cell_zoom, cell_zoom])
                 .val()
                 .map(|[[_, hi], _]| hi);
@@ -286,7 +288,7 @@ impl Around {
     }
 }
 
-impl<'a> World<'a> {
+impl World {
     /// Hands what the ground generates on the leaf `cell`, decor by decor, to
     /// `each` until `each` returns true, and returns whether it did. Only the
     /// decors whose bits are set in `decors` are asked. Each instance stands on
