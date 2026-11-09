@@ -63,6 +63,7 @@ use pxl_spec::value::VOID;
 use super::change;
 use super::decor::report_claims;
 use super::world::World;
+use crate::domain::layer::instance::Instance;
 use crate::domain::layer::terrain::clipmap::clip_read;
 use crate::domain::layer::terrain::pool::way_pool;
 use crate::domain::layer::tile_cache::Path;
@@ -84,11 +85,6 @@ pub(super) struct At {
     pub(super) inheritance: world::Inheritance,
 }
 
-/// What a reader asks of the world at a node: its answer with the decor
-/// standing in it (`World::node`), or, under decor's generation, what the
-/// layers compose under the decor (`World::layer_node`).
-pub(super) type NodeFn = fn(&World, &mut At, [Zoom; 2], &mut Path) -> Answer<In<[u32; 2]>>;
-
 impl World {
     /// The object store's revision, which every write moves
     /// (domain/layer/object/store.rs). Equal revisions mean the same things
@@ -102,7 +98,9 @@ impl World {
     /// standing in it included. X is on the asker's lap.
     pub fn asset(&self, node: Node<3>) -> Answer<u32> {
         report_claims(node);
-        self.asset_at(World::node, node)
+        self.asset_at(node, |at, zooms, path| {
+            self.node(at, zooms, path, &mut |_| true)
+        })
     }
 
     /// `node` with nothing handed down, as a descent's root is. Each source
@@ -119,19 +117,17 @@ impl World {
     /// it, asked at that zoom, or void where it is air or void. Each source
     /// finds what it needs down the node's line from the top. The cell's
     /// column is reported as read (`change::report_read`).
-    pub(super) fn asset_at(&self, node_fn: NodeFn, node: Node<3>) -> Answer<u32> {
+    pub(super) fn asset_at(
+        &self,
+        node: Node<3>,
+        ask: impl FnOnce(&mut At, [Zoom; 2], &mut Path) -> Answer<In<[u32; 2]>>,
+    ) -> Answer<u32> {
         let (zoom, c) = node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
         let side = units(zoom);
         let middle = [c[0], c[1]].map(|v| (f64::from(v) + 0.5) * side);
         change::report_read(middle, middle, zoom);
-        node_fn(
-            self,
-            &mut self.start(node),
-            [zoom, zoom],
-            &mut Path::default(),
-        )
-        .map(|i| {
+        ask(&mut self.start(node), [zoom, zoom], &mut Path::default()).map(|i| {
             if i.kind == Kind::Cell {
                 i.asset[0]
             } else {
@@ -155,16 +151,17 @@ impl World {
     /// near that a reader asks within it: this is the world's one query. What
     /// the layers compose (`layer_node`), with the decor standing in it
     /// (`with_decor`), which only the CPU answers. So a tree the ground grew
-    /// and a tree someone planted are one thing to whatever asks, each asker
-    /// deciding by what the asset is (pxl-spec `id::solid`).
+    /// and a tree someone planted are one thing to whatever asks, of the
+    /// decor it `sees`.
     pub(super) fn node(
         &self,
         at: &mut At,
         zooms: [Zoom; 2],
         path: &mut Path,
+        sees: &mut dyn FnMut(&Instance) -> bool,
     ) -> Answer<In<[u32; 2]>> {
         let (answer, relief) = self.layers(at, zooms, path);
-        answer.map(|i| self.with_decor(at, zooms[1], relief, i))
+        answer.map(|i| self.with_decor(at, zooms[1], relief, i, sees))
     }
 
     /// What the layers compose in `at`'s node (`layers`), under the decor

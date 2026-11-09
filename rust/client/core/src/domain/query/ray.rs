@@ -3,13 +3,12 @@
 //! The first cell a ray meets, at the zoom its distance asks. The descent is
 //! pxl-engine's (`cast::first`), the same one the GPU's cast runs. Here the
 //! world answers it from everything it holds, each node handed what its
-//! parent found (`CastWorld`), the decor standing in a cell among it. What stops
-//! a ray is the asker's: a body passes a decor and an eye stops at it
-//! (`Until`).
+//! parent found (`CastWorld`). A viewer's walk answers the decor it sees too
+//! (`Viewer`), and a body's the layers alone.
 
 use super::change;
-use super::decor::cell_box;
-use super::node::{coarsest, At, NodeFn};
+use super::decor::claim;
+use super::node::{coarsest, At};
 use super::world::World;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::tile_cache::Path;
@@ -20,7 +19,6 @@ use pxl_engine::cast::{self, Detail, End, Keep, Line, Query, Spacing, Trace, DEP
 use pxl_engine::object;
 use pxl_engine::support;
 use pxl_engine::support::ColumnSurface;
-use pxl_spec::asset::decor::DECORS;
 use pxl_spec::asset::id::{self, kind_of};
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -33,8 +31,6 @@ use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::octant::Octant;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_kit::status::bug::OrBug;
-use xpute_kit::status::errno::Errno;
 
 /// The zooms a cell is asked at: no coarser than the cells a tile draws, and
 /// no finer than what is placed is held.
@@ -125,18 +121,51 @@ pub struct Hit {
 /// a ray: the first tile lacked, and whether any node was answered.
 pub(super) struct CastWorld<'w> {
     world: &'w World,
-    node_fn: NodeFn,
-    /// Of what the ground generates, the decors the asker sees, one bit a
-    /// decor in `DECORS`' order. Any other is air to it.
-    decors: u32,
-    /// An eye's ray. What it starts inside is not met, and a decor is its
-    /// whole box, so a decor whose box the ray does not enter is air to it.
-    eye_ray: Option<&'w Ray>,
+    /// Who is looking, where the walk is a viewer's; a body sees no decor.
+    viewer: Option<Viewer<'w>>,
     lack: Option<Quadrant>,
     answered: bool,
     /// The ground's lines the walk read. Each node's line steps on from them
     /// (`World::node`).
     path: Path,
+}
+
+/// A viewer along a ray: what it sees of the decor.
+pub(super) struct Viewer<'w> {
+    pub(super) ray: &'w Ray,
+    /// Of what the ground generates, the decors it sees, one bit a decor in
+    /// `DECORS`' order; everything placed it sees.
+    pub(super) decors: u32,
+    /// The decor it last saw, struck as the box it is drawn as, at the face
+    /// the ray enters, so what is placed on it stands on that box (pxl-spec
+    /// asset/id.rs `Kind::stood_on`).
+    pub(super) met: Option<Hit>,
+}
+
+impl Viewer<'_> {
+    /// Whether it sees `i`: a decor it is shown, whose box its ray enters.
+    /// Holds the strike for the walk's end.
+    pub(super) fn sees(&mut self, i: &Instance) -> bool {
+        let Ray { origin, dir, .. } = *self.ray;
+        let shown = i.generated_in().is_none() || self.decors >> id::idx_of(i.id) & 1 == 1;
+        let met = claim(i)
+            .filter(|_| shown)
+            .map(|b| nearest_box(&b, origin[0]))
+            .and_then(|cube| {
+                let (t, k) = cube.enters(origin, dir)?;
+                let mut normal = [0.0; 3];
+                normal[k] = if dir[k] > 0.0 { -1.0 } else { 1.0 };
+                Some(Hit {
+                    t,
+                    point: self.ray.at(t),
+                    normal,
+                    cube,
+                    kind: HitKind::Decor(*i),
+                })
+            });
+        self.met = met.or(self.met);
+        met.is_some()
+    }
 }
 
 /// Where a walk from `origin` ended, for the next walk from that origin to go
@@ -203,10 +232,9 @@ impl Query for CastWorld<'_> {
             .child(at, (p[0] & 1 | (p[1] & 1) << 1 | (p[2] & 1) << 2) as usize)
     }
 
-    /// The world's answer (`ask`), keeping the first tile lacked. A node that
-    /// nothing under fills is air of its size. A decor the asker does not
-    /// see, one it leaves out (`decors`) or whose box it does not enter
-    /// (`eye`), is air to it.
+    /// The world's answer, keeping the first tile lacked: with the decor a
+    /// viewer sees, or for a body the layers alone. A node that nothing under
+    /// fills is air of its size.
     fn node(
         &mut self,
         at: &mut At,
@@ -215,53 +243,40 @@ impl Query for CastWorld<'_> {
         zooms: [Zoom; 2],
         _: f32,
     ) -> In<[u32; 2]> {
-        let answer = match (self.node_fn)(self.world, at, zooms, &mut self.path) {
+        let answer = match &mut self.viewer {
+            Some(v) => self
+                .world
+                .node(at, zooms, &mut self.path, &mut |i| v.sees(i)),
+            None => self.world.layer_node(at, zooms, &mut self.path),
+        };
+        self.answered |= !matches!(answer, Answer::Nothing(_));
+        match answer {
             Answer::Nothing(l) => {
                 self.lack.get_or_insert(l);
-                return In {
+                In {
                     kind: Kind::Lacks,
                     asset: answer::EMPTY,
-                };
+                }
             }
             Answer::Coarser(i, l) => {
                 self.lack.get_or_insert(l);
                 i
             }
             Answer::Exact(i) => i,
-        };
-        self.answered = true;
-        let Some(k) = DECORS
-            .iter()
-            .position(|d| d.id == answer::val(answer.asset[0]))
-            .filter(|_| answer.kind == Kind::Cell)
-        else {
-            return answer;
-        };
-        let unseen = !answer::is_placed(answer.asset[0]) && self.decors >> k & 1 == 0;
-        if unseen
-            || self
-                .eye_ray
-                .is_some_and(|ray| !self.world.ray_enters_decor(ray, at.node))
-        {
-            return In {
-                kind: Kind::Cell,
-                asset: answer::EMPTY,
-            };
         }
-        answer
     }
 }
 
 impl World {
     /// The first cell that stops a body along `ray` within its `t_max`, at
-    /// the zoom `detail` asks where it meets it (`Until::Solid`): no decor or
-    /// marker is met. What the ray starts inside is not met, so an eye under
+    /// the zoom `detail` asks where it meets it: the layers alone, so
+    /// no decor is met. What the ray starts inside is not met, so an eye under
     /// the ground is not stopped where it stands. A cell met coarser than it
     /// is held comes with the tile lacked. A cell not held at all is lacked
     /// too, and past it the ray tells nothing.
     pub fn first_hit(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
         let mut path = Path::default();
-        self.along(ray, detail, Until::Solid, u32::MAX, &mut path, &mut None)
+        self.along(ray, detail, Until::Opaque, None, &mut path, &mut None)
     }
 
     /// The first thing a viewer sees along `ray`, the same walk stopping at a
@@ -269,14 +284,21 @@ impl World {
     /// generates at the leaves, `decors` (`lens::leaf_decors`).
     pub fn first_visible(&self, ray: &Ray, detail: Detail, decors: u32) -> Answer<Option<Hit>> {
         let mut path = Path::default();
-        self.along(ray, detail, Until::Opaque, decors, &mut path, &mut None)
+        self.along(
+            ray,
+            detail,
+            Until::Opaque,
+            Some(decors),
+            &mut path,
+            &mut None,
+        )
     }
 
     /// The first cell along `ray` that `until` stops at, at the zoom `detail`
     /// asks where it meets it (pxl-engine `cast::first`). The ray starts at
     /// its origin, which may stand off the world, as an eye over it does
-    /// (pxl-spec `world::origin`). Of what the ground generates, it sees
-    /// `decors` (`CastWorld::decors`). The tiles' lines step on from `path`, the
+    /// (pxl-spec `world::origin`). With `decors` it is a viewer's (`Viewer`), and
+    /// without them a body's. The tiles' lines step on from `path`, the
     /// ground's lines that a walk beside this ray read over the same tile
     /// cache, and are left there for the next ray. A walk from the origin
     /// `descent` names goes on from where that one ended, its asker holding
@@ -286,22 +308,18 @@ impl World {
         ray: &Ray,
         detail: Detail,
         until: Until,
-        decors: u32,
+        decors: Option<u32>,
         path: &mut Path,
         descent: &mut Option<Descent>,
     ) -> Answer<Option<Hit>> {
         let mut query = CastWorld {
-            world: self,
-            node_fn: if until == Until::Opaque {
-                World::node
-            } else {
-                World::layer_node
-            },
-            decors,
-            eye_ray: (until == Until::Opaque).then_some(ray),
-            lack: None,
-            answered: false,
+            viewer: decors.map(|decors| Viewer {
+                ray,
+                decors,
+                met: None,
+            }),
             path: *path,
+            ..self.cast_world()
         };
         let o = ray.origin;
         let end = ray.at(ray.t_max);
@@ -319,7 +337,12 @@ impl World {
             None => cast::walk_from_root(&mut query, q, &from, detail, until, &mut keep),
         };
         *path = query.path;
-        let hit = (trace.end == End::Hit).then(|| self.hit(ray, q, until, trace.hit));
+        let met = query.viewer.as_ref().and_then(|v| v.met);
+        let is_decor = kind_of(answer::val(trace.hit.asset[0])) == Some(id::Kind::decor);
+        let hit = (trace.end == End::Hit).then(|| {
+            met.filter(|_| is_decor)
+                .unwrap_or_else(|| self.hit(ray, q, trace.hit))
+        });
         query.answer(hit)
     }
 
@@ -359,9 +382,7 @@ impl World {
     fn cast_world(&self) -> CastWorld<'_> {
         CastWorld {
             world: self,
-            node_fn: World::layer_node,
-            decors: u32::MAX,
-            eye_ray: None,
+            viewer: None,
             lack: None,
             answered: false,
             path: Path::default(),
@@ -372,7 +393,7 @@ impl World {
     /// origin as a position names it. The node's box is placed relative to
     /// the unit cell holding the origin, so it lies on the origin's lap, and
     /// is inset to the box its cell fills.
-    fn hit(&self, ray: &Ray, q: Q3, until: Until, s: cast::Hit<At>) -> Hit {
+    fn hit(&self, ray: &Ray, q: Q3, s: cast::Hit<At>) -> Hit {
         let (zoom, c) = s.at.node;
         let side = units(zoom);
         let unit = ray.origin.map(libm::floor);
@@ -388,26 +409,6 @@ impl World {
         let axis = s.axis as usize;
         let mut normal = [0.0; 3];
         normal[axis] = if ray.dir[axis] > 0.0 { -1.0 } else { 1.0 };
-        // A decor seen is struck as the box it claims, at the face the ray
-        // enters, so what is placed on it stands on that box (pxl-spec
-        // asset/id.rs `Kind::stood_on`). A body's climb out of what fills it
-        // stops at the cell of a decor it may stand inside.
-        if until == Until::Opaque && kind_of(answer::val(s.asset[0])) == Some(id::Kind::decor) {
-            let i = self.decor_over((zoom, c)).or_bug(Errno::ENOTRECOVERABLE);
-            let cube = nearest_box(&cell_box(&i).or_bug(Errno::ENOTRECOVERABLE), ray.origin[0]);
-            let (t, k) = cube
-                .enters(ray.origin, ray.dir)
-                .unwrap_or((f64::from(s.t), axis));
-            let mut normal = [0.0; 3];
-            normal[k] = if ray.dir[k] > 0.0 { -1.0 } else { 1.0 };
-            return Hit {
-                t,
-                point: ray.at(t),
-                normal,
-                cube,
-                kind: HitKind::Decor(i),
-            };
-        }
         let kind = match answer::is_placed(s.asset[0]) {
             true => self
                 .object

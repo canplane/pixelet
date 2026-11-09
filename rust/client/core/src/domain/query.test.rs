@@ -486,8 +486,8 @@ fn ray_goes_on_from_the_last() {
         access.along(
             &ray(z, 1.0),
             detail,
-            Until::Passable,
-            u32::MAX,
+            Until::Transparent,
+            None,
             &mut path,
             &mut descent,
         );
@@ -495,16 +495,16 @@ fn ray_goes_on_from_the_last() {
         let on = access.along(
             &ray(z, -1.0),
             detail,
-            Until::Solid,
-            u32::MAX,
+            Until::Opaque,
+            None,
             &mut path,
             &mut descent,
         );
         let top = access.along(
             &ray(z, -1.0),
             detail,
-            Until::Solid,
-            u32::MAX,
+            Until::Opaque,
+            None,
             &mut Path::default(),
             &mut None,
         );
@@ -908,6 +908,40 @@ fn generated_decor_struck_where_generated() {
     assert!(!matches!(met(none), HitKind::Decor(_)), "{:?}", met(none));
     let body = world.first_hit(&ray, finest()).exact().flatten().unwrap();
     assert_eq!(body.kind, HitKind::Ground, "a body passes it");
+}
+
+/// A decor whose base sinks under its cell is struck at the box it is drawn
+/// as, the claim's, and not the cells it claims, which are raised to its cell.
+#[test]
+fn sunk_decor_struck_at_its_drawn_box() {
+    use super::ray::Viewer;
+    use pxl_content::generation::Prop;
+    use pxl_spec::asset::decor::DECORS;
+    use pxl_spec::space::coord::q3::FRAC_W;
+    let sunk = scatter::instance(
+        &DECORS[0],
+        &Prop {
+            variant: 0,
+            turn: 0,
+            at: [100, 200, 5],
+            sink: 1 << (FRAC_W - 1),
+        },
+    );
+    let b = decor::claim(&sunk).unwrap();
+    assert_eq!(b.min[2], 4.5);
+    let ray = Ray {
+        origin: [100.5, 200.5, 30.0],
+        dir: [0.0, 0.0, -1.0],
+        t_max: 40.0,
+    };
+    let mut viewer = Viewer {
+        ray: &ray,
+        decors: u32::MAX,
+        met: None,
+    };
+    assert!(viewer.sees(&sunk));
+    let met = viewer.met.unwrap();
+    assert_eq!((met.cube, met.t), (b, 30.0 - b.max[2]));
 }
 
 /// A decor someone placed is the same to whatever asks as one the ground

@@ -37,9 +37,9 @@ impl Kind {
     }
 }
 
-/// Whether an asset stops a body: a cube does, and so does an id in a cube's
-/// range that the catalog does not give out; void and air, a decor and a
-/// marker do not.
+/// Whether an asset is matter with a cube's body: a cube is, and so is an id
+/// in a cube's range that the catalog does not give out; void and air, a
+/// decor and a marker are not.
 pub const fn solid(id: AssetId) -> bool {
     id != value::VOID && id != value::AIR && id >> IDX_BITS == Kind::cube as u32
 }

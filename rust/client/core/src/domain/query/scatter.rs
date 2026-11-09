@@ -80,7 +80,9 @@ impl DecorQuery for DecorWorld<'_> {
     /// shows where one is held, as far as its tiles are held.
     fn asset(&mut self, f: &ColumnSurface<At>, zoom: Zoom, c: [i32; 3], edited: bool) -> u32 {
         let answer = if edited {
-            self.world.asset_at(World::layer_node, (zoom, c))
+            self.world.asset_at((zoom, c), |at, zooms, path| {
+                self.world.layer_node(at, zooms, path)
+            })
         } else {
             self.base.asset_about(&f.line, zoom, c)
         };

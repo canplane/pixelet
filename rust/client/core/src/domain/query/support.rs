@@ -144,7 +144,7 @@ impl<'w> SplitCell<'w> {
             &ray,
             self.detail,
             until,
-            u32::MAX,
+            None,
             &mut self.path,
             &mut self.descent,
         );
@@ -192,13 +192,15 @@ impl<'w> SplitCell<'w> {
     fn lift(&mut self, mut z: f64) -> f64 {
         loop {
             let top = (0..self.across * self.across)
-                .map(|k| match self.meet(k, z, BOUNDS.max[2], Until::Passable) {
-                    Answer::Exact(None) => BOUNDS.max[2],
-                    Answer::Exact(Some(b)) | Answer::Coarser(Some(b), _) if b.min[2] > z => {
-                        self.top_under(k, b.min[2]).max(z)
-                    }
-                    _ => z,
-                })
+                .map(
+                    |k| match self.meet(k, z, BOUNDS.max[2], Until::Transparent) {
+                        Answer::Exact(None) => BOUNDS.max[2],
+                        Answer::Exact(Some(b)) | Answer::Coarser(Some(b), _) if b.min[2] > z => {
+                            self.top_under(k, b.min[2]).max(z)
+                        }
+                        _ => z,
+                    },
+                )
                 .fold(z, f64::max);
             if top == z {
                 return z;
@@ -211,7 +213,7 @@ impl<'w> SplitCell<'w> {
     /// of the reach. The rays go down from `z`, so they start in the cell
     /// over that solid.
     fn below(&mut self, z: f64) -> Option<f64> {
-        self.rays(z, BOUNDS.min[2], Until::Solid)
+        self.rays(z, BOUNDS.min[2], Until::Opaque)
             .map(|b| b.max[2])
             .filter(|&t| t > BOUNDS.min[2])
             .reduce(f64::max)
@@ -221,7 +223,7 @@ impl<'w> SplitCell<'w> {
     /// The rays go up from `z` and start in the cell at `z`, so they never
     /// meet a solid at `z` itself.
     fn above(&mut self, z: f64, to: f64) -> Option<f64> {
-        self.rays(z, to, Until::Solid)
+        self.rays(z, to, Until::Opaque)
             .map(|b| b.min[2])
             .filter(|&b| b < to)
             .reduce(f64::min)
