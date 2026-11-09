@@ -40,10 +40,9 @@ impl Candidate {
     };
 }
 
-/// Leaf cell `cell`'s candidate of `decor`, with its own draws, and whether the cell holds
-/// one (`cnt`).
-pub fn candidate_at(decor: &Row, cell: [i32; 2]) -> (Candidate, bool) {
-    let k = kind_of(decor.val);
+/// Leaf cell `cell`'s candidate of the `k`-th decor, with its own draws, and whether the cell
+/// holds one (`cnt`).
+pub fn candidate_at(k: usize, cell: [i32; 2]) -> (Candidate, bool) {
     let mut draws = SplitMix32::new(node_seed(SEEDS[k], (LEAF_CELL_ZOOM, cell)));
     (
         Candidate {
@@ -54,19 +53,6 @@ pub fn candidate_at(decor: &Row, cell: [i32; 2]) -> (Candidate, bool) {
         cnt(k, LEAF_CELL_ZOOM, cell) > 0,
     )
 }
-
-/// The first decor's stored value; the rest follow in the catalog's order.
-const FIRST_VAL: u32 = ROWS[0].val;
-const _: () = {
-    let mut k = 0;
-    while k < ROWS.len() {
-        assert!(
-            ROWS[k].val == FIRST_VAL + k as u32,
-            "the decors' stored values run in the catalog's order"
-        );
-        k += 1;
-    }
-};
 
 /// The words of each decor that the hashes read, its seed and its chance, kept in a small
 /// table of their own so that a GPU lane reading one by a decor's place copies no row of the
@@ -89,12 +75,6 @@ const CHANCES: [u32; ROWS.len()] = {
     }
     t
 };
-/// Where the decor stored as `val` stands among the catalog's rows, found from its value
-/// alone, with no row read.
-const fn kind_of(val: u32) -> usize {
-    (val - FIRST_VAL) as usize
-}
-
 /// The tags of a column's count and of its split among its four, beside a
 /// decor's seed (`node_seed`).
 pub const CNT: u32 = 0xc047_dec0;
@@ -204,18 +184,19 @@ pub fn side_of(decor: &Row, c: &Candidate) -> i32 {
     x.max(y) as i32
 }
 
-/// Whether `c` stands clear of `decor`'s other candidates: no candidate before it (`before`)
-/// claims a brick meeting its own (`side_of`, `meet`), whether or not that one gives way
-/// itself, as Matérn's second thinning keeps one. The cells asked are those at which a brick
+/// Whether `c` stands clear of the `k`-th decor's other candidates: no candidate before it
+/// (`before`) claims a brick meeting its own (`side_of`, `meet`), whether or not that one gives
+/// way itself, as Matérn's second thinning keeps one. The cells asked are those at which a brick
 /// meeting `c`'s may start, as wide as the decor's widest.
-pub fn retained(decor: &Row, c: &Candidate) -> bool {
+pub fn retained(k: usize, c: &Candidate) -> bool {
+    let decor = &ROWS[k];
     let (side, extent) = (side_of(decor, c), decor.widest() as i32 - 1);
     let mut y = c.cell[1] - extent;
     while y < c.cell[1] + side {
         let mut x = c.cell[0] - extent;
         while x < c.cell[0] + side {
             if x != c.cell[0] || y != c.cell[1] {
-                let (d, here) = candidate_at(decor, [x, y]);
+                let (d, here) = candidate_at(k, [x, y]);
                 if here && before(&d, c) && meet(&d, side_of(decor, &d), c, side) {
                     return false;
                 }
@@ -229,9 +210,9 @@ pub fn retained(decor: &Row, c: &Candidate) -> bool {
 
 /// What stands in leaf cell `cell`: its candidate, where it holds one and it
 /// stands clear (`retained`).
-pub fn scatter_at(decor: &Row, cell: [i32; 2]) -> Option<Candidate> {
-    let (c, here) = candidate_at(decor, cell);
-    (here && retained(decor, &c)).then_some(c)
+pub fn scatter_at(k: usize, cell: [i32; 2]) -> Option<Candidate> {
+    let (c, here) = candidate_at(k, cell);
+    (here && retained(k, &c)).then_some(c)
 }
 
 /// Whether `variant` of `decor` stands as itself in a clip level at `cell_zoom`, judged by its

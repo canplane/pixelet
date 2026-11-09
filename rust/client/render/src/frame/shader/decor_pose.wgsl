@@ -133,8 +133,9 @@ fn leaf_overlaps(s: u32, c: vec3<i32>, at: vec3<i32>, size: vec3<i32>) -> bool {
   if (s == SLOT_NOTHING || is_folded(s) || (s & SLOT_ZOOM_MASK) != UNIT_ZOOM) {
     return false;
   }
-  let k = (tree_data(s >> SLOT_SHIFT) & 0xffffu) - FIRST_VAL;
-  if (k >= DECORS) {
+  let id = tree_data(s >> SLOT_SHIFT) & 0xffffu;
+  let k = id & ((1u << IDX_BITS) - 1u);
+  if (id >> IDX_BITS != DECOR_KIND || k >= DECORS) {
     return false;
   }
   let h = node_seed(PLACED_TAG, UNIT_ZOOM, c);

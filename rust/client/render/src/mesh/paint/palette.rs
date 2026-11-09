@@ -26,13 +26,10 @@ pub fn sentinel_layer(s: u8) -> Option<u32> {
     Some((ALL_CUBES.len() + k) as u32)
 }
 
-pub fn palette() -> impl Iterator<Item = AssetId> {
-    ALL_CUBES.iter().copied()
-}
-
 pub fn layer_idx(cube: AssetId) -> u32 {
-    palette()
-        .position(|c| c == cube)
+    ALL_CUBES
+        .iter()
+        .position(|&c| c == cube)
         .expect("a cube of the catalog") as u32
 }
 
@@ -48,8 +45,9 @@ pub fn rgb255(rgb: u32) -> [u8; 3] {
 /// swatch where there is no tile. Each layer has one mean, its top face's, used on every face,
 /// so a cliff far off reads as its land use.
 pub static LAYER_MEAN: LazyLock<Vec<[u8; 3]>> = LazyLock::new(|| {
-    palette()
-        .map(|cube| {
+    ALL_CUBES
+        .iter()
+        .map(|&cube| {
             shipped_tile_mean(cube, CubeFace::Top)
                 .unwrap_or_else(|| rgb255(cube_rgb(cube).unwrap_or(0)))
         })

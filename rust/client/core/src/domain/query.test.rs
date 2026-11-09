@@ -825,7 +825,7 @@ fn generated_decor_edit_removes() {
     };
     let at = |tree: &Instance| {
         let [cx, cy, cz] = tree.generated_in().unwrap();
-        (Decor::of(u32::from(tree.id)), [cx, cy, cz])
+        (Decor::of(tree.id), [cx, cy, cz])
     };
     let generates_on = |store: Store, decor: &Decor, [cx, cy, _]: [i32; 3]| {
         let world = placed(store);
@@ -872,7 +872,7 @@ fn generated_decor_struck_where_generated() {
     };
     let generates = |i: &Instance| {
         let [cx, cy, _] = i.generated_in().unwrap();
-        let decor = Decor::of(u32::from(i.id));
+        let decor = Decor::of(i.id);
         scatter::generated_at(&mut scatter::DecorWorld::new(&world), decor, [cx, cy], true)
             .is_some_and(|(_, generates)| generates)
     };

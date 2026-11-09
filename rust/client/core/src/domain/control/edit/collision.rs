@@ -23,7 +23,7 @@ impl Asset {
         match self.decor() {
             Some(decor) => {
                 let (variant, turn) = user_decor_pick(corner, decor);
-                let (at, m) = decor.stand(cell.min, variant, turn, 1.0);
+                let (at, m) = decor.stand(cell.min, variant, turn);
                 decor.claim(at, &m)
             }
             None => cell,

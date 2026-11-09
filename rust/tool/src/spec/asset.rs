@@ -1,6 +1,6 @@
 // pxl-tool/spec/asset.rs
 
-use super::catalog::{run_of, CUBE_JSON, DECOR_JSON};
+use super::catalog::{slots, CUBE_JSON, DECOR_JSON};
 use super::{
     align_star, casing_note, file, js_num, json_str, read, rgb_literal, rs_doc, rs_ident, ts_doc,
     Node, Output,
@@ -246,6 +246,17 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
     ])
 }
 
+/// `IDX_BITS` and the number of kind `name` (id.json).
+fn kind_layout(name: &str) -> Result<(u32, u32), String> {
+    let id = read(ID_JSON)?;
+    let number = |n: Option<&Node>| n.and_then(Node::num).map(|n| n as u32);
+    Ok((
+        number(id.get("IDX_BITS").map(Node::val)).ok_or(format!("{ID_JSON}: no IDX_BITS"))?,
+        number(id.get("KIND").and_then(|k| k.get(name)))
+            .ok_or(format!("{ID_JSON}: no kind {name}"))?,
+    ))
+}
+
 pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
     let spec = read(CUBE_JSON)?;
     let sentinel = entries(spec.get("sentinel").ok_or("no sentinel")?, "sentinel")?;
@@ -257,55 +268,20 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
     let base_type = base.str_at("type").ok_or("base has no type")?;
 
     // One value space: the sentinels and the palette entries within a byte, the object's own
-    // values and decor past it.
-    let decor = read(DECOR_JSON)?;
-    let decor: Vec<(&str, u32)> = decor
-        .get("decors")
-        .ok_or(format!("{DECOR_JSON}: no decors"))?
-        .entries()
-        .iter()
-        .map(|(k, v)| {
-            v.get("val")
-                .and_then(Node::num)
-                .map(|n| (k.as_str(), n as u32))
-                .ok_or(format!("{DECOR_JSON}: {k} has no value"))
-        })
-        .collect::<Result<_, _>>()?;
+    // values past it.
     let mut seen = std::collections::BTreeMap::new();
-    for (name, val) in cube_entries(&sentinel)
+    for e in cube_entries(&sentinel)
         .chain(cube_entries(&ground))
         .chain(cube_entries(&object))
-        .map(|e| (e.name, e.val))
-        .chain(decor.iter().copied())
     {
-        if let Some(other) = seen.insert(val, name) {
+        if let Some(other) = seen.insert(e.val, e.name) {
             return Err(format!(
-                "{CUBE_JSON}, {DECOR_JSON}: {name} and {other} are both {val}"
+                "{CUBE_JSON}: {} and {other} are both {}",
+                e.name, e.val
             ));
         }
     }
-    // An id is its kind over its index (id.json).
-    let id = read(ID_JSON)?;
-    let idx_bits = id
-        .get("IDX_BITS")
-        .map(Node::val)
-        .and_then(Node::num)
-        .ok_or(format!("{ID_JSON}: no IDX_BITS"))? as u32;
-    let kind = |name: &str| {
-        id.get("KIND")
-            .and_then(|c| c.get(name))
-            .and_then(Node::num)
-            .map(|n| n as u32)
-            .ok_or(format!("{ID_JSON}: no kind {name}"))
-    };
-    let (cube_kind, decor_kind) = (kind("cube")?, kind("decor")?);
-    for (name, val) in &decor {
-        if *val > u32::from(u16::MAX) || val >> idx_bits != decor_kind {
-            return Err(format!(
-                "{DECOR_JSON}: {name} is {val}, not of the decor kind within a u16"
-            ));
-        }
-    }
+    let (idx_bits, cube_kind) = kind_layout("cube")?;
     for e in cube_entries(&ground) {
         if e.val == 0 || e.val >= 255 {
             return Err(format!(
@@ -734,24 +710,18 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
     ]
     .map(String::from)
     .to_vec();
-    let entries: Vec<(&str, String)> = spec
+    let decors = spec
         .get("decors")
-        .map(|d| {
-            d.entries()
-                .iter()
-                .map(|(k, v)| {
-                    (
-                        k.as_str(),
-                        v.get("val")
-                            .and_then(Node::num)
-                            .map(js_num)
-                            .unwrap_or_default(),
-                    )
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    let (rows, table) = decor_table(&spec, &ground_palette()?)?;
+        .ok_or(format!("{DECOR_JSON}: no decors"))?
+        .entries();
+    let (idx_bits, decor_kind) = kind_layout("decor")?;
+    // A decor's id is its place in the table, over the decor kind.
+    let ids: Vec<(&str, u32)> = decors
+        .iter()
+        .enumerate()
+        .map(|(i, (k, _))| (k.as_str(), decor_kind << idx_bits | i as u32))
+        .collect();
+    let (rows, table) = decor_table(&spec, &ground_palette()?, &slots()?)?;
 
     let mut ts = vec!["// @pxl/client/ui/shared/asset/decor.spec.ts".to_string()];
     ts.extend(header.iter().cloned());
@@ -762,36 +732,27 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
         "// GENERATED from spec/spec/asset/decor.json".to_string(),
     ];
     constants.extend(
-        entries
-            .iter()
-            .flat_map(|(k, v)| [String::new(), format!("export const {k} = {v};")]),
+        ids.iter()
+            .flat_map(|(k, id)| [String::new(), format!("export const {k} = {id};")]),
     );
     let mut labels = Vec::new();
-    for (k, v) in spec.get("decors").map(Node::entries).unwrap_or_default() {
+    for ((k, v), (_, id)) in decors.iter().zip(&ids) {
         let label = v
             .str_at("label")
             .ok_or(format!("{DECOR_JSON}: {k} has no label"))?;
-        let val = v
-            .get("val")
-            .and_then(Node::num)
-            .map(js_num)
-            .unwrap_or_default();
-        labels.push(format!("  {val}: {},", json_str(label)));
+        labels.push(format!("  {id}: {},", json_str(label)));
     }
-    let mut numbers: Vec<&String> = entries.iter().map(|(_, v)| v).collect();
-    numbers.sort_by_key(|v| v.parse::<u32>().unwrap_or(0));
     ts.extend([
         String::new(),
         "import * as decor from \"./decor/decor.spec.ts\";".to_string(),
         String::new(),
         "export { decor };".to_string(),
         String::new(),
-        "/** The decors, by number. */".to_string(),
+        "/** The decors' ids, in the table's order. */".to_string(),
         format!(
             "export const DECORS: readonly number[] = [{}];",
-            numbers
-                .iter()
-                .map(|v| v.as_str())
+            ids.iter()
+                .map(|(_, id)| id.to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
@@ -807,19 +768,10 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
     rs.extend(doc.iter().map(|l| format!("// {l}")));
     rs.push("//".into());
     rs.extend(casing_note());
-    rs.extend(
-        [
-            "#![allow(non_upper_case_globals, non_camel_case_types, clippy::absolute_paths, reason = \"generated from the spec\")]",
-            "pub mod decors {",
-        ]
-        .map(String::from),
+    rs.push(
+        "#![allow(non_camel_case_types, clippy::absolute_paths, reason = \"generated from the spec\")]"
+            .to_string(),
     );
-    rs.extend(
-        entries
-            .iter()
-            .map(|(k, v)| format!("    pub const {k}: u16 = {v};")),
-    );
-    rs.extend(["}", "", ""].map(String::from));
     rs.extend(rows);
     rs.extend(table);
     Ok(vec![
@@ -828,10 +780,7 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
             "ts/client/src/ui/shared/asset/decor/decor.spec.ts",
             file(&constants),
         ),
-        Output::new(
-            "rust/spec/src/asset/decor.spec.rs",
-            file(&unwrapped(rs, "pub mod decors {")),
-        ),
+        Output::new("rust/spec/src/asset/decor.spec.rs", file(&rs)),
     ])
 }
 
@@ -847,16 +796,22 @@ fn ground_palette() -> Result<Vec<(String, u32)>, String> {
 
 /// The decors' table, in the catalog's order, which is the order their variants are numbered
 /// in: the rows, every number the GPU reads too (how the ground generates each decor, its
-/// palette entries, its boxes), and each decor's models over its row.
+/// palette entries, its boxes), and each decor's models over its row. A model or a skin is its
+/// slot among `slots`, the catalog's numbering.
 fn decor_table(
     spec: &Node,
     palette_idxs: &[(String, u32)],
+    slots: &[String],
 ) -> Result<(Vec<String>, Vec<String>), String> {
     const SLOT: &str = "crate::asset::catalog::Slot";
-    let mut slot = run_of(DECOR_JSON)?.0;
+    let slot_of = |path: &str| {
+        slots
+            .iter()
+            .position(|p| p == path)
+            .ok_or(format!("{path} is no slot of the catalog"))
+    };
     struct Row {
         name: String,
-        val: String,
         doc: Vec<String>,
         seed: String,
         chance: u32,
@@ -895,49 +850,45 @@ fn decor_table(
             on[(v >> 5) as usize] |= 1 << (v & 31);
         }
         let (mut sizes, mut models) = (Vec::new(), Vec::new());
-        for v in k
-            .get("variants")
-            .and_then(Node::arr)
-            .ok_or(at("variants"))?
-        {
-            let size = v
-                .get("size")
+        for pack in k.get("packs").and_then(Node::arr).ok_or(at("packs"))? {
+            let skin = slot_of(pack.str_at("skin").ok_or(at("packs"))?)?;
+            for v in pack
+                .get("variants")
                 .and_then(Node::arr)
-                .filter(|s| s.len() == 3)
-                .map(|s| s.iter().map(Node::num).collect::<Option<Vec<_>>>());
-            match (v.str_at("model"), v.str_at("skin"), size.flatten()) {
-                (Some(_), Some(_), Some(size))
-                    if size
-                        .iter()
-                        .all(|&n| n >= 1.0 && n.fract() == 0.0 && n <= f64::from(u16::MAX)) =>
-                {
-                    sizes.push(format!(
-                        "[{}]",
-                        size.iter()
-                            .map(|&n| js_num(n))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ));
-                    models.push(format!(
-                        "Variant {{ model: {SLOT}({slot}), skin: {SLOT}({}) }}",
-                        slot + 1
-                    ));
-                    slot += 2;
+                .ok_or(at("packs"))?
+            {
+                let size = v
+                    .get("size")
+                    .and_then(Node::arr)
+                    .filter(|s| s.len() == 3)
+                    .map(|s| s.iter().map(Node::num).collect::<Option<Vec<_>>>());
+                match (v.str_at("model"), size.flatten()) {
+                    (Some(model), Some(size))
+                        if size
+                            .iter()
+                            .all(|&n| n >= 1.0 && n.fract() == 0.0 && n <= f64::from(u16::MAX)) =>
+                    {
+                        sizes.push(format!(
+                            "[{}]",
+                            size.iter()
+                                .map(|&n| js_num(n))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ));
+                        models.push(format!(
+                            "Variant {{ model: {SLOT}({}), skin: {SLOT}({skin}) }}",
+                            slot_of(model)?
+                        ));
+                    }
+                    _ => return Err(at("packs")),
                 }
-                _ => return Err(at("variants")),
             }
         }
         if sizes.is_empty() {
-            return Err(at("variants"));
+            return Err(at("packs"));
         }
-        let val = k
-            .get("val")
-            .and_then(Node::num)
-            .map(js_num)
-            .ok_or(at("val"))?;
         rows.push(Row {
             name: name.clone(),
-            val,
             doc: k.lines_at("$doc").unwrap_or_default(),
             seed: seed.to_string(),
             chance: libm::rint(density * 4_294_967_296.0).min(f64::from(u32::MAX)) as u32,
@@ -970,8 +921,6 @@ fn decor_table(
             "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
             "#[repr(C)]",
             "pub struct Row {",
-            "    /// What a placed one is stored as.",
-            "    pub val: u32,",
             "    /// Its scatter: changing it reshuffles every one the ground generates.",
             "    pub seed: u32,",
             "    /// The chance a cell of its holds one, over 2^32: a cell's mean",
@@ -996,7 +945,6 @@ fn decor_table(
         sizes.resize(variants_max, "[0, 0, 0]".into());
         portable.extend([
             "    Row {".to_string(),
-            format!("        val: {},", r.val),
             format!("        seed: {},", r.seed),
             format!("        chance: {},", r.chance),
             format!("        orient: Orientation::{},", r.orient),
@@ -1020,9 +968,9 @@ fn decor_table(
         "    pub skin: crate::asset::catalog::Slot,",
         "}",
         "",
-        "/// A decor: its id, its row (how the ground generates it and the boxes its",
-        "/// variants claim, `Row`) and its variants' models, in",
-        "/// the row's order.",
+        "/// A decor: its id, which is its place in `DECORS` over the decor kind, its row",
+        "/// (how the ground generates it and the boxes its variants claim, `Row`) and its",
+        "/// variants' models, in the row's order.",
         "#[derive(Clone, Copy, Debug, PartialEq)]",
         "pub struct Decor {",
         "    pub id: crate::asset::id::AssetId,",
@@ -1045,8 +993,8 @@ fn decor_table(
     for (field, ty) in meta {
         let ty = ty
             .str()
-            .filter(|t| matches!(*t, "u32" | "f64"))
-            .ok_or(format!("{DECOR_JSON}: meta.{field} is no u32 or f64"))?;
+            .filter(|t| *t == "u32")
+            .ok_or(format!("{DECOR_JSON}: meta.{field} is no u32"))?;
         rs.push(format!("    pub {field}: {ty},"));
     }
     rs.extend(["}".to_string(), String::new()]);
@@ -1059,7 +1007,7 @@ fn decor_table(
         );
         rs.extend([
             "    Decor {".to_string(),
-            format!("        id: {} as u32,", r.name),
+            format!("        id: crate::asset::id::asset_id(crate::asset::id::Kind::decor, {i}),"),
             format!("        row: &ROWS[{i}],"),
             "        variants: &[".to_string(),
         ]);

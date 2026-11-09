@@ -12,9 +12,8 @@ use pxl_spec::asset::decor::Decor;
 use pxl_spec::asset::id::{kind_of, Kind};
 use pxl_spec::asset::AssetId;
 use pxl_spec::space::coord::zoom::{Zoom, UNIT_ZOOM};
-use pxl_spec::space::layer::lattice::GROUND;
 
-use crate::domain::layer::object::size::{object_zoom_of, MARKER_ZOOM};
+use crate::domain::layer::object::size::object_zoom_of;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Asset {
@@ -60,13 +59,11 @@ impl Asset {
     }
 
     /// The zoom of the cube the asset takes. A cube's zoom comes from the
-    /// chosen scale step; a decor and a marker each have a fixed zoom.
+    /// chosen scale step; anything else fills one unit cell.
     pub fn zoom(self, scale_steps: i32) -> Zoom {
         match self {
             Asset::Cube(_) => object_zoom_of(scale_steps),
-            Asset::Decor(_) => UNIT_ZOOM,
-            Asset::Marker => MARKER_ZOOM,
-            Asset::Unknown => GROUND.leaf_cell_zoom(),
+            Asset::Decor(_) | Asset::Marker | Asset::Unknown => UNIT_ZOOM,
         }
     }
 }

@@ -8,7 +8,6 @@ use crate::domain::control::edit::collision::is_placement_blocked;
 use crate::domain::control::edit::{hover, tool};
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::ext::Ext;
-use crate::domain::layer::object::size::MARKER_ZOOM;
 use crate::domain::preview::{Draft, RenderEdit};
 use crate::sys::sched::edge::request_world_tick;
 use pxl_engine::answer::{self, PLACED_ASSET};
@@ -17,7 +16,7 @@ use pxl_spec::asset::marker::{MARKER, MARKER_TEXT_CHARS};
 use pxl_spec::asset::AssetId;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
-use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom};
+use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom, UNIT_ZOOM};
 use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_core::global::Global;
@@ -152,7 +151,7 @@ pub fn draft_at(at: Octant) {
 /// Opens a new marker's draft for a marker tool's tap on the free cell whose
 /// min corner is `corner`.
 pub fn draft_new(corner: &Q3) {
-    draft_at(Octant::holding(MARKER_ZOOM, corner));
+    draft_at(Octant::holding(UNIT_ZOOM, corner));
 }
 
 pub fn cancel_draft() {

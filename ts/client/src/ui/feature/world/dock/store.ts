@@ -4,13 +4,12 @@ import { create } from "zustand";
 
 import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
-import { ground, object } from "@/ui/shared/asset/cube.spec.ts";
+import { CUBES, ground, object } from "@/ui/shared/asset/cube.spec.ts";
+import { DECORS } from "@/ui/shared/asset/decor.spec.ts";
 import { KIND } from "@/ui/shared/asset/id.spec.ts";
 import {
-  allCubes,
   type AssetId,
   type Cube,
-  decorIds,
   kindOf,
   MARKER,
 } from "@/ui/shared/asset/catalog.ts";
@@ -31,7 +30,7 @@ let nextChatLineId = 0;
 
 // A saved hotbar may come from another build, with ids this catalog lacks.
 function isKnownPick(id: AssetId): boolean {
-  return id === MARKER || decorIds.includes(id) || allCubes.includes(id);
+  return id === MARKER || DECORS.includes(id) || CUBES.includes(id);
 }
 
 function touchRecent(recentPicks: readonly AssetId[], id: AssetId): AssetId[] {
@@ -79,7 +78,7 @@ const SEED: readonly AssetId[] = [
   ground.residential_road,
   object.red,
   object.blue,
-  decorIds[0],
+  DECORS[0],
 ];
 
 /** The hotbar is always full: the seed fills the empty slots, and a new pick

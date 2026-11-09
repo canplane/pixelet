@@ -48,20 +48,20 @@ pub mod groups {
         /// Each variant's gender (`GENDER`), row for row with its models.
         pub const gender: [u8; 12] = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1];
         pub const models: [crate::asset::catalog::Slot; 12] = [
-            crate::asset::catalog::Slot(45),
-            crate::asset::catalog::Slot(46),
-            crate::asset::catalog::Slot(47),
-            crate::asset::catalog::Slot(48),
-            crate::asset::catalog::Slot(49),
-            crate::asset::catalog::Slot(50),
-            crate::asset::catalog::Slot(51),
-            crate::asset::catalog::Slot(52),
-            crate::asset::catalog::Slot(53),
-            crate::asset::catalog::Slot(54),
-            crate::asset::catalog::Slot(55),
-            crate::asset::catalog::Slot(56),
+            crate::asset::catalog::Slot(28),
+            crate::asset::catalog::Slot(29),
+            crate::asset::catalog::Slot(30),
+            crate::asset::catalog::Slot(31),
+            crate::asset::catalog::Slot(32),
+            crate::asset::catalog::Slot(33),
+            crate::asset::catalog::Slot(34),
+            crate::asset::catalog::Slot(35),
+            crate::asset::catalog::Slot(36),
+            crate::asset::catalog::Slot(37),
+            crate::asset::catalog::Slot(38),
+            crate::asset::catalog::Slot(39),
         ];
-        pub const skin: crate::asset::catalog::Slot = crate::asset::catalog::Slot(57);
+        pub const skin: crate::asset::catalog::Slot = crate::asset::catalog::Slot(40);
         /// The catch-up move's clip, by its index in the pack's animations —
         /// every file of a pack lists them in one order, and Kenney doesn't name this
         /// "walk" consistently: the person's is "sprint", the pet's "run".
@@ -75,6 +75,23 @@ pub mod groups {
         /// Each pet's name, the one every locale shows (an item has one name), row for row with its models.
         pub const label: usize = 24;
         pub const models: [crate::asset::catalog::Slot; 24] = [
+            crate::asset::catalog::Slot(41),
+            crate::asset::catalog::Slot(42),
+            crate::asset::catalog::Slot(43),
+            crate::asset::catalog::Slot(44),
+            crate::asset::catalog::Slot(45),
+            crate::asset::catalog::Slot(46),
+            crate::asset::catalog::Slot(47),
+            crate::asset::catalog::Slot(48),
+            crate::asset::catalog::Slot(49),
+            crate::asset::catalog::Slot(50),
+            crate::asset::catalog::Slot(51),
+            crate::asset::catalog::Slot(52),
+            crate::asset::catalog::Slot(53),
+            crate::asset::catalog::Slot(54),
+            crate::asset::catalog::Slot(55),
+            crate::asset::catalog::Slot(56),
+            crate::asset::catalog::Slot(57),
             crate::asset::catalog::Slot(58),
             crate::asset::catalog::Slot(59),
             crate::asset::catalog::Slot(60),
@@ -82,25 +99,8 @@ pub mod groups {
             crate::asset::catalog::Slot(62),
             crate::asset::catalog::Slot(63),
             crate::asset::catalog::Slot(64),
-            crate::asset::catalog::Slot(65),
-            crate::asset::catalog::Slot(66),
-            crate::asset::catalog::Slot(67),
-            crate::asset::catalog::Slot(68),
-            crate::asset::catalog::Slot(69),
-            crate::asset::catalog::Slot(70),
-            crate::asset::catalog::Slot(71),
-            crate::asset::catalog::Slot(72),
-            crate::asset::catalog::Slot(73),
-            crate::asset::catalog::Slot(74),
-            crate::asset::catalog::Slot(75),
-            crate::asset::catalog::Slot(76),
-            crate::asset::catalog::Slot(77),
-            crate::asset::catalog::Slot(78),
-            crate::asset::catalog::Slot(79),
-            crate::asset::catalog::Slot(80),
-            crate::asset::catalog::Slot(81),
         ];
-        pub const skin: crate::asset::catalog::Slot = crate::asset::catalog::Slot(82);
+        pub const skin: crate::asset::catalog::Slot = crate::asset::catalog::Slot(65);
         /// The catch-up move's clip, by its index in the pack's animations —
         /// every file of a pack lists them in one order, and Kenney doesn't name this
         /// "walk" consistently: the person's is "sprint", the pet's "run".

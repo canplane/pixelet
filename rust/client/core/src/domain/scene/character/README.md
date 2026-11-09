@@ -4,7 +4,7 @@ A **character** is a person or a pet: a model that plays its own clips, each
 tick advancing them and writing its joint palette into its block
 (`../character.rs` `Character`). That sets it apart from decor, whose population
 is instances of static models, and from the indicators, which have no clips. The
-character kind's catalog lists every one a player can be, by its group, the
+characters' catalog lists every one a player can be, by its group, the
 person or the pet, and its row there (`spec/spec/asset/character.json`).
 
 The two the player chose, a person and a pet, are the **companion**, which keeps

@@ -14,7 +14,8 @@ use pxl_content::scatter::scatter_at;
 use pxl_engine::support::ColumnSurface;
 use pxl_engine::world::PlacedCursor;
 use pxl_spec::asset::cube::sentinel;
-use pxl_spec::asset::decor::{self, Decor};
+use pxl_spec::asset::decor::Decor;
+use pxl_spec::asset::id::idx_of;
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -51,10 +52,6 @@ impl<'a> DecorWorld<'a> {
 /// edit is asked of the world as edited (`World::asset_at`).
 impl DecorQuery for DecorWorld<'_> {
     type ColumnSurface = ColumnSurface<At>;
-
-    fn rows(&self) -> &[decor::Row] {
-        &decor::ROWS
-    }
 
     /// The column's surface and its top, with false when the world lacked a
     /// tile on the way. Decor generates only on ground held exactly as its
@@ -107,7 +104,7 @@ pub(super) fn generated_at(
     cell: [i32; 2],
     boxed: bool,
 ) -> Option<(Instance, bool)> {
-    let candidate = scatter_at(decor.row, cell)?;
+    let candidate = scatter_at(idx_of(decor.id) as usize, cell)?;
     let (prop, has_footing, generates) =
         generation::placement(world, decor.row, GROUND.leaf_cell_zoom(), &candidate, boxed);
     has_footing.then(|| (instance(decor, &prop), generates))
@@ -119,14 +116,9 @@ pub(super) fn generated_at(
 pub(super) fn instance(decor: &Decor, prop: &Prop) -> Instance {
     let [x, y, z] = prop.at;
     let base = f64::from(z) - f64::from(prop.sink) / f64::from(1u32 << FRAC_W);
-    let (at, meta) = decor.stand(
-        [f64::from(x), f64::from(y), base],
-        prop.variant,
-        prop.turn,
-        1.0,
-    );
+    let (at, meta) = decor.stand([f64::from(x), f64::from(y), base], prop.variant, prop.turn);
     Instance {
-        id: decor.val(),
+        id: decor.id,
         at,
         src: Source::Ground([x, y, z]),
         meta,

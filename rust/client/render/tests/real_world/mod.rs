@@ -19,7 +19,7 @@ use pxl_engine::ground::{self, Resident};
 use pxl_engine::object::{self, Table, BRANCH};
 use pxl_engine::world::{self, Inheritance};
 use pxl_spec::asset::cube::ground as palette;
-use pxl_spec::asset::decor::ROWS;
+use pxl_spec::asset::decor::DECORS;
 use pxl_spec::brick;
 use pxl_spec::brick::{BRICK_CELLS, BRICK_SHIFT, LINES_BINS_AT, LINES_ENTRIES_AT};
 use pxl_spec::ground::{ele_idx, word, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN, UNKNOWN};
@@ -480,8 +480,6 @@ impl Placing {
     }
 }
 
-pub const FIRST_DECOR_VAL: u32 = ROWS[0].val;
-
 /// The world built, and the places where the tests send their asks.
 pub struct Built {
     pub clipmap: Vec<[i32; 4]>,
@@ -889,7 +887,7 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
         placing.put(
             LEAF_CELL_ZOOM,
             at,
-            object::leaf_word(FIRST_DECOR_VAL + k % 4, 7000 + k),
+            object::leaf_word(DECORS[k as usize % DECORS.len()].id, 7000 + k),
         );
         decors.push(at);
     }

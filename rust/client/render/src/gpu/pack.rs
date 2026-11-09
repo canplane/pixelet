@@ -6,6 +6,7 @@
 //! takes no slot and reads as the box's color.
 
 use crate::frame::shader::word::{IMAGE_BOTTOM, IMAGE_SIDE, IMAGE_TOP, NO_SLOT, SLOT_BITS};
+use pxl_spec::asset::cube::ALL_CUBES;
 use pxl_spec::asset::ingest::{CubeFace, PACK};
 use pxl_spec::asset::{shipped_sentinel_tile, shipped_texture_tile, TileOrigin};
 
@@ -13,7 +14,7 @@ use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{buffer_usage, bytes, place, release, texture_usage, Format, Gpu, Image};
 use crate::gpu::mip::{mip_levels, MipPass};
-use crate::mesh::paint::palette::{palette, LAYERS, SENTINELS};
+use crate::mesh::paint::palette::{LAYERS, SENTINELS};
 
 pub const LAYER_TEX_SIZE: u32 = PACK.cell;
 
@@ -37,8 +38,9 @@ fn layout() -> (Vec<TileOrigin>, Vec<u32>) {
         }
     }
     let mut slots: Vec<TileOrigin> = Vec::new();
-    let table = palette()
-        .map(|cube| {
+    let table = ALL_CUBES
+        .iter()
+        .map(|&cube| {
             // An asset wears what the pack ships for it: its own side or bottom where it has
             // one, and otherwise its top's image on every face, as a `cube_all` model does. The
             // dirt under a face is an asset of its own, the stratum below (pxl-engine ground.rs

@@ -59,13 +59,12 @@ pub(super) fn carved_cube(h: Q3) -> Option<AssetId> {
 
 /// A generated decor shown as itself, where it stands.
 pub(super) fn prop(i: Instance) -> Option<Ghost> {
-    let (m, decor) = (i.meta, Asset::of(u32::from(i.id)).decor()?);
+    let (m, decor) = (i.meta, Asset::of(i.id).decor()?);
     Some(Ghost::Decor {
         at: i.at,
         decor,
         variant: m.variant,
         rot: m.spin(),
-        scale: m.scale,
         stand_in: None,
     })
 }
@@ -74,7 +73,7 @@ pub(super) fn prop(i: Instance) -> Option<Ghost> {
 /// heading its corner picks (`user_decor_pick`).
 pub(super) fn stand_at(corner: &Q3, d: &Decor) -> ([f64; 3], DecorMeta) {
     let (variant, turn) = user_decor_pick(corner, d);
-    d.stand(q3::unpack(corner), variant, turn, 1.0)
+    d.stand(q3::unpack(corner), variant, turn)
 }
 
 pub(super) fn decor_of(o: &Entry) -> Option<(&'static Decor, ([f64; 3], DecorMeta))> {
@@ -108,7 +107,6 @@ pub(super) fn at_corner(
             decor,
             variant: m.variant,
             rot: m.spin(),
-            scale: m.scale,
             stand_in: Some(b),
         },
         None => Ghost::Box(b),

@@ -97,8 +97,8 @@ impl World {
         let [x, y, z] = idx_of(GROUND.leaf_cell_zoom(), at);
         let mut met = None;
         self.generated_in([x, y], |d, i| {
-            met = Some(i)
-                .filter(|i| d.val() == decor.val() && i.generated_in().is_some_and(|c| c[2] == z));
+            met =
+                Some(i).filter(|i| d.id == decor.id && i.generated_in().is_some_and(|c| c[2] == z));
             met.is_some()
         });
         met
@@ -141,12 +141,11 @@ impl World {
             Some(d) if void => In {
                 kind: Kind::Cell,
                 asset: [
-                    u32::from(d.id)
-                        | if d.generated_in().is_none() {
-                            PLACED_ASSET
-                        } else {
-                            0
-                        },
+                    d.id | if d.generated_in().is_none() {
+                        PLACED_ASSET
+                    } else {
+                        0
+                    },
                     0,
                 ],
             },
@@ -222,8 +221,8 @@ impl World {
                 met = decor_instance(e).filter(claims);
             }
         });
-        // A count a little coarser tells most kinds apart at once, so a
-        // kind's corners are asked one by one only under a count that holds
+        // A count a little coarser tells most decors apart at once, so a
+        // decor's corners are asked one by one only under a count that holds
         // one.
         let over = (GROUND.leaf_cell_zoom() - 2, [cell[0] >> 2, cell[1] >> 2]);
         met.or_else(|| {
@@ -269,7 +268,7 @@ fn counted(k: usize, (zoom, c): (Zoom, [i32; 2])) -> bool {
 }
 
 pub(super) fn claim(i: &Instance) -> Option<Aabb> {
-    Some(Asset::of(u32::from(i.id)).decor()?.claim(i.at, &i.meta))
+    Some(Asset::of(i.id).decor()?.claim(i.at, &i.meta))
 }
 
 /// The box `i` claims as cells (decor.json), every cell of it the decor's:

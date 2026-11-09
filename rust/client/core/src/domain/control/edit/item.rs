@@ -69,10 +69,7 @@ pub(super) fn ghost(asset: Asset, hover: &Hover, p: &Preview) -> Ghost {
     let decor = asset.decor().map(|d| {
         // Placing an erased generated decor back restores that same
         // instance, so the ghost shows it.
-        let restored = match asset {
-            Asset::Decor(id) => restores_scattered(&h, id),
-            _ => None,
-        };
+        let restored = restores_scattered(&h, d.id);
         (
             d,
             restored.map_or_else(|| stand_at(&h, d), |i| (i.at, i.meta)),

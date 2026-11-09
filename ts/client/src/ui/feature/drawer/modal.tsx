@@ -6,16 +6,16 @@ import { StyleSheet, View } from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import {
-  allCubes,
   type AssetId,
   type Cube,
   cubeLabel,
   cubeSection,
-  decorIds,
   decorLabel,
   decorSection,
   MARKER,
 } from "@/ui/shared/asset/catalog.ts";
+import { CUBES } from "@/ui/shared/asset/cube.spec.ts";
+import { DECORS } from "@/ui/shared/asset/decor.spec.ts";
 import { PIN_LABEL } from "@/ui/shared/asset/marker.spec.ts";
 
 import { selectAsset, useInHand } from "@/ui/feature/world/dock/store.ts";
@@ -45,8 +45,8 @@ function sectioned<S, T>(
   }
   return sections;
 }
-const SECTIONS = sectioned(allCubes, cubeSection);
-const DECOR_SECTIONS = sectioned(decorIds, decorSection);
+const SECTIONS = sectioned(CUBES, cubeSection);
+const DECOR_SECTIONS = sectioned(DECORS, decorSection);
 
 // An item is a rounded square: a circle would cut away too much of a block's
 // texture.
@@ -178,12 +178,12 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
                 <Sections
                   kind="decor"
                   sections={DECOR_SECTIONS}
-                  item={(kind, cell) => (
+                  item={(id, cell) => (
                     <GlyphItem
-                      key={kind}
-                      id={kind}
-                      label={decorLabel(kind)}
-                      glyph={decorGlyph(kind)}
+                      key={id}
+                      id={id}
+                      label={decorLabel(id)}
+                      glyph={decorGlyph(id)}
                       cell={cell}
                       onPick={pick}
                     />

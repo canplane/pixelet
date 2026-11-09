@@ -4,16 +4,18 @@
 //
 // The decors, the cube catalog's sibling: drawn as a model, not a cell the rays meet.
 //
-// Numbered in the decor kind (id.json), so a placed leaf's value says it is
-// decor: an object value is a u16.
+// A decor's id is its place in `decors`, over the decor kind (id.json). A
+// placed one is stored as that id, so a decor already here keeps its place
+// and a new one goes at the end.
 //
-// Each decor is said here once: its number, its models, and how the ground
-// generates it on its own. A decor's `seed` names its scatter, so changing it
-// reshuffles every one the ground generates; `density` is the chance a cell of
-// its holds one, the mean of a tree of hashes of the cells (pxl-content
-// scatter.rs); `on` the palette entries it may stand on; `orient` a random
-// heading, or along the road or rail its cell lies on. A variant's
-// skin is its pack's colormap, kept outside the glb.
+// Each decor is said here once: its models, and how the ground generates it
+// on its own. A decor's `seed` names its scatter, so changing it reshuffles
+// every one the ground generates; `density` is the chance a cell of its holds
+// one, the mean of a tree of hashes of the cells (pxl-content scatter.rs);
+// `on` the palette entries it may stand on; `orient` a random heading, or
+// along the road or rail its cell lies on. `packs` are the model packs it is
+// drawn from, in the order its variants are numbered: a pack's `skin` is its
+// one colormap, kept outside the glb, and its `variants` its models.
 //
 // A variant's `size` is the box it claims, in its decor's cells: every cell
 // of it is the decor's. Its model is drawn as made, a glb unit a unit, its
@@ -24,21 +26,16 @@
 // two decors' boxes never meet.
 //
 // A decor thing carries `meta`, the fields its id gives it beside where it
-// stands: which variant of its decor, its heading in quarter turns (an odd
-// one swaps its box's sides) and its scale. The ground evaluates them from
-// its cell; a placed one's are the placement's.
+// stands: which variant of its decor and its heading in quarter turns (an
+// odd one swaps its box's sides). The ground evaluates them from its cell; a
+// placed one's are the placement's.
 //
 // Names as the spec spells them, so one record has one name on every side.
 #![allow(
-    non_upper_case_globals,
     non_camel_case_types,
     clippy::absolute_paths,
     reason = "generated from the spec"
 )]
-pub const tree: u16 = 1024;
-pub const boat: u16 = 1025;
-pub const car: u16 = 1026;
-pub const train: u16 = 1027;
 
 /// The most variants a decor has.
 pub const VARIANTS: usize = 9;
@@ -57,8 +54,6 @@ pub enum Orientation {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct Row {
-    /// What a placed one is stored as.
-    pub val: u32,
     /// Its scatter: changing it reshuffles every one the ground generates.
     pub seed: u32,
     /// The chance a cell of its holds one, over 2^32: a cell's mean
@@ -76,7 +71,6 @@ pub struct Row {
 pub const ROWS: [Row; 4] = [
     // tree
     Row {
-        val: 1024,
         seed: 0x7902530c,
         chance: 107374182,
         orient: Orientation::random,
@@ -86,7 +80,6 @@ pub const ROWS: [Row; 4] = [
     },
     // boat
     Row {
-        val: 1025,
         seed: 0xb0a5802d,
         chance: 4294967,
         orient: Orientation::random,
@@ -96,7 +89,6 @@ pub const ROWS: [Row; 4] = [
     },
     // car
     Row {
-        val: 1026,
         seed: 0x0ca63010,
         chance: 12884902,
         orient: Orientation::along_transport,
@@ -106,7 +98,6 @@ pub const ROWS: [Row; 4] = [
     },
     // train
     Row {
-        val: 1027,
         seed: 0x7ba5802d,
         chance: 6442451,
         orient: Orientation::along_transport,
@@ -123,9 +114,9 @@ pub struct Variant {
     pub skin: crate::asset::catalog::Slot,
 }
 
-/// A decor: its id, its row (how the ground generates it and the boxes its
-/// variants claim, `Row`) and its variants' models, in
-/// the row's order.
+/// A decor: its id, which is its place in `DECORS` over the decor kind, its row
+/// (how the ground generates it and the boxes its variants claim, `Row`) and its
+/// variants' models, in the row's order.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Decor {
     pub id: crate::asset::id::AssetId,
@@ -138,7 +129,6 @@ pub struct Decor {
 pub struct DecorMeta {
     pub variant: u32,
     pub turn: u32,
-    pub scale: f64,
 }
 
 pub const DECORS: [Decor; 4] = [
@@ -147,44 +137,44 @@ pub const DECORS: [Decor; 4] = [
     // not natural, ground. Sparse: a hillside with some trees, not a forest wall
     // at 1u spacing.
     Decor {
-        id: tree as u32,
+        id: crate::asset::id::asset_id(crate::asset::id::Kind::decor, 0),
         row: &ROWS[0],
         variants: &[
             Variant {
-                model: crate::asset::catalog::Slot(1),
-                skin: crate::asset::catalog::Slot(2),
+                model: crate::asset::catalog::Slot(2),
+                skin: crate::asset::catalog::Slot(1),
             },
             Variant {
                 model: crate::asset::catalog::Slot(3),
-                skin: crate::asset::catalog::Slot(4),
+                skin: crate::asset::catalog::Slot(1),
+            },
+            Variant {
+                model: crate::asset::catalog::Slot(4),
+                skin: crate::asset::catalog::Slot(1),
             },
             Variant {
                 model: crate::asset::catalog::Slot(5),
-                skin: crate::asset::catalog::Slot(6),
+                skin: crate::asset::catalog::Slot(1),
             },
             Variant {
-                model: crate::asset::catalog::Slot(7),
-                skin: crate::asset::catalog::Slot(8),
+                model: crate::asset::catalog::Slot(6),
+                skin: crate::asset::catalog::Slot(1),
+            },
+            Variant {
+                model: crate::asset::catalog::Slot(8),
+                skin: crate::asset::catalog::Slot(7),
             },
             Variant {
                 model: crate::asset::catalog::Slot(9),
-                skin: crate::asset::catalog::Slot(10),
+                skin: crate::asset::catalog::Slot(7),
+            },
+            Variant {
+                model: crate::asset::catalog::Slot(10),
+                skin: crate::asset::catalog::Slot(7),
             },
             Variant {
                 model: crate::asset::catalog::Slot(11),
-                skin: crate::asset::catalog::Slot(12),
-            },
-            Variant {
-                model: crate::asset::catalog::Slot(13),
-                skin: crate::asset::catalog::Slot(14),
-            },
-            Variant {
-                model: crate::asset::catalog::Slot(15),
-                skin: crate::asset::catalog::Slot(16),
-            },
-            Variant {
-                model: crate::asset::catalog::Slot(17),
-                skin: crate::asset::catalog::Slot(18),
+                skin: crate::asset::catalog::Slot(7),
             },
         ],
     },
@@ -196,24 +186,24 @@ pub const DECORS: [Decor; 4] = [
     // the tiles a coast crosses. Rivers are a few cells wide, so the same per-cell
     // rate reads far denser than on land.
     Decor {
-        id: boat as u32,
+        id: crate::asset::id::asset_id(crate::asset::id::Kind::decor, 1),
         row: &ROWS[1],
         variants: &[
             Variant {
-                model: crate::asset::catalog::Slot(19),
-                skin: crate::asset::catalog::Slot(20),
+                model: crate::asset::catalog::Slot(13),
+                skin: crate::asset::catalog::Slot(12),
             },
             Variant {
-                model: crate::asset::catalog::Slot(21),
-                skin: crate::asset::catalog::Slot(22),
+                model: crate::asset::catalog::Slot(14),
+                skin: crate::asset::catalog::Slot(12),
             },
             Variant {
-                model: crate::asset::catalog::Slot(23),
-                skin: crate::asset::catalog::Slot(24),
+                model: crate::asset::catalog::Slot(15),
+                skin: crate::asset::catalog::Slot(12),
             },
             Variant {
-                model: crate::asset::catalog::Slot(25),
-                skin: crate::asset::catalog::Slot(26),
+                model: crate::asset::catalog::Slot(16),
+                skin: crate::asset::catalog::Slot(12),
             },
         ],
     },
@@ -222,28 +212,28 @@ pub const DECORS: [Decor; 4] = [
     // road, since a random heading reads as a crash. Sparse: a car every couple
     // of cells reads as gridlock.
     Decor {
-        id: car as u32,
+        id: crate::asset::id::asset_id(crate::asset::id::Kind::decor, 2),
         row: &ROWS[2],
         variants: &[
             Variant {
-                model: crate::asset::catalog::Slot(27),
-                skin: crate::asset::catalog::Slot(28),
+                model: crate::asset::catalog::Slot(18),
+                skin: crate::asset::catalog::Slot(17),
             },
             Variant {
-                model: crate::asset::catalog::Slot(29),
-                skin: crate::asset::catalog::Slot(30),
+                model: crate::asset::catalog::Slot(19),
+                skin: crate::asset::catalog::Slot(17),
             },
             Variant {
-                model: crate::asset::catalog::Slot(31),
-                skin: crate::asset::catalog::Slot(32),
+                model: crate::asset::catalog::Slot(20),
+                skin: crate::asset::catalog::Slot(17),
             },
             Variant {
-                model: crate::asset::catalog::Slot(33),
-                skin: crate::asset::catalog::Slot(34),
+                model: crate::asset::catalog::Slot(21),
+                skin: crate::asset::catalog::Slot(17),
             },
             Variant {
-                model: crate::asset::catalog::Slot(35),
-                skin: crate::asset::catalog::Slot(36),
+                model: crate::asset::catalog::Slot(22),
+                skin: crate::asset::catalog::Slot(17),
             },
         ],
     },
@@ -251,24 +241,24 @@ pub const DECORS: [Decor; 4] = [
     // to the rail, since one lying across it reads as derailed. Very sparse:
     // trains should read as occasional.
     Decor {
-        id: train as u32,
+        id: crate::asset::id::asset_id(crate::asset::id::Kind::decor, 3),
         row: &ROWS[3],
         variants: &[
             Variant {
-                model: crate::asset::catalog::Slot(37),
-                skin: crate::asset::catalog::Slot(38),
+                model: crate::asset::catalog::Slot(24),
+                skin: crate::asset::catalog::Slot(23),
             },
             Variant {
-                model: crate::asset::catalog::Slot(39),
-                skin: crate::asset::catalog::Slot(40),
+                model: crate::asset::catalog::Slot(25),
+                skin: crate::asset::catalog::Slot(23),
             },
             Variant {
-                model: crate::asset::catalog::Slot(41),
-                skin: crate::asset::catalog::Slot(42),
+                model: crate::asset::catalog::Slot(26),
+                skin: crate::asset::catalog::Slot(23),
             },
             Variant {
-                model: crate::asset::catalog::Slot(43),
-                skin: crate::asset::catalog::Slot(44),
+                model: crate::asset::catalog::Slot(27),
+                skin: crate::asset::catalog::Slot(23),
             },
         ],
     },

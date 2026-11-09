@@ -17,6 +17,11 @@ pub(crate) const fn asset_id(kind: Kind, idx: u32) -> AssetId {
     (kind as u32) << IDX_BITS | idx
 }
 
+/// `id`'s index within its kind, which is its place in its kind's table.
+pub const fn idx_of(id: AssetId) -> u32 {
+    id & ((1 << IDX_BITS) - 1)
+}
+
 impl Kind {
     /// Whether what is placed stands on an instance of the kind: a cube, or a
     /// decor on its box, which may float over the model; a marker is stood

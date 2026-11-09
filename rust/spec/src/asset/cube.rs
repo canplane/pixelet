@@ -53,7 +53,7 @@ const _: () = {
 
 /// A cube of the catalog (`asset/cube.json`) is its id: a palette entry of the
 /// ground's, a byte, or past a byte one that is only ever placed; a player may
-/// place either. None for VOID, UNKNOWN, AIR or a decor kind.
+/// place either. None for VOID, UNKNOWN, AIR or a decor.
 pub fn cube_of(id: AssetId) -> Option<AssetId> {
     let known = match u8::try_from(id) {
         Ok(byte) => Ground::of(byte).is_some(),

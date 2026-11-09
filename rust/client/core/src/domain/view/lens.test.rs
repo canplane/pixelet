@@ -64,10 +64,10 @@ fn decor_edges_cell_shares() {
     }
 }
 
-/// A kind is generated at the leaves' clip level and at each coarser one where
+/// A decor is generated at the leaves' clip level and at each coarser one where
 /// a variant stands as itself (`scatter::stands_at`). Its clip levels run
 /// unbroken from the leaves' upward. None of them has cells of which the
-/// kind's largest box fills less than an eighth, since a folded cube of that
+/// decor's largest box fills less than an eighth, since a folded cube of that
 /// box would keep nothing there.
 #[test]
 fn decor_clip_levels_by_size() {

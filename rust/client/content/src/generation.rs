@@ -23,7 +23,7 @@ use xpute_kit::math::rng::SplitMix32;
 
 use crate::param::scatter::ALIGN_NEIGHBOR_RADIUS;
 use crate::scatter::{brick_cap, stands_at, variant_of, Candidate};
-use pxl_spec::asset::decor::{Orientation, Row, ROWS};
+use pxl_spec::asset::decor::{Decor, Orientation, Row, ROWS};
 
 /// The lanes of a decor pass's workgroup.
 pub const LANES: u32 = 64;
@@ -49,7 +49,7 @@ pub const BRICK_RECORDS: u32 = {
 
 /// The most records any one decor holds in a brick (`cap`), over which `decor_cs` is
 /// dispatched.
-pub const KIND_RECORDS: u32 = {
+pub const DECOR_RECORDS: u32 = {
     let (mut most, mut k) = (0, 0);
     while k < ROWS.len() {
         let cap = cap(&ROWS[k]);
@@ -357,14 +357,10 @@ pub mod drawn {
 
 /// What generating decor asks of the world, as either side holds it: of the base, the
 /// ground's alone, its columns' surfaces and the assets around them; of the world as edited,
-/// whether an edit holds a cell and what is placed in a box; and the catalog's rows, where it
-/// reads them.
+/// whether an edit holds a cell and what is placed in a box.
 pub trait DecorQuery {
     /// A column surface as this side keeps it, from which its assets are asked.
     type ColumnSurface: Copy;
-    /// The catalog's rows (pxl-spec `decor::ROWS`), as this side holds them: a GPU
-    /// reads them from a buffer.
-    fn rows(&self) -> &[Row];
     /// The column surface down column `g` at `cell_zoom` of the base, with what is
     /// placed left out: the query's support (`support::column_surface`) as this side asks it, and
     /// its top (`cast::top`); false where nothing fills there or the world lacks the column.
@@ -687,18 +683,6 @@ pub fn placed_pose(decor: &Row, corner: [i32; 3]) -> (u32, u32) {
     (variant, draws.next_u32() >> (u32::BITS - TURN_BITS))
 }
 
-/// The row of `rows` a stored value names; false for one not decor.
-pub fn row_of(rows: &[Row], val: u32) -> (u32, bool) {
-    let mut k = 0;
-    while k < rows.len() {
-        if rows[k].val == val {
-            return (k as u32, true);
-        }
-        k += 1;
-    }
-    (0, false)
-}
-
 /// How far before a box's min corner, in unit cells, a placed decor's corner may lie with
 /// its box still meeting the box: any decor's widest side and tallest box, less one.
 pub const CLAIM_EXTENT: [i32; 3] = {
@@ -746,11 +730,9 @@ pub(crate) fn overlaps_placed(q: &impl DecorQuery, at: [i32; 3], cells: [i32; 3]
         if !more {
             return false;
         }
-        let (k, decor) = row_of(q.rows(), word & 0xffff);
-        if decor {
-            let row = &q.rows()[k as usize];
-            let (variant, turn) = placed_pose(row, c);
-            let [w, e, v] = row.cells(variant, turn);
+        if let Some(decor) = Decor::find(word & 0xffff) {
+            let (variant, turn) = placed_pose(decor.row, c);
+            let [w, e, v] = decor.row.cells(variant, turn);
             let (w, e, v) = (w as i32, e as i32, v as i32);
             if c[0] < at[0] + cells[0]
                 && at[0] < c[0] + w

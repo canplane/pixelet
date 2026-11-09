@@ -834,6 +834,7 @@ fn decor_word() -> String {
     use pxl_content::scatter;
     use pxl_engine::{cast, world};
     use pxl_spec::asset::decor::{Orientation, Row, DECORS, ROWS};
+    use pxl_spec::asset::id::{Kind, IDX_BITS};
     use pxl_spec::value;
     let row = |at: usize| (at / size_of::<u32>()) as u32;
     let words: &[(&str, u32)] = &[
@@ -885,7 +886,8 @@ fn decor_word() -> String {
         ("CNT_TAG", scatter::CNT),
         ("SPLIT_TAG", scatter::SPLIT),
         ("DECORS", ROWS.len() as u32),
-        ("FIRST_VAL", ROWS[0].val),
+        ("IDX_BITS", IDX_BITS),
+        ("DECOR_KIND", Kind::decor as u32),
         ("ROW_WORDS", row(size_of::<Row>())),
         ("ROW_SEED", row(offset_of!(Row, seed))),
         ("ROW_ORIENT", row(offset_of!(Row, orient))),

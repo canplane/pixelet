@@ -1,5 +1,6 @@
 {
   "pack": {
+    "$type": "file",
     "$val": "cube/pack.webp",
     "$doc": [
       "The texture pack, the file the cube kind's palette entry is drawn from: one image",
