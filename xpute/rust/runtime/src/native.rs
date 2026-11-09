@@ -185,12 +185,12 @@ impl Core {
 
 /// The system's monotonic clock in milliseconds since boot: the clock a
 /// native app's `performance.now()` counts on, C++'s `steady_clock`, so that the
-/// core's times and the UI's lie on one line. That is `CLOCK_MONOTONIC_RAW` on
-/// Apple's systems, where `Instant` reads another clock, and `CLOCK_MONOTONIC`
+/// core's times and the UI's lie on one line. That is `CLOCK_UPTIME_RAW` on
+/// Apple's systems, which stops while the device sleeps, and `CLOCK_MONOTONIC`
 /// elsewhere.
 pub fn now() -> f64 {
     #[cfg(target_vendor = "apple")]
-    const CLOCK: libc::clockid_t = libc::CLOCK_MONOTONIC_RAW;
+    const CLOCK: libc::clockid_t = libc::CLOCK_UPTIME_RAW;
     #[cfg(not(target_vendor = "apple"))]
     const CLOCK: libc::clockid_t = libc::CLOCK_MONOTONIC;
     let mut t = libc::timespec {

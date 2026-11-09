@@ -15,22 +15,31 @@ import type { Core, Machine, ModuleSource } from "./runtime.ts";
 /** The display frame last offered, and the last a turn was granted. */
 let offered: f64 = 0;
 let granted: f64 = 0;
+/** What waits to be offered a frame. */
+const waiting: ((now: f64) => void)[] = [];
 
-/** Hands `run` the next display frame's time ahead of that frame, as soon as
- * this thread is free. The turn it grants waits on the core's own thread for
- * that frame, so what this thread is busy with does not move it. A frame
- * offered and not taken is offered no more, and the next is offered once this
- * one has come. */
-export function next_frame(run: (now: f64) => void): void {
-  setImmediate(() => {
+/** Offers each waiter the next display frame. While a turn granted has not
+ * begun it takes all that is sent before it, and a frame offered and not taken
+ * is offered no more, so in either case the waiter waits for the display's
+ * next frame. */
+function offer(): void {
+  for (const run of waiting.splice(0)) {
     const frame = XPUTE.nextFrame(granted);
-    if (frame === offered) {
+    if (frame === offered || granted > performance.now()) {
       requestAnimationFrame(() => next_frame(run));
-      return;
+      continue;
     }
     offered = frame;
     run(frame);
-  });
+  }
+}
+
+/** Hands `run` the next display frame's time ahead of that frame, as soon as
+ * this thread is free. The turn it grants waits on the core's own thread for
+ * that frame, so what this thread is busy with does not move it. */
+export function next_frame(run: (now: f64) => void): void {
+  waiting.push(run);
+  setImmediate(offer);
 }
 
 /** Once the core has terminated, a turn answers NaN (xpute-runtime native
@@ -64,6 +73,9 @@ export function open(
           XPUTE.answer();
           const [wake_ms, turn_ms] = XPUTE.turns();
           heard(wake_ms, turn_ms);
+          // An event of a native module's does not run what it left for
+          // `setImmediate` on iOS until something else runs on this thread.
+          offer();
         });
         // The core outlives a JavaScript reload, and it tells nothing more
         // until the news it told before the reload has been read, so it is

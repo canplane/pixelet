@@ -101,6 +101,16 @@ reach the queue before a destroy, and the two runs above kept going.
 The footprint stood at 947 MiB 4 s in and at 1.02–1.04 GiB through 80 s. The six
 plain launches were alive after 30 s, and no crash or Jetsam record was added.
 
+The last build, its first turn at a display frame, drew 83 and 72 frames in the
+drive with intervals up to 517 ms: a kick put off a turn not yet begun, turns were
+granted hundreds of ms ahead, and the Rust clock lay 93.5 hours from
+`performance.now()`, `CLOCK_MONOTONIC_RAW` counting the time asleep. With the
+earliest frame kept, one turn outstanding and `CLOCK_UPTIME_RAW`, two runs drew 299
+and 225 frames, interval p50 50 and 34 ms, max 200 and 234 ms, 636 and 681 turns,
+GPU p50 57.9 and 60.8 ms. The footprint stood at 1.02–1.04 GiB through 80 s. The
+frames drawn are fewer than the 350 and 349 before the turns moved, and the phone's
+temperature was not read.
+
 ## A matrix in a uniform
 
 `Resolve` was declared for the run as `Propagate` is, two `mat4x4f` and then a
@@ -118,7 +128,7 @@ pass, was not probed.
   before it is the kernel's log at the kill.
 - What kept the measuring drive drawing while touches drew nothing.
 - What wakes the app 13–46 times a second with no touch.
-- The last build on the iPhone, which was locked.
+- The last build on the S23.
 - Why the Release in the simulator stands at "Waiting for the server…", where
   its Safari opens the site.
 - The cause of the spans' differences between the app and Chrome.

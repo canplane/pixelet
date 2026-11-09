@@ -26,7 +26,9 @@ the page's.
   holds the runtime and React at once, and its animation frame gives the time
   the callback arrived. The scheduler offers the next display frame ahead of it
   (`next_frame`, from the platform's display link), and the core's thread waits
-  for that frame. A frame offered and not taken is offered no more.
+  for that frame. A frame offered and not taken is offered no more, a later kick
+  does not put off a turn already due, and no turn is granted while one has not
+  begun, since it takes all that was sent before it.
 - **A write the queue has not heard of.** The page's `writeBuffer` is on the
   queue when it returns. The native runtime stages writes for the next submit, so
   it submits them before it destroys a buffer or a texture.
