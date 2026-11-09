@@ -71,9 +71,10 @@ fn cast_px(p: vec2<u32>, size: vec2<u32>) -> bool {
   let aim = eye_aim(px);
   let on = ((node_cache[CNT_ON] >> CNT_EYE) & 1u) != 0u;
   if (visible != 0u && (visible & VISIBLE_LACK) == 0u) {
-    // The voxel's entry was drawn, so no claim takes its slot while its box is drawn
-    // (`record::drawn`). A slot forgotten since the boxes were drawn has no faces set to draw,
-    // and the pixel walks.
+    // The voxel's entry was drawn, so it is fresh (record_draw.wgsl), and the boxes are kept
+    // only while the eye's words its freshness reads stand. No claim takes its slot while its
+    // box is drawn (`record::drawn`). A slot forgotten since the boxes were drawn has no faces
+    // set to draw, and the pixel walks.
     let slot = visible - 1u;
     let e = entry_at(slot);
     let state = node_cache_word(state_at(slot));
@@ -82,7 +83,7 @@ fn cast_px(p: vec2<u32>, size: vec2<u32>) -> bool {
       let fill = (node_cache_word(e + W_ASSET) >> FILL_SHIFT) & (EIGHTHS - 1u);
       let faces = (state & RECORD_ASKED) >> RECORD_ASKED_SHIFT;
       let entry = visible_cell(aim, k.zoom, k.corner, k.roots - origin_roots(aim.origin), fill, faces);
-      if (entry.enters && is_fresh(k, (state & RECORD_WHOLE) != 0u, vec3<i32>(aim.origin))) {
+      if (entry.enters) {
         // The ray's words, with what lies about its face taken from the voxel's (`word`,
         // `ray::first_word`).
         let face = 2u * entry.axis + select(0u, 1u, ray_dir(aim.dir)[entry.axis] > 0.0);

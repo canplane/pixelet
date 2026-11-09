@@ -298,11 +298,11 @@ fn claim_slot(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32) -> vec2
 }
 
 /// Writes the node `c` at `zoom` asked at `zooms`, answered `a`, into slot `slot`, which its walk
-/// claimed (`claim`). Every word is written, with nothing set yet to draw it (pxl-engine
-/// `record`), and its key under `tag` is written last.
+/// claimed (`claim`), with nothing set yet to draw it (pxl-engine `record`). The word of its
+/// last draw is left to the stop that first sets it to draw (`observe_hit`). Its key under `tag`
+/// is written last.
 fn fill(slot: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32, a: Answer) {
   atomicStore(&node_cache[state_at(slot)], 0u);
-  atomicStore(&node_cache[drawn_at(slot)], 0u);
   for (var face = 0u; face < 6u; face += 1u) {
     atomicStore(&node_cache[face_at(slot, face)], 0u);
   }
