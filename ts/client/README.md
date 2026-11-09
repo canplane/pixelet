@@ -51,17 +51,14 @@ the world until the view is first drawn (`ui/feature/cover/`).
 
 ## The app's ABI
 
-What the numbers on xpute's rings mean is defined here, by two protocols under
-`spec/client/core/` (`door/ui.json`, the UI's, and `sys/io/text.json`, the
-platform's text), from which both sides' code is generated. The app's majors
-start at xpute's `PROGRAM_MAJOR`, a major a module, its two ends a pair of
-files named alike: `pxl-core door/apply/<x>.rs` and `service/core/<x>.ts`.
+xpute carries numbers and does not know what they mean; their meaning is the
+app's, defined here once, in two protocols under `spec/client/core/` from which
+both sides are generated. Each of the app's modules has one end in the core and
+one in the services, named alike.
 
-The core opens files by a root and a name, and each root is bound once, at
-boot, to what answers it (`service/sys/fs/namespace.ts`). So the core knows no
-URL, version or storage key; which version of each bake is served is the
-declaration the client reads at boot, and the core is handed only its part
-(`SOURCE_DECLARE`).
+The core names files only by a root and a name, and the client decides, once at
+boot, what answers each root. So no URL, version or storage key reaches the
+core, and where the world is read from changes without it.
 
 ## Builds
 
