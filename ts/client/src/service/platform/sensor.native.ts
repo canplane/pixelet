@@ -112,6 +112,10 @@ function geo_stop(): void {
 
 let orientation: Watch | null = null;
 
+/** A heading nearer the last one told than this is not told: a phone at rest
+ * trembles by less, and each reading told is a frame drawn. */
+const HEADING_STEP_DEG = 1;
+
 function orient_fail(watch: Watch, refused: boolean): void {
   if (orientation !== watch) return;
   orient_stop();
@@ -123,11 +127,16 @@ function orient_start(): void {
   if (orientation !== null) return;
   const watch: Watch = { subscription: null, stopped: false };
   orientation = watch;
+  let told: number | null = null;
   void (async () => {
     if (!(await geo_permit())) return orient_fail(watch, true);
     const subscription = await Location.watchHeadingAsync(
       (h) => {
         const heading = h.trueHeading >= 0 ? h.trueHeading : h.magHeading;
+        const moved =
+          told === null ? 360 : 180 - Math.abs(Math.abs(heading - told) - 180);
+        if (moved < HEADING_STEP_DEG) return;
+        told = heading;
         listener.orientation(heading, null, null, null);
       },
       (reason) => {
