@@ -378,7 +378,11 @@ fn kick_locked(g: &mut Loop, deadline_ms: f64, at_ms: f64) {
     let already = core::mem::replace(&mut g.kicked, true);
     g.deadline = g.deadline.max(deadline_ms);
     // A later kick does not put off a turn already due at an earlier frame.
-    g.not_before = if already { g.not_before.min(at_ms) } else { at_ms };
+    g.not_before = if already {
+        g.not_before.min(at_ms)
+    } else {
+        at_ms
+    };
     CORE_CV.notify_all();
 }
 
