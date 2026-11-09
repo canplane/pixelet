@@ -197,7 +197,7 @@ export const SETTING = {
     default: false,
     section: "debug",
   },
-  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell their faces show the eye (rust/client/render/src/frame/shader/camera_grid.wgsl, screen_shade.wgsl `cell_share`), in the looks debug_look.json gives them. */
+  /** The camera grid over the screen, the cells the rays are spaced by, and the cells the rays stop on tinted by the share of a grid cell their faces show the eye (rust/client/render/src/frame/shader/camera_grid.wgsl, screen_shade.wgsl `cell_share`), in the looks debug_look.json gives them. */
   camera_gizmo: {
     key: 16 as number,
     kind: "toggle",
@@ -401,7 +401,7 @@ export const SETTING_PROD = {
     default: false,
     section: "debug",
   },
-  /** The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell their faces show the eye (rust/client/render/src/frame/shader/camera_grid.wgsl, screen_shade.wgsl `cell_share`), in the looks debug_look.json gives them. */
+  /** The camera grid over the screen, the cells the rays are spaced by, and the cells the rays stop on tinted by the share of a grid cell their faces show the eye (rust/client/render/src/frame/shader/camera_grid.wgsl, screen_shade.wgsl `cell_share`), in the looks debug_look.json gives them. */
   camera_gizmo: {
     key: 16 as number,
     kind: "toggle",

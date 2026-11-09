@@ -261,7 +261,7 @@ pub enum SettingKey {
     perf = 14,
     /// Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/gizmo/frame.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/gizmo/coverage.rs).
     world_gizmo = 15,
-    /// The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell their faces show the eye (rust/client/render/src/frame/shader/camera_grid.wgsl, screen_shade.wgsl `cell_share`), in the looks debug_look.json gives them.
+    /// The camera grid over the screen, the cells the rays are spaced by, and the cells the rays stop on tinted by the share of a grid cell their faces show the eye (rust/client/render/src/frame/shader/camera_grid.wgsl, screen_shade.wgsl `cell_share`), in the looks debug_look.json gives them.
     camera_gizmo = 16,
     person = 17,
     pet = 18,

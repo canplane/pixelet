@@ -1,10 +1,9 @@
 // pxl-render/camera_grid.wgsl
 
-// The camera grid fixed to the screen, drawn over the canvas: the sphere about the eye cut into
-// cells of one solid angle, a cell's angle squared (`GRID_CELL`, pxl-engine grid.rs `CELL`), in
-// rings a cell apart about the optical axis, each ring cut into as many as fit. A cell here
-// holds the solid angle the eye decides a cell's zoom by (pxl-engine grid.rs `cell_zoom_at`).
-// Its lines are `GRID_COLOR` (debug_look.json).
+// The camera grid fixed to the screen, drawn over the canvas: the cells the rays are spaced by,
+// squares of the screen's tangent plane a cell (`GRID_CELL`, pxl-engine grid.rs `CELL`) a side,
+// counted from the screen's left and top (pxl-engine `beam::Grid::cell`). Its lines are
+// `GRID_COLOR` (debug_look.json).
 
 struct VertexOut {
   @builtin(position) clip: vec4f,
@@ -28,19 +27,9 @@ fn edge(v: f32, w: f32) -> f32 {
 @fragment
 fn fs(v: VertexOut) -> @location(0) vec4f {
   let m = sky_ray();
-  let dir = m * vec3f(v.ndc, 1.0);
-  let x = dot(dir, normalize(m[0]));
-  let y = dot(dir, normalize(m[1]));
-  let a = GRID_CELL;
-  // The angle from the axis, by atan2, since acos loses its bits near the axis.
-  let r = atan2(length(vec2f(x, y)), dot(dir, normalize(m[2]))) / a;
-  // Ring k spans [(k − ½)a, (k + ½)a]; the one on the axis is a single cell.
-  let ring = round(r);
-  let n = max(1.0, round(TAU * sin(ring * a) / a));
-  let phi = atan2(y, x);
-  // Measured on both sides of the seam at ±π, so the seam draws no line.
-  let dphi = min(fwidth(phi), fwidth(fract(phi / TAU) * TAU));
-  let sectors = edge(phi * n / TAU, n * dphi / TAU) * step(1.5, n);
-  let line = max(edge(r - 0.5, fwidth(r)), sectors);
+  let tan = vec2f(length(m[0]), length(m[1]));
+  let c = (vec2f(1.0) + vec2f(v.ndc.x, -v.ndc.y)) * tan / GRID_CELL;
+  let w = fwidth(c);
+  let line = max(edge(c.x, w.x), edge(c.y, w.y));
   return vec4f(to_srgb(GRID_COLOR.rgb), GRID_COLOR.a * line);
 }
