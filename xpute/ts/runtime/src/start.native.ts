@@ -125,18 +125,11 @@ export async function start<G extends Grant>(
     root: u32;
     path: string;
     controller: AbortController;
-    /** The program's fetcher has the file, off this thread. */
-    fetched: boolean;
   }
   const files = new Map<u32, File>();
 
   function open_file(fd: u32, root: u32, path: string, write: boolean): void {
-    const file: File = {
-      root,
-      path,
-      controller: new AbortController(),
-      fetched: false,
-    };
+    const file: File = { root, path, controller: new AbortController() };
     files.set(fd, file);
     if (write) return;
     const failed = (err: unknown) => {
@@ -154,19 +147,6 @@ export async function start<G extends Grant>(
       XPUTE.fsOpened(fd, bytes.byteLength, 0, bytes as Uint8Array);
     };
     try {
-      const fetcher = cfg.fs!.fetcher;
-      const url = fetcher && cfg.fs!.url?.(root, path);
-      if (fetcher && url !== undefined) {
-        file.fetched = true;
-        fetcher.fetch(fd, url).then(
-          () => void (file.fetched = false),
-          (err) => {
-            file.fetched = false;
-            failed(err);
-          },
-        );
-        return;
-      }
       const opened = cfg.fs!.open(root, path, file.controller.signal);
       if (opened instanceof Promise) opened.then(got, failed);
       else got(opened);
@@ -178,10 +158,7 @@ export async function start<G extends Grant>(
   function close_file(fd: u32, commit: boolean, bytes: U8Array | null): void {
     const file = files.get(fd);
     files.delete(fd);
-    if (!commit) {
-      if (file?.fetched) cfg.fs!.fetcher!.cancel(fd);
-      return file?.controller.abort();
-    }
+    if (!commit) return file?.controller.abort();
     let res: i32 = Errno.OK;
     try {
       if (file) cfg.fs!.commit(file.root, file.path, bytes ?? NOTHING);

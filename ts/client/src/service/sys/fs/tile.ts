@@ -16,7 +16,7 @@ import {
   type BaseLayer,
   tileObject,
 } from "@/service/origin/publication.spec.ts";
-import { href, tile_url } from "@/service/origin/route.ts";
+import { tile_url } from "@/service/origin/route.ts";
 import { get } from "@/service/sys/fs/read.ts";
 import type { Declaration } from "@/service/sys/fs/source.ts";
 
@@ -42,21 +42,13 @@ export function version_of(
   return finest?.[1] ?? d.version[kind];
 }
 
-function route_of(decl: Declaration, bake: u32, name: string): string {
-  const kind = BASE_LAYERS[bake];
-  return tile_url(kind, tileObject(version_of(decl, kind, name), name));
-}
-
 export function read_object(
   decl: Declaration,
   bake: u32,
   name: string,
   signal: AbortSignal,
 ): Promise<U8Array> {
-  return get(route_of(decl, bake, name), signal);
-}
-
-/** The whole URL `read_object` reads. */
-export function object_url(decl: Declaration, bake: u32, name: string): string {
-  return href(route_of(decl, bake, name));
+  const kind = BASE_LAYERS[bake];
+  const object = tileObject(version_of(decl, kind, name), name);
+  return get(tile_url(kind, object), signal);
 }

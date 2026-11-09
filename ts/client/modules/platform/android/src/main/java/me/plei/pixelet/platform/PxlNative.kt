@@ -20,10 +20,6 @@ object PxlNative {
    * thread at any time. */
   external fun unpack(packed: ByteArray): ByteBuffer?
 
-  /** Hands the runtime the body of the file `fd`, zstd or not; false where it
-   * does not decode, and the runtime has heard nothing. */
-  external fun fileBody(fd: Int, body: ByteArray, zstd: Boolean): Boolean
-
   /** Makes `width` and `raster` answer the core's text, on the core's thread. */
   external fun textOn()
 

@@ -4,10 +4,9 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { type Fetcher, FileError } from "@xpute/runtime";
+import { FileError } from "@xpute/runtime";
 import { online } from "@/service/origin/online.ts";
 import * as origin from "@/service/origin/route.ts";
-import type { NativeFetch } from "@/service/platform/types.ts";
 
 export async function get(url: string, signal: AbortSignal): Promise<U8Array> {
   let res: Response;
@@ -26,40 +25,17 @@ export async function get(url: string, signal: AbortSignal): Promise<U8Array> {
         }`,
       );
     }
-    throw transport_error();
+    throw new FileError(online() ? Errno.EIO : Errno.ENETUNREACH);
   }
-  if (res.status === 204 || !res.ok) throw status_error(url, res.status);
+  if (res.status === 204) throw new FileError(Errno.ENOENT);
+  if (!res.ok) {
+    console.warn(`[read] ${url}: HTTP ${res.status}`);
+    // A 404 is the object's failure: its key names nothing. Any other status
+    // is the server's failure.
+    throw new FileError(
+      res.status === 404 ? Errno.ENXIO : Errno.EACCES,
+      res.status,
+    );
+  }
   return body;
-}
-
-/** A failure of the transport: fetch throws the same TypeError when offline,
- * on a DNS failure, on CORS and on a refused connection, and only the online
- * flag tells offline apart. */
-function transport_error(): FileError {
-  return new FileError(online() ? Errno.EIO : Errno.ENETUNREACH);
-}
-
-/** Why a response of `status` holds no file. */
-function status_error(url: string, status: number): FileError {
-  if (status === 204) return new FileError(Errno.ENOENT);
-  console.warn(`[read] ${url}: HTTP ${status}`);
-  // A 404 is the object's failure: its key names nothing. Any other status
-  // is the server's failure.
-  return new FileError(status === 404 ? Errno.ENXIO : Errno.EACCES, status);
-}
-
-export function fetcher_of(native: NativeFetch): Fetcher {
-  return {
-    cancel: (fd) => native.cancel(fd),
-    fetch: (fd, url) =>
-      native.fetch(fd, url).then(
-        (status) => {
-          if (status !== 0) throw status_error(url, status);
-        },
-        (err) => {
-          console.warn(`[read] ${url}: ${String(err)}`);
-          throw transport_error();
-        },
-      ),
-  };
 }
