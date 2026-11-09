@@ -264,7 +264,8 @@ impl LocationIndicator {
         // The memo is checked every turn, so it sees each change once.
         let mut grounded = core::mem::take(&mut self.ground_center);
         grounded.forget_touched_at_leaf(|&(_, exact)| exact);
-        let (center_pos, _) = grounded.of(World::now(), seen, |w| self.ground(w, draw, seen));
+        let w = World::now();
+        let (center_pos, _) = grounded.of(seen, || self.ground(w, draw, seen));
         self.ground_center = grounded;
         let Some(center_pos) = center_pos else {
             return self.clear(draw);
@@ -373,7 +374,7 @@ impl LocationIndicator {
         let cell_there = lens::cell_there(v3::len(&to));
         p.visible = frame.sees(p.center, ZONE_RADIUS) && 2.0 * ZONE_RADIUS >= cell_there;
         p.zone_drawn =
-            p.visible && grid::cell_zoom_at(v3::dot(&to, &to)) >= GROUND.leaf_cell_zoom();
+            p.visible && grid::cell_zoom_at(v3::dot(&to, &to) as f32) >= GROUND.leaf_cell_zoom();
         let shown = p.beacon_at.get_or_insert(p.target);
         let gap = libm::hypot(p.target[0] - shown[0], p.target[1] - shown[1]);
         let slides = p.visible && gap <= ZONE_RADIUS && gap >= cell_there;

@@ -30,7 +30,8 @@ use xpute_kit::status::errno::Errno;
 use fnv::FnvHashMap;
 
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
+use pxl_spec::space::coord::zoom::{Zoom, LEAF_ZOOM, SHARD_ZOOM};
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::domain::layer::floor;
 use crate::domain::layer::tile_cache::{Path, TileCache};
@@ -42,7 +43,6 @@ use crate::sys::io::failure::{Exit, Failure};
 use crate::sys::io::request::declare;
 use crate::sys::io::source;
 use crate::sys::sched::edge;
-use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::layer::demand::tiles_within;
 use pxl_spec::space::layer::lattice::GROUND;

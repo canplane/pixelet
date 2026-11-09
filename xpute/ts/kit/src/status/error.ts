@@ -4,9 +4,14 @@ import { strerror } from "./errno.spec.ts";
 import type { i32 } from "../abi/word.ts";
 
 /**
- * An `XputeError` is an errno raised as an exception. Its class says whether it
- * is fatal, not its errno: an `InvariantError` is fatal, and a `FaultError` is
- * caught, isolated and dropped.
+ * Error policy:
+ * - Internal invariant violation (our bug / impossible state) => FATAL (the core is ended; never caught to carry on).
+ * - External fault (peer/network/remote/env/input) => NON-FATAL (catch, isolate, degrade, drop).
+ *
+ * Notes:
+ * - Errno describes the error code, not fatality.
+ * - Fatal vs non-fatal is determined by error class (and catch boundary policy).
+ * - Origin/context should be attached at catch/log boundary, not encoded in message prefixes.
  */
 export class XputeError extends Error {
   readonly errnum: i32;
@@ -14,6 +19,7 @@ export class XputeError extends Error {
   constructor(errnum: i32) {
     super(strerror(errnum));
 
+    // subclass-safe
     Object.setPrototypeOf(this, new.target.prototype);
     this.name = new.target.name;
 

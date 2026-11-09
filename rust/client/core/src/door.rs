@@ -17,6 +17,8 @@ pub mod cmd;
 mod executor;
 pub mod layout;
 mod life;
+#[cfg(not(target_arch = "wasm32"))]
+mod touch;
 
 use crate::domain::control::sensor;
 use crate::domain::scene::character::surface::character_surface_close;
@@ -132,6 +134,7 @@ fn on_runtime_attached(s: &mut State) {
     }
     sensor::sensors_close();
     text::text_forget();
+    apply::input::forget_touches();
     s.last_snapshot = Default::default();
 }
 
@@ -145,6 +148,7 @@ fn boot(b: BootInfo) {
     {
         text_device::install(b.call);
         native::named_by(cmd::mem_of);
+        touch::install();
     }
     if !machine::booted() {
         machine::boot(&MACHINE);

@@ -1,9 +1,8 @@
 // pxl-geo-bake/bin/server.rs
 
 //! The dev tile server, baking on demand. It keeps what it bakes, one directory a kind, across
-//! restarts, in `--oven` or else in the checkout's tmp/ under the digest of the code that
-//! bakes, so a change to a bake starts afresh. After a re-ingest the oven is purged by
-//! command. The Earth's picture is baked offline (bin/earth.rs), so it is served from
+//! restarts, in `--oven` or else in the checkout's tmp/. After a re-ingest or a change to a
+//! bake the oven is purged by command. The Earth's picture is baked offline (bin/earth.rs), so it is served from
 //! that bake (`./out`, or `--shelf`), under the names the bucket holds, however the rest is
 //! served.
 //! `--shelf` serves each kind's set (tile/shard.rs), so a bake can be looked at before
@@ -26,13 +25,13 @@ use pxl_geo_bake::oven::{
 };
 use pxl_geo_bake::pyramid;
 use pxl_geo_bake::source::{self, OverrideMap};
-use pxl_geo_bake::util::{code_digest, CONTENT_ENCODING};
+use pxl_geo_bake::util::CONTENT_ENCODING;
 use pxl_spec::bake::publication::{tile_object_parts, BaseLayer, FORMAT, TILE_SPHERE};
 use pxl_spec::bake::source::is_sharded;
 use pxl_spec::directory;
 use pxl_spec::route::{ASSET_ROOT, TILE_ROOT};
-use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, MIN_ZOOM};
+use pxl_spec::space::coord::zoom::{Zoom, LEAF_ZOOM, MIN_ZOOM};
+use pxl_spec::space::layer::quadrant::Quadrant;
 use std::path::{Path as FsPath, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -299,20 +298,9 @@ fn run() -> Result<(), String> {
         return Err("--shelf serves no oven, so the --oven flags do not apply".into());
     }
 
-    // A shelf's server has no oven, so it names no folder for one. The default oven is named by
-    // the code that bakes, and an oven another code baked is stale, so it is removed.
+    // A shelf's server has no oven, so it names no folder for one.
     let oven = match (oven, &shelf) {
-        (None, None) => {
-            let ovens = directory::tmp_dir("oven");
-            let own = format!("{:016x}", code_digest()?);
-            for e in std::fs::read_dir(&ovens).into_iter().flatten().flatten() {
-                if e.file_name() != own.as_str() {
-                    std::fs::remove_dir_all(e.path())
-                        .map_err(|err| format!("{}: {err}", e.path().display()))?;
-                }
-            }
-            ovens.join(own)
-        }
+        (None, None) => directory::tmp_dir("oven"),
         (oven, _) => oven.unwrap_or_default(),
     };
     // The folder the bakes write to: everything the server reads from it follows `--shelf`.

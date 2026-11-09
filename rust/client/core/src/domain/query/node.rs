@@ -47,18 +47,18 @@
 
 use pxl_content::Pixelet;
 use pxl_engine::answer::{In, Kind};
-use pxl_engine::area::{Area, Shard};
 use pxl_engine::clipmap::{self, Lookup};
-use pxl_engine::ground::VOID;
 use pxl_engine::ground::{self, Cell};
 use pxl_engine::object::{child_at, Cut};
 use pxl_engine::world;
-use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::ground::VOID;
+use pxl_spec::space::coord::zoom::{units, Zoom, MIN_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
+use pxl_spec::space::layer::area::{Area, Shard};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::octant::Octant;
-use pxl_spec::space::layer::quadrant::{Quadrant, MIN_ZOOM};
+use pxl_spec::space::layer::quadrant::Quadrant;
 
+use super::change;
 use super::world::World;
 use crate::domain::layer::terrain::clipmap::CpuClipmap;
 use crate::domain::layer::terrain::pool::way_pool;
@@ -101,35 +101,27 @@ impl World<'_> {
     pub(super) fn start(&self, node: Node<3>) -> At {
         At {
             node,
-            inheritance: if self.unplaced {
-                world::Inheritance::UNPLACED
-            } else {
-                world::Inheritance::of(&self.object.columns(), node)
-            },
+            inheritance: world::Inheritance::of(&self.object.columns(), node),
         }
     }
 
     /// What is in `at`'s cell at its own zoom, which is `coarsest` or finer:
     /// what fills it (`node`, asked at that zoom), or void where it is air or
     /// void. `path` are the ground's lines the asker read, and the cell's
-    /// line steps on from them (`node`).
+    /// line steps on from them (`node`). The cell's column is reported as
+    /// read (`change::report_read`).
     pub(super) fn asset_at(&self, at: &mut At, path: &mut Path) -> Answer<u32> {
-        let (zoom, _) = at.node;
+        let (zoom, c) = at.node;
         xpute_kit::ensure!(zoom >= coarsest(), EINVAL, zoom);
+        let side = units(zoom);
+        let middle = [c[0], c[1]].map(|v| (f64::from(v) + 0.5) * side);
+        change::report_read(middle, middle, zoom);
         self.node(at, [zoom, zoom], path).map(|i| {
             if i.kind == Kind::Cell {
                 i.asset[0]
             } else {
                 VOID
             }
-        })
-    }
-
-    /// A preview's entry in the form pxl-engine `object` takes.
-    fn cut(&self, entry: Option<Octant>) -> Cut {
-        entry.map_or(Cut::NONE, |e| Cut {
-            zoom: e.zoom(),
-            at: e.at(),
         })
     }
 
@@ -163,10 +155,7 @@ impl World<'_> {
         zooms: [Zoom; 2],
         path: &mut Path,
     ) -> Answer<In<[u32; 2]>> {
-        let (lanes, cuts) = (
-            self.object.columns(),
-            [self.cut(self.carve), self.cut(self.hide)],
-        );
+        let lanes = self.object.columns();
         let mut reading = GroundRead::new(self, path);
         let i = world::node(
             &mut reading,
@@ -176,7 +165,7 @@ impl World<'_> {
             &mut at.inheritance,
             at.node,
             zooms,
-            cuts,
+            [Cut::NONE; 2],
         );
         reading.answer(i.kind != Kind::Lacks, || i)
     }

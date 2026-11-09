@@ -14,6 +14,7 @@
 mod gpu;
 mod real_world;
 
+use pxl_spec::brick;
 use std::collections::BTreeMap;
 
 use gpu::{array_view, read_texture, texture, Gpu};
@@ -24,9 +25,12 @@ use pxl_engine::clipmap::{self, Entry, ENTRIES, FIRST_CELL_ZOOM};
 use pxl_engine::light::{self, Light, StartGrid};
 use pxl_engine::node_cache::{self, CHANGED_WORDS};
 use pxl_engine::object::Cut;
-use pxl_engine::{beam, eye, object, ray, value, Zoom, FRAC_W, LEAF_CELL_ZOOM};
+use pxl_engine::{beam, eye, object, ray};
 use pxl_render::frame::shader::record::{src, SHADER_FORGET, SHADER_LIGHT_CELL};
 use pxl_render::frame::shader::word::ROW_LANES;
+use pxl_spec::space::coord::q3::FRAC_W;
+use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
+use pxl_spec::value;
 
 use real_world::{q8, store_of, truth, Asking, Built, World, WorldBuffer, FINEST, NOTCH};
 
@@ -1158,7 +1162,7 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
         least: &[],
     };
     let leaf = ((LEAF_CELL_ZOOM - FIRST_CELL_ZOOM) * ENTRIES) as usize;
-    let s = clipmap::BRICK_SHIFT;
+    let s = brick::BRICK_SHIFT;
     let mut was = now.clone();
     let mut brick_columns = Vec::new();
     for q in [[g[0] >> s, g[1] >> s], [(g[0] >> s) + 2, g[1] >> s]] {

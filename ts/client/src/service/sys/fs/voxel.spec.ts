@@ -9,12 +9,12 @@
 /** Explicit air: the leaf stays and erases the layers under it. */
 export const AIR = 256;
 
-/** Whether a value read into a word is a palette entry the palette gives out (pxl-content `Ground::grounds`). */
+/** Whether a value read into a word is a palette entry the palette gives out (pxl-spec `Ground::grounds`). */
 export function grounds(val: number): boolean {
   return (val >= 1 && val <= 55) || (val >= 64 && val <= 66);
 }
 
-/** Whether a value read into a word is one of the object's colors (pxl-content `Object::objects`). */
+/** Whether a value read into a word is one of the object's colors (pxl-spec `Object::objects`). */
 export function objects(val: number): boolean {
   return val >= 257 && val <= 271;
 }

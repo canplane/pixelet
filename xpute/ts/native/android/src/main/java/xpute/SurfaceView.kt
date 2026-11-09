@@ -3,6 +3,7 @@
 package xpute
 
 import android.content.Context
+import android.view.MotionEvent
 import android.view.SurfaceHolder
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
@@ -24,7 +25,36 @@ class SurfaceView(context: Context, appContext: AppContext) : ExpoView(context, 
 
   private val view = android.view.SurfaceView(context).also {
     it.holder.addCallback(this)
+    it.setOnTouchListener { _, event -> touches && tell(event) }
     addView(it)
+  }
+
+  /** Whether this view tells the core its touches (`Core.touch`). */
+  var touches = false
+
+  private val density = context.resources.displayMetrics.density
+
+  private fun send(phase: Int, event: MotionEvent, index: Int) {
+    Core.touch(phase, event.getPointerId(index), (event.getX(index) / density).toDouble(), (event.getY(index) / density).toDouble())
+  }
+
+  private fun tell(event: MotionEvent): Boolean {
+    val at = event.actionIndex
+    when (event.actionMasked) {
+      MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> send(0, event, at)
+      MotionEvent.ACTION_MOVE -> for (i in 0 until event.pointerCount) send(1, event, i)
+      // A lifted finger also leaves the surface, as a page's pointerleave
+      // follows its pointerup, so that nothing stays hovered under it.
+      MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+        send(2, event, at)
+        send(3, event, at)
+      }
+      MotionEvent.ACTION_CANCEL -> for (i in 0 until event.pointerCount) {
+        send(4, event, i)
+        send(3, event, i)
+      }
+    }
+    return true
   }
 
   /** The core's surface the app wants shown here; 0 for none. */

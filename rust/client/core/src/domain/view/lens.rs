@@ -10,18 +10,21 @@
 
 use pxl_content::scatter;
 use pxl_engine::clipmap::FIRST_CELL_ZOOM;
-use pxl_engine::LEAF_CELL_ZOOM;
 use pxl_engine::{beam, eye};
 use pxl_spec::asset::decor::{Decor, DECORS};
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::camera::grid::{split_dist, CELL, CLIP_CELLS_A_RAD, CLIP_MARGIN};
+use pxl_spec::space::camera::grid::{split_dist, CELLS_A_RAD, CLIP_CELLS_A_RAD, CLIP_MARGIN};
 use pxl_spec::space::coord::world::origin;
-use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
 
 use crate::domain::query::zoom_range;
 use crate::domain::view::observation;
 use crate::domain::view::param;
 use crate::sys::io::loader::catalog;
+
+/// The view's camera grid cell, an angle in radians, 1/`CELLS_A_RAD` in a double (pxl-spec
+/// space/camera/grid.rs `CELL`).
+pub const CELL: f64 = 1.0 / CELLS_A_RAD as f64;
 
 /// The width, in world units, of one camera grid cell at `dist` from the
 /// eye. Something narrower than a cell is not observed at that distance, and
@@ -65,7 +68,7 @@ impl StepClock {
 
 /// The angle about the eye, in radians, below which a decor is drawn as an
 /// impostor instead of a model: `DECOR_MODEL_CELLS` camera grid cells
-/// (pxl-spec space/camera/grid.rs `CELL`). Being an angle, it does not change
+/// (`CELL`). Being an angle, it does not change
 /// with the screen's size or aspect ratio.
 pub fn decor_model_angle() -> f64 {
     param::DECOR_MODEL_CELLS * CELL
@@ -85,14 +88,14 @@ pub fn decor_impostor_angle() -> f64 {
 /// `is_decor_shown` scales its other side by the same margin, so the zooms it
 /// picks are the ones the view would pick.
 pub const fn cull_dist_u(extent_u: f64) -> f64 {
-    extent_u * CLIP_CELLS_A_RAD / param::DECOR_IMPOSTOR_CELLS
+    extent_u * CLIP_CELLS_A_RAD as f64 / param::DECOR_IMPOSTOR_CELLS
 }
 
 /// Whether a decor `extent_u` wide is still large enough for an impostor
 /// somewhere cells of `cell_zoom` are drawn. The nearest such place is where
 /// that zoom begins, so the decor is measured there.
 fn is_decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
-    split_dist(cell_zoom) * CLIP_MARGIN <= cull_dist_u(extent_u)
+    split_dist(cell_zoom) * f64::from(CLIP_MARGIN) <= cull_dist_u(extent_u)
 }
 
 /// The clip level zooms the ground generates each kind at, one bit for each
@@ -114,6 +117,16 @@ pub fn decor_zooms(on: bool) -> [u32; DECORS.len()] {
         return [0; DECORS.len()];
     }
     zooms_by(|d| d.extent(catalog()))
+}
+
+/// Of `zooms`, the kinds the frame generates at the leaves' clip level, one
+/// bit a kind in `DECORS`' order.
+pub fn leaf_decors(zooms: &[u32; DECORS.len()]) -> u32 {
+    let leaves = |z: u32| z >> (LEAF_CELL_ZOOM - FIRST_CELL_ZOOM) & 1;
+    zooms
+        .iter()
+        .enumerate()
+        .fold(0, |bits, (k, &z)| bits | leaves(z) << k)
 }
 
 /// `decor_zooms` with the decor setting on, with each kind's extent taken

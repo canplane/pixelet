@@ -20,12 +20,12 @@ fn gather(v: u32) -> u32 {
   return (g | (g >> 8u)) & 0x0000ffffu;
 }
 
-/// This is the twin of pxl-engine `clipmap::idx_of`.
+/// This is the twin of pxl-spec `brick::idx_of`.
 fn cell_id(at: vec2<u32>) -> u32 {
   return spread(at.x) | (spread(at.y) << 1u);
 }
 
-/// This is the twin of pxl-engine `clipmap::of_idx`.
+/// This is the twin of pxl-spec `brick::of_idx`.
 fn id_cell(i: u32) -> vec2<u32> {
   return vec2<u32>(gather(i), gather(i >> 1u));
 }

@@ -7,8 +7,8 @@
 //! and nothing in the core after a frame takes them. Wherever no tile is
 //! held, the global picture answers.
 
-use pxl_engine::wrap_idx;
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
+use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::layer::demand::{GROUND_DEMAND_ACROSS, GROUND_DEMAND_TILES};
 
 use pxl_spec::bake::tile::Occupancy;

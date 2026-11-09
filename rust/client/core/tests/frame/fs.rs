@@ -9,13 +9,13 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use pxl_content::cube::ground::{forest, grass};
-use pxl_engine::lattice::TILE_CELLS;
-use pxl_engine::LEAF_ZOOM;
+use pxl_spec::asset::cube::ground::{forest, grass};
 use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::separation::Separation;
 use pxl_spec::bake::tile::terrain::{self, TerrainTile, ELE_COLUMN, PALETTE_COLUMN};
 use pxl_spec::bake::tile::Occupancy;
+use pxl_spec::space::coord::zoom::LEAF_ZOOM;
+use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_kit::status::errno::Errno;
 

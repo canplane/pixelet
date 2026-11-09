@@ -14,8 +14,8 @@ use pxl_spec::space::coord::world::nearest;
 
 use crate::domain::view::param;
 use crate::domain::view::param::FALLBACK_G4326;
-use pxl_spec::procedural::height_u_per_m;
 use pxl_spec::space::camera::grid::fov;
+use pxl_spec::space::coord::adapter::epsg3857::height_u_per_m;
 use xpute_core::global::Global;
 
 /// `rot` is a pure rotation: it turns the world's axes into the camera's
@@ -126,7 +126,7 @@ pub fn anchor() -> G4326 {
 
 /// How many kilometers one unit of height spans where the eye stands. A
 /// unit of height is scaled as the ground is at that latitude (pxl-spec
-/// procedural.rs `height_u_per_m`).
+/// 3857.rs `height_u_per_m`).
 pub fn km_per_u() -> f64 {
     let y_u = epsg3857::u_from_merc(epsg4326::to_mercator(&anchor())[1]);
     1.0 / height_u_per_m(y_u) / 1000.0
@@ -136,7 +136,7 @@ pub fn km_per_u() -> f64 {
 /// world's surface (GPU_SURFACE_RESIZE), and composes the matrices again
 /// when either changed. A pointer's place is read against this size. The
 /// pixels the surface is drawn with matter to the drawing alone, since the
-/// camera grid is an angle (pxl-spec space/camera/grid.rs `CELL`).
+/// camera grid is an angle (lens.rs `CELL`).
 pub fn view_resize(width: f64, height: f64) {
     let v = view_mut();
     let (width, height) = (width.max(1.0), height.max(1.0));

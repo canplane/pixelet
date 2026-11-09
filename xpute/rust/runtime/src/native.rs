@@ -27,7 +27,10 @@ use xpute_core::mem::section::PAGE_BYTES;
 
 pub use alloc::Alloc;
 pub use say::{say, stop_hook};
-pub use serve::{attach, call, fs_closed, fs_opened, named_by, post, take, Named, STOPPED};
+pub use serve::{
+    attach, call, fs_closed, fs_opened, named_by, post, take, touch, touch_by, Named, Touch,
+    STOPPED,
+};
 pub use thread::{
     answer, answer_with, input, notify_on, pace, pause, resume, ring, terminated, vsync, wake,
     Answer, Notify, Pace, Vcpu,
@@ -329,6 +332,11 @@ macro_rules! native_abi {
         }
 
         #[no_mangle]
+        pub extern "C" fn xpute_touch(phase: u32, id: i32, x: f64, y: f64) {
+            $crate::native::touch(phase, id, x, y);
+        }
+
+        #[no_mangle]
         pub extern "C" fn xpute_pace(
             pace_hz: f64,
             margin_share: f64,
@@ -575,6 +583,19 @@ macro_rules! native_core {
             // SAFETY: the environment and object JNI called with.
             unsafe { $crate::jni::init(env, this) };
             xpute_attach(sq_at as u32, cq_at as u32, fs != 0);
+        }
+
+        #[cfg(target_os = "android")]
+        #[no_mangle]
+        extern "system" fn Java_xpute_Core_touch(
+            _env: *mut $crate::jni::sys::JNIEnv,
+            _this: $crate::jni::sys::jobject,
+            phase: $crate::jni::sys::jint,
+            id: $crate::jni::sys::jint,
+            x: $crate::jni::sys::jdouble,
+            y: $crate::jni::sys::jdouble,
+        ) {
+            xpute_touch(phase as u32, id, x, y);
         }
 
         #[cfg(target_os = "android")]

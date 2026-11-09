@@ -11,7 +11,7 @@
 /** The camera grid's lines. */
 export const grid = {
   rgb: 0xffffff,
-  alpha: 0.55 as number,
+  alpha: 0.25 as number,
 } as const;
 
 /** The tint on a cell the rays stop on, by the solid angle its face shows the

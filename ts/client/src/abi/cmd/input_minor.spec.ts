@@ -7,3 +7,4 @@ export const WHEEL = 0x03;
 export const MOVE = 0x06;
 export const XR_POSE = 0x09;
 export const XR_POSE_END = 0x0a;
+export const TYPING = 0x0b;

@@ -21,7 +21,7 @@
 /// The camera grid's lines.
 pub mod grid {
     pub const rgb: u32 = 0xffffff;
-    pub const alpha: f32 = 0.55;
+    pub const alpha: f32 = 0.25;
 }
 
 /// The tint on a cell the rays stop on, by the solid angle its face shows the

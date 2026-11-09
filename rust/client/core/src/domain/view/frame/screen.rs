@@ -1,8 +1,8 @@
 // pxl-core/domain/view/frame/screen.rs
 
 //! The only place the view meets the screen's CSS pixels. What the world
-//! shows is decided in angles, by the camera grid's cell (pxl-spec
-//! space/camera/grid.rs `CELL`). Pixels matter only to the UI's layout and
+//! shows is decided in angles, by the camera grid's cell (lens.rs `CELL`).
+//! Pixels matter only to the UI's layout and
 //! to input, and check-rules lets only the modules it names read this one
 //! (pxl-tool bin/rule.rs `SCREEN_USERS`).
 
@@ -19,7 +19,7 @@ pub(crate) fn size() -> [f64; 2] {
 /// How many CSS pixels one world unit spans at one unit from the eye. At that
 /// distance the view's height covers twice the tangent of its half-angle.
 pub(crate) fn px_per_unit() -> f64 {
-    view().height / (2.0 * HALF_TAN)
+    view().height / (2.0 * f64::from(HALF_TAN))
 }
 
 /// How many world units one CSS pixel spans at `dist` from the eye. A drag

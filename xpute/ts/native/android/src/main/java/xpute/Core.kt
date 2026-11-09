@@ -41,6 +41,9 @@ object Core {
   /** Starts the runtime's own thread over the rings at the given offsets. */
   external fun attach(sqAt: Int, cqAt: Int, fs: Boolean)
 
+  /** A touch on a surface: phase 0 down, 1 move, 2 up, 3 out, 4 cancel. */
+  external fun touch(phase: Int, id: Int, x: Double, y: Double)
+
   /** The program's numbers for frame pacing, given before the turns run. */
   external fun pace(paceHz: Double, marginShare: Double, batchFrames: Double, settleMs: Double)
 

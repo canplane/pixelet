@@ -89,15 +89,17 @@ pub enum InputMinor {
     MOVE = 0x06,
     XR_POSE = 0x09,
     XR_POSE_END = 0x0a,
+    TYPING = 0x0b,
 }
 
 impl InputMinor {
-    pub const ALL: [InputMinor; 5] = [
+    pub const ALL: [InputMinor; 6] = [
         InputMinor::POINTER,
         InputMinor::WHEEL,
         InputMinor::MOVE,
         InputMinor::XR_POSE,
         InputMinor::XR_POSE_END,
+        InputMinor::TYPING,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -416,6 +418,8 @@ pub enum Command {
     /// A pointer event on the world's canvas, in CSS pixels from the top left of its layout box
     /// (transforms aside), as the world surface's size is (GPU_SURFACE_RESIZE).
     INPUT_POINTER = 0x1102,
+    /// Whether the UI is taking typed text. A device's touches reach the core without the UI (pxl-core door/touch.rs), so a touch pressed while this holds is spent on ending the typing: its lift ends the gesture with no tap, and its drag still moves the world.
+    INPUT_TYPING = 0x110b,
     /// The tool and what it takes, the UI's to choose and keep: the core is told, and answers EINVAL for an item the catalog does not give out. It picks again under a hovering pointer.
     EDIT_TOOL = 0x1a01,
     /// The draft's text (Snapshot.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (spec/spec/asset/marker.json) is refused whole, never cut: EMSGSIZE, which the UI shows as what does not fit.
@@ -480,7 +484,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 31] = [
+    pub const ALL: [Command; 32] = [
         Command::SENSOR_POS,
         Command::SENSOR_ORIENT,
         Command::SENSOR_ERR,
@@ -489,6 +493,7 @@ impl Command {
         Command::SENSOR_PLATFORM,
         Command::SETTING_DEV,
         Command::INPUT_POINTER,
+        Command::INPUT_TYPING,
         Command::EDIT_TOOL,
         Command::EDIT_MARKER_TEXT,
         Command::EDIT_MARKER_CANCEL,
@@ -750,6 +755,15 @@ impl SensorPos {
             },
         })
     }
+    pub const FIELDS: u32 = 5;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.f64(Some(self.lon));
+        w.f64(Some(self.lat));
+        w.f64(self.alt);
+        w.f64(self.accuracy);
+        w.f64(self.course);
+    }
 }
 
 /// Command::SENSOR_ORIENT's packet.
@@ -783,6 +797,14 @@ impl SensorOrient {
             },
         })
     }
+    pub const FIELDS: u32 = 4;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.f64(self.webkit_compass_heading);
+        w.f64(self.alpha);
+        w.f64(self.beta);
+        w.f64(self.gamma);
+    }
 }
 
 /// Command::SENSOR_ERR's packet.
@@ -806,6 +828,12 @@ impl SensorErr {
                 None => None,
             },
         })
+    }
+    pub const FIELDS: u32 = 2;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.u32(Some(self.sensor as u32));
+        w.u32(self.code.map(|m| m as u32));
     }
 }
 
@@ -849,6 +877,12 @@ impl SensorPermission {
                 .ok_or_else(|| unknown())?,
         })
     }
+    pub const FIELDS: u32 = 2;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.u32(Some(self.sensor as u32));
+        w.u32(Some(self.answer as u32));
+    }
 }
 
 /// Command::SENSOR_PLATFORM's packet.
@@ -874,6 +908,14 @@ impl SensorPlatform {
             orient_silence_is_loss: f.at(3)?.get_bool()?,
         })
     }
+    pub const FIELDS: u32 = 4;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.bool(Some(self.geolocation));
+        w.bool(Some(self.orient));
+        w.bool(Some(self.orient_permission));
+        w.bool(Some(self.orient_silence_is_loss));
+    }
 }
 
 /// Command::SETTING_DEV's packet.
@@ -888,6 +930,11 @@ impl SettingDev {
         Ok(SettingDev {
             dev: f.at(0)?.get_bool()?,
         })
+    }
+    pub const FIELDS: u32 = 1;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.bool(Some(self.dev));
     }
 }
 
@@ -916,6 +963,36 @@ impl InputPointer {
             y: finite(f.at(5)?.get_number()?)?,
         })
     }
+    pub const FIELDS: u32 = 6;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.u32(Some(self.phase as u32));
+        w.u32(Some(self.pointer_type as u32));
+        w.i32(Some(self.id));
+        w.i32(Some(self.button));
+        w.f64(Some(self.x));
+        w.f64(Some(self.y));
+    }
+}
+
+/// Command::INPUT_TYPING's packet.
+#[derive(Clone, Copy, Debug)]
+pub struct InputTyping {
+    pub typing: bool,
+}
+
+impl InputTyping {
+    pub fn read(pkt: &[u8]) -> Result<InputTyping, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(InputTyping {
+            typing: f.at(0)?.get_bool()?,
+        })
+    }
+    pub const FIELDS: u32 = 1;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.bool(Some(self.typing));
+    }
 }
 
 /// Command::EDIT_TOOL's packet.
@@ -936,6 +1013,13 @@ impl EditTool {
             val: integer::<u32>(f.at(1)?.get_number()?)?,
             scale_steps: integer::<i32>(f.at(2)?.get_number()?)?,
         })
+    }
+    pub const FIELDS: u32 = 3;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.u32(Some(self.tool as u32));
+        w.u32(Some(self.val));
+        w.i32(Some(self.scale_steps));
     }
 }
 
@@ -967,6 +1051,11 @@ impl InputWheel {
             delta_y: finite(f.at(0)?.get_number()?)?,
         })
     }
+    pub const FIELDS: u32 = 1;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.f64(Some(self.delta_y));
+    }
 }
 
 /// Command::INPUT_MOVE's packet.
@@ -983,6 +1072,12 @@ impl InputMove {
             x: integer::<i32>(f.at(0)?.get_number()?)?,
             y: integer::<i32>(f.at(1)?.get_number()?)?,
         })
+    }
+    pub const FIELDS: u32 = 2;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.i32(Some(self.x));
+        w.i32(Some(self.y));
     }
 }
 
@@ -1016,6 +1111,14 @@ impl SceneDraw {
             },
         })
     }
+    pub const FIELDS: u32 = 4;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.u32(Some(self.surface));
+        w.u32(Some(self.content as u32));
+        w.u32(self.group.map(|m| m as u32));
+        w.u32(self.bg);
+    }
 }
 
 /// Command::SETTING_SET's packet.
@@ -1036,6 +1139,12 @@ impl SettingSet {
             .ok_or_else(|| unknown())?,
             val: integer::<u32>(f.at(1)?.get_number()?)?,
         })
+    }
+    pub const FIELDS: u32 = 2;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.u32(Some(self.key as u32));
+        w.u32(Some(self.val));
     }
 }
 
@@ -1067,6 +1176,11 @@ impl CameraTracking {
             tracking: Tracking::of(integer::<u32>(f.at(0)?.get_number()?)?)
                 .ok_or_else(|| unknown())?,
         })
+    }
+    pub const FIELDS: u32 = 1;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.u32(Some(self.tracking as u32));
     }
 }
 
@@ -1103,6 +1217,15 @@ impl CameraGoto {
             },
         })
     }
+    pub const FIELDS: u32 = 5;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.f64(Some(self.lon));
+        w.f64(Some(self.lat));
+        w.f64(self.dist);
+        w.f64(self.azimuth);
+        w.f64(self.polar);
+    }
 }
 
 /// Command::INPUT_XR_POSE's packet.
@@ -1130,6 +1253,17 @@ impl InputXrPose {
             qw: finite(f.at(6)?.get_number()?)?,
         })
     }
+    pub const FIELDS: u32 = 7;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.f64(Some(self.x));
+        w.f64(Some(self.y));
+        w.f64(Some(self.z));
+        w.f64(Some(self.qx));
+        w.f64(Some(self.qy));
+        w.f64(Some(self.qz));
+        w.f64(Some(self.qw));
+    }
 }
 
 /// Command::PERF_STATS's packet.
@@ -1147,6 +1281,11 @@ impl PerfStats {
                 None => None,
             },
         })
+    }
+    pub const FIELDS: u32 = 1;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.f64(self.window_ms);
     }
 }
 
@@ -1330,6 +1469,7 @@ pub mod ui {
         fn sensor_platform(&mut self, c: SensorPlatform) -> Outcome;
         fn setting_dev(&mut self, c: SettingDev) -> Outcome;
         fn input_pointer(&mut self, c: InputPointer) -> Outcome;
+        fn input_typing(&mut self, c: InputTyping) -> Outcome;
         fn edit_tool(&mut self, c: EditTool) -> Outcome;
         fn edit_marker_text(&mut self, c: EditMarkerText<'_>) -> Outcome;
         fn edit_marker_cancel(&mut self) -> Outcome;
@@ -1376,6 +1516,9 @@ pub mod ui {
                 pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
             )?),
             x if x == Command::INPUT_POINTER as u32 => h.input_pointer(InputPointer::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::INPUT_TYPING as u32 => h.input_typing(InputTyping::read(
                 pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
             )?),
             x if x == Command::EDIT_TOOL as u32 => h.edit_tool(EditTool::read(

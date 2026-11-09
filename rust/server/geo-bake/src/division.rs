@@ -16,8 +16,8 @@ use pxl_spec::bake::tile::division::{Division, DivisionTile, DIVISION_LEAF, NONE
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::division::Subtype;
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, merc_from_u, u_from_merc};
-use pxl_spec::space::coord::zoom::units;
-use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
+use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec::space::layer::lattice::{Lattice, GROUND, TILE_CELLS};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::coverage::BAKE_READ_DIST;
@@ -26,8 +26,6 @@ use crate::terrain::pipeline::ground::render_polygon;
 use crate::wkb::wkb_to_geometries;
 use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::tile::division;
-use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::layer::lattice::Lattice;
 
 /// Each area meeting the tile, cut to it, with its division and how deep that is.
 const AREAS_SQL: &str = "WITH env AS (SELECT ST_MakeEnvelope($1, $2, $3, $4, 3857) AS e)

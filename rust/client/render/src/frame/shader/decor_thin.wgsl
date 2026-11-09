@@ -3,8 +3,7 @@
 // Lays the candidates of each pair that `decor_mark_cs` listed whole, one thread a clip level
 // cell of the pair's brick. Each leaf cell under that cell is read from the decor's hashes. A
 // candidate that stands at the entry's clip level and stands clear (`scatter::retained`) is
-// laid as the decor's next record, which holds its cell for `decor_cs`, and none is laid past
-// the decor's room. The brick is the one the entry's header names, which the mark wrote from
+// laid as the decor's next record, which holds its cell for `decor_cs`. The brick is the one the entry's header names, which the mark wrote from
 // the clipmap's row this frame. The row is not read again, so a header that names another brick
 // lays that brick's candidates. The pass reads no world, only the decor's hashes.
 
@@ -43,11 +42,9 @@ fn decor_thin_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     let draws = candidate_draws(j, leaf);
     if (stands_at(j, variant_of(j, draws.y), cell_zoom) && retained(j, leaf, draws.x, draws.y)) {
       let k = atomicAdd(&records.headers[cnt_at(brick, j)], 1u);
-      if (k < decor_cap(j)) {
-        let r = entry_word(brick, j, k) - SLOTS_AT;
-        records.words[r + 1u] = u32(leaf.x);
-        records.words[r + 2u] = u32(leaf.y);
-      }
+      let r = entry_word(brick, j, k) - SLOTS_AT;
+      records.words[r + 1u] = u32(leaf.x);
+      records.words[r + 2u] = u32(leaf.y);
     }
   }
 }

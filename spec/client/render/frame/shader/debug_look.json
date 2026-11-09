@@ -14,7 +14,7 @@
     "rgb": "#ffffff",
     "alpha": {
       "$type": "f32",
-      "$val": 0.55
+      "$val": 0.25
     }
   },
   "share": {

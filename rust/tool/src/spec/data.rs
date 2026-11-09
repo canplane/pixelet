@@ -17,17 +17,17 @@ use crate::root;
 const DATA_SPECS: [DataSpec; 20] = [
     DataSpec {
         json: "spec/spec/space/earth.json",
-        rs: Some("rust/spec/spec/src/space/coord/earth.spec.rs"),
+        rs: Some("rust/spec/src/space/coord/earth.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/spec/space/geoid.json",
-        rs: Some("rust/spec/spec/src/space/coord/geoid.spec.rs"),
+        rs: Some("rust/spec/src/space/coord/geoid.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/spec/object/ext.json",
-        rs: Some("rust/spec/spec/src/object/ext.spec.rs"),
+        rs: Some("rust/spec/src/object/ext.spec.rs"),
         module: "ext",
         enum_scope: EnumScope::All,
         ..DataSpec::DEFAULT
@@ -36,14 +36,14 @@ const DATA_SPECS: [DataSpec; 20] = [
         json: "spec/spec/asset/marker.json",
         ts: Some("ts/client/src/ui/shared/asset/marker.spec.ts"),
         ts_names: Some(&["PIN_LABEL", "MARKER_TEXT_CHARS"]),
-        rs: Some("rust/spec/spec/src/asset/marker.spec.rs"),
+        rs: Some("rust/spec/src/asset/marker.spec.rs"),
         module: "marker",
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/spec/asset/id.json",
         ts: Some("ts/client/src/ui/shared/asset/id.spec.ts"),
-        rs: Some("rust/spec/spec/src/asset/id.spec.rs"),
+        rs: Some("rust/spec/src/asset/id.spec.rs"),
         module: "id",
         enum_scope: EnumScope::All,
         ..DataSpec::DEFAULT
@@ -51,27 +51,27 @@ const DATA_SPECS: [DataSpec; 20] = [
     DataSpec {
         json: "spec/spec/division.json",
         ts: Some("ts/client/src/ui/feature/division/division.spec.ts"),
-        rs: Some("rust/spec/spec/src/division.spec.rs"),
+        rs: Some("rust/spec/src/division.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/spec/search.json",
         ts: Some("ts/client/src/ui/feature/search/search.spec.ts"),
-        rs: Some("rust/spec/spec/src/search.spec.rs"),
+        rs: Some("rust/spec/src/search.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/spec/asset/character.json",
         ts: Some("ts/client/src/ui/shared/asset/character.spec.ts"),
         ts_names: Some(&["groups", "GENDER"]),
-        rs: Some("rust/spec/spec/src/asset/character.spec.rs"),
+        rs: Some("rust/spec/src/asset/character.spec.rs"),
         module: "character",
         enum_scope: EnumScope::All,
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/spec/asset/sky.json",
-        rs: Some("rust/spec/spec/src/asset/sky.spec.rs"),
+        rs: Some("rust/spec/src/asset/sky.spec.rs"),
         module: "sky",
         ..DataSpec::DEFAULT
     },
@@ -171,7 +171,7 @@ const TS_LAYOUT: [(&str, &str); 1] = [("ts/client/src/", "@pxl/client/")];
 const RS_LAYOUT: [(&str, &str); 3] = [
     ("rust/client/core/src/", "pxl-core"),
     ("rust/client/render/src/", "pxl-render"),
-    ("rust/spec/spec/src/", "pxl-spec"),
+    ("rust/spec/src/", "pxl-spec"),
 ];
 
 /// What a file reference is written as in Rust: a type whose one field is

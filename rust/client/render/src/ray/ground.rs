@@ -5,8 +5,9 @@
 //! its kept spans, a run in a pool every brick shares. The runtime reads each
 //! brick from the core's own memory when it runs the turn.
 
-use pxl_engine::clipmap::{BRICK_CELLS, BRICK_WORDS, FRAME_BRICKS, SLOTS, WAYS_POOL_WORDS};
-use pxl_engine::Zoom;
+use pxl_engine::clipmap::{BRICK_WORDS, FRAME_BRICKS, SLOTS, WAYS_POOL_WORDS};
+use pxl_spec::brick::BRICK_CELLS;
+use pxl_spec::space::coord::zoom::Zoom;
 use xpute_kit::collection::list::List;
 
 use super::RayPass;

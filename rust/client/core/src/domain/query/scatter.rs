@@ -1,21 +1,21 @@
 // pxl-core/domain/query/scatter.rs
 
-//! How the ground generates decor on its own. Generated decor is never
-//! stored: it is a pure function of each decor's seed
-//! (spec/spec/asset/decor.json) and of the world as its one query answers
-//! it, so a cell generates the same decor wherever it is read. Where a decor
-//! stands, which way it faces and whether it generates at all depend on the
-//! world unplaced, the ground alone: its column's surface and the cells
-//! around it (`World::column_surface`). Only an edit in its box, asked of
-//! the world as edited, takes it away (pxl-content `generation::placement`).
+//! How the ground generates decor on its own. Generated decor is never stored:
+//! it is a pure function of each decor's seed (spec/spec/asset/decor.json) and
+//! of the world as its one query answers it, so a cell generates the same decor
+//! wherever it is read. Where a decor stands, which way it faces and whether it
+//! generates at all depend on the base, what the world is without what is
+//! placed: its column's surface and the cells around it
+//! (`World::column_surface`). Only an edit in its box, asked of the world as
+//! edited, takes it away (pxl-content `generation::placement`).
 
 use pxl_content::generation::{self, DecorQuery, Prop};
+use pxl_content::scatter::scatter_at;
 use pxl_engine::support::ColumnSurface;
 use pxl_engine::world::PlacedCursor;
-use pxl_engine::FRAC_W;
 use pxl_spec::asset::cube::sentinel;
-use pxl_spec::asset::decor::Decor;
-use pxl_spec::procedural::scatter_at;
+use pxl_spec::asset::decor::{self, Decor};
+use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
 
@@ -24,14 +24,13 @@ use super::world::World;
 use crate::domain::layer::instance::{Instance, Source};
 use crate::domain::layer::object::store;
 use crate::domain::layer::Answer;
-use pxl_content::decor;
 
 /// The world as decor's generation asks it on the CPU (pxl-engine
-/// `DecorQuery`): the world's one query, both unplaced (`ground`, the ground
-/// alone) and as edited, and what is placed (`lanes`).
+/// `DecorQuery`): the world's one query, of the base and as edited, and what
+/// is placed (`lanes`).
 pub(super) struct DecorWorld<'a, 'w> {
     world: &'a World<'w>,
-    ground: World<'w>,
+    base: World<'w>,
     lanes: store::Table<'a>,
 }
 
@@ -39,7 +38,7 @@ impl<'a, 'w> DecorWorld<'a, 'w> {
     pub(super) fn new(world: &'a World<'w>) -> DecorWorld<'a, 'w> {
         DecorWorld {
             world,
-            ground: world.ground_only(),
+            base: world.base(),
             lanes: world.object.columns(),
         }
     }
@@ -47,13 +46,13 @@ impl<'a, 'w> DecorWorld<'a, 'w> {
 
 /// The world's one query on the CPU. A column's surface comes with its line
 /// (`World::column_surface`), and each cell around the column is asked off
-/// that line (`World::asset_about`), both of the world unplaced. A cell's
+/// that line (`World::asset_about`), both of the base. A cell's
 /// edit is asked of the world as edited (`World::asset`).
 impl DecorQuery for DecorWorld<'_, '_> {
     type ColumnSurface = ColumnSurface<At>;
 
-    fn rows(&self) -> &[decor::Decor] {
-        &decor::DECORS
+    fn rows(&self) -> &[decor::Row] {
+        &decor::ROWS
     }
 
     /// The column's surface and its top, with false when the world lacked a
@@ -64,7 +63,7 @@ impl DecorQuery for DecorWorld<'_, '_> {
         cell_zoom: Zoom,
         g: [i32; 2],
     ) -> (ColumnSurface<At>, (i32, f32), bool) {
-        let (answer, f) = self.ground.column_surface(cell_zoom, g);
+        let (answer, f) = self.base.column_surface(cell_zoom, g);
         match answer {
             Answer::Exact(Some(top)) => (f, top, true),
             _ => (f, (0, 0.0), false),
@@ -85,7 +84,7 @@ impl DecorQuery for DecorWorld<'_, '_> {
         let answer = if edited {
             self.world.asset((zoom, c))
         } else {
-            self.ground.asset_about(&f.line, zoom, c)
+            self.base.asset_about(&f.line, zoom, c)
         };
         answer.val().unwrap_or(u32::from(sentinel::void))
     }

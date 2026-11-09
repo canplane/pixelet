@@ -8,12 +8,12 @@
 //! once, the room a fill works in. The ways live on the heap, in one pool
 //! sized by what is resident (pool.rs).
 
-use pxl_engine::clipmap::{BRICK_CELLS, BRICK_WORDS, SPANS_WORDS};
-use pxl_spec::bake::tile::terrain::ELE_COLUMN;
+use pxl_engine::clipmap::{BRICK_WORDS, SPANS_WORDS};
+use pxl_spec::bake::tile::terrain::{TerrainTile, ELE_COLUMN};
+use pxl_spec::brick::BRICK_CELLS;
 
 use crate::domain::layer::tile_cache::TileCache;
 use pxl_engine::clipmap::SLOTS;
-use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_core::mem::range::arr_bytes;
 use xpute_core::mem::range::OwnedRange;
 

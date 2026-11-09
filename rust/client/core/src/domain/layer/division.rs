@@ -13,10 +13,9 @@
 use pxl_spec::bake::tile::division::{self, Division, DivisionTile, CELLS, DIVISION_LEAF};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::zoom::{idx_of, Zoom};
-use pxl_spec::space::layer::lattice::Grid;
-use pxl_spec::space::layer::lattice::{Lattice, GROUND};
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
+use pxl_spec::space::coord::zoom::{idx_of, Zoom, LEAF_ZOOM};
+use pxl_spec::space::layer::lattice::{Grid, Lattice, GROUND};
+use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_core::global::Global;
 use xpute_core::mem::range;
 use xpute_core::mem::range::OwnedRange;

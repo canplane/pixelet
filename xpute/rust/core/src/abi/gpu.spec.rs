@@ -122,6 +122,14 @@ impl GpuSurfaceResize {
             device_pixel_ratio: finite(f.at(3)?.get_number()?)?,
         })
     }
+    pub const FIELDS: u32 = 4;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.u32(Some(self.surface));
+        w.u32(Some(self.width));
+        w.u32(Some(self.height));
+        w.f64(Some(self.device_pixel_ratio));
+    }
 }
 
 /// Command::GPU_SURFACE_CLOSE's packet.
@@ -136,5 +144,10 @@ impl GpuSurfaceClose {
         Ok(GpuSurfaceClose {
             surface: integer::<u32>(f.at(0)?.get_number()?)?,
         })
+    }
+    pub const FIELDS: u32 = 1;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.u32(Some(self.surface));
     }
 }

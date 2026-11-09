@@ -11,16 +11,14 @@
 //! and the catalog is spec/spec/asset/decor.json. The scene draws the decor's
 //! models as they arrive (domain/scene/decor/asset.rs).
 
-use pxl_spec::space::layer::lattice::Grid;
+use pxl_spec::space::layer::lattice::{draw_dist, Grid, GROUND};
 
 use crate::domain::layer::object::asset::Asset;
 use pxl_spec::asset::decor::{Decor, DECORS};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::zoom::{cube, idx_of, units, Zoom, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{cube, idx_of, units, Zoom, LEAF_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
-use pxl_spec::space::layer::lattice::{draw_dist, GROUND};
-use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 
 use super::ray::Ray;
 use super::scatter::{generated_at, DecorWorld};
@@ -31,13 +29,17 @@ use crate::domain::layer::object::store::tree_key;
 use crate::domain::layer::object::store::Entry;
 use crate::domain::layer::tile_cache::Line;
 use crate::domain::query::decor_box::{box_extent, intersect};
-use pxl_engine::area::{self, Shard};
 use pxl_engine::cast;
 use pxl_engine::clipmap::Lookup;
 use pxl_engine::object::{self, NodeSlot};
+use pxl_spec::space::layer::area;
+use pxl_spec::space::layer::area::Shard;
 
 /// One ray's decor tests, carried along its ground walk.
 pub(super) struct DecorRay {
+    /// Of what the ground generates, the decors the frame generates at the
+    /// leaves' clip level, one bit a kind in `DECORS`' order.
+    decors: u32,
     /// How far any decor reaches from where it stands: in units here, and in
     /// whole leaf cells in `around`.
     pub(super) box_extent: f64,
@@ -66,6 +68,33 @@ pub(super) struct DecorRay {
 }
 
 impl DecorRay {
+    /// The decor tests of a ray that sees decor as the frame draws it:
+    /// everything placed and, of what the ground generates, `decors`.
+    /// None where the leaves' tiles are not drawn.
+    pub(super) fn new(ray: &Ray, decors: u32) -> Option<DecorRay> {
+        // Decor is struck out to where the view draws the leaves' tiles.
+        let dist = match GROUND.z_at(0.0) {
+            LEAF_ZOOM => draw_dist(GROUND, LEAF_ZOOM).min(ray.t_max),
+            _ => return None,
+        };
+        let extent = box_extent();
+        let around = extent.ceil() as i32;
+        let (za, zb) = (ray.at(0.0)[2], ray.at(dist)[2]);
+        let band = [za.min(zb) - extent, za.max(zb) + extent];
+        Some(DecorRay {
+            decors,
+            box_extent: extent,
+            around,
+            draw_dist: dist,
+            last: None,
+            best: None,
+            about: Around::new(),
+            extent_zoom: finest(|side| side >= extent),
+            band,
+            box_zoom: finest(|side| side > f64::from(around + 1).max(band[1] - band[0])),
+        })
+    }
+
     pub(super) fn about_zoom(&self, zoom: Zoom) -> Zoom {
         zoom.min(self.extent_zoom)
     }
@@ -260,21 +289,20 @@ impl Around {
 impl<'a> World<'a> {
     /// Hands what the ground generates on the leaf `cell`, decor by decor, to
     /// `each` until `each` returns true, and returns whether it did. Only the
-    /// kinds whose bits are set in `kinds` are asked (`World::decor`). Each
-    /// instance stands on its column's surface in the world unplaced
-    /// (`World::column_surface`). With `boxed`, `each` is also told whether
-    /// the decor generates there as the frame draws it (`generated_at`);
-    /// without `boxed` that is true. Nothing is handed where the world does
-    /// not hold the column.
+    /// decors whose bits are set in `decors` are asked. Each instance stands on
+    /// its column's surface in the base (`World::column_surface`). With `boxed`,
+    /// `each` is also told whether the decor generates there as the frame draws
+    /// it (`generated_at`); without `boxed` that is true. Nothing is handed
+    /// where the world does not hold the column.
     fn generated_in(
         &self,
         cell: [i32; 2],
         boxed: bool,
-        kinds: u32,
+        decors: u32,
         mut each: impl FnMut(&Decor, Instance, bool) -> bool,
     ) -> bool {
         DECORS.iter().enumerate().any(|(k, decor)| {
-            kinds >> k & 1 == 1
+            decors >> k & 1 == 1
                 && generated_at(&mut DecorWorld::new(self), decor, cell, boxed)
                     .is_some_and(|(i, generates)| each(decor, i, generates))
         })
@@ -314,31 +342,6 @@ impl<'a> World<'a> {
             met.is_some()
         });
         met
-    }
-
-    /// The decor tests a ray carries, where decor is struck at all.
-    pub(super) fn decor_ray(&self, ray: &Ray) -> Option<DecorRay> {
-        self.decor?;
-        // Decor is struck out to where the view draws the leaves' tiles.
-        let dist = match GROUND.z_at(0.0) {
-            LEAF_ZOOM => draw_dist(GROUND, LEAF_ZOOM).min(ray.t_max),
-            _ => return None,
-        };
-        let extent = box_extent();
-        let around = extent.ceil() as i32;
-        let (za, zb) = (ray.at(0.0)[2], ray.at(dist)[2]);
-        let band = [za.min(zb) - extent, za.max(zb) + extent];
-        Some(DecorRay {
-            box_extent: extent,
-            around,
-            draw_dist: dist,
-            last: None,
-            best: None,
-            about: Around::new(),
-            extent_zoom: finest(|side| side >= extent),
-            band,
-            box_zoom: finest(|side| side > f64::from(around + 1).max(band[1] - band[0])),
-        })
     }
 
     /// Strikes the decor standing near the leaf cell the walk is in. Only
@@ -425,8 +428,7 @@ impl<'a> World<'a> {
     }
 
     fn generated_near(&self, s: &mut DecorRay, ray: &Ray, cell: [i32; 2]) {
-        let kinds = self.decor.unwrap_or(0);
-        self.generated_in(cell, true, kinds, |_, i, generates| {
+        self.generated_in(cell, true, s.decors, |_, i, generates| {
             if generates {
                 meet(s, ray, i);
             }

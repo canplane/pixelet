@@ -42,11 +42,11 @@ use crate::domain::control::camera::state::Intent;
 use crate::domain::control::param::{CLIMB_PASSES, COLLISION_STEP_SAMPLES};
 use crate::domain::control::param::{EYE_CLEARANCE_U, MIN_DIST, NEAREST_DIST};
 use crate::domain::query::change::Memo;
-use crate::domain::query::{finest, Hit, HitKind, Ray, World};
+use crate::domain::query::{finest, Hit, Ray, World};
 use crate::domain::setting::store::{settings, OrbitObstacleMode};
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::param::NEAR;
-use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
+use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 
 /// An orbit pose. It holds the pivot as well as the offset, because the eye
 /// is the pivot plus the offset, and a gate that read only the offset could
@@ -290,7 +290,7 @@ fn line_clear(a: V3, b: V3, access: &Ground<'_>) -> bool {
         .first_hit(&ray, finest())
         .val()
         .flatten()
-        .is_none_or(|hit| matches!(hit.kind, HitKind::Decor(_)))
+        .is_none()
 }
 
 /// The first thing met on the ray from the pivot of `at` toward its eye,
@@ -337,7 +337,7 @@ pub fn climb_polar(pivot: V3, dist: f64, polar: f64, azimuth: f64) -> f64 {
     };
     let last = CLIMB_PITCH.get(|| Memo::NONE);
     last.forget_touched();
-    last.of(World::now(), key, |w| climb_pose(at, &Ground::of(&w)).polar)
+    last.of(key, || climb_pose(at, &Ground::of(&World::now())).polar)
 }
 
 /// What a climb is computed from, compared by value: the pose and where its

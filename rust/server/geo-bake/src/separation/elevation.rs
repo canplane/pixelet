@@ -8,14 +8,13 @@
 use fnv::FnvHashMap;
 
 use crate::terrain::CELL_U;
-use pxl_engine::ground;
+use pxl_spec::ground;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::adapter::epsg3857::u_from_merc;
-use pxl_spec::space::coord::zoom::idx_of;
-use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
+use pxl_spec::space::coord::zoom::{idx_of, LEAF_ZOOM};
 
 /// Heights at points from the tiles' elevations, in cells, as the client
-/// draws the elevation: the height of the cell a point lies in (pxl-engine
+/// draws the elevation: the height of the cell a point lies in (pxl-spec
 /// ground.rs `height`); a point's tile must be held.
 pub fn sample_cells(
     eles: &FnvHashMap<[i32; 2], Vec<i16>>,

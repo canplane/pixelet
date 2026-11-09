@@ -11,12 +11,12 @@ use crate::domain::query::over;
 use crate::domain::query::test::{flat_at_five, write};
 use crate::sys::serial;
 use pxl_content::cave::hollow;
-use pxl_engine::answer::FULL;
-use pxl_engine::LEAF_CELL_ZOOM;
 use pxl_spec::asset::cube::{self};
 use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::bake::tile::terrain::TerrainTile;
+use pxl_spec::share::FULL;
+use pxl_spec::space::coord::zoom::LEAF_CELL_ZOOM;
 
 fn pose(pivot: V3, dist: f64, polar: f64) -> ViewPose {
     ViewPose {

@@ -198,10 +198,10 @@ fn run() -> Result<(), String> {
         .iter()
         .flat_map(|s| s.mask.iter().copied())
         .collect();
-    std::fs::write(root.join("rust/spec/spec/src/asset/symbol.mask"), &masks)
+    std::fs::write(root.join("rust/spec/src/asset/symbol.mask"), &masks)
         .map_err(|e| e.to_string())?;
     write_formatted(
-        &root.join("rust/spec/spec/src/asset/symbol.spec.rs"),
+        &root.join("rust/spec/src/asset/symbol.spec.rs"),
         &symbol::render_rs(&symbols),
     )?;
     write_formatted(

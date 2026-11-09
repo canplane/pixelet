@@ -17,25 +17,28 @@
 //! (`upload`). Nothing of a tile is kept for a brick still to come: a brick
 //! that enters later asks for its tile again (`TileCache::refetch`).
 
-use pxl_engine::area::{Area, Shard};
+use pxl_engine::clipmap;
 use pxl_engine::clipmap::{
-    self, BrickSource, Entry, Lookup, Presence, BRICK, BRICK_CELLS, BRICK_MIPS, BRICK_SHIFT,
-    BRICK_WORDS, CLIP_LEVELS, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL_ZOOM, ROOT_AT, SLOTS,
-    SPANS_ACROSS, SPANS_WORDS,
+    BrickSource, Entry, Lookup, Presence, BRICK_MIPS, BRICK_WORDS, CLIP_LEVELS, ENTRIES,
+    EYE_CLIP_LEVELS, FIRST_CELL_ZOOM, ROOT_AT, SLOTS, SPANS_ACROSS, SPANS_WORDS,
 };
 use pxl_engine::fill;
-use pxl_engine::ground::{self, word, Extent};
-use pxl_engine::wrap_idx;
-use pxl_engine::LEAF_CELL_ZOOM;
+use pxl_engine::ground;
+use pxl_engine::ground::Extent;
 use pxl_render::gpu::api;
 use pxl_render::ray::{BrickWrite, TerrainWrite};
 use pxl_spec::bake::separation::Separation;
 use pxl_spec::bake::tile::terrain::{
-    brick_lines, brick_pairs, palette_cells, ELE_COLUMN, PALETTE_COLUMN,
+    brick_lines, brick_pairs, palette_cells, TerrainTile, ELE_COLUMN, PALETTE_COLUMN,
 };
-use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec::brick;
+use pxl_spec::brick::{BRICK, BRICK_CELLS, BRICK_SHIFT};
+use pxl_spec::ground::word;
+use pxl_spec::space::coord::world::wrap_idx;
+use pxl_spec::space::coord::zoom::{units, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM};
+use pxl_spec::space::layer::area::{Area, Shard};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, MIN_ZOOM};
+use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_core::global::Global;
 use xpute_kit::collection::list::List;
 use xpute_kit::status::bug::OrBug;
@@ -50,7 +53,6 @@ use crate::domain::layer::Base;
 use crate::sys::io::room::Refusal;
 use crate::sys::io::source::ServiceArea;
 use crate::sys::sched::edge::{request_world_tick, world_edge};
-use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_core::mem::range::arr;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -863,9 +865,9 @@ fn cut_into(b: u32, place: [u32; 2], four: &impl Fn(usize) -> u32) {
     let side = GROUND.tile_cells() as usize;
     let (x0, y0) = ((place[0] * BRICK) as usize, (place[1] * BRICK) as usize);
     let palette = &mut planes().palette[at..at + BRICK_CELLS as usize];
-    let across: [u32; BRICK as usize] = core::array::from_fn(|x| clipmap::idx_of([x as u32, 0]));
+    let across: [u32; BRICK as usize] = core::array::from_fn(|x| brick::idx_of([x as u32, 0]));
     for y in 0..BRICK {
-        let (row, down) = ((y0 + y as usize) * side + x0, clipmap::idx_of([0, y]));
+        let (row, down) = ((y0 + y as usize) * side + x0, brick::idx_of([0, y]));
         for (x, &a) in across.iter().enumerate() {
             palette[(a | down) as usize] = four(row + x);
         }
@@ -937,8 +939,7 @@ pub fn fill_share() {
 }
 
 /// A brick with no line reads this: no bin holds any segment.
-static NO_LINES: [u32; clipmap::LINES_ENTRIES_AT as usize] =
-    [0; clipmap::LINES_ENTRIES_AT as usize];
+static NO_LINES: [u32; brick::LINES_ENTRIES_AT as usize] = [0; brick::LINES_ENTRIES_AT as usize];
 
 /// A brick's lines as its fill reads them, or none (`NO_LINES`).
 fn lines_read(lines: &[u32]) -> &[u32] {
@@ -1039,7 +1040,7 @@ fn begin(w: &mut Clipmap) -> Poll {
             place,
             shard: Shard::UNKNOWN.at(
                 &ServiceArea,
-                (clipmap::bricks_zoom(slot.cell_zoom), slot.brick),
+                (brick::bricks_zoom(slot.cell_zoom), slot.brick),
             ),
             past: false,
             stage: Stage::Columns,
@@ -1069,7 +1070,7 @@ fn take_lines(
     if pairs.is_empty() {
         return true;
     }
-    let words = clipmap::lines_words(pairs.len() as u32, segments) as usize;
+    let words = brick::lines_words(pairs.len() as u32, segments) as usize;
     let mut lines = Vec::new();
     if lines.try_reserve_exact(words).is_err() {
         return wait_heap(w, b);
@@ -1086,10 +1087,10 @@ fn wait_heap(w: &mut Clipmap, b: u32) -> bool {
     false
 }
 
-/// Keeps the brick's spans in a run of the ways' pool and ends its fill: a column past
-/// `way::SPANS` refuses it for good; past the pool's cap it is refused until a run is given
-/// back; where the heap refuses it waits. Where a free run would fit and the runtime still
-/// holds it, a later turn lays the brick (`WayPool::take`).
+/// Keeps the brick's spans in a run of the ways' pool and ends its fill: a column past pxl-spec
+/// `way::SPANS` refuses it for good; past the pool's cap it is refused until a run is given back;
+/// where the heap refuses it waits. Where a free run would fit and the runtime still holds it, a
+/// later turn lays the brick (`WayPool::take`).
 fn lay(w: &mut Clipmap, b: u32, filling: BrickFill) -> Poll {
     let f = fill_scratch();
     if filling.past {
@@ -1133,7 +1134,7 @@ fn end(w: &mut Clipmap, b: u32, fill: Fill) -> Poll {
 /// `clipmap::bound_over`). It gives each brick's columns, mip levels and the
 /// root of its run of kept spans, read from the ways' pool (`pool`); the
 /// mip levels folded here over the eye's bricks (`fold`); and the service
-/// area the clip levels end at (pxl-engine `area::Area`).
+/// area the clip levels end at (pxl-spec `area::Area`).
 #[derive(Clone, Copy)]
 pub(in crate::domain::layer) struct CpuClipmap;
 

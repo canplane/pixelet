@@ -11,7 +11,7 @@ export const comp_str = (a: string, b: string): i32 =>
 
 export function make_comp<T, K extends numeric = f64>(
   key_fn: (e: T) => K,
-  tie_fn?: (a: T, b: T) => i32,
+  tie_fn?: (a: T, b: T) => i32, // tie_fn 없으면 0 (ties: implementation-defined ordering)
 ): Comp<T> {
   const tie = tie_fn ?? (() => 0);
 

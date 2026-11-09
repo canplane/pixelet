@@ -11,12 +11,12 @@ use std::sync::{Arc, Mutex};
 
 use crate::coverage::Coverage;
 use postgres::Client;
-use pxl_spec::bake::constant::{ele_idx, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
+use pxl_spec::ground::{ele_idx, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
 use pxl_spec::procedural::Frame;
-use pxl_spec::space::coord::adapter::epsg3857::get_tile_bbox;
-use pxl_spec::space::coord::adapter::epsg3857::BBox3857;
-use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
+use pxl_spec::space::coord::adapter::epsg3857;
+use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, BBox3857};
+use pxl_spec::space::coord::zoom::{Zoom, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_kit::math::scalar::round;
 
 const CACHE_CAP: usize = 512;
@@ -201,7 +201,7 @@ impl Raster {
     }
 
     /// Leaf `tile`'s padded grid of heights, in leaf cells at its scale
-    /// (pxl-engine `cells_of_m`, pxl-spec `Frame::per_m`).
+    /// (pxl-spec `epsg3857::cells_of_m`, `Frame::per_m`).
     pub(crate) fn tile_grid(
         &self,
         client: &mut Client,
@@ -312,7 +312,7 @@ impl Raster {
                 // sea: a shard's apron covers every pad, so none lacks a shard.
                 if let Some(v) = src.sample(px, py) {
                     grid[ele_idx(c as u32, (span - 1 - r) as u32)] =
-                        pxl_engine::cells_of_m(v, per_m) as i16;
+                        epsg3857::cells_of_m(v, per_m) as i16;
                 }
             }
         }

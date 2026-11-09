@@ -386,11 +386,26 @@ pub(super) fn emit(spec: &Spec, t: &Target, apart: Option<&Apart>) -> Result<Str
             for (i, f) in pkt.iter().enumerate() {
                 out.push(format!("            {}: {},", f.name, rs_read(spec, f, i)?));
             }
-            out.extend([
-                "        })".to_string(),
-                "    }".to_string(),
-                "}".to_string(),
-            ]);
+            out.extend(["        })".to_string(), "    }".to_string()]);
+            if !borrows && what == "packet" {
+                out.extend([
+                    format!("    pub const FIELDS: u32 = {};", pkt.len()),
+                    String::new(),
+                    format!(
+                        "    pub fn write(&self, {}: &mut PacketWriter) {{",
+                        if pkt.is_empty() { "_" } else { "w" }
+                    ),
+                ]);
+                for f in pkt {
+                    out.extend(
+                        rs_write(spec, f)?
+                            .into_iter()
+                            .map(|l| format!("        {l}")),
+                    );
+                }
+                out.push("    }".to_string());
+            }
+            out.push("}".to_string());
         }
         let name = pascal_name;
         if let Some(import) = &c.import {

@@ -11,7 +11,7 @@ import { useVisualViewport } from "@/service/platform/viewport.ts";
 import { POINTER_KIND, POINTER_PHASE } from "@/service/core/input.ts";
 import { surface_driver } from "@/service/core/surface.ts";
 import { keyDown, keyUp, releaseKeys } from "./keyboard.ts";
-import { releasePointers, worldPointer } from "./pointer.ts";
+import { releasePointers, worldPointer, worldTouched } from "./pointer.ts";
 import { Corner } from "./corner.tsx";
 import { bottomRest } from "@/ui/shared/component/bottom-rest.ts";
 import { Toaster } from "@/ui/feature/world/toast/stack.tsx";
@@ -38,6 +38,7 @@ const INPUT: InputDriver = {
   open: input.open,
   pointer: (phase, kind, id, button, x, y) =>
     worldPointer(POINTER_PHASE[phase], POINTER_KIND[kind], id, button, x, y),
+  touched: (phase) => worldTouched(POINTER_PHASE[phase]),
   wheel: input.wheel,
   keyDown,
   keyUp,

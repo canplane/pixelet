@@ -9,6 +9,7 @@ import android.hardware.Sensor
 import android.hardware.SensorManager
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.jni.NativeArrayBuffer
 import expo.modules.kotlin.modules.Module
@@ -21,6 +22,8 @@ import expo.modules.kotlin.modules.ModuleDefinition
  * view it draws into, are in xpute's own module (@xpute/native).
  */
 class PlatformModule : Module() {
+  private val files = FileFetch()
+
   private val context: Context
     get() = appContext.reactContext ?: throw CodedException("the app has no context")
 
@@ -28,6 +31,12 @@ class PlatformModule : Module() {
     Name("PxlPlatform")
 
     OnCreate { PxlNative.textOn() }
+
+    // ---- the core's files (service/platform/file.native.ts) ----
+
+    AsyncFunction("fileFetch") { fd: Int, url: String, promise: Promise -> files.fetch(fd, url, promise) }
+
+    Function("fileCancel") { fd: Int -> files.cancel(fd) }
 
     // ---- the transport (service/platform/origin.native.ts) ----
 

@@ -20,8 +20,9 @@
 use fnv::FnvHashMap;
 use pxl_spec::bake::tile::Occupancy;
 
+use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 use pxl_spec::space::layer::demand::demand_tiles;
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::domain::layer::floor;
 use crate::domain::layer::{AskScope, Base};

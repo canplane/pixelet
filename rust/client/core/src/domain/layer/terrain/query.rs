@@ -8,14 +8,14 @@
 //! column's ways are read from the spans its brick's fill kept, a run in the
 //! ways' pool (pool.rs; pxl-engine `clipmap::way_at`).
 
-use pxl_engine::area::Shard;
 use pxl_engine::clipmap::{self as cells, Lookup};
 use pxl_engine::ground::{Cell, Extent};
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec::space::coord::zoom::{units, Zoom, MIN_ZOOM};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
+use pxl_spec::space::layer::area::Shard;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::quadrant::{Quadrant, MIN_ZOOM};
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::domain::layer::terrain::clipmap::{self, CpuClipmap};
 use crate::domain::layer::tile_cache::{Line, Path, TileCache};
@@ -53,7 +53,7 @@ impl TileCache<TerrainTile> {
     /// below the lowest, and is cut to the node. A node past the service area
     /// has no palette index in it and holds nothing. For a node of a shard or
     /// finer, that is known before any of its ground arrives, the same way
-    /// every reader knows it (pxl-engine `area::Shard`). A coarser node may
+    /// every reader knows it (pxl-spec `area::Shard`). A coarser node may
     /// straddle the area's edge, so it is read.
     pub(in crate::domain::layer) fn bound<const D: usize>(
         &self,
@@ -101,7 +101,7 @@ impl TileCache<TerrainTile> {
     /// the answer is that lack, never an empty bound.
     ///
     /// No clip level holds anything past the service area, so a reader asks
-    /// that first, in the descent of its shard (pxl-engine `area::Shard`).
+    /// that first, in the descent of its shard (pxl-spec `area::Shard`).
     /// `place` comes in as where a node over this one found its cells, or
     /// `Lookup::NONE`, and goes out as where this node's cells are
     /// (pxl-engine `clipmap::step`). The cells are read at the cell zooms in

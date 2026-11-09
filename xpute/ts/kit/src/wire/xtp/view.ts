@@ -187,11 +187,18 @@ function val_to_node(val: NodeValue<NodeView>): Node {
   throw new MarshalError(Errno.EINVAL);
 }
 
+// ============ View ============
+
 export abstract class NodeView {
   abstract node: Node;
 
   abstract nil(): this;
 
+  // ---- Scalar ----
+  // explicit scalar writers are caller-chosen constructors;
+  // inputs are normalized through the corresponding word cast helpers.
+  // typed optional leaf writers preserve node kind;
+  // physical presence is decided during encode.
   abstract u8(u: u8 | null): this;
   abstract i8(i: i8 | null): this;
   abstract u16(u: u16 | null): this;
@@ -204,6 +211,8 @@ export abstract class NodeView {
   abstract f64(f: f64 | null): this;
 
   abstract bool(b: boolean | null): this;
+
+  // ---- Sequence ----
 
   abstract u8_array(arr: U8Array | null): this;
   abstract i8_array(arr: I8Array | null): this;
@@ -221,37 +230,76 @@ export abstract class NodeView {
   abstract str(s: string | null): this;
   abstract strs(items: string[] | null): this;
 
+  // ---- Subtree ----
+
+  /** Builds a branch subtree inline and writes it into the current view. */
   abstract branch(fn: ((b: BranchView) => void) | null): this;
 
-  /** `pkt` must start on a WORD_SZ boundary in its buffer, or EBADMSG. It is
-   * not copied, so it must not change until the tree is encoded. */
+  /**
+   * Grafts an already-encoded subtree packet.
+   *
+   * Contract:
+   * - `pkt` must be a tree packet carrier intended for this format
+   * - `pkt.byteOffset` must be WORD_SZ-aligned
+   * - The grafted root may be physically null
+   * - The caller must not mutate `pkt` after grafting it
+   *
+   * This method enforces only construction-boundary checks.
+   * Packet header validation remains a read/encode-side concern.
+   */
   abstract graft(pkt: U8Array): this;
 }
 
 export class TreeView extends NodeView {
   override node: Node = NIL_NODE;
 
+  // ---- Write Primitive ----
+
+  /** Replaces the current root node. */
   protected _set_node(node: Node): this {
     this.node = node;
     return this;
   }
 
   /**
-   * Writes `val` as the root, choosing each node's type from its value. A
-   * number becomes an i32 when it fits and an f64 otherwise; a bigint becomes
-   * an i64 (EINVAL outside it), so a u64 needs `u64()`. An array becomes a
-   * branch. An object is refused (EINVAL): which keys it carries and in what
-   * order is for a schema to say. A schema that owns the keys turns an object
-   * into an array with `to_tuple` and back with `from_tuple` (wire/lower.ts).
+   * Lowers a generic JS value into the current root node.
+   *
+   * Mapping:
+   * - number  -> i32 if it exact_i32(), otherwise f64
+   * - bigint  -> i64
+   * - boolean -> bool
+   * - string  -> str
+   * - TypedArray / BigTypedArray -> matching array node
+   * - Array -> branch preserving element order
+   *
+   * Note:
+   * - NodeValue currently excludes plain objects.
+   * - key-bearing object semantics must be modeled by a higher-level schema/plugin.
+   * - The number -> i32/f64 split is a JS-side lowering policy, not a wire-level
+   *   requirement of the tree packet format itself.
+   *
+   * Contract:
+   * - Unsupported input is treated as programmer error and throws.
+   * - bigint is accepted only when it fits the i64 lowering path.
+   * - Generic scalar bigint lowering currently targets only i64.
+   *   Unsigned 64-bit scalar writes must use the explicit u64() writer.
+   * - Explicit writers such as u8(), i64(), f64() are considered caller-chosen
+   *   leaf constructors and therefore do not add generic lowering validation.
    */
   set<T extends NodeValue<NodeView>>(val: T): this {
     return this._set_node(val_to_node(val));
   }
 
   override nil(): this {
+    // generic/untyped null lowering
     return this._set_node(NIL_NODE);
   }
 
+  // ---- Scalar ----
+  // explicit scalar writers are caller-chosen constructors;
+  // inputs are normalized through the corresponding word cast helpers.
+  // typed optional leaf writers preserve node kind;
+  // physical presence is decided during encode.
   override u8(u: u8 | null): this {
     return this._set_node(U8_NODE(u));
   }
@@ -286,6 +334,8 @@ export class TreeView extends NodeView {
   override bool(b: boolean | null): this {
     return this._set_node(BOOL_NODE(b));
   }
+
+  // ---- Sequence ----
 
   override u8_array(arr: U8Array | null): this {
     return this._set_node(U8_ARRAY_NODE(arr));
@@ -330,7 +380,11 @@ export class TreeView extends NodeView {
     return this._set_node(STRS_NODE(items));
   }
 
+  // ---- Subtree ----
+
+  /** Builds a branch subtree inline and writes it into the current root node. */
   override branch(fn: ((b: BranchView) => void) | null): this {
+    // typed optional branch; node kind is preserved and physical presence is decided during encode
     if (fn === null) {
       return this._set_node({ type: SpecialType.BRANCH, val: null });
     }
@@ -340,8 +394,17 @@ export class TreeView extends NodeView {
     return this._set_node(branch.node);
   }
 
-  /** `pkt` must start on a WORD_SZ boundary in its buffer, or EBADMSG. It is
-   * not copied, so it must not change until the tree is encoded. */
+  /**
+   * Grafts an already-encoded subtree packet into the current root node.
+   *
+   * Contract:
+   * - `pkt.byteOffset` must be WORD_SZ-aligned
+   * - The grafted root may be physically null
+   * - The caller must not mutate `pkt` after grafting it
+   *
+   * This method enforces only construction-boundary checks.
+   * Full packet validation is intentionally out of scope here.
+   */
   override graft(pkt: U8Array): this {
     if (pkt.byteOffset % WORD_SZ) throw new MarshalError(Errno.EBADMSG);
     return this._set_node({ type: SpecialType.GRAFT, val: pkt });
@@ -351,24 +414,32 @@ export class TreeView extends NodeView {
 export abstract class BranchView extends NodeView {
   override node: BranchNode = { type: SpecialType.BRANCH, val: [] };
 
+  // ---- Append Primitive ----
+
+  /** Replaces all existing children with the provided sequence. */
   set<T extends NodeValue<NodeView>[]>(vals: T): this {
     this.node.val!.length = 0;
     for (const val of vals) this.put(val);
     return this;
   }
 
+  /** Appends one child node to the current branch. */
   protected _put_node(node: Node): this {
     this.node.val!.push(node);
     return this;
   }
 
+  /** Lowers one generic JS value and appends it as a child. */
   put<T extends NodeValue<NodeView>>(val: T): this {
     return this._put_node(val_to_node(val));
   }
 
   override nil(): this {
+    // generic/untyped null lowering
     return this._put_node(NIL_NODE);
   }
+
+  // ---- scalar ----
 
   override u8(u: u8 | null): this {
     return this._put_node(U8_NODE(u));
@@ -404,6 +475,8 @@ export abstract class BranchView extends NodeView {
   override bool(b: boolean | null): this {
     return this._put_node(BOOL_NODE(b));
   }
+
+  // ---- sequence ----
 
   override u8_array(arr: U8Array | null): this {
     return this._put_node(U8_ARRAY_NODE(arr));
@@ -448,7 +521,10 @@ export abstract class BranchView extends NodeView {
     return this._put_node(STRS_NODE(items));
   }
 
+  // ---- Subtree ----
+
   override branch(fn: ((b: BranchView) => void) | null): this {
+    // typed optional branch; node kind is preserved and physical presence is decided during encode
     if (fn === null) {
       return this._put_node({ type: SpecialType.BRANCH, val: null });
     }
@@ -458,12 +534,21 @@ export abstract class BranchView extends NodeView {
     return this._put_node(branch.node);
   }
 
+  /**
+   * Appends an in-memory subtree as one child.
+   * The subtree is encoded inline as part of the current tree.
+   */
   subtree(subtree: NodeView): this {
     return this._put_node(subtree.node);
   }
 
-  /** `pkt` must start on a WORD_SZ boundary in its buffer, or EBADMSG. It is
-   * not copied, so it must not change until the tree is encoded. */
+  /**
+   * Grafts an already-encoded subtree packet as one child.
+   *
+   * Contract:
+   * - `pkt.byteOffset` must be WORD_SZ-aligned
+   * - Full packet validation is intentionally deferred
+   */
   override graft(pkt: U8Array): this {
     if (pkt.byteOffset % WORD_SZ) throw new MarshalError(Errno.EBADMSG);
     return this._put_node({ type: SpecialType.GRAFT, val: pkt });

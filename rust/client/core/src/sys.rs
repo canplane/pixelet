@@ -7,6 +7,8 @@
 //! profiler (pxl-tool rule.rs).
 
 pub(crate) mod boot;
+#[cfg(not(target_arch = "wasm32"))]
+mod file_body;
 pub(crate) mod io;
 pub(crate) mod load;
 #[path = "sys/machine.spec.rs"]

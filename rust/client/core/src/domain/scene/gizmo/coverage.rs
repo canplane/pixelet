@@ -10,21 +10,22 @@
 //! highest mark over it, straight between its ends on the ground.
 
 use fnv::{FnvHashMap, FnvHashSet};
+use pxl_spec::brick;
 
-use pxl_engine::area;
-use pxl_engine::clipmap::{self, FIRST_CELL_ZOOM};
-use pxl_engine::LEAF_CELL_ZOOM;
+use pxl_engine::clipmap::FIRST_CELL_ZOOM;
 use pxl_render::gpu::draw::DrawList;
 use pxl_render::look::color::linear_rgb;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::cell_zoom_at;
-use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::world;
-use pxl_spec::space::coord::zoom::{base_of, units, within, Zoom};
+use pxl_spec::space::coord::zoom::{
+    base_of, units, within, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM,
+};
+use pxl_spec::space::coord::{q3, world};
+use pxl_spec::space::layer::area;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, MIN_ZOOM};
+use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_core::global::Global;
 
 use crate::domain::layer::terrain::clipmap::{brick_present, eye_bricks, tile_of};
@@ -239,7 +240,7 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
         let Some(bricks) = eye_bricks(cell_zoom) else {
             continue;
         };
-        let pz = clipmap::bricks_zoom(cell_zoom);
+        let pz = brick::bricks_zoom(cell_zoom);
         for p in bricks {
             let tile = tile_of(cell_zoom, p).0;
             // The brick drawn in this one's place: its own when present, or
@@ -250,7 +251,7 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
                 .find(|&(c, at)| brick_present(c, at));
             let r2 = near(rect((pz, p)));
             if r2 > o.demand_dist * o.demand_dist
-                || cell_zoom_at(r2).clamp(FIRST_CELL_ZOOM, LEAF_CELL_ZOOM) < cell_zoom
+                || cell_zoom_at(r2 as f32).clamp(FIRST_CELL_ZOOM, LEAF_CELL_ZOOM) < cell_zoom
             {
                 continue;
             }

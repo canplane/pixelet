@@ -7,18 +7,17 @@
 //! asked for, and the order a tile is read in.
 
 use crate::sys::io::demand::Order;
-use pxl_spec::space::layer::lattice::{demand_dist, draw_dist};
+use pxl_spec::space::layer::lattice::{demand_dist, draw_dist, Lattice, GROUND};
 use xpute_core::global::Global;
 
-use pxl_engine::clipmap::{bricks_zoom, BRICK_SHIFT};
+use pxl_spec::brick::{bricks_zoom, BRICK_SHIFT};
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::split_dist;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::coord::zoom::{units, Zoom, LEAF_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::demand::{band, squares_within, tiles_within};
-use pxl_spec::space::layer::lattice::{Lattice, GROUND};
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::domain::layer::floor;
 use crate::domain::layer::Base as _;
@@ -28,7 +27,6 @@ use crate::domain::view::above_ground::height_at;
 use crate::domain::view::frame::pose::{eye, view};
 use crate::sys::io::source;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec::space::coord::zoom::Zoom;
 
 /// How far from the eye, in world units, the layers are asked for and the
 /// clip levels hold. This reaches as far as the source's top zoom does, past

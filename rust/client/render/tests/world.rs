@@ -8,18 +8,26 @@
 
 mod real_world;
 
+use pxl_spec::brick;
+use pxl_spec::ground::palette_idxs;
+use pxl_spec::share::FULL;
+use pxl_spec::space::coord::world::{wrap_idx, SEA_LEVEL};
+use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, MIN_ZOOM, SHARD_ZOOM};
+use pxl_spec::way::NOTHING;
 use std::collections::BTreeMap;
 
 use pxl_content::cave;
-use pxl_content::cube::ground as palette;
 use pxl_engine::answer::{self, In, Kind};
-use pxl_engine::area;
-use pxl_engine::clipmap::{self as clip, Lookup, ACROSS, BRICK_SHIFT, FIRST_CELL_ZOOM, ORIGIN_AT};
+use pxl_engine::clipmap as clip;
+use pxl_engine::clipmap::{Lookup, ACROSS, FIRST_CELL_ZOOM, ORIGIN_AT};
 use pxl_engine::ground;
 use pxl_engine::object::{self, Cut, Table};
 use pxl_engine::way;
 use pxl_engine::world::{self, Inheritance};
-use pxl_engine::{value, wrap_idx, Zoom, LEAF_CELL_ZOOM, SHARD_ZOOM};
+use pxl_spec::asset::cube::ground as palette;
+use pxl_spec::brick::BRICK_SHIFT;
+use pxl_spec::space::layer::area;
+use pxl_spec::value;
 
 use pxl_render::frame::shader::record::WORLD_ASKED;
 use real_world::{level_first, Draw, World, CORNERS, EYE, FINEST, UNLAID};
@@ -172,7 +180,7 @@ fn tell_way(w: World, (z, c): (Zoom, [i32; 3]), seen: &mut BTreeMap<[i32; 2], u3
         return;
     }
     let v = clip::way_at(&w, w.pool, place, b[1], (z, c));
-    if v == way::NOTHING {
+    if v == NOTHING {
         return;
     }
     let s = 1 << (LEAF_CELL_ZOOM - z);
@@ -229,7 +237,7 @@ fn tell(
         ];
         let (first, side) = (level_first(EYE, asked), 1 << (up - clip::BRICK_MIPS));
         let d = [
-            wrap_idx(clip::bricks_zoom(asked), g[0] - first[0]),
+            wrap_idx(brick::bricks_zoom(asked), g[0] - first[0]),
             g[1] - first[1],
         ];
         t.add("a block ending at its level's first, x", d[0] + side == 0);
@@ -241,14 +249,14 @@ fn tell(
         "asked of a level not laid",
         asked > z + clip::BRICK_MIPS && UNLAID.contains(&asked),
     );
-    if (pxl_engine::MIN_ZOOM..SHARD_ZOOM).contains(&z) && got.kind == Kind::Split {
+    if (MIN_ZOOM..SHARD_ZOOM).contains(&z) && got.kind == Kind::Split {
         let mut place = before.ground;
         let coarsest = ground::coarsest(z, zooms[0]).min(zooms[1]);
         let cells = [coarsest, zooms[1]];
         let (b, _, here) = clip::bound_over(&w, &mut place, cells, (z, [c[0], c[1]]));
         t.add(
             "wider than a shard, all under the sea",
-            here && b[0][1] < pxl_engine::SEA_LEVEL,
+            here && b[0][1] < SEA_LEVEL,
         );
     }
     if z >= LEAF_CELL_ZOOM && is_cell && !shard.past() {
@@ -271,7 +279,7 @@ fn tell(
         };
         !(-row..row).contains(&c[1]) || !(-side..side).contains(&c[2])
     });
-    if got.kind != Kind::Cell && z >= pxl_engine::MIN_ZOOM && !is_cell {
+    if got.kind != Kind::Cell && z >= MIN_ZOOM && !is_cell {
         let (mut resident, mut place) = (w, before.ground);
         let (i, _, bound) = ground::node(&mut resident, shard, &mut place, (z, c), zooms, false);
         let ways = way::slab(bound, [ground::coarsest(z, zooms[0]), zooms[1]]);
@@ -348,7 +356,7 @@ fn tell(
     t.add(
         "cell, four differ",
         is_cell && {
-            let [a, b, c, d] = ground::palette_idxs(got.asset[1]);
+            let [a, b, c, d] = palette_idxs(got.asset[1]);
             a != b || b != c || c != d
         },
     );
@@ -364,11 +372,8 @@ fn tell(
         let mut place = before.ground;
         let (i, _, _) = ground::node(&mut resident, shard, &mut place, (z, c), zooms, true);
         if i.kind == Kind::Cell {
-            t.add(
-                "cell, some of it cave",
-                i.asset[1] > 0 && i.asset[1] < answer::FULL,
-            );
-            t.add("cell, all of it cave", i.asset[1] >= answer::FULL);
+            t.add("cell, some of it cave", i.asset[1] > 0 && i.asset[1] < FULL);
+            t.add("cell, all of it cave", i.asset[1] >= FULL);
         }
     }
     if cuts != [Cut::NONE; 2] {
@@ -479,7 +484,7 @@ fn hand_world_answers_as_the_rust() {
         ];
         let z = top_at(g) - draw.within(4, 60);
         let c = [wrap_idx(LEAF_CELL_ZOOM, g[0]), g[1], z];
-        if cave::hollow((LEAF_CELL_ZOOM, c)) >= answer::FULL {
+        if cave::hollow((LEAF_CELL_ZOOM, c)) >= FULL {
             points.push([g[0], g[1], z]);
             caves += 1;
             if caves == 800 {
@@ -833,7 +838,7 @@ fn hand_world_answers_as_the_rust() {
             draw.within(-1 << 8, 1 << 8),
         ];
         let share = cave::hollow((cave::PIPE, c));
-        if share == 0 || share >= answer::FULL {
+        if share == 0 || share >= FULL {
             continue;
         }
         partial += 1;

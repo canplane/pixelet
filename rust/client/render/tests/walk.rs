@@ -6,8 +6,10 @@
 mod gpu;
 
 use pxl_engine::cast::{self, Spacing};
-use pxl_engine::{grid, node_cache};
+use pxl_engine::node_cache;
 use pxl_render::frame::shader::record::{src, SHADER_QUEUE_CORNERS};
+use pxl_spec::space::camera::grid;
+use pxl_spec::space::coord::zoom::FINEST_ZOOM;
 
 /// The probe's words for one case: the vector's three words, then the four the module writes.
 const PROBE_WORDS: usize = 7;
@@ -319,7 +321,7 @@ fn hand_keeps_as_the_engine() {
         seed
     };
     let mut cases: Vec<(u32, [i32; 3])> = Vec::new();
-    for zoom in 0..=pxl_engine::FINEST_ZOOM + 2 {
+    for zoom in 0..=FINEST_ZOOM + 2 {
         // The first and last index kept on an axis, and the one past each.
         let side = if zoom >= 31 { i32::MAX } else { 1i32 << zoom };
         let edges = [

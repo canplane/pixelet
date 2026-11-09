@@ -6,6 +6,7 @@
 //! parent found (`Walker`). Decor, which only the CPU answers, rides on the
 //! same descent.
 
+use super::change;
 use super::decor::DecorRay;
 use super::node::{coarsest, At};
 use super::world::World;
@@ -14,10 +15,10 @@ use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::{Answer, Base};
 use pxl_engine::answer::{self, In, Kind};
 pub(super) use pxl_engine::cast::Until;
-use pxl_engine::cast::{self, Detail, End, Keep, Over, Query, Spacing, Trace, DEPTH};
+use pxl_engine::cast::{self, Detail, End, Keep, Line, Query, Spacing, Trace, DEPTH};
 use pxl_engine::object;
 use pxl_engine::support;
-use pxl_engine::support::{ColumnSurface, Line};
+use pxl_engine::support::ColumnSurface;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::grid;
@@ -77,7 +78,7 @@ pub fn by_dist() -> Detail {
 /// no coarser than the cells a tile draws.
 pub fn cell_zoom_at(eye: V3, at: V3) -> Zoom {
     let v = v3::sub(&at, &eye);
-    let cell_zoom = grid::cell_zoom_at(v3::dot(&v, &v)).min(GROUND.leaf_cell_zoom());
+    let cell_zoom = grid::cell_zoom_at(v3::dot(&v, &v) as f32).min(GROUND.leaf_cell_zoom());
     TerrainTile::min_zoom().map_or(cell_zoom, |min| cell_zoom.max(GROUND.grid_zoom(min)))
 }
 
@@ -146,7 +147,7 @@ impl Descent {
         let (over, found) = self.node.over(cast::point_at(self.origin, ray, 0.0));
         found.then(|| {
             let n = cast::holding(self.origin, ray, over, 0.0);
-            (n, self.line.over(n.zoom), 0.0)
+            (n, self.line.ancestor(n.zoom), 0.0)
         })
     }
 }
@@ -265,19 +266,27 @@ fn decor_hit(ray: &Ray, t: f64, axis: usize, i: Instance) -> Hit {
 
 impl<'a> World<'a> {
     /// The first filled cell `ray` meets within its `t_max`, at the zoom
-    /// `detail` asks where it meets it, or the decor struck nearer. What the
-    /// ray starts inside is not met, so an eye under the ground is not
-    /// stopped where it stands. A cell met coarser than it is held comes with
-    /// the tile lacked. A cell not held at all is lacked too, and past it the
-    /// ray tells nothing. Decor, which fills no cell, is struck at the leaf
-    /// cells the ray passes.
+    /// `detail` asks where it meets it. What the ray starts inside is not met,
+    /// so an eye under the ground is not stopped where it stands. A cell met
+    /// coarser than it is held comes with the tile lacked. A cell not held at
+    /// all is lacked too, and past it the ray tells nothing.
     pub fn first_hit(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
+        let mut path = Path::default();
+        self.along(ray, detail, Until::Opaque, None, &mut path, &mut None)
+            .0
+    }
+
+    /// The first thing a viewer sees along `ray`: the first cell, or the
+    /// decor struck nearer, as the frame draws it: everything placed and, of
+    /// what the ground generates at the leaves, `decors` (`lens::leaf_decors`).
+    /// Decor is struck at the leaf cells the ray passes.
+    pub fn first_visible(&self, ray: &Ray, detail: Detail, decors: u32) -> Answer<Option<Hit>> {
         let mut path = Path::default();
         let (met, decor_ray) = self.along(
             ray,
             detail,
             Until::Opaque,
-            self.decor_ray(ray),
+            DecorRay::new(ray, decors),
             &mut path,
             &mut None,
         );
@@ -319,7 +328,7 @@ impl<'a> World<'a> {
         };
         let o = ray.origin;
         let end = ray.at(ray.t_max);
-        self.read([o[0], o[1]], [end[0], end[1]], detail.range[0]);
+        change::report_read([o[0], o[1]], [end[0], end[1]], detail.range[0]);
         let from = cast::Ray::new(ray.dir.map(|v| v as f32), ray.t_max as f32);
         let q = origin(o[0], o[1], o[2]);
         let on = descent
@@ -363,7 +372,7 @@ impl<'a> World<'a> {
         let mut walker = self.walker();
         let side = units(cell_zoom);
         let middle = g.map(|v| (f64::from(v) + 0.5) * side);
-        self.read(middle, middle, cell_zoom);
+        change::report_read(middle, middle, cell_zoom);
         let f = support::column_surface(&mut walker, cell_zoom, g);
         let met = (f.end == End::Hit).then_some(f.top);
         let answer = match (met, walker.lack, walker.answered) {
@@ -375,10 +384,10 @@ impl<'a> World<'a> {
         (answer, f)
     }
 
-    /// What is in the cell `c` at `zoom`, asked off the line `l` (pxl-engine
-    /// `support::asset`). The descent starts from the deepest node on the
-    /// line that holds the cell, never again from the top. Where the world
-    /// lacks the cell, the answer is nothing with the missing tile.
+    /// What is in the cell `c` at `zoom`, asked off the line `l`
+    /// (pxl-engine `support::asset`). The descent starts from the deepest node
+    /// on the line that holds the cell, never again from the top. Where the
+    /// world lacks the cell, the answer is nothing with the missing tile.
     pub(super) fn asset_about(&self, l: &Line<At>, zoom: Zoom, c: [i32; 3]) -> Answer<u32> {
         let mut walker = self.walker();
         let val = support::asset(&mut walker, l, zoom, c);

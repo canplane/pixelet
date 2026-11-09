@@ -1,7 +1,7 @@
 // pxl-tool/spec/catalog.rs
 
 //! The catalog: every file reference the asset specs make, a slot each,
-//! numbered in the kinds' order (id.json `KIND`). First the cube kind's pack,
+//! numbered in this order. First the cube kind's pack,
 //! then each decor variant's model and skin, then each `file` leaf of
 //! character.json and of sky.json in its document order. The Rust names each
 //! slot; the catalog fills them with the file each names, by its number below
@@ -141,6 +141,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     .collect::<Vec<_>>();
     Ok(vec![
         Output::new("ts/client/src/service/sys/fs/catalog.spec.ts", file(&ts)),
-        Output::new("rust/spec/spec/src/asset/catalog.spec.rs", file(&rs)),
+        Output::new("rust/spec/src/asset/catalog.spec.rs", file(&rs)),
     ])
 }

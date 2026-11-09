@@ -2,7 +2,7 @@
 
 // Generates the decor of each record of a listed pair, one thread a record: its footing, then
 // its pose (pxl-content `generation::placement`). Decor stands on the world with nothing
-// placed, and nothing placed stays nothing down a descent (`Inheritance::UNPLACED`), so no line
+// placed, and nothing placed stays nothing down a descent, so no line
 // of the world is kept. A column's surface is read from the column (`surface`, which answers
 // as `support::column_surface` does), and only a column under ways is walked cell by cell. The
 // loop asks the world from one place (`world_cell`), as a GPU inlines a call at every place it
@@ -170,7 +170,7 @@ fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let pair = list[select(LIST_AT + id.z, part_at(id.z - whole), part)];
   let brick = pair_entry(pair);
   let j = pair_decor(pair);
-  if (id.x >= in_cap(records[cnt_at(brick, j)], decor_cap(j))) {
+  if (id.x >= records[cnt_at(brick, j)]) {
     return;
   }
   let r = entry_word(brick, j, id.x);

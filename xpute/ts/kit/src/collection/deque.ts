@@ -12,6 +12,7 @@ export class Deque<T> {
   head: u32;
   len: u32;
 
+  // external storage (DOD-friendly): caller owns the ring buffer.
   constructor(buf: (T | undefined)[], head: u32 = 0, len: u32 = 0) {
     this.buf = buf;
     this.head = head;

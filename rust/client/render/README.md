@@ -174,7 +174,8 @@ and the device's runtime answers the same op at once.
 ## The shaders, held to the engine
 
 The shaders are WGSL by hand, assembled from parts (`frame/shader/part.rs`), and
-the layouts and numbers they read are generated from pxl-engine by `build.rs`.
+the layouts and numbers they read are generated from pxl-engine and pxl-spec by
+`build.rs`.
 
 - Every compute pass over the world (the cast, the node cache, the light's and
   decor's) is held word for word to pxl-engine's Rust by a test over a real

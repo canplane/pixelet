@@ -164,6 +164,9 @@ public class XputeModule: Module {
       Prop("surface") { (view: SurfaceView, surface: UInt32) in
         view.surface = surface
       }
+      Prop("touches") { (view: SurfaceView, touches: Bool) in
+        view.touches = touches
+      }
     }
   }
 }

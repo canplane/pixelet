@@ -56,6 +56,20 @@ export interface Fs {
    * `bytes` lies in the runtime's own memory, not the core's, so it stays
    * valid after the call. */
   commit(root: u32, path: string, bytes: U8Array): void;
+  /** Where the bytes of the file at `path` below `root` can be fetched from,
+   * for a runtime with a `fetcher`; none when only `open` answers. */
+  url?(root: u32, path: string): string | undefined;
+  /** Where a device fetches a file with no JavaScript on the bytes' way. */
+  fetcher?: Fetcher;
+}
+
+/** Fetches a file off the JavaScript thread and hands its bytes to the runtime
+ * itself. */
+export interface Fetcher {
+  /** Resolves once the bytes have gone to the runtime, and rejects with why
+   * they did not. */
+  fetch(fd: u32, url: string): Promise<void>;
+  cancel(fd: u32): void;
 }
 
 /** A `Complete` completes a core's request, given its tag and command, the

@@ -62,7 +62,7 @@ fn drawn_cap_fits_every_buffer() {
         let long = short * wide;
         for size in [[long as u32, short as u32], [short as u32, long as u32]] {
             let aspect = size[0] as f32 / size[1] as f32;
-            let tan = [HALF_TAN as f32 * aspect, HALF_TAN as f32];
+            let tan = [HALF_TAN * aspect, HALF_TAN];
             let words = beam::Grid::of(tan).walked_at() + ray::holes_words(size);
             let bytes = u64::from(word_bytes(words as usize));
             assert!(floor::fits(bytes, true), "{size:?}: {bytes} bytes");

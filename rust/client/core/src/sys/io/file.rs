@@ -21,7 +21,8 @@
 
 use core::fmt::{self, Write};
 
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
+use pxl_spec::space::coord::zoom::LEAF_ZOOM;
+use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_core::global::Global;
 use xpute_core::ipc::door::Pos;
 pub use xpute_core::ipc::door::Reading;

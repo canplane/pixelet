@@ -4,7 +4,8 @@
 
 use fnv::FnvHashMap;
 use postgres::Client;
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
+use pxl_spec::space::coord::zoom::LEAF_ZOOM;
+use pxl_spec::space::layer::quadrant::Quadrant;
 use std::path::Path;
 
 use postgres::types::ToSql;

@@ -19,7 +19,6 @@ fnv.workspace = true
 libm.workspace = true
 pxl-geo-spec.workspace = true
 pxl-spec = { workspace = true, features = ["serde"] }
-pxl-engine.workspace = true
 xpute-kit = { workspace = true, features = ["std"] }
 # Blocking: the pack and rasterize are `Rc`-backed, so a page is one non-`Send`
 # call, and each worker is a thread with its own connection.

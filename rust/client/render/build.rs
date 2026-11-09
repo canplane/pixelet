@@ -10,13 +10,20 @@ use naga::front::wgsl;
 use pxl_content::param::night;
 use pxl_engine::answer;
 use pxl_engine::beam::SAMPLE_SIDE;
-use pxl_engine::grid;
 use pxl_engine::ground;
-use pxl_engine::lattice;
 use pxl_engine::light::TILE as LIGHT_TILE;
 use pxl_engine::param::light;
 use pxl_engine::WORKGROUPS_CAP;
+use pxl_spec::brick;
+use pxl_spec::ground::PALETTE_BITS;
+use pxl_spec::share::{EIGHTHS, FILL_BITS, FULL};
+use pxl_spec::space::camera::grid;
+use pxl_spec::space::coord::q3::FRAC_W;
+use pxl_spec::space::coord::world::{HEIGHT_BITS, SEA_LEVEL};
+use pxl_spec::space::coord::zoom::{FINEST_ZOOM, LEAF_CELL_ZOOM, MIN_ZOOM, UNIT_ZOOM};
+use pxl_spec::space::layer::lattice;
 use pxl_spec::space::layer::lattice::EFFECT_REACH;
+use pxl_spec::way::{AIR_OF, NOTHING, SPANS};
 use std::path::Path;
 
 #[path = "src/frame/shader/debug_look.spec.rs"]
@@ -71,8 +78,8 @@ fn main() {
     // fraction has `FRAC_W` bits.
     let lattice = format!(
         "const UNIT_ZOOM: u32 = {}u;\nconst FRAC_W: u32 = {}u;\nconst GROUND_CELL_ZOOM: u32 = {}u;\n",
-        pxl_engine::UNIT_ZOOM,
-        pxl_engine::FRAC_W,
+        UNIT_ZOOM,
+        FRAC_W,
         lattice::GROUND.leaf_cell_zoom()
     );
     std::fs::write(out.join("lattice.wgsl"), lattice).expect("the lattice's shader");
@@ -98,15 +105,15 @@ fn main() {
     // `fill_side` gives the side of the box drawn for a cell that fills only part of its cube,
     // by the number of eighths the cell keeps (pxl-engine answer.rs `side`). A fill of 0 eighths
     // means all eight are kept, which the default case answers.
-    let sides: String = (1..answer::EIGHTHS)
+    let sides: String = (1..EIGHTHS)
         .map(|k| format!("case {k}u: {{ return {:?}; }} ", answer::side(k)))
         .collect();
     let fill = format!(
         "fn fill_side(k: u32) -> f32 {{ switch k {{ {sides}default: {{ return 1.0; }} }} }}\n"
     );
     // A coarse cell's ray carries the cell's four palette indices in its third word, packed as
-    // pxl-engine ground.rs `palette_idxs` packs them.
-    let b = ground::PALETTE_BITS;
+    // pxl-spec ground.rs `palette_idxs` packs them.
+    let b = PALETTE_BITS;
     let m = (1u32 << b) - 1;
     let palette_idxs = format!(
         "fn ray_palette_idxs(w: u32) -> vec4u {{ return vec4u(w & {m}u, (w >> {b}u) & {m}u, (w >> {}u) & {m}u, w >> {}u); }}\n",
@@ -284,13 +291,14 @@ const _: () = assert!(
 /// The constants the walks read (walk.wgsl), each written from the pxl-engine layout or rule
 /// that defines it.
 fn walk_word() -> String {
-    use pxl_engine::area::Shard;
     use pxl_engine::clipmap::{self, Lookup};
     use pxl_engine::object::{NodeSlot, RECTS};
     use pxl_engine::{
-        answer, beam, cast, count, eye, face, light, node_cache, param, raster, ray, record, value,
-        SHARD_ZOOM,
+        answer, beam, cast, count, eye, face, light, node_cache, param, raster, ray, record,
     };
+    use pxl_spec::space::coord::zoom::SHARD_ZOOM;
+    use pxl_spec::space::layer::area::Shard;
+    use pxl_spec::value;
     let words: &[(&str, u32)] = &[
         ("EYE_VEC4S", eye::WORDS as u32 / 4),
         ("ORIGIN", eye::ORIGIN as u32),
@@ -302,9 +310,9 @@ fn walk_word() -> String {
         ("TAN", eye::TAN as u32),
         ("RANGE", eye::RANGE as u32),
         ("GRID", eye::GRID as u32),
-        ("FRAC_W", pxl_engine::FRAC_W),
-        ("UNIT_ZOOM", pxl_engine::UNIT_ZOOM),
-        ("FINEST_ZOOM", pxl_engine::FINEST_ZOOM),
+        ("FRAC_W", FRAC_W),
+        ("UNIT_ZOOM", UNIT_ZOOM),
+        ("FINEST_ZOOM", FINEST_ZOOM),
         ("ZOOM_BITS", pxl_engine::ZOOM_BITS),
         ("SAMPLE", param::beam::SAMPLE),
         ("NEAR_SAMPLES", param::beam::NEAR),
@@ -353,7 +361,7 @@ fn walk_word() -> String {
         ("VAL_VOID", value::VOID),
         ("VAL_AIR", value::AIR),
         ("FILL_SHIFT", answer::FILL_SHIFT),
-        ("EIGHTHS", answer::EIGHTHS),
+        ("EIGHTHS", EIGHTHS),
         ("BOX_BITS", answer::BOX_BITS),
         ("BOX_STEPS", answer::BOX_STEPS),
         ("STEPS_CAP", cast::STEPS_CAP),
@@ -670,12 +678,12 @@ fn walk_word() -> String {
 }
 
 fn side_word() -> String {
-    let cases: String = (1..answer::EIGHTHS)
+    let cases: String = (1..EIGHTHS)
         .map(|k| format!("case {k}u: {{ return {:?}; }} ", answer::side(k)))
         .collect();
     format!(
         "fn side(k: u32) -> f32 {{ switch (k) {{ {cases}default: {{ return {:?}; }} }} }}\n",
-        answer::side(answer::EIGHTHS)
+        answer::side(EIGHTHS)
     )
 }
 
@@ -685,25 +693,27 @@ fn world_word() -> String {
     use pxl_content::cave::{
         BLOCK, BLOCKS, CELL_BLOCKS, CROSS, PIPE, ROOT, ROOT_BLOCKS, SPAWN, SPLIT, WALK,
     };
-    use pxl_content::cube::ground as palette;
     use pxl_content::param::{cave, strata};
     use pxl_engine::clipmap as clip;
     use pxl_engine::object::{self, Cut};
+    use pxl_engine::seed;
     use pxl_engine::way;
-    use pxl_engine::{area, seed, value};
+    use pxl_spec::asset::cube::ground as palette;
+    use pxl_spec::space::layer::area;
+    use pxl_spec::value;
     use xpute_kit::math::rng;
     let words: &[(&str, u32)] = &[
-        ("LEAF_CELL_ZOOM", pxl_engine::LEAF_CELL_ZOOM),
-        ("MIN_ZOOM", pxl_engine::MIN_ZOOM),
+        ("LEAF_CELL_ZOOM", LEAF_CELL_ZOOM),
+        ("MIN_ZOOM", MIN_ZOOM),
         ("VAL_UNKNOWN", value::UNKNOWN),
         ("GROUNDS_FIRST", value::GROUNDS[0]),
         ("GROUNDS_LAST", value::GROUNDS[1]),
         ("OBJECTS_FIRST", value::OBJECTS[0]),
         ("OBJECTS_LAST", value::OBJECTS[1]),
         ("PLACED_ASSET", answer::PLACED_ASSET),
-        ("FULL", answer::FULL),
-        ("FULL_BITS", answer::FULL.trailing_zeros()),
-        ("FILL_BITS", answer::FILL_BITS),
+        ("FULL", FULL),
+        ("FULL_BITS", FULL.trailing_zeros()),
+        ("FILL_BITS", FILL_BITS),
         ("BRANCH", object::BRANCH),
         ("OBJECT_ROOT", object::ROOT),
         ("CHILDREN", object::CHILDREN),
@@ -713,9 +723,9 @@ fn world_word() -> String {
         ("SHARD_KNOWN", area::SHARD_KNOWN),
         ("SHARD_SERVED_SHIFT", area::SHARD_SERVED_SHIFT),
         ("SHARD_OWN", area::OWN),
-        ("BRICK", clip::BRICK),
-        ("BRICK_SHIFT", clip::BRICK_SHIFT),
-        ("BRICK_CELLS", clip::BRICK_CELLS),
+        ("BRICK", brick::BRICK),
+        ("BRICK_SHIFT", brick::BRICK_SHIFT),
+        ("BRICK_CELLS", brick::BRICK_CELLS),
         ("BRICK_WORDS", clip::BRICK_WORDS),
         ("BRICK_MIPS", clip::BRICK_MIPS),
         ("ACROSS", clip::ACROSS),
@@ -736,10 +746,10 @@ fn world_word() -> String {
         ("RUN_OFFS_AT", clip::RUN_OFFS_AT),
         ("SPANS_ACROSS", clip::SPANS_ACROSS),
         ("SPANS_CNT", clip::SPANS_CNT),
-        ("WAY_NOTHING", way::NOTHING),
+        ("WAY_NOTHING", NOTHING),
         ("WAY_AIR", way::AIR),
-        ("WAY_AIR_OF", way::AIR_OF),
-        ("WAY_SPANS", way::SPANS as u32),
+        ("WAY_AIR_OF", AIR_OF),
+        ("WAY_SPANS", SPANS as u32),
         ("LOOKUP_SLOT_BITS", clip::LOOKUP_SLOT_BITS),
         ("LOOKUP_FROM_SHIFT", clip::LOOKUP_FROM_SHIFT),
         ("LOOKUP_CELL_ZOOM_SHIFT", clip::LOOKUP_CELL_ZOOM_SHIFT),
@@ -768,7 +778,7 @@ fn world_word() -> String {
         ("TUNNELS_LAST", cave::ROOT_TUNNELS[4]),
     ];
     let signed: &[(&str, i32)] = &[
-        ("SEA_LEVEL", pxl_engine::SEA_LEVEL),
+        ("SEA_LEVEL", SEA_LEVEL),
         ("SEA_CELLS", ground::SEA_CELLS),
         ("FACE_NONE", i16::MIN as i32),
         ("EMPTY_LO", ground::EMPTY[0]),
@@ -821,11 +831,12 @@ fn world_word() -> String {
 /// pxl-content layout or rule that defines it.
 fn decor_word() -> String {
     use core::mem::{offset_of, size_of};
-    use pxl_content::decor::{Decor, Orientation, DECORS};
     use pxl_content::generation::{self as g, drawn};
     use pxl_content::param::scatter::ALIGN_NEIGHBOR_RADIUS;
     use pxl_content::scatter;
-    use pxl_engine::{cast, value, world};
+    use pxl_engine::{cast, world};
+    use pxl_spec::asset::decor::{Orientation, Row, DECORS, ROWS};
+    use pxl_spec::value;
     let row = |at: usize| (at / size_of::<u32>()) as u32;
     let words: &[(&str, u32)] = &[
         ("LANES", g::LANES),
@@ -856,7 +867,7 @@ fn decor_word() -> String {
         ("RUN", g::RUN),
         ("RUNS", g::RUNS),
         ("EYE_ENTRIES", g::EYE_ENTRIES),
-        ("ROW_CHANCE", row(offset_of!(Decor, chance))),
+        ("ROW_CHANCE", row(offset_of!(Row, chance))),
         ("DRAWN_NONE", drawn::NONE),
         ("DRAWN_REGION_SHIFT", drawn::REGION_SHIFT),
         ("DRAWN_COLUMNS", drawn::COLUMNS),
@@ -875,14 +886,14 @@ fn decor_word() -> String {
         ("PLACED_FIRST", world::PLACED_FIRST),
         ("CNT_TAG", scatter::CNT),
         ("SPLIT_TAG", scatter::SPLIT),
-        ("DECORS", DECORS.len() as u32),
-        ("FIRST_VAL", DECORS[0].val),
-        ("ROW_WORDS", row(size_of::<Decor>())),
-        ("ROW_SEED", row(offset_of!(Decor, seed))),
-        ("ROW_ORIENT", row(offset_of!(Decor, orient))),
-        ("ROW_ON", row(offset_of!(Decor, on))),
-        ("ROW_VARIANTS", row(offset_of!(Decor, variants))),
-        ("ROW_SIZES", row(offset_of!(Decor, sizes))),
+        ("DECORS", ROWS.len() as u32),
+        ("FIRST_VAL", ROWS[0].val),
+        ("ROW_WORDS", row(size_of::<Row>())),
+        ("ROW_SEED", row(offset_of!(Row, seed))),
+        ("ROW_ORIENT", row(offset_of!(Row, orient))),
+        ("ROW_ON", row(offset_of!(Row, on))),
+        ("ROW_VARIANTS", row(offset_of!(Row, variants))),
+        ("ROW_SIZES", row(offset_of!(Row, sizes))),
         ("ALONG_TRANSPORT", Orientation::along_transport as u32),
         ("TRANSPORTS_FIRST", value::TRANSPORTS[0]),
         ("TRANSPORTS_LAST", value::TRANSPORTS[1]),
@@ -900,7 +911,7 @@ fn decor_word() -> String {
             "decor's tallest and widest are a cell or more"
         );
         assert!(
-            pxl_engine::UNIT_ZOOM - world::PLACED_FIRST == 3,
+            UNIT_ZOOM - world::PLACED_FIRST == 3,
             "decor_pose.wgsl `overlaps_placed` descends three levels to the unit cells"
         );
     }
@@ -918,7 +929,7 @@ fn decor_word() -> String {
     let [ex, ey, ez] = g::CLAIM_EXTENT;
     out += &format!("const CLAIM_EXTENT = vec3<i32>({ex}i, {ey}i, {ez}i);\n");
     let by_decor = |name: &str, of: &dyn Fn(usize) -> u32| {
-        let last = DECORS.len() - 1;
+        let last = ROWS.len() - 1;
         let cases: String = (0..last)
             .map(|k| format!("case {k}u: {{ return {}u; }} ", of(k)))
             .collect();
@@ -928,7 +939,7 @@ fn decor_word() -> String {
         )
     };
     let by_decor_i32 = |name: &str, of: &dyn Fn(usize) -> i32| {
-        let last = DECORS.len() - 1;
+        let last = ROWS.len() - 1;
         let cases: String = (0..last)
             .map(|k| format!("case {k}u: {{ return {}i; }} ", of(k)))
             .collect();
@@ -937,13 +948,10 @@ fn decor_word() -> String {
             of(last)
         )
     };
-    out += &by_decor("decor_cap", &|k| DECORS[k].cap());
-    out += &by_decor("decor_first_record", &|k| {
-        g::first_record(&DECORS, k as u32)
-    });
-    out += &by_decor("decor_first_group", &|k| g::first_group(&DECORS, k as u32));
+    out += &by_decor("decor_first_record", &|k| g::first_record(&ROWS, k as u32));
+    out += &by_decor("decor_first_group", &|k| DECORS[k].first_group());
     out += &by_decor("decor_root", &|k| scatter::ROOTS[k]);
-    out += &by_decor_i32("decor_widest", &|k| DECORS[k].widest() as i32);
+    out += &by_decor_i32("decor_widest", &|k| ROWS[k].widest() as i32);
     // Each turn's spin is written as the bits of the float the Rust computes, so
     // decor_compact.wgsl writes the same spin the CPU does.
     let last = (1u32 << g::TURN_BITS) - 1;
@@ -960,10 +968,10 @@ fn decor_word() -> String {
     // the cell's side (`cast::top`, `generation::footing`). Each value is written as the bits of
     // the Rust's float, so the shader reads exactly what the CPU computes.
     let top_of = |k: u32| {
-        let asset = (k % answer::EIGHTHS) << answer::FILL_SHIFT;
+        let asset = (k % EIGHTHS) << answer::FILL_SHIFT;
         cast::fill_bounds(([0.0; 3], [1.0; 3]), asset).1[2]
     };
-    let cases: String = (1..answer::EIGHTHS)
+    let cases: String = (1..EIGHTHS)
         .map(|k| {
             format!(
                 "case {k}u: {{ return bitcast<f32>({}u); }} ",
@@ -973,7 +981,7 @@ fn decor_word() -> String {
         .collect();
     out + &format!(
         "fn sink_share(k: u32) -> f32 {{ switch (k) {{ {cases}default: {{ return bitcast<f32>({}u); }} }} }}\n",
-        (1.0 - top_of(answer::EIGHTHS)).to_bits()
+        (1.0 - top_of(EIGHTHS)).to_bits()
     )
 }
 
@@ -1038,7 +1046,7 @@ fn words() -> String {
         // exact (frame.wgsl `from_eye`).
         format!(
             "const Q3_STEP: f32 = {:?};\n",
-            1.0f32 / (1u32 << pxl_engine::FRAC_W) as f32
+            1.0f32 / (1u32 << FRAC_W) as f32
         ),
         vec4s("FRAME", FRAME_FLOATS),
         vec4s("SKY", SKY_FLOATS),
@@ -1081,7 +1089,7 @@ fn words() -> String {
         format!("const LIGHT_SLOPES: u32 = {LIGHT_SLOPES}u;\nconst GROUND_SLOPES: u32 = {GROUND_SLOPES}u;\nconst SLOPE_WORDS: u32 = {SLOPE_WORDS}u;\n"),
         format!("const CLOUD_TILE_UNITS: u32 = {CLOUD_TILE_UNITS}u;\nconst CLOUD_TILE_TEXELS: u32 = {CLOUD_TILE_TEXELS}u;\n"),
         // The bits of a Q3 Z, which spans the world's height about sea level.
-        format!("const HEIGHT_BITS: u32 = {}u;\n", pxl_engine::HEIGHT_BITS),
+        format!("const HEIGHT_BITS: u32 = {}u;\n", HEIGHT_BITS),
         format!(
             "const NIGHT_FALL: vec2f = vec2f({:?}, {:?});\n",
             night::FALL[0],

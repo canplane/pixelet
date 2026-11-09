@@ -12,10 +12,28 @@ import type { f64, u32 } from "../abi/word.ts";
 export * from "./rng.32.ts";
 export * from "./rng.64.ts";
 
-/** A random stream draws the next `u32` on each call. */
+// ============ Deterministic RNG ============
+
+/**
+ * Deterministic pseudo-random number generator.
+ *
+ * Returns u32 values [0, 2^32) with good statistical properties.
+ * NOT cryptographically secure.
+ */
 export type RNG = () => u32;
 
-/** Maps a `u32` onto [0, 1), uniformly. */
+/**
+ * Convert u32 random value to uniform float in [0, 1).
+ *
+ * @param x - u32 random value [0, 2^32)
+ * @returns Float in [0, 1)
+ *
+ * @example
+ * const rng = make_rng();
+ * if (u32_to_unit(rng()) < 0.1) {
+ *   // 10% probability
+ * }
+ */
 export function u32_to_unit(x: u32): f64 {
   return x / 0x100000000;
 }

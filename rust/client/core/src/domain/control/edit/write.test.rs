@@ -61,3 +61,29 @@ fn place_written_over_a_placed_cube() {
         red
     ));
 }
+
+/// Erasing an entry finer than a leaf cell, from a cube placed over the
+/// ground, leaves a hole where it was: the ground would fill its cube once
+/// it is gone.
+#[test]
+fn erase_finer_than_a_leaf_leaves_the_hole() {
+    let _g = serial();
+    let (tile_cache, [x, y]) = flat_at_five();
+    let leaf = GROUND.leaf_cell_zoom();
+    let mut store = Store::default();
+    write(
+        &mut store,
+        [x, y, 4.0],
+        leaf,
+        catalog::Object::red as AssetId,
+    );
+    write(
+        &mut store,
+        [x, y, 4.0],
+        leaf + 1,
+        catalog::Object::blue as AssetId,
+    );
+    let world = World::new(&tile_cache, &store);
+    let entry = Octant::holding(leaf + 1, &world::point(x, y, 4.0));
+    assert_eq!(erase_val(world, entry), AIR);
+}

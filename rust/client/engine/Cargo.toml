@@ -1,0 +1,19 @@
+[package]
+name = "pxl-engine"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+doctest = false
+
+[dependencies]
+# The model the engine computes over: the zooms, the lattices and the value space.
+pxl-spec.workspace = true
+# The seeds' hash.
+xpute-kit.workspace = true
+libm.workspace = true
+
+[lints]
+workspace = true

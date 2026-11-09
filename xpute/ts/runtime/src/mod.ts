@@ -32,7 +32,7 @@ export {
 } from "./runtime.ts";
 export type { Encode, OnImport } from "./ipc/doorbell.ts";
 export { type Binding, Namespace } from "./ipc/ns.ts";
-export { FileError, type Fs } from "./ipc/fs.ts";
+export { type Fetcher, FileError, type Fs } from "./ipc/fs.ts";
 export { Command as FsCommand, type FsProtocol } from "./abi/fs.spec.ts";
 export { Command as GpuCommand, type GpuProtocol } from "./abi/gpu.spec.ts";
 export { Timeslice } from "./sched/timeslice.ts";

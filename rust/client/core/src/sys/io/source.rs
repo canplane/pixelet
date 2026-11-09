@@ -8,17 +8,19 @@
 //! is over or under is never asked for. The versions the source names stay
 //! with the client.
 
-use pxl_engine::area::{self, Area};
 use pxl_spec::bake::publication::{BaseLayer, FORMAT};
 use pxl_spec::bake::source::{is_sharded, key};
-use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, MIN_ZOOM};
+use pxl_spec::space::coord::world::wrap_idx;
+use pxl_spec::space::coord::zoom::{Zoom, LEAF_ZOOM, MIN_ZOOM, SHARD_ZOOM};
+use pxl_spec::space::layer::area;
+use pxl_spec::space::layer::area::Area;
+use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_core::global::Global;
 use xpute_kit::status::errno::Errno;
 
 struct Source {
     min_zoom: Zoom,
-    /// The service area at `SHARD_ZOOM` (pxl-engine `area::Area`). For each
+    /// The service area at `SHARD_ZOOM` (pxl-spec `area::Area`). For each
     /// cell, by its key (`area::shard_key`), it holds the bits of which of the
     /// nine cells about it are served. A cell beside no served cell holds 0.
     nine: Vec<u16>,
@@ -105,10 +107,7 @@ fn nines_of(shard: &[Quadrant]) -> Vec<u16> {
     let mut nine = vec![0u16; cells];
     for &[x, y] in &covered {
         for k in 0..9 {
-            let n = [
-                pxl_engine::wrap_idx(SHARD_ZOOM, x + k % 3 - 1),
-                y + k / 3 - 1,
-            ];
+            let n = [wrap_idx(SHARD_ZOOM, x + k % 3 - 1), y + k / 3 - 1];
             let key = area::shard_key(n);
             if key != area::NO_KEY {
                 nine[key as usize] = area::nine(serves, n) as u16;

@@ -13,7 +13,7 @@ use pxl_render::gpu::surface::SURFACES;
 use pxl_render::pass::atmosphere::EARTH_LAYERS;
 use pxl_render::ray::{Cast, GroundInput};
 use pxl_render::renderer::{render_frame, EarthLayer, FrameInput, FrameStat};
-use pxl_spec::space::coord::v3;
+use pxl_spec::space::coord::{q3, v3};
 use xpute_core::global::Global;
 
 use crate::domain::layer::earth::{self, EarthTile, EARTH_SLOTS};
@@ -69,7 +69,6 @@ use pxl_render::gpu::api;
 use pxl_spec::asset::catalog::pack;
 use pxl_spec::asset::decor;
 use pxl_spec::asset::sky::moon;
-use pxl_spec::space::coord::q3;
 
 const _: () = assert!(
     EARTH_SLOTS == EARTH_LAYERS,
@@ -101,8 +100,7 @@ pub fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
     let update = draw_list().take();
     let receivers = update.receivers;
     let models = model::models();
-    // Each decor variant takes the slot of its draw group (pxl-content
-    // generation.rs `first_group`).
+    // Each decor variant takes the slot of its draw group (`Decor::first_group`).
     let mut decor = [(0u32, None, [0.0f32; 3]); DECOR_GROUPS];
     for d in &decor::DECORS {
         for (v, variant) in d.variants.iter().enumerate() {

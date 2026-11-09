@@ -41,13 +41,15 @@ mod tunnel;
 
 use fnv::{FnvHashMap, FnvHashSet};
 use pxl_spec::procedural::Frame;
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
+use pxl_spec::space::coord::zoom::LEAF_ZOOM;
+use pxl_spec::space::layer::quadrant::Quadrant;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::terrain::CELL_U;
-use pxl_engine::way;
 use pxl_spec::bake::separation::{footprint as line_footprint, Form};
+use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, merc_from_u, u_from_merc};
+use pxl_spec::way;
 use xpute_kit::math::scalar::round;
 
 use crate::segment::{End, Part, PartId};
@@ -59,7 +61,7 @@ use crate::separation::{Line, Reader, Solution, WayRange};
 use crate::terrain::pipeline::overture::width::width_u;
 use crate::wkb::wkb_to_geometries;
 
-/// The tile's scale: Arnis's meters in leaf cells (pxl-engine
+/// The tile's scale: Arnis's meters in leaf cells (pxl-spec
 /// `cells_of_m`), at the tile's `Frame::per_m`.
 #[derive(Clone, Copy)]
 struct Scale {
@@ -68,7 +70,7 @@ struct Scale {
 
 impl Scale {
     fn c(self, m: f64) -> i32 {
-        pxl_engine::cells_of_m(m as f32, self.per_m)
+        epsg3857::cells_of_m(m as f32, self.per_m)
     }
 }
 
@@ -519,7 +521,7 @@ fn stretches_of(src: &Ring, scope: &BTreeSet<PartId>, origin: [f64; 2]) -> Vec<S
 }
 
 /// The cells around one whose centers lie within `radius` cells of its own, as a way covers
-/// them (pxl-engine `covers`, here by distance to its own).
+/// them (pxl-spec `way::on_way`, here by distance to its own).
 fn disk(radius: f32) -> Vec<[i64; 2]> {
     let r = libm::ceilf(radius) as i64;
     (-r..=r)

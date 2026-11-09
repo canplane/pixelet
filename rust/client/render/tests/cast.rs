@@ -4,8 +4,7 @@
 //! samples and the record.
 //!
 //! `face_cs` must answer each of the record's asks with the bits `face::word` gives. Each cell
-//! beside the hit is asked along the line down to the hit, as `support::sub_line` and
-//! `support::asset` ask it.
+//! beside the hit is asked from the beam ray's line, as `support::asset` asks it.
 //!
 //! `cast_cs` must give each pixel it draws the words `cast::entry` takes off the visible voxel
 //! that the test lays at that pixel. Where the pixel takes no voxel and all four samples about
@@ -35,15 +34,18 @@ use gpu::{
 };
 use pxl_engine::answer::{self, Kind};
 use pxl_engine::beam::{self, Grid};
+use pxl_engine::cast::Line;
 use pxl_engine::cast::{self, Node, Ray};
 use pxl_engine::object::{ancestor_at, Cut};
-use pxl_engine::support::{self, Lineage};
+use pxl_engine::support;
 use pxl_engine::world::Inheritance;
-use pxl_engine::{eye, face, node_cache, raster, ray, record, Zoom, LEAF_CELL_ZOOM};
+use pxl_engine::{eye, face, node_cache, raster, ray, record};
 use pxl_render::frame::shader::record::{
     src, SHADER_CAST, SHADER_CAST_TILES, SHADER_CELL, SHADER_FACE, SHADER_SAMPLE_BOX,
 };
 use pxl_render::frame::shader::word::{screen, SQUARE_SIDE};
+use pxl_spec::share::EIGHTHS;
+use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
 
 use real_world::{q8, Asking, Built, WorldBuffer, FINEST};
 
@@ -358,38 +360,18 @@ fn node_at(beams: &[u32], k: u32) -> Node {
 
 /// A beam ray's line, as `support::asset` reads it to ask about the cells around a hit: the
 /// line's node, and the inheritance handed to each node above it.
-struct BeamLine<'a> {
-    beams: &'a [u32],
-    line: u32,
-    at: [i32; 3],
-    zoom: Zoom,
-}
-
-impl<'a> BeamLine<'a> {
-    fn of(beams: &'a [u32], line: u32, origin: [i32; 3]) -> BeamLine<'a> {
-        let n = node_at(beams, line + beam::LINE_NODE);
-        BeamLine {
-            beams,
-            line,
-            at: n.idx(origin),
-            zoom: n.zoom,
-        }
-    }
-}
-
-impl Lineage<Inheritance> for BeamLine<'_> {
-    fn at(&self) -> [i32; 3] {
-        self.at
-    }
-
-    fn zoom(&self) -> Zoom {
-        self.zoom
-    }
-
-    fn ancestor(&self, z: Zoom) -> Inheritance {
-        let k = (self.line + beam::LINE_INHERITANCE + beam::LINE_STEP * z) as usize;
-        Inheritance::of_words([self.beams[k], self.beams[k + 1], self.beams[k + 2]])
-    }
+fn beam_line(beams: &[u32], line: u32, origin: [i32; 3]) -> Line<Inheritance> {
+    let n = node_at(beams, line + beam::LINE_NODE);
+    let at = |z: u32| {
+        let k = (line + beam::LINE_INHERITANCE + beam::LINE_STEP * z) as usize;
+        Inheritance::of_words([beams[k], beams[k + 1], beams[k + 2]])
+    };
+    Line::of_walk(
+        origin,
+        &n,
+        at(n.zoom),
+        &core::array::from_fn(|z| at(z as u32)),
+    )
 }
 
 /// Answers the ask at word `a` of the beam rays' words as the Rust answers it. Where the ask
@@ -405,9 +387,7 @@ fn face_want(q: &mut Asking, beams: &[u32], node_cache: &[u32], origin: [i32; 3]
     };
     let (zoom, c) = (hit.zoom, hit.idx(origin));
     let face_of = w(beam::ASK_FACE);
-    let base = BeamLine::of(beams, w(beam::ASK_LINE), origin);
-    let below = support::sub_line(q, &base, zoom, c);
-    let line = below.joined(&base);
+    let line = beam_line(beams, w(beam::ASK_LINE), origin);
     let bits = face::word(face_of, |d| {
         answer::whole(support::asset(q, &line, zoom, face::beside(zoom, c, d)))
     });
@@ -930,7 +910,7 @@ fn hand_pixels_answer_as_cast_entry() {
                     ]);
                     kind_cnt.add(
                         "enters its sample, short of its cube",
-                        answer::fill_eighths(asset[0]) != answer::EIGHTHS,
+                        answer::fill_eighths(asset[0]) != EIGHTHS,
                     );
                 } else if !lacks && drew && at_edge(&e, at.dir) {
                     edges += 1;

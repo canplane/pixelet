@@ -38,9 +38,10 @@ use pxl_engine::beam;
 use pxl_engine::cast::{self, Detail, End, Hit, Node, Ray, Spacing, Trace, Until};
 use pxl_engine::light::{self, Light};
 use pxl_engine::object::Cut;
-use pxl_engine::{eye, node_cache, param, raster, ray, record, Zoom};
+use pxl_engine::{eye, node_cache, param, raster, ray, record};
 use pxl_render::frame::shader::record::{src, SHADER_LIGHT, SHADER_LIGHT_MARK, SHADER_RECORD_DRAW};
 use pxl_render::frame::shader::word::SQUARE_SIDE;
+use pxl_spec::space::coord::zoom::Zoom;
 
 use real_world::{q8, Asking, Built, World, FINEST};
 
@@ -1329,13 +1330,13 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
 /// a split distance's.
 #[test]
 fn every_pass_bands_a_tile_alike() {
-    use pxl_engine::grid::INV_SPLIT2;
-    use pxl_engine::FINEST_ZOOM;
     use pxl_render::frame::shader::record::{
         compute, COMPUTE_LIGHT, COMPUTE_LIGHT_CELL, COMPUTE_LIGHT_SLIDE, COMPUTE_QUEUE,
         COMPUTE_QUEUE_LAST, COMPUTE_QUEUE_LAST_LIGHT_CORNERS, COMPUTE_QUEUE_LAST_LIGHT_SAMPLES,
         COMPUTE_QUEUE_LIGHT_CORNERS, COMPUTE_QUEUE_LIGHT_SAMPLES,
     };
+    use pxl_spec::space::camera::grid::INV_SPLIT2;
+    use pxl_spec::space::coord::zoom::FINEST_ZOOM;
     const PROBE: &str = r"
 @group(0) @binding(40) var<storage, read_write> probe: array<u32>;
 

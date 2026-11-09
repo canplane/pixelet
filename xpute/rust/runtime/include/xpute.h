@@ -73,6 +73,10 @@ void xpute_answer(void);
 // whether the machine asks for the file device.
 void xpute_attach(uint32_t sq_at, uint32_t cq_at, bool fs);
 
+// A touch on a surface, from the platform's main thread: phase 0 down, 1 move,
+// 2 up, 3 out, 4 cancel, at x, y in the view's own units.
+void xpute_touch(uint32_t phase, int32_t id, double x, double y);
+
 // The program's numbers for frame pacing (@xpute/runtime sched/frame_pacing.ts
 // `FramePacingConfig`), given before the turns run.
 void xpute_pace(double pace_hz, double margin_share, double batch_frames, double settle_ms);

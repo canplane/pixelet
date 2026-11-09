@@ -46,7 +46,7 @@ wrapping round, and nothing treats it as a special case. Since a position is an
 integer, it is the same bits on the CPU, on the GPU, on a server and in a bake,
 and a block placed in one is in the same place in all of them. Only an adapter
 at the edge knows what a unit is worth on the Earth;
-`rust/spec/spec/src/space/README.md` describes the zooms, the adapters and the keys.
+`rust/spec/src/space/README.md` describes the zooms, the adapters and the keys.
 
 The same zooms cut the plane into **tiles**, the squares that are fetched and
 stored, and cut space into an octree of **nodes**, eight under each, which is
@@ -106,7 +106,7 @@ thing to everything that draws, walks or points.
 Trees and caves are never stored. Each is a function of the node it stands in
 and the world's one seed, evaluated wherever someone asks (`pxl-engine seed.rs`
 `node_seed`). A count of trees at a coarse node is handed down to its children
-by weights a hash draws, exactly (`pxl-content share.rs` `halve`), so asking at
+by weights a hash draws, exactly (`pxl-content halve.rs` `halve`), so asking at
 any depth grows the same forest, and the CPU and the GPU grow the same tree in
 the same cell. A forest costs nothing to store and nothing to send.
 
@@ -495,9 +495,9 @@ The rest of the tree is grouped by language, and within a language by where a
 thing runs:
 
 ```text
-  rust/spec/spec/       pxl-spec, the model every crate shares
-  rust/spec/engine/     pxl-engine, what the CPU and the GPU both compute
-  rust/spec/content/    pxl-content, the content: decor, caves, clouds
+  rust/spec/            pxl-spec, the model every crate shares
+  rust/client/engine/   pxl-engine, what the CPU and the GPU both compute
+  rust/client/content/  pxl-content, the content: decor, caves, clouds
   rust/client/core/     pxl-core, the core
   rust/client/render/   pxl-render, the renderer and its WGSL
   rust/server/          the servers and the bakes, one crate a folder
@@ -508,5 +508,5 @@ thing runs:
 ```
 
 How a part works in detail is written beside its code:
-`rust/spec/spec/src/space/README.md` for sizes and positions, and a README in each of
+`rust/spec/src/space/README.md` for sizes and positions, and a README in each of
 the renderer, the core's layers, `sys/`, the bake and the client.

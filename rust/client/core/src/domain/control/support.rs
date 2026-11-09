@@ -18,7 +18,7 @@ use crate::domain::layer::Answer;
 use crate::domain::query::World;
 use crate::domain::setting::store::settings;
 use crate::domain::view::frame::coord::{to_world, world_to_canonical};
-use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
+use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 
 /// Where the pivot stands for the cell center `at`, such as the center of
 /// the cell across the face a tap struck. It stands on the floor under that
@@ -59,9 +59,10 @@ pub fn support_step() {
 /// one floor.
 fn standing(world: World<'_>, at: &Q3) -> Answer<Option<Q3>> {
     if is_unknown(at) || !settings().surface_follow {
-        return stand_memo().of(world, *at, |w| w.stands(at));
+        return stand_memo().of(*at, || world.stands(at));
     }
-    let floor = stand_memo().of(world, *at, |w| {
+    let w = world;
+    let floor = stand_memo().of(*at, || {
         w.floor_under(at, LEAF_ZOOM)
             .map(|top| top.map(|top| on_floor(at, top)))
     });

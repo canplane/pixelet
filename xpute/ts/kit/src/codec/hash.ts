@@ -24,6 +24,8 @@ export function fnv1a64_bytes(bytes: ByteArray): u64 {
   return h;
 }
 
+// ============ SHA-256 ============
+
 export async function sha256(bytes: ByteArray): Promise<ByteArray> {
   return new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
 }

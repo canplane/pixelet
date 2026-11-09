@@ -20,8 +20,8 @@ use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::pass::atmosphere::AIR_ENTRIES;
 use pxl_content::cloud::LATTICE_CNT;
 use pxl_content::param::cloud::LATTICE_SHAMT;
-use pxl_engine::UNIT_ZOOM;
 use pxl_spec::space::coord::world::EXTENT;
+use pxl_spec::space::coord::zoom::UNIT_ZOOM;
 
 const _: () = assert!(
     EXTENT[0] == UNIT_ZOOM && EXTENT[1] == UNIT_ZOOM,

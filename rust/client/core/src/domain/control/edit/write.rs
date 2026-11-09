@@ -12,8 +12,7 @@ use crate::domain::layer::object::size::MARKER_ZOOM;
 use crate::domain::preview::{Draft, RenderEdit};
 use crate::sys::sched::edge::request_world_tick;
 use pxl_engine::answer::PLACED_ASSET;
-use pxl_spec::asset::marker::MARKER;
-use pxl_spec::asset::marker::MARKER_TEXT_CHARS;
+use pxl_spec::asset::marker::{MARKER, MARKER_TEXT_CHARS};
 use pxl_spec::asset::{cube, AssetId};
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
@@ -27,7 +26,6 @@ use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::object::store::{Entry, Write, AIR, VOID};
 use crate::domain::query::World;
-use pxl_engine::answer;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::space::hierarchy::morton;
 use pxl_spec::space::layer::octant::Octant;
@@ -65,11 +63,7 @@ fn place_val_is_redundant(world: World, at: &Q3, zoom: Zoom, cube: AssetId) -> b
     let entry = Octant::holding(zoom, at);
     // Only the resident finest leaf can tell what the ground is. Where no
     // such leaf is resident, the cube is written as asked.
-    let ground = world
-        .previewing(Some(entry), None)
-        .asset_of(&middle(entry))
-        .exact();
-    ground == Some(cube)
+    world.base().asset_of(&middle(entry)).exact() == Some(cube)
 }
 
 pub(super) fn middle(at: Octant) -> Q3 {
@@ -213,6 +207,17 @@ pub fn place_air(at: Octant) {
     write_object_val(at, cube::object::air as u32);
 }
 
+/// What erasing the entry at `at` writes: VOID where the base holds nothing
+/// there, and AIR where it would fill the cell. Only the resident finest
+/// leaf can tell, as in `place_val_is_redundant`; where no such leaf is
+/// resident, the cube is emptied with AIR.
+fn erase_val(world: World, at: Octant) -> u32 {
+    match world.base().asset_of(&middle(at)).exact() {
+        Some(VOID) => VOID,
+        _ => AIR,
+    }
+}
+
 /// Erases what is placed at `at` and leaves the cell empty. Where the ground
 /// would fill the cell once the asset is gone, AIR is written, so an asset
 /// taken out of a hole leaves the hole. A generated decor that shared the
@@ -225,21 +230,9 @@ pub fn remove(at: Octant) {
         .filter_map(|i| i.generated_in())
         .filter(|&c| is_carved(&World::now(), &base_of(GROUND.leaf_cell_zoom(), c)))
         .collect();
-    // Only the resident finest leaf can tell what fills the cube without the
-    // asset, as in `place_val_is_redundant`. Where no such leaf is resident,
-    // the cube is emptied with AIR.
-    let id = match world
-        .previewing(Some(at), None)
-        .asset_of(&middle(at))
-        .exact()
-    {
-        Some(v) if v != VOID && !answer::is_placed(v) => AIR,
-        None => AIR,
-        Some(_) => VOID,
-    };
     submit(Write {
         at: key_of::<3>(at.zoom(), at.at()),
-        id,
+        id: erase_val(world, at),
         ext: None,
     });
     for c in erased {

@@ -11,9 +11,9 @@ use std::path::{Path, PathBuf};
 
 use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::tile::Occupancy;
-use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::coord::zoom::{Zoom, LEAF_ZOOM};
 use pxl_spec::space::layer::lattice::{coarsest, Lattice};
-use pxl_spec::space::layer::quadrant::{quad_rows, Quadrant, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{quad_rows, Quadrant};
 
 use crate::util;
 use crate::util::{pack, unpack, write_atomic, Level};

@@ -13,10 +13,12 @@
 
 use crate::frame::shader::access;
 use crate::frame::shader::sequence;
-use pxl_content::decor::DECORS;
 use pxl_content::generation::{self, drawn, GROUPS};
-use pxl_engine::{clipmap, eye, object, Zoom};
+use pxl_engine::{eye, object};
+use pxl_spec::asset::decor::ROWS;
+use pxl_spec::brick;
 use pxl_spec::space::coord::q3::Q3;
+use pxl_spec::space::coord::zoom::Zoom;
 
 use crate::frame::shader::group::{
     ARGS_GROUP, CNT_GROUP, COMPACT_GROUP, CULLED_LIGHT_ARGS, CULLED_SCREEN_ARGS, CULL_GROUP,
@@ -164,9 +166,10 @@ impl Generator {
     pub fn new(g: &Gpu, pipelines: &mut PipelineCache) -> Generator {
         let buf = |size: u32, usage: u32| g.buf(size, usage);
         let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
-        let rows = buf(size_of_val(&DECORS) as u32, storage);
-        let table = DECORS;
-        // SAFETY: the rows are `repr(C)` words alone (pxl-content decor.spec.rs), read while `table` lives.
+        let rows = buf(size_of_val(&ROWS) as u32, storage);
+        let table = ROWS;
+        // SAFETY: the rows are `repr(C)` words alone (pxl-spec asset/decor.spec.rs), read while
+        // `table` lives.
         let words = unsafe {
             core::slice::from_raw_parts(table.as_ptr().cast::<u32>(), size_of_val(&table) / 4)
         };
@@ -189,7 +192,7 @@ impl Generator {
                 word_bytes(generation::LIST_WORDS as usize),
                 storage | buffer_usage::INDIRECT,
             ),
-            zooms: buf(word_bytes(DECORS.len()), storage),
+            zooms: buf(word_bytes(ROWS.len()), storage),
             drawing: buf(word_bytes(drawn::DRAWING_WORDS as usize), storage),
             rows,
             meshes: buf(word_bytes(GROUPS as usize), storage),
@@ -359,7 +362,7 @@ impl Generator {
             let mut put = |at: u32, val: u32| header[at as usize] = val;
             put(
                 generation::THIN_ARGS,
-                clipmap::BRICK_CELLS.div_ceil(generation::LANES),
+                brick::BRICK_CELLS.div_ceil(generation::LANES),
             );
             put(generation::THIN_ARGS + 1, 1);
             put(

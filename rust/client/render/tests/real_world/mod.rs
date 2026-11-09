@@ -6,24 +6,33 @@
 
 #![allow(dead_code, reason = "each test reads its own of it")]
 
-use pxl_content::cube::ground as palette;
-use pxl_content::decor::DECORS;
 use pxl_content::Pixelet;
 use pxl_engine::answer::In;
-use pxl_engine::area::{self, Area, Shard};
 use pxl_engine::cast::Query;
+use pxl_engine::clipmap as clip;
 use pxl_engine::clipmap::{
-    self as clip, BrickSource, Lookup, Presence, ACROSS, BRICK_CELLS, BRICK_SHIFT, BRICK_WORDS,
-    ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL_ZOOM, JOINED_AT, JOINED_ENTRIES, JOINED_MIPS,
-    LINES_BINS_AT, LINES_ENTRIES_AT, ORIGIN_AT, OWN_AT, OWN_CELLS, ROOT_AT, SPANS_WORDS,
+    BrickSource, Lookup, Presence, ACROSS, BRICK_WORDS, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL_ZOOM,
+    JOINED_AT, JOINED_ENTRIES, JOINED_MIPS, ORIGIN_AT, OWN_AT, OWN_CELLS, ROOT_AT, SPANS_WORDS,
 };
 use pxl_engine::fill;
 use pxl_engine::ground::{self, Resident};
-use pxl_engine::lattice::TILE_CELLS;
 use pxl_engine::object::{self, Table, BRANCH};
-use pxl_engine::way::{self, Segment, StationGrid};
 use pxl_engine::world::{self, Inheritance};
-use pxl_engine::{value, wrap_idx, Zoom, FRAC_W, LEAF_CELL_ZOOM, SHARD_ZOOM};
+use pxl_spec::asset::cube::ground as palette;
+use pxl_spec::asset::decor::ROWS;
+use pxl_spec::brick;
+use pxl_spec::brick::{BRICK_CELLS, BRICK_SHIFT, LINES_BINS_AT, LINES_ENTRIES_AT};
+use pxl_spec::ground::{ele_idx, word, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN, UNKNOWN};
+use pxl_spec::space::coord::adapter::epsg3857::cells_of_m;
+use pxl_spec::space::coord::q3::FRAC_W;
+use pxl_spec::space::coord::world::wrap_idx;
+use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, SHARD_ZOOM};
+use pxl_spec::space::layer::area;
+use pxl_spec::space::layer::area::{Area, Shard};
+use pxl_spec::space::layer::lattice::TILE_CELLS;
+use pxl_spec::value;
+use pxl_spec::way;
+use pxl_spec::way::{Segment, StationGrid};
 
 /// The leaf cell index `x`, wrapped round X as the world names it.
 pub fn wrap(x: i32) -> i32 {
@@ -271,15 +280,15 @@ pub fn source(
     lined: bool,
     ways: &mut Vec<Point>,
 ) -> Source {
-    let span = (ground::ELE_PADDED_SPAN * ground::ELE_PADDED_SPAN) as usize;
+    let span = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
     let mut source = Source {
         four: vec![0; BRICK_CELLS as usize],
         ele: vec![0; span],
-        lines: vec![0; clip::lines_words(0, 0) as usize],
+        lines: vec![0; brick::lines_words(0, 0) as usize],
     };
     let s = LEAF_CELL_ZOOM - cell_zoom;
     for i in 0..BRICK_CELLS {
-        let [x, y] = clip::of_idx(i);
+        let [x, y] = brick::of_idx(i);
         let g = [
             (q[0] << BRICK_SHIFT) + x as i32,
             (q[1] << BRICK_SHIFT) + y as i32,
@@ -305,35 +314,34 @@ pub fn source(
             };
             [at(0), at(1), at(2), at(3)]
         } else {
-            [ground::UNKNOWN; 4]
+            [UNKNOWN; 4]
         };
-        source.four[i as usize] = ground::word(four);
+        source.four[i as usize] = word(four);
     }
     // The tile's elevation samples, each at the middle of its step on the padded grid over the
     // tile's cells.
     let tile = [q[0] >> 3, q[1] >> 3];
     let side = TILE_CELLS as i32;
     let first = [tile[0] * side, tile[1] * side];
-    let step = (TILE_CELLS / ground::TILE_ELE_SPAN) as i32;
-    for sy in 0..ground::ELE_PADDED_SPAN {
-        for sx in 0..ground::ELE_PADDED_SPAN {
-            let at = |v: u32, f: i32| {
-                ((f + (v as i32 - ground::ELE_PAD as i32) * step + step / 2) as i64) << s
-            };
+    let step = (TILE_CELLS / TILE_ELE_SPAN) as i32;
+    for sy in 0..ELE_PADDED_SPAN {
+        for sx in 0..ELE_PADDED_SPAN {
+            let at =
+                |v: u32, f: i32| ((f + (v as i32 - ELE_PAD as i32) * step + step / 2) as i64) << s;
             let e = ele(
                 eye,
                 cell_zoom,
                 at(sx, first[0]) as i32,
                 at(sy, first[1]) as i32,
             );
-            source.ele[ground::ele_idx(sx, sy)] = e as i16;
+            source.ele[ele_idx(sx, sy)] = e as i16;
         }
     }
     // The tile's lines, each listed in every bin of the brick. They are bridges, bores and an
     // approach, each of two segments that continue one into the other.
     let per_m = 1.0f32;
     let stations = StationGrid {
-        step: way::INTERVAL_M.map(|m| pxl_engine::cells_of_m(m, per_m)),
+        step: way::INTERVAL_M.map(|m| cells_of_m(m, per_m)),
         phase: [[0; 2], [3 << s, 5 << s]],
         leaf: 1 << s,
     };
@@ -393,14 +401,14 @@ pub fn source(
     }
     // Every bin holds every segment.
     let n = segments.len() as u32;
-    let entries = clip::WAYS_BINS * n;
-    let mut lines = vec![0; clip::lines_words(entries, n) as usize];
+    let entries = brick::WAYS_BINS * n;
+    let mut lines = vec![0; brick::lines_words(entries, n) as usize];
     lines[..way::HEADER_WORDS as usize]
         .copy_from_slice(&source.lines[..way::HEADER_WORDS as usize]);
-    for b in 0..clip::WAYS_BINS {
+    for b in 0..brick::WAYS_BINS {
         lines[(LINES_BINS_AT + b) as usize] = b * n;
     }
-    lines[(LINES_BINS_AT + clip::WAYS_BINS) as usize] = entries;
+    lines[(LINES_BINS_AT + brick::WAYS_BINS) as usize] = entries;
     for e in 0..entries {
         lines[(LINES_ENTRIES_AT + e) as usize] = e % n;
     }
@@ -475,7 +483,7 @@ impl Placing {
     }
 }
 
-pub const FIRST_DECOR_VAL: u32 = DECORS[0].val;
+pub const FIRST_DECOR_VAL: u32 = ROWS[0].val;
 
 /// The world built, and the places where the tests send their asks.
 pub struct Built {
@@ -614,7 +622,10 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
         clipmap[(ORIGIN_AT + cell_zoom - FIRST_CELL_ZOOM) as usize] = [first[0], first[1], laid, 0];
         for k in 0..ENTRIES {
             let q = [
-                wrap_idx(clip::bricks_zoom(cell_zoom), first[0] + (k % ACROSS) as i32),
+                wrap_idx(
+                    brick::bricks_zoom(cell_zoom),
+                    first[0] + (k % ACROSS) as i32,
+                ),
                 first[1] + (k / ACROSS) as i32,
             ];
             let row = ((cell_zoom - FIRST_CELL_ZOOM) * ENTRIES + clip::entry(q)) as usize;

@@ -1,5 +1,7 @@
 // @pxl/client/service/platform/origin.native.ts
 
+import { td } from "@xpute/kit/codec/encoding.ts";
+
 import { PLATFORM } from "./pxl-platform.ts";
 
 /** A device's app has no origin of its own: it reads from the site's. */
@@ -28,10 +30,17 @@ export async function get(
     const headers = new Headers(res.headers);
     headers.delete("content-encoding");
     headers.delete("content-length");
-    return new Response(body, {
+    const decoded = new Response(body, {
       status: res.status,
       statusText: res.statusText,
       headers,
+    });
+    // React Native's Response reads an ArrayBuffer's text one byte a character,
+    // which breaks whatever UTF-8 is not ASCII.
+    const text = () => Promise.resolve(td.decode(body));
+    return Object.assign(decoded, {
+      text,
+      json: () => text().then(JSON.parse),
     });
   } catch (err) {
     if (signal?.aborted) throw err;

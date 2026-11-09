@@ -1,18 +1,16 @@
 // pxl-core/domain/layer/object/store.test.rs
 
 use pxl_spec::asset::cube::Object;
-use pxl_spec::space::coord::zoom::UNIT_ZOOM;
+use pxl_spec::share::eighths;
+use pxl_spec::space::coord::zoom::{LEAF_ZOOM, SHARD_ZOOM, UNIT_ZOOM};
 use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use fnv::FnvHashMap;
-use pxl_spec::space::coord::zoom::SHARD_ZOOM;
 
 use super::*;
-use pxl_engine::answer;
 use pxl_engine::object::{self, Cut};
 use pxl_spec::bake::constant::OBJECT_COARSEST;
-use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 use xpute_kit::math::rng::SplitMix64;
 
 fn id_of(zoom: Zoom, at: [i32; 3]) -> u128 {
@@ -97,7 +95,7 @@ fn some_node(rng: &mut Rng, radius: f64) -> Node<3> {
 }
 
 /// What the store's folded tree holds at each cell: its value and how many
-/// eighths of the cell's cube are filled (pxl-engine `answer::eighths`).
+/// eighths of the cell's cube are filled (pxl-spec `share::eighths`).
 type Content = FnvHashMap<[i32; 3], (u32, u32)>;
 
 /// Writes `cells`, whole cells offset from a fixed corner, and reads back
@@ -120,7 +118,7 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Content, [i32; 2]) {
             for x in corner[0]..corner[0] + per {
                 let slot = store.cursor((target, [x, y, z]), target);
                 let v = object::val(&store.columns(), slot, Cut::NONE, target, [x, y, z]);
-                let eighths = answer::eighths(object::fill_share(&store.columns(), slot));
+                let eighths = eighths(object::fill_share(&store.columns(), slot));
                 if v != VOID && eighths > 0 {
                     out.insert([x, y, z], (v, eighths));
                 }
