@@ -2,6 +2,32 @@
 
 import CXpute
 import ExpoModulesCore
+import Foundation
+import QuartzCore
+
+/// This tells the core's thread each display frame (`xpute_vsync`). A
+/// display link calls it on the main thread.
+final class DisplayFrames: NSObject {
+  private var link: CADisplayLink?
+
+  func start() {
+    DispatchQueue.main.async {
+      self.link = CADisplayLink(target: self, selector: #selector(self.frame))
+      self.link?.add(to: .main, forMode: .common)
+    }
+  }
+
+  func stop() {
+    DispatchQueue.main.async {
+      self.link?.invalidate()
+      self.link = nil
+    }
+  }
+
+  @objc private func frame(link: CADisplayLink) {
+    xpute_vsync((CACurrentMediaTime() - link.timestamp) * 1000)
+  }
+}
 
 /// This is xpute's native module on iOS (src/mod.ts). It reaches the core and
 /// its GPU runtime through xpute's C ABI (xpute.h, xpute_gpu.h), and holds the
@@ -14,6 +40,7 @@ public class XputeModule: Module {
   /// The JavaScript function that answers the core's calls. It is called on
   /// the JavaScript thread, inside `run` or `answer`.
   nonisolated(unsafe) static var answer: JavaScriptValue?
+  private let frames = DisplayFrames()
 
   public func definition() -> ModuleDefinition {
     Name("Xpute")
@@ -24,6 +51,7 @@ public class XputeModule: Module {
 
     OnCreate {
       XputeModule.current = self
+      self.frames.start()
       // A C function captures nothing, so it reaches the module through the
       // static. It is called from the core's thread, and Expo's sendEvent
       // itself schedules the event onto the JavaScript thread.
@@ -38,6 +66,7 @@ public class XputeModule: Module {
       }
     }
     OnDestroy {
+      self.frames.stop()
       XputeModule.current = nil
       XputeModule.answer = nil
       xpute_call_on(nil)
@@ -66,8 +95,12 @@ public class XputeModule: Module {
       xpute_run(deadlineMs)
     }
 
-    Function("kick") { (deadlineMs: Double) in
-      xpute_kick(deadlineMs)
+    Function("kick") { (deadlineMs: Double, atMs: Double) in
+      xpute_kick(deadlineMs, atMs)
+    }
+
+    Function("nextFrame") { (afterMs: Double) -> Double in
+      xpute_next_frame(afterMs)
     }
 
     Function("pause") {
@@ -95,6 +128,10 @@ public class XputeModule: Module {
 
     Function("gpuOpen") { () -> Bool in
       xpute_gpu_open() == 0
+    }
+
+    Function("say") { (line: String) in
+      FileHandle.standardOutput.write(Data((line + "\n").utf8))
     }
 
     View(SurfaceView.self) {

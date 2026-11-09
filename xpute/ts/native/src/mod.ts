@@ -35,10 +35,12 @@ interface Xpute {
    * wants the next turn, in ms, or NaN once the core has terminated. It
    * returns early if no turn may begin until the completion ring is read. */
   run(deadlineMs: f64): f64;
-  /** Asks for a turn at once and returns without waiting. The next turn ends
-   * no sooner than `deadlineMs` after its rise; a negative `deadlineMs` sets
-   * no deadline. */
-  kick(deadlineMs: f64): void;
+  /** Asks for a turn and returns without waiting. The next turn begins at
+   * `atMs`, at once if that has passed, and ends no sooner than `deadlineMs`
+   * after its rise. */
+  kick(deadlineMs: f64, atMs: f64): void;
+  /** The time of the first display frame after both now and `afterMs`. */
+  nextFrame(afterMs: f64): f64;
   /** From now on only a turn `run` rings may begin, and a kick waits for
    * `resume`. */
   pause(): void;
@@ -55,6 +57,9 @@ interface Xpute {
   /** This says whether a GPU device opened. What the device is, the core reads
    * from its GPU runtime. */
   gpuOpen(): boolean;
+  /** Writes a line to the process's output: stdout on iOS, the log under the
+   * tag `xpute` on Android. */
+  say(line: string): void;
 }
 
 export const XPUTE: Xpute = requireNativeModule<Xpute>("Xpute");

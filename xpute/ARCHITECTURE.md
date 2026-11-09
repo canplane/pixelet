@@ -151,8 +151,10 @@ because its global state is sound on one thread only. That thread runs while it
 has work and sleeps until it is kicked. The runtime runs on the UI's JavaScript
 thread. It writes the submission ring and kicks the core's thread, and when a
 turn ends, the core's thread tells the runtime, which reads the completion ring
-dry. The core's thread keeps no timer: the same scheduler times its turns,
-kicking it at the moment the policy gives for the wake the core asked for. Four
+dry. The core's thread chooses no moment: the same scheduler times its turns,
+kicking it with the display frame the policy gives for the wake the core asked
+for. The thread waits for that frame itself, so how late the JavaScript thread
+is does not move the turn. Four
 rules hold that loop together: no kick is lost, every wait has someone to answer
 it, a turn begins only when the completion ring has room for everything one turn
 may post, and every turn takes the submission ring first.

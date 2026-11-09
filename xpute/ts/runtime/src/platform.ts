@@ -13,6 +13,11 @@ import type { Core, Machine, ModuleSource } from "./runtime.ts";
 import { reserve_mem } from "./mem/reserve.ts";
 import { open_module } from "./module.ts";
 
+/** Hands `run` the display's next animation frame and its time. */
+export function next_frame(run: (now: f64) => void): void {
+  requestAnimationFrame(run);
+}
+
 /** Throws EINVAL without a source, or for a memory size the machine does not
  * allow. The module's clock, `env.now`, is `now`. The module is compiled from
  * its bytes rather than streamed, so that a `file:` URL works too: streaming

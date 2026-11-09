@@ -2,8 +2,8 @@
 
 /**
  * Decides when a core's turn is rung. A turn is rung only when the runtime
- * (`wake`, `kick`) or the core's last falling edge asked for one, and only at
- * a moment that the scheduling policy the scheduler was booted with gives and
+ * (`wake`) or the core's last falling edge asked for one, and only at a
+ * moment that the scheduling policy the scheduler was booted with gives and
  * admits (policy.ts). A moment the policy does not admit passes the turn on
  * to the next moment.
  *
@@ -13,8 +13,8 @@
  * as the doorbell hears it (`Doorbell.turns`, `ring`), and each wake the
  * runtime asks for (`wake`), waits for a moment the policy gives and admits.
  * At that moment the turn's grant is submitted and the core is kicked with
- * its deadline. The scheduler asks for no turn for what the runtime sent,
- * since the doorbell has already kicked for it.
+ * its deadline. What the runtime sends is such a wake on either core, and
+ * the granted turn applies it.
  *
  * Every turn is heard (`Doorbell.on_turn`): each turn the thread ran, whoever
  * kicked it, and each turn rung. A turn heard drops the timer and every
@@ -97,13 +97,6 @@ export class Scheduler<G extends Grant = Grant> {
     this._drop_timer();
   }
 
-  /** Wakes the core for what the runtime submitted. For a core that runs only
-   * when rung, it asks the policy for a moment. For a core on its own thread
-   * it does nothing, since the doorbell kicked that core as it submitted. */
-  kick(): void {
-    if (!this._doorbell.kick) this.wake();
-  }
-
   /** Asks for a turn the runtime wants, at a moment asked of the policy. It
    * asks nothing while paused or once the core has stopped, nor for what goes
    * with the turn being submitted. */
@@ -153,11 +146,10 @@ export class Scheduler<G extends Grant = Grant> {
     this._last = now;
     this._drop_timer();
     const grant = this._policy.grant(performance.now());
-    // What `submit` sends goes with this turn, so it asks for no other turn
-    // and kicks nothing before the turn's own kick.
+    // What `submit` sends goes with this turn, so it asks for no other turn.
     this._batching = true;
     try {
-      this._doorbell.batch(() => this._submit(grant, delta_s));
+      this._submit(grant, delta_s);
     } finally {
       this._batching = false;
     }

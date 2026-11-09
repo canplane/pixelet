@@ -12,6 +12,27 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import { XPUTE } from "@xpute/native";
 import type { Core, Machine, ModuleSource } from "./runtime.ts";
 
+/** The display frame last offered, and the last a turn was granted. */
+let offered: f64 = 0;
+let granted: f64 = 0;
+
+/** Hands `run` the next display frame's time ahead of that frame, as soon as
+ * this thread is free. The turn it grants waits on the core's own thread for
+ * that frame, so what this thread is busy with does not move it. A frame
+ * offered and not taken is offered no more, and the next is offered once this
+ * one has come. */
+export function next_frame(run: (now: f64) => void): void {
+  setImmediate(() => {
+    const frame = XPUTE.nextFrame(granted);
+    if (frame === offered) {
+      requestAnimationFrame(() => next_frame(run));
+      return;
+    }
+    offered = frame;
+    run(frame);
+  });
+}
+
 /** Once the core has terminated, a turn answers NaN (xpute-runtime native
  * `run`). That is thrown here, as a page's module throws its trap. */
 export function open(
@@ -28,7 +49,14 @@ export function open(
     },
     answer_with: (answer) => XPUTE.callOn(answer),
     thread: {
-      kick: (deadline_ms) => XPUTE.kick(deadline_ms),
+      // The deadline counts from now, and the turn rises at its frame.
+      kick(deadline_ms) {
+        granted = offered;
+        XPUTE.kick(
+          Math.max(0, deadline_ms - Math.max(0, granted - performance.now())),
+          granted,
+        );
+      },
       pause: () => XPUTE.pause(),
       resume: () => XPUTE.resume(),
       listen(heard) {

@@ -5,7 +5,7 @@
 
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import type { i32 } from "@xpute/kit/abi/word.ts";
-import { FramePacing } from "@xpute/runtime";
+import { FramePacing, next_frame } from "@xpute/runtime";
 import { type Config, type FrameGrant, type Manifest } from "@xpute/runtime";
 import { Command, read, ui_mem } from "@/abi/cmd.spec.ts";
 import * as text from "@/abi/text.spec.ts";
@@ -52,7 +52,7 @@ export function config(handheld: boolean): Config<FrameGrant> {
       batch_frames: BATCH_FRAMES,
       settle_ms: SETTLE_MS,
     },
-    (run) => requestAnimationFrame(run),
+    next_frame,
   );
   const asked = calls(pacing);
   return {

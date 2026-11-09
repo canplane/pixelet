@@ -25,9 +25,15 @@ object Core {
    * calls come back to this thread meanwhile (`call`). */
   external fun run(deadlineMs: Double): Double
 
-  /** Asks for a turn at once. The next turn ends no sooner than `deadlineMs`
-   * after its rise; a negative `deadlineMs` sets no deadline. */
-  external fun kick(deadlineMs: Double)
+  /** Asks for a turn. The next turn begins at `atMs`, at once if that has
+   * passed, and ends no sooner than `deadlineMs` after its rise. */
+  external fun kick(deadlineMs: Double, atMs: Double)
+
+  /** Tells the core's thread of a display frame, `ageMs` after its time. */
+  external fun vsync(ageMs: Double)
+
+  /** The time of the first display frame after both now and `afterMs`. */
+  external fun nextFrame(afterMs: Double): Double
 
   /** From now on only a turn `run` rings may begin, and a kick waits for
    * `resume`. */

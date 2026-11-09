@@ -107,9 +107,6 @@ export class Doorbell implements PacketRoom {
   /** Wakes a core on its own thread; null for a core that runs only when
    * rung. */
   readonly kick: Kick | null;
-  /** While set, submissions kick nothing, and the kick after them does
-   * (`batch`). */
-  private _batching = false;
 
   get terminated(): boolean {
     return this._terminated;
@@ -240,19 +237,6 @@ export class Doorbell implements PacketRoom {
     }
     this.on_wake?.(wake);
     return wake;
-  }
-
-  /** Runs `f` with its submissions kicking nothing, so that the kick the
-   * caller makes afterwards gives the turn that applies them its
-   * deadline. */
-  batch(f: () => void): void {
-    const was = this._batching;
-    this._batching = true;
-    try {
-      f();
-    } finally {
-      this._batching = was;
-    }
   }
 
   /** Called when the core's own thread has posted or asked for a turn since
@@ -396,10 +380,7 @@ export class Doorbell implements PacketRoom {
     // A task of the core may be waiting for the room this read gave back,
     // without having asked for a turn (xpute-core sched/edge.rs
     // `runtime_turn`), so a turn is asked for it.
-    if (read > 0) {
-      if (this.kick) this.kick(-1);
-      else this.on_wake?.(0);
-    }
+    if (read > 0) this.on_wake?.(0);
     const later = this._later;
     this._later = [];
     for (const [tag, cmd, flags, result, encode] of later) {
@@ -423,7 +404,6 @@ export class Doorbell implements PacketRoom {
     const pkt = encode?.(this) ?? null;
     for (;;) {
       const errnum = this._sq.push(tag, cmd, flags, pkt, result);
-      if (errnum === Errno.OK && !this._batching) this.kick?.(-1);
       if (errnum === Errno.OK || errnum === Errno.EMSGSIZE) return errnum;
       if (errnum !== Errno.EAGAIN) {
         throw new Error(

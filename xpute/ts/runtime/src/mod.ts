@@ -37,4 +37,5 @@ export { Command as FsCommand, type FsProtocol } from "./abi/fs.spec.ts";
 export { Command as GpuCommand, type GpuProtocol } from "./abi/gpu.spec.ts";
 export { Timeslice } from "./sched/timeslice.ts";
 export { type FrameGrant, FramePacing } from "./sched/frame_pacing.ts";
+export { next_frame } from "./platform";
 export type { Grant, SchedulingPolicy } from "./sched/policy.ts";
