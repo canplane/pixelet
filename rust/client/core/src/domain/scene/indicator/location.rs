@@ -251,8 +251,12 @@ impl LocationIndicator {
             device,
             pos: coord::to_world(&device),
         };
-        // The memo is checked every turn, so it sees each change once.
+        // The memo is checked every turn, so it sees each change once. A zone
+        // whose block the heap refused is laid again.
         let mut grounded = core::mem::take(&mut self.ground_center);
+        if self.zone.is_some() && self.block.handle == 0 {
+            grounded = Memo::default();
+        }
         grounded.forget_touched_at_leaf(|&(_, exact)| exact);
         let w = World::now();
         let (center, _) = grounded.of(seen, || self.ground(w, draw, seen));
@@ -302,7 +306,8 @@ impl LocationIndicator {
             exact &= support.exact().is_some();
             support.val().flatten()
         });
-        if self.zone.as_ref().is_some_and(|z| z.center != center_pos) || self.drawn != instances {
+        let changed = self.zone.as_ref().is_some_and(|z| z.center != center_pos);
+        if self.block.handle == 0 || changed || self.drawn != instances {
             self.block.write(draw, bytes(&instances));
             // The beacon's shown place moves with the center, so a whole-cell
             // move of the zone does not play as the beacon sliding back.
