@@ -4,8 +4,7 @@
 //! by cell as the frame generates it (`generated_at`) from the ground's cells
 //! around the cell, and what objects place. Whatever fills a cell is an asset,
 //! so a leaf cell the layers leave void is the decor whose box claims it
-//! (`World::with_decor`), and each asker decides by what the asset is. A
-//! decor stands in the leaf cells alone: a fold holds none of it. The catalog
+//! (`World::with_decor`), among those the asker sees. A decor stands in the leaf cells alone: a fold holds none of it. The catalog
 //! is spec/spec/asset/decor.json. The scene draws the decor's models as they
 //! arrive (domain/scene/decor/asset.rs).
 
@@ -25,13 +24,11 @@ use xpute_core::global::Global;
 
 use super::change;
 use super::node::At;
-use super::ray::Ray;
 use super::scatter::{generated_at, DecorWorld};
 use super::world::World;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::meta::decor_instance;
-use pxl_spec::space::coord::world::nearest_box;
 
 /// The farthest any decor's box in decor.json reaches from its min corner,
 /// however it turns. It is computed once.
@@ -109,7 +106,8 @@ impl World {
     /// ground's bound the layers read over the node. Where `near` is coarser
     /// than a leaf cell, no decor stands. A cell at the leaves' zoom or finer
     /// that the layers leave void is the decor whose box claims it, if any
-    /// (`decor_at`), and carries `PLACED_ASSET` where it is placed. A node a
+    /// (`decor_at`) and that the asker sees (`sees`), and carries `PLACED_ASSET`
+    /// where it is placed. A node a
     /// decor may reach into (`may_reach`, or at those zooms a decor claiming
     /// its cell) is split whole, as a decor stands apart from the box of what
     /// the layers split on.
@@ -119,6 +117,7 @@ impl World {
         near: Zoom,
         relief: Option<Extent>,
         i: In<[u32; 2]>,
+        sees: &mut dyn FnMut(&Instance) -> bool,
     ) -> In<[u32; 2]> {
         let zoom = at.node.0;
         let leaf = GROUND.leaf_cell_zoom();
@@ -137,7 +136,7 @@ impl World {
                 i
             };
         }
-        match self.decor_over(at.node) {
+        match self.decor_over(at.node, sees) {
             Some(d) if void => In {
                 kind: Kind::Cell,
                 asset: [
@@ -190,25 +189,25 @@ impl World {
             })
     }
 
-    /// The decor whose box claims the leaf cell over the node `(zoom, c)`,
-    /// which is a leaf cell or finer (`decor_at`).
-    pub(super) fn decor_over(&self, (zoom, c): Node<3>) -> Option<Instance> {
-        self.decor_at(c.map(|v| v >> (zoom - GROUND.leaf_cell_zoom())))
-    }
-
-    /// Whether `ray` enters the box of the decor claiming the node `(zoom,
-    /// c)`, a leaf cell or finer.
-    pub(super) fn ray_enters_decor(&self, ray: &Ray, node: Node<3>) -> bool {
-        self.decor_over(node)
-            .and_then(|i| nearest_box(&cell_box(&i)?, ray.origin[0]).enters(ray.origin, ray.dir))
-            .is_some()
+    /// The decor the asker sees whose box claims the leaf cell over the node
+    /// `(zoom, c)`, which is a leaf cell or finer (`decor_at`).
+    fn decor_over(
+        &self,
+        (zoom, c): Node<3>,
+        sees: &mut dyn FnMut(&Instance) -> bool,
+    ) -> Option<Instance> {
+        self.decor_at(c.map(|v| v >> (zoom - GROUND.leaf_cell_zoom())), sees)
     }
 
     /// The decor whose box claims the leaf cell `cell`, placed or generated;
     /// X is on the asker's lap. The ground generates no decor whose box
     /// meets a placed one's, and no two whose boxes meet, so at most one
-    /// claims it.
-    fn decor_at(&self, cell: [i32; 3]) -> Option<Instance> {
+    /// claims it. `sees` is told of that one and says whether the asker has it.
+    fn decor_at(
+        &self,
+        cell: [i32; 3],
+        sees: &mut dyn FnMut(&Instance) -> bool,
+    ) -> Option<Instance> {
         let middle = cell.map(|v| f64::from(v) + 0.5);
         let claims = |i: &Instance| cell_box(i).is_some_and(|b| b.holds(middle));
         let near = Aabb {
@@ -218,7 +217,7 @@ impl World {
         let mut met = None;
         self.object.entries_in(&near, &mut |e| {
             if met.is_none() {
-                met = decor_instance(e).filter(claims);
+                met = decor_instance(e).filter(|i| claims(i) && sees(i));
             }
         });
         // A count a little coarser tells most decors apart at once, so a
@@ -232,7 +231,7 @@ impl World {
                 (0..w * w).find_map(|n| {
                     let corner = [cell[0] - n % w, cell[1] - n / w];
                     generated_at(&mut DecorWorld::new(self), d, corner, true)
-                        .filter(|(i, generates)| *generates && claims(i))
+                        .filter(|(i, generates)| *generates && claims(i) && sees(i))
                         .map(|(i, _)| i)
                 })
             })
@@ -275,7 +274,7 @@ pub(super) fn claim(i: &Instance) -> Option<Aabb> {
 /// `claim` raised to the cell it stands in, where a generated one's base sinks
 /// into the cell under it as its model is drawn on a top kept short of its
 /// cube.
-pub(super) fn cell_box(i: &Instance) -> Option<Aabb> {
+fn cell_box(i: &Instance) -> Option<Aabb> {
     let c = claim(i)?;
     let rise = i.generated_in().map_or(0.0, |g| f64::from(g[2]) - c.min[2]);
     Some(c.moved([0.0, 0.0, rise]))

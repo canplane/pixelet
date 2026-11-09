@@ -704,7 +704,8 @@ fn side_word() -> String {
 /// pxl-content layout or rule that defines it.
 fn world_word() -> String {
     use pxl_content::cave::{
-        BLOCK, BLOCKS, CELL_BLOCKS, CROSS, PIPE, ROOT, ROOT_BLOCKS, SPAWN, SPLIT, WALK,
+        BLOCK, BLOCKS_TAG, CELL_BLOCKS, CROSS_TAG, PIPE, ROOT, ROOT_BLOCKS, SPAWN_TAG, SPLIT_TAG,
+        WALK_TAG,
     };
     use pxl_content::param::{cave, strata};
     use pxl_engine::clipmap as clip;
@@ -777,11 +778,11 @@ fn world_word() -> String {
         ("CELL_BLOCKS", CELL_BLOCKS),
         ("ROOT_BLOCKS", ROOT_BLOCKS),
         ("CAVE_NUDGE", cave::NUDGE),
-        ("CAVE_TAG_SPAWN", SPAWN),
-        ("CAVE_TAG_WALK", WALK),
-        ("CAVE_TAG_CROSS", CROSS),
-        ("CAVE_TAG_SPLIT", SPLIT),
-        ("CAVE_TAG_BLOCKS", BLOCKS),
+        ("CAVE_SPAWN_TAG", SPAWN_TAG),
+        ("CAVE_WALK_TAG", WALK_TAG),
+        ("CAVE_CROSS_TAG", CROSS_TAG),
+        ("CAVE_SPLIT_TAG", SPLIT_TAG),
+        ("CAVE_BLOCKS_TAG", BLOCKS_TAG),
         ("MASTER_SEED", seed::MASTER_SEED),
         ("SEED_SALT", rng::SEED_SALT_32),
         ("MIX_FIRST", rng::MIX32_FIRST),
@@ -842,7 +843,7 @@ fn world_word() -> String {
 /// pxl-content layout or rule that defines it.
 fn decor_word() -> String {
     use core::mem::{offset_of, size_of};
-    use pxl_content::generation::{self as g, drawn};
+    use pxl_content::generation::{self as g, drawing};
     use pxl_content::param::scatter::ALIGN_NEIGHBOR_RADIUS;
     use pxl_content::scatter;
     use pxl_engine::{cast, world};
@@ -880,24 +881,24 @@ fn decor_word() -> String {
         ("RUNS", g::RUNS),
         ("EYE_ENTRIES", g::EYE_ENTRIES),
         ("ROW_CHANCE", row(offset_of!(Row, chance))),
-        ("DRAWN_NONE", drawn::NONE),
-        ("DRAWN_REGION_SHIFT", drawn::REGION_SHIFT),
-        ("DRAWN_COLUMNS", drawn::COLUMNS),
-        ("DRAWN_MODEL_ANGLE", drawn::MODEL_ANGLE),
-        ("DRAWN_IMPOSTOR_ANGLE", drawn::IMPOSTOR_ANGLE),
-        ("DRAWN_ANCHOR", drawn::ANCHOR),
-        ("DRAWN_HIDE", drawn::HIDE),
-        ("DRAWN_EXTENTS", drawn::EXTENTS),
-        ("DRAWN_MODEL", drawn::MODEL),
-        ("DRAWN_IMPOSTOR", drawn::IMPOSTOR),
-        ("DRAWN_CULLED", drawn::CULLED),
+        ("DRAWING_NONE", drawing::NONE),
+        ("DRAWING_REGION_SHIFT", drawing::REGION_SHIFT),
+        ("DRAWING_COLUMNS", drawing::COLUMNS),
+        ("DRAWING_MODEL_ANGLE", drawing::MODEL_ANGLE),
+        ("DRAWING_IMPOSTOR_ANGLE", drawing::IMPOSTOR_ANGLE),
+        ("DRAWING_ANCHOR", drawing::ANCHOR),
+        ("DRAWING_HIDE", drawing::HIDE),
+        ("DRAWING_EXTENTS", drawing::EXTENTS),
+        ("DRAWING_MODEL", drawing::MODEL),
+        ("DRAWING_IMPOSTOR", drawing::IMPOSTOR),
+        ("DRAWING_CULLED", drawing::CULLED),
         ("LIST_AT", g::LIST_AT),
         ("LIST_WORDS", g::LIST_WORDS),
         ("PAIR_DECOR_SHIFT", g::PAIR_DECOR_SHIFT),
         ("PLACED_TAG", g::PLACED_TAG),
         ("PLACED_FIRST", world::PLACED_FIRST),
-        ("CNT_TAG", scatter::CNT),
-        ("SPLIT_TAG", scatter::SPLIT),
+        ("SCATTER_CNT_TAG", scatter::CNT_TAG),
+        ("SCATTER_SPLIT_TAG", scatter::SPLIT_TAG),
         ("DECORS", ROWS.len() as u32),
         ("IDX_BITS", IDX_BITS),
         ("DECOR_KIND", Kind::decor as u32),
@@ -910,10 +911,10 @@ fn decor_word() -> String {
         ("ALONG_TRANSPORT", Orientation::along_transport as u32),
         ("TRANSPORTS_FIRST", value::TRANSPORTS[0]),
         ("TRANSPORTS_LAST", value::TRANSPORTS[1]),
-        ("REGIONS", drawn::REGIONS),
-        ("ARGS_WORDS", drawn::ARGS_WORDS),
-        ("IMPOSTOR_CORNERS", drawn::IMPOSTOR_CORNERS),
-        ("UNIFORM_WORDS", drawn::UNIFORM_WORDS),
+        ("REGIONS", drawing::REGIONS),
+        ("ARGS_WORDS", drawing::ARGS_WORDS),
+        ("IMPOSTOR_CORNERS", drawing::IMPOSTOR_CORNERS),
+        ("UNIFORM_WORDS", drawing::UNIFORM_WORDS),
         ("UNIFORM_IDX", word::instance::IDX as u32),
         ("TALLEST", g::TALLEST as u32),
         ("WIDEST", g::WIDEST as u32),
@@ -976,7 +977,7 @@ fn decor_word() -> String {
         "fn turn_spin(turn: u32) -> u32 {{ switch (turn) {{ {spins}default: {{ return {}u; }} }} }}\n",
         spin(last)
     );
-    out += &format!("const NEAREST_U: f32 = {:?};\n", drawn::NEAREST_U);
+    out += &format!("const NEAREST_U: f32 = {:?};\n", drawing::NEAREST_U);
     // How far below its box's top a cell keeping `k` eighths leaves its own top, as a share of
     // the cell's side (`cast::top`, `generation::footing`). Each value is written as the bits of
     // the Rust's float, so the shader reads exactly what the CPU computes.

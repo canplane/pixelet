@@ -11,9 +11,9 @@
 @group(0) @binding(13) var<storage, read> drawing: array<u32>;
 @group(0) @binding(14) var<storage, read_write> regions: array<atomic<u32>>;
 
-/// `generation::distance2`: the squared distance from `origin` to decor standing at `at`,
+/// `generation::dist2`: the squared distance from `origin` to decor standing at `at`,
 /// measured from the middle of its cell's base. X goes round the world as the steps wrap.
-fn distance2(origin: vec3<i32>, at: vec3<i32>) -> f32 {
+fn dist2(origin: vec3<i32>, at: vec3<i32>) -> f32 {
   let half = 1i << (FRAC_W - 1u);
   let steps = (at << vec3<u32>(FRAC_W)) + vec3<i32>(half, half, 0i) - origin;
   let d = vec3<f32>(steps) * (1.0 / f32(1u << FRAC_W));
@@ -36,7 +36,7 @@ fn cnt_one(i: u32) {
   }
   let corner = vec3<i32>(i32(records[i + 1u]), i32(records[i + 2u]), i32(records[i + 3u]));
   let origin = vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u)));
-  let d2 = distance2(origin, corner);
+  let d2 = dist2(origin, corner);
   let placed = i >= PLACED_HEADER + PLACED_HEADER_WORDS;
   let ask_zoom = zoom_at(d2, vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)));
   let zoom = select(ray_zoom(ask_zoom, corner.xy), ask_zoom, placed);
@@ -48,20 +48,20 @@ fn cnt_one(i: u32) {
     drawn_here = zoom >= LEAF_CELL_ZOOM;
   }
   let group = decor_first_group(record_decor(w)) + record_variant(w);
-  let hidden = drawing[DRAWN_HIDE + 3u] != 0u
-    && i32(drawing[DRAWN_HIDE]) == corner.x
-    && i32(drawing[DRAWN_HIDE + 1u]) == corner.y
-    && i32(drawing[DRAWN_HIDE + 2u]) == corner.z;
-  let across = bitcast<f32>(drawing[DRAWN_EXTENTS + group]) / max(sqrt(d2), NEAREST_U);
-  var lod = DRAWN_CULLED;
-  if (across >= bitcast<f32>(drawing[DRAWN_MODEL_ANGLE])) {
-    lod = DRAWN_MODEL;
-  } else if (across >= bitcast<f32>(drawing[DRAWN_IMPOSTOR_ANGLE])) {
-    lod = DRAWN_IMPOSTOR;
+  let hidden = drawing[DRAWING_HIDE + 3u] != 0u
+    && i32(drawing[DRAWING_HIDE]) == corner.x
+    && i32(drawing[DRAWING_HIDE + 1u]) == corner.y
+    && i32(drawing[DRAWING_HIDE + 2u]) == corner.z;
+  let across = bitcast<f32>(drawing[DRAWING_EXTENTS + group]) / max(sqrt(d2), NEAREST_U);
+  var lod = DRAWING_CULLED;
+  if (across >= bitcast<f32>(drawing[DRAWING_MODEL_ANGLE])) {
+    lod = DRAWING_MODEL;
+  } else if (across >= bitcast<f32>(drawing[DRAWING_IMPOSTOR_ANGLE])) {
+    lod = DRAWING_IMPOSTOR;
   }
-  let region = select(2u * group + lod, DRAWN_NONE, hidden || !drawn_here || lod == DRAWN_CULLED);
-  records[i] = (w & ((1u << DRAWN_REGION_SHIFT) - 1u)) | (region << DRAWN_REGION_SHIFT);
-  if (region != DRAWN_NONE) {
+  let region = select(2u * group + lod, DRAWING_NONE, hidden || !drawn_here || lod == DRAWING_CULLED);
+  records[i] = (w & ((1u << DRAWING_REGION_SHIFT) - 1u)) | (region << DRAWING_REGION_SHIFT);
+  if (region != DRAWING_NONE) {
     atomicAdd(&regions[region], 1u);
   }
 }

@@ -102,7 +102,7 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_DAMAGE_RECT => (SHADER_DAMAGE_RECT, "damage_rect_cs"),
         COMPUTE_DECOR_CULL_ARGS => (SHADER_DECOR_CULL, "decor_cull_args_cs"),
         COMPUTE_DECOR_CULL => (SHADER_DECOR_CULL, "decor_cull_cs"),
-        COMPUTE_GENERATION => (SHADER_GENERATION, "decor_cs"),
+        COMPUTE_GENERATION => (SHADER_GENERATION, "decor_pose_cs"),
         COMPUTE_GENERATION_CNT => (SHADER_GENERATION_CNT, "decor_cnt_cs"),
         COMPUTE_GENERATION_ARGS => (SHADER_GENERATION_ARGS, "decor_args_cs"),
         COMPUTE_GENERATION_COMPACT => (SHADER_GENERATION_COMPACT, "decor_compact_cs"),

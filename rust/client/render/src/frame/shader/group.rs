@@ -579,7 +579,7 @@ const _: () = assert!(
     "the faces' group binds past WebGPU's floor"
 );
 
-/// The group of `decor_cs` (decor_pose.wgsl): the world's buffers at world.wgsl's binding
+/// The group of `decor_pose_cs` (decor_pose.wgsl): the world's buffers at world.wgsl's binding
 /// numbers with its eye, the records, the rows and the list.
 pub const GENERATE_GROUP: [u32; 27] = [
     0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 5, COMPUTE, STORAGE, 6, COMPUTE,

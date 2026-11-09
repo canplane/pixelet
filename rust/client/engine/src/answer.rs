@@ -140,9 +140,7 @@ pub(crate) const fn box_of(w: PackedBox) -> ([u32; 3], [u32; 3]) {
 /// Whether an asset lets light through: a ray sees nothing there and passes on, whichever
 /// source holds it. Every ray sees by this (cast.rs `walk`), and it is the one place a value
 /// is said to be transparent: void, on which nothing is painted, and air, which is placed as
-/// nothing. A decor the CPU's world answers (pxl-core `World::node`) is not among them: an eye
-/// stops at it, though a body passes it (pxl-spec `id::solid`). It is a question of
-/// light, not of matter (`fills`): matter that a ray sees through would answer yes to both.
+/// nothing. It is a question of light, not of matter (`fills`): matter that a ray sees through would answer yes to both.
 pub fn transparent(val: u32) -> bool {
     let v = self::val(val);
     v == value::VOID || v == value::AIR

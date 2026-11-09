@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 
 import { Golden } from "@xpute/kit/golden.ts";
 import {
-  derive_seed_u64,
+  seed_mix64,
   make_rng,
   mix64,
   u32_to_unit,
@@ -25,7 +25,7 @@ test("rng computes what the record holds", async () => {
     const seed = v.u64(`${k}.seed`);
     assert.deepStrictEqual(mix64(seed), v.u64(`${k}.mix64`), `${k}.mix64`);
     assert.deepStrictEqual(
-      derive_seed_u64(seed, 77n),
+      seed_mix64(seed, 77n),
       v.u64(`${k}.derive`),
       `${k}.derive`,
     );

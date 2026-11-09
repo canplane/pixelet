@@ -64,7 +64,7 @@ fn decor_cull_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     }
   }
   let region = first;
-  let at = DRAWN_COLUMNS * region_word(0u, 4u) + id.x;
+  let at = DRAWING_COLUMNS * region_word(0u, 4u) + id.x;
   let b = damage_rect;
   if (b[0] > b[2] || b[1] > b[3]) {
     return;

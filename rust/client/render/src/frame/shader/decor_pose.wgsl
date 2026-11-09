@@ -140,7 +140,7 @@ fn leaf_overlaps(s: u32, c: vec3<i32>, at: vec3<i32>, size: vec3<i32>) -> bool {
   }
   let h = node_seed(PLACED_TAG, UNIT_ZOOM, c);
   let variant = mul_hi(draw(h, 0u), row_word(k, ROW_VARIANTS));
-  let box_size = cells(k, variant, draw(h, 1u) >> (32u - TURN_BITS));
+  let box_size = decor_size(k, variant, draw(h, 1u) >> (32u - TURN_BITS));
   return all(c < at + size) && all(at < c + box_size);
 }
 
@@ -164,7 +164,7 @@ const STAGE_POSE = 3u;
 /// pairs generated whole come first, then those in part (`generation::part_at`), of which only
 /// a record that a box reaches is asked.
 @compute @workgroup_size(LANES)
-fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
+fn decor_pose_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   // How many of the pairs the list holds are generated whole (`generation::LIST_WORDS`).
   let whole = in_cap(list[THIN_ARGS + 2u], LIST_WORDS - LIST_AT);
   let part = id.z >= whole;
@@ -262,7 +262,7 @@ fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         if (voting > 0i) {
           turn = u32(horizontal > vertical) + 2u * flip;
         }
-        let size = cells(j, variant, turn);
+        let size = decor_size(j, variant, turn);
         let side = 1i << s;
         n = (vec3<i32>(leaf + size.xy - 1i, (base + 1i) * side + size.z - 1i) >> vec3<u32>(s)) - foot + 1i;
       }
@@ -327,7 +327,7 @@ fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     ask += 1i;
   }
   let at_z = i32(records[r + 3u]);
-  if (overlaps_placed(vec3<i32>(leaf, at_z), cells(j, variant, turn))) {
+  if (overlaps_placed(vec3<i32>(leaf, at_z), decor_size(j, variant, turn))) {
     records[r] = UNGENERATED;
   } else {
     records[r] = record_word(j, variant, turn, cell_zoom);

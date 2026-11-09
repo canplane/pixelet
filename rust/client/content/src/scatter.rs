@@ -2,9 +2,8 @@
 
 //! wgsl-port: the decor the ground holds, never stored, as a tree of hashes. A brick at a
 //! decor's root zoom (`ROOTS`) holds as many as one hash draws around its mean, and each
-//! column hands its count down to its four children, one hash a column: evenly down to a
-//! clip level's cells, then by the hash's weights to the leaf cells, a unit each, which hold
-//! one or none (`cnt`). A leaf cell's own hash draws its
+//! column hands its count down to its four children by weights near a half that one hash a
+//! column draws (`near_half`), to the leaf cells, a unit each, which hold one or none (`cnt`). A leaf cell's own hash draws its
 //! variant and heading (`candidate_at`); one whose box meets the box of a neighbor that drew
 //! lower gives way to it (`retained`). At a zoom, a decor stands as itself where its box keeps
 //! an eighth of that zoom's cell or more, as a folded cube is drawn, and is none where it
@@ -19,7 +18,7 @@ use pxl_spec::share::EIGHTHS;
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, UNIT_ZOOM};
 use xpute_kit::math::rng::SplitMix32;
 
-use crate::halve;
+use crate::halve::{self, weight};
 use pxl_spec::asset::decor::{Row, ROWS};
 
 /// A cell's candidate: the leaf cell it stands at, at every zoom; its first draw, which is
@@ -32,18 +31,10 @@ pub struct Candidate {
     pub seed: u32,
 }
 
-impl Candidate {
-    pub const NONE: Candidate = Candidate {
-        cell: [0; 2],
-        draw: u32::MAX,
-        seed: 0,
-    };
-}
-
 /// Leaf cell `cell`'s candidate of the `k`-th decor, with its own draws, and whether the cell
 /// holds one (`cnt`).
 pub fn candidate_at(k: usize, cell: [i32; 2]) -> (Candidate, bool) {
-    let mut draws = SplitMix32::new(node_seed(SEEDS[k], (LEAF_CELL_ZOOM, cell)));
+    let mut draws = SplitMix32::new(node_seed(ROWS[k].seed, (LEAF_CELL_ZOOM, cell)));
     (
         Candidate {
             cell,
@@ -54,46 +45,25 @@ pub fn candidate_at(k: usize, cell: [i32; 2]) -> (Candidate, bool) {
     )
 }
 
-/// The words of each decor that the hashes read, its seed and its chance, kept in a small
-/// table of their own so that a GPU lane reading one by a decor's place copies no row of the
-/// catalog.
-const SEEDS: [u32; ROWS.len()] = {
-    let mut t = [0; ROWS.len()];
-    let mut k = 0;
-    while k < ROWS.len() {
-        t[k] = ROWS[k].seed;
-        k += 1;
-    }
-    t
-};
-const CHANCES: [u32; ROWS.len()] = {
-    let mut t = [0; ROWS.len()];
-    let mut k = 0;
-    while k < ROWS.len() {
-        t[k] = ROWS[k].chance;
-        k += 1;
-    }
-    t
-};
 /// The tags of a column's count and of its split among its four, beside a
 /// decor's seed (`node_seed`).
-pub const CNT: u32 = 0xc047_dec0;
-pub const SPLIT: u32 = 0x5b17_dec0;
+pub const CNT_TAG: u32 = 0xc047_dec0;
+pub const SPLIT_TAG: u32 = 0x5b17_dec0;
 
 /// How many of the `k`-th decor the column `b` at `zoom` holds; a leaf cell holds one or
 /// none. Its root's column (`ROOTS`) holds as many as a hash draws around its mean, the
 /// decor's chance for each leaf cell under it, rounded at a uniform draw. Each column's count
-/// is then halved across and along, exactly, evenly within the brick (`even`) and past that
-/// by weights its hash draws, with none past what its leaf cells hold. Coarser than the root, it is none. Every word is read by value.
+/// is then halved across and along, exactly, by weights its hash draws (`near_half`), with
+/// none past what its leaf cells hold. Coarser than the root, it is none. Every word is read by value.
 pub fn cnt(k: usize, zoom: Zoom, b: [i32; 2]) -> u32 {
-    cnt_of([SEEDS[k], CHANCES[k], ROOTS[k]], zoom, b)
+    cnt_of([ROWS[k].seed, ROWS[k].chance, ROOTS[k]], zoom, b)
 }
 
-/// The weight `w` keeps a brick's count even across its cells: an even half, its odd one
-/// going by `w`'s low bits (`halve`). Random weights over the brick's depth would heap its
-/// decor in a few cells and leave the rest bare.
-const fn even(w: u32) -> u32 {
-    w & 0xffff | 0x8000_0000
+/// A hash's weight held within a sixteenth of a half, its low bits still the draw that rounds
+/// (`halve`). Weights over the whole range would heap a brick's decor in a few cells and leave
+/// the rest bare.
+const fn near_half(w: u32) -> u32 {
+    weight(0x7000 + (w >> 16 & 0x1fff), w)
 }
 
 /// The mean a column at `root` holds, in 16.16 fixed point: the chance's top half for each
@@ -115,27 +85,21 @@ pub fn cnt_of([seed, chance, root]: [u32; 3], zoom: Zoom, b: [i32; 2]) -> u32 {
         return 0;
     }
     let at = |z: Zoom| [b[0] >> (zoom - z), b[1] >> (zoom - z)];
-    let draw = node_seed(seed ^ CNT, (root, at(root)));
+    let draw = node_seed(seed ^ CNT_TAG, (root, at(root)));
     let mut n = (mean(chance, root) + (draw & 0xffff)) >> 16;
     let mut z = root;
     while z < zoom && n > 0 {
         // Halved across, then along, none past what its leaf cells hold
         // (`halve::quarter`), the one rule the caves and the cumulus hand
-        // theirs down by: evenly within the brick, each half's odd one going
-        // by a draw of its own, and by the hash's weights past it.
-        let mut draws = SplitMix32::new(node_seed(seed ^ SPLIT, (z, at(z))));
+        // theirs down by, each half along by a weight of its own.
+        let mut draws = SplitMix32::new(node_seed(seed ^ SPLIT_TAG, (z, at(z))));
         let c = at(z + 1);
         let quarter = (c[0] & 1 | (c[1] & 1) << 1) as usize;
         let cap = 1u32 << (2 * (LEAF_CELL_ZOOM - z - 1));
         let cap = if cap > 0xffff { 0xffff } else { cap };
         let [across, along, other] = [draws.next_u32(), draws.next_u32(), draws.next_u32()];
-        let weights = match z < root + BRICK_SHIFT {
-            true => [
-                even(across),
-                even(if quarter & 1 == 0 { along } else { other }),
-            ],
-            false => [across, along],
-        };
+        let along = if quarter & 1 == 0 { along } else { other };
+        let weights = [near_half(across), near_half(along)];
         n = halve::quarter(n, cap, weights, quarter as u32);
         z += 1;
     }
@@ -169,18 +133,18 @@ pub(crate) const fn mul_hi(a: u32, b: u32) -> u32 {
 
 /// The variant a candidate draws, its seed's first draw: uniform over the
 /// decor's.
-pub(crate) fn variant_of(decor: &Row, draws: &mut SplitMix32) -> u32 {
+pub(crate) fn draw_variant(decor: &Row, draws: &mut SplitMix32) -> u32 {
     mul_hi(draws.next_u32(), decor.variants)
 }
 
-/// The variant candidate `c` draws (`variant_of`), the first of its seed's.
-pub fn variant(decor: &Row, c: &Candidate) -> u32 {
-    variant_of(decor, &mut SplitMix32::new(c.seed))
+/// The variant a candidate of `seed` draws (`draw_variant`), the first of its draws.
+pub fn variant_of(decor: &Row, seed: u32) -> u32 {
+    draw_variant(decor, &mut SplitMix32::new(seed))
 }
 
 /// The brick a candidate claims, which holds its box however it turns.
-pub fn side_of(decor: &Row, c: &Candidate) -> i32 {
-    let [x, y, _] = decor.sizes[variant(decor, c) as usize];
+pub fn side_of(decor: &Row, seed: u32) -> i32 {
+    let [x, y, _] = decor.sizes[variant_of(decor, seed) as usize];
     x.max(y) as i32
 }
 
@@ -190,14 +154,14 @@ pub fn side_of(decor: &Row, c: &Candidate) -> i32 {
 /// meeting `c`'s may start, as wide as the decor's widest.
 pub fn retained(k: usize, c: &Candidate) -> bool {
     let decor = &ROWS[k];
-    let (side, extent) = (side_of(decor, c), decor.widest() as i32 - 1);
+    let (side, extent) = (side_of(decor, c.seed), decor.widest() as i32 - 1);
     let mut y = c.cell[1] - extent;
     while y < c.cell[1] + side {
         let mut x = c.cell[0] - extent;
         while x < c.cell[0] + side {
             if x != c.cell[0] || y != c.cell[1] {
                 let (d, here) = candidate_at(k, [x, y]);
-                if here && before(&d, c) && meet(&d, side_of(decor, &d), c, side) {
+                if here && before(&d, c) && meet(&d, side_of(decor, d.seed), c, side) {
                     return false;
                 }
             }
@@ -241,14 +205,16 @@ pub const fn coarsest_stand(decor: &Row, variant: u32) -> Zoom {
     cell_zoom
 }
 
-/// The coarsest clip level zoom any variant of `decor` stands at
-/// (`any_stands_at`).
+/// The coarsest clip level zoom any variant of `decor` stands at (`coarsest_stand`): it stands
+/// at this zoom and every finer one.
 pub const fn first_cell_zoom(decor: &Row) -> Zoom {
-    let mut cell_zoom = LEAF_CELL_ZOOM;
-    while cell_zoom > 0 && any_stands_at(decor, cell_zoom - 1) {
-        cell_zoom -= 1;
+    let (mut first, mut v) = (LEAF_CELL_ZOOM, 0);
+    while v < decor.variants {
+        let z = coarsest_stand(decor, v);
+        first = if z < first { z } else { first };
+        v += 1;
     }
-    cell_zoom
+    first
 }
 
 /// The zoom a decor's counts start at: that of a brick at the coarsest clip level it stands
@@ -261,6 +227,17 @@ pub const fn root(decor: &Row) -> Zoom {
         FIRST_CELL_ZOOM
     }) - BRICK_SHIFT
 }
+
+/// The coarsest clip level zoom any decor stands at (`first_cell_zoom`).
+pub const COARSEST_STAND: Zoom = {
+    let (mut coarsest, mut k) = (LEAF_CELL_ZOOM, 0);
+    while k < ROWS.len() {
+        let z = first_cell_zoom(&ROWS[k]);
+        coarsest = if z < coarsest { z } else { coarsest };
+        k += 1;
+    }
+    coarsest
+};
 
 /// The root of each decor's counts (`cnt`, `root`).
 pub const ROOTS: [Zoom; ROWS.len()] = {
@@ -280,7 +257,7 @@ const _: () = {
             shift < u32::BITS,
             "a decor's root column's leaf cells, a shift, fit a u32 (`cnt`)"
         );
-        let mean = ((CHANCES[k] >> 16) as u64) << shift;
+        let mean = ((ROWS[k].chance >> 16) as u64) << shift;
         assert!(
             mean + 0xffff <= u32::MAX as u64,
             "a decor's mean a root column, in 16.16, fits a u32 (`cnt`)"
@@ -288,18 +265,6 @@ const _: () = {
         k += 1;
     }
 };
-
-/// Whether any variant of `decor` stands at `cell_zoom` (`stands_at`).
-pub const fn any_stands_at(decor: &Row, cell_zoom: Zoom) -> bool {
-    let mut v = 0;
-    while v < decor.variants {
-        if stands_at(decor, v, cell_zoom) {
-            return true;
-        }
-        v += 1;
-    }
-    false
-}
 
 #[cfg(test)]
 #[path = "scatter.test.rs"]

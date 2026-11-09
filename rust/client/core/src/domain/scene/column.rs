@@ -7,9 +7,9 @@
 //! group count, then each group's instance count, then each group's columns,
 //! then the index list.
 
-use pxl_content::generation::drawn::COLUMNS;
+use pxl_content::generation::drawing::COLUMNS;
 
-/// Where one group's columns lie in a buffer: `drawn::COLUMNS` f32 columns
+/// Where one group's columns lie in a buffer: `drawing::COLUMNS` f32 columns
 /// (x, y, z, spin, scale), then one flag byte an instance, padded to a whole
 /// word.
 #[derive(Clone, Copy)]

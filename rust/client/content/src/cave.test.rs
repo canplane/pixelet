@@ -74,7 +74,7 @@ fn every_root_alike() {
 #[test]
 #[ignore]
 fn picture() {
-    use super::{block_hollow, holds, PIPE};
+    use super::{holds, hollow_from, PIPE};
     let Ok(path) = std::env::var("CAVE_PICTURE") else {
         return;
     };
@@ -87,9 +87,9 @@ fn picture() {
                 if p.blocks == 0 {
                     continue;
                 }
-                let h = node_seed(super::BLOCKS, (PIPE, [cx, cy, cz]));
+                let h = node_seed(super::BLOCKS_TAG, (PIPE, [cx, cy, cz]));
                 for b in 0..64u32 {
-                    if block_hollow(h, &p, b) {
+                    if hollow_from(h, &p, [b, 0, 0], 0) == 1 {
                         let (x, y, z) = (
                             cx as usize * 4 + (b & 3) as usize,
                             cy as usize * 4 + (b >> 2 & 3) as usize,
@@ -154,7 +154,10 @@ fn every_node_of_a_root_is_its_children() {
                 if p.blocks > 0 {
                     let (o, s) = bounds(node);
                     let inside = |v: [i32; 3]| (0..3).all(|j| v[j] >= o[j] && v[j] < o[j] + s);
-                    assert!(inside(p.e) && inside(p.x), "piece {p:?} out of {node:?}");
+                    assert!(
+                        inside(p.enter) && inside(p.leave),
+                        "piece {p:?} out of {node:?}"
+                    );
                 }
                 next.extend(kids);
             }

@@ -80,18 +80,18 @@ export function mix64(x: u64): u64 {
  * @example
  * // Derive separate seeds for different roles
  * const master = 12345n;
- * const seed_server = derive_seed_u64(master, 0n);   // for SERVER role
- * const seed_storage = derive_seed_u64(master, 1n);  // for STORAGE role
+ * const seed_server = seed_mix64(master, 0n);   // for SERVER role
+ * const seed_storage = seed_mix64(master, 1n);  // for STORAGE role
  * // seed_server and seed_storage are uncorrelated in practice
  *
  * @example
  * // Chain derivations for hierarchical streams
  * const master = seed64();
- * const node_seed = derive_seed_u64(master, 1n);
- * const treap_seed = derive_seed_u64(node_seed, 0n);
- * const sampling_seed = derive_seed_u64(node_seed, 1n);
+ * const node_seed = seed_mix64(master, 1n);
+ * const treap_seed = seed_mix64(node_seed, 0n);
+ * const sampling_seed = seed_mix64(node_seed, 1n);
  */
-export function derive_seed_u64(base: u64, tag: u64): u64 {
+export function seed_mix64(base: u64, tag: u64): u64 {
   return mix64(U64(base ^ U64(tag)));
 }
 
@@ -123,8 +123,8 @@ export function derive_seed_u64(base: u64, tag: u64): u64 {
  * @example
  * // Derive separate RNG streams
  * const master = seed64();
- * const rng_a = make_rng(derive_seed_u64(master, 0n));
- * const rng_b = make_rng(derive_seed_u64(master, 1n));
+ * const rng_a = make_rng(seed_mix64(master, 0n));
+ * const rng_b = make_rng(seed_mix64(master, 1n));
  * // rng_a and rng_b are separate windows of one cycle, uncorrelated in practice, and reproducible
  */
 export function make_rng(seed: u64 = seed64()): RNG {

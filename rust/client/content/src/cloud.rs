@@ -9,7 +9,7 @@
 
 use pxl_engine::seed::node_seed;
 use pxl_spec::space::coord::zoom::{Zoom, UNIT_ZOOM};
-use xpute_kit::math::rng::derive_seed_u32;
+use xpute_kit::math::rng::seed_mix32;
 
 use crate::halve;
 use crate::param::cloud::LATTICE_SHAMT;
@@ -46,7 +46,7 @@ const CUMULUS_SPLIT: u32 = 0xc10d_0002;
 /// Cell `cell`'s draw under `salt`, in [0, 1), from which a cumulus there takes its place,
 /// size, turn and variant, by the one seed the decor draws theirs by (`node_seed`).
 pub fn cloud_draw(cell: [i32; 2], salt: u32) -> f64 {
-    f64::from(derive_seed_u32(node_seed(CUMULUS, (CELL_ZOOM, cell)), salt)) / 4_294_967_296.0
+    f64::from(seed_mix32(node_seed(CUMULUS, (CELL_ZOOM, cell)), salt)) / 4_294_967_296.0
 }
 
 /// Whether the field's cell `cell` holds a cumulus. Its patch holds `mean` of its 256 cells,
@@ -74,7 +74,7 @@ pub fn holds_cloud(cell: [i32; 2], mean: u32) -> bool {
         n = halve::quarter(
             n,
             cap,
-            [w(0) << 16 | (h >> 16), w(8) << 16 | (h & 0xffff)],
+            [halve::weight(w(0), h >> 16), halve::weight(w(8), h)],
             quarter as u32,
         );
         z += 1;

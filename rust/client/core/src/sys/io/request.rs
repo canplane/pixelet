@@ -25,7 +25,7 @@ use crate::sys::load::LOAD_FILES;
 use crate::sys::sched::edge;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
-use xpute_kit::math::rng::derive_seed_u64;
+use xpute_kit::math::rng::seed_mix64;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -318,7 +318,7 @@ pub fn settle(key: u64, exit: Exit, phases: Option<PhaseList>) {
 /// it, so one outage is counted once.
 fn hold(s: &mut Sched, fault: Fault, f: Failure, started_ms: f64, at: f64) {
     let o = &mut s.outage;
-    let seed = derive_seed_u64(o.fail_cnt as u64, at.to_bits());
+    let seed = seed_mix64(o.fail_cnt as u64, at.to_bits());
     o.failing = Some(f.errnum);
     if fault == Fault::Network {
         o.until = at + policy::backoff(1, seed).unwrap_or(0.0);

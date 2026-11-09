@@ -22,10 +22,10 @@ export function mix32(x: u32): u32 {
 }
 
 /**
- * Derives a seed from `base` and `tag` through `mix32`, as `derive_seed_u64`
+ * Derives a seed from `base` and `tag` through `mix32`, as `seed_mix64`
  * does through `mix64`.
  */
-export function derive_seed_u32(base: u32, tag: u32): u32 {
+export function seed_mix32(base: u32, tag: u32): u32 {
   return mix32(U32(base ^ tag));
 }
 

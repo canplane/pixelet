@@ -23,6 +23,12 @@ pub fn halve(n: u32, caps: [u32; 2], w: u32) -> u32 {
     }
 }
 
+/// The word `halve` takes: the first half's share, out of 2^16, over the low 16 bits of the
+/// `draw` that rounds it.
+pub const fn weight(share: u32, draw: u32) -> u32 {
+    share << 16 | draw & 0xffff
+}
+
 /// Quarter `q`'s part (`dx + 2dy`) of `n` spread over four quarters of `cap` each: halved
 /// across by `w[0]`, then along by `w[1]` (`halve`).
 pub fn quarter(n: u32, cap: u32, w: [u32; 2], q: u32) -> u32 {

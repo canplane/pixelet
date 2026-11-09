@@ -136,7 +136,7 @@ fn zooms_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {
         let (d, extent) = (&DECORS[k], extent(&DECORS[k]));
         (FIRST_CELL_ZOOM..=LEAF_CELL_ZOOM)
             .filter(|&cell_zoom| {
-                let stands = scatter::any_stands_at(d.row, cell_zoom);
+                let stands = cell_zoom >= scatter::first_cell_zoom(d.row);
                 stands && is_decor_shown(extent, cell_zoom)
             })
             .fold(0, |bits, cell_zoom| {

@@ -22,9 +22,9 @@ pub fn mix32(x: u32) -> u32 {
     z ^ (z >> 16)
 }
 
-/// Derives a seed from `base` and `tag` through `mix32`, as `derive_seed_u64`
+/// Derives a seed from `base` and `tag` through `mix32`, as `seed_mix64`
 /// does through `mix64`.
-pub fn derive_seed_u32(base: u32, tag: u32) -> u32 {
+pub fn seed_mix32(base: u32, tag: u32) -> u32 {
     mix32(base ^ tag)
 }
 

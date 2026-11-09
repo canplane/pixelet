@@ -15,7 +15,7 @@ pub fn mix64(x: u64) -> u64 {
     z ^ (z >> 31)
 }
 
-pub fn derive_seed_u64(base: u64, tag: u64) -> u64 {
+pub fn seed_mix64(base: u64, tag: u64) -> u64 {
     mix64(base ^ tag)
 }
 
