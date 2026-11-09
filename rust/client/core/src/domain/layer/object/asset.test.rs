@@ -31,8 +31,8 @@ fn past_the_catalog() {
         object::air as AssetId,
         shape(Kind::cube, past),
         shape(Kind::decor, past),
-        shape(Kind::character, 0),
-        shape(Kind::sky, 0),
+        // A kind the layout does not give out.
+        3 << SHAPE_BITS,
         u32::MAX,
     ] {
         assert_eq!(Asset::of(id), Asset::Unknown, "{id}");

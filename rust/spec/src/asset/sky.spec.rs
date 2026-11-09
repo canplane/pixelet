@@ -2,7 +2,7 @@
 //
 // GENERATED from spec/spec/asset/sky.json
 //
-// The sky kind (id.json): what hangs in the sky, claiming no cell, so no
+// The sky: what hangs in the sky, claiming no cell, so no
 // cell holds it. Each by its files' paths under asset/content/; what a
 // path is, its number and its extent, is the catalog's (pxl_spec::asset::catalog).
 
