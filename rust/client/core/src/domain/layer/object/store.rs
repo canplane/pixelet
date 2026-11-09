@@ -33,7 +33,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::world::{node_near, wrap_cell};
 use pxl_spec::space::hierarchy::morton::node_of;
-use pxl_spec::space::hierarchy::tree::{child_idx, region, Node};
+use pxl_spec::space::hierarchy::tree::{region, Node};
 use pxl_spec::space::layer::octant::Octant;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -195,20 +195,6 @@ impl object::Table for Table<'_> {
     fn data(&self, slot: u32) -> u32 {
         self.0.data()[slot as usize]
     }
-}
-
-/// The position of node `at` of `zoom` in the tree's own order, the order in
-/// which a walk from the root enters nodes (`descend`). The key is the node's
-/// child index at each zoom (`child_idx`) from the root down, so of two
-/// nodes where neither is under the other, the one entered first has the
-/// smaller key.
-pub(in crate::domain::layer) fn tree_key(zoom: Zoom, at: [i32; 3]) -> u128 {
-    let p = path(zoom, at);
-    let mut key = 0u128;
-    for l in 0..=zoom {
-        key = key << 3 | child_idx(p.map(|v| v >> (zoom - l))) as u128;
-    }
-    key << (3 * (OBJECT_FINEST - zoom))
 }
 
 /// One leaf written, as `<key, id, ext>`: its node's key, its catalog value
@@ -600,37 +586,6 @@ impl Store {
             }
             true
         });
-    }
-
-    /// `entries_in`, starting from the nodes in `from` instead of the root.
-    /// Each node comes with the slot a descent found for it
-    /// (`object::NodeSlot`). No node may be under another, and `query` must
-    /// lie within them. Each is walked from its slot, so when `from` is in
-    /// the tree's own order (`tree_key`), the leaves found and their order
-    /// equal those of a walk from the root.
-    pub(in crate::domain::layer) fn entries_under(
-        &self,
-        from: &[(Node<3>, NodeSlot)],
-        query: &Aabb,
-        visit: &mut dyn FnMut(&Entry),
-    ) {
-        let about = about(query);
-        for &((zoom, at), slot) in from {
-            if !slot.holds() {
-                continue;
-            }
-            let z = slot.zoom();
-            let at = wrap_cell(z, object::ancestor_at(zoom, at, zoom - z));
-            self.walk(slot, z, at, about, &mut |zoom, at, whole, leaf| {
-                if whole.meet(*query).is_none() {
-                    return false;
-                }
-                if let Some(v) = leaf {
-                    visit(&Entry::of(zoom, at, v));
-                }
-                true
-            });
-        }
     }
 
     /// The leaf placed at exactly node `at` of `zoom`, if any, read from the

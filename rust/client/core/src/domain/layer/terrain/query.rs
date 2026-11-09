@@ -11,7 +11,7 @@
 use pxl_engine::clipmap::{self as cells, Lookup};
 use pxl_engine::ground::{Cell, Extent};
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec::space::coord::zoom::{units, Zoom, MIN_ZOOM};
+use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, region, Node};
 use pxl_spec::space::layer::area::Shard;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -148,25 +148,6 @@ impl TileCache<TerrainTile> {
         cell_zoom: Zoom,
     ) -> Line {
         self.seek(path, bound_tile(node, cell_zoom))
-    }
-
-    /// The line that `node`'s cells at `cell_zoom` are read on, found from
-    /// `parent`, the line its parent column's cells were read on. It is
-    /// `parent` itself where both are the same tile's, one step from `parent`
-    /// where `parent` is the tile's parent's (`step`), and otherwise walked
-    /// from the top as `seek` walks.
-    pub(in crate::domain::layer) fn line_under(
-        &self,
-        parent: Option<&Line>,
-        node: Node<2>,
-        cell_zoom: Zoom,
-    ) -> Line {
-        let tile = bound_tile(node, cell_zoom);
-        match parent {
-            Some(o) if o.tile == tile => *o,
-            Some(o) if tile.zoom > MIN_ZOOM && o.tile == tile.parent() => self.step(o, tile),
-            _ => self.line(tile),
-        }
     }
 }
 

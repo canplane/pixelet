@@ -11,7 +11,8 @@ use crate::domain::layer::object::ext::Ext;
 use crate::domain::layer::object::size::MARKER_ZOOM;
 use crate::domain::preview::{Draft, RenderEdit};
 use crate::sys::sched::edge::request_world_tick;
-use pxl_engine::answer::PLACED_ASSET;
+use pxl_engine::answer::{self, PLACED_ASSET};
+use pxl_spec::asset::id::blocks_body;
 use pxl_spec::asset::marker::{MARKER, MARKER_TEXT_CHARS};
 use pxl_spec::asset::AssetId;
 use pxl_spec::space::coord::q3::{self, Q3};
@@ -208,12 +209,13 @@ pub fn place_air(at: Octant) {
 }
 
 /// What erasing the entry at `at` writes: VOID where the base holds nothing
-/// there, and AIR where it would fill the cell. Only the resident finest
-/// leaf can tell, as in `place_val_is_redundant`; where no such leaf is
-/// resident, the cube is emptied with AIR.
+/// there that blocks a body, and AIR where it would fill the cell, which
+/// would hide a decor the ground grows there. Only the resident finest leaf
+/// can tell, as in `place_val_is_redundant`; where no such leaf is resident,
+/// the cube is emptied with AIR.
 fn erase_val(at: Octant) -> u32 {
     match World::base().asset_of(&middle(at)).exact() {
-        Some(VOID) => VOID,
+        Some(v) if !blocks_body(answer::val(v)) => VOID,
         _ => AIR,
     }
 }

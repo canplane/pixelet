@@ -7,7 +7,9 @@ use pxl_spec::asset::cube::{self, ground, sentinel};
 use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
 use pxl_spec::bake::tile::terrain::{GroundCells, GroundId, TerrainTile, GROUND_COLUMN};
-use pxl_spec::space::coord::zoom::{idx_of, units, Zoom, LEAF_ZOOM, MIN_ZOOM, UNIT_ZOOM};
+use pxl_spec::space::coord::zoom::{
+    idx_of, units, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM, UNIT_ZOOM,
+};
 use pxl_spec::space::layer::lattice::{Grid, GROUND, TILE_CELLS};
 
 use super::*;
@@ -485,25 +487,25 @@ fn ray_goes_on_from_the_last() {
         access.along(
             &ray(z, 1.0),
             detail,
-            Until::Transparent,
-            None,
+            Until::Clear,
+            u32::MAX,
             &mut path,
             &mut descent,
         );
         assert!(descent.is_some());
-        let (on, _) = access.along(
+        let on = access.along(
             &ray(z, -1.0),
             detail,
-            Until::Opaque,
-            None,
+            Until::Solid,
+            u32::MAX,
             &mut path,
             &mut descent,
         );
-        let (top, _) = access.along(
+        let top = access.along(
             &ray(z, -1.0),
             detail,
-            Until::Opaque,
-            None,
+            Until::Solid,
+            u32::MAX,
             &mut Path::default(),
             &mut None,
         );
@@ -905,6 +907,53 @@ fn generated_decor_struck_where_generated() {
     );
     let none = 0;
     assert!(!matches!(met(none), HitKind::Decor(_)), "{:?}", met(none));
+    let body = world.first_hit(&ray, finest()).exact().flatten().unwrap();
+    assert_eq!(body.kind, HitKind::Ground, "a body passes it");
+}
+
+/// A decor someone placed is the same to whatever asks as one the ground
+/// grew: every cell of its box answers it, the eye stops at its box and a
+/// body passes it. A ray that starts inside the box does not meet it.
+#[test]
+fn placed_decor_answers_its_box() {
+    use pxl_engine::answer::PLACED_ASSET;
+    use pxl_spec::asset::decor::DECORS;
+    let _g = serial();
+    let [x, y] = flat_at_five();
+    let [cx, cy] = [x.floor(), y.floor()];
+    let tree = DECORS[0];
+    let mut store = Store::default();
+    write(&mut store, [cx, cy, 5.0], OBJECT_COARSEST, tree.id);
+    let world = placed(store);
+    let cell = [cx as i32, cy as i32, 5];
+    let word = PLACED_ASSET | tree.id;
+    assert_eq!(world.asset((LEAF_CELL_ZOOM, cell)).exact(), Some(word));
+    let shot = |z: f64, dir: f64| Ray {
+        origin: [cx + 0.5, cy + 0.5, z],
+        dir: [0.0, 0.0, dir],
+        t_max: 40.0,
+    };
+    let seen = world
+        .first_visible(&shot(30.0, -1.0), finest(), 0)
+        .exact()
+        .flatten()
+        .unwrap();
+    assert!(matches!(seen.kind, HitKind::Decor(i) if i.generated_in().is_none()));
+    assert_eq!(seen.normal, [0.0, 0.0, 1.0]);
+    let body = world.first_hit(&shot(30.0, -1.0), finest());
+    assert_eq!(body.exact().flatten().unwrap().kind, HitKind::Ground);
+    let from_inside = world
+        .first_visible(&shot(5.5, -1.0), finest(), 0)
+        .exact()
+        .flatten()
+        .unwrap();
+    assert_eq!(from_inside.kind, HitKind::Ground);
+    let stands = world.floor_under(&world::point(cx + 0.5, cy + 0.5, 6.5), LEAF_ZOOM);
+    assert_eq!(
+        stands.exact().flatten(),
+        Some(5.0),
+        "a body stands under it"
+    );
 }
 
 /// A service area of the shards at `SHARD_ZOOM` in column `.0` and east of

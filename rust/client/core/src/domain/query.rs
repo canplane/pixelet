@@ -29,8 +29,6 @@
 pub mod change;
 #[path = "query/decor.rs"]
 pub mod decor;
-#[path = "query/decor_box.rs"]
-pub mod decor_box;
 #[path = "query/entry.rs"]
 mod entry;
 #[path = "query/limit.rs"]

@@ -12,7 +12,7 @@ use super::decor::claim;
 use super::world::World;
 use crate::domain::layer::object::meta::decor_instance;
 use crate::domain::layer::object::store::Entry;
-use crate::domain::query::decor_box::box_extent;
+use crate::domain::query::decor::box_extent;
 use pxl_spec::space::layer::octant::Octant;
 
 impl World {

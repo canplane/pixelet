@@ -3,12 +3,13 @@
 //! The first cell a ray meets, at the zoom its distance asks. The descent is
 //! pxl-engine's (`cast::first`), the same one the GPU's cast runs. Here the
 //! world answers it from everything it holds, each node handed what its
-//! parent found (`Walker`). Decor, which only the CPU answers, rides on the
-//! same descent.
+//! parent found (`Walker`), the decor standing in a cell among it. What stops
+//! a ray is the asker's: a body passes a decor and an eye stops at it
+//! (`Until`).
 
 use super::change;
-use super::decor::DecorRay;
-use super::node::{coarsest, At};
+use super::decor::cells;
+use super::node::{coarsest, Ask, At};
 use super::world::World;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::tile_cache::Path;
@@ -19,17 +20,21 @@ use pxl_engine::cast::{self, Detail, End, Keep, Line, Query, Spacing, Trace, DEP
 use pxl_engine::object;
 use pxl_engine::support;
 use pxl_engine::support::ColumnSurface;
+use pxl_spec::asset::decor::DECORS;
+use pxl_spec::asset::id::{self, kind_of};
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::{self, V3};
-use pxl_spec::space::coord::world::{origin, wrap_cell};
+use pxl_spec::space::coord::world::{nearest_box, origin, wrap_cell};
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::octant::Octant;
 use pxl_spec::space::layer::quadrant::Quadrant;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 /// The zooms a cell is asked at: no coarser than the cells a tile draws, and
 /// no finer than what is placed is held.
@@ -117,14 +122,18 @@ pub struct Hit {
 }
 
 /// The world as the descent asks it, with what only the CPU carries along
-/// a ray: the decor struck, the first tile lacked, and whether any node was
-/// answered.
+/// a ray: the first tile lacked, and whether any node was answered.
 pub(super) struct Walker<'w> {
     world: &'w World,
+    ask: Ask,
+    /// Of what the ground generates, the decors the asker sees, one bit a
+    /// kind in `DECORS`' order. Any other is air to it.
+    decors: u32,
+    /// An eye's ray. What it starts inside is not met, and a decor is its
+    /// whole box, so a decor whose box the ray does not enter is air to it.
+    eye: Option<&'w Ray>,
     lack: Option<Quadrant>,
     answered: bool,
-    /// The decor struck along the ray, when the walk strikes decor at all.
-    decor_ray: Option<(&'w Ray, DecorRay)>,
     /// The ground's lines the walk read. Each node's line steps on from them
     /// (`World::node`).
     path: Path,
@@ -181,42 +190,24 @@ impl Query for Walker<'_> {
             .child(at, (p[0] & 1 | (p[1] & 1) << 1 | (p[2] & 1) << 2) as usize)
     }
 
-    /// The world's answer (`World::node`), keeping the first tile lacked. A
-    /// node that nothing under fills is air of its size. Decor fills no cell,
-    /// so it is handled apart. At each leaf cell the ray passes within the
-    /// distance where decor is drawn as held, the ray strikes the decor
-    /// standing near it. A node that no cell under fills is still descended
-    /// into, down to the leaf cells, where decor may stand in it.
+    /// The world's answer (`ask`), keeping the first tile lacked. A node that
+    /// nothing under fills is air of its size. A decor the asker does not
+    /// see, of a kind it does not (`decors`) or whose box it does not enter
+    /// (`eye`), is air to it.
     fn node(
         &mut self,
         at: &mut At,
         _: Zoom,
         _: [i32; 3],
         zooms: [Zoom; 2],
-        t0: f32,
+        _: f32,
     ) -> In<[u32; 2]> {
-        let (zoom, c) = at.node;
-        let t0 = f64::from(t0);
-        // While decor is struck here, this tracks what is placed and where
-        // the ground stands around the node, stepped on from what was around
-        // its parent.
-        if let Some((_, s)) = self.decor_ray.as_mut() {
-            s.about.visit(&self.world.object.columns(), at.node);
-            if t0 < s.draw_dist && s.about_zoom(zoom) == zoom {
-                s.about.read_columns((zoom, [c[0], c[1]]));
-            }
-        }
-        if zoom == GROUND.leaf_cell_zoom() {
-            if let Some((ray, s)) = self.decor_ray.as_mut().filter(|(_, s)| t0 < s.draw_dist) {
-                self.world.intersect_near(s, ray, (zoom, c));
-            }
-        }
-        let answer = match self.world.node(at, zooms, &mut self.path) {
+        let answer = match (self.ask)(self.world, at, zooms, &mut self.path) {
             Answer::Nothing(l) => {
                 self.lack.get_or_insert(l);
                 return In {
                     kind: Kind::Lacks,
-                    asset: answer::AIR,
+                    asset: answer::EMPTY,
                 };
             }
             Answer::Coarser(i, l) => {
@@ -226,86 +217,53 @@ impl Query for Walker<'_> {
             Answer::Exact(i) => i,
         };
         self.answered = true;
-        let decor = zoom < GROUND.leaf_cell_zoom()
-            && self.decor_ray.as_ref().is_some_and(|(_, s)| {
-                t0 < s.draw_dist && self.world.may_intersect(s, at.node, at.inheritance.shard)
-            });
-        match answer.kind {
-            // Air coarser than asked is descended into where decor may stand
-            // in it. A split is entered whole: its box is the world's, not the
-            // box of the decor standing over it.
-            Kind::Cell if zoom < zooms[1] && decor => In {
-                kind: Kind::Split,
-                asset: answer::BOX_WHOLE,
-            },
-            Kind::Split if decor => In {
-                kind: Kind::Split,
-                asset: answer::BOX_WHOLE,
-            },
-            _ => answer,
+        let Some(k) = DECORS
+            .iter()
+            .position(|d| u32::from(d.val()) == answer::val(answer.asset[0]))
+            .filter(|_| answer.kind == Kind::Cell)
+        else {
+            return answer;
+        };
+        let unseen = !answer::is_placed(answer.asset[0]) && self.decors >> k & 1 == 0;
+        if unseen
+            || self
+                .eye
+                .is_some_and(|ray| !self.world.entered(ray, at.node))
+        {
+            return In {
+                kind: Kind::Cell,
+                asset: answer::EMPTY,
+            };
         }
-    }
-}
-
-/// A decor struck at `t`, its box entered across `axis` (`decor_box`),
-/// as the block it is. The hit is the box it claims and that face, as a
-/// cell's hit is, so what is placed on it stands on that box (pxl-spec
-/// asset/id.rs `Kind::stood_on`).
-fn decor_hit(ray: &Ray, t: f64, axis: usize, i: Instance) -> Hit {
-    let claimed = super::decor::claim(&i).unwrap_or_else(|| i.cell());
-    let mut normal = [0.0; 3];
-    normal[axis] = if ray.dir[axis] > 0.0 { -1.0 } else { 1.0 };
-    Hit {
-        t,
-        point: ray.at(t),
-        normal,
-        cube: claimed,
-        kind: HitKind::Decor(i),
+        answer
     }
 }
 
 impl World {
-    /// The first filled cell `ray` meets within its `t_max`, at the zoom
-    /// `detail` asks where it meets it. What the ray starts inside is not met,
-    /// so an eye under the ground is not stopped where it stands. A cell met
-    /// coarser than it is held comes with the tile lacked. A cell not held at
-    /// all is lacked too, and past it the ray tells nothing.
+    /// The first cell that stops a body along `ray` within its `t_max`, at
+    /// the zoom `detail` asks where it meets it (`Until::Solid`): no decor or
+    /// marker is met. What the ray starts inside is not met, so an eye under
+    /// the ground is not stopped where it stands. A cell met coarser than it
+    /// is held comes with the tile lacked. A cell not held at all is lacked
+    /// too, and past it the ray tells nothing.
     pub fn first_hit(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
         let mut path = Path::default();
-        self.along(ray, detail, Until::Opaque, None, &mut path, &mut None)
-            .0
+        self.along(ray, detail, Until::Solid, u32::MAX, &mut path, &mut None)
     }
 
-    /// The first thing a viewer sees along `ray`: the first cell, or the
-    /// decor struck nearer, as the frame draws it: everything placed and, of
-    /// what the ground generates at the leaves, `decors` (`lens::leaf_decors`).
-    /// Decor is struck at the leaf cells the ray passes.
+    /// The first thing a viewer sees along `ray`, the same walk stopping at a
+    /// decor as the frame draws it: everything placed and, of what the ground
+    /// generates at the leaves, `decors` (`lens::leaf_decors`).
     pub fn first_visible(&self, ray: &Ray, detail: Detail, decors: u32) -> Answer<Option<Hit>> {
         let mut path = Path::default();
-        let (met, decor_ray) = self.along(
-            ray,
-            detail,
-            Until::Opaque,
-            DecorRay::new(ray, decors),
-            &mut path,
-            &mut None,
-        );
-        let decor = decor_ray
-            .and_then(|s| s.best)
-            .filter(|&(d, ..)| met.val().flatten().is_none_or(|h: Hit| d < h.t));
-        match (decor, met) {
-            (Some((d, i, k)), Answer::Nothing(l)) => {
-                Answer::Coarser(Some(decor_hit(ray, d, k, i)), l)
-            }
-            (Some((d, i, k)), met) => met.map(|_| Some(decor_hit(ray, d, k, i))),
-            (None, met) => met,
-        }
+        self.along(ray, detail, Until::Opaque, decors, &mut path, &mut None)
     }
 
     /// The first cell along `ray` that `until` stops at, at the zoom `detail`
     /// asks where it meets it (pxl-engine `cast::first`). The ray starts at
     /// its origin, which may stand off the world, as an eye over it does
-    /// (pxl-spec `world::origin`). The tiles' lines step on from `path`, the
+    /// (pxl-spec `world::origin`). Of what the ground generates, it sees
+    /// `decors` (`Walker::decors`). The tiles' lines step on from `path`, the
     /// ground's lines that a walk beside this ray read over the same tile
     /// cache, and are left there for the next ray. A walk from the origin
     /// `descent` names goes on from where that one ended, its asker holding
@@ -315,15 +273,21 @@ impl World {
         ray: &Ray,
         detail: Detail,
         until: Until,
-        decor_ray: Option<DecorRay>,
+        decors: u32,
         path: &mut Path,
         descent: &mut Option<Descent>,
-    ) -> (Answer<Option<Hit>>, Option<DecorRay>) {
+    ) -> Answer<Option<Hit>> {
         let mut walker = Walker {
             world: self,
+            ask: if until == Until::Opaque {
+                World::node
+            } else {
+                World::composed
+            },
+            decors,
+            eye: (until == Until::Opaque).then_some(ray),
             lack: None,
             answered: false,
-            decor_ray: decor_ray.map(|s| (ray, s)),
             path: *path,
         };
         let o = ray.origin;
@@ -349,18 +313,18 @@ impl World {
             None => cast::walk_from_root(&mut walker, q, &from, detail, until, &mut keep),
         };
         *path = walker.path;
-        let hit = (trace.end == End::Hit).then(|| self.hit(ray, q, trace.hit));
-        let answer = match (hit, walker.lack, walker.answered) {
+        let hit = (trace.end == End::Hit).then(|| self.hit(ray, q, until, trace.hit));
+        match (hit, walker.lack, walker.answered) {
             (h, None, _) => Answer::Exact(h),
             (Some(h), Some(l), _) => Answer::Coarser(Some(h), l),
             (None, Some(l), true) => Answer::Coarser(None, l),
             (None, Some(l), false) => Answer::Nothing(l),
-        };
-        (answer, walker.decor_ray.map(|(_, s)| s))
+        }
     }
 
     /// The column surface down column `g` at `cell_zoom` (pxl-engine
-    /// `support::column_surface`). The first value is the top of the cell
+    /// `support::column_surface`), of what the layers compose: what a decor
+    /// or a body stands on lies under the decor. The first value is the top of the cell
     /// met, as drawn, with what the world lacked on the way, or None where
     /// the column meets nothing opaque. The second is the column surface
     /// itself, off whose line the cells around it are asked (`asset_about`).
@@ -397,12 +361,15 @@ impl World {
         }
     }
 
+    /// A walker of what the layers compose under the decor.
     fn walker(&self) -> Walker<'_> {
         Walker {
             world: self,
+            ask: World::composed,
+            decors: u32::MAX,
+            eye: None,
             lack: None,
             answered: false,
-            decor_ray: None,
             path: Path::default(),
         }
     }
@@ -411,7 +378,7 @@ impl World {
     /// origin as a position names it. The node's box is placed relative to
     /// the unit cell holding the origin, so it lies on the origin's lap, and
     /// is inset to the box its cell fills.
-    fn hit(&self, ray: &Ray, q: Q3, s: cast::Hit<At>) -> Hit {
+    fn hit(&self, ray: &Ray, q: Q3, until: Until, s: cast::Hit<At>) -> Hit {
         let (zoom, c) = s.at.node;
         let side = units(zoom);
         let unit = ray.origin.map(libm::floor);
@@ -427,6 +394,26 @@ impl World {
         let axis = s.axis as usize;
         let mut normal = [0.0; 3];
         normal[axis] = if ray.dir[axis] > 0.0 { -1.0 } else { 1.0 };
+        // A decor seen is struck as the box it claims, at the face the ray
+        // enters, so what is placed on it stands on that box (pxl-spec
+        // asset/id.rs `Kind::stood_on`). A body's climb out of what fills it
+        // stops at the cell of a decor it may stand inside.
+        if until == Until::Opaque && kind_of(answer::val(s.asset[0])) == Some(id::Kind::decor) {
+            let i = self.decor_over((zoom, c)).or_bug(Errno::ENOTRECOVERABLE);
+            let cube = nearest_box(&cells(&i).or_bug(Errno::ENOTRECOVERABLE), ray.origin[0]);
+            let (t, k) = cube
+                .enters(ray.origin, ray.dir)
+                .unwrap_or((f64::from(s.t), axis));
+            let mut normal = [0.0; 3];
+            normal[k] = if ray.dir[k] > 0.0 { -1.0 } else { 1.0 };
+            return Hit {
+                t,
+                point: ray.at(t),
+                normal,
+                cube,
+                kind: HitKind::Decor(i),
+            };
+        }
         let kind = match answer::is_placed(s.asset[0]) {
             true => self
                 .object

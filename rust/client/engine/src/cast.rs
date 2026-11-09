@@ -2,8 +2,8 @@
 
 //! wgsl-port: the first cell a ray meets, at the zoom its distance asks: one descent for
 //! the CPU and the GPU, over a query each answers in its own way (`Query`). A node coarser
-//! than the zoom its distance asks is asked whether anything under it is not transparent. If
-//! nothing is, the ray goes on past it whole; otherwise the ray descends into the children it
+//! than the zoom its distance asks is asked whether anything under it may stop the ray. If
+//! nothing may, the ray goes on past it whole; otherwise the ray descends into the children it
 //! meets, nearest first. A node at that zoom is asked its asset, and the ray stops there or
 //! goes on.
 //!
@@ -19,8 +19,11 @@
 //! From a child it steps to the next child across the face it leaves by, so no frame holds
 //! its siblings.
 
-use crate::answer::{box_of, fill_eighths, side, transparent, In, Kind, AIR, BOX_BITS, BOX_STEPS};
+use crate::answer::{
+    box_of, fill_eighths, side, transparent, val, In, Kind, BOX_BITS, BOX_STEPS, EMPTY,
+};
 use crate::axis;
+use pxl_spec::asset::id::blocks_body;
 use pxl_spec::share::EIGHTHS;
 use pxl_spec::space::camera::grid::cell_zoom_at;
 use pxl_spec::space::coord::q3::FRAC_W;
@@ -120,17 +123,21 @@ const _: () = assert!(
 /// spacings, corner to corner.
 pub const SQRT_6: f32 = 2.449_489_8;
 
-/// Which cell a ray stops at: the first it cannot see through (`answer::transparent`), as an
-/// eye sees (`Opaque`); the first it can see through, where what is climbed out of ends
-/// (`Transparent`); or, for a beam ray of the camera grid, the first it cannot see through or
-/// the first split too narrow to hold one of the grid's rays for certain (`narrow`), with the
-/// box of every split it enters widened by `2√2` of that width (`Beam`).
+/// Which cell a ray stops at: the first an eye cannot see through (`answer::transparent`), as
+/// an eye sees (`Opaque`); the first that stops a body (pxl-spec `id::blocks_body`), as a body
+/// moves (`Solid`); the first a body passes, where what a body climbs out of ends (`Clear`);
+/// or, for a beam ray of the camera grid, the first an eye cannot see through or the first
+/// split too narrow to hold one of the grid's rays for certain (`narrow`), with the box of
+/// every split it enters widened by `2√2` of that width (`Beam`). A decor stops an eye and no
+/// body. No decor reaches a GPU's walk, whose world draws it as models, so a GPU's walk reads
+/// the eye's rules alone.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Until {
     Opaque,
-    Transparent,
+    Clear,
     Beam,
+    Solid,
 }
 
 /// A ray from an origin, a Q3 position: its direction, how far it reaches in units, and its
@@ -829,17 +836,17 @@ impl<A: Copy> Keep<A> for () {
 ///
 /// The walk holds its node, each axis an integer in its root (`Node`), and where the ray is,
 /// `t`; the planes, the span and the axis entered across are worked out from those where
-/// asked. A node is entered once and asked whether anything under it is not transparent at
+/// asked. A node is entered once and asked whether anything under it may stop the ray at
 /// the zooms every ray from the origin asks within it (`zooms`). A cell, the asset at that
 /// zoom or air where everything under it is air, is where the walk stops or goes on past. For
-/// an eye it stops where the cell is not transparent, except in the cell it starts in, and
-/// where the ray enters the box of a cell keeping less than its cube (`fill_bounds`); for what
-/// is climbed out of, it stops where the cell is transparent. Otherwise the walk enters the
-/// child the ray is in (PUSH, Laine & Karras 2010 §3). Past a node, the corner steps on the
-/// axis the ray leaves by (Amanatides & Woo 1987), and the walk moves to the child, holding
-/// the next node, of the nearest ancestor that holds it, found by the highest bit the step
-/// changed (POP); past a root, it moves into the next root, from its top. It is one loop of
-/// at most `STEPS_CAP` steps (`walk_at_most`).
+/// an eye or a body it stops where the cell is one `until` stops at, except in the cell it
+/// starts in, and where the ray enters the box of a cell keeping less than its cube
+/// (`fill_bounds`); for what a body climbs out of, it stops where a body passes the cell.
+/// Otherwise the walk enters the child the ray is in (PUSH, Laine & Karras 2010 §3). Past a
+/// node, the corner steps on the axis the ray leaves by (Amanatides & Woo 1987), and the walk
+/// moves to the child, holding the next node, of the nearest ancestor that holds it, found by
+/// the highest bit the step changed (POP); past a root, it moves into the next root, from its
+/// top. It is one loop of at most `STEPS_CAP` steps (`walk_at_most`).
 #[expect(
     clippy::too_many_arguments,
     reason = "the walk's query, origin, ray, detail, stop and start, the line over its start and what keeps its own, each its own (Laine & Karras 2010)"
@@ -946,14 +953,20 @@ pub fn walk_at_most<Q: Query>(
                 greater(greater(greater(t0, bx.0), by.0), bz.0)
                     < lesser(lesser(lesser(t1, bx.1), by.1), bz.1)
             };
+            // Whether the cell is one `until` stops at.
+            let stops = match until {
+                Until::Opaque | Until::Beam => !transparent(i.asset[0]),
+                Until::Solid => blocks_body(val(i.asset[0])),
+                Until::Clear => !blocks_body(val(i.asset[0])),
+            };
             let end = match i.kind {
                 Kind::Lacks => End::Lacks,
-                // A cell keeping less than its cube is the box its share fills (`fill_bounds`): an eye's ray
-                // stops where it enters the box and passes it as air where it misses; a beam ray stops at
-                // its node, since the samples it hands on may meet the box.
+                // A cell keeping less than its cube is the box its share fills (`fill_bounds`): an eye's or
+                // a body's ray stops where it enters the box and passes it as air where it misses; a beam
+                // ray stops at its node, since the samples it hands on may meet the box.
                 Kind::Cell
-                    if until == Until::Opaque
-                        && !transparent(i.asset[0])
+                    if (until == Until::Opaque || until == Until::Solid)
+                        && stops
                         && !inside
                         && fill_eighths(i.asset[0]) < EIGHTHS =>
                 {
@@ -970,11 +983,7 @@ pub fn walk_at_most<Q: Query>(
                     }
                 }
                 Kind::Cell
-                    if match until {
-                        Until::Opaque => !transparent(i.asset[0]) && !inside,
-                        Until::Transparent => transparent(i.asset[0]),
-                        Until::Beam => !transparent(i.asset[0]),
-                    } =>
+                    if stops && (!inside || until == Until::Clear || until == Until::Beam) =>
                 {
                     End::Hit
                 }
@@ -983,7 +992,7 @@ pub fn walk_at_most<Q: Query>(
                 // since the grid's rays around it clear it too. Otherwise it stops at a split it may not
                 // share with them, and enters every other. For any other walk, a span wholly outside the box,
                 // or only touching it, meets nothing a ray cannot see through, so a walk that stops at that
-                // passes the node whole, and a walk that stops at what is transparent goes in, its stop
+                // passes the node whole, and a walk that stops where a body passes goes in, its stop
                 // being where that span begins. Either way the box is asked once.
                 Kind::Split => {
                     let beam = until == Until::Beam;
@@ -995,12 +1004,12 @@ pub fn walk_at_most<Q: Query>(
                         0.0
                     };
                     let narrow = beam && narrow(side * side, width * width);
-                    let meets = until != Until::Transparent
-                        && meets_box(if beam { NARROW * width } else { 0.0 });
+                    let meets =
+                        until != Until::Clear && meets_box(if beam { NARROW * width } else { 0.0 });
                     into = if beam {
                         meets && !narrow
                     } else {
-                        until == Until::Transparent || meets
+                        until == Until::Clear || meets
                     };
                     if meets && narrow {
                         End::Hit
@@ -1063,7 +1072,7 @@ pub fn walk_at_most<Q: Query>(
                     axis: 0,
                     node: n,
                     at,
-                    asset: AIR,
+                    asset: EMPTY,
                 };
                 let trace = Trace {
                     end: End::Miss,
@@ -1132,7 +1141,7 @@ pub fn walk_at_most<Q: Query>(
         axis: 0,
         node: n,
         at,
-        asset: AIR,
+        asset: EMPTY,
     };
     let trace = Trace {
         end: End::Miss,

@@ -10,7 +10,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::layer::object::store::Entry;
-use crate::domain::query::decor_box;
+use crate::domain::query::decor;
 use crate::domain::query::World;
 use crate::domain::view::frame::coord;
 
@@ -39,7 +39,7 @@ impl Asset {
 pub fn placement_reads(asset: Asset, zoom: Zoom, corner: &Q3) -> [[f64; 2]; 2] {
     let room = asset.room(zoom, corner);
     let width = (room.max[0] - room.min[0]).max(room.max[1] - room.min[1]);
-    let pad = decor_box::box_extent() + width;
+    let pad = decor::box_extent() + width;
     [
         [room.min[0] - pad, room.min[1] - pad],
         [room.max[0] + pad, room.max[1] + pad],

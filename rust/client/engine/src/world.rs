@@ -265,7 +265,7 @@ pub fn node<H: ground::Resident, W: BrickSource, L: Table, P: Pool + ?Sized>(
     if box_none(joined) {
         return In {
             kind: Kind::Cell,
-            asset: answer::AIR,
+            asset: answer::EMPTY,
         };
     }
     In {

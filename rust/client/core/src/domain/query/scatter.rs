@@ -26,8 +26,9 @@ use crate::domain::layer::object::store;
 use crate::domain::layer::Answer;
 
 /// The world as decor's generation asks it on the CPU (pxl-engine
-/// `DecorQuery`): the world's one query, of the base and as edited, and what
-/// is placed (`lanes`).
+/// `DecorQuery`): what the layers compose under the decor (`World::composed`),
+/// of the base and as edited, since a decor is generated from what lies under
+/// it, and what is placed (`lanes`).
 pub(super) struct DecorWorld<'a> {
     world: &'a World,
     base: World,
@@ -44,10 +45,10 @@ impl<'a> DecorWorld<'a> {
     }
 }
 
-/// The world's one query on the CPU. A column's surface comes with its line
-/// (`World::column_surface`), and each cell around the column is asked off
-/// that line (`World::asset_about`), both of the base. A cell's
-/// edit is asked of the world as edited (`World::asset`).
+/// What the layers compose, as the CPU asks them. A column's surface comes
+/// with its line (`World::column_surface`), and each cell around the column
+/// is asked off that line (`World::asset_about`), both of the base. A cell's
+/// edit is asked of the world as edited (`World::asset_at`).
 impl DecorQuery for DecorWorld<'_> {
     type ColumnSurface = ColumnSurface<At>;
 
@@ -82,7 +83,7 @@ impl DecorQuery for DecorWorld<'_> {
     /// shows where one is held, as far as its tiles are held.
     fn asset(&mut self, f: &ColumnSurface<At>, zoom: Zoom, c: [i32; 3], edited: bool) -> u32 {
         let answer = if edited {
-            self.world.asset((zoom, c))
+            self.world.asset_at(World::composed, (zoom, c))
         } else {
             self.base.asset_about(&f.line, zoom, c)
         };
