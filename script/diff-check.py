@@ -163,15 +163,25 @@ for tree in ["ts/"]:
         runs.append((f"fmt {tree}", ["node_modules/.bin/prettier", "--check", *own], ROOT / tree))
 task("check-rules")
 
+# What the assembled shaders are made from: their sources, the words the build writes and
+# the crates those words and the Rust they translate come from.
+translated = [d for name, d in crate_dirs if name in ("pxl-engine", "pxl-content")]
+shaders = [
+    *translated,
+    "rust/client/render/src/frame/shader/",
+    "rust/client/render/build.rs",
+    "rust/client/render/src/param.rs",
+    "rust/client/render/src/look/",
+]
+
 # The tests of what the same selection reached.
 # The shader test compiles the shaders with Tint.
-if under("ts/client/") or under("ts/tool/shader/") or under("xpute/ts/") or under("rust/client/render/src/frame/shader/"):
+if under("ts/client/") or under("ts/tool/shader/") or under("xpute/ts/") or any(map(under, shaders)):
     task("test-ts")
 cargo("test-rust")
 # The GPU's tests hold the shaders written by hand to the Rust they translate,
 # so a change to either side is checked against the other.
-translated = [d for name, d in crate_dirs if name in ("pxl-engine", "pxl-content")]
-if any(map(under, [*translated, "rust/client/render/src/frame/shader/", "rust/client/render/tests/"])):
+if any(map(under, [*shaders, "rust/client/render/tests/"])):
     task("test-gpu")
 
 print(f"diff-check: {len(changed)} changed file(s); crates {', '.join(sorted(touched)) or 'none'}")
@@ -184,3 +194,7 @@ for label, argv, cwd in runs:
     if status != 0:
         print(f"diff-check: {label} failed", file=sys.stderr)
         sys.exit(status or 1)
+
+# What a browser's compiler and a phone's driver refuse, no test here can see.
+if not listing and any(map(under, shaders)):
+    print("diff-check: a shader changed; the probe in Safari is left to run (.agents/skills/shader)")
