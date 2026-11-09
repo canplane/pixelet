@@ -203,7 +203,7 @@ pub fn commit_draft() {
 /// Writes an AIR leaf, which means "nothing here, on purpose". Unlike
 /// `remove`, it also hides baked terrain, which has no leaf of its own to
 /// delete.
-pub fn place_air(at: Octant) {
+fn place_air(at: Octant) {
     write_object_val(at, cube::object::air as u32);
 }
 
@@ -218,12 +218,17 @@ fn erase_val(world: World, at: Octant) -> u32 {
     }
 }
 
-/// Erases what is placed at `at` and leaves the cell empty. Where the ground
+/// Erases what stands at `at`. Where nothing is placed there, what stands is
+/// the base's, which has no entry to delete, so AIR is written over it.
+/// Otherwise it erases what is placed and leaves the cell empty. Where the ground
 /// would fill the cell once the asset is gone, AIR is written, so an asset
 /// taken out of a hole leaves the hole. A generated decor that shared the
 /// asset's box comes back, because its erase is undone too.
 pub fn remove(at: Octant) {
     let world = World::now();
+    if world.entry_at(at).is_none() {
+        return place_air(at);
+    }
     let erased: Vec<[i32; 3]> = world
         .generated_over(&cube(at.zoom(), at.at()))
         .into_iter()

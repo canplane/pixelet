@@ -81,15 +81,18 @@ impl Pick {
         }
     }
 
-    /// What was struck, as a tool reads it: the placed object, or the decor
-    /// the ground generated and the leaf cell it stands in.
+    /// What was struck, as a tool reads it.
     pub(super) fn target(&self) -> Option<Target> {
-        if let HitKind::Decor(i) = self.hit.kind {
-            if let Some(cell) = i.generated_in() {
-                return Some(Target::Prop(cell, i));
-            }
+        match self.hit.kind {
+            HitKind::Decor(i) => Some(Target {
+                at: i.octant(),
+                decor: Some(i),
+            }),
+            _ => self.object().map(|o| Target {
+                at: o.id(),
+                decor: None,
+            }),
         }
-        self.object().map(|o| Target::Object(o.id()))
     }
 
     /// The corner a new cube of `zoom` takes flush against the face struck.

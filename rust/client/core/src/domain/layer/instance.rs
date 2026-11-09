@@ -43,10 +43,16 @@ impl Instance {
 
     /// The cell it stands in: the leaf cell the ground generated it in, or
     /// the cell of its entry for a placed one.
-    pub fn cell(&self) -> Aabb {
+    pub fn octant(&self) -> Octant {
         match self.src {
-            Source::Ground(cell) => cube(GROUND.leaf_cell_zoom(), cell),
-            Source::Object(e) => cube(e.zoom(), e.at()),
+            Source::Ground(cell) => Octant::new(GROUND.leaf_cell_zoom(), cell),
+            Source::Object(e) => e,
         }
+    }
+
+    /// `octant`'s cube.
+    pub fn cell(&self) -> Aabb {
+        let o = self.octant();
+        cube(o.zoom(), o.at())
     }
 }
