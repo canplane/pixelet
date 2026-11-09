@@ -234,31 +234,31 @@ pub mod STAT {
         pub const effects_p95: u32 = 34;
         pub const gpu_busy: u32 = 43;
         pub const gpu_busy_kinds: u32 = 46;
-        pub const phases_p95: u32 = 76;
-        pub const gpu_spans_p95: u32 = 81;
-        pub const gpu_spans_cnt: u32 = 119;
-        pub const kinds: u32 = 157;
-        pub const wakes: u32 = 167;
-        pub const gpu_px: u32 = 170;
-        pub const rays: u32 = 171;
-        pub const first: u32 = 191;
-        pub const last: u32 = 293;
-        pub const WORDS: u32 = 395;
+        pub const phases_p95: u32 = 73;
+        pub const gpu_spans_p95: u32 = 78;
+        pub const gpu_spans_cnt: u32 = 116;
+        pub const kinds: u32 = 154;
+        pub const wakes: u32 = 163;
+        pub const gpu_px: u32 = 166;
+        pub const rays: u32 = 167;
+        pub const first: u32 = 187;
+        pub const last: u32 = 289;
+        pub const WORDS: u32 = 391;
     }
     pub mod tasks {
-        pub const AT: u32 = 395;
+        pub const AT: u32 = 391;
         pub const slots: u32 = 0;
         pub const WORDS: u32 = 144;
     }
     pub mod steps {
-        pub const AT: u32 = 539;
+        pub const AT: u32 = 535;
         pub const cnt: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
     }
     /// What the frames held at the most or the least since the recording started, as the steps are timed, folded as each frame turn's record is taken (perf/record.rs `perf_fold_recording`): `frames` the frame turns folded; the heap's figures by their allocator's names (xpute-core mem/heap.rs `HeapStat`), the most of each but `largest_free`, the least, and `refusals` as it last stood; the door's rings' peaks and the body slots' (xpute-core ipc/door.rs `DoorStat`, sys/io/body.rs `take_peak`), `ring_left_peak` its `left_peak`; and `terrain_refusals` the terrain tiles the tile cache refused a slot, summed (domain/layer/tile_cache.rs `take_refusals`). Every word 0 before a frame is folded.
     pub mod recording {
-        pub const AT: u32 = 700;
+        pub const AT: u32 = 696;
         pub const frames: u32 = 0;
         pub const heap_live_max_bytes: u32 = 1;
         pub const heap_run_max_bytes: u32 = 2;
@@ -273,7 +273,7 @@ pub mod STAT {
         pub const terrain_refusals: u32 = 11;
         pub const WORDS: u32 = 12;
     }
-    pub const WORDS: u32 = 712;
+    pub const WORDS: u32 = 708;
 }
 
 /// What PERF_STATS finds as it reads, the window aside: each section's words at its AT, as STAT lays out its own. Every word an f64.

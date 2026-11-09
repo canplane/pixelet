@@ -38,8 +38,8 @@ use crate::frame::shelf::Atlas;
 use crate::gpu::api;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, device, frame_begin, frame_commit, gpu, on_device_lost,
-    pass_desc, release, sampler_entry, stream_free, texture_usage, view_entry, word_bytes, Device,
-    Entry, Format, Gpu, Group, Image, Load, RenderContext, TimestampWrites, TrackedRenderPass,
+    pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Device, Entry,
+    Format, Gpu, Group, Image, Load, RenderContext, TimestampWrites, TrackedRenderPass,
     WORLD_COLOR,
 };
 use crate::gpu::draw::{drifts, uniform_of, Draw, DrawTable, Position};
@@ -1864,21 +1864,6 @@ fn carry_edits(cast: &Option<Cast>) {
 /// lists are recorded for the frame that has both.
 pub fn render_frame(input: FrameInput) -> FrameOutput {
     REDRAW.set(false);
-    // While the runtime has not handed the stream back, nothing is recorded
-    // and the frame comes again (xpute_core ipc/stream.rs R3).
-    if !stream_free() {
-        carry_edits(&input.cast);
-        if take_lists(None, &input.update) {
-            if let Some(r) = RENDERER.get(|| None).as_mut() {
-                r.put_off();
-            }
-        }
-        return FrameOutput {
-            kind: FrameKind::stream_busy,
-            redraw: true,
-            stat: None,
-        };
-    }
     let world = surfaces().find(|s| s.role == surface_role::WORLD);
     let (Some(g), Some(device), Some(world)) = (gpu(), device(), world) else {
         carry_edits(&input.cast);

@@ -58,7 +58,6 @@ export const LIGHT_CHANGED = [
 export const FRAME_KINDS = [
   "none",
   "unready",
-  "stream_busy",
   "dropped",
   "plain",
   "still",
