@@ -20,7 +20,7 @@ constexpr std::uint32_t mix32(std::uint32_t x) noexcept {
     return z ^ z >> 16;
 }
 
-constexpr std::uint32_t derive_seed_u32(std::uint32_t base, std::uint32_t tag) noexcept {
+constexpr std::uint32_t seed_mix32(std::uint32_t base, std::uint32_t tag) noexcept {
     return mix32(base ^ tag);
 }
 

@@ -13,7 +13,7 @@ fn matches_record() {
         let seed = v.u32(&format!("{k}.seed"));
         assert_eq!(mix32(seed), v.u32(&format!("{k}.mix32")), "{k}.mix32");
         assert_eq!(
-            derive_seed_u32(seed, 77),
+            seed_mix32(seed, 77),
             v.u32(&format!("{k}.derive")),
             "{k}.derive"
         );

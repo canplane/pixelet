@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 
 import { Golden } from "@xpute/kit/golden.ts";
 import {
-  derive_seed_u32,
+  seed_mix32,
   make_rng32,
   mix32,
   u32_to_unit,
@@ -22,7 +22,7 @@ test("rng32 computes what the record holds", async () => {
     const seed = v.u32(`${k}.seed`);
     assert.deepStrictEqual(mix32(seed), v.u32(`${k}.mix32`), `${k}.mix32`);
     assert.deepStrictEqual(
-      derive_seed_u32(seed, 77),
+      seed_mix32(seed, 77),
       v.u32(`${k}.derive`),
       `${k}.derive`,
     );

@@ -13,7 +13,7 @@ fn matches_record() {
         let seed = v.u64(&format!("{k}.seed"));
         assert_eq!(mix64(seed), v.u64(&format!("{k}.mix64")), "{k}.mix64");
         assert_eq!(
-            derive_seed_u64(seed, 77),
+            seed_mix64(seed, 77),
             v.u64(&format!("{k}.derive")),
             "{k}.derive"
         );

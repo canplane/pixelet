@@ -11,7 +11,7 @@ fn row_word(k: u32, at: u32) -> u32 {
 
 /// `SplitMix32`'s `n`-th draw off `seed`.
 fn draw(seed: u32, n: u32) -> u32 {
-  return seed_mix(seed + n * SEED_SALT, 0u);
+  return seed_mix32(seed + n * SEED_SALT, 0u);
 }
 
 /// This is the port of pxl-content `scatter::mul_hi`.

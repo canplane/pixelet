@@ -16,7 +16,7 @@
 use pxl_engine::seed::node_seed;
 use pxl_spec::share::FULL;
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
-use xpute_kit::math::rng::derive_seed_u32;
+use xpute_kit::math::rng::seed_mix32;
 
 use crate::halve::{halve, weight};
 use crate::param::cave::{BLOCKS_A_TUNNEL, NUDGE, ROOT_TUNNELS};
@@ -120,7 +120,7 @@ fn child_of(o: [i32; 3], half: i32, p: [i32; 3]) -> u32 {
 fn spawn(node: (Zoom, [i32; 3]), k: usize) -> Piece {
     let (o, s) = bounds(node);
     let h = node_seed(SPAWN_TAG, node);
-    let g = derive_seed_u32(h, 1);
+    let g = seed_mix32(h, 1);
     if s < 4 {
         // Two pipe cells a side: from a cell picked by hash to the far corner, up or down as well.
         let e = [
@@ -256,7 +256,7 @@ fn hand_down(node: (Zoom, [i32; 3]), p: Piece, want: u32) -> (Piece, u32) {
             let nk = walk_at(u, v, wh, i + 1);
             let axis = (k ^ nk).trailing_zeros();
             let up = nk >> axis & 1 == 1;
-            let h = derive_seed_u32(node_seed(CROSS_TAG, node), i);
+            let h = seed_mix32(node_seed(CROSS_TAG, node), i);
             let mut j = 0;
             while j < 3 {
                 let v = (cur[j] + p.leave[j]) / 2
@@ -331,7 +331,7 @@ fn tunnels_down(
         let r = cap(k, child);
         let mut n = tunnels[k];
         let h = if n > 0 {
-            derive_seed_u32(node_seed(SPLIT_TAG, node), k as u32)
+            seed_mix32(node_seed(SPLIT_TAG, node), k as u32)
         } else {
             0
         };
@@ -419,7 +419,7 @@ fn key(a: [i32; 3], ab: [i32; 3], l: i32, h: u32, b: u32) -> i32 {
     } else {
         pp * l - t * t
     };
-    d + (derive_seed_u32(h, b) % NUDGE) as i32 * if l == 0 { 1 } else { l }
+    d + (seed_mix32(h, b) % NUDGE) as i32 * if l == 0 { 1 } else { l }
 }
 
 /// Side `side`'s middle in a pipe cell, in eighths of a unit from its

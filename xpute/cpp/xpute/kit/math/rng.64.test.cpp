@@ -14,7 +14,7 @@ XPUTE_TEST(rng_matches_record) {
     v.each("", [&v](const std::string &k) {
         std::uint64_t seed = v.u64(k + ".seed");
         XPUTE_CHECK_EQ(mix64(seed), v.u64(k + ".mix64"), (k + ".mix64").c_str());
-        XPUTE_CHECK_EQ(derive_seed_u64(seed, 77), v.u64(k + ".derive"), (k + ".derive").c_str());
+        XPUTE_CHECK_EQ(seed_mix64(seed, 77), v.u64(k + ".derive"), (k + ".derive").c_str());
         SplitMix64 stream(seed);
         v.each(k + ".draws", [&](const std::string &d) {
             std::uint32_t got = stream.next_u32();

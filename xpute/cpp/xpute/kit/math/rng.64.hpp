@@ -18,7 +18,7 @@ constexpr std::uint64_t mix64(std::uint64_t x) noexcept {
     return z ^ z >> 31;
 }
 
-constexpr std::uint64_t derive_seed_u64(std::uint64_t base, std::uint64_t tag) noexcept {
+constexpr std::uint64_t seed_mix64(std::uint64_t base, std::uint64_t tag) noexcept {
     return mix64(base ^ tag);
 }
 
