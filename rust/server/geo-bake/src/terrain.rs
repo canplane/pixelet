@@ -14,8 +14,7 @@ use pxl_spec::bake::tile::max_pkt_bytes;
 use pxl_spec::bake::tile::terrain::{self, TerrainTile};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::units;
-use pxl_spec::space::layer::lattice::Lattice;
-use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::quadrant::{neighborhood, Quadrant};
 
 /// The ground cell's side: what the raster, the separation's lines and a height count in.

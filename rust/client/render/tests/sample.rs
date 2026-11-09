@@ -13,6 +13,7 @@
 mod gpu;
 mod real_world;
 
+use pxl_spec::share::{EIGHTHS, FILL_BITS};
 use std::collections::{BTreeMap, BTreeSet};
 
 use gpu::{
@@ -22,15 +23,18 @@ use gpu::{
 use pxl_engine::answer::{self, Kind};
 use pxl_engine::beam::{self, Grid};
 use pxl_engine::cast::{self, Detail, End, Keep, Node, Ray, Spacing, Trace, Until, DEPTH};
-use pxl_engine::grid::CELL;
 use pxl_engine::light::{self, Light, StartGrid};
 use pxl_engine::node_cache;
 use pxl_engine::object::Cut;
 use pxl_engine::param;
 use pxl_engine::world::Inheritance;
-use pxl_engine::{eye, raster, ray, record, value, Zoom, FRAC_W, LEAF_CELL_ZOOM};
+use pxl_engine::{eye, raster, ray, record};
 use pxl_render::frame::shader::record::{src, SHADER_CELL, SHADER_LIGHT_CELL};
 use pxl_render::frame::shader::word::SHADOW_SIZE;
+use pxl_spec::space::camera::grid::CELL;
+use pxl_spec::space::coord::q3::FRAC_W;
+use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
+use pxl_spec::value;
 
 use real_world::{q8, store_of, truth, Asking, Built, World, WorldBuffer, FINEST};
 
@@ -1971,8 +1975,8 @@ fn boxes_want(
         // product is exact, as a node's side, a power of two, times `by` is. The test fails
         // where an inset's product rounds, so that the planes can be compared word for word.
         let eighths = answer::fill_eighths(asset);
-        if eighths != answer::EIGHTHS {
-            let whole = asset & !(((1 << answer::FILL_BITS) - 1) << answer::FILL_SHIFT);
+        if eighths != EIGHTHS {
+            let whole = asset & !(((1 << FILL_BITS) - 1) << answer::FILL_SHIFT);
             let (node_lo, node_hi) = cast::asset_box(origin, &cell, whole);
             let by = 0.5 * (1.0 - answer::side(eighths));
             for a in 0..3 {
@@ -2021,7 +2025,7 @@ fn boxes_want(
         add("boxes, lacks", lacks);
         add(
             "boxes, short of its cube",
-            answer::fill_eighths(asset) < answer::EIGHTHS,
+            answer::fill_eighths(asset) < EIGHTHS,
         );
         add("boxes, in another root", cell.roots != [0; 3]);
         want.insert(key, w);
@@ -2102,7 +2106,7 @@ fn light_record_case(
         kind_cnt.add("voxels, in another root", n.roots != [0; 3]);
         kind_cnt.add(
             "voxels, short of its cube",
-            answer::fill_eighths(asset[0]) < answer::EIGHTHS,
+            answer::fill_eighths(asset[0]) < EIGHTHS,
         );
     }
     let mut args = vec![0u32; raster::ARGS_WORDS as usize];

@@ -4,7 +4,7 @@
 //! one. The objects are all resident, so what the world knows is what the
 //! ground knows.
 
-use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
 
 use pxl_spec::space::layer::octant::Octant;
@@ -16,7 +16,6 @@ use crate::domain::layer::tile_cache::{Path, TileCache};
 use crate::domain::layer::Answer;
 use crate::domain::layer::Base as _;
 use pxl_engine::clipmap::FIRST_CELL_ZOOM;
-use pxl_engine::LEAF_CELL_ZOOM;
 use pxl_spec::asset::decor::DECORS;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::aabb::Aabb;

@@ -162,17 +162,13 @@ const SCENE_OWN: u8 = 6;
 /// the world's fields, the query over them (ARCHITECTURE.md, "The query, the
 /// only seam"), and what asks it. A layer knows no query, and the query no
 /// asker.
-const ENGINE: &str = "rust/spec/engine/src/";
-const ENGINE_ORDER: [(&str, u8); 25] = [
+const ENGINE: &str = "rust/client/engine/src/";
+const ENGINE_ORDER: [(&str, u8); 21] = [
     ("param", 0),
     ("seed", 0),
     ("content", 0),
-    ("value", 0),
-    ("lattice", 0),
-    ("grid", 0),
     ("answer", 0),
     ("count", 0),
-    ("area", 1),
     ("ground", 1),
     ("clipmap", 1),
     ("way", 1),
@@ -191,14 +187,49 @@ const ENGINE_ORDER: [(&str, u8); 25] = [
     ("face", 3),
 ];
 
-/// pxl-content's order: its parameters, then its palette and the one rule by which a count
-/// is handed down, then its rules and fields, then the decor's generation over its scatter.
-const CONTENT: &str = "rust/spec/content/src/";
-const CONTENT_ORDER: [(&str, u8); 9] = [
-    ("param", 0),
+/// pxl-spec's order: what stands on nothing; the space; what a tile's cells hold and what the
+/// catalog is; the ways a column makes over them; a brick over the ways, and a tile's place;
+/// and the bake's formats on top.
+const SPEC: &str = "rust/spec/src/";
+const SPEC_ORDER: [(&str, u8); 16] = [
+    ("value", 0),
     ("share", 0),
-    ("cube", 0),
-    ("decor", 0),
+    ("directory", 0),
+    ("division", 0),
+    ("division_spec", 0),
+    ("route", 0),
+    ("search", 0),
+    ("space", 1),
+    ("param", 2),
+    ("ground", 2),
+    ("asset", 2),
+    ("object", 3),
+    ("way", 3),
+    ("brick", 4),
+    ("procedural", 4),
+    ("bake", 5),
+];
+
+/// The space's own order (space.rs): positions, the hierarchy and the camera over them, and
+/// how a layer's tiles map onto those.
+const SPACE_ORDER: [(&str, u8); 4] = [("coord", 0), ("hierarchy", 1), ("camera", 1), ("layer", 2)];
+
+/// A layer's own order (space/layer.rs): where its data ends and its nodes' names, the pyramid
+/// of tiles, the lattice of cells placed on it, and the demand over them.
+const LAYER_ORDER: [(&str, u8); 5] = [
+    ("area", 0),
+    ("octant", 0),
+    ("quadrant", 1),
+    ("lattice", 2),
+    ("demand", 3),
+];
+
+/// pxl-content's order: its parameters and the one rule by which a count is handed down,
+/// then its rules and fields, then the decor's generation over its scatter.
+const CONTENT: &str = "rust/client/content/src/";
+const CONTENT_ORDER: [(&str, u8); 7] = [
+    ("param", 0),
+    ("halve", 0),
     ("cave", 1),
     ("strata", 1),
     ("cloud", 1),
@@ -328,7 +359,7 @@ const TSCONFIG: &str = "ts/tsconfig.json";
 
 /// Every order held. A folder whose root holds only its modules gives the root's own items a
 /// level above all of them, so no part reaches back to it.
-const ORDERS: [Order; 15] = [
+const ORDERS: [Order; 18] = [
     Order {
         root: CORE,
         path: "crate",
@@ -349,6 +380,30 @@ const ORDERS: [Order; 15] = [
         root: CONTENT,
         path: "crate",
         levels: &CONTENT_ORDER,
+        heads: &[],
+        beside: &[],
+        own: None,
+    },
+    Order {
+        root: SPEC,
+        path: "crate",
+        levels: &SPEC_ORDER,
+        heads: &[],
+        beside: &[],
+        own: None,
+    },
+    Order {
+        root: "rust/spec/src/space/",
+        path: "crate::space",
+        levels: &SPACE_ORDER,
+        heads: &[],
+        beside: &[],
+        own: None,
+    },
+    Order {
+        root: "rust/spec/src/space/layer/",
+        path: "crate::space::layer",
+        levels: &LAYER_ORDER,
         heads: &[],
         beside: &[],
         own: None,

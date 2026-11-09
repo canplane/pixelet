@@ -10,12 +10,12 @@
 //! the world as edited, takes it away (pxl-content `generation::placement`).
 
 use pxl_content::generation::{self, DecorQuery, Prop};
+use pxl_content::scatter::scatter_at;
 use pxl_engine::support::ColumnSurface;
 use pxl_engine::world::PlacedCursor;
-use pxl_engine::FRAC_W;
 use pxl_spec::asset::cube::sentinel;
-use pxl_spec::asset::decor::Decor;
-use pxl_spec::procedural::scatter_at;
+use pxl_spec::asset::decor::{self, Decor};
+use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::GROUND;
 
@@ -24,7 +24,6 @@ use super::world::World;
 use crate::domain::layer::instance::{Instance, Source};
 use crate::domain::layer::object::store;
 use crate::domain::layer::Answer;
-use pxl_content::decor;
 
 /// The world as decor's generation asks it on the CPU (pxl-engine
 /// `DecorQuery`): the world's one query, both unplaced (`ground`, the ground
@@ -52,8 +51,8 @@ impl<'a, 'w> DecorWorld<'a, 'w> {
 impl DecorQuery for DecorWorld<'_, '_> {
     type ColumnSurface = ColumnSurface<At>;
 
-    fn rows(&self) -> &[decor::Decor] {
-        &decor::DECORS
+    fn rows(&self) -> &[decor::Row] {
+        &decor::ROWS
     }
 
     /// The column's surface and its top, with false when the world lacked a

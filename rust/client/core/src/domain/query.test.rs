@@ -6,32 +6,32 @@
 use pxl_spec::asset::cube::{self, ground, sentinel};
 use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
-use pxl_spec::bake::tile::terrain::GroundCells;
+use pxl_spec::bake::tile::terrain::{GroundCells, GroundId, TerrainTile, GROUND_COLUMN};
+use pxl_spec::space::coord::zoom::{idx_of, units, Zoom, LEAF_ZOOM, MIN_ZOOM, UNIT_ZOOM};
 use pxl_spec::space::layer::lattice::{Grid, GROUND, TILE_CELLS};
 
 use super::*;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::Answer;
-use pxl_spec::bake::tile::terrain::{GroundId, TerrainTile, GROUND_COLUMN};
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM, MIN_ZOOM};
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::domain::layer::object::store::Store;
 use crate::domain::layer::tile_cache::TileCache;
-use pxl_spec::space::coord::zoom::{idx_of, units, Zoom};
 
 use crate::domain::layer::object::store::Write;
 use crate::domain::layer::terrain::clipmap::test;
 use crate::sys::serial;
-use pxl_engine::area::{self, Area};
 use pxl_engine::world::placed_in;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::bake::separation::Separation;
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::hierarchy::morton;
+use pxl_spec::space::layer::area;
+use pxl_spec::space::layer::area::Area;
 
 const CELLS: usize = GROUND_COLUMN;
 const SPAN: usize = TILE_CELLS as usize;
@@ -336,7 +336,8 @@ fn ray_from_above_meets_ground() {
 #[test]
 fn dig_met_as_folded() {
     use crate::domain::layer::object::store::AIR;
-    use pxl_engine::answer::{side, EIGHTHS};
+    use pxl_engine::answer::side;
+    use pxl_spec::share::EIGHTHS;
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let half = units(OBJECT_COARSEST + 1);
@@ -634,7 +635,7 @@ fn reading_reports_columns() {
 #[test]
 fn box_placed_matches_store() {
     let _g = serial();
-    let unit = pxl_engine::UNIT_ZOOM;
+    let unit = UNIT_ZOOM;
     let mut store = Store::default();
     let corners: [V3; 5] = [
         [3.0, 4.0, 5.0],
@@ -688,8 +689,10 @@ fn box_placed_matches_store() {
 fn late_brick_spike() {
     use crate::domain::layer::terrain::clipmap::test::{hand, unland};
     use crate::domain::layer::terrain::clipmap::CpuClipmap;
-    use pxl_engine::clipmap::{self as cells, BrickSource, Lookup, BRICK, BRICK_MIPS, CLIP_SIZE};
-    use pxl_engine::LEAF_CELL_ZOOM;
+    use pxl_engine::clipmap as cells;
+    use pxl_engine::clipmap::{BrickSource, Lookup, BRICK_MIPS, CLIP_SIZE};
+    use pxl_spec::brick::BRICK;
+    use pxl_spec::space::coord::zoom::LEAF_CELL_ZOOM;
     let _g = serial();
     let leaf = top().children()[0];
     let mut heights = vec![5; CELLS];
@@ -768,9 +771,11 @@ fn late_brick_spike() {
 #[test]
 fn device_loss_drops_bounds() {
     use crate::domain::layer::terrain::clipmap::{test::lose, CpuClipmap};
-    use pxl_engine::clipmap::{self as cells, BrickSource, Lookup, BRICK, BRICK_MIPS};
+    use pxl_engine::clipmap as cells;
+    use pxl_engine::clipmap::{BrickSource, Lookup, BRICK_MIPS};
     use pxl_engine::ground::UNBOUNDED;
-    use pxl_engine::LEAF_CELL_ZOOM;
+    use pxl_spec::brick::BRICK;
+    use pxl_spec::space::coord::zoom::LEAF_CELL_ZOOM;
     let _g = serial();
     let _flat = flat_at_five();
     let (first, _) = CpuClipmap.origin(LEAF_CELL_ZOOM);
@@ -882,8 +887,8 @@ fn generated_decor_edit_removes() {
 #[test]
 fn generated_decor_struck_where_generated() {
     use pxl_engine::clipmap::FIRST_CELL_ZOOM;
-    use pxl_engine::LEAF_CELL_ZOOM;
     use pxl_spec::asset::decor::DECORS;
+    use pxl_spec::space::coord::zoom::LEAF_CELL_ZOOM;
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let empty = Store::default();
@@ -942,7 +947,7 @@ impl Area for EastOf {
         true
     }
     fn nine(&self, key: u32) -> u32 {
-        use pxl_engine::SHARD_ZOOM;
+        use pxl_spec::space::coord::zoom::SHARD_ZOOM;
         // This undoes `area::shard_key`, which interleaves X's and Y's bits.
         let mut c = [0i32; 2];
         for b in 0..SHARD_ZOOM {
@@ -958,7 +963,7 @@ impl Area for EastOf {
 /// and a cell past it are neither (`World::within`, `World::editable`).
 #[test]
 fn area_edge_leaf_cell_thick() {
-    use pxl_engine::SHARD_ZOOM;
+    use pxl_spec::space::coord::zoom::SHARD_ZOOM;
     let _g = serial();
     let s = LEAF_ZOOM - SHARD_ZOOM;
     // The westmost leaf of a served shard whose west neighbor is not served.

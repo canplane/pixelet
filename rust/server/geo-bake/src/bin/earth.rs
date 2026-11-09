@@ -20,7 +20,7 @@
 //!
 //!   make bake-earth
 
-use pxl_spec::space::layer::lattice::Grid;
+use pxl_spec::space::layer::lattice::{Grid, GROUND, TILE_CELLS};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -33,8 +33,6 @@ use pxl_spec::bake::publication::{FORMAT, TILE_SPHERE};
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3;
-use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 /// What it reads, and where `make download-earth` keeps it.

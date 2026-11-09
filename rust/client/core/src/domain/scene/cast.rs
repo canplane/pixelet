@@ -21,7 +21,7 @@ use pxl_spec::space::layer::octant::Octant;
 /// `declare`), so the index is built once before that and once after.
 static SHARDS: Global<(bool, Vec<[i32; 4]>)> = Global::new();
 
-/// The service area (pxl-engine `area::Area`) in rows of four words. The word
+/// The service area (pxl-spec `area::Area`) in rows of four words. The word
 /// at a cell's key (`area::shard_key`) holds that cell's nine: which of the
 /// nine cells about it are served. Before a source is declared the index is
 /// one row of zeros, because a GPU binding cannot be empty, and a read past

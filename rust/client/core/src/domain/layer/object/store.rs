@@ -3,12 +3,12 @@
 //! The object layer's store: placed objects, kept as their one record. Each
 //! leaf holds its catalog value at its node and the handle of the record it
 //! carries beyond that value (ext.rs). The leaves live in one sparse tree
-//! over the world (pxl-spec space/hierarchy/sparse_tree.rs), whose root is
+//! over the world (sparse_tree.rs), whose root is
 //! the world, a node of zoom 0. A write arrives as `<key, id, ext>`, keyed by
 //! its node's Morton key (pxl-spec `morton::key_of`).
 //!
-//! Each branch's slot holds its children folded into one word (pxl-spec
-//! object/volume.rs `fold`), and every write folds again up its path, so a
+//! Each branch's slot holds its children folded into one word
+//! (volume.rs `fold`), and every write folds again up its path, so a
 //! node at any zoom can be read through a descent's cursor (`Store::cursor`,
 //! `Store::child`).
 //!
@@ -20,6 +20,9 @@
 //! source gives, with empty children (`set_fold`), until the shard's leaves
 //! take its place.
 
+use pxl_spec::space::coord::zoom::{
+    base_of, cube, units, y_start, z_start, Zoom, CUBE_ZOOM, SHARD_ZOOM,
+};
 use xpute_core::global::Global;
 
 use crate::domain::layer::object::asset::Asset;
@@ -28,21 +31,20 @@ use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::world::{node_near, wrap_cell};
-use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom, CUBE_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::node_of;
-use pxl_spec::space::hierarchy::sparse_tree::SparseTree;
 use pxl_spec::space::hierarchy::tree::{child_idx, region, Node};
 use pxl_spec::space::layer::octant::Octant;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::domain::layer::object::ext::{Ext, Pool, NONE};
+use crate::domain::layer::object::sparse_tree::SparseTree;
+use crate::domain::layer::object::volume::fold;
 use crate::sys::sched::edge::request_world_tick;
 use pxl_engine::object::{self, path, NodeSlot};
 use pxl_render::gpu::api;
 use pxl_render::ray::ObjectTable;
 use pxl_spec::object::ext::class_of;
-use pxl_spec::object::volume::fold;
 
 /// A leaf as an asker meets it: its cube, with its X index taken in the
 /// asker's frame since X wraps around the world, its catalog value, and the
@@ -697,9 +699,8 @@ impl Store {
                 Some(o) => {
                     for i in walk.start(o)..walk.at[o].end {
                         let (at, h) = walk.slots[i];
-                        let z = 2 * (at[2] + object::z_start(k as Zoom - 1))
-                            - object::z_start(k as Zoom);
-                        let y = c[1] - object::y_start(k as Zoom);
+                        let z = 2 * (at[2] + z_start(k as Zoom - 1)) - z_start(k as Zoom);
+                        let y = c[1] - y_start(k as Zoom);
                         for child in [z, z + 1].map(|z| [c[0], y, z]) {
                             visit(
                                 &mut walk.slots,

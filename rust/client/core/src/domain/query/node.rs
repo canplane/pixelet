@@ -47,17 +47,17 @@
 
 use pxl_content::Pixelet;
 use pxl_engine::answer::{In, Kind};
-use pxl_engine::area::{Area, Shard};
 use pxl_engine::clipmap::{self, Lookup};
-use pxl_engine::ground::VOID;
 use pxl_engine::ground::{self, Cell};
 use pxl_engine::object::{child_at, Cut};
 use pxl_engine::world;
-use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::ground::VOID;
+use pxl_spec::space::coord::zoom::{Zoom, MIN_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
+use pxl_spec::space::layer::area::{Area, Shard};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::octant::Octant;
-use pxl_spec::space::layer::quadrant::{Quadrant, MIN_ZOOM};
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 use super::world::World;
 use crate::domain::layer::terrain::clipmap::CpuClipmap;

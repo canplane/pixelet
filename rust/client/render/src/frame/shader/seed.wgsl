@@ -3,9 +3,9 @@
 // The seeds every random draw over the world's nodes starts from, and the rule by which a count
 // is handed down a pyramid. Each function computes bit for bit what its Rust twin computes, so
 // the GPU draws what the CPU draws (pxl-engine seed.rs, xpute-kit `derive_seed_u32`,
-// pxl-content share.rs).
+// pxl-content halve.rs).
 
-/// The twin of pxl-engine `wrap_idx`.
+/// The twin of pxl-spec `wrap_idx`.
 fn wrap_idx(zoom: u32, x: i32) -> i32 {
   if (zoom == 0u) {
     return 0i;
@@ -36,7 +36,7 @@ fn rotl(v: u32, s: u32) -> u32 {
   return (v << (s & 31u)) | (v >> ((32u - s) & 31u));
 }
 
-/// The twin of pxl-content `share::halve`, with its two caps passed apart.
+/// The twin of pxl-content `halve::halve`, with its two caps passed apart.
 fn halve(n: u32, cap_0: u32, cap_1: u32, w: u32) -> u32 {
   let scaled = n * (w >> 16u);
   let part = (scaled >> 16u) + u32((scaled & 0xffffu) > (w & 0xffffu));

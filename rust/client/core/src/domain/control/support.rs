@@ -18,7 +18,7 @@ use crate::domain::layer::Answer;
 use crate::domain::query::World;
 use crate::domain::setting::store::settings;
 use crate::domain::view::frame::coord::{to_world, world_to_canonical};
-use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
+use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 
 /// Where the pivot stands for the cell center `at`, such as the center of
 /// the cell across the face a tap struck. It stands on the floor under that

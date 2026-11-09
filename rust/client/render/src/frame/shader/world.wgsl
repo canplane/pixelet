@@ -1,11 +1,11 @@
 // pxl-render/world.wgsl
 
-// The world's one query, written by hand (pxl-engine world.rs `node`). It reads, and never
-// writes, what the Rust side wrote: the clip levels, their bricks, the service area's index,
-// what is placed and the ways' pool. It answers word for word as the Rust does
-// (tests/world.rs). The code keeps to scoped locals and small structs: no array, no atomic,
-// and nothing held across a loop beyond what is read after it. It works in integers alone: a
-// height a word holds is exact through `ground::top`'s floats, so `top_of` is its integer form.
+// The world's one query, written by hand (pxl-engine world.rs `node`). It reads, and never writes,
+// what the Rust side wrote: the clip levels, their bricks, the service area's index, what is placed
+// and the ways' pool. It answers word for word as the Rust does (tests/world.rs). The code keeps to
+// scoped locals and small structs: no array, no atomic, and nothing held across a loop beyond what
+// is read after it. It works in integers alone: a height a word holds is exact through pxl-spec
+// `ground::top`'s floats, so `top_of` is its integer form.
 //
 // What a node hands down is a `vec3<u32>` laid out as pxl-engine `Inheritance::words`: what is
 // placed, the node's shard, and where its ground's cells were held. A cut is a `vec4<i32>` as
@@ -15,7 +15,7 @@
 @group(0) @binding(5) var<storage, read> shards: array<vec4<u32>>;
 @group(0) @binding(6) var<storage, read> objects: array<u32>;
 
-// Values and fills, as pxl-engine value.rs and answer.rs state them.
+// Values and fills, as pxl-spec value.rs and share.rs and pxl-engine answer.rs state them.
 
 fn fills(asset: u32) -> bool {
   let v = asset & VAL_MASK;
@@ -36,7 +36,7 @@ fn cover(under_fill: u32, kind: u32, over: u32) -> Cover {
   return Cover(select(under_fill - over_eighths, 0u, over_eighths > under_fill), false);
 }
 
-/// The palette index `v` as all four of a cell word's palette indices, one a byte (pxl-engine
+/// The palette index `v` as all four of a cell word's palette indices, one a byte (pxl-spec
 /// `ground::word`).
 fn four_of(v: u32) -> u32 {
   return v | (v << 8u) | (v << 16u) | (v << 24u);
@@ -164,9 +164,9 @@ fn placed_four(s: u32, hide: vec4<i32>, zoom: u32, at: vec3<i32>, v: u32) -> u32
   return word;
 }
 
-// The service area and the clip levels, as pxl-engine area.rs and clipmap.rs read them.
+// The service area and the clip levels, as pxl-spec area.rs and pxl-engine clipmap.rs read them.
 
-/// The twin of pxl-engine `Shard::at` where the area's end is known, as it always is on the
+/// The twin of pxl-spec `Shard::at` where the area's end is known, as it always is on the
 /// GPU.
 fn shard_at(shard: u32, zoom: u32, c: vec2<i32>) -> u32 {
   if ((shard & SHARD_KNOWN) != 0u || zoom < SHARD_ZOOM) {

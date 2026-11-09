@@ -23,11 +23,11 @@ use fnv::{FnvHashMap, FnvHashSet};
 use std::collections::BTreeMap;
 
 use crate::terrain::CELL_U;
-use pxl_engine::param::way::STACKED_DECK_HEADROOM_M;
-use pxl_engine::way;
 use pxl_spec::bake::separation::Form;
+use pxl_spec::param::way::STACKED_DECK_HEADROOM_M;
 use pxl_spec::space::coord::adapter::epsg3857::{merc_from_u, u_from_merc};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
+use pxl_spec::way;
 use xpute_kit::math::scalar::round;
 
 use crate::segment::{End, PartId};
@@ -258,7 +258,7 @@ fn crosses(heading: [f64; 2], o: &Obstacle) -> bool {
 }
 
 /// Whether obstacle `o`'s way covers point `p`, as the client's way covers a
-/// column (pxl-engine `way::on_way`), its points and width in eighths of a
+/// column (`way::on_way`), its points and width in eighths of a
 /// cell (`way::eighths`).
 fn covers(o: &Obstacle, p: [f64; 2]) -> bool {
     let at = |v: [f64; 2]| v.map(way::eighths);
@@ -339,7 +339,7 @@ fn side_by_side(a: &Stretch, b: &Stretch, scale: Scale) -> bool {
         return false;
     }
     let same = effective_layer(a) == effective_layer(b);
-    // Their edges meet where each way's cover ends (pxl-engine `half_width`).
+    // Their edges meet where each way's cover ends (pxl-spec `way::half_width`).
     let half_width = |r: &Stretch| f64::from(way::half_width((r.width_u / CELL_U) as f32));
     let touching = half_width(a) + half_width(b) + f64::from(scale.c(SIDE_DECK_EDGE_GAP_M));
     let max = if same {

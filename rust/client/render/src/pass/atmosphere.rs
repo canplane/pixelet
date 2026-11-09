@@ -12,13 +12,11 @@
 
 use core::ops::Range;
 
-use pxl_engine::HEIGHT_BITS;
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
-use pxl_spec::procedural::height_u_per_m;
+use pxl_spec::space::coord::adapter::epsg3857::height_u_per_m;
+use pxl_spec::space::coord::world::{around, HEIGHT_BITS};
 use pxl_spec::space::layer::demand::{GROUND_DEMAND_ACROSS, GROUND_DEMAND_TILES};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
-
-use pxl_spec::space::coord::world::around;
 
 use crate::frame::shader::record::{
     binds, COMPUTE, COMPUTE_ATMOS_EXPOSURE, COMPUTE_ATMOS_FROXEL, PIPELINE_ATMOS_IRRADIANCE,
@@ -886,7 +884,7 @@ fn alt_sample(alt: f32) -> f32 {
 /// depth law, in km. The near end is how far the eye stands above the world's top, and 0 while
 /// the eye stands within the world. The world's top is the greatest Z a position holds,
 /// `HEIGHT_BITS` bits about sea level, taken in metres where a unit is longest, at the
-/// equator (pxl-spec procedural.rs `height_u_per_m`). So an eye high over the world spends no
+/// equator (pxl-spec 3857.rs `height_u_per_m`). So an eye high over the world spends no
 /// slice on the empty air under it, whatever latitude a unit is measured at. The far end is
 /// how far a ray from the eye runs, past the horizon, to where it leaves the air.
 fn view_layout(alt: f32) -> [f32; 3] {

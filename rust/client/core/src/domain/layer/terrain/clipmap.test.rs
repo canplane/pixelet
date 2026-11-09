@@ -8,11 +8,13 @@ use super::*;
 use crate::domain::layer::terrain::pool::{exhaust, set_way_pool, WayPool};
 use crate::sys;
 use pxl_engine::fill;
-use pxl_engine::ground::word;
-use pxl_engine::value::TRANSPORTS;
-use pxl_engine::way::{way_cell, BRIDGE};
+use pxl_engine::way::way_cell;
 use pxl_spec::bake::separation::{self, Separation};
 use pxl_spec::bake::tile::terrain::{self, GroundId};
+use pxl_spec::brick;
+use pxl_spec::ground::word;
+use pxl_spec::value::TRANSPORTS;
+use pxl_spec::way::BRIDGE;
 
 /// A tile as `hold` takes it: for each cell, row by row from the first, its
 /// own palette index and its height; then the tile's lines.
@@ -147,13 +149,13 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
         };
         let side = GROUND.tile_cells();
         let at = |k: u32| {
-            let [x, y] = clipmap::of_idx(k);
+            let [x, y] = brick::of_idx(k);
             ((place[1] * BRICK + y) * side + place[0] * BRICK + x) as usize
         };
         let mut pairs = Vec::new();
         let segments = brick_pairs(separation, place, &mut pairs).unwrap();
         let cnt = pairs.len();
-        let mut lines = vec![0; clipmap::lines_words(cnt as u32, segments) as usize];
+        let mut lines = vec![0; brick::lines_words(cnt as u32, segments) as usize];
         if cnt != 0 {
             brick_lines(t, separation, &mut pairs, &mut lines);
         }
@@ -165,7 +167,7 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
             palette_idxs: |k: u32| word([u32::from(palette_of[at(k)]); 4]),
             height: |c: [i32; 2]| {
                 i32::from(
-                    heights[at(clipmap::idx_of([
+                    heights[at(brick::idx_of([
                         c[0].clamp(0, BRICK as i32 - 1) as u32,
                         c[1].clamp(0, BRICK as i32 - 1) as u32,
                     ]))],
@@ -211,7 +213,7 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
 /// `back`, and the spans of its columns and of its ring, from its lines
 /// (`fill::keep`), go into `scratch`.
 fn fill_columns(
-    sq: &impl clipmap::Brick,
+    sq: &impl brick::Brick,
     top: impl Fn(u32) -> i32,
     back: &mut [u32],
     scratch: &mut [u32],
@@ -360,18 +362,18 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
         let mut pairs = Vec::new();
         let segments = brick_pairs(&tile.separation, place, &mut pairs).unwrap();
         let cnt = pairs.len();
-        let mut lines = vec![0; clipmap::lines_words(cnt as u32, segments) as usize];
+        let mut lines = vec![0; brick::lines_words(cnt as u32, segments) as usize];
         brick_lines(t, &tile.separation, &mut pairs, &mut lines);
         let site = fill::Site {
             cell_zoom,
             place,
             first: slot.brick.map(|v| v << BRICK_SHIFT),
-            shard: Shard::UNKNOWN.at(&ServiceArea, (clipmap::bricks_zoom(cell_zoom), slot.brick)),
+            shard: Shard::UNKNOWN.at(&ServiceArea, (brick::bricks_zoom(cell_zoom), slot.brick)),
             ele: &tile.ele,
             lines: &lines,
         };
         let four = |i: u32| {
-            let [x, y] = clipmap::of_idx(i);
+            let [x, y] = brick::of_idx(i);
             let c = ((place[1] * BRICK + y) * GROUND.tile_cells() + place[0] * BRICK + x) as usize;
             let at = 4 * c;
             word([0, 1, 2, 3].map(|k| u32::from(tile.cells[at + k])))
@@ -412,7 +414,7 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
             at: 0,
         };
         for i in 0..BRICK_CELLS {
-            let [x, y] = clipmap::of_idx(i);
+            let [x, y] = brick::of_idx(i);
             let g = [
                 (q[0] << BRICK_SHIFT) + x as i32,
                 (q[1] << BRICK_SHIFT) + y as i32,
@@ -501,7 +503,7 @@ fn brick_let_go_ends_its_fill() {
     assert!(w.filling.is_none(), "and nothing lands in the slot it left");
 }
 
-/// A brick with a column past `way::SPANS` is refused and no give-back wakes it.
+/// A brick with a column past pxl-spec `way::SPANS` is refused and no give-back wakes it.
 #[test]
 fn column_past_its_spans_refuses_the_brick_for_good() {
     let _g = sys::serial();

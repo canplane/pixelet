@@ -17,7 +17,8 @@ use std::sync::Arc;
 
 use postgres::Client;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
+use pxl_spec::space::coord::zoom::LEAF_ZOOM;
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 use pxl_geo_bake::cli;
 use pxl_geo_bake::coverage::Overture;

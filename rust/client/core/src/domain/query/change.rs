@@ -11,8 +11,8 @@ use super::world::World;
 use crate::domain::layer::object::store;
 use crate::domain::layer::Base as _;
 use core::cell::Cell;
-use pxl_engine::clipmap;
 use pxl_spec::bake::tile::terrain::TerrainTile;
+use pxl_spec::brick;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::world::{nearest, nearest_box, BOUNDS};
 use pxl_spec::space::coord::zoom::{units, Zoom};
@@ -67,7 +67,7 @@ pub fn within(xy: [[f64; 2]; 2], layer: &[Quadrant]) -> bool {
 /// zoom counts too.
 fn at_leaf(t: &Quadrant) -> bool {
     let cell_zoom = GROUND.leaf_cell_zoom();
-    t.zoom == cell_zoom - GROUND.tile_cell_shamt() || t.zoom == clipmap::bricks_zoom(cell_zoom)
+    t.zoom == cell_zoom - GROUND.tile_cell_shamt() || t.zoom == brick::bricks_zoom(cell_zoom)
 }
 
 /// `within`, of the ground nodes `counted` picks.

@@ -2087,6 +2087,7 @@ version = "0.0.0"
 dependencies = [
  "libm",
  "pxl-engine",
+ "pxl-spec",
  "xpute-kit",
 ]
 
@@ -2118,6 +2119,7 @@ name = "pxl-engine"
 version = "0.0.0"
 dependencies = [
  "libm",
+ "pxl-spec",
  "xpute-kit",
 ]
 
@@ -2150,7 +2152,6 @@ dependencies = [
  "libm",
  "parquet",
  "postgres",
- "pxl-engine",
  "pxl-geo-spec",
  "pxl-spec",
  "serde",
@@ -2207,8 +2208,6 @@ dependencies = [
  "fnv",
  "hex",
  "libm",
- "pxl-content",
- "pxl-engine",
  "serde",
  "xpute-kit",
 ]

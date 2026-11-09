@@ -24,6 +24,7 @@
 mod gpu;
 mod real_world;
 
+use pxl_spec::share::EIGHTHS;
 use std::collections::{BTreeMap, BTreeSet};
 
 use gpu::{
@@ -35,14 +36,13 @@ use pxl_engine::beam::{self, Grid};
 use pxl_engine::cast::Node;
 use pxl_engine::light::{self, Light, StartGrid};
 use pxl_engine::object::Cut;
-use pxl_engine::{
-    eye, face, node_cache, raster, ray, record, Zoom, LEAF_CELL_ZOOM, WORKGROUPS_CAP,
-};
+use pxl_engine::{eye, face, node_cache, raster, ray, record, WORKGROUPS_CAP};
 use pxl_render::frame::shader::record::{
     compute, src, COMPUTE_FACE, COMPUTE_LIGHT_RECORD_HITS, COMPUTE_RECORD_FACES,
     COMPUTE_RECORD_HITS, SHADER_CELL, SHADER_LIGHT_CELL, SHADER_SAMPLE_BOX,
 };
 use pxl_render::frame::shader::word::SQUARE_SIDE;
+use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
 
 use real_world::{q8, store_of, Built, WorldBuffer, FINEST};
 
@@ -493,7 +493,7 @@ fn record_want(
         kind_cnt.add("hits, whole", h.whole);
         kind_cnt.add(
             "hits, short of its cube",
-            !h.lacks && answer::fill_eighths(h.asset[0]) < answer::EIGHTHS,
+            !h.lacks && answer::fill_eighths(h.asset[0]) < EIGHTHS,
         );
         let Some(slot) = *slot else {
             kind_cnt.add("hits, no slot keeps the node", true);
@@ -535,7 +535,7 @@ fn record_want(
             continue;
         }
         let to = node_cache::face_at(slot, h.face);
-        let short = !h.lacks && answer::fill_eighths(h.asset[0]) < answer::EIGHTHS;
+        let short = !h.lacks && answer::fill_eighths(h.asset[0]) < EIGHTHS;
         cache[to as usize] = if short { face::BOX } else { 0 };
         if h.lacks || short {
             continue;

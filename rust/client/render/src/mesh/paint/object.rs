@@ -2,14 +2,12 @@
 
 //! The materials the object store's values are drawn as, as the catalog defines them.
 
-use pxl_spec::asset::cube;
-use pxl_spec::asset::cube::ALL_CUBES;
+use pxl_spec::asset::cube::{cube_rgb, ALL_CUBES};
 use pxl_spec::asset::decor::DECORS;
-use pxl_spec::asset::AssetId;
+use pxl_spec::asset::{cube, AssetId};
 
 use crate::mesh::paint::palette::layer_idx;
 use crate::mesh::paint::palette::rgb255;
-use pxl_spec::asset::cube::cube_rgb;
 use std::sync::LazyLock;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;

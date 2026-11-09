@@ -6,7 +6,7 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 
 use crate::domain::query::World;
-use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
+use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 
 /// The height of the floor under `at`. The search starts at the point's own
 /// height, so a point inside a cave finds the cave's floor and not the

@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use pxl_engine::answer::Kind;
 use pxl_engine::light::{self, Light, StartGrid};
-use pxl_engine::{cast, node_cache, ray, FRAC_W};
+use pxl_engine::{cast, node_cache, ray};
 use pxl_render::frame::shader::record::{
     compute, src, COMPUTE_QUEUE, COMPUTE_QUEUE_ASK, COMPUTE_QUEUE_ASK_CORNERS,
     COMPUTE_QUEUE_ASK_CORNERS_PARKED, COMPUTE_QUEUE_ASK_LIGHT_CORNERS,
@@ -25,6 +25,7 @@ use pxl_render::frame::shader::record::{
     COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED, COMPUTE_QUEUE_PARKED, COMPUTE_QUEUE_SAMPLES,
     COMPUTE_QUEUE_SAMPLES_PARKED,
 };
+use pxl_spec::space::coord::q3::FRAC_W;
 
 /// How long a test waits for the device to finish its work before the test fails.
 const WAIT: Duration = Duration::from_secs(60);

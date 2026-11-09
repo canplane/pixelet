@@ -21,6 +21,7 @@ use pxl_engine::eye;
 use pxl_engine::light::{self, Light, StartGrid, ANCHOR};
 use pxl_engine::WORKGROUPS_CAP;
 use pxl_spec::space::coord::mat4::{self, Mat4};
+use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::layer::lattice::EFFECT_REACH;
 use xpute_gpu::enums::{AddressMode, CompareFunction, FilterMode, MipmapFilterMode};
@@ -429,7 +430,7 @@ impl Shadow {
             corner[0].div_euclid(ANCHOR) * ANCHOR,
             corner[1].div_euclid(ANCHOR) * ANCHOR,
         ];
-        let q3 = f64::from(1u32 << pxl_engine::FRAC_W);
+        let q3 = f64::from(1u32 << FRAC_W);
         let texel = 2.0 / f64::from(SHADOW_SIZE);
         let (inverse, eye) = (self.inverse, self.eye_world);
         let mut anchor = |k: usize| {

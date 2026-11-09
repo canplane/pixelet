@@ -12,15 +12,15 @@
 use pxl_content::generation::{self, drawn, row_of};
 use pxl_content::scatter;
 use pxl_engine::object;
-use pxl_engine::LEAF_CELL_ZOOM;
 use pxl_render::gpu::api;
 use pxl_render::gpu::draw::Position;
 use pxl_render::gpu::generator::DecorFrame;
-use pxl_spec::asset::decor::DECORS;
+use pxl_spec::asset::decor::{self, DECORS};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::zoom::{idx_of, units, Zoom, UNIT_ZOOM};
+use pxl_spec::space::coord::world::wrap_idx;
+use pxl_spec::space::coord::zoom::{idx_of, units, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, UNIT_ZOOM};
 use xpute_core::global::Global;
 
 use crate::domain::layer::object::meta::user_decor_pick;
@@ -29,10 +29,8 @@ use crate::domain::query::World;
 use crate::domain::setting::store::settings;
 use crate::domain::view::lens::{decor_impostor_angle, decor_model_angle, decor_zooms};
 use crate::sys::io::loader::catalog;
-use pxl_content::decor;
 use pxl_spec::space::layer::lattice;
 use pxl_spec::space::layer::octant::Octant;
-use pxl_spec::space::layer::quadrant;
 
 /// What this module hands the GPU each frame. It is kept between frames, so a
 /// frame where nothing changed allocates nothing, and each part but `zooms`
@@ -99,10 +97,10 @@ fn hand_over() -> &'static mut Frame {
     })
 }
 
-/// A leaf cell's X wrapped as the world wraps it (pxl-engine `wrap_idx`), as a
+/// A leaf cell's X wrapped as the world wraps it (pxl-spec `wrap_idx`), as a
 /// word. The GPU's generated records name X the same way.
 fn wrap(x: i32) -> u32 {
-    pxl_engine::wrap_idx(LEAF_CELL_ZOOM, x) as u32
+    wrap_idx(LEAF_CELL_ZOOM, x) as u32
 }
 
 /// Builds this frame's hand-over for an eye at `eye`. Placed decor is walked
@@ -157,7 +155,7 @@ pub fn step(eye: V3, edit: &RenderEdit) {
     h.records.clear();
     let records = &mut h.records;
     World::now().placed_in(&around, &mut |e| {
-        let (k, decor) = row_of(&decor::DECORS, e.state);
+        let (k, decor) = row_of(&decor::ROWS, e.state);
         if !decor || hide == Some(e.id()) {
             return;
         }
@@ -168,7 +166,7 @@ pub fn step(eye: V3, edit: &RenderEdit) {
                 k,
                 variant,
                 turn,
-                scatter::coarsest_stand(&decor::DECORS[k as usize], variant),
+                scatter::coarsest_stand(&decor::ROWS[k as usize], variant),
             ),
             wrap(x),
             y as u32,
@@ -192,7 +190,7 @@ fn walk_zoom() -> Zoom {
         .map(|d| d.extent(catalog()))
         .fold(0.0, f64::max)
         / decor_impostor_angle())
-    .min(lattice::draw_dist(lattice::GROUND, quadrant::LEAF_ZOOM));
+    .min(lattice::draw_dist(lattice::GROUND, LEAF_ZOOM));
     let mut zoom = UNIT_ZOOM;
     while zoom > 0 && units(zoom) < dist {
         zoom -= 1;

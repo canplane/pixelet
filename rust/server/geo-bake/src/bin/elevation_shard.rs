@@ -14,15 +14,14 @@
 //!
 //!   ./infra/geo/elevation/ingest.sh   # reads it
 
-use pxl_spec::space::layer::quadrant::Quadrant;
+use pxl_spec::space::coord::zoom::{units, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::{quad_rows, Quadrant};
 use std::process::ExitCode;
 
 use pxl_geo_bake::coverage::{Coverage, SHARD_APRON};
 use pxl_geo_bake::elevation::{BLOCK, BLOCK_ZOOM};
-use pxl_spec::bake::constant::TILE_ELE_SPAN;
+use pxl_spec::ground::TILE_ELE_SPAN;
 use pxl_spec::space::coord::adapter::epsg3857::merc_from_u;
-use pxl_spec::space::coord::zoom::units;
-use pxl_spec::space::layer::quadrant::{quad_rows, LEAF_ZOOM};
 use xpute_kit::math::scalar::round;
 
 fn run() -> Result<(), String> {

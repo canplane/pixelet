@@ -15,7 +15,7 @@ Data sources have their own obligations and their own place:
 `ts/client/src/ui/feature/setting/info/attribution.tsx` is where the ones that must
 reach a user are shown.
 
-## louis-e/arnis — `rust/server/geo-bake/src/separation/solve.rs` and `solve/`, `rust/spec/spec/src/procedural.rs`
+## louis-e/arnis — `rust/server/geo-bake/src/separation/solve.rs` and `solve/`, `rust/spec/src/procedural.rs`
 
 How bridges and tunnels stand is [louis-e/arnis][arnis] at `c96872e`
 (Apache-2.0), its [element processing][processing] for bridges, highways and

@@ -5,9 +5,9 @@
 
 mod answer;
 use pxl_spec::bake::tile::Occupancy;
-use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::coord::zoom::{Zoom, LEAF_ZOOM};
 use pxl_spec::space::layer::lattice::{coarsest, Lattice};
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::sys::io::body::Packet;
 use crate::sys::io::demand::{PhaseList, Stream};

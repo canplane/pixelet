@@ -7,7 +7,8 @@ use pxl_spec::bake::tile::terrain::{self, GroundCells, TerrainTile};
 use pxl_spec::bake::way::lay;
 use pxl_spec::procedural::Frame;
 use pxl_spec::space::coord::adapter::epsg3857::{self, G3857};
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
+use pxl_spec::space::coord::zoom::LEAF_ZOOM;
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::separation::WayRange;
 use crate::terrain::pipeline::feature::{local, Feature};

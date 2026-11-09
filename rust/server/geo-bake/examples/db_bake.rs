@@ -15,7 +15,8 @@ use pxl_geo_bake::terrain::leaf::{self, bake_leaf};
 use pxl_geo_bake::terrain::repository::TerrainRepository;
 use pxl_spec::bake::tile::terrain;
 use pxl_spec::directory;
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
+use pxl_spec::space::coord::zoom::LEAF_ZOOM;
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();

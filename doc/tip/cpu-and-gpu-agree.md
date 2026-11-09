@@ -47,7 +47,7 @@ Where it showed here, once a test compared them:
   half-cell centres) and linear interpolation land exactly on a half.
 
 The ground's top and the ways' crossing are exact since, in integers
-(pxl-engine ground.rs `height`, way.rs `on_way`, `crossing`, `pier_covers`, each
+(pxl-spec ground.rs `height`, way.rs `on_way`, `crossing`, `pier_covers`, each
 with its bits counted), and their tests compare word for word.
 
 ## When it matters
@@ -61,8 +61,8 @@ walker stands over them (domain/query/support.rs). The ground and the ways are e
 machines must agree: each machine's GPU fills the same brick, and must fill it
 alike; and geo-bake, on the server, computes the same rules. Where two
 machines part, a block stands in one place on one and in another on the other.
-pxl-engine holds each rule, and a reference test holds the GPU to it word for
-word.
+pxl-engine and pxl-spec hold the rules, and a reference test holds the GPU to
+them word for word.
 
 The line runs between the world's state and its drawing:
 

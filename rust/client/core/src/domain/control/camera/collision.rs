@@ -46,7 +46,7 @@ use crate::domain::query::{finest, Hit, HitKind, Ray, World};
 use crate::domain::setting::store::{settings, OrbitObstacleMode};
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::param::NEAR;
-use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
+use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 
 /// An orbit pose. It holds the pivot as well as the offset, because the eye
 /// is the pivot plus the offset, and a gate that read only the offset could

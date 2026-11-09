@@ -8,14 +8,13 @@
 //! camera is not a walker and asks none of them (query/support.rs
 //! `step_slide`). The UI is told whether the pivot is past the area (`past`).
 
-use pxl_engine::area::{self, is_wall, walls_in, Area, Shard};
-use pxl_engine::wrap_idx;
-use pxl_spec::limit::{bedrock, ceiling};
+use pxl_content::strata::{bedrock, ceiling};
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::world::point;
-use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::coord::world::{point, wrap_idx};
+use pxl_spec::space::coord::zoom::{units, LEAF_ZOOM};
+use pxl_spec::space::layer::area;
+use pxl_spec::space::layer::area::{is_wall, walls_in, Area, Shard};
 use pxl_spec::space::layer::lattice::{Grid, GROUND};
-use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 
 use super::World;
 use crate::domain::layer::object::repository;
@@ -25,7 +24,7 @@ use pxl_spec::space::coord::q3::{self, Q3};
 
 impl World<'_> {
     /// Whether the leaf column under `at` lies in the service area and is
-    /// not the wall at its edge (pxl-engine `area::is_wall`). The answer is
+    /// not the wall at its edge (pxl-spec `area::is_wall`). The answer is
     /// known before any of the column's ground arrives: it comes from the
     /// nine shards around the column's own, with the area's index asked once
     /// (`Shard::at`). A walker comes up to the wall's face and never stands
@@ -35,7 +34,7 @@ impl World<'_> {
     }
 
     /// Whether the leaf tile under `at` is past the service area: the source
-    /// is declared and serves no shard over it (pxl-engine `area::past`).
+    /// is declared and serves no shard over it (pxl-spec `area::past`).
     /// The UI is told this of the pivot (ui.rs `outside`). A walk or an edit
     /// asks `within` instead, which also keeps off the area's edge.
     pub fn past(&self, at: &Q3) -> bool {
@@ -48,10 +47,10 @@ impl World<'_> {
     ///
     /// - every shard under it is read, so a write stands over what its file
     ///   held (domain/layer/object/repository.rs `holds`);
-    /// - none of its leaf columns is the wall (pxl-engine `area::walls_in`),
+    /// - none of its leaf columns is the wall (pxl-spec `area::walls_in`),
     ///   as `within` requires of a walker;
     /// - `space` lies over the bedrock and under the ceiling of ground the
-    ///   world knows exactly, with no tile still missing (pxl-spec limit.rs).
+    ///   world knows exactly, with no tile still missing (pxl-content strata.rs).
     ///
     /// The bedrock and the ceiling rise with the ground's face, so every
     /// column's limits hold where the lowest ceiling and the highest bedrock

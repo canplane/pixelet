@@ -18,9 +18,8 @@
 use pxl_spec::space::coord::q3::{self, FRAC_W, Q3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::world::{BOUNDS, ROUND};
-use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec::space::coord::zoom::{units, Zoom, LEAF_ZOOM};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 use xpute_kit::math::scalar::wrap;
 
 use pxl_spec::space::coord::aabb::Aabb;

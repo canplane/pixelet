@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::sys;
+use pxl_spec::brick;
 use pxl_spec::space::layer::lattice::GROUND;
 
 const COLUMNS: [[f64; 2]; 2] = [[0.5, 0.5], [1.5, 1.5]];
@@ -23,7 +24,7 @@ fn a_coarser_node_leaves_an_exact_answer_alone() {
     let tile = leaf - GROUND.tile_cell_shamt();
     assert!(!kept(true, tile), "the leaf's tile drops it");
     assert!(
-        !kept(true, clipmap::bricks_zoom(leaf)),
+        !kept(true, brick::bricks_zoom(leaf)),
         "the leaf's brick drops it"
     );
     assert!(kept(true, tile - 1), "a coarser node leaves it");

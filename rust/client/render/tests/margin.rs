@@ -15,8 +15,10 @@ use pxl_engine::light::{self, Light, StartGrid};
 use pxl_engine::object::Cut;
 use pxl_engine::world::Inheritance;
 use pxl_engine::{beam, cast};
-use pxl_engine::{eye, node_cache, Zoom, FRAC_W};
+use pxl_engine::{eye, node_cache};
 use pxl_render::frame::shader::record::{src, SHADER_LIGHT_CELL};
+use pxl_spec::space::coord::q3::FRAC_W;
+use pxl_spec::space::coord::zoom::Zoom;
 
 use real_world::{q8, store_of, Asking, World, WorldBuffer, FINEST};
 

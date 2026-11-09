@@ -242,7 +242,7 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
     }
     Ok(vec![
         Output::new("ts/client/src/ui/shared/asset/color.spec.ts", file(&ts)),
-        Output::new("rust/spec/spec/src/asset/color.spec.rs", file(&rs)),
+        Output::new("rust/spec/src/asset/color.spec.rs", file(&rs)),
     ])
 }
 
@@ -478,13 +478,13 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
     voxel.extend([
         format!("export const AIR = {};", air.val),
         String::new(),
-        "/** Whether a value read into a word is a palette entry the palette gives out (pxl-content `Ground::grounds`). */"
+        "/** Whether a value read into a word is a palette entry the palette gives out (pxl-spec `Ground::grounds`). */"
             .to_string(),
         "export function grounds(val: number): boolean {".to_string(),
         format!("  return {};", ts_runs(cube_entries(&ground).map(|e| e.val))),
         "}".to_string(),
         String::new(),
-        "/** Whether a value read into a word is one of the object's colors (pxl-content `Object::objects`). */"
+        "/** Whether a value read into a word is one of the object's colors (pxl-spec `Object::objects`). */"
             .to_string(),
         "export function objects(val: number): boolean {".to_string(),
         format!(
@@ -494,7 +494,7 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
         "}".to_string(),
     ]);
 
-    let mut rs = vec!["// pxl-content/cube.spec.rs".to_string()];
+    let mut rs = vec!["// pxl-spec/asset/cube.spec.rs".to_string()];
     rs.extend(header);
     rs.push(String::new());
     rs.extend(casing_note());
@@ -672,7 +672,7 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
         Output::new("ts/client/src/ui/shared/asset/cube.spec.ts", file(&ts)),
         Output::new("ts/client/src/service/sys/fs/voxel.spec.ts", file(&voxel)),
         Output::new(
-            "rust/spec/content/src/cube.spec.rs",
+            "rust/spec/src/asset/cube.spec.rs",
             file(&unwrapped(rs, "pub mod cubes {")),
         ),
     ];
@@ -751,7 +751,7 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
                 .collect()
         })
         .unwrap_or_default();
-    let (portable, table) = decor_table(&spec, &ground_palette()?)?;
+    let (rows, table) = decor_table(&spec, &ground_palette()?)?;
 
     let mut ts = vec!["// @pxl/client/ui/shared/asset/decor.spec.ts".to_string()];
     ts.extend(header.iter().cloned());
@@ -820,19 +820,8 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
             .map(|(k, v)| format!("    pub const {k}: u16 = {v};")),
     );
     rs.extend(["}", "", ""].map(String::from));
+    rs.extend(rows);
     rs.extend(table);
-    let mut row = vec!["// pxl-content/decor.spec.rs".to_string()];
-    row.extend(header);
-    row.extend(
-        [
-            "// The decors as the GPU reads them too: how the ground generates each one, the",
-            "// palette entries it stands on and the boxes its variants claim, in the catalog's",
-            "// order. pxl-spec asset/decor.spec.rs adds their models over each row.",
-            "#![allow(non_camel_case_types, reason = \"generated from the spec\")]",
-        ]
-        .map(String::from),
-    );
-    row.extend(portable);
     Ok(vec![
         Output::new("ts/client/src/ui/shared/asset/decor.spec.ts", file(&ts)),
         Output::new(
@@ -840,10 +829,9 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
             file(&constants),
         ),
         Output::new(
-            "rust/spec/spec/src/asset/decor.spec.rs",
+            "rust/spec/src/asset/decor.spec.rs",
             file(&unwrapped(rs, "pub mod decors {")),
         ),
-        Output::new("rust/spec/content/src/decor.spec.rs", file(&row)),
     ])
 }
 
@@ -858,8 +846,8 @@ fn ground_palette() -> Result<Vec<(String, u32)>, String> {
 }
 
 /// The decors' table, in the catalog's order, which is the order their variants are numbered
-/// in. In pxl-content it holds every number the GPU reads too (how the ground generates each
-/// decor, its palette entries, its boxes); in pxl-spec, each decor's models over that row.
+/// in: the rows, every number the GPU reads too (how the ground generates each decor, its
+/// palette entries, its boxes), and each decor's models over its row.
 fn decor_table(
     spec: &Node,
     palette_idxs: &[(String, u32)],
@@ -981,7 +969,7 @@ fn decor_table(
             "/// GPU reads the table from a buffer of these words.",
             "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
             "#[repr(C)]",
-            "pub struct Decor {",
+            "pub struct Row {",
             "    /// What a placed one is stored as.",
             "    pub val: u32,",
             "    /// Its scatter: changing it reshuffles every one the ground generates.",
@@ -1001,13 +989,13 @@ fn decor_table(
         ]
         .map(String::from),
     );
-    portable.push(format!("pub const DECORS: [Decor; {}] = [", rows.len()));
+    portable.push(format!("pub const ROWS: [Row; {}] = [", rows.len()));
     for r in &rows {
         portable.push(format!("    // {}", r.name));
         let mut sizes = r.sizes.clone();
         sizes.resize(variants_max, "[0, 0, 0]".into());
         portable.extend([
-            "    Decor {".to_string(),
+            "    Row {".to_string(),
             format!("        val: {},", r.val),
             format!("        seed: {},", r.seed),
             format!("        chance: {},", r.chance),
@@ -1025,9 +1013,6 @@ fn decor_table(
 
     let mut rs: Vec<String> = [
         "",
-        "/// How it faces, one row with the GPU's.",
-        "pub use pxl_content::decor::Orientation;",
-        "",
         "/// A model and its pack's colormap, each a slot the catalog fills.",
         "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
         "pub struct Variant {",
@@ -1036,12 +1021,12 @@ fn decor_table(
         "}",
         "",
         "/// A decor: its id, its row (how the ground generates it and the boxes its",
-        "/// variants claim, pxl-content decor.spec.rs) and its variants' models, in",
+        "/// variants claim, `Row`) and its variants' models, in",
         "/// the row's order.",
         "#[derive(Clone, Copy, Debug, PartialEq)]",
         "pub struct Decor {",
         "    pub id: crate::asset::id::AssetId,",
-        "    pub row: &'static pxl_content::decor::Decor,",
+        "    pub row: &'static Row,",
         "    pub variants: &'static [Variant],",
         "}",
         "",
@@ -1075,7 +1060,7 @@ fn decor_table(
         rs.extend([
             "    Decor {".to_string(),
             format!("        id: {} as u32,", r.name),
-            format!("        row: &pxl_content::decor::DECORS[{i}],"),
+            format!("        row: &ROWS[{i}],"),
             "        variants: &[".to_string(),
         ]);
         rs.extend(r.models.iter().map(|v| format!("            {v},")));

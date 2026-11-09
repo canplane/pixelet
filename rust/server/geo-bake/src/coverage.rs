@@ -9,13 +9,13 @@ use std::sync::LazyLock;
 
 use postgres::types::ToSql;
 use postgres::{Client, NoTls};
-use pxl_engine::area;
 use pxl_geo_spec::table::CATALOG;
-use pxl_spec::space::coord::zoom::{cnt, units, Zoom, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{cnt, units, Zoom, LEAF_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{self, key_of, key_of_name, node_of};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of, region};
+use pxl_spec::space::layer::area;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 const COVERAGE: &str = include_str!(concat!(env!("PXL_REPO"), "/infra/geo/coverage.json"));
 
@@ -124,7 +124,7 @@ impl Coverage {
         }
     }
 
-    /// The shard over a tile a shard or finer (pxl-engine `area::shard_over`).
+    /// The shard over a tile a shard or finer (`area::shard_over`).
     fn shard_of(zoom: Zoom, tile: [i32; 2]) -> Shard {
         area::shard_over(zoom, tile).1
     }

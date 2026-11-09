@@ -3,7 +3,7 @@
 //! The ground's surface: a cell's top and the asset of its face, read off
 //! the clip levels by the same reading of a column the GPU uses (pxl-engine
 //! `clipmap::ground`). Where the column is the wall at the service area's
-//! edge (pxl-engine `area::is_wall`), the face is the wall's.
+//! edge (pxl-spec `area::is_wall`), the face is the wall's.
 //!
 //! The surface is the ground's alone. The support (`support.rs`) uses it as
 //! the place a walker starts looking for what it stands on, and nothing
@@ -11,10 +11,11 @@
 //! bridge or what is placed, is the world's answer (`World::asset_of`),
 //! never the ground's.
 
-use pxl_engine::area::Shard;
 use pxl_engine::clipmap::Lookup;
 use pxl_spec::bake::tile::terrain::GroundId;
+use pxl_spec::space::coord::world::SEA_LEVEL;
 use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec::space::layer::area::Shard;
 
 use super::world::World;
 use crate::domain::layer::terrain::clipmap::CpuClipmap;
@@ -35,7 +36,7 @@ impl World<'_> {
         let shard = Shard::UNKNOWN.at(&CpuClipmap, (cell_zoom, c));
         if shard.past() {
             return Answer::Exact(Some(Surface {
-                top: f64::from(pxl_engine::SEA_LEVEL),
+                top: f64::from(SEA_LEVEL),
                 asset: sentinel::unknown,
             }));
         }

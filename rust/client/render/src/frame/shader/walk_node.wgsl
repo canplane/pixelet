@@ -144,8 +144,8 @@ fn idx_of(corner: vec3<u32>, zoom: u32, roots: vec3<i32>, r0: vec3<i32>) -> vec3
   let low = select(corner >> vec3<u32>((FINEST_ZOOM - zoom) & 31u), vec3<u32>(0u), zoom == 0u);
   let n = vec3<i32>(high + low);
   let x = select((n.x << ((32u - zoom) & 31u)) >> ((32u - zoom) & 31u), 0i, zoom == 0u);
-  // Y counts from the world's south edge and Z from its floor (pxl-engine `object::y_start`,
-  // `object::z_start`).
+  // Y counts from the world's south edge and Z from its floor (pxl-spec `zoom::y_start`,
+  // `zoom::z_start`).
   let y_start = select(1i << ((zoom - 1u) & 31u), 0i, zoom == 0u);
   let z_start = select(1i << ((zoom - SHARD_ZOOM - 1u) & 31u), 0i, zoom <= SHARD_ZOOM);
   return vec3<i32>(x, n.y - y_start, n.z - z_start);
@@ -226,7 +226,7 @@ fn zoom_at(r2: f32, range: vec2<u32>) -> u32 {
 }
 
 /// The zoom asked at `x2`, a squared distance counted in squared split distances, held within
-/// `range` (pxl-engine `grid::cell_zoom_in_splits`). The zoom falls by one each time the
+/// `range` (pxl-spec `grid::cell_zoom_in_splits`). The zoom falls by one each time the
 /// distance doubles, read from the float's exponent.
 fn zoom_in_splits(x2: f32, range: vec2<u32>) -> u32 {
   let e = (i32((bitcast<u32>(x2) >> 23u) & 255u) - 127i) >> 1u;

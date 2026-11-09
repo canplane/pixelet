@@ -37,7 +37,7 @@ fn head_face(w: u32) -> i32 {
   return i32(w) >> 16u;
 }
 
-/// Whether the leaf cells `run`, `[lo, hi)`, fill cell `z` of zoom `cell` (`way::fills`).
+/// Whether the leaf cells `run`, `[lo, hi)`, fill cell `z` of zoom `cell` (pxl-spec `way::fills`).
 fn way_fills(cell: u32, run: vec2<i32>, z: i32) -> bool {
   let s = 1i << (LEAF_CELL_ZOOM - cell);
   return 2i * (min(run.y, (z + 1i) * s) - max(run.x, z * s)) > s;

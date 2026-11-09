@@ -141,6 +141,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     .collect::<Vec<_>>();
     Ok(vec![
         Output::new("ts/client/src/service/sys/fs/catalog.spec.ts", file(&ts)),
-        Output::new("rust/spec/spec/src/asset/catalog.spec.rs", file(&rs)),
+        Output::new("rust/spec/src/asset/catalog.spec.rs", file(&rs)),
     ])
 }

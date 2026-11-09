@@ -230,7 +230,7 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
             file(&ts),
         ),
         Output::new("ts/server/edge/publication.spec.ts", file(&edge)),
-        Output::new("rust/spec/spec/src/bake/publication.spec.rs", file(&rs)),
+        Output::new("rust/spec/src/bake/publication.spec.rs", file(&rs)),
     ])
 }
 
@@ -273,7 +273,7 @@ pub fn object_outputs() -> Result<Vec<Output>, String> {
     rs.push(format!("pub const OBJECT_SCALES: usize = {scales};"));
     Ok(vec![
         Output::new("ts/client/src/ui/feature/world/object.spec.ts", file(&ts)),
-        Output::new("rust/spec/spec/src/bake/object.spec.rs", file(&rs)),
+        Output::new("rust/spec/src/bake/object.spec.rs", file(&rs)),
     ])
 }
 
@@ -442,7 +442,7 @@ pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
         ts.push("];".into());
     }
     Ok(vec![
-        Output::new("rust/spec/spec/src/bake/place_theme.spec.rs", file(&rs)),
+        Output::new("rust/spec/src/bake/place_theme.spec.rs", file(&rs)),
         Output::new(
             "ts/client/src/ui/feature/search/place_theme.spec.ts",
             file(&ts),

@@ -5,7 +5,7 @@
 // others. It reads no world and keeps no state, so a thread asks of a leaf cell by its name
 // alone.
 
-/// This is the twin of pxl-content `share::quarter`.
+/// This is the twin of pxl-content `halve::quarter`.
 fn share_quarter(n: u32, cap: u32, across: u32, along: u32, q: u32) -> u32 {
   let a = halve(n, 2u * cap, 2u * cap, across);
   let half = select(n - a, a, (q & 1u) == 0u);

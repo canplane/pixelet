@@ -11,16 +11,14 @@
 //! and the catalog is spec/spec/asset/decor.json. The scene draws the decor's
 //! models as they arrive (domain/scene/decor/asset.rs).
 
-use pxl_spec::space::layer::lattice::Grid;
+use pxl_spec::space::layer::lattice::{draw_dist, Grid, GROUND};
 
 use crate::domain::layer::object::asset::Asset;
 use pxl_spec::asset::decor::{Decor, DECORS};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::zoom::{cube, idx_of, units, Zoom, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{cube, idx_of, units, Zoom, LEAF_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
-use pxl_spec::space::layer::lattice::{draw_dist, GROUND};
-use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 
 use super::ray::Ray;
 use super::scatter::{generated_at, DecorWorld};
@@ -31,10 +29,11 @@ use crate::domain::layer::object::store::tree_key;
 use crate::domain::layer::object::store::Entry;
 use crate::domain::layer::tile_cache::Line;
 use crate::domain::query::decor_box::{box_extent, intersect};
-use pxl_engine::area::{self, Shard};
 use pxl_engine::cast;
 use pxl_engine::clipmap::Lookup;
 use pxl_engine::object::{self, NodeSlot};
+use pxl_spec::space::layer::area;
+use pxl_spec::space::layer::area::Shard;
 
 /// One ray's decor tests, carried along its ground walk.
 pub(super) struct DecorRay {

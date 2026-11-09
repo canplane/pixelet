@@ -46,7 +46,6 @@ use crate::sys::io::loader::{catalog, load_image, load_of};
 use pxl_content::generation;
 use pxl_content::param::cloud;
 use pxl_render::gpu::api::Image;
-use pxl_spec::space::camera::grid;
 
 /// The cumulus models. Each model is one whole cloud.
 const VARIANTS: [Slot; cumulus::models.len()] = cumulus::models;
@@ -82,7 +81,7 @@ pub const PATCHES_MAX: usize = {
 
 /// The distance from the eye, in units, at which the clouds begin to thin:
 /// where a cell spans `CLOUD_SPACING_CELLS` camera grid cells.
-const THIN_FROM: f64 = CELL / grid::CELL / CLOUD_SPACING_CELLS;
+const THIN_FROM: f64 = CELL / lens::CELL / CLOUD_SPACING_CELLS;
 
 /// Whether the cloud whose middle lies at `local` about its patch's corner
 /// shows at `d2` square units from the eye. It shows when its random draw is

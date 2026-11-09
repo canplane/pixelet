@@ -8,9 +8,9 @@
 
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::layer::lattice::Grid;
-use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
+use pxl_spec::space::coord::zoom::LEAF_ZOOM;
+use pxl_spec::space::layer::lattice::{Grid, GROUND};
+use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::{put_pivot, Motion};

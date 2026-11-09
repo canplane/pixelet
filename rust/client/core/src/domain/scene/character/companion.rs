@@ -37,8 +37,7 @@ use pxl_spec::asset::marker::marker_shows;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{units, Zoom};
-use pxl_spec::space::layer::lattice::Grid;
-use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::lattice::{Grid, GROUND};
 use xpute_core::clock;
 use xpute_core::global::Global;
 

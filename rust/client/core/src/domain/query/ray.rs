@@ -77,7 +77,7 @@ pub fn by_dist() -> Detail {
 /// no coarser than the cells a tile draws.
 pub fn cell_zoom_at(eye: V3, at: V3) -> Zoom {
     let v = v3::sub(&at, &eye);
-    let cell_zoom = grid::cell_zoom_at(v3::dot(&v, &v)).min(GROUND.leaf_cell_zoom());
+    let cell_zoom = grid::cell_zoom_at(v3::dot(&v, &v) as f32).min(GROUND.leaf_cell_zoom());
     TerrainTile::min_zoom().map_or(cell_zoom, |min| cell_zoom.max(GROUND.grid_zoom(min)))
 }
 

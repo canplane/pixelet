@@ -5,9 +5,8 @@
 //! how long following and the sensors wait out a silence.
 
 use pxl_spec::space::camera::grid;
-use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::coord::zoom::{units, MIN_ZOOM};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::quadrant;
 
 // ---- the camera ----
 
@@ -25,7 +24,7 @@ pub const DEFAULT_POLAR: f64 = core::f64::consts::FRAC_PI_3;
 /// 64·s lies a third of the way into that band.
 pub const DOLLY_END_CELLS: f64 = 64.0;
 const _: () = assert!(
-    DOLLY_END_CELLS >= grid::CELLS_A_RAD / 2.0 && DOLLY_END_CELLS < grid::CELLS_A_RAD,
+    DOLLY_END_CELLS >= grid::CELLS_A_RAD as f64 / 2.0 && DOLLY_END_CELLS < grid::CELLS_A_RAD as f64,
     "a dolly's limit lies in the band its end cell is drawn over"
 );
 /// The orbit's nearest distance from the pivot, in units. It is
@@ -38,7 +37,7 @@ pub const NEAREST_DIST: f64 = 1.25 * MIN_DIST;
 /// The orbit's farthest distance: `DOLLY_END_CELLS` sides of the coarsest
 /// cell any zoom holds, the cell of the pyramid's top. Looking straight down
 /// from there, the grid never asks for a cell coarser than a zoom draws.
-pub const MAX_DIST: f64 = DOLLY_END_CELLS * units(GROUND.cell_zoom(quadrant::MIN_ZOOM));
+pub const MAX_DIST: f64 = DOLLY_END_CELLS * units(GROUND.cell_zoom(MIN_ZOOM));
 
 // ---- how the camera settles and keeps out of the ground ----
 

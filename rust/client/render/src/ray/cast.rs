@@ -19,7 +19,8 @@ use crate::frame::shader::access::{Group, Step};
 use crate::frame::shader::sequence;
 use pxl_content::generation::{self, GROUPS};
 use pxl_engine::clipmap;
-use pxl_engine::{beam, eye, light, node_cache, object, ray, Zoom, LEAF_CELL_ZOOM};
+use pxl_engine::{beam, eye, light, node_cache, object, ray};
+use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
 use xpute_gpu::encode::Id;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -87,7 +88,7 @@ pub struct Cast<'a> {
     /// level wants there, X and Y, and the slot holding it plus one while it is present
     /// (`clipmap::Entry`); its fourth word holds nothing.
     pub clipmap: &'a [i32],
-    /// The service area's index (pxl-engine `area::Area`), four keys a row (pxl-core
+    /// The service area's index (pxl-spec `area::Area`), four keys a row (pxl-core
     /// domain/scene/cast.rs `shards`). The runtime reads it where it lies, so its writer asks
     /// `in_flight` (gpu/api.rs) before it writes it again.
     pub shards: &'a [[i32; 4]],

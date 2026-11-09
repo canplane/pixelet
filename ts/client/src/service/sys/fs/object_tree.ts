@@ -11,8 +11,8 @@
  * This file is a port of them, held equal to the store by a record that the
  * tests of both read (spec/golden/object/top.tsv). The rules ported are
  * an octkey's digits (pxl-spec space/hierarchy/morton.rs `name`), the nodes a
- * write reaches (pxl-spec space/hierarchy/sparse_tree.rs `set`), and the fold
- * (pxl-engine object.rs `fold`, `share` and `voxel`, and answer.rs `FULL`).
+ * write reaches (pxl-core domain/layer/object/sparse_tree.rs `set`), and the fold
+ * (pxl-engine object.rs `fold`, `share` and `voxel`, and pxl-spec share.rs `FULL`).
  * The values a fold counts as filling are generated (voxel.spec.ts).
  *
  * The backend stands in for a server. Its rules are a copy, never a second
@@ -38,7 +38,7 @@ export interface TopRow {
 }
 
 /** The value an erase writes. It is also the word of an empty node
- * (pxl-engine `value::VOID`). */
+ * (pxl-spec `value::VOID`). */
 export const VOID = 0;
 
 export function shard_of(key: string): string {
@@ -86,7 +86,7 @@ export function lay(leaves: Map<string, Leaf>, w: Leaf): void {
 }
 
 /** A share is how much of a cube is filled, and this is a whole cube
- * (pxl-engine answer.rs `FULL`). */
+ * (pxl-spec share.rs `FULL`). */
 const FULL = 1 << 15;
 
 /** A fold's word holds its kind in the low 16 bits and its share in the high

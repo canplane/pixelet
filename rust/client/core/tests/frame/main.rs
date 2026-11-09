@@ -20,14 +20,14 @@ mod spec;
 mod watch;
 
 use pxl_engine::ray::holes_words;
-use pxl_engine::SHARD_ZOOM;
 use pxl_render::api_spec::device::FRAME_LATENCY;
 use pxl_render::frame::shader::word::screen::JITTERS;
 use pxl_render::gpu::surface::Surface;
 use pxl_spec::bake::publication::{BaseLayer, FORMAT};
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3;
-use pxl_spec::space::layer::quadrant::{quad_rows, Quadrant, MIN_ZOOM};
+use pxl_spec::space::coord::zoom::{MIN_ZOOM, SHARD_ZOOM};
+use pxl_spec::space::layer::quadrant::{quad_rows, Quadrant};
 use runtime::Runtime;
 use spec::V;
 use xpute_runtime::native::pause;

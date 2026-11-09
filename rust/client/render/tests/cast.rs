@@ -39,11 +39,13 @@ use pxl_engine::cast::{self, Node, Ray};
 use pxl_engine::object::{ancestor_at, Cut};
 use pxl_engine::support::{self, Lineage};
 use pxl_engine::world::Inheritance;
-use pxl_engine::{eye, face, node_cache, raster, ray, record, Zoom, LEAF_CELL_ZOOM};
+use pxl_engine::{eye, face, node_cache, raster, ray, record};
 use pxl_render::frame::shader::record::{
     src, SHADER_CAST, SHADER_CAST_TILES, SHADER_CELL, SHADER_FACE, SHADER_SAMPLE_BOX,
 };
 use pxl_render::frame::shader::word::{screen, SQUARE_SIDE};
+use pxl_spec::share::EIGHTHS;
+use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
 
 use real_world::{q8, Asking, Built, WorldBuffer, FINEST};
 
@@ -930,7 +932,7 @@ fn hand_pixels_answer_as_cast_entry() {
                     ]);
                     kind_cnt.add(
                         "enters its sample, short of its cube",
-                        answer::fill_eighths(asset[0]) != answer::EIGHTHS,
+                        answer::fill_eighths(asset[0]) != EIGHTHS,
                     );
                 } else if !lacks && drew && at_edge(&e, at.dir) {
                     edges += 1;

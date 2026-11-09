@@ -16,9 +16,8 @@ use crate::domain::control::sensor::reading::{
     device_location_store, device_location_store_mut, SensorState,
 };
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
-use pxl_spec::space::layer::lattice::Grid;
-use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
+use pxl_spec::space::coord::zoom::LEAF_ZOOM;
+use pxl_spec::space::layer::lattice::{Grid, GROUND};
 use xpute_core::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -1,9 +1,8 @@
 // pxl-geo-bake/terrain/absent.test.rs
 
 use super::*;
-use pxl_spec::space::coord::zoom::SHARD_ZOOM;
+use pxl_spec::space::coord::zoom::{LEAF_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::tree::first_descendant_of;
-use pxl_spec::space::layer::quadrant::LEAF_ZOOM;
 
 /// The westmost shard's first leaf, and the leaf west of it, which no shard holds.
 fn absence() -> (Absence, Quadrant, Quadrant) {
