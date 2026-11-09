@@ -11,8 +11,8 @@ use pxl_engine::answer::In;
 use pxl_engine::cast::Query;
 use pxl_engine::clipmap as clip;
 use pxl_engine::clipmap::{
-    BrickSource, Lookup, Presence, ACROSS, BRICK_WORDS, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL_ZOOM,
-    JOINED_AT, JOINED_ENTRIES, JOINED_MIPS, ORIGIN_AT, OWN_AT, OWN_CELLS, ROOT_AT, SPANS_WORDS,
+    BrickSource, Lookup, ACROSS, BRICK_WORDS, ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL_ZOOM, JOINED_AT,
+    JOINED_ENTRIES, JOINED_MIPS, ORIGIN_AT, OWN_AT, OWN_CELLS, ROOT_AT, SPANS_WORDS,
 };
 use pxl_engine::fill;
 use pxl_engine::ground::{self, Resident};
@@ -207,14 +207,11 @@ impl World<'_> {
     }
 }
 
-impl Presence for World<'_> {
+impl BrickSource for World<'_> {
     fn present(&self, cell_zoom: Zoom, q: [i32; 2]) -> (u32, bool) {
         let row = self.row((cell_zoom - FIRST_CELL_ZOOM) * ENTRIES + clip::entry(q));
         (row.slot(), row.holds(q))
     }
-}
-
-impl BrickSource for World<'_> {
     fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool) {
         self.row((cell_zoom - FIRST_CELL_ZOOM) * ENTRIES + entry)
             .brick()

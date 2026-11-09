@@ -668,8 +668,8 @@ fn box_placed_matches_store() {
 /// zoom coarser than a brick.
 #[test]
 fn late_brick_spike() {
+    use crate::domain::layer::terrain::clipmap::clip_read;
     use crate::domain::layer::terrain::clipmap::test::{hand, unland};
-    use crate::domain::layer::terrain::clipmap::CpuClipmap;
     use pxl_engine::clipmap as cells;
     use pxl_engine::clipmap::{BrickSource, Lookup, BRICK_MIPS, CLIP_SIZE};
     use pxl_spec::brick::BRICK;
@@ -687,9 +687,9 @@ fn late_brick_spike() {
     let tile_cache = resident([x0 + 300.0, y0 + 200.0], &[(leaf, spiked)]);
     let store = Store::default();
     // Find the spike's column in the clip level of the eye's leaves.
-    let (first, _) = CpuClipmap.origin(LEAF_CELL_ZOOM);
+    let (first, _) = clip_read().origin(LEAF_CELL_ZOOM);
     let top = |g: [i32; 2]| {
-        cells::column_top(cells::cell(&CpuClipmap, Lookup::NONE, LEAF_CELL_ZOOM, g).1)
+        cells::column_top(cells::cell(&clip_read(), Lookup::NONE, LEAF_CELL_ZOOM, g).1)
     };
     let spike = (0..CLIP_SIZE as i32 * CLIP_SIZE as i32)
         .map(|k| {
@@ -733,7 +733,7 @@ fn late_brick_spike() {
         for zoom in MIN_ZOOM..LEAF_CELL_ZOOM - BRICK_MIPS {
             let s = LEAF_CELL_ZOOM - zoom;
             let (b, _, _) = cells::bound_over(
-                &CpuClipmap,
+                &clip_read(),
                 &mut Lookup::NONE.clone(),
                 [LEAF_CELL_ZOOM, LEAF_CELL_ZOOM],
                 (zoom, [g[0] >> s, g[1] >> s]),
@@ -751,7 +751,7 @@ fn late_brick_spike() {
 /// are gone.
 #[test]
 fn device_loss_drops_bounds() {
-    use crate::domain::layer::terrain::clipmap::{test::lose, CpuClipmap};
+    use crate::domain::layer::terrain::clipmap::{clip_read, test::lose};
     use pxl_engine::clipmap as cells;
     use pxl_engine::clipmap::{BrickSource, Lookup, BRICK_MIPS};
     use pxl_engine::ground::UNBOUNDED;
@@ -759,7 +759,7 @@ fn device_loss_drops_bounds() {
     use pxl_spec::space::coord::zoom::LEAF_CELL_ZOOM;
     let _g = serial();
     let _flat = flat_at_five();
-    let (first, _) = CpuClipmap.origin(LEAF_CELL_ZOOM);
+    let (first, _) = clip_read().origin(LEAF_CELL_ZOOM);
     let zoom = LEAF_CELL_ZOOM - BRICK_MIPS - 1;
     let over = || {
         let s = LEAF_CELL_ZOOM - zoom;
@@ -769,7 +769,7 @@ fn device_loss_drops_bounds() {
         ];
         let mut place = Lookup::NONE;
         cells::bound_over(
-            &CpuClipmap,
+            &clip_read(),
             &mut place,
             [LEAF_CELL_ZOOM, LEAF_CELL_ZOOM],
             (zoom, g),

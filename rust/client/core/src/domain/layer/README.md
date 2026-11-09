@@ -112,7 +112,7 @@ cut into its bricks as it lands, and the bricks are filled after the frame, a
 part at a time within the turn's share for tasks (`fill_share`): their cells, a
 min-max mipmap over them, and their ways as spans, a run in one pool all bricks
 share (`terrain/pool.rs`), 64 MiB and no more, what the GPU reads and nothing else.
-All of it is uploaded, so the CPU's query (`CpuClipmap`) and the GPU's cast meet the
+All of it is uploaded, so the CPU's query (`clip_read`) and the GPU's cast meet the
 same bridge. A tile's lines are vectors of its own on the heap and go with it,
 bounded as the tile is, by the slots and the bake's limit on a tile's bytes. A brick whose spans the pool cannot hold
 reads the coarser level's meanwhile, and its fill is tried again once the pool gives

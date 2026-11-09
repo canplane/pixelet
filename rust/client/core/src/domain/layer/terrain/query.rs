@@ -17,7 +17,7 @@ use pxl_spec::space::layer::area::Shard;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::Quadrant;
 
-use crate::domain::layer::terrain::clipmap::{self, CpuClipmap};
+use crate::domain::layer::terrain::clipmap::{self, clip_read};
 use crate::domain::layer::tile_cache::{Line, Path, TileCache};
 use crate::sys::io::source;
 
@@ -131,7 +131,7 @@ impl TileCache<TerrainTile> {
         place: Lookup,
         (zoom, c): Node<2>,
     ) -> Answer<Cell> {
-        let (cell, f) = cells::ground(&CpuClipmap, Shard::UNKNOWN, place, zoom, c);
+        let (cell, f) = cells::ground(&clip_read(), Shard::UNKNOWN, place, zoom, c);
         answer_at(line, f.from(), f.here(), cell)
     }
 

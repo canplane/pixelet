@@ -19,7 +19,7 @@ use pxl_spec::space::layer::area::Shard;
 
 use super::change;
 use super::world::World;
-use crate::domain::layer::terrain::clipmap::CpuClipmap;
+use crate::domain::layer::terrain::clipmap::clip_read;
 use crate::domain::layer::Answer;
 use pxl_spec::asset::cube::sentinel;
 
@@ -34,7 +34,7 @@ impl World<'_> {
     /// The surface of the cell `c` at `cell_zoom`. Past the service area it
     /// is the Earth's, at sea level. None where the cell has no ground.
     pub(super) fn surface_of(&self, cell_zoom: Zoom, c: [i32; 2]) -> Answer<Option<Surface>> {
-        let shard = Shard::UNKNOWN.at(&CpuClipmap, (cell_zoom, c));
+        let shard = Shard::UNKNOWN.at(&clip_read(), (cell_zoom, c));
         if shard.past() {
             return Answer::Exact(Some(Surface {
                 top: f64::from(SEA_LEVEL),

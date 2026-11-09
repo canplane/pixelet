@@ -60,7 +60,7 @@ use pxl_spec::space::layer::quadrant::Quadrant;
 
 use super::change;
 use super::world::World;
-use crate::domain::layer::terrain::clipmap::CpuClipmap;
+use crate::domain::layer::terrain::clipmap::clip_read;
 use crate::domain::layer::terrain::pool::way_pool;
 use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::Answer;
@@ -139,7 +139,7 @@ impl World<'_> {
     /// What is in `at`'s node, asked over `zooms`, the zooms from far to
     /// near that a reader asks within it. This is the world's one query
     /// (pxl-engine `world::node`). The ground is read as the GPU reads it,
-    /// off the clip levels (`CpuClipmap`), down the node's line through the
+    /// off the clip levels (`clip_read`), down the node's line through the
     /// tile cache (`GroundRead`).
     ///
     /// The answer (pxl-engine `answer`) is one of three: a split, with its
@@ -159,7 +159,7 @@ impl World<'_> {
         let mut reading = GroundRead::new(self, path);
         let i = world::node(
             &mut reading,
-            &CpuClipmap,
+            &clip_read(),
             &lanes,
             way_pool(),
             &mut at.inheritance,
@@ -259,6 +259,6 @@ impl ground::Resident for GroundRead<'_, '_> {
     /// `clipmap::ground`), or the wall where the column is the wall. The
     /// lookup steps on from where the node's relief found its cells.
     fn cell(&mut self, shard: Shard, place: Lookup, zoom: Zoom, c: [i32; 3]) -> Cell {
-        clipmap::ground(&CpuClipmap, shard, place, zoom, [c[0], c[1]]).0
+        clipmap::ground(&clip_read(), shard, place, zoom, [c[0], c[1]]).0
     }
 }

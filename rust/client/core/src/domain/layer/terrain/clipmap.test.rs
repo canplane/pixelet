@@ -419,11 +419,11 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
                 (q[0] << BRICK_SHIFT) + x as i32,
                 (q[1] << BRICK_SHIFT) + y as i32,
             ];
-            let (place, _) = clipmap::step(&CpuClipmap, Lookup::NONE, cell_zoom, g);
+            let (place, _) = clipmap::step(&clip_read(), Lookup::NONE, cell_zoom, g);
             assert!(place.here() && place.slot() == b);
             for z in -64..256 {
                 let got = clipmap::way_at(
-                    &CpuClipmap,
+                    &clip_read(),
                     way_pool(),
                     place,
                     [i32::MIN / 2, i32::MAX / 2],
@@ -781,7 +781,7 @@ fn left_brick_part() {
     for s in 0..ENTRIES {
         let q = want(w, pivot, s);
         assert!(
-            CpuClipmap.present(LEAF_CELL_ZOOM, q).1,
+            clip_read.present(LEAF_CELL_ZOOM, q).1,
             "the pivot's bricks stay present"
         );
         assert!(w.table.entries[(pivot * ENTRIES + s) as usize].holds(q));

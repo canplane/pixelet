@@ -662,7 +662,7 @@ pub fn drawn_at(at: Zoom, cell_zoom: Zoom, placed: bool) -> bool {
 /// present, as a ray reads it (`clipmap::step`), or the first where none does. Where a finer
 /// clip level holds no brick, because the bake left an empty page out (open sea), a coarser
 /// clip level's ground is drawn there, and its decor with it.
-pub fn ray_zoom(w: &impl clipmap::Presence, at: Zoom, c: [i32; 2]) -> Zoom {
+pub fn ray_zoom(w: &impl clipmap::BrickSource, at: Zoom, c: [i32; 2]) -> Zoom {
     let z = clipmap::clip_zoom(at);
     let s = LEAF_CELL_ZOOM - z;
     let g = [wrap_idx(z, c[0] >> s), c[1] >> s];

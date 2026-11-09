@@ -19,8 +19,8 @@
 
 use pxl_engine::clipmap;
 use pxl_engine::clipmap::{
-    BrickSource, Entry, Lookup, Presence, BRICK_MIPS, BRICK_WORDS, CLIP_LEVELS, ENTRIES,
-    EYE_CLIP_LEVELS, FIRST_CELL_ZOOM, ROOT_AT, SLOTS, SPANS_ACROSS, SPANS_WORDS,
+    BrickSource, Entry, Lookup, BRICK_MIPS, BRICK_WORDS, CLIP_LEVELS, ENTRIES, EYE_CLIP_LEVELS,
+    FIRST_CELL_ZOOM, ROOT_AT, SLOTS, SPANS_ACROSS, SPANS_WORDS,
 };
 use pxl_engine::fill;
 use pxl_engine::ground;
@@ -348,7 +348,7 @@ fn planes() -> &'static mut BrickMemory {
 /// Two places write which brick a clip level wants or whether it is
 /// present: `assign_slots`, in a turn's step, which folds before it returns,
 /// and the bricks a frame hands over (`upload`), folded once after all of
-/// them. No read of a bound (`CpuClipmap`) comes between a write and its
+/// them. No read of a bound (`clip_read`) comes between a write and its
 /// fold, so a bound read never sees other bricks than a read of the cells
 /// does. The fold reads through the clip levels it is handed (`ClipRead`),
 /// which its writer holds while it runs.
@@ -1129,29 +1129,12 @@ fn end(w: &mut Clipmap, b: u32, fill: Fill) -> Poll {
     Poll::Ran
 }
 
-/// The clip levels as the CPU holds them, for the one way pxl-engine reads a
-/// cell on the CPU and the GPU alike (`clipmap::step`,
-/// `clipmap::bound_over`). It gives each brick's columns, mip levels and the
-/// root of its run of kept spans, read from the ways' pool (`pool`); the
-/// mip levels folded here over the eye's bricks (`fold`); and the service
-/// area the clip levels end at (pxl-spec `area::Area`).
-#[derive(Clone, Copy)]
-pub(in crate::domain::layer) struct CpuClipmap;
-
-impl Area for CpuClipmap {
-    fn ends(&self) -> bool {
-        ServiceArea.ends()
-    }
-    fn nine(&self, key: u32) -> u32 {
-        ServiceArea.nine(key)
-    }
-}
-
 /// Clip levels that a caller already holds, read as a center reads them: its
 /// own clip level at a zoom where it has one, and the eye's at any other.
 /// `fold` reads through it, since it runs while its writer holds the clip
 /// levels.
-struct ClipRead<'a>(&'a Clipmap, Center);
+#[derive(Clone, Copy)]
+pub(in crate::domain::layer) struct ClipRead<'a>(&'a Clipmap, Center);
 
 impl ClipRead<'_> {
     /// The clip level read at `cell_zoom`.
@@ -1164,7 +1147,7 @@ impl ClipRead<'_> {
     }
 }
 
-impl Presence for ClipRead<'_> {
+impl BrickSource for ClipRead<'_> {
     /// A brick is present once it was handed to the GPU, in the slot that
     /// holds it, whichever clip levels want it.
     fn present(&self, cell_zoom: Zoom, q: [i32; 2]) -> (u32, bool) {
@@ -1172,9 +1155,6 @@ impl Presence for ClipRead<'_> {
         let slot = slot_of(w, cell_zoom, q).filter(|&b| w.slots[b as usize].present);
         (slot.unwrap_or(0), slot.is_some())
     }
-}
-
-impl BrickSource for ClipRead<'_> {
     fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool) {
         self.0.table.entries[(self.level(cell_zoom) * ENTRIES + entry) as usize].brick()
     }
@@ -1212,38 +1192,20 @@ impl BrickSource for ClipRead<'_> {
     }
 }
 
-/// The core's clip levels, read in place through `ClipRead`.
-impl Presence for CpuClipmap {
-    fn present(&self, cell_zoom: Zoom, q: [i32; 2]) -> (u32, bool) {
-        ClipRead(clipmap(), Center::Eye).present(cell_zoom, q)
+impl Area for ClipRead<'_> {
+    fn ends(&self) -> bool {
+        ServiceArea.ends()
+    }
+    fn nine(&self, key: u32) -> u32 {
+        ServiceArea.nine(key)
     }
 }
 
-impl BrickSource for CpuClipmap {
-    fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool) {
-        ClipRead(clipmap(), Center::Eye).brick(cell_zoom, entry)
-    }
-    fn palette_word(&self, cell_zoom: Zoom, b: u32, i: u32) -> u32 {
-        ClipRead(clipmap(), Center::Eye).palette_word(cell_zoom, b, i)
-    }
-    fn joined(&self, cell_zoom: Zoom, e: u32) -> [u32; clipmap::JOINED_WORDS as usize] {
-        ClipRead(clipmap(), Center::Eye).joined(cell_zoom, e)
-    }
-    fn origin(&self, cell_zoom: Zoom) -> ([i32; 2], bool) {
-        ClipRead(clipmap(), Center::Eye).origin(cell_zoom)
-    }
-    fn own(&self, cell_zoom: Zoom, b: u32, i: u32) -> u32 {
-        ClipRead(clipmap(), Center::Eye).own(cell_zoom, b, i)
-    }
-    fn column(&self, cell_zoom: Zoom, b: u32, i: u32) -> u32 {
-        ClipRead(clipmap(), Center::Eye).column(cell_zoom, b, i)
-    }
-    fn bound_mip(&self, cell_zoom: Zoom, b: u32, j: u32, at: [u32; 2]) -> [i32; 2] {
-        ClipRead(clipmap(), Center::Eye).bound_mip(cell_zoom, b, j, at)
-    }
-    fn root(&self, cell_zoom: Zoom, b: u32) -> u32 {
-        ClipRead(clipmap(), Center::Eye).root(cell_zoom, b)
-    }
+/// The core's clip levels as the eye reads them, for the one way pxl-engine
+/// reads a cell on the CPU and the GPU alike (`clipmap::step`,
+/// `clipmap::bound_over`).
+pub(in crate::domain::layer) fn clip_read() -> ClipRead<'static> {
+    ClipRead(clipmap(), Center::Eye)
 }
 
 /// What the clip levels hold of the node `(zoom, c)` at the cells from
