@@ -11,8 +11,8 @@ Whether the cooperative scheduler, the fetches and the memory's limits and
 budgets are closed, and whether the memory is described correctly; then to close
 them structurally, with nothing ad hoc. The user's frame for it: memory is fixed
 at 512 MiB on a handheld and 1 GiB on a desktop, and a heap that fills stops the
-core ("힙이 꽉 차면 그냥 죽이는거야... 그냥 RAII라고"). Close the problem and do
-not grow it ("확장하지 말고 문제를 닫으라고").
+core, nothing cleans up because it is full, and each owner lets go of what it
+holds. The problem was to be closed, not grown.
 
 ## What was found
 
@@ -22,10 +22,12 @@ without a bound is the objects.
 
 - The scheduler: every unit is bounded, yields at a boundary and advances each
   turn. Outside the turn's budget run the location indicator, the glTF parse and
-  the objects' apply, the last alone growing with a shard.
+  the objects' apply, the last alone growing with a shard. A CPU ray ends at
+  `STEPS_CAP`, 4096 steps. The render passes loop over fixed counts or the turn's
+  draw lists, and a frame that no longer fits the GPU's stream is dropped.
 - The memory: the front, `.fixed` and the heap's bounded flows have caps the
   build checks. The rest of the heap is workspace and has no sum, by design:
-  "각각의 상한을 더한게 상한이라는 무식한 소리는 하는거 아니다."
+  the user ruled out taking the caps added up as the limit.
 - The tiles: the four layers take one path (`TileCache`, `Demand::admit`, the
   farthest from the view evicted first). They differ only in where a tile's
   content lies.
@@ -41,7 +43,35 @@ without a bound is the objects.
 | `TileCache::again` reports its new mark as changed | A tile asked for again was missed | `17602cd358` |
 | The clipmap reports a change per brick | A coarse tile's report threw away the location indicator's memo every frame ([measured](../experiment/20261109-the-location-recomputed-less.md)) | `ef2298f898` |
 | `script/perf/measure.py` reads the results in batches | The script hung on a large result | `ef2298f898` |
-| The tiles' columns and rows take one set of names, plural columns and singular rows, `XxxTile` and `Xxx` | The user's discipline: "필드 구조는 다를 수 있어도 필드명은 다 똑같은 것만" | `a4620890f8` |
+| The tiles' columns and rows take one set of names, plural columns and singular rows, `XxxTile` and `Xxx` | The user's discipline: tiles may differ in structure, but a field that is the same thing has the same name | `a4620890f8` |
+| The place and division decoders build their rows without `Option`, and `tile_of` returns a tile | `StrList::get` fails only past the list's length, and each decoder has already held every column to one length and, for the divisions, every kind to a known one, so the failure branches could not be taken | not yet committed |
+
+## A read the replaced runtime left
+
+The user's word: not to leave it as a recommendation, and to secure the minimum
+of symmetry.
+
+- **The fault.** A core outlives a JS reload on a device, and a new runtime reads
+  the rings from where the old one stopped (`ipc/head.ts`). A read the core had
+  posted and the old runtime had not taken reaches the new one, which holds no
+  such file. `FS_CLOSE` answered `EBADF` for such a descriptor and `FS_WRITE`
+  returned; `FS_READ` alone threw, which ends the runtime. Read from the code, not
+  run on a device. Nothing in the app reloads JS outside development.
+- **Done.** `FS_READ` of a file the runtime does not hold is dropped, and its close
+  answers `EBADF`, held by the trace `read.unknown` in `conformance/fs/file.tsv`.
+  A file held with no bytes still throws: that is the core reading before its open
+  completed, a bug on the core's side.
+- **What the dropped read leaves.** The core's buffer stays zeroed. A fetch's body
+  goes with its attempt, since `request::reset` on the attach ended the attempt and
+  `fetch.rs` `drop_stopped` lets go of an arrival with none. An asset's read has no
+  attempt to check (`loader.rs` `arrival`), so that asset takes zeros, as it would
+  a corrupt file, and stays failed until the process restarts. The settings' read
+  at boot, caught the same way, would be refused and set aside.
+- **`FileTable::forget` is not put back.** The user had it removed. So
+  `request::reset` ends a read's attempt without closing its descriptor, and a
+  reload with reads out leaves up to the credits' 16 of the core's 19 descriptors
+  taken; a second such reload can then stop the core on `ENOSPC`. Development only,
+  as above.
 
 ## Decided against, and why
 
@@ -77,9 +107,6 @@ without a bound is the objects.
 | --- | --- |
 | The frame test's intermittent failure, "the view did not rest within 10 idle turns" | Every other check leans on it. At `443124ecfb` it did not fail: three runs of `cargo test-host`, four under a CPU load of 20 processes, 30 of six copies at once on the GPU, and 91 with 0 to 90 extra frames shifting the clock's phase. The cause is unknown, and it is looked at again when it next fails |
 | The location indicator's ~10 ms a recompute, outside the budget | The largest measured CPU cost left in a turn |
-| What the scheduler's reading did not reach: the CPU ray's step limit, inside the render passes | "Closed" does not cover them yet |
-| The decoders' unreachable branches in place and division | Dead paths, since a tile's columns are checked before |
-| xpute's `forget` and `fs.ts`: whether a new runtime reads from the old head | If it does, a device's JS reload dies on `EBADF`, and the fix was reverted without this being known |
 | After the ways' move to the heap: the memory's record and the ways' turn budget again | The ways' pool is 64 MiB of the flows' sum, and bricks and their fill change |
 
 ## Open

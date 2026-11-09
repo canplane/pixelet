@@ -12,16 +12,15 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P1
 
-- **The frame test's intermittent failure, and what the scheduler's reading has
-  not reached; xpute's `forget`.** Each with its reason in
+- **The frame test's intermittent failure.** Its reason in
   [the minutes](./minutes/20261109-closing-the-scheduler-the-reads-and-the-memory.md),
   "Queued".
 
 ## P2
 
 - **After the ways' move to the heap: the memory's record and the ways' turn
-  budget again; the location indicator's ~10 ms a recompute; the decoders'
-  unreachable branches.** The same minutes.
+  budget again; the location indicator's ~10 ms a recompute.** The same
+  minutes.
 - **The light's tail on the S23.** A p95 frame spends 90 to 140 ms in `light_hit`
   and 75 to 100 in `light_sample`, where the median frame is about 60 ms whole
   ([the journal](./experiment/20261103-the-frame-on-the-s23/README.md), "The

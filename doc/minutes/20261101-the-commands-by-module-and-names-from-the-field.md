@@ -16,7 +16,7 @@ name, the majors themselves, the words around them (`frame`, `space`, `world`,
 ## What the user decided
 
 - **A command's major is the module it is for**, as a microkernel's message is
-  its server's (2026-11-01, the user: "모듈 기준으로"). The majors are `SYS`,
+  its server's (2026-11-01, the user's choice). The majors are `SYS`,
   `INPUT`, `SENSOR`, `FS`, `GPU`, `SURFACE`, `SETTING`, `SCENE`, `CAMERA`,
   `PERF`, `EDIT` and `SHELL`; a sensor's command goes to `SENSOR` and an input's
   to `INPUT` whoever sends it. Every command keeps its major as a prefix. An
@@ -29,11 +29,11 @@ name, the majors themselves, the words around them (`frame`, `space`, `world`,
   (`SENSOR_PERMISSION`, `INPUT_XR_POSE`); what the program alone does takes a
   plain word. A platform API, an engine or a map library (W3C, Unreal, Mapbox)
   is no authority for a major, and a metaphor no field uses is no name. Carried
-  into the naming skill as one paragraph, kept short on the user's word: "룰이
-  많으면 자유도를 오히려 제약해."
+  into the naming skill as one paragraph, kept short on the user's word that
+  many rules restrict freedom rather than give it.
 - **`frame` keeps its meanings**: a ring's message (xpute), a coordinate frame
   (`domain/view/frame/`, a local frame) and a drawn frame (`SURFACE_FRAME`, the
-  profiler's `FRAME`). The user: "이름 겹쳐도 됨. CS도 그러잖아." The command a
+  profiler's `FRAME`). The user: names may overlap, as they do across computer science. The command a
   drawn frame is begun by is `SURFACE_FRAME`, after `KERNEL_TURN`, `KERNEL_VSYNC`
   and `KERNEL_FRAME` were each tried and left: a turn need not carry one, a vsync
   is every refresh, and the kernel is not its owner. `TURN_GRANT` replaced
@@ -57,7 +57,7 @@ name, the majors themselves, the words around them (`frame`, `space`, `world`,
   by a noun.
 
   > Since 2026-11-08, the user: the surface's role `PREVIEW` was not theirs
-  > ("surface role도 내가 승인한거 아냐"). It is `CHARACTER`, as a world surface's
+  > and not one they had approved. It is `CHARACTER`, as a world surface's
   > is `WORLD`; preview is the edit's.
 - **Gone**: `WORLD_VIEW`, since the world surface's open and close say the same;
   `INPUT_RECT`, since the view's size is the world surface's (`SURFACE_RESIZE`)

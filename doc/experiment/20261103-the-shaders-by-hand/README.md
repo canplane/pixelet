@@ -267,7 +267,7 @@ The passes went by hand in bundles. The user had asked for speed, with the
 instruction of 2026-11-03 to draft fast and have someone review; the agent grew that
 into reference tests, a mutant sweep and an outside audit for every bundle, a bundle
 took half a day, and the user had to dig the instruction out again. On the evening
-of 2026-11-04, after the user's word "그냥 번역해" ("just translate it"), four
+of 2026-11-04, after the user said simply to translate them, four
 translators in four worktrees took the last 15 passes at once and built and checked
 them on the CPU only. Each branch landed by fast-forward, and the next rebased once
 onto it (miss `0b978c7e53`; light `c0e206a08d`; beam, cast and face `2cc580cd88`;
