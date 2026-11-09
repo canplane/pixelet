@@ -196,7 +196,7 @@ pub mod STREAM_STAT {
     pub const reasons: u32 = 7;
     pub const phase_n: u32 = 19;
     pub const phase_mean: u32 = 20;
-    pub const WORDS: u32 = 24;
+    pub const WORDS: u32 = 23;
 }
 
 /// One registered step's timing, at STAT.steps.slots + its index × WORDS. `name` indexes STEP_NAMES.
@@ -248,17 +248,17 @@ pub mod STAT {
     pub mod tasks {
         pub const AT: u32 = 391;
         pub const slots: u32 = 0;
-        pub const WORDS: u32 = 144;
+        pub const WORDS: u32 = 138;
     }
     pub mod steps {
-        pub const AT: u32 = 535;
+        pub const AT: u32 = 529;
         pub const cnt: u32 = 0;
         pub const slots: u32 = 1;
         pub const WORDS: u32 = 161;
     }
     /// What the frames held at the most or the least since the recording started, as the steps are timed, folded as each frame turn's record is taken (perf/record.rs `perf_fold_recording`): `frames` the frame turns folded; the heap's figures by their allocator's names (xpute-core mem/heap.rs `HeapStat`), the most of each but `largest_free`, the least, and `refusals` as it last stood; the door's rings' peaks and the body slots' (xpute-core ipc/door.rs `DoorStat`, sys/io/body.rs `take_peak`), `ring_left_peak` its `left_peak`; and `terrain_refusals` the terrain tiles the tile cache refused a slot, summed (domain/layer/tile_cache.rs `take_refusals`). Every word 0 before a frame is folded.
     pub mod recording {
-        pub const AT: u32 = 696;
+        pub const AT: u32 = 690;
         pub const frames: u32 = 0;
         pub const heap_live_max_bytes: u32 = 1;
         pub const heap_run_max_bytes: u32 = 2;
@@ -273,7 +273,7 @@ pub mod STAT {
         pub const terrain_refusals: u32 = 11;
         pub const WORDS: u32 = 12;
     }
-    pub const WORDS: u32 = 708;
+    pub const WORDS: u32 = 702;
 }
 
 /// What PERF_STATS finds as it reads, the window aside: each section's words at its AT, as STAT lays out its own. Every word an f64.

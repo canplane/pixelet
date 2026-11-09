@@ -19,12 +19,7 @@ export const STREAM_NAMES = [
 
 export const OUTCOME_NAMES = ["ok", "aborted", "err"] as const;
 
-export const TASK_PHASE_NAMES = [
-  "net_ms",
-  "bytes",
-  "decode_ms",
-  "adopt_ms",
-] as const;
+export const TASK_PHASE_NAMES = ["net_ms", "bytes", "decode_ms"] as const;
 
 /** A run's timings past this many are dropped. */
 export const TASK_PHASES_MAX: u32 = 6 as number;
