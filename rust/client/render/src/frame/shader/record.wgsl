@@ -10,7 +10,7 @@
 /// The value that stands for no slot and no place.
 const NO_ENTRY: u32 = 0xffffffffu;
 
-fn record_frame() -> u32 {
+fn rec_frame() -> u32 {
   return node_cache_word(FRAME);
 }
 
@@ -90,7 +90,7 @@ fn find(zoom: u32, c: vec3<i32>, asset: vec2<u32>, lacks: bool) -> u32 {
     if (!lacks && (node_cache_word(e + W_ASSET) != asset.x || node_cache_word(e + W_ASSET + 1u) != asset.y)) {
       continue;
     }
-    if ((node_cache_word(state_at(slot)) & RECORD_FACES) != 0u) {
+    if ((node_cache_word(state_at(slot)) & REC_FACES) != 0u) {
       return slot;
     }
     if (found == NO_ENTRY) {

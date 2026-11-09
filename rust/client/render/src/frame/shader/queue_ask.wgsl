@@ -6,7 +6,7 @@
 // cache when the next walk goes on from the parked states, after this dispatch ends.
 
 /// The run's queue, bound from its head (pxl-engine `ray::QUEUE_WORDS`, `ray::queue_at`). Past
-/// the heads lie the asks' records, which every queue shares (`queue_records_at`).
+/// the heads lie the asks' records, which every queue shares (`queue_recs_at`).
 @group(0) @binding(10) var<storage, read_write> queue: array<atomic<u32>>;
 
 /// Asks the world once, for all the rays the queue parked at it, for the node `c` at `zoom`
@@ -49,9 +49,9 @@ fn ask_once(parent: vec3<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32) {
 
 /// Asks once for each node that the first walk listed, or the `parked`.
 fn queue_ask(parked: bool, id: u32) {
-  let n = in_cap(atomicLoad(&queue[select(QUEUE_ASKS, QUEUE_ASKS_PARKED, parked)]), QUEUE_RECORDS_CAP);
+  let n = in_cap(atomicLoad(&queue[select(QUEUE_ASKS, QUEUE_ASKS_PARKED, parked)]), QUEUE_RECS_CAP);
   for (var k = id; k < n; k += QUEUE_GROUPS * QUEUE_LANES) {
-    let at = queue_records_at() + k * QUEUE_RECORD_WORDS;
+    let at = queue_recs_at() + k * QUEUE_REC_WORDS;
     let c = vec3<i32>(
       i32(atomicLoad(&queue[at + 1u])),
       i32(atomicLoad(&queue[at + 2u])),

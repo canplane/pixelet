@@ -56,7 +56,7 @@ stream has room to send, or by revisions the GPU never held, or by a write that
 names no box, and the casts outrunning the frames a key's tag tells apart
 (`ray/cast.rs`). That is correct, and costs only a cast of everything again.
 The entries a ray stopped on are the record, and the raster draws every fresh
-one in view each frame (`record_draw_cs`). A frame whose rays reached little
+one in view each frame (`rec_draw_cs`). A frame whose rays reached little
 still draws everything found before that is still fresh; a still frame over a
 still world draws nothing at all.
 
@@ -107,7 +107,7 @@ coarser than the ground's leaf begin, and the box reaches at least that far.
 
 The light casts only what a receiver reads. Each voxel the eye sees, each pixel
 it walked, each placed decor and each drawn character marks the tiles it stands
-on within the effects' reach (`record_draw_cs`, `light_mark_walked_cs`,
+on within the effects' reach (`rec_draw_cs`, `light_mark_walked_cs`,
 `light_mark_draws_cs`). A tile is read if it lies sunward of one stood on,
 within the tallest decor's height (`light_propagate_cs`), and only the tiles
 read anew are cast. Where nothing within the effects' reach is seen, the light

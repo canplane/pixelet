@@ -78,10 +78,10 @@ fn cast_px(p: vec2<u32>, size: vec2<u32>) -> bool {
     let slot = visible - 1u;
     let e = entry_at(slot);
     let state = node_cache_word(state_at(slot));
-    if (entry_kind(slot) != KIND_SPLIT && (state & RECORD_ASKED) != 0u) {
+    if (entry_kind(slot) != KIND_SPLIT && (state & REC_ASKED) != 0u) {
       let k = entry_node(slot, vec3<i32>(aim.origin));
       let fill = (node_cache_word(e + W_ASSET) >> FILL_SHIFT) & (EIGHTHS - 1u);
-      let faces = (state & RECORD_ASKED) >> RECORD_ASKED_SHIFT;
+      let faces = (state & REC_ASKED) >> REC_ASKED_SHIFT;
       let entry = visible_cell(aim, k.zoom, k.corner, k.roots - origin_roots(aim.origin), fill, faces);
       if (entry.enters) {
         // The ray's words, with what lies about its face taken from the voxel's (`word`,

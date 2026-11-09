@@ -38,7 +38,7 @@ pub const RUN: u32 = 16;
 
 /// The most decor one brick generates, all decors together: each decor's capacity
 /// (`cap`), laid in the catalog's order.
-pub const BRICK_RECORD_CAP: u32 = {
+pub const BRICK_REC_CAP: u32 = {
     let (mut sum, mut k) = (0, 0);
     while k < ROWS.len() {
         sum += cap(&ROWS[k]);
@@ -49,7 +49,7 @@ pub const BRICK_RECORD_CAP: u32 = {
 
 /// The most records any one decor holds in a brick (`cap`), over which `decor_pose_cs` is
 /// dispatched.
-pub const DECOR_RECORD_CAP: u32 = {
+pub const DECOR_REC_CAP: u32 = {
     let (mut most, mut k) = (0, 0);
     while k < ROWS.len() {
         let cap = cap(&ROWS[k]);
@@ -64,10 +64,10 @@ const _: () = assert!(
     "a row is whole words, as a GPU reads the table"
 );
 
-/// A record of decor the GPU draws: its first word (`record_word`), then
+/// A record of decor the GPU draws: its first word (`rec_word`), then
 /// its box's min corner in leaf cells, then how far its base sinks under
 /// it (`Prop::sink`).
-pub const RECORD_WORDS: u32 = 5;
+pub const REC_WORDS: u32 = 5;
 
 /// The eye's clip levels' bricks, one entry each, in which the GPU generates decor; entry `s`
 /// is the brick the clip levels' table holds at `s`.
@@ -87,23 +87,23 @@ const _: () = assert!(
 );
 
 /// The GPU's decor in one buffer of words: a head for each eye entry, then each entry's
-/// `BRICK_RECORD_CAP` records, then placed decor's head and its records. An entry's records are
-/// each decor's in turn, as many as it retained (`entry_record`); a decor generated again lays
+/// `BRICK_REC_CAP` records, then placed decor's head and its records. An entry's records are
+/// each decor's in turn, as many as it retained (`entry_rec`); a decor generated again lays
 /// its own anew. A head holds the brick the records were generated for, X and Y, and 1 once
 /// they were, so that an entry whose brick the clip levels do not hold there any more is
 /// skipped (`generated_for`); then how many records each decor laid (`cnt_at`). Placed decor's
 /// head is its count.
 pub const CNT_AT: u32 = 3;
 pub const HEADER_WORDS: u32 = CNT_AT + ROWS.len() as u32;
-pub const ENTRY_RECORDS_AT: u32 = EYE_ENTRIES * HEADER_WORDS;
+pub const ENTRY_RECS_AT: u32 = EYE_ENTRIES * HEADER_WORDS;
 /// The records all the entries hold, which come before placed decor's.
-pub const ENTRY_RECORDS: u32 = EYE_ENTRIES * BRICK_RECORD_CAP;
-pub const PLACED_HEADER: u32 = ENTRY_RECORDS_AT + ENTRY_RECORDS * RECORD_WORDS;
+pub const ENTRY_RECS: u32 = EYE_ENTRIES * BRICK_REC_CAP;
+pub const PLACED_HEADER: u32 = ENTRY_RECS_AT + ENTRY_RECS * REC_WORDS;
 pub const PLACED_HEADER_WORDS: u32 = 4;
 
 /// The runs of records a decor pass's workgroup reads (decor_run.wgsl `run_of`): for an
 /// entry, `RUN` records each; for placed decor, one record each.
-pub const RUNS: u32 = BRICK_RECORD_CAP / RUN;
+pub const RUNS: u32 = BRICK_REC_CAP / RUN;
 
 /// Entry `s`'s head.
 pub const fn header_at(s: u32) -> u32 {
@@ -117,7 +117,7 @@ pub const fn cnt_at(s: u32, k: u32) -> u32 {
 
 /// Where `rows`' decor `k`'s records start among an entry's: the decors'
 /// capacities laid in the catalog's order (`cap`).
-pub fn first_record(rows: &[Row], k: u32) -> u32 {
+pub fn first_rec(rows: &[Row], k: u32) -> u32 {
     let (mut first, mut j) = (0, 0);
     while j < k {
         first += cap(&rows[j as usize]);
@@ -127,18 +127,18 @@ pub fn first_record(rows: &[Row], k: u32) -> u32 {
 }
 
 /// Entry `s`'s `i`-th record of `rows`' decor `k`, as a record number
-/// (`record_at`).
-pub fn entry_record(rows: &[Row], s: u32, k: u32, i: u32) -> u32 {
-    s * BRICK_RECORD_CAP + first_record(rows, k) + i
+/// (`rec_at`).
+pub fn entry_rec(rows: &[Row], s: u32, k: u32, i: u32) -> u32 {
+    s * BRICK_REC_CAP + first_rec(rows, k) + i
 }
 
 /// Record `n`'s first word, numbering the entries' records first, entry by entry, then
 /// placed decor's.
-pub const fn record_at(n: u32) -> u32 {
-    if n < ENTRY_RECORDS {
-        ENTRY_RECORDS_AT + n * RECORD_WORDS
+pub const fn rec_at(n: u32) -> u32 {
+    if n < ENTRY_RECS {
+        ENTRY_RECS_AT + n * REC_WORDS
     } else {
-        PLACED_HEADER + PLACED_HEADER_WORDS + (n - ENTRY_RECORDS) * RECORD_WORDS
+        PLACED_HEADER + PLACED_HEADER_WORDS + (n - ENTRY_RECS) * REC_WORDS
     }
 }
 
@@ -257,20 +257,20 @@ pub fn meets(reads: [i32; 4], b: [i32; 4]) -> bool {
 /// A record's first word: its decor and variant, a byte each, its turn in quarters, and the
 /// clip level zoom it was generated at, or for placed decor the coarsest it stands at
 /// (`scatter::coarsest_stand`); above them, once sized, its region (`drawing::REGION_SHIFT`).
-pub const fn record_word(decor: u32, variant: u32, turn: u32, cell_zoom: Zoom) -> u32 {
+pub const fn rec_word(decor: u32, variant: u32, turn: u32, cell_zoom: Zoom) -> u32 {
     decor | variant << VARIANT_SHIFT | turn << TURN_SHIFT | cell_zoom << CELL_ZOOM_SHIFT
 }
 
 /// The place and width of a record's turn in its first word, and its zoom's place above it
-/// (`record_word`).
+/// (`rec_word`).
 pub const TURN_SHIFT: u32 = 16;
-/// A record's variant's place past its decor, a byte each (`record_word`).
+/// A record's variant's place past its decor, a byte each (`rec_word`).
 pub const VARIANT_SHIFT: u32 = 8;
 pub const TURN_BITS: u32 = 2;
 pub const CELL_ZOOM_SHIFT: u32 = TURN_SHIFT + TURN_BITS;
 
-/// A record's decor, variant, turn and zoom (`record_word`).
-pub const fn record_of(w: u32) -> (u32, u32, u32, Zoom) {
+/// A record's decor, variant, turn and zoom (`rec_word`).
+pub const fn rec_of(w: u32) -> (u32, u32, u32, Zoom) {
     (
         w & ((1 << VARIANT_SHIFT) - 1),
         (w >> VARIANT_SHIFT) & ((1 << VARIANT_SHIFT) - 1),
@@ -526,7 +526,7 @@ pub fn dist2(origin: [i32; 3], at: [i32; 3]) -> f32 {
 }
 
 /// Whether decor is drawn where the rays ask zoom `at` (`Detail::at` at its distance,
-/// `dist2`), given its record's zoom `cell_zoom` (`record_of`). One generated at a coarser
+/// `dist2`), given its record's zoom `cell_zoom` (`rec_of`). One generated at a coarser
 /// clip level is drawn where `at` is that clip level's zoom, so each distance draws one clip
 /// level's decor; one generated at the leaves' is drawn where `at` is the leaf cell's zoom or
 /// finer; and one `placed` is drawn where `at` is the coarsest zoom it stands at or finer, so

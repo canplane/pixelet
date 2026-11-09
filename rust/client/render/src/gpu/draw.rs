@@ -289,7 +289,7 @@ pub struct DrawList {
     taken_rewrites: Vec<u32>,
     /// Each pipeline's records. Those this turn has set come first, in the order it set them,
     /// which is the order they are drawn in; `set` counts them.
-    records: [Vec<[u32; DRAW_WORDS]>; DRAW_PIPELINES.len()],
+    recs: [Vec<[u32; DRAW_WORDS]>; DRAW_PIPELINES.len()],
     set: [usize; DRAW_PIPELINES.len()],
     slots: Vec<Slot>,
     /// The slots let go, which a new draw takes first.
@@ -405,7 +405,7 @@ pub struct DrawUpdate<'a> {
 /// each record's uniform at its slot (`uniform_of`), handed where they lie.
 #[derive(Clone, Copy)]
 pub struct DrawTable<'a> {
-    records: &'a [Vec<[u32; DRAW_WORDS]>; DRAW_PIPELINES.len()],
+    recs: &'a [Vec<[u32; DRAW_WORDS]>; DRAW_PIPELINES.len()],
     slots: &'a [Slot],
     pub uniforms: &'a [f32],
     turn: u32,
@@ -414,7 +414,7 @@ pub struct DrawTable<'a> {
 
 impl<'a> DrawTable<'a> {
     pub fn of(&self, pipeline: u32) -> core::slice::Iter<'a, [u32; DRAW_WORDS]> {
-        self.records
+        self.recs
             .get(pipeline as usize)
             .map_or(&[][..], Vec::as_slice)
             .iter()
@@ -440,7 +440,7 @@ impl<'a> DrawTable<'a> {
             .slots
             .get(slot as usize)
             .filter(|s| s.pipeline != FREE)?;
-        let d = self.records[s.pipeline as usize][s.at as usize];
+        let d = self.recs[s.pipeline as usize][s.at as usize];
         let mut u = [0.0; DRAW_FLOATS];
         u.copy_from_slice(uniform_of(self.uniforms, &d));
         Some((d, u))
@@ -611,9 +611,9 @@ impl DrawList {
     /// place. Both records lie past those the turn has set, so the turn's order is kept.
     fn unlist(&mut self, slot: u32) {
         let s = self.slots[slot as usize];
-        let records = &mut self.records[s.pipeline as usize];
-        records.swap_remove(s.at as usize);
-        if let Some(moved) = records.get(s.at as usize) {
+        let recs = &mut self.recs[s.pipeline as usize];
+        recs.swap_remove(s.at as usize);
+        if let Some(moved) = recs.get(s.at as usize) {
             self.slots[moved[3] as usize].at = s.at;
         }
     }
@@ -630,15 +630,14 @@ impl DrawList {
         // second set is refused.
         xpute_kit::ensure!(s.set != self.turn, EEXIST, slot);
         self.slots[slot as usize].set = self.turn;
-        let record = [words[0], words[1], words[2], slot, pipeline];
+        let rec = [words[0], words[1], words[2], slot, pipeline];
         let was = (s.pipeline != FREE).then(|| {
             (
-                self.records[s.pipeline as usize][s.at as usize],
+                self.recs[s.pipeline as usize][s.at as usize],
                 self.uniform(slot),
             )
         });
-        let same =
-            was.is_some_and(|(r, w)| r == record && w.map(f32::to_bits) == u.map(f32::to_bits));
+        let same = was.is_some_and(|(r, w)| r == rec && w.map(f32::to_bits) == u.map(f32::to_bits));
         if !same {
             self.change(slot, was);
             let was_drifts = was.is_some_and(|(_, w)| drifts(&w));
@@ -646,21 +645,21 @@ impl DrawList {
             self.write(slot, &u);
         }
         if s.pipeline == pipeline {
-            self.records[p][s.at as usize] = record;
+            self.recs[p][s.at as usize] = rec;
         } else {
             if s.pipeline != FREE {
                 self.unlist(slot);
             }
-            self.records[p].push(record);
+            self.recs[p].push(rec);
             let s = &mut self.slots[slot as usize];
-            (s.pipeline, s.at) = (pipeline, self.records[p].len() as u32 - 1);
+            (s.pipeline, s.at) = (pipeline, self.recs[p].len() as u32 - 1);
         }
         // The draw goes next in its pipeline's order. The record there has not been set this
         // turn, and it takes the draw's old place.
         let (at, next) = (self.slots[slot as usize].at as usize, self.set[p]);
         if at != next {
-            self.records[p].swap(at, next);
-            self.slots[self.records[p][at][3] as usize].at = at as u32;
+            self.recs[p].swap(at, next);
+            self.slots[self.recs[p][at][3] as usize].at = at as u32;
             self.slots[slot as usize].at = next as u32;
             self.reordered = true;
         }
@@ -691,13 +690,13 @@ impl DrawList {
         &mut self,
         id: &DrawId,
         pipeline: u32,
-        record: [u32; 3],
+        rec: [u32; 3],
         at: Position,
         words: &[(usize, f32)],
         receiver: Option<ReceiverBox>,
     ) {
         self.stand(pipeline, receiver);
-        self.set(id, pipeline, record, uniform(at, words));
+        self.set(id, pipeline, rec, uniform(at, words));
     }
 
     /// A character's draw (`scaled_draw`).
@@ -823,8 +822,8 @@ impl DrawList {
     /// and changes start empty, on the lists' other side.
     pub fn take(&mut self) -> DrawUpdate<'_> {
         for p in 0..DRAW_PIPELINES.len() {
-            while self.records[p].len() > self.set[p] {
-                let Some(d) = self.records[p].pop() else {
+            while self.recs[p].len() > self.set[p] {
+                let Some(d) = self.recs[p].pop() else {
                     break;
                 };
                 let slot = d[3];
@@ -855,7 +854,7 @@ impl DrawList {
             rewrites: &self.taken_rewrites,
             frees: &l.frees[side][..frees],
             draws: DrawTable {
-                records: &self.records,
+                recs: &self.recs,
                 slots: &self.slots,
                 uniforms: &self.uniforms,
                 turn,

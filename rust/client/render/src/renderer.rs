@@ -1638,7 +1638,7 @@ impl Renderer {
     /// drawing makes none: an object made inside a frame that is dropped would
     /// be gone.
     fn prepare_character_surfaces(&mut self, g: &Gpu, surfaces: &[(u32, Draw, Image, u32)]) {
-        for &(id, (record, _), image, _) in Self::character_surfaces(surfaces) {
+        for &(id, (rec, _), image, _) in Self::character_surfaces(surfaces) {
             let Some(s) = surface(id) else { continue };
             targets(g, s);
             let slot = handle_slot(id) as usize;
@@ -1654,9 +1654,9 @@ impl Renderer {
             let pass = self.character_passes[slot]
                 .as_mut()
                 .or_bug(Errno::ENOTRECOVERABLE);
-            pass.skinned_mesh.set_skins(&[(record[2], image)]);
+            pass.skinned_mesh.set_skins(&[(rec[2], image)]);
             pass.skinned_mesh
-                .prepare(g, core::iter::once(&record), uploads());
+                .prepare(g, core::iter::once(&rec), uploads());
             pass.set_groups(g, s);
         }
     }

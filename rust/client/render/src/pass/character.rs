@@ -123,7 +123,7 @@ impl CharacterPass {
         ctx: &mut RenderContext,
         s: &Surface,
         mut frame: [f32; FRAME_FLOATS],
-        (record, uniform): &Draw,
+        (rec, uniform): &Draw,
         image: Image,
         bg: u32,
         changed: bool,
@@ -175,7 +175,7 @@ impl CharacterPass {
         let r = &mut self.read;
         r.begin();
         r.read(&frame);
-        r.read(record);
+        r.read(rec);
         r.read(uniform);
         r.read(&[image.0, s.width, s.height, s.depth, bg]);
         r.mark(changed);
@@ -199,7 +199,7 @@ impl CharacterPass {
         let mut pass = TrackedRenderPass::new(g, pass);
         self.skinned_mesh.draw(
             &mut pass,
-            core::iter::once(record),
+            core::iter::once(rec),
             uploads(),
             Stage::Lit,
             self.frame_group.frame,

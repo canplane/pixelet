@@ -388,19 +388,19 @@ pub const TOUCHES: &[Touch] = {
         // each box's tiles as a receiver of the world's (record_draw.wgsl,
         // light_receiver_tile.wgsl `stand_box`).
         Touch {
-            compute: COMPUTE_RECORD_DRAW,
+            compute: COMPUTE_REC_DRAW,
             binding: 16,
             writes: &[DRAW_ARGS],
             reads: &[DRAW_ARGS],
         },
         Touch {
-            compute: COMPUTE_LIGHT_RECORD_DRAW,
+            compute: COMPUTE_LIGHT_REC_DRAW,
             binding: 16,
             writes: &[DRAW_ARGS],
             reads: &[DRAW_ARGS],
         },
         Touch {
-            compute: COMPUTE_RECORD_DRAW,
+            compute: COMPUTE_REC_DRAW,
             binding: 21,
             writes: &[marks(light::LIST_RECEIVERS)],
             reads: &[marks(light::LIST_RECEIVERS)],
@@ -409,13 +409,13 @@ pub const TOUCHES: &[Touch] = {
         // (record_hits.wgsl, record_hits.eye.wgsl); the light's lay none
         // (record_hits.light.wgsl).
         Touch {
-            compute: COMPUTE_RECORD_HITS,
+            compute: COMPUTE_REC_HITS,
             binding: 16,
             writes: &[asks(raster::HIT_ASKED_AT)],
             reads: &[asks(raster::HIT_ASKED_AT)],
         },
         Touch {
-            compute: COMPUTE_LIGHT_RECORD_HITS,
+            compute: COMPUTE_LIGHT_REC_HITS,
             binding: 16,
             writes: &[],
             reads: &[],
@@ -495,7 +495,7 @@ pub const TOUCHES: &[Touch] = {
             reads: &[RECEIVER_TILES],
         },
         Touch {
-            compute: COMPUTE_RECORD_DRAW,
+            compute: COMPUTE_REC_DRAW,
             binding: 22,
             writes: &[RECEIVER_TILES],
             reads: &[RECEIVER_TILES],

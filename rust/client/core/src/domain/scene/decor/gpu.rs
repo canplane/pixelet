@@ -42,7 +42,7 @@ struct Frame {
     zooms: [u32; DECORS.len()],
     walk_zoom: Zoom,
     drawing: [u32; drawing::WORDS as usize],
-    records: Vec<[u32; generation::RECORD_WORDS as usize]>,
+    recs: Vec<[u32; generation::REC_WORDS as usize]>,
     /// The column boxes, in leaf cells, where objects were written since a
     /// frame last took them (`note_edited`). The first `edited` of them are
     /// the ones the next frame hands.
@@ -89,7 +89,7 @@ fn hand_over() -> &'static mut Frame {
         zooms: [0; DECORS.len()],
         walk_zoom: UNIT_ZOOM,
         drawing: [0; drawing::WORDS as usize],
-        records: Vec::new(),
+        recs: Vec::new(),
         edits: [[0; 4]; object::EDITS as usize],
         edited: 0,
         anchor: [0; 3],
@@ -148,21 +148,21 @@ pub fn step(eye: V3, edit: &RenderEdit) {
     // The renderer hands the records to the runtime in place, without a copy.
     // While the runtime still holds them they must not change, so the walk
     // waits for a later frame (pxl-render gpu/api.rs `in_flight`).
-    if api::in_flight(&h.records) {
+    if api::in_flight(&h.recs) {
         h.last_walk = None;
         return;
     }
     h.last_walk = Some(walk_key);
-    h.records.clear();
-    let records = &mut h.records;
+    h.recs.clear();
+    let recs = &mut h.recs;
     World::now().placed_in(&around, &mut |e| {
         let Some(decor) = e.asset().decor().filter(|_| hide != Some(e.id())) else {
             return;
         };
         let (variant, turn) = user_decor_pick(&e.corner(), decor);
         let [x, y, z] = idx_of(UNIT_ZOOM, &e.corner());
-        records.push([
-            generation::record_word(
+        recs.push([
+            generation::rec_word(
                 id::idx_of(decor.id),
                 variant,
                 turn,
@@ -283,7 +283,7 @@ pub fn frame() -> DecorFrame<'static> {
     DecorFrame {
         zooms: &h.zooms,
         drawing: &h.drawing,
-        placed_records: &h.records,
+        placed_recs: &h.recs,
         anchor: h.anchor,
         edits: &h.edits[..edited],
     }

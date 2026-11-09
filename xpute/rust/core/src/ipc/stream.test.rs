@@ -29,5 +29,5 @@ fn overflow_drops_whole() {
     s.begin();
     s.record(5, &[1], &[], None);
     assert!(s.commit(), "a transaction that fits is kept");
-    assert_eq!(s.left(), before - record_bytes(1, None));
+    assert_eq!(s.left(), before - rec_bytes(1, None));
 }

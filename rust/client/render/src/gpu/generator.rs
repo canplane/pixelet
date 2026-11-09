@@ -53,7 +53,7 @@ pub struct DecorFrame<'a> {
     /// turn, then its box's min corner in leaf cells, and a sink of none, as it stands where
     /// it is placed. The records are uploaded from where they lie, so their writer asks
     /// `in_flight` (gpu/api.rs) before it writes them again.
-    pub placed_records: &'a [[u32; generation::RECORD_WORDS as usize]],
+    pub placed_recs: &'a [[u32; generation::REC_WORDS as usize]],
     /// The unit the eye stands in, as a draw's Q3 (gpu/draw.rs `Position`). The instances'
     /// positions are about it, and from it they are drawn against the frame's eye (word.rs
     /// `frame::EYE`).
@@ -105,9 +105,9 @@ pub struct Generator {
     /// Each region's draw uniform, `drawing::UNIFORM_WORDS` apart, as the decor and impostor
     /// shaders read one. The args pass sets each uniform's index.
     uniforms: u32,
-    /// The records, laid out by entry (`generation::record_at`). `instances` holds the decor's
+    /// The records, laid out by entry (`generation::rec_at`). `instances` holds the decor's
     /// instances: `drawing::COLUMNS` lanes and the index list, each `cap` words long.
-    records: u32,
+    recs: u32,
     instances: u32,
     /// The draws' groups, in the layouts the decor and impostor draws share (record.rs
     /// `DRAW`, `UPLOAD`): one over the uniforms, with a region's at a dynamic offset, and one
@@ -202,7 +202,7 @@ impl Generator {
                 storage | buffer_usage::INDIRECT,
             ),
             uniforms,
-            records: 0,
+            recs: 0,
             instances: 0,
             draw_layouts,
             uniform_group: g.bind_group(
@@ -253,31 +253,31 @@ impl Generator {
     ) {
         self.on = true;
         let need =
-            generation::ENTRY_RECORDS + (f.placed_records.len() as u32).next_power_of_two().max(64);
+            generation::ENTRY_RECS + (f.placed_recs.len() as u32).next_power_of_two().max(64);
         let grew = need > self.cap;
         if grew {
             // The entries' records are copied into the new buffer. The placed records after them
             // are written anew.
-            let (records, instances) = (self.records, self.instances);
-            self.records = g.buf(
-                word_bytes(generation::record_at(need) as usize),
+            let (recs, instances) = (self.recs, self.instances);
+            self.recs = g.buf(
+                word_bytes(generation::rec_at(need) as usize),
                 buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
             );
             self.instances = g.buf(
                 word_bytes(((drawing::COLUMNS + 1) * need) as usize),
                 buffer_usage::STORAGE,
             );
-            if records != 0 {
+            if recs != 0 {
                 let e = g.encoder();
                 g.copy_buf(
                     e,
-                    (records, 0),
-                    (self.records, 0),
-                    word_bytes(generation::record_at(generation::ENTRY_RECORDS) as usize),
+                    (recs, 0),
+                    (self.recs, 0),
+                    word_bytes(generation::rec_at(generation::ENTRY_RECS) as usize),
                 );
                 g.submit(e);
             }
-            release(records);
+            release(recs);
             release(instances);
             release(self.instances_group);
             self.instances_group = g.bind_group(
@@ -367,7 +367,7 @@ impl Generator {
             put(generation::THIN_ARGS + 1, 1);
             put(
                 generation::GENERATE_ARGS,
-                generation::DECOR_RECORD_CAP.div_ceil(generation::LANES),
+                generation::DECOR_REC_CAP.div_ceil(generation::LANES),
             );
             put(generation::GENERATE_ARGS + 1, 1);
             put(generation::LIST_EVERY, u32::from(self.stale));
@@ -386,21 +386,21 @@ impl Generator {
         }
         let p = &mut self.placed;
         p.begin();
-        p.read(f.placed_records);
+        p.read(f.placed_recs);
         let placed_changed = !p.end();
-        self.placed_cnt = f.placed_records.len() as u32;
+        self.placed_cnt = f.placed_recs.len() as u32;
         if placed_changed {
             g.write_buf(
-                self.records,
+                self.recs,
                 generation::PLACED_HEADER * 4,
-                bytes(&[f.placed_records.len() as u32, 0, 0, 0]),
+                bytes(&[f.placed_recs.len() as u32, 0, 0, 0]),
             );
-            if !f.placed_records.is_empty() {
+            if !f.placed_recs.is_empty() {
                 // The upload is one stream record however many decor records there are.
                 g.upload_buf(
-                    self.records,
-                    generation::record_at(generation::ENTRY_RECORDS) * 4,
-                    bytes(f.placed_records.as_flattened()),
+                    self.recs,
+                    generation::rec_at(generation::ENTRY_RECS) * 4,
+                    bytes(f.placed_recs.as_flattened()),
                 );
             }
         }
@@ -480,12 +480,12 @@ impl Generator {
             framed(
                 &self.mark,
                 &GENERATION_MARK_BINDS,
-                &[(1, clipmap), (9, self.records), (12, self.zooms)],
+                &[(1, clipmap), (9, self.recs), (12, self.zooms)],
             ),
             framed(
                 &self.thin,
                 &GENERATION_THIN_BINDS,
-                &[(9, self.records), (10, self.rows)],
+                &[(9, self.recs), (10, self.rows)],
             ),
             framed(
                 &self.generate,
@@ -497,7 +497,7 @@ impl Generator {
                     (5, shards),
                     (6, objects),
                     (7, pool),
-                    (9, self.records),
+                    (9, self.recs),
                     (10, self.rows),
                 ],
             ),
@@ -506,7 +506,7 @@ impl Generator {
                 &[
                     (0, eye),
                     (1, clipmap),
-                    (9, self.records),
+                    (9, self.recs),
                     (13, self.drawing),
                     (14, self.regions),
                 ],
@@ -525,7 +525,7 @@ impl Generator {
                 &self.compact,
                 &[
                     (1, clipmap),
-                    (9, self.records),
+                    (9, self.recs),
                     (10, self.rows),
                     (13, self.drawing),
                     (14, self.regions),
@@ -613,11 +613,11 @@ impl Generator {
         // A workgroup reads the records an entry's decor laid, and past the entries each workgroup
         // reads `generation::RUNS` placed records (decor_run.wgsl `run_of`). The dispatch
         // covers the records held, not the capacity.
-        let records = generation::EYE_ENTRIES + self.placed_cnt.div_ceil(generation::RUNS);
+        let recs = generation::EYE_ENTRIES + self.placed_cnt.div_ceil(generation::RUNS);
         let passes = [
-            (&self.cnt, records),
+            (&self.cnt, recs),
             (&self.args_pipeline, 1),
-            (&self.compact, records),
+            (&self.compact, recs),
         ];
         for (k, (pipeline, x)) in passes.into_iter().enumerate() {
             g.set_pipeline(pass, pipeline.id);

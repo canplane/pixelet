@@ -9,9 +9,9 @@ fn walk_pass() -> u32 {
 }
 
 /// Where the asks' records lie in the run's view of its queue (pxl-engine
-/// `ray::queue_records_at`, `ray::QUEUE_LIGHT_CORNERS`).
-fn queue_records_at() -> u32 {
-  return LIGHT_CORNERS_RECORDS_AT;
+/// `ray::queue_recs_at`, `ray::QUEUE_LIGHT_CORNERS`).
+fn queue_recs_at() -> u32 {
+  return LIGHT_CORNERS_RECS_AT;
 }
 
 /// Where the run lists the items it parked (pxl-engine `light::parked_items_at`).

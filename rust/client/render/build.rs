@@ -555,35 +555,35 @@ fn walk_word() -> String {
         ("QUEUE_HITS", ray::QUEUE_HITS),
         ("QUEUE_PARKED", ray::QUEUE_PARKED),
         (
-            "EYE_CORNERS_RECORDS_AT",
-            ray::queue_records_at(ray::QUEUE_EYE_CORNERS),
+            "EYE_CORNERS_RECS_AT",
+            ray::queue_recs_at(ray::QUEUE_EYE_CORNERS),
         ),
         (
-            "EYE_SAMPLES_RECORDS_AT",
-            ray::queue_records_at(ray::QUEUE_EYE_SAMPLES),
+            "EYE_SAMPLES_RECS_AT",
+            ray::queue_recs_at(ray::QUEUE_EYE_SAMPLES),
         ),
         (
-            "EYE_HOLES_RECORDS_AT",
-            ray::queue_records_at(ray::QUEUE_EYE_HOLES),
+            "EYE_HOLES_RECS_AT",
+            ray::queue_recs_at(ray::QUEUE_EYE_HOLES),
         ),
         (
-            "LIGHT_CORNERS_RECORDS_AT",
-            ray::queue_records_at(ray::QUEUE_LIGHT_CORNERS),
+            "LIGHT_CORNERS_RECS_AT",
+            ray::queue_recs_at(ray::QUEUE_LIGHT_CORNERS),
         ),
         (
-            "LIGHT_SAMPLES_RECORDS_AT",
-            ray::queue_records_at(ray::QUEUE_LIGHT_SAMPLES),
+            "LIGHT_SAMPLES_RECS_AT",
+            ray::queue_recs_at(ray::QUEUE_LIGHT_SAMPLES),
         ),
         (
-            "LIGHT_HOLES_RECORDS_AT",
-            ray::queue_records_at(ray::QUEUE_LIGHT_HOLES),
+            "LIGHT_HOLES_RECS_AT",
+            ray::queue_recs_at(ray::QUEUE_LIGHT_HOLES),
         ),
-        ("QUEUE_RECORD_WORDS", ray::QUEUE_RECORD_WORDS),
+        ("QUEUE_REC_WORDS", ray::QUEUE_REC_WORDS),
         ("QUEUE_WORDS", ray::QUEUE_WORDS),
         ("QUEUE_HEADER_STRIDE", ray::QUEUE_HEADER_STRIDE),
         ("QUEUE_LIGHT_CORNERS", ray::QUEUE_LIGHT_CORNERS),
         ("QUEUE_LIGHT_HOLES", ray::QUEUE_LIGHT_HOLES),
-        ("QUEUE_RECORDS_CAP", ray::QUEUE_RECORDS_CAP),
+        ("QUEUE_RECS_CAP", ray::QUEUE_RECS_CAP),
         ("STATE_WORDS", ray::STATE_WORDS),
         ("PARKED", ray::PARKED),
         ("LAST_NEXT", node_cache::LAST_NEXT),
@@ -643,21 +643,21 @@ fn walk_word() -> String {
         ("NODE_CACHE_RECTS", RECTS),
         ("KEYS_AT", node_cache::KEYS_AT),
         ("STATES_AT", node_cache::STATES_AT),
-        ("RECORDS_AT", node_cache::RECORDS_AT),
+        ("RECS_AT", node_cache::RECS_AT),
         ("R_WORDS", node_cache::R_WORDS),
         ("R_DRAWN", node_cache::R_DRAWN),
         ("R_FACES", node_cache::R_FACES),
         ("W_PLACED", node_cache::W_PLACED),
         ("EYE_CLIP_LEVELS", clipmap::EYE_CLIP_LEVELS),
         ("NODE_CACHE_DRAWN", node_cache::DRAWN),
-        ("RECORD_EYE_DRAWS", record::EYE_DRAWS),
-        ("RECORD_LIGHT_DRAWS", record::LIGHT_DRAWS),
-        ("RECORD_DRAW_LANES", record::DRAW_LANES),
-        ("RECORD_FACES", record::FACES),
-        ("RECORD_ASKED", record::ASKED),
-        ("RECORD_ASKED_SHIFT", record::ASKED_SHIFT),
-        ("RECORD_WHOLE", record::WHOLE),
-        ("RECORD_TO", record::TO_RECORD),
+        ("REC_EYE_DRAWS", record::EYE_DRAWS),
+        ("REC_LIGHT_DRAWS", record::LIGHT_DRAWS),
+        ("REC_DRAW_LANES", record::DRAW_LANES),
+        ("REC_FACES", record::FACES),
+        ("REC_ASKED", record::ASKED),
+        ("REC_ASKED_SHIFT", record::ASKED_SHIFT),
+        ("REC_WHOLE", record::WHOLE),
+        ("REC_TO", record::TO_REC),
     ];
     // The light's cell rays start a margin short of where its beam ray stopped: a share of the
     // beam's spacing plus a number of Q3 steps (`light::margin`). A receiver reads slots within
@@ -666,7 +666,7 @@ fn walk_word() -> String {
     // light_propagate.wgsl).
     let tile_pad = light::TILE_READ_PAD;
     let mut out = format!(
-        "const INV_SPLIT2: f32 = {:?};\nconst NARROW: f32 = {:?};\nconst NARROW_SQUARED: f32 = {:?};\nconst LIGHT_MARGIN_PER_WIDTH: f32 = {:?};\nconst LIGHT_MARGIN_STEPS: f32 = {:?};\nconst LIGHT_TILE_READ_PAD: f32 = {tile_pad:?};\nconst LIGHT_FOOTPRINT_TILES: i32 = {}i;\nconst LIGHT_READ_FIRST: i32 = {}i;\nconst LIGHT_READ_LAST: i32 = {}i;\nconst FRAC_1_SQRT_2: f32 = {:?};\nconst SAMPLE_SPACING: f32 = {:?};\nconst SAMPLE_SPACING_INVERSE: f32 = {:?};\nconst GRID_CELL_INVERSE: f32 = {:?};\nconst RECORD_VIEW_GROWTH: f32 = {:?};\n",
+        "const INV_SPLIT2: f32 = {:?};\nconst NARROW: f32 = {:?};\nconst NARROW_SQUARED: f32 = {:?};\nconst LIGHT_MARGIN_PER_WIDTH: f32 = {:?};\nconst LIGHT_MARGIN_STEPS: f32 = {:?};\nconst LIGHT_TILE_READ_PAD: f32 = {tile_pad:?};\nconst LIGHT_FOOTPRINT_TILES: i32 = {}i;\nconst LIGHT_READ_FIRST: i32 = {}i;\nconst LIGHT_READ_LAST: i32 = {}i;\nconst FRAC_1_SQRT_2: f32 = {:?};\nconst SAMPLE_SPACING: f32 = {:?};\nconst SAMPLE_SPACING_INVERSE: f32 = {:?};\nconst GRID_CELL_INVERSE: f32 = {:?};\nconst REC_VIEW_GROWTH: f32 = {:?};\n",
         grid::INV_SPLIT2,
         cast::NARROW,
         cast::NARROW_SQUARED,
@@ -690,8 +690,8 @@ fn walk_word() -> String {
         "fn entry_at(slot: u32) -> u32 { return ENTRIES_AT + slot * ENTRY_WORDS; }\n",
         "fn key_at(slot: u32) -> u32 { return KEYS_AT + slot; }\n",
         "fn state_at(slot: u32) -> u32 { return STATES_AT + slot; }\n",
-        "fn drawn_at(slot: u32) -> u32 { return RECORDS_AT + slot * R_WORDS + R_DRAWN; }\n",
-        "fn face_at(slot: u32, face: u32) -> u32 { return RECORDS_AT + slot * R_WORDS + R_FACES + face; }\n",
+        "fn drawn_at(slot: u32) -> u32 { return RECS_AT + slot * R_WORDS + R_DRAWN; }\n",
+        "fn face_at(slot: u32, face: u32) -> u32 { return RECS_AT + slot * R_WORDS + R_FACES + face; }\n",
     );
     out
 }
@@ -860,11 +860,11 @@ fn decor_word() -> String {
     let row = |at: usize| (at / size_of::<u32>()) as u32;
     let words: &[(&str, u32)] = &[
         ("LANES", g::LANES),
-        ("RECORD_WORDS", g::RECORD_WORDS),
+        ("REC_WORDS", g::REC_WORDS),
         ("HEADER_WORDS", g::HEADER_WORDS),
         ("CNT_AT", g::CNT_AT),
-        ("ENTRY_RECORDS_AT", g::ENTRY_RECORDS_AT),
-        ("BRICK_RECORD_CAP", g::BRICK_RECORD_CAP),
+        ("ENTRY_RECS_AT", g::ENTRY_RECS_AT),
+        ("BRICK_REC_CAP", g::BRICK_REC_CAP),
         ("UNGENERATED", g::UNGENERATED),
         ("TURN_SHIFT", g::TURN_SHIFT),
         ("VARIANT_SHIFT", g::VARIANT_SHIFT),
@@ -881,7 +881,7 @@ fn decor_word() -> String {
         ("LIST_EVERY", g::LIST_EVERY),
         ("LIST_PARTS", g::LIST_PARTS),
         ("GENERATE_ARGS", g::GENERATE_ARGS),
-        ("ENTRY_RECORDS", g::ENTRY_RECORDS),
+        ("ENTRY_RECS", g::ENTRY_RECS),
         ("PLACED_HEADER", g::PLACED_HEADER),
         ("PLACED_HEADER_WORDS", g::PLACED_HEADER_WORDS),
         ("RUN", g::RUN),
@@ -969,7 +969,7 @@ fn decor_word() -> String {
             of(last)
         )
     };
-    out += &by_decor("decor_first_record", &|k| g::first_record(&ROWS, k as u32));
+    out += &by_decor("decor_first_rec", &|k| g::first_rec(&ROWS, k as u32));
     out += &by_decor("decor_first_group", &|k| DECORS[k].first_group());
     out += &by_decor("decor_root", &|k| scatter::ROOTS[k]);
     out += &by_decor_i32("decor_widest", &|k| ROWS[k].widest() as i32);
@@ -1076,7 +1076,7 @@ fn words() -> String {
         vec4s("STARS", STARS_FLOATS),
         vec4s("AO", AO_FLOATS),
         vec4s("MARKER", MARKER_FLOATS),
-        vec4s("STAR_RECORD", STAR_RECORD_FLOATS),
+        vec4s("STAR_REC", STAR_REC_FLOATS),
         {
             let [r, g, b] = color::linear_rgb(color::indicator::ACTION).map(|v| v as f32);
             format!("const LOCATION_ZONE_COLOR: vec3f = vec3f({r:?}, {g:?}, {b:?});\n")

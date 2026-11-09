@@ -8,13 +8,13 @@ fn cnt_at(s: u32, k: u32) -> u32 {
   return s * HEADER_WORDS + CNT_AT + k;
 }
 
-/// The first word of entry `s`'s `i`-th record of decor `k` (`entry_record`, `record_at`).
+/// The first word of entry `s`'s `i`-th record of decor `k` (`entry_rec`, `rec_at`).
 fn entry_word(s: u32, k: u32, i: u32) -> u32 {
-  return ENTRY_RECORDS_AT + (s * BRICK_RECORD_CAP + decor_first_record(k) + i) * RECORD_WORDS;
+  return ENTRY_RECS_AT + (s * BRICK_REC_CAP + decor_first_rec(k) + i) * REC_WORDS;
 }
 
-/// A record's first word, as pxl-content `generation::record_word` packs it.
-fn record_word(decor: u32, variant: u32, turn: u32, cell_zoom: u32) -> u32 {
+/// A record's first word, as pxl-content `generation::rec_word` packs it.
+fn rec_word(decor: u32, variant: u32, turn: u32, cell_zoom: u32) -> u32 {
   return decor | (variant << VARIANT_SHIFT) | (turn << TURN_SHIFT) | (cell_zoom << CELL_ZOOM_SHIFT);
 }
 
@@ -41,5 +41,5 @@ fn pair_decor(w: u32) -> u32 {
 /// `q`.
 fn generated_for(s: u32, q: vec2<i32>) -> bool {
   let h = s * HEADER_WORDS;
-  return records[h + 2u] == 1u && i32(records[h]) == q.x && i32(records[h + 1u]) == q.y;
+  return recs[h + 2u] == 1u && i32(recs[h]) == q.x && i32(recs[h + 1u]) == q.y;
 }

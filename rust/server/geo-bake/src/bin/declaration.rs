@@ -14,9 +14,8 @@ fn run() -> Result<(), String> {
     std::io::stdin()
         .read_to_string(&mut text)
         .map_err(|e| format!("stdin: {e}"))?;
-    let record: serde_json::Value =
-        serde_json::from_str(&text).map_err(|e| format!("stdin: {e}"))?;
-    println!("{}", decl_of(&record)?);
+    let rec: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("stdin: {e}"))?;
+    println!("{}", decl_of(&rec)?);
     Ok(())
 }
 

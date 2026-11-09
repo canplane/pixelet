@@ -16,7 +16,7 @@ import { END, HEAD } from "./stream.spec.ts";
  * stream's words, the index of its first word and its count. The words are
  * valid only inside `run`. Once this returns, even by a throw from `run`, the
  * stream is handed back to the core. */
-export function each_record(
+export function each_rec(
   mem: ArrayBufferLike,
   at: u32,
   run: (op: u32, w: U32Array, a: u32, n: u32) => void,

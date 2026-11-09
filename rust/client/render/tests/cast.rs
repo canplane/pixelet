@@ -378,9 +378,9 @@ fn beam_line(beams: &[u32], line: u32, origin: [i32; 3]) -> Line<Inheritance> {
 /// is a drawable entry's, its node is read from that entry in `node_cache`.
 fn face_want(q: &mut Asking, beams: &[u32], node_cache: &[u32], origin: [i32; 3], a: u32) -> Want {
     let w = |k: u32| beams[(a + k) as usize];
-    // A drawable entry's ask names its entry in the node cache (`record::TO_RECORD`). A hit's
+    // A drawable entry's ask names its entry in the node cache (`record::TO_REC`). A hit's
     // ask names its node in the beam rays' words.
-    let hit = if w(beam::ASK_TO) & record::TO_RECORD != 0 {
+    let hit = if w(beam::ASK_TO) & record::TO_REC != 0 {
         entry_node(node_cache, w(beam::ASK_NODE) as usize, origin)
     } else {
         node_at(beams, w(beam::ASK_NODE))
@@ -583,8 +583,8 @@ fn hand_faces_answer_as_face_word() {
                 face_want(&mut q, &cast.asked, &cast.node_cache, cast.origin, a);
             kind_cnt.add("asked, the cuts swapped answer otherwise", cut);
             want.push(bits);
-            have.push(if to & record::TO_RECORD != 0 {
-                cast.node_cache[(to & !record::TO_RECORD) as usize]
+            have.push(if to & record::TO_REC != 0 {
+                cast.node_cache[(to & !record::TO_REC) as usize]
             } else {
                 cast.beams[to as usize]
             });

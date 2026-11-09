@@ -114,7 +114,7 @@ fn emit(stream: &mut Stream, op: u32, put: &dyn Fn(&mut dyn Sink)) -> bool {
 
 /// This is the room a record takes of a stream, its op and count words
 /// included, counted as `emit` writes it.
-fn record_size(put: &dyn Fn(&mut dyn Sink)) -> usize {
+fn rec_size(put: &dyn Fn(&mut dyn Sink)) -> usize {
     let mut count = Count(0);
     put(&mut count);
     (2 + count.0) * WORD
@@ -651,7 +651,7 @@ impl<const N: usize> Gpu<N> {
     /// This is the room `shader_module` takes of a stream, for `Stream::fits`,
     /// so that a caller making several modules can ask before each one.
     pub fn shader_module_bytes(wgsl: &str) -> usize {
-        record_size(&|s| {
+        rec_size(&|s| {
             s.word(0);
             s.bytes(wgsl.as_bytes());
         })
@@ -958,7 +958,7 @@ pub mod call {
     /// This is the room `write_buffer` takes of a stream, for `Stream::fits`,
     /// so that a caller can ask once whether several writes fit.
     pub fn write_buffer_bytes(bytes: &[u8]) -> usize {
-        record_size(&|s| buffer_write(s, 0, 0, bytes))
+        rec_size(&|s| buffer_write(s, 0, 0, bytes))
     }
 
     /// This is `write_buffer`, but the record names the bytes where they lie in
@@ -1007,7 +1007,7 @@ pub mod call {
             origin: [0; 3],
             aspect: TextureAspect::all,
         };
-        record_size(&|s| {
+        rec_size(&|s| {
             texture_write(s, &place, [0; 2], [0; 3]);
             s.bytes(bytes);
         })

@@ -161,7 +161,7 @@ fn keep_hit(r: u32, w: WalkEnd, face: u32, id: vec2<u32>) -> u32 {
 /// the light gets its depth. A pixel of the eye gets its ray's words, and what lies around the
 /// face it stopped on: a box's for a cell short of its cube (pxl-engine `face::BOX`), and for a
 /// whole cell the word the record puts there once its stop is in (record_hits.wgsl
-/// `record_faces_cs`). A ray that ended as a lack shows the deepest node held (`shows`), and
+/// `rec_faces_cs`). A ray that ended as a lack shows the deepest node held (`shows`), and
 /// its stop stays a lack, so the next frame asks for what it lacked.
 fn finish(item: u32, aim: Aim, w: WalkEnd) {
   let stops = w.ends == 1u || w.ends == 2u;

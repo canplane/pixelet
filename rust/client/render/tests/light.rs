@@ -39,7 +39,7 @@ use pxl_engine::cast::{self, Detail, End, Hit, Node, Ray, Spacing, Trace, Until}
 use pxl_engine::light::{self, Light};
 use pxl_engine::object::Cut;
 use pxl_engine::{eye, node_cache, param, raster, ray, record};
-use pxl_render::frame::shader::record::{src, SHADER_LIGHT, SHADER_LIGHT_MARK, SHADER_RECORD_DRAW};
+use pxl_render::frame::shader::record::{src, SHADER_LIGHT, SHADER_LIGHT_MARK, SHADER_REC_DRAW};
 use pxl_render::frame::shader::word::SQUARE_SIDE;
 use pxl_spec::space::coord::zoom::Zoom;
 
@@ -753,7 +753,7 @@ fn within_by(d: f32, reach: f32) -> (bool, bool) {
 ///
 /// Two passes stand receivers. `light_mark_walked_cs` stands the pixels the eye walked apart,
 /// which it finds by their walked bits past the grid's words (`ray::hole_bit`), each hit a box
-/// of one point. `record_draw_cs` (record_draw.wgsl) stands every box the eye's draw writes,
+/// of one point. `rec_draw_cs` (record_draw.wgsl) stands every box the eye's draw writes,
 /// one for each fresh held voxel in view, with its planes as `cast::asset_box` lays them. It stands
 /// each box as it writes it, where the head says the world's receivers stand
 /// (`light::HEADER_WORLD_RECEIVERS`).
@@ -770,7 +770,7 @@ fn hand_light_marks_answer_as_the_rust() {
     };
     let pipes = [
         gpu.pipeline(src(SHADER_LIGHT_MARK), "light_mark_walked_cs"),
-        gpu.pipeline(src(SHADER_RECORD_DRAW), "record_draw_cs"),
+        gpu.pipeline(src(SHADER_REC_DRAW), "rec_draw_cs"),
     ];
     let built = real_world::build(EYE);
     let over = |g: [i32; 2], up: i32| q8([g[0], g[1], built.top_at(g) + up]);
@@ -924,7 +924,7 @@ fn hand_light_marks_answer_as_the_rust() {
         "tiles stood on",
         "casts that stood nothing",
     ]);
-    tally.end("light_mark_walked_cs, record_draw_cs");
+    tally.end("light_mark_walked_cs, rec_draw_cs");
 }
 
 /// Which of the receivers' passes stands the tiles (`hand_light_marks_answer_as_the_rust`).
@@ -1188,7 +1188,7 @@ fn run_marks(
     let beams_buf = gpu.buf(&beams, wgpu::BufferUsages::STORAGE);
     let raster_buf = gpu.buf(&raster_args, wgpu::BufferUsages::STORAGE);
     let boxes_buf = gpu.buf(&boxes, wgpu::BufferUsages::STORAGE);
-    let record_buf = gpu.buf(&rec, wgpu::BufferUsages::STORAGE);
+    let rec_buf = gpu.buf(&rec, wgpu::BufferUsages::STORAGE);
     let mut binds: Vec<(u32, wgpu::BindingResource)> = vec![
         (0, eye_buf.as_entire_binding()),
         (11, header_buf.as_entire_binding()),
@@ -1207,7 +1207,7 @@ fn run_marks(
         MarkSource::Voxels => {
             binds.push((14, boxes_buf.as_entire_binding()));
             binds.push((16, raster_buf.as_entire_binding()));
-            binds.push((9, record_buf.as_entire_binding()));
+            binds.push((9, rec_buf.as_entire_binding()));
             let per = record::DRAW_LANES;
             (&pipes[1], [node_cache::ENTRIES / per, 1, 1])
         }

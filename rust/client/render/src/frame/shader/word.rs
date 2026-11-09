@@ -365,7 +365,7 @@ pub const LOCATION_ZONE_INSTANCE_FLOATS: u32 = 8;
 
 /// The floats of a star's record (pass/star.rs, star.wgsl): its direction
 /// and flux, then its color and one float of padding.
-pub const STAR_RECORD_FLOATS: usize = 8;
+pub const STAR_REC_FLOATS: usize = 8;
 
 /// The words of the raster's view (ray/raster.rs, raster.wgsl
 /// `Raster`). build.rs checks that the WGSL struct has this size.

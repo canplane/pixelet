@@ -25,7 +25,7 @@ import { Head } from "@xpute/runtime/ipc/head.ts";
 import { WORDS, word } from "@xpute/runtime/ipc/head.spec.ts";
 import * as frame from "@xpute/runtime/ipc/frame.ts";
 import { Ring } from "@xpute/runtime/ipc/ring.ts";
-import { each_record } from "@xpute/runtime/ipc/stream.ts";
+import { each_rec } from "@xpute/runtime/ipc/stream.ts";
 import { open_module } from "@xpute/runtime/module.ts";
 import {
   CQ_CAP,
@@ -245,7 +245,7 @@ class Runtime {
   ring(deadline_ms: number): Turn {
     const wake = this._core.run(deadline_ms);
     const stream: number[] = [];
-    each_record(this._core.mem, this._stream_at, (op) => stream.push(op));
+    each_rec(this._core.mem, this._stream_at, (op) => stream.push(op));
     const completions: Completion[] = [];
     const cq = this._cq;
     for (let at = cq.peek(); at >= 0; at = cq.peek()) {

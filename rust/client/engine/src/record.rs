@@ -34,7 +34,7 @@
 //! zoom, its band (`light::Light::band`), and its stop is whole where the node is coarser
 //! than the band (`light_whole`). It sets the faces it enters (`FACES`) but asks none of
 //! their words, because the light's slots read no words (sample_hit.light.wgsl). The light's
-//! draw (record_draw.wgsl `light_record_draw_cs`) writes a box for every voxel whose box lies
+//! draw (record_draw.wgsl `light_rec_draw_cs`) writes a box for every voxel whose box lies
 //! on the light's box, in units from where the ray of box texel (0, 0) starts. A voxel is
 //! fresh for the light where a ray asking the band of the tile under the voxel's middle stops
 //! on it (`light_fresh`), and stale otherwise; a stale voxel is drawn behind. A light slot
@@ -67,7 +67,7 @@
 //!    for a lack or past the asks' room, `face::BOX` for a cell short of its cube, and
 //!    otherwise what face.wgsl writes into `node_cache::R_FACES`. A stop on a node no slot
 //!    keeps sets nothing, and its pixel walks again.
-//! 4. The draws (record_draw.wgsl `record_draw_cs`, `light_record_draw_cs`) read every slot,
+//! 4. The draws (record_draw.wgsl `rec_draw_cs`, `light_rec_draw_cs`) read every slot,
 //!    write a box for each drawable entry and mark the entry drawn (`node_cache::R_DRAWN`).
 //!    The eye's draw also records the frame it ran in (`node_cache::DRAWN`). The raster draws
 //!    the boxes, and `cast_cs` and light.wgsl read a pixel's slot.
@@ -126,7 +126,7 @@
 use crate::cast::{self, Detail, Node, Spacing};
 use crate::light::{Light, BEAM, TILE};
 use crate::node_cache::{self, ENTRIES};
-use crate::ray::QUEUE_RECORDS_CAP;
+use crate::ray::QUEUE_RECS_CAP;
 use pxl_spec::space::camera::grid;
 
 use crate::WORKGROUPS_CAP;
@@ -148,7 +148,7 @@ const _: () = assert!(
 /// so the cells bound the voxels drawn: the eye's cells at the widest view (`EYE_CELLS_CAP`),
 /// and the light's claimed tiles at one cell a tile (`LIGHT_CELLS_CAP`). Each cell's count is
 /// multiplied by the factors of `CELL_NODES`. The asks keep as many nodes a frame as a walk
-/// lists for them (`ray::QUEUE_RECORDS_CAP`), for the two frames an entry is spared
+/// lists for them (`ray::QUEUE_RECS_CAP`), for the two frames an entry is spared
 /// (`ASKS_KEPT`).
 const _: () = assert!(
     ENTRIES == entries_for(EYE_CELLS_CAP + LIGHT_CELLS_CAP),
@@ -165,7 +165,7 @@ pub const CELL_FRAMES: u32 = 2;
 pub const CELL_NODES: u32 = CELL_OVERLAP * CELL_STALE * CELL_FRAMES;
 
 /// The nodes the asks keep: one frame's worth for each of the two frames an entry is spared.
-pub const ASKS_KEPT: u32 = CELL_FRAMES * QUEUE_RECORDS_CAP;
+pub const ASKS_KEPT: u32 = CELL_FRAMES * QUEUE_RECS_CAP;
 
 /// The eye's camera cells at the widest view (`grid::ASPECT_MOST`) across the vertical field
 /// of view (`grid::HALF_TAN`), at `grid::CELLS_A_RAD` cells a radian, as `beam::Grid::of` lays
@@ -221,9 +221,9 @@ pub const fn asked_faces(state: u32) -> u32 {
 /// it set, the target is a word of the node cache, where face.wgsl leaves the face's word,
 /// not of the beam rays' buffer, and the ask's node is the entry's first word
 /// (`beam::ASK_NODE`, `node_cache::entry_at`).
-pub const TO_RECORD: u32 = 1 << 31;
+pub const TO_REC: u32 = 1 << 31;
 const _: () = assert!(
-    node_cache::WORDS < TO_RECORD,
+    node_cache::WORDS < TO_REC,
     "an ask names any word of the node cache"
 );
 

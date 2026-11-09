@@ -162,7 +162,7 @@ pub fn perf_frame(t: FrameTurn) {
         perf_record_rays(r);
     }
     perf_fold_recording(&section);
-    let record = FrameSample {
+    let rec = FrameSample {
         // The time the stage ended, before the record was taken.
         t: at,
         refresh_ms: t.refresh_ms,
@@ -188,7 +188,7 @@ pub fn perf_frame(t: FrameTurn) {
     perf_record_frame(
         FrameSample {
             perf_ms: own_ms,
-            ..record
+            ..rec
         },
         t.interval_ms,
         t.settled,

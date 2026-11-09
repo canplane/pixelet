@@ -22,7 +22,7 @@
 //! - the keys, one word a slot, a bucket's side by side (`KEYS_AT`);
 //! - the states, one word a slot (`STATES_AT`);
 //! - the entries, one a slot (`ENTRIES_AT`);
-//! - the records, the rest of what draws a slot (`RECORDS_AT`).
+//! - the records, the rest of what draws a slot (`RECS_AT`).
 //!
 //! That is all of it (`WORDS`). The pixels a frame's cast missed are marked elsewhere, past
 //! the camera grid's words, one bit a pixel (`ray::holes_words`).
@@ -32,7 +32,7 @@
 //! and asset, what was handed the node after it was asked (`world::Inheritance::words`), and
 //! the node's zoom and index, which tell it from another node in the same slot (pxl-render
 //! forget.wgsl reads its column). What draws the entry lies apart (`STATES_AT`,
-//! `RECORDS_AT`): it is none until a ray stops on the node, is written by the stops, the
+//! `RECS_AT`): it is none until a ray stops on the node, is written by the stops, the
 //! draws and the faces' pass, and its state is cleared wherever the slot is written. It lies apart
 //! because a walk reads a bucket's keys from one cache line and an entry's words from
 //! another, and a pass over every slot reads only the words it asks.
@@ -129,7 +129,7 @@ pub const LAST_CNT: u32 = LAST_NEXT + 1;
 pub const ASKED: u32 = LAST_CNT + 1;
 pub const HEADER_WORDS: u32 = ASKED + 1;
 /// The frame in which the eye's draw last ran, written by that draw (pxl-render
-/// record_draw.wgsl `record_draw_cs`). Until the draw runs again, the boxes the raster draws
+/// record_draw.wgsl `rec_draw_cs`). Until the draw runs again, the boxes the raster draws
 /// are those of the entries it marked then (`record::drawn`). It lies past the head that the
 /// host writes each frame.
 pub const DRAWN: u32 = HEADER_WORDS;
@@ -201,10 +201,10 @@ pub const ENTRIES: u32 = 1 << 20;
 pub const KEYS_AT: u32 = DRAWN + 1;
 pub const STATES_AT: u32 = KEYS_AT + ENTRIES;
 pub const ENTRIES_AT: u32 = STATES_AT + ENTRIES;
-pub const RECORDS_AT: u32 = ENTRIES_AT + ENTRIES * ENTRY_WORDS;
+pub const RECS_AT: u32 = ENTRIES_AT + ENTRIES * ENTRY_WORDS;
 /// The buffer's words. Their count does not depend on what is drawn: none of them is a
 /// pixel's.
-pub const WORDS: u32 = RECORDS_AT + ENTRIES * R_WORDS;
+pub const WORDS: u32 = RECS_AT + ENTRIES * R_WORDS;
 const _: () = assert!(
     (WORDS as u64) * 4 <= 134_217_728,
     "the node cache binds whole as storage on every device"
@@ -223,11 +223,11 @@ pub const fn state_at(slot: u32) -> u32 {
 }
 
 pub const fn drawn_at(slot: u32) -> u32 {
-    RECORDS_AT + slot * R_WORDS + R_DRAWN
+    RECS_AT + slot * R_WORDS + R_DRAWN
 }
 
 pub const fn face_at(slot: u32, face: u32) -> u32 {
-    RECORDS_AT + slot * R_WORDS + R_FACES + face
+    RECS_AT + slot * R_WORDS + R_FACES + face
 }
 
 /// No entry: a node no slot keeps.

@@ -79,11 +79,11 @@ fn node_at(k: u32, origin: vec3<i32>) -> Node {
 /// part of its cube is a box apart from everything around it, so its side takes `FACE_BOX` at
 /// once (pxl-engine `face::BOX`). Any other side takes none until the faces' pass answers an ask
 /// laid among `asks` from the stop's line, whose target is the entry's word
-/// (`record::TO_RECORD`). Past the asks' room it keeps none. An observer that reads no words,
+/// (`record::TO_REC`). Past the asks' room it keeps none. An observer that reads no words,
 /// which is the light, sets only the side.
 fn observe(p: Hit, slot: u32, asks: AskList) {
   let bit = 1u << p.face;
-  let asked = bit << RECORD_ASKED_SHIFT;
+  let asked = bit << REC_ASKED_SHIFT;
   let reads = asks.cap != 0u;
   let mark = select(bit, bit | asked, reads);
   let state = state_at(slot);
@@ -112,12 +112,12 @@ fn observe(p: Hit, slot: u32, asks: AskList) {
   beams[a + ASK_NODE] = entry_at(slot);
   beams[a + ASK_FACE] = p.face;
   beams[a + ASK_LINE] = p.line;
-  beams[a + ASK_TO] = RECORD_TO | face_at(slot, p.face);
+  beams[a + ASK_TO] = REC_TO | face_at(slot, p.face);
 }
 
 /// Writes stop `p` on the node `k` into the entry that draws the node (`find`). Where no slot
 /// keeps the node, nothing is written, and the stop's pixel walks again. Where the stop is
-/// whole, the entry is set whole (`RECORD_WHOLE`). That is a fact of the world, so the first
+/// whole, the entry is set whole (`REC_WHOLE`). That is a fact of the world, so the first
 /// ray of either observer to stop on the node whole sets it. Then the stop's face is set
 /// (`observe`).
 fn observe_hit(k: Node, p: Hit, asks: AskList) {
@@ -128,11 +128,11 @@ fn observe_hit(k: Node, p: Hit, asks: AskList) {
   let state = node_cache_word(state_at(slot));
   // An entry with no face set becomes drawable with this stop. Marking it with this frame's
   // number keeps eviction from taking it before a draw draws it (pxl-engine `record::drawn`).
-  if ((state & (RECORD_FACES | RECORD_ASKED)) == 0u) {
-    atomicStore(&node_cache[drawn_at(slot)], record_frame());
+  if ((state & (REC_FACES | REC_ASKED)) == 0u) {
+    atomicStore(&node_cache[drawn_at(slot)], rec_frame());
   }
-  if (p.whole && (state & RECORD_WHOLE) == 0u) {
-    atomicOr(&node_cache[state_at(slot)], RECORD_WHOLE);
+  if (p.whole && (state & REC_WHOLE) == 0u) {
+    atomicOr(&node_cache[state_at(slot)], REC_WHOLE);
   }
   observe(p, slot, asks);
 }

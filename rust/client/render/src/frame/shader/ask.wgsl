@@ -215,7 +215,7 @@ fn keep(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32, a: Answer) {
 /// `record::drawn`): it has a face set, and was drawn this frame or the last, or by the eye's
 /// last draw.
 fn drawn(slot: u32, frame: u32) -> bool {
-  if ((node_cache_now(state_at(slot)) & (RECORD_FACES | RECORD_ASKED)) == 0u) {
+  if ((node_cache_now(state_at(slot)) & (REC_FACES | REC_ASKED)) == 0u) {
     return false;
   }
   let last = node_cache_now(drawn_at(slot));

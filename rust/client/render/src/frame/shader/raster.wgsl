@@ -89,7 +89,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
   // and the light draws every face some ray entered (pxl-engine `record::ASKED`,
   // `record::FACES`).
   let state = node_cache_word(state_at(slot));
-  let faces = select((state & RECORD_ASKED) >> RECORD_ASKED_SHIFT, state & RECORD_FACES, raster.turn.y != 0u);
+  let faces = select((state & REC_ASKED) >> REC_ASKED_SHIFT, state & REC_FACES, raster.turn.y != 0u);
   if ((word & RASTER_EYED) != 0u) {
     o.axis = RASTER_ANY;
     if (vi < 3u) {

@@ -574,7 +574,7 @@ pub const HEADER_SLIDE_CAST: usize = HEADER_WORLD + 1;
 /// Whether the world's receivers are stood this frame, 1 or 0. The host writes it every
 /// frame, whether or not the head is a light cast's, so the eye's draw stands the boxes it
 /// draws only where the light's cast stands them (pxl-render record_draw.wgsl
-/// `record_draw_cs`).
+/// `rec_draw_cs`).
 pub const HEADER_WORLD_RECEIVERS: usize = HEADER_SLIDE_CAST + 1;
 /// The pool the holes' rays are parked in between a run's walks (`list_words`), and their stops
 /// (`hits_at`), laid by the map's side.
@@ -970,7 +970,7 @@ impl Light {
     /// `FOOTPRINT_TILES` more each way where `footprint`; none where it lies past the reach
     /// (`reach`, `within`) or past the box. Every receiver stands by this one rule: the box the
     /// eye's draw writes for a voxel in view (`cast::asset_box`; pxl-render record_draw.wgsl
-    /// `record_draw_cs`, which stands it as it writes it), on which every pixel that took that
+    /// `rec_draw_cs`, which stands it as it writes it), on which every pixel that took that
     /// voxel hit (visible.wgsl `visible_cell`); a walked pixel's hit, as a box of one point
     /// (light_mark.wgsl); and the box a host's draw stands within (gpu/draw.rs `ReceiverBox`,
     /// light_mark_draws.wgsl). A placed decor asks the reach of the box its ball stands in and

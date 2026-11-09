@@ -13,7 +13,7 @@ use std::process::ExitCode;
 use flate2::read::GzDecoder;
 
 use pxl_geo_bake::cli;
-use pxl_spec::asset::star::{record, Star, RECORD_BYTES};
+use pxl_spec::asset::star::{rec, Star, REC_BYTES};
 
 /// The catalog as pxl-tool download/star.rs keeps it.
 const SRC: &str = "asset/raw/sky/star/catalog.gz";
@@ -63,9 +63,9 @@ fn run() -> Result<(), String> {
         stars.extend(star(line)?);
     }
     stars.sort_by(|a, b| a.vmag.total_cmp(&b.vmag));
-    let mut out = Vec::with_capacity(stars.len() * RECORD_BYTES);
+    let mut out = Vec::with_capacity(stars.len() * REC_BYTES);
     for s in &stars {
-        out.extend_from_slice(&record(s));
+        out.extend_from_slice(&rec(s));
     }
     std::fs::write(OUT, &out).map_err(|e| format!("{OUT}: {e}"))?;
     let (first, last) = (

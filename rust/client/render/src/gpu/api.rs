@@ -1891,8 +1891,8 @@ impl Gpu {
 
     /// Notes that render pipeline `pipeline` was made from record `record`, so that a pass
     /// that declares what it draws can check the pipeline.
-    pub fn recorded(&self, pipeline: Id, record: u32) {
-        self.s().split.recorded(pipeline, record);
+    pub fn recorded(&self, pipeline: Id, rec: u32) {
+        self.s().split.recorded(pipeline, rec);
     }
 
     /// Limits what `pass` draws to `rect`, `[x, y, width, height]` in its targets' pixels.

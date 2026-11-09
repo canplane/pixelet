@@ -39,7 +39,7 @@ WHERE d.geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)
   AND NOT EXISTS (SELECT 1 FROM overture_division_areas s WHERE s.properties->>'division_id' = d.gers_id)";
 
 /// The divisions `$1` names and every parent of each.
-const RECORDS_SQL: &str = "WITH RECURSIVE up AS (
+const RECS_SQL: &str = "WITH RECURSIVE up AS (
   SELECT d.gers_id, d.properties FROM overture_divisions d WHERE d.gers_id = ANY($1)
   UNION SELECT p.gers_id, p.properties FROM overture_divisions p JOIN up ON p.gers_id = up.properties->>'parent_division_id'
 )
@@ -49,7 +49,7 @@ SELECT up.gers_id, up.properties->>'subtype' AS subtype, up.properties->'names'-
 FROM up";
 
 /// Every statement the layer runs, for the catalog check.
-pub const READS: [&str; 3] = [AREAS_SQL, POINTS_SQL, RECORDS_SQL];
+pub const READS: [&str; 3] = [AREAS_SQL, POINTS_SQL, RECS_SQL];
 
 /// Ids numbered as they are met.
 #[derive(Default)]
@@ -172,8 +172,8 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
     }
 
     // Last, each division a cell names is read, with its parents.
-    let rows = client.query(RECORDS_SQL, &[&ids.list]).map_err(db)?;
-    let mut records: FnvHashMap<&str, (Division, Option<&str>)> = FnvHashMap::default();
+    let rows = client.query(RECS_SQL, &[&ids.list]).map_err(db)?;
+    let mut recs: FnvHashMap<&str, (Division, Option<&str>)> = FnvHashMap::default();
     for r in &rows {
         let Some(kind) = r
             .get::<_, Option<&str>>("subtype")
@@ -193,10 +193,10 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
                 .clamp(0, 100) as u8,
             area: r.get("area"),
         };
-        records.insert(id, (division, r.get("parent")));
+        recs.insert(id, (division, r.get("parent")));
     }
     // The divisions in id order, so a tile is the same whatever order its rows came in.
-    let mut order: Vec<&str> = records.keys().copied().collect();
+    let mut order: Vec<&str> = recs.keys().copied().collect();
     order.sort();
     let at: FnvHashMap<&str, u32> = order
         .iter()
@@ -206,7 +206,7 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
     let divisions: Vec<Division> = order
         .iter()
         .map(|id| {
-            let (d, parent) = &records[*id];
+            let (d, parent) = &recs[*id];
             Division {
                 parent: parent.and_then(|p| at.get(p)).copied().unwrap_or(NONE),
                 ..*d

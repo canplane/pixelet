@@ -446,7 +446,7 @@ pub const SAMPLE_HIT_GROUP: [u32; 12] = [
 /// The group of the record's draw over every slot of the node cache (record_draw.wgsl): the
 /// eye, the node cache, the boxes, the raster's args, and the light's buffers through which
 /// the eye's boxes stand as receivers.
-pub const RECORD_GROUP: [u32; 24] = [
+pub const REC_GROUP: [u32; 24] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -477,8 +477,8 @@ pub const RECORD_GROUP: [u32; 24] = [
 /// beam rays' words, the node cache that holds their count and whose drawable entries they
 /// set, and the args of the faces' asks. It does not bind the stops' dispatch: that is copied
 /// out of the node cache, so that no pass reads its count from a buffer it binds writable
-/// (ray/raster.rs `Raster::record_hits`).
-pub const RECORD_HITS_GROUP: [u32; 15] = [
+/// (ray/raster.rs `Raster::rec_hits`).
+pub const REC_HITS_GROUP: [u32; 15] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -497,9 +497,9 @@ pub const RECORD_HITS_GROUP: [u32; 15] = [
 ];
 
 /// The group of the light's holes' stops (record_hits.wgsl over record_hits.light.wgsl):
-/// `RECORD_HITS_GROUP` with the light's map at 3 and its list at 8, and the light's head, by
+/// `REC_HITS_GROUP` with the light's map at 3 and its list at 8, and the light's head, by
 /// which its slots' rays are aimed.
-pub const LIGHT_RECORD_HITS_GROUP: [u32; 18] = [
+pub const LIGHT_REC_HITS_GROUP: [u32; 18] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -543,9 +543,9 @@ pub const LIGHT_SAMPLE_HIT_GROUP: [u32; 15] = [
 const _: () = assert!(
     floor::holds(&[&SAMPLE_HIT_GROUP])
         && floor::holds(&[&LIGHT_SAMPLE_HIT_GROUP])
-        && floor::holds(&[&RECORD_GROUP])
-        && floor::holds(&[&RECORD_HITS_GROUP])
-        && floor::holds(&[&LIGHT_RECORD_HITS_GROUP]),
+        && floor::holds(&[&REC_GROUP])
+        && floor::holds(&[&REC_HITS_GROUP])
+        && floor::holds(&[&LIGHT_REC_HITS_GROUP]),
     "the boxes' writing's group binds past WebGPU's floor"
 );
 
@@ -562,15 +562,9 @@ const _: () = assert!(
     binds(&[COMPUTE_SAMPLE_HIT], &SAMPLE_HIT_GROUP)
         && binds(&[COMPUTE_LIGHT_SAMPLE_HIT], &LIGHT_SAMPLE_HIT_GROUP)
         && binds(&[COMPUTE_FACE], &FACE_GROUP)
-        && binds(
-            &[COMPUTE_RECORD_DRAW, COMPUTE_LIGHT_RECORD_DRAW],
-            &RECORD_GROUP
-        )
-        && binds(
-            &[COMPUTE_RECORD_HITS, COMPUTE_RECORD_FACES],
-            &RECORD_HITS_GROUP
-        )
-        && binds(&[COMPUTE_LIGHT_RECORD_HITS], &LIGHT_RECORD_HITS_GROUP),
+        && binds(&[COMPUTE_REC_DRAW, COMPUTE_LIGHT_REC_DRAW], &REC_GROUP)
+        && binds(&[COMPUTE_REC_HITS, COMPUTE_REC_FACES], &REC_HITS_GROUP)
+        && binds(&[COMPUTE_LIGHT_REC_HITS], &LIGHT_REC_HITS_GROUP),
     "a compute group lays out other than its shader reads (record.rs `binds`)"
 );
 
@@ -782,8 +776,8 @@ pub const SAMPLE_HIT_BINDS: Group = Group {
     layout: &SAMPLE_HIT_GROUP,
     binds: &[bind(8, BEAMS), bind(9, NODE_CACHE), bind(16, RASTER_ARGS)],
 };
-pub const RECORD_BINDS: Group = Group {
-    layout: &RECORD_GROUP,
+pub const REC_BINDS: Group = Group {
+    layout: &REC_GROUP,
     binds: &[
         bind(12, LIGHT_LIST),
         bind(9, NODE_CACHE),
@@ -841,8 +835,8 @@ pub const LAST_BINDS: Group = Group {
     layout: &QUEUE_LAST_GROUP,
     binds: &[bind(8, BEAMS), bind(9, NODE_CACHE)],
 };
-pub const RECORD_HITS_OF_BINDS: Group = Group {
-    layout: &RECORD_HITS_GROUP,
+pub const REC_HITS_OF_BINDS: Group = Group {
+    layout: &REC_HITS_GROUP,
     binds: &[bind(8, BEAMS), bind(9, NODE_CACHE), bind(16, RASTER_ARGS)],
 };
 pub const GENERATION_MARK_BINDS: Group = Group {
@@ -873,8 +867,8 @@ pub const LIGHT_RECT_BINDS: Group = Group {
     layout: &RECT_ARGS_GROUP,
     binds: &[bind(1, LIGHT_RECT_ARGS)],
 };
-pub const LIGHT_RECORD_BINDS: Group = Group {
-    layout: &RECORD_GROUP,
+pub const LIGHT_REC_BINDS: Group = Group {
+    layout: &REC_GROUP,
     binds: &[
         bind(12, LIGHT_LIST),
         bind(9, NODE_CACHE),
@@ -977,8 +971,8 @@ pub const LIGHT_LAST_BINDS: Group = Group {
     layout: &QUEUE_LAST_GROUP,
     binds: &[bind(8, LIGHT_LIST), bind(9, NODE_CACHE)],
 };
-pub const LIGHT_RECORD_HITS_BINDS: Group = Group {
-    layout: &LIGHT_RECORD_HITS_GROUP,
+pub const LIGHT_REC_HITS_BINDS: Group = Group {
+    layout: &LIGHT_REC_HITS_GROUP,
     binds: &[
         bind(8, LIGHT_LIST),
         bind(9, NODE_CACHE),

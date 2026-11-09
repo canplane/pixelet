@@ -117,7 +117,7 @@ pub const SHADER_FACE: u32 = 43;
 /// on (pxl-engine `light::LIST_RECEIVERS`), then the tiles they read. A receiver stands on the
 /// tiles its box covers. `SHADER_LIGHT_MARK` stands the pixels whose rays the holes' queue
 /// walked; the record's draw stands the boxes of the voxels the raster drew
-/// (`SHADER_RECORD_DRAW`). `SHADER_LIGHT_MARK_DRAWS` stands the decor, and what the core draws
+/// (`SHADER_REC_DRAW`). `SHADER_LIGHT_MARK_DRAWS` stands the decor, and what the core draws
 /// that reads the map. `SHADER_LIGHT_PROPAGATE` lists the tiles those receivers read
 /// (`light::LIST_READS`, `light::reads_at`). All three are ports by hand (light_mark.wgsl,
 /// light_mark_draws.wgsl, light_propagate.wgsl).
@@ -210,12 +210,12 @@ pub const SHADER_DECOR_CULL: u32 = 76;
 /// view is written as a box for the raster, and also stood as a receiver of the light when the
 /// world's receivers are stood this frame. Each entry on the light's box is written as a box
 /// for the light's raster. It is a port by hand.
-pub const SHADER_RECORD_DRAW: u32 = 77;
+pub const SHADER_REC_DRAW: u32 = 77;
 /// Writes the holes' stops into the node cache's drawable entries, and puts at each hole's
 /// pixel what lies about the face it entered (record_hits.wgsl). It is a port by hand.
-pub const SHADER_RECORD_HITS: u32 = 78;
-/// `SHADER_RECORD_HITS` for the light's stops (record_hits.light.wgsl).
-pub const SHADER_LIGHT_RECORD_HITS: u32 = 79;
+pub const SHADER_REC_HITS: u32 = 78;
+/// `SHADER_REC_HITS` for the light's stops (record_hits.light.wgsl).
+pub const SHADER_LIGHT_REC_HITS: u32 = 79;
 /// Writes the dispatch of the drawn receivers' pass (light_mark_draws_open.wgsl). It is a
 /// module apart from that pass, so the pass, which takes its dispatch from the buffer this one
 /// writes, does not bind that buffer writable.
@@ -988,7 +988,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "decor_ball",
         "decor_cull",
     ],
-    // SHADER_RECORD_DRAW
+    // SHADER_REC_DRAW
     &[
         "walk_word",
         "world_word",
@@ -1007,7 +1007,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "light_receiver_tile",
         "record_draw",
     ],
-    // SHADER_RECORD_HITS
+    // SHADER_REC_HITS
     &[
         "walk_word",
         "raster_box",
@@ -1020,7 +1020,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "hit_read",
         "record_hits",
     ],
-    // SHADER_LIGHT_RECORD_HITS
+    // SHADER_LIGHT_REC_HITS
     &[
         "walk_word",
         "raster_box",

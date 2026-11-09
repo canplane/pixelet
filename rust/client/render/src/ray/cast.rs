@@ -209,7 +209,7 @@ pub(super) struct CastBuffer {
     light: Pipeline,
     /// The passes that list the tiles of the light's box the receivers stand on (pxl-engine
     /// `light::LIST_RECEIVERS`), and then the tiles those read. The record's draw marks the
-    /// tiles under the eye's voxels' boxes as it writes them (`Raster::record_draw`), and
+    /// tiles under the eye's voxels' boxes as it writes them (`Raster::rec_draw`), and
     /// `light_mark_walked_cs` those under the hits of the pixels the eye walked apart.
     /// `light_mark_draws_cs` marks where decor and the host's other draws that read the map
     /// stand, over as many threads as the single thread of `light_mark_draws_open_cs` opens.
@@ -291,11 +291,11 @@ pub(super) struct CastBuffer {
     /// Decides what each frame casts (ray/schedule.rs).
     schedule: Schedule,
     /// Whether the record's draw ran this frame, which it does once at most
-    /// (`Raster::record_draw`).
-    draws_record: bool,
+    /// (`Raster::rec_draw`).
+    draws_rec: bool,
     /// Buffers the record's group binds in place of the light's list, args and stood list's
     /// args while the light's cast has none. No thread reads them, as the head then says no
-    /// receiver stands (`Raster::record_group`).
+    /// receiver stands (`Raster::rec_group`).
     light_idle: [u32; 3],
     /// Whether a receiver other than the world's is drawn this frame, a host's draw or decor,
     /// so the drawn receivers' pass runs (`light_mark_draws_cs`).
@@ -605,7 +605,7 @@ impl RayPass {
             ),
             light_columns: Vec::with_capacity(light::COLUMNS),
             schedule: Schedule::new(),
-            draws_record: false,
+            draws_rec: false,
             light_idle: [0; 3].map(|_| {
                 buf(
                     word_bytes(light::RECEIVER_TILES_WORDS as usize),
@@ -921,7 +921,7 @@ impl RayPass {
         // world under the map; the box's slide or a step of the eye's zooms, which bound every
         // band, each keeping a tile whose band stands (`Light::keeps`); and what decides which
         // tiles are read: the eye's place and look, the boxes the host's draws stand in, and
-        // decor placed again (`record_draw_cs`, `light_mark_walked_cs`, `light_mark_draws_cs`).
+        // decor placed again (`rec_draw_cs`, `light_mark_walked_cs`, `light_mark_draws_cs`).
         // Where only the slide or which tiles are read moved, a tile cast within the epoch
         // stands where the box kept it, and only the tiles read anew are cast
         // (`light::HEADER_EPOCH`). Nothing is cast where no shadow is, or while the light's cast
@@ -1435,9 +1435,9 @@ impl RayPass {
             c.light_idle
         };
         c.raster
-            .record_group(g, [c.light_header, list, args, receiver_tiles]);
+            .rec_group(g, [c.light_header, list, args, receiver_tiles]);
         c.raster
-            .light_record_group(g, [c.light_header, list, args, receiver_tiles, light_map.0]);
+            .light_rec_group(g, [c.light_header, list, args, receiver_tiles, light_map.0]);
         let eye = c.eye;
         self.regroup(g, [rays.0, eye]);
     }
@@ -1482,7 +1482,7 @@ impl RayPass {
         // they were last marked afresh left in the stood list's args, and the read list's
         // count, are copied back in (`light::carry_at`). This runs ahead of every pass that
         // marks a tile, the record's draw among the eye's passes.
-        c.draws_record = false;
+        c.draws_rec = false;
         if lit.is_some_and(|l| !l.world || l.additive) {
             let back = &sequence::RECEIVER_TILES_BACK;
             g.copy_buf(
@@ -1566,9 +1566,9 @@ impl RayPass {
                     }
                     let masked = c.schedule.masked().then_some(claimed);
                     let samples_cast = kind == FrameKind::cast;
-                    c.draws_record = samples_cast || lit.is_some_and(|l| l.world);
+                    c.draws_rec = samples_cast || lit.is_some_and(|l| l.world);
                     c.raster
-                        .draw(ctx, &c.grid, (samples_cast, c.draws_record), masked);
+                        .draw(ctx, &c.grid, (samples_cast, c.draws_rec), masked);
                     group = c.px_group;
                     g.write_buf(
                         c.cast_tiles,
@@ -1636,8 +1636,8 @@ impl RayPass {
             );
             g.end(pass);
             // Every stop is recorded, its new faces are asked, and its face word is put at its
-            // pixel (ray/raster.rs `record_hits`). The next frame's raster draws them.
-            c.raster.record_hits(ctx, c.node_cache, GpuSpanName::hole);
+            // pixel (ray/raster.rs `rec_hits`). The next frame's raster draws them.
+            c.raster.rec_hits(ctx, c.node_cache, GpuSpanName::hole);
         }
         // Decor is generated after the rays and before the light's cast, which marks where
         // decor stands (`light_mark_draws_cs`).
@@ -1674,13 +1674,13 @@ impl RayPass {
             }
             // The tiles the world's receivers stand on (`light::LIST_RECEIVERS`). The record's
             // draw marks every box it writes, in the eye's pixels' cast, or here where that did
-            // not run (`draws_record`). Then every pixel the eye walked apart marks its hit, a
+            // not run (`draws_rec`). Then every pixel the eye walked apart marks its hit, a
             // thread a word of the walked bits, in a span of their own (`light_world_receivers`,
             // span.json `per_px`). Where these marks are added to those already made, the
             // earlier ones were copied back in before the frame's first pass (above).
             if due.world {
-                if !c.draws_record {
-                    c.raster.record_draw(ctx);
+                if !c.draws_rec {
+                    c.raster.rec_draw(ctx);
                 }
                 let stamp = ctx.stamp(GpuSpanName::light_world_receivers).pass();
                 let pass = g.compute_pass(encoder, stamp);
@@ -1852,9 +1852,9 @@ impl RayPass {
             );
             g.end(pass);
             // Every stop the queue listed is recorded after the queue and before the light's
-            // next draw (ray/raster.rs `light_record_hits`, `light_draw`).
+            // next draw (ray/raster.rs `light_rec_hits`, `light_draw`).
             c.raster
-                .light_record_hits(ctx, c.node_cache, GpuSpanName::light_walk);
+                .light_rec_hits(ctx, c.node_cache, GpuSpanName::light_walk);
         }
         let counted = CountBuffer {
             node_cache: c.node_cache,

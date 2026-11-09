@@ -1,7 +1,7 @@
 //! Checks that the record's passes over the holes' hits (frame/shader/record_hits.wgsl) answer
 //! as pxl-engine's record does, over the real world of tests/real_world.
 //!
-//! `record_hits_cs` writes each hit an observer's holes kept into the entry that draws the
+//! `rec_hits_cs` writes each hit an observer's holes kept into the entry that draws the
 //! hit's node (record_put.wgsl `observe_hit`), the eye's hits and the light's alike
 //! (record_hits.eye.wgsl, record_hits.light.wgsl). The hits are those the holes' queue leaves
 //! over the world: the eye's in frames that cast their samples first, whose hits set the
@@ -9,11 +9,11 @@
 //! the holes' hits; and the light's over its box. Some entries the hits find are then laid
 //! otherwise, as other frames and the other observer leave them (`lay_otherwise`). From those
 //! same words, the test works out what pxl-engine `record` says the pass leaves
-//! (`record_want`) and compares every word of the node cache, of the raster's args and of the
+//! (`rec_want`) and compares every word of the node cache, of the raster's args and of the
 //! observer's words. The asks the eye's hits open are compared as a set, because the device
 //! lays them in the order its threads come.
 //!
-//! `record_faces_cs` must then put, at each pixel that still waits for its hit, the word that
+//! `rec_faces_cs` must then put, at each pixel that still waits for its hit, the word that
 //! the hit's entry holds for the hit's face, once the faces' pass has answered the asks
 //! (`faces_want`). Every word of the rays, of the node cache and of the eye's words is
 //! compared.
@@ -38,8 +38,8 @@ use pxl_engine::light::{self, Light, StartGrid};
 use pxl_engine::object::Cut;
 use pxl_engine::{eye, face, node_cache, raster, ray, record, WORKGROUPS_CAP};
 use pxl_render::frame::shader::record::{
-    compute, src, COMPUTE_FACE, COMPUTE_LIGHT_RECORD_HITS, COMPUTE_RECORD_FACES,
-    COMPUTE_RECORD_HITS, SHADER_CELL, SHADER_LIGHT_CELL, SHADER_SAMPLE_HIT,
+    compute, src, COMPUTE_FACE, COMPUTE_LIGHT_REC_HITS, COMPUTE_REC_FACES, COMPUTE_REC_HITS,
+    SHADER_CELL, SHADER_LIGHT_CELL, SHADER_SAMPLE_HIT,
 };
 use pxl_render::frame::shader::word::SQUARE_SIDE;
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
@@ -441,8 +441,8 @@ fn twice(cache: &mut [u32], slot: u32) -> Option<u32> {
         node_cache::state_at(to) as usize,
     );
     cache[moved] = std::mem::take(&mut cache[state]);
-    let record = |s: u32| node_cache::RECORDS_AT + s * node_cache::R_WORDS;
-    let (from, into) = (record(slot), record(to));
+    let rec = |s: u32| node_cache::RECS_AT + s * node_cache::R_WORDS;
+    let (from, into) = (rec(slot), rec(to));
     for w in 0..node_cache::R_WORDS {
         cache[(into + w) as usize] = std::mem::take(&mut cache[(from + w) as usize]);
     }
@@ -458,7 +458,7 @@ struct Ask {
     lines: BTreeSet<u32>,
 }
 
-/// What `record_hits_cs` leaves where the hits `hits` are written into the node cache `cache`
+/// What `rec_hits_cs` leaves where the hits `hits` are written into the node cache `cache`
 /// and the raster's args `args`, by pxl-engine `record`; `reads` says the observer reads its
 /// faces' words, as the eye does. Each hit finds the entry that draws its node (`drawer`), and
 /// as no hit writes a key, every hit on a node finds the entry the pass began with. A hit on
@@ -467,10 +467,10 @@ struct Ask {
 /// `record::WHOLE`. Each hit sets its face's bit (`record::FACES`) and, where `reads`, its
 /// asked bit (`record::ASKED`). Where `reads`, the first hit to ask a face settles its word: none
 /// for a lack, `face::BOX` for a cell short of its cube, and otherwise none until an ask it opens
-/// answers, whose target is the entry's word (`record::TO_RECORD`), counted in the args at
+/// answers, whose target is the entry's word (`record::TO_REC`), counted in the args at
 /// `raster::HIT_ASKED_AT` as a dispatch of `raster::FACES_LANES` asks a workgroup. Returns the
 /// asks by their targets.
-fn record_want(
+fn rec_want(
     cache: &mut [u32],
     args: &mut [u32],
     hits: &[Hit],
@@ -559,7 +559,7 @@ fn record_want(
         words[beam::ASK_NODE as usize] = node_cache::entry_at(slot);
         words[beam::ASK_FACE as usize] = h.face;
         words[beam::ASK_LINE as usize] = h.line;
-        words[beam::ASK_TO as usize] = record::TO_RECORD | to;
+        words[beam::ASK_TO as usize] = record::TO_REC | to;
         asks.insert(
             to,
             Ask {
@@ -581,7 +581,7 @@ fn record_want(
     asks
 }
 
-/// What `record_faces_cs` leaves in the rays `rays`, laid out as `read_texture` reads them,
+/// What `rec_faces_cs` leaves in the rays `rays`, laid out as `read_texture` reads them,
 /// `size` pixels a layer. `hits` are the eye's hits, and `cache` is the node cache once the
 /// faces' pass has answered their asks, whose targets are `asked`. A pixel whose last ray word
 /// (`ray::FACES`) holds `beam::HIT_WAITS` and the number of its hit takes the word its hit's
@@ -618,7 +618,7 @@ fn faces_want(
 /// A word of the node cache, named for a message.
 fn cache_word(k: usize) -> String {
     use node_cache::{
-        ENTRIES_AT, ENTRY_WORDS, KEYS_AT, RECORDS_AT, R_DRAWN, R_FACES, R_WORDS, STATES_AT,
+        ENTRIES_AT, ENTRY_WORDS, KEYS_AT, RECS_AT, R_DRAWN, R_FACES, R_WORDS, STATES_AT,
     };
     let k = k as u32;
     if k < KEYS_AT {
@@ -627,11 +627,11 @@ fn cache_word(k: usize) -> String {
         format!("slot {}'s key", k - KEYS_AT)
     } else if k < ENTRIES_AT {
         format!("slot {}'s state", k - STATES_AT)
-    } else if k < RECORDS_AT {
+    } else if k < RECS_AT {
         let w = k - ENTRIES_AT;
         format!("slot {}'s entry word {}", w / ENTRY_WORDS, w % ENTRY_WORDS)
     } else {
-        let (slot, w) = ((k - RECORDS_AT) / R_WORDS, (k - RECORDS_AT) % R_WORDS);
+        let (slot, w) = ((k - RECS_AT) / R_WORDS, (k - RECS_AT) % R_WORDS);
         if w == R_DRAWN {
             format!("slot {slot}'s drawn frame")
         } else {
@@ -662,9 +662,9 @@ struct Run {
 }
 
 impl Run {
-    /// The bindings of `record_hits_cs`: the eye at 0, the observer's words at 8, the node cache
+    /// The bindings of `rec_hits_cs`: the eye at 0, the observer's words at 8, the node cache
     /// at 9 and the raster's args at 16, and the light's head at 11 for the light.
-    fn record_binds(&self) -> Vec<(u32, wgpu::BindingResource<'_>)> {
+    fn rec_binds(&self) -> Vec<(u32, wgpu::BindingResource<'_>)> {
         let mut binds = vec![
             (0, self.eye_buf.as_entire_binding()),
             (8, self.words_buf.as_entire_binding()),
@@ -1004,11 +1004,11 @@ fn light_run(gpu: &Gpu, b: &WorldBuffer, c: &LightCase) -> Run {
     }
 }
 
-/// Runs `record_hits_cs` over the words of `run`, a thread for each hit a frame holds, and
+/// Runs `rec_hits_cs` over the words of `run`, a thread for each hit a frame holds, and
 /// compares every word it leaves in the node cache, the raster's args and the observer's words
-/// with `record_want`'s. The asks it laid are put in the order of their targets first, and an
+/// with `rec_want`'s. The asks it laid are put in the order of their targets first, and an
 /// ask's line may be that of any hit that may open it (`Ask`).
-fn record_case(
+fn rec_case(
     gpu: &Gpu,
     p: &wgpu::ComputePipeline,
     run: &Run,
@@ -1017,10 +1017,10 @@ fn record_case(
 ) {
     let mut cache = run.cache.clone();
     let mut args = run.args.clone();
-    let asks = record_want(&mut cache, &mut args, &run.hits, run.reads, kind_cnt);
+    let asks = rec_want(&mut cache, &mut args, &run.hits, run.reads, kind_cnt);
     gpu.dispatch(
         p,
-        &run.record_binds(),
+        &run.rec_binds(),
         [ray::HITS_A_FRAME.div_ceil(beam::HIT_LANES), 1, 1],
     );
     let name = &run.name;
@@ -1078,16 +1078,16 @@ fn record_case(
 /// The eye's record of its holes' hits must leave every word as pxl-engine `record` says,
 /// over the eye's frames of `eye_cases`.
 #[test]
-fn hand_eye_hits_answer_as_record() {
+fn hand_eye_hits_answer_as_rec() {
     let Some(gpu) = device() else { return };
     let built = real_world::build(EYE);
     let b = world_bufs(&gpu, &built);
-    let p = pipeline(&gpu, COMPUTE_RECORD_HITS);
+    let p = pipeline(&gpu, COMPUTE_REC_HITS);
     let mut tally = Tally::default();
     let mut kind_cnt = KindCount::new();
     for (c, s) in eye_cases(&built) {
         let run = eye_run(&gpu, &b, (&c, &s));
-        record_case(&gpu, &p, &run, &mut tally, &mut kind_cnt);
+        rec_case(&gpu, &p, &run, &mut tally, &mut kind_cnt);
     }
     tally.end("the eye's hits");
     kind_cnt.hold(&[
@@ -1111,16 +1111,16 @@ fn hand_eye_hits_answer_as_record() {
 /// over the light's boxes of `light_cases`. It opens no ask and writes no args, since the
 /// light's slots read no face's word.
 #[test]
-fn hand_light_hits_answer_as_record() {
+fn hand_light_hits_answer_as_rec() {
     let Some(gpu) = device() else { return };
     let built = real_world::build(EYE);
     let b = world_bufs(&gpu, &built);
-    let p = pipeline(&gpu, COMPUTE_LIGHT_RECORD_HITS);
+    let p = pipeline(&gpu, COMPUTE_LIGHT_REC_HITS);
     let mut tally = Tally::default();
     let mut kind_cnt = KindCount::new();
     for c in light_cases(&built) {
         let run = light_run(&gpu, &b, &c);
-        record_case(&gpu, &p, &run, &mut tally, &mut kind_cnt);
+        rec_case(&gpu, &p, &run, &mut tally, &mut kind_cnt);
     }
     tally.end("the light's hits");
     kind_cnt.hold(&[
@@ -1137,23 +1137,23 @@ fn hand_light_hits_answer_as_record() {
 }
 
 /// Once the eye's hits are recorded and the faces' pass has answered their asks, as the
-/// renderer runs them (ray/raster.rs `record_hits`), `record_faces_cs` must leave every
+/// renderer runs them (ray/raster.rs `rec_hits`), `rec_faces_cs` must leave every
 /// word of the rays as `faces_want` says, and no word of the node cache or of the eye's words
 /// changed.
 #[test]
-fn hand_hit_faces_answer_as_record() {
+fn hand_hit_faces_answer_as_rec() {
     let Some(gpu) = device() else { return };
     let built = real_world::build(EYE);
     let b = world_bufs(&gpu, &built);
     let [hits_p, face_p, faces_p] =
-        [COMPUTE_RECORD_HITS, COMPUTE_FACE, COMPUTE_RECORD_FACES].map(|id| pipeline(&gpu, id));
+        [COMPUTE_REC_HITS, COMPUTE_FACE, COMPUTE_REC_FACES].map(|id| pipeline(&gpu, id));
     let mut tally = Tally::default();
     let mut kind_cnt = KindCount::new();
     for (c, s) in eye_cases(&built) {
         let run = eye_run(&gpu, &b, (&c, &s));
         gpu.dispatch(
             &hits_p,
-            &run.record_binds(),
+            &run.rec_binds(),
             [ray::HITS_A_FRAME.div_ceil(beam::HIT_LANES), 1, 1],
         );
         let args = gpu.read(&run.args_buf);
@@ -1168,7 +1168,7 @@ fn hand_hit_faces_answer_as_record() {
         let asked: BTreeSet<u32> = (0..args[at + raster::ARGS_INSTANCES as usize])
             .map(|place| {
                 let k = (run.asks_at + place * beam::ASK_WORDS + beam::ASK_TO) as usize;
-                words[k] & !record::TO_RECORD
+                words[k] & !record::TO_REC
             })
             .collect();
         let mut want = read_texture(&gpu.device, &gpu.queue, &run.rays);

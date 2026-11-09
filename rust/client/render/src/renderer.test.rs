@@ -88,7 +88,7 @@ fn passes() -> Vec<(u32, UploadOf)> {
 /// place on the field's map, which drifts, and `drift` is the drift the turn
 /// draws at.
 struct Rebuilt {
-    records: Vec<[u32; DRAW_WORDS]>,
+    recs: Vec<[u32; DRAW_WORDS]>,
     uniforms: Vec<[f32; DRAW_FLOATS]>,
     drift: Position,
 }
@@ -100,7 +100,7 @@ const BOX_LAYER: u32 = 3;
 fn rebuilt(t: &Turn) -> Rebuilt {
     let off = t.drift as f64 / 256.0;
     let mut r = Rebuilt {
-        records: Vec::new(),
+        recs: Vec::new(),
         uniforms: Vec::new(),
         drift: Position::of([off, off, 0.0]),
     };
@@ -109,7 +109,7 @@ fn rebuilt(t: &Turn) -> Rebuilt {
         let q = p.q.map(|v| f32::from_bits(v as u32));
         let [w0, w1, w2] = s.words;
         let drifts = if s.cloud { 1.0 } else { 0.0 };
-        r.records
+        r.recs
             .push([w0, w1, w2, r.uniforms.len() as u32, s.pipeline]);
         let mut u = [0.0; DRAW_FLOATS];
         u[draw::Q..draw::Q + 3].copy_from_slice(&q);
@@ -150,7 +150,7 @@ fn rebuilt_marks(was: &Rebuilt, now: &Rebuilt, touched: &[u32]) -> Vec<Damage> {
     let mut out = Vec::new();
     for (pipeline, read) in passes() {
         let of = |r: &Rebuilt| -> Vec<Draw> {
-            r.records
+            r.recs
                 .iter()
                 .zip(&r.uniforms)
                 .filter(|(d, _)| d[4] == pipeline)
@@ -186,7 +186,7 @@ fn rebuilt_marks(was: &Rebuilt, now: &Rebuilt, touched: &[u32]) -> Vec<Damage> {
 /// between the two frames, or if an upload one reads moved.
 fn rebuilt_beside(was: &Rebuilt, now: &Rebuilt, touched: &[u32]) -> bool {
     let beside = |r: &Rebuilt| -> Vec<([u32; DRAW_WORDS], [u32; DRAW_FLOATS])> {
-        r.records
+        r.recs
             .iter()
             .zip(&r.uniforms)
             .filter(|(d, u)| beside(d, &u[..]))
@@ -283,7 +283,7 @@ fn kept_draws_answer_as_the_rebuilt_lists_did() {
     let ids: Vec<DrawId> = (0..11).map(|_| DrawId::default()).collect();
     let mut list = DrawList::default();
     let mut was = Rebuilt {
-        records: Vec::new(),
+        recs: Vec::new(),
         uniforms: Vec::new(),
         drift: Position::of([0.0; 3]),
     };
@@ -311,7 +311,7 @@ fn kept_draws_answer_as_the_rebuilt_lists_did() {
         let drift_changed = now.drift != was.drift;
         // The oracle's answers to what renderer.rs `frame` asks of the
         // lists.
-        let records_changed = was.records != now.records;
+        let recs_changed = was.recs != now.recs;
         let bits = |r: &Rebuilt| {
             r.uniforms
                 .iter()
@@ -319,7 +319,7 @@ fn kept_draws_answer_as_the_rebuilt_lists_did() {
                 .collect::<Vec<_>>()
         };
         let uniforms_changed = first || bits(&was) != bits(&now);
-        let rebuilt_changed = records_changed || uniforms_changed;
+        let rebuilt_changed = recs_changed || uniforms_changed;
         let drifting = now.uniforms.iter().any(|u| drifts(u));
         let rebuilt_same = !rebuilt_changed && !uploads_changed && !(drifting && drift_changed);
         // The kept draws' answers.

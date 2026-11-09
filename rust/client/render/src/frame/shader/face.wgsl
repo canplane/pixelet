@@ -10,7 +10,7 @@
 
 @group(0) @binding(8) var<storage, read_write> beams: array<u32>;
 /// The node cache. An ask may name a drawable entry's face word as the word it writes
-/// (pxl-engine `record::TO_RECORD`, `node_cache::R_FACES`). Each face has one ask, so each word
+/// (pxl-engine `record::TO_REC`, `node_cache::R_FACES`). Each face has one ask, so each word
 /// has one writer.
 @group(0) @binding(9) var<storage, read_write> node_cache: array<u32>;
 /// The raster's args, which say where the pass's asks lie (`raster::ARGS_ASKS`) and how many
@@ -204,10 +204,10 @@ fn face_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     return;
   }
   // A drawable entry's ask names its entry, which holds its node as the world names it
-  // (pxl-engine `record::TO_RECORD`, `node_cache::W_NODE`). A hit's ask names its node among
+  // (pxl-engine `record::TO_REC`, `node_cache::W_NODE`). A hit's ask names its node among
   // the beam rays' words.
   var hit: vec4<i32>;
-  if ((to & RECORD_TO) != 0u) {
+  if ((to & REC_TO) != 0u) {
     let n = beams[a + ASK_NODE] + W_NODE;
     hit = vec4<i32>(i32(node_cache[n + 1u]), i32(node_cache[n + 2u]), i32(node_cache[n + 3u]), i32(node_cache[n]));
   } else {
@@ -228,10 +228,10 @@ fn face_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
   let d = descent(c, zoom, low, low_inheritance);
   let word = face_word(beams[a + ASK_FACE], line, low, low_inheritance, d.up, d.grand_inheritance, d.parent_inheritance, c, zoom);
-  // A drawable entry's face word goes into the node cache (pxl-engine `record::TO_RECORD`). A
+  // A drawable entry's face word goes into the node cache (pxl-engine `record::TO_REC`). A
   // hit's goes to the word its ask names among the beam rays' words.
-  if ((to & RECORD_TO) != 0u) {
-    node_cache[to & ~RECORD_TO] = word;
+  if ((to & REC_TO) != 0u) {
+    node_cache[to & ~REC_TO] = word;
   } else {
     beams[to] = word;
   }

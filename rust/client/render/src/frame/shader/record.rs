@@ -49,8 +49,8 @@ pub const COMPUTE_SCREEN_BOUND: u32 = 24;
 pub const COMPUTE_LIGHT_SLIDE: u32 = 25;
 pub const COMPUTE_QUEUE_LAST: u32 = 26;
 /// Puts at each hole's pixel what lies about the face its stop entered, read from the record
-/// (`SHADER_RECORD_HITS`).
-pub const COMPUTE_RECORD_FACES: u32 = 27;
+/// (`SHADER_REC_HITS`).
+pub const COMPUTE_REC_FACES: u32 = 27;
 pub const COMPUTE_RECT_ARGS: u32 = 28;
 pub const COMPUTE_QUEUE_LIGHT_CORNERS: u32 = 29;
 pub const COMPUTE_LIGHT_CELL: u32 = 30;
@@ -69,16 +69,16 @@ pub const COMPUTE_DECOR_CULL_ARGS: u32 = 41;
 pub const COMPUTE_DECOR_CULL: u32 = 42;
 /// Writes the node cache's drawable entries as the boxes of the eye's raster
 /// (record_draw.wgsl).
-pub const COMPUTE_RECORD_DRAW: u32 = 43;
+pub const COMPUTE_REC_DRAW: u32 = 43;
 /// Writes the stops of the eye's holes into the node cache's drawable entries
 /// (record_hits.wgsl).
-pub const COMPUTE_RECORD_HITS: u32 = 44;
+pub const COMPUTE_REC_HITS: u32 = 44;
 /// Writes the node cache's drawable entries as the boxes of the light's raster
 /// (record_draw.wgsl).
-pub const COMPUTE_LIGHT_RECORD_DRAW: u32 = 45;
+pub const COMPUTE_LIGHT_REC_DRAW: u32 = 45;
 /// Writes the stops of the light's holes into the node cache's drawable entries
 /// (record_hits.wgsl over record_hits.light.wgsl).
-pub const COMPUTE_LIGHT_RECORD_HITS: u32 = 46;
+pub const COMPUTE_LIGHT_REC_HITS: u32 = 46;
 /// Claims each tile the light's cast lists as read that has not been cast in its epoch
 /// (light_propagate.wgsl `light_damage_cs`).
 pub const COMPUTE_LIGHT_DAMAGE: u32 = 47;
@@ -129,7 +129,7 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_SCREEN_BOUND => (SHADER_SCREEN_BOUND, "screen_bound_cs"),
         COMPUTE_LIGHT_SLIDE => (SHADER_LIGHT_SLIDE, "light_slide_cs"),
         COMPUTE_QUEUE_LAST => (SHADER_QUEUE_LAST, "queue_last_cs"),
-        COMPUTE_RECORD_FACES => (SHADER_RECORD_HITS, "record_faces_cs"),
+        COMPUTE_REC_FACES => (SHADER_REC_HITS, "rec_faces_cs"),
         COMPUTE_RECT_ARGS => (SHADER_RECT_ARGS, "rect_args_cs"),
         COMPUTE_QUEUE_LIGHT_CORNERS => (SHADER_QUEUE_LIGHT_CORNERS, "queue_cs"),
         COMPUTE_QUEUE_LIGHT_CORNERS_PARKED => (SHADER_QUEUE_LIGHT_CORNERS, "queue_parked_cs"),
@@ -144,10 +144,10 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_QUEUE_LIGHT_SAMPLES => (SHADER_QUEUE_LIGHT_SAMPLES, "queue_cs"),
         COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED => (SHADER_QUEUE_LIGHT_SAMPLES, "queue_parked_cs"),
         COMPUTE_QUEUE_LAST_LIGHT_CORNERS => (SHADER_QUEUE_LAST_LIGHT_CORNERS, "queue_last_cs"),
-        COMPUTE_RECORD_DRAW => (SHADER_RECORD_DRAW, "record_draw_cs"),
-        COMPUTE_RECORD_HITS => (SHADER_RECORD_HITS, "record_hits_cs"),
-        COMPUTE_LIGHT_RECORD_DRAW => (SHADER_RECORD_DRAW, "light_record_draw_cs"),
-        COMPUTE_LIGHT_RECORD_HITS => (SHADER_LIGHT_RECORD_HITS, "record_hits_cs"),
+        COMPUTE_REC_DRAW => (SHADER_REC_DRAW, "rec_draw_cs"),
+        COMPUTE_REC_HITS => (SHADER_REC_HITS, "rec_hits_cs"),
+        COMPUTE_LIGHT_REC_DRAW => (SHADER_REC_DRAW, "light_rec_draw_cs"),
+        COMPUTE_LIGHT_REC_HITS => (SHADER_LIGHT_REC_HITS, "rec_hits_cs"),
         _ => panic!("a compute pipeline number with no shader"),
     }
 }
@@ -1050,7 +1050,7 @@ const fn words(desc: &Descriptor) -> usize {
 }
 
 /// The most words a record has.
-const RECORD_WORDS: usize = {
+const REC_WORDS: usize = {
     let (mut most, mut id) = (0, 0);
     while id < PIPELINES {
         let n = words(&desc_of(id));
@@ -1062,8 +1062,8 @@ const RECORD_WORDS: usize = {
 
 /// Pipeline `id`'s record and its length, each group entry visible to the stages that read it
 /// (`stages_reading`).
-const fn record(id: u32) -> ([u32; RECORD_WORDS], usize) {
-    let mut out = [0; RECORD_WORDS];
+const fn rec(id: u32) -> ([u32; REC_WORDS], usize) {
+    let mut out = [0; REC_WORDS];
     let desc = desc_of(id);
     let h = desc.header;
     let header = [
@@ -1116,16 +1116,16 @@ const fn record(id: u32) -> ([u32; RECORD_WORDS], usize) {
 }
 
 /// Every pipeline's record, worked out as the crate is built.
-const RECORDS: [([u32; RECORD_WORDS], usize); PIPELINES as usize] = {
-    let mut r = [([0; RECORD_WORDS], 0); PIPELINES as usize];
+const RECS: [([u32; REC_WORDS], usize); PIPELINES as usize] = {
+    let mut r = [([0; REC_WORDS], 0); PIPELINES as usize];
     let mut id = 0;
     while id < PIPELINES {
-        r[id as usize] = record(id);
+        r[id as usize] = rec(id);
         id += 1;
     }
     r
 };
-static TABLE: [([u32; RECORD_WORDS], usize); PIPELINES as usize] = RECORDS;
+static TABLE: [([u32; REC_WORDS], usize); PIPELINES as usize] = RECS;
 
 /// Pipeline `id`'s record (see Record words above), each group entry visible to the stages
 /// that read it.
@@ -1162,7 +1162,7 @@ pub fn reads_shadow_map(id: u32) -> bool {
 /// Whether pipeline `id`'s layout, with its groups as its record lays them out, binds within
 /// what every WebGPU device binds (`floor::holds`).
 const fn is_floored(id: u32) -> bool {
-    let (words, _) = &RECORDS[id as usize];
+    let (words, _) = &RECS[id as usize];
     let mut at = HEADER as usize;
     let bufs = words[at];
     at += 1;

@@ -64,14 +64,14 @@ inline constexpr std::uint32_t WORD = sizeof(std::uint32_t);
 
 // A record's words are its op and count, then `args`, then `bytes` as their
 // count followed by the bytes in words.
-constexpr std::uint64_t record_words(std::uint64_t args, std::optional<std::uint64_t> bytes) noexcept {
+constexpr std::uint64_t rec_words(std::uint64_t args, std::optional<std::uint64_t> bytes) noexcept {
     return 2 + args + (bytes ? 1 + (*bytes + WORD - 1) / WORD : 0);
 }
 
-// `record_bytes` is a record's size in bytes, the unit a stream's room is
+// `rec_bytes` is a record's size in bytes, the unit a stream's room is
 // counted in.
-constexpr std::uint64_t record_bytes(std::uint64_t args, std::optional<std::uint64_t> bytes) noexcept {
-    return record_words(args, bytes) * WORD;
+constexpr std::uint64_t rec_bytes(std::uint64_t args, std::optional<std::uint64_t> bytes) noexcept {
+    return rec_words(args, bytes) * WORD;
 }
 
 class Stream {
@@ -88,7 +88,7 @@ class Stream {
 
     std::uint32_t left() const noexcept { return (words_ - head_ - len_) * WORD; }
 
-    // `fits` says whether records of `bytes` bytes (`record_bytes`, or
+    // `fits` says whether records of `bytes` bytes (`rec_bytes`, or
     // gpu/encode's `call::*_bytes`) fit with `leave` bytes left after them.
     bool fits(std::uint64_t bytes, std::uint32_t leave) const noexcept { return std::uint64_t{left()} >= bytes + leave; }
 

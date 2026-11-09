@@ -14,7 +14,7 @@
 // A thread writes a record's first word, and its box's height and sink. The eye's words are
 // declared in eye_bind.wgsl.
 
-@group(0) @binding(9) var<storage, read_write> records: array<u32>;
+@group(0) @binding(9) var<storage, read_write> recs: array<u32>;
 @group(0) @binding(11) var<storage, read> list: array<u32>;
 
 /// The values a `Surface`'s `kind` takes.
@@ -171,12 +171,12 @@ fn decor_pose_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let pair = list[select(LIST_AT + id.z, part_at(id.z - whole), part)];
   let brick = pair_entry(pair);
   let j = pair_decor(pair);
-  if (id.x >= records[cnt_at(brick, j)]) {
+  if (id.x >= recs[cnt_at(brick, j)]) {
     return;
   }
   let r = entry_word(brick, j, id.x);
   let cell_zoom = FIRST_CELL_ZOOM + brick / CLIP_ENTRIES;
-  let leaf = vec2<i32>(i32(records[r + 1u]), i32(records[r + 2u]));
+  let leaf = vec2<i32>(i32(recs[r + 1u]), i32(recs[r + 2u]));
   if (part && !is_changed(cell_zoom, vec4<i32>(leaf, leaf + 1i))) {
     return;
   }
@@ -209,7 +209,7 @@ fn decor_pose_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     if (stage == STAGE_COLUMN) {
       let f = surface(column_zoom, vec2<i32>(wrap_idx(column_zoom, leaf.x >> (LEAF_CELL_ZOOM - column_zoom)), leaf.y >> (LEAF_CELL_ZOOM - column_zoom)));
       if (f.kind == SURFACE_NONE) {
-        records[r] = UNGENERATED;
+        recs[r] = UNGENERATED;
         return;
       }
       z = f.z;
@@ -220,8 +220,8 @@ fn decor_pose_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     if (stage == STAGE_MET) {
       if (column_zoom == cell_zoom) {
         let q = LEAF_CELL_ZOOM - cell_zoom;
-        records[r + 3u] = u32((z + 1i) * (1i << q));
-        records[r + 4u] = u32(sink_share(eighths) * f32(1u << (q + FRAC_W)) + 0.5);
+        recs[r + 3u] = u32((z + 1i) * (1i << q));
+        recs[r + 4u] = u32(sink_share(eighths) * f32(1u << (q + FRAC_W)) + 0.5);
       }
       if (column_zoom != zoom) {
         column_zoom = zoom;
@@ -293,7 +293,7 @@ fn decor_pose_cs(@builtin(global_invocation_id) id: vec3<u32>) {
       } else {
         z -= 1i;
         if (z < z_end) {
-          records[r] = UNGENERATED;
+          recs[r] = UNGENERATED;
           return;
         }
       }
@@ -301,7 +301,7 @@ fn decor_pose_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     }
     if (edited) {
       if ((v & PLACED_ASSET) != 0u) {
-        records[r] = UNGENERATED;
+        recs[r] = UNGENERATED;
         return;
       }
       edited = false;
@@ -310,7 +310,7 @@ fn decor_pose_cs(@builtin(global_invocation_id) id: vec3<u32>) {
       // the cell must be void and hold no edit.
       let under = c.z == base;
       if (!(select(v == VAL_VOID, allows(j, v & VAL_MASK), under))) {
-        records[r] = UNGENERATED;
+        recs[r] = UNGENERATED;
         return;
       }
       if (!under) {
@@ -326,10 +326,10 @@ fn decor_pose_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     }
     ask += 1i;
   }
-  let at_z = i32(records[r + 3u]);
+  let at_z = i32(recs[r + 3u]);
   if (overlaps_placed(vec3<i32>(leaf, at_z), decor_size(j, variant, turn))) {
-    records[r] = UNGENERATED;
+    recs[r] = UNGENERATED;
   } else {
-    records[r] = record_word(j, variant, turn, cell_zoom);
+    recs[r] = rec_word(j, variant, turn, cell_zoom);
   }
 }
