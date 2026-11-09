@@ -10,7 +10,7 @@ fn cnt_at(s: u32, k: u32) -> u32 {
 
 /// The first word of entry `s`'s `i`-th record of decor `k` (`entry_record`, `record_at`).
 fn entry_word(s: u32, k: u32, i: u32) -> u32 {
-  return SLOTS_AT + (s * BRICK_RECORD_CAP + decor_first_record(k) + i) * RECORD_WORDS;
+  return ENTRY_RECORDS_AT + (s * BRICK_RECORD_CAP + decor_first_record(k) + i) * RECORD_WORDS;
 }
 
 /// A record's first word, as pxl-content `generation::record_word` packs it.

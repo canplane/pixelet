@@ -15,9 +15,9 @@ fn wrap_idx(zoom: u32, x: i32) -> i32 {
 
 /// The port of `xpute_kit::seed_mix32`.
 fn seed_mix32(base: u32, tag: u32) -> u32 {
-  var z = (base ^ tag) + SEED_SALT;
-  z = (z ^ (z >> 16u)) * MIX_FIRST;
-  z = (z ^ (z >> 13u)) * MIX_LAST;
+  var z = (base ^ tag) + SEED_SALT_32;
+  z = (z ^ (z >> 16u)) * MIX32_FIRST;
+  z = (z ^ (z >> 13u)) * MIX32_LAST;
   return z ^ (z >> 16u);
 }
 

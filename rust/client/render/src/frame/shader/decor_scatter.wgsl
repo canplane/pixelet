@@ -56,11 +56,6 @@ fn candidate_at(k: u32, cell: vec2<i32>) -> Candidate {
   return Candidate(cell, draw(h, 0u), draw(h, 1u));
 }
 
-/// This is the port of pxl-content `scatter::variant_of`.
-fn variant_of(k: u32, seed: u32) -> u32 {
-  return mul_hi(draw(seed, 0u), row_word(k, ROW_VARIANTS));
-}
-
 /// This is the port of pxl-content `scatter::side_of`.
 fn side_of(k: u32, seed: u32) -> i32 {
   let size = decor_size(k, variant_of(k, seed), 0u);

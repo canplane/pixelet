@@ -811,7 +811,7 @@ fn generated_decor_stays() {
 
 /// Only an edit in its own box, air or a cube, takes what the ground
 /// generates away. An edit under it or over it leaves it generated
-/// (pxl-engine `generation::DecorQuery::asset`, edited).
+/// (pxl-content `generation::DecorQuery::edited`).
 #[test]
 fn generated_decor_edit_removes() {
     use pxl_spec::value::AIR;

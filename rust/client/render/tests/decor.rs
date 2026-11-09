@@ -117,6 +117,74 @@ struct Generating<'w, 't> {
     last_lacks: bool,
 }
 
+impl Generating<'_, '_> {
+    /// What the base answers near `f`, or with none the world as edited, tallied.
+    fn ask(
+        &mut self,
+        f: Option<&support::ColumnSurface<Inheritance>>,
+        zoom: Zoom,
+        c: [i32; 3],
+    ) -> u32 {
+        let edited = f.is_none();
+        let root_at = object::ancestor_at(zoom, c, zoom);
+        let (cuts, root) = if edited {
+            (self.cuts, Inheritance::of(&self.w, (0, root_at)))
+        } else {
+            ([Cut::NONE; 2], f.unwrap().line.ancestor(0))
+        };
+        // Where the ask is edited, the cell's root alone; else the column surface's line.
+        let line = if edited {
+            Line::of_root(root_at, root)
+        } else {
+            f.unwrap().line
+        };
+        let mut ground = Ground { w: self.w, cuts };
+        let v = support::asset(&mut ground, &line, zoom, c);
+        let lacks = !clip::step(&self.w, Lookup::NONE, zoom, [c[0], c[1]])
+            .0
+            .here();
+        self.last_lacks = lacks;
+        self.tally.add("ask: a column not held", lacks);
+        self.tally
+            .add("edit: asked over a column not held", edited && lacks);
+        self.tally.add("ask: of the world unplaced", !edited);
+        self.tally.add("ask: as edited", edited);
+        if edited && answer::is_placed(v) {
+            self.tally
+                .add("edit: air takes it", answer::val(v) == value::AIR);
+            self.tally.add(
+                "edit: something placed takes it",
+                answer::val(v) != value::AIR,
+            );
+            self.tally
+                .add("edit: part of its cube", answer::fill_eighths(v) < EIGHTHS);
+            self.tally
+                .add("edit: at a coarse zoom", zoom < LEAF_CELL_ZOOM);
+            let under = Inheritance::of(&self.w, (zoom, c));
+            self.tally
+                .add("edit: a cut takes it", !under.object.holds());
+        }
+        if edited && !answer::is_placed(v) {
+            let under = Inheritance::of(&self.w, (zoom, c));
+            self.tally
+                .add("edit: something placed takes nothing", under.object.holds());
+            self.tally.add(
+                "edit: under an eighth, or air on a lack",
+                under.object.holds() && under.object.is_folded(),
+            );
+        }
+        if edited {
+            let under = Inheritance::of(&self.w, (zoom, c));
+            let air_cut = cuts[0].zoom != Cut::NONE.zoom;
+            self.tally.add(
+                "edit: no tree there, no ask by hand",
+                !under.object.holds() && !air_cut,
+            );
+        }
+        v
+    }
+}
+
 impl DecorQuery for Generating<'_, '_> {
     type ColumnSurface = support::ColumnSurface<Inheritance>;
 
@@ -211,71 +279,19 @@ impl DecorQuery for Generating<'_, '_> {
         f.from()
     }
 
-    fn asset(&mut self, f: &Self::ColumnSurface, zoom: Zoom, c: [i32; 3], edited: bool) -> u32 {
-        let root_at = object::ancestor_at(zoom, c, zoom);
-        let (cuts, root) = if edited {
-            (self.cuts, Inheritance::of(&self.w, (0, root_at)))
-        } else {
-            ([Cut::NONE; 2], f.line.ancestor(0))
-        };
-        // Where the ask is edited, the cell's root alone; else the column surface's line.
-        let line = if edited {
-            Line::of_root(root_at, root)
-        } else {
-            f.line
-        };
-        let mut ground = Ground { w: self.w, cuts };
-        let v = support::asset(&mut ground, &line, zoom, c);
-        let lacks = !clip::step(&self.w, Lookup::NONE, zoom, [c[0], c[1]])
-            .0
-            .here();
-        self.last_lacks = lacks;
-        self.tally.add("ask: a column not held", lacks);
-        self.tally
-            .add("edit: asked over a column not held", edited && lacks);
-        self.tally.add("ask: of the world unplaced", !edited);
-        self.tally.add("ask: as edited", edited);
-        if edited && answer::is_placed(v) {
-            self.tally
-                .add("edit: air takes it", answer::val(v) == value::AIR);
-            self.tally.add(
-                "edit: something placed takes it",
-                answer::val(v) != value::AIR,
-            );
-            self.tally
-                .add("edit: part of its cube", answer::fill_eighths(v) < EIGHTHS);
-            self.tally
-                .add("edit: at a coarse zoom", zoom < LEAF_CELL_ZOOM);
-            let under = Inheritance::of(&self.w, (zoom, c));
-            self.tally
-                .add("edit: a cut takes it", !under.object.holds());
-        }
-        if edited && !answer::is_placed(v) {
-            let under = Inheritance::of(&self.w, (zoom, c));
-            self.tally
-                .add("edit: something placed takes nothing", under.object.holds());
-            self.tally.add(
-                "edit: under an eighth, or air on a lack",
-                under.object.holds() && under.object.is_folded(),
-            );
-        }
-        if edited {
-            let under = Inheritance::of(&self.w, (zoom, c));
-            let air_cut = cuts[0].zoom != Cut::NONE.zoom;
-            self.tally.add(
-                "edit: no tree there, no ask by hand",
-                !under.object.holds() && !air_cut,
-            );
-        }
-        v
+    fn asset(&mut self, f: &Self::ColumnSurface, zoom: Zoom, c: [i32; 3]) -> u32 {
+        self.ask(Some(f), zoom, c)
     }
 
+    fn edited(&mut self, zoom: Zoom, c: [i32; 3]) -> u32 {
+        self.ask(None, zoom, c)
+    }
     fn next_placed(&self, p: &mut PlacedCursor) -> ([i32; 3], u32, bool) {
         let (c, word, more) = p.next(&self.w);
         let mut t = self.placed.get();
         t[0] += 1;
         if more {
-            let decor = Decor::find(word & 0xffff).is_some();
+            let decor = Decor::find(object::low(word)).is_some();
             t[if decor { 1 } else { 2 }] += 1;
             t[3] += (decor && c == self.cuts[1].at && self.cuts[1].zoom == LEAF_CELL_ZOOM) as u64;
             if decor {
@@ -291,8 +307,16 @@ impl DecorQuery for Generating<'_, '_> {
 /// box's lowest corner, and its sink.
 fn stand(q: &mut Generating, j: u32, cell_zoom: Zoom, leaf: [i32; 2]) -> (u32, u32, u32) {
     let decor = &ROWS[j as usize];
-    let c = scatter::candidate_at(j as usize, leaf).0;
-    let (g, has_footing, generates) = generation::placement(q, decor, cell_zoom, &c, true);
+    let c = scatter::candidate_at(j as usize, leaf);
+    let placed_at = generation::placement(q, decor, cell_zoom, &c, true);
+    let has_footing = placed_at.is_some();
+    let none = generation::Prop {
+        variant: 0,
+        turn: 0,
+        at: [0; 3],
+        sink: 0,
+    };
+    let (g, generates) = placed_at.unwrap_or((none, false));
     let word = if generates {
         generation::record_word(j, g.variant, g.turn, cell_zoom)
     } else {
@@ -391,7 +415,8 @@ fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), LeafLi
                     let side = 1u32 << t;
                     for n in 0..side * side {
                         let leaf = [corner[0] + (n % side) as i32, corner[1] + (n / side) as i32];
-                        let (c, here) = scatter::candidate_at(j, leaf);
+                        let c = scatter::candidate_at(j, leaf);
+                        let here = scatter::cnt(j, LEAF_CELL_ZOOM, leaf) > 0;
                         if here
                             && scatter::stands_at(
                                 decor,
@@ -425,7 +450,7 @@ fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), LeafLi
                     let row = built.clipmap[s as usize];
                     if row[2] != 0 && [row[0], row[1]] == q {
                         for (j, decor) in ROWS.iter().enumerate() {
-                            let c = scatter::candidate_at(j, leaf).0;
+                            let c = scatter::candidate_at(j, leaf);
                             let stands = scatter::stands_at(
                                 decor,
                                 scatter::variant_of(decor, c.seed),
@@ -727,7 +752,7 @@ struct Expected {
 /// The words a round starts from: each pair's count, and its records. A whole pair's records
 /// are as `decor_thin_cs` leaves them, and a pair in part holds what a frame before left.
 fn init_of(laid: &BTreeMap<(u32, u32), LeafList>, round: &Round) -> Vec<u32> {
-    let words = generation::record_at(generation::SLOT_RECORDS) as usize;
+    let words = generation::record_at(generation::ENTRY_RECORDS) as usize;
     let mut init = vec![0u32; words];
     for (&(s, j), p) in laid {
         init[generation::cnt_at(s, j) as usize] = p.leaves.len() as u32;
@@ -879,22 +904,22 @@ fn differ(name: &str, by: &str, got: &[u32], e: &Expected) -> u64 {
             n += 1;
             if told < 12 {
                 told += 1;
-                let (s, at) = if (k as u32) < generation::SLOTS_AT {
+                let (s, at) = if (k as u32) < generation::ENTRY_RECORDS_AT {
                     (
                         k as u32 / generation::HEADER_WORDS,
                         k as u32 % generation::HEADER_WORDS,
                     )
                 } else {
-                    let rec = (k as u32 - generation::SLOTS_AT) / RECORD_WORDS;
+                    let rec = (k as u32 - generation::ENTRY_RECORDS_AT) / RECORD_WORDS;
                     (
                         rec / BRICK_RECORD_CAP,
-                        (k as u32 - generation::SLOTS_AT) % RECORD_WORDS,
+                        (k as u32 - generation::ENTRY_RECORDS_AT) % RECORD_WORDS,
                     )
                 };
                 eprintln!(
                     "{name} {by}: word {k}, entry {s}, at {at}: got {g:#x} want {w:#x} (was {:#x}), leaf {:?}",
                     e.init[k],
-                    if (k as u32) >= generation::SLOTS_AT {
+                    if (k as u32) >= generation::ENTRY_RECORDS_AT {
                         let r = k - at as usize;
                         [e.init[r + 1] as i32, e.init[r + 2] as i32]
                     } else {
@@ -1482,7 +1507,8 @@ fn thin_leaves(j: usize, cell_zoom: Zoom, q: [i32; 2]) -> Vec<[i32; 2]> {
         let side = 1u32 << t;
         for n in 0..side * side {
             let leaf = [corner[0] + (n % side) as i32, corner[1] + (n / side) as i32];
-            let (c, here) = scatter::candidate_at(j, leaf);
+            let c = scatter::candidate_at(j, leaf);
+            let here = scatter::cnt(j, LEAF_CELL_ZOOM, leaf) > 0;
             if here
                 && scatter::stands_at(decor, scatter::variant_of(decor, c.seed), cell_zoom)
                 && scatter::retained(j, &c)
@@ -1504,7 +1530,7 @@ fn hand_thin_lays_as_scatter() {
         return;
     };
     let hand = hand_pipeline(&device, SHADER_GENERATION_THIN);
-    let words = generation::record_at(generation::SLOT_RECORDS) as usize;
+    let words = generation::record_at(generation::ENTRY_RECORDS) as usize;
     let size = |pairs: u32| [BRICK_CELLS.div_ceil(generation::LANES), 1, pairs];
     let (mut laid_total, mut pairs_total) = (0u64, 0u64);
     let (mut none_past, mut stale_headers) = (0u64, 0u64);
@@ -1697,8 +1723,8 @@ fn mark_rust(clipmap: &[[i32; 4]], records: &mut [u32], list: &mut [u32], shown:
 }
 
 /// Whether workgroup `g` of a pass over the records reads them: the test's reference for
-/// decor_run.wgsl `is_valid`.
-fn is_valid(records: &[u32], clipmap: &[[i32; 4]], g: u32) -> bool {
+/// decor_run.wgsl `holds_records`.
+fn holds_records(records: &[u32], clipmap: &[[i32; 4]], g: u32) -> bool {
     if g >= generation::EYE_ENTRIES {
         return true;
     }
@@ -1727,7 +1753,7 @@ fn run_of(records: &[u32], g: u32, k: u32) -> (u32, u32) {
     } else {
         let n = (g - generation::EYE_ENTRIES) * generation::RUNS + k;
         (
-            generation::SLOT_RECORDS + n,
+            generation::ENTRY_RECORDS + n,
             u32::from(n < records[generation::PLACED_HEADER as usize]),
         )
     }
@@ -1738,7 +1764,7 @@ fn run_of(records: &[u32], g: u32, k: u32) -> (u32, u32) {
 fn each_record(records: &[u32], clipmap: &[[i32; 4]], workgroups: u32) -> Vec<usize> {
     let mut out = Vec::new();
     for g in 0..workgroups {
-        if is_valid(records, clipmap, g) {
+        if holds_records(records, clipmap, g) {
             for k in 0..generation::RUNS {
                 let (first, cnt) = run_of(records, g, k);
                 for n in 0..cnt {
@@ -1806,7 +1832,7 @@ const CAST_NUMBER: u32 = 7;
 /// holds a place in its brick, a variant and a turn, or nothing generated. Returns the records
 /// and the workgroups a pass over them takes.
 fn records_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32) {
-    let need = generation::SLOT_RECORDS + placed.next_power_of_two().max(64);
+    let need = generation::ENTRY_RECORDS + placed.next_power_of_two().max(64);
     let mut records = vec![0u32; generation::record_at(need) as usize];
     let mut draw = real_world::Draw(0x0bad_cafe);
     for s in 0..generation::EYE_ENTRIES {
@@ -1858,7 +1884,7 @@ fn records_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32)
     }
     records[generation::PLACED_HEADER as usize] = placed;
     for n in 0..placed {
-        let r = generation::record_at(generation::SLOT_RECORDS + n) as usize;
+        let r = generation::record_at(generation::ENTRY_RECORDS + n) as usize;
         let j = n % ROWS.len() as u32;
         let d = &ROWS[j as usize];
         let v = draw.next() % d.variants;
@@ -1876,7 +1902,7 @@ fn records_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32)
         records[r + 3] = (built.top_at(at) + draw.within(0, 3)) as u32;
         // The second lies beside the first on its row, a few cells along X.
         if n == 1 {
-            let first = generation::record_at(generation::SLOT_RECORDS) as usize;
+            let first = generation::record_at(generation::ENTRY_RECORDS) as usize;
             records[r + 1] = real_world::wrap(records[first + 1] as i32 + 3) as u32;
             records[r + 2] = records[first + 2];
             records[r + 3] = records[first + 3];
@@ -1942,7 +1968,7 @@ fn cnt_rust(w: &World, sizing: &Sizing, records: &mut [u32], workgroups: u32) {
         ];
         let d2 = generation::dist2(sizing.origin, at);
         // Placed decor's records lie past the entries'.
-        let placed = i >= generation::record_at(generation::SLOT_RECORDS) as usize;
+        let placed = i >= generation::record_at(generation::ENTRY_RECORDS) as usize;
         let ask = detail.at(d2);
         let zoom = if placed {
             ask
@@ -2612,7 +2638,7 @@ fn frame_differs(
         }
     }
     let r = RECORD_WORDS as usize;
-    let first = generation::record_at(generation::SLOT_RECORDS) as usize;
+    let first = generation::record_at(generation::ENTRY_RECORDS) as usize;
     for p in 0..want[generation::PLACED_HEADER as usize] as usize {
         let at = first + p * r;
         if got.records[at..at + r] != want[at..at + r] {
@@ -3167,12 +3193,12 @@ fn hand_frames_answer_as_the_rust() {
         // Placed decor as the core hands it, five more than one workgroup's runs, so it spills
         // into a second workgroup.
         let placed = generation::RUNS + 5;
-        let cap = generation::SLOT_RECORDS + placed.next_power_of_two().max(64);
+        let cap = generation::ENTRY_RECORDS + placed.next_power_of_two().max(64);
         let workgroups = generation::EYE_ENTRIES + placed.div_ceil(generation::RUNS);
         let mut init = vec![0u32; generation::record_at(cap) as usize];
         init[generation::PLACED_HEADER as usize] = placed;
         for n in 0..placed {
-            let r = generation::record_at(generation::SLOT_RECORDS + n) as usize;
+            let r = generation::record_at(generation::ENTRY_RECORDS + n) as usize;
             let j = n % ROWS.len() as u32;
             let p = built.decors[n as usize];
             let (variant, turn) = generation::placed_pose(&ROWS[j as usize], p);
@@ -3325,7 +3351,7 @@ fn hand_frames_answer_as_the_rust() {
         let mut hide = sizing.clone();
         let c = (0..placed)
             .find(|&n| {
-                let r = generation::record_at(generation::SLOT_RECORDS + n) as usize;
+                let r = generation::record_at(generation::ENTRY_RECORDS + n) as usize;
                 model.records[r] >> drawing::REGION_SHIFT != drawing::NONE
             })
             .map(|n| built.decors[n as usize])

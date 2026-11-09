@@ -710,8 +710,8 @@ fn side_word() -> String {
 /// pxl-content layout or rule that defines it.
 fn world_word() -> String {
     use pxl_content::cave::{
-        BLOCK, BLOCKS_TAG, CELL_BLOCKS, CROSS_TAG, PIPE, ROOT, ROOT_BLOCKS, SPAWN_TAG, SPLIT_TAG,
-        WALK_TAG,
+        BLOCK, BLOCKS_TAG, CELL_BLOCKS, CROSS_TAG, NO_SIDE, PIPE, ROOT, ROOT_BLOCKS, SPAWN_TAG,
+        SPLIT_TAG, WALK_TAG,
     };
     use pxl_content::param::{cave, strata};
     use pxl_engine::clipmap as clip;
@@ -784,15 +784,16 @@ fn world_word() -> String {
         ("CELL_BLOCKS", CELL_BLOCKS),
         ("ROOT_BLOCKS", ROOT_BLOCKS),
         ("CAVE_NUDGE", cave::NUDGE),
+        ("CAVE_NO_SIDE", NO_SIDE),
         ("CAVE_SPAWN_TAG", SPAWN_TAG),
         ("CAVE_WALK_TAG", WALK_TAG),
         ("CAVE_CROSS_TAG", CROSS_TAG),
         ("CAVE_SPLIT_TAG", SPLIT_TAG),
         ("CAVE_BLOCKS_TAG", BLOCKS_TAG),
         ("MASTER_SEED", seed::MASTER_SEED),
-        ("SEED_SALT", rng::SEED_SALT_32),
-        ("MIX_FIRST", rng::MIX32_FIRST),
-        ("MIX_LAST", rng::MIX32_LAST),
+        ("SEED_SALT_32", rng::SEED_SALT_32),
+        ("MIX32_FIRST", rng::MIX32_FIRST),
+        ("MIX32_LAST", rng::MIX32_LAST),
         ("TUNNELS_LAST", cave::ROOT_TUNNELS[4]),
     ];
     let signed: &[(&str, i32)] = &[
@@ -862,7 +863,7 @@ fn decor_word() -> String {
         ("RECORD_WORDS", g::RECORD_WORDS),
         ("HEADER_WORDS", g::HEADER_WORDS),
         ("CNT_AT", g::CNT_AT),
-        ("SLOTS_AT", g::SLOTS_AT),
+        ("ENTRY_RECORDS_AT", g::ENTRY_RECORDS_AT),
         ("BRICK_RECORD_CAP", g::BRICK_RECORD_CAP),
         ("UNGENERATED", g::UNGENERATED),
         ("TURN_SHIFT", g::TURN_SHIFT),
@@ -880,7 +881,7 @@ fn decor_word() -> String {
         ("LIST_EVERY", g::LIST_EVERY),
         ("LIST_PARTS", g::LIST_PARTS),
         ("GENERATE_ARGS", g::GENERATE_ARGS),
-        ("SLOT_RECORDS", g::SLOT_RECORDS),
+        ("ENTRY_RECORDS", g::ENTRY_RECORDS),
         ("PLACED_HEADER", g::PLACED_HEADER),
         ("PLACED_HEADER_WORDS", g::PLACED_HEADER_WORDS),
         ("RUN", g::RUN),

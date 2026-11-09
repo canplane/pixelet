@@ -40,7 +40,7 @@ fn compact_one(i: u32) {
 
 @compute @workgroup_size(LANES)
 fn decor_compact_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_invocation_id) lane: vec3<u32>) {
-  if (!is_valid(group.x)) {
+  if (!holds_records(group.x)) {
     return;
   }
   for (var k = lane.x; k < RUNS; k += LANES) {

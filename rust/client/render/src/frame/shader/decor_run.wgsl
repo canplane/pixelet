@@ -1,21 +1,21 @@
 // pxl-render/decor_run.wgsl
 
 // What a pass over the records reads, one workgroup an entry's records or a run of placed
-// decor (tests/decor.rs `is_valid`, `run_of`). It reads the records laid, not the room for them.
+// decor (tests/decor.rs `holds_records`, `run_of`). It reads the records laid, not the room for them.
 
 /// `record_at`: the first word of record `n`. The entries' records are numbered first, then
 /// placed decor's.
 fn record_at(n: u32) -> u32 {
-  if (n < SLOT_RECORDS) {
-    return SLOTS_AT + n * RECORD_WORDS;
+  if (n < ENTRY_RECORDS) {
+    return ENTRY_RECORDS_AT + n * RECORD_WORDS;
   }
-  return PLACED_HEADER + PLACED_HEADER_WORDS + (n - SLOT_RECORDS) * RECORD_WORDS;
+  return PLACED_HEADER + PLACED_HEADER_WORDS + (n - ENTRY_RECORDS) * RECORD_WORDS;
 }
 
-/// `is_valid`: whether workgroup `g`'s records still hold. Placed decor's, past the entries,
+/// `holds_records`: whether workgroup `g`'s records still hold. Placed decor's, past the entries,
 /// always do; an entry's hold while the clip levels still hold the brick they were generated
 /// for.
-fn is_valid(g: u32) -> bool {
+fn holds_records(g: u32) -> bool {
   if (g >= EYE_ENTRIES) {
     return true;
   }
@@ -27,7 +27,7 @@ fn is_valid(g: u32) -> bool {
 fn run_of(g: u32, k: u32) -> vec2<u32> {
   if (g >= EYE_ENTRIES) {
     let n = (g - EYE_ENTRIES) * RUNS + k;
-    return vec2<u32>(SLOT_RECORDS + n, u32(n < records[PLACED_HEADER]));
+    return vec2<u32>(ENTRY_RECORDS + n, u32(n < records[PLACED_HEADER]));
   }
   let first = k * RUN;
   var j = 0u;

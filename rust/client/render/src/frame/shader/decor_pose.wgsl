@@ -139,7 +139,7 @@ fn leaf_overlaps(s: u32, c: vec3<i32>, at: vec3<i32>, size: vec3<i32>) -> bool {
     return false;
   }
   let h = node_seed(PLACED_TAG, UNIT_ZOOM, c);
-  let variant = mul_hi(draw(h, 0u), row_word(k, ROW_VARIANTS));
+  let variant = variant_of(k, h);
   let box_size = decor_size(k, variant, draw(h, 1u) >> (32u - TURN_BITS));
   return all(c < at + size) && all(at < c + box_size);
 }
@@ -232,7 +232,7 @@ fn decor_pose_cs(@builtin(global_invocation_id) id: vec3<u32>) {
       // (`generation::asks`).
       base = z;
       let seed = draw(quad_seed(row_word(j, ROW_SEED), LEAF_CELL_ZOOM, leaf), 1u);
-      variant = mul_hi(draw(seed, 0u), row_word(j, ROW_VARIANTS));
+      variant = variant_of(j, seed);
       if (row_word(j, ROW_ORIENT) == ALONG_TRANSPORT) {
         flip = draw(seed, 1u) >> 31u;
         voting = 4i * ALIGN_NEIGHBOR_RADIUS;

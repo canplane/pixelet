@@ -40,13 +40,13 @@ const CELL_ZOOM: Zoom = UNIT_ZOOM - LATTICE_SHAMT;
 /// A patch of cells, 16 a side, at which a cumulus count starts.
 const PATCH_ZOOM: Zoom = CELL_ZOOM - 4;
 /// The tags of a patch's count and its split (`node_seed`).
-const CUMULUS: u32 = 0xc10d_0001;
-const CUMULUS_SPLIT: u32 = 0xc10d_0002;
+const CUMULUS_TAG: u32 = 0xc10d_0001;
+const CUMULUS_SPLIT_TAG: u32 = 0xc10d_0002;
 
 /// Cell `cell`'s draw under `salt`, in [0, 1), from which a cumulus there takes its place,
 /// size, turn and variant, by the one seed the decor draws theirs by (`node_seed`).
 pub fn cloud_draw(cell: [i32; 2], salt: u32) -> f64 {
-    f64::from(seed_mix32(node_seed(CUMULUS, (CELL_ZOOM, cell)), salt)) / 4_294_967_296.0
+    f64::from(seed_mix32(node_seed(CUMULUS_TAG, (CELL_ZOOM, cell)), salt)) / 4_294_967_296.0
 }
 
 /// Whether the field's cell `cell` holds a cumulus. Its patch holds `mean` of its 256 cells,
@@ -55,12 +55,12 @@ pub fn cloud_draw(cell: [i32; 2], salt: u32) -> f64 {
 /// one rule the decor and the caves hand theirs down by), down to one or none a cell.
 pub fn holds_cloud(cell: [i32; 2], mean: u32) -> bool {
     let at = |z: Zoom| [cell[0] >> (CELL_ZOOM - z), cell[1] >> (CELL_ZOOM - z)];
-    let draw = node_seed(CUMULUS, (PATCH_ZOOM, at(PATCH_ZOOM)));
+    let draw = node_seed(CUMULUS_TAG, (PATCH_ZOOM, at(PATCH_ZOOM)));
     let n = mean as i32 + (draw & 0x3f) as i32 - 32;
     let mut n = n.clamp(0, 256) as u32;
     let mut z = PATCH_ZOOM;
     while z < CELL_ZOOM && n > 0 {
-        let h = node_seed(CUMULUS_SPLIT, (z, at(z)));
+        let h = node_seed(CUMULUS_SPLIT_TAG, (z, at(z)));
         // A weight of 2^16 by hash, pushed out from the middle so the halves
         // come uneven and the clouds gather.
         let w = |b: u32| {

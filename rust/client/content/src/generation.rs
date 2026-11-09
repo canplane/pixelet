@@ -95,10 +95,10 @@ const _: () = assert!(
 /// head is its count.
 pub const CNT_AT: u32 = 3;
 pub const HEADER_WORDS: u32 = CNT_AT + ROWS.len() as u32;
-pub const SLOTS_AT: u32 = EYE_ENTRIES * HEADER_WORDS;
+pub const ENTRY_RECORDS_AT: u32 = EYE_ENTRIES * HEADER_WORDS;
 /// The records all the entries hold, which come before placed decor's.
-pub const SLOT_RECORDS: u32 = EYE_ENTRIES * BRICK_RECORD_CAP;
-pub const PLACED_HEADER: u32 = SLOTS_AT + SLOT_RECORDS * RECORD_WORDS;
+pub const ENTRY_RECORDS: u32 = EYE_ENTRIES * BRICK_RECORD_CAP;
+pub const PLACED_HEADER: u32 = ENTRY_RECORDS_AT + ENTRY_RECORDS * RECORD_WORDS;
 pub const PLACED_HEADER_WORDS: u32 = 4;
 
 /// The runs of records a decor pass's workgroup reads (decor_run.wgsl `run_of`): for an
@@ -135,10 +135,10 @@ pub fn entry_record(rows: &[Row], s: u32, k: u32, i: u32) -> u32 {
 /// Record `n`'s first word, numbering the entries' records first, entry by entry, then
 /// placed decor's.
 pub const fn record_at(n: u32) -> u32 {
-    if n < SLOT_RECORDS {
-        SLOTS_AT + n * RECORD_WORDS
+    if n < ENTRY_RECORDS {
+        ENTRY_RECORDS_AT + n * RECORD_WORDS
     } else {
-        PLACED_HEADER + PLACED_HEADER_WORDS + (n - SLOT_RECORDS) * RECORD_WORDS
+        PLACED_HEADER + PLACED_HEADER_WORDS + (n - ENTRY_RECORDS) * RECORD_WORDS
     }
 }
 
@@ -374,10 +374,11 @@ pub trait DecorQuery {
     /// (`placement`), the same whatever clip level asks.
     fn finest(&mut self, cell_zoom: Zoom, g: [i32; 2]) -> Zoom;
     /// What is in the cell `c` of `zoom`: the base's answer near the column surface `f`
-    /// (`support::asset`), void or the ground's value; or, where `edited`, the edited world's
-    /// answer down the cell's own line, which tells an edit there, something placed or air
-    /// (`answer::is_placed`). One ask serves both, so a GPU's walk to the cell is written once.
-    fn asset(&mut self, f: &Self::ColumnSurface, zoom: Zoom, c: [i32; 3], edited: bool) -> u32;
+    /// (`support::asset`), void or the ground's value.
+    fn asset(&mut self, f: &Self::ColumnSurface, zoom: Zoom, c: [i32; 3]) -> u32;
+    /// What the edited world answers of the cell `c` of `zoom`, down the cell's own line, which
+    /// tells an edit there, something placed or air (`answer::is_placed`).
+    fn edited(&mut self, zoom: Zoom, c: [i32; 3]) -> u32;
     /// The next leaf placed in `p`'s box, its cell and its word, false past
     /// the last (`world::PlacedCursor::next`).
     fn next_placed(&self, p: &mut PlacedCursor) -> ([i32; 3], u32, bool);
@@ -395,35 +396,26 @@ pub struct Prop {
     pub sink: u32,
 }
 
-impl Prop {
-    pub const NONE: Prop = Prop {
-        variant: 0,
-        turn: 0,
-        at: [0; 3],
-        sink: 0,
-    };
-}
-
 /// Where candidate `c` of `decor` stands at `cell_zoom`. It stands on its column's surface in
 /// the base, the ground's alone, so no edit moves it or takes the ground from under
 /// it, and it faces as the cells beside it vote (`asks`). Then, where `boxed`, it says whether
 /// the candidate generates there: every cell of its box is void and every cell under its base
 /// is a palette entry it generates on, as the ground holds them; no edit lies in its box, air
-/// included (`DecorQuery::asset`, edited); and no placed decor's box overlaps its own
+/// included (`DecorQuery::edited`); and no placed decor's box overlaps its own
 /// (`overlaps_placed`). It stands at its clip level's column surface, while the vote and its
 /// box are asked at the finest zoom at which the world holds its leaf column
 /// (`DecorQuery::finest`), around that zoom's column surface, so a candidate faces and
 /// generates alike at every clip level it is generated at. Its pose stands as itself only at a
-/// clip level its size stands at (`stands_at`). It returns where it stands, whether its column
-/// surface is found, and whether it generates there, which is true where not `boxed` and it
-/// stands.
+/// clip level its size stands at (`stands_at`). It returns where it stands and whether it
+/// generates there, which is true where not `boxed` and it stands; none where its column
+/// surface is not found.
 pub fn placement(
     q: &mut impl DecorQuery,
     decor: &Row,
     cell_zoom: Zoom,
     c: &Candidate,
     boxed: bool,
-) -> (Prop, bool, bool) {
+) -> Option<(Prop, bool)> {
     let column = |z: Zoom| {
         [
             c.cell[0] >> (LEAF_CELL_ZOOM - z),
@@ -434,86 +426,87 @@ pub fn placement(
     let zoom = q.finest(cell_zoom, c.cell);
     let (f, (floor, rise), here) = q.column_surface(cell_zoom, column(cell_zoom));
     if !here {
-        return (Prop::NONE, false, false);
+        return None;
     }
-    let prop = Prop {
-        variant: 0,
-        turn: 0,
-        at: [c.cell[0], c.cell[1], (floor + 1) * (1 << s)],
-        sink: ((1.0 - rise) * (1u32 << (s + FRAC_W)) as f32 + 0.5) as u32,
-    };
+    let at = [c.cell[0], c.cell[1], (floor + 1) * (1 << s)];
+    let sink = ((1.0 - rise) * (1u32 << (s + FRAC_W)) as f32 + 0.5) as u32;
     let (f, (base, _), found) = if zoom == cell_zoom {
         (f, (floor, rise), true)
     } else {
         q.column_surface(zoom, column(zoom))
     };
-    let (prop, generates) = asks(q, &f, decor, (zoom, base), c.seed, prop, boxed);
-    (
-        prop,
-        true,
-        found && generates && stands_at(decor, prop.variant, cell_zoom),
-    )
+    let (variant, turn, generates) = asks(q, &f, decor, (zoom, base), c.seed, at, boxed);
+    Some((
+        Prop {
+            variant,
+            turn,
+            at,
+            sink,
+        },
+        found && generates && stands_at(decor, variant, cell_zoom),
+    ))
 }
 
-/// How candidate `prop` is posed by its `seed`, its draws in order: its variant, then its
+/// How a candidate standing at `at` is posed by its `seed`, its draws in order: its variant, then its
 /// heading in quarter turns. Along transport, the heading is a plurality vote of the cells a
 /// way runs on, by their offset from the candidate's along each axis: a quarter turn if
 /// horizontal wins, else none (a tie or an isolated cell has no real answer), and a half turn
 /// more on a draw, as two-way traffic faces both ways. Then, where `boxed`, whether it
 /// generates there (`placement`'s rule). Every cell is asked at `zoom` around the column surface
-/// `about`, whose top cell is `base`. It returns what stands, and whether it generates there.
+/// `about`, whose top cell is `base`. It returns its variant, its heading, and whether it
+/// generates there.
 fn asks<Q: DecorQuery>(
     q: &mut Q,
     about: &Q::ColumnSurface,
     decor: &Row,
     (zoom, base): (Zoom, i32),
     seed: u32,
-    mut prop: Prop,
+    at: [i32; 3],
     boxed: bool,
-) -> (Prop, bool) {
+) -> (u32, u32, bool) {
     let s = LEAF_CELL_ZOOM - zoom;
     let mut draws = SplitMix32::new(seed);
-    prop.variant = draw_variant(decor, &mut draws);
-    let [x0, y0, _] = prop.at;
+    let variant = draw_variant(decor, &mut draws);
+    let [x0, y0, _] = at;
     let foot = [x0 >> s, y0 >> s];
-    if decor.orient == Orientation::along_transport {
+    let turn = if decor.orient == Orientation::along_transport {
         let flip = draws.next_u32() >> 31;
         let mut way = |x: i32, y: i32| {
             let c = [foot[0] + x, foot[1] + y, base];
-            i32::from(value::transports(val(q.asset(about, zoom, c, false))))
+            i32::from(value::transports(val(q.asset(about, zoom, c))))
         };
         let (mut horizontal, mut vertical) = (0, 0);
         for d in 1..=ALIGN_NEIGHBOR_RADIUS {
             horizontal += way(-d, 0) + way(d, 0);
             vertical += way(0, -d) + way(0, d);
         }
-        prop.turn = u32::from(horizontal > vertical) + 2 * flip;
+        u32::from(horizontal > vertical) + 2 * flip
     } else {
-        prop.turn = draws.next_u32() >> (u32::BITS - TURN_BITS);
-    }
+        draws.next_u32() >> (u32::BITS - TURN_BITS)
+    };
     if !boxed {
-        return (prop, true);
+        return (variant, turn, true);
     }
-    let [w, d, h] = decor.size(prop.variant, prop.turn).map(|v| v as i32);
+    let [w, d, h] = decor.size(variant, turn).map(|v| v as i32);
     let top = ((base + 1) * (1 << s) + h - 1) >> s;
     for y in foot[1]..=(y0 + d - 1) >> s {
         for x in foot[0]..=(x0 + w - 1) >> s {
             for z in base..=top {
                 let c = [x, y, z];
-                let v = q.asset(about, zoom, c, false);
+                let v = q.asset(about, zoom, c);
                 // Under its base a palette entry it generates on; over it void, and no edit.
                 let holds = if z == base {
                     decor.allows(val(v))
                 } else {
-                    v == value::VOID && !answer::is_placed(q.asset(about, zoom, c, true))
+                    v == value::VOID && !answer::is_placed(q.edited(zoom, c))
                 };
                 if !holds {
-                    return (prop, false);
+                    return (variant, turn, false);
                 }
             }
         }
     }
-    (prop, !overlaps_placed(q, prop.at, [w, d, h]))
+    (variant, turn, !overlaps_placed(q, at, [w, d, h]))
 }
 
 /// How far decor standing at `at` (leaf cells) lies from `origin` (Q3 steps), in units,
@@ -627,7 +620,7 @@ pub(crate) fn overlaps_placed(q: &impl DecorQuery, at: [i32; 3], cells: [i32; 3]
         if !more {
             return false;
         }
-        if let Some(decor) = Decor::find(word & 0xffff) {
+        if let Some(decor) = Decor::find(object::low(word)) {
             let (variant, turn) = placed_pose(decor.row, c);
             let [w, e, v] = decor.row.size(variant, turn);
             let (w, e, v) = (w as i32, e as i32, v as i32);
