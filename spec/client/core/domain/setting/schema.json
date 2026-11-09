@@ -293,9 +293,27 @@
       "default": false,
       "section": "debug"
     },
+    "camera_gizmo": {
+      "number": 16,
+      "$doc": [
+        "The camera grid over the screen, rings a cell apart about the optical axis cut into cells of one solid angle each, and the cells the rays stop on tinted by the share of a grid cell their faces show the eye (rust/client/render/src/frame/shader/camera_grid.wgsl, screen_shade.wgsl `cell_share`), in the looks debug_look.json gives them."
+      ],
+      "kind": "toggle",
+      "default": false,
+      "section": "debug"
+    },
     "person": { "number": 17, "kind": "index", "default": { "$val": 1, "$type": "u8", "$doc": ["The female-b model, by its row in character.json's person models."] }, "section": "character" },
     "pet": { "number": 18, "kind": "index", "default": { "$val": 5, "$type": "u8", "$doc": ["The chick, by its row in character.json's pet models."] }, "section": "character" },
-    "ray_counts": {
+    "ray_steps": {
+      "number": 19,
+      "$doc": [
+        "Each ray's pixel colored by the steps taken on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the steps of the beam ray its cell starts off (beam::LINE_STEPS) and its own after, or, where it took a voxel or the sky without a walk, those of the sample before it on the camera grid's lattice, counted the same way (beam::SAMPLE_STEPS_SHIFT; rust/client/render/src/frame/shader/cast.wgsl `taken_word`, queue.wgsl `finish`)."
+      ],
+      "kind": "toggle",
+      "default": false,
+      "section": "debug"
+    },
+    "ray_cnts": {
       "number": 20,
       "$doc": [
         "Counts what the eye's cast and the sun's shadow map do: the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn. The GPU counts them and writes them into the profiler's ray lanes of the frame that counted them (rust/spec/engine/src/count.rs, rust/client/render/src/gpu/ray/count.rs). The counting's atomics run inside the cast's spans, so time the cast with this off."

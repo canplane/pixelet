@@ -11,3 +11,14 @@ the core sees the world, each behind its setting, where an indicator
 
 The lines are `debug_line.rs`'s, and their colors `gizmo.spec.rs`'s, generated
 from `spec/client/core/domain/scene/gizmo/gizmo.json`.
+
+Two views the renderer draws itself, from a word the core hands it, in the
+looks of `spec/client/render/frame/shader/debug_look.json`:
+
+- behind the `camera_gizmo` setting (`FrameInput::camera_gizmo`), the camera
+  grid's rings over the screen and the cells the rays stop on tinted by the
+  share of a grid cell their faces show the eye (pxl-render
+  `frame/shader/camera_grid.wgsl`, `screen_shade.wgsl` `cell_share`);
+- behind the `ray_steps` setting (pxl-engine `eye::STEPS`, `../cast.rs` `eye`),
+  each ray's pixel colored by the steps taken on its way from the eye
+  (pxl-render `frame/shader/cast.wgsl` `taken_word`, `queue.wgsl` `finish`).

@@ -190,5 +190,10 @@ fn finish(hole: u32, aim: Aim, w: WalkEnd) {
   if (shown.ends == 1u && hit_fill(shown) != 0u) {
     faces = FACE_BOX;
   }
-  write_ray(at, ray_word(shown, face, faces));
+  var word = ray_word(shown, face, faces);
+  // In the ray steps view, the steps of its beam ray and of its own walk.
+  if (eye_word(STEPS) != 0u) {
+    word.z = beam_steps(grid_cell(px_tan(at, eye_size()))) + w.step;
+  }
+  write_ray(at, word);
 }

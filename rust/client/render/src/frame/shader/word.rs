@@ -171,6 +171,10 @@ uniform! {
         LIGHT_VIEW_PROJ: Mat4 = 32,
         SHADOW_STRENGTH: F32 = 48,
         SHADOW_TEXEL: F32 = 49,
+        /// 1 while the camera gizmo is shown: the camera grid drawn over the canvas
+        /// (gpu/pass/debug.rs) and its tint on the rays' cells (screen_shade.wgsl
+        /// `cell_share`).
+        GIZMO: F32 = 51,
         /// The canvas's size in device pixels, where `VIEWPORT` is the size
         /// the world is drawn at. What is drawn over the world after the
         /// finish is laid out in these pixels.

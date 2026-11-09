@@ -228,7 +228,9 @@ pub const SHADER_QUEUE_ASK_LIGHT_SAMPLES: u32 = 82;
 /// and the light's (queue_ask.wgsl).
 pub const SHADER_QUEUE_ASK_CORNERS: u32 = 83;
 pub const SHADER_QUEUE_ASK_LIGHT_CORNERS: u32 = 84;
-pub const SHADERS: u32 = 85;
+/// The camera grid's cells over the canvas (camera_grid.wgsl).
+pub const SHADER_CAMERA_GRID: u32 = 85;
+pub const SHADERS: u32 = 86;
 
 /// The parts of the air as the frame's shaders read it: its medium, its tables and the sky,
 /// the eye in it, the march through it, its light and the view through it. A shader's own
@@ -387,6 +389,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "tile_word",
         "screen_tile",
         "tile_quad",
+        "debug_look",
         "screen_ray",
         "screen_shade"
     ],
@@ -1135,4 +1138,6 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "corner_run.light",
         "queue_ask",
     ],
+    // SHADER_CAMERA_GRID
+    &["encode", "sky_word", "debug_look", "camera_grid"],
 ];

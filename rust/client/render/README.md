@@ -34,6 +34,16 @@ distance; the palette indices a coarse cell folds; and which edges and corners
 of the face meet the air. The screen pass paints them with the one function
 every lit face uses (`screen_ray.wgsl` `px_ray`, `paint.wgsl`).
 
+Two debug views read the cast. In the ray steps view (pxl-engine `eye::STEPS`)
+the third word holds, in place of the palette indices, the steps a ray took on
+its way from the eye, which the screen pass paints on a log ramp: its beam ray's
+descent from the root and its own walk from the cell's start for a hole, and for
+a pixel that took a voxel or the sky without a walk, those of the sample before
+it on the grid's lattice (`cast.wgsl` `taken_word`). Under the camera gizmo the screen pass tints each face by the
+solid angle it shows the eye against a grid cell's (`screen_shade.wgsl`
+`cell_share`), and the camera grid is drawn over the canvas
+(`camera_grid.wgsl`).
+
 ## The node cache and the record
 
 What the rays asked of each node is kept between frames in the node cache, a
@@ -112,7 +122,7 @@ world pass  generated decor → rays at their depth → generated impostors →
             characters, cumulus, impostors → high clouds → indicator, ghosts
 occlusion   N8AO at half resolution, off the depth the world pass laid (ao.rs)
 finish      the world's color encoded onto the canvas once
-over        markers → debug lines → character surfaces
+over        markers → debug lines → camera grid → character surfaces
 ```
 
 The calls are written through xpute's encoder into one stream (`gpu/api.rs`),

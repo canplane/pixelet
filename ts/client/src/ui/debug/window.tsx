@@ -3,7 +3,11 @@
 import type { ComponentType } from "react";
 
 import { SETTING, type SettingName, settingsIn } from "@/ui/setting/schema.ts";
-import { WorldGizmoLegend } from "./legend.tsx";
+import {
+  CameraGizmoLegend,
+  RayStepsLegend,
+  WorldGizmoLegend,
+} from "./legend.tsx";
 import { PerfPanel } from "./perf.tsx";
 import { ViewPanel } from "./view.tsx";
 import { useCore } from "@/ui/watch.ts";
@@ -12,6 +16,8 @@ const PANEL = {
   view: ViewPanel,
   perf: PerfPanel,
   world_gizmo: WorldGizmoLegend,
+  camera_gizmo: CameraGizmoLegend,
+  ray_steps: RayStepsLegend,
 } satisfies Partial<Record<SettingName, ComponentType>>;
 
 export type PanelName = keyof typeof PANEL;
