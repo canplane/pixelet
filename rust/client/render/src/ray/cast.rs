@@ -104,10 +104,10 @@ pub struct Cast<'a> {
     pub ray_cnts: bool,
 }
 
-/// The overwrites' tree (pxl-core domain/layer/object/store.rs `GpuTable`): its child
+/// The overwrites' tree (pxl-core domain/layer/object/store.rs `objects`): its child
 /// pointer lane and its data lane, with room for `cap` words each before they grow, at
 /// `revision`. `written_groups` names, by their first slots, the child groups written since
-/// revision `since`, the last the core uploaded (pxl-core domain/scene/cast.rs `Upload`). The
+/// revision `since`, the last the core uploaded (pxl-core domain/layer/object/store.rs `Upload`). The
 /// runtime reads the lanes where they lie, so their writer asks `in_flight` (gpu/api.rs)
 /// before it writes them again.
 pub struct ObjectTable<'a> {

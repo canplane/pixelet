@@ -26,6 +26,12 @@ node at a zoom the asker states, by their own methods (`terrain/query.rs`,
 A layer fetches and keeps nothing for a question, so reading costs what is
 asked, not what a tile holds.
 
+A tile owns what is its own, and what it owns goes when it goes. Its vectors are
+its own; a fixed room is right only for what is known at compile time and mostly
+in use, as a tile's elevation is. A packet is owned the same way: a layer decodes
+it and drops it, or, as the earth does, holds it in the tile until the GPU has its
+texels.
+
 ## The base
 
 The base layers are baked, and a base tile never changes within a version.
@@ -41,8 +47,9 @@ with a top and a width, and says which of its children are tiles (pxl-spec
 one icon wide, each with the zoom it shows from. **Divisions** (`division.rs`)
 hold the finest administrative division each cell is in, from `DIVISION_LEAF`
 up. The **earth** (`earth.rs`) is the planet's picture at one zoom only, held
-for the floor's tiles (`earth::window`) and answered by a coarser picture of the
-whole globe where none is held.
+for the floor's tiles (`earth::window`), each holding its packet until the GPU has
+its texels and then which device generation does, and answered by a coarser
+picture of the whole globe where none is held.
 
 ## The objects
 
@@ -104,12 +111,14 @@ brick at a zoom is held once, however many levels want it. A tile's palette is
 cut into its bricks as it lands, and the bricks are filled after the frame, a
 part at a time within the turn's share for tasks (`fill_share`): their cells, a
 min-max mipmap over them, and their ways as spans, a run in one pool all bricks
-share (`terrain/pool.rs`), 64 MiB and no more. All of it is uploaded, so the CPU's
-query (`CpuClipmap`) and the GPU's cast meet the same bridge. A tile's lines stay
-vectors, a heap block counted against the same cap. A brick whose spans the pool
-cannot hold reads the coarser level's meanwhile, and its fill is tried again once
-the pool gives a run back; a tile refused for its lines reads the tile over it and
-is asked again the same way. A brick with a column past `way::SPANS` stays
-refused while a level wants it.
+share (`terrain/pool.rs`), 64 MiB and no more, what the GPU reads and nothing else.
+All of it is uploaded, so the CPU's query (`CpuClipmap`) and the GPU's cast meet the
+same bridge. A tile's lines are vectors of its own on the heap and go with it, each
+tile's under one cap, the room the heap's other flows leave over the terrain tile
+slots (door/layout.rs `LINES_CAP_BYTES`). A brick whose spans the pool cannot hold
+reads the coarser level's meanwhile, and its fill is tried again once the pool gives
+a run back; a tile past its cap is the object's failure, as a tile that does not
+decode is, and reads the tile over it; a heap that refuses a tile waits on the heap.
+A brick with a column past `way::SPANS` stays refused while a level wants it.
 Nothing of a tile is kept for a brick still to come: a brick that enters asks
 for its tile again, and the browser's cache answers.

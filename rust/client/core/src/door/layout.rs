@@ -7,6 +7,8 @@
 use crate::domain::layer::division;
 use crate::domain::layer::terrain::fixed;
 use crate::domain::layer::terrain::pool;
+use crate::domain::layer::terrain::tile;
+use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::scene::character;
 use crate::domain::scene::character::Group;
 use crate::domain::scene::decor::asset;
@@ -18,6 +20,7 @@ use crate::sys::machine::MACHINE;
 use crate::sys::section;
 use pxl_render::gpu::api;
 use pxl_render::gpu::upload;
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_core::entry::BootInfo;
 use xpute_core::machine::Gpu;
 use xpute_core::mem::section::span_of;
@@ -91,7 +94,7 @@ const fn body_block(stream: Stream) -> u64 {
 /// The caps of the heap's bounded flows added up, checked against the heap a
 /// phone is guaranteed. The sum is a budget, not the most live at once: some
 /// of the flows share the credits, and free blocks do not add up to one block.
-/// The flows:
+/// The flows but one:
 /// - the terrain's and the Earth's bodies, kept or on a credit, in the runs
 ///   that `BODY_SLOTS` slots fill (sys/io/body.rs);
 /// - two baked tile's bodies for every credit, one out and one stopped whose
@@ -99,16 +102,14 @@ const fn body_block(stream: Stream) -> u64 {
 ///   block for the longest other kind, or a terrain body too long for its slot
 ///   (sys/io/body.rs `take`) in one no longer, each freed once it is decoded
 ///   or passed;
-/// - the ways' pool at its cap, which holds each brick's kept spans and counts each resident
-///   tile's separation (domain/layer/terrain/pool.rs, pxl-engine clipmap.rs `WAYS_POOL_WORDS`);
+/// - the ways' pool at its cap, which holds each brick's kept spans
+///   (domain/layer/terrain/pool.rs, pxl-engine clipmap.rs `WAYS_POOL_WORDS`);
 /// - the profiler's lanes while its setting is on (perf/record.rs).
 ///
 /// The pool and the lanes sit in the buddy's power-of-two blocks. Each flow is
 /// refused past its cap, and waits or stays absent when the heap refuses it. A
 /// shard's body has no longest (`Stream::max_body`), so no sum counts it.
-///
-/// The rest of the heap is workspace.
-const HEAP_FLOWS_BYTES: u64 = {
+const OTHER_FLOWS_BYTES: u64 = {
     use crate::sys::io::body::slots_bytes;
     use crate::sys::io::demand::Stream;
     let mut longest = 0;
@@ -124,6 +125,21 @@ const HEAP_FLOWS_BYTES: u64 = {
         + pool::POOL_BYTES
         + record::PERF_BYTES
 };
+
+/// The most heap a tile's lines take, each column in the block the heap gives
+/// it (pxl-spec bake/separation.rs `client_bytes`): the room the other flows
+/// leave under `MACHINE.min_heap_bytes`, an even share for each terrain tile
+/// slot. No number here is chosen: it follows from the heap a phone is
+/// guaranteed and the slots that hold the tiles. A tile past it is the
+/// object's failure, and the tile over it answers.
+pub(crate) const LINES_CAP_BYTES: u32 = ((MACHINE.min_heap_bytes as u64 - OTHER_FLOWS_BYTES)
+    / TileCache::<TerrainTile>::SLOTS as u64) as u32;
+
+/// The heap's bounded flows: the others (`OTHER_FLOWS_BYTES`) and every
+/// terrain tile slot's lines at their cap, which the assertion below holds
+/// to the heap a phone is guaranteed.
+const HEAP_FLOWS_BYTES: u64 =
+    OTHER_FLOWS_BYTES + TileCache::<TerrainTile>::SLOTS as u64 * LINES_CAP_BYTES as u64;
 
 const _: () = assert!(
     HEAP_FLOWS_BYTES <= MACHINE.min_heap_bytes as u64,
@@ -143,6 +159,7 @@ pub(crate) fn install(b: &BootInfo) {
     section::set_fixed(section::lay_out(b.mem_sz, b.form.data_end, FIXED_BYTES));
     fixed::RANGE.set(range(Fixed::Terrain));
     division::RANGE.set(range(Fixed::Division));
+    tile::LINES_CAP.set(LINES_CAP_BYTES);
     // SAFETY: `.fixed.uploads` and the GPU device's stream, zeroed, each the
     // renderer's alone.
     unsafe {

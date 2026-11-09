@@ -67,19 +67,3 @@ fn free_list_holds_every_gap_of_every_brick() {
     }
     assert_eq!(m.free.len(), 1, "joined whole");
 }
-
-#[test]
-fn tile_blocks_count_against_the_cap_and_take_no_run() {
-    let mut m = WayPool::default();
-    let block = m.take_tile(100).unwrap();
-    assert_eq!(block.len(), 100);
-    assert_eq!(m.tile_words, 128, "at its block's size");
-    assert_eq!(m.top(), 1, "no run taken");
-    assert!(m.free.is_empty());
-    m.top = WAYS_POOL_WORDS - 128;
-    assert_eq!(m.take_tile(1), Err(PoolRefusal::Cap), "the cap counts both");
-    assert_eq!(m.take(8), Err(PoolRefusal::Cap));
-    m.give_tile(block);
-    assert_eq!(m.tile_words, 0);
-    m.top = 1;
-}

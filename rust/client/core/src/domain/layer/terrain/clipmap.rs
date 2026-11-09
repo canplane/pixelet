@@ -15,7 +15,7 @@
 //! ways' pool (pool.rs).
 //! The next frame hands the brick to the GPU, and it is present from then on
 //! (`upload`). Nothing of a tile is kept for a brick still to come: a brick
-//! that enters later asks for its tile again (`TileCache::again`).
+//! that enters later asks for its tile again (`TileCache::refetch`).
 
 use pxl_engine::area::{Area, Shard};
 use pxl_engine::clipmap::{
@@ -31,7 +31,7 @@ use pxl_render::gpu::api;
 use pxl_render::ray::{BrickWrite, TerrainWrite};
 use pxl_spec::bake::separation::Separation;
 use pxl_spec::bake::tile::terrain::{
-    brick_lines, brick_pairs, palette_cells, TerrainTile, ELE_COLUMN, PALETTE_COLUMN,
+    brick_lines, brick_pairs, palette_cells, ELE_COLUMN, PALETTE_COLUMN,
 };
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
@@ -44,12 +44,13 @@ use xpute_kit::status::errno::Errno;
 use crate::domain::layer::terrain::fixed::{
     cells_off, fill_off, palette_off, CELLS_ARR_BYTES, PALETTE_ARR_BYTES, RANGE,
 };
-use crate::domain::layer::terrain::pool::{way_pool, PoolRefusal, Run, WayPool};
+use crate::domain::layer::terrain::pool::{way_pool, PoolRefusal, Run};
 use crate::domain::layer::terrain::tile;
 use crate::domain::layer::Base;
 use crate::sys::io::room::Refusal;
 use crate::sys::io::source::ServiceArea;
 use crate::sys::sched::edge::{request_world_tick, world_edge};
+use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_core::mem::range::arr;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -364,12 +365,6 @@ fn fold(w: &mut Clipmap) {
             }
         }
     }
-}
-
-/// The ways' pool, holding the spans of every held brick. The world's query reads it here as
-/// the GPU's cast reads its copy (pxl-engine `clipmap::way_at`).
-pub(in crate::domain::layer) fn pool() -> &'static WayPool {
-    way_pool()
 }
 
 /// The words the pool spans, which the GPU's copy of it holds.
@@ -730,23 +725,34 @@ pub fn pinned_tiles() -> &'static [Quadrant] {
     &clipmap().pinned
 }
 
-/// The bricks the eye's clip level at `cell_zoom` holds or wants, each with
-/// whether it is present, or none while its center is not laid out. It says
-/// what the layer holds for a debug reader (domain/scene/gizmo/coverage.rs)
-/// and changes nothing.
-pub(in crate::domain) fn eye_bricks(
-    cell_zoom: Zoom,
-) -> Option<[([i32; 2], bool); ENTRIES as usize]> {
-    let (w, clip_level) = (
-        clipmap(),
-        cell_zoom
-            .checked_sub(FIRST_CELL_ZOOM)
-            .filter(|&w| w < EYE_CLIP_LEVELS)?,
-    );
+/// The eye's clip level at `cell_zoom`, or none while its center is not laid
+/// out.
+fn eye_level(w: &Clipmap, cell_zoom: Zoom) -> Option<u32> {
+    let clip_level = cell_zoom
+        .checked_sub(FIRST_CELL_ZOOM)
+        .filter(|&l| l < EYE_CLIP_LEVELS)?;
     first_of(w, clip_level)?;
+    Some(clip_level)
+}
+
+/// The bricks the eye's clip level at `cell_zoom` holds or wants, or none
+/// while its center is not laid out. It says what the layer holds for a debug
+/// reader (domain/scene/gizmo/coverage.rs) and changes nothing.
+pub(in crate::domain) fn eye_bricks(cell_zoom: Zoom) -> Option<[[i32; 2]; ENTRIES as usize]> {
+    let w = clipmap();
+    let clip_level = eye_level(w, cell_zoom)?;
     Some(core::array::from_fn(|s| {
-        w.table.entries[(clip_level * ENTRIES) as usize + s].brick()
+        w.table.entries[(clip_level * ENTRIES) as usize + s].brick
     }))
+}
+
+/// Whether brick `q` is present in the eye's clip level at `cell_zoom`, for
+/// the same reader; false while its center is not laid out.
+pub(in crate::domain) fn brick_present(cell_zoom: Zoom, q: [i32; 2]) -> bool {
+    let w = clipmap();
+    eye_level(w, cell_zoom).is_some_and(|clip_level| {
+        w.table.entries[(clip_level * ENTRIES + clipmap::entry(q)) as usize].holds(q)
+    })
 }
 
 /// The clip levels' table as the GPU's cast reads it (pxl-render clip.wgsl
@@ -809,7 +815,7 @@ fn slot_wants(w: &Clipmap, tile: Quadrant, b: u32) -> bool {
 /// Cuts from `pkt`, the tile's packet, in the turn it landed, the palette of
 /// every absent brick of `tile` that a clip level wants. The palette is all
 /// that a brick's fill reads of a packet beyond what the tile keeps
-/// (`TerrainTile::separation`, `TerrainTile::ele`), so the packet can be
+/// (its `separation` and `ele`), so the packet can be
 /// freed afterwards. A brick whose slot the runtime holds is left absent, and
 /// its tile is asked for again.
 pub fn cut(tile: Quadrant, pkt: &[u8]) {

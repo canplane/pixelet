@@ -48,6 +48,7 @@ pub fn screen_shows_world() -> bool {
 /// under that bake's version.
 const EARTH: Load = Load::Sphere;
 
+use crate::domain::layer::object::store;
 use crate::domain::layer::terrain::clipmap;
 use crate::domain::preview::{Draft, RenderEdit};
 use crate::domain::scene;
@@ -193,7 +194,7 @@ pub fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
             eye,
             clipmap: clipmap::table(),
             shards: cast::shards(),
-            objects: cast::objects(),
+            objects: store::objects(),
             decor: gpu::frame(),
             receivers,
             ray_cnts: settings.ray_cnts,

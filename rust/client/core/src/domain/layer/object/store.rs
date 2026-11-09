@@ -40,6 +40,7 @@ use crate::domain::layer::object::ext::{Ext, Pool, NONE};
 use crate::sys::sched::edge::request_world_tick;
 use pxl_engine::object::{self, path, NodeSlot};
 use pxl_render::gpu::api;
+use pxl_render::ray::ObjectTable;
 use pxl_spec::object::ext::class_of;
 use pxl_spec::object::volume::fold;
 
@@ -78,11 +79,11 @@ impl Entry {
 
 static OBJECT: Global<Store> = Global::new();
 
-pub fn object() -> &'static Store {
+pub(in crate::domain::layer) fn object() -> &'static Store {
     object_mut()
 }
 
-pub fn object_mut() -> &'static mut Store {
+pub(in crate::domain::layer) fn object_mut() -> &'static mut Store {
     OBJECT.get(Store::default)
 }
 
@@ -109,6 +110,37 @@ pub(super) fn note_written(regions: &[Aabb]) {
 pub(in crate::domain::layer) fn take_written(out: &mut Vec<Aabb>) {
     out.clear();
     core::mem::swap(out, WRITTEN.get(Vec::new));
+}
+
+/// What the GPU was last handed of the tree: the store's revision at that
+/// hand, and the child groups written between the hand before it and it, by
+/// their first slots (`objects`).
+struct Upload {
+    since: u32,
+    written: Vec<u32>,
+}
+
+static UPLOAD: Global<Upload> = Global::new();
+
+/// The placed objects for the GPU. The tree's lanes are handed where they
+/// live, and `cap` is the room each has before it grows. A GPU that holds the
+/// revision last handed copies again only the child groups written since that
+/// revision.
+pub fn objects() -> ObjectTable<'static> {
+    let h = UPLOAD.get(|| Upload {
+        since: 0,
+        written: Vec::new(),
+    });
+    object_mut().take_written_groups(&mut h.written);
+    let store = object();
+    ObjectTable {
+        first_child: store.tree.first_child(),
+        data: store.tree.data(),
+        cap: store.tree.cap(),
+        revision: store.revision,
+        since: core::mem::replace(&mut h.since, store.revision),
+        written_groups: &h.written,
+    }
 }
 
 pub const VOID: AssetId = cube::sentinel::void as u32;
@@ -204,15 +236,6 @@ pub struct Store {
     revision: u32,
 }
 
-/// The tree's columns as the GPU takes them (`Store::gpu_table`), in
-/// place, at `revision`. `cap` is the room each column has before it grows.
-pub struct GpuTable<'a> {
-    pub first_child: &'a [u32],
-    pub data: &'a [u32],
-    pub cap: usize,
-    pub revision: u32,
-}
-
 impl Default for Store {
     fn default() -> Store {
         Store {
@@ -245,19 +268,9 @@ impl Store {
         api::in_flight(self.tree.first_child()) || api::in_flight(self.tree.data())
     }
 
-    pub fn gpu_table(&self) -> GpuTable<'_> {
-        GpuTable {
-            first_child: self.tree.first_child(),
-            data: self.tree.data(),
-            cap: self.tree.cap(),
-            revision: self.revision,
-        }
-    }
-
     /// Moves into `into` the child groups the tree wrote since they were last
-    /// taken, by their first slots, each once. The one who takes them keeps
-    /// what it took (domain/scene/cast.rs `objects`).
-    pub fn take_written_groups(&mut self, into: &mut Vec<u32>) {
+    /// taken, by their first slots, each once (`objects`).
+    fn take_written_groups(&mut self, into: &mut Vec<u32>) {
         self.tree.take_written(into);
         into.sort_unstable();
         into.dedup();

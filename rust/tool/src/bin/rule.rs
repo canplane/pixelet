@@ -55,9 +55,11 @@ const HALF_FLOORED: [&str; 2] = [
 /// One order of dependency over a folder's modules: a module names only what is at or below
 /// it, and neither head names the other; a module beside the order names anything, and only
 /// the order's top names it. `root` is where the folder's files are, and `path` is what a
-/// Rust file names its modules by, a `domain::` step past it being passed over (a TypeScript
-/// file names a module by its file: `imported`). A name past `path` that no module holds is
-/// the folder's root's own, which stands at `own`, or, where `own` is none, is not read.
+/// Rust file names its modules by, a `domain::` step past it, and the `layer::` before the
+/// query that is its child in the module tree and above it in the order, being passed over (a
+/// TypeScript file names a module by its file: `imported`). A name past `path` that no module
+/// holds is the folder's root's own, which stands at `own`, or, where `own` is none, is not
+/// read.
 struct Order {
     root: &'static str,
     path: &'static str,
@@ -501,7 +503,8 @@ const XPUTE: &str = "xpute/";
 const PIXELET_WORDS: &str = r"(?i)\b(pixelet|pxl[-_]\w+)\b";
 
 /// The modules `text` names past `path`, a `domain::` step past it passed
-/// over (the core's heads and trunk live under it), a group's every first
+/// over (the core's heads and trunk live under it) and the `layer::` before
+/// `query` (a child of `layer` that stands above it), a group's every first
 /// name among them, each with the line it is named on; `path` itself, named
 /// whole, is its root, an empty name.
 fn named(text: &str, path: &str) -> Vec<(usize, String)> {
@@ -529,6 +532,10 @@ fn named(text: &str, path: &str) -> Vec<(usize, String)> {
             continue;
         };
         let rest = rest.strip_prefix("domain::").unwrap_or(rest);
+        let rest = rest
+            .strip_prefix("layer::")
+            .filter(|r| ident(r) == "query")
+            .unwrap_or(rest);
         if let Some(group) = rest.strip_prefix('{') {
             // A group: the first name of each item at its own depth.
             let (mut depth, mut item_start) = (0, true);
@@ -1086,6 +1093,23 @@ mod spec;"
             ],
             "{found:?}"
         );
+    }
+
+    /// A layer names the query by neither of its spellings.
+    #[test]
+    fn layer_names_no_query() {
+        let order = ORDERS
+            .iter()
+            .find(|o| o.root == CORE)
+            .expect("the core's order");
+        let f = format!("{CORE}domain/layer/place.rs");
+        for text in [
+            "use crate::domain::query::World;",
+            "use crate::domain::layer::query::World;",
+        ] {
+            let found = out_of_order(&[f.as_str()], &|_| Some(text.to_string()), order);
+            assert_eq!(found.len(), 1, "{text}: {found:?}");
+        }
     }
 
     /// Each of pxl-render's orders refuses a name up it, as `ORDERS` holds them: the shaders'

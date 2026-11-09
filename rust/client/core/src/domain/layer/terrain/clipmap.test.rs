@@ -5,7 +5,7 @@
 // once, its cells as a fill leaves them.
 
 use super::*;
-use crate::domain::layer::terrain::pool::{exhaust, set_way_pool};
+use crate::domain::layer::terrain::pool::{exhaust, set_way_pool, WayPool};
 use crate::sys;
 use pxl_engine::fill;
 use pxl_engine::ground::word;
@@ -422,7 +422,7 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
             for z in -64..256 {
                 let got = clipmap::way_at(
                     &CpuClipmap,
-                    pool(),
+                    way_pool(),
                     place,
                     [i32::MIN / 2, i32::MAX / 2],
                     (cell_zoom, [g[0], g[1], z]),

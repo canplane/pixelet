@@ -8,8 +8,8 @@ use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::lattice::{coarsest, Lattice};
 use pxl_spec::space::layer::quadrant::{Quadrant, LEAF_ZOOM};
-use xpute_core::mem::heap::Block;
 
+use crate::sys::io::body::Packet;
 use crate::sys::io::demand::{PhaseList, Stream};
 use crate::sys::io::failure::Exit;
 use tile_cache::TileCache;
@@ -26,9 +26,7 @@ pub mod place;
 pub mod query;
 pub mod terrain;
 pub mod tile_cache;
-pub mod upload;
 
-use crate::sys::io::fetch;
 use crate::sys::io::source;
 pub use answer::Answer;
 
@@ -44,7 +42,7 @@ pub enum AskScope {
     View,
 }
 
-pub trait Base: Clone + 'static {
+pub trait Base: Sized + 'static {
     const STREAM: Stream;
 
     /// Which of the tile's children have tiles of their own, as the bake
@@ -89,19 +87,16 @@ pub trait Base: Clone + 'static {
 
     fn tile_cache() -> &'static mut TileCache<Self>;
 
-    fn receive(tile: Quadrant, slot: u32, pkt: &[u8], phases: &mut PhaseList)
-        -> Result<Self, Exit>;
-
-    /// The tile that held slot `slot` has left it: what the layer holds of it apart from its
-    /// body goes with it (the default holds nothing apart).
-    fn gone(_slot: u32) {}
-
-    /// Disposes of the packet a tile arrived in, once slot `slot` took the
-    /// tile or no slot did. The default frees it; a layer whose GPU copies
-    /// the tile from its packet keeps the packet instead (`upload::UploadTable`).
-    fn keep(_slot: Option<u32>, block: Block) {
-        fetch::release(Some(block));
-    }
+    /// Decodes the packet the tile arrived in into its own, slot `slot` being
+    /// the tile's. The tile owns what it decoded and takes the packet, or
+    /// drops it, as its layer decides. An `Exit` of `Refused` waits on what
+    /// refused it (sys/io/room.rs).
+    fn receive(
+        tile: Quadrant,
+        slot: u32,
+        pkt: Packet,
+        phases: &mut PhaseList,
+    ) -> Result<Self, Exit>;
 
     /// The tile with nothing in it, which stands for an absent tile at the
     /// layer's top. None for a layer whose absent tiles are answered by the

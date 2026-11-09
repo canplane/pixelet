@@ -2,21 +2,19 @@
 
 //! The world's reads: a tile below its bake's root by its quadkey, and a
 //! shard's objects and the objects' top below OBJECT (sys/io/file.rs). A body
-//! is read into a block (sys/io/body.rs) and answered to the layer that
-//! asked, and so is an absence. The layer decides what an absence means,
-//! settles the fetch, and releases the block or keeps it.
+//! is read into a packet (sys/io/body.rs) and answered to the layer that
+//! asked, and so is an absence. The layer decides what an absence means and
+//! settles the fetch, and what it does with the packet is its own.
 
 use xpute_core::clock::now;
 use xpute_core::global::Global;
 use xpute_core::ipc::door::Pos;
 use xpute_core::ipc::fs::Fd;
-use xpute_core::mem;
-use xpute_core::mem::heap::Block;
 use xpute_core::sched::edge::{notified, runtime_turn, yield_if_spent, Notify};
 use xpute_kit::collection::list::List;
 use xpute_kit::status::errno::Errno;
 
-use crate::sys::io::body;
+use crate::sys::io::body::{self, Packet};
 use crate::sys::io::demand::{PhaseList, Stream, TaskPhaseName};
 use crate::sys::io::failure::{Exit, Failure};
 use crate::sys::io::file::{self, Opened, Owner, Path};
@@ -27,9 +25,10 @@ use crate::sys::sched::edge::{request_world_tick, world_edge};
 /// An answered open, held until its body is filled.
 struct Arrival {
     key: u64,
-    /// The body, or None where the source has no object; or how the attempt
-    /// ended without a body.
-    body: Result<Option<Block>, Exit>,
+    /// The packet, or None where the source has no object; or how the
+    /// attempt ended without a body. An arrival is dropped only once `read`
+    /// is passed, so its packet never goes back under the runtime's read.
+    body: Result<Option<Packet>, Exit>,
     /// The read that fills the body. The body belongs to the runtime until
     /// the runtime's head has passed the read.
     read: Option<Pos>,
@@ -43,7 +42,7 @@ pub struct Response {
     pub stream: Stream,
     pub id: u64,
     /// None where the source has no object for it.
-    pub block: Option<Block>,
+    pub pkt: Option<Packet>,
     pub phases: PhaseList,
 }
 
@@ -108,17 +107,12 @@ pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
         }
         Opened::Bytes(n) => {
             let body = match body::take(stream, n) {
-                Ok(block) => {
-                    // SAFETY: a block just taken, `n` long and no one else's,
+                Ok(mut pkt) => {
+                    // SAFETY: a packet just taken, `n` long and no one else's,
                     // held unread by its arrival until the runtime's head has
                     // passed the read.
-                    read = Some(unsafe {
-                        file::read(
-                            fd,
-                            core::slice::from_raw_parts_mut(mem::at::<u8>(block.0), n as usize),
-                        )
-                    });
-                    Ok(Some(block))
+                    read = Some(unsafe { file::read(fd, &mut pkt) });
+                    Ok(Some(pkt))
                 }
                 Err(refused) => Err(Exit::Refused(refused)),
             };
@@ -141,20 +135,9 @@ pub fn on_opened(fd: Fd, key: u64, at_ms: f64, opened: Opened) {
 /// the turn, so it runs whether or not the turn is spent.
 fn drop_stopped() {
     let q = queue();
-    q.arrivals.retain(|a| {
-        let stopped = a.is_filled() && attempt_of(a.key).is_none();
-        if stopped {
-            release(a.body.ok().flatten());
-        }
-        !stopped
-    });
-    q.answers.retain(|a| {
-        let stopped = attempt_of(a.key).is_none();
-        if stopped {
-            release(a.block);
-        }
-        !stopped
-    });
+    q.arrivals
+        .retain(|a| !a.is_filled() || attempt_of(a.key).is_some());
+    q.answers.retain(|a| attempt_of(a.key).is_some());
 }
 
 /// Hands on each arrival once its body is filled, oldest first, and yields
@@ -183,20 +166,20 @@ fn arrived(a: Arrival) {
     // A runtime on its own thread may pass a stopped arrival's read after
     // `drop_stopped` looked, so an attempt that has stopped still comes here.
     let Some((stream, id)) = attempt_of(key) else {
-        return release(a.body.ok().flatten());
+        return;
     };
     let mut phases = PhaseList::default();
     phases.push(TaskPhaseName::net_ms, a.net_ms);
     match a.body {
-        Ok(block) => {
-            if let Some((_, bytes)) = block {
-                phases.push(TaskPhaseName::bytes, f64::from(bytes));
+        Ok(pkt) => {
+            if let Some(pkt) = &pkt {
+                phases.push(TaskPhaseName::bytes, pkt.len() as f64);
             }
             queue().answers.push(Response {
                 key,
                 stream,
                 id,
-                block,
+                pkt,
                 phases,
             });
             request_world_tick();
@@ -216,19 +199,6 @@ pub fn take_answer(of: &[Stream]) -> Option<Response> {
     let answers = &mut queue().answers;
     let at = answers.iter().position(|a| of.contains(&a.stream))?;
     Some(answers.remove(at))
-}
-
-pub fn body<'a>((at, bytes): Block) -> &'a [u8] {
-    // SAFETY: the block `on_opened` took for this body alone, `bytes` long,
-    // not released while it is read.
-    unsafe { core::slice::from_raw_parts(mem::at::<u8>(at), bytes as usize) }
-}
-
-pub fn release(block: Option<Block>) {
-    if let Some(block) = block {
-        // SAFETY: a body's block, taken by `on_opened` and released once.
-        unsafe { body::give(block) };
-    }
 }
 
 #[cfg(test)]

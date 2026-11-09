@@ -170,13 +170,13 @@ precision is always spent where the eye is.
 ### The query, the only seam
 
 Everything that looks at the world asks it the same question, and the **query**
-is the only place that knows how a layer stores its answer. Its files stand
-beside the layers' (`pxl-core domain/query.rs`), and in the module tree it is a
-child of theirs (`domain/layer.rs`): what a layer stores its answers in is
-visible within the layers alone, the query among them, and the compiler refuses
-any other reader. The **world** composes the layers
-into one answer for drawing and for control alike (`pxl-engine world.rs`
-`node`), each written over the one below:
+is the only place that knows how the terrain and the objects, the layers it
+answers from, store their answers. Its files stand beside the layers'
+(`pxl-core domain/query.rs`), and in the module tree it is a child of theirs
+(`domain/layer.rs`): what those two store their answers in is visible within
+the layers alone, the query among them, and the compiler refuses any other
+reader. The **world** composes the layers into one answer for drawing and for
+control alike (`pxl-engine world.rs` `node`), each written over the one below:
 
 ```text
   what is placed, air included            ┐ each is written
@@ -254,6 +254,11 @@ min-max pyramid over their heights and their bridges and tunnels as spans. All
 of it is uploaded, so the CPU's question and the GPU's ray meet the same bridge.
 Where a level holds no brick, the coarser level's ground is read, and drawn, in
 its place.
+
+A tile owns what is its own, and what it owns goes when it goes: its lines are
+vectors on the heap under a cap the build derives from what a phone guarantees
+(`door/layout.rs` `LINES_CAP_BYTES`), and an Earth tile holds its packet until the
+GPU has its texels. A tile past its cap is drawn from the tile over it.
 
 Every bound in the view has an owner: the camera grid bounds what is drawn,
 demand bounds what is fetched, the slots bound what is held, and a turn's time
@@ -421,9 +426,10 @@ noticing:
 
 - The ground is stored as 2.5D, but nothing behaves as 2.5D: every reader asks
   the 3D query, so caves, bores and placed objects are seen alike.
-- Only the query reads a layer. Everything else asks the world, and the
-  compiler refuses a layer's read anywhere else: the reads are visible within
-  `domain/layer` alone, and the query is its child.
+- Only the query reads the terrain and the objects, the layers it answers from.
+  Everything else asks the world, and the compiler refuses their reads anywhere
+  else: they are visible within `domain/layer` alone, and the query is its
+  child.
 - The UI computes no coordinate and no tile, and reaches the core only through
   the generated commands and the snapshot.
 - Nothing under `xpute/` knows pixelet: no tile, no world, no pixelet name.

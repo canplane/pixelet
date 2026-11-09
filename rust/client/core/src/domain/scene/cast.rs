@@ -1,16 +1,15 @@
 // pxl-core/domain/scene/cast.rs
 
 //! What the GPU's cast of the eye's rays reads from the core (pxl-render
-//! ray/cast.rs `Cast`): the eye, the service area's index and the placed
-//! objects. The terrain's part of the cast, the clipmap's table of bricks, is
-//! written by domain/layer/terrain/clipmap.rs.
+//! ray/cast.rs `Cast`): the eye and the service area's index. The layers' parts
+//! of the cast are their own: the clipmap's table of bricks is written by
+//! domain/layer/terrain/clipmap.rs, the placed objects by
+//! domain/layer/object/store.rs `objects`.
 
 use pxl_engine::eye;
-use pxl_render::ray::ObjectTable;
 use pxl_spec::space::camera::eye::Observation;
 use xpute_core::global::Global;
 
-use crate::domain::layer::object::store::{object, object_mut};
 use crate::domain::preview::RenderEdit;
 use crate::domain::view::lens;
 use crate::sys::io::source;
@@ -68,35 +67,4 @@ pub fn eye(o: &Observation, edit: &RenderEdit, steps: bool) -> Option<[u32; eye:
     words[eye::CARVE..eye::CARVE + eye::CUT_WORDS].copy_from_slice(&cut(edit.carve));
     words[eye::HIDE..eye::HIDE + eye::CUT_WORDS].copy_from_slice(&cut(edit.hide));
     Some(words)
-}
-
-/// What the GPU was last handed of the placed objects: the store's revision
-/// at that hand, and the child groups written between the hand before it and
-/// it, by their first slots (`objects`).
-struct Upload {
-    since: u32,
-    written: Vec<u32>,
-}
-
-static UPLOAD: Global<Upload> = Global::new();
-
-/// The placed objects for the GPU (domain/layer/object/store.rs
-/// `gpu_table`). The tree's lanes are handed where they live. A GPU that
-/// holds the revision last handed copies again only the child groups written
-/// since that revision.
-pub fn objects() -> ObjectTable<'static> {
-    let h = UPLOAD.get(|| Upload {
-        since: 0,
-        written: Vec::new(),
-    });
-    object_mut().take_written_groups(&mut h.written);
-    let l = object().gpu_table();
-    ObjectTable {
-        first_child: l.first_child,
-        data: l.data,
-        cap: l.cap,
-        revision: l.revision,
-        since: core::mem::replace(&mut h.since, l.revision),
-        written_groups: &h.written,
-    }
 }

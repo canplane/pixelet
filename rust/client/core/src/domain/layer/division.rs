@@ -23,6 +23,7 @@ use xpute_core::mem::range::OwnedRange;
 
 use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::{AskScope, Base};
+use crate::sys::io::body::Packet;
 use crate::sys::io::demand::{PhaseList, Stream};
 use crate::sys::io::failure::Exit;
 
@@ -56,12 +57,12 @@ impl Base for DivisionTile {
     fn receive(
         _tile: Quadrant,
         slot: u32,
-        pkt: &[u8],
+        pkt: Packet,
         _phases: &mut PhaseList,
     ) -> Result<DivisionTile, Exit> {
         // SAFETY: the slot is this tile's, and nothing reads it until the tile is set.
         let room = unsafe { range::arr::<u32>(RANGE.get(), slot * ROOM_BYTES, CELLS) };
-        Ok(division::decode_into(pkt, room)?)
+        Ok(division::decode_into(&pkt, room)?)
     }
 }
 

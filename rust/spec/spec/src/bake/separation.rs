@@ -5,7 +5,7 @@
 //! What they look like — slab, piers, bore, embankment, cutting — the client
 //! makes from the surface and these numbers.
 
-use std::borrow::Cow;
+use std::collections::TryReserveError;
 
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::shape::Shape;
@@ -70,17 +70,17 @@ impl Form {
 /// A tile's lines, structure-of-arrays: a column a line, then a column a point.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Separation {
-    pub starts: Cow<'static, [u32]>, // Line d holds the points starts[d]..starts[d + 1].
-    pub points: Cow<'static, [[i16; 2]]>, // Each point of the centreline, in 1/POINT_SCALE of a tile cell, as the source gives it.
-    pub tops: Cow<'static, [i16]>, // The road surface at each point, in leaf cells, solved over many tiles.
-    pub widths: Cow<'static, [u8]>, // Each line's width, in 1/POINT_SCALE of a tile cell, as the source gives it.
-    pub kinds: Cow<'static, [u8]>, // Each line's transport type: the source's class, which is the slab's material.
-    pub forms: Cow<'static, [u8]>, // Each line's `Form`, from the source's flags.
-    pub clears: Cow<'static, [u8]>, // A bore's clear space over its surface, in leaf cells, as the solve set it.
+    pub starts: Vec<u32>,      // Line d holds the points starts[d]..starts[d + 1].
+    pub points: Vec<[i16; 2]>, // Each point of the centreline, in 1/POINT_SCALE of a tile cell, as the source gives it.
+    pub tops: Vec<i16>, // The road surface at each point, in leaf cells, solved over many tiles.
+    pub widths: Vec<u8>, // Each line's width, in 1/POINT_SCALE of a tile cell, as the source gives it.
+    pub kinds: Vec<u8>, // Each line's transport type: the source's class, which is the slab's material.
+    pub forms: Vec<u8>, // Each line's `Form`, from the source's flags.
+    pub clears: Vec<u8>, // A bore's clear space over its surface, in leaf cells, as the solve set it.
     /// The coarsest zoom at which each point is held (pxl-engine `way::coarsest`): what a fold
-    /// keeps of a line. Only the bake reads it, since no client path folds, so a client's room
-    /// holds none (`Table::into_run`).
-    pub first_zooms: Cow<'static, [u8]>,
+    /// keeps of a line. Only the bake reads it, since no client path folds, so a client holds
+    /// none (`Table::to_client`).
+    pub first_zooms: Vec<u8>,
 }
 
 impl Default for Separation {
@@ -521,14 +521,14 @@ impl Builder {
     pub fn finish(mut self) -> Separation {
         self.starts.push(self.points.len() as u32);
         Separation {
-            starts: self.starts.into(),
-            points: self.points.into(),
-            tops: self.tops.into(),
-            first_zooms: self.first_zooms.into(),
-            widths: self.widths.into(),
-            kinds: self.kinds.into(),
-            forms: self.forms.into(),
-            clears: self.clears.into(),
+            starts: self.starts,
+            points: self.points,
+            tops: self.tops,
+            first_zooms: self.first_zooms,
+            widths: self.widths,
+            kinds: self.kinds,
+            forms: self.forms,
+            clears: self.clears,
         }
     }
 }
@@ -608,96 +608,55 @@ impl<'a> Table<'a> {
 
     pub(crate) fn to_separation(&self) -> Separation {
         Separation {
-            starts: self.starts.to_vec().into(),
-            points: self.points.to_vec().into(),
-            tops: self.tops.to_vec().into(),
-            first_zooms: self.first_zooms.to_vec().into(),
-            widths: self.widths.to_vec().into(),
-            kinds: self.kinds.to_vec().into(),
-            forms: self.forms.to_vec().into(),
-            clears: self.clears.to_vec().into(),
+            starts: self.starts.to_vec(),
+            points: self.points.to_vec(),
+            tops: self.tops.to_vec(),
+            first_zooms: self.first_zooms.to_vec(),
+            widths: self.widths.to_vec(),
+            kinds: self.kinds.to_vec(),
+            forms: self.forms.to_vec(),
+            clears: self.clears.to_vec(),
         }
     }
 
-    /// The words the columns a client keeps of this table take in a run (`into_run`): none
-    /// where it has no line.
-    pub fn words(&self) -> usize {
-        match self.widths.len() {
-            0 => 0,
-            n => run_words(n, self.points.len()),
-        }
+    /// The heap a client's columns take (`to_client`), each a block of its bytes rounded up to a
+    /// power of two, as the heap gives one: what a tile's lines are capped by.
+    pub(crate) fn client_bytes(&self) -> usize {
+        [
+            size_of_val(self.starts),
+            size_of_val(self.points),
+            size_of_val(self.tops),
+            size_of_val(self.widths),
+            size_of_val(self.kinds),
+            size_of_val(self.forms),
+            size_of_val(self.clears),
+        ]
+        .iter()
+        .filter(|&&n| n > 0)
+        .map(|n| n.next_power_of_two())
+        .sum()
     }
 
-    /// Into a client's run of `words` (`words`), the columns one after the other: every column
-    /// but `first_zooms`, which only a fold reads; a client reads a brick's lines whole
+    /// A client's own columns, on the heap and refused without a panic: every column but
+    /// `first_zooms`, which only a fold reads; a client reads a brick's lines whole
     /// (bake/tile/terrain.rs `brick_lines`).
-    pub fn into_run(&self, run: &'static mut [u32]) -> Separation {
-        if self.widths.is_empty() {
-            return Separation::default();
+    pub(crate) fn to_client(&self) -> Result<Separation, TryReserveError> {
+        fn column<T: Copy>(src: &[T]) -> Result<Vec<T>, TryReserveError> {
+            let mut column = Vec::new();
+            column.try_reserve_exact(src.len())?;
+            column.extend_from_slice(src);
+            Ok(column)
         }
-        let room = Room::of(run, self.widths.len(), self.points.len());
-        fn put<T: Copy>(dst: &'static mut [T], src: &[T]) -> &'static [T] {
-            let dst = &mut dst[..src.len()];
-            dst.copy_from_slice(src);
-            dst
-        }
-        Separation {
-            starts: put(room.starts, self.starts).into(),
-            points: put(room.points, self.points).into(),
-            tops: put(room.tops, self.tops).into(),
-            first_zooms: Cow::Borrowed(&[]),
-            widths: put(room.widths, self.widths).into(),
-            kinds: put(room.kinds, self.kinds).into(),
-            forms: put(room.forms, self.forms).into(),
-            clears: put(room.clears, self.clears).into(),
-        }
-    }
-}
-
-/// The words a client's columns of `lines` lines and `points` points take, each column whole
-/// words and in order (`Room::of`).
-fn run_words(lines: usize, points: usize) -> usize {
-    (lines + 1) + points + points.div_ceil(2) + 4 * lines.div_ceil(4)
-}
-
-/// A client's columns in a run of words, one column after the other: line starts, points, tops,
-/// widths, kinds, forms, clears (pxl-core domain/layer/terrain/tile.rs).
-struct Room {
-    starts: &'static mut [u32],
-    points: &'static mut [[i16; 2]],
-    tops: &'static mut [i16],
-    widths: &'static mut [u8],
-    kinds: &'static mut [u8],
-    forms: &'static mut [u8],
-    clears: &'static mut [u8],
-}
-
-impl Room {
-    fn of(run: &'static mut [u32], lines: usize, points: usize) -> Room {
-        assert_eq!(
-            run.len(),
-            run_words(lines, points),
-            "a run sized by its table"
-        );
-        let (starts, run) = run.split_at_mut(lines + 1);
-        let (at, run) = run.split_at_mut(points);
-        let (tops, run) = run.split_at_mut(points.div_ceil(2));
-        let (widths, run) = run.split_at_mut(lines.div_ceil(4));
-        let (kinds, run) = run.split_at_mut(lines.div_ceil(4));
-        let (forms, clears) = run.split_at_mut(lines.div_ceil(4));
-        // SAFETY: `u32` holds `[i16; 2]`, `i16` and `u8` in size and alignment, and every bit
-        // pattern is one of each; each view keeps within its own sub-run.
-        unsafe {
-            Room {
-                starts,
-                points: core::slice::from_raw_parts_mut(at.as_mut_ptr().cast(), points),
-                tops: core::slice::from_raw_parts_mut(tops.as_mut_ptr().cast(), points),
-                widths: core::slice::from_raw_parts_mut(widths.as_mut_ptr().cast(), lines),
-                kinds: core::slice::from_raw_parts_mut(kinds.as_mut_ptr().cast(), lines),
-                forms: core::slice::from_raw_parts_mut(forms.as_mut_ptr().cast(), lines),
-                clears: core::slice::from_raw_parts_mut(clears.as_mut_ptr().cast(), lines),
-            }
-        }
+        Ok(Separation {
+            starts: column(self.starts)?,
+            points: column(self.points)?,
+            tops: column(self.tops)?,
+            first_zooms: Vec::new(),
+            widths: column(self.widths)?,
+            kinds: column(self.kinds)?,
+            forms: column(self.forms)?,
+            clears: column(self.clears)?,
+        })
     }
 }
 

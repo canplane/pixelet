@@ -40,19 +40,19 @@ const ELE_AT: u32 = 0;
 /// The bytes of one brick's cells: its columns, one word per cell holding
 /// the top of its ground, then its levels, its cells as laid, and the root
 /// of its run of kept spans (pxl-engine `clipmap::BRICK_WORDS`).
-pub const CELLS_BYTES: u32 = BRICK_WORDS * 4;
-pub const CELLS_ARR_BYTES: u32 = arr_bytes(CELLS_BYTES as usize, 1);
+const CELLS_BYTES: u32 = BRICK_WORDS * 4;
+pub(super) const CELLS_ARR_BYTES: u32 = arr_bytes(CELLS_BYTES as usize, 1);
 const CELLS_AT: u32 = ELE_AT + TILE_SLOTS * ELE_BYTES;
 
 /// The bytes of one brick's palette: four palette indices per cell, packed
 /// in one word, cut from its tile's packet (clipmap.rs `cut`). The brick's
 /// fill lays its own cells from them, and the GPU colors a hit by them.
-pub const PALETTE_ARR_BYTES: u32 = arr_bytes(BRICK_CELLS as usize, 4);
+pub(super) const PALETTE_ARR_BYTES: u32 = arr_bytes(BRICK_CELLS as usize, 4);
 const PALETTE_AT: u32 = CELLS_AT + SLOTS * CELLS_ARR_BYTES;
 
 /// The room a fill works in (clipmap.rs `FillScratch`), one array each, in
 /// order: a brick's samples and its spans.
-pub const FILL_ARRAY_BYTES: [u32; 2] = [ELE_BYTES, arr_bytes(SPANS_WORDS as usize, 4)];
+const FILL_ARRAY_BYTES: [u32; 2] = [ELE_BYTES, arr_bytes(SPANS_WORDS as usize, 4)];
 
 /// Where the fill's room starts, on a cache line.
 const FILL_AT: u32 = arr_bytes(palette_off(SLOTS) as usize, 1);
@@ -60,21 +60,21 @@ const FILL_AT: u32 = arr_bytes(palette_off(SLOTS) as usize, 1);
 pub const TERRAIN_BYTES: u32 = FILL_AT + sum(&FILL_ARRAY_BYTES);
 
 /// Where tile slot `slot`'s samples start.
-pub const fn ele_off(slot: u32) -> u32 {
+pub(super) const fn ele_off(slot: u32) -> u32 {
     ELE_AT + slot * ELE_BYTES
 }
 
 /// Where brick slot `slot`'s cells start (clipmap.rs `Slot`); there are
 /// `SLOTS` brick slots.
-pub const fn cells_off(slot: u32) -> u32 {
+pub(super) const fn cells_off(slot: u32) -> u32 {
     CELLS_AT + slot * CELLS_ARR_BYTES
 }
 
-pub const fn palette_off(slot: u32) -> u32 {
+pub(super) const fn palette_off(slot: u32) -> u32 {
     PALETTE_AT + slot * PALETTE_ARR_BYTES
 }
 
-pub const fn fill_off(idx: usize) -> u32 {
+pub(super) const fn fill_off(idx: usize) -> u32 {
     let mut at = FILL_AT;
     let mut k = 0;
     while k < idx {

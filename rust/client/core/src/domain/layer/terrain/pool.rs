@@ -1,12 +1,11 @@
 // pxl-core/domain/layer/terrain/pool.rs
 
 //! The ways' pool (pxl-engine `clipmap::WAYS_POOL_WORDS`): one bounded allocator of words on
-//! the heap. Each brick's kept spans are a run here (clipmap.rs `lay`), given back with the
-//! brick's slot, and the GPU's copy follows it: a brick's run is handed over as its brick is
-//! (clipmap.rs `upload`, pxl-render ray/ground.rs `hand`), the words read in place, so `take`
-//! passes over a free run the runtime still holds. Each resident tile's separation is a block of its own on the
-//! heap, counted against the same cap and freed with the tile (tile.rs); no tile takes a run,
-//! and no tile's bytes go to the GPU. A tile or a brick with nothing to keep takes nothing.
+//! the heap, holding what the GPU reads and nothing else. Each brick's kept spans are a run here
+//! (clipmap.rs `lay`), given back with the brick's slot, and the GPU's copy follows it: a brick's
+//! run is handed over as its brick is (clipmap.rs `upload`, pxl-render ray/ground.rs `hand`), the
+//! words read in place, so `take` passes over a free run the runtime still holds. A brick with
+//! nothing to keep takes nothing.
 //!
 //! The pool grows a chunk at a time as runs reach past its end. A run may cross chunks: readers
 //! index it by word, and the GPU is handed its words piece by piece (`pieces`). Only the pool's
@@ -25,7 +24,7 @@ const CHUNK_CNT: u32 = WAYS_POOL_WORDS / CHUNK_WORDS;
 
 /// The heap the pool takes at its cap, counted in the buddy allocator's blocks: each chunk
 /// rounded up to a power of two, and the list of chunks likewise (door/layout.rs
-/// `HEAP_FLOWS_BYTES`). A tile's block is counted in the same cap at its block's size.
+/// `HEAP_FLOWS_BYTES`).
 pub const POOL_BYTES: u64 = (CHUNK_CNT as u64) * (CHUNK_WORDS as u64 * 4).next_power_of_two()
     + (CHUNK_CNT as u64 * size_of::<Box<[u32]>>() as u64).next_power_of_two();
 
@@ -37,12 +36,11 @@ pub(in crate::domain::layer) const RUN_PIECES: usize = (RUN_WORDS_MOST / CHUNK_W
 
 /// The runs given back below `top` are in `free`, lowest first, and no two of them touch, so
 /// each lies between two held runs and there is at most one more of them than there are
-/// bricks. `tile_words` counts the tiles' blocks in the cap, each as its block's size.
+/// bricks.
 pub(in crate::domain::layer) struct WayPool {
     chunks: Vec<Box<[u32]>>,
     top: u32,
     free: List<Run, { SLOTS as usize + 2 }>,
-    tile_words: u32,
 }
 
 impl Default for WayPool {
@@ -52,20 +50,21 @@ impl Default for WayPool {
             chunks: Vec::new(),
             top: 1,
             free: List::new(),
-            tile_words: 0,
         }
     }
 }
 
 static POOL: Global<WayPool> = Global::new();
 
+/// The ways' pool, holding the spans of every held brick. The world's query reads it as the
+/// GPU's cast reads its copy (pxl-engine `clipmap::way_at`).
 pub(in crate::domain::layer) fn way_pool() -> &'static mut WayPool {
     POOL.get(WayPool::default)
 }
 
-/// Why a run or a tile's block was not taken. `Cap`: the pool is full to its cap, and a run or a
-/// block given back may change that (sys/io/room.rs `Refusal::ways`). `Heap`: the heap refused a
-/// chunk or a block, and a page given back may change that (`Refusal::now`).
+/// Why a run was not taken. `Cap`: the pool is full to its cap, and a run given back may change
+/// that (sys/io/room.rs `Refusal::ways`). `Heap`: the heap refused a chunk, and a page given back
+/// may change that (`Refusal::now`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::domain::layer) enum PoolRefusal {
     Cap,
@@ -88,7 +87,7 @@ impl WayPool {
             }
             return Ok([first, n]);
         }
-        if self.top + n + self.tile_words > WAYS_POOL_WORDS {
+        if self.top + n > WAYS_POOL_WORDS {
             return Err(PoolRefusal::Cap);
         }
         self.grow_to(self.top + n - 1)?;
@@ -123,29 +122,6 @@ impl WayPool {
         }
     }
 
-    /// A block of `n` words of its own on the heap for a tile's separation, counted against
-    /// the cap at the buddy allocator's size for it. `n` is at least 1.
-    pub fn take_tile(&mut self, n: u32) -> Result<Box<[u32]>, PoolRefusal> {
-        let counted = n.next_power_of_two();
-        if self.top + self.tile_words + counted > WAYS_POOL_WORDS {
-            return Err(PoolRefusal::Cap);
-        }
-        let mut block = Vec::new();
-        if block.try_reserve_exact(n as usize).is_err() {
-            return Err(PoolRefusal::Heap);
-        }
-        block.resize(n as usize, 0);
-        self.tile_words += counted;
-        Ok(block.into_boxed_slice())
-    }
-
-    /// Gives back a tile's block, a give-back as a run's is.
-    pub fn give_tile(&mut self, block: Box<[u32]>) {
-        self.tile_words -= (block.len() as u32).next_power_of_two();
-        drop(block);
-        room::way_given_back();
-    }
-
     /// The words the pool spans, which the GPU's copy must hold.
     pub fn top(&self) -> u32 {
         self.top
@@ -154,7 +130,7 @@ impl WayPool {
     /// Whether a run of `n` words could be taken now, the heap's say apart.
     pub fn fits(&self, n: u32) -> bool {
         self.free.iter().any(|r| r[1] >= n)
-            || n.checked_add(self.top + self.tile_words)
+            || n.checked_add(self.top)
                 .is_some_and(|sum| sum <= WAYS_POOL_WORDS)
     }
 
@@ -246,7 +222,6 @@ impl Clone for WayPool {
             chunks: self.chunks.clone(),
             top: self.top,
             free,
-            tile_words: self.tile_words,
         }
     }
 }

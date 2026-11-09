@@ -32,7 +32,7 @@ impl Base for Probe {
         PROBE_TILES.get(TileCache::default)
     }
 
-    fn receive(_: Quadrant, _: u32, _: &[u8], _: &mut PhaseList) -> Result<Probe, Exit> {
+    fn receive(_: Quadrant, _: u32, _: Packet, _: &mut PhaseList) -> Result<Probe, Exit> {
         Err(Failure::from(Errno::ENOTRECOVERABLE).into())
     }
 }

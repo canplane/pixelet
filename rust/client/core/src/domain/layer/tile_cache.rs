@@ -68,9 +68,8 @@ pub struct TileCache<L: Base> {
     tiles: FnvHashMap<Quadrant, Entry<L>>,
     /// The tile each slot holds. It is the inverse of `Resident::slot`, and
     /// only `put` and `remove` write either side, so the two always agree.
-    /// The readers that start from a slot use this side: the packet a tile
-    /// arrives in (terrain/tile.rs `keep`) and the GPU hand-off, which walks
-    /// the slots (earth.rs `upload`).
+    /// The GPU hand-off starts from a slot and walks this side (earth.rs
+    /// `upload`).
     in_slot: Vec<Option<Quadrant>>,
     free: Vec<u32>,
     /// A buffer kept between calls so that `ask` allocates nothing.
@@ -341,14 +340,14 @@ impl<L: Base> TileCache<L> {
 
     /// The finest resident tile on `p`'s line, which answers `p` when `p` is
     /// a miss.
-    pub(in crate::domain::layer) fn finest_resident(&self, p: Quadrant) -> Option<Quadrant> {
+    pub fn finest_resident(&self, p: Quadrant) -> Option<Quadrant> {
         self.line(p).finest_resident
     }
 
     /// The resident tile that gives `p`'s ground exactly, or none where `p`
     /// is a miss. A resident tile over `p` that does not give its ground only
     /// draws `p` coarser.
-    pub(in crate::domain::layer) fn src(&self, p: Quadrant) -> Option<Quadrant> {
+    pub fn src(&self, p: Quadrant) -> Option<Quadrant> {
         self.line(p).src
     }
 
@@ -567,7 +566,6 @@ impl<L: Base> TileCache<L> {
             .and_then(|h| h.slot)
         {
             self.in_slot[was as usize] = None;
-            L::gone(was);
         }
         if let Some(f) = slot {
             self.in_slot[f as usize] = Some(p);
@@ -616,9 +614,11 @@ impl<L: Base> TileCache<L> {
         self.changed.push(p);
     }
 
-    /// The tile held in slot `slot`.
-    pub fn in_slot(&self, slot: u32) -> Option<Quadrant> {
-        self.in_slot[slot as usize]
+    /// The tile held in slot `slot` and what it holds.
+    pub(in crate::domain::layer) fn in_slot(&mut self, slot: u32) -> Option<(Quadrant, &mut L)> {
+        let p = self.in_slot[slot as usize]?;
+        let held = self.tiles.get_mut(&p)?.resident.as_mut()?;
+        Some((p, &mut held.body))
     }
 
     /// Returns the slot `p` was in, if any, for the caller to fill or free.
@@ -632,7 +632,6 @@ impl<L: Base> TileCache<L> {
         }
         if let Some(f) = resident.slot {
             self.in_slot[f as usize] = None;
-            L::gone(f);
         }
         self.changed.push(p);
         self.revision = self.revision.wrapping_add(1);

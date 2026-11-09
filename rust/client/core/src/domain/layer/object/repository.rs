@@ -41,7 +41,6 @@ use pxl_spec::space::layer::demand::GROUND_DEMAND_TILES;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
-use xpute_core::mem::heap::Block;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderConfig, TreeReader, TreeView};
@@ -49,9 +48,9 @@ use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderConfig, TreeReader, Tre
 use super::store::{object, object_mut};
 use crate::domain::layer::object::ext::Ext;
 use crate::domain::layer::object::store::{apply, note_written, Write};
+use crate::sys::io::body::Packet;
 use crate::sys::io::demand::{Order, PhaseList, Stream, TaskPhaseName};
 use crate::sys::io::failure::{Exit, Failure};
-use crate::sys::io::fetch::{body, release};
 use crate::sys::io::file::{self, Path};
 use crate::sys::io::file_spec::{self, format, object as object_file, root, top, write as column};
 use crate::sys::io::request::declare;
@@ -218,10 +217,9 @@ fn changed() {
 
 /// Takes in a file below OBJECT that arrived, the top or a shard, or the
 /// news that it is absent (`admit`).
-pub fn on_arrived(id: u64, block: Option<Block>, phases: &mut PhaseList) -> Result<(), Exit> {
+pub fn on_arrived(id: u64, pkt: Option<Packet>, phases: &mut PhaseList) -> Result<(), Exit> {
     let at = now();
-    let result = admit(id, block.map(body));
-    release(block);
+    let result = admit(id, pkt.as_deref());
     phases.push(TaskPhaseName::decode_ms, now() - at);
     result.map_err(|e| Exit::Failed(Failure::from(e)))
 }

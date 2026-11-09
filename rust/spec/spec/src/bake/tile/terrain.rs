@@ -2,11 +2,13 @@
 
 //! A baked terrain tile and its wire: `[samples, ground, occupancy, separation]`.
 
+use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::shape;
 use xpute_kit::wire::xtp::MAX_PKT_SZ;
 
 use std::borrow::Cow;
+use std::collections::TryReserveError;
 
 use super::{occupancy_of, Occupancy};
 use crate::bake::constant::ELE_PADDED_SPAN;
@@ -52,7 +54,8 @@ pub type GroundCells = Cow<'static, [GroundId]>;
 
 /// A tile: one column for each fact the client cannot make. What the client draws by rule,
 /// such as a slab, a bore or a pier, is not here. The bake holds what goes on the wire; a
-/// client holds what it reads of a tile as a whole, its lines. A client holds the tile's cells
+/// client holds what it reads of a tile as a whole, its lines, and they go when the tile does.
+/// A client holds the tile's cells
 /// in its clip levels, filled from the samples, and its ways there from the lines (pxl-engine
 /// `clipmap`, `fill`).
 #[derive(Clone, Debug, PartialEq)]
@@ -398,14 +401,14 @@ pub fn palette_cells(pkt: &[u8]) -> Result<&[GroundId], MarshalError> {
     Ok(read_tile(pkt)?.cells)
 }
 
-/// Decode a tile straight into its resident room: into `ele`, its padded samples, in
-/// `.fixed.terrain`; its lines into a run of words taken by `run` (pxl-core
-/// domain/layer/terrain/tile.rs), which is not asked for a tile with no line. Its cells go to
-/// its clip levels (`palette_cells`).
-pub fn decode_into<E: From<MarshalError>>(
+/// Decodes a tile as a client holds it: its padded samples straight into `ele`, in
+/// `.fixed.terrain`, and its lines onto the heap, owned by the tile. Lines that would take more
+/// of the heap than `lines_cap` bytes are the object's fault, refused as `EFBIG`; a heap that
+/// refuses them answers for itself. Its cells go to its clip levels (`palette_cells`).
+pub fn decode_into<E: From<MarshalError> + From<TryReserveError>>(
     pkt: &[u8],
     ele: &'static mut [i16],
-    run: impl FnOnce(usize) -> Result<&'static mut [u32], E>,
+    lines_cap: usize,
 ) -> Result<TerrainTile, E> {
     let Table {
         ele: samples,
@@ -413,11 +416,11 @@ pub fn decode_into<E: From<MarshalError>>(
         separation,
         ..
     } = read_tile(pkt)?;
+    if separation.client_bytes() > lines_cap {
+        return Err(MarshalError::new(Errno::EFBIG).into());
+    }
+    let separation = separation.to_client()?;
     ele.copy_from_slice(samples);
-    let separation = match separation.words() {
-        0 => Separation::default(),
-        words => separation.into_run(run(words)?),
-    };
     Ok(TerrainTile {
         cells: Cow::Borrowed(&[]),
         separation,

@@ -60,7 +60,8 @@ use pxl_spec::space::layer::octant::Octant;
 use pxl_spec::space::layer::quadrant::{Quadrant, MIN_ZOOM};
 
 use super::world::World;
-use crate::domain::layer::terrain::clipmap::{pool, CpuClipmap};
+use crate::domain::layer::terrain::clipmap::CpuClipmap;
+use crate::domain::layer::terrain::pool::way_pool;
 use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::Answer;
 use crate::sys::io::source;
@@ -171,7 +172,7 @@ impl World<'_> {
             &mut reading,
             &CpuClipmap,
             &lanes,
-            pool(),
+            way_pool(),
             &mut at.inheritance,
             at.node,
             zooms,

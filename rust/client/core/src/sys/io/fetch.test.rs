@@ -19,7 +19,7 @@ fn answer(key: u64) -> Response {
         key,
         stream: Stream::terrain,
         id: 1,
-        block: None,
+        pkt: None,
         phases: PhaseList::default(),
     }
 }
