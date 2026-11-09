@@ -26,6 +26,7 @@ android {
   namespace "xpute"
   ndkVersion rootProject.ext.ndkVersion
   defaultConfig {
+    consumerProguardFiles "consumer-rules.pro"
     versionCode 1
     versionName "0.0.0"
     // The library Core.kt and Gpu.kt load: cargo's name for the crate's.

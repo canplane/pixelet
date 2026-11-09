@@ -37,6 +37,8 @@ import type { ConfigPlugin } from "expo/config-plugins";
 const PROPERTIES = {
   reactNativeArchitectures: "arm64-v8a",
   "android.minSdkVersion": "29",
+  "android.enableMinifyInReleaseBuilds": "true",
+  "android.enableShrinkResourcesInReleaseBuilds": "true",
 };
 
 const FLAVORS = ["mobile", "quest"];
