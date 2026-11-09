@@ -14,7 +14,7 @@ use pxl_engine::world::{placed_in, PlacedCursor};
 use pxl_engine::WORKGROUPS_CAP;
 use pxl_engine::ZOOM_BITS;
 use pxl_spec::brick;
-use pxl_spec::brick::{BRICK, BRICK_SHIFT};
+use pxl_spec::brick::BRICK_SHIFT;
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::coord::zoom::{Zoom, FINEST_ZOOM, LEAF_CELL_ZOOM, UNIT_ZOOM};
@@ -22,7 +22,7 @@ use pxl_spec::value;
 use xpute_kit::math::rng::SplitMix32;
 
 use crate::param::scatter::ALIGN_NEIGHBOR_RADIUS;
-use crate::scatter::{mul_hi, root, stands_at, variant_of, Candidate};
+use crate::scatter::{most, stands_at, variant_of, Candidate};
 use pxl_spec::asset::decor::{Orientation, Row, ROWS};
 
 /// The lanes of a decor pass's workgroup.
@@ -765,23 +765,10 @@ pub(crate) fn overlaps_placed(q: &impl DecorQuery, at: [i32; 3], cells: [i32; 3]
     }
 }
 
-/// Its records' room in a brick, a whole number of runs (`RUN`): twice the mean it retains at
-/// the coarsest clip level a variant stands at (`scatter::root`), where a brick takes the most
-/// leaf cells, plus two runs.
+/// Its records' room in a brick, a whole number of runs (`RUN`): the most any brick holds
+/// (`scatter::most`).
 pub const fn cap(decor: &Row) -> u32 {
-    let root = root(decor);
-    let cell_zoom = if root > FIRST_CELL_ZOOM {
-        root
-    } else {
-        FIRST_CELL_ZOOM
-    };
-    let side = BRICK << (LEAF_CELL_ZOOM - cell_zoom);
-    let cells = if side < 1 << 16 {
-        side * side
-    } else {
-        u32::MAX
-    };
-    (2 * mul_hi(cells, decor.chance) + 2 * RUN).div_ceil(RUN) * RUN
+    most(decor).div_ceil(RUN) * RUN
 }
 
 #[cfg(test)]

@@ -1,9 +1,10 @@
 // pxl-content/scatter.rs
 
-//! wgsl-twin: the decor the ground holds, never stored, as a tree of hashes. A column at a
+//! wgsl-twin: the decor the ground holds, never stored, as a tree of hashes. A brick at a
 //! decor's root zoom (`ROOTS`) holds as many as one hash draws around its mean, and each
-//! column hands its count down to its four children, one hash a column, down to the leaf
-//! cells, a unit each, which hold one or none (`cnt`). A leaf cell's own hash draws its
+//! column hands its count down to its four children, one hash a column: evenly down to a
+//! clip level's cells, then by the hash's weights to the leaf cells, a unit each, which hold
+//! one or none (`cnt`). A leaf cell's own hash draws its
 //! variant and heading (`candidate_at`); one whose box meets the box of a neighbor that drew
 //! lower gives way to it (`retained`). At a zoom, a decor stands as itself where its box keeps
 //! an eighth of that zoom's cell or more, as a folded cube is drawn, and is none where it
@@ -11,7 +12,9 @@
 //! `SplitMix32`), seeded by the decor's seed and the column (`node_seed`), so every reader, on
 //! either side, draws the same.
 
+use pxl_engine::clipmap::FIRST_CELL_ZOOM;
 use pxl_engine::seed::node_seed;
+use pxl_spec::brick::BRICK_SHIFT;
 use pxl_spec::share::EIGHTHS;
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, UNIT_ZOOM};
 use xpute_kit::math::rng::SplitMix32;
@@ -100,10 +103,30 @@ pub const SPLIT: u32 = 0x5b17_dec0;
 /// How many of the `k`-th decor the column `b` at `zoom` holds; a leaf cell holds one or
 /// none. Its root's column (`ROOTS`) holds as many as a hash draws around its mean, the
 /// decor's chance for each leaf cell under it, rounded at a uniform draw. Each column's count
-/// is then halved across and along by weights its hash draws, exactly, with none past what
-/// its leaf cells hold. Coarser than the root, it is none. Every word is read by value.
+/// is then halved across and along, exactly, evenly within the brick (`even`) and past that
+/// by weights its hash draws, with none past what its leaf cells hold. Coarser than the root, it is none. Every word is read by value.
 pub fn cnt(k: usize, zoom: Zoom, b: [i32; 2]) -> u32 {
     cnt_of([SEEDS[k], CHANCES[k], ROOTS[k]], zoom, b)
+}
+
+/// The weight `w` keeps a brick's count even across its cells: an even half, its odd one
+/// going by `w`'s low bits (`halve`). Random weights over the brick's depth would heap its
+/// decor in a few cells and leave the rest bare.
+const fn even(w: u32) -> u32 {
+    w & 0xffff | 0x8000_0000
+}
+
+/// The mean a column at `root` holds, in 16.16 fixed point: the chance's top half for each
+/// leaf cell under it.
+const fn mean(chance: u32, root: Zoom) -> u32 {
+    (chance >> 16) << (2 * (LEAF_CELL_ZOOM - root))
+}
+
+/// The most of `decor` any brick holds: its count's root (`count_root`) is the brick at the
+/// coarsest clip level it stands at, which holds its mean rounded (`cnt`), and a finer
+/// clip level's brick holds a share of that.
+pub const fn most(decor: &Row) -> u32 {
+    (mean(decor.chance, count_root(decor)) + 0xffff) >> 16
 }
 
 /// `cnt` of a decor whose seed, chance and root are `seed`, `chance` and `root`.
@@ -112,10 +135,8 @@ pub fn cnt_of([seed, chance, root]: [u32; 3], zoom: Zoom, b: [i32; 2]) -> u32 {
         return 0;
     }
     let at = |z: Zoom| [b[0] >> (zoom - z), b[1] >> (zoom - z)];
-    // The mean in 16.16 fixed point: the chance's top half for each leaf cell.
-    let mean = (chance >> 16) << (2 * (LEAF_CELL_ZOOM - root));
     let draw = node_seed(seed ^ CNT, (root, at(root)));
-    let mut n = (mean + (draw & 0xffff)) >> 16;
+    let mut n = (mean(chance, root) + (draw & 0xffff)) >> 16;
     let mut z = root;
     while z < zoom && n > 0 {
         // Halved across, then along, by weights its own hash draws, none
@@ -126,7 +147,11 @@ pub fn cnt_of([seed, chance, root]: [u32; 3], zoom: Zoom, b: [i32; 2]) -> u32 {
         let quarter = (c[0] & 1 | (c[1] & 1) << 1) as usize;
         let cap = 1u32 << (2 * (LEAF_CELL_ZOOM - z - 1));
         let cap = if cap > 0xffff { 0xffff } else { cap };
-        n = halve::quarter(n, cap, [draws.next_u32(), draws.next_u32()], quarter as u32);
+        let weights = [draws.next_u32(), draws.next_u32()].map(|w| match z < root + BRICK_SHIFT {
+            true => even(w),
+            false => w,
+        });
+        n = halve::quarter(n, cap, weights, quarter as u32);
         z += 1;
     }
     n
@@ -240,13 +265,23 @@ pub const fn root(decor: &Row) -> Zoom {
     cell_zoom
 }
 
-/// The root of each decor's counts (`cnt`, `root`): the zoom at which a clip level first
-/// reads its columns.
+/// The zoom a decor's counts start at: that of a brick at the coarsest clip level it stands
+/// at (`root`).
+pub const fn count_root(decor: &Row) -> Zoom {
+    let root = root(decor);
+    (if root > FIRST_CELL_ZOOM {
+        root
+    } else {
+        FIRST_CELL_ZOOM
+    }) - BRICK_SHIFT
+}
+
+/// The root of each decor's counts (`cnt`, `count_root`).
 pub const ROOTS: [Zoom; ROWS.len()] = {
     let mut roots = [LEAF_CELL_ZOOM; ROWS.len()];
     let mut k = 0;
     while k < ROWS.len() {
-        roots[k] = root(&ROWS[k]);
+        roots[k] = count_root(&ROWS[k]);
         k += 1;
     }
     roots

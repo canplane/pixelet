@@ -35,7 +35,7 @@ fn run_of(g: u32, k: u32) -> vec2<u32> {
     j += 1u;
   }
   let past = first - decor_first_record(j);
-  let records_cnt = min(records[cnt_at(g, j)], decor_cap(j));
+  let records_cnt = records[cnt_at(g, j)];
   let cnt = select(0u, records_cnt - past, records_cnt > past);
   return vec2<u32>(g * BRICK_RECORDS + decor_first_record(j) + past, min(cnt, RUN));
 }

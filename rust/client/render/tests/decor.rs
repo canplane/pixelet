@@ -388,12 +388,10 @@ struct Round {
     cuts: [Cut; 2],
 }
 
-/// The leaves of the records a pair holds, as `decor_thin_cs` lays them, and the count the pair
-/// says it laid. A count of 0 stands for the number of leaves.
+/// The leaves a pair laid.
 #[derive(Default, Clone)]
 struct LeafList {
     leaves: Vec<[i32; 2]>,
-    cnt: u32,
 }
 
 /// What each pair holds. It starts with what `decor_thin_cs` lays, the candidates the hashes
@@ -436,7 +434,7 @@ fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), LeafLi
                         }
                     }
                 }
-                pairs.insert((s, j as u32), LeafList { leaves, cnt: 0 });
+                pairs.insert((s, j as u32), LeafList { leaves });
             }
         }
     }
@@ -759,11 +757,7 @@ fn init_of(laid: &BTreeMap<(u32, u32), LeafList>, round: &Round) -> Vec<u32> {
     let words = generation::record_at(generation::SLOT_RECORDS) as usize;
     let mut init = vec![0u32; words];
     for (&(s, j), p) in laid {
-        init[generation::cnt_at(s, j) as usize] = if p.cnt != 0 {
-            p.cnt
-        } else {
-            p.leaves.len() as u32
-        };
+        init[generation::cnt_at(s, j) as usize] = p.leaves.len() as u32;
     }
     for &(s, j, part) in &round.pairs {
         let cell_zoom = clip::eye_cell_zoom(s / ENTRIES);
@@ -808,17 +802,7 @@ fn expect(built: &Built, laid: &BTreeMap<(u32, u32), LeafList>, round: &Round) -
                     for &(s, j, part) in pairs {
                         let cell_zoom = clip::eye_cell_zoom(s / ENTRIES);
                         let p = &laid[&(s, j)];
-                        let cap = generation::cap(&ROWS[j as usize]);
-                        let cnt = if p.cnt != 0 {
-                            p.cnt
-                        } else {
-                            p.leaves.len() as u32
-                        };
-                        tally.add("pair: more laid than its room", cnt > cap);
                         for (i, leaf) in p.leaves.iter().enumerate() {
-                            if i as u32 >= cnt.min(cap) {
-                                continue;
-                            }
                             if part && !is_changed(&round.boxes, cell_zoom, *leaf) {
                                 tally.add("part: not reached, it stands", true);
                                 continue;
@@ -1189,15 +1173,7 @@ fn world_gpu<'d>(
 fn world_of(eye: [i32; 2], extra: &[Leaf]) -> (Built, BTreeMap<(u32, u32), LeafList>) {
     let mut built = real_world::build_with(eye, 600, extra);
     let edges = lack_columns(&mut built);
-    let mut laid = pairs_about(&built, &edges);
-    // One train pair says it laid three past its room. The passes read only as many records as
-    // its room holds.
-    if let Some((_, p)) = laid
-        .iter_mut()
-        .find(|(k, p)| k.1 == 3 && p.leaves.len() as u32 >= generation::cap(&ROWS[3]) - 8)
-    {
-        p.cnt = generation::cap(&ROWS[3]) + 3;
-    }
+    let laid = pairs_about(&built, &edges);
     (built, laid)
 }
 
@@ -1556,7 +1532,7 @@ fn hand_thin_lays_as_scatter() {
     let words = generation::record_at(generation::SLOT_RECORDS) as usize;
     let size = |pairs: u32| [BRICK_CELLS.div_ceil(generation::LANES), 1, pairs];
     let (mut laid_total, mut pairs_total) = (0u64, 0u64);
-    let (mut none_past, mut full_caps, mut stale_headers) = (0u64, 0u64, 0u64);
+    let (mut none_past, mut stale_headers) = (0u64, 0u64);
     for (name, eye) in [
         ("east of the seam", real_world::EYE),
         ("west of the seam", [(1 << 23) - 300, (40 << 16) + 30]),
@@ -1624,48 +1600,6 @@ fn hand_thin_lays_as_scatter() {
             }
             pairs_total += chunk.len() as u64;
         }
-        // Pairs whose room is two short of full before thin runs. Thin must write no record
-        // past the room. Each pair runs alone, so any word written past it is thin's.
-        let full: Vec<(u32, u32)> = pairs
-            .iter()
-            .copied()
-            .filter(|p| want[p].len() >= 3)
-            .step_by(97)
-            .take(4)
-            .collect();
-        for (s, j) in full {
-            let cap = generation::cap(&ROWS[j as usize]);
-            let mut before = init.clone();
-            before[generation::cnt_at(s, j) as usize] = cap - 2;
-            let mut list = vec![0u32; generation::LIST_WORDS as usize];
-            list[generation::THIN_ARGS as usize + 2] = 1;
-            list[generation::LIST_AT as usize] = generation::pair_word(s, j);
-            let (list, records) = (buf(&device, &list), buf(&device, &before));
-            let at = [(9, &records), (10, &rows), (11, &list)];
-            dispatch(&device, &queue, &hand, &at, size(1));
-            let got = read(&device, &queue, &records, name);
-            let mut written = Vec::new();
-            for i in cap - 2..cap {
-                let r = word_of(s, j, i);
-                written.push([got[r + 1] as i32, got[r + 2] as i32]);
-                before[r + 1] = got[r + 1];
-                before[r + 2] = got[r + 2];
-            }
-            for leaf in &written {
-                assert!(
-                    want[&(s, j)].contains(leaf),
-                    "{name}, {s} {j}: {leaf:?} no candidate"
-                );
-            }
-            assert!(
-                written[0] != written[1],
-                "{name}, {s} {j}: one candidate twice"
-            );
-            let cnt = generation::cnt_at(s, j) as usize;
-            before[cnt] = got[cnt];
-            assert!(got == before, "{name}, {s} {j}: a word past its room");
-            full_caps += 1;
-        }
         // Heads that name the brick east of the one the entry's row holds, which no mark of
         // the frame writes. Thin must not read the row: it lays the candidates of the head's
         // brick.
@@ -1705,9 +1639,9 @@ fn hand_thin_lays_as_scatter() {
         eprintln!("{name}: {} pairs", pairs.len());
     }
     eprintln!(
-        "thin: {pairs_total} pairs, {laid_total} laid, {none_past} past where they stand, {full_caps} caps filled, {stale_headers} headers naming another brick"
+        "thin: {pairs_total} pairs, {laid_total} laid, {none_past} past where they stand, {stale_headers} headers naming another brick"
     );
-    assert!(laid_total > 0 && none_past > 0 && full_caps > 0 && stale_headers > 0);
+    assert!(laid_total > 0 && none_past > 0 && stale_headers > 0);
 }
 
 /// The test's reference for `decor_mark_cs`, which marks the words one entry after another by
@@ -1808,8 +1742,7 @@ fn run_of(records: &[u32], g: u32, k: u32) -> (u32, u32) {
             first += generation::cap(&ROWS[j as usize]);
             j += 1;
         }
-        let cap = generation::cap(&ROWS[j as usize]);
-        let laid = records[generation::cnt_at(g, j) as usize].min(cap);
+        let laid = records[generation::cnt_at(g, j) as usize];
         let past = at_run - first;
         let cnt = laid.saturating_sub(past);
         (
@@ -1894,7 +1827,7 @@ const MAP_SIDE: u32 = 4096;
 const CAST_NUMBER: u32 = 7;
 
 /// Records as generation leaves them, with placed decor's records after the entries'. An
-/// entry's head is held or stale. Each decor laid none, a few, its room or past it. Each record
+/// entry's head is held or stale. Each decor laid none, a few or its room. Each record
 /// holds a place in its brick, a variant and a turn, or nothing generated. Returns the records
 /// and the workgroups a pass over them takes.
 fn records_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32) {
@@ -1920,7 +1853,7 @@ fn records_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32)
                 9 => generation::RUN + 1,
                 _ => draw.next() % 40,
             }
-            .min(cap + 5);
+            .min(cap);
             records[generation::cnt_at(s, j as u32) as usize] = laid;
             let z = built.top_at([b[0], b[1]]);
             for i in 0..laid.min(cap) {
@@ -3216,7 +3149,7 @@ fn hand_frames_answer_as_the_rust() {
         ("west of the seam", [(1 << 23) - 300, (40 << 16) + 30]),
     ] {
         let t0 = std::time::Instant::now();
-        let built = real_world::build_with_decors(at, 600);
+        let built = real_world::build_with_decors(at, 1200);
         let unplaced = real_world::build(at).objects;
         let world = built.world();
         let without = World {

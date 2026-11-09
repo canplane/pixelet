@@ -170,7 +170,7 @@ fn decor_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let pair = list[select(LIST_AT + id.z, part_at(id.z - whole), part)];
   let brick = pair_entry(pair);
   let j = pair_decor(pair);
-  if (id.x >= in_cap(records[cnt_at(brick, j)], decor_cap(j))) {
+  if (id.x >= records[cnt_at(brick, j)]) {
     return;
   }
   let r = entry_word(brick, j, id.x);

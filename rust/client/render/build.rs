@@ -948,7 +948,6 @@ fn decor_word() -> String {
             of(last)
         )
     };
-    out += &by_decor("decor_cap", &|k| g::cap(&ROWS[k]));
     out += &by_decor("decor_first_record", &|k| g::first_record(&ROWS, k as u32));
     out += &by_decor("decor_first_group", &|k| DECORS[k].first_group());
     out += &by_decor("decor_root", &|k| scatter::ROOTS[k]);

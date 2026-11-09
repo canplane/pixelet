@@ -31,7 +31,9 @@ fn scatter_cnt_of(seed: u32, chance: u32, root: u32, zoom: u32, b: vec2<i32>) ->
     let h = quad_seed(seed ^ SPLIT_TAG, z, b >> vec2<u32>(zoom - z));
     let c = vec2<u32>(b >> vec2<u32>(zoom - z - 1u)) & vec2<u32>(1u);
     let cap = min(1u << (2u * (LEAF_CELL_ZOOM - z - 1u)), 0xffffu);
-    n = share_quarter(n, cap, draw(h, 0u), draw(h, 1u), c.x | (c.y << 1u));
+    let kept = select(0xffffffffu, 0xffffu, z < root + BRICK_SHIFT);
+    let half = select(0u, 0x80000000u, z < root + BRICK_SHIFT);
+    n = share_quarter(n, cap, draw(h, 0u) & kept | half, draw(h, 1u) & kept | half, c.x | (c.y << 1u));
     z += 1u;
   }
   return n;
