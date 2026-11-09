@@ -17,13 +17,14 @@ use crate::ground::Cell;
 use crate::ground::Extent;
 use crate::way;
 use pxl_spec::brick::{bricks_zoom, idx_of, of_idx, BRICK, BRICK_CELLS, BRICK_SHIFT};
-use pxl_spec::ground::{palette_idxs, top, UNKNOWN, VOID};
+use pxl_spec::ground::{palette_idxs, top, UNKNOWN};
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::coord::zoom::{idx_at, Zoom, LEAF_CELL_ZOOM, MIN_ZOOM};
 use pxl_spec::space::layer::area;
 use pxl_spec::space::layer::area::{Area, Shard};
 use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::value::VOID;
 use pxl_spec::way::{NOTHING, SPANS};
 
 /// The bricks a clip level holds a side (`ACROSS`) and in all (`ENTRIES`): enough to hold

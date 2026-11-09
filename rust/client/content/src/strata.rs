@@ -16,9 +16,10 @@
 //! by the rule the wall is laid by (pxl-core domain/query/limit.rs `within`, `editable`).
 
 use pxl_engine::ground::rock;
-use pxl_spec::ground::{face_height, leaf_cells, UNKNOWN, VOID};
+use pxl_spec::ground::{face_height, leaf_cells, UNKNOWN};
 use pxl_spec::space::coord::world::SEA_LEVEL;
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
+use pxl_spec::value::VOID;
 
 use crate::param::strata::{BEDROCK_DEPTH, FILLER_DEPTH, HEADROOM, SANDSTONE_DEPTH};
 use crate::Pixelet;

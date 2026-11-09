@@ -18,8 +18,6 @@ use crate::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, UNIT_ZOOM};
 use crate::space::layer::lattice::TILE_CELLS;
 use crate::value;
 
-/// The value space's void and unknown as the words a palette index is read into.
-pub const VOID: u32 = value::VOID;
 pub const UNKNOWN: u32 = value::UNKNOWN;
 
 /// The inner elevation samples across one leaf tile. A leaf tile is about twice as many

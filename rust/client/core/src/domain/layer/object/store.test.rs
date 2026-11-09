@@ -5,6 +5,7 @@ use pxl_spec::share::eighths;
 use pxl_spec::space::coord::zoom::{LEAF_ZOOM, SHARD_ZOOM, UNIT_ZOOM};
 use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::value::{AIR, VOID};
 
 use fnv::FnvHashMap;
 

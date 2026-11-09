@@ -697,7 +697,6 @@ fn world_word() -> String {
     use pxl_engine::clipmap as clip;
     use pxl_engine::object::{self, Cut};
     use pxl_engine::seed;
-    use pxl_engine::way;
     use pxl_spec::asset::cube::ground as palette;
     use pxl_spec::space::layer::area;
     use pxl_spec::value;
@@ -747,7 +746,6 @@ fn world_word() -> String {
         ("SPANS_ACROSS", clip::SPANS_ACROSS),
         ("SPANS_CNT", clip::SPANS_CNT),
         ("WAY_NOTHING", NOTHING),
-        ("WAY_AIR", way::AIR),
         ("WAY_AIR_OF", AIR_OF),
         ("WAY_SPANS", SPANS as u32),
         ("LOOKUP_SLOT_BITS", clip::LOOKUP_SLOT_BITS),

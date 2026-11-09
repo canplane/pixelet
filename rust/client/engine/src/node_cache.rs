@@ -80,8 +80,8 @@ use crate::count;
 use crate::object::RECTS;
 use crate::world::INHERITANCE_WORDS;
 use crate::ZOOM_BITS;
-use pxl_spec::ground::VOID;
 use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::value::VOID;
 
 /// The head's words. `FRAME` is the frame's number. `FORGETS` says what this frame forgets
 /// (`FORGETS_NONE`, `FORGETS_ALL`, `FORGETS_CHANGED`). From `CHANGED_AT` comes one bit for

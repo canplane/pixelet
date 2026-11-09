@@ -1267,9 +1267,9 @@ mod tests {
     use crate::cast::Hit;
     use crate::cast::Node;
     use crate::content::Sample;
-    use crate::object::AIR;
     use crate::param::light;
     use pxl_spec::share::EIGHTHS;
+    use pxl_spec::value::AIR;
 
     /// Starts as a host lays them for the eye at the Q3 position `eye`, from the light's words
     /// alone: each anchor where its texel lies relative to the eye, rounded.

@@ -23,10 +23,11 @@
 use pxl_spec::space::coord::zoom::{
     base_of, cube, units, y_start, z_start, Zoom, CUBE_ZOOM, SHARD_ZOOM,
 };
+use pxl_spec::value;
 use xpute_core::global::Global;
 
 use crate::domain::layer::object::asset::Asset;
-use pxl_spec::asset::{cube, AssetId};
+use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
@@ -152,10 +153,6 @@ pub fn objects() -> ObjectTable<'static> {
     }
 }
 
-pub const VOID: AssetId = cube::sentinel::void as u32;
-pub const AIR: AssetId = cube::object::air as u32;
-const _: () = assert!(VOID == 0);
-
 /// What a leaf of the tree holds: its catalog value and its record's handle.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(in crate::domain::layer) struct Leaf {
@@ -164,7 +161,7 @@ pub(in crate::domain::layer) struct Leaf {
 }
 
 pub(super) const EMPTY: Leaf = Leaf {
-    id: VOID as u16,
+    id: value::VOID as u16,
     ext: NONE,
 };
 

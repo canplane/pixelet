@@ -18,17 +18,16 @@ pub(super) fn tap(hover: &Hover) {
     let Some(h) = hover.coord else {
         return;
     };
-    match hover.prop() {
-        // What the ground generated has no entry; a marker sharing its cell
-        // goes with it.
-        Some(i) => place_air(i.octant()),
-        // Where nothing was struck it takes a whole leaf cell of the ground,
-        // never the size tier.
-        None => remove(
-            hover
-                .target
-                .map_or(Octant::holding(GROUND.leaf_cell_zoom(), &h), |t| t.at),
-        ),
+    // Where nothing was struck it takes a whole leaf cell of the ground,
+    // never the size tier.
+    let at = hover
+        .target
+        .map_or(Octant::holding(GROUND.leaf_cell_zoom(), &h), |t| t.at);
+    // Only what is placed has an entry to take. Over what the base holds,
+    // AIR hides it, and a marker sharing a generated decor's cell goes with it.
+    match hover.object().0 {
+        Some(_) => remove(at),
+        None => place_air(at),
     }
 }
 

@@ -1249,8 +1249,8 @@ pub(crate) mod tests {
     }
     use crate::answer::{fill_word, BOX_WHOLE};
     use crate::content::Sample;
-    use crate::object::AIR;
     use pxl_spec::share::{eighths, EIGHTHS, FULL};
+    use pxl_spec::value::AIR;
 
     /// One cell of stone at `TARGET`, a unit cell, keeping `fill` eighths of its cube, with air
     /// around it.

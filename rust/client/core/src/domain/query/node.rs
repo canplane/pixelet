@@ -51,12 +51,12 @@ use pxl_engine::clipmap::{self, Lookup};
 use pxl_engine::ground::{self, Cell};
 use pxl_engine::object::{child_at, Cut};
 use pxl_engine::world;
-use pxl_spec::ground::VOID;
 use pxl_spec::space::coord::zoom::{units, Zoom, MIN_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::area::{Area, Shard};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::Quadrant;
+use pxl_spec::value::VOID;
 
 use super::change;
 use super::world::World;

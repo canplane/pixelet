@@ -6,8 +6,7 @@
 // which list of asks it runs. Each cell beside the hit is asked from the deepest node it
 // shares with the line down to the hit (`support::asset`). That line follows the beam ray's
 // line that the hit's cell resumed from, as the beam ray left it, down to the deepest node the
-// two share. Below that node, the hit's own descent hands each node down from its parent
-// (`support::asset`).
+// two share. Below that node, the hit's own descent hands each node down from its parent.
 
 @group(0) @binding(8) var<storage, read_write> beams: array<u32>;
 /// The node cache. An ask may name a drawable entry's face word as the word it writes
@@ -56,7 +55,7 @@ fn node_idx(k: u32) -> vec4<i32> {
   return vec4<i32>(idx_of(corner, zoom, roots, r0), i32(zoom));
 }
 
-/// The hit's own descent from where it leaves the line (`support::asset`). It keeps what was
+/// The hit's own descent from where it leaves the line. It keeps what was
 /// handed to the hit's grandparent and parent, whose zooms are in `up`. Where the descent starts
 /// no higher than one of them, the descent's first node stands in for it (`descent`).
 struct Descent {

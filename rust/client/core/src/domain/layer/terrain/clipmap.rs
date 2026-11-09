@@ -1133,7 +1133,6 @@ fn end(w: &mut Clipmap, b: u32, fill: Fill) -> Poll {
 /// own clip level at a zoom where it has one, and the eye's at any other.
 /// `fold` reads through it, since it runs while its writer holds the clip
 /// levels.
-#[derive(Clone, Copy)]
 pub(in crate::domain::layer) struct ClipRead<'a>(&'a Clipmap, Center);
 
 impl ClipRead<'_> {

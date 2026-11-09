@@ -12,9 +12,6 @@ use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
 use pxl_spec::value;
 use pxl_spec::way::{fill_range, fills, AIR_OF, NOTHING};
 
-/// What a bore's air is where the ways write it (`way_cell`): the ground's void.
-pub const AIR: u32 = value::VOID;
-
 /// Whether run `v` sorts at or after `best`, by its low end, then its high.
 fn at_or_after(v: [i32; 2], best: [i32; 2]) -> bool {
     v[0] > best[0] || (v[0] == best[0] && v[1] >= best[1])
@@ -111,7 +108,7 @@ fn beside(c: [i32; 2], m: u32, z: i32) -> ([i32; 2], i32) {
 
 /// What the ways write in cell `z` of column `c` at zoom `cell_zoom`, where its spans and those
 /// beside it are kept in `k` (`at` of its own). A deck's slab or its pier comes first, or else a
-/// bore's air (`AIR`). Under its face cell, where a cave may take it (pxl-spec
+/// bore's air (`value::VOID`). Under its face cell, where a cave may take it (pxl-spec
 /// `ground::face_cell`), it is otherwise the way's palette index wherever a bore's air lies beside
 /// it, under or over it or across one of its four faces, the first in `near`'s order; so a cave
 /// never opens into a way, whatever carves the ground. Otherwise it is `NOTHING`. It is read from
@@ -121,7 +118,7 @@ pub fn way_cell(k: &impl SpanTable, c: [i32; 2], cell_zoom: Zoom, z: i32) -> u32
     let (face, n) = k.header(c);
     let v = at(k, c, n, cell_zoom, z);
     if v != NOTHING {
-        return if v & AIR_OF != 0 { AIR } else { v };
+        return if v & AIR_OF != 0 { value::VOID } else { v };
     }
     let mut m = 1;
     while z < face && m < 7 {
@@ -295,7 +292,7 @@ mod tests {
                 if v == NOTHING {
                     continue;
                 }
-                let end = if v == AIR {
+                let end = if v == value::VOID {
                     ((z + 1) * s).min(top)
                 } else {
                     (z + 1) * s

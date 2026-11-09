@@ -335,9 +335,9 @@ fn ray_from_above_meets_ground() {
 /// dug lower half.
 #[test]
 fn dig_met_as_folded() {
-    use crate::domain::layer::object::store::AIR;
     use pxl_engine::answer::side;
     use pxl_spec::share::EIGHTHS;
+    use pxl_spec::value::AIR;
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let half = units(OBJECT_COARSEST + 1);
@@ -786,7 +786,7 @@ fn device_loss_drops_bounds() {
 /// generates on the base (pxl-content `generation::placement`).
 #[test]
 fn generated_decor_stays() {
-    use crate::domain::layer::object::store::AIR;
+    use pxl_spec::value::AIR;
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let near = |store: &Store| {
@@ -819,7 +819,7 @@ fn generated_decor_stays() {
 /// (pxl-engine `generation::DecorQuery::asset`, edited).
 #[test]
 fn generated_decor_edit_removes() {
-    use crate::domain::layer::object::store::AIR;
+    use pxl_spec::value::AIR;
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let empty = Store::default();

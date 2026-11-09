@@ -50,7 +50,7 @@ impl Instance {
         }
     }
 
-    /// The cube of the cell it stands in, X on the lap it was found on.
+    /// The cube of the cell it stands in.
     pub fn cell(&self) -> Aabb {
         match self.src {
             Source::Ground(cell) => cube(GROUND.leaf_cell_zoom(), cell),

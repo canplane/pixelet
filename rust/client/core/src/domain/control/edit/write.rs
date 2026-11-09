@@ -13,7 +13,7 @@ use crate::domain::preview::{Draft, RenderEdit};
 use crate::sys::sched::edge::request_world_tick;
 use pxl_engine::answer::PLACED_ASSET;
 use pxl_spec::asset::marker::{MARKER, MARKER_TEXT_CHARS};
-use pxl_spec::asset::{cube, AssetId};
+use pxl_spec::asset::AssetId;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom};
@@ -24,11 +24,12 @@ use xpute_kit::status::errno::Errno;
 
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::repository;
-use crate::domain::layer::object::store::{Entry, Write, AIR, VOID};
+use crate::domain::layer::object::store::{Entry, Write};
 use crate::domain::query::World;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::space::hierarchy::morton;
 use pxl_spec::space::layer::octant::Octant;
+use pxl_spec::value::{AIR, VOID};
 
 /// Whether AIR is written at `at`: the ground was carved there, or
 /// something placed there was taken back.
@@ -203,7 +204,7 @@ pub fn commit_draft() {
 /// Writes an AIR leaf, which means "nothing here, on purpose". It hides what
 /// the base holds there, which has no leaf of its own to delete.
 pub fn place_air(at: Octant) {
-    write_object_val(at, cube::object::air as u32);
+    write_object_val(at, AIR);
 }
 
 /// What erasing the entry at `at` writes: VOID where the base holds nothing
@@ -217,16 +218,12 @@ fn erase_val(world: World, at: Octant) -> u32 {
     }
 }
 
-/// Erases what is placed at `at` and leaves the cell empty; where nothing is
-/// placed, what stands there is the base's, and AIR hides it (`place_air`). Where the ground
+/// Erases what is placed at `at` and leaves the cell empty. Where the ground
 /// would fill the cell once the asset is gone, AIR is written, so an asset
 /// taken out of a hole leaves the hole. A generated decor that shared the
 /// asset's box comes back, because its erase is undone too.
 pub fn remove(at: Octant) {
     let world = World::now();
-    if world.entry_at(at).is_none() {
-        return place_air(at);
-    }
     let erased: Vec<[i32; 3]> = world
         .generated_over(&cube(at.zoom(), at.at()))
         .into_iter()

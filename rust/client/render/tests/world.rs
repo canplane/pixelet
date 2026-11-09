@@ -186,7 +186,7 @@ fn tell_way(w: World, (z, c): (Zoom, [i32; 3]), seen: &mut BTreeMap<[i32; 2], u3
     let s = 1 << (LEAF_CELL_ZOOM - z);
     let column = clip::cell(&w, Lookup::NONE, z, [c[0], c[1]]).1;
     let under = (c[2] + 1) * s <= clip::column_top(column);
-    let kind = if v == way::AIR {
+    let kind = if v == value::VOID {
         1
     } else if v == value::PIER {
         2

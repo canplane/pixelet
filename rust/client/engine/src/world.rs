@@ -12,12 +12,14 @@ use crate::answer::{
 };
 use crate::clipmap::{self, BrickSource, Lookup, Pool};
 use crate::ground;
-use crate::object::{self, Cut, Table, AIR, CELL, ROOT, SPLIT};
+use crate::object::{self, Cut, Table, CELL, ROOT, SPLIT};
 use crate::way;
-use pxl_spec::ground::{word, VOID};
+use pxl_spec::ground::word;
 use pxl_spec::share::{eighths, FULL};
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, UNIT_ZOOM};
 use pxl_spec::space::layer::area::Shard;
+use pxl_spec::value::AIR;
+use pxl_spec::value::VOID;
 use pxl_spec::way::NOTHING;
 
 /// What a node is handed by the node over it, each source's own part, so that a descent asks
