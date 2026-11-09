@@ -33,6 +33,8 @@ use crate::sys::io::request;
 use crate::sys::io::request::Event;
 use crate::sys::io::runtime;
 use crate::sys::io::text;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::sys::io::text_device;
 use crate::sys::machine::MACHINE;
 use crate::sys::sched::edge;
 use crate::sys::section;
@@ -139,7 +141,7 @@ fn on_runtime_attached(s: &mut State) {
 fn boot(b: BootInfo) {
     stop::install(runtime::abort, b.form.stop_hook);
     #[cfg(not(target_arch = "wasm32"))]
-    crate::sys::io::text_device::install(b.call);
+    text_device::install(b.call);
     if !machine::booted() {
         machine::boot(&MACHINE);
     }
