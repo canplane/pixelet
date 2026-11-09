@@ -34,7 +34,7 @@ const FRAME: Record<keyof typeof frame, string> = {
 const COVERAGE: Record<keyof typeof coverage, string> = {
   drawn: "drawn",
   drawn_from_floor: "drawn from the floor's tile",
-  unbuilt: "goal, mesh not built",
+  unbuilt: "goal, brick not yet filled",
   floor_only: "goal, only the floor's tile",
   no_tile: "goal, no tile on its line",
   tile: "a drawn piece's tile",
