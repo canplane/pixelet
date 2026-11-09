@@ -119,6 +119,16 @@ pub fn decor_zooms(on: bool) -> [u32; DECORS.len()] {
     zooms_by(|d| d.extent(catalog()))
 }
 
+/// Of `zooms`, the kinds the frame generates at the leaves' clip level, one
+/// bit a kind in `DECORS`' order.
+pub fn leaf_kinds(zooms: &[u32; DECORS.len()]) -> u32 {
+    let leaves = |z: u32| z >> (LEAF_CELL_ZOOM - FIRST_CELL_ZOOM) & 1;
+    zooms
+        .iter()
+        .enumerate()
+        .fold(0, |bits, (k, &z)| bits | leaves(z) << k)
+}
+
 /// `decor_zooms` with the decor setting on, with each kind's extent taken
 /// from `extent` instead of the catalog.
 fn zooms_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {

@@ -6,7 +6,7 @@
 //! wherever it is read. Where a decor stands, which way it faces and whether it
 //! generates at all depend on the base, what the world is without what is
 //! placed: its column's surface and the cells around it
-//! (`World::base_surface`). Only an edit in its box, asked of the world as
+//! (`World::column_surface`). Only an edit in its box, asked of the world as
 //! edited, takes it away (pxl-content `generation::placement`).
 
 use pxl_content::generation::{self, DecorQuery, Prop};
@@ -30,6 +30,7 @@ use crate::domain::layer::Answer;
 /// is placed (`lanes`).
 pub(super) struct DecorWorld<'a, 'w> {
     world: &'a World<'w>,
+    base: World<'w>,
     lanes: store::Table<'a>,
 }
 
@@ -37,14 +38,15 @@ impl<'a, 'w> DecorWorld<'a, 'w> {
     pub(super) fn new(world: &'a World<'w>) -> DecorWorld<'a, 'w> {
         DecorWorld {
             world,
+            base: world.base(),
             lanes: world.object.columns(),
         }
     }
 }
 
 /// The world's one query on the CPU. A column's surface comes with its line
-/// (`World::base_surface`), and each cell around the column is asked off
-/// that line (`World::base_about`), both of the base. A cell's
+/// (`World::column_surface`), and each cell around the column is asked off
+/// that line (`World::asset_about`), both of the base. A cell's
 /// edit is asked of the world as edited (`World::asset`).
 impl DecorQuery for DecorWorld<'_, '_> {
     type ColumnSurface = ColumnSurface<At>;
@@ -61,7 +63,7 @@ impl DecorQuery for DecorWorld<'_, '_> {
         cell_zoom: Zoom,
         g: [i32; 2],
     ) -> (ColumnSurface<At>, (i32, f32), bool) {
-        let (answer, f) = self.world.base_surface(cell_zoom, g);
+        let (answer, f) = self.base.column_surface(cell_zoom, g);
         match answer {
             Answer::Exact(Some(top)) => (f, top, true),
             _ => (f, (0, 0.0), false),
@@ -82,7 +84,7 @@ impl DecorQuery for DecorWorld<'_, '_> {
         let answer = if edited {
             self.world.asset((zoom, c))
         } else {
-            self.world.base_about(&f.line, zoom, c)
+            self.base.asset_about(&f.line, zoom, c)
         };
         answer.val().unwrap_or(u32::from(sentinel::void))
     }

@@ -63,7 +63,7 @@ fn place_val_is_redundant(world: World, at: &Q3, zoom: Zoom, cube: AssetId) -> b
     let entry = Octant::holding(zoom, at);
     // Only the resident finest leaf can tell what the ground is. Where no
     // such leaf is resident, the cube is written as asked.
-    world.base_at(&middle(entry)).exact() == Some(cube)
+    world.base().asset_of(&middle(entry)).exact() == Some(cube)
 }
 
 pub(super) fn middle(at: Octant) -> Q3 {
@@ -212,7 +212,7 @@ pub fn place_air(at: Octant) {
 /// leaf can tell, as in `place_val_is_redundant`; where no such leaf is
 /// resident, the cube is emptied with AIR.
 fn erase_val(world: World, at: Octant) -> u32 {
-    match world.base_at(&middle(at)).exact() {
+    match world.base().asset_of(&middle(at)).exact() {
         Some(VOID) => VOID,
         _ => AIR,
     }

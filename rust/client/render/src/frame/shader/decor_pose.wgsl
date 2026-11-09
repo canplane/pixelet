@@ -2,7 +2,7 @@
 
 // Generates the decor of each record of a listed pair, one thread a record: its footing, then
 // its pose (pxl-content `generation::placement`). Decor stands on the world with nothing
-// placed, and nothing placed stays nothing down a descent (`Inheritance::BASE`), so no line
+// placed, and nothing placed stays nothing down a descent, so no line
 // of the world is kept. A column's surface is read from the column (`surface`, which answers
 // as `support::column_surface` does), and only a column under ways is walked cell by cell. The
 // loop asks the world from one place (`world_cell`), as a GPU inlines a call at every place it

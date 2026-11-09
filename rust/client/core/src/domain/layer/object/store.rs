@@ -81,6 +81,13 @@ impl Entry {
 
 static OBJECT: Global<Store> = Global::new();
 
+static NOTHING_PLACED: Global<Store> = Global::new();
+
+/// The store with nothing placed.
+pub(in crate::domain::layer) fn nothing_placed() -> &'static Store {
+    NOTHING_PLACED.get(Store::default)
+}
+
 pub(in crate::domain::layer) fn object() -> &'static Store {
     object_mut()
 }

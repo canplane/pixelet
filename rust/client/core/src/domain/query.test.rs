@@ -613,25 +613,6 @@ fn height_nearest_floor() {
     );
 }
 
-/// A reading reports the columns its queries read, joined: a support reads
-/// its own cell, and a walk reads every cell it passes.
-#[test]
-fn reading_reports_columns() {
-    let _g = serial();
-    let (tile_cache, [x, y]) = flat_at_five();
-    let store = Store::default();
-    let read = change::Footprint::default();
-    let access = World::new(&tile_cache, &store).reading(&read);
-    let cell = units(GROUND.leaf_cell_zoom());
-    let at = [x + 0.5 * cell, y + 0.5 * cell];
-    let c = at.map(|v| libm::floor(v / cell) * cell);
-    access.surface_support(&point(at[0], at[1]));
-    assert_eq!(read.get(), Some([c, c.map(|v| v + cell)]));
-    let from = world::point(at[0], at[1], over(5.0));
-    access.step_slide(&from, &world::point(at[0] + 3.0 * cell, at[1], 0.0), true);
-    assert_eq!(read.get(), Some([c, [c[0] + 4.0 * cell, c[1] + cell]]));
-}
-
 #[test]
 fn box_placed_matches_store() {
     let _g = serial();
@@ -886,9 +867,7 @@ fn generated_decor_edit_removes() {
 /// (`World::first_seen`).
 #[test]
 fn generated_decor_struck_where_generated() {
-    use pxl_engine::clipmap::FIRST_CELL_ZOOM;
     use pxl_spec::asset::decor::DECORS;
-    use pxl_spec::space::coord::zoom::LEAF_CELL_ZOOM;
     let _g = serial();
     let (tile_cache, [x, y]) = flat_at_five();
     let empty = Store::default();
@@ -918,21 +897,21 @@ fn generated_decor_struck_where_generated() {
         dir: [0.0, 0.0, -1.0],
         t_max: 20.0,
     };
-    let met = |zooms: [u32; DECORS.len()]| {
+    let met = |kinds: u32| {
         world
-            .first_seen(&ray, finest(), &zooms)
+            .first_seen(&ray, finest(), kinds)
             .exact()
             .flatten()
             .expect("the ground under it")
             .kind
     };
-    let leaves = [1 << (LEAF_CELL_ZOOM - FIRST_CELL_ZOOM); DECORS.len()];
+    let leaves = (1 << DECORS.len()) - 1;
     assert!(
         matches!(met(leaves), HitKind::Decor(i) if i.generated_in() == tree.generated_in()),
         "{:?}",
         met(leaves)
     );
-    let none = [0; DECORS.len()];
+    let none = 0;
     assert!(!matches!(met(none), HitKind::Decor(_)), "{:?}", met(none));
 }
 

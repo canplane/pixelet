@@ -10,7 +10,6 @@
 use super::world::World;
 use crate::domain::layer::object::store;
 use crate::domain::layer::Base as _;
-use core::cell::Cell;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::brick;
 use pxl_spec::space::coord::aabb::Aabb;
@@ -88,50 +87,51 @@ fn touched(xy: [[f64; 2]; 2], layer: &[Quadrant], counted: impl Fn(&Quadrant) ->
     regions.any(|r| nearest_box(&r, about).shares(columns))
 }
 
-/// The columns a reader's queries read, as one box with its corners in units
-/// and X on the lap of the first column read. A ray reads the cells it
-/// passes at the coarsest zoom it is answered at; a surface or a column
-/// surface reads its cell (`World::reading`).
-#[derive(Default)]
-pub struct Footprint(Cell<Option<[[f64; 2]; 2]>>);
+/// The columns the queries read, as one box with its corners in units and X
+/// on the lap of the first column read. A ray reads the cells it passes at
+/// the coarsest zoom it is answered at; a cell, a surface or a column surface
+/// reads its cell. Every query reports here, and a memo's ask takes what it
+/// read from here (`Memo::of`).
+#[derive(Clone, Copy, Default)]
+struct Footprint(Option<[[f64; 2]; 2]>);
 
-impl Footprint {
-    /// Adds the cells of `zoom` that the box from `a` to `b` lies in.
-    pub(super) fn read(&self, a: [f64; 2], b: [f64; 2], zoom: Zoom) {
-        let side = units(zoom);
-        let [lo, hi] = [
-            [0, 1].map(|k| a[k].min(b[k])),
-            [0, 1].map(|k| a[k].max(b[k])),
-        ];
-        self.join([
-            lo.map(|v| libm::floor(v / side) * side),
-            hi.map(|v| (libm::floor(v / side) + 1.0) * side),
-        ]);
-    }
+static FOOTPRINT: Global<Footprint> = Global::new();
 
-    /// Adds the columns `cells`, moved onto the lap of the first column read.
-    pub(super) fn join(&self, cells: [[f64; 2]; 2]) {
-        let joined = match self.0.get() {
-            None => cells,
-            Some(c) => {
-                let dx = nearest(cells[0][0], c[0][0]) - cells[0][0];
-                [
-                    [c[0][0].min(cells[0][0] + dx), c[0][1].min(cells[0][1])],
-                    [c[1][0].max(cells[1][0] + dx), c[1][1].max(cells[1][1])],
-                ]
-            }
-        };
-        self.0.set(Some(joined));
-    }
+fn footprint() -> &'static mut Footprint {
+    FOOTPRINT.get(Footprint::default)
+}
 
-    /// The box of the columns read. None when nothing was read.
-    pub fn get(&self) -> Option<[[f64; 2]; 2]> {
-        self.0.get()
-    }
+/// Reports the cells of `zoom` that the box from `a` to `b` lies in as read.
+pub(super) fn read(a: [f64; 2], b: [f64; 2], zoom: Zoom) {
+    let side = units(zoom);
+    let [lo, hi] = [
+        [0, 1].map(|k| a[k].min(b[k])),
+        [0, 1].map(|k| a[k].max(b[k])),
+    ];
+    join([
+        lo.map(|v| libm::floor(v / side) * side),
+        hi.map(|v| (libm::floor(v / side) + 1.0) * side),
+    ]);
+}
+
+/// Reports the columns `cells` as read, moved onto the lap of the first
+/// column read.
+fn join(cells: [[f64; 2]; 2]) {
+    let f = footprint();
+    f.0 = Some(match f.0 {
+        None => cells,
+        Some(c) => {
+            let dx = nearest(cells[0][0], c[0][0]) - cells[0][0];
+            [
+                [c[0][0].min(cells[0][0] + dx), c[0][1].min(cells[0][1])],
+                [c[1][0].max(cells[1][0] + dx), c[1][1].max(cells[1][1])],
+            ]
+        }
+    });
 }
 
 /// An answer a step got from the world, kept with the key it was asked for
-/// and the columns it read (`World::reading`), their corners in units. It is
+/// and the columns it read (`Footprint`), their corners in units. It is
 /// asked again only when the key changes, or when a change to the ground or
 /// the objects touched those columns (`forget_touched`). An answer that read
 /// nothing is not kept, since no change would ever tell it to go.
@@ -178,20 +178,21 @@ impl<K: PartialEq, A: Copy> Memo<K, A> {
     }
 
     /// The answer for `of`: the kept one, or else what `ask` gets from
-    /// `world`, whose queries report what it read. What it read is reported
-    /// to `world` as well, so a memo kept inside another memo's ask lets that
+    /// `world`, with the columns its queries read. What it read is reported
+    /// as read here too, so a memo kept inside another memo's ask lets that
     /// one go with it.
     pub fn of(&mut self, world: World<'_>, of: K, ask: impl FnOnce(World<'_>) -> A) -> A {
         if let Some((k, columns, a)) = &self.0 {
             if *k == of {
-                world.read_columns(*columns);
+                join(*columns);
                 return *a;
             }
         }
-        let read = Footprint::default();
-        let a = ask(world.reading(&read));
-        self.0 = read.get().map(|columns| {
-            world.read_columns(columns);
+        let outer = core::mem::take(footprint());
+        let a = ask(world);
+        let read = core::mem::replace(footprint(), outer);
+        self.0 = read.0.map(|columns| {
+            join(columns);
             (of, columns, a)
         });
         a

@@ -20,7 +20,7 @@ use crate::domain::query::{finest, Hit, HitKind, Ray, World};
 use crate::domain::setting::store::settings;
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::frame::pose::{eye, ray_of};
-use crate::domain::view::lens::decor_zooms;
+use crate::domain::view::lens::{decor_zooms, leaf_kinds};
 use pxl_spec::space::coord::aabb::Aabb;
 
 // Larger than the error of a round trip through the 1/256 grid (±1/512 u),
@@ -180,7 +180,7 @@ pub fn ray_pick(origin: V3, dir: V3) -> Option<Hit> {
     // Only an exact answer counts. A coarser tile's answer is a summary, not
     // what is held.
     World::now()
-        .first_seen(&ray, finest(), &decor_zooms(settings().decor))
+        .first_seen(&ray, finest(), leaf_kinds(&decor_zooms(settings().decor)))
         .exact()
         .flatten()
 }

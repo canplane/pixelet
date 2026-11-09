@@ -59,15 +59,6 @@ impl Inheritance {
         }
     }
 
-    /// `of` with nothing placed, for any node: the node as the world holds it with nothing
-    /// placed, the ground's alone, on which a content's decor generates. Nothing placed stays
-    /// nothing down a descent (`object::child`).
-    pub const BASE: Inheritance = Inheritance {
-        object: object::NodeSlot::NOTHING,
-        shard: Shard::UNKNOWN,
-        ground: Lookup::NONE,
-    };
-
     /// What its child `c` at `zoom` is handed: each source stepped one zoom down, what is placed
     /// in `columns`.
     pub fn child(&self, columns: &impl Table, (zoom, c): (Zoom, [i32; 3])) -> Inheritance {

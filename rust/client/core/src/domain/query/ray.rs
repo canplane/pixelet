@@ -6,6 +6,7 @@
 //! parent found (`Walker`). Decor, which only the CPU answers, rides on the
 //! same descent.
 
+use super::change;
 use super::decor::DecorRay;
 use super::node::{coarsest, At};
 use super::world::World;
@@ -18,7 +19,6 @@ use pxl_engine::cast::{self, Detail, End, Keep, Over, Query, Spacing, Trace, DEP
 use pxl_engine::object;
 use pxl_engine::support;
 use pxl_engine::support::{ColumnSurface, Line};
-use pxl_spec::asset::decor::DECORS;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::grid;
@@ -121,8 +121,6 @@ pub struct Hit {
 /// answered.
 pub(super) struct Walker<'w, 'a> {
     world: &'w World<'a>,
-    /// Whether the descent reads the base alone.
-    base: bool,
     lack: Option<Quadrant>,
     answered: bool,
     /// The decor struck along the ray, when the walk strikes decor at all.
@@ -172,10 +170,7 @@ impl<'a> Query for Walker<'_, 'a> {
     type At = At;
 
     fn root(&mut self, node: [i32; 3]) -> At {
-        match self.base {
-            true => At::base((0, node)),
-            false => self.world.start((0, node)),
-        }
+        self.world.start((0, node))
     }
 
     /// The child is the one named by its place in the tree's cut
@@ -282,20 +277,15 @@ impl<'a> World<'a> {
     }
 
     /// The first thing a viewer sees along `ray`: the first cell, or the
-    /// decor struck nearer, as the frame draws it (`DecorRay::new`). Decor
+    /// decor struck nearer, as the frame draws it: `kinds` are those it generates at the leaves (`lens::leaf_kinds`). Decor
     /// is struck at the leaf cells the ray passes.
-    pub fn first_seen(
-        &self,
-        ray: &Ray,
-        detail: Detail,
-        zooms: &[u32; DECORS.len()],
-    ) -> Answer<Option<Hit>> {
+    pub fn first_seen(&self, ray: &Ray, detail: Detail, kinds: u32) -> Answer<Option<Hit>> {
         let mut path = Path::default();
         let (met, decor_ray) = self.along(
             ray,
             detail,
             Until::Opaque,
-            DecorRay::new(ray, zooms),
+            DecorRay::new(ray, kinds),
             &mut path,
             &mut None,
         );
@@ -330,7 +320,6 @@ impl<'a> World<'a> {
     ) -> (Answer<Option<Hit>>, Option<DecorRay>) {
         let mut walker = Walker {
             world: self,
-            base: false,
             lack: None,
             answered: false,
             decor_ray: decor_ray.map(|s| (ray, s)),
@@ -338,7 +327,7 @@ impl<'a> World<'a> {
         };
         let o = ray.origin;
         let end = ray.at(ray.t_max);
-        self.read([o[0], o[1]], [end[0], end[1]], detail.range[0]);
+        change::read([o[0], o[1]], [end[0], end[1]], detail.range[0]);
         let from = cast::Ray::new(ray.dir.map(|v| v as f32), ray.t_max as f32);
         let q = origin(o[0], o[1], o[2]);
         let on = descent
@@ -370,37 +359,19 @@ impl<'a> World<'a> {
     }
 
     /// The column surface down column `g` at `cell_zoom` (pxl-engine
-    /// `support::column_surface`). It is the top of the cell
+    /// `support::column_surface`). The first value is the top of the cell
     /// met, as drawn, with what the world lacked on the way, or None where
-    /// the column meets nothing opaque.
+    /// the column meets nothing opaque. The second is the column surface
+    /// itself, off whose line the cells around it are asked (`asset_about`).
     pub(super) fn column_surface(
         &self,
         cell_zoom: Zoom,
         g: [i32; 2],
-    ) -> Answer<Option<(i32, f32)>> {
-        self.surface_of_column(self.walker(), cell_zoom, g).0
-    }
-
-    /// `column_surface` of the base, what the world is without what is
-    /// placed, with the column surface itself, off whose line the cells
-    /// around it are asked (`base_about`). Decor is generated on it.
-    pub(super) fn base_surface(
-        &self,
-        cell_zoom: Zoom,
-        g: [i32; 2],
     ) -> (Answer<Option<(i32, f32)>>, ColumnSurface<At>) {
-        self.surface_of_column(self.base_walker(), cell_zoom, g)
-    }
-
-    fn surface_of_column(
-        &self,
-        mut walker: Walker<'_, 'a>,
-        cell_zoom: Zoom,
-        g: [i32; 2],
-    ) -> (Answer<Option<(i32, f32)>>, ColumnSurface<At>) {
+        let mut walker = self.walker();
         let side = units(cell_zoom);
         let middle = g.map(|v| (f64::from(v) + 0.5) * side);
-        self.read(middle, middle, cell_zoom);
+        change::read(middle, middle, cell_zoom);
         let f = support::column_surface(&mut walker, cell_zoom, g);
         let met = (f.end == End::Hit).then_some(f.top);
         let answer = match (met, walker.lack, walker.answered) {
@@ -412,12 +383,12 @@ impl<'a> World<'a> {
         (answer, f)
     }
 
-    /// What the base has in the cell `c` at `zoom`, asked off the line `l`
+    /// What is in the cell `c` at `zoom`, asked off the line `l`
     /// (pxl-engine `support::asset`). The descent starts from the deepest node
     /// on the line that holds the cell, never again from the top. Where the
     /// world lacks the cell, the answer is nothing with the missing tile.
-    pub(super) fn base_about(&self, l: &Line<At>, zoom: Zoom, c: [i32; 3]) -> Answer<u32> {
-        let mut walker = self.base_walker();
+    pub(super) fn asset_about(&self, l: &Line<At>, zoom: Zoom, c: [i32; 3]) -> Answer<u32> {
+        let mut walker = self.walker();
         let val = support::asset(&mut walker, l, zoom, c);
         match walker.lack {
             None => Answer::Exact(val),
@@ -425,17 +396,9 @@ impl<'a> World<'a> {
         }
     }
 
-    fn base_walker(&self) -> Walker<'_, 'a> {
-        Walker {
-            base: true,
-            ..self.walker()
-        }
-    }
-
     fn walker(&self) -> Walker<'_, 'a> {
         Walker {
             world: self,
-            base: false,
             lack: None,
             answered: false,
             decor_ray: None,

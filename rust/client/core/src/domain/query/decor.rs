@@ -17,9 +17,7 @@ use crate::domain::layer::object::asset::Asset;
 use pxl_spec::asset::decor::{Decor, DECORS};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::zoom::{
-    cube, idx_of, units, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, SHARD_ZOOM,
-};
+use pxl_spec::space::coord::zoom::{cube, idx_of, units, Zoom, LEAF_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
 
 use super::ray::Ray;
@@ -32,7 +30,7 @@ use crate::domain::layer::object::store::Entry;
 use crate::domain::layer::tile_cache::Line;
 use crate::domain::query::decor_box::{box_extent, intersect};
 use pxl_engine::cast;
-use pxl_engine::clipmap::{Lookup, FIRST_CELL_ZOOM};
+use pxl_engine::clipmap::Lookup;
 use pxl_engine::object::{self, NodeSlot};
 use pxl_spec::space::layer::area;
 use pxl_spec::space::layer::area::Shard;
@@ -71,25 +69,20 @@ pub(super) struct DecorRay {
 
 impl DecorRay {
     /// The decor tests of a ray that sees decor as the frame draws it:
-    /// everything placed and the kinds `zooms`, the zooms the frame hands
-    /// the GPU (domain/view/lens.rs `decor_zooms`), generate at the leaves.
+    /// everything placed and, of what the ground generates, `kinds`.
     /// None where the leaves' tiles are not drawn.
-    pub(super) fn new(ray: &Ray, zooms: &[u32; DECORS.len()]) -> Option<DecorRay> {
+    pub(super) fn new(ray: &Ray, kinds: u32) -> Option<DecorRay> {
         // Decor is struck out to where the view draws the leaves' tiles.
         let dist = match GROUND.z_at(0.0) {
             LEAF_ZOOM => draw_dist(GROUND, LEAF_ZOOM).min(ray.t_max),
             _ => return None,
         };
-        let leaves = |z: u32| z >> (LEAF_CELL_ZOOM - FIRST_CELL_ZOOM) & 1;
         let extent = box_extent();
         let around = extent.ceil() as i32;
         let (za, zb) = (ray.at(0.0)[2], ray.at(dist)[2]);
         let band = [za.min(zb) - extent, za.max(zb) + extent];
         Some(DecorRay {
-            kinds: zooms
-                .iter()
-                .enumerate()
-                .fold(0, |bits, (k, &z)| bits | leaves(z) << k),
+            kinds,
             box_extent: extent,
             around,
             draw_dist: dist,
@@ -297,7 +290,7 @@ impl<'a> World<'a> {
     /// Hands what the ground generates on the leaf `cell`, decor by decor, to
     /// `each` until `each` returns true, and returns whether it did. Only the
     /// kinds whose bits are set in `kinds` are asked. Each instance stands on
-    /// its column's surface in the base (`World::base_surface`). With `boxed`,
+    /// its column's surface in the base (`World::column_surface`). With `boxed`,
     /// `each` is also told whether the decor generates there as the frame draws
     /// it (`generated_at`); without `boxed` that is true. Nothing is handed
     /// where the world does not hold the column.

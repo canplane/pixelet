@@ -7,7 +7,6 @@
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::Node;
 
-use super::change::Footprint;
 use crate::domain::layer::object::store;
 use crate::domain::layer::object::store::{Store, Walk};
 use crate::domain::layer::tile_cache::{Path, TileCache};
@@ -20,8 +19,6 @@ use pxl_spec::space::coord::aabb::Aabb;
 pub struct World<'a> {
     pub(super) terrain: &'a TileCache<TerrainTile>,
     pub(super) object: &'a Store,
-    /// Where the queries report what they read, if anywhere.
-    pub(super) reading: Option<&'a Footprint>,
 }
 
 impl World<'static> {
@@ -34,37 +31,16 @@ impl World<'static> {
 }
 
 impl<'a> World<'a> {
-    pub fn new(terrain: &'a TileCache<TerrainTile>, object: &'a Store) -> World<'a> {
+    /// The base: this world with nothing placed in it.
+    pub fn base(self) -> World<'a> {
         World {
-            terrain,
-            object,
-            reading: None,
-        }
-    }
-
-    /// This world with the columns its queries read reported into
-    /// `footprint`.
-    pub fn reading(self, footprint: &'a Footprint) -> World<'a> {
-        World {
-            reading: Some(footprint),
+            object: store::nothing_placed(),
             ..self
         }
     }
 
-    /// Reports the cells of `zoom` that the box from `a` to `b` lies in
-    /// (`reading`).
-    pub(super) fn read(&self, a: [f64; 2], b: [f64; 2], zoom: Zoom) {
-        if let Some(c) = self.reading {
-            c.read(a, b, zoom);
-        }
-    }
-
-    /// Reports `columns` as read (`reading`). A kept answer reports what it
-    /// read this way.
-    pub(super) fn read_columns(&self, columns: [[f64; 2]; 2]) {
-        if let Some(c) = self.reading {
-            c.join(columns);
-        }
+    pub fn new(terrain: &'a TileCache<TerrainTile>, object: &'a Store) -> World<'a> {
+        World { terrain, object }
     }
 }
 

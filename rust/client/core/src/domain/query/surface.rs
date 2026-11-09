@@ -17,6 +17,7 @@ use pxl_spec::space::coord::world::SEA_LEVEL;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::area::Shard;
 
+use super::change;
 use super::world::World;
 use crate::domain::layer::terrain::clipmap::CpuClipmap;
 use crate::domain::layer::Answer;
@@ -42,7 +43,7 @@ impl World<'_> {
         }
         let side = units(cell_zoom);
         let middle = c.map(|v| (f64::from(v) + 0.5) * side);
-        self.read(middle, middle, cell_zoom);
+        change::read(middle, middle, cell_zoom);
         let line = self.terrain.cursor((cell_zoom, c), cell_zoom);
         self.terrain
             .column(&line, Lookup::NONE, (cell_zoom, c))
