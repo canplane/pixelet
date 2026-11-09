@@ -70,3 +70,11 @@ test("a packet under the cap is written, whatever the cap", () => {
     16 + 8 + 1104,
   );
 });
+
+test("a packet past the first buffer is written with no config", () => {
+  const t = new TreeView().u8_array(new Uint8Array(5000) as U8Array);
+  assert.deepStrictEqual(
+    new TreeEncoder().encode(t),
+    new TreeEncoder().encode(t, { init_cap: 1 << 13 }),
+  );
+});

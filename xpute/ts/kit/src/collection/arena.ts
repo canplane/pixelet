@@ -1,10 +1,10 @@
 // @xpute/kit/collection/arena.ts
 
-// These are pools that hand out slots in order and take them back by rewinding
-// to an earlier length. `Arena` holds objects its factory constructs once, and
-// reuses them: `alloc` hands one out in whatever state its last user left it,
-// and the caller must reinitialize it. `Vector` does the same over a typed
-// array of numbers.
+/**
+ * Arena / Vector scratch allocators (bump + mark/rewind)
+ * - Arena: reusable object slots
+ * - Vector: reusable typed-array scratch
+ */
 
 import type { u32 } from "../abi/word.ts";
 import type {
@@ -20,6 +20,20 @@ export interface ArenaConfig {
   max_cap: u32;
 }
 
+// ============ Arena ============
+
+/**
+ * Arena allocator with bump allocation and mark/rewind reset.
+ *
+ * Intended for transient objects to reduce GC churn.
+ * - alloc: bump cursor (amortized O(1); growth constructs the new slots)
+ * - truncate: rewind by mark/scope (bulk reset)
+ *
+ * Notes:
+ * - objects are preconstructed and reused
+ * - alloc() does not initialize object fields
+ * - caller owns object reinitialization before use
+ */
 export class Arena<T extends object> {
   readonly mem: T[] = [];
 
@@ -50,19 +64,21 @@ export class Arena<T extends object> {
     return this.mem[idx];
   }
 
+  /** Allocate one object from the arena. */
   alloc(): T {
     if (this._len >= this._cap) this._grow(this._len + 1);
 
     return this.mem[this._len++];
   }
 
+  /** Grow now so that the next cnt allocations do not; throws past `max_cap`. */
   reserve(cnt: u32): void {
     this._grow(this._len + cnt);
   }
 
   /**
-   * Rewinds to `new_len` slots. A `new_len` above the current length is a
-   * bug, not a way to grow.
+   * Rewind the bump cursor to a previous position.
+   * A `new_len` above the current length is a bug, not a way to grow.
    */
   truncate(new_len: u32): void {
     if (new_len > this._len) {
@@ -78,16 +94,18 @@ export class Arena<T extends object> {
     if (req > this.max_cap) throw new MarshalError(Errno.EOVERFLOW);
     const new_cap = Math.min(Math.max(this._cap * 2, req), this.max_cap);
 
-    this.mem.length = new_cap;
+    this.mem.length = new_cap; // V8 Array pre-allocation hint
     for (let i = this._cap; i < new_cap; i++) this.mem[i] = this._factory();
     this._cap = new_cap;
   }
 
+  /** Scope guard that rewinds to the current mark on dispose. */
   get scope(): ArenaGuard<T> {
     return new ArenaGuard(this);
   }
 }
 
+/** Scope guard that rewinds an arena to its saved mark on dispose. */
 class ArenaGuard<T extends object> implements Disposable {
   private readonly _mark: u32;
 
@@ -103,6 +121,21 @@ class ArenaGuard<T extends object> implements Disposable {
   }
 }
 
+// ============ Vector ============
+
+/**
+ * Contiguous typed scratch store with bump write and mark/rewind control.
+ *
+ * Intended for transient primitive data to reduce GC churn.
+ * - push: append one element (amortized O(1))
+ * - set : random write, at most one past the current len
+ * - truncate: rewind by mark/scope (bulk reset)
+ *
+ * Notes:
+ * - this is a scratch allocator, not a general container
+ * - reserve(cnt) means additional capacity from the current len
+ * - logical length is tracked separately from typed-array capacity
+ */
 export class Vector<T extends AnyTypedArray> {
   mem: T;
 
@@ -144,6 +177,7 @@ export class Vector<T extends AnyTypedArray> {
     else this.mem[idx] = v;
   }
 
+  /** Push one primitive value into scratch. Returns the written index. */
   push(v: AnyElementOf<T>): u32 {
     if (this._len >= this._cap) this._grow(this._len + 1);
 
@@ -152,21 +186,29 @@ export class Vector<T extends AnyTypedArray> {
     return i;
   }
 
+  /** Grow now so that the next cnt pushes do not; throws past `max_cap`. */
   reserve(cnt: u32): void {
     this._grow(this._len + cnt);
   }
 
   /**
-   * Rewinds to `new_len` elements. A `new_len` above the current length is a
-   * bug, not a way to grow.
+   * Rewind the bump cursor to a previous position.
+   * A `new_len` above the current length is a bug, not a way to grow.
    */
   truncate(new_len: u32): void {
     if (new_len > this._len) throw new InvariantError(Errno.EINVAL);
     this._len = new_len;
   }
 
-  // The capacity doubles but stops at `max_cap`, so a request is refused
-  // only when it does not fit under `max_cap`.
+  /**
+   * Grow the backing store and copy existing contents.
+   *
+   * Note:
+   * - this is the only path that reallocates the backing store
+   * - if this triggers frequently, increase init_cap
+   * - the capacity doubles but stops at `max_cap`, so a request is refused
+   *   only when it does not fit under `max_cap`
+   */
   private _grow(req: u32): void {
     if (req <= this._cap) return;
     if (req > this.max_cap) throw new MarshalError(Errno.EOVERFLOW);
@@ -181,6 +223,7 @@ export class Vector<T extends AnyTypedArray> {
     this._cap = new_cap;
   }
 
+  /** Scope guard that rewinds to the current mark on dispose. */
   get scope(): VectorGuard<T> {
     return new VectorGuard(this);
   }

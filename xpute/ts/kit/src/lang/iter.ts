@@ -1,6 +1,7 @@
 // @xpute/kit/lang/iter.ts
 
 import type { u32 } from "../abi/word.ts";
+
 export function* dedupe<T>(it: Iterable<T>): IterableIterator<T> {
   const seen = new Set<T>();
   for (const e of it) {

@@ -1,9 +1,26 @@
 // @xpute/kit/collection/heap.ts
-// These are binary min-heaps and max-heaps over an array the caller owns. They
-// check nothing; a key that compares with nothing, as a NaN does, breaks the
-// heap's order.
 
 import type { primitive, u32 } from "../abi/word.ts";
+
+// heap primitives over an external array (0-based).
+//
+// Element:
+//   - key: primitive (priority key)
+//   - val: payload
+//
+// Indexing (0-based):
+//   parent(i) = (i - 1) >> 1
+//   left(i)   = (i << 1) + 1
+//   right(i)  = left(i) + 1
+//
+// Semantics:
+//   - MinHeap: smaller key = higher priority (top is minimum key)
+//   - MaxHeap: larger  key = higher priority (top is maximum key)
+//
+// Notes:
+// - heapify(a, root, sz) assumes both child subtrees are already heaps.
+// - build() is O(n) bottom-up heapify.
+// - No defensive checks (caller upholds preconditions; keys are totally ordered).
 
 export interface Element<K extends primitive, T> {
   key: K;
@@ -13,6 +30,7 @@ export interface Element<K extends primitive, T> {
 export class MinHeap<K extends primitive, T> {
   readonly a: Element<K, T>[];
 
+  // external storage (DOD-friendly): we operate on caller-owned array.
   constructor(a: Element<K, T>[]) {
     this.a = a;
   }
@@ -30,8 +48,9 @@ export class MinHeap<K extends primitive, T> {
   }
 
   /**
-   * Sifts the element at `root` down within the first `sz` elements. Both
-   * subtrees of `root` must already be heaps.
+   * heapify(a, root, sz)
+   * - restore MIN-heap property of the subtree at `root`, within a[0..sz)
+   * - assumes child subtrees already satisfy heap property.
    */
   static heapify<K extends primitive, T>(
     a: Element<K, T>[],
@@ -56,6 +75,10 @@ export class MinHeap<K extends primitive, T> {
     a[i] = e;
   }
 
+  /**
+   * build(a)
+   * - bottom-up heapify, O(n)
+   */
   static build<K extends primitive, T>(a: Element<K, T>[]): void {
     for (let i = (a.length >> 1) - 1; i >= 0; i--) {
       MinHeap.heapify(a, i, a.length);
@@ -66,6 +89,10 @@ export class MinHeap<K extends primitive, T> {
     MinHeap.build(this.a);
   }
 
+  /**
+   * push(e)
+   * - hole sift-up (MIN)
+   */
   push(e: Element<K, T>): void {
     let i = this.a.length;
     this.a.push(e);
@@ -80,6 +107,10 @@ export class MinHeap<K extends primitive, T> {
     this.a[i] = e;
   }
 
+  /**
+   * pop() -> Element | undefined
+   * - removes and returns root (minimum key)
+   */
   pop(): Element<K, T> | undefined {
     const n = this.a.length;
     if (n === 0) return undefined;
@@ -96,8 +127,11 @@ export class MinHeap<K extends primitive, T> {
     return out;
   }
 
-  /** Replaces the top element and restores the order. The heap must not be
-   * empty. */
+  /**
+   * replace_root(e)
+   * - overwrite root and restore heap property
+   * - requires non-empty heap
+   */
   replace_root(e: Element<K, T>): void {
     this.a[0] = e;
     MinHeap.heapify(this.a, 0, this.a.length);
@@ -124,8 +158,9 @@ export class MaxHeap<K extends primitive, T> {
   }
 
   /**
-   * Sifts the element at `root` down within the first `sz` elements. Both
-   * subtrees of `root` must already be heaps.
+   * heapify(a, root, sz)
+   * - restore MAX-heap property of the subtree at `root`, within a[0..sz)
+   * - assumes child subtrees already satisfy heap property.
    */
   static heapify<K extends primitive, T>(
     a: Element<K, T>[],
@@ -160,6 +195,10 @@ export class MaxHeap<K extends primitive, T> {
     MaxHeap.build(this.a);
   }
 
+  /**
+   * push(e)
+   * - hole sift-up (MAX)
+   */
   push(e: Element<K, T>): void {
     let i = this.a.length;
     this.a.push(e);
@@ -174,6 +213,10 @@ export class MaxHeap<K extends primitive, T> {
     this.a[i] = e;
   }
 
+  /**
+   * pop() -> Element | undefined
+   * - removes and returns root (maximum key)
+   */
   pop(): Element<K, T> | undefined {
     const n = this.a.length;
     if (n === 0) return undefined;
@@ -190,15 +233,26 @@ export class MaxHeap<K extends primitive, T> {
     return out;
   }
 
-  /** Replaces the top element and restores the order. The heap must not be
-   * empty. */
+  /**
+   * replace_root(e)
+   * - overwrite root and restore heap property
+   * - requires non-empty heap
+   */
   replace_root(e: Element<K, T>): void {
     this.a[0] = e;
     MaxHeap.heapify(this.a, 0, this.a.length);
   }
 }
 
-/** Sorts by key, ascending and in place. The sort is not stable. */
+/**
+ * heapsort(a)
+ * - unstable, in-place, O(n log n)
+ * - sorts ASC by key using MAX-heap (classic: pop max to the end)
+ *
+ * This mirrors the classic C heapsort structure:
+ *   build (bottom-up heapify)
+ *   for end=n-1..1: swap(a[0], a[end]); heapify(a, 0, end)
+ */
 export function heapsort<K extends primitive, T>(a: Element<K, T>[]): void {
   const n = a.length;
   if (n <= 1) return;

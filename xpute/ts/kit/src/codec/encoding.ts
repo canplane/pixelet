@@ -1,16 +1,30 @@
 // @xpute/kit/codec/encoding.ts
 
+/**
+ * Encoding utilities
+ * - UTF-8
+ * - Base64url (URL-safe, no padding)
+ * - UUID v4
+ * - Hex
+ */
+
 import type { ByteArray } from "@xpute/kit/abi/array.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
 
+// ============ UTF-8 ============
+
 export const te = new TextEncoder();
 export const td = new TextDecoder();
+
+// ============ Base64url ============
 
 export type Base64Url = string;
 type Base64 = string;
 
 export function is_b64url(s: string): boolean {
+  // base64url charset only (no '=')
+  // NOTE: keep ASCII-only
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i);
     const ok =
@@ -31,10 +45,16 @@ export function ct_eq(a: ByteArray, b: ByteArray): boolean {
   return v === 0;
 }
 
+/**
+ * Convert bytes to base64url
+ * No padding, URL-safe
+ */
 export function bytes_to_b64url(bytes: ByteArray): Base64Url {
+  // Uint8Array -> binary string (chunked; avoids Array.from/join blowup)
+  // NOTE: btoa expects Latin1 string where each charCode is 0..255.
   let bin_str = "";
   const n = bytes.byteLength;
-  const CHUNK = 0x8000;
+  const CHUNK = 0x8000; // 32KB-ish; safe for apply arg limits
   for (let i = 0; i < n; i += CHUNK) {
     const end = Math.min(i + CHUNK, n);
     const sub = bytes.subarray(i, end);
@@ -43,12 +63,18 @@ export function bytes_to_b64url(bytes: ByteArray): Base64Url {
 
   const b64: Base64 = btoa(bin_str);
 
+  // base64 → base64url
   return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
+/**
+ * Convert base64url to bytes
+ */
 export function b64url_to_bytes(b64url: Base64Url): ByteArray {
+  // base64url → base64
   let b64: Base64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
 
+  // padding 복원
   while (b64.length % 4) {
     b64 += "=";
   }
@@ -61,9 +87,9 @@ export function b64url_to_bytes(b64url: Base64Url): ByteArray {
 }
 
 export function is_pid_b64url_16(pid: unknown, pid_bin: ByteArray): boolean {
+  // strict: pid must be a base64url string encoding exactly 16 bytes, no padding.
   if (typeof pid !== "string") return false;
-  // 16 bytes take 22 characters in unpadded base64url.
-  if (pid.length !== 22) return false;
+  if (pid.length !== 22) return false; // 16 bytes => 22 chars (unpadded base64url)
   if (!is_b64url(pid)) return false;
   try {
     const b = b64url_to_bytes(pid);
@@ -73,8 +99,13 @@ export function is_pid_b64url_16(pid: unknown, pid_bin: ByteArray): boolean {
   }
 }
 
-export type Uuid = ByteArray;
+// ============ UUID v4 ============
 
+export type Uuid = ByteArray; // 16 bytes
+
+/**
+ * Generate UUID v4 (random)
+ */
 export function generate_uuid(): Uuid {
   const bytes: Uuid = new Uint8Array(16);
   crypto.getRandomValues(bytes);
@@ -85,6 +116,9 @@ export function generate_uuid(): Uuid {
   return bytes;
 }
 
+/**
+ * UUID to base64url (22 chars)
+ */
 export function uuid_to_b64url(uuid: Uuid): Base64Url {
   if (uuid.length !== 16) {
     throw new MarshalError(Errno.EINVAL);
@@ -92,6 +126,9 @@ export function uuid_to_b64url(uuid: Uuid): Base64Url {
   return bytes_to_b64url(uuid);
 }
 
+/**
+ * Base64url to UUID
+ */
 export function b64url_to_uuid(b64url: Base64Url): Uuid {
   const bytes: Uuid = b64url_to_bytes(b64url);
   if (bytes.length !== 16) {
@@ -100,6 +137,9 @@ export function b64url_to_uuid(b64url: Base64Url): Uuid {
   return bytes;
 }
 
+/**
+ * Compare UUIDs
+ */
 export function uuid_equals(a: Uuid, b: Uuid): boolean {
   if (a.length !== 16 || b.length !== 16) return false;
 
@@ -110,10 +150,18 @@ export function uuid_equals(a: Uuid, b: Uuid): boolean {
   return true;
 }
 
+// ============ Hex ============
+
+/**
+ * Bytes to hex string
+ */
 export function bytes_to_hex(bytes: ByteArray): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/**
+ * Hex string to bytes
+ */
 export function hex_to_bytes(hex: string): ByteArray {
   if (hex.length % 2 !== 0) {
     throw new MarshalError(Errno.EINVAL);

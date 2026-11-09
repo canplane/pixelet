@@ -63,25 +63,22 @@ const DESC_REG: [u32, NodeType] = [NONE, SpecialType.NIL];
 /** A field of a command's packet as a caller hands it. */
 export type Arg = number | boolean | string | null | U32Array | string[];
 
+// ============ Encoder ============
+
 export interface TreeEncoderConfig {
-  /** The size of the first buffer tried; it doubles each time the packet does
-   * not fit. */
-  init_cap: u32;
-  /** The largest packet allowed; MAX_PKT_SZ when none is given. */
-  max_cap?: u32;
+  init_cap?: u32; // soft initial buffer size hint
+  max_cap?: u32; // hard packet size limit
 }
 
-/**
- * This encodes a tree by walking it onto `PacketWriter`, as the C++ `encode`
- * (cpp/xpute/kit/wire/xtp/view.hpp) does. The first buffer has `init_cap`
- * bytes; each time the packet overflows it, the tree is walked again into one
- * twice as large, up to `max_cap`.
- */
+// The encoder assumes the normal construction path went through the view layer.
+// It still enforces minimal packet-boundary invariants: the cap, the node type, and a graft's header and payload size.
 export class TreeEncoder {
+  // ---- Entry ----
+
   /** A `max_cap` below HDR_SZ or above MAX_PKT_SZ is EINVAL; a packet larger
    * than `max_cap` is EOVERFLOW. */
-  encode(view: NodeView, cfg: TreeEncoderConfig): U8Array {
-    const { init_cap, max_cap = MAX_PKT_SZ } = cfg;
+  encode(view: NodeView, cfg: TreeEncoderConfig = {}): U8Array {
+    const { init_cap = 1 << 10, max_cap = MAX_PKT_SZ } = cfg;
     if (max_cap < HDR_SZ || max_cap > MAX_PKT_SZ) {
       throw new MarshalError(Errno.EINVAL);
     }
@@ -107,6 +104,8 @@ export class TreeEncoder {
 
 export const encoder = new TreeEncoder();
 
+// ---- Node Dispatch ----
+
 function walk(w: PacketWriter, node: Node): void {
   if (NODE_IS_NIL(node)) {
     w.nil();
@@ -124,6 +123,8 @@ function walk(w: PacketWriter, node: Node): void {
     throw new MarshalError(Errno.EBADMSG);
   }
 }
+
+// ---- Leaf Dispatch ----
 
 function scalar_into(w: PacketWriter, node: ScalarNode): void {
   const v = node.val;
@@ -285,6 +286,7 @@ export class PacketWriter {
     if (f.written >= f.cnt) throw new InvariantError(Errno.ENOSPC);
     if (f.root) this.root_type = type;
     else if (this.err === null) {
+      // child node kind is preserved even when rel_off == 0
       SET_WORD(
         this.view,
         this.start + f.base + WORD_SZ * (1 + f.written),
@@ -296,6 +298,10 @@ export class PacketWriter {
     return this;
   }
 
+  // scalar layout:
+  // [payload]
+  // - scalar nodes have no header
+  // - scalar alignment is equal to the element size
   private scalar(
     type: ScalarType,
     unit: AlignUnit,
@@ -306,8 +312,14 @@ export class PacketWriter {
     return this.entry(at, type);
   }
 
-  /** Writes a sequence: its len slot, then `bytes` of payload, padded to a
-   * word. `fill` gets the payload's offset in `bytes` and writes it. */
+  // sequence layout:
+  // [len 32 | reserved 32][payload...]
+  // - len is stored in an 8-byte slot
+  // - the value is the low 32 bits; a reader refuses a len slot whose high half is not zero
+  // - payload begins immediately after the len slot: base + WORD_SZ
+  // - sequence node base is WORD_SZ-aligned
+  // - STR stores a trailing NUL on wire, but len excludes that terminator
+  // - `fill` gets the payload's offset in `bytes` and writes it
   private seq(
     type: SequenceType,
     len: u32,
@@ -452,6 +464,7 @@ export class PacketWriter {
       bits.length,
       Math.ceil(bits.length / 8),
       (payload) => {
+        // bit packing: bit i -> byte[i >> 3], bit position (i & 7), LSB-first within each byte
         bits.forEach((b, i) => {
           if (b) this.bytes[payload + (i >>> 3)] |= 1 << (i & 7);
         });
@@ -474,13 +487,14 @@ export class PacketWriter {
             this.bytes.subarray(this.start + payload, this.start + this.cap),
           )
         : null;
+    // wire payload includes trailing NUL for C-friendly reads
     const end: number = res === null ? 0 : payload + word_up(res.written + 1);
     if (res === null || res.read < s.length || end > this.cap) {
       return this.entry(this.spoil(Errno.EOVERFLOW), SequenceType.STR);
     }
     this.bytes.fill(0, this.start + this.lim, this.start + payload);
     this.bytes.fill(0, this.start + payload + res.written, this.start + end);
-    SET_WORD(this.view, this.start + base, res.written, RESERVED);
+    SET_WORD(this.view, this.start + base, res.written, RESERVED); // UTF-8 byte length, excluding trailing NUL
     this.lim = end;
     return this.entry(base, SequenceType.STR);
   }
@@ -540,9 +554,24 @@ export class PacketWriter {
     return this;
   }
 
-  /** Writing a number of children other than `cnt` is a bug and throws
-   * InvariantError. */
+  // ---- Branch Encoding ----
+
+  // branch layout:
+  // [len_lo32 | reserved_hi32]
+  // [rel_off_lo32 | desc_hi32]...
+  //
+  // desc_hi32:
+  //   bits 0..7   : node type
+  //   bits 8..31  : reserved
+  //
+  // - len and offsets occupy 8-byte slots
+  // - the value is the low 32 bits; a reader refuses a len slot whose high half is not zero,
+  //   and an offset's high half holds the type
+  // - each child offset is relative to the enclosing branch node base
+  // - branch alignment is WORD_SZ
+  // - writing a number of children other than `cnt` is a bug and throws InvariantError
   branch(cnt: u32, fill: (w: this) => void): this {
+    // empty branch (len = 0) is valid — analogous to [] or {} in JSON
     const at = this.branch_open(cnt);
     // When the branch did not fit, its children are still counted, so that a
     // miscount is caught; the packet is spoiled, and nothing is written at the
@@ -561,14 +590,22 @@ export class PacketWriter {
     return this.entry(-1, SpecialType.BRANCH);
   }
 
-  /** Copies the root of the encoded packet `pkt` in as this entry, aligned as
-   * its root's type requires. A malformed `pkt` makes `finish` refuse the
-   * packet (EBADMSG). */
+  // graft semantics:
+  // - `pkt` is a complete tree packet
+  // - the outer packet header is stripped
+  // - only the grafted root payload region is copied into the current packet
+  // - packet header word1 stores [root_payload_sz 32 | type 8 | reserved 24]
+  // - placement alignment follows the grafted root node type
+  // - because root_payload_sz excludes the fixed packet header, graft preserves
+  //   the same root payload layout as inline encoding
+  // - base-offset alignment is expected to be enforced by the view construction path
+  // - a malformed `pkt` makes `finish` refuse the packet (EBADMSG)
   graft(pkt: U8Array): this {
     let payload_sz: u32, type: NodeType;
     try {
       if (pkt.byteLength < HDR_SZ) throw new MarshalError(Errno.EBADMSG);
       const hdr = new DataView(pkt.buffer, pkt.byteOffset, HDR_SZ);
+      // packet header fallback
       if (GET_LEN(hdr, 0) !== MAGIC) throw new MarshalError(Errno.EBADMSG);
       [payload_sz, type] = GET_DESC(hdr, WORD_SZ, DESC_REG);
     } catch (e) {
@@ -609,13 +646,14 @@ export class PacketWriter {
     const end: u32 = ALIGN(this.lim, WORD_SZ);
     if (end > this.cap) throw new MarshalError(Errno.EOVERFLOW);
     this.bytes.fill(0, this.start + this.lim, this.start + end);
-    SET_WORD(this.view, this.start, MAGIC, RESERVED);
+    SET_WORD(this.view, this.start, MAGIC, RESERVED); // word0
+    // root node kind is preserved even when payload_sz == 0
     SET_WORD(
       this.view,
       this.start + WORD_SZ,
       this.lim - HDR_SZ,
       FIELD_SET(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, this.root_type),
-    );
+    ); // word1
     return end;
   }
 

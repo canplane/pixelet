@@ -1,8 +1,20 @@
 // @xpute/kit/wire/scalar.ts
 
-// These are little-endian numbers read from and written to a byte stream, each
-// call moving its offset on. Nothing here checks bounds: the caller does, and
-// an access out of range throws DataView's RangeError.
+/**
+ * Binary Scalar I/O
+ *
+ * - All operations are little-endian by specification.
+ * - No validation. Caller owns correctness.
+ *
+ * RULE
+ * ----
+ * This is IO only: raw byte stream read/write.
+ * Signedness is a *meaning* decision; we expose both geti/getu for native widths,
+ * but we do not "fix" or "reinterpret" beyond what DataView already does.
+ *
+ * Composite widths (96/128) are limb-IO helpers.
+ * If you need signed semantics for sub-fields, use abi/cast.ts.
+ */
 
 import type {
   f32,
@@ -19,6 +31,11 @@ import type {
 import { U64 } from "@xpute/kit/abi/word.ts";
 import type { ByteArray } from "@xpute/kit/abi/array.ts";
 
+// ----------------------------------------------------------------------------
+// Stream IO (little-endian)
+// - No validation: caller owns bounds checks.
+// ----------------------------------------------------------------------------
+
 export interface Stream {
   view: DataView;
   buf: ByteArray;
@@ -31,14 +48,21 @@ export const stream = (buf: ByteArray, off: i32 = 0): Stream => ({
   off,
 });
 
+// ----------------------------------------------------------------------------
+// memcpy (raw memory copy)
+// - No validation: caller owns correctness (RangeError is fine)
+// ----------------------------------------------------------------------------
+
 export const memcpy = (dst: ByteArray, src: ByteArray, nbyte: u32): void => {
+  // force exact-length source view; dst range is enforced by dst view length via .set()
   const s = new Uint8Array(src.buffer, src.byteOffset, nbyte);
-  dst.set(s, 0);
+  dst.set(s, 0); // RangeError if dst.byteLength < nbyte
 };
 
 export const write = (s: Stream, src: ByteArray, nbyte: u32): void => {
   const beg = s.off;
   const end = beg + nbyte;
+  // exact-length view: RangeError if src's buffer ends before byteOffset + nbyte
   const src_n = new Uint8Array(src.buffer, src.byteOffset, nbyte);
   s.buf.set(src_n, beg);
   s.off = end;
@@ -46,6 +70,7 @@ export const write = (s: Stream, src: ByteArray, nbyte: u32): void => {
 export const read = (s: Stream, dst: ByteArray, nbyte: u32): void => {
   const beg = s.off;
   const end = beg + nbyte;
+  // exact-length view: RangeError if the stream's buffer ends before the read does
   const src_n = new Uint8Array(s.buf.buffer, s.buf.byteOffset + beg, nbyte);
   dst.set(src_n, 0);
   s.off = end;
@@ -66,6 +91,10 @@ export const seek = (s: Stream, off: i32, whence: u8 = SEEK_SET): i32 => {
 export const tell = (s: Stream): i32 => s.off;
 export const len = (s: Stream): i32 => s.view.byteLength;
 export const rem = (s: Stream): i32 => s.view.byteLength - s.off;
+
+// ----------------------------------------------------------------------------
+// scalar ops (advance stream)
+// ----------------------------------------------------------------------------
 
 export const putu8 = (s: Stream, x: u8): void =>
   s.view.setUint8((s.off += 1) - 1, x);
@@ -111,6 +140,10 @@ export const putf64 = (s: Stream, x: f64): void =>
 export const getf64 = (s: Stream): f64 =>
   s.view.getFloat64((s.off += 8) - 8, true);
 
+// ----------------------------------------------------------------------------
+// 96/128 as limb stream IO (little-endian)
+// ----------------------------------------------------------------------------
+
 export const U96_SZ: u32 = 12;
 export const U128_SZ: u32 = 16;
 
@@ -137,6 +170,10 @@ export const getu128 = (s: Stream): [u64, u64] => {
   const hi = getu64(s);
   return [lo, hi];
 };
+
+// ----------------------------------------------------------------------------
+// 96/128 bigint <-> limb (keep)
+// ----------------------------------------------------------------------------
 
 export const pack96 = (lo: u32, mid: u32, hi: u32): bigint =>
   (U64(BigInt(hi)) << 64n) | (U64(BigInt(mid)) << 32n) | U64(BigInt(lo));

@@ -7,6 +7,9 @@
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
 
+// ---- Tuple ----
+
+// record -> tuple
 export function to_tuple<T extends Record<PropertyKey, unknown>>(
   obj: T,
   keys: readonly (keyof T)[],
@@ -18,6 +21,7 @@ export function to_tuple<T extends Record<PropertyKey, unknown>>(
   });
 }
 
+// tuple -> record
 export function from_tuple<T extends Record<PropertyKey, unknown>>(
   vals: readonly unknown[],
   keys: readonly (keyof T)[],
