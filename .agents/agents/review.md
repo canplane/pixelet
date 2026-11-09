@@ -27,5 +27,7 @@ meant to do and where it is, not why its author thinks it is right.
 ## Report
 
 Findings, most severe first, each with its file and line, a concrete failure,
-and whether you verified it (read or ran) or only suspect it. List the areas
+and whether you verified it (read or ran) or only suspect it. A finding is a
+fact for the author to weigh: one that would remove a structure first states
+what it expresses and which of its values are independent. List the areas
 found sound. Under about 800 words.
