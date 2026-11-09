@@ -80,7 +80,11 @@ importers:
         specifier: workspace:*
         version: link:../native
 
-  build: {}
+  build:
+    dependencies:
+      '@babel/parser':
+        specifier: 7.29.11
+        version: 7.29.11
 
   client:
     dependencies:
