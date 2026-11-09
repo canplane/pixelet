@@ -15,7 +15,7 @@
 use crate::domain::param;
 use crate::domain::query::change::Memo;
 use crate::domain::query::World;
-use crate::domain::query::{cell_zoom_at, floor_of, is_unknown, over, walks};
+use crate::domain::query::{cell_zoom_at, floor_of, is_unknown, over};
 use crate::domain::scene::character::param::{
     BODY_SHARE, CATCHUP_DURATION_S, CLIP_FADE_S, FOLLOW_WALK_LINGER_S, HEAD_CLEARANCE_U, PET_OFF,
     SETTLE_DELAY_S, WALK_EPS,
@@ -137,8 +137,7 @@ pub struct Camera {
     pub steered: bool,
     /// Whether the map follows the device.
     pub following: bool,
-    /// The eye. It decides whether the world is walked or read as a map
-    /// (`walks`), and what a character is drawn standing on.
+    /// The eye, which decides what a character is drawn standing on.
     pub eye: Q3,
 }
 
@@ -150,9 +149,9 @@ struct Companion {
     /// The floor the pivot is drawn on, kept by the pivot (`pivot_floor`).
     pivot_floor: Memo<Q3, Option<f64>>,
     /// The pet's floor beside the person, found by walking there from the
-    /// person's floor. It is kept by the pivot and its floor, the pet's
-    /// target, and whether the eye sees a walk there (`walks`).
-    pet_floor: Memo<([f64; 2], f64, [f64; 2], bool), f64>,
+    /// person's floor. It is kept by the pivot and its floor, and the pet's
+    /// target.
+    pet_floor: Memo<([f64; 2], f64, [f64; 2]), f64>,
 }
 
 static COMPANION: Global<Companion> = Global::new();
@@ -224,9 +223,8 @@ pub fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
     let pet_floor = &mut s.pet_floor;
     let mut walked = |floor: f64| {
         let from = center(camera.pivot, floor);
-        let of = (camera.pivot, floor, target, walks(&from, &camera.eye));
-        pet_floor.of(World::now(), of, |world| {
-            let end = walk_to(world, &from, target, &camera);
+        pet_floor.of(World::now(), (camera.pivot, floor, target), |world| {
+            let end = walk_to(world, &from, target);
             match reached(to_world(&end)) && !is_unknown(&end) {
                 true => floor_of(&end),
                 false => floor,
@@ -424,7 +422,7 @@ impl Walk {
         if arrived {
             *stands = center(at, arrive_floor);
         } else if moved {
-            let end = walk_to(World::now(), stands, at, camera);
+            let end = walk_to(World::now(), stands, at);
             let [x, y, _] = to_world(&end);
             (at, *stands) = if follows && gap([x, y], at) > WALK_EPS {
                 (target, center(target, arrive_floor))
@@ -448,8 +446,8 @@ fn center([x, y]: [f64; 2], floor: f64) -> Q3 {
 }
 
 /// Slides a step through `world` from `from` toward `to` (`World::step_slide`).
-fn walk_to(world: World<'_>, from: &Q3, [x, y]: [f64; 2], camera: &Camera) -> Q3 {
-    world.step_slide(from, &world_to_canonical(&[x, y, 0.0]), &camera.eye, true)
+fn walk_to(world: World<'_>, from: &Q3, [x, y]: [f64; 2]) -> Q3 {
+    world.step_slide(from, &world_to_canonical(&[x, y, 0.0]), true)
 }
 
 /// Where a body `half` wide on each side is drawn for `at`, on the floor the

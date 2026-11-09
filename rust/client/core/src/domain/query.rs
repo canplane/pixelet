@@ -33,7 +33,7 @@ mod surface;
 mod world;
 
 pub use ray::{at_zoom, by_dist, cell_zoom_at, finest, zoom_range, Hit, HitKind, Ray};
-pub use support::{floor_of, is_unknown, on_floor, over, unknown, walks};
+pub use support::{floor_of, is_unknown, on_floor, over, unknown};
 pub use world::{ColumnWalk, World};
 
 #[cfg(test)]

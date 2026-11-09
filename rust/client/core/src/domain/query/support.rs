@@ -25,7 +25,7 @@ use xpute_kit::math::scalar::wrap;
 
 use pxl_spec::space::coord::aabb::Aabb;
 
-use super::ray::{at_zoom, cell_zoom_at, finest, Ray, Until};
+use super::ray::{at_zoom, finest, Ray, Until};
 use super::world::World;
 use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::*;
@@ -68,15 +68,6 @@ pub fn on_floor(at: &Q3, top: f64) -> Q3 {
     with_z(at, q3::from_real(over(top)))
 }
 
-/// Whether a walker at `at`, seen from `eye`, walks. It does where the
-/// camera grid draws the ground there at its own leaf cells
-/// (`cell_zoom_at`), with X measured the short way round. Otherwise the
-/// world is a map to it (`step_slide`).
-pub fn walks(at: &Q3, eye: &Q3) -> bool {
-    let (a, e) = (q3::unpack(at), q3::unpack(eye));
-    cell_zoom_at(e, [world::nearest(a[0], e[0]), a[1], a[2]]) == GROUND.leaf_cell_zoom()
-}
-
 /// A point's place on the ground, in units.
 fn xy(at: &Q3) -> [f64; 2] {
     [q3::to_real(i64::from(at[0])), q3::to_real(i64::from(at[1]))]
@@ -87,7 +78,7 @@ fn xy(at: &Q3) -> [f64; 2] {
 /// the finest zoom anything is placed at in it; at a coarser zoom, one
 /// column. A walker meets what a ray straight up or down through a column's
 /// middle meets. The columns keep the first tile an answer lacked. Each
-/// ray's tile lines step on from the last ray's (`lines`), which were handed
+/// ray's tile lines step on from the last ray's (`path`), which were handed
 /// on from the columns these were made beside, since the rays climb the same
 /// tiles over the same tile cache.
 struct SplitCell<'w, 'a> {
@@ -98,11 +89,11 @@ struct SplitCell<'w, 'a> {
     detail: Detail,
     lack: Option<Quadrant>,
     zoom: Zoom,
-    lines: Path,
+    path: Path,
 }
 
 impl<'w, 'a> SplitCell<'w, 'a> {
-    fn new(world: &'w World<'a>, xy: [f64; 2], zoom: Zoom, lines: Path) -> SplitCell<'w, 'a> {
+    fn new(world: &'w World<'a>, xy: [f64; 2], zoom: Zoom, path: Path) -> SplitCell<'w, 'a> {
         let cell_zoom = GROUND.cell_zoom(zoom);
         let side = units(cell_zoom);
         let corner = xy.map(|v| libm::floor(v / side) * side);
@@ -126,7 +117,7 @@ impl<'w, 'a> SplitCell<'w, 'a> {
             detail: at_zoom(zoom + finer),
             lack: None,
             zoom,
-            lines,
+            path,
         }
     }
 
@@ -153,7 +144,7 @@ impl<'w, 'a> SplitCell<'w, 'a> {
         };
         let (answer, _) = self
             .world
-            .along(&ray, self.detail, until, None, &mut self.lines);
+            .along(&ray, self.detail, until, None, &mut self.path);
         if let Some(l) = answer.lack() {
             self.lack.get_or_insert(l);
         }
@@ -363,21 +354,15 @@ impl<'a> World<'a> {
     /// has no height limit but the ceiling's: it gives up where its own
     /// cell's ceiling stops the climb, and the walker settles on the floor.
     ///
-    /// Where the camera grid, seen from `eye`, draws `from` coarser than the
-    /// ground's own cells, this is a map, not a walk: the walker goes to `to`
-    /// and stands there. That is decided where it starts, by the grid's
-    /// angle.
-    ///
     /// With `walled`, as for what walks in the world, the walker never leaves
     /// the service area (`within`) and slides along its edge; one already
     /// past the area is not walled until it is back in. The camera is not
     /// walled and goes anywhere a position can be, past the area over the
     /// Earth, which holds nothing above sea level.
     ///
-    /// The walk stops at the edge of a leaf on the way that is not held, and
-    /// keeps what it walked up to there. Where the leaf under `from`, or a
-    /// map's `to`, is not held, it ends at `to` with its height not known.
-    pub fn step_slide(&self, from: &Q3, to: &Q3, eye: &Q3, walled: bool) -> Q3 {
+    /// Where a leaf on the way is not held, it ends at `to` with its height
+    /// not known.
+    pub fn step_slide(&self, from: &Q3, to: &Q3, walled: bool) -> Q3 {
         let stood = match is_unknown(from) {
             true => self
                 .surface_support(from)
@@ -387,12 +372,12 @@ impl<'a> World<'a> {
             false => Some(*from),
         };
         stood
-            .and_then(|from| self.slide(&from, to, eye, walled))
+            .and_then(|from| self.slide(&from, to, walled))
             .unwrap_or_else(|| unknown(to))
     }
 
     /// `step_slide` from a height known, None where it has no height to end at.
-    fn slide(&self, from: &Q3, to: &Q3, eye: &Q3, walled: bool) -> Option<Q3> {
+    fn slide(&self, from: &Q3, to: &Q3, walled: bool) -> Option<Q3> {
         let [sx, sy, sz] =
             [i64::from(from[0]), i64::from(from[1]), i64::from(from[2])].map(q3::to_real);
         let mut floor = under(sz);
@@ -404,39 +389,20 @@ impl<'a> World<'a> {
             )
         };
         let [tx, ty] = [i64::from(to[0]), i64::from(to[1])].map(q3::to_real);
-        if !walks(from, eye) {
-            let at = world::at(i64::from(to[0]), i64::from(to[1]), i64::from(from[2]));
-            if walled && !self.within(&at) && self.within(from) {
-                return Some(*from);
-            }
-            let stands = self.surface_support(&at).exact()?.unwrap_or(floor);
-            return Some(gather(tx, ty, stands));
-        }
         // The short way round the world, across the antimeridian too.
         let way = [wrap(tx - sx, -ROUND / 2.0, ROUND / 2.0), ty - sy];
         let s = units(GROUND.leaf_cell_zoom());
         let center = |c: [f64; 2]| [(c[0] + 0.5) * s, (c[1] + 0.5) * s];
         let mut end = [sx + way[0], sy + way[1]];
         let mut blocked = [false; 2];
-        // Where the walker is at the share `t` of the way, with a slid axis
-        // held where it stopped.
-        let point = |t: f64, end: [f64; 2], blocked: [bool; 2]| {
-            [0, 1].map(|k| {
-                if blocked[k] {
-                    end[k]
-                } else {
-                    [sx, sy][k] + way[k] * t
-                }
-            })
-        };
         let mut at = [sx, sy].map(|v| libm::floor(v / s));
         // The walker first climbs out of what fills its own cell, so only
         // what is over that counts as a ceiling.
-        let mut lines = Path::default();
+        let mut path = Path::default();
         floor = {
-            let mut c = SplitCell::new(self, center(at), LEAF_ZOOM, lines);
+            let mut c = SplitCell::new(self, center(at), LEAF_ZOOM, path);
             let f = c.lift(floor);
-            lines = c.lines;
+            path = c.path;
             c.answer(f).exact()?
         };
         // Amanatides and Woo's traversal: the share of `way` at each axis's next edge.
@@ -465,16 +431,11 @@ impl<'a> World<'a> {
             // A point short of the edge by less than a position's fraction,
             // so the cell it ends in is this one.
             let short = edge(k) - way[k].signum() * s * 1e-6;
-            match self.step(center(at), floor, center(into), walled, &mut lines) {
-                Some(Some(top)) => (at, floor) = (into, top),
+            match self.step(center(at), floor, center(into), walled, &mut path)? {
+                Some(top) => (at, floor) = (into, top),
                 // Blocked: the walker slides, this axis staying in its cell
                 // while the other goes on.
-                Some(None) => (end[k], blocked[k]) = (short, true),
-                None => {
-                    end = point(t, end, blocked);
-                    end[k] = short;
-                    break;
-                }
+                None => (end[k], blocked[k]) = (short, true),
             }
         }
         Some(gather(end[0], end[1], floor))
@@ -489,14 +450,14 @@ impl<'a> World<'a> {
     /// cell it leaves stopped it; the outer None means `to` or the cell it
     /// leaves is not held at the leaf. The ceiling is asked only as high as
     /// the climb, never past it. The columns' rays step their tile lines on
-    /// from `lines`, the walk's last, and leave theirs there.
+    /// from `path`, the walk's last, and leave theirs there.
     fn step(
         &self,
         from: [f64; 2],
         floor: f64,
         to: [f64; 2],
         walled: bool,
-        lines: &mut Path,
+        path: &mut Path,
     ) -> Option<Option<f64>> {
         // For what is `walled` and within the service area, the area's edge
         // is a wall, slid along as any wall is. One already past the area
@@ -507,18 +468,18 @@ impl<'a> World<'a> {
             return Some(None);
         }
         let cell = units(GROUND.leaf_cell_zoom());
-        let mut c = SplitCell::new(self, to, LEAF_ZOOM, *lines);
+        let mut c = SplitCell::new(self, to, LEAF_ZOOM, *path);
         let z = c.lift(floor);
         let moved = if z > floor {
-            let mut left = SplitCell::new(self, from, LEAF_ZOOM, c.lines);
+            let mut left = SplitCell::new(self, from, LEAF_ZOOM, c.path);
             let stopped = left.above(floor, z + cell).is_some();
-            (*lines, c.lines) = (left.lines, left.lines);
+            (*path, c.path) = (left.path, left.path);
             left.answer(()).exact()?;
             (!stopped).then_some(z)
         } else {
             Some(c.below(z).unwrap_or(z))
         };
-        *lines = c.lines;
+        *path = c.path;
         c.answer(moved).exact()
     }
 }

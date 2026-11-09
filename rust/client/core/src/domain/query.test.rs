@@ -526,7 +526,7 @@ fn walker_climbs_or_slides() {
     let east = world::point(x + 1.5, y + 0.5, 0.0);
     {
         let access = World::new(&tile_cache, &store);
-        let to = access.step_slide(&from, &east, &from, true);
+        let to = access.step_slide(&from, &east, true);
         assert_eq!(
             (q3::to_real(i64::from(to[0])), floor(to)),
             (x + 1.5, 8.0),
@@ -537,14 +537,14 @@ fn walker_climbs_or_slides() {
     // wall.
     write(&mut store, [x, y, 7.0], OBJECT_COARSEST, red);
     let access = World::new(&tile_cache, &store);
-    let to = access.step_slide(&from, &east, &from, true);
+    let to = access.step_slide(&from, &east, true);
     assert!(
         q3::to_real(i64::from(to[0])) < x + 1.0,
         "stopped at the wall"
     );
     assert_eq!(floor(to), 5.0);
     // Going north-east, the east is slid along and the north is walked.
-    let to = access.step_slide(&from, &world::point(x + 1.5, y + 1.5, 0.0), &from, true);
+    let to = access.step_slide(&from, &world::point(x + 1.5, y + 1.5, 0.0), true);
     assert!(
         q3::to_real(i64::from(to[0])) < x + 1.0,
         "slid along the wall"
@@ -594,12 +594,7 @@ fn reading_reports_columns() {
     access.surface_support(&point(at[0], at[1]));
     assert_eq!(read.get(), Some([c, c.map(|v| v + cell)]));
     let from = world::point(at[0], at[1], over(5.0));
-    access.step_slide(
-        &from,
-        &world::point(at[0] + 3.0 * cell, at[1], 0.0),
-        &from,
-        true,
-    );
+    access.step_slide(&from, &world::point(at[0] + 3.0 * cell, at[1], 0.0), true);
     assert_eq!(read.get(), Some([c, [c[0] + 4.0 * cell, c[1] + cell]]));
 }
 

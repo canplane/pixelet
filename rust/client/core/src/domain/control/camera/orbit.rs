@@ -75,18 +75,12 @@ pub fn pivot_world() -> Option<V3> {
 
 /// Writes a control into the intent and returns the intent taken. Terrain
 /// holds the control back here, where it is written, so a control that
-/// turns back moves the camera at once. Under `climb`, only an asked tilt is
-/// limited here. A zoom is answered by pitching the drawn facing in `turn`
-/// instead, because a pitch written into the intent would stay after the
-/// ground no longer asks for it.
+/// turns back moves the camera at once. Under `climb`, the ground is answered
+/// by pitching the drawn facing in `turn`, because a pitch written into the
+/// intent would stay after the ground no longer asks for it.
 pub fn ask(partial: IntentPatch) -> Intent {
     let c = camera_state_mut();
-    let mut asked = c.with_patch(partial);
-    if partial.polar.is_some() && settings().orbit_obstacle == OrbitObstacleMode::climb {
-        if let Some(at) = pivot_world() {
-            asked.polar = climb_polar(at, asked.dist, asked.polar, asked.azimuth);
-        }
-    }
+    let asked = c.with_patch(partial);
     c.commit_intent(allowed_view(asked, c.intent));
     c.intent
 }

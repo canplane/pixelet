@@ -124,11 +124,9 @@ pub fn resolve_to(to: &mut Option<Q3>, cur: V3) -> V3 {
 
 /// Where a pan moves the pivot from `from`, by `lx` units across the screen
 /// and `ly` units up it. The pivot slides over the world as a walker steps
-/// (`World::step_slide`). It stops at the edge of a leaf on the way that is
-/// not held. Where the leaf under `from` is not held, or the pan moves as a
-/// map (`World::step_slide`) to a target whose leaf is not held, the pivot
-/// goes on with its Z unknown until a leaf gives it.
-pub fn pan_to(from: &Q3, lx: f64, ly: f64, azimuth: f64, eye: &Q3) -> Q3 {
+/// (`World::step_slide`). Where a leaf on the way is not held, the pivot goes
+/// on with its Z unknown until a leaf gives it.
+pub fn pan_to(from: &Q3, lx: f64, ly: f64, azimuth: f64) -> Q3 {
     let (s, c) = libm::sincos(azimuth);
     let l = to_world(from);
     let way = [lx * c + ly * s, -lx * s + ly * c];
@@ -139,7 +137,7 @@ pub fn pan_to(from: &Q3, lx: f64, ly: f64, azimuth: f64, eye: &Q3) -> Q3 {
     if way == [0.0, 0.0] {
         return *from;
     }
-    World::now().step_slide(from, &to, eye, false)
+    World::now().step_slide(from, &to, false)
 }
 
 #[cfg(test)]

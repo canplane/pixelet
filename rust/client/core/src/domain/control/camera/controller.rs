@@ -102,11 +102,7 @@ pub fn pan_across(cx: f64, cy: f64) {
 
 fn pan_by(lx: f64, ly: f64) {
     let Some(from) = pivot_to() else { return };
-    let eye = eye_world().map_or(from, |e| world_to_canonical(&e));
-    put_pivot(
-        pan_to(&from, lx, ly, camera().azimuth, &eye),
-        Motion::Smooth,
-    );
+    put_pivot(pan_to(&from, lx, ly, camera().azimuth), Motion::Smooth);
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
