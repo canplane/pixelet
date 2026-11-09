@@ -28,8 +28,9 @@ Make the program faster while keeping every condition the design met.
 - One script a vendor, each one run: `script/perf/<vendor>.py <target> <dir>`.
   `chrome`, `safari`, `android-chrome` and `ios-safari` take a URL,
   `android-app` an APK, `ios-app` an app with `IOS_DEVICE` set to its devicectl
-  id. An app run installs afresh, which removes the app's data; `android-chrome`
-  clears the site's data and turns the cache off in its own tab.
+  id. `android-app` installs afresh, which removes the app's data; `ios-app`
+  installs over what is there, which keeps it; `android-chrome` clears the
+  site's data and turns the cache off in its own tab.
 - Every run writes the same three files into `<dir>`, and all three are read:
   `values.json` (`build`, `load`, `gpu`, `tick`) for the comparison, `report.txt`
   for where the time went, `trace.json` at ui.perfetto.dev for a frame on the
