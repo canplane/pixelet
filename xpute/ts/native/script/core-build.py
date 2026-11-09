@@ -57,6 +57,7 @@ def fail(message):
 IOS_TARGETS = {"iphoneos": "aarch64-apple-ios", "iphonesimulator": "aarch64-apple-ios-sim"}
 
 # An Android build packs the library for this ABI, and this is its Rust target.
+NUMBER_PATHS = Path(__file__).with_name("number-paths.py")
 ANDROID_ABI = "arm64-v8a"
 ANDROID_TARGET = "aarch64-linux-android"
 
@@ -141,6 +142,13 @@ def main():
     lib = package.replace("-", "_")
     build = gradle(args, lib) if "--android" in argv else xcode(lib)
     which = "release" if build["release"] else "debug"
+    if build["release"]:
+        # A panic's location carries the directories it was built in. The
+        # target's own variable, as RUSTFLAGS would replace what Gradle sets.
+        env = build["env"]
+        key = "CARGO_TARGET_" + build["target"].upper().replace("-", "_") + "_RUSTFLAGS"
+        remaps = [f"--remap-path-prefix={p}=" for p in (workspace.parent, os.environ["HOME"])]
+        env[key] = " ".join(f for f in [env.pop("RUSTFLAGS", None), env.get(key), *remaps] if f)
     profile = core.get("profile", {}).get(which, "release" if build["release"] else "dev")
     extra = core.get("args", {}).get(which, [])
 
@@ -162,6 +170,12 @@ def main():
     if mtime(built) > mtime(linked):
         linked.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(built, linked)
+        if build["release"]:
+            table = app / f"core.paths.{build['target']}.json"
+            code = subprocess.run([sys.executable, str(NUMBER_PATHS), str(linked), str(table), str(workspace)]).returncode
+            if code != 0:
+                linked.unlink()
+                return code
 
     # The headers lie beside it, so no pod names a path out of the app: xpute's
     # as their own module, and the crate's include/, where it has one.

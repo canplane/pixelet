@@ -3,10 +3,8 @@
 /** The page is one HTML file over one bundle (`output: "single"`), filled from
  * the template public/index.html, which script/web.ts makes from index.html. */
 
-import * as path from "node:path";
-import { WORKSPACE } from "@pxl/build/path.ts";
-
-const icon = path.join(WORKSPACE, "client/brand/icon.png");
+// Relative, as this table is shipped inside the app.
+const icon = "./brand/icon.png";
 
 export default {
   expo: {

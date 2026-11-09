@@ -192,7 +192,7 @@ vite.config.ts.timestamp-*
 # the page's template made from ts/client/index.html (ts/client/script/web.ts).
 ts/client/public/core.wasm
 ts/client/public/index.html
-ts/client/core.paths.json
+ts/client/core.paths*.json
 # The page's icons and link preview, made from ts/client/brand by each web
 # build (pxl-tool/bin/brand.rs).
 ts/client/public/brand/
